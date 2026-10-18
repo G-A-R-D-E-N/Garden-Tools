@@ -7603,7 +7603,256 @@
     },
     {
       "signature": "QUST",
-      "fields": [],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          { "signature": "EDID", "minimum": 0, "maximum": 1 },
+          { "signature": "VMAD", "minimum": 0, "maximum": 1 },
+          { "signature": "FULL", "minimum": 0, "maximum": 1 },
+          { "signature": "DNAM", "minimum": 1, "maximum": 1, "default": "000000000000000000000000" },
+          { "signature": "ENAM", "minimum": 0, "maximum": 1 },
+          { "signature": "LNAM", "minimum": 0, "maximum": 1 },
+          { "signature": "XNAM", "minimum": 0, "maximum": 1 },
+          { "signature": "QTGL", "minimum": 0, "maximum": 65535 },
+          { "signature": "FLTR", "minimum": 0, "maximum": 1 },
+          { "signature": "GNAM", "minimum": 0, "maximum": 1 },
+          { "signature": "SNAM", "minimum": 0, "maximum": 1 }
+        ]
+      },
+      "fields": [
+        {
+          "path": "QUST\\Name",
+          "label": "Name",
+          "kind": "string",
+          "subrecord": "FULL",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "QUST\\Flags",
+          "label": "Flags",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 0,
+          "storage": "u16",
+          "presentation": "flags",
+          "names": [
+            { "bit": 0, "name": "Start Game Enabled" },
+            { "bit": 1, "name": "Completed" },
+            { "bit": 2, "name": "Add Idle topic to Hello" },
+            { "bit": 3, "name": "Allow repeated stages" },
+            { "bit": 4, "name": "Starts Enabled" },
+            { "bit": 5, "name": "Displayed In HUD" },
+            { "bit": 6, "name": "Failed" },
+            { "bit": 7, "name": "Stage Wait" },
+            { "bit": 8, "name": "Run Once" },
+            { "bit": 9, "name": "Exclude from dialogue export" },
+            { "bit": 10, "name": "Warn on alias fill failure" },
+            { "bit": 11, "name": "Active" },
+            { "bit": 12, "name": "Repeats Conditions" },
+            { "bit": 13, "name": "Keep Instance" },
+            { "bit": 14, "name": "Want Dormant" },
+            { "bit": 15, "name": "Has Dialogue Data" }
+          ],
+          "minimum": 0,
+          "maximum": 65535,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "QUST\\Priority",
+          "label": "Priority",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 2,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "QUST\\DelayTime",
+          "label": "Delay time",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 4,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "QUST\\Type",
+          "label": "Type",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 8,
+          "storage": "u8",
+          "presentation": "enum",
+          "names": [
+            { "value": 0, "name": "None" },
+            { "value": 1, "name": "Main Quest" },
+            { "value": 2, "name": "Brotherhood of Steel" },
+            { "value": 3, "name": "Institute" },
+            { "value": 4, "name": "Minutemen" },
+            { "value": 5, "name": "Railroad" },
+            { "value": 6, "name": "Miscellaneous" },
+            { "value": 7, "name": "Side Quests" },
+            { "value": 8, "name": "DLC01" },
+            { "value": 9, "name": "DLC02" },
+            { "value": 10, "name": "DLC03" },
+            { "value": 11, "name": "DLC04" },
+            { "value": 12, "name": "DLC05" },
+            { "value": 13, "name": "DLC06" },
+            { "value": 14, "name": "DLC07" }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "QUST\\Event",
+          "label": "Event",
+          "kind": "scalar",
+          "subrecord": "ENAM",
+          "storage": "u32",
+          "presentation": "enum",
+          "names": [
+            { "value": 1380140097, "name": "Crime Gold Event" },
+            { "value": 1095320641, "name": "Actor Dialogue Event" },
+            { "value": 1447118401, "name": "Player Activate Actor" },
+            { "value": 1279608897, "name": "Actor Hello Event" },
+            { "value": 1280330049, "name": "Player Add Item" },
+            { "value": 1245859649, "name": "Attraction Object Event" },
+            { "value": 1414681153, "name": "Arrest Event" },
+            { "value": 1431524161, "name": "Assault Actor Event" },
+            { "value": 1112101442, "name": "Bribe" },
+            { "value": 1414742339, "name": "Cast Magic Event" },
+            { "value": 1381124163, "name": "Change Relationship Rank" },
+            { "value": 1129270339, "name": "Change Location Event" },
+            { "value": 1280461891, "name": "Clear Location Event" },
+            { "value": 1413894723, "name": "Craft Item" },
+            { "value": 1163023683, "name": "Player Cured" },
+            { "value": 1145128260, "name": "Dead Body" },
+            { "value": 1095390021, "name": "Escape Jail" },
+            { "value": 1413565510, "name": "Flatter" },
+            { "value": 1262698824, "name": "Hack Computer" },
+            { "value": 1128681033, "name": "Player Infected" },
+            { "value": 1297370697, "name": "Intimidate" },
+            { "value": 1313821257, "name": "Iron Sights" },
+            { "value": 1279869258, "name": "Jail Event" },
+            { "value": 1280067915, "name": "Kill Actor Event" },
+            { "value": 1145848652, "name": "Location Loaded" },
+            { "value": 1280722252, "name": "Increase Level" },
+            { "value": 1262702412, "name": "Lock Pick" },
+            { "value": 1162892878, "name": "New Voice Power" },
+            { "value": 1413562703, "name": "On Actor Attach" },
+            { "value": 1313424976, "name": "Pay Fine Event" },
+            { "value": 1262700880, "name": "Pickpocket" },
+            { "value": 1447449168, "name": "Player Recieves Favor" },
+            { "value": 1381258065, "name": "Quest Start" },
+            { "value": 1347241298, "name": "Player Remove Item" },
+            { "value": 1414546259, "name": "Script Event" },
+            { "value": 1246319699, "name": "Served Time" },
+            { "value": 1162169684, "name": "Trigger Mine Explosion Event" },
+            { "value": 1397051988, "name": "Trespass Actor Event" }
+          ],
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "QUST\\Filter",
+          "label": "Filter",
+          "kind": "string",
+          "subrecord": "FLTR",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "QUST\\Description",
+          "label": "Description",
+          "kind": "string",
+          "subrecord": "NNAM",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "QUST\\SwfFile",
+          "label": "SWF file",
+          "kind": "string",
+          "subrecord": "SNAM",
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "QUST\\Location",
+          "label": "Location",
+          "subrecord": "LNAM",
+          "offset": 0,
+          "targets": [
+            "LCTN"
+          ],
+          "nullable": false,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "QUST\\QuestCompletionXp",
+          "label": "Quest completion XP",
+          "subrecord": "XNAM",
+          "offset": 0,
+          "targets": [
+            "GLOB"
+          ],
+          "nullable": false,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "QUST\\QuestGroup",
+          "label": "Quest group",
+          "subrecord": "GNAM",
+          "offset": 0,
+          "targets": [
+            "KYWD"
+          ],
+          "nullable": false,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_lists": [
+        {
+          "path": "QUST\\TextDisplayGlobals",
+          "label": "Text display globals",
+          "subrecord": "QTGL",
+          "targets": [
+            "GLOB"
+          ],
+          "nullable": false,
+          "mutation": "appendable",
+          "anchor_predecessors": [
+            "FLTR",
+            "LNAM",
+            "XNAM",
+            "ENAM",
+            "DNAM",
+            "FULL",
+            "VMAD",
+            "EDID"
+          ]
+        }
+      ],
       "localized_subrecords": [
         "CNAM",
         "NNAM",
@@ -27146,6 +27395,156 @@
               "maximum": 3.4028234663852886e+38
             }
           ]
+        },
+        {
+          "path": "TERM\\BodyText",
+          "label": "Body text",
+          "kind": "string",
+          "subrecord": "BTXT",
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TERM\\ItemText",
+          "label": "Item text",
+          "kind": "string",
+          "subrecord": "ITXT",
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TERM\\ItemResponseText",
+          "label": "Response text",
+          "kind": "string",
+          "subrecord": "RNAM",
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TERM\\ItemType",
+          "label": "Item type",
+          "kind": "scalar",
+          "subrecord": "ANAM",
+          "storage": "u8",
+          "presentation": "enum",
+          "names": [
+            { "value": 0, "name": "Unknown 0" },
+            { "value": 1, "name": "Unknown 1" },
+            { "value": 2, "name": "Unknown 2" },
+            { "value": 3, "name": "Unknown 3" },
+            { "value": 4, "name": "Submenu - Terminal" },
+            { "value": 5, "name": "Submenu - Return to Top Level" },
+            { "value": 6, "name": "Submenu - Force Redraw" },
+            { "value": 7, "name": "Unknown 7" },
+            { "value": 8, "name": "Display Text" },
+            { "value": 9, "name": "Unknown 9" },
+            { "value": 10, "name": "Unknown 10" },
+            { "value": 11, "name": "Unknown 11" },
+            { "value": 12, "name": "Unknown 12" },
+            { "value": 13, "name": "Unknown 13" },
+            { "value": 14, "name": "Unknown 14" },
+            { "value": 15, "name": "Unknown 15" },
+            { "value": 16, "name": "Display Image" }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TERM\\ItemId",
+          "label": "Item ID",
+          "kind": "scalar",
+          "subrecord": "ITID",
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TERM\\ItemDisplayText",
+          "label": "Display text",
+          "kind": "string",
+          "subrecord": "UNAM",
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TERM\\ItemImage",
+          "label": "Show image",
+          "kind": "string",
+          "subrecord": "VNAM",
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TERM\\HolotapeTotal",
+          "label": "Holds holotape (count)",
+          "kind": "scalar",
+          "subrecord": "COCT",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TERM\\Holotapes",
+          "label": "Holotapes",
+          "kind": "subrecord_group",
+          "count_subrecord": "COCT",
+          "insertion": "existing_only",
+          "successors": [
+            "MNAM",
+            "WBDT",
+            "XMRK",
+            "SNAM",
+            "BSIZ",
+            "BTXT",
+            "ISIZ",
+            "ITXT",
+            "RNAM",
+            "ANAM",
+            "ITID",
+            "UNAM",
+            "VNAM",
+            "TNAM"
+          ],
+          "members": [
+            {
+              "subrecord": "CNTO",
+              "required": true,
+              "repeatable": false,
+              "payload_size": 8,
+              "default": "0000000001000000",
+              "fields": [
+                {
+                  "path": "TERM\\HolotapeCount",
+                  "label": "Count",
+                  "offset": 4,
+                  "storage": "i32",
+                  "presentation": "identity",
+                  "minimum": -2147483648,
+                  "maximum": 2147483647,
+                  "insertion": "existing_only"
+                }
+              ],
+              "formlink_fields": [
+                {
+                  "path": "TERM\\Holotape",
+                  "label": "Holotape",
+                  "offset": 0,
+                  "nullable": true,
+                  "targets": [
+                    "NOTE"
+                  ],
+                  "insertion": "existing_only"
+                }
+              ]
+            }
+          ]
         }
       ],
       "formlink_fields": [
@@ -27177,7 +27576,8 @@
           ],
           "insertion": "existing_only"
         },
-        {"path": "TERM\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"}
+        {"path": "TERM\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"},
+        {"path": "TERM\\ItemSubmenu", "label": "Submenu", "subrecord": "TNAM", "offset": 0, "targets": ["TERM"], "nullable": false, "repeated": true, "payload_sizes": [4], "insertion": "existing_only"}
       ],
       "localized_subrecords": [
         "NAM0",

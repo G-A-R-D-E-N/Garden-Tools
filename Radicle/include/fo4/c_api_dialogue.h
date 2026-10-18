@@ -159,6 +159,34 @@ RADICLE_API radicle_status radicle_plugin_scene_group_count(const radicle_plugin
                                                             radicle_form_key key,
                                                             radicle_scene_part part,
                                                             size_t* out_count);
+RADICLE_API radicle_status radicle_plugin_insert_scene_phase(radicle_plugin* plugin,
+                                                             radicle_form_key key,
+                                                             size_t index,
+                                                             const char* name);
+RADICLE_API radicle_status radicle_plugin_remove_scene_phase(radicle_plugin* plugin,
+                                                             radicle_form_key key,
+                                                             size_t index);
+RADICLE_API radicle_status radicle_plugin_set_scene_phase_name(radicle_plugin* plugin,
+                                                               radicle_form_key key,
+                                                               size_t index,
+                                                               const char* name);
+RADICLE_API radicle_status radicle_plugin_insert_scene_actor(radicle_plugin* plugin,
+                                                             radicle_form_key key,
+                                                             size_t index);
+RADICLE_API radicle_status radicle_plugin_remove_scene_actor(radicle_plugin* plugin,
+                                                             radicle_form_key key,
+                                                             size_t index);
+RADICLE_API radicle_status radicle_plugin_insert_scene_action(radicle_plugin* plugin,
+                                                              radicle_form_key key,
+                                                              size_t index,
+                                                              uint16_t type);
+RADICLE_API radicle_status radicle_plugin_remove_scene_action(radicle_plugin* plugin,
+                                                              radicle_form_key key,
+                                                              size_t index);
+RADICLE_API radicle_status radicle_plugin_set_scene_action_name(radicle_plugin* plugin,
+                                                                radicle_form_key key,
+                                                                size_t index,
+                                                                const char* name);
 
 #ifdef __cplusplus
 }

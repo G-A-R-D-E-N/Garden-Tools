@@ -454,6 +454,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_quest_authoring.cpp
     tests/test_quest_objectives.cpp
     tests/test_quest_stages.cpp
+    tests/test_qust_general_rows.cpp
     tests/test_typed_families_real.cpp
     tests/test_localized_fields.cpp
     tests/test_quest_alias_encoding.cpp
@@ -529,6 +530,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_item_mod_records_real.cpp
     tests/test_story_manager_records.cpp
     tests/test_story_manager_records_real.cpp
+    tests/test_term_menu_rows.cpp
     tests/test_world_misc_records.cpp
     tests/test_world_misc_records_real.cpp
     tests/test_weapon.cpp
@@ -582,6 +584,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_dialogue_writer_c_api.cpp
     tests/test_dialogue_writer_real.cpp
     tests/test_scene_writer.cpp
+    tests/test_scene_phase_edit.cpp
+    tests/test_scene_actor_action_edit.cpp
     tests/test_environment_world.cpp
     tests/test_environment_water_edges.cpp
     tests/test_environment_placed.cpp
