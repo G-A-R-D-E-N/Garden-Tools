@@ -375,6 +375,10 @@ void write_plugin_file(const Plugin& plugin, const std::filesystem::path& path) 
 }
 
 Plugin remap_plugin_masters(Plugin plugin, std::vector<MasterDescriptor> new_masters) {
+  if (new_masters.size() > k_max_plugin_masters) {
+    throw FormIdError("a plugin can carry at most " + std::to_string(k_max_plugin_masters) +
+                      " masters, " + std::to_string(new_masters.size()) + " were requested");
+  }
   assign_record_form_keys(plugin);
   std::vector<const Record*> undecodable;
   for (const auto* record : collect_records(plugin)) {
