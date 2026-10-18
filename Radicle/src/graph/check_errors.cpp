@@ -312,6 +312,47 @@ InfoTopics info_topics(const Plugin& plugin) {
   return out;
 }
 
+bool plugin_selected(const CheckOptions& options, const PluginKey& key) {
+  return options.plugins.empty() ||
+         std::find(options.plugins.begin(), options.plugins.end(), key) != options.plugins.end();
+}
+
+void check_injected_records(std::span<const Plugin* const> load_order,
+                            const CheckOptions& options,
+                            FindingSink& sink) {
+  std::map<PluginKey, std::set<FormKey>> present;
+  for (const auto* plugin : load_order) {
+    if (plugin == nullptr) continue;
+    auto& keys = present[plugin->key];
+    for (const auto* record : collect_records(*plugin)) keys.insert(record->form_key);
+  }
+
+  std::set<FormKey> claimed;
+  for (const auto* plugin : load_order) {
+    if (plugin == nullptr) continue;
+    for (const auto* record : collect_records(*plugin)) {
+      if (sink.full()) return;
+      const auto& key = record->form_key;
+      const bool first = claimed.insert(key).second;
+      if (key.owner() == plugin->key) continue;
+      const auto owner = present.find(key.owner());
+      if (owner == present.end()) continue;
+      if (owner->second.contains(key)) continue;
+      if (!first) continue;
+      if (!plugin_selected(options, plugin->key)) continue;
+      CheckFinding finding;
+      finding.code = CheckCode::injected_record;
+      finding.severity = CheckSeverity::warning;
+      finding.plugin = plugin->key;
+      finding.record = key;
+      finding.message = key.to_string() + " sits in " + std::string{plugin->key.filename()} +
+                        " but its form ID belongs to " +
+                        std::string{key.owner().filename()} + ", which has no such record";
+      sink.add(std::move(finding));
+    }
+  }
+}
+
 void check_dialogue_links(const Plugin& plugin,
                           const std::map<FormKey, WinnerInfo>& winners,
                           FindingSink& sink) {
@@ -371,6 +412,7 @@ std::string_view check_code_name(CheckCode code) noexcept {
     case CheckCode::light_object_id_overflow: return "light_object_id_overflow";
     case CheckCode::internal_form_id_mismatch: return "internal_form_id_mismatch";
     case CheckCode::invalid_condition: return "invalid_condition";
+    case CheckCode::injected_record: return "injected_record";
   }
   return "unknown";
 }
@@ -437,17 +479,12 @@ std::vector<std::vector<FormKey>> find_leveled_list_cycles(
 
 std::vector<CheckFinding> check_load_order(std::span<const Plugin* const> load_order,
                                            const CheckOptions& options) {
-  const auto selected = [&](const PluginKey& key) {
-    return options.plugins.empty() ||
-           std::find(options.plugins.begin(), options.plugins.end(), key) != options.plugins.end();
-  };
-
   const auto winners = winning_records(load_order);
   FindingSink sink{options.limit, {}};
   const auto game_master = PluginKey::from_filename(k_game_master);
 
   for (const auto* plugin : load_order) {
-    if (plugin == nullptr || !selected(plugin->key)) continue;
+    if (plugin == nullptr || !plugin_selected(options, plugin->key)) continue;
     std::map<FormKey, const Record*> records;
     for (const auto* record : collect_records(*plugin)) {
       records.try_emplace(record->form_key, record);
@@ -459,10 +496,12 @@ std::vector<CheckFinding> check_load_order(std::span<const Plugin* const> load_o
     check_conditions(*plugin, sink);
   }
 
+  check_injected_records(load_order, options, sink);
+
   for (const auto& cycle : find_leveled_list_cycles(load_order)) {
     const auto member = std::find_if(cycle.begin(), cycle.end(), [&](const FormKey& key) {
       const auto it = winners.find(key);
-      return it != winners.end() && selected(it->second.plugin);
+      return it != winners.end() && plugin_selected(options, it->second.plugin);
     });
     if (member == cycle.end()) continue;
     std::string chain;

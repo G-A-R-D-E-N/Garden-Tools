@@ -3,6 +3,7 @@
 #include "fo4/flags.hpp"
 #include "fo4/plugin_key.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <stdexcept>
@@ -112,6 +113,7 @@ constexpr std::uint8_t k_created_index = 0xFF;
 constexpr std::uint8_t k_light_runtime_index = 0xFE;
 constexpr std::uint32_t k_light_local_mask = 0x00000FFFu;
 constexpr std::uint32_t k_full_local_mask = 0x00FFFFFFu;
+constexpr std::size_t k_max_plugin_masters = 0xFDu;
 
 // Lowest local FormID a plugin may allocate for its own records.
 //

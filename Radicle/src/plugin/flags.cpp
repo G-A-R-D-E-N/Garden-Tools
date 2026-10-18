@@ -112,6 +112,18 @@ Plugin set_plugin_master_flag(Plugin plugin, bool master) {
   return plugin;
 }
 
+Plugin set_plugin_localized_flag(Plugin plugin, bool localized) {
+  const auto current = plugin.tes4.header.flags.value();
+  const auto next = localized
+      ? (current | RecordFlags::localized)
+      : (current & ~RecordFlags::localized);
+
+  plugin.tes4.header.flags = RecordFlags{next};
+  plugin.header.tes4_flags = plugin.tes4.header.flags;
+  clear_tes4_original_bytes(plugin);
+  return plugin;
+}
+
 Plugin set_plugin_author(Plugin plugin, std::string_view author) {
   const auto stored = stored_tes4_text(author, "author");
   set_tes4_zstring(plugin.tes4, sig_cnam, stored);
