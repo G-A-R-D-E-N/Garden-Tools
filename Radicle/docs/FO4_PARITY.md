@@ -46,7 +46,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | Record | xEdit line | Scalar rows | String rows | FormLink fields | FormLink lists | Localized subrecords | Authoring | Keyword list | Typed module | Mixed remap | Real-data tests naming it | Tier |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- | --- | ---: | --- |
 | AACT | 6970 | 5 | 1 | 1 | - | 1 | yes | - | - | - | 1 | L4 |
-| ACHR | 4483 | 11 | - | 13 | - | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
+| ACHR | 4483 | 21 | - | 17 | - | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
 | ACTI | 5611 | 22 | 3 | 14 | - | 2 | yes | yes | environment/base_records | yes | 1 | L4 |
 | ADDN | 7796 | 9 | 1 | 3 | - | - | yes | - | - | - | 1 | L4 |
 | AECH | 12206 | 2 | - | - | - | - | yes | - | - | - | 1 | L4 |
@@ -55,8 +55,8 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | AMMO | 5741 | 23 | 4 | 9 | - | 3 | yes | yes | - | - | 1 | L4 |
 | ANIO | 5777 | - | 2 | 1 | - | - | yes | - | - | - | 1 | L4 |
 | AORU | 12268 | 5 | - | - | - | - | yes | - | - | - | 1 | L4 |
-| ARMA | 5845 | 7 | 4 | 12 | - | - | yes | - | forms/armor, forms/armor_edit | yes | 1 | L4 |
-| ARMO | 5786 | 26 | 8 | 18 | - | 2 | yes | yes | forms/armor, forms/armor_edit | yes | 1 | L4 |
+| ARMA | 5845 | 15 | 4 | 12 | - | - | yes | - | forms/armor, forms/armor_edit | yes | 1 | L4 |
+| ARMO | 5786 | 27 | 8 | 18 | - | 2 | yes | yes | forms/armor, forms/armor_edit | yes | 1 | L4 |
 | ARTO | 9362 | 8 | 1 | 2 | - | - | yes | yes | - | - | 1 | L4 |
 | ASPC | 7057 | 8 | - | 3 | - | - | yes | - | - | - | 1 | L4 |
 | ASTP | 9135 | 1 | 4 | - | - | - | yes | - | - | - | - | L4 |
@@ -106,7 +106,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | IDLM | 7098 | 10 | 1 | 3 | - | - | yes | yes | - | yes | 1 | L4 |
 | IMAD | 7466 | 74 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | IMGS | 7393 | 36 | 1 | - | - | - | yes | - | - | - | 3 | L4 |
-| INFO | 9672 | 13 | 7 | 10 | - | 2 | yes | - | forms/info_copy, environment/dialogue | - | 2 | L4 |
+| INFO | 9672 | 14 | 7 | 13 | - | 2 | yes | - | forms/info_copy, environment/dialogue | - | 2 | L4 |
 | INGR | 9788 | 22 | 5 | 9 | - | 1 | yes | yes | - | - | 1 | L4 |
 | INNR | 12337 | 1 | - | - | - | 1 | yes | - | - | - | 1 | L4 |
 | IPCT | 7978 | 20 | 1 | 7 | - | - | yes | - | - | - | 1 | L4 |
@@ -118,7 +118,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | LAYR | 12400 | - | - | 1 | - | - | yes | - | environment/base_records | - | 1 | L4 |
 | LCRT | 6962 | 5 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | LCTN | 8039 | 6 | - | 4 | - | 1 | yes | yes | - | yes | 1 | L4 |
-| LENS | 12405 | 1 | - | - | - | - | yes | - | - | - | 1 | L4 |
+| LENS | 12405 | 2 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | LGTM | 8629 | 81 | - | 1 | - | - | yes | - | environment/world | - | 1 | L4 |
 | LIGH | 9871 | 37 | 6 | 10 | - | 1 | yes | yes | environment/base_records | - | 2 | L4 |
 | LSCR | 9946 | 4 | 1 | 2 | - | 1 | yes | - | - | - | 1 | L4 |
@@ -145,27 +145,27 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | OTFT | 9357 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
 | OVIS | 12546 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
 | PACK | 10526 | 24 | - | 12 | - | - | yes | - | environment/behavior | - | 3 | L4 |
-| PARW | 5944 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
-| PBAR | 5945 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
-| PBEA | 5946 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
-| PCON | 5947 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
+| PARW | 5944 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
+| PBAR | 5945 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
+| PBEA | 5946 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
+| PCON | 5947 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
 | PERK | 7582 | - | 2 | 2 | - | 3 | yes | - | - | yes | 1 | L4 |
-| PFLA | 5948 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
-| PGRE | 5949 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
-| PHZD | 5950 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
+| PFLA | 5948 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
+| PGRE | 5949 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
+| PHZD | 5950 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
 | PKIN | 12571 | 7 | 1 | 1 | - | - | yes | - | - | - | 1 | L4 |
 | PLYR | 12129 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
-| PMIS | 5951 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
+| PMIS | 5951 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
 | PROJ | 7115 | 33 | 4 | 15 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
 | QUST | 10684 | 5 | 4 | 3 | 1 | 3 | yes | - | forms/quest_alias_edit, forms/quest_aliases_decode, forms/quest_objectives, forms/quest_stages | - | 7 | L4 |
-| RACE | 11054 | 52 | 12 | 41 | 9 | 5 | yes | yes | forms/race, forms/race_body | yes | 1 | L4 |
-| REFR | 11347 | 25 | - | 13 | - | - | yes | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
+| RACE | 11054 | 56 | 12 | 41 | 9 | 5 | yes | yes | forms/race, forms/race_body | yes | 1 | L4 |
+| REFR | 11347 | 35 | - | 16 | - | - | yes | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
 | REGN | 11870 | 9 | - | 2 | - | 1 | - | - | - | yes | - | L4 |
 | RELA | 8848 | 2 | - | 3 | - | - | yes | - | - | - | 1 | L4 |
 | REVB | 9593 | 13 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | RFCT | 6163 | 1 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | RFGP | 12582 | - | 1 | 2 | - | - | yes | - | - | - | 1 | L4 |
-| SCCO | 12593 | - | - | 1 | - | - | yes | - | - | - | 1 | L4 |
+| SCCO | 12593 | 2 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | SCEN | 8879 | 7 | 1 | - | - | - | yes | yes | environment/dialogue | - | 2 | L4 |
 | SCOL | 12627 | 6 | 2 | 2 | - | 1 | yes | - | forms/static_collection | - | - | L4 |
 | SCSN | 12650 | 1 | - | - | - | - | yes | - | - | yes | 1 | L4 |
@@ -200,7 +200,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | Record | Scalar identity | Scalar percent_0_100 | Scalar enum | Scalar flags | String | Scalar storage | Repeated | Stride | When | Insertion |
 | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | --- |
 | AACT | 4 | - | 1 | - | 1 | u32, u8 | - | - | - | existing_only |
-| ACHR | 6 | 1 | 2 | 2 | - | f32, i32, u32, u8 | - | - | - | existing_only |
+| ACHR | 14 | 1 | 3 | 3 | - | f32, i32, u32, u8 | 3 | 7 | - | existing_only |
 | ACTI | 18 | 1 | - | 3 | 3 | f32, i16, i32, u16, u32, u8 | 12 | 4 | - | existing_only |
 | ADDN | 8 | - | 1 | - | 1 | i16, u16, u32 | - | - | - | existing_only |
 | AECH | - | - | 2 | - | - | u32 | 2 | - | - | existing_only |
@@ -209,8 +209,8 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | AMMO | 19 | 1 | - | 3 | 4 | f32, i16, i32, u32, u8 | 12 | 2 | - | existing_only |
 | ANIO | - | - | - | - | 2 | - | - | - | - | existing_only |
 | AORU | 3 | - | 2 | - | - | f32, u8 | - | - | - | existing_only |
-| ARMA | 5 | - | - | 2 | 4 | f32, u32, u8 | 1 | - | - | existing_only |
-| ARMO | 22 | 1 | 1 | 2 | 8 | f32, i16, i32, u16, u32, u8 | 14 | 4 | - | existing_only |
+| ARMA | 9 | - | - | 6 | 4 | f32, u32, u8 | 1 | - | - | existing_only |
+| ARMO | 23 | 1 | 1 | 2 | 8 | f32, i16, i32, u16, u32, u8 | 15 | 4 | - | existing_only |
 | ARTO | 7 | - | 1 | - | 1 | f32, i16, u32 | - | - | - | existing_only |
 | ASPC | 7 | - | 1 | - | - | i16, u16, u8 | - | - | - | existing_only |
 | ASTP | - | - | - | 1 | 4 | u32 | - | - | - | existing_only |
@@ -260,7 +260,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | IDLM | 9 | - | - | 1 | 1 | f32, i16, u8 | - | - | - | existing_only |
 | IMAD | 70 | - | 3 | 1 | - | f32, u32, u8 | - | 10 | - | existing_only |
 | IMGS | 35 | - | 1 | - | 1 | f32, u16 | - | - | - | existing_only |
-| INFO | 13 | - | - | - | 7 | i32, u16, u32, u8 | 11 | - | - | existing_only |
+| INFO | 14 | - | - | - | 7 | i32, u16, u32, u8 | 15 | - | - | existing_only |
 | INGR | 18 | 1 | - | 3 | 5 | f32, i16, i32, u32, u8 | 12 | 2 | - | existing_only |
 | INNR | - | - | 1 | - | - | u32 | - | - | - | existing_only |
 | IPCT | 15 | - | 3 | 2 | 1 | f32, u32, u8 | - | - | - | existing_only |
@@ -271,7 +271,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | LAYR | - | - | - | - | - | - | - | - | - | existing_only |
 | LCRT | 4 | - | 1 | - | - | u32, u8 | - | - | - | existing_only |
 | LCTN | 6 | - | - | - | - | f32, u8 | - | - | - | existing_only |
-| LENS | 1 | - | - | - | - | f32 | - | - | - | existing_only |
+| LENS | 2 | - | - | - | - | f32 | - | - | - | existing_only |
 | LGTM | 81 | - | - | - | - | f32, i32, u8 | - | - | - | existing_only |
 | LIGH | 33 | 1 | - | 3 | 6 | f32, i16, i32, u32, u8 | 12 | 4 | - | existing_only |
 | LSCR | 4 | - | - | - | 1 | f32, i16 | - | - | - | existing_only |
@@ -298,27 +298,27 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | OTFT | - | - | - | - | - | - | - | - | - | - |
 | OVIS | - | - | - | - | - | - | - | - | - | - |
 | PACK | 24 | - | - | - | - | i32, i8, u16, u32, u8 | 21 | - | 17 | existing_only |
-| PARW | 11 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
-| PBAR | 11 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
-| PBEA | 11 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
-| PCON | 11 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
+| PARW | 11 | 1 | 1 | 2 | - | f32, i32, u32, u8 | 2 | - | - | existing_only |
+| PBAR | 11 | 1 | 1 | 2 | - | f32, i32, u32, u8 | 2 | - | - | existing_only |
+| PBEA | 11 | 1 | 1 | 2 | - | f32, i32, u32, u8 | 2 | - | - | existing_only |
+| PCON | 11 | 1 | 1 | 2 | - | f32, i32, u32, u8 | 2 | - | - | existing_only |
 | PERK | - | - | - | - | 2 | - | - | - | - | existing_only |
-| PFLA | 11 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
-| PGRE | 11 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
-| PHZD | 11 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
+| PFLA | 11 | 1 | 1 | 2 | - | f32, i32, u32, u8 | 2 | - | - | existing_only |
+| PGRE | 11 | 1 | 1 | 2 | - | f32, i32, u32, u8 | 2 | - | - | existing_only |
+| PHZD | 11 | 1 | 1 | 2 | - | f32, i32, u32, u8 | 2 | - | - | existing_only |
 | PKIN | 7 | - | - | - | 1 | i16, u32 | - | - | - | existing_only |
 | PLYR | - | - | - | - | - | - | - | - | - | - |
-| PMIS | 11 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
+| PMIS | 11 | 1 | 1 | 2 | - | f32, i32, u32, u8 | 2 | - | - | existing_only |
 | PROJ | 30 | 1 | - | 2 | 4 | f32, i16, i32, u16, u32, u8 | 12 | 2 | - | existing_only |
 | QUST | 2 | - | 2 | 1 | 4 | f32, u16, u32, u8 | - | - | - | existing_only |
-| RACE | 40 | - | 9 | 3 | 12 | f32, i16, i32, u16, u32, u8 | 21 | 2 | - | existing_only |
-| REFR | 20 | 1 | 2 | 2 | - | f32, i32, u32, u8 | - | 4 | - | existing_only |
+| RACE | 44 | - | 9 | 3 | 12 | f32, i16, i32, u16, u32, u8 | 23 | 3 | - | existing_only |
+| REFR | 28 | 1 | 3 | 3 | - | f32, i32, u32, u8 | 5 | 11 | - | existing_only |
 | REGN | 8 | - | 1 | - | - | f32, u32, u8 | 7 | - | - | existing_only |
 | RELA | - | - | 1 | 1 | - | u8 | - | - | - | existing_only |
 | REVB | 12 | - | 1 | - | - | i8, u16, u32, u8 | - | - | - | existing_only |
 | RFCT | - | - | - | 1 | - | u32 | - | - | - | existing_only |
 | RFGP | - | - | - | - | 1 | - | - | - | - | existing_only |
-| SCCO | - | - | - | - | - | - | - | - | - | existing_only |
+| SCCO | 2 | - | - | - | - | i32 | 3 | - | - | existing_only |
 | SCEN | 7 | - | - | - | 1 | f32, u32 | - | - | - | existing_only |
 | SCOL | 6 | - | - | - | 2 | i16 | 1 | - | - | existing_only |
 | SCSN | 1 | - | - | - | - | u16 | - | - | - | existing_only |

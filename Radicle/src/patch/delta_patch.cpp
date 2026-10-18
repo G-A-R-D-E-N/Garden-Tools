@@ -24,7 +24,7 @@ bool same_stored_record(const Record& left, const Record& right) {
   return true;
 }
 
-std::size_t loaded_index(const Environment& env, const PluginKey& key) {
+std::size_t loaded_index(const env::Environment& env, const PluginKey& key) {
   const auto index = env.find_plugin(key.filename());
   if (!index.has_value()) {
     throw DeltaPatchError("plugin is not loaded: " + std::string(key.filename()));
@@ -34,7 +34,7 @@ std::size_t loaded_index(const Environment& env, const PluginKey& key) {
 
 }  // namespace
 
-DeltaPatchResult build_delta_patch(const Environment& env,
+DeltaPatchResult build_delta_patch(const env::Environment& env,
                                    const PluginKey& older,
                                    const PluginKey& newer) {
   const auto older_index = loaded_index(env, older);

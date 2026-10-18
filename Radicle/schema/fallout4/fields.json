@@ -200,7 +200,15 @@
           "kind": "string",
           "subrecord": "MOD5",
           "insertion": "existing_only"
-        }
+        },
+        {"path": "ARMA\\BipedMaleColorRemappingIndex", "label": "Biped male color remapping index", "kind": "scalar", "subrecord": "MO2C", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "ARMA\\BipedFemaleColorRemappingIndex", "label": "Biped female color remapping index", "kind": "scalar", "subrecord": "MO3C", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "ARMA\\FirstPersonMaleColorRemappingIndex", "label": "First person male color remapping index", "kind": "scalar", "subrecord": "MO4C", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "ARMA\\FirstPersonFemaleColorRemappingIndex", "label": "First person female color remapping index", "kind": "scalar", "subrecord": "MO5C", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "ARMA\\BipedMaleModelFlags", "label": "Biped male model flags", "kind": "scalar", "subrecord": "MO2F", "offset": 0, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Has FaceBones Model"}, {"bit": 1, "name": "Has 1stPerson Model"}], "minimum": 0, "maximum": 255, "payload_size": 1, "insertion": "existing_only"},
+        {"path": "ARMA\\BipedFemaleModelFlags", "label": "Biped female model flags", "kind": "scalar", "subrecord": "MO3F", "offset": 0, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Has FaceBones Model"}, {"bit": 1, "name": "Has 1stPerson Model"}], "minimum": 0, "maximum": 255, "payload_size": 1, "insertion": "existing_only"},
+        {"path": "ARMA\\FirstPersonMaleModelFlags", "label": "First person male model flags", "kind": "scalar", "subrecord": "MO4F", "offset": 0, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Has FaceBones Model"}, {"bit": 1, "name": "Has 1stPerson Model"}], "minimum": 0, "maximum": 255, "payload_size": 1, "insertion": "existing_only"},
+        {"path": "ARMA\\FirstPersonFemaleModelFlags", "label": "First person female model flags", "kind": "scalar", "subrecord": "MO5F", "offset": 0, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Has FaceBones Model"}, {"bit": 1, "name": "Has 1stPerson Model"}], "minimum": 0, "maximum": 255, "payload_size": 1, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {
@@ -436,6 +444,46 @@
             "minimum": 0,
             "maximum": 1,
             "coupled": true
+          },
+          {
+            "signature": "DAMC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DSTD",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTA",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDL",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDT",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDC",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDS",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTF",
+            "minimum": 0,
+            "maximum": 255
           },
           {
             "signature": "DESC",
@@ -720,7 +768,8 @@
           "kind": "string",
           "subrecord": "MIC2",
           "insertion": "existing_only"
-        }
+        },
+        {"path": "ARMO\\WorldModelColorRemappingIndex", "label": "World model color remapping index", "kind": "scalar", "subrecord": "MODC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 4, "repeated": true, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {
@@ -1691,6 +1740,41 @@
             "maximum": 1
           },
           {
+            "signature": "DSTD",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTA",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDL",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDT",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDC",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDS",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTF",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
             "signature": "YNAM",
             "minimum": 0,
             "maximum": 1
@@ -2074,6 +2158,41 @@
             "signature": "DAMC",
             "minimum": 0,
             "maximum": 1
+          },
+          {
+            "signature": "DSTD",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTA",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDL",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDT",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDC",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDS",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTF",
+            "minimum": 0,
+            "maximum": 255
           },
           {
             "signature": "YNAM",
@@ -2460,6 +2579,41 @@
             "signature": "DAMC",
             "minimum": 0,
             "maximum": 1
+          },
+          {
+            "signature": "DSTD",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTA",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDL",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDT",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDC",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDS",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTF",
+            "minimum": 0,
+            "maximum": 255
           },
           {
             "signature": "YNAM",
@@ -2868,6 +3022,41 @@
             "maximum": 1
           },
           {
+            "signature": "DSTD",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTA",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDL",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDT",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDC",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDS",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTF",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
             "signature": "ETYP",
             "minimum": 0,
             "maximum": 1
@@ -3220,6 +3409,41 @@
             "signature": "DAMC",
             "minimum": 0,
             "maximum": 1
+          },
+          {
+            "signature": "DSTD",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTA",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDL",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDT",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDC",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDS",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTF",
+            "minimum": 0,
+            "maximum": 255
           },
           {
             "signature": "YNAM",
@@ -6811,7 +7035,8 @@
       "signature": "LENS",
       "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "CNAM", "minimum": 0, "maximum": 1}, {"signature": "DNAM", "minimum": 0, "maximum": 65535}]},
       "fields": [
-        {"path": "LENS\\ColorInfluence", "label": "Color influence", "kind": "scalar", "subrecord": "CNAM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"}
+        {"path": "LENS\\ColorInfluence", "label": "Color influence", "kind": "scalar", "subrecord": "CNAM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "LENS\\FadeDistanceRadiusScale", "label": "Fade distance radius scale", "kind": "scalar", "subrecord": "DNAM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"}
       ],
       "localized_subrecords": []
     },
@@ -7540,8 +7765,7 @@
           {
             "signature": "DSTD",
             "minimum": 0,
-            "maximum": 1,
-            "coupled": true
+            "maximum": 255
           },
           {
             "signature": "DSTA",
@@ -7551,14 +7775,12 @@
           {
             "signature": "DMDL",
             "minimum": 0,
-            "maximum": 1,
-            "coupled": true
+            "maximum": 255
           },
           {
             "signature": "DMDT",
             "minimum": 0,
-            "maximum": 1,
-            "coupled": true
+            "maximum": 255
           },
           {
             "signature": "DMDC",
@@ -7573,8 +7795,7 @@
           {
             "signature": "DSTF",
             "minimum": 0,
-            "maximum": 1,
-            "coupled": true
+            "maximum": 255
           },
           {
             "signature": "DATA",
@@ -8732,12 +8953,16 @@
           "insertion": "existing_only"
         },
         {"path": "RACE\\FaceMorphIndices", "label": "Face morph index", "kind": "scalar", "subrecord": "FMRI", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "repeated": true, "insertion": "existing_only"},
+        {"path": "RACE\\TotalTintCount", "label": "Total number of tints in list", "kind": "scalar", "subrecord": "TINL", "storage": "u16", "presentation": "identity", "minimum": 0, "maximum": 65535, "insertion": "existing_only"},
+        {"path": "RACE\\NeckFatAdjustmentsScaleX", "label": "Neck fat adjustments scale X", "kind": "scalar", "subrecord": "NNAM", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 12, "repeated": true, "insertion": "existing_only"},
+        {"path": "RACE\\NeckFatAdjustmentsScaleY", "label": "Neck fat adjustments scale Y", "kind": "scalar", "subrecord": "NNAM", "offset": 8, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 12, "repeated": true, "insertion": "existing_only"},
         {"path": "RACE\\MorphGroupMask", "label": "Morph group mask", "kind": "scalar", "subrecord": "MPPK", "storage": "u16", "presentation": "enum", "names": [{"value": 1171, "name": "Male Forehead Mask"}, {"value": 1172, "name": "Male Eyes Mask"}, {"value": 1173, "name": "Male Nose Mask"}, {"value": 1174, "name": "Male Ears Mask"}, {"value": 1175, "name": "Male Cheeks Mask"}, {"value": 1176, "name": "Male Mouth Mask"}, {"value": 1177, "name": "Male Neck Mask"}, {"value": 1221, "name": "Female Forehead Mask"}, {"value": 1222, "name": "Female Eyes Mask"}, {"value": 1223, "name": "Female Nose Mask"}, {"value": 1224, "name": "Female Ears Mask"}, {"value": 1225, "name": "Female Cheeks Mask"}, {"value": 1226, "name": "Female Mouth Mask"}, {"value": 1227, "name": "Female Neck Mask"}, {"value": 65535, "name": "None"}], "minimum": 0, "maximum": 65535, "repeated": true, "insertion": "existing_only"},
         {"path": "RACE\\MorphGroupNames", "label": "Morph group name", "kind": "string", "subrecord": "MPGN", "repeated": true, "insertion": "existing_only"},
         {"path": "RACE\\MorphLastIndex", "label": "Morph last index", "kind": "scalar", "subrecord": "MLSI", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"},
         {"path": "RACE\\MorphPresetIndices", "label": "Morph preset index", "kind": "scalar", "subrecord": "MPPI", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "repeated": true, "insertion": "existing_only"},
         {"path": "RACE\\MorphPresetMorphs", "label": "Morph preset morph", "kind": "string", "subrecord": "MPPM", "repeated": true, "insertion": "existing_only"},
         {"path": "RACE\\MorphPresetPlayable", "label": "Morph preset playable", "kind": "scalar", "subrecord": "MPPF", "storage": "u8", "presentation": "enum", "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "minimum": 0, "maximum": 1, "repeated": true, "insertion": "existing_only"},
+        {"path": "RACE\\MorphGroupSliders", "label": "Morph group slider index", "kind": "scalar", "subrecord": "MPGS", "offset": 0, "stride": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"},
         {"path": "RACE\\MorphValueIndices", "label": "Morph value index", "kind": "scalar", "subrecord": "MSID", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "repeated": true, "insertion": "existing_only"},
         {"path": "RACE\\MorphValueMaxNames", "label": "Morph value max name", "kind": "string", "subrecord": "MSM1", "repeated": true, "insertion": "existing_only"},
         {"path": "RACE\\MorphValueMinNames", "label": "Morph value min name", "kind": "string", "subrecord": "MSM0", "repeated": true, "insertion": "existing_only"},
@@ -9332,6 +9557,14 @@
         ]
       },
       "fields": [
+        {"path": "REFR\\ReflectionType", "label": "Reflection type", "kind": "scalar", "subrecord": "XPWR", "offset": 4, "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Reflection"}, {"bit": 1, "name": "Refraction"}], "minimum": 0, "maximum": 4294967295, "repeated": true, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "REFR\\RagdollBoneId", "label": "Ragdoll bone id", "kind": "scalar", "subrecord": "XRGD", "offset": 0, "stride": 28, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "REFR\\RagdollPositionX", "label": "Ragdoll position X", "kind": "scalar", "subrecord": "XRGD", "offset": 4, "stride": 28, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "REFR\\RagdollPositionY", "label": "Ragdoll position Y", "kind": "scalar", "subrecord": "XRGD", "offset": 8, "stride": 28, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "REFR\\RagdollPositionZ", "label": "Ragdoll position Z", "kind": "scalar", "subrecord": "XRGD", "offset": 12, "stride": 28, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "REFR\\RagdollRotationX", "label": "Ragdoll rotation X", "kind": "scalar", "subrecord": "XRGD", "offset": 16, "stride": 28, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "REFR\\RagdollRotationY", "label": "Ragdoll rotation Y", "kind": "scalar", "subrecord": "XRGD", "offset": 20, "stride": 28, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "REFR\\RagdollRotationZ", "label": "Ragdoll rotation Z", "kind": "scalar", "subrecord": "XRGD", "offset": 24, "stride": 28, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
         {
           "path": "REFR\\HealthPercent",
           "label": "Health %",
@@ -9476,6 +9709,47 @@
           "presentation": "identity",
           "minimum": -3.4028234663852886e+38,
           "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\LevelModifier",
+          "label": "Level modifier",
+          "kind": "scalar",
+          "subrecord": "XLCM",
+          "storage": "i32",
+          "presentation": "enum",
+          "names": [
+            {
+              "value": 0,
+              "name": "Easy"
+            },
+            {
+              "value": 1,
+              "name": "Medium"
+            },
+            {
+              "value": 2,
+              "name": "Hard"
+            },
+            {
+              "value": 3,
+              "name": "Very Hard"
+            }
+          ],
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\PatrolIdleTime",
+          "label": "Patrol idle time",
+          "kind": "scalar",
+          "subrecord": "XPRD",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "repeated": true,
           "insertion": "existing_only"
         },
         {
@@ -9802,6 +10076,7 @@
         }
       ],
       "formlink_fields": [
+        {"path": "REFR\\ReflectedBy", "label": "Reflected by", "subrecord": "XPWR", "offset": 0, "payload_sizes": [8, 4], "targets": ["ACHR", "REFR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
         {
           "path": "REFR\\EncounterZone",
           "label": "Encounter zone",
@@ -9814,6 +10089,37 @@
             "ECZN"
           ],
           "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\PatrolIdle",
+          "label": "Patrol idle",
+          "subrecord": "INAM",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "IDLE"
+          ],
+          "nullable": true,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\LitWater",
+          "label": "Lit water",
+          "subrecord": "XLTW",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "ACHR",
+            "REFR"
+          ],
+          "nullable": false,
+          "repeated": true,
           "insertion": "existing_only"
         },
         {
@@ -10033,6 +10339,7 @@
         ]
       },
       "fields": [
+        {"path": "PARW\\ReflectionType", "label": "Reflection type", "kind": "scalar", "subrecord": "XPWR", "offset": 4, "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Reflection"}, {"bit": 1, "name": "Refraction"}], "minimum": 0, "maximum": 4294967295, "repeated": true, "payload_size": 8, "insertion": "existing_only"},
         {
           "path": "PARW\\HealthPercent",
           "label": "Health %",
@@ -10225,6 +10532,7 @@
         }
       ],
       "formlink_fields": [
+        {"path": "PARW\\ReflectedBy", "label": "Reflected by", "subrecord": "XPWR", "offset": 0, "payload_sizes": [8, 4], "targets": ["ACHR", "REFR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
         {
           "path": "PARW\\Base",
           "label": "Base",
@@ -10411,6 +10719,7 @@
         ]
       },
       "fields": [
+        {"path": "PBAR\\ReflectionType", "label": "Reflection type", "kind": "scalar", "subrecord": "XPWR", "offset": 4, "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Reflection"}, {"bit": 1, "name": "Refraction"}], "minimum": 0, "maximum": 4294967295, "repeated": true, "payload_size": 8, "insertion": "existing_only"},
         {
           "path": "PBAR\\HealthPercent",
           "label": "Health %",
@@ -10603,6 +10912,7 @@
         }
       ],
       "formlink_fields": [
+        {"path": "PBAR\\ReflectedBy", "label": "Reflected by", "subrecord": "XPWR", "offset": 0, "payload_sizes": [8, 4], "targets": ["ACHR", "REFR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
         {
           "path": "PBAR\\EncounterZone",
           "label": "Encounter zone",
@@ -10789,6 +11099,7 @@
         ]
       },
       "fields": [
+        {"path": "PBEA\\ReflectionType", "label": "Reflection type", "kind": "scalar", "subrecord": "XPWR", "offset": 4, "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Reflection"}, {"bit": 1, "name": "Refraction"}], "minimum": 0, "maximum": 4294967295, "repeated": true, "payload_size": 8, "insertion": "existing_only"},
         {
           "path": "PBEA\\HealthPercent",
           "label": "Health %",
@@ -10981,6 +11292,7 @@
         }
       ],
       "formlink_fields": [
+        {"path": "PBEA\\ReflectedBy", "label": "Reflected by", "subrecord": "XPWR", "offset": 0, "payload_sizes": [8, 4], "targets": ["ACHR", "REFR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
         {
           "path": "PBEA\\EncounterZone",
           "label": "Encounter zone",
@@ -11167,6 +11479,7 @@
         ]
       },
       "fields": [
+        {"path": "PCON\\ReflectionType", "label": "Reflection type", "kind": "scalar", "subrecord": "XPWR", "offset": 4, "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Reflection"}, {"bit": 1, "name": "Refraction"}], "minimum": 0, "maximum": 4294967295, "repeated": true, "payload_size": 8, "insertion": "existing_only"},
         {
           "path": "PCON\\HealthPercent",
           "label": "Health %",
@@ -11359,6 +11672,7 @@
         }
       ],
       "formlink_fields": [
+        {"path": "PCON\\ReflectedBy", "label": "Reflected by", "subrecord": "XPWR", "offset": 0, "payload_sizes": [8, 4], "targets": ["ACHR", "REFR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
         {
           "path": "PCON\\EncounterZone",
           "label": "Encounter zone",
@@ -11545,6 +11859,7 @@
         ]
       },
       "fields": [
+        {"path": "PFLA\\ReflectionType", "label": "Reflection type", "kind": "scalar", "subrecord": "XPWR", "offset": 4, "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Reflection"}, {"bit": 1, "name": "Refraction"}], "minimum": 0, "maximum": 4294967295, "repeated": true, "payload_size": 8, "insertion": "existing_only"},
         {
           "path": "PFLA\\HealthPercent",
           "label": "Health %",
@@ -11737,6 +12052,7 @@
         }
       ],
       "formlink_fields": [
+        {"path": "PFLA\\ReflectedBy", "label": "Reflected by", "subrecord": "XPWR", "offset": 0, "payload_sizes": [8, 4], "targets": ["ACHR", "REFR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
         {
           "path": "PFLA\\EncounterZone",
           "label": "Encounter zone",
@@ -11923,6 +12239,7 @@
         ]
       },
       "fields": [
+        {"path": "PGRE\\ReflectionType", "label": "Reflection type", "kind": "scalar", "subrecord": "XPWR", "offset": 4, "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Reflection"}, {"bit": 1, "name": "Refraction"}], "minimum": 0, "maximum": 4294967295, "repeated": true, "payload_size": 8, "insertion": "existing_only"},
         {
           "path": "PGRE\\HealthPercent",
           "label": "Health %",
@@ -12115,6 +12432,7 @@
         }
       ],
       "formlink_fields": [
+        {"path": "PGRE\\ReflectedBy", "label": "Reflected by", "subrecord": "XPWR", "offset": 0, "payload_sizes": [8, 4], "targets": ["ACHR", "REFR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
         {
           "path": "PGRE\\EncounterZone",
           "label": "Encounter zone",
@@ -12300,6 +12618,7 @@
         ]
       },
       "fields": [
+        {"path": "PHZD\\ReflectionType", "label": "Reflection type", "kind": "scalar", "subrecord": "XPWR", "offset": 4, "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Reflection"}, {"bit": 1, "name": "Refraction"}], "minimum": 0, "maximum": 4294967295, "repeated": true, "payload_size": 8, "insertion": "existing_only"},
         {
           "path": "PHZD\\HealthPercent",
           "label": "Health %",
@@ -12492,6 +12811,7 @@
         }
       ],
       "formlink_fields": [
+        {"path": "PHZD\\ReflectedBy", "label": "Reflected by", "subrecord": "XPWR", "offset": 0, "payload_sizes": [8, 4], "targets": ["ACHR", "REFR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
         {
           "path": "PHZD\\EncounterZone",
           "label": "Encounter zone",
@@ -12678,6 +12998,7 @@
         ]
       },
       "fields": [
+        {"path": "PMIS\\ReflectionType", "label": "Reflection type", "kind": "scalar", "subrecord": "XPWR", "offset": 4, "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Reflection"}, {"bit": 1, "name": "Refraction"}], "minimum": 0, "maximum": 4294967295, "repeated": true, "payload_size": 8, "insertion": "existing_only"},
         {
           "path": "PMIS\\HealthPercent",
           "label": "Health %",
@@ -12870,6 +13191,7 @@
         }
       ],
       "formlink_fields": [
+        {"path": "PMIS\\ReflectedBy", "label": "Reflected by", "subrecord": "XPWR", "offset": 0, "payload_sizes": [8, 4], "targets": ["ACHR", "REFR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
         {
           "path": "PMIS\\EncounterZone",
           "label": "Encounter zone",
@@ -13957,6 +14279,15 @@
           { "signature": "MODF", "minimum": 0, "maximum": 1 },
           { "signature": "KSIZ", "minimum": 0, "maximum": 1, "coupled": true },
           { "signature": "KWDA", "minimum": 0, "maximum": 1, "coupled": true },
+          { "signature": "DEST", "minimum": 0, "maximum": 1, "coupled": true },
+          { "signature": "DAMC", "minimum": 0, "maximum": 1 },
+          { "signature": "DSTD", "minimum": 0, "maximum": 255 },
+          { "signature": "DSTA", "minimum": 0, "maximum": 255 },
+          { "signature": "DMDL", "minimum": 0, "maximum": 255 },
+          { "signature": "DMDT", "minimum": 0, "maximum": 255 },
+          { "signature": "DMDC", "minimum": 0, "maximum": 255 },
+          { "signature": "DMDS", "minimum": 0, "maximum": 255 },
+          { "signature": "DSTF", "minimum": 0, "maximum": 255 },
           { "signature": "PRPS", "minimum": 0, "maximum": 1 },
           { "signature": "FULL", "minimum": 0, "maximum": 1 },
           { "signature": "ICON", "minimum": 0, "maximum": 1 },
@@ -22080,7 +22411,10 @@
           }
         ]
       },
-      "fields": [],
+      "fields": [
+        {"path": "SCCO\\CoordinateX", "label": "Coordinate X", "kind": "scalar", "subrecord": "XNAM", "offset": 0, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "minimum_payload_size": 8, "repeated": true, "insertion": "existing_only"},
+        {"path": "SCCO\\CoordinateY", "label": "Coordinate Y", "kind": "scalar", "subrecord": "XNAM", "offset": 4, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "minimum_payload_size": 8, "repeated": true, "insertion": "existing_only"}
+      ],
       "formlink_fields": [
         {
           "path": "SCCO\\Quest",
@@ -22091,6 +22425,21 @@
             "QUST"
           ],
           "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SCCO\\Scene",
+          "label": "Scene",
+          "subrecord": "SNAM",
+          "offset": 0,
+          "targets": [
+            "SCEN"
+          ],
+          "nullable": false,
+          "repeated": true,
+          "payload_sizes": [
+            4
+          ],
           "insertion": "existing_only"
         }
       ],
@@ -24811,6 +25160,42 @@
           "insertion": "existing_only"
         },
         {
+          "path": "INFO\\IdleInterruptPercentage",
+          "label": "Idle interrupt percentage",
+          "kind": "scalar",
+          "subrecord": "TNAM",
+          "offset": 0,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "payload_size": 2,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\Response",
+          "label": "Response",
+          "kind": "subrecord_group",
+          "insertion": "existing_only",
+          "members": [
+            {"subrecord": "TRDA", "required": true, "repeatable": false, "payload_size": 20},
+            {"subrecord": "NAM1", "required": true, "repeatable": false, "payload_size": 0, "default": "00",
+             "localized": true},
+            {"subrecord": "NAM2", "required": true, "repeatable": false, "payload_size": 0, "default": "00"},
+            {"subrecord": "NAM3", "required": true, "repeatable": false, "payload_size": 0, "default": "00"},
+            {"subrecord": "NAM4", "required": true, "repeatable": false, "payload_size": 0, "default": "00"},
+            {"subrecord": "SNAM", "required": false, "repeatable": false, "payload_size": 4},
+            {"subrecord": "LNAM", "required": false, "repeatable": false, "payload_size": 4},
+            {"subrecord": "TNAM", "required": false, "repeatable": false, "payload_size": 2},
+            {"subrecord": "NAM9", "required": false, "repeatable": false, "payload_size": 0},
+            {"subrecord": "SRAF", "required": false, "repeatable": false, "payload_size": 4},
+            {"subrecord": "WZMD", "required": false, "repeatable": false, "payload_size": 0}
+          ],
+          "successors": ["CTDA", "CITC", "RNAM", "ANAM", "TSCE", "INTV", "ALFA", "ONAM", "GREE", "TIQS", "NAM0",
+                         "INCC", "MODQ", "INAM"]
+        },
+        {
           "path": "INFO\\Prompt",
           "label": "Prompt",
           "kind": "string",
@@ -24973,6 +25358,45 @@
             "SNDR"
           ],
           "nullable": true,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\IdleSpeakerAnimation",
+          "payload_sizes": [4],
+          "label": "Idle animations: Speaker",
+          "subrecord": "SNAM",
+          "offset": 0,
+          "targets": [
+            "IDLE"
+          ],
+          "nullable": true,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\IdleListenerAnimation",
+          "payload_sizes": [4],
+          "label": "Idle animations: Listener",
+          "subrecord": "LNAM",
+          "offset": 0,
+          "targets": [
+            "IDLE"
+          ],
+          "nullable": true,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\CameraPath",
+          "payload_sizes": [4],
+          "label": "Camera path",
+          "subrecord": "SRAF",
+          "offset": 0,
+          "targets": [
+            "CPTH"
+          ],
+          "nullable": false,
           "repeated": true,
           "insertion": "existing_only"
         },
@@ -25208,6 +25632,46 @@
             "minimum": 0,
             "maximum": 1,
             "coupled": true
+          },
+          {
+            "signature": "DAMC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DSTD",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTA",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDL",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDT",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDC",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDS",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTF",
+            "minimum": 0,
+            "maximum": 255
           },
           {
             "signature": "KSIZ",
@@ -25672,6 +26136,46 @@
             "coupled": true
           },
           {
+            "signature": "DAMC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DSTD",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTA",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDL",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDT",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDC",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDS",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTF",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
             "signature": "DATA",
             "minimum": 1,
             "maximum": 1,
@@ -26123,6 +26627,46 @@
             "coupled": true
           },
           {
+            "signature": "DAMC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DSTD",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTA",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDL",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDT",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDC",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDS",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTF",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
             "signature": "KSIZ",
             "minimum": 0,
             "maximum": 1,
@@ -26484,6 +27028,46 @@
             "coupled": true
           },
           {
+            "signature": "DAMC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DSTD",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTA",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDL",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDT",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDC",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDS",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTF",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
             "signature": "KSIZ",
             "minimum": 0,
             "maximum": 1,
@@ -26562,6 +27146,32 @@
           },
           {
             "signature": "XMRK",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "APPR",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "OBTE",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "OBTF",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "OBTS",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "STOP",
             "minimum": 0,
             "maximum": 1
           }
@@ -26979,6 +27589,17 @@
           "insertion": "existing_only"
         },
         {
+          "path": "FURN\\Markers",
+          "label": "Markers",
+          "kind": "subrecord_group",
+          "insertion": "existing_only",
+          "members": [
+            {"subrecord": "ENAM", "required": true, "repeatable": false, "payload_size": 4},
+            {"subrecord": "NAM0", "required": true, "repeatable": false, "payload_size": 4}
+          ],
+          "successors": ["FNPR", "XMRK", "SNAM", "APPR", "OBTE", "NVNM"]
+        },
+        {
           "path": "FURN\\MarkerEntryType",
           "label": "Marker entry type",
           "kind": "scalar",
@@ -27305,6 +27926,46 @@
             "coupled": true
           },
           {
+            "signature": "DAMC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DSTD",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTA",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDL",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDT",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDC",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDS",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTF",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
             "signature": "KSIZ",
             "minimum": 0,
             "maximum": 1,
@@ -27579,6 +28240,46 @@
             "minimum": 0,
             "maximum": 1,
             "coupled": true
+          },
+          {
+            "signature": "DAMC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DSTD",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTA",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDL",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDT",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDC",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDS",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTF",
+            "minimum": 0,
+            "maximum": 255
           },
           {
             "signature": "KSIZ",
@@ -29075,8 +29776,15 @@
           {"signature": "MICO", "minimum": 0, "maximum": 1},
           {"signature": "EITM", "minimum": 0, "maximum": 1, "coupled": true},
           {"signature": "EAMT", "minimum": 0, "maximum": 1, "coupled": true},
-          {"signature": "DEST", "minimum": 0, "maximum": 1, "coupled": true},
-          {"signature": "DAMC", "minimum": 0, "maximum": 1},
+          { "signature": "DEST", "minimum": 0, "maximum": 1, "coupled": true },
+          { "signature": "DAMC", "minimum": 0, "maximum": 1 },
+          { "signature": "DSTD", "minimum": 0, "maximum": 255 },
+          { "signature": "DSTA", "minimum": 0, "maximum": 255 },
+          { "signature": "DMDL", "minimum": 0, "maximum": 255 },
+          { "signature": "DMDT", "minimum": 0, "maximum": 255 },
+          { "signature": "DMDC", "minimum": 0, "maximum": 255 },
+          { "signature": "DMDS", "minimum": 0, "maximum": 255 },
+          { "signature": "DSTF", "minimum": 0, "maximum": 255 },
           {"signature": "ETYP", "minimum": 0, "maximum": 1},
           {"signature": "BIDS", "minimum": 0, "maximum": 1},
           {"signature": "BAMT", "minimum": 0, "maximum": 1},
@@ -29953,6 +30661,46 @@
             "minimum": 0,
             "maximum": 1,
             "coupled": true
+          },
+          {
+            "signature": "DAMC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DSTD",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTA",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDL",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDT",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDC",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDS",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTF",
+            "minimum": 0,
+            "maximum": 255
           },
           {
             "signature": "WNAM",
@@ -31723,6 +32471,16 @@
     {
       "signature": "ACHR",
       "fields": [
+        {"path": "ACHR\\ReflectionType", "label": "Reflection type", "kind": "scalar", "subrecord": "XPWR", "offset": 4, "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Reflection"}, {"bit": 1, "name": "Refraction"}], "minimum": 0, "maximum": 4294967295, "repeated": true, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "ACHR\\PatrolIdleTime", "label": "Patrol idle time", "kind": "scalar", "subrecord": "XPRD", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "ACHR\\LevelModifier", "label": "Level modifier", "kind": "scalar", "subrecord": "XLCM", "storage": "i32", "presentation": "enum", "names": [{"value": 0, "name": "Easy"}, {"value": 1, "name": "Medium"}, {"value": 2, "name": "Hard"}, {"value": 3, "name": "Very Hard"}], "minimum": -2147483648, "maximum": 2147483647, "insertion": "existing_only"},
+        {"path": "ACHR\\RagdollBoneId", "label": "Ragdoll bone id", "kind": "scalar", "subrecord": "XRGD", "offset": 0, "stride": 28, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "ACHR\\RagdollPositionX", "label": "Ragdoll position X", "kind": "scalar", "subrecord": "XRGD", "offset": 4, "stride": 28, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "ACHR\\RagdollPositionY", "label": "Ragdoll position Y", "kind": "scalar", "subrecord": "XRGD", "offset": 8, "stride": 28, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "ACHR\\RagdollPositionZ", "label": "Ragdoll position Z", "kind": "scalar", "subrecord": "XRGD", "offset": 12, "stride": 28, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "ACHR\\RagdollRotationX", "label": "Ragdoll rotation X", "kind": "scalar", "subrecord": "XRGD", "offset": 16, "stride": 28, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "ACHR\\RagdollRotationY", "label": "Ragdoll rotation Y", "kind": "scalar", "subrecord": "XRGD", "offset": 20, "stride": 28, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "ACHR\\RagdollRotationZ", "label": "Ragdoll rotation Z", "kind": "scalar", "subrecord": "XRGD", "offset": 24, "stride": 28, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
         {"path": "ACHR\\Radius", "label": "Radius", "kind": "scalar", "subrecord": "XRDS", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
         {"path": "ACHR\\Count", "label": "Count", "kind": "scalar", "subrecord": "XCNT", "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "insertion": "existing_only"},
         {"path": "ACHR\\HealthPercent", "label": "Health %", "kind": "scalar", "subrecord": "XHLT", "storage": "u32", "presentation": "percent_0_100", "minimum": 0, "maximum": 100, "insertion": "existing_only"},
@@ -31736,6 +32494,10 @@
         {"path": "ACHR\\OwnerNoCrime", "label": "No Crime", "kind": "scalar", "subrecord": "XOWN", "offset": 8, "storage": "u8", "presentation": "enum", "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "minimum": 0, "maximum": 255, "payload_size": 12, "insertion": "existing_only"}
       ],
       "formlink_fields": [
+        {"path": "ACHR\\LitWater", "label": "Lit water", "subrecord": "XLTW", "offset": 0, "payload_sizes": [4], "targets": ["ACHR", "REFR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
+        {"path": "ACHR\\PatrolIdle", "label": "Patrol idle", "subrecord": "INAM", "offset": 0, "payload_sizes": [4], "targets": ["IDLE"], "nullable": true, "insertion": "existing_only"},
+        {"path": "ACHR\\PatrolTopic", "label": "Patrol topic", "subrecord": "TNAM", "offset": 0, "payload_sizes": [4], "targets": ["DIAL"], "nullable": true, "insertion": "existing_only"},
+        {"path": "ACHR\\ReflectedBy", "label": "Reflected by", "subrecord": "XPWR", "offset": 0, "payload_sizes": [8, 4], "targets": ["ACHR", "REFR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
         {"path": "ACHR\\EncounterZone", "label": "Encounter zone", "subrecord": "XEZN", "offset": 0, "payload_sizes": [4], "targets": ["ECZN"], "nullable": false, "insertion": "existing_only"},
         {"path": "ACHR\\LockKey", "label": "Lock key", "subrecord": "XLOC", "offset": 4, "payload_sizes": [16], "targets": ["KEYM"], "nullable": true, "insertion": "existing_only"},
         {"path": "ACHR\\Emittance", "label": "Emittance", "subrecord": "XEMI", "offset": 0, "payload_sizes": [4], "targets": ["LIGH", "REGN"], "nullable": false, "insertion": "existing_only"},

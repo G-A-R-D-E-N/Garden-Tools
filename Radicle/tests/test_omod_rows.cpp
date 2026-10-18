@@ -1,3 +1,4 @@
+#include "fo4/forms/omod.hpp"
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/subrecord_authoring.hpp"
@@ -10,6 +11,7 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -403,4 +405,231 @@ TEST(OmodRows, AuthoringMatchesTheXEditSubrecordOrder) {
   ASSERT_NE(record, nullptr);
   ASSERT_EQ(record->subrecords.size(), 1u);
   EXPECT_EQ(record->subrecords[0].signature, fo4::Signature::from_string("EDID"));
+}
+
+namespace {
+
+Bytes property_row(std::uint8_t value_type, std::uint8_t function_type, std::uint16_t property,
+                   std::uint32_t value1, std::uint32_t value2, float step) {
+  ByteWriter out;
+  out.u8(value_type);
+  out.u8(0);
+  out.u8(0);
+  out.u8(0);
+  out.u8(function_type);
+  out.u8(0);
+  out.u8(0);
+  out.u8(0);
+  out.u16(property);
+  out.u16(0);
+  out.u32(value1);
+  out.u32(value2);
+  out.f32(step);
+  return out.bytes;
+}
+
+Bytes omod_data_with_property(std::uint8_t value_type, std::uint32_t value1) {
+  ByteWriter out;
+  out.u32(1);
+  out.u32(1);
+  out.u8(1);
+  out.u8(0);
+  out.u32(1330467393u);
+  out.u8(3);
+  out.u8(2);
+  out.u32(0x00000A10);
+  out.u32(1);
+  out.u32(0x00000A11);
+  out.u32(1);
+  out.u32(0x11223344);
+  out.u32(0x55667788);
+  out.u32(0x00000A12);
+  out.u8(0);
+  out.u8(1);
+  out.u8(0);
+  const auto row = property_row(value_type, 1, 0x0142, value1, 0x40000000, 0.5f);
+  out.raw(row);
+  return out.bytes;
+}
+
+const fo4::Record* omod_record(const fo4::Plugin& plugin) {
+  return fo4::find_record(plugin, fo4::FormKey::parse(k_key));
+}
+
+}  // namespace
+
+TEST(OmodData, DecodesHeaderSlotsItemsAndIncludes) {
+  const auto plugin = fo4::read_plugin(make_plugin(omod_data()), "Patch.esp");
+  const auto* record = omod_record(plugin);
+  ASSERT_NE(record, nullptr);
+  const auto data = fo4::forms::read_omod_data(plugin, *record);
+  EXPECT_EQ(data.unknown_bool1, 1);
+  EXPECT_EQ(data.unknown_bool2, 0);
+  EXPECT_EQ(data.form_type, 1330467393u);
+  EXPECT_EQ(data.max_rank, 3);
+  EXPECT_EQ(data.level_tier_scaled_offset, 2);
+  EXPECT_EQ(data.attach_point, fo4::FormKey::parse("000A10:Fallout4.esm"));
+  ASSERT_EQ(data.attach_parent_slots.size(), 1u);
+  EXPECT_EQ(data.attach_parent_slots[0], fo4::FormKey::parse("000A11:Fallout4.esm"));
+  ASSERT_EQ(data.items.size(), 1u);
+  EXPECT_EQ(data.items[0].value1, (std::array<std::byte, 4>{std::byte{0x44}, std::byte{0x33},
+                                                            std::byte{0x22}, std::byte{0x11}}));
+  EXPECT_EQ(data.items[0].value2, (std::array<std::byte, 4>{std::byte{0x88}, std::byte{0x77},
+                                                            std::byte{0x66}, std::byte{0x55}}));
+  ASSERT_EQ(data.includes.size(), 1u);
+  EXPECT_EQ(data.includes[0].mod, fo4::FormKey::parse("000A12:Fallout4.esm"));
+  EXPECT_EQ(data.includes[0].minimum_level, 0);
+  EXPECT_EQ(data.includes[0].optional, 1);
+  EXPECT_EQ(data.includes[0].use_all, 0);
+  EXPECT_TRUE(data.properties.empty());
+}
+
+TEST(OmodData, DecodesPropertyValueArms) {
+  const auto form_plugin =
+      fo4::read_plugin(make_plugin(omod_data_with_property(4, 0x00000A13u)), "Patch.esp");
+  const auto* form_record = omod_record(form_plugin);
+  ASSERT_NE(form_record, nullptr);
+  auto data = fo4::forms::read_omod_data(form_plugin, *form_record);
+  ASSERT_EQ(data.properties.size(), 1u);
+  EXPECT_EQ(data.properties[0].value_type, 4);
+  EXPECT_EQ(data.properties[0].function_type, 1);
+  EXPECT_EQ(data.properties[0].property, 0x0142);
+  EXPECT_FLOAT_EQ(data.properties[0].step, 0.5f);
+  const auto linked = fo4::forms::omod_property_value1_form(form_plugin, data.properties[0]);
+  ASSERT_TRUE(linked.has_value());
+  EXPECT_EQ(*linked, fo4::FormKey::parse("000A13:Fallout4.esm"));
+  EXPECT_FALSE(fo4::forms::omod_property_value1_float(data.properties[0]).has_value());
+  EXPECT_EQ(fo4::forms::omod_property_value1_int(data.properties[0]),
+            (std::optional<std::uint32_t>{0x00000A13u}));
+  EXPECT_EQ(fo4::forms::omod_property_value2_int(data.properties[0]),
+            (std::optional<std::uint32_t>{0x40000000u}));
+  EXPECT_FALSE(fo4::forms::omod_property_value2_float(data.properties[0]).has_value());
+
+  const auto float_plugin =
+      fo4::read_plugin(make_plugin(omod_data_with_property(1, 0x3F800000u)), "Patch.esp");
+  const auto* float_record = omod_record(float_plugin);
+  ASSERT_NE(float_record, nullptr);
+  data = fo4::forms::read_omod_data(float_plugin, *float_record);
+  ASSERT_EQ(data.properties.size(), 1u);
+  const auto first = fo4::forms::omod_property_value1_float(data.properties[0]);
+  ASSERT_TRUE(first.has_value());
+  EXPECT_FLOAT_EQ(*first, 1.0f);
+  const auto second = fo4::forms::omod_property_value2_float(data.properties[0]);
+  ASSERT_TRUE(second.has_value());
+  EXPECT_FLOAT_EQ(*second, 2.0f);
+  EXPECT_FALSE(fo4::forms::omod_property_value1_form(float_plugin, data.properties[0]).has_value());
+  EXPECT_FALSE(fo4::forms::omod_property_value1_int(data.properties[0]).has_value());
+}
+
+TEST(OmodData, RoundTripsThePayloadByteForByte) {
+  auto plugin = fo4::read_plugin(make_plugin(omod_data()), "Patch.esp");
+  const auto* record = omod_record(plugin);
+  ASSERT_NE(record, nullptr);
+  const auto data = fo4::forms::read_omod_data(plugin, *record);
+  EXPECT_EQ(fo4::forms::write_omod_data(plugin, fo4::FormKey::parse(k_key), data),
+            fo4::forms::OmodDataWrite::written);
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(sub_bytes(reread, "DATA"), omod_data());
+  EXPECT_EQ(sub_bytes(reread, "MNAM"), words({0x00000A20}));
+}
+
+TEST(OmodData, EditsArraysAndRewritesTheirCounts) {
+  auto plugin = fo4::read_plugin(make_plugin(omod_data()), "Patch.esp");
+  const auto key = fo4::FormKey::parse(k_key);
+  const auto* record = omod_record(plugin);
+  ASSERT_NE(record, nullptr);
+  auto data = fo4::forms::read_omod_data(plugin, *record);
+
+  data.attach_parent_slots.push_back(fo4::FormKey::parse("000A1F:Fallout4.esm"));
+  data.items.clear();
+  data.includes.push_back(data.includes[0]);
+  fo4::forms::OmodProperty property;
+  property.value_type = 6;
+  property.function_type = 2;
+  property.property = 0x0031;
+  property.value1 = std::array<std::byte, 4>{std::byte{0x20}, std::byte{0x0A}, std::byte{0x00},
+                                            std::byte{0x00}};
+  property.value2 = std::array<std::byte, 4>{std::byte{0x00}, std::byte{0x00}, std::byte{0x80},
+                                            std::byte{0x3F}};
+  property.step = 1.0f;
+  data.properties.push_back(property);
+  EXPECT_EQ(fo4::forms::write_omod_data(plugin, key, data), fo4::forms::OmodDataWrite::written);
+
+  EXPECT_EQ(sub_bytes(plugin, "DATA").size(), 20u + 4 + 8 + 4 + 14 + 24);
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto* written = omod_record(reread);
+  ASSERT_NE(written, nullptr);
+  const auto payload = sub_bytes(reread, "DATA");
+  std::uint32_t include_count = 0;
+  std::uint32_t property_count = 0;
+  std::memcpy(&include_count, payload.data(), 4);
+  std::memcpy(&property_count, payload.data() + 4, 4);
+  EXPECT_EQ(include_count, 2u);
+  EXPECT_EQ(property_count, 1u);
+  const auto decoded = fo4::forms::read_omod_data(reread, *written);
+  ASSERT_EQ(decoded.attach_parent_slots.size(), 2u);
+  EXPECT_EQ(decoded.attach_parent_slots[1], fo4::FormKey::parse("000A1F:Fallout4.esm"));
+  EXPECT_TRUE(decoded.items.empty());
+  ASSERT_EQ(decoded.includes.size(), 2u);
+  EXPECT_EQ(decoded.includes[1].optional, 1);
+  ASSERT_EQ(decoded.properties.size(), 1u);
+  EXPECT_EQ(decoded.properties[0].property, 0x0031);
+  const auto linked = fo4::forms::omod_property_value1_form(reread, decoded.properties[0]);
+  ASSERT_TRUE(linked.has_value());
+  EXPECT_EQ(linked->local().value(), 0x000A20u);
+  EXPECT_FALSE(fo4::forms::omod_property_value1_float(decoded.properties[0]).has_value());
+  const auto factor = fo4::forms::omod_property_value2_float(decoded.properties[0]);
+  ASSERT_TRUE(factor.has_value());
+  EXPECT_FLOAT_EQ(*factor, 1.0f);
+}
+
+TEST(OmodData, RefusesMalformedPayloadsAndForeignRecords) {
+  const auto decode = [](Bytes payload) {
+    const auto plugin = fo4::read_plugin(make_plugin(std::move(payload)), "Patch.esp");
+    const auto* record = omod_record(plugin);
+    EXPECT_NE(record, nullptr);
+    if (record == nullptr) return fo4::forms::OmodData{};
+    return fo4::forms::read_omod_data(plugin, *record);
+  };
+
+  EXPECT_THROW(decode(short_omod_data()), fo4::forms::OmodError);
+  {
+    auto trailing = omod_data();
+    trailing.insert(trailing.end(), 4, std::byte{0});
+    EXPECT_THROW(decode(std::move(trailing)), fo4::forms::OmodError);
+  }
+  {
+    auto truncated = omod_data();
+    truncated.resize(24);
+    EXPECT_THROW(decode(std::move(truncated)), fo4::forms::OmodError);
+  }
+  {
+    auto miscounted = omod_data();
+    std::memcpy(miscounted.data() + 4, u32_bytes(2).data(), 4);
+    EXPECT_THROW(decode(std::move(miscounted)), fo4::forms::OmodError);
+  }
+  {
+    auto unsized = omod_data();
+    std::memcpy(unsized.data() + 28, u32_bytes(9).data(), 4);
+    EXPECT_THROW(decode(std::move(unsized)), fo4::forms::OmodError);
+  }
+}
+
+TEST(OmodData, WriteStatusesCoverForeignAndDatalessRecords) {
+  auto plugin = fo4::read_plugin(make_plugin(omod_data()), "Patch.esp");
+  const auto key = fo4::FormKey::parse(k_key);
+  const fo4::forms::OmodData data;
+  EXPECT_EQ(fo4::forms::write_omod_data(plugin, fo4::FormKey::parse("000D09:Patch.esp"), data),
+            fo4::forms::OmodDataWrite::record_missing);
+  EXPECT_EQ(fo4::forms::write_omod_data(plugin, fo4::FormKey::parse(k_keyword_key), data),
+            fo4::forms::OmodDataWrite::unsupported_record);
+  EXPECT_EQ(fo4::forms::write_omod_data(plugin, key, data), fo4::forms::OmodDataWrite::written);
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(sub_bytes(reread, "DATA").size(), 28u);
+
+  const auto created =
+      fo4::create_record(plugin, fo4::Signature::from_string(k_omod), "RadicleNewOmod");
+  ASSERT_EQ(created.status, fo4::RecordCreateStatus::created);
+  EXPECT_EQ(fo4::forms::write_omod_data(plugin, created.key, data),
+            fo4::forms::OmodDataWrite::missing_data_subrecord);
 }
