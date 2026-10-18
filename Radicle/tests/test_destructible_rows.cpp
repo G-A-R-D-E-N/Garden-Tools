@@ -111,6 +111,12 @@ Bytes make_plugin() {
   fo4::test::write_subrecord(out, "EDID", std::string_view{"Plain\0", 6});
   fo4::test::end_record(out, door);
   fo4::test::end_group(out, door_group);
+
+  const auto stat_group = fo4::test::begin_group(out, "STAT", 0);
+  const auto stat = fo4::test::begin_record(out, "STAT", 0, 0x000A03);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"Prop\0", 5});
+  fo4::test::end_record(out, stat);
+  fo4::test::end_group(out, stat_group);
   return out.bytes;
 }
 
@@ -486,11 +492,11 @@ TEST(DestructibleRows, StageRowsAddressEachRepeatedDstd) {
 TEST(DestructibleRows, WholeStageInsertAndRemoveKeepTheHeaderCount) {
   auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
 
-  EXPECT_EQ(fo4::insert_destructible_stage(plugin, record_key(), 1),
-            fo4::DestructibleStageMutationStatus::updated);
   EXPECT_EQ(fo4::insert_destructible_stage(plugin, record_key(), 3),
             fo4::DestructibleStageMutationStatus::index_out_of_range);
-  EXPECT_EQ(fo4::insert_destructible_stage(plugin, fo4::FormKey::parse("000A02:Patch.esp"), 0),
+  EXPECT_EQ(fo4::insert_destructible_stage(plugin, record_key(), 1),
+            fo4::DestructibleStageMutationStatus::updated);
+  EXPECT_EQ(fo4::insert_destructible_stage(plugin, fo4::FormKey::parse("000A03:Patch.esp"), 0),
             fo4::DestructibleStageMutationStatus::record_mismatch);
   EXPECT_EQ(fo4::insert_destructible_stage(plugin, fo4::FormKey::parse("000A04:Patch.esp"), 0),
             fo4::DestructibleStageMutationStatus::header_missing);
@@ -499,10 +505,11 @@ TEST(DestructibleRows, WholeStageInsertAndRemoveKeepTheHeaderCount) {
 
   const auto inserted = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   EXPECT_EQ(signatures_at(inserted, "000A01:Patch.esp"),
-            (std::vector<std::string>{"EDID", "DEST", "DAMC", "DSTD", "DSTF", "DSTD", "DSTA",
-                                      "DMDL", "DMDL", "DMDC", "DMDS", "DSTF"}));
+            (std::vector<std::string>{"EDID", "DEST", "DAMC", "DSTD", "DSTD", "DSTF", "DSTD",
+                                      "DSTA", "DMDL", "DMDL", "DMDC", "DMDS", "DSTF"}));
   EXPECT_EQ(byte_at(payload_at(inserted, "DEST", 0), 4), 3u);
   EXPECT_EQ(i32_at(payload_at(inserted, "DEST", 0), 0), 1500);
+  EXPECT_EQ(byte_at(payload_at(inserted, "DSTD", 0), 0), 10u);
   const auto added = payload_at(inserted, "DSTD", 1);
   ASSERT_EQ(added.size(), 20u);
   EXPECT_EQ(u32_at(added, 0), 0u);
