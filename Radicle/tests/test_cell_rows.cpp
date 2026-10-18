@@ -591,6 +591,13 @@ TEST(CellRows, WritesScalarsAndLinksThenRereads) {
                                            fo4::FormKey::parse("000A41:Objects.esp")),
             fo4::FormLinkFieldMutationStatus::updated);
 
+  const auto owner = fo4::schema::formlink_field_descriptor(fo4::Signature::from_string("CELL"),
+                                                            "CELL\\Owner");
+  ASSERT_TRUE(owner.has_value());
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, key, *owner,
+                                           fo4::FormKey::parse("000A43:Objects.esp")),
+            fo4::FormLinkFieldMutationStatus::updated);
+
   const auto regions = fo4::schema::formlink_list_descriptor(fo4::Signature::from_string("CELL"),
                                                              "CELL\\Regions");
   ASSERT_TRUE(regions.has_value());
@@ -621,6 +628,7 @@ TEST(CellRows, WritesScalarsAndLinksThenRereads) {
   EXPECT_EQ(sub_bytes(reread, reread_key, "XWEM"), text_bytes("other.dds"));
   EXPECT_EQ(sub_bytes(reread, reread_key, "XEZN"), u32_bytes(0x01000A40));
   EXPECT_EQ(sub_bytes(reread, reread_key, "XILL"), u32_bytes(0x01000A41));
+  EXPECT_EQ(sub_bytes(reread, reread_key, "XOWN"), owner_bytes(0x01000A43, 1));
   EXPECT_EQ(sub_bytes(reread, reread_key, "XCLR"), link_pair(0x00000A30, 0x01000A42));
   ByteWriter expected_previs;
   expected_previs.u32(0x01000A52);
