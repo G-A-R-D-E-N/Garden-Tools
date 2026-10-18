@@ -21,7 +21,8 @@ INSERTIONS = {"existing_only"}
 COUNTED_ARRAY_KEYS = {"kind", "path", "label", "subrecord", "count_subrecord", "stride", "insertion", "members"}
 MEMBER_KEYS = {"path", "label", "offset", "storage", "presentation", "minimum", "maximum"}
 SUBRECORD_GROUP_KEYS = {"kind", "path", "label", "count_subrecord", "insertion", "members", "successors"}
-GROUP_MEMBER_KEYS = {"subrecord", "required", "repeatable", "payload_size", "default", "fields", "formlink_fields"}
+GROUP_MEMBER_KEYS = {"subrecord", "required", "repeatable", "payload_size", "default", "fields",
+                     "formlink_fields", "localized"}
 GROUP_ROW_FORBIDDEN = {"kind", "subrecord", "repeated", "stride", "array_offset", "when", "payload_size", "minimum_payload_size"}
 GROUP_LINK_KEYS = {"path", "label", "offset", "nullable", "insertion", "target_union", "targets"}
 HEX_DIGITS = "0123456789abcdefABCDEF"
@@ -148,7 +149,7 @@ def parse_group_default(value, payload_size: int, path: str):
     if not isinstance(value, str) or not value or len(value) % 2 or any(ch not in HEX_DIGITS for ch in value):
         raise ValueError(f"subrecord_group member default must be an even-length hex string: {path!r}")
     data = bytes.fromhex(value)
-    if len(data) != payload_size:
+    if len(data) != payload_size and payload_size:
         raise ValueError(f"subrecord_group member default must be {payload_size} bytes: {path!r}")
     return list(data)
 
@@ -195,11 +196,14 @@ def parse_subrecord_group(field, record_signature: str):
         if not isinstance(required, bool) or not isinstance(repeatable, bool):
             raise ValueError(f"subrecord_group member required and repeatable must be booleans: {path!r}")
         payload_size = member.get("payload_size")
-        if not is_count(payload_size, 1):
-            raise ValueError(f"subrecord_group member payload_size must be a positive integer: {path!r}")
+        if not is_count(payload_size, 0):
+            raise ValueError(f"subrecord_group member payload_size must be a non-negative integer: {path!r}")
+        localized = member.get("localized", False)
+        if not isinstance(localized, bool):
+            raise ValueError(f"subrecord_group member localized must be a boolean: {path!r}")
         default = parse_group_default(member["default"], payload_size, path) if "default" in member else None
         parsed.append({"subrecord": signature, "required": required, "repeatable": repeatable,
-                       "payload_size": payload_size, "default": default})
+                       "payload_size": payload_size, "default": default, "localized": localized})
         member_fields = member.get("fields", [])
         member_links = member.get("formlink_fields", [])
         if not isinstance(member_fields, list) or not isinstance(member_links, list):
@@ -484,13 +488,16 @@ def render_subrecord_groups(groups):
         for member in group["members"]:
             spec = (f"Signature::from_string({cpp_string(member['subrecord'])}), "
                     f"{'true' if member['required'] else 'false'}, "
-                    f"{'true' if member['repeatable'] else 'false'}, {member['payload_size']}")
+                    f"{'true' if member['repeatable'] else 'false'}, {member['payload_size']}, ")
             if member["default"] is not None:
                 name = f"k_subrecord_group_default_{defaults}"
                 defaults += 1
                 body = ", ".join(f"0x{byte:02X}" for byte in member["default"])
                 lines.append(f"constexpr std::uint8_t {name}[] = {{{body}}};")
-                spec += f", std::span<const std::uint8_t>({name})"
+                spec += f"std::span<const std::uint8_t>({name})"
+            else:
+                spec += "std::span<const std::uint8_t>{}"
+            spec += f", {'true' if member['localized'] else 'false'}"
             members.append("{" + spec + "},")
         if group["successors"]:
             body = ", ".join(f"Signature::from_string({cpp_string(signature)})" for signature in group["successors"])

@@ -27,9 +27,9 @@ constexpr auto k_coed = fo4::Signature::from_string("COED");
 constexpr auto k_xtra = fo4::Signature::from_string("XTRA");
 
 constexpr std::array<fo4::schema::SubrecordGroupMemberDescriptor, 3> k_custom_members{{
-    {k_cnto, true, false, 4, {}},
-    {k_coed, false, true, 4, {}},
-    {k_xtra, true, false, 4, {}},
+    {k_cnto, true, false, 4, {}, false},
+    {k_coed, false, true, 4, {}, false},
+    {k_xtra, true, false, 4, {}, false},
 }};
 
 struct Piece {

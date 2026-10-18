@@ -326,7 +326,8 @@ std::vector<SubrecordGroupSpan> group_spans(const Record& record, const schema::
     }
     for (std::size_t k = first; k < end; ++k) {
       const auto member = *member_index(subs[k].signature);
-      if (subs[k].data.size() != group.members[member].payload_size) {
+      if (group.members[member].payload_size != 0 &&
+          subs[k].data.size() != group.members[member].payload_size) {
         throw refuse(subs[k].signature.to_string() + " size differs from its member size");
       }
     }
@@ -559,12 +560,19 @@ SubrecordGroupMutationStatus insert_record_subrecord_group(Plugin& plugin,
     created.push_back(std::move(count));
   }
   for (const auto& member : group.members) {
+    if (member.localized && plugin.header.tes4_flags.is_localized()) {
+      throw schema::SubrecordGroupError(std::string(group.path) + " cannot be inserted into a localized plugin");
+    }
     if (!member.required) continue;
     Subrecord subrecord;
     subrecord.signature = member.subrecord;
-    subrecord.data.assign(member.payload_size, std::byte{0});
-    for (std::size_t k = 0; k < member.default_payload.size(); ++k) {
-      subrecord.data[k] = std::byte{member.default_payload[k]};
+    if (member.default_payload.empty()) {
+      subrecord.data.assign(member.payload_size, std::byte{0});
+    } else {
+      subrecord.data.reserve(member.default_payload.size());
+      for (const auto byte : member.default_payload) {
+        subrecord.data.push_back(std::byte{byte});
+      }
     }
     created.push_back(std::move(subrecord));
   }

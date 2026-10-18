@@ -24811,6 +24811,42 @@
           "insertion": "existing_only"
         },
         {
+          "path": "INFO\\IdleInterruptPercentage",
+          "label": "Idle interrupt percentage",
+          "kind": "scalar",
+          "subrecord": "TNAM",
+          "offset": 0,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "payload_size": 2,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\Response",
+          "label": "Response",
+          "kind": "subrecord_group",
+          "insertion": "existing_only",
+          "members": [
+            {"subrecord": "TRDA", "required": true, "repeatable": false, "payload_size": 20},
+            {"subrecord": "NAM1", "required": true, "repeatable": false, "payload_size": 0, "default": "00",
+             "localized": true},
+            {"subrecord": "NAM2", "required": true, "repeatable": false, "payload_size": 0, "default": "00"},
+            {"subrecord": "NAM3", "required": true, "repeatable": false, "payload_size": 0, "default": "00"},
+            {"subrecord": "NAM4", "required": true, "repeatable": false, "payload_size": 0, "default": "00"},
+            {"subrecord": "SNAM", "required": false, "repeatable": false, "payload_size": 4},
+            {"subrecord": "LNAM", "required": false, "repeatable": false, "payload_size": 4},
+            {"subrecord": "TNAM", "required": false, "repeatable": false, "payload_size": 2},
+            {"subrecord": "NAM9", "required": false, "repeatable": false, "payload_size": 0},
+            {"subrecord": "SRAF", "required": false, "repeatable": false, "payload_size": 4},
+            {"subrecord": "WZMD", "required": false, "repeatable": false, "payload_size": 0}
+          ],
+          "successors": ["CTDA", "CITC", "RNAM", "ANAM", "TSCE", "INTV", "ALFA", "ONAM", "GREE", "TIQS", "NAM0",
+                         "INCC", "MODQ", "INAM"]
+        },
+        {
           "path": "INFO\\Prompt",
           "label": "Prompt",
           "kind": "string",
@@ -24973,6 +25009,45 @@
             "SNDR"
           ],
           "nullable": true,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\IdleSpeakerAnimation",
+          "payload_sizes": [4],
+          "label": "Idle animations: Speaker",
+          "subrecord": "SNAM",
+          "offset": 0,
+          "targets": [
+            "IDLE"
+          ],
+          "nullable": true,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\IdleListenerAnimation",
+          "payload_sizes": [4],
+          "label": "Idle animations: Listener",
+          "subrecord": "LNAM",
+          "offset": 0,
+          "targets": [
+            "IDLE"
+          ],
+          "nullable": true,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\CameraPath",
+          "payload_sizes": [4],
+          "label": "Camera path",
+          "subrecord": "SRAF",
+          "offset": 0,
+          "targets": [
+            "CPTH"
+          ],
+          "nullable": false,
           "repeated": true,
           "insertion": "existing_only"
         },
