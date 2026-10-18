@@ -7453,8 +7453,6 @@
           { "signature": "XNAM", "minimum": 0, "maximum": 1 },
           { "signature": "QTGL", "minimum": 0, "maximum": 65535 },
           { "signature": "FLTR", "minimum": 0, "maximum": 1 },
-          { "signature": "CTDA", "minimum": 0, "maximum": 65535 },
-          { "signature": "NNAM", "minimum": 0, "maximum": 1 },
           { "signature": "GNAM", "minimum": 0, "maximum": 1 },
           { "signature": "SNAM", "minimum": 0, "maximum": 1 }
         ]

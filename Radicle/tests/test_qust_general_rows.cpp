@@ -2,6 +2,7 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/formlink_lists.hpp"
+#include "fo4/schema/preflight.hpp"
 #include "fo4/schema/record_constraints.hpp"
 #include "fo4/schema/scalar.hpp"
 #include "plugin_bytes.hpp"
@@ -64,6 +65,12 @@ Bytes u32_bytes(std::uint32_t value) {
   return out.bytes;
 }
 
+Bytes ctda_bytes() {
+  Bytes payload(32, std::byte{0});
+  payload[8] = std::byte{7};
+  return payload;
+}
+
 Bytes zstring(std::string_view text) {
   fo4::test::ByteWriter out;
   out.raw(text);
@@ -82,6 +89,29 @@ std::vector<Piece> general_pieces() {
       {"QTGL", u32_bytes(0x901)},
       {"QTGL", u32_bytes(0x902)},
       {"FLTR", zstring("FilterText")},
+      {"NNAM", zstring("Description")},
+      {"SNAM", zstring("QuestMenu.swf")},
+      {"GNAM", u32_bytes(0x910)},
+  };
+}
+
+std::vector<Piece> nested_condition_pieces() {
+  return {
+      {"EDID", zstring("Q0")},
+      {"FULL", zstring("Name")},
+      {"DNAM", general_data(0x0001, 30, 2.5f, 6)},
+      {"ENAM", u32_bytes(1280067915u)},
+      {"LNAM", u32_bytes(0x920)},
+      {"XNAM", u32_bytes(0x900)},
+      {"QTGL", u32_bytes(0x901)},
+      {"FLTR", zstring("FilterText")},
+      {"INDX", u32_bytes(0)},
+      {"QSDT", u32_bytes(1)},
+      {"CTDA", ctda_bytes()},
+      {"QOBJ", u32_bytes(10)},
+      {"NNAM", zstring("Objective text")},
+      {"QSTA", u32_bytes(0)},
+      {"CTDA", ctda_bytes()},
       {"NNAM", zstring("Description")},
       {"SNAM", zstring("QuestMenu.swf")},
       {"GNAM", u32_bytes(0x910)},
@@ -364,7 +394,7 @@ TEST(QustGeneralRows, AuthoringCreatesAQuestWithTheGeneralDataDefaults) {
   ASSERT_TRUE(constraint.has_value());
   EXPECT_EQ(constraint->placement, fo4::schema::RecordPlacement::top_level);
   const auto rules = fo4::schema::authoring_subrecords(*constraint);
-  ASSERT_EQ(rules.size(), 13u);
+  ASSERT_EQ(rules.size(), 11u);
   EXPECT_EQ(rules[3].signature, k_dnam);
   EXPECT_EQ(rules[3].minimum, 1);
   ASSERT_EQ(rules[3].default_bytes().size(), 12u);
@@ -381,6 +411,21 @@ TEST(QustGeneralRows, AuthoringCreatesAQuestWithTheGeneralDataDefaults) {
   EXPECT_EQ(names, (std::vector<std::string>{"EDID", "DNAM"}));
   for (const auto& subrecord : record->subrecords) {
     if (subrecord.signature == k_dnam) EXPECT_EQ(subrecord.data, Bytes(12));
+  }
+}
+
+TEST(QustGeneralRows, AuthoringOrderAcceptsNestedStageAndObjectiveSubrecords) {
+  const auto plugin = load(nested_condition_pieces());
+  const auto issues = fo4::schema::preflight_authoring_record(plugin, record_key());
+  for (const auto& issue : issues) {
+    EXPECT_NE(issue.code, "subrecord_order_invalid") << issue.path;
+    EXPECT_NE(issue.code, "subrecord_cardinality_invalid") << issue.path;
+  }
+  const auto constraint = fo4::schema::record_authoring_constraint(k_qust);
+  ASSERT_TRUE(constraint.has_value());
+  for (const auto& rule : fo4::schema::authoring_subrecords(*constraint)) {
+    EXPECT_NE(rule.signature, fo4::Signature::from_string("CTDA"));
+    EXPECT_NE(rule.signature, fo4::Signature::from_string("NNAM"));
   }
 }
 
