@@ -379,7 +379,7 @@ TEST(SubrecordAuthoring, CountSubrecordsStayCoupledToTheirEntries) {
 TEST(SubrecordAuthoring, GeneratedSchemaMarksSiblingOwnersCoupled) {
   const std::pair<const char*, std::vector<std::string>> expected[] = {
       {"ARMA", {"MOD2", "MOD3", "MOD4", "MOD5"}},
-      {"ARMO", {"MOD2", "MOD4"}},
+      {"ARMO", {"MOD2", "MOD4", "DEST"}},
       {"COBJ", {"FVPA"}},
       {"EXPL", {"MODL"}},
       {"HAZD", {"MODL"}},
