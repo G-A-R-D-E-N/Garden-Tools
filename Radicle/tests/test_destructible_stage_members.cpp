@@ -273,7 +273,8 @@ TEST(DestructibleStageMembers, RemoveDropsOnlyTheAddressedStageMember) {
             "EDID OBND MODL MODT DEST DSTD DSTF DSTD DSTF DATA DNAM NAM1 VNAM");
 
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
-  EXPECT_EQ(signature_order(reread, staged_key()), k_staged_order);
+  EXPECT_EQ(signature_order(reread, staged_key()),
+            "EDID OBND MODL MODT DEST DSTD DSTF DSTD DSTF DATA DNAM NAM1 VNAM");
   const auto dest = payload_at(reread, staged_key(), "DEST", 0);
   ASSERT_EQ(dest.size(), 8u);
   EXPECT_EQ(byte_at(dest, 4), 2u);
