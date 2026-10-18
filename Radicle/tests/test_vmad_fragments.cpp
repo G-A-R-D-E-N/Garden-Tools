@@ -15,8 +15,18 @@ using namespace fo4;
 using fo4::test::ByteWriter;
 namespace fixture = fo4::test::vmad;
 
-using Entry = std::pair<std::uint8_t, std::string>;
-using IndexedEntry = std::pair<std::uint32_t, std::string>;
+struct Entry {
+  std::uint8_t unknown{0};
+  std::string function;
+  std::string script{"PF_Test"};
+};
+
+struct IndexedEntry {
+  std::uint32_t key{0};
+  std::string function;
+  std::string script{"PF_Test"};
+  std::uint8_t unknown{0x2A};
+};
 
 void append_fragment_script(ByteWriter& out, std::string_view name, std::uint32_t properties) {
   fixture::name(out, name);
@@ -36,10 +46,10 @@ std::vector<std::byte> flagged_tail(std::uint8_t flags, const std::vector<Entry>
   tail.u8(3);
   tail.u8(flags);
   append_fragment_script(tail, "PF_Test", 1);
-  for (const auto& [unknown, function] : entries) {
-    tail.u8(unknown);
-    fixture::name(tail, "PF_Test");
-    fixture::name(tail, function);
+  for (const auto& entry : entries) {
+    tail.u8(entry.unknown);
+    fixture::name(tail, entry.script);
+    fixture::name(tail, entry.function);
   }
   if (scenes) {
     tail.u16(1);
@@ -57,11 +67,11 @@ std::vector<std::byte> indexed_tail(const std::vector<IndexedEntry>& entries) {
   tail.u8(3);
   append_fragment_script(tail, "PF_Test", 1);
   tail.u16(static_cast<std::uint16_t>(entries.size()));
-  for (const auto& [key, function] : entries) {
-    tail.u32(key);
-    tail.u8(0x2A);
-    fixture::name(tail, "PF_Test");
-    fixture::name(tail, function);
+  for (const auto& entry : entries) {
+    tail.u32(entry.key);
+    tail.u8(entry.unknown);
+    fixture::name(tail, entry.script);
+    fixture::name(tail, entry.function);
   }
   return tail.bytes;
 }
@@ -87,14 +97,15 @@ TEST(VmadFragments, FlaggedRecordsRenameOneBindingAndKeepEveryOtherByte) {
     const auto coverage = vmad_coverage(fixture::subrecord(plugin).data,
                                         Signature::from_string(signature));
     ASSERT_TRUE(coverage.complete());
-    ASSERT_EQ(coverage.fragment_count, 2u);
+    ASSERT_EQ(coverage.fragment_count, scenes ? 3u : 2u);
 
     EXPECT_EQ(set_vmad_fragment(plugin, fixture::key(), 1, "PF_Other", "Fragment_Renamed"),
               VmadStructureMutationStatus::updated);
     const auto saved = saved_vmad(plugin);
     EXPECT_TRUE(vmad_coverage(saved, Signature::from_string(signature)).complete());
-    EXPECT_EQ(saved, vmad_bytes(flagged_tail(0x03, {{7, "Fragment_0"}, {8, "Fragment_Renamed"}},
-                                             scenes)));
+    EXPECT_EQ(saved,
+              vmad_bytes(flagged_tail(
+                  0x03, {{7, "Fragment_0"}, {8, "Fragment_Renamed", "PF_Other"}}, scenes)));
 
     EXPECT_EQ(set_vmad_fragment(plugin, fixture::key(), 1, "PF_Other", "Fragment_Renamed"),
               VmadStructureMutationStatus::unchanged);
@@ -142,7 +153,8 @@ TEST(VmadFragments, IndexedRecordsRenameAndRemoveByFragmentIndex) {
               VmadStructureMutationStatus::updated);
     auto saved = saved_vmad(plugin);
     EXPECT_TRUE(vmad_coverage(saved, Signature::from_string(signature)).complete());
-    EXPECT_EQ(saved, vmad_bytes(indexed_tail({{100, "Fragment_100"}, {200, "Fragment_Renamed"}})));
+    EXPECT_EQ(saved, vmad_bytes(indexed_tail(
+                        {{100, "Fragment_100"}, {200, "Fragment_Renamed", "PF_Other"}})));
 
     EXPECT_EQ(set_vmad_fragment(plugin, fixture::key(), 200, "PF_Other", "Fragment_Renamed"),
               VmadStructureMutationStatus::unchanged);
@@ -154,7 +166,7 @@ TEST(VmadFragments, IndexedRecordsRenameAndRemoveByFragmentIndex) {
     const auto trimmed = vmad_coverage(saved, Signature::from_string(signature));
     EXPECT_TRUE(trimmed.complete());
     EXPECT_EQ(trimmed.fragment_count, 1u);
-    EXPECT_EQ(saved, vmad_bytes(indexed_tail({{200, "Fragment_Renamed"}})));
+    EXPECT_EQ(saved, vmad_bytes(indexed_tail({{200, "Fragment_Renamed", "PF_Other"}})));
 
     EXPECT_EQ(remove_vmad_fragment(plugin, fixture::key(), 100),
               VmadStructureMutationStatus::binding_missing);
@@ -170,13 +182,14 @@ TEST(VmadFragments, ScenePhaseFragmentsSurviveMainFragmentEdits) {
             VmadStructureMutationStatus::updated);
   const auto renamed = saved_vmad(plugin);
   EXPECT_TRUE(vmad_coverage(renamed, sig_scen).complete());
-  EXPECT_EQ(renamed, vmad_bytes(flagged_tail(0x03, {{7, "Fragment_0"}, {8, "Fragment_Renamed"}},
-                                             true)));
+  EXPECT_EQ(renamed,
+            vmad_bytes(flagged_tail(
+                0x03, {{7, "Fragment_0"}, {8, "Fragment_Renamed", "PF_Other"}}, true)));
 
   ASSERT_EQ(remove_vmad_fragment(plugin, fixture::key(), 0), VmadStructureMutationStatus::updated);
   const auto trimmed = saved_vmad(plugin);
   EXPECT_TRUE(vmad_coverage(trimmed, sig_scen).complete());
-  EXPECT_EQ(trimmed, vmad_bytes(flagged_tail(0x01, {{8, "Fragment_Renamed"}}, true)));
+  EXPECT_EQ(trimmed, vmad_bytes(flagged_tail(0x02, {{8, "Fragment_Renamed", "PF_Other"}}, true)));
   EXPECT_LT(trimmed.size(), renamed.size());
 
   const auto one = flagged_tail(0x01, {{7, "Fragment_0"}}, true);
@@ -186,7 +199,7 @@ TEST(VmadFragments, ScenePhaseFragmentsSurviveMainFragmentEdits) {
             VmadStructureMutationStatus::updated);
   const auto appended = saved_vmad(single);
   EXPECT_TRUE(vmad_coverage(appended, sig_scen).complete());
-  EXPECT_EQ(vmad_coverage(appended, sig_scen).fragment_count, 2u);
+  EXPECT_EQ(vmad_coverage(appended, sig_scen).fragment_count, 3u);
   EXPECT_EQ(appended,
             vmad_bytes(flagged_tail(0x03, {{7, "Fragment_0"}, {0, "Fragment_1"}}, true)));
 }
@@ -228,7 +241,7 @@ TEST(VmadFragments, CreatedBindingWorksOnIndexedAndTwoBitRecords) {
   EXPECT_TRUE(vmad_coverage(perk_saved, sig_perk).complete());
   EXPECT_EQ(vmad_coverage(perk_saved, sig_perk).fragment_count, 3u);
   EXPECT_EQ(perk_saved, vmad_bytes(indexed_tail({{100, "Fragment_100"},
-                                                {150, "Fragment_150"},
+                                                {150, "Fragment_150", "PF_Test", 0},
                                                 {200, "Fragment_200"}})));
   EXPECT_EQ(add_vmad_fragment(perk, fixture::key(), 150, "PF_New", "Fragment_150"),
             VmadStructureMutationStatus::already_present);
@@ -241,7 +254,8 @@ TEST(VmadFragments, CreatedBindingWorksOnIndexedAndTwoBitRecords) {
   const auto term_saved = saved_vmad(term);
   EXPECT_TRUE(vmad_coverage(term_saved, sig_term).complete());
   EXPECT_EQ(vmad_coverage(term_saved, sig_term).fragment_count, 2u);
-  EXPECT_EQ(term_saved, vmad_bytes(indexed_tail({{4, "Fragment_4"}, {9, "Fragment_9"}})));
+  EXPECT_EQ(term_saved,
+            vmad_bytes(indexed_tail({{4, "Fragment_4"}, {9, "Fragment_9", "PF_Test", 0}})));
 
   const auto info_tail = flagged_tail(0x01, {{7, "Fragment_0"}});
   auto info = read_plugin(fixture::plugin_bytes(vmad_bytes(info_tail), "INFO"), "Vmad.esp");

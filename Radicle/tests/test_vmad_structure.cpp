@@ -265,8 +265,7 @@ TEST(VmadStructure, ReplaceWritesStructValuesAndChangesAPropertyType) {
   EXPECT_EQ(replaced[10].struct_elements->front().members.front().name, "named");
   EXPECT_EQ(replaced[10].struct_elements->front().members.front().integer, 42);
   EXPECT_EQ(replaced[11].name, "EmptyVariableArray");
-  EXPECT_EQ(replaced[11].value_offset + replaced[11].value_size, original[11].value_offset +
-                                                                    original[11].value_size);
+  EXPECT_EQ(data.size() - before.size(), replaced[10].value_size - original[10].value_size);
   EXPECT_EQ(slice(data, 0, original[10].offset), slice(before, 0, original[10].offset));
   EXPECT_EQ(slice(data, replaced[10].value_offset + replaced[10].value_size, data.size()),
             slice(before, original[10].value_offset + original[10].value_size, before.size()));
@@ -284,7 +283,7 @@ TEST(VmadStructure, ReplaceWritesStructValuesAndChangesAPropertyType) {
   EXPECT_EQ(changed[5].name, "3Array");
   ASSERT_EQ(replace_vmad_property(plugin, fixture::key(), 0, 4, original[4]),
             VmadStructureMutationStatus::updated);
-  EXPECT_EQ(fixture::subrecord(plugin).data, before);
+  EXPECT_EQ(fixture::subrecord(plugin).data, data);
 
   ASSERT_EQ(replace_vmad_property(plugin, fixture::key(), 0, 10, original[10]),
             VmadStructureMutationStatus::updated);
@@ -446,7 +445,7 @@ TEST(VmadStructure, StructureEditsPreserveTheQuestFragmentTail) {
   auto plugin = read_plugin(fixture::plugin_bytes(data, "QUST"), "Vmad.esp");
   ASSERT_TRUE(vmad_coverage(data, sig_qust).complete());
 
-  ASSERT_EQ(add_vmad_script(plugin, fixture::key(), 0, "Extra", 0),
+  ASSERT_EQ(add_vmad_script(plugin, fixture::key(), 1, "Extra", 0),
             VmadStructureMutationStatus::updated);
   VmadProperty count = property("StageCount", 3);
   count.integer = 3;

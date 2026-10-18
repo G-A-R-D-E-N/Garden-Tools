@@ -28,7 +28,9 @@ constexpr auto k_qtgl = fo4::Signature::from_string("QTGL");
 fo4::FormKey record_key() { return fo4::FormKey::parse("000800:Patch.esp"); }
 fo4::FormKey glob_key() { return fo4::FormKey::parse("000900:Patch.esp"); }
 fo4::FormKey keyword_key() { return fo4::FormKey::parse("000910:Patch.esp"); }
+fo4::FormKey spare_keyword_key() { return fo4::FormKey::parse("000911:Patch.esp"); }
 fo4::FormKey location_key() { return fo4::FormKey::parse("000920:Patch.esp"); }
+fo4::FormKey spare_location_key() { return fo4::FormKey::parse("000921:Patch.esp"); }
 
 struct Piece {
   std::string_view signature;
@@ -114,8 +116,8 @@ std::vector<Piece> nested_condition_pieces() {
       {"QSTA", u32_bytes(0)},
       {"CTDA", ctda_bytes()},
       {"NNAM", zstring("Description")},
-      {"SNAM", zstring("QuestMenu.swf")},
       {"GNAM", u32_bytes(0x910)},
+      {"SNAM", zstring("QuestMenu.swf")},
   };
 }
 
@@ -149,11 +151,15 @@ std::vector<std::byte> make_plugin(const std::vector<Piece>& quest) {
   const auto keyword_group = fo4::test::begin_group(out, "KYWD", 0);
   const auto keyword = fo4::test::begin_record(out, "KYWD", 0, 0x00000910);
   fo4::test::end_record(out, keyword);
+  const auto keyword_b = fo4::test::begin_record(out, "KYWD", 0, 0x00000911);
+  fo4::test::end_record(out, keyword_b);
   fo4::test::end_group(out, keyword_group);
 
   const auto location_group = fo4::test::begin_group(out, "LCTN", 0);
   const auto location = fo4::test::begin_record(out, "LCTN", 0, 0x00000920);
   fo4::test::end_record(out, location);
+  const auto location_b = fo4::test::begin_record(out, "LCTN", 0, 0x00000921);
+  fo4::test::end_record(out, location_b);
   fo4::test::end_group(out, location_group);
   return out.bytes;
 }
@@ -314,9 +320,11 @@ TEST(QustGeneralRows, AShortDnamPayloadExposesNothingAndRefusesWrites) {
   quest[2].data = u32_bytes(0);
   auto plugin = load(quest);
   const auto before = fo4::write_plugin(plugin);
-  EXPECT_THROW(read_member(plugin, "QUST\\Flags", 0), fo4::schema::ScalarError);
-  EXPECT_THROW(fo4::set_record_scalar(plugin, record_key(), scalar("QUST\\Priority"), "1"),
-               fo4::schema::ScalarError);
+  const auto dnam = payload_of(plugin, "DNAM");
+  EXPECT_TRUE(fo4::schema::scalar_field_bytes(dnam, scalar("QUST\\Flags").scalar).empty());
+  EXPECT_TRUE(fo4::schema::scalar_field_bytes(dnam, scalar("QUST\\Priority").scalar).empty());
+  EXPECT_EQ(fo4::set_record_scalar(plugin, record_key(), scalar("QUST\\Priority"), "1"),
+            fo4::ScalarMutationStatus::subrecord_missing);
   EXPECT_EQ(fo4::write_plugin(plugin), before);
 }
 
@@ -324,13 +332,20 @@ TEST(QustGeneralRows, GeneralLinksEditAndRefuseNull) {
   auto plugin = load();
   EXPECT_EQ(fo4::set_record_formlink_field(plugin, record_key(), link("QUST\\QuestGroup"),
                                            keyword_key()),
-            fo4::FormLinkFieldMutationStatus::updated);
+            fo4::FormLinkFieldMutationStatus::unchanged);
   EXPECT_EQ(fo4::set_record_formlink_field(plugin, record_key(), link("QUST\\Location"),
                                            location_key()),
+            fo4::FormLinkFieldMutationStatus::unchanged);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, record_key(), link("QUST\\QuestGroup"),
+                                           spare_keyword_key()),
+            fo4::FormLinkFieldMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, record_key(), link("QUST\\Location"),
+                                           spare_location_key()),
             fo4::FormLinkFieldMutationStatus::updated);
 
   const auto after = reparse(plugin);
-  EXPECT_EQ(payload_of(after, "GNAM"), u32_bytes(0x910));
+  EXPECT_EQ(payload_of(after, "GNAM"), u32_bytes(0x911));
+  EXPECT_EQ(payload_of(after, "LNAM"), u32_bytes(0x921));
 
   auto refusing = load();
   const auto before = fo4::write_plugin(refusing);
@@ -367,7 +382,7 @@ TEST(QustGeneralRows, TextDisplayGlobalsListReadsEditsAndResizes) {
   const auto after = reparse(plugin);
   EXPECT_EQ(signatures(after),
             (std::vector<std::string>{"EDID", "FULL", "DNAM", "ENAM", "LNAM", "XNAM", "QTGL",
-                                      "FLTR", "NNAM", "SNAM", "GNAM"}));
+                                      "QTGL", "FLTR", "NNAM", "SNAM", "GNAM"}));
   EXPECT_EQ(fo4::schema::record_formlink_list_size(after, record_key(), descriptor), 2u);
   const auto reread = fo4::schema::record_formlink_list_values(after, record_key(), descriptor);
   ASSERT_TRUE(reread.has_value());

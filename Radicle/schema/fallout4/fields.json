@@ -8317,7 +8317,6 @@
           "nullable": false,
           "mutation": "appendable",
           "anchor_predecessors": [
-            "FLTR",
             "LNAM",
             "XNAM",
             "ENAM",

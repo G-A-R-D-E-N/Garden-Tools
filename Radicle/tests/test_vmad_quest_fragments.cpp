@@ -139,8 +139,9 @@ TEST(VmadQuestFragments, RemovalDropsTheBindingAndItsCount) {
   EXPECT_EQ(first[prefix], std::byte{1});
   EXPECT_EQ(first[prefix + 1], std::byte{0});
   EXPECT_EQ(first.size(), before.size() - first_entry);
-  EXPECT_EQ(slice(first, 0, base + initial.fragments[0].offset),
-            slice(before, 0, base + initial.fragments[0].offset));
+  EXPECT_EQ(slice(first, 0, prefix), slice(before, 0, prefix));
+  EXPECT_EQ(slice(first, prefix + 2, base + initial.fragments[0].offset),
+            slice(before, prefix + 2, base + initial.fragments[0].offset));
   EXPECT_EQ(slice(first, base + initial.fragments[0].offset, first.size()),
             slice(before, base + initial.fragments[1].offset, before.size()));
 
@@ -156,8 +157,9 @@ TEST(VmadQuestFragments, RemovalDropsTheBindingAndItsCount) {
   EXPECT_EQ(emptied.size(),
             before.size() - first_entry -
                 (initial.fragments[1].end - initial.fragments[1].offset));
-  EXPECT_EQ(slice(emptied, 0, base + initial.fragments[0].offset),
-            slice(before, 0, base + initial.fragments[0].offset));
+  EXPECT_EQ(slice(emptied, 0, prefix), slice(before, 0, prefix));
+  EXPECT_EQ(slice(emptied, prefix + 2, base + initial.fragments[0].offset),
+            slice(before, prefix + 2, base + initial.fragments[0].offset));
   EXPECT_EQ(slice(emptied, emptied.size() - 2, emptied.size()),
             slice(before, before.size() - 2, before.size()));
 
