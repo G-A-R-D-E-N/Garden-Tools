@@ -20,6 +20,7 @@
 #include "fo4/c_api_faction.h"
 #include "fo4/c_api_components.h"
 #include "fo4/c_api_cell.h"
+#include "fo4/c_api_patch.h"
 #include <cstddef>
 #include <cstdio>
 
@@ -1277,5 +1278,8 @@ int main() {
   printf("ExteriorCellCreation.Y %zu\n", offsetof(radicle_exterior_cell_creation, y));
   printf("ExteriorCellCreation.EditorId %zu\n", offsetof(radicle_exterior_cell_creation, editor_id));
   printf("ExteriorCellCreation.Flags %zu\n", offsetof(radicle_exterior_cell_creation, flags));
+  printf("DeltaPatchCounts %zu\n", sizeof(radicle_delta_patch_counts));
+  printf("DeltaPatchCounts.Kept %zu\n", offsetof(radicle_delta_patch_counts, kept));
+  printf("DeltaPatchCounts.Removed %zu\n", offsetof(radicle_delta_patch_counts, removed));
   return 0;
 }

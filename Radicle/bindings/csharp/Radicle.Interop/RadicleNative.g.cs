@@ -1923,6 +1923,13 @@ public unsafe struct ExteriorCellCreation
     public ushort Flags;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct DeltaPatchCounts
+{
+    public nuint Kept;
+    public nuint Removed;
+}
+
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
@@ -2734,5 +2741,8 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_find_persistent_exterior_cell")]
     public static extern Status EnvFindPersistentExteriorCell(IntPtr env, FormKey worldspace, IntPtr* out_record);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_build_delta_patch")]
+    public static extern Status EnvBuildDeltaPatch(IntPtr env, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? older_plugin, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? newer_plugin, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? output_path, DeltaPatchCounts* out_counts);
 
 }

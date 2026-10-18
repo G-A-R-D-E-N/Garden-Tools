@@ -264,6 +264,8 @@ target_sources(radicle_c PRIVATE src/c_api_version.cpp)
 target_sources(radicle_c PRIVATE src/c_api_records.cpp src/c_api_authoring.cpp src/c_api_vmad.cpp src/c_api_behavior.cpp src/c_api_conditions.cpp)
 target_sources(radicle_c PRIVATE src/c_api_dialogue.cpp)
 target_sources(radicle_c PRIVATE src/c_api_armor.cpp src/c_api_eyes.cpp src/c_api_faction.cpp src/c_api_components.cpp src/c_api_cell.cpp)
+target_sources(radicle_c PRIVATE src/c_api_patch.cpp)
+target_sources(fo4 PRIVATE src/patch/delta_patch.cpp)
 
 if(RADICLE_INSTALL)
   include(GNUInstallDirs)
@@ -427,6 +429,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_subrecord_authoring.cpp
     tests/test_c_api_authoring.cpp
     tests/test_c_api_fields.cpp
+    tests/test_delta_patch.cpp
     tests/test_climate_weather_authoring.cpp
     tests/test_climate_weather_c_api.cpp
     tests/test_climate_weather_real.cpp
