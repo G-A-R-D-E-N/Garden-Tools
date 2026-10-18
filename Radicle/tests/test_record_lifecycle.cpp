@@ -193,7 +193,6 @@ TEST(RecordLifecycle, RenumberRefusesLightPluginAboveTwelveBits) {
   EXPECT_EQ(plugin.header.next_form_id, 0x802u);
 }
 
-// A renumber must relabel the children GRUP that carries the parent form ID.
 TEST(RecordLifecycle, RenumberRelabelsDialTopicChildren) {
   auto plugin = fo4::read_plugin(make_child_group_plugin("DIAL", "INFO", 7), "Lifecycle.esp");
   const auto key = fo4::FormKey::parse("000800:Lifecycle.esp");
