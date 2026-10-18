@@ -542,8 +542,9 @@ SubrecordGroupMutationStatus insert_record_subrecord_group(Plugin& plugin,
   if (target == nullptr) return SubrecordGroupMutationStatus::record_missing;
   require_subrecord_group_record(*target, group);
   const auto spans = group_spans(*target, group);
+  const bool counted = group.count_subrecord != Signature{};
   const auto counter = group_counter(*target, group, spans.size());
-  if (!counter && !spans.empty()) return SubrecordGroupMutationStatus::subrecord_missing;
+  if (counted && !counter && !spans.empty()) return SubrecordGroupMutationStatus::subrecord_missing;
   if (index > spans.size()) return SubrecordGroupMutationStatus::index_out_of_range;
 
   const std::size_t position = index < spans.size()  ? spans[index].first
@@ -551,7 +552,7 @@ SubrecordGroupMutationStatus insert_record_subrecord_group(Plugin& plugin,
                                : spans.empty()       ? *counter + 1
                                                      : spans.back().end;
   std::vector<Subrecord> created;
-  if (!counter) {
+  if (counted && !counter) {
     Subrecord count;
     count.signature = group.count_subrecord;
     count.data.assign(sizeof(std::uint32_t), std::byte{0});
@@ -572,7 +573,9 @@ SubrecordGroupMutationStatus insert_record_subrecord_group(Plugin& plugin,
   const std::size_t count_index = !counter                ? position
                                   : *counter < position  ? *counter
                                                          : *counter + created.size();
-  write_counter(target->subrecords[count_index].data, static_cast<std::uint32_t>(spans.size() + 1));
+  if (counted) {
+    write_counter(target->subrecords[count_index].data, static_cast<std::uint32_t>(spans.size() + 1));
+  }
   mark_record_modified(plugin, *target);
   return SubrecordGroupMutationStatus::updated;
 }
@@ -586,12 +589,15 @@ SubrecordGroupMutationStatus remove_record_subrecord_group(Plugin& plugin,
   if (target == nullptr) return SubrecordGroupMutationStatus::record_missing;
   require_subrecord_group_record(*target, group);
   const auto spans = group_spans(*target, group);
+  const bool counted = group.count_subrecord != Signature{};
   const auto counter = group_counter(*target, group, spans.size());
-  if (!counter) return SubrecordGroupMutationStatus::subrecord_missing;
+  if (counted && !counter) return SubrecordGroupMutationStatus::subrecord_missing;
   if (index >= spans.size()) return SubrecordGroupMutationStatus::index_out_of_range;
 
   const auto span = spans[index];
-  write_counter(target->subrecords[*counter].data, static_cast<std::uint32_t>(spans.size() - 1));
+  if (counted) {
+    write_counter(target->subrecords[*counter].data, static_cast<std::uint32_t>(spans.size() - 1));
+  }
   const auto first = target->subrecords.begin() + static_cast<std::ptrdiff_t>(span.first);
   target->subrecords.erase(first, first + static_cast<std::ptrdiff_t>(span.end - span.first));
   mark_record_modified(plugin, *target);

@@ -239,7 +239,10 @@ std::optional<SubrecordGroupDescriptor> subrecord_group_for_member(Signature rec
 
 bool is_subrecord_group_count_subrecord(Signature record, Signature subrecord) noexcept {
   for (const auto& group : k_subrecord_groups) {
-    if (group.record == record && group.count_subrecord == subrecord) return true;
+    if (group.record == record && group.count_subrecord != Signature{} &&
+        group.count_subrecord == subrecord) {
+      return true;
+    }
   }
   return false;
 }

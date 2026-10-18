@@ -163,8 +163,8 @@ def parse_subrecord_group(field, record_signature: str):
     label = field.get("label", "")
     if not isinstance(label, str) or not label or any(ord(ch) < 0x20 for ch in label):
         raise ValueError(f"subrecord_group label is invalid: {label!r}")
-    count_subrecord = field.get("count_subrecord")
-    if not isinstance(count_subrecord, str) or not valid_signature(count_subrecord):
+    count_subrecord = field.get("count_subrecord", "")
+    if not isinstance(count_subrecord, str) or (count_subrecord and not valid_signature(count_subrecord)):
         raise ValueError(f"subrecord_group count_subrecord must be four printable ASCII characters: {path!r}")
     if field.get("insertion") not in INSERTIONS:
         raise ValueError(f"unsupported insertion policy until record ordering exists: {field.get('insertion')!r}")
@@ -440,11 +440,14 @@ def load_schema(schema_path: Path):
             raise ValueError(f"counted_array {array['path']!r} needs exactly one whole-payload u32 row for {array['count_subrecord']}")
 
     for group in groups:
-        counts = [row for row in fields
-                  if row["record"] == group["record"] and row["subrecord"] == group["count_subrecord"]]
-        if len(counts) != 1 or not whole_payload_u32(counts[0]):
-            raise ValueError(f"subrecord_group {group['path']!r} needs exactly one whole-payload u32 row for {group['count_subrecord']}")
-        group_signatures = {member["subrecord"] for member in group["members"]} | {group["count_subrecord"]}
+        if group["count_subrecord"]:
+            counts = [row for row in fields
+                      if row["record"] == group["record"] and row["subrecord"] == group["count_subrecord"]]
+            if len(counts) != 1 or not whole_payload_u32(counts[0]):
+                raise ValueError(f"subrecord_group {group['path']!r} needs exactly one whole-payload u32 row for {group['count_subrecord']}")
+        group_signatures = {member["subrecord"] for member in group["members"]}
+        if group["count_subrecord"]:
+            group_signatures.add(group["count_subrecord"])
         for array in arrays:
             if array["record"] == group["record"] and group_signatures & {array["subrecord"], array["count_subrecord"]}:
                 raise ValueError(f"subrecord_group {group['path']!r} shares a subrecord with counted_array {array['path']!r} in {group['record']}")
@@ -503,7 +506,8 @@ def render_subrecord_groups(groups):
             f"Signature::from_string({cpp_string(group['record'])}), " +
             f"{cpp_string(group['path'])}, " +
             f"{cpp_string(group['label'])}, " +
-            f"Signature::from_string({cpp_string(group['count_subrecord'])}), " +
+            (f"Signature::from_string({cpp_string(group['count_subrecord'])})"
+             if group["count_subrecord"] else "Signature{}") + ", " +
             f"std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_{index}), " +
             successors +
             "},")

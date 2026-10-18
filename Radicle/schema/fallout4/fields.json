@@ -27391,6 +27391,17 @@
           "insertion": "existing_only"
         },
         {
+          "path": "FURN\\Markers",
+          "label": "Markers",
+          "kind": "subrecord_group",
+          "insertion": "existing_only",
+          "members": [
+            {"subrecord": "ENAM", "required": true, "repeatable": false, "payload_size": 4},
+            {"subrecord": "NAM0", "required": true, "repeatable": false, "payload_size": 4}
+          ],
+          "successors": ["FNPR", "XMRK", "SNAM", "APPR", "OBTE", "NVNM"]
+        },
+        {
           "path": "FURN\\MarkerEntryType",
           "label": "Marker entry type",
           "kind": "scalar",
