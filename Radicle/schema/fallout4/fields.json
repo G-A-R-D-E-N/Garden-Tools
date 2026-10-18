@@ -8251,7 +8251,117 @@
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
-        {"path": "RACE\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"}
+        {"path": "RACE\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"},
+        {
+          "path": "RACE\\SeverableExplosion",
+          "label": "Severable - Explosion",
+          "subrecord": "DATA",
+          "offset": 146,
+          "targets": ["EXPL"],
+          "nullable": true,
+          "payload_sizes": [200],
+          "min_form_version": 124,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\SeverableDebris",
+          "label": "Severable - Debris",
+          "subrecord": "DATA",
+          "offset": 150,
+          "targets": ["DEBR"],
+          "nullable": true,
+          "payload_sizes": [200],
+          "min_form_version": 124,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\SeverableImpactDataSet",
+          "label": "Severable - Impact Data Set",
+          "subrecord": "DATA",
+          "offset": 154,
+          "targets": ["IPDS"],
+          "nullable": true,
+          "payload_sizes": [200],
+          "min_form_version": 124,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\ExplodableExplosion",
+          "label": "Explodable - Explosion",
+          "subrecord": "DATA",
+          "offset": 158,
+          "targets": ["EXPL"],
+          "nullable": true,
+          "payload_sizes": [200],
+          "min_form_version": 124,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\ExplodableDebris",
+          "label": "Explodable - Debris",
+          "subrecord": "DATA",
+          "offset": 162,
+          "targets": ["DEBR"],
+          "nullable": true,
+          "payload_sizes": [200],
+          "min_form_version": 124,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\ExplodableImpactDataSet",
+          "label": "Explodable - Impact Data Set",
+          "subrecord": "DATA",
+          "offset": 166,
+          "targets": ["IPDS"],
+          "nullable": true,
+          "payload_sizes": [200],
+          "min_form_version": 124,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\OnCrippleExplosion",
+          "label": "OnCripple - Explosion",
+          "subrecord": "DATA",
+          "offset": 176,
+          "targets": ["EXPL"],
+          "nullable": true,
+          "payload_sizes": [200],
+          "min_form_version": 124,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\OnCrippleDebris",
+          "label": "OnCripple - Debris",
+          "subrecord": "DATA",
+          "offset": 180,
+          "targets": ["DEBR"],
+          "nullable": true,
+          "payload_sizes": [200],
+          "min_form_version": 124,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\OnCrippleImpactDataSet",
+          "label": "OnCripple - Impact Data Set",
+          "subrecord": "DATA",
+          "offset": 184,
+          "targets": ["IPDS"],
+          "nullable": true,
+          "payload_sizes": [200],
+          "min_form_version": 124,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\ExplodableSubsegmentExplosion",
+          "label": "Explodable - Subsegment Explosion",
+          "subrecord": "DATA",
+          "offset": 188,
+          "targets": ["EXPL"],
+          "nullable": true,
+          "payload_sizes": [200],
+          "min_form_version": 124,
+          "insertion": "existing_only"
+        }
       ],
       "localized_subrecords": [
         "FULL",
