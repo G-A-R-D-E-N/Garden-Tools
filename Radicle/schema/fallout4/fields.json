@@ -29410,7 +29410,20 @@
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
-        {"path": "NPC_\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"}
+        {"path": "NPC_\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"},
+        {"path": "NPC_\\TemplateActorTraits", "label": "Template actor traits", "subrecord": "TPTA", "offset": 0, "targets": ["BMMO", "LVLN", "NPC_"], "nullable": true, "insertion": "existing_only"},
+        {"path": "NPC_\\TemplateActorStats", "label": "Template actor stats", "subrecord": "TPTA", "offset": 4, "targets": ["BMMO", "LVLN", "NPC_"], "nullable": true, "insertion": "existing_only"},
+        {"path": "NPC_\\TemplateActorFactions", "label": "Template actor factions", "subrecord": "TPTA", "offset": 8, "targets": ["BMMO", "LVLN", "NPC_"], "nullable": true, "insertion": "existing_only"},
+        {"path": "NPC_\\TemplateActorSpellList", "label": "Template actor spell list", "subrecord": "TPTA", "offset": 12, "targets": ["BMMO", "LVLN", "NPC_"], "nullable": true, "insertion": "existing_only"},
+        {"path": "NPC_\\TemplateActorAIData", "label": "Template actor AI data", "subrecord": "TPTA", "offset": 16, "targets": ["BMMO", "LVLN", "NPC_"], "nullable": true, "insertion": "existing_only"},
+        {"path": "NPC_\\TemplateActorAIPackages", "label": "Template actor AI packages", "subrecord": "TPTA", "offset": 20, "targets": ["BMMO", "LVLN", "NPC_"], "nullable": true, "insertion": "existing_only"},
+        {"path": "NPC_\\TemplateActorModelAnimation", "label": "Template actor model and animation", "subrecord": "TPTA", "offset": 24, "targets": ["BMMO", "LVLN", "NPC_"], "nullable": true, "insertion": "existing_only"},
+        {"path": "NPC_\\TemplateActorBaseData", "label": "Template actor base data", "subrecord": "TPTA", "offset": 28, "targets": ["BMMO", "LVLN", "NPC_"], "nullable": true, "insertion": "existing_only"},
+        {"path": "NPC_\\TemplateActorInventory", "label": "Template actor inventory", "subrecord": "TPTA", "offset": 32, "targets": ["BMMO", "LVLN", "NPC_"], "nullable": true, "insertion": "existing_only"},
+        {"path": "NPC_\\TemplateActorScript", "label": "Template actor script", "subrecord": "TPTA", "offset": 36, "targets": ["BMMO", "LVLN", "NPC_"], "nullable": true, "insertion": "existing_only"},
+        {"path": "NPC_\\TemplateActorDefaultPackageList", "label": "Template actor default package list", "subrecord": "TPTA", "offset": 40, "targets": ["BMMO", "LVLN", "NPC_"], "nullable": true, "insertion": "existing_only"},
+        {"path": "NPC_\\TemplateActorAttackData", "label": "Template actor attack data", "subrecord": "TPTA", "offset": 44, "targets": ["BMMO", "LVLN", "NPC_"], "nullable": true, "insertion": "existing_only"},
+        {"path": "NPC_\\TemplateActorKeywords", "label": "Template actor keywords", "subrecord": "TPTA", "offset": 48, "targets": ["BMMO", "LVLN", "NPC_"], "nullable": true, "insertion": "existing_only"}
       ],
       "localized_subrecords": ["FULL", "SHRT", "ATTX"]
     }

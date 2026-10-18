@@ -612,6 +612,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_weap_rows.cpp
     tests/test_npc_link_rows.cpp
     tests/test_furn_marker_params.cpp
+    tests/test_npc_template_actor_rows.cpp
     tools/env_bench/env_bench.cpp
     tests/plugin_bytes.cpp
     tests/real_data_build.cpp
