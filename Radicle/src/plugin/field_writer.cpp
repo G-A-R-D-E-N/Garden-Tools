@@ -165,6 +165,10 @@ ScalarMutationStatus write_scalar(Plugin& plugin,
                               (is_string ? " is a string field; use the string setter"
                                          : " is not a string field"));
   }
+  if (is_string && field.scalar.embedded) {
+    throw schema::ScalarError(std::string(field.path) +
+                              " sits in a fixed-size slot and cannot be written generically");
+  }
 
   const auto resolved = scalar_slots(*target, field);
   if (index >= resolved.slots.size() || !resolved.slots[index].valid) {

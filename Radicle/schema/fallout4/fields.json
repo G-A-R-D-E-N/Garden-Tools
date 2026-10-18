@@ -12171,6 +12171,42 @@
           "insertion": "existing_only"
         },
         {
+          "path": "STAT\\DistantLodLevel0",
+          "label": "Distant LOD level 0",
+          "kind": "string",
+          "subrecord": "MNAM",
+          "offset": 0,
+          "minimum_payload_size": 260,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "STAT\\DistantLodLevel1",
+          "label": "Distant LOD level 1",
+          "kind": "string",
+          "subrecord": "MNAM",
+          "offset": 260,
+          "minimum_payload_size": 520,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "STAT\\DistantLodLevel2",
+          "label": "Distant LOD level 2",
+          "kind": "string",
+          "subrecord": "MNAM",
+          "offset": 520,
+          "minimum_payload_size": 780,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "STAT\\DistantLodLevel3",
+          "label": "Distant LOD level 3",
+          "kind": "string",
+          "subrecord": "MNAM",
+          "offset": 780,
+          "minimum_payload_size": 1040,
+          "insertion": "existing_only"
+        },
+        {
           "path": "STAT\\Properties",
           "label": "Properties",
           "kind": "counted_array",

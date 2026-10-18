@@ -81,6 +81,17 @@ std::string format_float(float value) {
   return std::string(buffer, ptr);
 }
 
+std::span<const std::byte> slot_string_bytes(std::span<const std::byte> payload,
+                                             std::size_t offset,
+                                             const ScalarDescriptor& descriptor) {
+  const auto tail = payload.subspan(offset);
+  const auto terminator = std::find(tail.begin(), tail.end(), std::byte{0});
+  if (terminator == tail.end()) {
+    throw ScalarError(std::string(descriptor.field_name) + " has no NUL terminator in its slot");
+  }
+  return tail.first(static_cast<std::size_t>(terminator - tail.begin()) + 1);
+}
+
 }  // namespace
 
 std::optional<ScalarDescriptor> scalar_descriptor(Signature subrecord) noexcept {
@@ -99,7 +110,12 @@ std::optional<ScalarDescriptor> scalar_descriptor(Signature subrecord) noexcept 
 
 std::span<const std::byte> scalar_field_bytes(std::span<const std::byte> payload,
                                               const ScalarDescriptor& descriptor) {
-  if (descriptor.storage == ScalarStorage::zstring) return payload;
+  if (descriptor.storage == ScalarStorage::zstring) {
+    if (!descriptor.embedded) return payload;
+    if (descriptor.payload_size != 0 && payload.size() != descriptor.payload_size) return {};
+    if (payload.size() < descriptor.minimum_payload_size) return {};
+    return slot_string_bytes(payload, descriptor.offset, descriptor);
+  }
   const auto width = scalar_storage_size(descriptor.storage);
   if (!descriptor.embedded) {
     if (payload.size() != width) {
@@ -129,7 +145,10 @@ FieldShape scalar_field_shape(const ScalarDescriptor& descriptor) noexcept {
 std::span<const std::byte> scalar_slot_bytes(std::span<const std::byte> payload,
                                              const FieldSlot& slot,
                                              const ScalarDescriptor& descriptor) {
-  if (descriptor.storage == ScalarStorage::zstring) return payload;
+  if (descriptor.storage == ScalarStorage::zstring) {
+    if (!descriptor.embedded) return payload;
+    return slot_string_bytes(payload, slot.offset, descriptor);
+  }
   return payload.subspan(slot.offset, scalar_storage_size(descriptor.storage));
 }
 

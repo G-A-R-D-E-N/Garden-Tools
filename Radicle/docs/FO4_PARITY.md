@@ -179,7 +179,7 @@ Tier counts: L0 5, L1 0, L2 5, L3 0, L4 137.
 | SPEL | 12030 | 14 | - | 2 | - | 2 | yes | yes | - | - | 3 | L4 |
 | SPGD | 6128 | 12 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
 | STAG | 12663 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
-| STAT | 12045 | 10 | 1 | 5 | - | 1 | yes | - | environment/base_records | yes | 2 | L4 |
+| STAT | 12045 | 10 | 5 | 5 | - | 1 | yes | - | environment/base_records | yes | 2 | L4 |
 | TACT | 5672 | 6 | 1 | 3 | - | 1 | yes | yes | - | - | 1 | L4 |
 | TERM | 12671 | 9 | 2 | 3 | - | 7 | yes | yes | - | yes | 1 | L4 |
 | TES4 | 12091 | - | - | - | - | - | - | - | - | yes | 7 | L0 |
@@ -331,7 +331,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | SPEL | 10 | - | 3 | 1 | - | f32, i16, u32 | - | - | - | existing_only |
 | SPGD | 11 | - | 1 | - | 1 | f32, u32 | - | - | - | existing_only |
 | STAG | - | - | - | - | - | - | - | - | - | - |
-| STAT | 10 | - | - | - | 1 | f32, i16 | - | 2 | - | existing_only |
+| STAT | 10 | - | - | - | 5 | f32, i16 | - | 2 | - | existing_only |
 | TACT | 6 | - | - | - | 1 | i16 | - | - | - | existing_only |
 | TERM | 7 | - | - | 2 | 2 | f32, i16, u16, u32 | - | 2 | - | existing_only |
 | TREE | 22 | - | - | - | 1 | f32, i16, u8 | - | - | - | existing_only |

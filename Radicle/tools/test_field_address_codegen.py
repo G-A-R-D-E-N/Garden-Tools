@@ -162,7 +162,7 @@ class SchemaCodegenTests(unittest.TestCase):
                 self.rejects("minimum_payload_size", scalar(minimum_payload_size=value))
         self.rejects("minimum_payload_size", scalar(offset=None, minimum_payload_size=12))
         self.rejects("minimum_payload_size", scalar(payload_size=8, minimum_payload_size=12))
-        self.rejects("string field", string(minimum_payload_size=12))
+        self.rejects("minimum_payload_size requires an embedded field", string(minimum_payload_size=12))
 
     def test_min_form_version_gates_a_row_and_rejects_bad_values(self):
         field = self.load(scalar(min_form_version=97))[0]
@@ -239,7 +239,7 @@ class SchemaCodegenTests(unittest.TestCase):
         field = self.load(string(repeated=True))[0]
         self.assertEqual((field["storage"], field["address"]["repeated"]), ("zstring", True))
         self.rejects("do not accept", string(storage="u32"))
-        self.rejects("do not accept", string(offset=0))
+        self.rejects("do not accept", string(payload_size=8))
         self.rejects("do not accept", string(stride=4))
         self.rejects("unsupported field kind", string(kind="blob"))
         self.rejects("insertion", string(insertion="always"))

@@ -116,6 +116,11 @@ def form_version_windows_disjoint(first, second):
     return bool((first_high and first_high <= second_low) or (second_high and second_high <= first_low))
 
 
+def field_span(field):
+    start = field["offset"]
+    return start, start + (field["width"] or field.get("minimum_payload_size", 0) - start)
+
+
 def reject_overlaps(entries, kind_label):
     by_payload = {}
     for field in entries:
@@ -142,12 +147,11 @@ def reject_overlaps(entries, kind_label):
 
             if different_layout:
                 conflict = "conflicting repeated/stride/array_offset layouts"
-            elif not first["embedded"] or not second["embedded"] or not first["width"] or not second["width"]:
+            elif not first["embedded"] or not second["embedded"]:
                 conflict = "whole-payload field covers the subrecord"
             else:
-                start_a, start_b = first["offset"], second["offset"]
-                end_a = start_a + first["width"]
-                end_b = start_b + second["width"]
+                start_a, end_a = field_span(first)
+                start_b, end_b = field_span(second)
                 if start_a >= end_b or start_b >= end_a:
                     continue
                 conflict = f"byte ranges [{start_a}, {end_a}) and [{start_b}, {end_b}) intersect"
