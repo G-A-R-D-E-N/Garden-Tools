@@ -98,6 +98,12 @@ constexpr LinkRow k_link_rows[] = {
     {"ARMA", "ARMA\\FootstepSound", "SNDD", "FSTS", true},
     {"ARMA", "ARMA\\ArtObject", "ONAM", "ARTO", false},
     {"ARMA", "ARMA\\AdditionalRaces", "MODL", "RACE", true},
+    {"ARMA", "ARMA\\BipedMaleMaterialSwap", "MO2S", "MSWP", false},
+    {"ARMA", "ARMA\\BipedFemaleMaterialSwap", "MO3S", "MSWP", false},
+    {"ARMA", "ARMA\\FirstPersonMaleMaterialSwap", "MO4S", "MSWP", false},
+    {"ARMA", "ARMA\\FirstPersonFemaleMaterialSwap", "MO5S", "MSWP", false},
+    {"ARMO", "ARMO\\MaleMaterialSwap", "MO2S", "MSWP", false},
+    {"ARMO", "ARMO\\FemaleMaterialSwap", "MO4S", "MSWP", false},
 };
 
 constexpr std::uint32_t raw_id(std::uint32_t local_id) { return 0x02000000u | local_id; }
@@ -208,6 +214,8 @@ std::vector<std::byte> make_plugin() {
       {"MODL", u32_bytes(0x00000A30)},
       {"INDX", u16_bytes(2)},
       {"MODL", u32_bytes(0x00000A31)},
+      {"MO2S", u32_bytes(0x00000A40)},
+      {"MO4S", u32_bytes(0x00000A41)},
   };
   for (const auto& sub : armo_subs) fo4::test::write_subrecord(out, sub.signature, sub.data);
   fo4::test::end_record(out, armo);
@@ -223,6 +231,10 @@ std::vector<std::byte> make_plugin() {
       {"NAM0", u32_bytes(0x00000A12)},
       {"SNDD", u32_bytes(0x00000A13)},
       {"MODL", u32_bytes(0x00000A32)},
+      {"MO2S", u32_bytes(0x00000A42)},
+      {"MO3S", u32_bytes(0x00000A43)},
+      {"MO4S", u32_bytes(0x00000A44)},
+      {"MO5S", u32_bytes(0x00000A45)},
   };
   for (const auto& sub : arma_subs) fo4::test::write_subrecord(out, sub.signature, sub.data);
   fo4::test::end_record(out, arma);
@@ -459,6 +471,45 @@ TEST(ARMOARMARows, ModelListRowsAreRepeatedIndicesAndAddonLinks) {
   const auto targets = fo4::schema::formlink_field_targets(*addon);
   ASSERT_EQ(targets.size(), 1u);
   EXPECT_EQ(targets[0], fo4::Signature::from_string("ARMA"));
+}
+
+TEST(ARMOARMARows, MaterialSwapRowsReadAndEditTheMSWPLink) {
+  const auto male = fo4::schema::formlink_field_descriptor(fo4::Signature::from_string("ARMO"),
+                                                           "ARMO\\MaleMaterialSwap");
+  const auto first_person_female =
+      fo4::schema::formlink_field_descriptor(fo4::Signature::from_string("ARMA"),
+                                             "ARMA\\FirstPersonFemaleMaterialSwap");
+  ASSERT_TRUE(male.has_value());
+  ASSERT_TRUE(first_person_female.has_value());
+  EXPECT_FALSE(male->address.repeated);
+  EXPECT_FALSE(male->nullable);
+  EXPECT_FALSE(first_person_female->address.repeated);
+  EXPECT_FALSE(first_person_female->nullable);
+
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  EXPECT_EQ(link_raw(plugin, k_armo_key, "MO2S"), 0x00000A40u);
+  EXPECT_EQ(link_raw(plugin, k_armo_key, "MO4S"), 0x00000A41u);
+  EXPECT_EQ(link_raw(plugin, k_arma_key, "MO2S"), 0x00000A42u);
+  EXPECT_EQ(link_raw(plugin, k_arma_key, "MO3S"), 0x00000A43u);
+  EXPECT_EQ(link_raw(plugin, k_arma_key, "MO4S"), 0x00000A44u);
+  EXPECT_EQ(link_raw(plugin, k_arma_key, "MO5S"), 0x00000A45u);
+
+  const auto armo_key = fo4::FormKey::parse(k_armo_key);
+  const auto arma_key = fo4::FormKey::parse(k_arma_key);
+  EXPECT_THROW(fo4::set_record_formlink_field(plugin, armo_key, *male, fo4::FormKey{}),
+               fo4::schema::FormLinkFieldError);
+  EXPECT_THROW(fo4::set_record_formlink_field(plugin, armo_key, *male, armo_key),
+               fo4::schema::FormLinkFieldError);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, armo_key, *male, 1,
+                                           fo4::FormKey::parse("000A60:Objects.esp")),
+            fo4::FormLinkFieldMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, arma_key, *first_person_female, 0,
+                                           fo4::FormKey::parse("000A61:Objects.esp")),
+            fo4::FormLinkFieldMutationStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(link_raw(reread, k_armo_key, "MO2S"), 0x00000A40u);
+  EXPECT_EQ(link_raw(reread, k_arma_key, "MO5S"), 0x01000A61u);
 }
 
 TEST(ARMOARMARows, EditsTheModelListByIndex) {

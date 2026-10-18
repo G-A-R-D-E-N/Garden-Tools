@@ -287,6 +287,62 @@
             4
           ],
           "insertion": "existing_only"
+        },
+        {
+          "path": "ARMA\\BipedMaleMaterialSwap",
+          "label": "Biped male material swap",
+          "subrecord": "MO2S",
+          "offset": 0,
+          "targets": [
+            "MSWP"
+          ],
+          "nullable": false,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMA\\BipedFemaleMaterialSwap",
+          "label": "Biped female material swap",
+          "subrecord": "MO3S",
+          "offset": 0,
+          "targets": [
+            "MSWP"
+          ],
+          "nullable": false,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMA\\FirstPersonMaleMaterialSwap",
+          "label": "First person male material swap",
+          "subrecord": "MO4S",
+          "offset": 0,
+          "targets": [
+            "MSWP"
+          ],
+          "nullable": false,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMA\\FirstPersonFemaleMaterialSwap",
+          "label": "First person female material swap",
+          "subrecord": "MO5S",
+          "offset": 0,
+          "targets": [
+            "MSWP"
+          ],
+          "nullable": false,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
         }
       ],
       "localized_subrecords": []
@@ -741,6 +797,34 @@
           ],
           "nullable": false,
           "repeated": true,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMO\\MaleMaterialSwap",
+          "label": "Male material swap",
+          "subrecord": "MO2S",
+          "offset": 0,
+          "targets": [
+            "MSWP"
+          ],
+          "nullable": false,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMO\\FemaleMaterialSwap",
+          "label": "Female material swap",
+          "subrecord": "MO4S",
+          "offset": 0,
+          "targets": [
+            "MSWP"
+          ],
+          "nullable": false,
           "payload_sizes": [
             4
           ],
