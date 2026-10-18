@@ -15,6 +15,12 @@
 #include "fo4/c_api_dialogue.h"
 #include "fo4/c_api_loadorder.h"
 #include "fo4/c_api_conditions.h"
+#include "fo4/c_api_armor.h"
+#include "fo4/c_api_eyes.h"
+#include "fo4/c_api_faction.h"
+#include "fo4/c_api_components.h"
+#include "fo4/c_api_cell.h"
+#include "fo4/c_api_patch.h"
 #include <cstddef>
 #include <cstdio>
 
@@ -1145,5 +1151,135 @@ int main() {
   printf("ConditionList.Rows %zu\n", offsetof(radicle_condition_list, rows));
   printf("ConditionList.Count %zu\n", offsetof(radicle_condition_list, count));
   printf("ConditionList.Internal %zu\n", offsetof(radicle_condition_list, internal));
+  printf("ArmorInfo %zu\n", sizeof(radicle_armor_info));
+  printf("ArmorInfo.Record %zu\n", offsetof(radicle_armor_info, record));
+  printf("ArmorInfo.EditorId %zu\n", offsetof(radicle_armor_info, editor_id));
+  printf("ArmorInfo.MaleWorldModel %zu\n", offsetof(radicle_armor_info, male_world_model));
+  printf("ArmorInfo.MaleIcon %zu\n", offsetof(radicle_armor_info, male_icon));
+  printf("ArmorInfo.MaleMessageIcon %zu\n", offsetof(radicle_armor_info, male_message_icon));
+  printf("ArmorInfo.FemaleWorldModel %zu\n", offsetof(radicle_armor_info, female_world_model));
+  printf("ArmorInfo.FemaleIcon %zu\n", offsetof(radicle_armor_info, female_icon));
+  printf("ArmorInfo.FemaleMessageIcon %zu\n", offsetof(radicle_armor_info, female_message_icon));
+  printf("ArmorInfo.FullNameKind %zu\n", offsetof(radicle_armor_info, full_name_kind));
+  printf("ArmorInfo.FullNameText %zu\n", offsetof(radicle_armor_info, full_name_text));
+  printf("ArmorInfo.FullNameStringId %zu\n", offsetof(radicle_armor_info, full_name_string_id));
+  printf("ArmorInfo.DescriptionKind %zu\n", offsetof(radicle_armor_info, description_kind));
+  printf("ArmorInfo.DescriptionText %zu\n", offsetof(radicle_armor_info, description_text));
+  printf("ArmorInfo.DescriptionStringId %zu\n", offsetof(radicle_armor_info, description_string_id));
+  printf("ArmorInfo.Value %zu\n", offsetof(radicle_armor_info, value));
+  printf("ArmorInfo.Weight %zu\n", offsetof(radicle_armor_info, weight));
+  printf("ArmorInfo.Health %zu\n", offsetof(radicle_armor_info, health));
+  printf("ArmorInfo.Internal %zu\n", offsetof(radicle_armor_info, internal));
+  printf("ArmorAddonInfo %zu\n", sizeof(radicle_armor_addon_info));
+  printf("ArmorAddonInfo.Record %zu\n", offsetof(radicle_armor_addon_info, record));
+  printf("ArmorAddonInfo.EditorId %zu\n", offsetof(radicle_armor_addon_info, editor_id));
+  printf("ArmorAddonInfo.MaleBipedModel %zu\n", offsetof(radicle_armor_addon_info, male_biped_model));
+  printf("ArmorAddonInfo.FemaleBipedModel %zu\n", offsetof(radicle_armor_addon_info, female_biped_model));
+  printf("ArmorAddonInfo.MaleFirstPersonModel %zu\n", offsetof(radicle_armor_addon_info, male_first_person_model));
+  printf("ArmorAddonInfo.FemaleFirstPersonModel %zu\n", offsetof(radicle_armor_addon_info, female_first_person_model));
+  printf("ArmorAddonInfo.MalePriority %zu\n", offsetof(radicle_armor_addon_info, male_priority));
+  printf("ArmorAddonInfo.FemalePriority %zu\n", offsetof(radicle_armor_addon_info, female_priority));
+  printf("ArmorAddonInfo.MaleWeightSlider %zu\n", offsetof(radicle_armor_addon_info, male_weight_slider));
+  printf("ArmorAddonInfo.FemaleWeightSlider %zu\n", offsetof(radicle_armor_addon_info, female_weight_slider));
+  printf("ArmorAddonInfo.UnknownBeforeDetection %zu\n", offsetof(radicle_armor_addon_info, unknown_before_detection));
+  printf("ArmorAddonInfo.DetectionSoundValue %zu\n", offsetof(radicle_armor_addon_info, detection_sound_value));
+  printf("ArmorAddonInfo.UnknownBeforeWeaponAdjust %zu\n", offsetof(radicle_armor_addon_info, unknown_before_weapon_adjust));
+  printf("ArmorAddonInfo.WeaponAdjust %zu\n", offsetof(radicle_armor_addon_info, weapon_adjust));
+  printf("ArmorAddonInfo.Internal %zu\n", offsetof(radicle_armor_addon_info, internal));
+  printf("ArmorCreation %zu\n", sizeof(radicle_armor_creation));
+  printf("ArmorCreation.EditorId %zu\n", offsetof(radicle_armor_creation, editor_id));
+  printf("ArmorCreation.MaleWorldModel %zu\n", offsetof(radicle_armor_creation, male_world_model));
+  printf("ArmorCreation.MaleIcon %zu\n", offsetof(radicle_armor_creation, male_icon));
+  printf("ArmorCreation.MaleMessageIcon %zu\n", offsetof(radicle_armor_creation, male_message_icon));
+  printf("ArmorCreation.FemaleWorldModel %zu\n", offsetof(radicle_armor_creation, female_world_model));
+  printf("ArmorCreation.FemaleIcon %zu\n", offsetof(radicle_armor_creation, female_icon));
+  printf("ArmorCreation.FemaleMessageIcon %zu\n", offsetof(radicle_armor_creation, female_message_icon));
+  printf("ArmorCreation.Description %zu\n", offsetof(radicle_armor_creation, description));
+  printf("ArmorCreation.Value %zu\n", offsetof(radicle_armor_creation, value));
+  printf("ArmorCreation.Weight %zu\n", offsetof(radicle_armor_creation, weight));
+  printf("ArmorCreation.Health %zu\n", offsetof(radicle_armor_creation, health));
+  printf("ArmorAddonCreation %zu\n", sizeof(radicle_armor_addon_creation));
+  printf("ArmorAddonCreation.EditorId %zu\n", offsetof(radicle_armor_addon_creation, editor_id));
+  printf("ArmorAddonCreation.MaleBipedModel %zu\n", offsetof(radicle_armor_addon_creation, male_biped_model));
+  printf("ArmorAddonCreation.FemaleBipedModel %zu\n", offsetof(radicle_armor_addon_creation, female_biped_model));
+  printf("ArmorAddonCreation.MaleFirstPersonModel %zu\n", offsetof(radicle_armor_addon_creation, male_first_person_model));
+  printf("ArmorAddonCreation.FemaleFirstPersonModel %zu\n", offsetof(radicle_armor_addon_creation, female_first_person_model));
+  printf("ArmorAddonCreation.MalePriority %zu\n", offsetof(radicle_armor_addon_creation, male_priority));
+  printf("ArmorAddonCreation.FemalePriority %zu\n", offsetof(radicle_armor_addon_creation, female_priority));
+  printf("ArmorAddonCreation.MaleWeightSlider %zu\n", offsetof(radicle_armor_addon_creation, male_weight_slider));
+  printf("ArmorAddonCreation.FemaleWeightSlider %zu\n", offsetof(radicle_armor_addon_creation, female_weight_slider));
+  printf("ArmorAddonCreation.UnknownBeforeDetection %zu\n", offsetof(radicle_armor_addon_creation, unknown_before_detection));
+  printf("ArmorAddonCreation.DetectionSoundValue %zu\n", offsetof(radicle_armor_addon_creation, detection_sound_value));
+  printf("ArmorAddonCreation.UnknownBeforeWeaponAdjust %zu\n", offsetof(radicle_armor_addon_creation, unknown_before_weapon_adjust));
+  printf("ArmorAddonCreation.WeaponAdjust %zu\n", offsetof(radicle_armor_addon_creation, weapon_adjust));
+  printf("EyesInfo %zu\n", sizeof(radicle_eyes_info));
+  printf("EyesInfo.Record %zu\n", offsetof(radicle_eyes_info, record));
+  printf("EyesInfo.RecordFlags %zu\n", offsetof(radicle_eyes_info, record_flags));
+  printf("EyesInfo.EditorId %zu\n", offsetof(radicle_eyes_info, editor_id));
+  printf("EyesInfo.FullText %zu\n", offsetof(radicle_eyes_info, full_text));
+  printf("EyesInfo.FullRawSize %zu\n", offsetof(radicle_eyes_info, full_raw_size));
+  printf("EyesInfo.Icon %zu\n", offsetof(radicle_eyes_info, icon));
+  printf("EyesInfo.DataFlags %zu\n", offsetof(radicle_eyes_info, data_flags));
+  printf("EyesInfo.Internal %zu\n", offsetof(radicle_eyes_info, internal));
+  printf("EyesCreation %zu\n", sizeof(radicle_eyes_creation));
+  printf("EyesCreation.EditorId %zu\n", offsetof(radicle_eyes_creation, editor_id));
+  printf("EyesCreation.FullText %zu\n", offsetof(radicle_eyes_creation, full_text));
+  printf("EyesCreation.Icon %zu\n", offsetof(radicle_eyes_creation, icon));
+  printf("EyesCreation.DataFlags %zu\n", offsetof(radicle_eyes_creation, data_flags));
+  printf("EyesCreation.RecordFlags %zu\n", offsetof(radicle_eyes_creation, record_flags));
+  printf("FactionRelation %zu\n", sizeof(radicle_faction_relation));
+  printf("FactionRelation.Faction %zu\n", offsetof(radicle_faction_relation, faction));
+  printf("FactionRelation.Modifier %zu\n", offsetof(radicle_faction_relation, modifier));
+  printf("FactionRelation.Reaction %zu\n", offsetof(radicle_faction_relation, reaction));
+  printf("FactionRank %zu\n", sizeof(radicle_faction_rank));
+  printf("FactionRank.Number %zu\n", offsetof(radicle_faction_rank, number));
+  printf("FactionRank.MaleTitleKind %zu\n", offsetof(radicle_faction_rank, male_title_kind));
+  printf("FactionRank.MaleTitleText %zu\n", offsetof(radicle_faction_rank, male_title_text));
+  printf("FactionRank.MaleTitleStringId %zu\n", offsetof(radicle_faction_rank, male_title_string_id));
+  printf("FactionRank.FemaleTitleKind %zu\n", offsetof(radicle_faction_rank, female_title_kind));
+  printf("FactionRank.FemaleTitleText %zu\n", offsetof(radicle_faction_rank, female_title_text));
+  printf("FactionRank.FemaleTitleStringId %zu\n", offsetof(radicle_faction_rank, female_title_string_id));
+  printf("FactionRank.Insignia %zu\n", offsetof(radicle_faction_rank, insignia));
+  printf("FactionRank.InsigniaSize %zu\n", offsetof(radicle_faction_rank, insignia_size));
+  printf("FactionRelations %zu\n", sizeof(radicle_faction_relations));
+  printf("FactionRelations.Relations %zu\n", offsetof(radicle_faction_relations, relations));
+  printf("FactionRelations.RelationCount %zu\n", offsetof(radicle_faction_relations, relation_count));
+  printf("FactionRelations.Internal %zu\n", offsetof(radicle_faction_relations, internal));
+  printf("FactionRanks %zu\n", sizeof(radicle_faction_ranks));
+  printf("FactionRanks.Ranks %zu\n", offsetof(radicle_faction_ranks, ranks));
+  printf("FactionRanks.RankCount %zu\n", offsetof(radicle_faction_ranks, rank_count));
+  printf("FactionRanks.Internal %zu\n", offsetof(radicle_faction_ranks, internal));
+  printf("FactionRankInput %zu\n", sizeof(radicle_faction_rank_input));
+  printf("FactionRankInput.MaleTitleKind %zu\n", offsetof(radicle_faction_rank_input, male_title_kind));
+  printf("FactionRankInput.MaleTitleText %zu\n", offsetof(radicle_faction_rank_input, male_title_text));
+  printf("FactionRankInput.MaleTitleStringId %zu\n", offsetof(radicle_faction_rank_input, male_title_string_id));
+  printf("FactionRankInput.FemaleTitleKind %zu\n", offsetof(radicle_faction_rank_input, female_title_kind));
+  printf("FactionRankInput.FemaleTitleText %zu\n", offsetof(radicle_faction_rank_input, female_title_text));
+  printf("FactionRankInput.FemaleTitleStringId %zu\n", offsetof(radicle_faction_rank_input, female_title_string_id));
+  printf("FactionRankInput.Insignia %zu\n", offsetof(radicle_faction_rank_input, insignia));
+  printf("FactionRankInput.InsigniaSize %zu\n", offsetof(radicle_faction_rank_input, insignia_size));
+  printf("ComponentEntry %zu\n", sizeof(radicle_component_entry));
+  printf("ComponentEntry.Component %zu\n", offsetof(radicle_component_entry, component));
+  printf("ComponentEntry.Count %zu\n", offsetof(radicle_component_entry, count));
+  printf("Components %zu\n", sizeof(radicle_components));
+  printf("Components.Entries %zu\n", offsetof(radicle_components, entries));
+  printf("Components.EntryCount %zu\n", offsetof(radicle_components, entry_count));
+  printf("Components.Internal %zu\n", offsetof(radicle_components, internal));
+  printf("ExteriorCellLayout %zu\n", sizeof(radicle_exterior_cell_layout));
+  printf("ExteriorCellLayout.CellX %zu\n", offsetof(radicle_exterior_cell_layout, cell_x));
+  printf("ExteriorCellLayout.CellY %zu\n", offsetof(radicle_exterior_cell_layout, cell_y));
+  printf("ExteriorCellLayout.BlockX %zu\n", offsetof(radicle_exterior_cell_layout, block_x));
+  printf("ExteriorCellLayout.BlockY %zu\n", offsetof(radicle_exterior_cell_layout, block_y));
+  printf("ExteriorCellLayout.SubblockX %zu\n", offsetof(radicle_exterior_cell_layout, subblock_x));
+  printf("ExteriorCellLayout.SubblockY %zu\n", offsetof(radicle_exterior_cell_layout, subblock_y));
+  printf("ExteriorCellCreation %zu\n", sizeof(radicle_exterior_cell_creation));
+  printf("ExteriorCellCreation.Worldspace %zu\n", offsetof(radicle_exterior_cell_creation, worldspace));
+  printf("ExteriorCellCreation.X %zu\n", offsetof(radicle_exterior_cell_creation, x));
+  printf("ExteriorCellCreation.Y %zu\n", offsetof(radicle_exterior_cell_creation, y));
+  printf("ExteriorCellCreation.EditorId %zu\n", offsetof(radicle_exterior_cell_creation, editor_id));
+  printf("ExteriorCellCreation.Flags %zu\n", offsetof(radicle_exterior_cell_creation, flags));
+  printf("DeltaPatchCounts %zu\n", sizeof(radicle_delta_patch_counts));
+  printf("DeltaPatchCounts.Kept %zu\n", offsetof(radicle_delta_patch_counts, kept));
+  printf("DeltaPatchCounts.Removed %zu\n", offsetof(radicle_delta_patch_counts, removed));
   return 0;
 }
