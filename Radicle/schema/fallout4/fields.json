@@ -8515,6 +8515,68 @@
     },
     {
       "signature": "REFR",
+      "authoring": {
+        "placement": "cell_reference_children",
+        "subrecords": [
+          { "signature": "EDID", "minimum": 0, "maximum": 1 },
+          { "signature": "VMAD", "minimum": 0, "maximum": 1 },
+          { "signature": "NAME", "minimum": 0, "maximum": 1 },
+          { "signature": "XMBO", "minimum": 0, "maximum": 1 },
+          { "signature": "XPRM", "minimum": 0, "maximum": 1 },
+          { "signature": "XPTL", "minimum": 0, "maximum": 1 },
+          { "signature": "XOCP", "minimum": 0, "maximum": 1 },
+          { "signature": "XRMR", "minimum": 0, "maximum": 1 },
+          { "signature": "LNAM", "minimum": 0, "maximum": 1 },
+          { "signature": "XMBP", "minimum": 0, "maximum": 1 },
+          { "signature": "XRDS", "minimum": 0, "maximum": 1 },
+          { "signature": "XEMI", "minimum": 0, "maximum": 1 },
+          { "signature": "XLIG", "minimum": 0, "maximum": 1 },
+          { "signature": "XALP", "minimum": 0, "maximum": 1 },
+          { "signature": "XTEL", "minimum": 0, "maximum": 1 },
+          { "signature": "XTNM", "minimum": 0, "maximum": 1 },
+          { "signature": "XMBR", "minimum": 0, "maximum": 1 },
+          { "signature": "XWCN", "minimum": 0, "maximum": 1 },
+          { "signature": "XASP", "minimum": 0, "maximum": 1 },
+          { "signature": "XATP", "minimum": 0, "maximum": 1 },
+          { "signature": "XAMC", "minimum": 0, "maximum": 1 },
+          { "signature": "XLKT", "minimum": 0, "maximum": 1 },
+          { "signature": "XLYR", "minimum": 0, "maximum": 1 },
+          { "signature": "XMSP", "minimum": 0, "maximum": 1 },
+          { "signature": "XRFG", "minimum": 0, "maximum": 1 },
+          { "signature": "XRDO", "minimum": 0, "maximum": 1 },
+          { "signature": "XBSD", "minimum": 0, "maximum": 1 },
+          { "signature": "XPDD", "minimum": 0, "maximum": 1 },
+          { "signature": "XSPC", "minimum": 0, "maximum": 1 },
+          { "signature": "XAPD", "minimum": 0, "maximum": 1 },
+          { "signature": "XLIB", "minimum": 0, "maximum": 1 },
+          { "signature": "XLCM", "minimum": 0, "maximum": 1 },
+          { "signature": "XLCN", "minimum": 0, "maximum": 1 },
+          { "signature": "XTRI", "minimum": 0, "maximum": 1 },
+          { "signature": "XLOC", "minimum": 0, "maximum": 1 },
+          { "signature": "XEZN", "minimum": 0, "maximum": 1 },
+          { "signature": "XNDP", "minimum": 0, "maximum": 1 },
+          { "signature": "XLRL", "minimum": 0, "maximum": 1 },
+          { "signature": "XIS2", "minimum": 0, "maximum": 1 },
+          { "signature": "XCNT", "minimum": 0, "maximum": 1 },
+          { "signature": "XHLT", "minimum": 0, "maximum": 1 },
+          { "signature": "XESP", "minimum": 0, "maximum": 1 },
+          { "signature": "XACT", "minimum": 0, "maximum": 1 },
+          { "signature": "XHTW", "minimum": 0, "maximum": 1 },
+          { "signature": "XFVC", "minimum": 0, "maximum": 1 },
+          { "signature": "ONAM", "minimum": 0, "maximum": 1 },
+          { "signature": "XMRK", "minimum": 0, "maximum": 1 },
+          { "signature": "FNAM", "minimum": 0, "maximum": 1 },
+          { "signature": "FULL", "minimum": 0, "maximum": 1 },
+          { "signature": "TNAM", "minimum": 0, "maximum": 1 },
+          { "signature": "XATR", "minimum": 0, "maximum": 1 },
+          { "signature": "XWPG", "minimum": 0, "maximum": 1 },
+          { "signature": "XCVL", "minimum": 0, "maximum": 1 },
+          { "signature": "XCVR", "minimum": 0, "maximum": 1 },
+          { "signature": "XSCL", "minimum": 0, "maximum": 1 },
+          { "signature": "DATA", "minimum": 1, "maximum": 1, "default": "000000000000000000000000000000000000000000000000" },
+          { "signature": "MNAM", "minimum": 0, "maximum": 1 }
+        ]
+      },
       "fields": [
         {
           "path": "REFR\\HealthPercent",
@@ -8839,6 +8901,150 @@
           "maximum": 3.4028234663852886e+38,
           "minimum_payload_size": 24,
           "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\MapFlags",
+          "label": "Map flags",
+          "kind": "scalar",
+          "subrecord": "FNAM",
+          "storage": "u8",
+          "presentation": "flags",
+          "names": [
+            {
+              "bit": 0,
+              "name": "Visible"
+            },
+            {
+              "bit": 1,
+              "name": "Can Travel To"
+            },
+            {
+              "bit": 2,
+              "name": "\"Show All\" Hidden"
+            },
+            {
+              "bit": 3,
+              "name": "Use Location Name"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\MapMarkerType",
+          "label": "Map marker type",
+          "kind": "scalar",
+          "subrecord": "TNAM",
+          "offset": 0,
+          "storage": "u8",
+          "presentation": "enum",
+          "names": [
+            {"value": 0, "name": "Cave"},
+            {"value": 1, "name": "City"},
+            {"value": 2, "name": "Diamond City"},
+            {"value": 3, "name": "Encampment"},
+            {"value": 4, "name": "Factory / Industrial Site"},
+            {"value": 5, "name": "Gov't Building / Monument"},
+            {"value": 6, "name": "Metro Station"},
+            {"value": 7, "name": "Military Base"},
+            {"value": 8, "name": "Natural Landmark"},
+            {"value": 9, "name": "Office / Civic Building"},
+            {"value": 10, "name": "Ruins - Town"},
+            {"value": 11, "name": "Ruins - Urban"},
+            {"value": 12, "name": "Sanctuary"},
+            {"value": 13, "name": "Settlement"},
+            {"value": 14, "name": "Sewer / Utility Tunnels"},
+            {"value": 15, "name": "Vault"},
+            {"value": 16, "name": "Airfield"},
+            {"value": 17, "name": "Bunker Hill"},
+            {"value": 18, "name": "Camper"},
+            {"value": 19, "name": "Car"},
+            {"value": 20, "name": "Church"},
+            {"value": 21, "name": "Country Club"},
+            {"value": 22, "name": "Custom House"},
+            {"value": 23, "name": "Drive-In"},
+            {"value": 24, "name": "Elevated Highway"},
+            {"value": 25, "name": "Faneuil Hall"},
+            {"value": 26, "name": "Farm"},
+            {"value": 27, "name": "Filling Station"},
+            {"value": 28, "name": "Forested"},
+            {"value": 29, "name": "Goodneighbor"},
+            {"value": 30, "name": "Graveyard"},
+            {"value": 31, "name": "Hospital"},
+            {"value": 32, "name": "Industrial Dome"},
+            {"value": 33, "name": "Industrial Stacks"},
+            {"value": 34, "name": "Institute"},
+            {"value": 35, "name": "Irish Pride"},
+            {"value": 36, "name": "Junkyard"},
+            {"value": 37, "name": "Observatory"},
+            {"value": 38, "name": "Pier"},
+            {"value": 39, "name": "Pond / Lake"},
+            {"value": 40, "name": "Quarry"},
+            {"value": 41, "name": "Radioactive Area"},
+            {"value": 42, "name": "Radio Tower"},
+            {"value": 43, "name": "Salem"},
+            {"value": 44, "name": "School"},
+            {"value": 45, "name": "Shipwreck"},
+            {"value": 46, "name": "Submarine"},
+            {"value": 47, "name": "Swan Pond"},
+            {"value": 48, "name": "Synth Head"},
+            {"value": 49, "name": "Town"},
+            {"value": 50, "name": "Brotherhood of Steel"},
+            {"value": 51, "name": "Brownstone Townhouse"},
+            {"value": 52, "name": "Bunker"},
+            {"value": 53, "name": "Castle"},
+            {"value": 54, "name": "Skyscraper"},
+            {"value": 55, "name": "Libertalia"},
+            {"value": 56, "name": "Low-Rise Building"},
+            {"value": 57, "name": "Minutemen"},
+            {"value": 58, "name": "Police Station"},
+            {"value": 59, "name": "Prydwen"},
+            {"value": 60, "name": "Railroad - Faction"},
+            {"value": 61, "name": "Railroad"},
+            {"value": 62, "name": "Satellite"},
+            {"value": 63, "name": "Sentinel"},
+            {"value": 64, "name": "USS Constitution"},
+            {"value": 65, "name": "Mechanist Lair"},
+            {"value": 66, "name": "Raider settlement"},
+            {"value": 67, "name": "Vassal settlement"},
+            {"value": 68, "name": "Potential Vassal settlement"},
+            {"value": 69, "name": "Bottling Plant"},
+            {"value": 70, "name": "Galactic"},
+            {"value": 71, "name": "HUB"},
+            {"value": 72, "name": "Kiddie Kingdom"},
+            {"value": 73, "name": "Monorail"},
+            {"value": 74, "name": "Rides"},
+            {"value": 75, "name": "Safari"},
+            {"value": 76, "name": "Wild West"},
+            {"value": 77, "name": "POI"},
+            {"value": 78, "name": "Disciples"},
+            {"value": 79, "name": "Operators"},
+            {"value": 80, "name": "Pack"},
+            {"value": 81, "name": "Custom 81"},
+            {"value": 82, "name": "Custom 82"},
+            {"value": 83, "name": "Custom 83"},
+            {"value": 84, "name": "Custom 84"},
+            {"value": 85, "name": "Custom 85"},
+            {"value": 86, "name": "Custom 86"},
+            {"value": 87, "name": "Custom 87"},
+            {"value": 88, "name": "Custom 88"},
+            {"value": 89, "name": "Custom 89"},
+            {"value": 90, "name": "Custom 90"},
+            {"value": 91, "name": "Custom 91"},
+            {"value": 92, "name": "Custom 92"},
+            {"value": 93, "name": "Custom 93"},
+            {"value": 94, "name": "Custom 94"},
+            {"value": 95, "name": "Custom 95"},
+            {"value": 96, "name": "Custom 96"},
+            {"value": 97, "name": "Custom 97"},
+            {"value": 98, "name": "Custom 98"},
+            {"value": 99, "name": "Custom 99"}
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 2,
+          "insertion": "existing_only"
         }
       ],
       "formlink_fields": [
@@ -8993,6 +9199,35 @@
           ],
           "targets": [
             "KEYM"
+          ],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\PersistLocation",
+          "label": "Persist location",
+          "subrecord": "XLCN",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "LCTN"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\LocationReference",
+          "label": "Location reference",
+          "subrecord": "XLRL",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "LCRT",
+            "LCTN"
           ],
           "nullable": true,
           "insertion": "existing_only"
@@ -9200,6 +9435,39 @@
           "maximum": 255,
           "payload_size": 12,
           "insertion": "existing_only"
+        },
+        {
+          "path": "PARW\\AmmoCount",
+          "label": "Ammo count",
+          "kind": "scalar",
+          "subrecord": "XAMC",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PARW\\HeadTrackingWeight",
+          "label": "Head-tracking weight",
+          "kind": "scalar",
+          "subrecord": "XHTW",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PARW\\FavorCost",
+          "label": "Favor cost",
+          "kind": "scalar",
+          "subrecord": "XFVC",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
         }
       ],
       "formlink_fields": [
@@ -9253,6 +9521,91 @@
           "targets": [
             "FACT",
             "NPC_"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PARW\\EncounterZone",
+          "label": "Encounter zone",
+          "subrecord": "XEZN",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "ECZN"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PARW\\AcousticParent",
+          "label": "Acoustic parent",
+          "subrecord": "XASP",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "REFR"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PARW\\Layer",
+          "label": "Layer",
+          "subrecord": "XLYR",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "LAYR"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PARW\\MaterialSwap",
+          "label": "Material swap",
+          "subrecord": "XMSP",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "MSWP"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PARW\\ReferenceGroup",
+          "label": "Reference group",
+          "subrecord": "XRFG",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "RFGP"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PARW\\Emittance",
+          "label": "Emittance",
+          "subrecord": "XEMI",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "LIGH",
+            "REGN"
           ],
           "nullable": false,
           "insertion": "existing_only"
@@ -29747,6 +30100,37 @@
         {"path": "NPC_\\DestructionStageMaterialSwap", "label": "Stage material swap", "subrecord": "DMDS", "offset": 0, "repeated": true, "payload_sizes": [4], "targets": ["MSWP"], "nullable": false, "insertion": "existing_only"}
       ],
       "localized_subrecords": ["FULL", "SHRT", "ATTX"]
+    },
+    {
+      "signature": "ACHR",
+      "fields": [
+        {"path": "ACHR\\Radius", "label": "Radius", "kind": "scalar", "subrecord": "XRDS", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "ACHR\\Count", "label": "Count", "kind": "scalar", "subrecord": "XCNT", "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "insertion": "existing_only"},
+        {"path": "ACHR\\HealthPercent", "label": "Health %", "kind": "scalar", "subrecord": "XHLT", "storage": "u32", "presentation": "percent_0_100", "minimum": 0, "maximum": 100, "insertion": "existing_only"},
+        {"path": "ACHR\\LockLevel", "label": "Lock level", "kind": "scalar", "subrecord": "XLOC", "offset": 0, "storage": "u8", "presentation": "enum", "names": [{"value": 0, "name": "None"}, {"value": 1, "name": "Novice 1"}, {"value": 25, "name": "Novice 25"}, {"value": 50, "name": "Advanced"}, {"value": 75, "name": "Expert"}, {"value": 100, "name": "Master"}, {"value": 251, "name": "Barred"}, {"value": 252, "name": "Chained"}, {"value": 253, "name": "Requires Terminal"}, {"value": 254, "name": "Inaccessible"}, {"value": 255, "name": "Requires Key"}], "minimum": 0, "maximum": 255, "payload_size": 16, "insertion": "existing_only"},
+        {"path": "ACHR\\LockFlags", "label": "Lock flags", "kind": "scalar", "subrecord": "XLOC", "offset": 8, "storage": "u8", "presentation": "flags", "names": [{"bit": 2, "name": "Leveled Lock"}], "minimum": 0, "maximum": 255, "payload_size": 16, "insertion": "existing_only"},
+        {"path": "ACHR\\Scale", "label": "Scale", "kind": "scalar", "subrecord": "XSCL", "storage": "f32", "presentation": "identity", "minimum": 0, "maximum": 10, "insertion": "existing_only"},
+        {"path": "ACHR\\HeadTrackingWeight", "label": "Head-tracking weight", "kind": "scalar", "subrecord": "XHTW", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "ACHR\\FavorCost", "label": "Favor cost", "kind": "scalar", "subrecord": "XFVC", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "ACHR\\EnableParentFlags", "label": "Enable Parent Flags", "kind": "scalar", "subrecord": "XESP", "offset": 4, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Set Enable State to Opposite of Parent"}, {"bit": 1, "name": "Pop In"}], "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "ACHR\\OwnerRank", "label": "Faction rank", "kind": "scalar", "subrecord": "XRNK", "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "insertion": "existing_only"},
+        {"path": "ACHR\\OwnerNoCrime", "label": "No Crime", "kind": "scalar", "subrecord": "XOWN", "offset": 8, "storage": "u8", "presentation": "enum", "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "minimum": 0, "maximum": 255, "payload_size": 12, "insertion": "existing_only"}
+      ],
+      "formlink_fields": [
+        {"path": "ACHR\\EncounterZone", "label": "Encounter zone", "subrecord": "XEZN", "offset": 0, "payload_sizes": [4], "targets": ["ECZN"], "nullable": false, "insertion": "existing_only"},
+        {"path": "ACHR\\LockKey", "label": "Lock key", "subrecord": "XLOC", "offset": 4, "payload_sizes": [16], "targets": ["KEYM"], "nullable": true, "insertion": "existing_only"},
+        {"path": "ACHR\\Emittance", "label": "Emittance", "subrecord": "XEMI", "offset": 0, "payload_sizes": [4], "targets": ["LIGH", "REGN"], "nullable": false, "insertion": "existing_only"},
+        {"path": "ACHR\\MultiboundReference", "label": "Multibound reference", "subrecord": "XMBR", "offset": 0, "payload_sizes": [4], "targets": ["PLYR", "ACHR", "REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"], "nullable": false, "insertion": "existing_only"},
+        {"path": "ACHR\\Base", "label": "Base", "subrecord": "NAME", "offset": 0, "payload_sizes": [4], "targets": ["NPC_"], "nullable": false, "insertion": "existing_only"},
+        {"path": "ACHR\\EnableParent", "label": "Enable Parent", "subrecord": "XESP", "offset": 0, "payload_sizes": [8], "targets": ["PLYR", "ACHR", "REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"], "nullable": true, "insertion": "existing_only"},
+        {"path": "ACHR\\Owner", "label": "Owner", "subrecord": "XOWN", "offset": 0, "payload_sizes": [12], "targets": ["FACT", "NPC_"], "nullable": false, "insertion": "existing_only"},
+        {"path": "ACHR\\ReferenceGroup", "label": "Reference group", "subrecord": "XRFG", "offset": 0, "payload_sizes": [4], "targets": ["RFGP"], "nullable": false, "insertion": "existing_only"},
+        {"path": "ACHR\\Layer", "label": "Layer", "subrecord": "XLYR", "offset": 0, "payload_sizes": [4], "targets": ["LAYR"], "nullable": false, "insertion": "existing_only"},
+        {"path": "ACHR\\MaterialSwap", "label": "Material swap", "subrecord": "XMSP", "offset": 0, "payload_sizes": [4], "targets": ["MSWP"], "nullable": false, "insertion": "existing_only"},
+        {"path": "ACHR\\AttachRef", "label": "Attach ref", "subrecord": "XATR", "offset": 0, "payload_sizes": [4], "targets": ["REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA", "ACHR"], "nullable": false, "insertion": "existing_only"},
+        {"path": "ACHR\\PersistLocation", "label": "Persist location", "subrecord": "XLCN", "offset": 0, "payload_sizes": [4], "targets": ["LCTN"], "nullable": false, "insertion": "existing_only"},
+        {"path": "ACHR\\LocationReference", "label": "Location reference", "subrecord": "XLRL", "offset": 0, "payload_sizes": [4], "targets": ["LCRT", "LCTN"], "nullable": true, "insertion": "existing_only"}
+      ]
     }
   ],
   "keyword_records": [
