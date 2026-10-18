@@ -20,6 +20,7 @@ struct Options {
   bool localized = false;
   bool short_relation = false;
   bool titles_before_rank = false;
+  std::uint32_t first_reaction = 1;
 };
 
 std::vector<std::byte> u32_bytes(std::uint32_t value) {
@@ -76,7 +77,8 @@ std::vector<std::byte> make_plugin(const Options& options = {}) {
   fo4::test::write_subrecord(out, "EDID", std::string_view{"RadicleFaction\0", 16});
   write_title(out, "FULL", "Garden Faction", 0x42, options.localized);
   fo4::test::write_subrecord(out, "XNAM",
-                             relation_bytes(0x01000123, -5, 1, options.short_relation ? 8 : 12));
+                             relation_bytes(0x01000123, -5, options.first_reaction,
+                                            options.short_relation ? 8 : 12));
   fo4::test::write_subrecord(out, "XNAM", relation_bytes(0x02000800, 20, 2));
   fo4::test::write_subrecord(out, "DATA", u32_bytes(3));
   fo4::test::ByteWriter crime;
@@ -286,6 +288,22 @@ TEST(FactionSynthetic, RejectsInlineTitleInLocalizedPlugin) {
   EXPECT_THROW(fo4::forms::set_faction_rank(plugin, key(), 0, rank),
                fo4::forms::FactionError);
   EXPECT_EQ(fo4::test::original_bytes(plugin), original);
+}
+
+TEST(FactionSynthetic, RejectsRankTitleWithEmbeddedNul) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto original = fo4::test::original_bytes(plugin);
+  const std::string_view nul_title{"A\0B", 3};
+  EXPECT_THROW(fo4::forms::add_faction_rank(plugin, key(), make_rank(9, nul_title)),
+               fo4::forms::FactionError);
+  EXPECT_THROW(fo4::forms::set_faction_rank(plugin, key(), 0, make_rank(0, nul_title)),
+               fo4::forms::FactionError);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
+}
+
+TEST(FactionSynthetic, DecodeRejectsOnDiskReactionAboveThree) {
+  const auto plugin = fo4::read_plugin(make_plugin({.first_reaction = 4}), "Patch.esp");
+  EXPECT_THROW(fo4::forms::decode_faction_relations(plugin, key()), fo4::forms::FactionError);
 }
 
 TEST(FactionSynthetic, RejectsMalformedRelationWithoutTouchingPlugin) {
