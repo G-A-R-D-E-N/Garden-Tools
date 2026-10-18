@@ -476,7 +476,7 @@ TEST(SubrecordAuthoring, RefusedCreationConsumesNoFormId) {
   auto plugin = fo4::read_plugin(build({}), k_plugin);
   const auto before = fo4::write_plugin(plugin);
 
-  EXPECT_EQ(fo4::create_record(plugin, sig("REGN"), "X").status, fo4::RecordCreateStatus::not_authorable);
+  EXPECT_EQ(fo4::create_record(plugin, sig("XXXX"), "X").status, fo4::RecordCreateStatus::not_authorable);
   EXPECT_EQ(fo4::create_record(plugin, sig("EYES"), "X").status, fo4::RecordCreateStatus::no_default);
   EXPECT_EQ(fo4::create_record(plugin, sig("ARMO"), std::string_view{"A\0B", 3}).status,
             fo4::RecordCreateStatus::invalid_editor_id);
