@@ -147,7 +147,7 @@ Bytes grid_bytes(bool with_land_flags) {
   return out.bytes;
 }
 
-// Only the 40-byte XCLL prefix is addressed; every offset past it depends on the form version.
+// Every XCLL offset past the 40-byte prefix depends on the form version.
 Bytes xcll_bytes(std::size_t size) {
   ByteWriter out;
   out.u32(0x00302010);
@@ -586,7 +586,7 @@ TEST(CellRows, WritesScalarsAndLinksThenRereads) {
   EXPECT_EQ((*values)[1], fo4::FormKey::parse("000A42:Patch.esp"));
 }
 
-TEST(CellRows, WritesLightingBytesWithoutTouchingTheirNeighbours) {
+TEST(CellRows, WritesLightingBytesWithoutTouchingTheirNeighbors) {
   auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto key = fo4::FormKey::parse("000C10:Patch.esp");
   const auto green = scalar_row("CELL\\LightingFogNearColorGreen");
