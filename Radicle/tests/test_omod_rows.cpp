@@ -120,6 +120,7 @@ Bytes make_plugin(Bytes data) {
   fo4::test::write_subrecord(out, "FNAM", words({0x00000A21}));
   fo4::test::write_subrecord(out, "LNAM", u32_bytes(0x00000A22));
   fo4::test::write_subrecord(out, "NAM1", Bytes{std::byte{7}});
+  fo4::test::write_subrecord(out, "FLTR", zstr("FilterText"));
   fo4::test::end_record(out, record);
   fo4::test::end_group(out, group);
   return out.bytes;
@@ -263,6 +264,44 @@ TEST(OmodRows, DataScalarsReadAndWriteAtTheirOffsets) {
   EXPECT_EQ(raw_at(data, 16), 0x00000A10u);
   EXPECT_EQ(raw_at(data, 24), 0x00000A11u);
   EXPECT_EQ(raw_at(data, 40), 0x00000A12u);
+}
+
+TEST(OmodRows, PriorityAndFilterRowsOwnTheirWholeSubrecord) {
+  auto plugin = fo4::read_plugin(make_plugin(omod_data()), "Patch.esp");
+  const auto key = fo4::FormKey::parse(k_key);
+  const auto priority = scalar_field("OMOD\\Priority");
+  const auto filter = scalar_field("OMOD\\Filter");
+  ASSERT_TRUE(priority.has_value());
+  ASSERT_TRUE(filter.has_value());
+  EXPECT_EQ(priority->scalar.subrecord, fo4::Signature::from_string("NAM1"));
+  EXPECT_EQ(priority->scalar.storage, fo4::schema::ScalarStorage::u8);
+  EXPECT_EQ(priority->scalar.payload_size, 0u);
+  EXPECT_FALSE(priority->scalar.embedded);
+  EXPECT_EQ(filter->scalar.subrecord, fo4::Signature::from_string("FLTR"));
+  EXPECT_EQ(filter->scalar.storage, fo4::schema::ScalarStorage::zstring);
+  EXPECT_FALSE(filter->scalar.embedded);
+  EXPECT_EQ(scalar_bytes(plugin, "OMOD\\Priority"), Bytes{std::byte{7}});
+  EXPECT_EQ(scalar_bytes(plugin, "OMOD\\Filter"), zstr("FilterText"));
+
+  EXPECT_THROW(fo4::set_record_scalar(plugin, key, *priority, 0, "256"),
+               fo4::schema::ScalarError);
+  EXPECT_THROW(fo4::set_record_scalar(plugin, key, *filter, 0, "Other"),
+               fo4::schema::ScalarError);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *priority, 1, "1"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *priority, 0, "9"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *priority, 0, "9"),
+            fo4::ScalarMutationStatus::unchanged);
+  EXPECT_EQ(fo4::set_record_string(plugin, key, *filter, 0, "FilterText"),
+            fo4::ScalarMutationStatus::unchanged);
+  EXPECT_EQ(fo4::set_record_string(plugin, key, *filter, 0, "NewFilter"),
+            fo4::ScalarMutationStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(sub_bytes(reread, "NAM1"), Bytes{std::byte{9}});
+  EXPECT_EQ(sub_bytes(reread, "FLTR"), zstr("NewFilter"));
+  EXPECT_EQ(sub_bytes(reread, "DATA").size(), k_data_size);
 }
 
 TEST(OmodRows, ShortDataPayloadRefusesEveryHeaderScalar) {

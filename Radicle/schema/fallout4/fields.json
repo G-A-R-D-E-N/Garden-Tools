@@ -8449,7 +8449,9 @@
         {"path": "OMOD\\UnknownBool2", "label": "Unknown bool 2", "kind": "scalar", "subrecord": "DATA", "offset": 9, "storage": "u8", "presentation": "enum", "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "minimum": 0, "maximum": 1, "minimum_payload_size": 20, "insertion": "existing_only"},
         {"path": "OMOD\\FormType", "label": "Form type", "kind": "scalar", "subrecord": "DATA", "offset": 10, "storage": "u32", "presentation": "enum", "names": [{"value": 1330467393, "name": "Armor"}, {"value": 1598246990, "name": "Non-player character"}, {"value": 1346454871, "name": "Weapon"}, {"value": 1162760014, "name": "None"}], "minimum": 0, "maximum": 4294967295, "minimum_payload_size": 20, "insertion": "existing_only"},
         {"path": "OMOD\\MaxRank", "label": "Max rank", "kind": "scalar", "subrecord": "DATA", "offset": 14, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "minimum_payload_size": 20, "insertion": "existing_only"},
-        {"path": "OMOD\\LevelTierScaledOffset", "label": "Level tier scaled offset", "kind": "scalar", "subrecord": "DATA", "offset": 15, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "minimum_payload_size": 20, "insertion": "existing_only"}
+        {"path": "OMOD\\LevelTierScaledOffset", "label": "Level tier scaled offset", "kind": "scalar", "subrecord": "DATA", "offset": 15, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "minimum_payload_size": 20, "insertion": "existing_only"},
+        {"path": "OMOD\\Priority", "label": "Priority", "kind": "scalar", "subrecord": "NAM1", "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "OMOD\\Filter", "label": "Filter", "kind": "string", "subrecord": "FLTR", "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {"path": "OMOD\\AttachPoint", "label": "Attach point", "subrecord": "DATA", "offset": 16, "targets": ["KYWD"], "nullable": true, "insertion": "existing_only"},
