@@ -436,6 +436,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_quest_authoring.cpp
     tests/test_quest_objectives.cpp
     tests/test_quest_stages.cpp
+    tests/test_qust_general_rows.cpp
     tests/test_typed_families_real.cpp
     tests/test_localized_fields.cpp
     tests/test_quest_alias_encoding.cpp
