@@ -254,4 +254,15 @@ RecordCopyStatus copy_record_as_override(Plugin& destination,
                                          const FormKey& record_key,
                                          bool overwrite);
 
+struct RecordDeepCopyResult {
+  RecordCopyStatus status{RecordCopyStatus::source_missing};
+  FormKey key{};
+  std::vector<FormKey> children;
+};
+
+RecordDeepCopyResult copy_record_deep(Plugin& destination,
+                                      const Plugin& source,
+                                      const FormKey& record,
+                                      bool overwrite);
+
 }  // namespace fo4
