@@ -33,6 +33,7 @@ enum class DestructibleStageMemberStatus {
   no_default,
   member_present,
   member_absent,
+  model_required,
 };
 
 DestructibleStageMemberStatus insert_destructible_stage_member(Plugin& plugin,

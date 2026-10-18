@@ -279,3 +279,48 @@ TEST(DestructibleStageMembers, RemoveDropsOnlyTheAddressedStageMember) {
   ASSERT_EQ(dest.size(), 8u);
   EXPECT_EQ(byte_at(dest, 4), 2u);
 }
+
+TEST(DestructibleStageMembers, InsertRefusesModelFollowersWithoutDMDL) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto before = fo4::write_plugin(plugin);
+
+  EXPECT_EQ(fo4::insert_destructible_stage_member(plugin, staged_key(), 1, sig("DMDC")),
+            fo4::DestructibleStageMemberStatus::model_required);
+  EXPECT_EQ(fo4::insert_destructible_stage_member(plugin, staged_key(), 1, sig("DMDS")),
+            fo4::DestructibleStageMemberStatus::model_required);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+  EXPECT_EQ(signature_order(plugin, staged_key()), k_staged_order);
+
+  EXPECT_EQ(fo4::insert_destructible_stage_member(plugin, staged_key(), 1, sig("DMDL")),
+            fo4::DestructibleStageMemberStatus::updated);
+  EXPECT_EQ(fo4::insert_destructible_stage_member(plugin, staged_key(), 1, sig("DMDC")),
+            fo4::DestructibleStageMemberStatus::updated);
+  EXPECT_EQ(signature_order(plugin, staged_key()),
+            "EDID OBND MODL MODT DEST DSTD DMDL DSTF DSTD DMDL DMDC DSTF DATA DNAM NAM1 VNAM");
+}
+
+TEST(DestructibleStageMembers, RemoveRefusesDMDLWhileAModelFollowerRemains) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  ASSERT_EQ(fo4::insert_destructible_stage_member(plugin, staged_key(), 0, sig("DMDC")),
+            fo4::DestructibleStageMemberStatus::updated);
+  ASSERT_EQ(fo4::insert_destructible_stage_member(plugin, staged_key(), 0, sig("DMDS")),
+            fo4::DestructibleStageMemberStatus::updated);
+  ASSERT_EQ(signature_order(plugin, staged_key()),
+            "EDID OBND MODL MODT DEST DSTD DMDL DMDC DMDS DSTF DSTD DSTF DATA DNAM NAM1 VNAM");
+  const auto before = fo4::write_plugin(plugin);
+
+  EXPECT_EQ(fo4::remove_destructible_stage_member(plugin, staged_key(), 0, sig("DMDL")),
+            fo4::DestructibleStageMemberStatus::model_required);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+
+  EXPECT_EQ(fo4::remove_destructible_stage_member(plugin, staged_key(), 0, sig("DMDC")),
+            fo4::DestructibleStageMemberStatus::updated);
+  EXPECT_EQ(fo4::remove_destructible_stage_member(plugin, staged_key(), 0, sig("DMDL")),
+            fo4::DestructibleStageMemberStatus::model_required);
+  EXPECT_EQ(fo4::remove_destructible_stage_member(plugin, staged_key(), 0, sig("DMDS")),
+            fo4::DestructibleStageMemberStatus::updated);
+  EXPECT_EQ(fo4::remove_destructible_stage_member(plugin, staged_key(), 0, sig("DMDL")),
+            fo4::DestructibleStageMemberStatus::updated);
+  EXPECT_EQ(signature_order(plugin, staged_key()),
+            "EDID OBND MODL MODT DEST DSTD DSTF DSTD DSTF DATA DNAM NAM1 VNAM");
+}

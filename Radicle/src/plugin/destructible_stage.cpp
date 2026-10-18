@@ -96,6 +96,24 @@ std::vector<StageSpan> stage_spans(const Record& record) {
   return spans;
 }
 
+bool model_follower(Signature signature) {
+  return signature == sig_dmdt || signature == sig_dmdc || signature == sig_dmds;
+}
+
+bool stage_has_member(const Record& record, const StageSpan& span, Signature signature) {
+  for (std::size_t i = span.first; i < span.end; ++i) {
+    if (record.subrecords[i].signature == signature) return true;
+  }
+  return false;
+}
+
+bool stage_has_model_follower(const Record& record, const StageSpan& span) {
+  for (std::size_t i = span.first; i < span.end; ++i) {
+    if (model_follower(record.subrecords[i].signature)) return true;
+  }
+  return false;
+}
+
 struct StageTarget {
   Record* record{nullptr};
   StageSpan span{};
@@ -196,10 +214,11 @@ DestructibleStageMemberStatus insert_destructible_stage_member(Plugin& plugin,
   if (!payload.has_value()) return DestructibleStageMemberStatus::no_default;
 
   Record& record = *found.record;
-  for (std::size_t i = found.span.first; i < found.span.end; ++i) {
-    if (record.subrecords[i].signature == member) {
-      return DestructibleStageMemberStatus::member_present;
-    }
+  if (model_follower(member) && !stage_has_member(record, found.span, sig_dmdl)) {
+    return DestructibleStageMemberStatus::model_required;
+  }
+  if (stage_has_member(record, found.span, member)) {
+    return DestructibleStageMemberStatus::member_present;
   }
   const auto rank = *member_rank(member);
   std::size_t position = found.span.end;
@@ -227,6 +246,9 @@ DestructibleStageMemberStatus remove_destructible_stage_member(Plugin& plugin,
   Record& record = *found.record;
   for (std::size_t i = found.span.first; i < found.span.end; ++i) {
     if (record.subrecords[i].signature != member) continue;
+    if (member == sig_dmdl && stage_has_model_follower(record, found.span)) {
+      return DestructibleStageMemberStatus::model_required;
+    }
     record.subrecords.erase(record.subrecords.begin() + static_cast<std::ptrdiff_t>(i));
     detail::mark_record_modified(plugin, record);
     return DestructibleStageMemberStatus::updated;
