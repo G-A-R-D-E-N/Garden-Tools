@@ -7482,7 +7482,8 @@
         {"path": "REGN\\RegionDataOverride", "label": "Region data override", "kind": "scalar", "subrecord": "RDAT", "offset": 4, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 1, "repeated": true, "insertion": "existing_only"},
         {"path": "REGN\\RegionDataPriority", "label": "Region data priority", "kind": "scalar", "subrecord": "RDAT", "offset": 5, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "insertion": "existing_only"},
         {"path": "REGN\\LodDisplayDistanceMultiplier", "label": "LOD display distance multiplier", "kind": "scalar", "subrecord": "RLDM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "insertion": "existing_only"},
-        {"path": "REGN\\OcclusionAccuracyDist", "label": "Occlusion accuracy distance", "kind": "scalar", "subrecord": "ANAM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "insertion": "existing_only"}
+        {"path": "REGN\\OcclusionAccuracyDist", "label": "Occlusion accuracy distance", "kind": "scalar", "subrecord": "ANAM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "insertion": "existing_only"},
+        {"path": "REGN\\RegionAreaEdgeFalloff", "label": "Region area edge fall-off", "kind": "scalar", "subrecord": "RPLI", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "repeated": true, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {"path": "REGN\\Worldspace", "label": "Worldspace", "subrecord": "WNAM", "offset": 0, "payload_sizes": [4], "targets": ["WRLD"], "nullable": false, "insertion": "existing_only"},

@@ -87,6 +87,8 @@ std::vector<std::byte> make_plugin() {
                         {"RCLR", Bytes{std::byte{0x11}, std::byte{0x22}, std::byte{0x33},
                                        std::byte{0x00}}},
                         {"WNAM", u32_bytes(0x00000D20)},
+                        {"RPLI", u32_bytes(80)},
+                        {"RPLI", u32_bytes(120)},
                         {"RDAT", rdat_bytes(3, 1, 40)},
                         {"RDMO", u32_bytes(0x00000D21)},
                         {"ANAM", f32_bytes(0.5f)},
@@ -169,6 +171,13 @@ TEST(RegnRows, DeclaresColorsDataEntryFieldsAndLinks) {
   ASSERT_TRUE(dist.has_value());
   EXPECT_EQ(dist->scalar.subrecord, fo4::Signature::from_string("ANAM"));
 
+  const auto falloff = scalar_row("REGN\\RegionAreaEdgeFalloff");
+  ASSERT_TRUE(falloff.has_value());
+  EXPECT_EQ(falloff->scalar.subrecord, fo4::Signature::from_string("RPLI"));
+  EXPECT_EQ(falloff->scalar.storage, u32);
+  EXPECT_FALSE(falloff->scalar.embedded);
+  EXPECT_TRUE(falloff->scalar.address.repeated);
+
   const auto worldspace = fo4::schema::formlink_field_descriptor(
       fo4::Signature::from_string("REGN"), "REGN\\Worldspace");
   ASSERT_TRUE(worldspace.has_value());
@@ -203,6 +212,8 @@ TEST(RegnRows, ReadsColorsDataEntriesAndLinks) {
   EXPECT_EQ(field_bytes(plugin, key, "REGN\\RegionDataPriority", 1), u8_bytes(60));
   EXPECT_EQ(field_bytes(plugin, key, "REGN\\OcclusionAccuracyDist"), f32_bytes(0.5f));
   EXPECT_EQ(field_bytes(plugin, key, "REGN\\LodDisplayDistanceMultiplier"), f32_bytes(2.5f));
+  EXPECT_EQ(field_bytes(plugin, key, "REGN\\RegionAreaEdgeFalloff"), u32_bytes(80));
+  EXPECT_EQ(field_bytes(plugin, key, "REGN\\RegionAreaEdgeFalloff", 1), u32_bytes(120));
 
   EXPECT_EQ(link_raw(plugin, key, "REGN\\Worldspace"), 0x00000D20u);
   EXPECT_EQ(link_raw(plugin, key, "REGN\\Music"), 0x00000D21u);
@@ -228,6 +239,11 @@ TEST(RegnRows, CountsRepeatedDataEntries) {
   const auto links = fo4::record_field_count(plugin, key, *worldspace);
   ASSERT_TRUE(links.has_value());
   EXPECT_EQ(*links, 1u);
+  const auto falloff = scalar_row("REGN\\RegionAreaEdgeFalloff");
+  ASSERT_TRUE(falloff.has_value());
+  const auto areas = fo4::record_field_count(plugin, key, *falloff);
+  ASSERT_TRUE(areas.has_value());
+  EXPECT_EQ(*areas, 2u);
 }
 
 TEST(RegnRows, WritesColorsDataEntryFieldsAndLinksThenRereads) {
@@ -236,11 +252,13 @@ TEST(RegnRows, WritesColorsDataEntryFieldsAndLinksThenRereads) {
   const auto blue = scalar_row("REGN\\MapColorBlue");
   const auto priority = scalar_row("REGN\\RegionDataPriority");
   const auto dist = scalar_row("REGN\\OcclusionAccuracyDist");
+  const auto falloff = scalar_row("REGN\\RegionAreaEdgeFalloff");
   const auto worldspace = fo4::schema::formlink_field_descriptor(
       fo4::Signature::from_string("REGN"), "REGN\\Worldspace");
   ASSERT_TRUE(blue.has_value());
   ASSERT_TRUE(priority.has_value());
   ASSERT_TRUE(dist.has_value());
+  ASSERT_TRUE(falloff.has_value());
   ASSERT_TRUE(worldspace.has_value());
 
   EXPECT_EQ(fo4::set_record_scalar(plugin, key, *blue, "200"),
@@ -249,6 +267,10 @@ TEST(RegnRows, WritesColorsDataEntryFieldsAndLinksThenRereads) {
             fo4::ScalarMutationStatus::updated);
   EXPECT_EQ(fo4::set_record_scalar(plugin, key, *dist, "1.5"),
             fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *falloff, 1, "121"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *falloff, 2, "9"),
+            fo4::ScalarMutationStatus::subrecord_missing);
   EXPECT_EQ(fo4::set_record_scalar(plugin, key, *priority, 4, "10"),
             fo4::ScalarMutationStatus::subrecord_missing);
   EXPECT_EQ(fo4::set_record_scalar(plugin, key, *blue, "200"),
@@ -266,6 +288,8 @@ TEST(RegnRows, WritesColorsDataEntryFieldsAndLinksThenRereads) {
   EXPECT_EQ(sub_bytes(reread, reread_key, "ANAM"), f32_bytes(1.5f));
   EXPECT_EQ(sub_bytes(reread, reread_key, "RLDM"), f32_bytes(2.5f));
   EXPECT_EQ(sub_bytes(reread, reread_key, "RDAT", 1), rdat_bytes(5, 0, 60));
+  EXPECT_EQ(sub_bytes(reread, reread_key, "RPLI"), u32_bytes(80));
+  EXPECT_EQ(sub_bytes(reread, reread_key, "RPLI", 1), u32_bytes(121));
   EXPECT_EQ(link_raw(reread, reread_key, "REGN\\Worldspace"), 0x02000D30u);
   EXPECT_EQ(link_raw(reread, reread_key, "REGN\\Music"), 0x00000D21u);
 }
@@ -296,6 +320,21 @@ TEST(RegnRows, MalformedPayloadsHideOrRefuseRows) {
   EXPECT_THROW(fo4::set_record_scalar(plugin, fo4::FormKey::parse(key), *dist, "1.0"),
                fo4::schema::ScalarError);
   EXPECT_EQ(sub_bytes(plugin, key, "ANAM"), (Bytes{std::byte{0x00}, std::byte{0x00}}));
+
+  ByteWriter short_area;
+  write_header(short_area);
+  write_grouped_record(short_area, "REGN", 0x0D41,
+                       {{"RPLI", Bytes{std::byte{0x50}, std::byte{0x00}}}});
+  auto short_plugin = fo4::read_plugin(short_area.bytes, "Patch.esp");
+  const auto short_key = "000D41:Patch.esp";
+  const auto falloff = scalar_row("REGN\\RegionAreaEdgeFalloff");
+  ASSERT_TRUE(falloff.has_value());
+  EXPECT_THROW(static_cast<void>(field_bytes(short_plugin, short_key, "REGN\\RegionAreaEdgeFalloff")),
+               fo4::schema::ScalarError);
+  EXPECT_THROW(
+      fo4::set_record_scalar(short_plugin, fo4::FormKey::parse(short_key), *falloff, "3"),
+      fo4::schema::ScalarError);
+  EXPECT_EQ(sub_bytes(short_plugin, short_key, "RPLI"), (Bytes{std::byte{0x50}, std::byte{0x00}}));
 }
 
 }  // namespace
