@@ -183,6 +183,7 @@ add_library(fo4
   src/plugin/onam.cpp
   src/plugin/writer.cpp
   src/schema/condition_functions.cpp
+  src/schema/condition_scope_path.cpp
   src/schema/condition_scopes.cpp
   src/schema/ctda.cpp
   src/schema/form_links.cpp
@@ -474,6 +475,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_condition_scopes.cpp
     tests/test_condition_scopes_records.cpp
     tests/test_condition_scopes_mesg.cpp
+    tests/test_condition_scopes_term.cpp
     tests/test_condition_root_insert.cpp
     tests/test_root_condition_lists.cpp
     tests/test_condition_scopes_real.cpp

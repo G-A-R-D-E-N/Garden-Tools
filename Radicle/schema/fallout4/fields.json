@@ -31803,6 +31803,8 @@
     { "record": "PERK", "container": "Tabs", "member": "Conditions", "scope": "perk_effect_tab" },
     { "record": "QUST", "container": "Aliases", "member": "Conditions", "scope": "alias" },
     { "record": "QUST", "container": "Targets", "member": "Conditions", "scope": "quest_target" },
-    { "record": "SPEL", "container": "Effects", "member": "Conditions", "scope": "effect" }
+    { "record": "SPEL", "container": "Effects", "member": "Conditions", "scope": "effect" },
+    { "record": "TERM", "container": "Body Text", "member": "Conditions", "scope": "terminal_body_text" },
+    { "record": "TERM", "container": "Menu Items", "member": "Conditions", "scope": "terminal_menu_item" }
   ]
 }
