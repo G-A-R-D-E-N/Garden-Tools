@@ -269,3 +269,93 @@ TEST(MOVTRows, WritesSpeedRowAndRereads) {
   EXPECT_EQ(scalar_bytes(reread, key, "MOVT\\RightSprint"), floats({8.0f}));
   EXPECT_EQ(subrecord_at(reread, key, "SPED", 0).size(), k_sped_floor);
 }
+
+TEST(MOVTRows, LegacySpeedRowsCoverThe40And44ByteLayouts) {
+  constexpr std::string_view key = "000C02:Patch.esp";
+  const auto forty = fo4::read_plugin(make_movt_plugin(ramp(10), 24), "Patch.esp");
+  EXPECT_EQ(scalar_bytes(forty, key, "MOVT\\LeftWalkBelow60"), floats({1.0f}));
+  EXPECT_EQ(scalar_bytes(forty, key, "MOVT\\LeftRunBelow60"), floats({2.0f}));
+  EXPECT_EQ(scalar_bytes(forty, key, "MOVT\\RightWalkBelow60"), floats({3.0f}));
+  EXPECT_EQ(scalar_bytes(forty, key, "MOVT\\RightRunBelow60"), floats({4.0f}));
+  EXPECT_EQ(scalar_bytes(forty, key, "MOVT\\ForwardWalkBelow60"), floats({5.0f}));
+  EXPECT_EQ(scalar_bytes(forty, key, "MOVT\\ForwardRunBelow60"), floats({6.0f}));
+  EXPECT_EQ(scalar_bytes(forty, key, "MOVT\\BackWalkBelow60"), floats({7.0f}));
+  EXPECT_EQ(scalar_bytes(forty, key, "MOVT\\BackRunBelow60"), floats({8.0f}));
+  EXPECT_EQ(scalar_bytes(forty, key, "MOVT\\PitchRollYawWalkBelow60"), floats({9.0f}));
+  EXPECT_EQ(scalar_bytes(forty, key, "MOVT\\PitchRollYawRunBelow60"), floats({10.0f}));
+  EXPECT_TRUE(scalar_bytes(forty, key, "MOVT\\Unknown40Below60").empty());
+  EXPECT_TRUE(scalar_bytes(forty, key, "MOVT\\LeftStanding").empty());
+
+  const auto forty_four = fo4::read_plugin(make_movt_plugin(ramp(11), 31), "Patch.esp");
+  EXPECT_EQ(scalar_bytes(forty_four, key, "MOVT\\PitchRollYawRunBelow60"), floats({10.0f}));
+  EXPECT_EQ(scalar_bytes(forty_four, key, "MOVT\\Unknown40Below60"), floats({11.0f}));
+}
+
+TEST(MOVTRows, MiddleSpeedRowsCoverThe68ByteLayout) {
+  constexpr std::string_view key = "000C02:Patch.esp";
+  const auto plugin = fo4::read_plugin(make_movt_plugin(ramp(17), 90), "Patch.esp");
+  EXPECT_EQ(scalar_bytes(plugin, key, "MOVT\\LeftWalkFrom60"), floats({1.0f}));
+  EXPECT_EQ(scalar_bytes(plugin, key, "MOVT\\LeftRunFrom60"), floats({2.0f}));
+  EXPECT_EQ(scalar_bytes(plugin, key, "MOVT\\RightWalkFrom60"), floats({3.0f}));
+  EXPECT_EQ(scalar_bytes(plugin, key, "MOVT\\RightRunFrom60"), floats({4.0f}));
+  EXPECT_EQ(scalar_bytes(plugin, key, "MOVT\\ForwardWalkFrom60"), floats({5.0f}));
+  EXPECT_EQ(scalar_bytes(plugin, key, "MOVT\\ForwardRunFrom60"), floats({6.0f}));
+  EXPECT_EQ(scalar_bytes(plugin, key, "MOVT\\BackWalkFrom60"), floats({7.0f}));
+  EXPECT_EQ(scalar_bytes(plugin, key, "MOVT\\BackRunFrom60"), floats({8.0f}));
+  EXPECT_EQ(scalar_bytes(plugin, key, "MOVT\\PitchWalkFrom60"), floats({9.0f}));
+  EXPECT_EQ(scalar_bytes(plugin, key, "MOVT\\PitchRunFrom60"), floats({10.0f}));
+  EXPECT_EQ(scalar_bytes(plugin, key, "MOVT\\RollWalkFrom60"), floats({11.0f}));
+  EXPECT_EQ(scalar_bytes(plugin, key, "MOVT\\RollRunFrom60"), floats({12.0f}));
+  EXPECT_EQ(scalar_bytes(plugin, key, "MOVT\\YawWalkFrom60"), floats({13.0f}));
+  EXPECT_EQ(scalar_bytes(plugin, key, "MOVT\\YawRunFrom60"), floats({14.0f}));
+  EXPECT_EQ(scalar_bytes(plugin, key, "MOVT\\Unknown56From60"), floats({15.0f}));
+  EXPECT_EQ(scalar_bytes(plugin, key, "MOVT\\Unknown60From60"), floats({16.0f}));
+  EXPECT_EQ(scalar_bytes(plugin, key, "MOVT\\Unknown64From60"), floats({17.0f}));
+  EXPECT_TRUE(scalar_bytes(plugin, key, "MOVT\\LeftWalkBelow60").empty());
+  EXPECT_TRUE(scalar_bytes(plugin, key, "MOVT\\LeftStanding").empty());
+}
+
+TEST(MOVTRows, EachSpeedLayoutHidesOutsideItsFormVersionWindow) {
+  constexpr std::string_view key = "000C02:Patch.esp";
+
+  const auto late = fo4::read_plugin(make_movt_plugin(ramp(28), 131), "Patch.esp");
+  EXPECT_EQ(scalar_bytes(late, key, "MOVT\\LeftStanding"), floats({1.0f}));
+  EXPECT_TRUE(scalar_bytes(late, key, "MOVT\\LeftWalkBelow60").empty());
+  EXPECT_TRUE(scalar_bytes(late, key, "MOVT\\LeftWalkFrom60").empty());
+
+  const auto at104 = fo4::read_plugin(make_movt_plugin(ramp(28), 104), "Patch.esp");
+  EXPECT_EQ(scalar_bytes(at104, key, "MOVT\\LeftStanding"), floats({1.0f}));
+  EXPECT_TRUE(scalar_bytes(at104, key, "MOVT\\LeftWalkFrom60").empty());
+
+  const auto at60 = fo4::read_plugin(make_movt_plugin(ramp(17), 60), "Patch.esp");
+  EXPECT_EQ(scalar_bytes(at60, key, "MOVT\\LeftWalkFrom60"), floats({1.0f}));
+  EXPECT_TRUE(scalar_bytes(at60, key, "MOVT\\LeftWalkBelow60").empty());
+
+  const auto at59 = fo4::read_plugin(make_movt_plugin(ramp(11), 59), "Patch.esp");
+  EXPECT_EQ(scalar_bytes(at59, key, "MOVT\\LeftWalkBelow60"), floats({1.0f}));
+  EXPECT_TRUE(scalar_bytes(at59, key, "MOVT\\LeftWalkFrom60").empty());
+
+  const auto oversized = fo4::read_plugin(make_movt_plugin(ramp(17), 24), "Patch.esp");
+  EXPECT_EQ(scalar_bytes(oversized, key, "MOVT\\LeftWalkBelow60"), floats({1.0f}));
+  EXPECT_TRUE(scalar_bytes(oversized, key, "MOVT\\LeftWalkFrom60").empty());
+}
+
+TEST(MOVTRows, WritesALegacySpeedRowAndRefusesTheOtherLayouts) {
+  auto plugin = fo4::read_plugin(make_movt_plugin(ramp(10), 27), "Patch.esp");
+  const auto key = fo4::FormKey::parse("000C02:Patch.esp");
+  const auto from60 =
+      fo4::schema::scalar_field_descriptor(fo4::Signature::from_string("MOVT"), "MOVT\\LeftWalkFrom60");
+  const auto below60 = fo4::schema::scalar_field_descriptor(fo4::Signature::from_string("MOVT"),
+                                                            "MOVT\\LeftWalkBelow60");
+  ASSERT_TRUE(from60.has_value());
+  ASSERT_TRUE(below60.has_value());
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *from60, "3"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *below60, "3"),
+            fo4::ScalarMutationStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(scalar_bytes(reread, "000C02:Patch.esp", "MOVT\\LeftWalkBelow60"), floats({3.0f}));
+  EXPECT_EQ(scalar_bytes(reread, "000C02:Patch.esp", "MOVT\\LeftRunBelow60"), floats({2.0f}));
+  EXPECT_EQ(subrecord_at(reread, "000C02:Patch.esp", "SPED", 0).size(), std::size_t{40});
+}

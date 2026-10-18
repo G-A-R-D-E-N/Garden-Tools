@@ -131,7 +131,7 @@ Tier counts: L0 5, L1 0, L2 5, L3 0, L4 137.
 | MESG | 8179 | 2 | 1 | 1 | - | 4 | yes | - | - | - | 1 | L4 |
 | MGEF | 10052 | 17 | - | 18 | - | 2 | yes | yes | - | yes | 1 | L4 |
 | MISC | 10212 | - | - | - | - | 1 | - | yes | forms/components | yes | 1 | L2 |
-| MOVT | 9393 | 33 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
+| MOVT | 9393 | 61 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
 | MSTT | 7067 | 8 | 1 | 4 | - | 1 | yes | yes | - | - | 1 | L4 |
 | MSWP | 12437 | 1 | 2 | - | - | - | yes | - | environment/material_swap | - | 1 | L4 |
 | MUSC | 8665 | 4 | - | - | 1 | - | yes | - | environment/sound | yes | 2 | L4 |
@@ -283,7 +283,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | MESG | 1 | - | - | 1 | 1 | u32 | - | - | - | existing_only |
 | MGEF | 12 | - | 4 | 1 | - | f32, u32 | - | - | - | existing_only |
 | MISC | - | - | - | - | - | - | - | - | - | - |
-| MOVT | 33 | - | - | - | 1 | f32 | - | - | - | existing_only |
+| MOVT | 61 | - | - | - | 1 | f32 | - | - | - | existing_only |
 | MSTT | 7 | - | 1 | - | 1 | f32, i16, u8 | - | 2 | - | existing_only |
 | MSWP | 1 | - | - | - | 2 | f32 | 2 | - | - | existing_only |
 | MUSC | 4 | - | - | - | - | f32, u16, u32 | - | - | - | existing_only |

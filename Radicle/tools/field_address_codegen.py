@@ -108,6 +108,14 @@ def address_key(address):
     return json.dumps(address, sort_keys=True)
 
 
+def form_version_windows_disjoint(first, second):
+    first_low = first.get("min_form_version", 0)
+    first_high = first.get("max_form_version", 0)
+    second_low = second.get("min_form_version", 0)
+    second_high = second.get("max_form_version", 0)
+    return bool((first_high and first_high <= second_low) or (second_high and second_high <= first_low))
+
+
 def reject_overlaps(entries, kind_label):
     by_payload = {}
     for field in entries:
@@ -116,6 +124,8 @@ def reject_overlaps(entries, kind_label):
         for first, second in combinations(group, 2):
             a, b = first["address"], second["address"]
             different_layout = any(a[key] != b[key] for key in ("repeated", "stride", "array_offset"))
+            if first["embedded"] and second["embedded"] and form_version_windows_disjoint(first, second):
+                continue
             aw, bw = a["when"], b["when"]
             if aw is None or bw is None:
                 exclusivity = "one or both fields are unguarded"
