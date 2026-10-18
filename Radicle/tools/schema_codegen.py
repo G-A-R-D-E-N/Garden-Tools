@@ -11,7 +11,7 @@ from field_address_codegen import is_count, parse_address, reject_overlaps, rend
 
 STORAGES = {"u8", "u16", "u32", "i32", "f32", "i8", "i16"}
 KINDS = {"scalar", "string"}
-STRING_FORBIDDEN = {"storage", "presentation", "minimum", "maximum", "offset", "payload_size", "minimum_payload_size", "stride", "array_offset", "names"}
+STRING_FORBIDDEN = {"storage", "presentation", "minimum", "maximum", "payload_size", "stride", "array_offset", "names"}
 PRESENTATIONS = {"identity", "percent_0_100", "enum", "flags"}
 NAME_KEYS = {"enum": "value", "flags": "bit"}
 CPP_PRESENTATIONS = {"enum": "enumeration"}
@@ -353,7 +353,7 @@ def load_schema(schema_path: Path):
                     raise ValueError(f"payload_size requires an embedded field: {path!r}")
                 if type(payload_size) is not int or payload_size <= 0:
                     raise ValueError(f"payload_size must be a positive integer: {path!r}")
-                if payload_size < offset + WIDTHS[storage]:
+                if payload_size < offset + WIDTHS.get(storage, 0):
                     raise ValueError(f"payload_size is smaller than the field end: {path!r}")
                 if address["stride"] and (payload_size - address["array_offset"]) % address["stride"] != 0:
                     raise ValueError(f"payload_size does not hold whole stride elements: {path!r}")
@@ -364,7 +364,7 @@ def load_schema(schema_path: Path):
                     raise ValueError(f"minimum_payload_size requires an embedded field: {path!r}")
                 if type(minimum_payload_size) is not int or minimum_payload_size <= 0:
                     raise ValueError(f"minimum_payload_size must be a positive integer: {path!r}")
-                if minimum_payload_size < offset + WIDTHS[storage]:
+                if minimum_payload_size < offset + WIDTHS.get(storage, 0):
                     raise ValueError(f"minimum_payload_size is smaller than the field end: {path!r}")
                 if payload_size and minimum_payload_size > payload_size:
                     raise ValueError(f"minimum_payload_size exceeds payload_size: {path!r}")

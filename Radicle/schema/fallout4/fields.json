@@ -5389,6 +5389,36 @@
           "minimum": 0,
           "maximum": 4294967295,
           "insertion": "existing_only"
+        },
+        {
+          "path": "IMAD\\TintColorInterpolators",
+          "label": "Tint color interpolators",
+          "kind": "counted_array",
+          "subrecord": "TNAM",
+          "stride": 20,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\TintColorTime", "label": "Tint color time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\TintColorRed", "label": "Tint color red", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\TintColorGreen", "label": "Tint color green", "offset": 8, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\TintColorBlue", "label": "Tint color blue", "offset": 12, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\TintColorAlpha", "label": "Tint color alpha", "offset": 16, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\FadeColorInterpolators",
+          "label": "Fade color interpolators",
+          "kind": "counted_array",
+          "subrecord": "NAM3",
+          "stride": 20,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\FadeColorTime", "label": "Fade color time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\FadeColorRed", "label": "Fade color red", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\FadeColorGreen", "label": "Fade color green", "offset": 8, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\FadeColorBlue", "label": "Fade color blue", "offset": 12, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\FadeColorAlpha", "label": "Fade color alpha", "offset": 16, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
         }
       ],
       "authoring": {
@@ -7553,7 +7583,35 @@
         {"path": "MOVT\\YawStanding", "label": "Yaw standing", "kind": "scalar", "subrecord": "SPED", "offset": 96, "min_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 112, "insertion": "existing_only"},
         {"path": "MOVT\\YawWalk", "label": "Yaw walk", "kind": "scalar", "subrecord": "SPED", "offset": 100, "min_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 112, "insertion": "existing_only"},
         {"path": "MOVT\\YawRun", "label": "Yaw run", "kind": "scalar", "subrecord": "SPED", "offset": 104, "min_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 112, "insertion": "existing_only"},
-        {"path": "MOVT\\YawSprint", "label": "Yaw sprint", "kind": "scalar", "subrecord": "SPED", "offset": 108, "min_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 112, "insertion": "existing_only"}
+        {"path": "MOVT\\YawSprint", "label": "Yaw sprint", "kind": "scalar", "subrecord": "SPED", "offset": 108, "min_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 112, "insertion": "existing_only"},
+        {"path": "MOVT\\LeftWalkBelow60", "label": "Left walk (layout below 60)", "kind": "scalar", "subrecord": "SPED", "offset": 0, "max_form_version": 60, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 40, "insertion": "existing_only"},
+        {"path": "MOVT\\LeftRunBelow60", "label": "Left run (layout below 60)", "kind": "scalar", "subrecord": "SPED", "offset": 4, "max_form_version": 60, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 40, "insertion": "existing_only"},
+        {"path": "MOVT\\RightWalkBelow60", "label": "Right walk (layout below 60)", "kind": "scalar", "subrecord": "SPED", "offset": 8, "max_form_version": 60, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 40, "insertion": "existing_only"},
+        {"path": "MOVT\\RightRunBelow60", "label": "Right run (layout below 60)", "kind": "scalar", "subrecord": "SPED", "offset": 12, "max_form_version": 60, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 40, "insertion": "existing_only"},
+        {"path": "MOVT\\ForwardWalkBelow60", "label": "Forward walk (layout below 60)", "kind": "scalar", "subrecord": "SPED", "offset": 16, "max_form_version": 60, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 40, "insertion": "existing_only"},
+        {"path": "MOVT\\ForwardRunBelow60", "label": "Forward run (layout below 60)", "kind": "scalar", "subrecord": "SPED", "offset": 20, "max_form_version": 60, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 40, "insertion": "existing_only"},
+        {"path": "MOVT\\BackWalkBelow60", "label": "Back walk (layout below 60)", "kind": "scalar", "subrecord": "SPED", "offset": 24, "max_form_version": 60, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 40, "insertion": "existing_only"},
+        {"path": "MOVT\\BackRunBelow60", "label": "Back run (layout below 60)", "kind": "scalar", "subrecord": "SPED", "offset": 28, "max_form_version": 60, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 40, "insertion": "existing_only"},
+        {"path": "MOVT\\PitchRollYawWalkBelow60", "label": "Pitch, roll and yaw walk (layout below 60)", "kind": "scalar", "subrecord": "SPED", "offset": 32, "max_form_version": 60, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 40, "insertion": "existing_only"},
+        {"path": "MOVT\\PitchRollYawRunBelow60", "label": "Pitch, roll and yaw run (layout below 60)", "kind": "scalar", "subrecord": "SPED", "offset": 36, "max_form_version": 60, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 40, "insertion": "existing_only"},
+        {"path": "MOVT\\Unknown40Below60", "label": "Unknown float (layout below 60, offset 40)", "kind": "scalar", "subrecord": "SPED", "offset": 40, "max_form_version": 60, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 44, "insertion": "existing_only"},
+        {"path": "MOVT\\LeftWalkFrom60", "label": "Left walk (layout 60 to 103)", "kind": "scalar", "subrecord": "SPED", "offset": 0, "min_form_version": 60, "max_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 68, "insertion": "existing_only"},
+        {"path": "MOVT\\LeftRunFrom60", "label": "Left run (layout 60 to 103)", "kind": "scalar", "subrecord": "SPED", "offset": 4, "min_form_version": 60, "max_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 68, "insertion": "existing_only"},
+        {"path": "MOVT\\RightWalkFrom60", "label": "Right walk (layout 60 to 103)", "kind": "scalar", "subrecord": "SPED", "offset": 8, "min_form_version": 60, "max_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 68, "insertion": "existing_only"},
+        {"path": "MOVT\\RightRunFrom60", "label": "Right run (layout 60 to 103)", "kind": "scalar", "subrecord": "SPED", "offset": 12, "min_form_version": 60, "max_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 68, "insertion": "existing_only"},
+        {"path": "MOVT\\ForwardWalkFrom60", "label": "Forward walk (layout 60 to 103)", "kind": "scalar", "subrecord": "SPED", "offset": 16, "min_form_version": 60, "max_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 68, "insertion": "existing_only"},
+        {"path": "MOVT\\ForwardRunFrom60", "label": "Forward run (layout 60 to 103)", "kind": "scalar", "subrecord": "SPED", "offset": 20, "min_form_version": 60, "max_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 68, "insertion": "existing_only"},
+        {"path": "MOVT\\BackWalkFrom60", "label": "Back walk (layout 60 to 103)", "kind": "scalar", "subrecord": "SPED", "offset": 24, "min_form_version": 60, "max_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 68, "insertion": "existing_only"},
+        {"path": "MOVT\\BackRunFrom60", "label": "Back run (layout 60 to 103)", "kind": "scalar", "subrecord": "SPED", "offset": 28, "min_form_version": 60, "max_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 68, "insertion": "existing_only"},
+        {"path": "MOVT\\PitchWalkFrom60", "label": "Pitch walk (layout 60 to 103)", "kind": "scalar", "subrecord": "SPED", "offset": 32, "min_form_version": 60, "max_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 68, "insertion": "existing_only"},
+        {"path": "MOVT\\PitchRunFrom60", "label": "Pitch run (layout 60 to 103)", "kind": "scalar", "subrecord": "SPED", "offset": 36, "min_form_version": 60, "max_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 68, "insertion": "existing_only"},
+        {"path": "MOVT\\RollWalkFrom60", "label": "Roll walk (layout 60 to 103)", "kind": "scalar", "subrecord": "SPED", "offset": 40, "min_form_version": 60, "max_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 68, "insertion": "existing_only"},
+        {"path": "MOVT\\RollRunFrom60", "label": "Roll run (layout 60 to 103)", "kind": "scalar", "subrecord": "SPED", "offset": 44, "min_form_version": 60, "max_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 68, "insertion": "existing_only"},
+        {"path": "MOVT\\YawWalkFrom60", "label": "Yaw walk (layout 60 to 103)", "kind": "scalar", "subrecord": "SPED", "offset": 48, "min_form_version": 60, "max_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 68, "insertion": "existing_only"},
+        {"path": "MOVT\\YawRunFrom60", "label": "Yaw run (layout 60 to 103)", "kind": "scalar", "subrecord": "SPED", "offset": 52, "min_form_version": 60, "max_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 68, "insertion": "existing_only"},
+        {"path": "MOVT\\Unknown56From60", "label": "Unknown float (layout 60 to 103, offset 56)", "kind": "scalar", "subrecord": "SPED", "offset": 56, "min_form_version": 60, "max_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 68, "insertion": "existing_only"},
+        {"path": "MOVT\\Unknown60From60", "label": "Unknown float (layout 60 to 103, offset 60)", "kind": "scalar", "subrecord": "SPED", "offset": 60, "min_form_version": 60, "max_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 68, "insertion": "existing_only"},
+        {"path": "MOVT\\Unknown64From60", "label": "Unknown float (layout 60 to 103, offset 64)", "kind": "scalar", "subrecord": "SPED", "offset": 64, "min_form_version": 60, "max_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 68, "insertion": "existing_only"}
       ],
       "localized_subrecords": []
     },
@@ -12997,6 +13055,42 @@
           "insertion": "existing_only"
         },
         {
+          "path": "STAT\\DistantLodLevel0",
+          "label": "Distant LOD level 0",
+          "kind": "string",
+          "subrecord": "MNAM",
+          "offset": 0,
+          "minimum_payload_size": 260,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "STAT\\DistantLodLevel1",
+          "label": "Distant LOD level 1",
+          "kind": "string",
+          "subrecord": "MNAM",
+          "offset": 260,
+          "minimum_payload_size": 520,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "STAT\\DistantLodLevel2",
+          "label": "Distant LOD level 2",
+          "kind": "string",
+          "subrecord": "MNAM",
+          "offset": 520,
+          "minimum_payload_size": 780,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "STAT\\DistantLodLevel3",
+          "label": "Distant LOD level 3",
+          "kind": "string",
+          "subrecord": "MNAM",
+          "offset": 780,
+          "minimum_payload_size": 1040,
+          "insertion": "existing_only"
+        },
+        {
           "path": "STAT\\Properties",
           "label": "Properties",
           "kind": "counted_array",
@@ -14649,11 +14743,43 @@
     },
     {
       "signature": "MSWP",
-      "fields": [],
+      "fields": [
+        {
+          "path": "MSWP\\OriginalMaterial",
+          "label": "Original material",
+          "kind": "string",
+          "subrecord": "BNAM",
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "MSWP\\ReplacementMaterial",
+          "label": "Replacement material",
+          "kind": "string",
+          "subrecord": "SNAM",
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "MSWP\\ColorRemappingIndex",
+          "label": "Color remapping index",
+          "kind": "scalar",
+          "subrecord": "CNAM",
+          "repeated": true,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        }
+      ],
       "authoring": {
         "placement": "top_level",
         "subrecords": [
-          { "signature": "EDID", "minimum": 0, "maximum": 1 }
+          { "signature": "EDID", "minimum": 0, "maximum": 1 },
+          { "signature": "BNAM", "minimum": 0, "maximum": 65535 },
+          { "signature": "SNAM", "minimum": 0, "maximum": 65535 },
+          { "signature": "CNAM", "minimum": 0, "maximum": 65535 }
         ]
       },
       "localized_subrecords": []
@@ -18543,7 +18669,13 @@
     },
     {
       "signature": "FSTS",
-      "fields": [],
+      "fields": [
+        {"path": "FSTS\\WalkingCount", "label": "Walking count", "kind": "scalar", "subrecord": "XCNT", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "FSTS\\RunningCount", "label": "Running count", "kind": "scalar", "subrecord": "XCNT", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "FSTS\\SprintingCount", "label": "Sprinting count", "kind": "scalar", "subrecord": "XCNT", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "FSTS\\SneakingCount", "label": "Sneaking count", "kind": "scalar", "subrecord": "XCNT", "offset": 12, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "FSTS\\SwimmingCount", "label": "Swimming count", "kind": "scalar", "subrecord": "XCNT", "offset": 16, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "payload_size": 20, "insertion": "existing_only"}
+      ],
       "formlink_fields": [
         {
           "path": "FSTS\\Footsteps",
@@ -19236,6 +19368,110 @@
           "insertion": "existing_only"
         },
         {
+          "path": "SOPM\\FrontLeft",
+          "label": "Front left channel",
+          "kind": "scalar",
+          "subrecord": "ONAM",
+          "offset": 0,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "stride": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SOPM\\FrontRight",
+          "label": "Front right channel",
+          "kind": "scalar",
+          "subrecord": "ONAM",
+          "offset": 1,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "stride": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SOPM\\Center",
+          "label": "Center channel",
+          "kind": "scalar",
+          "subrecord": "ONAM",
+          "offset": 2,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "stride": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SOPM\\LowFrequency",
+          "label": "Low frequency channel",
+          "kind": "scalar",
+          "subrecord": "ONAM",
+          "offset": 3,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "stride": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SOPM\\RearLeft",
+          "label": "Rear left channel",
+          "kind": "scalar",
+          "subrecord": "ONAM",
+          "offset": 4,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "stride": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SOPM\\RearRight",
+          "label": "Rear right channel",
+          "kind": "scalar",
+          "subrecord": "ONAM",
+          "offset": 5,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "stride": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SOPM\\SideLeft",
+          "label": "Side left channel",
+          "kind": "scalar",
+          "subrecord": "ONAM",
+          "offset": 6,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "stride": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SOPM\\SideRight",
+          "label": "Side right channel",
+          "kind": "scalar",
+          "subrecord": "ONAM",
+          "offset": 7,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "stride": 8,
+          "insertion": "existing_only"
+        },
+        {
           "path": "SOPM\\FadeInDistanceStart",
           "label": "Fade in distance start",
           "kind": "scalar",
@@ -19433,6 +19669,11 @@
             "minimum": 0,
             "maximum": 1,
             "default": "0000"
+          },
+          {
+            "signature": "ONAM",
+            "minimum": 0,
+            "maximum": 1
           },
           {
             "signature": "ATTN",

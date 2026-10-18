@@ -645,6 +645,10 @@ if(RADICLE_BUILD_TESTS)
     tests/test_regn_rows.cpp
     tests/test_c_api_forms_modules.cpp
     tools/env_bench/env_bench.cpp
+    tests/test_fsts_rows.cpp
+    tests/test_mswp_rows.cpp
+    tests/test_sopm_onam_rows.cpp
+    tests/test_stat_lod_rows.cpp
     tests/plugin_bytes.cpp
     tests/real_data_build.cpp
     tests/test_real_data_build.cpp
@@ -665,6 +669,8 @@ if(RADICLE_BUILD_TESTS)
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
   add_test(NAME radicle_field_address_codegen
            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_field_address_codegen.py)
+  add_test(NAME radicle_field_address_version_windows
+           COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_field_address_version_windows.py)
   add_test(NAME radicle_parity_matrix_unit COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_parity_matrix.py)
   if(RADICLE_BUILD_TOOLS)
     add_test(NAME radicle_papyrus_dump
