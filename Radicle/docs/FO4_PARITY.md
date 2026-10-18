@@ -39,7 +39,7 @@ Columns: xEdit line is the registration line in the pinned definitions. Rows, au
 
 Tier: L4 has field rows, FormLink fields or authoring constraints; L2 has a typed module, no rows or lists; L3 has FormLink list rows only; L1 has a keyword list only; L0 has none of these. Remap evidence (the Mixed remap column and the form_links.cpp record checks) does not affect the tier. L5 (dedicated PET route) is not derived.
 
-Tier counts: L0 4, L1 0, L2 5, L3 0, L4 138.
+Tier counts: L0 3, L1 0, L2 5, L3 0, L4 139.
 
 ### Per-signature coverage
 
@@ -149,7 +149,7 @@ Tier counts: L0 4, L1 0, L2 5, L3 0, L4 138.
 | PBAR | 5945 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
 | PBEA | 5946 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
 | PCON | 5947 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
-| PERK | 7582 | - | - | - | - | 3 | - | - | - | yes | 1 | L0 |
+| PERK | 7582 | - | 2 | 2 | - | 3 | yes | - | - | yes | 1 | L4 |
 | PFLA | 5948 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
 | PGRE | 5949 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
 | PHZD | 5950 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
@@ -301,7 +301,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | PBAR | 11 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
 | PBEA | 11 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
 | PCON | 11 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
-| PERK | - | - | - | - | - | - | - | - | - | - |
+| PERK | - | - | - | - | 2 | - | - | - | - | existing_only |
 | PFLA | 11 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
 | PGRE | 11 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
 | PHZD | 11 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |

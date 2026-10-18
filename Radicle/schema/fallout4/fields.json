@@ -7450,7 +7450,28 @@
     },
     {
       "signature": "PERK",
-      "fields": [],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {"signature": "EDID", "minimum": 0, "maximum": 1},
+          {"signature": "VMAD", "minimum": 0, "maximum": 1},
+          {"signature": "FULL", "minimum": 0, "maximum": 1},
+          {"signature": "DESC", "minimum": 0, "maximum": 1},
+          {"signature": "ICON", "minimum": 0, "maximum": 1},
+          {"signature": "DATA", "minimum": 1, "maximum": 1, "default": "0000010100"},
+          {"signature": "SNAM", "minimum": 0, "maximum": 1},
+          {"signature": "NNAM", "minimum": 0, "maximum": 1},
+          {"signature": "FNAM", "minimum": 0, "maximum": 1}
+        ]
+      },
+      "fields": [
+        {"path": "PERK\\Image", "label": "Image", "kind": "string", "subrecord": "ICON", "insertion": "existing_only"},
+        {"path": "PERK\\SWF", "label": "SWF", "kind": "string", "subrecord": "FNAM", "insertion": "existing_only"}
+      ],
+      "formlink_fields": [
+        {"path": "PERK\\Sound", "label": "Sound", "subrecord": "SNAM", "offset": 0, "targets": ["SNDR"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
+        {"path": "PERK\\NextPerk", "label": "Next perk", "subrecord": "NNAM", "offset": 0, "targets": ["PERK"], "nullable": true, "payload_sizes": [4], "insertion": "existing_only"}
+      ],
       "localized_subrecords": [
         "FULL",
         "DESC",
