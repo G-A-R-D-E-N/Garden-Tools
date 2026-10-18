@@ -282,6 +282,40 @@ std::uint32_t link_raw(const fo4::Plugin& plugin, std::string_view key,
   return 0;
 }
 
+std::vector<std::byte> make_three_level_plugin() {
+  ByteWriter out;
+  write_header(out);
+  const auto group = fo4::test::begin_group(out, "WRLD", 0);
+  const auto record = fo4::test::begin_record(out, "WRLD", 0, raw_id(0x0C04));
+  const std::vector<Sub> subs{
+      {"EDID", zstr("ThreeLevelWorld")},
+      {"WLEV", level_dimension()},
+      {"WLEV", level_cell_data()},
+      {"WLEV", level_cell_data()},
+  };
+  for (const auto& sub : subs) fo4::test::write_subrecord(out, sub.signature, sub.data);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return out.bytes;
+}
+
+std::vector<std::byte> make_offset_cell_size_plugin() {
+  ByteWriter out;
+  write_header(out);
+  const auto group = fo4::test::begin_group(out, "WRLD", 0);
+  const auto record = fo4::test::begin_record(out, "WRLD", 0, raw_id(0x0C05));
+  const std::vector<Sub> subs{
+      {"EDID", zstr("OffsetWorld")},
+      {"WLEV", level_dimension()},
+      {"OFST", floats({1.0f, 2.0f})},
+      {"CLSZ", floats({3.0f, 4.0f, 5.0f, 6.0f})},
+  };
+  for (const auto& sub : subs) fo4::test::write_subrecord(out, sub.signature, sub.data);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return out.bytes;
+}
+
 }  // namespace
 
 TEST(WRLDRows, ScalarRowsHaveXEditOffsetsStorageAndPayloadFloor) {
@@ -460,23 +494,6 @@ TEST(WRLDRows, PreflightAcceptsTwoWlevSubrecordsAndLeavesTheCellDataBlobAlone) {
             fo4::ScalarMutationStatus::subrecord_missing);
 }
 
-std::vector<std::byte> make_three_level_plugin() {
-  ByteWriter out;
-  write_header(out);
-  const auto group = fo4::test::begin_group(out, "WRLD", 0);
-  const auto record = fo4::test::begin_record(out, "WRLD", 0, raw_id(0x0C04));
-  const std::vector<Sub> subs{
-      {"EDID", zstr("ThreeLevelWorld")},
-      {"WLEV", level_dimension()},
-      {"WLEV", level_cell_data()},
-      {"WLEV", level_cell_data()},
-  };
-  for (const auto& sub : subs) fo4::test::write_subrecord(out, sub.signature, sub.data);
-  fo4::test::end_record(out, record);
-  fo4::test::end_group(out, group);
-  return out.bytes;
-}
-
 TEST(WRLDRows, PreflightAllowsTheSixByteLevelBlobBesideTheRowAndCountsTheRows) {
   const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   for (const auto& issue : fo4::schema::preflight_authoring_record(
@@ -498,8 +515,37 @@ TEST(WRLDRows, PreflightAllowsTheSixByteLevelBlobBesideTheRowAndCountsTheRows) {
   EXPECT_TRUE(cardinality_reported);
 }
 
-TEST(WRLDRows, LocalizedWorldKeepsItsStringIdAndStillWritesLevelRows) {
-  auto plugin = fo4::read_plugin(make_localized_plugin(), "Patch.esp");
+TEST(WRLDRows, OffsetAndCellSizeBlobsArePreservedButNotAuthored) {
+  auto plugin = fo4::read_plugin(make_offset_cell_size_plugin(), "Patch.esp");
+  const auto key = fo4::FormKey::parse("000C05:Patch.esp");
+  const auto ofst = sub_bytes(plugin, "000C05:Patch.esp", "OFST");
+  const auto clsz = sub_bytes(plugin, "000C05:Patch.esp", "CLSZ");
+  EXPECT_EQ(ofst.size(), 8u);
+  EXPECT_EQ(clsz.size(), 16u);
+  EXPECT_EQ(fo4::add_record_subrecord(plugin, key, fo4::Signature::from_string("OFST")),
+            fo4::SubrecordAddStatus::already_present);
+  EXPECT_EQ(fo4::add_record_subrecord(plugin, key, fo4::Signature::from_string("CLSZ")),
+            fo4::SubrecordAddStatus::already_present);
+
+  const auto level_width = fo4::schema::scalar_field_descriptor(
+      fo4::Signature::from_string("WRLD"), "WRLD\\LevelWidth");
+  ASSERT_TRUE(level_width.has_value());
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *level_width, "7"),
+            fo4::ScalarMutationStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(sub_bytes_at(reread, "000C05:Patch.esp", "WLEV", 0),
+            (Bytes{std::byte{0xDF}, std::byte{0x19}, std::byte{0x07}, std::byte{0x0C}}));
+  EXPECT_EQ(sub_bytes(reread, "000C05:Patch.esp", "OFST"), ofst);
+  EXPECT_EQ(sub_bytes(reread, "000C05:Patch.esp", "CLSZ"), clsz);
+
+  auto plain = fo4::read_plugin(make_plugin(), "Patch.esp");
+  EXPECT_EQ(fo4::add_record_subrecord(plain, fo4::FormKey::parse("000C01:Patch.esp"),
+                                      fo4::Signature::from_string("OFST")),
+            fo4::SubrecordAddStatus::no_default);
+}
+
+TEST(WRLDRows, LocalizedWorldKeepsItsStringIdAndStillWritesLevelRows) {  auto plugin = fo4::read_plugin(make_localized_plugin(), "Patch.esp");
   const auto key = fo4::FormKey::parse("000C03:Patch.esp");
   const auto* record = fo4::find_record(plugin, key);
   ASSERT_NE(record, nullptr);
