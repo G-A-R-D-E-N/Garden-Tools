@@ -1371,6 +1371,19 @@ public unsafe struct GrassLinks
     public IntPtr Internal;
 }
 
+public enum PackageInputValueKind : int
+{
+    None = 0,
+    Boolean = 1,
+    Integer = 2,
+    Real = 3,
+    Reference = 4,
+    Target = 5,
+    Location = 6,
+    ObjectList = 7,
+    Topic = 8,
+}
+
 [StructLayout(LayoutKind.Sequential)]
 public unsafe struct BehaviorCondition
 {
@@ -1507,6 +1520,24 @@ public unsafe struct PackageProcedureInput
     public nuint SubrecordBegin;
     public nuint SubrecordEnd;
     public byte Index;
+    public IntPtr ValueTag;
+    public nuint ValueIndex;
+    public PackageInputValueKind Kind;
+    public int Boolean;
+    public int Integer;
+    public uint IntegerRaw;
+    public float Real;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PackageInputValue
+{
+    public PackageInputValueKind Kind;
+    public int Boolean;
+    public int Integer;
+    public float Real;
+    public IntPtr Payload;
+    public nuint PayloadSize;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -1530,8 +1561,8 @@ public unsafe struct PackageProcedureTree
     public int Decoded;
     public nuint RegionBegin;
     public nuint RegionEnd;
-    public int HasMarker;
-    public byte Marker;
+    public int HasNextInputId;
+    public byte NextInputId;
     public IntPtr Inputs;
     public nuint InputCount;
     public IntPtr Nodes;
@@ -2591,6 +2622,15 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_package_procedure_free")]
     public static extern void PackageProcedureFree(PackageProcedureTree* tree);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_package_input_add")]
+    public static extern Status PackageInputAdd(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? type_name, PackageInputValue* value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_package_input_set")]
+    public static extern Status PackageInputSet(IntPtr plugin, FormKey key, byte id, PackageInputValue* value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_package_input_remove")]
+    public static extern Status PackageInputRemove(IntPtr plugin, FormKey key, byte id);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_package_location_type_name")]
     public static extern IntPtr PackageLocationTypeName(int type);

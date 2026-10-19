@@ -292,6 +292,38 @@ public sealed unsafe class PluginFile : IDisposable
         return Edit(record, (plugin, s, key) => RadicleNative.PluginAddSubrecord(plugin, key, signature));
     }
 
+    public bool AddPackageInput(FormKey record, string typeName, PackageInputEdit value)
+    {
+        ArgumentNullException.ThrowIfNull(typeName);
+        ArgumentNullException.ThrowIfNull(value);
+        var bytes = value.Payload ?? Array.Empty<byte>();
+        return Edit(record, (plugin, s, key) =>
+        {
+            fixed (byte* payload = bytes)
+            {
+                var native = value.ToNative(bytes.Length == 0 ? IntPtr.Zero : (IntPtr)payload, bytes.Length);
+                return RadicleNative.PackageInputAdd(plugin, key, typeName, &native);
+            }
+        });
+    }
+
+    public bool SetPackageInput(FormKey record, byte id, PackageInputEdit value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        var bytes = value.Payload ?? Array.Empty<byte>();
+        return Edit(record, (plugin, s, key) =>
+        {
+            fixed (byte* payload = bytes)
+            {
+                var native = value.ToNative(bytes.Length == 0 ? IntPtr.Zero : (IntPtr)payload, bytes.Length);
+                return RadicleNative.PackageInputSet(plugin, key, id, &native);
+            }
+        });
+    }
+
+    public bool RemovePackageInput(FormKey record, byte id) =>
+        Edit(record, (plugin, s, key) => RadicleNative.PackageInputRemove(plugin, key, id));
+
     public bool RemoveSubrecord(FormKey record, string signature, int occurrence = 0)
     {
         ArgumentNullException.ThrowIfNull(signature);
