@@ -177,6 +177,33 @@ TEST(PapyrusSourceTest, LexesCommentsContinuationsAndDocComments) {
   EXPECT_EQ(documented.tokens[2].kind, TokenKind::KwScriptName);
 }
 
+TEST(PapyrusSourceTest, LexesSameLengthIdentifiersAsIdentifiers) {
+  const LexResult lexed = fo4::psc::lex("Int Foo Self Ab\nScriptName SCRIPTNAME As EndIf\n");
+  ASSERT_TRUE(lexed.ok()) << lexed.error.message;
+  std::vector<TokenKind> kinds;
+  for (const fo4::psc::Token& token : lexed.tokens) {
+    if (token.kind != TokenKind::NewLine && token.kind != TokenKind::EndOfFile) kinds.push_back(token.kind);
+  }
+  const std::vector<TokenKind> expected = {
+      TokenKind::Identifier,   TokenKind::Identifier,   TokenKind::Identifier,   TokenKind::Identifier,
+      TokenKind::KwScriptName, TokenKind::KwScriptName, TokenKind::KwAs,         TokenKind::KwEndIf};
+  EXPECT_EQ(kinds, expected);
+}
+
+TEST(PapyrusSourceTest, LexesHugeFloatExponentWithoutOverflow) {
+  const std::string digits(30, '9');
+  const LexResult grown = fo4::psc::lex("1.0e" + digits + "\n");
+  ASSERT_TRUE(grown.ok()) << grown.error.message;
+  ASSERT_FALSE(grown.tokens.empty());
+  EXPECT_EQ(grown.tokens[0].kind, TokenKind::Float);
+  EXPECT_GT(grown.tokens[0].floatValue, 1e300);
+  const LexResult shrunk = fo4::psc::lex("1.0e-" + digits + "\n");
+  ASSERT_TRUE(shrunk.ok()) << shrunk.error.message;
+  ASSERT_FALSE(shrunk.tokens.empty());
+  EXPECT_EQ(shrunk.tokens[0].kind, TokenKind::Float);
+  EXPECT_EQ(shrunk.tokens[0].floatValue, 0.0);
+}
+
 TEST(PapyrusSourceTest, ParsesLiteralsOfEveryKind) {
   const std::string source =
       "Scriptname L\n"
@@ -499,6 +526,37 @@ TEST(PapyrusSourceTest, SummarizesCallsPropertiesWritesAndStateTransitions) {
   EXPECT_EQ(fo4::psc::find_function(summary, "Missing"), nullptr);
 }
 
+TEST(PapyrusSourceTest, SummarizesPropertyAccessorBodies) {
+  const std::string source =
+      "Scriptname PA\n"
+      "Int Property Count Auto\n"
+      "Float Property Scaled\n"
+      "  Float Function Get()\n"
+      "    Return Helper(Count)\n"
+      "  EndFunction\n"
+      "  Function Set(Float value)\n"
+      "    Refresh(value)\n"
+      "    Count = 1\n"
+      "  EndFunction\n"
+      "EndProperty\n"
+      "Int Function Helper(Int value) Native Global\n";
+  const ParseResult result = fo4::psc::parse(source);
+  ASSERT_TRUE(result.ok()) << result.error.message;
+  const ScriptSummary summary = fo4::psc::summarize(result.script);
+  ASSERT_EQ(summary.functions.size(), 3u);
+  const fo4::psc::FunctionSummary* getter = fo4::psc::find_function(summary, "Scaled.Get");
+  ASSERT_NE(getter, nullptr);
+  EXPECT_TRUE(contains(getter->calledFunctions, "Helper"));
+  EXPECT_TRUE(contains(getter->propertiesRead, "Count"));
+  const fo4::psc::FunctionSummary* setter = fo4::psc::find_function(summary, "Scaled.Set");
+  ASSERT_NE(setter, nullptr);
+  EXPECT_TRUE(contains(setter->calledFunctions, "Refresh"));
+  EXPECT_TRUE(contains(setter->propertiesWritten, "Count"));
+  EXPECT_TRUE(contains(summary.calledFunctions, "Helper"));
+  EXPECT_TRUE(contains(summary.calledFunctions, "Refresh"));
+  EXPECT_TRUE(contains(summary.propertiesWritten, "Count"));
+}
+
 TEST(PapyrusSourceTest, RejectsUnterminatedStringAndBlockComment) {
   const ParseResult text = fo4::psc::parse("Scriptname B\nString s = \"oops\n");
   ASSERT_FALSE(text.ok());
@@ -553,4 +611,25 @@ TEST(PapyrusSourceTest, RejectsNestingPastTheDepthLimit) {
   const ParseResult result = fo4::psc::parse(source);
   ASSERT_FALSE(result.ok());
   EXPECT_EQ(result.error.kind, ParseErrorKind::DepthLimit);
+}
+
+TEST(PapyrusSourceTest, RejectsLongChainsPastTheDepthLimitWithoutRecursing) {
+  std::string members = "Scriptname B\nFunction F()\n  Int a = x";
+  for (int step = 0; step < 5000; ++step) members += ".b";
+  members += "\nEndFunction\n";
+  const ParseResult member = fo4::psc::parse(members);
+  ASSERT_FALSE(member.ok());
+  EXPECT_EQ(member.error.kind, ParseErrorKind::DepthLimit);
+
+  std::string sums = "Scriptname B\nFunction F()\n  Int a = 1";
+  for (int step = 0; step < 5000; ++step) sums += " + 1";
+  sums += "\nEndFunction\n";
+  const ParseResult sum = fo4::psc::parse(sums);
+  ASSERT_FALSE(sum.ok());
+  EXPECT_EQ(sum.error.kind, ParseErrorKind::DepthLimit);
+
+  std::string realistic = "Scriptname B\nFunction F()\n  Int a = x";
+  for (int step = 0; step < 200; ++step) realistic += ".b";
+  realistic += "\nEndFunction\n";
+  EXPECT_TRUE(fo4::psc::parse(realistic).ok());
 }

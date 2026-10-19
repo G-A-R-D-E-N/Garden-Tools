@@ -51,8 +51,10 @@ ExpressionPtr Parser::parse_expression() { return parse_or(); }
 ExpressionPtr Parser::parse_or() {
   ExpressionPtr left = parse_and();
   if (failed()) return nullptr;
+  std::size_t links = 0;
   while (peek().kind == TokenKind::OrOr) {
     advance();
+    if (!chain_within(++links)) return nullptr;
     ExpressionPtr right = parse_and();
     if (failed()) return nullptr;
     left = make_binary(BinaryOperator::Or, std::move(left), std::move(right));
@@ -63,8 +65,10 @@ ExpressionPtr Parser::parse_or() {
 ExpressionPtr Parser::parse_and() {
   ExpressionPtr left = parse_comparison();
   if (failed()) return nullptr;
+  std::size_t links = 0;
   while (peek().kind == TokenKind::AndAnd) {
     advance();
+    if (!chain_within(++links)) return nullptr;
     ExpressionPtr right = parse_comparison();
     if (failed()) return nullptr;
     left = make_binary(BinaryOperator::And, std::move(left), std::move(right));
@@ -75,10 +79,12 @@ ExpressionPtr Parser::parse_and() {
 ExpressionPtr Parser::parse_comparison() {
   ExpressionPtr left = parse_additive();
   if (failed()) return nullptr;
+  std::size_t links = 0;
   for (;;) {
     BinaryOperator binary = BinaryOperator::Equal;
     if (!comparison_operator(peek().kind, binary)) return left;
     advance();
+    if (!chain_within(++links)) return nullptr;
     ExpressionPtr right = parse_additive();
     if (failed()) return nullptr;
     left = make_binary(binary, std::move(left), std::move(right));
@@ -88,6 +94,7 @@ ExpressionPtr Parser::parse_comparison() {
 ExpressionPtr Parser::parse_additive() {
   ExpressionPtr left = parse_multiplicative();
   if (failed()) return nullptr;
+  std::size_t links = 0;
   for (;;) {
     const TokenKind kind = peek().kind;
     BinaryOperator binary = BinaryOperator::Add;
@@ -99,6 +106,7 @@ ExpressionPtr Parser::parse_additive() {
       return left;
     }
     advance();
+    if (!chain_within(++links)) return nullptr;
     ExpressionPtr right = parse_multiplicative();
     if (failed()) return nullptr;
     left = make_binary(binary, std::move(left), std::move(right));
@@ -108,6 +116,7 @@ ExpressionPtr Parser::parse_additive() {
 ExpressionPtr Parser::parse_multiplicative() {
   ExpressionPtr left = parse_unary();
   if (failed()) return nullptr;
+  std::size_t links = 0;
   for (;;) {
     const TokenKind kind = peek().kind;
     BinaryOperator binary = BinaryOperator::Multiply;
@@ -121,6 +130,7 @@ ExpressionPtr Parser::parse_multiplicative() {
       return left;
     }
     advance();
+    if (!chain_within(++links)) return nullptr;
     ExpressionPtr right = parse_unary();
     if (failed()) return nullptr;
     left = make_binary(binary, std::move(left), std::move(right));
@@ -159,10 +169,12 @@ ExpressionPtr Parser::parse_unary() {
 ExpressionPtr Parser::parse_cast() {
   ExpressionPtr operand = parse_postfix();
   if (failed()) return nullptr;
+  std::size_t links = 0;
   while (peek().kind == TokenKind::KwAs || peek().kind == TokenKind::KwIs) {
     const bool isType = peek().kind == TokenKind::KwIs;
     const SourcePosition position = operand->position;
     advance();
+    if (!chain_within(++links)) return nullptr;
     std::string type;
     if (!expect_qualified_name(type)) return nullptr;
     auto expression = std::make_unique<Expression>();
@@ -178,28 +190,30 @@ ExpressionPtr Parser::parse_cast() {
 ExpressionPtr Parser::parse_postfix() {
   ExpressionPtr expression = parse_primary();
   if (failed()) return nullptr;
+  std::size_t links = 0;
   for (;;) {
     const TokenKind kind = peek().kind;
+    if (kind != TokenKind::Dot && kind != TokenKind::LBracket && kind != TokenKind::LParen) return expression;
+    if (!chain_within(++links)) return nullptr;
     if (kind == TokenKind::Dot) {
       advance();
       std::string member;
       if (!expect_name(member)) return nullptr;
       const SourcePosition position = expression->position;
-      if (peek().kind == TokenKind::LParen) {
-        auto call = std::make_unique<Expression>();
-        call->kind = ExpressionKind::Call;
-        call->position = position;
-        call->text = std::move(member);
-        call->left = std::move(expression);
-        if (!parse_arguments(call->arguments, call->argumentNames)) return nullptr;
-        expression = std::move(call);
-        continue;
-      }
       auto access = std::make_unique<Expression>();
       access->kind = ExpressionKind::Member;
       access->position = position;
       access->text = std::move(member);
       access->left = std::move(expression);
+      if (peek().kind == TokenKind::LParen) {
+        auto call = std::make_unique<Expression>();
+        call->kind = ExpressionKind::Call;
+        call->position = position;
+        call->left = std::move(access);
+        if (!parse_arguments(call->arguments, call->argumentNames)) return nullptr;
+        expression = std::move(call);
+        continue;
+      }
       expression = std::move(access);
       continue;
     }
@@ -226,7 +240,6 @@ ExpressionPtr Parser::parse_postfix() {
       expression = std::move(call);
       continue;
     }
-    return expression;
   }
 }
 
@@ -333,6 +346,12 @@ bool Parser::parse_arguments(std::vector<ExpressionPtr>& arguments, std::vector<
     break;
   }
   return expect(TokenKind::RParen);
+}
+
+bool Parser::chain_within(std::size_t links) {
+  if (links <= kMaxChainLength) return true;
+  fail(ParseErrorKind::DepthLimit, peek(), "shallower nesting");
+  return false;
 }
 
 }  // namespace fo4::psc

@@ -57,7 +57,7 @@ constexpr Keyword kKeywords[] = {
     {"while", TokenKind::KwWhile},
 };
 
-bool ascii_lower(char ch) { return ch >= 'A' && ch <= 'Z' ? static_cast<char>(ch - 'A' + 'a') : ch; }
+char ascii_lower(char ch) { return ch >= 'A' && ch <= 'Z' ? static_cast<char>(ch - 'A' + 'a') : ch; }
 
 bool equals_ignore_case(std::string_view left, std::string_view right) {
   if (left.size() != right.size()) return false;
@@ -337,9 +337,10 @@ private:
         negative = text[at] == '-';
         ++at;
       }
+      constexpr int kExponentCap = 10000;
       int exponent = 0;
       while (at < text.size() && is_digit(text[at])) {
-        exponent = exponent * 10 + (text[at] - '0');
+        if (exponent < kExponentCap) exponent = exponent * 10 + (text[at] - '0');
         ++at;
       }
       for (int step = 0; step < exponent; ++step) value = negative ? value / 10.0 : value * 10.0;
