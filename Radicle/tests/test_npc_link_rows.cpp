@@ -107,6 +107,30 @@ std::vector<std::byte> make_ordered_list_plugin(bool with_predecessor) {
   return out.bytes;
 }
 
+std::vector<std::byte> make_anchor_plugin(const std::vector<std::string_view>& subrecords) {
+  ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(1);
+  hedr.u32(0x911);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+
+  const auto group = fo4::test::begin_group(out, "NPC_", 0);
+  const auto record = fo4::test::begin_record(out, "NPC_", 0, 0x000800);
+  for (const auto signature : subrecords) {
+    fo4::test::write_subrecord(out, signature, u32_bytes(0));
+  }
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+
+  add_group(out, "PACK", {0x00000D00u});
+  add_group(out, "HDPT", {0x00000D01u});
+  add_group(out, "KYWD", {0x00000D02u});
+  return out.bytes;
+}
+
 std::vector<std::uint32_t> raws(const fo4::Plugin& plugin, fo4::Signature signature) {
   std::vector<std::uint32_t> out;
   const auto* record = fo4::find_record(plugin, npc_key());
@@ -224,6 +248,9 @@ TEST(NpcLinkRows, PackageAndHeadPartListsSetInsertAndRemoveByIndex) {
   const auto head_parts = list("NPC_\\HeadParts");
   ASSERT_EQ(fo4::schema::record_formlink_list_size(plugin, npc_key(), packages), 3u);
   ASSERT_EQ(fo4::schema::record_formlink_list_size(plugin, npc_key(), head_parts), 2u);
+  EXPECT_EQ(fo4::record_field_count(plugin, npc_key(), "NPC_\\Packages"), 3u);
+  EXPECT_EQ(fo4::record_field_count(plugin, npc_key(), "NPC_\\HeadParts"), 2u);
+  EXPECT_THROW(fo4::record_field_count(plugin, npc_key(), "NPC_\\Package"), fo4::schema::ScalarError);
 
   EXPECT_EQ(fo4::schema::set_record_formlink_list_element(plugin, npc_key(), packages, 1, key(0x000904)),
             fo4::schema::FormLinkListMutationStatus::updated);
@@ -270,6 +297,41 @@ TEST(NpcLinkRows, EmptyPackageListAnchorsAfterItsLastXEditOrderPredecessor) {
   ASSERT_TRUE(index_of(after, k_pkid).has_value());
   ASSERT_TRUE(index_of(after, sig("AIDT")).has_value());
   EXPECT_EQ(*index_of(after, k_pkid), *index_of(after, sig("AIDT")) + 1);
+}
+
+TEST(NpcLinkRows, EmptyListsAnchorAfterTheWholeAttackRun) {
+  // xEdit's wbAttackData repeats ATKE, ATKW, ATKS and ATKT after ATKD (FO4:4073-4123), so the first element of each list must land after ATKT, not after ATKD.
+  struct Row {
+    std::string_view path;
+    std::string_view subrecord;
+    std::uint32_t target;
+  };
+  const auto bytes = make_anchor_plugin(
+      {"ACBS", "RNAM", "DEST", "DSTD", "DSTF", "ATKD", "ATKE", "ATKW", "ATKS", "ATKT"});
+  for (const auto& row : {Row{"NPC_\\Packages", "PKID", 0x00000D00u},
+                          Row{"NPC_\\HeadParts", "PNAM", 0x00000D01u},
+                          Row{"NPC_\\AttachParentSlots", "APPR", 0x00000D02u}}) {
+    auto plugin = fo4::read_plugin(bytes, "Patch.esp");
+    EXPECT_EQ(fo4::schema::insert_record_formlink_list_element(
+                  plugin, npc_key(), list(row.path), 0, key(row.target)),
+              fo4::schema::FormLinkListMutationStatus::updated);
+    const auto after = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+    ASSERT_TRUE(index_of(after, sig(row.subrecord)).has_value());
+    ASSERT_TRUE(index_of(after, sig("ATKT")).has_value());
+    EXPECT_EQ(*index_of(after, sig(row.subrecord)), *index_of(after, sig("ATKT")) + 1);
+  }
+}
+
+TEST(NpcLinkRows, EmptyAttachParentSlotsAnchorsAfterTheDestructibleRun) {
+  // The APPR anchor set carries the whole destructible run, so a first attach parent slot must land after DSTF rather than after DEST (FO4:10404).
+  auto plugin = fo4::read_plugin(make_anchor_plugin({"ACBS", "RNAM", "DEST", "DSTD", "DSTF"}), "Patch.esp");
+  EXPECT_EQ(fo4::schema::insert_record_formlink_list_element(
+                plugin, npc_key(), list("NPC_\\AttachParentSlots"), 0, key(0x00000D02u)),
+            fo4::schema::FormLinkListMutationStatus::updated);
+  const auto after = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  ASSERT_TRUE(index_of(after, sig("APPR")).has_value());
+  ASSERT_TRUE(index_of(after, sig("DSTF")).has_value());
+  EXPECT_EQ(*index_of(after, sig("APPR")), *index_of(after, sig("DSTF")) + 1);
 }
 
 TEST(NpcLinkRows, EmptyPackageListRefusesAnInsertWithNoAnchor) {

@@ -31220,7 +31220,7 @@
           "nullable": false,
           "storage": "packed_array",
           "mutation": "appendable",
-          "anchor_predecessors": ["KWDA", "KSIZ", "PKID", "AIDT", "CNTO", "COCT", "NTRM", "FTYP", "PRPS", "PRKR", "PRKZ", "RCLR", "FCPL", "ECOR", "GWOR", "OCOR", "SPOR", "ATKD", "ATKR", "ANAM", "WNAM", "DEST", "SPLO", "SPCT", "RNAM", "TPTA", "LTPC", "LTPT", "TPLT", "VTCK", "INAM", "SNAM", "ACBS", "STCP", "PTRN", "OBND", "VMAD", "EDID"]
+          "anchor_predecessors": ["KWDA", "KSIZ", "PKID", "AIDT", "COED", "CNTO", "COCT", "NTRM", "FTYP", "PRPS", "PRKR", "PRKZ", "RCLR", "FCPL", "ECOR", "GWOR", "OCOR", "SPOR", "ATKT", "ATKS", "ATKW", "ATKE", "ATKD", "ATKR", "ANAM", "WNAM", "DSTF", "DMDS", "DMDC", "DMDT", "DMDL", "DSTA", "DSTD", "DAMC", "DEST", "SPLO", "SPCT", "RNAM", "TPTA", "LTPC", "LTPT", "TPLT", "VTCK", "INAM", "SNAM", "ACBS", "STCP", "PTRN", "OBND", "VMAD", "EDID"]
         },
         {
           "path": "NPC_\\Packages",
@@ -31229,7 +31229,7 @@
           "targets": ["PACK"],
           "nullable": false,
           "mutation": "existing_neighbors",
-          "anchor_predecessors": ["AIDT", "COED", "CNTO", "COCT", "NTRM", "FTYP", "PRPS", "PRKR", "PRKZ", "RCLR", "FCPL", "ECOR", "GWOR", "OCOR", "SPOR", "ATKD", "ATKR", "ANAM", "WNAM", "DSTF", "DMDS", "DMDC", "DMDT", "DMDL", "DSTA", "DSTD", "DAMC", "DEST", "SPLO", "SPCT", "RNAM", "TPTA", "LTPC", "LTPT", "TPLT", "VTCK", "INAM", "SNAM", "ACBS", "STCP", "PTRN", "OBND", "VMAD", "EDID"]
+          "anchor_predecessors": ["AIDT", "COED", "CNTO", "COCT", "NTRM", "FTYP", "PRPS", "PRKR", "PRKZ", "RCLR", "FCPL", "ECOR", "GWOR", "OCOR", "SPOR", "ATKT", "ATKS", "ATKW", "ATKE", "ATKD", "ATKR", "ANAM", "WNAM", "DSTF", "DMDS", "DMDC", "DMDT", "DMDL", "DSTA", "DSTD", "DAMC", "DEST", "SPLO", "SPCT", "RNAM", "TPTA", "LTPC", "LTPT", "TPLT", "VTCK", "INAM", "SNAM", "ACBS", "STCP", "PTRN", "OBND", "VMAD", "EDID"]
         },
         {
           "path": "NPC_\\HeadParts",
@@ -31238,7 +31238,7 @@
           "targets": ["HDPT"],
           "nullable": false,
           "mutation": "existing_neighbors",
-          "anchor_predecessors": ["DNAM", "DATA", "SHRT", "FULL", "CNAM", "STOP", "OBTS", "OBTF", "OBTE", "APPR", "KWDA", "KSIZ", "PKID", "AIDT", "COED", "CNTO", "COCT", "NTRM", "FTYP", "PRPS", "PRKR", "PRKZ", "RCLR", "FCPL", "ECOR", "GWOR", "OCOR", "SPOR", "ATKD", "ATKR", "ANAM", "WNAM", "DSTF", "DMDS", "DMDC", "DMDT", "DMDL", "DSTA", "DSTD", "DAMC", "DEST", "SPLO", "SPCT", "RNAM", "TPTA", "LTPC", "LTPT", "TPLT", "VTCK", "INAM", "SNAM", "ACBS", "STCP", "PTRN", "OBND", "VMAD", "EDID"]
+          "anchor_predecessors": ["DNAM", "DATA", "SHRT", "FULL", "CNAM", "STOP", "OBTS", "OBTF", "OBTE", "APPR", "KWDA", "KSIZ", "PKID", "AIDT", "COED", "CNTO", "COCT", "NTRM", "FTYP", "PRPS", "PRKR", "PRKZ", "RCLR", "FCPL", "ECOR", "GWOR", "OCOR", "SPOR", "ATKT", "ATKS", "ATKW", "ATKE", "ATKD", "ATKR", "ANAM", "WNAM", "DSTF", "DMDS", "DMDC", "DMDT", "DMDL", "DSTA", "DSTD", "DAMC", "DEST", "SPLO", "SPCT", "RNAM", "TPTA", "LTPC", "LTPT", "TPLT", "VTCK", "INAM", "SNAM", "ACBS", "STCP", "PTRN", "OBND", "VMAD", "EDID"]
         }
       ],
       "fields": [
