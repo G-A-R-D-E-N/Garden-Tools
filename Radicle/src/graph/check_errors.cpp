@@ -67,7 +67,6 @@ constexpr std::size_t k_ctda_param1 = 12;
 constexpr std::size_t k_ctda_param2 = 16;
 constexpr std::size_t k_ctda_run_on = 20;
 constexpr std::size_t k_ctda_reference = 24;
-constexpr std::uint32_t k_run_on_max = 10;
 
 constexpr std::array<Signature, 1> k_glob_targets{Signature::from_string("GLOB")};
 constexpr std::array<Signature, 12> k_reference_targets{
@@ -249,9 +248,9 @@ void check_conditions(const Plugin& plugin, FindingSink& sink) {
       }
       if (sub.data.size() < k_ctda_run_on + 4) continue;
       const auto run_on = read_payload<std::uint32_t>(sub, k_ctda_run_on);
-      if (run_on > k_run_on_max) {
+      if (schema::condition_run_on(run_on) == nullptr) {
         add(*record, k_ctda_run_on,
-            "CTDA Run On " + std::to_string(run_on) + " is not a known Run On value (0-10)");
+            "CTDA Run On " + std::to_string(run_on) + " is not a known Run On value");
       }
     }
   }
