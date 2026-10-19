@@ -250,10 +250,12 @@ TEST(DestructibleHeader, InsertOrdersTheHeaderWithoutEdidAndRefusesACrossedRecor
   const auto headerless = fo4::FormKey::parse("000C08:Patch.esp");
   const auto crossed = fo4::FormKey::parse("000C09:Patch.esp");
 
-  EXPECT_EQ(fo4::insert_destructible_header(plugin, headerless),
-            fo4::DestructibleHeaderStatus::updated);
   EXPECT_EQ(fo4::insert_destructible_header(plugin, crossed),
             fo4::DestructibleHeaderStatus::unknown_order);
+  EXPECT_EQ(fo4::write_plugin(plugin), original);
+
+  EXPECT_EQ(fo4::insert_destructible_header(plugin, headerless),
+            fo4::DestructibleHeaderStatus::updated);
 
   const auto built = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   EXPECT_EQ(signatures_at(built, "000C08:Patch.esp"),
