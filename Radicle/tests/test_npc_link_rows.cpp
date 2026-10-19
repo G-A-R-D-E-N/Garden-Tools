@@ -86,12 +86,39 @@ std::vector<std::uint32_t> raws(const fo4::Plugin& plugin, fo4::Signature signat
   for (const auto& subrecord : record->subrecords) {
     if (subrecord.signature != signature) continue;
     std::uint32_t value = 0;
-    for (std::size_t i = 0; i < 4; ++i) {
+    const std::size_t width = subrecord.data.size() < 4 ? subrecord.data.size() : 4;
+    for (std::size_t i = 0; i < width; ++i) {
       value |= static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(subrecord.data[i])) << (8 * i);
     }
     out.push_back(value);
   }
   return out;
+}
+
+std::vector<std::byte> make_single_link_plugin(bool short_transform = false) {
+  ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(1);
+  hedr.u32(0x911);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+
+  const auto group = fo4::test::begin_group(out, "NPC_", 0);
+  const auto record = fo4::test::begin_record(out, "NPC_", 0, 0x000800);
+  fo4::test::write_subrecord(out, "PTRN", short_transform ? Bytes(2, std::byte{0}) : u32_bytes(0x00000B00u));
+  fo4::test::write_subrecord(out, "STCP", u32_bytes(0x00000B01u));
+  fo4::test::write_subrecord(out, "NTRM", u32_bytes(0x00000B02u));
+  fo4::test::write_subrecord(out, "FTYP", u32_bytes(0x00000B03u));
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+
+  add_group(out, "TRNS", {0x00000B00u, 0x00000B10u});
+  add_group(out, "STAG", {0x00000B01u, 0x00000B11u});
+  add_group(out, "TERM", {0x00000B02u, 0x00000B12u});
+  add_group(out, "LCRT", {0x00000B03u, 0x00000B13u});
+  return out.bytes;
 }
 
 }  // namespace
@@ -171,4 +198,85 @@ TEST(NpcLinkRows, OddSizedPackagePayloadIsRefused) {
   EXPECT_THROW(fo4::set_record_formlink_field(plugin, npc_key(), row("NPC_\\Package"), 0, key(0x000903)),
                fo4::schema::FormLinkFieldError);
   EXPECT_EQ(raws(plugin, k_pkid).size(), 3u);
+}
+
+TEST(NpcLinkRows, SingleLinkRowsCarryTheirOwnTargetType) {
+  const auto transform = row("NPC_\\PreviewTransform");
+  EXPECT_EQ(transform.record, k_npc);
+  EXPECT_EQ(transform.subrecord, sig("PTRN"));
+  EXPECT_EQ(transform.offset, 0u);
+  EXPECT_FALSE(transform.nullable);
+  EXPECT_FALSE(transform.address.repeated);
+  EXPECT_EQ(transform.payload_sizes[0], 4u);
+  EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(transform, sig("TRNS")));
+  EXPECT_FALSE(fo4::schema::formlink_field_target_allowed(transform, sig("LCRT")));
+
+  const auto sound = row("NPC_\\AnimationSound");
+  EXPECT_EQ(sound.subrecord, sig("STCP"));
+  EXPECT_EQ(sound.offset, 0u);
+  EXPECT_FALSE(sound.address.repeated);
+  EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(sound, sig("STAG")));
+  EXPECT_FALSE(fo4::schema::formlink_field_target_allowed(sound, sig("SNDR")));
+
+  const auto terminal = row("NPC_\\NativeTerminal");
+  EXPECT_EQ(terminal.subrecord, sig("NTRM"));
+  EXPECT_EQ(terminal.offset, 0u);
+  EXPECT_FALSE(terminal.address.repeated);
+  EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(terminal, sig("TERM")));
+  EXPECT_FALSE(fo4::schema::formlink_field_target_allowed(terminal, sig("TRNS")));
+
+  const auto locref = row("NPC_\\ForcedLocRefType");
+  EXPECT_EQ(locref.subrecord, sig("FTYP"));
+  EXPECT_EQ(locref.offset, 0u);
+  EXPECT_FALSE(locref.address.repeated);
+  EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(locref, sig("LCRT")));
+  EXPECT_FALSE(fo4::schema::formlink_field_target_allowed(locref, sig("TERM")));
+
+  EXPECT_TRUE(fo4::schema::formlink_field_descriptor(k_npc, "NPC_\\PreviewTransform").has_value());
+  EXPECT_TRUE(fo4::schema::formlink_field_descriptor(k_npc, "NPC_\\AnimationSound").has_value());
+  EXPECT_TRUE(fo4::schema::formlink_field_descriptor(k_npc, "NPC_\\NativeTerminal").has_value());
+  EXPECT_TRUE(fo4::schema::formlink_field_descriptor(k_npc, "NPC_\\ForcedLocRefType").has_value());
+}
+
+TEST(NpcLinkRows, SingleLinkRowsReadRetargetAndRefuseForeignTargets) {
+  auto plugin = fo4::read_plugin(make_single_link_plugin(), "Patch.esp");
+  EXPECT_EQ(raws(plugin, sig("PTRN")), (std::vector<std::uint32_t>{0x00000B00u}));
+  EXPECT_EQ(raws(plugin, sig("STCP")), (std::vector<std::uint32_t>{0x00000B01u}));
+  EXPECT_EQ(raws(plugin, sig("NTRM")), (std::vector<std::uint32_t>{0x00000B02u}));
+  EXPECT_EQ(raws(plugin, sig("FTYP")), (std::vector<std::uint32_t>{0x00000B03u}));
+
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, npc_key(), row("NPC_\\PreviewTransform"), key(0x000B10)),
+            fo4::FormLinkFieldMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, npc_key(), row("NPC_\\AnimationSound"), key(0x000B11)),
+            fo4::FormLinkFieldMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, npc_key(), row("NPC_\\NativeTerminal"), key(0x000B12)),
+            fo4::FormLinkFieldMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, npc_key(), row("NPC_\\ForcedLocRefType"), key(0x000B13)),
+            fo4::FormLinkFieldMutationStatus::updated);
+
+  EXPECT_THROW(fo4::set_record_formlink_field(plugin, npc_key(), row("NPC_\\PreviewTransform"), key(0x000B12)),
+               fo4::schema::FormLinkFieldError);
+  EXPECT_THROW(fo4::set_record_formlink_field(plugin, npc_key(), row("NPC_\\NativeTerminal"), key(0x000B10)),
+               fo4::schema::FormLinkFieldError);
+  EXPECT_THROW(fo4::set_record_formlink_field(plugin, npc_key(), row("NPC_\\AnimationSound"), key(0x000B03)),
+               fo4::schema::FormLinkFieldError);
+  EXPECT_THROW(fo4::set_record_formlink_field(plugin, npc_key(), row("NPC_\\ForcedLocRefType"), fo4::FormKey{}),
+               fo4::schema::FormLinkFieldError);
+
+  const auto after = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(raws(after, sig("PTRN")), (std::vector<std::uint32_t>{0x00000B10u}));
+  EXPECT_EQ(raws(after, sig("STCP")), (std::vector<std::uint32_t>{0x00000B11u}));
+  EXPECT_EQ(raws(after, sig("NTRM")), (std::vector<std::uint32_t>{0x00000B12u}));
+  EXPECT_EQ(raws(after, sig("FTYP")), (std::vector<std::uint32_t>{0x00000B13u}));
+}
+
+TEST(NpcLinkRows, ShortSingleLinkPayloadIsRefused) {
+  auto plugin = fo4::read_plugin(make_single_link_plugin(true), "Patch.esp");
+  EXPECT_THROW(fo4::set_record_formlink_field(plugin, npc_key(), row("NPC_\\PreviewTransform"), key(0x000B10)),
+               fo4::schema::FormLinkFieldError);
+  EXPECT_EQ(raws(plugin, sig("PTRN")), (std::vector<std::uint32_t>{0x00000000u}));
+
+  const auto after = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(raws(after, sig("PTRN")).size(), 1u);
+  EXPECT_EQ(raws(after, sig("STCP")), (std::vector<std::uint32_t>{0x00000B01u}));
 }
