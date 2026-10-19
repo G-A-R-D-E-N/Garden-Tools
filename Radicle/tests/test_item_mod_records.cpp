@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <string_view>
 #include <vector>
 
@@ -65,6 +66,28 @@ Bytes zeros(std::size_t size) { return Bytes(size); }
 Bytes u32_bytes(std::uint32_t value) {
   ByteWriter out;
   out.u32(value);
+  return out.bytes;
+}
+
+Bytes u16_bytes(std::uint16_t value) {
+  ByteWriter out;
+  out.u16(value);
+  return out.bytes;
+}
+
+Bytes kwda_ids(std::initializer_list<std::uint32_t> ids) {
+  ByteWriter out;
+  for (const auto id : ids) {
+    out.u32(raw_id(id));
+  }
+  return out.bytes;
+}
+
+Bytes innr_property(float value, std::uint8_t target, std::uint8_t operation) {
+  ByteWriter out;
+  out.f32(value);
+  out.u8(target);
+  out.u8(operation);
   return out.bytes;
 }
 
@@ -177,7 +200,17 @@ std::vector<std::byte> make_plugin() {
   write_group(out, "DOBJ", {{0x815, {{"EDID", zstr("RadicleObjects")},
                                      {"DNAM", zeros(8)}}}});
   write_group(out, "INNR", {{0x816, {{"EDID", zstr("RadicleNaming")},
-                                     {"UNAM", u32_bytes(29)}}}});
+                                     {"UNAM", u32_bytes(29)},
+                                     {"VNAM", u32_bytes(2)},
+                                     {"WNAM", zstr("RadicleRuleA")},
+                                     {"KSIZ", u32_bytes(1)},
+                                     {"KWDA", kwda_ids({0x81A})},
+                                     {"XNAM", innr_property(1.5f, 4, 0)},
+                                     {"YNAM", u16_bytes(0)},
+                                     {"WNAM", zstr("RadicleRuleB")},
+                                     {"KSIZ", u32_bytes(2)},
+                                     {"KWDA", kwda_ids({0x81A, 0x81B})},
+                                     {"YNAM", u16_bytes(7)}}}});
   return out.bytes;
 }
 
@@ -186,6 +219,16 @@ const fo4::Subrecord* find_subrecord(const fo4::Record& record, fo4::Signature s
     if (sub.signature == signature) return &sub;
   }
   return nullptr;
+}
+
+Bytes subrecord_at(const fo4::Record& record, std::string_view signature, std::size_t ordinal) {
+  const auto wanted = fo4::Signature::from_string(signature);
+  std::size_t seen = 0;
+  for (const auto& sub : record.subrecords) {
+    if (sub.signature != wanted) continue;
+    if (seen++ == ordinal) return sub.data;
+  }
+  return {};
 }
 
 }  // namespace
@@ -283,6 +326,79 @@ TEST(ItemModRecordsSynthetic, EditsOneRowPerRecordAndRereads) {
       EXPECT_TRUE(found) << item.link_path;
     }
   }
+}
+
+TEST(ItemModRecordsSynthetic, InnrNamingRuleRowsAddressEachName) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto innr = fo4::Signature::from_string("INNR");
+  const auto key = fo4::FormKey::parse("000816:Patch.esp");
+
+  const auto rulesets = fo4::schema::scalar_field_descriptor(innr, "INNR\\RulesetCount");
+  const auto text = fo4::schema::scalar_field_descriptor(innr, "INNR\\NameText");
+  const auto count = fo4::schema::scalar_field_descriptor(innr, "INNR\\KeywordCount");
+  const auto index = fo4::schema::scalar_field_descriptor(innr, "INNR\\NameIndex");
+  const auto value = fo4::schema::scalar_field_descriptor(innr, "INNR\\PropertyValue");
+  const auto target = fo4::schema::scalar_field_descriptor(innr, "INNR\\PropertyTarget");
+  const auto operation = fo4::schema::scalar_field_descriptor(innr, "INNR\\PropertyOperator");
+  ASSERT_TRUE(rulesets.has_value());
+  ASSERT_TRUE(text.has_value());
+  ASSERT_TRUE(count.has_value());
+  ASSERT_TRUE(index.has_value());
+  ASSERT_TRUE(value.has_value());
+  ASSERT_TRUE(target.has_value());
+  ASSERT_TRUE(operation.has_value());
+
+  EXPECT_EQ(fo4::record_field_count(plugin, key, *rulesets), 1u);
+  EXPECT_EQ(fo4::record_field_count(plugin, key, *text), 2u);
+  EXPECT_EQ(fo4::record_field_count(plugin, key, *count), 2u);
+  EXPECT_EQ(fo4::record_field_count(plugin, key, *index), 2u);
+  EXPECT_EQ(fo4::record_field_count(plugin, key, *value), 2u);
+
+  const auto* before = fo4::find_record(plugin, key);
+  ASSERT_NE(before, nullptr);
+  EXPECT_EQ(subrecord_at(*before, "WNAM", 0), zstr("RadicleRuleA"));
+  EXPECT_EQ(subrecord_at(*before, "WNAM", 1), zstr("RadicleRuleB"));
+  EXPECT_EQ(subrecord_at(*before, "KSIZ", 1), u32_bytes(2));
+  EXPECT_EQ(subrecord_at(*before, "YNAM", 1), u16_bytes(7));
+  EXPECT_EQ(subrecord_at(*before, "XNAM", 1), innr_property(1.5f, 4, 0));
+
+  const auto xnam = subrecord_at(*before, "XNAM", 0);
+  const auto ynam = subrecord_at(*before, "YNAM", 1);
+  const auto ksiz = subrecord_at(*before, "KSIZ", 1);
+  const auto value_bytes = fo4::schema::scalar_field_bytes(xnam, value->scalar);
+  EXPECT_EQ(Bytes(value_bytes.begin(), value_bytes.end()), u32_bytes(0x3FC00000u));
+  EXPECT_EQ(fo4::schema::decode_scalar(value_bytes, value->scalar), "1.5");
+  EXPECT_EQ(fo4::schema::decode_scalar(fo4::schema::scalar_field_bytes(xnam, target->scalar),
+                                       target->scalar), "4");
+  EXPECT_EQ(fo4::schema::decode_scalar(fo4::schema::scalar_field_bytes(xnam, operation->scalar),
+                                       operation->scalar), "0");
+  EXPECT_EQ(fo4::schema::decode_scalar(ynam, index->scalar), "7");
+  EXPECT_EQ(fo4::schema::decode_scalar(ksiz, count->scalar), "2");
+
+  const auto untouched = fo4::read_plugin(make_plugin(), "Patch.esp");
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *count, 2, "4"),
+            fo4::ScalarMutationStatus::index_out_of_range);
+  EXPECT_EQ(fo4::set_record_string(plugin, key, *text, 2, "RadicleRuleD"),
+            fo4::ScalarMutationStatus::index_out_of_range);
+  EXPECT_EQ(fo4::write_plugin(plugin), fo4::write_plugin(untouched));
+
+  EXPECT_EQ(fo4::set_record_string(plugin, key, *text, 1, "RadicleRuleC"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *index, 1, "9"),
+            fo4::ScalarMutationStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto* after = fo4::find_record(reread, key);
+  ASSERT_NE(after, nullptr);
+  EXPECT_EQ(subrecord_at(*after, "WNAM", 0), zstr("RadicleRuleA"));
+  EXPECT_EQ(subrecord_at(*after, "WNAM", 1), zstr("RadicleRuleC"));
+  EXPECT_EQ(subrecord_at(*after, "YNAM", 0), u16_bytes(0));
+  EXPECT_EQ(subrecord_at(*after, "YNAM", 1), u16_bytes(9));
+  EXPECT_EQ(subrecord_at(*after, "KSIZ", 1), u32_bytes(2));
+  EXPECT_EQ(subrecord_at(*after, "KWDA", 0), kwda_ids({0x81A}));
+  EXPECT_EQ(subrecord_at(*after, "KWDA", 1), kwda_ids({0x81A, 0x81B}));
+  EXPECT_EQ(subrecord_at(*after, "XNAM", 1), innr_property(1.5f, 4, 0));
+  EXPECT_EQ(subrecord_at(*after, "VNAM", 0), u32_bytes(2));
 }
 
 TEST(ItemModRecordsSynthetic, FixtureRecordsPassAuthoringPreflight) {
