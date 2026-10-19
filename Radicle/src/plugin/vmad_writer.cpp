@@ -543,6 +543,47 @@ VmadStructureMutationStatus replace_vmad_property(Plugin& plugin, const FormKey&
   return VmadStructureMutationStatus::updated;
 }
 
+VmadStructureMutationStatus add_quest_vmad_fragment(Plugin& plugin, const FormKey& record_key,
+                                                    std::uint16_t stage, std::int32_t stage_index,
+                                                    std::string_view script,
+                                                    std::string_view function) {
+  QuestFragmentEdit edit;
+  if (const auto refusal = load_quest_fragments(plugin, record_key, edit)) return *refusal;
+  if (script.empty() || function.empty()) {
+    throw schema::ScalarError("VMAD fragment script and function names are required");
+  }
+  if (edit.extras.script_name.empty()) return VmadStructureMutationStatus::binding_missing;
+  for (const auto& existing : edit.extras.fragments) {
+    if (existing.stage == stage && existing.stage_index == stage_index) {
+      return VmadStructureMutationStatus::already_present;
+    }
+  }
+  if (edit.extras.fragments.size() >= std::numeric_limits<std::uint16_t>::max()) {
+    throw schema::ScalarError("the quest VMAD fragment list is full");
+  }
+  QuestVmadFragment added;
+  added.stage = stage;
+  added.stage_index = stage_index;
+  added.script = std::string(script);
+  added.function = std::string(function);
+  std::vector<std::byte> entry;
+  append_quest_fragment(entry, added);
+  auto at = edit.tail_start + edit.extras.entries_begin;
+  for (const auto& existing : edit.extras.fragments) {
+    if (existing.stage > stage ||
+        (existing.stage == stage && existing.stage_index > stage_index)) {
+      at = edit.tail_start + existing.offset;
+      break;
+    }
+    at = edit.tail_start + existing.end;
+  }
+  splice(edit.vmad->data, at, 0, entry);
+  put(edit.vmad->data, edit.tail_start + edit.extras.count_offset,
+      static_cast<std::uint32_t>(edit.extras.fragments.size() + 1), 2);
+  detail::mark_record_modified(plugin, *edit.record);
+  return VmadStructureMutationStatus::updated;
+}
+
 VmadStructureMutationStatus set_quest_vmad_fragment(Plugin& plugin, const FormKey& record_key,
                                                     std::uint16_t stage, std::string_view script,
                                                     std::string_view function) {

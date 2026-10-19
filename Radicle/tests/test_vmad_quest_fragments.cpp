@@ -37,6 +37,16 @@ std::vector<std::byte> fragment_tail(bool duplicate_stage = false) {
   return tail.bytes;
 }
 
+std::vector<std::byte> scriptless_fragment_tail() {
+  test::ByteWriter tail;
+  tail.u8(3);
+  tail.u16(1);
+  fixture::name(tail, "");
+  append_fragment(tail, 10, 0, 0, 0, "Fragment_10");
+  tail.u16(0);
+  return tail.bytes;
+}
+
 std::vector<std::byte> quest_bytes(const std::vector<std::byte>& tail) {
   auto data = fixture::payload();
   data.insert(data.end(), tail.begin(), tail.end());
@@ -217,4 +227,144 @@ TEST(VmadQuestFragments, EditsRefuseForeignRecordsAndBadPayloads) {
                schema::ScalarError);
   EXPECT_THROW(remove_quest_vmad_fragment(twice, fixture::key(), 10), schema::ScalarError);
   EXPECT_EQ(write_plugin(twice), twice_before);
+}
+
+TEST(VmadQuestFragments, AddedBindingLandsInStageOrderAndRemovalRestoresThePayload) {
+  const auto tail = fragment_tail();
+  auto plugin = read_plugin(fixture::plugin_bytes(quest_bytes(tail), "QUST"), "Vmad.esp");
+  const auto before = fixture::subrecord(plugin).data;
+  const auto initial = extras_of(before);
+  ASSERT_EQ(initial.fragments.size(), 2u);
+  const auto base = extras_base(before);
+  const auto count_at = base + initial.count_offset;
+
+  EXPECT_EQ(add_quest_vmad_fragment(plugin, fixture::key(), 15, 7, "QF_Test", "Fragment_15"),
+            VmadStructureMutationStatus::updated);
+  const auto middle = fixture::subrecord(read_plugin(write_plugin(plugin), "Vmad.esp")).data;
+  EXPECT_TRUE(vmad_coverage(middle, sig_qust).complete());
+  const auto three = extras_of(middle);
+  ASSERT_EQ(three.fragments.size(), 3u);
+  expect_fragment(three.fragments[0], 10, 0, 0, 0, "Fragment_10");
+  expect_fragment(three.fragments[1], 15, 0, 7, 0, "Fragment_15");
+  expect_fragment(three.fragments[2], 20, 0xFFFF, 5, 1, "Fragment_20");
+  EXPECT_EQ(three.fragments[0].offset, initial.fragments[0].offset);
+  EXPECT_EQ(three.fragments[0].end, initial.fragments[0].end);
+  EXPECT_EQ(three.fragments[1].offset, initial.fragments[1].offset);
+  EXPECT_EQ(middle[count_at], std::byte{3});
+  EXPECT_EQ(middle[count_at + 1], std::byte{0});
+  EXPECT_EQ(slice(middle, 0, base + three.fragments[1].offset),
+            slice(before, 0, base + initial.fragments[1].offset));
+  EXPECT_EQ(slice(middle, base + three.fragments[2].offset, middle.size()),
+            slice(before, base + initial.fragments[1].offset, before.size()));
+
+  EXPECT_EQ(add_quest_vmad_fragment(plugin, fixture::key(), 15, 7, "QF_Test", "Fragment_15"),
+            VmadStructureMutationStatus::already_present);
+  EXPECT_EQ(fixture::subrecord(plugin).data, middle);
+
+  EXPECT_EQ(add_quest_vmad_fragment(plugin, fixture::key(), 5, 0, "QF_Test", "Fragment_05"),
+            VmadStructureMutationStatus::updated);
+  const auto fronted = fixture::subrecord(read_plugin(write_plugin(plugin), "Vmad.esp")).data;
+  const auto four = extras_of(fronted);
+  ASSERT_EQ(four.fragments.size(), 4u);
+  expect_fragment(four.fragments[0], 5, 0, 0, 0, "Fragment_05");
+  expect_fragment(four.fragments[1], 10, 0, 0, 0, "Fragment_10");
+  expect_fragment(four.fragments[2], 15, 0, 7, 0, "Fragment_15");
+  expect_fragment(four.fragments[3], 20, 0xFFFF, 5, 1, "Fragment_20");
+  EXPECT_EQ(four.fragments[0].offset, three.entries_begin);
+  EXPECT_EQ(four.fragments[1].offset,
+            three.entries_begin + (four.fragments[0].end - four.fragments[0].offset));
+  EXPECT_EQ(fronted[count_at], std::byte{4});
+  EXPECT_EQ(slice(fronted, base + four.fragments[1].offset, fronted.size()),
+            slice(middle, base + three.entries_begin, middle.size()));
+
+  EXPECT_EQ(add_quest_vmad_fragment(plugin, fixture::key(), 30, 9, "QF_Test", "Fragment_30"),
+            VmadStructureMutationStatus::updated);
+  const auto appended = fixture::subrecord(read_plugin(write_plugin(plugin), "Vmad.esp")).data;
+  const auto five = extras_of(appended);
+  ASSERT_EQ(five.fragments.size(), 5u);
+  expect_fragment(five.fragments[4], 30, 0, 9, 0, "Fragment_30");
+  EXPECT_EQ(appended[count_at], std::byte{5});
+  EXPECT_EQ(five.fragments[4].offset, five.fragments[3].end);
+  EXPECT_EQ(five.fragments[4].end, appended.size() - base - 2);
+  EXPECT_EQ(slice(appended, 0, base + five.fragments[4].offset),
+            slice(fronted, 0, base + four.fragments[3].end));
+
+  EXPECT_EQ(remove_quest_vmad_fragment(plugin, fixture::key(), 5),
+            VmadStructureMutationStatus::updated);
+  EXPECT_EQ(remove_quest_vmad_fragment(plugin, fixture::key(), 15),
+            VmadStructureMutationStatus::updated);
+  EXPECT_EQ(remove_quest_vmad_fragment(plugin, fixture::key(), 30),
+            VmadStructureMutationStatus::updated);
+  EXPECT_EQ(fixture::subrecord(plugin).data, before);
+
+  auto repeated =
+      read_plugin(fixture::plugin_bytes(quest_bytes(fragment_tail(true)), "QUST"), "Vmad.esp");
+  const auto repeated_base = extras_base(fixture::subrecord(repeated).data);
+  EXPECT_EQ(add_quest_vmad_fragment(repeated, fixture::key(), 10, 9, "QF_Test", "Fragment_10b"),
+            VmadStructureMutationStatus::updated);
+  const auto longer = fixture::subrecord(read_plugin(write_plugin(repeated), "Vmad.esp")).data;
+  const auto three_of_stage = extras_of(longer);
+  ASSERT_EQ(three_of_stage.fragments.size(), 3u);
+  expect_fragment(three_of_stage.fragments[0], 10, 0, 0, 0, "Fragment_10");
+  expect_fragment(three_of_stage.fragments[1], 10, 0xFFFF, 5, 1, "Fragment_20");
+  expect_fragment(three_of_stage.fragments[2], 10, 0, 9, 0, "Fragment_10b");
+  EXPECT_EQ(longer[repeated_base + three_of_stage.count_offset], std::byte{3});
+
+  EXPECT_EQ(add_quest_vmad_fragment(repeated, fixture::key(), 10, 9, "QF_Test", "Fragment_10b"),
+            VmadStructureMutationStatus::already_present);
+  EXPECT_EQ(add_quest_vmad_fragment(repeated, fixture::key(), 10, 3, "QF_Test", "Fragment_10a"),
+            VmadStructureMutationStatus::updated);
+  const auto between = fixture::subrecord(read_plugin(write_plugin(repeated), "Vmad.esp")).data;
+  const auto ordered = extras_of(between);
+  ASSERT_EQ(ordered.fragments.size(), 4u);
+  expect_fragment(ordered.fragments[0], 10, 0, 0, 0, "Fragment_10");
+  expect_fragment(ordered.fragments[1], 10, 0, 3, 0, "Fragment_10a");
+  expect_fragment(ordered.fragments[2], 10, 0xFFFF, 5, 1, "Fragment_20");
+  expect_fragment(ordered.fragments[3], 10, 0, 9, 0, "Fragment_10b");
+  EXPECT_THROW(remove_quest_vmad_fragment(repeated, fixture::key(), 10), schema::ScalarError);
+  EXPECT_EQ(fixture::subrecord(repeated).data, between);
+}
+
+TEST(VmadQuestFragments, AddedBindingRefusesBoundStagesAndMissingFragmentSections) {
+  auto refr = read_plugin(fixture::plugin_bytes(), "Vmad.esp");
+  const auto refr_before = write_plugin(refr);
+  EXPECT_EQ(add_quest_vmad_fragment(refr, fixture::key(), 10, 0, "QF_Test", "Fragment_10"),
+            VmadStructureMutationStatus::not_authorable);
+  EXPECT_EQ(write_plugin(refr), refr_before);
+
+  auto bare = read_plugin(fixture::plugin_bytes(fixture::payload(), "QUST"), "Vmad.esp");
+  const auto bare_before = write_plugin(bare);
+  EXPECT_EQ(add_quest_vmad_fragment(bare, fixture::key(), 10, 0, "QF_Test", "Fragment_10"),
+            VmadStructureMutationStatus::binding_missing);
+  EXPECT_EQ(write_plugin(bare), bare_before);
+
+  auto scriptless =
+      read_plugin(fixture::plugin_bytes(quest_bytes(scriptless_fragment_tail()), "QUST"),
+                  "Vmad.esp");
+  const auto scriptless_before = write_plugin(scriptless);
+  ASSERT_EQ(extras_of(fixture::subrecord(scriptless).data).fragments.size(), 1u);
+  EXPECT_EQ(add_quest_vmad_fragment(scriptless, fixture::key(), 20, 0, "QF_Test", "Fragment_20"),
+            VmadStructureMutationStatus::binding_missing);
+  EXPECT_EQ(write_plugin(scriptless), scriptless_before);
+
+  auto quest =
+      read_plugin(fixture::plugin_bytes(quest_bytes(fragment_tail()), "QUST"), "Vmad.esp");
+  const auto quest_before = write_plugin(quest);
+  EXPECT_EQ(add_quest_vmad_fragment(quest, fixture::key(), 10, 0, "QF_Other", "Fragment_Ten"),
+            VmadStructureMutationStatus::already_present);
+  EXPECT_EQ(add_quest_vmad_fragment(quest, fixture::key(0x999), 15, 0, "QF_Test", "Fragment_15"),
+            VmadStructureMutationStatus::record_missing);
+  EXPECT_THROW(add_quest_vmad_fragment(quest, fixture::key(), 15, 0, "", "Fragment_15"),
+               schema::ScalarError);
+  EXPECT_THROW(add_quest_vmad_fragment(quest, fixture::key(), 15, 0, "QF_Test", ""),
+               schema::ScalarError);
+  EXPECT_EQ(write_plugin(quest), quest_before);
+
+  auto truncated = quest_bytes(fragment_tail());
+  truncated.pop_back();
+  auto damaged = read_plugin(fixture::plugin_bytes(truncated, "QUST"), "Vmad.esp");
+  const auto damaged_before = write_plugin(damaged);
+  EXPECT_THROW(add_quest_vmad_fragment(damaged, fixture::key(), 15, 0, "QF_Test", "Fragment_15"),
+               schema::ScalarError);
+  EXPECT_EQ(write_plugin(damaged), damaged_before);
 }
