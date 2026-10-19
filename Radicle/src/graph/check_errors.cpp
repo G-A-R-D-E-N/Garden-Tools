@@ -30,6 +30,8 @@ constexpr Signature k_sig_dlbr = Signature::from_string("DLBR");
 constexpr Signature k_sig_snam = Signature::from_string("SNAM");
 constexpr Signature k_sig_rfgp = Signature::from_string("RFGP");
 constexpr Signature k_sig_rnam = Signature::from_string("RNAM");
+constexpr Signature k_sig_regn = Signature::from_string("REGN");
+constexpr Signature k_sig_wnam = Signature::from_string("WNAM");
 
 struct WinnerInfo {
   Signature signature{};
@@ -187,6 +189,10 @@ void check_links(const Plugin& plugin,
       }
       if (hit.subrecord == k_sig_rnam && hit.key.owner() == game_master && owner != records.end() &&
           owner->second->header.signature == k_sig_rfgp) {
+        continue;
+      }
+      if (hit.subrecord == k_sig_wnam && hit.key.owner() == game_master && owner != records.end() &&
+          owner->second->header.signature == k_sig_regn) {
         continue;
       }
       finding.code = CheckCode::unresolved_link;
