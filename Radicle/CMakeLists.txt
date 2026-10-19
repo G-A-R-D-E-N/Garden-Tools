@@ -426,6 +426,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_refr_extra_rows.cpp
     tests/test_ipds_movt_rows.cpp
     tests/test_armo_arma_rows.cpp
+    tests/test_arma_sculpt_rows.cpp
     tests/test_destructible_rows.cpp
     tests/test_destructible_stage_members.cpp
     tests/test_packed_formlink_arrays.cpp
