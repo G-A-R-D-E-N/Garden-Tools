@@ -160,13 +160,14 @@ bool carries_header(const Record& record) {
   return false;
 }
 
-std::vector<std::byte> header_payload(const Record& record) {
+std::optional<std::vector<std::byte>> header_payload(const Record& record) {
   std::size_t stages = 0;
   for (const auto& subrecord : record.subrecords) {
     if (subrecord.signature == sig_dstd) ++stages;
   }
+  if (stages > k_max_stages) return std::nullopt;
   std::vector<std::byte> payload(8, std::byte{0});
-  payload[4] = static_cast<std::byte>(stages & 0xFFu);
+  payload[4] = static_cast<std::byte>(stages);
   return payload;
 }
 
@@ -217,12 +218,10 @@ DestructibleHeaderStatus insert_destructible_header(Plugin& plugin, const FormKe
   const auto position = group_position(*target, sig_dest);
   if (!position.has_value()) return DestructibleHeaderStatus::unknown_order;
 
-  std::vector<Subrecord> created;
-  created.push_back(Subrecord{sig_dest, header_payload(*target), false});
-  created.push_back(Subrecord{sig_damc, std::vector<std::byte>{}, false});
+  const auto payload = header_payload(*target);
+  if (!payload.has_value()) return DestructibleHeaderStatus::too_many_stages;
   target->subrecords.insert(target->subrecords.begin() + static_cast<std::ptrdiff_t>(*position),
-                            std::make_move_iterator(created.begin()),
-                            std::make_move_iterator(created.end()));
+                            Subrecord{sig_dest, *payload, false});
   detail::mark_record_modified(plugin, *target);
   return DestructibleHeaderStatus::updated;
 }

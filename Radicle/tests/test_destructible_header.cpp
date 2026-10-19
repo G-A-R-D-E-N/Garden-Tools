@@ -65,6 +65,11 @@ Bytes make_plugin() {
   fo4::test::write_subrecord(out, "EDID", std::string_view{"Damaged\0", 8});
   fo4::test::write_subrecord(out, "DAMC", Bytes(8));
   fo4::test::end_record(out, damaged);
+
+  const auto crowded = fo4::test::begin_record(out, "ACTI", 0, 0x01000C09);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"Crowded\0", 8});
+  for (int i = 0; i < 256; ++i) fo4::test::write_subrecord(out, "DSTD", Bytes(20));
+  fo4::test::end_record(out, crowded);
   fo4::test::end_group(out, acti_group);
 
   const auto door_group = fo4::test::begin_group(out, "DOOR", 0);
@@ -170,24 +175,18 @@ TEST(DestructibleHeader, InsertAndRemoveCreateAndDropTheWholeGroup) {
 
   const auto health = scalar_row("ACTI", "ACTI\\DestructionHealth");
   const auto value = scalar_row("ACTI", "ACTI\\DestructionResistanceValue");
-  const auto resistances = fo4::schema::counted_array_descriptor(
-                               fo4::Signature::from_string("ACTI"), "ACTI\\DestructionResistances")
-                               .value();
   EXPECT_EQ(fo4::set_record_scalar(plugin, bare, health, 0, "800"),
             fo4::ScalarMutationStatus::updated);
-  EXPECT_EQ(fo4::insert_record_counted_element(plugin, bare, resistances, 0),
-            fo4::CountedArrayMutationStatus::updated);
   EXPECT_EQ(fo4::insert_destructible_stage(plugin, bare, 0),
             fo4::DestructibleStageMutationStatus::updated);
 
   const auto built = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   EXPECT_EQ(signatures_at(built, "000C01:Patch.esp"),
-            (std::vector<std::string>{"EDID", "DEST", "DAMC", "DSTD", "DSTF"}));
+            (std::vector<std::string>{"EDID", "DEST", "DSTD", "DSTF"}));
   EXPECT_EQ(signatures_at(built, "000C02:Patch.esp"),
-            (std::vector<std::string>{"EDID", "OBND", "MODL", "MODT", "DEST", "DAMC", "KSIZ",
-                                      "KWDA"}));
+            (std::vector<std::string>{"EDID", "OBND", "MODL", "MODT", "DEST", "KSIZ", "KWDA"}));
   EXPECT_EQ(signatures_at(built, "000C04:Patch.esp"),
-            (std::vector<std::string>{"EDID", "DEST", "DAMC"}));
+            (std::vector<std::string>{"EDID", "DEST"}));
 
   const auto* dest = subrecord_at(built, "000C01:Patch.esp", "DEST", 0);
   ASSERT_NE(dest, nullptr);
@@ -197,11 +196,7 @@ TEST(DestructibleHeader, InsertAndRemoveCreateAndDropTheWholeGroup) {
   EXPECT_EQ(byte_at(dest->data, 5), 0u);
   EXPECT_EQ(byte_at(dest->data, 6), 0u);
   EXPECT_EQ(byte_at(dest->data, 7), 0u);
-  const auto* damc = subrecord_at(built, "000C01:Patch.esp", "DAMC", 0);
-  ASSERT_NE(damc, nullptr);
-  ASSERT_EQ(damc->data.size(), 8u);
-  EXPECT_EQ(u32_at(damc->data, 0), 0u);
-  EXPECT_EQ(u32_at(damc->data, 4), 0u);
+  EXPECT_EQ(subrecord_at(built, "000C01:Patch.esp", "DAMC", 0), nullptr);
   const auto* dstd = subrecord_at(built, "000C01:Patch.esp", "DSTD", 0);
   ASSERT_NE(dstd, nullptr);
   EXPECT_EQ(dstd->data.size(), 20u);
@@ -214,7 +209,7 @@ TEST(DestructibleHeader, InsertAndRemoveCreateAndDropTheWholeGroup) {
   EXPECT_EQ(i32_at(modelled_dest->data, 0), 0);
   EXPECT_EQ(byte_at(modelled_dest->data, 4), 0u);
   EXPECT_EQ(read_row(built, bare, health, 0), "800");
-  EXPECT_EQ(read_row(built, bare, value, 0), "0");
+  EXPECT_EQ(read_row(built, bare, value, 0), "");
 
   EXPECT_EQ(fo4::remove_destructible_header(plugin, bare), fo4::DestructibleHeaderStatus::updated);
   EXPECT_EQ(fo4::remove_destructible_header(plugin, bare),
@@ -244,6 +239,15 @@ TEST(DestructibleHeader, InsertRefusesARecordWithASubrecordOutsideItsRules) {
   EXPECT_EQ(fo4::test::original_bytes(plugin), original);
 }
 
+TEST(DestructibleHeader, InsertRefusesAStageCountThatDoesNotFitTheByte) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto original = fo4::test::original_bytes(plugin);
+
+  EXPECT_EQ(fo4::insert_destructible_header(plugin, fo4::FormKey::parse("000C09:Patch.esp")),
+            fo4::DestructibleHeaderStatus::too_many_stages);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
+}
+
 TEST(DestructibleHeader, DuplicatedHeaderIsPresentToInsertAndRemovable) {
   auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto twice = fo4::FormKey::parse("000C06:Patch.esp");
@@ -269,7 +273,7 @@ TEST(DestructibleHeader, InsertSeedsTheStageCountAndRemoveDropsStagesWithoutADes
 
   const auto built = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   EXPECT_EQ(signatures_at(built, "000C07:Patch.esp"),
-            (std::vector<std::string>{"EDID", "DEST", "DAMC", "DSTD", "DSTD"}));
+            (std::vector<std::string>{"EDID", "DEST", "DSTD", "DSTD"}));
   const auto* dest = subrecord_at(built, "000C07:Patch.esp", "DEST", 0);
   ASSERT_NE(dest, nullptr);
   ASSERT_EQ(dest->data.size(), 8u);
