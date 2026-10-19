@@ -416,9 +416,8 @@ PackageInputMutationStatus add_package_data_input(Plugin& plugin,
     }
     highest = std::max(highest, input.index);
   }
-  const std::optional<std::uint8_t> new_id = tree.inputs.empty()
-      ? std::optional<std::uint8_t>(clamped_input_id(static_cast<std::uint8_t>(tree.next_input_id.value_or(0))))
-      : next_free_input_id(used, highest);
+  std::optional<std::uint8_t> new_id = tree.inputs.empty() ? std::optional<std::uint8_t>(0) : next_free_input_id(used, highest);
+  if (tree.next_input_id && !used[clamped_input_id(*tree.next_input_id)]) new_id = clamped_input_id(*tree.next_input_id);
   if (!new_id) return PackageInputMutationStatus::no_free_input_id;
   used[*new_id] = true;
   const auto next_id = next_free_input_id(used, *new_id);
@@ -475,6 +474,7 @@ PackageInputMutationStatus set_package_data_input(Plugin& plugin,
   const auto serialized = serialize_value(*layout, value);
   if (serialized.status != Serialized::ok) return status_for(serialized.status);
   if (input->value_tag == sig("TPIC")) return PackageInputMutationStatus::payload_layout_undetermined;
+  if (serialized.tag != input->value_tag) return PackageInputMutationStatus::payload_tag_mismatch;
   if (input->value_index >= record->subrecords.size()) return PackageInputMutationStatus::undecodable;
   auto& payload = record->subrecords[input->value_index].data;
   if (payload == serialized.bytes) return PackageInputMutationStatus::unchanged;
@@ -497,7 +497,7 @@ PackageInputMutationStatus remove_package_data_input(Plugin& plugin,
   if (input == nullptr) return PackageInputMutationStatus::input_id_missing;
   const auto pkcu = find_pkcu(*record);
   if (pkcu == record->subrecords.size()) return PackageInputMutationStatus::undecodable;
-  if (Reader::u32(record->subrecords[pkcu], 4) == 0) return PackageInputMutationStatus::procedure_tree_present;
+  if (Reader::u32(record->subrecords[pkcu], 4) == 0 || !tree.nodes.empty()) return PackageInputMutationStatus::procedure_tree_present;
 
   record->subrecords.erase(record->subrecords.begin() + static_cast<std::ptrdiff_t>(input->id_index),
                            record->subrecords.begin() + static_cast<std::ptrdiff_t>(input->id_end));
