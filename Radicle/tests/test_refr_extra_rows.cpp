@@ -66,6 +66,23 @@ constexpr ScalarRow k_scalar_rows[] = {
     {"REFR", "REFR\\LightVolumetricIntensity", "XLIG", 20, f32, true, 0, 24},
     {"PGRE", "PGRE\\AmmoCount", "XAMC", 0, u32, false, 0, 0},
     {"PGRE", "PGRE\\HeadTrackingWeight", "XHTW", 0, f32, false, 0, 0},
+    {"REFR", "REFR\\ActivateParentOnly", "XAPD", 0, u8, false, 0, 0},
+    {"REFR", "REFR\\ActivateParentDelay", "XAPR", 4, f32, true, 8, 0},
+    {"REFR", "REFR\\WaterCurrentLinearVelocityX", "XCVL", 0, f32, true, 12, 0},
+    {"REFR", "REFR\\WaterCurrentLinearVelocityY", "XCVL", 4, f32, true, 12, 0},
+    {"REFR", "REFR\\WaterCurrentLinearVelocityZ", "XCVL", 8, f32, true, 12, 0},
+    {"REFR", "REFR\\WaterCurrentRotationalVelocityX", "XCVR", 0, f32, true, 12, 0},
+    {"REFR", "REFR\\WaterCurrentRotationalVelocityY", "XCVR", 4, f32, true, 12, 0},
+    {"REFR", "REFR\\WaterCurrentRotationalVelocityZ", "XCVR", 8, f32, true, 12, 0},
+    {"REFR", "REFR\\PowerGridCount", "XWPG", 0, u32, false, 0, 0},
+    {"REFR", "REFR\\SplineSlack", "XBSD", 0, f32, true, 0, 4},
+    {"REFR", "REFR\\SplineThickness", "XBSD", 4, f32, true, 0, 8},
+    {"REFR", "REFR\\SplineHalfExtentX", "XBSD", 8, f32, true, 0, 12},
+    {"REFR", "REFR\\SplineHalfExtentY", "XBSD", 12, f32, true, 0, 16},
+    {"REFR", "REFR\\SplineHalfExtentZ", "XBSD", 16, f32, true, 0, 20},
+    {"REFR", "REFR\\SplineWindDetachedEnd", "XBSD", 20, u8, true, 0, 21},
+    {"REFR", "REFR\\DecalWidthScale", "XPDD", 0, f32, true, 0, 4},
+    {"REFR", "REFR\\DecalHeightScale", "XPDD", 4, f32, true, 0, 8},
 };
 
 constexpr LinkRow k_link_rows[] = {
@@ -84,6 +101,15 @@ constexpr LinkRow k_link_rows[] = {
     {"REFR", "REFR\\LocationReference", "XLRL", 0, 4, "LCRT", true},
     {"PGRE", "PGRE\\EncounterZone", "XEZN", 0, 4, "ECZN"},
     {"PGRE", "PGRE\\Emittance", "XEMI", 0, 4, "REGN"},
+    {"REFR", "REFR\\LinkedKeyword", "XLKR", 0, 4, "KYWD", true},
+    {"REFR", "REFR\\LinkedReference", "XLKR", 4, 8, "REFR", true},
+    {"REFR", "REFR\\ActivateParentRef", "XAPR", 0, 8, "ACHR", true},
+    {"REFR", "REFR\\SplineConnection", "XPLK", 0, 8, "REFR"},
+    {"REFR", "REFR\\PortalOrigin", "XPOD", 0, 8, "REFR", true},
+    {"REFR", "REFR\\PortalDestination", "XPOD", 4, 8, "REFR", true},
+    {"REFR", "REFR\\PowerGridNode1", "XWPN", 0, 12, "ACHR", true},
+    {"REFR", "REFR\\PowerGridNode2", "XWPN", 4, 12, "REFR", true},
+    {"REFR", "REFR\\PowerGridLine", "XWPN", 8, 12, "REFR", true},
 };
 
 constexpr std::uint32_t raw_id(std::uint32_t local_id) { return 0x02000000u | local_id; }
@@ -130,6 +156,26 @@ Bytes lock_bytes(std::uint8_t level, std::uint32_t key, std::uint8_t flags) {
   out.u8(0);
   out.u8(0);
   out.u32(0);
+  return out.bytes;
+}
+
+Bytes u32s(std::initializer_list<std::uint32_t> values) {
+  ByteWriter out;
+  for (const auto value : values) out.u32(value);
+  return out.bytes;
+}
+
+Bytes activate_parent_bytes() {
+  ByteWriter out;
+  out.u32(0x00000A93u);
+  out.f32(1.25f);
+  return out.bytes;
+}
+
+Bytes spline_bytes() {
+  ByteWriter out;
+  for (const float value : {0.5f, 0.25f, 1.0f, 2.0f, 3.0f}) out.f32(value);
+  out.u8(0x01);
   return out.bytes;
 }
 
@@ -181,6 +227,19 @@ std::vector<std::byte> make_plugin() {
                 {"XLCM", i32_bytes(2)},
                 {"XLTW", u32_bytes(0x00000AA0)},
                 {"XRGD", ragdoll_bytes({3, 7})},
+                {"XLKR", u32_bytes(0x00000A90u)},
+                {"XLKR", u32s({0x00000A91u, 0x00000A92u})},
+                {"XAPD", Bytes{std::byte{0x01}}},
+                {"XAPR", activate_parent_bytes()},
+                {"XPLK", u32s({0x00000A94u, 0})},
+                {"XLRT", u32_bytes(0x00000A95u)},
+                {"XCVL", floats({1.0f, 2.0f, 3.0f})},
+                {"XCVR", floats({4.0f, 5.0f, 6.0f})},
+                {"XWPG", u32_bytes(1)},
+                {"XWPN", u32s({0x00000A96u, 0x00000A97u, 0x00000A98u})},
+                {"XPOD", u32s({0x00000A99u, 0x00000A9Au})},
+                {"XBSD", spline_bytes()},
+                {"XPDD", floats({2.0f, 3.0f})},
                 {"XLIG", floats({90.0f, 1.0f, 2048.0f, 0.5f, 10.0f, 0.75f})}});
   write_record(out, "REFR", 0x0C11,
                {{"XLIG", floats({90.0f, 1.0f, 2048.0f, 0.5f})}});
@@ -463,4 +522,114 @@ TEST(REFRExtraRows, WritesScalarsAndLinksThenRereads) {
   EXPECT_EQ(sub_bytes(reread, "000C10:Patch.esp", "XLOC"), lock_bytes(75, 0x01000A20, 0x04));
   EXPECT_EQ(sub_bytes(reread, "000C10:Patch.esp", "XEZN"), u32_bytes(0x01000A40));
   EXPECT_EQ(sub_bytes(reread, "000C10:Patch.esp", "XCNT"), i32_bytes(-3));
+}
+
+TEST(REFRExtraRows, LinkedActivateParentPortalPowerGridSplineAndWaterRowsReadFromThePlugin) {
+  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto key = "000C10:Patch.esp";
+
+  EXPECT_EQ(link_raw(plugin, "REFR", key, "REFR\\LinkedKeyword"), 0x00000A90u);
+  const auto pair = sub_bytes_at(plugin, key, "XLKR", 1);
+  ASSERT_EQ(pair.size(), 8u);
+  EXPECT_EQ(Bytes(pair.begin() + 4, pair.end()), u32_bytes(0x00000A92u));
+  EXPECT_EQ(link_raw(plugin, "REFR", key, "REFR\\ActivateParentRef"), 0x00000A93u);
+  EXPECT_EQ(link_raw(plugin, "REFR", key, "REFR\\SplineConnection"), 0x00000A94u);
+  EXPECT_EQ(link_raw(plugin, "REFR", key, "REFR\\PortalOrigin"), 0x00000A99u);
+  EXPECT_EQ(link_raw(plugin, "REFR", key, "REFR\\PortalDestination"), 0x00000A9Au);
+  EXPECT_EQ(link_raw(plugin, "REFR", key, "REFR\\PowerGridNode1"), 0x00000A96u);
+  EXPECT_EQ(link_raw(plugin, "REFR", key, "REFR\\PowerGridNode2"), 0x00000A97u);
+  EXPECT_EQ(link_raw(plugin, "REFR", key, "REFR\\PowerGridLine"), 0x00000A98u);
+
+  EXPECT_EQ(scalar_bytes(plugin, "REFR", key, "REFR\\ActivateParentOnly"), Bytes{std::byte{0x01}});
+  EXPECT_EQ(scalar_bytes(plugin, "REFR", key, "REFR\\ActivateParentDelay"), floats({1.25f}));
+  EXPECT_EQ(scalar_bytes(plugin, "REFR", key, "REFR\\PowerGridCount"), u32_bytes(1));
+  EXPECT_EQ(scalar_bytes(plugin, "REFR", key, "REFR\\WaterCurrentLinearVelocityY"), floats({2.0f}));
+  EXPECT_EQ(scalar_bytes(plugin, "REFR", key, "REFR\\WaterCurrentRotationalVelocityZ"),
+            floats({6.0f}));
+  EXPECT_EQ(scalar_bytes(plugin, "REFR", key, "REFR\\SplineSlack"), floats({0.5f}));
+  EXPECT_EQ(scalar_bytes(plugin, "REFR", key, "REFR\\SplineHalfExtentY"), floats({2.0f}));
+  EXPECT_EQ(scalar_bytes(plugin, "REFR", key, "REFR\\SplineWindDetachedEnd"),
+            Bytes{std::byte{0x01}});
+  EXPECT_EQ(scalar_bytes(plugin, "REFR", key, "REFR\\DecalHeightScale"), floats({3.0f}));
+
+  const auto ref_types = fo4::schema::formlink_list_descriptor(fo4::Signature::from_string("REFR"),
+                                                               "REFR\\LocationRefTypes");
+  ASSERT_TRUE(ref_types.has_value());
+  EXPECT_EQ(ref_types->subrecord, fo4::Signature::from_string("XLRT"));
+  EXPECT_EQ(ref_types->storage, fo4::schema::FormLinkListStorage::packed_array);
+  EXPECT_TRUE(ref_types->nullable);
+  EXPECT_FALSE(ref_types->can_insert);
+  const auto values = fo4::schema::record_formlink_list_values(
+      plugin, fo4::FormKey::parse(key), *ref_types);
+  ASSERT_TRUE(values.has_value());
+  ASSERT_EQ(values->size(), 1u);
+  EXPECT_EQ((*values)[0], fo4::FormKey::parse("00000A95:Fallout4.esm"));
+}
+
+TEST(REFRExtraRows, WritesTheNewRowsInPlaceAndRefusesALinkedReferenceBesideAShortXlkr) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto key = fo4::FormKey::parse("000C10:Patch.esp");
+  const auto refr = fo4::Signature::from_string("REFR");
+  const auto activate_only = fo4::schema::scalar_field_descriptor(refr, "REFR\\ActivateParentOnly");
+  const auto delay = fo4::schema::scalar_field_descriptor(refr, "REFR\\ActivateParentDelay");
+  const auto slack = fo4::schema::scalar_field_descriptor(refr, "REFR\\SplineSlack");
+  const auto decal = fo4::schema::scalar_field_descriptor(refr, "REFR\\DecalHeightScale");
+  const auto count = fo4::schema::scalar_field_descriptor(refr, "REFR\\PowerGridCount");
+  const auto keyword = fo4::schema::formlink_field_descriptor(refr, "REFR\\LinkedKeyword");
+  const auto reference = fo4::schema::formlink_field_descriptor(refr, "REFR\\LinkedReference");
+  ASSERT_TRUE(activate_only.has_value());
+  ASSERT_TRUE(delay.has_value());
+  ASSERT_TRUE(slack.has_value());
+  ASSERT_TRUE(decal.has_value());
+  ASSERT_TRUE(count.has_value());
+  ASSERT_TRUE(keyword.has_value());
+  ASSERT_TRUE(reference.has_value());
+  EXPECT_EQ(keyword->payload_sizes[0], 4u);
+  EXPECT_EQ(keyword->payload_sizes[1], 8u);
+
+  EXPECT_THROW(fo4::set_record_formlink_field(plugin, key, *reference,
+                                              fo4::FormKey::parse("00000A9B:Fallout4.esm")),
+               fo4::schema::FormLinkFieldError);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, key, *keyword,
+                                           fo4::FormKey::parse("00000A9B:Fallout4.esm")),
+            fo4::FormLinkFieldMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *activate_only, "0"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *delay, "2.5"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *slack, "1.5"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *decal, "4.0"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *count, "2"),
+            fo4::ScalarMutationStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto linked_keyword = sub_bytes_at(reread, "000C10:Patch.esp", "XLKR", 0);
+  ASSERT_EQ(linked_keyword.size(), 4u);
+  EXPECT_EQ(Bytes(linked_keyword.begin(), linked_keyword.end()), u32_bytes(0x00000A9Bu));
+  const auto linked_pair = sub_bytes_at(reread, "000C10:Patch.esp", "XLKR", 1);
+  ASSERT_EQ(linked_pair.size(), 8u);
+  EXPECT_EQ(Bytes(linked_pair.begin() + 4, linked_pair.end()), u32_bytes(0x00000A92u));
+
+  const auto activate_parent_only = sub_bytes(reread, "000C10:Patch.esp", "XAPD");
+  ASSERT_EQ(activate_parent_only.size(), 1u);
+  EXPECT_EQ(std::to_integer<std::uint8_t>(activate_parent_only[0]), 0x00);
+  const auto activate_parent = sub_bytes(reread, "000C10:Patch.esp", "XAPR");
+  ASSERT_EQ(activate_parent.size(), 8u);
+  EXPECT_EQ(Bytes(activate_parent.begin(), activate_parent.begin() + 4), u32_bytes(0x00000A93u));
+  EXPECT_EQ(Bytes(activate_parent.begin() + 4, activate_parent.end()), floats({2.5f}));
+
+  const auto spline = sub_bytes(reread, "000C10:Patch.esp", "XBSD");
+  ASSERT_EQ(spline.size(), 21u);
+  EXPECT_EQ(Bytes(spline.begin(), spline.begin() + 4), floats({1.5f}));
+  EXPECT_EQ(Bytes(spline.begin() + 4, spline.begin() + 20), floats({0.25f, 1.0f, 2.0f, 3.0f}));
+  EXPECT_EQ(std::to_integer<std::uint8_t>(spline[20]), 0x01);
+  EXPECT_EQ(sub_bytes(reread, "000C10:Patch.esp", "XPDD"), floats({2.0f, 4.0f}));
+  EXPECT_EQ(sub_bytes(reread, "000C10:Patch.esp", "XWPG"), u32_bytes(2));
+
+  EXPECT_EQ(sub_bytes(reread, "000C10:Patch.esp", "XCVL"), floats({1.0f, 2.0f, 3.0f}));
+  EXPECT_EQ(sub_bytes(reread, "000C10:Patch.esp", "XWPN"), u32s({0x00000A96u, 0x00000A97u, 0x00000A98u}));
+  EXPECT_EQ(sub_bytes(reread, "000C10:Patch.esp", "XPOD"), u32s({0x00000A99u, 0x00000A9Au}));
+  EXPECT_EQ(link_raw(reread, "REFR", "000C10:Patch.esp", "REFR\\LinkedKeyword"), 0x00000A9Bu);
 }

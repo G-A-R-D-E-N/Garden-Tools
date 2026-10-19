@@ -10219,7 +10219,24 @@
           "maximum": 255,
           "payload_size": 2,
           "insertion": "existing_only"
-        }
+        },
+        {"path": "REFR\\ActivateParentOnly", "label": "Parent activate only", "kind": "scalar", "subrecord": "XAPD", "storage": "u8", "presentation": "enum", "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "REFR\\ActivateParentDelay", "label": "Activate parent delay", "kind": "scalar", "subrecord": "XAPR", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 4, "repeated": true, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "REFR\\WaterCurrentLinearVelocityX", "label": "Linear velocity X", "kind": "scalar", "subrecord": "XCVL", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 0, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "REFR\\WaterCurrentLinearVelocityY", "label": "Linear velocity Y", "kind": "scalar", "subrecord": "XCVL", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 4, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "REFR\\WaterCurrentLinearVelocityZ", "label": "Linear velocity Z", "kind": "scalar", "subrecord": "XCVL", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 8, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "REFR\\WaterCurrentRotationalVelocityX", "label": "Rotational velocity X", "kind": "scalar", "subrecord": "XCVR", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 0, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "REFR\\WaterCurrentRotationalVelocityY", "label": "Rotational velocity Y", "kind": "scalar", "subrecord": "XCVR", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 4, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "REFR\\WaterCurrentRotationalVelocityZ", "label": "Rotational velocity Z", "kind": "scalar", "subrecord": "XCVR", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 8, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "REFR\\PowerGridCount", "label": "Power grid count", "kind": "scalar", "subrecord": "XWPG", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"},
+        {"path": "REFR\\SplineSlack", "label": "Spline slack", "kind": "scalar", "subrecord": "XBSD", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 0, "minimum_payload_size": 4, "insertion": "existing_only"},
+        {"path": "REFR\\SplineThickness", "label": "Spline thickness", "kind": "scalar", "subrecord": "XBSD", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 4, "minimum_payload_size": 8, "insertion": "existing_only"},
+        {"path": "REFR\\SplineHalfExtentX", "label": "Spline half extent X", "kind": "scalar", "subrecord": "XBSD", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 8, "minimum_payload_size": 12, "insertion": "existing_only"},
+        {"path": "REFR\\SplineHalfExtentY", "label": "Spline half extent Y", "kind": "scalar", "subrecord": "XBSD", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 12, "minimum_payload_size": 16, "insertion": "existing_only"},
+        {"path": "REFR\\SplineHalfExtentZ", "label": "Spline half extent Z", "kind": "scalar", "subrecord": "XBSD", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 16, "minimum_payload_size": 20, "insertion": "existing_only"},
+        {"path": "REFR\\SplineWindDetachedEnd", "label": "Spline wind detached end", "kind": "scalar", "subrecord": "XBSD", "storage": "u8", "presentation": "enum", "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "minimum": 0, "maximum": 255, "offset": 20, "minimum_payload_size": 21, "insertion": "existing_only"},
+        {"path": "REFR\\DecalWidthScale", "label": "Decal width scale", "kind": "scalar", "subrecord": "XPDD", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 0, "minimum_payload_size": 4, "insertion": "existing_only"},
+        {"path": "REFR\\DecalHeightScale", "label": "Decal height scale", "kind": "scalar", "subrecord": "XPDD", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 4, "minimum_payload_size": 8, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {"path": "REFR\\ReflectedBy", "label": "Reflected by", "subrecord": "XPWR", "offset": 0, "payload_sizes": [8, 4], "targets": ["ACHR", "REFR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
@@ -10437,9 +10454,21 @@
           ],
           "nullable": true,
           "insertion": "existing_only"
-        }
+        },
+        {"path": "REFR\\LinkedKeyword", "label": "Linked keyword", "subrecord": "XLKR", "offset": 0, "payload_sizes": [4, 8], "targets": ["KYWD", "PLYR", "ACHR", "REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"], "nullable": true, "repeated": true, "insertion": "existing_only"},
+        {"path": "REFR\\LinkedReference", "label": "Linked reference", "subrecord": "XLKR", "offset": 4, "payload_sizes": [8], "targets": ["PLYR", "ACHR", "REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"], "nullable": true, "repeated": true, "insertion": "existing_only"},
+        {"path": "REFR\\ActivateParentRef", "label": "Activate parent ref", "subrecord": "XAPR", "offset": 0, "payload_sizes": [8], "targets": ["PLYR", "ACHR", "REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"], "nullable": true, "repeated": true, "insertion": "existing_only"},
+        {"path": "REFR\\SplineConnection", "label": "Spline connection", "subrecord": "XPLK", "offset": 0, "payload_sizes": [8], "targets": ["REFR", "ACHR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
+        {"path": "REFR\\PortalOrigin", "label": "Portal origin", "subrecord": "XPOD", "offset": 0, "payload_sizes": [8], "targets": ["PLYR", "ACHR", "REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"], "nullable": true, "repeated": true, "insertion": "existing_only"},
+        {"path": "REFR\\PortalDestination", "label": "Portal destination", "subrecord": "XPOD", "offset": 4, "payload_sizes": [8], "targets": ["PLYR", "ACHR", "REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"], "nullable": true, "repeated": true, "insertion": "existing_only"},
+        {"path": "REFR\\PowerGridNode1", "label": "Power grid node 1", "subrecord": "XWPN", "offset": 0, "payload_sizes": [12], "targets": ["REFR", "ACHR"], "nullable": true, "repeated": true, "insertion": "existing_only"},
+        {"path": "REFR\\PowerGridNode2", "label": "Power grid node 2", "subrecord": "XWPN", "offset": 4, "payload_sizes": [12], "targets": ["REFR", "ACHR"], "nullable": true, "repeated": true, "insertion": "existing_only"},
+        {"path": "REFR\\PowerGridLine", "label": "Power grid line", "subrecord": "XWPN", "offset": 8, "payload_sizes": [12], "targets": ["REFR"], "nullable": true, "repeated": true, "insertion": "existing_only"}
       ],
-      "localized_subrecords": []
+      "localized_subrecords": [],
+      "formlink_lists": [
+        {"path": "REFR\\LocationRefTypes", "label": "Location ref types", "subrecord": "XLRT", "storage": "packed_array", "targets": ["LCRT"], "nullable": true, "mutation": "existing_only"}
+      ]
     },
     {
       "signature": "PARW",
