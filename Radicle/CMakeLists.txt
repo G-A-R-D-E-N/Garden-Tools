@@ -658,6 +658,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_papyrus_source.cpp
     tests/test_papyrus_source_real.cpp
     tests/test_abc.cpp
+    tests/test_abc_pool.cpp
     tests/test_material_file.cpp
     tests/test_material_file_real.cpp
     tests/test_swf.cpp
