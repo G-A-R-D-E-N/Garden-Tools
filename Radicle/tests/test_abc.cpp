@@ -15,6 +15,7 @@
 #include <utility>
 #include <vector>
 
+using fo4::abc::AbcArgumentKind;
 using fo4::abc::AbcCallSite;
 using fo4::abc::AbcFile;
 using fo4::abc::AbcInstruction;
@@ -218,6 +219,11 @@ TEST(Abc, SummaryAnswersExternalInterfaceAndEventListenerQuestions) {
   ASSERT_EQ(external.literals.size(), 1u);
   EXPECT_EQ(external.literals[0], "Foo");
   EXPECT_TRUE(external.literal_unambiguous);
+  ASSERT_EQ(external.arguments.size(), 1u);
+  EXPECT_EQ(external.arguments[0].kind, AbcArgumentKind::Literal);
+  EXPECT_EQ(external.arguments[0].value, "Foo");
+  EXPECT_TRUE(external.event_name.empty());
+  EXPECT_TRUE(external.handler.empty());
 
   const auto& listener = klass.methods[1];
   EXPECT_EQ(listener.name, "onClick");
@@ -225,13 +231,20 @@ TEST(Abc, SummaryAnswersExternalInterfaceAndEventListenerQuestions) {
   EXPECT_EQ(listener.instruction_count, 5u);
   const AbcCallSite& registration = only_call(listener.calls);
   EXPECT_EQ(registration.target, "addEventListener");
-  EXPECT_EQ(registration.receiver, "handler");
+  EXPECT_EQ(registration.receiver, "addEventListener");
   EXPECT_EQ(registration.arg_count, 2u);
   EXPECT_TRUE(fo4::abc::is_event_registration(registration));
   EXPECT_FALSE(fo4::abc::is_external_interface_call(registration));
   ASSERT_EQ(registration.literals.size(), 1u);
   EXPECT_EQ(registration.literals[0], "click");
   EXPECT_TRUE(registration.literal_unambiguous);
+  ASSERT_EQ(registration.arguments.size(), 2u);
+  EXPECT_EQ(registration.arguments[0].kind, AbcArgumentKind::Literal);
+  EXPECT_EQ(registration.arguments[0].value, "click");
+  EXPECT_EQ(registration.arguments[1].kind, AbcArgumentKind::Receiver);
+  EXPECT_EQ(registration.arguments[1].value, "handler");
+  EXPECT_EQ(registration.event_name, "click");
+  EXPECT_EQ(registration.handler, "handler");
 
   ASSERT_EQ(summary.functions.size(), 1u);
   const auto& helper = summary.functions.front();
@@ -240,6 +253,122 @@ TEST(Abc, SummaryAnswersExternalInterfaceAndEventListenerQuestions) {
   EXPECT_TRUE(helper.calls.empty());
   EXPECT_TRUE(helper.multinames.empty());
   EXPECT_TRUE(summary.scripts.empty());
+}
+
+TEST(Abc, MapsTwoStringArgumentsToTheirOwnSlots) {
+  std::vector<std::uint8_t> code;
+  put_u8(code, 0x60);
+  put_u30(code, kMultinameExternalInterface);
+  put_u8(code, 0x2C);
+  put_u30(code, kStringFoo);
+  put_u8(code, 0x2C);
+  put_u30(code, kStringClick);
+  put_u8(code, 0x4F);
+  put_u30(code, kMultinameCall);
+  put_u30(code, 2);
+  put_u8(code, 0x47);
+  AbcFile file;
+  ASSERT_EQ(AbcFile::parse(build_abc(code, tiny_listener_code()), file), AbcStatus::Ok);
+  AbcSummary summary;
+  ASSERT_EQ(fo4::abc::summarize(file, summary), AbcStatus::Ok);
+  ASSERT_EQ(summary.classes.size(), 1u);
+  ASSERT_EQ(summary.classes[0].methods.size(), 2u);
+  const AbcCallSite& site = only_call(summary.classes[0].methods[0].calls);
+  EXPECT_EQ(site.target, "flash.external::call");
+  EXPECT_EQ(site.receiver, "flash.external::ExternalInterface");
+  ASSERT_EQ(site.arg_count, 2u);
+  ASSERT_EQ(site.arguments.size(), 2u);
+  EXPECT_EQ(site.arguments[0].kind, AbcArgumentKind::Literal);
+  EXPECT_EQ(site.arguments[0].value, "Foo");
+  EXPECT_EQ(site.arguments[1].kind, AbcArgumentKind::Literal);
+  EXPECT_EQ(site.arguments[1].value, "click");
+  ASSERT_EQ(site.literals.size(), 2u);
+  EXPECT_FALSE(site.literal_unambiguous);
+}
+
+TEST(Abc, LeavesBranchJoinedArgumentUnknown) {
+  std::vector<std::uint8_t> code;
+  put_u8(code, 0x60);
+  put_u30(code, kMultinameExternalInterface);
+  put_u8(code, 0x12);
+  put_s24(code, 6);
+  put_u8(code, 0x2C);
+  put_u30(code, kStringFoo);
+  put_u8(code, 0x10);
+  put_s24(code, 2);
+  put_u8(code, 0x2C);
+  put_u30(code, kStringClick);
+  put_u8(code, 0x4F);
+  put_u30(code, kMultinameCall);
+  put_u30(code, 1);
+  put_u8(code, 0x47);
+  AbcFile file;
+  ASSERT_EQ(AbcFile::parse(build_abc(code, tiny_listener_code()), file), AbcStatus::Ok);
+  std::vector<AbcInstruction> instructions;
+  ASSERT_NE(file.body_for(0), nullptr);
+  ASSERT_EQ(fo4::abc::decode_code(file.body_for(0)->code, instructions), AbcStatus::Ok);
+  ASSERT_EQ(instructions.size(), 7u);
+  ASSERT_STREQ(instructions[1].mnemonic, "iffalse");
+  EXPECT_EQ(instructions[1].operands[0].target, 12);
+  ASSERT_STREQ(instructions[3].mnemonic, "jump");
+  EXPECT_EQ(instructions[3].operands[0].target, 14);
+  EXPECT_EQ(instructions[5].offset, 14u);
+  AbcSummary summary;
+  ASSERT_EQ(fo4::abc::summarize(file, summary), AbcStatus::Ok);
+  ASSERT_EQ(summary.classes.size(), 1u);
+  const AbcCallSite& site = only_call(summary.classes[0].methods[0].calls);
+  ASSERT_EQ(site.arg_count, 1u);
+  ASSERT_EQ(site.arguments.size(), 1u);
+  EXPECT_EQ(site.arguments[0].kind, AbcArgumentKind::Unknown);
+  EXPECT_TRUE(site.arguments[0].value.empty());
+  EXPECT_TRUE(site.literals.empty());
+  EXPECT_FALSE(site.literal_unambiguous);
+}
+
+TEST(Abc, LeavesNestedCallResultArgumentUnknown) {
+  std::vector<std::uint8_t> code;
+  put_u8(code, 0x60);
+  put_u30(code, kMultinameAddEventListener);
+  put_u8(code, 0x2C);
+  put_u30(code, kStringClick);
+  put_u8(code, 0x60);
+  put_u30(code, kMultinameExternalInterface);
+  put_u8(code, 0x2C);
+  put_u30(code, kStringFoo);
+  put_u8(code, 0x46);
+  put_u30(code, kMultinameCall);
+  put_u30(code, 1);
+  put_u8(code, 0x4F);
+  put_u30(code, kMultinameAddEventListener);
+  put_u30(code, 2);
+  put_u8(code, 0x47);
+  AbcFile file;
+  ASSERT_EQ(AbcFile::parse(build_abc(code, tiny_listener_code()), file), AbcStatus::Ok);
+  AbcSummary summary;
+  ASSERT_EQ(fo4::abc::summarize(file, summary), AbcStatus::Ok);
+  ASSERT_EQ(summary.classes.size(), 1u);
+  const std::vector<AbcCallSite>& calls = summary.classes[0].methods[0].calls;
+  ASSERT_EQ(calls.size(), 2u);
+  EXPECT_EQ(calls[0].target, "flash.external::call");
+  EXPECT_EQ(calls[0].receiver, "flash.external::ExternalInterface");
+  ASSERT_EQ(calls[0].arg_count, 1u);
+  ASSERT_EQ(calls[0].arguments.size(), 1u);
+  EXPECT_EQ(calls[0].arguments[0].kind, AbcArgumentKind::Literal);
+  EXPECT_EQ(calls[0].arguments[0].value, "Foo");
+  const AbcCallSite& registration = calls[1];
+  EXPECT_EQ(registration.target, "addEventListener");
+  EXPECT_EQ(registration.receiver, "addEventListener");
+  ASSERT_EQ(registration.arg_count, 2u);
+  ASSERT_EQ(registration.arguments.size(), 2u);
+  EXPECT_EQ(registration.arguments[0].kind, AbcArgumentKind::Literal);
+  EXPECT_EQ(registration.arguments[0].value, "click");
+  EXPECT_EQ(registration.arguments[1].kind, AbcArgumentKind::Unknown);
+  EXPECT_TRUE(registration.arguments[1].value.empty());
+  EXPECT_EQ(registration.event_name, "click");
+  EXPECT_TRUE(registration.handler.empty());
+  ASSERT_EQ(registration.literals.size(), 1u);
+  EXPECT_EQ(registration.literals[0], "click");
+  EXPECT_TRUE(registration.literal_unambiguous);
 }
 
 TEST(Abc, OpcodeTableMatchesAvm2Numbers) {

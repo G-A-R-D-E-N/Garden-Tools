@@ -10,6 +10,17 @@
 
 namespace fo4::abc {
 
+enum class AbcArgumentKind : std::uint8_t {
+  Unknown = 0,
+  Literal,
+  Receiver,
+};
+
+struct AbcCallArgument {
+  AbcArgumentKind kind{AbcArgumentKind::Unknown};
+  std::string value;
+};
+
 struct AbcCallSite {
   std::size_t offset{0};
   std::string opcode;
@@ -18,6 +29,9 @@ struct AbcCallSite {
   std::uint32_t arg_count{0};
   std::vector<std::string> literals;
   bool literal_unambiguous{false};
+  std::vector<AbcCallArgument> arguments;
+  std::string event_name;
+  std::string handler;
 };
 
 struct AbcMethodSummary {
