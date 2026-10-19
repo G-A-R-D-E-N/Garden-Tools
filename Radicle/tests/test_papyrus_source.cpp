@@ -465,6 +465,7 @@ TEST(PapyrusSourceTest, SummarizesCallsPropertiesWritesAndStateTransitions) {
       "  self.Helper(local)\n"
       "  Game.GetPlayer().AddItem(akItem)\n"
       "  GotoState(\"Busy\")\n"
+      "  Self.GoToState(\"Idle\")\n"
       "EndFunction\n"
       "Function Helper(Int value) Native Global\n";
   const ParseResult result = fo4::psc::parse(source);
@@ -481,12 +482,14 @@ TEST(PapyrusSourceTest, SummarizesCallsPropertiesWritesAndStateTransitions) {
   EXPECT_TRUE(contains(run->calledFunctions, "self.Helper"));
   EXPECT_TRUE(contains(run->calledFunctions, "Game.GetPlayer().AddItem"));
   EXPECT_FALSE(contains(run->calledFunctions, "GotoState"));
+  EXPECT_FALSE(contains(run->calledFunctions, "Self.GoToState"));
   EXPECT_TRUE(contains(run->propertiesRead, "seed"));
   EXPECT_TRUE(contains(run->propertiesRead, "Count"));
   EXPECT_TRUE(contains(run->propertiesWritten, "Count"));
   EXPECT_FALSE(contains(run->propertiesWritten, "seed"));
-  ASSERT_EQ(run->stateTransitions.size(), 1u);
+  ASSERT_EQ(run->stateTransitions.size(), 2u);
   EXPECT_EQ(run->stateTransitions[0], "Busy");
+  EXPECT_EQ(run->stateTransitions[1], "Idle");
   EXPECT_TRUE(contains(summary.calledFunctions, "Game.GetPlayer().AddItem"));
   EXPECT_TRUE(contains(summary.propertiesWritten, "Count"));
   const fo4::psc::FunctionSummary* helper = fo4::psc::find_function(summary, "Helper");

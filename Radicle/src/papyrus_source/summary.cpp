@@ -29,6 +29,14 @@ bool equals_ignore_case(const std::string& left, const char* right) {
   return at == left.size() && right[at] == '\0';
 }
 
+bool is_goto_state(const std::string& path) {
+  const std::size_t length = 9;
+  if (path.size() < length) return false;
+  const std::size_t at = path.size() - length;
+  if (at > 0 && path[at - 1] != '.') return false;
+  return equals_ignore_case(path.substr(at), "gotostate");
+}
+
 bool build_path(const Expression& expression, std::string& out) {
   switch (expression.kind) {
     case ExpressionKind::Identifier:
@@ -74,7 +82,7 @@ void record_transition(const Expression& call, FunctionSummary& summary) {
 void walk_call(const Expression& expression, FunctionSummary& summary) {
   std::string path;
   if (expression.left != nullptr && build_path(*expression.left, path)) {
-    if (equals_ignore_case(path, "gotostate")) {
+    if (is_goto_state(path)) {
       record_transition(expression, summary);
     } else {
       append_unique(summary.calledFunctions, path);
