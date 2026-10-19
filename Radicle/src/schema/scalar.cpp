@@ -81,6 +81,21 @@ std::string format_float(float value) {
   return std::string(buffer, ptr);
 }
 
+std::span<const std::byte> slot_string_bytes(std::span<const std::byte> payload,
+                                             std::size_t offset,
+                                             const ScalarDescriptor& descriptor) {
+  const auto tail = payload.subspan(offset);
+  const auto limit = descriptor.minimum_payload_size > offset
+                         ? descriptor.minimum_payload_size - offset
+                         : tail.size();
+  const auto slot = tail.first(std::min(limit, tail.size()));
+  const auto terminator = std::find(slot.begin(), slot.end(), std::byte{0});
+  if (terminator == slot.end()) {
+    throw ScalarError(std::string(descriptor.field_name) + " has no NUL terminator in its slot");
+  }
+  return slot.first(static_cast<std::size_t>(terminator - slot.begin()) + 1);
+}
+
 }  // namespace
 
 std::optional<ScalarDescriptor> scalar_descriptor(Signature subrecord) noexcept {
@@ -99,7 +114,12 @@ std::optional<ScalarDescriptor> scalar_descriptor(Signature subrecord) noexcept 
 
 std::span<const std::byte> scalar_field_bytes(std::span<const std::byte> payload,
                                               const ScalarDescriptor& descriptor) {
-  if (descriptor.storage == ScalarStorage::zstring) return payload;
+  if (descriptor.storage == ScalarStorage::zstring) {
+    if (!descriptor.embedded) return payload;
+    if (descriptor.payload_size != 0 && payload.size() != descriptor.payload_size) return {};
+    if (payload.size() < descriptor.minimum_payload_size) return {};
+    return slot_string_bytes(payload, descriptor.offset, descriptor);
+  }
   const auto width = scalar_storage_size(descriptor.storage);
   if (!descriptor.embedded) {
     if (payload.size() != width) {
@@ -119,6 +139,7 @@ FieldShape scalar_field_shape(const ScalarDescriptor& descriptor) noexcept {
   shape.payload_size = descriptor.payload_size;
   shape.minimum_payload_size = descriptor.minimum_payload_size;
   shape.min_form_version = descriptor.min_form_version;
+  shape.max_form_version = descriptor.max_form_version;
   shape.whole_payload = !descriptor.embedded;
   shape.offset = descriptor.embedded ? descriptor.offset : std::size_t{0};
   shape.width = scalar_storage_size(descriptor.storage);
@@ -128,7 +149,10 @@ FieldShape scalar_field_shape(const ScalarDescriptor& descriptor) noexcept {
 std::span<const std::byte> scalar_slot_bytes(std::span<const std::byte> payload,
                                              const FieldSlot& slot,
                                              const ScalarDescriptor& descriptor) {
-  if (descriptor.storage == ScalarStorage::zstring) return payload;
+  if (descriptor.storage == ScalarStorage::zstring) {
+    if (!descriptor.embedded) return payload;
+    return slot_string_bytes(payload, slot.offset, descriptor);
+  }
   return payload.subspan(slot.offset, scalar_storage_size(descriptor.storage));
 }
 
@@ -187,7 +211,9 @@ std::optional<CountedArrayDescriptor> counted_array_descriptor(Signature record,
 
 bool is_counted_array_count_subrecord(Signature record, Signature subrecord) noexcept {
   for (const auto& array : k_counted_arrays) {
-    if (array.record == record && array.count_subrecord == subrecord) return true;
+    if (array.record == record && array.count_subrecord != Signature{} && array.count_subrecord == subrecord) {
+      return true;
+    }
   }
   return false;
 }
@@ -213,9 +239,18 @@ std::optional<SubrecordGroupDescriptor> subrecord_group_for_member(Signature rec
 
 bool is_subrecord_group_count_subrecord(Signature record, Signature subrecord) noexcept {
   for (const auto& group : k_subrecord_groups) {
-    if (group.record == record && group.count_subrecord == subrecord) return true;
+    if (group.record == record && group.count_subrecord != Signature{} &&
+        group.count_subrecord == subrecord) {
+      return true;
+    }
   }
   return false;
+}
+
+bool is_derived_scalar_row(Signature record, Signature subrecord) noexcept {
+  if (is_counted_array_count_subrecord(record, subrecord)) return true;
+  if (is_subrecord_group_count_subrecord(record, subrecord)) return true;
+  return record == Signature::from_string("FSTS") && subrecord == Signature::from_string("XCNT");
 }
 
 std::size_t scalar_storage_size(ScalarStorage storage) noexcept {

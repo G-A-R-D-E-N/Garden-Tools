@@ -63,6 +63,12 @@ public enum PlacedCopyStatus : int
     AlreadyExists = 2,
 }
 
+public enum PlacedMoveStatus : int
+{
+    Moved = 0,
+    Relocated = 1,
+}
+
 [StructLayout(LayoutKind.Sequential)]
 public unsafe struct FormKey
 {
@@ -99,6 +105,15 @@ public unsafe struct RecordInfo
     public int HasBounds;
     public fixed short BoundsMin[3];
     public fixed short BoundsMax[3];
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ReferenceHit
+{
+    public FormKey Record;
+    public nuint PluginIndex;
+    public fixed byte Subrecord[5];
+    public nuint Offset;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -154,35 +169,6 @@ public unsafe struct CellLighting
     public float LightFadeEnd;
     public int HasInherits;
     public uint Inherits;
-}
-
-[StructLayout(LayoutKind.Sequential)]
-public unsafe struct CellInfo
-{
-    public int HasFlags;
-    public ushort Flags;
-    public int HasGrid;
-    public int GridX;
-    public int GridY;
-    public int HasLandFlags;
-    public byte LandFlags;
-    public int HasLighting;
-    public CellLighting Lighting;
-    public FormKey LightingTemplate;
-    public int HasWaterHeight;
-    public float WaterHeight;
-    public FormKey ImageSpace;
-    public FormKey EncounterZone;
-    public FormKey Location;
-    public FormKey Worldspace;
-    public FormKey Water;
-}
-
-[StructLayout(LayoutKind.Sequential)]
-public unsafe struct CellChild
-{
-    public IntPtr Record;
-    public int Persistent;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -1364,6 +1350,19 @@ public unsafe struct GrassLinks
     public IntPtr Internal;
 }
 
+public enum PackageInputValueKind : int
+{
+    None = 0,
+    Boolean = 1,
+    Integer = 2,
+    Real = 3,
+    Reference = 4,
+    Target = 5,
+    Location = 6,
+    ObjectList = 7,
+    Topic = 8,
+}
+
 [StructLayout(LayoutKind.Sequential)]
 public unsafe struct BehaviorCondition
 {
@@ -1500,6 +1499,24 @@ public unsafe struct PackageProcedureInput
     public nuint SubrecordBegin;
     public nuint SubrecordEnd;
     public byte Index;
+    public IntPtr ValueTag;
+    public nuint ValueIndex;
+    public PackageInputValueKind Kind;
+    public int Boolean;
+    public int Integer;
+    public uint IntegerRaw;
+    public float Real;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PackageInputValue
+{
+    public PackageInputValueKind Kind;
+    public int Boolean;
+    public int Integer;
+    public float Real;
+    public IntPtr Payload;
+    public nuint PayloadSize;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -1523,8 +1540,8 @@ public unsafe struct PackageProcedureTree
     public int Decoded;
     public nuint RegionBegin;
     public nuint RegionEnd;
-    public int HasMarker;
-    public byte Marker;
+    public int HasNextInputId;
+    public byte NextInputId;
     public IntPtr Inputs;
     public nuint InputCount;
     public IntPtr Nodes;
@@ -1693,10 +1710,316 @@ public enum OfficialTable : int
     Ae = 1,
 }
 
+public enum ConditionWriteStatus : int
+{
+    Updated = 0,
+    Unchanged = 1,
+    NoList = 2,
+    MultipleLists = 3,
+    AliasStructureInvalid = 4,
+    ScopeIndexOutOfRange = 5,
+    ElementNotConditioned = 6,
+    Unrepresentable = 7,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct Condition
+{
+    public byte FlagsByte;
+    public uint ComparisonRaw;
+    public ushort Function;
+    public ushort Unknown2;
+    public int Param1;
+    public int Param2;
+    public uint RunOn;
+    public uint Reference;
+    public int Unknown3;
+    public IntPtr Parameter1String;
+    public IntPtr Parameter2String;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ConditionList
+{
+    public IntPtr Rows;
+    public nuint Count;
+    public IntPtr Internal;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ArmorInfo
+{
+    public FormKey Record;
+    public IntPtr EditorId;
+    public IntPtr MaleWorldModel;
+    public IntPtr MaleIcon;
+    public IntPtr MaleMessageIcon;
+    public IntPtr FemaleWorldModel;
+    public IntPtr FemaleIcon;
+    public IntPtr FemaleMessageIcon;
+    public NameKind FullNameKind;
+    public IntPtr FullNameText;
+    public uint FullNameStringId;
+    public NameKind DescriptionKind;
+    public IntPtr DescriptionText;
+    public uint DescriptionStringId;
+    public int Value;
+    public float Weight;
+    public uint Health;
+    public IntPtr Internal;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ArmorAddonInfo
+{
+    public FormKey Record;
+    public IntPtr EditorId;
+    public IntPtr MaleBipedModel;
+    public IntPtr FemaleBipedModel;
+    public IntPtr MaleFirstPersonModel;
+    public IntPtr FemaleFirstPersonModel;
+    public byte MalePriority;
+    public byte FemalePriority;
+    public byte MaleWeightSlider;
+    public byte FemaleWeightSlider;
+    public fixed byte UnknownBeforeDetection[2];
+    public byte DetectionSoundValue;
+    public byte UnknownBeforeWeaponAdjust;
+    public float WeaponAdjust;
+    public IntPtr Internal;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ArmorCreation
+{
+    public IntPtr EditorId;
+    public IntPtr MaleWorldModel;
+    public IntPtr MaleIcon;
+    public IntPtr MaleMessageIcon;
+    public IntPtr FemaleWorldModel;
+    public IntPtr FemaleIcon;
+    public IntPtr FemaleMessageIcon;
+    public IntPtr Description;
+    public int Value;
+    public float Weight;
+    public uint Health;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ArmorAddonCreation
+{
+    public IntPtr EditorId;
+    public IntPtr MaleBipedModel;
+    public IntPtr FemaleBipedModel;
+    public IntPtr MaleFirstPersonModel;
+    public IntPtr FemaleFirstPersonModel;
+    public byte MalePriority;
+    public byte FemalePriority;
+    public byte MaleWeightSlider;
+    public byte FemaleWeightSlider;
+    public fixed byte UnknownBeforeDetection[2];
+    public byte DetectionSoundValue;
+    public byte UnknownBeforeWeaponAdjust;
+    public float WeaponAdjust;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct EyesInfo
+{
+    public FormKey Record;
+    public uint RecordFlags;
+    public IntPtr EditorId;
+    public IntPtr FullText;
+    public nuint FullRawSize;
+    public IntPtr Icon;
+    public byte DataFlags;
+    public IntPtr Internal;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct EyesCreation
+{
+    public IntPtr EditorId;
+    public IntPtr FullText;
+    public IntPtr Icon;
+    public byte DataFlags;
+    public uint RecordFlags;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct FactionRelation
+{
+    public FormKey Faction;
+    public int Modifier;
+    public uint Reaction;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct FactionRank
+{
+    public uint Number;
+    public NameKind MaleTitleKind;
+    public IntPtr MaleTitleText;
+    public uint MaleTitleStringId;
+    public NameKind FemaleTitleKind;
+    public IntPtr FemaleTitleText;
+    public uint FemaleTitleStringId;
+    public IntPtr Insignia;
+    public nuint InsigniaSize;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct FactionRelations
+{
+    public IntPtr Relations;
+    public nuint RelationCount;
+    public IntPtr Internal;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct FactionRanks
+{
+    public IntPtr Ranks;
+    public nuint RankCount;
+    public IntPtr Internal;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct FactionRankInput
+{
+    public NameKind MaleTitleKind;
+    public IntPtr MaleTitleText;
+    public uint MaleTitleStringId;
+    public NameKind FemaleTitleKind;
+    public IntPtr FemaleTitleText;
+    public uint FemaleTitleStringId;
+    public IntPtr Insignia;
+    public nuint InsigniaSize;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ComponentEntry
+{
+    public FormKey Component;
+    public uint Count;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct Components
+{
+    public IntPtr Entries;
+    public nuint EntryCount;
+    public IntPtr Internal;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ExteriorCellLayout
+{
+    public int CellX;
+    public int CellY;
+    public int BlockX;
+    public int BlockY;
+    public int SubblockX;
+    public int SubblockY;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ExteriorCellCreation
+{
+    public FormKey Worldspace;
+    public int X;
+    public int Y;
+    public IntPtr EditorId;
+    public ushort Flags;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct CellLightingTail
+{
+    public int HasNearHeight;
+    public float NearHeightMid;
+    public float NearHeightRange;
+    public int HasHighFogColors;
+    public ByteColor FogColorHighNear;
+    public ByteColor FogColorHighFar;
+    public int HasHighDensityScale;
+    public float HighDensityScale;
+    public int HasFogScales;
+    public float FogNearScale;
+    public float FogFarScale;
+    public float FogHighNearScale;
+    public float FogHighFarScale;
+    public int HasFarHeight;
+    public float FarHeightMid;
+    public float FarHeightRange;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct CellInfo
+{
+    public int HasFlags;
+    public ushort Flags;
+    public int HasGrid;
+    public int GridX;
+    public int GridY;
+    public int HasLandFlags;
+    public byte LandFlags;
+    public int HasLighting;
+    public CellLighting Lighting;
+    public FormKey LightingTemplate;
+    public int HasWaterHeight;
+    public float WaterHeight;
+    public FormKey ImageSpace;
+    public FormKey EncounterZone;
+    public FormKey Location;
+    public FormKey Worldspace;
+    public FormKey Water;
+    public CellLightingTail LightingTail;
+    public int HasPrevisTimestamp;
+    public ushort PrevisTimestamp;
+    public int HasPrecombinedTimestamp;
+    public ushort PrecombinedTimestamp;
+    public FormKey AcousticSpace;
+    public FormKey MusicType;
+    public FormKey SkyWeatherRegion;
+    public FormKey GodRays;
+    public FormKey LockList;
+    public FormKey Owner;
+    public int HasOwnerRank;
+    public int OwnerRank;
+    public int HasExteriorLod;
+    public FormKey ExteriorLodWorldspace;
+    public fixed float ExteriorLodOffset[3];
+    public int HasWaterCurrentCount;
+    public uint WaterCurrentCount;
+    public IntPtr WaterEnvironmentMap;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct WaterCurrent
+{
+    public fixed float Velocity[3];
+    public float Unnamed;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct CellChild
+{
+    public IntPtr Record;
+    public int Persistent;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct DeltaPatchCounts
+{
+    public nuint Kept;
+    public nuint Removed;
+}
+
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 40u;
+    public const uint CompiledAbiVersion = 47u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -1721,6 +2044,18 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_remap_masters")]
     public static extern Status PluginRemapMasters(IntPtr plugin, MasterDescriptor* masters, nuint master_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_author")]
+    public static extern Status PluginSetAuthor(IntPtr plugin, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? author);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_description")]
+    public static extern Status PluginSetDescription(IntPtr plugin, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? description);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_master_flag")]
+    public static extern Status PluginSetMasterFlag(IntPtr plugin, int master);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_localized_flag")]
+    public static extern Status PluginSetLocalizedFlag(IntPtr plugin, int localized);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_collect_form_keys")]
     public static extern Status PluginCollectFormKeys(IntPtr plugin, IntPtr** out_strings, nuint* out_count);
@@ -1767,6 +2102,15 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_free_record_array")]
     public static extern void FreeRecordArray(IntPtr* records);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_referenced_by")]
+    public static extern Status EnvReferencedBy(IntPtr env, FormKey key, ReferenceHit** out_hits, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_references_from")]
+    public static extern Status EnvReferencesFrom(IntPtr env, FormKey key, ReferenceHit** out_hits, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_free_reference_hits")]
+    public static extern void FreeReferenceHits(ReferenceHit* hits);
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_check_errors")]
     public static extern Status EnvCheckErrors(IntPtr env, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? plugin, nuint limit, IntPtr** out_strings, nuint* out_count);
 
@@ -1776,29 +2120,8 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_worldspace_get_info")]
     public static extern Status WorldspaceGetInfo(IntPtr env, IntPtr record, WorldspaceInfo* out_info);
 
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_cell_get_info")]
-    public static extern Status CellGetInfo(IntPtr env, IntPtr record, CellInfo* out_info);
-
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_record_get_container")]
     public static extern Status RecordGetContainer(IntPtr env, IntPtr record, int* out_group_type, FormKey* out_worldspace, FormKey* out_cell);
-
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_worldspace_top_cell")]
-    public static extern Status EnvWorldspaceTopCell(IntPtr env, FormKey worldspace, IntPtr* out_record);
-
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_worldspace_cells")]
-    public static extern Status EnvWorldspaceCells(IntPtr env, FormKey worldspace, IntPtr** out_records, nuint* out_count);
-
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_interior_cells")]
-    public static extern Status EnvInteriorCells(IntPtr env, IntPtr** out_records, nuint* out_count);
-
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_cell_children")]
-    public static extern Status EnvCellChildren(IntPtr env, FormKey cell, CellChild** out_children, nuint* out_count);
-
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_free_cell_children")]
-    public static extern void FreeCellChildren(CellChild* children);
-
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_cell_landscape")]
-    public static extern Status EnvCellLandscape(IntPtr env, FormKey cell, IntPtr* out_record);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_placed_ref_decode")]
     public static extern Status PlacedRefDecode(IntPtr env, IntPtr record, PlacedRef** out_ref);
@@ -1896,8 +2219,14 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_copy_placed_ref_new")]
     public static extern Status PluginCopyPlacedRefNew(IntPtr plugin, IntPtr env, IntPtr record, FormKey* out_key);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_copy_record_as_new")]
+    public static extern Status PluginCopyRecordAsNew(IntPtr destination, IntPtr source, FormKey record, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? editor_id, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? remove_prefix, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? remove_suffix, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? prefix, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? suffix, FormKey* out_key);
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_placed_transform")]
     public static extern Status PluginSetPlacedTransform(IntPtr plugin, FormKey reference, float* position, float* rotation);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_move_placed_ref")]
+    public static extern Status PluginMovePlacedRef(IntPtr plugin, FormKey reference, float* position, float* rotation, PlacedMoveStatus* out_status);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_placed_scale")]
     public static extern Status PluginSetPlacedScale(IntPtr plugin, FormKey reference, int has_scale, float scale);
@@ -2331,6 +2660,15 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_package_procedure_free")]
     public static extern void PackageProcedureFree(PackageProcedureTree* tree);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_package_input_add")]
+    public static extern Status PackageInputAdd(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? type_name, PackageInputValue* value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_package_input_set")]
+    public static extern Status PackageInputSet(IntPtr plugin, FormKey key, byte id, PackageInputValue* value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_package_input_remove")]
+    public static extern Status PackageInputRemove(IntPtr plugin, FormKey key, byte id);
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_package_location_type_name")]
     public static extern IntPtr PackageLocationTypeName(int type);
 
@@ -2361,8 +2699,35 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_scene_formlink")]
     public static extern Status PluginSetSceneFormlink(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, FormKey* target);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_scene_action_formlink")]
+    public static extern Status PluginSetSceneActionFormlink(IntPtr plugin, FormKey key, nuint index, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, FormKey* target);
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_scene_group_count")]
     public static extern Status PluginSceneGroupCount(IntPtr plugin, FormKey key, ScenePart part, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_insert_scene_phase")]
+    public static extern Status PluginInsertScenePhase(IntPtr plugin, FormKey key, nuint index, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_remove_scene_phase")]
+    public static extern Status PluginRemoveScenePhase(IntPtr plugin, FormKey key, nuint index);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_scene_phase_name")]
+    public static extern Status PluginSetScenePhaseName(IntPtr plugin, FormKey key, nuint index, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_insert_scene_actor")]
+    public static extern Status PluginInsertSceneActor(IntPtr plugin, FormKey key, nuint index);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_remove_scene_actor")]
+    public static extern Status PluginRemoveSceneActor(IntPtr plugin, FormKey key, nuint index);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_insert_scene_action")]
+    public static extern Status PluginInsertSceneAction(IntPtr plugin, FormKey key, nuint index, ushort type);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_remove_scene_action")]
+    public static extern Status PluginRemoveSceneAction(IntPtr plugin, FormKey key, nuint index);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_scene_action_name")]
+    public static extern Status PluginSetSceneActionName(IntPtr plugin, FormKey key, nuint index, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_list_read")]
     public static extern Status PluginListRead([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, IntPtr** out_rows, nuint* out_count);
@@ -2372,5 +2737,155 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_load_order_assemble")]
     public static extern Status LoadOrderAssemble([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? data_dir, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? plugin_list_path, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? ccc_path, OfficialTable table, IntPtr** out_rows, nuint* out_row_count, IntPtr** out_findings, nuint* out_finding_count, int* out_failed);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_record_conditions")]
+    public static extern Status RecordConditions(IntPtr env, IntPtr record, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? scope_path, ConditionList** out_list);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_condition_list_free")]
+    public static extern void ConditionListFree(ConditionList* list);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_conditions")]
+    public static extern Status PluginSetConditions(IntPtr plugin, FormKey record, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? scope_path, Condition* rows, nuint count, ConditionWriteStatus* out_status);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_armor_decode")]
+    public static extern Status ArmorDecode(IntPtr env, IntPtr record, ArmorInfo** out_info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_armor_free")]
+    public static extern void ArmorFree(ArmorInfo* info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_armor_addon_decode")]
+    public static extern Status ArmorAddonDecode(IntPtr env, IntPtr record, ArmorAddonInfo** out_info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_armor_addon_free")]
+    public static extern void ArmorAddonFree(ArmorAddonInfo* info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_create_armor")]
+    public static extern Status PluginCreateArmor(IntPtr plugin, ArmorCreation* creation, FormKey* out_key);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_create_armor_addon")]
+    public static extern Status PluginCreateArmorAddon(IntPtr plugin, ArmorAddonCreation* creation, FormKey* out_key);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_armor_models")]
+    public static extern Status PluginSetArmorModels(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? male_world_model, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? male_icon, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? male_message_icon, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? female_world_model, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? female_icon, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? female_message_icon);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_armor_addon_models")]
+    public static extern Status PluginSetArmorAddonModels(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? male_biped_model, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? female_biped_model, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? male_first_person_model, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? female_first_person_model);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_eyes_decode")]
+    public static extern Status EyesDecode(IntPtr env, IntPtr record, EyesInfo** out_info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_eyes_free")]
+    public static extern void EyesFree(EyesInfo* info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_create_eyes")]
+    public static extern Status PluginCreateEyes(IntPtr plugin, EyesCreation* creation, FormKey* out_key);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_eyes_text")]
+    public static extern Status PluginSetEyesText(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? editor_id, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? full_text, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? icon);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_eyes_data_flags")]
+    public static extern Status PluginSetEyesDataFlags(IntPtr plugin, FormKey key, byte flags);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_faction_relations_decode")]
+    public static extern Status FactionRelationsDecode(IntPtr env, IntPtr record, FactionRelations** out_relations);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_faction_relations_free")]
+    public static extern void FactionRelationsFree(FactionRelations* relations);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_faction_ranks_decode")]
+    public static extern Status FactionRanksDecode(IntPtr env, IntPtr record, FactionRanks** out_ranks);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_faction_ranks_free")]
+    public static extern void FactionRanksFree(FactionRanks* ranks);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_create_faction")]
+    public static extern Status PluginCreateFaction(IntPtr plugin, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? editor_id, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? full_name, uint flags, FormKey* out_key);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_add_faction_relation")]
+    public static extern Status PluginAddFactionRelation(IntPtr plugin, FormKey key, FormKey faction, int modifier, uint reaction);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_faction_relation")]
+    public static extern Status PluginSetFactionRelation(IntPtr plugin, FormKey key, nuint index, FormKey faction, int modifier, uint reaction);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_remove_faction_relation")]
+    public static extern Status PluginRemoveFactionRelation(IntPtr plugin, FormKey key, nuint index);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_add_faction_rank")]
+    public static extern Status PluginAddFactionRank(IntPtr plugin, FormKey key, uint number, FactionRankInput* titles);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_faction_rank")]
+    public static extern Status PluginSetFactionRank(IntPtr plugin, FormKey key, nuint index, uint number, FactionRankInput* titles);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_remove_faction_rank")]
+    public static extern Status PluginRemoveFactionRank(IntPtr plugin, FormKey key, nuint index);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_record_supports_components")]
+    public static extern Status RecordSupportsComponents([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? signature, int* out_supported);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_components_decode")]
+    public static extern Status ComponentsDecode(IntPtr env, IntPtr record, Components** out_components);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_components_free")]
+    public static extern void ComponentsFree(Components* components);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_record_components")]
+    public static extern Status PluginSetRecordComponents(IntPtr plugin, FormKey key, ComponentEntry* entries, nuint count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_exterior_cell_layout_for")]
+    public static extern Status ExteriorCellLayoutFor(int x, int y, ExteriorCellLayout* out_layout);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_exterior_cell_coordinate_valid")]
+    public static extern Status ExteriorCellCoordinateValid(int coordinate, int* out_valid);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_create_exterior_cell")]
+    public static extern Status PluginCreateExteriorCell(IntPtr plugin, ExteriorCellCreation* creation, FormKey* out_key);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_create_interior_cell")]
+    public static extern Status PluginCreateInteriorCell(IntPtr plugin, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? editor_id, FormKey* out_key);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_find_exterior_cell")]
+    public static extern Status EnvFindExteriorCell(IntPtr env, FormKey worldspace, int x, int y, IntPtr* out_record);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_find_persistent_exterior_cell")]
+    public static extern Status EnvFindPersistentExteriorCell(IntPtr env, FormKey worldspace, IntPtr* out_record);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_cell_get_info")]
+    public static extern Status CellGetInfo(IntPtr env, IntPtr record, CellInfo* out_info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_cell_get_regions")]
+    public static extern Status CellGetRegions(IntPtr env, IntPtr record, FormKey** out_keys, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_cell_get_previs_references")]
+    public static extern Status CellGetPrevisReferences(IntPtr env, IntPtr record, FormKey** out_keys, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_free_form_keys")]
+    public static extern void FreeFormKeys(FormKey* keys);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_cell_get_water_currents")]
+    public static extern Status CellGetWaterCurrents(IntPtr env, IntPtr record, WaterCurrent** out_currents, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_free_water_currents")]
+    public static extern void FreeWaterCurrents(WaterCurrent* currents);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_worldspace_top_cell")]
+    public static extern Status EnvWorldspaceTopCell(IntPtr env, FormKey worldspace, IntPtr* out_record);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_worldspace_cells")]
+    public static extern Status EnvWorldspaceCells(IntPtr env, FormKey worldspace, IntPtr** out_records, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_interior_cells")]
+    public static extern Status EnvInteriorCells(IntPtr env, IntPtr** out_records, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_cell_children")]
+    public static extern Status EnvCellChildren(IntPtr env, FormKey cell, CellChild** out_children, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_free_cell_children")]
+    public static extern void FreeCellChildren(CellChild* children);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_cell_landscape")]
+    public static extern Status EnvCellLandscape(IntPtr env, FormKey cell, IntPtr* out_record);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_build_delta_patch")]
+    public static extern Status EnvBuildDeltaPatch(IntPtr env, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? older_plugin, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? newer_plugin, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? output_path, DeltaPatchCounts* out_counts);
 
 }

@@ -19,6 +19,11 @@
 
 namespace fo4 {
 
+namespace localization {
+struct LocalizationTables;
+struct LocalizedStringTable;
+}
+
 enum class RecordCopyStatus {
   inserted,
   replaced,
@@ -39,6 +44,7 @@ enum class CountedArrayMutationStatus {
   record_missing,
   index_out_of_range,
   subrecord_missing,
+  would_empty,
 };
 
 enum class SubrecordGroupMutationStatus {
@@ -85,6 +91,55 @@ enum class RecordRenumberStatus {
   target_exists,
 };
 
+enum class LocalizedValueStatus {
+  updated,
+  unchanged,
+  record_missing,
+  subrecord_missing,
+  field_not_localized,
+  plugin_not_localized,
+  payload_not_an_id,
+  empty_text,
+};
+
+LocalizedValueStatus add_record_localized_string(Plugin& plugin,
+                                                 const FormKey& record_key,
+                                                 Signature subrecord_signature,
+                                                 std::size_t index,
+                                                 std::string_view text,
+                                                 localization::LocalizedStringTable& table);
+
+enum class PluginLocalizationStatus {
+  converted,
+  already_localized,
+  not_localized,
+  unconvertible_field,
+  unresolved_string_id,
+};
+
+struct PluginLocalizationResult {
+  PluginLocalizationStatus status{PluginLocalizationStatus::converted};
+  std::size_t converted{0};
+  std::size_t empty_text{0};
+};
+
+PluginLocalizationResult localize_plugin(Plugin& plugin,
+                                         localization::LocalizationTables& tables);
+PluginLocalizationResult delocalize_plugin(Plugin& plugin,
+                                           localization::LocalizationTables& tables);
+
+enum class ReferenceRepointStatus {
+  repointed,
+  no_references,
+  mismatched_owners,
+};
+
+struct ReferenceRepointResult {
+  ReferenceRepointStatus status{ReferenceRepointStatus::no_references};
+  std::size_t references{0};
+  std::vector<PluginKey> plugins;
+};
+
 // Light plugins cap local IDs at 0xFFF; see docs/code-notes/Radicle.md (local_form_id_range).
 std::pair<std::uint32_t, std::uint32_t> local_form_id_range(const Plugin& plugin);
 bool allows_hardcoded_range(const Plugin& plugin);
@@ -117,6 +172,10 @@ bool has_form_id_labelled_child_group(const Plugin& plugin, const FormKey& recor
 RecordRenumberStatus renumber_local_record(Plugin& plugin,
                                            const FormKey& record_key,
                                            LocalFormId new_local);
+
+ReferenceRepointResult repoint_record_references(std::span<Plugin*> plugins,
+                                                 const FormKey& from,
+                                                 const FormKey& to);
 
 std::string stored_editor_id(std::string_view editor_id);
 std::string stored_inline_text(std::string_view text, std::string_view field);
@@ -252,5 +311,16 @@ RecordCopyStatus copy_record_as_override(Plugin& destination,
                                          const Plugin& source,
                                          const FormKey& record_key,
                                          bool overwrite);
+
+struct RecordDeepCopyResult {
+  RecordCopyStatus status{RecordCopyStatus::source_missing};
+  FormKey key{};
+  std::vector<FormKey> children;
+};
+
+RecordDeepCopyResult copy_record_deep(Plugin& destination,
+                                      const Plugin& source,
+                                      const FormKey& record,
+                                      bool overwrite);
 
 }  // namespace fo4

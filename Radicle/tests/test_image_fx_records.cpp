@@ -85,7 +85,15 @@ std::vector<std::byte> make_plugin() {
   Bytes imad_full = zeros(252);
   put(imad_full, 0, u32(1));
   put(imad_full, 4, f32(1.0f));
-  write_record(out, "IMAD", 3001, {{"EDID", zstr("RadicleImageAdapter")}, {"DNAM", imad_full}});
+  Bytes imad_tnam = zeros(40);
+  put(imad_tnam, 0, f32(0.5f));
+  put(imad_tnam, 16, f32(1.0f));
+  put(imad_tnam, 20, f32(2.5f));
+  Bytes imad_nam3 = zeros(20);
+  put(imad_nam3, 0, f32(1.5f));
+  write_record(out, "IMAD", 3001,
+               {{"EDID", zstr("RadicleImageAdapter")}, {"DNAM", imad_full}, {"TNAM", imad_tnam},
+                {"NAM3", imad_nam3}});
   write_record(out, "IMAD", 3002, {{"EDID", zstr("RadicleImageAdapterTwo")}, {"DNAM", zeros(244)}});
 
   Bytes zoom = zeros(24);
@@ -197,6 +205,33 @@ TEST(ImageFxSynthetic, RowsWithMinimumPayloadStayAbsentOnShortSubrecords) {
   EXPECT_EQ(fo4::record_field_count(plugin, key(3008), "IMGS\\VignetteStrength"), 1u);
   EXPECT_EQ(fo4::set_record_scalar(plugin, key(3009), scalar("IMGS\\VignetteRadius"), 0, "1"),
             fo4::ScalarMutationStatus::subrecord_missing);
+}
+
+TEST(ImageFxSynthetic, InterpolatorMembersEditOneStrideElement) {
+  auto plugin = load();
+  EXPECT_EQ(fo4::record_field_count(plugin, key(3001), "IMAD\\TintColorTime"), 2u);
+  EXPECT_EQ(fo4::record_field_count(plugin, key(3001), "IMAD\\FadeColorAlpha"), 1u);
+  EXPECT_EQ(fo4::record_field_count(plugin, key(3002), "IMAD\\TintColorTime"), 0u);
+  EXPECT_EQ(decoded_value(plugin, 3001, "IMAD\\TintColorTime"), "0.5");
+  EXPECT_EQ(decoded_value(plugin, 3001, "IMAD\\TintColorAlpha"), "1");
+  EXPECT_EQ(decoded_value(plugin, 3001, "IMAD\\FadeColorTime"), "1.5");
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key(3001), scalar("IMAD\\TintColorTime"), 1, "3.5"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key(3001), scalar("IMAD\\FadeColorTime"), 0, "4.5"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key(3001), scalar("IMAD\\TintColorTime"), 2, "1"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key(3002), scalar("IMAD\\FadeColorTime"), 0, "1"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(payload(reread, 3001, "TNAM").size(), 40u);
+  EXPECT_EQ(slice(payload(reread, 3001, "TNAM"), 0, 4), f32(0.5f));
+  EXPECT_EQ(slice(payload(reread, 3001, "TNAM"), 16, 4), f32(1.0f));
+  EXPECT_EQ(slice(payload(reread, 3001, "TNAM"), 20, 4), f32(3.5f));
+  EXPECT_EQ(payload(reread, 3001, "NAM3").size(), 20u);
+  EXPECT_EQ(slice(payload(reread, 3001, "NAM3"), 0, 4), f32(4.5f));
 }
 
 TEST(ImageFxSynthetic, EditsOneRowPerRecordAndRereads) {

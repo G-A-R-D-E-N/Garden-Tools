@@ -207,22 +207,24 @@ TEST_P(VegetationReal, EveryNewScalarPathEditsOfficialRecordsWithoutLosingData) 
   sample = fo4::read_plugin(fo4::write_plugin(sample), path);
   const auto original = sample;
   std::map<std::string, std::string> applied;
+  std::map<std::string, std::size_t> applied_subrecord;
   std::map<std::string, int> edits;
+  int string_rows = 0;
   for (const auto& group : original.groups) {
     for (const auto& child : group.children) {
       const auto& record = std::get<fo4::Record>(child);
       for (const auto& field : fo4::schema::scalar_fields(record.header.signature)) {
         SCOPED_TRACE(record.form_key.to_string() + " " + std::string(field.path));
-        const auto* subrecord = [&]() -> const fo4::Subrecord* {
-          for (const auto& sub : record.subrecords) { if (sub.signature == field.scalar.subrecord) return &sub; }
-          return nullptr;
-        }();
-        if (subrecord == nullptr) continue;
-        const auto existing = fo4::schema::scalar_field_bytes(subrecord->data, field.scalar);
-        if (existing.empty()) continue;
+        if (field.scalar.storage == fo4::schema::ScalarStorage::zstring) { ++string_rows; continue; }
+        const auto slots = fo4::schema::resolve_field_slots(record, fo4::schema::scalar_field_shape(field.scalar), field.scalar.address);
+        if (slots.slots.empty() || !slots.slots.front().valid) continue;
+        const auto& slot = slots.slots.front();
+        const auto existing = fo4::schema::scalar_slot_bytes(record.subrecords[slot.subrecord].data, slot, field.scalar);
         const std::string value = fo4::schema::encode_scalar("1", field.scalar) == std::vector<std::byte>(existing.begin(), existing.end()) ? "2" : "1";
-        ASSERT_EQ(fo4::set_record_scalar(sample, record.form_key, field, value), fo4::ScalarMutationStatus::updated);
-        applied[record.form_key.to_string() + std::string(field.path)] = value;
+        ASSERT_EQ(fo4::set_record_scalar(sample, record.form_key, field, 0, value), fo4::ScalarMutationStatus::updated);
+        const auto key = record.form_key.to_string() + std::string(field.path);
+        applied[key] = value;
+        applied_subrecord[key] = slot.subrecord;
         ++edits[std::string(field.path)];
       }
     }
@@ -241,8 +243,11 @@ TEST_P(VegetationReal, EveryNewScalarPathEditsOfficialRecordsWithoutLosingData) 
         ASSERT_EQ(new_sub.signature, old_sub.signature); ASSERT_EQ(new_sub.data.size(), old_sub.data.size());
         auto expected = old_sub.data;
         for (const auto& field : fo4::schema::scalar_fields(before.header.signature)) {
-          const auto found = applied.find(before.form_key.to_string() + std::string(field.path));
+          const auto key = before.form_key.to_string() + std::string(field.path);
+          const auto found = applied.find(key);
           if (field.scalar.subrecord != old_sub.signature || found == applied.end()) continue;
+          const auto written = applied_subrecord.find(key);
+          if (written == applied_subrecord.end() || written->second != i) continue;
           fo4::schema::patch_scalar_field(expected, field.scalar, fo4::schema::encode_scalar(found->second, field.scalar));
           ++checked;
         }
@@ -261,6 +266,7 @@ TEST_P(VegetationReal, EveryNewScalarPathEditsOfficialRecordsWithoutLosingData) 
     }
   }
   RecordProperty("fields", static_cast<int>(checked));
+  RecordProperty("string_rows", string_rows);
 }
 
 using fo4::test::snapshot;

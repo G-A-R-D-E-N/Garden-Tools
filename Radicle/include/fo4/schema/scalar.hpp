@@ -60,6 +60,8 @@ struct ScalarDescriptor {
   std::size_t minimum_payload_size{0};
   std::span<const ScalarName> names{};
   std::uint16_t min_form_version{0};
+  bool localized{false};
+  std::uint16_t max_form_version{0};
 };
 
 struct ScalarFieldDescriptor {
@@ -92,8 +94,12 @@ struct SubrecordGroupMemberDescriptor {
   Signature subrecord{};
   bool required{false};
   bool repeatable{false};
+  // Constraint: payload_size 0 means a variable-length member and skips the size check.
   std::size_t payload_size{0};
   std::span<const std::uint8_t> default_payload{};
+  bool localized{false};
+  // Constraint: a skippable member may appear before the first leader, where it belongs to no run.
+  bool skippable{false};
 };
 
 struct SubrecordGroupDescriptor {
@@ -126,6 +132,7 @@ std::optional<SubrecordGroupDescriptor> subrecord_group_descriptor(Signature rec
 std::optional<SubrecordGroupDescriptor> subrecord_group_for_member(Signature record,
                                                                    Signature subrecord) noexcept;
 bool is_subrecord_group_count_subrecord(Signature record, Signature subrecord) noexcept;
+bool is_derived_scalar_row(Signature record, Signature subrecord) noexcept;
 
 // The bytes of one field within a subrecord payload. Empty when an embedded
 // field lies past the end of a legitimately shorter payload -- absent, not

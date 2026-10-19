@@ -242,7 +242,7 @@ TEST(SubrecordAuthoring, RefusesPresentUnknownOrderNoDefaultAndUnauthorable) {
   EXPECT_EQ(fo4::add_record_subrecord(plugin, key(0x804), sig("KWDA")),
             fo4::SubrecordAddStatus::not_authorable);
   EXPECT_EQ(fo4::add_record_subrecord(plugin, key(0x805), sig("EDID")),
-            fo4::SubrecordAddStatus::not_authorable);
+            fo4::SubrecordAddStatus::already_present);
   EXPECT_EQ(fo4::add_record_subrecord(plugin, key(0x8FF), sig("ICON")),
             fo4::SubrecordAddStatus::record_missing);
   EXPECT_EQ(order(plugin, 0x801), (std::vector<std::string>{"EDID", "KWDA", "DATA"}));
@@ -273,8 +273,8 @@ TEST(SubrecordAuthoring, RemovesPhysicalOccurrenceAndEnforcesTheMinimum) {
             fo4::SubrecordRemoveStatus::not_authorable);
   EXPECT_EQ(fo4::remove_record_subrecord(plugin, key(0x8FF), sig("DESC"), 0),
             fo4::SubrecordRemoveStatus::record_missing);
-  EXPECT_EQ(fo4::remove_record_subrecord(plugin, key(0x805), sig("EDID"), 0),
-            fo4::SubrecordRemoveStatus::not_authorable);
+  EXPECT_EQ(fo4::remove_record_subrecord(plugin, key(0x805), sig("FULL"), 0),
+            fo4::SubrecordRemoveStatus::absent);
 
   const auto reloaded = reload(plugin);
   EXPECT_EQ(order(reloaded, 0x800), (std::vector<std::string>{"EDID", "MOD2", "ICO2", "DATA"}));
@@ -379,10 +379,12 @@ TEST(SubrecordAuthoring, CountSubrecordsStayCoupledToTheirEntries) {
 TEST(SubrecordAuthoring, GeneratedSchemaMarksSiblingOwnersCoupled) {
   const std::pair<const char*, std::vector<std::string>> expected[] = {
       {"ARMA", {"MOD2", "MOD3", "MOD4", "MOD5"}},
-      {"ARMO", {"MOD2", "MOD4"}},
+      {"ARMO", {"MOD2", "MOD4", "DEST"}},
+      {"COBJ", {"FVPA"}},
       {"EXPL", {"MODL"}},
       {"HAZD", {"MODL"}},
-      {"PROJ", {"MODL", "DEST", "DSTD", "DMDL", "DMDT", "DSTF"}}};
+      {"PROJ", {"MODL", "DEST"}},
+      {"SCOL", {"MODL", "ONAM", "DATA"}}};
   for (const auto& [record, signatures] : expected) {
     const auto constraint = fo4::schema::record_authoring_constraint(sig(record));
     ASSERT_TRUE(constraint.has_value()) << record;
@@ -474,7 +476,7 @@ TEST(SubrecordAuthoring, RefusedCreationConsumesNoFormId) {
   auto plugin = fo4::read_plugin(build({}), k_plugin);
   const auto before = fo4::write_plugin(plugin);
 
-  EXPECT_EQ(fo4::create_record(plugin, sig("MISC"), "X").status, fo4::RecordCreateStatus::not_authorable);
+  EXPECT_EQ(fo4::create_record(plugin, sig("XXXX"), "X").status, fo4::RecordCreateStatus::not_authorable);
   EXPECT_EQ(fo4::create_record(plugin, sig("EYES"), "X").status, fo4::RecordCreateStatus::no_default);
   EXPECT_EQ(fo4::create_record(plugin, sig("ARMO"), std::string_view{"A\0B", 3}).status,
             fo4::RecordCreateStatus::invalid_editor_id);
@@ -583,10 +585,41 @@ TEST(SubrecordAuthoring, RemoveRefusesDebrDataWhoseModelTextureHasNoRule) {
   EXPECT_EQ(order(plugin, 0x801), (std::vector<std::string>{"EDID", "DATA"}));
 }
 
-TEST(SubrecordAuthoring, HazdCreateStaysNotAuthorableWhileModelIsCoupled) {
+TEST(SubrecordAuthoring, HazdCreateAuthorsEdidObndDnamWithoutModel) {
   auto plugin = fo4::read_plugin(build({}), k_plugin);
-  EXPECT_EQ(fo4::create_record(plugin, sig("HAZD"), "Gen").status, fo4::RecordCreateStatus::not_authorable);
-  EXPECT_EQ(plugin.header.next_form_id, 0x900u);
+  const auto created = fo4::create_record(plugin, sig("HAZD"), "Gen");
+  ASSERT_EQ(created.status, fo4::RecordCreateStatus::created);
+  EXPECT_EQ(created.key, key(0x900));
+  EXPECT_EQ(order(plugin, 0x900), (std::vector<std::string>{"EDID", "OBND", "DNAM"}));
+  const auto* dnam = find_sub(plugin, 0x900, "DNAM");
+  ASSERT_NE(dnam, nullptr);
+  EXPECT_EQ(dnam->data.size(), 52u);
+  EXPECT_TRUE(authoring_clean(plugin, key(0x900)));
+}
+
+TEST(SubrecordAuthoring, MiscCreatesFromItsGeneratedDefaults) {
+  auto plugin = fo4::read_plugin(build({}), k_plugin);
+
+  const auto misc = fo4::create_record(plugin, sig("MISC"), "NewMisc");
+  ASSERT_EQ(misc.status, fo4::RecordCreateStatus::created);
+  EXPECT_EQ(order(plugin, 0x900), (std::vector<std::string>{"EDID", "OBND", "DATA"}));
+  EXPECT_EQ(find_sub(plugin, 0x900, "DATA")->data, filled(8, 0));
+  EXPECT_TRUE(authoring_clean(plugin, misc.key));
+}
+
+TEST(SubrecordAuthoring, MiscDestructionStagesFollowTheXEditOrder) {
+  auto plugin = fo4::read_plugin(
+      build({{"MISC", 0x810,
+              {{"EDID", zstr("Stages")}, {"OBND", filled(12, 0)}, {"DEST", filled(8, 0)},
+               {"DSTD", filled(20, 0)}, {"DSTF", filled(0, 0)}, {"DATA", filled(8, 0)},
+               {"CVPA", filled(8, 0)}}},
+             {"MISC", 0x811,
+              {{"EDID", zstr("Late")}, {"OBND", filled(12, 0)}, {"DATA", filled(8, 0)},
+               {"DEST", filled(8, 0)}}}}),
+      k_plugin);
+  fo4::assign_record_form_keys(plugin);
+  EXPECT_TRUE(authoring_clean(plugin, key(0x810)));
+  EXPECT_FALSE(authoring_clean(plugin, key(0x811)));
 }
 
 TEST(SubrecordAuthoringRealData, AddRemoveKeepEveryShippedRecordConsistent) {

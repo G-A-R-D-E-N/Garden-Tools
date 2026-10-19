@@ -10,6 +10,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <fo4/schema/formlink_lists.hpp>
 #include <fo4/schema/scalar.hpp>
 #include <fo4/signature.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
@@ -139,14 +140,26 @@ TEST_CASE("Spreadsheet scalar columns come from generated record descriptors") {
         nlohmann::json::array({"Schema.esp", "REFR", 200, 0})));
     const auto fields =
         fo4::schema::scalar_fields(fo4::Signature::from_string("REFR"));
+    const auto links =
+        fo4::schema::formlink_fields(fo4::Signature::from_string("REFR"));
 
-    REQUIRE(grid.at("columns").size() == fields.size() + 1);
-    CHECK(grid.at("columns")[0] == "EDID");
-    for (std::size_t index = 0; index < fields.size(); ++index) {
-        const auto& address = fields[index].scalar.address;
-        const auto expected = std::string(fields[index].path) +
-            (address.repeated || address.stride != 0 ? "\\Count" : "");
-        CHECK(grid.at("columns")[index + 1].get<std::string>() == expected);
+    std::vector<std::string> expected{"EDID"};
+    for (const auto& field : fields) {
+        const auto& address = field.scalar.address;
+        expected.push_back(std::string(field.path) +
+                           (address.repeated || address.stride != 0 ? "\\Count" : ""));
+    }
+    for (const auto& link : links) {
+        expected.push_back(std::string(link.path) +
+                           (link.address.repeated || link.address.stride != 0 ? "\\Count" : ""));
+    }
+    const auto& columns = grid.at("columns");
+    REQUIRE(expected.size() <= columns.size());
+    for (std::size_t index = 0; index < expected.size(); ++index) {
+        CHECK(columns[index].get<std::string>() == expected[index]);
+    }
+    for (std::size_t index = expected.size(); index < columns.size(); ++index) {
+        CHECK(columns[index].get<std::string>().rfind("Authoring\\", 0) == 0);
     }
 
     REQUIRE(grid.at("rows").size() == 1);

@@ -1,6 +1,7 @@
 #include "fo4/forms/weapon.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
+#include "fo4/schema/field_address.hpp"
 #include "fo4/schema/scalar.hpp"
 #include "real_data_build.hpp"
 
@@ -44,6 +45,14 @@ TEST_P(WeaponReal, EveryWeaponDecodesWithoutFailure) {
       static_cast<void>(fo4::forms::decode_weapon_damage_types(plugin, key));
     } catch (const std::exception& error) {
       ADD_FAILURE() << GetParam() << ' ' << key.to_string() << " DAMA: " << error.what();
+    }
+    const auto amount = fo4::schema::scalar_field_descriptor(weap, "WEAP\\DamageAmount");
+    ASSERT_TRUE(amount.has_value());
+    const auto amount_slots = fo4::schema::resolve_field_slots(
+        *record, fo4::schema::scalar_field_shape(amount->scalar), amount->scalar.address);
+    for (const auto& slot : amount_slots.slots) {
+      EXPECT_EQ(slot.valid, record->header.form_version < amount->scalar.max_form_version)
+          << GetParam() << ' ' << key.to_string() << " DamageAmount slot at " << slot.offset;
     }
     for (const auto& field : fields) {
       const fo4::Subrecord* sub = nullptr;

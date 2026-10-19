@@ -11,7 +11,7 @@ from field_address_codegen import is_count, parse_address, reject_overlaps, rend
 
 STORAGES = {"u8", "u16", "u32", "i32", "f32", "i8", "i16"}
 KINDS = {"scalar", "string"}
-STRING_FORBIDDEN = {"storage", "presentation", "minimum", "maximum", "offset", "payload_size", "minimum_payload_size", "stride", "array_offset", "names"}
+STRING_FORBIDDEN = {"storage", "presentation", "minimum", "maximum", "payload_size", "stride", "array_offset", "names"}
 PRESENTATIONS = {"identity", "percent_0_100", "enum", "flags"}
 NAME_KEYS = {"enum": "value", "flags": "bit"}
 CPP_PRESENTATIONS = {"enum": "enumeration"}
@@ -21,7 +21,8 @@ INSERTIONS = {"existing_only"}
 COUNTED_ARRAY_KEYS = {"kind", "path", "label", "subrecord", "count_subrecord", "stride", "insertion", "members"}
 MEMBER_KEYS = {"path", "label", "offset", "storage", "presentation", "minimum", "maximum"}
 SUBRECORD_GROUP_KEYS = {"kind", "path", "label", "count_subrecord", "insertion", "members", "successors"}
-GROUP_MEMBER_KEYS = {"subrecord", "required", "repeatable", "payload_size", "default", "fields", "formlink_fields"}
+GROUP_MEMBER_KEYS = {"subrecord", "required", "repeatable", "payload_size", "default", "fields",
+                     "formlink_fields", "localized", "skippable"}
 GROUP_ROW_FORBIDDEN = {"kind", "subrecord", "repeated", "stride", "array_offset", "when", "payload_size", "minimum_payload_size"}
 GROUP_LINK_KEYS = {"path", "label", "offset", "nullable", "insertion", "target_union", "targets"}
 HEX_DIGITS = "0123456789abcdefABCDEF"
@@ -120,7 +121,8 @@ def parse_counted_array(field, record_signature: str):
         raise ValueError(f"counted_array label is invalid: {label!r}")
     subrecord = field.get("subrecord", "")
     count_subrecord = field.get("count_subrecord", "")
-    for signature in (subrecord, count_subrecord):
+    signatures = (subrecord, count_subrecord) if "count_subrecord" in field else (subrecord,)
+    for signature in signatures:
         if not isinstance(signature, str) or not valid_signature(signature):
             raise ValueError(f"counted_array signatures must be four printable ASCII characters: {signature!r}: {path!r}")
     if count_subrecord == subrecord:
@@ -147,7 +149,7 @@ def parse_group_default(value, payload_size: int, path: str):
     if not isinstance(value, str) or not value or len(value) % 2 or any(ch not in HEX_DIGITS for ch in value):
         raise ValueError(f"subrecord_group member default must be an even-length hex string: {path!r}")
     data = bytes.fromhex(value)
-    if len(data) != payload_size:
+    if len(data) != payload_size and payload_size:
         raise ValueError(f"subrecord_group member default must be {payload_size} bytes: {path!r}")
     return list(data)
 
@@ -162,8 +164,8 @@ def parse_subrecord_group(field, record_signature: str):
     label = field.get("label", "")
     if not isinstance(label, str) or not label or any(ord(ch) < 0x20 for ch in label):
         raise ValueError(f"subrecord_group label is invalid: {label!r}")
-    count_subrecord = field.get("count_subrecord")
-    if not isinstance(count_subrecord, str) or not valid_signature(count_subrecord):
+    count_subrecord = field.get("count_subrecord", "")
+    if not isinstance(count_subrecord, str) or (count_subrecord and not valid_signature(count_subrecord)):
         raise ValueError(f"subrecord_group count_subrecord must be four printable ASCII characters: {path!r}")
     if field.get("insertion") not in INSERTIONS:
         raise ValueError(f"unsupported insertion policy until record ordering exists: {field.get('insertion')!r}")
@@ -194,11 +196,18 @@ def parse_subrecord_group(field, record_signature: str):
         if not isinstance(required, bool) or not isinstance(repeatable, bool):
             raise ValueError(f"subrecord_group member required and repeatable must be booleans: {path!r}")
         payload_size = member.get("payload_size")
-        if not is_count(payload_size, 1):
-            raise ValueError(f"subrecord_group member payload_size must be a positive integer: {path!r}")
+        if not is_count(payload_size, 0):
+            raise ValueError(f"subrecord_group member payload_size must be a non-negative integer: {path!r}")
+        localized = member.get("localized", False)
+        if not isinstance(localized, bool):
+            raise ValueError(f"subrecord_group member localized must be a boolean: {path!r}")
+        skippable = member.get("skippable", False)
+        if not isinstance(skippable, bool):
+            raise ValueError(f"subrecord_group member skippable must be a boolean: {path!r}")
         default = parse_group_default(member["default"], payload_size, path) if "default" in member else None
         parsed.append({"subrecord": signature, "required": required, "repeatable": repeatable,
-                       "payload_size": payload_size, "default": default})
+                       "payload_size": payload_size, "default": default, "localized": localized,
+                       "skippable": skippable})
         member_fields = member.get("fields", [])
         member_links = member.get("formlink_fields", [])
         if not isinstance(member_fields, list) or not isinstance(member_links, list):
@@ -313,6 +322,10 @@ def load_schema(schema_path: Path):
             if not isinstance(label, str) or not label or any(ord(ch) < 0x20 for ch in label):
                 raise ValueError(f"schema field label is invalid: {label!r}")
 
+            localized = field.get("localized", False)
+            if type(localized) is not bool or (localized and not is_string):
+                raise ValueError(f"localized must be a boolean on string rows only: {path!r}")
+
             subrecord = field.get("subrecord", "")
             if not isinstance(subrecord, str) or not valid_signature(subrecord):
                 raise ValueError(f"subrecord signature must be four printable ASCII characters: {subrecord!r}")
@@ -348,7 +361,7 @@ def load_schema(schema_path: Path):
                     raise ValueError(f"payload_size requires an embedded field: {path!r}")
                 if type(payload_size) is not int or payload_size <= 0:
                     raise ValueError(f"payload_size must be a positive integer: {path!r}")
-                if payload_size < offset + WIDTHS[storage]:
+                if payload_size < offset + WIDTHS.get(storage, 0):
                     raise ValueError(f"payload_size is smaller than the field end: {path!r}")
                 if address["stride"] and (payload_size - address["array_offset"]) % address["stride"] != 0:
                     raise ValueError(f"payload_size does not hold whole stride elements: {path!r}")
@@ -359,7 +372,7 @@ def load_schema(schema_path: Path):
                     raise ValueError(f"minimum_payload_size requires an embedded field: {path!r}")
                 if type(minimum_payload_size) is not int or minimum_payload_size <= 0:
                     raise ValueError(f"minimum_payload_size must be a positive integer: {path!r}")
-                if minimum_payload_size < offset + WIDTHS[storage]:
+                if minimum_payload_size < offset + WIDTHS.get(storage, 0):
                     raise ValueError(f"minimum_payload_size is smaller than the field end: {path!r}")
                 if payload_size and minimum_payload_size > payload_size:
                     raise ValueError(f"minimum_payload_size exceeds payload_size: {path!r}")
@@ -368,6 +381,12 @@ def load_schema(schema_path: Path):
             if "min_form_version" in field:
                 if type(min_form_version) is not int or not 0 < min_form_version <= 0xFFFF:
                     raise ValueError(f"min_form_version must be a 16-bit positive integer: {path!r}")
+            max_form_version = field.get("max_form_version", 0)
+            if "max_form_version" in field:
+                if type(max_form_version) is not int or not 0 < max_form_version <= 0xFFFF:
+                    raise ValueError(f"max_form_version must be a 16-bit positive integer: {path!r}")
+                if max_form_version <= min_form_version:
+                    raise ValueError(f"max_form_version must exceed min_form_version: {path!r}")
 
             if is_string:
                 minimum = maximum = 0.0
@@ -406,7 +425,9 @@ def load_schema(schema_path: Path):
                 "payload_size": payload_size,
                 "minimum_payload_size": minimum_payload_size,
                 "min_form_version": min_form_version,
+                "max_form_version": max_form_version,
                 "address": address,
+                "localized": localized,
                 "can_insert": False,
             })
 
@@ -415,6 +436,8 @@ def load_schema(schema_path: Path):
                  if (other["record"], other["subrecord"]) == (array["record"], array["subrecord"])]
         if len(twins) > 1:
             raise ValueError(f"counted_array subrecord {array['subrecord']} is declared twice in {array['record']}: {array['path']!r}")
+        if not array["count_subrecord"]:
+            continue
         sharers = [other for other in arrays
                    if (other["record"], other["count_subrecord"]) == (array["record"], array["count_subrecord"])]
         if len(sharers) > 1:
@@ -425,11 +448,14 @@ def load_schema(schema_path: Path):
             raise ValueError(f"counted_array {array['path']!r} needs exactly one whole-payload u32 row for {array['count_subrecord']}")
 
     for group in groups:
-        counts = [row for row in fields
-                  if row["record"] == group["record"] and row["subrecord"] == group["count_subrecord"]]
-        if len(counts) != 1 or not whole_payload_u32(counts[0]):
-            raise ValueError(f"subrecord_group {group['path']!r} needs exactly one whole-payload u32 row for {group['count_subrecord']}")
-        group_signatures = {member["subrecord"] for member in group["members"]} | {group["count_subrecord"]}
+        if group["count_subrecord"]:
+            counts = [row for row in fields
+                      if row["record"] == group["record"] and row["subrecord"] == group["count_subrecord"]]
+            if len(counts) != 1 or not whole_payload_u32(counts[0]):
+                raise ValueError(f"subrecord_group {group['path']!r} needs exactly one whole-payload u32 row for {group['count_subrecord']}")
+        group_signatures = {member["subrecord"] for member in group["members"]}
+        if group["count_subrecord"]:
+            group_signatures.add(group["count_subrecord"])
         for array in arrays:
             if array["record"] == group["record"] and group_signatures & {array["subrecord"], array["count_subrecord"]}:
                 raise ValueError(f"subrecord_group {group['path']!r} shares a subrecord with counted_array {array['path']!r} in {group['record']}")
@@ -466,13 +492,17 @@ def render_subrecord_groups(groups):
         for member in group["members"]:
             spec = (f"Signature::from_string({cpp_string(member['subrecord'])}), "
                     f"{'true' if member['required'] else 'false'}, "
-                    f"{'true' if member['repeatable'] else 'false'}, {member['payload_size']}")
+                    f"{'true' if member['repeatable'] else 'false'}, {member['payload_size']}, ")
             if member["default"] is not None:
                 name = f"k_subrecord_group_default_{defaults}"
                 defaults += 1
                 body = ", ".join(f"0x{byte:02X}" for byte in member["default"])
                 lines.append(f"constexpr std::uint8_t {name}[] = {{{body}}};")
-                spec += f", std::span<const std::uint8_t>({name})"
+                spec += f"std::span<const std::uint8_t>({name})"
+            else:
+                spec += "std::span<const std::uint8_t>{}"
+            spec += f", {'true' if member['localized'] else 'false'}"
+            spec += f", {'true' if member['skippable'] else 'false'}"
             members.append("{" + spec + "},")
         if group["successors"]:
             body = ", ".join(f"Signature::from_string({cpp_string(signature)})" for signature in group["successors"])
@@ -488,7 +518,8 @@ def render_subrecord_groups(groups):
             f"Signature::from_string({cpp_string(group['record'])}), " +
             f"{cpp_string(group['path'])}, " +
             f"{cpp_string(group['label'])}, " +
-            f"Signature::from_string({cpp_string(group['count_subrecord'])}), " +
+            (f"Signature::from_string({cpp_string(group['count_subrecord'])})"
+             if group["count_subrecord"] else "Signature{}") + ", " +
             f"std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_{index}), " +
             successors +
             "},")
@@ -526,6 +557,13 @@ def render(fields, arrays=(), groups=()) -> str:
             trailing = f", {field['minimum_payload_size']}"
         if field["min_form_version"]:
             trailing += f", {field['min_form_version']}"
+        if field["localized"] or field["max_form_version"]:
+            names = (f"std::span<const ScalarName>(k_scalar_names_{tables[names_key(field)]})"
+                     if field["names"] else "{}")
+            localized = "true" if field["localized"] else "false"
+            trailing = f", {field['minimum_payload_size']}, {names}, {field['min_form_version']}, {localized}"
+        if field["max_form_version"]:
+            trailing += f", {field['max_form_version']}"
         presentation = CPP_PRESENTATIONS.get(field["presentation"], field["presentation"])
         lines.append(
             "{" +
@@ -555,7 +593,8 @@ def render(fields, arrays=(), groups=()) -> str:
                 f"{cpp_string(array['path'])}, " +
                 f"{cpp_string(array['label'])}, " +
                 f"Signature::from_string({cpp_string(array['subrecord'])}), " +
-                f"Signature::from_string({cpp_string(array['count_subrecord'])}), " +
+                (f"Signature::from_string({cpp_string(array['count_subrecord'])})" if array["count_subrecord"]
+                 else "Signature{}") + ", " +
                 f"{array['stride']}" +
                 "},")
         lines.append("}};")

@@ -62,6 +62,13 @@ Bytes zstr(std::string_view text) {
 
 Bytes zeros(std::size_t size) { return Bytes(size, std::byte{0}); }
 
+Bytes coords(std::int32_t x, std::int32_t y) {
+  fo4::test::ByteWriter out;
+  out.u32(static_cast<std::uint32_t>(x));
+  out.u32(static_cast<std::uint32_t>(y));
+  return out.bytes;
+}
+
 Bytes anam(std::uint32_t parent, std::uint32_t previous) {
   fo4::test::ByteWriter out;
   out.u32(parent);
@@ -116,7 +123,13 @@ std::vector<std::byte> make_plugin() {
   write_record(out, "SMEN", 2051, {{"EDID", zstr("RadicleEvent")}, {"PNAM", u32(2050)}, {"SNAM", u32(0)}, {"CITC", u32(0)}, {"DNAM", u32(2)}, {"XNAM", u32(0)}, {"ENAM", u32(four_cc("ADCR"))}});
   write_record(out, "QUST", 2053, {{"EDID", zstr("RadicleQuest")}});
   write_record(out, "QUST", 2058, {{"EDID", zstr("RadicleQuestTwo")}});
-  write_record(out, "SCCO", 2052, {{"EDID", zstr("RadicleCollection")}, {"QNAM", u32(2053)}, {"VNAM", zeros(4)}, {"VNAM", zeros(4)}});
+  write_record(out, "SCCO", 2052, {{"EDID", zstr("RadicleCollection")}, {"QNAM", u32(2053)},
+                                   {"SNAM", u32(2060)}, {"XNAM", coords(10, 20)},
+                                   {"SNAM", u32(2061)}, {"XNAM", coords(-30, 40)},
+                                   {"VNAM", zeros(4)}, {"XNAM", coords(50, 60)},
+                                   {"VNAM", zeros(4)}});
+  write_record(out, "SCEN", 2060, {{"EDID", zstr("RadicleSceneOne")}});
+  write_record(out, "SCEN", 2061, {{"EDID", zstr("RadicleSceneTwo")}});
   write_record(out, "TRNS", 2054, {{"EDID", zstr("RadicleTransform")}, {"DATA", transform(true)}});
   write_record(out, "TRNS", 2055, {{"EDID", zstr("RadicleShortTransform")}, {"DATA", transform(false)}});
   write_record(out, "CPTH", 2056, {{"EDID", zstr("RadicleCameraPath")}, {"ANAM", anam(2057, 0)}, {"DATA", u8(0x40)}});
@@ -170,7 +183,36 @@ TEST(StoryManagerRecordsSynthetic, EveryNewRowReadsItsSubrecordOnFixtureRecords)
   EXPECT_EQ(fo4::schema::decode_scalar(payload(plugin, 2050, "HNAM"), scalar("SMQN\\HoursUntilReset").scalar), "0.5");
   EXPECT_EQ(fo4::schema::decode_scalar(payload(plugin, 2049, "XNAM"), scalar("SMBN\\MaxConcurrentQuests").scalar), "3");
   EXPECT_EQ(fo4::schema::decode_scalar(payload(plugin, 2050, "MNAM"), scalar("SMQN\\NumQuestsToRun").scalar), "1");
-  EXPECT_TRUE(fo4::schema::scalar_fields(fo4::Signature::from_string("SCCO")).empty());
+  EXPECT_EQ(fo4::schema::scalar_fields(fo4::Signature::from_string("SCCO")).size(), 2u);
+}
+
+TEST(StoryManagerRecordsSynthetic, SceneCoordinatesUseTheLayoutBeforeTheFirstVnam) {
+  auto plugin = load();
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key(2052), scalar("SCCO\\CoordinateX"), 1, "-31"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key(2052), scalar("SCCO\\CoordinateY"), 0, "21"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, key(2052), link("SCCO\\Scene"), 1, key(2060)),
+            fo4::FormLinkFieldMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key(2052), scalar("SCCO\\CoordinateX"), 2, "7"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto* record = fo4::find_record(reread, key(2052));
+  ASSERT_NE(record, nullptr);
+  std::vector<Bytes> xnam;
+  std::vector<Bytes> snam;
+  for (const auto& subrecord : record->subrecords) {
+    if (subrecord.signature == fo4::Signature::from_string("XNAM")) xnam.push_back(subrecord.data);
+    if (subrecord.signature == fo4::Signature::from_string("SNAM")) snam.push_back(subrecord.data);
+  }
+  ASSERT_EQ(xnam.size(), 3u);
+  EXPECT_EQ(xnam[0], coords(10, 21));
+  EXPECT_EQ(xnam[1], coords(-31, 40));
+  EXPECT_EQ(xnam[2], coords(50, 60));
+  ASSERT_EQ(snam.size(), 2u);
+  EXPECT_EQ(snam[0], u32(2060));
+  EXPECT_EQ(snam[1], u32(2060));
 }
 
 TEST(StoryManagerRecordsSynthetic, NodeLinksFlagsAndEventTypeWriteTheirBytes) {

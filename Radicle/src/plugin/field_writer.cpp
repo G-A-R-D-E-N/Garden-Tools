@@ -117,12 +117,17 @@ schema::FieldSlots formlink_slots(const Record& record, const schema::FormLinkFi
   shape.subrecord = field.subrecord;
   shape.offset = field.offset;
   shape.width = sizeof(std::uint32_t);
+  shape.min_form_version = field.min_form_version;
+  shape.max_form_version = field.max_form_version;
   auto resolved = schema::resolve_field_slots(record, shape, field.address);
   if (resolved.duplicate) {
     throw schema::FormLinkFieldError("record contains duplicate FormLink subrecords: " +
                                      field.subrecord.to_string());
   }
-  if (field.payload_sizes[0] != 0 &&
+  const bool version_admits =
+      record.header.form_version >= field.min_form_version &&
+      (field.max_form_version == 0 || record.header.form_version < field.max_form_version);
+  if (field.payload_sizes[0] != 0 && version_admits &&
       (field.address.when.count == 0 || std::any_of(resolved.slots.begin(), resolved.slots.end(),
                                                    [](const auto& slot) { return slot.valid || slot.misfit; }))) {
     for (const auto& subrecord : record.subrecords) {
@@ -152,12 +157,20 @@ ScalarMutationStatus write_scalar(Plugin& plugin,
   if (schema::is_subrecord_group_count_subrecord(field.record, field.scalar.subrecord)) {
     throw schema::ScalarError(std::string(field.path) + " is maintained by subrecord group insert and remove");
   }
+  if (schema::is_derived_scalar_row(field.record, field.scalar.subrecord)) {
+    throw schema::ScalarError(std::string(field.path) +
+                              " is derived from the five footstep category lists in DATA");
+  }
 
   const bool is_string = field.scalar.storage == schema::ScalarStorage::zstring;
   if (is_string != string_setter) {
     throw schema::ScalarError(std::string(field.path) +
                               (is_string ? " is a string field; use the string setter"
                                          : " is not a string field"));
+  }
+  if (is_string && field.scalar.embedded) {
+    throw schema::ScalarError(std::string(field.path) +
+                              " sits in a fixed-size slot and cannot be written generically");
   }
 
   const auto resolved = scalar_slots(*target, field);
@@ -168,7 +181,7 @@ ScalarMutationStatus write_scalar(Plugin& plugin,
   auto& data = target->subrecords[slot.subrecord].data;
 
   if (is_string && plugin.header.tes4_flags.is_localized() &&
-      schema::is_localized_field(field.record, field.scalar.subrecord)) {
+      (field.scalar.localized || schema::is_localized_field(field.record, field.scalar.subrecord))) {
     throw schema::ScalarError(std::string(field.path) +
                               " is a localized string in a localized plugin");
   }
@@ -214,7 +227,7 @@ void write_counter(std::vector<std::byte>& data, std::uint32_t value) {
 
 struct CountedArraySubrecords {
   std::size_t payload;
-  std::size_t counter;
+  std::optional<std::size_t> counter;
   std::size_t count;
 };
 
@@ -238,10 +251,19 @@ std::optional<CountedArraySubrecords> counted_array_subrecords(const Record& rec
       counter = i;
     }
   }
-  if (!payload || !counter) return std::nullopt;
+  if (!payload) return std::nullopt;
+
+  const auto& data = record.subrecords[*payload].data;
+  if (array.count_subrecord == Signature{}) {
+    if (data.size() % array.stride != 0) {
+      throw schema::CountedArrayError(std::string(array.path) + " " + array.subrecord.to_string() +
+                                      " payload is not a whole number of elements");
+    }
+    return CountedArraySubrecords{*payload, std::nullopt, data.size() / array.stride};
+  }
+  if (!counter) return std::nullopt;
 
   const auto& count_data = record.subrecords[*counter].data;
-  const auto& data = record.subrecords[*payload].data;
   if (count_data.size() != 4) {
     throw schema::CountedArrayError(std::string(array.path) + " count subrecord must be four bytes");
   }
@@ -274,6 +296,13 @@ std::vector<SubrecordGroupSpan> group_spans(const Record& record, const schema::
   std::vector<SubrecordGroupSpan> spans;
   const auto& subs = record.subrecords;
   std::size_t first = 0;
+  // Constraint: a counted group's runs follow its count subrecord, so a member signature before it (the LENS record DNAM) belongs to no run.
+  if (group.count_subrecord != Signature{}) {
+    const auto counter = std::find_if(subs.begin(), subs.end(), [&](const Subrecord& sub) {
+      return sub.signature == group.count_subrecord;
+    });
+    if (counter != subs.end()) first = static_cast<std::size_t>(counter - subs.begin()) + 1;
+  }
   while (first < subs.size()) {
     const auto leader = member_index(subs[first].signature);
     if (!leader) {
@@ -281,6 +310,10 @@ std::vector<SubrecordGroupSpan> group_spans(const Record& record, const schema::
       continue;
     }
     if (*leader != 0) {
+      if (group.members[*leader].skippable) {
+        ++first;
+        continue;
+      }
       throw refuse("has " + subs[first].signature.to_string() + " outside a leader run");
     }
     std::vector<std::size_t> counts(group.members.size());
@@ -303,7 +336,8 @@ std::vector<SubrecordGroupSpan> group_spans(const Record& record, const schema::
     }
     for (std::size_t k = first; k < end; ++k) {
       const auto member = *member_index(subs[k].signature);
-      if (subs[k].data.size() != group.members[member].payload_size) {
+      if (group.members[member].payload_size != 0 &&
+          subs[k].data.size() != group.members[member].payload_size) {
         throw refuse(subs[k].signature.to_string() + " size differs from its member size");
       }
     }
@@ -450,6 +484,9 @@ std::optional<std::size_t> record_field_count(const Plugin& plugin,
   if (const auto link = schema::formlink_field_descriptor(path)) {
     return record_field_count(plugin, record_key, *link);
   }
+  if (const auto list = schema::packed_formlink_list_path(path)) {
+    return schema::record_formlink_list_size(plugin, record_key, *list);
+  }
   throw schema::ScalarError("unknown field path: " + std::string(path));
 }
 
@@ -467,7 +504,9 @@ CountedArrayMutationStatus insert_record_counted_element(Plugin& plugin,
 
   auto& data = target->subrecords[found->payload].data;
   data.insert(data.begin() + static_cast<std::ptrdiff_t>(index * array.stride), array.stride, std::byte{0});
-  write_counter(target->subrecords[found->counter].data, static_cast<std::uint32_t>(found->count + 1));
+  if (found->counter) {
+    write_counter(target->subrecords[*found->counter].data, static_cast<std::uint32_t>(found->count + 1));
+  }
   mark_record_modified(plugin, *target);
   return CountedArrayMutationStatus::updated;
 }
@@ -483,11 +522,14 @@ CountedArrayMutationStatus remove_record_counted_element(Plugin& plugin,
   const auto found = counted_array_subrecords(*target, array);
   if (!found) return CountedArrayMutationStatus::subrecord_missing;
   if (index >= found->count) return CountedArrayMutationStatus::index_out_of_range;
+  if (!found->counter && found->count == 1) return CountedArrayMutationStatus::would_empty;
 
   auto& data = target->subrecords[found->payload].data;
   const auto first = data.begin() + static_cast<std::ptrdiff_t>(index * array.stride);
   data.erase(first, first + static_cast<std::ptrdiff_t>(array.stride));
-  write_counter(target->subrecords[found->counter].data, static_cast<std::uint32_t>(found->count - 1));
+  if (found->counter) {
+    write_counter(target->subrecords[*found->counter].data, static_cast<std::uint32_t>(found->count - 1));
+  }
   mark_record_modified(plugin, *target);
   return CountedArrayMutationStatus::updated;
 }
@@ -511,8 +553,9 @@ SubrecordGroupMutationStatus insert_record_subrecord_group(Plugin& plugin,
   if (target == nullptr) return SubrecordGroupMutationStatus::record_missing;
   require_subrecord_group_record(*target, group);
   const auto spans = group_spans(*target, group);
+  const bool counted = group.count_subrecord != Signature{};
   const auto counter = group_counter(*target, group, spans.size());
-  if (!counter && !spans.empty()) return SubrecordGroupMutationStatus::subrecord_missing;
+  if (counted && !counter && !spans.empty()) return SubrecordGroupMutationStatus::subrecord_missing;
   if (index > spans.size()) return SubrecordGroupMutationStatus::index_out_of_range;
 
   const std::size_t position = index < spans.size()  ? spans[index].first
@@ -520,19 +563,26 @@ SubrecordGroupMutationStatus insert_record_subrecord_group(Plugin& plugin,
                                : spans.empty()       ? *counter + 1
                                                      : spans.back().end;
   std::vector<Subrecord> created;
-  if (!counter) {
+  if (counted && !counter) {
     Subrecord count;
     count.signature = group.count_subrecord;
     count.data.assign(sizeof(std::uint32_t), std::byte{0});
     created.push_back(std::move(count));
   }
   for (const auto& member : group.members) {
-    if (!member.required) continue;
+    if (member.localized && plugin.header.tes4_flags.is_localized()) {
+      throw schema::SubrecordGroupError(std::string(group.path) + " cannot be inserted into a localized plugin");
+    }
+    if (!member.required && member.default_payload.empty()) continue;
     Subrecord subrecord;
     subrecord.signature = member.subrecord;
-    subrecord.data.assign(member.payload_size, std::byte{0});
-    for (std::size_t k = 0; k < member.default_payload.size(); ++k) {
-      subrecord.data[k] = std::byte{member.default_payload[k]};
+    if (member.default_payload.empty()) {
+      subrecord.data.assign(member.payload_size, std::byte{0});
+    } else {
+      subrecord.data.reserve(member.default_payload.size());
+      for (const auto byte : member.default_payload) {
+        subrecord.data.push_back(std::byte{byte});
+      }
     }
     created.push_back(std::move(subrecord));
   }
@@ -541,7 +591,9 @@ SubrecordGroupMutationStatus insert_record_subrecord_group(Plugin& plugin,
   const std::size_t count_index = !counter                ? position
                                   : *counter < position  ? *counter
                                                          : *counter + created.size();
-  write_counter(target->subrecords[count_index].data, static_cast<std::uint32_t>(spans.size() + 1));
+  if (counted) {
+    write_counter(target->subrecords[count_index].data, static_cast<std::uint32_t>(spans.size() + 1));
+  }
   mark_record_modified(plugin, *target);
   return SubrecordGroupMutationStatus::updated;
 }
@@ -555,12 +607,15 @@ SubrecordGroupMutationStatus remove_record_subrecord_group(Plugin& plugin,
   if (target == nullptr) return SubrecordGroupMutationStatus::record_missing;
   require_subrecord_group_record(*target, group);
   const auto spans = group_spans(*target, group);
+  const bool counted = group.count_subrecord != Signature{};
   const auto counter = group_counter(*target, group, spans.size());
-  if (!counter) return SubrecordGroupMutationStatus::subrecord_missing;
+  if (counted && !counter) return SubrecordGroupMutationStatus::subrecord_missing;
   if (index >= spans.size()) return SubrecordGroupMutationStatus::index_out_of_range;
 
   const auto span = spans[index];
-  write_counter(target->subrecords[*counter].data, static_cast<std::uint32_t>(spans.size() - 1));
+  if (counted) {
+    write_counter(target->subrecords[*counter].data, static_cast<std::uint32_t>(spans.size() - 1));
+  }
   const auto first = target->subrecords.begin() + static_cast<std::ptrdiff_t>(span.first);
   target->subrecords.erase(first, first + static_cast<std::ptrdiff_t>(span.end - span.first));
   mark_record_modified(plugin, *target);

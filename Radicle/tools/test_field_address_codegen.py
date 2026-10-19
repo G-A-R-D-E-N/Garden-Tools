@@ -162,7 +162,7 @@ class SchemaCodegenTests(unittest.TestCase):
                 self.rejects("minimum_payload_size", scalar(minimum_payload_size=value))
         self.rejects("minimum_payload_size", scalar(offset=None, minimum_payload_size=12))
         self.rejects("minimum_payload_size", scalar(payload_size=8, minimum_payload_size=12))
-        self.rejects("string field", string(minimum_payload_size=12))
+        self.rejects("minimum_payload_size requires an embedded field", string(minimum_payload_size=12))
 
     def test_min_form_version_gates_a_row_and_rejects_bad_values(self):
         field = self.load(scalar(min_form_version=97))[0]
@@ -208,6 +208,13 @@ class SchemaCodegenTests(unittest.TestCase):
         self.rejects("non-empty array", scalar(when=dict(when, equals=[])))
         self.rejects("at most 8", scalar(when=dict(when, equals=list(range(9)))))
         self.rejects("duplicate", scalar(when=dict(when, equals=[1, 1])))
+        self.rejects("exactly one", scalar(when=dict(when, not_equals=[1])))
+        negated = self.load(scalar(when={"subrecord": "CNAM", "offset": 0, "storage": "u8", "not_equals": [1, 2]}))
+        self.assertEqual(negated[0]["address"]["when"]["equals"], [1, 2])
+        self.assertTrue(negated[0]["address"]["when"]["negated"])
+        self.assertIn("FieldDiscriminator{Signature::from_string(\"CNAM\"), 0, DiscriminatorStorage::u8, 2, {{1, 2}}, false, true}",
+                      schema_codegen.render(negated))
+        self.rejects("when.not_equals must be", scalar(when={"offset": 0, "storage": "u8", "not_equals": []}))
         self.rejects("exceeds u8", scalar(when=dict(when, equals=[256])))
         self.rejects("exceeds u8", scalar(when=dict(when, equals=[-1])))
         self.rejects("integers", scalar(when=dict(when, equals=[True])))
@@ -232,7 +239,7 @@ class SchemaCodegenTests(unittest.TestCase):
         field = self.load(string(repeated=True))[0]
         self.assertEqual((field["storage"], field["address"]["repeated"]), ("zstring", True))
         self.rejects("do not accept", string(storage="u32"))
-        self.rejects("do not accept", string(offset=0))
+        self.rejects("do not accept", string(payload_size=8))
         self.rejects("do not accept", string(stride=4))
         self.rejects("unsupported field kind", string(kind="blob"))
         self.rejects("insertion", string(insertion="always"))
@@ -314,12 +321,12 @@ class SchemaCodegenTests(unittest.TestCase):
     def test_rendering_includes_the_address(self):
         fields = self.load(scalar(stride=8, array_offset=4, when={"offset": 0, "storage": "u8", "equals": [1, 3]}))
         text = schema_codegen.render(fields)
-        self.assertIn("FieldAddress{false, 8, 4, FieldDiscriminator{Signature{}, 0, DiscriminatorStorage::u8, 2, {{1, 3}}, false}}", text)
+        self.assertIn("FieldAddress{false, 8, 4, FieldDiscriminator{Signature{}, 0, DiscriminatorStorage::u8, 2, {{1, 3}}, false, false}}", text)
         plain = schema_codegen.render(self.load(scalar()))
         self.assertIn("FieldAddress{}", plain)
         absent = schema_codegen.render(self.load(scalar(when={"subrecord": "CNAM", "offset": 0, "storage": "u32",
                                                               "equals": [7], "match_absent": True})))
-        self.assertIn("DiscriminatorStorage::u32, 1, {{7}}, true}", absent)
+        self.assertIn("DiscriminatorStorage::u32, 1, {{7}}, true, false}", absent)
 
     def test_guarded_and_unguarded_overlap_is_rejected(self):
         self.rejects("overlapping scalar fields in TEST.DATA",
@@ -345,6 +352,19 @@ class SchemaCodegenTests(unittest.TestCase):
                              scalar(when={"offset": 0, "storage": "u8", "equals": [1]}),
                              scalar(path="TEST" + BS + "Other",
                                     when={"offset": 0, "storage": "u8", "equals": [2], **changes}))
+
+    def test_not_equals_guards_are_exclusive_only_inside_their_complement(self):
+        plain = {"offset": 0, "storage": "u8", "equals": [1]}
+        self.assertEqual(len(self.load(scalar(when=plain),
+                                       scalar(path="TEST" + BS + "Other",
+                                              when={"offset": 0, "storage": "u8", "not_equals": [1, 2]}))), 2)
+        self.rejects("overlapping scalar fields in TEST.DATA", scalar(when=plain),
+                     scalar(path="TEST" + BS + "Other",
+                            when={"offset": 0, "storage": "u8", "not_equals": [3, 4]}))
+        self.rejects("overlapping scalar fields in TEST.DATA",
+                     scalar(when={"offset": 0, "storage": "u8", "not_equals": [1]}),
+                     scalar(path="TEST" + BS + "Other",
+                            when={"offset": 0, "storage": "u8", "not_equals": [2]}))
 
     def test_different_layouts_are_rejected(self):
         for first, second in (({}, {"stride": 8}), ({}, {"repeated": True}),
@@ -550,6 +570,13 @@ class SchemaCodegenTests(unittest.TestCase):
                         members=[member("OtherA", 0), member("OtherB", 4)])
         self.rejects("shared by two arrays", counted(), other, count_row())
 
+    def test_uncounted_arrays_need_no_count_row_and_may_share_a_record(self):
+        other = counted(path="TEST" + BS + "Other", label="Other", subrecord="OTHR", count_subrecord=None, members=[member("OtherA", 0)])
+        fields, arrays, _groups = self.load_schema(counted(count_subrecord=None), other)
+        self.assertEqual([array["count_subrecord"] for array in arrays], ["", ""])
+        self.assertIn('Signature::from_string("DATA"), Signature{}, 8},', schema_codegen.render(fields, arrays))
+        self.rejects("counted_array signatures must be four printable ASCII", counted(count_subrecord=""), count_row())
+
     def test_subrecord_group_expands_member_rows_and_renders_the_table(self):
         fields, arrays, groups = self.load_schema(group(), count_row(subrecord="COCT"))
         self.assertEqual(arrays, [])
@@ -563,8 +590,8 @@ class SchemaCodegenTests(unittest.TestCase):
         self.assertIn("constexpr std::uint8_t k_subrecord_group_default_0[] = "
                       "{0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00};", text)
         self.assertIn('{Signature::from_string("CNTO"), true, false, 8, '
-                      'std::span<const std::uint8_t>(k_subrecord_group_default_0)},', text)
-        self.assertIn('{Signature::from_string("COED"), false, false, 12},', text)
+                      'std::span<const std::uint8_t>(k_subrecord_group_default_0), false, false},', text)
+        self.assertIn('("COED"), false, false, 12, std::span<const std::uint8_t>{}, false, false},', text)
         self.assertIn('{Signature::from_string("TEST"), "TEST' + BS + BS + 'Items", "Items", '
                       'Signature::from_string("COCT"), '
                       'std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_0), '
@@ -673,8 +700,8 @@ class SchemaCodegenTests(unittest.TestCase):
                      group(members=[group_member("CN")]), count)
         self.rejects("required and repeatable must be booleans",
                      group(members=[group_member("CNTO", required="yes")]), count)
-        self.rejects("payload_size must be a positive integer", group(members=[group_member("CNTO", payload_size=0)]),
-                     count)
+        self.rejects("payload_size must be a non-negative integer",
+                     group(members=[group_member("CNTO", payload_size=-1)]), count)
         self.rejects("subrecord_group member rows must be arrays", group(members=[group_member("CNTO", fields={})]),
                      count)
 
@@ -686,8 +713,8 @@ class SchemaCodegenTests(unittest.TestCase):
             with self.subTest(count=count):
                 self.rejects("needs exactly one whole-payload u32 row", group(), count)
 
-    def test_subrecord_group_count_subrecord_is_required(self):
-        self.rejects("subrecord_group count_subrecord must be four printable ASCII", group(count_subrecord=None))
+    def test_subrecord_group_count_subrecord_is_optional(self):
+        self.assertIn('"Items", Signature{},', schema_codegen.render(*self.load_schema(group(count_subrecord=None))))
         self.rejects("subrecord_group count_subrecord must be four printable ASCII", group(count_subrecord=5))
 
     def test_subrecord_group_members_and_counts_cannot_be_shared(self):

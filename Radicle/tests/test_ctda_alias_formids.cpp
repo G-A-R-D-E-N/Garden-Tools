@@ -18,6 +18,7 @@ namespace {
 constexpr std::uint16_t k_get_distance = 1;
 constexpr std::uint16_t k_get_faction_rank_difference = 60;
 constexpr std::uint16_t k_get_is_current_package = 161;
+constexpr std::uint16_t k_get_in_worldspace = 310;
 constexpr std::uint32_t k_run_on_subject = 0;
 constexpr std::uint32_t k_run_on_quest_alias = 5;
 constexpr std::uint32_t k_missing = 0xFFFFFFFFu;
@@ -154,6 +155,8 @@ INSTANTIATE_TEST_SUITE_P(
                  std::nullopt},
         CtdaCase{"ReferenceParamWithoutAliasFlagIsStillRemapped", false, 0x03000801, 0,
                  k_get_distance, 3, 0, k_run_on_subject, 0x01000003u, std::nullopt},
+        CtdaCase{"GetInWorldspaceParamOneIsRemappedOnMasterReorder", false, 0x03000801, 0,
+                 k_get_in_worldspace, 3, 0, k_run_on_subject, 0x01000003u, std::nullopt},
         CtdaCase{"PackdataFlagLeavesPackageParamAlone", false, 0x03000801,
                  fo4::k_ctda_flag_pack_data, k_get_is_current_package, 3, 0, k_run_on_subject, 3u,
                  std::nullopt},

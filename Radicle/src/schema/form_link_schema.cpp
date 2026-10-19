@@ -60,7 +60,9 @@ SubrecordFormLinkOffsets schema_formlink_offsets(const Record& record) {
                            .width = sizeof(std::uint32_t),
                            .payload_size = 0,
                            .whole_payload = false,
-                           .minimum_payload_size = 0};
+                           .minimum_payload_size = 0,
+                           .min_form_version = field.min_form_version,
+                           .max_form_version = field.max_form_version};
     const auto resolved = resolve_field_slots(record, shape, field.address);
     for (const auto& slot : resolved.slots) {
       if (!slot.valid) continue;

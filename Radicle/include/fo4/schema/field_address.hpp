@@ -26,6 +26,7 @@ struct FieldDiscriminator {
   std::size_t count{0};
   std::array<std::int64_t, k_max_discriminator_values> equals{};
   bool match_absent{false};
+  bool negated{false};
 };
 
 struct FieldAddress {
@@ -43,6 +44,7 @@ struct FieldShape {
   bool whole_payload{false};
   std::size_t minimum_payload_size{0};
   std::uint16_t min_form_version{0};
+  std::uint16_t max_form_version{0};
 };
 
 struct FieldSlot {
