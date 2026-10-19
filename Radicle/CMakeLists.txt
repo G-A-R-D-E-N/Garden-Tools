@@ -226,6 +226,11 @@ add_library(fo4
   src/environment/sound.cpp
   src/environment/material_swap.cpp
   src/pex/pex.cpp
+  src/papyrus/status.cpp
+  src/papyrus/host.cpp
+  src/papyrus/array_ops.cpp
+  src/papyrus/interpreter.cpp
+  src/papyrus/execute.cpp
   src/material/material_file.cpp
   src/seq/seq.cpp
   src/quest/runtime.cpp
