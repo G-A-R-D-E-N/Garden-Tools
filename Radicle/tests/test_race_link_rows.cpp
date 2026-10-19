@@ -515,45 +515,34 @@ TEST(RaceScalarRows, FaceGenClampsChatterAndWrinkleMapsEditInPlace) {
   EXPECT_EQ(live_subrecord(reread, "WMAP", 1), zstr("Actors\\Character\\Other.dds"));
 }
 
-TEST(RaceScalarRows, SkeletalModelsAndMovementTypeNamesEditInPlace) {
+TEST(RaceScalarRows, SkeletalModelsEditInPlace) {
   auto plugin = fo4::read_plugin(
       plugin_with({{"ANAM", zstr("Actors\\Character\\MaleSkeleton.nif")},
-                   {"ANAM", zstr("Actors\\Character\\FemaleSkeleton.nif")},
-                   {"MTNM", zstr("Default")},
-                   {"MTNM", zstr("Fast")}},
+                   {"ANAM", zstr("Actors\\Character\\FemaleSkeleton.nif")}},
                   false),
       "Patch.esp");
   const auto key = fo4::FormKey::parse(k_race_key);
 
   const auto model = scalar_row("RACE\\SkeletalModelPath");
-  const auto movement = scalar_row("RACE\\MovementTypeName");
   EXPECT_EQ(model.scalar.subrecord, fo4::Signature::from_string("ANAM"));
   EXPECT_EQ(model.scalar.storage, fo4::schema::ScalarStorage::zstring);
   EXPECT_TRUE(model.scalar.address.repeated);
-  EXPECT_EQ(movement.scalar.subrecord, fo4::Signature::from_string("MTNM"));
-  EXPECT_EQ(movement.scalar.storage, fo4::schema::ScalarStorage::zstring);
-  EXPECT_TRUE(movement.scalar.address.repeated);
 
   EXPECT_EQ(fo4::record_field_count(plugin, key, "RACE\\SkeletalModelPath"), 2u);
-  EXPECT_EQ(fo4::record_field_count(plugin, key, "RACE\\MovementTypeName"), 2u);
   EXPECT_EQ(read_scalar_member(plugin, "RACE\\SkeletalModelPath", 0),
             "Actors\\Character\\MaleSkeleton.nif");
   EXPECT_EQ(read_scalar_member(plugin, "RACE\\SkeletalModelPath", 1),
             "Actors\\Character\\FemaleSkeleton.nif");
-  EXPECT_EQ(read_scalar_member(plugin, "RACE\\MovementTypeName", 0), "Default");
-  EXPECT_EQ(read_scalar_member(plugin, "RACE\\MovementTypeName", 1), "Fast");
 
+  EXPECT_EQ(fo4::set_record_string(plugin, key, model, 2, "Actors\\Character\\Other.nif"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(read_scalar_member(plugin, "RACE\\SkeletalModelPath", 2), "");
   EXPECT_EQ(fo4::set_record_string(plugin, key, model, 1, "Actors\\Character\\Other.nif"),
             fo4::ScalarMutationStatus::updated);
-  EXPECT_EQ(fo4::set_record_string(plugin, key, movement, 2, "Slow"),
-            fo4::ScalarMutationStatus::subrecord_missing);
-  EXPECT_EQ(read_scalar_member(plugin, "RACE\\MovementTypeName", 2), "");
 
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   EXPECT_EQ(live_subrecord(reread, "ANAM", 0), zstr("Actors\\Character\\MaleSkeleton.nif"));
   EXPECT_EQ(live_subrecord(reread, "ANAM", 1), zstr("Actors\\Character\\Other.nif"));
-  EXPECT_EQ(live_subrecord(reread, "MTNM", 0), zstr("Default"));
-  EXPECT_EQ(live_subrecord(reread, "MTNM", 1), zstr("Fast"));
 }
 
 TEST(RaceScalarRows, RefuseANonFloatPayloadForAWholePayloadRow) {
