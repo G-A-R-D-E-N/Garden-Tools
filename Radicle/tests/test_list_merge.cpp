@@ -122,8 +122,9 @@ TEST_F(ListMerge, LeveledListMergeKeepsAnEntryAnEarlierPluginAdded) {
 
   EXPECT_EQ(result.counts.merged, 1u);
   EXPECT_EQ(result.counts.unchanged, 0u);
-  ASSERT_EQ(result.patch.header.masters.size(), 1u);
+  ASSERT_EQ(result.patch.header.masters.size(), 2u);
   EXPECT_EQ(result.patch.header.masters[0].key, fo4::PluginKey::from_filename(kMaster));
+  EXPECT_EQ(result.patch.header.masters[1].key, fo4::PluginKey::from_filename(kFirst));
 
   const auto merged = fo4::forms::decode_leveled_list(result.patch, key_);
   const std::vector<std::pair<std::uint16_t, std::uint32_t>> expected{{1, 0x000800},
@@ -162,6 +163,9 @@ TEST_F(ListMerge, FormListMergeIsAUnionOfTheLoadOrder) {
       env, fo4::Signature::from_string("FLST"), "Merged.esp");
 
   EXPECT_EQ(result.counts.merged, 1u);
+  ASSERT_EQ(result.patch.header.masters.size(), 2u);
+  EXPECT_EQ(result.patch.header.masters[0].key, fo4::PluginKey::from_filename(kMaster));
+  EXPECT_EQ(result.patch.header.masters[1].key, fo4::PluginKey::from_filename(kFirst));
   const auto descriptor =
       fo4::schema::formlink_list_descriptor(fo4::Signature::from_string("FLST"), "FLST\\Items");
   ASSERT_TRUE(descriptor.has_value());

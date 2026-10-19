@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <map>
+#include <set>
 #include <span>
 #include <string>
 #include <utility>
@@ -72,10 +73,10 @@ std::vector<forms::LeveledListEntry> merge_leveled_entries(
   return target;
 }
 
-bool same_leveled_list(std::span<const forms::LeveledListEntry> left,
-                       std::span<const forms::LeveledListEntry> right) {
-  return left.size() == right.size() &&
-         std::equal(left.begin(), left.end(), right.begin(), same_leveled_entry);
+bool same_leveled_multiset(std::span<const forms::LeveledListEntry> left,
+                           std::span<const forms::LeveledListEntry> right) {
+  return std::is_permutation(left.begin(), left.end(), right.begin(), right.end(),
+                             same_leveled_entry);
 }
 
 bool holds_key(std::span<const FormKey> keys, const FormKey& wanted) {
@@ -95,6 +96,63 @@ std::vector<FormKey> merge_form_list(std::vector<FormKey> target,
   std::sort(target.begin(), target.end());
   target.erase(std::unique(target.begin(), target.end()), target.end());
   return target;
+}
+
+PluginKind owner_kind(const env::Environment& env, const PluginKey& owner) {
+  const auto index = env.find_plugin(owner.filename());
+  if (index.has_value()) return env.plugins()[*index].kind;
+  return owner.looks_light() ? PluginKind::light : PluginKind::full;
+}
+
+bool has_master(const Plugin& plugin, const PluginKey& owner) {
+  for (const auto& master : plugin.header.masters) {
+    if (master.key == owner) return true;
+  }
+  return false;
+}
+
+std::set<PluginKey> entry_owners(std::span<const forms::LeveledListEntry> entries) {
+  std::set<PluginKey> owners;
+  for (const auto& entry : entries) {
+    if (!entry.item.owner().empty()) owners.insert(entry.item.owner());
+  }
+  return owners;
+}
+
+std::set<PluginKey> entry_owners(std::span<const FormKey> keys) {
+  std::set<PluginKey> owners;
+  for (const auto& key : keys) {
+    if (!key.owner().empty()) owners.insert(key.owner());
+  }
+  return owners;
+}
+
+void add_entry_masters(Plugin& patch,
+                       const env::Environment& env,
+                       const std::set<PluginKey>& owners) {
+  std::vector<MasterDescriptor> masters;
+  masters.reserve(patch.header.masters.size() + owners.size());
+  for (const auto& master : patch.header.masters) masters.push_back({master.key, master.kind});
+
+  bool added = false;
+  for (const auto& owner : owners) {
+    if (owner == patch.key || has_master(patch, owner)) continue;
+    auto position = masters.size();
+    const auto owner_index = env.find_plugin(owner.filename());
+    if (owner_index.has_value()) {
+      for (std::size_t index = 0; index < masters.size(); ++index) {
+        const auto existing = env.find_plugin(masters[index].key.filename());
+        if (existing.has_value() && *existing > *owner_index) {
+          position = index;
+          break;
+        }
+      }
+    }
+    masters.insert(masters.begin() + static_cast<std::ptrdiff_t>(position),
+                   MasterDescriptor{owner, owner_kind(env, owner)});
+    added = true;
+  }
+  if (added) patch = remap_plugin_masters(std::move(patch), std::move(masters));
 }
 
 std::vector<forms::LeveledListEntry> leveled_entries(const Plugin& plugin,
@@ -170,7 +228,7 @@ ListMergeResult build_list_merge_patch(const env::Environment& env,
         const auto current = leveled_entries(*list[index], key);
         merged_entries = merge_leveled_entries(std::move(merged_entries), previous, current);
       }
-      unchanged = same_leveled_list(merged_entries, leveled_entries(winner, key));
+      unchanged = same_leveled_multiset(merged_entries, leveled_entries(winner, key));
     } else {
       const auto descriptor = schema::formlink_list_descriptor(signature, k_form_list_path);
       if (!descriptor.has_value()) {
@@ -184,7 +242,9 @@ ListMergeResult build_list_merge_patch(const env::Environment& env,
         const auto current = form_list_entries(*list[index], key, *descriptor);
         merged_keys = merge_form_list(std::move(merged_keys), previous, current);
       }
-      unchanged = merged_keys == form_list_entries(winner, key, *descriptor);
+      const auto winner_keys = form_list_entries(winner, key, *descriptor);
+      unchanged = std::is_permutation(merged_keys.begin(), merged_keys.end(),
+                                      winner_keys.begin(), winner_keys.end());
     }
 
     if (unchanged) {
@@ -199,6 +259,7 @@ ListMergeResult build_list_merge_patch(const env::Environment& env,
     }
 
     if (leveled) {
+      add_entry_masters(result.patch, env, entry_owners(merged_entries));
       if (!forms::replace_leveled_list_entries(result.patch, key, merged_entries)) {
         throw ListMergeError("leveled list cannot be rewritten: " + key.to_string());
       }
@@ -207,6 +268,7 @@ ListMergeResult build_list_merge_patch(const env::Environment& env,
       if (!descriptor.has_value()) {
         throw ListMergeError("no FormLink list row for " + std::string(k_form_list_path));
       }
+      add_entry_masters(result.patch, env, entry_owners(merged_keys));
       write_form_list(result.patch, key, *descriptor, merged_keys);
     }
     ++result.counts.merged;

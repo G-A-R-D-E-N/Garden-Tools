@@ -72,6 +72,8 @@ radicle_status radicle_env_build_list_merge_patch(const radicle_env* env,
       return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
     } catch (const fo4::schema::FormLinkListError& error) {
       return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
+    } catch (const fo4::FormIdError& error) {
+      return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
     }
   });
 }
