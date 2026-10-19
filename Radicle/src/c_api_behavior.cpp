@@ -189,6 +189,7 @@ void radicle_package_procedure_free(const radicle_package_procedure_tree* tree) 
   if (tree) delete static_cast<ProcedureTreeHolder*>(tree->internal);
 }
 
+extern "C++" {
 namespace {
 
 std::optional<fo4::env::PackageInputValue> to_input_value(const radicle_package_input_value& value) {
@@ -238,6 +239,7 @@ radicle_status package_input_failure(fo4::env::PackageInputMutationStatus status
   return fail(RADICLE_STATUS_INTERNAL_ERROR, "unknown package input mutation status");
 }
 
+}
 }
 
 radicle_status radicle_package_input_add(radicle_plugin* plugin, radicle_form_key key, const char* type_name,

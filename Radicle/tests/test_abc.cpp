@@ -354,7 +354,7 @@ TEST(Abc, ParsesVersionConstantPoolAndStructure) {
   EXPECT_EQ(file.body_for(0)->code.size(), 8u);
   EXPECT_EQ(file.body_for(0)->exceptions.size(), 0u);
   EXPECT_EQ(file.body_for(9), nullptr);
-  EXPECT_EQ(file.status_name(AbcStatus::VarintTooLong), std::string{"varint too long"});
+  EXPECT_EQ(status_name(AbcStatus::VarintTooLong), std::string{"varint too long"});
 }
 
 TEST(Abc, ParsesMethodOptionsParamNamesTraitsAndExceptions) {
