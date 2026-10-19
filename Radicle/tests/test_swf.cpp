@@ -31,7 +31,7 @@ struct SwfBuilder {
 
   void u32(std::uint32_t value) {
     u16(value);
-    u16(value >> 8);
+    u16(value >> 16);
   }
 
   void bytes(std::span<const std::byte> data) { body.insert(body.end(), data.begin(), data.end()); }
@@ -44,7 +44,7 @@ struct SwfBuilder {
   }
 
   void rect(std::int32_t x_min, std::int32_t x_max, std::int32_t y_min, std::int32_t y_max,
-            unsigned nbits) {
+            unsigned nbits, std::uint32_t padding = 0) {
     std::uint32_t pending = 0;
     unsigned filled = 0;
     const auto push = [&](std::uint32_t value, unsigned count) {
@@ -64,9 +64,7 @@ struct SwfBuilder {
     push(static_cast<std::uint32_t>(x_max) & mask, nbits);
     push(static_cast<std::uint32_t>(y_min) & mask, nbits);
     push(static_cast<std::uint32_t>(y_max) & mask, nbits);
-    if (filled != 0) {
-      body.push_back(static_cast<std::byte>(pending << (8u - filled)));
-    }
+    push(padding, (8u - filled) % 8u);
   }
 
   void tag(std::uint16_t code, std::span<const std::byte> payload, bool long_header) {
@@ -110,9 +108,9 @@ std::vector<std::byte> wrap_body(std::span<const std::byte> body, std::uint8_t v
   return out;
 }
 
-std::vector<std::byte> attribute_payload() {
+std::vector<std::byte> attribute_payload(std::uint32_t raw) {
   SwfBuilder builder;
-  builder.u32(0x58u);
+  builder.u32(raw);
   return builder.body;
 }
 
@@ -168,7 +166,7 @@ std::vector<std::byte> synthetic_body() {
   builder.rect(0, 11000, 0, 8000, 15);
   builder.u16(0x0C00);
   builder.u16(3);
-  const auto attributes = attribute_payload();
+  const auto attributes = attribute_payload(0x79u);
   builder.tag(69, attributes, false);
   SwfBuilder color;
   color.u8(0x11);
@@ -185,8 +183,7 @@ std::vector<std::byte> synthetic_body() {
   builder.tag(76, symbols, false);
   const auto exports = export_payload();
   builder.tag(56, exports, false);
-  const auto abc_tag = do_abc_payload(0, "", abc);
-  builder.tag(82, abc_tag, false);
+  builder.tag(72, abc, false);
   builder.tag(1);
   builder.tag(0);
   return builder.body;
@@ -225,14 +222,14 @@ TEST(SwfContainerTest, ReadsUncompressedFileAndDecodesCoreTags) {
 
   ASSERT_EQ(result.file.tags.size(), 9u);
   EXPECT_EQ(result.file.tags[0].code, fo4::swf::tag::kFileAttributes);
-  EXPECT_EQ(result.file.tags[0].offset, 13u);
+  EXPECT_EQ(result.file.tags[0].offset, 15u);
   ASSERT_TRUE(result.file.tags[0].attributes.has_value());
-  EXPECT_EQ(result.file.tags[0].attributes->raw, 0x58u);
+  EXPECT_EQ(result.file.tags[0].attributes->raw, 0x79u);
   EXPECT_TRUE(result.file.tags[0].attributes->has_metadata);
   EXPECT_TRUE(result.file.tags[0].attributes->action_script3);
   EXPECT_TRUE(result.file.tags[0].attributes->use_network);
-  EXPECT_FALSE(result.file.tags[0].attributes->use_gpu);
-  EXPECT_FALSE(result.file.tags[0].attributes->use_direct_blit);
+  EXPECT_TRUE(result.file.tags[0].attributes->use_gpu);
+  EXPECT_TRUE(result.file.tags[0].attributes->use_direct_blit);
 
   ASSERT_TRUE(result.file.tags[1].background_color.has_value());
   EXPECT_EQ(*result.file.tags[1].background_color, 0x112233u);
@@ -287,6 +284,27 @@ TEST(SwfContainerTest, ReadsUncompressedFileAndDecodesCoreTags) {
   EXPECT_EQ(fo4::swf::status_name(SwfStatus::malformed_tag), "malformed_tag");
 }
 
+TEST(SwfContainerTest, FileAttributesUseTheSpecBitLayout) {
+  const auto attributes = attribute_payload(0x08u);
+  SwfBuilder builder;
+  builder.rect(0, 10, 0, 10, 5);
+  builder.u16(0x0C00);
+  builder.u16(1);
+  builder.tag(69, attributes, false);
+  builder.tag(0);
+  const auto bytes = wrap_body(builder.body, 10, false, false);
+
+  const auto result = fo4::swf::read_swf(bytes);
+  ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
+  ASSERT_TRUE(result.file.tags[0].attributes.has_value());
+  EXPECT_TRUE(result.file.tags[0].attributes->action_script3);
+  EXPECT_FALSE(result.file.tags[0].attributes->has_metadata);
+  EXPECT_FALSE(result.file.tags[0].attributes->use_network);
+  const auto summary = fo4::swf::summarize(result.file);
+  EXPECT_TRUE(summary.action_script3);
+  EXPECT_FALSE(summary.has_metadata);
+}
+
 TEST(SwfContainerTest, RoundTripsUncompressedCompressedAndGfxFilesByteIdentically) {
   const auto plain = synthetic_file();
   const auto plain_result = fo4::swf::read_swf(plain);
@@ -336,7 +354,7 @@ TEST(SwfContainerTest, ReadsNestedSpriteTagStream) {
   EXPECT_EQ(*sprite_tag.sprite_frame_count, 2);
   ASSERT_EQ(sprite_tag.children.size(), 3u);
   EXPECT_EQ(sprite_tag.children[0].code, fo4::swf::tag::kPlaceObject2);
-  EXPECT_EQ(sprite_tag.children[0].offset, 4u);
+  EXPECT_EQ(sprite_tag.children[0].offset, 6u);
   EXPECT_EQ(sprite_tag.children[0].payload.size(), 2u);
   EXPECT_EQ(sprite_tag.children[1].code, fo4::swf::tag::kShowFrame);
   EXPECT_EQ(sprite_tag.children[2].code, fo4::swf::tag::kEnd);
@@ -377,14 +395,14 @@ TEST(SwfContainerTest, ReportsTruncatedTagStreamAndKeepsEarlierTags) {
   EXPECT_EQ(end_result.file.tags.size(), 8u);
   EXPECT_EQ(end_result.file.trailing_bytes.size(), 1u);
 
-  const std::vector<std::byte> missing_abc(bytes.begin(), bytes.end() - 9);
+  const std::vector<std::byte> missing_abc(bytes.begin(), bytes.end() - 6);
   const auto abc_result = fo4::swf::read_swf(missing_abc);
   EXPECT_EQ(abc_result.status, SwfStatus::truncated_tag);
   ASSERT_EQ(abc_result.file.tags.size(), 7u);
   const auto& last = abc_result.file.tags.back();
   EXPECT_EQ(last.code, fo4::swf::tag::kDoAbc);
-  EXPECT_EQ(last.length, 10u);
-  EXPECT_EQ(last.payload.size(), 5u);
+  EXPECT_EQ(last.length, 5u);
+  EXPECT_EQ(last.payload.size(), 3u);
   EXPECT_FALSE(last.abc.has_value());
   EXPECT_EQ(abc_result.file.tags[0].code, fo4::swf::tag::kFileAttributes);
 }
@@ -513,12 +531,11 @@ TEST(SwfContainerTest, ReplacesTagPayloadByIndex) {
   ASSERT_LT(index, result.file.tags.size());
 
   const std::vector<std::byte> abc{std::byte{0xAA}, std::byte{0xBB}};
-  const auto replacement = do_abc_payload(1, "Menu", abc);
-  EXPECT_TRUE(fo4::swf::replace_tag_payload(result.file, index, replacement));
-  EXPECT_EQ(result.file.tags[index].length, replacement.size());
+  EXPECT_TRUE(fo4::swf::replace_tag_payload(result.file, index, abc));
+  EXPECT_EQ(result.file.tags[index].length, abc.size());
   ASSERT_TRUE(result.file.tags[index].abc.has_value());
-  EXPECT_EQ(result.file.tags[index].abc->flags, 1u);
-  EXPECT_EQ(result.file.tags[index].abc->name, "Menu");
+  EXPECT_EQ(result.file.tags[index].abc->flags, 0u);
+  EXPECT_TRUE(result.file.tags[index].abc->name.empty());
   const auto payload_bytes = fo4::swf::abc_payload(result.file.tags[index]);
   EXPECT_EQ(std::vector<std::byte>(payload_bytes.begin(), payload_bytes.end()), abc);
 
@@ -527,14 +544,14 @@ TEST(SwfContainerTest, ReplacesTagPayloadByIndex) {
   ASSERT_TRUE(reread.ok()) << fo4::swf::status_name(reread.status);
   ASSERT_EQ(reread.file.tags.size(), 9u);
   ASSERT_TRUE(reread.file.tags[index].abc.has_value());
-  EXPECT_EQ(reread.file.tags[index].abc->name, "Menu");
+  EXPECT_TRUE(reread.file.tags[index].abc->name.empty());
   const auto reread_bytes = fo4::swf::abc_payload(reread.file.tags[index]);
   EXPECT_EQ(std::vector<std::byte>(reread_bytes.begin(), reread_bytes.end()), abc);
   EXPECT_EQ(reread.file.tags[1].payload, result.file.tags[1].payload);
   EXPECT_EQ(reread.file.header.frame_size, result.file.header.frame_size);
 
   const auto before = fo4::swf::write_swf(reread.file);
-  EXPECT_FALSE(fo4::swf::replace_tag_payload(reread.file, 99, replacement));
+  EXPECT_FALSE(fo4::swf::replace_tag_payload(reread.file, 99, abc));
   EXPECT_EQ(fo4::swf::write_swf(reread.file), before);
 
   EXPECT_TRUE(fo4::swf::replace_tag_payload(reread.file, 7, std::span<const std::byte>{}));
@@ -553,7 +570,7 @@ TEST(SwfContainerTest, ReadsAbc2InitActionBinaryDataAndScaleformTags) {
   builder.u16(0x0C00);
   builder.u16(1);
   const auto abc2 = do_abc_payload(1, "Menu", abc);
-  builder.tag(72, abc2, false);
+  builder.tag(82, abc2, false);
   SwfBuilder init_action;
   init_action.u16(5);
   init_action.u8(0x81);
@@ -609,5 +626,46 @@ TEST(SwfContainerTest, ReadsAbc2InitActionBinaryDataAndScaleformTags) {
   EXPECT_EQ(fo4::swf::tag_code_name(result.file.tags[6].code), "FontTextureInfo");
   EXPECT_EQ(result.file.tags[4].payload.size(), 4u);
   EXPECT_EQ(result.file.tags[6].payload.size(), 2u);
+  EXPECT_EQ(fo4::swf::write_swf(result.file), bytes);
+}
+
+TEST(SwfContainerTest, RoundTripsBytesAfterTheDeclaredLengthByteExactly) {
+  const auto body = synthetic_body();
+  auto bytes = wrap_body(body, 10, false, false);
+  const std::vector<std::byte> tail{std::byte{0xDE}, std::byte{0xAD}, std::byte{0xBE}};
+  bytes.insert(bytes.end(), tail.begin(), tail.end());
+
+  const auto result = fo4::swf::read_swf(bytes);
+  ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
+  EXPECT_FALSE(result.declared_length_matches);
+  EXPECT_EQ(result.file.trailing_bytes, tail);
+  EXPECT_EQ(fo4::swf::write_swf(result.file), bytes);
+}
+
+TEST(SwfContainerTest, RoundTripsAZeroBitFrameRectByteExactly) {
+  SwfBuilder builder;
+  builder.rect(0, 0, 0, 0, 0);
+  builder.u16(0x0C00);
+  builder.u16(1);
+  builder.tag(0);
+  const auto bytes = wrap_body(builder.body, 10, false, false);
+
+  const auto result = fo4::swf::read_swf(bytes);
+  ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
+  EXPECT_EQ(result.file.header.frame_size.nbits, 0);
+  EXPECT_EQ(result.file.header.frame_rate, 0x0C00);
+  EXPECT_EQ(fo4::swf::write_swf(result.file), bytes);
+}
+
+TEST(SwfContainerTest, RoundTripsNonZeroRectPaddingBitsByteExactly) {
+  SwfBuilder builder;
+  builder.rect(0, 10, 0, 10, 5, 0x7Fu);
+  builder.u16(0x0C00);
+  builder.u16(1);
+  builder.tag(0);
+  const auto bytes = wrap_body(builder.body, 10, false, false);
+
+  const auto result = fo4::swf::read_swf(bytes);
+  ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
   EXPECT_EQ(fo4::swf::write_swf(result.file), bytes);
 }
