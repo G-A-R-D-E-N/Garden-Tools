@@ -68,11 +68,20 @@ FieldSlots resolve_field_slots(const Record& record,
   for (std::size_t i = 0; i < record.subrecords.size(); ++i) {
     if (record.subrecords[i].signature == shape.subrecord) candidates.push_back(i);
   }
-  if (auto scoped = behavior_field_candidates(record, shape.subrecord)) candidates = std::move(*scoped);
-  if (!address.repeated && candidates.size() > 1) {
+  std::vector<std::vector<std::size_t>> scopes;
+  if (auto scoped = behavior_field_candidate_scopes(record, shape.subrecord)) {
+    scopes = std::move(*scoped);
+  } else {
+    scopes.push_back(std::move(candidates));
+  }
+  const bool several_in_one_scope =
+      std::any_of(scopes.begin(), scopes.end(), [](const auto& scope) { return scope.size() > 1; });
+  if (!address.repeated && several_in_one_scope) {
     out.duplicate = true;
     return out;
   }
+  candidates.clear();
+  for (const auto& scope : scopes) candidates.insert(candidates.end(), scope.begin(), scope.end());
 
   const auto& when = address.when;
   const bool guarded = when.count != 0;
