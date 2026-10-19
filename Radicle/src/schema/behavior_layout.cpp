@@ -38,14 +38,16 @@ std::vector<std::size_t> before_marker(const std::vector<Subrecord>& subs, Signa
 std::vector<std::vector<std::size_t>> entry_payload_scopes(const Record& record, Signature subrecord) {
   std::vector<std::vector<std::size_t>> scopes;
   std::vector<std::size_t> current;
+  bool in_entry = false;
   for (std::size_t i = 0; i < record.subrecords.size(); ++i) {
     const auto signature = record.subrecords[i].signature;
     if (signature == sig("RDAT")) {
       if (!current.empty()) scopes.push_back(std::move(current));
       current.clear();
+      in_entry = true;
       continue;
     }
-    if (signature == subrecord) current.push_back(i);
+    if (in_entry && signature == subrecord) current.push_back(i);
   }
   if (!current.empty()) scopes.push_back(std::move(current));
   return scopes;
@@ -113,7 +115,7 @@ std::optional<std::vector<std::size_t>> flat_field_candidates(const Record& reco
 std::optional<std::vector<std::vector<std::size_t>>> behavior_field_candidate_scopes(
     const Record& record, Signature subrecord) {
   if (record.header.signature == sig("REGN") &&
-      listed(subrecord.to_string(), {"RDOT", "RDGS", "RDWT", "RDSA"})) {
+      listed(subrecord.view(), {"RDOT", "RDGS", "RDWT", "RDSA"})) {
     return entry_payload_scopes(record, subrecord);
   }
   if (auto flat = flat_field_candidates(record, subrecord)) {
