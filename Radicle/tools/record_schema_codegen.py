@@ -118,6 +118,12 @@ def load_constraints(schema_path: Path):
             if not isinstance(coupled, bool):
                 raise ValueError(f"authoring coupled must be a boolean for {signature}.{sub_signature}")
 
+            paired_with = subrecord.get("paired_with")
+            if paired_with is not None and (not isinstance(paired_with, str)
+                                            or not valid_signature(paired_with)):
+                raise ValueError(
+                    f"authoring paired_with must be a subrecord signature for {signature}.{sub_signature}")
+
             parsed_subrecords.append({
                 "signature": sub_signature,
                 "minimum": minimum,
@@ -125,7 +131,17 @@ def load_constraints(schema_path: Path):
                 "default": default,
                 "uncounted": uncounted,
                 "coupled": coupled,
+                "paired_with": paired_with,
             })
+
+        known_subrecords = {item["signature"] for item in parsed_subrecords}
+        for item in parsed_subrecords:
+            if item["paired_with"] is None:
+                continue
+            if item["paired_with"] == item["signature"] or item["paired_with"] not in known_subrecords:
+                raise ValueError(
+                    f"authoring paired_with must name another subrecord of {signature}: "
+                    f"{item['signature']} paired with {item['paired_with']}")
 
         constraints.append({
             "signature": signature,
@@ -182,6 +198,20 @@ def render(constraints) -> str:
             f"RecordPlacement::{record['placement']}, {start}, {count}" +
             "},"
         )
+    lines.append("};")
+    lines.append("")
+    lines.append("inline constexpr SubrecordPairConstraint k_generated_subrecord_pairs[] = {")
+    for record in constraints:
+        for subrecord in record["subrecords"]:
+            if subrecord["paired_with"] is None:
+                continue
+            lines.append(
+                "  {" +
+                f"Signature::from_string({cpp_string(record['signature'])}), " +
+                f"Signature::from_string({cpp_string(subrecord['signature'])}), " +
+                f"Signature::from_string({cpp_string(subrecord['paired_with'])})" +
+                "},"
+            )
     lines.append("};")
     return "\n".join(lines) + "\n"
 

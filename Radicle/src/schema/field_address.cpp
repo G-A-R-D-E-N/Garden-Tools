@@ -34,6 +34,8 @@ bool listed(const FieldDiscriminator& when, std::optional<std::int64_t> value) {
   return found != when.negated;
 }
 
+}
+
 bool record_discriminator_matches(const Record& record, const FieldDiscriminator& when) {
   const Subrecord* found = nullptr;
   for (const auto& subrecord : record.subrecords) {
@@ -43,8 +45,6 @@ bool record_discriminator_matches(const Record& record, const FieldDiscriminator
   }
   if (found == nullptr) return when.match_absent;
   return listed(when, read_discriminator(found->data, 0, when));
-}
-
 }
 
 std::size_t discriminator_width(DiscriminatorStorage storage) noexcept {

@@ -570,6 +570,53 @@ TEST(SubrecordAuthoring, LocalizedDescriptionsStillRefuseCreateDefaults) {
   EXPECT_EQ(plugin.header.next_form_id, 0x900u);
 }
 
+TEST(SubrecordAuthoring, GameSettingStringDefaultIsInlineTextOutsideALocalizedPlugin) {
+  auto plugin = fo4::read_plugin(build({}), k_plugin);
+
+  const auto text = fo4::create_record(plugin, sig("GMST"), "sNewSetting");
+  ASSERT_EQ(text.status, fo4::RecordCreateStatus::created);
+  EXPECT_EQ(order(plugin, 0x900), (std::vector<std::string>{"EDID", "DATA"}));
+  EXPECT_EQ(find_sub(plugin, 0x900, "DATA")->data, zstr(""));
+  EXPECT_TRUE(authoring_clean(plugin, text.key));
+
+  const auto count = fo4::create_record(plugin, sig("GMST"), "iNewSetting");
+  ASSERT_EQ(count.status, fo4::RecordCreateStatus::created);
+  EXPECT_EQ(find_sub(plugin, 0x901, "DATA")->data, filled(4, 0));
+
+  plugin.header.tes4_flags = fo4::RecordFlags{plugin.header.tes4_flags.value() | fo4::RecordFlags::localized};
+  const auto localized = fo4::create_record(plugin, sig("GMST"), "sLocalizedSetting");
+  ASSERT_EQ(localized.status, fo4::RecordCreateStatus::created);
+  EXPECT_EQ(find_sub(plugin, 0x902, "DATA")->data, filled(4, 0));
+}
+
+TEST(SubrecordAuthoring, HeadPartPartsListCountsMustMatch) {
+  const Subs head{{"EDID", zstr("Paired")}, {"DATA", filled(1, 0)}, {"PNAM", filled(4, 0)},
+                   {"NAM0", filled(4, 0)}, {"NAM1", zstr("a.nif")}};
+  Subs unpaired = head;
+  unpaired.push_back({"NAM0", filled(4, 0)});
+  Subs headless = head;
+  headless.erase(headless.begin() + 1);
+  Subs headless_unpaired = headless;
+  headless_unpaired.push_back({"NAM0", filled(4, 0)});
+  auto plugin = fo4::read_plugin(build({{"HDPT", 0x810, head},
+                                        {"HDPT", 0x811, unpaired},
+                                        {"HDPT", 0x812, headless},
+                                        {"HDPT", 0x813, headless_unpaired}}),
+                                 k_plugin);
+  fo4::assign_record_form_keys(plugin);
+
+  EXPECT_TRUE(authoring_clean(plugin, key(0x810)));
+  EXPECT_FALSE(authoring_clean(plugin, key(0x811)));
+  EXPECT_EQ(fo4::add_record_subrecord(plugin, key(0x812), sig("DATA")),
+            fo4::SubrecordAddStatus::added);
+  EXPECT_EQ(fo4::add_record_subrecord(plugin, key(0x813), sig("DATA")),
+            fo4::SubrecordAddStatus::unknown_order);
+  EXPECT_EQ(order(plugin, 0x812),
+            (std::vector<std::string>{"EDID", "DATA", "PNAM", "NAM0", "NAM1"}));
+  EXPECT_EQ(order(plugin, 0x813),
+            (std::vector<std::string>{"EDID", "PNAM", "NAM0", "NAM0", "NAM1"}));
+}
+
 TEST(SubrecordAuthoring, RemoveRefusesDebrDataWhoseModelTextureHasNoRule) {
   auto plugin = fo4::read_plugin(
       build({{"DEBR", 0x800,

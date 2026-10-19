@@ -6,6 +6,7 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/schema/localized_fields.hpp"
 #include "fo4/schema/preflight.hpp"
+#include "fo4/schema/scalar.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -31,7 +32,23 @@ Rules generated_rules(Signature record) {
   return constraint.has_value() ? schema::authoring_subrecords(*constraint) : Rules{};
 }
 
-std::vector<std::byte> default_payload(const schema::SubrecordAuthoringConstraint& rule) {
+// Constraint: a guard-matched localized string row holds inline text outside a localized plugin.
+bool inline_string_default(const Plugin& plugin, const Record& record, Signature subrecord) {
+  if (plugin.header.tes4_flags.is_localized()) return false;
+  for (const auto& field : schema::scalar_fields(record.header.signature)) {
+    if (field.scalar.subrecord != subrecord || !field.scalar.localized) continue;
+    if (field.scalar.address.when.count == 0 ||
+        schema::record_discriminator_matches(record, field.scalar.address.when)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+std::vector<std::byte> default_payload(const Plugin& plugin,
+                                       const Record& record,
+                                       const schema::SubrecordAuthoringConstraint& rule) {
+  if (inline_string_default(plugin, record, rule.signature)) return {std::byte{0}};
   const auto bytes = std::as_bytes(rule.default_bytes());
   return {bytes.begin(), bytes.end()};
 }
@@ -59,7 +76,7 @@ bool local_layout_valid(Rules rules, const Record& record) {
       return false;
     }
   }
-  return true;
+  return !schema::mismatched_subrecord_pair(record.header.signature, rules, counts).has_value();
 }
 
 bool layout_valid(Rules rules, bool generated, const Record& record, bool localized) {
@@ -114,7 +131,9 @@ SubrecordAddStatus add_with_rules(Plugin& plugin,
 
   Record candidate = *record;
   candidate.subrecords.insert(candidate.subrecords.begin() + static_cast<std::ptrdiff_t>(position),
-                              Subrecord{subrecord, default_payload(rules[*target]), false});
+                              Subrecord{subrecord,
+                                        default_payload(plugin, *record, rules[*target]),
+                                        false});
   if (!layout_valid(rules, !explicit_given, candidate, plugin.header.tes4_flags.is_localized())) {
     return SubrecordAddStatus::unknown_order;
   }
@@ -195,7 +214,8 @@ RecordCreateResult create_with_rules(Plugin& plugin,
       continue;
     }
     for (std::uint16_t count = 0; count < rule.minimum; ++count) {
-      built.subrecords.push_back(Subrecord{rule.signature, default_payload(rule), false});
+      built.subrecords.push_back(
+          Subrecord{rule.signature, default_payload(plugin, built, rule), false});
     }
   }
 
