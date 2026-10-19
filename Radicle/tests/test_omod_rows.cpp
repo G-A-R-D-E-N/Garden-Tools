@@ -562,6 +562,18 @@ TEST(OmodData, DecodesPropertyValueArms) {
   EXPECT_FLOAT_EQ(*second, 2.0f);
   EXPECT_FALSE(fo4::forms::omod_property_value1_form(float_plugin, data.properties[0]).has_value());
   EXPECT_FALSE(fo4::forms::omod_property_value1_int(data.properties[0]).has_value());
+
+  const auto bool_plugin =
+      fo4::read_plugin(make_plugin(omod_data_with_property(2, 1u)), "Patch.esp");
+  const auto* bool_record = omod_record(bool_plugin);
+  ASSERT_NE(bool_record, nullptr);
+  data = fo4::forms::read_omod_data(bool_plugin, *bool_record);
+  ASSERT_EQ(data.properties.size(), 1u);
+  EXPECT_EQ(fo4::forms::omod_property_value1_int(data.properties[0]),
+            (std::optional<std::uint32_t>{1u}));
+  EXPECT_EQ(fo4::forms::omod_property_value2_int(data.properties[0]),
+            (std::optional<std::uint32_t>{0x40000000u}));
+  EXPECT_FALSE(fo4::forms::omod_property_value2_float(data.properties[0]).has_value());
 }
 
 TEST(OmodData, RoundTripsThePayloadByteForByte) {
