@@ -189,7 +189,8 @@ void mark_offset(std::int32_t target, std::vector<bool>& targets) {
 void simulate_arguments(const AbcFile& file, const std::vector<AbcInstruction>& code,
                         std::vector<CallFrame>& frames) {
   frames.assign(code.size(), CallFrame{});
-  std::vector<bool> targets(code.size() + 1, false);
+  const std::size_t byte_size = code.empty() ? 0 : code.back().offset + code.back().length;
+  std::vector<bool> targets(byte_size + 1, false);
   for (const AbcInstruction& instruction : code) {
     for (const AbcDecodedOperand& operand : instruction.operands) {
       if (operand.role == AbcOperandRole::Offset) {
@@ -206,7 +207,7 @@ void simulate_arguments(const AbcFile& file, const std::vector<AbcInstruction>& 
   std::size_t budget = kInstructionBudget;
   for (std::size_t i = 0; i < code.size() && budget > 0; ++i, --budget) {
     const AbcInstruction& instruction = code[i];
-    if (targets[instruction.offset]) {
+    if (instruction.offset < targets.size() && targets[instruction.offset]) {
       stack.clear();
     }
     const std::string_view mnemonic{instruction.mnemonic};

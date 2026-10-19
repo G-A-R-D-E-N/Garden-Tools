@@ -323,6 +323,38 @@ TEST(Abc, LeavesBranchJoinedArgumentUnknown) {
   EXPECT_TRUE(site.arguments[0].value.empty());
   EXPECT_TRUE(site.literals.empty());
   EXPECT_FALSE(site.literal_unambiguous);
+
+  std::vector<std::uint8_t> no_jump_code;
+  put_u8(no_jump_code, 0x60);
+  put_u30(no_jump_code, kMultinameExternalInterface);
+  put_u8(no_jump_code, 0x13);
+  put_s24(no_jump_code, 2);
+  put_u8(no_jump_code, 0x60);
+  put_u30(no_jump_code, kMultinameHandler);
+  put_u8(no_jump_code, 0x2C);
+  put_u30(no_jump_code, kStringFoo);
+  put_u8(no_jump_code, 0x4F);
+  put_u30(no_jump_code, kMultinameCall);
+  put_u30(no_jump_code, 1);
+  put_u8(no_jump_code, 0x47);
+  AbcFile no_jump_file;
+  ASSERT_EQ(AbcFile::parse(build_abc(no_jump_code, tiny_listener_code()), no_jump_file),
+            AbcStatus::Ok);
+  std::vector<AbcInstruction> no_jump_instructions;
+  ASSERT_NE(no_jump_file.body_for(0), nullptr);
+  ASSERT_EQ(fo4::abc::decode_code(no_jump_file.body_for(0)->code, no_jump_instructions),
+            AbcStatus::Ok);
+  ASSERT_EQ(no_jump_instructions.size(), 6u);
+  ASSERT_STREQ(no_jump_instructions[1].mnemonic, "ifeq");
+  EXPECT_EQ(no_jump_instructions[1].operands[0].target, 8);
+  EXPECT_EQ(no_jump_instructions[3].offset, 8u);
+  AbcSummary no_jump_summary;
+  ASSERT_EQ(fo4::abc::summarize(no_jump_file, no_jump_summary), AbcStatus::Ok);
+  ASSERT_EQ(no_jump_summary.classes.size(), 1u);
+  const AbcCallSite& no_jump_site = only_call(no_jump_summary.classes[0].methods[0].calls);
+  EXPECT_TRUE(no_jump_site.receiver.empty());
+  ASSERT_EQ(no_jump_site.arguments.size(), 1u);
+  EXPECT_EQ(no_jump_site.arguments[0].kind, AbcArgumentKind::Unknown);
 }
 
 TEST(Abc, LeavesNestedCallResultArgumentUnknown) {
