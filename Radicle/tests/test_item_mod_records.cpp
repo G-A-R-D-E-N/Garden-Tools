@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -81,17 +82,19 @@ Bytes note_data() {
   return out.bytes;
 }
 
-Bytes note_modt() {
+Bytes note_modt(const std::vector<std::uint32_t>& addon_nodes = {42u}) {
   ByteWriter out;
   out.u32(4);
   out.u32(1);
-  out.u32(1);
+  out.u32(static_cast<std::uint32_t>(addon_nodes.size()));
   out.u32(0);
   out.u32(1);
   out.u32(0x0A0B0C0Du);
   out.sig("dds");
   out.u32(0x11121314u);
-  out.u32(42);
+  for (const auto node : addon_nodes) {
+    out.u32(node);
+  }
   out.u32(0x71727374u);
   out.sig("bgsm");
   out.u32(0x81828384u);
@@ -227,6 +230,47 @@ TEST(ItemModRecordsSynthetic, EveryScalarRowDecodesOnTheFixture) {
     }
     EXPECT_EQ(decoded, fields.size()) << item.signature;
   }
+}
+
+TEST(ItemModRecordsSynthetic, ModelInfoSegmentRowsReadAndWriteAtTheirSegmentBase) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto key = fo4::FormKey::parse("000810:Patch.esp");
+  const auto* record = fo4::find_record(plugin, key);
+  ASSERT_NE(record, nullptr);
+
+  const auto read_row = [](const fo4::Record& from, std::string_view path) {
+    const auto field =
+        fo4::schema::scalar_field_descriptor(fo4::Signature::from_string("NOTE"), path);
+    EXPECT_TRUE(field.has_value()) << path;
+    if (!field) return std::string{};
+    const auto* sub = find_subrecord(from, field->scalar.subrecord);
+    EXPECT_NE(sub, nullptr) << path;
+    if (sub == nullptr) return std::string{};
+    return fo4::schema::decode_scalar(fo4::schema::scalar_field_bytes(sub->data, field->scalar),
+                                      field->scalar);
+  };
+
+  EXPECT_EQ(read_row(*record, "NOTE\\ModelInfoTextureFileHash"), std::to_string(0x0A0B0C0Du));
+  EXPECT_EQ(read_row(*record, "NOTE\\ModelInfoAddonNode"), "42");
+  EXPECT_EQ(read_row(*record, "NOTE\\ModelInfoMaterialFileHash"), std::to_string(0x71727374u));
+
+  const auto addon = fo4::schema::scalar_field_descriptor(fo4::Signature::from_string("NOTE"),
+                                                          "NOTE\\ModelInfoAddonNode");
+  ASSERT_TRUE(addon.has_value());
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *addon, 0, "7"),
+            fo4::ScalarMutationStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto* saved = fo4::find_record(reread, key);
+  ASSERT_NE(saved, nullptr);
+  EXPECT_EQ(read_row(*saved, "NOTE\\ModelInfoAddonNode"), "7");
+  EXPECT_EQ(read_row(*saved, "NOTE\\ModelInfoTextureFileHash"), std::to_string(0x0A0B0C0Du));
+  EXPECT_EQ(read_row(*saved, "NOTE\\ModelInfoMaterialFileHash"), std::to_string(0x71727374u));
+  const auto* modt = find_subrecord(*saved, fo4::Signature::from_string("MODT"));
+  ASSERT_NE(modt, nullptr);
+  EXPECT_EQ(modt->data, note_modt({7u}));
+
+  EXPECT_TRUE(fo4::schema::scalar_field_bytes(note_modt({}), addon->scalar).empty());
 }
 
 TEST(ItemModRecordsSynthetic, FlagsRowNamesComeFromXEdit) {
