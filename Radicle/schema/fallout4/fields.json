@@ -6938,9 +6938,6 @@
         {"path": "LVSP\\ChanceNone", "label": "Chance none", "kind": "scalar", "subrecord": "LVLD", "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
         {"path": "LVSP\\MaxCount", "label": "Max count", "kind": "scalar", "subrecord": "LVLM", "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
         {"path": "LVSP\\Flags", "label": "Flags", "kind": "scalar", "subrecord": "LVLF", "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"}
-      ],
-      "localized_subrecords": [
-        "FULL"
       ]
     },
     {
