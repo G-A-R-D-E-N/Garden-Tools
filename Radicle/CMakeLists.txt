@@ -226,6 +226,12 @@ add_library(fo4
   src/environment/sound.cpp
   src/environment/material_swap.cpp
   src/pex/pex.cpp
+  src/pex_analysis/opcodes.cpp
+  src/pex_analysis/cfg.cpp
+  src/pex_analysis/disasm.cpp
+  src/pex_analysis/callgraph.cpp
+  src/pex_analysis/summary.cpp
+  src/pex_analysis/fragments.cpp
   src/material/material_file.cpp
   src/seq/seq.cpp
   src/quest/runtime.cpp
@@ -630,6 +636,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_pex_hardening.cpp
     tests/test_pex_corpus.cpp
     tests/test_pex_oracle.cpp
+    tests/test_pex_analysis.cpp
     tests/test_material_file.cpp
     tests/test_material_file_real.cpp
     tests/test_c_api_material_file.cpp
