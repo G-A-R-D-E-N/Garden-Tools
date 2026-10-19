@@ -94,7 +94,7 @@ inline std::optional<SubrecordPairConstraint> mismatched_subrecord_pair(
   return std::nullopt;
 }
 
-// Constraint: before and after must be indexed like rules; returns the first pair whose counts move further apart.
+// Constraint: before and after must be indexed like rules.
 inline std::optional<SubrecordPairConstraint> worsened_subrecord_pair(
     Signature record,
     std::span<const SubrecordAuthoringConstraint> rules,

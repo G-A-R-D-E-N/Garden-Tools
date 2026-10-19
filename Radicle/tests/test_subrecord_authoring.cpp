@@ -591,7 +591,7 @@ TEST(SubrecordAuthoring, GameSettingStringDefaultIsInlineTextOutsideALocalizedPl
   EXPECT_EQ(find_sub(plugin, 0x902, "DATA")->data, filled(4, 0));
 }
 
-TEST(SubrecordAuthoring, HeadPartPartsListCountsMustMatch) {
+TEST(SubrecordAuthoring, HeadPartPartsRefuseGeneratedAddAndRemoveAsNotAuthorable) {
   const Subs head{{"EDID", zstr("Paired")}, {"DATA", filled(1, 0)}, {"PNAM", filled(4, 0)},
                    {"NAM0", filled(4, 0)}, {"NAM1", zstr("a.nif")}};
   Subs unpaired = head;
