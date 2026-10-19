@@ -155,7 +155,7 @@ PexFunctionCfg build_cfg(const fo4::pex::PexFunction& function) {
     const auto successor = cfg.blocks[stack[top].block].successors[stack[top].next];
     ++stack[top].next;
     if (state[successor] == 1) {
-      backEdges.emplace_back(frame.block, successor);
+      backEdges.emplace_back(stack[top].block, successor);
       continue;
     }
     if (state[successor] == 0) {
