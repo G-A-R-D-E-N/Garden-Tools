@@ -23435,7 +23435,7 @@
         },
         {
           "path": "PACK\\ProcedureLeafFlags",
-          "label": "Procedure leaf flags",
+          "label": "Procedure flags",
           "kind": "scalar",
           "subrecord": "FNAM",
           "offset": 0,
@@ -27350,7 +27350,27 @@
             "maximum": 1
           },
           {
+            "signature": "ENAM",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "NAM0",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "FNPR",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
             "signature": "XMRK",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "SNAM",
             "minimum": 0,
             "maximum": 1
           },
@@ -27377,6 +27397,11 @@
           },
           {
             "signature": "STOP",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "NVNM",
             "minimum": 0,
             "maximum": 1
           }

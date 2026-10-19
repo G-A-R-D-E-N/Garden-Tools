@@ -213,7 +213,6 @@ DestructibleHeaderStatus insert_destructible_header(Plugin& plugin, const FormKe
 
   std::vector<Subrecord> created;
   created.push_back(Subrecord{sig_dest, header_payload(*target), false});
-  created.push_back(Subrecord{sig_damc, std::vector<std::byte>{}, false});
   target->subrecords.insert(target->subrecords.begin() + static_cast<std::ptrdiff_t>(*position),
                             std::make_move_iterator(created.begin()),
                             std::make_move_iterator(created.end()));

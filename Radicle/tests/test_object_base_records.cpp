@@ -221,7 +221,7 @@ std::string read_row(const fo4::Plugin& plugin, const fo4::FormKey& key, std::st
   if (!field) return "no-field";
   const auto resolved = fo4::schema::resolve_field_slots(
       *record, fo4::schema::scalar_field_shape(field->scalar), field->scalar.address);
-  if (index >= resolved.slots.size()) return "absent";
+  if (index >= resolved.slots.size() || !resolved.slots[index].valid) return "absent";
   const auto slot = resolved.slots[index];
   const auto bytes =
       fo4::schema::scalar_slot_bytes(record->subrecords[slot.subrecord].data, slot, field->scalar);
