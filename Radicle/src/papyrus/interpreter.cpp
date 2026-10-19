@@ -54,6 +54,10 @@ std::string literalTypeName(const pex::PexValue& operand) {
     return "None";
 }
 
+const ObjectRef* objectOf(const Value& value) {
+    return value.type == ValueType::Object && value.object != nullptr ? value.object.get() : nullptr;
+}
+
 }
 
 Interpreter::Interpreter(Host& host, Limits limits) : host_(host), limits_(limits) {}
@@ -251,7 +255,7 @@ const pex::PexFunction* Interpreter::findFunction(const pex::PexObject& object,
     return nullptr;
 }
 
-Slot* Interpreter::findSlot(Frame& frame, const std::string& name) {
+Interpreter::Slot* Interpreter::findSlot(Frame& frame, const std::string& name) {
     for (Slot& slot : frame.slots) {
         if (sameName(slot.name, name)) return &slot;
     }
@@ -342,8 +346,10 @@ Status Interpreter::resolveIdentifier(Frame& frame, const std::string& name, Val
     if (frame.object != nullptr) {
         for (const pex::PexVariable& variable : frame.object->variables) {
             if (!sameName(variable.name, name)) continue;
+            const ObjectRef* self = objectOf(frame.self);
+            if (self == nullptr) return Status::NullObject;
             Status hostStatus = Status::Ok;
-            if (host_.getVariable(frame.self, name, out, hostStatus)) return Status::Ok;
+            if (host_.getVariable(*self, name, out, hostStatus)) return Status::Ok;
             out = defaultValueFor(variable.type);
             if (!variable.defaultValue.has_value()) return Status::Ok;
             Value literal;
@@ -356,8 +362,10 @@ Status Interpreter::resolveIdentifier(Frame& frame, const std::string& name, Val
         out = noneValue();
         return Status::Ok;
     }
+    const ObjectRef* self = objectOf(frame.self);
+    if (self == nullptr) return Status::NullObject;
     Status status = Status::Ok;
-    if (host_.getVariable(frame.self, name, out, status)) return Status::Ok;
+    if (host_.getVariable(*self, name, out, status)) return Status::Ok;
     return status == Status::Ok ? Status::UnknownIdentifier : status;
 }
 
@@ -376,8 +384,10 @@ Status Interpreter::writeOperand(Frame& frame, const pex::PexValue& operand, con
             Value coerced;
             const Status status = coerce(value, variable.type, coerced);
             if (status != Status::Ok) return status;
+            const ObjectRef* self = objectOf(frame.self);
+            if (self == nullptr) return Status::NullObject;
             Status hostStatus = Status::Ok;
-            if (host_.setVariable(frame.self, operand.str, coerced, hostStatus)) return Status::Ok;
+            if (host_.setVariable(*self, operand.str, coerced, hostStatus)) return Status::Ok;
             return hostStatus == Status::Ok ? Status::UnknownIdentifier : hostStatus;
         }
     }
@@ -389,8 +399,10 @@ Status Interpreter::writeOperand(Frame& frame, const pex::PexValue& operand, con
         frame.slots.push_back(std::move(slot));
         return Status::Ok;
     }
+    const ObjectRef* self = objectOf(frame.self);
+    if (self == nullptr) return Status::NullObject;
     Status status = Status::Ok;
-    if (host_.setVariable(frame.self, operand.str, value, status)) return Status::Ok;
+    if (host_.setVariable(*self, operand.str, value, status)) return Status::Ok;
     return status == Status::Ok ? Status::UnknownIdentifier : status;
 }
 
