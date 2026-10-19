@@ -13865,6 +13865,8 @@
           "subrecord": "MODL",
           "insertion": "existing_only"
         },
+        {"path": "STAT\\ColorRemapping", "label": "Color remapping index", "kind": "scalar", "subrecord": "MODC", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "STAT\\ModelFlags", "label": "Flags", "kind": "scalar", "subrecord": "MODF", "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Has FaceBones Model"}, {"bit": 1, "name": "Has 1stPerson Model"}], "minimum": 0, "maximum": 255, "insertion": "existing_only"},
         {
           "path": "STAT\\MaxAngle",
           "label": "Max angle",
@@ -26402,6 +26404,8 @@
           "subrecord": "MODL",
           "insertion": "existing_only"
         },
+        {"path": "CONT\\ColorRemapping", "label": "Color remapping index", "kind": "scalar", "subrecord": "MODC", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "CONT\\ModelFlags", "label": "Flags", "kind": "scalar", "subrecord": "MODF", "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Has FaceBones Model"}, {"bit": 1, "name": "Has 1stPerson Model"}], "minimum": 0, "maximum": 255, "insertion": "existing_only"},
         {
           "path": "CONT\\Flags",
           "label": "Flags",
@@ -26898,6 +26902,8 @@
           "subrecord": "MODL",
           "insertion": "existing_only"
         },
+        {"path": "DOOR\\ColorRemapping", "label": "Color remapping index", "kind": "scalar", "subrecord": "MODC", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "DOOR\\ModelFlags", "label": "Flags", "kind": "scalar", "subrecord": "MODF", "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Has FaceBones Model"}, {"bit": 1, "name": "Has 1stPerson Model"}], "minimum": 0, "maximum": 255, "insertion": "existing_only"},
         {
           "path": "DOOR\\Flags",
           "label": "Flags",
