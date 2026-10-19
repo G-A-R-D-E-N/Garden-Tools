@@ -268,6 +268,9 @@ AbcStatus decode_code(const std::uint8_t* code, std::size_t size,
       switch (operand_spec.encoding) {
         case Enc::U30:
           operand.value = reader.u30();
+          if (operand_spec.role == Role::Immediate) {
+            operand.immediate = static_cast<std::int16_t>(operand.value);
+          }
           break;
         case Enc::S24:
           operand.immediate = reader.s24();
@@ -284,10 +287,10 @@ AbcStatus decode_code(const std::uint8_t* code, std::size_t size,
           if (!reader.ok()) {
             return reader.status();
           }
-          if (static_cast<std::size_t>(cases) > reader.remaining() / 3) {
+          if (static_cast<std::size_t>(cases) + 1 > reader.remaining() / 3) {
             return AbcStatus::CountOutOfRange;
           }
-          operand.case_targets.resize(cases);
+          operand.case_targets.resize(static_cast<std::size_t>(cases) + 1);
           for (std::size_t c = 0; c < operand.case_targets.size(); ++c) {
             operand.case_targets[c] = reader.s24();
           }
@@ -305,22 +308,23 @@ AbcStatus decode_code(const std::uint8_t* code, std::size_t size,
     out.push_back(instruction);
   }
   for (AbcInstruction& instruction : out) {
-    const std::int64_t base = static_cast<std::int64_t>(instruction.offset + instruction.length);
+    const std::int64_t next = static_cast<std::int64_t>(instruction.offset + instruction.length);
+    const std::int64_t start = static_cast<std::int64_t>(instruction.offset);
     for (AbcDecodedOperand& operand : instruction.operands) {
       if (operand.role == Role::Offset) {
-        const std::int64_t target = base + operand.immediate;
+        const std::int64_t target = next + operand.immediate;
         if (!in_code_range(target, size)) {
           return AbcStatus::BranchOutOfRange;
         }
         operand.target = static_cast<std::int32_t>(target);
       } else if (operand.role == Role::Switch) {
-        const std::int64_t default_target = base + operand.immediate;
+        const std::int64_t default_target = start + operand.immediate;
         if (!in_code_range(default_target, size)) {
           return AbcStatus::BranchOutOfRange;
         }
         operand.target = static_cast<std::int32_t>(default_target);
         for (std::int32_t& case_target : operand.case_targets) {
-          const std::int64_t target = base + case_target;
+          const std::int64_t target = start + case_target;
           if (!in_code_range(target, size)) {
             return AbcStatus::BranchOutOfRange;
           }

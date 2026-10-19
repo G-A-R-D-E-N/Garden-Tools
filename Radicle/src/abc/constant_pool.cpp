@@ -7,12 +7,14 @@ namespace detail {
 
 namespace {
 
-AbcStatus read_count(ByteReader& reader, std::uint32_t& count) {
+constexpr std::size_t kMaxTypeNameExpansion = 64;
+
+AbcStatus read_count(ByteReader& reader, std::uint32_t& count, std::size_t entry_size) {
   count = reader.u30();
   if (!reader.ok()) {
     return reader.status();
   }
-  if (static_cast<std::size_t>(count) > reader.remaining() + 1) {
+  if (static_cast<std::size_t>(count) > reader.remaining() / entry_size + 1) {
     return AbcStatus::CountOutOfRange;
   }
   return AbcStatus::Ok;
@@ -54,32 +56,29 @@ bool is_multiname_kind(std::uint32_t raw) {
 
 AbcStatus parse_int_pool(ByteReader& reader, AbcConstantPool& pool) {
   std::uint32_t count = 0;
-  const AbcStatus status = read_count(reader, count);
+  const AbcStatus status = read_count(reader, count, 1);
   if (status != AbcStatus::Ok) {
     return status;
   }
   pool.ints.assign(static_cast<std::size_t>(count), 0);
   for (std::size_t i = 1; i < pool.ints.size(); ++i) {
-    const std::uint32_t raw = reader.u30();
+    pool.ints[i] = reader.s32();
     if (!reader.ok()) {
       return reader.status();
     }
-    pool.ints[i] = (raw & 0x20000000u) != 0u
-                       ? static_cast<std::int32_t>(raw) - 0x40000000
-                       : static_cast<std::int32_t>(raw);
   }
   return AbcStatus::Ok;
 }
 
 AbcStatus parse_uint_pool(ByteReader& reader, AbcConstantPool& pool) {
   std::uint32_t count = 0;
-  const AbcStatus status = read_count(reader, count);
+  const AbcStatus status = read_count(reader, count, 1);
   if (status != AbcStatus::Ok) {
     return status;
   }
   pool.uints.assign(static_cast<std::size_t>(count), 0);
   for (std::size_t i = 1; i < pool.uints.size(); ++i) {
-    pool.uints[i] = reader.u30();
+    pool.uints[i] = reader.u32();
     if (!reader.ok()) {
       return reader.status();
     }
@@ -89,7 +88,7 @@ AbcStatus parse_uint_pool(ByteReader& reader, AbcConstantPool& pool) {
 
 AbcStatus parse_double_pool(ByteReader& reader, AbcConstantPool& pool) {
   std::uint32_t count = 0;
-  const AbcStatus status = read_count(reader, count);
+  const AbcStatus status = read_count(reader, count, 8);
   if (status != AbcStatus::Ok) {
     return status;
   }
@@ -105,7 +104,7 @@ AbcStatus parse_double_pool(ByteReader& reader, AbcConstantPool& pool) {
 
 AbcStatus parse_string_pool(ByteReader& reader, AbcConstantPool& pool) {
   std::uint32_t count = 0;
-  const AbcStatus status = read_count(reader, count);
+  const AbcStatus status = read_count(reader, count, 1);
   if (status != AbcStatus::Ok) {
     return status;
   }
@@ -121,7 +120,7 @@ AbcStatus parse_string_pool(ByteReader& reader, AbcConstantPool& pool) {
 
 AbcStatus parse_namespace_pool(ByteReader& reader, AbcConstantPool& pool) {
   std::uint32_t count = 0;
-  const AbcStatus status = read_count(reader, count);
+  const AbcStatus status = read_count(reader, count, 2);
   if (status != AbcStatus::Ok) {
     return status;
   }
@@ -143,7 +142,7 @@ AbcStatus parse_namespace_pool(ByteReader& reader, AbcConstantPool& pool) {
 
 AbcStatus parse_ns_set_pool(ByteReader& reader, AbcConstantPool& pool) {
   std::uint32_t count = 0;
-  const AbcStatus status = read_count(reader, count);
+  const AbcStatus status = read_count(reader, count, 1);
   if (status != AbcStatus::Ok) {
     return status;
   }
@@ -173,11 +172,12 @@ AbcStatus parse_ns_set_pool(ByteReader& reader, AbcConstantPool& pool) {
 
 AbcStatus parse_multiname_pool(ByteReader& reader, AbcConstantPool& pool) {
   std::uint32_t count = 0;
-  const AbcStatus status = read_count(reader, count);
+  const AbcStatus status = read_count(reader, count, 1);
   if (status != AbcStatus::Ok) {
     return status;
   }
   pool.multinames.assign(static_cast<std::size_t>(count), AbcMultiname{});
+  std::vector<std::size_t> expansion(pool.multinames.size(), 1);
   for (std::size_t i = 1; i < pool.multinames.size(); ++i) {
     const std::uint32_t kind = reader.u8();
     if (!reader.ok()) {
@@ -244,23 +244,36 @@ AbcStatus parse_multiname_pool(ByteReader& reader, AbcConstantPool& pool) {
         if (static_cast<std::size_t>(params) > reader.remaining()) {
           return AbcStatus::CountOutOfRange;
         }
+        if (static_cast<std::size_t>(multiname.name) >= i) {
+          return AbcStatus::IndexOutOfRange;
+        }
         multiname.params.resize(params);
+        std::size_t nodes = 1 + expansion[multiname.name];
+        if (nodes > kMaxTypeNameExpansion) {
+          return AbcStatus::TypeNameTooLarge;
+        }
         for (std::size_t j = 0; j < multiname.params.size(); ++j) {
           const std::uint32_t index = reader.u30();
           if (!reader.ok()) {
             return reader.status();
           }
-          if (static_cast<std::size_t>(index) >= pool.multinames.size()) {
+          if (static_cast<std::size_t>(index) >= i) {
             return AbcStatus::IndexOutOfRange;
           }
           multiname.params[j] = index;
+          nodes += expansion[index];
+          if (nodes > kMaxTypeNameExpansion) {
+            return AbcStatus::TypeNameTooLarge;
+          }
         }
+        expansion[i] = nodes;
         break;
       }
       default:
         return AbcStatus::BadMultinameKind;
     }
-    if (multiname.name != 0 && static_cast<std::size_t>(multiname.name) >= pool.strings.size()) {
+    if (kind != 0x1Du && multiname.name != 0 &&
+        static_cast<std::size_t>(multiname.name) >= pool.strings.size()) {
       return AbcStatus::IndexOutOfRange;
     }
   }
