@@ -325,6 +325,34 @@ TEST(VmadQuestFragments, AddedBindingLandsInStageOrderAndRemovalRestoresThePaylo
   EXPECT_EQ(fixture::subrecord(repeated).data, between);
 }
 
+TEST(VmadQuestFragments, HighStageIndexLandsAfterSmallerIndexesAtTheSameStage) {
+  const auto tail = fragment_tail(true);
+  auto plugin = read_plugin(fixture::plugin_bytes(quest_bytes(tail), "QUST"), "Vmad.esp");
+  const auto before = fixture::subrecord(plugin).data;
+  const auto initial = extras_of(before);
+  ASSERT_EQ(initial.fragments.size(), 2u);
+  ASSERT_EQ(initial.fragments[0].stage_index, 0);
+  ASSERT_EQ(initial.fragments[1].stage_index, 5);
+  const auto base = extras_base(before);
+  constexpr auto high = static_cast<std::int32_t>(0x80000000u);
+
+  EXPECT_EQ(add_quest_vmad_fragment(plugin, fixture::key(), 10, high, "QF_Test", "Fragment_High"),
+            VmadStructureMutationStatus::updated);
+  const auto appended = fixture::subrecord(read_plugin(write_plugin(plugin), "Vmad.esp")).data;
+  const auto three = extras_of(appended);
+  ASSERT_EQ(three.fragments.size(), 3u);
+  expect_fragment(three.fragments[0], 10, 0, 0, 0, "Fragment_10");
+  expect_fragment(three.fragments[1], 10, 0xFFFF, 5, 1, "Fragment_20");
+  expect_fragment(three.fragments[2], 10, 0, high, 0, "Fragment_High");
+  EXPECT_EQ(three.fragments[2].offset, three.fragments[1].end);
+  EXPECT_EQ(slice(appended, 0, base + three.fragments[2].offset),
+            slice(before, 0, base + initial.fragments[1].end));
+
+  EXPECT_EQ(add_quest_vmad_fragment(plugin, fixture::key(), 10, high, "QF_Test", "Fragment_High"),
+            VmadStructureMutationStatus::already_present);
+  EXPECT_EQ(fixture::subrecord(plugin).data, appended);
+}
+
 TEST(VmadQuestFragments, AddedBindingRefusesBoundStagesAndMissingFragmentSections) {
   auto refr = read_plugin(fixture::plugin_bytes(), "Vmad.esp");
   const auto refr_before = write_plugin(refr);
