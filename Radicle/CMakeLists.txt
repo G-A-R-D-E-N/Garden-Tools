@@ -229,6 +229,7 @@ add_library(fo4
   src/environment/material_swap.cpp
   src/pex/pex.cpp
   src/papyrus/status.cpp
+  src/papyrus/value.cpp
   src/papyrus/host.cpp
   src/papyrus/array_ops.cpp
   src/papyrus/interpreter.cpp
