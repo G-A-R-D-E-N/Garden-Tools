@@ -681,3 +681,60 @@ TEST(RecordFlags, MarkOverrideDeletedClearsPartialFormOnlyWhereItCanBePartial) {
   EXPECT_TRUE(ref_record->header.flags.is_deleted());
   EXPECT_TRUE(ref_record->header.flags.test(fo4::RecordFlags::partial_form));
 }
+
+TEST(RecordFlags, UndeleteRefusesUndecodableMasterVersionWithoutChange) {
+  const CellPlugin master{.name = "Fallout4.esm"};
+  const CellPlugin temporary{
+      .name = "Patch.esp",
+      .masters = {"Fallout4.esm"},
+      .cell_form = 0x01000900,
+      .ref_flags = fo4::RecordFlags::deleted,
+      .ref_subs = {{"NAME", std::string{'\x01', '\x08', '\0', '\0'}}},
+  };
+  auto persistent = temporary;
+  persistent.bucket = fo4::GroupType::cell_persistent_children;
+  persistent.ref_flags = fo4::RecordFlags::deleted | fo4::RecordFlags::persistent;
+  for (const auto& patch : {temporary, persistent}) {
+    auto plugin = load(patch);
+    const auto ref = fo4::FormKey::parse("000800:Fallout4.esm");
+    const auto before = fo4::write_plugin(plugin);
+    EXPECT_EQ(fo4::undelete_and_disable_reference(
+                  plugin, load_order_with_undecodable_reference(master, patch), ref),
+              fo4::UndeleteStatus::incomplete_reference);
+    EXPECT_EQ(fo4::write_plugin(plugin), before);
+  }
+}
+
+TEST(RecordFlags, UndeleteRefusesMasterVersionWithoutNameOrDataWithoutChange) {
+  const CellPlugin master{.name = "Fallout4.esm",
+                          .ref_subs = {{"XSCL", std::string{'\0', '\0', '\x80', '\x3f'}}}};
+  const CellPlugin patch{
+      .name = "Patch.esp",
+      .masters = {"Fallout4.esm"},
+      .cell_form = 0x01000900,
+      .ref_flags = fo4::RecordFlags::deleted,
+      .ref_subs = {{"NAME", std::string{'\x01', '\x08', '\0', '\0'}}},
+  };
+  auto plugin = load(patch);
+  const auto ref = fo4::FormKey::parse("000800:Fallout4.esm");
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_EQ(fo4::undelete_and_disable_reference(plugin, load_order(master, patch), ref),
+            fo4::UndeleteStatus::incomplete_reference);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(RecordFlags, UndeleteTreatsOverrideWhoseOwnerIsNotLoadedAsInjected) {
+  auto plugin = load(CellPlugin{
+      .name = "Patch.esp",
+      .masters = {"Base.esm"},
+      .cell_form = 0x01000900,
+      .ref_flags = fo4::RecordFlags::deleted,
+      .ref_subs = {{"NAME", std::string{'\x01', '\x08', '\0', '\0'}},
+                   {"DATA", position_data(1.0f, 2.0f, 3.0f)}},
+  });
+  const auto ref = fo4::FormKey::parse("000800:Base.esm");
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_EQ(fo4::undelete_and_disable_reference(plugin, fo4::env::Environment{}, ref),
+            fo4::UndeleteStatus::injected_record);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}

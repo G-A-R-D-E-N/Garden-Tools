@@ -176,4 +176,23 @@ inline const fo4::Subrecord* subrecord_named(const fo4::Record& record, std::str
   return nullptr;
 }
 
+inline fo4::env::Environment load_order_with_undecodable_reference(const CellPlugin& master,
+                                                                   const CellPlugin& patch) {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  const auto group = fo4::test::begin_group(out, "REFR", 0);
+  const auto record = fo4::test::begin_record(
+      out, master.ref_signature, master.ref_flags | fo4::RecordFlags::compressed, master.ref_form);
+  out.u32(32);
+  out.raw(std::string_view{"not-zlib-data-at-all"});
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  fo4::test::TempDataDir dir;
+  dir.write(std::string{master.name}, out.bytes, 1);
+  dir.write(std::string{patch.name}, build_plugin(patch), 2);
+  const std::vector<std::filesystem::path> paths{dir.path() / std::string{master.name},
+                                                 dir.path() / std::string{patch.name}};
+  return fo4::env::Environment::load(paths);
+}
+
 }  // namespace fo4::test

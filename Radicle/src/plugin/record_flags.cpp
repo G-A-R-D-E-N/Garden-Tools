@@ -54,7 +54,10 @@ const Record* winning_master_content(const env::Environment& load_order,
   for (auto it = versions.rbegin(); it != versions.rend(); ++it) {
     const auto& owner = load_order.plugin(it->plugin).key;
     if (owner == plugin.key || !is_master_of(plugin, owner)) continue;
-    if (it->record->header.flags.is_deleted() || is_partial_form(*it->record)) continue;
+    if (it->record->header.flags.is_deleted() || is_partial_form(*it->record) ||
+        it->record->undecodable) {
+      continue;
+    }
     return it->record;
   }
   return nullptr;
@@ -274,6 +277,9 @@ UndeleteStatus undelete_and_disable_reference(Plugin& plugin,
   if (!placed) return UndeleteStatus::record_missing;
   Record& record = placed->record();
   if (master != nullptr) record.subrecords = master->subrecords;
+  if (find_subrecord(record, k_name) == nullptr || find_subrecord(record, k_data) == nullptr) {
+    return UndeleteStatus::incomplete_reference;
+  }
   const bool persistent = record.header.flags.is_persistent();
   detail::mark_record_modified(next, record);
   record.header.flags =

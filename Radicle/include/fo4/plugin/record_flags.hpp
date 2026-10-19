@@ -37,6 +37,7 @@ RecordFlagStatus set_record_flags(Plugin& plugin, const FormKey& record_key, Rec
 
 MarkDeletedStatus mark_override_deleted(Plugin& plugin, const FormKey& record_key);
 
+// load_order must hold the record's owner plugin, or the record reads as injected_record.
 UndeleteStatus undelete_and_disable_reference(Plugin& plugin,
                                              const env::Environment& load_order,
                                              const FormKey& record_key);
