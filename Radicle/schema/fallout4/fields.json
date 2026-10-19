@@ -22959,7 +22959,7 @@
         }
       ],
       "formlink_lists": [
-        {"path": "SMQN\\Quests", "label": "Quests", "subrecord": "NNAM", "counter": "QNAM", "targets": ["QUST"], "nullable": false, "mutation": "existing_only"}
+        {"path": "SMQN\\Quests", "label": "Quests", "subrecord": "NNAM", "counter": "QNAM", "element_tail": "RNAM", "targets": ["QUST"], "nullable": false, "mutation": "existing_only"}
       ],
       "localized_subrecords": []
     },

@@ -227,7 +227,7 @@ TEST(StoryManagerRecordsSynthetic, QuestListRowsReadAndRetargetEveryQuestNodeEnt
 }
 
 TEST(StoryManagerRecordsSynthetic, QuestListRemovalAndClearKeepTheDeclaredCount) {
-  // Regression: QNAM requires a rewrite after NNAM removal or clear, or the node declares more quests than it holds.
+  // Regression: QNAM requires a rewrite and each quest's RNAM travels with its NNAM, or removal leaves a stale count and an orphan RNAM that the next quest inherits.
   const auto quests = fo4::schema::formlink_list_descriptor(fo4::Signature::from_string("SMQN"), "SMQN\\Quests");
   ASSERT_TRUE(quests.has_value());
 
@@ -236,25 +236,37 @@ TEST(StoryManagerRecordsSynthetic, QuestListRemovalAndClearKeepTheDeclaredCount)
             fo4::schema::FormLinkListMutationStatus::updated);
   auto reread = fo4::read_plugin(fo4::write_plugin(removed), "Patch.esp");
   EXPECT_EQ(payloads(reread, 2050, "NNAM"), (std::vector<Bytes>{u32(2058)}));
+  EXPECT_EQ(payloads(reread, 2050, "RNAM"), (std::vector<Bytes>{f32(2.0f)}));
   EXPECT_EQ(payload(reread, 2050, "QNAM"), u32(1));
 
   EXPECT_EQ(fo4::schema::remove_record_formlink_list_element(removed, key(2050), *quests, 0),
             fo4::schema::FormLinkListMutationStatus::updated);
   reread = fo4::read_plugin(fo4::write_plugin(removed), "Patch.esp");
   EXPECT_TRUE(payloads(reread, 2050, "NNAM").empty());
+  EXPECT_TRUE(payloads(reread, 2050, "RNAM").empty());
   EXPECT_EQ(payload(reread, 2050, "QNAM"), u32(0));
 
   auto matched = load();
   EXPECT_EQ(fo4::schema::remove_record_formlink_list_elements_matching(matched, key(2050), *quests, key(2053)), 1u);
   reread = fo4::read_plugin(fo4::write_plugin(matched), "Patch.esp");
   EXPECT_EQ(payloads(reread, 2050, "NNAM"), (std::vector<Bytes>{u32(2058)}));
+  EXPECT_EQ(payloads(reread, 2050, "RNAM"), (std::vector<Bytes>{f32(2.0f)}));
   EXPECT_EQ(payload(reread, 2050, "QNAM"), u32(1));
+
+  auto moved = load();
+  EXPECT_EQ(fo4::schema::move_record_formlink_list_element(moved, key(2050), *quests, 0, 1),
+            fo4::schema::FormLinkListMutationStatus::updated);
+  reread = fo4::read_plugin(fo4::write_plugin(moved), "Patch.esp");
+  EXPECT_EQ(payloads(reread, 2050, "NNAM"), (std::vector<Bytes>{u32(2058), u32(2053)}));
+  EXPECT_EQ(payloads(reread, 2050, "RNAM"), (std::vector<Bytes>{f32(2.0f), f32(1.5f)}));
+  EXPECT_EQ(payload(reread, 2050, "QNAM"), u32(2));
 
   auto cleared = load();
   EXPECT_EQ(fo4::schema::clear_record_formlink_list(cleared, key(2050), *quests),
             fo4::schema::FormLinkListMutationStatus::updated);
   reread = fo4::read_plugin(fo4::write_plugin(cleared), "Patch.esp");
   EXPECT_TRUE(payloads(reread, 2050, "NNAM").empty());
+  EXPECT_TRUE(payloads(reread, 2050, "RNAM").empty());
   EXPECT_EQ(payload(reread, 2050, "QNAM"), u32(0));
 }
 
