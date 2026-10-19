@@ -14,14 +14,14 @@ struct OperandAccess {
 };
 
 struct AccessList {
-  OperandAccess items[3];
+  OperandAccess items[4];
   std::size_t count{0};
 };
 
 AccessList make_accesses(std::initializer_list<OperandAccess> items) {
   AccessList list;
   for (const auto& item : items) {
-    if (list.count < 3) list.items[list.count++] = item;
+    if (list.count < 4) list.items[list.count++] = item;
   }
   return list;
 }
@@ -61,25 +61,35 @@ AccessList operand_accesses(std::uint8_t op) {
     case PexOp::INeg:
     case PexOp::FNeg:
     case PexOp::Is:
+    case PexOp::ArrayCreate:
+    case PexOp::ArrayLength:
       return make_accesses({{0, PexAccessKind::Write}, {1, PexAccessKind::Read}});
     case PexOp::Return:
     case PexOp::JmpT:
     case PexOp::JmpF:
       return make_accesses({{0, PexAccessKind::Read}});
     case PexOp::PropGet:
-      return make_accesses({{0, PexAccessKind::Read}, {1, PexAccessKind::Read}});
+      return make_accesses({{0, PexAccessKind::Read},
+                            {1, PexAccessKind::Read},
+                            {2, PexAccessKind::Write}});
     case PexOp::PropSet:
-      return make_accesses({{0, PexAccessKind::Write}, {2, PexAccessKind::Read}});
-    case PexOp::ArrayLength:
-      return make_accesses({{0, PexAccessKind::Read}});
+      return make_accesses({{0, PexAccessKind::Write},
+                            {1, PexAccessKind::Read},
+                            {2, PexAccessKind::Read}});
     case PexOp::ArrayGetElement:
+      return make_accesses({{0, PexAccessKind::Write},
+                            {1, PexAccessKind::Read},
+                            {2, PexAccessKind::Read}});
     case PexOp::ArrayFindElement:
     case PexOp::ArrayRFindElement:
-      return make_accesses({{0, PexAccessKind::Read}, {1, PexAccessKind::Read}});
+      return make_accesses({{0, PexAccessKind::Read},
+                            {1, PexAccessKind::Write},
+                            {2, PexAccessKind::Read},
+                            {3, PexAccessKind::Read}});
     case PexOp::ArraySetElement:
-      return make_accesses({{0, PexAccessKind::Write}, {2, PexAccessKind::Read}});
     case PexOp::ArrayAdd:
     case PexOp::ArrayInsert:
+    case PexOp::ArrayRemove:
       return make_accesses({{0, PexAccessKind::Write},
                             {1, PexAccessKind::Read},
                             {2, PexAccessKind::Read}});
@@ -87,8 +97,6 @@ AccessList operand_accesses(std::uint8_t op) {
     case PexOp::ArrayClear:
     case PexOp::StructCreate:
       return make_accesses({{0, PexAccessKind::Write}});
-    case PexOp::ArrayRemove:
-      return make_accesses({{0, PexAccessKind::Write}, {1, PexAccessKind::Read}});
     case PexOp::StructGet:
       return make_accesses({{0, PexAccessKind::Read}});
     case PexOp::StructSet:
@@ -140,14 +148,16 @@ const DeclaredName* find_declared(const std::vector<DeclaredName>& names,
   return nullptr;
 }
 
-std::string declared_type_of(const fo4::pex::PexFunction& function, const std::string& name) {
+std::string declared_type_of(const fo4::pex::PexFunction& function, const std::string& name,
+                             const std::vector<DeclaredName>& declared) {
   for (const auto& param : function.params) {
     if (pex_name_equal(param.name, name)) return param.type;
   }
   for (const auto& local : function.locals) {
     if (pex_name_equal(local.name, name)) return local.type;
   }
-  return {};
+  const auto* match = find_declared(declared, name);
+  return match != nullptr ? match->type : std::string{};
 }
 
 PexFunctionRef make_ref(std::size_t fileIndex, std::size_t objectIndex,
@@ -377,7 +387,7 @@ PexCallGraph build_call_graph(std::span<const fo4::pex::PexFile* const> files) {
                 targetObject = object.name;
                 site.selfTarget = true;
               } else {
-                targetObject = declared_type_of(function, expression.str);
+                targetObject = declared_type_of(function, expression.str, declared);
                 if (targetObject.empty()) targetObject = expression.str;
               }
             }
