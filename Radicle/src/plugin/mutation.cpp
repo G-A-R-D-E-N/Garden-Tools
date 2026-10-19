@@ -550,7 +550,7 @@ RecordCopyStatus copy_record_as_override(Plugin& destination,
   }
 
   if (added_master) {
-    next = remap_plugin_masters(std::move(next), std::move(masters));
+    next = remap_plugin_masters(std::move(next), std::move(masters), type_lookup);
   }
 
   const auto source_context = plugin_form_id_context(source);

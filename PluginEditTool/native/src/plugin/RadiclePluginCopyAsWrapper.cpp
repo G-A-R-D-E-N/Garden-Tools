@@ -39,7 +39,8 @@ bool sameOverrideContent(const fo4::Plugin& targetPlugin, const fo4::Record& tar
     auto remapped = targetRecord;
     try {
         fo4::remap_record_form_links(remapped, fo4::plugin_form_id_context(targetPlugin),
-                                     fo4::plugin_form_id_context(sourcePlugin), &targetPlugin);
+                                     fo4::plugin_form_id_context(sourcePlugin),
+                                     fo4::plugin_type_lookup(targetPlugin));
     } catch (const std::exception&) {
         return false;
     }

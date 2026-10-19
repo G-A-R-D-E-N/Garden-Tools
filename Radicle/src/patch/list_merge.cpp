@@ -99,14 +99,17 @@ std::vector<FormKey> merge_form_list(std::vector<FormKey> target,
   return target;
 }
 
-PluginKind owner_kind(const env::Environment& env, const PluginKey& owner, const Plugin& source) {
+PluginKind owner_kind(const env::Environment& env, const PluginKey& owner,
+                      std::span<const Plugin* const> sources) {
   const auto index = env.find_plugin(owner.filename());
   if (index.has_value()) return env.plugins()[*index].kind;
-  for (const auto& master : source.header.masters) {
-    if (master.key == owner) return master.kind;
+  for (const auto* source : sources) {
+    for (const auto& master : source->header.masters) {
+      if (master.key == owner) return master.kind;
+    }
   }
   throw ListMergeError("list merge cannot type the owner " + std::string(owner.filename()) +
-                       ": it is not loaded and the source plugin does not carry it as a master");
+                       ": it is not loaded and no merged version carries it as a master");
 }
 
 FormLinkTypeLookup environment_type_lookup(const env::Environment& env) {
@@ -157,7 +160,7 @@ std::vector<PluginKey> master_load_order(const env::Environment& env, const Plug
 
 void add_entry_masters(Plugin& patch,
                        const env::Environment& env,
-                       const Plugin& source,
+                       std::span<const Plugin* const> sources,
                        const std::set<PluginKey>& owners,
                        const FormLinkTypeLookup& type_lookup) {
   std::vector<MasterDescriptor> masters;
@@ -167,7 +170,7 @@ void add_entry_masters(Plugin& patch,
   bool added = false;
   for (const auto& owner : owners) {
     if (owner == patch.key || has_master(patch, owner)) continue;
-    masters.push_back({owner, owner_kind(env, owner, source)});
+    masters.push_back({owner, owner_kind(env, owner, sources)});
     added = true;
   }
   if (!added) return;
@@ -282,7 +285,7 @@ ListMergeResult build_list_merge_patch(const env::Environment& env,
     }
 
     if (leveled) {
-      add_entry_masters(result.patch, env, winner, entry_owners(merged_entries), type_lookup);
+      add_entry_masters(result.patch, env, list, entry_owners(merged_entries), type_lookup);
       if (!forms::replace_leveled_list_entries(result.patch, key, merged_entries)) {
         throw ListMergeError("leveled list cannot be rewritten: " + key.to_string());
       }
@@ -291,7 +294,7 @@ ListMergeResult build_list_merge_patch(const env::Environment& env,
       if (!descriptor.has_value()) {
         throw ListMergeError("no FormLink list row for " + std::string(k_form_list_path));
       }
-      add_entry_masters(result.patch, env, winner, entry_owners(merged_keys), type_lookup);
+      add_entry_masters(result.patch, env, list, entry_owners(merged_keys), type_lookup);
       write_form_list(result.patch, key, *descriptor, merged_keys);
     }
     ++result.counts.merged;
