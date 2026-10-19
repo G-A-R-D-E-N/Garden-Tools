@@ -31,7 +31,8 @@ std::string label_of(std::uint32_t value) {
   return out;
 }
 
-void write_actor(ByteWriter& out, std::uint32_t local, std::size_t parent_bytes) {
+void write_actor(ByteWriter& out, std::uint32_t local, std::size_t parent_bytes,
+                 std::size_t link_bytes = 8) {
   const auto at = fo4::test::begin_record(out, "ACHR", 0, 0x01000000u | local);
   fo4::test::write_subrecord(out, "EDID", std::string_view{"Actor\0", 6});
   fo4::test::write_subrecord(out, "XAPD", Bytes{std::byte{1}});
@@ -47,10 +48,12 @@ void write_actor(ByteWriter& out, std::uint32_t local, std::size_t parent_bytes)
   ByteWriter link;
   link.u32(0x00000A50u);
   link.u32(0x00000A51u);
+  if (link_bytes < link.bytes.size()) link.bytes.resize(link_bytes);
   fo4::test::write_subrecord(out, "XLKR", link.bytes);
   ByteWriter second_link;
   second_link.u32(0x00000A52u);
   second_link.u32(0x00000A53u);
+  if (link_bytes < second_link.bytes.size()) second_link.bytes.resize(link_bytes);
   fo4::test::write_subrecord(out, "XLKR", second_link.bytes);
   ByteWriter ref_types;
   ref_types.u32(0x00000A60u);
@@ -60,9 +63,9 @@ void write_actor(ByteWriter& out, std::uint32_t local, std::size_t parent_bytes)
   fo4::test::end_record(out, at);
 }
 
-std::vector<std::byte> make_plugin(std::size_t parent_bytes = 8) {
+std::vector<std::byte> make_plugin(std::size_t parent_bytes = 8, std::size_t link_bytes = 8) {
   ByteWriter out;
-  out.bytes = fo4::test::make_tes4_plugin(0, 1.0f, {});
+  out.bytes = fo4::test::make_tes4_plugin(0, 1.0f, {"Fallout4.esm"});
   const auto cell_group = fo4::test::begin_group(out, "CELL", 0);
   const auto cell = fo4::test::begin_record(out, "CELL", 0, 0x01000000u | 0x800u);
   fo4::test::write_subrecord(out, "EDID", std::string_view{"Garden\0", 7});
@@ -70,7 +73,7 @@ std::vector<std::byte> make_plugin(std::size_t parent_bytes = 8) {
   const auto label = label_of(0x01000000u | 0x800u);
   const auto children = fo4::test::begin_group(out, label, 6);
   const auto persistent = fo4::test::begin_group(out, label, 8);
-  write_actor(out, 0x810u, parent_bytes);
+  write_actor(out, 0x810u, parent_bytes, link_bytes);
   fo4::test::end_group(out, persistent);
   fo4::test::end_group(out, children);
   fo4::test::end_group(out, cell_group);
@@ -114,7 +117,10 @@ std::optional<std::uint32_t> link_at(const fo4::Record& record, std::string_view
   std::size_t seen = 0;
   for (const auto& sub : record.subrecords) {
     if (sub.signature != field->subrecord) continue;
-    if (sub.data.size() != field->payload_sizes[0]) continue;
+    if (sub.data.size() != field->payload_sizes[0] &&
+        sub.data.size() != field->payload_sizes[1]) {
+      continue;
+    }
     if (seen++ != index) continue;
     std::uint32_t value = 0;
     std::memcpy(&value, sub.data.data() + field->offset, sizeof(value));
@@ -201,7 +207,8 @@ TEST(AchrParityRows, LinkedReferenceKeywordAndReferenceShareEachEightByteEntry) 
   ASSERT_TRUE(keyword.has_value());
   EXPECT_EQ(keyword->subrecord, fo4::Signature::from_string("XLKR"));
   EXPECT_EQ(keyword->offset, 0u);
-  EXPECT_EQ(keyword->payload_sizes[0], 8u);
+  EXPECT_EQ(keyword->payload_sizes[0], 4u);
+  EXPECT_EQ(keyword->payload_sizes[1], 8u);
   EXPECT_TRUE(keyword->address.repeated);
   EXPECT_TRUE(
       fo4::schema::formlink_field_target_allowed(*keyword, fo4::Signature::from_string("KYWD")));
@@ -218,6 +225,17 @@ TEST(AchrParityRows, LinkedReferenceKeywordAndReferenceShareEachEightByteEntry) 
   EXPECT_EQ(link_at(full, "ACHR\\LinkedReference", 0), 0x00000A51u);
   EXPECT_EQ(link_at(full, "ACHR\\LinkedReferenceKeyword", 1), 0x00000A52u);
   EXPECT_EQ(link_at(full, "ACHR\\LinkedReference", 1), 0x00000A53u);
+}
+
+TEST(AchrParityRows, FourByteLinkedReferenceKeepsTheKeywordSlot) {
+  const auto plugin = fo4::read_plugin(make_plugin(8, 4), "Patch.esp");
+  const auto& full = actor(plugin, 0x810u);
+
+  EXPECT_EQ(link_at(full, "ACHR\\LinkedReferenceKeyword", 0), 0x00000A50u);
+  EXPECT_EQ(link_at(full, "ACHR\\LinkedReferenceKeyword", 1), 0x00000A52u);
+  EXPECT_FALSE(link_at(full, "ACHR\\LinkedReference", 0).has_value());
+  EXPECT_EQ(fo4::record_field_count(plugin, patch_key(0x810u), "ACHR\\LinkedReferenceKeyword"),
+            2u);
 }
 
 TEST(AchrParityRows, LocationRefTypesAreAPackedArrayOfFourByteRefs) {
@@ -239,11 +257,11 @@ TEST(AchrParityRows, LocationRefTypesAreAPackedArrayOfFourByteRefs) {
 
   EXPECT_EQ(fo4::set_record_formlink_list_element(
                 plugin, patch_key(0x810u), *list, 1,
-                fo4::FormKey::parse("00000A70:Patch.esp")),
+                fo4::FormKey::parse("00000A70:Fallout4.esm")),
             fo4::FormLinkListMutationStatus::updated);
   EXPECT_EQ(fo4::set_record_formlink_list_element(
                 plugin, patch_key(0x810u), *list, 2,
-                fo4::FormKey::parse("00000A71:Patch.esp")),
+                fo4::FormKey::parse("00000A71:Fallout4.esm")),
             fo4::FormLinkListMutationStatus::index_out_of_range);
 
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
@@ -273,7 +291,7 @@ TEST(AchrParityRows, WritesTheParentFlagAndDelayThenRereads) {
   EXPECT_THROW(fo4::set_record_scalar(plugin, patch_key(0x810u), *flag, "256"),
                fo4::schema::ScalarError);
   EXPECT_EQ(fo4::set_record_formlink_field(plugin, patch_key(0x810u), *link,
-                                           fo4::FormKey::parse("00000A90:Patch.esp")),
+                                           fo4::FormKey::parse("00000A90:Fallout4.esm")),
             fo4::FormLinkFieldMutationStatus::updated);
   EXPECT_THROW(fo4::set_record_formlink_field(plugin, patch_key(0x810u), *link,
                                               fo4::FormKey::parse("00000800:Patch.esp")),

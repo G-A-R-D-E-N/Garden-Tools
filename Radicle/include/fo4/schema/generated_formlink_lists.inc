@@ -2436,7 +2436,7 @@ inline constexpr FormLinkFieldDescriptor k_generated_formlink_fields[] = {
   {Signature::from_string("ACHR"), "ACHR\\EncounterZone", "Encounter zone", Signature::from_string("XEZN"), 0, false, 36, 1, FieldAddress{}, {{4}}},
   {Signature::from_string("ACHR"), "ACHR\\Layer", "Layer", Signature::from_string("XLYR"), 0, false, 37, 1, FieldAddress{}, {{4}}},
   {Signature::from_string("ACHR"), "ACHR\\LinkedReference", "Linked reference", Signature::from_string("XLKR"), 4, true, 38, 11, FieldAddress{true, 0, 0, FieldDiscriminator{}}, {{8}}},
-  {Signature::from_string("ACHR"), "ACHR\\LinkedReferenceKeyword", "Linked reference keyword or reference", Signature::from_string("XLKR"), 0, true, 49, 12, FieldAddress{true, 0, 0, FieldDiscriminator{}}, {{8}}},
+  {Signature::from_string("ACHR"), "ACHR\\LinkedReferenceKeyword", "Linked reference keyword or reference", Signature::from_string("XLKR"), 0, true, 49, 12, FieldAddress{true, 0, 0, FieldDiscriminator{}}, {{4, 8}}},
   {Signature::from_string("ACHR"), "ACHR\\LitWater", "Lit water", Signature::from_string("XLTW"), 0, false, 61, 2, FieldAddress{true, 0, 0, FieldDiscriminator{}}, {{4}}},
   {Signature::from_string("ACHR"), "ACHR\\LocationReference", "Location reference", Signature::from_string("XLRL"), 0, true, 63, 2, FieldAddress{}, {{4}}},
   {Signature::from_string("ACHR"), "ACHR\\LockKey", "Lock key", Signature::from_string("XLOC"), 4, true, 65, 1, FieldAddress{}, {{16}}},
