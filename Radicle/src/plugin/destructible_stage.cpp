@@ -138,17 +138,14 @@ std::optional<std::size_t> group_position(const Record& record, Signature anchor
   const auto rules = schema::authoring_subrecords(*constraint);
   const auto target = rule_index(rules, anchor);
   if (!target.has_value()) return std::nullopt;
-  for (const auto& subrecord : record.subrecords) {
-    if (!rule_index(rules, subrecord.signature).has_value()) return std::nullopt;
-  }
   std::size_t position = 0;
-  for (std::size_t index = record.subrecords.size(); index > 0; --index) {
-    const auto existing = rule_index(rules, record.subrecords[index - 1].signature);
+  std::optional<std::size_t> previous;
+  for (std::size_t index = 0; index < record.subrecords.size(); ++index) {
+    const auto existing = rule_index(rules, record.subrecords[index].signature);
     if (!existing.has_value()) return std::nullopt;
-    if (*existing <= *target) {
-      position = index;
-      break;
-    }
+    if (previous.has_value() && *existing < *previous) return std::nullopt;
+    previous = existing;
+    if (*existing <= *target) position = index + 1;
   }
   return position;
 }
