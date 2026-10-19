@@ -480,7 +480,6 @@ void replace_quest_alias(Plugin& plugin,
         member_rank(k_alias_frame, member.signature).has_value()) {
       continue;
     }
-    // A kind change with no fill written must not carry over a fill member of either kind.
     if (kind_changed && !fill_written &&
         (member_run(existing_kind, member.signature) == AliasMemberRun::fill ||
          member_run(creation.kind, member.signature) == AliasMemberRun::fill)) {

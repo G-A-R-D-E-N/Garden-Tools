@@ -210,10 +210,10 @@ order, when a kind change that writes no fill would carry over a Fill Type
 member of either kind, or when the spliced alias does not decode. Order is
 compared by run rather than by single signature: `CIS1` and `CIS2` rank with
 the `CTDA` head of their condition run and `COED` ranks with the `CNTO` it
-belongs to, so a canonical `CTDA`, `CIS1`, `CTDA` condition run and a `CNTO`,
-`COED`, `CNTO`, `COED` item list are in order. A replacement that changes
-the alias kind rewrites the alias frame for the new kind (`ALST`/`ALLS`, or
-`ALCS`/`ALMI` when the new creation is a collection, plus `ALID`, `FNAM`,
+belongs to, so a canonical `CTDA`, `CIS1`, `CTDA` condition run and a `COCT`,
+`CNTO`, `COED`, `CNTO`, `COED` item list are in order. A replacement that
+changes the alias kind rewrites the alias frame for the new kind (`ALST`/`ALLS`,
+or `ALCS`/`ALMI` when the new creation is a collection, plus `ALID`, `FNAM`,
 `ALFI`, `ALED`) and preserves everything else under the new kind's order.
 
 ## Mutation safety
