@@ -631,8 +631,8 @@ TEST(ObjectBaseRecordsSynthetic, ModelInfoRowsDecodeEveryTextureAndMaterialEntry
   EXPECT_EQ(decoded_slots(*door, "DOOR\\ModelInfoAddonNode"), model_values({k_door_addon_nodes[0]}));
   EXPECT_TRUE(decoded_slots(*door, "DOOR\\ModelInfoMaterialFileHash").empty());
   EXPECT_EQ(fo4::record_field_count(plugin, door_key, "DOOR\\ModelInfoTextureFileHash"), 2u);
-  EXPECT_EQ(fo4::record_field_count(plugin, door_key, "DOOR\\ModelInfoAddonNodes"), 1u);
-  EXPECT_EQ(fo4::record_field_count(plugin, door_key, "DOOR\\ModelInfoMaterials"), 0u);
+  EXPECT_EQ(fo4::record_field_count(plugin, door_key, "DOOR\\ModelInfoAddonNode"), 1u);
+  EXPECT_EQ(fo4::record_field_count(plugin, door_key, "DOOR\\ModelInfoMaterialFileHash"), 0u);
 
   EXPECT_EQ(decoded_slots(*cont, "CONT\\ModelInfoTextureFileHash"),
             model_values({k_cont_textures[0].file_hash, k_cont_textures[1].file_hash}));
@@ -647,7 +647,7 @@ TEST(ObjectBaseRecordsSynthetic, ModelInfoRowsDecodeEveryTextureAndMaterialEntry
   EXPECT_TRUE(decoded_slots(*cont, "CONT\\ModelInfoAddonNode").empty());
   EXPECT_EQ(fo4::record_field_count(plugin, cont_key, "CONT\\ModelInfoTextureFileHash"), 2u);
   EXPECT_EQ(fo4::record_field_count(plugin, cont_key, "CONT\\ModelInfoMaterialFileHash"), 1u);
-  EXPECT_EQ(fo4::record_field_count(plugin, cont_key, "CONT\\ModelInfoAddonNodes"), 0u);
+  EXPECT_EQ(fo4::record_field_count(plugin, cont_key, "CONT\\ModelInfoAddonNode"), 0u);
 
   const auto extension = fo4::schema::scalar_field_descriptor(
       fo4::Signature::from_string("CONT"), "CONT\\ModelInfoMaterialExtension");
@@ -719,7 +719,7 @@ TEST(ObjectBaseRecordsSynthetic, ModelInfoPayloadsOutsideTheModelledArmAreAbsent
     ASSERT_NE(record, nullptr);
     EXPECT_TRUE(decoded_slots(*record, "DOOR\\ModelInfoTextureFileHash").empty());
     EXPECT_TRUE(decoded_slots(*record, "DOOR\\ModelInfoMaterialFileHash").empty());
-    EXPECT_EQ(fo4::record_field_count(plugin, key, "DOOR\\ModelInfoTextures"), 0u);
+    EXPECT_EQ(fo4::record_field_count(plugin, key, "DOOR\\ModelInfoAddonNode"), 0u);
     EXPECT_EQ(fo4::set_record_scalar(plugin, key, *field, 0, "7"),
               fo4::ScalarMutationStatus::subrecord_missing);
     expect_no_model_info_issue(*record);

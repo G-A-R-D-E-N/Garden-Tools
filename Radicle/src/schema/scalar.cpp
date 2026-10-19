@@ -246,7 +246,7 @@ std::optional<SegmentSpan> header_segment(std::span<const std::byte> payload,
     const auto count_word = layouts[index].count_word;
     if (count_word >= header_words) continue;
     const auto count = static_cast<std::size_t>(read_u32(payload.subspan(4 * (count_word + 1))));
-    if (count > payload.size()) return std::nullopt;
+    if (count > (payload.size() - base) / layouts[index].stride) return std::nullopt;
     if (index == segment.index) ours = SegmentSpan{base, count};
     base += count * layouts[index].stride;
   }

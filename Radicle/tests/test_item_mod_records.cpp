@@ -81,6 +81,23 @@ Bytes note_data() {
   return out.bytes;
 }
 
+Bytes note_modt() {
+  ByteWriter out;
+  out.u32(4);
+  out.u32(1);
+  out.u32(1);
+  out.u32(0);
+  out.u32(1);
+  out.u32(0x0A0B0C0Du);
+  out.sig("dds");
+  out.u32(0x11121314u);
+  out.u32(42);
+  out.u32(0x71727374u);
+  out.sig("bgsm");
+  out.u32(0x81828384u);
+  return out.bytes;
+}
+
 Bytes ench_enit() {
   ByteWriter out;
   out.i32(5);
@@ -152,6 +169,7 @@ std::vector<std::byte> make_plugin() {
   write_group(out, "NOTE", {{0x810, {{"EDID", zstr("RadicleNote")},
                                      {"OBND", zeros(12)},
                                      {"MODL", zstr("Note.nif")},
+                                     {"MODT", note_modt()},
                                      {"ICON", zstr("Icon.dds")},
                                      {"YNAM", u32_bytes(raw_id(0x800))},
                                      {"ZNAM", u32_bytes(raw_id(0x800))},
