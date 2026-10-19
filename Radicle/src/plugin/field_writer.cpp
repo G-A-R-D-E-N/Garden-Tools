@@ -196,30 +196,34 @@ ScalarMutationStatus write_scalar(Plugin& plugin,
                               " is a localized string in a localized plugin");
   }
 
-  const auto existing = schema::scalar_slot_bytes(data, slot, field.scalar);
-  static_cast<void>(schema::decode_scalar(existing, field.scalar));
-
   const auto encoded = schema::encode_scalar(value, field.scalar);
-  if (std::equal(existing.begin(), existing.end(), encoded.begin(), encoded.end())) {
-    return ScalarMutationStatus::unchanged;
+  std::size_t slot_size = 0;
+  {
+    const auto existing = schema::scalar_slot_bytes(data, slot, field.scalar);
+    static_cast<void>(schema::decode_scalar(existing, field.scalar));
+    if (std::equal(existing.begin(), existing.end(), encoded.begin(), encoded.end())) {
+      return ScalarMutationStatus::unchanged;
+    }
+    slot_size = existing.size();
   }
 
   if (is_string && member_string) {
-    // Constraint: a variable-length group member string row requires the encoded value and its NUL to replace the whole member payload; a fixed-size member requires it to fit the slot the subrecord already carries.
+    // Constraint: a variable-length member string row that owns the whole payload must resize it to the encoded value; every other member string row requires the encoded value to fit the slot the subrecord already carries.
     const auto* member = group_member(*member_group, field.scalar.subrecord);
-    const auto slot_size = existing.size();
-    if (encoded.size() > slot_size && member != nullptr && member->payload_size != 0) {
-      throw schema::ScalarError(std::string(field.path) + " does not fit in its " +
-                                std::to_string(slot_size) + "-byte slot");
-    }
-    if (slot.offset + encoded.size() > data.size()) {
-      data.resize(slot.offset + encoded.size());
-    }
-    std::copy(encoded.begin(), encoded.end(),
-              data.begin() + static_cast<std::ptrdiff_t>(slot.offset));
-    if (encoded.size() < slot_size) {
-      std::fill(data.begin() + static_cast<std::ptrdiff_t>(slot.offset + encoded.size()),
-                data.begin() + static_cast<std::ptrdiff_t>(slot.offset + slot_size), std::byte{0});
+    if (member != nullptr && member->payload_size == 0 && slot.offset == 0 &&
+        slot_size == data.size()) {
+      data = encoded;
+    } else {
+      if (encoded.size() > slot_size) {
+        throw schema::ScalarError(std::string(field.path) + " does not fit in its " +
+                                  std::to_string(slot_size) + "-byte slot");
+      }
+      std::copy(encoded.begin(), encoded.end(),
+                data.begin() + static_cast<std::ptrdiff_t>(slot.offset));
+      if (encoded.size() < slot_size) {
+        std::fill(data.begin() + static_cast<std::ptrdiff_t>(slot.offset + encoded.size()),
+                  data.begin() + static_cast<std::ptrdiff_t>(slot.offset + slot_size), std::byte{0});
+      }
     }
   } else if (is_string) {
     data = encoded;

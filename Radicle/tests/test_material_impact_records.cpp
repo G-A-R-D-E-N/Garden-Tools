@@ -1,6 +1,7 @@
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
+#include "fo4/schema/behavior_layout.hpp"
 #include "fo4/schema/formlink_lists.hpp"
 #include "fo4/schema/record_constraints.hpp"
 #include "fo4/schema/scalar.hpp"
@@ -157,7 +158,7 @@ std::vector<std::byte> make_plugin() {
                                      {"SNAM", u32_bytes(raw_id(0x809))}}}});
   write_group(out, "LENS", {{0x806, {{"EDID", zstr("RadicleFlare")},
                                      {"CNAM", f32_bytes(0.5f)},
-                                     {"DNAM", f32_bytes(1.0f)},
+                                     {"DNAM", f32_bytes(0.7f)},
                                      {"LFSP", u32_bytes(2)},
                                      {"DNAM", zstr("SpriteA")},
                                      {"FNAM", zstr("flare_a.dds")},
@@ -331,7 +332,7 @@ TEST(MaterialImpactSynthetic, LensFadeScaleUsesTheDnamBeforeTheSpriteList) {
     if (sub.signature == fo4::Signature::from_string("DNAM")) sprites.push_back(&sub);
   }
   ASSERT_EQ(sprites.size(), std::size_t{3});
-  EXPECT_EQ(sprites[0]->data, f32_bytes(1.0f));
+  EXPECT_EQ(sprites[0]->data, f32_bytes(0.7f));
 
   EXPECT_EQ(fo4::set_record_scalar(plugin, key, *field, "2.5"),
             fo4::ScalarMutationStatus::updated);
@@ -615,7 +616,35 @@ TEST(MaterialImpactSynthetic, LensSpriteStringsAddressOneSpriteAtATime) {
   EXPECT_EQ(row_string(reread, key, texture, 2), textures[2]);
 }
 
-TEST(MaterialImpactSynthetic, LensSpriteStringWritesGrowAndShrinkTheirMemberPayload) {
+TEST(MaterialImpactSynthetic, SpriteStringRowsSkipTheRecordLevelDnam) {
+  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto key = fo4::FormKey::parse("000806:Patch.esp");
+  const auto* record = fo4::find_record(plugin, key);
+  ASSERT_NE(record, nullptr);
+  ASSERT_GT(record->subrecords.size(), std::size_t{2});
+  const auto dnam = fo4::Signature::from_string("DNAM");
+  const auto id = sprite_row("LENS\\SpriteId");
+  const auto texture = sprite_row("LENS\\SpriteTexture");
+
+  EXPECT_EQ(record->subrecords[2].signature, dnam);
+  EXPECT_EQ(record->subrecords[2].data, f32_bytes(0.7f));
+
+  const auto sprites = fo4::behavior_field_candidates(*record, dnam, true);
+  ASSERT_TRUE(sprites.has_value());
+  EXPECT_EQ(*sprites, (std::vector<std::size_t>{4, 7}));
+  const auto leader = fo4::behavior_field_candidates(*record, dnam, false);
+  ASSERT_TRUE(leader.has_value());
+  EXPECT_EQ(*leader, (std::vector<std::size_t>{2}));
+
+  EXPECT_EQ(fo4::record_field_count(plugin, key, id), std::optional<std::size_t>{2});
+  EXPECT_EQ(fo4::record_field_count(plugin, key, texture), std::optional<std::size_t>{2});
+  EXPECT_EQ(row_string(plugin, key, id, 0), "SpriteA");
+  EXPECT_EQ(row_string(plugin, key, id, 1), "SpriteB");
+  EXPECT_EQ(row_string(plugin, key, texture, 0), "flare_a.dds");
+  EXPECT_EQ(row_string(plugin, key, texture, 1), "flare_b.dds");
+}
+
+TEST(MaterialImpactSynthetic, LensSpriteStringWritesResizeTheirMemberPayload) {
   auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto key = fo4::FormKey::parse("00080F:Patch.esp");
   const auto id = sprite_row("LENS\\SpriteId");
@@ -636,17 +665,18 @@ TEST(MaterialImpactSynthetic, LensSpriteStringWritesGrowAndShrinkTheirMemberPayl
 
   EXPECT_EQ(fo4::set_record_string(plugin, key, id, 1, "S"), fo4::ScalarMutationStatus::updated);
   EXPECT_EQ(fo4::set_record_string(plugin, key, id, 1, "S"), fo4::ScalarMutationStatus::unchanged);
+  EXPECT_EQ(fo4::set_record_string(plugin, key, texture, 2, "f.dds"),
+            fo4::ScalarMutationStatus::updated);
 
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   const auto* record = fo4::find_record(reread, key);
   ASSERT_NE(record, nullptr);
-  Bytes padded(9);
-  padded[0] = std::byte{'S'};
-  EXPECT_EQ(subrecord_at(*record, "DNAM", 2), padded);
+  EXPECT_EQ(subrecord_at(*record, "DNAM", 2), zstr("S"));
+  EXPECT_EQ(subrecord_at(*record, "FNAM", 2), zstr("f.dds"));
   EXPECT_EQ(subrecord_at(*record, "DNAM", 1), zstr("SpriteA"));
   EXPECT_EQ(subrecord_at(*record, "DNAM", 3), zstr("SpriteC"));
-  EXPECT_EQ(subrecord_at(*record, "FNAM", 2), zstr("flare_c_long.dds"));
   EXPECT_EQ(row_string(reread, key, id, 1), "S");
+  EXPECT_EQ(row_string(reread, key, texture, 2), "f.dds");
 }
 
 TEST(MaterialImpactSynthetic, LensSpriteStringWithoutATerminatorFailsClosed) {
