@@ -38,16 +38,21 @@ std::vector<std::size_t> before_marker(const std::vector<Subrecord>& subs, Signa
 std::vector<std::vector<std::size_t>> entry_payload_scopes(const Record& record, Signature subrecord) {
   std::vector<std::vector<std::size_t>> scopes;
   std::vector<std::size_t> current;
-  bool in_entry = false;
+  bool saw_header = false;
   for (std::size_t i = 0; i < record.subrecords.size(); ++i) {
     const auto signature = record.subrecords[i].signature;
     if (signature == sig("RDAT")) {
       if (!current.empty()) scopes.push_back(std::move(current));
       current.clear();
-      in_entry = true;
+      saw_header = true;
       continue;
     }
-    if (in_entry && signature == subrecord) current.push_back(i);
+    if (saw_header && signature == subrecord) current.push_back(i);
+  }
+  if (!saw_header) {
+    for (std::size_t i = 0; i < record.subrecords.size(); ++i) {
+      if (record.subrecords[i].signature == subrecord) current.push_back(i);
+    }
   }
   if (!current.empty()) scopes.push_back(std::move(current));
   return scopes;
