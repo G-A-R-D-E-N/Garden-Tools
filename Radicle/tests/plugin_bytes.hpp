@@ -26,8 +26,8 @@ inline std::vector<std::byte> record_original_bytes(const fo4::Plugin& plugin,
 }
 
 struct RecordState {
-  std::vector<std::pair<fo4::Signature, std::vector<std::byte>>> subrecords;
-  fo4::RecordFlags flags;
+  std::vector<std::pair<fo4::Signature, std::vector<std::byte>>> subrecords{};
+  fo4::RecordFlags flags{};
   bool original_bytes{false};
 
   bool operator==(const RecordState&) const = default;
@@ -35,7 +35,7 @@ struct RecordState {
 
 struct PluginState {
   bool original_bytes{false};
-  std::vector<RecordState> records;
+  std::vector<RecordState> records{};
 
   bool operator==(const PluginState&) const = default;
 };
