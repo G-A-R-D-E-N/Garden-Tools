@@ -213,6 +213,7 @@ add_library(fo4
   src/graph/reachability.cpp
   src/environment/environment.cpp
   src/environment/world.cpp
+  src/environment/region.cpp
   src/environment/placed.cpp
   src/environment/terrain.cpp
   src/environment/strings.cpp
