@@ -15,8 +15,6 @@ namespace {
 using detail::Reader;
 constexpr Signature sig(const char (&s)[5]) { return Signature{s[0], s[1], s[2], s[3]}; }
 
-constexpr std::array<std::string_view, 11> input_types{"Bool", "Int", "Float", "Ref", "Location", "LocWrapper",
-    "LocationSelector", "TargetSelector", "ObjectList", "SingleRef", "Topic"};
 constexpr std::array<std::string_view, 5> branch_types{"Procedure", "Sequence", "Stacked", "Simultaneous", "Random"};
 constexpr std::array<std::string_view, 30> procedures{"Travel", "Sandbox", "Sit", "Sleep", "Follow", "FollowTo",
     "Patrol", "UseWeapon", "Headtrack", "ForceGreet", "Activate", "HoldPosition", "UnlockDoors", "LockDoors", "Range",
@@ -94,9 +92,9 @@ std::string_view name_in(const Subrecord& sub, std::span<const std::string_view>
   return *text;
 }
 
-bool is_input_name(const Subrecord& sub) {
+const InputLayout* input_layout_of(const Subrecord& sub) {
   const auto text = zstring_view(sub);
-  return text && std::find(input_types.begin(), input_types.end(), *text) != input_types.end();
+  return text ? layout_for(*text) : nullptr;
 }
 
 bool ends_leaf(Signature tag) {
@@ -167,9 +165,9 @@ void read_input_value(Scan& scan, const InputLayout& layout, PackageDataInput& i
 }
 
 void read_inputs(Scan& scan, PackageProcedureTree& out) {
-  while (scan.is(sig("ANAM")) && is_input_name(scan.subs[scan.at])) {
-    const auto* layout = layout_for(*zstring_view(scan.subs[scan.at]));
-    if (layout == nullptr) throw Unreconciled{};
+  while (scan.is(sig("ANAM"))) {
+    const auto* layout = input_layout_of(scan.subs[scan.at]);
+    if (layout == nullptr) break;
     PackageDataInput input;
     input.subrecord_begin = scan.at;
     input.type_name = std::string{layout->name};

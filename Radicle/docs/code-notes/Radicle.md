@@ -929,7 +929,7 @@ Reads the subrecords after PKCU in three stages. Data inputs come first, and eac
 
 ## Radicle/src/environment/package_procedure.cpp:package_input_value_kind
 
-Maps a data input type name to `PackageInputValueKind` through `layout_for`, the same lookup `read_inputs` and the mutation entry points use, so the C ABI and C# can tell a data input type from a leaf or branch name without duplicating the table. The 11 registered names are the ones in `input_types`; a procedure such as Travel returns nothing. Test: `Radicle/tests/test_behavior.cpp:PackageDataInputMutationsRefuseBadRequestsAndKeepTheBytes`.
+Maps a data input type name to `PackageInputValueKind` through `layout_for`, the same lookup `read_inputs` and the mutation entry points use, so the C ABI and C# can tell a data input type from a leaf or branch name without duplicating the table. The 11 registered names are the ones in `input_layouts`, which is the only list of them: `input_layout_of` resolves a stored ANAM through the same table, so the decoder and the mutation entry points cannot drift apart. A procedure such as Travel returns nothing. Test: `Radicle/tests/test_behavior.cpp:PackageDataInputMutationsRefuseBadRequestsAndKeepTheBytes`.
 
 ## Radicle/src/environment/package_procedure.cpp:add_package_data_input
 
