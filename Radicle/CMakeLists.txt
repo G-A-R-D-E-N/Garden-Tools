@@ -242,6 +242,11 @@ add_library(fo4
   src/pex_analysis/callgraph.cpp
   src/pex_analysis/summary.cpp
   src/pex_analysis/fragments.cpp
+  src/abc/abc_file.cpp
+  src/abc/constant_pool.cpp
+  src/abc/opcodes.cpp
+  src/abc/disassembly.cpp
+  src/abc/summary.cpp
   src/material/material_file.cpp
   src/seq/seq.cpp
   src/quest/runtime.cpp
@@ -651,6 +656,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_pex_analysis.cpp
     tests/test_papyrus_source.cpp
     tests/test_papyrus_source_real.cpp
+    tests/test_abc.cpp
     tests/test_material_file.cpp
     tests/test_material_file_real.cpp
     tests/test_swf.cpp
