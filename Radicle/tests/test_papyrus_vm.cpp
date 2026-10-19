@@ -572,14 +572,14 @@ TEST(PapyrusVm, StructOpcodesReportUnsupportedAndUnknownOpcodesAreRejected) {
                                      instruction.mnemonic = "not_a_real_opcode";
                                      return instruction;
                                    }()});
-  const PexFunction short = method("Short", "None", {}, {}, {[] {
+  const PexFunction shortArgs = method("Short", "None", {}, {}, {[] {
                                      PexInstruction instruction;
                                      instruction.opCode = opcodeOf("iadd");
                                      instruction.mnemonic = "iadd";
                                      instruction.args = {id("::temp0")};
                                      return instruction;
                                    }()});
-  host.addScript(script("Script", "", {}, {state("", {structs, unknown, short})}));
+  host.addScript(script("Script", "", {}, {state("", {structs, unknown, shortArgs})}));
   EXPECT_EQ(runScript(host, "Script", "Structs").status, Status::UnsupportedOpcode);
   EXPECT_EQ(runScript(host, "Script", "Unknown").status, Status::UnknownOpcode);
   EXPECT_EQ(runScript(host, "Script", "Short").status, Status::StackUnderflow);
