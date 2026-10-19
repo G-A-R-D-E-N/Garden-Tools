@@ -14,11 +14,17 @@ bool is_value_kind(std::uint32_t raw) {
     case 0x01:
     case 0x03:
     case 0x04:
+    case 0x05:
     case 0x06:
     case 0x08:
     case 0x0A:
     case 0x0B:
     case 0x0C:
+    case 0x16:
+    case 0x17:
+    case 0x18:
+    case 0x19:
+    case 0x1A:
       return true;
     default:
       return false;
@@ -42,6 +48,10 @@ std::string ns_set_name(const AbcFile& file, std::uint32_t index) {
     out += name;
   }
   return out;
+}
+
+bool count_fits(std::size_t count, std::size_t remaining, std::size_t entry_size) {
+  return count <= remaining / entry_size + 1;
 }
 
 }
@@ -72,6 +82,8 @@ const char* status_name(AbcStatus status) noexcept {
       return "branch out of range";
     case AbcStatus::TrailingBytes:
       return "trailing bytes";
+    case AbcStatus::TypeNameTooLarge:
+      return "type name too large";
   }
   return "unknown";
 }
@@ -116,7 +128,7 @@ std::uint16_t ByteReader::u16() {
   return value;
 }
 
-std::uint32_t ByteReader::u30() {
+std::uint32_t ByteReader::u32() {
   if (!ok()) {
     return 0;
   }
@@ -129,7 +141,7 @@ std::uint32_t ByteReader::u30() {
     const std::uint8_t byte = data_[pos_++];
     value |= static_cast<std::uint32_t>(byte & 0x7Fu) << shift;
     if ((byte & 0x80u) == 0u) {
-      return value & 0x3FFFFFFFu;
+      return value;
     }
   }
   fail(AbcStatus::VarintTooLong);
@@ -149,26 +161,20 @@ std::int32_t ByteReader::s24() {
                                  : static_cast<std::int32_t>(raw);
 }
 
-std::uint32_t ByteReader::u32() {
-  if (remaining() < 4) {
-    fail(AbcStatus::Truncated);
-    return 0;
-  }
-  const std::uint32_t value = static_cast<std::uint32_t>(data_[pos_]) |
-                              static_cast<std::uint32_t>(data_[pos_ + 1]) << 8 |
-                              static_cast<std::uint32_t>(data_[pos_ + 2]) << 16 |
-                              static_cast<std::uint32_t>(data_[pos_ + 3]) << 24;
-  pos_ += 4;
-  return value;
-}
+std::uint32_t ByteReader::u30() { return u32() & 0x3FFFFFFFu; }
 
 std::int32_t ByteReader::s32() { return static_cast<std::int32_t>(u32()); }
 
 double ByteReader::d64() {
-  const std::uint32_t low = u32();
-  const std::uint32_t high = u32();
-  const std::uint64_t bits = static_cast<std::uint64_t>(low) |
-                             static_cast<std::uint64_t>(high) << 32;
+  if (remaining() < 8) {
+    fail(AbcStatus::Truncated);
+    return 0.0;
+  }
+  std::uint64_t bits = 0;
+  for (std::size_t i = 0; i < 8; ++i) {
+    bits |= static_cast<std::uint64_t>(data_[pos_ + i]) << (8 * i);
+  }
+  pos_ += 8;
   double value = 0.0;
   std::memcpy(&value, &bits, sizeof(value));
   return value;
@@ -249,7 +255,7 @@ std::string AbcFile::multiname_at(std::uint32_t index) const {
       return ns.empty() ? std::string{"*"} : ns + "::*";
     }
     case AbcMultinameKind::TypeName: {
-      std::string out = name;
+      std::string out = multiname_at(multiname.name);
       if (!multiname.params.empty()) {
         out += "<";
         for (std::size_t i = 0; i < multiname.params.size(); ++i) {
@@ -277,12 +283,14 @@ std::string AbcFile::class_name(std::uint32_t index) const {
   if (static_cast<std::size_t>(index) >= instances.size()) {
     return std::string{};
   }
-  return string_at(instances[index].name);
+  return multiname_at(instances[index].name);
 }
 
 std::string AbcFile::optional_value_at(const AbcOptionalValue& value) const {
   switch (value.kind) {
-    case AbcValueKind::None:
+    case AbcValueKind::Undefined:
+      return "undefined";
+    case AbcValueKind::Null:
       return "null";
     case AbcValueKind::True:
       return "true";
@@ -290,10 +298,14 @@ std::string AbcFile::optional_value_at(const AbcOptionalValue& value) const {
       return "false";
     case AbcValueKind::Utf8:
       return string_at(value.index);
+    case AbcValueKind::PrivateNs:
     case AbcValueKind::Namespace:
+    case AbcValueKind::PackageNamespace:
+    case AbcValueKind::PackageInternalNs:
+    case AbcValueKind::ProtectedNamespace:
+    case AbcValueKind::ExplicitNamespace:
+    case AbcValueKind::StaticProtectedNs:
       return namespace_at(value.index);
-    case AbcValueKind::Multiname:
-      return multiname_at(value.index);
     case AbcValueKind::Int: {
       if (static_cast<std::size_t>(value.index) >= pool.ints.size()) {
         return std::string{};
@@ -332,7 +344,7 @@ AbcStatus parse_metadata(ByteReader& reader, std::vector<AbcMetadata>& out) {
   if (!reader.ok()) {
     return reader.status();
   }
-  if (static_cast<std::size_t>(count) > reader.remaining()) {
+  if (!count_fits(count, reader.remaining(), 2)) {
     return AbcStatus::CountOutOfRange;
   }
   out.resize(count);
@@ -342,7 +354,7 @@ AbcStatus parse_metadata(ByteReader& reader, std::vector<AbcMetadata>& out) {
     if (!reader.ok()) {
       return reader.status();
     }
-    if (static_cast<std::size_t>(items) > reader.remaining()) {
+    if (!count_fits(items, reader.remaining(), 2)) {
       return AbcStatus::CountOutOfRange;
     }
     metadata.items.resize(items);
@@ -362,7 +374,7 @@ AbcStatus parse_traits(ByteReader& reader, std::vector<AbcTrait>& out) {
   if (!reader.ok()) {
     return reader.status();
   }
-  if (static_cast<std::size_t>(count) > reader.remaining()) {
+  if (!count_fits(count, reader.remaining(), 2)) {
     return AbcStatus::CountOutOfRange;
   }
   out.resize(count);
@@ -413,7 +425,7 @@ AbcStatus parse_traits(ByteReader& reader, std::vector<AbcTrait>& out) {
       if (!reader.ok()) {
         return reader.status();
       }
-      if (static_cast<std::size_t>(metadata_count) > reader.remaining()) {
+      if (!count_fits(metadata_count, reader.remaining(), 1)) {
         return AbcStatus::CountOutOfRange;
       }
       trait.metadata.resize(metadata_count);
@@ -472,7 +484,7 @@ AbcStatus parse_methods(ByteReader& reader, AbcFile& out) {
   if (!reader.ok()) {
     return reader.status();
   }
-  if (static_cast<std::size_t>(count) > reader.remaining()) {
+  if (!count_fits(count, reader.remaining(), 4)) {
     return AbcStatus::CountOutOfRange;
   }
   out.methods.resize(count);
@@ -482,7 +494,7 @@ AbcStatus parse_methods(ByteReader& reader, AbcFile& out) {
     if (!reader.ok()) {
       return reader.status();
     }
-    if (static_cast<std::size_t>(method.param_count) > reader.remaining()) {
+    if (!count_fits(method.param_count, reader.remaining(), 1)) {
       return AbcStatus::CountOutOfRange;
     }
     method.param_types.resize(method.param_count);
@@ -502,7 +514,7 @@ AbcStatus parse_methods(ByteReader& reader, AbcFile& out) {
       if (!reader.ok()) {
         return reader.status();
       }
-      if (static_cast<std::size_t>(optional_count) > reader.remaining()) {
+      if (!count_fits(optional_count, reader.remaining(), 2)) {
         return AbcStatus::CountOutOfRange;
       }
       method.options.resize(optional_count);
@@ -536,7 +548,7 @@ AbcStatus parse_instances(ByteReader& reader, AbcFile& out) {
   if (!reader.ok()) {
     return reader.status();
   }
-  if (static_cast<std::size_t>(count) > reader.remaining()) {
+  if (!count_fits(count, reader.remaining(), 6)) {
     return AbcStatus::CountOutOfRange;
   }
   out.instances.resize(count);
@@ -548,20 +560,24 @@ AbcStatus parse_instances(ByteReader& reader, AbcFile& out) {
     if (!reader.ok()) {
       return reader.status();
     }
-    if (instance.is_interface()) {
-      const std::uint32_t interface_count = reader.u30();
+    if (instance.has_protected_ns()) {
+      instance.protected_ns = reader.u30();
       if (!reader.ok()) {
         return reader.status();
       }
-      if (static_cast<std::size_t>(interface_count) > reader.remaining()) {
-        return AbcStatus::CountOutOfRange;
-      }
-      instance.interfaces.resize(interface_count);
-      for (std::uint32_t& interface_index : instance.interfaces) {
-        interface_index = reader.u30();
-        if (!reader.ok()) {
-          return reader.status();
-        }
+    }
+    const std::uint32_t interface_count = reader.u30();
+    if (!reader.ok()) {
+      return reader.status();
+    }
+    if (!count_fits(interface_count, reader.remaining(), 1)) {
+      return AbcStatus::CountOutOfRange;
+    }
+    instance.interfaces.resize(interface_count);
+    for (std::uint32_t& interface_index : instance.interfaces) {
+      interface_index = reader.u30();
+      if (!reader.ok()) {
+        return reader.status();
       }
     }
     instance.iinit = reader.u30();
@@ -591,7 +607,7 @@ AbcStatus parse_scripts(ByteReader& reader, AbcFile& out) {
   if (!reader.ok()) {
     return reader.status();
   }
-  if (static_cast<std::size_t>(count) > reader.remaining()) {
+  if (!count_fits(count, reader.remaining(), 2)) {
     return AbcStatus::CountOutOfRange;
   }
   out.scripts.resize(count);
@@ -613,7 +629,7 @@ AbcStatus parse_bodies(ByteReader& reader, AbcFile& out) {
   if (!reader.ok()) {
     return reader.status();
   }
-  if (static_cast<std::size_t>(count) > reader.remaining()) {
+  if (!count_fits(count, reader.remaining(), 8)) {
     return AbcStatus::CountOutOfRange;
   }
   out.bodies.resize(count);
@@ -635,7 +651,7 @@ AbcStatus parse_bodies(ByteReader& reader, AbcFile& out) {
     if (!reader.ok()) {
       return reader.status();
     }
-    if (static_cast<std::size_t>(exception_count) > reader.remaining()) {
+    if (!count_fits(exception_count, reader.remaining(), 5)) {
       return AbcStatus::CountOutOfRange;
     }
     body.exceptions.resize(exception_count);
