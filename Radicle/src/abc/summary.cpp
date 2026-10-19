@@ -208,7 +208,7 @@ AbcStatus summarize(const AbcFile& file, AbcSummary& out) {
   for (std::size_t i = 0; i < file.instances.size(); ++i) {
     const AbcInstanceInfo& instance = file.instances[i];
     AbcClassSummary klass;
-    klass.name = file.string_at(instance.name);
+    klass.name = file.multiname_at(instance.name);
     klass.super_name = file.multiname_at(instance.super_index);
     for (const std::uint32_t interface_index : instance.interfaces) {
       klass.interfaces.push_back(file.multiname_at(interface_index));
@@ -220,7 +220,7 @@ AbcStatus summarize(const AbcFile& file, AbcSummary& out) {
           trait.kind != AbcTraitKind::Setter) {
         continue;
       }
-      methods.emplace_back(trait.method_index, file.string_at(trait.name));
+      methods.emplace_back(trait.method_index, file.multiname_at(trait.name));
     }
     for (const auto& entry : methods) {
       AbcMethodSummary method;

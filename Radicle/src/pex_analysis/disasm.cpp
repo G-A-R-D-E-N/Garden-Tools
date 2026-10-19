@@ -95,6 +95,7 @@ class StructuredRenderer {
   }
 
   bool emit_loop(std::size_t block, const PexLoop& loop, int depth, std::string& out) {
+    if (cfg_.blocks[block].count != 1) return false;
     const auto terminator = terminator_of(block);
     if (!pex_is_conditional_jump(function_.instructions[terminator].opCode)) return false;
     const auto target = jump_target_of(terminator);

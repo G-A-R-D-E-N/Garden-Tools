@@ -23,6 +23,7 @@ enum class AbcStatus : std::uint8_t {
   BadOpcode,
   BranchOutOfRange,
   TrailingBytes,
+  TypeNameTooLarge,
 };
 
 const char* status_name(AbcStatus status) noexcept;
@@ -94,15 +95,21 @@ enum class AbcTraitKind : std::uint8_t {
 };
 
 enum class AbcValueKind : std::uint8_t {
-  None = 0x00,
+  Undefined = 0x00,
   Utf8 = 0x01,
   Int = 0x03,
   UInt = 0x04,
+  PrivateNs = 0x05,
   Double = 0x06,
   Namespace = 0x08,
-  Multiname = 0x0A,
+  False = 0x0A,
   True = 0x0B,
-  False = 0x0C,
+  Null = 0x0C,
+  PackageNamespace = 0x16,
+  PackageInternalNs = 0x17,
+  ProtectedNamespace = 0x18,
+  ExplicitNamespace = 0x19,
+  StaticProtectedNs = 0x1A,
 };
 
 struct AbcNamespace {
@@ -133,7 +140,7 @@ struct AbcConstantPool {
 };
 
 struct AbcOptionalValue {
-  AbcValueKind kind{AbcValueKind::None};
+  AbcValueKind kind{AbcValueKind::Undefined};
   std::uint32_t index{0};
 };
 
@@ -173,7 +180,7 @@ struct AbcTrait {
   std::uint32_t slot_id{0};
   std::uint32_t type_name{0};
   std::uint32_t value_index{0};
-  AbcValueKind value_kind{AbcValueKind::None};
+  AbcValueKind value_kind{AbcValueKind::Undefined};
   std::uint32_t class_index{0};
   std::uint32_t disp_id{0};
   std::uint32_t method_index{0};
@@ -188,6 +195,7 @@ struct AbcInstanceInfo {
   std::uint32_t name{0};
   std::uint32_t super_index{0};
   std::uint8_t flags{0};
+  std::uint32_t protected_ns{0};
   std::vector<std::uint32_t> interfaces;
   std::uint32_t iinit{0};
   std::vector<AbcTrait> traits;

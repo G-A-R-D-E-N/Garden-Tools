@@ -213,6 +213,10 @@ ScriptSummary summarize(const Script& script) {
   for (const PropertyDeclaration& property : script.properties) {
     append_unique(summary.declaredProperties, property.name);
     if (property.isAuto || property.isAutoReadOnly) append_unique(summary.autoProperties, property.name);
+    for (const FunctionDeclaration& accessor : property.accessors) {
+      summary.functions.push_back(summarize_function(accessor, std::string()));
+      summary.functions.back().name = property.name + "." + accessor.name;
+    }
   }
   for (const FunctionDeclaration& function : script.functions) {
     summary.functions.push_back(summarize_function(function, std::string()));

@@ -36,6 +36,7 @@ bool Parser::parse_block(std::vector<StatementPtr>& out) {
 }
 
 bool Parser::parse_statement(std::vector<StatementPtr>& out) {
+  links_ = 0;
   DepthGuard guard(depth_, kMaxNestingDepth);
   if (!guard.within()) {
     fail(ParseErrorKind::DepthLimit, peek(), "shallower nesting");
