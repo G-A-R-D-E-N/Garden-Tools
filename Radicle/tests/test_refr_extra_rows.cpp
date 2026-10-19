@@ -70,7 +70,7 @@ constexpr ScalarRow k_scalar_rows[] = {
     {"PGRE", "PGRE\\AmmoCount", "XAMC", 0, u32, false, 0, 0},
     {"PGRE", "PGRE\\HeadTrackingWeight", "XHTW", 0, f32, false, 0, 0},
     {"REFR", "REFR\\ActivateParentOnly", "XAPD", 0, u8, false, 0, 0},
-    {"REFR", "REFR\\ActivateParentDelay", "XAPR", 4, f32, true, 8, 0},
+    {"REFR", "REFR\\ActivateParentDelay", "XAPR", 4, f32, true, 8, 0, true},
     {"REFR", "REFR\\WaterCurrentLinearVelocityX", "XCVL", 0, f32, true, 12, 0},
     {"REFR", "REFR\\WaterCurrentLinearVelocityY", "XCVL", 4, f32, true, 12, 0},
     {"REFR", "REFR\\WaterCurrentLinearVelocityZ", "XCVL", 8, f32, true, 12, 0},
