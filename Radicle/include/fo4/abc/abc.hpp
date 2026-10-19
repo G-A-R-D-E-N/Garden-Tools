@@ -22,7 +22,6 @@ enum class AbcStatus : std::uint8_t {
   BadValueKind,
   BadOpcode,
   BranchOutOfRange,
-  NestingTooDeep,
   TrailingBytes,
 };
 
@@ -171,14 +170,14 @@ struct AbcTrait {
   std::uint32_t name{0};
   AbcTraitKind kind{AbcTraitKind::Slot};
   std::uint8_t attrs{0};
-  std::uint32_t type_name{0};
   std::uint32_t slot_id{0};
+  std::uint32_t type_name{0};
   std::uint32_t value_index{0};
   AbcValueKind value_kind{AbcValueKind::None};
   std::uint32_t class_index{0};
+  std::uint32_t disp_id{0};
   std::uint32_t method_index{0};
-  std::vector<AbcTrait> traits;
-  std::vector<AbcMetadata> metadata;
+  std::vector<std::uint32_t> metadata;
 
   bool is_final() const noexcept { return (attrs & 0x01u) != 0; }
   bool is_override() const noexcept { return (attrs & 0x02u) != 0; }

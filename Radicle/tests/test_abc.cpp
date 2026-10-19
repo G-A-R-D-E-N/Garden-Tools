@@ -181,33 +181,36 @@ void put_method_with_options(std::vector<std::uint8_t>& out, std::uint32_t name)
 }
 
 void put_instance_traits(std::vector<std::uint8_t>& out) {
-  put_u30(out, 4);
+  put_u30(out, 5);
   put_u30(out, kStringOnClick);
   put_u8(out, 0x41);
+  put_u30(out, 0);
   put_u30(out, 1);
   put_u30(out, 1);
-  put_u30(out, kStringFoo);
-  put_u30(out, 1);
-  put_u30(out, kStringExternalInterface);
-  put_u30(out, kStringCall);
+  put_u30(out, 0);
   put_u30(out, kStringCounter);
-  put_u8(out, 0x00);
+  put_u8(out, 0x40);
+  put_u30(out, 1);
   put_u30(out, kMultinameVoid);
+  put_u30(out, 0);
   put_u30(out, 1);
   put_u30(out, 0);
   put_u30(out, kStringCounter);
   put_u8(out, 0x06);
-  put_u30(out, kMultinameVoid);
   put_u30(out, 2);
+  put_u30(out, kMultinameVoid);
   put_u30(out, 1);
   put_u8(out, 0x03);
   put_u30(out, kStringInner);
   put_u8(out, 0x04);
   put_u30(out, 0);
-  put_u30(out, 1);
+  put_u30(out, 0);
   put_u30(out, kStringHelper);
-  put_u8(out, 0x01);
+  put_u8(out, 0x45);
+  put_u30(out, 3);
   put_u30(out, 2);
+  put_u30(out, 1);
+  put_u30(out, 0);
 }
 
 void put_body(std::vector<std::uint8_t>& out, std::uint32_t method,
@@ -240,7 +243,11 @@ std::vector<std::uint8_t> build_abc(const std::vector<std::uint8_t>& constructor
   put_method(out, kStringTest);
   put_method_with_options(out, kStringOnClick);
   put_method(out, kStringHelper);
-  put_u30(out, 0);
+  put_u30(out, 1);
+  put_u30(out, kStringFoo);
+  put_u30(out, 1);
+  put_u30(out, kStringExternalInterface);
+  put_u30(out, kStringCall);
   put_u30(out, 1);
   put_u30(out, kStringTest);
   put_u30(out, kMultinameObject);
@@ -271,6 +278,36 @@ std::vector<std::uint8_t> abc_header() {
   put_u30(out, 1);
   put_u30(out, 1);
   put_u30(out, 1);
+  return out;
+}
+
+std::vector<std::uint8_t> minimal_instance_file(std::uint8_t trait_tag,
+                                               std::uint32_t metadata_index) {
+  std::vector<std::uint8_t> out = abc_header();
+  put_u30(out, 1);
+  put_u30(out, 1);
+  put_u30(out, 1);
+  put_u30(out, 0);
+  put_u30(out, 1);
+  put_u30(out, 0);
+  put_u30(out, 0);
+  put_u30(out, 1);
+  put_u30(out, 0);
+  put_u30(out, 0);
+  put_u8(out, 0x00);
+  put_u30(out, 0);
+  put_u30(out, 1);
+  put_u30(out, 0);
+  put_u8(out, trait_tag);
+  put_u30(out, 0);
+  put_u30(out, 0);
+  put_u30(out, 0);
+  put_u30(out, 1);
+  put_u30(out, metadata_index);
+  put_u30(out, 0);
+  put_u30(out, 0);
+  put_u30(out, 0);
+  put_u30(out, 0);
   return out;
 }
 
@@ -342,27 +379,41 @@ TEST(Abc, ParsesMethodOptionsParamNamesTraitsAndExceptions) {
   EXPECT_FALSE(instance.is_final());
   ASSERT_EQ(instance.interfaces.size(), 1u);
   EXPECT_EQ(file.multiname_at(instance.interfaces[0]), "click");
-  ASSERT_EQ(instance.traits.size(), 4u);
+  ASSERT_EQ(instance.traits.size(), 5u);
   EXPECT_EQ(instance.traits[0].kind, fo4::abc::AbcTraitKind::Method);
   EXPECT_EQ(instance.traits[0].method_index, 1u);
+  EXPECT_EQ(instance.traits[0].disp_id, 0u);
   EXPECT_TRUE(instance.traits[0].has_metadata());
   EXPECT_FALSE(instance.traits[0].is_final());
   EXPECT_FALSE(instance.traits[0].is_override());
   ASSERT_EQ(instance.traits[0].metadata.size(), 1u);
-  EXPECT_EQ(file.string_at(instance.traits[0].metadata[0].name), "Foo");
-  ASSERT_EQ(instance.traits[0].metadata[0].items.size(), 1u);
-  EXPECT_EQ(file.string_at(instance.traits[0].metadata[0].items[0].value), "call");
+  ASSERT_EQ(file.metadata.size(), 1u);
+  EXPECT_EQ(instance.traits[0].metadata[0], 0u);
+  EXPECT_EQ(file.string_at(file.metadata[0].name), "Foo");
+  ASSERT_EQ(file.metadata[0].items.size(), 1u);
+  EXPECT_EQ(file.string_at(file.metadata[0].items[0].key), "ExternalInterface");
+  EXPECT_EQ(file.string_at(file.metadata[0].items[0].value), "call");
   EXPECT_EQ(instance.traits[1].kind, fo4::abc::AbcTraitKind::Slot);
   EXPECT_EQ(instance.traits[1].slot_id, 1u);
+  EXPECT_EQ(instance.traits[1].type_name, kMultinameVoid);
   EXPECT_EQ(instance.traits[1].value_index, 0u);
   EXPECT_EQ(instance.traits[1].value_kind, fo4::abc::AbcValueKind::None);
+  EXPECT_TRUE(instance.traits[1].has_metadata());
+  ASSERT_EQ(instance.traits[1].metadata.size(), 1u);
+  EXPECT_EQ(instance.traits[1].metadata[0], 0u);
   EXPECT_EQ(instance.traits[2].kind, fo4::abc::AbcTraitKind::Const);
+  EXPECT_EQ(instance.traits[2].slot_id, 2u);
   EXPECT_EQ(instance.traits[2].value_kind, fo4::abc::AbcValueKind::Int);
   EXPECT_EQ(instance.traits[2].value_index, 1u);
   EXPECT_EQ(instance.traits[3].kind, fo4::abc::AbcTraitKind::Class);
-  ASSERT_EQ(instance.traits[3].traits.size(), 1u);
-  EXPECT_EQ(instance.traits[3].traits[0].kind, fo4::abc::AbcTraitKind::Method);
-  EXPECT_EQ(instance.traits[3].traits[0].method_index, 2u);
+  EXPECT_EQ(instance.traits[3].slot_id, 0u);
+  EXPECT_EQ(instance.traits[3].class_index, 0u);
+  EXPECT_FALSE(instance.traits[3].has_metadata());
+  EXPECT_EQ(instance.traits[4].kind, fo4::abc::AbcTraitKind::Function);
+  EXPECT_EQ(instance.traits[4].slot_id, 3u);
+  EXPECT_EQ(instance.traits[4].class_index, 2u);
+  EXPECT_TRUE(instance.traits[4].has_metadata());
+  ASSERT_EQ(instance.traits[4].metadata.size(), 1u);
 
   const fo4::abc::AbcMethodBody* helper = file.body_for(2);
   ASSERT_NE(helper, nullptr);
@@ -621,6 +672,18 @@ TEST(Abc, RejectsBadNamespaceAndMultinameKinds) {
   put_u30(bad_multiname_index, 7);
   put_u30(bad_multiname_index, 0);
   EXPECT_EQ(AbcFile::parse(bad_multiname_index, file), AbcStatus::IndexOutOfRange);
+}
+
+TEST(Abc, RejectsBadTraitKindAndTraitMetadataIndex) {
+  AbcFile file;
+  EXPECT_EQ(AbcFile::parse(minimal_instance_file(0x40, 0), file), AbcStatus::Ok);
+  ASSERT_EQ(file.instances.size(), 1u);
+  ASSERT_EQ(file.instances[0].traits.size(), 1u);
+  EXPECT_EQ(file.instances[0].traits[0].kind, fo4::abc::AbcTraitKind::Slot);
+  ASSERT_EQ(file.instances[0].traits[0].metadata.size(), 1u);
+  EXPECT_EQ(file.instances[0].traits[0].metadata[0], 0u);
+  EXPECT_EQ(AbcFile::parse(minimal_instance_file(0x40, 5), file), AbcStatus::IndexOutOfRange);
+  EXPECT_EQ(AbcFile::parse(minimal_instance_file(0x0F, 0), file), AbcStatus::BadTraitKind);
 }
 
 TEST(AbcCorpus, EveryExtractedAbcParsesDisassemblesAndSummarizes) {

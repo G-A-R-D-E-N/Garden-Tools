@@ -25,8 +25,6 @@ bool is_value_kind(std::uint32_t raw) {
   }
 }
 
-constexpr std::size_t kMaxTraitDepth = 32;
-
 std::string ns_set_name(const AbcFile& file, std::uint32_t index) {
   if (static_cast<std::size_t>(index) >= file.pool.ns_sets.size()) {
     return std::string{};
@@ -72,8 +70,6 @@ const char* status_name(AbcStatus status) noexcept {
       return "bad opcode";
     case AbcStatus::BranchOutOfRange:
       return "branch out of range";
-    case AbcStatus::NestingTooDeep:
-      return "nesting too deep";
     case AbcStatus::TrailingBytes:
       return "trailing bytes";
   }
@@ -331,96 +327,6 @@ const AbcMethodBody* AbcFile::body_for(std::uint32_t method_index) const {
 
 namespace detail {
 
-AbcStatus parse_traits(ByteReader& reader, std::vector<AbcTrait>& out, std::size_t depth);
-
-namespace {
-
-AbcStatus parse_trait(ByteReader& reader, AbcTrait& trait, std::size_t depth) {
-  trait.name = reader.u30();
-  const std::uint32_t tag = reader.u8();
-  if (!reader.ok()) {
-    return reader.status();
-  }
-  const std::uint32_t kind = tag & 0x0Fu;
-  trait.attrs = static_cast<std::uint8_t>(tag >> 4);
-  if (kind > 6) {
-    return AbcStatus::BadTraitKind;
-  }
-  trait.kind = static_cast<AbcTraitKind>(kind);
-  switch (kind) {
-    case 0:
-    case 6: {
-      trait.type_name = reader.u30();
-      trait.slot_id = reader.u30();
-      trait.value_index = reader.u30();
-      if (!reader.ok()) {
-        return reader.status();
-      }
-      if (trait.value_index != 0) {
-        const std::uint32_t value_kind = reader.u8();
-        if (!reader.ok()) {
-          return reader.status();
-        }
-        if (!is_value_kind(value_kind)) {
-          return AbcStatus::BadValueKind;
-        }
-        trait.value_kind = static_cast<AbcValueKind>(value_kind);
-      }
-      break;
-    }
-    case 4:
-    case 5: {
-      trait.class_index = reader.u30();
-      if (!reader.ok()) {
-        return reader.status();
-      }
-      const AbcStatus status = parse_traits(reader, trait.traits, depth + 1);
-      if (status != AbcStatus::Ok) {
-        return status;
-      }
-      break;
-    }
-    case 1:
-    case 2:
-    case 3: {
-      trait.method_index = reader.u30();
-      if (!reader.ok()) {
-        return reader.status();
-      }
-      break;
-    }
-    default:
-      return AbcStatus::BadTraitKind;
-  }
-  if (trait.has_metadata() && kind != 0 && kind != 6) {
-    return parse_metadata(reader, trait.metadata);
-  }
-  return AbcStatus::Ok;
-}
-
-}
-
-AbcStatus parse_traits(ByteReader& reader, std::vector<AbcTrait>& out, std::size_t depth) {
-  if (depth > kMaxTraitDepth) {
-    return AbcStatus::NestingTooDeep;
-  }
-  const std::uint32_t count = reader.u30();
-  if (!reader.ok()) {
-    return reader.status();
-  }
-  if (static_cast<std::size_t>(count) > reader.remaining()) {
-    return AbcStatus::CountOutOfRange;
-  }
-  out.resize(count);
-  for (AbcTrait& trait : out) {
-    const AbcStatus status = parse_trait(reader, trait, depth);
-    if (status != AbcStatus::Ok) {
-      return status;
-    }
-  }
-  return AbcStatus::Ok;
-}
-
 AbcStatus parse_metadata(ByteReader& reader, std::vector<AbcMetadata>& out) {
   const std::uint32_t count = reader.u30();
   if (!reader.ok()) {
@@ -446,6 +352,112 @@ AbcStatus parse_metadata(ByteReader& reader, std::vector<AbcMetadata>& out) {
       if (!reader.ok()) {
         return reader.status();
       }
+    }
+  }
+  return AbcStatus::Ok;
+}
+
+AbcStatus parse_traits(ByteReader& reader, std::vector<AbcTrait>& out) {
+  const std::uint32_t count = reader.u30();
+  if (!reader.ok()) {
+    return reader.status();
+  }
+  if (static_cast<std::size_t>(count) > reader.remaining()) {
+    return AbcStatus::CountOutOfRange;
+  }
+  out.resize(count);
+  for (AbcTrait& trait : out) {
+    trait.name = reader.u30();
+    const std::uint32_t tag = reader.u8();
+    if (!reader.ok()) {
+      return reader.status();
+    }
+    const std::uint32_t kind = tag & 0x0Fu;
+    trait.attrs = static_cast<std::uint8_t>(tag >> 4);
+    if (kind > 6) {
+      return AbcStatus::BadTraitKind;
+    }
+    trait.kind = static_cast<AbcTraitKind>(kind);
+    if (kind == 0 || kind == 6) {
+      trait.slot_id = reader.u30();
+      trait.type_name = reader.u30();
+      trait.value_index = reader.u30();
+      if (!reader.ok()) {
+        return reader.status();
+      }
+      if (trait.value_index != 0) {
+        const std::uint32_t value_kind = reader.u8();
+        if (!reader.ok()) {
+          return reader.status();
+        }
+        if (!is_value_kind(value_kind)) {
+          return AbcStatus::BadValueKind;
+        }
+        trait.value_kind = static_cast<AbcValueKind>(value_kind);
+      }
+    } else if (kind == 4 || kind == 5) {
+      trait.slot_id = reader.u30();
+      trait.class_index = reader.u30();
+      if (!reader.ok()) {
+        return reader.status();
+      }
+    } else {
+      trait.disp_id = reader.u30();
+      trait.method_index = reader.u30();
+      if (!reader.ok()) {
+        return reader.status();
+      }
+    }
+    if (trait.has_metadata()) {
+      const std::uint32_t metadata_count = reader.u30();
+      if (!reader.ok()) {
+        return reader.status();
+      }
+      if (static_cast<std::size_t>(metadata_count) > reader.remaining()) {
+        return AbcStatus::CountOutOfRange;
+      }
+      trait.metadata.resize(metadata_count);
+      for (std::uint32_t& metadata_index : trait.metadata) {
+        metadata_index = reader.u30();
+        if (!reader.ok()) {
+          return reader.status();
+        }
+      }
+    }
+  }
+  return AbcStatus::Ok;
+}
+
+AbcStatus check_metadata_indices(const AbcFile& file) {
+  const std::size_t pool_size = file.metadata.size();
+  const auto has_bad_index = [pool_size](const std::vector<AbcTrait>& traits) {
+    for (const AbcTrait& trait : traits) {
+      for (const std::uint32_t metadata_index : trait.metadata) {
+        if (static_cast<std::size_t>(metadata_index) >= pool_size) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+  for (const AbcInstanceInfo& instance : file.instances) {
+    if (has_bad_index(instance.traits)) {
+      return AbcStatus::IndexOutOfRange;
+    }
+  }
+  for (const AbcClassInfo& klass : file.classes) {
+    if (has_bad_index(klass.traits)) {
+      return AbcStatus::IndexOutOfRange;
+    }
+  }
+  for (const AbcScriptInfo& script : file.scripts) {
+    if (has_bad_index(script.traits)) {
+      return AbcStatus::IndexOutOfRange;
+    }
+  }
+  for (const AbcMethodBody& body : file.bodies) {
+    if (has_bad_index(body.traits)) {
+      return AbcStatus::IndexOutOfRange;
     }
   }
   return AbcStatus::Ok;
@@ -556,7 +568,7 @@ AbcStatus parse_instances(ByteReader& reader, AbcFile& out) {
     if (!reader.ok()) {
       return reader.status();
     }
-    const AbcStatus status = detail::parse_traits(reader, instance.traits, 0);
+    const AbcStatus status = detail::parse_traits(reader, instance.traits);
     if (status != AbcStatus::Ok) {
       return status;
     }
@@ -566,7 +578,7 @@ AbcStatus parse_instances(ByteReader& reader, AbcFile& out) {
     if (!reader.ok()) {
       return reader.status();
     }
-    const AbcStatus status = detail::parse_traits(reader, klass.traits, 0);
+    const AbcStatus status = detail::parse_traits(reader, klass.traits);
     if (status != AbcStatus::Ok) {
       return status;
     }
@@ -588,7 +600,7 @@ AbcStatus parse_scripts(ByteReader& reader, AbcFile& out) {
     if (!reader.ok()) {
       return reader.status();
     }
-    const AbcStatus status = detail::parse_traits(reader, script.traits, 0);
+    const AbcStatus status = detail::parse_traits(reader, script.traits);
     if (status != AbcStatus::Ok) {
       return status;
     }
@@ -637,7 +649,7 @@ AbcStatus parse_bodies(ByteReader& reader, AbcFile& out) {
         return reader.status();
       }
     }
-    const AbcStatus status = detail::parse_traits(reader, body.traits, 0);
+    const AbcStatus status = detail::parse_traits(reader, body.traits);
     if (status != AbcStatus::Ok) {
       return status;
     }
@@ -679,6 +691,10 @@ AbcStatus AbcFile::parse(const std::uint8_t* data, std::size_t size, AbcFile& ou
     return status;
   }
   status = parse_bodies(reader, out);
+  if (status != AbcStatus::Ok) {
+    return status;
+  }
+  status = detail::check_metadata_indices(out);
   if (status != AbcStatus::Ok) {
     return status;
   }
