@@ -153,12 +153,11 @@ std::optional<std::size_t> group_position(const Record& record, Signature anchor
   return position;
 }
 
-std::size_t header_count(const Record& record) {
-  std::size_t count = 0;
+bool carries_header(const Record& record) {
   for (const auto& subrecord : record.subrecords) {
-    if (subrecord.signature == sig_dest) ++count;
+    if (subrecord.signature == sig_dest || subrecord.signature == sig_damc) return true;
   }
-  return count;
+  return false;
 }
 
 std::vector<std::byte> header_payload(const Record& record) {
@@ -173,6 +172,13 @@ std::vector<std::byte> header_payload(const Record& record) {
 
 bool group_member(Signature signature) {
   return signature == sig_dest || signature == sig_damc || stage_member(signature);
+}
+
+bool has_group_member(const Record& record) {
+  for (const auto& subrecord : record.subrecords) {
+    if (group_member(subrecord.signature)) return true;
+  }
+  return false;
 }
 
 StageTarget locate_stage(Plugin& plugin, const FormKey& record_key, std::size_t stage_index) {
@@ -207,7 +213,7 @@ DestructibleHeaderStatus insert_destructible_header(Plugin& plugin, const FormKe
   if (!destructible_carrier(target->header.signature)) {
     return DestructibleHeaderStatus::record_mismatch;
   }
-  if (header_count(*target) != 0) return DestructibleHeaderStatus::header_present;
+  if (carries_header(*target)) return DestructibleHeaderStatus::header_present;
   const auto position = group_position(*target, sig_dest);
   if (!position.has_value()) return DestructibleHeaderStatus::unknown_order;
 
@@ -227,7 +233,7 @@ DestructibleHeaderStatus remove_destructible_header(Plugin& plugin, const FormKe
   if (!destructible_carrier(target->header.signature)) {
     return DestructibleHeaderStatus::record_mismatch;
   }
-  if (header_count(*target) == 0) return DestructibleHeaderStatus::header_missing;
+  if (!has_group_member(*target)) return DestructibleHeaderStatus::header_missing;
 
   auto& subrecords = target->subrecords;
   subrecords.erase(std::remove_if(subrecords.begin(), subrecords.end(),

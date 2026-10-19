@@ -54,6 +54,17 @@ Bytes make_plugin() {
   fo4::test::write_subrecord(out, "EDID", std::string_view{"Navmeshed\0", 10});
   fo4::test::write_subrecord(out, "NVNM", Bytes(4));
   fo4::test::end_record(out, navmeshed);
+
+  const auto staged = fo4::test::begin_record(out, "ACTI", 0, 0x01000C07);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"Staged\0", 7});
+  fo4::test::write_subrecord(out, "DSTD", Bytes(20));
+  fo4::test::write_subrecord(out, "DSTD", Bytes(20));
+  fo4::test::end_record(out, staged);
+
+  const auto damaged = fo4::test::begin_record(out, "ACTI", 0, 0x01000C08);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"Damaged\0", 8});
+  fo4::test::write_subrecord(out, "DAMC", Bytes(8));
+  fo4::test::end_record(out, damaged);
   fo4::test::end_group(out, acti_group);
 
   const auto door_group = fo4::test::begin_group(out, "DOOR", 0);
@@ -246,5 +257,45 @@ TEST(DestructibleHeader, DuplicatedHeaderIsPresentToInsertAndRemovable) {
   EXPECT_EQ(signatures_at(reread, "000C06:Patch.esp"),
             (std::vector<std::string>{"EDID", "DATA"}));
   EXPECT_EQ(fo4::remove_destructible_header(plugin, twice),
+            fo4::DestructibleHeaderStatus::header_missing);
+}
+
+TEST(DestructibleHeader, InsertSeedsTheStageCountAndRemoveDropsStagesWithoutADestHeader) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto staged = fo4::FormKey::parse("000C07:Patch.esp");
+
+  EXPECT_EQ(fo4::insert_destructible_header(plugin, staged),
+            fo4::DestructibleHeaderStatus::updated);
+
+  const auto built = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(signatures_at(built, "000C07:Patch.esp"),
+            (std::vector<std::string>{"EDID", "DEST", "DAMC", "DSTD", "DSTD"}));
+  const auto* dest = subrecord_at(built, "000C07:Patch.esp", "DEST", 0);
+  ASSERT_NE(dest, nullptr);
+  ASSERT_EQ(dest->data.size(), 8u);
+  EXPECT_EQ(byte_at(dest->data, 4), 2u);
+
+  EXPECT_EQ(fo4::remove_destructible_header(plugin, staged),
+            fo4::DestructibleHeaderStatus::updated);
+  const auto cleared = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(signatures_at(cleared, "000C07:Patch.esp"), (std::vector<std::string>{"EDID"}));
+  EXPECT_EQ(fo4::remove_destructible_header(plugin, staged),
+            fo4::DestructibleHeaderStatus::header_missing);
+}
+
+TEST(DestructibleHeader, DamcWithoutDestIsRefusedOnInsertAndCleanedByRemove) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto damaged = fo4::FormKey::parse("000C08:Patch.esp");
+
+  EXPECT_EQ(fo4::insert_destructible_header(plugin, damaged),
+            fo4::DestructibleHeaderStatus::header_present);
+  EXPECT_EQ(signatures_at(plugin, "000C08:Patch.esp"),
+            (std::vector<std::string>{"EDID", "DAMC"}));
+
+  EXPECT_EQ(fo4::remove_destructible_header(plugin, damaged),
+            fo4::DestructibleHeaderStatus::updated);
+  const auto cleared = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(signatures_at(cleared, "000C08:Patch.esp"), (std::vector<std::string>{"EDID"}));
+  EXPECT_EQ(fo4::remove_destructible_header(plugin, damaged),
             fo4::DestructibleHeaderStatus::header_missing);
 }
