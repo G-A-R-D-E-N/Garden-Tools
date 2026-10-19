@@ -210,6 +210,7 @@ std::vector<std::byte> make_plugin() {
                                      {"WNAM", zstr("RadicleRuleB")},
                                      {"KSIZ", u32_bytes(2)},
                                      {"KWDA", kwda_ids({0x81A, 0x81B})},
+                                     {"XNAM", innr_property(1.5f, 4, 0)},
                                      {"YNAM", u16_bytes(7)}}}});
   return out.bytes;
 }
@@ -376,10 +377,12 @@ TEST(ItemModRecordsSynthetic, InnrNamingRuleRowsAddressEachName) {
   EXPECT_EQ(fo4::schema::decode_scalar(ksiz, count->scalar), "2");
 
   const auto untouched = fo4::read_plugin(make_plugin(), "Patch.esp");
-  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *count, 2, "4"),
-            fo4::ScalarMutationStatus::index_out_of_range);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *index, 2, "4"),
+            fo4::ScalarMutationStatus::subrecord_missing);
   EXPECT_EQ(fo4::set_record_string(plugin, key, *text, 2, "RadicleRuleD"),
-            fo4::ScalarMutationStatus::index_out_of_range);
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_THROW(fo4::set_record_scalar(plugin, key, *rulesets, 0, "9"), fo4::schema::ScalarError);
+  EXPECT_THROW(fo4::set_record_scalar(plugin, key, *count, 0, "3"), fo4::schema::ScalarError);
   EXPECT_EQ(fo4::write_plugin(plugin), fo4::write_plugin(untouched));
 
   EXPECT_EQ(fo4::set_record_string(plugin, key, *text, 1, "RadicleRuleC"),

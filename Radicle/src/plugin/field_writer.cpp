@@ -158,6 +158,10 @@ ScalarMutationStatus write_scalar(Plugin& plugin,
     throw schema::ScalarError(std::string(field.path) + " is maintained by subrecord group insert and remove");
   }
   if (schema::is_derived_scalar_row(field.record, field.scalar.subrecord)) {
+    if (field.record == Signature::from_string("INNR")) {
+      throw schema::ScalarError(std::string(field.path) +
+                                " is maintained by the INNR naming-rule and keyword lists");
+    }
     throw schema::ScalarError(std::string(field.path) +
                               " is derived from the five footstep category lists in DATA");
   }
