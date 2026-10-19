@@ -118,6 +118,12 @@ TEST(FstsRows, RefusesGenericEditsOfTheDerivedCounts) {
   EXPECT_THROW(fo4::set_record_string(plugin, record, row("FSTS\\SneakingCount"), 0, "1"),
                fo4::schema::ScalarError);
 
+  const auto fsts = fo4::Signature::from_string("FSTS");
+  EXPECT_TRUE(fo4::schema::is_derived_scalar_row(fsts, fo4::Signature::from_string("XCNT")));
+  EXPECT_FALSE(fo4::schema::is_derived_scalar_row(fsts, fo4::Signature::from_string("DATA")));
+  EXPECT_FALSE(fo4::schema::is_derived_scalar_row(fo4::Signature::from_string("SNDR"),
+                                                 fo4::Signature::from_string("XCNT")));
+
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   const auto* found = fo4::find_record(reread, record);
   ASSERT_NE(found, nullptr);

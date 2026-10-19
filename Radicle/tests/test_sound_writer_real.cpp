@@ -143,13 +143,17 @@ TEST_P(SoundWriterReal, EveryScalarStringAndLinkPathEditsFirstAndLastSlotsWithou
   std::map<fo4::FormKey, fo4::FormKey> self_targets;
   std::map<fo4::FormKey, std::vector<Bytes>> expected;
   std::map<std::string, int> edits;
+  int derived_rows = 0;
   fo4::visit_records(original, [&](const fo4::Record& record) {
     if (!is_sound(record.header.signature)) { return; }
     auto& want = expected[record.form_key];
     for (const auto& sub : record.subrecords) { want.push_back(sub.data); }
     for (const auto& field : fo4::schema::scalar_fields(record.header.signature)) {
       SCOPED_TRACE(record.form_key.to_string() + ' ' + std::string(field.path));
-      const auto slots = fo4::schema::resolve_field_slots(record, fo4::schema::scalar_field_shape(field.scalar), field.scalar.address);
+      if (fo4::schema::is_derived_scalar_row(field.record, field.scalar.subrecord)) { ++derived_rows; continue; }
+      const auto* live = fo4::find_record(sample, record.form_key);
+      ASSERT_NE(live, nullptr);
+      const auto slots = fo4::schema::resolve_field_slots(*live, fo4::schema::scalar_field_shape(field.scalar), field.scalar.address);
       std::set<std::size_t> picks;
       if (!slots.slots.empty()) { picks = {0, slots.slots.size() - 1}; }
       for (const auto index : picks) {
@@ -165,7 +169,7 @@ TEST_P(SoundWriterReal, EveryScalarStringAndLinkPathEditsFirstAndLastSlotsWithou
           payload.push_back(std::byte{0});
           want[slot.subrecord] = payload;
         } else {
-          const auto existing = fo4::schema::scalar_slot_bytes(record.subrecords[slot.subrecord].data, slot, field.scalar);
+          const auto existing = fo4::schema::scalar_slot_bytes(live->subrecords[slot.subrecord].data, slot, field.scalar);
           const std::string value = fo4::schema::encode_scalar("1", field.scalar) == Bytes(existing.begin(), existing.end()) ? "0" : "1";
           ASSERT_EQ(fo4::set_record_scalar(sample, record.form_key, field, index, value), fo4::ScalarMutationStatus::updated);
           const auto bytes = fo4::schema::encode_scalar(value, field.scalar);
@@ -218,6 +222,7 @@ TEST_P(SoundWriterReal, EveryScalarStringAndLinkPathEditsFirstAndLastSlotsWithou
   RecordProperty("records", checked);
   RecordProperty("paths", static_cast<int>(edits.size()));
   RecordProperty("edits", total);
+  RecordProperty("derived_rows", derived_rows);
 }
 
 TEST_P(SoundWriterReal, LinksAndOptionalSubrecordsEditOfficialRecordsAndKeepEveryOtherRecordByteIdentical) {

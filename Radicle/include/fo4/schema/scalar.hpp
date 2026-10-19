@@ -132,6 +132,7 @@ std::optional<SubrecordGroupDescriptor> subrecord_group_descriptor(Signature rec
 std::optional<SubrecordGroupDescriptor> subrecord_group_for_member(Signature record,
                                                                    Signature subrecord) noexcept;
 bool is_subrecord_group_count_subrecord(Signature record, Signature subrecord) noexcept;
+bool is_derived_scalar_row(Signature record, Signature subrecord) noexcept;
 
 // The bytes of one field within a subrecord payload. Empty when an embedded
 // field lies past the end of a legitimately shorter payload -- absent, not
