@@ -23,6 +23,8 @@ enum class ScalarStorage {
   i8,
   i16,
   zstring,
+  // Constraint: fixed_string is whole-payload only and its width is the descriptor's payload_size.
+  fixed_string,
 };
 
 enum class ScalarPresentation {

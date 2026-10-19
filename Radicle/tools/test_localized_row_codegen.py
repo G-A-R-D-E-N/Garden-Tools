@@ -82,6 +82,19 @@ class LocalizedRowTests(unittest.TestCase):
         self.rejects("minimum_payload_size is smaller than the field end",
                      string(offset=520, minimum_payload_size=260))
 
+    def test_a_payload_size_makes_a_whole_payload_fixed_width_name(self):
+        field = self.load(string(payload_size=4, repeated=True))[0]
+        self.assertEqual((field["storage"], field["payload_size"], field["embedded"]),
+                         ("fixed_string", 4, False))
+        rendered = schema_codegen.render([field])
+        self.assertIn("ScalarStorage::fixed_string, ScalarPresentation::identity, 0.0, 0.0, 0, false, 4, "
+                      "FieldAddress{true, 0, 0, FieldDiscriminator{}}", rendered)
+        self.assertEqual(self.load(string())[0]["storage"], "zstring")
+        for value in (0, -4, True, "4"):
+            with self.subTest(value=value):
+                self.rejects("payload_size must be a positive integer", string(payload_size=value))
+        self.rejects("must cover the whole payload", string(payload_size=4, offset=0))
+
     def test_slots_must_not_share_a_subrecord_range(self):
         slots = [string(path="TEST" + BS + "First", label="First", offset=0, minimum_payload_size=260),
                  string(path="TEST" + BS + "Second", label="Second", offset=260, minimum_payload_size=520)]

@@ -39,6 +39,12 @@ Bytes u32_words(std::initializer_list<std::uint32_t> values) {
   return out.bytes;
 }
 
+Bytes text_bytes(std::string_view text) {
+  ByteWriter out;
+  out.raw(text);
+  return out.bytes;
+}
+
 Bytes u16_bytes(std::uint16_t value) {
   ByteWriter out;
   out.u16(value);
@@ -422,4 +428,77 @@ TEST(WP9RaceWeapRows, MorphTintAndNeckFatRowsReadAndWrite) {
   EXPECT_EQ(
       fo4::set_record_scalar(truncated, fo4::FormKey::parse("000A04:Patch.esp"), fat_x, 0, "1"),
       missing);
+}
+
+TEST(WP9RaceWeapRows, MovementTypeNamesAreFourByteNames) {
+  const auto names = scalar_row("RACE", "RACE\\MovementTypeNames");
+  EXPECT_EQ(names.scalar.subrecord, fo4::Signature::from_string("MTNM"));
+  EXPECT_EQ(names.scalar.storage, fo4::schema::ScalarStorage::fixed_string);
+  EXPECT_EQ(names.scalar.payload_size, 4u);
+  EXPECT_EQ(names.scalar.offset, 0u);
+  EXPECT_FALSE(names.scalar.embedded);
+  EXPECT_TRUE(names.scalar.address.repeated);
+
+  auto out = make_plugin();
+  add_record(out, "RACE", 0xA05,
+             {{"MTNM", text_bytes("WALK")},
+              {"MTNM", text_bytes("RUN1")},
+              {"MTNM", text_bytes("SWIM")}});
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto key = fo4::FormKey::parse("000A05:Patch.esp");
+  const auto* record = fo4::find_record(plugin, key);
+  ASSERT_NE(record, nullptr);
+
+  const auto slots = fo4::schema::resolve_field_slots(
+      *record, fo4::schema::scalar_field_shape(names.scalar), names.scalar.address);
+  ASSERT_EQ(slots.slots.size(), 3u);
+  const std::string expected[] = {"WALK", "RUN1", "SWIM"};
+  for (std::size_t index = 0; index < 3; ++index) {
+    ASSERT_TRUE(slots.slots[index].valid) << index;
+    const auto bytes = fo4::schema::scalar_slot_bytes(
+        record->subrecords[slots.slots[index].subrecord].data, slots.slots[index], names.scalar);
+    EXPECT_EQ(fo4::schema::decode_scalar(bytes, names.scalar), expected[index]);
+  }
+
+  EXPECT_EQ(fo4::set_record_string(plugin, key, names, 1, "FLY1"),
+            fo4::ScalarMutationStatus::updated);
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const std::vector<Bytes> written = {text_bytes("WALK"), text_bytes("FLY1"), text_bytes("SWIM")};
+  EXPECT_EQ(payloads(reread, "000A05:Patch.esp", "MTNM"), written);
+}
+
+TEST(WP9RaceWeapRows, MovementTypeNamesRefuseAnotherWidth) {
+  const auto names = scalar_row("RACE", "RACE\\MovementTypeNames");
+  auto out = make_plugin();
+  add_record(out, "RACE", 0xA06, {{"MTNM", text_bytes("WAL")}});
+  add_record(out, "RACE", 0xA07, {{"MTNM", text_bytes("WALKS")}});
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto short_key = fo4::FormKey::parse("000A06:Patch.esp");
+  const auto long_key = fo4::FormKey::parse("000A07:Patch.esp");
+  EXPECT_THROW(fo4::record_field_count(plugin, short_key, "RACE\\MovementTypeNames"),
+               fo4::schema::ScalarError);
+  EXPECT_THROW(fo4::record_field_count(plugin, long_key, "RACE\\MovementTypeNames"),
+               fo4::schema::ScalarError);
+  EXPECT_THROW(fo4::set_record_string(plugin, short_key, names, 0, "WALK"),
+               fo4::schema::ScalarError);
+  EXPECT_THROW(fo4::set_record_string(plugin, long_key, names, 0, "WALK"),
+               fo4::schema::ScalarError);
+
+  auto writable = make_plugin();
+  add_record(writable, "RACE", 0xA08, {{"MTNM", text_bytes("WALK")}});
+  auto editable = fo4::read_plugin(writable.bytes, "Patch.esp");
+  const auto key = fo4::FormKey::parse("000A08:Patch.esp");
+  EXPECT_THROW(fo4::set_record_string(editable, key, names, 0, "WALKS"),
+               fo4::schema::ScalarError);
+  EXPECT_THROW(fo4::set_record_string(editable, key, names, 0, "WAL"),
+               fo4::schema::ScalarError);
+  EXPECT_EQ(fo4::set_record_string(editable, key, names, 0, "WALK"),
+            fo4::ScalarMutationStatus::unchanged);
+  EXPECT_EQ(payload(editable, "000A08:Patch.esp", "MTNM"), text_bytes("WALK"));
+}
+
+TEST(WP9RaceWeapRows, FixedWidthStringsKeepTheZstringTerminatorRule) {
+  const auto lod = scalar_row("STAT", "STAT\\DistantLodLevel0").scalar;
+  EXPECT_THROW(fo4::schema::scalar_field_bytes(Bytes(260, std::byte{0x61}), lod),
+               fo4::schema::ScalarError);
 }

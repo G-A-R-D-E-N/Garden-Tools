@@ -11,7 +11,7 @@ from field_address_codegen import is_count, parse_address, reject_overlaps, rend
 
 STORAGES = {"u8", "u16", "u32", "i32", "f32", "i8", "i16"}
 KINDS = {"scalar", "string"}
-STRING_FORBIDDEN = {"storage", "presentation", "minimum", "maximum", "payload_size", "stride", "array_offset", "names"}
+STRING_FORBIDDEN = {"storage", "presentation", "minimum", "maximum", "stride", "array_offset", "names"}
 PRESENTATIONS = {"identity", "percent_0_100", "enum", "flags"}
 NAME_KEYS = {"enum": "value", "flags": "bit"}
 CPP_PRESENTATIONS = {"enum": "enumeration"}
@@ -338,7 +338,7 @@ def load_schema(schema_path: Path):
                 offset = 0
 
             if is_string:
-                storage = "zstring"
+                storage = "fixed_string" if "payload_size" in field else "zstring"
                 presentation = "identity"
             else:
                 storage = field.get("storage")
@@ -357,14 +357,19 @@ def load_schema(schema_path: Path):
             payload_size = 0
             if "payload_size" in field:
                 payload_size = field["payload_size"]
-                if not embedded:
-                    raise ValueError(f"payload_size requires an embedded field: {path!r}")
                 if type(payload_size) is not int or payload_size <= 0:
                     raise ValueError(f"payload_size must be a positive integer: {path!r}")
-                if payload_size < offset + WIDTHS.get(storage, 0):
-                    raise ValueError(f"payload_size is smaller than the field end: {path!r}")
-                if address["stride"] and (payload_size - address["array_offset"]) % address["stride"] != 0:
-                    raise ValueError(f"payload_size does not hold whole stride elements: {path!r}")
+                if is_string:
+                    if embedded:
+                        raise ValueError(
+                            f"fixed-width string payload_size must cover the whole payload: {path!r}")
+                else:
+                    if not embedded:
+                        raise ValueError(f"payload_size requires an embedded field: {path!r}")
+                    if payload_size < offset + WIDTHS.get(storage, 0):
+                        raise ValueError(f"payload_size is smaller than the field end: {path!r}")
+                    if address["stride"] and (payload_size - address["array_offset"]) % address["stride"] != 0:
+                        raise ValueError(f"payload_size does not hold whole stride elements: {path!r}")
 
             minimum_payload_size = field.get("minimum_payload_size", 0)
             if "minimum_payload_size" in field:
