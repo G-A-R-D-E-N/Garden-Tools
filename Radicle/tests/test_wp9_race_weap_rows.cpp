@@ -497,7 +497,7 @@ TEST(WP9RaceWeapRows, MovementTypeNamesRefuseAnotherWidth) {
   EXPECT_EQ(payload(editable, "000A08:Patch.esp", "MTNM"), text_bytes("WALK"));
 }
 
-TEST(WP9RaceWeapRows, FixedWidthStringsKeepTheZstringTerminatorRule) {
+TEST(WP9RaceWeapRows, ZstringRowsKeepTheTerminatorRule) {
   const auto lod = scalar_row("STAT", "STAT\\DistantLodLevel0").scalar;
   EXPECT_THROW(fo4::schema::scalar_field_bytes(Bytes(260, std::byte{0x61}), lod),
                fo4::schema::ScalarError);
