@@ -104,7 +104,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | HDPT | 7006 | 3 | 2 | 4 | 1 | 1 | yes | - | - | - | 1 | L4 |
 | IDLE | 9646 | 5 | 3 | 2 | - | - | yes | - | environment/behavior | - | 2 | L4 |
 | IDLM | 7098 | 10 | 1 | 3 | - | - | yes | yes | - | yes | 1 | L4 |
-| IMAD | 7466 | 74 | - | - | - | - | yes | - | - | - | 1 | L4 |
+| IMAD | 7466 | 138 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | IMGS | 7393 | 36 | 1 | - | - | - | yes | - | - | - | 3 | L4 |
 | INFO | 9672 | 14 | 7 | 13 | - | 2 | yes | - | forms/info_copy, environment/dialogue | - | 2 | L4 |
 | INGR | 9788 | 22 | 5 | 9 | - | 1 | yes | yes | - | - | 1 | L4 |
@@ -135,7 +135,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | MSTT | 7067 | 19 | 3 | 8 | - | 1 | yes | yes | - | - | 1 | L4 |
 | MSWP | 12437 | 1 | 2 | - | - | - | yes | - | environment/material_swap | - | 1 | L4 |
 | MUSC | 8665 | 4 | - | - | 1 | - | yes | - | environment/sound | yes | 2 | L4 |
-| MUST | 8795 | 6 | 2 | - | 1 | - | yes | - | - | yes | 1 | L4 |
+| MUST | 8795 | 7 | 2 | - | 1 | - | yes | - | - | yes | 1 | L4 |
 | NAVI | 7240 | 4 | - | 1 | - | - | yes | - | environment/navmesh | yes | 2 | L4 |
 | NAVM | 7212 | - | - | - | - | - | yes | - | environment/navmesh | yes | 2 | L4 |
 | NOCM | 12453 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
@@ -171,7 +171,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | SCSN | 12650 | 1 | - | - | - | - | yes | - | - | yes | 1 | L4 |
 | SMBN | 8720 | 2 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | SMEN | 8762 | 3 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
-| SMQN | 8735 | 4 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
+| SMQN | 8735 | 4 | - | 2 | 1 | - | yes | - | - | - | 1 | L4 |
 | SNCT | 9469 | 5 | - | 2 | - | 1 | yes | - | - | - | 1 | L4 |
 | SNDR | 9406 | 11 | 3 | 5 | - | - | yes | - | environment/sound | - | 6 | L4 |
 | SOPM | 9489 | 24 | - | 1 | - | - | yes | - | - | - | 1 | L4 |
@@ -258,7 +258,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | HDPT | - | - | 2 | 1 | 2 | u32, u8 | 2 | - | - | existing_only |
 | IDLE | 5 | - | - | - | 3 | u16, u8 | - | - | - | existing_only |
 | IDLM | 9 | - | - | 1 | 1 | f32, i16, u8 | - | - | - | existing_only |
-| IMAD | 70 | - | 3 | 1 | - | f32, u32, u8 | - | 10 | - | existing_only |
+| IMAD | 134 | - | 3 | 1 | - | f32, u32, u8 | - | 74 | - | existing_only |
 | IMGS | 35 | - | 1 | - | 1 | f32, u16 | - | - | - | existing_only |
 | INFO | 14 | - | - | - | 7 | i32, u16, u32, u8 | 15 | - | - | existing_only |
 | INGR | 18 | 1 | - | 3 | 5 | f32, i16, i32, u32, u8 | 12 | 2 | - | existing_only |
@@ -288,7 +288,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | MSTT | 15 | 1 | 1 | 2 | 3 | f32, i16, i32, u32, u8 | 12 | 4 | - | existing_only |
 | MSWP | 1 | - | - | - | 2 | f32 | 3 | - | - | existing_only |
 | MUSC | 4 | - | - | - | - | f32, u16, u32 | - | - | - | existing_only |
-| MUST | 5 | - | 1 | - | 2 | f32, u32 | - | - | - | existing_only |
+| MUST | 6 | - | 1 | - | 2 | f32, u32 | - | 1 | - | existing_only |
 | NAVI | 4 | - | - | - | - | f32 | 5 | - | 5 | existing_only |
 | NAVM | - | - | - | - | - | - | - | - | - | - |
 | NOCM | - | - | - | - | - | - | - | - | - | - |

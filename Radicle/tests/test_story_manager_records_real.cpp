@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <iterator>
@@ -77,6 +78,25 @@ TEST_P(StoryManagerRecordsReal, EveryBatchRecordMatchesItsAuthoringAndDecodesEve
       for (const auto& field : fo4::schema::formlink_fields(signature)) {
         EXPECT_TRUE(fo4::record_field_count(plugin, record.form_key, field).has_value()) << field.path;
       }
+    }
+    if (signature == fo4::Signature::from_string("SMQN")) {
+      // Regression: the list length must equal the derived QNAM counter, or a list that skips an entry desyncs the node's quest count.
+      const auto quests = fo4::schema::formlink_list_descriptor(signature, "SMQN\\Quests");
+      ASSERT_TRUE(quests.has_value());
+      const auto values = fo4::schema::record_formlink_list_values(plugin, record.form_key, *quests);
+      ASSERT_TRUE(values.has_value());
+      std::uint32_t declared = 0;
+      std::size_t counters = 0;
+      for (const auto& subrecord : record.subrecords) {
+        if (subrecord.signature != fo4::Signature::from_string("QNAM")) continue;
+        ++counters;
+        if (subrecord.data.size() != 4) continue;
+        for (std::size_t byte = 0; byte < 4; ++byte) {
+          declared |= static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(subrecord.data[byte])) << (8 * byte);
+        }
+      }
+      EXPECT_EQ(counters, 1u) << record.form_key.to_string();
+      EXPECT_EQ(values->size(), declared) << record.form_key.to_string();
     }
   });
   if (std::string_view(GetParam()) == "Fallout4.esm") {

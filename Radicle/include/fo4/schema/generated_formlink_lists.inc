@@ -59,6 +59,7 @@ inline constexpr Signature k_generated_formlink_list_targets[] = {
   Signature::from_string("CLFM"),
   Signature::from_string("NPC_"),
   Signature::from_string("KYWD"),
+  Signature::from_string("QUST"),
   Signature::from_string("KYWD"),
   Signature::from_string("KYWD"),
   Signature::from_string("KYWD"),
@@ -2379,15 +2380,16 @@ inline constexpr FormLinkListDescriptor k_generated_formlink_lists[] = {
   {Signature::from_string("RACE"), "RACE\\MaleHairColors", "Male Hair Colors", "", Signature::from_string("AHCM"), FormLinkListStorage::per_subrecord, Signature{}, true, true, false, false, 55, 1, 826, 1, 5, 0, 0, 0, 0},
   {Signature::from_string("RACE"), "RACE\\MalePresets", "Male Race Presets", "", Signature::from_string("RPRM"), FormLinkListStorage::per_subrecord, Signature{}, true, true, false, false, 56, 1, 832, 0, 6, 0, 0, 0, 0},
   {Signature::from_string("SCEN"), "SCEN\\Keywords", "Keywords", "Keywords", Signature::from_string("KWDA"), FormLinkListStorage::packed_array, Signature::from_string("KSIZ"), false, true, false, false, 57, 1, 838, 54, 2, 0, 0, 0, 0},
-  {Signature::from_string("SPEL"), "SPEL\\Keywords", "Keywords", "Keywords", Signature::from_string("KWDA"), FormLinkListStorage::packed_array, Signature::from_string("KSIZ"), false, true, false, false, 58, 1, 894, 3, 6, 0, 0, 0, 0},
-  {Signature::from_string("TACT"), "TACT\\Keywords", "Keywords", "Keywords", Signature::from_string("KWDA"), FormLinkListStorage::packed_array, Signature::from_string("KSIZ"), false, true, false, false, 59, 1, 903, 18, 4, 0, 0, 0, 0},
-  {Signature::from_string("TERM"), "TERM\\Keywords", "Keywords", "Keywords", Signature::from_string("KWDA"), FormLinkListStorage::packed_array, Signature::from_string("KSIZ"), false, true, false, false, 60, 1, 925, 12, 20, 0, 0, 0, 0},
-  {Signature::from_string("WEAP"), "WEAP\\Keywords", "Keywords", "Keywords", Signature::from_string("KWDA"), FormLinkListStorage::packed_array, Signature::from_string("KSIZ"), false, true, false, false, 61, 1, 957, 28, 24, 0, 0, 0, 0},
+  {Signature::from_string("SMQN"), "SMQN\\Quests", "Quests", "", Signature::from_string("NNAM"), FormLinkListStorage::per_subrecord, Signature{}, false, false, false, false, 58, 1, 894, 0, 0, 0, 0, 0, 0},
+  {Signature::from_string("SPEL"), "SPEL\\Keywords", "Keywords", "Keywords", Signature::from_string("KWDA"), FormLinkListStorage::packed_array, Signature::from_string("KSIZ"), false, true, false, false, 59, 1, 894, 3, 6, 0, 0, 0, 0},
+  {Signature::from_string("TACT"), "TACT\\Keywords", "Keywords", "Keywords", Signature::from_string("KWDA"), FormLinkListStorage::packed_array, Signature::from_string("KSIZ"), false, true, false, false, 60, 1, 903, 18, 4, 0, 0, 0, 0},
+  {Signature::from_string("TERM"), "TERM\\Keywords", "Keywords", "Keywords", Signature::from_string("KWDA"), FormLinkListStorage::packed_array, Signature::from_string("KSIZ"), false, true, false, false, 61, 1, 925, 12, 20, 0, 0, 0, 0},
+  {Signature::from_string("WEAP"), "WEAP\\Keywords", "Keywords", "Keywords", Signature::from_string("KWDA"), FormLinkListStorage::packed_array, Signature::from_string("KSIZ"), false, true, false, false, 62, 1, 957, 28, 24, 0, 0, 0, 0},
 };
 
 inline constexpr NestedFormLinkListDescriptor k_generated_nested_formlink_lists[] = {
-  {Signature::from_string("RACE"), "RACE\\Subgraphs", "ActorKeywords", "Subgraph Actor Keywords", Signature::from_string("SAKD"), Signature::from_string("SRAF"), 4, false, true, 62, 1},
-  {Signature::from_string("RACE"), "RACE\\Subgraphs", "TargetKeywords", "Subgraph Target Keywords", Signature::from_string("STKD"), Signature::from_string("SRAF"), 4, false, true, 63, 1},
+  {Signature::from_string("RACE"), "RACE\\Subgraphs", "ActorKeywords", "Subgraph Actor Keywords", Signature::from_string("SAKD"), Signature::from_string("SRAF"), 4, false, true, 63, 1},
+  {Signature::from_string("RACE"), "RACE\\Subgraphs", "TargetKeywords", "Subgraph Target Keywords", Signature::from_string("STKD"), Signature::from_string("SRAF"), 4, false, true, 64, 1},
 };
 
 inline constexpr FormLinkFieldDescriptor k_generated_formlink_fields[] = {

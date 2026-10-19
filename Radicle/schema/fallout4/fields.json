@@ -5839,6 +5839,390 @@
             {"path": "IMAD\\FadeColorBlue", "label": "Fade color blue", "offset": 12, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
             {"path": "IMAD\\FadeColorAlpha", "label": "Fade color alpha", "offset": 16, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
           ]
+        },
+        {
+          "path": "IMAD\\BlurRadiusInterpolators",
+          "label": "Blur radius interpolators",
+          "kind": "counted_array",
+          "subrecord": "BNAM",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\BlurRadiusTime", "label": "Blur radius time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\BlurRadiusValue", "label": "Blur radius value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\DoubleVisionStrengthInterpolators",
+          "label": "Double vision strength interpolators",
+          "kind": "counted_array",
+          "subrecord": "VNAM",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\DoubleVisionStrengthTime", "label": "Double vision strength time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\DoubleVisionStrengthValue", "label": "Double vision strength value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\RadialBlurStrengthInterpolators",
+          "label": "Radial blur strength interpolators",
+          "kind": "counted_array",
+          "subrecord": "RNAM",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\RadialBlurStrengthTime", "label": "Radial blur strength time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\RadialBlurStrengthValue", "label": "Radial blur strength value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\RadialBlurRampUpInterpolators",
+          "label": "Radial blur ramp up interpolators",
+          "kind": "counted_array",
+          "subrecord": "SNAM",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\RadialBlurRampUpTime", "label": "Radial blur ramp up time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\RadialBlurRampUpValue", "label": "Radial blur ramp up value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\RadialBlurStartInterpolators",
+          "label": "Radial blur start interpolators",
+          "kind": "counted_array",
+          "subrecord": "UNAM",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\RadialBlurStartTime", "label": "Radial blur start time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\RadialBlurStartValue", "label": "Radial blur start value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\RadialBlurRampDownInterpolators",
+          "label": "Radial blur ramp down interpolators",
+          "kind": "counted_array",
+          "subrecord": "NAM1",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\RadialBlurRampDownTime", "label": "Radial blur ramp down time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\RadialBlurRampDownValue", "label": "Radial blur ramp down value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\RadialBlurDownStartInterpolators",
+          "label": "Radial blur down start interpolators",
+          "kind": "counted_array",
+          "subrecord": "NAM2",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\RadialBlurDownStartTime", "label": "Radial blur down start time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\RadialBlurDownStartValue", "label": "Radial blur down start value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\DepthOfFieldStrengthInterpolators",
+          "label": "Depth of field strength interpolators",
+          "kind": "counted_array",
+          "subrecord": "WNAM",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\DepthOfFieldStrengthTime", "label": "Depth of field strength time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\DepthOfFieldStrengthValue", "label": "Depth of field strength value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\DepthOfFieldDistanceInterpolators",
+          "label": "Depth of field distance interpolators",
+          "kind": "counted_array",
+          "subrecord": "XNAM",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\DepthOfFieldDistanceTime", "label": "Depth of field distance time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\DepthOfFieldDistanceValue", "label": "Depth of field distance value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\DepthOfFieldRangeInterpolators",
+          "label": "Depth of field range interpolators",
+          "kind": "counted_array",
+          "subrecord": "YNAM",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\DepthOfFieldRangeTime", "label": "Depth of field range time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\DepthOfFieldRangeValue", "label": "Depth of field range value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\MotionBlurStrengthInterpolators",
+          "label": "Motion blur strength interpolators",
+          "kind": "counted_array",
+          "subrecord": "NAM4",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\MotionBlurStrengthTime", "label": "Motion blur strength time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\MotionBlurStrengthValue", "label": "Motion blur strength value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDREyeAdaptSpeedAddInterpolators",
+          "label": "HDR eye adapt speed add interpolators",
+          "kind": "counted_array",
+          "subrecord": "@IAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDREyeAdaptSpeedAddTime", "label": "HDR eye adapt speed add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDREyeAdaptSpeedAddValue", "label": "HDR eye adapt speed add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDRBloomBlurRadiusAddInterpolators",
+          "label": "HDR bloom blur radius add interpolators",
+          "kind": "counted_array",
+          "subrecord": "AIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDRBloomBlurRadiusAddTime", "label": "HDR bloom blur radius add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDRBloomBlurRadiusAddValue", "label": "HDR bloom blur radius add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDRBloomThresholdAddInterpolators",
+          "label": "HDR bloom threshold add interpolators",
+          "kind": "counted_array",
+          "subrecord": "BIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDRBloomThresholdAddTime", "label": "HDR bloom threshold add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDRBloomThresholdAddValue", "label": "HDR bloom threshold add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDRBloomScaleAddInterpolators",
+          "label": "HDR bloom scale add interpolators",
+          "kind": "counted_array",
+          "subrecord": "CIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDRBloomScaleAddTime", "label": "HDR bloom scale add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDRBloomScaleAddValue", "label": "HDR bloom scale add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDRTargetLumMinAddInterpolators",
+          "label": "HDR target lum min add interpolators",
+          "kind": "counted_array",
+          "subrecord": "DIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDRTargetLumMinAddTime", "label": "HDR target lum min add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDRTargetLumMinAddValue", "label": "HDR target lum min add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDRTargetLumMaxAddInterpolators",
+          "label": "HDR target lum max add interpolators",
+          "kind": "counted_array",
+          "subrecord": "EIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDRTargetLumMaxAddTime", "label": "HDR target lum max add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDRTargetLumMaxAddValue", "label": "HDR target lum max add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDRSunlightScaleAddInterpolators",
+          "label": "HDR sunlight scale add interpolators",
+          "kind": "counted_array",
+          "subrecord": "FIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDRSunlightScaleAddTime", "label": "HDR sunlight scale add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDRSunlightScaleAddValue", "label": "HDR sunlight scale add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDRSkyScaleAddInterpolators",
+          "label": "HDR sky scale add interpolators",
+          "kind": "counted_array",
+          "subrecord": "GIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDRSkyScaleAddTime", "label": "HDR sky scale add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDRSkyScaleAddValue", "label": "HDR sky scale add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDRUnused8AddInterpolators",
+          "label": "HDR unused 8 add interpolators",
+          "kind": "counted_array",
+          "subrecord": "HIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDRUnused8AddTime", "label": "HDR unused 8 add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDRUnused8AddValue", "label": "HDR unused 8 add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDRUnused9AddInterpolators",
+          "label": "HDR unused 9 add interpolators",
+          "kind": "counted_array",
+          "subrecord": "IIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDRUnused9AddTime", "label": "HDR unused 9 add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDRUnused9AddValue", "label": "HDR unused 9 add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDRUnused10AddInterpolators",
+          "label": "HDR unused 10 add interpolators",
+          "kind": "counted_array",
+          "subrecord": "JIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDRUnused10AddTime", "label": "HDR unused 10 add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDRUnused10AddValue", "label": "HDR unused 10 add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDRUnused11AddInterpolators",
+          "label": "HDR unused 11 add interpolators",
+          "kind": "counted_array",
+          "subrecord": "KIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDRUnused11AddTime", "label": "HDR unused 11 add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDRUnused11AddValue", "label": "HDR unused 11 add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDRUnused12AddInterpolators",
+          "label": "HDR unused 12 add interpolators",
+          "kind": "counted_array",
+          "subrecord": "LIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDRUnused12AddTime", "label": "HDR unused 12 add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDRUnused12AddValue", "label": "HDR unused 12 add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDRUnused13AddInterpolators",
+          "label": "HDR unused 13 add interpolators",
+          "kind": "counted_array",
+          "subrecord": "MIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDRUnused13AddTime", "label": "HDR unused 13 add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDRUnused13AddValue", "label": "HDR unused 13 add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDRUnused14AddInterpolators",
+          "label": "HDR unused 14 add interpolators",
+          "kind": "counted_array",
+          "subrecord": "NIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDRUnused14AddTime", "label": "HDR unused 14 add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDRUnused14AddValue", "label": "HDR unused 14 add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDRUnused15AddInterpolators",
+          "label": "HDR unused 15 add interpolators",
+          "kind": "counted_array",
+          "subrecord": "OIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDRUnused15AddTime", "label": "HDR unused 15 add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDRUnused15AddValue", "label": "HDR unused 15 add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDRUnused16AddInterpolators",
+          "label": "HDR unused 16 add interpolators",
+          "kind": "counted_array",
+          "subrecord": "PIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDRUnused16AddTime", "label": "HDR unused 16 add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDRUnused16AddValue", "label": "HDR unused 16 add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\CinematicSaturationAddInterpolators",
+          "label": "Cinematic saturation add interpolators",
+          "kind": "counted_array",
+          "subrecord": "QIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\CinematicSaturationAddTime", "label": "Cinematic saturation add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\CinematicSaturationAddValue", "label": "Cinematic saturation add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\CinematicBrightnessAddInterpolators",
+          "label": "Cinematic brightness add interpolators",
+          "kind": "counted_array",
+          "subrecord": "RIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\CinematicBrightnessAddTime", "label": "Cinematic brightness add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\CinematicBrightnessAddValue", "label": "Cinematic brightness add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\CinematicContrastAddInterpolators",
+          "label": "Cinematic contrast add interpolators",
+          "kind": "counted_array",
+          "subrecord": "SIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\CinematicContrastAddTime", "label": "Cinematic contrast add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\CinematicContrastAddValue", "label": "Cinematic contrast add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\CinematicUnusedAddInterpolators",
+          "label": "Cinematic unused add interpolators",
+          "kind": "counted_array",
+          "subrecord": "TIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\CinematicUnusedAddTime", "label": "Cinematic unused add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\CinematicUnusedAddValue", "label": "Cinematic unused add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
         }
       ],
       "authoring": {
@@ -20790,6 +21174,17 @@
           "kind": "string",
           "subrecord": "BNAM",
           "insertion": "existing_only"
+        },
+        {
+          "path": "MUST\\CuePoints",
+          "label": "Cue points",
+          "kind": "counted_array",
+          "subrecord": "FNAM",
+          "stride": 4,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "MUST\\CuePoint", "label": "Cue point", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
         }
       ],
       "formlink_lists": [
@@ -22552,6 +22947,9 @@
           "nullable": true,
           "insertion": "existing_only"
         }
+      ],
+      "formlink_lists": [
+        {"path": "SMQN\\Quests", "label": "Quests", "subrecord": "NNAM", "targets": ["QUST"], "nullable": false, "mutation": "existing_only"}
       ],
       "localized_subrecords": []
     },
