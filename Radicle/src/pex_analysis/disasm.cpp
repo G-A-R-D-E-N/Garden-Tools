@@ -1,0 +1,285 @@
+#include <fo4/pex_analysis/disasm.hpp>
+
+#include <cstdint>
+#include <cstdio>
+#include <string>
+#include <utility>
+#include <vector>
+
+namespace fo4::pex_analysis {
+
+namespace {
+
+std::string indent_text(int depth) {
+  return std::string(static_cast<std::size_t>(depth) * 2, ' ');
+}
+
+std::string instruction_line(const fo4::pex::PexInstruction& instruction, std::size_t index) {
+  char buffer[24];
+  std::snprintf(buffer, sizeof(buffer), "%4zu", index);
+  std::string text = buffer;
+  text += ": ";
+  text += pex_op_name(instruction.opCode);
+  for (const auto& argument : instruction.args) {
+    text += " ";
+    text += pex_value_text(argument);
+  }
+  return text;
+}
+
+std::string label_line(std::size_t index) { return "L" + std::to_string(index) + ":"; }
+
+class StructuredRenderer {
+ public:
+  StructuredRenderer(const PexFunctionCfg& cfg, const fo4::pex::PexFunction& function)
+      : cfg_(cfg), function_(function), emitted_(cfg.blocks.size(), false) {}
+
+  bool render(std::string& out) {
+    if (!cfg_.unreachableBlocks.empty()) return false;
+    if (cfg_.loops.size() > 1) return false;
+    const auto ended = emit_range(0, cfg_.exitBlock, 0, out);
+    if (bailed_ || ended != cfg_.exitBlock) return false;
+    for (std::size_t b = 0; b < cfg_.blocks.size(); ++b) {
+      if (!emitted_[b] && b != cfg_.exitBlock) return false;
+    }
+    return true;
+  }
+
+ private:
+  std::size_t terminator_of(std::size_t block) const {
+    const auto& b = cfg_.blocks[block];
+    return b.first + b.count - 1;
+  }
+
+  std::size_t jump_target_of(std::size_t instructionIndex) const {
+    std::int64_t offset = 0;
+    if (!pex_jump_offset(function_.instructions[instructionIndex], &offset)) return kNoIndex;
+    const auto target = static_cast<std::int64_t>(instructionIndex) + offset;
+    return cfg_block_of(cfg_, static_cast<std::size_t>(target));
+  }
+
+  std::string condition_text(std::size_t instructionIndex) const {
+    const auto& instruction = function_.instructions[instructionIndex];
+    if (instruction.args.empty()) return "?";
+    return pex_value_text(instruction.args.front());
+  }
+
+  std::size_t linear_exit(std::size_t start, std::size_t bound) const {
+    if (start >= bound) return kNoIndex;
+    auto cur = start;
+    while (cur + 1 < bound) {
+      const auto& successors = cfg_.blocks[cur].successors;
+      if (successors.size() != 1 || successors.front() != cur + 1) return cur;
+      ++cur;
+    }
+    return cur;
+  }
+
+  const PexLoop* loop_at(std::size_t block) const {
+    for (const auto& loop : cfg_.loops) {
+      if (loop.headerBlock == block) return &loop;
+    }
+    return nullptr;
+  }
+
+  void emit_block_body(std::size_t block, int depth, bool withTerminator,
+                       std::string& out) const {
+    const auto& b = cfg_.blocks[block];
+    if (b.count == 0) return;
+    const auto end = b.first + b.count - (withTerminator ? std::size_t{0} : std::size_t{1});
+    for (auto i = b.first; i < end; ++i) {
+      out += indent_text(depth);
+      out += instruction_line(function_.instructions[i], i);
+      out += "\n";
+    }
+  }
+
+  bool emit_loop(std::size_t block, const PexLoop& loop, int depth, std::string& out) {
+    const auto terminator = terminator_of(block);
+    if (!pex_is_conditional_jump(function_.instructions[terminator].opCode)) return false;
+    const auto target = jump_target_of(terminator);
+    if (target == kNoIndex || target <= block + 1) return false;
+    if (loop.latchBlock != target - 1) return false;
+    const auto& latch = cfg_.blocks[loop.latchBlock];
+    if (latch.successors.size() != 1 || latch.successors.front() != block) return false;
+
+    emit_block_body(block, depth, false, out);
+    out += indent_text(depth) + "while (" + condition_text(terminator) + ") {\n";
+    const auto ended = emit_range(block + 1, target, depth + 1, out);
+    if (bailed_ || ended != target) return false;
+    out += indent_text(depth) + "}\n";
+    return true;
+  }
+
+  bool emit_conditional(std::size_t block, int depth, std::size_t& next, std::string& out) {
+    const auto terminator = terminator_of(block);
+    const auto& instruction = function_.instructions[terminator];
+    if (instruction.opCode != static_cast<std::uint8_t>(PexOp::JmpF)) return false;
+    const auto elseStart = jump_target_of(terminator);
+    if (elseStart == kNoIndex || elseStart <= block + 1) return false;
+
+    const auto thenStart = block + 1;
+    const auto thenExit = linear_exit(thenStart, elseStart);
+    if (thenExit == kNoIndex) return false;
+
+    const auto& thenSuccessors = cfg_.blocks[thenExit].successors;
+    const bool thenLeaves = thenSuccessors.empty() ||
+                            (thenSuccessors.size() == 1 && thenSuccessors.front() == elseStart);
+    if (thenLeaves) {
+      if (thenExit != elseStart - 1) return false;
+      emit_block_body(block, depth, false, out);
+      out += indent_text(depth) + "if (" + condition_text(terminator) + ") {\n";
+      const auto ended = emit_range(thenStart, thenExit + 1, depth + 1, out);
+      if (bailed_ || ended != thenExit + 1) return false;
+      out += indent_text(depth) + "}\n";
+      next = elseStart;
+      return true;
+    }
+
+    if (thenSuccessors.size() != 1) return false;
+    const auto join = thenSuccessors.front();
+    if (join <= elseStart) return false;
+    const auto elseExit = linear_exit(elseStart, join);
+    if (elseExit == kNoIndex || elseExit != join - 1) return false;
+    const auto& elseSuccessors = cfg_.blocks[elseExit].successors;
+    if (elseSuccessors.size() != 1 || elseSuccessors.front() != join) return false;
+
+    emit_block_body(block, depth, false, out);
+    out += indent_text(depth) + "if (" + condition_text(terminator) + ") {\n";
+    const auto endedThen = emit_range(thenStart, thenExit + 1, depth + 1, out);
+    if (bailed_ || endedThen != thenExit + 1) return false;
+    out += indent_text(depth) + "} else {\n";
+    const auto endedElse = emit_range(elseStart, elseExit + 1, depth + 1, out);
+    if (bailed_ || endedElse != elseExit + 1) return false;
+    out += indent_text(depth) + "}\n";
+    next = join;
+    return true;
+  }
+
+  std::size_t emit_range(std::size_t block, std::size_t stop, int depth, std::string& out) {
+    while (block != stop) {
+      if (block >= cfg_.blocks.size() || emitted_[block]) {
+        bailed_ = true;
+        return kNoIndex;
+      }
+      emitted_[block] = true;
+      const auto& current = cfg_.blocks[block];
+      if (current.count == 0) {
+        bailed_ = true;
+        return kNoIndex;
+      }
+
+      const auto terminator = terminator_of(block);
+      const auto* loop = loop_at(block);
+      if (loop != nullptr) {
+        if (!emit_loop(block, *loop, depth, out)) {
+          bailed_ = true;
+          return kNoIndex;
+        }
+        block = jump_target_of(terminator);
+        continue;
+      }
+
+      if (pex_is_conditional_jump(function_.instructions[terminator].opCode)) {
+        std::size_t next = kNoIndex;
+        if (!emit_conditional(block, depth, next, out)) {
+          bailed_ = true;
+          return kNoIndex;
+        }
+        block = next;
+        continue;
+      }
+
+      const auto& successors = current.successors;
+      if (stop != 0 && block == stop - 1) {
+        if (successors.size() > 1) {
+          bailed_ = true;
+          return kNoIndex;
+        }
+        const bool isJump = pex_is_jump(function_.instructions[terminator].opCode);
+        emit_block_body(block, depth, !isJump, out);
+        block = stop;
+        continue;
+      }
+
+      if (successors.size() != 1 || successors.front() != block + 1) {
+        bailed_ = true;
+        return kNoIndex;
+      }
+      emit_block_body(block, depth, true, out);
+      block = successors.front();
+    }
+    return block;
+  }
+
+  const PexFunctionCfg& cfg_;
+  const fo4::pex::PexFunction& function_;
+  std::vector<bool> emitted_;
+  bool bailed_{false};
+};
+
+std::string plain_listing(const PexFunctionCfg& cfg, const fo4::pex::PexFunction& function) {
+  const auto count = function.instructions.size();
+  std::vector<bool> isTarget(count + 1, false);
+  for (std::size_t i = 0; i < count; ++i) {
+    std::int64_t offset = 0;
+    if (!pex_jump_offset(function.instructions[i], &offset)) continue;
+    const auto target = static_cast<std::int64_t>(i) + offset;
+    if (target >= 0 && target <= static_cast<std::int64_t>(count)) {
+      isTarget[static_cast<std::size_t>(target)] = true;
+    }
+  }
+
+  std::string out;
+  for (std::size_t i = 0; i < count; ++i) {
+    if (isTarget[i]) {
+      out += label_line(i);
+      out += "\n";
+    }
+    const auto block = cfg_block_of(cfg, i);
+    if (block != kNoIndex && !cfg.blocks[block].reachable && cfg.blocks[block].first == i) {
+      out += "; unreachable\n";
+    }
+    out += instruction_line(function.instructions[i], i);
+    out += "\n";
+  }
+  if (isTarget[count]) {
+    out += label_line(count);
+    out += "\n";
+  }
+  return out;
+}
+
+}
+
+PexDisasmResult disassemble_function(const fo4::pex::PexFunction& function,
+                                     const PexDisasmOptions& options) {
+  PexDisasmResult result;
+  const auto cfg = build_cfg(function);
+  result.status = cfg.status;
+  result.errorInstruction = cfg.errorInstruction;
+  result.errorTarget = cfg.errorTarget;
+  if (cfg.status != PexAnalysisStatus::Ok) {
+    result.text = "error: " + pex_analysis_status_text(cfg.status) + " at instruction " +
+                  std::to_string(cfg.errorInstruction);
+    if (cfg.status == PexAnalysisStatus::JumpTargetOutOfRange) {
+      result.text += " (target " + std::to_string(cfg.errorTarget) + ")";
+    }
+    result.text += "\n";
+    return result;
+  }
+
+  if (options.structured) {
+    std::string structured;
+    StructuredRenderer renderer(cfg, function);
+    if (renderer.render(structured)) {
+      result.structured = true;
+      result.text = std::move(structured);
+      return result;
+    }
+  }
+  result.text = plain_listing(cfg, function);
+  return result;
+}
+
+}

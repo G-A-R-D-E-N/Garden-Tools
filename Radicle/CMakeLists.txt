@@ -236,6 +236,12 @@ add_library(fo4
   src/swf/swf.cpp
   src/swf/swf_tags.cpp
   src/swf/swf_write.cpp
+  src/pex_analysis/opcodes.cpp
+  src/pex_analysis/cfg.cpp
+  src/pex_analysis/disasm.cpp
+  src/pex_analysis/callgraph.cpp
+  src/pex_analysis/summary.cpp
+  src/pex_analysis/fragments.cpp
   src/material/material_file.cpp
   src/seq/seq.cpp
   src/quest/runtime.cpp
@@ -641,6 +647,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_pex_corpus.cpp
     tests/test_pex_oracle.cpp
     tests/test_papyrus_vm.cpp
+    tests/test_pex_analysis.cpp
     tests/test_material_file.cpp
     tests/test_material_file_real.cpp
     tests/test_swf.cpp
