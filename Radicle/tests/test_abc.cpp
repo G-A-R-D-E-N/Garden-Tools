@@ -434,9 +434,11 @@ TEST(Abc, ReadsProtectedNamespaceAndAlwaysPresentInterfaceCount) {
 TEST(Abc, RejectsEveryStructuralIndexPastItsPool) {
   const std::pair<AbcBadIndex, const char*> cases[] = {
       {AbcBadIndex::InstanceName, "instance name"},
+      {AbcBadIndex::InstanceNameAtLimit, "instance name at its pool limit"},
       {AbcBadIndex::InstanceSuper, "instance super"},
       {AbcBadIndex::InstanceInterface, "instance interface"},
       {AbcBadIndex::InstanceIinit, "instance iinit"},
+      {AbcBadIndex::InstanceIinitAtLimit, "instance iinit at its pool limit"},
       {AbcBadIndex::InstanceProtectedNs, "instance protected namespace"},
       {AbcBadIndex::ClassInit, "class cinit"},
       {AbcBadIndex::TraitName, "trait name"},

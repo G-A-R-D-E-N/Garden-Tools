@@ -405,7 +405,8 @@ AbcStatus check_pool_indices(const AbcFile& file) {
     }
     for (const AbcException& exception : body.exceptions) {
       if (optional_past_end(exception.exc_type, multinames) ||
-          optional_past_end(exception.var_name, strings)) {
+          (optional_past_end(exception.var_name, strings) &&
+           optional_past_end(exception.var_name, multinames))) {
         return AbcStatus::IndexOutOfRange;
       }
     }

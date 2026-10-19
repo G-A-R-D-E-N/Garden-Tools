@@ -40,9 +40,11 @@ inline constexpr std::uint32_t kMultinameHelper = 13;
 enum class AbcBadIndex {
   None = 0,
   InstanceName,
+  InstanceNameAtLimit,
   InstanceSuper,
   InstanceInterface,
   InstanceIinit,
+  InstanceIinitAtLimit,
   InstanceProtectedNs,
   ClassInit,
   TraitName,
@@ -59,6 +61,8 @@ enum class AbcBadIndex {
 };
 
 inline constexpr std::uint32_t kBadIndex = 99;
+inline constexpr std::uint32_t kMethodCount = 3;
+inline constexpr std::uint32_t kMultinameCount = 14;
 
 inline std::uint32_t bad_or(AbcBadIndex bad, AbcBadIndex field, std::uint32_t valid) {
   return bad == field ? kBadIndex : valid;
@@ -153,7 +157,7 @@ inline void put_constant_pool(std::vector<std::uint8_t>& out) {
   put_u8(out, 0x16);
   put_u30(out, 0);
   put_u30(out, 1);
-  put_u30(out, 14);
+  put_u30(out, kMultinameCount);
   put_u8(out, 0x07);
   put_u30(out, 1);
   put_u30(out, kStringExternalInterface);
@@ -279,7 +283,7 @@ inline std::vector<std::uint8_t> build_abc(const std::vector<std::uint8_t>& cons
   put_u16(out, fo4::abc::kAbcMinorVersion);
   put_u16(out, fo4::abc::kAbcMajorVersion);
   put_constant_pool(out);
-  put_u30(out, 3);
+  put_u30(out, kMethodCount);
   put_method(out, kStringTest, bad);
   put_method_with_options(out, kStringOnClick, bad);
   put_method(out, kStringHelper);
@@ -289,7 +293,9 @@ inline std::vector<std::uint8_t> build_abc(const std::vector<std::uint8_t>& cons
   put_u30(out, kStringExternalInterface);
   put_u30(out, kStringCall);
   put_u30(out, 1);
-  put_u30(out, bad_or(bad, AbcBadIndex::InstanceName, kMultinameTest));
+  const bool name_at_limit = bad == AbcBadIndex::InstanceNameAtLimit;
+  put_u30(out, name_at_limit ? kMultinameCount
+                             : bad_or(bad, AbcBadIndex::InstanceName, kMultinameTest));
   put_u30(out, bad_or(bad, AbcBadIndex::InstanceSuper, kMultinameObject));
   const bool bad_protected_ns = bad == AbcBadIndex::InstanceProtectedNs;
   put_u8(out, bad_protected_ns ? 0x0D : 0x05);
@@ -298,7 +304,8 @@ inline std::vector<std::uint8_t> build_abc(const std::vector<std::uint8_t>& cons
   }
   put_u30(out, 1);
   put_u30(out, bad_or(bad, AbcBadIndex::InstanceInterface, kMultinameClick));
-  put_u30(out, bad_or(bad, AbcBadIndex::InstanceIinit, 0));
+  const bool iinit_at_limit = bad == AbcBadIndex::InstanceIinitAtLimit;
+  put_u30(out, iinit_at_limit ? kMethodCount : bad_or(bad, AbcBadIndex::InstanceIinit, 0));
   put_instance_traits(out, bad);
   put_u30(out, bad_or(bad, AbcBadIndex::ClassInit, 0));
   put_u30(out, 0);
