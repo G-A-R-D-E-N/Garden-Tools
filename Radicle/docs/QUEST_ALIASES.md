@@ -182,6 +182,19 @@ change from a location alias carrying `ALCC` to a reference creation that
 writes a fill drops the `ALCC` instead of leaving two Fill Type variants
 behind.
 
+A kind change that writes no fill refuses the preserved Fill Type members
+instead of carrying them over. `ALFA`, `ALEQ`, `ALEA`, `ALFE`, `ALFD` and the
+location `ALCC` are Fill Type members of one kind that also have a position in
+the other kind's member order, so a preserved one silently becomes a Fill Type
+the caller did not ask for: a location alias's `ALCC` is Closest To Alias but a
+reference Find Matching Closest fill, and a reference `ALEA` (External Alias
+Reference) or `ALFE`/`ALFD` (Find Matching From Event) is a location External
+Alias or Find Matching Location fill. The replacement throws `QuestError`
+before the clone is committed when the kind changed, the creation writes no
+fill, and a member that would be preserved is a Fill Type member of either
+kind. `ALFR` and `ALFL` were already refused, because neither has a position in
+the other kind's member order.
+
 The order is the xEdit FO4 alias definition
 (`Core/wbDefinitionsFO4.pas:10808-10889` reference alias, `:10898-10924`
 location alias, at pin `93cc0bc5`): `ALST`/`ALLS`, `ALID`, `FNAM`, `ALFI`, the
@@ -193,7 +206,12 @@ before the conditions.
 Replacement throws `QuestError`, leaving the plugin unchanged, when a member
 that has to be preserved has no position in that order (an `ALFL` inside a
 reference alias, say), when the preserved members are themselves out of
-order, or when the spliced alias does not decode. A replacement that changes
+order, when a kind change that writes no fill would carry over a Fill Type
+member of either kind, or when the spliced alias does not decode. Order is
+compared by run rather than by single signature: `CIS1` and `CIS2` rank with
+the `CTDA` head of their condition run and `COED` ranks with the `CNTO` it
+belongs to, so a canonical `CTDA`, `CIS1`, `CTDA` condition run and a `CNTO`,
+`COED`, `CNTO`, `COED` item list are in order. A replacement that changes
 the alias kind rewrites the alias frame for the new kind (`ALST`/`ALLS`, or
 `ALCS`/`ALMI` when the new creation is a collection, plus `ALID`, `FNAM`,
 `ALFI`, `ALED`) and preserves everything else under the new kind's order.

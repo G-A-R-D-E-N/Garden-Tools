@@ -51,7 +51,7 @@ std::vector<std::byte> ctda_payload() {
   return data.bytes;
 }
 
-std::vector<std::byte> quest_with_tail(bool alias_after_tail = false) {
+std::vector<std::byte> quest_with_tail() {
   fo4::test::ByteWriter out;
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
   fo4::test::ByteWriter hedr;
@@ -77,12 +77,6 @@ std::vector<std::byte> quest_with_tail(bool alias_after_tail = false) {
   fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
 
   fo4::test::write_subrecord(out, "NNAM", std::string_view{"TailDescription\0", 16});
-
-  if (alias_after_tail) {
-    write_u32_subrecord(out, "ALCS", 9);
-    const std::vector<std::byte> max_fill{std::byte{2}};
-    fo4::test::write_subrecord(out, "ALMI", max_fill);
-  }
 
   fo4::test::end_record(out, quest);
   fo4::test::end_group(out, group);
@@ -230,6 +224,33 @@ std::vector<std::byte> u32_bytes(std::uint32_t value) {
 }
 
 const fo4::FormKey k_quest = fo4::FormKey::parse("000800:Quest.esp");
+
+// One alias of the given kind; extra members must already be in the kind's member order.
+std::vector<std::byte> alias_with_members(std::string_view start, std::uint32_t id,
+                                          const MemberList& members) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(1);
+  hedr.u32(0x900);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+
+  const auto group = fo4::test::begin_group(out, "QUST", 0);
+  const auto quest = fo4::test::begin_record(out, "QUST", 0, 0x00000800, 131);
+  write_u32_subrecord(out, "ANAM", 2);
+  write_u32_subrecord(out, start, id);
+  fo4::test::write_subrecord(out, "ALID", std::string_view{"Only\0", 5});
+  write_u32_subrecord(out, "FNAM", 0);
+  for (const auto& member : members) {
+    fo4::test::write_subrecord(out, member.first, member.second);
+  }
+  fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
+  fo4::test::end_record(out, quest);
+  fo4::test::end_group(out, group);
+  return out.bytes;
+}
 
 // A replacement must keep the ALFI, ALID, ALEA, CTDA/CIS1 and ALCC here.
 std::vector<std::byte> unmodelled_alias_member_quest() {
@@ -438,17 +459,6 @@ TEST(QuestAliasMutation, RejectsDuplicateIdsAndIdChangingReplacementTransactiona
   EXPECT_EQ(fo4::write_plugin(plugin), before);
 }
 
-TEST(QuestAliasMutation, RejectsAliasMarkersAfterTailBoundary) {
-  auto plugin = fo4::read_plugin(quest_with_tail(true), "Quest.esp");
-  const auto quest = fo4::FormKey::parse("000800:Quest.esp");
-  const auto before = fo4::write_plugin(plugin);
-
-  EXPECT_THROW(
-      fo4::forms::add_quest_alias(plugin, quest, collection(3, 1)),
-      fo4::forms::QuestError);
-  EXPECT_EQ(fo4::write_plugin(plugin), before);
-}
-
 TEST(QuestAliasMutation, RejectsAliasIdThatCannotAdvanceAnam) {
   auto plugin = fo4::read_plugin(quest_with_tail(), "Quest.esp");
   const auto quest = fo4::FormKey::parse("000800:Quest.esp");
@@ -526,58 +536,6 @@ TEST(QuestAliasMutation, WriteEmptyArrayClearsAliasesAndKeepsAnam) {
   EXPECT_TRUE(aliases.aliases.empty());
   EXPECT_EQ(aliases.next_alias_id, 2u);
   EXPECT_NE(unique_subrecord(*fo4::find_record(plugin, quest), "NNAM"), nullptr);
-}
-
-std::vector<std::byte> two_collections_separated() {
-  fo4::test::ByteWriter out;
-  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
-  fo4::test::ByteWriter hedr;
-  hedr.f32(1.0f);
-  hedr.u32(1);
-  hedr.u32(0x900);
-  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
-  fo4::test::end_record(out, tes4);
-
-  const auto group = fo4::test::begin_group(out, "QUST", 0);
-  const auto quest = fo4::test::begin_record(out, "QUST", 0, 0x00000800, 131);
-  fo4::test::write_subrecord(out, "EDID", std::string_view{"AliasQuest\0", 11});
-  write_u32_subrecord(out, "ANAM", 10);
-  write_u32_subrecord(out, "ALCS", 1);
-  write_u32_subrecord(out, "ALST", 2);
-  fo4::test::write_subrecord(out, "ALID", std::string_view{"Separator\0", 10});
-  write_u32_subrecord(out, "FNAM", 0);
-  fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
-  write_u32_subrecord(out, "ALCS", 3);
-  fo4::test::write_subrecord(out, "NNAM", std::string_view{"Tail\0", 5});
-  fo4::test::end_record(out, quest);
-  fo4::test::end_group(out, group);
-  return out.bytes;
-}
-
-TEST(QuestAliasMutation, RefusesMutationsThatWouldJoinCollectionRuns) {
-  auto plugin = fo4::read_plugin(two_collections_separated(), "Quest.esp");
-  const auto quest = fo4::FormKey::parse("000800:Quest.esp");
-  const auto before = fo4::write_plugin(plugin);
-
-  EXPECT_THROW(
-      static_cast<void>(fo4::forms::remove_quest_alias(plugin, quest, 2)),
-      fo4::forms::QuestError);
-  EXPECT_EQ(fo4::write_plugin(plugin), before);
-
-  EXPECT_THROW(
-      static_cast<void>(fo4::forms::reorder_quest_alias(plugin, quest, 2, 0)),
-      fo4::forms::QuestError);
-  EXPECT_EQ(fo4::write_plugin(plugin), before);
-
-  EXPECT_THROW(
-      fo4::forms::replace_quest_alias(plugin, quest, 2, collection(2, 1)),
-      fo4::forms::QuestError);
-  EXPECT_EQ(fo4::write_plugin(plugin), before);
-
-  EXPECT_THROW(
-      fo4::forms::add_quest_alias(plugin, quest, collection(4, 1)),
-      fo4::forms::QuestError);
-  EXPECT_EQ(fo4::write_plugin(plugin), before);
 }
 
 TEST(QuestAliasReplacementPreservation, KeepsMembersTheCreationDoesNotWrite) {
@@ -722,4 +680,61 @@ TEST(QuestAliasReplacementPreservation, RefusesPreservedMembersThatCannotBeOrder
       fo4::forms::replace_quest_alias(unordered, k_quest, 2, location_alias(2)),
       fo4::forms::QuestError);
   EXPECT_EQ(fo4::write_plugin(unordered), unordered_before);
+}
+
+// A location ALCC and a reference ALEA must not survive a no-fill kind change: each is a fill member of both kinds.
+TEST(QuestAliasReplacementPreservation, RefusesKindChangesOverSharedFillMembers) {
+  auto plugin = fo4::read_plugin(
+      alias_with_members("ALLS", 2, {{"ALCC", u32_bytes(4)}}), "Quest.esp");
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_THROW(fo4::forms::replace_quest_alias(plugin, k_quest, 2, reference_alias(2)),
+               fo4::forms::QuestError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+
+  auto other = fo4::read_plugin(
+      alias_with_members("ALST", 1, {{"ALEA", u32_bytes(5)}}), "Quest.esp");
+  const auto other_before = fo4::write_plugin(other);
+  EXPECT_THROW(fo4::forms::replace_quest_alias(other, k_quest, 1, location_alias(1)),
+               fo4::forms::QuestError);
+  EXPECT_EQ(fo4::write_plugin(other), other_before);
+}
+
+TEST(QuestAliasReplacementPreservation, RefusesOrDropsASpecificReferenceOnAKindChange) {
+  auto plugin = fo4::read_plugin(
+      alias_with_members("ALST", 1, {{"ALFR", u32_bytes(0x800)}}), "Quest.esp");
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_THROW(fo4::forms::replace_quest_alias(plugin, k_quest, 1, location_alias(1)),
+               fo4::forms::QuestError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+
+  auto location = location_alias(1);
+  location.fill = fo4::forms::QuestFindMatchingLocationFill{.event = 1, .data = 2};
+  fo4::forms::replace_quest_alias(plugin, k_quest, 1, location);
+
+  const auto* record = fo4::find_record(plugin, k_quest);
+  ASSERT_NE(record, nullptr);
+  EXPECT_EQ(member_names(alias_members(*record, "ALLS")),
+            (std::vector<std::string>{"ALLS", "FNAM", "ALFE", "ALFD", "ALED"}));
+}
+
+// CIS1 must rank with the CTDA head of its run, so a rename that writes no conditions must keep the whole run.
+TEST(QuestAliasReplacementPreservation, KeepsAConditionRunWithACis1InOrderOnARename) {
+  fo4::test::ByteWriter cis1;
+  cis1.raw(std::string_view{"One\0", 4});
+  auto plugin = fo4::read_plugin(
+      alias_with_members("ALLS", 2, {{"CTDA", ctda_payload()},
+                                     {"CIS1", cis1.bytes},
+                                     {"CTDA", ctda_payload()}}),
+      "Quest.esp");
+  auto renamed = location_alias(2);
+  renamed.name = std::string_view{"Renamed"};
+  fo4::forms::replace_quest_alias(plugin, k_quest, 2, renamed);
+
+  const auto* record = fo4::find_record(plugin, k_quest);
+  ASSERT_NE(record, nullptr);
+  const auto after = alias_members(*record, "ALLS");
+  EXPECT_EQ(member_names(after),
+            (std::vector<std::string>{"ALLS", "ALID", "FNAM", "CTDA", "CIS1", "CTDA",
+                                      "ALED"}));
+  EXPECT_EQ(member_payload(after, "CIS1"), cis1.bytes);
 }

@@ -28,6 +28,11 @@ constexpr auto k_alls = Signature::from_string("ALLS");
 constexpr auto k_alcs = Signature::from_string("ALCS");
 constexpr auto k_almi = Signature::from_string("ALMI");
 constexpr auto k_aled = Signature::from_string("ALED");
+constexpr auto k_ctda = Signature::from_string("CTDA");
+constexpr auto k_cis1 = Signature::from_string("CIS1");
+constexpr auto k_cis2 = Signature::from_string("CIS2");
+constexpr auto k_cnto = Signature::from_string("CNTO");
+constexpr auto k_coed = Signature::from_string("COED");
 
 struct AliasRange {
   std::size_t begin{0};
@@ -267,6 +272,9 @@ bool run_written(const std::vector<Subrecord>& members,
 
 std::optional<std::size_t> alias_member_rank(QuestAliasKind kind,
                                              Signature signature) {
+  // A run member must rank with its run head: CIS1/CIS2 with CTDA, COED with CNTO.
+  if (signature == k_cis1 || signature == k_cis2) signature = k_ctda;
+  if (signature == k_coed) signature = k_cnto;
   if (kind == QuestAliasKind::reference) {
     return member_rank(k_reference_member_order, signature);
   }
@@ -471,6 +479,16 @@ void replace_quest_alias(Plugin& plugin,
     if (kind_changed &&
         member_rank(k_alias_frame, member.signature).has_value()) {
       continue;
+    }
+    // A kind change with no fill written must not carry over a fill member of either kind.
+    if (kind_changed && !fill_written &&
+        (member_run(existing_kind, member.signature) == AliasMemberRun::fill ||
+         member_run(creation.kind, member.signature) == AliasMemberRun::fill)) {
+      throw QuestError(
+          "QUST alias member " + member.signature.to_string() +
+          " cannot be preserved across a " + detail::alias_label(existing_kind) +
+          " to " + detail::alias_label(creation.kind) +
+          " alias kind change that writes no fill");
     }
     preserved.push_back(member);
   }

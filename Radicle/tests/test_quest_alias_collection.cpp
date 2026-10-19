@@ -138,6 +138,32 @@ fo4::forms::QuestAliasCreation reference_alias(std::uint32_t id) {
   return creation;
 }
 
+std::vector<std::byte> two_collections_separated() {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(1);
+  hedr.u32(0x900);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+
+  const auto group = fo4::test::begin_group(out, "QUST", 0);
+  const auto quest = fo4::test::begin_record(out, "QUST", 0, 0x00000800, 131);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"AliasQuest\0", 11});
+  write_u32_subrecord(out, "ANAM", 10);
+  write_u32_subrecord(out, "ALCS", 1);
+  write_u32_subrecord(out, "ALST", 2);
+  fo4::test::write_subrecord(out, "ALID", std::string_view{"Separator\0", 10});
+  write_u32_subrecord(out, "FNAM", 0);
+  fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
+  write_u32_subrecord(out, "ALCS", 3);
+  fo4::test::write_subrecord(out, "NNAM", std::string_view{"Tail\0", 5});
+  fo4::test::end_record(out, quest);
+  fo4::test::end_group(out, group);
+  return out.bytes;
+}
+
 const fo4::FormKey k_quest = fo4::FormKey::parse("000800:Quest.esp");
 
 }
@@ -287,4 +313,40 @@ TEST(QuestAliasCollectionAuthoring, RejectsCollectionEntriesOnReferenceAliases) 
   creation.collection_entries = {{2, std::nullopt}};
   EXPECT_THROW(
       (void)fo4::forms::encode_quest_alias(creation), fo4::forms::QuestError);
+}
+
+TEST(QuestAliasCollectionGrouping, RefusesMutationsThatWouldJoinCollectionRuns) {
+  auto plugin = fo4::read_plugin(two_collections_separated(), "Quest.esp");
+  const auto before = fo4::write_plugin(plugin);
+
+  EXPECT_THROW(
+      static_cast<void>(fo4::forms::remove_quest_alias(plugin, k_quest, 2)),
+      fo4::forms::QuestError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+
+  EXPECT_THROW(
+      static_cast<void>(fo4::forms::reorder_quest_alias(plugin, k_quest, 2, 0)),
+      fo4::forms::QuestError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+
+  EXPECT_THROW(
+      fo4::forms::replace_quest_alias(plugin, k_quest, 2,
+                                      collection_entries({{2, std::uint8_t{1}}})),
+      fo4::forms::QuestError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+
+  EXPECT_THROW(
+      fo4::forms::add_quest_alias(plugin, k_quest, collection_entries({{4, std::uint8_t{1}}})),
+      fo4::forms::QuestError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(QuestAliasBoundary, RejectsAddingAnAliasWhenTheTailAlreadyHoldsMarkers) {
+  auto plugin = fo4::read_plugin(quest_bytes(true, false), "Quest.esp");
+  const auto before = fo4::write_plugin(plugin);
+
+  EXPECT_THROW(
+      fo4::forms::add_quest_alias(plugin, k_quest, collection_entries({{3, std::uint8_t{1}}})),
+      fo4::forms::QuestError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
 }
