@@ -25,6 +25,8 @@ constexpr auto k_cnto = fo4::Signature::from_string("CNTO");
 constexpr auto k_coed = fo4::Signature::from_string("COED");
 constexpr auto k_enam = fo4::Signature::from_string("ENAM");
 constexpr auto k_nam0 = fo4::Signature::from_string("NAM0");
+constexpr auto k_fnpr = fo4::Signature::from_string("FNPR");
+constexpr auto k_xmrk = fo4::Signature::from_string("XMRK");
 
 struct Piece {
   std::string_view signature;
@@ -40,6 +42,10 @@ fo4::schema::SubrecordGroupDescriptor items_group() {
 
 fo4::schema::SubrecordGroupDescriptor markers_group() {
   return fo4::schema::subrecord_group_descriptor(k_furn, "FURN\\Markers").value();
+}
+
+fo4::schema::SubrecordGroupDescriptor entry_points_group() {
+  return fo4::schema::subrecord_group_descriptor(k_furn, "FURN\\MarkerEntryPointList").value();
 }
 
 fo4::schema::ScalarFieldDescriptor scalar(std::string_view path) {
@@ -100,6 +106,16 @@ std::vector<Piece> markers_base() {
       {"NAM0", nam0_bytes(12)},
       {"ENAM", i32_bytes(4)},
       {"NAM0", nam0_bytes(3)},
+  };
+}
+
+std::vector<Piece> entry_points_base() {
+  return {
+      {"MNAM", u32_bytes(0)},
+      {"WBDT", zeros(1)},
+      {"FNPR", fnpr_bytes(1, 13)},
+      {"FNPR", fnpr_bytes(2, 7)},
+      {"XMRK", zeros(1)},
   };
 }
 
@@ -395,4 +411,65 @@ TEST(FurnRows, AnEnamWithoutItsNam0IsRefusedRatherThanTreatedAsAPair) {
                fo4::schema::SubrecordGroupError);
   EXPECT_THROW(static_cast<void>(fo4::record_field_count(plugin, record_key(), "FURN\\MarkerIndex")),
                fo4::schema::ScalarError);
+}
+
+TEST(FurnRows, MarkerEntryPointListNamesItsSingleFnprMemberAndNoCount) {
+  const auto group = entry_points_group();
+  EXPECT_EQ(group.record, k_furn);
+  EXPECT_EQ(group.count_subrecord, fo4::Signature{});
+  ASSERT_EQ(group.members.size(), 1u);
+  EXPECT_EQ(group.members[0].subrecord, k_fnpr);
+  EXPECT_TRUE(group.members[0].required);
+  EXPECT_FALSE(group.members[0].repeatable);
+  EXPECT_EQ(group.members[0].payload_size, 4u);
+  ASSERT_FALSE(group.successors.empty());
+  EXPECT_EQ(group.successors.front(), k_xmrk);
+  EXPECT_EQ(fo4::schema::subrecord_group_for_member(k_furn, k_fnpr)->path, "FURN\\MarkerEntryPointList");
+  EXPECT_FALSE(fo4::schema::is_subrecord_group_count_subrecord(k_furn, k_fnpr));
+}
+
+TEST(FurnRows, InsertsAndAppendsAMarkerEntryPointBeforeTheMarkerModel) {
+  auto plugin = fo4::read_plugin(make_plugin(entry_points_base()), "Patch.esp");
+  EXPECT_EQ(fo4::insert_record_subrecord_group(plugin, record_key(), entry_points_group(), 1),
+            fo4::SubrecordGroupMutationStatus::updated);
+  const auto middle = reparse(plugin);
+  EXPECT_EQ(signatures(middle),
+            (std::vector<std::string>{"MNAM", "WBDT", "FNPR", "FNPR", "FNPR", "XMRK"}));
+  EXPECT_EQ(payloads(middle, "FNPR"),
+            (std::vector<Bytes>{fnpr_bytes(1, 13), zeros(4), fnpr_bytes(2, 7)}));
+  EXPECT_EQ(read_member(middle, "FURN\\MarkerEntryType", 1), "0");
+  EXPECT_EQ(read_member(middle, "FURN\\MarkerEntryPoints", 1), "0");
+  EXPECT_EQ(read_member(middle, "FURN\\MarkerEntryType", 2), "2");
+  EXPECT_EQ(read_member(middle, "FURN\\MarkerEntryPoints", 2), "7");
+
+  auto appended_plugin = fo4::read_plugin(make_plugin(entry_points_base()), "Patch.esp");
+  EXPECT_EQ(fo4::insert_record_subrecord_group(appended_plugin, record_key(), entry_points_group(), 2),
+            fo4::SubrecordGroupMutationStatus::updated);
+  const auto appended = reparse(appended_plugin);
+  EXPECT_EQ(signatures(appended),
+            (std::vector<std::string>{"MNAM", "WBDT", "FNPR", "FNPR", "FNPR", "XMRK"}));
+  EXPECT_EQ(payloads(appended, "FNPR"),
+            (std::vector<Bytes>{fnpr_bytes(1, 13), fnpr_bytes(2, 7), zeros(4)}));
+}
+
+TEST(FurnRows, RemovesOneMarkerEntryPointAndLeavesTheOtherAlone) {
+  auto plugin = fo4::read_plugin(make_plugin(entry_points_base()), "Patch.esp");
+  EXPECT_EQ(fo4::remove_record_subrecord_group(plugin, record_key(), entry_points_group(), 0),
+            fo4::SubrecordGroupMutationStatus::updated);
+  const auto after = reparse(plugin);
+  EXPECT_EQ(signatures(after), (std::vector<std::string>{"MNAM", "WBDT", "FNPR", "XMRK"}));
+  EXPECT_EQ(payloads(after, "FNPR"), (std::vector<Bytes>{fnpr_bytes(2, 7)}));
+  EXPECT_EQ(read_member(after, "FURN\\MarkerEntryType", 0), "2");
+  EXPECT_EQ(read_member(after, "FURN\\MarkerEntryPoints", 0), "7");
+}
+
+TEST(FurnRows, MarkerEntryPointInsertAndRemoveRefuseIndexesPastTheEnd) {
+  auto plugin = fo4::read_plugin(make_plugin(entry_points_base()), "Patch.esp");
+  EXPECT_EQ(fo4::insert_record_subrecord_group(plugin, record_key(), entry_points_group(), 3),
+            fo4::SubrecordGroupMutationStatus::index_out_of_range);
+  EXPECT_EQ(fo4::remove_record_subrecord_group(plugin, record_key(), entry_points_group(), 2),
+            fo4::SubrecordGroupMutationStatus::index_out_of_range);
+  const auto after = reparse(plugin);
+  EXPECT_EQ(signatures(after), (std::vector<std::string>{"MNAM", "WBDT", "FNPR", "FNPR", "XMRK"}));
+  EXPECT_EQ(payloads(after, "FNPR"), (std::vector<Bytes>{fnpr_bytes(1, 13), fnpr_bytes(2, 7)}));
 }

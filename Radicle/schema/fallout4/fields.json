@@ -27810,6 +27810,16 @@
           "insertion": "existing_only"
         },
         {
+          "path": "FURN\\MarkerEntryPointList",
+          "label": "Marker entry points",
+          "kind": "subrecord_group",
+          "insertion": "existing_only",
+          "members": [
+            {"subrecord": "FNPR", "required": true, "repeatable": false, "payload_size": 4}
+          ],
+          "successors": ["XMRK", "SNAM", "APPR", "OBTE", "NVNM"]
+        },
+        {
           "path": "FURN\\MarkerOffsetX",
           "label": "Marker offset X",
           "kind": "scalar",
