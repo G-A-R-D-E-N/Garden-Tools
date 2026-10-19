@@ -159,9 +159,38 @@ implemented and tested:
 - Alias VMAD extras bind Papyrus to alias IDs (FO4 object format 2 only: unused u16, alias i16, QUST FormID) and stage fragments (`Stage` u16 = QUST INDX). Format 1 alias objects fail closed on rewrite. `StageIndex` i32 is preserved; it is not treated as a QSDT count. INDX remap is identity or a unique stage-body match, never array position. Duplicate, trailing, unsupported, or unmappable bindings fail closed with disk unchanged.
 
 Unknown members inside an existing reference/location alias are preserved in
-original order. Semantic replacement intentionally emits only the fields that
-Radicle has explicitly modeled; callers must not use replacement as a generic
-round-trip for an alias carrying unmodeled semantics they intend to preserve.
+original order by decode, and `replace_quest_alias` keeps them (see
+Replacement below).
+
+## Replacement
+
+`replace_quest_alias` rewrites only the members the creation sets. Every other
+member of the existing alias is kept and spliced back into the alias at the
+position the xEdit member order gives it, so `ALED` stays last and a collection
+`ALCS`/`ALMI` run stays one run. The Alias ID must stay the same.
+
+A member is written when the creation emits it, or when it belongs to a run the
+creation writes: the Fill Type union of the alias kind, the `CTDA`/`CIS1`/`CIS2`
+condition run, or the `COCT`/`CNTO`/`COED` item run. A run goes as a unit
+because a leftover member rebinds to the new run instead of staying put: a kept
+`ALEA` beside a written `ALFE`/`ALFD` would make the alias decode as two Fill
+Type variants, a kept `CIS1` would rebind its string to the next `CTDA`, and a
+kept `COED` would rebind its owner and rank to the next `CNTO`.
+
+The order is the xEdit FO4 alias definition
+(`Core/wbDefinitionsFO4.pas:10808-10889` reference alias, `:10898-10924`
+location alias, at pin `93cc0bc5`): `ALST`/`ALLS`, `ALID`, `FNAM`, `ALFI`, the
+Fill Type union, `CTDA`/`CIS1`/`CIS2`, the reference alias extras in their
+WriteRecordTypes order, then `ALED`. A location alias places `ALCC` after its
+condition run; a reference alias places it inside Find Matching Reference,
+before the conditions.
+
+Replacement throws `QuestError`, leaving the plugin unchanged, when a member
+that has to be preserved has no position in that order (an `ALFL` inside a
+reference alias, say), or when the preserved members are themselves out of
+order. A replacement that changes the alias kind rewrites the alias frame
+(`ALST`/`ALLS`/`ALCS`/`ALMI`, `ALID`, `FNAM`, `ALFI`, `ALED`) and preserves
+everything else under the new kind's order.
 
 ## Mutation safety
 
