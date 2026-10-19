@@ -24,6 +24,7 @@ enum class Status : std::uint8_t {
     ArgumentCountMismatch,
     HostError,
     InternalError,
+    StringTooLong,
 };
 
 const char* statusName(Status status);
