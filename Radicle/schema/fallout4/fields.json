@@ -13931,6 +13931,8 @@
           "subrecord": "MODL",
           "insertion": "existing_only"
         },
+        {"path": "STAT\\ColorRemapping", "label": "Color remapping index", "kind": "scalar", "subrecord": "MODC", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "STAT\\ModelFlags", "label": "Flags", "kind": "scalar", "subrecord": "MODF", "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Has FaceBones Model"}, {"bit": 1, "name": "Has 1stPerson Model"}], "minimum": 0, "maximum": 255, "insertion": "existing_only"},
         {
           "path": "STAT\\MaxAngle",
           "label": "Max angle",
@@ -26475,6 +26477,8 @@
           "subrecord": "MODL",
           "insertion": "existing_only"
         },
+        {"path": "CONT\\ColorRemapping", "label": "Color remapping index", "kind": "scalar", "subrecord": "MODC", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "CONT\\ModelFlags", "label": "Flags", "kind": "scalar", "subrecord": "MODF", "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Has FaceBones Model"}, {"bit": 1, "name": "Has 1stPerson Model"}], "minimum": 0, "maximum": 255, "insertion": "existing_only"},
         {
           "path": "CONT\\Flags",
           "label": "Flags",
@@ -26971,6 +26975,8 @@
           "subrecord": "MODL",
           "insertion": "existing_only"
         },
+        {"path": "DOOR\\ColorRemapping", "label": "Color remapping index", "kind": "scalar", "subrecord": "MODC", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "DOOR\\ModelFlags", "label": "Flags", "kind": "scalar", "subrecord": "MODF", "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Has FaceBones Model"}, {"bit": 1, "name": "Has 1stPerson Model"}], "minimum": 0, "maximum": 255, "insertion": "existing_only"},
         {
           "path": "DOOR\\Flags",
           "label": "Flags",
@@ -32302,7 +32308,9 @@
         {"path": "NPC_\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
         {"path": "NPC_\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
         {"path": "NPC_\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
-        {"path": "NPC_\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
+        {"path": "NPC_\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "NPC_\\AttackEvent", "label": "Attack event", "kind": "string", "subrecord": "ATKE", "repeated": true, "insertion": "existing_only"},
+        {"path": "NPC_\\AttackDescription", "label": "Attack description", "kind": "string", "subrecord": "ATKT", "repeated": true, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {
@@ -32628,7 +32636,13 @@
         {"path": "NPC_\\TemplateActorKeywords", "label": "Template actor keywords", "subrecord": "TPTA", "offset": 48, "targets": ["BMMO", "LVLN", "NPC_"], "nullable": true, "insertion": "existing_only"},
         {"path": "NPC_\\AttackSpell", "label": "Attack spell", "subrecord": "ATKD", "offset": 8, "targets": ["SPEL"], "nullable": true, "repeated": true, "payload_sizes": [44], "insertion": "existing_only"},
         {"path": "NPC_\\ActorSoundKeyword", "label": "Actor sound keyword", "subrecord": "CS2K", "offset": 0, "targets": ["KYWD"], "nullable": false, "repeated": true, "payload_sizes": [4], "insertion": "existing_only"},
-        {"path": "NPC_\\ActorSoundSound", "label": "Actor sound", "subrecord": "CS2D", "offset": 0, "targets": ["SNDR"], "nullable": false, "repeated": true, "payload_sizes": [4], "insertion": "existing_only"}
+        {"path": "NPC_\\ActorSoundSound", "label": "Actor sound", "subrecord": "CS2D", "offset": 0, "targets": ["SNDR"], "nullable": false, "repeated": true, "payload_sizes": [4], "insertion": "existing_only"},
+        {"path": "NPC_\\PreviewTransform", "label": "Preview transform", "subrecord": "PTRN", "offset": 0, "targets": ["TRNS"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
+        {"path": "NPC_\\AnimationSound", "label": "Animation sound", "subrecord": "STCP", "offset": 0, "targets": ["STAG"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
+        {"path": "NPC_\\NativeTerminal", "label": "Native terminal", "subrecord": "NTRM", "offset": 0, "targets": ["TERM"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
+        {"path": "NPC_\\ForcedLocRefType", "label": "Forced location reference type", "subrecord": "FTYP", "offset": 0, "targets": ["LCRT"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
+        {"path": "NPC_\\AttackWeaponSlot", "label": "Attack weapon slot", "subrecord": "ATKW", "offset": 0, "targets": ["EQUP"], "nullable": false, "repeated": true, "payload_sizes": [4], "insertion": "existing_only"},
+        {"path": "NPC_\\AttackRequiredSlot", "label": "Attack required slot", "subrecord": "ATKS", "offset": 0, "targets": ["EQUP"], "nullable": false, "repeated": true, "payload_sizes": [4], "insertion": "existing_only"}
       ],
       "localized_subrecords": ["FULL", "SHRT", "ATTX"]
     },

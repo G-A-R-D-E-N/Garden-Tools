@@ -141,6 +141,77 @@ std::string read_member(const fo4::Plugin& plugin, std::string_view path, std::s
       field.scalar);
 }
 
+Bytes u32_bytes(std::uint32_t value) {
+  ByteWriter out;
+  out.u32(value);
+  return out.bytes;
+}
+
+Bytes text_bytes(std::string_view text) {
+  Bytes out;
+  for (const char ch : text) {
+    out.push_back(static_cast<std::byte>(static_cast<unsigned char>(ch)));
+  }
+  out.push_back(std::byte{0});
+  return out;
+}
+
+std::vector<std::byte> make_attack_extra_plugin(bool short_slot = false) {
+  ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(1);
+  hedr.u32(0x911);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+
+  const auto group = fo4::test::begin_group(out, "NPC_", 0);
+  const auto record = fo4::test::begin_record(out, "NPC_", 0, 0x000800);
+  fo4::test::write_subrecord(out, "ATKD", atkd());
+  fo4::test::write_subrecord(out, "ATKE", text_bytes("event_a"));
+  fo4::test::write_subrecord(out, "ATKW", short_slot ? Bytes(2, std::byte{0}) : u32_bytes(0x00000A01u));
+  fo4::test::write_subrecord(out, "ATKS", u32_bytes(0x00000A02u));
+  fo4::test::write_subrecord(out, "ATKT", text_bytes("desc"));
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+
+  add_group(out, "EQUP", {0x00000A01u, 0x00000A02u, 0x00000A03u});
+  add_group(out, "SPEL", {0x00000A00u});
+  return out.bytes;
+}
+
+std::vector<std::uint32_t> raws(const fo4::Plugin& plugin, fo4::Signature signature) {
+  std::vector<std::uint32_t> out;
+  const auto* record = fo4::find_record(plugin, npc_key());
+  if (record == nullptr) return out;
+  for (const auto& subrecord : record->subrecords) {
+    if (subrecord.signature != signature) continue;
+    std::uint32_t value = 0;
+    const std::size_t width = subrecord.data.size() < 4 ? subrecord.data.size() : 4;
+    for (std::size_t i = 0; i < width; ++i) {
+      value |= static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(subrecord.data[i])) << (8 * i);
+    }
+    out.push_back(value);
+  }
+  return out;
+}
+
+std::string text_at(const fo4::Plugin& plugin, fo4::Signature signature) {
+  const auto* record = fo4::find_record(plugin, npc_key());
+  if (record == nullptr) return "absent";
+  for (const auto& subrecord : record->subrecords) {
+    if (subrecord.signature != signature) continue;
+    std::string out;
+    for (const auto byte : subrecord.data) {
+      const char ch = std::to_integer<char>(byte);
+      if (ch == '\0') break;
+      out.push_back(ch);
+    }
+    return out;
+  }
+  return "absent";
+}
 }  // namespace
 
 TEST(NpcAttackDataRows, RowsDeclareEveryAttackDataMember) {
@@ -250,4 +321,81 @@ TEST(NpcAttackDataRows, WrongTargetTypeAndUnsupportedValuesAreRefused) {
   EXPECT_THROW(fo4::set_record_scalar(plugin, npc_key(), scalar("NPC_\\AttackFlags"), 0, "4294967296"),
                fo4::schema::ScalarError);
   EXPECT_EQ(attack_payload(plugin, 0), atkd());
+}
+
+TEST(NpcAttackDataRows, SlotAndTextRowsSitBesideTheAttackStruct) {
+  const auto weapon = link("NPC_\\AttackWeaponSlot");
+  EXPECT_EQ(weapon.record, k_npc);
+  EXPECT_EQ(weapon.subrecord, fo4::Signature::from_string("ATKW"));
+  EXPECT_EQ(weapon.offset, 0u);
+  EXPECT_FALSE(weapon.nullable);
+  EXPECT_TRUE(weapon.address.repeated);
+  EXPECT_EQ(weapon.payload_sizes[0], 4u);
+  EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(weapon, fo4::Signature::from_string("EQUP")));
+  EXPECT_FALSE(fo4::schema::formlink_field_target_allowed(weapon, k_spel));
+
+  const auto required = link("NPC_\\AttackRequiredSlot");
+  EXPECT_EQ(required.subrecord, fo4::Signature::from_string("ATKS"));
+  EXPECT_EQ(required.offset, 0u);
+  EXPECT_FALSE(required.nullable);
+  EXPECT_TRUE(required.address.repeated);
+  EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(required, fo4::Signature::from_string("EQUP")));
+  EXPECT_FALSE(fo4::schema::formlink_field_target_allowed(required, k_spel));
+
+  const auto event = scalar("NPC_\\AttackEvent");
+  EXPECT_EQ(event.record, k_npc);
+  EXPECT_EQ(event.scalar.subrecord, fo4::Signature::from_string("ATKE"));
+  EXPECT_EQ(event.scalar.storage, fo4::schema::ScalarStorage::zstring);
+  EXPECT_TRUE(event.scalar.address.repeated);
+  EXPECT_FALSE(event.scalar.embedded);
+  EXPECT_FALSE(event.can_insert);
+
+  const auto description = scalar("NPC_\\AttackDescription");
+  EXPECT_EQ(description.scalar.subrecord, fo4::Signature::from_string("ATKT"));
+  EXPECT_EQ(description.scalar.storage, fo4::schema::ScalarStorage::zstring);
+  EXPECT_TRUE(description.scalar.address.repeated);
+}
+
+TEST(NpcAttackDataRows, SlotAndTextRowsReadWriteAndRefuseForeignTargets) {
+  auto plugin = fo4::read_plugin(make_attack_extra_plugin(), "Patch.esp");
+  EXPECT_EQ(raws(plugin, fo4::Signature::from_string("ATKW")), (std::vector<std::uint32_t>{0x00000A01u}));
+  EXPECT_EQ(raws(plugin, fo4::Signature::from_string("ATKS")), (std::vector<std::uint32_t>{0x00000A02u}));
+  EXPECT_EQ(text_at(plugin, fo4::Signature::from_string("ATKE")), "event_a");
+  EXPECT_EQ(text_at(plugin, fo4::Signature::from_string("ATKT")), "desc");
+  EXPECT_EQ(fo4::record_field_count(plugin, npc_key(), link("NPC_\\AttackWeaponSlot")), 1u);
+  EXPECT_EQ(fo4::record_field_count(plugin, npc_key(), link("NPC_\\AttackRequiredSlot")), 1u);
+
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, npc_key(), link("NPC_\\AttackWeaponSlot"), 0, key(0x000A03)),
+            fo4::FormLinkFieldMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, npc_key(), link("NPC_\\AttackRequiredSlot"), 0, key(0x000A03)),
+            fo4::FormLinkFieldMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_string(plugin, npc_key(), scalar("NPC_\\AttackEvent"), 0, "event_b"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_string(plugin, npc_key(), scalar("NPC_\\AttackDescription"), 0, "desc2"),
+            fo4::ScalarMutationStatus::updated);
+
+  EXPECT_THROW(fo4::set_record_formlink_field(plugin, npc_key(), link("NPC_\\AttackWeaponSlot"), 0, key(0x000A00)),
+               fo4::schema::FormLinkFieldError);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, npc_key(), link("NPC_\\AttackRequiredSlot"), 1, key(0x000A03)),
+            fo4::FormLinkFieldMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_string(plugin, npc_key(), scalar("NPC_\\AttackEvent"), 1, "event_c"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+
+  const auto after = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(raws(after, fo4::Signature::from_string("ATKW")), (std::vector<std::uint32_t>{0x00000A03u}));
+  EXPECT_EQ(raws(after, fo4::Signature::from_string("ATKS")), (std::vector<std::uint32_t>{0x00000A03u}));
+  EXPECT_EQ(text_at(after, fo4::Signature::from_string("ATKE")), "event_b");
+  EXPECT_EQ(text_at(after, fo4::Signature::from_string("ATKT")), "desc2");
+  EXPECT_EQ(attack_payload(after, 0), atkd());
+}
+
+TEST(NpcAttackDataRows, ShortSlotPayloadIsRefused) {
+  auto plugin = fo4::read_plugin(make_attack_extra_plugin(true), "Patch.esp");
+  EXPECT_THROW(fo4::set_record_formlink_field(plugin, npc_key(), link("NPC_\\AttackWeaponSlot"), 0, key(0x000A03)),
+               fo4::schema::FormLinkFieldError);
+  EXPECT_EQ(raws(plugin, fo4::Signature::from_string("ATKW")), (std::vector<std::uint32_t>{0x00000000u}));
+
+  const auto after = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(raws(after, fo4::Signature::from_string("ATKW")).size(), 1u);
+  EXPECT_EQ(text_at(after, fo4::Signature::from_string("ATKE")), "event_a");
 }

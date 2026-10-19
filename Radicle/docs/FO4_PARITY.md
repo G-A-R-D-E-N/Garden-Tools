@@ -72,7 +72,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | CMPO | 12294 | 7 | - | 3 | - | 1 | yes | - | - | - | 1 | L4 |
 | COBJ | 10266 | 2 | - | 5 | 1 | 1 | yes | - | forms/components | yes | - | L4 |
 | COLL | 9547 | 3 | 1 | - | - | 1 | yes | - | - | yes | 2 | L4 |
-| CONT | 6176 | 22 | 3 | 14 | - | 1 | yes | yes | - | - | 1 | L4 |
+| CONT | 6176 | 24 | 3 | 14 | - | 1 | yes | yes | - | - | 1 | L4 |
 | CPTH | 7930 | 1 | - | 2 | 1 | - | yes | - | - | - | 1 | L4 |
 | CSTY | 6233 | 49 | - | - | - | - | yes | - | environment/behavior | - | 2 | L4 |
 | DEBR | 7388 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
@@ -82,7 +82,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | DLVW | 8819 | - | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | DMGT | 12310 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
 | DOBJ | 8618 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
-| DOOR | 6477 | 18 | 3 | 10 | 1 | 3 | yes | yes | - | - | 1 | L4 |
+| DOOR | 6477 | 20 | 3 | 10 | 1 | 3 | yes | yes | - | - | 1 | L4 |
 | DUAL | 9452 | 7 | - | 5 | - | - | yes | - | - | - | 1 | L4 |
 | ECZN | 8022 | 4 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | EFSH | 6510 | - | 6 | 1 | - | - | yes | - | - | yes | 1 | L4 |
@@ -140,7 +140,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | NAVM | 7212 | - | - | - | - | - | yes | - | environment/navmesh | yes | 2 | L4 |
 | NOCM | 12453 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
 | NOTE | 12470 | 9 | 3 | 7 | - | 1 | yes | - | - | - | 1 | L4 |
-| NPC_ | 10286 | 85 | 2 | 51 | 1 | 3 | yes | yes | forms/npc | yes | 1 | L4 |
+| NPC_ | 10286 | 85 | 4 | 57 | 1 | 3 | yes | yes | forms/npc | yes | 1 | L4 |
 | OMOD | 12501 | 8 | 1 | 2 | 2 | 2 | yes | - | - | yes | - | L4 |
 | OTFT | 9357 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
 | OVIS | 12546 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
@@ -179,7 +179,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | SPEL | 12030 | 14 | - | 2 | - | 2 | yes | yes | - | - | 3 | L4 |
 | SPGD | 6128 | 12 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
 | STAG | 12663 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
-| STAT | 12045 | 10 | 5 | 5 | - | 1 | yes | - | environment/base_records | yes | 2 | L4 |
+| STAT | 12045 | 12 | 5 | 5 | - | 1 | yes | - | environment/base_records | yes | 2 | L4 |
 | TACT | 5672 | 17 | 3 | 7 | - | 1 | yes | yes | - | - | 1 | L4 |
 | TERM | 12671 | 13 | 7 | 5 | - | 7 | yes | yes | - | yes | 1 | L4 |
 | TES4 | 12091 | - | - | - | - | - | - | - | - | yes | 5 | L0 |
@@ -226,7 +226,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | CMPO | 7 | - | - | - | - | i16, u32 | - | - | - | existing_only |
 | COBJ | 2 | - | - | - | - | u16 | - | - | - | existing_only |
 | COLL | 2 | - | - | 1 | 1 | u32 | - | - | - | existing_only |
-| CONT | 18 | 1 | - | 3 | 3 | f32, i16, i32, u32, u8 | 14 | 4 | - | existing_only |
+| CONT | 19 | 1 | - | 4 | 3 | f32, i16, i32, u32, u8 | 14 | 4 | - | existing_only |
 | CPTH | - | - | - | 1 | - | u8 | - | - | - | existing_only |
 | CSTY | 49 | - | - | - | - | f32, u32 | - | - | - | existing_only |
 | DEBR | - | - | - | - | - | - | - | - | - | - |
@@ -236,7 +236,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | DLVW | - | - | - | - | - | - | - | - | - | existing_only |
 | DMGT | - | - | - | - | - | - | - | - | - | - |
 | DOBJ | - | - | - | - | - | - | - | - | - | - |
-| DOOR | 14 | 1 | - | 3 | 3 | f32, i16, i32, u32, u8 | 12 | 2 | - | existing_only |
+| DOOR | 15 | 1 | - | 4 | 3 | f32, i16, i32, u32, u8 | 12 | 2 | - | existing_only |
 | DUAL | 6 | - | - | 1 | - | i16, u32 | - | - | - | existing_only |
 | ECZN | 3 | - | - | 1 | - | i8, u8 | - | - | - | existing_only |
 | EFSH | - | - | - | - | 6 | - | - | - | - | existing_only |
@@ -293,7 +293,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | NAVM | - | - | - | - | - | - | - | - | - | - |
 | NOCM | - | - | - | - | - | - | - | - | - | - |
 | NOTE | 8 | - | 1 | - | 3 | f32, i16, u32, u8 | - | - | 3 | existing_only |
-| NPC_ | 70 | 1 | 9 | 5 | 2 | f32, i16, i32, u16, u32, u8 | 44 | 4 | - | existing_only |
+| NPC_ | 70 | 1 | 9 | 5 | 4 | f32, i16, i32, u16, u32, u8 | 48 | 4 | - | existing_only |
 | OMOD | 5 | - | 3 | - | 1 | u32, u8 | - | - | - | existing_only |
 | OTFT | - | - | - | - | - | - | - | - | - | - |
 | OVIS | - | - | - | - | - | - | - | - | - | - |
@@ -332,7 +332,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | SPEL | 10 | - | 3 | 1 | - | f32, i16, u32 | - | - | - | existing_only |
 | SPGD | 11 | - | 1 | - | 1 | f32, u32 | - | - | - | existing_only |
 | STAG | - | - | - | - | - | - | - | - | - | - |
-| STAT | 10 | - | - | - | 5 | f32, i16 | - | 2 | - | existing_only |
+| STAT | 11 | - | - | 1 | 5 | f32, i16, u8 | - | 2 | - | existing_only |
 | TACT | 14 | 1 | - | 2 | 3 | f32, i16, i32, u32, u8 | 12 | 2 | - | existing_only |
 | TERM | 10 | - | 1 | 2 | 7 | f32, i16, i32, u16, u32, u8 | 10 | 2 | - | existing_only |
 | TREE | 22 | - | - | - | 1 | f32, i16, u8 | - | - | - | existing_only |
@@ -393,7 +393,7 @@ These letters are hand-kept judgments, not derived output. The per-signature tab
 | CMPO | U | U | U | U | U | U | U | G | field audit pending |
 | COBJ | P | P | P | P | U | P | P | G | forms/components.hpp |
 | COLL | U | U | U | U | U | U | U | G | field audit pending |
-| CONT | I | I | I | I | U | U | I | G | field audit pending |
+| CONT | I | I | I | I | U | U | I | G | field audit: Radicle/docs/code-notes/Radicle.md (NPC_/DOOR/vendor audit); MODT unrowed |
 | CPTH | U | U | U | U | U | U | U | G | field audit pending |
 | CSTY | U | U | U | U | U | U | U | G | field audit pending; PR #408 |
 | DEBR | U | U | U | U | U | U | U | G | field audit pending |
@@ -403,7 +403,7 @@ These letters are hand-kept judgments, not derived output. The per-signature tab
 | DLVW | U | U | U | U | U | U | U | G | field audit pending |
 | DMGT | U | U | U | U | U | U | U | G | field audit pending |
 | DOBJ | U | U | U | U | U | P | U | G | field audit pending |
-| DOOR | I | I | I | I | U | U | I | G | field audit pending |
+| DOOR | I | I | I | I | U | U | I | G | field audit: Radicle/docs/code-notes/Radicle.md (NPC_/DOOR/vendor audit); MODT unrowed |
 | DUAL | U | U | U | U | U | U | U | G | field audit pending |
 | ECZN | U | U | U | U | U | U | U | G | field audit pending |
 | EFSH | U | U | U | U | U | U | U | G | field audit pending |
@@ -461,7 +461,7 @@ These letters are hand-kept judgments, not derived output. The per-signature tab
 | NAVM | U | U | U | U | U | P | U | G | field audit pending; PR #402 |
 | NOCM | U | U | U | U | U | U | U | G | field audit pending |
 | NOTE | U | U | U | U | U | U | U | G | field audit pending |
-| NPC_ | P | P | P | P | U | P | I | G | forms/npc.hpp (SNAM, PRKR, CNTO/COED lists) and schema/fallout4/fields.json NPC_ scalars; docs/NPCS.md; field audit pending for unlisted fields |
+| NPC_ | P | P | P | P | U | P | I | G | forms/npc.hpp (SNAM, PRKR, CNTO/COED lists) and schema/fallout4/fields.json NPC_ scalars; docs/NPCS.md; field audit: Radicle/docs/code-notes/Radicle.md (NPC_/DOOR/vendor audit) |
 | OMOD | U | U | U | U | U | P | U | G | field audit pending |
 | OTFT | U | U | U | U | U | U | U | G | field audit pending |
 | OVIS | U | U | U | U | U | U | U | G | field audit pending |
@@ -500,7 +500,7 @@ These letters are hand-kept judgments, not derived output. The per-signature tab
 | SPEL | I | I | I | I | U | U | I | G | field audit pending |
 | SPGD | U | U | U | U | U | U | U | G | field audit pending |
 | STAG | U | U | U | U | U | U | U | G | field audit pending |
-| STAT | P | U | U | U | U | U | P | G | environment / plugin headers |
+| STAT | P | U | U | U | U | U | P | G | environment / plugin headers; field audit: Radicle/docs/code-notes/Radicle.md (NPC_/DOOR/vendor audit) |
 | TACT | I | I | I | I | U | U | I | G | field audit pending |
 | TERM | I | I | I | I | U | U | I | G | field audit pending |
 | TES4 | P | U | U | U | U | P | P | G | environment / plugin headers |
