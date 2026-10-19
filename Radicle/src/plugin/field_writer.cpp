@@ -168,7 +168,10 @@ ScalarMutationStatus write_scalar(Plugin& plugin,
                               (is_string ? " is a string field; use the string setter"
                                          : " is not a string field"));
   }
-  if (is_string && field.scalar.embedded) {
+  const bool member_string =
+      is_string && field.scalar.embedded &&
+      schema::subrecord_group_for_member(field.record, field.scalar.subrecord).has_value();
+  if (is_string && field.scalar.embedded && !member_string) {
     throw schema::ScalarError(std::string(field.path) +
                               " sits in a fixed-size slot and cannot be written generically");
   }
@@ -194,7 +197,17 @@ ScalarMutationStatus write_scalar(Plugin& plugin,
     return ScalarMutationStatus::unchanged;
   }
 
-  if (is_string) {
+  if (is_string && member_string) {
+    // Constraint: a group member string row requires the encoded value and its NUL to fit the slot the subrecord already carries.
+    if (encoded.size() > existing.size()) {
+      throw schema::ScalarError(std::string(field.path) + " does not fit in its " +
+                                std::to_string(existing.size()) + "-byte slot");
+    }
+    std::copy(encoded.begin(), encoded.end(),
+              data.begin() + static_cast<std::ptrdiff_t>(slot.offset));
+    std::fill(data.begin() + static_cast<std::ptrdiff_t>(slot.offset + encoded.size()),
+              data.begin() + static_cast<std::ptrdiff_t>(slot.offset + existing.size()), std::byte{0});
+  } else if (is_string) {
     data = encoded;
   } else {
     std::copy(encoded.begin(), encoded.end(),

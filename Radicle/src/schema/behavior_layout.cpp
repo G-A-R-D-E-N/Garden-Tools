@@ -34,10 +34,29 @@ std::vector<std::size_t> before_marker(const std::vector<Subrecord>& subs, Signa
   return out;
 }
 
+std::vector<std::size_t> after_marker(const std::vector<Subrecord>& subs, Signature marker,
+                                      Signature subrecord) {
+  std::size_t start = subs.size();
+  for (std::size_t i = 0; i < subs.size(); ++i) {
+    if (subs[i].signature == marker) {
+      start = i + 1;
+      break;
+    }
+  }
+  std::vector<std::size_t> out;
+  for (std::size_t i = start; i < subs.size(); ++i) {
+    if (subs[i].signature == subrecord) out.push_back(i);
+  }
+  return out;
 }
 
-std::optional<std::vector<std::size_t>> behavior_field_candidates(const Record& record, Signature subrecord) {
+}
+
+std::optional<std::vector<std::size_t>> behavior_field_candidates(const Record& record, Signature subrecord,
+                                                                 bool repeated) {
   if (record.header.signature == sig("LENS") && subrecord == sig("DNAM")) {
+    // Constraint: DNAM is the sprite group's required non-repeatable leader, so every DNAM after LFSP heads one run.
+    if (repeated) return after_marker(record.subrecords, sig("LFSP"), subrecord);
     return before_marker(record.subrecords, sig("LFSP"), subrecord);
   }
   if (record.header.signature == sig("SCCO") && subrecord == sig("XNAM")) {
