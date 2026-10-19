@@ -398,7 +398,7 @@ PackageInputMutationStatus add_package_data_input(Plugin& plugin,
   if (layout == nullptr) return PackageInputMutationStatus::unknown_input_type;
   const auto serialized = serialize_value(*layout, value);
   if (serialized.status != Serialized::ok) return status_for(serialized.status);
-  auto* record = detail::locate_mutable_record(plugin, record_key);
+  auto* record = fo4::detail::locate_mutable_record(plugin, record_key);
   if (record == nullptr) return PackageInputMutationStatus::record_missing;
   if (record->header.signature != sig("PACK")) return PackageInputMutationStatus::not_a_package;
   const auto tree = decode_package_procedure(*record);
@@ -417,7 +417,7 @@ PackageInputMutationStatus add_package_data_input(Plugin& plugin,
     highest = std::max(highest, input.index);
   }
   const std::optional<std::uint8_t> new_id = tree.inputs.empty()
-      ? std::optional<std::uint8_t>{clamped_input_id(tree.next_input_id.value_or(0))}
+      ? std::optional<std::uint8_t>(clamped_input_id(static_cast<std::uint8_t>(tree.next_input_id.value_or(0))))
       : next_free_input_id(used, highest);
   if (!new_id) return PackageInputMutationStatus::no_free_input_id;
   used[*new_id] = true;
@@ -453,7 +453,7 @@ PackageInputMutationStatus add_package_data_input(Plugin& plugin,
                                       [](const Subrecord& sub) { return sub.signature == sig("XNAM") && sub.data.size() == 1; });
     if (counter != record->subrecords.end()) counter->data[0] = std::byte{next_id.value_or(*new_id)};
   }
-  detail::mark_record_modified(plugin, *record);
+  fo4::detail::mark_record_modified(plugin, *record);
   return PackageInputMutationStatus::updated;
 }
 
@@ -461,7 +461,7 @@ PackageInputMutationStatus set_package_data_input(Plugin& plugin,
                                                   const FormKey& record_key,
                                                   std::uint8_t id,
                                                   const PackageInputValue& value) {
-  auto* record = detail::locate_mutable_record(plugin, record_key);
+  auto* record = fo4::detail::locate_mutable_record(plugin, record_key);
   if (record == nullptr) return PackageInputMutationStatus::record_missing;
   if (record->header.signature != sig("PACK")) return PackageInputMutationStatus::not_a_package;
   const auto tree = decode_package_procedure(*record);
@@ -479,14 +479,14 @@ PackageInputMutationStatus set_package_data_input(Plugin& plugin,
   auto& payload = record->subrecords[input->value_index].data;
   if (payload == serialized.bytes) return PackageInputMutationStatus::unchanged;
   payload = serialized.bytes;
-  detail::mark_record_modified(plugin, *record);
+  fo4::detail::mark_record_modified(plugin, *record);
   return PackageInputMutationStatus::updated;
 }
 
 PackageInputMutationStatus remove_package_data_input(Plugin& plugin,
                                                      const FormKey& record_key,
                                                      std::uint8_t id) {
-  auto* record = detail::locate_mutable_record(plugin, record_key);
+  auto* record = fo4::detail::locate_mutable_record(plugin, record_key);
   if (record == nullptr) return PackageInputMutationStatus::record_missing;
   if (record->header.signature != sig("PACK")) return PackageInputMutationStatus::not_a_package;
   const auto tree = decode_package_procedure(*record);
@@ -504,7 +504,7 @@ PackageInputMutationStatus remove_package_data_input(Plugin& plugin,
   record->subrecords.erase(record->subrecords.begin() + static_cast<std::ptrdiff_t>(input->subrecord_begin),
                            record->subrecords.begin() + static_cast<std::ptrdiff_t>(input->subrecord_end));
   write_dword(record->subrecords[pkcu].data, 0, static_cast<std::uint32_t>(tree.inputs.size() - 1));
-  detail::mark_record_modified(plugin, *record);
+  fo4::detail::mark_record_modified(plugin, *record);
   return PackageInputMutationStatus::updated;
 }
 
