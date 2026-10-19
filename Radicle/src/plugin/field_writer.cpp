@@ -233,6 +233,10 @@ struct CountedArraySubrecords {
 
 std::optional<CountedArraySubrecords> counted_array_subrecords(const Record& record,
                                                                const schema::CountedArrayDescriptor& array) {
+  if (array.segment_count != 0) {
+    throw schema::CountedArrayError(std::string(array.path) +
+                                    " is a header-counted segment and cannot be inserted or removed");
+  }
   std::optional<std::size_t> payload;
   std::optional<std::size_t> counter;
   for (std::size_t i = 0; i < record.subrecords.size(); ++i) {

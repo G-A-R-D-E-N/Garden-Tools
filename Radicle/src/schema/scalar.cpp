@@ -209,6 +209,51 @@ std::optional<CountedArrayDescriptor> counted_array_descriptor(Signature record,
   return std::nullopt;
 }
 
+std::optional<SegmentSpan> header_segment(std::span<const std::byte> payload,
+                                          Signature record,
+                                          Signature subrecord,
+                                          const FieldAddress& address) {
+  const auto& segment = address.segment;
+  if (segment.count == 0 || segment.count > k_max_header_counters || address.stride == 0 ||
+      segment.index >= segment.count || payload.size() < 4) {
+    return std::nullopt;
+  }
+  const auto header_words = read_u32(payload);
+  if (header_words == 0 || header_words > k_max_header_counters) return std::nullopt;
+  const std::size_t header_size = 4 * (1 + header_words);
+  if (payload.size() < header_size) return std::nullopt;
+
+  struct SegmentLayout {
+    std::size_t count_word{0};
+    std::size_t stride{0};
+  };
+  std::array<SegmentLayout, k_max_header_counters> layouts{};
+  std::size_t found = 0;
+  for (const auto& array : k_counted_arrays) {
+    if (array.record != record || array.subrecord != subrecord || array.segment_count == 0) continue;
+    if (array.segment_index >= segment.count || array.stride == 0 ||
+        layouts[array.segment_index].stride != 0) {
+      return std::nullopt;
+    }
+    layouts[array.segment_index] = SegmentLayout{array.count_word, array.stride};
+    ++found;
+  }
+  if (found != segment.count) return std::nullopt;
+
+  std::size_t base = header_size;
+  std::optional<SegmentSpan> ours;
+  for (std::size_t index = 0; index < segment.count; ++index) {
+    const auto count_word = layouts[index].count_word;
+    if (count_word >= header_words) continue;
+    const auto count = static_cast<std::size_t>(read_u32(payload.subspan(4 * (count_word + 1))));
+    if (count > payload.size()) return std::nullopt;
+    if (index == segment.index) ours = SegmentSpan{base, count};
+    base += count * layouts[index].stride;
+  }
+  if (!ours || base != payload.size()) return std::nullopt;
+  return ours;
+}
+
 bool is_counted_array_count_subrecord(Signature record, Signature subrecord) noexcept {
   for (const auto& array : k_counted_arrays) {
     if (array.record == record && array.count_subrecord != Signature{} && array.count_subrecord == subrecord) {
