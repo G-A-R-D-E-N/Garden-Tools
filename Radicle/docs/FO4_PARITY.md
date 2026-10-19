@@ -144,7 +144,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | OMOD | 12501 | 8 | 1 | 2 | 2 | 2 | yes | - | - | yes | - | L4 |
 | OTFT | 9357 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
 | OVIS | 12546 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
-| PACK | 10526 | 24 | - | 12 | - | - | yes | - | environment/behavior | - | 3 | L4 |
+| PACK | 10526 | 26 | - | 12 | - | - | yes | - | environment/behavior | - | 3 | L4 |
 | PARW | 5944 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
 | PBAR | 5945 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
 | PBEA | 5946 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
@@ -297,7 +297,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | OMOD | 5 | - | 3 | - | 1 | u32, u8 | - | - | - | existing_only |
 | OTFT | - | - | - | - | - | - | - | - | - | - |
 | OVIS | - | - | - | - | - | - | - | - | - | - |
-| PACK | 24 | - | - | - | - | i32, i8, u16, u32, u8 | 21 | - | 17 | existing_only |
+| PACK | 24 | - | - | 2 | - | i32, i8, u16, u32, u8 | 23 | - | 17 | existing_only |
 | PARW | 11 | 1 | 1 | 2 | - | f32, i32, u32, u8 | 2 | - | - | existing_only |
 | PBAR | 11 | 1 | 1 | 2 | - | f32, i32, u32, u8 | 2 | - | - | existing_only |
 | PBEA | 11 | 1 | 1 | 2 | - | f32, i32, u32, u8 | 2 | - | - | existing_only |

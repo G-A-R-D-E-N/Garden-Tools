@@ -23432,6 +23432,41 @@
               5
             ]
           }
+        },
+        {
+          "path": "PACK\\ProcedureLeafFlags",
+          "label": "Procedure leaf flags",
+          "kind": "scalar",
+          "subrecord": "FNAM",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "flags",
+          "names": [
+            {"bit": 0, "name": "Success Completes Package"}
+          ],
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 4,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PACK\\ProcedureBranchFlags",
+          "label": "Procedure branch flags",
+          "kind": "scalar",
+          "subrecord": "PRCB",
+          "offset": 4,
+          "storage": "u32",
+          "presentation": "flags",
+          "names": [
+            {"bit": 0, "name": "Repeat when Complete"},
+            {"bit": 1, "name": "Unknown 1"}
+          ],
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 8,
+          "repeated": true,
+          "insertion": "existing_only"
         }
       ],
       "formlink_fields": [
