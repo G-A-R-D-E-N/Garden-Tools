@@ -485,7 +485,9 @@ namespace {
 
 constexpr auto k_prps = fo4::Signature::from_string("PRPS");
 constexpr auto k_fnam = fo4::Signature::from_string("FNAM");
+constexpr auto k_kwda = fo4::Signature::from_string("KWDA");
 constexpr auto k_mnam = fo4::Signature::from_string("MNAM");
+constexpr auto k_ntrm = fo4::Signature::from_string("NTRM");
 
 Bytes property_bytes(std::initializer_list<std::pair<std::uint32_t, float>> entries) {
   fo4::test::ByteWriter out;
@@ -596,6 +598,9 @@ TEST(FurnRows, AuthoringOrderNamesTheItemRunAfterItsCountAndMatchesNpc) {
   const auto cnto = rule_index(rules, k_cnto);
   const auto coed = rule_index(rules, k_coed);
   const auto mnam = rule_index(rules, k_mnam);
+  const auto kwda = rule_index(rules, k_kwda);
+  const auto prps = rule_index(rules, k_prps);
+  const auto ntrm = rule_index(rules, k_ntrm);
   ASSERT_LT(coct, rules.size());
   ASSERT_LT(cnto, rules.size());
   ASSERT_LT(coed, rules.size());
@@ -603,6 +608,11 @@ TEST(FurnRows, AuthoringOrderNamesTheItemRunAfterItsCountAndMatchesNpc) {
   EXPECT_LT(coct, cnto);
   EXPECT_LT(cnto, coed);
   EXPECT_LT(coed, mnam);
+  ASSERT_LT(kwda, rules.size());
+  ASSERT_LT(prps, rules.size());
+  ASSERT_LT(ntrm, rules.size());
+  EXPECT_LT(kwda, prps);
+  EXPECT_LT(prps, ntrm);
   EXPECT_TRUE(rules[coct].coupled);
   EXPECT_FALSE(rules[cnto].coupled);
   EXPECT_FALSE(rules[coed].coupled);
@@ -610,7 +620,7 @@ TEST(FurnRows, AuthoringOrderNamesTheItemRunAfterItsCountAndMatchesNpc) {
   EXPECT_EQ(rules[cnto].maximum, 65535);
   EXPECT_EQ(rules[coed].minimum, 0);
   EXPECT_EQ(rules[coed].maximum, 65535);
-  for (const auto signature : {k_coct, k_cnto, k_coed}) {
+  for (const auto signature : {k_coct, k_cnto, k_coed, k_prps}) {
     const auto twin = rule_index(npc_rules, signature);
     ASSERT_LT(twin, npc_rules.size()) << signature.to_string();
     const auto& rule = rules[rule_index(rules, signature)];
@@ -620,7 +630,7 @@ TEST(FurnRows, AuthoringOrderNamesTheItemRunAfterItsCountAndMatchesNpc) {
   }
 }
 
-TEST(FurnRows, AnItemRunOutOfOrderIsReportedAndAPropertyRunStillRefusesAGenericAdd) {
+TEST(FurnRows, AnItemRunOutOfOrderIsReportedAndAPropertyRunAcceptsAGenericAdd) {
   auto misordered = fo4::read_plugin(make_plugin({{"EDID", zeros(4)},
                                                   {"OBND", zeros(12)},
                                                   {"COCT", u32_bytes(1)},
@@ -639,8 +649,11 @@ TEST(FurnRows, AnItemRunOutOfOrderIsReportedAndAPropertyRunStillRefusesAGenericA
                                                        {"MNAM", u32_bytes(0)},
                                                        {"WBDT", zeros(1)}}),
                                           "Patch.esp");
-  const auto before = fo4::write_plugin(with_properties);
   EXPECT_EQ(fo4::add_record_subrecord(with_properties, record_key(), k_fnam),
-            fo4::SubrecordAddStatus::unknown_order);
-  EXPECT_EQ(fo4::write_plugin(with_properties), before);
+            fo4::SubrecordAddStatus::added);
+  const auto added = reparse(with_properties);
+  EXPECT_EQ(signatures(added), (std::vector<std::string>{"EDID", "OBND", "PRPS", "PNAM",
+                                                         "FNAM", "MNAM", "WBDT"}));
+  EXPECT_EQ(payloads(added, "FNAM"), (std::vector<Bytes>{zeros(2)}));
+  EXPECT_FALSE(fo4::test::authoring_order_violation(record_of(added), furn_rules()).has_value());
 }

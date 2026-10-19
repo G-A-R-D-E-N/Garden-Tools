@@ -27285,6 +27285,11 @@
             "coupled": true
           },
           {
+            "signature": "PRPS",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
             "signature": "NTRM",
             "minimum": 0,
             "maximum": 1
@@ -27426,7 +27431,7 @@
           "nullable": false,
           "storage": "packed_array",
           "mutation": "appendable",
-          "anchor_predecessors": ["XMRK", "NAM1", "WBDT", "MNAM", "COCT", "CTDA", "CITC", "FNAM", "ATTX", "WNAM", "PNAM", "FTYP", "NTRM", "KWDA", "KSIZ", "DEST", "MODF", "MODS", "MODC", "MODT", "MODL", "FULL", "PTRN", "OBND", "VMAD", "EDID"]
+          "anchor_predecessors": ["XMRK", "NAM1", "WBDT", "MNAM", "COED", "CNTO", "COCT", "CTDA", "CITC", "FNAM", "ATTX", "WNAM", "PNAM", "FTYP", "NTRM", "KWDA", "KSIZ", "DEST", "MODF", "MODS", "MODC", "MODT", "MODL", "FULL", "PTRN", "OBND", "VMAD", "EDID"]
         }
       ],
       "fields": [
