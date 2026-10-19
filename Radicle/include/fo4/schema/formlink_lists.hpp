@@ -7,6 +7,7 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <span>
 #include <stdexcept>
@@ -66,6 +67,11 @@ struct FormLinkListDescriptor {
   std::size_t first_anchor{0};
   std::size_t predecessor_count{0};
   std::size_t successor_count{0};
+  // Constraint: segment_count 0 means the counter is one whole u32; otherwise it is a shared fixed-size counter struct.
+  std::size_t segment_index{0};
+  std::size_t first_segment{0};
+  std::size_t segment_count{0};
+  std::size_t counter_payload_size{0};
 };
 
 struct NestedFormLinkListDescriptor {

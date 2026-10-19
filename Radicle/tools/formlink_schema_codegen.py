@@ -53,6 +53,42 @@ def parse_formlink_field_targets(row, path: str, union_targets):
     return parse_targets(row.get("targets"), path)
 
 
+SEGMENT_KEYS = ("counter_payload_size", "segment_counters", "segment_index")
+
+
+def parse_list_counter(row, path: str):
+    counter = row.get("counter", "")
+    if not isinstance(counter, str) or (counter and not valid_signature(counter)):
+        raise ValueError(f"FormLink list counter is invalid: {path!r}")
+    return counter
+
+
+def parse_list_segment(row, path: str, storage: str, counter: str):
+    present = [key for key in SEGMENT_KEYS if key in row]
+    if not present:
+        return None
+    if len(present) != len(SEGMENT_KEYS):
+        raise ValueError(f"FormLink list segment keys must be declared together: {path!r}")
+    if storage != "packed_array":
+        raise ValueError(f"FormLink list segments require packed_array storage: {path!r}")
+    if not counter:
+        raise ValueError(f"FormLink list segments require a counter subrecord: {path!r}")
+    payload_size = row["counter_payload_size"]
+    counters = row["segment_counters"]
+    index = row["segment_index"]
+    if type(payload_size) is not int or payload_size <= 0 or payload_size % 4 != 0 or payload_size > 0xFFFFFFFF:
+        raise ValueError(f"FormLink list counter_payload_size must be a positive multiple of four: {path!r}")
+    if not isinstance(counters, list) or not counters:
+        raise ValueError(f"FormLink list segment_counters must be a non-empty array: {path!r}")
+    if any(type(offset) is not int or offset < 0 or offset + 4 > payload_size for offset in counters):
+        raise ValueError(f"FormLink list segment_counters must fit the counter payload: {path!r}")
+    if len(set(counters)) != len(counters):
+        raise ValueError(f"FormLink list segment_counters contains duplicate offsets: {path!r}")
+    if type(index) is not int or not 0 <= index < len(counters):
+        raise ValueError(f"FormLink list segment_index must index segment_counters: {path!r}")
+    return {"payload_size": payload_size, "counters": list(counters), "index": index}
+
+
 def load_lists(schema_path: Path):
     document = json.loads(schema_path.read_text(encoding="utf-8"))
     if document.get("version") != 1:
@@ -67,7 +103,8 @@ def load_lists(schema_path: Path):
     fields = []
     nested_lists = []
     seen_paths = set()
-    seen_record_subrecords = set()
+    seen_record_subrecords = {}
+    segment_bodies = {}
     seen_field_aliases = set()
     seen_nested_paths = set()
     for record in records:
@@ -109,11 +146,6 @@ def load_lists(schema_path: Path):
                     raise ValueError(
                         f"duplicate FormLink list field_alias for {record_signature}.{field_alias}")
                 seen_field_aliases.add(alias_key)
-            key = (record_signature, subrecord)
-            if key in seen_record_subrecords:
-                raise ValueError(
-                    f"duplicate FormLink list subrecord mapping for {record_signature}.{subrecord}")
-            seen_record_subrecords.add(key)
             parsed_targets, wildcard_target = parse_targets_or_wildcard(row.get("targets"), path)
             if not isinstance(nullable, bool):
                 raise ValueError(f"FormLink list nullable must be boolean: {path!r}")
@@ -122,6 +154,20 @@ def load_lists(schema_path: Path):
             storage = row.get("storage", "per_subrecord")
             if storage not in ("per_subrecord", "packed_array"):
                 raise ValueError(f"unsupported FormLink list storage: {storage!r}")
+            counter = parse_list_counter(row, path)
+            segment = parse_list_segment(row, path, storage, counter)
+            key = (record_signature, subrecord)
+            previous = seen_record_subrecords.get(key)
+            if previous is not None and (segment is None or previous[1] is False):
+                raise ValueError(
+                    f"duplicate FormLink list subrecord mapping for {record_signature}.{subrecord}")
+            seen_record_subrecords[key] = (path, segment is not None)
+            if segment is not None:
+                body = (segment["payload_size"], tuple(segment["counters"]))
+                if segment_bodies.setdefault((record_signature, counter), body) != body:
+                    raise ValueError(
+                        f"FormLink list segments of {record_signature}.{counter} must share one "
+                        f"counter layout: {path!r}")
             explicit_anchor = row.get("anchor_predecessors")
             if explicit_anchor is not None and (
                     not isinstance(explicit_anchor, list)
@@ -135,7 +181,8 @@ def load_lists(schema_path: Path):
                 "field_alias": field_alias,
                 "subrecord": subrecord,
                 "storage": storage,
-                "counter": "",
+                "counter": counter,
+                "segment": segment,
                 "targets": parsed_targets,
                 "nullable": nullable,
                 "can_insert": mutation in ("existing_neighbors", "appendable"),
@@ -305,7 +352,7 @@ def load_lists(schema_path: Path):
         subrecord_key = (rec, "KWDA")
         if subrecord_key in seen_record_subrecords:
             raise ValueError(f"keyword subrecord mapping collides for {rec}.KWDA")
-        seen_record_subrecords.add(subrecord_key)
+        seen_record_subrecords[subrecord_key] = (path, False)
         anchors = {}
         for side in ("predecessors", "successors"):
             values = entry.get(side, [])
@@ -323,6 +370,7 @@ def load_lists(schema_path: Path):
             "subrecord": "KWDA",
             "storage": "packed_array",
             "counter": "KSIZ",
+            "segment": None,
             "targets": ["KYWD"],
             "nullable": False,
             "can_insert": True,
@@ -335,6 +383,9 @@ def load_lists(schema_path: Path):
     scalar_entries = [dict(field, width=WIDTHS.get(field["storage"], 0)) for field in load_fields(schema_path)]
     entries = [dict(field, width=4, embedded=True) for field in fields]
     for row in lists + nested_lists:
+        # Constraint: a segmented list has no static slot range, so it is not overlap-checked.
+        if row.get("segment") is not None:
+            continue
         packed = row.get("storage") == "packed_array"
         entries.append({
             "record": row["record"],
@@ -436,9 +487,34 @@ def render(lists, nested_lists, fields, unions) -> str:
     lines.append("};")
     lines.append("")
 
+    # Counter byte offset in body order of the segment lists sharing one counter subrecord.
+    lines.append("inline constexpr std::uint32_t k_generated_packed_segment_counters[] = {")
+    segment_start = 0
+    segment_meta = []
+    segment_bodies = {}
+    for row, _first_target, _target_count in descriptors:
+        segment = row.get("segment")
+        if segment is None:
+            segment_meta.append((0, 0, 0))
+            continue
+        body = (row["record"], row["counter"], tuple(segment["counters"]))
+        if body not in segment_bodies:
+            segment_bodies[body] = (segment_start, len(segment["counters"]))
+            for offset in segment["counters"]:
+                lines.append(f"  {offset},")
+            segment_start += len(segment["counters"])
+        first_segment, segment_count = segment_bodies[body]
+        segment_meta.append((segment["index"], first_segment, segment_count))
+    if segment_start == 0:
+        lines.append("  std::uint32_t{},")
+    lines.append("};")
+    lines.append("")
+
     lines.append("inline constexpr FormLinkListDescriptor k_generated_formlink_lists[] = {")
-    for (row, first_target, target_count), (first_anchor, predecessor_count, successor_count) in zip(
-            descriptors, anchor_meta):
+    for (row, first_target, target_count), (first_anchor, predecessor_count, successor_count), (
+            segment_index, first_segment, segment_count) in zip(
+            descriptors, anchor_meta, segment_meta):
+        segment = row.get("segment")
         lines.append(
             "  {" +
             f"Signature::from_string({cpp_string(row['record'])}), " +
@@ -453,7 +529,9 @@ def render(lists, nested_lists, fields, unions) -> str:
             ("true" if row["wildcard_target"] else "false") + ", " +
             ("true" if row["append_when_empty"] else "false") + ", " +
             f"{first_target}, {target_count}, " +
-            f"{first_anchor}, {predecessor_count}, {successor_count}" +
+            f"{first_anchor}, {predecessor_count}, {successor_count}, " +
+            f"{segment_index}, {first_segment}, {segment_count}, " +
+            f"{segment['payload_size'] if segment else 0}" +
             "},"
         )
     lines.append("};")

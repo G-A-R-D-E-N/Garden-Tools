@@ -94,7 +94,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | FLOR | 12167 | 26 | 3 | 9 | - | 3 | yes | yes | environment/vegetation | - | 1 | L4 |
 | FLST | 7574 | - | - | - | 1 | 1 | yes | - | - | - | - | L4 |
 | FSTP | 8686 | - | 1 | 1 | - | - | yes | - | environment/sound | yes | 2 | L4 |
-| FSTS | 8692 | 5 | - | 1 | - | - | yes | - | environment/sound | yes | 2 | L4 |
+| FSTS | 8692 | 5 | - | 1 | 5 | - | yes | - | environment/sound | yes | 2 | L4 |
 | FURN | 6848 | 32 | 4 | 13 | 1 | 2 | yes | yes | - | yes | 1 | L4 |
 | GDRY | 12322 | 15 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | GLOB | 6921 | 2 | - | - | - | - | yes | - | - | - | 1 | L4 |
