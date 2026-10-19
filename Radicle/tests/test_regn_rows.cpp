@@ -29,7 +29,6 @@ using fo4::test::envnode::rec;
 using fo4::test::envnode::top;
 
 constexpr auto f32 = fo4::schema::ScalarStorage::f32;
-constexpr auto i32 = fo4::schema::ScalarStorage::i32;
 constexpr auto u8 = fo4::schema::ScalarStorage::u8;
 constexpr auto u32 = fo4::schema::ScalarStorage::u32;
 
@@ -433,7 +432,7 @@ TEST(RegnRows, EntryArraysAndEntryPayloadsEditInPlace) {
   EXPECT_FALSE(fo4::schema::scalar_value_name(sound_flags->scalar, 16).has_value());
   EXPECT_EQ(sound_chance->scalar.offset, 8u);
   EXPECT_EQ(weather_chance->scalar.subrecord, fo4::Signature::from_string("RDWT"));
-  EXPECT_EQ(weather_chance->scalar.storage, i32);
+  EXPECT_EQ(weather_chance->scalar.storage, u32);
 
   const auto object = fo4::schema::formlink_field_descriptor(
       fo4::Signature::from_string("REGN"), "REGN\\Object");
@@ -509,7 +508,9 @@ TEST(RegnRows, EntryArraysAndEntryPayloadsEditInPlace) {
 
   EXPECT_EQ(fo4::set_record_scalar(plugin, record_key, *sound_flags, "16"),
             fo4::ScalarMutationStatus::updated);
-  EXPECT_EQ(fo4::set_record_scalar(plugin, record_key, *weather_chance, "250"),
+  EXPECT_THROW(fo4::set_record_scalar(plugin, record_key, *weather_chance, "-1"),
+               fo4::schema::ScalarError);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, record_key, *weather_chance, "4000000000"),
             fo4::ScalarMutationStatus::updated);
   EXPECT_EQ(fo4::set_record_formlink_field(plugin, record_key, *weather_global,
                                            fo4::FormKey::parse("00000F45:Patch.esp")),
@@ -525,7 +526,7 @@ TEST(RegnRows, EntryArraysAndEntryPayloadsEditInPlace) {
   EXPECT_EQ(sub_bytes(reread, key, "RPLD"), f32_list({1.5f, -2.5f, 3.5f, 4.5f}));
   EXPECT_EQ(sub_bytes(reread, key, "RDSA"), rdsa_bytes(0x00000F44, 16, 0.5f));
   EXPECT_EQ(sub_bytes(reread, key, "RDWT"),
-            concat(rdwt_bytes(0x00000F42, 250, 0x02000F45),
+            concat(rdwt_bytes(0x00000F42, 4000000000u, 0x02000F45),
                    rdwt_bytes(0x00000F4A, 250, 0x00000F4B)));
   EXPECT_EQ(sub_bytes(reread, key, "RDOT"), rdot_bytes(0x00000F40, 3, 0.25f));
   EXPECT_EQ(sub_bytes(reread, key, "RDWT", 1), rdwt_bytes(0x00000F48, 250, 0x00000F49));

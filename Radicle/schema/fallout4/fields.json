@@ -8526,7 +8526,7 @@
         {"path": "REGN\\Icon", "label": "Icon", "kind": "string", "subrecord": "ICON", "insertion": "existing_only"},
         {"path": "REGN\\SoundFlags", "label": "Sound flags", "kind": "scalar", "subrecord": "RDSA", "offset": 4, "stride": 12, "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Pleasant"}, {"bit": 1, "name": "Cloudy"}, {"bit": 2, "name": "Rainy"}, {"bit": 3, "name": "Snowy"}], "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"},
         {"path": "REGN\\SoundChance", "label": "Sound chance", "kind": "scalar", "subrecord": "RDSA", "offset": 8, "stride": 12, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
-        {"path": "REGN\\WeatherChance", "label": "Weather chance", "kind": "scalar", "subrecord": "RDWT", "offset": 4, "stride": 12, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "insertion": "existing_only"}
+        {"path": "REGN\\WeatherChance", "label": "Weather chance", "kind": "scalar", "subrecord": "RDWT", "offset": 4, "stride": 12, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {"path": "REGN\\Worldspace", "label": "Worldspace", "subrecord": "WNAM", "offset": 0, "payload_sizes": [4], "targets": ["WRLD"], "nullable": false, "insertion": "existing_only"},
@@ -9160,7 +9160,6 @@
         {"path": "RACE\\IdleChatterTimeMax", "label": "Idle chatter time max", "kind": "scalar", "subrecord": "NTOP", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
         {"path": "RACE\\WrinkleMapPath", "label": "Wrinkle map path", "kind": "string", "subrecord": "WMAP", "repeated": true, "insertion": "existing_only"},
         {"path": "RACE\\SkeletalModelPath", "label": "Skeletal model path", "kind": "string", "subrecord": "ANAM", "repeated": true, "insertion": "existing_only"},
-        {"path": "RACE\\MovementTypeName", "label": "Movement type name", "kind": "string", "subrecord": "MTNM", "repeated": true, "insertion": "existing_only"},
         {"path": "RACE\\MovementOverrideLeftStanding", "label": "Movement override left standing", "kind": "scalar", "subrecord": "SPED", "offset": 0, "min_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 112, "repeated": true, "insertion": "existing_only"},
         {"path": "RACE\\MovementOverrideLeftWalk", "label": "Movement override left walk", "kind": "scalar", "subrecord": "SPED", "offset": 4, "min_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 112, "repeated": true, "insertion": "existing_only"},
         {"path": "RACE\\MovementOverrideLeftRun", "label": "Movement override left run", "kind": "scalar", "subrecord": "SPED", "offset": 8, "min_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 112, "repeated": true, "insertion": "existing_only"},
