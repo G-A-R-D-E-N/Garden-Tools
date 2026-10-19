@@ -405,6 +405,14 @@ TEST(Abc, RejectsBranchTargetOutOfRange) {
   put_s24(bad_switch, 900);
   put_u8(bad_switch, 0x47);
   EXPECT_EQ(fo4::abc::decode_code(bad_switch, instructions), AbcStatus::BranchOutOfRange);
+  std::vector<std::uint8_t> dead_jump;
+  put_u8(dead_jump, 0x47);
+  put_u8(dead_jump, 0x10);
+  put_s24(dead_jump, 1000);
+  ASSERT_EQ(fo4::abc::decode_code(dead_jump, instructions), AbcStatus::Ok);
+  ASSERT_EQ(instructions.size(), 2u);
+  ASSERT_EQ(instructions[1].operands.size(), 1u);
+  EXPECT_EQ(instructions[1].operands[0].target, 1005);
 }
 
 TEST(Abc, RejectsBadTraitKindAndTraitMetadataIndex) {

@@ -663,6 +663,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_material_file_real.cpp
     tests/test_swf.cpp
     tests/test_swf_real.cpp
+    tests/test_abc_real.cpp
     tests/test_c_api_material_file.cpp
     tests/test_seq.cpp
     tests/test_seq_corpus.cpp
