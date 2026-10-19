@@ -1,18 +1,25 @@
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "fo4/plugin/subrecord_authoring.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/field_address.hpp"
 #include "fo4/schema/formlink_lists.hpp"
+#include "fo4/schema/preflight.hpp"
+#include "fo4/schema/record_constraints.hpp"
 #include "fo4/schema/scalar.hpp"
+#include "authoring_order.hpp"
 #include "plugin_bytes.hpp"
 
 #include <gtest/gtest.h>
 
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -472,4 +479,168 @@ TEST(FurnRows, MarkerEntryPointInsertAndRemoveRefuseIndexesPastTheEnd) {
   const auto after = reparse(plugin);
   EXPECT_EQ(signatures(after), (std::vector<std::string>{"MNAM", "WBDT", "FNPR", "FNPR", "XMRK"}));
   EXPECT_EQ(payloads(after, "FNPR"), (std::vector<Bytes>{fnpr_bytes(1, 13), fnpr_bytes(2, 7)}));
+}
+
+namespace {
+
+constexpr auto k_prps = fo4::Signature::from_string("PRPS");
+constexpr auto k_fnam = fo4::Signature::from_string("FNAM");
+constexpr auto k_mnam = fo4::Signature::from_string("MNAM");
+
+Bytes property_bytes(std::initializer_list<std::pair<std::uint32_t, float>> entries) {
+  fo4::test::ByteWriter out;
+  for (const auto& [actor_value, value] : entries) {
+    out.u32(actor_value);
+    out.f32(value);
+  }
+  return out.bytes;
+}
+
+fo4::schema::CountedArrayDescriptor properties_array() {
+  return fo4::schema::counted_array_descriptor(k_furn, "FURN\\Properties").value();
+}
+
+std::span<const fo4::schema::SubrecordAuthoringConstraint> furn_rules() {
+  return fo4::schema::authoring_subrecords(*fo4::schema::record_authoring_constraint(k_furn));
+}
+
+std::size_t rule_index(std::span<const fo4::schema::SubrecordAuthoringConstraint> rules,
+                       fo4::Signature signature) {
+  for (std::size_t index = 0; index < rules.size(); ++index) {
+    if (rules[index].signature == signature) return index;
+  }
+  return rules.size();
+}
+
+std::uint32_t prps_actor_value(const fo4::Plugin& plugin, std::size_t index) {
+  for (const auto& subrecord : record_of(plugin).subrecords) {
+    if (subrecord.signature == k_prps) return read_u32(subrecord.data, index * 8);
+  }
+  return 0;
+}
+
+std::vector<Piece> properties_and_items_base() {
+  return {
+      {"EDID", zeros(4)},
+      {"OBND", zeros(12)},
+      {"PRPS", property_bytes({{0x900, 1.5f}, {0x901, 2.5f}})},
+      {"PNAM", u32_bytes(0)},
+      {"FNAM", zeros(2)},
+      {"COCT", u32_bytes(2)},
+      {"CNTO", cnto_bytes(0x900, 5)},
+      {"CNTO", cnto_bytes(0x901, 1)},
+      {"MNAM", u32_bytes(0)},
+      {"WBDT", zeros(1)},
+  };
+}
+
+bool reports_order_issue(const fo4::Plugin& plugin, std::string_view path) {
+  for (const auto& issue : fo4::schema::preflight_authoring_record(plugin, record_key())) {
+    if (issue.code == "subrecord_order_invalid" && issue.path == path) return true;
+  }
+  return false;
+}
+
+}  // namespace
+
+TEST(FurnRows, PropertyAndItemRunsReadWriteAndRepeatOnOneFurn) {
+  auto plugin = fo4::read_plugin(make_plugin(properties_and_items_base()), "Patch.esp");
+  const auto properties = properties_array();
+  EXPECT_EQ(properties.record, k_furn);
+  EXPECT_EQ(properties.subrecord, k_prps);
+  EXPECT_EQ(properties.count_subrecord, fo4::Signature{});
+  EXPECT_EQ(properties.stride, 8u);
+  EXPECT_EQ(fo4::record_field_count(plugin, record_key(), "FURN\\PropertyValue"), 2u);
+  EXPECT_EQ(fo4::record_field_count(plugin, record_key(), "FURN\\PropertyActorValue"), 2u);
+  EXPECT_EQ(read_member(plugin, "FURN\\PropertyValue", 0), "1.5");
+  EXPECT_EQ(read_member(plugin, "FURN\\PropertyValue", 1), "2.5");
+  EXPECT_EQ(prps_actor_value(plugin, 0), 0x900u);
+  EXPECT_EQ(prps_actor_value(plugin, 1), 0x901u);
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, record_key(), scalar("FURN\\PropertyValue"), 1, "3.5"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_formlink_field(
+                plugin, record_key(),
+                fo4::schema::formlink_field_descriptor("FURN\\PropertyActorValue").value(), 0,
+                misc_key()),
+            fo4::FormLinkFieldMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, record_key(), scalar("FURN\\ItemCount"), 0, "7"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::insert_record_counted_element(plugin, record_key(), properties, 1),
+            fo4::CountedArrayMutationStatus::updated);
+
+  const auto after = reparse(plugin);
+  EXPECT_EQ(signatures(after), (std::vector<std::string>{"EDID", "OBND", "PRPS", "PNAM", "FNAM", "COCT",
+                                                         "CNTO", "CNTO", "MNAM", "WBDT"}));
+  EXPECT_EQ(payloads(after, "PRPS"),
+            (std::vector<Bytes>{property_bytes({{0x910, 1.5f}, {0, 0.0f}, {0x901, 3.5f}})}));
+  EXPECT_EQ(fo4::record_field_count(after, record_key(), "FURN\\PropertyValue"), 3u);
+  EXPECT_EQ(read_member(after, "FURN\\PropertyValue", 2), "3.5");
+  EXPECT_EQ(prps_actor_value(after, 0), 0x910u);
+  EXPECT_EQ(prps_actor_value(after, 2), 0x901u);
+  EXPECT_EQ(read_member(after, "FURN\\ItemCount", 0), "7");
+  EXPECT_EQ(read_member(after, "FURN\\ItemTotal", 0), "2");
+  EXPECT_EQ(cnto_item(after, 0), 0x900u);
+  EXPECT_FALSE(fo4::test::authoring_order_violation(record_of(after), furn_rules()).has_value());
+  for (const auto& issue : fo4::schema::preflight_authoring_record(after, record_key())) {
+    EXPECT_NE(issue.severity, fo4::schema::PreflightSeverity::error)
+        << issue.path << ' ' << issue.message;
+  }
+}
+
+TEST(FurnRows, AuthoringOrderNamesTheItemRunAfterItsCountAndMatchesNpc) {
+  const auto rules = furn_rules();
+  const auto npc_rules = fo4::schema::authoring_subrecords(
+      *fo4::schema::record_authoring_constraint(fo4::Signature::from_string("NPC_")));
+  const auto coct = rule_index(rules, k_coct);
+  const auto cnto = rule_index(rules, k_cnto);
+  const auto coed = rule_index(rules, k_coed);
+  const auto mnam = rule_index(rules, k_mnam);
+  ASSERT_LT(coct, rules.size());
+  ASSERT_LT(cnto, rules.size());
+  ASSERT_LT(coed, rules.size());
+  ASSERT_LT(mnam, rules.size());
+  EXPECT_LT(coct, cnto);
+  EXPECT_LT(cnto, coed);
+  EXPECT_LT(coed, mnam);
+  EXPECT_TRUE(rules[coct].coupled);
+  EXPECT_FALSE(rules[cnto].coupled);
+  EXPECT_FALSE(rules[coed].coupled);
+  EXPECT_EQ(rules[cnto].minimum, 0);
+  EXPECT_EQ(rules[cnto].maximum, 65535);
+  EXPECT_EQ(rules[coed].minimum, 0);
+  EXPECT_EQ(rules[coed].maximum, 65535);
+  for (const auto signature : {k_coct, k_cnto, k_coed}) {
+    const auto twin = rule_index(npc_rules, signature);
+    ASSERT_LT(twin, npc_rules.size()) << signature.to_string();
+    const auto& rule = rules[rule_index(rules, signature)];
+    EXPECT_EQ(rule.minimum, npc_rules[twin].minimum) << signature.to_string();
+    EXPECT_EQ(rule.maximum, npc_rules[twin].maximum) << signature.to_string();
+    EXPECT_EQ(rule.coupled, npc_rules[twin].coupled) << signature.to_string();
+  }
+}
+
+TEST(FurnRows, AnItemRunOutOfOrderIsReportedAndAPropertyRunStillRefusesAGenericAdd) {
+  auto misordered = fo4::read_plugin(make_plugin({{"EDID", zeros(4)},
+                                                  {"OBND", zeros(12)},
+                                                  {"COCT", u32_bytes(1)},
+                                                  {"MNAM", u32_bytes(0)},
+                                                  {"CNTO", cnto_bytes(0x900, 1)},
+                                                  {"PNAM", u32_bytes(0)},
+                                                  {"FNAM", zeros(2)},
+                                                  {"WBDT", zeros(1)}}),
+                                     "Patch.esp");
+  EXPECT_TRUE(reports_order_issue(misordered, "FURN\\CNTO"));
+
+  auto with_properties = fo4::read_plugin(make_plugin({{"EDID", zeros(4)},
+                                                       {"OBND", zeros(12)},
+                                                       {"PRPS", property_bytes({{0x900, 1.0f}})},
+                                                       {"PNAM", u32_bytes(0)},
+                                                       {"MNAM", u32_bytes(0)},
+                                                       {"WBDT", zeros(1)}}),
+                                          "Patch.esp");
+  const auto before = fo4::write_plugin(with_properties);
+  EXPECT_EQ(fo4::add_record_subrecord(with_properties, record_key(), k_fnam),
+            fo4::SubrecordAddStatus::unknown_order);
+  EXPECT_EQ(fo4::write_plugin(with_properties), before);
 }

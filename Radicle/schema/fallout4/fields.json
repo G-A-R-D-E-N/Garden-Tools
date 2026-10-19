@@ -27334,6 +27334,16 @@
             "coupled": true
           },
           {
+            "signature": "CNTO",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "COED",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
             "signature": "MNAM",
             "minimum": 0,
             "maximum": 1
