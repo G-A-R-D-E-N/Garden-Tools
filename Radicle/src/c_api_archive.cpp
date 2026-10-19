@@ -1,11 +1,18 @@
 #include "c_api_env_internal.hpp"
 #include "fo4/archive/assets.hpp"
+#include "fo4/archive/ba2.hpp"
+#include "fo4/archive/ba2_hash.hpp"
 #include "fo4/environment/strings.hpp"
+#include "fo4/text/encoding.hpp"
 
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <memory>
+#include <span>
 #include <string>
+#include <unordered_set>
+#include <utility>
 #include <vector>
 
 struct radicle_assets {
@@ -16,6 +23,8 @@ namespace {
 
 using namespace radicle_c_detail;
 using namespace radicle_c_env_detail;
+
+constexpr size_t k_max_write_path_length = 260;
 
 const fo4::archive::Ba2Reader* to_reader(const radicle_ba2* ba2) {
   return reinterpret_cast<const fo4::archive::Ba2Reader*>(ba2);
@@ -129,6 +138,49 @@ radicle_status radicle_ba2_extract(const radicle_ba2* ba2, size_t index, uint8_t
   }
   return guarded("unknown exception while extracting BA2 entry",
                  [&] { return copy_bytes(to_reader(ba2)->extract(index), out_bytes, out_size); });
+}
+
+radicle_status radicle_ba2_write_general(const radicle_ba2_write_entry* entries,
+                                         size_t count,
+                                         uint8_t** out_bytes,
+                                         size_t* out_size) {
+  clear_error();
+  if (out_bytes == nullptr || out_size == nullptr || (entries == nullptr && count != 0)) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "entries, out_bytes and out_size are required");
+  }
+  *out_bytes = nullptr;
+  *out_size = 0;
+  return guarded("unknown exception while writing BA2", [&] {
+    fo4::archive::Ba2GeneralArchive archive;
+    std::unordered_set<std::string> names;
+    archive.entries.reserve(count);
+    for (size_t index = 0; index < count; ++index) {
+      const auto& input = entries[index];
+      if (input.path == nullptr || (input.bytes == nullptr && input.size != 0) ||
+          input.size > std::numeric_limits<uint32_t>::max()) {
+        return fail(RADICLE_STATUS_INVALID_ARGUMENT, "BA2 entry needs a path and bytes that fit a 32-bit size");
+      }
+      const std::string path = input.path;
+      if (path.empty() || path.size() >= k_max_write_path_length) {
+        return fail(RADICLE_STATUS_INVALID_ARGUMENT, "BA2 entry path must be 1 to 259 bytes");
+      }
+      const auto stored = fo4::text::utf8_to_windows1252(path);
+      if (!stored) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "BA2 entry path has no Windows-1252 form");
+      if (!names.insert(fo4::archive::normalize_ba2_name(*stored)).second) {
+        return fail(RADICLE_STATUS_INVALID_ARGUMENT, "BA2 entry path duplicates an earlier entry");
+      }
+      const auto hashes = fo4::archive::compute_ba2_hashes(path);
+      fo4::archive::Ba2GeneralEntry entry;
+      entry.name_hash = hashes.name;
+      entry.extension_hash = hashes.extension;
+      entry.directory_hash = hashes.directory;
+      entry.path = path;
+      entry.chunks.push_back(fo4::archive::make_stored_ba2_chunk(
+          std::span<const std::byte>(reinterpret_cast<const std::byte*>(input.bytes), input.size)));
+      archive.entries.push_back(std::move(entry));
+    }
+    return copy_bytes(fo4::archive::write_ba2_general(archive), out_bytes, out_size);
+  });
 }
 
 radicle_status radicle_archive_load_order(const char* data_dir,

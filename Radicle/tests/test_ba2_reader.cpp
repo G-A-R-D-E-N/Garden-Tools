@@ -354,3 +354,74 @@ TEST_F(Ba2ReaderTest, CApiReadsArchivesAndAssets) {
   radicle_free_bytes(bytes);
   radicle_assets_destroy(assets);
 }
+
+TEST_F(Ba2ReaderTest, CApiWritesTheCppGeneralBytesAndReadsThemBack) {
+  const std::string mesh = "high";
+  const std::string material(4096, 'm');
+  const radicle_ba2_write_entry entries[] = {
+      {"Meshes\\Shared.nif", reinterpret_cast<const uint8_t*>(mesh.data()), mesh.size()},
+      {"Materials\\Gun.bgsm", reinterpret_cast<const uint8_t*>(material.data()), material.size()}};
+
+  Ba2GeneralArchive expected;
+  expected.entries = {general("Meshes\\Shared.nif", mesh), general("Materials\\Gun.bgsm", material)};
+
+  uint8_t* out = nullptr;
+  size_t size = 0;
+  ASSERT_EQ(radicle_ba2_write_general(entries, 2, &out, &size), RADICLE_STATUS_OK);
+  const auto* begin = reinterpret_cast<const std::byte*>(out);
+  const std::vector<std::byte> written(begin, begin + size);
+  radicle_free_bytes(out);
+  EXPECT_EQ(written, fo4::archive::write_ba2_general(expected));
+
+  const auto path = write_file(data() / "Abi - Main.ba2", written);
+  radicle_ba2* ba2 = nullptr;
+  ASSERT_EQ(radicle_ba2_open(path.string().c_str(), &ba2), RADICLE_STATUS_OK);
+  radicle_ba2_info info{};
+  ASSERT_EQ(radicle_ba2_get_info(ba2, &info), RADICLE_STATUS_OK);
+  EXPECT_EQ(info.kind, RADICLE_BA2_GENERAL);
+  EXPECT_EQ(info.version, 1u);
+  EXPECT_EQ(info.has_name_table, 1);
+  EXPECT_EQ(info.entry_count, 2u);
+  radicle_ba2_entry_info entry{};
+  ASSERT_EQ(radicle_ba2_get_entry(ba2, 1, &entry), RADICLE_STATUS_OK);
+  EXPECT_STREQ(entry.path, "Materials\\Gun.bgsm");
+  EXPECT_EQ(entry.unpacked_size, 4096u);
+  size_t index = 9;
+  ASSERT_EQ(radicle_ba2_find(ba2, "materials/GUN.bgsm", &index), RADICLE_STATUS_OK);
+  EXPECT_EQ(index, 1u);
+  ASSERT_EQ(radicle_ba2_extract(ba2, 0, &out, &size), RADICLE_STATUS_OK);
+  EXPECT_EQ(std::string(reinterpret_cast<const char*>(out), size), mesh);
+  radicle_free_bytes(out);
+  radicle_ba2_close(ba2);
+}
+
+TEST_F(Ba2ReaderTest, CApiWriteRefusesBadEntriesAndClearsOutputs) {
+  const std::string payload = "x";
+  const auto* bytes = reinterpret_cast<const uint8_t*>(payload.data());
+  const std::string longest(259, 'a');
+  const std::string too_long(260, 'a');
+  const radicle_ba2_write_entry longest_ok[] = {{longest.c_str(), bytes, 1}};
+  const radicle_ba2_write_entry null_path[] = {{nullptr, bytes, 1}};
+  const radicle_ba2_write_entry empty_path[] = {{"", bytes, 1}};
+  const radicle_ba2_write_entry too_long_path[] = {{too_long.c_str(), bytes, 1}};
+  const radicle_ba2_write_entry null_bytes[] = {{"Meshes\\A.nif", nullptr, 1}};
+  const radicle_ba2_write_entry duplicate[] = {{"Meshes\\A.nif", bytes, 1}, {"meshes/a.NIF", bytes, 1}};
+  const radicle_ba2_write_entry unmappable[] = {{"Meshes\\\xE4\xB8\xAD.nif", bytes, 1}};
+
+  uint8_t* out = nullptr;
+  size_t size = 7;
+  EXPECT_EQ(radicle_ba2_write_general(null_path, 1, &out, &size), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_ba2_write_general(empty_path, 1, &out, &size), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_ba2_write_general(too_long_path, 1, &out, &size), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_ba2_write_general(null_bytes, 1, &out, &size), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_ba2_write_general(duplicate, 2, &out, &size), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_ba2_write_general(unmappable, 1, &out, &size), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_ba2_write_general(nullptr, 1, &out, &size), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_ba2_write_general(longest_ok, 1, nullptr, &size), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(out, nullptr);
+  EXPECT_EQ(size, 0u);
+
+  ASSERT_EQ(radicle_ba2_write_general(longest_ok, 1, &out, &size), RADICLE_STATUS_OK);
+  EXPECT_GT(size, 0u);
+  radicle_free_bytes(out);
+}

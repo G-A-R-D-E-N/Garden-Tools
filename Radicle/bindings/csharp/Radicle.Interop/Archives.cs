@@ -83,6 +83,40 @@ public sealed unsafe class Ba2Archive : IDisposable
     public void Dispose() => _handle.Dispose();
 }
 
+public static unsafe class Ba2Writer
+{
+    static Ba2Writer() => RadicleLibrary.Register();
+
+    public static byte[] General(params (string Path, byte[] Data)[] files)
+    {
+        using var strings = new NativeStrings();
+        var payload = new byte[files.Sum(file => file.Data.Length)];
+        var entries = new Native.Ba2WriteEntry[files.Length];
+        var offset = 0;
+        for (var i = 0; i < files.Length; ++i)
+        {
+            files[i].Data.CopyTo(payload, offset);
+            entries[i].Path = strings.Add(files[i].Path);
+            entries[i].Size = (nuint)files[i].Data.Length;
+            offset += files[i].Data.Length;
+        }
+        fixed (byte* data = payload)
+        fixed (Native.Ba2WriteEntry* items = entries)
+        {
+            var at = data;
+            for (var i = 0; i < files.Length; ++i)
+            {
+                items[i].Bytes = (IntPtr)at;
+                at += files[i].Data.Length;
+            }
+            byte* bytes;
+            nuint size;
+            Call.Check(RadicleNative.Ba2WriteGeneral(items, (nuint)entries.Length, &bytes, &size));
+            return Call.TakeBytes(bytes, size);
+        }
+    }
+}
+
 public sealed unsafe class AssetResolver : IDisposable
 {
     private readonly AssetsHandle _handle;

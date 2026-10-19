@@ -454,6 +454,14 @@ public unsafe struct AssetLocation
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct Ba2WriteEntry
+{
+    public IntPtr Path;
+    public IntPtr Bytes;
+    public nuint Size;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct LightInfo
 {
     public int HasData;
@@ -1851,6 +1859,9 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_ba2_extract")]
     public static extern Status Ba2Extract(IntPtr ba2, nuint index, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_ba2_write_general")]
+    public static extern Status Ba2WriteGeneral(Ba2WriteEntry* entries, nuint count, byte** out_bytes, nuint* out_size);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_archive_load_order")]
     public static extern Status ArchiveLoadOrder([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? data_dir, IntPtr* ini_archives, nuint ini_count, IntPtr* plugins, nuint plugin_count, IntPtr** out_paths, nuint* out_count);

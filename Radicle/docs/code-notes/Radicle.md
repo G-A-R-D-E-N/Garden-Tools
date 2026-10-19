@@ -2427,3 +2427,23 @@ Skipped on purpose:
 - Radicle/schema/fallout4/fields.json:ENCH\BaseEnchantment: `payload_sizes` went from [36] to [32, 36]. `SetOptionalFrom(8)` (Core/wbDefinitionsFO4.pas:6747) makes only member 8, Worn Restrictions (offset 32), optional. Base Enchantment is member 7 at offset 28 and is required, so the shortest ENIT xEdit reads cleanly is 32 bytes. A 28-byte ENIT is not that form, because the required member runs past the payload (Core/wbImplementation.pas:22588-22603 marks only members from the optional index as missing). What xEdit shows for 28 bytes is not verified, since no xEdit run was made. ENCH\WornRestrictions stays at [36]. A link write on a payload whose size is not in `payload_sizes` throws `schema::FormLinkFieldError` (`Radicle/src/plugin/field_writer.cpp:formlink_slots`, throw at :132) instead of returning `subrecord_missing`, so a 28-byte ENIT throws for both links and a 32-byte ENIT throws for Worn Restrictions. The target-type check in `set_record_formlink_field` (:399) runs before it, so the test writes Worn Restrictions with a local FLST target and checks the message names the payload size. Test: `Radicle/tests/test_scalar_embedded.cpp:EnchEnitShortFormsReadOnlyTheMembersXEditReadsCleanly`.
 - Radicle/tools/record_schema_codegen.py:parse_default: an authoring default is checked against each subrecord's `payload_size` (exact) and now also against the largest `minimum_payload_size` of its rows. Without this, the ENIT default (36 bytes) would no longer be checked once the ENCH scalars moved to `minimum_payload_size` 28. A default shorter than that minimum is rejected.
 - Radicle/tools/schema_codegen.py:main and Radicle/tools/formlink_schema_codegen.py:main regenerated `include/fo4/schema/generated_scalar_fields.inc` and `generated_formlink_lists.inc`. Radicle/tools/parity_matrix.py:main regenerated `docs/FO4_PARITY.md` (IMAD scalar rows 58 to 60).
+
+## Radicle/src/c_api_archive.cpp:radicle_ba2_write_general
+
+GNRL writer C ABI, the counterpart of `Radicle/src/archive/ba2.cpp:write_ba2_general` (not exported before this). Each `radicle_ba2_write_entry` becomes one stored chunk, and the archive is version 1 with a name table. The name, extension and directory hashes come from `compute_ba2_hashes`, so an unnamed, hash-keyed lookup finds the same entry as the named one. The output is caller-owned and released with `radicle_free_bytes`; the outputs are cleared before any refusal.
+
+Refusals are INVALID_ARGUMENT, decided before `write_ba2_general` runs so that its `Ba2Error` (which `guarded` maps to PARSE_ERROR) is never the answer for bad input: a NULL path, NULL bytes with a non-zero size, a size above 32 bits, an empty path, a path of 260 or more bytes (the same cutoff as `normalize_ba2_path`, which otherwise falls back to zero hashes), a path with no Windows-1252 form, and a duplicate by the reader's own lookup key (`normalize_ba2_name` over the Windows-1252 bytes, as `Ba2Reader::find` uses). Zero entries write a 24-byte header-only archive.
+
+Tests: `Radicle/tests/test_ba2_reader.cpp:Ba2ReaderTest.CApiWritesTheCppGeneralBytesAndReadsThemBack` pins byte equality with `write_ba2_general` for the same archive and reads the bytes back through `radicle_ba2_open`, so a hash or table regression fails. `Ba2ReaderTest.CApiWriteRefusesBadEntriesAndClearsOutputs` pins the refusal statuses, the 259-byte accept and 260-byte refuse boundary, and the cleared outputs.
+
+## Radicle/include/fo4/c_api_env.h:radicle_ba2_write_entry
+
+Borrowed input. The pointers are read only during `radicle_ba2_write_general`, so the caller frees its buffers after the call. The struct is an array rather than parallel arrays because the C# side can join every payload into one pinned buffer and point each entry into it.
+
+## Radicle/bindings/csharp/Radicle.Interop/Archives.cs:Ba2Writer
+
+Public static `General(params (string Path, byte[] Data)[])` returns the archive bytes. It replaces the test-only writer that `Radicle/bindings/csharp/Radicle.Interop.Tests/Fixtures.cs` used to hold, which wrote zero hashes. Test: `Radicle/bindings/csharp/Radicle.Interop.Tests/ArchiveTests.cs:WritesGeneralArchivesThatTheReaderRereadsAndRefusesDuplicatePaths` writes through `Ba2Writer`, rereads through `Ba2Archive`, and expects INVALID_ARGUMENT for a case-and-slash duplicate.
+
+## Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION
+
+`radicle_ba2_write_general` and `radicle_ba2_write_entry` are new exports and do not change `RADICLE_ABI_VERSION` in this change; the bump is coordinated separately. `RadicleNative.g.cs` and `abi_layout_probe.cpp` were regenerated from the headers with the generator, so the interop check passes without a bump here.

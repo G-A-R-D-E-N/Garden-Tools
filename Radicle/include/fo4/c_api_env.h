@@ -530,6 +530,17 @@ RADICLE_API radicle_status radicle_ba2_extract(const radicle_ba2* ba2,
                                                uint8_t** out_bytes,
                                                size_t* out_size);
 
+typedef struct radicle_ba2_write_entry {
+  const char* path;
+  const uint8_t* bytes;
+  size_t size;
+} radicle_ba2_write_entry;
+
+RADICLE_API radicle_status radicle_ba2_write_general(const radicle_ba2_write_entry* entries,
+                                                     size_t count,
+                                                     uint8_t** out_bytes,
+                                                     size_t* out_size);
+
 RADICLE_API radicle_status radicle_archive_load_order(const char* data_dir,
                                                       const char* const* ini_archives,
                                                       size_t ini_count,

@@ -52,4 +52,27 @@ public class ArchiveTests
         Assert.Null(strings.Lookup(0, StringSource.Dl, 0x10));
         Assert.Equal(StringSource.Il, StringTables.SourceFor("INFO", "NAM1"));
     }
+
+    [Fact]
+    public void WritesGeneralArchivesThatTheReaderRereadsAndRefusesDuplicatePaths()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.Write("Data/Written - Main.ba2", Ba2Writer.General(
+            ("Meshes\\Shared.nif", Encoding.ASCII.GetBytes("mesh")),
+            ("Scripts\\Empty.pex", System.Array.Empty<byte>())));
+
+        using var archive = Ba2Archive.Open(path);
+        Assert.Equal(Ba2Kind.General, archive.Kind);
+        Assert.Equal(2, archive.Count);
+        Assert.Equal("Meshes\\Shared.nif", archive.Entry(0).Path);
+        Assert.Equal(4UL, archive.Entry(0).UnpackedSize);
+        Assert.Equal(0, archive.Find("meshes/SHARED.nif"));
+        Assert.Equal("mesh", Encoding.ASCII.GetString(archive.Extract(0)));
+        Assert.Empty(archive.Extract(1));
+
+        var duplicate = Assert.Throws<RadicleException>(() => Ba2Writer.General(
+            ("Meshes\\A.nif", Encoding.ASCII.GetBytes("a")),
+            ("meshes/a.NIF", Encoding.ASCII.GetBytes("b"))));
+        Assert.Equal(Status.InvalidArgument, duplicate.Status);
+    }
 }
