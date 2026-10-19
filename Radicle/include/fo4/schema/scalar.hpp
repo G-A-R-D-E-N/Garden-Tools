@@ -100,6 +100,8 @@ struct SubrecordGroupMemberDescriptor {
   bool localized{false};
   // Constraint: a skippable member may appear before the first leader, where it belongs to no run.
   bool skippable{false};
+  // Invariant: a leading member is optional, precedes the leader in declaration and data order, and belongs to the run of the leader that follows it.
+  bool leading{false};
 };
 
 struct SubrecordGroupDescriptor {

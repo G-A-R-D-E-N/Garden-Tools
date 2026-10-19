@@ -22,7 +22,7 @@ COUNTED_ARRAY_KEYS = {"kind", "path", "label", "subrecord", "count_subrecord", "
 MEMBER_KEYS = {"path", "label", "offset", "storage", "presentation", "minimum", "maximum"}
 SUBRECORD_GROUP_KEYS = {"kind", "path", "label", "count_subrecord", "insertion", "members", "successors"}
 GROUP_MEMBER_KEYS = {"subrecord", "required", "repeatable", "payload_size", "default", "fields",
-                     "formlink_fields", "localized", "skippable"}
+                     "formlink_fields", "localized", "skippable", "leading"}
 GROUP_ROW_FORBIDDEN = {"kind", "subrecord", "repeated", "stride", "array_offset", "when", "payload_size", "minimum_payload_size"}
 GROUP_LINK_KEYS = {"path", "label", "offset", "nullable", "insertion", "target_union", "targets"}
 HEX_DIGITS = "0123456789abcdefABCDEF"
@@ -204,10 +204,15 @@ def parse_subrecord_group(field, record_signature: str):
         skippable = member.get("skippable", False)
         if not isinstance(skippable, bool):
             raise ValueError(f"subrecord_group member skippable must be a boolean: {path!r}")
+        leading = member.get("leading", False)
+        if not isinstance(leading, bool):
+            raise ValueError(f"subrecord_group member leading must be a boolean: {path!r}")
+        if leading and (required or repeatable or skippable or any(not entry["leading"] for entry in parsed)):
+            raise ValueError(f"subrecord_group leading members must come first and be optional, non-repeatable and not skippable: {path!r}")
         default = parse_group_default(member["default"], payload_size, path) if "default" in member else None
         parsed.append({"subrecord": signature, "required": required, "repeatable": repeatable,
                        "payload_size": payload_size, "default": default, "localized": localized,
-                       "skippable": skippable})
+                       "skippable": skippable, "leading": leading})
         member_fields = member.get("fields", [])
         member_links = member.get("formlink_fields", [])
         if not isinstance(member_fields, list) or not isinstance(member_links, list):
@@ -234,7 +239,8 @@ def parse_subrecord_group(field, record_signature: str):
             if row["offset"] + WIDTHS["u32"] > payload_size:
                 raise ValueError(f"subrecord_group member link exceeds member size: {row.get('path')!r}")
             links.append(dict(row, subrecord=signature, repeated=True))
-    if not parsed[0]["required"] or parsed[0]["repeatable"]:
+    leader = next((entry for entry in parsed if not entry["leading"]), None)
+    if leader is None or not leader["required"] or leader["repeatable"]:
         raise ValueError(f"subrecord_group leader must be required and non-repeatable: {path!r}")
     if set(successors) & (signatures | {count_subrecord}):
         raise ValueError(f"subrecord_group successors cannot be members or the count subrecord: {path!r}")
@@ -503,6 +509,7 @@ def render_subrecord_groups(groups):
                 spec += "std::span<const std::uint8_t>{}"
             spec += f", {'true' if member['localized'] else 'false'}"
             spec += f", {'true' if member['skippable'] else 'false'}"
+            spec += f", {'true' if member['leading'] else 'false'}"
             members.append("{" + spec + "},")
         if group["successors"]:
             body = ", ".join(f"Signature::from_string({cpp_string(signature)})" for signature in group["successors"])

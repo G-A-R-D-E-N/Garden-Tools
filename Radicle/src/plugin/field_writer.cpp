@@ -293,6 +293,9 @@ std::vector<SubrecordGroupSpan> group_spans(const Record& record, const schema::
     return schema::SubrecordGroupError(std::string(group.path) + " " + reason);
   };
 
+  std::size_t lead = 0;
+  while (lead < group.members.size() && group.members[lead].leading) ++lead;
+
   std::vector<SubrecordGroupSpan> spans;
   const auto& subs = record.subrecords;
   std::size_t first = 0;
@@ -309,7 +312,7 @@ std::vector<SubrecordGroupSpan> group_spans(const Record& record, const schema::
       ++first;
       continue;
     }
-    if (*leader != 0) {
+    if (*leader > lead) {
       if (group.members[*leader].skippable) {
         ++first;
         continue;
@@ -317,12 +320,12 @@ std::vector<SubrecordGroupSpan> group_spans(const Record& record, const schema::
       throw refuse("has " + subs[first].signature.to_string() + " outside a leader run");
     }
     std::vector<std::size_t> counts(group.members.size());
-    counts[0] = 1;
-    std::size_t last = 0;
+    counts[*leader] = 1;
+    std::size_t last = *leader;
     std::size_t end = first + 1;
     for (; end < subs.size(); ++end) {
       const auto member = member_index(subs[end].signature);
-      if (!member || *member == 0) break;
+      if (!member || (counts[lead] != 0 && *member <= lead)) break;
       if (*member < last || (*member == last && !group.members[*member].repeatable)) {
         throw refuse("has " + subs[end].signature.to_string() + " out of order or repeated");
       }
