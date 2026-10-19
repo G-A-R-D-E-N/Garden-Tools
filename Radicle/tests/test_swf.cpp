@@ -523,7 +523,7 @@ TEST(SwfContainerTest, ReplacesTagPayloadByIndex) {
   EXPECT_EQ(std::vector<std::byte>(payload_bytes.begin(), payload_bytes.end()), abc);
 
   const auto written = fo4::swf::write_swf(result.file);
-  const auto reread = fo4::swf::read_swf(written);
+  auto reread = fo4::swf::read_swf(written);
   ASSERT_TRUE(reread.ok()) << fo4::swf::status_name(reread.status);
   ASSERT_EQ(reread.file.tags.size(), 9u);
   ASSERT_TRUE(reread.file.tags[index].abc.has_value());
