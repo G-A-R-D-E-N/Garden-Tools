@@ -632,4 +632,27 @@ TEST(PapyrusSourceTest, RejectsLongChainsPastTheDepthLimitWithoutRecursing) {
   for (int step = 0; step < 200; ++step) realistic += ".b";
   realistic += "\nEndFunction\n";
   EXPECT_TRUE(fo4::psc::parse(realistic).ok());
+
+  std::string boundary = "Scriptname B\nFunction F()\n  Int a = x";
+  for (int step = 0; step < 512; ++step) boundary += ".b";
+  boundary += "\nEndFunction\n";
+  EXPECT_TRUE(fo4::psc::parse(boundary).ok());
+
+  std::string over = "Scriptname B\nFunction F()\n  Int a = x";
+  for (int step = 0; step < 513; ++step) over += ".b";
+  over += "\nEndFunction\n";
+  const ParseResult overResult = fo4::psc::parse(over);
+  ASSERT_FALSE(overResult.ok());
+  EXPECT_EQ(overResult.error.kind, ParseErrorKind::DepthLimit);
+
+  std::string nested = "1";
+  for (int group = 0; group < 32; ++group) {
+    std::string chain = "1";
+    for (int step = 0; step < 20; ++step) chain += " + 1";
+    nested = "(" + nested + " + " + chain + ")";
+  }
+  const ParseResult nestedResult =
+      fo4::psc::parse("Scriptname B\nFunction F()\n  Int a = " + nested + "\nEndFunction\n");
+  ASSERT_FALSE(nestedResult.ok());
+  EXPECT_EQ(nestedResult.error.kind, ParseErrorKind::DepthLimit);
 }

@@ -98,12 +98,15 @@ AccessList operand_accesses(std::uint8_t op) {
     case PexOp::StructCreate:
       return make_accesses({{0, PexAccessKind::Write}});
     case PexOp::StructGet:
-      return make_accesses({{0, PexAccessKind::Read}});
+      return make_accesses({{0, PexAccessKind::Write}, {1, PexAccessKind::Read}});
     case PexOp::StructSet:
       return make_accesses({{0, PexAccessKind::Write}, {2, PexAccessKind::Read}});
     case PexOp::ArrayFindStruct:
     case PexOp::ArrayRFindStruct:
-      return make_accesses({{0, PexAccessKind::Read}, {1, PexAccessKind::Read}});
+      return make_accesses({{0, PexAccessKind::Read},
+                            {1, PexAccessKind::Write},
+                            {3, PexAccessKind::Read},
+                            {4, PexAccessKind::Read}});
     default:
       return AccessList{};
   }

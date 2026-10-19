@@ -1,5 +1,6 @@
 #include <fo4/papyrus_source/lexer.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -340,7 +341,7 @@ private:
       constexpr int kExponentCap = 10000;
       int exponent = 0;
       while (at < text.size() && is_digit(text[at])) {
-        if (exponent < kExponentCap) exponent = exponent * 10 + (text[at] - '0');
+        exponent = std::min(kExponentCap, exponent * 10 + (text[at] - '0'));
         ++at;
       }
       for (int step = 0; step < exponent; ++step) value = negative ? value / 10.0 : value * 10.0;

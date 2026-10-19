@@ -107,6 +107,7 @@ private:
   std::vector<Token> tokens_;
   std::size_t index_{0};
   std::size_t depth_{0};
+  std::size_t links_{0};
   std::string pendingDoc_;
   ParseError error_;
 };

@@ -37,9 +37,13 @@ constexpr std::uint8_t kCallMethod = 23;
 constexpr std::uint8_t kCallStatic = 25;
 constexpr std::uint8_t kReturn = 26;
 constexpr std::uint8_t kPropGet = 28;
+constexpr std::uint8_t kPropSet = 29;
 constexpr std::uint8_t kArrayLength = 31;
 constexpr std::uint8_t kArrayGetElement = 32;
 constexpr std::uint8_t kArrayFindElement = 34;
+constexpr std::uint8_t kStructGet = 38;
+constexpr std::uint8_t kArrayFindStruct = 40;
+constexpr std::uint8_t kArrayRemove = 45;
 constexpr std::uint8_t kIAdd = 1;
 
 PexValue identifier(std::string name) {
@@ -137,6 +141,9 @@ TEST(PexAnalysis, CfgSplitsStraightLineAndIfDiamond) {
   EXPECT_TRUE(cfg.loops.empty());
   EXPECT_TRUE(cfg.unreachableBlocks.empty());
   for (std::size_t b = 0; b < cfg.exitBlock; ++b) EXPECT_TRUE(cfg.blocks[b].reachable);
+  EXPECT_EQ(cfg.blocks[cfg.exitBlock].first, 6u);
+  EXPECT_EQ(cfg.blocks[cfg.exitBlock].count, 0u);
+  EXPECT_FALSE(cfg.blocks[cfg.exitBlock].reachable);
 }
 
 TEST(PexAnalysis, CfgFindsWhileLoopBackEdge) {
@@ -402,6 +409,11 @@ TEST(PexAnalysis, CallGraphMarksArrayAndPropertyResultOperandsAsWrites) {
       step(kArrayFindElement, {identifier("Items"), identifier("Slot"), identifier("Found"),
                                integer(0)}),
       step(kPropGet, {identifier("Total"), identifier("self"), identifier("Count")}),
+      step(kPropSet, {identifier("Total"), identifier("Items"), identifier("Count")}),
+      step(kArrayRemove, {identifier("Items"), identifier("Count"), identifier("Slot")}),
+      step(kStructGet, {identifier("Found"), identifier("Items"), text("Count")}),
+      step(kArrayFindStruct, {identifier("Items"), identifier("Slot"), text("Count"),
+                              identifier("Found"), integer(0)}),
       step(kReturn, {none()}),
   })})});
   for (const char* name : {"Count", "Items", "Found", "Slot"}) {
@@ -423,7 +435,7 @@ TEST(PexAnalysis, CallGraphMarksArrayAndPropertyResultOperandsAsWrites) {
   const auto graph = fo4::pex_analysis::build_call_graph(files);
   ASSERT_EQ(graph.scripts.size(), 1u);
   const auto& accesses = graph.scripts[0].accesses;
-  ASSERT_EQ(accesses.size(), 10u);
+  ASSERT_EQ(accesses.size(), 21u);
   EXPECT_EQ(accesses[0].name, "Count");
   EXPECT_EQ(accesses[0].kind, PexAccessKind::Write);
   EXPECT_EQ(accesses[2].name, "Found");
@@ -433,6 +445,24 @@ TEST(PexAnalysis, CallGraphMarksArrayAndPropertyResultOperandsAsWrites) {
   EXPECT_EQ(accesses[9].name, "Count");
   EXPECT_EQ(accesses[9].kind, PexAccessKind::Write);
   EXPECT_EQ(accesses[9].instructionIndex, 3u);
+  EXPECT_EQ(accesses[11].name, "Items");
+  EXPECT_EQ(accesses[11].kind, PexAccessKind::Read);
+  EXPECT_EQ(accesses[11].instructionIndex, 4u);
+  EXPECT_EQ(accesses[12].name, "Count");
+  EXPECT_EQ(accesses[12].kind, PexAccessKind::Read);
+  EXPECT_EQ(accesses[15].name, "Slot");
+  EXPECT_EQ(accesses[15].kind, PexAccessKind::Read);
+  EXPECT_EQ(accesses[15].instructionIndex, 5u);
+  EXPECT_EQ(accesses[16].name, "Found");
+  EXPECT_EQ(accesses[16].kind, PexAccessKind::Write);
+  EXPECT_EQ(accesses[16].instructionIndex, 6u);
+  EXPECT_EQ(accesses[17].name, "Items");
+  EXPECT_EQ(accesses[17].kind, PexAccessKind::Read);
+  EXPECT_EQ(accesses[19].name, "Slot");
+  EXPECT_EQ(accesses[19].kind, PexAccessKind::Write);
+  EXPECT_EQ(accesses[19].instructionIndex, 7u);
+  EXPECT_EQ(accesses[20].name, "Found");
+  EXPECT_EQ(accesses[20].kind, PexAccessKind::Read);
 }
 
 TEST(PexAnalysis, SummaryReportsEventsTransitionsAndProperties) {
