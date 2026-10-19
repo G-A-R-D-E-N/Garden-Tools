@@ -450,6 +450,8 @@ TEST(ObjectBaseRecordsSynthetic, MultiStageDestructibleFollowsTheAuthoringOrderP
   const auto violation = fo4::test::authoring_order_violation(*bad, rules);
   ASSERT_TRUE(violation.has_value());
   EXPECT_EQ(violation->subrecord, fo4::Signature::from_string("DSTA"));
+}
+
 TEST(ObjectBaseRecordsSynthetic, ModelRowsDecodeTheirValueAndFlags) {
   const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto door_signature = fo4::Signature::from_string("DOOR");
