@@ -24,7 +24,9 @@ void append_fragment(test::ByteWriter& tail, std::uint16_t stage, std::uint16_t 
   fixture::name(tail, function);
 }
 
-std::vector<std::byte> fragment_tail(bool duplicate_stage = false) {
+enum class FragmentTail { distinct, duplicate_stage, duplicate_pair };
+
+std::vector<std::byte> fragment_tail(FragmentTail kind = FragmentTail::distinct) {
   test::ByteWriter tail;
   tail.u8(3);
   tail.u16(2);
@@ -32,7 +34,8 @@ std::vector<std::byte> fragment_tail(bool duplicate_stage = false) {
   tail.u8(0);
   tail.u16(0);
   append_fragment(tail, 10, 0, 0, 0, "Fragment_10");
-  append_fragment(tail, duplicate_stage ? 10 : 20, 0xFFFF, 5, 1, "Fragment_20");
+  append_fragment(tail, kind == FragmentTail::distinct ? 20 : 10, 0xFFFF,
+                  kind == FragmentTail::duplicate_pair ? 0 : 5, 1, "Fragment_20");
   tail.u16(0);
   return tail.bytes;
 }
@@ -220,7 +223,9 @@ TEST(VmadQuestFragments, EditsRefuseForeignRecordsAndBadPayloads) {
   EXPECT_EQ(write_plugin(damaged), damaged_before);
 
   auto twice =
-      read_plugin(fixture::plugin_bytes(quest_bytes(fragment_tail(true)), "QUST"), "Vmad.esp");
+      read_plugin(fixture::plugin_bytes(quest_bytes(fragment_tail(FragmentTail::duplicate_stage)),
+                                        "QUST"),
+                  "Vmad.esp");
   const auto twice_before = write_plugin(twice);
   ASSERT_EQ(extras_of(fixture::subrecord(twice).data).fragments.size(), 2u);
   EXPECT_THROW(set_quest_vmad_fragment(twice, fixture::key(), 10, "QF_Test", "Fragment_Ten"),
@@ -298,7 +303,9 @@ TEST(VmadQuestFragments, AddedBindingLandsInStageOrderAndRemovalRestoresThePaylo
   EXPECT_EQ(fixture::subrecord(plugin).data, before);
 
   auto repeated =
-      read_plugin(fixture::plugin_bytes(quest_bytes(fragment_tail(true)), "QUST"), "Vmad.esp");
+      read_plugin(fixture::plugin_bytes(quest_bytes(fragment_tail(FragmentTail::duplicate_stage)),
+                                        "QUST"),
+                  "Vmad.esp");
   const auto repeated_base = extras_base(fixture::subrecord(repeated).data);
   EXPECT_EQ(add_quest_vmad_fragment(repeated, fixture::key(), 10, 9, "QF_Test", "Fragment_10b"),
             VmadStructureMutationStatus::updated);
@@ -370,7 +377,7 @@ TEST(VmadQuestFragments, AddedBindingRefusesBoundStagesAndMissingFragmentSection
 }
 
 TEST(VmadQuestFragments, StageBoundTwiceIsAddressedByStageIndex) {
-  const auto tail = fragment_tail(true);
+  const auto tail = fragment_tail(FragmentTail::duplicate_stage);
   auto plugin = read_plugin(fixture::plugin_bytes(quest_bytes(tail), "QUST"), "Vmad.esp");
   const auto before = fixture::subrecord(plugin).data;
   const auto initial = extras_of(before);
@@ -402,8 +409,12 @@ TEST(VmadQuestFragments, StageBoundTwiceIsAddressedByStageIndex) {
   expect_fragment(edited.fragments[0], 10, 0, 0, 0, "Fragment_10");
   EXPECT_EQ(edited.fragments[0].offset, initial.fragments[0].offset);
   EXPECT_EQ(edited.fragments[0].end, initial.fragments[0].end);
-  expect_fragment(edited.fragments[1], 10, 0xFFFF, 5, 1, "Fragment_Stage_0010");
+  EXPECT_EQ(edited.fragments[1].stage, 10u);
+  EXPECT_EQ(edited.fragments[1].unknown, 0xFFFF);
+  EXPECT_EQ(edited.fragments[1].stage_index, 5);
+  EXPECT_EQ(edited.fragments[1].unknown_byte, 1);
   EXPECT_EQ(edited.fragments[1].script, "QF_Other");
+  EXPECT_EQ(edited.fragments[1].function, "Fragment_Stage_0010");
   const auto saved_base = extras_base(saved);
   EXPECT_EQ(slice(saved, 0, saved_base + edited.fragments[1].offset),
             slice(before, 0, base + initial.fragments[1].offset));
@@ -445,4 +456,25 @@ TEST(VmadQuestFragments, StageBoundTwiceIsAddressedByStageIndex) {
             VmadStructureMutationStatus::binding_missing);
   EXPECT_EQ(set_quest_vmad_fragment(plugin, fixture::key(), 10, 0, "QF_Test", "Fragment_10"),
             VmadStructureMutationStatus::binding_missing);
+}
+
+TEST(VmadQuestFragments, DuplicateStageIndexIsRefused) {
+  const auto tail = fragment_tail(FragmentTail::duplicate_pair);
+  auto plugin = read_plugin(fixture::plugin_bytes(quest_bytes(tail), "QUST"), "Vmad.esp");
+  const auto before = fixture::subrecord(plugin).data;
+  const auto initial = extras_of(before);
+  ASSERT_EQ(initial.fragments.size(), 2u);
+  expect_fragment(initial.fragments[0], 10, 0, 0, 0, "Fragment_10");
+  expect_fragment(initial.fragments[1], 10, 0xFFFF, 0, 1, "Fragment_20");
+
+  const auto before_bytes = write_plugin(plugin);
+  EXPECT_THROW(set_quest_vmad_fragment(plugin, fixture::key(), 10, 0, "QF_Other", "Fragment_Ten"),
+               schema::ScalarError);
+  try {
+    (void)remove_quest_vmad_fragment(plugin, fixture::key(), 10, 0);
+    ADD_FAILURE() << "a stage index bound twice was not refused by the pair form";
+  } catch (const schema::ScalarError& error) {
+    EXPECT_NE(std::string(error.what()).find("stage index twice"), std::string::npos);
+  }
+  EXPECT_EQ(write_plugin(plugin), before_bytes);
 }
