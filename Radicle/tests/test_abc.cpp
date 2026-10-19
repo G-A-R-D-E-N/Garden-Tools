@@ -431,6 +431,35 @@ TEST(Abc, ReadsProtectedNamespaceAndAlwaysPresentInterfaceCount) {
   EXPECT_EQ(instance.traits[0].kind, fo4::abc::AbcTraitKind::Slot);
 }
 
+TEST(Abc, RejectsEveryStructuralIndexPastItsPool) {
+  const std::pair<AbcBadIndex, const char*> cases[] = {
+      {AbcBadIndex::InstanceName, "instance name"},
+      {AbcBadIndex::InstanceSuper, "instance super"},
+      {AbcBadIndex::InstanceInterface, "instance interface"},
+      {AbcBadIndex::InstanceIinit, "instance iinit"},
+      {AbcBadIndex::InstanceProtectedNs, "instance protected namespace"},
+      {AbcBadIndex::ClassInit, "class cinit"},
+      {AbcBadIndex::TraitName, "trait name"},
+      {AbcBadIndex::TraitTypeName, "trait type name"},
+      {AbcBadIndex::TraitMethodIndex, "trait method index"},
+      {AbcBadIndex::TraitClassIndex, "trait class index"},
+      {AbcBadIndex::TraitFunctionIndex, "trait function index"},
+      {AbcBadIndex::MethodReturnType, "method return type"},
+      {AbcBadIndex::MethodParamType, "method parameter type"},
+      {AbcBadIndex::ExceptionType, "exception type"},
+      {AbcBadIndex::ExceptionVarName, "exception variable name"},
+      {AbcBadIndex::ScriptInit, "script init"},
+      {AbcBadIndex::BodyMethod, "body method"},
+  };
+  AbcFile file;
+  ASSERT_EQ(AbcFile::parse(build_abc(), file), AbcStatus::Ok);
+  for (const auto& [bad, field] : cases) {
+    SCOPED_TRACE(field);
+    EXPECT_EQ(AbcFile::parse(build_abc(tiny_constructor_code(), tiny_listener_code(), bad), file),
+              AbcStatus::IndexOutOfRange);
+  }
+}
+
 TEST(AbcCorpus, EveryExtractedAbcParsesDisassemblesAndSummarizes) {
   const char* root = std::getenv("FO4_ABC_CORPUS");
   if (root == nullptr) {

@@ -37,6 +37,33 @@ inline constexpr std::uint32_t kMultinameTypeName = 11;
 inline constexpr std::uint32_t kMultinameInner = 12;
 inline constexpr std::uint32_t kMultinameHelper = 13;
 
+enum class AbcBadIndex {
+  None = 0,
+  InstanceName,
+  InstanceSuper,
+  InstanceInterface,
+  InstanceIinit,
+  InstanceProtectedNs,
+  ClassInit,
+  TraitName,
+  TraitTypeName,
+  TraitMethodIndex,
+  TraitClassIndex,
+  TraitFunctionIndex,
+  MethodReturnType,
+  MethodParamType,
+  ExceptionType,
+  ExceptionVarName,
+  ScriptInit,
+  BodyMethod,
+};
+
+inline constexpr std::uint32_t kBadIndex = 99;
+
+inline std::uint32_t bad_or(AbcBadIndex bad, AbcBadIndex field, std::uint32_t valid) {
+  return bad == field ? kBadIndex : valid;
+}
+
 inline void put_u8(std::vector<std::uint8_t>& out, std::uint32_t value) {
   out.push_back(static_cast<std::uint8_t>(value & 0xFFu));
 }
@@ -169,17 +196,19 @@ inline void put_constant_pool(std::vector<std::uint8_t>& out) {
   put_u30(out, kStringHelper);
 }
 
-inline void put_method(std::vector<std::uint8_t>& out, std::uint32_t name) {
+inline void put_method(std::vector<std::uint8_t>& out, std::uint32_t name,
+                       AbcBadIndex bad = AbcBadIndex::None) {
   put_u30(out, 0);
-  put_u30(out, kMultinameVoid);
+  put_u30(out, bad_or(bad, AbcBadIndex::MethodReturnType, kMultinameVoid));
   put_u30(out, name);
   put_u8(out, 0);
 }
 
-inline void put_method_with_options(std::vector<std::uint8_t>& out, std::uint32_t name) {
+inline void put_method_with_options(std::vector<std::uint8_t>& out, std::uint32_t name,
+                                    AbcBadIndex bad = AbcBadIndex::None) {
   put_u30(out, 1);
   put_u30(out, kMultinameVoid);
-  put_u30(out, kMultinameVoid);
+  put_u30(out, bad_or(bad, AbcBadIndex::MethodParamType, kMultinameVoid));
   put_u30(out, name);
   put_u8(out, 0x88);
   put_u30(out, 1);
@@ -188,18 +217,19 @@ inline void put_method_with_options(std::vector<std::uint8_t>& out, std::uint32_
   put_u30(out, kStringClick);
 }
 
-inline void put_instance_traits(std::vector<std::uint8_t>& out) {
+inline void put_instance_traits(std::vector<std::uint8_t>& out,
+                                AbcBadIndex bad = AbcBadIndex::None) {
   put_u30(out, 5);
-  put_u30(out, kMultinameOnClick);
+  put_u30(out, bad_or(bad, AbcBadIndex::TraitName, kMultinameOnClick));
   put_u8(out, 0x41);
   put_u30(out, 0);
-  put_u30(out, 1);
+  put_u30(out, bad_or(bad, AbcBadIndex::TraitMethodIndex, 1));
   put_u30(out, 1);
   put_u30(out, 0);
   put_u30(out, kMultinameCounter);
   put_u8(out, 0x40);
   put_u30(out, 1);
-  put_u30(out, kMultinameVoid);
+  put_u30(out, bad_or(bad, AbcBadIndex::TraitTypeName, kMultinameVoid));
   put_u30(out, 0);
   put_u30(out, 1);
   put_u30(out, 0);
@@ -212,17 +242,18 @@ inline void put_instance_traits(std::vector<std::uint8_t>& out) {
   put_u30(out, kMultinameInner);
   put_u8(out, 0x04);
   put_u30(out, 0);
-  put_u30(out, 0);
+  put_u30(out, bad_or(bad, AbcBadIndex::TraitClassIndex, 0));
   put_u30(out, kMultinameHelper);
   put_u8(out, 0x45);
   put_u30(out, 3);
-  put_u30(out, 2);
+  put_u30(out, bad_or(bad, AbcBadIndex::TraitFunctionIndex, 2));
   put_u30(out, 1);
   put_u30(out, 0);
 }
 
 inline void put_body(std::vector<std::uint8_t>& out, std::uint32_t method,
-              const std::vector<std::uint8_t>& code, bool with_exception) {
+              const std::vector<std::uint8_t>& code, bool with_exception,
+              AbcBadIndex bad = AbcBadIndex::None) {
   put_u30(out, method);
   put_u30(out, 4);
   put_u30(out, 1);
@@ -235,21 +266,22 @@ inline void put_body(std::vector<std::uint8_t>& out, std::uint32_t method,
     put_u30(out, 0);
     put_u30(out, static_cast<std::uint32_t>(code.size()));
     put_u30(out, 0);
-    put_u30(out, kMultinameTest);
-    put_u30(out, kStringHelper);
+    put_u30(out, bad_or(bad, AbcBadIndex::ExceptionType, kMultinameTest));
+    put_u30(out, bad_or(bad, AbcBadIndex::ExceptionVarName, kStringHelper));
   }
   put_u30(out, 0);
 }
 
 inline std::vector<std::uint8_t> build_abc(const std::vector<std::uint8_t>& constructor_code,
-                                    const std::vector<std::uint8_t>& listener_code) {
+                                    const std::vector<std::uint8_t>& listener_code,
+                                    AbcBadIndex bad = AbcBadIndex::None) {
   std::vector<std::uint8_t> out;
   put_u16(out, fo4::abc::kAbcMinorVersion);
   put_u16(out, fo4::abc::kAbcMajorVersion);
   put_constant_pool(out);
   put_u30(out, 3);
-  put_method(out, kStringTest);
-  put_method_with_options(out, kStringOnClick);
+  put_method(out, kStringTest, bad);
+  put_method_with_options(out, kStringOnClick, bad);
   put_method(out, kStringHelper);
   put_u30(out, 1);
   put_u30(out, kStringFoo);
@@ -257,20 +289,28 @@ inline std::vector<std::uint8_t> build_abc(const std::vector<std::uint8_t>& cons
   put_u30(out, kStringExternalInterface);
   put_u30(out, kStringCall);
   put_u30(out, 1);
-  put_u30(out, kMultinameTest);
-  put_u30(out, kMultinameObject);
-  put_u8(out, 0x05);
+  put_u30(out, bad_or(bad, AbcBadIndex::InstanceName, kMultinameTest));
+  put_u30(out, bad_or(bad, AbcBadIndex::InstanceSuper, kMultinameObject));
+  const bool bad_protected_ns = bad == AbcBadIndex::InstanceProtectedNs;
+  put_u8(out, bad_protected_ns ? 0x0D : 0x05);
+  if (bad_protected_ns) {
+    put_u30(out, kBadIndex);
+  }
   put_u30(out, 1);
-  put_u30(out, kMultinameClick);
+  put_u30(out, bad_or(bad, AbcBadIndex::InstanceInterface, kMultinameClick));
+  put_u30(out, bad_or(bad, AbcBadIndex::InstanceIinit, 0));
+  put_instance_traits(out, bad);
+  put_u30(out, bad_or(bad, AbcBadIndex::ClassInit, 0));
   put_u30(out, 0);
-  put_instance_traits(out);
-  put_u30(out, 0);
-  put_u30(out, 0);
-  put_u30(out, 0);
+  put_u30(out, bad == AbcBadIndex::ScriptInit ? 1 : 0);
+  if (bad == AbcBadIndex::ScriptInit) {
+    put_u30(out, kBadIndex);
+    put_u30(out, 0);
+  }
   put_u30(out, 3);
-  put_body(out, 0, constructor_code, false);
-  put_body(out, 1, listener_code, false);
-  put_body(out, 2, tiny_helper_code(), true);
+  put_body(out, bad_or(bad, AbcBadIndex::BodyMethod, 0), constructor_code, false, bad);
+  put_body(out, 1, listener_code, false, bad);
+  put_body(out, 2, tiny_helper_code(), true, bad);
   return out;
 }
 
@@ -298,7 +338,11 @@ inline std::vector<std::uint8_t> minimal_instance_file(std::uint8_t trait_tag,
   put_u30(out, 0);
   put_u30(out, 1);
   put_u30(out, 1);
+  put_u30(out, 1);
   put_u30(out, 0);
+  put_u30(out, 0);
+  put_u30(out, 0);
+  put_u8(out, 0);
   put_u30(out, 1);
   put_u30(out, 0);
   put_u30(out, 0);

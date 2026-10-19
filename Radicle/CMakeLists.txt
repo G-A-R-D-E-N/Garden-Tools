@@ -244,6 +244,7 @@ add_library(fo4
   src/pex_analysis/summary.cpp
   src/pex_analysis/fragments.cpp
   src/abc/abc_file.cpp
+  src/abc/byte_reader.cpp
   src/abc/constant_pool.cpp
   src/abc/opcodes.cpp
   src/abc/disassembly.cpp
