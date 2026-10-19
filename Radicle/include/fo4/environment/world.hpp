@@ -5,7 +5,7 @@
 #include <array>
 #include <cstdint>
 #include <optional>
-#include <string>
+#include <string_view>
 #include <vector>
 
 namespace fo4::env {
@@ -102,7 +102,7 @@ struct CellData {
   std::optional<ExteriorLod> exterior_lod;
   std::optional<std::uint32_t> water_current_count;
   std::vector<WaterCurrent> water_currents;
-  std::optional<std::string> water_environment_map;
+  std::optional<std::string_view> water_environment_map;
 };
 
 struct LightingTemplateData {

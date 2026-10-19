@@ -57,7 +57,7 @@ Bytes make_plugin(std::initializer_list<std::uint32_t> counts,
 }
 
 Bytes make_plugin(std::initializer_list<std::uint32_t> counts) {
-  return make_plugin(counts, {0x815, 0x814, 0x812, 0x813, 0x811});
+  return make_plugin(counts, {0x01000815, 0x01000814, 0x01000812, 0x01000813, 0x01000811});
 }
 
 fo4::schema::FormLinkListDescriptor list(std::string_view path) {
@@ -237,7 +237,7 @@ TEST(FstsRows, CategoryInsertRewritesItsCountAndShiftsOnlyItsBytes) {
   EXPECT_EQ(subrecord_bytes(plugin, record, fo4::Signature::from_string("XCNT")),
             words({2, 2, 0, 1, 1}));
   EXPECT_EQ(subrecord_bytes(plugin, record, fo4::Signature::from_string("DATA")),
-            words({0x815, 0x814, 0x812, 0x813, 0x815, 0x811}));
+            words({0x01000815, 0x01000814, 0x01000812, 0x01000813, 0x01000815, 0x01000811}));
   EXPECT_EQ(list_values(plugin, record, walking),
             (std::vector<fo4::FormKey>{step, fo4::FormKey::parse("000811:Patch.esp")}));
   EXPECT_EQ(list_size(plugin, record, running), std::size_t{2});
@@ -245,7 +245,7 @@ TEST(FstsRows, CategoryInsertRewritesItsCountAndShiftsOnlyItsBytes) {
 
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   EXPECT_EQ(subrecord_bytes(reread, record, fo4::Signature::from_string("DATA")),
-            words({0x815, 0x814, 0x812, 0x813, 0x815, 0x811}));
+            words({0x01000815, 0x01000814, 0x01000812, 0x01000813, 0x01000815, 0x01000811}));
   EXPECT_EQ(list_size(reread, record, walking), std::size_t{2});
 }
 
@@ -260,7 +260,7 @@ TEST(FstsRows, CategoryRemoveAndClearRewriteOnlyTheirOwnCount) {
   EXPECT_EQ(subrecord_bytes(plugin, record, fo4::Signature::from_string("XCNT")),
             words({0, 2, 0, 1, 1}));
   EXPECT_EQ(subrecord_bytes(plugin, record, fo4::Signature::from_string("DATA")),
-            words({0x815, 0x814, 0x812, 0x813}));
+            words({0x01000815, 0x01000814, 0x01000812, 0x01000813}));
   EXPECT_EQ(list_size(plugin, record, walking), std::size_t{0});
   EXPECT_EQ(fo4::schema::remove_record_formlink_list_element(plugin, record, walking, 0),
             fo4::schema::FormLinkListMutationStatus::index_out_of_range);
@@ -271,7 +271,7 @@ TEST(FstsRows, CategoryRemoveAndClearRewriteOnlyTheirOwnCount) {
             words({0, 2, 0, 1, 1}));
 
   const auto swimming = list("FSTS\\SwimmingFootsteps");
-  auto emptied = fo4::read_plugin(make_plugin({0, 0, 0, 0, 1}, {0x811}), "Patch.esp");
+  auto emptied = fo4::read_plugin(make_plugin({0, 0, 0, 0, 1}, {0x01000811}), "Patch.esp");
   EXPECT_EQ(fo4::schema::clear_record_formlink_list(emptied, record, swimming),
             fo4::schema::FormLinkListMutationStatus::updated);
   EXPECT_EQ(subrecord_bytes(emptied, record, fo4::Signature::from_string("XCNT")),
@@ -281,7 +281,7 @@ TEST(FstsRows, CategoryRemoveAndClearRewriteOnlyTheirOwnCount) {
 }
 
 TEST(FstsRows, CategoryListsRefuseACounterThatDoesNotMatchTheBody) {
-  auto plugin = fo4::read_plugin(make_plugin({1, 2, 0, 1, 1}, {0x815, 0x814, 0x812, 0x813}),
+  auto plugin = fo4::read_plugin(make_plugin({1, 2, 0, 1, 1}, {0x01000815, 0x01000814, 0x01000812, 0x01000813}),
                                  "Patch.esp");
   const auto record = fo4::FormKey::parse(k_key);
   const auto walking = list("FSTS\\WalkingFootsteps");
@@ -298,7 +298,7 @@ TEST(FstsRows, CategoryListsRefuseACounterThatDoesNotMatchTheBody) {
   EXPECT_EQ(subrecord_bytes(plugin, record, fo4::Signature::from_string("XCNT")),
             words({1, 2, 0, 1, 1}));
   EXPECT_EQ(subrecord_bytes(plugin, record, fo4::Signature::from_string("DATA")),
-            words({0x815, 0x814, 0x812, 0x813}));
+            words({0x01000815, 0x01000814, 0x01000812, 0x01000813}));
 
   auto short_counter = fo4::read_plugin(make_plugin({1, 2, 0}), "Patch.esp");
   EXPECT_THROW(fo4::schema::record_formlink_list_size(short_counter, record, walking),
@@ -308,5 +308,5 @@ TEST(FstsRows, CategoryListsRefuseACounterThatDoesNotMatchTheBody) {
   EXPECT_EQ(subrecord_bytes(short_counter, record, fo4::Signature::from_string("XCNT")),
             words({1, 2, 0}));
   EXPECT_EQ(subrecord_bytes(short_counter, record, fo4::Signature::from_string("DATA")),
-            words({0x815, 0x814, 0x812, 0x813, 0x811}));
+            words({0x01000815, 0x01000814, 0x01000812, 0x01000813, 0x01000811}));
 }

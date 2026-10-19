@@ -109,12 +109,12 @@ std::vector<FormKey> link_list(const Reader& reader, Signature signature) {
   return links;
 }
 
-std::optional<std::string> stored_string(const Reader& reader, Signature signature) {
+std::optional<std::string_view> stored_string(const Reader& reader, Signature signature) {
   const auto* subrecord = reader.unique(signature);
   if (subrecord == nullptr) return std::nullopt;
   const auto value = zstring_view(*subrecord);
   if (!value) reader.fail(signature, "is not a single NUL-terminated string");
-  return std::string{*value};
+  return *value;
 }
 
 void decode_cell_extras(const Reader& reader, CellData& data) {

@@ -30,27 +30,33 @@ Status Interpreter::execute(const pex::PexInstruction& instruction, Frame& frame
         return Status::UnknownOpcode;
     }
     const pex::PexFile::OpMeta& meta = pex::PexFile::kOpCodes[instruction.opCode];
+    if (!instruction.mnemonic.empty() && instruction.mnemonic != meta.name) {
+        return Status::UnknownOpcode;
+    }
     if (instruction.args.size() < static_cast<std::size_t>(meta.args)) {
         return Status::StackUnderflow;
     }
-    const char* op = instruction.mnemonic.empty() ? meta.name : instruction.mnemonic.c_str();
+    const char* op = meta.name;
 
     auto jumpTo = [&frame, &next](std::int32_t offset) -> Status {
         const std::int64_t target =
             static_cast<std::int64_t>(frame.ip) + static_cast<std::int64_t>(offset);
-        if (target < 0 || target >= static_cast<std::int64_t>(frame.function->instructions.size())) {
+        if (target < 0 || target > static_cast<std::int64_t>(frame.function->instructions.size())) {
             return Status::BadJumpTarget;
         }
         next = static_cast<std::size_t>(target);
         return Status::Ok;
     };
 
-    auto findProperty = [this](const pex::PexObject* start,
-                               const std::string& name) -> const pex::PexProperty* {
+    auto findProperty = [this](const pex::PexObject* start, const std::string& name,
+                               const pex::PexObject*& owner) -> const pex::PexProperty* {
         const pex::PexObject* current = start;
         for (int hop = 0; current != nullptr && hop < kMaxInheritanceHops; ++hop) {
             for (const pex::PexProperty& property : current->properties) {
-                if (sameName(property.name, name)) return &property;
+                if (sameName(property.name, name)) {
+                    owner = current;
+                    return &property;
+                }
             }
             if (current->parentClassName.empty()) return nullptr;
             current = host_.findObject(current->parentClassName);
@@ -143,7 +149,8 @@ Status Interpreter::execute(const pex::PexInstruction& instruction, Frame& frame
             return Status::NullObject;
         }
         const pex::PexObject* script = host_.findObject(receiver.object->type);
-        const pex::PexProperty* property = findProperty(script, instruction.args[0].str);
+        const pex::PexObject* owner = nullptr;
+        const pex::PexProperty* property = findProperty(script, instruction.args[0].str, owner);
 
         Value operand;
         if (!isGetter) {
@@ -163,14 +170,15 @@ Status Interpreter::execute(const pex::PexInstruction& instruction, Frame& frame
                 return Status::Ok;
             }
         }
-        if (property != nullptr && script != nullptr) {
-            if (isGetter && property->readHandler.has_value()) {
-                return invoke(frame, receiver, script, receiver.object->state, script->name,
-                              property->readHandler->name, instruction.args[2], {});
+        if (property != nullptr) {
+            if (isGetter && property->readHandler.has_value() && !property->readHandler->isNative) {
+                return pushFrame(owner, *property->readHandler, receiver.object->state, receiver,
+                                 instruction.args[2], {});
             }
-            if (!isGetter && property->writeHandler.has_value()) {
-                return invoke(frame, receiver, script, receiver.object->state, script->name,
-                              property->writeHandler->name, pex::PexValue{}, {operand});
+            if (!isGetter && property->writeHandler.has_value() &&
+                !property->writeHandler->isNative) {
+                return pushFrame(owner, *property->writeHandler, receiver.object->state, receiver,
+                                 pex::PexValue{}, {operand});
             }
         }
 
@@ -369,6 +377,9 @@ Status Interpreter::execute(const pex::PexInstruction& instruction, Frame& frame
         if (!castScalar(left, ValueType::String, leftText) ||
             !castScalar(right, ValueType::String, rightText)) {
             return Status::TypeMismatch;
+        }
+        if (leftText.str.size() + rightText.str.size() > limits_.maxStringLength) {
+            return Status::StringTooLong;
         }
         return storeResult(frame, instruction.args[0],
                            stringValue(leftText.str + rightText.str));

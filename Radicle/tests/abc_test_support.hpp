@@ -1,0 +1,344 @@
+#pragma once
+
+#include "fo4/abc/abc.hpp"
+
+#include <cstdint>
+#include <string>
+#include <vector>
+
+namespace fo4::test {
+
+inline constexpr std::uint32_t kStringFoo = 1;
+inline constexpr std::uint32_t kStringExternalInterface = 2;
+inline constexpr std::uint32_t kStringCall = 3;
+inline constexpr std::uint32_t kStringTest = 4;
+inline constexpr std::uint32_t kStringObject = 5;
+inline constexpr std::uint32_t kStringFlashExternal = 6;
+inline constexpr std::uint32_t kStringClick = 7;
+inline constexpr std::uint32_t kStringAddEventListener = 8;
+inline constexpr std::uint32_t kStringHandler = 9;
+inline constexpr std::uint32_t kStringVoid = 10;
+inline constexpr std::uint32_t kStringOnClick = 11;
+inline constexpr std::uint32_t kStringCounter = 12;
+inline constexpr std::uint32_t kStringInner = 13;
+inline constexpr std::uint32_t kStringHelper = 14;
+
+inline constexpr std::uint32_t kMultinameExternalInterface = 1;
+inline constexpr std::uint32_t kMultinameCall = 2;
+inline constexpr std::uint32_t kMultinameTest = 3;
+inline constexpr std::uint32_t kMultinameObject = 4;
+inline constexpr std::uint32_t kMultinameClick = 5;
+inline constexpr std::uint32_t kMultinameAddEventListener = 6;
+inline constexpr std::uint32_t kMultinameHandler = 7;
+inline constexpr std::uint32_t kMultinameVoid = 8;
+inline constexpr std::uint32_t kMultinameOnClick = 9;
+inline constexpr std::uint32_t kMultinameCounter = 10;
+inline constexpr std::uint32_t kMultinameTypeName = 11;
+inline constexpr std::uint32_t kMultinameInner = 12;
+inline constexpr std::uint32_t kMultinameHelper = 13;
+
+inline void put_u8(std::vector<std::uint8_t>& out, std::uint32_t value) {
+  out.push_back(static_cast<std::uint8_t>(value & 0xFFu));
+}
+
+inline void put_u16(std::vector<std::uint8_t>& out, std::uint32_t value) {
+  put_u8(out, value & 0xFFu);
+  put_u8(out, (value >> 8) & 0xFFu);
+}
+
+inline void put_u32(std::vector<std::uint8_t>& out, std::uint32_t value) {
+  std::uint32_t remaining = value;
+  while (remaining >= 0x80u) {
+    out.push_back(static_cast<std::uint8_t>((remaining & 0x7Fu) | 0x80u));
+    remaining >>= 7;
+  }
+  out.push_back(static_cast<std::uint8_t>(remaining));
+}
+
+inline void put_u30(std::vector<std::uint8_t>& out, std::uint32_t value) {
+  put_u32(out, value & 0x3FFFFFFFu);
+}
+
+inline void put_s24(std::vector<std::uint8_t>& out, std::int32_t value) {
+  const std::uint32_t raw = static_cast<std::uint32_t>(value) & 0xFFFFFFu;
+  put_u8(out, raw & 0xFFu);
+  put_u8(out, (raw >> 8) & 0xFFu);
+  put_u8(out, (raw >> 16) & 0xFFu);
+}
+
+inline void put_string(std::vector<std::uint8_t>& out, const std::string& value) {
+  put_u30(out, static_cast<std::uint32_t>(value.size()));
+  for (const char ch : value) {
+    out.push_back(static_cast<std::uint8_t>(ch));
+  }
+}
+
+inline std::vector<std::uint8_t> tiny_constructor_code() {
+  std::vector<std::uint8_t> code;
+  put_u8(code, 0x60);
+  put_u30(code, kMultinameExternalInterface);
+  put_u8(code, 0x2C);
+  put_u30(code, kStringFoo);
+  put_u8(code, 0x4F);
+  put_u30(code, kMultinameCall);
+  put_u30(code, 1);
+  put_u8(code, 0x47);
+  return code;
+}
+
+inline std::vector<std::uint8_t> tiny_listener_code() {
+  std::vector<std::uint8_t> code;
+  put_u8(code, 0x60);
+  put_u30(code, kMultinameAddEventListener);
+  put_u8(code, 0x2C);
+  put_u30(code, kStringClick);
+  put_u8(code, 0x60);
+  put_u30(code, kMultinameHandler);
+  put_u8(code, 0x4F);
+  put_u30(code, kMultinameAddEventListener);
+  put_u30(code, 2);
+  put_u8(code, 0x47);
+  return code;
+}
+
+inline std::vector<std::uint8_t> tiny_helper_code() {
+  std::vector<std::uint8_t> code;
+  put_u8(code, 0x47);
+  return code;
+}
+
+inline void put_constant_pool(std::vector<std::uint8_t>& out) {
+  const std::vector<std::string> strings{
+      "Foo",   "ExternalInterface", "call",   "Test",   "Object",
+      "flash.external", "click", "addEventListener", "handler", "void",
+      "onClick", "counter", "Inner", "helper"};
+  put_u30(out, 2);
+  put_u30(out, 7);
+  put_u30(out, 1);
+  put_u30(out, 1);
+  put_u30(out, static_cast<std::uint32_t>(strings.size()) + 1);
+  for (const std::string& value : strings) {
+    put_string(out, value);
+  }
+  put_u30(out, 3);
+  put_u8(out, 0x16);
+  put_u30(out, kStringFlashExternal);
+  put_u8(out, 0x16);
+  put_u30(out, 0);
+  put_u30(out, 1);
+  put_u30(out, 14);
+  put_u8(out, 0x07);
+  put_u30(out, 1);
+  put_u30(out, kStringExternalInterface);
+  put_u8(out, 0x07);
+  put_u30(out, 1);
+  put_u30(out, kStringCall);
+  put_u8(out, 0x07);
+  put_u30(out, 2);
+  put_u30(out, kStringTest);
+  put_u8(out, 0x07);
+  put_u30(out, 2);
+  put_u30(out, kStringObject);
+  put_u8(out, 0x07);
+  put_u30(out, 2);
+  put_u30(out, kStringClick);
+  put_u8(out, 0x07);
+  put_u30(out, 2);
+  put_u30(out, kStringAddEventListener);
+  put_u8(out, 0x07);
+  put_u30(out, 2);
+  put_u30(out, kStringHandler);
+  put_u8(out, 0x07);
+  put_u30(out, 2);
+  put_u30(out, kStringVoid);
+  put_u8(out, 0x07);
+  put_u30(out, 2);
+  put_u30(out, kStringOnClick);
+  put_u8(out, 0x07);
+  put_u30(out, 2);
+  put_u30(out, kStringCounter);
+  put_u8(out, 0x1D);
+  put_u30(out, kMultinameObject);
+  put_u30(out, 1);
+  put_u30(out, kMultinameTest);
+  put_u8(out, 0x07);
+  put_u30(out, 2);
+  put_u30(out, kStringInner);
+  put_u8(out, 0x07);
+  put_u30(out, 2);
+  put_u30(out, kStringHelper);
+}
+
+inline void put_method(std::vector<std::uint8_t>& out, std::uint32_t name) {
+  put_u30(out, 0);
+  put_u30(out, kMultinameVoid);
+  put_u30(out, name);
+  put_u8(out, 0);
+}
+
+inline void put_method_with_options(std::vector<std::uint8_t>& out, std::uint32_t name) {
+  put_u30(out, 1);
+  put_u30(out, kMultinameVoid);
+  put_u30(out, kMultinameVoid);
+  put_u30(out, name);
+  put_u8(out, 0x88);
+  put_u30(out, 1);
+  put_u30(out, 1);
+  put_u8(out, 0x03);
+  put_u30(out, kStringClick);
+}
+
+inline void put_instance_traits(std::vector<std::uint8_t>& out) {
+  put_u30(out, 5);
+  put_u30(out, kMultinameOnClick);
+  put_u8(out, 0x41);
+  put_u30(out, 0);
+  put_u30(out, 1);
+  put_u30(out, 1);
+  put_u30(out, 0);
+  put_u30(out, kMultinameCounter);
+  put_u8(out, 0x40);
+  put_u30(out, 1);
+  put_u30(out, kMultinameVoid);
+  put_u30(out, 0);
+  put_u30(out, 1);
+  put_u30(out, 0);
+  put_u30(out, kMultinameCounter);
+  put_u8(out, 0x06);
+  put_u30(out, 2);
+  put_u30(out, kMultinameVoid);
+  put_u30(out, 1);
+  put_u8(out, 0x03);
+  put_u30(out, kMultinameInner);
+  put_u8(out, 0x04);
+  put_u30(out, 0);
+  put_u30(out, 0);
+  put_u30(out, kMultinameHelper);
+  put_u8(out, 0x45);
+  put_u30(out, 3);
+  put_u30(out, 2);
+  put_u30(out, 1);
+  put_u30(out, 0);
+}
+
+inline void put_body(std::vector<std::uint8_t>& out, std::uint32_t method,
+              const std::vector<std::uint8_t>& code, bool with_exception) {
+  put_u30(out, method);
+  put_u30(out, 4);
+  put_u30(out, 1);
+  put_u30(out, 0);
+  put_u30(out, 1);
+  put_u30(out, static_cast<std::uint32_t>(code.size()));
+  out.insert(out.end(), code.begin(), code.end());
+  put_u30(out, with_exception ? 1 : 0);
+  if (with_exception) {
+    put_u30(out, 0);
+    put_u30(out, static_cast<std::uint32_t>(code.size()));
+    put_u30(out, 0);
+    put_u30(out, kMultinameTest);
+    put_u30(out, kStringHelper);
+  }
+  put_u30(out, 0);
+}
+
+inline std::vector<std::uint8_t> build_abc(const std::vector<std::uint8_t>& constructor_code,
+                                    const std::vector<std::uint8_t>& listener_code) {
+  std::vector<std::uint8_t> out;
+  put_u16(out, fo4::abc::kAbcMinorVersion);
+  put_u16(out, fo4::abc::kAbcMajorVersion);
+  put_constant_pool(out);
+  put_u30(out, 3);
+  put_method(out, kStringTest);
+  put_method_with_options(out, kStringOnClick);
+  put_method(out, kStringHelper);
+  put_u30(out, 1);
+  put_u30(out, kStringFoo);
+  put_u30(out, 1);
+  put_u30(out, kStringExternalInterface);
+  put_u30(out, kStringCall);
+  put_u30(out, 1);
+  put_u30(out, kMultinameTest);
+  put_u30(out, kMultinameObject);
+  put_u8(out, 0x05);
+  put_u30(out, 1);
+  put_u30(out, kMultinameClick);
+  put_u30(out, 0);
+  put_instance_traits(out);
+  put_u30(out, 0);
+  put_u30(out, 0);
+  put_u30(out, 0);
+  put_u30(out, 3);
+  put_body(out, 0, constructor_code, false);
+  put_body(out, 1, listener_code, false);
+  put_body(out, 2, tiny_helper_code(), true);
+  return out;
+}
+
+inline std::vector<std::uint8_t> build_abc() {
+  return build_abc(tiny_constructor_code(), tiny_listener_code());
+}
+
+inline std::vector<std::uint8_t> abc_header() {
+  std::vector<std::uint8_t> out;
+  put_u16(out, fo4::abc::kAbcMinorVersion);
+  put_u16(out, fo4::abc::kAbcMajorVersion);
+  put_u30(out, 1);
+  put_u30(out, 1);
+  put_u30(out, 1);
+  put_u30(out, 1);
+  return out;
+}
+
+inline std::vector<std::uint8_t> minimal_instance_file(std::uint8_t trait_tag,
+                                               std::uint32_t metadata_index,
+                                                std::uint8_t flags = 0) {
+  std::vector<std::uint8_t> out = abc_header();
+  put_u30(out, 2);
+  put_u8(out, 0x16);
+  put_u30(out, 0);
+  put_u30(out, 1);
+  put_u30(out, 1);
+  put_u30(out, 0);
+  put_u30(out, 1);
+  put_u30(out, 0);
+  put_u30(out, 0);
+  put_u30(out, 1);
+  put_u30(out, 0);
+  put_u30(out, 0);
+  put_u8(out, flags);
+  if ((flags & 0x08u) != 0u) {
+    put_u30(out, 1);
+  }
+  put_u30(out, 0);
+  put_u30(out, 0);
+  put_u30(out, 1);
+  put_u30(out, 0);
+  put_u8(out, trait_tag);
+  put_u30(out, 0);
+  put_u30(out, 0);
+  put_u30(out, 0);
+  put_u30(out, 1);
+  put_u30(out, metadata_index);
+  put_u30(out, 0);
+  put_u30(out, 0);
+  put_u30(out, 0);
+  put_u30(out, 0);
+  return out;
+}
+
+inline std::vector<std::uint8_t> multiname_file(std::uint32_t count,
+                                         const std::vector<std::uint8_t>& entries) {
+  std::vector<std::uint8_t> out = abc_header();
+  put_u30(out, 1);
+  put_u30(out, 1);
+  put_u30(out, count);
+  out.insert(out.end(), entries.begin(), entries.end());
+  put_u30(out, 0);
+  put_u30(out, 0);
+  put_u30(out, 0);
+  put_u30(out, 0);
+  put_u30(out, 0);
+  return out;
+}
+
+}  // namespace fo4::test
