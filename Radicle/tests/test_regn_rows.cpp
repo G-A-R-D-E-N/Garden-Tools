@@ -67,6 +67,38 @@ Bytes rdat_bytes(std::uint32_t type, std::uint8_t override_value, std::uint8_t p
   return out.bytes;
 }
 
+Bytes f32_list(std::initializer_list<float> values) {
+  ByteWriter out;
+  for (const float value : values) out.f32(value);
+  return out.bytes;
+}
+
+Bytes rdot_bytes(std::uint32_t object, std::uint16_t parent_index, float density) {
+  ByteWriter out;
+  out.u32(object);
+  out.u16(parent_index);
+  out.u16(0);
+  out.f32(density);
+  out.bytes.resize(52);
+  return out.bytes;
+}
+
+Bytes rdwt_bytes(std::uint32_t weather, std::uint32_t chance, std::uint32_t global) {
+  ByteWriter out;
+  out.u32(weather);
+  out.u32(chance);
+  out.u32(global);
+  return out.bytes;
+}
+
+Bytes rdsa_bytes(std::uint32_t sound, std::uint32_t flags, float chance) {
+  ByteWriter out;
+  out.u32(sound);
+  out.u32(flags);
+  out.f32(chance);
+  return out.bytes;
+}
+
 void write_header(ByteWriter& out) {
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
   ByteWriter hedr;
@@ -563,6 +595,136 @@ TEST(RegnRows, RejectsMalformedTypedRegionPayloads) {
     ASSERT_NE(ref, nullptr) << local;
     EXPECT_THROW(fo4::env::decode_region(env, *ref), fo4::env::WorldDecodeError) << local;
   }
+}
+
+TEST(RegnRows, EntryArraysAndRegionPointsEditInPlace) {
+  const auto point_x = scalar_row("REGN\\RegionPointX");
+  const auto point_y = scalar_row("REGN\\RegionPointY");
+  const auto sound_flags = scalar_row("REGN\\SoundFlags");
+  const auto sound_chance = scalar_row("REGN\\SoundChance");
+  const auto weather_chance = scalar_row("REGN\\WeatherChance");
+  ASSERT_TRUE(point_x.has_value());
+  ASSERT_TRUE(point_y.has_value());
+  ASSERT_TRUE(sound_flags.has_value());
+  ASSERT_TRUE(sound_chance.has_value());
+  ASSERT_TRUE(weather_chance.has_value());
+  EXPECT_EQ(point_x->scalar.subrecord, fo4::Signature::from_string("RPLD"));
+  EXPECT_EQ(point_x->scalar.offset, 0u);
+  EXPECT_EQ(point_y->scalar.offset, 4u);
+  EXPECT_EQ(point_x->scalar.address.stride, 8u);
+  EXPECT_EQ(point_x->scalar.storage, f32);
+  EXPECT_TRUE(point_x->scalar.embedded);
+  EXPECT_EQ(sound_flags->scalar.address.stride, 12u);
+  EXPECT_EQ(sound_flags->scalar.offset, 4u);
+  EXPECT_EQ(sound_flags->scalar.presentation, fo4::schema::ScalarPresentation::flags);
+  EXPECT_EQ(sound_flags->scalar.names.size(), 4u);
+  ASSERT_TRUE(fo4::schema::scalar_value_name(sound_flags->scalar, 4).has_value());
+  EXPECT_EQ(*fo4::schema::scalar_value_name(sound_flags->scalar, 4), "Rainy");
+  EXPECT_FALSE(fo4::schema::scalar_value_name(sound_flags->scalar, 16).has_value());
+  EXPECT_EQ(sound_chance->scalar.offset, 8u);
+  EXPECT_EQ(weather_chance->scalar.subrecord, fo4::Signature::from_string("RDWT"));
+  EXPECT_EQ(weather_chance->scalar.storage, u32);
+
+  const auto object = fo4::schema::formlink_field_descriptor(
+      fo4::Signature::from_string("REGN"), "REGN\\Object");
+  const auto grass = fo4::schema::formlink_field_descriptor(
+      fo4::Signature::from_string("REGN"), "REGN\\Grass");
+  const auto weather = fo4::schema::formlink_field_descriptor(
+      fo4::Signature::from_string("REGN"), "REGN\\Weather");
+  const auto weather_global = fo4::schema::formlink_field_descriptor(
+      fo4::Signature::from_string("REGN"), "REGN\\WeatherGlobal");
+  const auto sound = fo4::schema::formlink_field_descriptor(
+      fo4::Signature::from_string("REGN"), "REGN\\Sound");
+  ASSERT_TRUE(object.has_value());
+  ASSERT_TRUE(grass.has_value());
+  ASSERT_TRUE(weather.has_value());
+  ASSERT_TRUE(weather_global.has_value());
+  ASSERT_TRUE(sound.has_value());
+  EXPECT_EQ(object->address.stride, 52u);
+  EXPECT_EQ(grass->address.stride, 8u);
+  EXPECT_EQ(weather->address.stride, 12u);
+  EXPECT_EQ(weather_global->offset, 8u);
+  EXPECT_TRUE(weather_global->nullable);
+  EXPECT_FALSE(weather->nullable);
+  EXPECT_TRUE(sound->nullable);
+  EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(
+      *object, fo4::Signature::from_string("SCOL")));
+  EXPECT_FALSE(fo4::schema::formlink_field_target_allowed(
+      *object, fo4::Signature::from_string("REGN")));
+  EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(
+      *sound, fo4::Signature::from_string("SOUN")));
+
+  ByteWriter out;
+  write_header(out);
+  write_grouped_record(out, "REGN", 0x0F10,
+                       {{"EDID", text_bytes("EntryRegion")},
+                        {"RCLR", Bytes{std::byte{0x01}, std::byte{0x02}, std::byte{0x03},
+                                       std::byte{0x00}}},
+                        {"ICON", text_bytes("Icons\\Region.dds")},
+                        {"RPLI", u32_bytes(64)},
+                        {"RPLD", f32_list({1.5f, -2.5f, 3.5f, 4.5f})},
+                        {"RDAT", rdat_bytes(2, 0, 10)},
+                        {"RDOT", rdot_bytes(0x00000F40, 3, 0.25f)},
+                        {"RDGS", u32_bytes(0x00000F41)},
+                        {"RDWT", rdwt_bytes(0x00000F42, 100, 0x00000F43)},
+                        {"RDSA", rdsa_bytes(0x00000F44, 4, 0.5f)}});
+  write_grouped_record(out, "GLOB", 0x0F45, {{"EDID", text_bytes("TestGlobal")}});
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto key = "000F10:Patch.esp";
+
+  EXPECT_EQ(field_bytes(plugin, key, "REGN\\Icon"), text_bytes("Icons\\Region.dds"));
+  EXPECT_EQ(field_bytes(plugin, key, "REGN\\RegionPointX"), f32_bytes(1.5f));
+  EXPECT_EQ(field_bytes(plugin, key, "REGN\\RegionPointY"), f32_bytes(-2.5f));
+  EXPECT_EQ(link_raw(plugin, key, "REGN\\Object"), 0x00000F40u);
+  EXPECT_EQ(link_raw(plugin, key, "REGN\\Grass"), 0x00000F41u);
+  EXPECT_EQ(link_raw(plugin, key, "REGN\\Weather"), 0x00000F42u);
+  EXPECT_EQ(sub_bytes(plugin, key, "RDWT"), rdwt_bytes(0x00000F42, 100, 0x00000F43));
+  EXPECT_EQ(link_raw(plugin, key, "REGN\\Sound"), 0x00000F44u);
+  EXPECT_EQ(fo4::record_field_count(plugin, key, "REGN\\RegionPointX"), 2u);
+  EXPECT_EQ(fo4::record_field_count(plugin, key, "REGN\\SoundChance"), 1u);
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, fo4::FormKey::parse(key), *point_y, 1, "9.5"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, fo4::FormKey::parse(key), *sound_flags, "16"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, fo4::FormKey::parse(key), *weather_chance, "250"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, fo4::FormKey::parse(key), *point_x, 2, "1.0"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, fo4::FormKey::parse(key), *weather_global,
+                                           fo4::FormKey::parse("00000F45:Patch.esp")),
+            fo4::FormLinkFieldMutationStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(sub_bytes(reread, key, "RPLD"), f32_list({1.5f, 9.5f, 3.5f, 4.5f}));
+  EXPECT_EQ(sub_bytes(reread, key, "RDSA"), rdsa_bytes(0x00000F44, 16, 0.5f));
+  EXPECT_EQ(sub_bytes(reread, key, "RDWT"), rdwt_bytes(0x00000F42, 250, 0x02000F45));
+  EXPECT_EQ(sub_bytes(reread, key, "RDOT"), rdot_bytes(0x00000F40, 3, 0.25f));
+}
+
+TEST(RegnRows, RefusesEntryArrayRowsOnAMisalignedPayload) {
+  ByteWriter out;
+  write_header(out);
+  write_grouped_record(out, "REGN", 0x0F20,
+                       {{"RDWT", Bytes(13)},
+                        {"RDSA", Bytes(11)},
+                        {"RPLD", Bytes(6)}});
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto key = fo4::FormKey::parse("000F20:Patch.esp");
+  const auto weather_chance = scalar_row("REGN\\WeatherChance");
+  const auto weather = fo4::schema::formlink_field_descriptor(
+      fo4::Signature::from_string("REGN"), "REGN\\Weather");
+  ASSERT_TRUE(weather_chance.has_value());
+  ASSERT_TRUE(weather.has_value());
+
+  EXPECT_EQ(fo4::record_field_count(plugin, key, "REGN\\WeatherChance"), 0u);
+  EXPECT_EQ(fo4::record_field_count(plugin, key, "REGN\\RegionPointX"), 0u);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *weather_chance, "5"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, key, *weather,
+                                           fo4::FormKey::parse("00000F46:Fallout4.esm")),
+            fo4::FormLinkFieldMutationStatus::subrecord_missing);
+  EXPECT_EQ(sub_bytes(plugin, "000F20:Patch.esp", "RDWT"), Bytes(13));
 }
 
 }  // namespace
