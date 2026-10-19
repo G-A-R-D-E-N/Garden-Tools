@@ -62,7 +62,7 @@ RecordName stored_name(const Environment& env, const RecordRef& ref, const Reade
 
 RegionArea read_area(const Reader& reader, const Subrecord& subrecord) {
   if (subrecord.data.size() != 4) reader.fail(subrecord.signature, "edge fall-off must be four bytes");
-  return RegionArea{Reader::u32(subrecord, 0), {}};
+  return RegionArea{Reader::u32(subrecord, 0), {}, std::nullopt};
 }
 
 void read_points(const Reader& reader, const Subrecord& subrecord, RegionArea& area) {
