@@ -23920,7 +23920,10 @@
     },
     {
       "signature": "NOCM",
-      "fields": [],
+      "fields": [
+        {"path": "NOCM\\Index", "label": "Index", "kind": "scalar", "subrecord": "INDX", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "payload_size": 4, "repeated": true, "insertion": "existing_only"},
+        {"path": "NOCM\\Model", "label": "Model", "kind": "string", "subrecord": "NAM1", "repeated": true, "insertion": "existing_only"}
+      ],
       "formlink_fields": [],
       "localized_subrecords": [],
       "authoring": {

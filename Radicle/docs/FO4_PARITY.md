@@ -138,7 +138,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | MUST | 8795 | 6 | 2 | - | 1 | - | yes | - | - | yes | 1 | L4 |
 | NAVI | 7240 | 4 | - | 1 | - | - | yes | - | environment/navmesh | yes | 2 | L4 |
 | NAVM | 7212 | - | - | - | - | - | yes | - | environment/navmesh | yes | 2 | L4 |
-| NOCM | 12453 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
+| NOCM | 12453 | 1 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
 | NOTE | 12470 | 9 | 3 | 7 | - | 1 | yes | - | - | - | 1 | L4 |
 | NPC_ | 10286 | 85 | 4 | 57 | 1 | 3 | yes | yes | forms/npc | yes | 1 | L4 |
 | OMOD | 12501 | 8 | 1 | 2 | 2 | 2 | yes | - | - | yes | - | L4 |
@@ -291,7 +291,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | MUST | 5 | - | 1 | - | 2 | f32, u32 | - | - | - | existing_only |
 | NAVI | 4 | - | - | - | - | f32 | 5 | - | 5 | existing_only |
 | NAVM | - | - | - | - | - | - | - | - | - | - |
-| NOCM | - | - | - | - | - | - | - | - | - | - |
+| NOCM | 1 | - | - | - | 1 | u32 | 2 | - | - | existing_only |
 | NOTE | 8 | - | 1 | - | 3 | f32, i16, u32, u8 | - | - | 3 | existing_only |
 | NPC_ | 70 | 1 | 9 | 5 | 4 | f32, i16, i32, u16, u32, u8 | 48 | 4 | - | existing_only |
 | OMOD | 5 | - | 3 | - | 1 | u32, u8 | - | - | - | existing_only |
