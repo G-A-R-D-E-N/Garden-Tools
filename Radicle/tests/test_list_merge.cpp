@@ -21,15 +21,19 @@ namespace {
 constexpr const char* kMaster = "Master.esm";
 constexpr const char* kFirst = "First.esp";
 constexpr const char* kSecond = "Second.esp";
+constexpr const char* kThird = "Third.esp";
 
 struct Entry {
   std::uint16_t level;
   std::uint32_t item;
   std::uint16_t count;
+  std::uint32_t coed_owner{0};
+  std::uint32_t coed_union{0};
 };
 
 std::vector<std::byte> leveled_plugin(const std::vector<std::string>& masters,
-                                      const std::vector<Entry>& entries) {
+                                      const std::vector<Entry>& entries,
+                                      std::uint32_t coed_owner_record = 0) {
   fo4::test::ByteWriter out;
   const auto tes4 = fo4::test::make_tes4_plugin(0, 1.0f, masters);
   out.raw(std::span<const std::byte>{tes4});
@@ -46,12 +50,26 @@ std::vector<std::byte> leveled_plugin(const std::vector<std::string>& masters,
     body.u8(0);
     body.u8(0);
     fo4::test::write_subrecord(out, "LVLO", body.bytes);
+    if (entry.coed_owner != 0 || entry.coed_union != 0) {
+      fo4::test::ByteWriter coed;
+      coed.u32(entry.coed_owner);
+      coed.u32(entry.coed_union);
+      coed.u32(0);
+      fo4::test::write_subrecord(out, "COED", coed.bytes);
+    }
   }
   fo4::test::ByteWriter count;
   count.u8(static_cast<std::uint8_t>(entries.size()));
   fo4::test::write_subrecord(out, "LLCT", count.bytes);
   fo4::test::end_record(out, record);
   fo4::test::end_group(out, group);
+  if (coed_owner_record != 0) {
+    const auto owner_group = fo4::test::begin_group(out, "NPC_", 0);
+    const auto owner = fo4::test::begin_record(out, "NPC_", 0, coed_owner_record);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"Owner\0", 6});
+    fo4::test::end_record(out, owner);
+    fo4::test::end_group(out, owner_group);
+  }
   return out.bytes;
 }
 
@@ -107,6 +125,12 @@ protected:
     return fo4::env::Environment::load(paths);
   }
 
+  fo4::env::Environment load_with_third() {
+    const std::filesystem::path paths[] = {root_ / kMaster, root_ / kFirst, root_ / kSecond,
+                                           root_ / kThird};
+    return fo4::env::Environment::load(paths);
+  }
+
   const fo4::FormKey key_{fo4::FormKey::parse("000800:Master.esm")};
   std::filesystem::path root_;
 };
@@ -151,6 +175,67 @@ TEST_F(ListMerge, LeveledListMergeSkipsARecordTheWinnerAlreadyHolds) {
   EXPECT_EQ(result.counts.merged, 0u);
   EXPECT_EQ(result.counts.unchanged, 1u);
   EXPECT_TRUE(result.patch.groups.empty());
+}
+
+TEST_F(ListMerge, TheMergedPatchMasterTableIsInLoadOrder) {
+  write(kMaster, leveled_plugin({}, {{1, 0x000800, 1}, {2, 0x000801, 1}}));
+  write(kFirst, leveled_plugin({kMaster}, {{1, 0x000800, 1}, {2, 0x000801, 1}, {3, 0x01000803, 1}}));
+  write(kSecond, leveled_plugin({kMaster}, {{1, 0x000800, 1}, {4, 0x01000804, 1}}));
+  write(kThird, leveled_plugin({kMaster, kFirst}, {{1, 0x000800, 1}, {2, 0x01000802, 1}}));
+  const auto env = load_with_third();
+
+  const auto result = fo4::patch::build_list_merge_patch(
+      env, fo4::Signature::from_string("LVLI"), "Merged.esp");
+
+  EXPECT_EQ(result.counts.merged, 1u);
+  ASSERT_EQ(result.patch.header.masters.size(), 3u);
+  EXPECT_EQ(result.patch.header.masters[0].key, fo4::PluginKey::from_filename(kMaster));
+  EXPECT_EQ(result.patch.header.masters[1].key, fo4::PluginKey::from_filename(kFirst));
+  EXPECT_EQ(result.patch.header.masters[2].key, fo4::PluginKey::from_filename(kSecond));
+}
+
+TEST_F(ListMerge, AMergedEntryKeepsItsCoedOwnerAsAMaster) {
+  write(kMaster, leveled_plugin({}, {{1, 0x000800, 1}}));
+  write(kFirst, leveled_plugin({kMaster}, {{1, 0x000800, 1}, {2, 0x000800, 1, 0x01000805}}));
+  write(kSecond, leveled_plugin({kMaster}, {{1, 0x000800, 1}}));
+  const auto env = load();
+
+  const auto result = fo4::patch::build_list_merge_patch(
+      env, fo4::Signature::from_string("LVLI"), "Merged.esp");
+
+  EXPECT_EQ(result.counts.merged, 1u);
+  ASSERT_EQ(result.patch.header.masters.size(), 2u);
+  EXPECT_EQ(result.patch.header.masters[0].key, fo4::PluginKey::from_filename(kMaster));
+  EXPECT_EQ(result.patch.header.masters[1].key, fo4::PluginKey::from_filename(kFirst));
+
+  const auto merged = fo4::forms::decode_leveled_list(result.patch, key_);
+  ASSERT_EQ(merged.entries.size(), 2u);
+  ASSERT_TRUE(merged.entries[1].extra.has_value());
+  EXPECT_EQ(merged.entries[1].extra->owner, fo4::FormKey::parse("000805:First.esp"));
+}
+
+TEST_F(ListMerge, ACoedOwnerIsTypedFromTheLoadOrder) {
+  write(kMaster, leveled_plugin({}, {{1, 0x000800, 1}}));
+  write(kFirst, leveled_plugin({kMaster}, {{1, 0x000800, 1}, {2, 0x01000801, 1}}, 0x01000805));
+  write(kSecond, leveled_plugin({kMaster},
+                                {{1, 0x000800, 1}, {3, 0x01000801, 1, 0x01000805, 0x00000042}},
+                                0x01000805));
+  const auto env = load();
+
+  const auto result = fo4::patch::build_list_merge_patch(
+      env, fo4::Signature::from_string("LVLI"), "Merged.esp");
+
+  EXPECT_EQ(result.counts.merged, 1u);
+  ASSERT_EQ(result.patch.header.masters.size(), 3u);
+  EXPECT_EQ(result.patch.header.masters[0].key, fo4::PluginKey::from_filename(kMaster));
+  EXPECT_EQ(result.patch.header.masters[1].key, fo4::PluginKey::from_filename(kFirst));
+  EXPECT_EQ(result.patch.header.masters[2].key, fo4::PluginKey::from_filename(kSecond));
+
+  const auto merged = fo4::forms::decode_leveled_list(result.patch, key_);
+  ASSERT_EQ(merged.entries.size(), 3u);
+  ASSERT_TRUE(merged.entries[2].extra.has_value());
+  EXPECT_EQ(merged.entries[2].extra->owner, fo4::FormKey::parse("000805:Second.esp"));
+  EXPECT_EQ(merged.entries[2].extra->global_or_rank, 0x00000042u);
 }
 
 TEST_F(ListMerge, FormListMergeIsAUnionOfTheLoadOrder) {

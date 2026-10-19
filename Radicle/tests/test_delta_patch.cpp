@@ -19,6 +19,7 @@
 namespace {
 
 constexpr const char* kOlder = "Older.esp";
+constexpr const char* kMiddle = "Middle.esp";
 constexpr const char* kNewer = "Newer.esp";
 
 using EnvPtr = std::unique_ptr<radicle_env, decltype(&radicle_env_destroy)>;
@@ -102,6 +103,7 @@ protected:
              std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     std::filesystem::create_directories(root_);
     older_ = root_ / kOlder;
+    middle_ = root_ / kMiddle;
     newer_ = root_ / kNewer;
     output_ = root_ / "Patch.esp";
     write_bytes(older_, fixture(2, false));
@@ -122,6 +124,16 @@ protected:
     return EnvPtr(env, radicle_env_destroy);
   }
 
+  EnvPtr open_env_with_middle() {
+    const auto older_text = older_.string();
+    const auto middle_text = middle_.string();
+    const auto newer_text = newer_.string();
+    const char* paths[] = {older_text.c_str(), middle_text.c_str(), newer_text.c_str()};
+    radicle_env* env = nullptr;
+    EXPECT_EQ(radicle_env_load(paths, 3, &env), RADICLE_STATUS_OK);
+    return EnvPtr(env, radicle_env_destroy);
+  }
+
   EnvPtr open_output() {
     const auto output_text = output_.string();
     const char* paths[] = {output_text.c_str()};
@@ -138,6 +150,7 @@ protected:
 
   std::filesystem::path root_;
   std::filesystem::path older_;
+  std::filesystem::path middle_;
   std::filesystem::path newer_;
   std::filesystem::path output_;
 };
@@ -243,9 +256,11 @@ TEST_F(DeltaPatchCApi, DeletedFlagDifferenceKeepsTheRecord) {
 
 TEST_F(DeltaPatchCApi, ListMergeWritesAPatchAndCountsTheMergedLists) {
   write_bytes(older_, leveled_plugin({}, {{1, 0x000800, 1}, {2, 0x000801, 1}}));
+  write_bytes(middle_,
+              leveled_plugin({"Older.esp"}, {{1, 0x000800, 1}, {2, 0x000801, 1}, {4, 0x01000804, 1}}));
   write_bytes(newer_, leveled_plugin({"Older.esp"}, {{1, 0x000800, 1}, {3, 0x01000803, 2}}));
 
-  const auto env = open_env();
+  const auto env = open_env_with_middle();
   radicle_list_merge_counts counts{};
   const auto output_text = output_.string();
   ASSERT_EQ(radicle_env_build_list_merge_patch(env.get(), "LVLI", "Merged.esp", output_text.c_str(),
