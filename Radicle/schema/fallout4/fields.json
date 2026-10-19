@@ -21233,6 +21233,11 @@
             "default": "000000000000000000000000"
           },
           {
+            "signature": "FNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
             "signature": "CITC",
             "minimum": 0,
             "maximum": 1,
@@ -22849,6 +22854,11 @@
             "minimum": 1,
             "maximum": 1,
             "default": "00000000"
+          },
+          {
+            "signature": "NNAM",
+            "minimum": 0,
+            "maximum": 65535
           }
         ]
       },
@@ -22949,7 +22959,7 @@
         }
       ],
       "formlink_lists": [
-        {"path": "SMQN\\Quests", "label": "Quests", "subrecord": "NNAM", "targets": ["QUST"], "nullable": false, "mutation": "existing_only"}
+        {"path": "SMQN\\Quests", "label": "Quests", "subrecord": "NNAM", "counter": "QNAM", "targets": ["QUST"], "nullable": false, "mutation": "existing_only"}
       ],
       "localized_subrecords": []
     },

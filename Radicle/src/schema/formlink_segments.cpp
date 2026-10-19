@@ -109,19 +109,14 @@ void reconcile_counter(Record& record,
   if (descriptor.counter == Signature{}) return;
   const auto counter_index = subrecord_index(record, descriptor.counter);
   if (descriptor.segment_count == 0) {
-    if (count == 0) {
-      if (counter_index.has_value()) {
-        record.subrecords.erase(record.subrecords.begin() +
-                                static_cast<std::ptrdiff_t>(*counter_index));
-      }
-      return;
-    }
+    // Constraint: a whole-u32 counter is overwritten in place, including zero, never erased.
     if (counter_index.has_value()) {
       auto& data = record.subrecords[*counter_index].data;
       data.resize(4);
       write_u32(data, 0, count);
       return;
     }
+    if (count == 0) return;
     Subrecord counter;
     counter.signature = descriptor.counter;
     counter.data.resize(4);

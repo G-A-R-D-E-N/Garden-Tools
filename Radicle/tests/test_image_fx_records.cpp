@@ -102,8 +102,8 @@ std::vector<std::byte> make_plugin() {
   put(imad_iad, 8, f32(0.75f));
   put(imad_iad, 12, f32(1.5f));
   write_record(out, "IMAD", 3001,
-               {{"EDID", zstr("RadicleImageAdapter")}, {"DNAM", imad_full}, {"TNAM", imad_tnam},
-                {"NAM3", imad_nam3}, {"BNAM", imad_bnam}, {"@IAD", imad_iad}});
+               {{"EDID", zstr("RadicleImageAdapter")}, {"DNAM", imad_full}, {"BNAM", imad_bnam},
+                {"TNAM", imad_tnam}, {"NAM3", imad_nam3}, {"@IAD", imad_iad}});
   write_record(out, "IMAD", 3002, {{"EDID", zstr("RadicleImageAdapterTwo")}, {"DNAM", zeros(244)}});
 
   Bytes zoom = zeros(24);

@@ -226,6 +226,38 @@ TEST(StoryManagerRecordsSynthetic, QuestListRowsReadAndRetargetEveryQuestNodeEnt
   EXPECT_EQ(payload(reread, 2050, "QNAM"), u32(2));
 }
 
+TEST(StoryManagerRecordsSynthetic, QuestListRemovalAndClearKeepTheDeclaredCount) {
+  // Regression: QNAM requires a rewrite after NNAM removal or clear, or the node declares more quests than it holds.
+  const auto quests = fo4::schema::formlink_list_descriptor(fo4::Signature::from_string("SMQN"), "SMQN\\Quests");
+  ASSERT_TRUE(quests.has_value());
+
+  auto removed = load();
+  EXPECT_EQ(fo4::schema::remove_record_formlink_list_element(removed, key(2050), *quests, 0),
+            fo4::schema::FormLinkListMutationStatus::updated);
+  auto reread = fo4::read_plugin(fo4::write_plugin(removed), "Patch.esp");
+  EXPECT_EQ(payloads(reread, 2050, "NNAM"), (std::vector<Bytes>{u32(2058)}));
+  EXPECT_EQ(payload(reread, 2050, "QNAM"), u32(1));
+
+  EXPECT_EQ(fo4::schema::remove_record_formlink_list_element(removed, key(2050), *quests, 0),
+            fo4::schema::FormLinkListMutationStatus::updated);
+  reread = fo4::read_plugin(fo4::write_plugin(removed), "Patch.esp");
+  EXPECT_TRUE(payloads(reread, 2050, "NNAM").empty());
+  EXPECT_EQ(payload(reread, 2050, "QNAM"), u32(0));
+
+  auto matched = load();
+  EXPECT_EQ(fo4::schema::remove_record_formlink_list_elements_matching(matched, key(2050), *quests, key(2053)), 1u);
+  reread = fo4::read_plugin(fo4::write_plugin(matched), "Patch.esp");
+  EXPECT_EQ(payloads(reread, 2050, "NNAM"), (std::vector<Bytes>{u32(2058)}));
+  EXPECT_EQ(payload(reread, 2050, "QNAM"), u32(1));
+
+  auto cleared = load();
+  EXPECT_EQ(fo4::schema::clear_record_formlink_list(cleared, key(2050), *quests),
+            fo4::schema::FormLinkListMutationStatus::updated);
+  reread = fo4::read_plugin(fo4::write_plugin(cleared), "Patch.esp");
+  EXPECT_TRUE(payloads(reread, 2050, "NNAM").empty());
+  EXPECT_EQ(payload(reread, 2050, "QNAM"), u32(0));
+}
+
 TEST(StoryManagerRecordsSynthetic, SceneCoordinatesUseTheLayoutBeforeTheFirstVnam) {
   auto plugin = load();
   EXPECT_EQ(fo4::set_record_scalar(plugin, key(2052), scalar("SCCO\\CoordinateX"), 1, "-31"),
