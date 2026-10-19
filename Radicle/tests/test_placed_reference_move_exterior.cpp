@@ -184,6 +184,16 @@ void expect_move_refused(const std::vector<std::byte>& bytes) {
   EXPECT_EQ(fo4::write_plugin(plugin), before);
 }
 
+void expect_move_refused_with_status(const std::vector<std::byte>& bytes,
+                                     const fo4::forms::PositionRotation& transform,
+                                     fo4::forms::PlacedReferenceMoveStatus expected) {
+  auto plugin = fo4::read_plugin(bytes, "Exterior.esp");
+  const auto ref = fo4::FormKey::parse("000902:Exterior.esp");
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_EQ(fo4::forms::move_placed_reference(plugin, ref, transform), expected);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
 }  // namespace
 
 TEST(PlacedReferenceMoveExterior, PersistentBucketWithAClearFlagRebucketsToTemporary) {
@@ -298,4 +308,16 @@ TEST(PlacedReferenceMoveExterior, RefusesAnExteriorCellOutsideAWorldspace) {
 
 TEST(PlacedReferenceMoveExterior, RefusesAnExteriorCellWithNoWorldspaceRecord) {
   expect_move_refused(exterior_plugin({.worldspace_record = false}));
+}
+
+TEST(PlacedReferenceMoveExterior, RefusesAPersistentReferenceWithNoPersistentCellInTheWorldspace) {
+  expect_move_refused_with_status(
+      exterior_plugin({.reference_flags = 0x00000400u}), {.x = 4106.0f, .y = 20.0f, .z = 30.0f},
+      fo4::forms::PlacedReferenceMoveStatus::target_cell_missing);
+}
+
+TEST(PlacedReferenceMoveExterior, RefusesAClearFlagRecordInAPersistentBucketWithNoGridCell) {
+  expect_move_refused_with_status(
+      exterior_plugin({.bucket = fo4::GroupType::cell_persistent_children}), {.x = 32768.0f},
+      fo4::forms::PlacedReferenceMoveStatus::target_cell_missing);
 }
