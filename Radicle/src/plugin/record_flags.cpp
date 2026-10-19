@@ -34,6 +34,32 @@ bool has_type(const GroupHeader& header, GroupType type) {
   return header.group_type == static_cast<std::int32_t>(type);
 }
 
+bool is_master_of(const Plugin& plugin, const PluginKey& key) {
+  return std::any_of(plugin.header.masters.begin(), plugin.header.masters.end(),
+                     [&key](const MasterReference& master) { return master.key == key; });
+}
+
+bool is_injected(const env::Environment& load_order, const Plugin& plugin, const FormKey& record_key) {
+  if (record_key.owner() == plugin.key) return false;
+  const auto versions = load_order.versions(record_key);
+  return std::none_of(versions.begin(), versions.end(), [&](const env::RecordRef& version) {
+    return load_order.plugin(version.plugin).key == record_key.owner();
+  });
+}
+
+const Record* winning_master_content(const env::Environment& load_order,
+                                     const Plugin& plugin,
+                                     const FormKey& record_key) {
+  const auto versions = load_order.versions(record_key);
+  for (auto it = versions.rbegin(); it != versions.rend(); ++it) {
+    const auto& owner = load_order.plugin(it->plugin).key;
+    if (owner == plugin.key || !is_master_of(plugin, owner)) continue;
+    if (it->record->header.flags.is_deleted() || is_partial_form(*it->record)) continue;
+    return it->record;
+  }
+  return nullptr;
+}
+
 bool is_cell_bucket(const GroupHeader& header) {
   return has_type(header, GroupType::cell_persistent_children) ||
          has_type(header, GroupType::cell_temporary_children) ||
@@ -211,8 +237,9 @@ MarkDeletedStatus mark_override_deleted(Plugin& plugin, const FormKey& record_ke
   if (record.header.flags.is_deleted()) return MarkDeletedStatus::already_deleted;
   require_decodable(record);
 
-  constexpr auto dropped = RecordFlags::compressed | RecordFlags::partial_form;
-  record.header.flags = RecordFlags{(record.header.flags.value() | RecordFlags::deleted) & ~dropped};
+  auto flags = (record.header.flags.value() | RecordFlags::deleted) & ~RecordFlags::compressed;
+  if (can_be_partial(record.header.signature)) flags &= ~RecordFlags::partial_form;
+  record.header.flags = RecordFlags{flags};
   record.compressed = false;
   std::vector<Subrecord> kept;
   if (is_placed_reference_signature(record.header.signature)) {
@@ -225,7 +252,9 @@ MarkDeletedStatus mark_override_deleted(Plugin& plugin, const FormKey& record_ke
   return MarkDeletedStatus::marked;
 }
 
-UndeleteStatus undelete_and_disable_reference(Plugin& plugin, const FormKey& record_key) {
+UndeleteStatus undelete_and_disable_reference(Plugin& plugin,
+                                             const env::Environment& load_order,
+                                             const FormKey& record_key) {
   assign_record_form_keys(plugin);
   if (plugin.tes4.form_key == record_key) return UndeleteStatus::header_record;
   const auto located = find_mutable_location(plugin, record_key);
@@ -234,14 +263,17 @@ UndeleteStatus undelete_and_disable_reference(Plugin& plugin, const FormKey& rec
   if (!is_placed_reference_signature(source.header.signature)) return UndeleteStatus::not_a_reference;
   if (!source.header.flags.is_deleted()) return UndeleteStatus::not_deleted;
   require_decodable(source);
-  if (find_subrecord(source, k_name) == nullptr || find_subrecord(source, k_data) == nullptr) {
-    return UndeleteStatus::incomplete_reference;
-  }
+  if (is_injected(load_order, plugin, record_key)) return UndeleteStatus::injected_record;
+  const bool complete = find_subrecord(source, k_name) != nullptr &&
+                        find_subrecord(source, k_data) != nullptr;
+  const Record* master = complete ? nullptr : winning_master_content(load_order, plugin, record_key);
+  if (!complete && master == nullptr) return UndeleteStatus::incomplete_reference;
 
   Plugin next = plugin;
   auto placed = find_mutable_location(next, record_key);
   if (!placed) return UndeleteStatus::record_missing;
   Record& record = placed->record();
+  if (master != nullptr) record.subrecords = master->subrecords;
   const bool persistent = record.header.flags.is_persistent();
   detail::mark_record_modified(next, record);
   record.header.flags =
