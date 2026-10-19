@@ -6,6 +6,7 @@
 #include "fo4/schema/preflight.hpp"
 #include "fo4/schema/record_constraints.hpp"
 #include "fo4/schema/scalar.hpp"
+#include "authoring_order.hpp"
 #include "plugin_bytes.hpp"
 
 #include <gtest/gtest.h>
@@ -211,6 +212,31 @@ const fo4::Record* only_furn(const fo4::Plugin& plugin) {
   return found;
 }
 
+fo4::Plugin destructible_acti_plugin(const std::vector<Sub>& stages) {
+  ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(1);
+  hedr.u32(0x900);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+  const auto group = fo4::test::begin_group(out, "ACTI", 0);
+  const auto record = fo4::test::begin_record(out, "ACTI", 0, 0x820);
+  fo4::test::write_subrecord(out, "EDID", zstr("RadicleActi"));
+  fo4::test::write_subrecord(out, "OBND", zeros(12));
+  for (const auto& sub : stages) {
+    fo4::test::write_subrecord(out, sub.signature, sub.data);
+  }
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return fo4::read_plugin(out.bytes, "Patch.esp");
+}
+
+const fo4::Record* only_acti(const fo4::Plugin& plugin) {
+  return fo4::find_record(plugin, fo4::FormKey::parse("000820:Patch.esp"));
+}
+
 }  // namespace
 
 TEST(ObjectBaseRecordsSynthetic, EveryScalarRowDecodesOnTheFixture) {
@@ -382,4 +408,35 @@ TEST(ObjectBaseRecordsSynthetic, FurnTemplateBlockFollowsTheAuthoringOrderInPref
   EXPECT_TRUE(std::any_of(issues.begin(), issues.end(), [](const fo4::schema::PreflightIssue& issue) {
     return issue.code == "subrecord_order_invalid";
   }));
+}
+
+TEST(ObjectBaseRecordsSynthetic, MultiStageDestructibleFollowsTheAuthoringOrderPerStage) {
+  const auto constraint =
+      fo4::schema::record_authoring_constraint(fo4::Signature::from_string("ACTI"));
+  ASSERT_TRUE(constraint.has_value());
+  const auto rules = fo4::schema::authoring_subrecords(*constraint);
+
+  const auto two_stages = destructible_acti_plugin({{"DEST", zeros(8)},
+                                                    {"DSTD", zeros(20)},
+                                                    {"DSTA", zstr("Stage1")},
+                                                    {"DMDL", zstr("Stage1.nif")},
+                                                    {"DSTF", Bytes{}},
+                                                    {"DSTD", zeros(20)},
+                                                    {"DSTA", zstr("Stage2")},
+                                                    {"DMDL", zstr("Stage2.nif")},
+                                                    {"DSTF", Bytes{}}});
+  const auto* acti = only_acti(two_stages);
+  ASSERT_NE(acti, nullptr);
+  EXPECT_FALSE(fo4::test::authoring_order_violation(*acti, rules).has_value());
+
+  const auto inverted = destructible_acti_plugin({{"DEST", zeros(8)},
+                                                  {"DSTD", zeros(20)},
+                                                  {"DMDL", zstr("Stage1.nif")},
+                                                  {"DSTA", zstr("Stage1")},
+                                                  {"DSTF", Bytes{}}});
+  const auto* bad = only_acti(inverted);
+  ASSERT_NE(bad, nullptr);
+  const auto violation = fo4::test::authoring_order_violation(*bad, rules);
+  ASSERT_TRUE(violation.has_value());
+  EXPECT_EQ(violation->subrecord, fo4::Signature::from_string("DSTA"));
 }
