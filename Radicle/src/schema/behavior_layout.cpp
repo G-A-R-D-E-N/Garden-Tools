@@ -169,7 +169,7 @@ std::optional<std::vector<std::size_t>> behavior_formid_offsets(const Record& re
   }
   if (tag == "PKCU") return checked({4}, sub.data.size() == 12);
   if (tag == "CNAM" || tag == "QNAM" || tag == "INAM") {
-    const auto candidates = *behavior_field_candidates(record, sub.signature);
+    const auto candidates = *behavior_field_candidates(record, sub.signature, false);
     const auto index = static_cast<std::size_t>(&sub - record.subrecords.data());
     const bool owned = std::find(candidates.begin(), candidates.end(), index) != candidates.end();
     if (!owned) {

@@ -35,6 +35,14 @@ void require_scalar_record(const Record& record, const schema::ScalarFieldDescri
 
 std::vector<SubrecordGroupSpan> group_spans(const Record& record, const schema::SubrecordGroupDescriptor& group);
 
+const schema::SubrecordGroupMemberDescriptor* group_member(const schema::SubrecordGroupDescriptor& group,
+                                                           Signature subrecord) {
+  for (const auto& member : group.members) {
+    if (member.subrecord == subrecord) return &member;
+  }
+  return nullptr;
+}
+
 bool response_shape_valid(const Record& record) {
   constexpr Signature trda = Signature::from_string("TRDA");
   constexpr Signature members[] = {Signature::from_string("NAM1"), Signature::from_string("NAM2"),
@@ -168,9 +176,8 @@ ScalarMutationStatus write_scalar(Plugin& plugin,
                               (is_string ? " is a string field; use the string setter"
                                          : " is not a string field"));
   }
-  const bool member_string =
-      is_string && field.scalar.embedded &&
-      schema::subrecord_group_for_member(field.record, field.scalar.subrecord).has_value();
+  const auto member_group = schema::subrecord_group_for_member(field.record, field.scalar.subrecord);
+  const bool member_string = is_string && field.scalar.embedded && member_group.has_value();
   if (is_string && field.scalar.embedded && !member_string) {
     throw schema::ScalarError(std::string(field.path) +
                               " sits in a fixed-size slot and cannot be written generically");
@@ -198,15 +205,22 @@ ScalarMutationStatus write_scalar(Plugin& plugin,
   }
 
   if (is_string && member_string) {
-    // Constraint: a group member string row requires the encoded value and its NUL to fit the slot the subrecord already carries.
-    if (encoded.size() > existing.size()) {
+    // Constraint: a variable-length group member string row requires the encoded value and its NUL to replace the whole member payload; a fixed-size member requires it to fit the slot the subrecord already carries.
+    const auto* member = group_member(*member_group, field.scalar.subrecord);
+    const auto slot_size = existing.size();
+    if (encoded.size() > slot_size && member != nullptr && member->payload_size != 0) {
       throw schema::ScalarError(std::string(field.path) + " does not fit in its " +
-                                std::to_string(existing.size()) + "-byte slot");
+                                std::to_string(slot_size) + "-byte slot");
+    }
+    if (slot.offset + encoded.size() > data.size()) {
+      data.resize(slot.offset + encoded.size());
     }
     std::copy(encoded.begin(), encoded.end(),
               data.begin() + static_cast<std::ptrdiff_t>(slot.offset));
-    std::fill(data.begin() + static_cast<std::ptrdiff_t>(slot.offset + encoded.size()),
-              data.begin() + static_cast<std::ptrdiff_t>(slot.offset + existing.size()), std::byte{0});
+    if (encoded.size() < slot_size) {
+      std::fill(data.begin() + static_cast<std::ptrdiff_t>(slot.offset + encoded.size()),
+                data.begin() + static_cast<std::ptrdiff_t>(slot.offset + slot_size), std::byte{0});
+    }
   } else if (is_string) {
     data = encoded;
   } else {
