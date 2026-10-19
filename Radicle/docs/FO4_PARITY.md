@@ -95,7 +95,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | FLST | 7574 | - | - | - | 1 | 1 | yes | - | - | - | - | L4 |
 | FSTP | 8686 | - | 1 | 1 | - | - | yes | - | environment/sound | yes | 2 | L4 |
 | FSTS | 8692 | 5 | - | 1 | 5 | - | yes | - | environment/sound | yes | 2 | L4 |
-| FURN | 6848 | 32 | 4 | 13 | 1 | 2 | yes | yes | - | yes | 1 | L4 |
+| FURN | 6848 | 40 | 4 | 13 | 1 | 2 | yes | yes | - | yes | 1 | L4 |
 | GDRY | 12322 | 15 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | GLOB | 6921 | 2 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | GMST | 6936 | 3 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
@@ -140,7 +140,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | NAVM | 7212 | - | - | - | - | - | yes | - | environment/navmesh | yes | 2 | L4 |
 | NOCM | 12453 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
 | NOTE | 12470 | 9 | 3 | 7 | - | 1 | yes | - | - | - | 1 | L4 |
-| NPC_ | 10286 | 85 | 4 | 57 | 1 | 3 | yes | yes | forms/npc | yes | 1 | L4 |
+| NPC_ | 10286 | 93 | 4 | 57 | 1 | 3 | yes | yes | forms/npc | yes | 1 | L4 |
 | OMOD | 12501 | 8 | 1 | 2 | 2 | 2 | yes | - | - | yes | - | L4 |
 | OTFT | 9357 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
 | OVIS | 12546 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
@@ -249,7 +249,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | FLST | - | - | - | - | - | - | - | - | - | - |
 | FSTP | - | - | - | - | 1 | - | - | - | - | existing_only |
 | FSTS | 5 | - | - | - | - | u32 | - | 1 | - | existing_only |
-| FURN | 22 | 1 | 2 | 7 | 4 | f32, i16, i32, u16, u32, u8 | 18 | 10 | - | existing_only |
+| FURN | 29 | 1 | 3 | 7 | 4 | f32, i16, i32, u16, u32, u8 | 26 | 10 | - | existing_only |
 | GDRY | 15 | - | - | - | - | f32 | - | - | - | existing_only |
 | GLOB | 1 | - | 1 | - | - | f32, u8 | - | - | - | existing_only |
 | GMST | 2 | - | 1 | - | 1 | f32, i32, u32 | - | - | 4 | existing_only |
@@ -293,7 +293,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | NAVM | - | - | - | - | - | - | - | - | - | - |
 | NOCM | - | - | - | - | - | - | - | - | - | - |
 | NOTE | 8 | - | 1 | - | 3 | f32, i16, u32, u8 | - | - | 3 | existing_only |
-| NPC_ | 70 | 1 | 9 | 5 | 4 | f32, i16, i32, u16, u32, u8 | 48 | 4 | - | existing_only |
+| NPC_ | 77 | 1 | 10 | 5 | 4 | f32, i16, i32, u16, u32, u8 | 56 | 4 | - | existing_only |
 | OMOD | 5 | - | 3 | - | 1 | u32, u8 | - | - | - | existing_only |
 | OTFT | - | - | - | - | - | - | - | - | - | - |
 | OVIS | - | - | - | - | - | - | - | - | - | - |

@@ -2,6 +2,7 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "fo4/plugin/writer.hpp"
+#include "fo4/schema/field_address.hpp"
 #include "fo4/schema/formlink_lists.hpp"
 #include "fo4/schema/preflight.hpp"
 #include "fo4/schema/record_constraints.hpp"
@@ -192,6 +193,40 @@ std::size_t rule_index(std::span<const fo4::schema::SubrecordAuthoringConstraint
     if (rules[index].signature == signature) return index;
   }
   return rules.size();
+}
+
+Bytes obts_header(std::uint32_t includes, std::uint32_t properties, std::uint8_t level_min,
+                  std::uint8_t level_max, std::int16_t parent, std::uint8_t is_default,
+                  std::uint8_t min_rank, std::uint8_t alt_levels, std::uint8_t keywords) {
+  ByteWriter out;
+  out.u32(includes);
+  out.u32(properties);
+  out.u8(level_min);
+  out.u8(0);
+  out.u8(level_max);
+  out.u8(0);
+  out.u16(static_cast<std::uint16_t>(parent));
+  out.u8(is_default);
+  out.u8(keywords);
+  out.u8(min_rank);
+  out.u8(alt_levels);
+  return out.bytes;
+}
+
+std::string read_row(const fo4::Plugin& plugin, const fo4::FormKey& key, std::string_view path,
+                     std::size_t index) {
+  const auto* record = fo4::find_record(plugin, key);
+  if (record == nullptr) return "no-record";
+  const auto field = fo4::schema::scalar_field_descriptor(record->header.signature, path);
+  if (!field) return "no-field";
+  const auto resolved = fo4::schema::resolve_field_slots(
+      *record, fo4::schema::scalar_field_shape(field->scalar), field->scalar.address);
+  if (index >= resolved.slots.size()) return "absent";
+  const auto slot = resolved.slots[index];
+  const auto bytes =
+      fo4::schema::scalar_slot_bytes(record->subrecords[slot.subrecord].data, slot, field->scalar);
+  if (bytes.empty()) return "absent";
+  return fo4::schema::decode_scalar(bytes, field->scalar);
 }
 
 fo4::Plugin template_record_plugin(std::string_view signature, std::uint32_t local_id,
@@ -528,4 +563,114 @@ TEST(ObjectBaseRecordsSynthetic, WrongSizedModelPayloadsAreRefused) {
                fo4::schema::ScalarError);
   EXPECT_THROW(static_cast<void>(fo4::schema::scalar_field_bytes(modf->data, flags->scalar)),
                fo4::schema::ScalarError);
+}
+
+namespace {
+
+constexpr std::string_view k_obts_paths[] = {
+    "ObjectTemplateIncludeCount", "ObjectTemplatePropertyCount", "ObjectTemplateLevelMin",
+    "ObjectTemplateLevelMax",     "ObjectTemplateParentCombinationIndex",
+    "ObjectTemplateDefault",      "ObjectTemplateMinLevelForRanks",
+    "ObjectTemplateAltLevelsPerTier"};
+
+fo4::Plugin object_template_plugin(std::string_view signature, std::uint32_t local_id,
+                                   const std::vector<Sub>& combinations) {
+  std::vector<Sub> subs;
+  subs.push_back({"EDID", zstr("RadicleObjectTemplate")});
+  for (const auto& combination : combinations) {
+    subs.push_back(combination);
+  }
+  return template_record_plugin(signature, local_id, subs);
+}
+
+}  // namespace
+
+TEST(ObjectBaseRecordsSynthetic, ObjectTemplateHeaderRowsCoverNpcAndFurn) {
+  for (const auto signature : {"NPC_", "FURN"}) {
+    const auto record = fo4::Signature::from_string(signature);
+    for (const auto name : k_obts_paths) {
+      const auto path = std::string{signature} + "\\" + std::string{name};
+      const auto field = fo4::schema::scalar_field_descriptor(record, path);
+      ASSERT_TRUE(field.has_value()) << path;
+      EXPECT_EQ(field->scalar.subrecord, fo4::Signature::from_string("OBTS")) << path;
+      EXPECT_TRUE(field->scalar.address.repeated) << path;
+      EXPECT_EQ(field->scalar.minimum_payload_size, 18u) << path;
+    }
+    const auto level_min = fo4::schema::scalar_field_descriptor(record, std::string{signature} + "\\ObjectTemplateLevelMin");
+    const auto parent = fo4::schema::scalar_field_descriptor(record, std::string{signature} + "\\ObjectTemplateParentCombinationIndex");
+    const auto defaulted = fo4::schema::scalar_field_descriptor(record, std::string{signature} + "\\ObjectTemplateDefault");
+    ASSERT_TRUE(level_min.has_value());
+    ASSERT_TRUE(parent.has_value());
+    ASSERT_TRUE(defaulted.has_value());
+    EXPECT_EQ(level_min->scalar.offset, 8u);
+    EXPECT_EQ(parent->scalar.offset, 12u);
+    EXPECT_EQ(defaulted->scalar.offset, 14u);
+    const auto true_name = fo4::schema::scalar_value_name(defaulted->scalar, 1);
+    ASSERT_TRUE(true_name.has_value());
+    EXPECT_EQ(*true_name, "True");
+  }
+}
+
+TEST(ObjectBaseRecordsSynthetic, ReadsAndEditsOneObjectTemplateCombinationHeader) {
+  for (const auto signature : {"NPC_", "FURN"}) {
+    const auto key = fo4::FormKey::parse("000850:Patch.esp");
+    auto plugin = object_template_plugin(signature, 0x850,
+                                         {{"OBTE", u32_bytes(2)},
+                                          {"OBTF", zeros(0)},
+                                          {"OBTS", obts_header(1, 0, 5, 10, -1, 0, 1, 2, 0)},
+                                          {"OBTF", zeros(0)},
+                                          {"OBTS", obts_header(0, 3, 20, 30, 7, 1, 4, 8, 0)},
+                                          {"STOP", zeros(0)}});
+    EXPECT_EQ(read_row(plugin, key, std::string{signature} + "\\ObjectTemplateLevelMin", 0), "5");
+    EXPECT_EQ(read_row(plugin, key, std::string{signature} + "\\ObjectTemplateLevelMax", 1), "30");
+    EXPECT_EQ(read_row(plugin, key, std::string{signature} + "\\ObjectTemplateParentCombinationIndex", 0), "-1");
+    EXPECT_EQ(read_row(plugin, key, std::string{signature} + "\\ObjectTemplateDefault", 1), "True");
+    EXPECT_EQ(read_row(plugin, key, std::string{signature} + "\\ObjectTemplateMinLevelForRanks", 1), "4");
+    EXPECT_EQ(read_row(plugin, key, std::string{signature} + "\\ObjectTemplateAltLevelsPerTier", 1), "8");
+
+    const auto level_max = fo4::schema::scalar_field_descriptor(fo4::Signature::from_string(signature), std::string{signature} + "\\ObjectTemplateLevelMax");
+    const auto parent = fo4::schema::scalar_field_descriptor(fo4::Signature::from_string(signature), std::string{signature} + "\\ObjectTemplateParentCombinationIndex");
+    ASSERT_TRUE(level_max.has_value());
+    ASSERT_TRUE(parent.has_value());
+    EXPECT_EQ(fo4::set_record_scalar(plugin, key, *level_max, 1, "42"),
+              fo4::ScalarMutationStatus::updated);
+    EXPECT_EQ(fo4::set_record_scalar(plugin, key, *parent, 0, "9"),
+              fo4::ScalarMutationStatus::updated);
+
+    const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+    const auto* record = fo4::find_record(reread, key);
+    ASSERT_NE(record, nullptr) << signature;
+    std::vector<Bytes> payloads;
+    for (const auto& sub : record->subrecords) {
+      if (sub.signature == fo4::Signature::from_string("OBTS")) payloads.push_back(sub.data);
+    }
+    ASSERT_EQ(payloads.size(), 2u) << signature;
+    EXPECT_EQ(payloads[0], obts_header(1, 0, 5, 10, 9, 0, 1, 2, 0)) << signature;
+    EXPECT_EQ(payloads[1], obts_header(0, 3, 20, 42, 7, 1, 4, 8, 0)) << signature;
+    EXPECT_EQ(read_row(reread, key, std::string{signature} + "\\ObjectTemplateLevelMax", 1), "42");
+    EXPECT_EQ(read_row(reread, key, std::string{signature} + "\\ObjectTemplateLevelMin", 1), "20");
+  }
+}
+
+TEST(ObjectBaseRecordsSynthetic, ShortObjectTemplateCombinationsHideTheirHeaderRows) {
+  const auto key = fo4::FormKey::parse("000851:Patch.esp");
+  auto plugin = object_template_plugin("NPC_", 0x851,
+                                       {{"OBTE", u32_bytes(1)},
+                                        {"OBTF", zeros(0)},
+                                        {"OBTS", zeros(17)},
+                                        {"STOP", zeros(0)}});
+  EXPECT_EQ(read_row(plugin, key, "NPC_\\ObjectTemplateLevelMin", 0), "absent");
+  const auto level_min = fo4::schema::scalar_field_descriptor(
+      fo4::Signature::from_string("NPC_"), "NPC_\\ObjectTemplateLevelMin");
+  ASSERT_TRUE(level_min.has_value());
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *level_min, 0, "1"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *level_min, 1, "1"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto* record = fo4::find_record(reread, key);
+  ASSERT_NE(record, nullptr);
+  const auto* obts = find_subrecord(*record, fo4::Signature::from_string("OBTS"));
+  ASSERT_NE(obts, nullptr);
+  EXPECT_EQ(obts->data, zeros(17));
 }
