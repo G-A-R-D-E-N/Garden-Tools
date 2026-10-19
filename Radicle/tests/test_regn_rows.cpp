@@ -657,19 +657,28 @@ TEST(RegnRows, EntryArraysAndEntryPayloadsEditInPlace) {
                         {"RDOT", rdot_bytes(0x00000F40, 3, 0.25f)},
                         {"RDGS", rdgs_bytes(0x00000F41)},
                         {"RDWT", rdwt_bytes(0x00000F42, 100, 0x00000F43)},
-                        {"RDSA", rdsa_bytes(0x00000F44, 4, 0.5f)}});
+                        {"RDSA", rdsa_bytes(0x00000F44, 4, 0.5f)},
+                        {"RDAT", rdat_bytes(2, 1, 20)},
+                        {"RDOT", rdot_bytes(0x00000F47, 5, 0.75f)},
+                        {"RDWT", rdwt_bytes(0x00000F48, 200, 0x00000F49)}});
   write_grouped_record(out, "GLOB", 0x0F45, {{"EDID", text_bytes("TestGlobal")}});
   auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
   const auto key = "000F10:Patch.esp";
 
   EXPECT_EQ(field_bytes(plugin, key, "REGN\\Icon"), text_bytes("Icons\\Region.dds"));
   EXPECT_EQ(link_raw(plugin, key, "REGN\\Object"), 0x00000F40u);
+  EXPECT_EQ(link_raw(plugin, key, "REGN\\Object", 1), 0x00000F47u);
   EXPECT_EQ(link_raw(plugin, key, "REGN\\Grass"), 0x00000F41u);
   EXPECT_EQ(link_raw(plugin, key, "REGN\\Weather"), 0x00000F42u);
   EXPECT_EQ(sub_bytes(plugin, key, "RDWT"), rdwt_bytes(0x00000F42, 100, 0x00000F43));
   EXPECT_EQ(link_raw(plugin, key, "REGN\\Sound"), 0x00000F44u);
   EXPECT_EQ(fo4::record_field_count(plugin, key, "REGN\\Grass"), 1u);
   EXPECT_EQ(fo4::record_field_count(plugin, key, "REGN\\SoundChance"), 1u);
+  EXPECT_EQ(fo4::record_field_count(plugin, key, "REGN\\Object"), 2u);
+  EXPECT_EQ(fo4::record_field_count(plugin, key, "REGN\\WeatherChance"), 2u);
+  for (const auto& issue : fo4::schema::preflight_plugin(plugin)) {
+    EXPECT_NE(issue.code, "duplicate_scalar_subrecord") << issue.path;
+  }
 
   EXPECT_EQ(fo4::set_record_scalar(plugin, fo4::FormKey::parse(key), *sound_flags, "16"),
             fo4::ScalarMutationStatus::updated);
@@ -680,12 +689,15 @@ TEST(RegnRows, EntryArraysAndEntryPayloadsEditInPlace) {
   EXPECT_EQ(fo4::set_record_formlink_field(plugin, fo4::FormKey::parse(key), *weather_global,
                                            fo4::FormKey::parse("00000F45:Patch.esp")),
             fo4::FormLinkFieldMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, fo4::FormKey::parse(key), *weather_chance, 1, "250"),
+            fo4::ScalarMutationStatus::updated);
 
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   EXPECT_EQ(sub_bytes(reread, key, "RPLD"), f32_list({1.5f, -2.5f, 3.5f, 4.5f}));
   EXPECT_EQ(sub_bytes(reread, key, "RDSA"), rdsa_bytes(0x00000F44, 16, 0.5f));
   EXPECT_EQ(sub_bytes(reread, key, "RDWT"), rdwt_bytes(0x00000F42, 4000000000u, 0x02000F45));
   EXPECT_EQ(sub_bytes(reread, key, "RDOT"), rdot_bytes(0x00000F40, 3, 0.25f));
+  EXPECT_EQ(sub_bytes(reread, key, "RDWT", 1), rdwt_bytes(0x00000F48, 250, 0x00000F49));
 }
 
 TEST(RegnRows, RefusesEntryArrayRowsOnAMisalignedPayload) {
@@ -709,6 +721,29 @@ TEST(RegnRows, RefusesEntryArrayRowsOnAMisalignedPayload) {
                                            fo4::FormKey::parse("00000F46:Fallout4.esm")),
             fo4::FormLinkFieldMutationStatus::subrecord_missing);
   EXPECT_EQ(sub_bytes(plugin, "000F20:Patch.esp", "RDWT"), Bytes(13));
+}
+
+TEST(RegnRows, RefusesTwoPayloadsInsideOneEntry) {
+  const auto bytes = fo4::test::envnode::make_plugin(
+      {}, {top("REGN", {rec("REGN", 0x0F51, {{"RDAT", bytes_of({3, 0})},
+                                              {"RDWT", Bytes(12)},
+                                              {"RDWT", Bytes(12)}})})});
+  const auto plugin = fo4::read_plugin(bytes, "Patch.esp");
+  const auto key = fo4::FormKey::parse("000F51:Patch.esp");
+  const auto weather = fo4::schema::formlink_field_descriptor(
+      fo4::Signature::from_string("REGN"), "REGN\\Weather");
+  const auto chance = scalar_row("REGN\\WeatherChance");
+  ASSERT_TRUE(weather.has_value() && chance.has_value());
+  std::vector<std::string> duplicates;
+  for (const auto& issue : fo4::schema::preflight_plugin(plugin)) {
+    if (issue.code == "duplicate_scalar_subrecord") duplicates.push_back(issue.path);
+  }
+  ASSERT_EQ(duplicates.size(), 1u) << (duplicates.empty() ? std::string{} : duplicates[0]);
+  EXPECT_THROW(fo4::set_record_scalar(plugin, key, *chance, 0, "5"),
+               fo4::schema::ScalarError);
+  EXPECT_THROW(fo4::set_record_formlink_field(plugin, key, *weather, 0,
+                                              fo4::FormKey::parse("00000F49:Fallout4.esm")),
+               fo4::schema::FormLinkFieldError);
 }
 
 }  // namespace
