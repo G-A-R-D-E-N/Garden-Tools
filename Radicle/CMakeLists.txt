@@ -291,6 +291,7 @@ target_sources(radicle_c PRIVATE src/c_api_dialogue.cpp)
 target_sources(radicle_c PRIVATE src/c_api_armor.cpp src/c_api_eyes.cpp src/c_api_faction.cpp src/c_api_components.cpp src/c_api_cell.cpp)
 target_sources(radicle_c PRIVATE src/c_api_patch.cpp)
 target_sources(fo4 PRIVATE src/patch/delta_patch.cpp)
+target_sources(fo4 PRIVATE src/papyrus_source/lexer.cpp src/papyrus_source/parser.cpp src/papyrus_source/parser_decl.cpp src/papyrus_source/parser_expr.cpp src/papyrus_source/parser_stmt.cpp src/papyrus_source/summary.cpp)
 
 if(RADICLE_INSTALL)
   include(GNUInstallDirs)
@@ -648,6 +649,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_pex_oracle.cpp
     tests/test_papyrus_vm.cpp
     tests/test_pex_analysis.cpp
+    tests/test_papyrus_source.cpp
+    tests/test_papyrus_source_real.cpp
     tests/test_material_file.cpp
     tests/test_material_file_real.cpp
     tests/test_swf.cpp
