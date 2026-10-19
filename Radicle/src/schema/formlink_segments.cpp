@@ -109,7 +109,14 @@ void reconcile_counter(Record& record,
   if (descriptor.counter == Signature{}) return;
   const auto counter_index = subrecord_index(record, descriptor.counter);
   if (descriptor.segment_count == 0) {
-    // Constraint: a whole-u32 counter is overwritten in place, including zero, never erased.
+    // Constraint: a per-subrecord counter is overwritten in place, including zero, never erased.
+    if (count == 0 && descriptor.storage == FormLinkListStorage::packed_array) {
+      if (counter_index.has_value()) {
+        record.subrecords.erase(record.subrecords.begin() +
+                                static_cast<std::ptrdiff_t>(*counter_index));
+      }
+      return;
+    }
     if (counter_index.has_value()) {
       auto& data = record.subrecords[*counter_index].data;
       data.resize(4);
