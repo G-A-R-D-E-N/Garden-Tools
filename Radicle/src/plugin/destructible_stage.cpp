@@ -2,11 +2,14 @@
 
 #include "record_edit.hpp"
 
+#include "fo4/schema/record_constraints.hpp"
 #include "fo4/schema/scalar.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <iterator>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -120,6 +123,58 @@ struct StageTarget {
   DestructibleStageMemberStatus status{DestructibleStageMemberStatus::updated};
 };
 
+using Rules = std::span<const schema::SubrecordAuthoringConstraint>;
+
+std::optional<std::size_t> rule_index(Rules rules, Signature signature) {
+  for (std::size_t i = 0; i < rules.size(); ++i) {
+    if (rules[i].signature == signature) return i;
+  }
+  return std::nullopt;
+}
+
+std::optional<std::size_t> group_position(const Record& record, Signature anchor) {
+  const auto constraint = schema::record_authoring_constraint(record.header.signature);
+  if (!constraint.has_value()) return std::nullopt;
+  const auto rules = schema::authoring_subrecords(*constraint);
+  const auto target = rule_index(rules, anchor);
+  if (!target.has_value()) return std::nullopt;
+  for (const auto& subrecord : record.subrecords) {
+    if (!rule_index(rules, subrecord.signature).has_value()) return std::nullopt;
+  }
+  std::size_t position = 0;
+  for (std::size_t index = record.subrecords.size(); index > 0; --index) {
+    const auto existing = rule_index(rules, record.subrecords[index - 1].signature);
+    if (!existing.has_value()) return std::nullopt;
+    if (*existing <= *target) {
+      position = index;
+      break;
+    }
+  }
+  return position;
+}
+
+std::size_t header_count(const Record& record) {
+  std::size_t count = 0;
+  for (const auto& subrecord : record.subrecords) {
+    if (subrecord.signature == sig_dest) ++count;
+  }
+  return count;
+}
+
+std::vector<std::byte> header_payload(const Record& record) {
+  std::size_t stages = 0;
+  for (const auto& subrecord : record.subrecords) {
+    if (subrecord.signature == sig_dstd) ++stages;
+  }
+  std::vector<std::byte> payload(8, std::byte{0});
+  payload[4] = static_cast<std::byte>(stages & 0xFFu);
+  return payload;
+}
+
+bool group_member(Signature signature) {
+  return signature == sig_dest || signature == sig_damc || stage_member(signature);
+}
+
 StageTarget locate_stage(Plugin& plugin, const FormKey& record_key, std::size_t stage_index) {
   StageTarget found;
   found.record = detail::locate_mutable_record(plugin, record_key);
@@ -145,6 +200,44 @@ StageTarget locate_stage(Plugin& plugin, const FormKey& record_key, std::size_t 
 }
 
 }  // namespace
+
+DestructibleHeaderStatus insert_destructible_header(Plugin& plugin, const FormKey& record_key) {
+  auto* target = detail::locate_mutable_record(plugin, record_key);
+  if (target == nullptr) return DestructibleHeaderStatus::record_missing;
+  if (!destructible_carrier(target->header.signature)) {
+    return DestructibleHeaderStatus::record_mismatch;
+  }
+  if (header_count(*target) != 0) return DestructibleHeaderStatus::header_present;
+  const auto position = group_position(*target, sig_dest);
+  if (!position.has_value()) return DestructibleHeaderStatus::unknown_order;
+
+  std::vector<Subrecord> created;
+  created.push_back(Subrecord{sig_dest, header_payload(*target), false});
+  created.push_back(Subrecord{sig_damc, std::vector<std::byte>{}, false});
+  target->subrecords.insert(target->subrecords.begin() + static_cast<std::ptrdiff_t>(*position),
+                            std::make_move_iterator(created.begin()),
+                            std::make_move_iterator(created.end()));
+  detail::mark_record_modified(plugin, *target);
+  return DestructibleHeaderStatus::updated;
+}
+
+DestructibleHeaderStatus remove_destructible_header(Plugin& plugin, const FormKey& record_key) {
+  auto* target = detail::locate_mutable_record(plugin, record_key);
+  if (target == nullptr) return DestructibleHeaderStatus::record_missing;
+  if (!destructible_carrier(target->header.signature)) {
+    return DestructibleHeaderStatus::record_mismatch;
+  }
+  if (header_count(*target) == 0) return DestructibleHeaderStatus::header_missing;
+
+  auto& subrecords = target->subrecords;
+  subrecords.erase(std::remove_if(subrecords.begin(), subrecords.end(),
+                                  [](const Subrecord& subrecord) {
+                                    return group_member(subrecord.signature);
+                                  }),
+                   subrecords.end());
+  detail::mark_record_modified(plugin, *target);
+  return DestructibleHeaderStatus::updated;
+}
 
 DestructibleStageMutationStatus insert_destructible_stage(Plugin& plugin,
                                                          const FormKey& record_key,
