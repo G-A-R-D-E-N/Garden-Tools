@@ -33,6 +33,17 @@ const AbcCallSite& only_call(const std::vector<AbcCallSite>& calls) {
   static const AbcCallSite missing;
   return calls.empty() ? missing : calls.front();
 }
+
+std::vector<std::uint8_t> empty_pools_header() {
+  std::vector<std::uint8_t> out;
+  put_u16(out, fo4::abc::kAbcMinorVersion);
+  put_u16(out, fo4::abc::kAbcMajorVersion);
+  for (int pool = 0; pool < 6; ++pool) {
+    put_u30(out, 0);
+  }
+  put_u30(out, 1);
+  return out;
+}
 }
 
 TEST(Abc, ParsesVersionConstantPoolAndStructure) {
@@ -535,6 +546,63 @@ TEST(Abc, AcceptsEveryStructuralIndexAtItsLastEntry) {
         break;
     }
   }
+}
+
+TEST(Abc, AcceptsZeroIndicesIntoEmptyStringPool) {
+  std::vector<std::uint8_t> bytes = empty_pools_header();
+  put_u30(bytes, 1);
+  put_u30(bytes, 1);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u8(bytes, 0x80);
+  put_u30(bytes, 0);
+  put_u30(bytes, 1);
+  put_u30(bytes, 0);
+  put_u30(bytes, 1);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  AbcFile file;
+  ASSERT_EQ(AbcFile::parse(bytes, file), AbcStatus::Ok);
+  ASSERT_EQ(file.methods.size(), 1u);
+  EXPECT_EQ(file.methods[0].name, 0u);
+  ASSERT_EQ(file.methods[0].param_names.size(), 1u);
+  EXPECT_EQ(file.methods[0].param_names[0], 0u);
+  ASSERT_EQ(file.metadata.size(), 1u);
+  EXPECT_EQ(file.metadata[0].name, 0u);
+  ASSERT_EQ(file.metadata[0].items.size(), 1u);
+  EXPECT_EQ(file.metadata[0].items[0].key, 0u);
+  EXPECT_EQ(file.metadata[0].items[0].value, 0u);
+}
+
+TEST(Abc, AcceptsZeroIndexOptionInEmptyIntPoolAndAnyIndexForPoollessKind) {
+  std::vector<std::uint8_t> bytes = empty_pools_header();
+  put_u30(bytes, 1);
+  put_u30(bytes, 1);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u8(bytes, 0x08);
+  put_u30(bytes, 2);
+  put_u30(bytes, 0);
+  put_u8(bytes, 0x03);
+  put_u30(bytes, kBadIndex);
+  put_u8(bytes, 0x0B);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  AbcFile file;
+  ASSERT_EQ(AbcFile::parse(bytes, file), AbcStatus::Ok);
+  ASSERT_EQ(file.methods.size(), 1u);
+  ASSERT_EQ(file.methods[0].options.size(), 2u);
+  EXPECT_EQ(file.methods[0].options[0].kind, fo4::abc::AbcValueKind::Int);
+  EXPECT_EQ(file.methods[0].options[0].index, 0u);
+  EXPECT_EQ(file.methods[0].options[1].kind, fo4::abc::AbcValueKind::True);
+  EXPECT_EQ(file.methods[0].options[1].index, kBadIndex);
 }
 
 TEST(AbcCorpus, EveryExtractedAbcParsesDisassemblesAndSummarizes) {

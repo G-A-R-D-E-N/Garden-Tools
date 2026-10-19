@@ -332,6 +332,9 @@ AbcStatus check_pool_indices(const AbcFile& file) {
     return index != 0 && past_end(index, limit);
   };
   const auto value_past_end = [&](std::uint32_t index, AbcValueKind kind) {
+    if (index == 0) {
+      return false;
+    }
     switch (kind) {
       case AbcValueKind::Utf8:
         return past_end(index, strings);
@@ -400,17 +403,17 @@ AbcStatus check_pool_indices(const AbcFile& file) {
   };
 
   for (const AbcMetadata& entry : file.metadata) {
-    if (past_end(entry.name, strings)) {
+    if (optional_past_end(entry.name, strings)) {
       return AbcStatus::IndexOutOfRange;
     }
     for (const AbcMetadataItem& item : entry.items) {
-      if (past_end(item.key, strings) || past_end(item.value, strings)) {
+      if (optional_past_end(item.key, strings) || optional_past_end(item.value, strings)) {
         return AbcStatus::IndexOutOfRange;
       }
     }
   }
   for (const AbcMethodInfo& method : file.methods) {
-    if (past_end(method.name, strings) || past_end(method.return_type, multinames)) {
+    if (optional_past_end(method.name, strings) || past_end(method.return_type, multinames)) {
       return AbcStatus::IndexOutOfRange;
     }
     for (const std::uint32_t param : method.param_types) {
@@ -419,7 +422,7 @@ AbcStatus check_pool_indices(const AbcFile& file) {
       }
     }
     for (const std::uint32_t param_name : method.param_names) {
-      if (past_end(param_name, strings)) {
+      if (optional_past_end(param_name, strings)) {
         return AbcStatus::IndexOutOfRange;
       }
     }
