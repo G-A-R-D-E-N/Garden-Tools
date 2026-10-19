@@ -30,6 +30,7 @@ struct ScalarRow {
   bool embedded;
   std::size_t payload_size;
   std::size_t minimum_payload_size;
+  bool repeated = false;
 };
 
 struct LinkRow {
@@ -76,7 +77,7 @@ constexpr ScalarRow k_scalar_rows[] = {
     {"REFR", "REFR\\WaterCurrentRotationalVelocityX", "XCVR", 0, f32, true, 12, 0},
     {"REFR", "REFR\\WaterCurrentRotationalVelocityY", "XCVR", 4, f32, true, 12, 0},
     {"REFR", "REFR\\WaterCurrentRotationalVelocityZ", "XCVR", 8, f32, true, 12, 0},
-    {"REFR", "REFR\\PowerGridCount", "XWPG", 0, u32, false, 0, 0},
+    {"REFR", "REFR\\PowerGridCount", "XWPG", 0, u32, false, 0, 0, true},
     {"REFR", "REFR\\SplineSlack", "XBSD", 0, f32, true, 0, 20},
     {"REFR", "REFR\\SplineThickness", "XBSD", 4, f32, true, 0, 20},
     {"REFR", "REFR\\SplineHalfExtentX", "XBSD", 8, f32, true, 0, 20},
@@ -239,6 +240,9 @@ std::vector<std::byte> make_plugin() {
                 {"XCVR", floats({4.0f, 5.0f, 6.0f})},
                 {"XWPG", u32_bytes(1)},
                 {"XWPN", u32s({0x00000A96u, 0x00000A97u, 0x00000A98u})},
+                {"XWPG", u32_bytes(2)},
+                {"XWPN", u32s({0x00000AC1u, 0x00000AC2u, 0x00000AC3u})},
+                {"XWPN", u32s({0x00000AC4u, 0x00000AC5u, 0x00000AC6u})},
                 {"XPOD", u32s({0x00000A99u, 0x00000A9Au})},
                 {"XBSD", spline_bytes()},
                 {"XPDD", floats({2.0f, 3.0f})},
@@ -328,6 +332,7 @@ TEST(REFRExtraRows, ScalarRowsHaveXEditOffsetsStorageAndGates) {
     EXPECT_EQ(field->scalar.storage, row.storage);
     EXPECT_EQ(field->scalar.payload_size, row.payload_size);
     EXPECT_EQ(field->scalar.minimum_payload_size, row.minimum_payload_size);
+    EXPECT_EQ(field->scalar.address.repeated, row.repeated);
   }
 }
 
@@ -613,9 +618,12 @@ TEST(REFRExtraRows, WritesTheNewRowsInPlaceAndRefusesALinkedReferenceBesideAShor
             fo4::ScalarMutationStatus::updated);
   EXPECT_EQ(fo4::set_record_scalar(plugin, key, *decal, "4.0"),
             fo4::ScalarMutationStatus::updated);
-  EXPECT_TRUE(fo4::schema::is_derived_scalar_row(refr, fo4::Signature::from_string("XWPG")));
-  EXPECT_THROW(static_cast<void>(fo4::set_record_scalar(plugin, key, *count, "2")),
-               fo4::schema::ScalarError);
+  EXPECT_FALSE(fo4::schema::is_derived_scalar_row(refr, fo4::Signature::from_string("XWPG")));
+  ASSERT_EQ(fo4::record_field_count(plugin, key, *count), 2u);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *count, 1, "5"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *count, 2, "5"),
+            fo4::ScalarMutationStatus::subrecord_missing);
 
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   const auto linked_keyword = sub_bytes_at(reread, "000C10:Patch.esp", "XLKR", 0);
@@ -639,7 +647,8 @@ TEST(REFRExtraRows, WritesTheNewRowsInPlaceAndRefusesALinkedReferenceBesideAShor
   EXPECT_EQ(Bytes(spline.begin() + 4, spline.begin() + 20), floats({0.25f, 1.0f, 2.0f, 3.0f}));
   EXPECT_EQ(std::to_integer<std::uint8_t>(spline[20]), 0x01);
   EXPECT_EQ(sub_bytes(reread, "000C10:Patch.esp", "XPDD"), floats({2.0f, 4.0f}));
-  EXPECT_EQ(sub_bytes(reread, "000C10:Patch.esp", "XWPG"), u32_bytes(1));
+  EXPECT_EQ(sub_bytes_at(reread, "000C10:Patch.esp", "XWPG", 0), u32_bytes(1));
+  EXPECT_EQ(sub_bytes_at(reread, "000C10:Patch.esp", "XWPG", 1), u32_bytes(5));
 
   EXPECT_EQ(sub_bytes(reread, "000C10:Patch.esp", "XCVL"), floats({1.0f, 2.0f, 3.0f}));
   EXPECT_EQ(sub_bytes(reread, "000C10:Patch.esp", "XWPN"), u32s({0x00000A96u, 0x00000A97u, 0x00000A98u}));

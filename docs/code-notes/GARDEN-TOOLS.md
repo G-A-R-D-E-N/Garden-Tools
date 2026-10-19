@@ -1047,9 +1047,9 @@ The fields, all from xEdit FO4 (pin `9fb016884bec138ea6c7b872cec831537d464c3e`),
 | `XPOD` Portal Data | array of {Origin, Destination} | multiple of 8 |
 | `XORD` Linked Occlusion References | form ID array | multiple of 4 |
 | `XLRT` Location Ref Type | form ID array | multiple of 4 |
-| `XPWR` Reflected/Refracted By | {Reference, Type} | exactly 8 or 4 (`Radicle/src/schema/form_link_mixed.cpp:k_placed_reference_layouts`) |
+| `XPWR` Reflected/Refracted By | {Reference, Type} | `Radicle/src/schema/form_link_mixed.cpp:k_placed_reference_layouts` |
 | `XAPR` Activate Parent Ref | {Reference, Delay} | exactly 8 |
-| `XPLK` Spline Connection | {Ref, Unknown} | exactly 8 or 4 (`Radicle/src/schema/form_link_mixed.cpp:k_placed_reference_layouts`) |
+| `XPLK` Spline Connection | {Ref, Unknown} | `Radicle/src/schema/form_link_mixed.cpp:k_placed_reference_layouts` |
 | `XWPN` Power Grid Connection | {Node 1, Node 2, Line} | exactly 12 |
 
 `placed_reference_formid_offsets` handles these for the ten placed signatures only, because other record types reuse some of these names. A strict remap throws `FormIdError` when a payload's size breaks its rule, instead of leaving stale IDs.
