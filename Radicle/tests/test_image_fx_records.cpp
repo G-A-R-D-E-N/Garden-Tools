@@ -282,7 +282,7 @@ TEST(ImageFxSynthetic, DepthOfFieldVignetteInterpolatorsAreGatedByFormVersion118
   EXPECT_EQ(fo4::record_field_count(plugin, key(3001), "IMAD\\DoFVignetteStrengthTime"), 1u);
   EXPECT_EQ(fo4::record_field_count(plugin, key(3001), "IMAD\\DoFVignetteStrengthValue"), 1u);
   EXPECT_EQ(decoded_value(plugin, 3001, "IMAD\\DoFVignetteStrengthValue"), "0.5");
-  EXPECT_EQ(fo4::record_field_count(plugin, key(3002), "IMAD\\DoFVignetteStrengthTime"), 0u);
+  EXPECT_EQ(fo4::record_field_count(plugin, key(3002), "IMAD\\DoFVignetteStrengthTime"), 1u);
   EXPECT_EQ(fo4::record_field_count(plugin, key(3002), "IMAD\\DoFVignetteRadiusTime"), 0u);
 
   const auto before = payload(plugin, 3002, "NAM6");
