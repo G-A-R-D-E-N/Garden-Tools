@@ -32076,6 +32076,7 @@
           "kind": "subrecord_group",
           "count_subrecord": "CS2H",
           "insertion": "existing_only",
+          "requires_existing_count": true,
           "successors": ["CS2E", "CS2F", "CSCR", "PFRN", "DOFT", "SOFT", "DPLT", "CRIF", "FTST", "QNAM", "MSDK", "MSDV", "TETI", "TEND", "MRSV", "FMRI", "FMRS", "FMIN", "ATTX"],
           "members": [
             {"subrecord": "CS2K", "required": false, "repeatable": false, "payload_size": 4, "leading": true},

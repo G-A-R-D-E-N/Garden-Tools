@@ -558,7 +558,7 @@ SubrecordGroupMutationStatus insert_record_subrecord_group(Plugin& plugin,
   const auto spans = group_spans(*target, group);
   const bool counted = group.count_subrecord != Signature{};
   const auto counter = group_counter(*target, group, spans.size());
-  if (counted && !counter && !spans.empty()) return SubrecordGroupMutationStatus::subrecord_missing;
+  if (counted && !counter && (!spans.empty() || group.requires_existing_count)) return SubrecordGroupMutationStatus::subrecord_missing;
   if (index > spans.size()) return SubrecordGroupMutationStatus::index_out_of_range;
 
   const std::size_t position = index < spans.size()  ? spans[index].first

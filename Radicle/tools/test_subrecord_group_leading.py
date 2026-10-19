@@ -46,6 +46,17 @@ class LeadingGroupMemberTests(unittest.TestCase):
         self.rejects("leading must be a boolean",
                      group(members=[group_member("CS2K", **dict(leading, leading="yes")), group_member("CNTO")]), count)
 
+    def test_subrecord_group_requires_existing_count_renders_only_when_set(self):
+        count = count_row(subrecord="COCT")
+        plain = schema_codegen.render(*self.load_schema(group(), count))
+        self.assertNotIn("true},", plain.split("k_subrecord_groups{{", 1)[1])
+        flagged = schema_codegen.render(*self.load_schema(group(requires_existing_count=True), count))
+        self.assertIn("k_subrecord_group_members_0), std::span<const Signature>{}, true},", flagged)
+        self.rejects("requires_existing_count must be a boolean on a counted group",
+                     group(requires_existing_count=1), count)
+        self.rejects("requires_existing_count must be a boolean on a counted group",
+                     group(count_subrecord=None, requires_existing_count=True))
+
 
 if __name__ == "__main__":
     unittest.main()

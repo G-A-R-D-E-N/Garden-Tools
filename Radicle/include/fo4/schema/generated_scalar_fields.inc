@@ -2516,6 +2516,6 @@ constexpr std::array<SubrecordGroupDescriptor, 9> k_subrecord_groups{{
 {Signature::from_string("IPDS"), "IPDS\\Data", "Data", Signature{}, std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_4), std::span<const Signature>{}},
 {Signature::from_string("LENS"), "LENS\\Sprites", "Lens flare sprites", Signature::from_string("LFSP"), std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_5), std::span<const Signature>{}},
 {Signature::from_string("MSWP"), "MSWP\\Substitutions", "Substitutions", Signature{}, std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_6), std::span<const Signature>{}},
-{Signature::from_string("NPC_"), "NPC_\\ActorSounds", "Actor sounds", Signature::from_string("CS2H"), std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_7), std::span<const Signature>(k_subrecord_group_successors_7)},
+{Signature::from_string("NPC_"), "NPC_\\ActorSounds", "Actor sounds", Signature::from_string("CS2H"), std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_7), std::span<const Signature>(k_subrecord_group_successors_7), true},
 {Signature::from_string("TERM"), "TERM\\Holotapes", "Holotapes", Signature::from_string("COCT"), std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_8), std::span<const Signature>(k_subrecord_group_successors_8)},
 }};

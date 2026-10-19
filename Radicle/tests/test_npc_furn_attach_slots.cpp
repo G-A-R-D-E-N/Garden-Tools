@@ -273,7 +273,9 @@ fo4::schema::SubrecordGroupDescriptor sounds_group() {
 
 std::uint32_t stored_sound_count(const fo4::Plugin& plugin, std::string_view key) {
   const auto bytes = payloads_of(plugin, key, "CS2H");
-  return bytes.size() == 4 ? static_cast<std::uint32_t>(bytes[0]) : 0xFFFFFFFFu;
+  return bytes.size() == 4 ? static_cast<std::uint32_t>(bytes[0]) | static_cast<std::uint32_t>(bytes[1]) << 8 |
+                                static_cast<std::uint32_t>(bytes[2]) << 16 | static_cast<std::uint32_t>(bytes[3]) << 24
+                              : 0xFFFFFFFFu;
 }
 
 }  // namespace
@@ -355,15 +357,13 @@ TEST(NpcFurnAttachSlots, InsertingAnActorSoundGoesBeforeTheNextRunAndBeforeTheEn
             fo4::SubrecordGroupMutationStatus::index_out_of_range);
 }
 
-TEST(NpcFurnAttachSlots, FirstActorSoundCreatesTheCountBeforeInheritsSoundsFrom) {
+TEST(NpcFurnAttachSlots, FirstActorSoundIsRefusedBecauseItWouldLeaveCS2EAndCS2FMissing) {
   auto plugin = fo4::read_plugin(make_plugin().bytes, "Patch.esp");
   const auto npc = fo4::FormKey::parse("000804:Patch.esp");
+  const auto before = fo4::write_plugin(plugin);
   EXPECT_EQ(fo4::insert_record_subrecord_group(plugin, npc, sounds_group(), 0),
-            fo4::SubrecordGroupMutationStatus::updated);
-  const auto after = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
-  EXPECT_EQ(signature_list(after, "000804:Patch.esp"), "EDID,NAM8,CS2H,CS2D,CSCR");
-  EXPECT_EQ(stored_sound_count(after, "000804:Patch.esp"), 1u);
-  EXPECT_EQ(payloads_of(after, "000804:Patch.esp", "CS2D"), u32_bytes(0));
+            fo4::SubrecordGroupMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
 }
 
 TEST(NpcFurnAttachSlots, ActorSoundKeywordWithoutASoundFailsClosedWithoutMutation) {

@@ -92,7 +92,8 @@ TEST_P(NpcReal, ActorSoundRunsMatchTheStoredCountAndKeepEachKeywordWithItsSound)
     for (const auto& subrecord : record->subrecords) {
       if (subrecord.signature == count_signature && subrecord.data.size() == 4) {
         ++counts;
-        stored = static_cast<std::uint32_t>(subrecord.data[0]);
+        stored = static_cast<std::uint32_t>(subrecord.data[0]) | static_cast<std::uint32_t>(subrecord.data[1]) << 8 |
+                 static_cast<std::uint32_t>(subrecord.data[2]) << 16 | static_cast<std::uint32_t>(subrecord.data[3]) << 24;
       }
       if (subrecord.signature == sound_signature) ++sounds;
     }

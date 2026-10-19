@@ -20,7 +20,7 @@ CPP_PRESENTATIONS = {"enum": "enumeration"}
 INSERTIONS = {"existing_only"}
 COUNTED_ARRAY_KEYS = {"kind", "path", "label", "subrecord", "count_subrecord", "stride", "insertion", "members"}
 MEMBER_KEYS = {"path", "label", "offset", "storage", "presentation", "minimum", "maximum"}
-SUBRECORD_GROUP_KEYS = {"kind", "path", "label", "count_subrecord", "insertion", "members", "successors"}
+SUBRECORD_GROUP_KEYS = {"kind", "path", "label", "count_subrecord", "insertion", "members", "successors", "requires_existing_count"}
 GROUP_MEMBER_KEYS = {"subrecord", "required", "repeatable", "payload_size", "default", "fields",
                      "formlink_fields", "localized", "skippable", "leading"}
 GROUP_ROW_FORBIDDEN = {"kind", "subrecord", "repeated", "stride", "array_offset", "when", "payload_size", "minimum_payload_size"}
@@ -169,6 +169,9 @@ def parse_subrecord_group(field, record_signature: str):
         raise ValueError(f"subrecord_group count_subrecord must be four printable ASCII characters: {path!r}")
     if field.get("insertion") not in INSERTIONS:
         raise ValueError(f"unsupported insertion policy until record ordering exists: {field.get('insertion')!r}")
+    requires_existing_count = field.get("requires_existing_count", False)
+    if not isinstance(requires_existing_count, bool) or (requires_existing_count and not count_subrecord):
+        raise ValueError(f"subrecord_group requires_existing_count must be a boolean on a counted group: {path!r}")
     members = field.get("members")
     if not isinstance(members, list) or not members:
         raise ValueError(f"subrecord_group members must be a non-empty array: {path!r}")
@@ -245,7 +248,8 @@ def parse_subrecord_group(field, record_signature: str):
     if set(successors) & (signatures | {count_subrecord}):
         raise ValueError(f"subrecord_group successors cannot be members or the count subrecord: {path!r}")
     group = {"record": record_signature, "path": path, "label": label,
-             "count_subrecord": count_subrecord, "members": parsed, "successors": successors}
+             "count_subrecord": count_subrecord, "members": parsed, "successors": successors,
+             "requires_existing_count": requires_existing_count}
     return group, rows, links
 
 
@@ -529,6 +533,7 @@ def render_subrecord_groups(groups):
              if group["count_subrecord"] else "Signature{}") + ", " +
             f"std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_{index}), " +
             successors +
+            (", true" if group["requires_existing_count"] else "") +
             "},")
     if groups:
         lines.append(f"constexpr std::array<SubrecordGroupDescriptor, {len(groups)}> k_subrecord_groups{{{{")

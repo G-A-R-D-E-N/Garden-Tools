@@ -111,6 +111,7 @@ struct SubrecordGroupDescriptor {
   Signature count_subrecord{};
   std::span<const SubrecordGroupMemberDescriptor> members{};
   std::span<const Signature> successors{};
+  bool requires_existing_count{false};
 };
 
 class SubrecordGroupError : public std::runtime_error {
