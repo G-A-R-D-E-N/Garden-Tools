@@ -69,6 +69,13 @@ public enum PlacedMoveStatus : int
     Relocated = 1,
 }
 
+public enum RecordCopyStatus : int
+{
+    Inserted = 0,
+    Replaced = 1,
+    AlreadyExists = 2,
+}
+
 [StructLayout(LayoutKind.Sequential)]
 public unsafe struct FormKey
 {
@@ -2210,6 +2217,9 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_copy_record_as_new")]
     public static extern Status PluginCopyRecordAsNew(IntPtr destination, IntPtr source, FormKey record, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? editor_id, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? remove_prefix, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? remove_suffix, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? prefix, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? suffix, FormKey* out_key);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_copy_record_override")]
+    public static extern Status PluginCopyRecordOverride(IntPtr destination, IntPtr source, FormKey record, int overwrite, RecordCopyStatus* out_status);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_placed_transform")]
     public static extern Status PluginSetPlacedTransform(IntPtr plugin, FormKey reference, float* position, float* rotation);
