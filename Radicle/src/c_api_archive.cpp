@@ -145,11 +145,14 @@ radicle_status radicle_ba2_write_general(const radicle_ba2_write_entry* entries,
                                          uint8_t** out_bytes,
                                          size_t* out_size) {
   clear_error();
-  if (out_bytes == nullptr || out_size == nullptr || (entries == nullptr && count != 0)) {
-    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "entries, out_bytes and out_size are required");
+  if (out_bytes != nullptr) *out_bytes = nullptr;
+  if (out_size != nullptr) *out_size = 0;
+  if (out_bytes == nullptr || out_size == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_bytes and out_size are required");
   }
-  *out_bytes = nullptr;
-  *out_size = 0;
+  if (entries == nullptr && count != 0) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "entries are required");
+  }
   return guarded("unknown exception while writing BA2", [&] {
     fo4::archive::Ba2GeneralArchive archive;
     std::unordered_set<std::string> names;
@@ -161,15 +164,15 @@ radicle_status radicle_ba2_write_general(const radicle_ba2_write_entry* entries,
         return fail(RADICLE_STATUS_INVALID_ARGUMENT, "BA2 entry needs a path and bytes that fit a 32-bit size");
       }
       const std::string path = input.path;
-      if (path.empty() || path.size() >= k_max_write_path_length) {
-        return fail(RADICLE_STATUS_INVALID_ARGUMENT, "BA2 entry path must be 1 to 259 bytes");
-      }
       const auto stored = fo4::text::utf8_to_windows1252(path);
       if (!stored) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "BA2 entry path has no Windows-1252 form");
+      if (stored->empty() || stored->size() >= k_max_write_path_length) {
+        return fail(RADICLE_STATUS_INVALID_ARGUMENT, "BA2 entry path must be 1 to 259 Windows-1252 bytes");
+      }
       if (!names.insert(fo4::archive::normalize_ba2_name(*stored)).second) {
         return fail(RADICLE_STATUS_INVALID_ARGUMENT, "BA2 entry path duplicates an earlier entry");
       }
-      const auto hashes = fo4::archive::compute_ba2_hashes(path);
+      const auto hashes = fo4::archive::compute_ba2_hashes(*stored);
       fo4::archive::Ba2GeneralEntry entry;
       entry.name_hash = hashes.name;
       entry.extension_hash = hashes.extension;

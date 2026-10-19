@@ -386,12 +386,49 @@ TEST_F(Ba2ReaderTest, CApiWritesTheCppGeneralBytesAndReadsThemBack) {
   ASSERT_EQ(radicle_ba2_get_entry(ba2, 1, &entry), RADICLE_STATUS_OK);
   EXPECT_STREQ(entry.path, "Materials\\Gun.bgsm");
   EXPECT_EQ(entry.unpacked_size, 4096u);
+  EXPECT_EQ(entry.name_hash, 0xB5DA1C49u);
+  EXPECT_EQ(entry.extension_hash, 0x6D736762u);
+  EXPECT_EQ(entry.directory_hash, 0x7D1E021Bu);
   size_t index = 9;
   ASSERT_EQ(radicle_ba2_find(ba2, "materials/GUN.bgsm", &index), RADICLE_STATUS_OK);
   EXPECT_EQ(index, 1u);
   ASSERT_EQ(radicle_ba2_extract(ba2, 0, &out, &size), RADICLE_STATUS_OK);
   EXPECT_EQ(std::string(reinterpret_cast<const char*>(out), size), mesh);
   radicle_free_bytes(out);
+  radicle_ba2_close(ba2);
+}
+
+TEST_F(Ba2ReaderTest, CApiWriteHashesTheWindows1252FormAndAcceptsLongUtf8Path) {
+  const std::string caf = "Meshes\\Caf\xC3\xA9.nif";
+  std::string long_path = "Meshes\\";
+  for (int i = 0; i < 189; ++i) long_path += "\xC3\xA9";
+  long_path += ".nif";
+  const std::string mesh = "x";
+  const auto* bytes = reinterpret_cast<const uint8_t*>(mesh.data());
+  const radicle_ba2_write_entry entries[] = {{caf.c_str(), bytes, 1}, {long_path.c_str(), bytes, 1}};
+
+  uint8_t* out = nullptr;
+  size_t size = 0;
+  ASSERT_EQ(radicle_ba2_write_general(entries, 2, &out, &size), RADICLE_STATUS_OK);
+  const auto* begin = reinterpret_cast<const std::byte*>(out);
+  const std::vector<std::byte> written(begin, begin + size);
+  radicle_free_bytes(out);
+
+  const auto path = write_file(data() / "Caf - Main.ba2", written);
+  radicle_ba2* ba2 = nullptr;
+  ASSERT_EQ(radicle_ba2_open(path.string().c_str(), &ba2), RADICLE_STATUS_OK);
+  radicle_ba2_entry_info entry{};
+  ASSERT_EQ(radicle_ba2_get_entry(ba2, 0, &entry), RADICLE_STATUS_OK);
+  EXPECT_STREQ(entry.path, caf.c_str());
+  EXPECT_EQ(entry.name_hash, 0x8AF76F07u);
+  EXPECT_EQ(entry.extension_hash, 0x0066696Eu);
+  EXPECT_EQ(entry.directory_hash, 0x0B70CE37u);
+  ASSERT_EQ(radicle_ba2_get_entry(ba2, 1, &entry), RADICLE_STATUS_OK);
+  EXPECT_STREQ(entry.path, long_path.c_str());
+  const auto long_hashes = fo4::archive::compute_ba2_hashes("Meshes\\" + std::string(189, '\xE9') + ".nif");
+  EXPECT_EQ(entry.name_hash, long_hashes.name);
+  EXPECT_EQ(entry.extension_hash, long_hashes.extension);
+  EXPECT_EQ(entry.directory_hash, long_hashes.directory);
   radicle_ba2_close(ba2);
 }
 
@@ -408,17 +445,25 @@ TEST_F(Ba2ReaderTest, CApiWriteRefusesBadEntriesAndClearsOutputs) {
   const radicle_ba2_write_entry duplicate[] = {{"Meshes\\A.nif", bytes, 1}, {"meshes/a.NIF", bytes, 1}};
   const radicle_ba2_write_entry unmappable[] = {{"Meshes\\\xE4\xB8\xAD.nif", bytes, 1}};
 
+  uint8_t sentinel = 0;
   uint8_t* out = nullptr;
-  size_t size = 7;
-  EXPECT_EQ(radicle_ba2_write_general(null_path, 1, &out, &size), RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(radicle_ba2_write_general(empty_path, 1, &out, &size), RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(radicle_ba2_write_general(too_long_path, 1, &out, &size), RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(radicle_ba2_write_general(null_bytes, 1, &out, &size), RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(radicle_ba2_write_general(duplicate, 2, &out, &size), RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(radicle_ba2_write_general(unmappable, 1, &out, &size), RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(radicle_ba2_write_general(nullptr, 1, &out, &size), RADICLE_STATUS_INVALID_ARGUMENT);
+  size_t size = 0;
+  const auto refused = [&](const radicle_ba2_write_entry* entries, size_t count) {
+    out = &sentinel;
+    size = 7;
+    EXPECT_EQ(radicle_ba2_write_general(entries, count, &out, &size), RADICLE_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(out, nullptr);
+    EXPECT_EQ(size, 0u);
+  };
+  refused(null_path, 1);
+  refused(empty_path, 1);
+  refused(too_long_path, 1);
+  refused(null_bytes, 1);
+  refused(duplicate, 2);
+  refused(unmappable, 1);
+  refused(nullptr, 1);
+  size = 7;
   EXPECT_EQ(radicle_ba2_write_general(longest_ok, 1, nullptr, &size), RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(out, nullptr);
   EXPECT_EQ(size, 0u);
 
   ASSERT_EQ(radicle_ba2_write_general(longest_ok, 1, &out, &size), RADICLE_STATUS_OK);
