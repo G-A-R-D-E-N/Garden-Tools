@@ -19611,6 +19611,13 @@
         {"path": "FSTS\\SneakingCount", "label": "Sneaking count", "kind": "scalar", "subrecord": "XCNT", "offset": 12, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "payload_size": 20, "insertion": "existing_only"},
         {"path": "FSTS\\SwimmingCount", "label": "Swimming count", "kind": "scalar", "subrecord": "XCNT", "offset": 16, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "payload_size": 20, "insertion": "existing_only"}
       ],
+      "formlink_lists": [
+        {"path": "FSTS\\SwimmingFootsteps", "label": "Swimming footsteps", "subrecord": "DATA", "storage": "packed_array", "counter": "XCNT", "counter_payload_size": 20, "segment_counters": [16, 12, 8, 4, 0], "segment_index": 0, "targets": ["FSTP"], "nullable": false, "mutation": "existing_neighbors"},
+        {"path": "FSTS\\SneakingFootsteps", "label": "Sneaking footsteps", "subrecord": "DATA", "storage": "packed_array", "counter": "XCNT", "counter_payload_size": 20, "segment_counters": [16, 12, 8, 4, 0], "segment_index": 1, "targets": ["FSTP"], "nullable": false, "mutation": "existing_neighbors"},
+        {"path": "FSTS\\SprintingFootsteps", "label": "Sprinting footsteps", "subrecord": "DATA", "storage": "packed_array", "counter": "XCNT", "counter_payload_size": 20, "segment_counters": [16, 12, 8, 4, 0], "segment_index": 2, "targets": ["FSTP"], "nullable": false, "mutation": "existing_neighbors"},
+        {"path": "FSTS\\RunningFootsteps", "label": "Running footsteps", "subrecord": "DATA", "storage": "packed_array", "counter": "XCNT", "counter_payload_size": 20, "segment_counters": [16, 12, 8, 4, 0], "segment_index": 3, "targets": ["FSTP"], "nullable": false, "mutation": "existing_neighbors"},
+        {"path": "FSTS\\WalkingFootsteps", "label": "Walking footsteps", "subrecord": "DATA", "storage": "packed_array", "counter": "XCNT", "counter_payload_size": 20, "segment_counters": [16, 12, 8, 4, 0], "segment_index": 4, "targets": ["FSTP"], "nullable": false, "mutation": "existing_neighbors"}
+      ],
       "formlink_fields": [
         {
           "path": "FSTS\\Footsteps",
