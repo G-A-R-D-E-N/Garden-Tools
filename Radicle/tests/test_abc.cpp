@@ -16,8 +16,10 @@
 #include <vector>
 
 using fo4::abc::AbcCallSite;
+using fo4::abc::AbcException;
 using fo4::abc::AbcFile;
 using fo4::abc::AbcInstruction;
+using fo4::abc::AbcMethodBody;
 using fo4::abc::AbcOpcodeInfo;
 using fo4::abc::AbcOperandEncoding;
 using fo4::abc::AbcOperandRole;
@@ -415,6 +417,61 @@ TEST(Abc, RejectsBranchTargetOutOfRange) {
   EXPECT_EQ(instructions[1].operands[0].target, 1005);
 }
 
+TEST(Abc, HandlerTargetsAreReachabilityRootsAndValidated) {
+  std::vector<AbcInstruction> instructions;
+  std::vector<std::uint8_t> catch_only_jump;
+  put_u8(catch_only_jump, 0x47);
+  put_u8(catch_only_jump, 0x10);
+  put_s24(catch_only_jump, 1000);
+  const std::vector<AbcException> handler{
+      AbcException{0, 1, 1, kMultinameTest, kStringHelper}};
+  EXPECT_EQ(fo4::abc::decode_code(catch_only_jump, instructions, handler),
+            AbcStatus::BranchOutOfRange);
+  ASSERT_EQ(fo4::abc::decode_code(catch_only_jump, instructions), AbcStatus::Ok);
+  ASSERT_EQ(instructions.size(), 2u);
+  EXPECT_EQ(instructions[1].operands[0].target, 1005);
+  std::vector<std::uint8_t> reachable_catch;
+  put_u8(reachable_catch, 0x47);
+  put_u8(reachable_catch, 0x10);
+  put_s24(reachable_catch, 0);
+  EXPECT_EQ(fo4::abc::decode_code(reachable_catch, instructions, handler), AbcStatus::Ok);
+  ASSERT_EQ(instructions.size(), 2u);
+  EXPECT_EQ(instructions[1].operands[0].target, 5);
+  const std::vector<AbcException> past_end{
+      AbcException{0, 1, 99, kMultinameTest, kStringHelper}};
+  EXPECT_EQ(fo4::abc::decode_code(catch_only_jump, instructions, past_end),
+            AbcStatus::BranchOutOfRange);
+  const std::vector<AbcException> at_end{
+      AbcException{0, 1, 5, kMultinameTest, kStringHelper}};
+  EXPECT_EQ(fo4::abc::decode_code(catch_only_jump, instructions, at_end),
+            AbcStatus::BranchOutOfRange);
+  std::vector<std::uint8_t> two_byte_head;
+  put_u8(two_byte_head, 0x60);
+  put_u30(two_byte_head, kMultinameExternalInterface);
+  put_u8(two_byte_head, 0x47);
+  const std::vector<AbcException> mid_instruction{
+      AbcException{0, 1, 1, kMultinameTest, kStringHelper}};
+  EXPECT_EQ(fo4::abc::decode_code(two_byte_head, instructions, mid_instruction),
+            AbcStatus::BranchOutOfRange);
+  const std::vector<AbcException> instruction_start{
+      AbcException{0, 1, 2, kMultinameTest, kStringHelper}};
+  EXPECT_EQ(fo4::abc::decode_code(two_byte_head, instructions, instruction_start),
+            AbcStatus::Ok);
+  AbcFile file;
+  std::string listing;
+  EXPECT_EQ(fo4::abc::disassemble(file, catch_only_jump, listing, handler),
+            AbcStatus::BranchOutOfRange);
+  EXPECT_EQ(fo4::abc::disassemble(file, reachable_catch, listing, handler), AbcStatus::Ok);
+  EXPECT_NE(listing.find("1: jump 5"), std::string::npos);
+  AbcMethodBody body;
+  body.code = catch_only_jump;
+  body.exceptions = handler;
+  file.methods.resize(1);
+  file.bodies.push_back(body);
+  AbcSummary summary;
+  EXPECT_EQ(fo4::abc::summarize(file, summary), AbcStatus::BranchOutOfRange);
+}
+
 TEST(Abc, RejectsBadTraitKindAndTraitMetadataIndex) {
   AbcFile file;
   EXPECT_EQ(AbcFile::parse(minimal_instance_file(0x40, 0), file), AbcStatus::Ok);
@@ -472,7 +529,7 @@ TEST(AbcCorpus, EveryExtractedAbcParsesDisassemblesAndSummarizes) {
     EXPECT_EQ(file.minor_version, fo4::abc::kAbcMinorVersion);
     for (const fo4::abc::AbcMethodBody& body : file.bodies) {
       std::vector<AbcInstruction> instructions;
-      ASSERT_EQ(fo4::abc::decode_code(body.code, instructions), AbcStatus::Ok);
+      ASSERT_EQ(fo4::abc::decode_code(body.code, instructions, body.exceptions), AbcStatus::Ok);
       ASSERT_EQ(fo4::abc::validate_operand_pools(file, instructions), AbcStatus::Ok);
     }
     AbcSummary summary;

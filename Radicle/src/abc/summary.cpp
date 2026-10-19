@@ -148,7 +148,7 @@ AbcStatus build_method_summary(const AbcFile& file, std::uint32_t method_index,
     return AbcStatus::Ok;
   }
   std::vector<AbcInstruction> code;
-  AbcStatus status = decode_code(body->code, code);
+  AbcStatus status = decode_code(body->code, code, body->exceptions);
   if (status != AbcStatus::Ok) {
     return status;
   }
