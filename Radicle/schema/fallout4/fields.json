@@ -19371,7 +19371,28 @@
           "minimum": 0,
           "maximum": 4294967295,
           "insertion": "existing_only"
-        }
+        },
+        {
+          "kind": "subrecord_group",
+          "path": "INNR\\NamingRules",
+          "label": "Naming rule",
+          "insertion": "existing_only",
+          "members": [
+            {"subrecord": "VNAM", "required": true, "repeatable": false, "payload_size": 4}
+          ],
+          "run": {
+            "count_member": "VNAM",
+            "members": [
+              {"subrecord": "WNAM", "required": true, "repeatable": false, "payload_size": 0, "localized": true, "default": "00"},
+              {"subrecord": "KSIZ", "required": false, "repeatable": false, "payload_size": 4},
+              {"subrecord": "KWDA", "required": false, "repeatable": false, "payload_size": 0},
+              {"subrecord": "XNAM", "required": false, "repeatable": false, "payload_size": 6},
+              {"subrecord": "YNAM", "required": false, "repeatable": false, "payload_size": 2}
+            ]
+          }
+        },
+        {"path": "INNR\\NameText", "label": "Name text", "kind": "string", "subrecord": "WNAM", "localized": true, "repeated": true, "insertion": "existing_only"},
+        {"path": "INNR\\NameIndex", "label": "Name index", "kind": "scalar", "subrecord": "YNAM", "storage": "u16", "presentation": "identity", "minimum": 0, "maximum": 65535, "repeated": true, "insertion": "existing_only"}
       ],
       "localized_subrecords": ["WNAM"]
     },

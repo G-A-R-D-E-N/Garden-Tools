@@ -68,6 +68,12 @@ Bytes u32_bytes(std::uint32_t value) {
   return out.bytes;
 }
 
+Bytes u16_bytes(std::uint16_t value) {
+  ByteWriter out;
+  out.u16(value);
+  return out.bytes;
+}
+
 Bytes note_type_dnam() {
   ByteWriter out;
   out.u8(1);
@@ -177,7 +183,10 @@ std::vector<std::byte> make_plugin() {
   write_group(out, "DOBJ", {{0x815, {{"EDID", zstr("RadicleObjects")},
                                      {"DNAM", zeros(8)}}}});
   write_group(out, "INNR", {{0x816, {{"EDID", zstr("RadicleNaming")},
-                                     {"UNAM", u32_bytes(29)}}}});
+                                     {"UNAM", u32_bytes(29)},
+                                     {"VNAM", u32_bytes(1)},
+                                     {"WNAM", zstr("RadicleRule")},
+                                     {"YNAM", u16_bytes(0)}}}});
   return out.bytes;
 }
 

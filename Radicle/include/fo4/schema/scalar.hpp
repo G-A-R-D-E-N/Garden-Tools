@@ -102,6 +102,12 @@ struct SubrecordGroupMemberDescriptor {
   bool skippable{false};
 };
 
+// Invariant: count_member names one of the group's own members; that member's whole four-byte payload is the number of nested runs that follow it inside the enclosing run. An empty count_member means the group has no nested run.
+struct SubrecordGroupRunDescriptor {
+  Signature count_member{};
+  std::span<const SubrecordGroupMemberDescriptor> members{};
+};
+
 struct SubrecordGroupDescriptor {
   Signature record{};
   std::string_view path;
@@ -109,6 +115,7 @@ struct SubrecordGroupDescriptor {
   Signature count_subrecord{};
   std::span<const SubrecordGroupMemberDescriptor> members{};
   std::span<const Signature> successors{};
+  SubrecordGroupRunDescriptor run{};
 };
 
 class SubrecordGroupError : public std::runtime_error {

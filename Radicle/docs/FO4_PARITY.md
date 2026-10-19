@@ -108,7 +108,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | IMGS | 7393 | 36 | 1 | - | - | - | yes | - | - | - | 3 | L4 |
 | INFO | 9672 | 14 | 7 | 13 | - | 2 | yes | - | forms/info_copy, environment/dialogue | - | 2 | L4 |
 | INGR | 9788 | 22 | 5 | 9 | - | 1 | yes | yes | - | - | 1 | L4 |
-| INNR | 12337 | 1 | - | - | - | 1 | yes | - | - | - | 1 | L4 |
+| INNR | 12337 | 2 | 1 | - | - | 1 | yes | - | - | - | 1 | L4 |
 | IPCT | 7978 | 20 | 1 | 7 | - | - | yes | - | - | - | 1 | L4 |
 | IPDS | 8014 | - | - | 2 | - | - | yes | - | - | - | 2 | L4 |
 | KEYM | 9823 | 20 | 5 | 8 | - | 1 | yes | yes | - | - | 1 | L4 |
@@ -262,7 +262,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | IMGS | 35 | - | 1 | - | 1 | f32, u16 | - | - | - | existing_only |
 | INFO | 14 | - | - | - | 7 | i32, u16, u32, u8 | 15 | - | - | existing_only |
 | INGR | 18 | 1 | - | 3 | 5 | f32, i16, i32, u32, u8 | 12 | 2 | - | existing_only |
-| INNR | - | - | 1 | - | - | u32 | - | - | - | existing_only |
+| INNR | 1 | - | 1 | - | 1 | u16, u32 | 2 | - | - | existing_only |
 | IPCT | 15 | - | 3 | 2 | 1 | f32, u32, u8 | - | - | - | existing_only |
 | IPDS | - | - | - | - | - | - | 2 | - | - | existing_only |
 | KEYM | 17 | 1 | - | 2 | 5 | f32, i16, i32, u32, u8 | 12 | 2 | - | existing_only |
