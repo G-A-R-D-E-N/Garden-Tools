@@ -157,6 +157,28 @@ PexFunction shortCircuitFunction() {
                                  });
 }
 
+PexFunction jmptLoopHeaderFunction() {
+  return function("JmptLoopHeader", {
+                                       step(kJmpT, {identifier("::temp1"), integer(3)}),
+                                       step(kIAdd, {identifier("::temp1"), identifier("::temp1"),
+                                                    integer(1)}),
+                                       step(kJmp, {integer(-2)}),
+                                       step(kReturn, {none()}),
+                                   });
+}
+
+PexFunction deepNestingFunction(std::size_t depth) {
+  std::vector<PexInstruction> instructions;
+  instructions.reserve(depth + 2);
+  for (std::size_t i = 0; i < depth; ++i) {
+    instructions.push_back(step(kJmpF, {identifier("::t" + std::to_string(i)),
+                                        integer(static_cast<std::int32_t>(depth + 1 - i))}));
+  }
+  instructions.push_back(step(kAssign, {identifier("Result"), integer(1)}));
+  instructions.push_back(step(kReturn, {none()}));
+  return function("DeepNesting", std::move(instructions));
+}
+
 PexFile singleFunctionFile(const PexFunction& fn) {
   PexFile file;
   file.majorVersion = 3;
@@ -184,35 +206,34 @@ TEST(PexAnalysis, DisassemblesWhileLoopWithComputedCondition) {
   const auto result = fo4::pex_analysis::disassemble_function(computedWhileFunction());
   ASSERT_EQ(result.status, fo4::pex_analysis::PexAnalysisStatus::Ok);
   ASSERT_TRUE(result.structured);
-  const auto loop = result.text.find("while (true) {");
-  const auto prefix = result.text.find("1: cmp_lt ::temp2 ::temp1 10");
-  const auto guard = result.text.find("if (!(::temp2)) break;");
-  ASSERT_NE(loop, std::string::npos);
-  ASSERT_NE(prefix, std::string::npos);
-  ASSERT_NE(guard, std::string::npos);
-  EXPECT_LT(loop, prefix);
-  EXPECT_LT(prefix, guard);
-  EXPECT_NE(result.text.find("  3: callmethod Work self ::nonevar"), std::string::npos);
-  EXPECT_NE(result.text.find("6: return none"), std::string::npos);
-  EXPECT_EQ(result.text.find("L1:"), std::string::npos);
-  EXPECT_EQ(result.text.find("5: jmp -4"), std::string::npos);
+  const std::string expected =
+      "   0: assign ::temp1 0\n"
+      "while (true) {\n"
+      "     1: cmp_lt ::temp2 ::temp1 10\n"
+      "  if (!(::temp2)) break;\n"
+      "     3: callmethod Work self ::nonevar\n"
+      "     4: iadd ::temp1 ::temp1 1\n"
+      "}\n"
+      "   6: return none\n";
+  EXPECT_EQ(result.text, expected);
 }
 
 TEST(PexAnalysis, DisassemblesNestedIfElse) {
   const auto result = fo4::pex_analysis::disassemble_function(nestedIfFunction());
   ASSERT_EQ(result.status, fo4::pex_analysis::PexAnalysisStatus::Ok);
   ASSERT_TRUE(result.structured);
-  const auto outer = result.text.find("if (::temp1) {");
-  const auto inner = result.text.find("  if (::temp2) {");
-  ASSERT_NE(outer, std::string::npos);
-  ASSERT_NE(inner, std::string::npos);
-  EXPECT_LT(outer, inner);
-  EXPECT_NE(result.text.find("2: assign Result 1"), std::string::npos);
-  EXPECT_NE(result.text.find("4: assign Result 2"), std::string::npos);
-  EXPECT_NE(result.text.find("6: assign Result 3"), std::string::npos);
-  EXPECT_NE(result.text.find("7: return none"), std::string::npos);
-  EXPECT_EQ(result.text.find("L0:"), std::string::npos);
-  EXPECT_EQ(result.text.find("3: jmp 2"), std::string::npos);
+  const std::string expected =
+      "if (::temp1) {\n"
+      "  if (::temp2) {\n"
+      "       2: assign Result 1\n"
+      "  } else {\n"
+      "       4: assign Result 2\n"
+      "  }\n"
+      "} else {\n"
+      "     6: assign Result 3\n"
+      "}\n"
+      "   7: return none\n";
+  EXPECT_EQ(result.text, expected);
 }
 
 TEST(PexAnalysis, DisassemblesSequentialLoops) {
@@ -267,6 +288,27 @@ TEST(PexAnalysis, DisassemblyKeepsLabelledListingForShortCircuitJmpt) {
   EXPECT_NE(result.text.find("3: assign Result 2"), std::string::npos);
 }
 
+TEST(PexAnalysis, DisassemblyKeepsLabelledListingForJmptLoopHeader) {
+  const auto result = fo4::pex_analysis::disassemble_function(jmptLoopHeaderFunction());
+  ASSERT_EQ(result.status, fo4::pex_analysis::PexAnalysisStatus::Ok);
+  EXPECT_FALSE(result.structured);
+  EXPECT_EQ(result.text.find("while ("), std::string::npos);
+  EXPECT_NE(result.text.find("L0:"), std::string::npos);
+  EXPECT_NE(result.text.find("L3:"), std::string::npos);
+  EXPECT_NE(result.text.find("1: iadd ::temp1 ::temp1 1"), std::string::npos);
+  EXPECT_NE(result.text.find("2: jmp -2"), std::string::npos);
+}
+
+TEST(PexAnalysis, DisassemblyFallsBackPastTheNestingCapWithoutRecursing) {
+  constexpr std::size_t kDepth = 50000;
+  const auto result = fo4::pex_analysis::disassemble_function(deepNestingFunction(kDepth));
+  ASSERT_EQ(result.status, fo4::pex_analysis::PexAnalysisStatus::Ok);
+  EXPECT_FALSE(result.structured);
+  EXPECT_EQ(result.text.find("if ("), std::string::npos);
+  EXPECT_NE(result.text.find("L" + std::to_string(kDepth + 1) + ":"), std::string::npos);
+  EXPECT_NE(result.text.find(std::to_string(kDepth) + ": assign Result 1"), std::string::npos);
+}
+
 TEST(PexAnalysis, StructuredListingSurvivesPexEncoding) {
   const auto source = nestedIfFunction();
   const auto decoded = PexFile::fromBytes(singleFunctionFile(source).toBytes());
@@ -280,6 +322,15 @@ TEST(PexAnalysis, StructuredListingSurvivesPexEncoding) {
   EXPECT_TRUE(fromFile.structured);
   EXPECT_EQ(fromFile.text, inMemory.text);
   EXPECT_NE(fromFile.text.find("if (::temp2) {"), std::string::npos);
+
+  auto shifted = nestedIfFunction();
+  shifted.instructions[3].args = {integer(3)};
+  const auto shiftedFile = PexFile::fromBytes(singleFunctionFile(shifted).toBytes());
+  ASSERT_EQ(shiftedFile.objects.size(), 1u);
+  const auto fromShifted =
+      fo4::pex_analysis::disassemble_function(shiftedFile.objects[0].states[0].functions[0]);
+  EXPECT_FALSE(fromShifted.structured);
+  EXPECT_EQ(fromShifted.text.find("if ("), std::string::npos);
 }
 
 TEST(PexAnalysis, StructuredListingKeepsEveryInstructionOnce) {

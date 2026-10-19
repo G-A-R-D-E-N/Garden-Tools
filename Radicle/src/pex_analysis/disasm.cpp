@@ -70,11 +70,7 @@ class StructuredRenderer {
     if (header.count == 0) return kNoIndex;
     const auto terminator = terminator_of(block);
     const auto& instruction = function_.instructions[terminator];
-    if (header.count > 1) {
-      if (instruction.opCode != static_cast<std::uint8_t>(PexOp::JmpF)) return kNoIndex;
-    } else if (!pex_is_conditional_jump(instruction.opCode)) {
-      return kNoIndex;
-    }
+    if (instruction.opCode != static_cast<std::uint8_t>(PexOp::JmpF)) return kNoIndex;
     const auto target = jump_target_of(terminator);
     if (target == kNoIndex || target <= block + 1) return kNoIndex;
     if (loop.latchBlock != target - 1) return kNoIndex;
@@ -83,21 +79,23 @@ class StructuredRenderer {
     return target;
   }
 
-  std::size_t conditional_join(std::size_t block) const {
+  std::size_t conditional_join(std::size_t block, int depth) const {
+    if (depth > kMaxNestingDepth) return kNoIndex;
     const auto terminator = terminator_of(block);
     const auto& instruction = function_.instructions[terminator];
     if (instruction.opCode != static_cast<std::uint8_t>(PexOp::JmpF)) return kNoIndex;
     const auto elseStart = jump_target_of(terminator);
     if (elseStart == kNoIndex || elseStart <= block + 1) return kNoIndex;
     std::size_t thenExit = kNoIndex;
-    if (!region_exit(block + 1, elseStart, thenExit)) return kNoIndex;
+    if (!region_exit(block + 1, elseStart, depth, thenExit)) return kNoIndex;
     if (thenExit == kNoIndex || thenExit == elseStart) return elseStart;
     std::size_t elseExit = kNoIndex;
-    if (!region_exit(elseStart, thenExit, elseExit)) return kNoIndex;
+    if (!region_exit(elseStart, thenExit, depth, elseExit)) return kNoIndex;
     return elseExit == thenExit ? thenExit : kNoIndex;
   }
 
-  bool region_exit(std::size_t start, std::size_t limit, std::size_t& exit) const {
+  bool region_exit(std::size_t start, std::size_t limit, int depth,
+                   std::size_t& exitBlock) const {
     if (start >= limit || limit > cfg_.blocks.size()) return false;
     auto cur = start;
     while (true) {
@@ -107,7 +105,7 @@ class StructuredRenderer {
       const auto& instruction = function_.instructions[terminator];
       if (instruction.opCode == static_cast<std::uint8_t>(PexOp::Return)) {
         if (cur + 1 != limit) return false;
-        exit = kNoIndex;
+        exitBlock = kNoIndex;
         return true;
       }
       std::size_t next = kNoIndex;
@@ -115,13 +113,13 @@ class StructuredRenderer {
       if (loop != nullptr) {
         next = loop_exit(cur, *loop);
       } else if (pex_is_conditional_jump(instruction.opCode)) {
-        next = conditional_join(cur);
+        next = conditional_join(cur, depth + 1);
       } else if (pex_is_jump(instruction.opCode)) {
         const auto target = jump_target_of(terminator);
         if (target == kNoIndex) return false;
         if (target != cur + 1) {
           if (cur + 1 != limit) return false;
-          exit = target;
+          exitBlock = target;
           return true;
         }
         next = cur + 1;
@@ -131,7 +129,7 @@ class StructuredRenderer {
       }
       if (next == kNoIndex || next <= cur || next > limit) return false;
       if (next == limit) {
-        exit = limit;
+        exitBlock = limit;
         return true;
       }
       cur = next;
@@ -181,7 +179,7 @@ class StructuredRenderer {
     if (instruction.opCode != static_cast<std::uint8_t>(PexOp::JmpF)) return false;
     const auto elseStart = jump_target_of(terminator);
     if (elseStart == kNoIndex || elseStart <= block + 1) return false;
-    const auto join = conditional_join(block);
+    const auto join = conditional_join(block, depth);
     if (join == kNoIndex) return false;
 
     emit_block_body(block, depth, false, out);
@@ -221,12 +219,12 @@ class StructuredRenderer {
       const auto terminator = terminator_of(block);
       const auto* loop = loop_at(block);
       if (loop != nullptr) {
-        const auto exit = loop_exit(block, *loop);
-        if (exit == kNoIndex || !emit_loop(block, *loop, depth, out)) {
+        const auto exitBlock = loop_exit(block, *loop);
+        if (exitBlock == kNoIndex || !emit_loop(block, *loop, depth, out)) {
           bailed_ = true;
           return kNoIndex;
         }
-        block = exit;
+        block = exitBlock;
         continue;
       }
 
