@@ -4,12 +4,14 @@
 #include "fo4/forms/placed_reference.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/schema/form_link_mixed.hpp"
+#include "fo4/schema/form_links.hpp"
 #include "record_edit.hpp"
 #include "../forms/placed_reference_copy_internal.hpp"
 
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <utility>
 #include <vector>
 
@@ -47,9 +49,9 @@ bool is_injected(const env::Environment& load_order, const Plugin& plugin, const
   });
 }
 
-const Record* winning_master_content(const env::Environment& load_order,
-                                     const Plugin& plugin,
-                                     const FormKey& record_key) {
+const env::RecordRef* winning_master_content(const env::Environment& load_order,
+                                             const Plugin& plugin,
+                                             const FormKey& record_key) {
   const auto versions = load_order.versions(record_key);
   for (auto it = versions.rbegin(); it != versions.rend(); ++it) {
     const auto& owner = load_order.plugin(it->plugin).key;
@@ -58,7 +60,7 @@ const Record* winning_master_content(const env::Environment& load_order,
         it->record->undecodable) {
       continue;
     }
-    return it->record;
+    return &*it;
   }
   return nullptr;
 }
@@ -269,14 +271,25 @@ UndeleteStatus undelete_and_disable_reference(Plugin& plugin,
   if (is_injected(load_order, plugin, record_key)) return UndeleteStatus::injected_record;
   const bool complete = find_subrecord(source, k_name) != nullptr &&
                         find_subrecord(source, k_data) != nullptr;
-  const Record* master = complete ? nullptr : winning_master_content(load_order, plugin, record_key);
+  const env::RecordRef* master =
+      complete ? nullptr : winning_master_content(load_order, plugin, record_key);
   if (!complete && master == nullptr) return UndeleteStatus::incomplete_reference;
 
   Plugin next = plugin;
   auto placed = find_mutable_location(next, record_key);
   if (!placed) return UndeleteStatus::record_missing;
   Record& record = placed->record();
-  if (master != nullptr) record.subrecords = master->subrecords;
+  if (master != nullptr) {
+    const auto& master_plugin = load_order.plugin(master->plugin);
+    Record restored = *master->record;
+    try {
+      remap_record_form_links(restored, plugin_form_id_context(master_plugin),
+                              plugin_form_id_context(next), &master_plugin);
+    } catch (const std::exception&) {
+      return UndeleteStatus::incomplete_reference;
+    }
+    record.subrecords = std::move(restored.subrecords);
+  }
   if (find_subrecord(record, k_name) == nullptr || find_subrecord(record, k_data) == nullptr) {
     return UndeleteStatus::incomplete_reference;
   }

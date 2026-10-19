@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <initializer_list>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -115,6 +116,44 @@ inline fo4::env::Environment load_order(const CellPlugin& master, const CellPlug
   return fo4::env::Environment::load(paths);
 }
 
+inline fo4::env::Environment load_order(std::initializer_list<CellPlugin> plugins) {
+  fo4::test::TempDataDir dir;
+  std::vector<std::filesystem::path> paths;
+  int rank = 0;
+  for (const auto& plugin : plugins) {
+    dir.write(std::string{plugin.name}, build_plugin(plugin), ++rank);
+    paths.push_back(dir.path() / std::string{plugin.name});
+  }
+  return fo4::env::Environment::load(paths);
+}
+
+inline CellPlugin two_level_master_plugin() {
+  return CellPlugin{
+      .name = "Machine.esm",
+      .masters = {"Fallout4.esm"},
+      .cell_form = 0x01000900,
+      .ref_form = 0x01000800,
+      .ref_subs = {{"NAME", std::string{'\x01', '\x08', '\0', '\x01'}},
+                   {"DATA", std::string(24, '\0')}},
+  };
+}
+
+inline CellPlugin two_level_patch_plugin() {
+  return CellPlugin{
+      .name = "Patch.esp",
+      .masters = {"Fallout4.esm", "Coast.esm", "Machine.esm"},
+      .cell_form = 0x03000900,
+      .ref_form = 0x02000800,
+      .ref_flags = fo4::RecordFlags::deleted,
+      .ref_subs = {{"NAME", std::string{'\x01', '\x08', '\0', '\0'}}},
+  };
+}
+
+inline fo4::env::Environment two_level_load_order() {
+  return load_order({CellPlugin{.name = "Fallout4.esm"}, CellPlugin{.name = "Coast.esm"},
+                     two_level_master_plugin(), two_level_patch_plugin()});
+}
+
 inline const fo4::Group* find_group(const fo4::Group& group, fo4::GroupType type, std::uint32_t label) {
   if (group.header.group_type == static_cast<std::int32_t>(type) &&
       group.header.label_as_u32() == label) {
@@ -174,6 +213,18 @@ inline const fo4::Subrecord* subrecord_named(const fo4::Record& record, std::str
     if (sub.signature == signature) return &sub;
   }
   return nullptr;
+}
+
+inline fo4::RawFormId form_id_of(const fo4::Subrecord& sub) {
+  std::uint32_t value = 0;
+  for (std::size_t i = 0; i < 4 && i < sub.data.size(); ++i) {
+    value |= std::to_integer<std::uint32_t>(sub.data[i]) << (8 * i);
+  }
+  return fo4::RawFormId{value};
+}
+
+inline fo4::FormKey resolved_link(const fo4::Plugin& plugin, const fo4::Subrecord& sub) {
+  return fo4::resolve_plugin_form_id(form_id_of(sub), fo4::plugin_form_id_context(plugin));
 }
 
 inline fo4::env::Environment load_order_with_undecodable_reference(const CellPlugin& master,

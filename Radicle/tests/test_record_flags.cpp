@@ -640,6 +640,16 @@ TEST(RecordFlags, UndeleteRestoresStrippedContentFromTheWinningMasterVersion) {
   EXPECT_EQ(fo4::write_plugin(reread), bytes);
 }
 
+TEST(RecordFlags, UndeleteRemapsMasterFormLinksIntoTheTargetMasterSpace) {
+  auto plugin = load(two_level_patch_plugin());
+  const auto ref = fo4::FormKey::parse("000800:Machine.esm");
+  ASSERT_EQ(fo4::undelete_and_disable_reference(plugin, two_level_load_order(), ref),
+            fo4::UndeleteStatus::undeleted);
+  const auto* name = subrecord_named(*fo4::find_record(plugin, ref), "NAME");
+  ASSERT_NE(name, nullptr);
+  EXPECT_EQ(resolved_link(plugin, *name), fo4::FormKey::parse("000801:Machine.esm"));
+}
+
 TEST(RecordFlags, UndeleteRefusesInjectedReferenceWithoutChange) {
   const CellPlugin master{.name = "Fallout4.esm", .ref_form = 0x801};
   const CellPlugin patch{
