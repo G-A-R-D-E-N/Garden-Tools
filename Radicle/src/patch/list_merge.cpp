@@ -1,0 +1,218 @@
+#include "fo4/patch/list_merge.hpp"
+
+#include "fo4/forms/leveled_list.hpp"
+#include "fo4/plugin/mutation.hpp"
+#include "fo4/plugin/reader.hpp"
+#include "fo4/plugin/writer.hpp"
+#include "fo4/schema/formlink_lists.hpp"
+
+#include <algorithm>
+#include <cstddef>
+#include <map>
+#include <span>
+#include <string>
+#include <utility>
+#include <vector>
+
+namespace fo4::patch {
+namespace {
+
+constexpr auto k_lvli = Signature::from_string("LVLI");
+constexpr auto k_lvln = Signature::from_string("LVLN");
+constexpr auto k_lvsp = Signature::from_string("LVSP");
+constexpr auto k_flst = Signature::from_string("FLST");
+constexpr std::string_view k_form_list_path = "FLST\\Items";
+
+const Plugin* master_file_holder(const Plugin& plugin,
+                                 std::span<const Plugin* const> versions,
+                                 std::size_t index) {
+  for (std::size_t back = index; back > 0; --back) {
+    const auto& candidate = versions[back - 1]->key;
+    for (const auto& master : plugin.header.masters) {
+      if (master.key == candidate) return versions[back - 1];
+    }
+  }
+  return nullptr;
+}
+
+bool same_leveled_entry(const forms::LeveledListEntry& left,
+                        const forms::LeveledListEntry& right) {
+  return left.level == right.level && left.item == right.item && left.count == right.count;
+}
+
+bool holds_entry(std::span<const forms::LeveledListEntry> entries,
+                 const forms::LeveledListEntry& wanted) {
+  return std::any_of(entries.begin(), entries.end(),
+                     [&](const forms::LeveledListEntry& entry) {
+                       return same_leveled_entry(entry, wanted);
+                     });
+}
+
+std::vector<forms::LeveledListEntry> merge_leveled_entries(
+    std::vector<forms::LeveledListEntry> target,
+    std::span<const forms::LeveledListEntry> previous,
+    std::span<const forms::LeveledListEntry> current) {
+  for (const auto& entry : previous) {
+    if (holds_entry(current, entry)) continue;
+    target.erase(std::remove_if(target.begin(), target.end(),
+                                [&](const forms::LeveledListEntry& known) {
+                                  return same_leveled_entry(known, entry);
+                                }),
+                 target.end());
+  }
+  for (const auto& entry : current) {
+    if (holds_entry(previous, entry)) {
+      for (auto& known : target) {
+        if (same_leveled_entry(known, entry)) known = entry;
+      }
+      continue;
+    }
+    if (!holds_entry(target, entry)) target.push_back(entry);
+  }
+  return target;
+}
+
+bool same_leveled_list(std::span<const forms::LeveledListEntry> left,
+                       std::span<const forms::LeveledListEntry> right) {
+  return left.size() == right.size() &&
+         std::equal(left.begin(), left.end(), right.begin(), same_leveled_entry);
+}
+
+bool holds_key(std::span<const FormKey> keys, const FormKey& wanted) {
+  return std::find(keys.begin(), keys.end(), wanted) != keys.end();
+}
+
+std::vector<FormKey> merge_form_list(std::vector<FormKey> target,
+                                     std::span<const FormKey> previous,
+                                     std::span<const FormKey> current) {
+  for (const auto& key : previous) {
+    if (holds_key(current, key)) continue;
+    std::erase(target, key);
+  }
+  for (const auto& key : current) {
+    if (!holds_key(previous, key) && !holds_key(target, key)) target.push_back(key);
+  }
+  std::sort(target.begin(), target.end());
+  target.erase(std::unique(target.begin(), target.end()), target.end());
+  return target;
+}
+
+std::vector<forms::LeveledListEntry> leveled_entries(const Plugin& plugin,
+                                                     const FormKey& key) {
+  return forms::decode_leveled_list(plugin, key).entries;
+}
+
+std::vector<FormKey> form_list_entries(const Plugin& plugin,
+                                       const FormKey& key,
+                                       const schema::FormLinkListDescriptor& descriptor) {
+  auto values = schema::record_formlink_list_values(plugin, key, descriptor);
+  if (!values.has_value()) {
+    throw ListMergeError("form list record not found: " + key.to_string());
+  }
+  return std::move(*values);
+}
+
+void write_form_list(Plugin& patch,
+                     const FormKey& key,
+                     const schema::FormLinkListDescriptor& descriptor,
+                     std::span<const FormKey> values) {
+  const auto cleared = schema::clear_record_formlink_list(patch, key, descriptor);
+  if (cleared != schema::FormLinkListMutationStatus::updated &&
+      cleared != schema::FormLinkListMutationStatus::unchanged) {
+    throw ListMergeError("form list cannot be rewritten: " + key.to_string());
+  }
+  for (std::size_t index = 0; index < values.size(); ++index) {
+    const auto status =
+        schema::insert_record_formlink_list_element(patch, key, descriptor, index, values[index]);
+    if (status != schema::FormLinkListMutationStatus::updated) {
+      throw ListMergeError("form list element cannot be inserted: " + key.to_string());
+    }
+  }
+}
+
+}  // namespace
+
+ListMergeResult build_list_merge_patch(const env::Environment& env,
+                                       Signature signature,
+                                       std::string_view patch_name) {
+  const bool leveled = signature != k_flst;
+  if (leveled && signature != k_lvli && signature != k_lvln && signature != k_lvsp) {
+    throw ListMergeError("list merging covers LVLI, LVLN, LVSP and FLST, not " +
+                         signature.to_string());
+  }
+
+  std::map<FormKey, std::vector<const Plugin*>> versions;
+  for (std::size_t index = 0; index < env.plugins().size(); ++index) {
+    const auto& plugin = env.plugin(index);
+    for (const auto* record : collect_records(plugin)) {
+      if (record->header.signature != signature || record->undecodable) continue;
+      versions[record->form_key].push_back(&plugin);
+    }
+  }
+
+  ListMergeResult result;
+  result.patch = make_empty_plugin(patch_name);
+
+  for (const auto& [key, list] : versions) {
+    if (list.size() < 2) continue;
+    const auto& winner = *list.back();
+
+    std::vector<FormKey> merged_keys;
+    std::vector<forms::LeveledListEntry> merged_entries;
+    bool unchanged = false;
+
+    if (leveled) {
+      merged_entries = leveled_entries(*list.front(), key);
+      for (std::size_t index = 1; index < list.size(); ++index) {
+        const auto* holder = master_file_holder(*list[index], list, index);
+        if (holder == nullptr) continue;
+        const auto previous = leveled_entries(*holder, key);
+        const auto current = leveled_entries(*list[index], key);
+        merged_entries = merge_leveled_entries(std::move(merged_entries), previous, current);
+      }
+      unchanged = same_leveled_list(merged_entries, leveled_entries(winner, key));
+    } else {
+      const auto descriptor = schema::formlink_list_descriptor(signature, k_form_list_path);
+      if (!descriptor.has_value()) {
+        throw ListMergeError("no FormLink list row for " + std::string(k_form_list_path));
+      }
+      merged_keys = form_list_entries(*list.front(), key, *descriptor);
+      for (std::size_t index = 1; index < list.size(); ++index) {
+        const auto* holder = master_file_holder(*list[index], list, index);
+        if (holder == nullptr) continue;
+        const auto previous = form_list_entries(*holder, key, *descriptor);
+        const auto current = form_list_entries(*list[index], key, *descriptor);
+        merged_keys = merge_form_list(std::move(merged_keys), previous, current);
+      }
+      unchanged = merged_keys == form_list_entries(winner, key, *descriptor);
+    }
+
+    if (unchanged) {
+      ++result.counts.unchanged;
+      continue;
+    }
+
+    const auto copied = copy_record_as_override(result.patch, winner, key, false);
+    if (copied != RecordCopyStatus::inserted && copied != RecordCopyStatus::replaced) {
+      throw ListMergeError("the winning record cannot be copied into the patch: " +
+                           key.to_string());
+    }
+
+    if (leveled) {
+      if (!forms::replace_leveled_list_entries(result.patch, key, merged_entries)) {
+        throw ListMergeError("leveled list cannot be rewritten: " + key.to_string());
+      }
+    } else {
+      const auto descriptor = schema::formlink_list_descriptor(signature, k_form_list_path);
+      if (!descriptor.has_value()) {
+        throw ListMergeError("no FormLink list row for " + std::string(k_form_list_path));
+      }
+      write_form_list(result.patch, key, *descriptor, merged_keys);
+    }
+    ++result.counts.merged;
+  }
+
+  return result;
+}
+
+}  // namespace fo4::patch

@@ -298,6 +298,7 @@ target_sources(radicle_c PRIVATE src/c_api_armor.cpp src/c_api_eyes.cpp src/c_ap
 target_sources(radicle_c PRIVATE src/c_api_patch.cpp)
 target_sources(radicle_c PRIVATE src/c_api_conflict.cpp)
 target_sources(fo4 PRIVATE src/patch/delta_patch.cpp)
+target_sources(fo4 PRIVATE src/patch/list_merge.cpp)
 target_sources(fo4 PRIVATE src/papyrus_source/lexer.cpp src/papyrus_source/parser.cpp src/papyrus_source/parser_decl.cpp src/papyrus_source/parser_expr.cpp src/papyrus_source/parser_stmt.cpp src/papyrus_source/summary.cpp)
 
 if(RADICLE_INSTALL)
@@ -473,6 +474,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_c_api_authoring.cpp
     tests/test_c_api_fields.cpp
     tests/test_delta_patch.cpp
+    tests/test_list_merge.cpp
     tests/test_climate_weather_authoring.cpp
     tests/test_climate_weather_c_api.cpp
     tests/test_climate_weather_real.cpp

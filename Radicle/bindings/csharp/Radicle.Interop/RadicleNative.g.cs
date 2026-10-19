@@ -2015,6 +2015,13 @@ public unsafe struct DeltaPatchCounts
     public nuint Removed;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ListMergeCounts
+{
+    public nuint Merged;
+    public nuint Unchanged;
+}
+
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
@@ -2886,6 +2893,9 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_build_delta_patch")]
     public static extern Status EnvBuildDeltaPatch(IntPtr env, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? older_plugin, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? newer_plugin, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? output_path, DeltaPatchCounts* out_counts);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_build_list_merge_patch")]
+    public static extern Status EnvBuildListMergePatch(IntPtr env, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? signature, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? patch_name, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? output_path, ListMergeCounts* out_counts);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_classify_conflicts")]
     public static extern Status EnvClassifyConflicts(IntPtr env, IntPtr** out_strings, nuint* out_count);

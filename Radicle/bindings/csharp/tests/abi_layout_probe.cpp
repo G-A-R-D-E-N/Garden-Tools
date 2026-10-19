@@ -1335,5 +1335,8 @@ int main() {
   printf("DeltaPatchCounts %zu\n", sizeof(radicle_delta_patch_counts));
   printf("DeltaPatchCounts.Kept %zu\n", offsetof(radicle_delta_patch_counts, kept));
   printf("DeltaPatchCounts.Removed %zu\n", offsetof(radicle_delta_patch_counts, removed));
+  printf("ListMergeCounts %zu\n", sizeof(radicle_list_merge_counts));
+  printf("ListMergeCounts.Merged %zu\n", offsetof(radicle_list_merge_counts, merged));
+  printf("ListMergeCounts.Unchanged %zu\n", offsetof(radicle_list_merge_counts, unchanged));
   return 0;
 }
