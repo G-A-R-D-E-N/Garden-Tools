@@ -104,7 +104,7 @@ bool push_literal(const AbcFile& file, const AbcInstruction& instruction, StackV
   return true;
 }
 
-bool push_receiver(const AbcFile& file, const AbcInstruction& instruction, StackValue& out) {
+bool push_named(const AbcFile& file, const AbcInstruction& instruction, StackValue& out) {
   const std::string_view mnemonic{instruction.mnemonic};
   if (mnemonic != "getlex" && mnemonic != "findpropstrict") {
     return false;
@@ -117,7 +117,7 @@ bool push_receiver(const AbcFile& file, const AbcInstruction& instruction, Stack
     if (name.empty()) {
       return false;
     }
-    out.kind = AbcArgumentKind::Receiver;
+    out.kind = AbcArgumentKind::Named;
     out.value = name;
     return true;
   }
@@ -125,19 +125,35 @@ bool push_receiver(const AbcFile& file, const AbcInstruction& instruction, Stack
 }
 
 std::size_t fixed_pops(std::string_view mnemonic) {
-  if (mnemonic == "call") {
-    return 2;
-  }
-  return mnemonic == "callstatic" ? 0 : 1;
+  return mnemonic == "call" ? 2 : 1;
 }
 
 bool attributes_receiver(std::string_view mnemonic) {
-  return mnemonic != "call" && mnemonic != "callstatic";
+  return mnemonic != "call";
 }
 
 bool pushes_result(std::string_view mnemonic) {
   return mnemonic != "callpropvoid" && mnemonic != "callsupervoid" &&
          mnemonic != "constructsuper";
+}
+
+constexpr std::int32_t kUnknownStackDelta = -2;
+
+std::int32_t stack_delta(std::string_view mnemonic) {
+  if (starts_with(mnemonic, "getlocal") || mnemonic == "getglobalscope" ||
+      mnemonic == "getscopeobject" || mnemonic == "findproperty") {
+    return 1;
+  }
+  if (starts_with(mnemonic, "setlocal")) {
+    return -1;
+  }
+  if (starts_with(mnemonic, "coerce") || starts_with(mnemonic, "convert_") ||
+      starts_with(mnemonic, "astype") || mnemonic == "getproperty" || mnemonic == "getslot" ||
+      mnemonic == "negate" || mnemonic == "increment" || mnemonic == "not" ||
+      mnemonic == "typeof") {
+    return 0;
+  }
+  return kUnknownStackDelta;
 }
 
 void apply_call(const AbcInstruction& instruction, ValueStack& stack, CallFrame& frame) {
@@ -199,7 +215,7 @@ void simulate_arguments(const AbcFile& file, const std::vector<AbcInstruction>& 
       continue;
     }
     StackValue value;
-    if (push_literal(file, instruction, value) || push_receiver(file, instruction, value)) {
+    if (push_literal(file, instruction, value) || push_named(file, instruction, value)) {
       if (stack.size() < kSimulatedStackLimit) {
         stack.push_back(std::move(value));
       } else {
@@ -231,7 +247,28 @@ void simulate_arguments(const AbcFile& file, const std::vector<AbcInstruction>& 
       }
       continue;
     }
-    stack.clear();
+    const std::int32_t delta = stack_delta(mnemonic);
+    if (delta == kUnknownStackDelta) {
+      stack.clear();
+      continue;
+    }
+    if (delta > 0) {
+      if (stack.size() < kSimulatedStackLimit) {
+        stack.push_back(StackValue{});
+      } else {
+        stack.clear();
+      }
+      continue;
+    }
+    if (delta < 0) {
+      if (!stack.empty()) {
+        stack.pop_back();
+      }
+      continue;
+    }
+    if (!stack.empty()) {
+      stack.back() = StackValue{};
+    }
   }
 }
 

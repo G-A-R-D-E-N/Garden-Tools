@@ -13,7 +13,7 @@ namespace fo4::abc {
 enum class AbcArgumentKind : std::uint8_t {
   Unknown = 0,
   Literal,
-  Receiver,
+  Named,
 };
 
 struct AbcCallArgument {

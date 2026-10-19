@@ -2,7 +2,9 @@
 
 #include "fo4/abc/abc.hpp"
 
+#include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -66,6 +68,14 @@ inline void put_s24(std::vector<std::uint8_t>& out, std::int32_t value) {
   put_u8(out, (raw >> 16) & 0xFFu);
 }
 
+inline void put_double(std::vector<std::uint8_t>& out, double value) {
+  std::uint64_t bits = 0;
+  std::memcpy(&bits, &value, sizeof(bits));
+  for (std::size_t i = 0; i < 8; ++i) {
+    put_u8(out, static_cast<std::uint32_t>((bits >> (8 * i)) & 0xFFu));
+  }
+}
+
 inline void put_string(std::vector<std::uint8_t>& out, const std::string& value) {
   put_u30(out, static_cast<std::uint32_t>(value.size()));
   for (const char ch : value) {
@@ -114,8 +124,10 @@ inline void put_constant_pool(std::vector<std::uint8_t>& out) {
       "onClick", "counter", "Inner", "helper"};
   put_u30(out, 2);
   put_u30(out, 7);
-  put_u30(out, 1);
-  put_u30(out, 1);
+  put_u30(out, 2);
+  put_u30(out, 9);
+  put_u30(out, 2);
+  put_double(out, 1.5);
   put_u30(out, static_cast<std::uint32_t>(strings.size()) + 1);
   for (const std::string& value : strings) {
     put_string(out, value);

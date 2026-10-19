@@ -241,7 +241,7 @@ TEST(Abc, SummaryAnswersExternalInterfaceAndEventListenerQuestions) {
   ASSERT_EQ(registration.arguments.size(), 2u);
   EXPECT_EQ(registration.arguments[0].kind, AbcArgumentKind::Literal);
   EXPECT_EQ(registration.arguments[0].value, "click");
-  EXPECT_EQ(registration.arguments[1].kind, AbcArgumentKind::Receiver);
+  EXPECT_EQ(registration.arguments[1].kind, AbcArgumentKind::Named);
   EXPECT_EQ(registration.arguments[1].value, "handler");
   EXPECT_EQ(registration.event_name, "click");
   EXPECT_EQ(registration.handler, "handler");
@@ -369,6 +369,110 @@ TEST(Abc, LeavesNestedCallResultArgumentUnknown) {
   ASSERT_EQ(registration.literals.size(), 1u);
   EXPECT_EQ(registration.literals[0], "click");
   EXPECT_TRUE(registration.literal_unambiguous);
+}
+
+TEST(Abc, PopsCallStaticReceiverWithItsArgument) {
+  std::vector<std::uint8_t> code;
+  put_u8(code, 0x2C);
+  put_u30(code, kStringFoo);
+  put_u8(code, 0x60);
+  put_u30(code, kMultinameExternalInterface);
+  put_u8(code, 0x2C);
+  put_u30(code, kStringClick);
+  put_u8(code, 0x44);
+  put_u30(code, 1);
+  put_u30(code, 1);
+  put_u8(code, 0x4F);
+  put_u30(code, kMultinameCall);
+  put_u30(code, 1);
+  put_u8(code, 0x47);
+  AbcFile file;
+  ASSERT_EQ(AbcFile::parse(build_abc(code, tiny_listener_code()), file), AbcStatus::Ok);
+  AbcSummary summary;
+  ASSERT_EQ(fo4::abc::summarize(file, summary), AbcStatus::Ok);
+  ASSERT_EQ(summary.classes.size(), 1u);
+  const AbcCallSite& site = only_call(summary.classes[0].methods[0].calls);
+  EXPECT_EQ(site.opcode, "callpropvoid");
+  EXPECT_EQ(site.target, "flash.external::call");
+  EXPECT_EQ(site.receiver, "Foo");
+  EXPECT_FALSE(fo4::abc::is_external_interface_call(site));
+  ASSERT_EQ(site.arguments.size(), 1u);
+  EXPECT_EQ(site.arguments[0].kind, AbcArgumentKind::Unknown);
+}
+
+TEST(Abc, KeepsLiteralArgumentsAcrossPlainOpcodes) {
+  std::vector<std::uint8_t> code;
+  put_u8(code, 0xD0);
+  put_u8(code, 0x66);
+  put_u30(code, kMultinameHandler);
+  put_u8(code, 0x2C);
+  put_u30(code, kStringClick);
+  put_u8(code, 0x60);
+  put_u30(code, kMultinameHandler);
+  put_u8(code, 0x4F);
+  put_u30(code, kMultinameAddEventListener);
+  put_u30(code, 2);
+  put_u8(code, 0x47);
+  AbcFile file;
+  ASSERT_EQ(AbcFile::parse(build_abc(code, tiny_listener_code()), file), AbcStatus::Ok);
+  AbcSummary summary;
+  ASSERT_EQ(fo4::abc::summarize(file, summary), AbcStatus::Ok);
+  ASSERT_EQ(summary.classes.size(), 1u);
+  const AbcCallSite& site = only_call(summary.classes[0].methods[0].calls);
+  EXPECT_EQ(site.target, "addEventListener");
+  EXPECT_TRUE(site.receiver.empty());
+  EXPECT_TRUE(fo4::abc::is_event_registration(site));
+  ASSERT_EQ(site.arguments.size(), 2u);
+  EXPECT_EQ(site.arguments[0].kind, AbcArgumentKind::Literal);
+  EXPECT_EQ(site.arguments[0].value, "click");
+  EXPECT_EQ(site.arguments[1].kind, AbcArgumentKind::Named);
+  EXPECT_EQ(site.arguments[1].value, "handler");
+  EXPECT_EQ(site.event_name, "click");
+  EXPECT_EQ(site.handler, "handler");
+  ASSERT_EQ(site.literals.size(), 1u);
+  EXPECT_EQ(site.literals[0], "click");
+  EXPECT_TRUE(site.literal_unambiguous);
+}
+
+TEST(Abc, MapsEveryPushFormToItsLiteralKind) {
+  std::vector<std::uint8_t> code;
+  put_u8(code, 0x60);
+  put_u30(code, kMultinameExternalInterface);
+  put_u8(code, 0x2D);
+  put_u30(code, 1);
+  put_u8(code, 0x2E);
+  put_u30(code, 1);
+  put_u8(code, 0x2F);
+  put_u30(code, 1);
+  put_u8(code, 0x26);
+  put_u8(code, 0x27);
+  put_u8(code, 0x20);
+  put_u8(code, 0x21);
+  put_u8(code, 0x28);
+  put_u8(code, 0x25);
+  put_u30(code, 0xFFFBu);
+  put_u8(code, 0x24);
+  put_u8(code, 0xFDu);
+  put_u8(code, 0x4F);
+  put_u30(code, kMultinameCall);
+  put_u30(code, 10);
+  put_u8(code, 0x47);
+  AbcFile file;
+  ASSERT_EQ(AbcFile::parse(build_abc(code, tiny_listener_code()), file), AbcStatus::Ok);
+  AbcSummary summary;
+  ASSERT_EQ(fo4::abc::summarize(file, summary), AbcStatus::Ok);
+  ASSERT_EQ(summary.classes.size(), 1u);
+  const AbcCallSite& site = only_call(summary.classes[0].methods[0].calls);
+  EXPECT_EQ(site.receiver, "flash.external::ExternalInterface");
+  EXPECT_EQ(site.arg_count, 10u);
+  const std::vector<std::string> expected{"7",    "9",         "1.500000", "true", "false",
+                                          "null", "undefined", "NaN",      "-5",   "-3"};
+  ASSERT_EQ(site.arguments.size(), expected.size());
+  for (std::size_t slot = 0; slot < expected.size(); ++slot) {
+    EXPECT_EQ(site.arguments[slot].kind, AbcArgumentKind::Literal) << "slot " << slot;
+    EXPECT_EQ(site.arguments[slot].value, expected[slot]) << "slot " << slot;
+  }
+  EXPECT_EQ(site.literals, expected);
 }
 
 TEST(Abc, OpcodeTableMatchesAvm2Numbers) {
