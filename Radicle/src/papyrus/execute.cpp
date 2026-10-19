@@ -155,10 +155,11 @@ Status Interpreter::execute(const pex::PexInstruction& instruction, Frame& frame
             Status autoStatus = Status::Ok;
             if (isGetter) {
                 Value stored;
-                if (host_.getVariable(receiver, property->autoVarName, stored, autoStatus)) {
+                if (host_.getVariable(*receiver.object, property->autoVarName, stored, autoStatus)) {
                     return storeResult(frame, instruction.args[2], stored);
                 }
-            } else if (host_.setVariable(receiver, property->autoVarName, operand, autoStatus)) {
+            } else if (host_.setVariable(*receiver.object, property->autoVarName, operand,
+                                         autoStatus)) {
                 return Status::Ok;
             }
         }
@@ -176,10 +177,10 @@ Status Interpreter::execute(const pex::PexInstruction& instruction, Frame& frame
         Status hostStatus = Status::Ok;
         if (isGetter) {
             Value out;
-            if (host_.getProperty(receiver, instruction.args[0].str, out, hostStatus)) {
+            if (host_.getProperty(*receiver.object, instruction.args[0].str, out, hostStatus)) {
                 return storeResult(frame, instruction.args[2], out);
             }
-        } else if (host_.setProperty(receiver, instruction.args[0].str, operand, hostStatus)) {
+        } else if (host_.setProperty(*receiver.object, instruction.args[0].str, operand, hostStatus)) {
             return Status::Ok;
         }
         return hostStatus == Status::Ok ? Status::UnknownIdentifier : hostStatus;
