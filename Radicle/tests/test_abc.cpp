@@ -452,6 +452,17 @@ TEST(Abc, RejectsEveryStructuralIndexPastItsPool) {
       {AbcBadIndex::ExceptionVarName, "exception variable name"},
       {AbcBadIndex::ScriptInit, "script init"},
       {AbcBadIndex::BodyMethod, "body method"},
+      {AbcBadIndex::MethodNameAtLimit, "method name"},
+      {AbcBadIndex::MethodParamNameAtLimit, "method parameter name"},
+      {AbcBadIndex::MethodOptionIndexAtLimit, "method option index"},
+      {AbcBadIndex::MetadataNameAtLimit, "metadata name"},
+      {AbcBadIndex::MetadataItemKeyAtLimit, "metadata item key"},
+      {AbcBadIndex::MetadataItemValueAtLimit, "metadata item value"},
+      {AbcBadIndex::TraitValueIndexAtLimit, "trait value index"},
+      {AbcBadIndex::TraitValueIndexStringAtLimit, "trait string value index"},
+      {AbcBadIndex::TraitValueIndexUIntAtLimit, "trait uint value index"},
+      {AbcBadIndex::TraitValueIndexDoubleAtLimit, "trait double value index"},
+      {AbcBadIndex::TraitValueIndexNamespaceAtLimit, "trait namespace value index"},
   };
   AbcFile file;
   ASSERT_EQ(AbcFile::parse(build_abc(), file), AbcStatus::Ok);
@@ -459,6 +470,70 @@ TEST(Abc, RejectsEveryStructuralIndexPastItsPool) {
     SCOPED_TRACE(field);
     EXPECT_EQ(AbcFile::parse(build_abc(tiny_constructor_code(), tiny_listener_code(), bad), file),
               AbcStatus::IndexOutOfRange);
+  }
+}
+
+TEST(Abc, AcceptsEveryStructuralIndexAtItsLastEntry) {
+  const std::pair<AbcBadIndex, const char*> cases[] = {
+      {AbcBadIndex::MethodNameAtLast, "method name"},
+      {AbcBadIndex::MethodParamNameAtLast, "method parameter name"},
+      {AbcBadIndex::MethodOptionIndexAtLast, "method option index"},
+      {AbcBadIndex::MethodOptionIndexZero, "method option index 0"},
+      {AbcBadIndex::MetadataNameAtLast, "metadata name"},
+      {AbcBadIndex::MetadataItemKeyAtLast, "metadata item key"},
+      {AbcBadIndex::MetadataItemValueAtLast, "metadata item value"},
+      {AbcBadIndex::TraitValueIndexAtLast, "trait value index"},
+      {AbcBadIndex::TraitValueIndexStringAtLast, "trait string value index"},
+      {AbcBadIndex::TraitValueIndexNamespaceAtLast, "trait namespace value index"},
+  };
+  AbcFile file;
+  for (const auto& [bad, field] : cases) {
+    SCOPED_TRACE(field);
+    ASSERT_EQ(AbcFile::parse(build_abc(tiny_constructor_code(), tiny_listener_code(), bad), file),
+              AbcStatus::Ok);
+    switch (bad) {
+      case AbcBadIndex::MethodNameAtLast:
+        EXPECT_EQ(file.methods[0].name, kStringCount - 1);
+        EXPECT_EQ(file.methods[1].name, kStringCount - 1);
+        break;
+      case AbcBadIndex::MethodParamNameAtLast:
+        ASSERT_EQ(file.methods[1].param_names.size(), 1u);
+        EXPECT_EQ(file.methods[1].param_names[0], kStringCount - 1);
+        break;
+      case AbcBadIndex::MethodOptionIndexAtLast:
+        ASSERT_EQ(file.methods[1].options.size(), 1u);
+        EXPECT_EQ(file.methods[1].options[0].index, kIntCount - 1);
+        break;
+      case AbcBadIndex::MethodOptionIndexZero:
+        ASSERT_EQ(file.methods[1].options.size(), 1u);
+        EXPECT_EQ(file.methods[1].options[0].index, 0u);
+        break;
+      case AbcBadIndex::MetadataNameAtLast:
+        ASSERT_EQ(file.metadata.size(), 1u);
+        EXPECT_EQ(file.metadata[0].name, kStringCount - 1);
+        break;
+      case AbcBadIndex::MetadataItemKeyAtLast:
+        ASSERT_EQ(file.metadata.size(), 1u);
+        ASSERT_EQ(file.metadata[0].items.size(), 1u);
+        EXPECT_EQ(file.metadata[0].items[0].key, kStringCount - 1);
+        break;
+      case AbcBadIndex::MetadataItemValueAtLast:
+        ASSERT_EQ(file.metadata.size(), 1u);
+        ASSERT_EQ(file.metadata[0].items.size(), 1u);
+        EXPECT_EQ(file.metadata[0].items[0].value, kStringCount - 1);
+        break;
+      case AbcBadIndex::TraitValueIndexAtLast:
+        EXPECT_EQ(file.instances[0].traits[2].value_index, kIntCount - 1);
+        break;
+      case AbcBadIndex::TraitValueIndexStringAtLast:
+        EXPECT_EQ(file.instances[0].traits[2].value_index, kStringCount - 1);
+        break;
+      case AbcBadIndex::TraitValueIndexNamespaceAtLast:
+        EXPECT_EQ(file.instances[0].traits[2].value_index, kNamespaceCount - 1);
+        break;
+      default:
+        break;
+    }
   }
 }
 

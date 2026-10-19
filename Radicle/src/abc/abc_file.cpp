@@ -318,6 +318,9 @@ AbcStatus check_pool_indices(const AbcFile& file) {
   const std::size_t strings = file.pool.strings.size();
   const std::size_t namespaces = file.pool.namespaces.size();
   const std::size_t multinames = file.pool.multinames.size();
+  const std::size_t ints = file.pool.ints.size();
+  const std::size_t uints = file.pool.uints.size();
+  const std::size_t doubles = file.pool.doubles.size();
   const std::size_t methods = file.methods.size();
   const std::size_t metadata = file.metadata.size();
   const std::size_t instances = file.instances.size();
@@ -328,6 +331,32 @@ AbcStatus check_pool_indices(const AbcFile& file) {
   const auto optional_past_end = [&past_end](std::uint32_t index, std::size_t limit) {
     return index != 0 && past_end(index, limit);
   };
+  const auto value_past_end = [&](std::uint32_t index, AbcValueKind kind) {
+    switch (kind) {
+      case AbcValueKind::Utf8:
+        return past_end(index, strings);
+      case AbcValueKind::Int:
+        return past_end(index, ints);
+      case AbcValueKind::UInt:
+        return past_end(index, uints);
+      case AbcValueKind::Double:
+        return past_end(index, doubles);
+      case AbcValueKind::PrivateNs:
+      case AbcValueKind::Namespace:
+      case AbcValueKind::PackageNamespace:
+      case AbcValueKind::PackageInternalNs:
+      case AbcValueKind::ProtectedNamespace:
+      case AbcValueKind::ExplicitNamespace:
+      case AbcValueKind::StaticProtectedNs:
+        return past_end(index, namespaces);
+      case AbcValueKind::Undefined:
+      case AbcValueKind::True:
+      case AbcValueKind::False:
+      case AbcValueKind::Null:
+        return false;
+    }
+    return false;
+  };
   const auto bad_traits = [&](const std::vector<AbcTrait>& traits) {
     for (const AbcTrait& trait : traits) {
       if (past_end(trait.name, multinames)) {
@@ -337,6 +366,9 @@ AbcStatus check_pool_indices(const AbcFile& file) {
         case AbcTraitKind::Slot:
         case AbcTraitKind::Const:
           if (past_end(trait.type_name, multinames)) {
+            return true;
+          }
+          if (trait.value_index != 0 && value_past_end(trait.value_index, trait.value_kind)) {
             return true;
           }
           break;
@@ -367,12 +399,32 @@ AbcStatus check_pool_indices(const AbcFile& file) {
     return false;
   };
 
+  for (const AbcMetadata& entry : file.metadata) {
+    if (past_end(entry.name, strings)) {
+      return AbcStatus::IndexOutOfRange;
+    }
+    for (const AbcMetadataItem& item : entry.items) {
+      if (past_end(item.key, strings) || past_end(item.value, strings)) {
+        return AbcStatus::IndexOutOfRange;
+      }
+    }
+  }
   for (const AbcMethodInfo& method : file.methods) {
-    if (past_end(method.return_type, multinames)) {
+    if (past_end(method.name, strings) || past_end(method.return_type, multinames)) {
       return AbcStatus::IndexOutOfRange;
     }
     for (const std::uint32_t param : method.param_types) {
       if (past_end(param, multinames)) {
+        return AbcStatus::IndexOutOfRange;
+      }
+    }
+    for (const std::uint32_t param_name : method.param_names) {
+      if (past_end(param_name, strings)) {
+        return AbcStatus::IndexOutOfRange;
+      }
+    }
+    for (const AbcOptionalValue& option : method.options) {
+      if (value_past_end(option.index, option.kind)) {
         return AbcStatus::IndexOutOfRange;
       }
     }

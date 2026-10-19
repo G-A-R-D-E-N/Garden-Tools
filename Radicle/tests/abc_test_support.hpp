@@ -58,14 +58,115 @@ enum class AbcBadIndex {
   ExceptionVarName,
   ScriptInit,
   BodyMethod,
+  MethodNameAtLast,
+  MethodNameAtLimit,
+  MethodParamNameAtLast,
+  MethodParamNameAtLimit,
+  MethodOptionIndexAtLast,
+  MethodOptionIndexAtLimit,
+  MethodOptionIndexZero,
+  MetadataNameAtLast,
+  MetadataNameAtLimit,
+  MetadataItemKeyAtLast,
+  MetadataItemKeyAtLimit,
+  MetadataItemValueAtLast,
+  MetadataItemValueAtLimit,
+  TraitValueIndexAtLast,
+  TraitValueIndexAtLimit,
+  TraitValueIndexStringAtLast,
+  TraitValueIndexStringAtLimit,
+  TraitValueIndexUIntAtLimit,
+  TraitValueIndexDoubleAtLimit,
+  TraitValueIndexNamespaceAtLast,
+  TraitValueIndexNamespaceAtLimit,
 };
 
 inline constexpr std::uint32_t kBadIndex = 99;
 inline constexpr std::uint32_t kMethodCount = 3;
 inline constexpr std::uint32_t kMultinameCount = 14;
+inline constexpr std::uint32_t kStringCount = 15;
+inline constexpr std::uint32_t kIntCount = 2;
+inline constexpr std::uint32_t kUIntCount = 1;
+inline constexpr std::uint32_t kDoubleCount = 1;
+inline constexpr std::uint32_t kNamespaceCount = 3;
 
 inline std::uint32_t bad_or(AbcBadIndex bad, AbcBadIndex field, std::uint32_t valid) {
   return bad == field ? kBadIndex : valid;
+}
+
+inline std::uint32_t method_name_or(AbcBadIndex bad, std::uint32_t valid) {
+  switch (bad) {
+    case AbcBadIndex::MethodNameAtLast:
+      return kStringCount - 1;
+    case AbcBadIndex::MethodNameAtLimit:
+      return kStringCount;
+    default:
+      return valid;
+  }
+}
+
+inline std::uint32_t param_name_or(AbcBadIndex bad, std::uint32_t valid) {
+  switch (bad) {
+    case AbcBadIndex::MethodParamNameAtLast:
+      return kStringCount - 1;
+    case AbcBadIndex::MethodParamNameAtLimit:
+      return kStringCount;
+    default:
+      return valid;
+  }
+}
+
+inline std::uint32_t option_index_or(AbcBadIndex bad, std::uint32_t valid) {
+  switch (bad) {
+    case AbcBadIndex::MethodOptionIndexAtLast:
+      return kIntCount - 1;
+    case AbcBadIndex::MethodOptionIndexAtLimit:
+      return kIntCount;
+    case AbcBadIndex::MethodOptionIndexZero:
+      return 0;
+    default:
+      return valid;
+  }
+}
+
+inline std::uint32_t metadata_index_or(AbcBadIndex bad, AbcBadIndex at_last,
+                                       AbcBadIndex at_limit, std::uint32_t valid) {
+  if (bad == at_last) {
+    return kStringCount - 1;
+  }
+  if (bad == at_limit) {
+    return kStringCount;
+  }
+  return valid;
+}
+
+inline std::uint32_t trait_value_index_or(AbcBadIndex bad, std::uint8_t& kind) {
+  switch (bad) {
+    case AbcBadIndex::TraitValueIndexAtLast:
+      return kIntCount - 1;
+    case AbcBadIndex::TraitValueIndexAtLimit:
+      return kIntCount;
+    case AbcBadIndex::TraitValueIndexStringAtLast:
+      kind = 0x01;
+      return kStringCount - 1;
+    case AbcBadIndex::TraitValueIndexStringAtLimit:
+      kind = 0x01;
+      return kStringCount;
+    case AbcBadIndex::TraitValueIndexUIntAtLimit:
+      kind = 0x04;
+      return kUIntCount;
+    case AbcBadIndex::TraitValueIndexDoubleAtLimit:
+      kind = 0x06;
+      return kDoubleCount;
+    case AbcBadIndex::TraitValueIndexNamespaceAtLast:
+      kind = 0x16;
+      return kNamespaceCount - 1;
+    case AbcBadIndex::TraitValueIndexNamespaceAtLimit:
+      kind = 0x16;
+      return kNamespaceCount;
+    default:
+      return 1;
+  }
 }
 
 inline void put_u8(std::vector<std::uint8_t>& out, std::uint32_t value) {
@@ -204,7 +305,7 @@ inline void put_method(std::vector<std::uint8_t>& out, std::uint32_t name,
                        AbcBadIndex bad = AbcBadIndex::None) {
   put_u30(out, 0);
   put_u30(out, bad_or(bad, AbcBadIndex::MethodReturnType, kMultinameVoid));
-  put_u30(out, name);
+  put_u30(out, method_name_or(bad, name));
   put_u8(out, 0);
 }
 
@@ -213,12 +314,12 @@ inline void put_method_with_options(std::vector<std::uint8_t>& out, std::uint32_
   put_u30(out, 1);
   put_u30(out, kMultinameVoid);
   put_u30(out, bad_or(bad, AbcBadIndex::MethodParamType, kMultinameVoid));
-  put_u30(out, name);
+  put_u30(out, method_name_or(bad, name));
   put_u8(out, 0x88);
   put_u30(out, 1);
-  put_u30(out, 1);
+  put_u30(out, option_index_or(bad, 1));
   put_u8(out, 0x03);
-  put_u30(out, kStringClick);
+  put_u30(out, param_name_or(bad, kStringClick));
 }
 
 inline void put_instance_traits(std::vector<std::uint8_t>& out,
@@ -241,8 +342,9 @@ inline void put_instance_traits(std::vector<std::uint8_t>& out,
   put_u8(out, 0x06);
   put_u30(out, 2);
   put_u30(out, kMultinameVoid);
-  put_u30(out, 1);
-  put_u8(out, 0x03);
+  std::uint8_t value_kind = 0x03;
+  put_u30(out, trait_value_index_or(bad, value_kind));
+  put_u8(out, value_kind);
   put_u30(out, kMultinameInner);
   put_u8(out, 0x04);
   put_u30(out, 0);
@@ -288,10 +390,14 @@ inline std::vector<std::uint8_t> build_abc(const std::vector<std::uint8_t>& cons
   put_method_with_options(out, kStringOnClick, bad);
   put_method(out, kStringHelper);
   put_u30(out, 1);
-  put_u30(out, kStringFoo);
+  put_u30(out, metadata_index_or(bad, AbcBadIndex::MetadataNameAtLast,
+                                 AbcBadIndex::MetadataNameAtLimit, kStringFoo));
   put_u30(out, 1);
-  put_u30(out, kStringExternalInterface);
-  put_u30(out, kStringCall);
+  put_u30(out, metadata_index_or(bad, AbcBadIndex::MetadataItemKeyAtLast,
+                                 AbcBadIndex::MetadataItemKeyAtLimit,
+                                 kStringExternalInterface));
+  put_u30(out, metadata_index_or(bad, AbcBadIndex::MetadataItemValueAtLast,
+                                 AbcBadIndex::MetadataItemValueAtLimit, kStringCall));
   put_u30(out, 1);
   const bool name_at_limit = bad == AbcBadIndex::InstanceNameAtLimit;
   put_u30(out, name_at_limit ? kMultinameCount
