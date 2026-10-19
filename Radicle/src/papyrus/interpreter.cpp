@@ -336,9 +336,15 @@ Status Interpreter::resolveIdentifier(Frame& frame, const std::string& name, Val
         out = noneValue();
         return Status::Ok;
     }
+    if (sameName(name, "self")) {
+        out = frame.self;
+        return Status::Ok;
+    }
     if (frame.object != nullptr) {
         for (const pex::PexVariable& variable : frame.object->variables) {
             if (!sameName(variable.name, name)) continue;
+            Status hostStatus = Status::Ok;
+            if (host_.getVariable(frame.self, name, out, hostStatus)) return Status::Ok;
             out = defaultValueFor(variable.type);
             if (!variable.defaultValue.has_value()) return Status::Ok;
             Value literal;

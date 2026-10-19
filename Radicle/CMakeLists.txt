@@ -635,6 +635,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_pex_hardening.cpp
     tests/test_pex_corpus.cpp
     tests/test_pex_oracle.cpp
+    tests/test_papyrus_vm.cpp
     tests/test_material_file.cpp
     tests/test_material_file_real.cpp
     tests/test_c_api_material_file.cpp
