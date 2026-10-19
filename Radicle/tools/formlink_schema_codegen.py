@@ -89,6 +89,19 @@ def parse_list_segment(row, path: str, storage: str, counter: str):
     return {"payload_size": payload_size, "counters": list(counters), "index": index}
 
 
+def parse_list_counter_offset(row, path: str, counter: str, segment):
+    offset = row.get("counter_offset")
+    if offset is None:
+        return 0
+    if type(offset) is not int or offset < 0 or offset > 0xFFFFFFFF:
+        raise ValueError(f"FormLink list counter_offset must be a non-negative integer: {path!r}")
+    if not counter:
+        raise ValueError(f"FormLink list counter_offset requires a counter subrecord: {path!r}")
+    if segment is not None:
+        raise ValueError(f"FormLink list counter_offset cannot be combined with segments: {path!r}")
+    return offset
+
+
 def load_lists(schema_path: Path):
     document = json.loads(schema_path.read_text(encoding="utf-8"))
     if document.get("version") != 1:
@@ -156,6 +169,7 @@ def load_lists(schema_path: Path):
                 raise ValueError(f"unsupported FormLink list storage: {storage!r}")
             counter = parse_list_counter(row, path)
             segment = parse_list_segment(row, path, storage, counter)
+            counter_offset = parse_list_counter_offset(row, path, counter, segment)
             key = (record_signature, subrecord)
             previous = seen_record_subrecords.get(key)
             if previous is not None and (segment is None or previous[1] is False):
@@ -182,6 +196,7 @@ def load_lists(schema_path: Path):
                 "subrecord": subrecord,
                 "storage": storage,
                 "counter": counter,
+                "counter_offset": counter_offset,
                 "segment": segment,
                 "targets": parsed_targets,
                 "nullable": nullable,
@@ -370,6 +385,7 @@ def load_lists(schema_path: Path):
             "subrecord": "KWDA",
             "storage": "packed_array",
             "counter": "KSIZ",
+            "counter_offset": 0,
             "segment": None,
             "targets": ["KYWD"],
             "nullable": False,
@@ -531,7 +547,8 @@ def render(lists, nested_lists, fields, unions) -> str:
             f"{first_target}, {target_count}, " +
             f"{first_anchor}, {predecessor_count}, {successor_count}, " +
             f"{segment_index}, {first_segment}, {segment_count}, " +
-            f"{segment['payload_size'] if segment else 0}" +
+            f"{segment['payload_size'] if segment else 0}, " +
+            f"{row['counter_offset']}" +
             "},"
         )
     lines.append("};")

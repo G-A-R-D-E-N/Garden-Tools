@@ -72,6 +72,9 @@ struct FormLinkListDescriptor {
   std::size_t first_segment{0};
   std::size_t segment_count{0};
   std::size_t counter_payload_size{0};
+  // Constraint: a nonzero counter_offset is the u16 count at that offset inside the counter
+  // subrecord, which must already exist and is never erased.
+  std::size_t counter_offset{0};
 };
 
 struct NestedFormLinkListDescriptor {

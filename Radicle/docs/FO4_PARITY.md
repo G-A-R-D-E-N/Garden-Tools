@@ -129,7 +129,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | MATO | 9375 | 12 | 1 | 1 | - | - | yes | - | - | - | 1 | L4 |
 | MATT | 7958 | 5 | 2 | 2 | - | - | yes | - | - | - | 2 | L4 |
 | MESG | 8179 | 2 | 1 | 1 | - | 4 | yes | - | - | - | 1 | L4 |
-| MGEF | 10052 | 17 | - | 18 | - | 2 | yes | yes | - | yes | 1 | L4 |
+| MGEF | 10052 | 17 | - | 18 | 1 | 2 | yes | yes | - | yes | 1 | L4 |
 | MISC | 10212 | 11 | 2 | 4 | - | 1 | yes | yes | forms/components | yes | 1 | L4 |
 | MOVT | 9393 | 61 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
 | MSTT | 7067 | 19 | 3 | 8 | - | 1 | yes | yes | - | - | 1 | L4 |

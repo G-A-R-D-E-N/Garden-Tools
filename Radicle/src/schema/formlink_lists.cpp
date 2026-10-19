@@ -161,6 +161,7 @@ FormLinkListMutationStatus insert_encoded_element(
   record->subrecords.insert(
       record->subrecords.begin() + static_cast<std::ptrdiff_t>(insertion),
       encoded_element(descriptor, encoded));
+  reconcile_counter(*record, descriptor, static_cast<std::uint32_t>(positions.size() + 1));
   fo4::detail::mark_record_modified(plugin, *record);
   return FormLinkListMutationStatus::updated;
 }
@@ -625,6 +626,7 @@ FormLinkListMutationStatus remove_record_formlink_list_element(
 
   record->subrecords.erase(
       record->subrecords.begin() + static_cast<std::ptrdiff_t>(positions[index]));
+  reconcile_counter(*record, descriptor, static_cast<std::uint32_t>(positions.size() - 1));
   fo4::detail::mark_record_modified(next, *record);
   plugin = std::move(next);
   return FormLinkListMutationStatus::updated;
@@ -662,6 +664,8 @@ std::size_t remove_record_formlink_list_elements_matching(
     record->subrecords.erase(
         record->subrecords.begin() + static_cast<std::ptrdiff_t>(*it));
   }
+  reconcile_counter(*record, descriptor,
+                    static_cast<std::uint32_t>(positions.size() - victims.size()));
   fo4::detail::mark_record_modified(next, *record);
   plugin = std::move(next);
   return victims.size();
@@ -729,6 +733,7 @@ FormLinkListMutationStatus clear_record_formlink_list(
     record->subrecords.erase(
         record->subrecords.begin() + static_cast<std::ptrdiff_t>(*it));
   }
+  reconcile_counter(*record, descriptor, 0);
   fo4::detail::mark_record_modified(next, *record);
   plugin = std::move(next);
   return FormLinkListMutationStatus::updated;
