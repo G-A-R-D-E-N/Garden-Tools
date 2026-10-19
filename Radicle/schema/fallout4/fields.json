@@ -1260,6 +1260,9 @@
       "signature": "OTFT",
       "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "INAM", "minimum": 0, "maximum": 1}]},
       "fields": [],
+      "formlink_lists": [
+        {"path": "OTFT\\Items", "label": "Items", "subrecord": "INAM", "targets": ["ARMO", "LVLI"], "nullable": false, "storage": "packed_array", "mutation": "appendable", "anchor_predecessors": ["EDID"]}
+      ],
       "localized_subrecords": []
     },
     {
@@ -8065,7 +8068,13 @@
         {"path": "COLL\\Index", "label": "Index", "kind": "scalar", "subrecord": "BNAM", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"},
         {"path": "COLL\\Flags", "label": "Flags", "kind": "scalar", "subrecord": "GNAM", "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Trigger Volume"}, {"bit": 1, "name": "Sensor"}, {"bit": 2, "name": "Navmesh Obstacle"}], "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"},
         {"path": "COLL\\InteractablesCount", "label": "Interactables count", "kind": "scalar", "subrecord": "INTV", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"},
-        {"path": "COLL\\Name", "label": "Name", "kind": "string", "subrecord": "MNAM", "insertion": "existing_only"}
+        {"path": "COLL\\Name", "label": "Name", "kind": "string", "subrecord": "MNAM", "insertion": "existing_only"},
+        {"path": "COLL\\DebugColorRed", "label": "Debug color red", "kind": "scalar", "subrecord": "FNAM", "offset": 0, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "COLL\\DebugColorGreen", "label": "Debug color green", "kind": "scalar", "subrecord": "FNAM", "offset": 1, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "COLL\\DebugColorBlue", "label": "Debug color blue", "kind": "scalar", "subrecord": "FNAM", "offset": 2, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "payload_size": 4, "insertion": "existing_only"}
+      ],
+      "formlink_lists": [
+        {"path": "COLL\\CollidesWith", "label": "Collides with", "subrecord": "CNAM", "targets": ["COLL"], "nullable": false, "storage": "packed_array", "mutation": "appendable", "anchor_predecessors": ["INTV", "MNAM", "GNAM", "FNAM", "BNAM", "DESC", "EDID"]}
       ],
       "localized_subrecords": ["DESC"]
     },
@@ -20648,9 +20657,25 @@
           "minimum": 0,
           "maximum": 65535,
           "insertion": "existing_only"
+        },
+        {
+          "path": "SCSN\\Multiplier",
+          "label": "Multiplier",
+          "kind": "scalar",
+          "subrecord": "CNAM",
+          "offset": 4,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 8,
+          "repeated": true,
+          "insertion": "existing_only"
         }
       ],
-      "formlink_fields": [],
+      "formlink_fields": [
+        {"path": "SCSN\\Category", "label": "Category", "subrecord": "CNAM", "offset": 0, "targets": ["SNCT"], "nullable": false, "repeated": true, "payload_sizes": [8], "insertion": "existing_only"}
+      ],
       "authoring": {
         "placement": "top_level",
         "subrecords": [
