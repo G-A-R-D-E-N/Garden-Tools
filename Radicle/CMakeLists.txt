@@ -226,6 +226,9 @@ add_library(fo4
   src/environment/sound.cpp
   src/environment/material_swap.cpp
   src/pex/pex.cpp
+  src/swf/swf.cpp
+  src/swf/swf_tags.cpp
+  src/swf/swf_write.cpp
   src/material/material_file.cpp
   src/seq/seq.cpp
   src/quest/runtime.cpp
@@ -632,6 +635,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_pex_oracle.cpp
     tests/test_material_file.cpp
     tests/test_material_file_real.cpp
+    tests/test_swf.cpp
+    tests/test_swf_real.cpp
     tests/test_c_api_material_file.cpp
     tests/test_seq.cpp
     tests/test_seq_corpus.cpp
