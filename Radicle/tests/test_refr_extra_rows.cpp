@@ -40,6 +40,8 @@ struct LinkRow {
   std::uint32_t payload_size;
   std::string_view target;
   bool nullable = false;
+  bool repeated = false;
+  std::size_t stride = 0;
 };
 
 constexpr auto f32 = fo4::schema::ScalarStorage::f32;
@@ -75,14 +77,14 @@ constexpr ScalarRow k_scalar_rows[] = {
     {"REFR", "REFR\\WaterCurrentRotationalVelocityY", "XCVR", 4, f32, true, 12, 0},
     {"REFR", "REFR\\WaterCurrentRotationalVelocityZ", "XCVR", 8, f32, true, 12, 0},
     {"REFR", "REFR\\PowerGridCount", "XWPG", 0, u32, false, 0, 0},
-    {"REFR", "REFR\\SplineSlack", "XBSD", 0, f32, true, 0, 4},
-    {"REFR", "REFR\\SplineThickness", "XBSD", 4, f32, true, 0, 8},
-    {"REFR", "REFR\\SplineHalfExtentX", "XBSD", 8, f32, true, 0, 12},
-    {"REFR", "REFR\\SplineHalfExtentY", "XBSD", 12, f32, true, 0, 16},
+    {"REFR", "REFR\\SplineSlack", "XBSD", 0, f32, true, 0, 20},
+    {"REFR", "REFR\\SplineThickness", "XBSD", 4, f32, true, 0, 20},
+    {"REFR", "REFR\\SplineHalfExtentX", "XBSD", 8, f32, true, 0, 20},
+    {"REFR", "REFR\\SplineHalfExtentY", "XBSD", 12, f32, true, 0, 20},
     {"REFR", "REFR\\SplineHalfExtentZ", "XBSD", 16, f32, true, 0, 20},
     {"REFR", "REFR\\SplineWindDetachedEnd", "XBSD", 20, u8, true, 0, 21},
-    {"REFR", "REFR\\DecalWidthScale", "XPDD", 0, f32, true, 0, 4},
-    {"REFR", "REFR\\DecalHeightScale", "XPDD", 4, f32, true, 0, 8},
+    {"REFR", "REFR\\DecalWidthScale", "XPDD", 0, f32, true, 8, 0},
+    {"REFR", "REFR\\DecalHeightScale", "XPDD", 4, f32, true, 8, 0},
 };
 
 constexpr LinkRow k_link_rows[] = {
@@ -101,15 +103,15 @@ constexpr LinkRow k_link_rows[] = {
     {"REFR", "REFR\\LocationReference", "XLRL", 0, 4, "LCRT", true},
     {"PGRE", "PGRE\\EncounterZone", "XEZN", 0, 4, "ECZN"},
     {"PGRE", "PGRE\\Emittance", "XEMI", 0, 4, "REGN"},
-    {"REFR", "REFR\\LinkedKeyword", "XLKR", 0, 4, "KYWD", true},
-    {"REFR", "REFR\\LinkedReference", "XLKR", 4, 8, "REFR", true},
-    {"REFR", "REFR\\ActivateParentRef", "XAPR", 0, 8, "ACHR", true},
-    {"REFR", "REFR\\SplineConnection", "XPLK", 0, 8, "REFR"},
-    {"REFR", "REFR\\PortalOrigin", "XPOD", 0, 8, "REFR", true},
-    {"REFR", "REFR\\PortalDestination", "XPOD", 4, 8, "REFR", true},
-    {"REFR", "REFR\\PowerGridNode1", "XWPN", 0, 12, "ACHR", true},
-    {"REFR", "REFR\\PowerGridNode2", "XWPN", 4, 12, "REFR", true},
-    {"REFR", "REFR\\PowerGridLine", "XWPN", 8, 12, "REFR", true},
+    {"REFR", "REFR\\LinkedKeyword", "XLKR", 0, 4, "KYWD", true, true},
+    {"REFR", "REFR\\LinkedReference", "XLKR", 4, 8, "REFR", true, true},
+    {"REFR", "REFR\\ActivateParentRef", "XAPR", 0, 8, "ACHR", true, true},
+    {"REFR", "REFR\\SplineConnection", "XPLK", 0, 8, "REFR", false, true},
+    {"REFR", "REFR\\PortalOrigin", "XPOD", 0, 8, "REFR", true, false, 8},
+    {"REFR", "REFR\\PortalDestination", "XPOD", 4, 8, "REFR", true, false, 8},
+    {"REFR", "REFR\\PowerGridNode1", "XWPN", 0, 12, "ACHR", true, true},
+    {"REFR", "REFR\\PowerGridNode2", "XWPN", 4, 12, "REFR", true, true},
+    {"REFR", "REFR\\PowerGridLine", "XWPN", 8, 12, "REFR", true, true},
 };
 
 constexpr std::uint32_t raw_id(std::uint32_t local_id) { return 0x02000000u | local_id; }
@@ -243,6 +245,9 @@ std::vector<std::byte> make_plugin() {
                 {"XLIG", floats({90.0f, 1.0f, 2048.0f, 0.5f, 10.0f, 0.75f})}});
   write_record(out, "REFR", 0x0C11,
                {{"XLIG", floats({90.0f, 1.0f, 2048.0f, 0.5f})}});
+  write_record(out, "REFR", 0x0C12,
+               {{"XPOD", u32s({0x00000A99u, 0x00000A9Au, 0x00000AA1u, 0x00000AA2u})},
+                {"XPLK", u32_bytes(0x00000AA4u)}});
   write_record(out, "PGRE", 0x0C20,
                {{"XAMC", u32_bytes(30)},
                 {"XHTW", floats({3.5f})},
@@ -336,6 +341,8 @@ TEST(REFRExtraRows, LinkRowsNameTheirSubrecordsOffsetsAndTargets) {
     EXPECT_EQ(field->offset, row.offset);
     EXPECT_EQ(field->nullable, row.nullable);
     EXPECT_EQ(field->payload_sizes[0], row.payload_size);
+    EXPECT_EQ(field->address.repeated, row.repeated);
+    EXPECT_EQ(field->address.stride, row.stride);
     EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(
         *field, fo4::Signature::from_string(row.target)));
   }
@@ -346,6 +353,11 @@ TEST(REFRExtraRows, LinkRowsNameTheirSubrecordsOffsetsAndTargets) {
       *key, fo4::Signature::from_string("KEYM")));
   EXPECT_FALSE(fo4::schema::formlink_field_target_allowed(
       *key, fo4::Signature::from_string("STAT")));
+  const auto portal = fo4::schema::formlink_field_descriptor(fo4::Signature::from_string("REFR"),
+                                                             "REFR\\PortalOrigin");
+  ASSERT_TRUE(portal.has_value());
+  EXPECT_FALSE(fo4::schema::formlink_field_target_allowed(
+      *portal, fo4::Signature::from_string("ACHR")));
 }
 
 TEST(REFRExtraRows, ReadsScalarsAndLinksFromThePlugin) {
@@ -601,8 +613,9 @@ TEST(REFRExtraRows, WritesTheNewRowsInPlaceAndRefusesALinkedReferenceBesideAShor
             fo4::ScalarMutationStatus::updated);
   EXPECT_EQ(fo4::set_record_scalar(plugin, key, *decal, "4.0"),
             fo4::ScalarMutationStatus::updated);
-  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *count, "2"),
-            fo4::ScalarMutationStatus::updated);
+  EXPECT_TRUE(fo4::schema::is_derived_scalar_row(refr, fo4::Signature::from_string("XWPG")));
+  EXPECT_THROW(static_cast<void>(fo4::set_record_scalar(plugin, key, *count, "2")),
+               fo4::schema::ScalarError);
 
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   const auto linked_keyword = sub_bytes_at(reread, "000C10:Patch.esp", "XLKR", 0);
@@ -626,10 +639,52 @@ TEST(REFRExtraRows, WritesTheNewRowsInPlaceAndRefusesALinkedReferenceBesideAShor
   EXPECT_EQ(Bytes(spline.begin() + 4, spline.begin() + 20), floats({0.25f, 1.0f, 2.0f, 3.0f}));
   EXPECT_EQ(std::to_integer<std::uint8_t>(spline[20]), 0x01);
   EXPECT_EQ(sub_bytes(reread, "000C10:Patch.esp", "XPDD"), floats({2.0f, 4.0f}));
-  EXPECT_EQ(sub_bytes(reread, "000C10:Patch.esp", "XWPG"), u32_bytes(2));
+  EXPECT_EQ(sub_bytes(reread, "000C10:Patch.esp", "XWPG"), u32_bytes(1));
 
   EXPECT_EQ(sub_bytes(reread, "000C10:Patch.esp", "XCVL"), floats({1.0f, 2.0f, 3.0f}));
   EXPECT_EQ(sub_bytes(reread, "000C10:Patch.esp", "XWPN"), u32s({0x00000A96u, 0x00000A97u, 0x00000A98u}));
   EXPECT_EQ(sub_bytes(reread, "000C10:Patch.esp", "XPOD"), u32s({0x00000A99u, 0x00000A9Au}));
   EXPECT_EQ(link_raw(reread, "REFR", "000C10:Patch.esp", "REFR\\LinkedKeyword"), 0x00000A9Bu);
+}
+
+TEST(REFRExtraRows, PackedPortalPairsAddressEachElement) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto key = fo4::FormKey::parse("000C12:Patch.esp");
+  const auto refr = fo4::Signature::from_string("REFR");
+  const auto origin = fo4::schema::formlink_field_descriptor(refr, "REFR\\PortalOrigin");
+  const auto destination =
+      fo4::schema::formlink_field_descriptor(refr, "REFR\\PortalDestination");
+  ASSERT_TRUE(origin.has_value());
+  ASSERT_TRUE(destination.has_value());
+  EXPECT_FALSE(origin->address.repeated);
+  EXPECT_EQ(origin->address.stride, 8u);
+  EXPECT_EQ(fo4::record_field_count(plugin, key, *origin), 2u);
+  EXPECT_EQ(fo4::record_field_count(plugin, key, *destination), 2u);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, key, *origin, 1,
+                                           fo4::FormKey::parse("000AA3:Objects.esp")),
+            fo4::FormLinkFieldMutationStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(sub_bytes(reread, "000C12:Patch.esp", "XPOD"),
+            u32s({0x00000A99u, 0x00000A9Au, 0x01000AA3u, 0x00000AA2u}));
+  EXPECT_EQ(link_raw(reread, "REFR", "000C12:Patch.esp", "REFR\\PortalOrigin"), 0x00000A99u);
+  EXPECT_EQ(link_raw(reread, "REFR", "000C12:Patch.esp", "REFR\\PortalDestination"),
+            0x00000A9Au);
+}
+
+TEST(REFRExtraRows, ShortSplineConnectionPayloadReadsAndWrites) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto key = fo4::FormKey::parse("000C12:Patch.esp");
+  const auto spline = fo4::schema::formlink_field_descriptor(fo4::Signature::from_string("REFR"),
+                                                             "REFR\\SplineConnection");
+  ASSERT_TRUE(spline.has_value());
+  EXPECT_EQ(spline->payload_sizes[0], 8u);
+  EXPECT_EQ(spline->payload_sizes[1], 4u);
+  EXPECT_EQ(fo4::record_field_count(plugin, key, *spline), 1u);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, key, *spline, 0,
+                                           fo4::FormKey::parse("000AA5:Objects.esp")),
+            fo4::FormLinkFieldMutationStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(sub_bytes(reread, "000C12:Patch.esp", "XPLK"), u32_bytes(0x01000AA5u));
 }

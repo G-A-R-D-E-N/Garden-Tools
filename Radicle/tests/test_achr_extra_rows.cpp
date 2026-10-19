@@ -191,6 +191,11 @@ TEST(AchrExtraRows, WaterCurrentAndLocationRefTypeRowsAreAddressedAsXEditDoes) {
       *ref_types, fo4::Signature::from_string("LCRT")));
   EXPECT_FALSE(fo4::schema::formlink_list_target_allowed(
       *ref_types, fo4::Signature::from_string("LCTN")));
+
+  const auto spline = fo4::schema::formlink_field_descriptor(k_achr, "ACHR\\SplineConnection");
+  ASSERT_TRUE(spline.has_value());
+  EXPECT_EQ(spline->payload_sizes[0], 8u);
+  EXPECT_EQ(spline->payload_sizes[1], 4u);
 }
 
 TEST(AchrExtraRows, LinkedActivateParentSplineAndVelocityRowsReadFromThePlugin) {
