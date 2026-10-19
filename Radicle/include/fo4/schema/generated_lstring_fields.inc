@@ -55,6 +55,7 @@ inline constexpr LocalizedFieldEntry k_generated_localized_fields[] = {
   {Signature::from_string("LIGH"), Signature::from_string("FULL")},
   {Signature::from_string("LSCR"), Signature::from_string("DESC")},
   {Signature::from_string("LVLI"), Signature::from_string("ONAM")},
+  {Signature::from_string("LVSP"), Signature::from_string("FULL")},
   {Signature::from_string("MESG"), Signature::from_string("DESC")},
   {Signature::from_string("MESG"), Signature::from_string("FULL")},
   {Signature::from_string("MESG"), Signature::from_string("ITXT")},

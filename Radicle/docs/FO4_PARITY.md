@@ -125,7 +125,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | LTEX | 9967 | 3 | - | 2 | 1 | - | yes | - | environment/terrain, environment/vegetation | - | 1 | L4 |
 | LVLI | 10009 | 10 | - | 3 | - | 1 | yes | - | forms/leveled_list | yes | 1 | L4 |
 | LVLN | 9986 | 10 | 1 | 3 | - | - | yes | - | forms/leveled_list | yes | 1 | L4 |
-| LVSP | 10033 | 9 | - | - | - | - | yes | - | forms/leveled_list, forms/leveled_spell | - | 1 | L4 |
+| LVSP | 10033 | 9 | - | - | - | 1 | yes | - | forms/leveled_list, forms/leveled_spell | - | 1 | L4 |
 | MATO | 9375 | 12 | 1 | 1 | - | - | yes | - | - | - | 1 | L4 |
 | MATT | 7958 | 5 | 2 | 2 | - | - | yes | - | - | - | 2 | L4 |
 | MESG | 8179 | 2 | 1 | 1 | - | 4 | yes | - | - | - | 1 | L4 |
