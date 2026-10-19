@@ -166,8 +166,9 @@ Replacement below).
 
 `replace_quest_alias` rewrites only the members the creation sets. Every other
 member of the existing alias is kept and spliced back into the alias at the
-position the xEdit member order gives it, so `ALED` stays last and a collection
-`ALCS`/`ALMI` run stays one run. The Alias ID must stay the same.
+position the xEdit member order gives it, so `ALED` stays last. Replacement
+never targets a collection alias; only a kind change to one can produce an
+`ALCS`/`ALMI` run. The Alias ID must stay the same.
 
 A member is written when the creation emits it, or when it belongs to a run the
 creation writes: the Fill Type union of the alias kind, the `CTDA`/`CIS1`/`CIS2`
@@ -175,7 +176,11 @@ condition run, or the `COCT`/`CNTO`/`COED` item run. A run goes as a unit
 because a leftover member rebinds to the new run instead of staying put: a kept
 `ALEA` beside a written `ALFE`/`ALFD` would make the alias decode as two Fill
 Type variants, a kept `CIS1` would rebind its string to the next `CTDA`, and a
-kept `COED` would rebind its owner and rank to the next `CNTO`.
+kept `COED` would rebind its owner and rank to the next `CNTO`. The Fill Type
+union is checked against the new kind as well as the existing one, so a kind
+change from a location alias carrying `ALCC` to a reference creation that
+writes a fill drops the `ALCC` instead of leaving two Fill Type variants
+behind.
 
 The order is the xEdit FO4 alias definition
 (`Core/wbDefinitionsFO4.pas:10808-10889` reference alias, `:10898-10924`
@@ -187,10 +192,11 @@ before the conditions.
 
 Replacement throws `QuestError`, leaving the plugin unchanged, when a member
 that has to be preserved has no position in that order (an `ALFL` inside a
-reference alias, say), or when the preserved members are themselves out of
-order. A replacement that changes the alias kind rewrites the alias frame
-(`ALST`/`ALLS`/`ALCS`/`ALMI`, `ALID`, `FNAM`, `ALFI`, `ALED`) and preserves
-everything else under the new kind's order.
+reference alias, say), when the preserved members are themselves out of
+order, or when the spliced alias does not decode. A replacement that changes
+the alias kind rewrites the alias frame for the new kind (`ALST`/`ALLS`, or
+`ALCS`/`ALMI` when the new creation is a collection, plus `ALID`, `FNAM`,
+`ALFI`, `ALED`) and preserves everything else under the new kind's order.
 
 ## Mutation safety
 

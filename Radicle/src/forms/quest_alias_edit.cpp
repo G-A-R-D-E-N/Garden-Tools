@@ -441,15 +441,21 @@ void replace_quest_alias(Plugin& plugin,
       run_written(alias.subrecords, creation.kind, AliasMemberRun::conditions);
   const bool items_written =
       run_written(alias.subrecords, creation.kind, AliasMemberRun::items);
+  // A written fill run must also take a preserved fill member of the new kind.
   const auto replaced = [&](Signature signature) {
     if (written.count(signature) != 0) return true;
-    switch (member_run(existing_kind, signature)) {
-      case AliasMemberRun::fill:
-        return fill_written;
+    const auto existing_run = member_run(existing_kind, signature);
+    if (fill_written &&
+        (existing_run == AliasMemberRun::fill ||
+         member_run(creation.kind, signature) == AliasMemberRun::fill)) {
+      return true;
+    }
+    switch (existing_run) {
       case AliasMemberRun::conditions:
         return conditions_written;
       case AliasMemberRun::items:
         return items_written;
+      case AliasMemberRun::fill:
       case AliasMemberRun::none:
         return false;
     }
@@ -474,6 +480,8 @@ void replace_quest_alias(Plugin& plugin,
   const auto end = record->subrecords.begin() + static_cast<std::ptrdiff_t>(range->end);
   auto insertion = record->subrecords.erase(begin, end);
   record->subrecords.insert(insertion, merged.begin(), merged.end());
+  // Fail closed: the spliced alias must decode before the clone is committed.
+  static_cast<void>(decode_quest_aliases(next, quest));
   mark_modified(next, *record);
   plugin = std::move(next);
 }

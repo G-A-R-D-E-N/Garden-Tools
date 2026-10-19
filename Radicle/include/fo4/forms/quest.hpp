@@ -354,6 +354,7 @@ void write_quest_aliases(Plugin& plugin,
 void add_quest_alias(Plugin& plugin,
                      const FormKey& quest,
                      const QuestAliasCreation& creation);
+// A kind change must rewrite the frame; an unset name or force_into_alias then drops ALID/ALFI.
 void replace_quest_alias(Plugin& plugin,
                          const FormKey& quest,
                          std::uint32_t alias_id,
