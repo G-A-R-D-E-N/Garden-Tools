@@ -360,6 +360,10 @@ bool orderValues(const Value& left, const Value& right, int& order) {
         order = a == b ? 0 : (a < b ? -1 : 1);
         return true;
     }
+    if (left.type == ValueType::Integer && right.type == ValueType::Integer) {
+        order = left.integer == right.integer ? 0 : (left.integer < right.integer ? -1 : 1);
+        return true;
+    }
     if ((left.type == ValueType::Float || left.type == ValueType::Integer) &&
         (right.type == ValueType::Float || right.type == ValueType::Integer)) {
         const float a = left.type == ValueType::Float ? left.real : static_cast<float>(left.integer);

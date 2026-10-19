@@ -72,6 +72,7 @@ enum class PackageInputMutationStatus {
   kind_mismatch,
   payload_size_invalid,
   payload_layout_undetermined,
+  payload_tag_mismatch,
   procedure_tree_present,
   no_free_input_id,
 };

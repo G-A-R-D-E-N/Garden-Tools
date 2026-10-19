@@ -89,8 +89,7 @@ bool inflate_body(std::span<const std::byte> input, std::vector<std::byte>& out,
   return true;
 }
 
-void collect_tags(const std::vector<SwfTag>& tags, SwfSummary& summary, bool& attributes_seen,
-                  unsigned depth) {
+void collect_tags(const std::vector<SwfTag>& tags, SwfSummary& summary, unsigned depth) {
   if (depth > detail::kMaxTagDepth) {
     return;
   }
@@ -111,12 +110,11 @@ void collect_tags(const std::vector<SwfTag>& tags, SwfSummary& summary, bool& at
           SwfAbcInfo{current.abc->name, static_cast<std::uint32_t>(current.abc->payload_size)});
     }
     if (current.attributes.has_value()) {
-      attributes_seen = true;
       summary.action_script3 = current.attributes->action_script3;
       summary.has_metadata = current.attributes->has_metadata;
       summary.use_network = current.attributes->use_network;
     }
-    collect_tags(current.children, summary, attributes_seen, depth + 1);
+    collect_tags(current.children, summary, depth + 1);
   }
 }
 
@@ -377,6 +375,9 @@ SwfReadResult read_swf(std::span<const std::byte> bytes) {
   rect.y_min = y_min;
   rect.y_max = y_max;
   rect.nbits = static_cast<std::uint8_t>(nbits);
+  const auto pad_bits = static_cast<unsigned>((8u - bits.bit_position() % 8u) % 8u);
+  rect.padding = static_cast<std::uint8_t>(byte_at(body, bits.byte_position() - 1u) &
+                                           ((1u << pad_bits) - 1u));
   header.frame_size = rect;
 
   detail::SwfReader reader(body, bits.byte_position());
@@ -396,8 +397,9 @@ SwfReadResult read_swf(std::span<const std::byte> bytes) {
   if (stop < body.size()) {
     result.file.trailing_bytes.assign(body.begin() + static_cast<std::ptrdiff_t>(stop), body.end());
   }
-  result.file.source_body = std::move(body);
   result.file.trailing_bytes.insert(result.file.trailing_bytes.end(), extra.begin(), extra.end());
+  body.insert(body.end(), extra.begin(), extra.end());
+  result.file.source_body = std::move(body);
 
   if (walk_status != SwfStatus::ok) {
     result.status = walk_status;
@@ -444,9 +446,8 @@ SwfSummary summarize(const SwfFile& file) {
   summary.compressed = file.header.compression != SwfCompression::none;
   summary.is_gfx = file.header.format == SwfFormat::gfx;
   summary.frame_count = file.header.frame_count;
-  bool attributes_seen = false;
-  collect_tags(file.tags, summary, attributes_seen, 0);
-  if (!attributes_seen && !summary.abc_blocks.empty()) {
+  collect_tags(file.tags, summary, 0);
+  if (!summary.abc_blocks.empty()) {
     summary.action_script3 = true;
   }
   return summary;

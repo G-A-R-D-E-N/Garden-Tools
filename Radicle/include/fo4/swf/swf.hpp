@@ -77,14 +77,14 @@ inline constexpr std::uint16_t kSetTabIndex = 66;
 inline constexpr std::uint16_t kFileAttributes = 69;
 inline constexpr std::uint16_t kPlaceObject3 = 70;
 inline constexpr std::uint16_t kImportAssets2 = 71;
-inline constexpr std::uint16_t kDoAbc2 = 72;
+inline constexpr std::uint16_t kDoAbc2 = 82;
 inline constexpr std::uint16_t kDefineFontAlignZones = 73;
 inline constexpr std::uint16_t kCsmTextSettings = 74;
 inline constexpr std::uint16_t kDefineFont3 = 75;
 inline constexpr std::uint16_t kSymbolClass = 76;
 inline constexpr std::uint16_t kMetadata = 77;
 inline constexpr std::uint16_t kDefineScalingGrid = 78;
-inline constexpr std::uint16_t kDoAbc = 82;
+inline constexpr std::uint16_t kDoAbc = 72;
 inline constexpr std::uint16_t kDefineShape4 = 83;
 inline constexpr std::uint16_t kDefineMorphShape2 = 84;
 inline constexpr std::uint16_t kDefineSceneAndFrameLabelData = 86;
@@ -108,6 +108,7 @@ struct SwfRect {
   std::int32_t y_min{0};
   std::int32_t y_max{0};
   std::uint8_t nbits{0};
+  std::uint8_t padding{0};
 
   bool operator==(const SwfRect&) const = default;
 };

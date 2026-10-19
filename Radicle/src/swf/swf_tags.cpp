@@ -125,11 +125,11 @@ SwfStatus decode_tag_payload(const std::vector<std::byte>& payload, SwfTag& out_
                        (static_cast<std::uint32_t>(byte_at(data, 3)) << 24);
       SwfFileAttributes attributes;
       attributes.raw = raw;
-      attributes.use_direct_blit = (raw & 0x02u) != 0;
-      attributes.use_gpu = (raw & 0x04u) != 0;
-      attributes.has_metadata = (raw & 0x08u) != 0;
-      attributes.action_script3 = (raw & 0x10u) != 0;
-      attributes.use_network = (raw & 0x40u) != 0;
+      attributes.use_network = (raw & 0x01u) != 0;
+      attributes.action_script3 = (raw & 0x08u) != 0;
+      attributes.has_metadata = (raw & 0x10u) != 0;
+      attributes.use_gpu = (raw & 0x20u) != 0;
+      attributes.use_direct_blit = (raw & 0x40u) != 0;
       out_tag.attributes = attributes;
       return SwfStatus::ok;
     }
@@ -190,7 +190,12 @@ SwfStatus decode_tag_payload(const std::vector<std::byte>& payload, SwfTag& out_
       }
       return SwfStatus::ok;
     }
-    case tag::kDoAbc:
+    case tag::kDoAbc: {
+      SwfAbc abc;
+      abc.payload_size = payload.size();
+      out_tag.abc = abc;
+      return SwfStatus::ok;
+    }
     case tag::kDoAbc2: {
       SwfReader reader(data, 0);
       SwfAbc abc;
