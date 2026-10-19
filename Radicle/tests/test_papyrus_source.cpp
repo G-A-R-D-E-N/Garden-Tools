@@ -156,7 +156,9 @@ TEST(PapyrusSourceTest, LexesCommentsContinuationsAndDocComments) {
   EXPECT_EQ(identifiers[1], "Int");
   EXPECT_EQ(identifiers[2], "Value");
   ASSERT_FALSE(lexed.tokens.empty());
-  EXPECT_EQ(lexed.tokens.front().position.line, 3u);
+  std::size_t firstCode = 0;
+  while (lexed.tokens[firstCode].kind == TokenKind::NewLine) ++firstCode;
+  EXPECT_EQ(lexed.tokens[firstCode].position.line, 3u);
   bool sawContinuation = false;
   for (std::size_t at = 0; at + 1 < lexed.tokens.size(); ++at) {
     if (lexed.tokens[at].kind == TokenKind::Integer && lexed.tokens[at].intValue == 2) {
