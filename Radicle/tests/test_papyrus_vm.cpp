@@ -243,7 +243,8 @@ PexState castState() {
        ins("assign", {id("::temp1"), number(1)}), ins("return", {id("::temp1")})});
   PexFunction notNone =
       method("NotNone", "Bool", {}, {typed("::temp0", "Bool")},
-             {ins("not", {id("::temp0"), id("::NoneVar")}), ins("return", {id("::temp0")})});
+             {ins("jmpt", {id("::NoneVar"), number(2)}),
+              ins("not", {id("::temp0"), id("::NoneVar")}), ins("return", {id("::temp0")})});
   return state("", {convert, truth, castRef, notNone});
 }
 
@@ -363,7 +364,8 @@ TEST(PapyrusVm, StringConcatFormatsNumbersAndEqualityIgnoresCase) {
   Limits limits;
   limits.maxStringLength = 8;
   const Result capped = runScript(host, "Script", "Concat", {}, limits);
-  EXPECT_STREQ(fo4::papyrus::statusName(capped.status), "StringTooLong");
+  EXPECT_EQ(capped.status, Status::StringTooLong);
+  EXPECT_FALSE(fo4::papyrus::isFatal(capped.status));
   EXPECT_EQ(capped.value.type, ValueType::None);
   limits.maxStringLength = 9;
   EXPECT_EQ(runScript(host, "Script", "Concat", {}, limits).status, Status::Ok);
@@ -576,7 +578,7 @@ TEST(PapyrusVm, NativeFunctionsResolveThroughTheHostRegistry) {
       status = Status::TypeMismatch;
       return false;
     }
-    out = fo4::papyrus::integerValue(args[0].integer * 10);
+    out = fo4::papyrus::floatValue(static_cast<float>(args[0].integer) * 10.0F);
     return true;
   });
 
@@ -589,7 +591,7 @@ TEST(PapyrusVm, NativeFunctionsResolveThroughTheHostRegistry) {
   ASSERT_EQ(direct.status, Status::Ok);
   EXPECT_EQ(direct.value.integer, 50);
   const Result exploded = runScript(host, "Natives", "Blast");
-  EXPECT_EQ(exploded.status, Status::InternalError);
+  EXPECT_EQ(exploded.status, Status::HostError);
 }
 
 TEST(PapyrusVm, PropertiesUseTheHostAndAutoVariablesUseTheBackingVariable) {

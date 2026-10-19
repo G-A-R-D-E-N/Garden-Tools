@@ -58,9 +58,9 @@ const ObjectRef* objectOf(const Value& value) {
     return value.type == ValueType::Object && value.object != nullptr ? value.object.get() : nullptr;
 }
 
-Result internalFailure() {
+Result hostFailure() {
     Result failed;
-    failed.status = Status::InternalError;
+    failed.status = Status::HostError;
     return failed;
 }
 
@@ -87,7 +87,7 @@ Result Interpreter::runFunction(const std::string& scriptName, const std::string
         const Value self = objectValue(0, object->name, state);
         return run(owner, *function, state, self, args);
     } catch (...) {
-        return internalFailure();
+        return hostFailure();
     }
 }
 
@@ -113,7 +113,7 @@ Result Interpreter::runFunction(const Value& self, const std::string& functionNa
         }
         return run(owner, *function, state, self, args);
     } catch (...) {
-        return internalFailure();
+        return hostFailure();
     }
 }
 
@@ -127,7 +127,7 @@ Result Interpreter::runObjectFunction(const pex::PexObject& object, const pex::P
         }
         return run(&object, function, state, self, args);
     } catch (...) {
-        return internalFailure();
+        return hostFailure();
     }
 }
 
@@ -145,13 +145,18 @@ Result Interpreter::run(const pex::PexObject* object, const pex::PexFunction& fu
 
     if (function.isNative) {
         Result nativeResult;
+        if (object == nullptr) {
+            nativeResult.status = Status::FunctionNotFound;
+            return nativeResult;
+        }
         Value out;
         Status status = Status::Ok;
-        if (host_.callNative(object->name, function.name, args, out, status)) {
-            nativeResult.value = out;
-        } else {
+        if (!host_.callNative(object->name, function.name, args, out, status)) {
             nativeResult.status = status == Status::Ok ? Status::FunctionNotFound : status;
+            return nativeResult;
         }
+        const Status coerced = coerce(out, function.returnType, nativeResult.value);
+        if (coerced != Status::Ok) nativeResult.status = coerced;
         return nativeResult;
     }
 
@@ -358,9 +363,7 @@ Status Interpreter::readBoolOperand(Frame& frame, const pex::PexValue& operand, 
     Value value;
     const Status status = readOperand(frame, operand, value);
     if (status != Status::Ok) return status;
-    if (value.type != ValueType::Bool) return Status::TypeMismatch;
-    out = value.boolean;
-    return Status::Ok;
+    return toBool(value, out);
 }
 
 Status Interpreter::resolveIdentifier(Frame& frame, const std::string& name, Value& out) {
