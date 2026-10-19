@@ -431,7 +431,7 @@ SwfStatus decode_tag_payload(const std::vector<std::byte>& payload, SwfTag& out_
         return SwfStatus::malformed_tag;
       }
       font.glyph_count = static_cast<std::uint32_t>(first_offset / 2u);
-      if (reader.remaining() < static_cast<std::size_t>(font.glyph_count) * 2u + 2u) {
+      if (reader.remaining() < static_cast<std::size_t>(font.glyph_count) * 2u) {
         return SwfStatus::malformed_tag;
       }
       out_tag.font = font;

@@ -104,8 +104,9 @@ std::vector<std::byte> text_payload(std::uint16_t character_id, bool rgba) {
   builder.push_bits(0, 1);
   builder.push_bits(0, 5);
   builder.align();
-  builder.u8(8);
-  builder.u8(8);
+  // Entry widths must leave a record off the byte boundary or the align regression is invisible
+  builder.u8(6);
+  builder.u8(7);
   builder.u8(0x8Eu);
   builder.u16(11);
   builder.u8(0x11);
@@ -117,17 +118,17 @@ std::vector<std::byte> text_payload(std::uint16_t character_id, bool rgba) {
   builder.u16(100);
   builder.u16(400);
   builder.u8(2);
-  builder.push_bits(1, 8);
-  builder.push_bits(20, 8);
-  builder.push_bits(2, 8);
-  builder.push_bits(30, 8);
+  builder.push_bits(1, 6);
+  builder.push_bits(20, 7);
+  builder.push_bits(2, 6);
+  builder.push_bits(30, 7);
   builder.align();
   builder.u8(0x88u);
   builder.u16(12);
   builder.u16(300);
   builder.u8(1);
-  builder.push_bits(3, 8);
-  builder.push_bits(40, 8);
+  builder.push_bits(3, 6);
+  builder.push_bits(40, 7);
   builder.align();
   builder.u8(0x00);
   return builder.body;
@@ -417,6 +418,61 @@ TEST(SwfTagDecode, DecodesScaleformExporterImageAndFontTextureTags) {
   EXPECT_EQ(texture.font_texture->nominal_glyph_size, 20);
   EXPECT_EQ(texture.font_texture->texture_glyph_count, 1u);
   EXPECT_EQ(texture.font_texture->font_count, 1u);
+}
+
+TEST(SwfTagDecode, ExporterInfoVersionGateSkipsFlagsBelow0x10A) {
+  SwfBuilder below;
+  below.u16(0x0109);
+  below.u16(2);
+  below.sized_text("Menu");
+  below.sized_text("HUDMenu");
+  const auto below_result = fo4::swf::read_swf(movie_with(1000, below.body));
+  ASSERT_TRUE(below_result.ok()) << fo4::swf::status_name(below_result.status);
+  const auto& below_info = below_result.file.tags[0].exporter_info;
+  ASSERT_TRUE(below_info.has_value());
+  EXPECT_EQ(below_info->version, 0x0109);
+  EXPECT_EQ(below_info->flags, 0u);
+  EXPECT_EQ(below_info->bitmap_format, 2);
+  EXPECT_EQ(below_info->prefix, "Menu");
+  EXPECT_EQ(below_info->swf_name, "HUDMenu");
+  EXPECT_EQ(below_info->code_offset_count, 0u);
+
+  SwfBuilder at;
+  at.u16(0x010A);
+  at.u32(0x00000003u);
+  at.u16(2);
+  at.sized_text("Menu");
+  at.sized_text("HUDMenu");
+  const auto at_result = fo4::swf::read_swf(movie_with(1000, at.body));
+  ASSERT_TRUE(at_result.ok()) << fo4::swf::status_name(at_result.status);
+  const auto& at_info = at_result.file.tags[0].exporter_info;
+  ASSERT_TRUE(at_info.has_value());
+  EXPECT_EQ(at_info->version, 0x010A);
+  EXPECT_EQ(at_info->flags, 3u);
+  EXPECT_EQ(at_info->bitmap_format, 2);
+  EXPECT_EQ(at_info->prefix, "Menu");
+  EXPECT_EQ(at_info->swf_name, "HUDMenu");
+  EXPECT_EQ(at_info->code_offset_count, 0u);
+}
+
+TEST(SwfTagDecode, DefineFontTenBoundAcceptsTheMinimumTail) {
+  SwfBuilder minimum;
+  minimum.u16(11);
+  minimum.u16(2);
+  minimum.u16(0);
+  const auto accepted = fo4::swf::read_swf(movie_with(10, minimum.body));
+  ASSERT_TRUE(accepted.ok()) << fo4::swf::status_name(accepted.status);
+  ASSERT_TRUE(accepted.file.tags[0].font.has_value());
+  EXPECT_EQ(accepted.file.tags[0].font->font_id, 11);
+  EXPECT_EQ(accepted.file.tags[0].font->glyph_count, 1u);
+
+  SwfBuilder short_tail;
+  short_tail.u16(11);
+  short_tail.u16(2);
+  short_tail.u8(0);
+  const auto rejected = fo4::swf::read_swf(movie_with(10, short_tail.body));
+  EXPECT_EQ(rejected.status, SwfStatus::malformed_tag);
+  EXPECT_FALSE(rejected.file.tags[0].font.has_value());
 }
 
 TEST(SwfTagDecode, BackgroundColorKeepsTheFourthAlphaByte) {
