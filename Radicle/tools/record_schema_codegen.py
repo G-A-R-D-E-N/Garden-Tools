@@ -200,11 +200,13 @@ def render(constraints) -> str:
         )
     lines.append("};")
     lines.append("")
-    lines.append("inline constexpr SubrecordPairConstraint k_generated_subrecord_pairs[] = {")
-    for record in constraints:
-        for subrecord in record["subrecords"]:
-            if subrecord["paired_with"] is None:
-                continue
+    pairs = [(record, subrecord)
+             for record in constraints
+             for subrecord in record["subrecords"]
+             if subrecord["paired_with"] is not None]
+    if pairs:
+        lines.append("inline constexpr SubrecordPairConstraint k_generated_subrecord_pairs[] = {")
+        for record, subrecord in pairs:
             lines.append(
                 "  {" +
                 f"Signature::from_string({cpp_string(record['signature'])}), " +
@@ -212,7 +214,10 @@ def render(constraints) -> str:
                 f"Signature::from_string({cpp_string(subrecord['paired_with'])})" +
                 "},"
             )
-    lines.append("};")
+        lines.append("};")
+    else:
+        lines.append("inline constexpr std::array<SubrecordPairConstraint, 0> "
+                     "k_generated_subrecord_pairs{};")
     return "\n".join(lines) + "\n"
 
 
