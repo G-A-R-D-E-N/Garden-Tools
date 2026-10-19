@@ -1,14 +1,13 @@
 #include "fo4/archive/ba2.hpp"
 #include "fo4/swf/swf.hpp"
 #include "real_data_build.hpp"
+#include "real_data_movies.hpp"
 
 #include <gtest/gtest.h>
 
-#include <cctype>
 #include <cstddef>
 #include <cstdlib>
 #include <filesystem>
-#include <fstream>
 #include <map>
 #include <span>
 #include <string>
@@ -16,32 +15,6 @@
 #include <vector>
 
 namespace {
-
-std::string lower_extension(const std::string& path) {
-  std::string extension = std::filesystem::path(path).extension().string();
-  for (auto& ch : extension) {
-    ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
-  }
-  return extension;
-}
-
-bool is_movie(const std::string& path) {
-  const auto extension = lower_extension(path);
-  return extension == ".swf" || extension == ".gfx";
-}
-
-std::vector<std::byte> read_file(const std::filesystem::path& path) {
-  std::ifstream in(path, std::ios::binary);
-  std::vector<std::byte> bytes;
-  char buffer[4096];
-  while (in.read(buffer, static_cast<std::streamsize>(sizeof(buffer))) || in.gcount() > 0) {
-    const auto count = in.gcount();
-    for (std::streamsize index = 0; index < count; ++index) {
-      bytes.push_back(static_cast<std::byte>(static_cast<unsigned char>(buffer[index])));
-    }
-  }
-  return bytes;
-}
 
 struct MovieStats {
   std::size_t total{0};
