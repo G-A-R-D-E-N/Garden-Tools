@@ -2771,7 +2771,7 @@ inline constexpr FormLinkFieldDescriptor k_generated_formlink_fields[] = {
   {Signature::from_string("NPC_"), "NPC_\\Skin", "Skin", Signature::from_string("WNAM"), 0, false, 608, 1, FieldAddress{}, {{4}}},
   {Signature::from_string("NPC_"), "NPC_\\SleepingOutfit", "Sleeping Outfit", Signature::from_string("SOFT"), 0, false, 609, 1, FieldAddress{}, {{4}}},
   {Signature::from_string("NPC_"), "NPC_\\SpectatorOverridePackageList", "Spectator Override Package List", Signature::from_string("SPOR"), 0, false, 610, 1, FieldAddress{}, {{4}}},
-  {Signature::from_string("NPC_"), "NPC_\\Spell", "Spell", Signature::from_string("SPLO"), 0, false, 611, 2, FieldAddress{true, 0, 0, FieldDiscriminator{}}, {{4}}},
+  {Signature::from_string("NPC_"), "NPC_\\Spell", "Spell", Signature::from_string("SPLO"), 0, false, 611, 2, FieldAddress{true, 0, 0, FieldDiscriminator{}}},
   {Signature::from_string("NPC_"), "NPC_\\TemplateActorAIData", "Template actor AI data", Signature::from_string("TPTA"), 16, true, 613, 3, FieldAddress{}},
   {Signature::from_string("NPC_"), "NPC_\\TemplateActorAIPackages", "Template actor AI packages", Signature::from_string("TPTA"), 20, true, 616, 3, FieldAddress{}},
   {Signature::from_string("NPC_"), "NPC_\\TemplateActorAttackData", "Template actor attack data", Signature::from_string("TPTA"), 44, true, 619, 3, FieldAddress{}},
