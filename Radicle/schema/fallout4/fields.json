@@ -5839,6 +5839,162 @@
             {"path": "IMAD\\FadeColorBlue", "label": "Fade color blue", "offset": 12, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
             {"path": "IMAD\\FadeColorAlpha", "label": "Fade color alpha", "offset": 16, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
           ]
+        },
+        {
+          "path": "IMAD\\BlurRadiusInterpolators",
+          "label": "Blur radius interpolators",
+          "kind": "counted_array",
+          "subrecord": "BNAM",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\BlurRadiusTime", "label": "Blur radius time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\BlurRadiusValue", "label": "Blur radius value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\DoubleVisionInterpolators",
+          "label": "Double vision interpolators",
+          "kind": "counted_array",
+          "subrecord": "VNAM",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\DoubleVisionTime", "label": "Double vision time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\DoubleVisionValue", "label": "Double vision value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\RadialBlurStrengthInterpolators",
+          "label": "Radial blur strength interpolators",
+          "kind": "counted_array",
+          "subrecord": "RNAM",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\RadialBlurStrengthTime", "label": "Radial blur strength time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\RadialBlurStrengthValue", "label": "Radial blur strength value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\RadialBlurRampUpInterpolators",
+          "label": "Radial blur ramp up interpolators",
+          "kind": "counted_array",
+          "subrecord": "SNAM",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\RadialBlurRampUpTime", "label": "Radial blur ramp up time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\RadialBlurRampUpValue", "label": "Radial blur ramp up value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\RadialBlurStartInterpolators",
+          "label": "Radial blur start interpolators",
+          "kind": "counted_array",
+          "subrecord": "UNAM",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\RadialBlurStartTime", "label": "Radial blur start time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\RadialBlurStartValue", "label": "Radial blur start value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\RadialBlurRampDownInterpolators",
+          "label": "Radial blur ramp down interpolators",
+          "kind": "counted_array",
+          "subrecord": "NAM1",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\RadialBlurRampDownTime", "label": "Radial blur ramp down time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\RadialBlurRampDownValue", "label": "Radial blur ramp down value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\RadialBlurDownStartInterpolators",
+          "label": "Radial blur down start interpolators",
+          "kind": "counted_array",
+          "subrecord": "NAM2",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\RadialBlurDownStartTime", "label": "Radial blur down start time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\RadialBlurDownStartValue", "label": "Radial blur down start value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\DoFStrengthInterpolators",
+          "label": "Depth of field strength interpolators",
+          "kind": "counted_array",
+          "subrecord": "WNAM",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\DoFStrengthTime", "label": "Depth of field strength time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\DoFStrengthValue", "label": "Depth of field strength value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\DoFDistanceInterpolators",
+          "label": "Depth of field distance interpolators",
+          "kind": "counted_array",
+          "subrecord": "XNAM",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\DoFDistanceTime", "label": "Depth of field distance time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\DoFDistanceValue", "label": "Depth of field distance value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\DoFRangeInterpolators",
+          "label": "Depth of field range interpolators",
+          "kind": "counted_array",
+          "subrecord": "YNAM",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\DoFRangeTime", "label": "Depth of field range time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\DoFRangeValue", "label": "Depth of field range value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\DoFVignetteRadiusInterpolators",
+          "label": "Depth of field vignette radius interpolators",
+          "kind": "counted_array",
+          "subrecord": "NAM5",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\DoFVignetteRadiusTime", "label": "Depth of field vignette radius time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "min_form_version": 118},
+            {"path": "IMAD\\DoFVignetteRadiusValue", "label": "Depth of field vignette radius value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "min_form_version": 118}
+          ]
+        },
+        {
+          "path": "IMAD\\DoFVignetteStrengthInterpolators",
+          "label": "Depth of field vignette strength interpolators",
+          "kind": "counted_array",
+          "subrecord": "NAM6",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\DoFVignetteStrengthTime", "label": "Depth of field vignette strength time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "min_form_version": 118},
+            {"path": "IMAD\\DoFVignetteStrengthValue", "label": "Depth of field vignette strength value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "min_form_version": 118}
+          ]
+        },
+        {
+          "path": "IMAD\\MotionBlurStrengthInterpolators",
+          "label": "Motion blur strength interpolators",
+          "kind": "counted_array",
+          "subrecord": "NAM4",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\MotionBlurStrengthTime", "label": "Motion blur strength time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\MotionBlurStrengthValue", "label": "Motion blur strength value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
         }
       ],
       "authoring": {

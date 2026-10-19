@@ -19,7 +19,8 @@ CPP_PRESENTATIONS = {"enum": "enumeration"}
 # requires record-level subrecord ordering metadata, not only a scalar field row.
 INSERTIONS = {"existing_only"}
 COUNTED_ARRAY_KEYS = {"kind", "path", "label", "subrecord", "count_subrecord", "stride", "insertion", "members"}
-MEMBER_KEYS = {"path", "label", "offset", "storage", "presentation", "minimum", "maximum"}
+MEMBER_KEYS = {"path", "label", "offset", "storage", "presentation", "minimum", "maximum",
+               "min_form_version"}
 SUBRECORD_GROUP_KEYS = {"kind", "path", "label", "count_subrecord", "insertion", "members", "successors"}
 GROUP_MEMBER_KEYS = {"subrecord", "required", "repeatable", "payload_size", "default", "fields",
                      "formlink_fields", "localized", "skippable"}
