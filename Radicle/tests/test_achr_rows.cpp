@@ -63,6 +63,9 @@ constexpr ScalarRow k_scalar_rows[] = {
     {"ACHR\\OwnerRank", "XRNK", 0, i32, false, 0},
     {"ACHR\\OwnerNoCrime", "XOWN", 8, u8, true, 12},
     {"ACHR\\ReflectionType", "XPWR", 4, u32, true, 8},
+    {"ACHR\\ActivateParentOnly", "XAPD", 0, u8, false, 0},
+    {"ACHR\\ActivateParentDelay", "XAPR", 4, f32, true, 8},
+    {"ACHR\\WaterCurrentVelocityCount", "XWCN", 0, u32, false, 0},
 };
 
 constexpr LinkRow k_link_rows[] = {
@@ -80,6 +83,10 @@ constexpr LinkRow k_link_rows[] = {
     {"ACHR\\PersistLocation", "XLCN", 0, 4, "LCTN"},
     {"ACHR\\LocationReference", "XLRL", 0, 4, "LCTN"},
     {"ACHR\\ReflectedBy", "XPWR", 0, 8, "ACHR"},
+    {"ACHR\\LinkedKeyword", "XLKR", 0, 4, "KYWD"},
+    {"ACHR\\LinkedReference", "XLKR", 4, 8, "REFR"},
+    {"ACHR\\ActivateParentRef", "XAPR", 0, 8, "REFR"},
+    {"ACHR\\SplineConnection", "XPLK", 0, 8, "REFR"},
 };
 
 Bytes u32_bytes(std::uint32_t value) {
@@ -147,6 +154,20 @@ void write_actor(fo4::test::ByteWriter& out, std::uint32_t local, std::size_t lo
   fo4::test::write_subrecord(out, "XLYR", u32_bytes(0x00000A61u));
   fo4::test::write_subrecord(out, "XMSP", u32_bytes(0x00000A62u));
   fo4::test::write_subrecord(out, "XATR", u32_bytes(0x00000A63u));
+  fo4::test::write_subrecord(out, "XAPD", Bytes{std::byte{0x01}});
+  ByteWriter activate_parent;
+  activate_parent.u32(0x00000A93u);
+  activate_parent.f32(1.25f);
+  fo4::test::write_subrecord(out, "XAPR", activate_parent.bytes);
+  ByteWriter spline;
+  spline.u32(0x00000A94u);
+  spline.u32(0);
+  fo4::test::write_subrecord(out, "XPLK", spline.bytes);
+  fo4::test::write_subrecord(out, "XLRT", u32_bytes(0x00000A95u));
+  fo4::test::write_subrecord(out, "XWCN", u32_bytes(1));
+  ByteWriter velocities;
+  for (const float value : {1.0f, 2.0f, 3.0f, 0.5f}) velocities.f32(value);
+  fo4::test::write_subrecord(out, "XWCU", velocities.bytes);
   fo4::test::write_subrecord(out, "XPRD", f32_bytes(2.5f));
   fo4::test::write_subrecord(out, "INAM", u32_bytes(0x00000A80u));
   fo4::test::write_subrecord(out, "TNAM", u32_bytes(0x00000A81u));
@@ -301,7 +322,7 @@ Bytes sub_bytes(const fo4::Plugin& plugin, std::uint32_t local, std::string_view
 }  // namespace
 
 TEST(AchrRows, ScalarRowsHaveXEditOffsetsStorageAndPayloadGates) {
-  EXPECT_EQ(fo4::schema::scalar_fields(k_achr).size(), 21u);
+  EXPECT_EQ(fo4::schema::scalar_fields(k_achr).size(), 28u);
   for (const auto& row : k_scalar_rows) {
     SCOPED_TRACE(row.path);
     const auto field = fo4::schema::scalar_field_descriptor(k_achr, row.path);
@@ -312,7 +333,8 @@ TEST(AchrRows, ScalarRowsHaveXEditOffsetsStorageAndPayloadGates) {
     EXPECT_EQ(field->scalar.storage, row.storage);
     EXPECT_EQ(field->scalar.payload_size, row.payload_size);
     EXPECT_EQ(field->scalar.address.repeated,
-              std::string_view{row.path} == "ACHR\\ReflectionType");
+              std::string_view{row.path} == "ACHR\\ReflectionType" ||
+                  std::string_view{row.path} == "ACHR\\ActivateParentDelay");
   }
   EXPECT_FALSE(fo4::schema::scalar_field_descriptor(k_achr, "ACHR\\AlphaBase").has_value());
 }
@@ -334,7 +356,7 @@ TEST(AchrRows, LockRowsShareTheXlocPayloadAndTheKeyRowIsNullable) {
 }
 
 TEST(AchrRows, LinkRowsNameTheirSubrecordsOffsetsAndTargets) {
-  EXPECT_EQ(fo4::schema::formlink_fields(k_achr).size(), 17u);
+  EXPECT_EQ(fo4::schema::formlink_fields(k_achr).size(), 21u);
   for (const auto& row : k_link_rows) {
     SCOPED_TRACE(row.path);
     const auto field = fo4::schema::formlink_field_descriptor(k_achr, row.path);
@@ -345,7 +367,10 @@ TEST(AchrRows, LinkRowsNameTheirSubrecordsOffsetsAndTargets) {
     EXPECT_EQ(field->nullable,
               std::string_view{row.path} == "ACHR\\LockKey" ||
                   std::string_view{row.path} == "ACHR\\EnableParent" ||
-                  std::string_view{row.path} == "ACHR\\LocationReference");
+                  std::string_view{row.path} == "ACHR\\LocationReference" ||
+                  std::string_view{row.path} == "ACHR\\LinkedKeyword" ||
+                  std::string_view{row.path} == "ACHR\\LinkedReference" ||
+                  std::string_view{row.path} == "ACHR\\ActivateParentRef");
     EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(
         *field, fo4::Signature::from_string(row.target)));
   }

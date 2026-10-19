@@ -46,7 +46,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | Record | xEdit line | Scalar rows | String rows | FormLink fields | FormLink lists | Localized subrecords | Authoring | Keyword list | Typed module | Mixed remap | Real-data tests naming it | Tier |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- | --- | ---: | --- |
 | AACT | 6970 | 5 | 1 | 1 | - | 1 | yes | - | - | - | 1 | L4 |
-| ACHR | 4483 | 21 | - | 17 | - | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
+| ACHR | 4483 | 28 | - | 21 | 1 | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
 | ACTI | 5611 | 22 | 3 | 14 | - | 2 | yes | yes | environment/base_records | yes | 1 | L4 |
 | ADDN | 7796 | 9 | 1 | 3 | - | - | yes | - | - | - | 1 | L4 |
 | AECH | 12206 | 2 | - | - | - | - | yes | - | - | - | 1 | L4 |
@@ -200,7 +200,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | Record | Scalar identity | Scalar percent_0_100 | Scalar enum | Scalar flags | String | Scalar storage | Repeated | Stride | When | Insertion |
 | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | --- |
 | AACT | 4 | - | 1 | - | 1 | u32, u8 | - | - | - | existing_only |
-| ACHR | 14 | 1 | 3 | 3 | - | f32, i32, u32, u8 | 3 | 7 | - | existing_only |
+| ACHR | 20 | 1 | 4 | 3 | - | f32, i32, u32, u8 | 8 | 11 | - | existing_only |
 | ACTI | 18 | 1 | - | 3 | 3 | f32, i16, i32, u16, u32, u8 | 12 | 4 | - | existing_only |
 | ADDN | 8 | - | 1 | - | 1 | i16, u16, u32 | - | - | - | existing_only |
 | AECH | - | - | 2 | - | - | u32 | 2 | - | - | existing_only |
