@@ -244,7 +244,7 @@ bool is_subrecord_group_count_subrecord(Signature record, Signature subrecord) n
   for (const auto& group : k_subrecord_groups) {
     if (group.record != record) continue;
     if (group.count_subrecord != Signature{} && group.count_subrecord == subrecord) return true;
-    if (group.run.count_member == subrecord) return true;
+    if (group.run.count_member != Signature{} && group.run.count_member == subrecord) return true;
   }
   return false;
 }

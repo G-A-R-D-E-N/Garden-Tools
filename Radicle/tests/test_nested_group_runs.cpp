@@ -156,9 +156,14 @@ TEST(NestedGroupRuns, InnrNamingRulesDescriptorNamesItsNestedRunAndCount) {
   EXPECT_EQ(group.run.members[1].payload_size, 4u);
   EXPECT_EQ(group.run.members[2].subrecord, k_kwda);
   EXPECT_EQ(group.run.members[4].subrecord, k_ynam);
+  EXPECT_TRUE(group.run.members[4].required);
   EXPECT_EQ(group.run.members[4].payload_size, 2u);
-  EXPECT_EQ(fo4::schema::subrecord_group_for_member(k_innr, k_wnam)->path, "INNR\\NamingRules");
-  EXPECT_EQ(fo4::schema::subrecord_group_for_member(k_innr, k_ynam)->path, "INNR\\NamingRules");
+  const auto text_group = fo4::schema::subrecord_group_for_member(k_innr, k_wnam);
+  ASSERT_TRUE(text_group.has_value());
+  EXPECT_EQ(text_group->path, "INNR\\NamingRules");
+  const auto index_group = fo4::schema::subrecord_group_for_member(k_innr, k_ynam);
+  ASSERT_TRUE(index_group.has_value());
+  EXPECT_EQ(index_group->path, "INNR\\NamingRules");
   EXPECT_TRUE(fo4::schema::is_subrecord_group_count_subrecord(k_innr, k_vnam));
 }
 
@@ -190,7 +195,10 @@ TEST(NestedGroupRuns, CountMismatchAndMissingLeaderFailClosed) {
       {{"EDID", zstr("RadicleNaming")}, {"UNAM", u32_bytes(29)}, {"VNAM", u32_bytes(1)},
        {"YNAM", u16_bytes(0)}},
       {{"EDID", zstr("RadicleNaming")}, {"UNAM", u32_bytes(29)}, {"VNAM", u32_bytes(1)},
-       {"WNAM", zstr("RadicleName")}, {"KSIZ", u16_bytes(1)}, {"YNAM", u16_bytes(0)}}};
+       {"WNAM", zstr("RadicleName")}, {"KSIZ", u16_bytes(1)}, {"YNAM", u16_bytes(0)}},
+      {{"EDID", zstr("RadicleNaming")}, {"UNAM", u32_bytes(29)}, {"VNAM", u32_bytes(1)},
+       {"WNAM", zstr("RadicleName")}, {"KSIZ", u32_bytes(1)}, {"KWDA", u32_bytes(0x911)}, {"YNAM", u16_bytes(0)},
+       {"WNAM", zstr("RadicleName")}, {"KSIZ", u32_bytes(1)}, {"KWDA", u32_bytes(0x911)}, {"YNAM", u16_bytes(1)}}};
   for (const auto& body : malformed) {
     const auto plugin = fo4::read_plugin(make_plugin(body), "Patch.esp");
     EXPECT_THROW(static_cast<void>(fo4::subrecord_group_spans(plugin, record_key(), naming_rules())),
@@ -208,12 +216,15 @@ TEST(NestedGroupRuns, InsertingAndRemovingANameKeepsItsRulesetCount) {
   EXPECT_EQ(names[2], "VNAM");
   EXPECT_EQ(names[3], "WNAM");
   EXPECT_EQ(names[7], "WNAM");
-  EXPECT_EQ(names[8], "WNAM");
-  EXPECT_EQ(names[9], "KSIZ");
-  EXPECT_EQ(names[11], "YNAM");
-  EXPECT_EQ(names[12], "VNAM");
+  EXPECT_EQ(names[8], "YNAM");
+  EXPECT_EQ(names[9], "WNAM");
+  EXPECT_EQ(names[10], "KSIZ");
+  EXPECT_EQ(names[12], "YNAM");
+  EXPECT_EQ(names[13], "VNAM");
   EXPECT_EQ(payloads(plugin, k_wnam).size(), 4u);
+  EXPECT_EQ(payloads(plugin, k_ynam).size(), payloads(plugin, k_wnam).size());
   EXPECT_EQ(payloads(plugin, k_wnam)[1], std::string("\0", 1));
+  EXPECT_EQ(payloads(plugin, k_ynam)[1], std::string("\0\0", 2));
 
   EXPECT_EQ(fo4::remove_record_subrecord_group_run(plugin, record_key(), naming_rules(), 0, 1),
             fo4::SubrecordGroupMutationStatus::updated);

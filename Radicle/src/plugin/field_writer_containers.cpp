@@ -1,4 +1,5 @@
 #include "fo4/plugin/mutation.hpp"
+#include "fo4/plugin/reader.hpp"
 
 #include "field_writer_internal.hpp"
 #include "record_edit.hpp"
@@ -47,6 +48,9 @@ std::vector<SubrecordGroupSpan> group_spans(const Record& record, const schema::
   while (first < subs.size()) {
     const auto leader = member_index(group.members, subs[first].signature);
     if (!leader) {
+      if (member_index(group.run.members, subs[first].signature)) {
+        throw refuse("count does not match its nested runs");
+      }
       ++first;
       continue;
     }
@@ -425,8 +429,7 @@ SubrecordGroupMutationStatus insert_record_subrecord_group_run(Plugin& plugin,
   }
   target->subrecords.insert(target->subrecords.begin() + static_cast<std::ptrdiff_t>(position),
                             std::make_move_iterator(created.begin()), std::make_move_iterator(created.end()));
-  const std::size_t count_index = position <= counter ? counter + created.size() : counter;
-  write_counter(target->subrecords[count_index].data, static_cast<std::uint32_t>(span.runs.size() + 1));
+  write_counter(target->subrecords[counter].data, static_cast<std::uint32_t>(span.runs.size() + 1));
   mark_record_modified(plugin, *target);
   return SubrecordGroupMutationStatus::updated;
 }

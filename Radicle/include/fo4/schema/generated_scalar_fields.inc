@@ -2489,7 +2489,7 @@ constexpr SubrecordGroupMemberDescriptor k_subrecord_group_run_members_4[] = {
 {Signature::from_string("KSIZ"), false, false, 4, std::span<const std::uint8_t>{}, false, false},
 {Signature::from_string("KWDA"), false, false, 0, std::span<const std::uint8_t>{}, false, false},
 {Signature::from_string("XNAM"), false, false, 6, std::span<const std::uint8_t>{}, false, false},
-{Signature::from_string("YNAM"), false, false, 2, std::span<const std::uint8_t>{}, false, false},
+{Signature::from_string("YNAM"), true, false, 2, std::span<const std::uint8_t>{}, false, false},
 };
 constexpr SubrecordGroupMemberDescriptor k_subrecord_group_members_5[] = {
 {Signature::from_string("PNAM"), true, false, 8, std::span<const std::uint8_t>{}, false, false},

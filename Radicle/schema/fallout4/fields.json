@@ -19387,7 +19387,7 @@
               {"subrecord": "KSIZ", "required": false, "repeatable": false, "payload_size": 4},
               {"subrecord": "KWDA", "required": false, "repeatable": false, "payload_size": 0},
               {"subrecord": "XNAM", "required": false, "repeatable": false, "payload_size": 6},
-              {"subrecord": "YNAM", "required": false, "repeatable": false, "payload_size": 2}
+              {"subrecord": "YNAM", "required": true, "repeatable": false, "payload_size": 2}
             ]
           }
         },
