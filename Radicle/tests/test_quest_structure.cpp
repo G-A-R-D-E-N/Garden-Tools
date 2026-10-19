@@ -1,12 +1,16 @@
 #include "quest_structure_fixture.hpp"
 #include "fo4/c_api_quest.h"
+#include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/quest/structure.hpp"
+#include "fo4/schema/scalar.hpp"
 
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <bit>
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -575,6 +579,35 @@ TEST(QuestStructure, RemovingObjectiveWithUnresolvedTargetKeywordSucceeds) {
   });
   EXPECT_TRUE(fo4::forms::remove_quest_objective(plugin, structure_quest_key(), 30));
   EXPECT_TRUE(fo4::forms::decode_quest_objectives(plugin, structure_quest_key()).objectives.empty());
+}
+
+TEST(QuestStructure, NextAliasIdRowReadsAndWritesTheStoredCounter) {
+  auto plugin = quest_structure_plugin();
+  const auto field = fo4::schema::scalar_field_descriptor(fo4::Signature::from_string("QUST"),
+                                                          "QUST\\NextAliasID");
+  ASSERT_TRUE(field.has_value());
+  EXPECT_EQ(field->scalar.subrecord, fo4::Signature::from_string("ANAM"));
+  EXPECT_EQ(field->scalar.storage, fo4::schema::ScalarStorage::u32);
+  EXPECT_EQ(fo4::record_field_count(plugin, structure_quest_key(), *field), 1u);
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, structure_quest_key(), *field, "9"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, structure_quest_key(), *field, "9"),
+            fo4::ScalarMutationStatus::unchanged);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Quests.esp");
+  const auto* record = fo4::find_record(reread, structure_quest_key());
+  ASSERT_NE(record, nullptr);
+  const auto& quest = *record;
+  const auto bytes = std::find_if(quest.subrecords.begin(), quest.subrecords.end(),
+                                  [](const auto& member) {
+                                    return member.signature == fo4::Signature::from_string("ANAM");
+                                  });
+  ASSERT_NE(bytes, quest.subrecords.end());
+  EXPECT_EQ(fo4::schema::scalar_field_bytes(bytes->data, field->scalar).size(), 4u);
+  EXPECT_EQ(std::to_integer<std::uint8_t>(bytes->data[0]), 9);
+  EXPECT_EQ(std::to_integer<std::uint8_t>(bytes->data[1]), 0);
+  EXPECT_TRUE(fo4::quest::read_quest_structure(reread, structure_quest_key()).aliases_supported);
 }
 
 TEST(QuestStructure, MissingQuestReturnsNotFound) {
