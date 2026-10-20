@@ -183,6 +183,10 @@ TEST_CASE("Spreadsheet scalar columns come from generated record descriptors") {
         expected.push_back(std::string(link.path) +
                            (link.address.repeated || link.address.stride != 0 ? "\\Count" : ""));
     }
+    for (const auto& list : fo4::schema::k_generated_formlink_lists) {
+        if (list.record != fo4::Signature::from_string("REFR")) continue;
+        expected.push_back(std::string(list.path) + "\\Count");
+    }
     const auto& columns = grid.at("columns");
     REQUIRE(expected.size() <= columns.size());
     for (std::size_t index = 0; index < expected.size(); ++index) {
