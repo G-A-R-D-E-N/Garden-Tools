@@ -2049,3 +2049,7 @@ inline constexpr RecordAuthoringConstraint k_generated_record_authoring_constrai
   {Signature::from_string("WTHR"), RecordPlacement::top_level, 1555, 59},
   {Signature::from_string("ZOOM"), RecordPlacement::top_level, 1614, 2},
 };
+
+inline constexpr SubrecordPairConstraint k_generated_subrecord_pairs[] = {
+  {Signature::from_string("HDPT"), Signature::from_string("NAM0"), Signature::from_string("NAM1")},
+};

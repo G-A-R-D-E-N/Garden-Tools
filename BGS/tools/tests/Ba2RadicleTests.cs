@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text;
+using BehaviourStudio.App;
 using OpenCommonwealth.Services.Archive;
 using Radicle.Interop;
 using Xunit;
@@ -24,6 +25,17 @@ public sealed class Ba2RadicleTests
         var wrapped = new InvalidDataException("wrapped", new RadicleAbiMismatchException("stale radicle.dll"));
         Assert.False(GameData.IsSkippableArchiveFailure(wrapped));
         Assert.True(GameData.IsSkippableArchiveFailure(new InvalidDataException("unreadable archive")));
+    }
+
+    [Fact]
+    public void PlaybackSkeletonLookupReportsNativeLoadFailureButSkipsCorruptArchives()
+    {
+        var native = new InvalidDataException("the Radicle native library could not be loaded",
+            new DllNotFoundException("radicle_c"));
+        Assert.Same(native, Assert.Throws<InvalidDataException>(
+            () => MainWindow.SkeletonBytesOrNull(() => throw native)));
+        Assert.Null(MainWindow.SkeletonBytesOrNull(() => throw new InvalidDataException("corrupt archive")));
+        Assert.Null(MainWindow.SkeletonBytesOrNull(() => throw new IOException("truncated archive")));
     }
 
     [Fact]
