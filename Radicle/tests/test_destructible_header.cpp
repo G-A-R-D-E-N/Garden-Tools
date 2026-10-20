@@ -70,6 +70,21 @@ Bytes make_plugin() {
   fo4::test::write_subrecord(out, "EDID", std::string_view{"Crowded\0", 8});
   for (int i = 0; i < 256; ++i) fo4::test::write_subrecord(out, "DSTD", Bytes(20));
   fo4::test::end_record(out, crowded);
+
+  const auto headerless = fo4::test::begin_record(out, "ACTI", 0, 0x01000C0B);
+  fo4::test::write_subrecord(out, "VMAD", Bytes(6));
+  fo4::test::write_subrecord(out, "OBND", Bytes(12));
+  fo4::test::write_subrecord(out, "MODL", std::string_view{"h.nif\0", 6});
+  fo4::test::write_subrecord(out, "MODT", Bytes(12));
+  fo4::test::write_subrecord(out, "KSIZ", Bytes{std::byte{1}, std::byte{0}, std::byte{0},
+                                                std::byte{0}});
+  fo4::test::end_record(out, headerless);
+
+  const auto crossed = fo4::test::begin_record(out, "ACTI", 0, 0x01000C0C);
+  fo4::test::write_subrecord(out, "KSIZ", Bytes{std::byte{1}, std::byte{0}, std::byte{0},
+                                                std::byte{0}});
+  fo4::test::write_subrecord(out, "OBND", Bytes(12));
+  fo4::test::end_record(out, crossed);
   fo4::test::end_group(out, acti_group);
 
   const auto door_group = fo4::test::begin_group(out, "DOOR", 0);
@@ -243,6 +258,30 @@ TEST(DestructibleHeader, InsertAndRemoveCreateAndDropTheWholeGroup) {
   EXPECT_EQ(signatures_at(cleared, "000C02:Patch.esp"),
             (std::vector<std::string>{"EDID", "OBND", "MODL", "MODT", "KSIZ", "KWDA"}));
   EXPECT_EQ(signatures_at(cleared, "000C04:Patch.esp"), (std::vector<std::string>{"EDID"}));
+  EXPECT_EQ(fo4::write_plugin(plugin), original);
+}
+
+TEST(DestructibleHeader, InsertOrdersTheHeaderWithoutEdidAndRefusesACrossedRecord) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto original = fo4::test::original_bytes(plugin);
+  const auto headerless = fo4::FormKey::parse("000C0B:Patch.esp");
+  const auto crossed = fo4::FormKey::parse("000C0C:Patch.esp");
+
+  EXPECT_EQ(fo4::insert_destructible_header(plugin, crossed),
+            fo4::DestructibleHeaderStatus::unknown_order);
+  EXPECT_EQ(fo4::write_plugin(plugin), original);
+
+  EXPECT_EQ(fo4::insert_destructible_header(plugin, headerless),
+            fo4::DestructibleHeaderStatus::updated);
+
+  const auto built = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(signatures_at(built, "000C0B:Patch.esp"),
+            (std::vector<std::string>{"VMAD", "OBND", "MODL", "MODT", "DEST", "KSIZ"}));
+  EXPECT_EQ(signatures_at(built, "000C0C:Patch.esp"),
+            (std::vector<std::string>{"KSIZ", "OBND"}));
+
+  EXPECT_EQ(fo4::remove_destructible_header(plugin, headerless),
+            fo4::DestructibleHeaderStatus::updated);
   EXPECT_EQ(fo4::write_plugin(plugin), original);
 }
 
