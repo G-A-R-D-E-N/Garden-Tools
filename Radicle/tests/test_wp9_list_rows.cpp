@@ -35,6 +35,13 @@ Bytes u32_bytes(std::uint32_t value) {
   return out.bytes;
 }
 
+Bytes snapshot_multiplier(std::uint32_t category, float multiplier) {
+  ByteWriter out;
+  out.u32(category);
+  out.f32(multiplier);
+  return out.bytes;
+}
+
 Bytes u32_words(std::initializer_list<std::uint32_t> values) {
   ByteWriter out;
   for (const auto value : values) out.u32(value);
@@ -80,6 +87,21 @@ ByteWriter make_plugin() {
               {"LVLM", u8_bytes(0)},
               {"LVLF", u8_bytes(1)},
               {"LLCT", u8_bytes(0)}});
+  add_record(out, "OTFT", 0xB01, {{"INAM", u32_words({0x00000B40, 0x00000B41})}});
+  add_record(out, "COLL", 0xB02,
+             {{"DESC", u32_bytes(0)},
+              {"BNAM", u32_bytes(7)},
+              {"FNAM", Bytes{std::byte{16}, std::byte{32}, std::byte{48}, std::byte{99}}},
+              {"GNAM", u32_bytes(1)},
+              {"MNAM", Bytes{std::byte{'L'}, std::byte{0}}},
+              {"INTV", u32_bytes(0)}});
+  add_record(out, "SCSN", 0xB04,
+             {{"PNAM", Bytes(2)},
+              {"CNAM", snapshot_multiplier(0x00000B50, 0.25f)},
+              {"CNAM", snapshot_multiplier(0x00000B51, 0.5f)}});
+  add_record(out, "ARMO", 0xB10, {});
+  add_record(out, "LVLI", 0xB11, {});
+  add_record(out, "SNCT", 0xB12, {});
   return out;
 }
 
@@ -282,4 +304,98 @@ TEST(WP9ListRows, RepeatedSubrecordsAreAddableInAuthoring) {
     ASSERT_NE(rule, rules.end());
     EXPECT_EQ(rule->maximum, std::uint16_t{65535});
   }
+}
+
+TEST(WP9ListRows, OutfitItemsAndCollidesWithAreAppendablePackedListsInXEditOrder) {
+  const auto out = make_plugin();
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto outfit = list("OTFT", "OTFT\\Items");
+  const auto collides = list("COLL", "COLL\\CollidesWith");
+  EXPECT_EQ(outfit.storage, fo4::schema::FormLinkListStorage::packed_array);
+  EXPECT_EQ(collides.storage, fo4::schema::FormLinkListStorage::packed_array);
+  EXPECT_FALSE(outfit.nullable);
+  EXPECT_FALSE(collides.nullable);
+  const auto otft = fo4::FormKey::parse("000B01:Patch.esp");
+  const auto coll = fo4::FormKey::parse("000B02:Patch.esp");
+  const auto updated = fo4::schema::FormLinkListMutationStatus::updated;
+  EXPECT_EQ(fo4::schema::record_formlink_list_size(plugin, otft, outfit), 2u);
+
+  EXPECT_EQ(fo4::schema::insert_record_formlink_list_element(
+                plugin, otft, outfit, 2, fo4::FormKey::parse("000B10:Patch.esp")),
+            updated);
+  EXPECT_EQ(fo4::schema::insert_record_formlink_list_element(
+                plugin, otft, outfit, 3, fo4::FormKey::parse("000B11:Patch.esp")),
+            updated);
+  EXPECT_EQ(fo4::schema::insert_record_formlink_list_element(
+                plugin, otft, outfit, 4, fo4::FormKey::parse("000B02:Patch.esp")),
+            fo4::schema::FormLinkListMutationStatus::target_type_mismatch);
+  EXPECT_THROW(fo4::schema::insert_record_formlink_list_null_element(plugin, otft, outfit, 0),
+               fo4::schema::FormLinkListError);
+  EXPECT_EQ(payload(plugin, "000B01:Patch.esp", "INAM"),
+            u32_words({0x00000B40, 0x00000B41, 0x02000B10, 0x02000B11}));
+
+  EXPECT_EQ(fo4::schema::record_formlink_list_size(plugin, coll, collides), 0u);
+  EXPECT_EQ(fo4::schema::insert_record_formlink_list_element(
+                plugin, coll, collides, 0, fo4::FormKey::parse("000B02:Patch.esp")),
+            updated);
+  EXPECT_EQ(signature_list(plugin, "000B02:Patch.esp"), "EDID,DESC,BNAM,FNAM,GNAM,MNAM,INTV,CNAM");
+  EXPECT_EQ(fo4::schema::insert_record_formlink_list_element(
+                plugin, coll, collides, 1, fo4::FormKey::parse("000B10:Patch.esp")),
+            fo4::schema::FormLinkListMutationStatus::target_type_mismatch);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(fo4::schema::record_formlink_list_size(reread, otft, outfit), 4u);
+  EXPECT_EQ(payload(reread, "000B02:Patch.esp", "CNAM"), u32_words({0x02000B02}));
+}
+
+TEST(WP9ListRows, CollisionDebugColorEditsRgbAndKeepsTheUnusedByte) {
+  const auto out = make_plugin();
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto key = fo4::FormKey::parse("000B02:Patch.esp");
+  const std::string_view paths[] = {"COLL\\DebugColorRed", "COLL\\DebugColorGreen",
+                                    "COLL\\DebugColorBlue"};
+  const std::string_view initial[] = {"16", "32", "48"};
+  const std::string_view written[] = {"255", "0", "7"};
+  for (std::size_t i = 0; i < 3; ++i) {
+    SCOPED_TRACE(paths[i]);
+    const auto field = fo4::schema::scalar_field_descriptor(paths[i]);
+    ASSERT_TRUE(field.has_value());
+    const auto data = payload(plugin, "000B02:Patch.esp", "FNAM");
+    EXPECT_EQ(fo4::schema::decode_scalar(fo4::schema::scalar_field_bytes(data, field->scalar),
+                                         field->scalar),
+              initial[i]);
+    EXPECT_EQ(fo4::set_record_scalar(plugin, key, *field, written[i]),
+              fo4::ScalarMutationStatus::updated);
+  }
+  const auto blue = fo4::schema::scalar_field_descriptor("COLL\\DebugColorBlue");
+  EXPECT_THROW(fo4::set_record_scalar(plugin, key, *blue, "256"), fo4::schema::ScalarError);
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(payload(reread, "000B02:Patch.esp", "FNAM"),
+            (Bytes{std::byte{255}, std::byte{0}, std::byte{7}, std::byte{99}}));
+}
+
+TEST(WP9ListRows, SnapshotCategoryMultipliersEditPerSubrecordAndRefuseWrongTargets) {
+  const auto out = make_plugin();
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto key = fo4::FormKey::parse("000B04:Patch.esp");
+  const auto multiplier = fo4::schema::scalar_field_descriptor("SCSN\\Multiplier");
+  const auto category = fo4::schema::formlink_field_descriptor("SCSN\\Category");
+  ASSERT_TRUE(multiplier.has_value());
+  ASSERT_TRUE(category.has_value());
+  EXPECT_EQ(fo4::record_field_count(plugin, key, *multiplier), 2u);
+  EXPECT_EQ(fo4::record_field_count(plugin, key, *category), 2u);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *multiplier, 1, "0.125"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, key, *category, 0,
+                                           fo4::FormKey::parse("000B12:Patch.esp")),
+            fo4::FormLinkFieldMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *multiplier, 2, "0.5"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_THROW(fo4::set_record_formlink_field(plugin, key, *category, 1,
+                                              fo4::FormKey::parse("000B02:Patch.esp")),
+               fo4::schema::FormLinkFieldError);
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(payloads(reread, "000B04:Patch.esp", "CNAM"),
+            (std::vector<Bytes>{snapshot_multiplier(0x02000B12, 0.25f),
+                                snapshot_multiplier(0x00000B51, 0.125f)}));
 }

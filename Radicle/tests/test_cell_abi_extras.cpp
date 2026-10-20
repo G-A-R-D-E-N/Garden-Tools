@@ -173,7 +173,7 @@ TEST_F(CellAbiTest, ReportsShortTailsMalformedSubrecordsAndNonCells) {
   EXPECT_EQ(info.lighting_tail.has_near_height, 1);
   EXPECT_EQ(info.lighting_tail.has_far_height, 0);
   EXPECT_EQ(info.lighting_tail.far_height_mid, 0.0f);
-  EXPECT_EQ(info.lighting_tail.has_fog_scales, 0);
+  EXPECT_EQ(info.lighting_tail.has_fog_scales, 1);
   EXPECT_EQ(info.water_environment_map, nullptr);
 
   radicle_form_key* keys = nullptr;

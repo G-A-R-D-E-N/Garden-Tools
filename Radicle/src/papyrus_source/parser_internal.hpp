@@ -11,6 +11,7 @@
 namespace fo4::psc {
 
 constexpr std::size_t kMaxNestingDepth = 96;
+constexpr std::size_t kMaxChainLength = 512;
 
 class DepthGuard {
 public:
@@ -101,10 +102,12 @@ private:
   ExpressionPtr parse_primary();
   ExpressionPtr parse_new();
   bool parse_arguments(std::vector<ExpressionPtr>& arguments, std::vector<std::string>& names);
+  bool chain_within(std::size_t links);
 
   std::vector<Token> tokens_;
   std::size_t index_{0};
   std::size_t depth_{0};
+  std::size_t links_{0};
   std::string pendingDoc_;
   ParseError error_;
 };
