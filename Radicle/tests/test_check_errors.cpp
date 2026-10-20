@@ -362,6 +362,20 @@ fo4::Plugin regn_with_worldspace(const char* name, std::uint32_t wnam) {
   fo4::test::end_group(out, group);
   return fo4::read_plugin(out.bytes, name);
 }
+
+fo4::Plugin plugin_with_link(const char* name, std::string_view signature,
+                             std::string_view subrecord, std::uint32_t target) {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  const auto group = fo4::test::begin_group(out, signature, 0);
+  const auto record = fo4::test::begin_record(out, signature, 0, 0x000840);
+  fo4::test::ByteWriter value;
+  value.u32(target);
+  fo4::test::write_subrecord(out, subrecord, value.bytes);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return fo4::read_plugin(out.bytes, name);
+}
 }  // namespace
 
 TEST(CheckErrors, MissingGameMasterReferenceGroupTargetIsNotAnError) {
@@ -391,6 +405,43 @@ TEST(CheckErrors, MissingModRegionWorldspaceIsStillUnresolved) {
   const auto unresolved = of_code(fo4::check_load_order(load_order), fo4::CheckCode::unresolved_link);
   ASSERT_EQ(unresolved.size(), 1u);
   EXPECT_EQ(unresolved[0].target, fo4::FormKey::parse("000850:Mod.esp"));
+  EXPECT_EQ(unresolved[0].severity, fo4::CheckSeverity::error);
+}
+
+TEST(CheckErrors, DanglingGameMasterLinksAreExemptOnlyForKnownPairs) {
+  struct Exemption {
+    std::string_view record;
+    std::string_view subrecord;
+  };
+  constexpr std::array<Exemption, 4> exemptions{{
+      {"REFR", "XRFG"},
+      {"REFR", "XMSP"},
+      {"ACHR", "XLCN"},
+      {"SCCO", "SNAM"},
+  }};
+
+  for (const auto& exemption : exemptions) {
+    const auto master =
+        plugin_with_link("Fallout4.esm", exemption.record, exemption.subrecord, 0x000850);
+    const std::vector<const fo4::Plugin*> master_order{&master};
+    EXPECT_TRUE(
+        of_code(fo4::check_load_order(master_order), fo4::CheckCode::unresolved_link).empty())
+        << exemption.record << " " << exemption.subrecord;
+
+    const auto mod = plugin_with_link("Mod.esp", exemption.record, exemption.subrecord, 0x000850);
+    const std::vector<const fo4::Plugin*> mod_order{&mod};
+    const auto unresolved =
+        of_code(fo4::check_load_order(mod_order), fo4::CheckCode::unresolved_link);
+    ASSERT_EQ(unresolved.size(), 1u) << exemption.record << " " << exemption.subrecord;
+    EXPECT_EQ(unresolved[0].target, fo4::FormKey::parse("000850:Mod.esp"));
+    EXPECT_EQ(unresolved[0].severity, fo4::CheckSeverity::error);
+  }
+
+  const auto other_slot = plugin_with_link("Fallout4.esm", "REFR", "XLCN", 0x000850);
+  const std::vector<const fo4::Plugin*> other_order{&other_slot};
+  const auto unresolved = of_code(fo4::check_load_order(other_order), fo4::CheckCode::unresolved_link);
+  ASSERT_EQ(unresolved.size(), 1u);
+  EXPECT_EQ(unresolved[0].subrecord.to_string(), "XLCN");
   EXPECT_EQ(unresolved[0].severity, fo4::CheckSeverity::error);
 }
 

@@ -21,6 +21,7 @@ Status readIndex(const Value& index, std::int32_t& out) {
 }
 
 Status coerceElement(const Array& array, const Value& value, Value& out) {
+    if (value.type == ValueType::Array && value.array != nullptr) return Status::TypeMismatch;
     if (array.elementType == ValueType::None || isNoneLike(value)) {
         out = value;
         return Status::Ok;
@@ -107,6 +108,7 @@ Status arrayFindElement(const Value& array, const Value& value, const Value& sta
     if (!isNoneLike(start)) {
         status = readIndex(start, position);
         if (status != Status::Ok) return status;
+        if (reverse && position < 0) position += size;
     }
 
     if (reverse) {
