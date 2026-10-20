@@ -143,6 +143,36 @@ TEST(MusicTrackLists, AppendAfterLastConditionSubrecordWhenTracksAbsent) {
   EXPECT_EQ(order(plugin, k_must), (Order{"EDID", "CITC", "CTDA", "CIS2", "CTDA", "SNAM"}));
 }
 
+TEST(MusicTrackLists, CuePointRowsDecodeAndWriteOneArrayElement) {
+  // Regression: cue-point rows require a four-byte stride, so a wrong stride writes the value into the neighbouring cue point.
+  auto entries = fixture();
+  for (auto& entry : entries) {
+    if (entry.id == k_must) { entry.subs.push_back({"FNAM", f32s({0.5f, 1.25f, -2.0f})}); }
+  }
+  auto plugin = read(build(entries));
+  const auto cue = fo4::schema::scalar_field_descriptor("MUST\\CuePoint");
+  ASSERT_TRUE(cue.has_value());
+  EXPECT_EQ(fo4::record_field_count(plugin, key(k_must), *cue).value_or(0), 3u);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key(k_must), *cue, 1, "2.5"), fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key(k_must), *cue, 3, "4.5"), fo4::ScalarMutationStatus::subrecord_missing);
+  const auto reloaded = reload(plugin);
+  EXPECT_EQ(payloads(reloaded, k_must, "FNAM"), (std::vector<Bytes>{f32s({0.5f, 2.5f, -2.0f})}));
+}
+
+TEST(MusicTrackLists, TruncatedCuePointPayloadRefusesElementWrites) {
+  // Regression: a cue-point payload that is not a whole number of elements must not have its trailing bytes overwritten.
+  auto entries = fixture();
+  for (auto& entry : entries) {
+    if (entry.id == k_must) { entry.subs.push_back({"FNAM", raw({0, 0, 0x80, 0x3F, 0x11})}); }
+  }
+  auto plugin = read(build(entries));
+  const auto cue = fo4::schema::scalar_field_descriptor("MUST\\CuePoint");
+  ASSERT_TRUE(cue.has_value());
+  EXPECT_EQ(fo4::record_field_count(plugin, key(k_must), *cue).value_or(99), 0u);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key(k_must), *cue, 0, "2.5"), fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(payloads(plugin, k_must, "FNAM"), (std::vector<Bytes>{raw({0, 0, 0x80, 0x3F, 0x11})}));
+}
+
 TEST(MusicTrackLists, CApiNullInsertWritesZeroIntoPackedTracks) {
   TempRoot root;
   std::filesystem::create_directories(root.path / "out");
