@@ -181,7 +181,9 @@ TEST_P(SoundWriterReal, EveryScalarStringAndLinkPathEditsFirstAndLastSlotsWithou
     for (const auto& field : fo4::schema::formlink_fields(record.header.signature)) {
       SCOPED_TRACE(record.form_key.to_string() + ' ' + std::string(field.path));
       const fo4::schema::FieldShape shape{field.subrecord, field.offset, 4, 0, false};
-      const auto slots = fo4::schema::resolve_field_slots(record, shape, field.address);
+      const auto* live = fo4::find_record(sample, record.form_key);
+      ASSERT_NE(live, nullptr);
+      const auto slots = fo4::schema::resolve_field_slots(*live, shape, field.address);
       if (slots.slots.empty()) { continue; }
       const auto index = slots.slots.size() - 1;
       const auto& slot = slots.slots[index];

@@ -23,6 +23,9 @@ radicle_status map_scalar_status(fo4::ScalarMutationStatus status) {
     case fo4::ScalarMutationStatus::subrecord_missing:
       return fail(RADICLE_STATUS_NOT_FOUND,
                   "record has no such field occurrence, or the field is outside its supported payload layout");
+    case fo4::ScalarMutationStatus::next_alias_id_too_low:
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                  "QUST Next Alias ID must stay above every existing alias ID");
     default:
       return RADICLE_STATUS_OK;
   }

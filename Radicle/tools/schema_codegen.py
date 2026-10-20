@@ -7,24 +7,25 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from field_address_codegen import is_count, parse_address, reject_overlaps, render_address  # noqa: E402
+from field_address_codegen import (is_count, parse_address, parse_segment, reject_overlaps,  # noqa: E402
+                                   render_address)
 
 STORAGES = {"u8", "u16", "u32", "i32", "f32", "i8", "i16"}
 KINDS = {"scalar", "string"}
-STRING_FORBIDDEN = {"storage", "presentation", "minimum", "maximum", "payload_size", "stride", "array_offset", "names"}
+STRING_FORBIDDEN = {"storage", "presentation", "minimum", "maximum", "stride", "array_offset", "names"}
 PRESENTATIONS = {"identity", "percent_0_100", "enum", "flags"}
 NAME_KEYS = {"enum": "value", "flags": "bit"}
 CPP_PRESENTATIONS = {"enum": "enumeration"}
 # Missing-field insertion is intentionally not generated yet. Safe insertion
 # requires record-level subrecord ordering metadata, not only a scalar field row.
 INSERTIONS = {"existing_only"}
-COUNTED_ARRAY_KEYS = {"kind", "path", "label", "subrecord", "count_subrecord", "stride", "insertion", "members"}
-MEMBER_KEYS = {"path", "label", "offset", "storage", "presentation", "minimum", "maximum",
-               "min_form_version"}
+COUNTED_ARRAY_KEYS = {"kind", "path", "label", "subrecord", "count_subrecord", "stride", "insertion",
+                      "members", "count_word", "segment_index", "min_form_version"}
+MEMBER_KEYS = {"path", "label", "offset", "storage", "presentation", "minimum", "maximum"}
 SUBRECORD_GROUP_KEYS = {"kind", "path", "label", "count_subrecord", "insertion", "members", "successors"}
 GROUP_MEMBER_KEYS = {"subrecord", "required", "repeatable", "payload_size", "default", "fields",
                      "formlink_fields", "localized", "skippable"}
-GROUP_ROW_FORBIDDEN = {"kind", "subrecord", "repeated", "stride", "array_offset", "when", "payload_size", "minimum_payload_size"}
+GROUP_ROW_FORBIDDEN = {"subrecord", "repeated", "stride", "array_offset", "when", "payload_size", "minimum_payload_size"}
 GROUP_LINK_KEYS = {"path", "label", "offset", "nullable", "insertion", "target_union", "targets"}
 HEX_DIGITS = "0123456789abcdefABCDEF"
 WIDTHS = {"u8": 1, "u16": 2, "u32": 4, "i32": 4, "f32": 4, "i8": 1, "i16": 2}
@@ -133,6 +134,12 @@ def parse_counted_array(field, record_signature: str):
         raise ValueError(f"counted_array stride must be a positive integer: {path!r}")
     if field.get("insertion") not in INSERTIONS:
         raise ValueError(f"unsupported insertion policy until record ordering exists: {field.get('insertion')!r}")
+    min_form_version = field.get("min_form_version", 0)
+    if "min_form_version" in field and (type(min_form_version) is not int or not 0 < min_form_version <= 0xFFFF):
+        raise ValueError(f"counted_array min_form_version must be a 16-bit positive integer: {path!r}")
+    segment = parse_segment(field, path, stride, False)
+    if segment is not None and "count_subrecord" in field:
+        raise ValueError(f"a header-counted segment reads its count from the payload header: {path!r}")
     members = field.get("members")
     if not isinstance(members, list) or not members:
         raise ValueError(f"counted_array members must be a non-empty array: {path!r}")
@@ -140,9 +147,15 @@ def parse_counted_array(field, record_signature: str):
     for member in members:
         if not isinstance(member, dict) or set(member) - MEMBER_KEYS:
             raise ValueError(f"counted_array member keys must be a subset of {sorted(MEMBER_KEYS)}: {path!r}")
-        rows.append(dict(member, kind="scalar", subrecord=subrecord, stride=stride, insertion="existing_only"))
+        row = dict(member, kind="scalar", subrecord=subrecord, stride=stride, insertion="existing_only")
+        if segment is not None:
+            row["count_word"] = segment["count_word"]
+            row["segment_index"] = segment["index"]
+        if min_form_version:
+            row["min_form_version"] = min_form_version
+        rows.append(row)
     array = {"record": record_signature, "path": path, "label": label, "subrecord": subrecord,
-             "count_subrecord": count_subrecord, "stride": stride}
+             "count_subrecord": count_subrecord, "stride": stride, "segment": segment}
     return array, rows
 
 
@@ -218,6 +231,17 @@ def parse_subrecord_group(field, record_signature: str):
         for row in member_fields:
             if not isinstance(row, dict) or set(row) & GROUP_ROW_FORBIDDEN:
                 raise ValueError(f"subrecord_group member field keys must not include {sorted(GROUP_ROW_FORBIDDEN)}: {path!r}")
+            kind = row.get("kind", "scalar")
+            if kind not in KINDS:
+                raise ValueError(f"subrecord_group member field kind is unsupported: {row.get('path')!r}")
+            if kind == "string":
+                forbidden = sorted(STRING_FORBIDDEN & set(row))
+                if forbidden:
+                    raise ValueError(f"subrecord_group member string rows do not accept {forbidden}: {row.get('path')!r}")
+                if not is_count(row.get("offset"), 0):
+                    raise ValueError(f"subrecord_group member string row needs a non-negative offset: {row.get('path')!r}")
+                rows.append(dict(row, kind="string", subrecord=signature, repeated=True, group_member=True))
+                continue
             width = WIDTHS.get(row.get("storage"))
             if width is None:
                 raise ValueError(f"subrecord_group member field storage is unsupported: {row.get('path')!r}")
@@ -226,7 +250,7 @@ def parse_subrecord_group(field, record_signature: str):
             end = row.get("offset", 0) + width
             if end > payload_size or ("offset" not in row and end != payload_size):
                 raise ValueError(f"subrecord_group member field exceeds member size: {row.get('path')!r}")
-            rows.append(dict(row, kind="scalar", subrecord=signature, repeated=True))
+            rows.append(dict(row, kind="scalar", subrecord=signature, repeated=True, group_member=True))
         for row in member_links:
             if not isinstance(row, dict) or set(row) - GROUP_LINK_KEYS:
                 raise ValueError(f"subrecord_group member link keys must be a subset of {sorted(GROUP_LINK_KEYS)}: {path!r}")
@@ -339,7 +363,7 @@ def load_schema(schema_path: Path):
                 offset = 0
 
             if is_string:
-                storage = "zstring"
+                storage = "fixed_string" if "payload_size" in field else "zstring"
                 presentation = "identity"
             else:
                 storage = field.get("storage")
@@ -358,14 +382,19 @@ def load_schema(schema_path: Path):
             payload_size = 0
             if "payload_size" in field:
                 payload_size = field["payload_size"]
-                if not embedded:
-                    raise ValueError(f"payload_size requires an embedded field: {path!r}")
                 if type(payload_size) is not int or payload_size <= 0:
                     raise ValueError(f"payload_size must be a positive integer: {path!r}")
-                if payload_size < offset + WIDTHS.get(storage, 0):
-                    raise ValueError(f"payload_size is smaller than the field end: {path!r}")
-                if address["stride"] and (payload_size - address["array_offset"]) % address["stride"] != 0:
-                    raise ValueError(f"payload_size does not hold whole stride elements: {path!r}")
+                if is_string:
+                    if embedded:
+                        raise ValueError(
+                            f"fixed-width string payload_size must cover the whole payload: {path!r}")
+                else:
+                    if not embedded:
+                        raise ValueError(f"payload_size requires an embedded field: {path!r}")
+                    if payload_size < offset + WIDTHS.get(storage, 0):
+                        raise ValueError(f"payload_size is smaller than the field end: {path!r}")
+                    if address["stride"] and (payload_size - address["array_offset"]) % address["stride"] != 0:
+                        raise ValueError(f"payload_size does not hold whole stride elements: {path!r}")
 
             minimum_payload_size = field.get("minimum_payload_size", 0)
             if "minimum_payload_size" in field:
@@ -430,14 +459,15 @@ def load_schema(schema_path: Path):
                 "address": address,
                 "localized": localized,
                 "can_insert": False,
+                "group_member": field.get("group_member", False),
             })
 
     for array in arrays:
         twins = [other for other in arrays
                  if (other["record"], other["subrecord"]) == (array["record"], array["subrecord"])]
-        if len(twins) > 1:
+        if len(twins) > 1 and not all(other["segment"] is not None for other in twins):
             raise ValueError(f"counted_array subrecord {array['subrecord']} is declared twice in {array['record']}: {array['path']!r}")
-        if not array["count_subrecord"]:
+        if array["segment"] is not None or not array["count_subrecord"]:
             continue
         sharers = [other for other in arrays
                    if (other["record"], other["count_subrecord"]) == (array["record"], array["count_subrecord"])]
@@ -447,6 +477,25 @@ def load_schema(schema_path: Path):
                   if row["record"] == array["record"] and row["subrecord"] == array["count_subrecord"]]
         if len(counts) != 1 or not whole_payload_u32(counts[0]):
             raise ValueError(f"counted_array {array['path']!r} needs exactly one whole-payload u32 row for {array['count_subrecord']}")
+
+    payload_segments = {}
+    for array in arrays:
+        if array["segment"] is None:
+            continue
+        payload_segments.setdefault((array["record"], array["subrecord"]), []).append(array)
+    for (record_signature, subrecord), group in payload_segments.items():
+        indexes = sorted(array["segment"]["index"] for array in group)
+        if indexes != list(range(len(group))):
+            raise ValueError(f"counted_array segments of {record_signature}.{subrecord} must be indexed 0..{len(group) - 1}: {group[0]['path']!r}")
+        counters = [array["segment"]["count_word"] for array in group]
+        if len(set(counters)) != len(counters):
+            raise ValueError(f"counted_array segments of {record_signature}.{subrecord} must read different header counters: {group[0]['path']!r}")
+        for array in group:
+            array["segment"]["count"] = len(group)
+        for field in fields:
+            if (field["record"] == record_signature and field["subrecord"] == subrecord
+                    and field["address"]["segment"] is not None):
+                field["address"]["segment"]["count"] = len(group)
 
     for group in groups:
         if group["count_subrecord"]:
@@ -472,7 +521,9 @@ def load_schema(schema_path: Path):
             if group["count_subrecord"] and other["count_subrecord"] == group["count_subrecord"]:
                 raise ValueError(f"subrecord_group count subrecord {group['count_subrecord']} is shared by two groups in {group['record']}: {group['path']!r}")
 
-    reject_overlaps([dict(field, width=WIDTHS.get(field["storage"], 0)) for field in fields], "scalar")
+    # Constraint: a header-counted segment has no static slot range, so it is not overlap-checked.
+    reject_overlaps([dict(field, width=WIDTHS.get(field["storage"], 0)) for field in fields
+                     if field["address"]["segment"] is None], "scalar")
 
     fields.sort(key=lambda item: (item["record"], item["path"]))
     arrays.sort(key=lambda item: (item["record"], item["path"]))
@@ -588,6 +639,7 @@ def render(fields, arrays=(), groups=()) -> str:
     if arrays:
         lines.append(f"constexpr std::array<CountedArrayDescriptor, {len(arrays)}> k_counted_arrays{{{{")
         for array in arrays:
+            segment = array["segment"]
             lines.append(
                 "{" +
                 f"Signature::from_string({cpp_string(array['record'])}), " +
@@ -597,6 +649,7 @@ def render(fields, arrays=(), groups=()) -> str:
                 (f"Signature::from_string({cpp_string(array['count_subrecord'])})" if array["count_subrecord"]
                  else "Signature{}") + ", " +
                 f"{array['stride']}" +
+                (f", {segment['count_word']}, {segment['index']}, {segment['count']}" if segment else "") +
                 "},")
         lines.append("}};")
     else:

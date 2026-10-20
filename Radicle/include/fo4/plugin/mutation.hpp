@@ -5,6 +5,7 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "fo4/schema/condition_scopes.hpp"
+#include "fo4/schema/form_links.hpp"
 #include "fo4/schema/ctda.hpp"
 #include "fo4/schema/formlink_lists.hpp"
 #include "fo4/schema/scalar.hpp"
@@ -37,6 +38,7 @@ enum class ScalarMutationStatus {
   unchanged,
   record_missing,
   subrecord_missing,
+  next_alias_id_too_low,
 };
 
 enum class CountedArrayMutationStatus {
@@ -310,7 +312,8 @@ inline ConditionMutationStatus set_record_conditions(Plugin& plugin,
 RecordCopyStatus copy_record_as_override(Plugin& destination,
                                          const Plugin& source,
                                          const FormKey& record_key,
-                                         bool overwrite);
+                                         bool overwrite,
+                                         FormLinkTypeLookup type_lookup = {});
 
 struct RecordDeepCopyResult {
   RecordCopyStatus status{RecordCopyStatus::source_missing};
