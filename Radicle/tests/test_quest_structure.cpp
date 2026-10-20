@@ -8,7 +8,6 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
-#include <bit>
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
@@ -590,24 +589,37 @@ TEST(QuestStructure, NextAliasIdRowReadsAndWritesTheStoredCounter) {
   EXPECT_EQ(field->scalar.storage, fo4::schema::ScalarStorage::u32);
   EXPECT_EQ(fo4::record_field_count(plugin, structure_quest_key(), *field), 1u);
 
+  const auto expect_stored = [&](const fo4::Plugin& current, std::uint8_t expected) {
+    const auto reread = fo4::read_plugin(fo4::write_plugin(current), "Quests.esp");
+    const auto* record = fo4::find_record(reread, structure_quest_key());
+    ASSERT_NE(record, nullptr);
+    const auto& quest = *record;
+    const auto bytes = std::find_if(quest.subrecords.begin(), quest.subrecords.end(),
+                                    [](const auto& member) {
+                                      return member.signature == fo4::Signature::from_string("ANAM");
+                                    });
+    ASSERT_NE(bytes, quest.subrecords.end());
+    EXPECT_EQ(fo4::schema::scalar_field_bytes(bytes->data, field->scalar).size(), 4u);
+    EXPECT_EQ(std::to_integer<std::uint8_t>(bytes->data[0]), expected);
+    EXPECT_EQ(std::to_integer<std::uint8_t>(bytes->data[1]), 0);
+    EXPECT_TRUE(fo4::quest::read_quest_structure(reread, structure_quest_key()).aliases_supported);
+  };
+
+  expect_stored(plugin, 5);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, structure_quest_key(), *field, "1"),
+            fo4::ScalarMutationStatus::next_alias_id_too_low);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, structure_quest_key(), *field, "2"),
+            fo4::ScalarMutationStatus::next_alias_id_too_low);
+  expect_stored(plugin, 5);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, structure_quest_key(), *field, "3"),
+            fo4::ScalarMutationStatus::updated);
+  expect_stored(plugin, 3);
+
   EXPECT_EQ(fo4::set_record_scalar(plugin, structure_quest_key(), *field, "9"),
             fo4::ScalarMutationStatus::updated);
   EXPECT_EQ(fo4::set_record_scalar(plugin, structure_quest_key(), *field, "9"),
             fo4::ScalarMutationStatus::unchanged);
-
-  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Quests.esp");
-  const auto* record = fo4::find_record(reread, structure_quest_key());
-  ASSERT_NE(record, nullptr);
-  const auto& quest = *record;
-  const auto bytes = std::find_if(quest.subrecords.begin(), quest.subrecords.end(),
-                                  [](const auto& member) {
-                                    return member.signature == fo4::Signature::from_string("ANAM");
-                                  });
-  ASSERT_NE(bytes, quest.subrecords.end());
-  EXPECT_EQ(fo4::schema::scalar_field_bytes(bytes->data, field->scalar).size(), 4u);
-  EXPECT_EQ(std::to_integer<std::uint8_t>(bytes->data[0]), 9);
-  EXPECT_EQ(std::to_integer<std::uint8_t>(bytes->data[1]), 0);
-  EXPECT_TRUE(fo4::quest::read_quest_structure(reread, structure_quest_key()).aliases_supported);
+  expect_stored(plugin, 9);
 }
 
 TEST(QuestStructure, MissingQuestReturnsNotFound) {

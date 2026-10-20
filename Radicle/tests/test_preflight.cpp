@@ -338,6 +338,39 @@ TEST(AuthoringPreflight, GeneratedLvspCreationShapePassesWithoutOptionalFields) 
   EXPECT_EQ(fo4::schema::authoring_subrecords(*constraint).size(), 7u);
 }
 
+TEST(AuthoringPreflight, PairCountsWorsenOnlyWhenAnEditMovesThemApart) {
+  const auto signature = fo4::Signature::from_string("HDPT");
+  const auto constraint = fo4::schema::record_authoring_constraint(signature);
+  ASSERT_TRUE(constraint.has_value());
+  const auto rules = fo4::schema::authoring_subrecords(*constraint);
+  std::size_t nam0 = rules.size();
+  std::size_t nam1 = rules.size();
+  for (std::size_t index = 0; index < rules.size(); ++index) {
+    if (rules[index].signature == fo4::Signature::from_string("NAM0")) nam0 = index;
+    if (rules[index].signature == fo4::Signature::from_string("NAM1")) nam1 = index;
+  }
+  ASSERT_LT(nam0, rules.size());
+  ASSERT_LT(nam1, rules.size());
+
+  const std::vector<std::size_t> balanced(rules.size(), 0);
+  auto added = balanced;
+  ++added[nam0];
+  EXPECT_TRUE(fo4::schema::worsened_subrecord_pair(signature, rules, balanced, added).has_value());
+
+  std::vector<std::size_t> imbalanced(rules.size(), 0);
+  imbalanced[nam0] = 2;
+  auto paired = imbalanced;
+  ++paired[nam1];
+  EXPECT_FALSE(fo4::schema::worsened_subrecord_pair(signature, rules, imbalanced, paired).has_value());
+  auto wider = imbalanced;
+  ++wider[nam0];
+  EXPECT_TRUE(fo4::schema::worsened_subrecord_pair(signature, rules, imbalanced, wider).has_value());
+
+  auto unrelated = imbalanced;
+  ++unrelated[0];
+  EXPECT_FALSE(fo4::schema::worsened_subrecord_pair(signature, rules, imbalanced, unrelated).has_value());
+}
+
 TEST(ListPreflight, PackedKeywordArrayIsChecked4BytesPerElement) {
   fo4::Record record;
   record.header.signature = fo4::Signature::from_string("MISC");

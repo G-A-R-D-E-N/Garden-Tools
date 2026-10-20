@@ -210,13 +210,15 @@ TEST(PexAnalysis, DisassemblesIfElseDiamondWithoutLabels) {
   EXPECT_EQ(result.text.find("3: jmp 2"), std::string::npos);
 }
 
-TEST(PexAnalysis, DisassemblyFallsBackToGotoForComputedWhileCondition) {
+TEST(PexAnalysis, DisassemblesComputedWhileConditionWithoutGotoFallback) {
   const auto result = fo4::pex_analysis::disassemble_function(whileFunction());
   ASSERT_EQ(result.status, PexAnalysisStatus::Ok);
-  EXPECT_FALSE(result.structured);
-  EXPECT_EQ(result.text.find("while ("), std::string::npos);
-  EXPECT_NE(result.text.find("L1:"), std::string::npos);
-  EXPECT_NE(result.text.find("5: jmp -4"), std::string::npos);
+  EXPECT_TRUE(result.structured);
+  EXPECT_NE(result.text.find("while (true) {"), std::string::npos);
+  EXPECT_NE(result.text.find("if (!(::temp2)) break;"), std::string::npos);
+  EXPECT_NE(result.text.find("3: callmethod Work self ::nonevar"), std::string::npos);
+  EXPECT_EQ(result.text.find("L1:"), std::string::npos);
+  EXPECT_EQ(result.text.find("5: jmp -4"), std::string::npos);
 }
 
 TEST(PexAnalysis, DisassemblesWhileLoopWithVariableCondition) {

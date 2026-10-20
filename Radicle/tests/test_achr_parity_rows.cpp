@@ -7,7 +7,6 @@
 
 #include <gtest/gtest.h>
 
-#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -246,26 +245,26 @@ TEST(AchrParityRows, LocationRefTypesAreAPackedArrayOfFourByteRefs) {
   EXPECT_EQ(list->storage, fo4::schema::FormLinkListStorage::packed_array);
   EXPECT_TRUE(fo4::schema::formlink_list_target_allowed(*list, fo4::Signature::from_string("LCRT")));
 
-  const auto size = fo4::record_formlink_list_size(plugin, patch_key(0x810u), *list);
+  const auto size = fo4::schema::record_formlink_list_size(plugin, patch_key(0x810u), *list);
   ASSERT_TRUE(size.has_value());
   EXPECT_EQ(*size, 2u);
-  const auto values = fo4::record_formlink_list_values(plugin, patch_key(0x810u), *list);
+  const auto values = fo4::schema::record_formlink_list_values(plugin, patch_key(0x810u), *list);
   ASSERT_TRUE(values.has_value());
   ASSERT_EQ(values->size(), 2u);
   EXPECT_EQ(values->at(0).local().value(), 0x00000A60u);
   EXPECT_EQ(values->at(1).local().value(), 0x00000A61u);
 
-  EXPECT_EQ(fo4::set_record_formlink_list_element(
+  EXPECT_EQ(fo4::schema::set_record_formlink_list_element(
                 plugin, patch_key(0x810u), *list, 1,
                 fo4::FormKey::parse("00000A70:Fallout4.esm")),
-            fo4::FormLinkListMutationStatus::updated);
-  EXPECT_EQ(fo4::set_record_formlink_list_element(
+            fo4::schema::FormLinkListMutationStatus::updated);
+  EXPECT_EQ(fo4::schema::set_record_formlink_list_element(
                 plugin, patch_key(0x810u), *list, 2,
                 fo4::FormKey::parse("00000A71:Fallout4.esm")),
-            fo4::FormLinkListMutationStatus::index_out_of_range);
+            fo4::schema::FormLinkListMutationStatus::index_out_of_range);
 
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
-  const auto written = fo4::record_formlink_list_values(reread, patch_key(0x810u), *list);
+  const auto written = fo4::schema::record_formlink_list_values(reread, patch_key(0x810u), *list);
   ASSERT_TRUE(written.has_value());
   ASSERT_EQ(written->size(), 2u);
   EXPECT_EQ(written->at(0).local().value(), 0x00000A60u);
