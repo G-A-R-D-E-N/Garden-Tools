@@ -94,7 +94,7 @@ void check_block(const std::string& name, std::span<const std::byte> payload, Ab
   for (const fo4::abc::AbcMethodBody& body : file.bodies) {
     ++stats.bodies;
     std::vector<fo4::abc::AbcInstruction> instructions;
-    const auto decode_status = fo4::abc::decode_code(body.code, instructions);
+    const auto decode_status = fo4::abc::decode_code(body.code, instructions, body.exceptions);
     EXPECT_EQ(decode_status, fo4::abc::AbcStatus::Ok)
         << name << ": " << fo4::abc::status_name(decode_status);
     if (decode_status != fo4::abc::AbcStatus::Ok) {
@@ -105,7 +105,7 @@ void check_block(const std::string& name, std::span<const std::byte> payload, Ab
         << name << ": " << fo4::abc::status_name(operand_status);
     stats.instructions += instructions.size();
     std::string listing;
-    const auto listing_status = fo4::abc::disassemble(file, body.code, listing);
+    const auto listing_status = fo4::abc::disassemble(file, body.code, listing, body.exceptions);
     EXPECT_EQ(listing_status, fo4::abc::AbcStatus::Ok)
         << name << ": " << fo4::abc::status_name(listing_status);
   }

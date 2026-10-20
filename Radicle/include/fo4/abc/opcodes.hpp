@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -64,10 +65,12 @@ struct AbcInstruction {
 };
 
 AbcStatus decode_code(const std::uint8_t* code, std::size_t size,
-                      std::vector<AbcInstruction>& out);
+                      std::vector<AbcInstruction>& out,
+                      std::span<const AbcException> exceptions = {});
 
 AbcStatus decode_code(const std::vector<std::uint8_t>& code,
-                      std::vector<AbcInstruction>& out);
+                      std::vector<AbcInstruction>& out,
+                      std::span<const AbcException> exceptions = {});
 
 AbcStatus validate_operand_pools(const AbcFile& file,
                                  const std::vector<AbcInstruction>& code);
@@ -78,6 +81,6 @@ std::string render_listing(const AbcFile& file,
                            const std::vector<AbcInstruction>& code);
 
 AbcStatus disassemble(const AbcFile& file, const std::vector<std::uint8_t>& code,
-                      std::string& out);
+                      std::string& out, std::span<const AbcException> exceptions = {});
 
 }
