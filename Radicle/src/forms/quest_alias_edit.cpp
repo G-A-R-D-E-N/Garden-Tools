@@ -490,7 +490,6 @@ void replace_quest_alias(Plugin& plugin,
   const auto end = record->subrecords.begin() + static_cast<std::ptrdiff_t>(range->end);
   auto insertion = record->subrecords.erase(begin, end);
   record->subrecords.insert(insertion, merged.begin(), merged.end());
-  // Fail closed: the spliced alias must decode before the clone is committed.
   static_cast<void>(decode_quest_aliases(next, quest));
   mark_modified(next, *record);
   plugin = std::move(next);
