@@ -209,6 +209,7 @@ void check_links(const Plugin& plugin,
         continue;
       }
       if (hit.key.owner() == game_master && owner != records.end() &&
+          hit.record.owner() == game_master &&
           std::any_of(k_game_master_link_exemptions.begin(), k_game_master_link_exemptions.end(),
                       [&](const GameMasterLinkExemption& exemption) {
                         return exemption.record == owner->second->header.signature &&

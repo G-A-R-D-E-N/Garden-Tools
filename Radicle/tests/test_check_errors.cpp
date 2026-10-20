@@ -364,11 +364,13 @@ fo4::Plugin regn_with_worldspace(const char* name, std::uint32_t wnam) {
 }
 
 fo4::Plugin plugin_with_link(const char* name, std::string_view signature,
-                             std::string_view subrecord, std::uint32_t target) {
+                             std::string_view subrecord, std::uint32_t target,
+                             std::string_view master = {},
+                             std::uint32_t record_id = 0x000840) {
   fo4::test::ByteWriter out;
-  write_header(out, {});
+  write_header(out, master);
   const auto group = fo4::test::begin_group(out, signature, 0);
-  const auto record = fo4::test::begin_record(out, signature, 0, 0x000840);
+  const auto record = fo4::test::begin_record(out, signature, 0, record_id);
   fo4::test::ByteWriter value;
   value.u32(target);
   fo4::test::write_subrecord(out, subrecord, value.bytes);
@@ -452,6 +454,22 @@ TEST(CheckErrors, DanglingGameMasterLinksAreExemptOnlyForKnownPairs) {
   ASSERT_EQ(other_record_unresolved.size(), 1u);
   EXPECT_EQ(other_record_unresolved[0].subrecord.to_string(), "XLKR");
   EXPECT_EQ(other_record_unresolved[0].severity, fo4::CheckSeverity::error);
+
+  const auto mod_new =
+      plugin_with_link("Mod.esp", "REFR", "XLKR", 0x000850, "Fallout4.esm", 0x01000840);
+  const std::vector<const fo4::Plugin*> mod_new_order{&mod_new};
+  const auto mod_new_unresolved =
+      of_code(fo4::check_load_order(mod_new_order), fo4::CheckCode::unresolved_link);
+  ASSERT_EQ(mod_new_unresolved.size(), 1u);
+  EXPECT_EQ(mod_new_unresolved[0].record, fo4::FormKey::parse("000840:Mod.esp"));
+  EXPECT_EQ(mod_new_unresolved[0].target, fo4::FormKey::parse("000850:Fallout4.esm"));
+  EXPECT_EQ(mod_new_unresolved[0].severity, fo4::CheckSeverity::error);
+
+  const auto mod_override =
+      plugin_with_link("Mod.esp", "REFR", "XLKR", 0x000850, "Fallout4.esm", 0x00000840);
+  const std::vector<const fo4::Plugin*> mod_override_order{&mod_override};
+  EXPECT_TRUE(of_code(fo4::check_load_order(mod_override_order), fo4::CheckCode::unresolved_link)
+                  .empty());
 }
 
 TEST(CheckErrors, NoneFormIdIsNotALink) {
