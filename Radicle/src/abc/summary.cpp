@@ -137,6 +137,33 @@ bool pushes_result(std::string_view mnemonic) {
          mnemonic != "constructsuper";
 }
 
+std::size_t runtime_parts(const AbcFile& file, std::uint32_t index) {
+  if (static_cast<std::size_t>(index) >= file.pool.multinames.size()) {
+    return 0;
+  }
+  switch (file.pool.multinames[index].kind) {
+    case AbcMultinameKind::RTQName:
+    case AbcMultinameKind::RTQNameA:
+    case AbcMultinameKind::MultinameL:
+    case AbcMultinameKind::MultinameLA:
+      return 1;
+    case AbcMultinameKind::RTQNameL:
+    case AbcMultinameKind::RTQNameLA:
+      return 2;
+    default:
+      return 0;
+  }
+}
+
+std::size_t runtime_name_parts(const AbcFile& file, const AbcInstruction& instruction) {
+  for (const AbcDecodedOperand& operand : instruction.operands) {
+    if (operand.role == AbcOperandRole::Multiname) {
+      return runtime_parts(file, operand.value);
+    }
+  }
+  return 0;
+}
+
 constexpr std::int32_t kUnknownStackDelta = -2;
 
 std::int32_t stack_delta(std::string_view mnemonic) {
@@ -148,7 +175,7 @@ std::int32_t stack_delta(std::string_view mnemonic) {
     return -1;
   }
   if (starts_with(mnemonic, "coerce") || starts_with(mnemonic, "convert_") ||
-      starts_with(mnemonic, "astype") || mnemonic == "getproperty" || mnemonic == "getslot" ||
+      mnemonic == "astype" || mnemonic == "getproperty" || mnemonic == "getslot" ||
       mnemonic == "negate" || mnemonic == "increment" || mnemonic == "not" ||
       mnemonic == "typeof") {
     return 0;
@@ -156,11 +183,12 @@ std::int32_t stack_delta(std::string_view mnemonic) {
   return kUnknownStackDelta;
 }
 
-void apply_call(const AbcInstruction& instruction, ValueStack& stack, CallFrame& frame) {
+void apply_call(const AbcFile& file, const AbcInstruction& instruction, ValueStack& stack,
+                CallFrame& frame) {
   const std::string_view mnemonic{instruction.mnemonic};
   const std::size_t argc = argument_slots(instruction);
   frame.arguments.assign(argc, AbcCallArgument{});
-  const std::size_t pops = argc + fixed_pops(mnemonic);
+  const std::size_t pops = argc + fixed_pops(mnemonic) + runtime_name_parts(file, instruction);
   if (stack.size() < pops) {
     stack.clear();
     return;
@@ -212,7 +240,24 @@ void simulate_arguments(const AbcFile& file, const std::vector<AbcInstruction>& 
     }
     const std::string_view mnemonic{instruction.mnemonic};
     if (is_call_like(mnemonic)) {
-      apply_call(instruction, stack, frames[i]);
+      apply_call(file, instruction, stack, frames[i]);
+      continue;
+    }
+    const std::size_t runtime = runtime_name_parts(file, instruction);
+    if (runtime > 0) {
+      if (mnemonic != "getproperty" && mnemonic != "findproperty") {
+        stack.clear();
+        continue;
+      }
+      stack.resize(stack.size() - std::min(runtime, stack.size()));
+    }
+    if (mnemonic == "astypelate") {
+      if (stack.size() < 2) {
+        stack.clear();
+      } else {
+        stack.pop_back();
+        stack.back() = StackValue{};
+      }
       continue;
     }
     StackValue value;

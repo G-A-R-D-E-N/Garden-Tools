@@ -2,6 +2,7 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/formlink_lists.hpp"
+#include "fo4/schema/scalar.hpp"
 #include "plugin_bytes.hpp"
 
 #include <gtest/gtest.h>
@@ -21,6 +22,7 @@ constexpr auto k_npc = fo4::Signature::from_string("NPC_");
 constexpr auto k_pkid = fo4::Signature::from_string("PKID");
 constexpr auto k_pnam = fo4::Signature::from_string("PNAM");
 constexpr auto k_splo = fo4::Signature::from_string("SPLO");
+constexpr auto k_spct = fo4::Signature::from_string("SPCT");
 
 fo4::Signature sig(std::string_view text) { return fo4::Signature::from_string(text); }
 
@@ -34,6 +36,10 @@ fo4::FormKey npc_key() { return key(0x000800); }
 
 fo4::schema::FormLinkFieldDescriptor row(std::string_view path) {
   return fo4::schema::formlink_field_descriptor(path).value();
+}
+
+fo4::schema::SubrecordGroupDescriptor spells_group() {
+  return fo4::schema::subrecord_group_descriptor(k_npc, "NPC_\\Spells").value();
 }
 
 Bytes u32_bytes(std::uint32_t value) {
@@ -51,7 +57,8 @@ void add_group(ByteWriter& out, std::string_view signature, const std::vector<st
   fo4::test::end_group(out, group);
 }
 
-std::vector<std::byte> make_plugin(bool padded_package = false) {
+std::vector<std::byte> make_plugin(bool padded_package = false,
+                                   std::uint32_t stored_spell_count = 2) {
   ByteWriter out;
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
   ByteWriter hedr;
@@ -68,6 +75,7 @@ std::vector<std::byte> make_plugin(bool padded_package = false) {
   fo4::test::write_subrecord(out, "PKID", u32_bytes(0x00000902u));
   fo4::test::write_subrecord(out, "PNAM", u32_bytes(0x00000910u));
   fo4::test::write_subrecord(out, "PNAM", u32_bytes(0x00000911u));
+  fo4::test::write_subrecord(out, "SPCT", u32_bytes(stored_spell_count));
   fo4::test::write_subrecord(out, "SPLO", u32_bytes(0x00000920u));
   fo4::test::write_subrecord(out, "SPLO", u32_bytes(0x00000921u));
   fo4::test::end_record(out, record);
@@ -92,6 +100,14 @@ std::vector<std::uint32_t> raws(const fo4::Plugin& plugin, fo4::Signature signat
     }
     out.push_back(value);
   }
+  return out;
+}
+
+std::vector<fo4::Signature> signatures(const fo4::Plugin& plugin) {
+  std::vector<fo4::Signature> out;
+  const auto* record = fo4::find_record(plugin, npc_key());
+  if (record == nullptr) return out;
+  for (const auto& subrecord : record->subrecords) out.push_back(subrecord.signature);
   return out;
 }
 
@@ -149,16 +165,26 @@ TEST(NpcLinkRows, PackageHeadPartAndSpellRowsDeclareRepeatedTargets) {
   const auto spell = row("NPC_\\Spell");
   EXPECT_EQ(spell.record, k_npc);
   EXPECT_EQ(spell.subrecord, k_splo);
+  EXPECT_EQ(spell.offset, 0u);
   EXPECT_FALSE(spell.nullable);
   EXPECT_TRUE(spell.address.repeated);
-  EXPECT_EQ(spell.payload_sizes[0], 4u);
   EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(spell, sig("SPEL")));
   EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(spell, sig("LVSP")));
   EXPECT_FALSE(fo4::schema::formlink_field_target_allowed(spell, sig("KYWD")));
 
+  const auto spells = spells_group();
+  EXPECT_EQ(spells.record, k_npc);
+  EXPECT_EQ(spells.count_subrecord, k_spct);
+  ASSERT_EQ(spells.members.size(), 1u);
+  EXPECT_EQ(spells.members[0].subrecord, k_splo);
+  EXPECT_TRUE(spells.members[0].required);
+  EXPECT_FALSE(spells.members[0].repeatable);
+  EXPECT_EQ(spells.members[0].payload_size, 4u);
+
   EXPECT_TRUE(fo4::schema::formlink_field_descriptor(k_npc, "NPC_\\Package").has_value());
   EXPECT_TRUE(fo4::schema::formlink_field_descriptor(k_npc, "NPC_\\HeadPart").has_value());
   EXPECT_TRUE(fo4::schema::formlink_field_descriptor(k_npc, "NPC_\\Spell").has_value());
+  EXPECT_TRUE(fo4::schema::scalar_field_descriptor("NPC_\\SpellCount").has_value());
 }
 
 TEST(NpcLinkRows, RepeatedWritesReachOnlyTheirOwnSubrecord) {
@@ -166,6 +192,8 @@ TEST(NpcLinkRows, RepeatedWritesReachOnlyTheirOwnSubrecord) {
   EXPECT_EQ(fo4::record_field_count(plugin, npc_key(), "NPC_\\Package"), 3u);
   EXPECT_EQ(fo4::record_field_count(plugin, npc_key(), "NPC_\\HeadPart"), 2u);
   EXPECT_EQ(fo4::record_field_count(plugin, npc_key(), "NPC_\\Spell"), 2u);
+  EXPECT_EQ(raws(plugin, k_splo), (std::vector<std::uint32_t>{0x00000920u, 0x00000921u}));
+  EXPECT_EQ(raws(plugin, k_spct), (std::vector<std::uint32_t>{2u}));
 
   EXPECT_EQ(fo4::set_record_formlink_field(plugin, npc_key(), row("NPC_\\Package"), 1, key(0x000903)),
             fo4::FormLinkFieldMutationStatus::updated);
@@ -174,10 +202,20 @@ TEST(NpcLinkRows, RepeatedWritesReachOnlyTheirOwnSubrecord) {
   EXPECT_EQ(fo4::set_record_formlink_field(plugin, npc_key(), row("NPC_\\Spell"), 1, key(0x000922)),
             fo4::FormLinkFieldMutationStatus::updated);
 
+  EXPECT_EQ(fo4::insert_record_subrecord_group(plugin, npc_key(), spells_group(), 1),
+            fo4::SubrecordGroupMutationStatus::updated);
+  EXPECT_EQ(raws(plugin, k_spct), (std::vector<std::uint32_t>{3u}));
+
+  EXPECT_EQ(fo4::remove_record_subrecord_group(plugin, npc_key(), spells_group(), 0),
+            fo4::SubrecordGroupMutationStatus::updated);
+  EXPECT_EQ(raws(plugin, k_spct), (std::vector<std::uint32_t>{2u}));
+
   const auto after = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   EXPECT_EQ(raws(after, k_pkid), (std::vector<std::uint32_t>{0x00000900u, 0x00000903u, 0x00000902u}));
   EXPECT_EQ(raws(after, k_pnam), (std::vector<std::uint32_t>{0x00000912u, 0x00000911u}));
-  EXPECT_EQ(raws(after, k_splo), (std::vector<std::uint32_t>{0x00000920u, 0x00000922u}));
+  EXPECT_EQ(raws(after, k_splo), (std::vector<std::uint32_t>{0x00000000u, 0x00000922u}));
+  EXPECT_EQ(signatures(after), (std::vector<fo4::Signature>{k_pkid, k_pkid, k_pkid, k_pnam, k_pnam,
+                                                             k_spct, k_splo, k_splo}));
 }
 
 TEST(NpcLinkRows, OutOfRangeIndexNullAndWrongTargetTypeAreRefused) {
@@ -190,7 +228,24 @@ TEST(NpcLinkRows, OutOfRangeIndexNullAndWrongTargetTypeAreRefused) {
                fo4::schema::FormLinkFieldError);
   EXPECT_THROW(fo4::set_record_formlink_field(plugin, npc_key(), row("NPC_\\Spell"), 0, npc_key()),
                fo4::schema::FormLinkFieldError);
+  EXPECT_EQ(fo4::remove_record_subrecord_group(plugin, npc_key(), spells_group(), 2),
+            fo4::SubrecordGroupMutationStatus::index_out_of_range);
   EXPECT_EQ(raws(plugin, k_pkid), (std::vector<std::uint32_t>{0x00000900u, 0x00000901u, 0x00000902u}));
+  EXPECT_EQ(raws(plugin, k_splo), (std::vector<std::uint32_t>{0x00000920u, 0x00000921u}));
+  EXPECT_EQ(raws(plugin, k_spct), (std::vector<std::uint32_t>{2u}));
+}
+
+TEST(NpcLinkRows, SpellCountThatDisagreesWithTheRunIsRefusedAtomically) {
+  auto plugin = fo4::read_plugin(make_plugin(false, 3), "Patch.esp");
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_EQ(raws(plugin, k_splo).size(), 2u);
+  EXPECT_EQ(raws(plugin, k_spct), (std::vector<std::uint32_t>{3u}));
+
+  EXPECT_THROW(fo4::insert_record_subrecord_group(plugin, npc_key(), spells_group(), 0),
+               fo4::schema::SubrecordGroupError);
+  EXPECT_THROW(fo4::remove_record_subrecord_group(plugin, npc_key(), spells_group(), 0),
+               fo4::schema::SubrecordGroupError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
 }
 
 TEST(NpcLinkRows, OddSizedPackagePayloadIsRefused) {
