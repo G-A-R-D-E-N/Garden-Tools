@@ -528,19 +528,19 @@ TEST(SubrecordGroup, ItemLinkAcceptsNull) {
   EXPECT_EQ(cnto_item(reparse(plugin), 1), 0u);
 }
 
-TEST(SubrecordGroup, InsertsAtTheEndWhenTheCountFollowsTheRuns) {
-  auto plugin = fo4::read_plugin(make_plugin({{"CNTO", cnto_bytes(0x900, 5)}, {"COCT", u32_bytes(1)}, {"DATA", zeros(4)}}),
+TEST(SubrecordGroup, InsertsAtTheEndOfTheRunsAfterTheCount) {
+  auto plugin = fo4::read_plugin(make_plugin({{"COCT", u32_bytes(1)}, {"CNTO", cnto_bytes(0x900, 5)}, {"DATA", zeros(4)}}),
                                  "Patch.esp");
   EXPECT_EQ(fo4::insert_record_subrecord_group(plugin, record_key(), items_group(), 1),
             fo4::SubrecordGroupMutationStatus::updated);
   const auto after = reparse(plugin);
-  EXPECT_EQ(signatures(after), (std::vector<std::string>{"CNTO", "CNTO", "COCT", "DATA"}));
+  EXPECT_EQ(signatures(after), (std::vector<std::string>{"COCT", "CNTO", "CNTO", "DATA"}));
   EXPECT_EQ(stored_count(after), 2u);
   EXPECT_EQ(cnto_item(after, 0), 0x900u);
   EXPECT_EQ(cnto_item(after, 1), 0u);
   EXPECT_EQ(read_member(after, "CONT\\ItemCount", 0), "5");
   EXPECT_EQ(read_member(after, "CONT\\ItemCount", 1), "1");
-  EXPECT_EQ(record_of(after).subrecords[1].data, cnto_bytes(0, 1));
+  EXPECT_EQ(record_of(after).subrecords[2].data, cnto_bytes(0, 1));
   EXPECT_EQ(record_of(after).subrecords[3].data, zeros(4));
 }
 

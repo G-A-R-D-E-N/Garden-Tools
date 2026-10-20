@@ -37,6 +37,13 @@ constexpr std::uint8_t kCallMethod = 23;
 constexpr std::uint8_t kCallStatic = 25;
 constexpr std::uint8_t kReturn = 26;
 constexpr std::uint8_t kPropGet = 28;
+constexpr std::uint8_t kPropSet = 29;
+constexpr std::uint8_t kArrayLength = 31;
+constexpr std::uint8_t kArrayGetElement = 32;
+constexpr std::uint8_t kArrayFindElement = 34;
+constexpr std::uint8_t kStructGet = 38;
+constexpr std::uint8_t kArrayFindStruct = 40;
+constexpr std::uint8_t kArrayRemove = 45;
 constexpr std::uint8_t kIAdd = 1;
 
 PexValue identifier(std::string name) {
@@ -133,7 +140,10 @@ TEST(PexAnalysis, CfgSplitsStraightLineAndIfDiamond) {
   EXPECT_EQ(cfg.blocks[3].successors, (std::vector<std::size_t>{}));
   EXPECT_TRUE(cfg.loops.empty());
   EXPECT_TRUE(cfg.unreachableBlocks.empty());
-  for (const auto& block : cfg.blocks) EXPECT_TRUE(block.reachable);
+  for (std::size_t b = 0; b < cfg.exitBlock; ++b) EXPECT_TRUE(cfg.blocks[b].reachable);
+  EXPECT_EQ(cfg.blocks[cfg.exitBlock].first, 6u);
+  EXPECT_EQ(cfg.blocks[cfg.exitBlock].count, 0u);
+  EXPECT_FALSE(cfg.blocks[cfg.exitBlock].reachable);
 }
 
 TEST(PexAnalysis, CfgFindsWhileLoopBackEdge) {
@@ -200,15 +210,34 @@ TEST(PexAnalysis, DisassemblesIfElseDiamondWithoutLabels) {
   EXPECT_EQ(result.text.find("3: jmp 2"), std::string::npos);
 }
 
-TEST(PexAnalysis, DisassemblesWhileLoopWithoutLabels) {
+TEST(PexAnalysis, DisassemblesComputedWhileConditionWithoutGotoFallback) {
   const auto result = fo4::pex_analysis::disassemble_function(whileFunction());
   ASSERT_EQ(result.status, PexAnalysisStatus::Ok);
   EXPECT_TRUE(result.structured);
-  EXPECT_NE(result.text.find("while (::temp2) {"), std::string::npos);
+  EXPECT_NE(result.text.find("while (true) {"), std::string::npos);
+  EXPECT_NE(result.text.find("if (!(::temp2)) break;"), std::string::npos);
   EXPECT_NE(result.text.find("3: callmethod Work self ::nonevar"), std::string::npos);
-  EXPECT_NE(result.text.find("6: return none"), std::string::npos);
-  EXPECT_EQ(result.text.find("5: jmp"), std::string::npos);
   EXPECT_EQ(result.text.find("L1:"), std::string::npos);
+  EXPECT_EQ(result.text.find("5: jmp -4"), std::string::npos);
+}
+
+TEST(PexAnalysis, DisassemblesWhileLoopWithVariableCondition) {
+  const auto result = fo4::pex_analysis::disassemble_function(function(
+      "Spin", {
+                  step(kAssign, {identifier("::temp2"), integer(1)}),
+                  step(kJmpF, {identifier("::temp2"), integer(4)}),
+                  step(kCallMethod, {identifier("Work"), identifier("self"),
+                                     identifier("::nonevar")}),
+                  step(kAssign, {identifier("::temp2"), integer(0)}),
+                  step(kJmp, {integer(-3)}),
+                  step(kReturn, {none()}),
+              }));
+  ASSERT_EQ(result.status, PexAnalysisStatus::Ok);
+  EXPECT_TRUE(result.structured);
+  EXPECT_NE(result.text.find("while (::temp2) {"), std::string::npos);
+  EXPECT_NE(result.text.find("2: callmethod Work self ::nonevar"), std::string::npos);
+  EXPECT_NE(result.text.find("5: return none"), std::string::npos);
+  EXPECT_EQ(result.text.find("4: jmp"), std::string::npos);
 }
 
 TEST(PexAnalysis, DisassemblyFallsBackToLabelsAndGotoStyle) {
@@ -266,11 +295,12 @@ TEST(PexAnalysis, CallGraphResolvesSelfStaticAndRecursiveCalls) {
                                         step(kReturn, {none()}),
                                     });
   auto ping = function("Ping", {step(kReturn, {none()})});
+  auto idle = function("Idle", {step(kReturn, {none()})});
   ping.isNative = true;
 
   PexFile alpha;
   alpha.sourceFileName = "AlphaScript.psc";
-  alpha.objects.push_back(object("AlphaScript", {state("", {caller, helper})}));
+  alpha.objects.push_back(object("AlphaScript", {state("", {caller, helper, idle})}));
   PexFile beta;
   beta.sourceFileName = "BetaScript.psc";
   beta.objects.push_back(object("BetaScript", {state("", {ping})}));
@@ -303,8 +333,8 @@ TEST(PexAnalysis, CallGraphResolvesSelfStaticAndRecursiveCalls) {
   EXPECT_EQ(recursive.caller.functionName, "Helper");
 
   ASSERT_EQ(graph.roots.size(), 1u);
-  EXPECT_EQ(graph.roots[0].functionName, "Ping");
-  EXPECT_EQ(graph.roots[0].fileIndex, 1u);
+  EXPECT_EQ(graph.roots[0].functionName, "Idle");
+  EXPECT_EQ(graph.roots[0].fileIndex, 0u);
 }
 
 TEST(PexAnalysis, CallGraphKeepsUnresolvedAndParentCalls) {
@@ -372,6 +402,69 @@ TEST(PexAnalysis, CallGraphReportsPropertyAndVariableAccesses) {
   EXPECT_EQ(accesses[1].kind, PexAccessKind::Read);
   EXPECT_EQ(accesses[2].name, "Count");
   EXPECT_EQ(accesses[2].kind, PexAccessKind::Read);
+}
+
+TEST(PexAnalysis, CallGraphMarksArrayAndPropertyResultOperandsAsWrites) {
+  PexObject host = object("ListScript", {state("", {function("OnInit", {
+      step(kArrayLength, {identifier("Count"), identifier("Items")}),
+      step(kArrayGetElement, {identifier("Found"), identifier("Items"), identifier("Count")}),
+      step(kArrayFindElement, {identifier("Items"), identifier("Slot"), identifier("Found"),
+                               integer(0)}),
+      step(kPropGet, {identifier("Total"), identifier("self"), identifier("Count")}),
+      step(kPropSet, {identifier("Total"), identifier("Items"), identifier("Count")}),
+      step(kArrayRemove, {identifier("Items"), identifier("Count"), identifier("Slot")}),
+      step(kStructGet, {identifier("Found"), identifier("Items"), text("Count")}),
+      step(kArrayFindStruct, {identifier("Items"), identifier("Slot"), text("Count"),
+                              identifier("Found"), integer(0)}),
+      step(kReturn, {none()}),
+  })})});
+  for (const char* name : {"Count", "Items", "Found", "Slot"}) {
+    PexVariable variable;
+    variable.name = name;
+    variable.type = "Int";
+    host.variables.push_back(variable);
+  }
+  PexProperty total;
+  total.name = "Total";
+  total.type = "Int";
+  host.properties.push_back(total);
+
+  PexFile file;
+  file.sourceFileName = "ListScript.psc";
+  file.objects.push_back(host);
+
+  const std::vector<const PexFile*> files{&file};
+  const auto graph = fo4::pex_analysis::build_call_graph(files);
+  ASSERT_EQ(graph.scripts.size(), 1u);
+  const auto& accesses = graph.scripts[0].accesses;
+  ASSERT_EQ(accesses.size(), 21u);
+  EXPECT_EQ(accesses[0].name, "Count");
+  EXPECT_EQ(accesses[0].kind, PexAccessKind::Write);
+  EXPECT_EQ(accesses[2].name, "Found");
+  EXPECT_EQ(accesses[2].kind, PexAccessKind::Write);
+  EXPECT_EQ(accesses[6].name, "Slot");
+  EXPECT_EQ(accesses[6].kind, PexAccessKind::Write);
+  EXPECT_EQ(accesses[9].name, "Count");
+  EXPECT_EQ(accesses[9].kind, PexAccessKind::Write);
+  EXPECT_EQ(accesses[9].instructionIndex, 3u);
+  EXPECT_EQ(accesses[11].name, "Items");
+  EXPECT_EQ(accesses[11].kind, PexAccessKind::Read);
+  EXPECT_EQ(accesses[11].instructionIndex, 4u);
+  EXPECT_EQ(accesses[12].name, "Count");
+  EXPECT_EQ(accesses[12].kind, PexAccessKind::Read);
+  EXPECT_EQ(accesses[15].name, "Slot");
+  EXPECT_EQ(accesses[15].kind, PexAccessKind::Read);
+  EXPECT_EQ(accesses[15].instructionIndex, 5u);
+  EXPECT_EQ(accesses[16].name, "Found");
+  EXPECT_EQ(accesses[16].kind, PexAccessKind::Write);
+  EXPECT_EQ(accesses[16].instructionIndex, 6u);
+  EXPECT_EQ(accesses[17].name, "Items");
+  EXPECT_EQ(accesses[17].kind, PexAccessKind::Read);
+  EXPECT_EQ(accesses[19].name, "Slot");
+  EXPECT_EQ(accesses[19].kind, PexAccessKind::Write);
+  EXPECT_EQ(accesses[19].instructionIndex, 7u);
+  EXPECT_EQ(accesses[20].name, "Found");
+  EXPECT_EQ(accesses[20].kind, PexAccessKind::Read);
 }
 
 TEST(PexAnalysis, SummaryReportsEventsTransitionsAndProperties) {

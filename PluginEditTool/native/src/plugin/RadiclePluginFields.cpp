@@ -180,6 +180,11 @@ Result<std::vector<SemanticFieldCell>> semanticFieldCells(const fo4::Plugin& plu
                 cells.push_back(SemanticFieldCell{std::string(descriptor.path) + "[" + std::to_string(index) + "]",
                     (*values)[index].to_string(), true, true});
             }
+        } catch (const fo4::schema::FormLinkListError& error) {
+            if (descriptor.segment_count == 0) {
+                return std::unexpected(Error{"FormLinkReadFailed", error.what()});
+            }
+            cells.push_back(SemanticFieldCell{std::string(descriptor.path), "<opaque>", false, true});
         } catch (const std::exception& error) {
             return std::unexpected(Error{"FormLinkReadFailed", error.what()});
         }

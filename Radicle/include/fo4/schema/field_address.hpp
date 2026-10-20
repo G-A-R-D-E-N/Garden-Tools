@@ -63,6 +63,9 @@ struct FieldSlots {
 
 std::size_t discriminator_width(DiscriminatorStorage storage) noexcept;
 
+// Constraint: requires the named subrecord exactly once; absent matches only when the discriminator declares it.
+bool record_discriminator_matches(const Record& record, const FieldDiscriminator& when);
+
 FieldSlots resolve_field_slots(const Record& record,
                                const FieldShape& shape,
                                const FieldAddress& address);

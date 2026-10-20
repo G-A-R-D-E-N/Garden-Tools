@@ -490,7 +490,7 @@ TEST(MaterialImpactSynthetic, LensSpriteInsertAndRemoveKeepTheSpriteTotal) {
   ASSERT_NE(inserted, nullptr);
   EXPECT_EQ(subrecord_at(*inserted, "LFSP", 0), u32_bytes(3));
   EXPECT_EQ(subrecord_at(*inserted, "DNAM", 2), zstr(""));
-  EXPECT_EQ(subrecord_at(*inserted, "FNAM", 2), zstr(""));
+  EXPECT_EQ(subrecord_at(*inserted, "FNAM", 1), zstr(""));
   EXPECT_EQ(subrecord_at(*inserted, "LFSD", 1), Bytes(36));
   EXPECT_EQ(subrecord_at(*inserted, "LFSD", 2), lfsd_bytes(0.5f, 0));
 }
