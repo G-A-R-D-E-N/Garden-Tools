@@ -596,7 +596,7 @@ TEST(CApiQuest, DisengagedStructWithArrayMemberStaysInSync) {
   radicle_plugin_destroy(plugin);
 }
 
-TEST(CApiQuest, AbiVersionIsFortyFive) {
-  EXPECT_EQ(radicle_abi_version(), 47u);
-  EXPECT_EQ(RADICLE_ABI_VERSION, 47u);
+TEST(CApiQuest, AbiVersionIsFortyEight) {
+  EXPECT_EQ(radicle_abi_version(), 48u);
+  EXPECT_EQ(RADICLE_ABI_VERSION, 48u);
 }

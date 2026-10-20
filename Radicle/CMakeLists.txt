@@ -244,6 +244,7 @@ add_library(fo4
   src/pex_analysis/summary.cpp
   src/pex_analysis/fragments.cpp
   src/abc/abc_file.cpp
+  src/abc/byte_reader.cpp
   src/abc/constant_pool.cpp
   src/abc/opcodes.cpp
   src/abc/disassembly.cpp
@@ -296,7 +297,9 @@ target_sources(radicle_c PRIVATE src/c_api_records.cpp src/c_api_authoring.cpp s
 target_sources(radicle_c PRIVATE src/c_api_dialogue.cpp)
 target_sources(radicle_c PRIVATE src/c_api_armor.cpp src/c_api_eyes.cpp src/c_api_faction.cpp src/c_api_components.cpp src/c_api_cell.cpp)
 target_sources(radicle_c PRIVATE src/c_api_patch.cpp)
+target_sources(radicle_c PRIVATE src/c_api_conflict.cpp)
 target_sources(fo4 PRIVATE src/patch/delta_patch.cpp)
+target_sources(fo4 PRIVATE src/patch/list_merge.cpp)
 target_sources(fo4 PRIVATE src/papyrus_source/lexer.cpp src/papyrus_source/parser.cpp src/papyrus_source/parser_decl.cpp src/papyrus_source/parser_expr.cpp src/papyrus_source/parser_stmt.cpp src/papyrus_source/summary.cpp)
 
 if(RADICLE_INSTALL)
@@ -367,7 +370,9 @@ if(RADICLE_BUILD_TESTS)
   FetchContent_MakeAvailable(googletest)
 
   add_executable(fo4_tests
+    tests/test_achr_extra_rows.cpp
     tests/test_achr_rows.cpp
+    tests/test_achr_parity_rows.cpp
     tests/test_parw_rows.cpp
     tests/test_signature.cpp
     tests/test_formid.cpp
@@ -428,6 +433,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_armo_arma_rows.cpp
     tests/test_destructible_rows.cpp
     tests/test_destructible_stage_members.cpp
+    tests/test_destructible_header.cpp
     tests/test_packed_formlink_arrays.cpp
     tests/test_formlink_ordinals.cpp
     tests/test_rekey_formlinks.cpp
@@ -453,7 +459,9 @@ if(RADICLE_BUILD_TESTS)
     tests/test_placed_variants_real.cpp
     tests/test_placed_reference_create.cpp
     tests/test_placed_reference_move.cpp
+    tests/test_placed_reference_move_exterior.cpp
     tests/test_record_flags.cpp
+    tests/test_record_flags_deleted.cpp
     tests/test_extension_light_kinds.cpp
     tests/test_static_collection.cpp
     tests/test_quest_aliases.cpp
@@ -472,6 +480,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_c_api_authoring.cpp
     tests/test_c_api_fields.cpp
     tests/test_delta_patch.cpp
+    tests/test_list_merge.cpp
     tests/test_climate_weather_authoring.cpp
     tests/test_climate_weather_c_api.cpp
     tests/test_climate_weather_real.cpp
@@ -528,6 +537,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_magic_location_records_real.cpp
     tests/test_object_base_records.cpp
     tests/test_object_base_records_real.cpp
+    tests/test_object_base_model_info.cpp
     tests/test_weather_concept.cpp
     tests/test_weather_formlinks.cpp
     tests/test_lvsp.cpp
@@ -656,13 +666,18 @@ if(RADICLE_BUILD_TESTS)
     tests/test_pex_oracle.cpp
     tests/test_papyrus_vm.cpp
     tests/test_pex_analysis.cpp
+    tests/test_pex_disasm.cpp
     tests/test_papyrus_source.cpp
     tests/test_papyrus_source_real.cpp
     tests/test_abc.cpp
+    tests/test_abc_pool.cpp
+    tests/test_abc_summary.cpp
     tests/test_material_file.cpp
     tests/test_material_file_real.cpp
     tests/test_swf.cpp
+    tests/test_swf_tags.cpp
     tests/test_swf_real.cpp
+    tests/test_abc_real.cpp
     tests/test_c_api_material_file.cpp
     tests/test_seq.cpp
     tests/test_seq_corpus.cpp
@@ -673,7 +688,9 @@ if(RADICLE_BUILD_TESTS)
     tests/test_load_order_real.cpp
     tests/test_c_api_loadorder.cpp
     tests/test_c_api_referenced_by.cpp
+    tests/test_c_api_conflict.cpp
     tests/test_regn_rows.cpp
+    tests/test_regn_region_decode.cpp
     tests/test_c_api_forms_modules.cpp
     tests/test_weap_rows.cpp
     tests/test_npc_link_rows.cpp
@@ -706,9 +723,13 @@ if(RADICLE_BUILD_TESTS)
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
   add_test(NAME radicle_field_address_codegen
            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_field_address_codegen.py)
+  add_test(NAME radicle_counted_array_segments
+           COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_counted_array_segments.py)
   add_test(NAME radicle_field_address_version_windows
            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_field_address_version_windows.py)
   add_test(NAME radicle_parity_matrix_unit COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_parity_matrix.py)
+  add_test(NAME radicle_condition_function_codegen
+           COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_condition_function_codegen.py)
   if(RADICLE_BUILD_TOOLS)
     add_test(NAME radicle_papyrus_dump
              COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/parity/tests/test_papyrus_dump.py

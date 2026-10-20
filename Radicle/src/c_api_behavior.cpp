@@ -194,7 +194,8 @@ namespace {
 
 std::optional<fo4::env::PackageInputValue> to_input_value(const radicle_package_input_value& value) {
   using Kind = fo4::env::PackageInputValueKind;
-  if (value.kind < RADICLE_PACKAGE_INPUT_NONE || value.kind > RADICLE_PACKAGE_INPUT_TOPIC) return std::nullopt;
+  const auto kind = static_cast<int>(value.kind);
+  if (kind < RADICLE_PACKAGE_INPUT_NONE || kind > RADICLE_PACKAGE_INPUT_TOPIC) return std::nullopt;
   fo4::env::PackageInputValue out;
   out.kind = static_cast<Kind>(value.kind);
   out.boolean = value.boolean != 0;
@@ -231,6 +232,8 @@ radicle_status package_input_failure(fo4::env::PackageInputMutationStatus status
       return fail(RADICLE_STATUS_INVALID_ARGUMENT, "payload size is not a stored layout size for this type");
     case Status::payload_layout_undetermined:
       return fail(RADICLE_STATUS_INVALID_ARGUMENT, "payload layout is not writable for this type");
+    case Status::payload_tag_mismatch:
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "payload subrecord does not match the stored value subrecord");
     case Status::procedure_tree_present:
       return fail(RADICLE_STATUS_INVALID_ARGUMENT, "package has an unlinked procedure tree, so removal is refused");
     case Status::no_free_input_id:

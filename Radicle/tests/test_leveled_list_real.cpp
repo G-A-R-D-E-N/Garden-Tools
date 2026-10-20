@@ -1,4 +1,6 @@
+#include "fo4/environment/environment.hpp"
 #include "fo4/forms/leveled_list.hpp"
+#include "fo4/patch/list_merge.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "real_data_build.hpp"
@@ -55,5 +57,29 @@ TEST_P(LeveledListReal, EveryLeveledItemAndNpcDecodesWithoutFailure) {
 INSTANTIATE_TEST_SUITE_P(OfficialMasters, LeveledListReal, testing::Values(
     "Fallout4.esm", "DLCRobot.esm", "DLCworkshop01.esm", "DLCCoast.esm",
     "DLCworkshop02.esm", "DLCworkshop03.esm", "DLCNukaWorld.esm"));
+
+TEST(LeveledListMergeReal, Lvli210B67MergesToTheThreeRowsOfItsNukaWorldWinner) {
+  const auto* directory = std::getenv("FO4_DATA_DIR");
+  if (!directory) {
+    GTEST_SKIP() << "set FO4_DATA_DIR to run official-master coverage";
+  }
+  record_game_build(detect_game_build(directory));
+  const auto data = std::filesystem::path(directory);
+  const std::filesystem::path paths[] = {data / "Fallout4.esm", data / "DLCNukaWorld.esm"};
+  const auto env = fo4::env::Environment::load(paths);
+  const auto key = fo4::FormKey::parse("210B67:Fallout4.esm");
+
+  const auto winner = env.find_plugin("DLCNukaWorld.esm");
+  ASSERT_TRUE(winner.has_value());
+  EXPECT_EQ(fo4::forms::decode_leveled_list(env.plugin(*winner), key).entries.size(), 3u);
+
+  const auto result =
+      fo4::patch::build_list_merge_patch(env, fo4::Signature::from_string("LVLI"), "Merged.esp");
+  std::size_t written = 0;
+  fo4::visit_records(result.patch, [&](const fo4::Record& record) {
+    if (record.form_key == key) ++written;
+  });
+  EXPECT_EQ(written, 0u) << "the merged rows differ from the winner's three rows";
+}
 
 }  // namespace

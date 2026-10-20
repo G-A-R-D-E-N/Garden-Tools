@@ -35,6 +35,46 @@ std::vector<std::size_t> before_marker(const std::vector<Subrecord>& subs, Signa
   return out;
 }
 
+std::vector<std::size_t> after_marker(const std::vector<Subrecord>& subs, Signature marker,
+                                      Signature subrecord) {
+  std::size_t start = subs.size();
+  for (std::size_t i = 0; i < subs.size(); ++i) {
+    if (subs[i].signature == marker) {
+      start = i + 1;
+      break;
+    }
+  }
+  std::vector<std::size_t> out;
+  for (std::size_t i = start; i < subs.size(); ++i) {
+    if (subs[i].signature == subrecord) out.push_back(i);
+  }
+  return out;
+}
+
+std::vector<std::size_t> outside_objective_array(const std::vector<Subrecord>& subs, Signature subrecord) {
+  std::size_t begin = subs.size();
+  std::size_t end = subs.size();
+  for (std::size_t i = 0; i < subs.size(); ++i) {
+    if (subs[i].signature == sig("ANAM")) {
+      end = i;
+      break;
+    }
+    if (subs[i].signature == sig("QOBJ") && begin == subs.size()) begin = i;
+  }
+  std::vector<std::size_t> out;
+  for (std::size_t i = 0; i < subs.size(); ++i) {
+    if (subs[i].signature == subrecord && (i < begin || i >= end)) out.push_back(i);
+  }
+  return out;
+}
+
+std::vector<std::size_t> first_occurrence(const std::vector<Subrecord>& subs, Signature subrecord) {
+  for (std::size_t i = 0; i < subs.size(); ++i) {
+    if (subs[i].signature == subrecord) return {i};
+  }
+  return {};
+}
+
 std::vector<std::vector<std::size_t>> entry_payload_scopes(const Record& record, Signature subrecord) {
   std::vector<std::vector<std::size_t>> scopes;
   std::vector<std::size_t> current;
@@ -58,12 +98,21 @@ std::vector<std::vector<std::size_t>> entry_payload_scopes(const Record& record,
   return scopes;
 }
 
-std::optional<std::vector<std::size_t>> flat_field_candidates(const Record& record, Signature subrecord) {
+std::optional<std::vector<std::size_t>> flat_field_candidates(const Record& record, Signature subrecord,
+                                                             bool repeated) {
   if (record.header.signature == sig("LENS") && subrecord == sig("DNAM")) {
+    // Constraint: DNAM is the sprite group's required non-repeatable leader, so every DNAM after LFSP heads one run.
+    if (repeated) return after_marker(record.subrecords, sig("LFSP"), subrecord);
     return before_marker(record.subrecords, sig("LFSP"), subrecord);
   }
   if (record.header.signature == sig("SCCO") && subrecord == sig("XNAM")) {
     return before_marker(record.subrecords, sig("VNAM"), subrecord);
+  }
+  if (record.header.signature == sig("QUST") && subrecord == sig("NNAM")) {
+    return outside_objective_array(record.subrecords, subrecord);
+  }
+  if (record.header.signature == sig("RACE") && subrecord == sig("MPGS")) {
+    return first_occurrence(record.subrecords, subrecord);
   }
   if (record.header.signature == sig("PERK") && subrecord == sig("DATA")) {
     for (std::size_t i = 0; i < record.subrecords.size(); ++i) {
@@ -118,19 +167,20 @@ std::optional<std::vector<std::size_t>> flat_field_candidates(const Record& reco
 }
 
 std::optional<std::vector<std::vector<std::size_t>>> behavior_field_candidate_scopes(
-    const Record& record, Signature subrecord) {
+    const Record& record, Signature subrecord, bool repeated) {
   if (record.header.signature == sig("REGN") &&
       listed(subrecord.view(), {"RDOT", "RDGS", "RDWT", "RDSA"})) {
     return entry_payload_scopes(record, subrecord);
   }
-  if (auto flat = flat_field_candidates(record, subrecord)) {
+  if (auto flat = flat_field_candidates(record, subrecord, repeated)) {
     return std::vector<std::vector<std::size_t>>{std::move(*flat)};
   }
   return std::nullopt;
 }
 
-std::optional<std::vector<std::size_t>> behavior_field_candidates(const Record& record, Signature subrecord) {
-  const auto scopes = behavior_field_candidate_scopes(record, subrecord);
+std::optional<std::vector<std::size_t>> behavior_field_candidates(const Record& record, Signature subrecord,
+                                                                 bool repeated) {
+  const auto scopes = behavior_field_candidate_scopes(record, subrecord, repeated);
   if (!scopes) return std::nullopt;
   std::vector<std::size_t> flat;
   for (const auto& scope : *scopes) flat.insert(flat.end(), scope.begin(), scope.end());
@@ -194,7 +244,7 @@ std::optional<std::vector<std::size_t>> behavior_formid_offsets(const Record& re
   }
   if (tag == "PKCU") return checked({4}, sub.data.size() == 12);
   if (tag == "CNAM" || tag == "QNAM" || tag == "INAM") {
-    const auto candidates = *behavior_field_candidates(record, sub.signature);
+    const auto candidates = *behavior_field_candidates(record, sub.signature, false);
     const auto index = static_cast<std::size_t>(&sub - record.subrecords.data());
     const bool owned = std::find(candidates.begin(), candidates.end(), index) != candidates.end();
     if (!owned) {

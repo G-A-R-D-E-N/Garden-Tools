@@ -1,6 +1,7 @@
 #include "c_api_env_internal.hpp"
 #include "fo4/forms/copy_as_new.hpp"
 #include "fo4/forms/placed_reference.hpp"
+#include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/writer.hpp"
 
 #include <memory>
@@ -151,6 +152,42 @@ radicle_status radicle_plugin_copy_record_as_new(radicle_plugin* destination,
     } catch (const fo4::forms::InfoCopyError& error) {
       return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
     }
+  });
+}
+
+radicle_status radicle_plugin_copy_record_override(radicle_plugin* destination,
+                                                   const radicle_plugin* source,
+                                                   radicle_form_key record,
+                                                   int32_t overwrite,
+                                                   radicle_record_copy_status* out_status) {
+  clear_error();
+  const auto key = to_form_key(record);
+  if (destination == nullptr || source == nullptr || !key || out_status == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                "destination, source, a valid record and out_status are required");
+  }
+  *out_status = RADICLE_RECORD_COPY_INSERTED;
+  return guarded("unknown exception while copying record as an override", [&] {
+    auto next = destination->value;
+    const auto status = fo4::copy_record_as_override(next, source->value, *key, overwrite != 0);
+    switch (status) {
+      case fo4::RecordCopyStatus::inserted:
+        *out_status = RADICLE_RECORD_COPY_INSERTED;
+        break;
+      case fo4::RecordCopyStatus::replaced:
+        *out_status = RADICLE_RECORD_COPY_REPLACED;
+        break;
+      case fo4::RecordCopyStatus::already_exists:
+        *out_status = RADICLE_RECORD_COPY_ALREADY_EXISTS;
+        break;
+      case fo4::RecordCopyStatus::source_missing:
+        return fail(RADICLE_STATUS_NOT_FOUND, "source record is not in its plugin");
+      case fo4::RecordCopyStatus::source_containment_unsupported:
+        return fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                    "source record's containment cannot be reproduced");
+    }
+    destination->value = std::move(next);
+    return RADICLE_STATUS_OK;
   });
 }
 

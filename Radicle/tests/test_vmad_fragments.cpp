@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -28,6 +29,14 @@ struct IndexedEntry {
   std::uint8_t unknown{0x2A};
 };
 
+struct PhaseEntry {
+  std::uint8_t flag{1};
+  std::uint32_t index{0};
+  std::uint8_t unknown{0xFF};
+  std::string function;
+  std::string script{"PF_Test"};
+};
+
 void append_fragment_script(ByteWriter& out, std::string_view name, std::uint32_t properties) {
   fixture::name(out, name);
   out.u8(0);
@@ -38,6 +47,28 @@ void append_fragment_script(ByteWriter& out, std::string_view name, std::uint32_
     out.u8(1);
     out.u32(i + 5);
   }
+}
+
+std::vector<std::byte> scene_tail(std::uint8_t flags, const std::vector<Entry>& entries,
+                                  const std::vector<PhaseEntry>& phases) {
+  ByteWriter tail;
+  tail.u8(3);
+  tail.u8(flags);
+  append_fragment_script(tail, "PF_Test", 1);
+  for (const auto& entry : entries) {
+    tail.u8(entry.unknown);
+    fixture::name(tail, entry.script);
+    fixture::name(tail, entry.function);
+  }
+  tail.u16(static_cast<std::uint16_t>(phases.size()));
+  for (const auto& phase : phases) {
+    tail.u8(phase.flag);
+    tail.u32(phase.index);
+    tail.u8(phase.unknown);
+    fixture::name(tail, phase.script);
+    fixture::name(tail, phase.function);
+  }
+  return tail.bytes;
 }
 
 std::vector<std::byte> flagged_tail(std::uint8_t flags, const std::vector<Entry>& entries,
@@ -84,6 +115,14 @@ std::vector<std::byte> vmad_bytes(const std::vector<std::byte>& tail) {
 
 std::vector<std::byte> saved_vmad(Plugin& plugin) {
   return fixture::subrecord(read_plugin(write_plugin(plugin), "Vmad.esp")).data;
+}
+
+SceneVmadExtras read_scene_extras(const Plugin& plugin) {
+  const auto data = fixture::subrecord(plugin).data;
+  const auto scripts = read_vmad_scripts(data);
+  return read_scene_vmad_extras(
+      std::span<const std::byte>(data).subspan(data.size() - scripts.trailing_bytes),
+      scripts.object_format);
 }
 
 }  // namespace
@@ -202,6 +241,155 @@ TEST(VmadFragments, ScenePhaseFragmentsSurviveMainFragmentEdits) {
   EXPECT_EQ(vmad_coverage(appended, sig_scen).fragment_count, 3u);
   EXPECT_EQ(appended,
             vmad_bytes(flagged_tail(0x03, {{7, "Fragment_0"}, {0, "Fragment_1"}}, true)));
+}
+
+TEST(VmadFragments, ScenePhaseFragmentsDecodeAndRoundTripByPhaseIndexAndFlag) {
+  const std::vector<Entry> entries{{7, "Fragment_0"}, {8, "Fragment_1"}};
+  const std::vector<PhaseEntry> phases{{1, 2, 0, "Phase_2"}, {2, 5, 0xFF, "Phase_5"}};
+  auto plugin = read_plugin(
+      fixture::plugin_bytes(vmad_bytes(scene_tail(0x03, entries, phases)), "SCEN"), "Vmad.esp");
+  const auto before = fixture::subrecord(plugin).data;
+  ASSERT_TRUE(vmad_coverage(before, sig_scen).complete());
+  ASSERT_EQ(vmad_coverage(before, sig_scen).fragment_count, 4u);
+
+  const auto decoded = read_scene_extras(plugin);
+  EXPECT_TRUE(decoded.fully_consumed);
+  EXPECT_FALSE(decoded.unsupported);
+  EXPECT_TRUE(decoded.unsupported_reason.empty());
+  EXPECT_EQ(decoded.flags, 0x03);
+  ASSERT_EQ(decoded.phases.size(), 2u);
+  EXPECT_EQ(decoded.phases[0].flag, 1);
+  EXPECT_EQ(decoded.phases[0].index, 2u);
+  EXPECT_EQ(decoded.phases[0].unknown, 0);
+  EXPECT_EQ(decoded.phases[0].script, "PF_Test");
+  EXPECT_EQ(decoded.phases[0].function, "Phase_2");
+  EXPECT_EQ(decoded.phases[0].end - decoded.phases[0].offset, 24u);
+  EXPECT_EQ(decoded.phases[1].flag, 2);
+  EXPECT_EQ(decoded.phases[1].index, 5u);
+  EXPECT_EQ(decoded.phases[1].unknown, 0xFF);
+  EXPECT_EQ(decoded.phases[1].function, "Phase_5");
+
+  EXPECT_EQ(set_scene_vmad_phase_fragment(plugin, fixture::key(), 5, 1, "PF_Other", "Phase_X"),
+            VmadStructureMutationStatus::binding_missing);
+  EXPECT_EQ(set_scene_vmad_phase_fragment(plugin, fixture::key(), 9, 2, "PF_Other", "Phase_X"),
+            VmadStructureMutationStatus::binding_missing);
+  EXPECT_EQ(fixture::subrecord(plugin).data, before);
+
+  ASSERT_EQ(set_scene_vmad_phase_fragment(plugin, fixture::key(), 5, 2, "PF_Other", "Phase_5b"),
+            VmadStructureMutationStatus::updated);
+  const auto renamed = saved_vmad(plugin);
+  EXPECT_TRUE(vmad_coverage(renamed, sig_scen).complete());
+  EXPECT_EQ(renamed,
+            vmad_bytes(scene_tail(0x03, entries, {{1, 2, 0, "Phase_2"},
+                                                 {2, 5, 0xFF, "Phase_5b", "PF_Other"}})));
+  EXPECT_EQ(set_scene_vmad_phase_fragment(plugin, fixture::key(), 5, 2, "PF_Other", "Phase_5b"),
+            VmadStructureMutationStatus::unchanged);
+  EXPECT_EQ(fixture::subrecord(plugin).data, renamed);
+
+  ASSERT_EQ(set_scene_vmad_phase_fragment(plugin, fixture::key(), 5, 2, "PF_Test", "Phase_5"),
+            VmadStructureMutationStatus::updated);
+  EXPECT_EQ(saved_vmad(plugin), before);
+
+  ASSERT_EQ(remove_scene_vmad_phase_fragment(plugin, fixture::key(), 2, 1),
+            VmadStructureMutationStatus::updated);
+  const auto trimmed = saved_vmad(plugin);
+  EXPECT_TRUE(vmad_coverage(trimmed, sig_scen).complete());
+  EXPECT_EQ(vmad_coverage(trimmed, sig_scen).fragment_count, 3u);
+  EXPECT_EQ(trimmed, vmad_bytes(scene_tail(0x03, entries, {{2, 5, 0xFF, "Phase_5"}})));
+  EXPECT_EQ(remove_scene_vmad_phase_fragment(plugin, fixture::key(), 2, 1),
+            VmadStructureMutationStatus::binding_missing);
+
+  ASSERT_EQ(add_scene_vmad_phase_fragment(plugin, fixture::key(), 2, 1, "PF_Test", "Phase_2"),
+            VmadStructureMutationStatus::updated);
+  EXPECT_EQ(saved_vmad(plugin), before);
+}
+
+TEST(VmadFragments, SceneUnsupportedFragmentPropertyReportsInsteadOfThrowing) {
+  ByteWriter tail;
+  tail.u8(3);
+  tail.u8(0x00);
+  fixture::name(tail, "PF_Test");
+  tail.u8(0);
+  tail.u16(1);
+  fixture::name(tail, "Unsupported");
+  tail.u8(6);
+  tail.u8(0);
+  auto plugin = read_plugin(fixture::plugin_bytes(vmad_bytes(tail.bytes), "SCEN"), "Vmad.esp");
+  const auto extras = read_scene_extras(plugin);
+  EXPECT_TRUE(extras.unsupported);
+  EXPECT_FALSE(extras.unsupported_reason.empty());
+  EXPECT_FALSE(extras.fully_consumed);
+}
+
+TEST(VmadFragments, CreatedScenePhaseFragmentLandsInPhaseOrderAndRefusalsHold) {
+  const std::vector<PhaseEntry> phases{{1, 2, 0xFF, "Phase_2"}, {2, 5, 0xFF, "Phase_5"}};
+  auto plugin = read_plugin(
+      fixture::plugin_bytes(vmad_bytes(scene_tail(0x00, {}, phases)), "SCEN"), "Vmad.esp");
+  ASSERT_TRUE(vmad_coverage(fixture::subrecord(plugin).data, sig_scen).complete());
+
+  ASSERT_EQ(add_scene_vmad_phase_fragment(plugin, fixture::key(), 3, 2, "PF_Test", "Phase_3"),
+            VmadStructureMutationStatus::updated);
+  const auto inserted = saved_vmad(plugin);
+  EXPECT_TRUE(vmad_coverage(inserted, sig_scen).complete());
+  EXPECT_EQ(vmad_coverage(inserted, sig_scen).fragment_count, 3u);
+  EXPECT_EQ(inserted, vmad_bytes(scene_tail(0x00, {},
+                                            {{1, 2, 0xFF, "Phase_2"},
+                                             {2, 3, 0, "Phase_3", "PF_Test"},
+                                             {2, 5, 0xFF, "Phase_5"}})));
+
+  EXPECT_EQ(add_scene_vmad_phase_fragment(plugin, fixture::key(), 5, 2, "PF_New", "Phase_5b"),
+            VmadStructureMutationStatus::already_present);
+  EXPECT_EQ(add_scene_vmad_phase_fragment(plugin, fixture::key(), 4, 0, "PF_New", "Phase_4"),
+            VmadStructureMutationStatus::index_out_of_range);
+  EXPECT_EQ(add_scene_vmad_phase_fragment(plugin, fixture::key(), 4, 4, "PF_New", "Phase_4"),
+            VmadStructureMutationStatus::index_out_of_range);
+  EXPECT_EQ(add_scene_vmad_phase_fragment(plugin, fixture::key(), 4, 0x80, "PF_New", "Phase_4"),
+            VmadStructureMutationStatus::index_out_of_range);
+  EXPECT_THROW(add_scene_vmad_phase_fragment(plugin, fixture::key(), 4, 1, "", "Phase_4"),
+               schema::ScalarError);
+  EXPECT_THROW(add_scene_vmad_phase_fragment(plugin, fixture::key(), 4, 1, "PF_New", ""),
+               schema::ScalarError);
+  EXPECT_THROW(set_scene_vmad_phase_fragment(plugin, fixture::key(), 5, 2, "", "Phase_5"),
+               schema::ScalarError);
+  EXPECT_EQ(fixture::subrecord(plugin).data, inserted);
+
+  ASSERT_EQ(remove_scene_vmad_phase_fragment(plugin, fixture::key(), 3, 2),
+            VmadStructureMutationStatus::updated);
+  EXPECT_EQ(saved_vmad(plugin), vmad_bytes(scene_tail(0x00, {}, phases)));
+
+  auto packed = read_plugin(
+      fixture::plugin_bytes(vmad_bytes(flagged_tail(0x03, {{7, "F0"}, {8, "F1"}})), "PACK"),
+      "Vmad.esp");
+  const auto packed_before = write_plugin(packed);
+  EXPECT_EQ(add_scene_vmad_phase_fragment(packed, fixture::key(), 0, 1, "PF_New", "Phase_0"),
+            VmadStructureMutationStatus::not_authorable);
+  EXPECT_EQ(set_scene_vmad_phase_fragment(packed, fixture::key(), 0, 1, "PF_New", "Phase_0"),
+            VmadStructureMutationStatus::not_authorable);
+  EXPECT_EQ(remove_scene_vmad_phase_fragment(packed, fixture::key(), 0, 1),
+            VmadStructureMutationStatus::not_authorable);
+  EXPECT_EQ(write_plugin(packed), packed_before);
+
+  auto bare = read_plugin(fixture::plugin_bytes(fixture::payload(), "SCEN"), "Vmad.esp");
+  const auto bare_before = write_plugin(bare);
+  EXPECT_EQ(add_scene_vmad_phase_fragment(bare, fixture::key(), 0, 1, "PF_New", "Phase_0"),
+            VmadStructureMutationStatus::binding_missing);
+  EXPECT_EQ(set_scene_vmad_phase_fragment(bare, fixture::key(), 0, 1, "PF_New", "Phase_0"),
+            VmadStructureMutationStatus::binding_missing);
+  EXPECT_EQ(remove_scene_vmad_phase_fragment(bare, fixture::key(), 0, 1),
+            VmadStructureMutationStatus::binding_missing);
+  EXPECT_EQ(write_plugin(bare), bare_before);
+
+  auto countless = read_plugin(
+      fixture::plugin_bytes(vmad_bytes(flagged_tail(0x01, {{7, "F0"}})), "SCEN"), "Vmad.esp");
+  ASSERT_TRUE(vmad_coverage(fixture::subrecord(countless).data, sig_scen).complete());
+  const auto countless_before = write_plugin(countless);
+  EXPECT_THROW(add_scene_vmad_phase_fragment(countless, fixture::key(), 0, 1, "PF_New", "Phase_0"),
+               schema::ScalarError);
+  EXPECT_THROW(set_scene_vmad_phase_fragment(countless, fixture::key(), 0, 1, "PF_New", "Phase_0"),
+               schema::ScalarError);
+  EXPECT_THROW(remove_scene_vmad_phase_fragment(countless, fixture::key(), 0, 1),
+               schema::ScalarError);
+  EXPECT_EQ(write_plugin(countless), countless_before);
 }
 
 TEST(VmadFragments, CreatedBindingLandsInKeyOrderAndRemovalRestoresThePayload) {

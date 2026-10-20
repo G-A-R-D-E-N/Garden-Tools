@@ -19,6 +19,7 @@
 namespace {
 
 constexpr const char* kOlder = "Older.esp";
+constexpr const char* kMiddle = "Middle.esp";
 constexpr const char* kNewer = "Newer.esp";
 
 using EnvPtr = std::unique_ptr<radicle_env, decltype(&radicle_env_destroy)>;
@@ -61,6 +62,39 @@ std::vector<std::byte> fixture(std::uint32_t differing_data, bool extra_record) 
   return misc_plugin({}, records);
 }
 
+struct ListEntry {
+  std::uint16_t level;
+  std::uint32_t item;
+  std::uint16_t count;
+};
+
+std::vector<std::byte> leveled_plugin(const std::vector<std::string>& masters,
+                                      const std::vector<ListEntry>& entries) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::make_tes4_plugin(0, 1.0f, masters);
+  out.raw(std::span<const std::byte>{tes4});
+  const auto group = fo4::test::begin_group(out, "LVLI", 0);
+  const auto record = fo4::test::begin_record(out, "LVLI", 0, 0x00000800);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"List\0", 5});
+  fo4::test::write_subrecord(out, "LVLD", std::string_view{"\0", 1});
+  for (const auto& entry : entries) {
+    fo4::test::ByteWriter body;
+    body.u16(entry.level);
+    body.u16(0);
+    body.u32(entry.item);
+    body.u16(entry.count);
+    body.u8(0);
+    body.u8(0);
+    fo4::test::write_subrecord(out, "LVLO", body.bytes);
+  }
+  fo4::test::ByteWriter count;
+  count.u8(static_cast<std::uint8_t>(entries.size()));
+  fo4::test::write_subrecord(out, "LLCT", count.bytes);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return out.bytes;
+}
+
 class DeltaPatchCApi : public ::testing::Test {
 protected:
   void SetUp() override {
@@ -69,6 +103,7 @@ protected:
              std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     std::filesystem::create_directories(root_);
     older_ = root_ / kOlder;
+    middle_ = root_ / kMiddle;
     newer_ = root_ / kNewer;
     output_ = root_ / "Patch.esp";
     write_bytes(older_, fixture(2, false));
@@ -89,6 +124,16 @@ protected:
     return EnvPtr(env, radicle_env_destroy);
   }
 
+  EnvPtr open_env_with_middle() {
+    const auto older_text = older_.string();
+    const auto middle_text = middle_.string();
+    const auto newer_text = newer_.string();
+    const char* paths[] = {older_text.c_str(), middle_text.c_str(), newer_text.c_str()};
+    radicle_env* env = nullptr;
+    EXPECT_EQ(radicle_env_load(paths, 3, &env), RADICLE_STATUS_OK);
+    return EnvPtr(env, radicle_env_destroy);
+  }
+
   EnvPtr open_output() {
     const auto output_text = output_.string();
     const char* paths[] = {output_text.c_str()};
@@ -105,6 +150,7 @@ protected:
 
   std::filesystem::path root_;
   std::filesystem::path older_;
+  std::filesystem::path middle_;
   std::filesystem::path newer_;
   std::filesystem::path output_;
 };
@@ -206,6 +252,59 @@ TEST_F(DeltaPatchCApi, DeletedFlagDifferenceKeepsTheRecord) {
   ASSERT_EQ(radicle_record_get_info(patch.get(), kept, &info), RADICLE_STATUS_OK);
   EXPECT_EQ(info.deleted, 1);
   EXPECT_EQ(info.record_flags, 0x20u);
+}
+
+TEST_F(DeltaPatchCApi, ListMergeWritesAPatchAndCountsTheMergedLists) {
+  write_bytes(older_, leveled_plugin({}, {{1, 0x000800, 1}, {2, 0x000801, 1}}));
+  write_bytes(middle_,
+              leveled_plugin({"Older.esp"}, {{1, 0x000800, 1}, {2, 0x000801, 1}, {4, 0x01000804, 1}}));
+  write_bytes(newer_, leveled_plugin({"Older.esp"}, {{1, 0x000800, 1}, {3, 0x01000803, 2}}));
+
+  const auto env = open_env_with_middle();
+  radicle_list_merge_counts counts{};
+  const auto output_text = output_.string();
+  ASSERT_EQ(radicle_env_build_list_merge_patch(env.get(), "LVLI", "Merged.esp", output_text.c_str(),
+                                               &counts),
+            RADICLE_STATUS_OK);
+  EXPECT_EQ(counts.merged, 1u);
+  EXPECT_EQ(counts.unchanged, 0u);
+
+  const auto patch = open_output();
+  const radicle_record* record = nullptr;
+  EXPECT_EQ(radicle_env_find_editor_id(patch.get(), "List", "LVLI", &record), RADICLE_STATUS_OK);
+  EXPECT_NE(record, nullptr);
+}
+
+TEST_F(DeltaPatchCApi, ListMergeRefusesBadArgumentsAndZeroesTheCounts) {
+  write_bytes(older_, leveled_plugin({}, {{1, 0x000800, 1}}));
+  write_bytes(newer_, leveled_plugin({"Older.esp"}, {{1, 0x000800, 1}}));
+
+  const auto env = open_env();
+  radicle_list_merge_counts counts{7, 7};
+  const auto output_text = output_.string();
+  EXPECT_EQ(radicle_env_build_list_merge_patch(nullptr, "LVLI", "Merged.esp", output_text.c_str(),
+                                               &counts),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_env_build_list_merge_patch(env.get(), "LVLI", nullptr, output_text.c_str(),
+                                               &counts),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_env_build_list_merge_patch(env.get(), "LVLI", "Merged.esp", nullptr, &counts),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_env_build_list_merge_patch(env.get(), "LVLI", "Merged.esp", output_text.c_str(),
+                                               nullptr),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_env_build_list_merge_patch(env.get(), nullptr, "Merged.esp",
+                                               output_text.c_str(), &counts),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_env_build_list_merge_patch(env.get(), "LVL", "Merged.esp", output_text.c_str(),
+                                               &counts),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_env_build_list_merge_patch(env.get(), "MISC", "Merged.esp", output_text.c_str(),
+                                               &counts),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(counts.merged, 0u);
+  EXPECT_EQ(counts.unchanged, 0u);
+  EXPECT_FALSE(std::filesystem::exists(output_));
 }
 
 }  // namespace

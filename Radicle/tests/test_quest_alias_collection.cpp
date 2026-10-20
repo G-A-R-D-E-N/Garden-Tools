@@ -10,6 +10,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -135,6 +136,76 @@ fo4::forms::QuestAliasCreation reference_alias(std::uint32_t id) {
   creation.name = std::string_view{"ReferenceAlias"};
   creation.flags = 0u;
   return creation;
+}
+
+std::vector<std::byte> two_collections_separated() {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(1);
+  hedr.u32(0x900);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+
+  const auto group = fo4::test::begin_group(out, "QUST", 0);
+  const auto quest = fo4::test::begin_record(out, "QUST", 0, 0x00000800, 131);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"AliasQuest\0", 11});
+  write_u32_subrecord(out, "ANAM", 10);
+  write_u32_subrecord(out, "ALCS", 1);
+  write_u32_subrecord(out, "ALST", 2);
+  fo4::test::write_subrecord(out, "ALID", std::string_view{"Separator\0", 10});
+  write_u32_subrecord(out, "FNAM", 0);
+  fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
+  write_u32_subrecord(out, "ALCS", 3);
+  fo4::test::write_subrecord(out, "NNAM", std::string_view{"Tail\0", 5});
+  fo4::test::end_record(out, quest);
+  fo4::test::end_group(out, group);
+  return out.bytes;
+}
+
+void write_cnto_subrecord(fo4::test::ByteWriter& out,
+                          std::uint32_t item,
+                          std::int32_t count) {
+  fo4::test::ByteWriter data;
+  data.u32(item);
+  data.i32(count);
+  fo4::test::write_subrecord(out, "CNTO", data.bytes);
+}
+
+void write_coed_subrecord(fo4::test::ByteWriter& out) {
+  fo4::test::ByteWriter data;
+  data.u32(0);
+  data.i32(0);
+  data.f32(0.0f);
+  fo4::test::write_subrecord(out, "COED", data.bytes);
+}
+
+std::vector<std::byte> item_run_quest() {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(1);
+  hedr.u32(0x900);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+
+  const auto group = fo4::test::begin_group(out, "QUST", 0);
+  const auto quest = fo4::test::begin_record(out, "QUST", 0, 0x00000800, 131);
+  write_u32_subrecord(out, "ANAM", 3);
+  write_u32_subrecord(out, "ALST", 2);
+  fo4::test::write_subrecord(out, "ALID", std::string_view{"ItemRun\0", 8});
+  write_u32_subrecord(out, "FNAM", 0);
+  write_u32_subrecord(out, "COCT", 2);
+  write_cnto_subrecord(out, 5, 1);
+  write_coed_subrecord(out);
+  write_cnto_subrecord(out, 6, 3);
+  write_coed_subrecord(out);
+  fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
+  fo4::test::end_record(out, quest);
+  fo4::test::end_group(out, group);
+  return out.bytes;
 }
 
 const fo4::FormKey k_quest = fo4::FormKey::parse("000800:Quest.esp");
@@ -286,4 +357,66 @@ TEST(QuestAliasCollectionAuthoring, RejectsCollectionEntriesOnReferenceAliases) 
   creation.collection_entries = {{2, std::nullopt}};
   EXPECT_THROW(
       (void)fo4::forms::encode_quest_alias(creation), fo4::forms::QuestError);
+}
+
+TEST(QuestAliasCollectionGrouping, RefusesMutationsThatWouldJoinCollectionRuns) {
+  auto plugin = fo4::read_plugin(two_collections_separated(), "Quest.esp");
+  const auto before = fo4::write_plugin(plugin);
+
+  EXPECT_THROW(
+      static_cast<void>(fo4::forms::remove_quest_alias(plugin, k_quest, 2)),
+      fo4::forms::QuestError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+
+  EXPECT_THROW(
+      static_cast<void>(fo4::forms::reorder_quest_alias(plugin, k_quest, 2, 0)),
+      fo4::forms::QuestError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+
+  auto joined = collection_entries({{2, std::uint8_t{1}}});
+  joined.id = 2;
+  EXPECT_THROW(
+      fo4::forms::replace_quest_alias(plugin, k_quest, 2, joined),
+      fo4::forms::QuestError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+
+  EXPECT_THROW(
+      fo4::forms::add_quest_alias(plugin, k_quest, collection_entries({{4, std::uint8_t{1}}})),
+      fo4::forms::QuestError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(QuestAliasBoundary, RejectsAddingAnAliasWhenTheTailAlreadyHoldsMarkers) {
+  auto plugin = fo4::read_plugin(quest_bytes(true, false), "Quest.esp");
+  const auto before = fo4::write_plugin(plugin);
+
+  EXPECT_THROW(
+      fo4::forms::add_quest_alias(plugin, k_quest, collection_entries({{3, std::uint8_t{1}}})),
+      fo4::forms::QuestError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(QuestAliasReplacementPreservation, KeepsAnItemRunWithCoedInOrderOnARename) {
+  auto plugin = fo4::read_plugin(item_run_quest(), "Quest.esp");
+  auto renamed = reference_alias(2);
+  renamed.name = std::string_view{"Renamed"};
+  fo4::forms::replace_quest_alias(plugin, k_quest, 2, renamed);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Quest.esp");
+  const auto decoded = fo4::forms::decode_quest_aliases(reread, k_quest);
+  ASSERT_EQ(decoded.aliases.size(), 1u);
+  const auto& alias = decoded.aliases[0];
+  std::vector<std::string> names;
+  for (const auto& member : alias.subrecords) {
+    names.push_back(member.signature.to_string());
+  }
+  EXPECT_EQ(names, (std::vector<std::string>{"ALST", "ALID", "FNAM", "COCT", "CNTO",
+                                             "COED", "CNTO", "COED", "ALED"}));
+  ASSERT_EQ(alias.items.size(), 2u);
+  EXPECT_EQ(alias.items[0].item, fo4::FormKey::parse("000005:Quest.esp"));
+  EXPECT_EQ(alias.items[0].count, 1);
+  EXPECT_EQ(alias.items[1].item, fo4::FormKey::parse("000006:Quest.esp"));
+  EXPECT_EQ(alias.items[1].count, 3);
+  EXPECT_TRUE(alias.items[0].extra.has_value());
+  EXPECT_TRUE(alias.items[1].extra.has_value());
 }

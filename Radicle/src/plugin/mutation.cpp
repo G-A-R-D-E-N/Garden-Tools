@@ -501,7 +501,8 @@ FormLinkFieldMutationStatus set_record_formlink_field(
 RecordCopyStatus copy_record_as_override(Plugin& destination,
                                          const Plugin& source,
                                          const FormKey& record_key,
-                                         bool overwrite) {
+                                         bool overwrite,
+                                         FormLinkTypeLookup type_lookup) {
   const auto* source_record = find_record(source, record_key);
   if (source_record == nullptr) return RecordCopyStatus::source_missing;
   require_decodable(*source_record);
@@ -549,13 +550,13 @@ RecordCopyStatus copy_record_as_override(Plugin& destination,
   }
 
   if (added_master) {
-    next = remap_plugin_masters(std::move(next), std::move(masters));
+    next = remap_plugin_masters(std::move(next), std::move(masters), type_lookup);
   }
 
   const auto source_context = plugin_form_id_context(source);
   const auto destination_context = plugin_form_id_context(next);
   copied_record.header.form_id = encode_plugin_form_id(record_key, destination_context);
-  remap_record_form_links(copied_record, source_context, destination_context);
+  remap_record_form_links(copied_record, source_context, destination_context, type_lookup);
   copied_record.original_range.clear();
   copied_record.decompressed_payload.clear();
   copied_record.header.data_size = 0;

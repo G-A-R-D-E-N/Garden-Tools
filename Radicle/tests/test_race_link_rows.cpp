@@ -515,7 +515,7 @@ TEST(RaceScalarRows, FaceGenClampsChatterAndWrinkleMapsEditInPlace) {
   EXPECT_EQ(live_subrecord(reread, "WMAP", 1), zstr("Actors\\Character\\Other.dds"));
 }
 
-TEST(RaceScalarRows, SkeletalModelsEditInPlace) {
+TEST(RaceScalarRows, SkeletalModelPathsEditInPlace) {
   auto plugin = fo4::read_plugin(
       plugin_with({{"ANAM", zstr("Actors\\Character\\MaleSkeleton.nif")},
                    {"ANAM", zstr("Actors\\Character\\FemaleSkeleton.nif")}},
@@ -539,6 +539,9 @@ TEST(RaceScalarRows, SkeletalModelsEditInPlace) {
   EXPECT_EQ(read_scalar_member(plugin, "RACE\\SkeletalModelPath", 2), "");
   EXPECT_EQ(fo4::set_record_string(plugin, key, model, 1, "Actors\\Character\\Other.nif"),
             fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_string(plugin, key, model, 2, "Actors\\Character\\Third.nif"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(read_scalar_member(plugin, "RACE\\SkeletalModelPath", 2), "");
 
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   EXPECT_EQ(live_subrecord(reread, "ANAM", 0), zstr("Actors\\Character\\MaleSkeleton.nif"));
