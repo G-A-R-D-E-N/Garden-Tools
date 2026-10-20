@@ -1260,6 +1260,9 @@
       "signature": "OTFT",
       "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "INAM", "minimum": 0, "maximum": 1}]},
       "fields": [],
+      "formlink_lists": [
+        {"path": "OTFT\\Items", "label": "Items", "subrecord": "INAM", "targets": ["ARMO", "LVLI"], "nullable": false, "storage": "packed_array", "mutation": "appendable", "anchor_predecessors": ["EDID"]}
+      ],
       "localized_subrecords": []
     },
     {
@@ -7944,7 +7947,7 @@
     },
     {
       "signature": "HDPT",
-      "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "FULL", "minimum": 0, "maximum": 1}, {"signature": "MODL", "minimum": 0, "maximum": 1, "coupled": true}, {"signature": "MODT", "minimum": 0, "maximum": 1}, {"signature": "MODC", "minimum": 0, "maximum": 1}, {"signature": "MODS", "minimum": 0, "maximum": 1}, {"signature": "MODF", "minimum": 0, "maximum": 1}, {"signature": "DATA", "minimum": 1, "maximum": 1, "default": "00"}, {"signature": "PNAM", "minimum": 1, "maximum": 1, "default": "00000000"}, {"signature": "HNAM", "minimum": 0, "maximum": 65535}, {"signature": "NAM0", "minimum": 0, "maximum": 65535}, {"signature": "NAM1", "minimum": 0, "maximum": 65535}, {"signature": "TNAM", "minimum": 0, "maximum": 1}, {"signature": "CNAM", "minimum": 0, "maximum": 1}, {"signature": "RNAM", "minimum": 0, "maximum": 1}, {"signature": "CTDA", "minimum": 0, "maximum": 65535}]},
+      "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "FULL", "minimum": 0, "maximum": 1}, {"signature": "MODL", "minimum": 0, "maximum": 1, "coupled": true}, {"signature": "MODT", "minimum": 0, "maximum": 1}, {"signature": "MODC", "minimum": 0, "maximum": 1}, {"signature": "MODS", "minimum": 0, "maximum": 1}, {"signature": "MODF", "minimum": 0, "maximum": 1}, {"signature": "DATA", "minimum": 1, "maximum": 1, "default": "00"}, {"signature": "PNAM", "minimum": 1, "maximum": 1, "default": "00000000"}, {"signature": "HNAM", "minimum": 0, "maximum": 65535}, {"signature": "NAM0", "minimum": 0, "maximum": 65535, "paired_with": "NAM1"}, {"signature": "NAM1", "minimum": 0, "maximum": 65535}, {"signature": "TNAM", "minimum": 0, "maximum": 1}, {"signature": "CNAM", "minimum": 0, "maximum": 1}, {"signature": "RNAM", "minimum": 0, "maximum": 1}, {"signature": "CTDA", "minimum": 0, "maximum": 65535}]},
       "fields": [
         {"path": "HDPT\\Model", "label": "Model file name", "kind": "string", "subrecord": "MODL", "insertion": "existing_only"},
         {"path": "HDPT\\Flags", "label": "Flags", "kind": "scalar", "subrecord": "DATA", "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Playable"}, {"bit": 1, "name": "Male"}, {"bit": 2, "name": "Female"}, {"bit": 3, "name": "Is Extra Part"}, {"bit": 4, "name": "Use Solid Tint"}, {"bit": 5, "name": "Uses Body Texture"}], "minimum": 0, "maximum": 255, "insertion": "existing_only"},
@@ -8065,7 +8068,13 @@
         {"path": "COLL\\Index", "label": "Index", "kind": "scalar", "subrecord": "BNAM", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"},
         {"path": "COLL\\Flags", "label": "Flags", "kind": "scalar", "subrecord": "GNAM", "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Trigger Volume"}, {"bit": 1, "name": "Sensor"}, {"bit": 2, "name": "Navmesh Obstacle"}], "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"},
         {"path": "COLL\\InteractablesCount", "label": "Interactables count", "kind": "scalar", "subrecord": "INTV", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"},
-        {"path": "COLL\\Name", "label": "Name", "kind": "string", "subrecord": "MNAM", "insertion": "existing_only"}
+        {"path": "COLL\\Name", "label": "Name", "kind": "string", "subrecord": "MNAM", "insertion": "existing_only"},
+        {"path": "COLL\\DebugColorRed", "label": "Debug color red", "kind": "scalar", "subrecord": "FNAM", "offset": 0, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "COLL\\DebugColorGreen", "label": "Debug color green", "kind": "scalar", "subrecord": "FNAM", "offset": 1, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "COLL\\DebugColorBlue", "label": "Debug color blue", "kind": "scalar", "subrecord": "FNAM", "offset": 2, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "payload_size": 4, "insertion": "existing_only"}
+      ],
+      "formlink_lists": [
+        {"path": "COLL\\CollidesWith", "label": "Collides with", "subrecord": "CNAM", "targets": ["COLL"], "nullable": false, "storage": "packed_array", "mutation": "appendable", "anchor_predecessors": ["INTV", "MNAM", "GNAM", "FNAM", "BNAM", "DESC", "EDID"]}
       ],
       "localized_subrecords": ["DESC"]
     },
@@ -8518,15 +8527,24 @@
         {"path": "REGN\\MapColorGreen", "label": "Map color green", "kind": "scalar", "subrecord": "RCLR", "offset": 1, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
         {"path": "REGN\\MapColorBlue", "label": "Map color blue", "kind": "scalar", "subrecord": "RCLR", "offset": 2, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
         {"path": "REGN\\RegionDataType", "label": "Region data type", "kind": "scalar", "subrecord": "RDAT", "offset": 0, "storage": "u32", "presentation": "enum", "names": [{"value": 2, "name": "Objects"}, {"value": 3, "name": "Weather"}, {"value": 4, "name": "Map"}, {"value": 5, "name": "Land"}, {"value": 6, "name": "Grass"}, {"value": 7, "name": "Sound"}], "minimum": 0, "maximum": 7, "repeated": true, "insertion": "existing_only"},
-        {"path": "REGN\\RegionDataOverride", "label": "Region data override", "kind": "scalar", "subrecord": "RDAT", "offset": 4, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 1, "repeated": true, "insertion": "existing_only"},
+        {"path": "REGN\\RegionDataOverride", "label": "Region data override", "kind": "scalar", "subrecord": "RDAT", "offset": 4, "storage": "u8", "presentation": "enum", "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "minimum": 0, "maximum": 1, "repeated": true, "insertion": "existing_only"},
         {"path": "REGN\\RegionDataPriority", "label": "Region data priority", "kind": "scalar", "subrecord": "RDAT", "offset": 5, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "insertion": "existing_only"},
         {"path": "REGN\\LodDisplayDistanceMultiplier", "label": "LOD display distance multiplier", "kind": "scalar", "subrecord": "RLDM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "insertion": "existing_only"},
         {"path": "REGN\\OcclusionAccuracyDist", "label": "Occlusion accuracy distance", "kind": "scalar", "subrecord": "ANAM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "insertion": "existing_only"},
-        {"path": "REGN\\RegionAreaEdgeFalloff", "label": "Region area edge fall-off", "kind": "scalar", "subrecord": "RPLI", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "repeated": true, "insertion": "existing_only"}
+        {"path": "REGN\\RegionAreaEdgeFalloff", "label": "Region area edge fall-off", "kind": "scalar", "subrecord": "RPLI", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "repeated": true, "insertion": "existing_only"},
+        {"path": "REGN\\Icon", "label": "Icon", "kind": "string", "subrecord": "ICON", "insertion": "existing_only"},
+        {"path": "REGN\\SoundFlags", "label": "Sound flags", "kind": "scalar", "subrecord": "RDSA", "offset": 4, "stride": 12, "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Pleasant"}, {"bit": 1, "name": "Cloudy"}, {"bit": 2, "name": "Rainy"}, {"bit": 3, "name": "Snowy"}], "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"},
+        {"path": "REGN\\SoundChance", "label": "Sound chance", "kind": "scalar", "subrecord": "RDSA", "offset": 8, "stride": 12, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "REGN\\WeatherChance", "label": "Weather chance", "kind": "scalar", "subrecord": "RDWT", "offset": 4, "stride": 12, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {"path": "REGN\\Worldspace", "label": "Worldspace", "subrecord": "WNAM", "offset": 0, "payload_sizes": [4], "targets": ["WRLD"], "nullable": false, "insertion": "existing_only"},
-        {"path": "REGN\\Music", "label": "Music", "subrecord": "RDMO", "offset": 0, "payload_sizes": [4], "targets": ["MUSC"], "nullable": false, "repeated": true, "insertion": "existing_only"}
+        {"path": "REGN\\Music", "label": "Music", "subrecord": "RDMO", "offset": 0, "payload_sizes": [4], "targets": ["MUSC"], "nullable": false, "repeated": true, "insertion": "existing_only"},
+        {"path": "REGN\\Object", "label": "Object", "subrecord": "RDOT", "offset": 0, "stride": 52, "targets": ["TREE", "FLOR", "STAT", "LTEX", "MSTT", "SCOL"], "nullable": false, "insertion": "existing_only"},
+        {"path": "REGN\\Grass", "label": "Grass", "subrecord": "RDGS", "offset": 0, "stride": 8, "targets": ["GRAS"], "nullable": false, "insertion": "existing_only"},
+        {"path": "REGN\\Weather", "label": "Weather", "subrecord": "RDWT", "offset": 0, "stride": 12, "targets": ["WTHR"], "nullable": false, "insertion": "existing_only"},
+        {"path": "REGN\\WeatherGlobal", "label": "Weather global", "subrecord": "RDWT", "offset": 8, "stride": 12, "targets": ["GLOB"], "nullable": true, "insertion": "existing_only"},
+        {"path": "REGN\\Sound", "label": "Sound", "subrecord": "RDSA", "offset": 0, "stride": 12, "targets": ["SNDR", "SOUN"], "nullable": true, "insertion": "existing_only"}
       ],
       "localized_subrecords": [
         "RDMP"
@@ -9150,6 +9168,7 @@
         {"path": "RACE\\IdleChatterTimeMin", "label": "Idle chatter time min", "kind": "scalar", "subrecord": "PTOP", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
         {"path": "RACE\\IdleChatterTimeMax", "label": "Idle chatter time max", "kind": "scalar", "subrecord": "NTOP", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
         {"path": "RACE\\WrinkleMapPath", "label": "Wrinkle map path", "kind": "string", "subrecord": "WMAP", "repeated": true, "insertion": "existing_only"},
+        {"path": "RACE\\SkeletalModelPath", "label": "Skeletal model path", "kind": "string", "subrecord": "ANAM", "repeated": true, "insertion": "existing_only"},
         {"path": "RACE\\MovementOverrideLeftStanding", "label": "Movement override left standing", "kind": "scalar", "subrecord": "SPED", "offset": 0, "min_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 112, "repeated": true, "insertion": "existing_only"},
         {"path": "RACE\\MovementOverrideLeftWalk", "label": "Movement override left walk", "kind": "scalar", "subrecord": "SPED", "offset": 4, "min_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 112, "repeated": true, "insertion": "existing_only"},
         {"path": "RACE\\MovementOverrideLeftRun", "label": "Movement override left run", "kind": "scalar", "subrecord": "SPED", "offset": 8, "min_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 112, "repeated": true, "insertion": "existing_only"},
@@ -19660,7 +19679,17 @@
       "signature": "AECH",
       "fields": [
         {"path": "AECH\\EffectType", "label": "Effect type", "kind": "scalar", "subrecord": "KNAM", "offset": 0, "storage": "u32", "presentation": "enum", "names": [{"value": 2252866750, "name": "BSOverdrive"}, {"value": 4015480703, "name": "BSStateVariableFilter"}, {"value": 411269967, "name": "BSDelayEffect"}], "minimum": 0, "maximum": 4294967295, "repeated": true, "minimum_payload_size": 4, "insertion": "existing_only"},
-        {"path": "AECH\\EffectEnabled", "label": "Enabled", "kind": "scalar", "subrecord": "DNAM", "offset": 0, "storage": "u32", "presentation": "enum", "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "minimum": 0, "maximum": 1, "repeated": true, "minimum_payload_size": 4, "insertion": "existing_only"}
+        {"path": "AECH\\EffectEnabled", "label": "Enabled", "kind": "scalar", "subrecord": "DNAM", "offset": 0, "storage": "u32", "presentation": "enum", "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "minimum": 0, "maximum": 1, "repeated": true, "minimum_payload_size": 4, "insertion": "existing_only"},
+        {"path": "AECH\\OverdriveInputGain", "label": "Input Gain", "kind": "scalar", "subrecord": "DNAM", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 20, "repeated": true, "when": {"subrecord": "KNAM", "offset": 0, "storage": "u32", "equals": [2252866750]}, "insertion": "existing_only"},
+        {"path": "AECH\\OverdriveOutputGain", "label": "Output Gain", "kind": "scalar", "subrecord": "DNAM", "offset": 8, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 20, "repeated": true, "when": {"subrecord": "KNAM", "offset": 0, "storage": "u32", "equals": [2252866750]}, "insertion": "existing_only"},
+        {"path": "AECH\\OverdriveUpperThreshold", "label": "Upper Threshold", "kind": "scalar", "subrecord": "DNAM", "offset": 12, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 20, "repeated": true, "when": {"subrecord": "KNAM", "offset": 0, "storage": "u32", "equals": [2252866750]}, "insertion": "existing_only"},
+        {"path": "AECH\\OverdriveLowerThreshold", "label": "Lower Threshold", "kind": "scalar", "subrecord": "DNAM", "offset": 16, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 20, "repeated": true, "when": {"subrecord": "KNAM", "offset": 0, "storage": "u32", "equals": [2252866750]}, "insertion": "existing_only"},
+        {"path": "AECH\\FilterCenterFreq", "label": "Center Freq", "kind": "scalar", "subrecord": "DNAM", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 16, "repeated": true, "when": {"subrecord": "KNAM", "offset": 0, "storage": "u32", "equals": [4015480703]}, "insertion": "existing_only"},
+        {"path": "AECH\\FilterQValue", "label": "Q Value", "kind": "scalar", "subrecord": "DNAM", "offset": 8, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 16, "repeated": true, "when": {"subrecord": "KNAM", "offset": 0, "storage": "u32", "equals": [4015480703]}, "insertion": "existing_only"},
+        {"path": "AECH\\FilterMode", "label": "Filter Mode", "kind": "scalar", "subrecord": "DNAM", "offset": 12, "storage": "u32", "presentation": "enum", "names": [{"value": 0, "name": "High Pass"}, {"value": 1, "name": "Low Pass"}, {"value": 2, "name": "Band Pass"}, {"value": 3, "name": "Notch"}], "minimum": 0, "maximum": 3, "payload_size": 16, "repeated": true, "when": {"subrecord": "KNAM", "offset": 0, "storage": "u32", "equals": [4015480703]}, "insertion": "existing_only"},
+        {"path": "AECH\\DelayFeedback", "label": "Feedback %", "kind": "scalar", "subrecord": "DNAM", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 16, "repeated": true, "when": {"subrecord": "KNAM", "offset": 0, "storage": "u32", "equals": [411269967]}, "insertion": "existing_only"},
+        {"path": "AECH\\DelayWetMix", "label": "Wet Mix %", "kind": "scalar", "subrecord": "DNAM", "offset": 8, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 16, "repeated": true, "when": {"subrecord": "KNAM", "offset": 0, "storage": "u32", "equals": [411269967]}, "insertion": "existing_only"},
+        {"path": "AECH\\DelayMs", "label": "Delay MS", "kind": "scalar", "subrecord": "DNAM", "offset": 12, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "payload_size": 16, "repeated": true, "when": {"subrecord": "KNAM", "offset": 0, "storage": "u32", "equals": [411269967]}, "insertion": "existing_only"}
       ],
       "formlink_fields": [],
       "authoring": {
@@ -20648,9 +20677,25 @@
           "minimum": 0,
           "maximum": 65535,
           "insertion": "existing_only"
+        },
+        {
+          "path": "SCSN\\Multiplier",
+          "label": "Multiplier",
+          "kind": "scalar",
+          "subrecord": "CNAM",
+          "offset": 4,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 8,
+          "repeated": true,
+          "insertion": "existing_only"
         }
       ],
-      "formlink_fields": [],
+      "formlink_fields": [
+        {"path": "SCSN\\Category", "label": "Category", "subrecord": "CNAM", "offset": 0, "targets": ["SNCT"], "nullable": false, "repeated": true, "payload_sizes": [8], "insertion": "existing_only"}
+      ],
       "authoring": {
         "placement": "top_level",
         "subrecords": [
@@ -32310,7 +32355,34 @@
         {"path": "NPC_\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
         {"path": "NPC_\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"},
         {"path": "NPC_\\AttackEvent", "label": "Attack event", "kind": "string", "subrecord": "ATKE", "repeated": true, "insertion": "existing_only"},
-        {"path": "NPC_\\AttackDescription", "label": "Attack description", "kind": "string", "subrecord": "ATKT", "repeated": true, "insertion": "existing_only"}
+        {"path": "NPC_\\AttackDescription", "label": "Attack description", "kind": "string", "subrecord": "ATKT", "repeated": true, "insertion": "existing_only"},
+        {"path": "NPC_\\SpellCount", "label": "Spell count", "kind": "scalar", "subrecord": "SPCT", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"},
+        {
+          "path": "NPC_\\Spells",
+          "label": "Spells",
+          "kind": "subrecord_group",
+          "count_subrecord": "SPCT",
+          "insertion": "existing_only",
+          "successors": ["DEST", "DAMC", "DSTD", "DSTA", "DMDL", "DMDT", "DMDC", "DMDS", "DSTF", "WNAM", "ANAM", "ATKR", "ATKD", "SPOR", "OCOR", "GWOR", "ECOR", "FCPL", "RCLR", "PRKZ", "PRKR", "PRPS", "FTYP", "NTRM", "COCT", "CNTO", "COED", "AIDT", "PKID", "KSIZ", "KWDA", "APPR", "OBTE", "OBTF", "OBTS", "STOP", "CNAM", "FULL", "SHRT", "DATA", "DNAM", "PNAM", "HCLF", "BCLF", "ZNAM", "GNAM", "NAM5", "NAM6", "NAM7", "NAM4", "MWGT", "NAM8", "CS2H", "CS2K", "CS2D", "CS2E", "CS2F", "CSCR", "PFRN", "DOFT", "SOFT", "DPLT", "CRIF", "FTST", "QNAM", "MSDK", "MSDV", "TETI", "TEND", "MRSV", "FMRI", "FMRS", "FMIN", "ATTX"],
+          "members": [
+            {
+              "subrecord": "SPLO",
+              "required": true,
+              "repeatable": false,
+              "payload_size": 4,
+              "formlink_fields": [
+                {
+                  "path": "NPC_\\Spell",
+                  "label": "Spell",
+                  "offset": 0,
+                  "nullable": false,
+                  "insertion": "existing_only",
+                  "targets": ["SPEL", "LVSP"]
+                }
+              ]
+            }
+          ]
+        }
       ],
       "formlink_fields": [
         {
@@ -32350,17 +32422,6 @@
           "subrecord": "PNAM",
           "offset": 0,
           "targets": ["HDPT"],
-          "nullable": false,
-          "repeated": true,
-          "payload_sizes": [4],
-          "insertion": "existing_only"
-        },
-        {
-          "path": "NPC_\\Spell",
-          "label": "Spell",
-          "subrecord": "SPLO",
-          "offset": 0,
-          "targets": ["SPEL", "LVSP"],
           "nullable": false,
           "repeated": true,
           "payload_sizes": [4],

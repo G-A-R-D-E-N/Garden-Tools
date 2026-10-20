@@ -447,6 +447,41 @@ TEST(QustGeneralRows, AuthoringOrderAcceptsNestedStageAndObjectiveSubrecords) {
   }
 }
 
+TEST(QustGeneralRows, ObjectiveDisplayTextIsNotTheQuestDescription) {
+  const std::vector<Piece> head = {
+      {"EDID", zstring("Q0")},
+      {"FULL", zstring("Name")},
+      {"DNAM", general_data(0x0001, 30, 2.5f, 6)},
+      {"NNAM", zstring("Description")},
+  };
+  const std::vector<Piece> objectives = {
+      {"QOBJ", Bytes{std::byte{1}, std::byte{0}}},
+      {"NNAM", zstring("Objective one")},
+      {"QSTA", Bytes(8, std::byte{0})},
+      {"QOBJ", Bytes{std::byte{2}, std::byte{0}}},
+      {"NNAM", zstring("Objective two")},
+      {"QSTA", Bytes(8, std::byte{0})},
+  };
+
+  auto pieces = head;
+  pieces.insert(pieces.end(), objectives.begin(), objectives.end());
+  const auto plugin = load(pieces);
+  for (const auto& issue : fo4::schema::preflight_record(record_of(plugin))) {
+    EXPECT_NE(issue.code, "duplicate_scalar_subrecord") << issue.path;
+  }
+  EXPECT_EQ(read_member(plugin, "QUST\\Description", 0), "Description");
+
+  auto duplicated = head;
+  duplicated.push_back({"NNAM", zstring("Second description")});
+  duplicated.insert(duplicated.end(), objectives.begin(), objectives.end());
+  const auto duplicate_plugin = load(duplicated);
+  std::size_t flagged = 0;
+  for (const auto& issue : fo4::schema::preflight_record(record_of(duplicate_plugin))) {
+    if (issue.code == "duplicate_scalar_subrecord" && issue.path == "QUST\\Description") ++flagged;
+  }
+  EXPECT_EQ(flagged, 1u);
+}
+
 TEST(QustGeneralRows, AuthoringRefusesSignaturesOutsideTheGeneralBlock) {
   auto plugin = load(general_pieces());
   const auto before = fo4::write_plugin(plugin);

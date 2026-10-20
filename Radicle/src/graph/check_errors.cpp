@@ -32,6 +32,26 @@ constexpr Signature k_sig_rfgp = Signature::from_string("RFGP");
 constexpr Signature k_sig_rnam = Signature::from_string("RNAM");
 constexpr Signature k_sig_regn = Signature::from_string("REGN");
 constexpr Signature k_sig_wnam = Signature::from_string("WNAM");
+constexpr Signature k_sig_refr = Signature::from_string("REFR");
+constexpr Signature k_sig_achr = Signature::from_string("ACHR");
+constexpr Signature k_sig_scco = Signature::from_string("SCCO");
+constexpr Signature k_sig_xrfg = Signature::from_string("XRFG");
+constexpr Signature k_sig_xmsp = Signature::from_string("XMSP");
+constexpr Signature k_sig_xlcn = Signature::from_string("XLCN");
+
+struct GameMasterLinkExemption {
+  Signature record;
+  Signature subrecord;
+};
+
+constexpr std::array<GameMasterLinkExemption, 6> k_game_master_link_exemptions{{
+    {k_sig_rfgp, k_sig_rnam},
+    {k_sig_regn, k_sig_wnam},
+    {k_sig_refr, k_sig_xrfg},
+    {k_sig_refr, k_sig_xmsp},
+    {k_sig_achr, k_sig_xlcn},
+    {k_sig_scco, k_sig_snam},
+}};
 
 struct WinnerInfo {
   Signature signature{};
@@ -186,12 +206,12 @@ void check_links(const Plugin& plugin,
           owner->second->header.signature == k_sig_dlbr) {
         continue;
       }
-      if (hit.subrecord == k_sig_rnam && hit.key.owner() == game_master && owner != records.end() &&
-          owner->second->header.signature == k_sig_rfgp) {
-        continue;
-      }
-      if (hit.subrecord == k_sig_wnam && hit.key.owner() == game_master && owner != records.end() &&
-          owner->second->header.signature == k_sig_regn) {
+      if (hit.key.owner() == game_master && owner != records.end() &&
+          std::any_of(k_game_master_link_exemptions.begin(), k_game_master_link_exemptions.end(),
+                      [&](const GameMasterLinkExemption& exemption) {
+                        return exemption.record == owner->second->header.signature &&
+                               exemption.subrecord == hit.subrecord;
+                      })) {
         continue;
       }
       finding.code = CheckCode::unresolved_link;

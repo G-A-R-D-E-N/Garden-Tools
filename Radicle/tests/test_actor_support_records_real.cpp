@@ -62,6 +62,16 @@ TEST_P(ActorSupportReal, EveryBatchRecordMatchesItsAuthoringAndDecodesEveryRow) 
       EXPECT_LE(count, static_cast<std::size_t>(rule.maximum))
           << record.form_key.to_string() << ' ' << rule.signature.to_string();
     }
+    for (const auto& pair : fo4::schema::k_generated_subrecord_pairs) {
+      if (pair.record != signature) continue;
+      const auto count_of = [&](fo4::Signature name) {
+        return static_cast<std::size_t>(std::count_if(
+            record.subrecords.begin(), record.subrecords.end(),
+            [&](const auto& subrecord) { return subrecord.signature == name; }));
+      };
+      EXPECT_EQ(count_of(pair.subrecord), count_of(pair.partner))
+          << record.form_key.to_string() << ' ' << pair.subrecord.to_string();
+    }
     for (const auto& field : fo4::schema::scalar_fields(signature)) {
       for (const auto& subrecord : record.subrecords) {
         if (subrecord.signature != field.scalar.subrecord) continue;
