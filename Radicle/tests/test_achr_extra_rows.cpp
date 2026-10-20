@@ -186,7 +186,7 @@ TEST(AchrExtraRows, WaterCurrentAndLocationRefTypeRowsAreAddressedAsXEditDoes) {
   EXPECT_EQ(ref_types->subrecord, fo4::Signature::from_string("XLRT"));
   EXPECT_EQ(ref_types->storage, fo4::schema::FormLinkListStorage::packed_array);
   EXPECT_TRUE(ref_types->nullable);
-  EXPECT_FALSE(ref_types->can_insert);
+  EXPECT_TRUE(ref_types->can_insert);
   EXPECT_TRUE(fo4::schema::formlink_list_target_allowed(
       *ref_types, fo4::Signature::from_string("LCRT")));
   EXPECT_FALSE(fo4::schema::formlink_list_target_allowed(
@@ -202,15 +202,15 @@ TEST(AchrExtraRows, LinkedActivateParentSplineAndVelocityRowsReadFromThePlugin) 
   const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto& full = actor(plugin, 0x810u);
 
-  EXPECT_EQ(link_raw(full, "ACHR\\LinkedKeyword"), 0x00000A90u);
+  EXPECT_EQ(link_raw(full, "ACHR\\LinkedReferenceKeyword"), 0x00000A90u);
   const auto reference = fo4::schema::formlink_field_descriptor(k_achr, "ACHR\\LinkedReference");
   ASSERT_TRUE(reference.has_value());
   EXPECT_EQ(link_at(full, *reference, 1), 0x00000A92u);
   EXPECT_FALSE(link_at(full, *reference, 0).has_value());
-  EXPECT_EQ(link_raw(full, "ACHR\\ActivateParentRef"), 0x00000A93u);
+  EXPECT_EQ(link_raw(full, "ACHR\\ActivateParent"), 0x00000A93u);
   EXPECT_EQ(link_raw(full, "ACHR\\SplineConnection"), 0x00000A94u);
 
-  const auto only = scalar_bytes(full, "ACHR\\ActivateParentOnly");
+  const auto only = scalar_bytes(full, "ACHR\\ParentActivateOnly");
   ASSERT_TRUE(only.has_value());
   ASSERT_EQ(only->size(), 1u);
   EXPECT_EQ(std::to_integer<std::uint8_t>((*only)[0]), 0x01);
@@ -239,9 +239,9 @@ TEST(AchrExtraRows, LinkedActivateParentSplineAndVelocityRowsReadFromThePlugin) 
 
 TEST(AchrExtraRows, ShortLinkedKeywordPayloadRefusesTheReferenceRowAndWritesLandInPlace) {
   auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
-  const auto keyword = fo4::schema::formlink_field_descriptor(k_achr, "ACHR\\LinkedKeyword");
+  const auto keyword = fo4::schema::formlink_field_descriptor(k_achr, "ACHR\\LinkedReferenceKeyword");
   const auto reference = fo4::schema::formlink_field_descriptor(k_achr, "ACHR\\LinkedReference");
-  const auto activate_only = fo4::schema::scalar_field_descriptor(k_achr, "ACHR\\ActivateParentOnly");
+  const auto activate_only = fo4::schema::scalar_field_descriptor(k_achr, "ACHR\\ParentActivateOnly");
   const auto delay = fo4::schema::scalar_field_descriptor(k_achr, "ACHR\\ActivateParentDelay");
   ASSERT_TRUE(keyword.has_value());
   ASSERT_TRUE(reference.has_value());
@@ -268,15 +268,15 @@ TEST(AchrExtraRows, ShortLinkedKeywordPayloadRefusesTheReferenceRowAndWritesLand
   ASSERT_EQ(activate_parent.size(), 8u);
   EXPECT_EQ(std::to_integer<std::uint8_t>(activate_parent[0]), 0x93);
   EXPECT_EQ(Bytes(activate_parent.begin() + 4, activate_parent.end()), f32_bytes(2.5f));
-  EXPECT_EQ(link_raw(full, "ACHR\\ActivateParentRef"), 0x00000A93u);
-  const auto activate_only_bytes = scalar_bytes(full, "ACHR\\ActivateParentOnly");
+  EXPECT_EQ(link_raw(full, "ACHR\\ActivateParent"), 0x00000A93u);
+  const auto activate_only_bytes = scalar_bytes(full, "ACHR\\ParentActivateOnly");
   ASSERT_TRUE(activate_only_bytes.has_value());
   ASSERT_EQ(activate_only_bytes->size(), 1u);
   EXPECT_EQ(std::to_integer<std::uint8_t>((*activate_only_bytes)[0]), 0x00);
   const auto linked = sub_bytes(reread, 0x811u, "XLKR");
   ASSERT_EQ(linked.size(), 4u);
   EXPECT_EQ(Bytes(linked.begin(), linked.end()), u32_bytes(0x00000A96u));
-  EXPECT_EQ(link_raw(full, "ACHR\\LinkedKeyword"), 0x00000A96u);
+  EXPECT_EQ(link_raw(full, "ACHR\\LinkedReferenceKeyword"), 0x00000A96u);
   EXPECT_EQ(link_raw(full, "ACHR\\SplineConnection"), 0x00000A94u);
   EXPECT_EQ(link_raw(full, "ACHR\\AttachRef"), 0x00000A63u);
   EXPECT_EQ(sub_bytes(reread, 0x811u, "XWCN"), u32_bytes(1));

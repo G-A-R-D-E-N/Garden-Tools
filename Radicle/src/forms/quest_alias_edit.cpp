@@ -4,14 +4,17 @@
 #include "fo4/plugin/visit.hpp"
 #include "fo4/signature.hpp"
 #include "../plugin/record_edit.hpp"
+#include "quest_aliases_internal.hpp"
 
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <optional>
 #include <set>
 #include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -25,6 +28,11 @@ constexpr auto k_alls = Signature::from_string("ALLS");
 constexpr auto k_alcs = Signature::from_string("ALCS");
 constexpr auto k_almi = Signature::from_string("ALMI");
 constexpr auto k_aled = Signature::from_string("ALED");
+constexpr auto k_ctda = Signature::from_string("CTDA");
+constexpr auto k_cis1 = Signature::from_string("CIS1");
+constexpr auto k_cis2 = Signature::from_string("CIS2");
+constexpr auto k_cnto = Signature::from_string("CNTO");
+constexpr auto k_coed = Signature::from_string("COED");
 
 struct AliasRange {
   std::size_t begin{0};
@@ -199,6 +207,122 @@ std::vector<std::uint8_t> collection_flags(const AliasSection& section) {
   return flags;
 }
 
+constexpr std::string_view k_reference_member_order[] = {
+    "ALST", "ALID", "FNAM", "ALFI", "ALFR", "ALUA", "ALFA", "ALRT", "ALEQ",
+    "ALEA", "ALCO", "ALCA", "ALCL", "ALNA", "ALNT", "ALFE", "ALFD", "ALCC",
+    "CTDA", "CIS1", "CIS2", "KSIZ", "KWDA", "COCT", "CNTO", "COED", "SPOR",
+    "OCOR", "GWOR", "ECOR", "ALLA", "ALDN", "ALFV", "ALDI", "ALSP", "ALFC",
+    "ALPC", "VTCK", "ALED"};
+
+constexpr std::string_view k_location_member_order[] = {
+    "ALLS", "ALID", "FNAM", "ALFI", "ALFL", "ALFA", "KNAM", "ALEQ", "ALEA",
+    "ALFE", "ALFD", "CTDA", "CIS1", "CIS2", "ALCC", "ALED"};
+
+constexpr std::string_view k_alias_frame[] = {
+    "ALST", "ALLS", "ALCS", "ALMI", "ALID", "FNAM", "ALFI", "ALED"};
+
+constexpr std::string_view k_reference_fill_members[] = {
+    "ALFR", "ALUA", "ALFA", "ALRT", "ALEQ", "ALEA", "ALCO", "ALCA", "ALCL",
+    "ALNA", "ALNT", "ALFE", "ALFD", "ALCC"};
+
+constexpr std::string_view k_location_fill_members[] = {
+    "ALFL", "ALFA", "KNAM", "ALEQ", "ALEA", "ALFE", "ALFD"};
+
+constexpr std::string_view k_condition_run[] = {"CTDA", "CIS1", "CIS2"};
+constexpr std::string_view k_item_run[] = {"COCT", "CNTO", "COED"};
+
+template <std::size_t N>
+std::optional<std::size_t> member_rank(const std::string_view (&names)[N],
+                                       Signature signature) {
+  for (std::size_t index = 0; index < N; ++index) {
+    if (names[index] == signature.view()) return index;
+  }
+  return std::nullopt;
+}
+
+enum class AliasMemberRun { none, fill, conditions, items };
+
+AliasMemberRun member_run(QuestAliasKind kind, Signature signature) {
+  if (kind == QuestAliasKind::reference &&
+      member_rank(k_reference_fill_members, signature).has_value()) {
+    return AliasMemberRun::fill;
+  }
+  if (kind == QuestAliasKind::location &&
+      member_rank(k_location_fill_members, signature).has_value()) {
+    return AliasMemberRun::fill;
+  }
+  if (member_rank(k_condition_run, signature).has_value()) {
+    return AliasMemberRun::conditions;
+  }
+  if (member_rank(k_item_run, signature).has_value()) return AliasMemberRun::items;
+  return AliasMemberRun::none;
+}
+
+bool run_written(const std::vector<Subrecord>& members,
+                 QuestAliasKind kind,
+                 AliasMemberRun run) {
+  for (const auto& member : members) {
+    if (member_run(kind, member.signature) == run) return true;
+  }
+  return false;
+}
+
+std::optional<std::size_t> alias_member_rank(QuestAliasKind kind,
+                                             Signature signature) {
+  if (signature == k_cis1 || signature == k_cis2) signature = k_ctda;
+  if (signature == k_coed) signature = k_cnto;
+  if (kind == QuestAliasKind::reference) {
+    return member_rank(k_reference_member_order, signature);
+  }
+  if (kind == QuestAliasKind::location) {
+    return member_rank(k_location_member_order, signature);
+  }
+  return std::nullopt;
+}
+
+std::vector<Subrecord> merge_alias_members(QuestAliasKind kind,
+                                           const std::vector<Subrecord>& preserved,
+                                           const QuestAlias& alias) {
+  if (preserved.empty()) return alias.subrecords;
+
+  std::vector<std::size_t> ranks;
+  ranks.reserve(preserved.size());
+  for (const auto& member : preserved) {
+    const auto rank = alias_member_rank(kind, member.signature);
+    if (!rank.has_value()) {
+      throw QuestError("QUST alias member " + member.signature.to_string() +
+                       " cannot be placed in the " + detail::alias_label(kind) +
+                       " alias member order");
+    }
+    if (!ranks.empty() && *rank < ranks.back()) {
+      throw QuestError("QUST " + std::string(detail::alias_label(kind)) +
+                       " alias preserved members are not in member order");
+    }
+    ranks.push_back(*rank);
+  }
+
+  std::vector<Subrecord> merged;
+  merged.reserve(preserved.size() + alias.subrecords.size());
+  std::size_t next = 0;
+  for (const auto& member : alias.subrecords) {
+    const auto rank = alias_member_rank(kind, member.signature);
+    if (!rank.has_value()) {
+      throw QuestError("QUST encoded alias member " + member.signature.to_string() +
+                       " has no " + detail::alias_label(kind) + " alias member order");
+    }
+    while (next < preserved.size() && ranks[next] < *rank) {
+      merged.push_back(preserved[next]);
+      ++next;
+    }
+    merged.push_back(member);
+  }
+  while (next < preserved.size()) {
+    merged.push_back(preserved[next]);
+    ++next;
+  }
+  return merged;
+}
+
 }  // namespace
 
 void write_quest_aliases(Plugin& plugin,
@@ -308,11 +432,65 @@ void replace_quest_alias(Plugin& plugin,
       creation.kind == QuestAliasKind::collection ? 1 : 0;
   refuse_adjacent_collections(flags);
 
+  const auto existing_kind =
+      detail::alias_kind(record->subrecords[range->begin].signature);
   const auto alias = encode_quest_alias(next, creation);
+
+  std::set<Signature> written;
+  for (const auto& member : alias.subrecords) written.insert(member.signature);
+  const bool fill_written =
+      run_written(alias.subrecords, creation.kind, AliasMemberRun::fill);
+  const bool conditions_written =
+      run_written(alias.subrecords, creation.kind, AliasMemberRun::conditions);
+  const bool items_written =
+      run_written(alias.subrecords, creation.kind, AliasMemberRun::items);
+  const auto replaced = [&](Signature signature) {
+    if (written.count(signature) != 0) return true;
+    const auto existing_run = member_run(existing_kind, signature);
+    if (fill_written &&
+        (existing_run == AliasMemberRun::fill ||
+         member_run(creation.kind, signature) == AliasMemberRun::fill)) {
+      return true;
+    }
+    switch (existing_run) {
+      case AliasMemberRun::conditions:
+        return conditions_written;
+      case AliasMemberRun::items:
+        return items_written;
+      case AliasMemberRun::fill:
+      case AliasMemberRun::none:
+        return false;
+    }
+    return false;
+  };
+
+  const bool kind_changed = creation.kind != existing_kind;
+  std::vector<Subrecord> preserved;
+  for (std::size_t index = range->begin; index < range->end; ++index) {
+    const auto& member = record->subrecords[index];
+    if (replaced(member.signature)) continue;
+    if (kind_changed &&
+        member_rank(k_alias_frame, member.signature).has_value()) {
+      continue;
+    }
+    if (kind_changed && !fill_written &&
+        (member_run(existing_kind, member.signature) == AliasMemberRun::fill ||
+         member_run(creation.kind, member.signature) == AliasMemberRun::fill)) {
+      throw QuestError(
+          "QUST alias member " + member.signature.to_string() +
+          " cannot be preserved across a " + detail::alias_label(existing_kind) +
+          " to " + detail::alias_label(creation.kind) +
+          " alias kind change that writes no fill");
+    }
+    preserved.push_back(member);
+  }
+  const auto merged = merge_alias_members(creation.kind, preserved, alias);
+
   const auto begin = record->subrecords.begin() + static_cast<std::ptrdiff_t>(range->begin);
   const auto end = record->subrecords.begin() + static_cast<std::ptrdiff_t>(range->end);
   auto insertion = record->subrecords.erase(begin, end);
-  record->subrecords.insert(insertion, alias.subrecords.begin(), alias.subrecords.end());
+  record->subrecords.insert(insertion, merged.begin(), merged.end());
+  static_cast<void>(decode_quest_aliases(next, quest));
   mark_modified(next, *record);
   plugin = std::move(next);
 }

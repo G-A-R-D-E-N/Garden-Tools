@@ -140,7 +140,7 @@ TEST(ScalarSchema, WeaponDnamFieldsUseTheirPayloadAndEnumBounds) {
   EXPECT_EQ(melee->scalar.maximum, 4.0);
 
   const auto fields = fo4::schema::scalar_fields(fo4::Signature::from_string("WEAP"));
-  EXPECT_EQ(fields.size(), 63u);
+  EXPECT_EQ(fields.size(), 70u);
 }
 
 TEST(ScalarSchema, EnumRowExposesItsXEditNames) {
