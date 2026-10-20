@@ -254,7 +254,6 @@ TEST(ImageFxSynthetic, InterpolatorMembersEditOneStrideElement) {
 }
 
 TEST(ImageFxSynthetic, TimeInterpolatorArraysDecodeAndEditOneStrideElement) {
-  // Regression: an interpolator row requires stride 8 with Time at 0 and Value at 4, so a wrong stride or offset edits the neighbouring sample of the same array.
   auto plugin = load();
   EXPECT_EQ(fo4::record_field_count(plugin, key(3001), "IMAD\\BlurRadiusTime"), 2u);
   EXPECT_EQ(fo4::record_field_count(plugin, key(3001), "IMAD\\HDREyeAdaptSpeedAddValue"), 2u);
@@ -284,7 +283,6 @@ TEST(ImageFxSynthetic, TimeInterpolatorArraysDecodeAndEditOneStrideElement) {
 }
 
 TEST(ImageFxSynthetic, DepthOfFieldVignetteInterpolatorsAreGatedByFormVersion118) {
-  // Regression: NAM5 and NAM6 carry min_form_version 118, so a version 113 record must not read or write them even when the payload is present.
   auto plugin = load();
   EXPECT_EQ(fo4::record_field_count(plugin, key(3001), "IMAD\\DepthOfFieldVignetteRadiusTime"), 1u);
   EXPECT_EQ(fo4::record_field_count(plugin, key(3001), "IMAD\\DepthOfFieldVignetteStrengthValue"), 1u);
