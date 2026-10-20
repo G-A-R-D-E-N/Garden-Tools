@@ -35,6 +35,12 @@ std::vector<std::byte> u32_bytes(std::uint32_t value) {
   return writer.bytes;
 }
 
+std::vector<std::byte> string_bytes(std::string_view text) {
+  fo4::test::ByteWriter writer;
+  writer.raw(text);
+  return writer.bytes;
+}
+
 std::vector<std::byte> ctda_bytes(std::uint16_t function) {
   fo4::test::ByteWriter ctda;
   ctda.u32(0);
@@ -160,6 +166,36 @@ TEST(RootConditionLists, ActiCreatesCitcBeforeNvnmAndDropsItWhenCleared) {
   after = snapshot(plugin);
   EXPECT_EQ(after.signatures, (std::vector<std::string>{"EDID", "KNAM", "NVNM"}));
   EXPECT_TRUE(after.citc.empty());
+}
+
+TEST(RootConditionLists, FurnCreatesCitcBeforeMnamAndDropsItWhenCleared) {
+  auto plugin = make_plugin("FURN", {{"FNAM", zeros(2)},
+                                     {"MNAM", u32_bytes(0)},
+                                     {"ENAM", zeros(4)},
+                                     {"XMRK", string_bytes(std::string_view{"m.nif\0", 6})}});
+  EXPECT_EQ(set_root(plugin, {function_condition(9)}), fo4::ConditionMutationStatus::updated);
+  auto after = snapshot(plugin);
+  EXPECT_EQ(after.signatures,
+            (std::vector<std::string>{"EDID", "FNAM", "CITC", "CTDA", "MNAM", "ENAM", "XMRK"}));
+  EXPECT_EQ(after.citc, (std::vector<std::uint32_t>{1}));
+  EXPECT_EQ(after.functions, (std::vector<std::uint16_t>{9}));
+
+  EXPECT_EQ(set_root(plugin, {function_condition(9), function_condition(10)}),
+            fo4::ConditionMutationStatus::updated);
+  after = snapshot(plugin);
+  EXPECT_EQ(after.signatures,
+            (std::vector<std::string>{"EDID", "FNAM", "CITC", "CTDA", "CTDA", "MNAM", "ENAM",
+                                      "XMRK"}));
+  EXPECT_EQ(after.citc, (std::vector<std::uint32_t>{2}));
+  EXPECT_EQ(after.functions, (std::vector<std::uint16_t>{9, 10}));
+
+  EXPECT_EQ(set_root(plugin, std::vector<fo4::CtdaCondition>{}),
+            fo4::ConditionMutationStatus::updated);
+  after = snapshot(plugin);
+  EXPECT_EQ(after.signatures,
+            (std::vector<std::string>{"EDID", "FNAM", "MNAM", "ENAM", "XMRK"}));
+  EXPECT_TRUE(after.citc.empty());
+  EXPECT_TRUE(after.functions.empty());
 }
 
 TEST(RootConditionLists, CamsListLandsBeforeDataWithoutCitc) {

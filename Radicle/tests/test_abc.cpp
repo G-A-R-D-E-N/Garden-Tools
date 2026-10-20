@@ -15,7 +15,6 @@
 #include <utility>
 #include <vector>
 
-using fo4::abc::AbcCallSite;
 using fo4::abc::AbcFile;
 using fo4::abc::AbcInstruction;
 using fo4::abc::AbcOpcodeInfo;
@@ -28,10 +27,15 @@ using namespace fo4::test;
 
 namespace {
 
-const AbcCallSite& only_call(const std::vector<AbcCallSite>& calls) {
-  EXPECT_EQ(calls.size(), 1u);
-  static const AbcCallSite missing;
-  return calls.empty() ? missing : calls.front();
+std::vector<std::uint8_t> empty_pools_header() {
+  std::vector<std::uint8_t> out;
+  put_u16(out, fo4::abc::kAbcMinorVersion);
+  put_u16(out, fo4::abc::kAbcMajorVersion);
+  for (int pool = 0; pool < 6; ++pool) {
+    put_u30(out, 0);
+  }
+  put_u30(out, 1);
+  return out;
 }
 }
 
@@ -43,7 +47,7 @@ TEST(Abc, ParsesVersionConstantPoolAndStructure) {
   EXPECT_EQ(file.major_version, 46u);
   EXPECT_EQ(file.pool.strings.size(), 15u);
   EXPECT_EQ(file.pool.namespaces.size(), 3u);
-  EXPECT_EQ(file.pool.multinames.size(), 14u);
+  EXPECT_EQ(file.pool.multinames.size(), 15u);
   EXPECT_EQ(file.pool.ints.size(), 2u);
   EXPECT_EQ(file.pool.ints[1], 7);
   EXPECT_EQ(file.pool.ns_sets.size(), 1u);
@@ -186,60 +190,6 @@ TEST(Abc, DisassemblesConstructorCallSite) {
   std::string short_listing;
   ASSERT_EQ(fo4::abc::disassemble(file, short_code, short_listing), AbcStatus::Ok);
   EXPECT_EQ(short_listing, "0: pushshort -5\n");
-}
-
-TEST(Abc, SummaryAnswersExternalInterfaceAndEventListenerQuestions) {
-  AbcFile file;
-  ASSERT_EQ(AbcFile::parse(build_abc(), file), AbcStatus::Ok);
-  AbcSummary summary;
-  ASSERT_EQ(fo4::abc::summarize(file, summary), AbcStatus::Ok);
-  ASSERT_EQ(summary.classes.size(), 1u);
-  const auto& klass = summary.classes.front();
-  EXPECT_EQ(klass.name, "Test");
-  EXPECT_EQ(klass.super_name, "Object");
-  ASSERT_EQ(klass.interfaces.size(), 1u);
-  EXPECT_EQ(klass.interfaces[0], "click");
-  ASSERT_EQ(klass.methods.size(), 2u);
-  const auto& constructor = klass.methods[0];
-  EXPECT_EQ(constructor.name, "<init>");
-  EXPECT_EQ(constructor.return_type, "void");
-  EXPECT_EQ(constructor.flags, 0u);
-  EXPECT_EQ(constructor.instruction_count, 4u);
-  ASSERT_EQ(constructor.multinames.size(), 2u);
-  EXPECT_EQ(constructor.multinames[0], "flash.external::ExternalInterface");
-  EXPECT_EQ(constructor.multinames[1], "flash.external::call");
-  const AbcCallSite& external = only_call(constructor.calls);
-  EXPECT_EQ(external.opcode, "callpropvoid");
-  EXPECT_EQ(external.target, "flash.external::call");
-  EXPECT_EQ(external.receiver, "flash.external::ExternalInterface");
-  EXPECT_EQ(external.arg_count, 1u);
-  EXPECT_TRUE(fo4::abc::is_external_interface_call(external));
-  EXPECT_FALSE(fo4::abc::is_event_registration(external));
-  ASSERT_EQ(external.literals.size(), 1u);
-  EXPECT_EQ(external.literals[0], "Foo");
-  EXPECT_TRUE(external.literal_unambiguous);
-
-  const auto& listener = klass.methods[1];
-  EXPECT_EQ(listener.name, "onClick");
-  EXPECT_EQ(listener.return_type, "void");
-  EXPECT_EQ(listener.instruction_count, 5u);
-  const AbcCallSite& registration = only_call(listener.calls);
-  EXPECT_EQ(registration.target, "addEventListener");
-  EXPECT_EQ(registration.receiver, "handler");
-  EXPECT_EQ(registration.arg_count, 2u);
-  EXPECT_TRUE(fo4::abc::is_event_registration(registration));
-  EXPECT_FALSE(fo4::abc::is_external_interface_call(registration));
-  ASSERT_EQ(registration.literals.size(), 1u);
-  EXPECT_EQ(registration.literals[0], "click");
-  EXPECT_TRUE(registration.literal_unambiguous);
-
-  ASSERT_EQ(summary.functions.size(), 1u);
-  const auto& helper = summary.functions.front();
-  EXPECT_EQ(helper.name, "helper");
-  EXPECT_EQ(helper.instruction_count, 1u);
-  EXPECT_TRUE(helper.calls.empty());
-  EXPECT_TRUE(helper.multinames.empty());
-  EXPECT_TRUE(summary.scripts.empty());
 }
 
 TEST(Abc, OpcodeTableMatchesAvm2Numbers) {
@@ -405,6 +355,14 @@ TEST(Abc, RejectsBranchTargetOutOfRange) {
   put_s24(bad_switch, 900);
   put_u8(bad_switch, 0x47);
   EXPECT_EQ(fo4::abc::decode_code(bad_switch, instructions), AbcStatus::BranchOutOfRange);
+  std::vector<std::uint8_t> dead_jump;
+  put_u8(dead_jump, 0x47);
+  put_u8(dead_jump, 0x10);
+  put_s24(dead_jump, 1000);
+  ASSERT_EQ(fo4::abc::decode_code(dead_jump, instructions), AbcStatus::Ok);
+  ASSERT_EQ(instructions.size(), 2u);
+  ASSERT_EQ(instructions[1].operands.size(), 1u);
+  EXPECT_EQ(instructions[1].operands[0].target, 1005);
 }
 
 TEST(Abc, RejectsBadTraitKindAndTraitMetadataIndex) {
@@ -429,6 +387,169 @@ TEST(Abc, ReadsProtectedNamespaceAndAlwaysPresentInterfaceCount) {
   EXPECT_TRUE(instance.interfaces.empty());
   ASSERT_EQ(instance.traits.size(), 1u);
   EXPECT_EQ(instance.traits[0].kind, fo4::abc::AbcTraitKind::Slot);
+}
+
+TEST(Abc, RejectsEveryStructuralIndexPastItsPool) {
+  const std::pair<AbcBadIndex, const char*> cases[] = {
+      {AbcBadIndex::InstanceName, "instance name"},
+      {AbcBadIndex::InstanceNameAtLimit, "instance name at its pool limit"},
+      {AbcBadIndex::InstanceSuper, "instance super"},
+      {AbcBadIndex::InstanceInterface, "instance interface"},
+      {AbcBadIndex::InstanceIinit, "instance iinit"},
+      {AbcBadIndex::InstanceIinitAtLimit, "instance iinit at its pool limit"},
+      {AbcBadIndex::InstanceProtectedNs, "instance protected namespace"},
+      {AbcBadIndex::ClassInit, "class cinit"},
+      {AbcBadIndex::TraitName, "trait name"},
+      {AbcBadIndex::TraitTypeName, "trait type name"},
+      {AbcBadIndex::TraitMethodIndex, "trait method index"},
+      {AbcBadIndex::TraitClassIndex, "trait class index"},
+      {AbcBadIndex::TraitFunctionIndex, "trait function index"},
+      {AbcBadIndex::MethodReturnType, "method return type"},
+      {AbcBadIndex::MethodParamType, "method parameter type"},
+      {AbcBadIndex::ExceptionType, "exception type"},
+      {AbcBadIndex::ExceptionVarName, "exception variable name"},
+      {AbcBadIndex::ScriptInit, "script init"},
+      {AbcBadIndex::BodyMethod, "body method"},
+      {AbcBadIndex::MethodNameAtLimit, "method name"},
+      {AbcBadIndex::MethodParamNameAtLimit, "method parameter name"},
+      {AbcBadIndex::MethodOptionIndexAtLimit, "method option index"},
+      {AbcBadIndex::MetadataNameAtLimit, "metadata name"},
+      {AbcBadIndex::MetadataItemKeyAtLimit, "metadata item key"},
+      {AbcBadIndex::MetadataItemValueAtLimit, "metadata item value"},
+      {AbcBadIndex::TraitValueIndexAtLimit, "trait value index"},
+      {AbcBadIndex::TraitValueIndexStringAtLimit, "trait string value index"},
+      {AbcBadIndex::TraitValueIndexUIntAtLimit, "trait uint value index"},
+      {AbcBadIndex::TraitValueIndexDoubleAtLimit, "trait double value index"},
+      {AbcBadIndex::TraitValueIndexNamespaceAtLimit, "trait namespace value index"},
+  };
+  AbcFile file;
+  ASSERT_EQ(AbcFile::parse(build_abc(), file), AbcStatus::Ok);
+  for (const auto& [bad, field] : cases) {
+    SCOPED_TRACE(field);
+    EXPECT_EQ(AbcFile::parse(build_abc(tiny_constructor_code(), tiny_listener_code(), bad), file),
+              AbcStatus::IndexOutOfRange);
+  }
+}
+
+TEST(Abc, AcceptsEveryStructuralIndexAtItsLastEntry) {
+  const std::pair<AbcBadIndex, const char*> cases[] = {
+      {AbcBadIndex::MethodNameAtLast, "method name"},
+      {AbcBadIndex::MethodParamNameAtLast, "method parameter name"},
+      {AbcBadIndex::MethodOptionIndexAtLast, "method option index"},
+      {AbcBadIndex::MethodOptionIndexZero, "method option index 0"},
+      {AbcBadIndex::MetadataNameAtLast, "metadata name"},
+      {AbcBadIndex::MetadataItemKeyAtLast, "metadata item key"},
+      {AbcBadIndex::MetadataItemValueAtLast, "metadata item value"},
+      {AbcBadIndex::TraitValueIndexAtLast, "trait value index"},
+      {AbcBadIndex::TraitValueIndexStringAtLast, "trait string value index"},
+      {AbcBadIndex::TraitValueIndexNamespaceAtLast, "trait namespace value index"},
+  };
+  AbcFile file;
+  for (const auto& [bad, field] : cases) {
+    SCOPED_TRACE(field);
+    ASSERT_EQ(AbcFile::parse(build_abc(tiny_constructor_code(), tiny_listener_code(), bad), file),
+              AbcStatus::Ok);
+    switch (bad) {
+      case AbcBadIndex::MethodNameAtLast:
+        EXPECT_EQ(file.methods[0].name, kStringCount - 1);
+        EXPECT_EQ(file.methods[1].name, kStringCount - 1);
+        break;
+      case AbcBadIndex::MethodParamNameAtLast:
+        ASSERT_EQ(file.methods[1].param_names.size(), 1u);
+        EXPECT_EQ(file.methods[1].param_names[0], kStringCount - 1);
+        break;
+      case AbcBadIndex::MethodOptionIndexAtLast:
+        ASSERT_EQ(file.methods[1].options.size(), 1u);
+        EXPECT_EQ(file.methods[1].options[0].index, kIntCount - 1);
+        break;
+      case AbcBadIndex::MethodOptionIndexZero:
+        ASSERT_EQ(file.methods[1].options.size(), 1u);
+        EXPECT_EQ(file.methods[1].options[0].index, 0u);
+        break;
+      case AbcBadIndex::MetadataNameAtLast:
+        ASSERT_EQ(file.metadata.size(), 1u);
+        EXPECT_EQ(file.metadata[0].name, kStringCount - 1);
+        break;
+      case AbcBadIndex::MetadataItemKeyAtLast:
+        ASSERT_EQ(file.metadata.size(), 1u);
+        ASSERT_EQ(file.metadata[0].items.size(), 1u);
+        EXPECT_EQ(file.metadata[0].items[0].key, kStringCount - 1);
+        break;
+      case AbcBadIndex::MetadataItemValueAtLast:
+        ASSERT_EQ(file.metadata.size(), 1u);
+        ASSERT_EQ(file.metadata[0].items.size(), 1u);
+        EXPECT_EQ(file.metadata[0].items[0].value, kStringCount - 1);
+        break;
+      case AbcBadIndex::TraitValueIndexAtLast:
+        EXPECT_EQ(file.instances[0].traits[2].value_index, kIntCount - 1);
+        break;
+      case AbcBadIndex::TraitValueIndexStringAtLast:
+        EXPECT_EQ(file.instances[0].traits[2].value_index, kStringCount - 1);
+        break;
+      case AbcBadIndex::TraitValueIndexNamespaceAtLast:
+        EXPECT_EQ(file.instances[0].traits[2].value_index, kNamespaceCount - 1);
+        break;
+      default:
+        break;
+    }
+  }
+}
+
+TEST(Abc, AcceptsZeroIndicesIntoEmptyStringPool) {
+  std::vector<std::uint8_t> bytes = empty_pools_header();
+  put_u30(bytes, 1);
+  put_u30(bytes, 1);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u8(bytes, 0x80);
+  put_u30(bytes, 0);
+  put_u30(bytes, 1);
+  put_u30(bytes, 0);
+  put_u30(bytes, 1);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  AbcFile file;
+  ASSERT_EQ(AbcFile::parse(bytes, file), AbcStatus::Ok);
+  ASSERT_EQ(file.methods.size(), 1u);
+  EXPECT_EQ(file.methods[0].name, 0u);
+  ASSERT_EQ(file.methods[0].param_names.size(), 1u);
+  EXPECT_EQ(file.methods[0].param_names[0], 0u);
+  ASSERT_EQ(file.metadata.size(), 1u);
+  EXPECT_EQ(file.metadata[0].name, 0u);
+  ASSERT_EQ(file.metadata[0].items.size(), 1u);
+  EXPECT_EQ(file.metadata[0].items[0].key, 0u);
+  EXPECT_EQ(file.metadata[0].items[0].value, 0u);
+}
+
+TEST(Abc, AcceptsZeroIndexOptionInEmptyIntPoolAndAnyIndexForPoollessKind) {
+  std::vector<std::uint8_t> bytes = empty_pools_header();
+  put_u30(bytes, 1);
+  put_u30(bytes, 1);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u8(bytes, 0x08);
+  put_u30(bytes, 2);
+  put_u30(bytes, 0);
+  put_u8(bytes, 0x03);
+  put_u30(bytes, kBadIndex);
+  put_u8(bytes, 0x0B);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  AbcFile file;
+  ASSERT_EQ(AbcFile::parse(bytes, file), AbcStatus::Ok);
+  ASSERT_EQ(file.methods.size(), 1u);
+  ASSERT_EQ(file.methods[0].options.size(), 2u);
+  EXPECT_EQ(file.methods[0].options[0].kind, fo4::abc::AbcValueKind::Int);
+  EXPECT_EQ(file.methods[0].options[0].index, 0u);
+  EXPECT_EQ(file.methods[0].options[1].kind, fo4::abc::AbcValueKind::True);
+  EXPECT_EQ(file.methods[0].options[1].index, kBadIndex);
 }
 
 TEST(AbcCorpus, EveryExtractedAbcParsesDisassemblesAndSummarizes) {

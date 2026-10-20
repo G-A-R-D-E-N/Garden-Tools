@@ -237,6 +237,65 @@ bool in_code_range(std::int64_t target, std::size_t size) {
   return target >= 0 && target <= static_cast<std::int64_t>(size);
 }
 
+bool ends_control_flow(std::uint8_t opcode) {
+  switch (opcode) {
+    case 0x03:
+    case 0x10:
+    case 0x1B:
+    case 0x47:
+    case 0x48:
+      return true;
+    default:
+      return false;
+  }
+}
+
+std::vector<bool> mark_reachable(const std::vector<AbcInstruction>& code, std::size_t size) {
+  std::vector<std::size_t> index_at(size + 1, code.size());
+  for (std::size_t index = 0; index < code.size(); ++index) {
+    index_at[code[index].offset] = index;
+  }
+  std::vector<bool> reachable(code.size(), false);
+  std::vector<std::size_t> pending;
+  if (!code.empty()) {
+    pending.push_back(0);
+  }
+  while (!pending.empty()) {
+    const std::size_t index = pending.back();
+    pending.pop_back();
+    if (reachable[index]) {
+      continue;
+    }
+    reachable[index] = true;
+    const AbcInstruction& instruction = code[index];
+    const std::int64_t start = static_cast<std::int64_t>(instruction.offset);
+    const std::int64_t next = start + static_cast<std::int64_t>(instruction.length);
+    const auto push = [&pending, &index_at, &code](std::int64_t target) {
+      if (target < 0 || target > static_cast<std::int64_t>(index_at.size() - 1)) {
+        return;
+      }
+      const std::size_t target_index = index_at[static_cast<std::size_t>(target)];
+      if (target_index < code.size()) {
+        pending.push_back(target_index);
+      }
+    };
+    if (!ends_control_flow(instruction.opcode)) {
+      push(next);
+    }
+    for (const AbcDecodedOperand& operand : instruction.operands) {
+      if (operand.role == AbcOperandRole::Offset) {
+        push(next + operand.immediate);
+      } else if (operand.role == AbcOperandRole::Switch) {
+        push(start + operand.immediate);
+        for (const std::int32_t case_target : operand.case_targets) {
+          push(start + case_target);
+        }
+      }
+    }
+  }
+  return reachable;
+}
+
 }
 
 const AbcOpcodeInfo* opcode_info(std::uint8_t opcode) noexcept {
@@ -307,25 +366,27 @@ AbcStatus decode_code(const std::uint8_t* code, std::size_t size,
     instruction.length = reader.offset() - instruction.offset;
     out.push_back(instruction);
   }
-  for (AbcInstruction& instruction : out) {
+  const std::vector<bool> reachable = mark_reachable(out, size);
+  for (std::size_t index = 0; index < out.size(); ++index) {
+    AbcInstruction& instruction = out[index];
     const std::int64_t next = static_cast<std::int64_t>(instruction.offset + instruction.length);
     const std::int64_t start = static_cast<std::int64_t>(instruction.offset);
     for (AbcDecodedOperand& operand : instruction.operands) {
       if (operand.role == Role::Offset) {
         const std::int64_t target = next + operand.immediate;
-        if (!in_code_range(target, size)) {
+        if (reachable[index] && !in_code_range(target, size)) {
           return AbcStatus::BranchOutOfRange;
         }
         operand.target = static_cast<std::int32_t>(target);
       } else if (operand.role == Role::Switch) {
         const std::int64_t default_target = start + operand.immediate;
-        if (!in_code_range(default_target, size)) {
+        if (reachable[index] && !in_code_range(default_target, size)) {
           return AbcStatus::BranchOutOfRange;
         }
         operand.target = static_cast<std::int32_t>(default_target);
         for (std::int32_t& case_target : operand.case_targets) {
           const std::int64_t target = start + case_target;
-          if (!in_code_range(target, size)) {
+          if (reachable[index] && !in_code_range(target, size)) {
             return AbcStatus::BranchOutOfRange;
           }
           case_target = static_cast<std::int32_t>(target);

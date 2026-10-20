@@ -114,6 +114,30 @@ void collect_tags(const std::vector<SwfTag>& tags, SwfSummary& summary, unsigned
       summary.has_metadata = current.attributes->has_metadata;
       summary.use_network = current.attributes->use_network;
     }
+    if (current.shape.has_value()) {
+      ++summary.shape_tags;
+    }
+    if (current.bitmap.has_value()) {
+      ++summary.bitmap_tags;
+    }
+    if (current.font.has_value()) {
+      ++summary.font_tags;
+    }
+    if (current.text.has_value()) {
+      ++summary.text_tags;
+    }
+    if (current.sound.has_value()) {
+      ++summary.sound_tags;
+    }
+    if (current.exporter_info.has_value()) {
+      ++summary.exporter_info_tags;
+    }
+    if (current.external_image.has_value()) {
+      ++summary.external_image_tags;
+    }
+    if (current.font_texture.has_value()) {
+      ++summary.font_texture_tags;
+    }
     collect_tags(current.children, summary, depth + 1);
   }
 }
@@ -276,6 +300,8 @@ std::string_view tag_code_name(std::uint16_t code) noexcept {
       return "ExporterInfo";
     case tag::kDefineExternalImage:
       return "DefineExternalImage";
+    case tag::kDefineExternalImageV4:
+      return "DefineExternalImage";
     case tag::kFontTextureInfo:
       return "FontTextureInfo";
     default:
@@ -296,6 +322,14 @@ void SwfTag::clear_decoded() {
   abc.reset();
   action.reset();
   binary_data.reset();
+  shape.reset();
+  bitmap.reset();
+  font.reset();
+  text.reset();
+  sound.reset();
+  exporter_info.reset();
+  external_image.reset();
+  font_texture.reset();
 }
 
 SwfReadResult read_swf(std::span<const std::byte> bytes) {
@@ -356,31 +390,16 @@ SwfReadResult read_swf(std::span<const std::byte> bytes) {
       header.file_length > 8 ? static_cast<std::size_t>(header.file_length) - 8 : std::size_t{0};
   result.declared_length_matches = source_length == declared_body;
 
-  detail::BitReader bits(body, 0);
-  std::uint32_t nbits = 0;
-  std::int32_t x_min = 0;
-  std::int32_t x_max = 0;
-  std::int32_t y_min = 0;
-  std::int32_t y_max = 0;
-  if (!bits.read_unsigned(5, nbits) || !bits.read_signed(nbits, x_min) ||
-      !bits.read_signed(nbits, x_max) || !bits.read_signed(nbits, y_min) ||
-      !bits.read_signed(nbits, y_max)) {
+  SwfRect rect;
+  std::size_t after_rect = 0;
+  if (!detail::read_rect(body, 0, rect, after_rect)) {
     result.status = SwfStatus::truncated_header;
     result.message = "SWF frame size rectangle is truncated";
     return result;
   }
-  SwfRect rect;
-  rect.x_min = x_min;
-  rect.x_max = x_max;
-  rect.y_min = y_min;
-  rect.y_max = y_max;
-  rect.nbits = static_cast<std::uint8_t>(nbits);
-  const auto pad_bits = static_cast<unsigned>((8u - bits.bit_position() % 8u) % 8u);
-  rect.padding = static_cast<std::uint8_t>(byte_at(body, bits.byte_position() - 1u) &
-                                           ((1u << pad_bits) - 1u));
   header.frame_size = rect;
 
-  detail::SwfReader reader(body, bits.byte_position());
+  detail::SwfReader reader(body, after_rect);
   std::uint16_t frame_rate = 0;
   std::uint16_t frame_count = 0;
   if (!reader.read_u16(frame_rate) || !reader.read_u16(frame_count)) {
