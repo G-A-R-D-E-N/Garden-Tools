@@ -1,6 +1,7 @@
 #include "fo4/forms/leveled_list.hpp"
 #include "fo4/patch/list_merge.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "fo4/schema/formlink_lists.hpp"
 #include "plugin_bytes.hpp"
 
 #include <gtest/gtest.h>

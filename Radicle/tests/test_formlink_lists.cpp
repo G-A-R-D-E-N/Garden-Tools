@@ -438,7 +438,7 @@ TEST(FormLinkListMutation, MaintainsTheCounterStoredInsideAnotherSubrecord) {
   const auto host_key = fo4::FormKey::parse("000802:CounterEffects.esp");
   const auto first = fo4::FormKey::parse("000800:CounterEffects.esp");
   const auto descriptor = fo4::schema::formlink_list_descriptor(
-      fo4::Signature::from_string("MGEF"), "MGEF\CounterEffects");
+      fo4::Signature::from_string("MGEF"), "MGEF\\CounterEffects");
   ASSERT_TRUE(descriptor.has_value());
   EXPECT_EQ(descriptor->counter.to_string(), "DATA");
   EXPECT_EQ(descriptor->counter_offset, 20u);
@@ -475,7 +475,7 @@ TEST(FormLinkListMutation, RefusesACounterSubrecordTooShortForTheCount) {
   const auto host_key = fo4::FormKey::parse("000802:CounterEffects.esp");
   const auto first = fo4::FormKey::parse("000800:CounterEffects.esp");
   const auto descriptor = fo4::schema::formlink_list_descriptor(
-      fo4::Signature::from_string("MGEF"), "MGEF\CounterEffects");
+      fo4::Signature::from_string("MGEF"), "MGEF\\CounterEffects");
   ASSERT_TRUE(descriptor.has_value());
   const auto before = fo4::write_plugin(plugin);
 

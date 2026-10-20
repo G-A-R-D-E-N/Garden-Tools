@@ -143,8 +143,8 @@ inline CellPlugin two_level_patch_plugin() {
       .name = "Patch.esp",
       .masters = {"Fallout4.esm", "Coast.esm", "Machine.esm"},
       .cell_form = 0x03000900,
-      .ref_form = 0x02000800,
       .ref_flags = fo4::RecordFlags::deleted,
+      .ref_form = 0x02000800,
       .ref_subs = {{"NAME", std::string{'\x01', '\x08', '\0', '\0'}}},
   };
 }
