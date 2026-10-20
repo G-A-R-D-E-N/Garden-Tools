@@ -10,7 +10,11 @@ WHEN_STORAGES = {
     "u32": (4, 0, 0xFFFFFFFF),
     "i32": (4, -0x80000000, 0x7FFFFFFF),
 }
+SEGMENT_KEYS = ("count_word", "segment_index")
 MAX_WHEN_VALUES = 8
+# Constraint: xEdit wbModelInfoDecider (Core/wbDefinitionsCommon.pas:5646) allows at
+# most eight counter words, and a larger first word must be a different format.
+MAX_HEADER_COUNTERS = 8
 
 
 def is_count(value, minimum):
@@ -74,6 +78,25 @@ def disjoint(a, b):
     return set(a["equals"]).isdisjoint(b["equals"])
 
 
+def parse_segment(row, path, stride, repeated):
+    present = [key for key in SEGMENT_KEYS if key in row]
+    if not present:
+        return None
+    if len(present) != len(SEGMENT_KEYS):
+        raise ValueError(f"segment keys must be declared together: {path!r}")
+    count_word = row["count_word"]
+    index = row["segment_index"]
+    if not is_count(count_word, 0) or count_word >= MAX_HEADER_COUNTERS:
+        raise ValueError(f"count_word must index a header counter: {path!r}")
+    if not is_count(index, 0) or index >= MAX_HEADER_COUNTERS:
+        raise ValueError(f"segment_index must be below {MAX_HEADER_COUNTERS}: {path!r}")
+    if repeated or not stride:
+        raise ValueError(f"a header-counted segment needs a stride and is not repeated: {path!r}")
+    if "array_offset" in row:
+        raise ValueError(f"a header-counted segment starts after its own header: {path!r}")
+    return {"count_word": count_word, "index": index, "count": 0}
+
+
 def parse_address(row, path, subrecord, has_offset, width):
     repeated = row.get("repeated", False)
     if not isinstance(repeated, bool):
@@ -94,6 +117,7 @@ def parse_address(row, path, subrecord, has_offset, width):
             raise ValueError(f"stride requires an offset: {path!r}")
         if row.get("offset", 0) + width > stride:
             raise ValueError(f"field does not fit inside one stride element: {path!r}")
+    segment = parse_segment(row, path, stride, repeated)
     when = parse_when(row["when"], path, subrecord) if "when" in row else None
     if when is not None and not when["subrecord"]:
         end = when["offset"] + WHEN_STORAGES[when["storage"]][0]
@@ -101,7 +125,8 @@ def parse_address(row, path, subrecord, has_offset, width):
             raise ValueError(f"when discriminator does not fit inside one stride element: {path!r}")
         if not stride and row.get("payload_size") and end > row["payload_size"]:
             raise ValueError(f"when discriminator does not fit inside payload_size: {path!r}")
-    return {"repeated": repeated, "stride": stride, "array_offset": array_offset, "when": when}
+    return {"repeated": repeated, "stride": stride, "array_offset": array_offset, "when": when,
+            "segment": segment}
 
 
 def address_key(address):
@@ -132,6 +157,9 @@ def reject_overlaps(entries, kind_label):
         for first, second in combinations(group, 2):
             a, b = first["address"], second["address"]
             different_layout = any(a[key] != b[key] for key in ("repeated", "stride", "array_offset"))
+            # Constraint: a subrecord_group member row addresses its own run instance, so a row of the same signature outside the group cannot share its bytes.
+            if different_layout and bool(first.get("group_member")) != bool(second.get("group_member")):
+                continue
             if first["embedded"] and second["embedded"] and form_version_windows_disjoint(first, second):
                 continue
             aw, bw = a["when"], b["when"]
@@ -165,7 +193,11 @@ def reject_overlaps(entries, kind_label):
 
 def render_address(address):
     when = address["when"]
-    if not address["repeated"] and not address["stride"] and when is None:
+    segment = address.get("segment")
+    trailing = ""
+    if segment is not None:
+        trailing = f", SegmentAddress{{{segment['count_word']}, {segment['index']}, {segment['count']}}}"
+    if not address["repeated"] and not address["stride"] and when is None and not trailing:
         return "FieldAddress{}"
     if when is None:
         rendered = "FieldDiscriminator{}"
@@ -178,4 +210,4 @@ def render_address(address):
                     f"{', true' if when['match_absent'] else ', false'}"
                     f"{', true' if when['negated'] else ', false'}}}")
     return (f"FieldAddress{{{'true' if address['repeated'] else 'false'}, {address['stride']}, "
-            f"{address['array_offset']}, {rendered}}}")
+            f"{address['array_offset']}, {rendered}{trailing}}}")
