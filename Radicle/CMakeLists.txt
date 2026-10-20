@@ -457,6 +457,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_placed_reference_move.cpp
     tests/test_placed_reference_move_exterior.cpp
     tests/test_record_flags.cpp
+    tests/test_record_flags_deleted.cpp
     tests/test_extension_light_kinds.cpp
     tests/test_static_collection.cpp
     tests/test_quest_aliases.cpp

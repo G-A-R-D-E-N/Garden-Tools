@@ -54,10 +54,14 @@ inline void require_decodable(const Record& record) {
                               record.form_key.to_string() + " is undecodable; edits are refused");
 }
 
+inline bool can_be_partial(Signature signature) {
+  const auto view = signature.view();
+  return view == "CELL" || view == "DIAL" || view == "QUST" || view == "WRLD";
+}
+
 inline bool is_partial_form(const Record& record) {
-  const auto signature = record.header.signature.view();
   return record.header.flags.test(RecordFlags::partial_form) &&
-         (signature == "CELL" || signature == "DIAL" || signature == "QUST" || signature == "WRLD");
+         can_be_partial(record.header.signature);
 }
 
 struct Group;
