@@ -147,6 +147,7 @@ RegionData decode_region(const Environment& env, const RecordRef& ref) {
     if (sub.signature == sig("RPLI")) {
       data.areas.push_back(read_area(reader, sub));
       area = &data.areas.back();
+      entry = nullptr;
       continue;
     }
     if (sub.signature == sig("RPLD")) {
