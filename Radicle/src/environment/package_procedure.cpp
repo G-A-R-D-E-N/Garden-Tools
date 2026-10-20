@@ -246,11 +246,11 @@ void write_dword(std::vector<std::byte>& data, std::size_t offset, std::uint32_t
 }
 
 std::uint8_t step_input_id(std::uint8_t id) {
-  return id >= max_input_id ? 0 : static_cast<std::uint8_t>(id + 1);
+  return id >= max_input_id ? std::uint8_t{0} : static_cast<std::uint8_t>(id + 1);
 }
 
 std::uint8_t clamped_input_id(std::uint8_t id) {
-  return id > max_input_id ? 0 : id;
+  return id > max_input_id ? std::uint8_t{0} : id;
 }
 
 std::optional<std::uint8_t> next_free_input_id(const std::array<bool, input_id_count>& used, std::uint8_t after) {
@@ -416,7 +416,7 @@ PackageInputMutationStatus add_package_data_input(Plugin& plugin,
     }
     highest = std::max(highest, input.index);
   }
-  std::optional<std::uint8_t> new_id = tree.inputs.empty() ? std::optional<std::uint8_t>(0) : next_free_input_id(used, highest);
+  std::optional<std::uint8_t> new_id = tree.inputs.empty() ? std::optional<std::uint8_t>(std::uint8_t{0}) : next_free_input_id(used, highest);
   if (tree.next_input_id && !used[clamped_input_id(*tree.next_input_id)]) new_id = clamped_input_id(*tree.next_input_id);
   if (!new_id) return PackageInputMutationStatus::no_free_input_id;
   used[*new_id] = true;
