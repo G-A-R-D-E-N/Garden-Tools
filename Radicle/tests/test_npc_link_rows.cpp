@@ -103,6 +103,7 @@ std::vector<std::byte> make_ordered_list_plugin(bool with_predecessor) {
     fo4::test::write_subrecord(out, "ACBS", Bytes(20, std::byte{0}));
     fo4::test::write_subrecord(out, "RNAM", u32_bytes(0x00000C00u));
     fo4::test::write_subrecord(out, "AIDT", Bytes(24, std::byte{0}));
+    fo4::test::write_subrecord(out, "PNAM", u32_bytes(0x00000C01u));
   } else {
     fo4::test::write_subrecord(out, "PNAM", u32_bytes(0x00000C01u));
   }
@@ -349,7 +350,9 @@ TEST(NpcLinkRows, EmptyPackageListAnchorsAfterItsLastXEditOrderPredecessor) {
   EXPECT_EQ(raws(after, k_pkid), (std::vector<std::uint32_t>{0x00000C02u}));
   ASSERT_TRUE(index_of(after, k_pkid).has_value());
   ASSERT_TRUE(index_of(after, sig("AIDT")).has_value());
+  ASSERT_TRUE(index_of(after, sig("PNAM")).has_value());
   EXPECT_EQ(*index_of(after, k_pkid), *index_of(after, sig("AIDT")) + 1);
+  EXPECT_EQ(*index_of(after, sig("PNAM")), *index_of(after, k_pkid) + 1);
 }
 
 TEST(NpcLinkRows, EmptyListsAnchorAfterTheWholeAttackRun) {
