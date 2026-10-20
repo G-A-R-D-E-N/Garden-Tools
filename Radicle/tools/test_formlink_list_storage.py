@@ -129,7 +129,21 @@ class FormLinkListSegmentTests(unittest.TestCase):
     def test_render_emits_the_segment_table_and_descriptor_fields(self):
         rendered = formlink_schema_codegen.render(load_rows([segment(segment_index=1)]), [], [], [])
         self.assertIn("k_generated_packed_segment_counters[] = {\n  8,\n  4,\n  0,\n};", rendered)
-        self.assertIn("Signature::from_string(\"CNTS\"), false, true, false, true, 0, 1, 0, 0, 0, 1, 0, 3, 12, Signature{}}",
+        self.assertIn("Signature::from_string(\"CNTS\"), false, true, false, true, 0, 1, 0, 0, 0, 1, 0, 3, 12, 0, Signature{}}",
+                      rendered)
+
+    def test_counter_offset_requires_a_counter_and_no_segments(self):
+        with self.assertRaisesRegex(ValueError, "requires a counter subrecord"):
+            load_rows([row(path="TEST\\Counter", counter_offset=20)])
+        with self.assertRaisesRegex(ValueError, "cannot be combined with segments"):
+            load_rows([segment(segment_index=0, counter_offset=20)])
+        rows = load_rows([row(path="TEST\\Counter", counter="CNTS", counter_offset=20)])
+        self.assertEqual(rows[0]["counter_offset"], 20)
+
+    def test_render_emits_the_counter_offset(self):
+        rendered = formlink_schema_codegen.render(
+            load_rows([row(path="TEST\\Counter", counter="CNTS", counter_offset=20)]), [], [], [])
+        self.assertIn("Signature::from_string(\"CNTS\"), false, true, false, true, 0, 1, 0, 0, 0, 0, 0, 0, 0, 20, Signature{}}",
                       rendered)
 
     def test_element_tail_is_emitted_and_requires_per_subrecord_storage(self):

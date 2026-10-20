@@ -163,6 +163,7 @@ FormLinkListMutationStatus insert_encoded_element(
   record->subrecords.insert(
       record->subrecords.begin() + static_cast<std::ptrdiff_t>(insertion),
       encoded_element(descriptor, encoded));
+  reconcile_counter(*record, descriptor, static_cast<std::uint32_t>(positions.size() + 1));
   fo4::detail::mark_record_modified(plugin, *record);
   return FormLinkListMutationStatus::updated;
 }

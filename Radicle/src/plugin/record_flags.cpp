@@ -284,7 +284,7 @@ UndeleteStatus undelete_and_disable_reference(Plugin& plugin,
     Record restored = *master->record;
     try {
       remap_record_form_links(restored, plugin_form_id_context(master_plugin),
-                              plugin_form_id_context(next), &master_plugin);
+                              plugin_form_id_context(next), plugin_type_lookup(master_plugin));
     } catch (const std::exception&) {
       return UndeleteStatus::incomplete_reference;
     }

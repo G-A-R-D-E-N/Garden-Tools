@@ -31346,6 +31346,9 @@
         {"path": "MGEF\\ImageSpaceModifier", "label": "Image Space Modifier", "subrecord": "DATA", "offset": 132, "payload_sizes": [152], "targets": ["IMAD"], "nullable": true, "insertion": "existing_only"},
         {"path": "MGEF\\PerkToApply", "label": "Perk to Apply", "subrecord": "DATA", "offset": 136, "payload_sizes": [152], "targets": ["PERK"], "nullable": true, "insertion": "existing_only"}
       ],
+      "formlink_lists": [
+        {"path": "MGEF\\CounterEffects", "label": "Counter effects", "subrecord": "ESCE", "counter": "DATA", "counter_offset": 20, "targets": ["MGEF"], "nullable": false, "mutation": "existing_neighbors", "anchor_predecessors": ["DATA"]}
+      ],
       "localized_subrecords": ["FULL", "DNAM"]
     },
     {

@@ -29,6 +29,10 @@ void write_u32(std::vector<std::byte>& data, std::size_t offset, std::uint32_t v
   std::memcpy(data.data() + offset, &value, sizeof(value));
 }
 
+void write_u16(std::vector<std::byte>& data, std::size_t offset, std::uint16_t value) {
+  std::memcpy(data.data() + offset, &value, sizeof(value));
+}
+
 std::span<const std::uint32_t> segment_counters(
     const FormLinkListDescriptor& descriptor) noexcept {
   return {k_generated_packed_segment_counters + descriptor.first_segment,
@@ -122,6 +126,23 @@ void reconcile_counter(Record& record,
                        std::uint32_t count) {
   if (descriptor.counter == Signature{}) return;
   const auto counter_index = subrecord_index(record, descriptor.counter);
+  if (descriptor.counter_offset != 0) {
+    if (count > 0xFFFFu) {
+      throw FormLinkListError(std::string(descriptor.path) + " count does not fit the counter field");
+    }
+    if (!counter_index.has_value()) {
+      throw FormLinkListError(std::string(descriptor.path) +
+                              " counter subrecord is missing from the record");
+    }
+    auto& data = record.subrecords[*counter_index].data;
+    if (data.size() < descriptor.counter_offset + 2) {
+      throw FormLinkListError(std::string(descriptor.path) +
+                              " counter subrecord is too short for the count");
+    }
+    // Constraint: an in-subrecord counter is zeroed in place, never erased.
+    write_u16(data, descriptor.counter_offset, static_cast<std::uint16_t>(count));
+    return;
+  }
   if (descriptor.segment_count == 0) {
     // Constraint: a per-subrecord counter is overwritten in place, including zero, never erased.
     if (count == 0 && descriptor.storage == FormLinkListStorage::packed_array) {
