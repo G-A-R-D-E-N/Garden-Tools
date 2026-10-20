@@ -369,6 +369,7 @@ if(RADICLE_BUILD_TESTS)
 
   add_executable(fo4_tests
     tests/test_achr_rows.cpp
+    tests/test_achr_parity_rows.cpp
     tests/test_parw_rows.cpp
     tests/test_signature.cpp
     tests/test_formid.cpp
@@ -457,6 +458,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_placed_reference_move.cpp
     tests/test_placed_reference_move_exterior.cpp
     tests/test_record_flags.cpp
+    tests/test_record_flags_deleted.cpp
     tests/test_extension_light_kinds.cpp
     tests/test_static_collection.cpp
     tests/test_quest_aliases.cpp

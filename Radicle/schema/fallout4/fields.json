@@ -8362,6 +8362,17 @@
           "kind": "string",
           "subrecord": "SNAM",
           "insertion": "existing_only"
+        },
+        {
+          "path": "QUST\\NextAliasID",
+          "label": "Next alias ID",
+          "kind": "scalar",
+          "subrecord": "ANAM",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
         }
       ],
       "formlink_fields": [
@@ -24098,7 +24109,10 @@
     },
     {
       "signature": "NOCM",
-      "fields": [],
+      "fields": [
+        {"path": "NOCM\\Index", "label": "Index", "kind": "scalar", "subrecord": "INDX", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "payload_size": 4, "repeated": true, "insertion": "existing_only"},
+        {"path": "NOCM\\Model", "label": "Model", "kind": "string", "subrecord": "NAM1", "repeated": true, "insertion": "existing_only"}
+      ],
       "formlink_fields": [],
       "localized_subrecords": [],
       "authoring": {
@@ -33109,7 +33123,10 @@
         {"path": "ACHR\\FavorCost", "label": "Favor cost", "kind": "scalar", "subrecord": "XFVC", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
         {"path": "ACHR\\EnableParentFlags", "label": "Enable Parent Flags", "kind": "scalar", "subrecord": "XESP", "offset": 4, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Set Enable State to Opposite of Parent"}, {"bit": 1, "name": "Pop In"}], "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
         {"path": "ACHR\\OwnerRank", "label": "Faction rank", "kind": "scalar", "subrecord": "XRNK", "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "insertion": "existing_only"},
-        {"path": "ACHR\\OwnerNoCrime", "label": "No Crime", "kind": "scalar", "subrecord": "XOWN", "offset": 8, "storage": "u8", "presentation": "enum", "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "minimum": 0, "maximum": 255, "payload_size": 12, "insertion": "existing_only"}
+        {"path": "ACHR\\OwnerNoCrime", "label": "No Crime", "kind": "scalar", "subrecord": "XOWN", "offset": 8, "storage": "u8", "presentation": "enum", "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "minimum": 0, "maximum": 255, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "ACHR\\ParentActivateOnly", "label": "Parent activate only", "kind": "scalar", "subrecord": "XAPD", "storage": "u8", "presentation": "enum", "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "ACHR\\ActivateParentDelay", "label": "Activate parent delay", "kind": "scalar", "subrecord": "XAPR", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "insertion": "existing_only"},
+        {"path": "ACHR\\Comments", "label": "Comments", "kind": "string", "subrecord": "MNAM", "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {"path": "ACHR\\LitWater", "label": "Lit water", "subrecord": "XLTW", "offset": 0, "payload_sizes": [4], "targets": ["ACHR", "REFR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
@@ -33128,7 +33145,13 @@
         {"path": "ACHR\\MaterialSwap", "label": "Material swap", "subrecord": "XMSP", "offset": 0, "payload_sizes": [4], "targets": ["MSWP"], "nullable": false, "insertion": "existing_only"},
         {"path": "ACHR\\AttachRef", "label": "Attach ref", "subrecord": "XATR", "offset": 0, "payload_sizes": [4], "targets": ["REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA", "ACHR"], "nullable": false, "insertion": "existing_only"},
         {"path": "ACHR\\PersistLocation", "label": "Persist location", "subrecord": "XLCN", "offset": 0, "payload_sizes": [4], "targets": ["LCTN"], "nullable": false, "insertion": "existing_only"},
-        {"path": "ACHR\\LocationReference", "label": "Location reference", "subrecord": "XLRL", "offset": 0, "payload_sizes": [4], "targets": ["LCRT", "LCTN"], "nullable": true, "insertion": "existing_only"}
+        {"path": "ACHR\\LocationReference", "label": "Location reference", "subrecord": "XLRL", "offset": 0, "payload_sizes": [4], "targets": ["LCRT", "LCTN"], "nullable": true, "insertion": "existing_only"},
+        {"path": "ACHR\\LinkedReferenceKeyword", "label": "Linked reference keyword or reference", "subrecord": "XLKR", "offset": 0, "payload_sizes": [4, 8], "targets": ["KYWD", "PLYR", "ACHR", "REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"], "nullable": true, "repeated": true, "insertion": "existing_only"},
+        {"path": "ACHR\\LinkedReference", "label": "Linked reference", "subrecord": "XLKR", "offset": 4, "payload_sizes": [8], "targets": ["PLYR", "ACHR", "REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"], "nullable": true, "repeated": true, "insertion": "existing_only"},
+        {"path": "ACHR\\ActivateParent", "label": "Activate parent", "subrecord": "XAPR", "offset": 0, "payload_sizes": [8], "targets": ["PLYR", "ACHR", "REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"], "nullable": true, "repeated": true, "insertion": "existing_only"}
+      ],
+      "formlink_lists": [
+        {"path": "ACHR\\LocationRefTypes", "label": "Location ref types", "subrecord": "XLRT", "targets": ["LCRT"], "nullable": true, "storage": "packed_array", "mutation": "existing_neighbors"}
       ]
     }
   ],
