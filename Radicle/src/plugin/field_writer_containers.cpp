@@ -35,6 +35,9 @@ std::vector<SubrecordGroupSpan> group_spans(const Record& record, const schema::
     }
   };
 
+  std::size_t lead = 0;
+  while (lead < group.members.size() && group.members[lead].leading) ++lead;
+
   std::vector<SubrecordGroupSpan> spans;
   const auto& subs = record.subrecords;
   std::size_t first = 0;
@@ -54,7 +57,7 @@ std::vector<SubrecordGroupSpan> group_spans(const Record& record, const schema::
       ++first;
       continue;
     }
-    if (*leader != 0) {
+    if (*leader > lead) {
       if (group.members[*leader].skippable) {
         ++first;
         continue;
@@ -62,12 +65,12 @@ std::vector<SubrecordGroupSpan> group_spans(const Record& record, const schema::
       throw refuse("has " + subs[first].signature.to_string() + " outside a leader run");
     }
     std::vector<std::size_t> counts(group.members.size());
-    counts[0] = 1;
-    std::size_t last = 0;
+    counts[*leader] = 1;
+    std::size_t last = *leader;
     std::size_t end = first + 1;
     SubrecordGroupSpan span{};
     span.first = first;
-    check_size(group.members, 0, subs[first]);
+    check_size(group.members, *leader, subs[first]);
     const auto nested_runs = [&](const Subrecord& member) {
       const auto& run = group.run;
       if (run.count_member != member.signature) return;
@@ -109,7 +112,7 @@ std::vector<SubrecordGroupSpan> group_spans(const Record& record, const schema::
     nested_runs(subs[first]);
     while (end < subs.size()) {
       const auto member = member_index(group.members, subs[end].signature);
-      if (!member || *member == 0) break;
+      if (!member || (counts[lead] != 0 && *member <= lead)) break;
       if (*member < last || (*member == last && !group.members[*member].repeatable)) {
         throw refuse("has " + subs[end].signature.to_string() + " out of order or repeated");
       }
@@ -321,7 +324,7 @@ SubrecordGroupMutationStatus insert_record_subrecord_group(Plugin& plugin,
   const auto spans = group_spans(*target, group);
   const bool counted = group.count_subrecord != Signature{};
   const auto counter = group_counter(*target, group, spans.size());
-  if (counted && !counter && !spans.empty()) return SubrecordGroupMutationStatus::subrecord_missing;
+  if (counted && !counter && (!spans.empty() || group.requires_existing_count)) return SubrecordGroupMutationStatus::subrecord_missing;
   if (index > spans.size()) return SubrecordGroupMutationStatus::index_out_of_range;
 
   const std::size_t position = index < spans.size()  ? spans[index].first

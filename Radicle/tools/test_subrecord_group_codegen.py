@@ -142,12 +142,12 @@ class SubrecordGroupCodegenTests(unittest.TestCase):
         self.assertIn("constexpr std::uint8_t k_subrecord_group_default_0[] = "
                       "{0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00};", text)
         self.assertIn('{Signature::from_string("CNTO"), true, false, 8, '
-                      'std::span<const std::uint8_t>(k_subrecord_group_default_0), false, false},', text)
-        self.assertIn('("COED"), false, false, 12, std::span<const std::uint8_t>{}, false, false},', text)
+                      'std::span<const std::uint8_t>(k_subrecord_group_default_0), false, false, false},', text)
+        self.assertIn('("COED"), false, false, 12, std::span<const std::uint8_t>{}, false, false, false},', text)
         self.assertIn('{Signature::from_string("TEST"), "TEST' + BS + BS + 'Items", "Items", '
                       'Signature::from_string("COCT"), '
                       'std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_0), '
-                      'std::span<const Signature>{}, SubrecordGroupRunDescriptor{}},', text)
+                      'std::span<const Signature>{}, SubrecordGroupRunDescriptor{}, false},', text)
         self.assertIn("constexpr std::array<SubrecordGroupDescriptor, 1> k_subrecord_groups{{", text)
 
     def test_subrecord_group_successors_render_as_a_signature_table(self):
@@ -158,7 +158,7 @@ class SubrecordGroupCodegenTests(unittest.TestCase):
                       '{Signature::from_string("DATA"), Signature::from_string("KSIZ")};', text)
         self.assertIn('std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_0), '
                       'std::span<const Signature>(k_subrecord_group_successors_0), '
-                      'SubrecordGroupRunDescriptor{}},', text)
+                      'SubrecordGroupRunDescriptor{}, false},', text)
 
     def test_subrecord_group_successors_are_distinct_and_not_members(self):
         count = count_row(subrecord="COCT")
@@ -294,13 +294,13 @@ class SubrecordGroupCodegenTests(unittest.TestCase):
         text = schema_codegen.render(fields, arrays, groups)
         self.assertIn("constexpr SubrecordGroupMemberDescriptor k_subrecord_group_run_members_0[] = {", text)
         self.assertIn('{Signature::from_string("WNAM"), true, false, 0, '
-                      'std::span<const std::uint8_t>(k_subrecord_group_default_0), false, false},', text)
+                      'std::span<const std::uint8_t>(k_subrecord_group_default_0), false, false, false},', text)
         self.assertIn('std::span<const Signature>{}, '
                       'SubrecordGroupRunDescriptor{Signature::from_string("VNAM"), '
-                      'std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_run_members_0)}},', text)
+                      'std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_run_members_0)}, false},', text)
 
     def test_subrecord_group_without_a_run_renders_an_empty_descriptor(self):
-        self.assertIn('std::span<const Signature>{}, SubrecordGroupRunDescriptor{}},',
+        self.assertIn('std::span<const Signature>{}, SubrecordGroupRunDescriptor{}, false},',
                       schema_codegen.render(*self.load_schema(group(), count_row(subrecord="COCT"))))
 
     def test_subrecord_group_run_member_rows_are_expanded(self):
@@ -352,6 +352,56 @@ class SubrecordGroupCodegenTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "overlapping FormLink/scalar fields in TEST.CNTO"):
             self.link_schema(fields=[overlap, count_row(subrecord="COCT")])
         self.link_schema(fields=[group(), count_row(subrecord="COCT")])
+
+
+class LeadingGroupMemberTests(unittest.TestCase):
+    def load_schema(self, *fields):
+        with tempfile.TemporaryDirectory() as directory:
+            return schema_codegen.load_schema(write_schema(directory, fields))
+
+    def rejects(self, message, *fields):
+        with self.assertRaisesRegex(ValueError, message):
+            self.load_schema(*fields)
+
+    def test_subrecord_group_leading_members_precede_a_required_leader(self):
+        count = count_row(subrecord="COCT")
+        _, _, groups = self.load_schema(
+            group(members=[group_member("CS2K", required=False, payload_size=4, leading=True),
+                           group_member("CNTO", payload_size=4)]), count)
+        self.assertEqual([member["leading"] for member in groups[0]["members"]], [True, False])
+        text = schema_codegen.render(*self.load_schema(
+            group(members=[group_member("CS2K", required=False, payload_size=4, leading=True),
+                           group_member("CNTO", payload_size=4)]), count))
+        self.assertIn('{Signature::from_string("CS2K"), false, false, 4, std::span<const std::uint8_t>{}, '
+                      'false, false, true},', text)
+        self.assertIn('{Signature::from_string("CNTO"), true, false, 4, std::span<const std::uint8_t>{}, '
+                      'false, false, false},', text)
+
+    def test_subrecord_group_leading_members_must_be_optional_first_and_have_a_leader(self):
+        count = count_row(subrecord="COCT")
+        leading = {"required": False, "payload_size": 4, "leading": True}
+        self.rejects("leading members must come first",
+                     group(members=[group_member("CS2K", **dict(leading, required=True)), group_member("CNTO")]), count)
+        self.rejects("leading members must come first",
+                     group(members=[group_member("CS2K", repeatable=True, **leading), group_member("CNTO")]), count)
+        self.rejects("leading members must come first",
+                     group(members=[group_member("CNTO"), group_member("CS2K", **leading)]), count)
+        self.rejects("leader must be required and non-repeatable",
+                     group(members=[group_member("CS2K", **leading)]), count)
+        self.rejects("leading must be a boolean",
+                     group(members=[group_member("CS2K", **dict(leading, leading="yes")), group_member("CNTO")]), count)
+
+    def test_subrecord_group_requires_existing_count_renders_only_when_set(self):
+        count = count_row(subrecord="COCT")
+        plain = schema_codegen.render(*self.load_schema(group(), count))
+        self.assertNotIn("true},", plain.split("k_subrecord_groups{{", 1)[1])
+        flagged = schema_codegen.render(*self.load_schema(group(requires_existing_count=True), count))
+        self.assertIn("k_subrecord_group_members_0), std::span<const Signature>{}, "
+                      "SubrecordGroupRunDescriptor{}, true},", flagged)
+        self.rejects("requires_existing_count must be a boolean on a counted group",
+                     group(requires_existing_count=1), count)
+        self.rejects("requires_existing_count must be a boolean on a counted group",
+                     group(count_subrecord=None, requires_existing_count=True))
 
 
 if __name__ == "__main__":

@@ -55,6 +55,7 @@ Every scalar uses `existing_only` insertion. The presentation is `identity` exce
 | NPC_\TintLayerColorRed, Green, Blue | TEND | 1, 2, 3 | u8 | 7 | 10454-10461; `wbByteColors` Common:6696-6708 |
 | NPC_\TintLayerTemplateColorIndex | TEND | 5 | i16 | 7 | 10454-10461 |
 | NPC_\SoundLevel | NAM8 | whole | u32 | 4 | 10431; wbSoundLevelEnum FO4:3424 |
+| NPC_\ActorSoundTotal | CS2H | whole | u32 | 4 | 10433; group count of NPC_\ActorSounds, plain writes refused |
 
 Notes on the scalars:
 
@@ -129,7 +130,7 @@ Each link of a repeated FormLink row is read and written by index through the ge
 
 `NPC_\Spell` is the same read and indexed write, but it is the member link of the `NPC_\Spells` subrecord group (`count_subrecord` `SPCT`, one required 4-byte `SPLO` member), so `insert_record_subrecord_group` and `remove_record_subrecord_group` add and remove a spell and rewrite `SPCT` with the run. The row carries no `payload_sizes` of its own; the member descriptor holds the 4-byte rule. `NPC_\SpellCount` is the group's whole-payload u32 count row, and a plain scalar write to it is refused, as for `CONT\ItemTotal`. `RACE\ActorEffects` still rows the same xEdit list shape with no count.
 
-`NPC_\ActorSoundKeyword` and `NPC_\ActorSoundSound` are the two links of xEdit's `wbActorSounds` pair: one CS2K keyword and one CS2D sound per sound group. The CS2H group count is not rowed, because the two-member group it counts has no `subrecord_group` shape (see Not covered), and xEdit's CS2E end marker is empty.
+`NPC_\ActorSoundKeyword` and `NPC_\ActorSoundSound` are the two links of xEdit's `wbActorSounds` pair: one CS2K keyword and one CS2D sound per sound group. The CS2H count is `NPC_\ActorSoundTotal` and CS2K and CS2D are the members of the counted group `NPC_\ActorSounds` (optional keyword, then required sound), so a sound can be added and removed with its keyword and the count follows. xEdit's CS2E end marker is empty and is not created by an insert, so adding the first sound to an NPC_ with no CS2H is refused.
 
 ### Link lists
 
@@ -145,7 +146,7 @@ The two lists carry an explicit `anchor_predecessors` list in reverse xEdit orde
 
 `NPC_\AttachParentSlots` is a typed list in the same shape as `RACE\AttachParentSlots`: a `packed_array` over the APPR subrecord, targets KYWD, `nullable: false` and `mutation: appendable`, so elements can be appended, set and removed. Its first element is anchored against the declared predecessors (`KWDA` and the rest of the subrecords xEdit orders before APPR, FO4:10404) and it appends at the end of the record when none of them is present.
 
-`NPC_\ActorSoundsFinalize` is the whole 1-byte CS2F payload (xEdit `wbByteArray(CS2F, 'Finalize', 1)`, FO4:10436), `repeated: true` because one CS2F follows each sound group.
+`NPC_\ActorSoundsFinalize` is the whole 1-byte CS2F payload (xEdit `wbByteArray(CS2F, 'Finalize', 1)`, FO4:10436), `repeated: true`; Fallout4.esm and the DLC masters carry exactly one CS2F per NPC_ with sounds.
 
 ## Not covered
 
@@ -163,7 +164,7 @@ The two lists carry an explicit `anchor_predecessors` list in reverse xEdit orde
 | FO4:10409 | DATA | Empty marker subrecord; authoring only. |
 | FO4:10417-10421 | PNAM head parts, HCLF, BCLF, ZNAM, GNAM | HCLF, BCLF, ZNAM and GNAM are form IDs. PNAM is a repeated form ID list, rowed as `NPC_\HeadParts`. |
 | FO4:10422 | NAM5 | Unknown bytes of no fixed width. |
-| FO4:10432-10436 | CS2H count, CS2E | Count and end marker are not modeled; CS2H has no typed owner, and the two-member sound group it counts is not expressible as a `subrecord_group`. |
+| FO4:10435 | CS2E | Empty end marker; not rowed and not created by a group insert. |
 | FO4:10438-10444 | CSCR, PFRN, DOFT, SOFT, DPLT, CRIF, FTST | FormIDs. |
 | FO4:10446-10447 | MSDK, MSDV | Morph arrays of variable length. |
 | FO4:10459 | TEND offset 4 | Unused byte of `wbByteColors`. |

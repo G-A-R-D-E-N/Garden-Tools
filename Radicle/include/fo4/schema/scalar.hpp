@@ -111,6 +111,8 @@ struct SubrecordGroupMemberDescriptor {
   bool localized{false};
   // Constraint: a skippable member may appear before the first leader, where it belongs to no run.
   bool skippable{false};
+  // Invariant: a leading member is optional, precedes the leader in declaration and data order, and belongs to the run of the leader that follows it.
+  bool leading{false};
 };
 
 // Invariant: count_member names one of the group's own members; that member's whole four-byte payload is the number of nested runs that follow it inside the enclosing run. An empty count_member means the group has no nested run.
@@ -127,6 +129,7 @@ struct SubrecordGroupDescriptor {
   std::span<const SubrecordGroupMemberDescriptor> members{};
   std::span<const Signature> successors{};
   SubrecordGroupRunDescriptor run{};
+  bool requires_existing_count{false};
 };
 
 class SubrecordGroupError : public std::runtime_error {
