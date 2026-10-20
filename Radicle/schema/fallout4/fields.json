@@ -7052,8 +7052,12 @@
         {"path": "LENS\\FadeDistanceRadiusScale", "label": "Fade distance radius scale", "kind": "scalar", "subrecord": "DNAM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
         {"path": "LENS\\SpriteTotal", "label": "Sprite total", "kind": "scalar", "subrecord": "LFSP", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"},
         {"path": "LENS\\Sprites", "label": "Lens flare sprites", "kind": "subrecord_group", "count_subrecord": "LFSP", "insertion": "existing_only", "members": [
-          {"subrecord": "DNAM", "required": true, "repeatable": false, "payload_size": 0, "default": "00"},
-          {"subrecord": "FNAM", "required": true, "repeatable": false, "payload_size": 0, "default": "00"},
+          {"subrecord": "DNAM", "required": true, "repeatable": false, "payload_size": 0, "default": "00", "fields": [
+            {"path": "LENS\\SpriteId", "label": "Lens flare sprite ID", "kind": "string", "offset": 0, "insertion": "existing_only"}
+          ]},
+          {"subrecord": "FNAM", "required": true, "repeatable": false, "payload_size": 0, "default": "00", "fields": [
+            {"path": "LENS\\SpriteTexture", "label": "Texture", "kind": "string", "offset": 0, "insertion": "existing_only"}
+          ]},
           {"subrecord": "LFSD", "required": true, "repeatable": false, "payload_size": 36, "fields": [
             {"path": "LENS\\SpriteTintRed", "label": "Sprite tint red", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
             {"path": "LENS\\SpriteTintGreen", "label": "Sprite tint green", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},

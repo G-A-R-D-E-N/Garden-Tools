@@ -82,7 +82,10 @@ with no change. C# sends UTF-8 and so inherits this. Tests:
 Shared body of `set_record_scalar(..., index, value)` and `set_record_string`. The old four-argument
 `set_record_scalar` and `set_record_formlink_field` in `Radicle/src/plugin/mutation.cpp` now delegate with
 index 0, so their results are unchanged for every field that existed before. Numeric fields patch bytes in
-place at the slot offset (neighbours stay identical); strings replace the whole subrecord payload.
+place at the slot offset (neighbours stay identical); strings replace the whole subrecord payload, except a
+group member string row, which `Radicle/src/plugin/field_writer.cpp:write_scalar` resizes to the encoded value
+when the string owns the whole payload and otherwise requires the value to fit the slot the subrecord already
+carries (`Radicle/src/plugin/field_writer.cpp:group_member`).
 `set_record_scalar` on a `zstring` field and `set_record_string` on a numeric field both throw
 `ScalarError`, keeping the localized check in one place. A string is refused when its (record, subrecord)
 pair is in `Radicle/include/fo4/schema/localized_fields.hpp:is_localized_field` and the plugin has the TES4
