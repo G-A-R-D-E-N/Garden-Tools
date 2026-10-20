@@ -368,6 +368,7 @@ if(RADICLE_BUILD_TESTS)
   FetchContent_MakeAvailable(googletest)
 
   add_executable(fo4_tests
+    tests/test_achr_extra_rows.cpp
     tests/test_achr_rows.cpp
     tests/test_achr_parity_rows.cpp
     tests/test_parw_rows.cpp
