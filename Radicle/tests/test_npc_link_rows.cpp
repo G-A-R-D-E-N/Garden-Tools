@@ -103,6 +103,7 @@ std::vector<std::byte> make_ordered_list_plugin(bool with_predecessor) {
     fo4::test::write_subrecord(out, "ACBS", Bytes(20, std::byte{0}));
     fo4::test::write_subrecord(out, "RNAM", u32_bytes(0x00000C00u));
     fo4::test::write_subrecord(out, "AIDT", Bytes(24, std::byte{0}));
+    fo4::test::write_subrecord(out, "PNAM", u32_bytes(0x00000C01u));
   } else {
     fo4::test::write_subrecord(out, "PNAM", u32_bytes(0x00000C01u));
   }
@@ -229,7 +230,6 @@ TEST(NpcLinkRows, SpellRowDeclaresRepeatedTargets) {
 }
 
 TEST(NpcLinkRows, PackageAndHeadPartArePerSubrecordListsNotFields) {
-  // PKID and PNAM must each carry one list row: a second field-shaped row on the same subrecord is refused by the codegen overlap guard, and a read-only field row leaves add and remove unoffered.
   const auto packages = list("NPC_\\Packages");
   EXPECT_EQ(packages.record, k_npc);
   EXPECT_EQ(packages.subrecord, k_pkid);
@@ -339,7 +339,6 @@ TEST(NpcLinkRows, SpellCountThatDisagreesWithTheRunIsRefusedAtomically) {
 }
 
 TEST(NpcLinkRows, EmptyPackageListAnchorsAfterItsLastXEditOrderPredecessor) {
-  // The first package must land after the last present xEdit-order predecessor, AIDT here (FO4:10399, 10400), not at the end of the record.
   auto plugin = fo4::read_plugin(make_ordered_list_plugin(true), "Patch.esp");
   const auto packages = list("NPC_\\Packages");
   ASSERT_EQ(fo4::schema::record_formlink_list_size(plugin, npc_key(), packages), 0u);
@@ -351,11 +350,12 @@ TEST(NpcLinkRows, EmptyPackageListAnchorsAfterItsLastXEditOrderPredecessor) {
   EXPECT_EQ(raws(after, k_pkid), (std::vector<std::uint32_t>{0x00000C02u}));
   ASSERT_TRUE(index_of(after, k_pkid).has_value());
   ASSERT_TRUE(index_of(after, sig("AIDT")).has_value());
+  ASSERT_TRUE(index_of(after, sig("PNAM")).has_value());
   EXPECT_EQ(*index_of(after, k_pkid), *index_of(after, sig("AIDT")) + 1);
+  EXPECT_EQ(*index_of(after, sig("PNAM")), *index_of(after, k_pkid) + 1);
 }
 
 TEST(NpcLinkRows, EmptyListsAnchorAfterTheWholeAttackRun) {
-  // xEdit's wbAttackData repeats ATKE, ATKW, ATKS and ATKT after ATKD (FO4:4073-4123), so the first element of each list must land after ATKT, not after ATKD.
   struct Row {
     std::string_view path;
     std::string_view subrecord;
@@ -378,7 +378,6 @@ TEST(NpcLinkRows, EmptyListsAnchorAfterTheWholeAttackRun) {
 }
 
 TEST(NpcLinkRows, EmptyAttachParentSlotsAnchorsAfterTheDestructibleRun) {
-  // The APPR anchor set carries the whole destructible run, so a first attach parent slot must land after DSTF rather than after DEST (FO4:10404).
   auto plugin = fo4::read_plugin(make_anchor_plugin({"ACBS", "RNAM", "DEST", "DSTD", "DSTF"}), "Patch.esp");
   EXPECT_EQ(fo4::schema::insert_record_formlink_list_element(
                 plugin, npc_key(), list("NPC_\\AttachParentSlots"), 0, key(0x00000D02u)),
@@ -390,7 +389,6 @@ TEST(NpcLinkRows, EmptyAttachParentSlotsAnchorsAfterTheDestructibleRun) {
 }
 
 TEST(NpcLinkRows, EmptyPackageListRefusesAnInsertWithNoAnchor) {
-  // PNAM is not a PKID predecessor, so a record with no anchor must fail closed rather than append a package out of order.
   auto plugin = fo4::read_plugin(make_ordered_list_plugin(false), "Patch.esp");
   const auto packages = list("NPC_\\Packages");
   EXPECT_EQ(fo4::schema::insert_record_formlink_list_element(plugin, npc_key(), packages, 0, key(0x000C02)),

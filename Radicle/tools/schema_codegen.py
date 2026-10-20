@@ -289,11 +289,12 @@ def parse_subrecord_group(field, record_signature: str):
         run_members = run.get("members")
         if not isinstance(run_members, list) or not run_members:
             raise ValueError(f"subrecord_group run members must be a non-empty array: {path!r}")
+        if any(isinstance(member, dict) and member.get("leading") for member in run_members):
+            raise ValueError(f"subrecord_group run members cannot be leading: {path!r}")
         nested, nested_rows, nested_links, _nested_signatures = parse_group_members(
             run_members, path, signatures | set(successors)
             | ({count_subrecord} if count_subrecord else set()))
-        nested_leader = next((entry for entry in nested if not entry["leading"]), None)
-        if nested_leader is None or not nested_leader["required"] or nested_leader["repeatable"]:
+        if not nested[0]["required"] or nested[0]["repeatable"]:
             raise ValueError(f"subrecord_group run leader must be required and non-repeatable: {path!r}")
         rows.extend(nested_rows)
         links.extend(nested_links)
