@@ -61,9 +61,9 @@ fo4::FormKey key(std::uint32_t local) {
 }
 
 void write_record(fo4::test::ByteWriter& out, std::string_view signature, std::uint32_t form_id,
-                  const std::vector<Sub>& subrecords) {
+                  const std::vector<Sub>& subrecords, std::uint16_t form_version = 131) {
   const auto group = fo4::test::begin_group(out, signature, 0);
-  const auto record = fo4::test::begin_record(out, signature, 0, form_id);
+  const auto record = fo4::test::begin_record(out, signature, 0, form_id, form_version);
   for (const auto& subrecord : subrecords) {
     fo4::test::write_subrecord(out, subrecord.signature, std::span<const std::byte>{subrecord.data});
   }
@@ -91,10 +91,29 @@ std::vector<std::byte> make_plugin() {
   put(imad_tnam, 20, f32(2.5f));
   Bytes imad_nam3 = zeros(20);
   put(imad_nam3, 0, f32(1.5f));
+  Bytes imad_bnam = zeros(16);
+  put(imad_bnam, 0, f32(0.25f));
+  put(imad_bnam, 4, f32(2.5f));
+  put(imad_bnam, 8, f32(0.75f));
+  put(imad_bnam, 12, f32(-4.0f));
+  Bytes imad_iad = zeros(16);
+  put(imad_iad, 0, f32(0.5f));
+  put(imad_iad, 4, f32(6.0f));
+  put(imad_iad, 8, f32(0.75f));
+  put(imad_iad, 12, f32(1.5f));
+  Bytes imad_nam5 = zeros(8);
+  put(imad_nam5, 0, f32(0.5f));
+  put(imad_nam5, 4, f32(1.5f));
+  Bytes imad_nam6 = zeros(8);
+  put(imad_nam6, 0, f32(0.125f));
+  put(imad_nam6, 4, f32(0.5f));
   write_record(out, "IMAD", 3001,
-               {{"EDID", zstr("RadicleImageAdapter")}, {"DNAM", imad_full}, {"TNAM", imad_tnam},
-                {"NAM3", imad_nam3}});
-  write_record(out, "IMAD", 3002, {{"EDID", zstr("RadicleImageAdapterTwo")}, {"DNAM", zeros(244)}});
+               {{"EDID", zstr("RadicleImageAdapter")}, {"DNAM", imad_full}, {"BNAM", imad_bnam},
+                {"TNAM", imad_tnam}, {"NAM3", imad_nam3}, {"@IAD", imad_iad}, {"NAM5", imad_nam5},
+                {"NAM6", imad_nam6}});
+  write_record(out, "IMAD", 3002,
+               {{"EDID", zstr("RadicleImageAdapterTwo")}, {"DNAM", zeros(244)}, {"NAM6", zeros(8)}},
+               113);
 
   Bytes zoom = zeros(24);
   put(zoom, 0, f32(1.0f));
@@ -232,6 +251,62 @@ TEST(ImageFxSynthetic, InterpolatorMembersEditOneStrideElement) {
   EXPECT_EQ(slice(payload(reread, 3001, "TNAM"), 20, 4), f32(3.5f));
   EXPECT_EQ(payload(reread, 3001, "NAM3").size(), 20u);
   EXPECT_EQ(slice(payload(reread, 3001, "NAM3"), 0, 4), f32(4.5f));
+}
+
+TEST(ImageFxSynthetic, TimeInterpolatorArraysDecodeAndEditOneStrideElement) {
+  // Regression: an interpolator row requires stride 8 with Time at 0 and Value at 4, so a wrong stride or offset edits the neighbouring sample of the same array.
+  auto plugin = load();
+  EXPECT_EQ(fo4::record_field_count(plugin, key(3001), "IMAD\\BlurRadiusTime"), 2u);
+  EXPECT_EQ(fo4::record_field_count(plugin, key(3001), "IMAD\\HDREyeAdaptSpeedAddValue"), 2u);
+  EXPECT_EQ(fo4::record_field_count(plugin, key(3002), "IMAD\\BlurRadiusTime"), 0u);
+  EXPECT_EQ(decoded_value(plugin, 3001, "IMAD\\BlurRadiusTime"), "0.25");
+  EXPECT_EQ(decoded_value(plugin, 3001, "IMAD\\BlurRadiusValue"), "2.5");
+  EXPECT_EQ(decoded_value(plugin, 3001, "IMAD\\HDREyeAdaptSpeedAddTime"), "0.5");
+  EXPECT_EQ(decoded_value(plugin, 3001, "IMAD\\HDREyeAdaptSpeedAddValue"), "6");
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key(3001), scalar("IMAD\\BlurRadiusValue"), 1, "7.5"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key(3001), scalar("IMAD\\HDREyeAdaptSpeedAddValue"), 1, "8.5"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key(3001), scalar("IMAD\\BlurRadiusTime"), 2, "9"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key(3002), scalar("IMAD\\BlurRadiusTime"), 0, "9"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(payload(reread, 3001, "BNAM").size(), 16u);
+  EXPECT_EQ(slice(payload(reread, 3001, "BNAM"), 0, 4), f32(0.25f));
+  EXPECT_EQ(slice(payload(reread, 3001, "BNAM"), 4, 4), f32(2.5f));
+  EXPECT_EQ(slice(payload(reread, 3001, "BNAM"), 8, 4), f32(0.75f));
+  EXPECT_EQ(slice(payload(reread, 3001, "BNAM"), 12, 4), f32(7.5f));
+  EXPECT_EQ(slice(payload(reread, 3001, "@IAD"), 4, 4), f32(6.0f));
+  EXPECT_EQ(slice(payload(reread, 3001, "@IAD"), 12, 4), f32(8.5f));
+}
+
+TEST(ImageFxSynthetic, DepthOfFieldVignetteInterpolatorsAreGatedByFormVersion118) {
+  // Regression: NAM5 and NAM6 carry min_form_version 118, so a version 113 record must not read or write them even when the payload is present.
+  auto plugin = load();
+  EXPECT_EQ(fo4::record_field_count(plugin, key(3001), "IMAD\\DepthOfFieldVignetteRadiusTime"), 1u);
+  EXPECT_EQ(fo4::record_field_count(plugin, key(3001), "IMAD\\DepthOfFieldVignetteStrengthValue"), 1u);
+  EXPECT_EQ(decoded_value(plugin, 3001, "IMAD\\DepthOfFieldVignetteRadiusValue"), "1.5");
+  EXPECT_EQ(decoded_value(plugin, 3001, "IMAD\\DepthOfFieldVignetteStrengthValue"), "0.5");
+  EXPECT_EQ(fo4::record_field_count(plugin, key(3002), "IMAD\\DepthOfFieldVignetteStrengthTime"), 1u);
+  EXPECT_EQ(fo4::record_field_count(plugin, key(3002), "IMAD\\DepthOfFieldVignetteRadiusTime"), 0u);
+
+  const auto before = payload(plugin, 3002, "NAM6");
+  EXPECT_EQ(before.size(), 8u);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key(3002), scalar("IMAD\\DepthOfFieldVignetteStrengthTime"), 0, "1"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(payload(plugin, 3002, "NAM6"), before);
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key(3001), scalar("IMAD\\DepthOfFieldVignetteStrengthTime"), 0, "4"),
+            fo4::ScalarMutationStatus::updated);
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(payload(reread, 3001, "NAM5").size(), 8u);
+  EXPECT_EQ(slice(payload(reread, 3001, "NAM5"), 0, 4), f32(0.5f));
+  EXPECT_EQ(slice(payload(reread, 3001, "NAM5"), 4, 4), f32(1.5f));
+  EXPECT_EQ(slice(payload(reread, 3001, "NAM6"), 0, 4), f32(4.0f));
+  EXPECT_EQ(slice(payload(reread, 3001, "NAM6"), 4, 4), f32(0.5f));
 }
 
 TEST(ImageFxSynthetic, EditsOneRowPerRecordAndRereads) {

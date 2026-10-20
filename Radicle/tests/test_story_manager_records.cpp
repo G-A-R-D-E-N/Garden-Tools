@@ -119,7 +119,7 @@ std::vector<std::byte> make_plugin() {
   fo4::test::end_record(out, tes4);
 
   write_record(out, "SMBN", 2049, {{"EDID", zstr("RadicleBranch")}, {"PNAM", u32(2050)}, {"SNAM", u32(0)}, {"CITC", u32(0)}, {"DNAM", u32(1)}, {"XNAM", u32(3)}});
-  write_record(out, "SMQN", 2050, {{"EDID", zstr("RadicleQuestNode")}, {"PNAM", u32(2049)}, {"SNAM", u32(0)}, {"CITC", u32(0)}, {"DNAM", u32(0)}, {"XNAM", u32(2)}, {"MNAM", u32(1)}, {"HNAM", f32(0.5f)}, {"QNAM", u32(0)}});
+  write_record(out, "SMQN", 2050, {{"EDID", zstr("RadicleQuestNode")}, {"PNAM", u32(2049)}, {"SNAM", u32(0)}, {"CITC", u32(0)}, {"DNAM", u32(0)}, {"XNAM", u32(2)}, {"MNAM", u32(1)}, {"HNAM", f32(0.5f)}, {"QNAM", u32(2)}, {"NNAM", u32(2053)}, {"RNAM", f32(1.5f)}, {"NNAM", u32(2058)}, {"RNAM", f32(2.0f)}});
   write_record(out, "SMEN", 2051, {{"EDID", zstr("RadicleEvent")}, {"PNAM", u32(2050)}, {"SNAM", u32(0)}, {"CITC", u32(0)}, {"DNAM", u32(2)}, {"XNAM", u32(0)}, {"ENAM", u32(four_cc("ADCR"))}});
   write_record(out, "QUST", 2053, {{"EDID", zstr("RadicleQuest")}});
   write_record(out, "QUST", 2058, {{"EDID", zstr("RadicleQuestTwo")}});
@@ -160,6 +160,16 @@ Bytes payload(const fo4::Plugin& plugin, std::uint32_t local, std::string_view s
   return {};
 }
 
+std::vector<Bytes> payloads(const fo4::Plugin& plugin, std::uint32_t local, std::string_view signature) {
+  std::vector<Bytes> out;
+  const auto* record = fo4::find_record(plugin, key(local));
+  if (record == nullptr) return out;
+  for (const auto& subrecord : record->subrecords) {
+    if (subrecord.signature == fo4::Signature::from_string(signature)) out.push_back(subrecord.data);
+  }
+  return out;
+}
+
 }  // namespace
 
 TEST(StoryManagerRecordsSynthetic, EveryNewRowReadsItsSubrecordOnFixtureRecords) {
@@ -184,6 +194,80 @@ TEST(StoryManagerRecordsSynthetic, EveryNewRowReadsItsSubrecordOnFixtureRecords)
   EXPECT_EQ(fo4::schema::decode_scalar(payload(plugin, 2049, "XNAM"), scalar("SMBN\\MaxConcurrentQuests").scalar), "3");
   EXPECT_EQ(fo4::schema::decode_scalar(payload(plugin, 2050, "MNAM"), scalar("SMQN\\NumQuestsToRun").scalar), "1");
   EXPECT_EQ(fo4::schema::scalar_fields(fo4::Signature::from_string("SCCO")).size(), 2u);
+}
+
+TEST(StoryManagerRecordsSynthetic, QuestListRowsReadAndRetargetEveryQuestNodeEntry) {
+  // Regression: the node's quest references require a list row, so without it a retarget writes into the wrong NNAM payload and the QUST target type goes unchecked.
+  auto plugin = load();
+  const auto quests = fo4::schema::formlink_list_descriptor(fo4::Signature::from_string("SMQN"), "SMQN\\Quests");
+  ASSERT_TRUE(quests.has_value());
+  EXPECT_EQ(quests->subrecord, fo4::Signature::from_string("NNAM"));
+  EXPECT_EQ(quests->storage, fo4::schema::FormLinkListStorage::per_subrecord);
+  EXPECT_FALSE(quests->nullable);
+  EXPECT_FALSE(quests->can_insert);
+  const auto targets = fo4::schema::formlink_list_targets(*quests);
+  ASSERT_EQ(targets.size(), 1u);
+  EXPECT_EQ(targets[0], fo4::Signature::from_string("QUST"));
+  const auto values = fo4::schema::record_formlink_list_values(plugin, key(2050), *quests);
+  ASSERT_TRUE(values.has_value());
+  ASSERT_EQ(values->size(), 2u);
+  EXPECT_EQ(values->at(0), key(2053));
+  EXPECT_EQ(values->at(1), key(2058));
+
+  EXPECT_EQ(fo4::schema::set_record_formlink_list_element(plugin, key(2050), *quests, 1, key(2053)),
+            fo4::schema::FormLinkListMutationStatus::updated);
+  EXPECT_EQ(fo4::schema::set_record_formlink_list_element(plugin, key(2050), *quests, 1, key(2049)),
+            fo4::schema::FormLinkListMutationStatus::target_type_mismatch);
+  EXPECT_EQ(fo4::schema::set_record_formlink_list_element(plugin, key(2050), *quests, 2, key(2053)),
+            fo4::schema::FormLinkListMutationStatus::index_out_of_range);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(payloads(reread, 2050, "NNAM"), (std::vector<Bytes>{u32(2053), u32(2053)}));
+  EXPECT_EQ(payload(reread, 2050, "QNAM"), u32(2));
+}
+
+TEST(StoryManagerRecordsSynthetic, QuestListRemovalAndClearKeepTheDeclaredCount) {
+  // Regression: QNAM requires a rewrite and each quest's RNAM travels with its NNAM, or removal leaves a stale count and an orphan RNAM that the next quest inherits.
+  const auto quests = fo4::schema::formlink_list_descriptor(fo4::Signature::from_string("SMQN"), "SMQN\\Quests");
+  ASSERT_TRUE(quests.has_value());
+
+  auto removed = load();
+  EXPECT_EQ(fo4::schema::remove_record_formlink_list_element(removed, key(2050), *quests, 0),
+            fo4::schema::FormLinkListMutationStatus::updated);
+  auto reread = fo4::read_plugin(fo4::write_plugin(removed), "Patch.esp");
+  EXPECT_EQ(payloads(reread, 2050, "NNAM"), (std::vector<Bytes>{u32(2058)}));
+  EXPECT_EQ(payloads(reread, 2050, "RNAM"), (std::vector<Bytes>{f32(2.0f)}));
+  EXPECT_EQ(payload(reread, 2050, "QNAM"), u32(1));
+
+  EXPECT_EQ(fo4::schema::remove_record_formlink_list_element(removed, key(2050), *quests, 0),
+            fo4::schema::FormLinkListMutationStatus::updated);
+  reread = fo4::read_plugin(fo4::write_plugin(removed), "Patch.esp");
+  EXPECT_TRUE(payloads(reread, 2050, "NNAM").empty());
+  EXPECT_TRUE(payloads(reread, 2050, "RNAM").empty());
+  EXPECT_EQ(payload(reread, 2050, "QNAM"), u32(0));
+
+  auto matched = load();
+  EXPECT_EQ(fo4::schema::remove_record_formlink_list_elements_matching(matched, key(2050), *quests, key(2053)), 1u);
+  reread = fo4::read_plugin(fo4::write_plugin(matched), "Patch.esp");
+  EXPECT_EQ(payloads(reread, 2050, "NNAM"), (std::vector<Bytes>{u32(2058)}));
+  EXPECT_EQ(payloads(reread, 2050, "RNAM"), (std::vector<Bytes>{f32(2.0f)}));
+  EXPECT_EQ(payload(reread, 2050, "QNAM"), u32(1));
+
+  auto moved = load();
+  EXPECT_EQ(fo4::schema::move_record_formlink_list_element(moved, key(2050), *quests, 0, 1),
+            fo4::schema::FormLinkListMutationStatus::updated);
+  reread = fo4::read_plugin(fo4::write_plugin(moved), "Patch.esp");
+  EXPECT_EQ(payloads(reread, 2050, "NNAM"), (std::vector<Bytes>{u32(2058), u32(2053)}));
+  EXPECT_EQ(payloads(reread, 2050, "RNAM"), (std::vector<Bytes>{f32(2.0f), f32(1.5f)}));
+  EXPECT_EQ(payload(reread, 2050, "QNAM"), u32(2));
+
+  auto cleared = load();
+  EXPECT_EQ(fo4::schema::clear_record_formlink_list(cleared, key(2050), *quests),
+            fo4::schema::FormLinkListMutationStatus::updated);
+  reread = fo4::read_plugin(fo4::write_plugin(cleared), "Patch.esp");
+  EXPECT_TRUE(payloads(reread, 2050, "NNAM").empty());
+  EXPECT_TRUE(payloads(reread, 2050, "RNAM").empty());
+  EXPECT_EQ(payload(reread, 2050, "QNAM"), u32(0));
 }
 
 TEST(StoryManagerRecordsSynthetic, SceneCoordinatesUseTheLayoutBeforeTheFirstVnam) {

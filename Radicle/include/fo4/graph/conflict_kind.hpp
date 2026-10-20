@@ -5,6 +5,8 @@
 
 #include <cstddef>
 #include <span>
+#include <string>
+#include <string_view>
 #include <vector>
 
 namespace fo4 {
@@ -54,12 +56,22 @@ struct SubrecordConflict {
   std::vector<ConflictRole> roles;
 };
 
+struct FieldConflict {
+  std::string path;
+  ConflictCategory category{ConflictCategory::unknown};
+  std::vector<ConflictRole> roles;
+};
+
 struct RecordConflict {
   FormKey key;
   ConflictCategory category{ConflictCategory::unknown};
   std::vector<ConflictRole> roles;
   std::vector<SubrecordConflict> subrecords;
+  std::vector<FieldConflict> fields;
 };
+
+std::string_view conflict_category_name(ConflictCategory category) noexcept;
+std::string_view conflict_role_name(ConflictRole role) noexcept;
 
 struct ConflictQuery {
   std::span<const Plugin* const> load_order;

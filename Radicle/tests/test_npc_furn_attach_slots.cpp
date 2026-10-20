@@ -81,6 +81,8 @@ ByteWriter make_plugin() {
   add_record(out, "NPC_", 0x804, {{"NAM8", Bytes(4)}, {"CSCR", u32_bytes(0)}});
   add_record(out, "NPC_", 0x805, {{"CS2H", u32_bytes(1)}, {"CS2K", u32_bytes(0x00000A30)}, {"CS2E", Bytes{}}});
   add_record(out, "FURN", 0x900, {{"XMRK", Bytes(7)}});
+  add_record(out, "FURN", 0x901,
+             {{"COCT", u32_bytes(1)}, {"CNTO", u32_words({0x02000A30u, 1u})}});
   return out;
 }
 
@@ -192,6 +194,12 @@ TEST(NpcFurnAttachSlots, EmptyAttachParentSlotsAnchorsAfterItsPredecessor) {
   EXPECT_EQ(fo4::schema::insert_record_formlink_list_element(plugin, furn, furn_appr, 0, keyword2),
             updated);
   EXPECT_EQ(signature_list(plugin, "000900:Patch.esp"), "EDID,XMRK,APPR");
+
+  const auto furn_items = fo4::FormKey::parse("000901:Patch.esp");
+  EXPECT_EQ(fo4::schema::insert_record_formlink_list_element(plugin, furn_items, furn_appr, 0,
+                                                             keyword2),
+            updated);
+  EXPECT_EQ(signature_list(plugin, "000901:Patch.esp"), "EDID,COCT,CNTO,APPR");
 
   EXPECT_EQ(fo4::schema::insert_record_formlink_list_element(plugin, npc, npc_appr, 1, keyword2), updated);
   EXPECT_EQ(fo4::schema::record_formlink_list_size(plugin, npc, npc_appr), 2u);

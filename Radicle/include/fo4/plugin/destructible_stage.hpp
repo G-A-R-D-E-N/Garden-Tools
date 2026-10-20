@@ -6,6 +6,20 @@
 
 namespace fo4 {
 
+enum class DestructibleHeaderStatus {
+  updated,
+  record_missing,
+  record_mismatch,
+  header_present,
+  header_missing,
+  unknown_order,
+  too_many_stages,
+};
+
+DestructibleHeaderStatus insert_destructible_header(Plugin& plugin, const FormKey& record_key);
+
+DestructibleHeaderStatus remove_destructible_header(Plugin& plugin, const FormKey& record_key);
+
 enum class DestructibleStageMutationStatus {
   updated,
   record_missing,

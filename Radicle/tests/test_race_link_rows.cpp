@@ -515,6 +515,39 @@ TEST(RaceScalarRows, FaceGenClampsChatterAndWrinkleMapsEditInPlace) {
   EXPECT_EQ(live_subrecord(reread, "WMAP", 1), zstr("Actors\\Character\\Other.dds"));
 }
 
+TEST(RaceScalarRows, SkeletalModelPathsEditInPlace) {
+  auto plugin = fo4::read_plugin(
+      plugin_with({{"ANAM", zstr("Actors\\Character\\MaleSkeleton.nif")},
+                   {"ANAM", zstr("Actors\\Character\\FemaleSkeleton.nif")}},
+                  false),
+      "Patch.esp");
+  const auto key = fo4::FormKey::parse(k_race_key);
+
+  const auto model = scalar_row("RACE\\SkeletalModelPath");
+  EXPECT_EQ(model.scalar.subrecord, fo4::Signature::from_string("ANAM"));
+  EXPECT_EQ(model.scalar.storage, fo4::schema::ScalarStorage::zstring);
+  EXPECT_TRUE(model.scalar.address.repeated);
+
+  EXPECT_EQ(fo4::record_field_count(plugin, key, "RACE\\SkeletalModelPath"), 2u);
+  EXPECT_EQ(read_scalar_member(plugin, "RACE\\SkeletalModelPath", 0),
+            "Actors\\Character\\MaleSkeleton.nif");
+  EXPECT_EQ(read_scalar_member(plugin, "RACE\\SkeletalModelPath", 1),
+            "Actors\\Character\\FemaleSkeleton.nif");
+
+  EXPECT_EQ(fo4::set_record_string(plugin, key, model, 2, "Actors\\Character\\Other.nif"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(read_scalar_member(plugin, "RACE\\SkeletalModelPath", 2), "");
+  EXPECT_EQ(fo4::set_record_string(plugin, key, model, 1, "Actors\\Character\\Other.nif"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_string(plugin, key, model, 2, "Actors\\Character\\Third.nif"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(read_scalar_member(plugin, "RACE\\SkeletalModelPath", 2), "");
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(live_subrecord(reread, "ANAM", 0), zstr("Actors\\Character\\MaleSkeleton.nif"));
+  EXPECT_EQ(live_subrecord(reread, "ANAM", 1), zstr("Actors\\Character\\Other.nif"));
+}
+
 TEST(RaceScalarRows, RefuseANonFloatPayloadForAWholePayloadRow) {
   auto plugin = fo4::read_plugin(plugin_with({{"PNAM", u16_bytes(1)}}, true), "Patch.esp");
   const auto key = fo4::FormKey::parse(k_race_key);
