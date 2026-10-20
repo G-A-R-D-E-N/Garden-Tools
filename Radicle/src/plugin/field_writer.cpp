@@ -170,7 +170,8 @@ ScalarMutationStatus write_scalar(Plugin& plugin,
                               " is derived from the five footstep category lists in DATA");
   }
 
-  const bool is_string = field.scalar.storage == schema::ScalarStorage::zstring;
+  const bool is_string = field.scalar.storage == schema::ScalarStorage::zstring ||
+                         field.scalar.storage == schema::ScalarStorage::fixed_string;
   if (is_string != string_setter) {
     throw schema::ScalarError(std::string(field.path) +
                               (is_string ? " is a string field; use the string setter"

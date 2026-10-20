@@ -81,6 +81,14 @@ std::string format_float(float value) {
   return std::string(buffer, ptr);
 }
 
+std::span<const std::byte> fixed_string_bytes(std::span<const std::byte> payload,
+                                              const ScalarDescriptor& descriptor) {
+  if (payload.size() != descriptor.payload_size) {
+    throw ScalarError(std::string(descriptor.field_name) + " has unexpected binary width");
+  }
+  return payload;
+}
+
 std::span<const std::byte> slot_string_bytes(std::span<const std::byte> payload,
                                              std::size_t offset,
                                              const ScalarDescriptor& descriptor) {
@@ -190,7 +198,8 @@ std::optional<ScalarDescriptor> scalar_descriptor(Signature subrecord) noexcept 
     only = &field.scalar;
   }
   if (!only || only->embedded || only->address.repeated ||
-      only->storage == ScalarStorage::zstring) {
+      only->storage == ScalarStorage::zstring ||
+      only->storage == ScalarStorage::fixed_string) {
     return std::nullopt;
   }
   return *only;
@@ -198,6 +207,9 @@ std::optional<ScalarDescriptor> scalar_descriptor(Signature subrecord) noexcept 
 
 std::span<const std::byte> scalar_field_bytes(std::span<const std::byte> payload,
                                               const ScalarDescriptor& descriptor) {
+  if (descriptor.storage == ScalarStorage::fixed_string) {
+    return fixed_string_bytes(payload, descriptor);
+  }
   if (descriptor.storage == ScalarStorage::zstring) {
     if (!descriptor.embedded) return payload;
     if (descriptor.payload_size != 0 && payload.size() != descriptor.payload_size) return {};
@@ -232,13 +244,18 @@ FieldShape scalar_field_shape(const ScalarDescriptor& descriptor) noexcept {
   shape.max_form_version = descriptor.max_form_version;
   shape.whole_payload = !descriptor.embedded;
   shape.offset = descriptor.embedded ? descriptor.offset : std::size_t{0};
-  shape.width = scalar_storage_size(descriptor.storage);
+  shape.width = descriptor.storage == ScalarStorage::fixed_string
+                    ? descriptor.payload_size
+                    : scalar_storage_size(descriptor.storage);
   return shape;
 }
 
 std::span<const std::byte> scalar_slot_bytes(std::span<const std::byte> payload,
                                              const FieldSlot& slot,
                                              const ScalarDescriptor& descriptor) {
+  if (descriptor.storage == ScalarStorage::fixed_string) {
+    return fixed_string_bytes(payload, descriptor);
+  }
   if (descriptor.storage == ScalarStorage::zstring) {
     if (!descriptor.embedded) return payload;
     return slot_string_bytes(payload, slot.offset, descriptor);
@@ -375,6 +392,7 @@ std::size_t scalar_storage_size(ScalarStorage storage) noexcept {
     case ScalarStorage::f32:
       return 4;
     case ScalarStorage::zstring:
+    case ScalarStorage::fixed_string:
       return 0;
   }
   return 0;
@@ -398,6 +416,11 @@ std::optional<std::int64_t> scalar_name_value(const ScalarDescriptor& descriptor
 
 std::string decode_scalar(std::span<const std::byte> data,
                           const ScalarDescriptor& descriptor) {
+  if (descriptor.storage == ScalarStorage::fixed_string) {
+    const auto slot = fixed_string_bytes(data, descriptor);
+    const auto* begin = reinterpret_cast<const char*>(slot.data());
+    return std::string(begin, begin + slot.size());
+  }
   if (descriptor.storage == ScalarStorage::zstring) {
     const auto terminated = !data.empty() && data.back() == std::byte{0} &&
                             std::find(data.begin(), data.end() - 1, std::byte{0}) == data.end() - 1;
@@ -420,6 +443,7 @@ std::string decode_scalar(std::span<const std::byte> data,
     case ScalarStorage::i16:
       return std::to_string(static_cast<std::int16_t>(read_u16(data)));
     case ScalarStorage::zstring:
+    case ScalarStorage::fixed_string:
       break;
     case ScalarStorage::u16:
       return std::to_string(read_u16(data));
@@ -480,6 +504,14 @@ std::vector<std::byte> encode_scalar(std::string_view text,
       }
       for (const char ch : text) out.push_back(std::byte{static_cast<std::uint8_t>(ch)});
       out.push_back(std::byte{0});
+      break;
+    }
+    case ScalarStorage::fixed_string: {
+      if (text.size() != descriptor.payload_size) {
+        throw ScalarError(std::string(descriptor.field_name) + " must be exactly " +
+                          std::to_string(descriptor.payload_size) + " characters");
+      }
+      for (const char ch : text) out.push_back(std::byte{static_cast<std::uint8_t>(ch)});
       break;
     }
     case ScalarStorage::u16: {
