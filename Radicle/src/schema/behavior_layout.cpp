@@ -34,6 +34,30 @@ std::vector<std::size_t> before_marker(const std::vector<Subrecord>& subs, Signa
   return out;
 }
 
+std::vector<std::size_t> outside_objective_array(const std::vector<Subrecord>& subs, Signature subrecord) {
+  std::size_t begin = subs.size();
+  std::size_t end = subs.size();
+  for (std::size_t i = 0; i < subs.size(); ++i) {
+    if (subs[i].signature == sig("ANAM")) {
+      end = i;
+      break;
+    }
+    if (subs[i].signature == sig("QOBJ") && begin == subs.size()) begin = i;
+  }
+  std::vector<std::size_t> out;
+  for (std::size_t i = 0; i < subs.size(); ++i) {
+    if (subs[i].signature == subrecord && (i < begin || i >= end)) out.push_back(i);
+  }
+  return out;
+}
+
+std::vector<std::size_t> first_occurrence(const std::vector<Subrecord>& subs, Signature subrecord) {
+  for (std::size_t i = 0; i < subs.size(); ++i) {
+    if (subs[i].signature == subrecord) return {i};
+  }
+  return {};
+}
+
 }
 
 std::optional<std::vector<std::size_t>> behavior_field_candidates(const Record& record, Signature subrecord) {
@@ -42,6 +66,12 @@ std::optional<std::vector<std::size_t>> behavior_field_candidates(const Record& 
   }
   if (record.header.signature == sig("SCCO") && subrecord == sig("XNAM")) {
     return before_marker(record.subrecords, sig("VNAM"), subrecord);
+  }
+  if (record.header.signature == sig("QUST") && subrecord == sig("NNAM")) {
+    return outside_objective_array(record.subrecords, subrecord);
+  }
+  if (record.header.signature == sig("RACE") && subrecord == sig("MPGS")) {
+    return first_occurrence(record.subrecords, subrecord);
   }
   if (record.header.signature == sig("PERK") && subrecord == sig("DATA")) {
     for (std::size_t i = 0; i < record.subrecords.size(); ++i) {

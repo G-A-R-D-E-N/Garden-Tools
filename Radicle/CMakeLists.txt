@@ -244,6 +244,7 @@ add_library(fo4
   src/pex_analysis/summary.cpp
   src/pex_analysis/fragments.cpp
   src/abc/abc_file.cpp
+  src/abc/byte_reader.cpp
   src/abc/constant_pool.cpp
   src/abc/opcodes.cpp
   src/abc/disassembly.cpp
@@ -656,6 +657,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_pex_oracle.cpp
     tests/test_papyrus_vm.cpp
     tests/test_pex_analysis.cpp
+    tests/test_pex_disasm.cpp
     tests/test_papyrus_source.cpp
     tests/test_papyrus_source_real.cpp
     tests/test_abc.cpp
