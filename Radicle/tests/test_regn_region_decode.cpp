@@ -86,7 +86,15 @@ TEST(RegnRows, DecodesAnamInBothXEditPositionsAndEntryLodMultiplier) {
                                      {"RDAT", bytes_of({3, 0})},
                                      {"RDWT", Bytes(12)},
                                      {"RPLI", bytes_of({120})},
-                                     {"ANAM", floats({2048.0f})}})})});
+                                     {"ANAM", floats({2048.0f})}}),
+                rec("REGN", 0x0F26, {{"RPLI", bytes_of({80})},
+                                     {"RDAT", bytes_of({3, 0})},
+                                     {"RPLI", bytes_of({120})},
+                                     {"RDWT", Bytes(12)}}),
+                rec("REGN", 0x0F27, {{"RPLI", bytes_of({80})},
+                                     {"RDAT", bytes_of({3, 0})},
+                                     {"RPLI", bytes_of({120})},
+                                     {"RLDM", floats({1.0f})}})})});
   fo4::test::TempDataDir dir;
   dir.write("Anam.esp", bytes, 0);
   const std::vector<std::filesystem::path> ordered{dir.path() / "Anam.esp"};
@@ -120,7 +128,7 @@ TEST(RegnRows, DecodesAnamInBothXEditPositionsAndEntryLodMultiplier) {
   ASSERT_EQ(reopened_region.entries.size(), 1u);
   EXPECT_FALSE(reopened_region.entries[0].occlusion_accuracy_dist.has_value());
 
-  for (const auto* local : {"000F22", "000F23", "000F24"}) {
+  for (const auto* local : {"000F22", "000F23", "000F24", "000F26", "000F27"}) {
     const auto* ref = env.winner(fo4::FormKey::parse(std::string(local) + ":Anam.esp"));
     ASSERT_NE(ref, nullptr) << local;
     EXPECT_THROW(fo4::env::decode_region(env, *ref), fo4::env::WorldDecodeError) << local;
