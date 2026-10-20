@@ -111,7 +111,8 @@ Result<std::vector<SemanticFieldCell>> semanticFieldCells(const fo4::Plugin& plu
                 try {
                     cell.value = fo4::schema::decode_scalar(fo4::schema::scalar_slot_bytes(
                         record.subrecords[slot.subrecord].data, slot, scalar), scalar);
-                    if (scalar.storage == fo4::schema::ScalarStorage::zstring) {
+                    if (scalar.storage == fo4::schema::ScalarStorage::zstring ||
+                        scalar.storage == fo4::schema::ScalarStorage::fixed_string) {
                         cell.value = fo4::text::windows1252_to_utf8(cell.value);
                     }
                     cell.available = true;
@@ -179,6 +180,11 @@ Result<std::vector<SemanticFieldCell>> semanticFieldCells(const fo4::Plugin& plu
                 cells.push_back(SemanticFieldCell{std::string(descriptor.path) + "[" + std::to_string(index) + "]",
                     (*values)[index].to_string(), true, true});
             }
+        } catch (const fo4::schema::FormLinkListError& error) {
+            if (descriptor.segment_count == 0) {
+                return std::unexpected(Error{"FormLinkReadFailed", error.what()});
+            }
+            cells.push_back(SemanticFieldCell{std::string(descriptor.path), "<opaque>", false, true});
         } catch (const std::exception& error) {
             return std::unexpected(Error{"FormLinkReadFailed", error.what()});
         }

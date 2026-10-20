@@ -114,7 +114,8 @@ Result<nlohmann::json> RadiclePluginBackend::setFieldValue(
     try {
         auto mutated = loaded->plugin;
         fo4::ScalarMutationStatus status;
-        if (field->scalar.storage == fo4::schema::ScalarStorage::zstring) {
+        if (field->scalar.storage == fo4::schema::ScalarStorage::zstring ||
+            field->scalar.storage == fo4::schema::ScalarStorage::fixed_string) {
             const auto stored = fo4::text::utf8_to_windows1252(value);
             if (!stored) {
                 return std::unexpected(Error{"ScalarFieldWriteFailed",
