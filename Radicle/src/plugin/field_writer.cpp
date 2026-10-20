@@ -3,6 +3,7 @@
 #include "record_edit.hpp"
 
 #include "fo4/environment/sound.hpp"
+#include "fo4/forms/quest.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "fo4/schema/field_address.hpp"
@@ -149,6 +150,15 @@ schema::FieldSlots formlink_slots(const Record& record, const schema::FormLinkFi
   return resolved;
 }
 
+std::optional<std::uint32_t> highest_alias_id(const Plugin& plugin, const FormKey& record_key) {
+  std::optional<std::uint32_t> highest;
+  for (const auto& alias : forms::decode_quest_aliases(plugin, record_key).aliases) {
+    if (alias.kind == forms::QuestAliasKind::collection) continue;
+    highest = highest ? std::max(*highest, alias.id) : alias.id;
+  }
+  return highest;
+}
+
 ScalarMutationStatus write_scalar(Plugin& plugin,
                                   const FormKey& record_key,
                                   const schema::ScalarFieldDescriptor& field,
@@ -198,6 +208,13 @@ ScalarMutationStatus write_scalar(Plugin& plugin,
   }
 
   const auto encoded = schema::encode_scalar(value, field.scalar);
+  if (field.path == "QUST\\NextAliasID") {
+    // Invariant: QUST Next Alias ID must stay above every existing alias ID.
+    std::uint32_t next_alias_id = 0;
+    std::memcpy(&next_alias_id, encoded.data(), sizeof(next_alias_id));
+    const auto highest = highest_alias_id(plugin, record_key);
+    if (highest && next_alias_id <= *highest) return ScalarMutationStatus::next_alias_id_too_low;
+  }
   std::size_t slot_size = 0;
   {
     const auto existing = schema::scalar_slot_bytes(data, slot, field.scalar);

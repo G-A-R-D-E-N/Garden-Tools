@@ -138,6 +138,11 @@ Result<nlohmann::json> RadiclePluginBackend::setFieldValue(
                         field->scalar.subrecord.to_string() +
                         " subrecord; Radicle will not guess a missing subrecord insertion position"
                 });
+            case fo4::ScalarMutationStatus::next_alias_id_too_low:
+                return std::unexpected(Error{
+                    "ScalarFieldWriteFailed",
+                    "QUST Next Alias ID must stay above every existing alias ID"
+                });
             case fo4::ScalarMutationStatus::updated:
             case fo4::ScalarMutationStatus::unchanged:
                 break;
