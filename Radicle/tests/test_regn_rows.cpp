@@ -67,6 +67,38 @@ Bytes rdat_bytes(std::uint32_t type, std::uint8_t override_value, std::uint8_t p
   return out.bytes;
 }
 
+Bytes f32_list(std::initializer_list<float> values) {
+  ByteWriter out;
+  for (const float value : values) out.f32(value);
+  return out.bytes;
+}
+
+Bytes rdot_bytes(std::uint32_t object, std::uint16_t parent_index, float density) {
+  ByteWriter out;
+  out.u32(object);
+  out.u16(parent_index);
+  out.u16(0);
+  out.f32(density);
+  out.bytes.resize(52);
+  return out.bytes;
+}
+
+Bytes rdwt_bytes(std::uint32_t weather, std::uint32_t chance, std::uint32_t global) {
+  ByteWriter out;
+  out.u32(weather);
+  out.u32(chance);
+  out.u32(global);
+  return out.bytes;
+}
+
+Bytes rdsa_bytes(std::uint32_t sound, std::uint32_t flags, float chance) {
+  ByteWriter out;
+  out.u32(sound);
+  out.u32(flags);
+  out.f32(chance);
+  return out.bytes;
+}
+
 void write_header(ByteWriter& out) {
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
   ByteWriter hedr;
@@ -424,9 +456,9 @@ Bytes rdwt_bytes() {
   return out.bytes;
 }
 
-Bytes rdgs_bytes() {
+Bytes rdgs_bytes(std::uint32_t object) {
   ByteWriter out;
-  out.u32(0x02000D60);
+  out.u32(object);
   out.u32(0);
   return out.bytes;
 }
@@ -456,7 +488,7 @@ Bytes typed_region_plugin() {
        {"RDAT", rdat_bytes(2, 0, 50)},
        {"RDOT", rdot_bytes()},
        {"RDAT", rdat_bytes(6, 0, 60)},
-       {"RDGS", rdgs_bytes()},
+       {"RDGS", rdgs_bytes(0x02000D60)},
        {"RDAT", rdat_bytes(7, 1, 70)},
        {"RDMO", u32_bytes(0x02000D21)},
        {"RDSA", rdsa_bytes()},
@@ -571,92 +603,116 @@ TEST(RegnRows, RejectsMalformedTypedRegionPayloads) {
   }
 }
 
-TEST(RegnRows, RefusesPayloadsThatDoNotMatchTheirEntryType) {
-  const auto bytes = fo4::test::envnode::make_plugin(
-      {}, {top("REGN", {rec("REGN", 0x0F01, {{"RDAT", bytes_of({3, 0})}, {"RDOT", Bytes(52)}}),
-                        rec("REGN", 0x0F02, {{"RDAT", bytes_of({2, 0})}, {"RDWT", Bytes(12)}}),
-                        rec("REGN", 0x0F03, {{"RDAT", bytes_of({4, 0})}, {"RDSA", Bytes(12)}}),
-                        rec("REGN", 0x0F04, {{"RDAT", bytes_of({6, 0})}, {"RDMO", bytes_of({1})}}),
-                        rec("REGN", 0x0F05, {{"RDAT", bytes_of({7, 0})}, {"RDGS", Bytes(8)}}),
-                        rec("REGN", 0x0F06, {{"RDAT", bytes_of({5, 0})}, {"RDMP", text_bytes("Map")}}),
-                        rec("REGN", 0x0F07, {{"RDAT", bytes_of({0, 0})}, {"RDWT", Bytes(12)}}),
-                        rec("REGN", 0x0F08, {{"RDAT", bytes_of({3, 0})}, {"RDGS", Bytes(8)}}),
-                        rec("REGN", 0x0F09, {{"RDAT", bytes_of({3, 0})}, {"RDWT", Bytes(12)}}),
-                        rec("REGN", 0x0F0A, {{"RDAT", bytes_of({7, 0})},
-                                             {"RDMO", bytes_of({1})},
-                                             {"RDSA", Bytes(12)}})})});
-  fo4::test::TempDataDir dir;
-  dir.write("Types.esp", bytes, 0);
-  const std::vector<std::filesystem::path> ordered{dir.path() / "Types.esp"};
-  const auto env = fo4::env::Environment::load(ordered);
+TEST(RegnRows, EntryArraysAndEntryPayloadsEditInPlace) {
+  const auto sound_flags = scalar_row("REGN\\SoundFlags");
+  const auto sound_chance = scalar_row("REGN\\SoundChance");
+  const auto weather_chance = scalar_row("REGN\\WeatherChance");
+  ASSERT_TRUE(sound_flags.has_value());
+  ASSERT_TRUE(sound_chance.has_value());
+  ASSERT_TRUE(weather_chance.has_value());
+  EXPECT_EQ(sound_flags->scalar.address.stride, 12u);
+  EXPECT_EQ(sound_flags->scalar.offset, 4u);
+  EXPECT_EQ(sound_flags->scalar.presentation, fo4::schema::ScalarPresentation::flags);
+  EXPECT_EQ(sound_flags->scalar.names.size(), 4u);
+  ASSERT_TRUE(fo4::schema::scalar_value_name(sound_flags->scalar, 4).has_value());
+  EXPECT_EQ(*fo4::schema::scalar_value_name(sound_flags->scalar, 4), "Rainy");
+  EXPECT_FALSE(fo4::schema::scalar_value_name(sound_flags->scalar, 16).has_value());
+  EXPECT_EQ(sound_chance->scalar.offset, 8u);
+  EXPECT_EQ(weather_chance->scalar.subrecord, fo4::Signature::from_string("RDWT"));
+  EXPECT_EQ(weather_chance->scalar.storage, u32);
 
-  for (const auto* local : {"000F01", "000F02", "000F03", "000F04", "000F05", "000F06", "000F07",
-                            "000F08"}) {
-    const auto* ref = env.winner(fo4::FormKey::parse(std::string(local) + ":Types.esp"));
-    ASSERT_NE(ref, nullptr) << local;
-    EXPECT_THROW(fo4::env::decode_region(env, *ref), fo4::env::WorldDecodeError) << local;
-  }
+  const auto object = fo4::schema::formlink_field_descriptor(
+      fo4::Signature::from_string("REGN"), "REGN\\Object");
+  const auto grass = fo4::schema::formlink_field_descriptor(
+      fo4::Signature::from_string("REGN"), "REGN\\Grass");
+  const auto weather = fo4::schema::formlink_field_descriptor(
+      fo4::Signature::from_string("REGN"), "REGN\\Weather");
+  const auto weather_global = fo4::schema::formlink_field_descriptor(
+      fo4::Signature::from_string("REGN"), "REGN\\WeatherGlobal");
+  const auto sound = fo4::schema::formlink_field_descriptor(
+      fo4::Signature::from_string("REGN"), "REGN\\Sound");
+  ASSERT_TRUE(object.has_value());
+  ASSERT_TRUE(grass.has_value());
+  ASSERT_TRUE(weather.has_value());
+  ASSERT_TRUE(weather_global.has_value());
+  ASSERT_TRUE(sound.has_value());
+  EXPECT_EQ(object->address.stride, 52u);
+  EXPECT_EQ(grass->address.stride, 8u);
+  EXPECT_EQ(weather->address.stride, 12u);
+  EXPECT_EQ(weather_global->offset, 8u);
+  EXPECT_TRUE(weather_global->nullable);
+  EXPECT_FALSE(weather->nullable);
+  EXPECT_TRUE(sound->nullable);
+  EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(
+      *object, fo4::Signature::from_string("SCOL")));
+  EXPECT_FALSE(fo4::schema::formlink_field_target_allowed(
+      *object, fo4::Signature::from_string("REGN")));
+  EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(
+      *sound, fo4::Signature::from_string("SOUN")));
 
-  const auto* weather = env.winner(fo4::FormKey::parse("000F09:Types.esp"));
-  ASSERT_NE(weather, nullptr);
-  const auto weather_region = fo4::env::decode_region(env, *weather);
-  ASSERT_EQ(weather_region.entries.size(), 1u);
-  EXPECT_EQ(weather_region.entries[0].type, 3u);
-  EXPECT_EQ(weather_region.entries[0].weathers.size(), 1u);
+  ByteWriter out;
+  write_header(out);
+  write_grouped_record(out, "REGN", 0x0F10,
+                       {{"EDID", text_bytes("EntryRegion")},
+                        {"RCLR", Bytes{std::byte{0x01}, std::byte{0x02}, std::byte{0x03},
+                                       std::byte{0x00}}},
+                        {"ICON", text_bytes("Icons\\Region.dds")},
+                        {"RPLI", u32_bytes(64)},
+                        {"RPLD", f32_list({1.5f, -2.5f, 3.5f, 4.5f})},
+                        {"RDAT", rdat_bytes(2, 0, 10)},
+                        {"RDOT", rdot_bytes(0x00000F40, 3, 0.25f)},
+                        {"RDGS", rdgs_bytes(0x00000F41)},
+                        {"RDWT", rdwt_bytes(0x00000F42, 100, 0x00000F43)},
+                        {"RDSA", rdsa_bytes(0x00000F44, 4, 0.5f)}});
+  write_grouped_record(out, "GLOB", 0x0F45, {{"EDID", text_bytes("TestGlobal")}});
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto key = "000F10:Patch.esp";
 
-  const auto* sound = env.winner(fo4::FormKey::parse("000F0A:Types.esp"));
-  ASSERT_NE(sound, nullptr);
-  const auto sound_region = fo4::env::decode_region(env, *sound);
-  ASSERT_EQ(sound_region.entries.size(), 1u);
-  EXPECT_EQ(sound_region.entries[0].type, 7u);
-  EXPECT_TRUE(sound_region.entries[0].music.has_value());
-  EXPECT_EQ(sound_region.entries[0].sounds.size(), 1u);
+  EXPECT_EQ(field_bytes(plugin, key, "REGN\\Icon"), text_bytes("Icons\\Region.dds"));
+  EXPECT_EQ(link_raw(plugin, key, "REGN\\Object"), 0x00000F40u);
+  EXPECT_EQ(link_raw(plugin, key, "REGN\\Grass"), 0x00000F41u);
+  EXPECT_EQ(link_raw(plugin, key, "REGN\\Weather"), 0x00000F42u);
+  EXPECT_EQ(sub_bytes(plugin, key, "RDWT"), rdwt_bytes(0x00000F42, 100, 0x00000F43));
+  EXPECT_EQ(link_raw(plugin, key, "REGN\\Sound"), 0x00000F44u);
+  EXPECT_EQ(fo4::record_field_count(plugin, fo4::FormKey::parse(key), "REGN\\Grass"), 1u);
+  EXPECT_EQ(fo4::record_field_count(plugin, fo4::FormKey::parse(key), "REGN\\SoundChance"), 1u);
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, fo4::FormKey::parse(key), *sound_flags, "16"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, fo4::FormKey::parse(key), *weather_chance, "250"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, fo4::FormKey::parse(key), *weather_global,
+                                           fo4::FormKey::parse("00000F45:Patch.esp")),
+            fo4::FormLinkFieldMutationStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(sub_bytes(reread, key, "RPLD"), f32_list({1.5f, -2.5f, 3.5f, 4.5f}));
+  EXPECT_EQ(sub_bytes(reread, key, "RDSA"), rdsa_bytes(0x00000F44, 16, 0.5f));
+  EXPECT_EQ(sub_bytes(reread, key, "RDWT"), rdwt_bytes(0x00000F42, 250, 0x02000F45));
+  EXPECT_EQ(sub_bytes(reread, key, "RDOT"), rdot_bytes(0x00000F40, 3, 0.25f));
 }
 
-TEST(RegnRows, DecodesAnamInBothXEditPositionsAndEntryLodMultiplier) {
-  const auto bytes = fo4::test::envnode::make_plugin(
-      {}, {top("REGN",
-               {rec("REGN", 0x0F20, {{"RPLI", bytes_of({80})},
-                                     {"RPLD", floats({1.0f, 2.0f})},
-                                     {"ANAM", floats({2048.0f})}}),
-                rec("REGN", 0x0F21, {{"RPLI", bytes_of({80})},
-                                     {"RPLD", floats({1.0f, 2.0f})},
-                                     {"RDAT", bytes_of({3, 0})},
-                                     {"RDWT", Bytes(12)},
-                                     {"RLDM", floats({2.5f})},
-                                     {"ANAM", floats({4096.0f})}}),
-                rec("REGN", 0x0F22, {{"ANAM", floats({1.0f})}}),
-                rec("REGN", 0x0F23, {{"RLDM", floats({1.0f})}}),
-                rec("REGN", 0x0F24, {{"RPLI", bytes_of({80})}, {"ANAM", Bytes(2)}})})});
-  fo4::test::TempDataDir dir;
-  dir.write("Anam.esp", bytes, 0);
-  const std::vector<std::filesystem::path> ordered{dir.path() / "Anam.esp"};
-  const auto env = fo4::env::Environment::load(ordered);
+TEST(RegnRows, RefusesEntryArrayRowsOnAMisalignedPayload) {
+  ByteWriter out;
+  write_header(out);
+  write_grouped_record(out, "REGN", 0x0F20,
+                       {{"RDWT", Bytes(13)},
+                        {"RDSA", Bytes(11)}});
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto key = fo4::FormKey::parse("000F20:Patch.esp");
+  const auto weather_chance = scalar_row("REGN\\WeatherChance");
+  const auto weather = fo4::schema::formlink_field_descriptor(
+      fo4::Signature::from_string("REGN"), "REGN\\Weather");
+  ASSERT_TRUE(weather_chance.has_value());
+  ASSERT_TRUE(weather.has_value());
 
-  const auto* area_ref = env.winner(fo4::FormKey::parse("000F20:Anam.esp"));
-  ASSERT_NE(area_ref, nullptr);
-  const auto area_region = fo4::env::decode_region(env, *area_ref);
-  ASSERT_EQ(area_region.areas.size(), 1u);
-  ASSERT_TRUE(area_region.areas[0].unknown_anam.has_value());
-  EXPECT_EQ(*area_region.areas[0].unknown_anam, 2048.0f);
-  EXPECT_TRUE(area_region.entries.empty());
-
-  const auto* entry_ref = env.winner(fo4::FormKey::parse("000F21:Anam.esp"));
-  ASSERT_NE(entry_ref, nullptr);
-  const auto entry_region = fo4::env::decode_region(env, *entry_ref);
-  ASSERT_EQ(entry_region.areas.size(), 1u);
-  EXPECT_FALSE(entry_region.areas[0].unknown_anam.has_value());
-  ASSERT_EQ(entry_region.entries.size(), 1u);
-  ASSERT_TRUE(entry_region.entries[0].occlusion_accuracy_dist.has_value());
-  EXPECT_EQ(*entry_region.entries[0].occlusion_accuracy_dist, 4096.0f);
-  ASSERT_TRUE(entry_region.entries[0].lod_display_distance_multiplier.has_value());
-  EXPECT_EQ(*entry_region.entries[0].lod_display_distance_multiplier, 2.5f);
-
-  for (const auto* local : {"000F22", "000F23", "000F24"}) {
-    const auto* ref = env.winner(fo4::FormKey::parse(std::string(local) + ":Anam.esp"));
-    ASSERT_NE(ref, nullptr) << local;
-    EXPECT_THROW(fo4::env::decode_region(env, *ref), fo4::env::WorldDecodeError) << local;
-  }
+  EXPECT_EQ(fo4::record_field_count(plugin, key, "REGN\\WeatherChance"), 0u);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *weather_chance, "5"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, key, *weather,
+                                           fo4::FormKey::parse("00000F46:Fallout4.esm")),
+            fo4::FormLinkFieldMutationStatus::subrecord_missing);
+  EXPECT_EQ(sub_bytes(plugin, "000F20:Patch.esp", "RDWT"), Bytes(13));
 }
 
 }  // namespace
