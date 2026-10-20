@@ -78,7 +78,8 @@ TEST_P(MaterialImpactRecordsReal, EveryBatchRecordMatchesItsAuthoringAndDecodesE
           << record.form_key.to_string() << ' ' << rule.signature.to_string();
     }
     for (const auto& field : fo4::schema::scalar_fields(signature)) {
-      const auto scoped = fo4::behavior_field_candidates(record, field.scalar.subrecord);
+      const auto scoped =
+          fo4::behavior_field_candidates(record, field.scalar.subrecord, field.scalar.address.repeated);
       for (std::size_t position = 0; position < record.subrecords.size(); ++position) {
         const auto& subrecord = record.subrecords[position];
         if (subrecord.signature != field.scalar.subrecord) continue;

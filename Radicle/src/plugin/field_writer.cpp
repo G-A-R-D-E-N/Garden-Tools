@@ -3,6 +3,7 @@
 #include "record_edit.hpp"
 
 #include "fo4/environment/sound.hpp"
+#include "fo4/forms/quest.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "fo4/schema/field_address.hpp"
@@ -34,6 +35,14 @@ void require_scalar_record(const Record& record, const schema::ScalarFieldDescri
 }
 
 std::vector<SubrecordGroupSpan> group_spans(const Record& record, const schema::SubrecordGroupDescriptor& group);
+
+const schema::SubrecordGroupMemberDescriptor* group_member(const schema::SubrecordGroupDescriptor& group,
+                                                           Signature subrecord) {
+  for (const auto& member : group.members) {
+    if (member.subrecord == subrecord) return &member;
+  }
+  return nullptr;
+}
 
 bool response_shape_valid(const Record& record) {
   constexpr Signature trda = Signature::from_string("TRDA");
@@ -141,6 +150,15 @@ schema::FieldSlots formlink_slots(const Record& record, const schema::FormLinkFi
   return resolved;
 }
 
+std::optional<std::uint32_t> highest_alias_id(const Plugin& plugin, const FormKey& record_key) {
+  std::optional<std::uint32_t> highest;
+  for (const auto& alias : forms::decode_quest_aliases(plugin, record_key).aliases) {
+    if (alias.kind == forms::QuestAliasKind::collection) continue;
+    highest = highest ? std::max(*highest, alias.id) : alias.id;
+  }
+  return highest;
+}
+
 ScalarMutationStatus write_scalar(Plugin& plugin,
                                   const FormKey& record_key,
                                   const schema::ScalarFieldDescriptor& field,
@@ -158,17 +176,24 @@ ScalarMutationStatus write_scalar(Plugin& plugin,
     throw schema::ScalarError(std::string(field.path) + " is maintained by subrecord group insert and remove");
   }
   if (schema::is_derived_scalar_row(field.record, field.scalar.subrecord)) {
+    if (field.record == Signature::from_string("INNR")) {
+      throw schema::ScalarError(std::string(field.path) +
+                                " is maintained by the INNR naming-rule and keyword lists");
+    }
     throw schema::ScalarError(std::string(field.path) +
                               " is derived from the five footstep category lists in DATA");
   }
 
-  const bool is_string = field.scalar.storage == schema::ScalarStorage::zstring;
+  const bool is_string = field.scalar.storage == schema::ScalarStorage::zstring ||
+                         field.scalar.storage == schema::ScalarStorage::fixed_string;
   if (is_string != string_setter) {
     throw schema::ScalarError(std::string(field.path) +
                               (is_string ? " is a string field; use the string setter"
                                          : " is not a string field"));
   }
-  if (is_string && field.scalar.embedded) {
+  const auto member_group = schema::subrecord_group_for_member(field.record, field.scalar.subrecord);
+  const bool member_string = is_string && field.scalar.embedded && member_group.has_value();
+  if (is_string && field.scalar.embedded && !member_string) {
     throw schema::ScalarError(std::string(field.path) +
                               " sits in a fixed-size slot and cannot be written generically");
   }
@@ -186,15 +211,43 @@ ScalarMutationStatus write_scalar(Plugin& plugin,
                               " is a localized string in a localized plugin");
   }
 
-  const auto existing = schema::scalar_slot_bytes(data, slot, field.scalar);
-  static_cast<void>(schema::decode_scalar(existing, field.scalar));
-
   const auto encoded = schema::encode_scalar(value, field.scalar);
-  if (std::equal(existing.begin(), existing.end(), encoded.begin(), encoded.end())) {
-    return ScalarMutationStatus::unchanged;
+  if (field.path == "QUST\\NextAliasID") {
+    // Invariant: QUST Next Alias ID must stay above every existing alias ID.
+    std::uint32_t next_alias_id = 0;
+    std::memcpy(&next_alias_id, encoded.data(), sizeof(next_alias_id));
+    const auto highest = highest_alias_id(plugin, record_key);
+    if (highest && next_alias_id <= *highest) return ScalarMutationStatus::next_alias_id_too_low;
+  }
+  std::size_t slot_size = 0;
+  {
+    const auto existing = schema::scalar_slot_bytes(data, slot, field.scalar);
+    static_cast<void>(schema::decode_scalar(existing, field.scalar));
+    if (std::equal(existing.begin(), existing.end(), encoded.begin(), encoded.end())) {
+      return ScalarMutationStatus::unchanged;
+    }
+    slot_size = existing.size();
   }
 
-  if (is_string) {
+  if (is_string && member_string) {
+    // Constraint: a variable-length member string row that owns the whole payload must resize it to the encoded value; every other member string row requires the encoded value to fit the slot the subrecord already carries.
+    const auto* member = group_member(*member_group, field.scalar.subrecord);
+    if (member != nullptr && member->payload_size == 0 && slot.offset == 0 &&
+        slot_size == data.size()) {
+      data = encoded;
+    } else {
+      if (encoded.size() > slot_size) {
+        throw schema::ScalarError(std::string(field.path) + " does not fit in its " +
+                                  std::to_string(slot_size) + "-byte slot");
+      }
+      std::copy(encoded.begin(), encoded.end(),
+                data.begin() + static_cast<std::ptrdiff_t>(slot.offset));
+      if (encoded.size() < slot_size) {
+        std::fill(data.begin() + static_cast<std::ptrdiff_t>(slot.offset + encoded.size()),
+                  data.begin() + static_cast<std::ptrdiff_t>(slot.offset + slot_size), std::byte{0});
+      }
+    }
+  } else if (is_string) {
     data = encoded;
   } else {
     std::copy(encoded.begin(), encoded.end(),
@@ -233,6 +286,10 @@ struct CountedArraySubrecords {
 
 std::optional<CountedArraySubrecords> counted_array_subrecords(const Record& record,
                                                                const schema::CountedArrayDescriptor& array) {
+  if (array.segment_count != 0) {
+    throw schema::CountedArrayError(std::string(array.path) +
+                                    " is a header-counted segment and cannot be inserted or removed");
+  }
   std::optional<std::size_t> payload;
   std::optional<std::size_t> counter;
   for (std::size_t i = 0; i < record.subrecords.size(); ++i) {
@@ -484,7 +541,8 @@ std::optional<std::size_t> record_field_count(const Plugin& plugin,
   if (const auto link = schema::formlink_field_descriptor(path)) {
     return record_field_count(plugin, record_key, *link);
   }
-  if (const auto list = schema::packed_formlink_list_path(path)) {
+  if (const auto list = schema::formlink_list_descriptor(
+          Signature::from_string(path.substr(0, 4)), path)) {
     return schema::record_formlink_list_size(plugin, record_key, *list);
   }
   throw schema::ScalarError("unknown field path: " + std::string(path));

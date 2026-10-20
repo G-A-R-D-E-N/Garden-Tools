@@ -1,6 +1,7 @@
 #include "fo4/schema/ctda.hpp"
 
 #include "fo4/plugin/container.hpp"
+#include "fo4/schema/condition_functions.hpp"
 #include "fo4/signature.hpp"
 
 #include <algorithm>
@@ -31,7 +32,6 @@ constexpr std::size_t k_ctda_param1 = 12;
 constexpr std::size_t k_ctda_param2 = 16;
 constexpr std::size_t k_ctda_run_on = 20;
 constexpr std::size_t k_ctda_reference = 24;
-constexpr std::uint32_t k_run_on_reference = 2;
 constexpr std::uint32_t k_run_on_quest_alias = 5;
 constexpr std::uint16_t k_get_is_current_package = 161;
 constexpr std::uint8_t k_param1_reference = 1;
@@ -176,8 +176,11 @@ std::vector<std::size_t> ctda_formid_offsets(const Subrecord& sub) {
       offsets.push_back(k_ctda_param2);
     }
   }
-  if (sub.data.size() >= 28 && read_u32(sub.data, k_ctda_run_on) == k_run_on_reference) {
-    offsets.push_back(k_ctda_reference);
+  if (sub.data.size() >= 28) {
+    const auto* run_on = schema::condition_run_on(read_u32(sub.data, k_ctda_run_on));
+    if (run_on != nullptr && run_on->reference_form_id) {
+      offsets.push_back(k_ctda_reference);
+    }
   }
   return offsets;
 }

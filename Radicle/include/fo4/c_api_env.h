@@ -539,6 +539,12 @@ typedef enum radicle_placed_move_status {
   RADICLE_PLACED_MOVE_RELOCATED = 1
 } radicle_placed_move_status;
 
+typedef enum radicle_record_copy_status {
+  RADICLE_RECORD_COPY_INSERTED = 0,
+  RADICLE_RECORD_COPY_REPLACED = 1,
+  RADICLE_RECORD_COPY_ALREADY_EXISTS = 2
+} radicle_record_copy_status;
+
 RADICLE_API radicle_status radicle_plugin_create(const char* filename, radicle_plugin** out_plugin);
 RADICLE_API radicle_status radicle_plugin_copy_placed_ref_override(radicle_plugin* plugin,
                                                                    const radicle_env* env,
@@ -558,6 +564,12 @@ RADICLE_API radicle_status radicle_plugin_copy_record_as_new(radicle_plugin* des
                                                              const char* prefix,
                                                              const char* suffix,
                                                              radicle_form_key* out_key);
+/* The key must be owned by source; overwrite replaces an existing copy in destination. */
+RADICLE_API radicle_status radicle_plugin_copy_record_override(radicle_plugin* destination,
+                                                               const radicle_plugin* source,
+                                                               radicle_form_key record,
+                                                               int32_t overwrite,
+                                                               radicle_record_copy_status* out_status);
 RADICLE_API radicle_status radicle_plugin_set_placed_transform(radicle_plugin* plugin,
                                                                radicle_form_key reference,
                                                                const float position[3],

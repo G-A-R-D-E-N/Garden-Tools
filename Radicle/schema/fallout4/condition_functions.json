@@ -372,6 +372,10 @@
         "WRLD",
         "FLST"
       ]
+    },
+    {
+      "name": "event_data_code",
+      "kind": "other"
     }
   ],
   "functions": [
@@ -3243,6 +3247,74 @@
       "index": 817,
       "name": "IsInRobotWorkbench",
       "parameters": []
+    }
+  ],
+  "run_on": [
+    {
+      "value": 0,
+      "name": "Subject",
+      "parameter3": "integer",
+      "reference_form_id": false
+    },
+    {
+      "value": 1,
+      "name": "Target",
+      "parameter3": "integer",
+      "reference_form_id": false
+    },
+    {
+      "value": 2,
+      "name": "Reference",
+      "parameter3": "integer",
+      "reference_form_id": true
+    },
+    {
+      "value": 3,
+      "name": "Combat Target",
+      "parameter3": "integer",
+      "reference_form_id": false
+    },
+    {
+      "value": 4,
+      "name": "Linked Reference",
+      "parameter3": "integer",
+      "reference_form_id": false
+    },
+    {
+      "value": 5,
+      "name": "Quest Alias",
+      "parameter3": "alias",
+      "reference_form_id": false
+    },
+    {
+      "value": 6,
+      "name": "Package Data",
+      "parameter3": "integer",
+      "reference_form_id": false
+    },
+    {
+      "value": 7,
+      "name": "Event Data",
+      "parameter3": "event_data_code",
+      "reference_form_id": false
+    },
+    {
+      "value": 8,
+      "name": "Command Target",
+      "parameter3": "integer",
+      "reference_form_id": false
+    },
+    {
+      "value": 9,
+      "name": "Event Camera Ref",
+      "parameter3": "integer",
+      "reference_form_id": false
+    },
+    {
+      "value": 10,
+      "name": "My Killer",
+      "parameter3": "integer",
+      "reference_form_id": false
     }
   ]
 }

@@ -69,6 +69,13 @@ public enum PlacedMoveStatus : int
     Relocated = 1,
 }
 
+public enum RecordCopyStatus : int
+{
+    Inserted = 0,
+    Replaced = 1,
+    AlreadyExists = 2,
+}
+
 [StructLayout(LayoutKind.Sequential)]
 public unsafe struct FormKey
 {
@@ -2008,10 +2015,17 @@ public unsafe struct DeltaPatchCounts
     public nuint Removed;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ListMergeCounts
+{
+    public nuint Merged;
+    public nuint Unchanged;
+}
+
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 47u;
+    public const uint CompiledAbiVersion = 48u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -2210,6 +2224,9 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_copy_record_as_new")]
     public static extern Status PluginCopyRecordAsNew(IntPtr destination, IntPtr source, FormKey record, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? editor_id, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? remove_prefix, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? remove_suffix, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? prefix, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? suffix, FormKey* out_key);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_copy_record_override")]
+    public static extern Status PluginCopyRecordOverride(IntPtr destination, IntPtr source, FormKey record, int overwrite, RecordCopyStatus* out_status);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_placed_transform")]
     public static extern Status PluginSetPlacedTransform(IntPtr plugin, FormKey reference, float* position, float* rotation);
@@ -2876,5 +2893,11 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_build_delta_patch")]
     public static extern Status EnvBuildDeltaPatch(IntPtr env, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? older_plugin, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? newer_plugin, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? output_path, DeltaPatchCounts* out_counts);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_build_list_merge_patch")]
+    public static extern Status EnvBuildListMergePatch(IntPtr env, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? signature, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? patch_name, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? output_path, ListMergeCounts* out_counts);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_classify_conflicts")]
+    public static extern Status EnvClassifyConflicts(IntPtr env, IntPtr** out_strings, nuint* out_count);
 
 }

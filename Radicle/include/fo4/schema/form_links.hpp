@@ -5,6 +5,8 @@
 #include "fo4/signature.hpp"
 
 #include <cstddef>
+#include <functional>
+#include <optional>
 #include <vector>
 
 namespace fo4 {
@@ -18,13 +20,18 @@ struct FormLinkHit {
   FormKey key;
 };
 
+using FormLinkTypeLookup = std::function<std::optional<Signature>(const FormKey&)>;
+
+FormLinkTypeLookup plugin_type_lookup(const Plugin& plugin);
+
 void remap_record_form_links(Record& record,
                              const PluginFormIdContext& old_context,
                              const PluginFormIdContext& new_context,
-                             const Plugin* type_source = nullptr);
+                             const FormLinkTypeLookup& type_lookup = {});
 
 void remap_form_links(Plugin& plugin, const PluginFormIdContext& old_context,
-                      const PluginFormIdContext& new_context);
+                      const PluginFormIdContext& new_context,
+                      FormLinkTypeLookup type_lookup = {});
 
 // Replaces every schema-proven in-plugin reference to old_key with new_key.
 // The operation is transactional and uses strict link parsing: unsupported

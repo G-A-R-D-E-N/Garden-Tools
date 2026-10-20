@@ -1,6 +1,8 @@
 #include "formlink_segments.hpp"
 
+#include <algorithm>
 #include <cstring>
+#include <iterator>
 #include <optional>
 #include <span>
 #include <string>
@@ -27,6 +29,10 @@ void write_u32(std::vector<std::byte>& data, std::size_t offset, std::uint32_t v
   std::memcpy(data.data() + offset, &value, sizeof(value));
 }
 
+void write_u16(std::vector<std::byte>& data, std::size_t offset, std::uint16_t value) {
+  std::memcpy(data.data() + offset, &value, sizeof(value));
+}
+
 std::span<const std::uint32_t> segment_counters(
     const FormLinkListDescriptor& descriptor) noexcept {
   return {k_generated_packed_segment_counters + descriptor.first_segment,
@@ -46,6 +52,18 @@ std::vector<std::uint32_t> segment_counts(const FormLinkListDescriptor& descript
     counts.push_back(read_u32(counter.data, offset));
   }
   return counts;
+}
+
+std::size_t element_end(const Record& record,
+                        const FormLinkListDescriptor& descriptor,
+                        std::size_t position) {
+  std::size_t end = position + 1;
+  // Invariant: element_tail subrecords directly after an element belong to that element.
+  while (descriptor.element_tail != Signature{} && end < record.subrecords.size() &&
+         record.subrecords[end].signature == descriptor.element_tail) {
+    ++end;
+  }
+  return end;
 }
 
 void insert_counter(Record& record,
@@ -108,8 +126,26 @@ void reconcile_counter(Record& record,
                        std::uint32_t count) {
   if (descriptor.counter == Signature{}) return;
   const auto counter_index = subrecord_index(record, descriptor.counter);
+  if (descriptor.counter_offset != 0) {
+    if (count > 0xFFFFu) {
+      throw FormLinkListError(std::string(descriptor.path) + " count does not fit the counter field");
+    }
+    if (!counter_index.has_value()) {
+      throw FormLinkListError(std::string(descriptor.path) +
+                              " counter subrecord is missing from the record");
+    }
+    auto& data = record.subrecords[*counter_index].data;
+    if (data.size() < descriptor.counter_offset + 2) {
+      throw FormLinkListError(std::string(descriptor.path) +
+                              " counter subrecord is too short for the count");
+    }
+    // Constraint: an in-subrecord counter is zeroed in place, never erased.
+    write_u16(data, descriptor.counter_offset, static_cast<std::uint16_t>(count));
+    return;
+  }
   if (descriptor.segment_count == 0) {
-    if (count == 0) {
+    // Constraint: a per-subrecord counter is overwritten in place, including zero, never erased.
+    if (count == 0 && descriptor.storage == FormLinkListStorage::packed_array) {
       if (counter_index.has_value()) {
         record.subrecords.erase(record.subrecords.begin() +
                                 static_cast<std::ptrdiff_t>(*counter_index));
@@ -122,6 +158,7 @@ void reconcile_counter(Record& record,
       write_u32(data, 0, count);
       return;
     }
+    if (count == 0) return;
     Subrecord counter;
     counter.signature = descriptor.counter;
     counter.data.resize(4);
@@ -148,6 +185,46 @@ void reconcile_counter(Record& record,
   counter.data.assign(descriptor.counter_payload_size, std::byte{0});
   write_u32(counter.data, counter_offset, count);
   insert_counter(record, descriptor, std::move(counter));
+}
+
+void erase_list_element(Record& record,
+                        const FormLinkListDescriptor& descriptor,
+                        std::size_t position) {
+  const auto end = element_end(record, descriptor, position);
+  record.subrecords.erase(record.subrecords.begin() + static_cast<std::ptrdiff_t>(position),
+                          record.subrecords.begin() + static_cast<std::ptrdiff_t>(end));
+}
+
+void move_list_element(Record& record,
+                       const FormLinkListDescriptor& descriptor,
+                       const std::vector<std::size_t>& positions,
+                       std::size_t from,
+                       std::size_t to) {
+  const auto at = [&record](std::size_t index) {
+    return record.subrecords.begin() + static_cast<std::ptrdiff_t>(index);
+  };
+  std::vector<std::vector<Subrecord>> gaps;
+  std::vector<std::vector<Subrecord>> blocks;
+  std::size_t cursor = positions.front();
+  for (const auto position : positions) {
+    const auto end = element_end(record, descriptor, position);
+    gaps.emplace_back(at(cursor), at(position));
+    blocks.emplace_back(at(position), at(end));
+    cursor = end;
+  }
+  auto moving = std::move(blocks[from]);
+  blocks.erase(blocks.begin() + static_cast<std::ptrdiff_t>(from));
+  blocks.insert(blocks.begin() + static_cast<std::ptrdiff_t>(to), std::move(moving));
+
+  std::vector<Subrecord> rebuilt;
+  for (std::size_t index = 0; index < blocks.size(); ++index) {
+    std::move(gaps[index].begin(), gaps[index].end(), std::back_inserter(rebuilt));
+    std::move(blocks[index].begin(), blocks[index].end(), std::back_inserter(rebuilt));
+  }
+  const auto first = positions.front();
+  record.subrecords.erase(at(first), at(cursor));
+  record.subrecords.insert(at(first), std::make_move_iterator(rebuilt.begin()),
+                           std::make_move_iterator(rebuilt.end()));
 }
 
 }  // namespace fo4::schema::detail
