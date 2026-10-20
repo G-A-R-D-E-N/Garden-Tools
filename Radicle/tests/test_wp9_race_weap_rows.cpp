@@ -6,6 +6,7 @@
 #include "fo4/schema/field_address.hpp"
 #include "fo4/schema/formlink_lists.hpp"
 #include "fo4/schema/formlink_slots.hpp"
+#include "fo4/schema/preflight.hpp"
 #include "fo4/schema/scalar.hpp"
 #include "plugin_bytes.hpp"
 
@@ -422,4 +423,30 @@ TEST(WP9RaceWeapRows, MorphTintAndNeckFatRowsReadAndWrite) {
   EXPECT_EQ(
       fo4::set_record_scalar(truncated, fo4::FormKey::parse("000A04:Patch.esp"), fat_x, 0, "1"),
       missing);
+}
+
+TEST(WP9RaceWeapRows, OnlyTheFirstMorphGroupSlidersRowIsAddressed) {
+  auto out = make_plugin();
+  add_record(out, "RACE", 0xA05,
+             {{"MPGN", u32_bytes(1)},
+              {"MPGS", u32_words({7u, 9u, 11u})},
+              {"MPGN", u32_bytes(2)},
+              {"MPGS", u32_words({20u, 21u, 22u})}});
+  const auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto* record = fo4::find_record(plugin, fo4::FormKey::parse("000A05:Patch.esp"));
+  ASSERT_NE(record, nullptr);
+
+  for (const auto& issue : fo4::schema::preflight_record(*record)) {
+    EXPECT_NE(issue.code, "duplicate_scalar_subrecord") << issue.path;
+  }
+
+  const auto sliders = scalar_row("RACE", "RACE\\MorphGroupSliders");
+  const auto resolved = fo4::schema::resolve_field_slots(
+      *record, fo4::schema::scalar_field_shape(sliders.scalar), sliders.scalar.address);
+  ASSERT_EQ(resolved.slots.size(), 3u);
+  const auto first = resolved.slots.front();
+  EXPECT_EQ(first.subrecord, 2u);
+  const auto bytes =
+      fo4::schema::scalar_slot_bytes(record->subrecords[first.subrecord].data, first, sliders.scalar);
+  EXPECT_EQ(fo4::schema::decode_scalar(bytes, sliders.scalar), "7");
 }
