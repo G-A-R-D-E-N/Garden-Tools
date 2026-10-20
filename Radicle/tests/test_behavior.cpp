@@ -708,8 +708,8 @@ TEST_F(BehaviorRead, MalformedProcedureFlagPayloadsHideTheirRows) {
             fo4::ScalarMutationStatus::subrecord_missing);
   const auto after = saved_subrecords(plugin);
   for (const auto& [tag, bytes] : after) {
-    if (tag == "FNAM") EXPECT_EQ(bytes, (std::vector<std::byte>{std::byte{1}, std::byte{0}, std::byte{0}}));
-    if (tag == "PRCB") EXPECT_EQ(bytes, words({2}));
+    if (tag == "FNAM") { EXPECT_EQ(bytes, (std::vector<std::byte>{std::byte{1}, std::byte{0}, std::byte{0}})); }
+    if (tag == "PRCB") { EXPECT_EQ(bytes, words({2})); }
   }
 }
 

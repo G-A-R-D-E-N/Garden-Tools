@@ -111,7 +111,7 @@ TEST_P(NpcReal, ActorSoundRunsMatchTheStoredCountAndKeepEachKeywordWithItsSound)
         ASSERT_GE(span.end - span.first, 1u);
         ASSERT_LE(span.end - span.first, 2u);
         EXPECT_EQ(record->subrecords[span.end - 1].signature, sound_signature);
-        if (span.end - span.first == 2) EXPECT_EQ(record->subrecords[span.first].signature, keyword_signature);
+        if (span.end - span.first == 2) { EXPECT_EQ(record->subrecords[span.first].signature, keyword_signature); }
       }
     } catch (const std::exception& error) {
       ADD_FAILURE() << GetParam() << ' ' << key.to_string() << ": " << error.what();
