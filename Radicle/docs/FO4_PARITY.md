@@ -46,7 +46,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | Record | xEdit line | Scalar rows | String rows | FormLink fields | FormLink lists | Localized subrecords | Authoring | Keyword list | Typed module | Mixed remap | Real-data tests naming it | Tier |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- | --- | ---: | --- |
 | AACT | 6970 | 5 | 1 | 1 | - | 1 | yes | - | - | - | 1 | L4 |
-| ACHR | 4483 | 21 | - | 17 | - | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
+| ACHR | 4483 | 23 | 1 | 20 | 1 | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
 | ACTI | 5611 | 29 | 3 | 14 | - | 2 | yes | yes | environment/base_records | yes | 1 | L4 |
 | ADDN | 7796 | 16 | 1 | 3 | - | - | yes | - | - | - | 1 | L4 |
 | AECH | 12206 | 12 | - | - | - | - | yes | - | - | - | 1 | L4 |
@@ -138,7 +138,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | MUST | 8795 | 6 | 2 | - | 1 | - | yes | - | - | yes | 1 | L4 |
 | NAVI | 7240 | 4 | - | 1 | - | - | yes | - | environment/navmesh | yes | 2 | L4 |
 | NAVM | 7212 | - | - | - | - | - | yes | - | environment/navmesh | yes | 2 | L4 |
-| NOCM | 12453 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
+| NOCM | 12453 | 1 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
 | NOTE | 12470 | 16 | 3 | 7 | - | 1 | yes | - | - | - | 1 | L4 |
 | NPC_ | 10286 | 86 | 4 | 55 | 3 | 3 | yes | yes | forms/npc | yes | 1 | L4 |
 | OMOD | 12501 | 15 | 1 | 2 | 2 | 2 | yes | - | - | yes | - | L4 |
@@ -157,7 +157,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | PLYR | 12129 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
 | PMIS | 5951 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
 | PROJ | 7115 | 40 | 4 | 15 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
-| QUST | 10684 | 5 | 4 | 3 | 1 | 3 | yes | - | forms/quest_alias_edit, forms/quest_aliases_decode, forms/quest_objectives, forms/quest_stages | - | 7 | L4 |
+| QUST | 10684 | 6 | 4 | 3 | 1 | 3 | yes | - | forms/quest_alias_edit, forms/quest_aliases_decode, forms/quest_objectives, forms/quest_stages | - | 7 | L4 |
 | RACE | 11054 | 112 | 14 | 42 | 9 | 5 | yes | yes | forms/race, forms/race_body | yes | 1 | L4 |
 | REFR | 11347 | 35 | - | 16 | - | - | yes | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
 | REGN | 11870 | 12 | 1 | 7 | - | 1 | yes | - | - | yes | - | L4 |
@@ -200,7 +200,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | Record | Scalar identity | Scalar percent_0_100 | Scalar enum | Scalar flags | String | Scalar storage | Repeated | Stride | When | Insertion |
 | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | --- |
 | AACT | 4 | - | 1 | - | 1 | u32, u8 | - | - | - | existing_only |
-| ACHR | 14 | 1 | 3 | 3 | - | f32, i32, u32, u8 | 3 | 7 | - | existing_only |
+| ACHR | 15 | 1 | 4 | 3 | 1 | f32, i32, u32, u8 | 7 | 7 | - | existing_only |
 | ACTI | 25 | 1 | - | 3 | 3 | f32, i16, i32, u16, u32, u8 | 12 | 11 | - | existing_only |
 | ADDN | 15 | - | 1 | - | 1 | i16, u16, u32 | - | 7 | - | existing_only |
 | AECH | 9 | - | 3 | - | - | f32, u32 | 12 | - | 10 | existing_only |
@@ -291,7 +291,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | MUST | 5 | - | 1 | - | 2 | f32, u32 | - | - | - | existing_only |
 | NAVI | 4 | - | - | - | - | f32 | 5 | - | 5 | existing_only |
 | NAVM | - | - | - | - | - | - | - | - | - | - |
-| NOCM | - | - | - | - | - | - | - | - | - | - |
+| NOCM | 1 | - | - | - | 1 | u32 | 2 | - | - | existing_only |
 | NOTE | 15 | - | 1 | - | 3 | f32, i16, u32, u8 | - | 7 | 3 | existing_only |
 | NPC_ | 71 | 1 | 9 | 5 | 4 | f32, i16, i32, u16, u32, u8 | 46 | 4 | - | existing_only |
 | OMOD | 12 | - | 3 | - | 1 | u32, u8 | - | 7 | - | existing_only |
@@ -310,7 +310,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | PLYR | - | - | - | - | - | - | - | - | - | - |
 | PMIS | 11 | 1 | 1 | 2 | - | f32, i32, u32, u8 | 2 | - | - | existing_only |
 | PROJ | 37 | 1 | - | 2 | 4 | f32, i16, i32, u16, u32, u8 | 12 | 9 | - | existing_only |
-| QUST | 2 | - | 2 | 1 | 4 | f32, u16, u32, u8 | - | - | - | existing_only |
+| QUST | 3 | - | 2 | 1 | 4 | f32, u16, u32, u8 | - | - | - | existing_only |
 | RACE | 100 | - | 9 | 3 | 14 | f32, i16, i32, u16, u32, u8 | 82 | 3 | - | existing_only |
 | REFR | 28 | 1 | 3 | 3 | - | f32, i32, u32, u8 | 5 | 11 | - | existing_only |
 | REGN | 9 | - | 2 | 1 | 1 | f32, u32, u8 | 7 | 8 | - | existing_only |
