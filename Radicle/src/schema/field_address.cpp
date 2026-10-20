@@ -1,4 +1,5 @@
 #include "fo4/schema/field_address.hpp"
+#include "fo4/schema/scalar.hpp"
 #include "fo4/schema/form_link_mixed.hpp"
 #include "fo4/schema/behavior_layout.hpp"
 
@@ -90,7 +91,9 @@ FieldSlots resolve_field_slots(const Record& record,
   for (std::size_t i = 0; i < record.subrecords.size(); ++i) {
     if (record.subrecords[i].signature == shape.subrecord) candidates.push_back(i);
   }
-  if (auto scoped = behavior_field_candidates(record, shape.subrecord)) candidates = std::move(*scoped);
+  if (auto scoped = behavior_field_candidates(record, shape.subrecord, address.repeated)) {
+    candidates = std::move(*scoped);
+  }
   if (!address.repeated && candidates.size() > 1) {
     out.duplicate = true;
     return out;
@@ -148,7 +151,13 @@ FieldSlots resolve_field_slots(const Record& record,
     std::size_t first = 0;
     std::size_t count = 1;
     std::size_t step = 0;
-    if (address.stride != 0) {
+    if (address.segment.count != 0) {
+      const auto span = header_segment(data, record.header.signature, shape.subrecord, address);
+      if (!span) continue;
+      first = span->base;
+      step = address.stride;
+      count = span->count;
+    } else if (address.stride != 0) {
       if (data.size() < address.array_offset ||
           (data.size() - address.array_offset) % address.stride != 0) {
         out.misaligned = out.misaligned || sized;

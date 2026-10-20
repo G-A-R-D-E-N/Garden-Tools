@@ -29,11 +29,25 @@ struct FieldDiscriminator {
   bool negated{false};
 };
 
+// Constraint: count 0 means the row is not header-counted; the element count is counter[count_word].
+struct SegmentAddress {
+  std::size_t count_word{0};
+  std::size_t index{0};
+  std::size_t count{0};
+};
+
 struct FieldAddress {
   bool repeated{false};
   std::size_t stride{0};
   std::size_t array_offset{0};
   FieldDiscriminator when{};
+  SegmentAddress segment{};
+};
+
+// Constraint: base is the first element offset and count its element count.
+struct SegmentSpan {
+  std::size_t base{0};
+  std::size_t count{0};
 };
 
 struct FieldShape {
