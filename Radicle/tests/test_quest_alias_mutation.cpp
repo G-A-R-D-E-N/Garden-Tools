@@ -34,7 +34,6 @@ void write_i32_subrecord(fo4::test::ByteWriter& out,
   fo4::test::write_subrecord(out, signature, data.bytes);
 }
 
-// Every form ID offset in this CTDA payload must stay null.
 std::vector<std::byte> ctda_payload() {
   fo4::test::ByteWriter data;
   data.u32(0);
@@ -225,7 +224,6 @@ std::vector<std::byte> u32_bytes(std::uint32_t value) {
 
 const fo4::FormKey k_quest = fo4::FormKey::parse("000800:Quest.esp");
 
-// One alias of the given kind; extra members must already be in the kind's member order.
 std::vector<std::byte> alias_with_members(std::string_view start, std::uint32_t id,
                                           const MemberList& members) {
   fo4::test::ByteWriter out;
@@ -252,7 +250,6 @@ std::vector<std::byte> alias_with_members(std::string_view start, std::uint32_t 
   return out.bytes;
 }
 
-// A replacement must keep the ALFI, ALID, ALEA, CTDA/CIS1 and ALCC here.
 std::vector<std::byte> unmodelled_alias_member_quest() {
   fo4::test::ByteWriter out;
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
@@ -290,7 +287,6 @@ std::vector<std::byte> unmodelled_alias_member_quest() {
   return out.bytes;
 }
 
-// ALFL must not be placeable in the reference alias ordering.
 std::vector<std::byte> reference_alias_with_location_member() {
   fo4::test::ByteWriter out;
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
@@ -315,7 +311,6 @@ std::vector<std::byte> reference_alias_with_location_member() {
   return out.bytes;
 }
 
-// Preserved members must be in member order: ALCC before CTDA is not.
 std::vector<std::byte> location_alias_out_of_member_order() {
   fo4::test::ByteWriter out;
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
@@ -559,7 +554,6 @@ TEST(QuestAliasReplacementPreservation, KeepsMembersTheCreationDoesNotWrite) {
   const auto* record = fo4::find_record(plugin, k_quest);
   ASSERT_NE(record, nullptr);
 
-  // ALFI must stay ahead of the written fill in the reference alias ordering.
   const auto after_reference = alias_members(*record, "ALST");
   EXPECT_EQ(member_names(after_reference),
             (std::vector<std::string>{"ALST", "ALID", "FNAM", "ALFI", "ALNA",
@@ -568,7 +562,6 @@ TEST(QuestAliasReplacementPreservation, KeepsMembersTheCreationDoesNotWrite) {
   EXPECT_EQ(member_payload(after_reference, "ALFI"),
             member_payload(before_reference, "ALFI"));
 
-  // ALID, ALFI, CTDA/CIS1 and ALCC must survive; the ALEA fill must not, because a Fill Type union is one run.
   const auto after_location = alias_members(*record, "ALLS");
   EXPECT_EQ(member_names(after_location),
             (std::vector<std::string>{"ALLS", "ALID", "FNAM", "ALFI", "ALFE",
@@ -620,7 +613,6 @@ TEST(QuestAliasReplacementPreservation, ReplacesAWrittenConditionRunAsAUnit) {
   const auto* record = fo4::find_record(plugin, k_quest);
   ASSERT_NE(record, nullptr);
   const auto after_location = alias_members(*record, "ALLS");
-  // A written condition run must replace CTDA and CIS1; ALEA and ALCC must stay.
   EXPECT_EQ(member_names(after_location),
             (std::vector<std::string>{"ALLS", "ALID", "FNAM", "ALFI", "ALEA",
                                       "CTDA", "ALCC", "ALED"}));
@@ -646,7 +638,6 @@ TEST(QuestAliasReplacementPreservation, DropsLocationClosestToWhenAReferenceFill
   const auto* record = fo4::find_record(plugin, k_quest);
   ASSERT_NE(record, nullptr);
   const auto after = alias_members(*record, "ALST", 1);
-  // ALCC must not survive a written reference fill: it is a reference Fill Type member.
   EXPECT_EQ(member_names(after),
             (std::vector<std::string>{"ALST", "ALID", "FNAM", "ALNA", "ALNT",
                                       "CTDA", "CIS1", "ALED"}));
@@ -682,7 +673,6 @@ TEST(QuestAliasReplacementPreservation, RefusesPreservedMembersThatCannotBeOrder
   EXPECT_EQ(fo4::write_plugin(unordered), unordered_before);
 }
 
-// A location ALCC and a reference ALEA must not survive a no-fill kind change: each is a fill member of both kinds.
 TEST(QuestAliasReplacementPreservation, RefusesKindChangesOverSharedFillMembers) {
   auto plugin = fo4::read_plugin(
       alias_with_members("ALLS", 2, {{"ALCC", u32_bytes(4)}}), "Quest.esp");
@@ -717,7 +707,15 @@ TEST(QuestAliasReplacementPreservation, RefusesOrDropsASpecificReferenceOnAKindC
             (std::vector<std::string>{"ALLS", "FNAM", "ALFE", "ALFD", "ALED"}));
 }
 
-// CIS1 must rank with the CTDA head of its run, so a rename that writes no conditions must keep the whole run.
+TEST(QuestAliasReplacementPreservation, RefusesAKindChangeThatWouldCarryVoiceTypes) {
+  auto plugin = fo4::read_plugin(
+      alias_with_members("ALST", 1, {{"VTCK", u32_bytes(0x800)}}), "Quest.esp");
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_THROW(fo4::forms::replace_quest_alias(plugin, k_quest, 1, location_alias(1)),
+               fo4::forms::QuestError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
 TEST(QuestAliasReplacementPreservation, KeepsAConditionRunWithACis1InOrderOnARename) {
   fo4::test::ByteWriter cis1;
   cis1.raw(std::string_view{"One\0", 4});

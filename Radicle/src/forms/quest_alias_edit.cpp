@@ -207,7 +207,6 @@ std::vector<std::uint8_t> collection_flags(const AliasSection& section) {
   return flags;
 }
 
-// xEdit alias member ordering: Core/wbDefinitionsFO4.pas:10808-10889 and :10898-10924 at 93cc0bc5.
 constexpr std::string_view k_reference_member_order[] = {
     "ALST", "ALID", "FNAM", "ALFI", "ALFR", "ALUA", "ALFA", "ALRT", "ALEQ",
     "ALEA", "ALCO", "ALCA", "ALCL", "ALNA", "ALNT", "ALFE", "ALFD", "ALCC",
@@ -222,7 +221,6 @@ constexpr std::string_view k_location_member_order[] = {
 constexpr std::string_view k_alias_frame[] = {
     "ALST", "ALLS", "ALCS", "ALMI", "ALID", "FNAM", "ALFI", "ALED"};
 
-// Run membership: xEdit wbRUnion ordering at Core/wbDefinitionsFO4.pas:10813-10866 and :10903-10919.
 constexpr std::string_view k_reference_fill_members[] = {
     "ALFR", "ALUA", "ALFA", "ALRT", "ALEQ", "ALEA", "ALCO", "ALCA", "ALCL",
     "ALNA", "ALNT", "ALFE", "ALFD", "ALCC"};
@@ -242,7 +240,6 @@ std::optional<std::size_t> member_rank(const std::string_view (&names)[N],
   return std::nullopt;
 }
 
-// A run must be written as a unit: a leftover member rebinds to the new run.
 enum class AliasMemberRun { none, fill, conditions, items };
 
 AliasMemberRun member_run(QuestAliasKind kind, Signature signature) {
@@ -272,7 +269,6 @@ bool run_written(const std::vector<Subrecord>& members,
 
 std::optional<std::size_t> alias_member_rank(QuestAliasKind kind,
                                              Signature signature) {
-  // A run member must rank with its run head: CIS1/CIS2 with CTDA, COED with CNTO.
   if (signature == k_cis1 || signature == k_cis2) signature = k_ctda;
   if (signature == k_coed) signature = k_cnto;
   if (kind == QuestAliasKind::reference) {
@@ -284,7 +280,6 @@ std::optional<std::size_t> alias_member_rank(QuestAliasKind kind,
   return std::nullopt;
 }
 
-// Preserved members must already be in member order; otherwise this throws.
 std::vector<Subrecord> merge_alias_members(QuestAliasKind kind,
                                            const std::vector<Subrecord>& preserved,
                                            const QuestAlias& alias) {
@@ -449,7 +444,6 @@ void replace_quest_alias(Plugin& plugin,
       run_written(alias.subrecords, creation.kind, AliasMemberRun::conditions);
   const bool items_written =
       run_written(alias.subrecords, creation.kind, AliasMemberRun::items);
-  // A written fill run must also take a preserved fill member of the new kind.
   const auto replaced = [&](Signature signature) {
     if (written.count(signature) != 0) return true;
     const auto existing_run = member_run(existing_kind, signature);
@@ -470,7 +464,6 @@ void replace_quest_alias(Plugin& plugin,
     return false;
   };
 
-  // A kind change must rewrite the alias frame; a same-kind one must not.
   const bool kind_changed = creation.kind != existing_kind;
   std::vector<Subrecord> preserved;
   for (std::size_t index = range->begin; index < range->end; ++index) {

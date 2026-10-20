@@ -168,7 +168,7 @@ Replacement below).
 member of the existing alias is kept and spliced back into the alias at the
 position the xEdit member order gives it, so `ALED` stays last. Replacement
 never targets a collection alias; only a kind change to one can produce an
-`ALCS`/`ALMI` run. The Alias ID must stay the same.
+`ALCS`/`ALMI` run. The Alias ID must stay the same. An empty creation field (`name`, `force_into_alias`, the fill, `conditions`, `items`, the other extras) keeps the existing member: there is no in-place clear. To remove a member, rebuild the alias with `remove_quest_alias` followed by `add_quest_alias`.
 
 A member is written when the creation emits it, or when it belongs to a run the
 creation writes: the Fill Type union of the alias kind, the `CTDA`/`CIS1`/`CIS2`
@@ -214,7 +214,7 @@ belongs to, so a canonical `CTDA`, `CIS1`, `CTDA` condition run and a `COCT`,
 `CNTO`, `COED`, `CNTO`, `COED` item list are in order. A replacement that
 changes the alias kind rewrites the alias frame for the new kind (`ALST`/`ALLS`,
 or `ALCS`/`ALMI` when the new creation is a collection, plus `ALID`, `FNAM`,
-`ALFI`, `ALED`) and preserves everything else under the new kind's order.
+`ALFI`, `ALED`) and preserves everything else under the new kind's order. On a kind change the existing `ALID` and `ALFI` are dropped when the creation leaves `name` or `force_into_alias` unset; a same-kind replacement keeps them. There is no drop opt-in for members the new kind's order does not allow: a kind change refuses them. A reference alias carrying `VTCK` replaced by a location creation throws `QuestError` (`Radicle/src/forms/quest_alias_edit.cpp:merge_alias_members`) and leaves the plugin unchanged. To change such an alias's kind, the caller must rebuild it with `remove_quest_alias` followed by `add_quest_alias`.
 
 ## Mutation safety
 

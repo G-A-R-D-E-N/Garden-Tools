@@ -4007,3 +4007,81 @@ The scalar row `RACE\MorphGroupSliders` (`Radicle/schema/fallout4/fields.json`) 
 ## Radicle/tests/test_sound_writer_real.cpp:EveryScalarStringAndLinkPathEditsFirstAndLastSlotsWithoutTouchingOtherBytes (formlink sweep)
 
 The formlink half of `Radicle/tests/test_sound_writer_real.cpp:EveryScalarStringAndLinkPathEditsFirstAndLastSlotsWithoutTouchingOtherBytes` resolved `Radicle/src/schema/field_address.cpp:resolve_field_slots` against the pre-edit `original` record while writing into the already scalar-edited `sample`. The scalar sweep sets `SNDR\DescriptorType` (CNAM) to 1 on AutoWeapon records (CNAM 0xED157AE3), so `SNDR\BaseDescriptor` (BNAM) failed its discriminator guard on `sample` and `Radicle/src/plugin/field_writer.cpp:set_record_formlink_field` returned `subrecord_missing` where the test expected `updated`. The loop now resolves against `fo4::find_record(sample, record.form_key)`, the same record the writer resolves, so an invalid live slot takes the existing `subrecord_missing` expectation and leaves the expected bytes untouched. Regression: `Radicle/tests/test_sound_writer_real.cpp:EveryScalarStringAndLinkPathEditsFirstAndLastSlotsWithoutTouchingOtherBytes` on the masters holding AutoWeapon SNDR (Fallout4, DLCRobot, DLCCoast, DLCNukaWorld).
+
+## Radicle/src/forms/quest_alias_edit.cpp:k_reference_member_order, Radicle/src/forms/quest_alias_edit.cpp:k_location_member_order
+
+Member order pin: xEdit alias member ordering at `Core/wbDefinitionsFO4.pas:10808-10889` and `:10898-10924` at 93cc0bc5.
+
+## Radicle/src/forms/quest_alias_edit.cpp:k_reference_fill_members, Radicle/src/forms/quest_alias_edit.cpp:k_location_fill_members
+
+Run membership pin: xEdit wbRUnion ordering at `Core/wbDefinitionsFO4.pas:10813-10866` and `:10903-10919` at 93cc0bc5.
+
+## Radicle/src/forms/quest_alias_edit.cpp:AliasMemberRun
+
+A run must be written as a unit: a leftover member rebinds to the new run.
+
+## Radicle/src/forms/quest_alias_edit.cpp:alias_member_rank
+
+A run member must rank with its run head: CIS1/CIS2 with CTDA, COED with CNTO.
+
+## Radicle/src/forms/quest_alias_edit.cpp:merge_alias_members
+
+Preserved members must already be in member order; otherwise this throws.
+
+## Radicle/src/forms/quest_alias_edit.cpp:replace_quest_alias
+
+A written fill run must also take a preserved fill member of the new kind. A kind change must rewrite the alias frame; a same-kind one must not.
+
+Kind change and the frame (#602 r6): on a kind change the preserved list drops `ALST`/`ALLS`/`ALCS`/`ALMI`/`ALED` and also `ALID`/`ALFI` unless the creation writes them. The `ALID`/`ALFI` drop when the creation leaves `name` or `force_into_alias` unset is the chosen behaviour, not a bug: `Radicle/tests/test_quest_alias_mutation.cpp:RefusesOrDropsASpecificReferenceOnAKindChange` pins it (the location alias comes back as `ALLS`, `FNAM`, `ALFE`, `ALFD`, `ALED`). Keeping them would need a collection-target exception, because a collection alias has no `ALID`/`ALFI` order and `merge_alias_members` would throw on them. Documented in `Radicle/docs/QUEST_ALIASES.md` Replacement.
+
+Kind change refusal (#602 r6): a preserved member the new kind's order does not allow is refused, not dropped. A reference alias carrying `VTCK` replaced by a location creation reaches `merge_alias_members` with `VTCK` preserved, which has no location rank and throws `QuestError` before the clone is committed. There is no drop opt-in yet; the caller rebuilds the alias with delete plus create. Empty creation fields keep the existing member (no in-place clear), which is the same rule the fill-run and condition-run checks already use.
+
+Tests: `Radicle/tests/test_quest_alias_mutation.cpp:RefusesAKindChangeThatWouldCarryVoiceTypes` detects a kind change that silently drops a reference-only member (the old erase behaviour) or carries it into a location alias; it throws `QuestError` and leaves the plugin bytes unchanged.
+
+## Radicle/include/fo4/forms/quest.hpp:replace_quest_alias
+
+A kind change must rewrite the frame; an unset name or force_into_alias then drops ALID/ALFI.
+
+## Radicle/src/forms/quest_alias_edit.cpp:replace_quest_alias (ordering invariant)
+
+The spliced alias must decode before the clone is committed; the constraint is kept as a single line in source at the decode call.
+
+## Radicle/tests/test_quest_alias_mutation.cpp:ctda_payload
+
+Every form ID offset in this CTDA payload must stay null.
+
+## Radicle/tests/test_quest_alias_mutation.cpp:alias_with_members
+
+One alias of the given kind; extra members must already be in the kind's member order.
+
+## Radicle/tests/test_quest_alias_mutation.cpp:unmodelled_alias_member_quest
+
+A replacement must keep the ALFI, ALID, ALEA, CTDA/CIS1 and ALCC here.
+
+## Radicle/tests/test_quest_alias_mutation.cpp:reference_alias_with_location_member
+
+ALFL must not be placeable in the reference alias ordering.
+
+## Radicle/tests/test_quest_alias_mutation.cpp:location_alias_out_of_member_order
+
+Preserved members must be in member order: ALCC before CTDA is not.
+
+## Radicle/tests/test_quest_alias_mutation.cpp:KeepsMembersTheCreationDoesNotWrite
+
+ALFI must stay ahead of the written fill in the reference alias ordering. ALID, ALFI, CTDA/CIS1 and ALCC must survive; the ALEA fill must not, because a Fill Type union is one run.
+
+## Radicle/tests/test_quest_alias_mutation.cpp:ReplacesAWrittenConditionRunAsAUnit
+
+A written condition run must replace CTDA and CIS1; ALEA and ALCC must stay.
+
+## Radicle/tests/test_quest_alias_mutation.cpp:DropsLocationClosestToWhenAReferenceFillIsWritten
+
+ALCC must not survive a written reference fill: it is a reference Fill Type member.
+
+## Radicle/tests/test_quest_alias_mutation.cpp:RefusesKindChangesOverSharedFillMembers
+
+A location ALCC and a reference ALEA must not survive a no-fill kind change: each is a fill member of both kinds.
+
+## Radicle/tests/test_quest_alias_mutation.cpp:KeepsAConditionRunWithACis1InOrderOnARename
+
+CIS1 must rank with the CTDA head of its run, so a rename that writes no conditions must keep the whole run.
