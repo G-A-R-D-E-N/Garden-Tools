@@ -37,47 +37,50 @@ const Plugin* master_file_holder(const Plugin& plugin,
   return nullptr;
 }
 
-bool same_leveled_entry(const forms::LeveledListEntry& left,
-                        const forms::LeveledListEntry& right) {
-  return left.level == right.level && left.item == right.item && left.count == right.count;
+bool same_leveled_item(const forms::LeveledListEntry& left,
+                       const forms::LeveledListEntry& right) {
+  return left.level == right.level && left.item == right.item;
 }
 
-bool holds_entry(std::span<const forms::LeveledListEntry> entries,
-                 const forms::LeveledListEntry& wanted) {
-  return std::any_of(entries.begin(), entries.end(),
-                     [&](const forms::LeveledListEntry& entry) {
-                       return same_leveled_entry(entry, wanted);
-                     });
+std::vector<forms::LeveledListEntry> entries_of_item(
+    std::span<const forms::LeveledListEntry> entries,
+    const forms::LeveledListEntry& item) {
+  std::vector<forms::LeveledListEntry> found;
+  for (const auto& entry : entries) {
+    if (same_leveled_item(entry, item)) found.push_back(entry);
+  }
+  return found;
 }
 
 std::vector<forms::LeveledListEntry> merge_leveled_entries(
     std::vector<forms::LeveledListEntry> target,
     std::span<const forms::LeveledListEntry> previous,
     std::span<const forms::LeveledListEntry> current) {
-  for (const auto& entry : previous) {
-    if (holds_entry(current, entry)) continue;
-    target.erase(std::remove_if(target.begin(), target.end(),
-                                [&](const forms::LeveledListEntry& known) {
-                                  return same_leveled_entry(known, entry);
-                                }),
-                 target.end());
-  }
-  for (const auto& entry : current) {
-    if (holds_entry(previous, entry)) {
-      for (auto& known : target) {
-        if (same_leveled_entry(known, entry)) known = entry;
+  const auto merge_item = [&](const forms::LeveledListEntry& item) {
+    const auto before = entries_of_item(previous, item);
+    const auto after = entries_of_item(current, item);
+    if (std::is_permutation(before.begin(), before.end(), after.begin(), after.end())) return;
+    std::vector<forms::LeveledListEntry> merged;
+    bool placed = false;
+    for (const auto& known : target) {
+      if (!same_leveled_item(known, item)) {
+        merged.push_back(known);
+      } else if (!placed) {
+        merged.insert(merged.end(), after.begin(), after.end());
+        placed = true;
       }
-      continue;
     }
-    if (!holds_entry(target, entry)) target.push_back(entry);
-  }
+    if (!placed) merged.insert(merged.end(), after.begin(), after.end());
+    target = std::move(merged);
+  };
+  for (const auto& entry : previous) merge_item(entry);
+  for (const auto& entry : current) merge_item(entry);
   return target;
 }
 
 bool same_leveled_multiset(std::span<const forms::LeveledListEntry> left,
                            std::span<const forms::LeveledListEntry> right) {
-  return std::is_permutation(left.begin(), left.end(), right.begin(), right.end(),
-                             same_leveled_entry);
+  return std::is_permutation(left.begin(), left.end(), right.begin(), right.end());
 }
 
 bool holds_key(std::span<const FormKey> keys, const FormKey& wanted) {
@@ -94,8 +97,6 @@ std::vector<FormKey> merge_form_list(std::vector<FormKey> target,
   for (const auto& key : current) {
     if (!holds_key(previous, key) && !holds_key(target, key)) target.push_back(key);
   }
-  std::sort(target.begin(), target.end());
-  target.erase(std::unique(target.begin(), target.end()), target.end());
   return target;
 }
 

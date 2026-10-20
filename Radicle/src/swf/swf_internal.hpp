@@ -22,9 +22,12 @@ public:
   std::size_t position() const noexcept { return position_; }
   std::size_t remaining() const noexcept { return data_.size() - position_; }
 
+  bool read_u8(std::uint8_t& out) noexcept;
   bool read_u16(std::uint16_t& out) noexcept;
   bool read_u32(std::uint32_t& out) noexcept;
   bool read_zstring(std::string& out);
+  bool read_sized_string(std::string& out);
+  bool skip(std::size_t count) noexcept;
 
 private:
   std::span<const std::byte> data_;
@@ -50,6 +53,9 @@ private:
 std::string to_text(std::span<const std::byte> bytes);
 
 std::uint8_t byte_at(std::span<const std::byte> bytes, std::size_t index) noexcept;
+
+bool read_rect(std::span<const std::byte> data, std::size_t offset, SwfRect& out,
+               std::size_t& next) noexcept;
 
 SwfStatus decode_tag_payload(const std::vector<std::byte>& payload, SwfTag& out_tag,
                              unsigned depth);

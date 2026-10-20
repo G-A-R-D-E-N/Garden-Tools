@@ -396,7 +396,9 @@ def load_lists(schema_path: Path):
             "anchor_successors": anchors["successors"],
         })
 
-    scalar_entries = [dict(field, width=WIDTHS.get(field["storage"], 0)) for field in load_fields(schema_path)]
+    scalar_entries = [dict(field, width=WIDTHS.get(field["storage"], 0))
+                      for field in load_fields(schema_path)
+                      if field["address"]["segment"] is None]
     entries = [dict(field, width=4, embedded=True) for field in fields]
     for row in lists + nested_lists:
         # Constraint: a segmented list has no static slot range, so it is not overlap-checked.

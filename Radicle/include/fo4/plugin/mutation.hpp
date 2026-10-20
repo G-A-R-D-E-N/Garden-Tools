@@ -38,6 +38,7 @@ enum class ScalarMutationStatus {
   unchanged,
   record_missing,
   subrecord_missing,
+  next_alias_id_too_low,
 };
 
 enum class CountedArrayMutationStatus {

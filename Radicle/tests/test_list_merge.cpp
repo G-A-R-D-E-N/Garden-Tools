@@ -307,6 +307,40 @@ TEST_F(ListMerge, AnOwnerOutsideTheLoadOrderIsTypedFromTheVersionThatCarriesIt) 
   EXPECT_EQ(merged.entries[1].item, fo4::FormKey::parse("000801:Missing.esm"));
 }
 
+TEST_F(ListMerge, AMultisetRemovalDropsOnlyTheCopiesTheOverrideDrops) {
+  write(kMaster, leveled_plugin({}, {{1, 0x000800, 1}, {1, 0x000800, 1}, {1, 0x000800, 1},
+                                     {2, 0x000801, 1}}));
+  write(kFirst, leveled_plugin({kMaster}, {{1, 0x000800, 1}, {2, 0x000801, 1},
+                                           {3, 0x01000803, 1}}));
+  write(kSecond, leveled_plugin({kMaster}, {{1, 0x000800, 1}, {1, 0x000800, 1},
+                                            {1, 0x000800, 1}, {2, 0x000801, 1}}));
+  const auto env = load();
+
+  const auto result = fo4::patch::build_list_merge_patch(
+      env, fo4::Signature::from_string("LVLI"), "Merged.esp");
+
+  EXPECT_EQ(result.counts.merged, 1u);
+  const std::vector<std::pair<std::uint16_t, std::uint32_t>> expected{
+      {1, 0x000800}, {2, 0x000801}, {3, 0x000803}};
+  EXPECT_EQ(entry_pairs(fo4::forms::decode_leveled_list(result.patch, key_).entries), expected);
+}
+
+TEST_F(ListMerge, ALaterOverrideWinsAConflictingCountOfOneItem) {
+  write(kMaster, leveled_plugin({}, {{1, 0x000800, 1}}));
+  write(kFirst, leveled_plugin({kMaster}, {{1, 0x000800, 2}}));
+  write(kSecond, leveled_plugin({kMaster}, {{1, 0x000800, 3}}));
+  write(kThird, leveled_plugin({kMaster}, {{1, 0x000800, 1}}));
+  const auto env = load_with_third();
+
+  const auto result = fo4::patch::build_list_merge_patch(
+      env, fo4::Signature::from_string("LVLI"), "Merged.esp");
+
+  EXPECT_EQ(result.counts.merged, 1u);
+  const auto merged = fo4::forms::decode_leveled_list(result.patch, key_);
+  ASSERT_EQ(merged.entries.size(), 1u);
+  EXPECT_EQ(merged.entries[0].count, 3);
+}
+
 TEST_F(ListMerge, FormListMergeIsAUnionOfTheLoadOrder) {
   write(kMaster, form_list_plugin({}, {0x000800, 0x000801}));
   write(kFirst, form_list_plugin({kMaster}, {0x000800, 0x000801, 0x01000803}));
@@ -323,8 +357,8 @@ TEST_F(ListMerge, FormListMergeIsAUnionOfTheLoadOrder) {
   const auto descriptor =
       fo4::schema::formlink_list_descriptor(fo4::Signature::from_string("FLST"), "FLST\\Items");
   ASSERT_TRUE(descriptor.has_value());
-  const std::vector<fo4::FormKey> expected{fo4::FormKey::parse("000803:First.esp"),
-                                           fo4::FormKey::parse("000801:Master.esm")};
+  const std::vector<fo4::FormKey> expected{fo4::FormKey::parse("000801:Master.esm"),
+                                           fo4::FormKey::parse("000803:First.esp")};
   const auto values = fo4::schema::record_formlink_list_values(result.patch, key_, *descriptor);
   ASSERT_TRUE(values.has_value());
   EXPECT_EQ(*values, expected);
