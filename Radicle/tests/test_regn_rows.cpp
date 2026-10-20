@@ -132,7 +132,7 @@ std::vector<std::byte> make_plugin() {
                         {"WNAM", u32_bytes(0x00000D20)},
                         {"RPLI", u32_bytes(80)},
                         {"RPLI", u32_bytes(120)},
-                        {"RDAT", rdat_bytes(3, 1, 40)},
+                        {"RDAT", rdat_bytes(7, 1, 40)},
                         {"RDMO", u32_bytes(0x00000D21)},
                         {"ANAM", f32_bytes(0.5f)},
                         {"RDAT", rdat_bytes(5, 0, 60)},
@@ -203,6 +203,12 @@ TEST(RegnRows, DeclaresColorsDataEntryFieldsAndLinks) {
   EXPECT_EQ(fo4::schema::scalar_value_name(type->scalar, 3), std::string_view("Weather"));
   EXPECT_FALSE(fo4::schema::scalar_value_name(type->scalar, 1).has_value());
 
+  const auto override_value = scalar_row("REGN\\RegionDataOverride");
+  ASSERT_TRUE(override_value.has_value());
+  EXPECT_EQ(override_value->scalar.presentation, fo4::schema::ScalarPresentation::enumeration);
+  EXPECT_EQ(fo4::schema::scalar_value_name(override_value->scalar, 1), std::string_view("True"));
+  EXPECT_FALSE(fo4::schema::scalar_value_name(override_value->scalar, 2).has_value());
+
   const auto priority = scalar_row("REGN\\RegionDataPriority");
   ASSERT_TRUE(priority.has_value());
   EXPECT_EQ(priority->scalar.offset, 5u);
@@ -249,7 +255,7 @@ TEST(RegnRows, ReadsColorsDataEntriesAndLinks) {
   EXPECT_EQ(field_bytes(plugin, key, "REGN\\MapColorRed"), u8_bytes(0x11));
   EXPECT_EQ(field_bytes(plugin, key, "REGN\\MapColorGreen"), u8_bytes(0x22));
   EXPECT_EQ(field_bytes(plugin, key, "REGN\\MapColorBlue"), u8_bytes(0x33));
-  EXPECT_EQ(field_bytes(plugin, key, "REGN\\RegionDataType"), u32_bytes(3));
+  EXPECT_EQ(field_bytes(plugin, key, "REGN\\RegionDataType"), u32_bytes(7));
   EXPECT_EQ(field_bytes(plugin, key, "REGN\\RegionDataType", 1), u32_bytes(5));
   EXPECT_EQ(field_bytes(plugin, key, "REGN\\RegionDataOverride"), u8_bytes(1));
   EXPECT_EQ(field_bytes(plugin, key, "REGN\\RegionDataPriority"), u8_bytes(40));

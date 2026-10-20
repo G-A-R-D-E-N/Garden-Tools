@@ -677,6 +677,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_c_api_loadorder.cpp
     tests/test_c_api_referenced_by.cpp
     tests/test_regn_rows.cpp
+    tests/test_regn_region_decode.cpp
     tests/test_c_api_forms_modules.cpp
     tests/test_weap_rows.cpp
     tests/test_npc_link_rows.cpp
