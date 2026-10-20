@@ -91,9 +91,19 @@ std::vector<std::byte> make_plugin() {
   put(imad_tnam, 20, f32(2.5f));
   Bytes imad_nam3 = zeros(20);
   put(imad_nam3, 0, f32(1.5f));
+  Bytes imad_bnam = zeros(16);
+  put(imad_bnam, 0, f32(0.25f));
+  put(imad_bnam, 4, f32(2.5f));
+  put(imad_bnam, 8, f32(0.75f));
+  put(imad_bnam, 12, f32(-4.0f));
+  Bytes imad_iad = zeros(16);
+  put(imad_iad, 0, f32(0.5f));
+  put(imad_iad, 4, f32(6.0f));
+  put(imad_iad, 8, f32(0.75f));
+  put(imad_iad, 12, f32(1.5f));
   write_record(out, "IMAD", 3001,
-               {{"EDID", zstr("RadicleImageAdapter")}, {"DNAM", imad_full}, {"TNAM", imad_tnam},
-                {"NAM3", imad_nam3}});
+               {{"EDID", zstr("RadicleImageAdapter")}, {"DNAM", imad_full}, {"BNAM", imad_bnam},
+                {"TNAM", imad_tnam}, {"NAM3", imad_nam3}, {"@IAD", imad_iad}});
   write_record(out, "IMAD", 3002, {{"EDID", zstr("RadicleImageAdapterTwo")}, {"DNAM", zeros(244)}});
 
   Bytes zoom = zeros(24);
@@ -232,6 +242,36 @@ TEST(ImageFxSynthetic, InterpolatorMembersEditOneStrideElement) {
   EXPECT_EQ(slice(payload(reread, 3001, "TNAM"), 20, 4), f32(3.5f));
   EXPECT_EQ(payload(reread, 3001, "NAM3").size(), 20u);
   EXPECT_EQ(slice(payload(reread, 3001, "NAM3"), 0, 4), f32(4.5f));
+}
+
+TEST(ImageFxSynthetic, TimeInterpolatorArraysDecodeAndEditOneStrideElement) {
+  // Regression: an interpolator row requires stride 8 with Time at 0 and Value at 4, so a wrong stride or offset edits the neighbouring sample of the same array.
+  auto plugin = load();
+  EXPECT_EQ(fo4::record_field_count(plugin, key(3001), "IMAD\\BlurRadiusTime"), 2u);
+  EXPECT_EQ(fo4::record_field_count(plugin, key(3001), "IMAD\\HDREyeAdaptSpeedAddValue"), 2u);
+  EXPECT_EQ(fo4::record_field_count(plugin, key(3002), "IMAD\\BlurRadiusTime"), 0u);
+  EXPECT_EQ(decoded_value(plugin, 3001, "IMAD\\BlurRadiusTime"), "0.25");
+  EXPECT_EQ(decoded_value(plugin, 3001, "IMAD\\BlurRadiusValue"), "2.5");
+  EXPECT_EQ(decoded_value(plugin, 3001, "IMAD\\HDREyeAdaptSpeedAddTime"), "0.5");
+  EXPECT_EQ(decoded_value(plugin, 3001, "IMAD\\HDREyeAdaptSpeedAddValue"), "6");
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key(3001), scalar("IMAD\\BlurRadiusValue"), 1, "7.5"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key(3001), scalar("IMAD\\HDREyeAdaptSpeedAddValue"), 1, "8.5"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key(3001), scalar("IMAD\\BlurRadiusTime"), 2, "9"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key(3002), scalar("IMAD\\BlurRadiusTime"), 0, "9"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(payload(reread, 3001, "BNAM").size(), 16u);
+  EXPECT_EQ(slice(payload(reread, 3001, "BNAM"), 0, 4), f32(0.25f));
+  EXPECT_EQ(slice(payload(reread, 3001, "BNAM"), 4, 4), f32(2.5f));
+  EXPECT_EQ(slice(payload(reread, 3001, "BNAM"), 8, 4), f32(0.75f));
+  EXPECT_EQ(slice(payload(reread, 3001, "BNAM"), 12, 4), f32(7.5f));
+  EXPECT_EQ(slice(payload(reread, 3001, "@IAD"), 4, 4), f32(6.0f));
+  EXPECT_EQ(slice(payload(reread, 3001, "@IAD"), 12, 4), f32(8.5f));
 }
 
 TEST(ImageFxSynthetic, EditsOneRowPerRecordAndRereads) {

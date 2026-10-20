@@ -72,6 +72,8 @@ struct FormLinkListDescriptor {
   std::size_t first_segment{0};
   std::size_t segment_count{0};
   std::size_t counter_payload_size{0};
+  // Invariant: element_tail subrecords directly follow an element and must move with it.
+  Signature element_tail{};
 };
 
 struct NestedFormLinkListDescriptor {

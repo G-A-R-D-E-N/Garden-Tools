@@ -155,6 +155,11 @@ def load_lists(schema_path: Path):
             if storage not in ("per_subrecord", "packed_array"):
                 raise ValueError(f"unsupported FormLink list storage: {storage!r}")
             counter = parse_list_counter(row, path)
+            element_tail = row.get("element_tail", "")
+            if not isinstance(element_tail, str) or (element_tail and not valid_signature(element_tail)):
+                raise ValueError(f"FormLink list element_tail is invalid: {path!r}")
+            if element_tail and storage != "per_subrecord":
+                raise ValueError(f"FormLink list element_tail requires per_subrecord storage: {path!r}")
             segment = parse_list_segment(row, path, storage, counter)
             key = (record_signature, subrecord)
             previous = seen_record_subrecords.get(key)
@@ -182,6 +187,7 @@ def load_lists(schema_path: Path):
                 "subrecord": subrecord,
                 "storage": storage,
                 "counter": counter,
+                "element_tail": element_tail,
                 "segment": segment,
                 "targets": parsed_targets,
                 "nullable": nullable,
@@ -370,6 +376,7 @@ def load_lists(schema_path: Path):
             "subrecord": "KWDA",
             "storage": "packed_array",
             "counter": "KSIZ",
+            "element_tail": "",
             "segment": None,
             "targets": ["KYWD"],
             "nullable": False,
@@ -533,7 +540,9 @@ def render(lists, nested_lists, fields, unions) -> str:
             f"{first_target}, {target_count}, " +
             f"{first_anchor}, {predecessor_count}, {successor_count}, " +
             f"{segment_index}, {first_segment}, {segment_count}, " +
-            f"{segment['payload_size'] if segment else 0}" +
+            f"{segment['payload_size'] if segment else 0}, " +
+            (f"Signature::from_string({cpp_string(row['element_tail'])})"
+                if row["element_tail"] else "Signature{}") +
             "},"
         )
     lines.append("};")
