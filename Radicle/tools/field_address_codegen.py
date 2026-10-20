@@ -157,6 +157,9 @@ def reject_overlaps(entries, kind_label):
         for first, second in combinations(group, 2):
             a, b = first["address"], second["address"]
             different_layout = any(a[key] != b[key] for key in ("repeated", "stride", "array_offset"))
+            # Constraint: a subrecord_group member row addresses its own run instance, so a row of the same signature outside the group cannot share its bytes.
+            if different_layout and bool(first.get("group_member")) != bool(second.get("group_member")):
+                continue
             if first["embedded"] and second["embedded"] and form_version_windows_disjoint(first, second):
                 continue
             aw, bw = a["when"], b["when"]

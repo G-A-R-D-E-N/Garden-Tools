@@ -25,7 +25,7 @@ MEMBER_KEYS = {"path", "label", "offset", "storage", "presentation", "minimum", 
 SUBRECORD_GROUP_KEYS = {"kind", "path", "label", "count_subrecord", "insertion", "members", "successors"}
 GROUP_MEMBER_KEYS = {"subrecord", "required", "repeatable", "payload_size", "default", "fields",
                      "formlink_fields", "localized", "skippable"}
-GROUP_ROW_FORBIDDEN = {"kind", "subrecord", "repeated", "stride", "array_offset", "when", "payload_size", "minimum_payload_size"}
+GROUP_ROW_FORBIDDEN = {"subrecord", "repeated", "stride", "array_offset", "when", "payload_size", "minimum_payload_size"}
 GROUP_LINK_KEYS = {"path", "label", "offset", "nullable", "insertion", "target_union", "targets"}
 HEX_DIGITS = "0123456789abcdefABCDEF"
 WIDTHS = {"u8": 1, "u16": 2, "u32": 4, "i32": 4, "f32": 4, "i8": 1, "i16": 2}
@@ -231,6 +231,17 @@ def parse_subrecord_group(field, record_signature: str):
         for row in member_fields:
             if not isinstance(row, dict) or set(row) & GROUP_ROW_FORBIDDEN:
                 raise ValueError(f"subrecord_group member field keys must not include {sorted(GROUP_ROW_FORBIDDEN)}: {path!r}")
+            kind = row.get("kind", "scalar")
+            if kind not in KINDS:
+                raise ValueError(f"subrecord_group member field kind is unsupported: {row.get('path')!r}")
+            if kind == "string":
+                forbidden = sorted(STRING_FORBIDDEN & set(row))
+                if forbidden:
+                    raise ValueError(f"subrecord_group member string rows do not accept {forbidden}: {row.get('path')!r}")
+                if not is_count(row.get("offset"), 0):
+                    raise ValueError(f"subrecord_group member string row needs a non-negative offset: {row.get('path')!r}")
+                rows.append(dict(row, kind="string", subrecord=signature, repeated=True, group_member=True))
+                continue
             width = WIDTHS.get(row.get("storage"))
             if width is None:
                 raise ValueError(f"subrecord_group member field storage is unsupported: {row.get('path')!r}")
@@ -239,7 +250,7 @@ def parse_subrecord_group(field, record_signature: str):
             end = row.get("offset", 0) + width
             if end > payload_size or ("offset" not in row and end != payload_size):
                 raise ValueError(f"subrecord_group member field exceeds member size: {row.get('path')!r}")
-            rows.append(dict(row, kind="scalar", subrecord=signature, repeated=True))
+            rows.append(dict(row, kind="scalar", subrecord=signature, repeated=True, group_member=True))
         for row in member_links:
             if not isinstance(row, dict) or set(row) - GROUP_LINK_KEYS:
                 raise ValueError(f"subrecord_group member link keys must be a subset of {sorted(GROUP_LINK_KEYS)}: {path!r}")
@@ -443,6 +454,7 @@ def load_schema(schema_path: Path):
                 "address": address,
                 "localized": localized,
                 "can_insert": False,
+                "group_member": field.get("group_member", False),
             })
 
     for array in arrays:
