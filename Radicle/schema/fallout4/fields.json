@@ -32321,7 +32321,34 @@
         {"path": "NPC_\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
         {"path": "NPC_\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"},
         {"path": "NPC_\\AttackEvent", "label": "Attack event", "kind": "string", "subrecord": "ATKE", "repeated": true, "insertion": "existing_only"},
-        {"path": "NPC_\\AttackDescription", "label": "Attack description", "kind": "string", "subrecord": "ATKT", "repeated": true, "insertion": "existing_only"}
+        {"path": "NPC_\\AttackDescription", "label": "Attack description", "kind": "string", "subrecord": "ATKT", "repeated": true, "insertion": "existing_only"},
+        {"path": "NPC_\\SpellCount", "label": "Spell count", "kind": "scalar", "subrecord": "SPCT", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"},
+        {
+          "path": "NPC_\\Spells",
+          "label": "Spells",
+          "kind": "subrecord_group",
+          "count_subrecord": "SPCT",
+          "insertion": "existing_only",
+          "successors": ["DEST", "DAMC", "DSTD", "DSTA", "DMDL", "DMDT", "DMDC", "DMDS", "DSTF", "WNAM", "ANAM", "ATKR", "ATKD", "SPOR", "OCOR", "GWOR", "ECOR", "FCPL", "RCLR", "PRKZ", "PRKR", "PRPS", "FTYP", "NTRM", "COCT", "CNTO", "COED", "AIDT", "PKID", "KSIZ", "KWDA", "APPR", "OBTE", "OBTF", "OBTS", "STOP", "CNAM", "FULL", "SHRT", "DATA", "DNAM", "PNAM", "HCLF", "BCLF", "ZNAM", "GNAM", "NAM5", "NAM6", "NAM7", "NAM4", "MWGT", "NAM8", "CS2H", "CS2K", "CS2D", "CS2E", "CS2F", "CSCR", "PFRN", "DOFT", "SOFT", "DPLT", "CRIF", "FTST", "QNAM", "MSDK", "MSDV", "TETI", "TEND", "MRSV", "FMRI", "FMRS", "FMIN", "ATTX"],
+          "members": [
+            {
+              "subrecord": "SPLO",
+              "required": true,
+              "repeatable": false,
+              "payload_size": 4,
+              "formlink_fields": [
+                {
+                  "path": "NPC_\\Spell",
+                  "label": "Spell",
+                  "offset": 0,
+                  "nullable": false,
+                  "insertion": "existing_only",
+                  "targets": ["SPEL", "LVSP"]
+                }
+              ]
+            }
+          ]
+        }
       ],
       "formlink_fields": [
         {
@@ -32361,17 +32388,6 @@
           "subrecord": "PNAM",
           "offset": 0,
           "targets": ["HDPT"],
-          "nullable": false,
-          "repeated": true,
-          "payload_sizes": [4],
-          "insertion": "existing_only"
-        },
-        {
-          "path": "NPC_\\Spell",
-          "label": "Spell",
-          "subrecord": "SPLO",
-          "offset": 0,
-          "targets": ["SPEL", "LVSP"],
           "nullable": false,
           "repeated": true,
           "payload_sizes": [4],

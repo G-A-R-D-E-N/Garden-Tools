@@ -33,6 +33,17 @@ const AbcCallSite& only_call(const std::vector<AbcCallSite>& calls) {
   static const AbcCallSite missing;
   return calls.empty() ? missing : calls.front();
 }
+
+std::vector<std::uint8_t> empty_pools_header() {
+  std::vector<std::uint8_t> out;
+  put_u16(out, fo4::abc::kAbcMinorVersion);
+  put_u16(out, fo4::abc::kAbcMajorVersion);
+  for (int pool = 0; pool < 6; ++pool) {
+    put_u30(out, 0);
+  }
+  put_u30(out, 1);
+  return out;
+}
 }
 
 TEST(Abc, ParsesVersionConstantPoolAndStructure) {
@@ -429,6 +440,169 @@ TEST(Abc, ReadsProtectedNamespaceAndAlwaysPresentInterfaceCount) {
   EXPECT_TRUE(instance.interfaces.empty());
   ASSERT_EQ(instance.traits.size(), 1u);
   EXPECT_EQ(instance.traits[0].kind, fo4::abc::AbcTraitKind::Slot);
+}
+
+TEST(Abc, RejectsEveryStructuralIndexPastItsPool) {
+  const std::pair<AbcBadIndex, const char*> cases[] = {
+      {AbcBadIndex::InstanceName, "instance name"},
+      {AbcBadIndex::InstanceNameAtLimit, "instance name at its pool limit"},
+      {AbcBadIndex::InstanceSuper, "instance super"},
+      {AbcBadIndex::InstanceInterface, "instance interface"},
+      {AbcBadIndex::InstanceIinit, "instance iinit"},
+      {AbcBadIndex::InstanceIinitAtLimit, "instance iinit at its pool limit"},
+      {AbcBadIndex::InstanceProtectedNs, "instance protected namespace"},
+      {AbcBadIndex::ClassInit, "class cinit"},
+      {AbcBadIndex::TraitName, "trait name"},
+      {AbcBadIndex::TraitTypeName, "trait type name"},
+      {AbcBadIndex::TraitMethodIndex, "trait method index"},
+      {AbcBadIndex::TraitClassIndex, "trait class index"},
+      {AbcBadIndex::TraitFunctionIndex, "trait function index"},
+      {AbcBadIndex::MethodReturnType, "method return type"},
+      {AbcBadIndex::MethodParamType, "method parameter type"},
+      {AbcBadIndex::ExceptionType, "exception type"},
+      {AbcBadIndex::ExceptionVarName, "exception variable name"},
+      {AbcBadIndex::ScriptInit, "script init"},
+      {AbcBadIndex::BodyMethod, "body method"},
+      {AbcBadIndex::MethodNameAtLimit, "method name"},
+      {AbcBadIndex::MethodParamNameAtLimit, "method parameter name"},
+      {AbcBadIndex::MethodOptionIndexAtLimit, "method option index"},
+      {AbcBadIndex::MetadataNameAtLimit, "metadata name"},
+      {AbcBadIndex::MetadataItemKeyAtLimit, "metadata item key"},
+      {AbcBadIndex::MetadataItemValueAtLimit, "metadata item value"},
+      {AbcBadIndex::TraitValueIndexAtLimit, "trait value index"},
+      {AbcBadIndex::TraitValueIndexStringAtLimit, "trait string value index"},
+      {AbcBadIndex::TraitValueIndexUIntAtLimit, "trait uint value index"},
+      {AbcBadIndex::TraitValueIndexDoubleAtLimit, "trait double value index"},
+      {AbcBadIndex::TraitValueIndexNamespaceAtLimit, "trait namespace value index"},
+  };
+  AbcFile file;
+  ASSERT_EQ(AbcFile::parse(build_abc(), file), AbcStatus::Ok);
+  for (const auto& [bad, field] : cases) {
+    SCOPED_TRACE(field);
+    EXPECT_EQ(AbcFile::parse(build_abc(tiny_constructor_code(), tiny_listener_code(), bad), file),
+              AbcStatus::IndexOutOfRange);
+  }
+}
+
+TEST(Abc, AcceptsEveryStructuralIndexAtItsLastEntry) {
+  const std::pair<AbcBadIndex, const char*> cases[] = {
+      {AbcBadIndex::MethodNameAtLast, "method name"},
+      {AbcBadIndex::MethodParamNameAtLast, "method parameter name"},
+      {AbcBadIndex::MethodOptionIndexAtLast, "method option index"},
+      {AbcBadIndex::MethodOptionIndexZero, "method option index 0"},
+      {AbcBadIndex::MetadataNameAtLast, "metadata name"},
+      {AbcBadIndex::MetadataItemKeyAtLast, "metadata item key"},
+      {AbcBadIndex::MetadataItemValueAtLast, "metadata item value"},
+      {AbcBadIndex::TraitValueIndexAtLast, "trait value index"},
+      {AbcBadIndex::TraitValueIndexStringAtLast, "trait string value index"},
+      {AbcBadIndex::TraitValueIndexNamespaceAtLast, "trait namespace value index"},
+  };
+  AbcFile file;
+  for (const auto& [bad, field] : cases) {
+    SCOPED_TRACE(field);
+    ASSERT_EQ(AbcFile::parse(build_abc(tiny_constructor_code(), tiny_listener_code(), bad), file),
+              AbcStatus::Ok);
+    switch (bad) {
+      case AbcBadIndex::MethodNameAtLast:
+        EXPECT_EQ(file.methods[0].name, kStringCount - 1);
+        EXPECT_EQ(file.methods[1].name, kStringCount - 1);
+        break;
+      case AbcBadIndex::MethodParamNameAtLast:
+        ASSERT_EQ(file.methods[1].param_names.size(), 1u);
+        EXPECT_EQ(file.methods[1].param_names[0], kStringCount - 1);
+        break;
+      case AbcBadIndex::MethodOptionIndexAtLast:
+        ASSERT_EQ(file.methods[1].options.size(), 1u);
+        EXPECT_EQ(file.methods[1].options[0].index, kIntCount - 1);
+        break;
+      case AbcBadIndex::MethodOptionIndexZero:
+        ASSERT_EQ(file.methods[1].options.size(), 1u);
+        EXPECT_EQ(file.methods[1].options[0].index, 0u);
+        break;
+      case AbcBadIndex::MetadataNameAtLast:
+        ASSERT_EQ(file.metadata.size(), 1u);
+        EXPECT_EQ(file.metadata[0].name, kStringCount - 1);
+        break;
+      case AbcBadIndex::MetadataItemKeyAtLast:
+        ASSERT_EQ(file.metadata.size(), 1u);
+        ASSERT_EQ(file.metadata[0].items.size(), 1u);
+        EXPECT_EQ(file.metadata[0].items[0].key, kStringCount - 1);
+        break;
+      case AbcBadIndex::MetadataItemValueAtLast:
+        ASSERT_EQ(file.metadata.size(), 1u);
+        ASSERT_EQ(file.metadata[0].items.size(), 1u);
+        EXPECT_EQ(file.metadata[0].items[0].value, kStringCount - 1);
+        break;
+      case AbcBadIndex::TraitValueIndexAtLast:
+        EXPECT_EQ(file.instances[0].traits[2].value_index, kIntCount - 1);
+        break;
+      case AbcBadIndex::TraitValueIndexStringAtLast:
+        EXPECT_EQ(file.instances[0].traits[2].value_index, kStringCount - 1);
+        break;
+      case AbcBadIndex::TraitValueIndexNamespaceAtLast:
+        EXPECT_EQ(file.instances[0].traits[2].value_index, kNamespaceCount - 1);
+        break;
+      default:
+        break;
+    }
+  }
+}
+
+TEST(Abc, AcceptsZeroIndicesIntoEmptyStringPool) {
+  std::vector<std::uint8_t> bytes = empty_pools_header();
+  put_u30(bytes, 1);
+  put_u30(bytes, 1);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u8(bytes, 0x80);
+  put_u30(bytes, 0);
+  put_u30(bytes, 1);
+  put_u30(bytes, 0);
+  put_u30(bytes, 1);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  AbcFile file;
+  ASSERT_EQ(AbcFile::parse(bytes, file), AbcStatus::Ok);
+  ASSERT_EQ(file.methods.size(), 1u);
+  EXPECT_EQ(file.methods[0].name, 0u);
+  ASSERT_EQ(file.methods[0].param_names.size(), 1u);
+  EXPECT_EQ(file.methods[0].param_names[0], 0u);
+  ASSERT_EQ(file.metadata.size(), 1u);
+  EXPECT_EQ(file.metadata[0].name, 0u);
+  ASSERT_EQ(file.metadata[0].items.size(), 1u);
+  EXPECT_EQ(file.metadata[0].items[0].key, 0u);
+  EXPECT_EQ(file.metadata[0].items[0].value, 0u);
+}
+
+TEST(Abc, AcceptsZeroIndexOptionInEmptyIntPoolAndAnyIndexForPoollessKind) {
+  std::vector<std::uint8_t> bytes = empty_pools_header();
+  put_u30(bytes, 1);
+  put_u30(bytes, 1);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u8(bytes, 0x08);
+  put_u30(bytes, 2);
+  put_u30(bytes, 0);
+  put_u8(bytes, 0x03);
+  put_u30(bytes, kBadIndex);
+  put_u8(bytes, 0x0B);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  AbcFile file;
+  ASSERT_EQ(AbcFile::parse(bytes, file), AbcStatus::Ok);
+  ASSERT_EQ(file.methods.size(), 1u);
+  ASSERT_EQ(file.methods[0].options.size(), 2u);
+  EXPECT_EQ(file.methods[0].options[0].kind, fo4::abc::AbcValueKind::Int);
+  EXPECT_EQ(file.methods[0].options[0].index, 0u);
+  EXPECT_EQ(file.methods[0].options[1].kind, fo4::abc::AbcValueKind::True);
+  EXPECT_EQ(file.methods[0].options[1].index, kBadIndex);
 }
 
 TEST(AbcCorpus, EveryExtractedAbcParsesDisassemblesAndSummarizes) {
