@@ -624,6 +624,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_scene_phase_edit.cpp
     tests/test_scene_actor_action_edit.cpp
     tests/test_environment_world.cpp
+    tests/test_environment_region.cpp
     tests/test_environment_water_edges.cpp
     tests/test_environment_placed.cpp
     tests/test_environment_script_elements.cpp
