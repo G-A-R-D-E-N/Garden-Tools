@@ -16,7 +16,7 @@ struct RegionPoint {
 struct RegionArea {
   std::uint32_t edge_falloff{0};
   std::vector<RegionPoint> points;
-  std::optional<float> occlusion_accuracy_dist;
+  std::optional<float> unknown_anam;
 };
 
 struct RegionObject {
@@ -61,8 +61,7 @@ struct RegionData {
   std::vector<RegionDataEntry> entries;
 };
 
-// Ordering: an RPLD or entry payload must follow the RPLI or RDAT subrecord it belongs to, and a
-// payload must be one the RDAT type names.
+// An RPLD or entry payload must follow the RPLI or RDAT it belongs to and match that RDAT type.
 RegionData decode_region(const Environment& env, const RecordRef& ref);
 
 }  // namespace fo4::env

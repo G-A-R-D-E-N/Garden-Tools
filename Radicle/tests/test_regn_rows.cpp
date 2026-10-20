@@ -637,15 +637,15 @@ TEST(RegnRows, DecodesAnamInBothXEditPositionsAndEntryLodMultiplier) {
   ASSERT_NE(area_ref, nullptr);
   const auto area_region = fo4::env::decode_region(env, *area_ref);
   ASSERT_EQ(area_region.areas.size(), 1u);
-  ASSERT_TRUE(area_region.areas[0].occlusion_accuracy_dist.has_value());
-  EXPECT_EQ(*area_region.areas[0].occlusion_accuracy_dist, 2048.0f);
+  ASSERT_TRUE(area_region.areas[0].unknown_anam.has_value());
+  EXPECT_EQ(*area_region.areas[0].unknown_anam, 2048.0f);
   EXPECT_TRUE(area_region.entries.empty());
 
   const auto* entry_ref = env.winner(fo4::FormKey::parse("000F21:Anam.esp"));
   ASSERT_NE(entry_ref, nullptr);
   const auto entry_region = fo4::env::decode_region(env, *entry_ref);
   ASSERT_EQ(entry_region.areas.size(), 1u);
-  EXPECT_FALSE(entry_region.areas[0].occlusion_accuracy_dist.has_value());
+  EXPECT_FALSE(entry_region.areas[0].unknown_anam.has_value());
   ASSERT_EQ(entry_region.entries.size(), 1u);
   ASSERT_TRUE(entry_region.entries[0].occlusion_accuracy_dist.has_value());
   EXPECT_EQ(*entry_region.entries[0].occlusion_accuracy_dist, 4096.0f);

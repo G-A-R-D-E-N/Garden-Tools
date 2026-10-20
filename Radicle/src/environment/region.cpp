@@ -170,7 +170,7 @@ RegionData decode_region(const Environment& env, const RecordRef& ref) {
       if (entry != nullptr) {
         entry->occlusion_accuracy_dist = Reader::f32(sub, 0);
       } else if (area != nullptr) {
-        area->occlusion_accuracy_dist = Reader::f32(sub, 0);
+        area->unknown_anam = Reader::f32(sub, 0);
       } else {
         reader.fail(sub.signature, "appears before any RPLI edge fall-off");
       }
