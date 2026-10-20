@@ -1098,7 +1098,10 @@
           "maximum": 255,
           "payload_size": 6,
           "insertion": "existing_only"
-        }
+        },
+        {"path": "CLMT\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "CLMT\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "CLMT\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "CLMT\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "CLMT\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "CLMT\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "CLMT\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "CLMT\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "CLMT\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "CLMT\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {
@@ -1260,6 +1263,9 @@
       "signature": "OTFT",
       "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "INAM", "minimum": 0, "maximum": 1}]},
       "fields": [],
+      "formlink_lists": [
+        {"path": "OTFT\\Items", "label": "Items", "subrecord": "INAM", "targets": ["ARMO", "LVLI"], "nullable": false, "storage": "packed_array", "mutation": "appendable", "anchor_predecessors": ["EDID"]}
+      ],
       "localized_subrecords": []
     },
     {
@@ -1506,7 +1512,10 @@
           "minimum": 0,
           "maximum": 65535,
           "insertion": "existing_only"
-        }
+        },
+        {"path": "EXPL\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "EXPL\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "EXPL\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "EXPL\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "EXPL\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "EXPL\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "EXPL\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "EXPL\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "EXPL\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "EXPL\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {"path": "EXPL\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
@@ -2011,7 +2020,10 @@
         {"path": "ALCH\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
         {"path": "ALCH\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
         {"path": "ALCH\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
-        {"path": "ALCH\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
+        {"path": "ALCH\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "ALCH\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "ALCH\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "ALCH\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "ALCH\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "ALCH\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "ALCH\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "ALCH\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "ALCH\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "ALCH\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "ALCH\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {
@@ -2436,7 +2448,10 @@
         {"path": "AMMO\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
         {"path": "AMMO\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
         {"path": "AMMO\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
-        {"path": "AMMO\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
+        {"path": "AMMO\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "AMMO\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "AMMO\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "AMMO\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "AMMO\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "AMMO\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "AMMO\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "AMMO\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "AMMO\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "AMMO\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "AMMO\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {
@@ -2861,7 +2876,10 @@
         {"path": "BOOK\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
         {"path": "BOOK\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
         {"path": "BOOK\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
-        {"path": "BOOK\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
+        {"path": "BOOK\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "BOOK\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "BOOK\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "BOOK\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "BOOK\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "BOOK\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "BOOK\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "BOOK\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "BOOK\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "BOOK\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "BOOK\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {
@@ -3271,7 +3289,10 @@
         {"path": "INGR\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
         {"path": "INGR\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
         {"path": "INGR\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
-        {"path": "INGR\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
+        {"path": "INGR\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "INGR\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "INGR\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "INGR\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "INGR\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "INGR\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "INGR\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "INGR\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "INGR\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "INGR\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "INGR\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {
@@ -3624,7 +3645,10 @@
         {"path": "KEYM\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
         {"path": "KEYM\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
         {"path": "KEYM\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
-        {"path": "KEYM\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
+        {"path": "KEYM\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "KEYM\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "KEYM\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "KEYM\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "KEYM\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "KEYM\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "KEYM\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "KEYM\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "KEYM\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "KEYM\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "KEYM\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {
@@ -3852,7 +3876,10 @@
           "kind": "string",
           "subrecord": "MODL",
           "insertion": "existing_only"
-        }
+        },
+        {"path": "ARTO\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "ARTO\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "ARTO\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "ARTO\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "ARTO\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "ARTO\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "ARTO\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "ARTO\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "ARTO\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "ARTO\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {
@@ -4096,7 +4123,10 @@
           "kind": "string",
           "subrecord": "MODL",
           "insertion": "existing_only"
-        }
+        },
+        {"path": "IDLM\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "IDLM\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "IDLM\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "IDLM\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "IDLM\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "IDLM\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "IDLM\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "IDLM\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "IDLM\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "IDLM\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {
@@ -4277,7 +4307,10 @@
         {"path": "FLOR\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
         {"path": "FLOR\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
         {"path": "FLOR\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
-        {"path": "FLOR\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
+        {"path": "FLOR\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "FLOR\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "FLOR\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "FLOR\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "FLOR\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "FLOR\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "FLOR\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "FLOR\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "FLOR\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "FLOR\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "FLOR\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {
@@ -4490,7 +4523,10 @@
           "minimum": 0,
           "maximum": 255,
           "insertion": "existing_only"
-        }
+        },
+        {"path": "GRAS\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "GRAS\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "GRAS\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "GRAS\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "GRAS\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "GRAS\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "GRAS\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "GRAS\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "GRAS\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "GRAS\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {"path": "GRAS\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"}
@@ -4548,7 +4584,10 @@
           "kind": "string",
           "subrecord": "NAM9",
           "insertion": "existing_only"
-        }
+        },
+        {"path": "EFSH\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "EFSH\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "EFSH\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "EFSH\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "EFSH\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "EFSH\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "EFSH\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "EFSH\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "EFSH\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "EFSH\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {"path": "EFSH\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"}
@@ -6559,7 +6598,10 @@
           "maximum": 3.4028234663852886e+38,
           "minimum_payload_size": 64,
           "insertion": "existing_only"
-        }
+        },
+        {"path": "CAMS\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "CAMS\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "CAMS\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "CAMS\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "CAMS\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "CAMS\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "CAMS\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "CAMS\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "CAMS\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "CAMS\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {"path": "CAMS\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
@@ -7072,7 +7114,10 @@
           "minimum": -3.4028234663852886e+38,
           "maximum": 3.4028234663852886e+38,
           "insertion": "existing_only"
-        }
+        },
+        {"path": "HAZD\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "HAZD\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "HAZD\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "HAZD\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "HAZD\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "HAZD\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "HAZD\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "HAZD\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "HAZD\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "HAZD\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {"path": "HAZD\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
@@ -7343,7 +7388,10 @@
         {"path": "MATO\\SinglePassColorRed", "label": "Single pass color red", "kind": "scalar", "subrecord": "DATA", "offset": 32, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 36, "insertion": "existing_only"},
         {"path": "MATO\\SinglePassColorGreen", "label": "Single pass color green", "kind": "scalar", "subrecord": "DATA", "offset": 36, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 40, "insertion": "existing_only"},
         {"path": "MATO\\SinglePassColorBlue", "label": "Single pass color blue", "kind": "scalar", "subrecord": "DATA", "offset": 40, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 44, "insertion": "existing_only"},
-        {"path": "MATO\\SinglePass", "label": "Single pass", "kind": "scalar", "subrecord": "DATA", "offset": 44, "storage": "u32", "presentation": "enum", "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "minimum": 0, "maximum": 1, "minimum_payload_size": 48, "insertion": "existing_only"}
+        {"path": "MATO\\SinglePass", "label": "Single pass", "kind": "scalar", "subrecord": "DATA", "offset": 44, "storage": "u32", "presentation": "enum", "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "minimum": 0, "maximum": 1, "minimum_payload_size": 48, "insertion": "existing_only"},
+        {"path": "MATO\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "MATO\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "MATO\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "MATO\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "MATO\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "MATO\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "MATO\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "MATO\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "MATO\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "MATO\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {"path": "MATO\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"}
@@ -7360,7 +7408,10 @@
         {"path": "MATT\\Buoyancy", "label": "Buoyancy", "kind": "scalar", "subrecord": "BNAM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
         {"path": "MATT\\Flags", "label": "Flags", "kind": "scalar", "subrecord": "FNAM", "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Stair Material"}, {"bit": 1, "name": "Arrows Stick"}, {"bit": 2, "name": "Can Tunnel"}], "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"},
         {"path": "MATT\\MaterialName", "label": "Material name", "kind": "string", "subrecord": "MNAM", "insertion": "existing_only"},
-        {"path": "MATT\\BreakableFX", "label": "Breakable FX", "kind": "string", "subrecord": "ANAM", "insertion": "existing_only"}
+        {"path": "MATT\\BreakableFX", "label": "Breakable FX", "kind": "string", "subrecord": "ANAM", "insertion": "existing_only"},
+        {"path": "MATT\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "MATT\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "MATT\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "MATT\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "MATT\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "MATT\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "MATT\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "MATT\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "MATT\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "MATT\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {"path": "MATT\\MaterialParent", "label": "Material parent", "subrecord": "PNAM", "offset": 0, "targets": ["MATT"], "nullable": true, "insertion": "existing_only"},
@@ -7392,7 +7443,10 @@
         {"path": "IPCT\\DecalColorRed", "label": "Decal color red", "kind": "scalar", "subrecord": "DODT", "offset": 32, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
         {"path": "IPCT\\DecalColorGreen", "label": "Decal color green", "kind": "scalar", "subrecord": "DODT", "offset": 33, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
         {"path": "IPCT\\DecalColorBlue", "label": "Decal color blue", "kind": "scalar", "subrecord": "DODT", "offset": 34, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
-        {"path": "IPCT\\FootstepParticleMaxDistance", "label": "Footstep particle max distance", "kind": "scalar", "subrecord": "FNAM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"}
+        {"path": "IPCT\\FootstepParticleMaxDistance", "label": "Footstep particle max distance", "kind": "scalar", "subrecord": "FNAM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "IPCT\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "IPCT\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "IPCT\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "IPCT\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "IPCT\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "IPCT\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "IPCT\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "IPCT\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "IPCT\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "IPCT\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {"path": "IPCT\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
@@ -7433,8 +7487,12 @@
         {"path": "LENS\\FadeDistanceRadiusScale", "label": "Fade distance radius scale", "kind": "scalar", "subrecord": "DNAM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
         {"path": "LENS\\SpriteTotal", "label": "Sprite total", "kind": "scalar", "subrecord": "LFSP", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"},
         {"path": "LENS\\Sprites", "label": "Lens flare sprites", "kind": "subrecord_group", "count_subrecord": "LFSP", "insertion": "existing_only", "members": [
-          {"subrecord": "DNAM", "required": true, "repeatable": false, "payload_size": 0, "default": "00"},
-          {"subrecord": "FNAM", "required": true, "repeatable": false, "payload_size": 0, "default": "00"},
+          {"subrecord": "DNAM", "required": true, "repeatable": false, "payload_size": 0, "default": "00", "fields": [
+            {"path": "LENS\\SpriteId", "label": "Lens flare sprite ID", "kind": "string", "offset": 0, "insertion": "existing_only"}
+          ]},
+          {"subrecord": "FNAM", "required": true, "repeatable": false, "payload_size": 0, "default": "00", "fields": [
+            {"path": "LENS\\SpriteTexture", "label": "Texture", "kind": "string", "offset": 0, "insertion": "existing_only"}
+          ]},
           {"subrecord": "LFSD", "required": true, "repeatable": false, "payload_size": 36, "fields": [
             {"path": "LENS\\SpriteTintRed", "label": "Sprite tint red", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
             {"path": "LENS\\SpriteTintGreen", "label": "Sprite tint green", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
@@ -7781,8 +7839,11 @@
                 "maximum": 4294967295
               }
             ]
-          }
-        ],
+          },
+        {"path": "LVLN\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "LVLN\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "LVLN\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "LVLN\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "LVLN\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "LVLN\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "LVLN\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "LVLN\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "LVLN\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "LVLN\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
+      ],
         "formlink_fields": [
           {"path": "LVLN\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
           {
@@ -8033,7 +8094,10 @@
         {"path": "PROJ\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
         {"path": "PROJ\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
         {"path": "PROJ\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
-        {"path": "PROJ\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
+        {"path": "PROJ\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "PROJ\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "PROJ\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "PROJ\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "PROJ\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "PROJ\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "PROJ\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "PROJ\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "PROJ\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "PROJ\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "PROJ\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {"path": "PROJ\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
@@ -8328,13 +8392,16 @@
     },
     {
       "signature": "HDPT",
-      "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "FULL", "minimum": 0, "maximum": 1}, {"signature": "MODL", "minimum": 0, "maximum": 1, "coupled": true}, {"signature": "MODT", "minimum": 0, "maximum": 1}, {"signature": "MODC", "minimum": 0, "maximum": 1}, {"signature": "MODS", "minimum": 0, "maximum": 1}, {"signature": "MODF", "minimum": 0, "maximum": 1}, {"signature": "DATA", "minimum": 1, "maximum": 1, "default": "00"}, {"signature": "PNAM", "minimum": 1, "maximum": 1, "default": "00000000"}, {"signature": "HNAM", "minimum": 0, "maximum": 65535}, {"signature": "NAM0", "minimum": 0, "maximum": 65535}, {"signature": "NAM1", "minimum": 0, "maximum": 65535}, {"signature": "TNAM", "minimum": 0, "maximum": 1}, {"signature": "CNAM", "minimum": 0, "maximum": 1}, {"signature": "RNAM", "minimum": 0, "maximum": 1}, {"signature": "CTDA", "minimum": 0, "maximum": 65535}]},
+      "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "FULL", "minimum": 0, "maximum": 1}, {"signature": "MODL", "minimum": 0, "maximum": 1, "coupled": true}, {"signature": "MODT", "minimum": 0, "maximum": 1}, {"signature": "MODC", "minimum": 0, "maximum": 1}, {"signature": "MODS", "minimum": 0, "maximum": 1}, {"signature": "MODF", "minimum": 0, "maximum": 1}, {"signature": "DATA", "minimum": 1, "maximum": 1, "default": "00"}, {"signature": "PNAM", "minimum": 1, "maximum": 1, "default": "00000000"}, {"signature": "HNAM", "minimum": 0, "maximum": 65535}, {"signature": "NAM0", "minimum": 0, "maximum": 65535, "paired_with": "NAM1"}, {"signature": "NAM1", "minimum": 0, "maximum": 65535}, {"signature": "TNAM", "minimum": 0, "maximum": 1}, {"signature": "CNAM", "minimum": 0, "maximum": 1}, {"signature": "RNAM", "minimum": 0, "maximum": 1}, {"signature": "CTDA", "minimum": 0, "maximum": 65535}]},
       "fields": [
         {"path": "HDPT\\Model", "label": "Model file name", "kind": "string", "subrecord": "MODL", "insertion": "existing_only"},
         {"path": "HDPT\\Flags", "label": "Flags", "kind": "scalar", "subrecord": "DATA", "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Playable"}, {"bit": 1, "name": "Male"}, {"bit": 2, "name": "Female"}, {"bit": 3, "name": "Is Extra Part"}, {"bit": 4, "name": "Use Solid Tint"}, {"bit": 5, "name": "Uses Body Texture"}], "minimum": 0, "maximum": 255, "insertion": "existing_only"},
         {"path": "HDPT\\Type", "label": "Type", "kind": "scalar", "subrecord": "PNAM", "storage": "u32", "presentation": "enum", "names": [{"value": 0, "name": "Misc"}, {"value": 1, "name": "Face"}, {"value": 2, "name": "Eyes"}, {"value": 3, "name": "Hair"}, {"value": 4, "name": "Facial Hair"}, {"value": 5, "name": "Scar"}, {"value": 6, "name": "Eyebrows"}, {"value": 7, "name": "Meatcaps"}, {"value": 8, "name": "Teeth"}, {"value": 9, "name": "Head Rear"}], "minimum": 0, "maximum": 9, "insertion": "existing_only"},
         {"path": "HDPT\\PartType", "label": "Part type", "kind": "scalar", "subrecord": "NAM0", "storage": "u32", "presentation": "enum", "names": [{"value": 0, "name": "Race Morph"}, {"value": 1, "name": "Tri"}, {"value": 2, "name": "Chargen Morph"}], "minimum": 0, "maximum": 2, "repeated": true, "insertion": "existing_only"},
-        {"path": "HDPT\\PartFilename", "label": "Part filename", "kind": "string", "subrecord": "NAM1", "repeated": true, "insertion": "existing_only"}
+        {"path": "HDPT\\PartFilename", "label": "Part filename", "kind": "string", "subrecord": "NAM1", "repeated": true, "insertion": "existing_only"},
+        {"path": "HDPT\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "HDPT\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "HDPT\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "HDPT\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "HDPT\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "HDPT\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "HDPT\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "HDPT\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "HDPT\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "HDPT\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {"path": "HDPT\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
@@ -8449,7 +8516,13 @@
         {"path": "COLL\\Index", "label": "Index", "kind": "scalar", "subrecord": "BNAM", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"},
         {"path": "COLL\\Flags", "label": "Flags", "kind": "scalar", "subrecord": "GNAM", "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Trigger Volume"}, {"bit": 1, "name": "Sensor"}, {"bit": 2, "name": "Navmesh Obstacle"}], "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"},
         {"path": "COLL\\InteractablesCount", "label": "Interactables count", "kind": "scalar", "subrecord": "INTV", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"},
-        {"path": "COLL\\Name", "label": "Name", "kind": "string", "subrecord": "MNAM", "insertion": "existing_only"}
+        {"path": "COLL\\Name", "label": "Name", "kind": "string", "subrecord": "MNAM", "insertion": "existing_only"},
+        {"path": "COLL\\DebugColorRed", "label": "Debug color red", "kind": "scalar", "subrecord": "FNAM", "offset": 0, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "COLL\\DebugColorGreen", "label": "Debug color green", "kind": "scalar", "subrecord": "FNAM", "offset": 1, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "COLL\\DebugColorBlue", "label": "Debug color blue", "kind": "scalar", "subrecord": "FNAM", "offset": 2, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "payload_size": 4, "insertion": "existing_only"}
+      ],
+      "formlink_lists": [
+        {"path": "COLL\\CollidesWith", "label": "Collides with", "subrecord": "CNAM", "targets": ["COLL"], "nullable": false, "storage": "packed_array", "mutation": "appendable", "anchor_predecessors": ["INTV", "MNAM", "GNAM", "FNAM", "BNAM", "DESC", "EDID"]}
       ],
       "localized_subrecords": ["DESC"]
     },
@@ -8479,7 +8552,10 @@
       "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "MODL", "minimum": 0, "maximum": 1, "coupled": true}, {"signature": "MODT", "minimum": 0, "maximum": 1}, {"signature": "MODC", "minimum": 0, "maximum": 1}, {"signature": "MODS", "minimum": 0, "maximum": 1}, {"signature": "MODF", "minimum": 0, "maximum": 1}, {"signature": "BNAM", "minimum": 0, "maximum": 1}]},
       "fields": [
         {"path": "ANIO\\Model", "label": "Model file name", "kind": "string", "subrecord": "MODL", "insertion": "existing_only"},
-        {"path": "ANIO\\UnloadEvent", "label": "Unload event", "kind": "string", "subrecord": "BNAM", "insertion": "existing_only"}
+        {"path": "ANIO\\UnloadEvent", "label": "Unload event", "kind": "string", "subrecord": "BNAM", "insertion": "existing_only"},
+        {"path": "ANIO\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "ANIO\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "ANIO\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "ANIO\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "ANIO\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "ANIO\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "ANIO\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "ANIO\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "ANIO\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "ANIO\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {"path": "ANIO\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"}
@@ -8670,6 +8746,17 @@
           "kind": "string",
           "subrecord": "SNAM",
           "insertion": "existing_only"
+        },
+        {
+          "path": "QUST\\NextAliasID",
+          "label": "Next alias ID",
+          "kind": "scalar",
+          "subrecord": "ANAM",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
         }
       ],
       "formlink_fields": [
@@ -8824,7 +8911,10 @@
         {"path": "MISC\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
         {"path": "MISC\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
         {"path": "MISC\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
-        {"path": "MISC\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
+        {"path": "MISC\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "MISC\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "MISC\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "MISC\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "MISC\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "MISC\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "MISC\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "MISC\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "MISC\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "MISC\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "MISC\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {"path": "MISC\\DestructionDamageType", "label": "Damage type", "subrecord": "DAMC", "offset": 0, "stride": 8, "targets": ["DMGT"], "nullable": false, "insertion": "existing_only"},
@@ -8866,7 +8956,10 @@
         {"path": "OMOD\\MaxRank", "label": "Max rank", "kind": "scalar", "subrecord": "DATA", "offset": 14, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "minimum_payload_size": 20, "insertion": "existing_only"},
         {"path": "OMOD\\LevelTierScaledOffset", "label": "Level tier scaled offset", "kind": "scalar", "subrecord": "DATA", "offset": 15, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "minimum_payload_size": 20, "insertion": "existing_only"},
         {"path": "OMOD\\Priority", "label": "Priority", "kind": "scalar", "subrecord": "NAM1", "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
-        {"path": "OMOD\\Filter", "label": "Filter", "kind": "string", "subrecord": "FLTR", "insertion": "existing_only"}
+        {"path": "OMOD\\Filter", "label": "Filter", "kind": "string", "subrecord": "FLTR", "insertion": "existing_only"},
+        {"path": "OMOD\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "OMOD\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "OMOD\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "OMOD\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "OMOD\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "OMOD\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "OMOD\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "OMOD\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "OMOD\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "OMOD\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {"path": "OMOD\\AttachPoint", "label": "Attach point", "subrecord": "DATA", "offset": 16, "targets": ["KYWD"], "nullable": true, "insertion": "existing_only"},
@@ -8902,15 +8995,24 @@
         {"path": "REGN\\MapColorGreen", "label": "Map color green", "kind": "scalar", "subrecord": "RCLR", "offset": 1, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
         {"path": "REGN\\MapColorBlue", "label": "Map color blue", "kind": "scalar", "subrecord": "RCLR", "offset": 2, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
         {"path": "REGN\\RegionDataType", "label": "Region data type", "kind": "scalar", "subrecord": "RDAT", "offset": 0, "storage": "u32", "presentation": "enum", "names": [{"value": 2, "name": "Objects"}, {"value": 3, "name": "Weather"}, {"value": 4, "name": "Map"}, {"value": 5, "name": "Land"}, {"value": 6, "name": "Grass"}, {"value": 7, "name": "Sound"}], "minimum": 0, "maximum": 7, "repeated": true, "insertion": "existing_only"},
-        {"path": "REGN\\RegionDataOverride", "label": "Region data override", "kind": "scalar", "subrecord": "RDAT", "offset": 4, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 1, "repeated": true, "insertion": "existing_only"},
+        {"path": "REGN\\RegionDataOverride", "label": "Region data override", "kind": "scalar", "subrecord": "RDAT", "offset": 4, "storage": "u8", "presentation": "enum", "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "minimum": 0, "maximum": 1, "repeated": true, "insertion": "existing_only"},
         {"path": "REGN\\RegionDataPriority", "label": "Region data priority", "kind": "scalar", "subrecord": "RDAT", "offset": 5, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "insertion": "existing_only"},
         {"path": "REGN\\LodDisplayDistanceMultiplier", "label": "LOD display distance multiplier", "kind": "scalar", "subrecord": "RLDM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "insertion": "existing_only"},
         {"path": "REGN\\OcclusionAccuracyDist", "label": "Occlusion accuracy distance", "kind": "scalar", "subrecord": "ANAM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "insertion": "existing_only"},
-        {"path": "REGN\\RegionAreaEdgeFalloff", "label": "Region area edge fall-off", "kind": "scalar", "subrecord": "RPLI", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "repeated": true, "insertion": "existing_only"}
+        {"path": "REGN\\RegionAreaEdgeFalloff", "label": "Region area edge fall-off", "kind": "scalar", "subrecord": "RPLI", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "repeated": true, "insertion": "existing_only"},
+        {"path": "REGN\\Icon", "label": "Icon", "kind": "string", "subrecord": "ICON", "insertion": "existing_only"},
+        {"path": "REGN\\SoundFlags", "label": "Sound flags", "kind": "scalar", "subrecord": "RDSA", "offset": 4, "stride": 12, "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Pleasant"}, {"bit": 1, "name": "Cloudy"}, {"bit": 2, "name": "Rainy"}, {"bit": 3, "name": "Snowy"}], "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"},
+        {"path": "REGN\\SoundChance", "label": "Sound chance", "kind": "scalar", "subrecord": "RDSA", "offset": 8, "stride": 12, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "REGN\\WeatherChance", "label": "Weather chance", "kind": "scalar", "subrecord": "RDWT", "offset": 4, "stride": 12, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {"path": "REGN\\Worldspace", "label": "Worldspace", "subrecord": "WNAM", "offset": 0, "payload_sizes": [4], "targets": ["WRLD"], "nullable": false, "insertion": "existing_only"},
-        {"path": "REGN\\Music", "label": "Music", "subrecord": "RDMO", "offset": 0, "payload_sizes": [4], "targets": ["MUSC"], "nullable": false, "repeated": true, "insertion": "existing_only"}
+        {"path": "REGN\\Music", "label": "Music", "subrecord": "RDMO", "offset": 0, "payload_sizes": [4], "targets": ["MUSC"], "nullable": false, "repeated": true, "insertion": "existing_only"},
+        {"path": "REGN\\Object", "label": "Object", "subrecord": "RDOT", "offset": 0, "stride": 52, "targets": ["TREE", "FLOR", "STAT", "LTEX", "MSTT", "SCOL"], "nullable": false, "insertion": "existing_only"},
+        {"path": "REGN\\Grass", "label": "Grass", "subrecord": "RDGS", "offset": 0, "stride": 8, "targets": ["GRAS"], "nullable": false, "insertion": "existing_only"},
+        {"path": "REGN\\Weather", "label": "Weather", "subrecord": "RDWT", "offset": 0, "stride": 12, "targets": ["WTHR"], "nullable": false, "insertion": "existing_only"},
+        {"path": "REGN\\WeatherGlobal", "label": "Weather global", "subrecord": "RDWT", "offset": 8, "stride": 12, "targets": ["GLOB"], "nullable": true, "insertion": "existing_only"},
+        {"path": "REGN\\Sound", "label": "Sound", "subrecord": "RDSA", "offset": 0, "stride": 12, "targets": ["SNDR", "SOUN"], "nullable": true, "insertion": "existing_only"}
       ],
       "localized_subrecords": [
         "RDMP"
@@ -9079,7 +9181,10 @@
           "kind": "string",
           "subrecord": "FLTR",
           "insertion": "existing_only"
-        }
+        },
+        {"path": "SCOL\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "SCOL\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "SCOL\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "SCOL\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "SCOL\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "SCOL\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "SCOL\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "SCOL\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "SCOL\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "SCOL\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {
@@ -9204,7 +9309,10 @@
         {"path": "WRLD\\MapImage", "label": "Map image", "kind": "string", "subrecord": "ICON", "insertion": "existing_only"},
         {"path": "WRLD\\HdLodDiffuseTexture", "label": "HD LOD diffuse texture", "kind": "string", "subrecord": "TNAM", "insertion": "existing_only"},
         {"path": "WRLD\\HdLodNormalTexture", "label": "HD LOD normal texture", "kind": "string", "subrecord": "UNAM", "insertion": "existing_only"},
-        {"path": "WRLD\\WaterEnvironmentMap", "label": "Water environment map", "kind": "string", "subrecord": "XWEM", "insertion": "existing_only"}
+        {"path": "WRLD\\WaterEnvironmentMap", "label": "Water environment map", "kind": "string", "subrecord": "XWEM", "insertion": "existing_only"},
+        {"path": "WRLD\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "WRLD\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "WRLD\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "WRLD\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "WRLD\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "WRLD\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "WRLD\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "WRLD\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "WRLD\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "WRLD\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {"path": "WRLD\\EncounterZone", "label": "Encounter zone", "subrecord": "XEZN", "offset": 0, "payload_sizes": [4], "targets": ["ECZN"], "nullable": true, "insertion": "existing_only"},
@@ -9534,6 +9642,8 @@
         {"path": "RACE\\IdleChatterTimeMin", "label": "Idle chatter time min", "kind": "scalar", "subrecord": "PTOP", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
         {"path": "RACE\\IdleChatterTimeMax", "label": "Idle chatter time max", "kind": "scalar", "subrecord": "NTOP", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
         {"path": "RACE\\WrinkleMapPath", "label": "Wrinkle map path", "kind": "string", "subrecord": "WMAP", "repeated": true, "insertion": "existing_only"},
+        {"path": "RACE\\MovementTypeNames", "label": "Movement type name", "kind": "string", "subrecord": "MTNM", "payload_size": 4, "repeated": true, "insertion": "existing_only"},
+        {"path": "RACE\\SkeletalModelPath", "label": "Skeletal model path", "kind": "string", "subrecord": "ANAM", "repeated": true, "insertion": "existing_only"},
         {"path": "RACE\\MovementOverrideLeftStanding", "label": "Movement override left standing", "kind": "scalar", "subrecord": "SPED", "offset": 0, "min_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 112, "repeated": true, "insertion": "existing_only"},
         {"path": "RACE\\MovementOverrideLeftWalk", "label": "Movement override left walk", "kind": "scalar", "subrecord": "SPED", "offset": 4, "min_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 112, "repeated": true, "insertion": "existing_only"},
         {"path": "RACE\\MovementOverrideLeftRun", "label": "Movement override left run", "kind": "scalar", "subrecord": "SPED", "offset": 8, "min_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 112, "repeated": true, "insertion": "existing_only"},
@@ -14000,7 +14110,10 @@
           "maximum": 65535,
           "payload_size": 4,
           "insertion": "existing_only"
-        }
+        },
+        {"path": "ADDN\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "ADDN\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "ADDN\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "ADDN\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "ADDN\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "ADDN\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "ADDN\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "ADDN\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "ADDN\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "ADDN\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {"path": "ADDN\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
@@ -14252,7 +14365,10 @@
           "maximum": 255,
           "payload_size": 4,
           "insertion": "existing_only"
-        }
+        },
+        {"path": "TREE\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "TREE\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "TREE\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "TREE\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "TREE\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "TREE\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "TREE\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "TREE\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "TREE\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "TREE\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {"path": "TREE\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
@@ -14409,7 +14525,10 @@
               "maximum": 3.4028234663852886e+38
             }
           ]
-        }
+        },
+        {"path": "STAT\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "STAT\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "STAT\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "STAT\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "STAT\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "STAT\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "STAT\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "STAT\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "STAT\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "STAT\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {"path": "STAT\\PreviewTransform", "label": "Preview transform", "subrecord": "PTRN", "offset": 0, "targets": ["TRNS"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
@@ -14756,7 +14875,10 @@
         {"path": "LIGH\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
         {"path": "LIGH\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
         {"path": "LIGH\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
-        {"path": "LIGH\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
+        {"path": "LIGH\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "LIGH\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "LIGH\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "LIGH\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "LIGH\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "LIGH\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "LIGH\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "LIGH\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "LIGH\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "LIGH\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "LIGH\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {"path": "LIGH\\PreviewTransform", "label": "Preview transform", "subrecord": "PTRN", "offset": 0, "targets": ["TRNS"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
@@ -18292,7 +18414,10 @@
           "kind": "string",
           "subrecord": "MODL",
           "insertion": "existing_only"
-        }
+        },
+        {"path": "WTHR\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "WTHR\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "WTHR\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "WTHR\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "WTHR\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "WTHR\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "WTHR\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "WTHR\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "WTHR\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "WTHR\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {
@@ -18991,7 +19116,10 @@
           "kind": "string",
           "subrecord": "PNAM",
           "insertion": "existing_only"
-        }
+        },
+        {"path": "NOTE\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "NOTE\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "NOTE\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "NOTE\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "NOTE\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "NOTE\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "NOTE\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "NOTE\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "NOTE\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "NOTE\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {"path": "NOTE\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
@@ -20044,7 +20172,17 @@
       "signature": "AECH",
       "fields": [
         {"path": "AECH\\EffectType", "label": "Effect type", "kind": "scalar", "subrecord": "KNAM", "offset": 0, "storage": "u32", "presentation": "enum", "names": [{"value": 2252866750, "name": "BSOverdrive"}, {"value": 4015480703, "name": "BSStateVariableFilter"}, {"value": 411269967, "name": "BSDelayEffect"}], "minimum": 0, "maximum": 4294967295, "repeated": true, "minimum_payload_size": 4, "insertion": "existing_only"},
-        {"path": "AECH\\EffectEnabled", "label": "Enabled", "kind": "scalar", "subrecord": "DNAM", "offset": 0, "storage": "u32", "presentation": "enum", "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "minimum": 0, "maximum": 1, "repeated": true, "minimum_payload_size": 4, "insertion": "existing_only"}
+        {"path": "AECH\\EffectEnabled", "label": "Enabled", "kind": "scalar", "subrecord": "DNAM", "offset": 0, "storage": "u32", "presentation": "enum", "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "minimum": 0, "maximum": 1, "repeated": true, "minimum_payload_size": 4, "insertion": "existing_only"},
+        {"path": "AECH\\OverdriveInputGain", "label": "Input Gain", "kind": "scalar", "subrecord": "DNAM", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 20, "repeated": true, "when": {"subrecord": "KNAM", "offset": 0, "storage": "u32", "equals": [2252866750]}, "insertion": "existing_only"},
+        {"path": "AECH\\OverdriveOutputGain", "label": "Output Gain", "kind": "scalar", "subrecord": "DNAM", "offset": 8, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 20, "repeated": true, "when": {"subrecord": "KNAM", "offset": 0, "storage": "u32", "equals": [2252866750]}, "insertion": "existing_only"},
+        {"path": "AECH\\OverdriveUpperThreshold", "label": "Upper Threshold", "kind": "scalar", "subrecord": "DNAM", "offset": 12, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 20, "repeated": true, "when": {"subrecord": "KNAM", "offset": 0, "storage": "u32", "equals": [2252866750]}, "insertion": "existing_only"},
+        {"path": "AECH\\OverdriveLowerThreshold", "label": "Lower Threshold", "kind": "scalar", "subrecord": "DNAM", "offset": 16, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 20, "repeated": true, "when": {"subrecord": "KNAM", "offset": 0, "storage": "u32", "equals": [2252866750]}, "insertion": "existing_only"},
+        {"path": "AECH\\FilterCenterFreq", "label": "Center Freq", "kind": "scalar", "subrecord": "DNAM", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 16, "repeated": true, "when": {"subrecord": "KNAM", "offset": 0, "storage": "u32", "equals": [4015480703]}, "insertion": "existing_only"},
+        {"path": "AECH\\FilterQValue", "label": "Q Value", "kind": "scalar", "subrecord": "DNAM", "offset": 8, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 16, "repeated": true, "when": {"subrecord": "KNAM", "offset": 0, "storage": "u32", "equals": [4015480703]}, "insertion": "existing_only"},
+        {"path": "AECH\\FilterMode", "label": "Filter Mode", "kind": "scalar", "subrecord": "DNAM", "offset": 12, "storage": "u32", "presentation": "enum", "names": [{"value": 0, "name": "High Pass"}, {"value": 1, "name": "Low Pass"}, {"value": 2, "name": "Band Pass"}, {"value": 3, "name": "Notch"}], "minimum": 0, "maximum": 3, "payload_size": 16, "repeated": true, "when": {"subrecord": "KNAM", "offset": 0, "storage": "u32", "equals": [4015480703]}, "insertion": "existing_only"},
+        {"path": "AECH\\DelayFeedback", "label": "Feedback %", "kind": "scalar", "subrecord": "DNAM", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 16, "repeated": true, "when": {"subrecord": "KNAM", "offset": 0, "storage": "u32", "equals": [411269967]}, "insertion": "existing_only"},
+        {"path": "AECH\\DelayWetMix", "label": "Wet Mix %", "kind": "scalar", "subrecord": "DNAM", "offset": 8, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 16, "repeated": true, "when": {"subrecord": "KNAM", "offset": 0, "storage": "u32", "equals": [411269967]}, "insertion": "existing_only"},
+        {"path": "AECH\\DelayMs", "label": "Delay MS", "kind": "scalar", "subrecord": "DNAM", "offset": 12, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "payload_size": 16, "repeated": true, "when": {"subrecord": "KNAM", "offset": 0, "storage": "u32", "equals": [411269967]}, "insertion": "existing_only"}
       ],
       "formlink_fields": [],
       "authoring": {
@@ -21032,9 +21170,25 @@
           "minimum": 0,
           "maximum": 65535,
           "insertion": "existing_only"
+        },
+        {
+          "path": "SCSN\\Multiplier",
+          "label": "Multiplier",
+          "kind": "scalar",
+          "subrecord": "CNAM",
+          "offset": 4,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 8,
+          "repeated": true,
+          "insertion": "existing_only"
         }
       ],
-      "formlink_fields": [],
+      "formlink_fields": [
+        {"path": "SCSN\\Category", "label": "Category", "subrecord": "CNAM", "offset": 0, "targets": ["SNCT"], "nullable": false, "repeated": true, "payload_sizes": [8], "insertion": "existing_only"}
+      ],
       "authoring": {
         "placement": "top_level",
         "subrecords": [
@@ -23840,6 +23994,41 @@
               5
             ]
           }
+        },
+        {
+          "path": "PACK\\ProcedureLeafFlags",
+          "label": "Procedure flags",
+          "kind": "scalar",
+          "subrecord": "FNAM",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "flags",
+          "names": [
+            {"bit": 0, "name": "Success Completes Package"}
+          ],
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 4,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PACK\\ProcedureBranchFlags",
+          "label": "Procedure branch flags",
+          "kind": "scalar",
+          "subrecord": "PRCB",
+          "offset": 4,
+          "storage": "u32",
+          "presentation": "flags",
+          "names": [
+            {"bit": 0, "name": "Repeat when Complete"},
+            {"bit": 1, "name": "Unknown 1"}
+          ],
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 8,
+          "repeated": true,
+          "insertion": "existing_only"
         }
       ],
       "formlink_fields": [
@@ -24328,7 +24517,10 @@
     },
     {
       "signature": "NOCM",
-      "fields": [],
+      "fields": [
+        {"path": "NOCM\\Index", "label": "Index", "kind": "scalar", "subrecord": "INDX", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "payload_size": 4, "repeated": true, "insertion": "existing_only"},
+        {"path": "NOCM\\Model", "label": "Model", "kind": "string", "subrecord": "NAM1", "repeated": true, "insertion": "existing_only"}
+      ],
       "formlink_fields": [],
       "localized_subrecords": [],
       "authoring": {
@@ -26506,7 +26698,10 @@
         {"path": "ACTI\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
         {"path": "ACTI\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
         {"path": "ACTI\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
-        {"path": "ACTI\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
+        {"path": "ACTI\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "ACTI\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "ACTI\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "ACTI\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "ACTI\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "ACTI\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "ACTI\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "ACTI\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "ACTI\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "ACTI\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "ACTI\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {
@@ -27014,7 +27209,10 @@
         {"path": "CONT\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
         {"path": "CONT\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
         {"path": "CONT\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
-        {"path": "CONT\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
+        {"path": "CONT\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "CONT\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "CONT\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "CONT\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "CONT\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "CONT\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "CONT\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "CONT\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "CONT\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "CONT\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "CONT\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {
@@ -27434,7 +27632,10 @@
         {"path": "DOOR\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
         {"path": "DOOR\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
         {"path": "DOOR\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
-        {"path": "DOOR\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
+        {"path": "DOOR\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "DOOR\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "DOOR\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "DOOR\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "DOOR\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "DOOR\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "DOOR\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "DOOR\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "DOOR\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "DOOR\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "DOOR\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {
@@ -27658,6 +27859,11 @@
             "coupled": true
           },
           {
+            "signature": "PRPS",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
             "signature": "NTRM",
             "minimum": 0,
             "maximum": 1
@@ -27707,6 +27913,16 @@
             "coupled": true
           },
           {
+            "signature": "CNTO",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "COED",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
             "signature": "MNAM",
             "minimum": 0,
             "maximum": 1
@@ -27723,7 +27939,27 @@
             "maximum": 1
           },
           {
+            "signature": "ENAM",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "NAM0",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "FNPR",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
             "signature": "XMRK",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "SNAM",
             "minimum": 0,
             "maximum": 1
           },
@@ -27752,6 +27988,11 @@
             "signature": "STOP",
             "minimum": 0,
             "maximum": 1
+          },
+          {
+            "signature": "NVNM",
+            "minimum": 0,
+            "maximum": 1
           }
         ]
       },
@@ -27764,7 +28005,7 @@
           "nullable": false,
           "storage": "packed_array",
           "mutation": "appendable",
-          "anchor_predecessors": ["XMRK", "NAM1", "WBDT", "MNAM", "COCT", "CTDA", "CITC", "FNAM", "ATTX", "WNAM", "PNAM", "FTYP", "NTRM", "KWDA", "KSIZ", "DEST", "MODF", "MODS", "MODC", "MODT", "MODL", "FULL", "PTRN", "OBND", "VMAD", "EDID"]
+          "anchor_predecessors": ["XMRK", "NAM1", "WBDT", "MNAM", "COED", "CNTO", "COCT", "CTDA", "CITC", "FNAM", "ATTX", "WNAM", "PNAM", "FTYP", "NTRM", "KWDA", "KSIZ", "DEST", "MODF", "MODS", "MODC", "MODT", "MODL", "FULL", "PTRN", "OBND", "VMAD", "EDID"]
         }
       ],
       "fields": [
@@ -28218,6 +28459,104 @@
           "insertion": "existing_only"
         },
         {
+          "path": "FURN\\MarkerEntryPointList",
+          "label": "Marker entry points",
+          "kind": "subrecord_group",
+          "insertion": "existing_only",
+          "members": [
+            {"subrecord": "FNPR", "required": true, "repeatable": false, "payload_size": 4}
+          ],
+          "successors": ["XMRK", "SNAM", "APPR", "OBTE", "NVNM"]
+        },
+        {
+          "path": "FURN\\ObjectTemplateIncludeCount",
+          "label": "Object template include count",
+          "kind": "scalar",
+          "subrecord": "OBTS",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "minimum_payload_size": 18,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FURN\\ObjectTemplatePropertyCount",
+          "label": "Object template property count",
+          "kind": "scalar",
+          "subrecord": "OBTS",
+          "offset": 4,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "minimum_payload_size": 18,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FURN\\ObjectTemplateLevelMin",
+          "label": "Object template level min",
+          "kind": "scalar",
+          "subrecord": "OBTS",
+          "offset": 8,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "minimum_payload_size": 18,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FURN\\ObjectTemplateLevelMax",
+          "label": "Object template level max",
+          "kind": "scalar",
+          "subrecord": "OBTS",
+          "offset": 10,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "minimum_payload_size": 18,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FURN\\ObjectTemplateParentCombinationIndex",
+          "label": "Object template parent combination index",
+          "kind": "scalar",
+          "subrecord": "OBTS",
+          "offset": 12,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "minimum_payload_size": 18,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FURN\\ObjectTemplateDefault",
+          "label": "Object template default",
+          "kind": "scalar",
+          "subrecord": "OBTS",
+          "offset": 14,
+          "storage": "u8",
+          "presentation": "enum",
+          "names": [
+            {"value": 0, "name": "False"},
+            {"value": 1, "name": "True"}
+          ],
+          "minimum": 0,
+          "maximum": 1,
+          "minimum_payload_size": 18,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
           "path": "FURN\\MarkerOffsetX",
           "label": "Marker offset X",
           "kind": "scalar",
@@ -28328,7 +28667,10 @@
         {"path": "FURN\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
         {"path": "FURN\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
         {"path": "FURN\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
-        {"path": "FURN\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
+        {"path": "FURN\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "FURN\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "FURN\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "FURN\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "FURN\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "FURN\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "FURN\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "FURN\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "FURN\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "FURN\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "FURN\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {
@@ -28706,7 +29048,10 @@
         {"path": "MSTT\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
         {"path": "MSTT\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
         {"path": "MSTT\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
-        {"path": "MSTT\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
+        {"path": "MSTT\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "MSTT\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "MSTT\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "MSTT\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "MSTT\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "MSTT\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "MSTT\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "MSTT\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "MSTT\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "MSTT\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "MSTT\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {
@@ -28993,7 +29338,10 @@
         {"path": "TACT\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
         {"path": "TACT\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
         {"path": "TACT\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
-        {"path": "TACT\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
+        {"path": "TACT\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "TACT\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "TACT\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "TACT\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "TACT\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "TACT\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "TACT\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "TACT\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "TACT\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "TACT\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "TACT\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {
@@ -29614,7 +29962,10 @@
               ]
             }
           ]
-        }
+        },
+        {"path": "TERM\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "TERM\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "TERM\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "TERM\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "TERM\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "TERM\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "TERM\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "TERM\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "TERM\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "TERM\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {
@@ -30558,7 +30909,10 @@
         {"path": "WEAP\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
         {"path": "WEAP\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
         {"path": "WEAP\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
-        {"path": "WEAP\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
+        {"path": "WEAP\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "WEAP\\ModelInfoTextures", "label": "Textures", "kind": "counted_array", "subrecord": "MODT", "count_word": 0, "segment_index": 0, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "WEAP\\ModelInfoTextureFileHash", "label": "Texture file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "WEAP\\ModelInfoTextureExtension", "label": "Texture extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "WEAP\\ModelInfoTextureFolderHash", "label": "Texture folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "WEAP\\ModelInfoAddonNodes", "label": "Addon nodes", "kind": "counted_array", "subrecord": "MODT", "count_word": 1, "segment_index": 1, "stride": 4, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "WEAP\\ModelInfoAddonNode", "label": "Addon node", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "WEAP\\ModelInfoMaterials", "label": "Materials", "kind": "counted_array", "subrecord": "MODT", "count_word": 3, "segment_index": 2, "stride": 12, "min_form_version": 40, "insertion": "existing_only", "members": [{"path": "WEAP\\ModelInfoMaterialFileHash", "label": "Material file hash", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "WEAP\\ModelInfoMaterialExtension", "label": "Material extension", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}, {"path": "WEAP\\ModelInfoMaterialFolderHash", "label": "Material folder hash", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]}
       ],
       "formlink_fields": [
         {"path": "WEAP\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
@@ -31628,7 +31982,25 @@
           "nullable": false,
           "storage": "packed_array",
           "mutation": "appendable",
-          "anchor_predecessors": ["KWDA", "KSIZ", "PKID", "AIDT", "CNTO", "COCT", "NTRM", "FTYP", "PRPS", "PRKR", "PRKZ", "RCLR", "FCPL", "ECOR", "GWOR", "OCOR", "SPOR", "ATKD", "ATKR", "ANAM", "WNAM", "DEST", "SPLO", "SPCT", "RNAM", "TPTA", "LTPC", "LTPT", "TPLT", "VTCK", "INAM", "SNAM", "ACBS", "STCP", "PTRN", "OBND", "VMAD", "EDID"]
+          "anchor_predecessors": ["KWDA", "KSIZ", "PKID", "AIDT", "COED", "CNTO", "COCT", "NTRM", "FTYP", "PRPS", "PRKR", "PRKZ", "RCLR", "FCPL", "ECOR", "GWOR", "OCOR", "SPOR", "ATKT", "ATKS", "ATKW", "ATKE", "ATKD", "ATKR", "ANAM", "WNAM", "DSTF", "DMDS", "DMDC", "DMDT", "DMDL", "DSTA", "DSTD", "DAMC", "DEST", "SPLO", "SPCT", "RNAM", "TPTA", "LTPC", "LTPT", "TPLT", "VTCK", "INAM", "SNAM", "ACBS", "STCP", "PTRN", "OBND", "VMAD", "EDID"]
+        },
+        {
+          "path": "NPC_\\Packages",
+          "label": "Packages",
+          "subrecord": "PKID",
+          "targets": ["PACK"],
+          "nullable": false,
+          "mutation": "existing_neighbors",
+          "anchor_predecessors": ["AIDT", "COED", "CNTO", "COCT", "NTRM", "FTYP", "PRPS", "PRKR", "PRKZ", "RCLR", "FCPL", "ECOR", "GWOR", "OCOR", "SPOR", "ATKT", "ATKS", "ATKW", "ATKE", "ATKD", "ATKR", "ANAM", "WNAM", "DSTF", "DMDS", "DMDC", "DMDT", "DMDL", "DSTA", "DSTD", "DAMC", "DEST", "SPLO", "SPCT", "RNAM", "TPTA", "LTPC", "LTPT", "TPLT", "VTCK", "INAM", "SNAM", "ACBS", "STCP", "PTRN", "OBND", "VMAD", "EDID"]
+        },
+        {
+          "path": "NPC_\\HeadParts",
+          "label": "Head parts",
+          "subrecord": "PNAM",
+          "targets": ["HDPT"],
+          "nullable": false,
+          "mutation": "existing_neighbors",
+          "anchor_predecessors": ["DNAM", "DATA", "SHRT", "FULL", "CNAM", "STOP", "OBTS", "OBTF", "OBTE", "APPR", "KWDA", "KSIZ", "PKID", "AIDT", "COED", "CNTO", "COCT", "NTRM", "FTYP", "PRPS", "PRKR", "PRKZ", "RCLR", "FCPL", "ECOR", "GWOR", "OCOR", "SPOR", "ATKT", "ATKS", "ATKW", "ATKE", "ATKD", "ATKR", "ANAM", "WNAM", "DSTF", "DMDS", "DMDC", "DMDT", "DMDL", "DSTA", "DSTD", "DAMC", "DEST", "SPLO", "SPCT", "RNAM", "TPTA", "LTPC", "LTPT", "TPLT", "VTCK", "INAM", "SNAM", "ACBS", "STCP", "PTRN", "OBND", "VMAD", "EDID"]
         }
       ],
       "fields": [
@@ -32718,7 +33090,122 @@
         {"path": "NPC_\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
         {"path": "NPC_\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"},
         {"path": "NPC_\\AttackEvent", "label": "Attack event", "kind": "string", "subrecord": "ATKE", "repeated": true, "insertion": "existing_only"},
-        {"path": "NPC_\\AttackDescription", "label": "Attack description", "kind": "string", "subrecord": "ATKT", "repeated": true, "insertion": "existing_only"}
+        {"path": "NPC_\\AttackDescription", "label": "Attack description", "kind": "string", "subrecord": "ATKT", "repeated": true, "insertion": "existing_only"},
+        {
+          "path": "NPC_\\ObjectTemplateIncludeCount",
+          "label": "Object template include count",
+          "kind": "scalar",
+          "subrecord": "OBTS",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "minimum_payload_size": 18,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\ObjectTemplatePropertyCount",
+          "label": "Object template property count",
+          "kind": "scalar",
+          "subrecord": "OBTS",
+          "offset": 4,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "minimum_payload_size": 18,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\ObjectTemplateLevelMin",
+          "label": "Object template level min",
+          "kind": "scalar",
+          "subrecord": "OBTS",
+          "offset": 8,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "minimum_payload_size": 18,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\ObjectTemplateLevelMax",
+          "label": "Object template level max",
+          "kind": "scalar",
+          "subrecord": "OBTS",
+          "offset": 10,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "minimum_payload_size": 18,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\ObjectTemplateParentCombinationIndex",
+          "label": "Object template parent combination index",
+          "kind": "scalar",
+          "subrecord": "OBTS",
+          "offset": 12,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "minimum_payload_size": 18,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\ObjectTemplateDefault",
+          "label": "Object template default",
+          "kind": "scalar",
+          "subrecord": "OBTS",
+          "offset": 14,
+          "storage": "u8",
+          "presentation": "enum",
+          "names": [
+            {"value": 0, "name": "False"},
+            {"value": 1, "name": "True"}
+          ],
+          "minimum": 0,
+          "maximum": 1,
+          "minimum_payload_size": 18,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {"path": "NPC_\\SpellCount", "label": "Spell count", "kind": "scalar", "subrecord": "SPCT", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"},
+        {
+          "path": "NPC_\\Spells",
+          "label": "Spells",
+          "kind": "subrecord_group",
+          "count_subrecord": "SPCT",
+          "insertion": "existing_only",
+          "successors": ["DEST", "DAMC", "DSTD", "DSTA", "DMDL", "DMDT", "DMDC", "DMDS", "DSTF", "WNAM", "ANAM", "ATKR", "ATKD", "SPOR", "OCOR", "GWOR", "ECOR", "FCPL", "RCLR", "PRKZ", "PRKR", "PRPS", "FTYP", "NTRM", "COCT", "CNTO", "COED", "AIDT", "PKID", "KSIZ", "KWDA", "APPR", "OBTE", "OBTF", "OBTS", "STOP", "CNAM", "FULL", "SHRT", "DATA", "DNAM", "PNAM", "HCLF", "BCLF", "ZNAM", "GNAM", "NAM5", "NAM6", "NAM7", "NAM4", "MWGT", "NAM8", "CS2H", "CS2K", "CS2D", "CS2E", "CS2F", "CSCR", "PFRN", "DOFT", "SOFT", "DPLT", "CRIF", "FTST", "QNAM", "MSDK", "MSDV", "TETI", "TEND", "MRSV", "FMRI", "FMRS", "FMIN", "ATTX"],
+          "members": [
+            {
+              "subrecord": "SPLO",
+              "required": true,
+              "repeatable": false,
+              "payload_size": 4,
+              "formlink_fields": [
+                {
+                  "path": "NPC_\\Spell",
+                  "label": "Spell",
+                  "offset": 0,
+                  "nullable": false,
+                  "insertion": "existing_only",
+                  "targets": ["SPEL", "LVSP"]
+                }
+              ]
+            }
+          ]
+        }
       ],
       "formlink_fields": [
         {
@@ -32738,39 +33225,6 @@
           "offset": 0,
           "targets": ["VTYP"],
           "nullable": false,
-          "payload_sizes": [4],
-          "insertion": "existing_only"
-        },
-        {
-          "path": "NPC_\\Package",
-          "label": "Package",
-          "subrecord": "PKID",
-          "offset": 0,
-          "targets": ["PACK"],
-          "nullable": false,
-          "repeated": true,
-          "payload_sizes": [4],
-          "insertion": "existing_only"
-        },
-        {
-          "path": "NPC_\\HeadPart",
-          "label": "Head part",
-          "subrecord": "PNAM",
-          "offset": 0,
-          "targets": ["HDPT"],
-          "nullable": false,
-          "repeated": true,
-          "payload_sizes": [4],
-          "insertion": "existing_only"
-        },
-        {
-          "path": "NPC_\\Spell",
-          "label": "Spell",
-          "subrecord": "SPLO",
-          "offset": 0,
-          "targets": ["SPEL", "LVSP"],
-          "nullable": false,
-          "repeated": true,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -33077,7 +33531,10 @@
         {"path": "ACHR\\FavorCost", "label": "Favor cost", "kind": "scalar", "subrecord": "XFVC", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
         {"path": "ACHR\\EnableParentFlags", "label": "Enable Parent Flags", "kind": "scalar", "subrecord": "XESP", "offset": 4, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Set Enable State to Opposite of Parent"}, {"bit": 1, "name": "Pop In"}], "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
         {"path": "ACHR\\OwnerRank", "label": "Faction rank", "kind": "scalar", "subrecord": "XRNK", "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "insertion": "existing_only"},
-        {"path": "ACHR\\OwnerNoCrime", "label": "No Crime", "kind": "scalar", "subrecord": "XOWN", "offset": 8, "storage": "u8", "presentation": "enum", "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "minimum": 0, "maximum": 255, "payload_size": 12, "insertion": "existing_only"}
+        {"path": "ACHR\\OwnerNoCrime", "label": "No Crime", "kind": "scalar", "subrecord": "XOWN", "offset": 8, "storage": "u8", "presentation": "enum", "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "minimum": 0, "maximum": 255, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "ACHR\\ParentActivateOnly", "label": "Parent activate only", "kind": "scalar", "subrecord": "XAPD", "storage": "u8", "presentation": "enum", "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "ACHR\\ActivateParentDelay", "label": "Activate parent delay", "kind": "scalar", "subrecord": "XAPR", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "insertion": "existing_only"},
+        {"path": "ACHR\\Comments", "label": "Comments", "kind": "string", "subrecord": "MNAM", "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {"path": "ACHR\\LitWater", "label": "Lit water", "subrecord": "XLTW", "offset": 0, "payload_sizes": [4], "targets": ["ACHR", "REFR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
@@ -33096,7 +33553,13 @@
         {"path": "ACHR\\MaterialSwap", "label": "Material swap", "subrecord": "XMSP", "offset": 0, "payload_sizes": [4], "targets": ["MSWP"], "nullable": false, "insertion": "existing_only"},
         {"path": "ACHR\\AttachRef", "label": "Attach ref", "subrecord": "XATR", "offset": 0, "payload_sizes": [4], "targets": ["REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA", "ACHR"], "nullable": false, "insertion": "existing_only"},
         {"path": "ACHR\\PersistLocation", "label": "Persist location", "subrecord": "XLCN", "offset": 0, "payload_sizes": [4], "targets": ["LCTN"], "nullable": false, "insertion": "existing_only"},
-        {"path": "ACHR\\LocationReference", "label": "Location reference", "subrecord": "XLRL", "offset": 0, "payload_sizes": [4], "targets": ["LCRT", "LCTN"], "nullable": true, "insertion": "existing_only"}
+        {"path": "ACHR\\LocationReference", "label": "Location reference", "subrecord": "XLRL", "offset": 0, "payload_sizes": [4], "targets": ["LCRT", "LCTN"], "nullable": true, "insertion": "existing_only"},
+        {"path": "ACHR\\LinkedReferenceKeyword", "label": "Linked reference keyword or reference", "subrecord": "XLKR", "offset": 0, "payload_sizes": [4, 8], "targets": ["KYWD", "PLYR", "ACHR", "REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"], "nullable": true, "repeated": true, "insertion": "existing_only"},
+        {"path": "ACHR\\LinkedReference", "label": "Linked reference", "subrecord": "XLKR", "offset": 4, "payload_sizes": [8], "targets": ["PLYR", "ACHR", "REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"], "nullable": true, "repeated": true, "insertion": "existing_only"},
+        {"path": "ACHR\\ActivateParent", "label": "Activate parent", "subrecord": "XAPR", "offset": 0, "payload_sizes": [8], "targets": ["PLYR", "ACHR", "REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"], "nullable": true, "repeated": true, "insertion": "existing_only"}
+      ],
+      "formlink_lists": [
+        {"path": "ACHR\\LocationRefTypes", "label": "Location ref types", "subrecord": "XLRT", "targets": ["LCRT"], "nullable": true, "storage": "packed_array", "mutation": "existing_neighbors"}
       ]
     }
   ],

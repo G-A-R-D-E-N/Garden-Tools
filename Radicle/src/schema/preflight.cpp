@@ -479,6 +479,16 @@ std::vector<PreflightIssue> preflight_authoring_record(
     }
   }
 
+  const auto unpaired = mismatched_subrecord_pair(location.record->header.signature, rules, counts);
+  if (unpaired.has_value()) {
+    issues.push_back(authoring_issue(
+        record_key,
+        location.record->header.signature.to_string() + "\\" + unpaired->subrecord.to_string(),
+        "subrecord_count_mismatch",
+        "authored record has a different number of " + unpaired->subrecord.to_string() +
+            " and " + unpaired->partner.to_string() + " subrecords"));
+  }
+
   auto scalar_issues = preflight_record(*location.record, plugin.header.tes4_flags.is_localized());
   issues.insert(issues.end(),
                 std::make_move_iterator(scalar_issues.begin()),
