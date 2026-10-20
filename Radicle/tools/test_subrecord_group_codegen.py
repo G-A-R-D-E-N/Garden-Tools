@@ -391,6 +391,11 @@ class LeadingGroupMemberTests(unittest.TestCase):
         self.rejects("leading must be a boolean",
                      group(members=[group_member("CS2K", **dict(leading, leading="yes")), group_member("CNTO")]), count)
 
+    def test_subrecord_group_run_members_cannot_be_leading(self):
+        leading_run = group_run(members=[group_member("WNAM", required=False, payload_size=2, leading=True),
+                                         group_member("YNAM", payload_size=4)])
+        self.rejects("subrecord_group run members cannot be leading", run_group(run=leading_run))
+
     def test_subrecord_group_requires_existing_count_renders_only_when_set(self):
         count = count_row(subrecord="COCT")
         plain = schema_codegen.render(*self.load_schema(group(), count))
