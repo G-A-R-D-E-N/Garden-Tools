@@ -19912,6 +19912,172 @@
           "minimum": 0,
           "maximum": 4294967295,
           "insertion": "existing_only"
+        },
+        {
+          "path": "INNR\\RulesetCount",
+          "label": "Ruleset count",
+          "kind": "scalar",
+          "subrecord": "VNAM",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INNR\\NameText",
+          "label": "Name text",
+          "kind": "string",
+          "subrecord": "WNAM",
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INNR\\KeywordCount",
+          "label": "Keyword count",
+          "kind": "scalar",
+          "subrecord": "KSIZ",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INNR\\PropertyValue",
+          "label": "Property value",
+          "kind": "scalar",
+          "subrecord": "XNAM",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 6,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INNR\\PropertyTarget",
+          "label": "Property target",
+          "kind": "scalar",
+          "subrecord": "XNAM",
+          "offset": 4,
+          "storage": "u8",
+          "presentation": "enum",
+          "names": [
+            {
+              "value": 0,
+              "name": "Enchantments"
+            },
+            {
+              "value": 1,
+              "name": "BashImpactDataSet"
+            },
+            {
+              "value": 2,
+              "name": "BlockMaterial"
+            },
+            {
+              "value": 3,
+              "name": "Keywords"
+            },
+            {
+              "value": 4,
+              "name": "Weight"
+            },
+            {
+              "value": 5,
+              "name": "Value"
+            },
+            {
+              "value": 6,
+              "name": "Rating"
+            },
+            {
+              "value": 7,
+              "name": "AddonIndex"
+            },
+            {
+              "value": 8,
+              "name": "BodyPart"
+            },
+            {
+              "value": 9,
+              "name": "DamageTypeValues"
+            },
+            {
+              "value": 10,
+              "name": "ActorValues"
+            },
+            {
+              "value": 11,
+              "name": "Health"
+            },
+            {
+              "value": 12,
+              "name": "ColorRemappingIndex"
+            },
+            {
+              "value": 13,
+              "name": "MaterialSwaps"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 6,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INNR\\PropertyOperator",
+          "label": "Property operator",
+          "kind": "scalar",
+          "subrecord": "XNAM",
+          "offset": 5,
+          "storage": "u8",
+          "presentation": "enum",
+          "names": [
+            {
+              "value": 0,
+              "name": ">="
+            },
+            {
+              "value": 1,
+              "name": ">"
+            },
+            {
+              "value": 2,
+              "name": "<="
+            },
+            {
+              "value": 3,
+              "name": "<"
+            },
+            {
+              "value": 4,
+              "name": "="
+            }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 6,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INNR\\NameIndex",
+          "label": "Name index",
+          "kind": "scalar",
+          "subrecord": "YNAM",
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "repeated": true,
+          "insertion": "existing_only"
         }
       ],
       "localized_subrecords": ["WNAM"]

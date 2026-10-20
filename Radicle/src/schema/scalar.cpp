@@ -376,7 +376,12 @@ bool is_subrecord_group_count_subrecord(Signature record, Signature subrecord) n
 bool is_derived_scalar_row(Signature record, Signature subrecord) noexcept {
   if (is_counted_array_count_subrecord(record, subrecord)) return true;
   if (is_subrecord_group_count_subrecord(record, subrecord)) return true;
-  return record == Signature::from_string("FSTS") && subrecord == Signature::from_string("XCNT");
+  if (record == Signature::from_string("FSTS") && subrecord == Signature::from_string("XCNT")) {
+    return true;
+  }
+  return record == Signature::from_string("INNR") &&
+         (subrecord == Signature::from_string("VNAM") ||
+          subrecord == Signature::from_string("KSIZ"));
 }
 
 std::size_t scalar_storage_size(ScalarStorage storage) noexcept {
