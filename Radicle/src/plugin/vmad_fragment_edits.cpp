@@ -186,15 +186,31 @@ struct FragmentBinding {
   std::size_t end{0};
 };
 
+struct ScenePhaseBinding {
+  std::uint32_t index{0};
+  std::uint8_t flag{0};
+  std::uint8_t unknown{0};
+  std::string script;
+  std::string function;
+  std::size_t offset{0};
+  std::size_t end{0};
+};
+
+constexpr std::uint8_t k_scene_phase_flags = 0x03;
+
 struct FragmentSection {
   Record* record{nullptr};
   Subrecord* vmad{nullptr};
   bool indexed{false};
+  bool scene{false};
   std::size_t flags_offset{0};
   std::size_t count_offset{0};
   std::size_t entries_begin{0};
+  std::size_t phase_count_offset{0};
+  std::size_t phases_begin{0};
   std::uint8_t flags{0};
   std::vector<FragmentBinding> bindings;
+  std::vector<ScenePhaseBinding> phases;
 };
 
 bool is_fragment_record(Signature signature) {
@@ -240,6 +256,14 @@ const FragmentBinding* find_binding(const std::vector<FragmentBinding>& bindings
                                     std::uint32_t key) {
   for (const auto& binding : bindings) {
     if (binding.key == key) return &binding;
+  }
+  return nullptr;
+}
+
+const ScenePhaseBinding* find_phase(const std::vector<ScenePhaseBinding>& phases,
+                                    std::uint32_t index, std::uint8_t flag) {
+  for (const auto& phase : phases) {
+    if (phase.index == index && phase.flag == flag) return &phase;
   }
   return nullptr;
 }
@@ -354,6 +378,23 @@ std::optional<VmadStructureMutationStatus> load_fragment_section(Plugin& plugin,
     binding.end += extras_start;
     section.bindings.push_back(std::move(binding));
   }
+  if (signature != sig_scen) return std::nullopt;
+  section.scene = true;
+  section.phase_count_offset = extras_start + cursor.position();
+  const auto phases = cursor.u16();
+  section.phases_begin = extras_start + cursor.position();
+  section.phases.reserve(phases);
+  for (std::uint16_t i = 0; i < phases; ++i) {
+    ScenePhaseBinding phase;
+    phase.offset = extras_start + cursor.position();
+    phase.flag = cursor.u8();
+    phase.index = cursor.u32();
+    phase.unknown = cursor.u8();
+    phase.script = cursor.wstring();
+    phase.function = cursor.wstring();
+    phase.end = extras_start + cursor.position();
+    section.phases.push_back(std::move(phase));
+  }
   return std::nullopt;
 }
 
@@ -365,6 +406,16 @@ std::vector<std::byte> encode_binding(const FragmentBinding& binding, bool index
   append_u8(entry, binding.unknown);
   append_name(entry, binding.script);
   append_name(entry, binding.function);
+  return entry;
+}
+
+std::vector<std::byte> encode_phase(const ScenePhaseBinding& phase) {
+  std::vector<std::byte> entry;
+  append_u8(entry, phase.flag);
+  append_u32(entry, phase.index);
+  append_u8(entry, phase.unknown);
+  append_name(entry, phase.script);
+  append_name(entry, phase.function);
   return entry;
 }
 
@@ -450,6 +501,91 @@ VmadStructureMutationStatus remove_vmad_fragment(Plugin& plugin, const FormKey& 
     section.vmad->data[section.flags_offset] =
         static_cast<std::byte>(section.flags & ~(1u << key));
   }
+  detail::mark_record_modified(plugin, *section.record);
+  return VmadStructureMutationStatus::updated;
+}
+
+VmadStructureMutationStatus add_scene_vmad_phase_fragment(Plugin& plugin, const FormKey& record_key,
+                                                          std::uint32_t phase_index,
+                                                          std::uint8_t phase_flag,
+                                                          std::string_view script,
+                                                          std::string_view function) {
+  FragmentSection section;
+  if (const auto refusal = load_fragment_section(plugin, record_key, section)) return *refusal;
+  if (!section.scene) return VmadStructureMutationStatus::not_authorable;
+  if (script.empty() || function.empty()) {
+    throw schema::ScalarError("VMAD fragment script and function names are required");
+  }
+  if (phase_flag == 0 || (phase_flag & ~k_scene_phase_flags) != 0) {
+    return VmadStructureMutationStatus::index_out_of_range;
+  }
+  if (find_phase(section.phases, phase_index, phase_flag) != nullptr) {
+    return VmadStructureMutationStatus::already_present;
+  }
+  if (section.phases.size() >= 0xFFFFu) {
+    throw schema::ScalarError("VMAD fragment list is full");
+  }
+  ScenePhaseBinding phase;
+  phase.index = phase_index;
+  phase.flag = phase_flag;
+  phase.script = std::string(script);
+  phase.function = std::string(function);
+  const auto entry = encode_phase(phase);
+  auto at = section.phases_begin;
+  for (const auto& existing : section.phases) {
+    if (existing.index > phase_index ||
+        (existing.index == phase_index && existing.flag > phase_flag)) {
+      at = existing.offset;
+      break;
+    }
+    at = existing.end;
+  }
+  splice(section.vmad->data, at, 0, entry);
+  put_u16(section.vmad->data, section.phase_count_offset,
+          static_cast<std::uint16_t>(section.phases.size() + 1));
+  detail::mark_record_modified(plugin, *section.record);
+  return VmadStructureMutationStatus::updated;
+}
+
+VmadStructureMutationStatus set_scene_vmad_phase_fragment(Plugin& plugin, const FormKey& record_key,
+                                                          std::uint32_t phase_index,
+                                                          std::uint8_t phase_flag,
+                                                          std::string_view script,
+                                                          std::string_view function) {
+  FragmentSection section;
+  if (const auto refusal = load_fragment_section(plugin, record_key, section)) return *refusal;
+  if (!section.scene) return VmadStructureMutationStatus::not_authorable;
+  if (script.empty() || function.empty()) {
+    throw schema::ScalarError("VMAD fragment script and function names are required");
+  }
+  const auto* found = find_phase(section.phases, phase_index, phase_flag);
+  if (found == nullptr) return VmadStructureMutationStatus::binding_missing;
+  auto updated = *found;
+  updated.script = std::string(script);
+  updated.function = std::string(function);
+  const auto entry = encode_phase(updated);
+  if (entry.size() == found->end - found->offset &&
+      std::equal(entry.begin(), entry.end(),
+                 section.vmad->data.begin() + static_cast<std::ptrdiff_t>(found->offset))) {
+    return VmadStructureMutationStatus::unchanged;
+  }
+  splice(section.vmad->data, found->offset, found->end - found->offset, entry);
+  detail::mark_record_modified(plugin, *section.record);
+  return VmadStructureMutationStatus::updated;
+}
+
+VmadStructureMutationStatus remove_scene_vmad_phase_fragment(Plugin& plugin,
+                                                             const FormKey& record_key,
+                                                             std::uint32_t phase_index,
+                                                             std::uint8_t phase_flag) {
+  FragmentSection section;
+  if (const auto refusal = load_fragment_section(plugin, record_key, section)) return *refusal;
+  if (!section.scene) return VmadStructureMutationStatus::not_authorable;
+  const auto* found = find_phase(section.phases, phase_index, phase_flag);
+  if (found == nullptr) return VmadStructureMutationStatus::binding_missing;
+  splice(section.vmad->data, found->offset, found->end - found->offset, {});
+  put_u16(section.vmad->data, section.phase_count_offset,
+          static_cast<std::uint16_t>(section.phases.size() - 1));
   detail::mark_record_modified(plugin, *section.record);
   return VmadStructureMutationStatus::updated;
 }
