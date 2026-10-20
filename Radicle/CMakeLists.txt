@@ -176,6 +176,7 @@ add_library(fo4
   src/plugin/vmad_fragment_edits.cpp
   src/plugin/navmesh_writer.cpp
   src/plugin/field_writer.cpp
+  src/plugin/field_writer_containers.cpp
   src/plugin/destructible_stage.cpp
   src/plugin/subrecord_authoring.cpp
   src/plugin/scene_writer.cpp
@@ -401,6 +402,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_counted_array.cpp
     tests/test_uncounted_arrays.cpp
     tests/test_subrecord_group.cpp
+    tests/test_nested_group_runs.cpp
     tests/test_writer.cpp
     tests/test_atomic_write.cpp
     tests/test_hedr_count.cpp

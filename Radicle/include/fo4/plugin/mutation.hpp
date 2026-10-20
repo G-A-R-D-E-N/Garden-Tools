@@ -59,6 +59,8 @@ enum class SubrecordGroupMutationStatus {
 struct SubrecordGroupSpan {
   std::size_t first{0};
   std::size_t end{0};
+  // Invariant: the nested tuples of the group's counted sub-run, in record order; empty when the group has none.
+  std::vector<SubrecordGroupSpan> runs{};
 };
 
 enum class ConditionMutationStatus {
@@ -264,6 +266,18 @@ SubrecordGroupMutationStatus remove_record_subrecord_group(Plugin& plugin,
                                                            const FormKey& record_key,
                                                            const schema::SubrecordGroupDescriptor& group,
                                                            std::size_t index);
+
+SubrecordGroupMutationStatus insert_record_subrecord_group_run(Plugin& plugin,
+                                                               const FormKey& record_key,
+                                                               const schema::SubrecordGroupDescriptor& group,
+                                                               std::size_t run,
+                                                               std::size_t index);
+
+SubrecordGroupMutationStatus remove_record_subrecord_group_run(Plugin& plugin,
+                                                               const FormKey& record_key,
+                                                               const schema::SubrecordGroupDescriptor& group,
+                                                               std::size_t run,
+                                                               std::size_t index);
 
 inline ConditionMutationStatus set_record_conditions(Plugin& plugin,
                                   const FormKey& record_key,

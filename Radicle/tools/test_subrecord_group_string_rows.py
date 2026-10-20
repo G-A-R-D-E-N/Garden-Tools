@@ -8,7 +8,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import schema_codegen  # noqa: E402
-from test_field_address_codegen import count_row, group, group_member, string, write_schema  # noqa: E402
+from test_field_address_codegen import count_row, string, write_schema  # noqa: E402
+from test_subrecord_group_codegen import group, group_member  # noqa: E402
 
 BS = chr(92)
 

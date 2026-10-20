@@ -52,6 +52,7 @@ TEST_P(ItemModRecordsReal, RowsDecodeAndAuthoringLimitsHold) {
       for (const auto& sub : record.subrecords) {
         for (const auto& field : scalars) {
           if (sub.signature != field.scalar.subrecord) continue;
+          if (field.scalar.localized && plugin.header.tes4_flags.is_localized()) continue;
           if (field.scalar.payload_size != 0 && sub.data.size() != field.scalar.payload_size) {
             ADD_FAILURE() << GetParam() << ' ' << record.form_key.to_string() << ' ' << field.path << ": "
                           << sub.signature.to_string() << " is " << sub.data.size()

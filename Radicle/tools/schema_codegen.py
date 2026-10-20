@@ -22,9 +22,11 @@ INSERTIONS = {"existing_only"}
 COUNTED_ARRAY_KEYS = {"kind", "path", "label", "subrecord", "count_subrecord", "stride", "insertion",
                       "members", "count_word", "segment_index", "min_form_version"}
 MEMBER_KEYS = {"path", "label", "offset", "storage", "presentation", "minimum", "maximum"}
-SUBRECORD_GROUP_KEYS = {"kind", "path", "label", "count_subrecord", "insertion", "members", "successors"}
+SUBRECORD_GROUP_KEYS = {"kind", "path", "label", "count_subrecord", "insertion", "members", "successors",
+                        "run"}
 GROUP_MEMBER_KEYS = {"subrecord", "required", "repeatable", "payload_size", "default", "fields",
                      "formlink_fields", "localized", "skippable"}
+GROUP_RUN_KEYS = {"count_member", "members"}
 GROUP_ROW_FORBIDDEN = {"subrecord", "repeated", "stride", "array_offset", "when", "payload_size", "minimum_payload_size"}
 GROUP_LINK_KEYS = {"path", "label", "offset", "nullable", "insertion", "target_union", "targets"}
 HEX_DIGITS = "0123456789abcdefABCDEF"
@@ -168,30 +170,7 @@ def parse_group_default(value, payload_size: int, path: str):
     return list(data)
 
 
-def parse_subrecord_group(field, record_signature: str):
-    path = field.get("path", "")
-    unknown = sorted(set(field) - SUBRECORD_GROUP_KEYS)
-    if unknown:
-        raise ValueError(f"unknown subrecord_group keys {unknown}: {path!r}")
-    if not isinstance(path, str) or not path.startswith(record_signature + "\\"):
-        raise ValueError(f"subrecord_group path must be qualified by {record_signature}\\: {path!r}")
-    label = field.get("label", "")
-    if not isinstance(label, str) or not label or any(ord(ch) < 0x20 for ch in label):
-        raise ValueError(f"subrecord_group label is invalid: {label!r}")
-    count_subrecord = field.get("count_subrecord", "")
-    if not isinstance(count_subrecord, str) or (count_subrecord and not valid_signature(count_subrecord)):
-        raise ValueError(f"subrecord_group count_subrecord must be four printable ASCII characters: {path!r}")
-    if field.get("insertion") not in INSERTIONS:
-        raise ValueError(f"unsupported insertion policy until record ordering exists: {field.get('insertion')!r}")
-    members = field.get("members")
-    if not isinstance(members, list) or not members:
-        raise ValueError(f"subrecord_group members must be a non-empty array: {path!r}")
-    successors = field.get("successors", [])
-    if (not isinstance(successors, list)
-            or not all(isinstance(entry, str) and valid_signature(entry) for entry in successors)
-            or len(set(successors)) != len(successors)):
-        raise ValueError(f"subrecord_group successors must be distinct four-character signatures: {path!r}")
-
+def parse_group_members(members, path: str, reserved: set):
     parsed = []
     rows = []
     links = []
@@ -202,7 +181,7 @@ def parse_subrecord_group(field, record_signature: str):
         signature = member.get("subrecord", "")
         if not isinstance(signature, str) or not valid_signature(signature):
             raise ValueError(f"subrecord_group member signature must be four printable ASCII characters: {signature!r}: {path!r}")
-        if signature in signatures or signature == count_subrecord:
+        if signature in signatures or signature in reserved:
             raise ValueError(f"subrecord_group member {signature} is repeated or is the count subrecord: {path!r}")
         signatures.add(signature)
         required = member.get("required")
@@ -259,12 +238,64 @@ def parse_subrecord_group(field, record_signature: str):
             if row["offset"] + WIDTHS["u32"] > payload_size:
                 raise ValueError(f"subrecord_group member link exceeds member size: {row.get('path')!r}")
             links.append(dict(row, subrecord=signature, repeated=True))
+    return parsed, rows, links, signatures
+
+
+def parse_subrecord_group(field, record_signature: str):
+    path = field.get("path", "")
+    unknown = sorted(set(field) - SUBRECORD_GROUP_KEYS)
+    if unknown:
+        raise ValueError(f"unknown subrecord_group keys {unknown}: {path!r}")
+    if not isinstance(path, str) or not path.startswith(record_signature + "\\"):
+        raise ValueError(f"subrecord_group path must be qualified by {record_signature}\\: {path!r}")
+    label = field.get("label", "")
+    if not isinstance(label, str) or not label or any(ord(ch) < 0x20 for ch in label):
+        raise ValueError(f"subrecord_group label is invalid: {label!r}")
+    count_subrecord = field.get("count_subrecord", "")
+    if not isinstance(count_subrecord, str) or (count_subrecord and not valid_signature(count_subrecord)):
+        raise ValueError(f"subrecord_group count_subrecord must be four printable ASCII characters: {path!r}")
+    if field.get("insertion") not in INSERTIONS:
+        raise ValueError(f"unsupported insertion policy until record ordering exists: {field.get('insertion')!r}")
+    members = field.get("members")
+    if not isinstance(members, list) or not members:
+        raise ValueError(f"subrecord_group members must be a non-empty array: {path!r}")
+    successors = field.get("successors", [])
+    if (not isinstance(successors, list)
+            or not all(isinstance(entry, str) and valid_signature(entry) for entry in successors)
+            or len(set(successors)) != len(successors)):
+        raise ValueError(f"subrecord_group successors must be distinct four-character signatures: {path!r}")
+
+    parsed, rows, links, signatures = parse_group_members(
+        members, path, {count_subrecord} if count_subrecord else set())
+    parsed_run = None
+    if "run" in field:
+        run = field["run"]
+        if not isinstance(run, dict) or set(run) != GROUP_RUN_KEYS:
+            raise ValueError(f"subrecord_group run keys must be exactly {sorted(GROUP_RUN_KEYS)}: {path!r}")
+        count_member = run.get("count_member", "")
+        if not isinstance(count_member, str) or not valid_signature(count_member):
+            raise ValueError(f"subrecord_group run count_member must be four printable ASCII characters: {path!r}")
+        holder = next((member for member in parsed if member["subrecord"] == count_member), None)
+        if holder is None or holder["payload_size"] != WIDTHS["u32"] or holder["repeatable"]:
+            raise ValueError(f"subrecord_group run count_member must be a four-byte non-repeatable member: {path!r}")
+        run_members = run.get("members")
+        if not isinstance(run_members, list) or not run_members:
+            raise ValueError(f"subrecord_group run members must be a non-empty array: {path!r}")
+        nested, nested_rows, nested_links, _nested_signatures = parse_group_members(
+            run_members, path, signatures | set(successors)
+            | ({count_subrecord} if count_subrecord else set()))
+        if not nested[0]["required"] or nested[0]["repeatable"]:
+            raise ValueError(f"subrecord_group run leader must be required and non-repeatable: {path!r}")
+        rows.extend(nested_rows)
+        links.extend(nested_links)
+        parsed_run = {"count_member": count_member, "members": nested}
     if not parsed[0]["required"] or parsed[0]["repeatable"]:
         raise ValueError(f"subrecord_group leader must be required and non-repeatable: {path!r}")
     if set(successors) & (signatures | {count_subrecord}):
         raise ValueError(f"subrecord_group successors cannot be members or the count subrecord: {path!r}")
     group = {"record": record_signature, "path": path, "label": label,
-             "count_subrecord": count_subrecord, "members": parsed, "successors": successors}
+             "count_subrecord": count_subrecord, "members": parsed, "successors": successors,
+             "run": parsed_run}
     return group, rows, links
 
 
@@ -504,6 +535,9 @@ def load_schema(schema_path: Path):
             if len(counts) != 1 or not whole_payload_u32(counts[0]):
                 raise ValueError(f"subrecord_group {group['path']!r} needs exactly one whole-payload u32 row for {group['count_subrecord']}")
         group_signatures = {member["subrecord"] for member in group["members"]}
+        if group["run"] is not None:
+            group_signatures |= {member["subrecord"] for member in group["run"]["members"]}
+        group_members_only = set(group_signatures)
         if group["count_subrecord"]:
             group_signatures.add(group["count_subrecord"])
         for array in arrays:
@@ -512,11 +546,13 @@ def load_schema(schema_path: Path):
         for other in groups:
             if other is group or other["record"] != group["record"]:
                 continue
-            shared = sorted({member["subrecord"] for member in group["members"]}
-                            & {member["subrecord"] for member in other["members"]})
+            other_members = {member["subrecord"] for member in other["members"]}
+            if other["run"] is not None:
+                other_members |= {member["subrecord"] for member in other["run"]["members"]}
+            shared = sorted(group_members_only & other_members)
             if shared:
                 raise ValueError(f"subrecord_group members {shared} are declared by two groups in {group['record']}: {group['path']!r}")
-            if group["count_subrecord"] in {member["subrecord"] for member in other["members"]}:
+            if group["count_subrecord"] in other_members:
                 raise ValueError(f"subrecord_group count subrecord {group['count_subrecord']} is a member of another group in {group['record']}: {group['path']!r}")
             if group["count_subrecord"] and other["count_subrecord"] == group["count_subrecord"]:
                 raise ValueError(f"subrecord_group count subrecord {group['count_subrecord']} is shared by two groups in {group['record']}: {group['path']!r}")
@@ -535,27 +571,32 @@ def names_key(field):
     return tuple((entry["value"], entry["name"]) for entry in field["names"])
 
 
+def render_group_members(members, lines, defaults):
+    specs = []
+    for member in members:
+        spec = (f"Signature::from_string({cpp_string(member['subrecord'])}), "
+                f"{'true' if member['required'] else 'false'}, "
+                f"{'true' if member['repeatable'] else 'false'}, {member['payload_size']}, ")
+        if member["default"] is not None:
+            name = f"k_subrecord_group_default_{defaults[0]}"
+            defaults[0] += 1
+            body = ", ".join(f"0x{byte:02X}" for byte in member["default"])
+            lines.append(f"constexpr std::uint8_t {name}[] = {{{body}}};")
+            spec += f"std::span<const std::uint8_t>({name})"
+        else:
+            spec += "std::span<const std::uint8_t>{}"
+        spec += f", {'true' if member['localized'] else 'false'}"
+        spec += f", {'true' if member['skippable'] else 'false'}"
+        specs.append("{" + spec + "},")
+    return specs
+
+
 def render_subrecord_groups(groups):
     lines = []
     entries = []
-    defaults = 0
+    defaults = [0]
     for index, group in enumerate(groups):
-        members = []
-        for member in group["members"]:
-            spec = (f"Signature::from_string({cpp_string(member['subrecord'])}), "
-                    f"{'true' if member['required'] else 'false'}, "
-                    f"{'true' if member['repeatable'] else 'false'}, {member['payload_size']}, ")
-            if member["default"] is not None:
-                name = f"k_subrecord_group_default_{defaults}"
-                defaults += 1
-                body = ", ".join(f"0x{byte:02X}" for byte in member["default"])
-                lines.append(f"constexpr std::uint8_t {name}[] = {{{body}}};")
-                spec += f"std::span<const std::uint8_t>({name})"
-            else:
-                spec += "std::span<const std::uint8_t>{}"
-            spec += f", {'true' if member['localized'] else 'false'}"
-            spec += f", {'true' if member['skippable'] else 'false'}"
-            members.append("{" + spec + "},")
+        members = render_group_members(group["members"], lines, defaults)
         if group["successors"]:
             body = ", ".join(f"Signature::from_string({cpp_string(signature)})" for signature in group["successors"])
             lines.append(f"constexpr Signature k_subrecord_group_successors_{index}[] = {{{body}}};")
@@ -565,6 +606,17 @@ def render_subrecord_groups(groups):
         lines.append(f"constexpr SubrecordGroupMemberDescriptor k_subrecord_group_members_{index}[] = {{")
         lines.extend(members)
         lines.append("};")
+        if group["run"] is None:
+            run = "SubrecordGroupRunDescriptor{}"
+        else:
+            run_members = render_group_members(group["run"]["members"], lines, defaults)
+            lines.append(f"constexpr SubrecordGroupMemberDescriptor k_subrecord_group_run_members_{index}[] = {{")
+            lines.extend(run_members)
+            lines.append("};")
+            run = ("SubrecordGroupRunDescriptor{Signature::from_string(" +
+                   cpp_string(group["run"]["count_member"]) + "), " +
+                   f"std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_run_members_{index})" +
+                   "}")
         entries.append(
             "{" +
             f"Signature::from_string({cpp_string(group['record'])}), " +
@@ -573,7 +625,8 @@ def render_subrecord_groups(groups):
             (f"Signature::from_string({cpp_string(group['count_subrecord'])})"
              if group["count_subrecord"] else "Signature{}") + ", " +
             f"std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_{index}), " +
-            successors +
+            successors + ", " +
+            run +
             "},")
     if groups:
         lines.append(f"constexpr std::array<SubrecordGroupDescriptor, {len(groups)}> k_subrecord_groups{{{{")
