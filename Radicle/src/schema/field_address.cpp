@@ -90,7 +90,9 @@ FieldSlots resolve_field_slots(const Record& record,
   for (std::size_t i = 0; i < record.subrecords.size(); ++i) {
     if (record.subrecords[i].signature == shape.subrecord) candidates.push_back(i);
   }
-  if (auto scoped = behavior_field_candidates(record, shape.subrecord)) candidates = std::move(*scoped);
+  if (auto scoped = behavior_field_candidates(record, shape.subrecord, address.repeated)) {
+    candidates = std::move(*scoped);
+  }
   if (!address.repeated && candidates.size() > 1) {
     out.duplicate = true;
     return out;
