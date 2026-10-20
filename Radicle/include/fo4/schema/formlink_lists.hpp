@@ -75,6 +75,8 @@ struct FormLinkListDescriptor {
   // Constraint: a nonzero counter_offset is the u16 count at that offset inside the counter
   // subrecord, which must already exist and is never erased.
   std::size_t counter_offset{0};
+  // Invariant: element_tail subrecords directly follow an element and must move with it.
+  Signature element_tail{};
 };
 
 struct NestedFormLinkListDescriptor {

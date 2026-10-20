@@ -5878,6 +5878,390 @@
             {"path": "IMAD\\FadeColorBlue", "label": "Fade color blue", "offset": 12, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
             {"path": "IMAD\\FadeColorAlpha", "label": "Fade color alpha", "offset": 16, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
           ]
+        },
+        {
+          "path": "IMAD\\BlurRadiusInterpolators",
+          "label": "Blur radius interpolators",
+          "kind": "counted_array",
+          "subrecord": "BNAM",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\BlurRadiusTime", "label": "Blur radius time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\BlurRadiusValue", "label": "Blur radius value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\DoubleVisionStrengthInterpolators",
+          "label": "Double vision strength interpolators",
+          "kind": "counted_array",
+          "subrecord": "VNAM",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\DoubleVisionStrengthTime", "label": "Double vision strength time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\DoubleVisionStrengthValue", "label": "Double vision strength value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\RadialBlurStrengthInterpolators",
+          "label": "Radial blur strength interpolators",
+          "kind": "counted_array",
+          "subrecord": "RNAM",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\RadialBlurStrengthTime", "label": "Radial blur strength time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\RadialBlurStrengthValue", "label": "Radial blur strength value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\RadialBlurRampUpInterpolators",
+          "label": "Radial blur ramp up interpolators",
+          "kind": "counted_array",
+          "subrecord": "SNAM",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\RadialBlurRampUpTime", "label": "Radial blur ramp up time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\RadialBlurRampUpValue", "label": "Radial blur ramp up value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\RadialBlurStartInterpolators",
+          "label": "Radial blur start interpolators",
+          "kind": "counted_array",
+          "subrecord": "UNAM",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\RadialBlurStartTime", "label": "Radial blur start time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\RadialBlurStartValue", "label": "Radial blur start value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\RadialBlurRampDownInterpolators",
+          "label": "Radial blur ramp down interpolators",
+          "kind": "counted_array",
+          "subrecord": "NAM1",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\RadialBlurRampDownTime", "label": "Radial blur ramp down time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\RadialBlurRampDownValue", "label": "Radial blur ramp down value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\RadialBlurDownStartInterpolators",
+          "label": "Radial blur down start interpolators",
+          "kind": "counted_array",
+          "subrecord": "NAM2",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\RadialBlurDownStartTime", "label": "Radial blur down start time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\RadialBlurDownStartValue", "label": "Radial blur down start value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\DepthOfFieldStrengthInterpolators",
+          "label": "Depth of field strength interpolators",
+          "kind": "counted_array",
+          "subrecord": "WNAM",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\DepthOfFieldStrengthTime", "label": "Depth of field strength time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\DepthOfFieldStrengthValue", "label": "Depth of field strength value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\DepthOfFieldDistanceInterpolators",
+          "label": "Depth of field distance interpolators",
+          "kind": "counted_array",
+          "subrecord": "XNAM",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\DepthOfFieldDistanceTime", "label": "Depth of field distance time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\DepthOfFieldDistanceValue", "label": "Depth of field distance value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\DepthOfFieldRangeInterpolators",
+          "label": "Depth of field range interpolators",
+          "kind": "counted_array",
+          "subrecord": "YNAM",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\DepthOfFieldRangeTime", "label": "Depth of field range time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\DepthOfFieldRangeValue", "label": "Depth of field range value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\MotionBlurStrengthInterpolators",
+          "label": "Motion blur strength interpolators",
+          "kind": "counted_array",
+          "subrecord": "NAM4",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\MotionBlurStrengthTime", "label": "Motion blur strength time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\MotionBlurStrengthValue", "label": "Motion blur strength value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDREyeAdaptSpeedAddInterpolators",
+          "label": "HDR eye adapt speed add interpolators",
+          "kind": "counted_array",
+          "subrecord": "@IAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDREyeAdaptSpeedAddTime", "label": "HDR eye adapt speed add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDREyeAdaptSpeedAddValue", "label": "HDR eye adapt speed add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDRBloomBlurRadiusAddInterpolators",
+          "label": "HDR bloom blur radius add interpolators",
+          "kind": "counted_array",
+          "subrecord": "AIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDRBloomBlurRadiusAddTime", "label": "HDR bloom blur radius add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDRBloomBlurRadiusAddValue", "label": "HDR bloom blur radius add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDRBloomThresholdAddInterpolators",
+          "label": "HDR bloom threshold add interpolators",
+          "kind": "counted_array",
+          "subrecord": "BIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDRBloomThresholdAddTime", "label": "HDR bloom threshold add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDRBloomThresholdAddValue", "label": "HDR bloom threshold add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDRBloomScaleAddInterpolators",
+          "label": "HDR bloom scale add interpolators",
+          "kind": "counted_array",
+          "subrecord": "CIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDRBloomScaleAddTime", "label": "HDR bloom scale add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDRBloomScaleAddValue", "label": "HDR bloom scale add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDRTargetLumMinAddInterpolators",
+          "label": "HDR target lum min add interpolators",
+          "kind": "counted_array",
+          "subrecord": "DIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDRTargetLumMinAddTime", "label": "HDR target lum min add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDRTargetLumMinAddValue", "label": "HDR target lum min add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDRTargetLumMaxAddInterpolators",
+          "label": "HDR target lum max add interpolators",
+          "kind": "counted_array",
+          "subrecord": "EIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDRTargetLumMaxAddTime", "label": "HDR target lum max add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDRTargetLumMaxAddValue", "label": "HDR target lum max add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDRSunlightScaleAddInterpolators",
+          "label": "HDR sunlight scale add interpolators",
+          "kind": "counted_array",
+          "subrecord": "FIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDRSunlightScaleAddTime", "label": "HDR sunlight scale add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDRSunlightScaleAddValue", "label": "HDR sunlight scale add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDRSkyScaleAddInterpolators",
+          "label": "HDR sky scale add interpolators",
+          "kind": "counted_array",
+          "subrecord": "GIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDRSkyScaleAddTime", "label": "HDR sky scale add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDRSkyScaleAddValue", "label": "HDR sky scale add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDRUnused8AddInterpolators",
+          "label": "HDR unused 8 add interpolators",
+          "kind": "counted_array",
+          "subrecord": "HIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDRUnused8AddTime", "label": "HDR unused 8 add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDRUnused8AddValue", "label": "HDR unused 8 add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDRUnused9AddInterpolators",
+          "label": "HDR unused 9 add interpolators",
+          "kind": "counted_array",
+          "subrecord": "IIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDRUnused9AddTime", "label": "HDR unused 9 add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDRUnused9AddValue", "label": "HDR unused 9 add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDRUnused10AddInterpolators",
+          "label": "HDR unused 10 add interpolators",
+          "kind": "counted_array",
+          "subrecord": "JIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDRUnused10AddTime", "label": "HDR unused 10 add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDRUnused10AddValue", "label": "HDR unused 10 add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDRUnused11AddInterpolators",
+          "label": "HDR unused 11 add interpolators",
+          "kind": "counted_array",
+          "subrecord": "KIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDRUnused11AddTime", "label": "HDR unused 11 add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDRUnused11AddValue", "label": "HDR unused 11 add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDRUnused12AddInterpolators",
+          "label": "HDR unused 12 add interpolators",
+          "kind": "counted_array",
+          "subrecord": "LIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDRUnused12AddTime", "label": "HDR unused 12 add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDRUnused12AddValue", "label": "HDR unused 12 add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDRUnused13AddInterpolators",
+          "label": "HDR unused 13 add interpolators",
+          "kind": "counted_array",
+          "subrecord": "MIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDRUnused13AddTime", "label": "HDR unused 13 add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDRUnused13AddValue", "label": "HDR unused 13 add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDRUnused14AddInterpolators",
+          "label": "HDR unused 14 add interpolators",
+          "kind": "counted_array",
+          "subrecord": "NIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDRUnused14AddTime", "label": "HDR unused 14 add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDRUnused14AddValue", "label": "HDR unused 14 add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDRUnused15AddInterpolators",
+          "label": "HDR unused 15 add interpolators",
+          "kind": "counted_array",
+          "subrecord": "OIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDRUnused15AddTime", "label": "HDR unused 15 add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDRUnused15AddValue", "label": "HDR unused 15 add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\HDRUnused16AddInterpolators",
+          "label": "HDR unused 16 add interpolators",
+          "kind": "counted_array",
+          "subrecord": "PIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\HDRUnused16AddTime", "label": "HDR unused 16 add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\HDRUnused16AddValue", "label": "HDR unused 16 add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\CinematicSaturationAddInterpolators",
+          "label": "Cinematic saturation add interpolators",
+          "kind": "counted_array",
+          "subrecord": "QIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\CinematicSaturationAddTime", "label": "Cinematic saturation add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\CinematicSaturationAddValue", "label": "Cinematic saturation add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\CinematicBrightnessAddInterpolators",
+          "label": "Cinematic brightness add interpolators",
+          "kind": "counted_array",
+          "subrecord": "RIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\CinematicBrightnessAddTime", "label": "Cinematic brightness add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\CinematicBrightnessAddValue", "label": "Cinematic brightness add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\CinematicContrastAddInterpolators",
+          "label": "Cinematic contrast add interpolators",
+          "kind": "counted_array",
+          "subrecord": "SIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\CinematicContrastAddTime", "label": "Cinematic contrast add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\CinematicContrastAddValue", "label": "Cinematic contrast add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\CinematicUnusedAddInterpolators",
+          "label": "Cinematic unused add interpolators",
+          "kind": "counted_array",
+          "subrecord": "TIAD",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\CinematicUnusedAddTime", "label": "Cinematic unused add time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\CinematicUnusedAddValue", "label": "Cinematic unused add value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
         }
       ],
       "authoring": {
@@ -10329,7 +10713,24 @@
           "maximum": 255,
           "payload_size": 2,
           "insertion": "existing_only"
-        }
+        },
+        {"path": "REFR\\ActivateParentOnly", "label": "Parent activate only", "kind": "scalar", "subrecord": "XAPD", "storage": "u8", "presentation": "enum", "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "REFR\\ActivateParentDelay", "label": "Activate parent delay", "kind": "scalar", "subrecord": "XAPR", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 4, "repeated": true, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "REFR\\WaterCurrentLinearVelocityX", "label": "Linear velocity X", "kind": "scalar", "subrecord": "XCVL", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 0, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "REFR\\WaterCurrentLinearVelocityY", "label": "Linear velocity Y", "kind": "scalar", "subrecord": "XCVL", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 4, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "REFR\\WaterCurrentLinearVelocityZ", "label": "Linear velocity Z", "kind": "scalar", "subrecord": "XCVL", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 8, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "REFR\\WaterCurrentRotationalVelocityX", "label": "Rotational velocity X", "kind": "scalar", "subrecord": "XCVR", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 0, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "REFR\\WaterCurrentRotationalVelocityY", "label": "Rotational velocity Y", "kind": "scalar", "subrecord": "XCVR", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 4, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "REFR\\WaterCurrentRotationalVelocityZ", "label": "Rotational velocity Z", "kind": "scalar", "subrecord": "XCVR", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 8, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "REFR\\PowerGridCount", "label": "Power grid count", "kind": "scalar", "subrecord": "XWPG", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "repeated": true, "insertion": "existing_only"},
+        {"path": "REFR\\SplineSlack", "label": "Spline slack", "kind": "scalar", "subrecord": "XBSD", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 0, "minimum_payload_size": 20, "insertion": "existing_only"},
+        {"path": "REFR\\SplineThickness", "label": "Spline thickness", "kind": "scalar", "subrecord": "XBSD", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 4, "minimum_payload_size": 20, "insertion": "existing_only"},
+        {"path": "REFR\\SplineHalfExtentX", "label": "Spline half extent X", "kind": "scalar", "subrecord": "XBSD", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 8, "minimum_payload_size": 20, "insertion": "existing_only"},
+        {"path": "REFR\\SplineHalfExtentY", "label": "Spline half extent Y", "kind": "scalar", "subrecord": "XBSD", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 12, "minimum_payload_size": 20, "insertion": "existing_only"},
+        {"path": "REFR\\SplineHalfExtentZ", "label": "Spline half extent Z", "kind": "scalar", "subrecord": "XBSD", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 16, "minimum_payload_size": 20, "insertion": "existing_only"},
+        {"path": "REFR\\SplineWindDetachedEnd", "label": "Spline wind detached end", "kind": "scalar", "subrecord": "XBSD", "storage": "u8", "presentation": "enum", "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "minimum": 0, "maximum": 255, "offset": 20, "minimum_payload_size": 21, "insertion": "existing_only"},
+        {"path": "REFR\\DecalWidthScale", "label": "Decal width scale", "kind": "scalar", "subrecord": "XPDD", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 0, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "REFR\\DecalHeightScale", "label": "Decal height scale", "kind": "scalar", "subrecord": "XPDD", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 4, "payload_size": 8, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {"path": "REFR\\ReflectedBy", "label": "Reflected by", "subrecord": "XPWR", "offset": 0, "payload_sizes": [8, 4], "targets": ["ACHR", "REFR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
@@ -10547,9 +10948,21 @@
           ],
           "nullable": true,
           "insertion": "existing_only"
-        }
+        },
+        {"path": "REFR\\LinkedKeyword", "label": "Linked keyword", "subrecord": "XLKR", "offset": 0, "payload_sizes": [4, 8], "targets": ["KYWD", "PLYR", "ACHR", "REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"], "nullable": true, "repeated": true, "insertion": "existing_only"},
+        {"path": "REFR\\LinkedReference", "label": "Linked reference", "subrecord": "XLKR", "offset": 4, "payload_sizes": [8], "targets": ["PLYR", "ACHR", "REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"], "nullable": true, "repeated": true, "insertion": "existing_only"},
+        {"path": "REFR\\ActivateParentRef", "label": "Activate parent ref", "subrecord": "XAPR", "offset": 0, "payload_sizes": [8], "targets": ["PLYR", "ACHR", "REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"], "nullable": true, "repeated": true, "insertion": "existing_only"},
+        {"path": "REFR\\SplineConnection", "label": "Spline connection", "subrecord": "XPLK", "offset": 0, "payload_sizes": [8, 4], "targets": ["REFR", "ACHR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
+        {"path": "REFR\\PortalOrigin", "label": "Portal origin", "subrecord": "XPOD", "offset": 0, "stride": 8, "targets": ["REFR"], "nullable": true, "insertion": "existing_only"},
+        {"path": "REFR\\PortalDestination", "label": "Portal destination", "subrecord": "XPOD", "offset": 4, "stride": 8, "targets": ["REFR"], "nullable": true, "insertion": "existing_only"},
+        {"path": "REFR\\PowerGridNode1", "label": "Power grid node 1", "subrecord": "XWPN", "offset": 0, "payload_sizes": [12], "targets": ["REFR", "ACHR"], "nullable": true, "repeated": true, "insertion": "existing_only"},
+        {"path": "REFR\\PowerGridNode2", "label": "Power grid node 2", "subrecord": "XWPN", "offset": 4, "payload_sizes": [12], "targets": ["REFR", "ACHR"], "nullable": true, "repeated": true, "insertion": "existing_only"},
+        {"path": "REFR\\PowerGridLine", "label": "Power grid line", "subrecord": "XWPN", "offset": 8, "payload_sizes": [12], "targets": ["REFR"], "nullable": true, "repeated": true, "insertion": "existing_only"}
       ],
-      "localized_subrecords": []
+      "localized_subrecords": [],
+      "formlink_lists": [
+        {"path": "REFR\\LocationRefTypes", "label": "Location ref types", "subrecord": "XLRT", "storage": "packed_array", "targets": ["LCRT"], "nullable": true, "mutation": "existing_only"}
+      ]
     },
     {
       "signature": "PARW",
@@ -20944,6 +21357,17 @@
           "kind": "string",
           "subrecord": "BNAM",
           "insertion": "existing_only"
+        },
+        {
+          "path": "MUST\\CuePoints",
+          "label": "Cue points",
+          "kind": "counted_array",
+          "subrecord": "FNAM",
+          "stride": 4,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "MUST\\CuePoint", "label": "Cue point", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
         }
       ],
       "formlink_lists": [
@@ -20990,6 +21414,11 @@
             "minimum": 0,
             "maximum": 1,
             "default": "000000000000000000000000"
+          },
+          {
+            "signature": "FNAM",
+            "minimum": 0,
+            "maximum": 1
           },
           {
             "signature": "CITC",
@@ -22608,6 +23037,11 @@
             "minimum": 1,
             "maximum": 1,
             "default": "00000000"
+          },
+          {
+            "signature": "NNAM",
+            "minimum": 0,
+            "maximum": 65535
           }
         ]
       },
@@ -22706,6 +23140,9 @@
           "nullable": true,
           "insertion": "existing_only"
         }
+      ],
+      "formlink_lists": [
+        {"path": "SMQN\\Quests", "label": "Quests", "subrecord": "NNAM", "counter": "QNAM", "element_tail": "RNAM", "targets": ["QUST"], "nullable": false, "mutation": "existing_only"}
       ],
       "localized_subrecords": []
     },
@@ -33128,8 +33565,10 @@
         {"path": "ACHR\\OwnerRank", "label": "Faction rank", "kind": "scalar", "subrecord": "XRNK", "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "insertion": "existing_only"},
         {"path": "ACHR\\OwnerNoCrime", "label": "No Crime", "kind": "scalar", "subrecord": "XOWN", "offset": 8, "storage": "u8", "presentation": "enum", "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "minimum": 0, "maximum": 255, "payload_size": 12, "insertion": "existing_only"},
         {"path": "ACHR\\ParentActivateOnly", "label": "Parent activate only", "kind": "scalar", "subrecord": "XAPD", "storage": "u8", "presentation": "enum", "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "minimum": 0, "maximum": 255, "insertion": "existing_only"},
-        {"path": "ACHR\\ActivateParentDelay", "label": "Activate parent delay", "kind": "scalar", "subrecord": "XAPR", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "insertion": "existing_only"},
-        {"path": "ACHR\\Comments", "label": "Comments", "kind": "string", "subrecord": "MNAM", "insertion": "existing_only"}
+        {"path": "ACHR\\ActivateParentDelay", "label": "Activate parent delay", "kind": "scalar", "subrecord": "XAPR", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "ACHR\\Comments", "label": "Comments", "kind": "string", "subrecord": "MNAM", "insertion": "existing_only"},
+        {"path": "ACHR\\WaterCurrentVelocityCount", "label": "Velocity count", "kind": "scalar", "subrecord": "XWCN", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"},
+        {"path": "ACHR\\WaterCurrentVelocities", "label": "Velocities", "kind": "counted_array", "subrecord": "XWCU", "count_subrecord": "XWCN", "stride": 16, "insertion": "existing_only", "members": [{"path": "ACHR\\WaterCurrentVelocityX", "label": "Velocity X", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}, {"path": "ACHR\\WaterCurrentVelocityY", "label": "Velocity Y", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}, {"path": "ACHR\\WaterCurrentVelocityZ", "label": "Velocity Z", "offset": 8, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}, {"path": "ACHR\\WaterCurrentUnnamed", "label": "Unnamed float", "offset": 12, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}]}
       ],
       "formlink_fields": [
         {"path": "ACHR\\LitWater", "label": "Lit water", "subrecord": "XLTW", "offset": 0, "payload_sizes": [4], "targets": ["ACHR", "REFR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
@@ -33151,7 +33590,8 @@
         {"path": "ACHR\\LocationReference", "label": "Location reference", "subrecord": "XLRL", "offset": 0, "payload_sizes": [4], "targets": ["LCRT", "LCTN"], "nullable": true, "insertion": "existing_only"},
         {"path": "ACHR\\LinkedReferenceKeyword", "label": "Linked reference keyword or reference", "subrecord": "XLKR", "offset": 0, "payload_sizes": [4, 8], "targets": ["KYWD", "PLYR", "ACHR", "REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"], "nullable": true, "repeated": true, "insertion": "existing_only"},
         {"path": "ACHR\\LinkedReference", "label": "Linked reference", "subrecord": "XLKR", "offset": 4, "payload_sizes": [8], "targets": ["PLYR", "ACHR", "REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"], "nullable": true, "repeated": true, "insertion": "existing_only"},
-        {"path": "ACHR\\ActivateParent", "label": "Activate parent", "subrecord": "XAPR", "offset": 0, "payload_sizes": [8], "targets": ["PLYR", "ACHR", "REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"], "nullable": true, "repeated": true, "insertion": "existing_only"}
+        {"path": "ACHR\\ActivateParent", "label": "Activate parent", "subrecord": "XAPR", "offset": 0, "payload_sizes": [8], "targets": ["PLYR", "ACHR", "REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"], "nullable": true, "repeated": true, "insertion": "existing_only"},
+        {"path": "ACHR\\SplineConnection", "label": "Spline connection", "subrecord": "XPLK", "offset": 0, "payload_sizes": [8, 4], "targets": ["REFR", "ACHR"], "nullable": false, "repeated": true, "insertion": "existing_only"}
       ],
       "formlink_lists": [
         {"path": "ACHR\\LocationRefTypes", "label": "Location ref types", "subrecord": "XLRT", "targets": ["LCRT"], "nullable": true, "storage": "packed_array", "mutation": "existing_neighbors"}

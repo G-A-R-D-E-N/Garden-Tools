@@ -20,6 +20,8 @@
 namespace fo4::schema {
 namespace {
 
+using detail::erase_list_element;
+using detail::move_list_element;
 using detail::packed_segment;
 using detail::reconcile_counter;
 
@@ -624,9 +626,9 @@ FormLinkListMutationStatus remove_record_formlink_list_element(
     return FormLinkListMutationStatus::index_out_of_range;
   }
 
-  record->subrecords.erase(
-      record->subrecords.begin() + static_cast<std::ptrdiff_t>(positions[index]));
-  reconcile_counter(*record, descriptor, static_cast<std::uint32_t>(positions.size() - 1));
+  erase_list_element(*record, descriptor, positions[index]);
+  reconcile_counter(*record, descriptor,
+                    static_cast<std::uint32_t>(positions.size() - 1));
   fo4::detail::mark_record_modified(next, *record);
   plugin = std::move(next);
   return FormLinkListMutationStatus::updated;
@@ -661,8 +663,7 @@ std::size_t remove_record_formlink_list_elements_matching(
   if (victims.empty()) return 0;
 
   for (auto it = victims.rbegin(); it != victims.rend(); ++it) {
-    record->subrecords.erase(
-        record->subrecords.begin() + static_cast<std::ptrdiff_t>(*it));
+    erase_list_element(*record, descriptor, *it);
   }
   reconcile_counter(*record, descriptor,
                     static_cast<std::uint32_t>(positions.size() - victims.size()));
@@ -694,19 +695,7 @@ FormLinkListMutationStatus move_record_formlink_list_element(
   }
   if (from == to) return FormLinkListMutationStatus::unchanged;
 
-  auto moving = record->subrecords[positions[from]].data;
-  if (from < to) {
-    for (std::size_t index = from; index < to; ++index) {
-      record->subrecords[positions[index]].data =
-          record->subrecords[positions[index + 1]].data;
-    }
-  } else {
-    for (std::size_t index = from; index > to; --index) {
-      record->subrecords[positions[index]].data =
-          record->subrecords[positions[index - 1]].data;
-    }
-  }
-  record->subrecords[positions[to]].data = std::move(moving);
+  move_list_element(*record, descriptor, positions, from, to);
   fo4::detail::mark_record_modified(next, *record);
   plugin = std::move(next);
   return FormLinkListMutationStatus::updated;
@@ -730,8 +719,7 @@ FormLinkListMutationStatus clear_record_formlink_list(
   const auto positions = matching_positions(*record, descriptor);
   if (positions.empty()) return FormLinkListMutationStatus::unchanged;
   for (auto it = positions.rbegin(); it != positions.rend(); ++it) {
-    record->subrecords.erase(
-        record->subrecords.begin() + static_cast<std::ptrdiff_t>(*it));
+    erase_list_element(*record, descriptor, *it);
   }
   reconcile_counter(*record, descriptor, 0);
   fo4::detail::mark_record_modified(next, *record);
