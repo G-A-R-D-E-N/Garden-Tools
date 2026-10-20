@@ -104,6 +104,90 @@ std::span<const std::byte> slot_string_bytes(std::span<const std::byte> payload,
   return slot.first(static_cast<std::size_t>(terminator - slot.begin()) + 1);
 }
 
+struct SegmentLayout {
+  std::size_t count_word{0};
+  std::size_t stride{0};
+  bool operator==(const SegmentLayout&) const = default;
+};
+
+using SegmentLayouts = std::array<SegmentLayout, k_max_header_counters>;
+
+bool record_segment_layouts(Signature record, Signature subrecord, std::size_t segment_count,
+                            SegmentLayouts& layouts) {
+  if (segment_count == 0 || segment_count > k_max_header_counters) return false;
+  std::size_t found = 0;
+  for (const auto& array : k_counted_arrays) {
+    if (array.record != record || array.subrecord != subrecord || array.segment_count == 0) continue;
+    if (array.segment_index >= segment_count || array.stride == 0 ||
+        layouts[array.segment_index].stride != 0) {
+      return false;
+    }
+    layouts[array.segment_index] = SegmentLayout{array.count_word, array.stride};
+    ++found;
+  }
+  return found == segment_count;
+}
+
+// Constraint: one payload subrecord carries one segment layout in every record that declares it.
+bool shared_segment_layouts(Signature subrecord, std::size_t segment_count,
+                            SegmentLayouts& layouts) {
+  bool found = false;
+  Signature source{};
+  for (const auto& array : k_counted_arrays) {
+    if (array.subrecord != subrecord || array.segment_count != segment_count) continue;
+    if (found && array.record == source) continue;
+    SegmentLayouts candidate{};
+    if (!record_segment_layouts(array.record, subrecord, segment_count, candidate)) return false;
+    if (!found) {
+      layouts = candidate;
+      source = array.record;
+      found = true;
+    } else if (candidate != layouts) {
+      return false;
+    }
+  }
+  return found;
+}
+
+std::optional<SegmentSpan> segment_span(std::span<const std::byte> payload,
+                                        const SegmentLayouts& layouts,
+                                        const FieldAddress& address) {
+  const auto& segment = address.segment;
+  if (segment.count == 0 || segment.count > k_max_header_counters || address.stride == 0 ||
+      segment.index >= segment.count || payload.size() < 4 ||
+      layouts[segment.index].stride != address.stride ||
+      layouts[segment.index].count_word != segment.count_word) {
+    return std::nullopt;
+  }
+  const auto header_words = read_u32(payload);
+  if (header_words == 0 || header_words > k_max_header_counters) return std::nullopt;
+  const std::size_t header_size = 4 * (1 + header_words);
+  if (payload.size() < header_size) return std::nullopt;
+
+  std::size_t base = header_size;
+  std::optional<SegmentSpan> ours;
+  for (std::size_t index = 0; index < segment.count; ++index) {
+    const auto count_word = layouts[index].count_word;
+    if (count_word >= header_words) continue;
+    const auto count = static_cast<std::size_t>(read_u32(payload.subspan(4 * (count_word + 1))));
+    if (count > (payload.size() - base) / layouts[index].stride) return std::nullopt;
+    if (index == segment.index) ours = SegmentSpan{base, count};
+    base += count * layouts[index].stride;
+  }
+  if (!ours || base != payload.size()) return std::nullopt;
+  return ours;
+}
+
+std::optional<SegmentSpan> descriptor_segment(std::span<const std::byte> payload,
+                                              const ScalarDescriptor& descriptor) {
+  if (descriptor.address.segment.count == 0) return std::nullopt;
+  SegmentLayouts layouts{};
+  if (!shared_segment_layouts(descriptor.subrecord, descriptor.address.segment.count, layouts)) {
+    return std::nullopt;
+  }
+  return segment_span(payload, layouts, descriptor.address);
+}
+
 }  // namespace
 
 std::optional<ScalarDescriptor> scalar_descriptor(Signature subrecord) noexcept {
@@ -141,8 +225,14 @@ std::span<const std::byte> scalar_field_bytes(std::span<const std::byte> payload
   }
   if (descriptor.payload_size != 0 && payload.size() != descriptor.payload_size) return {};
   if (payload.size() < descriptor.minimum_payload_size) return {};
-  if (payload.size() < descriptor.offset + width) return {};
-  return payload.subspan(descriptor.offset, width);
+  std::size_t offset = descriptor.offset;
+  if (descriptor.address.segment.count != 0) {
+    const auto segment = descriptor_segment(payload, descriptor);
+    if (!segment || segment->count == 0) return {};
+    offset += segment->base;
+  }
+  if (payload.size() < offset + width) return {};
+  return payload.subspan(offset, width);
 }
 
 FieldShape scalar_field_shape(const ScalarDescriptor& descriptor) noexcept {
@@ -180,7 +270,15 @@ void patch_scalar_field(std::span<std::byte> payload,
   if (encoded.size() != width) {
     throw ScalarError(std::string(descriptor.field_name) + " encoded to the wrong width");
   }
-  const auto offset = descriptor.embedded ? descriptor.offset : std::size_t{0};
+  std::size_t offset = descriptor.embedded ? descriptor.offset : std::size_t{0};
+  if (descriptor.address.segment.count != 0) {
+    const auto segment = descriptor_segment(payload, descriptor);
+    if (!segment || segment->count == 0) {
+      throw ScalarError(std::string(descriptor.field_name) +
+                        " does not fit in the subrecord payload");
+    }
+    offset += segment->base;
+  }
   if (payload.size() < descriptor.minimum_payload_size || payload.size() < offset + width) {
     throw ScalarError(std::string(descriptor.field_name) +
                       " does not fit in the subrecord payload");
@@ -224,6 +322,17 @@ std::optional<CountedArrayDescriptor> counted_array_descriptor(Signature record,
     if (array.record == record && array.path == path) return array;
   }
   return std::nullopt;
+}
+
+std::optional<SegmentSpan> header_segment(std::span<const std::byte> payload,
+                                          Signature record,
+                                          Signature subrecord,
+                                          const FieldAddress& address) {
+  SegmentLayouts layouts{};
+  if (!record_segment_layouts(record, subrecord, address.segment.count, layouts)) {
+    return std::nullopt;
+  }
+  return segment_span(payload, layouts, address);
 }
 
 bool is_counted_array_count_subrecord(Signature record, Signature subrecord) noexcept {

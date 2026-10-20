@@ -78,6 +78,10 @@ public:
   using std::runtime_error::runtime_error;
 };
 
+// Constraint: xEdit wbModelInfoDecider (Core/wbDefinitionsCommon.pas:5646) allows at
+// most eight counter words, and a larger first word must be a different format.
+inline constexpr std::size_t k_max_header_counters = 8;
+
 struct CountedArrayDescriptor {
   Signature record{};
   std::string_view path;
@@ -85,6 +89,11 @@ struct CountedArrayDescriptor {
   Signature subrecord{};
   Signature count_subrecord{};
   std::size_t stride{0};
+  // Constraint: segment_count 0 means a plain payload; otherwise the array is one of
+  // segment_count header-counted segments that must share one payload.
+  std::size_t count_word{0};
+  std::size_t segment_index{0};
+  std::size_t segment_count{0};
 };
 
 class CountedArrayError : public std::runtime_error {
@@ -129,6 +138,12 @@ std::size_t scalar_storage_size(ScalarStorage storage) noexcept;
 std::optional<CountedArrayDescriptor> counted_array_descriptor(Signature record,
                                                                std::string_view path) noexcept;
 bool is_counted_array_count_subrecord(Signature record, Signature subrecord) noexcept;
+
+// Constraint: nullopt when the payload is not the modelled arm, never a partial read.
+std::optional<SegmentSpan> header_segment(std::span<const std::byte> payload,
+                                          Signature record,
+                                          Signature subrecord,
+                                          const FieldAddress& address);
 std::optional<SubrecordGroupDescriptor> subrecord_group_descriptor(Signature record,
                                                                    std::string_view path) noexcept;
 std::optional<SubrecordGroupDescriptor> subrecord_group_for_member(Signature record,
