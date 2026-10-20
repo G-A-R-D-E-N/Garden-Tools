@@ -71,7 +71,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | CLMT | 6115 | 7 | 3 | 2 | - | - | yes | - | environment/base_records | - | 2 | L4 |
 | CMPO | 12294 | 7 | - | 3 | - | 1 | yes | - | - | - | 1 | L4 |
 | COBJ | 10266 | 2 | - | 5 | 1 | 1 | yes | - | forms/components | yes | - | L4 |
-| COLL | 9547 | 3 | 1 | - | - | 1 | yes | - | - | yes | 2 | L4 |
+| COLL | 9547 | 6 | 1 | - | 1 | 1 | yes | - | - | yes | 2 | L4 |
 | CONT | 6176 | 24 | 3 | 14 | - | 1 | yes | yes | - | - | 1 | L4 |
 | CPTH | 7930 | 1 | - | 2 | 1 | - | yes | - | - | - | 1 | L4 |
 | CSTY | 6233 | 49 | - | - | - | - | yes | - | environment/behavior | - | 2 | L4 |
@@ -142,7 +142,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | NOTE | 12470 | 9 | 3 | 7 | - | 1 | yes | - | - | - | 1 | L4 |
 | NPC_ | 10286 | 86 | 4 | 57 | 1 | 3 | yes | yes | forms/npc | yes | 1 | L4 |
 | OMOD | 12501 | 8 | 1 | 2 | 2 | 2 | yes | - | - | yes | - | L4 |
-| OTFT | 9357 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
+| OTFT | 9357 | - | - | - | 1 | - | yes | - | - | yes | 1 | L4 |
 | OVIS | 12546 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
 | PACK | 10526 | 24 | - | 12 | - | - | yes | - | environment/behavior | - | 3 | L4 |
 | PARW | 5944 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
@@ -168,7 +168,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | SCCO | 12593 | 2 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | SCEN | 8879 | 7 | 1 | - | - | - | yes | yes | environment/dialogue | - | 2 | L4 |
 | SCOL | 12627 | 6 | 2 | 2 | - | 1 | yes | - | forms/static_collection | - | - | L4 |
-| SCSN | 12650 | 1 | - | - | - | - | yes | - | - | yes | 1 | L4 |
+| SCSN | 12650 | 2 | - | 1 | - | - | yes | - | - | yes | 1 | L4 |
 | SMBN | 8720 | 2 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | SMEN | 8762 | 3 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | SMQN | 8735 | 4 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
@@ -225,7 +225,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | CLMT | 7 | - | - | - | 3 | i32, u8 | - | 3 | - | existing_only |
 | CMPO | 7 | - | - | - | - | i16, u32 | - | - | - | existing_only |
 | COBJ | 2 | - | - | - | - | u16 | - | - | - | existing_only |
-| COLL | 2 | - | - | 1 | 1 | u32 | - | - | - | existing_only |
+| COLL | 5 | - | - | 1 | 1 | u32, u8 | - | - | - | existing_only |
 | CONT | 19 | 1 | - | 4 | 3 | f32, i16, i32, u32, u8 | 14 | 4 | - | existing_only |
 | CPTH | - | - | - | 1 | - | u8 | - | - | - | existing_only |
 | CSTY | 49 | - | - | - | - | f32, u32 | - | - | - | existing_only |
@@ -321,7 +321,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | SCCO | 2 | - | - | - | - | i32 | 3 | - | - | existing_only |
 | SCEN | 7 | - | - | - | 1 | f32, u32 | - | - | - | existing_only |
 | SCOL | 6 | - | - | - | 2 | i16 | 1 | - | - | existing_only |
-| SCSN | 1 | - | - | - | - | u16 | - | - | - | existing_only |
+| SCSN | 2 | - | - | - | - | f32, u16 | 2 | - | - | existing_only |
 | SMBN | 1 | - | - | 1 | - | u32 | - | - | - | existing_only |
 | SMEN | 1 | - | 1 | 1 | - | u32 | - | - | - | existing_only |
 | SMQN | 3 | - | - | 1 | - | f32, u32 | - | - | - | existing_only |
