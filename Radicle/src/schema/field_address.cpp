@@ -34,17 +34,39 @@ bool listed(const FieldDiscriminator& when, std::optional<std::int64_t> value) {
   return found != when.negated;
 }
 
-bool record_discriminator_matches(const Record& record, const FieldDiscriminator& when) {
-  const Subrecord* found = nullptr;
+bool record_discriminator_matches(const Record& record,
+                                  const FieldDiscriminator& when,
+                                  std::size_t ordinal) {
+  std::size_t seen = 0;
   for (const auto& subrecord : record.subrecords) {
     if (subrecord.signature != when.subrecord) continue;
-    if (found != nullptr) return false;
-    found = &subrecord;
+    if (seen++ != ordinal) continue;
+    return listed(when, read_discriminator(subrecord.data, 0, when));
   }
-  if (found == nullptr) return when.match_absent;
-  return listed(when, read_discriminator(found->data, 0, when));
+  return when.match_absent;
 }
 
+std::size_t count_occurrences(const Record& record, Signature signature) {
+  std::size_t count = 0;
+  for (const auto& subrecord : record.subrecords) {
+    if (subrecord.signature == signature) ++count;
+  }
+  return count;
+}
+
+std::size_t ordinal_of(const Record& record, Signature signature, std::size_t index) {
+  std::size_t ordinal = 0;
+  for (std::size_t i = 0; i < index && i < record.subrecords.size(); ++i) {
+    if (record.subrecords[i].signature == signature) ++ordinal;
+  }
+  return ordinal;
+}
+
+}
+
+bool record_discriminator_matches(const Record& record, const FieldDiscriminator& when) {
+  if (count_occurrences(record, when.subrecord) > 1) return false;
+  return record_discriminator_matches(record, when, 0);
 }
 
 std::size_t discriminator_width(DiscriminatorStorage storage) noexcept {
@@ -77,7 +99,23 @@ FieldSlots resolve_field_slots(const Record& record,
   const auto& when = address.when;
   const bool guarded = when.count != 0;
   const bool external = guarded && when.subrecord.packed() != 0;
-  const bool external_ok = !external || record_discriminator_matches(record, when);
+  std::size_t source_count = 0;
+  std::size_t own_count = 0;
+  if (external) {
+    source_count = count_occurrences(record, when.subrecord);
+    if (source_count > 1) own_count = count_occurrences(record, shape.subrecord);
+  }
+  const bool per_ordinal = source_count > 1;
+  const bool ordinal_aligned = !per_ordinal || own_count == source_count;
+  const bool record_guard = !external || per_ordinal || record_discriminator_matches(record, when, 0);
+
+  const auto guard_passes = [&](std::size_t index, std::span<const std::byte> data, std::size_t base) {
+    if (!guarded) return true;
+    if (!external) return listed(when, read_discriminator(data, base, when));
+    if (!per_ordinal) return record_guard;
+    if (!ordinal_aligned) return false;
+    return record_discriminator_matches(record, when, ordinal_of(record, shape.subrecord, index));
+  };
 
   for (const auto index : candidates) {
     const auto& data = record.subrecords[index].data;
@@ -97,12 +135,11 @@ FieldSlots resolve_field_slots(const Record& record,
 
     if (shape.whole_payload) {
       FieldSlot slot{index, 0, false, false};
-      const bool guard_passes =
-          external_ok && (!guarded || external || listed(when, read_discriminator(data, 0, when)));
-      if (shape.width != 0 && data.size() != shape.width && guard_passes) {
+      const bool passes = guard_passes(index, data, 0);
+      if (shape.width != 0 && data.size() != shape.width && passes) {
         out.malformed = true;
       } else {
-        slot.valid = sized && guard_passes;
+        slot.valid = sized && passes;
       }
       out.slots.push_back(slot);
       continue;
@@ -126,7 +163,7 @@ FieldSlots resolve_field_slots(const Record& record,
       const auto start = first + element * step;
       const auto offset = start + shape.offset;
       FieldSlot slot{index, offset, false, false};
-      if (sized && external_ok && (!guarded || external || listed(when, read_discriminator(data, start, when)))) {
+      if (sized && guard_passes(index, data, start)) {
         if (offset > data.size() || data.size() - offset < shape.width) {
           slot.misfit = true;
         } else {

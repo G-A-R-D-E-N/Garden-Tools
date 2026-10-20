@@ -49,7 +49,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | ACHR | 4483 | 21 | - | 17 | - | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
 | ACTI | 5611 | 22 | 3 | 14 | - | 2 | yes | yes | environment/base_records | yes | 1 | L4 |
 | ADDN | 7796 | 9 | 1 | 3 | - | - | yes | - | - | - | 1 | L4 |
-| AECH | 12206 | 2 | - | - | - | - | yes | - | - | - | 1 | L4 |
+| AECH | 12206 | 12 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | ALCH | 5691 | 22 | 5 | 11 | - | 3 | yes | yes | - | yes | 1 | L4 |
 | AMDL | 12246 | 16 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | AMMO | 5741 | 23 | 4 | 9 | - | 3 | yes | yes | - | - | 1 | L4 |
@@ -71,7 +71,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | CLMT | 6115 | 7 | 3 | 2 | - | - | yes | - | environment/base_records | - | 2 | L4 |
 | CMPO | 12294 | 7 | - | 3 | - | 1 | yes | - | - | - | 1 | L4 |
 | COBJ | 10266 | 2 | - | 5 | 1 | 1 | yes | - | forms/components | yes | - | L4 |
-| COLL | 9547 | 3 | 1 | - | - | 1 | yes | - | - | yes | 2 | L4 |
+| COLL | 9547 | 6 | 1 | - | 1 | 1 | yes | - | - | yes | 2 | L4 |
 | CONT | 6176 | 24 | 3 | 14 | - | 1 | yes | yes | - | - | 1 | L4 |
 | CPTH | 7930 | 1 | - | 2 | 1 | - | yes | - | - | - | 1 | L4 |
 | CSTY | 6233 | 49 | - | - | - | - | yes | - | environment/behavior | - | 2 | L4 |
@@ -140,9 +140,9 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | NAVM | 7212 | - | - | - | - | - | yes | - | environment/navmesh | yes | 2 | L4 |
 | NOCM | 12453 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
 | NOTE | 12470 | 9 | 3 | 7 | - | 1 | yes | - | - | - | 1 | L4 |
-| NPC_ | 10286 | 85 | 4 | 55 | 3 | 3 | yes | yes | forms/npc | yes | 1 | L4 |
+| NPC_ | 10286 | 86 | 4 | 55 | 3 | 3 | yes | yes | forms/npc | yes | 1 | L4 |
 | OMOD | 12501 | 8 | 1 | 2 | 2 | 2 | yes | - | - | yes | - | L4 |
-| OTFT | 9357 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
+| OTFT | 9357 | - | - | - | 1 | - | yes | - | - | yes | 1 | L4 |
 | OVIS | 12546 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
 | PACK | 10526 | 24 | - | 12 | - | - | yes | - | environment/behavior | - | 3 | L4 |
 | PARW | 5944 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
@@ -158,9 +158,9 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | PMIS | 5951 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
 | PROJ | 7115 | 33 | 4 | 15 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
 | QUST | 10684 | 5 | 4 | 3 | 1 | 3 | yes | - | forms/quest_alias_edit, forms/quest_aliases_decode, forms/quest_objectives, forms/quest_stages | - | 7 | L4 |
-| RACE | 11054 | 112 | 12 | 42 | 9 | 5 | yes | yes | forms/race, forms/race_body | yes | 1 | L4 |
+| RACE | 11054 | 112 | 13 | 42 | 9 | 5 | yes | yes | forms/race, forms/race_body | yes | 1 | L4 |
 | REFR | 11347 | 35 | - | 16 | - | - | yes | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
-| REGN | 11870 | 9 | - | 2 | - | 1 | yes | - | - | yes | - | L4 |
+| REGN | 11870 | 12 | 1 | 7 | - | 1 | yes | - | - | yes | - | L4 |
 | RELA | 8848 | 2 | - | 3 | - | - | yes | - | - | - | 1 | L4 |
 | REVB | 9593 | 13 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | RFCT | 6163 | 1 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
@@ -168,7 +168,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | SCCO | 12593 | 2 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | SCEN | 8879 | 7 | 1 | - | - | - | yes | yes | environment/dialogue | - | 2 | L4 |
 | SCOL | 12627 | 6 | 2 | 2 | - | 1 | yes | - | forms/static_collection | - | - | L4 |
-| SCSN | 12650 | 1 | - | - | - | - | yes | - | - | yes | 1 | L4 |
+| SCSN | 12650 | 2 | - | 1 | - | - | yes | - | - | yes | 1 | L4 |
 | SMBN | 8720 | 2 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | SMEN | 8762 | 3 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | SMQN | 8735 | 4 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
@@ -203,7 +203,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | ACHR | 14 | 1 | 3 | 3 | - | f32, i32, u32, u8 | 3 | 7 | - | existing_only |
 | ACTI | 18 | 1 | - | 3 | 3 | f32, i16, i32, u16, u32, u8 | 12 | 4 | - | existing_only |
 | ADDN | 8 | - | 1 | - | 1 | i16, u16, u32 | - | - | - | existing_only |
-| AECH | - | - | 2 | - | - | u32 | 2 | - | - | existing_only |
+| AECH | 9 | - | 3 | - | - | f32, u32 | 12 | - | 10 | existing_only |
 | ALCH | 18 | 1 | - | 3 | 5 | f32, i16, i32, u32, u8 | 12 | 2 | - | existing_only |
 | AMDL | 16 | - | - | - | - | f32, u32 | - | - | - | existing_only |
 | AMMO | 19 | 1 | - | 3 | 4 | f32, i16, i32, u32, u8 | 12 | 2 | - | existing_only |
@@ -225,7 +225,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | CLMT | 7 | - | - | - | 3 | i32, u8 | - | 3 | - | existing_only |
 | CMPO | 7 | - | - | - | - | i16, u32 | - | - | - | existing_only |
 | COBJ | 2 | - | - | - | - | u16 | - | - | - | existing_only |
-| COLL | 2 | - | - | 1 | 1 | u32 | - | - | - | existing_only |
+| COLL | 5 | - | - | 1 | 1 | u32, u8 | - | - | - | existing_only |
 | CONT | 19 | 1 | - | 4 | 3 | f32, i16, i32, u32, u8 | 14 | 4 | - | existing_only |
 | CPTH | - | - | - | 1 | - | u8 | - | - | - | existing_only |
 | CSTY | 49 | - | - | - | - | f32, u32 | - | - | - | existing_only |
@@ -293,7 +293,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | NAVM | - | - | - | - | - | - | - | - | - | - |
 | NOCM | - | - | - | - | - | - | - | - | - | - |
 | NOTE | 8 | - | 1 | - | 3 | f32, i16, u32, u8 | - | - | 3 | existing_only |
-| NPC_ | 70 | 1 | 9 | 5 | 4 | f32, i16, i32, u16, u32, u8 | 46 | 4 | - | existing_only |
+| NPC_ | 71 | 1 | 9 | 5 | 4 | f32, i16, i32, u16, u32, u8 | 46 | 4 | - | existing_only |
 | OMOD | 5 | - | 3 | - | 1 | u32, u8 | - | - | - | existing_only |
 | OTFT | - | - | - | - | - | - | - | - | - | - |
 | OVIS | - | - | - | - | - | - | - | - | - | - |
@@ -311,9 +311,9 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | PMIS | 11 | 1 | 1 | 2 | - | f32, i32, u32, u8 | 2 | - | - | existing_only |
 | PROJ | 30 | 1 | - | 2 | 4 | f32, i16, i32, u16, u32, u8 | 12 | 2 | - | existing_only |
 | QUST | 2 | - | 2 | 1 | 4 | f32, u16, u32, u8 | - | - | - | existing_only |
-| RACE | 100 | - | 9 | 3 | 12 | f32, i16, i32, u16, u32, u8 | 80 | 3 | - | existing_only |
+| RACE | 100 | - | 9 | 3 | 13 | f32, i16, i32, u16, u32, u8 | 81 | 3 | - | existing_only |
 | REFR | 28 | 1 | 3 | 3 | - | f32, i32, u32, u8 | 5 | 11 | - | existing_only |
-| REGN | 8 | - | 1 | - | - | f32, u32, u8 | 7 | - | - | existing_only |
+| REGN | 9 | - | 2 | 1 | 1 | f32, u32, u8 | 7 | 8 | - | existing_only |
 | RELA | - | - | 1 | 1 | - | u8 | - | - | - | existing_only |
 | REVB | 12 | - | 1 | - | - | i8, u16, u32, u8 | - | - | - | existing_only |
 | RFCT | - | - | - | 1 | - | u32 | - | - | - | existing_only |
@@ -321,7 +321,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | SCCO | 2 | - | - | - | - | i32 | 3 | - | - | existing_only |
 | SCEN | 7 | - | - | - | 1 | f32, u32 | - | - | - | existing_only |
 | SCOL | 6 | - | - | - | 2 | i16 | 1 | - | - | existing_only |
-| SCSN | 1 | - | - | - | - | u16 | - | - | - | existing_only |
+| SCSN | 2 | - | - | - | - | f32, u16 | 2 | - | - | existing_only |
 | SMBN | 1 | - | - | 1 | - | u32 | - | - | - | existing_only |
 | SMEN | 1 | - | 1 | 1 | - | u32 | - | - | - | existing_only |
 | SMQN | 3 | - | - | 1 | - | f32, u32 | - | - | - | existing_only |

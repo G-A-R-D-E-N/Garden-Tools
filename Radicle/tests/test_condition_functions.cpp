@@ -32,6 +32,11 @@ constexpr Lookup k_known_lookups[] = {
     {817, "IsInRobotWorkbench"},
 };
 
+struct RunOnLookup {
+  std::uint32_t value;
+  std::string_view name;
+};
+
 std::uint8_t expected_flags(const ConditionFunction& function) {
   std::uint8_t flags = 0;
   for (std::size_t slot = 0; slot < 2; ++slot) {
@@ -108,6 +113,44 @@ TEST(ConditionFunctionsTest, CtdaFlagsAgreeWithTable) {
       continue;
     }
     EXPECT_EQ(ctda_flags(function->index), expected_flags(*function)) << function->name;
+  }
+}
+
+TEST(ConditionFunctionsTest, RunOnTableMatchesXEditEnum) {
+  constexpr RunOnLookup k_expected[] = {
+      {0, "Subject"},
+      {1, "Target"},
+      {2, "Reference"},
+      {3, "Combat Target"},
+      {4, "Linked Reference"},
+      {5, "Quest Alias"},
+      {6, "Package Data"},
+      {7, "Event Data"},
+      {8, "Command Target"},
+      {9, "Event Camera Ref"},
+      {10, "My Killer"},
+  };
+  for (const RunOnLookup& expected : k_expected) {
+    const ConditionRunOn* row = condition_run_on(expected.value);
+    ASSERT_NE(row, nullptr) << expected.value;
+    EXPECT_EQ(row->value, expected.value);
+    EXPECT_EQ(row->name, expected.name);
+  }
+  EXPECT_EQ(condition_run_on(11), nullptr);
+  EXPECT_EQ(condition_run_on(65535), nullptr);
+  EXPECT_EQ(condition_run_on(0xFFFFFFFFu), nullptr);
+}
+
+TEST(ConditionFunctionsTest, RunOnParameter3AndReferenceFollowXEditRules) {
+  for (std::uint32_t value = 0; value <= 10; ++value) {
+    const ConditionRunOn* row = condition_run_on(value);
+    ASSERT_NE(row, nullptr) << value;
+    ASSERT_NE(row->parameter3, nullptr) << value;
+    std::string_view expected = "integer";
+    if (value == 5) expected = "alias";
+    if (value == 7) expected = "event_data_code";
+    EXPECT_EQ(row->parameter3->name, expected) << row->name;
+    EXPECT_EQ(row->reference_form_id, value == 2) << row->name;
   }
 }
 
