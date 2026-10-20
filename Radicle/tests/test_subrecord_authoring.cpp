@@ -599,7 +599,7 @@ TEST(SubrecordAuthoring, HeadPartPartsRefuseGeneratedAddAndRemoveAsNotAuthorable
   Subs headless = head;
   headless.erase(headless.begin() + 1);
   Subs headless_unpaired = headless;
-  headless_unpaired.push_back({"NAM0", filled(4, 0)});
+  headless_unpaired.insert(headless_unpaired.begin() + 3, {"NAM0", filled(4, 0)});
   auto plugin = fo4::read_plugin(build({{"HDPT", 0x810, head},
                                         {"HDPT", 0x811, unpaired},
                                         {"HDPT", 0x812, headless},
