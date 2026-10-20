@@ -95,6 +95,9 @@ std::vector<std::byte> exterior_plugin(const ExteriorShape& shape) {
   const auto wrld_group = fo4::test::begin_group(out, "WRLD", 0);
   if (shape.worldspace_record) write_worldspace(out);
   const auto world_children = begin_group_raw(out, 0x00000800u, fo4::GroupType::world_children);
+  const bool in_block = shape.owner == fo4::GroupType::exterior_cell_subblock;
+  const auto block = in_block ? begin_group_raw(out, 0u, fo4::GroupType::exterior_cell_block)
+                              : std::size_t{0};
   const auto owner = begin_group_raw(out, 0u, shape.owner);
   if (shape.cell_record) write_exterior_cell(out, 0u, 0x00000901u, true);
   const auto children = begin_group_raw(out, 0x00000901u, shape.children);
@@ -107,6 +110,7 @@ std::vector<std::byte> exterior_plugin(const ExteriorShape& shape) {
   }
   end_group_raw(out, children);
   end_group_raw(out, owner);
+  if (in_block) end_group_raw(out, block);
   end_group_raw(out, world_children);
   fo4::test::end_group(out, wrld_group);
   return out.bytes;
@@ -203,7 +207,9 @@ TEST(PlacedReferenceMoveExterior, PersistentBucketWithAClearFlagRebucketsToTempo
   const auto ref = fo4::FormKey::parse("000902:Exterior.esp");
   ASSERT_EQ(bucket_type_of(plugin, cell, ref), k_persistent_bucket);
 
-  EXPECT_EQ(fo4::forms::move_placed_reference(plugin, ref, {.x = 4106.0f, .y = 20.0f, .z = 30.0f}),
+  const fo4::forms::PositionRotation moved_transform{
+      .x = 4106.0f, .y = 20.0f, .z = 30.0f, .rx = 13.0f, .ry = 14.0f, .rz = 15.0f};
+  EXPECT_EQ(fo4::forms::move_placed_reference(plugin, ref, moved_transform),
             fo4::forms::PlacedReferenceMoveStatus::moved);
 
   EXPECT_EQ(bucket_type_of(plugin, cell, ref), k_temporary_bucket);
