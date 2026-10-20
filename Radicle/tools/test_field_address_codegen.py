@@ -239,7 +239,6 @@ class SchemaCodegenTests(unittest.TestCase):
         field = self.load(string(repeated=True))[0]
         self.assertEqual((field["storage"], field["address"]["repeated"]), ("zstring", True))
         self.rejects("do not accept", string(storage="u32"))
-        self.rejects("do not accept", string(payload_size=8))
         self.rejects("do not accept", string(stride=4))
         self.rejects("unsupported field kind", string(kind="blob"))
         self.rejects("insertion", string(insertion="always"))

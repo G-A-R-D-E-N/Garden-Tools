@@ -84,6 +84,7 @@ inline constexpr ConditionParameterType k_generated_condition_parameter_types[] 
   {"voice_type", ConditionParameterKind::form_link, k_condition_targets_voice_type},
   {"weather", ConditionParameterKind::form_link, k_condition_targets_weather},
   {"worldspace", ConditionParameterKind::form_link, k_condition_targets_worldspace},
+  {"event_data_code", ConditionParameterKind::other, {}},
 };
 inline constexpr ConditionFunction k_generated_condition_functions[] = {
   {0, "GetWantBlocking", {nullptr, nullptr, nullptr}},
@@ -565,4 +566,17 @@ inline constexpr ConditionFunction k_generated_condition_functions[] = {
   {813, "EPIsCalculatingBaseDamage", {nullptr, nullptr, nullptr}},
   {814, "GetReanimating", {nullptr, nullptr, nullptr}},
   {817, "IsInRobotWorkbench", {nullptr, nullptr, nullptr}},
+};
+inline constexpr ConditionRunOn k_generated_condition_run_on[] = {
+  {0, "Subject", &k_generated_condition_parameter_types[2], false},
+  {1, "Target", &k_generated_condition_parameter_types[2], false},
+  {2, "Reference", &k_generated_condition_parameter_types[2], true},
+  {3, "Combat Target", &k_generated_condition_parameter_types[2], false},
+  {4, "Linked Reference", &k_generated_condition_parameter_types[2], false},
+  {5, "Quest Alias", &k_generated_condition_parameter_types[4], false},
+  {6, "Package Data", &k_generated_condition_parameter_types[2], false},
+  {7, "Event Data", &k_generated_condition_parameter_types[50], false},
+  {8, "Command Target", &k_generated_condition_parameter_types[2], false},
+  {9, "Event Camera Ref", &k_generated_condition_parameter_types[2], false},
+  {10, "My Killer", &k_generated_condition_parameter_types[2], false},
 };

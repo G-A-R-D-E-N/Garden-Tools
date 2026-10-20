@@ -1,7 +1,7 @@
 #include "fo4/swf/swf.hpp"
+#include "swf_movie_builder.hpp"
 
 #include <gtest/gtest.h>
-#include <zlib.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -18,95 +18,8 @@ using fo4::swf::SwfFile;
 using fo4::swf::SwfFormat;
 using fo4::swf::SwfRect;
 using fo4::swf::SwfStatus;
-
-struct SwfBuilder {
-  std::vector<std::byte> body;
-
-  void u8(std::uint32_t value) { body.push_back(static_cast<std::byte>(value & 0xFFu)); }
-
-  void u16(std::uint32_t value) {
-    u8(value);
-    u8(value >> 8);
-  }
-
-  void u32(std::uint32_t value) {
-    u16(value);
-    u16(value >> 16);
-  }
-
-  void bytes(std::span<const std::byte> data) { body.insert(body.end(), data.begin(), data.end()); }
-
-  void text(std::string_view value) {
-    for (const auto ch : value) {
-      body.push_back(static_cast<std::byte>(static_cast<unsigned char>(ch)));
-    }
-    body.push_back(std::byte{0});
-  }
-
-  void rect(std::int32_t x_min, std::int32_t x_max, std::int32_t y_min, std::int32_t y_max,
-            unsigned nbits, std::uint32_t padding = 0) {
-    std::uint32_t pending = 0;
-    unsigned filled = 0;
-    const auto push = [&](std::uint32_t value, unsigned count) {
-      for (unsigned index = 0; index < count; ++index) {
-        pending = (pending << 1) | ((value >> (count - 1u - index)) & 1u);
-        ++filled;
-        if (filled == 8) {
-          body.push_back(static_cast<std::byte>(pending));
-          pending = 0;
-          filled = 0;
-        }
-      }
-    };
-    const auto mask = nbits == 0 ? 0u : ((1u << nbits) - 1u);
-    push(nbits, 5);
-    push(static_cast<std::uint32_t>(x_min) & mask, nbits);
-    push(static_cast<std::uint32_t>(x_max) & mask, nbits);
-    push(static_cast<std::uint32_t>(y_min) & mask, nbits);
-    push(static_cast<std::uint32_t>(y_max) & mask, nbits);
-    push(padding, (8u - filled) % 8u);
-  }
-
-  void tag(std::uint16_t code, std::span<const std::byte> payload, bool long_header) {
-    const auto length = static_cast<std::uint32_t>(payload.size());
-    const auto code_bits = static_cast<std::uint32_t>((code & 0x3FFu) << 6);
-    if (long_header || length >= 0x3Fu) {
-      u16(code_bits | 0x3Fu);
-      u32(length);
-    } else {
-      u16(code_bits | (length & 0x3Fu));
-    }
-    bytes(payload);
-  }
-
-  void tag(std::uint16_t code) { tag(code, std::span<const std::byte>{}, false); }
-};
-
-std::vector<std::byte> wrap_body(std::span<const std::byte> body, std::uint8_t version, bool gfx,
-                                 bool compressed) {
-  std::vector<std::byte> out;
-  const char* signature = gfx ? (compressed ? "CFX" : "GFX") : (compressed ? "CWS" : "FWS");
-  for (int index = 0; index < 3; ++index) {
-    out.push_back(static_cast<std::byte>(static_cast<unsigned char>(signature[index])));
-  }
-  out.push_back(static_cast<std::byte>(version));
-  const auto total = static_cast<std::uint32_t>(body.size() + 8);
-  for (int index = 0; index < 4; ++index) {
-    out.push_back(static_cast<std::byte>((total >> (8 * index)) & 0xFFu));
-  }
-  if (!compressed) {
-    out.insert(out.end(), body.begin(), body.end());
-    return out;
-  }
-  uLongf packed = compressBound(static_cast<uLong>(body.size()));
-  std::vector<std::byte> buffer(static_cast<std::size_t>(packed));
-  const auto result = compress2(reinterpret_cast<Bytef*>(buffer.data()), &packed,
-                                reinterpret_cast<const Bytef*>(body.data()),
-                                static_cast<uLong>(body.size()), Z_BEST_COMPRESSION);
-  EXPECT_EQ(result, Z_OK);
-  out.insert(out.end(), buffer.begin(), buffer.begin() + static_cast<std::ptrdiff_t>(packed));
-  return out;
-}
+using swf_test::SwfBuilder;
+using swf_test::wrap_body;
 
 std::vector<std::byte> attribute_payload(std::uint32_t raw) {
   SwfBuilder builder;
@@ -588,13 +501,31 @@ TEST(SwfContainerTest, ReadsAbc2InitActionBinaryDataAndScaleformTags) {
   binary.u8(0xAD);
   builder.tag(87, binary.body, false);
   SwfBuilder exporter;
-  exporter.u32(0x00010000u);
+  exporter.u16(0x0401);
+  exporter.u32(2);
+  exporter.u16(2);
+  exporter.sized_text("Menu");
+  exporter.sized_text("HUDMenu");
+  exporter.u16(0);
   builder.tag(1000, exporter.body, false);
   SwfBuilder external;
   external.u16(4);
+  external.u16(2);
+  external.u16(26);
+  external.u16(26);
+  external.sized_text("Z.png");
+  external.sized_text("Z.png.dds");
   builder.tag(1001, external.body, false);
   SwfBuilder font;
-  font.u16(6);
+  font.u32(6);
+  font.u16(2);
+  font.sized_text("Font");
+  font.u16(512);
+  font.u16(512);
+  font.u8(1);
+  font.u16(20);
+  font.u16(0);
+  font.u16(0);
   builder.tag(1002, font.body, false);
   builder.tag(0);
   const auto bytes = wrap_body(builder.body, 10, false, false);
@@ -624,8 +555,12 @@ TEST(SwfContainerTest, ReadsAbc2InitActionBinaryDataAndScaleformTags) {
   EXPECT_EQ(fo4::swf::tag_code_name(result.file.tags[4].code), "ExporterInfo");
   EXPECT_EQ(fo4::swf::tag_code_name(result.file.tags[5].code), "DefineExternalImage");
   EXPECT_EQ(fo4::swf::tag_code_name(result.file.tags[6].code), "FontTextureInfo");
-  EXPECT_EQ(result.file.tags[4].payload.size(), 4u);
-  EXPECT_EQ(result.file.tags[6].payload.size(), 2u);
+  ASSERT_TRUE(result.file.tags[4].exporter_info.has_value());
+  EXPECT_EQ(result.file.tags[4].exporter_info->swf_name, "HUDMenu");
+  ASSERT_TRUE(result.file.tags[5].external_image.has_value());
+  EXPECT_EQ(result.file.tags[5].external_image->file_name, "Z.png.dds");
+  ASSERT_TRUE(result.file.tags[6].font_texture.has_value());
+  EXPECT_EQ(result.file.tags[6].font_texture->texture_width, 512);
   EXPECT_EQ(fo4::swf::write_swf(result.file), bytes);
 }
 
