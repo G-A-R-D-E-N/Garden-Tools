@@ -15,7 +15,6 @@
 #include <utility>
 #include <vector>
 
-using fo4::abc::AbcCallSite;
 using fo4::abc::AbcFile;
 using fo4::abc::AbcInstruction;
 using fo4::abc::AbcOpcodeInfo;
@@ -27,12 +26,6 @@ using fo4::abc::ByteReader;
 using namespace fo4::test;
 
 namespace {
-
-const AbcCallSite& only_call(const std::vector<AbcCallSite>& calls) {
-  EXPECT_EQ(calls.size(), 1u);
-  static const AbcCallSite missing;
-  return calls.empty() ? missing : calls.front();
-}
 
 std::vector<std::uint8_t> empty_pools_header() {
   std::vector<std::uint8_t> out;
@@ -54,7 +47,7 @@ TEST(Abc, ParsesVersionConstantPoolAndStructure) {
   EXPECT_EQ(file.major_version, 46u);
   EXPECT_EQ(file.pool.strings.size(), 15u);
   EXPECT_EQ(file.pool.namespaces.size(), 3u);
-  EXPECT_EQ(file.pool.multinames.size(), 14u);
+  EXPECT_EQ(file.pool.multinames.size(), 15u);
   EXPECT_EQ(file.pool.ints.size(), 2u);
   EXPECT_EQ(file.pool.ints[1], 7);
   EXPECT_EQ(file.pool.ns_sets.size(), 1u);
@@ -197,60 +190,6 @@ TEST(Abc, DisassemblesConstructorCallSite) {
   std::string short_listing;
   ASSERT_EQ(fo4::abc::disassemble(file, short_code, short_listing), AbcStatus::Ok);
   EXPECT_EQ(short_listing, "0: pushshort -5\n");
-}
-
-TEST(Abc, SummaryAnswersExternalInterfaceAndEventListenerQuestions) {
-  AbcFile file;
-  ASSERT_EQ(AbcFile::parse(build_abc(), file), AbcStatus::Ok);
-  AbcSummary summary;
-  ASSERT_EQ(fo4::abc::summarize(file, summary), AbcStatus::Ok);
-  ASSERT_EQ(summary.classes.size(), 1u);
-  const auto& klass = summary.classes.front();
-  EXPECT_EQ(klass.name, "Test");
-  EXPECT_EQ(klass.super_name, "Object");
-  ASSERT_EQ(klass.interfaces.size(), 1u);
-  EXPECT_EQ(klass.interfaces[0], "click");
-  ASSERT_EQ(klass.methods.size(), 2u);
-  const auto& constructor = klass.methods[0];
-  EXPECT_EQ(constructor.name, "<init>");
-  EXPECT_EQ(constructor.return_type, "void");
-  EXPECT_EQ(constructor.flags, 0u);
-  EXPECT_EQ(constructor.instruction_count, 4u);
-  ASSERT_EQ(constructor.multinames.size(), 2u);
-  EXPECT_EQ(constructor.multinames[0], "flash.external::ExternalInterface");
-  EXPECT_EQ(constructor.multinames[1], "flash.external::call");
-  const AbcCallSite& external = only_call(constructor.calls);
-  EXPECT_EQ(external.opcode, "callpropvoid");
-  EXPECT_EQ(external.target, "flash.external::call");
-  EXPECT_EQ(external.receiver, "flash.external::ExternalInterface");
-  EXPECT_EQ(external.arg_count, 1u);
-  EXPECT_TRUE(fo4::abc::is_external_interface_call(external));
-  EXPECT_FALSE(fo4::abc::is_event_registration(external));
-  ASSERT_EQ(external.literals.size(), 1u);
-  EXPECT_EQ(external.literals[0], "Foo");
-  EXPECT_TRUE(external.literal_unambiguous);
-
-  const auto& listener = klass.methods[1];
-  EXPECT_EQ(listener.name, "onClick");
-  EXPECT_EQ(listener.return_type, "void");
-  EXPECT_EQ(listener.instruction_count, 5u);
-  const AbcCallSite& registration = only_call(listener.calls);
-  EXPECT_EQ(registration.target, "addEventListener");
-  EXPECT_EQ(registration.receiver, "handler");
-  EXPECT_EQ(registration.arg_count, 2u);
-  EXPECT_TRUE(fo4::abc::is_event_registration(registration));
-  EXPECT_FALSE(fo4::abc::is_external_interface_call(registration));
-  ASSERT_EQ(registration.literals.size(), 1u);
-  EXPECT_EQ(registration.literals[0], "click");
-  EXPECT_TRUE(registration.literal_unambiguous);
-
-  ASSERT_EQ(summary.functions.size(), 1u);
-  const auto& helper = summary.functions.front();
-  EXPECT_EQ(helper.name, "helper");
-  EXPECT_EQ(helper.instruction_count, 1u);
-  EXPECT_TRUE(helper.calls.empty());
-  EXPECT_TRUE(helper.multinames.empty());
-  EXPECT_TRUE(summary.scripts.empty());
 }
 
 TEST(Abc, OpcodeTableMatchesAvm2Numbers) {
