@@ -13,6 +13,7 @@ enum class DestructibleHeaderStatus {
   header_present,
   header_missing,
   unknown_order,
+  too_many_stages,
 };
 
 DestructibleHeaderStatus insert_destructible_header(Plugin& plugin, const FormKey& record_key);
