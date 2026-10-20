@@ -2,7 +2,7 @@
 
 source:xEdit 93cc0bc5a1251936c3c7859eee3150eda12a62d7, `Core/wbDefinitionsFO4.pas` NPC_ record at line 10286. Helper definitions are in `Core/wbDefinitionsCommon.pas` and `Core/wbInterface.pas`; each is cited where it is used.
 
-The schema lives in `schema/fallout4/fields.json` (`NPC_` entry). Scalars are generated into `include/fo4/schema/generated_scalar_fields.inc` and authoring constraints into `generated_record_constraints.inc`. The three repeated lists have typed code in `include/fo4/forms/npc.hpp` and `src/forms/npc.cpp`.
+The schema lives in `schema/fallout4/fields.json` (`NPC_` entry). Scalars are generated into `include/fo4/schema/generated_scalar_fields.inc`, authoring constraints into `generated_record_constraints.inc` and the FormLink rows and lists into `generated_formlink_lists.inc`. The three repeated lists that carry a count subrecord (factions, perks, items) have typed code in `include/fo4/forms/npc.hpp` and `src/forms/npc.cpp`.
 
 ## Scalar fields
 
@@ -115,8 +115,6 @@ Edit rules:
 
 | Path | Subrecord | Targets | xEdit |
 | --- | --- | --- | --- |
-| NPC_\Package | PKID | PACK | FO4:10400 |
-| NPC_\HeadPart | PNAM | HDPT | FO4:10417 |
 | NPC_\Spell | SPLO | SPEL, LVSP | FO4:10372; wbSPLO FO4:3284; member of the `NPC_\Spells` group |
 | NPC_\AttackSpell | ATKD | SPEL | FO4:4077, nullable |
 | NPC_\ActorSoundKeyword | CS2K | KYWD | FO4:10434; wbActorSounds Common:8399-8414 |
@@ -127,13 +125,25 @@ Edit rules:
 
 `AttackSpell` is `repeated: true` with `payload_sizes: [44]`, because xEdit wraps ATKD in `wbAttackData` (`wxRStructSK([1], 'Attack', [ATKD, ATKE])`) and the NPC_ member is `wbRArrayS('Attacks', wbAttackData)` (FO4:10377), so a record may carry several ATKD subrecords. The ten ATKD scalars above are `repeated: true` with `payload_size: 44` for the same reason: index 0 is the first attack, index 1 the second, and an index past the last ATKD reports `subrecord_missing`. Because the payload must be exactly 44 bytes, a truncated ATKD exposes no member at all.
 
-`NPC_\Package` and `NPC_\HeadPart` are schema FormLink rows with `repeated: true`, `payload_sizes: [4]`, `nullable: false` and `insertion: existing_only`: each link of the list is read and written by index through the generic FormLink field path, and a write leaves the other links byte-identical. Adding and removing links is not offered for them; these rows replace no typed list.
+Each link of a repeated FormLink row is read and written by index through the generic FormLink field path, and a write leaves the other links byte-identical. Adding and removing links is not offered by that path; the repeated links that own a list row are `NPC_\Packages` and `NPC_\HeadParts` below.
 
 `NPC_\Spell` is the same read and indexed write, but it is the member link of the `NPC_\Spells` subrecord group (`count_subrecord` `SPCT`, one required 4-byte `SPLO` member), so `insert_record_subrecord_group` and `remove_record_subrecord_group` add and remove a spell and rewrite `SPCT` with the run. The row carries no `payload_sizes` of its own; the member descriptor holds the 4-byte rule. `NPC_\SpellCount` is the group's whole-payload u32 count row, and a plain scalar write to it is refused, as for `CONT\ItemTotal`. `RACE\ActorEffects` still rows the same xEdit list shape with no count.
 
 `NPC_\ActorSoundKeyword` and `NPC_\ActorSoundSound` are the two links of xEdit's `wbActorSounds` pair: one CS2K keyword and one CS2D sound per sound group. The CS2H group count is not rowed, because the two-member group it counts has no `subrecord_group` shape (see Not covered), and xEdit's CS2E end marker is empty.
 
-`NPC_\AttachParentSlots` is a typed list in the same shape as `RACE\AttachParentSlots`: a `packed_array` over the APPR subrecord, targets KYWD, `nullable: false` and `mutation: appendable`, so elements can be appended, set and removed. It is the only list NPC_ declares, so its first element is anchored against the declared predecessors (`KWDA` and the rest of the subrecords xEdit orders before APPR, FO4:10404) and appends at the end of the record when none of them is present.
+### Link lists
+
+| Path | Subrecord | Targets | xEdit |
+| --- | --- | --- | --- |
+| NPC_\Packages | PKID | PACK | FO4:10400-10402; wbRArray |
+| NPC_\HeadParts | PNAM | HDPT | FO4:10417; wbRArrayS |
+| NPC_\AttachParentSlots | APPR | KYWD | FO4:10404; wbAPPR FO4:5275 |
+
+`NPC_\Packages` and `NPC_\HeadParts` are `per_subrecord` lists over one 4-byte subrecord per element, `nullable: false` and `mutation: existing_neighbors`, so an element can be inserted, set, moved, removed and cleared by index. xEdit gives neither a count subrecord: `wbRArray('Packages', wbFormIDCk(PKID, 'Package', [PACK]))` (FO4:10400-10402) and `wbRArrayS('Head Parts', wbFormIDCk(PNAM, 'Head Part', [HDPT]))` (:10417) repeat the subrecord itself, so no counter has to be kept in sync. A record that is not four bytes reports `FormLinkListError` from `matching_positions`, the same guard the SPLO field rows apply through `payload_sizes`. Measured against Fallout4.esm (both top-level `NPC_` groups, compressed records inflated): 3015 NPC_ records, PKID present in 1120 of them (1 to 10 each, 1872 subrecords) and PNAM in 1602 (1 to 72 each, 17271 subrecords), every PKID, PNAM and SPLO payload exactly four bytes.
+
+The two lists carry an explicit `anchor_predecessors` list in reverse xEdit order, so the first element of an absent list lands after the last present subrecord xEdit orders before it: after AIDT or whichever predecessor appears last for PKID, and after DNAM or whichever predecessor appears last for PNAM. Each list is the complete xEdit-order predecessor set, including all five members of the attack run (`ATKD`, `ATKE`, `ATKW`, `ATKS`, `ATKT`; `wbAttackData`, FO4:4073-4123), which the NPC_ authoring block lists as `ATKD` alone. NPC_ declares only list rows, so the sibling-derived anchors the generator would otherwise use are empty. A record with none of those predecessors fails closed with `insertion_boundary_unavailable` rather than appending out of order; every real NPC_ carries RNAM, which both lists list as a predecessor.
+
+`NPC_\AttachParentSlots` is a typed list in the same shape as `RACE\AttachParentSlots`: a `packed_array` over the APPR subrecord, targets KYWD, `nullable: false` and `mutation: appendable`, so elements can be appended, set and removed. Its first element is anchored against the declared predecessors (`KWDA` and the rest of the subrecords xEdit orders before APPR, FO4:10404) and it appends at the end of the record when none of them is present.
 
 `NPC_\ActorSoundsFinalize` is the whole 1-byte CS2F payload (xEdit `wbByteArray(CS2F, 'Finalize', 1)`, FO4:10436), `repeated: true` because one CS2F follows each sound group.
 
@@ -146,12 +156,12 @@ Edit rules:
 | FO4:10348-10369 | INAM, VTCK, TPLT, LTPT, LTPC, TPTA | Form IDs, not scalars. TPTA is rowed as thirteen links in the Link rows table. |
 | FO4:10370-10383 | RNAM, WNAM, ANAM, ATKR, SPOR, OCOR, GWOR, ECOR, FCPL, RCLR | FormIDs, not scalars. |
 | FO4:10371 | SPCT count | Rowed as `NPC_\SpellCount`, the count of the `NPC_\Spells` group. A generic write would desync it from SPLO, so `write_scalar` refuses it and only insert and remove write it. |
-| FO4:10394-10396, 10399, 10401 | PRPS, FTYP, NTRM, AIDT's sibling PKID list | Properties (xEdit `wbPRPS`, `Core/wbDefinitionsFO4.pas:10394` at pin 93cc0bc5), an array of 8-byte `wbObjectProperty` entries (`:5266-5272`). Modeled by `NPC_\PropertyActorValue` (link to AVIF, nullable, offset 0, stride 8) and `NPC_\PropertyValue` (f32, offset 4, stride 8) in `Radicle/schema/fallout4/fields.json`, both existing_only. FTYP and NTRM are form IDs; PKID is a repeated form ID list. |
+| FO4:10394-10396, 10399, 10401 | PRPS, FTYP, NTRM, AIDT's sibling PKID list | Properties (xEdit `wbPRPS`, `Core/wbDefinitionsFO4.pas:10394` at pin 93cc0bc5), an array of 8-byte `wbObjectProperty` entries (`:5266-5272`). Modeled by `NPC_\PropertyActorValue` (link to AVIF, nullable, offset 0, stride 8) and `NPC_\PropertyValue` (f32, offset 4, stride 8) in `Radicle/schema/fallout4/fields.json`, both existing_only. FTYP and NTRM are form IDs; PKID is a repeated form ID list, rowed as `NPC_\Packages`. |
 | FO4:10403-10404 | KWDA/KSIZ keywords | Covered by the keyword FormLink tables. APPR is rowed as `NPC_\AttachParentSlots`. |
 | FO4:10405 | Object template OBTE/OBTF/OBTS/STOP | `Core/wbDefinitionsFO4.pas:5520-5529` (pin 93cc0bc5): OBTE is the combination count, OBTF and STOP are empty markers, and each OBTS combination is a `wbStruct` whose keyword, include and property arrays carry their own counts, so its payload length varies. Walking the NPC_ groups of Fallout4.esm measured OBTE 4 bytes, OBTF 0, STOP 0 and OBTS lengths from 18 to 186 bytes, confirming the OBTS payload is not a fixed width. |
 | FO4:10406-10408 | CNAM, FULL, SHRT | CNAM is a FormID. FULL and SHRT are localized strings; NPC_ is not in `localized_subrecords`, so localization is unchanged. |
 | FO4:10409 | DATA | Empty marker subrecord; authoring only. |
-| FO4:10417-10421 | PNAM head parts, HCLF, BCLF, ZNAM, GNAM | FormIDs or a repeated FormID list. |
+| FO4:10417-10421 | PNAM head parts, HCLF, BCLF, ZNAM, GNAM | HCLF, BCLF, ZNAM and GNAM are form IDs. PNAM is a repeated form ID list, rowed as `NPC_\HeadParts`. |
 | FO4:10422 | NAM5 | Unknown bytes of no fixed width. |
 | FO4:10432-10436 | CS2H count, CS2E | Count and end marker are not modeled; CS2H has no typed owner, and the two-member sound group it counts is not expressible as a `subrecord_group`. |
 | FO4:10438-10444 | CSCR, PFRN, DOFT, SOFT, DPLT, CRIF, FTST | FormIDs. |
