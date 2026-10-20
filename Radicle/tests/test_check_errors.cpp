@@ -413,9 +413,10 @@ TEST(CheckErrors, DanglingGameMasterLinksAreExemptOnlyForKnownPairs) {
     std::string_view record;
     std::string_view subrecord;
   };
-  constexpr std::array<Exemption, 4> exemptions{{
+  constexpr std::array<Exemption, 5> exemptions{{
       {"REFR", "XRFG"},
       {"REFR", "XMSP"},
+      {"REFR", "XLKR"},
       {"ACHR", "XLCN"},
       {"SCCO", "SNAM"},
   }};
@@ -443,6 +444,14 @@ TEST(CheckErrors, DanglingGameMasterLinksAreExemptOnlyForKnownPairs) {
   ASSERT_EQ(unresolved.size(), 1u);
   EXPECT_EQ(unresolved[0].subrecord.to_string(), "XLCN");
   EXPECT_EQ(unresolved[0].severity, fo4::CheckSeverity::error);
+
+  const auto other_record = plugin_with_link("Fallout4.esm", "ACHR", "XLKR", 0x000850);
+  const std::vector<const fo4::Plugin*> other_record_order{&other_record};
+  const auto other_record_unresolved =
+      of_code(fo4::check_load_order(other_record_order), fo4::CheckCode::unresolved_link);
+  ASSERT_EQ(other_record_unresolved.size(), 1u);
+  EXPECT_EQ(other_record_unresolved[0].subrecord.to_string(), "XLKR");
+  EXPECT_EQ(other_record_unresolved[0].severity, fo4::CheckSeverity::error);
 }
 
 TEST(CheckErrors, NoneFormIdIsNotALink) {

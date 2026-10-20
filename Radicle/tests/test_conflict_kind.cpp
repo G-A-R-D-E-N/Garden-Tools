@@ -286,16 +286,24 @@ TEST(ConflictKind, AKeyNoPluginDefinesIsUnknown) {
   EXPECT_TRUE(result.subrecords.empty());
 }
 
-TEST(ConflictKind, BulkClassificationCoversEverySharedKey) {
-  const auto base = base_plugin("MISC", "Thing", {{"DATA", k_value_a}});
+TEST(ConflictKind, BulkClassificationCoversEveryKeyIncludingSinglePluginOnes) {
+  const auto base = fo4::read_plugin(
+      make_plugin({{"MISC", 0x800, "Thing", {{"DATA", k_value_a}}},
+                   {"MISC", 0x900, "Solo", {{"DATA", k_value_b}}}},
+                  false),
+      "Master.esm");
   const auto patch = override_plugin("Patch.esp", "MISC", "Thing", {{"DATA", k_value_b}});
   const std::vector<const fo4::Plugin*> order{&base, &patch};
   const auto graph = fo4::ConflictGraph::build(order);
 
   const auto results = fo4::classify_conflicts(graph, order);
-  ASSERT_EQ(results.size(), 1u);
+  ASSERT_EQ(results.size(), 2u);
   EXPECT_EQ(results[0].key, master_key());
   EXPECT_EQ(results[0].category, fo4::ConflictCategory::override_);
+  EXPECT_EQ(results[1].key, fo4::FormKey::parse("000900:Master.esm"));
+  EXPECT_EQ(results[1].category, fo4::ConflictCategory::only_one);
+  ASSERT_EQ(results[1].roles.size(), 1u);
+  EXPECT_EQ(results[1].roles[0], fo4::ConflictRole::only_one);
 }
 
 const fo4::FieldConflict* find_field(const fo4::RecordConflict& conflict, std::string_view path) {
