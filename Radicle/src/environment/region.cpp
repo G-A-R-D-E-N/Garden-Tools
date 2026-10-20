@@ -147,6 +147,7 @@ RegionData decode_region(const Environment& env, const RecordRef& ref) {
     if (sub.signature == sig("RPLI")) {
       data.areas.push_back(read_area(reader, sub));
       area = &data.areas.back();
+      entry = nullptr;
       continue;
     }
     if (sub.signature == sig("RPLD")) {
@@ -160,7 +161,7 @@ RegionData decode_region(const Environment& env, const RecordRef& ref) {
       continue;
     }
     if (sub.signature == sig("RLDM")) {
-      if (entry == nullptr) reader.fail(sub.signature, "appears before any RDAT data header");
+      if (entry == nullptr) reader.fail(sub.signature, "appears outside an open RDAT data entry");
       if (sub.data.size() != 4) reader.fail(sub.signature, "must be four bytes");
       entry->lod_display_distance_multiplier = Reader::f32(sub, 0);
       continue;
@@ -177,7 +178,7 @@ RegionData decode_region(const Environment& env, const RecordRef& ref) {
       continue;
     }
     if (!is_entry_payload(sub.signature)) continue;
-    if (entry == nullptr) reader.fail(sub.signature, "appears before any RDAT data header");
+    if (entry == nullptr) reader.fail(sub.signature, "appears outside an open RDAT data entry");
     if (!payload_matches_type(entry->type, sub.signature)) {
       reader.fail(sub.signature,
                   "does not belong to region data type " + std::to_string(entry->type));
