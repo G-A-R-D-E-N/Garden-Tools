@@ -430,6 +430,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_armo_arma_rows.cpp
     tests/test_destructible_rows.cpp
     tests/test_destructible_stage_members.cpp
+    tests/test_destructible_header.cpp
     tests/test_packed_formlink_arrays.cpp
     tests/test_formlink_ordinals.cpp
     tests/test_rekey_formlinks.cpp
@@ -532,6 +533,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_magic_location_records_real.cpp
     tests/test_object_base_records.cpp
     tests/test_object_base_records_real.cpp
+    tests/test_object_base_model_info.cpp
     tests/test_weather_concept.cpp
     tests/test_weather_formlinks.cpp
     tests/test_lvsp.cpp

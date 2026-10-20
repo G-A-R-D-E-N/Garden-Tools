@@ -23586,6 +23586,41 @@
               5
             ]
           }
+        },
+        {
+          "path": "PACK\\ProcedureLeafFlags",
+          "label": "Procedure flags",
+          "kind": "scalar",
+          "subrecord": "FNAM",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "flags",
+          "names": [
+            {"bit": 0, "name": "Success Completes Package"}
+          ],
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 4,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PACK\\ProcedureBranchFlags",
+          "label": "Procedure branch flags",
+          "kind": "scalar",
+          "subrecord": "PRCB",
+          "offset": 4,
+          "storage": "u32",
+          "presentation": "flags",
+          "names": [
+            {"bit": 0, "name": "Repeat when Complete"},
+            {"bit": 1, "name": "Unknown 1"}
+          ],
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 8,
+          "repeated": true,
+          "insertion": "existing_only"
         }
       ],
       "formlink_fields": [
@@ -27416,6 +27451,11 @@
             "coupled": true
           },
           {
+            "signature": "PRPS",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
             "signature": "NTRM",
             "minimum": 0,
             "maximum": 1
@@ -27465,6 +27505,16 @@
             "coupled": true
           },
           {
+            "signature": "CNTO",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "COED",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
             "signature": "MNAM",
             "minimum": 0,
             "maximum": 1
@@ -27481,7 +27531,27 @@
             "maximum": 1
           },
           {
+            "signature": "ENAM",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "NAM0",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "FNPR",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
             "signature": "XMRK",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "SNAM",
             "minimum": 0,
             "maximum": 1
           },
@@ -27510,6 +27580,11 @@
             "signature": "STOP",
             "minimum": 0,
             "maximum": 1
+          },
+          {
+            "signature": "NVNM",
+            "minimum": 0,
+            "maximum": 1
           }
         ]
       },
@@ -27522,7 +27597,7 @@
           "nullable": false,
           "storage": "packed_array",
           "mutation": "appendable",
-          "anchor_predecessors": ["XMRK", "NAM1", "WBDT", "MNAM", "COCT", "CTDA", "CITC", "FNAM", "ATTX", "WNAM", "PNAM", "FTYP", "NTRM", "KWDA", "KSIZ", "DEST", "MODF", "MODS", "MODC", "MODT", "MODL", "FULL", "PTRN", "OBND", "VMAD", "EDID"]
+          "anchor_predecessors": ["XMRK", "NAM1", "WBDT", "MNAM", "COED", "CNTO", "COCT", "CTDA", "CITC", "FNAM", "ATTX", "WNAM", "PNAM", "FTYP", "NTRM", "KWDA", "KSIZ", "DEST", "MODF", "MODS", "MODC", "MODT", "MODL", "FULL", "PTRN", "OBND", "VMAD", "EDID"]
         }
       ],
       "fields": [
@@ -27972,6 +28047,104 @@
           "minimum": 0,
           "maximum": 65535,
           "payload_size": 4,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FURN\\MarkerEntryPointList",
+          "label": "Marker entry points",
+          "kind": "subrecord_group",
+          "insertion": "existing_only",
+          "members": [
+            {"subrecord": "FNPR", "required": true, "repeatable": false, "payload_size": 4}
+          ],
+          "successors": ["XMRK", "SNAM", "APPR", "OBTE", "NVNM"]
+        },
+        {
+          "path": "FURN\\ObjectTemplateIncludeCount",
+          "label": "Object template include count",
+          "kind": "scalar",
+          "subrecord": "OBTS",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "minimum_payload_size": 18,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FURN\\ObjectTemplatePropertyCount",
+          "label": "Object template property count",
+          "kind": "scalar",
+          "subrecord": "OBTS",
+          "offset": 4,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "minimum_payload_size": 18,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FURN\\ObjectTemplateLevelMin",
+          "label": "Object template level min",
+          "kind": "scalar",
+          "subrecord": "OBTS",
+          "offset": 8,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "minimum_payload_size": 18,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FURN\\ObjectTemplateLevelMax",
+          "label": "Object template level max",
+          "kind": "scalar",
+          "subrecord": "OBTS",
+          "offset": 10,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "minimum_payload_size": 18,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FURN\\ObjectTemplateParentCombinationIndex",
+          "label": "Object template parent combination index",
+          "kind": "scalar",
+          "subrecord": "OBTS",
+          "offset": 12,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "minimum_payload_size": 18,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FURN\\ObjectTemplateDefault",
+          "label": "Object template default",
+          "kind": "scalar",
+          "subrecord": "OBTS",
+          "offset": 14,
+          "storage": "u8",
+          "presentation": "enum",
+          "names": [
+            {"value": 0, "name": "False"},
+            {"value": 1, "name": "True"}
+          ],
+          "minimum": 0,
+          "maximum": 1,
+          "minimum_payload_size": 18,
           "repeated": true,
           "insertion": "existing_only"
         },
@@ -32510,6 +32683,94 @@
         {"path": "NPC_\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"},
         {"path": "NPC_\\AttackEvent", "label": "Attack event", "kind": "string", "subrecord": "ATKE", "repeated": true, "insertion": "existing_only"},
         {"path": "NPC_\\AttackDescription", "label": "Attack description", "kind": "string", "subrecord": "ATKT", "repeated": true, "insertion": "existing_only"},
+        {
+          "path": "NPC_\\ObjectTemplateIncludeCount",
+          "label": "Object template include count",
+          "kind": "scalar",
+          "subrecord": "OBTS",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "minimum_payload_size": 18,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\ObjectTemplatePropertyCount",
+          "label": "Object template property count",
+          "kind": "scalar",
+          "subrecord": "OBTS",
+          "offset": 4,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "minimum_payload_size": 18,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\ObjectTemplateLevelMin",
+          "label": "Object template level min",
+          "kind": "scalar",
+          "subrecord": "OBTS",
+          "offset": 8,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "minimum_payload_size": 18,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\ObjectTemplateLevelMax",
+          "label": "Object template level max",
+          "kind": "scalar",
+          "subrecord": "OBTS",
+          "offset": 10,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "minimum_payload_size": 18,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\ObjectTemplateParentCombinationIndex",
+          "label": "Object template parent combination index",
+          "kind": "scalar",
+          "subrecord": "OBTS",
+          "offset": 12,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "minimum_payload_size": 18,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\ObjectTemplateDefault",
+          "label": "Object template default",
+          "kind": "scalar",
+          "subrecord": "OBTS",
+          "offset": 14,
+          "storage": "u8",
+          "presentation": "enum",
+          "names": [
+            {"value": 0, "name": "False"},
+            {"value": 1, "name": "True"}
+          ],
+          "minimum": 0,
+          "maximum": 1,
+          "minimum_payload_size": 18,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
         {"path": "NPC_\\SpellCount", "label": "Spell count", "kind": "scalar", "subrecord": "SPCT", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"},
         {
           "path": "NPC_\\Spells",
