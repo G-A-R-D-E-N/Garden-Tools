@@ -161,4 +161,26 @@ struct QuestVmadExtras {
 
 QuestVmadExtras read_quest_vmad_extras(std::span<const std::byte> data, std::int16_t object_format);
 
+struct SceneVmadPhaseFragment {
+  std::uint8_t flag{0};
+  std::uint32_t index{0};
+  std::uint8_t unknown{0};
+  std::string script;
+  std::string function;
+  std::size_t offset{0};
+  std::size_t end{0};
+};
+
+struct SceneVmadExtras {
+  std::uint8_t flags{0};
+  std::vector<SceneVmadPhaseFragment> phases;
+  bool unsupported{false};
+  std::string unsupported_reason;
+  bool fully_consumed{false};
+};
+
+// The extras span must begin after the leading script list.
+SceneVmadExtras read_scene_vmad_extras(std::span<const std::byte> data,
+                                       std::int16_t object_format);
+
 }  // namespace fo4
