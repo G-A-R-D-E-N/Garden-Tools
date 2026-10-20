@@ -33,7 +33,6 @@ using fo4::test::envnode::rec;
 using fo4::test::envnode::top;
 
 constexpr auto f32 = fo4::schema::ScalarStorage::f32;
-constexpr auto i32 = fo4::schema::ScalarStorage::i32;
 constexpr auto u8 = fo4::schema::ScalarStorage::u8;
 constexpr auto u32 = fo4::schema::ScalarStorage::u32;
 
@@ -614,7 +613,7 @@ TEST(RegnRows, EntryArraysAndEntryPayloadsEditInPlace) {
   EXPECT_FALSE(fo4::schema::scalar_value_name(sound_flags->scalar, 16).has_value());
   EXPECT_EQ(sound_chance->scalar.offset, 8u);
   EXPECT_EQ(weather_chance->scalar.subrecord, fo4::Signature::from_string("RDWT"));
-  EXPECT_EQ(weather_chance->scalar.storage, i32);
+  EXPECT_EQ(weather_chance->scalar.storage, u32);
 
   const auto object = fo4::schema::formlink_field_descriptor(
       fo4::Signature::from_string("REGN"), "REGN\\Object");
@@ -669,8 +668,8 @@ TEST(RegnRows, EntryArraysAndEntryPayloadsEditInPlace) {
   EXPECT_EQ(link_raw(plugin, key, "REGN\\Weather"), 0x00000F42u);
   EXPECT_EQ(sub_bytes(plugin, key, "RDWT"), rdwt_bytes(0x00000F42, 100, 0x00000F43));
   EXPECT_EQ(link_raw(plugin, key, "REGN\\Sound"), 0x00000F44u);
-  EXPECT_EQ(fo4::record_field_count(plugin, key, "REGN\\Grass"), 1u);
-  EXPECT_EQ(fo4::record_field_count(plugin, key, "REGN\\SoundChance"), 1u);
+  EXPECT_EQ(fo4::record_field_count(plugin, fo4::FormKey::parse(key), "REGN\\Grass"), 1u);
+  EXPECT_EQ(fo4::record_field_count(plugin, fo4::FormKey::parse(key), "REGN\\SoundChance"), 1u);
 
   EXPECT_EQ(fo4::set_record_scalar(plugin, fo4::FormKey::parse(key), *sound_flags, "16"),
             fo4::ScalarMutationStatus::updated);
