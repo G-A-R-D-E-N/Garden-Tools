@@ -245,6 +245,10 @@ class StructuredRenderer {
           return kNoIndex;
         }
         const bool isJump = pex_is_jump(function_.instructions[terminator].opCode);
+        if (depth == 0 && isJump && jump_target_of(terminator) != stop) {
+          bailed_ = true;
+          return kNoIndex;
+        }
         emit_block_body(block, depth, !isJump, out);
         block = stop;
         continue;

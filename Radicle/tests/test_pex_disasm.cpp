@@ -299,6 +299,30 @@ TEST(PexAnalysis, DisassemblyKeepsLabelledListingForJmptLoopHeader) {
   EXPECT_NE(result.text.find("2: jmp -2"), std::string::npos);
 }
 
+TEST(PexAnalysis, DisassemblyBailsOnTailJumpThatDoesNotReachTheEnd) {
+  const auto loopback = fo4::pex_analysis::disassemble_function(
+      function("TailLoopback", {
+                                   step(kJmpF, {identifier("::temp1"), integer(2)}),
+                                   step(kJmp, {integer(-1)}),
+                                   step(kJmp, {integer(-1)}),
+                               }));
+  ASSERT_EQ(loopback.status, fo4::pex_analysis::PexAnalysisStatus::Ok);
+  EXPECT_FALSE(loopback.structured);
+  EXPECT_EQ(loopback.text.find("while ("), std::string::npos);
+  EXPECT_NE(loopback.text.find("2: jmp -1"), std::string::npos);
+
+  const auto returned = fo4::pex_analysis::disassemble_function(
+      function("TailJumpToReturn", {
+                                       step(kJmpF, {identifier("::temp1"), integer(2)}),
+                                       step(kReturn, {none()}),
+                                       step(kJmp, {integer(-1)}),
+                                   }));
+  ASSERT_EQ(returned.status, fo4::pex_analysis::PexAnalysisStatus::Ok);
+  EXPECT_FALSE(returned.structured);
+  EXPECT_EQ(returned.text.find("if ("), std::string::npos);
+  EXPECT_NE(returned.text.find("2: jmp -1"), std::string::npos);
+}
+
 TEST(PexAnalysis, DisassemblyFallsBackPastTheNestingCapWithoutRecursing) {
   constexpr std::size_t kDepth = 50000;
   const auto result = fo4::pex_analysis::disassemble_function(deepNestingFunction(kDepth));
