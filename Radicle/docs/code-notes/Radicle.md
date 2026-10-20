@@ -2059,7 +2059,7 @@ Not supported yet:
 - Only `existing_only` insertion is accepted. Runs cannot be reordered, and a repeatable leader is rejected.
 - Only CONT is generated. The LVLI leveled-list entries use the same COED shape in vanilla (see `generated_scalar_fields.inc:k_subrecord_groups`) and are not wired.
 - This change adds no C API or editor entry point for groups; insert and remove exist only as C++ functions in `mutation.hpp`.
-- The group check covers only the `field_writer.cpp` entry points: scalar and FormLink writes through the `scalar_slots` and `formlink_slots` helpers, insert, remove and `subrecord_group_spans`. `formlink_list_read.cpp`, `src/schema/formlink_slots.cpp` and `preflight` do not run it yet.
+- The group check covers only the `field_writer.cpp` entry points, scalar and FormLink writes through the `scalar_slots` and `formlink_slots` helpers, and the `field_writer_containers.cpp` entry points insert, remove and `subrecord_group_spans`. `formlink_list_read.cpp`, `src/schema/formlink_slots.cpp` and `preflight` do not run it yet.
 
 ## Radicle/src/schema/scalar.cpp:subrecord_group_for_member
 
