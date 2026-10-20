@@ -4,6 +4,7 @@
 #include <array>
 #include <cstring>
 #include <string_view>
+#include <utility>
 
 namespace fo4 {
 namespace {
@@ -74,10 +75,31 @@ std::vector<std::size_t> first_occurrence(const std::vector<Subrecord>& subs, Si
   return {};
 }
 
+std::vector<std::vector<std::size_t>> entry_payload_scopes(const Record& record, Signature subrecord) {
+  std::vector<std::vector<std::size_t>> scopes;
+  std::vector<std::size_t> current;
+  bool saw_header = false;
+  for (std::size_t i = 0; i < record.subrecords.size(); ++i) {
+    const auto signature = record.subrecords[i].signature;
+    if (signature == sig("RDAT")) {
+      if (!current.empty()) scopes.push_back(std::move(current));
+      current.clear();
+      saw_header = true;
+      continue;
+    }
+    if (saw_header && signature == subrecord) current.push_back(i);
+  }
+  if (!saw_header) {
+    for (std::size_t i = 0; i < record.subrecords.size(); ++i) {
+      if (record.subrecords[i].signature == subrecord) current.push_back(i);
+    }
+  }
+  if (!current.empty()) scopes.push_back(std::move(current));
+  return scopes;
 }
 
-std::optional<std::vector<std::size_t>> behavior_field_candidates(const Record& record, Signature subrecord,
-                                                                 bool repeated) {
+std::optional<std::vector<std::size_t>> flat_field_candidates(const Record& record, Signature subrecord,
+                                                             bool repeated) {
   if (record.header.signature == sig("LENS") && subrecord == sig("DNAM")) {
     // Constraint: DNAM is the sprite group's required non-repeatable leader, so every DNAM after LFSP heads one run.
     if (repeated) return after_marker(record.subrecords, sig("LFSP"), subrecord);
@@ -140,6 +162,29 @@ std::optional<std::vector<std::size_t>> behavior_field_candidates(const Record& 
     out.push_back(*idle);
   }
   return out;
+}
+
+}
+
+std::optional<std::vector<std::vector<std::size_t>>> behavior_field_candidate_scopes(
+    const Record& record, Signature subrecord, bool repeated) {
+  if (record.header.signature == sig("REGN") &&
+      listed(subrecord.view(), {"RDOT", "RDGS", "RDWT", "RDSA"})) {
+    return entry_payload_scopes(record, subrecord);
+  }
+  if (auto flat = flat_field_candidates(record, subrecord, repeated)) {
+    return std::vector<std::vector<std::size_t>>{std::move(*flat)};
+  }
+  return std::nullopt;
+}
+
+std::optional<std::vector<std::size_t>> behavior_field_candidates(const Record& record, Signature subrecord,
+                                                                 bool repeated) {
+  const auto scopes = behavior_field_candidate_scopes(record, subrecord, repeated);
+  if (!scopes) return std::nullopt;
+  std::vector<std::size_t> flat;
+  for (const auto& scope : *scopes) flat.insert(flat.end(), scope.begin(), scope.end());
+  return flat;
 }
 
 bool behavior_field_payload_valid(const Record& record, const Subrecord& sub) {

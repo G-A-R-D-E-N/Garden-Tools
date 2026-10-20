@@ -534,6 +534,9 @@ TEST(RaceScalarRows, SkeletalModelPathsEditInPlace) {
   EXPECT_EQ(read_scalar_member(plugin, "RACE\\SkeletalModelPath", 1),
             "Actors\\Character\\FemaleSkeleton.nif");
 
+  EXPECT_EQ(fo4::set_record_string(plugin, key, model, 2, "Actors\\Character\\Other.nif"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(read_scalar_member(plugin, "RACE\\SkeletalModelPath", 2), "");
   EXPECT_EQ(fo4::set_record_string(plugin, key, model, 1, "Actors\\Character\\Other.nif"),
             fo4::ScalarMutationStatus::updated);
   EXPECT_EQ(fo4::set_record_string(plugin, key, model, 2, "Actors\\Character\\Third.nif"),

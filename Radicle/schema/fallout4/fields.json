@@ -208,7 +208,38 @@
         {"path": "ARMA\\BipedMaleModelFlags", "label": "Biped male model flags", "kind": "scalar", "subrecord": "MO2F", "offset": 0, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Has FaceBones Model"}, {"bit": 1, "name": "Has 1stPerson Model"}], "minimum": 0, "maximum": 255, "payload_size": 1, "insertion": "existing_only"},
         {"path": "ARMA\\BipedFemaleModelFlags", "label": "Biped female model flags", "kind": "scalar", "subrecord": "MO3F", "offset": 0, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Has FaceBones Model"}, {"bit": 1, "name": "Has 1stPerson Model"}], "minimum": 0, "maximum": 255, "payload_size": 1, "insertion": "existing_only"},
         {"path": "ARMA\\FirstPersonMaleModelFlags", "label": "First person male model flags", "kind": "scalar", "subrecord": "MO4F", "offset": 0, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Has FaceBones Model"}, {"bit": 1, "name": "Has 1stPerson Model"}], "minimum": 0, "maximum": 255, "payload_size": 1, "insertion": "existing_only"},
-        {"path": "ARMA\\FirstPersonFemaleModelFlags", "label": "First person female model flags", "kind": "scalar", "subrecord": "MO5F", "offset": 0, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Has FaceBones Model"}, {"bit": 1, "name": "Has 1stPerson Model"}], "minimum": 0, "maximum": 255, "payload_size": 1, "insertion": "existing_only"}
+        {"path": "ARMA\\FirstPersonFemaleModelFlags", "label": "First person female model flags", "kind": "scalar", "subrecord": "MO5F", "offset": 0, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Has FaceBones Model"}, {"bit": 1, "name": "Has 1stPerson Model"}], "minimum": 0, "maximum": 255, "payload_size": 1, "insertion": "existing_only"},
+        {
+          "path": "ARMA\\SculptData",
+          "label": "Sculpt data",
+          "kind": "subrecord_group",
+          "insertion": "existing_only",
+          "members": [
+            {
+              "subrecord": "BSMP",
+              "required": true,
+              "repeatable": false,
+              "payload_size": 4,
+              "fields": [
+                {"path": "ARMA\\SculptTargetGender", "label": "Target gender", "offset": 0, "storage": "u32", "presentation": "enum", "names": [{"value": 0, "name": "Male"}, {"value": 1, "name": "Female"}], "minimum": 0, "maximum": 1, "insertion": "existing_only"}
+              ]
+            },
+            {
+              "subrecord": "BSMB",
+              "required": true,
+              "repeatable": true,
+              "payload_size": 0,
+              "default": "00"
+            },
+            {
+              "subrecord": "BSMS",
+              "required": true,
+              "repeatable": true,
+              "payload_size": 12,
+              "default": "000000000000000000000000"
+            }
+          ]
+        }
       ],
       "formlink_fields": [
         {
@@ -5997,6 +6028,32 @@
           "members": [
             {"path": "IMAD\\DepthOfFieldRangeTime", "label": "Depth of field range time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
             {"path": "IMAD\\DepthOfFieldRangeValue", "label": "Depth of field range value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\DepthOfFieldVignetteRadiusInterpolators",
+          "label": "Depth of field vignette radius interpolators",
+          "kind": "counted_array",
+          "subrecord": "NAM5",
+          "stride": 8,
+          "min_form_version": 118,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\DepthOfFieldVignetteRadiusTime", "label": "Depth of field vignette radius time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\DepthOfFieldVignetteRadiusValue", "label": "Depth of field vignette radius value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\DepthOfFieldVignetteStrengthInterpolators",
+          "label": "Depth of field vignette strength interpolators",
+          "kind": "counted_array",
+          "subrecord": "NAM6",
+          "stride": 8,
+          "min_form_version": 118,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\DepthOfFieldVignetteStrengthTime", "label": "Depth of field vignette strength time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\DepthOfFieldVignetteStrengthValue", "label": "Depth of field vignette strength value", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
           ]
         },
         {

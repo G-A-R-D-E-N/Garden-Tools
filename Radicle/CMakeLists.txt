@@ -433,6 +433,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_refr_extra_rows.cpp
     tests/test_ipds_movt_rows.cpp
     tests/test_armo_arma_rows.cpp
+    tests/test_arma_sculpt_rows.cpp
     tests/test_destructible_rows.cpp
     tests/test_destructible_stage_members.cpp
     tests/test_destructible_header.cpp
@@ -626,6 +627,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_scene_phase_edit.cpp
     tests/test_scene_actor_action_edit.cpp
     tests/test_environment_world.cpp
+    tests/test_environment_region.cpp
     tests/test_environment_water_edges.cpp
     tests/test_environment_placed.cpp
     tests/test_environment_script_elements.cpp
