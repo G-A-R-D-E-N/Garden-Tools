@@ -329,10 +329,12 @@ TEST(RecordFlags, ChangingDeletedBitThroughSetRecordFlagsIsRefused) {
   auto plugin = load({});
   const auto ref = fo4::FormKey::parse("000800:Cells.esp");
   const auto before = fo4::write_plugin(plugin);
+  const auto state = fo4::test::plugin_state(plugin);
   EXPECT_EQ(fo4::set_record_flags(plugin, ref,
                                   fo4::RecordFlags::deleted | fo4::RecordFlags::persistent),
             fo4::RecordFlagStatus::deleted_bit);
   EXPECT_EQ(fo4::write_plugin(plugin), before);
+  EXPECT_EQ(fo4::test::plugin_state(plugin), state);
 }
 
 TEST(RecordFlags, ExteriorPersistentSetMovesReferenceToWorldPersistentCell) {
@@ -389,9 +391,11 @@ TEST(RecordFlags, ExteriorPersistentSetWithoutPersistentCellRefusesWithoutChange
   auto plugin = load_exterior({});
   const auto ref = fo4::FormKey::parse("000910:Exterior.esp");
   const auto before = fo4::write_plugin(plugin);
+  const auto state = fo4::test::plugin_state(plugin);
   EXPECT_EQ(fo4::set_record_flags(plugin, ref, fo4::RecordFlags::persistent),
             fo4::RecordFlagStatus::target_cell_missing);
   EXPECT_EQ(fo4::write_plugin(plugin), before);
+  EXPECT_EQ(fo4::test::plugin_state(plugin), state);
 }
 
 TEST(RecordFlags, ExteriorPersistentClearInsideGridCellMovesBucketInPlace) {
@@ -618,9 +622,11 @@ TEST(RecordFlags, MarkOverrideDeletedLeavesNoSubrecordsOnNonReference) {
 TEST(RecordFlags, LocalRecordAndAlreadyDeletedReturnWithoutChange) {
   auto local = load({});
   const auto local_before = fo4::write_plugin(local);
+  const auto local_state = fo4::test::plugin_state(local);
   EXPECT_EQ(fo4::mark_override_deleted(local, fo4::FormKey::parse("000800:Cells.esp")),
             fo4::MarkDeletedStatus::local_record);
   EXPECT_EQ(fo4::write_plugin(local), local_before);
+  EXPECT_EQ(fo4::test::plugin_state(local), local_state);
 
   auto deleted = load(CellPlugin{
       .masters = {"Base.esm"},
@@ -628,9 +634,11 @@ TEST(RecordFlags, LocalRecordAndAlreadyDeletedReturnWithoutChange) {
       .ref_flags = fo4::RecordFlags::deleted,
   });
   const auto deleted_before = fo4::write_plugin(deleted);
+  const auto deleted_state = fo4::test::plugin_state(deleted);
   EXPECT_EQ(fo4::mark_override_deleted(deleted, fo4::FormKey::parse("000800:Base.esm")),
             fo4::MarkDeletedStatus::already_deleted);
   EXPECT_EQ(fo4::write_plugin(deleted), deleted_before);
+  EXPECT_EQ(fo4::test::plugin_state(deleted), deleted_state);
 }
 
 TEST(RecordFlags, UndeleteClearsDeletedDisablesAndParentsToPlayerReference) {
@@ -697,8 +705,10 @@ TEST(RecordFlags, UndeleteRefusesNonDeletedReferenceWithoutChange) {
   auto plugin = load({});
   const auto ref = fo4::FormKey::parse("000800:Cells.esp");
   const auto before = fo4::write_plugin(plugin);
+  const auto state = fo4::test::plugin_state(plugin);
   EXPECT_EQ(fo4::undelete_and_disable_reference(plugin, ref), fo4::UndeleteStatus::not_deleted);
   EXPECT_EQ(fo4::write_plugin(plugin), before);
+  EXPECT_EQ(fo4::test::plugin_state(plugin), state);
 }
 
 TEST(RecordFlags, UndeleteRefusesDeletedStubWithoutDataWithoutChange) {
@@ -708,22 +718,28 @@ TEST(RecordFlags, UndeleteRefusesDeletedStubWithoutDataWithoutChange) {
   });
   const auto ref = fo4::FormKey::parse("000800:Cells.esp");
   const auto before = fo4::write_plugin(plugin);
+  const auto state = fo4::test::plugin_state(plugin);
   EXPECT_EQ(fo4::undelete_and_disable_reference(plugin, ref), fo4::UndeleteStatus::incomplete_reference);
   EXPECT_EQ(fo4::write_plugin(plugin), before);
+  EXPECT_EQ(fo4::test::plugin_state(plugin), state);
 }
 
 TEST(RecordFlags, UndeleteRefusesNonReferenceWithoutChange) {
   auto plugin = fo4::read_plugin(weapon_plugin(), "Patch.esp");
   const auto weapon = fo4::FormKey::parse("000800:Base.esm");
   const auto before = fo4::write_plugin(plugin);
+  const auto state = fo4::test::plugin_state(plugin);
   EXPECT_EQ(fo4::undelete_and_disable_reference(plugin, weapon), fo4::UndeleteStatus::not_a_reference);
   EXPECT_EQ(fo4::write_plugin(plugin), before);
+  EXPECT_EQ(fo4::test::plugin_state(plugin), state);
 }
 
 TEST(RecordFlags, UndeleteRefusesMissingFormKeyWithoutChange) {
   auto plugin = load({});
   const auto missing = fo4::FormKey::parse("000999:Cells.esp");
   const auto before = fo4::write_plugin(plugin);
+  const auto state = fo4::test::plugin_state(plugin);
   EXPECT_EQ(fo4::undelete_and_disable_reference(plugin, missing), fo4::UndeleteStatus::record_missing);
   EXPECT_EQ(fo4::write_plugin(plugin), before);
+  EXPECT_EQ(fo4::test::plugin_state(plugin), state);
 }

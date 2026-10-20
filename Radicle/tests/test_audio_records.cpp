@@ -144,7 +144,9 @@ Bytes fixture() {
               {"ATTN", cat({f32(1.0f), f32(2.0f), f32(3.0f), f32(4.0f), le(0, 1), le(50, 1), le(80, 1),
                             le(95, 1), le(50, 1), le(20, 1), le(5, 1), le(0, 1)})},
               {"ENAM", le(0x807, 4)}});
-  add_record(out, "SCSN", 0x804, {{"EDID", zstr("RadicleSnapshot")}, {"PNAM", le(5, 2)}});
+  add_record(out, "SCSN", 0x804,
+             {{"EDID", zstr("RadicleSnapshot")}, {"PNAM", le(5, 2)},
+              {"CNAM", cat({le(0x802, 4), f32(0.5f)})}});
   add_record(out, "STAG", 0x805, {{"EDID", zstr("RadicleTags")}});
   add_record(out, "MUST", 0x806,
              {{"EDID", zstr("RadicleTrack")}, {"CNAM", le(1859641416, 4)}, {"FLTV", f32(2.5f)},
