@@ -6,6 +6,8 @@
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <memory>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -235,7 +237,15 @@ PexState castState() {
       method("Truth", "Bool", {}, {typed("::temp0", "Bool"), typed("::temp1", "Bool")},
              {ins("cast", {id("::temp0"), number(3)}), ins("not", {id("::temp1"), id("::temp0")}),
               ins("not", {id("::temp0"), id("::temp1")}), ins("return", {id("::temp0")})});
-  return state("", {convert, truth});
+  PexFunction castRef = method(
+      "CastRef", "Int", {typed("ref", "Var")}, {typed("::temp0", "Bool"), typed("::temp1", "Int")},
+      {ins("cast", {id("::temp0"), id("ref")}), ins("jmpf", {id("::temp0"), number(2)}),
+       ins("assign", {id("::temp1"), number(1)}), ins("return", {id("::temp1")})});
+  PexFunction notNone =
+      method("NotNone", "Bool", {}, {typed("::temp0", "Bool")},
+             {ins("jmpt", {id("::NoneVar"), number(2)}),
+              ins("not", {id("::temp0"), id("::NoneVar")}), ins("return", {id("::temp0")})});
+  return state("", {convert, truth, castRef, notNone});
 }
 
 PexState loopState() {
@@ -248,7 +258,7 @@ PexState loopState() {
        ins("iadd", {id("::temp0"), id("::temp0"), id("::temp1")}),
        ins("iadd", {id("::temp1"), id("::temp1"), number(1)}),
        ins("jmp", {number(-4)}), ins("return", {id("::temp0")})});
-  PexFunction spin = method("Spin", "None", {}, {}, {ins("jmp", {number(-1)})});
+  PexFunction spin = method("Spin", "None", {}, {}, {ins("jmp", {number(0)})});
   return state("", {total, spin});
 }
 
@@ -257,7 +267,7 @@ PexState recursionState() {
       "Factorial", "Int", {typed("n", "Int")},
       {typed("::temp0", "Int"), typed("::temp1", "Bool"), typed("::temp2", "Int")},
       {ins("cmp_lte", {id("::temp1"), id("n"), number(1)}),
-       ins("jmpf", {id("::temp1"), number(4)}), ins("assign", {id("::temp0"), number(1)}),
+       ins("jmpf", {id("::temp1"), number(3)}), ins("assign", {id("::temp0"), number(1)}),
        ins("return", {id("::temp0")}), ins("isub", {id("::temp2"), id("n"), number(1)}),
        ins("callstatic", {id("Script"), id("Factorial"), id("::temp0"), id("::temp2")}),
        ins("imul", {id("::temp0"), id("n"), id("::temp0")}), ins("return", {id("::temp0")})});
@@ -303,7 +313,18 @@ PexState arrayState() {
        ins("array_add", {id("::temp0"), number(1), number(400)}),
        ins("array_length", {id("::temp1"), id("::temp0")}),
        ins("return", {id("::temp1")})});
-  return state("", {build, find, length, overrun, tooLong});
+  PexFunction lastIndex = method(
+      "LastIndex", "Int", {}, {typed("::temp0", "Int[]"), typed("::temp1", "Int")},
+      {ins("array_create", {id("::temp0"), number(3)}),
+       ins("array_setelement", {id("::temp0"), number(2), number(5)}),
+       ins("array_rfindelement", {id("::temp0"), id("::temp1"), number(5), number(-1)}),
+       ins("return", {id("::temp1")})});
+  PexFunction nest = method(
+      "Nest", "Int", {}, {typed("::temp0", "Var[]"), typed("::temp1", "Int")},
+      {ins("array_create", {id("::temp0"), number(1)}),
+       ins("array_add", {id("::temp0"), id("::temp0"), number(1)}),
+       ins("array_length", {id("::temp1"), id("::temp0")}), ins("return", {id("::temp1")})});
+  return state("", {build, find, length, overrun, tooLong, lastIndex, nest});
 }
 
 }
@@ -340,6 +361,14 @@ TEST(PapyrusVm, StringConcatFormatsNumbersAndEqualityIgnoresCase) {
   const Result compare = runScript(host, "Script", "Compare");
   ASSERT_EQ(compare.status, Status::Ok);
   EXPECT_TRUE(compare.value.boolean);
+  Limits limits;
+  limits.maxStringLength = 8;
+  const Result capped = runScript(host, "Script", "Concat", {}, limits);
+  EXPECT_EQ(capped.status, Status::StringTooLong);
+  EXPECT_FALSE(fo4::papyrus::isFatal(capped.status));
+  EXPECT_EQ(capped.value.type, ValueType::None);
+  limits.maxStringLength = 9;
+  EXPECT_EQ(runScript(host, "Script", "Concat", {}, limits).status, Status::Ok);
 }
 
 TEST(PapyrusVm, ScalarCastsFollowThePapyrusTable) {
@@ -351,6 +380,20 @@ TEST(PapyrusVm, ScalarCastsFollowThePapyrusTable) {
   const Result truth = runScript(host, "Script", "Truth");
   ASSERT_EQ(truth.status, Status::Ok);
   EXPECT_TRUE(truth.value.boolean);
+  const Result nullCast = runScript(host, "Script", "CastRef", {fo4::papyrus::noneValue()});
+  ASSERT_EQ(nullCast.status, Status::Ok);
+  EXPECT_EQ(nullCast.value.integer, 0);
+  const Result nullNot = runScript(host, "Script", "NotNone");
+  ASSERT_EQ(nullNot.status, Status::Ok);
+  EXPECT_TRUE(nullNot.value.boolean);
+  const Result selfCast =
+      runScript(host, "Script", "CastRef", {fo4::papyrus::objectValue(2, "Script", "")});
+  ASSERT_EQ(selfCast.status, Status::Ok);
+  EXPECT_EQ(selfCast.value.integer, 1);
+  const Value items = fo4::papyrus::arrayValue(std::make_shared<fo4::papyrus::Array>());
+  const Result arrayCast = runScript(host, "Script", "CastRef", {items});
+  ASSERT_EQ(arrayCast.status, Status::Ok);
+  EXPECT_EQ(arrayCast.value.integer, 1);
 }
 
 TEST(PapyrusVm, CastingAnArrayToAScalarIsRejected) {
@@ -378,10 +421,15 @@ TEST(PapyrusVm, LoopJumpsAreRelativeToTheCurrentInstruction) {
 TEST(PapyrusVm, BadJumpTargetIsRejectedInsteadOfReadingPastTheFunction) {
   TestHost host;
   PexFunction broken = method("Broken", "None", {}, {}, {ins("jmp", {number(9)})});
-  host.addScript(script("Script", "", {}, {state("", {broken})}));
+  PexFunction toEnd = method("ToEnd", "Int", {}, {typed("::temp0", "Int")},
+                             {ins("jmp", {number(2)}), ins("assign", {id("::temp0"), number(9)})});
+  host.addScript(script("Script", "", {}, {state("", {broken, toEnd})}));
   const Result result = runScript(host, "Script", "Broken");
   EXPECT_EQ(result.status, Status::BadJumpTarget);
   EXPECT_TRUE(fo4::papyrus::isFatal(result.status));
+  const Result atEnd = runScript(host, "Script", "ToEnd");
+  EXPECT_EQ(atEnd.status, Status::Ok);
+  EXPECT_EQ(atEnd.value.type, ValueType::None);
 }
 
 TEST(PapyrusVm, RecursionReturnsThroughTheCallerDestinationSlot) {
@@ -426,6 +474,9 @@ TEST(PapyrusVm, ArrayInstructionsMutateTheSharedArrayInPlace) {
   const Result length = runScript(host, "Script", "Length");
   ASSERT_EQ(length.status, Status::Ok);
   EXPECT_EQ(length.value.integer, 4);
+  const Result last = runScript(host, "Script", "LastIndex");
+  ASSERT_EQ(last.status, Status::Ok);
+  EXPECT_EQ(last.value.integer, 2);
 }
 
 TEST(PapyrusVm, ArrayOverrunAndOverlongArraysAreReported) {
@@ -438,6 +489,8 @@ TEST(PapyrusVm, ArrayOverrunAndOverlongArraysAreReported) {
   limits.maxArrayLength = 128;
   const Result tooLong = runScript(host, "Script", "TooLong", {}, limits);
   EXPECT_EQ(tooLong.status, Status::ArrayTooLong);
+  const Result nested = runScript(host, "Script", "Nest");
+  EXPECT_EQ(nested.status, Status::TypeMismatch);
 }
 
 TEST(PapyrusVm, MethodsResolveThroughTheParentChainAndCallParentRestartsThere) {
@@ -454,7 +507,13 @@ TEST(PapyrusVm, MethodsResolveThroughTheParentChainAndCallParentRestartsThere) {
   const PexFunction callParent =
       method("CallParent", "String", {}, {typed("::temp0", "String")},
              {ins("callparent", {id("Describe"), id("::temp0")}), ins("return", {id("::temp0")})});
-  host.addScript(script("Parent", "", {}, {state("", {parentDescribe, parentWho})}));
+  const PexFunction parentLevel =
+      method("Level", "Int", {}, {typed("::temp0", "Int")},
+             {ins("assign", {id("::temp0"), id("Count")}), ins("return", {id("::temp0")})});
+  PexVariable count = variable("Count", "Int");
+  count.defaultValue = number(7);
+  host.addScript(
+      script("Parent", "", {count}, {state("", {parentDescribe, parentWho, parentLevel})}));
   host.addScript(script("Child", "Parent", {}, {state("", {childDescribe, callParent})}));
 
   const Value self = fo4::papyrus::objectValue(7, "Child", "");
@@ -467,6 +526,9 @@ TEST(PapyrusVm, MethodsResolveThroughTheParentChainAndCallParentRestartsThere) {
   const Result viaParent = runSelf(host, self, "CallParent");
   ASSERT_EQ(viaParent.status, Status::Ok);
   EXPECT_EQ(viaParent.value.str, "Parent");
+  const Result level = runSelf(host, self, "Level");
+  ASSERT_EQ(level.status, Status::Ok);
+  EXPECT_EQ(level.value.integer, 7);
 }
 
 TEST(PapyrusVm, NamedStatesShadowTheEmptyStateForTheSameFunctionName) {
@@ -503,13 +565,20 @@ TEST(PapyrusVm, NativeFunctionsResolveThroughTheHostRegistry) {
   const PexFunction missing = method(
       "Missing", "Int", {}, {typed("::temp0", "Int")},
       {ins("callstatic", {id("Nowhere"), id("Gone"), id("::temp0")}), ins("return", {id("::temp0")})});
-  host.addScript(script("Natives", "", {}, {state("", {boost, caller, missing})}));
+  const PexFunction blast = method(
+      "Blast", "Int", {}, {typed("::temp0", "Int")},
+      {ins("callstatic", {id("Natives"), id("Explode"), id("::temp0")}),
+       ins("return", {id("::temp0")})});
+  host.addScript(script("Natives", "", {}, {state("", {boost, caller, missing, blast})}));
+  host.addNative("Natives", "Explode", [](const std::vector<Value>&, Value&, Status&) -> bool {
+    throw std::runtime_error("host fault");
+  });
   host.addNative("Natives", "Boost", [](const std::vector<Value>& args, Value& out, Status& status) {
     if (args.size() != 1 || args[0].type != ValueType::Integer) {
       status = Status::TypeMismatch;
       return false;
     }
-    out = fo4::papyrus::integerValue(args[0].integer * 10);
+    out = fo4::papyrus::floatValue(static_cast<float>(args[0].integer) * 10.0F);
     return true;
   });
 
@@ -518,6 +587,11 @@ TEST(PapyrusVm, NativeFunctionsResolveThroughTheHostRegistry) {
   EXPECT_EQ(result.value.integer, 51);
   const Result absent = runScript(host, "Natives", "Missing");
   EXPECT_EQ(absent.status, Status::FunctionNotFound);
+  const Result direct = runScript(host, "Natives", "Boost", {fo4::papyrus::integerValue(5)});
+  ASSERT_EQ(direct.status, Status::Ok);
+  EXPECT_EQ(direct.value.integer, 50);
+  const Result exploded = runScript(host, "Natives", "Blast");
+  EXPECT_EQ(exploded.status, Status::HostError);
 }
 
 TEST(PapyrusVm, PropertiesUseTheHostAndAutoVariablesUseTheBackingVariable) {
@@ -546,6 +620,64 @@ TEST(PapyrusVm, PropertiesUseTheHostAndAutoVariablesUseTheBackingVariable) {
   ASSERT_EQ(after.status, Status::Ok);
   EXPECT_EQ(after.value.integer, 9);
   EXPECT_EQ(host.variables["holder.countvar"].integer, 9);
+}
+
+TEST(PapyrusVm, PropertyHandlersRunEvenWhenTheirFunctionNamesAreEmpty) {
+  TestHost host;
+  PexProperty count;
+  count.name = "Count";
+  count.flags = 0x03;
+  count.readHandler = method("", "Int", {}, {}, {ins("return", {number(42)})});
+  count.writeHandler =
+      method("", "None", {typed("value", "Int")}, {}, {ins("assign", {id("Last"), id("value")})});
+  const PexFunction probe = method(
+      "Probe", "Int", {}, {typed("::temp0", "Int")},
+      {ins("propset", {id("Count"), id("self"), number(9)}),
+       ins("propget", {id("Count"), id("self"), id("::temp0")}), ins("return", {id("::temp0")})});
+  PexObject object = script("Holder", "", {variable("Last", "Int")}, {state("", {probe})});
+  object.properties.push_back(count);
+  host.addScript(std::move(object));
+  const Result result = runSelf(host, fo4::papyrus::objectValue(5, "Holder", ""), "Probe");
+  ASSERT_EQ(result.status, Status::Ok);
+  EXPECT_EQ(result.value.integer, 42);
+  EXPECT_EQ(host.variables["holder.last"].integer, 9);
+}
+
+TEST(PapyrusVm, IntegerOrderingIsExactBeyondFloatPrecision) {
+  TestHost host;
+  const PexFunction order = method(
+      "Order", "Bool", {}, {typed("::temp0", "Bool")},
+      {ins("cmp_lt", {id("::temp0"), number(16777216), number(16777217)}),
+       ins("return", {id("::temp0")})});
+  host.addScript(script("Script", "", {}, {state("", {order})}));
+  const Result result = runScript(host, "Script", "Order");
+  ASSERT_EQ(result.status, Status::Ok);
+  EXPECT_TRUE(result.value.boolean);
+}
+
+TEST(PapyrusVm, AFailedReturnWriteStopsTheRunInsteadOfContinuingTheCaller) {
+  TestHost host;
+  const PexFunction make = method("Make", "Int", {}, {}, {ins("return", {number(5)})});
+  const PexFunction caller = method(
+      "Caller", "Int", {}, {typed("::temp0", "Thing"), typed("::temp1", "Int")},
+      {ins("callstatic", {id("Script"), id("Make"), id("::temp0")}),
+       ins("assign", {id("::temp1"), number(1)}), ins("return", {id("::temp1")})});
+  host.addScript(script("Script", "", {}, {state("", {make, caller})}));
+  const Result result = runScript(host, "Script", "Caller");
+  EXPECT_EQ(result.status, Status::TypeMismatch);
+  EXPECT_EQ(result.instructions, 2U);
+}
+
+TEST(PapyrusVm, WritesToNoneVarAreDiscardedAndReadBackAsNone) {
+  TestHost host;
+  const PexFunction sink = method(
+      "Sink", "Int", {}, {typed("::temp0", "Int")},
+      {ins("assign", {id("::NoneVar"), number(5)}),
+       ins("assign", {id("::temp0"), id("::NoneVar")}), ins("return", {id("::temp0")})});
+  host.addScript(script("Script", "", {}, {state("", {sink})}));
+  const Result result = runScript(host, "Script", "Sink");
+  ASSERT_EQ(result.status, Status::Ok);
+  EXPECT_EQ(result.value.type, ValueType::None);
 }
 
 TEST(PapyrusVm, UnknownIdentifierAndArgumentCountAreRejected) {
@@ -579,10 +711,14 @@ TEST(PapyrusVm, StructOpcodesReportUnsupportedAndUnknownOpcodesAreRejected) {
                                      instruction.args = {id("::temp0")};
                                      return instruction;
                                    }()});
-  host.addScript(script("Script", "", {}, {state("", {structs, unknown, shortArgs})}));
+  PexInstruction swapped = ins("iadd", {id("::temp0"), number(4), number(1)});
+  swapped.mnemonic = "isub";
+  const PexFunction mismatch = method("Mismatch", "None", {}, {typed("::temp0", "Int")}, {swapped});
+  host.addScript(script("Script", "", {}, {state("", {structs, unknown, shortArgs, mismatch})}));
   EXPECT_EQ(runScript(host, "Script", "Structs").status, Status::UnsupportedOpcode);
   EXPECT_EQ(runScript(host, "Script", "Unknown").status, Status::UnknownOpcode);
   EXPECT_EQ(runScript(host, "Script", "Short").status, Status::StackUnderflow);
+  EXPECT_EQ(runScript(host, "Script", "Mismatch").status, Status::UnknownOpcode);
 }
 
 TEST(PapyrusVm, AFunctionMissingFromTheScriptIsReported) {

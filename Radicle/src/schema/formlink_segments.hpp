@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 namespace fo4::schema::detail {
 
@@ -19,5 +20,15 @@ PackedSegment packed_segment(const Record& record,
 void reconcile_counter(Record& record,
                        const FormLinkListDescriptor& descriptor,
                        std::uint32_t count);
+
+void erase_list_element(Record& record,
+                        const FormLinkListDescriptor& descriptor,
+                        std::size_t position);
+
+void move_list_element(Record& record,
+                       const FormLinkListDescriptor& descriptor,
+                       const std::vector<std::size_t>& positions,
+                       std::size_t from,
+                       std::size_t to);
 
 }  // namespace fo4::schema::detail

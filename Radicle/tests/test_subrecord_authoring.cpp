@@ -512,8 +512,10 @@ TEST(SubrecordAuthoring, CreationRefusesRequiredCountedRepeatedEntries) {
 
 TEST(SubrecordAuthoring, RefusesDefaultFieldsInLocalizedPlugins) {
   auto plugin = fo4::read_plugin(build({}), k_plugin);
-  EXPECT_EQ(fo4::create_record(plugin, sig("ARMO"), "X", k_localized_rules).status,
-            fo4::RecordCreateStatus::created);
+  const auto created = fo4::create_record(plugin, sig("ARMO"), "X", k_localized_rules);
+  ASSERT_EQ(created.status, fo4::RecordCreateStatus::created);
+  ASSERT_EQ(order(plugin, 0x900), (std::vector<std::string>{"EDID", "FULL"}));
+  EXPECT_EQ(find_sub(plugin, 0x900, "FULL")->data, filled(1, 1));
   plugin.header.tes4_flags = fo4::RecordFlags{plugin.header.tes4_flags.value() | fo4::RecordFlags::localized};
   ASSERT_TRUE(plugin.header.tes4_flags.is_localized());
   EXPECT_EQ(fo4::create_record(plugin, sig("ARMO"), "X", k_localized_rules).status,
@@ -568,6 +570,60 @@ TEST(SubrecordAuthoring, LocalizedDescriptionsStillRefuseCreateDefaults) {
   EXPECT_EQ(fo4::create_record(plugin, sig("LSCR"), "").status, fo4::RecordCreateStatus::no_default);
   EXPECT_EQ(fo4::create_record(plugin, sig("MESG"), "").status, fo4::RecordCreateStatus::no_default);
   EXPECT_EQ(plugin.header.next_form_id, 0x900u);
+}
+
+TEST(SubrecordAuthoring, GameSettingStringDefaultIsInlineTextOutsideALocalizedPlugin) {
+  auto plugin = fo4::read_plugin(build({}), k_plugin);
+
+  const auto text = fo4::create_record(plugin, sig("GMST"), "sNewSetting");
+  ASSERT_EQ(text.status, fo4::RecordCreateStatus::created);
+  EXPECT_EQ(order(plugin, 0x900), (std::vector<std::string>{"EDID", "DATA"}));
+  EXPECT_EQ(find_sub(plugin, 0x900, "DATA")->data, zstr(""));
+  EXPECT_TRUE(authoring_clean(plugin, text.key));
+
+  const auto count = fo4::create_record(plugin, sig("GMST"), "iNewSetting");
+  ASSERT_EQ(count.status, fo4::RecordCreateStatus::created);
+  EXPECT_EQ(find_sub(plugin, 0x901, "DATA")->data, filled(4, 0));
+
+  plugin.header.tes4_flags = fo4::RecordFlags{plugin.header.tes4_flags.value() | fo4::RecordFlags::localized};
+  const auto localized = fo4::create_record(plugin, sig("GMST"), "sLocalizedSetting");
+  ASSERT_EQ(localized.status, fo4::RecordCreateStatus::created);
+  EXPECT_EQ(find_sub(plugin, 0x902, "DATA")->data, filled(4, 0));
+}
+
+TEST(SubrecordAuthoring, HeadPartPartsRefuseGeneratedAddAndRemoveAsNotAuthorable) {
+  const Subs head{{"EDID", zstr("Paired")}, {"DATA", filled(1, 0)}, {"PNAM", filled(4, 0)},
+                   {"NAM0", filled(4, 0)}, {"NAM1", zstr("a.nif")}};
+  Subs unpaired = head;
+  unpaired.push_back({"NAM0", filled(4, 0)});
+  Subs headless = head;
+  headless.erase(headless.begin() + 1);
+  Subs headless_unpaired = headless;
+  headless_unpaired.insert(headless_unpaired.begin() + 3, {"NAM0", filled(4, 0)});
+  auto plugin = fo4::read_plugin(build({{"HDPT", 0x810, head},
+                                        {"HDPT", 0x811, unpaired},
+                                        {"HDPT", 0x812, headless},
+                                        {"HDPT", 0x813, headless_unpaired}}),
+                                 k_plugin);
+  fo4::assign_record_form_keys(plugin);
+
+  EXPECT_TRUE(authoring_clean(plugin, key(0x810)));
+  EXPECT_FALSE(authoring_clean(plugin, key(0x811)));
+  EXPECT_FALSE(authoring_clean(plugin, key(0x813)));
+  EXPECT_EQ(fo4::add_record_subrecord(plugin, key(0x810), sig("NAM0")),
+            fo4::SubrecordAddStatus::not_authorable);
+  EXPECT_EQ(fo4::remove_record_subrecord(plugin, key(0x810), sig("NAM0"), 0),
+            fo4::SubrecordRemoveStatus::not_authorable);
+  EXPECT_EQ(fo4::add_record_subrecord(plugin, key(0x812), sig("DATA")),
+            fo4::SubrecordAddStatus::added);
+  EXPECT_EQ(fo4::add_record_subrecord(plugin, key(0x813), sig("DATA")),
+            fo4::SubrecordAddStatus::added);
+  EXPECT_EQ(order(plugin, 0x812),
+            (std::vector<std::string>{"EDID", "DATA", "PNAM", "NAM0", "NAM1"}));
+  EXPECT_EQ(order(plugin, 0x813),
+            (std::vector<std::string>{"EDID", "DATA", "PNAM", "NAM0", "NAM0", "NAM1"}));
+  EXPECT_TRUE(authoring_clean(plugin, key(0x812)));
+  EXPECT_FALSE(authoring_clean(plugin, key(0x813)));
 }
 
 TEST(SubrecordAuthoring, RemoveRefusesDebrDataWhoseModelTextureHasNoRule) {

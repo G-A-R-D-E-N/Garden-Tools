@@ -58,56 +58,77 @@ const ObjectRef* objectOf(const Value& value) {
     return value.type == ValueType::Object && value.object != nullptr ? value.object.get() : nullptr;
 }
 
+Result hostFailure() {
+    Result failed;
+    failed.status = Status::HostError;
+    return failed;
+}
+
 }
 
 Interpreter::Interpreter(Host& host, Limits limits) : host_(host), limits_(limits) {}
 
 Result Interpreter::runFunction(const std::string& scriptName, const std::string& functionName,
                                 const std::vector<Value>& args) {
-    Result result;
-    const pex::PexObject* object = host_.findObject(scriptName);
-    if (object == nullptr) {
-        result.status = Status::FunctionNotFound;
-        return result;
+    try {
+        Result result;
+        const pex::PexObject* object = host_.findObject(scriptName);
+        if (object == nullptr) {
+            result.status = Status::FunctionNotFound;
+            return result;
+        }
+        const std::string state = object->autoStateName;
+        const pex::PexObject* owner = nullptr;
+        const pex::PexFunction* function = findFunction(*object, state, functionName, &owner);
+        if (function == nullptr) {
+            result.status = Status::FunctionNotFound;
+            return result;
+        }
+        const Value self = objectValue(0, object->name, state);
+        return run(owner, *function, state, self, args);
+    } catch (...) {
+        return hostFailure();
     }
-    const std::string state = object->autoStateName;
-    const pex::PexFunction* function = findFunction(*object, state, functionName, nullptr);
-    if (function == nullptr) {
-        result.status = Status::FunctionNotFound;
-        return result;
-    }
-    const Value self = objectValue(0, object->name, state);
-    return run(object, *function, state, self, args);
 }
 
 Result Interpreter::runFunction(const Value& self, const std::string& functionName,
                                 const std::vector<Value>& args) {
-    Result result;
-    if (self.type != ValueType::Object || self.object == nullptr) {
-        result.status = Status::NullObject;
-        return result;
+    try {
+        Result result;
+        if (self.type != ValueType::Object || self.object == nullptr) {
+            result.status = Status::NullObject;
+            return result;
+        }
+        const pex::PexObject* object = host_.findObject(self.object->type);
+        if (object == nullptr) {
+            result.status = Status::FunctionNotFound;
+            return result;
+        }
+        const std::string state = self.object->state;
+        const pex::PexObject* owner = nullptr;
+        const pex::PexFunction* function = findFunction(*object, state, functionName, &owner);
+        if (function == nullptr) {
+            result.status = Status::FunctionNotFound;
+            return result;
+        }
+        return run(owner, *function, state, self, args);
+    } catch (...) {
+        return hostFailure();
     }
-    const pex::PexObject* object = host_.findObject(self.object->type);
-    if (object == nullptr) {
-        result.status = Status::FunctionNotFound;
-        return result;
-    }
-    const std::string state = self.object->state;
-    const pex::PexFunction* function = findFunction(*object, state, functionName, nullptr);
-    if (function == nullptr) {
-        result.status = Status::FunctionNotFound;
-        return result;
-    }
-    return run(object, *function, state, self, args);
 }
 
 Result Interpreter::runObjectFunction(const pex::PexObject& object, const pex::PexFunction& function,
                                       const Value& self, const std::vector<Value>& args) {
-    std::string state = object.autoStateName;
-    if (self.type == ValueType::Object && self.object != nullptr && !self.object->state.empty()) {
-        state = self.object->state;
+    try {
+        std::string state = object.autoStateName;
+        if (self.type == ValueType::Object && self.object != nullptr &&
+            !self.object->state.empty()) {
+            state = self.object->state;
+        }
+        return run(&object, function, state, self, args);
+    } catch (...) {
+        return hostFailure();
     }
-    return run(&object, function, state, self, args);
 }
 
 // Frames hold pointers into the host-owned pex objects, so those must outlive the Run.
@@ -122,6 +143,23 @@ Result Interpreter::run(const pex::PexObject* object, const pex::PexFunction& fu
     result_ = Value{};
     frames_.clear();
 
+    if (function.isNative) {
+        Result nativeResult;
+        if (object == nullptr) {
+            nativeResult.status = Status::FunctionNotFound;
+            return nativeResult;
+        }
+        Value out;
+        Status status = Status::Ok;
+        if (!host_.callNative(object->name, function.name, args, out, status)) {
+            nativeResult.status = status == Status::Ok ? Status::FunctionNotFound : status;
+            return nativeResult;
+        }
+        const Status coerced = coerce(out, function.returnType, nativeResult.value);
+        if (coerced != Status::Ok) nativeResult.status = coerced;
+        return nativeResult;
+    }
+
     const Status pushed = pushFrame(object, function, state, self, pex::PexValue{}, args);
     if (pushed != Status::Ok) {
         Result failed;
@@ -129,7 +167,7 @@ Result Interpreter::run(const pex::PexObject* object, const pex::PexFunction& fu
         return failed;
     }
 
-    while (!frames_.empty()) {
+    while (!frames_.empty() && firstError_ == Status::Ok) {
         if (instructions_ >= limits_.maxInstructions) {
             record(Status::InstructionBudgetExceeded);
             break;
@@ -325,9 +363,7 @@ Status Interpreter::readBoolOperand(Frame& frame, const pex::PexValue& operand, 
     Value value;
     const Status status = readOperand(frame, operand, value);
     if (status != Status::Ok) return status;
-    if (value.type != ValueType::Bool) return Status::TypeMismatch;
-    out = value.boolean;
-    return Status::Ok;
+    return toBool(value, out);
 }
 
 Status Interpreter::resolveIdentifier(Frame& frame, const std::string& name, Value& out) {
@@ -371,6 +407,7 @@ Status Interpreter::resolveIdentifier(Frame& frame, const std::string& name, Val
 
 Status Interpreter::writeOperand(Frame& frame, const pex::PexValue& operand, const Value& value) {
     if (operand.type != pex::PexValueType::Identifier) return Status::InternalError;
+    if (sameName(operand.str, "::NoneVar")) return Status::Ok;
     if (Slot* slot = findSlot(frame, operand.str)) {
         Value coerced;
         const Status status = coerce(value, slot->declaredType, coerced);
@@ -465,6 +502,13 @@ Status Interpreter::castTo(const Value& source, const std::string& sourceType,
         out = source;
         return Status::Ok;
     }
+    if (declaredValueType(targetType) == ValueType::Bool) {
+        bool flag = false;
+        const Status status = toBool(source, flag);
+        if (status != Status::Ok) return status;
+        out = boolValue(flag);
+        return Status::Ok;
+    }
     if (isNoneLike(source)) {
         out = noneValue();
         return Status::Ok;
@@ -500,6 +544,14 @@ Status Interpreter::castTo(const Value& source, const std::string& sourceType,
 Status Interpreter::toBool(const Value& value, bool& out) const {
     if (value.type == ValueType::Bool) {
         out = value.boolean;
+        return Status::Ok;
+    }
+    if (isNoneLike(value)) {
+        out = false;
+        return Status::Ok;
+    }
+    if (value.type == ValueType::Object || value.type == ValueType::Array) {
+        out = true;
         return Status::Ok;
     }
     Value converted;

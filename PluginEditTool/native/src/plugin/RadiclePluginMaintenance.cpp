@@ -12,13 +12,16 @@
 #include <utility>
 #include <vector>
 
+#include <fo4/environment/environment.hpp>
 #include <fo4/forms/copy_as_new.hpp>
 #include <fo4/forms/placed_reference.hpp>
 #include <fo4/plugin/mutation.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/maintenance.hpp>
+#include <fo4/plugin/record_flags.hpp>
 #include <fo4/plugin/visit.hpp>
 #include <fo4/plugin/writer.hpp>
+#include <fo4/schema/form_link_mixed.hpp>
 #include <fo4/schema/form_links.hpp>
 #include <fo4/signature.hpp>
 
@@ -306,12 +309,17 @@ Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
             auto mutated = loaded->plugin;
             std::size_t undeleted = 0;
             std::size_t skipped = 0;
+            std::vector<fo4::FormKey> references;
             fo4::visit_records(mutated, [&](fo4::Record& record) {
                 if (record.header.signature == fo4::sig_tes4 || !record.header.flags.is_deleted()) {
                     return;
                 }
                 if (record.undecodable) {
                     ++skipped;
+                    return;
+                }
+                if (fo4::is_placed_reference_signature(record.header.signature)) {
+                    references.push_back(record.form_key);
                     return;
                 }
                 const auto bits = (record.header.flags.value() & ~fo4::RecordFlags::deleted) |
@@ -323,18 +331,47 @@ Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
                 record.uncompressed_size = 0;
                 ++undeleted;
             });
-            const auto skippedNote = skipped == 0
-                ? std::string{}
-                : ", skipped " + std::to_string(skipped) + " undecodable";
+
+            std::size_t injected = 0;
+            std::size_t incomplete = 0;
+            if (!references.empty()) {
+                std::vector<fo4::Plugin> order;
+                order.reserve(plugins_.size());
+                for (const auto& item : plugins_) order.push_back(item.plugin);
+                const auto loadOrder = fo4::env::Environment::from_plugins(std::move(order));
+                for (const auto& key : references) {
+                    switch (fo4::undelete_and_disable_reference(mutated, loadOrder, key)) {
+                        case fo4::UndeleteStatus::undeleted:
+                            ++undeleted;
+                            break;
+                        case fo4::UndeleteStatus::injected_record:
+                            ++injected;
+                            break;
+                        case fo4::UndeleteStatus::incomplete_reference:
+                            ++incomplete;
+                            break;
+                        case fo4::UndeleteStatus::not_deleted:
+                        case fo4::UndeleteStatus::record_missing:
+                        case fo4::UndeleteStatus::header_record:
+                        case fo4::UndeleteStatus::not_a_reference:
+                            break;
+                    }
+                }
+            }
+
+            std::string notes;
+            if (skipped != 0) notes += ", skipped " + std::to_string(skipped) + " undecodable";
+            if (injected != 0) notes += ", refused " + std::to_string(injected) + " injected";
+            if (incomplete != 0) notes += ", refused " + std::to_string(incomplete) + " incomplete";
             if (undeleted == 0) {
                 return nlohmann::json(
-                    "Cleaned " + pluginName + ": undeleted + disabled 0 record(s)" + skippedNote + ".");
+                    "Cleaned " + pluginName + ": undeleted + disabled 0 record(s)" + notes + ".");
             }
             mutated.original_range.clear();
             stagePluginMutationLocked(*loaded, std::move(mutated));
             return nlohmann::json(
                 "Cleaned " + pluginName + ": undeleted + disabled " +
-                std::to_string(undeleted) + " record(s)" + skippedNote + ".");
+                std::to_string(undeleted) + " record(s)" + notes + ".");
         } catch (const std::exception& error) {
             return std::unexpected(Error{"CleanPluginFailed", error.what()});
         }

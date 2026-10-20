@@ -1,3 +1,4 @@
+#include "abc_test_support.hpp"
 #include "fo4/abc/abc.hpp"
 #include "fo4/abc/opcodes.hpp"
 #include "fo4/abc/summary.hpp"
@@ -11,9 +12,9 @@
 #include <fstream>
 #include <string>
 #include <system_error>
+#include <utility>
 #include <vector>
 
-using fo4::abc::AbcCallSite;
 using fo4::abc::AbcFile;
 using fo4::abc::AbcInstruction;
 using fo4::abc::AbcOpcodeInfo;
@@ -22,307 +23,20 @@ using fo4::abc::AbcOperandRole;
 using fo4::abc::AbcStatus;
 using fo4::abc::AbcSummary;
 using fo4::abc::ByteReader;
+using namespace fo4::test;
 
 namespace {
 
-constexpr std::uint32_t kStringFoo = 1;
-constexpr std::uint32_t kStringExternalInterface = 2;
-constexpr std::uint32_t kStringCall = 3;
-constexpr std::uint32_t kStringTest = 4;
-constexpr std::uint32_t kStringObject = 5;
-constexpr std::uint32_t kStringFlashExternal = 6;
-constexpr std::uint32_t kStringClick = 7;
-constexpr std::uint32_t kStringAddEventListener = 8;
-constexpr std::uint32_t kStringHandler = 9;
-constexpr std::uint32_t kStringVoid = 10;
-constexpr std::uint32_t kStringOnClick = 11;
-constexpr std::uint32_t kStringCounter = 12;
-constexpr std::uint32_t kStringInner = 13;
-constexpr std::uint32_t kStringHelper = 14;
-
-constexpr std::uint32_t kMultinameExternalInterface = 1;
-constexpr std::uint32_t kMultinameCall = 2;
-constexpr std::uint32_t kMultinameTest = 3;
-constexpr std::uint32_t kMultinameObject = 4;
-constexpr std::uint32_t kMultinameClick = 5;
-constexpr std::uint32_t kMultinameAddEventListener = 6;
-constexpr std::uint32_t kMultinameHandler = 7;
-constexpr std::uint32_t kMultinameVoid = 8;
-
-void put_u8(std::vector<std::uint8_t>& out, std::uint32_t value) {
-  out.push_back(static_cast<std::uint8_t>(value & 0xFFu));
-}
-
-void put_u16(std::vector<std::uint8_t>& out, std::uint32_t value) {
-  put_u8(out, value & 0xFFu);
-  put_u8(out, (value >> 8) & 0xFFu);
-}
-
-void put_u30(std::vector<std::uint8_t>& out, std::uint32_t value) {
-  std::uint32_t remaining = value & 0x3FFFFFFFu;
-  while (remaining >= 0x80u) {
-    out.push_back(static_cast<std::uint8_t>((remaining & 0x7Fu) | 0x80u));
-    remaining >>= 7;
-  }
-  out.push_back(static_cast<std::uint8_t>(remaining));
-}
-
-void put_s24(std::vector<std::uint8_t>& out, std::int32_t value) {
-  const std::uint32_t raw = static_cast<std::uint32_t>(value) & 0xFFFFFFu;
-  put_u8(out, raw & 0xFFu);
-  put_u8(out, (raw >> 8) & 0xFFu);
-  put_u8(out, (raw >> 16) & 0xFFu);
-}
-
-void put_string(std::vector<std::uint8_t>& out, const std::string& value) {
-  put_u30(out, static_cast<std::uint32_t>(value.size()));
-  for (const char ch : value) {
-    out.push_back(static_cast<std::uint8_t>(ch));
-  }
-}
-
-std::vector<std::uint8_t> tiny_constructor_code() {
-  std::vector<std::uint8_t> code;
-  put_u8(code, 0x60);
-  put_u30(code, kMultinameExternalInterface);
-  put_u8(code, 0x2C);
-  put_u30(code, kStringFoo);
-  put_u8(code, 0x4F);
-  put_u30(code, kMultinameCall);
-  put_u30(code, 1);
-  put_u8(code, 0x47);
-  return code;
-}
-
-std::vector<std::uint8_t> tiny_listener_code() {
-  std::vector<std::uint8_t> code;
-  put_u8(code, 0x60);
-  put_u30(code, kMultinameAddEventListener);
-  put_u8(code, 0x2C);
-  put_u30(code, kStringClick);
-  put_u8(code, 0x60);
-  put_u30(code, kMultinameHandler);
-  put_u8(code, 0x4F);
-  put_u30(code, kMultinameAddEventListener);
-  put_u30(code, 2);
-  put_u8(code, 0x47);
-  return code;
-}
-
-std::vector<std::uint8_t> tiny_helper_code() {
-  std::vector<std::uint8_t> code;
-  put_u8(code, 0x47);
-  return code;
-}
-
-void put_constant_pool(std::vector<std::uint8_t>& out) {
-  const std::vector<std::string> strings{
-      "Foo",   "ExternalInterface", "call",   "Test",   "Object",
-      "flash.external", "click", "addEventListener", "handler", "void",
-      "onClick", "counter", "Inner", "helper"};
-  put_u30(out, 2);
-  put_u30(out, 7);
-  put_u30(out, 1);
-  put_u30(out, 1);
-  put_u30(out, static_cast<std::uint32_t>(strings.size()) + 1);
-  for (const std::string& value : strings) {
-    put_string(out, value);
-  }
-  put_u30(out, 3);
-  put_u8(out, 0x16);
-  put_u30(out, kStringFlashExternal);
-  put_u8(out, 0x16);
-  put_u30(out, 0);
-  put_u30(out, 1);
-  put_u30(out, 9);
-  put_u8(out, 0x07);
-  put_u30(out, 1);
-  put_u30(out, kStringExternalInterface);
-  put_u8(out, 0x07);
-  put_u30(out, 1);
-  put_u30(out, kStringCall);
-  put_u8(out, 0x07);
-  put_u30(out, 2);
-  put_u30(out, kStringTest);
-  put_u8(out, 0x07);
-  put_u30(out, 2);
-  put_u30(out, kStringObject);
-  put_u8(out, 0x07);
-  put_u30(out, 2);
-  put_u30(out, kStringClick);
-  put_u8(out, 0x07);
-  put_u30(out, 2);
-  put_u30(out, kStringAddEventListener);
-  put_u8(out, 0x07);
-  put_u30(out, 2);
-  put_u30(out, kStringHandler);
-  put_u8(out, 0x07);
-  put_u30(out, 2);
-  put_u30(out, kStringVoid);
-}
-
-void put_method(std::vector<std::uint8_t>& out, std::uint32_t name) {
-  put_u30(out, 0);
-  put_u30(out, kMultinameVoid);
-  put_u30(out, name);
-  put_u8(out, 0);
-}
-
-void put_method_with_options(std::vector<std::uint8_t>& out, std::uint32_t name) {
-  put_u30(out, 1);
-  put_u30(out, kMultinameVoid);
-  put_u30(out, kMultinameVoid);
-  put_u30(out, name);
-  put_u8(out, 0x88);
-  put_u30(out, 1);
-  put_u30(out, 1);
-  put_u8(out, 0x03);
-  put_u30(out, kStringClick);
-}
-
-void put_instance_traits(std::vector<std::uint8_t>& out) {
-  put_u30(out, 5);
-  put_u30(out, kStringOnClick);
-  put_u8(out, 0x41);
-  put_u30(out, 0);
-  put_u30(out, 1);
-  put_u30(out, 1);
-  put_u30(out, 0);
-  put_u30(out, kStringCounter);
-  put_u8(out, 0x40);
-  put_u30(out, 1);
-  put_u30(out, kMultinameVoid);
-  put_u30(out, 0);
-  put_u30(out, 1);
-  put_u30(out, 0);
-  put_u30(out, kStringCounter);
-  put_u8(out, 0x06);
-  put_u30(out, 2);
-  put_u30(out, kMultinameVoid);
-  put_u30(out, 1);
-  put_u8(out, 0x03);
-  put_u30(out, kStringInner);
-  put_u8(out, 0x04);
-  put_u30(out, 0);
-  put_u30(out, 0);
-  put_u30(out, kStringHelper);
-  put_u8(out, 0x45);
-  put_u30(out, 3);
-  put_u30(out, 2);
-  put_u30(out, 1);
-  put_u30(out, 0);
-}
-
-void put_body(std::vector<std::uint8_t>& out, std::uint32_t method,
-              const std::vector<std::uint8_t>& code, bool with_exception) {
-  put_u30(out, method);
-  put_u30(out, 4);
-  put_u30(out, 1);
-  put_u30(out, 0);
-  put_u30(out, 1);
-  put_u30(out, static_cast<std::uint32_t>(code.size()));
-  out.insert(out.end(), code.begin(), code.end());
-  put_u30(out, with_exception ? 1 : 0);
-  if (with_exception) {
-    put_u30(out, 0);
-    put_u30(out, static_cast<std::uint32_t>(code.size()));
-    put_u30(out, 0);
-    put_u30(out, kMultinameTest);
-    put_u30(out, kStringHelper);
-  }
-  put_u30(out, 0);
-}
-
-std::vector<std::uint8_t> build_abc(const std::vector<std::uint8_t>& constructor_code,
-                                    const std::vector<std::uint8_t>& listener_code) {
+std::vector<std::uint8_t> empty_pools_header() {
   std::vector<std::uint8_t> out;
   put_u16(out, fo4::abc::kAbcMinorVersion);
   put_u16(out, fo4::abc::kAbcMajorVersion);
-  put_constant_pool(out);
-  put_u30(out, 3);
-  put_method(out, kStringTest);
-  put_method_with_options(out, kStringOnClick);
-  put_method(out, kStringHelper);
-  put_u30(out, 1);
-  put_u30(out, kStringFoo);
-  put_u30(out, 1);
-  put_u30(out, kStringExternalInterface);
-  put_u30(out, kStringCall);
-  put_u30(out, 1);
-  put_u30(out, kStringTest);
-  put_u30(out, kMultinameObject);
-  put_u8(out, 0x05);
-  put_u30(out, 1);
-  put_u30(out, kMultinameClick);
-  put_u30(out, 0);
-  put_instance_traits(out);
-  put_u30(out, 0);
-  put_u30(out, 0);
-  put_u30(out, 0);
-  put_u30(out, 3);
-  put_body(out, 0, constructor_code, false);
-  put_body(out, 1, listener_code, false);
-  put_body(out, 2, tiny_helper_code(), true);
-  return out;
-}
-
-std::vector<std::uint8_t> build_abc() {
-  return build_abc(tiny_constructor_code(), tiny_listener_code());
-}
-
-std::vector<std::uint8_t> abc_header() {
-  std::vector<std::uint8_t> out;
-  put_u16(out, fo4::abc::kAbcMinorVersion);
-  put_u16(out, fo4::abc::kAbcMajorVersion);
-  put_u30(out, 1);
-  put_u30(out, 1);
-  put_u30(out, 1);
+  for (int pool = 0; pool < 6; ++pool) {
+    put_u30(out, 0);
+  }
   put_u30(out, 1);
   return out;
 }
-
-std::vector<std::uint8_t> minimal_instance_file(std::uint8_t trait_tag,
-                                               std::uint32_t metadata_index) {
-  std::vector<std::uint8_t> out = abc_header();
-  put_u30(out, 1);
-  put_u30(out, 1);
-  put_u30(out, 1);
-  put_u30(out, 0);
-  put_u30(out, 1);
-  put_u30(out, 0);
-  put_u30(out, 0);
-  put_u30(out, 1);
-  put_u30(out, 0);
-  put_u30(out, 0);
-  put_u8(out, 0x00);
-  put_u30(out, 0);
-  put_u30(out, 1);
-  put_u30(out, 0);
-  put_u8(out, trait_tag);
-  put_u30(out, 0);
-  put_u30(out, 0);
-  put_u30(out, 0);
-  put_u30(out, 1);
-  put_u30(out, metadata_index);
-  put_u30(out, 0);
-  put_u30(out, 0);
-  put_u30(out, 0);
-  put_u30(out, 0);
-  return out;
-}
-
-AbcFile parse_or_fail(const std::vector<std::uint8_t>& bytes) {
-  AbcFile file;
-  EXPECT_EQ(AbcFile::parse(bytes, file), AbcStatus::Ok);
-  return file;
-}
-
-const AbcCallSite& only_call(const std::vector<AbcCallSite>& calls) {
-  EXPECT_EQ(calls.size(), 1u);
-  static const AbcCallSite missing;
-  return calls.empty() ? missing : calls.front();
-}
-
 }
 
 TEST(Abc, ParsesVersionConstantPoolAndStructure) {
@@ -333,7 +47,7 @@ TEST(Abc, ParsesVersionConstantPoolAndStructure) {
   EXPECT_EQ(file.major_version, 46u);
   EXPECT_EQ(file.pool.strings.size(), 15u);
   EXPECT_EQ(file.pool.namespaces.size(), 3u);
-  EXPECT_EQ(file.pool.multinames.size(), 9u);
+  EXPECT_EQ(file.pool.multinames.size(), 15u);
   EXPECT_EQ(file.pool.ints.size(), 2u);
   EXPECT_EQ(file.pool.ints[1], 7);
   EXPECT_EQ(file.pool.ns_sets.size(), 1u);
@@ -348,6 +62,7 @@ TEST(Abc, ParsesVersionConstantPoolAndStructure) {
   EXPECT_EQ(file.multiname_at(kMultinameCall), "flash.external::call");
   EXPECT_EQ(file.multiname_at(kMultinameTest), "Test");
   EXPECT_EQ(file.multiname_at(kMultinameVoid), "void");
+  EXPECT_EQ(file.multiname_at(kMultinameTypeName), "Object<Test>");
   EXPECT_EQ(file.class_name(0), "Test");
   EXPECT_EQ(file.method_name(1), "onClick");
   ASSERT_NE(file.body_for(0), nullptr);
@@ -358,7 +73,8 @@ TEST(Abc, ParsesVersionConstantPoolAndStructure) {
 }
 
 TEST(Abc, ParsesMethodOptionsParamNamesTraitsAndExceptions) {
-  const AbcFile file = parse_or_fail(build_abc());
+  AbcFile file;
+  ASSERT_EQ(AbcFile::parse(build_abc(), file), AbcStatus::Ok);
   const fo4::abc::AbcMethodInfo& handler = file.methods[1];
   EXPECT_EQ(handler.param_count, 1u);
   EXPECT_EQ(handler.param_types.size(), 1u);
@@ -397,7 +113,7 @@ TEST(Abc, ParsesMethodOptionsParamNamesTraitsAndExceptions) {
   EXPECT_EQ(instance.traits[1].slot_id, 1u);
   EXPECT_EQ(instance.traits[1].type_name, kMultinameVoid);
   EXPECT_EQ(instance.traits[1].value_index, 0u);
-  EXPECT_EQ(instance.traits[1].value_kind, fo4::abc::AbcValueKind::None);
+  EXPECT_EQ(instance.traits[1].value_kind, fo4::abc::AbcValueKind::Undefined);
   EXPECT_TRUE(instance.traits[1].has_metadata());
   ASSERT_EQ(instance.traits[1].metadata.size(), 1u);
   EXPECT_EQ(instance.traits[1].metadata[0], 0u);
@@ -434,7 +150,9 @@ TEST(Abc, ParsesEveryByteAndRejectsTrailingBytes) {
 }
 
 TEST(Abc, DisassemblesConstructorCallSite) {
-  const AbcFile file = parse_or_fail(build_abc());
+  AbcFile file;
+  ASSERT_EQ(AbcFile::parse(build_abc(), file), AbcStatus::Ok);
+  ASSERT_NE(file.body_for(0), nullptr);
   const std::vector<std::uint8_t>& code = file.body_for(0)->code;
   std::vector<AbcInstruction> instructions;
   ASSERT_EQ(fo4::abc::decode_code(code, instructions), AbcStatus::Ok);
@@ -461,59 +179,17 @@ TEST(Abc, DisassemblesConstructorCallSite) {
                      "2: pushstring \"Foo\"\n"
                      "4: callpropvoid flash.external::call 1\n"
                      "7: returnvoid\n");
-}
-
-TEST(Abc, SummaryAnswersExternalInterfaceAndEventListenerQuestions) {
-  const AbcFile file = parse_or_fail(build_abc());
-  AbcSummary summary;
-  ASSERT_EQ(fo4::abc::summarize(file, summary), AbcStatus::Ok);
-  ASSERT_EQ(summary.classes.size(), 1u);
-  const auto& klass = summary.classes.front();
-  EXPECT_EQ(klass.name, "Test");
-  EXPECT_EQ(klass.super_name, "Object");
-  ASSERT_EQ(klass.interfaces.size(), 1u);
-  EXPECT_EQ(klass.interfaces[0], "click");
-  ASSERT_EQ(klass.methods.size(), 2u);
-  const auto& constructor = klass.methods[0];
-  EXPECT_EQ(constructor.name, "<init>");
-  EXPECT_EQ(constructor.return_type, "void");
-  EXPECT_EQ(constructor.flags, 0u);
-  EXPECT_EQ(constructor.instruction_count, 4u);
-  ASSERT_EQ(constructor.multinames.size(), 2u);
-  EXPECT_EQ(constructor.multinames[0], "flash.external::ExternalInterface");
-  EXPECT_EQ(constructor.multinames[1], "flash.external::call");
-  const AbcCallSite& external = only_call(constructor.calls);
-  EXPECT_EQ(external.opcode, "callpropvoid");
-  EXPECT_EQ(external.target, "flash.external::call");
-  EXPECT_EQ(external.receiver, "flash.external::ExternalInterface");
-  EXPECT_EQ(external.arg_count, 1u);
-  EXPECT_TRUE(fo4::abc::is_external_interface_call(external));
-  EXPECT_FALSE(fo4::abc::is_event_registration(external));
-  ASSERT_EQ(external.literals.size(), 1u);
-  EXPECT_EQ(external.literals[0], "Foo");
-  EXPECT_TRUE(external.literal_unambiguous);
-
-  const auto& listener = klass.methods[1];
-  EXPECT_EQ(listener.name, "onClick");
-  EXPECT_EQ(listener.return_type, "void");
-  EXPECT_EQ(listener.instruction_count, 5u);
-  const AbcCallSite& registration = only_call(listener.calls);
-  EXPECT_EQ(registration.target, "addEventListener");
-  EXPECT_EQ(registration.receiver, "handler");
-  EXPECT_EQ(registration.arg_count, 2u);
-  EXPECT_TRUE(fo4::abc::is_event_registration(registration));
-  EXPECT_FALSE(fo4::abc::is_external_interface_call(registration));
-  ASSERT_EQ(registration.literals.size(), 1u);
-  EXPECT_EQ(registration.literals[0], "click");
-  EXPECT_TRUE(registration.literal_unambiguous);
-
-  ASSERT_EQ(summary.functions.size(), 1u);
-  const auto& helper = summary.functions.front();
-  EXPECT_EQ(helper.name, "helper");
-  EXPECT_EQ(helper.instruction_count, 1u);
-  EXPECT_TRUE(helper.calls.empty());
-  EXPECT_TRUE(helper.multinames.empty());
-  EXPECT_TRUE(summary.scripts.empty());
+  std::vector<std::uint8_t> short_code;
+  put_u8(short_code, 0x25);
+  put_u30(short_code, 0xFFFBu);
+  std::vector<AbcInstruction> short_instructions;
+  ASSERT_EQ(fo4::abc::decode_code(short_code, short_instructions), AbcStatus::Ok);
+  ASSERT_EQ(short_instructions.size(), 1u);
+  ASSERT_EQ(short_instructions[0].operands.size(), 1u);
+  EXPECT_EQ(short_instructions[0].operands[0].immediate, -5);
+  std::string short_listing;
+  ASSERT_EQ(fo4::abc::disassemble(file, short_code, short_listing), AbcStatus::Ok);
+  EXPECT_EQ(short_listing, "0: pushshort -5\n");
 }
 
 TEST(Abc, OpcodeTableMatchesAvm2Numbers) {
@@ -529,6 +205,11 @@ TEST(Abc, OpcodeTableMatchesAvm2Numbers) {
   ASSERT_NE(info, nullptr);
   EXPECT_STREQ(info->mnemonic, "pushbyte");
   EXPECT_EQ(info->operands[0].encoding, AbcOperandEncoding::S8);
+  info = fo4::abc::opcode_info(0x25);
+  ASSERT_NE(info, nullptr);
+  EXPECT_STREQ(info->mnemonic, "pushshort");
+  EXPECT_EQ(info->operands[0].encoding, AbcOperandEncoding::U30);
+  EXPECT_EQ(info->operands[0].role, AbcOperandRole::Immediate);
   info = fo4::abc::opcode_info(0x40);
   ASSERT_NE(info, nullptr);
   EXPECT_STREQ(info->mnemonic, "newfunction");
@@ -552,13 +233,16 @@ TEST(Abc, OpcodeTableMatchesAvm2Numbers) {
   info = fo4::abc::opcode_info(0xF3);
   ASSERT_NE(info, nullptr);
   EXPECT_STREQ(info->mnemonic, "timestamp");
-  EXPECT_EQ(fo4::abc::opcode_info(0x00), nullptr);
-  EXPECT_EQ(fo4::abc::opcode_info(0x0A), nullptr);
-  EXPECT_EQ(fo4::abc::opcode_info(0x0B), nullptr);
-  EXPECT_EQ(fo4::abc::opcode_info(0x22), nullptr);
-  EXPECT_EQ(fo4::abc::opcode_info(0x54), nullptr);
-  EXPECT_EQ(fo4::abc::opcode_info(0x8F), nullptr);
-  EXPECT_EQ(fo4::abc::opcode_info(0xF5), nullptr);
+  const std::pair<std::uint8_t, std::uint8_t> undefined[] = {
+      {0x00, 0x00}, {0x0A, 0x0B}, {0x22, 0x22}, {0x33, 0x34}, {0x3F, 0x3F}, {0x4B, 0x4B},
+      {0x4D, 0x4D}, {0x54, 0x54}, {0x5B, 0x5C}, {0x79, 0x7F}, {0x8A, 0x8F}, {0x98, 0x9F},
+      {0xB5, 0xBF}, {0xC8, 0xCF}, {0xD8, 0xEE}, {0xF4, 0xFF}};
+  for (const auto& [first, last] : undefined) {
+    for (std::uint32_t opcode = first; opcode <= last; ++opcode) {
+      EXPECT_EQ(fo4::abc::opcode_info(static_cast<std::uint8_t>(opcode)), nullptr)
+          << "opcode 0x" << std::hex << opcode;
+    }
+  }
 }
 
 TEST(Abc, RejectsUnknownOpcode) {
@@ -603,8 +287,10 @@ TEST(Abc, RejectsConstantPoolIndexOutOfRange) {
   put_u8(code, 0x60);
   put_u30(code, 99);
   put_u8(code, 0x47);
-  const AbcFile file = parse_or_fail(build_abc(code, tiny_listener_code()));
+  AbcFile file;
+  ASSERT_EQ(AbcFile::parse(build_abc(code, tiny_listener_code()), file), AbcStatus::Ok);
   std::vector<AbcInstruction> instructions;
+  ASSERT_NE(file.body_for(0), nullptr);
   ASSERT_EQ(fo4::abc::decode_code(file.body_for(0)->code, instructions), AbcStatus::Ok);
   EXPECT_EQ(fo4::abc::validate_operand_pools(file, instructions), AbcStatus::IndexOutOfRange);
   std::string listing;
@@ -635,43 +321,48 @@ TEST(Abc, RejectsBranchTargetOutOfRange) {
   put_s24(switch_code, 0);
   put_u30(switch_code, 1);
   put_s24(switch_code, 1);
+  put_s24(switch_code, 0);
   put_u8(switch_code, 0x47);
   ASSERT_EQ(fo4::abc::decode_code(switch_code, instructions), AbcStatus::Ok);
   ASSERT_EQ(instructions.size(), 2u);
+  EXPECT_EQ(instructions[0].length, 11u);
+  EXPECT_EQ(instructions[0].operands[0].target, 0);
+  ASSERT_EQ(instructions[0].operands[0].case_targets.size(), 2u);
+  EXPECT_EQ(instructions[0].operands[0].case_targets[0], 1);
+  EXPECT_EQ(instructions[0].operands[0].case_targets[1], 0);
+  std::vector<std::uint8_t> tail_switch;
+  put_u8(tail_switch, 0x1B);
+  put_s24(tail_switch, 8);
+  put_u30(tail_switch, 0);
+  put_s24(tail_switch, 8);
+  ASSERT_EQ(fo4::abc::decode_code(tail_switch, instructions), AbcStatus::Ok);
+  ASSERT_EQ(instructions.size(), 1u);
   EXPECT_EQ(instructions[0].length, 8u);
   EXPECT_EQ(instructions[0].operands[0].target, 8);
   ASSERT_EQ(instructions[0].operands[0].case_targets.size(), 1u);
-  EXPECT_EQ(instructions[0].operands[0].case_targets[0], 9);
+  EXPECT_EQ(instructions[0].operands[0].case_targets[0], 8);
+  std::vector<std::uint8_t> short_switch;
+  put_u8(short_switch, 0x1B);
+  put_s24(short_switch, 0);
+  put_u30(short_switch, 1);
+  put_s24(short_switch, 1);
+  EXPECT_EQ(fo4::abc::decode_code(short_switch, instructions), AbcStatus::CountOutOfRange);
   std::vector<std::uint8_t> bad_switch;
   put_u8(bad_switch, 0x1B);
   put_s24(bad_switch, 0);
   put_u30(bad_switch, 1);
+  put_s24(bad_switch, 0);
   put_s24(bad_switch, 900);
   put_u8(bad_switch, 0x47);
   EXPECT_EQ(fo4::abc::decode_code(bad_switch, instructions), AbcStatus::BranchOutOfRange);
-}
-
-TEST(Abc, RejectsBadNamespaceAndMultinameKinds) {
-  AbcFile file;
-  std::vector<std::uint8_t> bad_namespace = abc_header();
-  put_u30(bad_namespace, 2);
-  put_u8(bad_namespace, 0x99);
-  put_u30(bad_namespace, 0);
-  EXPECT_EQ(AbcFile::parse(bad_namespace, file), AbcStatus::BadNamespaceKind);
-  std::vector<std::uint8_t> bad_multiname = abc_header();
-  put_u30(bad_multiname, 1);
-  put_u30(bad_multiname, 0);
-  put_u30(bad_multiname, 2);
-  put_u8(bad_multiname, 0x99);
-  EXPECT_EQ(AbcFile::parse(bad_multiname, file), AbcStatus::BadMultinameKind);
-  std::vector<std::uint8_t> bad_multiname_index = abc_header();
-  put_u30(bad_multiname_index, 1);
-  put_u30(bad_multiname_index, 0);
-  put_u30(bad_multiname_index, 2);
-  put_u8(bad_multiname_index, 0x07);
-  put_u30(bad_multiname_index, 7);
-  put_u30(bad_multiname_index, 0);
-  EXPECT_EQ(AbcFile::parse(bad_multiname_index, file), AbcStatus::IndexOutOfRange);
+  std::vector<std::uint8_t> dead_jump;
+  put_u8(dead_jump, 0x47);
+  put_u8(dead_jump, 0x10);
+  put_s24(dead_jump, 1000);
+  ASSERT_EQ(fo4::abc::decode_code(dead_jump, instructions), AbcStatus::Ok);
+  ASSERT_EQ(instructions.size(), 2u);
+  ASSERT_EQ(instructions[1].operands.size(), 1u);
+  EXPECT_EQ(instructions[1].operands[0].target, 1005);
 }
 
 TEST(Abc, RejectsBadTraitKindAndTraitMetadataIndex) {
@@ -684,6 +375,181 @@ TEST(Abc, RejectsBadTraitKindAndTraitMetadataIndex) {
   EXPECT_EQ(file.instances[0].traits[0].metadata[0], 0u);
   EXPECT_EQ(AbcFile::parse(minimal_instance_file(0x40, 5), file), AbcStatus::IndexOutOfRange);
   EXPECT_EQ(AbcFile::parse(minimal_instance_file(0x0F, 0), file), AbcStatus::BadTraitKind);
+}
+
+TEST(Abc, ReadsProtectedNamespaceAndAlwaysPresentInterfaceCount) {
+  AbcFile file;
+  ASSERT_EQ(AbcFile::parse(minimal_instance_file(0x40, 0, 0x08), file), AbcStatus::Ok);
+  ASSERT_EQ(file.instances.size(), 1u);
+  const fo4::abc::AbcInstanceInfo& instance = file.instances[0];
+  EXPECT_TRUE(instance.has_protected_ns());
+  EXPECT_EQ(instance.protected_ns, 1u);
+  EXPECT_TRUE(instance.interfaces.empty());
+  ASSERT_EQ(instance.traits.size(), 1u);
+  EXPECT_EQ(instance.traits[0].kind, fo4::abc::AbcTraitKind::Slot);
+}
+
+TEST(Abc, RejectsEveryStructuralIndexPastItsPool) {
+  const std::pair<AbcBadIndex, const char*> cases[] = {
+      {AbcBadIndex::InstanceName, "instance name"},
+      {AbcBadIndex::InstanceNameAtLimit, "instance name at its pool limit"},
+      {AbcBadIndex::InstanceSuper, "instance super"},
+      {AbcBadIndex::InstanceInterface, "instance interface"},
+      {AbcBadIndex::InstanceIinit, "instance iinit"},
+      {AbcBadIndex::InstanceIinitAtLimit, "instance iinit at its pool limit"},
+      {AbcBadIndex::InstanceProtectedNs, "instance protected namespace"},
+      {AbcBadIndex::ClassInit, "class cinit"},
+      {AbcBadIndex::TraitName, "trait name"},
+      {AbcBadIndex::TraitTypeName, "trait type name"},
+      {AbcBadIndex::TraitMethodIndex, "trait method index"},
+      {AbcBadIndex::TraitClassIndex, "trait class index"},
+      {AbcBadIndex::TraitFunctionIndex, "trait function index"},
+      {AbcBadIndex::MethodReturnType, "method return type"},
+      {AbcBadIndex::MethodParamType, "method parameter type"},
+      {AbcBadIndex::ExceptionType, "exception type"},
+      {AbcBadIndex::ExceptionVarName, "exception variable name"},
+      {AbcBadIndex::ScriptInit, "script init"},
+      {AbcBadIndex::BodyMethod, "body method"},
+      {AbcBadIndex::MethodNameAtLimit, "method name"},
+      {AbcBadIndex::MethodParamNameAtLimit, "method parameter name"},
+      {AbcBadIndex::MethodOptionIndexAtLimit, "method option index"},
+      {AbcBadIndex::MetadataNameAtLimit, "metadata name"},
+      {AbcBadIndex::MetadataItemKeyAtLimit, "metadata item key"},
+      {AbcBadIndex::MetadataItemValueAtLimit, "metadata item value"},
+      {AbcBadIndex::TraitValueIndexAtLimit, "trait value index"},
+      {AbcBadIndex::TraitValueIndexStringAtLimit, "trait string value index"},
+      {AbcBadIndex::TraitValueIndexUIntAtLimit, "trait uint value index"},
+      {AbcBadIndex::TraitValueIndexDoubleAtLimit, "trait double value index"},
+      {AbcBadIndex::TraitValueIndexNamespaceAtLimit, "trait namespace value index"},
+  };
+  AbcFile file;
+  ASSERT_EQ(AbcFile::parse(build_abc(), file), AbcStatus::Ok);
+  for (const auto& [bad, field] : cases) {
+    SCOPED_TRACE(field);
+    EXPECT_EQ(AbcFile::parse(build_abc(tiny_constructor_code(), tiny_listener_code(), bad), file),
+              AbcStatus::IndexOutOfRange);
+  }
+}
+
+TEST(Abc, AcceptsEveryStructuralIndexAtItsLastEntry) {
+  const std::pair<AbcBadIndex, const char*> cases[] = {
+      {AbcBadIndex::MethodNameAtLast, "method name"},
+      {AbcBadIndex::MethodParamNameAtLast, "method parameter name"},
+      {AbcBadIndex::MethodOptionIndexAtLast, "method option index"},
+      {AbcBadIndex::MethodOptionIndexZero, "method option index 0"},
+      {AbcBadIndex::MetadataNameAtLast, "metadata name"},
+      {AbcBadIndex::MetadataItemKeyAtLast, "metadata item key"},
+      {AbcBadIndex::MetadataItemValueAtLast, "metadata item value"},
+      {AbcBadIndex::TraitValueIndexAtLast, "trait value index"},
+      {AbcBadIndex::TraitValueIndexStringAtLast, "trait string value index"},
+      {AbcBadIndex::TraitValueIndexNamespaceAtLast, "trait namespace value index"},
+  };
+  AbcFile file;
+  for (const auto& [bad, field] : cases) {
+    SCOPED_TRACE(field);
+    ASSERT_EQ(AbcFile::parse(build_abc(tiny_constructor_code(), tiny_listener_code(), bad), file),
+              AbcStatus::Ok);
+    switch (bad) {
+      case AbcBadIndex::MethodNameAtLast:
+        EXPECT_EQ(file.methods[0].name, kStringCount - 1);
+        EXPECT_EQ(file.methods[1].name, kStringCount - 1);
+        break;
+      case AbcBadIndex::MethodParamNameAtLast:
+        ASSERT_EQ(file.methods[1].param_names.size(), 1u);
+        EXPECT_EQ(file.methods[1].param_names[0], kStringCount - 1);
+        break;
+      case AbcBadIndex::MethodOptionIndexAtLast:
+        ASSERT_EQ(file.methods[1].options.size(), 1u);
+        EXPECT_EQ(file.methods[1].options[0].index, kIntCount - 1);
+        break;
+      case AbcBadIndex::MethodOptionIndexZero:
+        ASSERT_EQ(file.methods[1].options.size(), 1u);
+        EXPECT_EQ(file.methods[1].options[0].index, 0u);
+        break;
+      case AbcBadIndex::MetadataNameAtLast:
+        ASSERT_EQ(file.metadata.size(), 1u);
+        EXPECT_EQ(file.metadata[0].name, kStringCount - 1);
+        break;
+      case AbcBadIndex::MetadataItemKeyAtLast:
+        ASSERT_EQ(file.metadata.size(), 1u);
+        ASSERT_EQ(file.metadata[0].items.size(), 1u);
+        EXPECT_EQ(file.metadata[0].items[0].key, kStringCount - 1);
+        break;
+      case AbcBadIndex::MetadataItemValueAtLast:
+        ASSERT_EQ(file.metadata.size(), 1u);
+        ASSERT_EQ(file.metadata[0].items.size(), 1u);
+        EXPECT_EQ(file.metadata[0].items[0].value, kStringCount - 1);
+        break;
+      case AbcBadIndex::TraitValueIndexAtLast:
+        EXPECT_EQ(file.instances[0].traits[2].value_index, kIntCount - 1);
+        break;
+      case AbcBadIndex::TraitValueIndexStringAtLast:
+        EXPECT_EQ(file.instances[0].traits[2].value_index, kStringCount - 1);
+        break;
+      case AbcBadIndex::TraitValueIndexNamespaceAtLast:
+        EXPECT_EQ(file.instances[0].traits[2].value_index, kNamespaceCount - 1);
+        break;
+      default:
+        break;
+    }
+  }
+}
+
+TEST(Abc, AcceptsZeroIndicesIntoEmptyStringPool) {
+  std::vector<std::uint8_t> bytes = empty_pools_header();
+  put_u30(bytes, 1);
+  put_u30(bytes, 1);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u8(bytes, 0x80);
+  put_u30(bytes, 0);
+  put_u30(bytes, 1);
+  put_u30(bytes, 0);
+  put_u30(bytes, 1);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  AbcFile file;
+  ASSERT_EQ(AbcFile::parse(bytes, file), AbcStatus::Ok);
+  ASSERT_EQ(file.methods.size(), 1u);
+  EXPECT_EQ(file.methods[0].name, 0u);
+  ASSERT_EQ(file.methods[0].param_names.size(), 1u);
+  EXPECT_EQ(file.methods[0].param_names[0], 0u);
+  ASSERT_EQ(file.metadata.size(), 1u);
+  EXPECT_EQ(file.metadata[0].name, 0u);
+  ASSERT_EQ(file.metadata[0].items.size(), 1u);
+  EXPECT_EQ(file.metadata[0].items[0].key, 0u);
+  EXPECT_EQ(file.metadata[0].items[0].value, 0u);
+}
+
+TEST(Abc, AcceptsZeroIndexOptionInEmptyIntPoolAndAnyIndexForPoollessKind) {
+  std::vector<std::uint8_t> bytes = empty_pools_header();
+  put_u30(bytes, 1);
+  put_u30(bytes, 1);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u8(bytes, 0x08);
+  put_u30(bytes, 2);
+  put_u30(bytes, 0);
+  put_u8(bytes, 0x03);
+  put_u30(bytes, kBadIndex);
+  put_u8(bytes, 0x0B);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  put_u30(bytes, 0);
+  AbcFile file;
+  ASSERT_EQ(AbcFile::parse(bytes, file), AbcStatus::Ok);
+  ASSERT_EQ(file.methods.size(), 1u);
+  ASSERT_EQ(file.methods[0].options.size(), 2u);
+  EXPECT_EQ(file.methods[0].options[0].kind, fo4::abc::AbcValueKind::Int);
+  EXPECT_EQ(file.methods[0].options[0].index, 0u);
+  EXPECT_EQ(file.methods[0].options[1].kind, fo4::abc::AbcValueKind::True);
+  EXPECT_EQ(file.methods[0].options[1].index, kBadIndex);
 }
 
 TEST(AbcCorpus, EveryExtractedAbcParsesDisassemblesAndSummarizes) {

@@ -428,11 +428,11 @@ TEST_F(BehaviorRead, PackageDataInputAddAppendsTheGroupIdAndCounterInSaveOrder) 
             fo4::env::PackageInputMutationStatus::updated);
   EXPECT_EQ(saved_subrecords(plugin), (std::vector<Sub>{{"PKCU", words({3, 0x812, 9})}, {"ANAM", text("Int")},
     {"CNAM", words({5})}, {"ANAM", text("Bool")}, {"CNAM", one(1)}, {"ANAM", text("Float")}, {"CNAM", f32(2.5f)},
-    {"UNAM", one(1)}, {"UNAM", one(3)}, {"UNAM", one(4)}, {"XNAM", one(5)}}));
-  fo4::write_plugin(plugin, path);
+    {"UNAM", one(1)}, {"UNAM", one(3)}, {"UNAM", one(5)}, {"XNAM", one(6)}}));
+  fo4::write_plugin_file(plugin, path);
   const auto env = load(); const auto tree = fo4::env::decode_package_procedure(*record(env).record);
   ASSERT_TRUE(tree.decoded); ASSERT_EQ(tree.inputs.size(), 3u);
-  EXPECT_EQ(tree.inputs[2].type_name, "Float"); EXPECT_EQ(tree.inputs[2].real, 2.5f); EXPECT_EQ(tree.inputs[2].index, 4);
+  EXPECT_EQ(tree.inputs[2].type_name, "Float"); EXPECT_EQ(tree.inputs[2].real, 2.5f); EXPECT_EQ(tree.inputs[2].index, 5);
 }
 
 TEST_F(BehaviorRead, PackageDataInputAddWrapsTheCounterBeforeTheReservedId) {
@@ -447,6 +447,25 @@ TEST_F(BehaviorRead, PackageDataInputAddWrapsTheCounterBeforeTheReservedId) {
   EXPECT_EQ(saved_subrecords(plugin), (std::vector<Sub>{{"PKCU", words({3, 0x812, 9})}, {"ANAM", text("Bool")},
     {"CNAM", one(1)}, {"ANAM", text("Bool")}, {"CNAM", one(0)}, {"ANAM", text("Int")}, {"CNAM", words({0xFFFFFFFF})},
     {"UNAM", one(0xFD)}, {"UNAM", one(0xFE)}, {"UNAM", one(0)}, {"XNAM", one(1)}}));
+}
+
+TEST_F(BehaviorRead, PackageDataInputAddTakesTheStoredCounterWhenItIsFree) {
+  const std::vector<Rec> records{{"PACK", 0x800, {{"PKCU", words({2, 0x812, 9})}, {"ANAM", text("Bool")},
+    {"CNAM", one(1)}, {"ANAM", text("Bool")}, {"CNAM", one(0)}, {"UNAM", one(1)}, {"UNAM", one(3)}, {"XNAM", one(9)}}},
+    {"PACK", 0x801, {{"PKCU", words({2, 0x812, 9})}, {"ANAM", text("Bool")}, {"CNAM", one(1)}, {"ANAM", text("Bool")},
+      {"CNAM", one(0)}, {"UNAM", one(1)}, {"UNAM", one(3)}, {"XNAM", one(3)}}}};
+  write(records);
+  auto plugin = fo4::read_plugin(plugin_bytes(records), "Behavior.esm");
+  auto value = input_value(fo4::env::PackageInputValueKind::integer); value.integer = 7;
+  ASSERT_EQ(fo4::env::add_package_data_input(plugin, behavior_key(0x800), "Int", value),
+            fo4::env::PackageInputMutationStatus::updated);
+  ASSERT_EQ(fo4::env::add_package_data_input(plugin, behavior_key(0x801), "Int", value),
+            fo4::env::PackageInputMutationStatus::updated);
+  EXPECT_EQ(saved_subrecords(plugin), (std::vector<Sub>{{"PKCU", words({3, 0x812, 9})}, {"ANAM", text("Bool")},
+    {"CNAM", one(1)}, {"ANAM", text("Bool")}, {"CNAM", one(0)}, {"ANAM", text("Int")}, {"CNAM", words({7})},
+    {"UNAM", one(1)}, {"UNAM", one(3)}, {"UNAM", one(9)}, {"XNAM", one(10)},
+    {"PKCU", words({3, 0x812, 9})}, {"ANAM", text("Bool")}, {"CNAM", one(1)}, {"ANAM", text("Bool")}, {"CNAM", one(0)},
+    {"ANAM", text("Int")}, {"CNAM", words({7})}, {"UNAM", one(1)}, {"UNAM", one(3)}, {"UNAM", one(4)}, {"XNAM", one(5)}}));
 }
 
 TEST_F(BehaviorRead, PackageDataInputSetWritesScalarsAndRawFormIdPayloads) {
@@ -496,8 +515,10 @@ TEST_F(BehaviorRead, PackageDataInputRemovalKeepsIdsGappedAndRefusesTreePackages
   ASSERT_EQ(fo4::env::remove_package_data_input(plugin, behavior_key(0x800), 3),
             fo4::env::PackageInputMutationStatus::updated);
   const auto saved = saved_subrecords(plugin);
-  EXPECT_EQ(saved, (std::vector<Sub>{{"PKCU", words({2, 0x812, 9})}, {"ANAM", text("Int")}, {"CNAM", words({5})},
-    {"ANAM", text("Float")}, {"CNAM", f32(1.0f)}, {"UNAM", one(1)}, {"UNAM", one(5)}, {"XNAM", one(7)}}));
+  auto expected = std::vector<Sub>{{"PKCU", words({2, 0x812, 9})}, {"ANAM", text("Int")}, {"CNAM", words({5})},
+    {"ANAM", text("Float")}, {"CNAM", f32(1.0f)}, {"UNAM", one(1)}, {"UNAM", one(5)}, {"XNAM", one(7)}};
+  expected.insert(expected.end(), records[1].subs.begin(), records[1].subs.end());
+  EXPECT_EQ(saved, expected);
   EXPECT_EQ(fo4::env::remove_package_data_input(plugin, behavior_key(0x800), 3),
             fo4::env::PackageInputMutationStatus::input_id_missing);
 }
@@ -512,7 +533,14 @@ TEST_F(BehaviorRead, PackageDataInputMutationsRefuseBadRequestsAndKeepTheBytes) 
       {"XNAM", one(2)}}},
     {"PACK", 0x803, {{"PKCU", words({2, 0x812, 9})}, {"ANAM", text("Bool")}, {"CNAM", one(1)}, {"ANAM", text("Bool")},
       {"CNAM", one(1)}, {"UNAM", one(1)}, {"UNAM", one(1)}, {"XNAM", one(2)}}},
-    {"IDLE", 0x804, {{"PKCU", words({0, 0x812, 9})}}}};
+    {"IDLE", 0x804, {{"PKCU", words({0, 0x812, 9})}}},
+    {"PACK", 0x805, {{"PKCU", words({2, 0x812, 9})}, {"ANAM", text("Int")}, {"CNAM", words({5})}, {"ANAM", text("Bool")},
+      {"CNAM", one(1)}, {"UNAM", one(1)}, {"UNAM", one(3)}, {"XNAM", one(5)}, {"ANAM", text("Procedure")},
+      {"CITC", words({0})}, {"PNAM", text("Travel")}, {"POBA", {}}}},
+    {"PACK", 0x806, {{"PKCU", words({1, 0x812, 9})}, {"ANAM", text("SingleRef")}, {"PTDT", words({0, 0x811, 3, 0})},
+      {"UNAM", one(1)}, {"XNAM", one(2)}}},
+    {"PACK", 0x807, {{"PKCU", words({1, 0x812, 9})}, {"ANAM", text("TargetSelector")}, {"PTDA", words({0, 0x811, 3})},
+      {"UNAM", one(1)}, {"XNAM", one(2)}}}};
   write(records);
   auto plugin = fo4::read_plugin(plugin_bytes(records), "Behavior.esm");
   const auto before = fo4::write_plugin(plugin);
@@ -552,6 +580,14 @@ TEST_F(BehaviorRead, PackageDataInputMutationsRefuseBadRequestsAndKeepTheBytes) 
             fo4::env::PackageInputMutationStatus::not_a_package);
   EXPECT_EQ(fo4::env::remove_package_data_input(plugin, behavior_key(0x802), 1),
             fo4::env::PackageInputMutationStatus::undecodable);
+  auto narrow = input_value(fo4::env::PackageInputValueKind::target); narrow.payload = std::vector<std::byte>(12, std::byte{0});
+  auto wide = input_value(fo4::env::PackageInputValueKind::target); wide.payload = std::vector<std::byte>(16, std::byte{0});
+  EXPECT_EQ(fo4::env::set_package_data_input(plugin, behavior_key(0x806), 1, narrow),
+            fo4::env::PackageInputMutationStatus::payload_tag_mismatch);
+  EXPECT_EQ(fo4::env::set_package_data_input(plugin, behavior_key(0x807), 1, wide),
+            fo4::env::PackageInputMutationStatus::payload_tag_mismatch);
+  EXPECT_EQ(fo4::env::remove_package_data_input(plugin, behavior_key(0x805), 3),
+            fo4::env::PackageInputMutationStatus::procedure_tree_present);
   EXPECT_EQ(fo4::write_plugin(plugin), before);
   EXPECT_FALSE(fo4::env::package_input_value_kind("Travel").has_value());
   EXPECT_EQ(fo4::env::package_input_value_kind("Topic"), fo4::env::PackageInputValueKind::topic);
@@ -589,7 +625,7 @@ TEST_F(BehaviorRead, ProcedureCAbiAddsSetsAndRemovesDataInputs) {
   const auto tree = fo4::env::decode_package_procedure(*ref.record);
   ASSERT_TRUE(tree.decoded); ASSERT_EQ(tree.inputs.size(), 2u);
   EXPECT_EQ(tree.inputs[0].type_name, "Bool"); EXPECT_EQ(tree.inputs[0].index, 1); EXPECT_TRUE(tree.inputs[0].boolean);
-  EXPECT_EQ(tree.inputs[1].type_name, "Int"); EXPECT_EQ(tree.inputs[1].index, 4); EXPECT_EQ(tree.inputs[1].integer, -2);
+  EXPECT_EQ(tree.inputs[1].type_name, "Int"); EXPECT_EQ(tree.inputs[1].index, 5); EXPECT_EQ(tree.inputs[1].integer, -2);
 }
 
 TEST_F(BehaviorRead, ProcedureFlagRowsAddressLeavesAndBranchesByOccurrence) {

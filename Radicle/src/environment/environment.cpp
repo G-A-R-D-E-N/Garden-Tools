@@ -103,20 +103,27 @@ std::optional<ObjectBounds> decode_object_bounds(const Record& record) noexcept 
 }
 
 Environment Environment::load(std::span<const std::filesystem::path> ordered_paths) {
-  Environment env;
-  env.loaded_.reserve(ordered_paths.size());
-  std::set<PluginKey> seen;
+  std::vector<Plugin> plugins;
+  plugins.reserve(ordered_paths.size());
   for (const auto& path : ordered_paths) {
     try {
-      env.loaded_.push_back(read_plugin_file(path));
+      plugins.push_back(read_plugin_file(path));
     } catch (const std::bad_alloc&) {
       throw;
     } catch (const std::exception& error) {
       throw EnvironmentError("failed to load " + utf8(path) + ": " + error.what());
     }
-    const auto& key = env.loaded_.back().key;
-    if (key.empty() || !seen.insert(key).second) {
-      throw EnvironmentError("duplicate or unnamed plugin in load order: " + utf8(path));
+  }
+  return from_plugins(std::move(plugins));
+}
+
+Environment Environment::from_plugins(std::vector<Plugin> ordered_plugins) {
+  Environment env;
+  env.loaded_ = std::move(ordered_plugins);
+  std::set<PluginKey> seen;
+  for (const auto& plugin : env.loaded_) {
+    if (plugin.key.empty() || !seen.insert(plugin.key).second) {
+      throw EnvironmentError("duplicate or unnamed plugin in load order: " + utf8(plugin.path));
     }
   }
 

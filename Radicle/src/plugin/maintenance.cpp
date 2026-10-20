@@ -72,7 +72,8 @@ std::optional<Record> remapped_into(const Record& record,
                                     const PluginFormIdContext& target) {
   auto normalized = record;
   try {
-    remap_record_form_links(normalized, plugin_form_id_context(source), target, &source);
+    remap_record_form_links(normalized, plugin_form_id_context(source), target,
+                            plugin_type_lookup(source));
   } catch (const std::exception&) {
     return std::nullopt;
   }
