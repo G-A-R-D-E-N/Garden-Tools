@@ -254,6 +254,8 @@ TEST(VmadFragments, ScenePhaseFragmentsDecodeAndRoundTripByPhaseIndexAndFlag) {
 
   const auto decoded = read_scene_extras(plugin);
   EXPECT_TRUE(decoded.fully_consumed);
+  EXPECT_FALSE(decoded.unsupported);
+  EXPECT_TRUE(decoded.unsupported_reason.empty());
   EXPECT_EQ(decoded.flags, 0x03);
   ASSERT_EQ(decoded.phases.size(), 2u);
   EXPECT_EQ(decoded.phases[0].flag, 1);
@@ -300,6 +302,23 @@ TEST(VmadFragments, ScenePhaseFragmentsDecodeAndRoundTripByPhaseIndexAndFlag) {
   ASSERT_EQ(add_scene_vmad_phase_fragment(plugin, fixture::key(), 2, 1, "PF_Test", "Phase_2"),
             VmadStructureMutationStatus::updated);
   EXPECT_EQ(saved_vmad(plugin), before);
+}
+
+TEST(VmadFragments, SceneUnsupportedFragmentPropertyReportsInsteadOfThrowing) {
+  ByteWriter tail;
+  tail.u8(3);
+  tail.u8(0x00);
+  fixture::name(tail, "PF_Test");
+  tail.u8(0);
+  tail.u16(1);
+  fixture::name(tail, "Unsupported");
+  tail.u8(6);
+  tail.u8(0);
+  auto plugin = read_plugin(fixture::plugin_bytes(vmad_bytes(tail.bytes), "SCEN"), "Vmad.esp");
+  const auto extras = read_scene_extras(plugin);
+  EXPECT_TRUE(extras.unsupported);
+  EXPECT_FALSE(extras.unsupported_reason.empty());
+  EXPECT_FALSE(extras.fully_consumed);
 }
 
 TEST(VmadFragments, CreatedScenePhaseFragmentLandsInPhaseOrderAndRefusalsHold) {

@@ -174,6 +174,8 @@ struct SceneVmadPhaseFragment {
 struct SceneVmadExtras {
   std::uint8_t flags{0};
   std::vector<SceneVmadPhaseFragment> phases;
+  bool unsupported{false};
+  std::string unsupported_reason;
   bool fully_consumed{false};
 };
 
