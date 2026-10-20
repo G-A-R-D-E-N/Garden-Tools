@@ -64,6 +64,11 @@ std::size_t ordinal_of(const Record& record, Signature signature, std::size_t in
 
 }
 
+bool record_discriminator_matches(const Record& record, const FieldDiscriminator& when) {
+  if (count_occurrences(record, when.subrecord) > 1) return false;
+  return record_discriminator_matches(record, when, 0);
+}
+
 std::size_t discriminator_width(DiscriminatorStorage storage) noexcept {
   switch (storage) {
     case DiscriminatorStorage::u8:
