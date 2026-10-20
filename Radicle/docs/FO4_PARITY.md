@@ -55,7 +55,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | AMMO | 5741 | 30 | 4 | 9 | - | 3 | yes | yes | - | - | 1 | L4 |
 | ANIO | 5777 | 7 | 2 | 1 | - | - | yes | - | - | - | 1 | L4 |
 | AORU | 12268 | 5 | - | - | - | - | yes | - | - | - | 1 | L4 |
-| ARMA | 5845 | 15 | 4 | 12 | - | - | yes | - | forms/armor, forms/armor_edit | yes | 1 | L4 |
+| ARMA | 5845 | 16 | 4 | 12 | - | - | yes | - | forms/armor, forms/armor_edit | yes | 1 | L4 |
 | ARMO | 5786 | 27 | 8 | 18 | - | 2 | yes | yes | forms/armor, forms/armor_edit | yes | 1 | L4 |
 | ARTO | 9362 | 15 | 1 | 2 | - | - | yes | yes | - | - | 1 | L4 |
 | ASPC | 7057 | 8 | - | 3 | - | - | yes | - | - | - | 1 | L4 |
@@ -104,7 +104,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | HDPT | 7006 | 10 | 2 | 4 | 1 | 1 | yes | - | - | - | 1 | L4 |
 | IDLE | 9646 | 5 | 3 | 2 | - | - | yes | - | environment/behavior | - | 2 | L4 |
 | IDLM | 7098 | 17 | 1 | 3 | - | - | yes | yes | - | yes | 1 | L4 |
-| IMAD | 7466 | 138 | - | - | - | - | yes | - | - | - | 1 | L4 |
+| IMAD | 7466 | 142 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | IMGS | 7393 | 36 | 1 | - | - | - | yes | - | - | - | 3 | L4 |
 | INFO | 9672 | 14 | 7 | 13 | - | 2 | yes | - | forms/info_copy, environment/dialogue | - | 2 | L4 |
 | INGR | 9788 | 29 | 5 | 9 | - | 1 | yes | yes | - | - | 1 | L4 |
@@ -209,7 +209,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | AMMO | 26 | 1 | - | 3 | 4 | f32, i16, i32, u32, u8 | 12 | 9 | - | existing_only |
 | ANIO | 7 | - | - | - | 2 | u32 | - | 7 | - | existing_only |
 | AORU | 3 | - | 2 | - | - | f32, u8 | - | - | - | existing_only |
-| ARMA | 9 | - | - | 6 | 4 | f32, u32, u8 | 1 | - | - | existing_only |
+| ARMA | 9 | - | 1 | 6 | 4 | f32, u32, u8 | 2 | - | - | existing_only |
 | ARMO | 23 | 1 | 1 | 2 | 8 | f32, i16, i32, u16, u32, u8 | 15 | 4 | - | existing_only |
 | ARTO | 14 | - | 1 | - | 1 | f32, i16, u32 | - | 7 | - | existing_only |
 | ASPC | 7 | - | 1 | - | - | i16, u16, u8 | - | - | - | existing_only |
@@ -258,7 +258,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | HDPT | 7 | - | 2 | 1 | 2 | u32, u8 | 2 | 7 | - | existing_only |
 | IDLE | 5 | - | - | - | 3 | u16, u8 | - | - | - | existing_only |
 | IDLM | 16 | - | - | 1 | 1 | f32, i16, u32, u8 | - | 7 | - | existing_only |
-| IMAD | 134 | - | 3 | 1 | - | f32, u32, u8 | - | 74 | - | existing_only |
+| IMAD | 138 | - | 3 | 1 | - | f32, u32, u8 | - | 78 | - | existing_only |
 | IMGS | 35 | - | 1 | - | 1 | f32, u16 | - | - | - | existing_only |
 | INFO | 14 | - | - | - | 7 | i32, u16, u32, u8 | 15 | - | - | existing_only |
 | INGR | 25 | 1 | - | 3 | 5 | f32, i16, i32, u32, u8 | 12 | 9 | - | existing_only |
