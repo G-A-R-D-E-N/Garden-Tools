@@ -80,7 +80,13 @@ TEST(RegnRows, DecodesAnamInBothXEditPositionsAndEntryLodMultiplier) {
                                      {"ANAM", floats({4096.0f})}}),
                 rec("REGN", 0x0F22, {{"ANAM", floats({1.0f})}}),
                 rec("REGN", 0x0F23, {{"RLDM", floats({1.0f})}}),
-                rec("REGN", 0x0F24, {{"RPLI", bytes_of({80})}, {"ANAM", Bytes(2)}})})});
+                rec("REGN", 0x0F24, {{"RPLI", bytes_of({80})}, {"ANAM", Bytes(2)}}),
+                rec("REGN", 0x0F25, {{"RPLI", bytes_of({80})},
+                                     {"RPLD", floats({1.0f, 2.0f})},
+                                     {"RDAT", bytes_of({3, 0})},
+                                     {"RDWT", Bytes(12)},
+                                     {"RPLI", bytes_of({120})},
+                                     {"ANAM", floats({2048.0f})}})})});
   fo4::test::TempDataDir dir;
   dir.write("Anam.esp", bytes, 0);
   const std::vector<std::filesystem::path> ordered{dir.path() / "Anam.esp"};
@@ -104,6 +110,15 @@ TEST(RegnRows, DecodesAnamInBothXEditPositionsAndEntryLodMultiplier) {
   EXPECT_EQ(*entry_region.entries[0].occlusion_accuracy_dist, 4096.0f);
   ASSERT_TRUE(entry_region.entries[0].lod_display_distance_multiplier.has_value());
   EXPECT_EQ(*entry_region.entries[0].lod_display_distance_multiplier, 2.5f);
+
+  const auto* reopened_ref = env.winner(fo4::FormKey::parse("000F25:Anam.esp"));
+  ASSERT_NE(reopened_ref, nullptr);
+  const auto reopened_region = fo4::env::decode_region(env, *reopened_ref);
+  ASSERT_EQ(reopened_region.areas.size(), 2u);
+  ASSERT_TRUE(reopened_region.areas[1].unknown_anam.has_value());
+  EXPECT_EQ(*reopened_region.areas[1].unknown_anam, 2048.0f);
+  ASSERT_EQ(reopened_region.entries.size(), 1u);
+  EXPECT_FALSE(reopened_region.entries[0].occlusion_accuracy_dist.has_value());
 
   for (const auto* local : {"000F22", "000F23", "000F24"}) {
     const auto* ref = env.winner(fo4::FormKey::parse(std::string(local) + ":Anam.esp"));
