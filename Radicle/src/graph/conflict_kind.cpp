@@ -420,7 +420,7 @@ std::vector<RecordConflict> classify_conflicts(const ConflictGraph& graph,
                                                std::span<const Plugin* const> load_order,
                                                std::span<const ConflictPriorityRule> priorities) {
   std::vector<RecordConflict> out;
-  for (const auto& key : graph.conflicts()) {
+  for (const auto& key : graph.all_keys()) {
     out.push_back(classify_record_conflict(graph, ConflictQuery{load_order, key,
                                                                 ConflictPriority::normal,
                                                                 priorities}));

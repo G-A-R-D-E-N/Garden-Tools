@@ -38,17 +38,19 @@ constexpr Signature k_sig_scco = Signature::from_string("SCCO");
 constexpr Signature k_sig_xrfg = Signature::from_string("XRFG");
 constexpr Signature k_sig_xmsp = Signature::from_string("XMSP");
 constexpr Signature k_sig_xlcn = Signature::from_string("XLCN");
+constexpr Signature k_sig_xlkr = Signature::from_string("XLKR");
 
 struct GameMasterLinkExemption {
   Signature record;
   Signature subrecord;
 };
 
-constexpr std::array<GameMasterLinkExemption, 6> k_game_master_link_exemptions{{
+constexpr std::array<GameMasterLinkExemption, 7> k_game_master_link_exemptions{{
     {k_sig_rfgp, k_sig_rnam},
     {k_sig_regn, k_sig_wnam},
     {k_sig_refr, k_sig_xrfg},
     {k_sig_refr, k_sig_xmsp},
+    {k_sig_refr, k_sig_xlkr},
     {k_sig_achr, k_sig_xlcn},
     {k_sig_scco, k_sig_snam},
 }};

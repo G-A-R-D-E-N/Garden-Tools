@@ -179,20 +179,20 @@ TEST(ARMASculptRows, TargetGenderRowAddressesOneEntryByIndex) {
   EXPECT_EQ(row.scalar.names[1].name, "Female");
 
   auto plugin = load(two_entries());
-  EXPECT_EQ(fo4::set_record_scalar(plugin, fo4::FormKey::parse(k_arma_key), row, 0, "Female"),
+  EXPECT_EQ(fo4::set_record_scalar(plugin, fo4::FormKey::parse(k_arma_key), row, 0, "1"),
             fo4::ScalarMutationStatus::updated);
-  EXPECT_EQ(fo4::set_record_scalar(plugin, fo4::FormKey::parse(k_arma_key), row, 1, "Male"),
+  EXPECT_EQ(fo4::set_record_scalar(plugin, fo4::FormKey::parse(k_arma_key), row, 1, "0"),
             fo4::ScalarMutationStatus::updated);
   auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   EXPECT_EQ(all_sub_bytes(reread, "BSMP"), (std::vector<Bytes>{u32_bytes(1), u32_bytes(0)}));
   EXPECT_EQ(all_sub_bytes(reread, "BSMB"), (std::vector<Bytes>{zstr("Head"), zstr("Neck")}));
 
-  EXPECT_EQ(fo4::set_record_scalar(reread, fo4::FormKey::parse(k_arma_key), row, 1, "Female"),
+  EXPECT_EQ(fo4::set_record_scalar(reread, fo4::FormKey::parse(k_arma_key), row, 1, "1"),
             fo4::ScalarMutationStatus::updated);
   auto trimmed = fo4::read_plugin(fo4::write_plugin(reread), "Patch.esp");
   EXPECT_EQ(all_sub_bytes(trimmed, "BSMP"), (std::vector<Bytes>{u32_bytes(1), u32_bytes(1)}));
 
-  EXPECT_EQ(fo4::set_record_scalar(trimmed, fo4::FormKey::parse(k_arma_key), row, 2, "Male"),
+  EXPECT_EQ(fo4::set_record_scalar(trimmed, fo4::FormKey::parse(k_arma_key), row, 2, "0"),
             fo4::ScalarMutationStatus::subrecord_missing);
   EXPECT_THROW(fo4::set_record_scalar(trimmed, fo4::FormKey::parse(k_arma_key), row, 0, "Both"),
                fo4::schema::ScalarError);
@@ -220,7 +220,7 @@ TEST(ARMASculptRows, InsertsAndRemovesAWholeSculptEntry) {
                                 floats({2.0f, 2.0f, 2.0f})}));
   EXPECT_EQ(fo4::record_field_count(reread, fo4::FormKey::parse(k_arma_key), k_gender_path),
             std::optional<std::size_t>{3});
-  EXPECT_EQ(fo4::set_record_scalar(reread, fo4::FormKey::parse(k_arma_key), gender_row(), 1, "Female"),
+  EXPECT_EQ(fo4::set_record_scalar(reread, fo4::FormKey::parse(k_arma_key), gender_row(), 1, "1"),
             fo4::ScalarMutationStatus::updated);
 
   auto filled = fo4::read_plugin(fo4::write_plugin(reread), "Patch.esp");

@@ -146,6 +146,10 @@ std::vector<std::byte> make_plugin(const std::vector<Piece>& container) {
   const auto misc = fo4::test::begin_record(out, "MISC", 0, 0x00000910);
   fo4::test::end_record(out, misc);
   fo4::test::end_group(out, misc_group);
+  const auto avif_group = fo4::test::begin_group(out, "AVIF", 0);
+  const auto avif = fo4::test::begin_record(out, "AVIF", 0, 0x00000902);
+  fo4::test::end_record(out, avif);
+  fo4::test::end_group(out, avif_group);
   return out.bytes;
 }
 
@@ -564,7 +568,7 @@ TEST(FurnRows, PropertyAndItemRunsReadWriteAndRepeatOnOneFurn) {
   EXPECT_EQ(fo4::set_record_formlink_field(
                 plugin, record_key(),
                 fo4::schema::formlink_field_descriptor("FURN\\PropertyActorValue").value(), 0,
-                misc_key()),
+                fo4::FormKey::parse("000902:Patch.esp")),
             fo4::FormLinkFieldMutationStatus::updated);
   EXPECT_EQ(fo4::set_record_scalar(plugin, record_key(), scalar("FURN\\ItemCount"), 0, "7"),
             fo4::ScalarMutationStatus::updated);
@@ -575,10 +579,10 @@ TEST(FurnRows, PropertyAndItemRunsReadWriteAndRepeatOnOneFurn) {
   EXPECT_EQ(signatures(after), (std::vector<std::string>{"EDID", "OBND", "PRPS", "PNAM", "FNAM", "COCT",
                                                          "CNTO", "CNTO", "MNAM", "WBDT"}));
   EXPECT_EQ(payloads(after, "PRPS"),
-            (std::vector<Bytes>{property_bytes({{0x910, 1.5f}, {0, 0.0f}, {0x901, 3.5f}})}));
+            (std::vector<Bytes>{property_bytes({{0x902, 1.5f}, {0, 0.0f}, {0x901, 3.5f}})}));
   EXPECT_EQ(fo4::record_field_count(after, record_key(), "FURN\\PropertyValue"), 3u);
   EXPECT_EQ(read_member(after, "FURN\\PropertyValue", 2), "3.5");
-  EXPECT_EQ(prps_actor_value(after, 0), 0x910u);
+  EXPECT_EQ(prps_actor_value(after, 0), 0x902u);
   EXPECT_EQ(prps_actor_value(after, 2), 0x901u);
   EXPECT_EQ(read_member(after, "FURN\\ItemCount", 0), "7");
   EXPECT_EQ(read_member(after, "FURN\\ItemTotal", 0), "2");

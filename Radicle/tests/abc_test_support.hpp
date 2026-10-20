@@ -89,8 +89,8 @@ inline constexpr std::uint32_t kMethodCount = 3;
 inline constexpr std::uint32_t kMultinameCount = 15;
 inline constexpr std::uint32_t kStringCount = 15;
 inline constexpr std::uint32_t kIntCount = 2;
-inline constexpr std::uint32_t kUIntCount = 1;
-inline constexpr std::uint32_t kDoubleCount = 1;
+inline constexpr std::uint32_t kUIntCount = 2;
+inline constexpr std::uint32_t kDoubleCount = 2;
 inline constexpr std::uint32_t kNamespaceCount = 3;
 
 inline std::uint32_t bad_or(AbcBadIndex bad, AbcBadIndex field, std::uint32_t valid) {

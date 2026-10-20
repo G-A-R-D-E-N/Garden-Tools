@@ -151,7 +151,9 @@ Bytes fixture() {
   add_record(out, "MUST", 0x806,
              {{"EDID", zstr("RadicleTrack")}, {"CNAM", le(1859641416, 4)}, {"FLTV", f32(2.5f)},
               {"DNAM", f32(0.5f)}, {"ANAM", zstr("a.wav")}, {"BNAM", zstr("b.wav")},
-              {"LNAM", cat({f32(0.25f), f32(1.5f), le(3, 4)})}, {"SNAM", cat({le(0x806, 4), le(0x806, 4)})}});
+              {"LNAM", cat({f32(0.25f), f32(1.5f), le(3, 4)})},
+              {"FNAM", cat({f32(12.5f), f32(30.0f)})},
+              {"SNAM", cat({le(0x806, 4), le(0x806, 4)})}});
   return out.bytes;
 }
 

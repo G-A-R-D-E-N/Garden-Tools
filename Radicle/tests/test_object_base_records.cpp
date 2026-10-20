@@ -360,7 +360,7 @@ TEST(ObjectBaseRecordsSynthetic, ReadsAndEditsOneObjectTemplateCombinationHeader
     EXPECT_EQ(read_row(plugin, key, std::string{signature} + "\\ObjectTemplateLevelMin", 0), "5");
     EXPECT_EQ(read_row(plugin, key, std::string{signature} + "\\ObjectTemplateLevelMax", 1), "30");
     EXPECT_EQ(read_row(plugin, key, std::string{signature} + "\\ObjectTemplateParentCombinationIndex", 0), "-1");
-    EXPECT_EQ(read_row(plugin, key, std::string{signature} + "\\ObjectTemplateDefault", 1), "True");
+    EXPECT_EQ(read_row(plugin, key, std::string{signature} + "\\ObjectTemplateDefault", 1), "1");
 
     const auto level_max = fo4::schema::scalar_field_descriptor(fo4::Signature::from_string(signature), std::string{signature} + "\\ObjectTemplateLevelMax");
     const auto parent = fo4::schema::scalar_field_descriptor(fo4::Signature::from_string(signature), std::string{signature} + "\\ObjectTemplateParentCombinationIndex");

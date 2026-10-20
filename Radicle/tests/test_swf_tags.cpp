@@ -99,7 +99,7 @@ std::vector<std::byte> font3_payload() {
 std::vector<std::byte> text_payload(std::uint16_t character_id, bool rgba) {
   SwfBuilder builder;
   builder.u16(character_id);
-  builder.rect(0, 1000, 0, 500, 10);
+  builder.rect(0, 1000, 0, 500, 11);
   builder.push_bits(0, 1);
   builder.push_bits(0, 1);
   builder.push_bits(0, 5);
@@ -354,7 +354,7 @@ TEST(SwfTagDecode, CountsTextRecordsAndGlyphEntries) {
   const auto& text = result.file.tags[tag_index(result.file, 11)];
   ASSERT_TRUE(text.text.has_value());
   EXPECT_EQ(text.text->character_id, 20);
-  EXPECT_EQ(text.text->bounds, (fo4::swf::SwfRect{0, 1000, 0, 500, 10}));
+  EXPECT_EQ(text.text->bounds, (fo4::swf::SwfRect{0, 1000, 0, 500, 11}));
   EXPECT_EQ(text.text->record_count, 2u);
   EXPECT_EQ(text.text->glyph_count, 3u);
 

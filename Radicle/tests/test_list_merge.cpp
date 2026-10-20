@@ -1,6 +1,7 @@
 #include "fo4/forms/leveled_list.hpp"
 #include "fo4/patch/list_merge.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "fo4/plugin/writer.hpp"
 #include "fo4/schema/formlink_lists.hpp"
 #include "plugin_bytes.hpp"
 
@@ -173,7 +174,7 @@ TEST_F(ListMerge, LeveledListMergeKeepsAnEntryAnEarlierPluginAdded) {
   EXPECT_EQ(merged.entries[1].count, 2);
   EXPECT_EQ(merged.entries[1].item.owner(), fo4::PluginKey::from_filename(kFirst));
 
-  const auto written = fo4::test::original_bytes(result.patch);
+  const auto written = fo4::write_plugin(result.patch);
   const auto reloaded = fo4::read_plugin(written, "Merged.esp");
   EXPECT_EQ(entry_pairs(fo4::forms::decode_leveled_list(reloaded, key_).entries), expected);
 }
@@ -364,7 +365,7 @@ TEST_F(ListMerge, FormListMergeIsAUnionOfTheLoadOrder) {
   ASSERT_TRUE(values.has_value());
   EXPECT_EQ(*values, expected);
 
-  const auto written = fo4::test::original_bytes(result.patch);
+  const auto written = fo4::write_plugin(result.patch);
   const auto reloaded = fo4::read_plugin(written, "Merged.esp");
   const auto reread_values =
       fo4::schema::record_formlink_list_values(reloaded, key_, *descriptor);
@@ -374,6 +375,8 @@ TEST_F(ListMerge, FormListMergeIsAUnionOfTheLoadOrder) {
 
 TEST_F(ListMerge, AnUnsupportedSignatureIsRefused) {
   write(kMaster, leveled_plugin({}, {{1, 0x000800, 1}}));
+  write(kFirst, leveled_plugin({kMaster}, {{1, 0x000800, 1}}));
+  write(kSecond, leveled_plugin({kMaster}, {{1, 0x000800, 1}}));
   const auto env = load();
 
   EXPECT_THROW(fo4::patch::build_list_merge_patch(env, fo4::Signature::from_string("MISC"),
