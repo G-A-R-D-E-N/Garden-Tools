@@ -31,8 +31,17 @@ struct ConditionFunction {
   std::array<const ConditionParameterType*, 3> parameters;
 };
 
+struct ConditionRunOn {
+  std::uint32_t value;
+  std::string_view name;
+  const ConditionParameterType* parameter3;
+  bool reference_form_id;
+};
+
 const ConditionFunction* condition_function(std::uint16_t index);
 
 const ConditionFunction* condition_function_by_name(std::string_view name);
+
+const ConditionRunOn* condition_run_on(std::uint32_t value);
 
 }  // namespace fo4::schema

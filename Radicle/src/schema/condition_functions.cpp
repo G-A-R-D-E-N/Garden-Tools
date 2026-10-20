@@ -45,4 +45,17 @@ const ConditionFunction* condition_function_by_name(std::string_view name) {
   return it == end ? nullptr : &*it;
 }
 
+const ConditionRunOn* condition_run_on(std::uint32_t value) {
+  const auto begin = std::begin(k_generated_condition_run_on);
+  const auto end = std::end(k_generated_condition_run_on);
+  const auto it = std::lower_bound(begin, end, value,
+                                   [](const ConditionRunOn& row, std::uint32_t wanted) {
+                                     return row.value < wanted;
+                                   });
+  if (it == end || it->value != value) {
+    return nullptr;
+  }
+  return &*it;
+}
+
 }  // namespace fo4::schema

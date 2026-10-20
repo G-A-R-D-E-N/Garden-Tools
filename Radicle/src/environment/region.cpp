@@ -26,6 +26,23 @@ bool is_entry_payload(Signature signature) {
          signature == sig("RDGS") || signature == sig("RDWT") || signature == sig("RDSA");
 }
 
+bool payload_matches_type(std::uint32_t type, Signature signature) {
+  switch (type) {
+    case 2:
+      return signature == sig("RDOT");
+    case 3:
+      return signature == sig("RDWT");
+    case 4:
+      return signature == sig("RDMP");
+    case 6:
+      return signature == sig("RDGS");
+    case 7:
+      return signature == sig("RDMO") || signature == sig("RDSA");
+    default:
+      return false;
+  }
+}
+
 void require_stride(const Reader& reader, const Subrecord& subrecord, std::size_t stride) {
   if (subrecord.data.size() % stride != 0) {
     reader.fail(subrecord.signature, "must be a multiple of " + std::to_string(stride) + " bytes");
@@ -45,7 +62,7 @@ RecordName stored_name(const Environment& env, const RecordRef& ref, const Reade
 
 RegionArea read_area(const Reader& reader, const Subrecord& subrecord) {
   if (subrecord.data.size() != 4) reader.fail(subrecord.signature, "edge fall-off must be four bytes");
-  return RegionArea{Reader::u32(subrecord, 0), {}};
+  return RegionArea{Reader::u32(subrecord, 0), {}, std::nullopt};
 }
 
 void read_points(const Reader& reader, const Subrecord& subrecord, RegionArea& area) {
@@ -142,8 +159,29 @@ RegionData decode_region(const Environment& env, const RecordRef& ref) {
       entry = &data.entries.back();
       continue;
     }
+    if (sub.signature == sig("RLDM")) {
+      if (entry == nullptr) reader.fail(sub.signature, "appears before any RDAT data header");
+      if (sub.data.size() != 4) reader.fail(sub.signature, "must be four bytes");
+      entry->lod_display_distance_multiplier = Reader::f32(sub, 0);
+      continue;
+    }
+    if (sub.signature == sig("ANAM")) {
+      if (sub.data.size() != 4) reader.fail(sub.signature, "must be four bytes");
+      if (entry != nullptr) {
+        entry->occlusion_accuracy_dist = Reader::f32(sub, 0);
+      } else if (area != nullptr) {
+        area->unknown_anam = Reader::f32(sub, 0);
+      } else {
+        reader.fail(sub.signature, "appears before any RPLI edge fall-off");
+      }
+      continue;
+    }
     if (!is_entry_payload(sub.signature)) continue;
     if (entry == nullptr) reader.fail(sub.signature, "appears before any RDAT data header");
+    if (!payload_matches_type(entry->type, sub.signature)) {
+      reader.fail(sub.signature,
+                  "does not belong to region data type " + std::to_string(entry->type));
+    }
     if (sub.signature == sig("RDMO")) {
       if (sub.data.size() != 4) reader.fail(sub.signature, "music link must be four bytes");
       entry->music = reader.link_at(sub, 0);
