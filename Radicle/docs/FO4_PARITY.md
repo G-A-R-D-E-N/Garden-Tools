@@ -313,7 +313,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | QUST | 2 | - | 2 | 1 | 4 | f32, u16, u32, u8 | - | - | - | existing_only |
 | RACE | 100 | - | 9 | 3 | 12 | f32, i16, i32, u16, u32, u8 | 80 | 3 | - | existing_only |
 | REFR | 28 | 1 | 3 | 3 | - | f32, i32, u32, u8 | 5 | 11 | - | existing_only |
-| REGN | 8 | - | 1 | - | - | f32, u32, u8 | 7 | - | - | existing_only |
+| REGN | 7 | - | 2 | - | - | f32, u32, u8 | 7 | - | - | existing_only |
 | RELA | - | - | 1 | 1 | - | u8 | - | - | - | existing_only |
 | REVB | 12 | - | 1 | - | - | i8, u16, u32, u8 | - | - | - | existing_only |
 | RFCT | - | - | - | 1 | - | u32 | - | - | - | existing_only |

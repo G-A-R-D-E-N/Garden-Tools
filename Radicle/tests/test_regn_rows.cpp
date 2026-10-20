@@ -100,7 +100,7 @@ std::vector<std::byte> make_plugin() {
                         {"WNAM", u32_bytes(0x00000D20)},
                         {"RPLI", u32_bytes(80)},
                         {"RPLI", u32_bytes(120)},
-                        {"RDAT", rdat_bytes(3, 1, 40)},
+                        {"RDAT", rdat_bytes(7, 1, 40)},
                         {"RDMO", u32_bytes(0x00000D21)},
                         {"ANAM", f32_bytes(0.5f)},
                         {"RDAT", rdat_bytes(5, 0, 60)},
@@ -171,6 +171,12 @@ TEST(RegnRows, DeclaresColorsDataEntryFieldsAndLinks) {
   EXPECT_EQ(fo4::schema::scalar_value_name(type->scalar, 3), std::string_view("Weather"));
   EXPECT_FALSE(fo4::schema::scalar_value_name(type->scalar, 1).has_value());
 
+  const auto override_value = scalar_row("REGN\\RegionDataOverride");
+  ASSERT_TRUE(override_value.has_value());
+  EXPECT_EQ(override_value->scalar.presentation, fo4::schema::ScalarPresentation::enumeration);
+  EXPECT_EQ(fo4::schema::scalar_value_name(override_value->scalar, 1), std::string_view("True"));
+  EXPECT_FALSE(fo4::schema::scalar_value_name(override_value->scalar, 2).has_value());
+
   const auto priority = scalar_row("REGN\\RegionDataPriority");
   ASSERT_TRUE(priority.has_value());
   EXPECT_EQ(priority->scalar.offset, 5u);
@@ -217,7 +223,7 @@ TEST(RegnRows, ReadsColorsDataEntriesAndLinks) {
   EXPECT_EQ(field_bytes(plugin, key, "REGN\\MapColorRed"), u8_bytes(0x11));
   EXPECT_EQ(field_bytes(plugin, key, "REGN\\MapColorGreen"), u8_bytes(0x22));
   EXPECT_EQ(field_bytes(plugin, key, "REGN\\MapColorBlue"), u8_bytes(0x33));
-  EXPECT_EQ(field_bytes(plugin, key, "REGN\\RegionDataType"), u32_bytes(3));
+  EXPECT_EQ(field_bytes(plugin, key, "REGN\\RegionDataType"), u32_bytes(7));
   EXPECT_EQ(field_bytes(plugin, key, "REGN\\RegionDataType", 1), u32_bytes(5));
   EXPECT_EQ(field_bytes(plugin, key, "REGN\\RegionDataOverride"), u8_bytes(1));
   EXPECT_EQ(field_bytes(plugin, key, "REGN\\RegionDataPriority"), u8_bytes(40));
@@ -560,6 +566,94 @@ TEST(RegnRows, RejectsMalformedTypedRegionPayloads) {
   for (const auto* local : {"000E01", "000E02", "000E03", "000E04", "000E05", "000E06",
                             "000E07", "000E08", "000E09", "000E0A", "000E0B", "000E0C"}) {
     const auto* ref = env.winner(fo4::FormKey::parse(std::string(local) + ":Bad.esp"));
+    ASSERT_NE(ref, nullptr) << local;
+    EXPECT_THROW(fo4::env::decode_region(env, *ref), fo4::env::WorldDecodeError) << local;
+  }
+}
+
+TEST(RegnRows, RefusesPayloadsThatDoNotMatchTheirEntryType) {
+  const auto bytes = fo4::test::envnode::make_plugin(
+      {}, {top("REGN", {rec("REGN", 0x0F01, {{"RDAT", bytes_of({3, 0})}, {"RDOT", Bytes(52)}}),
+                        rec("REGN", 0x0F02, {{"RDAT", bytes_of({2, 0})}, {"RDWT", Bytes(12)}}),
+                        rec("REGN", 0x0F03, {{"RDAT", bytes_of({4, 0})}, {"RDSA", Bytes(12)}}),
+                        rec("REGN", 0x0F04, {{"RDAT", bytes_of({6, 0})}, {"RDMO", bytes_of({1})}}),
+                        rec("REGN", 0x0F05, {{"RDAT", bytes_of({7, 0})}, {"RDGS", Bytes(8)}}),
+                        rec("REGN", 0x0F06, {{"RDAT", bytes_of({5, 0})}, {"RDMP", text_bytes("Map")}}),
+                        rec("REGN", 0x0F07, {{"RDAT", bytes_of({0, 0})}, {"RDWT", Bytes(12)}}),
+                        rec("REGN", 0x0F08, {{"RDAT", bytes_of({3, 0})}, {"RDGS", Bytes(8)}}),
+                        rec("REGN", 0x0F09, {{"RDAT", bytes_of({3, 0})}, {"RDWT", Bytes(12)}}),
+                        rec("REGN", 0x0F0A, {{"RDAT", bytes_of({7, 0})},
+                                             {"RDMO", bytes_of({1})},
+                                             {"RDSA", Bytes(12)}})})});
+  fo4::test::TempDataDir dir;
+  dir.write("Types.esp", bytes, 0);
+  const std::vector<std::filesystem::path> ordered{dir.path() / "Types.esp"};
+  const auto env = fo4::env::Environment::load(ordered);
+
+  for (const auto* local : {"000F01", "000F02", "000F03", "000F04", "000F05", "000F06", "000F07",
+                            "000F08"}) {
+    const auto* ref = env.winner(fo4::FormKey::parse(std::string(local) + ":Types.esp"));
+    ASSERT_NE(ref, nullptr) << local;
+    EXPECT_THROW(fo4::env::decode_region(env, *ref), fo4::env::WorldDecodeError) << local;
+  }
+
+  const auto* weather = env.winner(fo4::FormKey::parse("000F09:Types.esp"));
+  ASSERT_NE(weather, nullptr);
+  const auto weather_region = fo4::env::decode_region(env, *weather);
+  ASSERT_EQ(weather_region.entries.size(), 1u);
+  EXPECT_EQ(weather_region.entries[0].type, 3u);
+  EXPECT_EQ(weather_region.entries[0].weathers.size(), 1u);
+
+  const auto* sound = env.winner(fo4::FormKey::parse("000F0A:Types.esp"));
+  ASSERT_NE(sound, nullptr);
+  const auto sound_region = fo4::env::decode_region(env, *sound);
+  ASSERT_EQ(sound_region.entries.size(), 1u);
+  EXPECT_EQ(sound_region.entries[0].type, 7u);
+  EXPECT_TRUE(sound_region.entries[0].music.has_value());
+  EXPECT_EQ(sound_region.entries[0].sounds.size(), 1u);
+}
+
+TEST(RegnRows, DecodesAnamInBothXEditPositionsAndEntryLodMultiplier) {
+  const auto bytes = fo4::test::envnode::make_plugin(
+      {}, {top("REGN",
+               {rec("REGN", 0x0F20, {{"RPLI", bytes_of({80})},
+                                     {"RPLD", floats({1.0f, 2.0f})},
+                                     {"ANAM", floats({2048.0f})}}),
+                rec("REGN", 0x0F21, {{"RPLI", bytes_of({80})},
+                                     {"RPLD", floats({1.0f, 2.0f})},
+                                     {"RDAT", bytes_of({3, 0})},
+                                     {"RDWT", Bytes(12)},
+                                     {"RLDM", floats({2.5f})},
+                                     {"ANAM", floats({4096.0f})}}),
+                rec("REGN", 0x0F22, {{"ANAM", floats({1.0f})}}),
+                rec("REGN", 0x0F23, {{"RLDM", floats({1.0f})}}),
+                rec("REGN", 0x0F24, {{"RPLI", bytes_of({80})}, {"ANAM", Bytes(2)}})})});
+  fo4::test::TempDataDir dir;
+  dir.write("Anam.esp", bytes, 0);
+  const std::vector<std::filesystem::path> ordered{dir.path() / "Anam.esp"};
+  const auto env = fo4::env::Environment::load(ordered);
+
+  const auto* area_ref = env.winner(fo4::FormKey::parse("000F20:Anam.esp"));
+  ASSERT_NE(area_ref, nullptr);
+  const auto area_region = fo4::env::decode_region(env, *area_ref);
+  ASSERT_EQ(area_region.areas.size(), 1u);
+  ASSERT_TRUE(area_region.areas[0].unknown_anam.has_value());
+  EXPECT_EQ(*area_region.areas[0].unknown_anam, 2048.0f);
+  EXPECT_TRUE(area_region.entries.empty());
+
+  const auto* entry_ref = env.winner(fo4::FormKey::parse("000F21:Anam.esp"));
+  ASSERT_NE(entry_ref, nullptr);
+  const auto entry_region = fo4::env::decode_region(env, *entry_ref);
+  ASSERT_EQ(entry_region.areas.size(), 1u);
+  EXPECT_FALSE(entry_region.areas[0].unknown_anam.has_value());
+  ASSERT_EQ(entry_region.entries.size(), 1u);
+  ASSERT_TRUE(entry_region.entries[0].occlusion_accuracy_dist.has_value());
+  EXPECT_EQ(*entry_region.entries[0].occlusion_accuracy_dist, 4096.0f);
+  ASSERT_TRUE(entry_region.entries[0].lod_display_distance_multiplier.has_value());
+  EXPECT_EQ(*entry_region.entries[0].lod_display_distance_multiplier, 2.5f);
+
+  for (const auto* local : {"000F22", "000F23", "000F24"}) {
+    const auto* ref = env.winner(fo4::FormKey::parse(std::string(local) + ":Anam.esp"));
     ASSERT_NE(ref, nullptr) << local;
     EXPECT_THROW(fo4::env::decode_region(env, *ref), fo4::env::WorldDecodeError) << local;
   }
