@@ -225,6 +225,7 @@ bool Parser::parse_script_header(Script& script) {
 }
 
 bool Parser::parse_declaration(DeclarationTarget& target, const std::string& doc) {
+  links_ = 0;
   const TokenKind kind = peek().kind;
   if (kind == TokenKind::KwFunction || kind == TokenKind::KwEvent) {
     if (slot_missing(target.functions)) return false;

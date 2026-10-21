@@ -365,7 +365,13 @@ public partial class MainWindow : Window
         if (_poseSource == key) return;
 
         Stop();
-        _poseSkeleton = PoseSkeleton(archiveEntry == null ? key : null) ?? ArchiveSkeleton(archiveEntry);
+        try { _poseSkeleton = PoseSkeleton(archiveEntry == null ? key : null) ?? ArchiveSkeleton(archiveEntry); }
+        catch (InvalidDataException ex)
+        {
+            SetPlaybackSummary($"Could not read {label}: {ex.Message.Split('\n')[0]}", Ux.BadBrush);
+            ClearPose();
+            return;
+        }
 
         HkxAnimationData animation;
         try
@@ -436,15 +442,17 @@ public partial class MainWindow : Window
     private HkxSkeleton? ArchiveSkeleton(string? animationEntry)
     {
         if (_gameData == null || animationEntry == null) return null;
-        byte[]? bytes;
-        try { bytes = _gameData.SkeletonBytes(animationEntry); }
-        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
-        {
-            return null;
-        }
+        var gameData = _gameData;
+        byte[]? bytes = SkeletonBytesOrNull(() => gameData.SkeletonBytes(animationEntry));
         if (bytes == null) return null;
         try { return new HkxBinaryReader().ReadSkeleton(bytes); }
         catch { return null; }
+    }
+
+    internal static byte[]? SkeletonBytesOrNull(Func<byte[]?> read)
+    {
+        try { return read(); }
+        catch (Exception e) when (GameData.IsSkippableArchiveFailure(e)) { return null; }
     }
 
 }

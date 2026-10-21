@@ -1,14 +1,13 @@
 #include "fo4/archive/ba2.hpp"
 #include "fo4/swf/swf.hpp"
 #include "real_data_build.hpp"
+#include "real_data_movies.hpp"
 
 #include <gtest/gtest.h>
 
-#include <cctype>
 #include <cstddef>
 #include <cstdlib>
 #include <filesystem>
-#include <fstream>
 #include <map>
 #include <span>
 #include <string>
@@ -16,32 +15,6 @@
 #include <vector>
 
 namespace {
-
-std::string lower_extension(const std::string& path) {
-  std::string extension = std::filesystem::path(path).extension().string();
-  for (auto& ch : extension) {
-    ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
-  }
-  return extension;
-}
-
-bool is_movie(const std::string& path) {
-  const auto extension = lower_extension(path);
-  return extension == ".swf" || extension == ".gfx";
-}
-
-std::vector<std::byte> read_file(const std::filesystem::path& path) {
-  std::ifstream in(path, std::ios::binary);
-  std::vector<std::byte> bytes;
-  char buffer[4096];
-  while (in.read(buffer, static_cast<std::streamsize>(sizeof(buffer))) || in.gcount() > 0) {
-    const auto count = in.gcount();
-    for (std::streamsize index = 0; index < count; ++index) {
-      bytes.push_back(static_cast<std::byte>(static_cast<unsigned char>(buffer[index])));
-    }
-  }
-  return bytes;
-}
 
 struct MovieStats {
   std::size_t total{0};
@@ -52,6 +25,14 @@ struct MovieStats {
   std::size_t lzma{0};
   std::size_t symbols{0};
   std::size_t abc_blocks{0};
+  std::size_t shape_movies{0};
+  std::size_t bitmap_movies{0};
+  std::size_t font_movies{0};
+  std::size_t text_movies{0};
+  std::size_t sound_movies{0};
+  std::size_t exporter_info_movies{0};
+  std::size_t external_image_movies{0};
+  std::size_t font_texture_movies{0};
   std::map<std::string, std::size_t> versions;
 };
 
@@ -74,6 +55,14 @@ void check_movie(const std::string& name, std::span<const std::byte> bytes, Movi
   stats.action_script3 += summary.action_script3 ? 1u : 0u;
   stats.symbols += summary.symbol_classes.size();
   stats.abc_blocks += summary.abc_blocks.size();
+  stats.shape_movies += summary.shape_tags != 0 ? 1u : 0u;
+  stats.bitmap_movies += summary.bitmap_tags != 0 ? 1u : 0u;
+  stats.font_movies += summary.font_tags != 0 ? 1u : 0u;
+  stats.text_movies += summary.text_tags != 0 ? 1u : 0u;
+  stats.sound_movies += summary.sound_tags != 0 ? 1u : 0u;
+  stats.exporter_info_movies += summary.exporter_info_tags != 0 ? 1u : 0u;
+  stats.external_image_movies += summary.external_image_tags != 0 ? 1u : 0u;
+  stats.font_texture_movies += summary.font_texture_tags != 0 ? 1u : 0u;
   ++stats.versions["v" + std::to_string(summary.version) + (summary.is_gfx ? "-gfx" : "-swf") +
                     (summary.compressed ? "-zlib" : "-raw")];
   const std::vector<std::byte> original(bytes.begin(), bytes.end());
@@ -141,5 +130,13 @@ TEST(SwfRealData, ParsesEveryInterfaceMovieAndRoundTripsByteIdentically) {
   RecordProperty("lzma_movies", std::to_string(stats.lzma));
   RecordProperty("symbol_classes", std::to_string(stats.symbols));
   RecordProperty("abc_blocks", std::to_string(stats.abc_blocks));
+  RecordProperty("shape_movies", std::to_string(stats.shape_movies));
+  RecordProperty("bitmap_movies", std::to_string(stats.bitmap_movies));
+  RecordProperty("font_movies", std::to_string(stats.font_movies));
+  RecordProperty("text_movies", std::to_string(stats.text_movies));
+  RecordProperty("sound_movies", std::to_string(stats.sound_movies));
+  RecordProperty("exporter_info_movies", std::to_string(stats.exporter_info_movies));
+  RecordProperty("external_image_movies", std::to_string(stats.external_image_movies));
+  RecordProperty("font_texture_movies", std::to_string(stats.font_texture_movies));
   RecordProperty("version_histogram", version_histogram(stats));
 }

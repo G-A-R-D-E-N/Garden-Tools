@@ -2,11 +2,13 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "fo4/plugin/writer.hpp"
+#include "fo4/schema/field_address.hpp"
 #include "fo4/schema/formlink_lists.hpp"
 #include "fo4/schema/preflight.hpp"
 #include "fo4/schema/record_constraints.hpp"
 #include "fo4/schema/scalar.hpp"
 #include "authoring_order.hpp"
+#include "object_base_fixture.hpp"
 #include "plugin_bytes.hpp"
 
 #include <gtest/gtest.h>
@@ -18,237 +20,7 @@
 #include <string_view>
 #include <vector>
 
-namespace {
-
-using Bytes = std::vector<std::byte>;
-using fo4::test::ByteWriter;
-
-struct Sub {
-  std::string_view signature;
-  Bytes data;
-};
-
-struct Entry {
-  std::uint32_t local_id;
-  std::vector<Sub> subs;
-};
-
-struct Item {
-  std::string_view signature;
-  std::string_view key;
-  std::string_view scalar_path;
-  std::string_view scalar_value;
-  std::string_view text_path;
-  std::string_view link_path;
-  std::uint32_t link_start;
-  std::string_view link_target;
-};
-
-constexpr Item k_items[] = {
-    {"ACTI", "000801:Patch.esp", "ACTI\\BoundMaxX", "7", "ACTI\\Model", "ACTI\\LoopingSound",
-     0x800, "000808:Patch.esp"},
-    {"CONT", "000802:Patch.esp", "CONT\\Weight", "2.5", "CONT\\Model", "CONT\\OpenSound", 0x800,
-     "000808:Patch.esp"},
-    {"DOOR", "000803:Patch.esp", "DOOR\\Flags", "2", "DOOR\\Model", "DOOR\\OpenSound", 0x800,
-     "000808:Patch.esp"},
-    {"FURN", "000804:Patch.esp", "FURN\\BenchType", "7", "FURN\\Model", "FURN\\PreviewTransform",
-     0x809, "00080A:Patch.esp"},
-    {"MSTT", "000805:Patch.esp", "MSTT\\OnLocalMap", "0", "MSTT\\Model", "MSTT\\LoopingSound",
-     0x800, "000808:Patch.esp"},
-    {"TACT", "000806:Patch.esp", "TACT\\BoundMinX", "-4", "TACT\\Model", "TACT\\LoopingSound",
-     0x800, "000808:Patch.esp"},
-    {"TERM", "000807:Patch.esp", "TERM\\Flags", "4", "TERM\\Model", "TERM\\PreviewTransform",
-     0x809, "00080A:Patch.esp"},
-};
-
-constexpr std::uint32_t raw_id(std::uint32_t local_id) { return 0x02000000u | local_id; }
-
-Bytes zstr(std::string_view text) {
-  ByteWriter out;
-  out.raw(text);
-  out.u8(0);
-  return out.bytes;
-}
-
-Bytes zeros(std::size_t size) { return Bytes(size); }
-
-Bytes u32_bytes(std::uint32_t value) {
-  ByteWriter out;
-  out.u32(value);
-  return out.bytes;
-}
-
-Bytes u16_bytes(std::uint16_t value) {
-  ByteWriter out;
-  out.u16(value);
-  return out.bytes;
-}
-
-Bytes f32_bytes(float value) {
-  ByteWriter out;
-  out.f32(value);
-  return out.bytes;
-}
-
-Bytes u8_bytes(std::uint8_t value) {
-  ByteWriter out;
-  out.u8(value);
-  return out.bytes;
-}
-
-Bytes container_data() {
-  ByteWriter out;
-  out.u8(1);
-  out.f32(1.5f);
-  return out.bytes;
-}
-
-void write_group(ByteWriter& out, std::string_view label, const std::vector<Entry>& entries) {
-  const auto group = fo4::test::begin_group(out, label, 0);
-  for (const auto& entry : entries) {
-    const auto record = fo4::test::begin_record(out, label, 0, raw_id(entry.local_id));
-    for (const auto& sub : entry.subs) {
-      fo4::test::write_subrecord(out, sub.signature, sub.data);
-    }
-    fo4::test::end_record(out, record);
-  }
-  fo4::test::end_group(out, group);
-}
-
-std::vector<std::byte> make_plugin() {
-  ByteWriter out;
-  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
-  ByteWriter hedr;
-  hedr.f32(1.0f);
-  hedr.u32(2);
-  hedr.u32(0x900);
-  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
-  fo4::test::write_subrecord(out, "MAST", std::string_view{"Fallout4.esm\0", 13});
-  fo4::test::write_subrecord(out, "DATA", zeros(8));
-  fo4::test::write_subrecord(out, "MAST", std::string_view{"MagicMaster.esp\0", 16});
-  fo4::test::write_subrecord(out, "DATA", zeros(8));
-  fo4::test::end_record(out, tes4);
-
-  write_group(out, "SNDR", {{0x800, {{"EDID", zstr("RadicleSoundA")}}},
-                            {0x808, {{"EDID", zstr("RadicleSoundB")}}}});
-  write_group(out, "TRNS", {{0x809, {{"EDID", zstr("RadicleTransformA")}}},
-                            {0x80A, {{"EDID", zstr("RadicleTransformB")}}}});
-  write_group(out, "ACTI", {{0x801, {{"EDID", zstr("RadicleActi")},
-                                     {"OBND", zeros(12)},
-                                     {"MODL", zstr("Light.nif")},
-                                     {"SNAM", u32_bytes(raw_id(0x800))},
-                                     {"FNAM", u16_bytes(1)}}}});
-  write_group(out, "CONT", {{0x802, {{"EDID", zstr("RadicleCont")},
-                                     {"OBND", zeros(12)},
-                                     {"MODL", zstr("Crate.nif")},
-                                     {"MODC", f32_bytes(0.25f)},
-                                     {"MODF", u8_bytes(2)},
-                                     {"DATA", container_data()},
-                                     {"SNAM", u32_bytes(raw_id(0x800))}}}});
-  write_group(out, "DOOR", {{0x803, {{"EDID", zstr("RadicleDoor")},
-                                     {"OBND", zeros(12)},
-                                     {"MODL", zstr("Door.nif")},
-                                     {"MODC", f32_bytes(2.5f)},
-                                     {"MODF", u8_bytes(1)},
-                                     {"SNAM", u32_bytes(raw_id(0x800))},
-                                     {"FNAM", u8_bytes(1)}}}});
-  write_group(out, "FURN", {{0x804, {{"EDID", zstr("RadicleFurn")},
-                                     {"OBND", zeros(12)},
-                                     {"PTRN", u32_bytes(raw_id(0x809))},
-                                     {"MODL", zstr("Bench.nif")},
-                                     {"PNAM", zeros(4)},
-                                     {"FNAM", u16_bytes(2)},
-                                     {"WBDT", u8_bytes(1)}}}});
-  write_group(out, "MSTT", {{0x805, {{"EDID", zstr("RadicleMstt")},
-                                     {"OBND", zeros(12)},
-                                     {"MODL", zstr("Pylon.nif")},
-                                     {"DATA", u8_bytes(1)},
-                                     {"SNAM", u32_bytes(raw_id(0x800))}}}});
-  write_group(out, "TACT", {{0x806, {{"EDID", zstr("RadicleTact")},
-                                     {"OBND", zeros(12)},
-                                     {"MODL", zstr("Talk.nif")},
-                                     {"PNAM", zeros(4)},
-                                     {"SNAM", u32_bytes(raw_id(0x800))},
-                                     {"FNAM", zeros(2)}}}});
-  write_group(out, "TERM", {{0x807, {{"EDID", zstr("RadicleTerm")},
-                                     {"OBND", zeros(12)},
-                                     {"PTRN", u32_bytes(raw_id(0x809))},
-                                     {"MODL", zstr("Terminal.nif")},
-                                     {"FNAM", u16_bytes(1)}}}});
-  return out.bytes;
-}
-
-const fo4::Subrecord* find_subrecord(const fo4::Record& record, fo4::Signature signature) {
-  for (const auto& sub : record.subrecords) {
-    if (sub.signature == signature) return &sub;
-  }
-  return nullptr;
-}
-
-std::size_t rule_index(std::span<const fo4::schema::SubrecordAuthoringConstraint> rules,
-                       std::string_view name) {
-  const auto signature = fo4::Signature::from_string(name);
-  for (std::size_t index = 0; index < rules.size(); ++index) {
-    if (rules[index].signature == signature) return index;
-  }
-  return rules.size();
-}
-
-fo4::Plugin template_record_plugin(std::string_view signature, std::uint32_t local_id,
-                                   const std::vector<Sub>& subs) {
-  ByteWriter out;
-  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
-  ByteWriter hedr;
-  hedr.f32(1.0f);
-  hedr.u32(1);
-  hedr.u32(0x900);
-  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
-  fo4::test::end_record(out, tes4);
-  const auto group = fo4::test::begin_group(out, signature, 0);
-  const auto record = fo4::test::begin_record(out, signature, 0, local_id);
-  for (const auto& sub : subs) {
-    fo4::test::write_subrecord(out, sub.signature, sub.data);
-  }
-  fo4::test::end_record(out, record);
-  fo4::test::end_group(out, group);
-  return fo4::read_plugin(out.bytes, "Patch.esp");
-}
-
-const fo4::Record* only_record(const fo4::Plugin& plugin, std::string_view signature) {
-  const auto wanted = fo4::Signature::from_string(signature);
-  const fo4::Record* found = nullptr;
-  fo4::visit_records(plugin, [&](const fo4::Record& record) {
-    if (record.header.signature == wanted) found = &record;
-  });
-  return found;
-}
-
-fo4::Plugin destructible_acti_plugin(const std::vector<Sub>& stages) {
-  ByteWriter out;
-  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
-  ByteWriter hedr;
-  hedr.f32(1.0f);
-  hedr.u32(1);
-  hedr.u32(0x900);
-  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
-  fo4::test::end_record(out, tes4);
-  const auto group = fo4::test::begin_group(out, "ACTI", 0);
-  const auto record = fo4::test::begin_record(out, "ACTI", 0, 0x820);
-  fo4::test::write_subrecord(out, "EDID", zstr("RadicleActi"));
-  fo4::test::write_subrecord(out, "OBND", zeros(12));
-  for (const auto& sub : stages) {
-    fo4::test::write_subrecord(out, sub.signature, sub.data);
-  }
-  fo4::test::end_record(out, record);
-  fo4::test::end_group(out, group);
-  return fo4::read_plugin(out.bytes, "Patch.esp");
-}
-
-const fo4::Record* only_acti(const fo4::Plugin& plugin) {
-  return fo4::find_record(plugin, fo4::FormKey::parse("000820:Patch.esp"));
-}
-
-}  // namespace
+using namespace object_base_fixture;
 
 TEST(ObjectBaseRecordsSynthetic, EveryScalarRowDecodesOnTheFixture) {
   const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
@@ -528,4 +300,146 @@ TEST(ObjectBaseRecordsSynthetic, WrongSizedModelPayloadsAreRefused) {
                fo4::schema::ScalarError);
   EXPECT_THROW(static_cast<void>(fo4::schema::scalar_field_bytes(modf->data, flags->scalar)),
                fo4::schema::ScalarError);
+}
+
+namespace {
+
+constexpr std::string_view k_obts_paths[] = {
+    "ObjectTemplateIncludeCount", "ObjectTemplatePropertyCount", "ObjectTemplateLevelMin",
+    "ObjectTemplateLevelMax",     "ObjectTemplateParentCombinationIndex",
+    "ObjectTemplateDefault"};
+
+fo4::Plugin object_template_plugin(std::string_view signature, std::uint32_t local_id,
+                                   const std::vector<Sub>& combinations) {
+  std::vector<Sub> subs;
+  subs.push_back({"EDID", zstr("RadicleObjectTemplate")});
+  for (const auto& combination : combinations) {
+    subs.push_back(combination);
+  }
+  return template_record_plugin(signature, local_id, subs);
+}
+
+}  // namespace
+
+TEST(ObjectBaseRecordsSynthetic, ObjectTemplateHeaderRowsCoverNpcAndFurn) {
+  for (const auto signature : {"NPC_", "FURN"}) {
+    const auto record = fo4::Signature::from_string(signature);
+    for (const auto name : k_obts_paths) {
+      const auto path = std::string{signature} + "\\" + std::string{name};
+      const auto field = fo4::schema::scalar_field_descriptor(record, path);
+      ASSERT_TRUE(field.has_value()) << path;
+      EXPECT_EQ(field->scalar.subrecord, fo4::Signature::from_string("OBTS")) << path;
+      EXPECT_TRUE(field->scalar.address.repeated) << path;
+      EXPECT_EQ(field->scalar.minimum_payload_size, 18u) << path;
+    }
+    const auto level_min = fo4::schema::scalar_field_descriptor(record, std::string{signature} + "\\ObjectTemplateLevelMin");
+    const auto parent = fo4::schema::scalar_field_descriptor(record, std::string{signature} + "\\ObjectTemplateParentCombinationIndex");
+    const auto defaulted = fo4::schema::scalar_field_descriptor(record, std::string{signature} + "\\ObjectTemplateDefault");
+    ASSERT_TRUE(level_min.has_value());
+    ASSERT_TRUE(parent.has_value());
+    ASSERT_TRUE(defaulted.has_value());
+    EXPECT_EQ(level_min->scalar.offset, 8u);
+    EXPECT_EQ(parent->scalar.offset, 12u);
+    EXPECT_EQ(defaulted->scalar.offset, 14u);
+    const auto true_name = fo4::schema::scalar_value_name(defaulted->scalar, 1);
+    ASSERT_TRUE(true_name.has_value());
+    EXPECT_EQ(*true_name, "True");
+  }
+}
+
+TEST(ObjectBaseRecordsSynthetic, ReadsAndEditsOneObjectTemplateCombinationHeader) {
+  for (const auto signature : {"NPC_", "FURN"}) {
+    const auto key = fo4::FormKey::parse("000850:Patch.esp");
+    auto plugin = object_template_plugin(signature, 0x850,
+                                         {{"OBTE", u32_bytes(2)},
+                                          {"OBTF", zeros(0)},
+                                          {"OBTS", obts_header(1, 0, 5, 10, -1, 0, 1, 2, 0)},
+                                          {"OBTF", zeros(0)},
+                                          {"OBTS", obts_header(0, 3, 20, 30, 7, 1, 4, 8, 0)},
+                                          {"STOP", zeros(0)}});
+    EXPECT_EQ(read_row(plugin, key, std::string{signature} + "\\ObjectTemplateLevelMin", 0), "5");
+    EXPECT_EQ(read_row(plugin, key, std::string{signature} + "\\ObjectTemplateLevelMax", 1), "30");
+    EXPECT_EQ(read_row(plugin, key, std::string{signature} + "\\ObjectTemplateParentCombinationIndex", 0), "-1");
+    EXPECT_EQ(read_row(plugin, key, std::string{signature} + "\\ObjectTemplateDefault", 1), "1");
+
+    const auto level_max = fo4::schema::scalar_field_descriptor(fo4::Signature::from_string(signature), std::string{signature} + "\\ObjectTemplateLevelMax");
+    const auto parent = fo4::schema::scalar_field_descriptor(fo4::Signature::from_string(signature), std::string{signature} + "\\ObjectTemplateParentCombinationIndex");
+    ASSERT_TRUE(level_max.has_value());
+    ASSERT_TRUE(parent.has_value());
+    EXPECT_EQ(fo4::set_record_scalar(plugin, key, *level_max, 1, "42"),
+              fo4::ScalarMutationStatus::updated);
+    EXPECT_EQ(fo4::set_record_scalar(plugin, key, *parent, 0, "9"),
+              fo4::ScalarMutationStatus::updated);
+
+    const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+    const auto* record = fo4::find_record(reread, key);
+    ASSERT_NE(record, nullptr) << signature;
+    std::vector<Bytes> payloads;
+    for (const auto& sub : record->subrecords) {
+      if (sub.signature == fo4::Signature::from_string("OBTS")) payloads.push_back(sub.data);
+    }
+    ASSERT_EQ(payloads.size(), 2u) << signature;
+    EXPECT_EQ(payloads[0], obts_header(1, 0, 5, 10, 9, 0, 1, 2, 0)) << signature;
+    EXPECT_EQ(payloads[1], obts_header(0, 3, 20, 42, 7, 1, 4, 8, 0)) << signature;
+    EXPECT_EQ(read_row(reread, key, std::string{signature} + "\\ObjectTemplateLevelMax", 1), "42");
+    EXPECT_EQ(read_row(reread, key, std::string{signature} + "\\ObjectTemplateLevelMin", 1), "20");
+  }
+}
+
+TEST(ObjectBaseRecordsSynthetic, ShortObjectTemplateCombinationsHideTheirHeaderRows) {
+  const auto key = fo4::FormKey::parse("000851:Patch.esp");
+  auto plugin = object_template_plugin("NPC_", 0x851,
+                                       {{"OBTE", u32_bytes(1)},
+                                        {"OBTF", zeros(0)},
+                                        {"OBTS", zeros(17)},
+                                        {"STOP", zeros(0)}});
+  EXPECT_EQ(read_row(plugin, key, "NPC_\\ObjectTemplateLevelMin", 0), "absent");
+  const auto level_min = fo4::schema::scalar_field_descriptor(
+      fo4::Signature::from_string("NPC_"), "NPC_\\ObjectTemplateLevelMin");
+  ASSERT_TRUE(level_min.has_value());
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *level_min, 0, "1"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *level_min, 1, "1"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto* record = fo4::find_record(reread, key);
+  ASSERT_NE(record, nullptr);
+  const auto* obts = find_subrecord(*record, fo4::Signature::from_string("OBTS"));
+  ASSERT_NE(obts, nullptr);
+  EXPECT_EQ(obts->data, zeros(17));
+}
+
+TEST(ObjectBaseRecordsSynthetic, KeywordedObjectTemplateHasNoFixedOffsetMinRankOrAltRows) {
+  const auto key = fo4::FormKey::parse("000852:Patch.esp");
+  for (const auto signature : {"NPC_", "FURN"}) {
+    const auto record = fo4::Signature::from_string(signature);
+    EXPECT_FALSE(fo4::schema::scalar_field_descriptor(
+                     record, std::string{signature} + "\\ObjectTemplateMinLevelForRanks")
+                     .has_value())
+        << signature;
+    EXPECT_FALSE(fo4::schema::scalar_field_descriptor(
+                     record, std::string{signature} + "\\ObjectTemplateAltLevelsPerTier")
+                     .has_value())
+        << signature;
+
+    auto plugin = object_template_plugin(signature, 0x852,
+                                         {{"OBTE", u32_bytes(1)},
+                                          {"OBTF", zeros(0)},
+                                          {"OBTS", obts_header(0, 0, 5, 10, -1, 0, 1, 2, 1)},
+                                          {"STOP", zeros(0)}});
+    EXPECT_EQ(read_row(plugin, key, std::string{signature} + "\\ObjectTemplateLevelMax", 0), "10");
+    const auto level_max = fo4::schema::scalar_field_descriptor(
+        record, std::string{signature} + "\\ObjectTemplateLevelMax");
+    ASSERT_TRUE(level_max.has_value()) << signature;
+    EXPECT_EQ(fo4::set_record_scalar(plugin, key, *level_max, 0, "42"),
+              fo4::ScalarMutationStatus::updated)
+        << signature;
+
+    const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+    const auto* reread_record = fo4::find_record(reread, key);
+    ASSERT_NE(reread_record, nullptr) << signature;
+    const auto* obts = find_subrecord(*reread_record, fo4::Signature::from_string("OBTS"));
+    ASSERT_NE(obts, nullptr) << signature;
+    EXPECT_EQ(obts->data, obts_header(0, 0, 5, 42, -1, 0, 1, 2, 1)) << signature;
+  }
 }

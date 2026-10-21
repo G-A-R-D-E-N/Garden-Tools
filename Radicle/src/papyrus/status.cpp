@@ -42,6 +42,8 @@ const char* statusName(Status status) {
             return "HostError";
         case Status::InternalError:
             return "InternalError";
+        case Status::StringTooLong:
+            return "StringTooLong";
     }
     return "Unknown";
 }
@@ -68,6 +70,7 @@ bool isFatal(Status status) {
         case Status::NullObject:
         case Status::FunctionNotFound:
         case Status::ArgumentCountMismatch:
+        case Status::StringTooLong:
             return false;
     }
     return true;

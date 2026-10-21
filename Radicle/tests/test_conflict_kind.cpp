@@ -16,6 +16,8 @@ namespace {
 constexpr std::string_view k_value_a{"\xAA\xBB\0\0", 4};
 constexpr std::string_view k_value_b{"\xCC\xDD\0\0", 4};
 constexpr std::string_view k_value_c{"\x11", 1};
+constexpr std::string_view k_dest_health_100{"\x64\0\0\0\x01\0\0\0", 8};
+constexpr std::string_view k_dest_health_200{"\xC8\0\0\0\x01\0\0\0", 8};
 
 const auto k_data = fo4::Signature::from_string("DATA");
 const auto k_edid = fo4::Signature::from_string("EDID");
@@ -284,14 +286,79 @@ TEST(ConflictKind, AKeyNoPluginDefinesIsUnknown) {
   EXPECT_TRUE(result.subrecords.empty());
 }
 
-TEST(ConflictKind, BulkClassificationCoversEverySharedKey) {
-  const auto base = base_plugin("MISC", "Thing", {{"DATA", k_value_a}});
+TEST(ConflictKind, BulkClassificationCoversEveryKeyIncludingSinglePluginOnes) {
+  const auto base = fo4::read_plugin(
+      make_plugin({{"MISC", 0x800, "Thing", {{"DATA", k_value_a}}},
+                   {"MISC", 0x900, "Solo", {{"DATA", k_value_b}}}},
+                  false),
+      "Master.esm");
   const auto patch = override_plugin("Patch.esp", "MISC", "Thing", {{"DATA", k_value_b}});
   const std::vector<const fo4::Plugin*> order{&base, &patch};
   const auto graph = fo4::ConflictGraph::build(order);
 
   const auto results = fo4::classify_conflicts(graph, order);
-  ASSERT_EQ(results.size(), 1u);
+  ASSERT_EQ(results.size(), 2u);
   EXPECT_EQ(results[0].key, master_key());
   EXPECT_EQ(results[0].category, fo4::ConflictCategory::override_);
+  EXPECT_EQ(results[1].key, fo4::FormKey::parse("000900:Master.esm"));
+  EXPECT_EQ(results[1].category, fo4::ConflictCategory::only_one);
+  ASSERT_EQ(results[1].roles.size(), 1u);
+  EXPECT_EQ(results[1].roles[0], fo4::ConflictRole::only_one);
+}
+
+const fo4::FieldConflict* find_field(const fo4::RecordConflict& conflict, std::string_view path) {
+  for (const auto& field : conflict.fields) {
+    if (field.path == path) return &field;
+  }
+  return nullptr;
+}
+
+TEST(ConflictKind, ScalarFieldRowsSplitAChangedSubrecord) {
+  const auto base = base_plugin("MISC", "Thing", {{"DEST", k_dest_health_100}});
+  const auto patch = override_plugin("Patch.esp", "MISC", "Thing", {{"DEST", k_dest_health_200}});
+  const std::vector<const fo4::Plugin*> order{&base, &patch};
+  const auto result = classify(order, master_key());
+
+  EXPECT_EQ(result.category, fo4::ConflictCategory::override_);
+
+  const auto* health = find_field(result, "MISC\\DestructionHealth");
+  ASSERT_NE(health, nullptr);
+  EXPECT_EQ(health->category, fo4::ConflictCategory::override_);
+  ASSERT_EQ(health->roles.size(), 2u);
+  EXPECT_EQ(health->roles[0], fo4::ConflictRole::master);
+  EXPECT_EQ(health->roles[1], fo4::ConflictRole::override_);
+
+  const auto* stages = find_field(result, "MISC\\DestructionStageCount");
+  ASSERT_NE(stages, nullptr);
+  EXPECT_EQ(stages->category, fo4::ConflictCategory::no_conflict);
+  ASSERT_EQ(stages->roles.size(), 2u);
+  EXPECT_EQ(stages->roles[1], fo4::ConflictRole::identical_to_master);
+
+  EXPECT_EQ(find_field(result, "MISC\\DestructionResistanceValue"), nullptr);
+}
+
+TEST(ConflictKind, AnInjectedRecordIsPromotedToCritical) {
+  const auto base = base_plugin("MISC", "Thing", {{"DATA", k_value_a}});
+  const auto middle = fo4::read_plugin(
+      make_plugin({{"MISC", 0x900, "Thing", {{"DATA", k_value_a}}}}, true), "Middle.esp");
+  const auto patch = fo4::read_plugin(
+      make_plugin({{"MISC", 0x900, "Thing", {{"DATA", k_value_b}}}}, true), "Patch.esp");
+  const std::vector<const fo4::Plugin*> order{&base, &middle, &patch};
+  const auto result = classify(order, fo4::FormKey::parse("000900:Master.esm"));
+
+  EXPECT_EQ(result.category, fo4::ConflictCategory::critical);
+  ASSERT_EQ(result.roles.size(), 2u);
+  EXPECT_EQ(result.roles[0], fo4::ConflictRole::master);
+  EXPECT_EQ(result.roles[1], fo4::ConflictRole::wins);
+}
+
+TEST(ConflictKind, ARecordItsOwnerDefinesIsNotInjected) {
+  const auto base = fo4::read_plugin(
+      make_plugin({{"MISC", 0x900, "Thing", {{"DATA", k_value_a}}}}, false), "Master.esm");
+  const auto patch = fo4::read_plugin(
+      make_plugin({{"MISC", 0x900, "Thing", {{"DATA", k_value_b}}}}, true), "Patch.esp");
+  const std::vector<const fo4::Plugin*> order{&base, &patch};
+  const auto result = classify(order, fo4::FormKey::parse("000900:Master.esm"));
+
+  EXPECT_EQ(result.category, fo4::ConflictCategory::override_);
 }
