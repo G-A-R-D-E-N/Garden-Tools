@@ -215,7 +215,8 @@ public sealed class HkxAnimationBoundsTests
     [Theory]
     [InlineData("hkaQuantizedAnimation", "Unsupported compression (quantized)")]
     [InlineData("hkaPredictiveCompressedAnimation", "Unsupported compression (predictive)")]
-    public void UnsupportedCompressionRejectionNamesTheCompression(string animationClass, string reason)
+    [InlineData("hkaReferencePoseAnimation", "unsupported animation class")]
+    public void UnsupportedAnimationRejectionNamesTheReason(string animationClass, string reason)
     {
         byte[] bytes = Packfile(animationClass, (_, _) => { }, out _);
 

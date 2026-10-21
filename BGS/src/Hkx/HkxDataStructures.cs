@@ -101,7 +101,7 @@ public class HkxAnimationData
     {
         "hkaQuantizedAnimation" => "Unsupported compression (quantized)",
         "hkaPredictiveCompressedAnimation" => "Unsupported compression (predictive)",
-        _ => "Unsupported animation class",
+        _ => "unsupported animation class",
     };
 
     public HkxSkeleton? Skeleton { get; set; }
