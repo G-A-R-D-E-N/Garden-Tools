@@ -33,25 +33,6 @@ public class LooseModReleaseTests : IDisposable
         public void Dispose() => Disposed = true;
     }
 
-    private readonly int _originalCap = MutagenLoader.MaxCachedModIndexes;
-    private readonly long _originalRecordCap = MutagenLoader.MaxCachedIndexRecords;
-
-    public LooseModReleaseTests()
-    {
-        MutagenLoader.MaxCachedModIndexes = 64;
-        MutagenLoader.MaxCachedIndexRecords = 500_000;
-        MutagenLoader.ClearModIndexCacheForTest();
-        MutagenLoader.EditableMods.Clear();
-    }
-
-    public void Dispose()
-    {
-        MutagenLoader.MaxCachedModIndexes = _originalCap;
-        MutagenLoader.MaxCachedIndexRecords = _originalRecordCap;
-        MutagenLoader.ClearModIndexCacheForTest();
-        MutagenLoader.EditableMods.Clear();
-    }
-
     private static void Clear(string name)
     {
         MutagenLoader.LooseMods.TryRemove(name, out _);
