@@ -551,6 +551,12 @@ RADICLE_API radicle_status radicle_assets_open(const char* data_dir,
                                                const char* const* archive_paths,
                                                size_t archive_count,
                                                radicle_assets** out_assets);
+/* roots must be ordered high to low priority; empty root entries are skipped. */
+RADICLE_API radicle_status radicle_assets_open_roots(const char* const* root_paths,
+                                                     size_t root_count,
+                                                     const char* const* archive_paths,
+                                                     size_t archive_count,
+                                                     radicle_assets** out_assets);
 RADICLE_API void radicle_assets_destroy(radicle_assets* assets);
 RADICLE_API size_t radicle_assets_archive_count(const radicle_assets* assets);
 RADICLE_API radicle_status radicle_assets_get_archive(const radicle_assets* assets,

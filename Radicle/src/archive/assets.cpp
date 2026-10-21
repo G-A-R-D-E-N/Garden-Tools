@@ -136,8 +136,16 @@ std::vector<std::filesystem::path> archive_load_order(const std::filesystem::pat
 
 AssetResolver AssetResolver::open(const std::filesystem::path& data_dir,
                                   std::span<const std::filesystem::path> archives) {
+  if (data_dir.empty()) return open_roots({}, archives);
+  return open_roots(std::span<const std::filesystem::path>(&data_dir, 1), archives);
+}
+
+AssetResolver AssetResolver::open_roots(std::span<const std::filesystem::path> roots,
+                                        std::span<const std::filesystem::path> archives) {
   AssetResolver resolver;
-  resolver.data_dir_ = data_dir;
+  for (const auto& root : roots) {
+    if (!root.empty()) resolver.roots_.push_back(root);
+  }
   resolver.archives_.reserve(archives.size());
   for (const auto& path : archives) resolver.archives_.push_back(Ba2Reader::open(path));
   return resolver;
@@ -145,8 +153,8 @@ AssetResolver AssetResolver::open(const std::filesystem::path& data_dir,
 
 std::optional<AssetLocation> AssetResolver::locate(std::string_view data_relative_path) const {
   const auto key = normalize_asset_path(data_relative_path);
-  if (!data_dir_.empty()) {
-    std::optional<std::filesystem::path> current = data_dir_;
+  for (const auto& root : roots_) {
+    std::optional<std::filesystem::path> current = root;
     std::size_t start = 0;
     while (current) {
       const auto slash = key.find('/', start);
@@ -183,9 +191,9 @@ std::vector<AssetListing> AssetResolver::list(std::string_view prefix, std::stri
   };
   std::vector<AssetListing> found;
   std::set<std::string> keys;
-  if (!data_dir_.empty()) {
+  for (const auto& root : roots_) {
     std::vector<std::pair<std::string, std::filesystem::path>> loose;
-    walk_loose(data_dir_, data_dir_, 0, loose);
+    walk_loose(root, root, 0, loose);
     for (auto& [key, path] : loose) {
       if (!wanted(key)) continue;
       std::error_code ec;
