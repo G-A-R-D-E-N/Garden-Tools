@@ -176,13 +176,17 @@ public sealed class Ba2RadicleTests
             Assert.Equal(new[] { "meshes/n/a.hkx" }, Paths(data, "Meshes\\N", ".hkx"));
             Assert.Equal(new[] { "meshes/n/a.hkx" }, Paths(data, "./Meshes/N", "hkx"));
             Assert.Equal(new[] { "meshes/n/a.hkx" }, Paths(data, ".", ".hkx"));
+            Assert.Equal(new[] { "meshes/n/a.hkx" }, Paths(data, "./.", ".hkx"));
+            Assert.Equal(new[] { "meshes/n/a.hkx" }, Paths(data, "././Meshes/N", ".hkx"));
             Assert.Equal(new[] { "meshes/n/a.hkx", "meshes/n/notahkx" }, Paths(data, "", ""));
+            Assert.Equal(new[] { "meshes/n/a.hkx", "meshes/n/notahkx" }, Paths(data, "", "."));
         }
         finally { Directory.Delete(root, recursive: true); }
     }
 
     [Theory]
     [InlineData("Meshes\\X\\CharacterAssets\\a.HKX", true)]
+    [InlineData("Meshes/X/CharacterAssets/a.txt", false)]
     [InlineData("CharacterAssets.hkx", false)]
     [InlineData("x.hkt", false)]
     public void IsSkeletonPathAcceptsOnlyHkxUnderCharacterAssets(string name, bool expected) =>

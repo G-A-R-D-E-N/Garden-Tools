@@ -16,7 +16,7 @@ public sealed partial class GameData
     {
         string want = FlatName(prefix).ToLowerInvariant();
         if (want.Length > 0 && !want.EndsWith('/')) want += "/";
-        var wantExtensions = extensions.Where(ext => ext.Length > 0).Select(ext => ext.StartsWith('.') ? ext : "." + ext).ToList();
+        var wantExtensions = extensions.Select(ext => ext.TrimStart('.')).Where(ext => ext.Length > 0).Select(ext => "." + ext).ToList();
         var winners = new Dictionary<string, (string Path, string Source, string Location, string? ArchivePath, List<AssetCopy> Shadowed)>(
             StringComparer.Ordinal);
 
@@ -51,16 +51,15 @@ public sealed partial class GameData
 
     private static List<string> LooseFiles(string root)
     {
-        try { return Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories).ToList(); }
+        try { return Directory.EnumerateFiles(root, "*", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = 0 }).ToList(); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return new List<string>(); }
     }
 
     private static string FlatName(string name)
     {
         string flat = name.Replace('\\', '/').TrimStart('/');
-        if (flat == ".") return "";
-        if (flat.StartsWith("./", StringComparison.Ordinal)) flat = flat[2..].TrimStart('/');
-        return flat;
+        while (flat.StartsWith("./", StringComparison.Ordinal)) flat = flat[2..].TrimStart('/');
+        return flat == "." ? "" : flat;
     }
 
     public byte[]? TryReadEntry(string archivePath, string entryName)
