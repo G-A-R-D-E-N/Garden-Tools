@@ -74,11 +74,13 @@ public sealed class Ba2RadicleTests
         string dataFolder = Path.Combine(root, "Data");
         Directory.CreateDirectory(Path.Combine(dataFolder, "meshes", "x"));
         Directory.CreateDirectory(Path.Combine(dataFolder, "meshes", "y"));
+        Directory.CreateDirectory(Path.Combine(dataFolder, "meshes", "xy"));
         try
         {
             File.WriteAllBytes(Path.Combine(dataFolder, "meshes", "x", "shared.hkx"), Encoding.ASCII.GetBytes("loose"));
             File.WriteAllBytes(Path.Combine(dataFolder, "meshes", "x", "shared.txt"), Encoding.ASCII.GetBytes("sibling"));
             File.WriteAllBytes(Path.Combine(dataFolder, "meshes", "y", "other.hkx"), Encoding.ASCII.GetBytes("elsewhere"));
+            File.WriteAllBytes(Path.Combine(dataFolder, "meshes", "xy", "other.hkx"), Encoding.ASCII.GetBytes("xy"));
             string archiveA = Path.Combine(dataFolder, "A.ba2");
             string archiveB = Path.Combine(dataFolder, "B.ba2");
             WriteGeneralBa2(archiveA, "meshes/x/shared.hkx", Encoding.ASCII.GetBytes("archive A"));
@@ -103,26 +105,91 @@ public sealed class Ba2RadicleTests
     }
 
     [Fact]
-    public void ArchiveOnlyWinnerFollowsArchivePathsOrderNotFileNameOrder()
+    public void ModArchiveOutranksBaseArchivesWithTheSamePath()
     {
         string root = TempRoot();
         string dataFolder = Path.Combine(root, "Data");
+        string modRoot = Path.Combine(root, "mods", "Zed");
         Directory.CreateDirectory(dataFolder);
+        Directory.CreateDirectory(modRoot);
         try
         {
-            WriteGeneralBa2(Path.Combine(dataFolder, "A.ba2"), "meshes/y/only.hkx", Encoding.ASCII.GetBytes("archive A"));
-            WriteGeneralBa2(Path.Combine(dataFolder, "B.ba2"), "meshes/y/only.hkx", Encoding.ASCII.GetBytes("archive B"));
+            WriteGeneralBa2(Path.Combine(dataFolder, "A.ba2"), "meshes/y/only.hkx", Encoding.ASCII.GetBytes("base A"));
+            WriteGeneralBa2(Path.Combine(dataFolder, "B.ba2"), "meshes/y/only.hkx", Encoding.ASCII.GetBytes("base B"));
+            string zed = Path.Combine(modRoot, "Zed.ba2");
+            WriteGeneralBa2(zed, "meshes/y/only.hkx", Encoding.ASCII.GetBytes("mod Zed"));
 
-            using var data = GameData.Discover(dataFolder, Path.Combine(root, "plugins.txt"));
+            using var data = GameData.Discover(dataFolder, Path.Combine(root, "plugins.txt"), new[] { modRoot });
 
             var winner = Assert.Single(data.EnumerateWinners("meshes/y/", ".hkx"));
-            Assert.Equal(data.ArchivePaths[0], winner.ArchivePath);
-            Assert.Equal(Path.GetFileName(data.ArchivePaths[0]), winner.Source);
-            Assert.Equal(data.ArchivePaths[0], winner.Location);
-            Assert.Equal(Path.GetFileName(data.ArchivePaths[1]), Assert.Single(winner.Shadowed).Source);
+            Assert.Equal(Path.GetFullPath(zed), winner.ArchivePath);
+            Assert.Equal("Zed.ba2", winner.Source);
+            Assert.Equal(Path.GetFullPath(zed), winner.Location);
+            Assert.Equal(new[] { "A.ba2", "B.ba2" }, winner.Shadowed.Select(c => c.Source));
+            Assert.Equal(Encoding.ASCII.GetBytes("mod Zed"), data.TryReadEntry(zed, "meshes/y/only.hkx"));
         }
         finally { Directory.Delete(root, recursive: true); }
     }
+
+    [Fact]
+    public void HigherModRootWinsAndLowerRootAndDataCopiesAreListedInPrecedenceOrder()
+    {
+        string root = TempRoot();
+        string dataFolder = Path.Combine(root, "Data");
+        string low = Path.Combine(root, "mods", "Low");
+        string high = Path.Combine(root, "mods", "High");
+        Directory.CreateDirectory(Path.Combine(dataFolder, "meshes", "x"));
+        try
+        {
+            File.WriteAllBytes(Path.Combine(dataFolder, "meshes", "x", "shared.hkx"), Encoding.ASCII.GetBytes("data"));
+            foreach (string mod in new[] { low, high })
+            {
+                Directory.CreateDirectory(Path.Combine(mod, "meshes", "x"));
+                File.WriteAllBytes(Path.Combine(mod, "meshes", "x", "shared.hkx"), Encoding.ASCII.GetBytes(Path.GetFileName(mod)));
+            }
+
+            using var data = GameData.Discover(dataFolder, Path.Combine(root, "plugins.txt"), new[] { low, high });
+
+            var winner = Assert.Single(data.EnumerateWinners("meshes/x/", ".hkx"));
+            Assert.Equal("loose:High", winner.Source);
+            Assert.Equal(Path.GetFullPath(high), winner.Location);
+            Assert.Equal(
+                new[] { new GameData.AssetCopy("loose:Low", Path.GetFullPath(low)), new GameData.AssetCopy("loose", dataFolder) },
+                winner.Shadowed);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
+    public void EnumerateWinnersNormalizesPrefixAndExtensionSpellings()
+    {
+        string root = TempRoot();
+        string dataFolder = Path.Combine(root, "Data");
+        Directory.CreateDirectory(Path.Combine(dataFolder, "meshes", "n"));
+        try
+        {
+            File.WriteAllBytes(Path.Combine(dataFolder, "meshes", "n", "a.hkx"), Encoding.ASCII.GetBytes("hkx"));
+            File.WriteAllBytes(Path.Combine(dataFolder, "meshes", "n", "notahkx"), Encoding.ASCII.GetBytes("plain"));
+
+            using var data = GameData.Discover(dataFolder, Path.Combine(root, "plugins.txt"));
+
+            Assert.Equal(new[] { "meshes/n/a.hkx" }, Paths(data, "Meshes\\N", ".hkx"));
+            Assert.Equal(new[] { "meshes/n/a.hkx" }, Paths(data, "./Meshes/N", "hkx"));
+            Assert.Equal(new[] { "meshes/n/a.hkx" }, Paths(data, ".", ".hkx"));
+            Assert.Equal(new[] { "meshes/n/a.hkx", "meshes/n/notahkx" }, Paths(data, "", ""));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Theory]
+    [InlineData("Meshes\\X\\CharacterAssets\\a.HKX", true)]
+    [InlineData("CharacterAssets.hkx", false)]
+    [InlineData("x.hkt", false)]
+    public void IsSkeletonPathAcceptsOnlyHkxUnderCharacterAssets(string name, bool expected) =>
+        Assert.Equal(expected, GameData.IsSkeletonPath(name));
+
+    private static string[] Paths(GameData data, string prefix, string extension) =>
+        data.EnumerateWinners(prefix, extension).Select(w => w.Path).ToArray();
 
     [Fact]
     public void ModRootLooseOverrideBeatsDataLooseCopyAndIsLocatedByItsRoot()
