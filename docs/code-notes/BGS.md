@@ -357,3 +357,29 @@ This check, moved here from `BGS/tools/uismoke/Smoke.cs` with `SettingsWriteFail
 ## BGS/app/ModlistScan.cs:ModlistScan.IsNativeLoadAbort — native-load aborts (GT-285, GT-286)
 
 A native-load failure (missing or stale radicle.dll, surfaced by `BGS/src/Archive/Ba2.cs:Ba2.Open` as an InvalidDataException wrapping the native error) aborts `--scan-archives`, `--scan-modlist` and `--scan-clips` with exit 2 and kind "native", through `ModlistScan.Fail`. `ModlistScan.Run` used to skip every archive as unreadable and exit 0, and `ModlistScan.ScanModlist` / `ModlistScan.ScanClips` let it escape as a stack trace without a JSON report. Ordinary unreadable archives still skip through `BGS/src/Archive/GameData.cs:GameData.IsSkippableArchiveFailure`.
+
+## BGS/src/Archive/GameData.Entries.cs:GameData.EnumerateWinners
+
+Enumeration uses the precedence ReadAnimation applies, with no second rule. Mod roots are visited from the last `ModRoots` entry (highest priority) down, and only roots containing `Meshes` count, the same gate `ModLooseIndex` applies. Then come the Data folder's loose files, then `ArchivePaths` in order, where the first archive holding a path wins, as in `FindEntry`. An asset's identity is its lower-cased, '/'-separated path with the extension. `ModLooseIndex` keys strip the extension through `Normalize`, so `shared.hkx` and `shared.txt` in one root would collapse and an extension filter could never see the dropped file. For the same reason `.hkt` does not alias `.hkx` here, although `ReadAnimation` still does. A loose winner's Source is "loose" with no mod name. Each call walks the whole Data folder and every archive entry.
+
+## BGS/src/Archive/GameData.Entries.cs:GameData.TryReadEntry
+
+Reads go through `Open`, the handle cache `ReadAnimation` and `SkeletonBytes` use, so each archive is opened once per GameData. A missing entry and a skippable archive failure both return null; `ReadEntry` turns that null into FileNotFoundException. Each call scans the archive's entry list, so a caller that already holds a `Ba2.Entry` should not use this per entry.
+
+## BGS/src/Archive/GameData.cs:GameData.ModlistPath
+
+The single modlist.txt rule. `DiscoverModded` reads it, and `BGS/src/Archive/Mo2ScanData.cs:Mo2ScanData.TryProfile` uses it for the selected profile, the instance root and the Default profile. Selection order, error text and profile enumeration stay in `TryProfile`, because each failure is reported differently.
+
+## BGS/src/Archive/GameData.cs:GameData.IsSkeletonPath
+
+Matches an .hkx under any CharacterAssets folder. `SkeletonBytes` adds the actor's own CharacterAssets prefix on top. `BGS/app/ModlistScan.cs:ModlistScan.IsBehaviourPath` also matches `/characterassets/`, but for behaviour files, so it stays separate.
+
+## BGS/src/Archive/SubgraphIndex.cs:SubgraphIndex.ReadEntry
+
+Still opens its own archive per entry and was left unchanged. It takes a `Ba2.Entry` the caller already holds, and routing it through `GameData.TryReadEntry` would add a name scan per entry, quadratic over a whole index sweep. A by-entry read on GameData would remove the reopen.
+
+## BGS/tools/tests/Ba2RadicleTests.cs:EnumerateWinnersShadowsArchiveCopiesUnderLooseOverrideAndMissingEntryIsNull
+
+Regression: a loose override that stops shadowing archive copies in the winner list, or a missing archive entry that reads bytes instead of null. Built on one loose file and two temp GNRL archives holding the same path.
+
+`BGS/src/Archive/GameData.Entries.cs:GameData.TryReadEntry` and `GameData.EnumerateWinners` read through archive handles that `GameData.Dispose` closes, so any caller that needs entry bytes after discovery must keep the `GameData` instance alive for as long as it reads.
