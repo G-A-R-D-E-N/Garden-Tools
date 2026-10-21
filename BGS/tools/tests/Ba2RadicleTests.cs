@@ -179,7 +179,30 @@ public sealed class Ba2RadicleTests
             Assert.Equal(new[] { "meshes/n/a.hkx" }, Paths(data, "./.", ".hkx"));
             Assert.Equal(new[] { "meshes/n/a.hkx" }, Paths(data, "././Meshes/N", ".hkx"));
             Assert.Equal(new[] { "meshes/n/a.hkx", "meshes/n/notahkx" }, Paths(data, "", ""));
+            Assert.Equal(new[] { "meshes/n/a.hkx" }, Paths(data, "/./Meshes/N", ".hkx"));
+            Assert.Equal(new[] { "meshes/n/a.hkx" }, Paths(data, ".//Meshes/N", ".hkx"));
             Assert.Equal(new[] { "meshes/n/a.hkx", "meshes/n/notahkx" }, Paths(data, "", "."));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
+    public void EnumerateWinnersListsHiddenLooseFiles()
+    {
+        string root = TempRoot();
+        string dataFolder = Path.Combine(root, "Data");
+        string folder = Path.Combine(dataFolder, "meshes", "h");
+        Directory.CreateDirectory(folder);
+        try
+        {
+            string name = OperatingSystem.IsWindows() ? "hidden.hkx" : ".hidden.hkx";
+            string file = Path.Combine(folder, name);
+            File.WriteAllBytes(file, Encoding.ASCII.GetBytes("hkx"));
+            if (OperatingSystem.IsWindows()) File.SetAttributes(file, FileAttributes.Hidden);
+
+            using var data = GameData.Discover(dataFolder, Path.Combine(root, "plugins.txt"));
+
+            Assert.Equal(new[] { "meshes/h/" + name }, Paths(data, "meshes/h/", ".hkx"));
         }
         finally { Directory.Delete(root, recursive: true); }
     }
