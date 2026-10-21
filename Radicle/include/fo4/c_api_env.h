@@ -518,6 +518,16 @@ typedef struct radicle_asset_location {
   size_t entry_index;
 } radicle_asset_location;
 
+/* Entry paths must stay valid until radicle_asset_list_destroy. */
+typedef struct radicle_asset_list radicle_asset_list;
+
+typedef struct radicle_asset_list_entry {
+  const char* path;
+  radicle_asset_location location;
+  uint64_t size;
+  int32_t shadowed;
+} radicle_asset_list_entry;
+
 RADICLE_API radicle_status radicle_ba2_open(const char* path, radicle_ba2** out_ba2);
 RADICLE_API void radicle_ba2_close(radicle_ba2* ba2);
 RADICLE_API radicle_status radicle_ba2_get_info(const radicle_ba2* ba2, radicle_ba2_info* out_info);
@@ -549,6 +559,17 @@ RADICLE_API radicle_status radicle_assets_get_archive(const radicle_assets* asse
 RADICLE_API radicle_status radicle_assets_locate(const radicle_assets* assets,
                                                  const char* path,
                                                  radicle_asset_location* out_location);
+/* Sorted by path; a winner must precede its shadowed copies; NULL or empty prefix and extension mean no filter. */
+RADICLE_API radicle_status radicle_assets_list(const radicle_assets* assets,
+                                               const char* prefix,
+                                               const char* extension,
+                                               int32_t include_shadowed,
+                                               radicle_asset_list** out_list);
+RADICLE_API size_t radicle_asset_list_count(const radicle_asset_list* list);
+RADICLE_API radicle_status radicle_asset_list_get(const radicle_asset_list* list,
+                                                  size_t index,
+                                                  radicle_asset_list_entry* out_entry);
+RADICLE_API void radicle_asset_list_destroy(radicle_asset_list* list);
 RADICLE_API radicle_status radicle_assets_read(const radicle_assets* assets,
                                                const char* path,
                                                uint8_t** out_bytes,

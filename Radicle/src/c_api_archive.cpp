@@ -213,6 +213,46 @@ radicle_status radicle_assets_locate(const radicle_assets* assets, const char* p
   });
 }
 
+radicle_status radicle_assets_list(const radicle_assets* assets,
+                                   const char* prefix,
+                                   const char* extension,
+                                   int32_t include_shadowed,
+                                   radicle_asset_list** out_list) {
+  clear_error();
+  if (assets == nullptr || out_list == nullptr) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "assets and out_list are required");
+  *out_list = nullptr;
+  return guarded("unknown exception while listing assets", [&] {
+    try {
+      auto list = std::make_unique<radicle_asset_list>();
+      list->items = assets->value.list(prefix == nullptr ? "" : prefix, extension == nullptr ? "" : extension,
+                                       include_shadowed != 0);
+      *out_list = list.release();
+    } catch (const fo4::archive::AssetPathError& error) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, error.what());
+    }
+    return RADICLE_STATUS_OK;
+  });
+}
+
+size_t radicle_asset_list_count(const radicle_asset_list* list) {
+  clear_error();
+  return list == nullptr ? 0 : list->items.size();
+}
+
+radicle_status radicle_asset_list_get(const radicle_asset_list* list, size_t index, radicle_asset_list_entry* out_entry) {
+  clear_error();
+  if (list == nullptr || out_entry == nullptr) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "list and out_entry are required");
+  if (index >= list->items.size()) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "list index is out of range");
+  const auto& item = list->items[index];
+  *out_entry = {item.path.c_str(), to_c_location(item.location), item.size, item.shadowed ? 1 : 0};
+  return RADICLE_STATUS_OK;
+}
+
+void radicle_asset_list_destroy(radicle_asset_list* list) {
+  clear_error();
+  delete list;
+}
+
 radicle_status radicle_assets_read(const radicle_assets* assets,
                                    const char* path,
                                    uint8_t** out_bytes,

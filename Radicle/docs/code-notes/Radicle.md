@@ -1104,7 +1104,13 @@ Rows are `name\tchecked\tmaster_flag\tlight`; findings are `code\tplugin\tdetail
 
 ## Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION
 
-ABI 40 adds `radicle_plugin_list_read`, `radicle_ccc_read` and `radicle_load_order_assemble` (`Radicle/include/fo4/c_api_loadorder.h`) and the `radicle_official_table` enum. The pin is `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsForty`.
+ABI 40 adds `radicle_plugin_list_read`, `radicle_ccc_read` and `radicle_load_order_assemble` (`Radicle/include/fo4/c_api_loadorder.h`) and the `radicle_official_table` enum. The pin was `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsForty` before ABI 41 renamed it.
+
+## Radicle/src/archive/assets.cpp:AssetResolver::list
+
+`AssetResolver::list(prefix, extension, include_shadowed)` enumerates every loose file under `data_dir_` (recursive, regular files only) and every named archive entry, keys each one with `normalize_asset_path` (lower case, forward slashes, leading `data/` dropped) and keeps the winner per key the way `AssetResolver::locate` does: the loose file, then archives from the last to the first. With `include_shadowed` the losing copies follow their winner in that same order and carry `shadowed`. A prefix matches whole path components (`mesh` does not match `meshes/...`), an empty prefix means everything, an extension is compared case-insensitively against the end of the path, and entries of an archive without a name table are skipped because they have no path. Output is sorted by key, so two calls over the same data agree. `size` is the file size for loose files and `Ba2EntryInfo::unpacked_size` for archive entries. A prefix with `.`/`..` components throws `AssetPathError`, which `Radicle/src/c_api_archive.cpp:radicle_assets_list` reports as `RADICLE_STATUS_INVALID_ARGUMENT`.
+
+`Radicle/include/fo4/c_api_env.h` adds `radicle_assets_list`, `radicle_asset_list_count`, `radicle_asset_list_get` and `radicle_asset_list_destroy` (ABI 41, pinned by `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsFortyOne`). The list is a snapshot owned by the caller; entry paths stay valid until destroy. `Radicle/bindings/csharp/Radicle.Interop/Archives.cs:AssetResolver.List` copies the entries and always destroys the native list. Tests: `Radicle/tests/test_ba2_reader.cpp:Ba2ReaderTest.ListingReturnsTheSameWinnersAsLocateAndKeepsShadowedCopiesBehindThem` (winners agree with `locate`, shadowed order, component-wise prefix, unnamed entries skipped), `Ba2ReaderTest.CApiReadsArchivesAndAssets` (the C exports) and `Radicle.Interop.Tests/ArchiveTests.cs:ListsWinningAssetsWithOriginSizeAndShadowedCopies`.
 
 ## Radicle/tests/test_load_order_real.cpp:InstalledDataFollowsFallout4OfficialThenCccOrder
 

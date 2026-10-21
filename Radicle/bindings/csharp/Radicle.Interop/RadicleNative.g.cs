@@ -454,6 +454,15 @@ public unsafe struct AssetLocation
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct AssetListEntry
+{
+    public IntPtr Path;
+    public AssetLocation Location;
+    public ulong Size;
+    public int Shadowed;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct LightInfo
 {
     public int HasData;
@@ -1688,7 +1697,7 @@ public enum OfficialTable : int
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 40u;
+    public const uint CompiledAbiVersion = 41u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -1869,6 +1878,18 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_assets_locate")]
     public static extern Status AssetsLocate(IntPtr assets, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, AssetLocation* out_location);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_assets_list")]
+    public static extern Status AssetsList(IntPtr assets, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? prefix, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? extension, int include_shadowed, IntPtr* out_list);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_asset_list_count")]
+    public static extern nuint AssetListCount(IntPtr list);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_asset_list_get")]
+    public static extern Status AssetListGet(IntPtr list, nuint index, AssetListEntry* out_entry);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_asset_list_destroy")]
+    public static extern void AssetListDestroy(IntPtr list);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_assets_read")]
     public static extern Status AssetsRead(IntPtr assets, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, byte** out_bytes, nuint* out_size, AssetLocation* out_location);

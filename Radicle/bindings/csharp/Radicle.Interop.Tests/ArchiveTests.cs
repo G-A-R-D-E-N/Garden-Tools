@@ -52,4 +52,29 @@ public class ArchiveTests
         Assert.Null(strings.Lookup(0, StringSource.Dl, 0x10));
         Assert.Equal(StringSource.Il, StringTables.SourceFor("INFO", "NAM1"));
     }
+    [Fact]
+    public void ListsWinningAssetsWithOriginSizeAndShadowedCopies()
+    {
+        using var temp = new TempDirectory();
+        var data = System.IO.Path.Combine(temp.Path, "Data");
+        var low = temp.Write("Data/Base - Main.ba2", Ba2Writer.General(
+            ("Meshes\Shared.nif", Encoding.ASCII.GetBytes("low")),
+            ("Meshes\Only.nif", Encoding.ASCII.GetBytes("only")),
+            ("Textures\T.dds", Encoding.ASCII.GetBytes("t"))));
+        var high = temp.Write("Data/Base - Textures.ba2", Ba2Writer.General(("meshes\shared.nif", Encoding.ASCII.GetBytes("high"))));
+        temp.Write("Data/Meshes/Shared.NIF", Encoding.ASCII.GetBytes("loose!"));
+
+        using var assets = AssetResolver.Open(data, new[] { low, high });
+        var winners = assets.List("meshes", ".nif");
+        Assert.Equal(new[] { "meshes/only.nif", "meshes/shared.nif" }, winners.Select(w => w.Path));
+        Assert.Equal(new AssetLocation(AssetOrigin.Archive, 0, 1), winners[0].Location);
+        Assert.Equal((AssetOrigin.Loose, 6UL, false), (winners[1].Location.Origin, winners[1].Size, winners[1].Shadowed));
+
+        var all = assets.List("meshes", ".nif", includeShadowed: true);
+        Assert.Equal(new[] { false, false, true, true },
+            all.Select(a => a.Shadowed));
+        Assert.Equal(new[] { AssetOrigin.Loose, AssetOrigin.Archive, AssetOrigin.Archive },
+            all.Skip(1).Select(a => a.Location.Origin));
+        Assert.Equal(Status.InvalidArgument, Assert.Throws<RadicleException>(() => assets.List("../x")).Status);
+    }
 }

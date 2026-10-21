@@ -144,6 +144,62 @@ std::optional<AssetLocation> AssetResolver::locate_in_archives(std::string_view 
   return std::nullopt;
 }
 
+std::vector<AssetListing> AssetResolver::list(std::string_view prefix, std::string_view extension,
+                                              bool include_shadowed) const {
+  const auto wanted_prefix = prefix.empty() ? std::string() : normalize_asset_path(prefix);
+  const auto wanted_extension = lower(extension);
+  const auto wanted = [&](const std::string& path) {
+    if (!wanted_prefix.empty() && path != wanted_prefix &&
+        !(path.size() > wanted_prefix.size() && path.starts_with(wanted_prefix) && path[wanted_prefix.size()] == '/')) {
+      return false;
+    }
+    return wanted_extension.empty() || path.ends_with(wanted_extension);
+  };
+  std::vector<AssetListing> found;
+  std::error_code ec;
+  if (!data_dir_.empty() && std::filesystem::is_directory(data_dir_, ec)) {
+    std::vector<AssetListing> loose;
+    for (std::filesystem::recursive_directory_iterator it(data_dir_, std::filesystem::directory_options::skip_permission_denied, ec), end;
+         !ec && it != end; it.increment(ec)) {
+      std::error_code entry_ec;
+      if (!it->is_regular_file(entry_ec)) continue;
+      std::string key;
+      try {
+        key = normalize_asset_path(utf8(it->path().lexically_relative(data_dir_)));
+      } catch (const AssetPathError&) {
+        continue;
+      }
+      if (!wanted(key)) continue;
+      const auto size = std::filesystem::file_size(it->path(), entry_ec);
+      loose.push_back({std::move(key), {AssetOrigin::loose, it->path(), 0, 0}, entry_ec ? 0 : size, false});
+    }
+    std::sort(loose.begin(), loose.end(), [](const auto& a, const auto& b) { return a.location.loose_path < b.location.loose_path; });
+    found = std::move(loose);
+  }
+  for (std::size_t i = archives_.size(); i-- > 0;) {
+    const auto& entries = archives_[i].entries();
+    for (std::size_t e = 0; e < entries.size(); ++e) {
+      if (entries[e].path.empty()) continue;
+      std::string key;
+      try {
+        key = normalize_asset_path(entries[e].path);
+      } catch (const AssetPathError&) {
+        continue;
+      }
+      if (wanted(key)) found.push_back({std::move(key), {AssetOrigin::archive, {}, i, e}, entries[e].unpacked_size(), false});
+    }
+  }
+  std::stable_sort(found.begin(), found.end(), [](const auto& a, const auto& b) { return a.path < b.path; });
+  std::vector<AssetListing> out;
+  for (auto& item : found) {
+    const bool shadowed = !out.empty() && out.back().path == item.path;
+    if (shadowed && !include_shadowed) continue;
+    item.shadowed = shadowed;
+    out.push_back(std::move(item));
+  }
+  return out;
+}
+
 std::vector<std::byte> AssetResolver::read(const AssetLocation& location) const {
   if (location.origin == AssetOrigin::archive) return archives_.at(location.archive).extract(location.entry);
   std::ifstream stream(location.loose_path, std::ios::binary | std::ios::ate);
