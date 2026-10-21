@@ -13,6 +13,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <optional>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -313,8 +314,15 @@ UndeleteStatus undelete_and_disable_reference(Plugin& plugin,
   if (!has_player_master) {
     std::vector<MasterDescriptor> masters{{player.owner(), PluginKind::full}};
     for (const auto& held : next.header.masters) masters.push_back({held.key, held.kind});
+    const auto own_types = plugin_type_lookup(plugin);
+    const FormLinkTypeLookup types = [&](const FormKey& key) -> std::optional<Signature> {
+      if (const auto own = own_types(key)) return own;
+      const auto* winner = load_order.winner(key);
+      if (winner == nullptr || winner->record == nullptr) return std::nullopt;
+      return winner->record->header.signature;
+    };
     try {
-      next = remap_plugin_masters(std::move(next), std::move(masters));
+      next = remap_plugin_masters(std::move(next), std::move(masters), types);
     } catch (const std::exception&) {
       return UndeleteStatus::incomplete_reference;
     }
