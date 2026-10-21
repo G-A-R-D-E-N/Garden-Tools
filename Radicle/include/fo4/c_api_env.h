@@ -559,7 +559,7 @@ RADICLE_API radicle_status radicle_assets_get_archive(const radicle_assets* asse
 RADICLE_API radicle_status radicle_assets_locate(const radicle_assets* assets,
                                                  const char* path,
                                                  radicle_asset_location* out_location);
-/* Sorted by path; a winner must precede its shadowed copies; NULL or empty prefix and extension mean no filter. */
+/* Sorted by path; a winner must precede its shadowed copies; NULL or empty prefix and extension mean no filter; a prefix that normalizes to nothing is INVALID_ARGUMENT. */
 RADICLE_API radicle_status radicle_assets_list(const radicle_assets* assets,
                                                const char* prefix,
                                                const char* extension,

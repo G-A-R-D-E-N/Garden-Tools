@@ -56,6 +56,7 @@ public:
   std::optional<AssetLocation> locate(std::string_view data_relative_path) const;
   std::optional<AssetLocation> locate_in_archives(std::string_view data_relative_path) const;
   std::vector<std::byte> read(const AssetLocation& location) const;
+  std::vector<AssetListing> list(std::string_view prefix, std::string_view extension, bool include_shadowed) const;
 
 private:
   std::filesystem::path data_dir_;

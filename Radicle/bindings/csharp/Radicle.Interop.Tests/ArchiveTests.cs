@@ -58,10 +58,10 @@ public class ArchiveTests
         using var temp = new TempDirectory();
         var data = System.IO.Path.Combine(temp.Path, "Data");
         var low = temp.Write("Data/Base - Main.ba2", Ba2Writer.General(
-            ("Meshes\Shared.nif", Encoding.ASCII.GetBytes("low")),
-            ("Meshes\Only.nif", Encoding.ASCII.GetBytes("only")),
-            ("Textures\T.dds", Encoding.ASCII.GetBytes("t"))));
-        var high = temp.Write("Data/Base - Textures.ba2", Ba2Writer.General(("meshes\shared.nif", Encoding.ASCII.GetBytes("high"))));
+            ("Meshes\\Shared.nif", Encoding.ASCII.GetBytes("low")),
+            ("Meshes\\Only.nif", Encoding.ASCII.GetBytes("only")),
+            ("Textures\\T.dds", Encoding.ASCII.GetBytes("t"))));
+        var high = temp.Write("Data/Base - Textures.ba2", Ba2Writer.General(("meshes\\shared.nif", Encoding.ASCII.GetBytes("high"))));
         temp.Write("Data/Meshes/Shared.NIF", Encoding.ASCII.GetBytes("loose!"));
 
         using var assets = AssetResolver.Open(data, new[] { low, high });

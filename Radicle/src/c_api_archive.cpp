@@ -12,6 +12,10 @@ struct radicle_assets {
   fo4::archive::AssetResolver value;
 };
 
+struct radicle_asset_list {
+  std::vector<fo4::archive::AssetListing> items;
+};
+
 namespace {
 
 using namespace radicle_c_detail;
@@ -222,14 +226,10 @@ radicle_status radicle_assets_list(const radicle_assets* assets,
   if (assets == nullptr || out_list == nullptr) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "assets and out_list are required");
   *out_list = nullptr;
   return guarded("unknown exception while listing assets", [&] {
-    try {
-      auto list = std::make_unique<radicle_asset_list>();
-      list->items = assets->value.list(prefix == nullptr ? "" : prefix, extension == nullptr ? "" : extension,
-                                       include_shadowed != 0);
-      *out_list = list.release();
-    } catch (const fo4::archive::AssetPathError& error) {
-      return fail(RADICLE_STATUS_INVALID_ARGUMENT, error.what());
-    }
+    auto list = std::make_unique<radicle_asset_list>();
+    list->items = assets->value.list(prefix == nullptr ? "" : prefix, extension == nullptr ? "" : extension,
+                                     include_shadowed != 0);
+    *out_list = list.release();
     return RADICLE_STATUS_OK;
   });
 }

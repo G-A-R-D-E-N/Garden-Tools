@@ -240,18 +240,20 @@ TEST_F(Ba2ReaderTest, LooseFilesThenLaterArchivesWin) {
 }
 
 TEST_F(Ba2ReaderTest, ListingReturnsTheSameWinnersAsLocateAndKeepsShadowedCopiesBehindThem) {
-  const auto low = write_general("Low.ba2", {general("Meshes\Shared.nif", "low"), general("Meshes\LowOnly.nif", "low-only"),
-                                            general("Meshes\a.hkx", "x"), general("Textures\t.nif", "t")});
-  const auto high = write_general("High.ba2", {general("meshes\shared.nif", "high"), general("meshes\over.nif", "archived")});
-  const auto unnamed = write_general("Unnamed.ba2", {general("meshes\hidden.nif", "h")}, false);
+  const auto low = write_general("Low.ba2", {general("Meshes\\Shared.nif", "low"), general("Meshes\\LowOnly.nif", "low-only"),
+                                            general("Meshes\\a.hkx", "x"), general("Textures\\t.nif", "t")});
+  const auto high = write_general("High.ba2", {general("meshes\\shared.nif", "high"), general("meshes\\over.nif", "archived")});
+  const auto unnamed = write_general("Unnamed.ba2", {general("meshes\\lowonly.nif", "h")}, false);
   write_file(data() / "MESHES" / "Over.NIF", bytes_of("loose"));
+  write_file(data() / "Data" / "Meshes" / "Nested.nif", bytes_of("nested"));
   const std::vector<std::filesystem::path> archives{low, high, unnamed};
   const auto assets = fo4::archive::AssetResolver::open(data(), archives);
 
-  const auto winners = assets.list("Data\Meshes", ".NIF", false);
+  const auto winners = assets.list("Data\\Meshes", ".NIF", false);
   ASSERT_EQ(winners.size(), 3u);
   EXPECT_EQ(winners[0].path, "meshes/lowonly.nif");
-  EXPECT_EQ(winners[0].size, 8u);
+  EXPECT_EQ(winners[0].location.archive, 2u);
+  EXPECT_EQ(winners[0].size, 1u);
   EXPECT_EQ(winners[1].path, "meshes/over.nif");
   EXPECT_EQ(winners[1].location.origin, fo4::archive::AssetOrigin::loose);
   EXPECT_EQ(winners[1].size, 5u);
@@ -267,12 +269,14 @@ TEST_F(Ba2ReaderTest, ListingReturnsTheSameWinnersAsLocateAndKeepsShadowedCopies
   }
 
   const auto all = assets.list("meshes", ".nif", true);
-  ASSERT_EQ(all.size(), 5u);
-  EXPECT_EQ((std::vector<bool>{all[0].shadowed, all[1].shadowed, all[2].shadowed, all[3].shadowed, all[4].shadowed}),
-            (std::vector<bool>{false, false, true, false, true}));
-  EXPECT_EQ(all[2].location.origin, fo4::archive::AssetOrigin::archive);
-  EXPECT_EQ(all[2].location.archive, 1u);
-  EXPECT_EQ(all[4].location.archive, 0u);
+  ASSERT_EQ(all.size(), 6u);
+  EXPECT_EQ((std::vector<bool>{all[0].shadowed, all[1].shadowed, all[2].shadowed, all[3].shadowed, all[4].shadowed, all[5].shadowed}),
+            (std::vector<bool>{false, true, false, true, false, true}));
+  EXPECT_EQ(all[1].location.archive, 0u);
+  EXPECT_EQ(all[3].location.origin, fo4::archive::AssetOrigin::archive);
+  EXPECT_EQ(all[3].location.archive, 1u);
+  EXPECT_EQ(all[5].location.archive, 0u);
+  EXPECT_FALSE(assets.locate("meshes/nested.nif").has_value());
 
   EXPECT_EQ(assets.list("", ".hkx", false).size(), 1u);
   EXPECT_EQ(assets.list("mesh", ".nif", false).size(), 0u);
