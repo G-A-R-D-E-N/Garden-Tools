@@ -384,6 +384,40 @@ TEST_F(Ba2ReaderTest, LooseRootsResolveHighToLowAndShadowLowerRoots) {
   EXPECT_EQ(radicle_assets_open_roots(nullptr, 1, archive_paths, 1, &handle), RADICLE_STATUS_INVALID_ARGUMENT);
 }
 
+TEST_F(Ba2ReaderTest, CApiWritesGeneralArchivesThatMatchTheNativeWriterAndReadBack) {
+  const std::string big(4096, 'm');
+  const radicle_ba2_file files[] = {
+      {"Meshes\\Gun.nif", reinterpret_cast<const uint8_t*>("gun"), 3},
+      {"Materials\\Gun.bgsm", reinterpret_cast<const uint8_t*>(big.data()), big.size()},
+      {"Empty.txt", nullptr, 0}};
+  uint8_t* bytes = nullptr;
+  size_t size = 0;
+  ASSERT_EQ(radicle_ba2_write_general(files, 3, 1, 1, &bytes, &size), RADICLE_STATUS_OK);
+  const std::vector<std::byte> written(reinterpret_cast<const std::byte*>(bytes),
+                                       reinterpret_cast<const std::byte*>(bytes) + size);
+  radicle_free_bytes(bytes);
+
+  Ba2GeneralArchive expected;
+  expected.entries = {general("Meshes\\Gun.nif", "gun", true), general("Materials\\Gun.bgsm", big, true),
+                      general("Empty.txt", "", true)};
+  EXPECT_EQ(written, fo4::archive::write_ba2_general(expected));
+
+  const auto path = write_file(data() / "Written.ba2", written);
+  const auto reader = Ba2Reader::open(path);
+  ASSERT_EQ(reader.entries().size(), 3u);
+  EXPECT_EQ(text_of(reader.extract(*reader.find("meshes/gun.nif"))), "gun");
+  EXPECT_EQ(reader.extract(*reader.find("materials/gun.bgsm")).size(), 4096u);
+  EXPECT_EQ(reader.entries()[1].name_hash, fo4::archive::compute_ba2_hashes("Materials\\Gun.bgsm").name);
+
+  ASSERT_EQ(radicle_ba2_write_general(files, 3, 8, 0, &bytes, &size), RADICLE_STATUS_OK);
+  radicle_free_bytes(bytes);
+  EXPECT_NE(radicle_ba2_write_general(files, 3, 5, 0, &bytes, &size), RADICLE_STATUS_OK);
+  EXPECT_EQ(bytes, nullptr);
+  const radicle_ba2_file no_path[] = {{nullptr, nullptr, 0}};
+  EXPECT_EQ(radicle_ba2_write_general(no_path, 1, 1, 0, &bytes, &size), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_ba2_write_general(nullptr, 1, 1, 0, &bytes, &size), RADICLE_STATUS_INVALID_ARGUMENT);
+}
+
 TEST_F(Ba2ReaderTest, CApiReadsArchivesAndAssets) {
   const auto low = write_general("Low.ba2", {general("Meshes\\Shared.nif", "low")});
   const auto high = write_general("High.ba2", {general("Meshes\\Shared.nif", "high")});

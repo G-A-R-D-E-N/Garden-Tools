@@ -307,6 +307,10 @@ int main() {
   printf("Ba2EntryInfo.DxgiFormat %zu\n", offsetof(radicle_ba2_entry_info, dxgi_format));
   printf("Ba2EntryInfo.TextureFlags %zu\n", offsetof(radicle_ba2_entry_info, texture_flags));
   printf("Ba2EntryInfo.TileMode %zu\n", offsetof(radicle_ba2_entry_info, tile_mode));
+  printf("Ba2File %zu\n", sizeof(radicle_ba2_file));
+  printf("Ba2File.Path %zu\n", offsetof(radicle_ba2_file, path));
+  printf("Ba2File.Data %zu\n", offsetof(radicle_ba2_file, data));
+  printf("Ba2File.Size %zu\n", offsetof(radicle_ba2_file, size));
   printf("AssetLocation %zu\n", sizeof(radicle_asset_location));
   printf("AssetLocation.Origin %zu\n", offsetof(radicle_asset_location, origin));
   printf("AssetLocation.ArchiveIndex %zu\n", offsetof(radicle_asset_location, archive_index));
