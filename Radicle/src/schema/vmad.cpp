@@ -706,4 +706,43 @@ QuestVmadExtras read_quest_vmad_extras(std::span<const std::byte> data, std::int
   return result;
 }
 
+SceneVmadExtras read_scene_vmad_extras(std::span<const std::byte> data,
+                                       std::int16_t object_format) {
+  SceneVmadExtras result;
+  try {
+    Slice slice(data);
+    slice.u8();
+    result.flags = slice.u8();
+    const unsigned entries = (result.flags & 1u) + ((result.flags >> 1) & 1u);
+    std::vector<std::size_t> ignored;
+    walk_script_entry(slice, object_format, ignored);
+    for (unsigned i = 0; i < entries; ++i) {
+      slice.u8();
+      slice.skip_wstring();
+      slice.skip_wstring();
+    }
+    const auto phases = slice.u16();
+    result.phases.reserve(phases);
+    for (std::uint16_t i = 0; i < phases; ++i) {
+      SceneVmadPhaseFragment phase;
+      phase.offset = slice.position();
+      phase.flag = slice.u8();
+      phase.index = slice.u32();
+      phase.unknown = slice.u8();
+      phase.script = slice.wstring();
+      phase.function = slice.wstring();
+      phase.end = slice.position();
+      result.phases.push_back(std::move(phase));
+    }
+    result.fully_consumed = slice.at_end();
+  } catch (const UnsupportedVmadProperty&) {
+    result.unsupported = true;
+    result.unsupported_reason = "a VMAD property in the scene extras is unsupported";
+  } catch (const std::exception& error) {
+    result.unsupported = true;
+    result.unsupported_reason = error.what();
+  }
+  return result;
+}
+
 }  // namespace fo4

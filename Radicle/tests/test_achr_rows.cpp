@@ -63,6 +63,8 @@ constexpr ScalarRow k_scalar_rows[] = {
     {"ACHR\\OwnerRank", "XRNK", 0, i32, false, 0},
     {"ACHR\\OwnerNoCrime", "XOWN", 8, u8, true, 12},
     {"ACHR\\ReflectionType", "XPWR", 4, u32, true, 8},
+    {"ACHR\\ActivateParentDelay", "XAPR", 4, f32, true, 8},
+    {"ACHR\\WaterCurrentVelocityCount", "XWCN", 0, u32, false, 0},
 };
 
 constexpr LinkRow k_link_rows[] = {
@@ -80,6 +82,8 @@ constexpr LinkRow k_link_rows[] = {
     {"ACHR\\PersistLocation", "XLCN", 0, 4, "LCTN"},
     {"ACHR\\LocationReference", "XLRL", 0, 4, "LCTN"},
     {"ACHR\\ReflectedBy", "XPWR", 0, 8, "ACHR"},
+    {"ACHR\\LinkedReference", "XLKR", 4, 8, "REFR"},
+    {"ACHR\\SplineConnection", "XPLK", 0, 8, "REFR"},
 };
 
 Bytes u32_bytes(std::uint32_t value) {
@@ -301,7 +305,7 @@ Bytes sub_bytes(const fo4::Plugin& plugin, std::uint32_t local, std::string_view
 }  // namespace
 
 TEST(AchrRows, ScalarRowsHaveXEditOffsetsStorageAndPayloadGates) {
-  EXPECT_EQ(fo4::schema::scalar_fields(k_achr).size(), 21u);
+  EXPECT_EQ(fo4::schema::scalar_fields(k_achr).size(), 29u);
   for (const auto& row : k_scalar_rows) {
     SCOPED_TRACE(row.path);
     const auto field = fo4::schema::scalar_field_descriptor(k_achr, row.path);
@@ -312,7 +316,8 @@ TEST(AchrRows, ScalarRowsHaveXEditOffsetsStorageAndPayloadGates) {
     EXPECT_EQ(field->scalar.storage, row.storage);
     EXPECT_EQ(field->scalar.payload_size, row.payload_size);
     EXPECT_EQ(field->scalar.address.repeated,
-              std::string_view{row.path} == "ACHR\\ReflectionType");
+              std::string_view{row.path} == "ACHR\\ReflectionType" ||
+                  std::string_view{row.path} == "ACHR\\ActivateParentDelay");
   }
   EXPECT_FALSE(fo4::schema::scalar_field_descriptor(k_achr, "ACHR\\AlphaBase").has_value());
 }
@@ -334,7 +339,7 @@ TEST(AchrRows, LockRowsShareTheXlocPayloadAndTheKeyRowIsNullable) {
 }
 
 TEST(AchrRows, LinkRowsNameTheirSubrecordsOffsetsAndTargets) {
-  EXPECT_EQ(fo4::schema::formlink_fields(k_achr).size(), 17u);
+  EXPECT_EQ(fo4::schema::formlink_fields(k_achr).size(), 21u);
   for (const auto& row : k_link_rows) {
     SCOPED_TRACE(row.path);
     const auto field = fo4::schema::formlink_field_descriptor(k_achr, row.path);
@@ -345,7 +350,8 @@ TEST(AchrRows, LinkRowsNameTheirSubrecordsOffsetsAndTargets) {
     EXPECT_EQ(field->nullable,
               std::string_view{row.path} == "ACHR\\LockKey" ||
                   std::string_view{row.path} == "ACHR\\EnableParent" ||
-                  std::string_view{row.path} == "ACHR\\LocationReference");
+                  std::string_view{row.path} == "ACHR\\LocationReference" ||
+                  std::string_view{row.path} == "ACHR\\LinkedReference");
     EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(
         *field, fo4::Signature::from_string(row.target)));
   }

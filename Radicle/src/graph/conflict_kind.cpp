@@ -1,6 +1,8 @@
 #include "fo4/graph/conflict_kind.hpp"
 
 #include "fo4/plugin/reader.hpp"
+#include "fo4/schema/field_address.hpp"
+#include "fo4/schema/scalar.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -46,6 +48,14 @@ bool same_value(const Value& left, const Value& right) {
   if (left.has_value() != right.has_value()) return false;
   return !left.has_value() || *left == *right;
 }
+
+ConflictPriority element_priority(ConflictPriority priority, bool injected) {
+  if (injected && priority >= ConflictPriority::normal) return ConflictPriority::critical;
+  return priority;
+}
+
+constexpr Signature k_gmst = Signature::from_string("GMST");
+constexpr Signature k_dfob = Signature::from_string("DFOB");
 
 ConflictPriority rule_for(std::span<const ConflictPriorityRule> rules,
                           Signature record,
@@ -283,14 +293,16 @@ SubrecordRows build_subrecord_rows(const std::vector<VersionView>& versions,
 void append_subrecord_rows(const std::vector<VersionView>& versions,
                            Signature record_signature,
                            std::span<const ConflictPriorityRule> rules,
+                           bool injected,
                            std::vector<SubrecordConflict>& out) {
   auto built = build_subrecord_rows(versions, record_signature, rules);
   const auto& keys = built.keys;
   const auto& rows = built.rows;
 
   for (std::size_t row = 0; row < rows.size(); ++row) {
-    const auto result =
-        classify_nodes(rows[row], rule_for(rules, record_signature, keys[row].signature));
+    const auto result = classify_nodes(
+        rows[row], element_priority(rule_for(rules, record_signature, keys[row].signature),
+                                    injected));
     SubrecordConflict conflict;
     conflict.signature = keys[row].signature;
     conflict.ordinal = keys[row].ordinal;
@@ -298,6 +310,73 @@ void append_subrecord_rows(const std::vector<VersionView>& versions,
     conflict.roles = result.roles;
     out.push_back(std::move(conflict));
   }
+}
+
+std::optional<std::string> field_value(const Record& record,
+                                      const schema::ScalarFieldDescriptor& field) {
+  const auto resolved = schema::resolve_field_slots(
+      record, schema::scalar_field_shape(field.scalar), field.scalar.address);
+  if (resolved.duplicate || resolved.malformed || resolved.misaligned) return std::nullopt;
+  std::string out;
+  bool any = false;
+  for (const auto& slot : resolved.slots) {
+    if (!slot.valid) continue;
+    try {
+      const auto bytes =
+          schema::scalar_slot_bytes(record.subrecords[slot.subrecord].data, slot, field.scalar);
+      out.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+      any = true;
+    } catch (const schema::ScalarError&) {
+      return std::nullopt;
+    }
+  }
+  if (!any) return std::nullopt;
+  return out;
+}
+
+void append_field_rows(const std::vector<VersionView>& versions,
+                       Signature record_signature,
+                       std::span<const ConflictPriorityRule> rules,
+                       bool injected,
+                       std::vector<FieldConflict>& out) {
+  for (const auto& field : schema::scalar_fields(record_signature)) {
+    const auto priority = rule_for(rules, record_signature, field.scalar.subrecord);
+    if (priority == ConflictPriority::ignore) continue;
+    std::vector<Node> row = fresh_row(versions);
+    bool any = false;
+    for (std::size_t index = 0; index < versions.size(); ++index) {
+      if (versions[index].record == nullptr || versions[index].partial) continue;
+      auto value = field_value(*versions[index].record, field);
+      if (!value.has_value()) continue;
+      row[index].value = std::move(*value);
+      any = true;
+    }
+    if (!any) continue;
+    const auto result = classify_nodes(row, element_priority(priority, injected));
+    FieldConflict conflict;
+    conflict.path = std::string(field.path);
+    conflict.category = result.category;
+    conflict.roles = std::move(result.roles);
+    out.push_back(std::move(conflict));
+  }
+}
+
+bool record_is_injected(const std::vector<VersionView>& versions,
+                        std::span<const Plugin* const> load_order,
+                        const FormKey& key) {
+  const Plugin* owner = nullptr;
+  for (const auto* plugin : load_order) {
+    if (plugin != nullptr && plugin->key == key.owner()) {
+      owner = plugin;
+      break;
+    }
+  }
+  if (owner == nullptr) return false;
+  if (find_record(*owner, key) != nullptr) return false;
+  for (const auto& version : versions) {
+    if (version.record != nullptr && version.record->form_key.owner() == key.owner()) return true;
+  }
+  return false;
 }
 
 }  // namespace
@@ -308,20 +387,30 @@ RecordConflict classify_record_conflict(const ConflictGraph& graph, const Confli
   const auto versions = resolve_versions(graph, query.load_order, query.key);
   if (versions.empty()) return out;
 
+  Signature signature{};
+  for (const auto& version : versions) {
+    if (version.record == nullptr || version.partial) continue;
+    signature = version.record->header.signature;
+    break;
+  }
+  const bool injected = signature != k_gmst && signature != k_dfob &&
+                        record_is_injected(versions, query.load_order, query.key);
+
   std::vector<Node> record_nodes = fresh_row(versions);
   for (std::size_t index = 0; index < versions.size(); ++index) {
     if (versions[index].record == nullptr || versions[index].partial) continue;
     record_nodes[index].value = record_value(*versions[index].record, query.priorities);
   }
 
-  const auto result = classify_nodes(record_nodes, query.record_priority);
+  const auto result =
+      classify_nodes(record_nodes, element_priority(query.record_priority, injected));
   out.category = result.category;
   out.roles = result.roles;
 
   for (const auto& version : versions) {
     if (version.record == nullptr || version.partial) continue;
-    append_subrecord_rows(versions, version.record->header.signature, query.priorities,
-                          out.subrecords);
+    append_subrecord_rows(versions, signature, query.priorities, injected, out.subrecords);
+    append_field_rows(versions, signature, query.priorities, injected, out.fields);
     break;
   }
   return out;
@@ -331,7 +420,7 @@ std::vector<RecordConflict> classify_conflicts(const ConflictGraph& graph,
                                                std::span<const Plugin* const> load_order,
                                                std::span<const ConflictPriorityRule> priorities) {
   std::vector<RecordConflict> out;
-  for (const auto& key : graph.conflicts()) {
+  for (const auto& key : graph.all_keys()) {
     out.push_back(classify_record_conflict(graph, ConflictQuery{load_order, key,
                                                                 ConflictPriority::normal,
                                                                 priorities}));
@@ -383,6 +472,35 @@ std::vector<RecordComparison> compare_conflicts_across_plugins(
     out.push_back(compare_record_across_plugins(graph, load_order, key, priorities));
   }
   return out;
+}
+
+std::string_view conflict_category_name(ConflictCategory category) noexcept {
+  switch (category) {
+    case ConflictCategory::unknown: return "unknown";
+    case ConflictCategory::only_one: return "only_one";
+    case ConflictCategory::no_conflict: return "no_conflict";
+    case ConflictCategory::benign: return "benign";
+    case ConflictCategory::override_: return "override";
+    case ConflictCategory::conflict: return "conflict";
+    case ConflictCategory::critical: return "critical";
+  }
+  return "unknown";
+}
+
+std::string_view conflict_role_name(ConflictRole role) noexcept {
+  switch (role) {
+    case ConflictRole::unknown: return "unknown";
+    case ConflictRole::ignored: return "ignored";
+    case ConflictRole::identical_to_master: return "identical_to_master";
+    case ConflictRole::only_one: return "only_one";
+    case ConflictRole::master: return "master";
+    case ConflictRole::benign: return "benign";
+    case ConflictRole::override_: return "override";
+    case ConflictRole::identical_to_master_wins: return "identical_to_master_wins";
+    case ConflictRole::wins: return "wins";
+    case ConflictRole::loses: return "loses";
+  }
+  return "unknown";
 }
 
 }  // namespace fo4

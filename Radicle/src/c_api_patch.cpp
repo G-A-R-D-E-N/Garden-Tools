@@ -1,7 +1,10 @@
 #include "c_api_env_internal.hpp"
 #include "fo4/c_api_patch.h"
+#include "fo4/forms/leveled_list.hpp"
 #include "fo4/patch/delta_patch.hpp"
+#include "fo4/patch/list_merge.hpp"
 #include "fo4/plugin/writer.hpp"
+#include "fo4/schema/formlink_lists.hpp"
 
 using namespace radicle_c_detail;
 using namespace radicle_c_env_detail;
@@ -36,6 +39,40 @@ radicle_status radicle_env_build_delta_patch(const radicle_env* env,
       out_counts->removed = result.counts.removed;
       return RADICLE_STATUS_OK;
     } catch (const fo4::patch::DeltaPatchError& error) {
+      return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
+    }
+  });
+}
+
+radicle_status radicle_env_build_list_merge_patch(const radicle_env* env,
+                                                  const char* signature,
+                                                  const char* patch_name,
+                                                  const char* output_path,
+                                                  radicle_list_merge_counts* out_counts) {
+  clear_error();
+  if (out_counts != nullptr) *out_counts = radicle_list_merge_counts{0, 0};
+  if (env == nullptr || patch_name == nullptr || output_path == nullptr || out_counts == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                "env, the patch name, the output path and out_counts are required");
+  }
+  const auto record_signature = to_signature(signature);
+  if (!record_signature.has_value()) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "signature must be four characters");
+  }
+  return guarded("unknown exception while merging lists", [&] {
+    try {
+      auto result = fo4::patch::build_list_merge_patch(env->value, *record_signature, patch_name);
+      fo4::write_plugin_file(result.patch, utf8_path(output_path));
+      out_counts->merged = result.counts.merged;
+      out_counts->unchanged = result.counts.unchanged;
+      return RADICLE_STATUS_OK;
+    } catch (const fo4::patch::ListMergeError& error) {
+      return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
+    } catch (const fo4::forms::LeveledListError& error) {
+      return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
+    } catch (const fo4::schema::FormLinkListError& error) {
+      return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
+    } catch (const fo4::FormIdError& error) {
       return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
     }
   });

@@ -44,6 +44,7 @@ public:
   const std::vector<ReferencedByHit>& referenced_by(const FormKey& key) const noexcept;
   const std::vector<OutgoingReferenceHit>& references_from(const FormKey& key) const noexcept;
   std::vector<FormKey> conflicts() const;
+  std::vector<FormKey> all_keys() const;
 
 private:
   std::map<FormKey, std::vector<RecordVersion>> records_;

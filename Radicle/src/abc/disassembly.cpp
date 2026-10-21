@@ -1,5 +1,6 @@
 #include <fo4/abc/opcodes.hpp>
 
+#include <span>
 #include <string>
 
 namespace fo4::abc {
@@ -110,10 +111,10 @@ std::string render_listing(const AbcFile& file, const std::vector<AbcInstruction
 }
 
 AbcStatus disassemble(const AbcFile& file, const std::vector<std::uint8_t>& code,
-                      std::string& out) {
+                      std::string& out, std::span<const AbcException> exceptions) {
   out.clear();
   std::vector<AbcInstruction> instructions;
-  const AbcStatus status = decode_code(code, instructions);
+  const AbcStatus status = decode_code(code, instructions, exceptions);
   if (status != AbcStatus::Ok) {
     return status;
   }

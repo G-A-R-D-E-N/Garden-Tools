@@ -5,6 +5,7 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "fo4/schema/condition_scopes.hpp"
+#include "fo4/schema/form_links.hpp"
 #include "fo4/schema/ctda.hpp"
 #include "fo4/schema/formlink_lists.hpp"
 #include "fo4/schema/scalar.hpp"
@@ -37,6 +38,7 @@ enum class ScalarMutationStatus {
   unchanged,
   record_missing,
   subrecord_missing,
+  next_alias_id_too_low,
 };
 
 enum class CountedArrayMutationStatus {
@@ -57,6 +59,8 @@ enum class SubrecordGroupMutationStatus {
 struct SubrecordGroupSpan {
   std::size_t first{0};
   std::size_t end{0};
+  // Invariant: the nested tuples of the group's counted sub-run, in record order; empty when the group has none.
+  std::vector<SubrecordGroupSpan> runs{};
 };
 
 enum class ConditionMutationStatus {
@@ -263,6 +267,18 @@ SubrecordGroupMutationStatus remove_record_subrecord_group(Plugin& plugin,
                                                            const schema::SubrecordGroupDescriptor& group,
                                                            std::size_t index);
 
+SubrecordGroupMutationStatus insert_record_subrecord_group_run(Plugin& plugin,
+                                                               const FormKey& record_key,
+                                                               const schema::SubrecordGroupDescriptor& group,
+                                                               std::size_t run,
+                                                               std::size_t index);
+
+SubrecordGroupMutationStatus remove_record_subrecord_group_run(Plugin& plugin,
+                                                               const FormKey& record_key,
+                                                               const schema::SubrecordGroupDescriptor& group,
+                                                               std::size_t run,
+                                                               std::size_t index);
+
 inline ConditionMutationStatus set_record_conditions(Plugin& plugin,
                                   const FormKey& record_key,
                                   std::span<const CtdaCondition> conditions) {
@@ -310,7 +326,8 @@ inline ConditionMutationStatus set_record_conditions(Plugin& plugin,
 RecordCopyStatus copy_record_as_override(Plugin& destination,
                                          const Plugin& source,
                                          const FormKey& record_key,
-                                         bool overwrite);
+                                         bool overwrite,
+                                         FormLinkTypeLookup type_lookup = {});
 
 struct RecordDeepCopyResult {
   RecordCopyStatus status{RecordCopyStatus::source_missing};

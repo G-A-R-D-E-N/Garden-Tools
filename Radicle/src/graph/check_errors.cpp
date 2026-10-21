@@ -32,6 +32,28 @@ constexpr Signature k_sig_rfgp = Signature::from_string("RFGP");
 constexpr Signature k_sig_rnam = Signature::from_string("RNAM");
 constexpr Signature k_sig_regn = Signature::from_string("REGN");
 constexpr Signature k_sig_wnam = Signature::from_string("WNAM");
+constexpr Signature k_sig_refr = Signature::from_string("REFR");
+constexpr Signature k_sig_achr = Signature::from_string("ACHR");
+constexpr Signature k_sig_scco = Signature::from_string("SCCO");
+constexpr Signature k_sig_xrfg = Signature::from_string("XRFG");
+constexpr Signature k_sig_xmsp = Signature::from_string("XMSP");
+constexpr Signature k_sig_xlcn = Signature::from_string("XLCN");
+constexpr Signature k_sig_xlkr = Signature::from_string("XLKR");
+
+struct GameMasterLinkExemption {
+  Signature record;
+  Signature subrecord;
+};
+
+constexpr std::array<GameMasterLinkExemption, 7> k_game_master_link_exemptions{{
+    {k_sig_rfgp, k_sig_rnam},
+    {k_sig_regn, k_sig_wnam},
+    {k_sig_refr, k_sig_xrfg},
+    {k_sig_refr, k_sig_xmsp},
+    {k_sig_refr, k_sig_xlkr},
+    {k_sig_achr, k_sig_xlcn},
+    {k_sig_scco, k_sig_snam},
+}};
 
 struct WinnerInfo {
   Signature signature{};
@@ -67,7 +89,6 @@ constexpr std::size_t k_ctda_param1 = 12;
 constexpr std::size_t k_ctda_param2 = 16;
 constexpr std::size_t k_ctda_run_on = 20;
 constexpr std::size_t k_ctda_reference = 24;
-constexpr std::uint32_t k_run_on_max = 10;
 
 constexpr std::array<Signature, 1> k_glob_targets{Signature::from_string("GLOB")};
 constexpr std::array<Signature, 12> k_reference_targets{
@@ -187,12 +208,13 @@ void check_links(const Plugin& plugin,
           owner->second->header.signature == k_sig_dlbr) {
         continue;
       }
-      if (hit.subrecord == k_sig_rnam && hit.key.owner() == game_master && owner != records.end() &&
-          owner->second->header.signature == k_sig_rfgp) {
-        continue;
-      }
-      if (hit.subrecord == k_sig_wnam && hit.key.owner() == game_master && owner != records.end() &&
-          owner->second->header.signature == k_sig_regn) {
+      if (hit.key.owner() == game_master && owner != records.end() &&
+          hit.record.owner() == game_master &&
+          std::any_of(k_game_master_link_exemptions.begin(), k_game_master_link_exemptions.end(),
+                      [&](const GameMasterLinkExemption& exemption) {
+                        return exemption.record == owner->second->header.signature &&
+                               exemption.subrecord == hit.subrecord;
+                      })) {
         continue;
       }
       finding.code = CheckCode::unresolved_link;
@@ -249,9 +271,9 @@ void check_conditions(const Plugin& plugin, FindingSink& sink) {
       }
       if (sub.data.size() < k_ctda_run_on + 4) continue;
       const auto run_on = read_payload<std::uint32_t>(sub, k_ctda_run_on);
-      if (run_on > k_run_on_max) {
+      if (schema::condition_run_on(run_on) == nullptr) {
         add(*record, k_ctda_run_on,
-            "CTDA Run On " + std::to_string(run_on) + " is not a known Run On value (0-10)");
+            "CTDA Run On " + std::to_string(run_on) + " is not a known Run On value");
       }
     }
   }
