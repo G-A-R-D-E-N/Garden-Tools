@@ -311,6 +311,11 @@ int main() {
   printf("AssetLocation.Origin %zu\n", offsetof(radicle_asset_location, origin));
   printf("AssetLocation.ArchiveIndex %zu\n", offsetof(radicle_asset_location, archive_index));
   printf("AssetLocation.EntryIndex %zu\n", offsetof(radicle_asset_location, entry_index));
+  printf("AssetListEntry %zu\n", sizeof(radicle_asset_list_entry));
+  printf("AssetListEntry.Path %zu\n", offsetof(radicle_asset_list_entry, path));
+  printf("AssetListEntry.Location %zu\n", offsetof(radicle_asset_list_entry, location));
+  printf("AssetListEntry.Size %zu\n", offsetof(radicle_asset_list_entry, size));
+  printf("AssetListEntry.Shadowed %zu\n", offsetof(radicle_asset_list_entry, shadowed));
   printf("LightInfo %zu\n", sizeof(radicle_light_info));
   printf("LightInfo.HasData %zu\n", offsetof(radicle_light_info, has_data));
   printf("LightInfo.Time %zu\n", offsetof(radicle_light_info, time));

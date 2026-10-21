@@ -11,6 +11,8 @@ public sealed record Ba2Entry(string Path, uint NameHash, uint ExtensionHash, ui
 
 public readonly record struct AssetLocation(AssetOrigin Origin, int ArchiveIndex, int EntryIndex);
 
+public sealed record AssetListing(string Path, AssetLocation Location, ulong Size, bool Shadowed);
+
 public sealed unsafe class Ba2Archive : IDisposable
 {
     private readonly Ba2Handle _handle;
@@ -142,6 +144,27 @@ public sealed unsafe class AssetResolver : IDisposable
         return Call.Found(RadicleNative.AssetsLocate(use.Pointer, path, &location))
             ? new AssetLocation(location.Origin, (int)location.ArchiveIndex, (int)location.EntryIndex)
             : null;
+    }
+
+    public IReadOnlyList<AssetListing> List(string? prefix = null, string? extension = null, bool includeShadowed = false)
+    {
+        using var use = Use();
+        IntPtr list;
+        Call.Check(RadicleNative.AssetsList(use.Pointer, prefix, extension, includeShadowed ? 1 : 0, &list));
+        try
+        {
+            var count = (int)RadicleNative.AssetListCount(list);
+            var items = new List<AssetListing>(count);
+            for (var i = 0; i < count; i++)
+            {
+                Native.AssetListEntry e;
+                Call.Check(RadicleNative.AssetListGet(list, (nuint)i, &e));
+                items.Add(new AssetListing(Utf8.Read(e.Path) ?? string.Empty,
+                    new AssetLocation(e.Location.Origin, (int)e.Location.ArchiveIndex, (int)e.Location.EntryIndex), e.Size, e.Shadowed != 0));
+            }
+            return items;
+        }
+        finally { RadicleNative.AssetListDestroy(list); }
     }
 
     public byte[]? Read(string path)

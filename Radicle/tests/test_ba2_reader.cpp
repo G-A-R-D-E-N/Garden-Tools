@@ -239,6 +239,50 @@ TEST_F(Ba2ReaderTest, LooseFilesThenLaterArchivesWin) {
   EXPECT_EQ(archive_only.locate("meshes/over.nif")->origin, fo4::archive::AssetOrigin::archive);
 }
 
+TEST_F(Ba2ReaderTest, ListingReturnsTheSameWinnersAsLocateAndKeepsShadowedCopiesBehindThem) {
+  const auto low = write_general("Low.ba2", {general("Meshes\\Shared.nif", "low"), general("Meshes\\LowOnly.nif", "low-only"),
+                                            general("Meshes\\a.hkx", "x"), general("Textures\\t.nif", "t")});
+  const auto high = write_general("High.ba2", {general("meshes\\shared.nif", "high"), general("meshes\\over.nif", "archived")});
+  const auto unnamed = write_general("Unnamed.ba2", {general("meshes\\lowonly.nif", "h")}, false);
+  write_file(data() / "MESHES" / "Over.NIF", bytes_of("loose"));
+  write_file(data() / "Data" / "Meshes" / "Nested.nif", bytes_of("nested"));
+  const std::vector<std::filesystem::path> archives{low, high, unnamed};
+  const auto assets = fo4::archive::AssetResolver::open(data(), archives);
+
+  const auto winners = assets.list("Data\\Meshes", ".NIF", false);
+  ASSERT_EQ(winners.size(), 3u);
+  EXPECT_EQ(winners[0].path, "meshes/lowonly.nif");
+  EXPECT_EQ(winners[0].location.archive, 2u);
+  EXPECT_EQ(winners[0].size, 1u);
+  EXPECT_EQ(winners[1].path, "meshes/over.nif");
+  EXPECT_EQ(winners[1].location.origin, fo4::archive::AssetOrigin::loose);
+  EXPECT_EQ(winners[1].size, 5u);
+  EXPECT_EQ(winners[2].path, "meshes/shared.nif");
+  EXPECT_EQ(winners[2].location.archive, 1u);
+  for (const auto& winner : winners) {
+    EXPECT_FALSE(winner.shadowed);
+    const auto located = assets.locate(winner.path);
+    ASSERT_TRUE(located.has_value());
+    EXPECT_EQ(located->origin, winner.location.origin);
+    EXPECT_EQ(located->archive, winner.location.archive);
+    EXPECT_EQ(located->entry, winner.location.entry);
+  }
+
+  const auto all = assets.list("meshes", ".nif", true);
+  ASSERT_EQ(all.size(), 6u);
+  EXPECT_EQ((std::vector<bool>{all[0].shadowed, all[1].shadowed, all[2].shadowed, all[3].shadowed, all[4].shadowed, all[5].shadowed}),
+            (std::vector<bool>{false, true, false, true, false, true}));
+  EXPECT_EQ(all[1].location.archive, 0u);
+  EXPECT_EQ(all[3].location.origin, fo4::archive::AssetOrigin::archive);
+  EXPECT_EQ(all[3].location.archive, 1u);
+  EXPECT_EQ(all[5].location.archive, 0u);
+  EXPECT_FALSE(assets.locate("meshes/nested.nif").has_value());
+
+  EXPECT_EQ(assets.list("", ".hkx", false).size(), 1u);
+  EXPECT_EQ(assets.list("mesh", ".nif", false).size(), 0u);
+  EXPECT_THROW(static_cast<void>(assets.list("meshes/../x", "", false)), fo4::archive::AssetPathError);
+}
+
 TEST_F(Ba2ReaderTest, RejectsDriveAndStreamPaths) {
   const auto assets = fo4::archive::AssetResolver::open(data(), {});
   for (const auto* path : {"C:/outside.nif", "C:outside.nif", "meshes/C:/outside.nif", "meshes/a.nif:stream"}) {
@@ -352,5 +396,23 @@ TEST_F(Ba2ReaderTest, CApiReadsArchivesAndAssets) {
   ASSERT_EQ(radicle_assets_read(assets, "meshes/shared.nif", &bytes, &size, &location), RADICLE_STATUS_OK);
   EXPECT_EQ(std::string(reinterpret_cast<const char*>(bytes), size), "high");
   radicle_free_bytes(bytes);
+  radicle_asset_list* list = nullptr;
+  radicle_asset_list_entry listed{};
+  EXPECT_EQ(radicle_assets_list(nullptr, "", "", 0, &list), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_assets_list(assets, "../x", "", 0, &list), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(list, nullptr);
+  ASSERT_EQ(radicle_assets_list(assets, nullptr, nullptr, 1, &list), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_asset_list_count(list), 2u);
+  ASSERT_EQ(radicle_asset_list_get(list, 0, &listed), RADICLE_STATUS_OK);
+  EXPECT_STREQ(listed.path, "meshes/shared.nif");
+  EXPECT_EQ(listed.location.archive_index, 1u);
+  EXPECT_EQ(listed.size, 4u);
+  EXPECT_EQ(listed.shadowed, 0);
+  ASSERT_EQ(radicle_asset_list_get(list, 1, &listed), RADICLE_STATUS_OK);
+  EXPECT_EQ(listed.location.archive_index, 0u);
+  EXPECT_EQ(listed.shadowed, 1);
+  EXPECT_EQ(radicle_asset_list_get(list, 2, &listed), RADICLE_STATUS_INVALID_ARGUMENT);
+  radicle_asset_list_destroy(list);
+  radicle_asset_list_destroy(nullptr);
   radicle_assets_destroy(assets);
 }
