@@ -329,8 +329,9 @@ TEST(RecordFlags, UndeletePrependsPlayerMasterWhenACoedOwnerIsTypedByAnotherMast
   dir.write("Base.esm", build_plugin(base), 1);
   dir.write("Actors.esm", actors.bytes, 2);
   dir.write("Patch.esp", build_plugin(patch), 3);
-  const auto order = fo4::env::Environment::load({dir.path() / "Base.esm", dir.path() / "Actors.esm",
-                                                  dir.path() / "Patch.esp"});
+  const std::vector<std::filesystem::path> paths{dir.path() / "Base.esm", dir.path() / "Actors.esm",
+                                                 dir.path() / "Patch.esp"};
+  const auto order = fo4::env::Environment::load(paths);
 
   auto plugin = load(patch);
   const auto ref = fo4::FormKey::parse("000800:Base.esm");
