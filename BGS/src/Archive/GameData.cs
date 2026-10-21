@@ -226,10 +226,10 @@ public sealed partial class GameData : IDisposable
         var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (string root in ModRoots)
         {
-            if (!Directory.Exists(Path.Combine(root, "Meshes"))) continue;
+            if (CaseInsensitivePath(Path.Combine(root, "Meshes")) == null) continue;
             try
             {
-                foreach (string file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+                foreach (string file in Directory.EnumerateFiles(root, "*", LooseEnumeration))
                 {
                     string rel = Path.GetRelativePath(root, file);
                     map[Normalize(rel)] = file;

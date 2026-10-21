@@ -219,6 +219,26 @@ public sealed class Ba2RadicleTests
         finally { Directory.Delete(root, recursive: true); }
     }
 
+    [Fact]
+    public void ModLooseIndexFindsFilesUnderLowercaseMeshesRoot()
+    {
+        string root = TempRoot();
+        string dataFolder = Path.Combine(root, "Data");
+        string modRoot = Path.Combine(root, "mods", "Lower");
+        string folder = Path.Combine(modRoot, "meshes", "h");
+        Directory.CreateDirectory(dataFolder);
+        Directory.CreateDirectory(folder);
+        try
+        {
+            File.WriteAllBytes(Path.Combine(folder, "pose.hkx"), Encoding.ASCII.GetBytes("hkx"));
+
+            using var data = GameData.Discover(dataFolder, Path.Combine(root, "plugins.txt"), new[] { modRoot });
+
+            Assert.Equal(Encoding.ASCII.GetBytes("hkx"), data.ReadAnimation(dataFolder, "meshes/h/pose.hkx")?.Bytes);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
     [Theory]
     [InlineData("Meshes\\X\\CharacterAssets\\a.HKX", true)]
     [InlineData("Meshes/X/CharacterAssets/a.txt", false)]

@@ -49,9 +49,11 @@ public sealed partial class GameData
             .Select(w => new AssetWinner(w.Path, w.Source, w.Location, w.ArchivePath, w.Shadowed));
     }
 
+    private static readonly EnumerationOptions LooseEnumeration = new() { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = 0 };
+
     private static List<string> LooseFiles(string root)
     {
-        try { return Directory.EnumerateFiles(root, "*", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = 0 }).ToList(); }
+        try { return Directory.EnumerateFiles(root, "*", LooseEnumeration).ToList(); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return new List<string>(); }
     }
 
