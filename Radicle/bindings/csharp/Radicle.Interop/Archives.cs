@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using Radicle.Interop.Native;
 
 namespace Radicle.Interop;
@@ -83,6 +84,39 @@ public sealed unsafe class Ba2Archive : IDisposable
     }
 
     public void Dispose() => _handle.Dispose();
+}
+
+public static unsafe class Ba2Writer
+{
+    static Ba2Writer() => RadicleLibrary.Register();
+
+    public static byte[] General(params (string Path, byte[] Data)[] files) => General(files, 1, false);
+
+    public static byte[] General(IEnumerable<(string Path, byte[] Data)> files, uint version, bool compress)
+    {
+        var items = files.ToArray();
+        using var strings = new NativeStrings();
+        var pins = new List<GCHandle>();
+        try
+        {
+            var native = new Ba2File[items.Length];
+            for (var i = 0; i < items.Length; i++)
+            {
+                var pin = GCHandle.Alloc(items[i].Data, GCHandleType.Pinned);
+                pins.Add(pin);
+                native[i] = new Ba2File { Path = strings.Add(items[i].Path), Data = pin.AddrOfPinnedObject(), Size = (nuint)items[i].Data.Length };
+            }
+            byte* bytes;
+            nuint size;
+            fixed (Ba2File* first = native)
+                Call.Check(RadicleNative.Ba2WriteGeneral(first, (nuint)native.Length, version, compress ? 1 : 0, &bytes, &size));
+            return Call.TakeBytes(bytes, size);
+        }
+        finally
+        {
+            foreach (var pin in pins) pin.Free();
+        }
+    }
 }
 
 public sealed unsafe class AssetResolver : IDisposable

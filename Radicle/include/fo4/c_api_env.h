@@ -507,6 +507,12 @@ typedef struct radicle_ba2_entry_info {
   uint8_t tile_mode;
 } radicle_ba2_entry_info;
 
+typedef struct radicle_ba2_file {
+  const char* path;
+  const uint8_t* data;
+  size_t size;
+} radicle_ba2_file;
+
 typedef enum radicle_asset_origin {
   RADICLE_ASSET_LOOSE = 0,
   RADICLE_ASSET_ARCHIVE = 1
@@ -539,6 +545,13 @@ RADICLE_API radicle_status radicle_ba2_extract(const radicle_ba2* ba2,
                                                size_t index,
                                                uint8_t** out_bytes,
                                                size_t* out_size);
+
+RADICLE_API radicle_status radicle_ba2_write_general(const radicle_ba2_file* files,
+                                                     size_t file_count,
+                                                     uint32_t version,
+                                                     int32_t compress,
+                                                     uint8_t** out_bytes,
+                                                     size_t* out_size);
 
 RADICLE_API radicle_status radicle_archive_load_order(const char* data_dir,
                                                       const char* const* ini_archives,

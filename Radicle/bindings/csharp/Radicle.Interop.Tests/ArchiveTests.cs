@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Text;
 using Radicle.Interop.Native;
@@ -52,6 +53,23 @@ public class ArchiveTests
         Assert.Null(strings.Lookup(0, StringSource.Dl, 0x10));
         Assert.Equal(StringSource.Il, StringTables.SourceFor("INFO", "NAM1"));
     }
+    [Fact]
+    public void WriterEmitsReadableArchivesWithPathHashesAndRefusesUnknownVersions()
+    {
+        using var temp = new TempDirectory();
+        var big = new byte[4096];
+        Array.Fill(big, (byte)'m');
+        var files = new[] { ("Meshes\\Gun.nif", Encoding.ASCII.GetBytes("gun")), ("Materials\\Gun.bgsm", big) };
+        var path = temp.Write("Data/Written - Main.ba2", Ba2Writer.General(files, version: 8, compress: true));
+
+        using var archive = Ba2Archive.Open(path);
+        Assert.Equal(8u, archive.Version);
+        Assert.Equal(new[] { "Meshes\\Gun.nif", "Materials\\Gun.bgsm" }, archive.Entries.Select(e => e.Path));
+        Assert.All(archive.Entries, e => Assert.NotEqual(0u, e.NameHash));
+        Assert.Equal(big, archive.Extract(archive.Find("materials/gun.bgsm")!.Value));
+        Assert.Equal(Status.ParseError, Assert.Throws<RadicleException>(() => Ba2Writer.General(files, version: 5, compress: false)).Status);
+    }
+
     [Fact]
     public void OpenRootsLayersLooseRootsHighToLowOverArchives()
     {
