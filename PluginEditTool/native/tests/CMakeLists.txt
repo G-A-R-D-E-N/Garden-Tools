@@ -1,5 +1,10 @@
 include(Catch)
 
+set(FO4IDE_TEST_TIMEOUT 10)
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(FO4IDE_TEST_TIMEOUT 60)
+endif()
+
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 add_test(NAME fo4ide_native_mcp_smoke
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/native_mcp_smoke.py" "$<TARGET_FILE:fo4ide>")
@@ -10,7 +15,7 @@ function(fo4ide_add_test name source library)
     target_link_libraries(${name} PRIVATE ${library} Catch2::Catch2WithMain)
     fo4ide_enable_warnings(${name})
     fo4ide_enable_sanitizers(${name})
-    catch_discover_tests(${name} PROPERTIES TIMEOUT 10)
+    catch_discover_tests(${name} PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})
 endfunction()
 
 fo4ide_add_test(fo4ide_test_events unit/EventBusTests.cpp fo4ide_events)
@@ -67,7 +72,7 @@ target_link_libraries(
 )
 fo4ide_enable_warnings(fo4ide_test_texture_resolver)
 fo4ide_enable_sanitizers(fo4ide_test_texture_resolver)
-catch_discover_tests(fo4ide_test_texture_resolver PROPERTIES TIMEOUT 10)
+catch_discover_tests(fo4ide_test_texture_resolver PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})
 fo4ide_add_test(fo4ide_test_textures unit/TextureCodecTests.cpp fo4ide_textures)
 fo4ide_add_test(fo4ide_test_papyrus_lexer unit/PapyrusLexerTests.cpp fo4ide_papyrus)
 fo4ide_add_test(fo4ide_test_papyrus_parser unit/PapyrusParserTests.cpp fo4ide_papyrus)
@@ -187,7 +192,7 @@ target_link_libraries(
 target_compile_definitions(fo4ide_test_plugin_backend PRIVATE FO4IDE_TEST_HOOKS)
 fo4ide_enable_warnings(fo4ide_test_plugin_backend)
 fo4ide_enable_sanitizers(fo4ide_test_plugin_backend)
-catch_discover_tests(fo4ide_test_plugin_backend PROPERTIES TIMEOUT 10)
+catch_discover_tests(fo4ide_test_plugin_backend PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})
 
 add_executable(fo4ide_test_sound_semantic_real unit/RadiclePluginSoundSemanticRealTests.cpp)
 target_link_libraries(fo4ide_test_sound_semantic_real PRIVATE fo4ide_plugin Catch2::Catch2WithMain)
@@ -213,7 +218,7 @@ target_link_libraries(
 )
 fo4ide_enable_warnings(fo4ide_test_proj_expl_hazd)
 fo4ide_enable_sanitizers(fo4ide_test_proj_expl_hazd)
-catch_discover_tests(fo4ide_test_proj_expl_hazd PROPERTIES TIMEOUT 10)
+catch_discover_tests(fo4ide_test_proj_expl_hazd PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})
 
 add_executable(
     fo4ide_test_quest_authoring
@@ -237,7 +242,7 @@ target_link_libraries(
 target_compile_definitions(fo4ide_test_quest_authoring PRIVATE FO4IDE_TEST_HOOKS)
 fo4ide_enable_warnings(fo4ide_test_quest_authoring)
 fo4ide_enable_sanitizers(fo4ide_test_quest_authoring)
-catch_discover_tests(fo4ide_test_quest_authoring PROPERTIES TIMEOUT 10)
+catch_discover_tests(fo4ide_test_quest_authoring PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})
 
 add_executable(
     fo4ide_test_archive_backend
@@ -249,7 +254,7 @@ target_link_libraries(
 )
 fo4ide_enable_warnings(fo4ide_test_archive_backend)
 fo4ide_enable_sanitizers(fo4ide_test_archive_backend)
-catch_discover_tests(fo4ide_test_archive_backend PROPERTIES TIMEOUT 10)
+catch_discover_tests(fo4ide_test_archive_backend PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})
 
 add_executable(fo4ide_fake_process helpers/fake_process.cpp)
 fo4ide_enable_warnings(fo4ide_fake_process)
@@ -264,7 +269,7 @@ target_compile_definitions(
 add_dependencies(fo4ide_test_process fo4ide_fake_process)
 fo4ide_enable_warnings(fo4ide_test_process)
 fo4ide_enable_sanitizers(fo4ide_test_process)
-catch_discover_tests(fo4ide_test_process PROPERTIES TIMEOUT 10)
+catch_discover_tests(fo4ide_test_process PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})
 
 fo4ide_use_utf8_code_page()
 
