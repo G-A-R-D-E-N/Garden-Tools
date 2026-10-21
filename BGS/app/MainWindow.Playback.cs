@@ -379,8 +379,9 @@ public partial class MainWindow : Window
             if (!new HkxBinaryReader().TryReadAnimation(hkx, out animation))
             {
                 ClearPose();
-                SetPlaybackSummary($"{label}: {animation.AnimationClass} is not decoded, so it cannot be drawn.",
-                                   Ux.BadBrush);
+                SetPlaybackSummary(
+                    $"{label}: {animation.UnsupportedReason} in {animation.AnimationClass}, so it cannot be drawn.",
+                    Ux.BadBrush);
                 return;
             }
         }
