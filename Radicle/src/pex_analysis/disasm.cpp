@@ -36,7 +36,6 @@ class StructuredRenderer {
 
   bool render(std::string& out) {
     if (!cfg_.unreachableBlocks.empty()) return false;
-    if (cfg_.loops.size() > 1) return false;
     const auto ended = emit_range(0, cfg_.exitBlock, 0, out);
     if (bailed_ || ended != cfg_.exitBlock) return false;
     for (std::size_t b = 0; b < cfg_.blocks.size(); ++b) {
@@ -46,6 +45,8 @@ class StructuredRenderer {
   }
 
  private:
+  static constexpr int kMaxNestingDepth = 64;
+
   std::size_t terminator_of(std::size_t block) const {
     const auto& b = cfg_.blocks[block];
     return b.first + b.count - 1;
@@ -64,15 +65,75 @@ class StructuredRenderer {
     return pex_value_text(instruction.args.front());
   }
 
-  std::size_t linear_exit(std::size_t start, std::size_t bound) const {
-    if (start >= bound) return kNoIndex;
+  std::size_t loop_exit(std::size_t block, const PexLoop& loop) const {
+    const auto& header = cfg_.blocks[block];
+    if (header.count == 0) return kNoIndex;
+    const auto terminator = terminator_of(block);
+    const auto& instruction = function_.instructions[terminator];
+    if (instruction.opCode != static_cast<std::uint8_t>(PexOp::JmpF)) return kNoIndex;
+    const auto target = jump_target_of(terminator);
+    if (target == kNoIndex || target <= block + 1) return kNoIndex;
+    if (loop.latchBlock != target - 1) return kNoIndex;
+    const auto& latch = cfg_.blocks[loop.latchBlock];
+    if (latch.successors.size() != 1 || latch.successors.front() != block) return kNoIndex;
+    return target;
+  }
+
+  std::size_t conditional_join(std::size_t block, int depth) const {
+    if (depth > kMaxNestingDepth) return kNoIndex;
+    const auto terminator = terminator_of(block);
+    const auto& instruction = function_.instructions[terminator];
+    if (instruction.opCode != static_cast<std::uint8_t>(PexOp::JmpF)) return kNoIndex;
+    const auto elseStart = jump_target_of(terminator);
+    if (elseStart == kNoIndex || elseStart <= block + 1) return kNoIndex;
+    std::size_t thenExit = kNoIndex;
+    if (!region_exit(block + 1, elseStart, depth, thenExit)) return kNoIndex;
+    if (thenExit == kNoIndex || thenExit == elseStart) return elseStart;
+    std::size_t elseExit = kNoIndex;
+    if (!region_exit(elseStart, thenExit, depth, elseExit)) return kNoIndex;
+    return elseExit == thenExit ? thenExit : kNoIndex;
+  }
+
+  bool region_exit(std::size_t start, std::size_t limit, int depth,
+                   std::size_t& exitBlock) const {
+    if (start >= limit || limit > cfg_.blocks.size()) return false;
     auto cur = start;
-    while (cur + 1 < bound) {
-      const auto& successors = cfg_.blocks[cur].successors;
-      if (successors.size() != 1 || successors.front() != cur + 1) return cur;
-      ++cur;
+    while (true) {
+      const auto& block = cfg_.blocks[cur];
+      if (block.count == 0) return false;
+      const auto terminator = terminator_of(cur);
+      const auto& instruction = function_.instructions[terminator];
+      if (instruction.opCode == static_cast<std::uint8_t>(PexOp::Return)) {
+        if (cur + 1 != limit) return false;
+        exitBlock = kNoIndex;
+        return true;
+      }
+      std::size_t next = kNoIndex;
+      const auto* loop = loop_at(cur);
+      if (loop != nullptr) {
+        next = loop_exit(cur, *loop);
+      } else if (pex_is_conditional_jump(instruction.opCode)) {
+        next = conditional_join(cur, depth + 1);
+      } else if (pex_is_jump(instruction.opCode)) {
+        const auto target = jump_target_of(terminator);
+        if (target == kNoIndex) return false;
+        if (target != cur + 1) {
+          if (cur + 1 != limit) return false;
+          exitBlock = target;
+          return true;
+        }
+        next = cur + 1;
+      } else {
+        if (block.successors.size() != 1 || block.successors.front() != cur + 1) return false;
+        next = cur + 1;
+      }
+      if (next == kNoIndex || next <= cur || next > limit) return false;
+      if (next == limit) {
+        exitBlock = limit;
+        return true;
+      }
+      cur = next;
     }
-    return cur;
   }
 
   const PexLoop* loop_at(std::size_t block) const {
@@ -95,16 +156,17 @@ class StructuredRenderer {
   }
 
   bool emit_loop(std::size_t block, const PexLoop& loop, int depth, std::string& out) {
+    const auto target = loop_exit(block, loop);
+    if (target == kNoIndex) return false;
     const auto terminator = terminator_of(block);
-    if (!pex_is_conditional_jump(function_.instructions[terminator].opCode)) return false;
-    const auto target = jump_target_of(terminator);
-    if (target == kNoIndex || target <= block + 1) return false;
-    if (loop.latchBlock != target - 1) return false;
-    const auto& latch = cfg_.blocks[loop.latchBlock];
-    if (latch.successors.size() != 1 || latch.successors.front() != block) return false;
-
-    emit_block_body(block, depth, false, out);
-    out += indent_text(depth) + "while (" + condition_text(terminator) + ") {\n";
+    if (cfg_.blocks[block].count > 1) {
+      out += indent_text(depth) + "while (true) {\n";
+      emit_block_body(block, depth + 1, false, out);
+      out += indent_text(depth + 1) + "if (!(" + condition_text(terminator) + ")) break;\n";
+    } else {
+      emit_block_body(block, depth, false, out);
+      out += indent_text(depth) + "while (" + condition_text(terminator) + ") {\n";
+    }
     const auto ended = emit_range(block + 1, target, depth + 1, out);
     if (bailed_ || ended != target) return false;
     out += indent_text(depth) + "}\n";
@@ -117,46 +179,31 @@ class StructuredRenderer {
     if (instruction.opCode != static_cast<std::uint8_t>(PexOp::JmpF)) return false;
     const auto elseStart = jump_target_of(terminator);
     if (elseStart == kNoIndex || elseStart <= block + 1) return false;
+    const auto join = conditional_join(block, depth);
+    if (join == kNoIndex) return false;
 
-    const auto thenStart = block + 1;
-    const auto thenExit = linear_exit(thenStart, elseStart);
-    if (thenExit == kNoIndex) return false;
-
-    const auto& thenSuccessors = cfg_.blocks[thenExit].successors;
-    const bool thenLeaves = thenSuccessors.empty() ||
-                            (thenSuccessors.size() == 1 && thenSuccessors.front() == elseStart);
-    if (thenLeaves) {
-      if (thenExit != elseStart - 1) return false;
-      emit_block_body(block, depth, false, out);
-      out += indent_text(depth) + "if (" + condition_text(terminator) + ") {\n";
-      const auto ended = emit_range(thenStart, thenExit + 1, depth + 1, out);
-      if (bailed_ || ended != thenExit + 1) return false;
+    emit_block_body(block, depth, false, out);
+    out += indent_text(depth) + "if (" + condition_text(terminator) + ") {\n";
+    const auto endedThen = emit_range(block + 1, elseStart, depth + 1, out);
+    if (bailed_ || endedThen != elseStart) return false;
+    if (join == elseStart) {
       out += indent_text(depth) + "}\n";
       next = elseStart;
       return true;
     }
-
-    if (thenSuccessors.size() != 1) return false;
-    const auto join = thenSuccessors.front();
-    if (join <= elseStart) return false;
-    const auto elseExit = linear_exit(elseStart, join);
-    if (elseExit == kNoIndex || elseExit != join - 1) return false;
-    const auto& elseSuccessors = cfg_.blocks[elseExit].successors;
-    if (elseSuccessors.size() != 1 || elseSuccessors.front() != join) return false;
-
-    emit_block_body(block, depth, false, out);
-    out += indent_text(depth) + "if (" + condition_text(terminator) + ") {\n";
-    const auto endedThen = emit_range(thenStart, thenExit + 1, depth + 1, out);
-    if (bailed_ || endedThen != thenExit + 1) return false;
     out += indent_text(depth) + "} else {\n";
-    const auto endedElse = emit_range(elseStart, elseExit + 1, depth + 1, out);
-    if (bailed_ || endedElse != elseExit + 1) return false;
+    const auto endedElse = emit_range(elseStart, join, depth + 1, out);
+    if (bailed_ || endedElse != join) return false;
     out += indent_text(depth) + "}\n";
     next = join;
     return true;
   }
 
   std::size_t emit_range(std::size_t block, std::size_t stop, int depth, std::string& out) {
+    if (depth > kMaxNestingDepth) {
+      bailed_ = true;
+      return kNoIndex;
+    }
     while (block != stop) {
       if (block >= cfg_.blocks.size() || emitted_[block]) {
         bailed_ = true;
@@ -172,11 +219,12 @@ class StructuredRenderer {
       const auto terminator = terminator_of(block);
       const auto* loop = loop_at(block);
       if (loop != nullptr) {
-        if (!emit_loop(block, *loop, depth, out)) {
+        const auto exitBlock = loop_exit(block, *loop);
+        if (exitBlock == kNoIndex || !emit_loop(block, *loop, depth, out)) {
           bailed_ = true;
           return kNoIndex;
         }
-        block = jump_target_of(terminator);
+        block = exitBlock;
         continue;
       }
 
@@ -197,6 +245,10 @@ class StructuredRenderer {
           return kNoIndex;
         }
         const bool isJump = pex_is_jump(function_.instructions[terminator].opCode);
+        if (depth == 0 && isJump && jump_target_of(terminator) != stop) {
+          bailed_ = true;
+          return kNoIndex;
+        }
         emit_block_body(block, depth, !isJump, out);
         block = stop;
         continue;

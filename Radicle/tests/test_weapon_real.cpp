@@ -69,9 +69,18 @@ TEST_P(WeaponReal, EveryWeaponDecodesWithoutFailure) {
                       << " bytes, expected " << field.scalar.payload_size;
         continue;
       }
+      const auto bytes = fo4::schema::scalar_field_bytes(sub->data, field.scalar);
+      if (bytes.empty()) {
+        if (field.scalar.address.segment.count != 0) {
+          EXPECT_TRUE(fo4::schema::header_segment(sub->data, weap, field.scalar.subrecord,
+                                                  field.scalar.address)
+                          .has_value())
+              << GetParam() << ' ' << key.to_string() << ' ' << field.path;
+        }
+        continue;
+      }
       try {
-        static_cast<void>(fo4::schema::decode_scalar(
-            fo4::schema::scalar_field_bytes(sub->data, field.scalar), field.scalar));
+        static_cast<void>(fo4::schema::decode_scalar(bytes, field.scalar));
       } catch (const std::exception& error) {
         ADD_FAILURE() << GetParam() << ' ' << key.to_string() << ' ' << field.path << ": "
                       << error.what();

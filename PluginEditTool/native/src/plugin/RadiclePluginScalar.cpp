@@ -114,7 +114,8 @@ Result<nlohmann::json> RadiclePluginBackend::setFieldValue(
     try {
         auto mutated = loaded->plugin;
         fo4::ScalarMutationStatus status;
-        if (field->scalar.storage == fo4::schema::ScalarStorage::zstring) {
+        if (field->scalar.storage == fo4::schema::ScalarStorage::zstring ||
+            field->scalar.storage == fo4::schema::ScalarStorage::fixed_string) {
             const auto stored = fo4::text::utf8_to_windows1252(value);
             if (!stored) {
                 return std::unexpected(Error{"ScalarFieldWriteFailed",
@@ -136,6 +137,11 @@ Result<nlohmann::json> RadiclePluginBackend::setFieldValue(
                     field->record.to_string() + " has no " +
                         field->scalar.subrecord.to_string() +
                         " subrecord; Radicle will not guess a missing subrecord insertion position"
+                });
+            case fo4::ScalarMutationStatus::next_alias_id_too_low:
+                return std::unexpected(Error{
+                    "ScalarFieldWriteFailed",
+                    "QUST Next Alias ID must stay above every existing alias ID"
                 });
             case fo4::ScalarMutationStatus::updated:
             case fo4::ScalarMutationStatus::unchanged:

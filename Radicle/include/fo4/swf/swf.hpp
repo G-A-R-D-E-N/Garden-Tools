@@ -77,14 +77,14 @@ inline constexpr std::uint16_t kSetTabIndex = 66;
 inline constexpr std::uint16_t kFileAttributes = 69;
 inline constexpr std::uint16_t kPlaceObject3 = 70;
 inline constexpr std::uint16_t kImportAssets2 = 71;
-inline constexpr std::uint16_t kDoAbc2 = 72;
+inline constexpr std::uint16_t kDoAbc2 = 82;
 inline constexpr std::uint16_t kDefineFontAlignZones = 73;
 inline constexpr std::uint16_t kCsmTextSettings = 74;
 inline constexpr std::uint16_t kDefineFont3 = 75;
 inline constexpr std::uint16_t kSymbolClass = 76;
 inline constexpr std::uint16_t kMetadata = 77;
 inline constexpr std::uint16_t kDefineScalingGrid = 78;
-inline constexpr std::uint16_t kDoAbc = 82;
+inline constexpr std::uint16_t kDoAbc = 72;
 inline constexpr std::uint16_t kDefineShape4 = 83;
 inline constexpr std::uint16_t kDefineMorphShape2 = 84;
 inline constexpr std::uint16_t kDefineSceneAndFrameLabelData = 86;
@@ -97,6 +97,8 @@ inline constexpr std::uint16_t kDefineFont4 = 91;
 inline constexpr std::uint16_t kExporterInfo = 1000;
 inline constexpr std::uint16_t kDefineExternalImage = 1001;
 inline constexpr std::uint16_t kFontTextureInfo = 1002;
+// DefineExternalImage requires tag 1009 with a UI32 CharacterID in GFx 4.x (1001 unassigned).
+inline constexpr std::uint16_t kDefineExternalImageV4 = 1009;
 
 }  // namespace tag
 
@@ -108,6 +110,7 @@ struct SwfRect {
   std::int32_t y_min{0};
   std::int32_t y_max{0};
   std::uint8_t nbits{0};
+  std::uint8_t padding{0};
 
   bool operator==(const SwfRect&) const = default;
 };
@@ -163,6 +166,79 @@ struct SwfBinaryData {
   std::size_t size{0};
 };
 
+struct SwfShape {
+  std::uint16_t shape_id{0};
+  SwfRect bounds{};
+  bool has_edge_bounds{false};
+  SwfRect edge_bounds{};
+  std::uint8_t flags{0};
+};
+
+struct SwfBitmap {
+  std::uint16_t character_id{0};
+  std::uint8_t format{0};
+  std::uint16_t width{0};
+  std::uint16_t height{0};
+  std::optional<std::uint8_t> color_table_size;
+};
+
+struct SwfFont {
+  std::uint16_t font_id{0};
+  std::uint32_t glyph_count{0};
+  std::uint8_t flags{0};
+  std::uint8_t language{0};
+  std::string name;
+  bool wide_offsets{false};
+  bool wide_codes{false};
+};
+
+struct SwfText {
+  std::uint16_t character_id{0};
+  SwfRect bounds{};
+  std::size_t record_count{0};
+  std::size_t glyph_count{0};
+};
+
+struct SwfSound {
+  std::uint16_t sound_id{0};
+  std::uint8_t format{0};
+  std::uint8_t rate{0};
+  bool sample_16bit{false};
+  bool stereo{false};
+  std::uint32_t sample_count{0};
+  std::size_t data_size{0};
+};
+
+struct SwfExporterInfo {
+  std::uint16_t version{0};
+  std::uint32_t flags{0};
+  std::uint16_t bitmap_format{0};
+  std::string prefix;
+  std::string swf_name;
+  std::size_t code_offset_count{0};
+};
+
+struct SwfExternalImage {
+  std::uint32_t character_id{0};
+  std::uint16_t bitmap_format{0};
+  std::uint16_t target_width{0};
+  std::uint16_t target_height{0};
+  std::string export_name;
+  std::string file_name;
+};
+
+struct SwfFontTextureInfo {
+  std::uint32_t texture_id{0};
+  std::uint16_t texture_format{0};
+  std::string file_name;
+  std::uint16_t texture_width{0};
+  std::uint16_t texture_height{0};
+  std::uint8_t pad_pixels{0};
+  std::uint16_t nominal_glyph_size{0};
+  std::uint32_t texture_glyph_count{0};
+  std::uint32_t font_count{0};
+};
+
 struct SwfTag {
   std::uint16_t code{0};
   std::uint32_t length{0};
@@ -182,6 +258,14 @@ struct SwfTag {
   std::optional<SwfAbc> abc;
   std::optional<SwfAction> action;
   std::optional<SwfBinaryData> binary_data;
+  std::optional<SwfShape> shape;
+  std::optional<SwfBitmap> bitmap;
+  std::optional<SwfFont> font;
+  std::optional<SwfText> text;
+  std::optional<SwfSound> sound;
+  std::optional<SwfExporterInfo> exporter_info;
+  std::optional<SwfExternalImage> external_image;
+  std::optional<SwfFontTextureInfo> font_texture;
 
   void clear_decoded();
 };
@@ -218,6 +302,14 @@ struct SwfSummary {
   bool use_network{false};
   std::uint16_t frame_count{0};
   std::size_t tag_count{0};
+  std::size_t shape_tags{0};
+  std::size_t bitmap_tags{0};
+  std::size_t font_tags{0};
+  std::size_t text_tags{0};
+  std::size_t sound_tags{0};
+  std::size_t exporter_info_tags{0};
+  std::size_t external_image_tags{0};
+  std::size_t font_texture_tags{0};
   std::vector<SwfSymbol> symbol_classes;
   std::vector<SwfAbcInfo> abc_blocks;
   std::vector<std::string> export_names;

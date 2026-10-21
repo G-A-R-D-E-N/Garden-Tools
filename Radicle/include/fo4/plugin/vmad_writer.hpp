@@ -73,4 +73,21 @@ VmadStructureMutationStatus set_vmad_fragment(Plugin& plugin, const FormKey& rec
 VmadStructureMutationStatus remove_vmad_fragment(Plugin& plugin, const FormKey& record,
                                                  std::uint32_t key);
 
+VmadStructureMutationStatus add_scene_vmad_phase_fragment(Plugin& plugin, const FormKey& record,
+                                                          std::uint32_t phase_index,
+                                                          std::uint8_t phase_flag,
+                                                          std::string_view script,
+                                                          std::string_view function);
+
+VmadStructureMutationStatus set_scene_vmad_phase_fragment(Plugin& plugin, const FormKey& record,
+                                                          std::uint32_t phase_index,
+                                                          std::uint8_t phase_flag,
+                                                          std::string_view script,
+                                                          std::string_view function);
+
+VmadStructureMutationStatus remove_scene_vmad_phase_fragment(Plugin& plugin,
+                                                             const FormKey& record,
+                                                             std::uint32_t phase_index,
+                                                             std::uint8_t phase_flag);
+
 }

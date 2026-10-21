@@ -30,7 +30,7 @@ void append_u32(std::vector<std::byte>& out, std::uint32_t value) {
 
 unsigned bits_for(std::int32_t value) noexcept {
   if (value == 0) {
-    return 1;
+    return 0;
   }
   const auto magnitude =
       value < 0 ? static_cast<std::uint32_t>(~value) : static_cast<std::uint32_t>(value);
@@ -38,7 +38,7 @@ unsigned bits_for(std::int32_t value) noexcept {
 }
 
 unsigned rect_bits(const SwfRect& rect) noexcept {
-  unsigned bits = 1;
+  unsigned bits = 0;
   for (const auto value : {rect.x_min, rect.x_max, rect.y_min, rect.y_max}) {
     bits = std::max(bits, bits_for(value));
   }
@@ -62,13 +62,7 @@ public:
     }
   }
 
-  void align() {
-    if (filled_ != 0) {
-      out_.push_back(static_cast<std::byte>(static_cast<std::uint8_t>(pending_ << (8u - filled_))));
-      pending_ = 0;
-      filled_ = 0;
-    }
-  }
+  void align(std::uint32_t fill) { write_bits(fill, (8u - filled_) % 8u); }
 
 private:
   std::vector<std::byte>& out_;
@@ -92,7 +86,7 @@ void append_rect(std::vector<std::byte>& out, const SwfRect& rect) {
   writer.write_bits(static_cast<std::uint32_t>(rect.x_max) & mask, nbits);
   writer.write_bits(static_cast<std::uint32_t>(rect.y_min) & mask, nbits);
   writer.write_bits(static_cast<std::uint32_t>(rect.y_max) & mask, nbits);
-  writer.align();
+  writer.align(rect.padding);
 }
 
 std::vector<std::byte> deflate_body(std::span<const std::byte> body) {

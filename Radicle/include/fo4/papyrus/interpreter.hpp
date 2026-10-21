@@ -17,6 +17,7 @@ struct Limits {
     std::size_t maxInstructions{200000};
     std::size_t maxCallDepth{64};
     std::size_t maxArrayLength{128};
+    std::size_t maxStringLength{1048576};
 };
 
 struct Result {

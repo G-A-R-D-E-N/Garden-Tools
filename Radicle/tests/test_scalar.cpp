@@ -48,7 +48,7 @@ TEST(ScalarSchema, GeneratedRefrFieldsAreRecordQualified) {
   EXPECT_FALSE(fo4::schema::scalar_field_descriptor(k_misc, "REFR\\Scale").has_value());
 
   const auto fields = fo4::schema::scalar_fields(k_refr);
-  ASSERT_EQ(fields.size(), 35u);
+  ASSERT_EQ(fields.size(), 52u);
   const auto has = [&fields](std::string_view path) {
     return std::any_of(fields.begin(), fields.end(), [path](const auto& field) { return field.path == path; });
   };
@@ -140,7 +140,7 @@ TEST(ScalarSchema, WeaponDnamFieldsUseTheirPayloadAndEnumBounds) {
   EXPECT_EQ(melee->scalar.maximum, 4.0);
 
   const auto fields = fo4::schema::scalar_fields(fo4::Signature::from_string("WEAP"));
-  EXPECT_EQ(fields.size(), 63u);
+  EXPECT_EQ(fields.size(), 70u);
 }
 
 TEST(ScalarSchema, EnumRowExposesItsXEditNames) {

@@ -84,6 +84,12 @@ ByteWriter build_plugin() {
   add_record(out, "LGTM", 0x803, 131, {{"EDID", zstr("Short")}, {"DATA", Bytes(92)}, {"DALC", Bytes(32)}});
   add_record(out, "LGTM", 0x804, 20, {{"EDID", zstr("Old")}, {"DATA", Bytes(136)}, {"DALC", Bytes(24)}});
   fo4::test::end_group(out, lgtm_group);
+
+  const Subs parts{{"NAM0", u32_bytes(1)}, {"NAM0", u32_bytes(2)}, {"NAM1", zstr("a.nif")},
+                   {"TNAM", u32_bytes(0)}};
+  const auto hdpt_group = fo4::test::begin_group(out, "HDPT", 0);
+  for (std::uint32_t id = 0x810; id <= 0x814; ++id) add_record(out, "HDPT", id, 131, parts);
+  fo4::test::end_group(out, hdpt_group);
   return out;
 }
 
@@ -235,4 +241,38 @@ TEST(WP9SmallRecords, LightingTemplateCreatesWithAuthoredTailAndDalc) {
   EXPECT_EQ(slice(payload(reread, created.key, "DATA"), 76, 4), f32_bytes(1.0f));
   EXPECT_EQ(slice(payload(reread, created.key, "DATA"), 132, 4), f32_bytes(7.0f));
   EXPECT_TRUE(authoring_clean(reread, created.key));
+}
+
+TEST(WP9SmallRecords, HeadPartPairEditsFollowTheExplicitEditableRules) {
+  const auto out = build_plugin();
+  auto plugin = fo4::read_plugin(out.bytes, k_plugin);
+  constexpr std::uint8_t k_part_type[] = {0, 0, 0, 0};
+  constexpr std::uint8_t k_part_file[] = {0};
+  const fo4::schema::SubrecordAuthoringConstraint rules[] = {
+      {sig("NAM0"), 0, 65535, k_part_type, 4, true, false},
+      {sig("NAM1"), 0, 65535, k_part_file, 1, true, false},
+      {sig("TNAM"), 0, 1, nullptr, 0, false, false},
+  };
+  const std::vector<std::string> imbalanced{"NAM0", "NAM0", "NAM1", "TNAM"};
+
+  EXPECT_EQ(fo4::add_record_subrecord(plugin, key(0x810), sig("NAM0"), rules),
+            fo4::SubrecordAddStatus::unknown_order);
+  EXPECT_EQ(order(plugin, key(0x810)), imbalanced);
+
+  EXPECT_EQ(fo4::add_record_subrecord(plugin, key(0x811), sig("NAM1"), rules),
+            fo4::SubrecordAddStatus::added);
+  EXPECT_EQ(order(plugin, key(0x811)),
+            (std::vector<std::string>{"NAM0", "NAM0", "NAM1", "NAM1", "TNAM"}));
+
+  EXPECT_EQ(fo4::remove_record_subrecord(plugin, key(0x812), sig("NAM0"), 0, rules),
+            fo4::SubrecordRemoveStatus::removed);
+  EXPECT_EQ(order(plugin, key(0x812)), (std::vector<std::string>{"NAM0", "NAM1", "TNAM"}));
+
+  EXPECT_EQ(fo4::remove_record_subrecord(plugin, key(0x813), sig("NAM1"), 0, rules),
+            fo4::SubrecordRemoveStatus::unknown_order);
+  EXPECT_EQ(order(plugin, key(0x813)), imbalanced);
+
+  EXPECT_EQ(fo4::remove_record_subrecord(plugin, key(0x814), sig("TNAM"), 0, rules),
+            fo4::SubrecordRemoveStatus::removed);
+  EXPECT_EQ(order(plugin, key(0x814)), (std::vector<std::string>{"NAM0", "NAM0", "NAM1"}));
 }

@@ -23,6 +23,8 @@ enum class ScalarStorage {
   i8,
   i16,
   zstring,
+  // Constraint: fixed_string is whole-payload only and its width is the descriptor's payload_size.
+  fixed_string,
 };
 
 enum class ScalarPresentation {
@@ -76,6 +78,10 @@ public:
   using std::runtime_error::runtime_error;
 };
 
+// Constraint: xEdit wbModelInfoDecider (Core/wbDefinitionsCommon.pas:5646) allows at
+// most eight counter words, and a larger first word must be a different format.
+inline constexpr std::size_t k_max_header_counters = 8;
+
 struct CountedArrayDescriptor {
   Signature record{};
   std::string_view path;
@@ -83,6 +89,11 @@ struct CountedArrayDescriptor {
   Signature subrecord{};
   Signature count_subrecord{};
   std::size_t stride{0};
+  // Constraint: segment_count 0 means a plain payload; otherwise the array is one of
+  // segment_count header-counted segments that must share one payload.
+  std::size_t count_word{0};
+  std::size_t segment_index{0};
+  std::size_t segment_count{0};
 };
 
 class CountedArrayError : public std::runtime_error {
@@ -100,6 +111,14 @@ struct SubrecordGroupMemberDescriptor {
   bool localized{false};
   // Constraint: a skippable member may appear before the first leader, where it belongs to no run.
   bool skippable{false};
+  // Invariant: a leading member is optional, precedes the leader in declaration and data order, and belongs to the run of the leader that follows it.
+  bool leading{false};
+};
+
+// Invariant: count_member names one of the group's own members; that member's whole four-byte payload is the number of nested runs that follow it inside the enclosing run. An empty count_member means the group has no nested run.
+struct SubrecordGroupRunDescriptor {
+  Signature count_member{};
+  std::span<const SubrecordGroupMemberDescriptor> members{};
 };
 
 struct SubrecordGroupDescriptor {
@@ -109,6 +128,8 @@ struct SubrecordGroupDescriptor {
   Signature count_subrecord{};
   std::span<const SubrecordGroupMemberDescriptor> members{};
   std::span<const Signature> successors{};
+  SubrecordGroupRunDescriptor run{};
+  bool requires_existing_count{false};
 };
 
 class SubrecordGroupError : public std::runtime_error {
@@ -127,6 +148,12 @@ std::size_t scalar_storage_size(ScalarStorage storage) noexcept;
 std::optional<CountedArrayDescriptor> counted_array_descriptor(Signature record,
                                                                std::string_view path) noexcept;
 bool is_counted_array_count_subrecord(Signature record, Signature subrecord) noexcept;
+
+// Constraint: nullopt when the payload is not the modelled arm, never a partial read.
+std::optional<SegmentSpan> header_segment(std::span<const std::byte> payload,
+                                          Signature record,
+                                          Signature subrecord,
+                                          const FieldAddress& address);
 std::optional<SubrecordGroupDescriptor> subrecord_group_descriptor(Signature record,
                                                                    std::string_view path) noexcept;
 std::optional<SubrecordGroupDescriptor> subrecord_group_for_member(Signature record,
