@@ -374,11 +374,10 @@ TEST_F(Ba2ReaderTest, LooseRootsResolveHighToLowAndShadowLowerRoots) {
   radicle_assets* handle = nullptr;
   ASSERT_EQ(radicle_assets_open_roots(root_paths, 2, archive_paths, 1, &handle), RADICLE_STATUS_OK);
   radicle_asset_location location{};
-  ASSERT_EQ(radicle_assets_locate(handle, "meshes/a.nif", &location), RADICLE_STATUS_OK);
-  EXPECT_EQ(location.origin, RADICLE_ASSET_LOOSE);
   uint8_t* bytes = nullptr;
   size_t size = 0;
-  ASSERT_EQ(radicle_assets_read(handle, "meshes/a.nif", &bytes, &size), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_assets_read(handle, "meshes/a.nif", &bytes, &size, &location), RADICLE_STATUS_OK);
+  EXPECT_EQ(location.origin, RADICLE_ASSET_LOOSE);
   EXPECT_EQ(std::string(reinterpret_cast<const char*>(bytes), size), "high");
   radicle_free_bytes(bytes);
   radicle_assets_destroy(handle);
