@@ -7,6 +7,7 @@ using Xunit;
 
 namespace BehaviourStudio.Tests;
 
+[Collection("ScanCli")]
 public sealed class Ba2RadicleTests
 {
     [Fact]
@@ -67,32 +68,145 @@ public sealed class Ba2RadicleTests
     }
 
     [Fact]
-    public void EnumerateWinnersShadowsArchiveCopiesUnderLooseOverrideAndMissingEntryIsNull()
+    public void EnumerateWinnersShadowsArchiveCopiesUnderLooseOverrideAndSkipsSiblingsAndMissingEntryIsNull()
     {
-        string root = Path.Combine(Path.GetTempPath(), "bgs-winners-" + Guid.NewGuid().ToString("N"));
+        string root = TempRoot();
         string dataFolder = Path.Combine(root, "Data");
         Directory.CreateDirectory(Path.Combine(dataFolder, "meshes", "x"));
+        Directory.CreateDirectory(Path.Combine(dataFolder, "meshes", "y"));
         try
         {
             File.WriteAllBytes(Path.Combine(dataFolder, "meshes", "x", "shared.hkx"), Encoding.ASCII.GetBytes("loose"));
-            WriteGeneralBa2(Path.Combine(dataFolder, "A.ba2"), "meshes/x/shared.hkx", Encoding.ASCII.GetBytes("archive A"));
-            WriteGeneralBa2(Path.Combine(dataFolder, "B.ba2"), "meshes/x/shared.hkx", Encoding.ASCII.GetBytes("archive B"));
+            File.WriteAllBytes(Path.Combine(dataFolder, "meshes", "x", "shared.txt"), Encoding.ASCII.GetBytes("sibling"));
+            File.WriteAllBytes(Path.Combine(dataFolder, "meshes", "y", "other.hkx"), Encoding.ASCII.GetBytes("elsewhere"));
+            string archiveA = Path.Combine(dataFolder, "A.ba2");
+            string archiveB = Path.Combine(dataFolder, "B.ba2");
+            WriteGeneralBa2(archiveA, "meshes/x/shared.hkx", Encoding.ASCII.GetBytes("archive A"));
+            WriteGeneralBa2(archiveB, "meshes/x/shared.hkx", Encoding.ASCII.GetBytes("archive B"));
 
             using var data = GameData.Discover(dataFolder, Path.Combine(root, "plugins.txt"));
 
-            var winner = Assert.Single(data.EnumerateWinners("Meshes/X/", ".hkx"));
+            var winner = Assert.Single(data.EnumerateWinners("Meshes/X", ".hkx"));
             Assert.Equal("meshes/x/shared.hkx", winner.Path);
             Assert.Equal("loose", winner.Source);
+            Assert.Equal(dataFolder, winner.Location);
             Assert.Null(winner.ArchivePath);
-            Assert.Equal(new[] { "A.ba2", "B.ba2" }, winner.Shadowed.OrderBy(s => s, StringComparer.Ordinal));
+            Assert.Equal(
+                new[] { new GameData.AssetCopy("A.ba2", archiveA), new GameData.AssetCopy("B.ba2", archiveB) },
+                winner.Shadowed.OrderBy(c => c.Source, StringComparer.Ordinal));
 
-            string archiveB = Path.Combine(dataFolder, "B.ba2");
             Assert.Equal(Encoding.ASCII.GetBytes("archive B"), data.TryReadEntry(archiveB, "Meshes\\X\\shared.hkx"));
             Assert.Null(data.TryReadEntry(archiveB, "meshes/x/missing.hkx"));
             Assert.Throws<FileNotFoundException>(() => data.ReadEntry(archiveB, "meshes/x/missing.hkx"));
         }
         finally { Directory.Delete(root, recursive: true); }
     }
+
+    [Fact]
+    public void ArchiveOnlyWinnerFollowsArchivePathsOrderNotFileNameOrder()
+    {
+        string root = TempRoot();
+        string dataFolder = Path.Combine(root, "Data");
+        Directory.CreateDirectory(dataFolder);
+        try
+        {
+            WriteGeneralBa2(Path.Combine(dataFolder, "A.ba2"), "meshes/y/only.hkx", Encoding.ASCII.GetBytes("archive A"));
+            WriteGeneralBa2(Path.Combine(dataFolder, "B.ba2"), "meshes/y/only.hkx", Encoding.ASCII.GetBytes("archive B"));
+
+            using var data = GameData.Discover(dataFolder, Path.Combine(root, "plugins.txt"));
+
+            var winner = Assert.Single(data.EnumerateWinners("meshes/y/", ".hkx"));
+            Assert.Equal(data.ArchivePaths[0], winner.ArchivePath);
+            Assert.Equal(Path.GetFileName(data.ArchivePaths[0]), winner.Source);
+            Assert.Equal(data.ArchivePaths[0], winner.Location);
+            Assert.Equal(Path.GetFileName(data.ArchivePaths[1]), Assert.Single(winner.Shadowed).Source);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
+    public void ModRootLooseOverrideBeatsDataLooseCopyAndIsLocatedByItsRoot()
+    {
+        string root = TempRoot();
+        string dataFolder = Path.Combine(root, "Data");
+        string modRoot = Path.Combine(root, "mods", "Override");
+        Directory.CreateDirectory(Path.Combine(dataFolder, "meshes", "x"));
+        Directory.CreateDirectory(Path.Combine(modRoot, "meshes", "x"));
+        try
+        {
+            File.WriteAllBytes(Path.Combine(dataFolder, "meshes", "x", "shared.hkx"), Encoding.ASCII.GetBytes("data"));
+            File.WriteAllBytes(Path.Combine(modRoot, "meshes", "x", "shared.hkx"), Encoding.ASCII.GetBytes("mod"));
+
+            using var data = GameData.Discover(dataFolder, Path.Combine(root, "plugins.txt"), new[] { modRoot });
+
+            var winner = Assert.Single(data.EnumerateWinners("meshes/x/", ".hkx"));
+            Assert.Equal("loose:Override", winner.Source);
+            Assert.Equal(Path.GetFullPath(modRoot), winner.Location);
+            Assert.Equal(new[] { new GameData.AssetCopy("loose", dataFolder) }, winner.Shadowed);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
+    public void ModRootWithoutMeshesFolderStillWinsItsSoundPrefix()
+    {
+        string root = TempRoot();
+        string dataFolder = Path.Combine(root, "Data");
+        string modRoot = Path.Combine(root, "mods", "Voice");
+        Directory.CreateDirectory(dataFolder);
+        Directory.CreateDirectory(Path.Combine(modRoot, "sound"));
+        try
+        {
+            File.WriteAllBytes(Path.Combine(modRoot, "sound", "line.wav"), Encoding.ASCII.GetBytes("wav"));
+
+            using var data = GameData.Discover(dataFolder, Path.Combine(root, "plugins.txt"), new[] { modRoot });
+
+            var winner = Assert.Single(data.EnumerateWinners("Sound/", ".wav"));
+            Assert.Equal("sound/line.wav", winner.Path);
+            Assert.Equal("loose:Voice", winner.Source);
+            Assert.Equal(Path.GetFullPath(modRoot), winner.Location);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
+    public void TryReadEntryReusesTheOpenArchiveHandleInsteadOfReopening()
+    {
+        string root = TempRoot();
+        string dataFolder = Path.Combine(root, "Data");
+        Directory.CreateDirectory(dataFolder);
+        try
+        {
+            string archive = Path.Combine(dataFolder, "A.ba2");
+            WriteGeneralBa2(archive, "meshes/x/shared.hkx", Encoding.ASCII.GetBytes("archive A"));
+
+            using var data = GameData.Discover(dataFolder, Path.Combine(root, "plugins.txt"));
+            Assert.Equal(Encoding.ASCII.GetBytes("archive A"), data.TryReadEntry(archive, "meshes/x/shared.hkx"));
+
+            Ba2.OpenCountForTest = 0;
+            Assert.Equal(Encoding.ASCII.GetBytes("archive A"), data.TryReadEntry(archive, "meshes/x/shared.hkx"));
+            Assert.Equal(Encoding.ASCII.GetBytes("archive A"), data.TryReadEntry(archive, "Meshes\\X\\shared.hkx"));
+            Assert.Equal(0, Ba2.OpenCountForTest);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
+    public void TryReadEntryReturnsNullForAMissingArchiveFile()
+    {
+        string root = TempRoot();
+        string dataFolder = Path.Combine(root, "Data");
+        Directory.CreateDirectory(dataFolder);
+        try
+        {
+            using var data = GameData.Discover(dataFolder, Path.Combine(root, "plugins.txt"));
+
+            Assert.Null(data.TryReadEntry(Path.Combine(dataFolder, "absent.ba2"), "meshes/x/shared.hkx"));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    private static string TempRoot() => Path.Combine(Path.GetTempPath(), "bgs-winners-" + Guid.NewGuid().ToString("N"));
 
     private static void WriteGeneralBa2(string path, string entryName, byte[] payload)
     {
