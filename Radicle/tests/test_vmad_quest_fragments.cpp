@@ -257,8 +257,9 @@ TEST(VmadQuestFragments, AddedBindingLandsInStageOrderAndRemovalRestoresThePaylo
   EXPECT_EQ(three.fragments[1].offset, initial.fragments[1].offset);
   EXPECT_EQ(middle[count_at], std::byte{3});
   EXPECT_EQ(middle[count_at + 1], std::byte{0});
-  EXPECT_EQ(slice(middle, 0, base + three.fragments[1].offset),
-            slice(before, 0, base + initial.fragments[1].offset));
+  EXPECT_EQ(slice(middle, 0, count_at), slice(before, 0, count_at));
+  EXPECT_EQ(slice(middle, count_at + 2, base + three.fragments[1].offset),
+            slice(before, count_at + 2, base + initial.fragments[1].offset));
   EXPECT_EQ(slice(middle, base + three.fragments[2].offset, middle.size()),
             slice(before, base + initial.fragments[1].offset, before.size()));
 
@@ -291,8 +292,9 @@ TEST(VmadQuestFragments, AddedBindingLandsInStageOrderAndRemovalRestoresThePaylo
   EXPECT_EQ(appended[count_at], std::byte{5});
   EXPECT_EQ(five.fragments[4].offset, five.fragments[3].end);
   EXPECT_EQ(five.fragments[4].end, appended.size() - base - 2);
-  EXPECT_EQ(slice(appended, 0, base + five.fragments[4].offset),
-            slice(fronted, 0, base + four.fragments[3].end));
+  EXPECT_EQ(slice(appended, 0, count_at), slice(fronted, 0, count_at));
+  EXPECT_EQ(slice(appended, count_at + 2, base + five.fragments[4].offset),
+            slice(fronted, count_at + 2, base + four.fragments[3].end));
 
   EXPECT_EQ(remove_quest_vmad_fragment(plugin, fixture::key(), 5),
             VmadStructureMutationStatus::updated);
