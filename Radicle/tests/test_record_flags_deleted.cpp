@@ -282,6 +282,29 @@ TEST(RecordFlags, UndeleteParentsToTheLoadOrderPlayerWhenFallout4IsNotAMaster) {
   EXPECT_EQ(resolved_link(reread, *name), fo4::FormKey::parse("000801:Base.esm"));
 }
 
+TEST(RecordFlags, UndeleteKeepsMasterOrderWhenFallout4IsANonZeroMaster) {
+  const CellPlugin master{.name = "Base.esm"};
+  const CellPlugin patch{
+      .name = "Patch.esp",
+      .masters = {"Base.esm", "Fallout4.esm"},
+      .cell_form = 0x02000900,
+      .ref_flags = fo4::RecordFlags::deleted,
+      .ref_subs = {{"NAME", std::string{'\x01', '\x08', '\0', '\0'}},
+                   {"DATA", position_data(1.0f, 2.0f, 3.0f)}},
+  };
+  auto plugin = load(patch);
+  const auto ref = fo4::FormKey::parse("000800:Base.esm");
+  ASSERT_EQ(fo4::undelete_and_disable_reference(plugin, load_order(master, patch), ref),
+            fo4::UndeleteStatus::undeleted);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  ASSERT_EQ(reread.header.masters.size(), 2u);
+  EXPECT_EQ(reread.header.masters[0].key, fo4::PluginKey::from_filename("Base.esm"));
+  const auto* xesp = subrecord_named(*fo4::find_record(reread, ref), "XESP");
+  ASSERT_NE(xesp, nullptr);
+  EXPECT_EQ(resolved_link(reread, *xesp), fo4::FormKey::parse("000014:Fallout4.esm"));
+}
+
 TEST(RecordFlags, UndeleteRemapsMasterFormLinksIntoTheTargetMasterSpace) {
   auto plugin = load(two_level_patch_plugin());
   const auto ref = fo4::FormKey::parse("000800:Machine.esm");

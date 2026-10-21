@@ -313,7 +313,11 @@ UndeleteStatus undelete_and_disable_reference(Plugin& plugin,
   if (!has_player_master) {
     std::vector<MasterDescriptor> masters{{player.owner(), PluginKind::full}};
     for (const auto& held : next.header.masters) masters.push_back({held.key, held.kind});
-    next = remap_plugin_masters(std::move(next), std::move(masters));
+    try {
+      next = remap_plugin_masters(std::move(next), std::move(masters));
+    } catch (const std::exception&) {
+      return UndeleteStatus::incomplete_reference;
+    }
   }
   forms::set_placed_reference_enable_parent(next, record_key, player, 1);
   plugin = std::move(next);
