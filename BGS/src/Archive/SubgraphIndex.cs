@@ -89,7 +89,7 @@ public sealed class SubgraphIndex
         void ScanLoose(string root)
         {
             string? looseRoot = GameData.CaseInsensitivePath(Path.Combine(root, "Meshes", "AnimTextData"));
-            if (looseRoot == null) return;
+            if (looseRoot == null || !Directory.Exists(looseRoot)) return;
             string? looseFileData = GameData.CaseInsensitivePath(Path.Combine(looseRoot, "AnimationFileData"));
             if (looseFileData != null && Directory.Exists(looseFileData))
             foreach (string file in Directory.EnumerateFiles(
