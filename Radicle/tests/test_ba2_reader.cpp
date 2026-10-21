@@ -343,7 +343,7 @@ TEST_F(Ba2ReaderTest, LooseRootsResolveHighToLowAndShadowLowerRoots) {
   const auto mod_high = data().parent_path() / "ModHigh";
   const auto mod_low = data().parent_path() / "ModLow";
   write_file(mod_high / "Meshes" / "A.nif", bytes_of("high"));
-  write_file(mod_low / "meshes" / "a.nif", bytes_of("low"));
+  write_file(mod_low / "Meshes" / "a.nif", bytes_of("low"));
   write_file(mod_low / "Meshes" / "c.nif", bytes_of("c"));
   write_file(data() / "meshes" / "c.nif", bytes_of("data"));
   const std::vector<std::filesystem::path> roots{mod_high, mod_low, data()};
@@ -359,7 +359,7 @@ TEST_F(Ba2ReaderTest, LooseRootsResolveHighToLowAndShadowLowerRoots) {
   EXPECT_EQ((std::vector<bool>{all[0].shadowed, all[1].shadowed, all[2].shadowed, all[3].shadowed, all[4].shadowed, all[5].shadowed}),
             (std::vector<bool>{false, true, true, false, false, true}));
   EXPECT_EQ(all[0].location.loose_path, mod_high / "Meshes" / "A.nif");
-  EXPECT_EQ(all[1].location.loose_path, mod_low / "meshes" / "a.nif");
+  EXPECT_EQ(all[1].location.loose_path, mod_low / "Meshes" / "a.nif");
   EXPECT_EQ(all[2].location.origin, fo4::archive::AssetOrigin::archive);
   EXPECT_EQ(all[4].path, "meshes/c.nif");
 
