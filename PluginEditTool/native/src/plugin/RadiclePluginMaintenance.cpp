@@ -153,7 +153,11 @@ Result<fo4::FormKey> RadiclePluginBackend::copyRecordAsNewLocked(
     }
     *allocated = std::move(copied);
 
-    if (newEditorId.has_value() && !fo4::set_record_editor_id(mutated, newKey, *newEditorId)) {
+    if (newEditorId.has_value() && newEditorId->empty()) {
+        std::erase_if(allocated->subrecords,
+                      [](const fo4::Subrecord& subrecord) { return subrecord.signature == fo4::sig_edid; });
+        allocated->original_range.clear();
+    } else if (newEditorId.has_value() && !fo4::set_record_editor_id(mutated, newKey, *newEditorId)) {
         return std::unexpected(Error{
             "CopyAsNewEditorIdFailed",
             "Could not set EditorID on the duplicated record"

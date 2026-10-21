@@ -2215,7 +2215,7 @@ When the target already overrides the key, `fo4::copy_record_as_override` with o
 
 ## PluginEditTool/native/src/plugin/RadiclePluginMaintenance.cpp:RadiclePluginBackend::copyRecordAsNewLocked — shared plain-record copy (#362)
 
-The plain-record branch of `CopyAsNewRecord` moved here so `copyAsWrapper` uses the same copy. It checks decodability, adds the masters that the source's form links need, allocates a local record, copies the record and remaps its form links. The EDID is set only when the caller passes a value. `CopyAsNewRecord` passes nothing when there is no EDID to write, so its output is unchanged. `copyAsWrapper` always passes its EDID, so an empty one writes a 1-byte EDID (a lone NUL) on the copy rather than omitting it.
+The plain-record branch of `CopyAsNewRecord` moved here so `copyAsWrapper` uses the same copy. It checks decodability, adds the masters that the source's form links need, allocates a local record, copies the record and remaps its form links. The EDID is set only when the caller passes a value. `CopyAsNewRecord` passes nothing when there is no EDID to write, so its output is unchanged. `copyAsWrapper` always passes its EDID. An empty one (the UI prompt says "Leave empty for no EditorID") removes the EDID subrecord that the copy inherited from the source (`copyRecordAsNewLocked`), because `nullopt` would leave the source's EDID on the copy and duplicate the EditorID, and `set_record_editor_id` would write a lone NUL (GT-290, #701). Test: `PluginEditTool/native/tests/unit/RadiclePluginCopyAsWrapperTests.cpp` "Native CopyAsWrapper with an empty EditorID gives the NEW copy no EDID subrecord".
 
 ## PluginEditTool/native/src/app/PluginBackendTarget.cpp:PluginBackendTarget::invoke — CopyAsWrapper dispatch (#362)
 
