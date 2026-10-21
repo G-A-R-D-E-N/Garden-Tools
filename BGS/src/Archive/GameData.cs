@@ -16,7 +16,7 @@ namespace OpenCommonwealth.Services.Archive;
 /// Character). The same path inside an archive appears with that data-relative prefix, so an
 /// animation that is not loose can still exist inside e.g. "Fallout4 - Animations.ba2".
 /// </summary>
-public sealed class GameData : IDisposable
+public sealed partial class GameData : IDisposable
 {
     public string DataFolder { get; }
     public IReadOnlyList<string> ArchivePaths { get; }
@@ -109,10 +109,8 @@ public sealed class GameData : IDisposable
         string mods = Path.GetFullPath(modsFolder);
         var roots = new List<string>();
 
-        string? modlist = profile != null
-            ? Path.Combine(mods, "profiles", profile, "modlist.txt")
-            : Path.Combine(mods, "modlist.txt");
-        if (File.Exists(modlist))
+        string? modlist = ModlistPath(mods, profile);
+        if (modlist != null)
         {
             // Bottom-up: the last root wins, and MO2 puts the winning mod on the first line.
             foreach (string raw in File.ReadAllLines(modlist).Reverse())
@@ -148,6 +146,15 @@ public sealed class GameData : IDisposable
             .Where(n => File.Exists(Path.Combine(profiles, n, "modlist.txt")))
             .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
             .FirstOrDefault();
+    }
+
+    public static string? ModlistPath(string modsFolder, string? profile)
+    {
+        string mods = Path.GetFullPath(modsFolder);
+        string list = profile != null
+            ? Path.Combine(mods, "profiles", profile, "modlist.txt")
+            : Path.Combine(mods, "modlist.txt");
+        return File.Exists(list) ? list : null;
     }
 
     /// <summary>
@@ -286,6 +293,13 @@ public sealed class GameData : IDisposable
         return current;
     }
 
+    public static bool IsSkeletonPath(string name)
+    {
+        string flat = "/" + name.Replace('\\', '/').Trim('/');
+        return flat.EndsWith(".hkx", StringComparison.OrdinalIgnoreCase) &&
+               flat.Contains("/CharacterAssets/", StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>
     /// The first .hkx under the character's CharacterAssets folder in the archives, given an
     /// animation entry name like "Meshes/Actors/Turret/Animations/...". Returns its bytes, or
@@ -304,7 +318,7 @@ public sealed class GameData : IDisposable
             foreach (var entry in Entries(archive))
             {
                 if (!entry.Name.StartsWith(assets, StringComparison.OrdinalIgnoreCase)) continue;
-                if (!entry.Name.EndsWith(".hkx", StringComparison.OrdinalIgnoreCase)) continue;
+                if (!IsSkeletonPath(entry.Name)) continue;
                 try { return Open(archive).Read(entry); }
                 catch (Exception e) when (IsSkippableArchiveFailure(e)) { return null; }
             }
