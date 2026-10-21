@@ -1,5 +1,7 @@
 #include "c_api_env_internal.hpp"
 #include "fo4/archive/assets.hpp"
+#include "fo4/archive/ba2.hpp"
+#include "fo4/archive/ba2_hash.hpp"
 #include "fo4/environment/strings.hpp"
 
 #include <cstdlib>
@@ -133,6 +135,43 @@ radicle_status radicle_ba2_extract(const radicle_ba2* ba2, size_t index, uint8_t
   }
   return guarded("unknown exception while extracting BA2 entry",
                  [&] { return copy_bytes(to_reader(ba2)->extract(index), out_bytes, out_size); });
+}
+
+radicle_status radicle_ba2_write_general(const radicle_ba2_file* files,
+                                         size_t file_count,
+                                         uint32_t version,
+                                         int32_t compress,
+                                         uint8_t** out_bytes,
+                                         size_t* out_size) {
+  clear_error();
+  if ((files == nullptr && file_count != 0) || out_bytes == nullptr || out_size == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "files, out_bytes and out_size are required");
+  }
+  *out_bytes = nullptr;
+  *out_size = 0;
+  for (size_t i = 0; i < file_count; ++i) {
+    if (files[i].path == nullptr || (files[i].data == nullptr && files[i].size != 0)) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "every file needs a path and data");
+    }
+  }
+  return guarded("unknown exception while writing BA2", [&] {
+    fo4::archive::Ba2GeneralArchive archive;
+    archive.version = version;
+    archive.entries.reserve(file_count);
+    for (size_t i = 0; i < file_count; ++i) {
+      fo4::archive::Ba2GeneralEntry entry;
+      entry.path = files[i].path;
+      const auto hashes = fo4::archive::compute_ba2_hashes(entry.path);
+      entry.name_hash = hashes.name;
+      entry.extension_hash = hashes.extension;
+      entry.directory_hash = hashes.directory;
+      const std::span<const std::byte> data(reinterpret_cast<const std::byte*>(files[i].data), files[i].size);
+      entry.chunks.push_back(compress != 0 ? fo4::archive::make_compressed_ba2_chunk(data)
+                                           : fo4::archive::make_stored_ba2_chunk(data));
+      archive.entries.push_back(std::move(entry));
+    }
+    return copy_bytes(fo4::archive::write_ba2_general(archive), out_bytes, out_size);
+  });
 }
 
 radicle_status radicle_archive_load_order(const char* data_dir,

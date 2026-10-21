@@ -446,6 +446,14 @@ public unsafe struct Ba2EntryInfo
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct Ba2File
+{
+    public IntPtr Path;
+    public IntPtr Data;
+    public nuint Size;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct AssetLocation
 {
     public AssetOrigin Origin;
@@ -1697,7 +1705,7 @@ public enum OfficialTable : int
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 42u;
+    public const uint CompiledAbiVersion = 43u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -1860,6 +1868,9 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_ba2_extract")]
     public static extern Status Ba2Extract(IntPtr ba2, nuint index, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_ba2_write_general")]
+    public static extern Status Ba2WriteGeneral(Ba2File* files, nuint file_count, uint version, int compress, byte** out_bytes, nuint* out_size);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_archive_load_order")]
     public static extern Status ArchiveLoadOrder([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? data_dir, IntPtr* ini_archives, nuint ini_count, IntPtr* plugins, nuint plugin_count, IntPtr** out_paths, nuint* out_count);
