@@ -338,6 +338,53 @@ TEST_F(Ba2ReaderTest, StringTablesFallBackToArchives) {
   EXPECT_EQ(loose.lookup(0, fo4::env::StringSource::normal, 0x10), std::optional<std::string_view>{"Loose Commonwealth"});
 }
 
+TEST_F(Ba2ReaderTest, LooseRootsResolveHighToLowAndShadowLowerRoots) {
+  const auto archive = write_general("Base.ba2", {general("meshes/a.nif", "arc"), general("meshes/b.nif", "arc")});
+  const auto mod_high = data().parent_path() / "ModHigh";
+  const auto mod_low = data().parent_path() / "ModLow";
+  write_file(mod_high / "Meshes" / "A.nif", bytes_of("high"));
+  write_file(mod_low / "meshes" / "a.nif", bytes_of("low"));
+  write_file(mod_low / "Meshes" / "c.nif", bytes_of("c"));
+  write_file(data() / "meshes" / "c.nif", bytes_of("data"));
+  const std::vector<std::filesystem::path> roots{mod_high, mod_low, data()};
+  const std::vector<std::filesystem::path> archives{archive};
+  const auto assets = fo4::archive::AssetResolver::open_roots(roots, archives);
+
+  EXPECT_EQ(text_of(assets.read(*assets.locate("meshes/a.nif"))), "high");
+  EXPECT_EQ(text_of(assets.read(*assets.locate("meshes/c.nif"))), "c");
+  EXPECT_EQ(assets.locate("meshes/b.nif")->origin, fo4::archive::AssetOrigin::archive);
+
+  const auto all = assets.list("meshes", ".nif", true);
+  ASSERT_EQ(all.size(), 6u);
+  EXPECT_EQ((std::vector<bool>{all[0].shadowed, all[1].shadowed, all[2].shadowed, all[3].shadowed, all[4].shadowed, all[5].shadowed}),
+            (std::vector<bool>{false, true, true, false, false, true}));
+  EXPECT_EQ(all[0].location.loose_path, mod_high / "Meshes" / "A.nif");
+  EXPECT_EQ(all[1].location.loose_path, mod_low / "meshes" / "a.nif");
+  EXPECT_EQ(all[2].location.origin, fo4::archive::AssetOrigin::archive);
+  EXPECT_EQ(all[4].path, "meshes/c.nif");
+
+  const auto none = fo4::archive::AssetResolver::open_roots({}, archives);
+  EXPECT_EQ(none.locate("meshes/a.nif")->origin, fo4::archive::AssetOrigin::archive);
+
+  const std::string high_text = mod_high.string();
+  const std::string low_text = mod_low.string();
+  const std::string archive_text = archive.string();
+  const char* root_paths[] = {high_text.c_str(), low_text.c_str()};
+  const char* archive_paths[] = {archive_text.c_str()};
+  radicle_assets* handle = nullptr;
+  ASSERT_EQ(radicle_assets_open_roots(root_paths, 2, archive_paths, 1, &handle), RADICLE_STATUS_OK);
+  radicle_asset_location location{};
+  ASSERT_EQ(radicle_assets_locate(handle, "meshes/a.nif", &location), RADICLE_STATUS_OK);
+  EXPECT_EQ(location.origin, RADICLE_ASSET_LOOSE);
+  uint8_t* bytes = nullptr;
+  size_t size = 0;
+  ASSERT_EQ(radicle_assets_read(handle, "meshes/a.nif", &bytes, &size), RADICLE_STATUS_OK);
+  EXPECT_EQ(std::string(reinterpret_cast<const char*>(bytes), size), "high");
+  radicle_free_bytes(bytes);
+  radicle_assets_destroy(handle);
+  EXPECT_EQ(radicle_assets_open_roots(nullptr, 1, archive_paths, 1, &handle), RADICLE_STATUS_INVALID_ARGUMENT);
+}
+
 TEST_F(Ba2ReaderTest, CApiReadsArchivesAndAssets) {
   const auto low = write_general("Low.ba2", {general("Meshes\\Shared.nif", "low")});
   const auto high = write_general("High.ba2", {general("Meshes\\Shared.nif", "high")});

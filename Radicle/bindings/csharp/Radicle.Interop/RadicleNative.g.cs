@@ -1697,7 +1697,7 @@ public enum OfficialTable : int
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 41u;
+    public const uint CompiledAbiVersion = 42u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -1866,6 +1866,9 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_assets_open")]
     public static extern Status AssetsOpen([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? data_dir, IntPtr* archive_paths, nuint archive_count, IntPtr* out_assets);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_assets_open_roots")]
+    public static extern Status AssetsOpenRoots(IntPtr* root_paths, nuint root_count, IntPtr* archive_paths, nuint archive_count, IntPtr* out_assets);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_assets_destroy")]
     public static extern void AssetsDestroy(IntPtr assets);

@@ -180,6 +180,27 @@ radicle_status radicle_assets_open(const char* data_dir,
   });
 }
 
+radicle_status radicle_assets_open_roots(const char* const* root_paths,
+                                         size_t root_count,
+                                         const char* const* archive_paths,
+                                         size_t archive_count,
+                                         radicle_assets** out_assets) {
+  clear_error();
+  if (!valid_list(root_paths, root_count) || !valid_list(archive_paths, archive_count) || out_assets == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "non-NULL root paths, archive paths and out_assets are required");
+  }
+  *out_assets = nullptr;
+  return guarded("unknown exception while opening assets", [&] {
+    std::vector<std::filesystem::path> roots;
+    for (size_t i = 0; i < root_count; ++i) roots.push_back(utf8_path(root_paths[i]));
+    std::vector<std::filesystem::path> archives;
+    for (size_t i = 0; i < archive_count; ++i) archives.push_back(utf8_path(archive_paths[i]));
+    auto assets = std::make_unique<radicle_assets>(radicle_assets{fo4::archive::AssetResolver::open_roots(roots, archives)});
+    *out_assets = assets.release();
+    return RADICLE_STATUS_OK;
+  });
+}
+
 void radicle_assets_destroy(radicle_assets* assets) {
   clear_error();
   delete assets;

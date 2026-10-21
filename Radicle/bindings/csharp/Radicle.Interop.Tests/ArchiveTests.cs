@@ -53,6 +53,22 @@ public class ArchiveTests
         Assert.Equal(StringSource.Il, StringTables.SourceFor("INFO", "NAM1"));
     }
     [Fact]
+    public void OpenRootsLayersLooseRootsHighToLowOverArchives()
+    {
+        using var temp = new TempDirectory();
+        var archive = temp.Write("Data/Base - Main.ba2", Ba2Writer.General(("meshes\\a.nif", Encoding.ASCII.GetBytes("arc"))));
+        temp.Write("ModHigh/Meshes/A.nif", Encoding.ASCII.GetBytes("high"));
+        temp.Write("ModLow/Meshes/A.nif", Encoding.ASCII.GetBytes("low"));
+        var roots = new[] { System.IO.Path.Combine(temp.Path, "ModHigh"), System.IO.Path.Combine(temp.Path, "ModLow") };
+
+        using var assets = AssetResolver.OpenRoots(roots, new[] { archive });
+        var all = assets.List("meshes", ".nif", includeShadowed: true);
+        Assert.Equal(new[] { false, true, true }, all.Select(a => a.Shadowed));
+        Assert.Equal(new[] { AssetOrigin.Loose, AssetOrigin.Loose, AssetOrigin.Archive }, all.Select(a => a.Location.Origin));
+        Assert.Equal(4UL, all[0].Size);
+    }
+
+    [Fact]
     public void ListsWinningAssetsWithOriginSizeAndShadowedCopies()
     {
         using var temp = new TempDirectory();

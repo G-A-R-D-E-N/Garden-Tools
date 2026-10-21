@@ -120,6 +120,18 @@ public sealed unsafe class AssetResolver : IDisposable
         return new AssetResolver(handle);
     }
 
+    public static AssetResolver OpenRoots(IEnumerable<string> roots, IEnumerable<string> archives)
+    {
+        using var s = new NativeStrings();
+        var rootPaths = roots.Select(s.Add).ToArray();
+        var archivePaths = archives.Select(s.Add).ToArray();
+        IntPtr handle;
+        fixed (IntPtr* r = rootPaths)
+        fixed (IntPtr* p = archivePaths)
+            Call.Check(RadicleNative.AssetsOpenRoots(r, (nuint)rootPaths.Length, p, (nuint)archivePaths.Length, &handle));
+        return new AssetResolver(handle);
+    }
+
     public int ArchiveCount
     {
         get
