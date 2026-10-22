@@ -67,7 +67,7 @@ public sealed class SubgraphIndex
             if (lower.StartsWith("meshes/animtextdata/animationfiledata/", StringComparison.Ordinal) &&
                 lower.EndsWith(".txt", StringComparison.Ordinal))
             {
-                var sub = ParseManifestFile(Path.GetFileName(name), ReadEntry(archive, entry), archive, entry.Name);
+                var sub = ParseManifestFile(Path.GetFileName(name), ReadEntry(data, archive, entry), archive, entry.Name);
                 if (sub != null) byId[sub.Id] = sub;
             }
             else if (lower.StartsWith("meshes/animtextdata/animationoffsets/", StringComparison.Ordinal) &&
@@ -75,7 +75,7 @@ public sealed class SubgraphIndex
             {
                 string stem = Path.GetFileNameWithoutExtension(name);
                 if (!ulong.TryParse(stem, out ulong id)) continue;
-                byte[] bytes = ReadEntry(archive, entry);
+                byte[] bytes = ReadEntry(data, archive, entry);
                 offsets[id] = new OffsetData(id, Path.GetFileName(archive), entry.Name, bytes.Length,
                                              FirstPathHint(bytes));
             }
@@ -88,26 +88,26 @@ public sealed class SubgraphIndex
 
         void ScanLoose(string root)
         {
-            string looseRoot = Path.Combine(root, "Meshes", "AnimTextData");
-            if (!Directory.Exists(looseRoot)) return;
-            string looseFileData = Path.Combine(looseRoot, "AnimationFileData");
-            if (Directory.Exists(looseFileData))
-            foreach (string file in Directory.EnumerateFiles(
-                         looseFileData, "*.txt",
-                         SearchOption.TopDirectoryOnly))
+            string? looseRoot = GameData.CaseInsensitivePath(Path.Combine(root, "Meshes", "AnimTextData"));
+            if (looseRoot == null || !Directory.Exists(looseRoot)) return;
+            string? looseFileData = GameData.CaseInsensitivePath(Path.Combine(looseRoot, "AnimationFileData"));
+            if (looseFileData != null && Directory.Exists(looseFileData))
+            foreach (string file in LooseManifestFiles(looseFileData))
             {
                 var sub = ParseManifestFile(Path.GetFileName(file), ReadText(file), "loose", file);
                 if (sub != null) byId[sub.Id] = sub;
             }
-            string looseOffsets = Path.Combine(looseRoot, "AnimationOffsets");
-            if (Directory.Exists(looseOffsets))
-            foreach (string file in Directory.EnumerateFiles(
-                         looseOffsets, "*.txt",
-                         SearchOption.TopDirectoryOnly))
+            string? looseOffsets = GameData.CaseInsensitivePath(Path.Combine(looseRoot, "AnimationOffsets"));
+            if (looseOffsets != null && Directory.Exists(looseOffsets))
+            foreach (string file in LooseManifestFiles(looseOffsets))
             {
                 string stem = Path.GetFileNameWithoutExtension(file);
-                if (ulong.TryParse(stem, out ulong id))
+                if (!ulong.TryParse(stem, out ulong id)) continue;
+                try
+                {
                     offsets[id] = new OffsetData(id, "loose", file, (int)new FileInfo(file).Length, FirstPathHint(ReadText(file)));
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
             }
         }
     }
@@ -155,18 +155,14 @@ public sealed class SubgraphIndex
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return Array.Empty<byte>(); }
     }
 
-    private static byte[] ReadEntry(string archivePath, Ba2.Entry entry)
+    private static List<string> LooseManifestFiles(string folder)
     {
-        // Ba2 owns a file handle. Leaving it to the finaliser costs nothing on Linux, where an
-        // open file can still be deleted, but on Windows it keeps the archive locked for as
-        // long as the reader survives -- long enough to fail an unrelated directory delete.
-        try
-        {
-            using var archive = Ba2.Open(archivePath);
-            return archive.Read(entry);
-        }
-        catch (Exception e) when (GameData.IsSkippableArchiveFailure(e)) { return Array.Empty<byte>(); }
+        try { return Directory.EnumerateFiles(folder, "*.txt", SearchOption.TopDirectoryOnly).ToList(); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return new List<string>(); }
     }
+
+    private static byte[] ReadEntry(GameData data, string archivePath, Ba2.Entry entry) =>
+        data.TryReadEntry(archivePath, entry) ?? Array.Empty<byte>();
 
     public static CoverageDiff CompareCoverage(GameData vanilla, GameData modded)
     {

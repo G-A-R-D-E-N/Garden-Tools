@@ -1,8 +1,12 @@
 #include <fo4ide/graph/GraphCompiler.hpp>
 
 #include <cctype>
+#include <chrono>
+#include <filesystem>
 #include <fstream>
+#include <mutex>
 #include <random>
+#include <system_error>
 
 #include <fo4ide/papyrus/Parser.hpp>
 
@@ -41,6 +45,57 @@ void writeTextFile(const std::filesystem::path& path, const std::string& text) {
     stream.write(text.data(), static_cast<std::streamsize>(text.size()));
 }
 
+// One scratch folder per process; see docs/code-notes/GARDEN-TOOLS.md (GraphCompiler scratch folders).
+class ScratchBase {
+public:
+    ~ScratchBase() { clear(); }
+
+    std::filesystem::path root() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (root_.empty()) {
+            const auto parent = parentPath();
+            sweepOld(parent);
+            root_ = parent / ("p-" + randomHex());
+        }
+        return root_;
+    }
+
+    void clear() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (root_.empty()) return;
+        std::error_code ignored;
+        std::filesystem::remove_all(root_, ignored);
+        root_.clear();
+    }
+
+    static std::filesystem::path parentPath() {
+        return std::filesystem::temp_directory_path() / "fo4re-graph-scratch";
+    }
+
+private:
+    static void sweepOld(const std::filesystem::path& parent) {
+        std::error_code error;
+        const auto cutoff = std::filesystem::file_time_type::clock::now() - std::chrono::hours(24);
+        std::size_t examined = 0;
+        for (std::filesystem::directory_iterator it(parent, error), end;
+             !error && it != end && examined < 64; it.increment(error)) {
+            ++examined;
+            std::error_code entryError;
+            if (std::filesystem::last_write_time(it->path(), entryError) < cutoff && !entryError) {
+                std::filesystem::remove_all(it->path(), entryError);
+            }
+        }
+    }
+
+    std::mutex mutex_;
+    std::filesystem::path root_;
+};
+
+ScratchBase& scratchBase() {
+    static ScratchBase base;
+    return base;
+}
+
 bool hasError(const std::vector<GraphDiagnostic>& diagnostics) {
     for (const auto& diagnostic : diagnostics) {
         if (diagnostic.severity == GraphSeverity::Error) return true;
@@ -49,6 +104,10 @@ bool hasError(const std::vector<GraphDiagnostic>& diagnostics) {
 }
 
 }  // namespace
+
+std::filesystem::path GraphCompiler::scratchRoot() { return scratchBase().root(); }
+
+void GraphCompiler::clearScratch() { scratchBase().clear(); }
 
 GraphCompiler::GraphCompiler(papyrus::ScriptIndex& index, NodePalette* palette)
     : index_(index) {
@@ -180,13 +239,13 @@ void GraphCompiler::publishForSelfReference(const std::string& scriptName,
         const auto known = scratchRoots_.find(key);
         if (known != scratchRoots_.end()) {
             const auto existing = known->second / fileName;
+            std::filesystem::create_directories(known->second);
             writeTextFile(existing, source);
             index_.invalidate(existing);
             return;
         }
 
-        const auto root = std::filesystem::temp_directory_path() / "fo4re-graph-scratch" /
-                          randomHex();
+        const auto root = scratchBase().root() / randomHex();
         std::filesystem::create_directories(root);
 
         const auto path = root / fileName;

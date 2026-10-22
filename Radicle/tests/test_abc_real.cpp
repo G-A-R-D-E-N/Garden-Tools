@@ -47,6 +47,7 @@ struct AbcStats {
   std::size_t blocks{0};
   std::size_t parsed{0};
   std::size_t trailing_bytes_blocks{0};
+  std::size_t serialize_mismatches{0};
   std::size_t bodies{0};
   std::size_t instructions{0};
   std::size_t classes{0};
@@ -77,7 +78,18 @@ std::string histogram_text(const std::map<std::string, std::size_t>& histogram) 
   return text;
 }
 
-void check_block(const std::string& name, std::span<const std::byte> payload, AbcStats& stats) {
+std::size_t first_difference(std::span<const std::byte> expected,
+                             const std::vector<std::uint8_t>& actual) {
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    if (i >= actual.size() || static_cast<std::uint8_t>(expected[i]) != actual[i]) {
+      return i;
+    }
+  }
+  return expected.size();
+}
+
+void check_block(const std::string& name, std::span<const std::byte> payload, AbcStats& stats,
+                 std::vector<std::uint8_t>& rebuilt) {
   ++stats.blocks;
   fo4::abc::AbcFile file;
   const auto parse_status = fo4::abc::AbcFile::parse(
@@ -90,6 +102,17 @@ void check_block(const std::string& name, std::span<const std::byte> payload, Ab
     return;
   }
   ++stats.parsed;
+
+  const auto serialize_status = file.serialize(rebuilt);
+  const std::size_t difference = first_difference(payload, rebuilt);
+  const bool identical = serialize_status == fo4::abc::AbcStatus::Ok &&
+                         rebuilt.size() == payload.size() && difference == payload.size();
+  if (!identical) {
+    ++stats.serialize_mismatches;
+  }
+  EXPECT_TRUE(identical) << name << ": serialize " << fo4::abc::status_name(serialize_status)
+                         << ", first differing offset " << difference << " of "
+                         << payload.size();
 
   for (const fo4::abc::AbcMethodBody& body : file.bodies) {
     ++stats.bodies;
@@ -142,10 +165,29 @@ void check_movie(const std::string& name, std::span<const std::byte> bytes, AbcS
     return;
   }
   ++stats.movies;
-  for (const fo4::swf::SwfAbcBlock& block : fo4::swf::abc_blocks(result.file)) {
+  const auto blocks = fo4::swf::abc_blocks(result.file);
+  fo4::swf::SwfFile rebuilt = result.file;
+  for (const fo4::swf::SwfAbcBlock& block : blocks) {
     const std::string label = name + ":tag" + std::to_string(block.tag_index) +
                               (block.name.empty() ? std::string{} : ":" + block.name);
-    check_block(label, block.payload, stats);
+    std::vector<std::uint8_t> serialized;
+    check_block(label, block.payload, stats, serialized);
+    if (serialized.empty()) {
+      continue;
+    }
+    const fo4::swf::SwfTag& tag = result.file.tags[block.tag_index];
+    const auto prefix_end =
+        tag.payload.begin() + static_cast<std::ptrdiff_t>(tag.abc->payload_offset);
+    std::vector<std::byte> payload(tag.payload.begin(), prefix_end);
+    for (const std::uint8_t byte : serialized) {
+      payload.push_back(static_cast<std::byte>(byte));
+    }
+    EXPECT_TRUE(fo4::swf::replace_tag_payload(rebuilt, block.tag_index, payload)) << label;
+  }
+  if (!blocks.empty()) {
+    EXPECT_TRUE(fo4::swf::write_swf(rebuilt, fo4::swf::SwfCompression::none) ==
+                fo4::swf::write_swf(result.file, fo4::swf::SwfCompression::none))
+        << name;
   }
 }
 
@@ -193,6 +235,7 @@ TEST(AbcCorpusReal, DecodesEveryShippedInterfaceAbcBlock) {
   EXPECT_EQ(stats.total_movies, stats.movies + stats.lzma + stats.unreadable);
   EXPECT_EQ(stats.blocks, stats.parsed + stats.unsupported_total());
   EXPECT_EQ(stats.trailing_bytes_blocks, 0u);
+  EXPECT_EQ(stats.serialize_mismatches, 0u);
   EXPECT_EQ(stats.unsupported_total(), 0u)
       << "unsupported_status_histogram: " << histogram_text(stats.unsupported);
   EXPECT_EQ(stats.lzma, 0u);

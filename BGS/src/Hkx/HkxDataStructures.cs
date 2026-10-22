@@ -97,6 +97,13 @@ public class HkxAnimationData
     public bool HasUnsupportedAnimation =>
         AnimationClass.Length > 0 && Array.IndexOf(DecodedAnimationClasses, AnimationClass) < 0;
 
+    public string UnsupportedReason => AnimationClass switch
+    {
+        "hkaQuantizedAnimation" => "Unsupported compression (quantized)",
+        "hkaPredictiveCompressedAnimation" => "Unsupported compression (predictive)",
+        _ => "unsupported animation class",
+    };
+
     public HkxSkeleton? Skeleton { get; set; }
 
     public int FrameAt(float fraction)
