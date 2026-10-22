@@ -157,7 +157,7 @@ public sealed class SubgraphIndex
 
     private static List<string> LooseManifestFiles(string folder)
     {
-        try { return Directory.EnumerateFiles(folder, "*.txt", new EnumerationOptions { IgnoreInaccessible = true }).ToList(); }
+        try { return Directory.EnumerateFiles(folder, "*.txt", SearchOption.TopDirectoryOnly).ToList(); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return new List<string>(); }
     }
 

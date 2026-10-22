@@ -416,8 +416,9 @@ public sealed class Ba2RadicleTests
         foreach (string arg in args) start.ArgumentList.Add(arg);
         using var process = Process.Start(start)!;
         process.StandardOutput.ReadToEnd();
-        process.StandardError.ReadToEnd();
+        string error = process.StandardError.ReadToEnd();
         process.WaitForExit();
+        if (process.ExitCode != 0) throw new IOException($"icacls failed: {error}");
     }
 
     private static void WriteGeneralBa2(string path, string entryName, byte[] payload)
