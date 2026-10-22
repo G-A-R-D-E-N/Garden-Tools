@@ -9,7 +9,7 @@ namespace OpenCommonwealth.Services.Archive;
 /// <summary>
 /// The game's data tree as the engine sees it: a folder holding loose files plus every .ba2
 /// archive under it, consulted in load order. Loose files win over archives, and within the
-/// archives the ordering is ArchivePaths order and the first match wins; for existence checks any hit is enough.
+/// archives the ordering rule is that the later-loaded archive wins; for existence checks any hit is enough.
 ///
 /// A project chain declares animation paths relative to its root, which is normally a folder
 /// somewhere inside the data tree (for Fallout 4's vanilla character: Data\Meshes\Actors\
