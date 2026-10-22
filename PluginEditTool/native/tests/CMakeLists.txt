@@ -69,7 +69,7 @@ target_compile_definitions(
 add_dependencies(fo4ide_test_core fo4ide_fake_process)
 fo4ide_enable_warnings(fo4ide_test_core)
 fo4ide_enable_sanitizers(fo4ide_test_core)
-catch_discover_tests(fo4ide_test_core PROPERTIES TIMEOUT 10)
+catch_discover_tests(fo4ide_test_core PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})
 
 add_executable(
     fo4ide_test_graph
@@ -85,7 +85,7 @@ add_executable(
 target_link_libraries(fo4ide_test_graph PRIVATE fo4ide_graph Catch2::Catch2WithMain)
 fo4ide_enable_warnings(fo4ide_test_graph)
 fo4ide_enable_sanitizers(fo4ide_test_graph)
-catch_discover_tests(fo4ide_test_graph PROPERTIES TIMEOUT 10)
+catch_discover_tests(fo4ide_test_graph PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})
 
 add_executable(
     fo4ide_test_papyrus
@@ -109,7 +109,7 @@ add_executable(
 target_link_libraries(fo4ide_test_papyrus PRIVATE fo4ide_papyrus fo4ide_f4se Catch2::Catch2WithMain)
 fo4ide_enable_warnings(fo4ide_test_papyrus)
 fo4ide_enable_sanitizers(fo4ide_test_papyrus)
-catch_discover_tests(fo4ide_test_papyrus TEST_SPEC "~F4SE*" PROPERTIES TIMEOUT 10)
+catch_discover_tests(fo4ide_test_papyrus TEST_SPEC "~F4SE*" PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})
 catch_discover_tests(fo4ide_test_papyrus TEST_SPEC "F4SE*" PROPERTIES TIMEOUT 120)
 
 add_executable(
