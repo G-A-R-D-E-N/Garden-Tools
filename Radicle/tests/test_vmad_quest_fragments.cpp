@@ -1,10 +1,14 @@
+#include "fo4/c_api_vmad.h"
 #include "fo4/plugin/vmad_writer.hpp"
 #include "vmad_writer_fixture.hpp"
 
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <span>
 #include <string>
 #include <string_view>
@@ -82,6 +86,29 @@ void expect_fragment(const QuestVmadFragment& actual, std::uint16_t stage, std::
   EXPECT_EQ(actual.script, "QF_Test");
   EXPECT_EQ(actual.function, function);
 }
+
+struct CQuestPlugin {
+  std::filesystem::path root;
+  radicle_plugin* handle{nullptr};
+
+  explicit CQuestPlugin(const std::vector<std::byte>& bytes)
+      : root(std::filesystem::temp_directory_path() /
+             ("radicle_quest_fragments_" +
+              std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()))) {
+    std::filesystem::create_directories(root);
+    const auto input = root / "Vmad.esp";
+    std::ofstream stream(input, std::ios::binary);
+    stream.write(reinterpret_cast<const char*>(bytes.data()),
+                 static_cast<std::streamsize>(bytes.size()));
+    stream.close();
+    EXPECT_EQ(radicle_plugin_read_file(input.string().c_str(), &handle), RADICLE_STATUS_OK);
+  }
+  ~CQuestPlugin() {
+    radicle_plugin_destroy(handle);
+    std::error_code error;
+    std::filesystem::remove_all(root, error);
+  }
+};
 
 }  // namespace
 
@@ -515,4 +542,53 @@ TEST(VmadQuestFragments, DuplicateStageIndexIsRefused) {
     EXPECT_NE(std::string(error.what()).find("stage index twice"), std::string::npos);
   }
   EXPECT_EQ(write_plugin(plugin), before_bytes);
+}
+
+TEST(VmadQuestFragments, CApiPairFormEditsOneOfTwoBindingsAndRefusesBadInput) {
+  CQuestPlugin plugin(
+      fixture::plugin_bytes(quest_bytes(fragment_tail(FragmentTail::duplicate_stage)), "QUST"));
+  ASSERT_NE(plugin.handle, nullptr);
+  const radicle_form_key key{"Vmad.esp", 0x800};
+  EXPECT_EQ(radicle_plugin_set_quest_vmad_fragment(nullptr, key, 10, 5, "QF_Other", "Fragment_Ten"),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_set_quest_vmad_fragment(plugin.handle, key, 10, 5, nullptr, "Fragment_Ten"),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_set_quest_vmad_fragment(plugin.handle, key, 10, 5, "QF_Other", "\xFF"),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_set_quest_vmad_fragment(plugin.handle, key, 10, 7, "QF_Other", "Fragment_Ten"),
+            RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(radicle_plugin_remove_quest_vmad_fragment(plugin.handle, key, 10, 7),
+            RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(radicle_plugin_set_quest_vmad_fragment(plugin.handle, {"Vmad.esp", 0x801}, 10, 5,
+                                                   "QF_Other", "Fragment_Ten"),
+            RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(radicle_plugin_set_quest_vmad_fragment(plugin.handle, key, 10, 0, "QF_Test", "Fragment_10"),
+            RADICLE_STATUS_OK);
+  EXPECT_EQ(radicle_plugin_set_quest_vmad_fragment(plugin.handle, key, 10, 5, "QF_Other",
+                                                   "Fragment_Stage_0010"),
+            RADICLE_STATUS_OK);
+  EXPECT_EQ(radicle_plugin_remove_quest_vmad_fragment(plugin.handle, key, 10, 5), RADICLE_STATUS_OK);
+  const auto output = plugin.root / "Saved.esp";
+  ASSERT_EQ(radicle_plugin_write_file(plugin.handle, output.string().c_str()), RADICLE_STATUS_OK);
+  const auto remaining = extras_of(fixture::subrecord(fo4::read_plugin_file(output)).data);
+  ASSERT_EQ(remaining.fragments.size(), 1u);
+  expect_fragment(remaining.fragments[0], 10, 0, 0, 0, "Fragment_10");
+}
+
+TEST(VmadQuestFragments, CApiPairFormRefusesDuplicatePairAndLeavesBytesUnchanged) {
+  const auto bytes =
+      fixture::plugin_bytes(quest_bytes(fragment_tail(FragmentTail::duplicate_pair)), "QUST");
+  CQuestPlugin plugin(bytes);
+  ASSERT_NE(plugin.handle, nullptr);
+  const radicle_form_key key{"Vmad.esp", 0x800};
+  EXPECT_EQ(radicle_plugin_set_quest_vmad_fragment(plugin.handle, key, 10, 0, "QF_Other", "Fragment_Ten"),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_NE(std::string(radicle_last_error()).find("stage index twice"), std::string::npos);
+  EXPECT_EQ(radicle_plugin_remove_quest_vmad_fragment(plugin.handle, key, 10, 0),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_NE(std::string(radicle_last_error()).find("stage index twice"), std::string::npos);
+  const auto output = plugin.root / "Refused.esp";
+  ASSERT_EQ(radicle_plugin_write_file(plugin.handle, output.string().c_str()), RADICLE_STATUS_OK);
+  EXPECT_EQ(fixture::subrecord(fo4::read_plugin_file(output)).data,
+            fixture::subrecord(read_plugin(bytes, "Vmad.esp")).data);
 }
