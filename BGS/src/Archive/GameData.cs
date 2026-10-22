@@ -581,6 +581,7 @@ public sealed partial class GameData : IDisposable
                 if (placed.Add(archive)) ordered.Add(archive);
             }
         }
+        ordered.Reverse();
         foreach (string archive in archives)
             if (placed.Add(archive)) ordered.Add(archive);
 

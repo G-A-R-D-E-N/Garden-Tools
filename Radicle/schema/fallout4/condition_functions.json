@@ -1,0 +1,3320 @@
+{
+  "version": 1,
+  "parameter_types": [
+    {
+      "name": "none",
+      "kind": "none"
+    },
+    {
+      "name": "float",
+      "kind": "float"
+    },
+    {
+      "name": "integer",
+      "kind": "integer"
+    },
+    {
+      "name": "string",
+      "kind": "string"
+    },
+    {
+      "name": "alias",
+      "kind": "other"
+    },
+    {
+      "name": "event",
+      "kind": "other"
+    },
+    {
+      "name": "packdata",
+      "kind": "other"
+    },
+    {
+      "name": "quest_stage",
+      "kind": "other"
+    },
+    {
+      "name": "alignment",
+      "kind": "enum"
+    },
+    {
+      "name": "axis",
+      "kind": "enum"
+    },
+    {
+      "name": "casting_source",
+      "kind": "enum"
+    },
+    {
+      "name": "crime_type",
+      "kind": "enum"
+    },
+    {
+      "name": "critical_stage",
+      "kind": "enum"
+    },
+    {
+      "name": "form_type",
+      "kind": "enum"
+    },
+    {
+      "name": "misc_stat",
+      "kind": "enum"
+    },
+    {
+      "name": "sex",
+      "kind": "enum"
+    },
+    {
+      "name": "ward_state",
+      "kind": "enum"
+    },
+    {
+      "name": "actor",
+      "kind": "form_link",
+      "targets": [
+        "ACHR",
+        "PLYR",
+        "REFR",
+        "TRGT"
+      ]
+    },
+    {
+      "name": "actor_base",
+      "kind": "form_link",
+      "targets": [
+        "NPC_"
+      ]
+    },
+    {
+      "name": "actor_value",
+      "kind": "form_link",
+      "targets": [
+        "AVIF"
+      ]
+    },
+    {
+      "name": "association_type",
+      "kind": "form_link",
+      "targets": [
+        "ASTP"
+      ]
+    },
+    {
+      "name": "base_effect",
+      "kind": "form_link",
+      "targets": [
+        "MGEF"
+      ]
+    },
+    {
+      "name": "base_object",
+      "kind": "form_link",
+      "targets": [
+        "NULL",
+        "ACTI",
+        "ADDN",
+        "ALCH",
+        "AMMO",
+        "ARMO",
+        "ARTO",
+        "ASPC",
+        "BNDS",
+        "BOOK",
+        "CMPO",
+        "COBJ",
+        "CONT",
+        "DEBR",
+        "DOOR",
+        "EXPL",
+        "FLST",
+        "FLOR",
+        "FURN",
+        "HAZD",
+        "IDLM",
+        "INGR",
+        "KEYM",
+        "LIGH",
+        "LVLI",
+        "LVLN",
+        "LVSP",
+        "MISC",
+        "MSTT",
+        "NOTE",
+        "NPC_",
+        "OMOD",
+        "PROJ",
+        "SCOL",
+        "SCRL",
+        "SOUN",
+        "SPEL",
+        "STAT",
+        "TACT",
+        "TERM",
+        "TREE",
+        "TXST",
+        "WATR",
+        "WEAP",
+        "ENCH"
+      ]
+    },
+    {
+      "name": "cell",
+      "kind": "form_link",
+      "targets": [
+        "CELL"
+      ]
+    },
+    {
+      "name": "class",
+      "kind": "form_link",
+      "targets": [
+        "CLAS"
+      ]
+    },
+    {
+      "name": "damage_type",
+      "kind": "form_link",
+      "targets": [
+        "DMGT",
+        "FLST"
+      ]
+    },
+    {
+      "name": "effect_item",
+      "kind": "form_link",
+      "targets": [
+        "ALCH",
+        "ENCH",
+        "INGR",
+        "SCRL",
+        "SPEL"
+      ]
+    },
+    {
+      "name": "encounter_zone",
+      "kind": "form_link",
+      "targets": [
+        "ECZN"
+      ]
+    },
+    {
+      "name": "equip_type",
+      "kind": "form_link",
+      "targets": [
+        "EQUP"
+      ]
+    },
+    {
+      "name": "event_data",
+      "kind": "form_link",
+      "targets": [
+        "FLST",
+        "KYWD",
+        "LCTN"
+      ]
+    },
+    {
+      "name": "faction",
+      "kind": "form_link",
+      "targets": [
+        "FACT"
+      ]
+    },
+    {
+      "name": "faction_null",
+      "kind": "form_link",
+      "targets": [
+        "FACT",
+        "NULL"
+      ]
+    },
+    {
+      "name": "form_list",
+      "kind": "form_link",
+      "targets": [
+        "FLST"
+      ]
+    },
+    {
+      "name": "furniture",
+      "kind": "form_link",
+      "targets": [
+        "FLST",
+        "FURN"
+      ]
+    },
+    {
+      "name": "global",
+      "kind": "form_link",
+      "targets": [
+        "GLOB"
+      ]
+    },
+    {
+      "name": "idle_form",
+      "kind": "form_link",
+      "targets": [
+        "IDLE"
+      ]
+    },
+    {
+      "name": "keyword",
+      "kind": "form_link",
+      "targets": [
+        "FLST",
+        "KYWD",
+        "NULL"
+      ]
+    },
+    {
+      "name": "location",
+      "kind": "form_link",
+      "targets": [
+        "LCTN"
+      ]
+    },
+    {
+      "name": "location_ref_type",
+      "kind": "form_link",
+      "targets": [
+        "LCRT"
+      ]
+    },
+    {
+      "name": "owner",
+      "kind": "form_link",
+      "targets": [
+        "FACT",
+        "NPC_",
+        "NULL"
+      ]
+    },
+    {
+      "name": "package",
+      "kind": "form_link",
+      "targets": [
+        "PACK"
+      ]
+    },
+    {
+      "name": "perk",
+      "kind": "form_link",
+      "targets": [
+        "PERK"
+      ]
+    },
+    {
+      "name": "quest",
+      "kind": "form_link",
+      "targets": [
+        "QUST"
+      ]
+    },
+    {
+      "name": "race",
+      "kind": "form_link",
+      "targets": [
+        "RACE"
+      ]
+    },
+    {
+      "name": "reference",
+      "kind": "form_link",
+      "targets": [
+        "ACHR",
+        "PARW",
+        "PBAR",
+        "PBEA",
+        "PCON",
+        "PFLA",
+        "PGRE",
+        "PHZD",
+        "PLYR",
+        "PMIS",
+        "REFR",
+        "TRGT"
+      ]
+    },
+    {
+      "name": "region",
+      "kind": "form_link",
+      "targets": [
+        "REGN"
+      ]
+    },
+    {
+      "name": "scene",
+      "kind": "form_link",
+      "targets": [
+        "SCEN"
+      ]
+    },
+    {
+      "name": "voice_type",
+      "kind": "form_link",
+      "targets": [
+        "VTYP",
+        "FLST"
+      ]
+    },
+    {
+      "name": "weather",
+      "kind": "form_link",
+      "targets": [
+        "WTHR"
+      ]
+    },
+    {
+      "name": "worldspace",
+      "kind": "form_link",
+      "targets": [
+        "WRLD",
+        "FLST"
+      ]
+    },
+    {
+      "name": "event_data_code",
+      "kind": "other"
+    }
+  ],
+  "functions": [
+    {
+      "index": 0,
+      "name": "GetWantBlocking",
+      "parameters": []
+    },
+    {
+      "index": 1,
+      "name": "GetDistance",
+      "parameters": [
+        "reference"
+      ]
+    },
+    {
+      "index": 5,
+      "name": "GetLocked",
+      "parameters": []
+    },
+    {
+      "index": 6,
+      "name": "GetPos",
+      "parameters": [
+        "axis"
+      ]
+    },
+    {
+      "index": 8,
+      "name": "GetAngle",
+      "parameters": [
+        "axis"
+      ]
+    },
+    {
+      "index": 10,
+      "name": "GetStartingPos",
+      "parameters": [
+        "axis"
+      ]
+    },
+    {
+      "index": 11,
+      "name": "GetStartingAngle",
+      "parameters": [
+        "axis"
+      ]
+    },
+    {
+      "index": 12,
+      "name": "GetSecondsPassed",
+      "parameters": []
+    },
+    {
+      "index": 14,
+      "name": "GetValue",
+      "parameters": [
+        "actor_value"
+      ]
+    },
+    {
+      "index": 18,
+      "name": "GetCurrentTime",
+      "parameters": []
+    },
+    {
+      "index": 24,
+      "name": "GetScale",
+      "parameters": []
+    },
+    {
+      "index": 25,
+      "name": "IsMoving",
+      "parameters": []
+    },
+    {
+      "index": 26,
+      "name": "IsTurning",
+      "parameters": []
+    },
+    {
+      "index": 27,
+      "name": "GetLineOfSight",
+      "parameters": [
+        "reference"
+      ]
+    },
+    {
+      "index": 32,
+      "name": "GetInSameCell",
+      "parameters": [
+        "reference"
+      ]
+    },
+    {
+      "index": 35,
+      "name": "GetDisabled",
+      "parameters": []
+    },
+    {
+      "index": 36,
+      "name": "MenuMode",
+      "parameters": [
+        "integer"
+      ]
+    },
+    {
+      "index": 39,
+      "name": "GetDisease",
+      "parameters": []
+    },
+    {
+      "index": 41,
+      "name": "GetClothingValue",
+      "parameters": []
+    },
+    {
+      "index": 42,
+      "name": "SameFaction",
+      "parameters": [
+        "actor"
+      ]
+    },
+    {
+      "index": 43,
+      "name": "SameRace",
+      "parameters": [
+        "actor"
+      ]
+    },
+    {
+      "index": 44,
+      "name": "SameSex",
+      "parameters": [
+        "actor"
+      ]
+    },
+    {
+      "index": 45,
+      "name": "GetDetected",
+      "parameters": [
+        "actor"
+      ]
+    },
+    {
+      "index": 46,
+      "name": "GetDead",
+      "parameters": []
+    },
+    {
+      "index": 47,
+      "name": "GetItemCount",
+      "parameters": [
+        "base_object"
+      ]
+    },
+    {
+      "index": 48,
+      "name": "GetGold",
+      "parameters": []
+    },
+    {
+      "index": 49,
+      "name": "GetSleeping",
+      "parameters": []
+    },
+    {
+      "index": 50,
+      "name": "GetTalkedToPC",
+      "parameters": []
+    },
+    {
+      "index": 56,
+      "name": "GetQuestRunning",
+      "parameters": [
+        "quest"
+      ]
+    },
+    {
+      "index": 58,
+      "name": "GetStage",
+      "parameters": [
+        "quest"
+      ]
+    },
+    {
+      "index": 59,
+      "name": "GetStageDone",
+      "parameters": [
+        "quest",
+        "quest_stage"
+      ]
+    },
+    {
+      "index": 60,
+      "name": "GetFactionRankDifference",
+      "parameters": [
+        "faction",
+        "actor"
+      ]
+    },
+    {
+      "index": 61,
+      "name": "GetAlarmed",
+      "parameters": []
+    },
+    {
+      "index": 62,
+      "name": "IsRaining",
+      "parameters": []
+    },
+    {
+      "index": 63,
+      "name": "GetAttacked",
+      "parameters": []
+    },
+    {
+      "index": 64,
+      "name": "GetIsCreature",
+      "parameters": []
+    },
+    {
+      "index": 65,
+      "name": "GetLockLevel",
+      "parameters": []
+    },
+    {
+      "index": 66,
+      "name": "GetShouldAttack",
+      "parameters": [
+        "actor"
+      ]
+    },
+    {
+      "index": 67,
+      "name": "GetInCell",
+      "parameters": [
+        "cell"
+      ]
+    },
+    {
+      "index": 68,
+      "name": "GetIsClass",
+      "parameters": [
+        "class"
+      ]
+    },
+    {
+      "index": 69,
+      "name": "GetIsRace",
+      "parameters": [
+        "race"
+      ]
+    },
+    {
+      "index": 70,
+      "name": "GetIsSex",
+      "parameters": [
+        "sex"
+      ]
+    },
+    {
+      "index": 71,
+      "name": "GetInFaction",
+      "parameters": [
+        "faction"
+      ]
+    },
+    {
+      "index": 72,
+      "name": "GetIsID",
+      "parameters": [
+        "base_object"
+      ]
+    },
+    {
+      "index": 73,
+      "name": "GetFactionRank",
+      "parameters": [
+        "faction"
+      ]
+    },
+    {
+      "index": 74,
+      "name": "GetGlobalValue",
+      "parameters": [
+        "global"
+      ]
+    },
+    {
+      "index": 75,
+      "name": "IsSnowing",
+      "parameters": []
+    },
+    {
+      "index": 77,
+      "name": "GetRandomPercent",
+      "parameters": []
+    },
+    {
+      "index": 79,
+      "name": "WouldBeStealing",
+      "parameters": [
+        "reference"
+      ]
+    },
+    {
+      "index": 80,
+      "name": "GetLevel",
+      "parameters": []
+    },
+    {
+      "index": 81,
+      "name": "IsRotating",
+      "parameters": []
+    },
+    {
+      "index": 84,
+      "name": "GetDeadCount",
+      "parameters": [
+        "actor_base"
+      ]
+    },
+    {
+      "index": 91,
+      "name": "GetIsAlerted",
+      "parameters": []
+    },
+    {
+      "index": 98,
+      "name": "GetPlayerControlsDisabled",
+      "parameters": [
+        "integer",
+        "integer",
+        "integer"
+      ]
+    },
+    {
+      "index": 99,
+      "name": "GetHeadingAngle",
+      "parameters": [
+        "reference"
+      ]
+    },
+    {
+      "index": 101,
+      "name": "IsWeaponMagicOut",
+      "parameters": []
+    },
+    {
+      "index": 102,
+      "name": "IsTorchOut",
+      "parameters": []
+    },
+    {
+      "index": 103,
+      "name": "IsShieldOut",
+      "parameters": []
+    },
+    {
+      "index": 106,
+      "name": "IsFacingUp",
+      "parameters": []
+    },
+    {
+      "index": 107,
+      "name": "GetKnockedState",
+      "parameters": []
+    },
+    {
+      "index": 108,
+      "name": "GetWeaponAnimType",
+      "parameters": []
+    },
+    {
+      "index": 109,
+      "name": "IsWeaponSkillType",
+      "parameters": [
+        "actor_value"
+      ]
+    },
+    {
+      "index": 110,
+      "name": "GetCurrentAIPackage",
+      "parameters": []
+    },
+    {
+      "index": 111,
+      "name": "IsWaiting",
+      "parameters": []
+    },
+    {
+      "index": 112,
+      "name": "IsIdlePlaying",
+      "parameters": []
+    },
+    {
+      "index": 116,
+      "name": "IsIntimidatedbyPlayer",
+      "parameters": []
+    },
+    {
+      "index": 117,
+      "name": "IsPlayerInRegion",
+      "parameters": [
+        "region"
+      ]
+    },
+    {
+      "index": 118,
+      "name": "GetActorAggroRadiusViolated",
+      "parameters": []
+    },
+    {
+      "index": 122,
+      "name": "GetCrime",
+      "parameters": [
+        "actor",
+        "crime_type"
+      ]
+    },
+    {
+      "index": 123,
+      "name": "IsGreetingPlayer",
+      "parameters": []
+    },
+    {
+      "index": 125,
+      "name": "IsGuard",
+      "parameters": []
+    },
+    {
+      "index": 127,
+      "name": "HasBeenEaten",
+      "parameters": []
+    },
+    {
+      "index": 128,
+      "name": "GetStaminaPercentage",
+      "parameters": []
+    },
+    {
+      "index": 129,
+      "name": "HasBeenRead",
+      "parameters": []
+    },
+    {
+      "index": 130,
+      "name": "GetDying",
+      "parameters": []
+    },
+    {
+      "index": 131,
+      "name": "GetSceneActionPercent",
+      "parameters": [
+        "scene",
+        "integer"
+      ]
+    },
+    {
+      "index": 132,
+      "name": "WouldRefuseCommand",
+      "parameters": [
+        "reference"
+      ]
+    },
+    {
+      "index": 133,
+      "name": "SameFactionAsPC",
+      "parameters": []
+    },
+    {
+      "index": 134,
+      "name": "SameRaceAsPC",
+      "parameters": []
+    },
+    {
+      "index": 135,
+      "name": "SameSexAsPC",
+      "parameters": []
+    },
+    {
+      "index": 136,
+      "name": "GetIsReference",
+      "parameters": [
+        "reference"
+      ]
+    },
+    {
+      "index": 141,
+      "name": "IsTalking",
+      "parameters": []
+    },
+    {
+      "index": 142,
+      "name": "GetComponentCount",
+      "parameters": [
+        "base_object"
+      ]
+    },
+    {
+      "index": 143,
+      "name": "GetCurrentAIProcedure",
+      "parameters": []
+    },
+    {
+      "index": 144,
+      "name": "GetTrespassWarningLevel",
+      "parameters": []
+    },
+    {
+      "index": 145,
+      "name": "IsTrespassing",
+      "parameters": []
+    },
+    {
+      "index": 146,
+      "name": "IsInMyOwnedCell",
+      "parameters": []
+    },
+    {
+      "index": 147,
+      "name": "GetWindSpeed",
+      "parameters": []
+    },
+    {
+      "index": 148,
+      "name": "GetCurrentWeatherPercent",
+      "parameters": []
+    },
+    {
+      "index": 149,
+      "name": "GetIsCurrentWeather",
+      "parameters": [
+        "weather"
+      ]
+    },
+    {
+      "index": 150,
+      "name": "IsContinuingPackagePCNear",
+      "parameters": []
+    },
+    {
+      "index": 152,
+      "name": "GetIsCrimeFaction",
+      "parameters": [
+        "faction"
+      ]
+    },
+    {
+      "index": 153,
+      "name": "CanHaveFlames",
+      "parameters": []
+    },
+    {
+      "index": 154,
+      "name": "HasFlames",
+      "parameters": []
+    },
+    {
+      "index": 157,
+      "name": "GetOpenState",
+      "parameters": []
+    },
+    {
+      "index": 159,
+      "name": "GetSitting",
+      "parameters": []
+    },
+    {
+      "index": 161,
+      "name": "GetIsCurrentPackage",
+      "parameters": [
+        "package"
+      ]
+    },
+    {
+      "index": 162,
+      "name": "IsCurrentFurnitureRef",
+      "parameters": [
+        "reference"
+      ]
+    },
+    {
+      "index": 163,
+      "name": "IsCurrentFurnitureObj",
+      "parameters": [
+        "furniture"
+      ]
+    },
+    {
+      "index": 170,
+      "name": "GetDayOfWeek",
+      "parameters": []
+    },
+    {
+      "index": 172,
+      "name": "GetTalkedToPCParam",
+      "parameters": [
+        "actor"
+      ]
+    },
+    {
+      "index": 175,
+      "name": "IsPCSleeping",
+      "parameters": []
+    },
+    {
+      "index": 176,
+      "name": "IsPCAMurderer",
+      "parameters": []
+    },
+    {
+      "index": 180,
+      "name": "HasSameEditorLocationAsRef",
+      "parameters": [
+        "reference",
+        "keyword"
+      ]
+    },
+    {
+      "index": 181,
+      "name": "HasSameEditorLocationAsRefAlias",
+      "parameters": [
+        "alias",
+        "keyword"
+      ]
+    },
+    {
+      "index": 182,
+      "name": "GetEquipped",
+      "parameters": [
+        "base_object"
+      ]
+    },
+    {
+      "index": 185,
+      "name": "IsSwimming",
+      "parameters": []
+    },
+    {
+      "index": 190,
+      "name": "GetAmountSoldStolen",
+      "parameters": []
+    },
+    {
+      "index": 192,
+      "name": "GetIgnoreCrime",
+      "parameters": []
+    },
+    {
+      "index": 193,
+      "name": "GetPCExpelled",
+      "parameters": [
+        "faction"
+      ]
+    },
+    {
+      "index": 195,
+      "name": "GetPCFactionMurder",
+      "parameters": [
+        "faction"
+      ]
+    },
+    {
+      "index": 197,
+      "name": "GetPCEnemyofFaction",
+      "parameters": [
+        "faction"
+      ]
+    },
+    {
+      "index": 199,
+      "name": "GetPCFactionAttack",
+      "parameters": [
+        "faction"
+      ]
+    },
+    {
+      "index": 203,
+      "name": "GetDestroyed",
+      "parameters": []
+    },
+    {
+      "index": 214,
+      "name": "HasMagicEffect",
+      "parameters": [
+        "base_effect"
+      ]
+    },
+    {
+      "index": 215,
+      "name": "GetDefaultOpen",
+      "parameters": []
+    },
+    {
+      "index": 223,
+      "name": "IsSpellTarget",
+      "parameters": [
+        "effect_item"
+      ]
+    },
+    {
+      "index": 224,
+      "name": "GetVATSMode",
+      "parameters": []
+    },
+    {
+      "index": 225,
+      "name": "GetPersuasionNumber",
+      "parameters": []
+    },
+    {
+      "index": 226,
+      "name": "GetVampireFeed",
+      "parameters": []
+    },
+    {
+      "index": 227,
+      "name": "GetCannibal",
+      "parameters": []
+    },
+    {
+      "index": 228,
+      "name": "GetIsClassDefault",
+      "parameters": [
+        "class"
+      ]
+    },
+    {
+      "index": 229,
+      "name": "GetClassDefaultMatch",
+      "parameters": []
+    },
+    {
+      "index": 230,
+      "name": "GetInCellParam",
+      "parameters": [
+        "cell",
+        "reference"
+      ]
+    },
+    {
+      "index": 231,
+      "name": "GetPlayerDialogueInput",
+      "parameters": []
+    },
+    {
+      "index": 235,
+      "name": "GetVatsTargetHeight",
+      "parameters": []
+    },
+    {
+      "index": 237,
+      "name": "GetIsGhost",
+      "parameters": []
+    },
+    {
+      "index": 242,
+      "name": "GetUnconscious",
+      "parameters": []
+    },
+    {
+      "index": 244,
+      "name": "GetRestrained",
+      "parameters": []
+    },
+    {
+      "index": 246,
+      "name": "GetIsUsedItem",
+      "parameters": [
+        "base_object"
+      ]
+    },
+    {
+      "index": 247,
+      "name": "GetIsUsedItemType",
+      "parameters": [
+        "form_type"
+      ]
+    },
+    {
+      "index": 248,
+      "name": "IsScenePlaying",
+      "parameters": [
+        "scene"
+      ]
+    },
+    {
+      "index": 249,
+      "name": "IsInDialogueWithPlayer",
+      "parameters": []
+    },
+    {
+      "index": 250,
+      "name": "GetLocationCleared",
+      "parameters": [
+        "location"
+      ]
+    },
+    {
+      "index": 254,
+      "name": "GetIsPlayableRace",
+      "parameters": []
+    },
+    {
+      "index": 255,
+      "name": "GetOffersServicesNow",
+      "parameters": []
+    },
+    {
+      "index": 258,
+      "name": "HasAssociationType",
+      "parameters": [
+        "actor",
+        "association_type"
+      ]
+    },
+    {
+      "index": 259,
+      "name": "HasFamilyRelationship",
+      "parameters": [
+        "actor"
+      ]
+    },
+    {
+      "index": 261,
+      "name": "HasParentRelationship",
+      "parameters": [
+        "actor"
+      ]
+    },
+    {
+      "index": 262,
+      "name": "IsWarningAbout",
+      "parameters": [
+        "form_list"
+      ]
+    },
+    {
+      "index": 263,
+      "name": "IsWeaponOut",
+      "parameters": []
+    },
+    {
+      "index": 264,
+      "name": "HasSpell",
+      "parameters": [
+        "effect_item"
+      ]
+    },
+    {
+      "index": 265,
+      "name": "IsTimePassing",
+      "parameters": []
+    },
+    {
+      "index": 266,
+      "name": "IsPleasant",
+      "parameters": []
+    },
+    {
+      "index": 267,
+      "name": "IsCloudy",
+      "parameters": []
+    },
+    {
+      "index": 274,
+      "name": "IsSmallBump",
+      "parameters": []
+    },
+    {
+      "index": 277,
+      "name": "GetBaseValue",
+      "parameters": [
+        "actor_value"
+      ]
+    },
+    {
+      "index": 278,
+      "name": "IsOwner",
+      "parameters": [
+        "owner"
+      ]
+    },
+    {
+      "index": 280,
+      "name": "IsCellOwner",
+      "parameters": [
+        "cell",
+        "owner"
+      ]
+    },
+    {
+      "index": 282,
+      "name": "IsHorseStolen",
+      "parameters": []
+    },
+    {
+      "index": 285,
+      "name": "IsLeftUp",
+      "parameters": []
+    },
+    {
+      "index": 286,
+      "name": "IsSneaking",
+      "parameters": []
+    },
+    {
+      "index": 287,
+      "name": "IsRunning",
+      "parameters": []
+    },
+    {
+      "index": 288,
+      "name": "GetFriendHit",
+      "parameters": []
+    },
+    {
+      "index": 289,
+      "name": "IsInCombat",
+      "parameters": [
+        "integer"
+      ]
+    },
+    {
+      "index": 300,
+      "name": "IsInInterior",
+      "parameters": []
+    },
+    {
+      "index": 304,
+      "name": "IsWaterObject",
+      "parameters": []
+    },
+    {
+      "index": 305,
+      "name": "GetPlayerAction",
+      "parameters": []
+    },
+    {
+      "index": 306,
+      "name": "IsActorUsingATorch",
+      "parameters": []
+    },
+    {
+      "index": 309,
+      "name": "IsXBox",
+      "parameters": []
+    },
+    {
+      "index": 310,
+      "name": "GetInWorldspace",
+      "parameters": [
+        "worldspace"
+      ]
+    },
+    {
+      "index": 312,
+      "name": "GetPCMiscStat",
+      "parameters": [
+        "misc_stat"
+      ]
+    },
+    {
+      "index": 313,
+      "name": "GetPairedAnimation",
+      "parameters": []
+    },
+    {
+      "index": 314,
+      "name": "IsActorAVictim",
+      "parameters": []
+    },
+    {
+      "index": 315,
+      "name": "GetTotalPersuasionNumber",
+      "parameters": []
+    },
+    {
+      "index": 318,
+      "name": "GetIdleDoneOnce",
+      "parameters": []
+    },
+    {
+      "index": 320,
+      "name": "GetNoRumors",
+      "parameters": []
+    },
+    {
+      "index": 323,
+      "name": "GetCombatState",
+      "parameters": []
+    },
+    {
+      "index": 325,
+      "name": "GetWithinPackageLocation",
+      "parameters": [
+        "packdata"
+      ]
+    },
+    {
+      "index": 327,
+      "name": "IsRidingMount",
+      "parameters": []
+    },
+    {
+      "index": 329,
+      "name": "IsFleeing",
+      "parameters": []
+    },
+    {
+      "index": 332,
+      "name": "IsInDangerousWater",
+      "parameters": []
+    },
+    {
+      "index": 338,
+      "name": "GetIgnoreFriendlyHits",
+      "parameters": []
+    },
+    {
+      "index": 339,
+      "name": "IsPlayersLastRiddenMount",
+      "parameters": []
+    },
+    {
+      "index": 353,
+      "name": "IsActor",
+      "parameters": []
+    },
+    {
+      "index": 354,
+      "name": "IsEssential",
+      "parameters": []
+    },
+    {
+      "index": 358,
+      "name": "IsPlayerMovingIntoNewSpace",
+      "parameters": []
+    },
+    {
+      "index": 359,
+      "name": "GetInCurrentLocation",
+      "parameters": [
+        "location"
+      ]
+    },
+    {
+      "index": 360,
+      "name": "GetInCurrentLocationAlias",
+      "parameters": [
+        "alias"
+      ]
+    },
+    {
+      "index": 361,
+      "name": "GetTimeDead",
+      "parameters": []
+    },
+    {
+      "index": 362,
+      "name": "HasLinkedRef",
+      "parameters": [
+        "keyword"
+      ]
+    },
+    {
+      "index": 365,
+      "name": "IsChild",
+      "parameters": []
+    },
+    {
+      "index": 366,
+      "name": "GetStolenItemValueNoCrime",
+      "parameters": [
+        "faction"
+      ]
+    },
+    {
+      "index": 367,
+      "name": "GetLastPlayerAction",
+      "parameters": []
+    },
+    {
+      "index": 368,
+      "name": "IsPlayerActionActive",
+      "parameters": [
+        "integer"
+      ]
+    },
+    {
+      "index": 370,
+      "name": "IsTalkingActivatorActor",
+      "parameters": [
+        "actor"
+      ]
+    },
+    {
+      "index": 372,
+      "name": "IsInList",
+      "parameters": [
+        "form_list"
+      ]
+    },
+    {
+      "index": 373,
+      "name": "GetStolenItemValue",
+      "parameters": [
+        "faction"
+      ]
+    },
+    {
+      "index": 375,
+      "name": "GetCrimeGoldViolent",
+      "parameters": [
+        "faction_null"
+      ]
+    },
+    {
+      "index": 376,
+      "name": "GetCrimeGoldNonviolent",
+      "parameters": [
+        "faction_null"
+      ]
+    },
+    {
+      "index": 378,
+      "name": "IsOwnedBy",
+      "parameters": [
+        "actor"
+      ]
+    },
+    {
+      "index": 380,
+      "name": "GetCommandDistance",
+      "parameters": []
+    },
+    {
+      "index": 381,
+      "name": "GetCommandLocationDistance",
+      "parameters": []
+    },
+    {
+      "index": 390,
+      "name": "GetHitLocation",
+      "parameters": []
+    },
+    {
+      "index": 391,
+      "name": "IsPC1stPerson",
+      "parameters": []
+    },
+    {
+      "index": 396,
+      "name": "GetCauseofDeath",
+      "parameters": []
+    },
+    {
+      "index": 397,
+      "name": "IsLimbGone",
+      "parameters": [
+        "integer"
+      ]
+    },
+    {
+      "index": 398,
+      "name": "IsWeaponInList",
+      "parameters": [
+        "form_list"
+      ]
+    },
+    {
+      "index": 402,
+      "name": "IsBribedbyPlayer",
+      "parameters": []
+    },
+    {
+      "index": 403,
+      "name": "GetRelationshipRank",
+      "parameters": [
+        "actor"
+      ]
+    },
+    {
+      "index": 407,
+      "name": "GetVATSValue",
+      "parameters": [
+        "integer",
+        "integer"
+      ]
+    },
+    {
+      "index": 408,
+      "name": "IsKiller",
+      "parameters": [
+        "actor"
+      ]
+    },
+    {
+      "index": 409,
+      "name": "IsKillerObject",
+      "parameters": [
+        "form_list"
+      ]
+    },
+    {
+      "index": 410,
+      "name": "GetFactionCombatReaction",
+      "parameters": [
+        "faction",
+        "faction"
+      ]
+    },
+    {
+      "index": 414,
+      "name": "Exists",
+      "parameters": [
+        "reference"
+      ]
+    },
+    {
+      "index": 415,
+      "name": "GetGroupMemberCount",
+      "parameters": []
+    },
+    {
+      "index": 416,
+      "name": "GetGroupTargetCount",
+      "parameters": []
+    },
+    {
+      "index": 426,
+      "name": "GetIsVoiceType",
+      "parameters": [
+        "voice_type"
+      ]
+    },
+    {
+      "index": 427,
+      "name": "GetPlantedExplosive",
+      "parameters": []
+    },
+    {
+      "index": 429,
+      "name": "IsScenePackageRunning",
+      "parameters": []
+    },
+    {
+      "index": 430,
+      "name": "GetHealthPercentage",
+      "parameters": []
+    },
+    {
+      "index": 432,
+      "name": "GetIsObjectType",
+      "parameters": [
+        "form_type"
+      ]
+    },
+    {
+      "index": 434,
+      "name": "PlayerVisualDetection",
+      "parameters": []
+    },
+    {
+      "index": 435,
+      "name": "PlayerAudioDetection",
+      "parameters": []
+    },
+    {
+      "index": 437,
+      "name": "GetIsCreatureType",
+      "parameters": [
+        "integer"
+      ]
+    },
+    {
+      "index": 438,
+      "name": "HasKey",
+      "parameters": [
+        "reference"
+      ]
+    },
+    {
+      "index": 439,
+      "name": "IsFurnitureEntryType",
+      "parameters": [
+        "base_object"
+      ]
+    },
+    {
+      "index": 444,
+      "name": "GetInCurrentLocationFormList",
+      "parameters": [
+        "form_list"
+      ]
+    },
+    {
+      "index": 445,
+      "name": "GetInZone",
+      "parameters": [
+        "encounter_zone"
+      ]
+    },
+    {
+      "index": 446,
+      "name": "GetVelocity",
+      "parameters": [
+        "axis"
+      ]
+    },
+    {
+      "index": 447,
+      "name": "GetGraphVariableFloat",
+      "parameters": [
+        "string"
+      ]
+    },
+    {
+      "index": 448,
+      "name": "HasPerk",
+      "parameters": [
+        "perk"
+      ]
+    },
+    {
+      "index": 449,
+      "name": "GetFactionRelation",
+      "parameters": [
+        "actor"
+      ]
+    },
+    {
+      "index": 450,
+      "name": "IsLastIdlePlayed",
+      "parameters": [
+        "idle_form"
+      ]
+    },
+    {
+      "index": 453,
+      "name": "GetPlayerTeammate",
+      "parameters": []
+    },
+    {
+      "index": 454,
+      "name": "GetPlayerTeammateCount",
+      "parameters": []
+    },
+    {
+      "index": 458,
+      "name": "GetActorCrimePlayerEnemy",
+      "parameters": []
+    },
+    {
+      "index": 459,
+      "name": "GetCrimeGold",
+      "parameters": [
+        "faction_null"
+      ]
+    },
+    {
+      "index": 463,
+      "name": "IsPlayerGrabbedRef",
+      "parameters": [
+        "reference"
+      ]
+    },
+    {
+      "index": 465,
+      "name": "GetKeywordItemCount",
+      "parameters": [
+        "keyword"
+      ]
+    },
+    {
+      "index": 470,
+      "name": "GetDestructionStage",
+      "parameters": []
+    },
+    {
+      "index": 473,
+      "name": "GetIsAlignment",
+      "parameters": [
+        "alignment"
+      ]
+    },
+    {
+      "index": 476,
+      "name": "IsProtected",
+      "parameters": []
+    },
+    {
+      "index": 477,
+      "name": "GetThreatRatio",
+      "parameters": [
+        "actor"
+      ]
+    },
+    {
+      "index": 479,
+      "name": "GetIsUsedItemEquipType",
+      "parameters": [
+        "equip_type"
+      ]
+    },
+    {
+      "index": 483,
+      "name": "GetPlayerActivated",
+      "parameters": []
+    },
+    {
+      "index": 485,
+      "name": "GetFullyEnabledActorsInHigh",
+      "parameters": []
+    },
+    {
+      "index": 487,
+      "name": "IsCarryable",
+      "parameters": []
+    },
+    {
+      "index": 488,
+      "name": "GetConcussed",
+      "parameters": []
+    },
+    {
+      "index": 491,
+      "name": "GetMapMarkerVisible",
+      "parameters": []
+    },
+    {
+      "index": 493,
+      "name": "PlayerKnows",
+      "parameters": [
+        "base_object"
+      ]
+    },
+    {
+      "index": 494,
+      "name": "GetPermanentValue",
+      "parameters": [
+        "actor_value"
+      ]
+    },
+    {
+      "index": 495,
+      "name": "GetKillingBlowLimb",
+      "parameters": []
+    },
+    {
+      "index": 497,
+      "name": "CanPayCrimeGold",
+      "parameters": [
+        "faction"
+      ]
+    },
+    {
+      "index": 499,
+      "name": "GetDaysInJail",
+      "parameters": []
+    },
+    {
+      "index": 500,
+      "name": "EPAlchemyGetMakingPoison",
+      "parameters": []
+    },
+    {
+      "index": 501,
+      "name": "EPAlchemyEffectHasKeyword",
+      "parameters": [
+        "keyword"
+      ]
+    },
+    {
+      "index": 503,
+      "name": "GetAllowWorldInteractions",
+      "parameters": []
+    },
+    {
+      "index": 506,
+      "name": "DialogueGetAv",
+      "parameters": [
+        "actor_value"
+      ]
+    },
+    {
+      "index": 507,
+      "name": "DialogueHasPerk",
+      "parameters": [
+        "perk"
+      ]
+    },
+    {
+      "index": 508,
+      "name": "GetLastHitCritical",
+      "parameters": []
+    },
+    {
+      "index": 510,
+      "name": "DialogueGetItemCount",
+      "parameters": [
+        "base_object"
+      ]
+    },
+    {
+      "index": 511,
+      "name": "LastCrippledCondition",
+      "parameters": [
+        "actor_value"
+      ]
+    },
+    {
+      "index": 512,
+      "name": "HasSharedPowerGrid",
+      "parameters": [
+        "reference"
+      ]
+    },
+    {
+      "index": 513,
+      "name": "IsCombatTarget",
+      "parameters": [
+        "actor"
+      ]
+    },
+    {
+      "index": 515,
+      "name": "GetVATSRightAreaFree",
+      "parameters": [
+        "reference"
+      ]
+    },
+    {
+      "index": 516,
+      "name": "GetVATSLeftAreaFree",
+      "parameters": [
+        "reference"
+      ]
+    },
+    {
+      "index": 517,
+      "name": "GetVATSBackAreaFree",
+      "parameters": [
+        "reference"
+      ]
+    },
+    {
+      "index": 518,
+      "name": "GetVATSFrontAreaFree",
+      "parameters": [
+        "reference"
+      ]
+    },
+    {
+      "index": 519,
+      "name": "GetIsLockBroken",
+      "parameters": []
+    },
+    {
+      "index": 520,
+      "name": "IsPS3",
+      "parameters": []
+    },
+    {
+      "index": 521,
+      "name": "IsWindowsPC",
+      "parameters": []
+    },
+    {
+      "index": 522,
+      "name": "GetVATSRightTargetVisible",
+      "parameters": [
+        "reference"
+      ]
+    },
+    {
+      "index": 523,
+      "name": "GetVATSLeftTargetVisible",
+      "parameters": [
+        "reference"
+      ]
+    },
+    {
+      "index": 524,
+      "name": "GetVATSBackTargetVisible",
+      "parameters": [
+        "reference"
+      ]
+    },
+    {
+      "index": 525,
+      "name": "GetVATSFrontTargetVisible",
+      "parameters": [
+        "reference"
+      ]
+    },
+    {
+      "index": 528,
+      "name": "IsInCriticalStage",
+      "parameters": [
+        "critical_stage"
+      ]
+    },
+    {
+      "index": 530,
+      "name": "GetXPForNextLevel",
+      "parameters": []
+    },
+    {
+      "index": 533,
+      "name": "GetInfamy",
+      "parameters": [
+        "faction_null"
+      ]
+    },
+    {
+      "index": 534,
+      "name": "GetInfamyViolent",
+      "parameters": [
+        "faction_null"
+      ]
+    },
+    {
+      "index": 535,
+      "name": "GetInfamyNonViolent",
+      "parameters": [
+        "faction_null"
+      ]
+    },
+    {
+      "index": 536,
+      "name": "GetTypeCommandPerforming",
+      "parameters": []
+    },
+    {
+      "index": 543,
+      "name": "GetQuestCompleted",
+      "parameters": [
+        "quest"
+      ]
+    },
+    {
+      "index": 544,
+      "name": "GetSpeechChallengeSuccessLevel",
+      "parameters": []
+    },
+    {
+      "index": 547,
+      "name": "IsGoreDisabled",
+      "parameters": []
+    },
+    {
+      "index": 550,
+      "name": "IsSceneActionComplete",
+      "parameters": [
+        "scene",
+        "integer"
+      ]
+    },
+    {
+      "index": 552,
+      "name": "GetSpellUsageNum",
+      "parameters": [
+        "effect_item"
+      ]
+    },
+    {
+      "index": 554,
+      "name": "GetActorsInHigh",
+      "parameters": []
+    },
+    {
+      "index": 555,
+      "name": "HasLoaded3D",
+      "parameters": []
+    },
+    {
+      "index": 560,
+      "name": "HasKeyword",
+      "parameters": [
+        "keyword"
+      ]
+    },
+    {
+      "index": 561,
+      "name": "HasRefType",
+      "parameters": [
+        "location_ref_type"
+      ]
+    },
+    {
+      "index": 562,
+      "name": "LocationHasKeyword",
+      "parameters": [
+        "keyword"
+      ]
+    },
+    {
+      "index": 563,
+      "name": "LocationHasRefType",
+      "parameters": [
+        "location_ref_type"
+      ]
+    },
+    {
+      "index": 565,
+      "name": "GetIsEditorLocation",
+      "parameters": [
+        "location"
+      ]
+    },
+    {
+      "index": 566,
+      "name": "GetIsAliasRef",
+      "parameters": [
+        "alias"
+      ]
+    },
+    {
+      "index": 567,
+      "name": "GetIsEditorLocationAlias",
+      "parameters": [
+        "alias"
+      ]
+    },
+    {
+      "index": 568,
+      "name": "IsSprinting",
+      "parameters": []
+    },
+    {
+      "index": 569,
+      "name": "IsBlocking",
+      "parameters": []
+    },
+    {
+      "index": 570,
+      "name": "HasEquippedSpell",
+      "parameters": [
+        "casting_source"
+      ]
+    },
+    {
+      "index": 571,
+      "name": "GetCurrentCastingType",
+      "parameters": [
+        "casting_source"
+      ]
+    },
+    {
+      "index": 572,
+      "name": "GetCurrentDeliveryType",
+      "parameters": [
+        "casting_source"
+      ]
+    },
+    {
+      "index": 574,
+      "name": "GetAttackState",
+      "parameters": []
+    },
+    {
+      "index": 576,
+      "name": "GetEventData",
+      "parameters": [
+        "event",
+        "event_data"
+      ]
+    },
+    {
+      "index": 577,
+      "name": "IsCloserToAThanB",
+      "parameters": [
+        "reference",
+        "reference"
+      ]
+    },
+    {
+      "index": 578,
+      "name": "LevelMinusPCLevel",
+      "parameters": []
+    },
+    {
+      "index": 580,
+      "name": "IsBleedingOut",
+      "parameters": []
+    },
+    {
+      "index": 584,
+      "name": "GetRelativeAngle",
+      "parameters": [
+        "reference",
+        "axis"
+      ]
+    },
+    {
+      "index": 589,
+      "name": "GetMovementDirection",
+      "parameters": []
+    },
+    {
+      "index": 590,
+      "name": "IsInScene",
+      "parameters": []
+    },
+    {
+      "index": 591,
+      "name": "GetRefTypeDeadCount",
+      "parameters": [
+        "location",
+        "location_ref_type"
+      ]
+    },
+    {
+      "index": 592,
+      "name": "GetRefTypeAliveCount",
+      "parameters": [
+        "location",
+        "location_ref_type"
+      ]
+    },
+    {
+      "index": 594,
+      "name": "GetIsFlying",
+      "parameters": []
+    },
+    {
+      "index": 595,
+      "name": "IsCurrentSpell",
+      "parameters": [
+        "effect_item",
+        "casting_source"
+      ]
+    },
+    {
+      "index": 596,
+      "name": "SpellHasKeyword",
+      "parameters": [
+        "casting_source",
+        "keyword"
+      ]
+    },
+    {
+      "index": 597,
+      "name": "GetEquippedItemType",
+      "parameters": [
+        "casting_source"
+      ]
+    },
+    {
+      "index": 598,
+      "name": "GetLocationAliasCleared",
+      "parameters": [
+        "alias"
+      ]
+    },
+    {
+      "index": 600,
+      "name": "GetLocationAliasRefTypeDeadCount",
+      "parameters": [
+        "alias",
+        "location_ref_type"
+      ]
+    },
+    {
+      "index": 601,
+      "name": "GetLocationAliasRefTypeAliveCount",
+      "parameters": [
+        "alias",
+        "location_ref_type"
+      ]
+    },
+    {
+      "index": 602,
+      "name": "IsWardState",
+      "parameters": [
+        "ward_state"
+      ]
+    },
+    {
+      "index": 603,
+      "name": "IsInSameCurrentLocationAsRef",
+      "parameters": [
+        "reference",
+        "keyword"
+      ]
+    },
+    {
+      "index": 604,
+      "name": "IsInSameCurrentLocationAsRefAlias",
+      "parameters": [
+        "alias",
+        "keyword"
+      ]
+    },
+    {
+      "index": 605,
+      "name": "LocationAliasIsLocation",
+      "parameters": [
+        "alias",
+        "location"
+      ]
+    },
+    {
+      "index": 606,
+      "name": "GetKeywordDataForLocation",
+      "parameters": [
+        "location",
+        "keyword"
+      ]
+    },
+    {
+      "index": 608,
+      "name": "GetKeywordDataForAlias",
+      "parameters": [
+        "alias",
+        "keyword"
+      ]
+    },
+    {
+      "index": 610,
+      "name": "LocationAliasHasKeyword",
+      "parameters": [
+        "alias",
+        "keyword"
+      ]
+    },
+    {
+      "index": 611,
+      "name": "IsNullPackageData",
+      "parameters": [
+        "packdata"
+      ]
+    },
+    {
+      "index": 612,
+      "name": "GetNumericPackageData",
+      "parameters": [
+        "packdata"
+      ]
+    },
+    {
+      "index": 613,
+      "name": "IsPlayerRadioOn",
+      "parameters": []
+    },
+    {
+      "index": 614,
+      "name": "GetPlayerRadioFrequency",
+      "parameters": []
+    },
+    {
+      "index": 615,
+      "name": "GetHighestRelationshipRank",
+      "parameters": []
+    },
+    {
+      "index": 616,
+      "name": "GetLowestRelationshipRank",
+      "parameters": []
+    },
+    {
+      "index": 617,
+      "name": "HasAssociationTypeAny",
+      "parameters": [
+        "association_type"
+      ]
+    },
+    {
+      "index": 618,
+      "name": "HasFamilyRelationshipAny",
+      "parameters": []
+    },
+    {
+      "index": 619,
+      "name": "GetPathingTargetOffset",
+      "parameters": [
+        "axis"
+      ]
+    },
+    {
+      "index": 620,
+      "name": "GetPathingTargetAngleOffset",
+      "parameters": [
+        "axis"
+      ]
+    },
+    {
+      "index": 621,
+      "name": "GetPathingTargetSpeed",
+      "parameters": []
+    },
+    {
+      "index": 622,
+      "name": "GetPathingTargetSpeedAngle",
+      "parameters": [
+        "axis"
+      ]
+    },
+    {
+      "index": 623,
+      "name": "GetMovementSpeed",
+      "parameters": []
+    },
+    {
+      "index": 624,
+      "name": "GetInContainer",
+      "parameters": [
+        "reference"
+      ]
+    },
+    {
+      "index": 625,
+      "name": "IsLocationLoaded",
+      "parameters": [
+        "location"
+      ]
+    },
+    {
+      "index": 626,
+      "name": "IsLocationAliasLoaded",
+      "parameters": [
+        "alias"
+      ]
+    },
+    {
+      "index": 627,
+      "name": "IsDualCasting",
+      "parameters": []
+    },
+    {
+      "index": 629,
+      "name": "GetVMQuestVariable",
+      "parameters": [
+        "quest",
+        "string"
+      ]
+    },
+    {
+      "index": 630,
+      "name": "GetCombatAudioDetection",
+      "parameters": []
+    },
+    {
+      "index": 631,
+      "name": "GetCombatVisualDetection",
+      "parameters": []
+    },
+    {
+      "index": 632,
+      "name": "IsCasting",
+      "parameters": []
+    },
+    {
+      "index": 633,
+      "name": "GetFlyingState",
+      "parameters": []
+    },
+    {
+      "index": 635,
+      "name": "IsInFavorState",
+      "parameters": []
+    },
+    {
+      "index": 636,
+      "name": "HasTwoHandedWeaponEquipped",
+      "parameters": []
+    },
+    {
+      "index": 637,
+      "name": "IsFurnitureExitType",
+      "parameters": [
+        "base_object"
+      ]
+    },
+    {
+      "index": 638,
+      "name": "IsInFriendStatewithPlayer",
+      "parameters": []
+    },
+    {
+      "index": 639,
+      "name": "GetWithinDistance",
+      "parameters": [
+        "reference",
+        "float"
+      ]
+    },
+    {
+      "index": 640,
+      "name": "GetValuePercent",
+      "parameters": [
+        "actor_value"
+      ]
+    },
+    {
+      "index": 641,
+      "name": "IsUnique",
+      "parameters": []
+    },
+    {
+      "index": 642,
+      "name": "GetLastBumpDirection",
+      "parameters": []
+    },
+    {
+      "index": 644,
+      "name": "GetInfoChallangeSuccess",
+      "parameters": []
+    },
+    {
+      "index": 645,
+      "name": "GetIsInjured",
+      "parameters": []
+    },
+    {
+      "index": 646,
+      "name": "GetIsCrashLandRequest",
+      "parameters": []
+    },
+    {
+      "index": 647,
+      "name": "GetIsHastyLandRequest",
+      "parameters": []
+    },
+    {
+      "index": 650,
+      "name": "IsLinkedTo",
+      "parameters": [
+        "reference",
+        "keyword"
+      ]
+    },
+    {
+      "index": 651,
+      "name": "GetKeywordDataForCurrentLocation",
+      "parameters": [
+        "keyword"
+      ]
+    },
+    {
+      "index": 652,
+      "name": "GetInSharedCrimeFaction",
+      "parameters": [
+        "reference"
+      ]
+    },
+    {
+      "index": 654,
+      "name": "GetBribeSuccess",
+      "parameters": []
+    },
+    {
+      "index": 655,
+      "name": "GetIntimidateSuccess",
+      "parameters": []
+    },
+    {
+      "index": 656,
+      "name": "GetArrestedState",
+      "parameters": []
+    },
+    {
+      "index": 657,
+      "name": "GetArrestingActor",
+      "parameters": []
+    },
+    {
+      "index": 659,
+      "name": "HasVMScript",
+      "parameters": [
+        "string"
+      ]
+    },
+    {
+      "index": 660,
+      "name": "GetVMScriptVariable",
+      "parameters": [
+        "string",
+        "string"
+      ]
+    },
+    {
+      "index": 661,
+      "name": "GetWorkshopResourceDamage",
+      "parameters": [
+        "actor_value"
+      ]
+    },
+    {
+      "index": 664,
+      "name": "HasValidRumorTopic",
+      "parameters": [
+        "quest"
+      ]
+    },
+    {
+      "index": 672,
+      "name": "IsAttacking",
+      "parameters": []
+    },
+    {
+      "index": 673,
+      "name": "IsPowerAttacking",
+      "parameters": []
+    },
+    {
+      "index": 674,
+      "name": "IsLastHostileActor",
+      "parameters": []
+    },
+    {
+      "index": 675,
+      "name": "GetGraphVariableInt",
+      "parameters": [
+        "string"
+      ]
+    },
+    {
+      "index": 678,
+      "name": "ShouldAttackKill",
+      "parameters": [
+        "actor"
+      ]
+    },
+    {
+      "index": 680,
+      "name": "GetActivationHeight",
+      "parameters": []
+    },
+    {
+      "index": 682,
+      "name": "WornHasKeyword",
+      "parameters": [
+        "keyword"
+      ]
+    },
+    {
+      "index": 683,
+      "name": "GetPathingCurrentSpeed",
+      "parameters": []
+    },
+    {
+      "index": 684,
+      "name": "GetPathingCurrentSpeedAngle",
+      "parameters": [
+        "axis"
+      ]
+    },
+    {
+      "index": 691,
+      "name": "GetWorkshopObjectCount",
+      "parameters": [
+        "base_object"
+      ]
+    },
+    {
+      "index": 693,
+      "name": "EPMagic_SpellHasKeyword",
+      "parameters": [
+        "keyword"
+      ]
+    },
+    {
+      "index": 694,
+      "name": "GetNoBleedoutRecovery",
+      "parameters": []
+    },
+    {
+      "index": 696,
+      "name": "EPMagic_SpellHasSkill",
+      "parameters": [
+        "actor_value"
+      ]
+    },
+    {
+      "index": 697,
+      "name": "IsAttackType",
+      "parameters": [
+        "keyword"
+      ]
+    },
+    {
+      "index": 698,
+      "name": "IsAllowedToFly",
+      "parameters": []
+    },
+    {
+      "index": 699,
+      "name": "HasMagicEffectKeyword",
+      "parameters": [
+        "keyword"
+      ]
+    },
+    {
+      "index": 700,
+      "name": "IsCommandedActor",
+      "parameters": []
+    },
+    {
+      "index": 701,
+      "name": "IsStaggered",
+      "parameters": []
+    },
+    {
+      "index": 702,
+      "name": "IsRecoiling",
+      "parameters": []
+    },
+    {
+      "index": 703,
+      "name": "HasScopeWeaponEquipped",
+      "parameters": []
+    },
+    {
+      "index": 704,
+      "name": "IsPathing",
+      "parameters": []
+    },
+    {
+      "index": 705,
+      "name": "GetShouldHelp",
+      "parameters": [
+        "actor"
+      ]
+    },
+    {
+      "index": 706,
+      "name": "HasBoundWeaponEquipped",
+      "parameters": [
+        "casting_source"
+      ]
+    },
+    {
+      "index": 707,
+      "name": "GetCombatTargetHasKeyword",
+      "parameters": [
+        "keyword"
+      ]
+    },
+    {
+      "index": 709,
+      "name": "GetCombatGroupMemberCount",
+      "parameters": []
+    },
+    {
+      "index": 710,
+      "name": "IsIgnoringCombat",
+      "parameters": []
+    },
+    {
+      "index": 711,
+      "name": "GetLightLevel",
+      "parameters": []
+    },
+    {
+      "index": 713,
+      "name": "SpellHasCastingPerk",
+      "parameters": [
+        "perk"
+      ]
+    },
+    {
+      "index": 714,
+      "name": "IsBeingRidden",
+      "parameters": []
+    },
+    {
+      "index": 715,
+      "name": "IsUndead",
+      "parameters": []
+    },
+    {
+      "index": 716,
+      "name": "GetRealHoursPassed",
+      "parameters": []
+    },
+    {
+      "index": 718,
+      "name": "IsUnlockedDoor",
+      "parameters": []
+    },
+    {
+      "index": 719,
+      "name": "IsHostileToActor",
+      "parameters": [
+        "actor"
+      ]
+    },
+    {
+      "index": 720,
+      "name": "GetTargetHeight",
+      "parameters": [
+        "reference"
+      ]
+    },
+    {
+      "index": 721,
+      "name": "IsPoison",
+      "parameters": []
+    },
+    {
+      "index": 722,
+      "name": "WornApparelHasKeywordCount",
+      "parameters": [
+        "keyword"
+      ]
+    },
+    {
+      "index": 723,
+      "name": "GetItemHealthPercent",
+      "parameters": []
+    },
+    {
+      "index": 724,
+      "name": "EffectWasDualCast",
+      "parameters": []
+    },
+    {
+      "index": 725,
+      "name": "GetKnockStateEnum",
+      "parameters": []
+    },
+    {
+      "index": 726,
+      "name": "DoesNotExist",
+      "parameters": []
+    },
+    {
+      "index": 728,
+      "name": "GetPlayerWalkAwayFromDialogueScene",
+      "parameters": []
+    },
+    {
+      "index": 729,
+      "name": "GetActorStance",
+      "parameters": []
+    },
+    {
+      "index": 734,
+      "name": "CanProduceForWorkshop",
+      "parameters": []
+    },
+    {
+      "index": 735,
+      "name": "CanFlyHere",
+      "parameters": []
+    },
+    {
+      "index": 736,
+      "name": "EPIsDamageType",
+      "parameters": [
+        "damage_type"
+      ]
+    },
+    {
+      "index": 738,
+      "name": "GetActorGunState",
+      "parameters": []
+    },
+    {
+      "index": 739,
+      "name": "GetVoiceLineLength",
+      "parameters": []
+    },
+    {
+      "index": 741,
+      "name": "ObjectTemplateItem_HasKeyword",
+      "parameters": [
+        "keyword"
+      ]
+    },
+    {
+      "index": 742,
+      "name": "ObjectTemplateItem_HasUniqueKeyword",
+      "parameters": [
+        "keyword"
+      ]
+    },
+    {
+      "index": 743,
+      "name": "ObjectTemplateItem_GetLevel",
+      "parameters": []
+    },
+    {
+      "index": 744,
+      "name": "MovementIdleMatches",
+      "parameters": [
+        "integer",
+        "integer"
+      ]
+    },
+    {
+      "index": 745,
+      "name": "GetActionData",
+      "parameters": []
+    },
+    {
+      "index": 746,
+      "name": "GetActionDataShort",
+      "parameters": [
+        "integer"
+      ]
+    },
+    {
+      "index": 747,
+      "name": "GetActionDataByte",
+      "parameters": [
+        "integer"
+      ]
+    },
+    {
+      "index": 748,
+      "name": "GetActionDataFlag",
+      "parameters": [
+        "integer"
+      ]
+    },
+    {
+      "index": 749,
+      "name": "ModdedItemHasKeyword",
+      "parameters": [
+        "keyword"
+      ]
+    },
+    {
+      "index": 750,
+      "name": "GetAngryWithPlayer",
+      "parameters": []
+    },
+    {
+      "index": 751,
+      "name": "IsCameraUnderWater",
+      "parameters": []
+    },
+    {
+      "index": 753,
+      "name": "IsActorRefOwner",
+      "parameters": [
+        "actor"
+      ]
+    },
+    {
+      "index": 754,
+      "name": "HasActorRefOwner",
+      "parameters": [
+        "actor"
+      ]
+    },
+    {
+      "index": 756,
+      "name": "GetLoadedAmmoCount",
+      "parameters": []
+    },
+    {
+      "index": 757,
+      "name": "IsTimeSpanSunrise",
+      "parameters": []
+    },
+    {
+      "index": 758,
+      "name": "IsTimeSpanMorning",
+      "parameters": []
+    },
+    {
+      "index": 759,
+      "name": "IsTimeSpanAfternoon",
+      "parameters": []
+    },
+    {
+      "index": 760,
+      "name": "IsTimeSpanEvening",
+      "parameters": []
+    },
+    {
+      "index": 761,
+      "name": "IsTimeSpanSunset",
+      "parameters": []
+    },
+    {
+      "index": 762,
+      "name": "IsTimeSpanNight",
+      "parameters": []
+    },
+    {
+      "index": 763,
+      "name": "IsTimeSpanMidnight",
+      "parameters": []
+    },
+    {
+      "index": 764,
+      "name": "IsTimeSpanAnyDay",
+      "parameters": []
+    },
+    {
+      "index": 765,
+      "name": "IsTimeSpanAnyNight",
+      "parameters": []
+    },
+    {
+      "index": 766,
+      "name": "CurrentFurnitureHasKeyword",
+      "parameters": [
+        "keyword"
+      ]
+    },
+    {
+      "index": 767,
+      "name": "GetWeaponEquipIndex",
+      "parameters": []
+    },
+    {
+      "index": 769,
+      "name": "IsOverEncumbered",
+      "parameters": []
+    },
+    {
+      "index": 770,
+      "name": "IsPackageRequestingBlockedIdles",
+      "parameters": []
+    },
+    {
+      "index": 771,
+      "name": "GetActionDataInt",
+      "parameters": []
+    },
+    {
+      "index": 772,
+      "name": "GetVATSRightMinusLeftAreaFree",
+      "parameters": [
+        "reference"
+      ]
+    },
+    {
+      "index": 773,
+      "name": "GetInIronSights",
+      "parameters": [
+        "reference"
+      ]
+    },
+    {
+      "index": 774,
+      "name": "GetActorStaggerDirection",
+      "parameters": []
+    },
+    {
+      "index": 775,
+      "name": "GetActorStaggerMagnitude",
+      "parameters": []
+    },
+    {
+      "index": 776,
+      "name": "WornCoversBipedSlot",
+      "parameters": [
+        "integer"
+      ]
+    },
+    {
+      "index": 777,
+      "name": "GetInventoryValue",
+      "parameters": []
+    },
+    {
+      "index": 778,
+      "name": "IsPlayerInConversation",
+      "parameters": []
+    },
+    {
+      "index": 779,
+      "name": "IsInDialogueCamera",
+      "parameters": []
+    },
+    {
+      "index": 780,
+      "name": "IsMyDialogueTargetPlayer",
+      "parameters": []
+    },
+    {
+      "index": 781,
+      "name": "IsMyDialogueTargetActor",
+      "parameters": []
+    },
+    {
+      "index": 782,
+      "name": "GetMyDialogueTargetDistance",
+      "parameters": []
+    },
+    {
+      "index": 783,
+      "name": "IsSeatOccupied",
+      "parameters": [
+        "keyword"
+      ]
+    },
+    {
+      "index": 784,
+      "name": "IsPlayerRiding",
+      "parameters": []
+    },
+    {
+      "index": 785,
+      "name": "IsTryingEventCamera",
+      "parameters": []
+    },
+    {
+      "index": 786,
+      "name": "UseLeftSideCamera",
+      "parameters": []
+    },
+    {
+      "index": 787,
+      "name": "GetNoteType",
+      "parameters": []
+    },
+    {
+      "index": 788,
+      "name": "LocationHasPlayerOwnedWorkshop",
+      "parameters": []
+    },
+    {
+      "index": 789,
+      "name": "IsStartingAction",
+      "parameters": []
+    },
+    {
+      "index": 790,
+      "name": "IsMidAction",
+      "parameters": []
+    },
+    {
+      "index": 791,
+      "name": "IsWeaponChargeAttack",
+      "parameters": []
+    },
+    {
+      "index": 792,
+      "name": "IsInWorkshopMode",
+      "parameters": []
+    },
+    {
+      "index": 793,
+      "name": "IsWeaponChargingHoldAttack",
+      "parameters": []
+    },
+    {
+      "index": 794,
+      "name": "IsEncounterAbovePlayerLevel",
+      "parameters": []
+    },
+    {
+      "index": 795,
+      "name": "IsMeleeAttacking",
+      "parameters": []
+    },
+    {
+      "index": 796,
+      "name": "GetVATSQueuedTargetsUnique",
+      "parameters": []
+    },
+    {
+      "index": 797,
+      "name": "GetCurrentLocationCleared",
+      "parameters": []
+    },
+    {
+      "index": 798,
+      "name": "IsPowered",
+      "parameters": []
+    },
+    {
+      "index": 799,
+      "name": "GetTransmitterDistance",
+      "parameters": []
+    },
+    {
+      "index": 800,
+      "name": "GetCameraPlaybackTime",
+      "parameters": []
+    },
+    {
+      "index": 801,
+      "name": "IsInWater",
+      "parameters": []
+    },
+    {
+      "index": 802,
+      "name": "GetWithinActivateDistance",
+      "parameters": [
+        "reference"
+      ]
+    },
+    {
+      "index": 803,
+      "name": "IsUnderWater",
+      "parameters": []
+    },
+    {
+      "index": 804,
+      "name": "IsInSameSpace",
+      "parameters": [
+        "reference"
+      ]
+    },
+    {
+      "index": 805,
+      "name": "LocationAllowsReset",
+      "parameters": []
+    },
+    {
+      "index": 806,
+      "name": "GetVATSBackRightAreaFree",
+      "parameters": [
+        "reference"
+      ]
+    },
+    {
+      "index": 807,
+      "name": "GetVATSBackLeftAreaFree",
+      "parameters": [
+        "reference"
+      ]
+    },
+    {
+      "index": 808,
+      "name": "GetVATSBackRightTargetVisible",
+      "parameters": [
+        "reference"
+      ]
+    },
+    {
+      "index": 809,
+      "name": "GetVATSBackLeftTargetVisible",
+      "parameters": [
+        "reference"
+      ]
+    },
+    {
+      "index": 810,
+      "name": "GetVATSTargetLimbVisible",
+      "parameters": [
+        "reference"
+      ]
+    },
+    {
+      "index": 811,
+      "name": "IsPlayerListening",
+      "parameters": [
+        "float"
+      ]
+    },
+    {
+      "index": 812,
+      "name": "GetPathingRequestedQuickTurn",
+      "parameters": []
+    },
+    {
+      "index": 813,
+      "name": "EPIsCalculatingBaseDamage",
+      "parameters": []
+    },
+    {
+      "index": 814,
+      "name": "GetReanimating",
+      "parameters": []
+    },
+    {
+      "index": 817,
+      "name": "IsInRobotWorkbench",
+      "parameters": []
+    }
+  ],
+  "run_on": [
+    {
+      "value": 0,
+      "name": "Subject",
+      "parameter3": "integer",
+      "reference_form_id": false
+    },
+    {
+      "value": 1,
+      "name": "Target",
+      "parameter3": "integer",
+      "reference_form_id": false
+    },
+    {
+      "value": 2,
+      "name": "Reference",
+      "parameter3": "integer",
+      "reference_form_id": true
+    },
+    {
+      "value": 3,
+      "name": "Combat Target",
+      "parameter3": "integer",
+      "reference_form_id": false
+    },
+    {
+      "value": 4,
+      "name": "Linked Reference",
+      "parameter3": "integer",
+      "reference_form_id": false
+    },
+    {
+      "value": 5,
+      "name": "Quest Alias",
+      "parameter3": "alias",
+      "reference_form_id": false
+    },
+    {
+      "value": 6,
+      "name": "Package Data",
+      "parameter3": "integer",
+      "reference_form_id": false
+    },
+    {
+      "value": 7,
+      "name": "Event Data",
+      "parameter3": "event_data_code",
+      "reference_form_id": false
+    },
+    {
+      "value": 8,
+      "name": "Command Target",
+      "parameter3": "integer",
+      "reference_form_id": false
+    },
+    {
+      "value": 9,
+      "name": "Event Camera Ref",
+      "parameter3": "integer",
+      "reference_form_id": false
+    },
+    {
+      "value": 10,
+      "name": "My Killer",
+      "parameter3": "integer",
+      "reference_form_id": false
+    }
+  ]
+}

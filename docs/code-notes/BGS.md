@@ -441,3 +441,13 @@ On a case-sensitive filesystem the helper stops at the deepest folder that exist
 A null profile with no root `modlist.txt` makes the caller skip the layering and run a plain `GameData.Discover(folder)` with the summary "no modlist.txt under that folder". So a denied profiles folder silently drops the mods rather than failing, and the user sees only that summary line.
 
 `BGS/tools/tests/Ba2RadicleTests.cs:ModlistProfileNamesTheProfileUnlessTheProfilesListingIsDenied` creates `mods/profiles/Default/modlist.txt` and asserts `ModlistProfile` returns "Default" while the folder is readable. It then denies the current user's list right on `profiles` through the shared `DenyListing` / `RestoreListing` helpers (`icacls` on Windows, mode 0 elsewhere) and asserts null, restoring the folder in `finally` before the temp folder is deleted. It returns without asserting if a probe shows the denial did not take effect. It fails on the unfixed code with `UnauthorizedAccessException` from `ModlistProfile`'s profiles listing, and passes with the fix. It does not cover a denied profile folder's own `modlist.txt` or an `IOException` raised mid-enumeration.
+
+### src/Archive/GameData.cs — OrderByPlugins (later plugin's archive wins)
+
+`BGS/src/Archive/GameData.cs:GameData.OrderByPlugins` now reverses the plugin-matched base archives before the unplaced ones are appended. `ArchivePaths` is highest priority first, so the archive of the last-loaded plugin is now first and wins. Before, the first plugin listed in plugins.txt came first, and its archive won, which is the reverse of the game.
+
+This follows the Radicle load-order rule in `docs/code-notes/GARDEN-TOOLS.md` under "**Load order.**" and "**Precedence.**": INI-listed archives load first, then each plugin's archives in load order, and the last-mounted archive wins.
+
+Archives that match no plugin, such as `Fallout4 - Animations.ba2` when Fallout4.esm is not in plugins.txt, stay after every plugin-matched archive, as the lowest priority. They stand in for INI-listed archives, which load before any plugin archive. The early `return archives;` for an unreadable plugin list is unchanged, so that case keeps the alphabetical order. Mod-root archives are unchanged.
+
+Tests: `BGS/tools/tests/Ba2RadicleTests.cs:LaterPluginsBaseArchiveWinsOverEarlierOne` covers A, B and Fallout4 archives with plugins.txt `*A.esm`, `*B.esm`. It expects B's archive to win and `ArchivePaths` to be B, A, Fallout4. `BGS/tools/tests/GameDataPluginOrderTests.cs:PluginListOrdersBaseArchivesWithRadicleRules` expects the new order. The symrm test `BGS/tools/symrm/Tests.cs:GameDataLoadOrderFollowsPlugins` was deleted because it duplicated `PluginListOrdersBaseArchivesWithRadicleRules`.
