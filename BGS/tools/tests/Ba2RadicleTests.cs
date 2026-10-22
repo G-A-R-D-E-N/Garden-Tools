@@ -332,6 +332,30 @@ public sealed class Ba2RadicleTests
         finally { Directory.Delete(root, recursive: true); }
     }
 
+    [Fact]
+    public void ModlistProfileNamesTheProfileUnlessTheProfilesListingIsDenied()
+    {
+        string root = TempRoot();
+        string mods = Path.Combine(root, "mods");
+        string profiles = Path.Combine(mods, "profiles");
+        Directory.CreateDirectory(Path.Combine(profiles, "Default"));
+        try
+        {
+            File.WriteAllText(Path.Combine(profiles, "Default", "modlist.txt"), "+Readable\n");
+            Assert.Equal("Default", GameData.ModlistProfile(mods));
+            if (!DenyListing(profiles)) return;
+            try
+            {
+                Assert.Null(GameData.ModlistProfile(mods));
+            }
+            finally
+            {
+                RestoreListing(profiles);
+            }
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
     [Theory]
     [InlineData("Meshes\\X\\CharacterAssets\\a.HKX", true)]
     [InlineData("Meshes/X/CharacterAssets/a.txt", false)]
