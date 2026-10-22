@@ -404,16 +404,25 @@ export interface MastersHost {
   SavePlugin(plugin: string): Promise<string>;
 }
 
-export interface StringTableInfo { kind: string; path: string; count: number; }
+export interface StringTableInfo { kind: string; path: string; count: number; source: string; pending?: boolean; }
+export interface SkippedStringArchive { path: string; reason: string; }
+export interface StringTablesResult { tables: StringTableInfo[]; skippedArchives: SkippedStringArchive[]; }
 export interface StringRow { id: number; text: string; }
-export interface StringsPage { total: number; offset: number; limit: number; rows: StringRow[]; }
-export interface StringLookupRow { kind: string; id: number; text: string; }
+export interface StringsPage { total: number; offset: number; limit: number; rows: StringRow[]; pending?: boolean; }
+export interface StringLookupRow { kind: string; id: number; text: string; pending?: boolean; }
 
 export interface StringsHost {
   ListStringTables(plugin: string, language: string): Promise<string>;
   GetStrings(plugin: string, language: string, table: string, filter: string,
              offset: number, limit: number): Promise<string>;
   LookupString(plugin: string, language: string, id: number): Promise<string>;
+  SetString(plugin: string, language: string, table: string, id: number, text: string): Promise<string>;
+  AddString(plugin: string, language: string, table: string, text: string): Promise<string>;
+  RemoveString(plugin: string, language: string, table: string, id: number): Promise<string>;
+  ImportStrings(plugin: string, language: string, table: string, json: string, mode: string): Promise<string>;
+  ExportStrings(plugin: string, language: string, table: string): Promise<string>;
+  SaveStringTables(plugin: string, language: string): Promise<string>;
+  DiscardStringEdits(plugin: string, language: string): Promise<string>;
 }
 
 

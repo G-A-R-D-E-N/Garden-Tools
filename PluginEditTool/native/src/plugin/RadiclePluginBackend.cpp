@@ -185,6 +185,13 @@ Result<nlohmann::json> RadiclePluginBackend::invoke(std::string_view operation,
     if (operation == "strings.ListStringTables") return listStringTables(arguments);
     if (operation == "strings.GetStrings") return getStrings(arguments);
     if (operation == "strings.LookupString") return lookupString(arguments);
+    if (operation == "strings.SetString") return setString(arguments);
+    if (operation == "strings.AddString") return addString(arguments);
+    if (operation == "strings.RemoveString") return removeString(arguments);
+    if (operation == "strings.ImportStrings") return importStrings(arguments);
+    if (operation == "strings.ExportStrings") return exportStrings(arguments);
+    if (operation == "strings.SaveStringTables") return saveStringTables(arguments);
+    if (operation == "strings.DiscardStringEdits") return discardStringEdits(arguments);
     if (operation == "appInterop.GetPlugins") return getPlugins();
     if (operation == "appInterop.GetChildren") return getChildren(arguments);
     if (operation == "appInterop.OpenRecord") return openRecord(arguments);

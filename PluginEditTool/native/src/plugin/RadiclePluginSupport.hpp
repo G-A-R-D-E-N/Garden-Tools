@@ -76,6 +76,27 @@ inline std::string stringField(const nlohmann::json& object, const char* name) {
     return object.at(name).get<std::string>();
 }
 
+inline Result<std::string> stringLanguage(const nlohmann::json& arguments) {
+    auto language = stringArgument(arguments, 1);
+    if (language.empty()) return std::string("en");
+    const bool valid = std::all_of(language.begin(), language.end(), [](unsigned char ch) {
+        return std::isalnum(ch) != 0;
+    });
+    if (!valid) {
+        return std::unexpected(Error{
+            "InvalidStringLanguage",
+            "string table language must be an alphanumeric token"
+        });
+    }
+    return language;
+}
+
+inline std::string displayText(std::string_view language, const std::vector<std::byte>& bytes) {
+    const std::string raw(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+    if (language != "en" && fo4::text::is_valid_utf8(raw)) return raw;
+    return fo4::text::windows1252_to_utf8(raw);
+}
+
 inline Result<fo4::FormKey> formKeyArgument(std::string_view text) {
     if (text.empty()) return std::unexpected(Error{"FormKeyMissing", "FormKey is empty"});
     try {
