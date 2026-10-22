@@ -392,16 +392,15 @@ public static class Program
             {
                 try
                 {
-                    var a = new HkxBinaryReader().ReadAnimation(file);
+                    if (!new HkxBinaryReader().TryReadAnimation(file, out var a))
+                    {
+                        unsupported++;
+                        classes[a.AnimationClass] = classes.GetValueOrDefault(a.AnimationClass) + 1;
+                        continue;
+                    }
                     bool any = a.Tracks.Any(t => t.Rotations.Count > 0 || t.Translations.Count > 0 || t.Scales.Count > 0);
                     if (a.NumFrames <= 0 || !any) { empty++; Console.WriteLine($"  empty  {Short(file, target)}  {a.GetSummary()}"); }
                     else read++;
-                }
-                catch (NotSupportedException ex)
-                {
-                    unsupported++;
-                    string cls = ex.Message.Split('.')[0].Replace("unsupported animation class: ", "");
-                    classes[cls] = classes.GetValueOrDefault(cls) + 1;
                 }
                 catch (Exception ex)
                 {

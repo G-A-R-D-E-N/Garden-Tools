@@ -14,6 +14,8 @@ inline constexpr unsigned kMaxTagDepth = 64;
 
 inline constexpr std::size_t kMaxBodyBytes = 256u * 1024u * 1024u;
 
+inline constexpr std::size_t kMaxTags = 1u << 18;
+
 class SwfReader {
 public:
   SwfReader(std::span<const std::byte> data, std::size_t start) noexcept
@@ -58,9 +60,10 @@ bool read_rect(std::span<const std::byte> data, std::size_t offset, SwfRect& out
                std::size_t& next) noexcept;
 
 SwfStatus decode_tag_payload(const std::vector<std::byte>& payload, SwfTag& out_tag,
-                             unsigned depth);
+                             unsigned depth, std::size_t& tags_left);
 
 SwfStatus decode_tag_stream(std::span<const std::byte> data, std::size_t begin, std::size_t end,
-                            unsigned depth, std::vector<SwfTag>& out, std::size_t& stop);
+                            unsigned depth, std::vector<SwfTag>& out, std::size_t& stop,
+                            std::size_t& tags_left);
 
 }  // namespace fo4::swf::detail

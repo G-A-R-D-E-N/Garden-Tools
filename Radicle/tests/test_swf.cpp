@@ -116,6 +116,18 @@ std::size_t do_abc_index(const SwfFile& file) {
   return file.tags.size();
 }
 
+std::vector<std::byte> tag_count_movie(unsigned tags) {
+  SwfBuilder builder;
+  builder.rect(0, 200, 0, 100, 9);
+  builder.u16(0x1800);
+  builder.u16(1);
+  for (unsigned index = 1; index < tags; ++index) {
+    builder.tag(1);
+  }
+  builder.tag(0);
+  return wrap_body(builder.body, 9, false, false);
+}
+
 }  // namespace
 
 TEST(SwfContainerTest, ReadsUncompressedFileAndDecodesCoreTags) {
@@ -603,4 +615,45 @@ TEST(SwfContainerTest, RoundTripsNonZeroRectPaddingBitsByteExactly) {
   const auto result = fo4::swf::read_swf(bytes);
   ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
   EXPECT_EQ(fo4::swf::write_swf(result.file), bytes);
+}
+
+TEST(SwfContainerTest, AcceptsTagCountAtTheLimit) {
+  const auto bytes = tag_count_movie(4);
+  const auto result = fo4::swf::read_swf(bytes, 4);
+  ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
+  EXPECT_EQ(result.file.tags.size(), 4u);
+}
+
+TEST(SwfContainerTest, RejectsOneTagOverTheLimitWithoutPushingIt) {
+  const auto bytes = tag_count_movie(5);
+  const auto result = fo4::swf::read_swf(bytes, 4);
+  EXPECT_EQ(result.status, SwfStatus::too_many_tags);
+  EXPECT_FALSE(result.message.empty());
+  EXPECT_EQ(result.file.tags.size(), 4u);
+}
+
+TEST(SwfContainerTest, CountsSpriteChildrenAgainstTheWholeFileBudget) {
+  SwfBuilder sprite;
+  sprite.u16(7);
+  sprite.u16(1);
+  sprite.tag(1);
+  sprite.tag(1);
+  sprite.tag(1);
+  sprite.tag(0);
+  SwfBuilder builder;
+  builder.rect(0, 200, 0, 100, 9);
+  builder.u16(0x1800);
+  builder.u16(1);
+  builder.tag(39, sprite.body, false);
+  builder.tag(1);
+  builder.tag(0);
+  const auto bytes = wrap_body(builder.body, 9, false, false);
+
+  const auto result = fo4::swf::read_swf(bytes, 7);
+  ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
+  EXPECT_EQ(fo4::swf::summarize(result.file).tag_count, 7u);
+
+  const auto over = fo4::swf::read_swf(bytes, 6);
+  EXPECT_EQ(over.status, SwfStatus::too_many_tags);
+  EXPECT_FALSE(over.message.empty());
 }

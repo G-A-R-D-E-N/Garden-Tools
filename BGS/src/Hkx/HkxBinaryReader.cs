@@ -35,7 +35,7 @@ public partial class HkxBinaryReader
 
         if (parsed.HasUnsupportedAnimation)
             throw new NotSupportedException(
-                $"unsupported animation class: {parsed.AnimationClass}. " +
+                $"{parsed.UnsupportedReason}: {parsed.AnimationClass}. " +
                 $"Only {HkxAnimationData.SupportedAnimationClasses} are decoded, so no frame data was read from " +
                 Path.GetFileName(filepath));
 
@@ -48,7 +48,7 @@ public partial class HkxBinaryReader
 
         if (parsed.HasUnsupportedAnimation)
             throw new NotSupportedException(
-                $"unsupported animation class: {parsed.AnimationClass}. " +
+                $"{parsed.UnsupportedReason}: {parsed.AnimationClass}. " +
                 $"Only {HkxAnimationData.SupportedAnimationClasses} are decoded, so no frame data was read from " +
                 "this archive entry.");
 

@@ -254,6 +254,99 @@ TEST(RecordFlags, UndeleteRestoresStrippedContentFromTheWinningMasterVersion) {
   EXPECT_EQ(fo4::write_plugin(reread), bytes);
 }
 
+TEST(RecordFlags, UndeleteParentsToTheLoadOrderPlayerWhenFallout4IsNotAMaster) {
+  const CellPlugin master{.name = "Base.esm"};
+  const CellPlugin patch{
+      .name = "Patch.esp",
+      .masters = {"Base.esm"},
+      .cell_form = 0x01000900,
+      .ref_flags = fo4::RecordFlags::deleted,
+      .ref_subs = {{"NAME", std::string{'\x01', '\x08', '\0', '\0'}},
+                   {"DATA", position_data(1.0f, 2.0f, 3.0f)}},
+  };
+  auto plugin = load(patch);
+  const auto ref = fo4::FormKey::parse("000800:Base.esm");
+  ASSERT_EQ(fo4::undelete_and_disable_reference(plugin, load_order(master, patch), ref),
+            fo4::UndeleteStatus::undeleted);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  ASSERT_EQ(reread.header.masters.size(), 2u);
+  EXPECT_EQ(reread.header.masters[0].key, fo4::PluginKey::from_filename("Fallout4.esm"));
+  const auto* record = fo4::find_record(reread, ref);
+  ASSERT_NE(record, nullptr);
+  const auto* xesp = subrecord_named(*record, "XESP");
+  ASSERT_NE(xesp, nullptr);
+  EXPECT_EQ(resolved_link(reread, *xesp), fo4::FormKey::parse("000014:Fallout4.esm"));
+  const auto* name = subrecord_named(*record, "NAME");
+  ASSERT_NE(name, nullptr);
+  EXPECT_EQ(resolved_link(reread, *name), fo4::FormKey::parse("000801:Base.esm"));
+}
+
+TEST(RecordFlags, UndeleteKeepsMasterOrderWhenFallout4IsANonZeroMaster) {
+  const CellPlugin master{.name = "Base.esm"};
+  const CellPlugin patch{
+      .name = "Patch.esp",
+      .masters = {"Base.esm", "Fallout4.esm"},
+      .cell_form = 0x02000900,
+      .ref_flags = fo4::RecordFlags::deleted,
+      .ref_subs = {{"NAME", std::string{'\x01', '\x08', '\0', '\0'}},
+                   {"DATA", position_data(1.0f, 2.0f, 3.0f)}},
+  };
+  auto plugin = load(patch);
+  const auto ref = fo4::FormKey::parse("000800:Base.esm");
+  ASSERT_EQ(fo4::undelete_and_disable_reference(plugin, load_order(master, patch), ref),
+            fo4::UndeleteStatus::undeleted);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  ASSERT_EQ(reread.header.masters.size(), 2u);
+  EXPECT_EQ(reread.header.masters[0].key, fo4::PluginKey::from_filename("Base.esm"));
+  const auto* xesp = subrecord_named(*fo4::find_record(reread, ref), "XESP");
+  ASSERT_NE(xesp, nullptr);
+  EXPECT_EQ(resolved_link(reread, *xesp), fo4::FormKey::parse("000014:Fallout4.esm"));
+}
+
+TEST(RecordFlags, UndeletePrependsPlayerMasterWhenACoedOwnerIsTypedByAnotherMaster) {
+  const CellPlugin base{.name = "Base.esm"};
+  fo4::test::ByteWriter coed;
+  coed.u32(0x01000800);
+  coed.u32(0x00000801);
+  coed.u32(0);
+  const CellPlugin patch{
+      .name = "Patch.esp",
+      .masters = {"Base.esm", "Actors.esm"},
+      .cell_form = 0x02000900,
+      .ref_flags = fo4::RecordFlags::deleted,
+      .ref_subs = {{"NAME", std::string{'\x01', '\x08', '\0', '\0'}},
+                   {"DATA", position_data(1.0f, 2.0f, 3.0f)},
+                   {"COED", std::string(reinterpret_cast<const char*>(coed.bytes.data()), coed.bytes.size())}},
+  };
+  fo4::test::ByteWriter actors;
+  write_header(actors, {});
+  const auto top = fo4::test::begin_group(actors, "NPC_", 0);
+  put_record(actors, "NPC_", 0, 0x800, {{"EDID", std::string("Hero", 5)}});
+  fo4::test::end_group(actors, top);
+  fo4::test::TempDataDir dir;
+  dir.write("Base.esm", build_plugin(base), 1);
+  dir.write("Actors.esm", actors.bytes, 2);
+  dir.write("Patch.esp", build_plugin(patch), 3);
+  const std::vector<std::filesystem::path> paths{dir.path() / "Base.esm", dir.path() / "Actors.esm",
+                                                 dir.path() / "Patch.esp"};
+  const auto order = fo4::env::Environment::load(paths);
+
+  auto plugin = load(patch);
+  const auto ref = fo4::FormKey::parse("000800:Base.esm");
+  ASSERT_EQ(fo4::undelete_and_disable_reference(plugin, order, ref), fo4::UndeleteStatus::undeleted);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  ASSERT_EQ(reread.header.masters.size(), 3u);
+  EXPECT_EQ(reread.header.masters[0].key, fo4::PluginKey::from_filename("Fallout4.esm"));
+  const auto* record = fo4::find_record(reread, ref);
+  ASSERT_NE(record, nullptr);
+  const auto* coed_sub = subrecord_named(*record, "COED");
+  ASSERT_NE(coed_sub, nullptr);
+  EXPECT_EQ(resolved_link(reread, *coed_sub), fo4::FormKey::parse("000800:Actors.esm"));
+}
+
 TEST(RecordFlags, UndeleteRemapsMasterFormLinksIntoTheTargetMasterSpace) {
   auto plugin = load(two_level_patch_plugin());
   const auto ref = fo4::FormKey::parse("000800:Machine.esm");

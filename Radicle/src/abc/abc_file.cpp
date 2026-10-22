@@ -82,6 +82,8 @@ const char* status_name(AbcStatus status) noexcept {
       return "trailing bytes";
     case AbcStatus::TypeNameTooLarge:
       return "type name too large";
+    case AbcStatus::InconsistentModel:
+      return "inconsistent model";
   }
   return "unknown";
 }
@@ -234,10 +236,12 @@ AbcStatus parse_metadata(ByteReader& reader, std::vector<AbcMetadata>& out) {
     metadata.items.resize(items);
     for (AbcMetadataItem& item : metadata.items) {
       item.key = reader.u30();
+    }
+    for (AbcMetadataItem& item : metadata.items) {
       item.value = reader.u30();
-      if (!reader.ok()) {
-        return reader.status();
-      }
+    }
+    if (!reader.ok()) {
+      return reader.status();
     }
   }
   return AbcStatus::Ok;

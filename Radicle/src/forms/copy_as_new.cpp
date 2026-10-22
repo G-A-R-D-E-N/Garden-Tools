@@ -108,11 +108,22 @@ void apply_editor_id(Plugin& destination,
   }
 }
 
+FormLinkTypeLookup composed_type_lookup(const Plugin& source, const Plugin& destination) {
+  const FormLinkTypeLookup source_types = plugin_type_lookup(source);
+  const FormLinkTypeLookup destination_types = plugin_type_lookup(destination);
+  return [source_types, destination_types](const FormKey& key) -> std::optional<Signature> {
+    if (const auto own = source_types(key)) return own;
+    return destination_types(key);
+  };
+}
+
 RecordCopyNewResult copy_top_level_as_new(Plugin& destination,
                                           const Plugin& source,
                                           const Record& source_record,
-                                          const RecordCopyNewOptions& options) {
+                                          const RecordCopyNewOptions& options,
+                                          const FormLinkTypeLookup& type_lookup) {
   require_decodable(source_record);
+  const auto types = type_lookup ? type_lookup : composed_type_lookup(source, destination);
 
   std::set<PluginKey> required_owners;
   for (const auto& link : collect_form_links(source)) {
@@ -132,7 +143,7 @@ RecordCopyNewResult copy_top_level_as_new(Plugin& destination,
     added_master = true;
   }
   if (added_master) {
-    destination = remap_plugin_masters(std::move(destination), std::move(masters));
+    destination = remap_plugin_masters(destination, std::move(masters), types);
   }
 
   const auto new_key = create_local_record(destination, source_record.header.signature);
@@ -141,7 +152,7 @@ RecordCopyNewResult copy_top_level_as_new(Plugin& destination,
   auto copied = source_record;
   copied.form_key = new_key;
   copied.header.form_id = encode_plugin_form_id(new_key, destination_context);
-  remap_record_form_links(copied, source_context, destination_context);
+  remap_record_form_links(copied, source_context, destination_context, types);
   copied.original_range.clear();
   copied.decompressed_payload.clear();
   copied.header.data_size = 0;
@@ -197,12 +208,13 @@ RecordCopyNewResult copy_contained_as_new(Plugin& destination,
 RecordCopyNewResult copy_record_as_new(Plugin& destination,
                                        const Plugin& source,
                                        const FormKey& record,
-                                       const RecordCopyNewOptions& options) {
+                                       const RecordCopyNewOptions& options,
+                                       FormLinkTypeLookup type_lookup) {
   if (const auto* top = top_level_record_of(source, record); top != nullptr) {
     if (refused_top_level(top->header.signature)) {
       return {RecordCopyNewStatus::unsupported_signature, {}};
     }
-    return copy_top_level_as_new(destination, source, *top, options);
+    return copy_top_level_as_new(destination, source, *top, options, type_lookup);
   }
   const auto* contained = find_record(source, record);
   if (contained == nullptr) return {RecordCopyNewStatus::source_missing, {}};

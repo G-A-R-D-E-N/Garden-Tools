@@ -353,8 +353,8 @@ public partial class MainWindow : Window
         try { hkx = InputFilePolicy.ReadHkx(animationPath); }
         catch (Exception ex)
         {
-            SetPlaybackSummary($"Could not read {label}: {ex.Message.Split('\n')[0]}", Ux.BadBrush);
             ClearPose();
+            SetPlaybackSummary($"Could not read {label}: {ex.Message.Split('\n')[0]}", Ux.BadBrush);
             return;
         }
         LoadPose(hkx, animationPath, label, "loose", null);
@@ -368,8 +368,8 @@ public partial class MainWindow : Window
         try { _poseSkeleton = PoseSkeleton(archiveEntry == null ? key : null) ?? ArchiveSkeleton(archiveEntry); }
         catch (InvalidDataException ex)
         {
-            SetPlaybackSummary($"Could not read {label}: {ex.Message.Split('\n')[0]}", Ux.BadBrush);
             ClearPose();
+            SetPlaybackSummary($"Could not read {label}: {ex.Message.Split('\n')[0]}", Ux.BadBrush);
             return;
         }
 
@@ -378,16 +378,17 @@ public partial class MainWindow : Window
         {
             if (!new HkxBinaryReader().TryReadAnimation(hkx, out animation))
             {
-                SetPlaybackSummary($"{label}: {animation.AnimationClass} is not decoded, so it cannot be drawn.",
-                                   Ux.BadBrush);
                 ClearPose();
+                SetPlaybackSummary(
+                    $"{label}: {animation.UnsupportedReason} in {animation.AnimationClass}, so it cannot be drawn.",
+                    Ux.BadBrush);
                 return;
             }
         }
         catch (Exception ex)
         {
-            SetPlaybackSummary($"Could not read {label}: {ex.Message.Split('\n')[0]}", Ux.BadBrush);
             ClearPose();
+            SetPlaybackSummary($"Could not read {label}: {ex.Message.Split('\n')[0]}", Ux.BadBrush);
             return;
         }
 

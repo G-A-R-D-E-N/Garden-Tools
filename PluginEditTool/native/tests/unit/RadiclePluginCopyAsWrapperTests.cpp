@@ -206,6 +206,13 @@ std::string editorIdOf(const fo4::Record& record) {
     return {};
 }
 
+bool hasEditorIdSubrecord(const fo4::Record& record) {
+    for (const auto& subrecord : record.subrecords) {
+        if (subrecord.signature == fo4::sig_edid) return true;
+    }
+    return false;
+}
+
 void saveTarget(fo4ide::plugin::RadiclePluginBackend& backend) {
     REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Target.esp"})).has_value());
 }
@@ -257,6 +264,25 @@ TEST_CASE("Native CopyAsWrapper overrides an LVLI and keeps its FormKey and EDID
     CHECK(list.entries[0].item == copied);
     CHECK(list.entries[0].level == 1);
     CHECK(list.entries[0].count == 1);
+}
+
+TEST_CASE("Native CopyAsWrapper with an empty EditorID gives the NEW copy no EDID subrecord") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadWrapperEnvironment(backend, root);
+
+    const auto message = textResult(backend.copyAsWrapper(nlohmann::json::array(
+        {"Master.esm", "000804:Master.esm", "Target.esp", ""})));
+    saveTarget(backend);
+
+    const auto reloaded = fo4::read_plugin_file(root / "Target.esp");
+    const auto* copy = fo4::find_record(reloaded, fo4::FormKey::parse(message.substr(message.find("NEW record ") + 11, message.size() - message.find("NEW record ") - 12)));
+    REQUIRE(copy != nullptr);
+    CHECK_FALSE(hasEditorIdSubrecord(*copy));
+    const auto* wrapper = fo4::find_record(reloaded, overrideKeyFrom(message));
+    REQUIRE(wrapper != nullptr);
+    CHECK(editorIdOf(*wrapper) == "MasterList");
 }
 
 TEST_CASE("Native CopyAsWrapper moves all of the original entries into the NEW copy") {
