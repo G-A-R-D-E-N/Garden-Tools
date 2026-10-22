@@ -436,6 +436,7 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "CopyAsDisabledOverride") return backend_.copyAsDisabledOverride(args);
         if (method == "CompactToEsl") return backend_.compactToEsl(args);
         if (method == "RenumberPluginFormIds") return backend_.renumberPluginFormIds(args);
+        if (method == "InjectFormsIntoMaster") return backend_.injectFormsIntoMaster(args);
         if (method == "DeepCopyAsOverride") {
             const auto normalizedName = normalizeTargetPluginName(stringArgument(args, 2));
             auto normalizedArgs = withTargetName(args, 2, normalizedName);

@@ -21,7 +21,7 @@ export default function RecordContextMenu({
 }) {
   const {
     copyAsOverrideInto, savePlugin, deleteRecord, renumberFormId, compactEsl, cleanMasters, cleanPlugin, copyAsNewRecord,
-    deepCopyAsOverride, changeReferencingRecords, removeItm, addMasters, renumberPlugin, createSeq, createSchemaRecord,
+    deepCopyAsOverride, changeReferencingRecords, removeItm, addMasters, renumberPlugin, injectIntoMaster, createSeq, createSchemaRecord,
     checkCircularLeveled, checkForErrors, findUnreachable, lootReport, updateOnam, compareTo, copyAsDisabledOverrideInto, copyAsWrapperInto, copyText, elementAction, askImpact,
   } = actions;
   return (
@@ -112,6 +112,7 @@ export default function RecordContextMenu({
       <button onClick={() => addMasters(menu.col)}><Plus size={13} /> Add masters...</button>
       <button onClick={() => cleanMasters(menu.col)}><Eraser size={13} /> Clean masters</button>
       <button onClick={() => renumberPlugin(menu.col)}><Hash size={13} /> Renumber all FormIDs...</button>
+      <button onClick={() => injectIntoMaster(menu.col)}><Hash size={13} /> Inject Forms into master...</button>
       <button onClick={() => createSeq(menu.col)}><FilePlus2 size={13} /> Create SEQ file</button>
       <button onClick={() => checkCircularLeveled(menu.col)}><ListFilter size={13} /> Check circular leveled lists</button>
       <button onClick={() => checkForErrors(menu.col)}><ListFilter size={13} /> Check for errors</button>

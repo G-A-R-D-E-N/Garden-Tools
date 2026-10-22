@@ -36,6 +36,7 @@ add_library(
     plugin/RadiclePluginMaintenance.cpp
     plugin/RadiclePluginCompact.cpp
     plugin/RadiclePluginRenumber.cpp
+    plugin/RadiclePluginInject.cpp
     plugin/RadiclePluginDeepCopy.cpp
     plugin/RadiclePluginReferenceRemap.cpp
     plugin/RadiclePluginOverridePatch.cpp

@@ -2410,6 +2410,18 @@ Regression: `PluginEditTool/native/tests/unit/RadiclePluginItmNestedTests.cpp` (
 - When a script was already published in a compiler and its folder was swept or cleared since, the next publish recreates the folder (`create_directories` / `Directory.CreateDirectory`) before writing, so the self-reference is not silently dropped.
 - Callers need no change: the C# compiler is created without being disposed in many places, which is why cleanup is per process and not per instance.
 
+### Radicle/src/plugin/mutation.cpp:inject_local_record
+
+- Moves one of the plugin's own top-level records to a FormKey owned by one of the plugin's masters, rewrites in-plugin FormLinks with `rekey_form_links`, and relabels child groups, as `renumber_local_record` does. It does not change the HEDR next object ID, because the new id belongs to the master.
+- Returns `not_local` for a record the plugin does not own, and `target_exists` when the plugin already has a record at the target, for example an override of the master's record. Throws `FormIdError` when the target owner is not in `plugin_form_id_context(plugin).masters`, and when the id is wider than the master's mask (raised by `encode_plugin_form_id`).
+- Does not check the master's own records or its lower id bound. The PET op `injectFormsIntoMaster` does both, using `fo4::local_form_id_range(master)`.
+
+### PluginEditTool/native/src/plugin/RadiclePluginInject.cpp:injectFormsIntoMaster
+
+- Locks the plugin and the master names together. The order of refusals is: argument check, `InvalidFormId`, plugin loaded, `InjectMasterNotListed`, `InjectMasterNotLoaded`, range against `fo4::local_form_id_range(master)` (`InjectRangeInvalid`), `InjectTargetOccupied` in the plugin or in the master, the nested top-level check, and `support::parentGroupRelabelRefusal`.
+- The nested top-level refusal is returned as a normal result with a message, the same as `RenumberPluginFormIds` does.
+- Dry run stages nothing. Apply runs `writeGuard` on the injecting plugin only, mutates a copy with `fo4::inject_local_record`, and calls `stagePluginMutationLocked`. Persisting is left to `SavePlugin`.
+
 ## PluginEditTool/native/tests/unit/GraphLiftTests.cpp:UniqueRoot — lift tests remove their temp roots
 
 - `uniqueRoot` made `<temp>/fo4ide-lift-<tag>/<timestamp>` for every `compileText`, `throughGraph`, `runOne` and refusal call and never removed it (38,000 folders per tag on the CI machine). `UniqueRoot` is a small RAII type: it removes its folder, and the tag folder when empty, when the test body ends. The temp root is used only inside the function that creates it, so the lifetime is safe.

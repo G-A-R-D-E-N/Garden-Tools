@@ -1,5 +1,5 @@
 import type { KeyboardEvent } from 'react';
-import type { ConflictFieldRow, ConflictMatrix } from './backend';
+import { getMasters, type ConflictFieldRow, type ConflictMatrix, type MastersListResult } from './backend';
 import { useDialogs } from './useDialogs';
 import type { CompareRow } from './PluginCompareDialog';
 import { errorText } from './errors';
@@ -360,6 +360,43 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
     } catch (e) { setStatus('Renumber failed: ' + errorText(e)); }
   };
 
+  const injectIntoMaster = async (col: number) => {
+    closeMenu();
+    const b = back();
+    const masters = getMasters();
+    if (!b || !masters) return;
+    const plug = matrix.Plugins[col];
+    let names: string[];
+    try {
+      const parsed = JSON.parse(await masters.List(plug)) as MastersListResult;
+      if (parsed.error) throw new Error(parsed.error);
+      names = (parsed.masters ?? []).map(m => m.name);
+    } catch (e) { setStatus('Inject failed: ' + errorText(e)); return; }
+    if (names.length === 0) { setStatus(`${plug} has no masters to inject into.`); return; }
+    const master = await askPrompt({
+      title: 'Inject Forms into master',
+      description: `Moves the records ${plug} owns into the master you name. Masters of ${plug}: ${names.join(', ')}.`,
+      label: 'Master plugin', defaultValue: names[0],
+      validate: v => names.includes(v.trim()) ? null : 'Enter one of the masters listed above.',
+    });
+    if (!master) return;
+    const start = await askPrompt({
+      title: 'Inject Forms into master',
+      description: 'Starting object id in the master. The records take consecutive ids from here. You get a dry run to confirm first.',
+      label: 'Starting object id (hex)', defaultValue: '000800',
+      validate: v => /^[0-9a-fA-F]{1,6}$/.test(v.trim()) ? null : 'Six hex digits or fewer, e.g. 000800.',
+    });
+    if (!start) return;
+    try {
+      const preview = await b.InjectFormsIntoMaster(plug, master.trim(), start, false);
+      setStatus(preview);
+      if (!preview.startsWith('DRY RUN')) return;
+      if (!await askConfirm({ title: 'Confirm', message: preview, confirmLabel: 'Proceed' })) return;
+      setStatus(await b.InjectFormsIntoMaster(plug, master.trim(), start, true));
+      await onReload();
+    } catch (e) { setStatus('Inject failed: ' + errorText(e)); }
+  };
+
   const createSeq = async (col: number) => {
     closeMenu();
     const b = back();
@@ -527,6 +564,7 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
     removeItm,
     addMasters,
     renumberPlugin,
+    injectIntoMaster,
     createSeq,
     checkCircularLeveled,
     compareTo,

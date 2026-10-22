@@ -93,6 +93,13 @@ public:
         });
     }
 
+    virtual Result<nlohmann::json> injectFormsIntoMaster(const nlohmann::json&) {
+        return std::unexpected(Error{
+            "InjectFormsIntoMasterUnavailable",
+            "Native inject-forms-into-master is unavailable for this backend"
+        });
+    }
+
     virtual Result<nlohmann::json> deepCopyAsOverride(const nlohmann::json&) {
         return std::unexpected(Error{
             "DeepCopyUnavailable",
