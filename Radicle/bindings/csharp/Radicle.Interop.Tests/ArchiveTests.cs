@@ -71,6 +71,13 @@ public class ArchiveTests
     }
 
     [Fact]
+    public void WriterRefusesNullFileDataBeforePinning()
+    {
+        var files = new (string Path, byte[] Data)[] { ("Meshes\\Gun.nif", null!) };
+        Assert.Throws<ArgumentException>(() => Ba2Writer.General(files, 1, false));
+    }
+
+    [Fact]
     public void OpenRootsLayersLooseRootsHighToLowOverArchives()
     {
         using var temp = new TempDirectory();

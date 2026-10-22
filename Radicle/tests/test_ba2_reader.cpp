@@ -10,6 +10,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
@@ -382,6 +383,49 @@ TEST_F(Ba2ReaderTest, LooseRootsResolveHighToLowAndShadowLowerRoots) {
   radicle_free_bytes(bytes);
   radicle_assets_destroy(handle);
   EXPECT_EQ(radicle_assets_open_roots(nullptr, 1, archive_paths, 1, &handle), RADICLE_STATUS_INVALID_ARGUMENT);
+}
+
+TEST_F(Ba2ReaderTest, RepeatedLooseRootIsKeptOnceAtItsFirstPosition) {
+  const auto root_a = data().parent_path() / "ModA";
+  const auto root_b = data().parent_path() / "ModB";
+  write_file(root_a / "Meshes" / "a.nif", bytes_of("a"));
+  write_file(root_b / "Meshes" / "b.nif", bytes_of("b"));
+  const std::vector<std::filesystem::path> roots{root_a, root_a, root_b};
+  const auto assets = fo4::archive::AssetResolver::open_roots(roots, {});
+
+  ASSERT_EQ(assets.roots().size(), 2u);
+  EXPECT_EQ(assets.roots()[0], root_a);
+  EXPECT_EQ(assets.roots()[1], root_b);
+  const auto all = assets.list("meshes", ".nif", true);
+  ASSERT_EQ(all.size(), 2u);
+  EXPECT_EQ(all[0].path, "meshes/a.nif");
+  EXPECT_EQ(all[0].location.loose_path, root_a / "Meshes" / "a.nif");
+  EXPECT_FALSE(all[0].shadowed);
+  EXPECT_FALSE(all[1].shadowed);
+}
+
+TEST_F(Ba2ReaderTest, LooseWalkTerminatesOnDirectorySymlinkBackToItsParent) {
+  write_file(data() / "meshes" / "x.nif", bytes_of("x"));
+  try {
+    std::filesystem::create_directory_symlink(data() / "meshes", data() / "meshes" / "up");
+  } catch (const std::filesystem::filesystem_error& error) {
+    GTEST_SKIP() << "directory symlinks need a privilege this session lacks: " << error.what();
+  }
+  const auto assets = fo4::archive::AssetResolver::open(data(), {});
+  const auto all = assets.list("", ".nif", true);
+  EXPECT_EQ(std::count_if(all.begin(), all.end(), [](const auto& item) { return item.path == "meshes/x.nif"; }), 1);
+  EXPECT_EQ(text_of(assets.read(*assets.locate("meshes/x.nif"))), "x");
+}
+
+TEST_F(Ba2ReaderTest, LooseWalkLeavesTheDataFolderOutOfTheTree) {
+  write_file(data() / "data" / "meshes" / "x.nif", bytes_of("nested"));
+  write_file(data() / "meshes" / "x.nif", bytes_of("real"));
+  const auto assets = fo4::archive::AssetResolver::open(data(), {});
+  const auto all = assets.list("meshes", ".nif", true);
+  ASSERT_EQ(all.size(), 1u);
+  EXPECT_EQ(all[0].path, "meshes/x.nif");
+  EXPECT_FALSE(all[0].shadowed);
+  EXPECT_EQ(all[0].location.loose_path, data() / "meshes" / "x.nif");
 }
 
 TEST_F(Ba2ReaderTest, CApiWritesGeneralArchivesThatMatchTheNativeWriterAndReadBack) {

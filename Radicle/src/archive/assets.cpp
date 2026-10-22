@@ -24,6 +24,17 @@ std::filesystem::path from_utf8(std::string_view text) {
 
 using io::utf8;
 
+std::string root_key(const std::filesystem::path& root) {
+  std::error_code ec;
+  const auto canonical = std::filesystem::weakly_canonical(root, ec);
+  const auto key = utf8(ec ? root : canonical);
+#if defined(_WIN32)
+  return text::fold(key);
+#else
+  return key;
+#endif
+}
+
 std::vector<std::pair<std::string, std::filesystem::path>> list_files(const std::filesystem::path& dir) {
   std::vector<std::pair<std::string, std::filesystem::path>> files;
   std::error_code ec;
@@ -143,8 +154,9 @@ AssetResolver AssetResolver::open(const std::filesystem::path& data_dir,
 AssetResolver AssetResolver::open_roots(std::span<const std::filesystem::path> roots,
                                         std::span<const std::filesystem::path> archives) {
   AssetResolver resolver;
+  std::set<std::string> seen;
   for (const auto& root : roots) {
-    if (!root.empty()) resolver.roots_.push_back(root);
+    if (!root.empty() && seen.insert(root_key(root)).second) resolver.roots_.push_back(root);
   }
   resolver.archives_.reserve(archives.size());
   for (const auto& path : archives) resolver.archives_.push_back(Ba2Reader::open(path));
