@@ -384,3 +384,103 @@ TEST(FormLinkListRead, PreservesStoredOrderAndRefusesMalformedOrWrongRecord) {
   EXPECT_THROW(fo4::schema::record_formlink_list_values(malformed, key, parsed->descriptor),
                fo4::schema::FormLinkListError);
 }
+
+namespace {
+
+std::vector<std::byte> plugin_with_mgef_counter_effects(std::size_t data_size = 22) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(3);
+  hedr.u32(0x804);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+
+  const auto group = fo4::test::begin_group(out, "MGEF", 0);
+  auto first = fo4::test::begin_record(out, "MGEF", 0, 0x00000800, 131);
+  fo4::test::end_record(out, first);
+  auto second = fo4::test::begin_record(out, "MGEF", 0, 0x00000801, 131);
+  fo4::test::end_record(out, second);
+
+  const auto host = fo4::test::begin_record(out, "MGEF", 0, 0x00000802, 131);
+  std::vector<std::byte> data(data_size, std::byte{0});
+  if (data_size >= 22) data[20] = std::byte{2};
+  fo4::test::write_subrecord(out, "DATA", data);
+  fo4::test::ByteWriter entry;
+  entry.u32(0x00000800);
+  fo4::test::write_subrecord(out, "ESCE", entry.bytes);
+  entry = fo4::test::ByteWriter{};
+  entry.u32(0x00000801);
+  fo4::test::write_subrecord(out, "ESCE", entry.bytes);
+  fo4::test::end_record(out, host);
+  fo4::test::end_group(out, group);
+  return out.bytes;
+}
+
+std::uint16_t data_u16(const fo4::Record& record, std::size_t offset) {
+  const auto data = fo4::Signature::from_string("DATA");
+  for (const auto& subrecord : record.subrecords) {
+    if (subrecord.signature != data) continue;
+    if (subrecord.data.size() < offset + 2) break;
+    std::uint16_t value = 0;
+    std::memcpy(&value, subrecord.data.data() + offset, sizeof(value));
+    return value;
+  }
+  ADD_FAILURE() << "missing DATA long enough for the counter";
+  return 0;
+}
+
+}  // namespace
+
+TEST(FormLinkListMutation, MaintainsTheCounterStoredInsideAnotherSubrecord) {
+  auto plugin = fo4::read_plugin(plugin_with_mgef_counter_effects(), "CounterEffects.esp");
+  const auto host_key = fo4::FormKey::parse("000802:CounterEffects.esp");
+  const auto first = fo4::FormKey::parse("000800:CounterEffects.esp");
+  const auto descriptor = fo4::schema::formlink_list_descriptor(
+      fo4::Signature::from_string("MGEF"), "MGEF\\CounterEffects");
+  ASSERT_TRUE(descriptor.has_value());
+  EXPECT_EQ(descriptor->counter.to_string(), "DATA");
+  EXPECT_EQ(descriptor->counter_offset, 20u);
+
+  EXPECT_EQ(fo4::schema::insert_record_formlink_list_element(
+                plugin, host_key, *descriptor, 2, first),
+            fo4::schema::FormLinkListMutationStatus::updated);
+  auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "CounterEffects.esp");
+  const auto* host = fo4::find_record(reread, host_key);
+  ASSERT_NE(host, nullptr);
+  ASSERT_EQ(count_subrecords(*host, "ESCE"), 3u);
+  EXPECT_EQ(data_u16(*host, 20), 3u);
+
+  EXPECT_EQ(fo4::schema::remove_record_formlink_list_element(plugin, host_key, *descriptor, 0),
+            fo4::schema::FormLinkListMutationStatus::updated);
+  reread = fo4::read_plugin(fo4::write_plugin(plugin), "CounterEffects.esp");
+  host = fo4::find_record(reread, host_key);
+  ASSERT_NE(host, nullptr);
+  ASSERT_EQ(count_subrecords(*host, "ESCE"), 2u);
+  EXPECT_EQ(data_u16(*host, 20), 2u);
+
+  EXPECT_EQ(fo4::schema::clear_record_formlink_list(plugin, host_key, *descriptor),
+            fo4::schema::FormLinkListMutationStatus::updated);
+  reread = fo4::read_plugin(fo4::write_plugin(plugin), "CounterEffects.esp");
+  host = fo4::find_record(reread, host_key);
+  ASSERT_NE(host, nullptr);
+  EXPECT_EQ(count_subrecords(*host, "ESCE"), 0u);
+  EXPECT_EQ(count_subrecords(*host, "DATA"), 1u);
+  EXPECT_EQ(data_u16(*host, 20), 0u);
+}
+
+TEST(FormLinkListMutation, RefusesACounterSubrecordTooShortForTheCount) {
+  auto plugin = fo4::read_plugin(plugin_with_mgef_counter_effects(8), "CounterEffects.esp");
+  const auto host_key = fo4::FormKey::parse("000802:CounterEffects.esp");
+  const auto first = fo4::FormKey::parse("000800:CounterEffects.esp");
+  const auto descriptor = fo4::schema::formlink_list_descriptor(
+      fo4::Signature::from_string("MGEF"), "MGEF\\CounterEffects");
+  ASSERT_TRUE(descriptor.has_value());
+  const auto before = fo4::write_plugin(plugin);
+
+  EXPECT_THROW(fo4::schema::insert_record_formlink_list_element(
+                   plugin, host_key, *descriptor, 2, first),
+               fo4::schema::FormLinkListError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}

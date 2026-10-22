@@ -144,6 +144,48 @@ TEST(ScalarPreflight, LegacyOutOfRangeValuesAreWarningsNotReadFailures) {
   EXPECT_EQ(issues[1].severity, fo4::schema::PreflightSeverity::warning);
 }
 
+TEST(ScalarPreflight, EnumerationValueWithNoGeneratedNameIsAWarning) {
+  fo4::Record record;
+  record.header.signature = fo4::Signature::from_string("NOTE");
+  record.form_key = fo4::FormKey::parse("000800:Patch.esp");
+  fo4::Subrecord type;
+  type.signature = fo4::Signature::from_string("DNAM");
+  type.data = {std::byte{4}};
+  record.subrecords.push_back(std::move(type));
+
+  const auto issues = fo4::schema::preflight_record(record);
+  ASSERT_EQ(issues.size(), 1u);
+  EXPECT_EQ(issues[0].path, "NOTE\\Type");
+  EXPECT_EQ(issues[0].code, "scalar_enum_value_unnamed");
+  EXPECT_EQ(issues[0].severity, fo4::schema::PreflightSeverity::warning);
+  EXPECT_NE(issues[0].message.find("<Unknown: 4>"), std::string::npos);
+
+  record.subrecords[0].data = {std::byte{3}};
+  EXPECT_TRUE(fo4::schema::preflight_record(record).empty());
+}
+
+TEST(ScalarPreflight, FlagValueWithUnnamedBitsIsAWarning) {
+  fo4::Record record;
+  record.header.signature = fo4::Signature::from_string("CLFM");
+  record.form_key = fo4::FormKey::parse("000800:Patch.esp");
+  record.subrecords.push_back(
+      u32_subrecord(fo4::Signature::from_string("FNAM"), 8u));
+
+  const auto issues = fo4::schema::preflight_record(record);
+  ASSERT_EQ(issues.size(), 1u);
+  EXPECT_EQ(issues[0].path, "CLFM\\Flags");
+  EXPECT_EQ(issues[0].code, "scalar_flag_bits_unnamed");
+  EXPECT_EQ(issues[0].severity, fo4::schema::PreflightSeverity::warning);
+  EXPECT_NE(issues[0].message.find("<Unknown: 3>"), std::string::npos);
+
+  record.subrecords[0].data = {std::byte{4}, std::byte{0}, std::byte{0}, std::byte{0}};
+  EXPECT_TRUE(fo4::schema::preflight_record(record).empty());
+  record.subrecords[0].data = {std::byte{0x81}, std::byte{0}, std::byte{0}, std::byte{0}};
+  const auto two_named = fo4::schema::preflight_record(record);
+  ASSERT_EQ(two_named.size(), 1u);
+  EXPECT_NE(two_named[0].message.find("<Unknown: 7>"), std::string::npos);
+}
+
 TEST(AuthoringPreflight, GeneratedEyesShapePasses) {
   auto plugin = plugin_with_top_record(authored_record(
       "EYES", 0x800, {"EDID", "FULL", "ICON", "DATA"}));
@@ -215,9 +257,77 @@ TEST(AuthoringPreflight, CellReferenceVariantAtTopLevelFails) {
   EXPECT_TRUE(has_issue(issues, "record_placement_invalid"));
 }
 
+fo4::Plugin refr_in_cell(fo4::Record record) {
+  fo4::Plugin plugin;
+  plugin.key = fo4::PluginKey::from_filename("Patch.esp");
+  auto outer = top_group("CELL");
+  fo4::Group children;
+  children.header.group_type = static_cast<std::int32_t>(fo4::GroupType::cell_children);
+  fo4::Group nested;
+  nested.header.group_type = static_cast<std::int32_t>(fo4::GroupType::cell_persistent_children);
+  nested.children.emplace_back(std::move(record));
+  children.children.emplace_back(std::move(nested));
+  outer.children.emplace_back(std::move(children));
+  plugin.groups.push_back(std::move(outer));
+  return plugin;
+}
+
+fo4::Record refr_with_data(std::vector<std::string_view> subrecords) {
+  auto record = authored_record("REFR", 0x800, subrecords);
+  for (auto& subrecord : record.subrecords) {
+    if (subrecord.signature == fo4::Signature::from_string("NAME")) {
+      subrecord.data.resize(4);
+    }
+    if (subrecord.signature == fo4::Signature::from_string("DATA")) {
+      subrecord.data.resize(24);
+    }
+    if (subrecord.signature == fo4::Signature::from_string("XSCL")) {
+      subrecord.data.resize(4);
+    }
+  }
+  return record;
+}
+
+TEST(AuthoringPreflight, RefrAuthoringBlockListsTheSingletonsInXEditOrder) {
+  const auto constraint =
+      fo4::schema::record_authoring_constraint(fo4::Signature::from_string("REFR"));
+  ASSERT_TRUE(constraint.has_value());
+  EXPECT_EQ(constraint->placement, fo4::schema::RecordPlacement::cell_reference_children);
+  const auto rules = fo4::schema::authoring_subrecords(*constraint);
+  ASSERT_EQ(rules.size(), 57u);
+  EXPECT_EQ(rules.front().signature, fo4::Signature::from_string("EDID"));
+  EXPECT_EQ(rules.back().signature, fo4::Signature::from_string("MNAM"));
+  for (const auto& rule : rules) {
+    if (rule.signature != fo4::Signature::from_string("DATA")) {
+      EXPECT_EQ(rule.maximum, 1u) << rule.signature.to_string();
+      EXPECT_EQ(rule.minimum, 0u) << rule.signature.to_string();
+      continue;
+    }
+    EXPECT_EQ(rule.minimum, 1u);
+    ASSERT_TRUE(rule.has_default());
+    EXPECT_EQ(rule.default_bytes().size(), 24u);
+  }
+}
+
+TEST(AuthoringPreflight, RefrOrderedReferencePassesAndMisorderedReferenceFails) {
+  const auto key = fo4::FormKey::parse("000800:Patch.esp");
+  const auto ordered = refr_in_cell(refr_with_data({"NAME", "XSCL", "DATA"}));
+  EXPECT_TRUE(fo4::schema::preflight_authoring_record(ordered, key).empty());
+
+  const auto misordered = refr_in_cell(refr_with_data({"DATA", "NAME"}));
+  EXPECT_TRUE(has_issue(fo4::schema::preflight_authoring_record(misordered, key),
+                        "subrecord_order_invalid"));
+
+  const auto top_level = plugin_with_top_record(
+      refr_with_data({"NAME", "DATA"}));
+  EXPECT_TRUE(has_issue(fo4::schema::preflight_authoring_record(top_level, key),
+                        "record_placement_invalid"));
+}
+
 TEST(AuthoringPreflight, GeneratedLvspCreationShapePassesWithoutOptionalFields) {
   auto record = authored_record("LVSP", 0x800, {"OBND", "LVLD", "LVLM", "LVLF", "LLCT"});
   record.subrecords.front().data.resize(12);
+  for (std::size_t i = 1; i <= 3; ++i) record.subrecords[i].data.resize(1);
   auto plugin = plugin_with_top_record(record);
   const auto key = fo4::FormKey::parse("000800:Patch.esp");
   EXPECT_TRUE(fo4::schema::preflight_authoring_record(plugin, key).empty());
@@ -226,6 +336,39 @@ TEST(AuthoringPreflight, GeneratedLvspCreationShapePassesWithoutOptionalFields) 
       fo4::schema::record_authoring_constraint(fo4::Signature::from_string("LVSP"));
   ASSERT_TRUE(constraint.has_value());
   EXPECT_EQ(fo4::schema::authoring_subrecords(*constraint).size(), 7u);
+}
+
+TEST(AuthoringPreflight, PairCountsWorsenOnlyWhenAnEditMovesThemApart) {
+  const auto signature = fo4::Signature::from_string("HDPT");
+  const auto constraint = fo4::schema::record_authoring_constraint(signature);
+  ASSERT_TRUE(constraint.has_value());
+  const auto rules = fo4::schema::authoring_subrecords(*constraint);
+  std::size_t nam0 = rules.size();
+  std::size_t nam1 = rules.size();
+  for (std::size_t index = 0; index < rules.size(); ++index) {
+    if (rules[index].signature == fo4::Signature::from_string("NAM0")) nam0 = index;
+    if (rules[index].signature == fo4::Signature::from_string("NAM1")) nam1 = index;
+  }
+  ASSERT_LT(nam0, rules.size());
+  ASSERT_LT(nam1, rules.size());
+
+  const std::vector<std::size_t> balanced(rules.size(), 0);
+  auto added = balanced;
+  ++added[nam0];
+  EXPECT_TRUE(fo4::schema::worsened_subrecord_pair(signature, rules, balanced, added).has_value());
+
+  std::vector<std::size_t> imbalanced(rules.size(), 0);
+  imbalanced[nam0] = 2;
+  auto paired = imbalanced;
+  ++paired[nam1];
+  EXPECT_FALSE(fo4::schema::worsened_subrecord_pair(signature, rules, imbalanced, paired).has_value());
+  auto wider = imbalanced;
+  ++wider[nam0];
+  EXPECT_TRUE(fo4::schema::worsened_subrecord_pair(signature, rules, imbalanced, wider).has_value());
+
+  auto unrelated = imbalanced;
+  ++unrelated[0];
+  EXPECT_FALSE(fo4::schema::worsened_subrecord_pair(signature, rules, imbalanced, unrelated).has_value());
 }
 
 TEST(ListPreflight, PackedKeywordArrayIsChecked4BytesPerElement) {

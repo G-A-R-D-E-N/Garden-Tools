@@ -185,7 +185,7 @@ public class VegetationAuthoringTests
             var newTree = plugin.CreateRecord("TREE", "NewTree");
             var newFlor = plugin.CreateRecord("FLOR", "NewFlora");
             var newLtex = plugin.CreateRecord("LTEX", "NewLand");
-            Assert.Equal(Status.InvalidArgument, Refusal(() => plugin.CreateRecord("MISC", "X")));
+            Assert.Equal(Status.InvalidArgument, Refusal(() => plugin.CreateRecord("BPTD", "X")));
             Assert.True(plugin.AddSubrecord(newFlor, "FNAM"));
             Assert.True(plugin.SetScalar(newFlor, "FLOR\\Flags", "513"));
             Assert.True(plugin.SetScalar(newGras, "GRAS\\Density", "44"));

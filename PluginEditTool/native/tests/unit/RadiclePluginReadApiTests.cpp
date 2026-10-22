@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
@@ -151,18 +152,25 @@ TEST_CASE("Native Spreadsheet grid exposes only safe EDID writes") {
 
     const auto grid = parseResult(backend.invokeBackend(
         "GetRecordsGrid", nlohmann::json::array({"Base.esp", "MISC", 200, 0})));
-    REQUIRE(grid.at("columns").size() == 2);
-    CHECK(grid.at("columns")[0] == "EDID");
-    CHECK(grid.at("columns")[1] == "MISC\\Keywords\\Count");
     CHECK(grid.at("total") == 1);
     CHECK(grid.at("offset") == 0);
     REQUIRE(grid.at("rows").size() == 1);
-    CHECK(grid.at("rows")[0].at("formKey") == "000800:Base.esp");
-    CHECK(grid.at("rows")[0].at("editorId") == "BaseMisc");
-    CHECK(grid.at("rows")[0].at("cells")[0] == "BaseMisc");
-    CHECK(grid.at("rows")[0].at("cells")[1] == "0");
-    CHECK(grid.at("rows")[0].at("editable")[0] == true);
-    CHECK(grid.at("rows")[0].at("editable")[1] == false);
+    const auto& columns = grid.at("columns");
+    const auto& row = grid.at("rows")[0];
+    REQUIRE(columns[0] == "EDID");
+    CHECK(row.at("formKey") == "000800:Base.esp");
+    CHECK(row.at("editorId") == "BaseMisc");
+    CHECK(row.at("cells")[0] == "BaseMisc");
+    REQUIRE(row.at("cells").size() == columns.size());
+    REQUIRE(row.at("editable").size() == columns.size());
+
+    const auto keywords = std::find(columns.begin(), columns.end(), "MISC\\Keywords\\Count");
+    REQUIRE(keywords != columns.end());
+    CHECK(row.at("cells")[static_cast<std::size_t>(keywords - columns.begin())] == "0");
+
+    for (std::size_t index = 0; index < columns.size(); ++index) {
+        CHECK(row.at("editable")[index] == (index == 0));
+    }
 }
 
 TEST_CASE("Native grid refuses all cell edits on protected plugins", "[w0]") {

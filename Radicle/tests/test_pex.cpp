@@ -177,11 +177,24 @@ std::size_t findSequence(const std::vector<std::uint8_t>& haystack,
   return std::string::npos;
 }
 
-void expectParseError(const std::vector<std::uint8_t>& bytes) {
+void expectParseError(const std::vector<std::uint8_t>& bytes, const std::string& expected) {
   try {
     static_cast<void>(PexFile::fromBytes(bytes));
     FAIL() << "expected a parse error";
+  } catch (const std::runtime_error& e) {
+    EXPECT_NE(std::string(e.what()).find(expected), std::string::npos) << e.what();
+  } catch (...) {
+    FAIL() << "expected std::runtime_error";
+  }
+}
+
+void expectAnyParseError(const std::vector<std::uint8_t>& bytes) {
+  try {
+    static_cast<void>(PexFile::fromBytes(bytes));
+    FAIL() << bytes.size() << "-byte prefix parsed";
   } catch (const std::runtime_error&) {
+  } catch (...) {
+    FAIL() << bytes.size() << "-byte prefix threw a non-runtime_error exception";
   }
 }
 
@@ -332,15 +345,15 @@ TEST(Pex, UnusedStringTableEntriesAreNotRebuiltOnWrite) {
 }
 
 TEST(Pex, EmptyAndBadMagicFailClosed) {
-  expectParseError({});
-  expectParseError({0x00, 0x00, 0x00, 0x00});
-  expectParseError({0xFA, 0x57, 0xC0, 0xDE});
+  expectParseError({}, "Unexpected end of .pex data");
+  expectParseError({0x00, 0x00, 0x00, 0x00}, "Not a .pex file");
+  expectParseError({0xFA, 0x57, 0xC0, 0xDE}, "big-endian");
 }
 
-TEST(Pex, TruncatedHeaderFailsClosed) {
+TEST(Pex, TruncatedFileFailsClosed) {
   const auto bytes = encoded(syntheticFile());
-  for (std::size_t length : {4u, 10u, 20u, 26u}) {
-    expectParseError(std::vector<std::uint8_t>(bytes.begin(), bytes.begin() + length));
+  for (std::size_t length = 0; length < bytes.size(); ++length) {
+    expectAnyParseError(std::vector<std::uint8_t>(bytes.begin(), bytes.begin() + length));
   }
 }
 
@@ -349,7 +362,7 @@ TEST(Pex, ForeignGameIdFailsClosed) {
   ASSERT_GE(bytes.size(), 8u);
   bytes[6] = 1;
   bytes[7] = 0;
-  expectParseError(bytes);
+  expectParseError(bytes, "is for game id");
 }
 
 TEST(Pex, ValueTypeTagBeyondFiveFailsClosed) {
@@ -358,7 +371,7 @@ TEST(Pex, ValueTypeTagBeyondFiveFailsClosed) {
   const std::size_t at = findSequence(bytes, integerMarker);
   ASSERT_NE(at, std::string::npos);
   bytes[at] = 0x06;
-  expectParseError(bytes);
+  expectParseError(bytes, "Invalid value type tag");
 }
 
 TEST(Pex, WritingAnUnknownOpcodeFailsClosed) {

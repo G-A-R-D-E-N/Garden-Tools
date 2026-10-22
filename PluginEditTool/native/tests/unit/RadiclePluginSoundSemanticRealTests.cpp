@@ -35,14 +35,13 @@ std::string value(const nlohmann::json& grid, const fo4::FormKey& key, std::stri
         return name.template get<std::string>() == path;
     });
     REQUIRE(column != columns.end());
-    for (const auto& row : grid.at("rows")) {
-        if (row.at("formKey") != key.to_string()) continue;
-        const auto index = static_cast<std::size_t>(column - columns.begin());
-        CHECK(row.at("editable")[index] == true);
-        return row.at("cells")[index].template get<std::string>();
-    }
-    FAIL("Missing official sound override " << key.to_string());
-    return {};
+    const auto& rows = grid.at("rows");
+    const auto row = std::find_if(rows.begin(), rows.end(),
+        [&](const auto& candidate) { return candidate.at("formKey") == key.to_string(); });
+    if (row == rows.end()) { FAIL("Missing official sound override " << key.to_string()); }
+    const auto index = static_cast<std::size_t>(column - columns.begin());
+    CHECK(row->at("editable")[index] == true);
+    return row->at("cells")[index].template get<std::string>();
 }
 
 }

@@ -32,5 +32,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="fixtures/**" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../symrm/samples/Meshes/Actors/Turret/CharacterAssets/TurretMounted.nif" Link="samples/TurretMounted.nif" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

@@ -146,6 +146,37 @@ public sealed class Ba2RadicleTests
     }
 
     [Fact]
+    public void LaterPluginsBaseArchiveWinsOverEarlierOne()
+    {
+        string root = TempRoot();
+        string dataFolder = Path.Combine(root, "Data");
+        Directory.CreateDirectory(dataFolder);
+        try
+        {
+            string archiveA = Path.Combine(dataFolder, "A - Animations.ba2");
+            string archiveB = Path.Combine(dataFolder, "B - Animations.ba2");
+            WriteGeneralBa2(archiveA, "Meshes/X/anim.hkx", Encoding.ASCII.GetBytes("archive A"));
+            WriteGeneralBa2(archiveB, "Meshes/X/anim.hkx", Encoding.ASCII.GetBytes("archive B"));
+            WriteGeneralBa2(Path.Combine(dataFolder, "Fallout4 - Animations.ba2"), "Meshes/X/anim.hkx",
+                            Encoding.ASCII.GetBytes("archive Fallout4"));
+            string plugins = Path.Combine(root, "plugins.txt");
+            File.WriteAllText(plugins, "*A.esm\n*B.esm\n");
+
+            using var data = GameData.Discover(dataFolder, plugins);
+
+            Assert.Equal(
+                new[] { "B - Animations.ba2", "A - Animations.ba2", "Fallout4 - Animations.ba2" },
+                data.ArchivePaths.Select(path => Path.GetFileName(path)));
+            var winner = Assert.Single(data.EnumerateWinners("meshes/x/", ".hkx"));
+            Assert.Equal("B - Animations.ba2", Path.GetFileName(winner.ArchivePath));
+            Assert.Equal(new[] { "A - Animations.ba2", "Fallout4 - Animations.ba2" },
+                         winner.Shadowed.Select(c => c.Source));
+            Assert.Equal(Encoding.ASCII.GetBytes("archive B"), data.ReadAnimation(dataFolder, "Meshes/X/anim.hkx")?.Bytes);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
     public void HigherModRootWinsAndLowerRootAndDataCopiesAreListedInPrecedenceOrder()
     {
         string root = TempRoot();

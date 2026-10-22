@@ -105,6 +105,17 @@ Result<const fo4::Plugin*> winningPlugin(const Plugins& plugins, const fo4::Form
     return std::unexpected(Error{"RecordNotFound", "Record not found: " + key.to_string()});
 }
 
+inline const fo4::Record* topLevelRecord(const fo4::Plugin& plugin, const fo4::FormKey& key) {
+    for (const auto& group : plugin.groups) {
+        if (group.header.group_type != static_cast<std::int32_t>(fo4::GroupType::top)) continue;
+        for (const auto& child : group.children) {
+            const auto* record = std::get_if<fo4::Record>(&child);
+            if (record != nullptr && record->form_key == key) return record;
+        }
+    }
+    return nullptr;
+}
+
 inline std::string editorId(const fo4::Record& record) {
     for (const auto& subrecord : record.subrecords) {
         if (subrecord.signature != fo4::sig_edid || subrecord.data.empty()) continue;

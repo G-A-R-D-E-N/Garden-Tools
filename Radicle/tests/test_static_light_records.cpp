@@ -191,9 +191,9 @@ TEST(StaticLightSynthetic, EditsOneFieldPerRecordAndRereadsIt) {
   EXPECT_EQ(payload(reread, "000806:Patch.esp", "TX00"), zstr("Textures\\New_d.dds"));
 }
 
-TEST(StaticLightSynthetic, MaterialSwapArraysStayUntouchedAndHaveNoRows) {
+TEST(StaticLightSynthetic, MaterialSwapArraysStayUntouchedAndFlatFnamHasNoRow) {
   const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
-  EXPECT_TRUE(fo4::schema::scalar_fields(sig("MSWP")).empty());
+  EXPECT_FALSE(fo4::schema::scalar_field_descriptor("MSWP\\FNAM").has_value());
   EXPECT_TRUE(fo4::schema::formlink_fields(sig("MSWP")).empty());
   EXPECT_EQ(payload(plugin, "000805:Patch.esp", "BNAM"), zstr("Materials\\A.bgsm"));
   EXPECT_EQ(payload(plugin, "000805:Patch.esp", "SNAM"), zstr("Materials\\B.bgsm"));

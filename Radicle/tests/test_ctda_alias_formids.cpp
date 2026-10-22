@@ -18,12 +18,16 @@ namespace {
 constexpr std::uint16_t k_get_distance = 1;
 constexpr std::uint16_t k_get_faction_rank_difference = 60;
 constexpr std::uint16_t k_get_is_current_package = 161;
+constexpr std::uint16_t k_get_in_worldspace = 310;
 constexpr std::uint32_t k_run_on_subject = 0;
+constexpr std::uint32_t k_run_on_reference = 2;
 constexpr std::uint32_t k_run_on_quest_alias = 5;
+constexpr std::uint16_t k_get_seconds_passed = 12;
 constexpr std::uint32_t k_missing = 0xFFFFFFFFu;
 
 std::vector<std::byte> make_ctda(std::uint8_t type, std::uint16_t function, std::uint32_t param1,
-                                 std::uint32_t param2, std::uint32_t run_on) {
+                                 std::uint32_t param2, std::uint32_t run_on,
+                                 std::uint32_t reference = 0) {
   fo4::test::ByteWriter ctda;
   ctda.u8(type);
   ctda.u8(0);
@@ -35,7 +39,7 @@ std::vector<std::byte> make_ctda(std::uint8_t type, std::uint16_t function, std:
   ctda.u32(param1);
   ctda.u32(param2);
   ctda.u32(run_on);
-  ctda.u32(0);
+  ctda.u32(reference);
   ctda.u32(static_cast<std::uint32_t>(-1));
   return ctda.bytes;
 }
@@ -154,6 +158,8 @@ INSTANTIATE_TEST_SUITE_P(
                  std::nullopt},
         CtdaCase{"ReferenceParamWithoutAliasFlagIsStillRemapped", false, 0x03000801, 0,
                  k_get_distance, 3, 0, k_run_on_subject, 0x01000003u, std::nullopt},
+        CtdaCase{"GetInWorldspaceParamOneIsRemappedOnMasterReorder", false, 0x03000801, 0,
+                 k_get_in_worldspace, 3, 0, k_run_on_subject, 0x01000003u, std::nullopt},
         CtdaCase{"PackdataFlagLeavesPackageParamAlone", false, 0x03000801,
                  fo4::k_ctda_flag_pack_data, k_get_is_current_package, 3, 0, k_run_on_subject, 3u,
                  std::nullopt},
@@ -177,3 +183,29 @@ INSTANTIATE_TEST_SUITE_P(
                  k_get_is_current_package, 0x00000812, 0, k_run_on_quest_alias, 0x01000812u,
                  std::nullopt}),
     [](const testing::TestParamInfo<CtdaCase>& info) { return std::string(info.param.name); });
+
+TEST(CtdaReferenceRunOn, ReferenceSlotIsAFormIdOnlyOnReferenceRunOn) {
+  const std::string plugin_name = "ReferenceRunOn.esp";
+  auto out = plugin_with_masters();
+  write_cobj(out, 0x03000801,
+             make_ctda(0, k_get_seconds_passed, 0, 0, k_run_on_reference, 0x00000812));
+  const auto masters = std::vector<fo4::PluginKey>{
+      fo4::PluginKey::from_filename("RadiationOverhaul.esp"),
+      fo4::PluginKey::from_filename("Fallout4.esm")};
+  const auto ctda = remapped_ctda(out, plugin_name, masters);
+  ASSERT_EQ(ctda.size(), 32u);
+  EXPECT_EQ(read_u32(ctda, 24), 0x01000812u);
+}
+
+TEST(CtdaReferenceRunOn, ReferenceSlotIsLeftAloneOnOtherRunOn) {
+  const std::string plugin_name = "StaleReference.esp";
+  auto out = plugin_with_masters();
+  write_cobj(out, 0x03000801,
+             make_ctda(0, k_get_seconds_passed, 0, 0, k_run_on_subject, 0x00000812));
+  const auto masters = std::vector<fo4::PluginKey>{
+      fo4::PluginKey::from_filename("RadiationOverhaul.esp"),
+      fo4::PluginKey::from_filename("Fallout4.esm")};
+  const auto ctda = remapped_ctda(out, plugin_name, masters);
+  ASSERT_EQ(ctda.size(), 32u);
+  EXPECT_EQ(read_u32(ctda, 24), 0x00000812u);
+}

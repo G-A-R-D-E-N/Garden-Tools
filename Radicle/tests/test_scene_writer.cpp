@@ -12,6 +12,64 @@ Scalar set(fo4::Plugin& plugin, const char* path, std::size_t group, const char*
   return fo4::set_scene_scalar(plugin, key(id), path, group, value);
 }
 
+inline constexpr std::uint32_t k_subtype = 0x830;
+
+Bytes payload_scene() {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(0);
+  hedr.u32(0x900);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+  const auto quests = fo4::test::begin_group(out, "QUST", 0);
+  record(out, "QUST", k_quest, {{"EDID", zstr("Quest")}});
+  record(out, "DIAL", k_topic, {{"EDID", zstr("Topic")}});
+  record(out, "DIAL", k_bare, {{"EDID", zstr("Bare")}});
+  record(out, "SCEN", k_scene,
+         {
+             {"EDID", zstr("Payload scene")},
+             {"ANAM", halves({0})}, {"NAM0", zstr("")}, {"ALID", words({0})},
+             {"DATA", words({k_topic})}, {"DMIN", f32s({1.0f})}, {"DMAX", f32s({3.5f})},
+             {"CRIS", f32s({40.0f, 0.5f})}, {"DEMO", words({2})}, {"DEVA", words({60})},
+             {"VENC", words({k_kywd})}, {"ONAM", words({k_sopm})}, {"PNAM", words({k_kywd})},
+             {"ANAM", {}},
+             {"ANAM", halves({2})}, {"NAM0", zstr("")}, {"ALID", words({0xFFFFFFFF})},
+             {"SNAM", words({0})}, {"SNAM", f32s({5.0f})}, {"TNAM", f32s({1.0f})},
+             {"ANAM", {}},
+             {"ANAM", halves({3})}, {"NAM0", zstr("")}, {"ALID", words({0})},
+             {"PTOP", words({k_topic})}, {"PLVD", words({k_kywd})}, {"DTGT", words({0xFFFFFFFF})},
+             {"NPOS", words({k_kywd})},
+             {"ANAM", {}},
+             {"ANAM", halves({6})}, {"NAM0", zstr("")}, {"ALID", words({0})},
+             {"DATA", words({k_topic})}, {"HTID", words({k_sndr})}, {"DMAX", f32s({2.0f})},
+             {"VENC", words({k_kywd})},
+             {"ANAM", {}},
+             {"ANAM", halves({4})}, {"NAM0", zstr("")}, {"ALID", words({0})},
+             {"STSC", words({k_scene})},
+             {"ANAM", {}},
+             {"ANAM", halves({1})}, {"NAM0", zstr("")}, {"ALID", words({0})},
+             {"PNAM", words({k_pack})},
+             {"ANAM", {}},
+             {"PNAM", words({k_quest})}, {"INAM", words({5})}, {"VNAM", words({0, 0, 0, 0})},
+         });
+  fo4::test::end_group(out, quests);
+  struct Target {
+    const char* signature;
+    std::uint32_t id;
+    const char* editor_id;
+  };
+  const Target targets[] = {{"KYWD", k_kywd, "Keyword"}, {"KYWD", k_subtype, "Subtype"}, {"SOPM", k_sopm, "Output"},
+                            {"SNDR", k_sndr, "Sound"},   {"PACK", k_pack, "Package"}};
+  for (const auto& target : targets) {
+    const auto group = fo4::test::begin_group(out, target.signature, 0);
+    record(out, target.signature, target.id, {{"EDID", zstr(target.editor_id)}});
+    fo4::test::end_group(out, group);
+  }
+  return out.bytes;
+}
+
 }
 
 TEST(SceneWriter, GroupFieldsAreAddressedByExplicitGroupIndex) {
@@ -91,6 +149,97 @@ TEST(SceneWriter, LinksAndRefusalsChangeNoByte) {
   EXPECT_TRUE(refused(plugin, [&] { set(plugin, "SCEN\\Action\\Type", 0, "1"); }));
   EXPECT_TRUE(refused(plugin, [&] { set(plugin, "SCEN\\Actor\\Alias", 0, "1", k_topic); }));
   EXPECT_EQ(set(plugin, "SCEN\\Flags", 0, "1", 0x8FF), Scalar::record_missing);
+}
+
+TEST(SceneWriter, ActionPayloadRowsFollowTheStoredActionType) {
+  auto plugin = read(payload_scene());
+  EXPECT_EQ(set(plugin, "SCEN\\Action\\LoopingMax", 0, "7.5"), Scalar::updated);
+  EXPECT_EQ(set(plugin, "SCEN\\Action\\LoopingMin", 0, "-2.5"), Scalar::updated);
+  EXPECT_EQ(set(plugin, "SCEN\\Action\\CameraFovOnPlayerCamera", 0, "55"), Scalar::updated);
+  EXPECT_EQ(set(plugin, "SCEN\\Action\\CameraRateOfChange", 0, "0.25"), Scalar::updated);
+  EXPECT_EQ(set(plugin, "SCEN\\Action\\EmotionType", 0, "3"), Scalar::updated);
+  EXPECT_EQ(set(plugin, "SCEN\\Action\\EmotionValue", 0, "80"), Scalar::updated);
+  EXPECT_EQ(set(plugin, "SCEN\\Action\\TimerMax", 1, "9"), Scalar::updated);
+  EXPECT_EQ(set(plugin, "SCEN\\Action\\TimerMin", 1, "0.5"), Scalar::updated);
+  EXPECT_EQ(set(plugin, "SCEN\\Action\\DialogueTargetActor", 2, "4"), Scalar::updated);
+  EXPECT_EQ(set(plugin, "SCEN\\Action\\LoopingMax", 3, "2.5"), Scalar::updated);
+  EXPECT_EQ(set(plugin, "SCEN\\Action\\CameraRateOfChange", 0, "0.25"), Scalar::unchanged);
+  EXPECT_EQ(set(plugin, "SCEN\\Action\\LoopingMax", 1, "2.5"), Scalar::subrecord_missing);
+  EXPECT_EQ(set(plugin, "SCEN\\Action\\EmotionType", 3, "2"), Scalar::subrecord_missing);
+  EXPECT_EQ(set(plugin, "SCEN\\Action\\TimerMax", 0, "3"), Scalar::subrecord_missing);
+  EXPECT_EQ(set(plugin, "SCEN\\Action\\DialogueTargetActor", 0, "1"), Scalar::subrecord_missing);
+  EXPECT_EQ(set(plugin, "SCEN\\Action\\LoopingMax", 9, "1"), Scalar::subrecord_missing);
+  EXPECT_TRUE(refused(plugin, [&] { set(plugin, "SCEN\\Action\\LoopingMax", 0, "x"); }));
+
+  EXPECT_EQ(fo4::set_scene_action_formlink(plugin, key(k_scene), 0, "SCEN\\Action\\Topic", key(k_bare)),
+            Link::updated);
+  EXPECT_EQ(fo4::set_scene_action_formlink(plugin, key(k_scene), 0, "SCEN\\Action\\DialogueSubtype", key(k_subtype)),
+            Link::updated);
+  EXPECT_EQ(fo4::set_scene_action_formlink(plugin, key(k_scene), 0, "SCEN\\Action\\AnimArchType", key(k_kywd)),
+            Link::unchanged);
+  EXPECT_EQ(
+      fo4::set_scene_action_formlink(plugin, key(k_scene), 2, "SCEN\\Action\\PlayerNegativeDialogueSubtype", key(k_subtype)),
+      Link::updated);
+  EXPECT_EQ(fo4::set_scene_action_formlink(plugin, key(k_scene), 4, "SCEN\\Action\\StartSceneTopic", key(k_bare)),
+            Link::updated);
+  EXPECT_EQ(fo4::set_scene_action_formlink(plugin, key(k_scene), 3, "SCEN\\Action\\PlaySound", key(k_sndr)),
+            Link::unchanged);
+  EXPECT_EQ(fo4::set_scene_action_formlink(plugin, key(k_scene), 3, "SCEN\\Action\\Topic", key(k_bare)),
+            Link::updated);
+  EXPECT_EQ(fo4::set_scene_action_formlink(plugin, key(k_scene), 5, "SCEN\\Action\\AnimArchType", key(k_kywd)),
+            Link::subrecord_missing);
+  EXPECT_EQ(fo4::set_scene_action_formlink(plugin, key(k_scene), 2, "SCEN\\Action\\Topic", key(k_topic)),
+            Link::subrecord_missing);
+  EXPECT_EQ(fo4::set_scene_action_formlink(plugin, key(k_scene), 9, "SCEN\\Action\\Topic", key(k_topic)),
+            Link::subrecord_missing);
+  EXPECT_EQ(fo4::set_scene_action_formlink(plugin, key(0x8FF), 0, "SCEN\\Action\\Topic", key(k_topic)),
+            Link::record_missing);
+  EXPECT_EQ(fo4::set_scene_action_formlink(plugin, key(k_topic), 0, "SCEN\\Action\\Topic", key(k_topic)),
+            Link::record_mismatch);
+  EXPECT_TRUE(refused(plugin, [&] {
+    fo4::set_scene_action_formlink(plugin, key(k_scene), 0, "SCEN\\Action\\Topic", key(k_quest));
+  }));
+  EXPECT_TRUE(refused(plugin, [&] {
+    fo4::set_scene_action_formlink(plugin, key(k_scene), 0, "SCEN\\Action\\Topic", fo4::FormKey{});
+  }));
+  EXPECT_TRUE(refused(plugin, [&] {
+    fo4::set_scene_action_formlink(plugin, key(k_scene), 0, "SCEN\\ParentQuest", key(k_quest));
+  }));
+  EXPECT_TRUE(refused(plugin, [&] { fo4::set_scene_formlink(plugin, key(k_scene), "SCEN\\Action\\Topic", key(k_topic)); }));
+  EXPECT_TRUE(refused(plugin, [&] {
+    fo4::set_scene_action_formlink(plugin, key(k_scene), 0, "SCEN\\Nope", key(k_topic));
+  }));
+  EXPECT_TRUE(refused(plugin, [&] { fo4::set_scene_action_formlink(plugin, key(k_scene), 0, "SCEN\\Action\\DTGT", key(k_topic)); }));
+
+  const auto reloaded = reload(plugin);
+  EXPECT_EQ(payloads(reloaded, k_scene, "DMAX").at(0), f32s({7.5f}));
+  EXPECT_EQ(payloads(reloaded, k_scene, "DMAX").at(1), f32s({2.5f}));
+  EXPECT_EQ(payloads(reloaded, k_scene, "DMIN").at(0), f32s({-2.5f}));
+  EXPECT_EQ(payloads(reloaded, k_scene, "CRIS").at(0), f32s({55.0f, 0.25f}));
+  EXPECT_EQ(payloads(reloaded, k_scene, "DEMO").at(0), words({3}));
+  EXPECT_EQ(payloads(reloaded, k_scene, "DEVA").at(0), words({80}));
+  EXPECT_EQ(payloads(reloaded, k_scene, "SNAM").at(0), words({0}));
+  EXPECT_EQ(payloads(reloaded, k_scene, "SNAM").at(1), f32s({9.0f}));
+  EXPECT_EQ(payloads(reloaded, k_scene, "TNAM").at(0), f32s({0.5f}));
+  EXPECT_EQ(payloads(reloaded, k_scene, "DTGT").at(0), words({4}));
+  EXPECT_EQ(payloads(reloaded, k_scene, "DATA").at(0), words({k_bare}));
+  EXPECT_EQ(payloads(reloaded, k_scene, "DATA").at(1), words({k_bare}));
+  EXPECT_EQ(payloads(reloaded, k_scene, "VENC").at(0), words({k_subtype}));
+  EXPECT_EQ(payloads(reloaded, k_scene, "VENC").at(1), words({k_kywd}));
+  EXPECT_EQ(payloads(reloaded, k_scene, "STSC").at(0), words({k_bare}));
+  EXPECT_EQ(payloads(reloaded, k_scene, "HTID").at(0), words({k_sndr}));
+  EXPECT_EQ(payloads(reloaded, k_scene, "PNAM").at(0), words({k_kywd}));
+  EXPECT_EQ(payloads(reloaded, k_scene, "PNAM").at(1), words({k_pack}));
+  ASSERT_EQ(fo4::scene_group_count(reloaded, key(k_scene), fo4::ScenePart::action), 6u);
+
+  const SavedEnvironment saved(reloaded);
+  const auto scene = fo4::env::decode_scene(saved.env(), saved.record(k_scene));
+  ASSERT_EQ(scene.actions.size(), 6u);
+  EXPECT_FALSE(scene.actions[0].index.has_value());
+  EXPECT_EQ(scene.actions[1].payload.size(), 2u);
+  EXPECT_EQ(scene.actions[2].payload.size(), 4u);
+  EXPECT_EQ(scene.actions[2].payload.front().signature.to_string(), "PTOP");
+  EXPECT_EQ(scene.actions[5].actor_alias, 0);
 }
 
 TEST(SceneWriter, MalformedOrDuplicatedScopesAreRefused) {
