@@ -97,13 +97,11 @@ nlohmann::json cell(const nlohmann::json& grid, std::uint32_t id, std::string_vi
         [&](const auto& name) { return name.template get<std::string>() == field; });
     REQUIRE(column != columns.end());
     const auto index = static_cast<std::size_t>(column - columns.begin());
-    for (const auto& row : grid.at("rows")) {
-        if (row.at("formKey") == sound::key(id).to_string()) {
-            return {{"value", row.at("cells")[index]}, {"editable", row.at("editable")[index]}};
-        }
-    }
-    FAIL("Missing sound record " << id);
-    return {};
+    const auto& rows = grid.at("rows");
+    const auto row = std::find_if(rows.begin(), rows.end(),
+        [&](const auto& candidate) { return candidate.at("formKey") == sound::key(id).to_string(); });
+    if (row == rows.end()) { FAIL("Missing sound record " << id); }
+    return {{"value", row->at("cells")[index]}, {"editable", row->at("editable")[index]}};
 }
 
 }
