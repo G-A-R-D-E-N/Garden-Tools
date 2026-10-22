@@ -73,9 +73,13 @@ public sealed partial class GameData : IDisposable
                 string full = Path.GetFullPath(root);
                 if (!placed.Add(full)) continue;
                 roots.Add(full);
-                foreach (string ba2 in Directory.EnumerateFiles(full, "*.ba2", SearchOption.TopDirectoryOnly)
-                                                .OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
-                    if (placed.Add(ba2)) modArchives.Add(ba2);
+                try
+                {
+                    foreach (string ba2 in Directory.EnumerateFiles(full, "*.ba2", SearchOption.TopDirectoryOnly)
+                                                    .OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
+                        if (placed.Add(ba2)) modArchives.Add(ba2);
+                }
+                catch (UnauthorizedAccessException) { }
             }
             modArchives.Reverse();
         }
