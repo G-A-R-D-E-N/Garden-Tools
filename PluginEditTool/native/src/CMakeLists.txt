@@ -32,6 +32,7 @@ add_library(
     plugin/RadiclePluginQuestExistingExtras.cpp
     plugin/RadiclePluginQuestLocalized.cpp
     plugin/RadiclePluginStrings.cpp
+    plugin/RadiclePluginStringsEdit.cpp
     plugin/RadiclePluginElement.cpp
     plugin/RadiclePluginMaintenance.cpp
     plugin/RadiclePluginCompact.cpp

@@ -2413,3 +2413,30 @@ Regression: `PluginEditTool/native/tests/unit/RadiclePluginItmNestedTests.cpp` (
 ## PluginEditTool/native/tests/unit/GraphLiftTests.cpp:UniqueRoot — lift tests remove their temp roots
 
 - `uniqueRoot` made `<temp>/fo4ide-lift-<tag>/<timestamp>` for every `compileText`, `throughGraph`, `runOne` and refusal call and never removed it (38,000 folders per tag on the CI machine). `UniqueRoot` is a small RAII type: it removes its folder, and the tag folder when empty, when the test body ends. The temp root is used only inside the function that creates it, so the lifetime is safe.
+
+### PluginEditTool/native/src/plugin/RadiclePluginStringsEdit.cpp:setString — staged edits, not written
+
+- `setString`, `addString` and `removeString` each read the effective table (saved files overlaid with already staged state through `readStringTables`), mutate a copy, and call `stageStringTable` for that plugin, language and table kind. Nothing reaches disk until `saveStringTables`. The staged map is `RadiclePluginBackend.hpp:stagedStrings_`, guarded by `stagedStringsMutex_` because read ops do not take the write lock.
+- Staging does not check protection. A game-Data or official plugin can be staged and then refused at save, so the refusal sits in one place.
+- Staged state is not cleared when the environment reloads (`environment.LoadMo2`). Edits survive a reload until `discardStringEdits` runs.
+
+### PluginEditTool/native/src/plugin/RadiclePluginStringsEdit.cpp:encodeStringText — encoding rule
+
+- English text is stored as Windows-1252 through `fo4::text::utf8_to_windows1252`. A character outside the code page is refused with `StringNotEncodable`. It is never replaced with `?`.
+- Other languages are stored as the UTF-8 that was sent, after `is_valid_utf8` passes. NUL bytes are refused for every language.
+
+### PluginEditTool/native/src/plugin/RadiclePluginStringsEdit.cpp:saveStringTables — save target and protection
+
+- Each staged table for the plugin and language is written with `write_string_table_file` to `string_table_path` under the plugin's folder. `write_string_table_file` is already atomic, so no temp-file step is added here.
+- The save refuses with `StringSaveProtected` when `isEditable` is false. That covers the game Data folder and protected or official plugins, the same predicate the other write ops use.
+- Staged entries are erased only after every file is written. If a write fails midway, the files already written stay on disk and the staged entries stay in memory so the next save retries the rest.
+
+### PluginEditTool/native/src/plugin/RadiclePluginStringsEdit.cpp:importStrings — import modes
+
+- The whole JSON is validated before anything is staged: bad JSON or a missing `rows` array gives `ImportInvalid`, and an id listed twice gives `ImportDuplicateId`.
+- `merge` sets existing ids and inserts explicit ids with `insert_string`, which keeps the table sorted by id. `replace` first removes every id not in the import.
+- An import row whose display text already equals the staged text keeps its original bytes, so untouched text is never re-encoded.
+
+### PluginEditTool/native/src/plugin/RadiclePluginStringsEdit.cpp:exportStrings — deterministic export
+
+- Rows are sorted by id and carry display text, so two exports of the same table are byte-identical. The op is read-only and takes the read lock.
