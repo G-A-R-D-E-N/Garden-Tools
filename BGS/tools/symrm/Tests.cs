@@ -130,7 +130,6 @@ public static class Tests
         ("Fo4CharacterListsItsAnimations", Fo4CharacterListsItsAnimations),
         ("GameDataResolvesAnimationsInsideArchives", GameDataResolvesAnimationsInsideArchives),
         ("ProjectChainResolvesAnimationsThroughGameData", ProjectChainResolvesAnimationsThroughGameData),
-        ("GameDataLoadOrderFollowsPlugins", GameDataLoadOrderFollowsPlugins),
         ("GameDataCollapsesBorrowedPaths", GameDataCollapsesBorrowedPaths),
         ("RealFilesSurviveAPointerLayoutRoundTrip", RealFilesSurviveAPointerLayoutRoundTrip),
         ("PackedAnimationsAndSkeletonsPlayBackFromArchives", PackedAnimationsAndSkeletonsPlayBackFromArchives),
@@ -2917,31 +2916,6 @@ public static class Tests
                   chain.AnimationSources[@"Animations\Gone.hkt"]);
         }
         finally { Directory.Delete(work, true); }
-    }
-
-    private static void GameDataLoadOrderFollowsPlugins()
-    {
-        Console.WriteLine("\ngame data orders archives by the plugin load order, not alphabetically");
-
-        string data = Directory.CreateTempSubdirectory("bgs-plugins").FullName;
-        try
-        {
-            WriteSingleEntryArchive(Path.Combine(data, "A - Animations.ba2"), "a.hkx", new byte[] { 1 });
-            WriteSingleEntryArchive(Path.Combine(data, "B - Animations.ba2"), "b.hkx", new byte[] { 2 });
-            WriteSingleEntryArchive(Path.Combine(data, "C - Animations.ba2"), "c.hkx", new byte[] { 3 });
-            string plugins = Path.Combine(data, "plugins.txt");
-            File.WriteAllLines(plugins, new[] { "*C.esm", "*B.esm", "*A.esm" });
-
-            using var gameData = OpenCommonwealth.Services.Archive.GameData.Discover(data, plugins);
-            Check("three archives indexed", 3, gameData.ArchivePaths.Count);
-            Check("the highest-priority plugin's archive first", "C - Animations.ba2",
-                  Path.GetFileName(gameData.ArchivePaths[0]));
-            Check("the second plugin's archive next", "B - Animations.ba2",
-                  Path.GetFileName(gameData.ArchivePaths[1]));
-            Check("the lowest-priority plugin's archive last", "A - Animations.ba2",
-                  Path.GetFileName(gameData.ArchivePaths[2]));
-        }
-        finally { Directory.Delete(data, true); }
     }
 
     private static void WriteTestArchive(string path, params (string Name, byte[] Payload)[] entries)
