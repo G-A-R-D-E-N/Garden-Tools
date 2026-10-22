@@ -145,11 +145,18 @@ public sealed partial class GameData : IDisposable
         if (File.Exists(Path.Combine(mods, "modlist.txt"))) return null;
         string profiles = Path.Combine(mods, "profiles");
         if (!Directory.Exists(profiles)) return null;
-        return Directory.EnumerateDirectories(profiles)
-            .Select(d => Path.GetFileName(d))
-            .Where(n => File.Exists(Path.Combine(profiles, n, "modlist.txt")))
-            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
-            .FirstOrDefault();
+        try
+        {
+            return Directory.EnumerateDirectories(profiles)
+                .Select(d => Path.GetFileName(d))
+                .Where(n => File.Exists(Path.Combine(profiles, n, "modlist.txt")))
+                .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     public static string? ModlistPath(string modsFolder, string? profile)
