@@ -11,6 +11,8 @@ public static partial class Smoke
 {
     private static void PackedAnimationOpensFromIndexAndArchive()
     {
+        CancelledArchiveOpenKeepsTheEditedDocumentWritable();
+
         Console.WriteLine("\na packed animation opened from the Animations index or the archive browser is posable");
 
         string samples = System.IO.Path.Combine(AppContext.BaseDirectory, "samples");
@@ -95,6 +97,50 @@ public static partial class Smoke
                 PlayAndStep(browser, "archive browser");
                 CloseForTest(browser);
             });
+        }
+        finally
+        {
+            try { System.IO.Directory.Delete(root, true); }
+            catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException) { }
+        }
+    }
+
+    private static void CancelledArchiveOpenKeepsTheEditedDocumentWritable()
+    {
+        Console.WriteLine("\na cancelled archive open leaves the unsaved edit writable");
+        const string entryPath = "Behaviors/CancelledOpen.hkx";
+        string root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"bgs-cancelled-open-{Guid.NewGuid():N}");
+        System.IO.Directory.CreateDirectory(root);
+
+        try
+        {
+            string loose = WriteOneClip("bgs-smoke-cancelled-open");
+            string archive = System.IO.Path.Combine(root, "Fallout4 - Cancelled.ba2");
+            WriteArchive(archive, new[] { (entryPath, System.IO.File.ReadAllBytes(loose)) });
+
+            var window = new MainWindow();
+            window.Show();
+            window.Open(loose);
+            Dispatcher.UIThread.RunJobs();
+            window.SetXmlForTest(OpenCommonwealth.Services.Hkx.HkxTextEdit.SetParam(
+                window.LoadedXml, "90", "playbackSpeed", "0.8125"));
+
+            int asked = 0;
+            window.DiscardDecision = () =>
+            {
+                asked++;
+                return DiscardChoice.Cancel;
+            };
+            window.OpenArchiveForTest(archive, entryPath);
+            Dispatcher.UIThread.RunJobs();
+            CheckTrue("the cancelled archive open asked about the unsaved edit", asked == 1);
+            CheckTrue("and the edit is still pending", window.IsDirty);
+
+            window.SaveForTest();
+            Dispatcher.UIThread.RunJobs();
+            CheckTrue("Save still writes the edit to the document that stayed open",
+                      OpenCommonwealth.Services.Hkx.HkxTextEdit.TextOf(loose).Contains("0.8125", StringComparison.Ordinal));
+            CloseForTest(window);
         }
         finally
         {

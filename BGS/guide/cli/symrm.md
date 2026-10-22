@@ -129,7 +129,9 @@ symrm mapper x --data "/path/to/Data"                  # sweep every mapper-bear
   relative accuracy in larger units. It writes nothing on its own.
 - `--out <file>` writes the result. Without `--force`, `symrm` refuses an `--out` that is the file being
   read or that already exists; with `--force` it overwrites. The write goes to a temporary file beside the
-  target and is then moved into place, so a failure leaves the existing file alone.
+  target and is then moved into place, so a failure leaves the existing file alone. Overwriting the file
+  that was read keeps the version that was read as `<name>.bak` beside it, and refuses a file that changed
+  on disk since it was read.
 - `--data <folder>` sweeps a game `Data` folder, or an MO2 instance: its `ModOrganizer.ini` game path,
   profile and enabled mod roots resolve the Data folder and the mod archives, exactly as the app's scans
   do. It builds one `GameData` for the folder and reads every mapper-bearing `CharacterAssets` skeleton

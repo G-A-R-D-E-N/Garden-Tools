@@ -1430,3 +1430,11 @@ The directory branch of `Frames` counts animations the reader does not decode by
 ## BGS/app/MainWindow.Pose.cs:ClearPose - pose skeleton cleared
 
 `ClearPose` also sets `_poseSkeleton` to null. Its callers all want the pose gone: `BGS/app/MainWindow.Open.cs:Load` and the failure paths in `BGS/app/MainWindow.Playback.cs:LoadPose`. `LoadPose` assigns `_poseSkeleton` before it reads the animation, so without this a later unreadable or unsupported animation left the previous skeleton set with no animation to pose.
+
+## BGS/app/MainWindow.Open.cs:LoadDocument - read-only only after the new document loads
+
+`LoadDocument` returns true once it commits the new document, after the discard prompt and the source stamp. Every earlier return (empty path, not found, refused file, a discard the user cancelled, an unreadable stamp) returns false. `Open` and `Load` pass that result back. The archive callers `BGS/app/MainWindow.Index.cs:OpenIndexEntry` and `BGS/app/MainWindow.Pose.cs:OpenArchiveEntry` set `_readOnly` and print "Opened ... read only" only when it returns true. Before, they did this after any return, so a cancelled discard left the still-loaded, possibly edited document read-only and Save refused it. The two returns after the commit point (the non-8-byte pointer layout and a root that did not resolve) return true, because the archive copy is already the open document and must still be read-only. Regression test: `BGS/tools/uismoke/Smoke.PackedAnimation.cs:CancelledArchiveOpenKeepsTheEditedDocumentWritable` (edit, cancelled archive open, then Save still writes the edit).
+
+## BGS/tools/symrm/MapperCli.cs:MapperOne - overwriting the source keeps a backup
+
+When `--out` names the file that was read, `MapperOne` writes with `FileSafety.ReplaceChecked` and the hash of the bytes that were read, the same as `BGS/tools/symrm/RagdollCli.cs:RagdollOne`. That keeps the previous version as `<name>.bak` and refuses the write if the file changed on disk after it was read. Before, `FileSafety.Replace` overwrote the source with no backup and no changed-on-disk check. Regression test: `BGS/tools/tests/MapperCliTests.cs:MapperCliTests.OverwritingTheSourceWithForceKeepsTheOriginalAsABackup`.

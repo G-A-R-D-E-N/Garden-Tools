@@ -104,7 +104,7 @@ public partial class MainWindow : Window
             _pendingVirtualPathHint = entry.Name;
             _pendingSourceFolder = Path.GetDirectoryName(Path.GetFullPath(archivePath)) ?? "";
             _pathField.Text = copy;
-            Load();
+            if (!Load()) return;
 
             _readOnly = true;
             _readOnlyWhy = $"{entry.FileName} came out of {Path.GetFileName(archivePath)}, and " +

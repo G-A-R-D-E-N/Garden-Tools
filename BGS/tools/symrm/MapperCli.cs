@@ -159,9 +159,12 @@ public static partial class Program
             return 0;
         }
 
+        string sourcePath = Path.GetFullPath(file);
+        bool replacesSource = string.Equals(outPath, sourcePath, StringComparison.OrdinalIgnoreCase);
+
         if (!force)
         {
-            if (string.Equals(outPath, Path.GetFullPath(file), StringComparison.OrdinalIgnoreCase))
+            if (replacesSource)
             {
                 Console.Error.WriteLine($"  refused: {outPath} is the file being read; pass --force to overwrite it");
                 return 1;
@@ -174,14 +177,20 @@ public static partial class Program
             }
         }
 
-        try { FileSafety.Replace(outPath, produced); }
+        try
+        {
+            if (replacesSource) FileSafety.ReplaceChecked(outPath, produced, DocumentSourceStamp.Capture(source));
+            else FileSafety.Replace(outPath, produced);
+        }
         catch (Exception error)
         {
             Console.Error.WriteLine($"  cannot write {outPath}: {error.Message}");
             return 1;
         }
 
-        Console.WriteLine($"  written to {outPath}");
+        Console.WriteLine(replacesSource
+            ? $"  written to {outPath}; the version that was read is kept as {Path.GetFileName(outPath)}.bak"
+            : $"  written to {outPath}");
         return 0;
     }
 

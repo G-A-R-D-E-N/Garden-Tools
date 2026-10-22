@@ -59,10 +59,10 @@ public partial class MainWindow : Window
         return null;
     }
 
-    public void Open(string path)
+    public bool Open(string path)
     {
         _pathField.Text = path;
-        Load();
+        return Load();
     }
 
     private static string? RememberSetting(string key, string value, string action)
@@ -95,39 +95,39 @@ public partial class MainWindow : Window
             return $"{name} is not a Fallout 4 hk_2014.1.0-r1 packfile.";
         return null;
     }
-    private void Load()
+    private bool Load()
     {
-        try { LoadDocument(); }
+        try { return LoadDocument(); }
         finally { ReleaseScopedGameData(); }
     }
 
-    private void LoadDocument()
+    private bool LoadDocument()
     {
         string path = (_pathField.Text ?? "").Trim().Trim('"');
         string? virtualPathHint = _pendingVirtualPathHint;
         _pendingVirtualPathHint = null;
         string? dataFolderHint = _pendingSourceFolder.Length > 0 ? _pendingSourceFolder : null;
         _pendingSourceFolder = "";
-        if (path.Length == 0) { SetSummary("Enter the path to a .hkx file.", Ux.MutedBrush); return; }
+        if (path.Length == 0) { SetSummary("Enter the path to a .hkx file.", Ux.MutedBrush); return false; }
         if (!File.Exists(path))
         {
             string full = Path.GetFullPath(path);
             SetSummary(full == path ? "Not found: " + path
                                     : $"Not found: {path}, which from here means {full}", Ux.BadBrush);
             if (_hkxPath.Length > 0) _pathField.Text = _hkxPath;
-            return;
+            return false;
         }
         if (RefuseReason(path) is { } reason)
         {
             SetSummary(reason, Ux.BadBrush);
             if (_hkxPath.Length > 0) _pathField.Text = _hkxPath;
-            return;
+            return false;
         }
 
         if (!ConfirmDiscard("open this file"))
         {
             if (_hkxPath.Length > 0) _pathField.Text = _hkxPath;
-            return;
+            return false;
         }
 
         DocumentSourceStamp sourceStamp;
@@ -139,7 +139,7 @@ public partial class MainWindow : Window
         {
             SetSummary("Could not read the file consistently enough to open it: " + e.Message.Split('\n')[0],
                        Ux.BadBrush);
-            return;
+            return false;
         }
 
         _documentStamp++;
@@ -189,7 +189,7 @@ public partial class MainWindow : Window
             BuildClipList(new BehaviourGraphModel());
             RefreshPasteSlots();
             RefreshTemplates();
-            return;
+            return true;
         }
 
         TryLoadRagdoll(path, virtualPathHint);
@@ -221,7 +221,7 @@ public partial class MainWindow : Window
                 AppendPhysicsNotes();
             }
             RefreshSaveAnimationState();
-            return;
+            return true;
         }
 
         if (!isAnimation)
@@ -287,6 +287,7 @@ public partial class MainWindow : Window
         }
         RefreshSaveAnimationState();
         if (settingsWarning != null) SetStatus(settingsWarning, Ux.WarnBrush);
+        return true;
     }
 
     private void AppendPhysicsNotes()

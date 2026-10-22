@@ -64,6 +64,27 @@ public sealed class MapperCliTests
     }
 
     [Fact]
+    public void OverwritingTheSourceWithForceKeepsTheOriginalAsABackup()
+    {
+        using var work = new Work();
+        string target = work.Copy("skeleton.hkx");
+        byte[] before = File.ReadAllBytes(target);
+        string elsewhere = work.At("rebuilt.hkx");
+        Capture(() => CliEntry.Run(
+            new[] { "mapper", target, "--out", elsewhere }, TextWriter.Null, TextWriter.Null));
+        byte[] rebuilt = File.ReadAllBytes(elsewhere);
+
+        var (exit, output, error) = Capture(() => CliEntry.Run(
+            new[] { "mapper", target, "--out", target, "--force" }, TextWriter.Null, TextWriter.Null));
+
+        Assert.Equal(0, exit);
+        Assert.Equal("", error);
+        Assert.Contains(".bak", output);
+        Assert.Equal(before, File.ReadAllBytes(target + ".bak"));
+        Assert.Equal(rebuilt, File.ReadAllBytes(target));
+    }
+
+    [Fact]
     public void UnknownSwitchesAndMissingValuesExitOneWithUsage()
     {
         using var work = new Work();
