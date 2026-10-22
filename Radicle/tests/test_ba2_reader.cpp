@@ -455,7 +455,7 @@ TEST_F(Ba2ReaderTest, CApiWritesGeneralArchivesThatMatchTheNativeWriterAndReadBa
 
   ASSERT_EQ(radicle_ba2_write_general(files, 3, 8, 0, &bytes, &size), RADICLE_STATUS_OK);
   radicle_free_bytes(bytes);
-  EXPECT_NE(radicle_ba2_write_general(files, 3, 5, 0, &bytes, &size), RADICLE_STATUS_OK);
+  EXPECT_EQ(radicle_ba2_write_general(files, 3, 5, 0, &bytes, &size), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(bytes, nullptr);
   const radicle_ba2_file no_path[] = {{nullptr, nullptr, 0}};
   EXPECT_EQ(radicle_ba2_write_general(no_path, 1, 1, 0, &bytes, &size), RADICLE_STATUS_INVALID_ARGUMENT);
@@ -582,6 +582,22 @@ TEST_F(Ba2ReaderTest, CApiWritesTheCppGeneralBytesAndReadsThemBack) {
   EXPECT_EQ(std::string(reinterpret_cast<const char*>(out), size), mesh);
   radicle_free_bytes(out);
   radicle_ba2_close(ba2);
+
+  ASSERT_EQ(radicle_ba2_write_general(files, 2, 1, 1, &out, &size), RADICLE_STATUS_OK);
+  const auto* packed_begin = reinterpret_cast<const std::byte*>(out);
+  const std::vector<std::byte> packed(packed_begin, packed_begin + size);
+  radicle_free_bytes(out);
+  Ba2GeneralArchive packed_expected;
+  packed_expected.entries = {general("Meshes\\Shared.nif", mesh, true), general("Materials\\Gun.bgsm", material, true)};
+  EXPECT_EQ(packed, fo4::archive::write_ba2_general(packed_expected));
+  EXPECT_LT(packed.size(), written.size());
+
+  const auto packed_path = write_file(data() / "Abi - Packed.ba2", packed);
+  ASSERT_EQ(radicle_ba2_open(packed_path.string().c_str(), &ba2), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_ba2_extract(ba2, 1, &out, &size), RADICLE_STATUS_OK);
+  EXPECT_EQ(std::string(reinterpret_cast<const char*>(out), size), material);
+  radicle_free_bytes(out);
+  radicle_ba2_close(ba2);
 }
 
 TEST_F(Ba2ReaderTest, CApiWriteRefusesNonAsciiNamesSoUnverifiedHashesAreNeverWritten) {
@@ -622,6 +638,8 @@ TEST_F(Ba2ReaderTest, CApiWriteRefusesBadEntriesAndClearsOutputs) {
   const radicle_ba2_file null_bytes[] = {{"Meshes\\A.nif", nullptr, 1}};
   const radicle_ba2_file duplicate[] = {{"Meshes\\A.nif", bytes, 1}, {"meshes/a.NIF", bytes, 1}};
   const radicle_ba2_file unmappable[] = {{"Meshes\\\xE4\xB8\xAD.nif", bytes, 1}};
+  const radicle_ba2_file backslash[] = {{"\\", bytes, 1}};
+  const radicle_ba2_file slashes[] = {{"///", bytes, 1}};
 
   uint8_t sentinel = 0;
   uint8_t* out = nullptr;
@@ -639,7 +657,14 @@ TEST_F(Ba2ReaderTest, CApiWriteRefusesBadEntriesAndClearsOutputs) {
   refused(null_bytes, 1);
   refused(duplicate, 2);
   refused(unmappable, 1);
+  refused(backslash, 1);
+  refused(slashes, 1);
   refused(nullptr, 1);
+  out = &sentinel;
+  size = 7;
+  EXPECT_EQ(radicle_ba2_write_general(longest_ok, 1, 2, 0, &out, &size), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(out, nullptr);
+  EXPECT_EQ(size, 0u);
   size = 7;
   EXPECT_EQ(radicle_ba2_write_general(longest_ok, 1, 1, 0, nullptr, &size), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(size, 0u);
@@ -647,4 +672,15 @@ TEST_F(Ba2ReaderTest, CApiWriteRefusesBadEntriesAndClearsOutputs) {
   ASSERT_EQ(radicle_ba2_write_general(longest_ok, 1, 1, 0, &out, &size), RADICLE_STATUS_OK);
   EXPECT_GT(size, 0u);
   radicle_free_bytes(out);
+}
+
+TEST_F(Ba2ReaderTest, CApiWriteEmptyFileListMatchesTheCppEmptyArchive) {
+  uint8_t* out = nullptr;
+  size_t size = 0;
+  ASSERT_EQ(radicle_ba2_write_general(nullptr, 0, 1, 0, &out, &size), RADICLE_STATUS_OK);
+  const auto* begin = reinterpret_cast<const std::byte*>(out);
+  const std::vector<std::byte> written(begin, begin + size);
+  radicle_free_bytes(out);
+  const Ba2GeneralArchive empty{};
+  EXPECT_EQ(written, fo4::archive::write_ba2_general(empty));
 }

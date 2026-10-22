@@ -157,6 +157,9 @@ radicle_status radicle_ba2_write_general(const radicle_ba2_file* files,
   if ((files == nullptr && file_count != 0) || out_bytes == nullptr || out_size == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "files, out_bytes and out_size are required");
   }
+  if (!fo4::archive::is_supported_ba2_general_version(version)) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "BA2 general version must be 1, 7 or 8");
+  }
   for (size_t i = 0; i < file_count; ++i) {
     if (files[i].path == nullptr || (files[i].data == nullptr && files[i].size != 0) ||
         files[i].size > std::numeric_limits<uint32_t>::max()) {
@@ -179,7 +182,9 @@ radicle_status radicle_ba2_write_general(const radicle_ba2_file* files,
       if (std::ranges::any_of(*stored, [](unsigned char ch) { return ch >= 0x80; })) {
         return fail(RADICLE_STATUS_INVALID_ARGUMENT, "BA2 entry path must be ASCII: non-ASCII name hashes are not verified");
       }
-      if (!names.insert(fo4::archive::normalize_ba2_name(*stored)).second) {
+      const auto name = fo4::archive::normalize_ba2_name(*stored);
+      if (name.empty()) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "BA2 entry path has no name after separators are removed");
+      if (!names.insert(name).second) {
         return fail(RADICLE_STATUS_INVALID_ARGUMENT, "BA2 entry path duplicates an earlier entry");
       }
       const auto hashes = fo4::archive::compute_ba2_hashes(*stored);
