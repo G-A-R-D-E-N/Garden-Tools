@@ -45,13 +45,13 @@ public sealed class GameDataSharedPathTests
         try
         {
             File.WriteAllText(Path.Combine(fileData, $"{id}.txt"),
-                "V1\nx\n1234567890123\nx\nActors\Test\Behaviors\Test.hkx\n");
+                "V1\nx\n1234567890123\nx\nActors\\Test\\Behaviors\\Test.hkx\n");
             File.WriteAllText(Path.Combine(offsets, $"{id}.txt"), "V4\n");
 
             using var data = GameData.Discover(dataFolder, Path.Combine(root, "plugins.txt"), new[] { modRoot });
             var index = SubgraphIndex.Discover(data);
 
-            Assert.Equal("Actors\Test\Behaviors\Test.hkx", index.Find(id)?.PrimaryBehavior);
+            Assert.Equal("Actors\\Test\\Behaviors\\Test.hkx", index.Find(id)?.PrimaryBehavior);
             Assert.NotNull(index.FindOffsetData(id));
         }
         finally { Directory.Delete(root, recursive: true); }

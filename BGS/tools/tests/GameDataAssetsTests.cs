@@ -612,6 +612,7 @@ public sealed class GameDataAssetsTests
         GameAsset winner = Only(data.EnumerateWinners("Meshes/X"), anim);
         Assert.Equal(archiveB, winner.ArchivePath);
         Assert.Equal(Bytes(2, 2), data.Read(winner));
+        Assert.Equal(Bytes(2, 2), data.ReadAnimation(dataFolder, anim)?.Bytes);
         Assert.Equal(new[] { archiveA, fallout }, winner.Shadowed.Select(s => s.ArchivePath));
     }
 
