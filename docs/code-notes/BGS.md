@@ -442,3 +442,10 @@ This follows the Radicle load-order rule in `docs/code-notes/GARDEN-TOOLS.md` un
 Archives that match no plugin, such as `Fallout4 - Animations.ba2` when Fallout4.esm is not in plugins.txt, stay after every plugin-matched archive, as the lowest priority. They stand in for INI-listed archives, which load before any plugin archive. The early `return archives;` for an unreadable plugin list is unchanged, so that case keeps the alphabetical order. Mod-root archives are unchanged.
 
 Tests: `BGS/tools/tests/Ba2RadicleTests.cs:LaterPluginsBaseArchiveWinsOverEarlierOne` covers A, B and Fallout4 archives with plugins.txt `*A.esm`, `*B.esm`. It expects B's archive to win and `ArchivePaths` to be B, A, Fallout4. `BGS/tools/tests/GameDataPluginOrderTests.cs:PluginListOrdersBaseArchivesWithRadicleRules` expects the new order. The symrm test `BGS/tools/symrm/Tests.cs:GameDataLoadOrderFollowsPlugins` was deleted because it duplicated `PluginListOrdersBaseArchivesWithRadicleRules`.
+## BGS/tools/symrm/Program.cs:Frames - unsupported tally by animation class
+
+The directory branch of `Frames` counts animations the reader does not decode by `HkxAnimationData.AnimationClass`, taken from `HkxBinaryReader.TryReadAnimation`, not by splitting the `NotSupportedException` message. The message now starts with `Unsupported compression (quantized)` or `Unsupported compression (predictive)` for the two compressed classes, so splitting on `.` gave mixed keys. Keying on the class also gives every unsupported class the same raw class name as its key.
+
+## BGS/app/MainWindow.Pose.cs:ClearPose - pose skeleton cleared
+
+`ClearPose` also sets `_poseSkeleton` to null. Its callers all want the pose gone: `BGS/app/MainWindow.Open.cs:Load` and the failure paths in `BGS/app/MainWindow.Playback.cs:LoadPose`. `LoadPose` assigns `_poseSkeleton` before it reads the animation, so without this a later unreadable or unsupported animation left the previous skeleton set with no animation to pose.
