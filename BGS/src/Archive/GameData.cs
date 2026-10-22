@@ -79,7 +79,7 @@ public sealed partial class GameData : IDisposable
                                                     .OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
                         if (placed.Add(ba2)) modArchives.Add(ba2);
                 }
-                catch (UnauthorizedAccessException) { }
+                catch (Exception e) when (e is UnauthorizedAccessException || (e is IOException && e is not DirectoryNotFoundException)) { }
             }
             modArchives.Reverse();
         }
