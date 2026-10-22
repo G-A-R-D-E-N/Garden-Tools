@@ -94,11 +94,14 @@ Embedded fields have `payload_size`, so the scalar reader returns absent for a D
 | WEAP\FullPowerSeconds | DNAM | 116 | f32 | f32 | 12990 |
 | WEAP\MinPowerPerShot | DNAM | 120 | f32 | f32 | 12991 |
 | WEAP\Stagger | DNAM | 124 | u32 | 0..4 | 12992, enum 5106 |
+| WEAP\UnknownAfterAnimationAttackSeconds | DNAM | 110 | u16 | 0..65535 | 12988 |
+| WEAP\UnknownEnd | DNAM | 128 | u32 | 0..4294967295 | 12993 |
 | WEAP\AnimationFireSeconds | FNAM | 0 | f32 | f32 | 12996 |
 | WEAP\RumbleLeftStrength | FNAM | 4 | f32 | f32 | 12997 |
 | WEAP\RumbleRightStrength | FNAM | 8 | f32 | f32 | 12998 |
 | WEAP\RumbleDuration | FNAM | 12 | f32 | f32 | 12999 |
 | WEAP\AnimationReloadSeconds | FNAM | 16 | f32 | f32 | 13000 |
+| WEAP\BoltAnimationSeconds | FNAM | 20 | u32 | 0..4294967295 | 13001 |
 | WEAP\SightedTransitionSeconds | FNAM | 24 | f32 | f32 | 13002 |
 | WEAP\ProjectileCount | FNAM | 28 | u8 | 0..255 | 13003 |
 | WEAP\Pattern | FNAM | 33 | u32 | 0..3 | 13005-13010 |
@@ -110,6 +113,7 @@ Embedded fields have `payload_size`, so the scalar reader returns absent for a D
 | WEAP\ModelFlags | MODF | whole | u8 | 0..255 | 4260, flags 4256-4259 |
 | WEAP\FirstPersonColorRemapIndex | MO4C | whole | f32 | f32 | 4269 |
 | WEAP\FirstPersonModelFlags | MO4F | whole | u8 | 0..255 | 4263 |
+| WEAP\DamageAmount | DAMA | 4, stride 8 | u32 | 0..4294967295 | 13023, Common 8454-8463 |
 
 Enum ranges are the count of xEdit enum members (`On Hit` 4, `Animation Type` 12, `Sound Level` 5, `Stagger` 5, `Pattern` 4, `Melee Speed` 5). The schema accepts only these values on write. Reads are not range-checked, so an out-of-range stored value stays readable. f32 fields use the same range as the other f32 scalars.
 
@@ -134,15 +138,14 @@ Embedded form IDs go through the single-FormLink table with a payload size. Top-
 | WEAP\SoundFastEquip | DNAM | 101 | SNDR | 12985 |
 | WEAP\OverrideProjectile | FNAM | 29 | PROJ | 13004 |
 | WEAP\CritEffect | CRDT | 8 | SPEL | 13016 |
+| WEAP\DamageType | DAMA | 0, stride 8 | DMGT | 13023, Common 8454-8463 |
 
-All FormLink fields are nullable, matching the `wbFormIDCk(..., [X, NULL])` helpers.
+The FormLink fields above are nullable, matching xEdit's `[X, NULL]` lists, except `WEAP\DamageType`, which xEdit lists as `[DMGT]` with no NULL.
 
 ## Not covered
 
 | xEdit | Reason |
 | --- | --- |
-| DNAM Unknown, 2 bytes at 110 (12988) and 4 bytes at 128 (12993) | wbByteArray, not a scalar. Preserved as bytes. |
-| FNAM Bolt Anim Seconds, 4 bytes at 20 (13001) | wbByteArray, not a scalar. Preserved as bytes. |
 | OBTE count (12902, 5521) | Count tied to the OBTS combinations. Authoring coupled, no scalar. |
 | OBTS combination block (5499-5512, 5523-5526) | Variable-length, not typed. form IDs remapped by `Radicle/src/schema/form_links.cpp` (validated on 813 WEAP OBTS bodies). |
 | DEST stage members (4275 onward, DSTD and others) | Only DEST and DAMC are listed. Stages are repeated. |
@@ -152,12 +155,12 @@ All FormLink fields are nullable, matching the `wbFormIDCk(..., [X, NULL])` help
 
 ## Version gates
 
-WEAP DNAM, FNAM and CRDT have no version condition in xEdit, so each has one fixed size. The only version gate is the DAMA entry. xEdit adds a Curve Table form ID from form version 152 (`Common 8460`, `wbFromVersion(152, ...)`). The FormLink remap already applies this at `Radicle/src/schema/form_link_mixed.cpp:k_repeated_struct_layouts`.
+WEAP DNAM, FNAM and CRDT have no version condition in xEdit, so each has one fixed size. The only version gate is the DAMA entry. xEdit adds a Curve Table form ID from form version 152 (`Common 8460`, `wbFromVersion(152, ...)`). The FormLink remap already applies this at `Radicle/src/schema/form_link_mixed.cpp:k_repeated_struct_layouts`. The DAMA rows (`WEAP\DamageType`, `WEAP\DamageAmount`) address every 8-byte entry for form version below 152 (the layout of the 131 records in the corpus). Both rows carry `"max_form_version": 152`, an exclusive bound. Form version 152+ (12-byte entries) is not addressed by these rows: the scalar row resolves no valid slot, and the FormLink row returns `subrecord_missing` on write, with the bytes unchanged.
 
 ## Typed read
 
-DAMA is the one layout the tables cannot express: a count-free run of 8-byte entries, or 12-byte entries from form version 152. `Radicle/src/forms/weapon.cpp:decode_weapon_damage_types` decodes it, fails closed on a payload that is not whole entries, and returns an empty list when DAMA is absent. Its layout is xEdit-derived. `WeaponReal` (`tests/test_weapon_real.cpp`) is selected for the native-windows-real-data job and skips without FO4_DATA_DIR; no result is recorded here.
+DAMA is a count-free run of 8-byte entries, or 12-byte entries from form version 152. The DAMA rows address every 8-byte entry below form version 152 (see Version gates); 12-byte entries from form version 152 are left to this decoder, and the Curve Table form ID is not rowed. `Radicle/src/forms/weapon.cpp:decode_weapon_damage_types` decodes it, fails closed on a payload that is not whole entries, and returns an empty list when DAMA is absent. Its layout is xEdit-derived. `WeaponReal` (`tests/test_weapon_real.cpp`) is selected for the native-windows-real-data job and skips without FO4_DATA_DIR; no result is recorded here.
 
 ## Parity
 
-READ is partial: scalars, FormLinks and DAMA decode. Generic scalar writes (`set_record_scalar`) now reach these fields for existing subrecords. No WEAP write has save and reparse proof, so WRITE is not claimed.
+READ is partial: scalars, FormLinks and DAMA decode. Generic scalar writes (`set_record_scalar`) now reach these fields for existing subrecords. DAMA entry one has a synthetic save and reparse test (`Radicle/tests/test_wp9_race_weap_rows.cpp`); no official-master write proof exists, so WRITE is not claimed.

@@ -102,7 +102,8 @@ Result<std::vector<SemanticFieldCell>> semanticFieldCells(const fo4::Plugin& plu
             SemanticFieldCell cell{indexedPath(field.path, scalar.address, index), {}, false, false};
             const bool localized = scalar.storage == fo4::schema::ScalarStorage::zstring &&
                 plugin.header.tes4_flags.is_localized() &&
-                fo4::schema::is_localized_field(field.record, scalar.subrecord);
+                (fo4::schema::is_localized_field(field.record, scalar.subrecord) ||
+                 (scalar.localized && index < resolved.slots.size() && resolved.slots[index].valid));
             if (localized) {
                 cell.value = "<opaque/localized>";
             } else if (index < resolved.slots.size() && resolved.slots[index].valid) {
@@ -110,7 +111,8 @@ Result<std::vector<SemanticFieldCell>> semanticFieldCells(const fo4::Plugin& plu
                 try {
                     cell.value = fo4::schema::decode_scalar(fo4::schema::scalar_slot_bytes(
                         record.subrecords[slot.subrecord].data, slot, scalar), scalar);
-                    if (scalar.storage == fo4::schema::ScalarStorage::zstring) {
+                    if (scalar.storage == fo4::schema::ScalarStorage::zstring ||
+                        scalar.storage == fo4::schema::ScalarStorage::fixed_string) {
                         cell.value = fo4::text::windows1252_to_utf8(cell.value);
                     }
                     cell.available = true;
@@ -128,7 +130,10 @@ Result<std::vector<SemanticFieldCell>> semanticFieldCells(const fo4::Plugin& plu
             cells.push_back(SemanticFieldCell{std::string(field.path), "<opaque>", false, true});
             continue;
         }
-        const fo4::schema::FieldShape shape{field.subrecord, field.offset, sizeof(std::uint32_t), 0, false};
+        const fo4::schema::FieldShape shape{.subrecord = field.subrecord,
+                                            .offset = field.offset,
+                                            .width = sizeof(std::uint32_t),
+                                            .max_form_version = field.max_form_version};
         const auto resolved = fo4::schema::resolve_field_slots(record, shape, field.address);
         if (resolved.misaligned) {
             return std::unexpected(Error{"FormLinkReadFailed",
@@ -175,6 +180,11 @@ Result<std::vector<SemanticFieldCell>> semanticFieldCells(const fo4::Plugin& plu
                 cells.push_back(SemanticFieldCell{std::string(descriptor.path) + "[" + std::to_string(index) + "]",
                     (*values)[index].to_string(), true, true});
             }
+        } catch (const fo4::schema::FormLinkListError& error) {
+            if (descriptor.segment_count == 0) {
+                return std::unexpected(Error{"FormLinkReadFailed", error.what()});
+            }
+            cells.push_back(SemanticFieldCell{std::string(descriptor.path), "<opaque>", false, true});
         } catch (const std::exception& error) {
             return std::unexpected(Error{"FormLinkReadFailed", error.what()});
         }

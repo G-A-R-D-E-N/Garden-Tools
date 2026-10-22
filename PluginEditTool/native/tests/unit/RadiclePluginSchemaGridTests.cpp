@@ -10,6 +10,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <fo4/schema/formlink_lists.hpp>
 #include <fo4/schema/scalar.hpp>
 #include <fo4/signature.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
@@ -100,6 +101,36 @@ std::vector<std::byte> makeFactPlugin() {
     return out.bytes;
 }
 
+std::vector<std::byte> word(std::uint32_t value) {
+    fo4::test::ByteWriter out;
+    out.u32(value);
+    return out.bytes;
+}
+
+std::vector<std::byte> makeNpcLinkPlugin(bool paddedPackage = false) {
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(1);
+    hedr.u32(0x801);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::end_record(out, tes4);
+
+    const auto group = fo4::test::begin_group(out, "NPC_", 0);
+    const auto record = fo4::test::begin_record(out, "NPC_", 0, 0x00000800);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"SchemaNpc\0", 10});
+    fo4::test::write_subrecord(out, "PKID", word(0x00000900));
+    fo4::test::write_subrecord(out, "PKID",
+                               paddedPackage ? std::vector<std::byte>(8) : word(0x00000901));
+    fo4::test::write_subrecord(out, "PKID", word(0x00000902));
+    fo4::test::write_subrecord(out, "PNAM", word(0x00000910));
+    fo4::test::write_subrecord(out, "PNAM", word(0x00000911));
+    fo4::test::end_record(out, record);
+    fo4::test::end_group(out, group);
+    return out.bytes;
+}
+
 nlohmann::json pluginEntry(const std::filesystem::path& path) {
     return {
         {"name", "Schema.esp"},
@@ -139,14 +170,30 @@ TEST_CASE("Spreadsheet scalar columns come from generated record descriptors") {
         nlohmann::json::array({"Schema.esp", "REFR", 200, 0})));
     const auto fields =
         fo4::schema::scalar_fields(fo4::Signature::from_string("REFR"));
+    const auto links =
+        fo4::schema::formlink_fields(fo4::Signature::from_string("REFR"));
 
-    REQUIRE(grid.at("columns").size() == fields.size() + 1);
-    CHECK(grid.at("columns")[0] == "EDID");
-    for (std::size_t index = 0; index < fields.size(); ++index) {
-        const auto& address = fields[index].scalar.address;
-        const auto expected = std::string(fields[index].path) +
-            (address.repeated || address.stride != 0 ? "\\Count" : "");
-        CHECK(grid.at("columns")[index + 1].get<std::string>() == expected);
+    std::vector<std::string> expected{"EDID"};
+    for (const auto& field : fields) {
+        const auto& address = field.scalar.address;
+        expected.push_back(std::string(field.path) +
+                           (address.repeated || address.stride != 0 ? "\\Count" : ""));
+    }
+    for (const auto& link : links) {
+        expected.push_back(std::string(link.path) +
+                           (link.address.repeated || link.address.stride != 0 ? "\\Count" : ""));
+    }
+    for (const auto& list : fo4::schema::k_generated_formlink_lists) {
+        if (list.record != fo4::Signature::from_string("REFR")) continue;
+        expected.push_back(std::string(list.path) + "\\Count");
+    }
+    const auto& columns = grid.at("columns");
+    REQUIRE(expected.size() <= columns.size());
+    for (std::size_t index = 0; index < expected.size(); ++index) {
+        CHECK(columns[index].get<std::string>() == expected[index]);
+    }
+    for (std::size_t index = expected.size(); index < columns.size(); ++index) {
+        CHECK(columns[index].get<std::string>().rfind("Authoring\\", 0) == 0);
     }
 
     REQUIRE(grid.at("rows").size() == 1);
@@ -259,4 +306,46 @@ TEST_CASE("Schema enum and flag names reach the grid and record matrix") {
     CHECK(row("FACT\\Flags").at("Presentation").at("kind") == "flags");
     CHECK(row("FACT\\CrimeArrest").at("Presentation").at("names")[1].at("name") == "True");
     CHECK_FALSE(row("FACT\\CrimeMurder").contains("Presentation"));
+}
+
+TEST_CASE("NPC_ package and head part lists reach the grid as indexed columns") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Schema.esp";
+    writeBytes(path, makeNpcLinkPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+
+    const auto grid = parseResult(backend.invokeBackend(
+        "GetRecordsGrid",
+        nlohmann::json::array({"Schema.esp", "NPC_", 200, 0})));
+    const auto& columns = grid.at("columns");
+    const auto cell = [&](std::string_view column) {
+        const auto found = std::find(columns.begin(), columns.end(), std::string(column));
+        REQUIRE(found != columns.end());
+        return grid.at("rows")[0].at("cells")[
+            static_cast<std::size_t>(std::distance(columns.begin(), found))].template get<std::string>();
+    };
+    CHECK(cell("NPC_\\Packages\\Count") == "3");
+    CHECK(cell("NPC_\\Packages[0]") == "000900:Schema.esp");
+    CHECK(cell("NPC_\\Packages[2]") == "000902:Schema.esp");
+    CHECK(cell("NPC_\\HeadParts\\Count") == "2");
+    CHECK(cell("NPC_\\HeadParts[1]") == "000911:Schema.esp");
+}
+
+TEST_CASE("Malformed NPC_ package payload fails the page instead of blanking the list") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Schema.esp";
+    writeBytes(path, makeNpcLinkPlugin(true));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+
+    const auto grid = backend.invokeBackend(
+        "GetRecordsGrid",
+        nlohmann::json::array({"Schema.esp", "NPC_", 200, 0}));
+    REQUIRE_FALSE(grid.has_value());
+    CHECK(grid.error().type == "FormLinkReadFailed");
 }

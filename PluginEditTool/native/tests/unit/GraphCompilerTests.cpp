@@ -269,3 +269,25 @@ TEST_CASE("GraphCompiler Oracle3 the generated script has the same shape as the 
         CHECK(sortedNames(mineVariables) == sortedNames(theirsVariables));
     }
 }
+
+TEST_CASE("GraphCompiler publishes scripts under one process folder that clearScratch removes") {
+    GraphCompiler::clearScratch();
+    Env env(/*withGraphScripts=*/true);
+    const auto fixtures = allFixtures(env.palette);
+    REQUIRE(!fixtures.empty());
+    REQUIRE(compileGraph(fixtures.front()).success());
+    REQUIRE(compileGraph(fixtures.front()).success());
+
+    const auto root = GraphCompiler::scratchRoot();
+    REQUIRE(std::filesystem::is_directory(root));
+    CHECK(root.parent_path().filename() == "fo4re-graph-scratch");
+    std::size_t published = 0;
+    for (const auto& entry : std::filesystem::directory_iterator(root)) {
+        (void)entry;
+        ++published;
+    }
+    CHECK(published >= 2);
+
+    GraphCompiler::clearScratch();
+    CHECK_FALSE(std::filesystem::exists(root));
+}

@@ -5,6 +5,8 @@
 #include <array>
 #include <cstdint>
 #include <optional>
+#include <string_view>
+#include <vector>
 
 namespace fo4::env {
 
@@ -36,7 +38,6 @@ struct CellGrid {
   std::optional<std::uint8_t> land_flags;
 };
 
-// XCLL members through Inherits; later members are not decoded yet.
 struct CellLighting {
   ByteColor ambient;
   ByteColor directional;
@@ -53,6 +54,27 @@ struct CellLighting {
   std::optional<float> light_fade_begin;
   std::optional<float> light_fade_end;
   std::optional<std::uint32_t> inherits;
+  std::optional<float> near_height_mid;
+  std::optional<float> near_height_range;
+  std::optional<ByteColor> fog_color_high_near;
+  std::optional<ByteColor> fog_color_high_far;
+  std::optional<float> high_density_scale;
+  std::optional<float> fog_near_scale;
+  std::optional<float> fog_far_scale;
+  std::optional<float> fog_high_near_scale;
+  std::optional<float> fog_high_far_scale;
+  std::optional<float> far_height_mid;
+  std::optional<float> far_height_range;
+};
+
+struct WaterCurrent {
+  std::array<float, 3> velocity{0.0f, 0.0f, 0.0f};
+  float unnamed{0.0f};
+};
+
+struct ExteriorLod {
+  FormKey worldspace;
+  std::array<float, 3> offset{0.0f, 0.0f, 0.0f};
 };
 
 struct CellData {
@@ -66,6 +88,21 @@ struct CellData {
   std::optional<FormKey> location;
   std::optional<FormKey> worldspace;
   std::optional<FormKey> water;
+  std::optional<std::uint16_t> previs_timestamp;
+  std::optional<std::uint16_t> precombined_timestamp;
+  std::vector<FormKey> regions;
+  std::vector<FormKey> previs_references;
+  std::optional<FormKey> acoustic_space;
+  std::optional<FormKey> music_type;
+  std::optional<FormKey> sky_weather_region;
+  std::optional<FormKey> god_rays;
+  std::optional<FormKey> lock_list;
+  std::optional<FormKey> owner;
+  std::optional<std::int32_t> owner_rank;
+  std::optional<ExteriorLod> exterior_lod;
+  std::optional<std::uint32_t> water_current_count;
+  std::vector<WaterCurrent> water_currents;
+  std::optional<std::string_view> water_environment_map;
 };
 
 struct LightingTemplateData {

@@ -292,6 +292,35 @@ bool has_form_id_labelled_child_group(const Plugin& plugin, const FormKey& recor
   return found;
 }
 
+namespace {
+
+void relabel_form_id_child_groups(Group& group,
+                                  const PluginFormIdContext& context,
+                                  const FormKey& from,
+                                  const RawFormId to) {
+  for (auto& child : group.children) {
+    auto* nested = std::get_if<Group>(&child);
+    if (nested == nullptr) continue;
+    if (group_label_is_form_id(nested->header.group_type)) {
+      const RawFormId raw{nested->header.label_as_u32()};
+      if (!raw.is_null() && resolve_plugin_form_id(raw, context) == from) {
+        nested->header.set_label_as_u32(to.value());
+      }
+    }
+    relabel_form_id_child_groups(*nested, context, from, to);
+  }
+}
+
+void relabel_record_child_groups(Plugin& plugin, const FormKey& from, const FormKey& to) {
+  const auto context = plugin_form_id_context(plugin);
+  const auto encoded = encode_plugin_form_id(to, context);
+  for (auto& group : plugin.groups) {
+    relabel_form_id_child_groups(group, context, from, encoded);
+  }
+}
+
+}  // namespace
+
 RecordRenumberStatus renumber_local_record(Plugin& plugin,
                                            const FormKey& record_key,
                                            LocalFormId new_local) {
@@ -317,12 +346,8 @@ RecordRenumberStatus renumber_local_record(Plugin& plugin,
   if (new_key == record_key) return RecordRenumberStatus::unchanged;
   if (find_record(next, new_key) != nullptr) return RecordRenumberStatus::target_exists;
 
-  if (has_form_id_labelled_child_group(next, record_key)) {
-    throw FormIdError(
-        "renumbering a record with form ID labelled child groups is disabled until parent GRUP label rewriting is proven");
-  }
-
   rekey_form_links(next, record_key, new_key);
+  relabel_record_child_groups(next, record_key, new_key);
   target = find_top_level_record(next, record_key);
   if (target == nullptr) {
     throw FormIdError("record disappeared during transactional FormLink rekey");
@@ -341,6 +366,45 @@ RecordRenumberStatus renumber_local_record(Plugin& plugin,
   next.original_range.clear();
   plugin = std::move(next);
   return RecordRenumberStatus::renumbered;
+}
+
+ReferenceRepointResult repoint_record_references(std::span<Plugin*> plugins,
+                                                 const FormKey& from,
+                                                 const FormKey& to) {
+  ReferenceRepointResult result;
+  if (from.owner().empty() || from.owner() != to.owner()) {
+    result.status = ReferenceRepointStatus::mismatched_owners;
+    return result;
+  }
+  if (from == to) return result;
+
+  std::vector<std::size_t> touched;
+  for (std::size_t index = 0; index < plugins.size(); ++index) {
+    const auto* plugin = plugins[index];
+    if (plugin == nullptr) continue;
+    std::size_t found = 0;
+    for (const auto& link : collect_form_links(*plugin)) {
+      if (link.key == from) ++found;
+    }
+    if (found == 0) continue;
+    result.references += found;
+    touched.push_back(index);
+  }
+  if (touched.empty()) return result;
+
+  std::vector<Plugin> next;
+  next.reserve(touched.size());
+  for (const auto index : touched) {
+    next.push_back(*plugins[index]);
+    rekey_form_links(next.back(), from, to);
+  }
+
+  for (std::size_t slot = 0; slot < touched.size(); ++slot) {
+    result.plugins.push_back(plugins[touched[slot]]->key);
+    *plugins[touched[slot]] = std::move(next[slot]);
+  }
+  result.status = ReferenceRepointStatus::repointed;
+  return result;
 }
 
 std::string stored_inline_text(std::string_view value, std::string_view field) {
@@ -437,7 +501,8 @@ FormLinkFieldMutationStatus set_record_formlink_field(
 RecordCopyStatus copy_record_as_override(Plugin& destination,
                                          const Plugin& source,
                                          const FormKey& record_key,
-                                         bool overwrite) {
+                                         bool overwrite,
+                                         FormLinkTypeLookup type_lookup) {
   const auto* source_record = find_record(source, record_key);
   if (source_record == nullptr) return RecordCopyStatus::source_missing;
   require_decodable(*source_record);
@@ -485,13 +550,13 @@ RecordCopyStatus copy_record_as_override(Plugin& destination,
   }
 
   if (added_master) {
-    next = remap_plugin_masters(std::move(next), std::move(masters));
+    next = remap_plugin_masters(std::move(next), std::move(masters), type_lookup);
   }
 
   const auto source_context = plugin_form_id_context(source);
   const auto destination_context = plugin_form_id_context(next);
   copied_record.header.form_id = encode_plugin_form_id(record_key, destination_context);
-  remap_record_form_links(copied_record, source_context, destination_context);
+  remap_record_form_links(copied_record, source_context, destination_context, type_lookup);
   copied_record.original_range.clear();
   copied_record.decompressed_payload.clear();
   copied_record.header.data_size = 0;
