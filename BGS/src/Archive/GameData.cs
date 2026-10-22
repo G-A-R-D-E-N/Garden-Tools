@@ -247,7 +247,7 @@ public sealed partial class GameData : IDisposable
     /// the loose folder that ships them. Resolves a path by matching each missing
     /// component case-insensitively against the deepest existing ancestor.
     /// </summary>
-    private static string? CaseInsensitivePath(string path)
+    internal static string? CaseInsensitivePath(string path)
     {
         if (File.Exists(path) || Directory.Exists(path)) return path;
 

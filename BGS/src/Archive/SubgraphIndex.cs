@@ -88,10 +88,10 @@ public sealed class SubgraphIndex
 
         void ScanLoose(string root)
         {
-            string looseRoot = Path.Combine(root, "Meshes", "AnimTextData");
-            if (!Directory.Exists(looseRoot)) return;
-            string looseFileData = Path.Combine(looseRoot, "AnimationFileData");
-            if (Directory.Exists(looseFileData))
+            string? looseRoot = GameData.CaseInsensitivePath(Path.Combine(root, "Meshes", "AnimTextData"));
+            if (looseRoot == null || !Directory.Exists(looseRoot)) return;
+            string? looseFileData = GameData.CaseInsensitivePath(Path.Combine(looseRoot, "AnimationFileData"));
+            if (looseFileData != null && Directory.Exists(looseFileData))
             foreach (string file in Directory.EnumerateFiles(
                          looseFileData, "*.txt",
                          SearchOption.TopDirectoryOnly))
@@ -99,8 +99,8 @@ public sealed class SubgraphIndex
                 var sub = ParseManifestFile(Path.GetFileName(file), ReadText(file), "loose", file);
                 if (sub != null) byId[sub.Id] = sub;
             }
-            string looseOffsets = Path.Combine(looseRoot, "AnimationOffsets");
-            if (Directory.Exists(looseOffsets))
+            string? looseOffsets = GameData.CaseInsensitivePath(Path.Combine(looseRoot, "AnimationOffsets"));
+            if (looseOffsets != null && Directory.Exists(looseOffsets))
             foreach (string file in Directory.EnumerateFiles(
                          looseOffsets, "*.txt",
                          SearchOption.TopDirectoryOnly))
