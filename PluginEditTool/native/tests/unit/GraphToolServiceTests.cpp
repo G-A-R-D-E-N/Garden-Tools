@@ -115,15 +115,15 @@ TEST_CASE("GraphToolService compiling source only returns the generated script")
 
 TEST_CASE("GraphToolService compiling with an output folder writes both files") {
     const TempRoot output("fo4ide-tool-out");
-    const auto outputPath = output.path();
+    const auto outputPath = output.path() / "out";
     const auto text = withGraph(goodGraph(), [&](const std::string& path) {
         return GraphToolService::compile(path, &outputPath, &imports(),
                                          /*sourceOnly=*/false);
     });
 
     CHECK(startsWith(text, "RESULT: OK"));
-    CHECK(std::filesystem::exists(output.path() / "Fixture.psc"));
-    CHECK(std::filesystem::exists(output.path() / "Fixture.pex"));
+    CHECK(std::filesystem::exists(outputPath / "Fixture.psc"));
+    CHECK(std::filesystem::exists(outputPath / "Fixture.pex"));
     CHECK(text.find("Wrote ") != std::string::npos);
 }
 
