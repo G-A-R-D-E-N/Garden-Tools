@@ -2385,10 +2385,13 @@ A deploy folder that does not exist now exits with code 1 and prints no success 
 
 - `GraphCompiler::publishForSelfReference` writes the generated `.psc` into a scratch folder so the graph can refer to its own script. It used to create `<temp>/fo4re-graph-scratch/<random>` for every script and compiler instance and never removed it. Tests compile thousands of graphs, so one CI machine collected over 620,000 files there, which with the other test folders used up all 1,048,576 file slots (inodes) of the 32 GB tmpfs `/tmp` and failed every Linux job with "No space left on device" while the disk was nearly empty.
 - Now each process owns one folder `<temp>/fo4re-graph-scratch/p-<random>` (`ScratchBase::root`, `GraphScratch.Root`). The per-script folders live inside it. It is deleted when the process ends (`ScratchBase` destructor, `AppDomain.ProcessExit`) and can be removed on demand (`GraphCompiler::clearScratch`, `GraphScratch.Clear`).
+- `GraphCompiler.hpp:scratchRoot` names the process folder that holds published scripts. `GraphCompiler::clearScratch` removes it now; the scratch-folder test calls it to check that nothing is left behind.
 - A process that crashes cannot clean up, so the next process that creates its folder sweeps sibling folders whose last write is more than 24 hours old (`sweepOld`, `SweepOld`). A folder newer than that is kept because another live process may own it.
 - When a script was already published in a compiler and its folder was swept or cleared since, the next publish recreates the folder (`create_directories` / `Directory.CreateDirectory`) before writing, so the self-reference is not silently dropped.
 - Callers need no change: the C# compiler is created without being disposed in many places, which is why cleanup is per process and not per instance.
 
-## PluginEditTool/native/tests/unit/GraphLiftTests.cpp:UniqueRoot — lift tests remove their temp roots
+## PluginEditTool/native/tests/helpers/TempRoot.hpp:TempRoot — graph and decompiler tests remove their temp roots
 
-- `uniqueRoot` made `<temp>/fo4ide-lift-<tag>/<timestamp>` for every `compileText`, `throughGraph`, `runOne` and refusal call and never removed it (38,000 folders per tag on the CI machine). `UniqueRoot` is a small RAII type: it removes its folder, and the tag folder when empty, when the test body ends. The temp root is used only inside the function that creates it, so the lifetime is safe.
+- The graph and decompiler tests used to make `<temp>/<parent>/<timestamp>` folders (`uniqueRoot` in GraphLiftTests, GraphCompilerTests, GraphToolServiceTests and GraphScriptLoaderTests, and the `PapyrusDecompilerTests` `Fixture`) and never remove them. The lift tests alone left 38,000 folders per tag on the CI machine.
+- `TempRoot` (namespace `fo4ide_test`) creates its folder in the constructor. The destructor removes that folder and then the parent when the parent is empty, ignoring errors. The parent name is passed in full (for example `"fo4ide-lift-text"`), so temp paths are unchanged.
+- The temp root is used only inside the scope that owns it, so the lifetime is safe. Removal now also runs when a `REQUIRE` fails.

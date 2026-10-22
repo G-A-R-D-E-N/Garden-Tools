@@ -45,7 +45,6 @@ void writeTextFile(const std::filesystem::path& path, const std::string& text) {
     stream.write(text.data(), static_cast<std::streamsize>(text.size()));
 }
 
-// One scratch folder per process; see docs/code-notes/GARDEN-TOOLS.md (GraphCompiler scratch folders).
 class ScratchBase {
 public:
     ~ScratchBase() { clear(); }

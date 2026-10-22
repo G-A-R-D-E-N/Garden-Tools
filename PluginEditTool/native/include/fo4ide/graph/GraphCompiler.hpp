@@ -58,8 +58,6 @@ public:
 
     static papyrus::ScriptIndex indexFor(const std::vector<std::filesystem::path>& roots);
 
-    // The temp folder holding this process's published scripts. It is removed when the process
-    // ends; clearScratch() removes it now (tests use this to check nothing is left behind).
     static std::filesystem::path scratchRoot();
     static void clearScratch();
 
