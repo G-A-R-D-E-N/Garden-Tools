@@ -102,6 +102,33 @@ std::vector<std::byte> top_level_source(std::string_view signature) {
   return out.bytes;
 }
 
+std::vector<std::byte> container_source(std::string_view owner_signature,
+                                        std::uint32_t owner_raw,
+                                        std::uint32_t union_raw) {
+  fo4::test::ByteWriter out;
+  write_header(out, {"Base.esm"}, 0x900);
+  const auto top = fo4::test::begin_group(out, "CONT", 0);
+  const auto container = fo4::test::begin_record(out, "CONT", 0, 0x01000800u);
+  fo4::test::ByteWriter cnto;
+  cnto.u32(0x01000803u);
+  cnto.i32(1);
+  fo4::test::write_subrecord(out, "CNTO", cnto.bytes);
+  fo4::test::ByteWriter coed;
+  coed.u32(owner_raw);
+  coed.u32(union_raw);
+  coed.f32(1.0f);
+  fo4::test::write_subrecord(out, "COED", coed.bytes);
+  fo4::test::end_record(out, container);
+  fo4::test::end_group(out, top);
+  const auto owner_group = fo4::test::begin_group(out, owner_signature, 0);
+  fo4::test::end_record(out, fo4::test::begin_record(out, owner_signature, 0, 0x01000801u));
+  fo4::test::end_group(out, owner_group);
+  const auto glob_group = fo4::test::begin_group(out, "GLOB", 0);
+  fo4::test::end_record(out, fo4::test::begin_record(out, "GLOB", 0, 0x01000802u));
+  fo4::test::end_group(out, glob_group);
+  return out.bytes;
+}
+
 void write_cell(fo4::test::ByteWriter& out, std::uint32_t raw) {
   const auto cell = fo4::test::begin_record(out, "CELL", 0, raw);
   const std::vector<std::byte> data{std::byte{1}, std::byte{0}};
@@ -167,12 +194,14 @@ std::string edid_of(const fo4::Record& record) {
   return std::string(view.substr(0, view.find('\0')));
 }
 
-std::uint32_t u32_field(const fo4::Record& record, std::string_view signature) {
+std::uint32_t u32_field(const fo4::Record& record,
+                        std::string_view signature,
+                        std::size_t offset = 0) {
   const auto* subrecord = find_subrecord(record, signature);
   if (subrecord == nullptr) return 0;
   std::uint32_t value = 0;
-  for (std::size_t index = 0; index < 4 && index < subrecord->data.size(); ++index) {
-    value |= std::to_integer<std::uint32_t>(subrecord->data[index]) << (8 * index);
+  for (std::size_t index = 0; index < 4 && offset + index < subrecord->data.size(); ++index) {
+    value |= std::to_integer<std::uint32_t>(subrecord->data[offset + index]) << (8 * index);
   }
   return value;
 }
@@ -350,4 +379,41 @@ TEST(CopyAsNewRecordCApi, CopiesThroughTheHandlesAndWritesTheResult) {
 
   radicle_plugin_destroy(source);
   radicle_plugin_destroy(target);
+}
+
+TEST(CopyAsNewRecord, CopiesAContainerWhoseCoedOwnerIsAnNpcAndRemapsTheGlobal) {
+  const auto source = fo4::read_plugin(container_source("NPC_", 0x01000801u, 0x01000802u), "Source.esp");
+  auto target = fo4::read_plugin(header_only({"Other.esm", "Base.esm"}, 0x800), "Patch.esp");
+
+  const auto result = fo4::forms::copy_record_as_new(
+      target, source, fo4::FormKey::parse("000800:Source.esp"));
+  ASSERT_EQ(result.status, fo4::forms::RecordCopyNewStatus::created);
+  ASSERT_EQ(target.header.masters.size(), 3u);
+  EXPECT_EQ(target.header.masters[2].key.filename(), "Source.esp");
+  const auto* copied = fo4::find_record(target, result.new_record);
+  ASSERT_NE(copied, nullptr);
+  EXPECT_EQ(u32_field(*copied, "COED", 0), 0x02000801u);
+  EXPECT_EQ(u32_field(*copied, "COED", 4), 0x02000802u);
+}
+
+TEST(CopyAsNewRecord, CopiesAContainerWhoseCoedOwnerIsAFactionAndKeepsTheRank) {
+  const auto source = fo4::read_plugin(container_source("FACT", 0x01000801u, 3u), "Source.esp");
+  auto target = fo4::read_plugin(header_only({"Other.esm", "Base.esm"}, 0x800), "Patch.esp");
+
+  const auto result = fo4::forms::copy_record_as_new(
+      target, source, fo4::FormKey::parse("000800:Source.esp"));
+  ASSERT_EQ(result.status, fo4::forms::RecordCopyNewStatus::created);
+  const auto* copied = fo4::find_record(target, result.new_record);
+  ASSERT_NE(copied, nullptr);
+  EXPECT_EQ(u32_field(*copied, "COED", 0), 0x02000801u);
+  EXPECT_EQ(u32_field(*copied, "COED", 4), 3u);
+}
+
+TEST(CopyAsNewRecord, RefusesACoedOwnerThatNoPluginDefines) {
+  const auto source = fo4::read_plugin(container_source("NPC_", 0x00000802u, 3u), "Source.esp");
+  auto target = fo4::read_plugin(header_only({"Other.esm", "Base.esm"}, 0x800), "Patch.esp");
+
+  EXPECT_THROW(
+      fo4::forms::copy_record_as_new(target, source, fo4::FormKey::parse("000800:Source.esp")),
+      fo4::FormIdError);
 }

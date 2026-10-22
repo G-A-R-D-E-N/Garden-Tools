@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <limits>
+#include <new>
 #include <optional>
 #include <string>
 #include <utility>
@@ -59,23 +60,28 @@ bool inflate_body(std::span<const std::byte> input, std::vector<std::byte>& out,
   z_stream stream{};
   stream.next_in = reinterpret_cast<Bytef*>(const_cast<std::byte*>(input.data()));
   stream.avail_in = static_cast<uInt>(input.size());
+  std::vector<std::byte> chunk(64u * 1024u);
   if (inflateInit(&stream) != Z_OK) {
     message = "zlib inflateInit failed";
     return false;
   }
-  std::vector<std::byte> chunk(64u * 1024u);
   int code = Z_OK;
   bool overflow = false;
-  while (code == Z_OK) {
-    stream.next_out = reinterpret_cast<Bytef*>(chunk.data());
-    stream.avail_out = static_cast<uInt>(chunk.size());
-    code = inflate(&stream, Z_NO_FLUSH);
-    const auto produced = static_cast<std::size_t>(chunk.size() - stream.avail_out);
-    if (out.size() + produced > detail::kMaxBodyBytes) {
-      overflow = true;
-      break;
+  try {
+    while (code == Z_OK) {
+      stream.next_out = reinterpret_cast<Bytef*>(chunk.data());
+      stream.avail_out = static_cast<uInt>(chunk.size());
+      code = inflate(&stream, Z_NO_FLUSH);
+      const auto produced = static_cast<std::size_t>(chunk.size() - stream.avail_out);
+      if (out.size() + produced > detail::kMaxBodyBytes) {
+        overflow = true;
+        break;
+      }
+      out.insert(out.end(), chunk.begin(), chunk.begin() + static_cast<std::ptrdiff_t>(produced));
     }
-    out.insert(out.end(), chunk.begin(), chunk.begin() + static_cast<std::ptrdiff_t>(produced));
+  } catch (...) {
+    inflateEnd(&stream);
+    throw;
   }
   inflateEnd(&stream);
   if (overflow) {
@@ -162,6 +168,10 @@ std::string_view status_name(SwfStatus status) noexcept {
       return "truncated_tag";
     case SwfStatus::malformed_tag:
       return "malformed_tag";
+    case SwfStatus::too_many_tags:
+      return "too_many_tags";
+    case SwfStatus::out_of_memory:
+      return "out_of_memory";
   }
   return "unknown";
 }
@@ -333,6 +343,10 @@ void SwfTag::clear_decoded() {
 }
 
 SwfReadResult read_swf(std::span<const std::byte> bytes) {
+  return read_swf(bytes, detail::kMaxTags);
+}
+
+SwfReadResult read_swf(std::span<const std::byte> bytes, std::size_t max_tags) {
   SwfReadResult result;
   if (bytes.empty()) {
     result.status = SwfStatus::empty_input;
@@ -367,8 +381,14 @@ SwfReadResult read_swf(std::span<const std::byte> bytes) {
   std::vector<std::byte> extra;
   std::size_t source_length = 0;
   if (header.compression == SwfCompression::zlib) {
-    if (!inflate_body(bytes.subspan(8), body, result.message)) {
-      result.status = SwfStatus::decompress_failed;
+    try {
+      if (!inflate_body(bytes.subspan(8), body, result.message)) {
+        result.status = SwfStatus::decompress_failed;
+        return result;
+      }
+    } catch (const std::bad_alloc&) {
+      result.status = SwfStatus::out_of_memory;
+      result.message = "SWF body ran out of memory while inflating";
       return result;
     }
     source_length = body.size();
@@ -411,8 +431,16 @@ SwfReadResult read_swf(std::span<const std::byte> bytes) {
   header.frame_count = frame_count;
 
   std::size_t stop = 0;
-  const auto walk_status =
-      detail::decode_tag_stream(body, reader.position(), body.size(), 0, result.file.tags, stop);
+  std::size_t tags_left = max_tags;
+  SwfStatus walk_status = SwfStatus::ok;
+  try {
+    walk_status = detail::decode_tag_stream(body, reader.position(), body.size(), 0,
+                                            result.file.tags, stop, tags_left);
+  } catch (const std::bad_alloc&) {
+    result.status = SwfStatus::out_of_memory;
+    result.message = "SWF tag decoding ran out of memory";
+    return result;
+  }
   if (stop < body.size()) {
     result.file.trailing_bytes.assign(body.begin() + static_cast<std::ptrdiff_t>(stop), body.end());
   }
@@ -422,8 +450,9 @@ SwfReadResult read_swf(std::span<const std::byte> bytes) {
 
   if (walk_status != SwfStatus::ok) {
     result.status = walk_status;
-    result.message = walk_status == SwfStatus::truncated_tag ? "SWF tag stream is truncated"
-                                                            : "a SWF tag payload did not decode";
+    result.message = walk_status == SwfStatus::truncated_tag   ? "SWF tag stream is truncated"
+                     : walk_status == SwfStatus::too_many_tags ? "SWF tag count exceeds the limit"
+                                                               : "a SWF tag payload did not decode";
   } else if (!result.declared_length_matches && result.message.empty()) {
     result.message = "declared SWF length does not match the body size";
   }
@@ -481,7 +510,8 @@ bool replace_tag_payload(SwfFile& file, std::size_t tag_index, std::span<const s
   target.payload.assign(payload.begin(), payload.end());
   target.length = static_cast<std::uint32_t>(target.payload.size());
   target.clear_decoded();
-  detail::decode_tag_payload(target.payload, target, 0);
+  std::size_t tags_left = detail::kMaxTags;
+  detail::decode_tag_payload(target.payload, target, 0, tags_left);
   return true;
 }
 
