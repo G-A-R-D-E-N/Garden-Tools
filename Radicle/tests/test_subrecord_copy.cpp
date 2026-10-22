@@ -1,0 +1,79 @@
+#include "fo4/plugin/reader.hpp"
+#include "fo4/plugin/subrecord_authoring.hpp"
+#include "fo4/plugin/subrecord_copy.hpp"
+#include "fo4/plugin/writer.hpp"
+
+#include <gtest/gtest.h>
+
+#include <cstdint>
+#include <variant>
+#include <vector>
+
+namespace {
+
+constexpr auto k_armo = fo4::Signature::from_string("ARMO");
+constexpr auto k_icon = fo4::Signature::from_string("ICON");
+
+std::vector<std::byte> payload(std::uint8_t value) {
+  return {std::byte{value}, std::byte{value}, std::byte{0}};
+}
+
+fo4::Record& only_record(fo4::Plugin& plugin) {
+  return std::get<fo4::Record>(plugin.groups.front().children.front());
+}
+
+std::vector<std::vector<std::byte>> icons(const fo4::Plugin& plugin, const fo4::FormKey& key) {
+  std::vector<std::vector<std::byte>> out;
+  const auto* record = fo4::find_record(plugin, key);
+  if (record == nullptr) return out;
+  for (const auto& sub : record->subrecords) {
+    if (sub.signature == k_icon) out.push_back(sub.data);
+  }
+  return out;
+}
+
+}  // namespace
+
+TEST(SubrecordCopy, ReplacesAnOccurrenceTheDestinationAlreadyHas) {
+  auto source = fo4::make_empty_plugin("Source.esp");
+  const auto sourceKey = fo4::create_record(source, k_armo, "SourceArmor").key;
+  only_record(source).subrecords.push_back({k_icon, payload(7), false});
+
+  auto target = fo4::make_empty_plugin("Target.esp");
+  const auto targetKey = fo4::create_record(target, k_armo, "TargetArmor").key;
+  only_record(target).subrecords.push_back({k_icon, payload(3), false});
+
+  ASSERT_EQ(fo4::copy_record_subrecord(target, targetKey, source, sourceKey, k_icon, 0),
+            fo4::SubrecordCopyStatus::copied);
+  const auto after = icons(target, targetKey);
+  ASSERT_EQ(after.size(), 1u);
+  EXPECT_EQ(after.front(), payload(7));
+}
+
+TEST(SubrecordCopy, AddsAMissingOccurrenceInSchemaOrderWhenTheDestinationLacksIt) {
+  auto source = fo4::make_empty_plugin("Source.esp");
+  const auto sourceKey = fo4::create_record(source, k_armo, "SourceArmor").key;
+  only_record(source).subrecords.push_back({k_icon, payload(7), false});
+
+  auto target = fo4::make_empty_plugin("Target.esp");
+  const auto targetKey = fo4::create_record(target, k_armo, "TargetArmor").key;
+  ASSERT_TRUE(icons(target, targetKey).empty());
+
+  ASSERT_EQ(fo4::copy_record_subrecord(target, targetKey, source, sourceKey, k_icon, 0),
+            fo4::SubrecordCopyStatus::copied);
+  const auto after = icons(target, targetKey);
+  ASSERT_EQ(after.size(), 1u);
+  EXPECT_EQ(after.front(), payload(7));
+}
+
+TEST(SubrecordCopy, RefusesAnOccurrenceTheSourceDoesNotHaveWithoutWriting) {
+  auto source = fo4::make_empty_plugin("Source.esp");
+  const auto sourceKey = fo4::create_record(source, k_armo, "SourceArmor").key;
+
+  auto target = fo4::make_empty_plugin("Target.esp");
+  const auto targetKey = fo4::create_record(target, k_armo, "TargetArmor").key;
+
+  EXPECT_EQ(fo4::copy_record_subrecord(target, targetKey, source, sourceKey, k_icon, 0),
+            fo4::SubrecordCopyStatus::source_occurrence_missing);
+  EXPECT_TRUE(icons(target, targetKey).empty());
+}

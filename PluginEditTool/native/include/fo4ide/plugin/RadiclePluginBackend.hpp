@@ -202,6 +202,8 @@ private:
     Result<nlohmann::json> removeElement(const nlohmann::json& arguments) override;
     Result<nlohmann::json> moveElement(const nlohmann::json& arguments) override;
     Result<nlohmann::json> clearElement(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> copyElementToSelected(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> removeElementFromSelected(const nlohmann::json& arguments) override;
 
     Result<nlohmann::json> copyAsOverride(const nlohmann::json& arguments);
     Result<nlohmann::json> copyAsOverrideLocked(const nlohmann::json& arguments, bool initiallyDisabled);

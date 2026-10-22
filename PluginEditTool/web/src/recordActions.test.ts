@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import type { ConflictMatrix } from './backend';
+import type { BulkTarget, ConflictFieldRow, ConflictMatrix } from './backend';
 import { f2Edit, useRecordActions } from './recordActions';
 
 const dialogs = vi.hoisted(() => ({ prompt: vi.fn(), pickPlugin: vi.fn(), confirm: vi.fn() }));
@@ -15,6 +15,8 @@ const matrix: ConflictMatrix = {
 };
 
 const CopyAsWrapper = vi.fn(async () => 'Copied 000800:Patch.esp as wrapper in Target.esp.');
+const CopyElementToSelected = vi.fn(async () => JSON.stringify({ applied: 1, skipped: [], failures: [] }));
+const RemoveElementFromSelected = vi.fn(async () => JSON.stringify({ applied: 1, skipped: [], failures: [] }));
 const onReload = vi.fn(async () => {});
 const InjectFormsIntoMaster = vi.fn(async (_plugin: string, _master: string, _start: string, apply: boolean) =>
   apply ? 'Injected 2 record(s) from Patch.esp into Target.esp.' : 'DRY RUN: would inject 2 of 2 record(s) of Patch.esp into Target.esp.');
@@ -26,18 +28,23 @@ const MastersList = vi.fn(async () => JSON.stringify({
 const setStatus = vi.fn();
 const closeMenu = vi.fn();
 
-function renderActions() {
+const setErrorStr = vi.fn();
+const source: BulkTarget = { plugin: 'Patch.esp', formKey: '000800:Patch.esp' };
+const other: BulkTarget = { plugin: 'Other.esp', formKey: '000801:Other.esp' };
+
+function renderActions(selected: BulkTarget[] = []) {
   return renderHook(() => useRecordActions({
-    matrix, editablePlugins: ['Target.esp'], closeMenu, setStatus, onReload,
+    matrix, editablePlugins: ['Target.esp'], closeMenu, setStatus, onReload, selected, setErrorStr,
   })).result;
 }
 
 beforeEach(() => {
   vi.stubGlobal('chrome', { webview: { hostObjects: {
-    backend: { CopyAsWrapper, InjectFormsIntoMaster },
+    backend: { CopyAsWrapper, CopyElementToSelected, RemoveElementFromSelected, InjectFormsIntoMaster },
     masters: { List: MastersList },
   } } });
   dialogs.pickPlugin.mockResolvedValue({ target: 'Target.esp', extra: '' });
+  dialogs.confirm.mockResolvedValue(true);
 });
 
 afterEach(() => {
@@ -188,4 +195,46 @@ it('f2Edit fires only for F2 on the element itself', () => {
   expect(edit).toHaveBeenCalledOnce();
   expect(preventDefault).toHaveBeenCalledOnce();
   expect(p.tabIndex).toBe(-1);
+});
+
+const subrecordRow = { Field: 'Authoring\\ICON[0]', DisplayLabel: 'Icon' } as ConflictFieldRow;
+
+it('sends the element path and every selected record except the source to CopyElementToSelected', async () => {
+  const result = renderActions([source, other]);
+
+  await act(async () => { await result.current.copyElementToSelected(0, subrecordRow); });
+
+  expect(CopyElementToSelected).toHaveBeenCalledWith('Patch.esp', '000800:Patch.esp', 'Authoring\\ICON[0]', JSON.stringify([other]));
+});
+
+it('sends the same targets to RemoveElementFromSelected after confirmation', async () => {
+  const result = renderActions([source, other]);
+
+  await act(async () => { await result.current.removeElementFromSelected(0, subrecordRow); });
+
+  expect(dialogs.confirm).toHaveBeenCalled();
+  expect(RemoveElementFromSelected).toHaveBeenCalledWith('Authoring\\ICON[0]', JSON.stringify([other]));
+});
+
+it('never calls the bridge when the source is the only selected record', async () => {
+  dialogs.confirm.mockResolvedValue(false);
+  const result = renderActions([source]);
+
+  await act(async () => { await result.current.copyElementToSelected(0, subrecordRow); });
+  await act(async () => { await result.current.removeElementFromSelected(0, subrecordRow); });
+
+  expect(CopyElementToSelected).not.toHaveBeenCalled();
+  expect(RemoveElementFromSelected).not.toHaveBeenCalled();
+});
+
+it('lists per-record failures from a bulk copy in the error line', async () => {
+  CopyElementToSelected.mockResolvedValueOnce(JSON.stringify({
+    applied: 1, skipped: [], failures: [{ plugin: 'Other.esp', formKey: '000801:Other.esp', reason: 'ElementLinkNeedsMaster: x' }],
+  }));
+  const result = renderActions([source, other]);
+
+  await act(async () => { await result.current.copyElementToSelected(0, subrecordRow); });
+
+  expect(setErrorStr).toHaveBeenCalledWith(expect.stringContaining('1 of 2 records could not be copied:'));
+  expect(setErrorStr).toHaveBeenCalledWith(expect.stringContaining('Other.esp 000801:Other.esp: ElementLinkNeedsMaster: x'));
 });

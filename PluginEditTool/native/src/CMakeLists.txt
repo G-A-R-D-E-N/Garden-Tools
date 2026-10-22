@@ -47,6 +47,7 @@ add_library(
     plugin/RadiclePluginCopyAsWrapper.cpp
     plugin/RadiclePluginCheck.cpp
     plugin/RadiclePluginBatchMutation.cpp
+    plugin/RadiclePluginBulkElements.cpp
     plugin/RadiclePluginMasterMutation.cpp
     plugin/RadiclePluginReadApi.cpp
     plugin/RadiclePluginEsl.cpp

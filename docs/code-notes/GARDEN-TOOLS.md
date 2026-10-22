@@ -2425,3 +2425,19 @@ Regression: `PluginEditTool/native/tests/unit/RadiclePluginItmNestedTests.cpp` (
 ## PluginEditTool/native/tests/unit/GraphLiftTests.cpp:UniqueRoot — lift tests remove their temp roots
 
 - `uniqueRoot` made `<temp>/fo4ide-lift-<tag>/<timestamp>` for every `compileText`, `throughGraph`, `runOne` and refusal call and never removed it (38,000 folders per tag on the CI machine). `UniqueRoot` is a small RAII type: it removes its folder, and the tag folder when empty, when the test body ends. The temp root is used only inside the function that creates it, so the lifetime is safe.
+
+## PluginEditTool/native/src/plugin/RadiclePluginBulkElements.cpp:copyElementToSelected
+
+Partial-failure policy: each target is decided on its own, in order. A target that is not loaded or is write-guarded, or whose copy returns a status other than `copied`, becomes one entry in `failures` with the error code as prefix. Its plugin's working copy is left as it was, because `copy_record_subrecord` writes only on success. The plugins that did change are staged once each after all targets are decided, so an earlier plugin already staged is not rolled back if a later stage throws; that case returns the whole-op error `BulkCopyWriteFailed`. The result shape is `{applied, skipped, failures}`; `skipped` is always empty for copy, and `failures` carries `plugin` as well as `formKey`.
+
+Link rule: a copied element that links to a record in a plugin the destination does not list as a master fails that target with `ElementLinkNeedsMaster`. No master is added, so the copy is never written with a link the destination cannot resolve. The re-encoding itself is done by `Radicle/src/plugin/subrecord_copy.cpp:copy_record_subrecord`.
+
+Path limit: only `Authoring\SIG[n]` is accepted, and other schema list paths return `ElementPathUnsupported` before any plugin is locked. Cost ceiling: `collect_form_links` scans the whole source plugin for each call, so a large selection repeats that scan per target.
+
+## PluginEditTool/native/src/plugin/RadiclePluginBulkElements.cpp:removeElementFromSelected
+
+Same per-target, working-copy and single-stage policy as `copyElementToSelected`, with `BulkRemoveWriteFailed` as the whole-op stage error. The difference is the result classes: an element absent from a target is reported in `skipped` with the reason `Element is not present` and is not a failure, and a target with no record is a failure with `RecordNotFound`. A removal that would drop a required subrecord below its minimum fails that target with `ElementBelowMinimum`, and an order the authoring rules cannot prove safe fails with `ElementUnknownOrder`. The path limit is the same as for copy.
+
+## Radicle/src/plugin/subrecord_copy.cpp:copy_record_subrecord
+
+Copies one occurrence of a subrecord from a source record into a destination record of another plugin. Before any write, every form link in the source occurrence is checked: its owner must be the destination plugin or one of its masters, otherwise the call returns `owner_not_master` and writes nothing. The payload is remapped through a one-subrecord temporary record with `remap_record_form_links`, using the source plugin context and the destination context from `plugin_type_lookup`, so the link IDs follow the destination's master list. If the destination lacks the occurrence and the position is the next free one, `add_record_subrecord` inserts it in schema order; a position past the destination's count returns `occurrence_unreachable`, and `add_record_subrecord` returning `already_present` maps to the same status. Data and the extended size are replaced only after these checks pass, and `mark_record_modified` runs last.

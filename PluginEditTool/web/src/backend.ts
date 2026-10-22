@@ -49,6 +49,8 @@ export interface Backend {
   RemoveElement(plugin: string, record: string, path: string): Promise<string>;
   MoveElement(plugin: string, record: string, path: string, delta: number): Promise<string>;
   ClearElement(plugin: string, record: string, path: string): Promise<string>;
+  CopyElementToSelected(sourcePlugin: string, sourceFormKey: string, elementPath: string, targetsJson: string): Promise<string>;
+  RemoveElementFromSelected(elementPath: string, targetsJson: string): Promise<string>;
   GetConditions(plugin: string, record: string): Promise<string>;
   GetConditionsAt(plugin: string, record: string, path: string): Promise<string>;
   SetConditionsAt(plugin: string, record: string, path: string, conditionsJson: string): Promise<string>;
@@ -201,6 +203,8 @@ export interface ConflictFieldRow {
 export interface RefByEntry { Plugin: string; FormKey: string; EditorID: string; Type: string; }
 export interface RecordProblem { Code?: string; Detail?: string; Severity: string; Description: string; }
 export interface SearchHit { FormKey: string; EditorID: string; Type: string; Plugin: string; }
+
+export interface BulkTarget { plugin: string; formKey: string }
 
 export interface ElementActions {
   canCreate?: boolean;
