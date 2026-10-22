@@ -1,5 +1,7 @@
 using System;
+using System.Diagnostics;
 using System.IO;
+using System.Security.Principal;
 using System.Text;
 using BehaviourStudio.App;
 using OpenCommonwealth.Services.Archive;
@@ -266,6 +268,38 @@ public sealed class Ba2RadicleTests
         finally { Directory.Delete(root, recursive: true); }
     }
 
+    [Fact]
+    public void SubgraphIndexKeepsReadableLooseManifestsWhenAModRootListingIsDenied()
+    {
+        string root = TempRoot();
+        string dataFolder = Path.Combine(root, "Data");
+        string modRoot = Path.Combine(root, "mods", "Denied");
+        const ulong id = 1234567890123;
+        string dataAnim = Path.Combine(dataFolder, "meshes", "animtextdata");
+        string deniedFileData = Path.Combine(modRoot, "meshes", "animtextdata", "animationfiledata");
+        Directory.CreateDirectory(Path.Combine(dataAnim, "animationfiledata"));
+        Directory.CreateDirectory(Path.Combine(dataAnim, "animationoffsets"));
+        Directory.CreateDirectory(deniedFileData);
+        try
+        {
+            File.WriteAllText(Path.Combine(dataAnim, "animationfiledata", $"{id}.txt"),
+                "V1\nx\n1234567890123\nx\nActors\\Test\\Behaviors\\Test.hkx\n");
+            File.WriteAllText(Path.Combine(dataAnim, "animationoffsets", $"{id}.txt"), "V4\n");
+            if (!DenyListing(deniedFileData)) return;
+
+            using var data = GameData.Discover(dataFolder, Path.Combine(root, "plugins.txt"), new[] { modRoot });
+            var index = SubgraphIndex.Discover(data);
+
+            Assert.Equal("Actors\\Test\\Behaviors\\Test.hkx", index.Find(id)?.PrimaryBehavior);
+            Assert.NotNull(index.FindOffsetData(id));
+        }
+        finally
+        {
+            RestoreListing(deniedFileData);
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     [Theory]
     [InlineData("Meshes\\X\\CharacterAssets\\a.HKX", true)]
     [InlineData("Meshes/X/CharacterAssets/a.txt", false)]
@@ -360,6 +394,32 @@ public sealed class Ba2RadicleTests
     }
 
     private static string TempRoot() => Path.Combine(Path.GetTempPath(), "bgs-winners-" + Guid.NewGuid().ToString("N"));
+
+    private static bool DenyListing(string folder)
+    {
+        if (OperatingSystem.IsWindows()) Icacls(folder, "/deny", $"{WindowsIdentity.GetCurrent().Name}:(RD)");
+        else File.SetUnixFileMode(folder, UnixFileMode.None);
+        try { Directory.EnumerateFiles(folder).ToList(); return false; }
+        catch (UnauthorizedAccessException) { return true; }
+    }
+
+    private static void RestoreListing(string folder)
+    {
+        if (OperatingSystem.IsWindows()) Icacls(folder, "/remove:d", WindowsIdentity.GetCurrent().Name);
+        else File.SetUnixFileMode(folder, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+    }
+
+    private static void Icacls(string folder, params string[] args)
+    {
+        var start = new ProcessStartInfo("icacls") { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true };
+        start.ArgumentList.Add(folder);
+        foreach (string arg in args) start.ArgumentList.Add(arg);
+        using var process = Process.Start(start)!;
+        process.StandardOutput.ReadToEnd();
+        string error = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        if (process.ExitCode != 0) throw new IOException($"icacls failed: {error}");
+    }
 
     private static void WriteGeneralBa2(string path, string entryName, byte[] payload)
     {
