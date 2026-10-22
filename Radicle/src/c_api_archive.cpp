@@ -5,6 +5,7 @@
 #include "fo4/environment/strings.hpp"
 #include "fo4/text/encoding.hpp"
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
@@ -17,6 +18,10 @@
 
 struct radicle_assets {
   fo4::archive::AssetResolver value;
+};
+
+struct radicle_asset_list {
+  std::vector<fo4::archive::AssetListing> items;
 };
 
 namespace {
@@ -140,34 +145,39 @@ radicle_status radicle_ba2_extract(const radicle_ba2* ba2, size_t index, uint8_t
                  [&] { return copy_bytes(to_reader(ba2)->extract(index), out_bytes, out_size); });
 }
 
-radicle_status radicle_ba2_write_general(const radicle_ba2_write_entry* entries,
-                                         size_t count,
+radicle_status radicle_ba2_write_general(const radicle_ba2_file* files,
+                                         size_t file_count,
+                                         uint32_t version,
+                                         int32_t compress,
                                          uint8_t** out_bytes,
                                          size_t* out_size) {
   clear_error();
   if (out_bytes != nullptr) *out_bytes = nullptr;
   if (out_size != nullptr) *out_size = 0;
-  if (out_bytes == nullptr || out_size == nullptr) {
-    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_bytes and out_size are required");
+  if ((files == nullptr && file_count != 0) || out_bytes == nullptr || out_size == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "files, out_bytes and out_size are required");
   }
-  if (entries == nullptr && count != 0) {
-    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "entries are required");
+  for (size_t i = 0; i < file_count; ++i) {
+    if (files[i].path == nullptr || (files[i].data == nullptr && files[i].size != 0) ||
+        files[i].size > std::numeric_limits<uint32_t>::max()) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "every file needs a path and data that fit a 32-bit size");
+    }
   }
   return guarded("unknown exception while writing BA2", [&] {
     fo4::archive::Ba2GeneralArchive archive;
+    archive.version = version;
     std::unordered_set<std::string> names;
-    archive.entries.reserve(count);
-    for (size_t index = 0; index < count; ++index) {
-      const auto& input = entries[index];
-      if (input.path == nullptr || (input.bytes == nullptr && input.size != 0) ||
-          input.size > std::numeric_limits<uint32_t>::max()) {
-        return fail(RADICLE_STATUS_INVALID_ARGUMENT, "BA2 entry needs a path and bytes that fit a 32-bit size");
-      }
+    archive.entries.reserve(file_count);
+    for (size_t i = 0; i < file_count; ++i) {
+      const auto& input = files[i];
       const std::string path = input.path;
       const auto stored = fo4::text::utf8_to_windows1252(path);
       if (!stored) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "BA2 entry path has no Windows-1252 form");
       if (stored->empty() || stored->size() >= k_max_write_path_length) {
         return fail(RADICLE_STATUS_INVALID_ARGUMENT, "BA2 entry path must be 1 to 259 Windows-1252 bytes");
+      }
+      if (std::ranges::any_of(*stored, [](unsigned char ch) { return ch >= 0x80; })) {
+        return fail(RADICLE_STATUS_INVALID_ARGUMENT, "BA2 entry path must be ASCII: non-ASCII name hashes are not verified");
       }
       if (!names.insert(fo4::archive::normalize_ba2_name(*stored)).second) {
         return fail(RADICLE_STATUS_INVALID_ARGUMENT, "BA2 entry path duplicates an earlier entry");
@@ -178,8 +188,9 @@ radicle_status radicle_ba2_write_general(const radicle_ba2_write_entry* entries,
       entry.extension_hash = hashes.extension;
       entry.directory_hash = hashes.directory;
       entry.path = path;
-      entry.chunks.push_back(fo4::archive::make_stored_ba2_chunk(
-          std::span<const std::byte>(reinterpret_cast<const std::byte*>(input.bytes), input.size)));
+      const std::span<const std::byte> data(reinterpret_cast<const std::byte*>(input.data), input.size);
+      entry.chunks.push_back(compress != 0 ? fo4::archive::make_compressed_ba2_chunk(data)
+                                           : fo4::archive::make_stored_ba2_chunk(data));
       archive.entries.push_back(std::move(entry));
     }
     return copy_bytes(fo4::archive::write_ba2_general(archive), out_bytes, out_size);
@@ -231,6 +242,27 @@ radicle_status radicle_assets_open(const char* data_dir,
   });
 }
 
+radicle_status radicle_assets_open_roots(const char* const* root_paths,
+                                         size_t root_count,
+                                         const char* const* archive_paths,
+                                         size_t archive_count,
+                                         radicle_assets** out_assets) {
+  clear_error();
+  if (!valid_list(root_paths, root_count) || !valid_list(archive_paths, archive_count) || out_assets == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "non-NULL root paths, archive paths and out_assets are required");
+  }
+  *out_assets = nullptr;
+  return guarded("unknown exception while opening assets", [&] {
+    std::vector<std::filesystem::path> roots;
+    for (size_t i = 0; i < root_count; ++i) roots.push_back(utf8_path(root_paths[i]));
+    std::vector<std::filesystem::path> archives;
+    for (size_t i = 0; i < archive_count; ++i) archives.push_back(utf8_path(archive_paths[i]));
+    auto assets = std::make_unique<radicle_assets>(radicle_assets{fo4::archive::AssetResolver::open_roots(roots, archives)});
+    *out_assets = assets.release();
+    return RADICLE_STATUS_OK;
+  });
+}
+
 void radicle_assets_destroy(radicle_assets* assets) {
   clear_error();
   delete assets;
@@ -266,6 +298,42 @@ radicle_status radicle_assets_locate(const radicle_assets* assets, const char* p
     *out_location = to_c_location(*location);
     return RADICLE_STATUS_OK;
   });
+}
+
+radicle_status radicle_assets_list(const radicle_assets* assets,
+                                   const char* prefix,
+                                   const char* extension,
+                                   int32_t include_shadowed,
+                                   radicle_asset_list** out_list) {
+  clear_error();
+  if (assets == nullptr || out_list == nullptr) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "assets and out_list are required");
+  *out_list = nullptr;
+  return guarded("unknown exception while listing assets", [&] {
+    auto list = std::make_unique<radicle_asset_list>();
+    list->items = assets->value.list(prefix == nullptr ? "" : prefix, extension == nullptr ? "" : extension,
+                                     include_shadowed != 0);
+    *out_list = list.release();
+    return RADICLE_STATUS_OK;
+  });
+}
+
+size_t radicle_asset_list_count(const radicle_asset_list* list) {
+  clear_error();
+  return list == nullptr ? 0 : list->items.size();
+}
+
+radicle_status radicle_asset_list_get(const radicle_asset_list* list, size_t index, radicle_asset_list_entry* out_entry) {
+  clear_error();
+  if (list == nullptr || out_entry == nullptr) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "list and out_entry are required");
+  if (index >= list->items.size()) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "list index is out of range");
+  const auto& item = list->items[index];
+  *out_entry = {item.path.c_str(), to_c_location(item.location), item.size, item.shadowed ? 1 : 0};
+  return RADICLE_STATUS_OK;
+}
+
+void radicle_asset_list_destroy(radicle_asset_list* list) {
+  clear_error();
+  delete list;
 }
 
 radicle_status radicle_assets_read(const radicle_assets* assets,

@@ -3,6 +3,7 @@
 #include "fo4/forms/cell.hpp"
 #include "fo4/forms/placed_reference.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "fo4/plugin/writer.hpp"
 #include "fo4/schema/form_link_mixed.hpp"
 #include "fo4/schema/form_links.hpp"
 #include "record_edit.hpp"
@@ -12,6 +13,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <optional>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -25,7 +28,7 @@ constexpr auto k_wrld = Signature::from_string("WRLD");
 constexpr auto k_xesp = Signature::from_string("XESP");
 constexpr auto k_xtel = Signature::from_string("XTEL");
 constexpr RecordFlags::value_type k_kept_bits = RecordFlags::compressed | RecordFlags::partial_form;
-constexpr std::uint32_t k_player_form = 0x14;
+constexpr std::string_view k_player_key = "000014:Fallout4.esm";
 constexpr float k_undelete_z = -30000.0f;
 
 using detail::MutableLocation;
@@ -304,8 +307,27 @@ UndeleteStatus undelete_and_disable_reference(Plugin& plugin,
     transform.z = k_undelete_z;
     forms::set_placed_reference_transform(next, record_key, transform);
   }
-  forms::set_placed_reference_enable_parent(
-      next, record_key, resolve_plugin_form_id(RawFormId{k_player_form}, plugin_form_id_context(next)), 1);
+  const auto player = FormKey::parse(k_player_key);
+  const bool has_player_master =
+      next.key == player.owner() || std::any_of(next.header.masters.begin(), next.header.masters.end(),
+                                                [&](const MasterReference& held) { return held.key == player.owner(); });
+  if (!has_player_master) {
+    std::vector<MasterDescriptor> masters{{player.owner(), PluginKind::full}};
+    for (const auto& held : next.header.masters) masters.push_back({held.key, held.kind});
+    const auto own_types = plugin_type_lookup(plugin);
+    const FormLinkTypeLookup types = [&](const FormKey& key) -> std::optional<Signature> {
+      if (const auto own = own_types(key)) return own;
+      const auto* winner = load_order.winner(key);
+      if (winner == nullptr || winner->record == nullptr) return std::nullopt;
+      return winner->record->header.signature;
+    };
+    try {
+      next = remap_plugin_masters(std::move(next), std::move(masters), types);
+    } catch (const std::exception&) {
+      return UndeleteStatus::incomplete_reference;
+    }
+  }
+  forms::set_placed_reference_enable_parent(next, record_key, player, 1);
   plugin = std::move(next);
   return UndeleteStatus::undeleted;
 }

@@ -652,6 +652,8 @@ TEST(REFRExtraRows, WritesTheNewRowsInPlaceAndRefusesALinkedReferenceBesideAShor
 
   EXPECT_EQ(sub_bytes(reread, "000C10:Patch.esp", "XCVL"), floats({1.0f, 2.0f, 3.0f}));
   EXPECT_EQ(sub_bytes(reread, "000C10:Patch.esp", "XWPN"), u32s({0x00000A96u, 0x00000A97u, 0x00000A98u}));
+  EXPECT_EQ(sub_bytes_at(reread, "000C10:Patch.esp", "XWPN", 1), u32s({0x00000AC1u, 0x00000AC2u, 0x00000AC3u}));
+  EXPECT_EQ(sub_bytes_at(reread, "000C10:Patch.esp", "XWPN", 2), u32s({0x00000AC4u, 0x00000AC5u, 0x00000AC6u}));
   EXPECT_EQ(sub_bytes(reread, "000C10:Patch.esp", "XPOD"), u32s({0x00000A99u, 0x00000A9Au}));
   EXPECT_EQ(link_raw(reread, "REFR", "000C10:Patch.esp", "REFR\\LinkedKeyword"), 0x00000A9Bu);
 }

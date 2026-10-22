@@ -100,7 +100,7 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
                 });
             }
             bool editorValid = false;
-            const auto editorId = optionalStringField(*payload, "editorId", editorValid);
+            const auto editorId = optionalEditorIdField(*payload, editorValid);
             if (!editorValid) {
                 return std::unexpected(Error{
                     "InvalidRecordCreationPayload",
@@ -121,7 +121,7 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
             }
 
             bool editorValid = false;
-            const auto editorId = optionalStringField(*payload, "editorId", editorValid);
+            const auto editorId = optionalEditorIdField(*payload, editorValid);
             if (!editorValid) {
                 return std::unexpected(Error{
                     "InvalidRecordCreationPayload",
@@ -213,7 +213,7 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
             }
 
             bool editorValid = false;
-            const auto editorId = optionalStringField(*payload, "editorId", editorValid);
+            const auto editorId = optionalEditorIdField(*payload, editorValid);
             if (!editorValid ||
                 (editorId.has_value() && editorId->find('\0') != std::string::npos)) {
                 return std::unexpected(Error{
@@ -244,7 +244,7 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
                 });
             }
             bool editorValid = false;
-            const auto editorId = optionalStringField(*payload, "editorId", editorValid);
+            const auto editorId = optionalEditorIdField(*payload, editorValid);
             if (!editorValid) {
                 return std::unexpected(Error{
                     "InvalidRecordCreationPayload",
@@ -256,7 +256,7 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
                 chanceNone, maxCount, flags);
         } else if (signatureText == "FACT") {
             bool valid = false;
-            const auto editorId = optionalStringField(*payload, "editorId", valid);
+            const auto editorId = optionalEditorIdField(*payload, valid);
             if (!valid) return std::unexpected(Error{"InvalidRecordCreationPayload", "FACT editorId must be a string or null"});
             const auto fullName = optionalStringField(*payload, "fullName", valid);
             if (!valid) return std::unexpected(Error{"InvalidRecordCreationPayload", "FACT fullName must be a string or null"});
@@ -277,7 +277,7 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
             }
 
             bool valid = false;
-            const auto editorId = optionalStringField(*payload, "editorId", valid);
+            const auto editorId = optionalEditorIdField(*payload, valid);
             if (!valid) return std::unexpected(Error{"InvalidRecordCreationPayload", "RACE editorId must be a string or null"});
             const auto fullName = optionalStringField(*payload, "fullName", valid);
             if (!valid) return std::unexpected(Error{"InvalidRecordCreationPayload", "RACE fullName must be a string or null"});
@@ -302,7 +302,7 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
             key = fo4::forms::create_race(mutated, creation);
         } else if (signatureText == "ARMO") {
             bool valid = false;
-            const auto editorId = optionalStringField(*payload, "editorId", valid);
+            const auto editorId = optionalEditorIdField(*payload, valid);
             if (!valid) {
                 return std::unexpected(Error{"InvalidRecordCreationPayload", "ARMO editorId must be a string or null"});
             }
@@ -338,7 +338,7 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
             key = fo4::forms::create_armor(mutated, creation);
         } else if (signatureText == "ARMA") {
             bool valid = false;
-            const auto editorId = optionalStringField(*payload, "editorId", valid);
+            const auto editorId = optionalEditorIdField(*payload, valid);
             if (!valid) return std::unexpected(Error{"InvalidRecordCreationPayload", "ARMA editorId must be a string or null"});
             const auto maleBiped = optionalStringField(*payload, "maleBipedModel", valid);
             if (!valid) return std::unexpected(Error{"InvalidRecordCreationPayload", "ARMA maleBipedModel must be a string or null"});

@@ -131,6 +131,12 @@ inline std::optional<std::string_view> optionalStringView(
     return std::string_view{*value};
 }
 
+inline std::optional<std::string> optionalEditorIdField(const nlohmann::json& object, bool& valid) {
+    auto editorId = optionalStringField(object, "editorId", valid);
+    if (editorId.has_value() && editorId->empty()) return std::nullopt;
+    return editorId;
+}
+
 inline std::optional<Error> parseFormKeyField(const nlohmann::json& object,
                                               const char* key,
                                               fo4::FormKey& value) {

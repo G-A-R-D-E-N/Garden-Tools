@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using Radicle.Interop.Native;
 
 namespace Radicle.Interop;
@@ -10,6 +11,8 @@ public sealed record Ba2Entry(string Path, uint NameHash, uint ExtensionHash, ui
                               byte TextureFlags, byte TileMode);
 
 public readonly record struct AssetLocation(AssetOrigin Origin, int ArchiveIndex, int EntryIndex);
+
+public sealed record AssetListing(string Path, AssetLocation Location, ulong Size, bool Shadowed);
 
 public sealed unsafe class Ba2Archive : IDisposable
 {
@@ -87,32 +90,36 @@ public static unsafe class Ba2Writer
 {
     static Ba2Writer() => RadicleLibrary.Register();
 
-    public static byte[] General(params (string Path, byte[] Data)[] files)
+    public static byte[] General(params (string Path, byte[] Data)[] files) => General(files, 1, false);
+
+    public static byte[] General(IEnumerable<(string Path, byte[] Data)> files, uint version, bool compress)
     {
-        using var strings = new NativeStrings();
-        var payload = new byte[files.Sum(file => file.Data.Length)];
-        var entries = new Native.Ba2WriteEntry[files.Length];
-        var offset = 0;
-        for (var i = 0; i < files.Length; ++i)
+        ArgumentNullException.ThrowIfNull(files);
+        var items = files.ToArray();
+        for (var i = 0; i < items.Length; i++)
         {
-            files[i].Data.CopyTo(payload, offset);
-            entries[i].Path = strings.Add(files[i].Path);
-            entries[i].Size = (nuint)files[i].Data.Length;
-            offset += files[i].Data.Length;
+            if (items[i].Path is null || items[i].Data is null) throw new ArgumentException($"File {i} has a null Path or Data.", nameof(files));
         }
-        fixed (byte* data = payload)
-        fixed (Native.Ba2WriteEntry* items = entries)
+        using var strings = new NativeStrings();
+        var pins = new List<GCHandle>();
+        try
         {
-            var at = data;
-            for (var i = 0; i < files.Length; ++i)
+            var native = new Ba2File[items.Length];
+            for (var i = 0; i < items.Length; i++)
             {
-                items[i].Bytes = (IntPtr)at;
-                at += files[i].Data.Length;
+                var pin = GCHandle.Alloc(items[i].Data, GCHandleType.Pinned);
+                pins.Add(pin);
+                native[i] = new Ba2File { Path = strings.Add(items[i].Path), Data = pin.AddrOfPinnedObject(), Size = (nuint)items[i].Data.Length };
             }
             byte* bytes;
             nuint size;
-            Call.Check(RadicleNative.Ba2WriteGeneral(items, (nuint)entries.Length, &bytes, &size));
+            fixed (Ba2File* first = native)
+                Call.Check(RadicleNative.Ba2WriteGeneral(first, (nuint)native.Length, version, compress ? 1 : 0, &bytes, &size));
             return Call.TakeBytes(bytes, size);
+        }
+        finally
+        {
+            foreach (var pin in pins) pin.Free();
         }
     }
 }
@@ -152,6 +159,18 @@ public sealed unsafe class AssetResolver : IDisposable
         return new AssetResolver(handle);
     }
 
+    public static AssetResolver OpenRoots(IEnumerable<string> roots, IEnumerable<string> archives)
+    {
+        using var s = new NativeStrings();
+        var rootPaths = roots.Select(s.Add).ToArray();
+        var archivePaths = archives.Select(s.Add).ToArray();
+        IntPtr handle;
+        fixed (IntPtr* r = rootPaths)
+        fixed (IntPtr* p = archivePaths)
+            Call.Check(RadicleNative.AssetsOpenRoots(r, (nuint)rootPaths.Length, p, (nuint)archivePaths.Length, &handle));
+        return new AssetResolver(handle);
+    }
+
     public int ArchiveCount
     {
         get
@@ -176,6 +195,27 @@ public sealed unsafe class AssetResolver : IDisposable
         return Call.Found(RadicleNative.AssetsLocate(use.Pointer, path, &location))
             ? new AssetLocation(location.Origin, (int)location.ArchiveIndex, (int)location.EntryIndex)
             : null;
+    }
+
+    public IReadOnlyList<AssetListing> List(string? prefix = null, string? extension = null, bool includeShadowed = false)
+    {
+        using var use = Use();
+        IntPtr list;
+        Call.Check(RadicleNative.AssetsList(use.Pointer, prefix, extension, includeShadowed ? 1 : 0, &list));
+        try
+        {
+            var count = (int)RadicleNative.AssetListCount(list);
+            var items = new List<AssetListing>(count);
+            for (var i = 0; i < count; i++)
+            {
+                Native.AssetListEntry e;
+                Call.Check(RadicleNative.AssetListGet(list, (nuint)i, &e));
+                items.Add(new AssetListing(Utf8.Read(e.Path) ?? string.Empty,
+                    new AssetLocation(e.Location.Origin, (int)e.Location.ArchiveIndex, (int)e.Location.EntryIndex), e.Size, e.Shadowed != 0));
+            }
+            return items;
+        }
+        finally { RadicleNative.AssetListDestroy(list); }
     }
 
     public byte[]? Read(string path)

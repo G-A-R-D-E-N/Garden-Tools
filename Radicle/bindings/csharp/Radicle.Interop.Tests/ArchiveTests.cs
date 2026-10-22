@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Text;
 using Radicle.Interop.Native;
@@ -52,27 +53,69 @@ public class ArchiveTests
         Assert.Null(strings.Lookup(0, StringSource.Dl, 0x10));
         Assert.Equal(StringSource.Il, StringTables.SourceFor("INFO", "NAM1"));
     }
-
     [Fact]
-    public void WritesGeneralArchivesThatTheReaderRereadsAndRefusesDuplicatePaths()
+    public void WriterEmitsReadableArchivesWithPathHashesAndRefusesUnknownVersions()
     {
         using var temp = new TempDirectory();
-        var path = temp.Write("Data/Written - Main.ba2", Ba2Writer.General(
-            ("Meshes\\Shared.nif", Encoding.ASCII.GetBytes("mesh")),
-            ("Scripts\\Empty.pex", System.Array.Empty<byte>())));
+        var big = new byte[4096];
+        Array.Fill(big, (byte)'m');
+        var files = new[] { ("Meshes\\Gun.nif", Encoding.ASCII.GetBytes("gun")), ("Materials\\Gun.bgsm", big) };
+        var path = temp.Write("Data/Written - Main.ba2", Ba2Writer.General(files, version: 8, compress: true));
 
         using var archive = Ba2Archive.Open(path);
-        Assert.Equal(Ba2Kind.General, archive.Kind);
-        Assert.Equal(2, archive.Count);
-        Assert.Equal("Meshes\\Shared.nif", archive.Entry(0).Path);
-        Assert.Equal(4UL, archive.Entry(0).UnpackedSize);
-        Assert.Equal(0, archive.Find("meshes/SHARED.nif"));
-        Assert.Equal("mesh", Encoding.ASCII.GetString(archive.Extract(0)));
-        Assert.Empty(archive.Extract(1));
+        Assert.Equal(8u, archive.Version);
+        Assert.Equal(new[] { "Meshes\\Gun.nif", "Materials\\Gun.bgsm" }, archive.Entries.Select(e => e.Path));
+        Assert.All(archive.Entries, e => Assert.NotEqual(0u, e.NameHash));
+        Assert.Equal(big, archive.Extract(archive.Find("materials/gun.bgsm")!.Value));
+        Assert.Equal(Status.ParseError, Assert.Throws<RadicleException>(() => Ba2Writer.General(files, version: 5, compress: false)).Status);
+    }
 
-        var duplicate = Assert.Throws<RadicleException>(() => Ba2Writer.General(
-            ("Meshes\\A.nif", Encoding.ASCII.GetBytes("a")),
-            ("meshes/a.NIF", Encoding.ASCII.GetBytes("b"))));
-        Assert.Equal(Status.InvalidArgument, duplicate.Status);
+    [Fact]
+    public void WriterRefusesNullFileDataBeforePinning()
+    {
+        var files = new (string Path, byte[] Data)[] { ("Meshes\\Gun.nif", null!) };
+        Assert.Throws<ArgumentException>(() => Ba2Writer.General(files, 1, false));
+    }
+
+    [Fact]
+    public void OpenRootsLayersLooseRootsHighToLowOverArchives()
+    {
+        using var temp = new TempDirectory();
+        var archive = temp.Write("Data/Base - Main.ba2", Ba2Writer.General(("meshes\\a.nif", Encoding.ASCII.GetBytes("arc"))));
+        temp.Write("ModHigh/Meshes/A.nif", Encoding.ASCII.GetBytes("high"));
+        temp.Write("ModLow/Meshes/A.nif", Encoding.ASCII.GetBytes("low"));
+        var roots = new[] { System.IO.Path.Combine(temp.Path, "ModHigh"), System.IO.Path.Combine(temp.Path, "ModLow") };
+
+        using var assets = AssetResolver.OpenRoots(roots, new[] { archive });
+        var all = assets.List("meshes", ".nif", includeShadowed: true);
+        Assert.Equal(new[] { false, true, true }, all.Select(a => a.Shadowed));
+        Assert.Equal(new[] { AssetOrigin.Loose, AssetOrigin.Loose, AssetOrigin.Archive }, all.Select(a => a.Location.Origin));
+        Assert.Equal(4UL, all[0].Size);
+    }
+
+    [Fact]
+    public void ListsWinningAssetsWithOriginSizeAndShadowedCopies()
+    {
+        using var temp = new TempDirectory();
+        var data = System.IO.Path.Combine(temp.Path, "Data");
+        var low = temp.Write("Data/Base - Main.ba2", Ba2Writer.General(
+            ("Meshes\\Shared.nif", Encoding.ASCII.GetBytes("low")),
+            ("Meshes\\Only.nif", Encoding.ASCII.GetBytes("only")),
+            ("Textures\\T.dds", Encoding.ASCII.GetBytes("t"))));
+        var high = temp.Write("Data/Base - Textures.ba2", Ba2Writer.General(("meshes\\shared.nif", Encoding.ASCII.GetBytes("high"))));
+        temp.Write("Data/Meshes/Shared.NIF", Encoding.ASCII.GetBytes("loose!"));
+
+        using var assets = AssetResolver.Open(data, new[] { low, high });
+        var winners = assets.List("meshes", ".nif");
+        Assert.Equal(new[] { "meshes/only.nif", "meshes/shared.nif" }, winners.Select(w => w.Path));
+        Assert.Equal(new AssetLocation(AssetOrigin.Archive, 0, 1), winners[0].Location);
+        Assert.Equal((AssetOrigin.Loose, 6UL, false), (winners[1].Location.Origin, winners[1].Size, winners[1].Shadowed));
+
+        var all = assets.List("meshes", ".nif", includeShadowed: true);
+        Assert.Equal(new[] { false, false, true, true },
+            all.Select(a => a.Shadowed));
+        Assert.Equal(new[] { AssetOrigin.Loose, AssetOrigin.Archive, AssetOrigin.Archive },
+            all.Skip(1).Select(a => a.Location.Origin));
+        Assert.Equal(Status.InvalidArgument, Assert.Throws<RadicleException>(() => assets.List("../x")).Status);
     }
 }

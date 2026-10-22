@@ -23,7 +23,7 @@ public sealed class GameDataPluginOrderTests
             using var data = GameData.Discover(root, plugins);
 
             Assert.Equal(
-                new[] { "C - Animations.ba2", "B - Animations.ba2", "A - Animations.ba2" },
+                new[] { "A - Animations.ba2", "B - Animations.ba2", "C - Animations.ba2" },
                 data.ArchivePaths.Select(path => Path.GetFileName(path)));
         }
         finally { Directory.Delete(root, recursive: true); }
