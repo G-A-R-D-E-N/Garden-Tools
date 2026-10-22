@@ -255,7 +255,7 @@ bool decode_text_records(std::span<const std::byte> data, std::size_t offset, bo
 }  // namespace
 
 SwfStatus decode_tag_payload(const std::vector<std::byte>& payload, SwfTag& out_tag,
-                             unsigned depth) {
+                             unsigned depth, std::size_t& tags_left) {
   const std::span<const std::byte> data(payload);
   switch (out_tag.code) {
     case tag::kFileAttributes: {
@@ -320,7 +320,10 @@ SwfStatus decode_tag_payload(const std::vector<std::byte>& payload, SwfTag& out_
       }
       std::size_t stop = 0;
       const auto nested = decode_tag_stream(data, reader.position(), data.size(), depth + 1,
-                                            out_tag.children, stop);
+                                            out_tag.children, stop, tags_left);
+      if (nested == SwfStatus::too_many_tags) {
+        return nested;
+      }
       return nested == SwfStatus::ok ? SwfStatus::ok : SwfStatus::malformed_tag;
     }
     case tag::kSymbolClass:
@@ -585,10 +588,12 @@ SwfStatus decode_tag_payload(const std::vector<std::byte>& payload, SwfTag& out_
 }
 
 SwfStatus decode_tag_stream(std::span<const std::byte> data, std::size_t begin, std::size_t end,
-                            unsigned depth, std::vector<SwfTag>& out, std::size_t& stop) {
+                            unsigned depth, std::vector<SwfTag>& out, std::size_t& stop,
+                            std::size_t& tags_left) {
   std::size_t position = begin;
   bool malformed = false;
   while (position < end) {
+    const auto tag_start = position;
     if (end - position < 2) {
       stop = position;
       return SwfStatus::truncated_tag;
@@ -613,6 +618,11 @@ SwfStatus decode_tag_stream(std::span<const std::byte> data, std::size_t begin, 
       position += 4;
       current.long_header = true;
     }
+    if (tags_left == 0) {
+      stop = tag_start;
+      return SwfStatus::too_many_tags;
+    }
+    tags_left -= 1;
     current.length = length;
     current.offset = position;
 
@@ -627,7 +637,12 @@ SwfStatus decode_tag_stream(std::span<const std::byte> data, std::size_t begin, 
                            data.begin() + static_cast<std::ptrdiff_t>(position + length));
     position += length;
 
-    if (decode_tag_payload(current.payload, current, depth) != SwfStatus::ok) {
+    const auto payload_status = decode_tag_payload(current.payload, current, depth, tags_left);
+    if (payload_status == SwfStatus::too_many_tags) {
+      stop = tag_start;
+      return payload_status;
+    }
+    if (payload_status != SwfStatus::ok) {
       malformed = true;
     }
     const bool is_end = current.code == tag::kEnd;

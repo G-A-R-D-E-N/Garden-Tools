@@ -1,6 +1,7 @@
 #pragma once
 
 #include "fo4/plugin/container.hpp"
+#include "fo4/schema/form_links.hpp"
 
 #include <optional>
 #include <string>
@@ -31,6 +32,7 @@ struct RecordCopyNewResult {
 RecordCopyNewResult copy_record_as_new(Plugin& destination,
                                        const Plugin& source,
                                        const FormKey& record,
-                                       const RecordCopyNewOptions& options = {});
+                                       const RecordCopyNewOptions& options = {},
+                                       FormLinkTypeLookup type_lookup = {});
 
 }  // namespace fo4::forms

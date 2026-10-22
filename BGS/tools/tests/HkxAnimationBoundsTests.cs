@@ -212,6 +212,32 @@ public sealed class HkxAnimationBoundsTests
         Assert.NotEmpty(animation.Tracks);
     }
 
+    [Theory]
+    [InlineData("hkaQuantizedAnimation", "Unsupported compression (quantized)")]
+    [InlineData("hkaPredictiveCompressedAnimation", "Unsupported compression (predictive)")]
+    [InlineData("hkaReferencePoseAnimation", "unsupported animation class")]
+    public void UnsupportedAnimationRejectionNamesTheReason(string animationClass, string reason)
+    {
+        byte[] bytes = Packfile(animationClass, (_, _) => { }, out _);
+
+        var error = Assert.Throws<NotSupportedException>(() => new HkxBinaryReader().ReadAnimation(bytes));
+
+        Assert.StartsWith($"{reason}: {animationClass}.", error.Message);
+
+        string path = Path.Combine(Path.GetTempPath(), "bgs-unsupported-" + Guid.NewGuid().ToString("N") + ".hkx");
+        try
+        {
+            File.WriteAllBytes(path, bytes);
+            var fromFile = Assert.Throws<NotSupportedException>(() => new HkxBinaryReader().ReadAnimation(path));
+
+            Assert.StartsWith($"{reason}: {animationClass}.", fromFile.Message);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     private static void SetLossless(CraftedPackfile crafted, NativeAppend.Added animation, int frames, int tracks)
     {
         crafted.SetScalar(animation, "hkaAnimation", "numberOfTransformTracks", tracks);

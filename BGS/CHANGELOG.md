@@ -8,6 +8,8 @@ New to BGS? See the [Getting Started Guide](https://prisma-user-interface-framew
 
 * Skin weights on full-precision skinned meshes are read and saved at the correct vertex offset. Skinned shapes whose vertex stride does not match their declared attributes are refused instead of misread.
 
+* When several base game archives contain the same file, the copy from the plugin loaded last is used, as in the game, instead of the copy from the first plugin in plugins.txt.
+
 ## 1.3.0
 
 October 1, 2026

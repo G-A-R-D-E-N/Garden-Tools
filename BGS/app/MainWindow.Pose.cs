@@ -192,6 +192,7 @@ public partial class MainWindow : Window
     {
         Stop();
         _poseAnimation = null;
+        _poseSkeleton = null;
         _poseSource = "";
         _playback.Clear();
 

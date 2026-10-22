@@ -24,6 +24,7 @@ enum class AbcStatus : std::uint8_t {
   BranchOutOfRange,
   TrailingBytes,
   TypeNameTooLarge,
+  InconsistentModel,
 };
 
 const char* status_name(AbcStatus status) noexcept;
@@ -248,6 +249,8 @@ struct AbcFile {
 
   static AbcStatus parse(const std::uint8_t* data, std::size_t size, AbcFile& out);
   static AbcStatus parse(const std::vector<std::uint8_t>& bytes, AbcFile& out);
+
+  AbcStatus serialize(std::vector<std::uint8_t>& out) const;
 
   std::string string_at(std::uint32_t index) const;
   std::string namespace_at(std::uint32_t index) const;
