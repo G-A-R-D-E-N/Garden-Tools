@@ -51,6 +51,32 @@ std::optional<std::filesystem::path> child(const std::filesystem::path& dir, std
   return found;
 }
 
+void walk_loose(const std::filesystem::path& dir, const std::filesystem::path& root, int depth,
+                std::vector<std::pair<std::string, std::filesystem::path>>& out) {
+  constexpr int k_max_depth = 64;
+  std::error_code ec;
+  std::vector<std::filesystem::path> children;
+  for (std::filesystem::directory_iterator it(dir, std::filesystem::directory_options::skip_permission_denied, ec), end;
+       !ec && it != end; it.increment(ec)) {
+    children.push_back(it->path());
+  }
+  std::sort(children.begin(), children.end());
+  for (const auto& path : children) {
+    std::error_code entry_ec;
+    if (std::filesystem::is_directory(path, entry_ec)) {
+      if (depth < k_max_depth) walk_loose(path, root, depth + 1, out);
+      continue;
+    }
+    if (!std::filesystem::is_regular_file(path, entry_ec)) continue;
+    const auto relative = path.lexically_relative(root);
+    if (text::equals_folded(utf8(*relative.begin()), "data")) continue;
+    try {
+      out.emplace_back(normalize_asset_path(utf8(relative)), path);
+    } catch (const AssetPathError&) {
+    }
+  }
+}
+
 }  // namespace
 
 std::string normalize_asset_path(std::string_view path) {
@@ -110,8 +136,16 @@ std::vector<std::filesystem::path> archive_load_order(const std::filesystem::pat
 
 AssetResolver AssetResolver::open(const std::filesystem::path& data_dir,
                                   std::span<const std::filesystem::path> archives) {
+  if (data_dir.empty()) return open_roots({}, archives);
+  return open_roots(std::span<const std::filesystem::path>(&data_dir, 1), archives);
+}
+
+AssetResolver AssetResolver::open_roots(std::span<const std::filesystem::path> roots,
+                                        std::span<const std::filesystem::path> archives) {
   AssetResolver resolver;
-  resolver.data_dir_ = data_dir;
+  for (const auto& root : roots) {
+    if (!root.empty()) resolver.roots_.push_back(root);
+  }
   resolver.archives_.reserve(archives.size());
   for (const auto& path : archives) resolver.archives_.push_back(Ba2Reader::open(path));
   return resolver;
@@ -119,8 +153,8 @@ AssetResolver AssetResolver::open(const std::filesystem::path& data_dir,
 
 std::optional<AssetLocation> AssetResolver::locate(std::string_view data_relative_path) const {
   const auto key = normalize_asset_path(data_relative_path);
-  if (!data_dir_.empty()) {
-    std::optional<std::filesystem::path> current = data_dir_;
+  for (const auto& root : roots_) {
+    std::optional<std::filesystem::path> current = root;
     std::size_t start = 0;
     while (current) {
       const auto slash = key.find('/', start);
@@ -142,6 +176,69 @@ std::optional<AssetLocation> AssetResolver::locate_in_archives(std::string_view 
     }
   }
   return std::nullopt;
+}
+
+std::vector<AssetListing> AssetResolver::list(std::string_view prefix, std::string_view extension,
+                                              bool include_shadowed) const {
+  const auto wanted_prefix = prefix.empty() ? std::string() : normalize_asset_path(prefix);
+  const auto wanted_extension = lower(extension);
+  const auto wanted = [&](const std::string& path) {
+    if (!wanted_prefix.empty() && path != wanted_prefix &&
+        !(path.size() > wanted_prefix.size() && path.starts_with(wanted_prefix) && path[wanted_prefix.size()] == '/')) {
+      return false;
+    }
+    return wanted_extension.empty() || path.ends_with(wanted_extension);
+  };
+  std::vector<AssetListing> found;
+  std::set<std::string> keys;
+  for (const auto& root : roots_) {
+    std::vector<std::pair<std::string, std::filesystem::path>> loose;
+    walk_loose(root, root, 0, loose);
+    for (auto& [key, path] : loose) {
+      if (!wanted(key)) continue;
+      std::error_code ec;
+      const auto size = std::filesystem::file_size(path, ec);
+      keys.insert(key);
+      found.push_back({std::move(key), {AssetOrigin::loose, std::move(path), 0, 0}, ec ? 0 : size, false});
+    }
+  }
+  std::vector<std::vector<AssetListing>> per_archive(archives_.size());
+  for (std::size_t i = 0; i < archives_.size(); ++i) {
+    if (!archives_[i].has_name_table()) continue;
+    const auto& entries = archives_[i].entries();
+    for (std::size_t e = 0; e < entries.size(); ++e) {
+      if (entries[e].path.empty()) continue;
+      std::string key;
+      try {
+        key = normalize_asset_path(entries[e].path);
+      } catch (const AssetPathError&) {
+        continue;
+      }
+      if (!wanted(key)) continue;
+      keys.insert(key);
+      per_archive[i].push_back({std::move(key), {AssetOrigin::archive, {}, i, e}, entries[e].unpacked_size(), false});
+    }
+  }
+  for (std::size_t i = 0; i < archives_.size(); ++i) {
+    if (archives_[i].has_name_table()) continue;
+    for (const auto& key : keys) {
+      if (const auto entry = archives_[i].find(key)) {
+        per_archive[i].push_back({key, {AssetOrigin::archive, {}, i, *entry}, archives_[i].entries()[*entry].unpacked_size(), false});
+      }
+    }
+  }
+  for (std::size_t i = archives_.size(); i-- > 0;) {
+    for (auto& item : per_archive[i]) found.push_back(std::move(item));
+  }
+  std::stable_sort(found.begin(), found.end(), [](const auto& x, const auto& y) { return x.path < y.path; });
+  std::vector<AssetListing> out;
+  for (auto& item : found) {
+    const bool shadowed = !out.empty() && out.back().path == item.path;
+    if (shadowed && !include_shadowed) continue;
+    item.shadowed = shadowed;
+    out.push_back(std::move(item));
+  }
+  return out;
 }
 
 std::vector<std::byte> AssetResolver::read(const AssetLocation& location) const {

@@ -80,9 +80,18 @@ Result<fo4::FormKey> RadiclePluginBackend::copyRecordAsNewLocked(
     const fo4::FormKey& key,
     std::optional<std::string_view> newEditorId) const {
     fo4::forms::RecordCopyNewOptions options;
-    if (newEditorId.has_value()) options.editor_id = std::string(*newEditorId);
+    if (newEditorId.has_value() && !newEditorId->empty()) options.editor_id = std::string(*newEditorId);
     const auto result = fo4::forms::copy_record_as_new(mutated, source.plugin, key, options);
-    if (result.status == fo4::forms::RecordCopyNewStatus::created) return result.new_record;
+    if (result.status == fo4::forms::RecordCopyNewStatus::created) {
+        if (newEditorId.has_value() && newEditorId->empty()) {
+            if (auto* created = mutableRecord(mutated, result.new_record)) {
+                std::erase_if(created->subrecords,
+                              [](const fo4::Subrecord& subrecord) { return subrecord.signature == fo4::sig_edid; });
+                created->original_range.clear();
+            }
+        }
+        return result.new_record;
+    }
     const auto targetName = std::string(mutated.key.filename());
     if (result.status == fo4::forms::RecordCopyNewStatus::unsupported_signature) {
         return std::unexpected(Error{

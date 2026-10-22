@@ -82,11 +82,10 @@ struct Fixture {
 
 std::size_t column(const nlohmann::json& grid, std::string_view path) {
     const auto& columns = grid.at("columns");
-    for (std::size_t i = 0; i < columns.size(); ++i) {
-        if (columns[i].get<std::string>() == path) return i;
-    }
-    FAIL("Missing semantic field: " << path);
-    return columns.size();
+    const auto found = std::find_if(columns.begin(), columns.end(),
+        [&](const auto& name) { return name.template get<std::string>() == path; });
+    if (found == columns.end()) { FAIL("Missing semantic field: " << path); }
+    return static_cast<std::size_t>(found - columns.begin());
 }
 
 }
