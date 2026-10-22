@@ -606,8 +606,9 @@ VmadStructureMutationStatus add_quest_vmad_fragment(Plugin& plugin, const FormKe
     throw schema::ScalarError("VMAD fragment script and function names are required");
   }
   if (edit.extras.script_name.empty()) return VmadStructureMutationStatus::binding_missing;
+  const auto index = static_cast<std::uint32_t>(stage_index);
   for (const auto& existing : edit.extras.fragments) {
-    if (existing.stage == stage && existing.stage_index == stage_index) {
+    if (existing.stage == stage && static_cast<std::uint32_t>(existing.stage_index) == index) {
       return VmadStructureMutationStatus::already_present;
     }
   }
@@ -617,6 +618,7 @@ VmadStructureMutationStatus add_quest_vmad_fragment(Plugin& plugin, const FormKe
   QuestVmadFragment added;
   added.stage = stage;
   added.stage_index = stage_index;
+  added.unknown_byte = 1;
   added.script = std::string(script);
   added.function = std::string(function);
   std::vector<std::byte> entry;
@@ -624,7 +626,7 @@ VmadStructureMutationStatus add_quest_vmad_fragment(Plugin& plugin, const FormKe
   auto at = edit.tail_start + edit.extras.entries_begin;
   for (const auto& existing : edit.extras.fragments) {
     if (existing.stage > stage ||
-        (existing.stage == stage && existing.stage_index > stage_index)) {
+        (existing.stage == stage && static_cast<std::uint32_t>(existing.stage_index) > index)) {
       at = edit.tail_start + existing.offset;
       break;
     }
