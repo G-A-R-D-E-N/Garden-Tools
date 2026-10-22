@@ -22,6 +22,12 @@ inline fo4::FormLinkFieldMutationStatus link(fo4::Plugin& plugin, std::uint32_t 
   return fo4::set_record_formlink_field(plugin, key(id), field.value(), index, target);
 }
 
+inline fo4::schema::FormLinkListMutationStatus list_link(fo4::Plugin& plugin, std::uint32_t id, const char* path, std::size_t index, const fo4::FormKey& target) {
+  const auto list = fo4::schema::formlink_list_descriptor(sig(path), path);
+  EXPECT_TRUE(list.has_value()) << path;
+  return fo4::schema::set_record_formlink_list_element(plugin, key(id), list.value(), index, target);
+}
+
 inline std::size_t count(const fo4::Plugin& plugin, std::uint32_t id, const char* path) {
   return fo4::record_field_count(plugin, key(id), path).value_or(9999);
 }

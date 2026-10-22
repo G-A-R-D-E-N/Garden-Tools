@@ -8,6 +8,7 @@
 #include <map>
 #include <set>
 #include <string>
+#include <string_view>
 #include <utility>
 
 namespace fo4::localization {
@@ -272,6 +273,106 @@ const LocalizedStringEntry* find_string(const LocalizedStringTable& table,
   const auto it = std::find_if(table.entries.begin(), table.entries.end(),
                                [id](const auto& entry) { return entry.id == id; });
   return it == table.entries.end() ? nullptr : &*it;
+}
+
+std::uint32_t next_string_id(const LocalizedStringTable& table) noexcept {
+  std::uint32_t next = 1;
+  for (const auto& entry : table.entries) {
+    if (entry.id == std::numeric_limits<std::uint32_t>::max()) return 0;
+    if (entry.id >= next) next = entry.id + 1;
+  }
+  return next;
+}
+
+std::uint32_t add_string(LocalizedStringTable& table, std::string_view text) {
+  if (text.empty()) return 0;
+  std::vector<std::byte> encoded;
+  encoded.reserve(text.size());
+  for (const char ch : text) {
+    encoded.push_back(std::byte{static_cast<std::uint8_t>(ch)});
+  }
+  validate_text_bytes(encoded);
+  const auto id = next_string_id(table);
+  if (id == 0) throw StringTableError("localized string table has no free ID");
+  table.entries.push_back({id, std::move(encoded)});
+  return id;
+}
+
+StringTableKind string_table_kind(Signature record, Signature subrecord) noexcept {
+  constexpr auto k_desc = Signature::from_string("DESC");
+  constexpr auto k_cnam = Signature::from_string("CNAM");
+  constexpr auto k_rnam = Signature::from_string("RNAM");
+  constexpr auto k_lscr = Signature::from_string("LSCR");
+  constexpr auto k_qust = Signature::from_string("QUST");
+  constexpr auto k_book = Signature::from_string("BOOK");
+  constexpr auto k_info = Signature::from_string("INFO");
+
+  if (record != k_lscr && subrecord == k_desc) return StringTableKind::dlstrings;
+  if (record == k_qust && subrecord == k_cnam) return StringTableKind::dlstrings;
+  if (record == k_book && subrecord == k_cnam) return StringTableKind::dlstrings;
+  if (record == k_info && subrecord != k_rnam) return StringTableKind::ilstrings;
+  return StringTableKind::strings;
+}
+
+std::string_view string_table_extension(StringTableKind kind) noexcept {
+  switch (kind) {
+    case StringTableKind::dlstrings:
+      return ".DLSTRINGS";
+    case StringTableKind::ilstrings:
+      return ".ILSTRINGS";
+    case StringTableKind::strings:
+      return ".STRINGS";
+  }
+  return ".STRINGS";
+}
+
+std::filesystem::path string_table_path(std::string_view plugin_file_name,
+                                        StringTableKind kind,
+                                        std::string_view language) {
+  const auto stem = std::filesystem::path(plugin_file_name).stem().string();
+  std::string name = stem;
+  name += '_';
+  name += language;
+  name += string_table_extension(kind);
+  return std::filesystem::path("Strings") / name;
+}
+
+LocalizedStringTable& table_for(LocalizationTables& tables, StringTableKind kind) noexcept {
+  switch (kind) {
+    case StringTableKind::dlstrings:
+      return tables.dlstrings;
+    case StringTableKind::ilstrings:
+      return tables.ilstrings;
+    case StringTableKind::strings:
+      return tables.strings;
+  }
+  return tables.strings;
+}
+
+const LocalizedStringTable& table_for(const LocalizationTables& tables,
+                                      StringTableKind kind) noexcept {
+  switch (kind) {
+    case StringTableKind::dlstrings:
+      return tables.dlstrings;
+    case StringTableKind::ilstrings:
+      return tables.ilstrings;
+    case StringTableKind::strings:
+      return tables.strings;
+  }
+  return tables.strings;
+}
+
+void write_localization_tables(const LocalizationTables& tables,
+                               std::string_view plugin_file_name,
+                               std::string_view language,
+                               const std::filesystem::path& data_dir) {
+  const auto directory = data_dir / "Strings";
+  std::filesystem::create_directories(directory);
+  for (const auto kind : {StringTableKind::strings, StringTableKind::dlstrings,
+                          StringTableKind::ilstrings}) {
+    const auto path = data_dir / string_table_path(plugin_file_name, kind, language);
+    write_string_table_file(table_for(tables, kind), path);
+  }
 }
 
 }  // namespace fo4::localization

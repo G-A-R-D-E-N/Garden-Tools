@@ -54,7 +54,7 @@ public class AuthoringTests
             Assert.Equal(Status.InvalidArgument, Assert.Throws<RadicleException>(() => plugin.AddSubrecord(armor, signature)).Status);
         }
         Assert.Equal(Status.InvalidArgument, Assert.Throws<RadicleException>(() => plugin.RemoveSubrecord(armor, "DATA")).Status);
-        Assert.Equal(Status.InvalidArgument, Assert.Throws<RadicleException>(() => plugin.CreateRecord("MISC", "X")).Status);
+        Assert.Equal(Status.InvalidArgument, Assert.Throws<RadicleException>(() => plugin.CreateRecord("BPTD", "X")).Status);
         Assert.Equal(Status.InvalidArgument, Assert.Throws<RadicleException>(() => plugin.CreateRecord("EYES", "X")).Status);
         Assert.Equal(Status.InvalidArgument, Assert.Throws<RadicleException>(() => plugin.CreateRecord("ARMO", "\u4e2d")).Status);
         Assert.Throws<ArgumentException>(() => plugin.CreateRecord("ARMO", "A\0B"));

@@ -66,6 +66,20 @@ inline std::vector<std::byte> plugin_bytes(std::vector<std::byte> vmad_data = pa
   return out.bytes;
 }
 
+inline std::vector<std::byte> plugin_bytes_without_vmad(std::string_view signature = "MISC",
+                                                        bool editor_id = true) {
+  ByteWriter out;
+  auto record = begin_record(out, "TES4", 0, 0);
+  ByteWriter hedr; hedr.f32(1); hedr.u32(3); hedr.u32(0x900);
+  write_subrecord(out, "HEDR", hedr.bytes); end_record(out, record);
+  auto group = begin_group(out, signature, 0);
+  record = begin_record(out, signature, 0, 0x800);
+  if (editor_id) write_subrecord(out, "EDID", "TestRecord");
+  write_subrecord(out, "ZZZZ", "kept");
+  end_record(out, record); end_group(out, group);
+  return out.bytes;
+}
+
 inline FormKey key(std::uint32_t local = 0x800, std::string_view owner = "Vmad.esp") {
   return {PluginKey::from_filename(owner), LocalFormId{local}};
 }

@@ -39,7 +39,8 @@ bool sameOverrideContent(const fo4::Plugin& targetPlugin, const fo4::Record& tar
     auto remapped = targetRecord;
     try {
         fo4::remap_record_form_links(remapped, fo4::plugin_form_id_context(targetPlugin),
-                                     fo4::plugin_form_id_context(sourcePlugin), &targetPlugin);
+                                     fo4::plugin_form_id_context(sourcePlugin),
+                                     fo4::plugin_type_lookup(targetPlugin));
     } catch (const std::exception&) {
         return false;
     }
@@ -130,6 +131,13 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsWrapper(const nlohmann::json&
             targetName + " already overrides " + formKeyText +
                 " with different content; wrap from " + targetName +
                 " instead so its entries are kept"
+        });
+    }
+
+    if (support::topLevelRecord(source->plugin, key) == nullptr) {
+        return std::unexpected(Error{
+            "RecordNotFound",
+            "Record is not present in " + source->name + ": " + key.to_string()
         });
     }
 

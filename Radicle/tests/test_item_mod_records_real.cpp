@@ -1,6 +1,7 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "fo4/schema/formlink_lists.hpp"
+#include "fo4/schema/localized_fields.hpp"
 #include "fo4/schema/record_constraints.hpp"
 #include "fo4/schema/scalar.hpp"
 #include "real_data_build.hpp"
@@ -51,6 +52,7 @@ TEST_P(ItemModRecordsReal, RowsDecodeAndAuthoringLimitsHold) {
       for (const auto& sub : record.subrecords) {
         for (const auto& field : scalars) {
           if (sub.signature != field.scalar.subrecord) continue;
+          if (field.scalar.localized && plugin.header.tes4_flags.is_localized()) continue;
           if (field.scalar.payload_size != 0 && sub.data.size() != field.scalar.payload_size) {
             ADD_FAILURE() << GetParam() << ' ' << record.form_key.to_string() << ' ' << field.path << ": "
                           << sub.signature.to_string() << " is " << sub.data.size()
@@ -59,7 +61,16 @@ TEST_P(ItemModRecordsReal, RowsDecodeAndAuthoringLimitsHold) {
           }
           try {
             const auto bytes = fo4::schema::scalar_field_bytes(sub.data, field.scalar);
-            if (!bytes.empty()) static_cast<void>(fo4::schema::decode_scalar(bytes, field.scalar));
+            if (bytes.empty()) continue;
+            if (field.scalar.storage == fo4::schema::ScalarStorage::zstring &&
+                !field.scalar.embedded &&
+                (field.scalar.localized ||
+                 fo4::schema::is_localized_field(signature, sub.signature))) {
+              static_cast<void>(
+                  fo4::schema::read_localized_string(plugin, signature, sub.signature, sub));
+              continue;
+            }
+            static_cast<void>(fo4::schema::decode_scalar(bytes, field.scalar));
           } catch (const std::exception& error) {
             ADD_FAILURE() << GetParam() << ' ' << record.form_key.to_string() << ' ' << field.path << ": "
                           << error.what();

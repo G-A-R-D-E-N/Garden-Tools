@@ -142,6 +142,7 @@ struct PlacedReferenceCreation {
   PositionRotation transform{};
   bool persistent{true};
   bool initially_disabled{false};
+  PlacedReferenceKind kind{PlacedReferenceKind::object};
 };
 
 FormKey create_placed_reference(Plugin& plugin, const PlacedReferenceCreation& creation);

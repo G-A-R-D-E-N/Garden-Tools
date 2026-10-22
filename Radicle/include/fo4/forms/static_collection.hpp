@@ -3,6 +3,8 @@
 #include "fo4/formid.hpp"
 #include "fo4/plugin/container.hpp"
 
+#include <cstddef>
+#include <span>
 #include <stdexcept>
 #include <vector>
 
@@ -35,5 +37,17 @@ struct StaticCollectionPartView {
 std::vector<StaticCollectionPartView> decode_static_collection_parts(
     const Plugin& plugin,
     const Record& record);
+
+bool add_static_collection_part(Plugin& plugin,
+                                const FormKey& scol,
+                                const FormKey& static_record,
+                                std::span<const StaticPlacementView> placements);
+
+bool remove_static_collection_part(Plugin& plugin, const FormKey& scol, std::size_t part_index);
+
+bool set_static_collection_part_placements(Plugin& plugin,
+                                           const FormKey& scol,
+                                           std::size_t part_index,
+                                           std::span<const StaticPlacementView> placements);
 
 }  // namespace fo4::forms
