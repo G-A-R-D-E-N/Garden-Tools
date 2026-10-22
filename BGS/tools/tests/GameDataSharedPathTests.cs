@@ -40,7 +40,7 @@ public sealed class GameDataSharedPathTests
         const int headerBytes = 24;
         const int recordBytes = 36;
         ulong nameTable = (ulong)(headerBytes + recordBytes * files.Length);
-        ulong dataOffset = nameTable + files.Sum(f => 2UL + (ulong)Encoding.UTF8.GetByteCount(f.Name));
+        ulong dataOffset = nameTable + files.Aggregate(0UL, (sum, f) => sum + 2UL + (ulong)Encoding.UTF8.GetByteCount(f.Name));
 
         using var stream = File.Create(path);
         using var writer = new BinaryWriter(stream);
