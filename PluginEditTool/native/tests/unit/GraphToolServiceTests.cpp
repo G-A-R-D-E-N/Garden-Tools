@@ -1,6 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -9,17 +8,13 @@
 #include <fo4ide/graph/NodePalette.hpp>
 
 #include "../helpers/GraphBuilder.hpp"
+#include "../helpers/TempRoot.hpp"
 
 using namespace fo4ide::graph;
 using namespace fo4ide::graph::test;
+using fo4ide_test::TempRoot;
 
 namespace {
-
-std::string uniqueRoot(std::string_view tag) {
-    return (std::filesystem::temp_directory_path() / ("fo4ide-tool-" + std::string(tag)) /
-            std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()))
-        .string();
-}
 
 // Static so `&imports()` is a stable pointer to pass to the service.
 const std::string& imports() {
@@ -30,15 +25,13 @@ const std::string& imports() {
 // Port of WithGraph: serializes the document to a temp .fograph and runs work.
 template <typename F>
 auto withGraph(const GraphDocument& document, F&& work) -> decltype(work(std::string())) {
-    const std::string directory = uniqueRoot("graph");
-    std::filesystem::create_directories(directory);
-    const auto path = std::filesystem::path(directory) / "Fixture.fograph";
+    const TempRoot guard("fo4ide-tool-graph");
+    const auto path = guard.path() / "Fixture.fograph";
     {
         std::ofstream out(path, std::ios::binary | std::ios::trunc);
         out << documentJson::serialize(document);
     }
     const auto result = work(path.string());
-    std::filesystem::remove_all(directory);
     return result;
 }
 
@@ -99,9 +92,8 @@ TEST_CASE("GraphToolService a missing graph file is a message rather than an exc
 }
 
 TEST_CASE("GraphToolService a malformed graph file is a message rather than an exception") {
-    const std::string directory = uniqueRoot("bad");
-    std::filesystem::create_directories(directory);
-    const auto path = std::filesystem::path(directory) / "Bad.fograph";
+    const TempRoot guard("fo4ide-tool-bad");
+    const auto path = guard.path() / "Bad.fograph";
     {
         std::ofstream out(path, std::ios::binary | std::ios::trunc);
         out << "{ not json";
@@ -109,8 +101,6 @@ TEST_CASE("GraphToolService a malformed graph file is a message rather than an e
 
     const auto text = GraphToolService::validate(path, &imports());
     CHECK(startsWith(text, "RESULT: FAILED"));
-
-    std::filesystem::remove_all(directory);
 }
 
 TEST_CASE("GraphToolService compiling source only returns the generated script") {
@@ -124,19 +114,17 @@ TEST_CASE("GraphToolService compiling source only returns the generated script")
 }
 
 TEST_CASE("GraphToolService compiling with an output folder writes both files") {
-    const std::string output = uniqueRoot("out");
-    const auto outputPath = std::filesystem::path(output);
+    const TempRoot output("fo4ide-tool-out");
+    const auto outputPath = output.path() / "out";
     const auto text = withGraph(goodGraph(), [&](const std::string& path) {
         return GraphToolService::compile(path, &outputPath, &imports(),
                                          /*sourceOnly=*/false);
     });
 
     CHECK(startsWith(text, "RESULT: OK"));
-    CHECK(std::filesystem::exists(std::filesystem::path(output) / "Fixture.psc"));
-    CHECK(std::filesystem::exists(std::filesystem::path(output) / "Fixture.pex"));
+    CHECK(std::filesystem::exists(outputPath / "Fixture.psc"));
+    CHECK(std::filesystem::exists(outputPath / "Fixture.pex"));
     CHECK(text.find("Wrote ") != std::string::npos);
-
-    std::filesystem::remove_all(output);
 }
 
 TEST_CASE("GraphToolService a failed compile shows the generated source it could not use") {
