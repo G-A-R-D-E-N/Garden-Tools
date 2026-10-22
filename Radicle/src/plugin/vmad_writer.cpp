@@ -565,6 +565,7 @@ VmadStructureMutationStatus add_quest_vmad_fragment(Plugin& plugin, const FormKe
   QuestVmadFragment added;
   added.stage = stage;
   added.stage_index = stage_index;
+  added.unknown_byte = 1;
   added.script = std::string(script);
   added.function = std::string(function);
   std::vector<std::byte> entry;

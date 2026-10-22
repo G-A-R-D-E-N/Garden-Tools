@@ -245,11 +245,15 @@ TEST(VmadQuestFragments, AddedBindingLandsInStageOrderAndRemovalRestoresThePaylo
   const auto three = extras_of(middle);
   ASSERT_EQ(three.fragments.size(), 3u);
   expect_fragment(three.fragments[0], 10, 0, 0, 0, "Fragment_10");
-  expect_fragment(three.fragments[1], 15, 0, 7, 0, "Fragment_15");
+  expect_fragment(three.fragments[1], 15, 0, 7, 1, "Fragment_15");
   expect_fragment(three.fragments[2], 20, 0xFFFF, 5, 1, "Fragment_20");
   EXPECT_EQ(three.fragments[0].offset, initial.fragments[0].offset);
   EXPECT_EQ(three.fragments[0].end, initial.fragments[0].end);
   EXPECT_EQ(three.fragments[1].offset, initial.fragments[1].offset);
+  test::ByteWriter created;
+  append_fragment(created, 15, 0, 7, 1, "Fragment_15");
+  EXPECT_EQ(slice(middle, base + three.fragments[1].offset, base + three.fragments[1].end),
+            created.bytes);
   EXPECT_EQ(middle[count_at], std::byte{3});
   EXPECT_EQ(middle[count_at + 1], std::byte{0});
   EXPECT_EQ(slice(middle, 0, count_at), slice(before, 0, count_at));
@@ -267,9 +271,9 @@ TEST(VmadQuestFragments, AddedBindingLandsInStageOrderAndRemovalRestoresThePaylo
   const auto fronted = fixture::subrecord(read_plugin(write_plugin(plugin), "Vmad.esp")).data;
   const auto four = extras_of(fronted);
   ASSERT_EQ(four.fragments.size(), 4u);
-  expect_fragment(four.fragments[0], 5, 0, 0, 0, "Fragment_05");
+  expect_fragment(four.fragments[0], 5, 0, 0, 1, "Fragment_05");
   expect_fragment(four.fragments[1], 10, 0, 0, 0, "Fragment_10");
-  expect_fragment(four.fragments[2], 15, 0, 7, 0, "Fragment_15");
+  expect_fragment(four.fragments[2], 15, 0, 7, 1, "Fragment_15");
   expect_fragment(four.fragments[3], 20, 0xFFFF, 5, 1, "Fragment_20");
   EXPECT_EQ(four.fragments[0].offset, three.entries_begin);
   EXPECT_EQ(four.fragments[1].offset,
@@ -283,7 +287,7 @@ TEST(VmadQuestFragments, AddedBindingLandsInStageOrderAndRemovalRestoresThePaylo
   const auto appended = fixture::subrecord(read_plugin(write_plugin(plugin), "Vmad.esp")).data;
   const auto five = extras_of(appended);
   ASSERT_EQ(five.fragments.size(), 5u);
-  expect_fragment(five.fragments[4], 30, 0, 9, 0, "Fragment_30");
+  expect_fragment(five.fragments[4], 30, 0, 9, 1, "Fragment_30");
   EXPECT_EQ(appended[count_at], std::byte{5});
   EXPECT_EQ(five.fragments[4].offset, five.fragments[3].end);
   EXPECT_EQ(five.fragments[4].end, appended.size() - base - 2);
@@ -309,7 +313,7 @@ TEST(VmadQuestFragments, AddedBindingLandsInStageOrderAndRemovalRestoresThePaylo
   ASSERT_EQ(three_of_stage.fragments.size(), 3u);
   expect_fragment(three_of_stage.fragments[0], 10, 0, 0, 0, "Fragment_10");
   expect_fragment(three_of_stage.fragments[1], 10, 0xFFFF, 5, 1, "Fragment_20");
-  expect_fragment(three_of_stage.fragments[2], 10, 0, 9, 0, "Fragment_10b");
+  expect_fragment(three_of_stage.fragments[2], 10, 0, 9, 1, "Fragment_10b");
   EXPECT_EQ(longer[repeated_base + three_of_stage.count_offset], std::byte{3});
 
   EXPECT_EQ(add_quest_vmad_fragment(repeated, fixture::key(), 10, 9, "QF_Test", "Fragment_10b"),
@@ -320,9 +324,9 @@ TEST(VmadQuestFragments, AddedBindingLandsInStageOrderAndRemovalRestoresThePaylo
   const auto ordered = extras_of(between);
   ASSERT_EQ(ordered.fragments.size(), 4u);
   expect_fragment(ordered.fragments[0], 10, 0, 0, 0, "Fragment_10");
-  expect_fragment(ordered.fragments[1], 10, 0, 3, 0, "Fragment_10a");
+  expect_fragment(ordered.fragments[1], 10, 0, 3, 1, "Fragment_10a");
   expect_fragment(ordered.fragments[2], 10, 0xFFFF, 5, 1, "Fragment_20");
-  expect_fragment(ordered.fragments[3], 10, 0, 9, 0, "Fragment_10b");
+  expect_fragment(ordered.fragments[3], 10, 0, 9, 1, "Fragment_10b");
   EXPECT_THROW(remove_quest_vmad_fragment(repeated, fixture::key(), 10), schema::ScalarError);
   EXPECT_EQ(fixture::subrecord(repeated).data, between);
 }
@@ -346,7 +350,7 @@ TEST(VmadQuestFragments, HighStageIndexLandsAfterSmallerIndexesAtTheSameStage) {
   ASSERT_EQ(three.fragments.size(), 3u);
   expect_fragment(three.fragments[0], 10, 0, 0, 0, "Fragment_10");
   expect_fragment(three.fragments[1], 10, 0xFFFF, 5, 1, "Fragment_20");
-  expect_fragment(three.fragments[2], 10, 0, high, 0, "Fragment_High");
+  expect_fragment(three.fragments[2], 10, 0, high, 1, "Fragment_High");
   EXPECT_EQ(three.fragments[2].offset, three.fragments[1].end);
   EXPECT_EQ(appended[count_at], std::byte{3});
   EXPECT_EQ(appended[count_at + 1], std::byte{0});
