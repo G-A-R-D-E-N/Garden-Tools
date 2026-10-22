@@ -604,19 +604,22 @@ public partial class MainWindow : Window
         Stop();
         bool foreign = !string.Equals(SafeFullPath(_hkxPath), SafeFullPath(key), StringComparison.OrdinalIgnoreCase);
         if (foreign) ClearPhysicsReport();
-        _poseSkeleton = PoseSkeleton(key, archiveEntry, dataFolderHint);
+        try { _poseSkeleton = PoseSkeleton(key, archiveEntry, dataFolderHint); }
+        catch (InvalidDataException ex)
+        {
+            ClearPose();
+            SetPlaybackSummary($"Could not read {label}: {ex.Message.Split('\n')[0]}", Ux.BadBrush);
+            return;
+        }
 
         HkxAnimationData animation;
         try
         {
             if (!new HkxBinaryReader().TryReadAnimation(hkx, out animation))
             {
+                ClearPose();
                 SetPlaybackSummary($"{label}: {AnimationCompression.Describe(animation.AnimationClass)}",
                                    Ux.BadBrush);
-                ClearPose();
-                SetPlaybackSummary(
-                    $"{label}: {animation.UnsupportedReason} in {animation.AnimationClass}, so it cannot be drawn.",
-                    Ux.BadBrush);
                 return;
             }
         }
@@ -684,12 +687,7 @@ public partial class MainWindow : Window
     private static HkxSkeleton? ArchiveSkeleton(GameData? data, string? animationEntry)
     {
         if (data == null || animationEntry == null) return null;
-        byte[]? bytes;
-        try { bytes = data.SkeletonBytes(animationEntry); }
-        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
-        {
-            return null;
-        }
+        byte[]? bytes = SkeletonBytesOrNull(() => data.SkeletonBytes(animationEntry));
         if (bytes == null) return null;
         try { return new HkxBinaryReader().ReadSkeleton(bytes); }
         catch { return null; }
@@ -705,6 +703,12 @@ public partial class MainWindow : Window
         }
 
         return File.ReadAllBytes(key);
+    }
+
+    internal static byte[]? SkeletonBytesOrNull(Func<byte[]?> read)
+    {
+        try { return read(); }
+        catch (Exception e) when (GameData.IsSkippableArchiveFailure(e)) { return null; }
     }
 
 }

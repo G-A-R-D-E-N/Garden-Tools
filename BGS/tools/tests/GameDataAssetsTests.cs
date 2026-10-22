@@ -589,6 +589,102 @@ public sealed class GameDataAssetsTests
     public void IsCharacterAssetPathCoversTheFolderRule(string virtualPath, bool expected) =>
         Assert.Equal(expected, GameData.IsCharacterAssetPath(virtualPath));
 
+    [Fact]
+    public void LaterPluginsBaseArchiveWinsOverEarlierOne()
+    {
+        using var root = new TestArchives.TempDirectory("bgs-gamedata-plugin-order");
+        string dataFolder = Path.Combine(root.Path, "Data");
+        Directory.CreateDirectory(dataFolder);
+
+        string archiveA = Path.Combine(dataFolder, "A - Animations.ba2");
+        string archiveB = Path.Combine(dataFolder, "B - Animations.ba2");
+        string fallout = Path.Combine(dataFolder, "Fallout4 - Animations.ba2");
+        const string anim = "Meshes/X/anim.hkx";
+        TestArchives.WriteGeneralBa2(archiveA, (anim, Bytes(1, 1)));
+        TestArchives.WriteGeneralBa2(archiveB, (anim, Bytes(2, 2)));
+        TestArchives.WriteGeneralBa2(fallout, (anim, Bytes(3, 3)));
+        string plugins = Path.Combine(root.Path, "plugins.txt");
+        File.WriteAllText(plugins, "*A.esm\n*B.esm\n");
+
+        using var data = GameData.Discover(dataFolder, plugins);
+        Assert.Equal(new[] { archiveB, archiveA, fallout }, data.ArchivePaths);
+
+        GameAsset winner = Only(data.EnumerateWinners("Meshes/X"), anim);
+        Assert.Equal(archiveB, winner.ArchivePath);
+        Assert.Equal(Bytes(2, 2), data.Read(winner));
+        Assert.Equal(new[] { archiveA, fallout }, winner.Shadowed.Select(s => s.ArchivePath));
+    }
+
+    [Fact]
+    public void ModArchiveOutranksBaseArchivesWithTheSamePath()
+    {
+        using var root = new TestArchives.TempDirectory("bgs-gamedata-mod-archive");
+        string dataFolder = Path.Combine(root.Path, "Data");
+        string modRoot = Path.Combine(root.Path, "mods", "Zed");
+        Directory.CreateDirectory(dataFolder);
+        Directory.CreateDirectory(modRoot);
+
+        const string anim = "meshes/y/only.hkx";
+        string archiveA = Path.Combine(dataFolder, "A.ba2");
+        string archiveB = Path.Combine(dataFolder, "B.ba2");
+        string zed = Path.Combine(modRoot, "Zed.ba2");
+        TestArchives.WriteGeneralBa2(archiveA, (anim, Bytes(1, 1)));
+        TestArchives.WriteGeneralBa2(archiveB, (anim, Bytes(2, 2)));
+        TestArchives.WriteGeneralBa2(zed, (anim, Bytes(3, 3)));
+
+        using var data = GameData.Discover(dataFolder, Path.Combine(root.Path, "plugins.txt"), new[] { modRoot });
+
+        GameAsset winner = Only(data.EnumerateWinners("meshes/y"), anim);
+        Assert.Equal(zed, winner.ArchivePath);
+        Assert.Equal(Bytes(3, 3), data.Read(winner));
+        Assert.Equal(new[] { archiveA, archiveB }, winner.Shadowed.Select(s => s.ArchivePath));
+    }
+
+    [Fact]
+    public void ModRootWithoutMeshesFolderStillWinsItsSoundPrefix()
+    {
+        using var root = new TestArchives.TempDirectory("bgs-gamedata-voice");
+        string dataFolder = Path.Combine(root.Path, "Data");
+        string modRoot = Path.Combine(root.Path, "mods", "Voice");
+        Directory.CreateDirectory(dataFolder);
+        Put(modRoot, "sound/line.wav", Bytes(3, 3));
+
+        using var data = GameData.Discover(dataFolder, Path.Combine(root.Path, "plugins.txt"), new[] { modRoot });
+
+        GameAsset winner = Only(data.EnumerateWinners("Sound/"), "sound/line.wav");
+        Assert.Equal(modRoot, winner.SourceRoot);
+        Assert.Equal(Bytes(3, 3), data.Read(winner));
+    }
+
+    [Fact]
+    public void EnumerateWinnersListsHiddenLooseFiles()
+    {
+        using var root = new TestArchives.TempDirectory("bgs-gamedata-hidden");
+        string dataFolder = Path.Combine(root.Path, "Data");
+        string name = OperatingSystem.IsWindows() ? "hidden.hkx" : ".hidden.hkx";
+        string file = Path.Combine(dataFolder, "Meshes", "H", name);
+        Put(dataFolder, "Meshes/H/" + name, Bytes(1, 1));
+        if (OperatingSystem.IsWindows()) File.SetAttributes(file, FileAttributes.Hidden);
+
+        using var data = GameData.Discover(dataFolder, Path.Combine(root.Path, "plugins.txt"));
+
+        Assert.Equal(new[] { "Meshes/H/" + name }, data.EnumerateWinners("Meshes/H").Select(asset => asset.VirtualPath));
+    }
+
+    [Fact]
+    public void ModLooseIndexFindsFilesUnderLowercaseMeshesRoot()
+    {
+        using var root = new TestArchives.TempDirectory("bgs-gamedata-lower");
+        string dataFolder = Path.Combine(root.Path, "Data");
+        string modRoot = Path.Combine(root.Path, "mods", "Lower");
+        Directory.CreateDirectory(dataFolder);
+        Put(modRoot, "meshes/h/pose.hkx", Bytes(3, 3));
+
+        using var data = GameData.Discover(dataFolder, Path.Combine(root.Path, "plugins.txt"), new[] { modRoot });
+
+        Assert.Equal(Bytes(3, 3), data.ReadAnimation(dataFolder, "meshes/h/pose.hkx")?.Bytes);
+    }
+
     private static byte[] Bytes(int count, byte value)
     {
         var bytes = new byte[count];

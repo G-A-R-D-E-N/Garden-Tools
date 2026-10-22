@@ -151,15 +151,6 @@ public sealed partial class GameData : IDisposable
         }
     }
 
-    public static string? ModlistPath(string modsFolder, string? profile)
-    {
-        string mods = Path.GetFullPath(modsFolder);
-        string list = profile != null
-            ? Path.Combine(mods, "profiles", profile, "modlist.txt")
-            : Path.Combine(mods, "modlist.txt");
-        return File.Exists(list) ? list : null;
-    }
-
     /// <summary>
     /// True when the animation is loose under the project root, or an archive entry matches it.
     /// The declared extension does not matter (.hkt resolves to .hkx, as the game treats them
