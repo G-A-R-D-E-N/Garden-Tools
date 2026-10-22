@@ -300,6 +300,38 @@ public sealed class Ba2RadicleTests
         }
     }
 
+    [Fact]
+    public void DiscoverSkipsAModRootWhoseTopLevelListingIsDeniedAndKeepsTheOtherArchives()
+    {
+        string root = TempRoot();
+        string dataFolder = Path.Combine(root, "Data");
+        string deniedRoot = Path.Combine(root, "mods", "Denied");
+        string readableRoot = Path.Combine(root, "mods", "Readable");
+        Directory.CreateDirectory(dataFolder);
+        Directory.CreateDirectory(deniedRoot);
+        Directory.CreateDirectory(readableRoot);
+        try
+        {
+            string archive = Path.Combine(readableRoot, "Readable.ba2");
+            WriteGeneralBa2(archive, "meshes/y/only.hkx", Encoding.ASCII.GetBytes("readable"));
+            if (!DenyListing(deniedRoot)) return;
+            try
+            {
+                using var data = GameData.Discover(dataFolder, Path.Combine(root, "plugins.txt"),
+                                                   new[] { deniedRoot, readableRoot });
+
+                var winner = Assert.Single(data.EnumerateWinners("meshes/y/", ".hkx"));
+                Assert.Equal(Path.GetFullPath(archive), winner.ArchivePath);
+                Assert.Equal("Readable.ba2", winner.Source);
+            }
+            finally
+            {
+                RestoreListing(deniedRoot);
+            }
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
     [Theory]
     [InlineData("Meshes\\X\\CharacterAssets\\a.HKX", true)]
     [InlineData("Meshes/X/CharacterAssets/a.txt", false)]
