@@ -353,8 +353,8 @@ public partial class MainWindow : Window
         try { hkx = InputFilePolicy.ReadHkx(animationPath); }
         catch (Exception ex)
         {
-            SetPlaybackSummary($"Could not read {label}: {ex.Message.Split('\n')[0]}", Ux.BadBrush);
             ClearPose();
+            SetPlaybackSummary($"Could not read {label}: {ex.Message.Split('\n')[0]}", Ux.BadBrush);
             return;
         }
         LoadPose(hkx, animationPath, label, "loose", null);
@@ -365,23 +365,30 @@ public partial class MainWindow : Window
         if (_poseSource == key) return;
 
         Stop();
-        _poseSkeleton = PoseSkeleton(archiveEntry == null ? key : null) ?? ArchiveSkeleton(archiveEntry);
+        try { _poseSkeleton = PoseSkeleton(archiveEntry == null ? key : null) ?? ArchiveSkeleton(archiveEntry); }
+        catch (InvalidDataException ex)
+        {
+            ClearPose();
+            SetPlaybackSummary($"Could not read {label}: {ex.Message.Split('\n')[0]}", Ux.BadBrush);
+            return;
+        }
 
         HkxAnimationData animation;
         try
         {
             if (!new HkxBinaryReader().TryReadAnimation(hkx, out animation))
             {
-                SetPlaybackSummary($"{label}: {animation.AnimationClass} is not decoded, so it cannot be drawn.",
-                                   Ux.BadBrush);
                 ClearPose();
+                SetPlaybackSummary(
+                    $"{label}: {animation.UnsupportedReason} in {animation.AnimationClass}, so it cannot be drawn.",
+                    Ux.BadBrush);
                 return;
             }
         }
         catch (Exception ex)
         {
-            SetPlaybackSummary($"Could not read {label}: {ex.Message.Split('\n')[0]}", Ux.BadBrush);
             ClearPose();
+            SetPlaybackSummary($"Could not read {label}: {ex.Message.Split('\n')[0]}", Ux.BadBrush);
             return;
         }
 
@@ -436,15 +443,17 @@ public partial class MainWindow : Window
     private HkxSkeleton? ArchiveSkeleton(string? animationEntry)
     {
         if (_gameData == null || animationEntry == null) return null;
-        byte[]? bytes;
-        try { bytes = _gameData.SkeletonBytes(animationEntry); }
-        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
-        {
-            return null;
-        }
+        var gameData = _gameData;
+        byte[]? bytes = SkeletonBytesOrNull(() => gameData.SkeletonBytes(animationEntry));
         if (bytes == null) return null;
         try { return new HkxBinaryReader().ReadSkeleton(bytes); }
         catch { return null; }
+    }
+
+    internal static byte[]? SkeletonBytesOrNull(Func<byte[]?> read)
+    {
+        try { return read(); }
+        catch (Exception e) when (GameData.IsSkippableArchiveFailure(e)) { return null; }
     }
 
 }

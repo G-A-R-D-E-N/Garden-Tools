@@ -189,39 +189,49 @@ TEST_CASE("Generated PROJ EXPL HAZD FormLink descriptors match the audited slots
         std::size_t offset;
         std::array<std::string_view, 2> targets;
         std::size_t targetCount;
+        bool nullable;
     };
     const std::array expected{
-        Expected{"PROJ", "PROJ\\Light", "DNAM", 16, {"LIGH", {}}, 1},
-        Expected{"PROJ", "PROJ\\MuzzleFlashLight", "DNAM", 20, {"LIGH", {}}, 1},
-        Expected{"PROJ", "PROJ\\ExplosionType", "DNAM", 32, {"EXPL", {}}, 1},
-        Expected{"PROJ", "PROJ\\ActiveSoundLoop", "DNAM", 36, {"SNDR", {}}, 1},
-        Expected{"PROJ", "PROJ\\CountdownSound", "DNAM", 52, {"SNDR", {}}, 1},
-        Expected{"PROJ", "PROJ\\DeactivateSound", "DNAM", 56, {"SNDR", {}}, 1},
-        Expected{"PROJ", "PROJ\\DefaultWeaponSource", "DNAM", 60, {"WEAP", {}}, 1},
-        Expected{"PROJ", "PROJ\\DecalData", "DNAM", 80, {"TXST", {}}, 1},
-        Expected{"PROJ", "PROJ\\CollisionLayer", "DNAM", 84, {"COLL", {}}, 1},
-        Expected{"EXPL", "EXPL\\Light", "DATA", 0, {"LIGH", {}}, 1},
-        Expected{"EXPL", "EXPL\\Sound1", "DATA", 4, {"SNDR", {}}, 1},
-        Expected{"EXPL", "EXPL\\Sound2", "DATA", 8, {"SNDR", {}}, 1},
-        Expected{"EXPL", "EXPL\\ImpactDataSet", "DATA", 12, {"IPDS", {}}, 1},
-        Expected{"EXPL", "EXPL\\ImpactPlacedObject", "DATA", 16, {"ACTI", "WEAP"}, 44},
-        Expected{"EXPL", "EXPL\\SpawnProjectile", "DATA", 20, {"PROJ", {}}, 1},
-        Expected{"HAZD", "HAZD\\Spell", "DNAM", 24, {"SPEL", "ENCH"}, 2},
-        Expected{"HAZD", "HAZD\\Light", "DNAM", 28, {"LIGH", {}}, 1},
-        Expected{"HAZD", "HAZD\\ImpactDataSet", "DNAM", 32, {"IPDS", {}}, 1},
-        Expected{"HAZD", "HAZD\\Sound", "DNAM", 36, {"SNDR", {}}, 1},
+        Expected{"PROJ", "PROJ\\Light", "DNAM", 16, {"LIGH", {}}, 1, true},
+        Expected{"PROJ", "PROJ\\MuzzleFlashLight", "DNAM", 20, {"LIGH", {}}, 1, true},
+        Expected{"PROJ", "PROJ\\ExplosionType", "DNAM", 32, {"EXPL", {}}, 1, true},
+        Expected{"PROJ", "PROJ\\ActiveSoundLoop", "DNAM", 36, {"SNDR", {}}, 1, true},
+        Expected{"PROJ", "PROJ\\CountdownSound", "DNAM", 52, {"SNDR", {}}, 1, true},
+        Expected{"PROJ", "PROJ\\DeactivateSound", "DNAM", 56, {"SNDR", {}}, 1, true},
+        Expected{"PROJ", "PROJ\\DefaultWeaponSource", "DNAM", 60, {"WEAP", {}}, 1, true},
+        Expected{"PROJ", "PROJ\\DecalData", "DNAM", 80, {"TXST", {}}, 1, true},
+        Expected{"PROJ", "PROJ\\CollisionLayer", "DNAM", 84, {"COLL", {}}, 1, true},
+        Expected{"PROJ", "PROJ\\VATSProjectile", "DNAM", 89, {"PROJ", {}}, 1, true},
+        Expected{"PROJ", "PROJ\\MaterialSwap", "MODS", 0, {"MSWP", {}}, 1, false},
+        Expected{"PROJ", "PROJ\\DestructionDamageType", "DAMC", 0, {"DMGT", {}}, 1, false},
+        Expected{"PROJ", "PROJ\\DestructionStageDebris", "DSTD", 12, {"DEBR", {}}, 1, true},
+        Expected{"PROJ", "PROJ\\DestructionStageExplosion", "DSTD", 8, {"EXPL", {}}, 1, true},
+        Expected{"PROJ", "PROJ\\DestructionStageMaterialSwap", "DMDS", 0, {"MSWP", {}}, 1, false},
+        Expected{"EXPL", "EXPL\\Light", "DATA", 0, {"LIGH", {}}, 1, true},
+        Expected{"EXPL", "EXPL\\Sound1", "DATA", 4, {"SNDR", {}}, 1, true},
+        Expected{"EXPL", "EXPL\\Sound2", "DATA", 8, {"SNDR", {}}, 1, true},
+        Expected{"EXPL", "EXPL\\ImpactDataSet", "DATA", 12, {"IPDS", {}}, 1, true},
+        Expected{"EXPL", "EXPL\\ImpactPlacedObject", "DATA", 16, {"ACTI", "WEAP"}, 44, true},
+        Expected{"EXPL", "EXPL\\SpawnProjectile", "DATA", 20, {"PROJ", {}}, 1, true},
+        Expected{"EXPL", "EXPL\\MaterialSwap", "MODS", 0, {"MSWP", {}}, 1, false},
+        Expected{"HAZD", "HAZD\\Spell", "DNAM", 24, {"SPEL", "ENCH"}, 2, true},
+        Expected{"HAZD", "HAZD\\Light", "DNAM", 28, {"LIGH", {}}, 1, true},
+        Expected{"HAZD", "HAZD\\ImpactDataSet", "DNAM", 32, {"IPDS", {}}, 1, true},
+        Expected{"HAZD", "HAZD\\Sound", "DNAM", 36, {"SNDR", {}}, 1, true},
+        Expected{"HAZD", "HAZD\\ImageSpaceModifier", "MNAM", 0, {"IMAD", {}}, 1, true},
+        Expected{"HAZD", "HAZD\\MaterialSwap", "MODS", 0, {"MSWP", {}}, 1, false},
     };
 
-    REQUIRE(fo4::schema::formlink_fields(fo4::Signature::from_string("PROJ")).size() == 9);
-    REQUIRE(fo4::schema::formlink_fields(fo4::Signature::from_string("EXPL")).size() == 6);
-    REQUIRE(fo4::schema::formlink_fields(fo4::Signature::from_string("HAZD")).size() == 4);
+    REQUIRE(fo4::schema::formlink_fields(fo4::Signature::from_string("PROJ")).size() == 15);
+    REQUIRE(fo4::schema::formlink_fields(fo4::Signature::from_string("EXPL")).size() == 7);
+    REQUIRE(fo4::schema::formlink_fields(fo4::Signature::from_string("HAZD")).size() == 6);
     for (const auto& item : expected) {
         const auto descriptor = fo4::schema::formlink_field_descriptor(item.path);
         REQUIRE(descriptor.has_value());
         CHECK(descriptor->record == fo4::Signature::from_string(item.record));
         CHECK(descriptor->subrecord == fo4::Signature::from_string(item.subrecord));
         CHECK(descriptor->offset == item.offset);
-        CHECK(descriptor->nullable);
+        CHECK(descriptor->nullable == item.nullable);
         CHECK(descriptor->target_count == item.targetCount);
         CHECK(fo4::schema::formlink_field_target_allowed(
             *descriptor, fo4::Signature::from_string(item.targets[0])));
@@ -257,6 +267,7 @@ TEST_CASE("Native SetField writes every audited PROJ EXPL HAZD FormLink slot") {
         Write{"PROJ", "000900:Patch.esp", "PROJ\\DefaultWeaponSource", "000803:Patch.esp", 0x803},
         Write{"PROJ", "000900:Patch.esp", "PROJ\\DecalData", "000804:Patch.esp", 0x804},
         Write{"PROJ", "000900:Patch.esp", "PROJ\\CollisionLayer", "000805:Patch.esp", 0x805},
+        Write{"PROJ", "000900:Patch.esp", "PROJ\\VATSProjectile", "000806:Patch.esp", 0x806},
         Write{"EXPL", "000901:Patch.esp", "EXPL\\Light", "000800:Patch.esp", 0x800},
         Write{"EXPL", "000901:Patch.esp", "EXPL\\Sound1", "000802:Patch.esp", 0x802},
         Write{"EXPL", "000901:Patch.esp", "EXPL\\Sound2", "000802:Patch.esp", 0x802},

@@ -437,7 +437,7 @@ public partial class MainWindow : Window
                     }
                     else
                     {
-                        _modsSummary.Text = "no modlist.txt under that folder";
+                        _modsSummary.Text = "no modlist.txt under that folder, or its profiles folder is unreadable";
                     }
                 }
                 else if (mods.Length > 0)

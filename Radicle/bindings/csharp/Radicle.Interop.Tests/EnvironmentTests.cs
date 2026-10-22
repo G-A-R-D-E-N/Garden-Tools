@@ -78,10 +78,8 @@ public class EnvironmentTests : IClassFixture<WorldFixture>
         Assert.Equal(new FormKey("Strong_PA.esp", 0x808), new FormKey("strong_PA.esp", 0x808));
         Assert.Single(new HashSet<FormKey> { new("Strong_PA.esp", 0x808), new("strong_PA.esp", 0x808) });
         Assert.NotEqual(new FormKey("Strong_PA.esp", 0x808), new FormKey("Strong_PA.esp", 0x809));
+        Assert.Single(new HashSet<FormKey> { default, default });
     }
-
-    [Fact]
-    public void DefaultFormKeyCanBeHashed() => Assert.Single(new HashSet<FormKey> { default, default });
 
     [Fact]
     public void LoadsPluginsAndResolvesVersions()

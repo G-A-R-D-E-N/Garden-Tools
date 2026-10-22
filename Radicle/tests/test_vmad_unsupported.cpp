@@ -250,16 +250,16 @@ TEST(Vmad, UnexposedScalarObjectWordsStopTheScanPath) {
   }
 }
 
-TEST(Vmad, VariablePropertyFailsClosedForMasterRemap) {
-  expect_remap_refused(6);
-}
-
-TEST(Vmad, VariableArrayPropertyFailsClosedForMasterRemap) {
-  expect_remap_refused(16);
-}
-
-TEST(Vmad, UnknownPropertyTypeFailsClosedForMasterRemap) {
-  expect_remap_refused(8);
+TEST(Vmad, UnsupportedPropertyTypesRefuseMasterRemap) {
+  struct Row {
+    std::uint8_t type;
+    bool nested;
+  };
+  const Row rows[] = {{6, false}, {16, false}, {8, false}, {6, true}, {16, true}};
+  for (const auto& row : rows) {
+    SCOPED_TRACE(std::to_string(row.type) + (row.nested ? " nested" : " top level"));
+    expect_remap_refused(row.type, row.nested);
+  }
 }
 
 TEST(Vmad, FragmentCountsArePublishedOnlyForCompleteCoverage) {
@@ -374,14 +374,6 @@ TEST(Vmad, EmptyQuestFragmentHeaderHasNoFlagsOrProperties) {
   EXPECT_TRUE(coverage.complete());
   EXPECT_EQ(coverage.fragment_count, 1u);
   EXPECT_EQ(coverage.fragment_script_count, 0u);
-}
-
-TEST(Vmad, NestedVariablePropertyClearsEarlierDiscoveries) {
-  expect_remap_refused(6, true);
-}
-
-TEST(Vmad, NestedVariableArrayPropertyClearsEarlierDiscoveries) {
-  expect_remap_refused(16, true);
 }
 
 TEST(Vmad, EmptyVariableArrayPreservesValuesAndRemapsFollowingReferences) {

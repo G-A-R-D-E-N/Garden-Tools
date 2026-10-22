@@ -1,7 +1,9 @@
 #include "fo4/c_api_env.h"
 #include "fo4/c_api_records.h"
 #include "fo4/environment/world.hpp"
+#include "env_node_fixture.hpp"
 #include "plugin_bytes.hpp"
+#include "xcll_fixture.hpp"
 
 #include <gtest/gtest.h>
 
@@ -18,122 +20,8 @@
 
 namespace {
 
-struct Sub {
-  std::string signature;
-  std::vector<std::byte> data;
-};
-
-struct Node {
-  bool group{false};
-  std::string signature;
-  std::uint32_t form_id{0};
-  std::uint32_t flags{0};
-  std::vector<Sub> subrecords;
-  std::uint32_t label{0};
-  std::int32_t group_type{0};
-  std::vector<Node> children;
-};
-
-Node rec(std::string signature, std::uint32_t form_id, std::vector<Sub> subrecords = {},
-         std::uint32_t flags = 0) {
-  Node node;
-  node.signature = std::move(signature);
-  node.form_id = form_id;
-  node.flags = flags;
-  node.subrecords = std::move(subrecords);
-  return node;
-}
-
-Node grp(std::uint32_t label, std::int32_t type, std::vector<Node> children) {
-  Node node;
-  node.group = true;
-  node.label = label;
-  node.group_type = type;
-  node.children = std::move(children);
-  return node;
-}
-
-Node top(std::string_view signature, std::vector<Node> children) {
-  std::uint32_t label = 0;
-  std::memcpy(&label, signature.data(), 4);
-  return grp(label, 0, std::move(children));
-}
-
-std::vector<std::byte> bytes_of(std::initializer_list<std::uint32_t> words) {
-  fo4::test::ByteWriter out;
-  for (const auto word : words) out.u32(word);
-  return out.bytes;
-}
-
-std::vector<std::byte> floats(std::initializer_list<float> values) {
-  fo4::test::ByteWriter out;
-  for (const auto value : values) out.f32(value);
-  return out.bytes;
-}
-
-std::vector<std::byte> zstring(std::string_view text) {
-  std::vector<std::byte> bytes;
-  for (const char ch : text) bytes.push_back(std::byte{static_cast<std::uint8_t>(ch)});
-  bytes.push_back(std::byte{0});
-  return bytes;
-}
-
-void write_node(fo4::test::ByteWriter& out, const Node& node) {
-  if (node.group) {
-    std::string label(4, '\0');
-    std::memcpy(label.data(), &node.label, 4);
-    const auto header = fo4::test::begin_group(out, label, node.group_type);
-    for (const auto& child : node.children) write_node(out, child);
-    fo4::test::end_group(out, header);
-    return;
-  }
-  const auto header = fo4::test::begin_record(out, node.signature, node.flags, node.form_id);
-  for (const auto& sub : node.subrecords) fo4::test::write_subrecord(out, sub.signature, sub.data);
-  fo4::test::end_record(out, header);
-}
-
-std::vector<std::byte> make_plugin(const std::vector<std::string>& masters,
-                                   const std::vector<Node>& groups) {
-  fo4::test::ByteWriter out;
-  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
-  fo4::test::ByteWriter hedr;
-  hedr.f32(1.0f);
-  hedr.u32(0);
-  hedr.u32(0x900);
-  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
-  for (const auto& master : masters) {
-    fo4::test::write_subrecord(out, "MAST", zstring(master));
-    fo4::test::ByteWriter data;
-    data.u32(0);
-    data.u32(0);
-    fo4::test::write_subrecord(out, "DATA", data.bytes);
-  }
-  fo4::test::end_record(out, tes4);
-  for (const auto& group : groups) write_node(out, group);
-  return out.bytes;
-}
-
-std::vector<std::byte> xcll_bytes(std::size_t size) {
-  fo4::test::ByteWriter out;
-  out.u32(0x00302010);  // ambient
-  out.u32(0x00050403);  // directional
-  out.u32(0x00090807);  // fog near color
-  out.f32(64.0f);
-  out.f32(4096.0f);
-  out.i32(45);
-  out.i32(-30);
-  out.f32(1.0f);
-  out.f32(8192.0f);
-  out.f32(2.0f);
-  for (int i = 0; i < 32; ++i) out.u8(0);  // directional ambient + specular + fresnel
-  out.u32(0x00CCBBAA);                        // fog far color
-  out.f32(0.75f);
-  out.f32(100.0f);
-  out.f32(200.0f);
-  out.u32(0x14);  // inherits fog near + fog far
-  out.bytes.resize(size);
-  return out.bytes;
-}
+using namespace fo4::test::envnode;
+using fo4::test::xcll_bytes;
 
 // Base.esm: WRLD 000800, top cell 000801, exterior cell 000802 at (1,2) with LAND 000813, interior 000803.
 std::vector<std::byte> make_base() {
@@ -472,6 +360,98 @@ TEST_F(WorldEnvironmentTest, DecodesCellFields) {
   EXPECT_EQ(lighting.fog_max, 0.75f);
   EXPECT_EQ(lighting.inherits, std::optional<std::uint32_t>{0x14});
   EXPECT_FALSE(interior.worldspace.has_value());
+}
+
+TEST_F(WorldEnvironmentTest, DecodesCellLightingTailAndExtraSubrecords) {
+  fo4::test::ByteWriter lod;
+  lod.u32(0xC00);
+  lod.f32(1.5f);
+  lod.f32(-2.5f);
+  lod.f32(3.5f);
+  const auto cell = rec("CELL", 0x800,
+                        {{"EDID", zstring("Extras")},
+                         {"DATA", {std::byte{0x02}, std::byte{0}}},
+                         {"VISI", {std::byte{0x34}, std::byte{0x12}}},
+                         {"PCMB", {std::byte{0x78}, std::byte{0x56}}},
+                         {"XCLR", bytes_of({0x900, 0x901})},
+                         {"XPRI", bytes_of({0x910, 0x911})},
+                         {"XOWN", bytes_of({0xA00, 0, 0})},
+                         {"XRNK", bytes_of({3})},
+                         {"XILL", bytes_of({0xB00})},
+                         {"XILW", lod.bytes},
+                         {"XWCN", bytes_of({2})},
+                         {"XWCU", floats({1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f})},
+                         {"XWEM", zstring("water/current.dds")},
+                         {"XCCM", bytes_of({0xD00})},
+                         {"XCAS", bytes_of({0xE00})},
+                         {"XCMO", bytes_of({0xF00})},
+                         {"XGDR", bytes_of({0x1000})},
+                         {"XCLL", xcll_bytes(136)}});
+  const auto truncated = rec("CELL", 0x801, {{"XCLL", xcll_bytes(135)}});
+  const auto bad_region = rec("CELL", 0x802, {{"XCLR", {std::byte{0}, std::byte{0}}}});
+  const auto bad_current = rec("CELL", 0x803, {{"XWCU", floats({1.0f, 2.0f, 3.0f, 4.0f, 5.0f})}});
+  const auto bad_stride = rec("CELL", 0x804, {{"XPRI", std::vector<std::byte>(6)}});
+  paths_ = {write("Extras.esp", make_plugin({}, {top("CELL", {grp(0, 2, {grp(0, 3,
+      {cell, truncated, bad_region, bad_current, bad_stride})})})}))};
+  const auto env = fo4::env::Environment::load(paths_);
+
+  const auto data = fo4::env::decode_cell(env, *env.winner(key("000800:Extras.esp")));
+  EXPECT_EQ(data.previs_timestamp, std::optional<std::uint16_t>{0x1234});
+  EXPECT_EQ(data.precombined_timestamp, std::optional<std::uint16_t>{0x5678});
+  ASSERT_EQ(data.regions.size(), 2u);
+  EXPECT_EQ(data.regions[0], key("000900:Extras.esp"));
+  EXPECT_EQ(data.regions[1], key("000901:Extras.esp"));
+  ASSERT_EQ(data.previs_references.size(), 2u);
+  EXPECT_EQ(data.previs_references[0], key("000910:Extras.esp"));
+  EXPECT_EQ(data.previs_references[1], key("000911:Extras.esp"));
+  EXPECT_EQ(data.owner, key("000A00:Extras.esp"));
+  EXPECT_EQ(data.owner_rank, std::optional<std::int32_t>{3});
+  EXPECT_EQ(data.lock_list, key("000B00:Extras.esp"));
+  ASSERT_TRUE(data.exterior_lod.has_value());
+  EXPECT_EQ(data.exterior_lod->worldspace, key("000C00:Extras.esp"));
+  EXPECT_EQ(data.exterior_lod->offset[0], 1.5f);
+  EXPECT_EQ(data.exterior_lod->offset[1], -2.5f);
+  EXPECT_EQ(data.exterior_lod->offset[2], 3.5f);
+  EXPECT_EQ(data.water_current_count, std::optional<std::uint32_t>{2});
+  ASSERT_EQ(data.water_currents.size(), 2u);
+  EXPECT_EQ(data.water_currents[0].velocity[2], 3.0f);
+  EXPECT_EQ(data.water_currents[0].unnamed, 4.0f);
+  EXPECT_EQ(data.water_currents[1].velocity[0], 5.0f);
+  EXPECT_EQ(data.water_currents[1].unnamed, 8.0f);
+  EXPECT_EQ(data.water_environment_map, std::optional<std::string>{"water/current.dds"});
+  EXPECT_EQ(data.sky_weather_region, key("000D00:Extras.esp"));
+  EXPECT_EQ(data.acoustic_space, key("000E00:Extras.esp"));
+  EXPECT_EQ(data.music_type, key("000F00:Extras.esp"));
+  EXPECT_EQ(data.god_rays, key("00001000:Extras.esp"));
+
+  ASSERT_TRUE(data.lighting.has_value());
+  const auto& lighting = *data.lighting;
+  EXPECT_EQ(lighting.near_height_mid, std::optional<float>{300.0f});
+  EXPECT_EQ(lighting.near_height_range, std::optional<float>{400.0f});
+  ASSERT_TRUE(lighting.fog_color_high_near.has_value());
+  EXPECT_EQ(lighting.fog_color_high_near->red, 0x10);
+  EXPECT_EQ(lighting.fog_color_high_near->green, 0x11);
+  EXPECT_EQ(lighting.fog_color_high_near->blue, 0x12);
+  ASSERT_TRUE(lighting.fog_color_high_far.has_value());
+  EXPECT_EQ(lighting.fog_color_high_far->blue, 0x22);
+  EXPECT_EQ(lighting.high_density_scale, std::optional<float>{2.0f});
+  EXPECT_EQ(lighting.fog_near_scale, std::optional<float>{3.0f});
+  EXPECT_EQ(lighting.fog_far_scale, std::optional<float>{4.0f});
+  EXPECT_EQ(lighting.fog_high_near_scale, std::optional<float>{5.0f});
+  EXPECT_EQ(lighting.fog_high_far_scale, std::optional<float>{6.0f});
+  EXPECT_EQ(lighting.far_height_mid, std::optional<float>{500.0f});
+  EXPECT_EQ(lighting.far_height_range, std::optional<float>{600.0f});
+
+  const auto short_lighting = fo4::env::decode_cell(env, *env.winner(key("000801:Extras.esp")));
+  ASSERT_TRUE(short_lighting.lighting.has_value());
+  EXPECT_EQ(short_lighting.lighting->far_height_mid, std::optional<float>{500.0f});
+  EXPECT_FALSE(short_lighting.lighting->far_height_range.has_value());
+  EXPECT_THROW(fo4::env::decode_cell(env, *env.winner(key("000802:Extras.esp"))),
+               fo4::env::WorldDecodeError);
+  EXPECT_THROW(fo4::env::decode_cell(env, *env.winner(key("000803:Extras.esp"))),
+               fo4::env::WorldDecodeError);
+  EXPECT_THROW(fo4::env::decode_cell(env, *env.winner(key("000804:Extras.esp"))),
+               fo4::env::WorldDecodeError);
 }
 
 TEST_F(WorldEnvironmentTest, RejectsMalformedAndWrongRecords) {

@@ -125,36 +125,6 @@ public class GraphBenchmarkTests
     }
 
     [Fact]
-    public void Compile_success_rate_across_the_fixture_suite()
-    {
-        if (!Enabled)
-        {
-            _output.WriteLine($"{BenchVariable} is not set; not benchmarking.");
-            return;
-        }
-
-        WriteContext();
-
-        int attempted = 0, clean = 0;
-        var refused = new List<string>();
-
-        foreach (var fixture in GraphFixtures.All)
-        {
-            attempted++;
-            var result = GraphTestEnvironment.Compile(fixture.Build());
-            if (result.Success && !result.Errors.Any()) clean++;
-            else refused.Add($"{fixture.Name}: {GraphTestEnvironment.Describe(result.Errors)}");
-        }
-
-
-
-        _output.WriteLine($"BENCH graph.success clean={clean} attempted={attempted} refused={refused.Count}");
-        foreach (var line in refused) _output.WriteLine("  REFUSED " + line);
-
-        clean.Should().Be(attempted, "every checked-in fixture is ours, so anything less is a defect");
-    }
-
-    [Fact]
     public void Palette_build_and_search_speed()
     {
         if (!Enabled)

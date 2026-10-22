@@ -29,15 +29,6 @@ std::string lower(std::string_view text) {
     return out;
 }
 
-std::string describe(const std::vector<const GraphDiagnostic*>& diagnostics) {
-    std::string out;
-    for (const auto* diagnostic : diagnostics) {
-        if (!out.empty()) out += " | ";
-        out += diagnostic->toString();
-    }
-    return out;
-}
-
 std::set<std::string> sortedNames(const std::vector<std::string>& names) {
     std::set<std::string> out;
     for (const auto& name : names) out.insert(lower(name));
@@ -140,6 +131,7 @@ std::string decompilesAndRecompiles(const GraphCompileResult& first) {
 TEST_CASE("GraphCompiler every fixture graph compiles clean") {
     Env env(/*withGraphScripts=*/true);
     const auto fixtures = allFixtures(env.palette);
+    REQUIRE(fixtures.size() >= 24);
     for (const auto& fixture : fixtures) {
         INFO("fixture: " << fixture.name);
         auto result = compileGraph(fixture);
@@ -278,44 +270,24 @@ TEST_CASE("GraphCompiler Oracle3 the generated script has the same shape as the 
     }
 }
 
-TEST_CASE("GraphCompiler the whole fixture suite reports its own numbers") {
+TEST_CASE("GraphCompiler publishes scripts under one process folder that clearScratch removes") {
+    GraphCompiler::clearScratch();
     Env env(/*withGraphScripts=*/true);
     const auto fixtures = allFixtures(env.palette);
+    REQUIRE(!fixtures.empty());
+    REQUIRE(compileGraph(fixtures.front()).success());
+    REQUIRE(compileGraph(fixtures.front()).success());
 
-    int attempted = 0;
-    int compiled = 0;
-    int oracle2 = 0;
-    int oracle1 = 0;
-    std::vector<std::string> refusals;
-
-    for (const auto& fixture : fixtures) {
-        attempted++;
-        const auto result = compileGraph(fixture);
-        if (!result.success()) {
-            refusals.push_back(fixture.name + ": " + describe(result.errors()));
-            continue;
-        }
-        compiled++;
-
-        const std::string root = uniqueRoot("summary");
-        auto reference = compileReference(fixture, root);
-        std::error_code error;
-        std::filesystem::remove_all(root, error);
-        if (reference &&
-            fo4ide::papyrus::test::firstDifference(reference->objects[0],
-                                                   result.pex->objects[0])
-                .empty()) {
-            oracle2++;
-        }
-        if (decompilesAndRecompiles(result).empty()) oracle1++;
+    const auto root = GraphCompiler::scratchRoot();
+    REQUIRE(std::filesystem::is_directory(root));
+    CHECK(root.parent_path().filename() == "fo4re-graph-scratch");
+    std::size_t published = 0;
+    for (const auto& entry : std::filesystem::directory_iterator(root)) {
+        (void)entry;
+        ++published;
     }
+    CHECK(published >= 2);
 
-    INFO("BENCH graph.fixtures attempted=" << attempted << " compiled=" << compiled
-         << " matchedHandWritten=" << oracle2 << " decompileRecompiles=" << oracle1);
-    for (const auto& refusal : refusals) INFO("  REFUSED " << refusal);
-
-    REQUIRE(attempted >= 24);
-    REQUIRE(compiled == attempted);
-    REQUIRE(oracle2 == attempted);
-    REQUIRE(oracle1 == attempted);
+    GraphCompiler::clearScratch();
+    CHECK_FALSE(std::filesystem::exists(root));
 }

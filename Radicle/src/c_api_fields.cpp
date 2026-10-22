@@ -23,6 +23,9 @@ radicle_status map_scalar_status(fo4::ScalarMutationStatus status) {
     case fo4::ScalarMutationStatus::subrecord_missing:
       return fail(RADICLE_STATUS_NOT_FOUND,
                   "record has no such field occurrence, or the field is outside its supported payload layout");
+    case fo4::ScalarMutationStatus::next_alias_id_too_low:
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                  "QUST Next Alias ID must stay above every existing alias ID");
     default:
       return RADICLE_STATUS_OK;
   }
@@ -123,7 +126,18 @@ radicle_status radicle_plugin_set_record_formlink(radicle_plugin* plugin,
       return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, a valid record key, path and a valid target or NULL are required");
     }
     const auto field = fo4::schema::formlink_field_descriptor(path);
-    if (!field) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "unknown FormLink field path");
+    if (!field) {
+      const auto list = fo4::schema::packed_formlink_list_path(path);
+      if (!list) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "unknown FormLink field path");
+      try {
+        return map_list_status(fo4::schema::set_record_formlink_list_element(
+            plugin->value, *form_key, *list, index, optional_target(target)));
+      } catch (const fo4::schema::FormLinkListError& error) {
+        return bad_argument(error);
+      } catch (const fo4::FormIdError& error) {
+        return bad_argument(error);
+      }
+    }
     try {
       switch (fo4::set_record_formlink_field(plugin->value, *form_key, *field, index, optional_target(target))) {
         case fo4::FormLinkFieldMutationStatus::record_missing:
@@ -162,6 +176,8 @@ radicle_status radicle_plugin_record_field_count(const radicle_plugin* plugin,
     } catch (const fo4::schema::ScalarError& error) {
       return bad_argument(error);
     } catch (const fo4::schema::FormLinkFieldError& error) {
+      return bad_argument(error);
+    } catch (const fo4::schema::FormLinkListError& error) {
       return bad_argument(error);
     }
   });

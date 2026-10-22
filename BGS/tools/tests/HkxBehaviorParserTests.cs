@@ -52,22 +52,20 @@ public class HkxBehaviorParserTests
         }
     }
 
-    [Fact]
-    public void ParseBehavior_RejectsDuplicateLocalFixupSourcesWithoutThrowing()
+    [Theory]
+    [InlineData("local")]
+    [InlineData("global")]
+    [InlineData("virtual")]
+    public void ParseBehavior_RejectsDuplicateFixupSourcesWithoutThrowing(string kind)
     {
-        AssertRejected(data => data.SetLocals(new[] { (0, 8), (0, 8) }));
-    }
-
-    [Fact]
-    public void ParseBehavior_RejectsDuplicateGlobalFixupSourcesWithoutThrowing()
-    {
-        AssertRejected(data => data.SetGlobals(new[] { (0, 1, 8), (0, 1, 8) }));
-    }
-
-    [Fact]
-    public void ParseBehavior_RejectsDuplicateVirtualFixupSourcesWithoutThrowing()
-    {
-        AssertRejected(data => data.AddVirtual(0, 0, 0));
+        Action<PackfileSection> mutate = kind switch
+        {
+            "local" => data => data.SetLocals(new[] { (0, 8), (0, 8) }),
+            "global" => data => data.SetGlobals(new[] { (0, 1, 8), (0, 1, 8) }),
+            "virtual" => data => data.AddVirtual(0, 0, 0),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind)),
+        };
+        AssertRejected(mutate);
     }
 
     [Fact]

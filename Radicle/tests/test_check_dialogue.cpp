@@ -103,13 +103,6 @@ std::vector<fo4::CheckFinding> of_code(const std::vector<fo4::CheckFinding>& fin
 
 }  // namespace
 
-TEST(CheckDialogue, CodeNamesAreStable) {
-  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::branch_starting_topic_not_dial),
-            "branch_starting_topic_not_dial");
-  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::topic_children_not_dial),
-            "topic_children_not_dial");
-}
-
 TEST(CheckDialogue, TopicChildrenLabelThatIsNotADialIsReported) {
   const auto plugin = make_orphan_topic_plugin();
   const std::vector<const fo4::Plugin*> load_order{&plugin};

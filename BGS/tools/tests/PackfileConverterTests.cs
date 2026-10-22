@@ -8,14 +8,10 @@ namespace BehaviourStudio.Tests;
 
 public sealed class PackfileConverterTests
 {
-    private static string Fixture(string relative) =>
-        Path.Combine(AppContext.BaseDirectory, "fixtures/vanilla",
-                     relative.Replace('/', Path.DirectorySeparatorChar));
-
     [Fact]
     public void Fo4FixtureSupportsBothCanonicalPointerWidthDirections()
     {
-        var image = PackfileImage.Read(Fixture(
+        var image = PackfileImage.Read(TestFixtures.Path(
             "Meshes/Actors/Character/Behaviors/SingleAnimFurniture.hkx"));
         Assert.Equal(8, image.Layout.PointerSize);
         Assert.Equal(new byte[] { 8, 1, 0, 1 }, image.LayoutRules);
@@ -32,7 +28,7 @@ public sealed class PackfileConverterTests
     [Fact]
     public void ConvertToNamesSourceAndTargetLayoutsWhenWidthIsUnsupported()
     {
-        var image = PackfileImage.Read(Fixture(
+        var image = PackfileImage.Read(TestFixtures.Path(
             "Meshes/Actors/Character/Behaviors/SingleAnimFurniture.hkx"));
 
         var error = Assert.Throws<InvalidDataException>(() =>
@@ -47,7 +43,7 @@ public sealed class PackfileConverterTests
     [Fact]
     public void TryConvertToReportsTheExactUnsafeSection()
     {
-        var image = PackfileImage.Read(Fixture(
+        var image = PackfileImage.Read(TestFixtures.Path(
             "Meshes/Actors/Character/Behaviors/SingleAnimFurniture.hkx"));
         image.Sections.Add(new PackfileSection
         {
@@ -63,7 +59,7 @@ public sealed class PackfileConverterTests
     [Fact]
     public void TryConvertToPreservesBooleanFailClosedApi()
     {
-        var image = PackfileImage.Read(Fixture(
+        var image = PackfileImage.Read(TestFixtures.Path(
             "Meshes/Actors/Character/Behaviors/SingleAnimFurniture.hkx"));
 
         Assert.False(PackfileConverter.TryConvertTo(image, new PointerLayout(3)));

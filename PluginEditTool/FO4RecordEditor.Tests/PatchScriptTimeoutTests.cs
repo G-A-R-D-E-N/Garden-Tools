@@ -16,7 +16,7 @@ public class PatchScriptTimeoutTests
     public void InfiniteLoop_IsAbandonedAtTheTimeout()
     {
         var original = PatchScriptRunner.ScriptTimeout;
-        PatchScriptRunner.ScriptTimeout = TimeSpan.FromSeconds(3);
+        PatchScriptRunner.ScriptTimeout = TimeSpan.FromSeconds(1);
         try
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();

@@ -55,11 +55,6 @@ describe('copySelection', () => {
 
     expect(clip.nodes[0].x).toBe(10);
   });
-
-  it('copies nothing when nothing is selected', () => {
-    const clip = copySelection(doc([node('a')], []), { nodes: [], wires: [] });
-    expect(clip.nodes).toHaveLength(0);
-  });
 });
 
 describe('keyboard wiring', () => {
@@ -135,6 +130,9 @@ describe('keyboard wiring', () => {
   });
 
   it('does nothing on copy with an empty selection', () => {
+    const clip = copySelection(doc([node('a')], []), { nodes: [], wires: [] });
+    expect(clip.nodes).toHaveLength(0);
+
     const { result } = mount([node('a')], [], []);
 
     press('c');

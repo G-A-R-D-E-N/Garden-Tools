@@ -72,6 +72,17 @@ add_custom_target(radicle_condition_scope_schema_check ALL
   COMMENT "Checking generated Fallout 4 condition scope schema"
   VERBATIM
 )
+add_custom_target(radicle_condition_function_schema_check ALL
+  COMMAND
+    "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tools/condition_function_codegen.py"
+    --schema "${CMAKE_CURRENT_SOURCE_DIR}/schema/fallout4/condition_functions.json"
+    --output "${CMAKE_CURRENT_SOURCE_DIR}/include/fo4/schema/generated_condition_functions.inc"
+    --ctda-output "${CMAKE_CURRENT_SOURCE_DIR}/include/fo4/schema/ctda_functions.inc"
+    --check
+  COMMENT "Checking generated Fallout 4 condition function table"
+  VERBATIM
+)
 add_custom_target(radicle_parity_matrix_check ALL
   COMMAND
     "${Python3_EXECUTABLE}"
@@ -128,6 +139,8 @@ add_library(fo4
   src/forms/placed_reference.cpp
   src/forms/placed_reference_copy.cpp
   src/forms/info_copy.cpp
+  src/forms/copy_as_new.cpp
+  src/forms/copy_as_wrapper.cpp
   src/forms/placed_reference_edit.cpp
   src/forms/placed_reference_create.cpp
   src/forms/placed_reference_move.cpp
@@ -148,10 +161,14 @@ add_library(fo4
   src/forms/race.cpp
   src/forms/race_body.cpp
   src/forms/npc.cpp
+  src/forms/omod.cpp
+  src/forms/perk.cpp
   src/forms/faction.cpp
   src/forms/weapon.cpp
   src/io/atomic_write.cpp
   src/localization/strings.cpp
+  src/plugin/localization_plugin.cpp
+  src/plugin/localized_writes.cpp
   src/plugin/tes4.cpp
   src/plugin/reader.cpp
   src/plugin/master_kinds.cpp
@@ -161,8 +178,11 @@ add_library(fo4
   src/plugin/record_flags.cpp
   src/plugin/copy_hierarchy.cpp
   src/plugin/vmad_writer.cpp
+  src/plugin/vmad_fragment_edits.cpp
   src/plugin/navmesh_writer.cpp
   src/plugin/field_writer.cpp
+  src/plugin/field_writer_containers.cpp
+  src/plugin/destructible_stage.cpp
   src/plugin/subrecord_authoring.cpp
   src/plugin/scene_writer.cpp
   src/plugin/master_usage.cpp
@@ -170,6 +190,8 @@ add_library(fo4
   src/plugin/placement.cpp
   src/plugin/onam.cpp
   src/plugin/writer.cpp
+  src/schema/condition_functions.cpp
+  src/schema/condition_scope_path.cpp
   src/schema/condition_scopes.cpp
   src/schema/ctda.cpp
   src/schema/form_links.cpp
@@ -180,6 +202,7 @@ add_library(fo4
   src/schema/behavior_layout.cpp
   src/schema/localized_fields.cpp
   src/schema/formlink_lists.cpp
+  src/schema/formlink_segments.cpp
   src/schema/formlink_list_read.cpp
   src/schema/nested_formlink_lists.cpp
   src/schema/nested_formlink_list_null.cpp
@@ -190,12 +213,14 @@ add_library(fo4
   src/schema/formlink_slots.cpp
   src/schema/vmad.cpp
   src/graph/conflict_graph.cpp
+  src/graph/conflict_kind.cpp
   src/graph/check_errors.cpp
   src/graph/check_errors_records.cpp
   src/graph/plugin_diff.cpp
   src/graph/reachability.cpp
   src/environment/environment.cpp
   src/environment/world.cpp
+  src/environment/region.cpp
   src/environment/placed.cpp
   src/environment/terrain.cpp
   src/environment/strings.cpp
@@ -209,6 +234,28 @@ add_library(fo4
   src/environment/sound.cpp
   src/environment/material_swap.cpp
   src/pex/pex.cpp
+  src/papyrus/status.cpp
+  src/papyrus/value.cpp
+  src/papyrus/host.cpp
+  src/papyrus/array_ops.cpp
+  src/papyrus/interpreter.cpp
+  src/papyrus/execute.cpp
+  src/swf/swf.cpp
+  src/swf/swf_tags.cpp
+  src/swf/swf_write.cpp
+  src/pex_analysis/opcodes.cpp
+  src/pex_analysis/cfg.cpp
+  src/pex_analysis/disasm.cpp
+  src/pex_analysis/callgraph.cpp
+  src/pex_analysis/summary.cpp
+  src/pex_analysis/fragments.cpp
+  src/abc/abc_file.cpp
+  src/abc/abc_write.cpp
+  src/abc/byte_reader.cpp
+  src/abc/constant_pool.cpp
+  src/abc/opcodes.cpp
+  src/abc/disassembly.cpp
+  src/abc/summary.cpp
   src/material/material_file.cpp
   src/seq/seq.cpp
   src/quest/runtime.cpp
@@ -226,6 +273,9 @@ if(TARGET radicle_formlink_schema_check)
 endif()
 if(TARGET radicle_condition_scope_schema_check)
   add_dependencies(fo4 radicle_condition_scope_schema_check)
+endif()
+if(TARGET radicle_condition_function_schema_check)
+  add_dependencies(fo4 radicle_condition_function_schema_check)
 endif()
 
 set_target_properties(fo4 PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -250,8 +300,14 @@ set_target_properties(radicle_c PROPERTIES
 fo4_apply_warnings(radicle_c)
 fo4_apply_sanitizers(radicle_c)
 target_sources(radicle_c PRIVATE src/c_api_version.cpp)
-target_sources(radicle_c PRIVATE src/c_api_records.cpp src/c_api_authoring.cpp src/c_api_vmad.cpp src/c_api_behavior.cpp)
+target_sources(radicle_c PRIVATE src/c_api_records.cpp src/c_api_authoring.cpp src/c_api_vmad.cpp src/c_api_behavior.cpp src/c_api_conditions.cpp)
 target_sources(radicle_c PRIVATE src/c_api_dialogue.cpp)
+target_sources(radicle_c PRIVATE src/c_api_armor.cpp src/c_api_eyes.cpp src/c_api_faction.cpp src/c_api_components.cpp src/c_api_cell.cpp)
+target_sources(radicle_c PRIVATE src/c_api_patch.cpp)
+target_sources(radicle_c PRIVATE src/c_api_conflict.cpp)
+target_sources(fo4 PRIVATE src/patch/delta_patch.cpp)
+target_sources(fo4 PRIVATE src/patch/list_merge.cpp)
+target_sources(fo4 PRIVATE src/papyrus_source/lexer.cpp src/papyrus_source/parser.cpp src/papyrus_source/parser_decl.cpp src/papyrus_source/parser_expr.cpp src/papyrus_source/parser_stmt.cpp src/papyrus_source/summary.cpp)
 target_sources(radicle_c PRIVATE src/c_api_nif.cpp src/c_api_dds.cpp)
 
 if(RADICLE_INSTALL)
@@ -322,13 +378,15 @@ if(RADICLE_BUILD_TESTS)
   FetchContent_MakeAvailable(googletest)
 
   add_executable(fo4_tests
+    tests/test_achr_extra_rows.cpp
+    tests/test_achr_rows.cpp
+    tests/test_achr_parity_rows.cpp
+    tests/test_parw_rows.cpp
     tests/test_signature.cpp
     tests/test_formid.cpp
     tests/test_cursor.cpp
     tests/test_reader.cpp
-    tests/test_xxxx.cpp
     tests/test_compression.cpp
-    tests/test_reader_limits.cpp
     tests/test_undecodable_record.cpp
     tests/test_undecodable_edit.cpp
     tests/test_real_plugin.cpp
@@ -338,15 +396,20 @@ if(RADICLE_BUILD_TESTS)
     tests/test_master_metadata.cpp
     tests/test_load_order.cpp
     tests/test_plugin_flags.cpp
+    tests/test_tes4_header_setters.cpp
     tests/test_mutation.cpp
     tests/test_editor_id_text.cpp
     tests/test_record_lifecycle.cpp
     tests/test_delete_child_groups.cpp
     tests/test_copy_containment.cpp
     tests/test_copy_cell_children.cpp
+    tests/test_cell_rows.cpp
+    tests/test_cell_abi_extras.cpp
     tests/test_scalar_mutation.cpp
     tests/test_counted_array.cpp
+    tests/test_uncounted_arrays.cpp
     tests/test_subrecord_group.cpp
+    tests/test_nested_group_runs.cpp
     tests/test_writer.cpp
     tests/test_atomic_write.cpp
     tests/test_hedr_count.cpp
@@ -356,6 +419,31 @@ if(RADICLE_BUILD_TESTS)
     tests/test_clmt_formlinks.cpp
     tests/test_ipds_formlinks.cpp
     tests/test_dobj_formlinks.cpp
+    tests/test_wp9_link_rows.cpp
+    tests/test_wp9_bounds_model_rows.cpp
+    tests/test_wp9_ltex_llkc_rows.cpp
+    tests/test_wp9_union_rows.cpp
+    tests/test_wp9_misc_rows_a.cpp
+    tests/test_wp9_list_rows.cpp
+    tests/test_wp9_misc_rows_b.cpp
+    tests/test_wp9_misc_rows_c.cpp
+    tests/test_wp9_small_records.cpp
+    tests/test_wp9_prps_rows.cpp
+    tests/test_wp9_cobj_rows.cpp
+    tests/test_wp9_race_weap_rows.cpp
+    tests/test_race_data_rows.cpp
+    tests/test_race_data_links.cpp
+    tests/test_race_link_rows.cpp
+    tests/test_wp9_scol.cpp
+    tests/test_furn_rows.cpp
+    tests/test_wrld_rows.cpp
+    tests/test_refr_extra_rows.cpp
+    tests/test_ipds_movt_rows.cpp
+    tests/test_armo_arma_rows.cpp
+    tests/test_arma_sculpt_rows.cpp
+    tests/test_destructible_rows.cpp
+    tests/test_destructible_stage_members.cpp
+    tests/test_destructible_header.cpp
     tests/test_packed_formlink_arrays.cpp
     tests/test_formlink_ordinals.cpp
     tests/test_rekey_formlinks.cpp
@@ -374,12 +462,16 @@ if(RADICLE_BUILD_TESTS)
     tests/test_interior_cell_create.cpp
     tests/test_placed_reference.cpp
     tests/test_placed_reference_copy.cpp
+    tests/test_copy_as_new.cpp
+    tests/test_copy_as_wrapper.cpp
     tests/test_info_copy_new.cpp
     tests/test_placed_variants.cpp
     tests/test_placed_variants_real.cpp
     tests/test_placed_reference_create.cpp
     tests/test_placed_reference_move.cpp
+    tests/test_placed_reference_move_exterior.cpp
     tests/test_record_flags.cpp
+    tests/test_record_flags_deleted.cpp
     tests/test_extension_light_kinds.cpp
     tests/test_static_collection.cpp
     tests/test_quest_aliases.cpp
@@ -391,9 +483,14 @@ if(RADICLE_BUILD_TESTS)
     tests/test_proj_expl_hazd_reencode_real.cpp
     tests/test_scalar_embedded.cpp
     tests/test_field_writer.cpp
+    tests/test_localized_value_writes.cpp
+    tests/test_localization_tables.cpp
+    tests/test_plugin_localization.cpp
     tests/test_subrecord_authoring.cpp
     tests/test_c_api_authoring.cpp
     tests/test_c_api_fields.cpp
+    tests/test_delta_patch.cpp
+    tests/test_list_merge.cpp
     tests/test_climate_weather_authoring.cpp
     tests/test_climate_weather_c_api.cpp
     tests/test_climate_weather_real.cpp
@@ -401,21 +498,21 @@ if(RADICLE_BUILD_TESTS)
     tests/test_plugin_corpus.cpp
     tests/test_struct_payload_formlinks_real.cpp
     tests/test_obts_formlinks.cpp
+    tests/test_omod_rows.cpp
     tests/test_quest_authoring.cpp
     tests/test_quest_objectives.cpp
     tests/test_quest_stages.cpp
+    tests/test_qust_general_rows.cpp
     tests/test_typed_families_real.cpp
     tests/test_localized_fields.cpp
     tests/test_quest_alias_encoding.cpp
     tests/test_quest_alias_formlinks.cpp
     tests/test_quest_alias_location_formlinks.cpp
     tests/test_quest_alias_mutation.cpp
-    tests/test_quest_alias_boundary.cpp
-    tests/test_quest_alias_collection_grouping.cpp
+    tests/test_quest_alias_collection.cpp
     tests/test_quest_alias_formlink_remap.cpp
     tests/test_quest_alias_remaining_fills.cpp
     tests/test_quest_alias_extra_decode.cpp
-    tests/test_quest_alias_collection_authoring.cpp
     tests/test_scalar.cpp
     tests/test_preflight.cpp
     tests/test_ctda_strings.cpp
@@ -423,10 +520,15 @@ if(RADICLE_BUILD_TESTS)
     tests/test_ctda_alias_formids.cpp
     tests/test_condition_scopes.cpp
     tests/test_condition_scopes_records.cpp
+    tests/test_condition_scopes_mesg.cpp
+    tests/test_condition_scopes_term.cpp
     tests/test_condition_root_insert.cpp
+    tests/test_root_condition_lists.cpp
     tests/test_condition_scopes_real.cpp
+    tests/test_condition_functions.cpp
     tests/test_package_targets.cpp
     tests/test_perk_entrypoints.cpp
+    tests/test_perk_rows.cpp
     tests/test_vegetation.cpp
     tests/test_vegetation_edit.cpp
     tests/test_vegetation_authoring.cpp
@@ -439,28 +541,25 @@ if(RADICLE_BUILD_TESTS)
     tests/test_armor_creation.cpp
     tests/test_armor_edit.cpp
     tests/test_eyes.cpp
-    tests/test_eyes_creation.cpp
     tests/test_base_items.cpp
     tests/test_base_items_real.cpp
     tests/test_magic_location_records.cpp
     tests/test_magic_location_records_real.cpp
     tests/test_object_base_records.cpp
     tests/test_object_base_records_real.cpp
+    tests/test_object_base_model_info.cpp
     tests/test_weather_concept.cpp
     tests/test_weather_formlinks.cpp
     tests/test_lvsp.cpp
-    tests/test_lvsp_creation.cpp
     tests/test_leveled_list.cpp
     tests/test_leveled_list_real.cpp
     tests/test_leveled_list_creation.cpp
     tests/test_race_creation.cpp
     tests/test_race_body.cpp
-    tests/test_race_real.cpp
     tests/test_npc_lists.cpp
     tests/test_npc_real.cpp
     tests/test_faction.cpp
     tests/test_faction_real.cpp
-    tests/test_faction_creation.cpp
     tests/test_static_light_records.cpp
     tests/test_static_light_records_real.cpp
     tests/test_config_records.cpp
@@ -475,6 +574,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_item_mod_records_real.cpp
     tests/test_story_manager_records.cpp
     tests/test_story_manager_records_real.cpp
+    tests/test_term_menu_rows.cpp
     tests/test_world_misc_records.cpp
     tests/test_world_misc_records_real.cpp
     tests/test_weapon.cpp
@@ -486,8 +586,16 @@ if(RADICLE_BUILD_TESTS)
     tests/test_vmad.cpp
     tests/test_vmad_unsupported.cpp
     tests/test_vmad_array_elements.cpp
+    tests/test_vmad_structure.cpp
+    tests/test_vmad_quest_fragments.cpp
+    tests/test_vmad_fragments.cpp
     tests/test_conflict_graph.cpp
+    tests/test_conflict_kind.cpp
+    tests/test_conflict_compare.cpp
+    tests/test_repoint_references.cpp
+    tests/test_deep_copy.cpp
     tests/test_check_errors.cpp
+    tests/test_check_errors_conditions.cpp
     tests/test_check_dialogue.cpp
     tests/test_remap_non_formid_slots.cpp
     tests/test_struct_payload_remap.cpp
@@ -500,6 +608,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_reachability.cpp
     tests/test_maintenance.cpp
     tests/test_maintenance_nested.cpp
+    tests/test_esl_compaction.cpp
     tests/test_c_api_maintenance.cpp
     tests/test_c_api_pex.cpp
     tests/test_c_api_seq.cpp
@@ -522,7 +631,10 @@ if(RADICLE_BUILD_TESTS)
     tests/test_dialogue_writer_c_api.cpp
     tests/test_dialogue_writer_real.cpp
     tests/test_scene_writer.cpp
+    tests/test_scene_phase_edit.cpp
+    tests/test_scene_actor_action_edit.cpp
     tests/test_environment_world.cpp
+    tests/test_environment_region.cpp
     tests/test_environment_water_edges.cpp
     tests/test_environment_placed.cpp
     tests/test_environment_script_elements.cpp
@@ -541,6 +653,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_writeback_real.cpp
     tests/test_environment_ref_fields.cpp
     tests/test_environment_base_records.cpp
+    tests/test_c_api_conditions.cpp
     tests/test_water_real.cpp
     tests/test_water_authoring.cpp
     tests/test_water_c_api.cpp
@@ -548,6 +661,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_sound_real.cpp
     tests/test_sound_authoring.cpp
     tests/test_sound_subrecords.cpp
+    tests/test_music_track_lists.cpp
     tests/test_sound_writer_c_api.cpp
     tests/test_sound_writer_real.cpp
     tests/test_audio_records.cpp
@@ -563,8 +677,21 @@ if(RADICLE_BUILD_TESTS)
     tests/test_pex_hardening.cpp
     tests/test_pex_corpus.cpp
     tests/test_pex_oracle.cpp
+    tests/test_papyrus_vm.cpp
+    tests/test_pex_analysis.cpp
+    tests/test_pex_disasm.cpp
+    tests/test_papyrus_source.cpp
+    tests/test_papyrus_source_real.cpp
+    tests/test_abc.cpp
+    tests/test_abc_pool.cpp
+    tests/test_abc_write.cpp
+    tests/test_abc_summary.cpp
     tests/test_material_file.cpp
     tests/test_material_file_real.cpp
+    tests/test_swf.cpp
+    tests/test_swf_tags.cpp
+    tests/test_swf_real.cpp
+    tests/test_abc_real.cpp
     tests/test_c_api_material_file.cpp
     tests/test_seq.cpp
     tests/test_seq_corpus.cpp
@@ -574,7 +701,23 @@ if(RADICLE_BUILD_TESTS)
     tests/test_load_order_files.cpp
     tests/test_load_order_real.cpp
     tests/test_c_api_loadorder.cpp
+    tests/test_c_api_referenced_by.cpp
+    tests/test_c_api_conflict.cpp
+    tests/test_regn_rows.cpp
+    tests/test_regn_region_decode.cpp
+    tests/test_c_api_forms_modules.cpp
+    tests/test_weap_rows.cpp
+    tests/test_npc_link_rows.cpp
+    tests/test_furn_marker_params.cpp
+    tests/test_npc_template_actor_rows.cpp
+    tests/test_npc_attack_data_rows.cpp
+    tests/test_npc_face_tint_rows.cpp
+    tests/test_npc_furn_attach_slots.cpp
     tools/env_bench/env_bench.cpp
+    tests/test_fsts_rows.cpp
+    tests/test_mswp_rows.cpp
+    tests/test_sopm_onam_rows.cpp
+    tests/test_stat_lod_rows.cpp
     tests/plugin_bytes.cpp
     tests/real_data_build.cpp
     tests/test_real_data_build.cpp
@@ -588,14 +731,23 @@ if(RADICLE_BUILD_TESTS)
   target_compile_options(fo4_tests PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/wd4996>)
   fo4_apply_warnings(fo4_tests)
   fo4_apply_sanitizers(fo4_tests)
-  target_sources(fo4_tests PRIVATE tests/test_c_api_version.cpp)
 
   include(GoogleTest)
   gtest_discover_tests(fo4_tests DISCOVERY_TIMEOUT 120
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
   add_test(NAME radicle_field_address_codegen
            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_field_address_codegen.py)
+  add_test(NAME radicle_counted_array_segments
+           COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_counted_array_segments.py)
+  add_test(NAME radicle_subrecord_group_codegen
+           COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_subrecord_group_codegen.py)
+  add_test(NAME radicle_subrecord_group_string_rows
+           COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_subrecord_group_string_rows.py)
+  add_test(NAME radicle_field_address_version_windows
+           COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_field_address_version_windows.py)
   add_test(NAME radicle_parity_matrix_unit COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_parity_matrix.py)
+  add_test(NAME radicle_condition_function_codegen
+           COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_condition_function_codegen.py)
   if(RADICLE_BUILD_TOOLS)
     add_test(NAME radicle_papyrus_dump
              COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/parity/tests/test_papyrus_dump.py
@@ -630,10 +782,6 @@ if(RADICLE_BUILD_TESTS)
   add_library(radicle_abi_stub_v1 SHARED bindings/csharp/tests/abi_stub.cpp)
   target_include_directories(radicle_abi_stub_v1 PRIVATE include)
   target_compile_definitions(radicle_abi_stub_v1 PRIVATE RADICLE_C_BUILD RADICLE_ABI_STUB_VERSION=1u)
-  # ABI 4 is the last generation without the record payload and topic exports.
-  add_library(radicle_abi_stub_v4 SHARED bindings/csharp/tests/abi_stub.cpp)
-  target_include_directories(radicle_abi_stub_v4 PRIVATE include)
-  target_compile_definitions(radicle_abi_stub_v4 PRIVATE RADICLE_C_BUILD RADICLE_ABI_STUB_VERSION=4u)
 
   find_package(Python3 COMPONENTS Interpreter QUIET)
   if(Python3_Interpreter_FOUND)
@@ -670,6 +818,6 @@ if(RADICLE_BUILD_TESTS)
              COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/bindings/csharp/tools/run_managed_tests.py
                      --dotnet ${DOTNET_EXECUTABLE})
     set_tests_properties(radicle_csharp_bindings PROPERTIES
-      ENVIRONMENT "RADICLE_NATIVE_PATH=$<TARGET_FILE:radicle_c>;RADICLE_ABI_PROBE=$<TARGET_FILE:radicle_abi_layout_probe>;RADICLE_ABI_STUB=$<TARGET_FILE:radicle_abi_stub>;RADICLE_ABI_STUB_V1=$<TARGET_FILE:radicle_abi_stub_v1>;RADICLE_ABI_STUB_V4=$<TARGET_FILE:radicle_abi_stub_v4>")
+      ENVIRONMENT "RADICLE_NATIVE_PATH=$<TARGET_FILE:radicle_c>;RADICLE_ABI_PROBE=$<TARGET_FILE:radicle_abi_layout_probe>;RADICLE_ABI_STUB=$<TARGET_FILE:radicle_abi_stub>;RADICLE_ABI_STUB_V1=$<TARGET_FILE:radicle_abi_stub_v1>")
   endif()
 endif()

@@ -24,6 +24,13 @@ struct CreateCleanup {
     }
 };
 
+bool hasEditorIdSubrecord(const fo4::Record& record) {
+    for (const auto& subrecord : record.subrecords) {
+        if (subrecord.signature == fo4::sig_edid) return true;
+    }
+    return false;
+}
+
 }
 
 TEST_CASE("Native CreatePlugin writes validates registers and immediately supports record creation") {
@@ -168,4 +175,43 @@ TEST_CASE("Native created-plugin rollback deletes only unchanged empty plugins")
     const auto disk = fo4::read_plugin_file(nonEmptyPath);
     CHECK(fo4::find_record(
         disk, fo4::FormKey::parse("000800:NonEmptyRollback.esp")) != nullptr);
+}
+
+TEST_CASE("Native CreateRecord with an empty editorId writes no EDID subrecord") {
+    const auto root = createTempRoot();
+    CreateCleanup cleanup{root};
+    const auto overwrite = root / "overwrite";
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.setTrustedNewPluginRoot(overwrite).has_value());
+    REQUIRE(backend.createPlugin(nlohmann::json::array({"EmptyEdid.esp"})).has_value());
+
+    const auto formKeyOf = [&](const char* signature, const nlohmann::json& payload) {
+        const auto created = backend.invokeBackend(
+            "CreateRecord", nlohmann::json::array({"EmptyEdid.esp", signature, payload}));
+        REQUIRE(created.has_value());
+        REQUIRE(created->is_string());
+        return nlohmann::json::parse(created->get<std::string>()).at("formKey").get<std::string>();
+    };
+    const auto emptyFaction = formKeyOf("FACT", nlohmann::json{{"editorId", ""}, {"flags", 0}});
+    const auto emptyEyes = formKeyOf("EYES", nlohmann::json{
+        {"editorId", ""},
+        {"fullText", "Empty Eyes"},
+        {"icon", "Textures\\Interface\\EmptyEyes.dds"},
+        {"dataFlags", 0},
+        {"recordFlags", 0}
+    });
+    const auto keptFaction = formKeyOf("FACT", nlohmann::json{{"editorId", "KeptFaction"}, {"flags", 0}});
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"EmptyEdid.esp"})).has_value());
+    const auto disk = fo4::read_plugin_file(overwrite / "EmptyEdid.esp");
+    for (const auto& key : {emptyFaction, emptyEyes}) {
+        const auto* record = fo4::find_record(disk, fo4::FormKey::parse(key));
+        REQUIRE(record != nullptr);
+        CHECK_FALSE(hasEditorIdSubrecord(*record));
+    }
+    const auto* kept = fo4::find_record(disk, fo4::FormKey::parse(keptFaction));
+    REQUIRE(kept != nullptr);
+    CHECK(hasEditorIdSubrecord(*kept));
 }

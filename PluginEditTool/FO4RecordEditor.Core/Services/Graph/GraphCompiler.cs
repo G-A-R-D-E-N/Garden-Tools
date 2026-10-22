@@ -212,13 +212,13 @@ public sealed class GraphCompiler
             if (_scratchRoots.TryGetValue(scriptName, out var known))
             {
                 var existing = Path.Combine(known, fileName);
+                Directory.CreateDirectory(known);
                 File.WriteAllText(existing, source);
                 _index.Invalidate(existing);
                 return;
             }
 
-            var root = Path.Combine(
-                Path.GetTempPath(), "fo4re-graph-scratch", Guid.NewGuid().ToString("N"));
+            var root = Path.Combine(GraphScratch.Root, Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(root);
 
             var path = Path.Combine(root, fileName);
