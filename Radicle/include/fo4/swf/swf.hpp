@@ -23,6 +23,8 @@ enum class SwfStatus : std::uint8_t {
   decompress_failed,
   truncated_tag,
   malformed_tag,
+  too_many_tags,
+  out_of_memory,
 };
 
 std::string_view status_name(SwfStatus status) noexcept;
@@ -323,6 +325,7 @@ struct SwfAbcBlock {
 };
 
 SwfReadResult read_swf(std::span<const std::byte> bytes);
+SwfReadResult read_swf(std::span<const std::byte> bytes, std::size_t max_tags);
 
 std::vector<std::byte> write_swf(const SwfFile& file);
 std::vector<std::byte> write_swf(const SwfFile& file, SwfCompression compression);
