@@ -94,7 +94,12 @@ public static unsafe class Ba2Writer
 
     public static byte[] General(IEnumerable<(string Path, byte[] Data)> files, uint version, bool compress)
     {
+        ArgumentNullException.ThrowIfNull(files);
         var items = files.ToArray();
+        for (var i = 0; i < items.Length; i++)
+        {
+            if (items[i].Path is null || items[i].Data is null) throw new ArgumentException($"File {i} has a null Path or Data.", nameof(files));
+        }
         using var strings = new NativeStrings();
         var pins = new List<GCHandle>();
         try

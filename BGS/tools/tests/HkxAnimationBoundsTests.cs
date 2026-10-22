@@ -223,6 +223,19 @@ public sealed class HkxAnimationBoundsTests
         var error = Assert.Throws<NotSupportedException>(() => new HkxBinaryReader().ReadAnimation(bytes));
 
         Assert.StartsWith($"{reason}: {animationClass}.", error.Message);
+
+        string path = Path.Combine(Path.GetTempPath(), "bgs-unsupported-" + Guid.NewGuid().ToString("N") + ".hkx");
+        try
+        {
+            File.WriteAllBytes(path, bytes);
+            var fromFile = Assert.Throws<NotSupportedException>(() => new HkxBinaryReader().ReadAnimation(path));
+
+            Assert.StartsWith($"{reason}: {animationClass}.", fromFile.Message);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
     }
 
     private static void SetLossless(CraftedPackfile crafted, NativeAppend.Added animation, int frames, int tracks)

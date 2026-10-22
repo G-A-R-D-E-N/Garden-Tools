@@ -373,11 +373,11 @@ A native-load failure (missing or stale radicle.dll, surfaced by `BGS/src/Archiv
 
 ## BGS/src/Archive/GameData.Entries.cs:GameData.TryReadEntry
 
-`BGS/src/Archive/GameData.Entries.cs:GameData.TryReadEntry`: successful opens are cached in the `Open` handle cache that `ReadAnimation` and `SkeletonBytes` use, so each good archive is opened once per GameData. A failed or DX10 archive is not cached: `Ba2.Open` is retried on every call and fails again. A missing entry and a skippable archive failure both return null; `ReadEntry` turns that null into FileNotFoundException. Each call scans the archive's entry list, so a caller that already holds a `Ba2.Entry` should not use this per entry. Names are normalized as in `EnumerateWinners`: `\` becomes `/`, and only a leading run of `/` and `./` is stripped.
+`BGS/src/Archive/GameData.Entries.cs:GameData.TryReadEntry`: successful opens are cached in the `Open` handle cache that `ReadAnimation` and `SkeletonBytes` use, so each good archive is opened once per GameData. A failed or DX10 archive is not cached: `Ba2.Open` is retried on every call and fails again. A missing entry and a skippable archive failure both return null; `ReadEntry` turns that null into FileNotFoundException. Each name call scans the archive's entry list. A caller that already holds a `Ba2.Entry` uses the entry overload, which skips the scan and reads through the same cached handle; `BGS/src/Archive/SubgraphIndex.cs:SubgraphIndex.ReadEntry` does this for every manifest, so one `SubgraphIndex.Discover` opens each archive once. Names are normalized as in `EnumerateWinners`: `\` becomes `/`, and only a leading run of `/` and `./` is stripped.
 
 ## BGS/src/Archive/GameData.cs:GameData.ModlistPath
 
-The modlist.txt path rule that `DiscoverModded` and `BGS/src/Archive/Mo2ScanData.cs:Mo2ScanData.TryProfile` share; `TryProfile` uses it for the selected profile, the instance root and the Default profile. Selection order, error text and profile enumeration stay in `TryProfile`, because each failure is reported differently. This change refactored only `DiscoverModded`, `Mo2ScanData.TryProfile` and `GameData.SkeletonBytes`; `GameData.ModlistProfile`, `BGS/app/MainWindow.Chain.cs`, `Mo2ScanData.ModHkxPaths` and `SubgraphIndex` were not.
+The modlist.txt path rule that `DiscoverModded` and `BGS/src/Archive/Mo2ScanData.cs:Mo2ScanData.TryProfile` share; `TryProfile` uses it for the selected profile, the instance root and the Default profile. Selection order, error text and profile enumeration stay in `TryProfile`, because each failure is reported differently. This change refactored only `DiscoverModded`, `Mo2ScanData.TryProfile` and `GameData.SkeletonBytes`; `GameData.ModlistProfile`, `BGS/app/MainWindow.Chain.cs` and `Mo2ScanData.ModHkxPaths` were not. `SubgraphIndex` reads its manifests through `GameData.TryReadEntry` since #696, but its overlay was not moved.
 
 ## BGS/src/Archive/GameData.Entries.cs:GameData
 
@@ -389,7 +389,16 @@ Matches an .hkx under any CharacterAssets folder. `SkeletonBytes` adds the actor
 
 ## BGS/src/Archive/SubgraphIndex.cs:SubgraphIndex.ReadEntry
 
-Still opens its own archive per entry and was left unchanged. It takes a `Ba2.Entry` the caller already holds, and routing it through `GameData.TryReadEntry` would add a name scan per entry, quadratic over a whole index sweep. A by-entry read on GameData would remove the reopen.
+Reads one manifest or offset entry through the entry overload `GameData.TryReadEntry(archivePath, entry)` and maps a null (a skippable archive failure) to an empty array, as before. It used to open and dispose its own `Ba2` per entry, so one `Discover` opened a large archive 1+N times. It now reads through the GameData handle cache, which `EnumerateEntries` already fills for every archive, so each archive is opened once per GameData and stays open until `GameData.Dispose`. The lock lifetime during `Discover` is unchanged, because `EnumerateEntries` already held those handles; what went away is the extra handle per entry. `BGS/tools/tests/GameDataSharedPathTests.cs:GameDataSharedPathTests` pins the single open.
+
+## BGS/src/Archive/SubgraphIndex.cs:SubgraphIndex.Discover - why the overlay is not on EnumerateWinners (#696)
+
+The manifest overlay, the loose scan and `Mo2ScanData.ModHkxPaths` stay off `GameData.EnumerateWinners`, because its semantics differ:
+- Manifests merge by content id (`byId[sub.Id] = sub`, last entry wins), while `EnumerateWinners` keeps one winner per path.
+- The loose AnimTextData scan is top-level only (`LooseManifestFiles`, `TopDirectoryOnly`), while `EnumerateWinners` recurses into subfolders.
+- `Mo2ScanData.ModHkxPaths` is per root (loose, then archive) and covers mod roots only, so it does not match the Data-plus-archives order.
+- `Mo2ScanData.DescribeSource` would call the winner lookup per row, making the work O(rows x files).
+- `ModlistScan --scan-archives` scans a user-picked tree independent of load order, so there are no winners to take.
 
 ## BGS/tools/tests/Ba2RadicleTests.cs:EnumerateWinnersShadowsArchiveCopiesUnderLooseOverrideAndSkipsSiblingsAndMissingEntryIsNull
 
@@ -447,3 +456,10 @@ Tests: `BGS/tools/tests/Ba2RadicleTests.cs:LaterPluginsBaseArchiveWinsOverEarlie
 `BGS/src/Archive/GameData.cs:GameData.DiscoverModded` reads the chosen modlist.txt inside a catch for `UnauthorizedAccessException` and for `IOException` other than `FileNotFoundException` or `DirectoryNotFoundException`. An unreadable file counts as empty: no mod roots come from it, only the overwrite root (when present) is layered, and the archives are those a plain `GameData.Discover` finds. Before, the exception escaped and the modded open failed. A file that vanishes between the `File.Exists` check in `GameData.ModlistPath` and the read still throws.
 
 `BGS/tools/tests/Ba2RadicleTests.cs:DiscoverModdedFallsBackToPlainArchivesWhenTheModlistCannotBeRead` denies the file's read (`DenyReading`) and asserts `ArchivePaths` and `ModRoots` equal a plain `Discover`. `BGS/tools/tests/Ba2RadicleTests.cs:ModlistPathUsesTheNamedProfileAndNeverFallsBackToTheRootModlist` pins `GameData.ModlistPath`: a named profile uses its own modlist, and a missing profile returns null rather than the root modlist.
+## BGS/tools/symrm/Program.cs:Frames - unsupported tally by animation class
+
+The directory branch of `Frames` counts animations the reader does not decode by `HkxAnimationData.AnimationClass`, taken from `HkxBinaryReader.TryReadAnimation`, not by splitting the `NotSupportedException` message. The message now starts with `Unsupported compression (quantized)` or `Unsupported compression (predictive)` for the two compressed classes, so splitting on `.` gave mixed keys. Keying on the class also gives every unsupported class the same raw class name as its key.
+
+## BGS/app/MainWindow.Pose.cs:ClearPose - pose skeleton cleared
+
+`ClearPose` also sets `_poseSkeleton` to null. Its callers all want the pose gone: `BGS/app/MainWindow.Open.cs:Load` and the failure paths in `BGS/app/MainWindow.Playback.cs:LoadPose`. `LoadPose` assigns `_poseSkeleton` before it reads the animation, so without this a later unreadable or unsupported animation left the previous skeleton set with no animation to pose.
