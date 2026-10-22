@@ -245,6 +245,7 @@ add_library(fo4
   src/pex_analysis/summary.cpp
   src/pex_analysis/fragments.cpp
   src/abc/abc_file.cpp
+  src/abc/abc_write.cpp
   src/abc/byte_reader.cpp
   src/abc/constant_pool.cpp
   src/abc/opcodes.cpp
@@ -674,6 +675,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_papyrus_source_real.cpp
     tests/test_abc.cpp
     tests/test_abc_pool.cpp
+    tests/test_abc_write.cpp
     tests/test_abc_summary.cpp
     tests/test_material_file.cpp
     tests/test_material_file_real.cpp
