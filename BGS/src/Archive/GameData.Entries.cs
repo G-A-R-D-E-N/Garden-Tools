@@ -69,6 +69,11 @@ public sealed partial class GameData
         string want = FlatName(entryName);
         var entry = Entries(archivePath).FirstOrDefault(e => string.Equals(FlatName(e.Name), want, StringComparison.OrdinalIgnoreCase));
         if (entry == null) return null;
+        return TryReadEntry(archivePath, entry);
+    }
+
+    public byte[]? TryReadEntry(string archivePath, Ba2.Entry entry)
+    {
         try { return Open(archivePath).Read(entry); }
         catch (Exception e) when (IsSkippableArchiveFailure(e)) { return null; }
     }

@@ -67,7 +67,7 @@ public sealed class SubgraphIndex
             if (lower.StartsWith("meshes/animtextdata/animationfiledata/", StringComparison.Ordinal) &&
                 lower.EndsWith(".txt", StringComparison.Ordinal))
             {
-                var sub = ParseManifestFile(Path.GetFileName(name), ReadEntry(archive, entry), archive, entry.Name);
+                var sub = ParseManifestFile(Path.GetFileName(name), ReadEntry(data, archive, entry), archive, entry.Name);
                 if (sub != null) byId[sub.Id] = sub;
             }
             else if (lower.StartsWith("meshes/animtextdata/animationoffsets/", StringComparison.Ordinal) &&
@@ -75,7 +75,7 @@ public sealed class SubgraphIndex
             {
                 string stem = Path.GetFileNameWithoutExtension(name);
                 if (!ulong.TryParse(stem, out ulong id)) continue;
-                byte[] bytes = ReadEntry(archive, entry);
+                byte[] bytes = ReadEntry(data, archive, entry);
                 offsets[id] = new OffsetData(id, Path.GetFileName(archive), entry.Name, bytes.Length,
                                              FirstPathHint(bytes));
             }
@@ -161,18 +161,8 @@ public sealed class SubgraphIndex
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return new List<string>(); }
     }
 
-    private static byte[] ReadEntry(string archivePath, Ba2.Entry entry)
-    {
-        // Ba2 owns a file handle. Leaving it to the finaliser costs nothing on Linux, where an
-        // open file can still be deleted, but on Windows it keeps the archive locked for as
-        // long as the reader survives -- long enough to fail an unrelated directory delete.
-        try
-        {
-            using var archive = Ba2.Open(archivePath);
-            return archive.Read(entry);
-        }
-        catch (Exception e) when (GameData.IsSkippableArchiveFailure(e)) { return Array.Empty<byte>(); }
-    }
+    private static byte[] ReadEntry(GameData data, string archivePath, Ba2.Entry entry) =>
+        data.TryReadEntry(archivePath, entry) ?? Array.Empty<byte>();
 
     public static CoverageDiff CompareCoverage(GameData vanilla, GameData modded)
     {
