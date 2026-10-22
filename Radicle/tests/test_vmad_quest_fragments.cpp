@@ -339,7 +339,7 @@ TEST(VmadQuestFragments, AddedBindingLandsInStageOrderAndRemovalRestoresThePaylo
 }
 
 TEST(VmadQuestFragments, HighStageIndexLandsAfterSmallerIndexesAtTheSameStage) {
-  const auto tail = fragment_tail(true);
+  const auto tail = fragment_tail(FragmentTail::duplicate_stage);
   auto plugin = read_plugin(fixture::plugin_bytes(quest_bytes(tail), "QUST"), "Vmad.esp");
   const auto before = fixture::subrecord(plugin).data;
   const auto initial = extras_of(before);
