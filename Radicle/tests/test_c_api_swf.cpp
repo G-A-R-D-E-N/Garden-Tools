@@ -63,7 +63,7 @@ SwfHandle open_abc_movie() {
   abc_tag.u32(0);
   abc_tag.text("frame 1");
   abc_tag.bytes(std::span<const std::byte>(reinterpret_cast<const std::byte*>(abc.data()), abc.size()));
-  file.tag(72, abc_tag.body, false);
+  file.tag(82, abc_tag.body, false);
 
   SwfBuilder sprite;
   sprite.u16(7);
@@ -121,7 +121,7 @@ TEST(CApiSwfTest, WalksTheTagTreeAndReadsLabelsSymbolsAndExports) {
   ASSERT_EQ(radicle_swf_tag_at(file.get(), 3, &tag), RADICLE_STATUS_OK);
   EXPECT_EQ(tag.code, 56);
   ASSERT_EQ(radicle_swf_tag_at(file.get(), 4, &tag), RADICLE_STATUS_OK);
-  EXPECT_EQ(tag.code, 72);
+  EXPECT_EQ(tag.code, 82);
 
   // A sprite child must sit after its sprite tag and must point its parent back at it.
   ASSERT_EQ(radicle_swf_tag_at(file.get(), 5, &tag), RADICLE_STATUS_OK);
@@ -136,8 +136,13 @@ TEST(CApiSwfTest, WalksTheTagTreeAndReadsLabelsSymbolsAndExports) {
   ASSERT_EQ(radicle_swf_tag_at(file.get(), 7, &tag), RADICLE_STATUS_OK);
   EXPECT_EQ(tag.code, 0);
   EXPECT_EQ(tag.parent, sprite_index);
+  ASSERT_EQ(radicle_swf_tag_at(file.get(), 8, &tag), RADICLE_STATUS_OK);
+  EXPECT_EQ(tag.code, 1);
+  EXPECT_EQ(tag.parent, RADICLE_SWF_NO_INDEX);
+  ASSERT_EQ(radicle_swf_tag_at(file.get(), 9, &tag), RADICLE_STATUS_OK);
+  EXPECT_EQ(tag.code, 0);
 
-  EXPECT_EQ(radicle_swf_tag_at(file.get(), 8, &tag), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_swf_tag_at(file.get(), 10, &tag), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_swf_tag_at(nullptr, 0, &tag), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_swf_tag_count(nullptr), 0u);
 
@@ -314,7 +319,7 @@ TEST(CApiSwfTest, ReportsAnAbcBlockThatDoesNotParse) {
   abc_tag.u32(0);
   abc_tag.text("broken");
   abc_tag.u8(0x10);
-  builder.tag(72, abc_tag.body, false);
+  builder.tag(82, abc_tag.body, false);
   builder.tag(0);
   const auto file = open(wrap_body(builder.body, 9, false, false));
   ASSERT_NE(file, nullptr);

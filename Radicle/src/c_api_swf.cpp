@@ -90,8 +90,10 @@ void flatten_tags(const fo4::swf::SwfTag& tag,
                   bool inside_sprite,
                   radicle_swf& swf) {
   const auto index = swf.tags.size();
-  swf.tags.push_back(tag_view{&tag, parent, sprite_id, inside_sprite});
-  const auto child_sprite = tag.sprite_id.has_value() ? *tag.sprite_id : sprite_id;
+  // A DefineSprite tag must report the id its children carry, not only its parent's.
+  const auto own_sprite = tag.sprite_id.has_value() ? *tag.sprite_id : sprite_id;
+  swf.tags.push_back(tag_view{&tag, parent, own_sprite, inside_sprite});
+  const auto child_sprite = own_sprite;
   const auto child_inside = tag.sprite_id.has_value() ? true : inside_sprite;
   for (const auto& child : tag.children) {
     flatten_tags(child, index, child_sprite, child_inside, swf);
@@ -118,14 +120,26 @@ void collect_records(radicle_swf& swf) {
 }
 
 void build_abc_views(radicle_swf& swf) {
+  // abc_blocks indexes root tags, so each block must report the flat index radicle_swf_tag_at takes.
+  std::vector<std::size_t> root_flat_index;
+  for (std::size_t index = 0; index < swf.tags.size(); ++index) {
+    if (swf.tags[index].parent == RADICLE_SWF_NO_INDEX) root_flat_index.push_back(index);
+  }
   for (const auto& block : fo4::swf::abc_blocks(swf.file)) {
+    auto payload = block.payload;
+    const auto flat_index =
+        block.tag_index < root_flat_index.size() ? root_flat_index[block.tag_index] : block.tag_index;
+    if (swf.tags[flat_index].tag->code == fo4::swf::tag::kDoAbc && payload.size() >= 4) {
+      // DoABC keeps its payload whole; the flags must be skipped before the ABC data starts.
+      payload = payload.subspan(4);
+    }
     abc_view view;
     view.name = block.name;
     view.flags = block.flags;
-    view.tag_index = block.tag_index;
-    view.payload_size = block.payload.size();
+    view.tag_index = flat_index;
+    view.payload_size = payload.size();
     const auto status = fo4::abc::AbcFile::parse(
-        reinterpret_cast<const std::uint8_t*>(block.payload.data()), block.payload.size(), view.file);
+        reinterpret_cast<const std::uint8_t*>(payload.data()), payload.size(), view.file);
     view.parsed = status == fo4::abc::AbcStatus::Ok;
     if (view.parsed) {
       // A block that fails to summarize must keep an empty summary; parsed stays 1.
