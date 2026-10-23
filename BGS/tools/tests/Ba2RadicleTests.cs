@@ -387,6 +387,56 @@ public sealed class Ba2RadicleTests
         finally { Directory.Delete(root, recursive: true); }
     }
 
+    [Fact]
+    public void ModlistPathUsesTheNamedProfileAndNeverFallsBackToTheRootModlist()
+    {
+        string root = TempRoot();
+        string mods = Path.Combine(root, "mods");
+        Directory.CreateDirectory(Path.Combine(mods, "profiles", "Default"));
+        try
+        {
+            File.WriteAllText(Path.Combine(mods, "modlist.txt"), "+Root\n");
+            File.WriteAllText(Path.Combine(mods, "profiles", "Default", "modlist.txt"), "+Readable\n");
+
+            Assert.Equal(Path.Combine(Path.GetFullPath(mods), "profiles", "Default", "modlist.txt"),
+                         GameData.ModlistPath(mods, "Default"));
+            Assert.Null(GameData.ModlistPath(mods, "Missing"));
+            Assert.Equal(Path.Combine(Path.GetFullPath(mods), "modlist.txt"), GameData.ModlistPath(mods, null));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
+    public void DiscoverModdedFallsBackToPlainArchivesWhenTheModlistCannotBeRead()
+    {
+        string root = TempRoot();
+        string dataFolder = Path.Combine(root, "Data");
+        string mods = Path.Combine(root, "mods");
+        Directory.CreateDirectory(dataFolder);
+        Directory.CreateDirectory(Path.Combine(mods, "Readable"));
+        string modlist = Path.Combine(mods, "modlist.txt");
+        try
+        {
+            WriteGeneralBa2(Path.Combine(dataFolder, "Base.ba2"), "meshes/y/only.hkx", Encoding.ASCII.GetBytes("base"));
+            WriteGeneralBa2(Path.Combine(mods, "Readable", "Readable.ba2"), "meshes/y/only.hkx", Encoding.ASCII.GetBytes("mod"));
+            File.WriteAllText(modlist, "+Readable\n");
+            if (!DenyReading(modlist)) return;
+            try
+            {
+                using var modded = GameData.DiscoverModded(dataFolder, mods, null, Path.Combine(root, "plugins.txt"));
+                using var plain = GameData.Discover(dataFolder, Path.Combine(root, "plugins.txt"));
+
+                Assert.Equal(plain.ArchivePaths, modded.ArchivePaths);
+                Assert.Equal(plain.ModRoots, modded.ModRoots);
+            }
+            finally
+            {
+                RestoreListing(modlist);
+            }
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
     [Theory]
     [InlineData("Meshes\\X\\CharacterAssets\\a.HKX", true)]
     [InlineData("Meshes/X/CharacterAssets/a.txt", false)]
@@ -482,12 +532,19 @@ public sealed class Ba2RadicleTests
 
     private static string TempRoot() => Path.Combine(Path.GetTempPath(), "bgs-winners-" + Guid.NewGuid().ToString("N"));
 
-    private static bool DenyListing(string folder)
+    private static bool DenyListing(string folder) => DenyAccess(folder, () => Directory.EnumerateFiles(folder).ToList());
+
+    private static bool DenyReading(string file) => DenyAccess(file, () => File.ReadAllBytes(file));
+
+    private static bool DenyAccess(string path, Action probe)
     {
-        if (OperatingSystem.IsWindows()) Icacls(folder, "/deny", $"{WindowsIdentity.GetCurrent().Name}:(RD)");
-        else File.SetUnixFileMode(folder, UnixFileMode.None);
-        try { Directory.EnumerateFiles(folder).ToList(); return false; }
+        if (OperatingSystem.IsWindows()) Icacls(path, "/deny", $"{WindowsIdentity.GetCurrent().Name}:(RD)");
+        else File.SetUnixFileMode(path, UnixFileMode.None);
+        try { probe(); }
         catch (UnauthorizedAccessException) { return true; }
+        if (Environment.GetEnvironmentVariable("BGS_REQUIRE_DENY_TESTS") == "1")
+            Assert.Fail($"denying access to {path} had no effect, so the denied-access test cannot prove its point");
+        return false;
     }
 
     private static void RestoreListing(string folder)
