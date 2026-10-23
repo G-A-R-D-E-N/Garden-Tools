@@ -322,7 +322,7 @@ export default function LocalizationPanel({ onClose }: { onClose: () => void }) 
                   ) : (
                     <tr key={`${row.id}:${i}`}>
                       <td>{row.id}</td>
-                      <td className="localization-text">{row.text}{row.pending ? <span className="localization-pending"> (unsaved)</span> : null}</td>
+                      <td className="localization-text">{row.text}</td>
                       <td className="localization-actions-cell">
                         <button aria-label={`Edit string ${row.id}`} onClick={() => startEdit(i, row)} disabled={busy || unavailable}>Edit</button>
                         <button aria-label={`Remove string ${row.id}`} onClick={() => removeRow(row.id)} disabled={busy || unavailable}>Remove</button>

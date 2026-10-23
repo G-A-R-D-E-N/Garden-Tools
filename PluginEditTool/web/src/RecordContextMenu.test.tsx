@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import type { ConflictFieldRow, ConflictMatrix } from './backend';
+import type { BulkTarget, ConflictFieldRow, ConflictMatrix } from './backend';
 import type { useRecordActions } from './recordActions';
 import RecordContextMenu from './RecordContextMenu';
 
@@ -12,7 +12,7 @@ const row: ConflictFieldRow = {
   EditKind: 'Text', EnumOptions: null, RefType: null, RefTypes: null,
 };
 
-const bulkStub = { bulkTargetsFor: () => [], selectedCount: 0, copyElementToSelected: () => {}, removeElementFromSelected: () => {} };
+const bulkStub = { bulkTargetsFor: (): BulkTarget[] => [], selectedCount: 0, copyElementToSelected: () => {}, removeElementFromSelected: () => {} };
 
 function renderMenuFor(type: string, actions: Partial<typeof bulkStub> = {}, menuRow: ConflictFieldRow = row) {
   const matrix: ConflictMatrix = {
