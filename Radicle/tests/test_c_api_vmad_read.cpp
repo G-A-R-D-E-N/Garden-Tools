@@ -7,6 +7,7 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -85,6 +86,165 @@ std::vector<std::byte> make_struct_array_vmad() {
   return out.bytes;
 }
 
+std::vector<std::byte> make_scalar_array_vmad() {
+  fo4::test::ByteWriter out;
+  out.u16(6);
+  out.u16(2);
+  out.u16(1);
+  wstring(out, "KindsScript");
+  out.u8(0);
+  out.u16(10);
+  wstring(out, "Count");
+  out.u8(3);
+  out.u8(0);
+  out.i32(-5);
+  wstring(out, "Ratio");
+  out.u8(4);
+  out.u8(0);
+  out.f32(2.5f);
+  wstring(out, "Flag");
+  out.u8(5);
+  out.u8(0);
+  out.u8(1);
+  wstring(out, "Owner");
+  out.u8(1);
+  out.u8(0);
+  out.u16(0);
+  out.u16(0xFFFF);
+  out.u32(0x805);
+  wstring(out, "Label");
+  out.u8(2);
+  out.u8(0);
+  wstring(out, "Alpha");
+  wstring(out, "Counts");
+  out.u8(13);
+  out.u8(0);
+  out.u32(2);
+  out.i32(1);
+  out.i32(2);
+  wstring(out, "Ratios");
+  out.u8(14);
+  out.u8(0);
+  out.u32(2);
+  out.f32(0.5f);
+  out.f32(-1.5f);
+  wstring(out, "Flags");
+  out.u8(15);
+  out.u8(0);
+  out.u32(2);
+  out.u8(0);
+  out.u8(1);
+  wstring(out, "Owners");
+  out.u8(11);
+  out.u8(0);
+  out.u32(1);
+  out.u16(0);
+  out.u16(3);
+  out.u32(0x806);
+  wstring(out, "Labels");
+  out.u8(12);
+  out.u8(0);
+  out.u32(1);
+  wstring(out, "Beta");
+  return out.bytes;
+}
+
+std::vector<std::byte> make_struct_values_vmad() {
+  fo4::test::ByteWriter out;
+  out.u16(6);
+  out.u16(2);
+  out.u16(1);
+  wstring(out, "StructValues");
+  out.u8(0);
+  out.u16(2);
+  wstring(out, "Point");
+  out.u8(7);
+  out.u8(0);
+  out.u32(2);
+  wstring(out, "X");
+  out.u8(3);
+  out.u8(0);
+  out.i32(7);
+  wstring(out, "Name");
+  out.u8(2);
+  out.u8(0);
+  wstring(out, "Origin");
+  wstring(out, "Pairs");
+  out.u8(17);
+  out.u8(0);
+  out.u32(2);
+  out.u32(2);
+  wstring(out, "Id");
+  out.u8(3);
+  out.u8(0);
+  out.i32(9);
+  wstring(out, "Owner");
+  out.u8(1);
+  out.u8(0);
+  out.u16(0);
+  out.u16(4);
+  out.u32(0x807);
+  out.u32(0);
+  return out.bytes;
+}
+
+std::vector<std::byte> make_latin1_vmad() {
+  fo4::test::ByteWriter out;
+  out.u16(6);
+  out.u16(2);
+  out.u16(1);
+  wstring(out, "Caf\xE9");
+  out.u8(0);
+  out.u16(2);
+  wstring(out, "Caf\xE9");
+  out.u8(2);
+  out.u8(0);
+  wstring(out, "Caf\xC3\xA9");
+  wstring(out, "Labels");
+  out.u8(12);
+  out.u8(0);
+  out.u32(1);
+  wstring(out, "Caf\xC3\xA9");
+  return out.bytes;
+}
+
+std::vector<std::byte> make_unsupported_vmad() {
+  fo4::test::ByteWriter out;
+  out.u16(6);
+  out.u16(2);
+  out.u16(1);
+  wstring(out, "VariableScript");
+  out.u8(0);
+  out.u16(1);
+  wstring(out, "Unsure");
+  out.u8(6);
+  out.u8(0);
+  return out.bytes;
+}
+
+std::vector<std::byte> with_trailing(std::vector<std::byte> bytes, std::size_t extra) {
+  for (std::size_t i = 0; i < extra; ++i) bytes.push_back(std::byte{0xAB});
+  return bytes;
+}
+
+std::vector<std::byte> make_undecodable_plugin() {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(0);
+  hedr.u32(0x900);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+  const auto group = fo4::test::begin_group(out, "REFR", 0);
+  const auto header = fo4::test::begin_record(out, "REFR", fo4::RecordFlags::compressed, 0x800);
+  out.u32(16);
+  out.raw("not a zlib stream");
+  fo4::test::end_record(out, header);
+  fo4::test::end_group(out, group);
+  return out.bytes;
+}
+
 std::vector<std::byte> make_plugin(const std::vector<Rec>& records) {
   fo4::test::ByteWriter out;
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
@@ -129,8 +289,11 @@ protected:
   }
 
   EnvHandle open(std::vector<std::byte> vmad = make_vmad()) {
-    const auto data = make_plugin({{"REFR", 0x800, {{"VMAD", std::move(vmad)}}}, {"STAT", 0x806, {}}});
-    const auto path = root_ / "Vmad.esp";
+    return open_plugin(make_plugin({{"REFR", 0x800, {{"VMAD", std::move(vmad)}}}, {"STAT", 0x806, {}}}));
+  }
+
+  EnvHandle open_plugin(std::vector<std::byte> data, const std::string& filename = "Vmad.esp") {
+    const auto path = root_ / filename;
     std::ofstream(path, std::ios::binary).write(reinterpret_cast<const char*>(data.data()),
                                                  static_cast<std::streamsize>(data.size()));
     const auto utf8 = path.u8string();
@@ -257,4 +420,217 @@ TEST_F(CApiVmadReadTest, ReportsAStructMemberItCannotDecodeAsUnsupported) {
   EXPECT_EQ(radicle_vmad_scripts_element(scripts.get(), 0, 0, 0, &stale_element), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(stale_element.kind, RADICLE_VMAD_NONE);
   EXPECT_EQ(stale_element.struct_index, 0u);
+}
+
+TEST_F(CApiVmadReadTest, ReadsEveryScalarKindAndItsArray) {
+  const auto env = open(make_scalar_array_vmad());
+  ASSERT_NE(env, nullptr);
+  radicle_vmad_scripts* raw = nullptr;
+  ASSERT_EQ(radicle_record_vmad_scripts(env.get(), winner(env.get(), 0x800), &raw), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  const ScriptsHandle scripts(raw);
+  radicle_vmad_script script{};
+  ASSERT_EQ(radicle_vmad_scripts_script(scripts.get(), 0, &script), RADICLE_STATUS_OK);
+  EXPECT_EQ(std::string(script.name), "KindsScript");
+  EXPECT_EQ(script.property_count, 10u);
+  EXPECT_EQ(script.unsupported, 0);
+
+  // Invariant: an array property reports one row per element; a scalar reports its kind and no rows.
+  radicle_vmad_property property{};
+  ASSERT_EQ(radicle_vmad_scripts_property(scripts.get(), 0, 0, &property), RADICLE_STATUS_OK);
+  EXPECT_EQ(std::string(property.name), "Count");
+  EXPECT_EQ(property.value_kind, RADICLE_VMAD_INT);
+  EXPECT_EQ(property.integer, -5);
+  EXPECT_EQ(property.element_kind, RADICLE_VMAD_NONE);
+  EXPECT_EQ(property.element_total, 0u);
+
+  ASSERT_EQ(radicle_vmad_scripts_property(scripts.get(), 0, 1, &property), RADICLE_STATUS_OK);
+  EXPECT_EQ(property.value_kind, RADICLE_VMAD_REAL);
+  EXPECT_FLOAT_EQ(property.real, 2.5f);
+
+  ASSERT_EQ(radicle_vmad_scripts_property(scripts.get(), 0, 2, &property), RADICLE_STATUS_OK);
+  EXPECT_EQ(property.value_kind, RADICLE_VMAD_BOOL);
+  EXPECT_EQ(property.boolean, 1);
+
+  ASSERT_EQ(radicle_vmad_scripts_property(scripts.get(), 0, 3, &property), RADICLE_STATUS_OK);
+  EXPECT_EQ(property.value_kind, RADICLE_VMAD_OBJECT);
+  EXPECT_EQ(property.object_form_id, 0x805u);
+  EXPECT_EQ(property.alias, -1);
+
+  ASSERT_EQ(radicle_vmad_scripts_property(scripts.get(), 0, 4, &property), RADICLE_STATUS_OK);
+  EXPECT_EQ(property.value_kind, RADICLE_VMAD_TEXT);
+  ASSERT_NE(property.text, nullptr);
+  EXPECT_EQ(std::string(property.text), "Alpha");
+
+  radicle_vmad_element element{};
+  ASSERT_EQ(radicle_vmad_scripts_property(scripts.get(), 0, 5, &property), RADICLE_STATUS_OK);
+  EXPECT_EQ(std::string(property.name), "Counts");
+  EXPECT_EQ(property.value_kind, RADICLE_VMAD_NONE);
+  EXPECT_EQ(property.element_kind, RADICLE_VMAD_INT);
+  EXPECT_EQ(property.declared_element_count, 2u);
+  EXPECT_EQ(property.element_total, 2u);
+  ASSERT_EQ(radicle_vmad_scripts_element(scripts.get(), 0, 5, 1, &element), RADICLE_STATUS_OK);
+  EXPECT_EQ(element.kind, RADICLE_VMAD_INT);
+  EXPECT_EQ(element.integer, 2);
+  EXPECT_EQ(element.member_name, nullptr);
+
+  ASSERT_EQ(radicle_vmad_scripts_property(scripts.get(), 0, 6, &property), RADICLE_STATUS_OK);
+  EXPECT_EQ(property.element_kind, RADICLE_VMAD_REAL);
+  ASSERT_EQ(radicle_vmad_scripts_element(scripts.get(), 0, 6, 0, &element), RADICLE_STATUS_OK);
+  EXPECT_FLOAT_EQ(element.real, 0.5f);
+  ASSERT_EQ(radicle_vmad_scripts_element(scripts.get(), 0, 6, 1, &element), RADICLE_STATUS_OK);
+  EXPECT_FLOAT_EQ(element.real, -1.5f);
+
+  ASSERT_EQ(radicle_vmad_scripts_property(scripts.get(), 0, 7, &property), RADICLE_STATUS_OK);
+  EXPECT_EQ(property.element_kind, RADICLE_VMAD_BOOL);
+  ASSERT_EQ(radicle_vmad_scripts_element(scripts.get(), 0, 7, 1, &element), RADICLE_STATUS_OK);
+  EXPECT_EQ(element.boolean, 1);
+
+  ASSERT_EQ(radicle_vmad_scripts_property(scripts.get(), 0, 8, &property), RADICLE_STATUS_OK);
+  EXPECT_EQ(property.element_kind, RADICLE_VMAD_OBJECT);
+  ASSERT_EQ(radicle_vmad_scripts_element(scripts.get(), 0, 8, 0, &element), RADICLE_STATUS_OK);
+  EXPECT_EQ(element.object_form_id, 0x806u);
+  EXPECT_EQ(element.alias, 3);
+
+  ASSERT_EQ(radicle_vmad_scripts_property(scripts.get(), 0, 9, &property), RADICLE_STATUS_OK);
+  EXPECT_EQ(property.element_kind, RADICLE_VMAD_TEXT);
+  ASSERT_EQ(radicle_vmad_scripts_element(scripts.get(), 0, 9, 0, &element), RADICLE_STATUS_OK);
+  ASSERT_NE(element.text, nullptr);
+  EXPECT_EQ(std::string(element.text), "Beta");
+}
+
+TEST_F(CApiVmadReadTest, ReadsPlainStructsAndStructArrays) {
+  const auto env = open(make_struct_values_vmad());
+  ASSERT_NE(env, nullptr);
+  radicle_vmad_scripts* raw = nullptr;
+  ASSERT_EQ(radicle_record_vmad_scripts(env.get(), winner(env.get(), 0x800), &raw), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  const ScriptsHandle scripts(raw);
+  radicle_vmad_script script{};
+  ASSERT_EQ(radicle_vmad_scripts_script(scripts.get(), 0, &script), RADICLE_STATUS_OK);
+  EXPECT_EQ(script.property_count, 2u);
+  EXPECT_EQ(script.unsupported, 0);
+
+  // Invariant: a plain struct and a struct array both list member rows, and the array also reports its struct count.
+  radicle_vmad_property property{};
+  ASSERT_EQ(radicle_vmad_scripts_property(scripts.get(), 0, 0, &property), RADICLE_STATUS_OK);
+  EXPECT_EQ(std::string(property.name), "Point");
+  EXPECT_EQ(property.type, 7);
+  EXPECT_EQ(property.value_kind, RADICLE_VMAD_NONE);
+  EXPECT_EQ(property.element_kind, RADICLE_VMAD_STRUCT_MEMBER);
+  EXPECT_EQ(property.declared_element_count, 2u);
+  EXPECT_EQ(property.element_total, 2u);
+
+  radicle_vmad_element element{};
+  ASSERT_EQ(radicle_vmad_scripts_element(scripts.get(), 0, 0, 0, &element), RADICLE_STATUS_OK);
+  EXPECT_EQ(element.kind, RADICLE_VMAD_INT);
+  EXPECT_EQ(std::string(element.member_name), "X");
+  EXPECT_EQ(element.struct_index, 0u);
+  EXPECT_EQ(element.integer, 7);
+  ASSERT_EQ(radicle_vmad_scripts_element(scripts.get(), 0, 0, 1, &element), RADICLE_STATUS_OK);
+  EXPECT_EQ(element.kind, RADICLE_VMAD_TEXT);
+  EXPECT_EQ(std::string(element.member_name), "Name");
+  ASSERT_NE(element.text, nullptr);
+  EXPECT_EQ(std::string(element.text), "Origin");
+
+  // Invariant: a struct array counts structs in declared_element_count and rows in element_total.
+  ASSERT_EQ(radicle_vmad_scripts_property(scripts.get(), 0, 1, &property), RADICLE_STATUS_OK);
+  EXPECT_EQ(std::string(property.name), "Pairs");
+  EXPECT_EQ(property.type, 17);
+  EXPECT_EQ(property.declared_element_count, 2u);
+  EXPECT_EQ(property.element_total, 2u);
+  ASSERT_EQ(radicle_vmad_scripts_element(scripts.get(), 0, 1, 0, &element), RADICLE_STATUS_OK);
+  EXPECT_EQ(std::string(element.member_name), "Id");
+  EXPECT_EQ(element.struct_index, 0u);
+  EXPECT_EQ(element.integer, 9);
+  ASSERT_EQ(radicle_vmad_scripts_element(scripts.get(), 0, 1, 1, &element), RADICLE_STATUS_OK);
+  EXPECT_EQ(std::string(element.member_name), "Owner");
+  EXPECT_EQ(element.struct_index, 0u);
+  EXPECT_EQ(element.kind, RADICLE_VMAD_OBJECT);
+  EXPECT_EQ(element.object_form_id, 0x807u);
+  EXPECT_EQ(element.alias, 4);
+  // Invariant: the second struct has no members, so it contributes no rows.
+  EXPECT_EQ(radicle_vmad_scripts_element(scripts.get(), 0, 1, 2, &element), RADICLE_STATUS_INVALID_ARGUMENT);
+}
+
+TEST_F(CApiVmadReadTest, ConvertsWindows1252NamesAndTextToUtf8) {
+  const auto env = open(make_latin1_vmad());
+  ASSERT_NE(env, nullptr);
+  radicle_vmad_scripts* raw = nullptr;
+  ASSERT_EQ(radicle_record_vmad_scripts(env.get(), winner(env.get(), 0x800), &raw), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  const ScriptsHandle scripts(raw);
+  radicle_vmad_script script{};
+  ASSERT_EQ(radicle_vmad_scripts_script(scripts.get(), 0, &script), RADICLE_STATUS_OK);
+  // Invariant: names reach the caller as UTF-8, converted from the Windows-1252 bytes the file stores.
+  EXPECT_EQ(std::string(script.name), "Caf\xC3\xA9");
+  radicle_vmad_property property{};
+  ASSERT_EQ(radicle_vmad_scripts_property(scripts.get(), 0, 0, &property), RADICLE_STATUS_OK);
+  EXPECT_EQ(std::string(property.name), "Caf\xC3\xA9");
+  ASSERT_NE(property.text, nullptr);
+  // Invariant: VMAD string values are stored as UTF-8 and must be returned unchanged.
+  EXPECT_EQ(std::string(property.text), "Caf\xC3\xA9");
+  radicle_vmad_element element{};
+  ASSERT_EQ(radicle_vmad_scripts_element(scripts.get(), 0, 1, 0, &element), RADICLE_STATUS_OK);
+  ASSERT_NE(element.text, nullptr);
+  EXPECT_EQ(std::string(element.text), "Caf\xC3\xA9");
+}
+TEST_F(CApiVmadReadTest, ReportsTruncatedVmadAsParseError) {
+  auto truncated = make_vmad();
+  truncated.resize(truncated.size() - 4);
+  const auto env = open(std::move(truncated));
+  ASSERT_NE(env, nullptr);
+  radicle_vmad_scripts* raw = nullptr;
+  // Invariant: a truncated payload is a parse error, not an empty script list.
+  EXPECT_EQ(radicle_record_vmad_scripts(env.get(), winner(env.get(), 0x800), &raw), RADICLE_STATUS_PARSE_ERROR);
+  EXPECT_EQ(raw, nullptr);
+}
+
+TEST_F(CApiVmadReadTest, ReportsUnsupportedPropertiesAndTrailingBytes) {
+  const auto unsupported_env = open(make_unsupported_vmad());
+  ASSERT_NE(unsupported_env, nullptr);
+  radicle_vmad_scripts* raw = nullptr;
+  ASSERT_EQ(radicle_record_vmad_scripts(unsupported_env.get(), winner(unsupported_env.get(), 0x800), &raw),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  const ScriptsHandle unsupported(raw);
+  ASSERT_EQ(radicle_vmad_script_count(unsupported.get()), 1u);
+  radicle_vmad_script script{};
+  ASSERT_EQ(radicle_vmad_scripts_script(unsupported.get(), 0, &script), RADICLE_STATUS_OK);
+  // Invariant: an undecodable property sets unsupported, so the script reads as incomplete.
+  EXPECT_EQ(std::string(script.name), "VariableScript");
+  EXPECT_EQ(script.unsupported, 1);
+  EXPECT_EQ(script.property_count, 0u);
+
+  const auto trailing_env = open(with_trailing(make_vmad(), 3));
+  ASSERT_NE(trailing_env, nullptr);
+  ASSERT_EQ(radicle_record_vmad_scripts(trailing_env.get(), winner(trailing_env.get(), 0x800), &raw),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  const ScriptsHandle trailing(raw);
+  ASSERT_EQ(radicle_vmad_scripts_script(trailing.get(), 0, &script), RADICLE_STATUS_OK);
+  // Invariant: trailing_bytes reports the bytes after the last property.
+  EXPECT_EQ(script.trailing_bytes, 3u);
+  EXPECT_EQ(script.unsupported, 0);
+}
+
+TEST_F(CApiVmadReadTest, RejectsRecordsFromAnotherEnvironment) {
+  const auto first = open();
+  ASSERT_NE(first, nullptr);
+  const auto second = open_plugin(make_plugin({{"REFR", 0x800, {{"VMAD", make_vmad()}}}}), "Vmad2.esp");
+  ASSERT_NE(second, nullptr);
+  radicle_vmad_scripts* raw = nullptr;
+  // Invariant: a record handle from another environment is refused with INVALID_ARGUMENT.
+  EXPECT_EQ(radicle_record_vmad_scripts(second.get(), winner(first.get(), 0x800), &raw),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(raw, nullptr);
+}
+
+TEST_F(CApiVmadReadTest, ReportsUndecodableRecordsAsParseErrors) {
+  const auto env = open_plugin(make_undecodable_plugin());
+  ASSERT_NE(env, nullptr);
+  radicle_vmad_scripts* raw = nullptr;
+  // Invariant: an undecodable record is a parse error, never a missing VMAD.
+  EXPECT_EQ(radicle_record_vmad_scripts(env.get(), winner(env.get(), 0x800), &raw), RADICLE_STATUS_PARSE_ERROR);
+  EXPECT_EQ(raw, nullptr);
 }

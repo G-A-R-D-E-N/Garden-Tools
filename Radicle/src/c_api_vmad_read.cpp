@@ -4,10 +4,12 @@
 #include "fo4/plugin/container.hpp"
 #include "fo4/schema/vmad.hpp"
 #include "fo4/signature.hpp"
+#include "fo4/text/encoding.hpp"
 
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -110,7 +112,7 @@ element_row object_element(const fo4::VmadObjectElement& element, std::size_t in
 
 element_row member_element(const fo4::VmadStructMember& member, std::size_t struct_index, std::size_t index) {
   element_row row;
-  row.member_name = member.name;
+  row.member_name = fo4::text::windows1252_to_utf8(member.name);
   row.struct_index = struct_index;
   row.index_in_property = index;
   row.type = member.type;
@@ -197,12 +199,12 @@ void fill_handle(const fo4::VmadScripts& decoded, radicle_vmad_scripts& handle) 
   handle.trailing_bytes = decoded.trailing_bytes;
   for (const auto& script : decoded.scripts) {
     script_row row;
-    row.name = script.name;
+    row.name = fo4::text::windows1252_to_utf8(script.name);
     row.flags = script.flags;
     row.first_property = handle.properties.size();
     for (const auto& property : script.properties) {
       property_row entry;
-      entry.name = property.name;
+      entry.name = fo4::text::windows1252_to_utf8(property.name);
       entry.type = property.type;
       entry.flags = property.flags;
       entry.declared_element_count = property.element_count.value_or(0);
@@ -245,6 +247,12 @@ radicle_status radicle_record_vmad_scripts(const radicle_env* env,
       return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to env");
     }
     if (ref->record == nullptr) return fail(RADICLE_STATUS_NOT_FOUND, "record has no VMAD subrecord");
+    // Invariant: an undecodable record reports a decode failure, never NOT_FOUND, because its payload is unknown.
+    try {
+      fo4::require_decodable(*ref->record);
+    } catch (const std::invalid_argument& error) {
+      return fail(RADICLE_STATUS_PARSE_ERROR, error.what());
+    }
     const auto* vmad = find_vmad(*ref->record);
     if (vmad == nullptr) return fail(RADICLE_STATUS_NOT_FOUND, "record has no VMAD subrecord");
     fo4::VmadScripts decoded;
