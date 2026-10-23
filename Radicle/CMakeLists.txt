@@ -83,6 +83,17 @@ add_custom_target(radicle_condition_function_schema_check ALL
   COMMENT "Checking generated Fallout 4 condition function table"
   VERBATIM
 )
+add_custom_target(radicle_hkx_layout_check ALL
+  COMMAND
+    "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tools/hkx_layout_codegen.py"
+    --layouts "${CMAKE_CURRENT_SOURCE_DIR}/../BGS/src/Hkx/HavokClassLayouts.json"
+    --types "${CMAKE_CURRENT_SOURCE_DIR}/../BGS/src/Hkx/HavokClassTypes.json"
+    --output "${CMAKE_CURRENT_SOURCE_DIR}/src/hkx/hkx_layouts.generated.inc"
+    --check
+  COMMENT "Checking generated Havok class layout table"
+  VERBATIM
+)
 add_custom_target(radicle_parity_matrix_check ALL
   COMMAND
     "${Python3_EXECUTABLE}"
@@ -251,6 +262,9 @@ add_library(fo4
   src/abc/opcodes.cpp
   src/abc/disassembly.cpp
   src/abc/summary.cpp
+  src/hkx/layout.cpp
+  src/hkx/packfile.cpp
+  src/hkx/skeleton.cpp
   src/material/material_file.cpp
   src/seq/seq.cpp
   src/quest/runtime.cpp
@@ -271,6 +285,9 @@ if(TARGET radicle_condition_scope_schema_check)
 endif()
 if(TARGET radicle_condition_function_schema_check)
   add_dependencies(fo4 radicle_condition_function_schema_check)
+endif()
+if(TARGET radicle_hkx_layout_check)
+  add_dependencies(fo4 radicle_hkx_layout_check)
 endif()
 
 set_target_properties(fo4 PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -683,6 +700,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_swf_tags.cpp
     tests/test_swf_real.cpp
     tests/test_abc_real.cpp
+    tests/test_hkx_packfile.cpp
+    tests/test_hkx_real.cpp
     tests/test_c_api_material_file.cpp
     tests/test_seq.cpp
     tests/test_seq_corpus.cpp

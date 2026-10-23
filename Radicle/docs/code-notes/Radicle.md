@@ -4514,3 +4514,43 @@ A location ALCC and a reference ALEA must not survive a no-fill kind change: eac
 CIS1 must rank with the CTDA head of its run, so a rename that writes no conditions must keep the whole run.
 
 `Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION` is 51 after merging `nomad/602-remaining` (ABI 48, eight bumps from base 40) into `nomad/dev` (ABI 43, three bumps from base 40): both added exports, so the merged surface takes the next unused number, pinned by `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsFiftyOne` and `Radicle/bindings/csharp/Radicle.Interop/RadicleNative.g.cs:RadicleNative.CompiledAbiVersion`.
+
+## Radicle/src/hkx/packfile.cpp:read_packfile
+
+Phase 1 of the clean-room HKX reader for #814. The container is read with no Havok SDK and no GPL code. `read_packfile` checks the 0x40-byte header: the magic pair, the four layout-rule bytes (8, 1, 0, 1), file version 11 and 64-bit pointers. The section table follows the header at `0x40 + u16 at 0x3E`. Each 0x40-byte section header holds a 20-byte tag, a start offset and six marks that cut the section into data, local fixups, global fixups and virtual fixups. The marks must be non-decreasing, and the whole section must fit in the file, otherwise the status is BadSection or Truncated. A `section_count` above 16 is BadSection, as is a section whose byte range (its start plus the sixth mark) overlaps an earlier section's range. A zero-length section overlaps nothing, which matches the vanilla `__types__` section. The overlap check is in `Radicle/src/hkx/packfile.cpp:read_section` and runs before the section's bytes are copied, so the copies total at most the file size.
+
+Table entries: local fixups are 8-byte (source, destination) pairs. Global and virtual fixups are 12-byte (source, section, destination) triples. A source of 0xFFFFFFFF is a filler entry and is dropped while the table is read. The vanilla `Meshes/Actors/Character/CharacterAssets/skeleton.hkx` fixture (`BGS/tools/tests/fixtures/vanilla`) ends its `__data__` virtual table with one such terminator; a throwaway parse of that fixture counted 83 virtual entries, 140 global fixups into `__data__` and the terminator. Dropping the terminator is therefore required, not optional.
+
+Fixup handling runs in `validate_fixups` and `build_objects`. Local fixups are sorted by source. A source whose 8-byte pointer runs past the section, or a destination at or past the section end, is FixupOutOfRange. Two local fixups on one source are DuplicateFixup. A global fixup must name an existing section and a destination inside that section. A virtual fixup must name the `__classnames__` section, and its destination must lie at least 5 bytes into that section (a 4-byte class signature followed by one prefix byte); a missing or empty name is BadClassName. Each object's span is `[its source, the next object's source)`, and the last object runs to the end of `__data__`.
+
+Phase 1 covers the container header, all sections (`__types__` is stored but not interpreted), the three fixup tables, and the object table (class name, signature, span). Not covered: following global fixups into other sections, and any object body beyond its span. The reader does not change `RADICLE_ABI_VERSION` and adds no C ABI export.
+
+## Radicle/src/hkx/packfile.cpp:cstring_at
+
+`cstring_at` reads a NUL-terminated string only from the 256 bytes that start at the offset, so a name is at most 255 characters. A longer run, or one with no NUL inside the bounds, returns nullopt. `build_objects` reports that as BadClassName for a class name, and `read_string` in `Radicle/src/hkx/skeleton.cpp` reports it as FixupOutOfRange for a bone or skeleton name. The cap is in this one function, so every caller inherits it and no caller copies an unbounded string.
+
+## Radicle/include/fo4/hkx/packfile.hpp:HkxPackfile
+
+`HkxPackfile::objects` holds `string_view` and `span` values that point into `sections`. A copy would leave those views pointing at the source's buffers, so the copy constructor and copy assignment are deleted. Moves are defaulted: a moved `std::vector` keeps its heap buffers, so the views stay valid after `read_packfile` or a caller moves the packfile.
+
+## Radicle/src/hkx/layout.cpp:find_layout
+
+`find_layout` looks a class up in `k_hkx_classes`, the table generated into `Radicle/src/hkx/hkx_layouts.generated.inc`. The two-argument form calls the one-argument form and then compares the signature read from the packfile object, so a file from another Havok build fails the match instead of being decoded with the wrong offsets. The table has no duplicate class names, which is what makes the name lookup return the one row the signature check needs. The one-argument form matches the name only and is used for lookups that are not tied to a file object, such as the `hkaBone` layout inside `read_skeleton`. `find_member_offset` looks a member name up in the same way. Both return a pointer into the static table, or nullptr and nullopt when nothing matches.
+
+The table is a linear scan over 900 rows. That is fine for phase 1, which decodes a few objects per file; an index is the upgrade path if lookups move into a per-frame loop. The table is generated and must not be hand-edited; `Radicle/tools/hkx_layout_codegen.py` is the only writer.
+
+## Radicle/src/hkx/skeleton.cpp:read_skeleton
+
+`read_skeleton` decodes every `hkaSkeleton` object in the packfile through `find_layout` and returns the one with the most bones. In the vanilla fixture the animation skeleton has 95 bones and the ragdoll skeleton in the same file has 18, so the 95-bone one is returned. An object whose signature does not match the layout table returns UnsupportedLayout, and a file with no `hkaSkeleton` returns MissingObject.
+
+Decoded fields: `name` (the string pointer at the `hkaSkeleton` name offset), `parentIndices` (int16 array), `bones` (array of `hkaBone`; each bone name is read through the `hkaBone` name pointer at offset 0) and `referencePose` (`hkQsTransform`, 48 bytes: translation at 0, rotation at 16, scale at 32). Every pointer is resolved only through the object section's local fixups, via `local_target`. An array with count 0 needs no target. A non-zero count whose pointer has no local fixup, or whose elements run past the data section, is FixupOutOfRange. A bone with no name fixup is also FixupOutOfRange in `Radicle/src/hkx/skeleton.cpp:decode_skeleton`; no name is invented for it.
+
+`Radicle/src/hkx/skeleton.cpp:check_skeleton` runs at the end of `Radicle/src/hkx/skeleton.cpp:decode_skeleton`. The parent, bone and pose counts must agree, and each parent must be -1 or an earlier bone. That rules out self-parents, forward parents and cycles, and any failure is BadSection. The vanilla fixture passes this check for both of its `hkaSkeleton` objects (95 and 18 bones).
+
+Not covered by phase 1, and still open under #814: animation data (`hkaAnimation` and its compressed or spline tracks), animation bindings (`hkaAnimationBinding`), physics (the hkp and hknp shape, constraint and ragdoll classes), the `hkaSkeleton` fields `referenceFloats`, `localFrames` and `partitions`, and every write path. The `floatSlots` field is not decoded and `HkxSkeleton` has no slot names in phase 1; that comes with the animation binding work. The layout table is measured for Havok 2014 (signature 0xfec1cedb for `hkaSkeleton`), so other builds are rejected rather than guessed.
+
+## Radicle/tools/hkx_layout_codegen.py:collect and render
+
+Data source: `BGS/src/Hkx/HavokClassLayouts.json` supplies member offsets and instance sizes. Its `source` field says they were read from the Fallout 4 1.10.163 executable's class initializers at startup, so they are measured. `BGS/src/Hkx/HavokClassTypes.json` supplies each class's 32-bit signature; its note says the member metadata is published class-description data under MIT. `docs/code-notes/BGS.md` names both JSON files as the authoritative schemas, so this table follows them and not any other copy. No Havok SDK file is read or copied.
+
+`collect` emits a row only for a class present in both files, so every row carries the signature that `find_layout` matches. It rejects non-ASCII names, names that are not C identifiers, signatures that are not `0x` plus eight lowercase hex digits, and negative offsets. `render` writes 900 rows, sorted by class name, with LF line endings. `--check` renders in memory and exits 1 when the output file differs or is missing. The CMake target `radicle_hkx_layout_check` runs `--check` on every build. The generated file is exempt from the 750-line guard as a `.generated.` file.
