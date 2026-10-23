@@ -133,7 +133,7 @@ std::vector<std::byte> spline_packfile(int block_offset_override, int mask_size_
   data.push_back(std::byte{0x01});
   data.push_back(std::byte{0x00});
   data.push_back(std::byte{0x01});
-  for (std::uint8_t knot : {0, 0, 1, 1}) data.push_back(std::byte{knot});
+  for (const int knot : {0, 0, 1, 1}) data.push_back(static_cast<std::byte>(knot));
   pad_to(data, data_offset, 4);
 
   put_float(data, 0.0f);
