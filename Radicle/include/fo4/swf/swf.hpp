@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -168,12 +169,75 @@ struct SwfBinaryData {
   std::size_t size{0};
 };
 
+struct SwfMatrix {
+  std::int32_t scale_x{0x10000};
+  std::int32_t scale_y{0x10000};
+  std::int32_t rotate_skew0{0};
+  std::int32_t rotate_skew1{0};
+  std::int32_t translate_x{0};
+  std::int32_t translate_y{0};
+
+  bool operator==(const SwfMatrix&) const = default;
+};
+
+struct SwfColorTransform {
+  bool has_alpha{false};
+  std::array<std::int32_t, 4> multiply{256, 256, 256, 256};
+  std::array<std::int32_t, 4> add{0, 0, 0, 0};
+
+  bool operator==(const SwfColorTransform&) const = default;
+};
+
+struct SwfGradientStop {
+  std::uint8_t ratio{0};
+  std::uint32_t color{0};
+};
+
+struct SwfFillStyle {
+  std::uint8_t type{0};
+  std::uint32_t color{0};
+  std::uint16_t bitmap_id{0};
+  std::optional<SwfMatrix> matrix;
+  std::uint8_t spread{0};
+  std::uint8_t interpolation{0};
+  std::vector<SwfGradientStop> stops;
+  std::optional<std::int16_t> focal_point;
+};
+
+struct SwfLineStyle {
+  std::uint16_t width{0};
+  std::uint32_t color{0};
+  std::uint16_t flags{0};
+  std::optional<std::uint16_t> miter_limit;
+  std::optional<SwfFillStyle> fill;
+};
+
 struct SwfShape {
   std::uint16_t shape_id{0};
   SwfRect bounds{};
   bool has_edge_bounds{false};
   SwfRect edge_bounds{};
   std::uint8_t flags{0};
+  std::vector<SwfFillStyle> fill_styles;
+  std::vector<SwfLineStyle> line_styles;
+  std::uint32_t edge_count{0};
+  std::uint32_t curved_edge_count{0};
+  std::uint32_t style_change_count{0};
+};
+
+struct SwfMorphShape {
+  std::uint16_t character_id{0};
+  std::uint8_t version{1};
+  SwfRect start_bounds{};
+  SwfRect end_bounds{};
+  bool has_edge_bounds{false};
+  SwfRect start_edge_bounds{};
+  SwfRect end_edge_bounds{};
+  std::uint8_t flags{0};
+  std::uint32_t fill_style_count{0};
+  std::uint32_t line_style_count{0};
+  std::uint32_t start_edge_count{0};
+  std::uint32_t end_edge_count{0};
 };
 
 struct SwfBitmap {
@@ -182,6 +246,42 @@ struct SwfBitmap {
   std::uint16_t width{0};
   std::uint16_t height{0};
   std::optional<std::uint8_t> color_table_size;
+  std::size_t data_size{0};
+};
+
+struct SwfJpeg {
+  std::uint16_t character_id{0};
+  std::uint16_t deblock{0};
+  std::size_t image_size{0};
+  bool has_alpha{false};
+  std::size_t alpha_size{0};
+};
+
+struct SwfJpegTables {
+  std::size_t size{0};
+};
+
+struct SwfPlacement {
+  std::uint16_t depth{0};
+  bool move{false};
+  bool has_clip_actions{false};
+  std::optional<std::uint16_t> character_id;
+  std::optional<SwfMatrix> matrix;
+  std::optional<SwfColorTransform> color_transform;
+  std::optional<std::uint16_t> ratio;
+  std::optional<std::string> name;
+  std::optional<std::uint16_t> clip_depth;
+  std::optional<std::string> class_name;
+  std::uint16_t filter_count{0};
+  std::optional<std::uint8_t> blend_mode;
+  std::optional<std::uint8_t> bitmap_cache;
+  std::optional<bool> visible;
+  std::optional<std::uint32_t> background_color;
+};
+
+struct SwfRemoval {
+  std::optional<std::uint16_t> character_id;
+  std::uint16_t depth{0};
 };
 
 struct SwfFont {
@@ -268,6 +368,11 @@ struct SwfTag {
   std::optional<SwfExporterInfo> exporter_info;
   std::optional<SwfExternalImage> external_image;
   std::optional<SwfFontTextureInfo> font_texture;
+  std::optional<SwfPlacement> placement;
+  std::optional<SwfRemoval> removal;
+  std::optional<SwfMorphShape> morph_shape;
+  std::optional<SwfJpeg> jpeg;
+  std::optional<SwfJpegTables> jpeg_tables;
 
   void clear_decoded();
 };

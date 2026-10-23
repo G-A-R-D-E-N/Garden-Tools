@@ -46,6 +46,7 @@ public:
 
   std::size_t bit_position() const noexcept { return bit_position_; }
   std::size_t byte_position() const noexcept { return (bit_position_ + 7) / 8; }
+  void align() noexcept { bit_position_ = (bit_position_ + 7) / 8 * 8; }
 
 private:
   std::span<const std::byte> data_;
@@ -59,8 +60,12 @@ std::uint8_t byte_at(std::span<const std::byte> bytes, std::size_t index) noexce
 bool read_rect(std::span<const std::byte> data, std::size_t offset, SwfRect& out,
                std::size_t& next) noexcept;
 
+bool read_matrix(BitReader& bits, SwfMatrix& out) noexcept;
+
 SwfStatus decode_tag_payload(const std::vector<std::byte>& payload, SwfTag& out_tag,
                              unsigned depth, std::size_t& tags_left);
+
+SwfStatus decode_placement_tag(std::span<const std::byte> data, SwfTag& out_tag);
 
 SwfStatus decode_shape_tag(std::span<const std::byte> data, SwfTag& out_tag);
 

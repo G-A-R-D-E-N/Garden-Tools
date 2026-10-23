@@ -65,7 +65,9 @@ std::vector<std::byte> sprite_payload() {
   builder.u16(7);
   builder.u16(2);
   SwfBuilder nested;
-  nested.u16(0x0001);
+  nested.u8(0x02);
+  nested.u16(1);
+  nested.u16(5);
   builder.tag(26, nested.body, false);
   builder.tag(1);
   builder.tag(0);
@@ -280,7 +282,7 @@ TEST(SwfContainerTest, ReadsNestedSpriteTagStream) {
   ASSERT_EQ(sprite_tag.children.size(), 3u);
   EXPECT_EQ(sprite_tag.children[0].code, fo4::swf::tag::kPlaceObject2);
   EXPECT_EQ(sprite_tag.children[0].offset, 6u);
-  EXPECT_EQ(sprite_tag.children[0].payload.size(), 2u);
+  EXPECT_EQ(sprite_tag.children[0].payload.size(), 5u);
   EXPECT_EQ(sprite_tag.children[1].code, fo4::swf::tag::kShowFrame);
   EXPECT_EQ(sprite_tag.children[2].code, fo4::swf::tag::kEnd);
   EXPECT_EQ(sprite_tag.payload, sprite);

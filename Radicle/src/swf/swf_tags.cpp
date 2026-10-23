@@ -147,6 +147,37 @@ bool BitReader::read_signed(unsigned count, std::int32_t& out) noexcept {
   return true;
 }
 
+bool read_matrix(BitReader& bits, SwfMatrix& out) noexcept {
+  SwfMatrix matrix;
+  std::uint32_t flag = 0;
+  std::uint32_t nbits = 0;
+  if (!bits.read_unsigned(1, flag)) {
+    return false;
+  }
+  if (flag != 0) {
+    if (!bits.read_unsigned(5, nbits) || !bits.read_signed(nbits, matrix.scale_x) ||
+        !bits.read_signed(nbits, matrix.scale_y)) {
+      return false;
+    }
+  }
+  if (!bits.read_unsigned(1, flag)) {
+    return false;
+  }
+  if (flag != 0) {
+    if (!bits.read_unsigned(5, nbits) || !bits.read_signed(nbits, matrix.rotate_skew0) ||
+        !bits.read_signed(nbits, matrix.rotate_skew1)) {
+      return false;
+    }
+  }
+  if (!bits.read_unsigned(5, nbits) || !bits.read_signed(nbits, matrix.translate_x) ||
+      !bits.read_signed(nbits, matrix.translate_y)) {
+    return false;
+  }
+  bits.align();
+  out = matrix;
+  return true;
+}
+
 namespace {
 
 bool decode_symbol_list(std::span<const std::byte> payload, std::vector<SwfSymbol>& out) {
@@ -301,6 +332,12 @@ SwfStatus decode_tag_payload(const std::vector<std::byte>& payload, SwfTag& out_
       out_tag.binary_data = binary;
       return SwfStatus::ok;
     }
+    case tag::kPlaceObject:
+    case tag::kPlaceObject2:
+    case tag::kPlaceObject3:
+    case tag::kRemoveObject:
+    case tag::kRemoveObject2:
+      return decode_placement_tag(data, out_tag);
     case tag::kDefineShape:
     case tag::kDefineShape2:
     case tag::kDefineShape3:

@@ -255,6 +255,7 @@ add_library(fo4
   src/papyrus/execute.cpp
   src/swf/swf.cpp
   src/swf/swf_tags.cpp
+  src/swf/swf_placement.cpp
   src/swf/swf_shape.cpp
   src/swf/swf_bitmap.cpp
   src/swf/swf_text.cpp
@@ -720,6 +721,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_material_file_real.cpp
     tests/test_swf.cpp
     tests/test_swf_tags.cpp
+    tests/test_swf_place.cpp
     tests/test_swf_real.cpp
     tests/test_abc_real.cpp
     tests/test_hkx_packfile.cpp

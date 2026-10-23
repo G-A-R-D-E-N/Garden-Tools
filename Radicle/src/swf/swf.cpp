@@ -340,6 +340,11 @@ void SwfTag::clear_decoded() {
   exporter_info.reset();
   external_image.reset();
   font_texture.reset();
+  placement.reset();
+  removal.reset();
+  morph_shape.reset();
+  jpeg.reset();
+  jpeg_tables.reset();
 }
 
 SwfReadResult read_swf(std::span<const std::byte> bytes) {
