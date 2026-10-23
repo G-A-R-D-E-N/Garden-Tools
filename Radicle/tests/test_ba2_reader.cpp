@@ -641,6 +641,7 @@ TEST_F(Ba2ReaderTest, CApiWriteRefusesBadEntriesAndClearsOutputs) {
   const radicle_ba2_file unmappable[] = {{"Meshes\\\xE4\xB8\xAD.nif", bytes, 1}};
   const radicle_ba2_file backslash[] = {{"\\", bytes, 1}};
   const radicle_ba2_file slashes[] = {{"///", bytes, 1}};
+  const radicle_ba2_file trailing_separator[] = {{"Meshes\\", bytes, 1}};
 
   uint8_t sentinel = 0;
   uint8_t* out = nullptr;
@@ -660,6 +661,7 @@ TEST_F(Ba2ReaderTest, CApiWriteRefusesBadEntriesAndClearsOutputs) {
   refused(unmappable, 1);
   refused(backslash, 1);
   refused(slashes, 1);
+  refused(trailing_separator, 1);
   refused(nullptr, 1);
   out = &sentinel;
   size = 7;

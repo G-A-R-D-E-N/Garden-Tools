@@ -184,6 +184,7 @@ radicle_status radicle_ba2_write_general(const radicle_ba2_file* files,
       }
       const auto name = fo4::archive::normalize_ba2_name(*stored);
       if (name.empty()) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "BA2 entry path has no name after separators are removed");
+      if (stored->back() == '\\' || stored->back() == '/') return fail(RADICLE_STATUS_INVALID_ARGUMENT, "BA2 entry path must name a file, not a directory");
       if (!names.insert(name).second) {
         return fail(RADICLE_STATUS_INVALID_ARGUMENT, "BA2 entry path duplicates an earlier entry");
       }
