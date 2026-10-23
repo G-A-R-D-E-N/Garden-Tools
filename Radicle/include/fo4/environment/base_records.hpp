@@ -212,7 +212,11 @@ BendableSplineData decode_bendable_spline(const Environment& env, const RecordRe
 std::optional<FormKey> decode_layer_parent(const Environment& env, const RecordRef& ref);
 ClimateData decode_climate(const Environment& env, const RecordRef& ref);
 bool set_climate_timing(Plugin& plugin, const FormKey& key, const ClimateTiming& timing);
+bool set_climate_weathers(Plugin& plugin, const FormKey& key, std::span<const ClimateWeather> weathers);
 WeatherData decode_weather(const Environment& env, const RecordRef& ref);
+bool set_weather_colors(Plugin& plugin, const FormKey& key, WeatherColorGroup group, std::span<const ByteColor> times);
+bool set_weather_fog(Plugin& plugin, const FormKey& key, std::span<const float> distances);
+bool set_weather_transition(Plugin& plugin, const FormKey& key, std::uint8_t transition_delta);
 std::vector<StaticCollectionPart> decode_static_collection(const Environment& env, const RecordRef& ref);
 StaticDistantLod decode_static_distant_lod(const Environment& env, const RecordRef& ref);
 std::optional<FormKey> decode_activator_water_type(const Environment& env, const RecordRef& ref);

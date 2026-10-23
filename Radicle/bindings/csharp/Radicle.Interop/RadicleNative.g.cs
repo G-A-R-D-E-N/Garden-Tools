@@ -365,6 +365,8 @@ public unsafe struct PlacedRef
     public IntPtr Scripts;
     public nuint ScriptCount;
     public IntPtr Internal;
+    public int HasEmittance;
+    public FormKey Emittance;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -942,6 +944,12 @@ public unsafe struct SoundFileList
     public IntPtr Internal;
 }
 
+public enum PexSourceKind : int
+{
+    Archive = 0,
+    Loose = 1,
+}
+
 [StructLayout(LayoutKind.Sequential)]
 public unsafe struct PexHeader
 {
@@ -1067,6 +1075,25 @@ public unsafe struct PexObjectCode
     public nuint StructCount;
     public IntPtr StructMembers;
     public nuint StructMemberCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ScriptCandidate
+{
+    public IntPtr Name;
+    public nuint NameSize;
+    public byte Kind;
+    public IntPtr Container;
+    public nuint ContainerSize;
+    public int LoadIndex;
+    public ulong Size;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ScriptWinner
+{
+    public nuint CandidateIndex;
+    public nuint Replaced;
 }
 
 public enum MaterialFormat : int
@@ -2039,10 +2066,37 @@ public unsafe struct ListMergeCounts
     public nuint Unchanged;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct LandHeights
+{
+    public int HasHeights;
+    public float Base;
+    public fixed float Heights[1089];
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct LandBlendLayer
+{
+    public FormKey Texture;
+    public IntPtr Weights;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct LandBlend
+{
+    public FormKey Base0;
+    public FormKey Base1;
+    public FormKey Base2;
+    public FormKey Base3;
+    public IntPtr Layers;
+    public nuint LayerCount;
+    public IntPtr Internal;
+}
+
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 53u;
+    public const uint CompiledAbiVersion = 54u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -2359,6 +2413,18 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_climate_timing")]
     public static extern Status PluginSetClimateTiming(IntPtr plugin, FormKey key, ClimateTimingEdit* timing);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_climate_weathers")]
+    public static extern Status PluginSetClimateWeathers(IntPtr plugin, FormKey key, ClimateWeather* weathers, nuint weather_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_weather_colors")]
+    public static extern Status PluginSetWeatherColors(IntPtr plugin, FormKey key, byte group, ByteColor* times, nuint time_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_weather_fog")]
+    public static extern Status PluginSetWeatherFog(IntPtr plugin, FormKey key, float* distances, nuint distance_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_weather_transition")]
+    public static extern Status PluginSetWeatherTransition(IntPtr plugin, FormKey key, byte transition_delta);
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_climate_moon_phase")]
     public static extern Status ClimateMoonPhase(byte moons_phase_length, uint days_passed, int* out_has_phase, byte* out_phase);
 
@@ -2544,6 +2610,15 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_free_object_code")]
     public static extern void PexFreeObjectCode(PexObjectCode* code);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_normalize_name")]
+    public static extern Status ScriptNormalizeName(byte* bytes, nuint size, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_resolve")]
+    public static extern Status ScriptResolve(ScriptCandidate* candidates, nuint count, ScriptWinner** out_winners, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_free_winners")]
+    public static extern void ScriptFreeWinners(ScriptWinner* winners);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_read")]
     public static extern Status MaterialFileRead(byte* bytes, nuint size, IntPtr* out_file);
@@ -2784,6 +2859,18 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_load_order_assemble")]
     public static extern Status LoadOrderAssemble([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? data_dir, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? plugin_list_path, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? ccc_path, OfficialTable table, IntPtr** out_rows, nuint* out_row_count, IntPtr** out_findings, nuint* out_finding_count, int* out_failed);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_mo2_instance_read")]
+    public static extern Status Mo2InstanceRead([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? instance_dir, IntPtr** out_fields, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_mo2_profile_read")]
+    public static extern Status Mo2ProfileRead([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? instance_dir, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? profile, IntPtr** out_mod_rows, nuint* out_mod_count, IntPtr** out_plugin_rows, nuint* out_plugin_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_mo2_asset_roots")]
+    public static extern Status Mo2AssetRoots([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? instance_dir, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? profile, IntPtr** out_roots, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_mo2_plugin_paths")]
+    public static extern Status Mo2PluginPaths([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? instance_dir, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? profile, IntPtr** out_rows, nuint* out_count);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_record_conditions")]
     public static extern Status RecordConditions(IntPtr env, IntPtr record, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? scope_path, ConditionList** out_list);
@@ -3054,5 +3141,14 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_dds_info")]
     public static extern Status DdsInfo(byte* bytes, nuint size, uint* out_format, uint* out_mip_count, uint* out_width, uint* out_height, ulong* out_payload_size, int* out_bc5);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_landscape_heights")]
+    public static extern Status LandscapeHeights(IntPtr env, IntPtr record, LandHeights* out_heights);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_landscape_blend")]
+    public static extern Status LandscapeBlend(IntPtr env, IntPtr record, LandBlend** out_blend);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_landscape_blend_free")]
+    public static extern void LandscapeBlendFree(LandBlend* blend);
 
 }

@@ -566,3 +566,53 @@ TEST(CApiPex, DuplicateStringsCanonicalizeToTheFirstMatchingEntry) {
   radicle_pex_free_object_code(&code);
   radicle_pex_destroy(pex);
 }
+
+TEST(CApiPex, ScriptResolveReturnsWinnerIndexesAndReplacedCounts) {
+  const std::string name = "foo";
+  const std::string archive = "Fallout4 - Main.ba2";
+  const std::string loose = "Data/Scripts/foo.pex";
+  const radicle_script_candidate candidates[] = {
+      {reinterpret_cast<const uint8_t*>(name.data()), name.size(), RADICLE_PEX_SOURCE_ARCHIVE,
+       reinterpret_cast<const uint8_t*>(archive.data()), archive.size(), 5, 10},
+      {reinterpret_cast<const uint8_t*>(name.data()), name.size(), RADICLE_PEX_SOURCE_LOOSE,
+       reinterpret_cast<const uint8_t*>(loose.data()), loose.size(), 0, 12},
+  };
+  radicle_script_winner* winners = nullptr;
+  size_t count = 0;
+  ASSERT_EQ(radicle_script_resolve(candidates, 2, &winners, &count), RADICLE_STATUS_OK);
+  ASSERT_EQ(count, 1u);
+  EXPECT_EQ(winners[0].candidate_index, 1u);
+  EXPECT_EQ(winners[0].replaced, 1u);
+  radicle_script_free_winners(winners);
+}
+
+TEST(CApiPex, ScriptResolveRejectsAnUnknownSourceKind) {
+  const std::string name = "foo";
+  const radicle_script_candidate candidate{reinterpret_cast<const uint8_t*>(name.data()), name.size(), 7,
+                                           nullptr, 0, 0, 1};
+  radicle_script_winner* winners = nullptr;
+  size_t count = 0;
+  EXPECT_EQ(radicle_script_resolve(&candidate, 1, &winners, &count), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(winners, nullptr);
+  EXPECT_EQ(count, 0u);
+}
+
+TEST(CApiPex, ScriptNormalizeNameReturnsTheLibraryKey) {
+  const std::string path = "Data\\Scripts\\Quest\\Foo.PEX";
+  uint8_t* bytes = nullptr;
+  size_t size = 0;
+  ASSERT_EQ(radicle_script_normalize_name(reinterpret_cast<const uint8_t*>(path.data()), path.size(), &bytes, &size),
+            RADICLE_STATUS_OK);
+  EXPECT_EQ(std::string(reinterpret_cast<const char*>(bytes), size), "quest/foo");
+  radicle_free_bytes(bytes);
+}
+
+TEST(CApiPex, ScriptNormalizeNameReportsInvalidArgumentForParentComponent) {
+  const std::string path = "Scripts/../escape.pex";
+  uint8_t* bytes = nullptr;
+  size_t size = 0;
+  EXPECT_EQ(radicle_script_normalize_name(reinterpret_cast<const uint8_t*>(path.data()), path.size(), &bytes, &size),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(bytes, nullptr);
+  EXPECT_EQ(size, 0u);
+}
