@@ -6,6 +6,7 @@ import {
   type StringTableInfo, type StringTablesResult,
 } from './backend';
 import { errorText } from './errors';
+import { useDialogs } from './useDialogs';
 import './PapyrusPanel.css';
 import './LocalizationPanel.css';
 
@@ -19,6 +20,7 @@ interface Editing { id: number; index: number; }
 
 
 export default function LocalizationPanel({ onClose }: { onClose: () => void }) {
+  const { confirm: askConfirm } = useDialogs();
   const [plugins, setPlugins] = useState<string[]>([]);
   const [plugin, setPlugin] = useState('');
   const [language, setLanguage] = useState(() => LS('language', 'en'));
@@ -168,17 +170,27 @@ export default function LocalizationPanel({ onClose }: { onClose: () => void }) 
     });
   };
 
-  const removeRow = (id: number) => write('Could not remove string', h => h.RemoveString(plugin, language, table, id));
+  const removeRow = async (id: number) => {
+    if (!await askConfirm({
+      title: 'Remove string?', danger: true, confirmLabel: 'Remove',
+      message: `Remove string ${id} from ${table} (${language})? Saving the string tables writes the removal.`,
+    })) return;
+    write('Could not remove string', h => h.RemoveString(plugin, language, table, id));
+  };
 
   const addRow = () => write('Could not add string', h => h.AddString(plugin, language, table, newText), () => {
     setNewText('');
     reload();
   });
 
-  const importChosen = (e: ChangeEvent<HTMLInputElement>) => {
+  const importChosen = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
+    if (importMode === 'replace' && !await askConfirm({
+      title: 'Replace every string?', danger: true, confirmLabel: 'Replace',
+      message: `Replace all strings in ${table} (${language}) with the rows in this file? Strings the file does not list are removed.`,
+    })) return;
     write('Could not import strings', async h => h.ImportStrings(plugin, language, table, await file.text(), importMode));
   };
 

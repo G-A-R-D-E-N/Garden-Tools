@@ -105,6 +105,13 @@ Error missingStringId(const StringTarget& target, std::uint32_t id) {
     };
 }
 
+Error pendingLocalizationError() {
+    return Error{
+        "StringEditBlockedByPendingLocalization",
+        "Save or discard the pending localized quest edit before editing or saving its string tables"
+    };
+}
+
 Result<std::vector<ImportRow>> parseImportRows(const std::string& json_text, std::string_view language) {
     nlohmann::json document;
     try {
@@ -154,6 +161,7 @@ Result<nlohmann::json> RadiclePluginBackend::setString(const nlohmann::json& arg
     if (loaded == nullptr) {
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + target->plugin});
     }
+    if (loaded->stagedLocalization.has_value()) return std::unexpected(pendingLocalizationError());
     auto tables = readStringTables(*loaded, target->language);
     if (!tables) return std::unexpected(tables.error());
     auto table = effectiveTable(*tables, target->source);
@@ -176,6 +184,7 @@ Result<nlohmann::json> RadiclePluginBackend::addString(const nlohmann::json& arg
     if (loaded == nullptr) {
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + target->plugin});
     }
+    if (loaded->stagedLocalization.has_value()) return std::unexpected(pendingLocalizationError());
     auto tables = readStringTables(*loaded, target->language);
     if (!tables) return std::unexpected(tables.error());
     auto table = effectiveTable(*tables, target->source);
@@ -200,6 +209,7 @@ Result<nlohmann::json> RadiclePluginBackend::removeString(const nlohmann::json& 
     if (loaded == nullptr) {
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + target->plugin});
     }
+    if (loaded->stagedLocalization.has_value()) return std::unexpected(pendingLocalizationError());
     auto tables = readStringTables(*loaded, target->language);
     if (!tables) return std::unexpected(tables.error());
     auto table = effectiveTable(*tables, target->source);
@@ -223,6 +233,7 @@ Result<nlohmann::json> RadiclePluginBackend::importStrings(const nlohmann::json&
     if (loaded == nullptr) {
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + target->plugin});
     }
+    if (loaded->stagedLocalization.has_value()) return std::unexpected(pendingLocalizationError());
     auto tables = readStringTables(*loaded, target->language);
     if (!tables) return std::unexpected(tables.error());
     auto table = effectiveTable(*tables, target->source);
@@ -293,6 +304,7 @@ Result<nlohmann::json> RadiclePluginBackend::saveStringTables(const nlohmann::js
             "Refusing to write string tables for protected or game-Data plugin: " + pluginName
         });
     }
+    if (loaded->stagedLocalization.has_value()) return std::unexpected(pendingLocalizationError());
     std::vector<std::pair<StringSource, StringTable>> pending;
     {
         std::scoped_lock staged(stagedStringsMutex_);

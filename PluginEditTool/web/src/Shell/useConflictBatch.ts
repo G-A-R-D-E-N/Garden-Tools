@@ -143,9 +143,10 @@ export interface CompareRow { field: string; label: string; cells: CompareCell[]
 export interface CompareView { columns: CompareColumn[]; rows: CompareRow[] }
 
 function buildCompareView(picked: { formKey: string; plugin: string; matrix: ConflictMatrix }[]): CompareView {
+  const shown = picked.filter(p => p.matrix.Plugins.includes(p.plugin));
   const labels = new Map<string, string>();
-  const valuesByColumn = picked.map(p => {
-    const col = Math.max(0, p.matrix.Plugins.indexOf(p.plugin));
+  const valuesByColumn = shown.map(p => {
+    const col = p.matrix.Plugins.indexOf(p.plugin);
     const values = new Map<string, string>();
     for (const row of p.matrix.Rows) {
       if (!labels.has(row.Field)) labels.set(row.Field, row.DisplayLabel || row.Field);
@@ -158,7 +159,7 @@ function buildCompareView(picked: { formKey: string; plugin: string; matrix: Con
     const differs = values.some(v => v !== values[0]);
     return { field, label: labels.get(field) ?? field, cells: values.map(value => ({ value, differs })), differs };
   });
-  return { columns: picked.map(p => ({ formKey: p.formKey, plugin: p.plugin })), rows };
+  return { columns: shown.map(p => ({ formKey: p.formKey, plugin: p.plugin })), rows };
 }
 
 export function useCompareSelected() {

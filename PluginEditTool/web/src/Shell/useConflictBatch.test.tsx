@@ -129,6 +129,21 @@ it('useCompareSelected builds a side-by-side view with one column per record and
   expect(result.current.view).toBeNull();
 });
 
+it('useCompareSelected drops a column whose plugin the matrix does not list (it used to show the first plugin values)', async () => {
+  const getMatrix = vi.fn<(formKey: string) => Promise<string>>(async formKey => formKey === 'a'
+    ? matrixJson(['M.esm', 'L.esp'], [{ Field: 'Name', DisplayLabel: 'Name', Values: ['Old', 'Old'] }])
+    : matrixJson(['M.esm'], [{ Field: 'Name', DisplayLabel: 'Name', Values: ['New'] }]));
+  vi.stubGlobal('chrome', { webview: { hostObjects: { backend: { GetConflictMatrix: getMatrix } } } });
+  const { result } = renderHook(() => useCompareSelected());
+  await act(async () => {
+    await result.current.compare([{ formKey: 'a', plugin: 'M.esm' }, { formKey: 'b', plugin: 'L.esp' }]);
+  });
+  expect(result.current.view).toEqual({
+    columns: [{ formKey: 'a', plugin: 'M.esm' }],
+    rows: [{ field: 'Name', label: 'Name', differs: false, cells: [{ value: 'Old', differs: false }] }],
+  });
+});
+
 it('useCompareSelected flags comparing while the matrices load and resets after a failure', async () => {
   const gates: (() => void)[] = [];
   const getMatrix = vi.fn<(formKey: string) => Promise<string>>(() => new Promise<string>(resolve => {

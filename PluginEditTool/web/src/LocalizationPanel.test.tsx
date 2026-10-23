@@ -1,7 +1,11 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StringsHost, StringsPage } from './backend';
 import LocalizationPanel from './LocalizationPanel';
+import type { ConfirmRequest } from './useDialogs';
+
+const confirm = vi.hoisted(() => vi.fn<(req: ConfirmRequest) => Promise<boolean>>());
+vi.mock('./useDialogs', () => ({ useDialogs: () => ({ confirm }) }));
 
 const pageJson = (page: Partial<StringsPage> & Pick<StringsPage, 'rows'>) =>
   JSON.stringify({ total: page.rows.length, offset: 0, limit: 200, ...page });
@@ -55,6 +59,8 @@ async function pickPlugin(firstRow = 'Apple pie') {
   fireEvent.change(screen.getByRole('combobox', { name: 'Plugin' }), { target: { value: 'Mod.esp' } });
   await screen.findByText(firstRow);
 }
+
+beforeEach(() => { confirm.mockResolvedValue(true); });
 
 afterEach(() => {
   cleanup();
@@ -221,6 +227,54 @@ describe('LocalizationPanel', () => {
 
     await vi.waitFor(() =>
       expect(host.ImportStrings).toHaveBeenCalledWith('Mod.esp', 'en', 'STRINGS', json, 'replace'));
+  });
+
+  it('asks before removing a string and sends nothing when the user declines', async () => {
+    const host = installHost();
+    confirm.mockResolvedValue(false);
+    render(<LocalizationPanel onClose={() => {}} />);
+    await pickPlugin();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove string 10' }));
+    await vi.waitFor(() => expect(confirm).toHaveBeenCalledTimes(1));
+    expect(host.RemoveString).not.toHaveBeenCalled();
+  });
+
+  it('removes a string once the user confirms', async () => {
+    const host = installHost();
+    render(<LocalizationPanel onClose={() => {}} />);
+    await pickPlugin();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove string 10' }));
+    await vi.waitFor(() => expect(host.RemoveString).toHaveBeenCalledWith('Mod.esp', 'en', 'STRINGS', 10));
+  });
+
+  it('asks before a replace import and sends nothing when the user declines', async () => {
+    const host = installHost();
+    confirm.mockResolvedValue(false);
+    render(<LocalizationPanel onClose={() => {}} />);
+    await pickPlugin();
+
+    const file = { text: async () => '{"rows":[]}' } as unknown as File;
+    fireEvent.change(screen.getByRole('combobox', { name: 'Import mode' }), { target: { value: 'replace' } });
+    fireEvent.change(screen.getByLabelText('Import file'), { target: { files: [file] } });
+    await vi.waitFor(() => expect(confirm).toHaveBeenCalledTimes(1));
+    expect(confirm.mock.calls[0][0].confirmLabel).toBe('Replace');
+    expect(host.ImportStrings).not.toHaveBeenCalled();
+  });
+
+  it('does not ask before a merge import', async () => {
+    const host = installHost();
+    render(<LocalizationPanel onClose={() => {}} />);
+    await pickPlugin();
+
+    const json = '{"rows":[]}';
+    const file = { text: async () => json } as unknown as File;
+    fireEvent.change(screen.getByRole('combobox', { name: 'Import mode' }), { target: { value: 'merge' } });
+    fireEvent.change(screen.getByLabelText('Import file'), { target: { files: [file] } });
+    await vi.waitFor(() =>
+      expect(host.ImportStrings).toHaveBeenCalledWith('Mod.esp', 'en', 'STRINGS', json, 'merge'));
+    expect(confirm).not.toHaveBeenCalled();
   });
 
   it('shows skipped archives as a warning', async () => {
