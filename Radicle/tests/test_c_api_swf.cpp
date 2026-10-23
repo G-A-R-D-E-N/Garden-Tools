@@ -288,7 +288,8 @@ TEST(CApiSwfTest, SummarizesAbcAndDisassemblesAMethodBody) {
   ASSERT_EQ(radicle_swf_abc_method_count(file.get(), 0), 3u);
   radicle_swf_method_pool pool{};
   ASSERT_EQ(radicle_swf_abc_method_at(file.get(), 0, 0, &pool), RADICLE_STATUS_OK);
-  EXPECT_STREQ(pool.name, "<init>");
+  // The pool must report the stored name ("Test"); only the summary derives "<init>".
+  EXPECT_STREQ(pool.name, "Test");
   EXPECT_EQ(pool.has_body, 1);
   EXPECT_GT(pool.code_size, 0u);
   EXPECT_GE(pool.max_stack, 1u);
