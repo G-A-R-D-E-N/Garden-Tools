@@ -169,13 +169,13 @@ radicle_status radicle_mo2_profile_read(const char* instance_dir,
       out_plugin_rows == nullptr || out_plugin_count == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "instance_dir and all outputs are required");
   }
-  if (profile != nullptr && profile[0] == '\0') {
-    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "profile must not be empty");
-  }
   *out_mod_rows = nullptr;
   *out_mod_count = 0;
   *out_plugin_rows = nullptr;
   *out_plugin_count = 0;
+  if (profile != nullptr && profile[0] == '\0') {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "profile must not be empty");
+  }
   return guarded_io("unknown exception while reading the MO2 profile", [&] {
     const auto instance = fo4::loadorder::read_mo2_instance(utf8_path(instance_dir));
     const auto loaded = fo4::loadorder::read_mo2_profile(instance, profile_name(instance, profile));
@@ -206,11 +206,11 @@ radicle_status radicle_mo2_asset_roots(const char* instance_dir,
   if (instance_dir == nullptr || out_roots == nullptr || out_count == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "instance_dir, out_roots and out_count are required");
   }
+  *out_roots = nullptr;
+  *out_count = 0;
   if (profile != nullptr && profile[0] == '\0') {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "profile must not be empty");
   }
-  *out_roots = nullptr;
-  *out_count = 0;
   return guarded_io("unknown exception while resolving MO2 asset roots", [&] {
     const auto instance = fo4::loadorder::read_mo2_instance(utf8_path(instance_dir));
     const auto loaded = fo4::loadorder::read_mo2_profile(instance, profile_name(instance, profile));
@@ -230,11 +230,11 @@ radicle_status radicle_mo2_plugin_paths(const char* instance_dir,
   if (instance_dir == nullptr || out_rows == nullptr || out_count == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "instance_dir, out_rows and out_count are required");
   }
+  *out_rows = nullptr;
+  *out_count = 0;
   if (profile != nullptr && profile[0] == '\0') {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "profile must not be empty");
   }
-  *out_rows = nullptr;
-  *out_count = 0;
   return guarded_io("unknown exception while resolving MO2 plugin paths", [&] {
     const auto instance = fo4::loadorder::read_mo2_instance(utf8_path(instance_dir));
     const auto loaded = fo4::loadorder::read_mo2_profile(instance, profile_name(instance, profile));

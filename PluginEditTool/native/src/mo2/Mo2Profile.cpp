@@ -44,13 +44,19 @@ InstanceInfo toInfo(const fo4::loadorder::Mo2Instance& instance) {
     return info;
 }
 
+std::filesystem::path folderKey(const std::filesystem::path& folder) {
+    auto key = folder.lexically_normal();
+    if (key.filename().empty()) key = key.parent_path();
+    return key;
+}
+
 std::string sourceOf(const std::filesystem::path& file,
                      const fo4::loadorder::Mo2Instance& instance,
                      const std::vector<ModEntry>& modsHighToLow) {
-    const auto folder = file.parent_path();
-    if (folder == instance.overwrite_dir) return "overwrite";
+    const auto folder = folderKey(file.parent_path());
+    if (folder == folderKey(instance.overwrite_dir)) return "overwrite";
     for (const auto& mod : modsHighToLow) {
-        if (folder == mod.path) return mod.name;
+        if (folder == folderKey(mod.path)) return mod.name;
     }
     return "Data";
 }

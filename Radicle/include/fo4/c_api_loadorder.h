@@ -45,7 +45,7 @@ RADICLE_API radicle_status radicle_mo2_profile_read(const char* instance_dir,
                                                     char*** out_plugin_rows,
                                                     size_t* out_plugin_count);
 
-/* Requires radicle_free_string_array. */
+/* Invariant: roots are LOW to HIGH; callers must reverse for open_roots (HIGH to LOW). Requires radicle_free_string_array. */
 RADICLE_API radicle_status radicle_mo2_asset_roots(const char* instance_dir,
                                                    const char* profile,
                                                    char*** out_roots,

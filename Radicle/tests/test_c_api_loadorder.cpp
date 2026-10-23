@@ -292,14 +292,29 @@ TEST(CApiLoadOrder, Mo2ProfileRowsRootsAndPluginPathsFollowTheInstance) {
   EXPECT_EQ(take_strings(paths, path_count),
             (std::vector<std::string>{"ex.esp\t" + (root.path() / "mods" / "Mod" / "Ex.esp").string()}));
 
-  char** empty_rows = nullptr;
-  std::size_t empty_count = 0;
-  char** empty_plugins = nullptr;
-  std::size_t empty_plugin_count = 0;
+  char* sentinel = nullptr;
+  char** empty_rows = &sentinel;
+  std::size_t empty_count = 9;
+  char** empty_plugins = &sentinel;
+  std::size_t empty_plugin_count = 9;
   EXPECT_EQ(radicle_mo2_profile_read(instance.c_str(), "", &empty_rows, &empty_count, &empty_plugins, &empty_plugin_count),
             RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(empty_rows, nullptr);
+  EXPECT_EQ(empty_count, 0u);
+  EXPECT_EQ(empty_plugins, nullptr);
+  EXPECT_EQ(empty_plugin_count, 0u);
+
+  empty_rows = &sentinel;
+  empty_count = 9;
   EXPECT_EQ(radicle_mo2_asset_roots(instance.c_str(), "", &empty_rows, &empty_count), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(empty_rows, nullptr);
+  EXPECT_EQ(empty_count, 0u);
+
+  empty_rows = &sentinel;
+  empty_count = 9;
   EXPECT_EQ(radicle_mo2_plugin_paths(instance.c_str(), "", &empty_rows, &empty_count), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(empty_rows, nullptr);
+  EXPECT_EQ(empty_count, 0u);
 }
 
 TEST(CApiLoadOrder, Mo2MissingPluginsTxtIsIoErrorWithClearedOutputs) {
