@@ -22,6 +22,7 @@
 #include "fo4/c_api_cell.h"
 #include "fo4/c_api_patch.h"
 #include "fo4/c_api_conflict.h"
+#include "fo4/c_api_script_set.h"
 #include <cstddef>
 #include <cstdio>
 
@@ -1347,5 +1348,17 @@ int main() {
   printf("ListMergeCounts %zu\n", sizeof(radicle_list_merge_counts));
   printf("ListMergeCounts.Merged %zu\n", offsetof(radicle_list_merge_counts, merged));
   printf("ListMergeCounts.Unchanged %zu\n", offsetof(radicle_list_merge_counts, unchanged));
+  printf("ScriptCandidate %zu\n", sizeof(radicle_script_candidate));
+  printf("ScriptCandidate.Name %zu\n", offsetof(radicle_script_candidate, name));
+  printf("ScriptCandidate.Path %zu\n", offsetof(radicle_script_candidate, path));
+  printf("ScriptCandidate.Origin %zu\n", offsetof(radicle_script_candidate, origin));
+  printf("ScriptCandidate.Container %zu\n", offsetof(radicle_script_candidate, container));
+  printf("ScriptCandidate.LoadIndex %zu\n", offsetof(radicle_script_candidate, load_index));
+  printf("ScriptCandidate.Size %zu\n", offsetof(radicle_script_candidate, size));
+  printf("ScriptCandidate.Location %zu\n", offsetof(radicle_script_candidate, location));
+  printf("ScriptWinner %zu\n", sizeof(radicle_script_winner));
+  printf("ScriptWinner.Name %zu\n", offsetof(radicle_script_winner, name));
+  printf("ScriptWinner.Winner %zu\n", offsetof(radicle_script_winner, winner));
+  printf("ScriptWinner.Replaced %zu\n", offsetof(radicle_script_winner, replaced));
   return 0;
 }

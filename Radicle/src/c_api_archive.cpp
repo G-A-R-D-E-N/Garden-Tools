@@ -10,10 +10,6 @@
 #include <string>
 #include <vector>
 
-struct radicle_assets {
-  fo4::archive::AssetResolver value;
-};
-
 struct radicle_asset_list {
   std::vector<fo4::archive::AssetListing> items;
 };
