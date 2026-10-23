@@ -101,6 +101,22 @@ nlohmann::json rowsOf(fo4ide::plugin::RadiclePluginBackend& backend,
     return nlohmann::json::parse(value->get<std::string>());
 }
 
+nlohmann::json tablesOf(fo4ide::plugin::RadiclePluginBackend& backend, nlohmann::json args) {
+    return rowsOf(backend, "ListStringTables", std::move(args))["tables"];
+}
+
+#ifdef FO4IDE_TEST_HOOKS
+fo4ide::plugin::RadiclePluginBackend* stringEditBackend = nullptr;
+bool stringEditStagedInHook = false;
+
+void stageStringEditInHook() {
+    if (stringEditBackend == nullptr) return;
+    stringEditStagedInHook = stringEditBackend->invoke(
+        "strings.SetString", nlohmann::json::array({"Patch.esp", "", "STRINGS", 10, "Late edit"})).has_value();
+    stringEditBackend = nullptr;
+}
+#endif
+
 }
 
 TEST_CASE("ListStringTables reports the tables present for the plugin language") {
@@ -110,7 +126,7 @@ TEST_CASE("ListStringTables reports the tables present for the plugin language")
     fo4ide::plugin::RadiclePluginBackend backend;
     loadPlugin(backend, root);
 
-    const auto english = rowsOf(backend, "ListStringTables", nlohmann::json::array({"Patch.esp", ""}));
+    const auto english = tablesOf(backend, nlohmann::json::array({"Patch.esp", ""}));
     REQUIRE(english.size() == 2);
     CHECK(english[0]["kind"] == "STRINGS");
     CHECK(english[0]["count"] == 5);
@@ -118,11 +134,11 @@ TEST_CASE("ListStringTables reports the tables present for the plugin language")
     CHECK(english[1]["kind"] == "DLSTRINGS");
     CHECK(english[1]["count"] == 1);
 
-    const auto german = rowsOf(backend, "ListStringTables", nlohmann::json::array({"Patch.esp", "de"}));
+    const auto german = tablesOf(backend, nlohmann::json::array({"Patch.esp", "de"}));
     REQUIRE(german.size() == 1);
     CHECK(german[0]["count"] == 1);
 
-    const auto none = rowsOf(backend, "ListStringTables", nlohmann::json::array({"Patch.esp", "fr"}));
+    const auto none = tablesOf(backend, nlohmann::json::array({"Patch.esp", "fr"}));
     CHECK(none.empty());
 
     CHECK_FALSE(backend.invoke("strings.ListStringTables",
@@ -206,7 +222,7 @@ TEST_CASE("ListStringTables matches loose table names case-insensitively") {
     fo4ide::plugin::RadiclePluginBackend backend;
     loadPlugin(backend, root, "mod.esp");
 
-    const auto rows = rowsOf(backend, "ListStringTables", nlohmann::json::array({"mod.esp", "EN"}));
+    const auto rows = tablesOf(backend, nlohmann::json::array({"mod.esp", "EN"}));
     REQUIRE(rows.size() == 1);
     CHECK(rows[0]["kind"] == "STRINGS");
     CHECK(rows[0]["source"] == "loose");
@@ -228,7 +244,7 @@ TEST_CASE("ListStringTables and GetStrings read tables packed in the data direct
     backend.setDataDirectory(data);
     loadPlugin(backend, root);
 
-    const auto tables = rowsOf(backend, "ListStringTables", nlohmann::json::array({"Patch.esp", "es"}));
+    const auto tables = tablesOf(backend, nlohmann::json::array({"Patch.esp", "es"}));
     REQUIRE(tables.size() == 1);
     CHECK(tables[0]["kind"] == "STRINGS");
     CHECK(tables[0]["source"] == "Patch - Main.ba2");
@@ -238,7 +254,7 @@ TEST_CASE("ListStringTables and GetStrings read tables packed in the data direct
     REQUIRE(page["rows"].size() == 1);
     CHECK(page["rows"][0]["text"] == "Manzana");
 
-    const auto english = rowsOf(backend, "ListStringTables", nlohmann::json::array({"Patch.esp", ""}));
+    const auto english = tablesOf(backend, nlohmann::json::array({"Patch.esp", ""}));
     CHECK(english.empty());
 }
 
@@ -251,7 +267,7 @@ TEST_CASE("ListStringTables and GetStrings read archives that sit beside the plu
     fo4ide::plugin::RadiclePluginBackend backend;
     loadPlugin(backend, root);
 
-    const auto tables = rowsOf(backend, "ListStringTables", nlohmann::json::array({"Patch.esp", "es"}));
+    const auto tables = tablesOf(backend, nlohmann::json::array({"Patch.esp", "es"}));
     REQUIRE(tables.size() == 1);
     CHECK(tables[0]["source"] == "Patch - Main.ba2");
 
@@ -274,7 +290,7 @@ TEST_CASE("A plugin folder archive shadows the data directory copy of the same n
     backend.setDataDirectory(data);
     loadPlugin(backend, root);
 
-    const auto tables = rowsOf(backend, "ListStringTables", nlohmann::json::array({"Patch.esp", "es"}));
+    const auto tables = tablesOf(backend, nlohmann::json::array({"Patch.esp", "es"}));
     REQUIRE(tables.size() == 1);
     CHECK(tables[0]["source"] == "Patch - Main.ba2");
 
@@ -297,7 +313,7 @@ TEST_CASE("A plugin folder archive shadows a data directory copy whose name diff
     backend.setDataDirectory(data);
     loadPlugin(backend, root);
 
-    const auto tables = rowsOf(backend, "ListStringTables", nlohmann::json::array({"Patch.esp", "es"}));
+    const auto tables = tablesOf(backend, nlohmann::json::array({"Patch.esp", "es"}));
     REQUIRE(tables.size() == 1);
     CHECK(tables[0]["source"] == "PATCH - MAIN.ba2");
 
@@ -320,10 +336,15 @@ TEST_CASE("ListStringTables still lists loose tables when a data directory archi
     backend.setDataDirectory(data);
     loadPlugin(backend, root);
 
-    const auto tables = rowsOf(backend, "ListStringTables", nlohmann::json::array({"Patch.esp", ""}));
+    const auto tables = tablesOf(backend, nlohmann::json::array({"Patch.esp", ""}));
     REQUIRE(tables.size() == 2);
     CHECK(tables[0]["source"] == "loose");
     CHECK(tables[1]["source"] == "loose");
+
+    const auto skipped = rowsOf(backend, "ListStringTables", nlohmann::json::array({"Patch.esp", ""}))["skippedArchives"];
+    REQUIRE(skipped.size() == 1);
+    CHECK(skipped[0]["path"].get<std::string>().ends_with("Patch - Junk.ba2"));
+    CHECK_FALSE(skipped[0]["reason"].get<std::string>().empty());
 }
 
 TEST_CASE("String RPC arguments are validated with distinct error types") {
@@ -422,7 +443,7 @@ TEST_CASE("String archive cache follows the archive when it changes or disappear
     CHECK(changed["rows"][0]["text"] == "Pera de agua");
 
     std::filesystem::remove(archive);
-    const auto gone = rowsOf(backend, "ListStringTables", nlohmann::json::array({"Patch.esp", "es"}));
+    const auto gone = tablesOf(backend, nlohmann::json::array({"Patch.esp", "es"}));
     CHECK(gone.empty());
 }
 
@@ -441,4 +462,232 @@ TEST_CASE("A corrupt loose string table is reported as StringTableInvalid") {
     REQUIRE_FALSE(refused.has_value());
     CHECK(refused.error().type == "StringTableInvalid");
     CHECK(refused.error().message.starts_with("could not read string tables: "));
+    CHECK(refused.error().message.find("Patch_en.STRINGS") != std::string::npos);
+}
+
+TEST_CASE("Staged string edits save as loose files and keep untouched ids byte-identical") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeStrings(root);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadPlugin(backend, root);
+    const auto path = root / "Strings" / "Patch_en.STRINGS";
+    const auto original = fo4::localization::read_string_table_file(path, StringTableKind::strings);
+
+    REQUIRE(backend.invoke("strings.SetString", nlohmann::json::array({"Patch.esp", "", "STRINGS", 10, "Apple tart"})).has_value());
+    const auto added = rowsOf(backend, "AddString", nlohmann::json::array({"Patch.esp", "", "STRINGS", "Fig"}));
+    CHECK(added["id"] == 51);
+    REQUIRE(backend.invoke("strings.RemoveString", nlohmann::json::array({"Patch.esp", "", "STRINGS", 50})).has_value());
+
+    const auto staged = tablesOf(backend, nlohmann::json::array({"Patch.esp", ""}));
+    REQUIRE(staged.size() == 2);
+    CHECK(staged[0]["pending"] == true);
+    CHECK_FALSE(staged[1].contains("pending"));
+    const auto page = rowsOf(backend, "GetStrings", nlohmann::json::array({"Patch.esp", "", "STRINGS", "", 0, 200}));
+    CHECK(page["pending"] == true);
+    REQUIRE(page["rows"].size() == 5);
+    CHECK(page["rows"][0]["text"] == "Apple tart");
+    CHECK(page["rows"][4]["id"] == 51);
+
+    REQUIRE(backend.invoke("strings.SaveStringTables", nlohmann::json::array({"Patch.esp", ""})).has_value());
+    const auto saved = fo4::localization::read_string_table_file(path, StringTableKind::strings);
+    REQUIRE(saved.entries.size() == 5);
+    CHECK(fo4::localization::find_string(saved, 50) == nullptr);
+    REQUIRE(fo4::localization::find_string(saved, 10) != nullptr);
+    CHECK(fo4::localization::find_string(saved, 10)->text == rawBytes("Apple tart"));
+    CHECK(fo4::localization::find_string(saved, 51)->text == rawBytes("Fig"));
+    for (const std::uint32_t id : {20u, 30u, 40u}) {
+        REQUIRE(fo4::localization::find_string(original, id) != nullptr);
+        REQUIRE(fo4::localization::find_string(saved, id) != nullptr);
+        CHECK(fo4::localization::find_string(saved, id)->text == fo4::localization::find_string(original, id)->text);
+    }
+    const auto after = tablesOf(backend, nlohmann::json::array({"Patch.esp", ""}));
+    CHECK_FALSE(after[0].contains("pending"));
+}
+
+TEST_CASE("Discard drops staged string edits so reads show the saved table again") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeStrings(root);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadPlugin(backend, root);
+
+    REQUIRE(backend.invoke("strings.SetString", nlohmann::json::array({"Patch.esp", "", "STRINGS", 10, "Edited"})).has_value());
+    REQUIRE(backend.invoke("strings.DiscardStringEdits", nlohmann::json::array({"Patch.esp", ""})).has_value());
+
+    const auto page = rowsOf(backend, "GetStrings", nlohmann::json::array({"Patch.esp", "", "STRINGS", "", 0, 200}));
+    CHECK(page["rows"][0]["text"] == "Apple pie");
+    CHECK_FALSE(page.contains("pending"));
+    const auto tables = tablesOf(backend, nlohmann::json::array({"Patch.esp", ""}));
+    CHECK_FALSE(tables[0].contains("pending"));
+}
+
+TEST_CASE("Staged string edits block a LoadMo2 or OpenPlugin reload without discardPending instead of dropping them (regression: silent loss of staged strings on reload)") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeStrings(root);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadPlugin(backend, root);
+    REQUIRE(backend.invoke("strings.SetString", nlohmann::json::array({"Patch.esp", "", "STRINGS", 10, "Edited"})).has_value());
+
+    const auto path = root / "Patch.esp";
+    auto environment = nlohmann::json{{"plugins", nlohmann::json::array({{
+        {"name", "Patch.esp"},
+        {"path", path.string()},
+        {"source", "PluginStrings"},
+        {"resolved", true}
+    }})}};
+    const auto reloaded = backend.invoke("environment.LoadMo2", environment);
+    REQUIRE_FALSE(reloaded.has_value());
+    CHECK(reloaded.error().type == "PluginHasPendingChanges");
+    const auto reopened = backend.invoke("backend.OpenPlugin", nlohmann::json::array({path.string()}));
+    REQUIRE_FALSE(reopened.has_value());
+    CHECK(reopened.error().type == "PluginHasPendingChanges");
+    const auto kept = rowsOf(backend, "GetStrings", nlohmann::json::array({"Patch.esp", "", "STRINGS", "", 0, 200}));
+    CHECK(kept["rows"][0]["text"] == "Edited");
+    CHECK(kept["pending"] == true);
+    const auto listed = backend.invoke("appInterop.GetPlugins", nlohmann::json::array());
+    REQUIRE(listed.has_value());
+    CHECK(nlohmann::json::parse(listed->get<std::string>())[0]["Pending"] == true);
+
+    environment["discardPending"] = true;
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+    const auto discarded = tablesOf(backend, nlohmann::json::array({"Patch.esp", ""}));
+    CHECK_FALSE(discarded[0].contains("pending"));
+}
+
+TEST_CASE("LoadMo2 discardPending refuses a string edit staged after consent instead of dropping it (regression: staged string edit made after consent was silently discarded)") {
+#ifdef FO4IDE_TEST_HOOKS
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeStrings(root);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadPlugin(backend, root);
+
+    auto environment = nlohmann::json{{"plugins", nlohmann::json::array({{
+        {"name", "Patch.esp"},
+        {"path", (root / "Patch.esp").string()},
+        {"source", "PluginStrings"},
+        {"resolved", true}
+    }})}};
+    environment["discardPending"] = true;
+
+    stringEditBackend = &backend;
+    fo4ide::plugin::setLoadMo2AfterPendingCheckHook(&stageStringEditInHook);
+    const auto reloaded = backend.invoke("environment.LoadMo2", environment);
+    fo4ide::plugin::setLoadMo2AfterPendingCheckHook(nullptr);
+
+    CHECK(stringEditStagedInHook);
+    REQUIRE_FALSE(reloaded.has_value());
+    CHECK(reloaded.error().type == "PluginHasPendingChanges");
+    const auto kept = rowsOf(backend, "GetStrings", nlohmann::json::array({"Patch.esp", "", "STRINGS", "", 0, 200}));
+    CHECK(kept["pending"] == true);
+    CHECK(kept["rows"][0]["text"] == "Late edit");
+#else
+    SUCCEED("FO4IDE_TEST_HOOKS is required for the LoadMo2 string edit consent race");
+#endif
+}
+
+TEST_CASE("DiscardPlugin on a clean plugin drops its staged string edits (regression: discardPlugin returned early and left the string edit pending)") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeStrings(root);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadPlugin(backend, root);
+    REQUIRE(backend.invoke("strings.SetString", nlohmann::json::array({"Patch.esp", "", "STRINGS", 10, "Edited"})).has_value());
+
+    const auto discarded = backend.invoke("backend.DiscardPlugin", nlohmann::json::array({"Patch.esp"}));
+    REQUIRE(discarded.has_value());
+
+    const auto listed = backend.invoke("appInterop.GetPlugins", nlohmann::json::array());
+    REQUIRE(listed.has_value());
+    CHECK(nlohmann::json::parse(listed->get<std::string>())[0]["Pending"] == false);
+    const auto page = rowsOf(backend, "GetStrings", nlohmann::json::array({"Patch.esp", "", "STRINGS", "", 0, 200}));
+    CHECK(page["rows"][0]["text"] == "Apple pie");
+    CHECK_FALSE(page.contains("pending"));
+}
+
+TEST_CASE("Saving string tables into the backend Data folder is refused and leaves the file unchanged") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto data = root / "Data";
+    writeStrings(data);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    backend.setDataDirectory(data);
+    loadPlugin(backend, data);
+    REQUIRE(backend.invoke("strings.SetString", nlohmann::json::array({"Patch.esp", "", "STRINGS", 10, "Edited"})).has_value());
+
+    const auto refused = backend.invoke("strings.SaveStringTables", nlohmann::json::array({"Patch.esp", ""}));
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().type == "StringSaveProtected");
+    const auto onDisk = fo4::localization::read_string_table_file(data / "Strings" / "Patch_en.STRINGS", StringTableKind::strings);
+    REQUIRE(fo4::localization::find_string(onDisk, 10) != nullptr);
+    CHECK(fo4::localization::find_string(onDisk, 10)->text == rawBytes("Apple pie"));
+}
+
+TEST_CASE("English string text outside Windows-1252 is refused, and Windows-1252 text is saved as one byte") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeStrings(root);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadPlugin(backend, root);
+
+    const auto refused = backend.invoke("strings.SetString", nlohmann::json::array({"Patch.esp", "", "STRINGS", 10, "\xCE\xA9 mega"}));
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().type == "StringNotEncodable");
+    const auto unchanged = rowsOf(backend, "GetStrings", nlohmann::json::array({"Patch.esp", "", "STRINGS", "", 0, 200}));
+    CHECK(unchanged["rows"][0]["text"] == "Apple pie");
+    CHECK_FALSE(unchanged.contains("pending"));
+
+    REQUIRE(backend.invoke("strings.SetString", nlohmann::json::array({"Patch.esp", "", "STRINGS", 10, "Caf\xC3\xA9"})).has_value());
+    REQUIRE(backend.invoke("strings.SaveStringTables", nlohmann::json::array({"Patch.esp", ""})).has_value());
+    const auto saved = fo4::localization::read_string_table_file(root / "Strings" / "Patch_en.STRINGS", StringTableKind::strings);
+    REQUIRE(fo4::localization::find_string(saved, 10) != nullptr);
+    auto expected = rawBytes("Caf");
+    expected.push_back(std::byte{0xE9});
+    CHECK(fo4::localization::find_string(saved, 10)->text == expected);
+}
+
+TEST_CASE("Import replace with a duplicate id is rejected and stages nothing") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeStrings(root);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadPlugin(backend, root);
+
+    const std::string listing = R"({"rows":[{"id":10,"text":"A"},{"id":10,"text":"B"}]})";
+    const auto refused = backend.invoke("strings.ImportStrings", nlohmann::json::array({"Patch.esp", "", "STRINGS", listing, "replace"}));
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().type == "ImportDuplicateId");
+
+    const auto page = rowsOf(backend, "GetStrings", nlohmann::json::array({"Patch.esp", "", "STRINGS", "", 0, 200}));
+    CHECK(page["total"] == 5);
+    CHECK(page["rows"][0]["text"] == "Apple pie");
+    CHECK_FALSE(page.contains("pending"));
+}
+
+TEST_CASE("Import merge keeps explicit ids below the next free id and exports rows in id order") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeStrings(root);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadPlugin(backend, root);
+
+    const std::string listing = R"({"rows":[{"id":7,"text":"Seven"},{"id":10,"text":"Apple tart"}]})";
+    REQUIRE(backend.invoke("strings.ImportStrings", nlohmann::json::array({"Patch.esp", "", "STRINGS", listing, "merge"})).has_value());
+
+    const auto exported = rowsOf(backend, "ExportStrings", nlohmann::json::array({"Patch.esp", "", "STRINGS"}));
+    CHECK(exported["kind"] == "STRINGS");
+    REQUIRE(exported["rows"].size() == 6);
+    CHECK(exported["rows"][0]["id"] == 7);
+    CHECK(exported["rows"][0]["text"] == "Seven");
+    CHECK(exported["rows"][1]["text"] == "Apple tart");
+    CHECK(exported["rows"][2]["text"] == "Banana");
+
+    REQUIRE(backend.invoke("strings.SaveStringTables", nlohmann::json::array({"Patch.esp", ""})).has_value());
+    const auto saved = fo4::localization::read_string_table_file(root / "Strings" / "Patch_en.STRINGS", StringTableKind::strings);
+    REQUIRE(fo4::localization::find_string(saved, 7) != nullptr);
+    CHECK(fo4::localization::find_string(saved, 7)->text == rawBytes("Seven"));
+    REQUIRE(fo4::localization::find_string(saved, 10) != nullptr);
+    CHECK(fo4::localization::find_string(saved, 10)->text == rawBytes("Apple tart"));
 }

@@ -196,6 +196,7 @@ add_library(fo4
   src/plugin/field_writer_containers.cpp
   src/plugin/destructible_stage.cpp
   src/plugin/subrecord_authoring.cpp
+  src/plugin/subrecord_copy.cpp
   src/plugin/scene_writer.cpp
   src/plugin/master_usage.cpp
   src/plugin/maintenance.cpp
@@ -506,6 +507,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_localization_tables.cpp
     tests/test_plugin_localization.cpp
     tests/test_subrecord_authoring.cpp
+    tests/test_subrecord_copy.cpp
     tests/test_c_api_authoring.cpp
     tests/test_c_api_fields.cpp
     tests/test_delta_patch.cpp

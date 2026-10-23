@@ -1,7 +1,9 @@
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -9,6 +11,8 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <fo4/plugin/reader.hpp>
+#include <fo4/plugin/subrecord_authoring.hpp>
+#include <fo4/plugin/writer.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
 #include "plugin_bytes.hpp"
@@ -361,4 +365,142 @@ TEST_CASE("Native CopyAsOverrideMany reports a wrong-typed item and applies the 
     const auto reloaded = fo4::read_plugin_file(target);
     CHECK(fo4::find_record(reloaded, fo4::FormKey::parse("000800:Master.esm")) != nullptr);
     CHECK(fo4::find_record(reloaded, fo4::FormKey::parse("000802:Master.esm")) == nullptr);
+}
+
+namespace {
+
+fo4::FormKey makeArmorFile(const std::filesystem::path& path, std::string_view name,
+                           std::optional<std::uint8_t> icon) {
+    auto plugin = fo4::make_empty_plugin(name);
+    const auto key = fo4::create_record(plugin, fo4::Signature::from_string("ARMO"), "Armor").key;
+    if (icon) {
+        std::get<fo4::Record>(plugin.groups.front().children.front()).subrecords.push_back(
+            {fo4::Signature::from_string("ICON"), {std::byte{*icon}, std::byte{0}}, false});
+    }
+    std::filesystem::create_directories(path.parent_path());
+    fo4::write_plugin_file(plugin, path);
+    return key;
+}
+
+std::vector<std::vector<std::byte>> iconsOf(const std::filesystem::path& path, const fo4::FormKey& key) {
+    const auto plugin = fo4::read_plugin_file(path);
+    const auto* record = fo4::find_record(plugin, key);
+    REQUIRE(record != nullptr);
+    std::vector<std::vector<std::byte>> out;
+    for (const auto& sub : record->subrecords) {
+        if (sub.signature == fo4::Signature::from_string("ICON")) out.push_back(sub.data);
+    }
+    return out;
+}
+
+}
+
+TEST_CASE("Native CopyElementToSelected makes each selected record's element equal to the source and reports an unloaded target") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto sourcePath = root / "Source.esp";
+    const auto targetA = root / "TargetA.esp";
+    const auto targetB = root / "TargetB.esp";
+    const auto sourceKey = makeArmorFile(sourcePath, "Source.esp", std::uint8_t{7});
+    const auto keyA = makeArmorFile(targetA, "TargetA.esp", std::uint8_t{3});
+    const auto keyB = makeArmorFile(targetB, "TargetB.esp", std::nullopt);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Source.esp", sourcePath),
+            pluginEntry("TargetA.esp", targetA),
+            pluginEntry("TargetB.esp", targetB)
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const nlohmann::json targets = nlohmann::json::array({
+        {{"plugin", "TargetA.esp"}, {"formKey", keyA.to_string()}},
+        {{"plugin", "TargetB.esp"}, {"formKey", keyB.to_string()}},
+        {{"plugin", "Missing.esp"}, {"formKey", keyA.to_string()}}
+    });
+    const auto report = parseResult(backend.invokeBackend("CopyElementToSelected", nlohmann::json::array({
+        "Source.esp", sourceKey.to_string(), "Authoring\\ICON[0]", targets.dump()})));
+    CHECK(report.at("applied") == 2);
+    CHECK(report.at("skipped").empty());
+    REQUIRE(report.at("failures").size() == 1);
+    CHECK(report.at("failures")[0].at("plugin") == "Missing.esp");
+
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"TargetA.esp"})).has_value());
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"TargetB.esp"})).has_value());
+    const std::vector<std::byte> expected{std::byte{7}, std::byte{0}};
+    CHECK(iconsOf(targetA, keyA) == std::vector<std::vector<std::byte>>{expected});
+    CHECK(iconsOf(targetB, keyB) == std::vector<std::vector<std::byte>>{expected});
+}
+
+TEST_CASE("Native RemoveElementFromSelected removes where present, skips where absent, and refuses a required element") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto targetA = root / "TargetA.esp";
+    const auto targetB = root / "TargetB.esp";
+    const auto keyA = makeArmorFile(targetA, "TargetA.esp", std::uint8_t{3});
+    const auto keyB = makeArmorFile(targetB, "TargetB.esp", std::nullopt);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("TargetA.esp", targetA),
+            pluginEntry("TargetB.esp", targetB)
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const nlohmann::json targets = nlohmann::json::array({
+        {{"plugin", "TargetA.esp"}, {"formKey", keyA.to_string()}},
+        {{"plugin", "TargetB.esp"}, {"formKey", keyB.to_string()}}
+    });
+    const auto removed = parseResult(backend.invokeBackend("RemoveElementFromSelected", nlohmann::json::array({
+        "Authoring\\ICON[0]", targets.dump()})));
+    CHECK(removed.at("applied") == 1);
+    REQUIRE(removed.at("skipped").size() == 1);
+    CHECK(removed.at("skipped")[0].at("plugin") == "TargetB.esp");
+    CHECK(removed.at("failures").empty());
+
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"TargetA.esp"})).has_value());
+    CHECK(iconsOf(targetA, keyA).empty());
+
+    const nlohmann::json requiredTarget = nlohmann::json::array({
+        {{"plugin", "TargetB.esp"}, {"formKey", keyB.to_string()}}
+    });
+    const auto refused = parseResult(backend.invokeBackend("RemoveElementFromSelected", nlohmann::json::array({
+        "Authoring\\DATA[0]", requiredTarget.dump()})));
+    CHECK(refused.at("applied") == 0);
+    REQUIRE(refused.at("failures").size() == 1);
+    CHECK(refused.at("failures")[0].at("reason").get<std::string>().starts_with("ElementBelowMinimum"));
+}
+
+TEST_CASE("Native CopyElementToSelected accepts Authoring\\ICON without an index (regression: ElementPathUnsupported for the non-indexed path)") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto sourcePath = root / "Source.esp";
+    const auto targetPath = root / "Target.esp";
+    const auto sourceKey = makeArmorFile(sourcePath, "Source.esp", std::uint8_t{7});
+    const auto targetKey = makeArmorFile(targetPath, "Target.esp", std::uint8_t{3});
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Source.esp", sourcePath),
+            pluginEntry("Target.esp", targetPath)
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const nlohmann::json targets = nlohmann::json::array({
+        {{"plugin", "Target.esp"}, {"formKey", targetKey.to_string()}}
+    });
+    const auto report = parseResult(backend.invokeBackend("CopyElementToSelected", nlohmann::json::array({
+        "Source.esp", sourceKey.to_string(), "Authoring\\ICON", targets.dump()})));
+    CHECK(report.at("applied") == 1);
+    CHECK(report.at("failures").empty());
+
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Target.esp"})).has_value());
+    const std::vector<std::byte> expected{std::byte{7}, std::byte{0}};
+    CHECK(iconsOf(targetPath, targetKey) == std::vector<std::vector<std::byte>>{expected});
 }

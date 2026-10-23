@@ -177,6 +177,10 @@ RecordRenumberStatus renumber_local_record(Plugin& plugin,
                                            const FormKey& record_key,
                                            LocalFormId new_local);
 
+RecordRenumberStatus inject_local_record(Plugin& plugin,
+                                         const FormKey& record_key,
+                                         const FormKey& new_key);
+
 ReferenceRepointResult repoint_record_references(std::span<Plugin*> plugins,
                                                  const FormKey& from,
                                                  const FormKey& to);
