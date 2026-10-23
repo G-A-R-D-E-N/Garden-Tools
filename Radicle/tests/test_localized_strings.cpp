@@ -221,3 +221,32 @@ TEST(LocalizedStrings, FileIoRoundTripsRawLegacyBytesWithoutUtf8Validation) {
   ASSERT_EQ(reread.entries.size(), 1u);
   EXPECT_EQ(reread.entries[0].text, table.entries[0].text);
 }
+
+TEST(LocalizedStrings, InsertKeepsExplicitIdOrderAndRejectsDuplicateIds) {
+  fo4::localization::LocalizedStringTable table{
+      fo4::localization::StringTableKind::strings,
+      {{10, bytes("Ten")}, {30, bytes("Thirty")}}};
+  fo4::localization::insert_string(table, 20, "Twenty");
+  ASSERT_EQ(table.entries.size(), 3u);
+  EXPECT_EQ(table.entries[1].id, 20u);
+  EXPECT_EQ(text(table.entries[1]), "Twenty");
+  EXPECT_THROW(fo4::localization::insert_string(table, 20, "Again"),
+               fo4::localization::StringTableError);
+  EXPECT_THROW(fo4::localization::insert_string(table, 40, std::string_view("a\0b", 3)),
+               fo4::localization::StringTableError);
+  EXPECT_EQ(table.entries.size(), 3u);
+}
+
+TEST(LocalizedStrings, SetAndRemoveReportMissingIdsWithoutChangingTheTable) {
+  fo4::localization::LocalizedStringTable table{
+      fo4::localization::StringTableKind::strings,
+      {{10, bytes("Ten")}}};
+  EXPECT_FALSE(fo4::localization::set_string(table, 11, "Eleven"));
+  EXPECT_FALSE(fo4::localization::remove_string(table, 11));
+  EXPECT_EQ(table.entries.size(), 1u);
+
+  EXPECT_TRUE(fo4::localization::set_string(table, 10, "Edited"));
+  EXPECT_EQ(text(table.entries[0]), "Edited");
+  EXPECT_TRUE(fo4::localization::remove_string(table, 10));
+  EXPECT_TRUE(table.entries.empty());
+}

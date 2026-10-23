@@ -273,14 +273,14 @@ describe('sidebar record multi-select', () => {
     expect(screen.queryByText(/selected \(/)).toBeNull();
   });
 
-  it('enables Compare selected only for exactly two records and opens them in order', async () => {
+  it('enables Compare selected for two or more records and loads each one in pick order', async () => {
     await openRecordSearch('weapon');
     fireEvent.click(hitRow('WeaponOne'), { ctrlKey: true });
     expect(button(/Compare selected/).disabled).toBe(true);
     fireEvent.click(hitRow('BowOne'), { ctrlKey: true });
     expect(button(/Compare selected/).disabled).toBe(false);
     fireEvent.click(hitRow('AxeOne'), { ctrlKey: true });
-    expect(button(/Compare selected/).disabled).toBe(true);
+    expect(button(/Compare selected/).disabled).toBe(false);
     fireEvent.click(hitRow('AxeOne'), { ctrlKey: true });
     fireEvent.click(button(/Compare selected/));
     await waitFor(() => expect(getMatrix).toHaveBeenCalledWith(bowHit.FormKey));

@@ -1,15 +1,18 @@
 #include "fo4/c_api_env.h"
+#include "fo4/c_api_terrain.h"
 #include "fo4/environment/terrain.hpp"
 #include "plugin_bytes.hpp"
 
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -156,7 +159,146 @@ fo4::FormKey key(std::uint32_t local) {
   return fo4::FormKey{fo4::PluginKey::from_filename("Terrain.esp"), fo4::LocalFormId{local}};
 }
 
+using Alpha = std::pair<std::uint16_t, float>;
+
+std::vector<std::byte> vtxt_entries(const std::vector<Alpha>& entries) {
+  fo4::test::ByteWriter out;
+  for (const auto& [position, opacity] : entries) {
+    out.u16(position);
+    out.u16(0);
+    out.f32(opacity);
+  }
+  return out.bytes;
+}
+
+std::vector<Alpha> full_grid(float opacity) {
+  std::vector<Alpha> out;
+  for (std::uint16_t position = 0; position < 289; ++position) out.emplace_back(position, opacity);
+  return out;
+}
+
+fo4::env::LandLayer land_layer(bool base, std::uint32_t texture, std::uint8_t quadrant,
+                               const std::vector<std::byte>& alpha) {
+  return fo4::env::LandLayer{base, key(texture), quadrant, 0, alpha};
+}
+
+fo4::env::LandscapeData landscape(std::vector<fo4::env::LandLayer> layers) {
+  fo4::env::LandscapeData land;
+  land.layers = std::move(layers);
+  return land;
+}
+
+float weight_of(const fo4::env::LandVertexWeights& blend, std::uint32_t texture, std::size_t x, std::size_t y) {
+  for (const auto& [owner, weights] : blend.layers) {
+    if (owner == key(texture)) return weights[y * fo4::env::k_land_grid + x];
+  }
+  return 0.0f;
+}
+
 }  // namespace
+
+TEST(TerrainLand, IntegratesDeltasWithRowStartCarry) {
+  std::vector<std::byte> deltas(fo4::env::k_land_vertices, std::byte{0});
+  deltas[0] = std::byte{0xFF};
+  deltas[1] = std::byte{1};
+  deltas[33] = std::byte{3};
+  deltas[34] = std::byte{0x80};
+  deltas[66] = std::byte{0x7F};
+  fo4::env::LandscapeData land;
+  land.height_offset = 2.0f;
+  land.heights = deltas;
+  const auto grid = fo4::env::decode_land_heights(land);
+  ASSERT_TRUE(grid.has_value());
+  EXPECT_EQ(grid->base, 2.0f);
+  EXPECT_EQ(grid->heights[0], 8.0f);
+  EXPECT_EQ(grid->heights[1], 16.0f);
+  EXPECT_EQ(grid->heights[2], 16.0f);
+  EXPECT_EQ(grid->heights[33], 32.0f);
+  EXPECT_EQ(grid->heights[34], -992.0f);
+  EXPECT_EQ(grid->heights[66], 1048.0f);
+  EXPECT_FALSE(fo4::env::decode_land_heights(fo4::env::LandscapeData{}).has_value());
+}
+
+TEST(TerrainLand, MapsAlphaPositionsOntoTheSeventeenGrid) {
+  const auto alpha = vtxt_entries({{20, 0.5f}, {288, 1.0f}, {5, 1.5f}, {6, -0.25f}, {17, 0.75f}, {7, std::nanf("")}});
+  const auto layers = fo4::env::decode_layer_alpha(landscape({land_layer(false, 0x811, 2, alpha)}));
+  ASSERT_EQ(layers.size(), 1u);
+  EXPECT_EQ(layers[0].quadrant, 2);
+  EXPECT_EQ(layers[0].texture, key(0x811));
+  EXPECT_EQ(layers[0].alpha[5], 1.0f);
+  EXPECT_EQ(layers[0].alpha[6], 0.0f);
+  EXPECT_EQ(layers[0].alpha[7], 0.0f);
+  EXPECT_EQ(layers[0].alpha[17], 0.75f);
+  EXPECT_EQ(layers[0].alpha[20], 0.5f);
+  EXPECT_EQ(layers[0].alpha[288], 1.0f);
+}
+
+TEST(TerrainLand, SkipsAlphaPositionsOutsideTheGrid) {
+  const auto alpha = vtxt_entries({{289, 0.5f}, {0xFFFF, 0.5f}, {0, 0.25f}});
+  const auto layers = fo4::env::decode_layer_alpha(landscape({land_layer(false, 0x811, 0, alpha)}));
+  ASSERT_EQ(layers.size(), 1u);
+  EXPECT_EQ(layers[0].alpha[0], 0.25f);
+  EXPECT_EQ(layers[0].alpha[1], 0.0f);
+  EXPECT_EQ(layers[0].alpha[288], 0.0f);
+}
+
+TEST(TerrainLand, BlendMergesQuadrantEdgesIntoSharedVertices) {
+  const auto quarter = vtxt_entries(full_grid(0.25f));
+  const auto half = vtxt_entries(full_grid(0.5f));
+  const auto blend = fo4::env::blend_cell_weights(landscape({
+      land_layer(true, 0x810, 0, {}),
+      land_layer(false, 0x811, 0, quarter),
+      land_layer(true, 0x810, 1, {}),
+      land_layer(false, 0x811, 1, half),
+  }));
+  EXPECT_FLOAT_EQ(weight_of(blend, 0x811, 5, 5), 0.25f);
+  EXPECT_FLOAT_EQ(weight_of(blend, 0x811, 16, 5), 0.375f);
+  EXPECT_FLOAT_EQ(weight_of(blend, 0x811, 5, 16), 0.125f);
+  EXPECT_FLOAT_EQ(weight_of(blend, 0x811, 16, 16), 0.1875f);
+  EXPECT_FLOAT_EQ(weight_of(blend, 0x811, 5, 20), 0.0f);
+}
+
+TEST(TerrainLand, BlendGivesGroundTheRemainderAndNormalisesOverfullVertices) {
+  const auto three_quarters = vtxt_entries(full_grid(0.75f));
+  const auto quarter = vtxt_entries(full_grid(0.25f));
+  const auto blend = fo4::env::blend_cell_weights(landscape({
+      land_layer(true, 0x810, 0, {}),
+      land_layer(false, 0x811, 0, three_quarters),
+      land_layer(false, 0x812, 0, three_quarters),
+      land_layer(true, 0x810, 2, {}),
+      land_layer(false, 0x811, 2, quarter),
+  }));
+  EXPECT_FLOAT_EQ(weight_of(blend, 0x811, 3, 3), 0.5f);
+  EXPECT_FLOAT_EQ(weight_of(blend, 0x812, 3, 3), 0.5f);
+  EXPECT_FLOAT_EQ(weight_of(blend, 0x810, 3, 3), 0.0f);
+  EXPECT_FLOAT_EQ(weight_of(blend, 0x810, 3, 19), 0.75f);
+  EXPECT_FLOAT_EQ(weight_of(blend, 0x811, 3, 19), 0.25f);
+  for (std::size_t vertex = 0; vertex < fo4::env::k_land_vertices; ++vertex) {
+    float total = 0.0f;
+    for (const auto& [texture, weights] : blend.layers) total += weights[vertex];
+    EXPECT_LE(total, 1.0f + 1e-5f) << vertex;
+  }
+}
+
+TEST(TerrainLand, BaseTextureIsTheFirstBaseLayerOfEachQuadrant) {
+  const auto quarter = vtxt_entries(full_grid(0.25f));
+  const auto half = vtxt_entries(full_grid(0.5f));
+  const auto blend = fo4::env::blend_cell_weights(landscape({
+      land_layer(true, 0x810, 0, {}),
+      land_layer(true, 0x812, 0, {}),
+      land_layer(false, 0x811, 0, quarter),
+      land_layer(false, 0x811, 1, half),
+      land_layer(false, 0x811, 3, quarter),
+      land_layer(true, 0x812, 3, {}),
+  }));
+  ASSERT_TRUE(blend.base[0].has_value());
+  EXPECT_EQ(*blend.base[0], key(0x810));
+  EXPECT_FALSE(blend.base[1].has_value());
+  ASSERT_TRUE(blend.base[3].has_value());
+  EXPECT_EQ(*blend.base[3], key(0x812));
+  EXPECT_FLOAT_EQ(weight_of(blend, 0x812, 3, 3), 0.0f);
+  EXPECT_FLOAT_EQ(weight_of(blend, 0x812, 20, 20), 0.75f);
+}
 
 TEST_F(TerrainEnvironmentTest, DecodesLandscapeGridsAndLayers) {
   const std::vector<std::filesystem::path> paths{path_};
@@ -234,6 +376,24 @@ TEST_F(TerrainEnvironmentTest, CApiExposesTerrain) {
   EXPECT_EQ(land->layers[1].alpha_size, 16u);
   EXPECT_EQ(land->layers[1].texture.local_id, 0x811u);
   radicle_landscape_free(land);
+
+  radicle_land_heights heights{};
+  ASSERT_EQ(radicle_landscape_heights(env, record, &heights), RADICLE_STATUS_OK) << radicle_last_error();
+  EXPECT_EQ(heights.has_heights, 1);
+  EXPECT_EQ(heights.base, -1024.0f);
+  EXPECT_EQ(heights.heights[0], -8192.0f);
+  EXPECT_EQ(heights.heights[1], -8184.0f);
+
+  radicle_land_blend* blend = nullptr;
+  ASSERT_EQ(radicle_landscape_blend(env, record, &blend), RADICLE_STATUS_OK) << radicle_last_error();
+  EXPECT_EQ(blend->base[0].local_id, 0x810u);
+  ASSERT_EQ(blend->layer_count, 2u);
+  EXPECT_EQ(blend->layers[0].texture.local_id, 0x810u);
+  EXPECT_FLOAT_EQ(blend->layers[0].weights[0], 1.0f);
+  EXPECT_EQ(blend->layers[1].texture.local_id, 0x811u);
+  EXPECT_FLOAT_EQ(blend->layers[1].weights[16 * 33 + 5], 0.25f);
+  radicle_landscape_blend_free(blend);
+  radicle_landscape_blend_free(nullptr);
 
   ASSERT_EQ(radicle_env_winner(env, {"Terrain.esp", 0x801}, &record), RADICLE_STATUS_OK);
   EXPECT_EQ(radicle_landscape_decode(env, record, &land), RADICLE_STATUS_PARSE_ERROR);

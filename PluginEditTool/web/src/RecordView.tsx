@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronRight, ChevronDown, EyeOff, Link2, AlertTriangle, Crown, Clock, Network, HelpCircle,
 } from 'lucide-react';
-import { TYPED_RECORD_TYPES, type ConflictMatrix, type ConflictFieldRow, type RefByEntry, type RecordProblem, type Dependency, type HistoryEntry, type ElementActions } from './backend';
+import { TYPED_RECORD_TYPES, type ConflictMatrix, type ConflictFieldRow, type RefByEntry, type RecordProblem, type Dependency, type HistoryEntry, type ElementActions, type BulkTarget } from './backend';
 import { ScalarEditor, ScalarText } from './ScalarEditor';
 import { rawEditable } from './scalarPresentation';
 import RecordPicker from './RecordPicker';
@@ -41,7 +41,7 @@ function TabBtn({ id, current, set, children, count }: {
 
 export default function RecordView(
   { matrix, plugin, onReload, onOpenRecord, activeTab: externalTab, onTabChange, highlightField,
-    highlightSeq, onPluginsChanged }: {
+    highlightSeq, onPluginsChanged, selectedRecords, setErrorStr }: {
     matrix: ConflictMatrix; plugin: string;
     onReload: () => Promise<void>;
     onOpenRecord?: (formKey: string, plugin: string) => void;
@@ -50,6 +50,7 @@ export default function RecordView(
     highlightField?: string;
     highlightSeq?: number;
     onPluginsChanged?: () => void;
+    selectedRecords?: BulkTarget[]; setErrorStr?: (message: string) => void;
   }
 ) {
   const [internalTab, setInternalTab] = useState<RecordTab>('grid');
@@ -262,7 +263,7 @@ export default function RecordView(
   }, [menu]);
 
   const actions = useRecordActions({
-    matrix, editablePlugins, closeMenu: () => setMenu(null), setStatus, onReload, onPluginsChanged,
+    matrix, editablePlugins, closeMenu: () => setMenu(null), setStatus, onReload, onPluginsChanged, selected: selectedRecords, setErrorStr,
   });
   const { copyInto, renumberFormId, compactEsl, cleanPlugin, deleteRecord } = actions;
 

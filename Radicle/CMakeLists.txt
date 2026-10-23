@@ -83,6 +83,17 @@ add_custom_target(radicle_condition_function_schema_check ALL
   COMMENT "Checking generated Fallout 4 condition function table"
   VERBATIM
 )
+add_custom_target(radicle_hkx_layout_check ALL
+  COMMAND
+    "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tools/hkx_layout_codegen.py"
+    --layouts "${CMAKE_CURRENT_SOURCE_DIR}/../BGS/src/Hkx/HavokClassLayouts.json"
+    --types "${CMAKE_CURRENT_SOURCE_DIR}/../BGS/src/Hkx/HavokClassTypes.json"
+    --output "${CMAKE_CURRENT_SOURCE_DIR}/src/hkx/hkx_layouts.generated.inc"
+    --check
+  COMMENT "Checking generated Havok class layout table"
+  VERBATIM
+)
 add_custom_target(radicle_parity_matrix_check ALL
   COMMAND
     "${Python3_EXECUTABLE}"
@@ -116,6 +127,7 @@ add_library(fo4
   src/text/encoding.cpp
   src/loadorder/plugin_list.cpp
   src/loadorder/assemble.cpp
+  src/loadorder/mo2_profile.cpp
   src/formid.cpp
   src/archive/ba2.cpp
   src/archive/ba2_hash.cpp
@@ -125,6 +137,11 @@ add_library(fo4
   src/binary/cursor.cpp
   src/nif/nif.cpp
   src/nif/geometry.cpp
+  src/nif/shader.cpp
+  src/nif/skin.cpp
+  src/texture/bcn.cpp
+  src/texture/dds.cpp
+  src/texture/dds_codec.cpp
   src/forms/armor.cpp
   src/forms/armor_edit.cpp
   src/forms/cell.cpp
@@ -179,6 +196,7 @@ add_library(fo4
   src/plugin/field_writer_containers.cpp
   src/plugin/destructible_stage.cpp
   src/plugin/subrecord_authoring.cpp
+  src/plugin/subrecord_copy.cpp
   src/plugin/scene_writer.cpp
   src/plugin/master_usage.cpp
   src/plugin/maintenance.cpp
@@ -235,7 +253,6 @@ add_library(fo4
   src/papyrus/array_ops.cpp
   src/papyrus/interpreter.cpp
   src/papyrus/execute.cpp
-  src/papyrus/script_set.cpp
   src/swf/swf.cpp
   src/swf/swf_tags.cpp
   src/swf/swf_write.cpp
@@ -245,6 +262,7 @@ add_library(fo4
   src/pex_analysis/callgraph.cpp
   src/pex_analysis/summary.cpp
   src/pex_analysis/fragments.cpp
+  src/pex_analysis/script_set.cpp
   src/abc/abc_file.cpp
   src/abc/abc_write.cpp
   src/abc/byte_reader.cpp
@@ -252,6 +270,9 @@ add_library(fo4
   src/abc/opcodes.cpp
   src/abc/disassembly.cpp
   src/abc/summary.cpp
+  src/hkx/layout.cpp
+  src/hkx/packfile.cpp
+  src/hkx/skeleton.cpp
   src/material/material_file.cpp
   src/seq/seq.cpp
   src/quest/runtime.cpp
@@ -272,6 +293,9 @@ if(TARGET radicle_condition_scope_schema_check)
 endif()
 if(TARGET radicle_condition_function_schema_check)
   add_dependencies(fo4 radicle_condition_function_schema_check)
+endif()
+if(TARGET radicle_hkx_layout_check)
+  add_dependencies(fo4 radicle_hkx_layout_check)
 endif()
 
 set_target_properties(fo4 PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -305,6 +329,7 @@ target_sources(radicle_c PRIVATE src/c_api_script_set.cpp)
 target_sources(fo4 PRIVATE src/patch/delta_patch.cpp)
 target_sources(fo4 PRIVATE src/patch/list_merge.cpp)
 target_sources(fo4 PRIVATE src/papyrus_source/lexer.cpp src/papyrus_source/parser.cpp src/papyrus_source/parser_decl.cpp src/papyrus_source/parser_expr.cpp src/papyrus_source/parser_stmt.cpp src/papyrus_source/summary.cpp)
+target_sources(radicle_c PRIVATE src/c_api_nif.cpp src/c_api_dds.cpp)
 
 if(RADICLE_INSTALL)
   include(GNUInstallDirs)
@@ -483,6 +508,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_localization_tables.cpp
     tests/test_plugin_localization.cpp
     tests/test_subrecord_authoring.cpp
+    tests/test_subrecord_copy.cpp
     tests/test_c_api_authoring.cpp
     tests/test_c_api_fields.cpp
     tests/test_delta_patch.cpp
@@ -635,13 +661,17 @@ if(RADICLE_BUILD_TESTS)
     tests/test_environment_placed.cpp
     tests/test_environment_script_elements.cpp
     tests/test_environment_terrain.cpp
+    tests/test_environment_terrain_real.cpp
     tests/test_environment_strings.cpp
     tests/test_ba2_reader.cpp
     tests/test_ba2_long_names.cpp
     tests/test_ba2_real.cpp
     tests/test_ba2_versions_real.cpp
     tests/test_nif.cpp
+    tests/test_nif_nodes.cpp
     tests/test_nif_corpus.cpp
+    tests/test_c_api_nif.cpp
+    tests/test_dds.cpp
     tests/test_environment_writeback.cpp
     tests/test_writeback_real.cpp
     tests/test_environment_ref_fields.cpp
@@ -671,9 +701,10 @@ if(RADICLE_BUILD_TESTS)
     tests/test_pex_corpus.cpp
     tests/test_pex_oracle.cpp
     tests/test_papyrus_vm.cpp
-    tests/test_script_set.cpp
     tests/test_c_api_script_set.cpp
     tests/test_pex_analysis.cpp
+    tests/test_script_set.cpp
+    tests/test_script_set_real.cpp
     tests/test_pex_disasm.cpp
     tests/test_papyrus_source.cpp
     tests/test_papyrus_source_real.cpp
@@ -687,6 +718,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_swf_tags.cpp
     tests/test_swf_real.cpp
     tests/test_abc_real.cpp
+    tests/test_hkx_packfile.cpp
+    tests/test_hkx_real.cpp
     tests/test_c_api_material_file.cpp
     tests/test_seq.cpp
     tests/test_seq_corpus.cpp
@@ -696,6 +729,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_load_order_files.cpp
     tests/test_load_order_real.cpp
     tests/test_c_api_loadorder.cpp
+    tests/test_mo2_profile.cpp
     tests/test_c_api_referenced_by.cpp
     tests/test_c_api_conflict.cpp
     tests/test_regn_rows.cpp

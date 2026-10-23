@@ -7,11 +7,13 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -86,15 +88,22 @@ std::string text_of(uint8_t* bytes, size_t size) {
   return std::string(reinterpret_cast<const char*>(bytes), size);
 }
 
+// A pointer that a rejected call must overwrite; it is never dereferenced.
+template <typename T>
+T* sentinel() {
+  return reinterpret_cast<T*>(static_cast<std::uintptr_t>(1));
+}
+
 }  // namespace
 
 TEST_F(CApiScriptSetTest, ResolvesReadsAndCountsReplacedPayloads) {
   const auto data = root_ / "Data";
-  write_loose(data, "Scripts/Actors/Foo.pex", "loose");
+  const auto loose_path = write_loose(data, "Scripts/Actors/Foo.pex", "loose");
   const auto archive = write_archive("Mod - Main.ba2", {general("Scripts\\Actors\\Foo.pex", "archived"),
                                                         general("Scripts\\Bar.pex", "bar")});
   radicle_assets* assets = open({data.string()}, {archive.string()});
   ASSERT_NE(assets, nullptr);
+  EXPECT_EQ(radicle_assets_root_count(assets), 1u);
 
   radicle_script_set* set = nullptr;
   ASSERT_EQ(radicle_script_set_resolve(assets, nullptr, 0, &set), RADICLE_STATUS_OK);
@@ -107,7 +116,7 @@ TEST_F(CApiScriptSetTest, ResolvesReadsAndCountsReplacedPayloads) {
   EXPECT_EQ(std::string(winner.winner.name), "actors/foo");
   EXPECT_EQ(std::string(winner.winner.path), "scripts/actors/foo.pex");
   EXPECT_EQ(winner.winner.origin, RADICLE_ASSET_LOOSE);
-  EXPECT_EQ(std::string(winner.winner.container), data.string());
+  EXPECT_TRUE(std::filesystem::equivalent(std::filesystem::path(winner.winner.container), loose_path));
   EXPECT_EQ(winner.winner.size, 5u);
   EXPECT_EQ(winner.replaced, 1u);
 
@@ -132,23 +141,24 @@ TEST_F(CApiScriptSetTest, ResolvesReadsAndCountsReplacedPayloads) {
 TEST_F(CApiScriptSetTest, ExplicitLoadIndexMovesTheWinner) {
   const auto high = root_ / "ModHigh";
   const auto low = root_ / "ModLow";
-  write_loose(high, "Scripts/foo.pex", "high");
-  write_loose(low, "Scripts/foo.pex", "low");
+  const auto high_path = write_loose(high, "Scripts/foo.pex", "high");
+  const auto low_path = write_loose(low, "Scripts/foo.pex", "low");
   radicle_assets* assets = open({high.string(), low.string()}, {});
   ASSERT_NE(assets, nullptr);
+  ASSERT_EQ(radicle_assets_root_count(assets), 2u);
 
   radicle_script_set* set = nullptr;
   ASSERT_EQ(radicle_script_set_resolve(assets, nullptr, 0, &set), RADICLE_STATUS_OK);
   radicle_script_winner winner{};
   ASSERT_EQ(radicle_script_set_get(set, 0, &winner), RADICLE_STATUS_OK);
-  EXPECT_EQ(std::string(winner.winner.container), high.string());
+  EXPECT_TRUE(std::filesystem::equivalent(std::filesystem::path(winner.winner.container), high_path));
   radicle_script_set_destroy(set);
 
   const int32_t indexes[] = {2, 7};
   ASSERT_EQ(radicle_script_set_resolve(assets, indexes, 2, &set), RADICLE_STATUS_OK);
   ASSERT_EQ(radicle_script_set_count(set), 1u);
   ASSERT_EQ(radicle_script_set_get(set, 0, &winner), RADICLE_STATUS_OK);
-  EXPECT_EQ(std::string(winner.winner.container), low.string());
+  EXPECT_TRUE(std::filesystem::equivalent(std::filesystem::path(winner.winner.container), low_path));
   EXPECT_EQ(winner.winner.load_index, 7);
   EXPECT_EQ(winner.replaced, 1u);
 
@@ -168,22 +178,38 @@ TEST_F(CApiScriptSetTest, RejectsBadArguments) {
   radicle_assets* assets = open({data.string()}, {});
   ASSERT_NE(assets, nullptr);
 
-  radicle_script_set* set = nullptr;
-  EXPECT_EQ(radicle_script_set_resolve(nullptr, nullptr, 0, &set), RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(radicle_script_set_resolve(assets, nullptr, 0, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(radicle_script_set_resolve(assets, nullptr, 2, &set), RADICLE_STATUS_INVALID_ARGUMENT);
+  // Invariant: every out-param keeps a sentinel until the call proves the arguments.
+  // Invariant: a rejected call must clear the caller's previous handle so the sentinel stays visible here.
+  radicle_script_set* out_set = sentinel<radicle_script_set>();
+  EXPECT_EQ(radicle_script_set_resolve(nullptr, nullptr, 0, &out_set), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(out_set, nullptr);
+  out_set = sentinel<radicle_script_set>();
+  EXPECT_EQ(radicle_script_set_resolve(assets, nullptr, 2, &out_set), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(out_set, nullptr);
   // Invariant: the assets handle has one root, so two indexes must be refused.
   const int32_t two[] = {1, 2};
-  EXPECT_EQ(radicle_script_set_resolve(assets, two, 2, &set), RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(set, nullptr);
+  out_set = sentinel<radicle_script_set>();
+  EXPECT_EQ(radicle_script_set_resolve(assets, two, 2, &out_set), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(out_set, nullptr);
+  EXPECT_EQ(radicle_script_set_resolve(assets, nullptr, 0, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
 
+  radicle_script_set* set = nullptr;
   ASSERT_EQ(radicle_script_set_resolve(assets, nullptr, 0, &set), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_script_set_count(set), 1u);
   radicle_script_winner winner{};
+  winner.name = "stale";
+  winner.winner.load_index = 9;
+  winner.replaced = 7u;
   EXPECT_EQ(radicle_script_set_get(set, 1, &winner), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(winner.name, static_cast<const char*>(nullptr));
+  EXPECT_EQ(winner.winner.load_index, 0);
+  EXPECT_EQ(winner.replaced, 0u);
   EXPECT_EQ(radicle_script_set_get(set, 0, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
-  uint8_t* bytes = nullptr;
-  size_t size = 0;
+  uint8_t* bytes = sentinel<uint8_t>();
+  size_t size = 99u;
   EXPECT_EQ(radicle_script_set_read(set, 1, &bytes, &size), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(bytes, nullptr);
+  EXPECT_EQ(size, 0u);
   EXPECT_EQ(radicle_script_set_get(nullptr, 0, &winner), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_script_set_count(nullptr), 0u);
   radicle_script_set_destroy(nullptr);

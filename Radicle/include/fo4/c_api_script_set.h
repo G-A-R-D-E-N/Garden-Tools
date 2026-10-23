@@ -7,12 +7,12 @@
 extern "C" {
 #endif
 
-// The compiled-script set C ABI must resolve every Scripts/**.pex payload the assets reach to one winner per name.
-// Ordering: a loose payload beats an archive payload, then a higher load index wins, then the ordinally greater container path.
-// Names must be lower case paths under Scripts/ without the .pex extension, so they compare without regard to case.
+// Invariant: every Scripts/**.pex payload the assets reach resolves to one winner per name.
+// Invariant: a loose payload beats an archive payload, then a higher load index wins, then the ordinally greater container path.
+// Invariant: a name is a lower case path under Scripts/ without the .pex extension, so names compare without regard to case.
 // Invariant: a set borrows the radicle_assets handle it was resolved from, which must outlive the set.
 // Invariant: strings returned here stay valid until radicle_script_set_destroy and are owned by the set.
-// A set is not thread-safe; different sets may be used from different threads, and radicle_last_error is shared.
+// Invariant: a set is not thread-safe; different sets may be used from different threads, and radicle_last_error is shared.
 
 typedef struct radicle_script_set radicle_script_set;
 
@@ -20,6 +20,7 @@ typedef struct radicle_script_candidate {
   const char* name;
   const char* path;
   radicle_asset_origin origin;
+  // Invariant: the loose payload path, or the archive file path for an archived payload.
   const char* container;
   int32_t load_index;
   uint64_t size;
@@ -32,7 +33,7 @@ typedef struct radicle_script_winner {
   uint32_t replaced;
 } radicle_script_winner;
 
-// root_load_index must hold one index per assets root, or be NULL with a count of zero for the high-to-low root order.
+// Requires root_load_index to hold radicle_assets_root_count indexes, or NULL with a count of zero for the high-to-low root order.
 RADICLE_API radicle_status radicle_script_set_resolve(const radicle_assets* assets,
                                                       const int32_t* root_load_index,
                                                       size_t root_load_index_count,

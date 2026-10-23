@@ -85,4 +85,23 @@ public sealed class VmadAuthoringTests
         var script = Assert.Single(env.PlacedReference(env.Winner(new FormKey("Utf8.esp", 0x800))!.Value).Scripts);
         Assert.Equal("\u0100", script.Properties[1].Text);
     }
+
+    [Fact]
+    public void QuestFragmentEditsRefuseOtherRecordsAndMissingKeysWithoutTouchingBytes()
+    {
+        using var temp = new TempDirectory();
+        var bytes = PluginWriter.Build(0, Array.Empty<string>(),
+            PluginWriter.Top("REFR", new Rec("REFR", 0x800, new[] { ("VMAD", Vmad()) })));
+        using var plugin = PluginFile.Read(temp.Write("Vmad.esp", bytes));
+        var key = new FormKey("Vmad.esp", 0x800);
+        var absent = new FormKey("Vmad.esp", 0x999);
+        Assert.Throws<RadicleException>(() => plugin.SetQuestVmadFragment(key, 10, 0, "QF_Test", "Fragment_10"));
+        Assert.Throws<RadicleException>(() => plugin.RemoveQuestVmadFragment(key, 10, 0));
+        Assert.False(plugin.SetQuestVmadFragment(absent, 10, 0, "QF_Test", "Fragment_10"));
+        Assert.False(plugin.RemoveQuestVmadFragment(absent, 10, 0));
+        Assert.Throws<ArgumentNullException>(() => plugin.SetQuestVmadFragment(key, 10, 0, null!, "Fragment_10"));
+        Assert.Throws<ArgumentException>(() => plugin.SetQuestVmadFragment(key, 10, 0, "QF\0Test", "Fragment_10"));
+        Assert.Throws<ArgumentException>(() => plugin.SetQuestVmadFragment(key, 10, 0, "QF_Test", "Fragment\0_10"));
+        Assert.Equal(bytes, plugin.ToBytes());
+    }
 }

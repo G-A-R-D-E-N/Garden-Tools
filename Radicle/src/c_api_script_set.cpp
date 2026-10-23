@@ -1,6 +1,6 @@
 #include "c_api_env_internal.hpp"
 #include "fo4/c_api_script_set.h"
-#include "fo4/papyrus/script_set.hpp"
+#include "fo4/pex_analysis/script_set.hpp"
 
 #include <cstdlib>
 #include <cstring>
@@ -11,7 +11,7 @@
 
 struct radicle_script_set {
   const radicle_assets* assets{nullptr};  // invariant: outlives the set
-  std::vector<fo4::papyrus::ScriptWinner> winners;
+  std::vector<fo4::pex_analysis::ScriptWinner> winners;
 };
 
 namespace {
@@ -24,12 +24,12 @@ radicle_asset_location to_c_location(const fo4::archive::AssetLocation& location
   return {RADICLE_ASSET_ARCHIVE, location.archive, location.entry};
 }
 
-radicle_script_candidate to_c_candidate(const fo4::papyrus::ScriptCandidate& candidate) {
+radicle_script_candidate to_c_candidate(const fo4::pex_analysis::ScriptCandidate& candidate) {
   radicle_script_candidate out{};
   out.name = candidate.name.c_str();
   out.path = candidate.path.c_str();
-  out.origin = candidate.location.origin == fo4::archive::AssetOrigin::loose ? RADICLE_ASSET_LOOSE
-                                                                            : RADICLE_ASSET_ARCHIVE;
+  out.origin = candidate.kind == fo4::pex_analysis::ScriptSourceKind::loose ? RADICLE_ASSET_LOOSE
+                                                                           : RADICLE_ASSET_ARCHIVE;
   out.container = candidate.container.c_str();
   out.load_index = candidate.load_index;
   out.size = candidate.size;
@@ -59,19 +59,19 @@ radicle_status radicle_script_set_resolve(const radicle_assets* assets,
   if (assets == nullptr || out_set == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "assets and out_set are required");
   }
+  *out_set = nullptr;
   if (root_load_index_count != 0 && root_load_index == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "root_load_index is required when its count is not zero");
   }
   if (root_load_index_count != 0 && root_load_index_count != assets->value.roots().size()) {
-    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "a script set needs one load index per assets root");
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "a script set requires one load index per assets root");
   }
-  *out_set = nullptr;
   return guarded("unknown exception while resolving the script set", [&] {
     const std::span<const std::int32_t> indexes =
         root_load_index == nullptr ? std::span<const std::int32_t>()
                                    : std::span<const std::int32_t>(root_load_index, root_load_index_count);
     auto set = std::make_unique<radicle_script_set>();
-    set->winners = fo4::papyrus::resolve_script_set(assets->value, indexes);
+    set->winners = fo4::pex_analysis::resolve_script_set(assets->value, indexes);
     set->assets = assets;
     *out_set = set.release();
     return RADICLE_STATUS_OK;
@@ -90,12 +90,12 @@ radicle_status radicle_script_set_get(const radicle_script_set* set,
   if (set == nullptr || out_winner == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "set and out_winner are required");
   }
+  *out_winner = {};
   if (index >= set->winners.size()) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "winner index is out of range");
   const auto& winner = set->winners[index];
-  *out_winner = {};
-  out_winner->name = winner.name.c_str();
+  out_winner->name = winner.winner.name.c_str();
   out_winner->winner = to_c_candidate(winner.winner);
-  out_winner->replaced = winner.replaced;
+  out_winner->replaced = static_cast<uint32_t>(winner.replaced);
   return RADICLE_STATUS_OK;
 }
 

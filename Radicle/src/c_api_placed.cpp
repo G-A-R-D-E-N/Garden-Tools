@@ -70,6 +70,8 @@ void build_view(const radicle_env& env, PlacedHolder& holder) {
   }
   v.layer = key(d.layer);
   v.encounter_zone = key(d.encounter_zone);
+  v.has_emittance = d.emittance ? 1 : 0;
+  v.emittance = key(d.emittance);
   v.location_reference = key(d.location_reference);
   v.attach_ref = key(d.attach_ref);
 

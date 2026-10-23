@@ -431,11 +431,14 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "RemoveElement") return backend_.removeElement(args);
         if (method == "MoveElement") return backend_.moveElement(args);
         if (method == "ClearElement") return backend_.clearElement(args);
+        if (method == "CopyElementToSelected") return backend_.copyElementToSelected(args);
+        if (method == "RemoveElementFromSelected") return backend_.removeElementFromSelected(args);
         if (method == "CleanUnusedMasters") return backend_.cleanUnusedMasters(args);
         if (method == "UpdateOnam") return backend_.updateOnam(args);
         if (method == "CopyAsDisabledOverride") return backend_.copyAsDisabledOverride(args);
         if (method == "CompactToEsl") return backend_.compactToEsl(args);
         if (method == "RenumberPluginFormIds") return backend_.renumberPluginFormIds(args);
+        if (method == "InjectFormsIntoMaster") return backend_.injectFormsIntoMaster(args);
         if (method == "DeepCopyAsOverride") {
             const auto normalizedName = normalizeTargetPluginName(stringArgument(args, 2));
             auto normalizedArgs = withTargetName(args, 2, normalizedName);

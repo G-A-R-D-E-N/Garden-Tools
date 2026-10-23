@@ -6,7 +6,7 @@ Evidence source: `xEdit/xeMainForm.pas` and `xEdit/xeMainForm.dfm` in TES5Edit/T
 |---|---|
 | Copy as disabled override | Implemented: `PluginEditTool/native/src/plugin/RadiclePluginDisabledOverride.cpp` |
 | Copy as wrapper | Implemented: `PluginEditTool/native/src/plugin/RadiclePluginCopyAsWrapper.cpp`. Shape differs from xEdit, see below. |
-| Inject Forms into master | Not implemented yet. Not declined. The runtime behavior is recorded below. |
+| Inject Forms into master | Implemented as `InjectFormsIntoMaster` (#362). The runtime behavior is recorded below. |
 | Fixup race-specific leveled items | Declined (#364) |
 | Copy idle animations into... | Declined (#364) |
 
@@ -45,7 +45,17 @@ Runtime behavior (source: the #362 comment of 2026-10-04, which cites the RE evi
 
 So the engine neither reports an ID collision nor enforces the light range; a writer would have to do both itself. #362 records no CK-side note for injected forms.
 
-Not implemented yet, and not declined. The runtime evidence exists; what is missing is the decision to implement and the implementation. Per the Radicle evidence order (`Radicle/ROADMAP.md`), runtime evidence takes precedence, and xEdit's ability to produce injected records is not enough on its own.
+PluginEditTool (#362): `InjectFormsIntoMaster(plugin, master, start, apply)` renumbers the plugin's own records to consecutive ids in the chosen master, starting at `start`. It is a dry run unless `apply` is true, and it stages changes without writing; `SavePlugin` persists them. Radicle's `fo4::inject_local_record` does the rekey, and it repoints in-plugin FormLinks to the new keys. The op refuses:
+
+- `InjectMasterNotListed`: the master is not in the plugin's master list.
+- `InjectMasterNotLoaded`: the master is not loaded, so id collisions cannot be checked.
+- `InjectRangeInvalid`: `start` or `start + count - 1` is outside `fo4::local_form_id_range(master)`. A light master's bound is taken from that function, not from a constant.
+- `InjectTargetOccupied`: a target FormKey is already used in the plugin or in the master. The message names the key.
+- The nested-record refusal and `parentGroupRelabelRefusal`, as renumber has them.
+
+Other plugins' references to the old ids are not repointed; the apply message says they dangle until patched.
+
+The runtime evidence above is why the op checks both collisions and the range itself. Per the Radicle evidence order (`Radicle/ROADMAP.md`), runtime evidence takes precedence, and xEdit's ability to produce injected records is not enough on its own.
 
 ## Declined (#364)
 
