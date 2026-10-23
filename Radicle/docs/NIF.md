@@ -3,8 +3,12 @@
 Scope of `fo4::nif`: header, block-type table, block sizes, string table, root list,
 NiNode-family child lists, shape-to-global transforms, billboard-node mode, and
 geometry for `BSTriShape`, `BSSubIndexTriShape`, `BSMeshLODTriShape` and
-`BSDynamicTriShape`. Not in scope: JSON, C ABI, shader, alpha and texture
-properties, skin data, collision.
+`BSDynamicTriShape`. A shape also decodes its bitangents, its skin weights and bone
+indices, its bones with their bind transforms, its `BSLightingShaderProperty`
++material path and its `BSShaderTextureSet` slots. Not in scope: JSON, collision,
+alpha properties, and the fragment, effect and water shader property types.
+`include/fo4/c_api_nif.h` exposes all of it to C, and
+`bindings/csharp/Radicle.Interop/NifFile.cs` to C#.
 
 Sources, the only fact sources for this reader:
 
@@ -12,6 +16,12 @@ Sources, the only fact sources for this reader:
   pins every citation, because F4LODGEN is being removed from main.
 - `BGS/src/Nif/NifFile.cs:<function>` (abbreviated `NifFile.cs`).
 - `BGS/src/Nif/NifShape.cs:<function>` (abbreviated `NifShape.cs`).
+- `nif.xml` from [niftools/nifxml](https://github.com/niftools/nifxml), the `develop`
+  and `master` revisions (abbreviated `nif.xml`). Object, struct and field names are
+  cited as written there. `#BS_FO4#` is `#BSVER# == 130` and `#BS_GTE_130#` holds at
+  130, so both are true for this reader.
+- The installed vanilla data, measured by `tests/test_nif_corpus.cpp`; the counts
+  quoted below are that run.
 
 Facts the sources do not pin are in the Parity-pending list at the end. The code
 follows the stated default, and the corpus run (`tests/test_nif_corpus.cpp`)
@@ -139,7 +149,9 @@ Vertex attribute offsets (`NifShape.cs:Layout` lines 143-162):
 - UV, UV2, normal, tangent and colour: 4 bytes each, in that order after the
   position (`NifShape.cs:Layout` lines 147-152).
 - Skin weights 8 bytes and indices 4 bytes, after the colour
-  (`NifShape.cs:Layout` lines 154-155). Skin data is not decoded.
+  (`NifShape.cs:Layout` lines 154-155). The weights and bone indices are decoded by
+  `src/nif/geometry.cpp:read_vertex`; the bone list and bind transforms are read by
+  `src/nif/skin.cpp:read_bones` (see Skin below).
 - Tail slot (bit 8): 4 bytes after the skin block, at the end of the vertex
   (byte 36 in the vanilla stride-40 layout, flags `0x17b`; the descriptor's
   offset nibble at bits 36-39 says 9, which is 36 bytes). Not decoded. Its
@@ -155,6 +167,97 @@ Each triangle index must be less than the vertex count
 Binary16 decode: `NifFile.cs:Half` uses `BitConverter.ToHalf`. This reader has
 its own decoder (`src/nif/geometry.cpp:half_to_float`) covering zero, subnormals,
 infinity and NaN.
+
+## Vertex attributes, bitangents and skin weights
+
+`nif.xml:BSVertexData` covers `#SSE# #FO4# #F76#`, so it is the FO4 layout, and
+`src/nif/geometry.cpp:read_vertex` follows its order:
+
+1. Position: three floats at full precision (descriptor bit 10), or three binary16
+   at half precision.
+2. Bitangent X: one float at full precision, one `hfloat` at half precision. This is
+   the slot the reader used to skip.
+3. UV: two binary16 (`HalfTexCoord`), gated by bit 1.
+4. Normal: `ByteVector3`, decoded as `b / 255 * 2 - 1`, gated by bit 3.
+5. Bitangent Y: one `normbyte`, decoded the same way, present with the normal.
+6. Tangent: `ByteVector3`, which `nif.xml` reads only when bits 3 and 4
+   (`0x18 == 0x18`) are both set.
+7. Bitangent Z: one `normbyte`, present with the tangent.
+8. Vertex colours: `ByteColor4`, decoded as `b / 255`, gated by bit 5.
+9. Bone weights: four binary16, then four bone indices, both gated by bit 6.
+10. Eye data: one float, gated by bit 8. Still read past.
+
+The bitangent is stored, not reconstructed: every component is on disk.
+`Shape::bitangents` holds three floats per vertex when bits 3 and 4 are both set
+and is empty otherwise, so it never holds a partial vertex.
+
+Checked against 8,737 vanilla vertices that carry normals and tangents: the mean
+decoded bitangent length is 0.99987, the mean `|normal . bitangent|` is 0.0045,
+and `bitangent . (normal x tangent)` is 1.00026, positive for 8,290 of them. The
+447 with a negative product are degenerate normal and tangent pairs.
+
+`Shape::weights` holds four floats per vertex and `Shape::bone_indices` four bytes
+per vertex, both empty when bit 6 is clear. Corpus: 23,595 shapes are skinned and
+every one holds exactly `4 * vertex count` of each; every one of the 169,498 bone
+indices found addresses a bone inside its shape's list.
+
+## Skin
+
+`nif.xml:BSSkin::Instance` is a skeleton-root pointer, a `BSSkin::BoneData`
+reference, a bone count, that many `NiNode` pointers, then a scale count and
+`Vector3` scales the reader does not read. A bone's name is the referenced node's
+NiAVObject name, or empty when the reference or its string index does not resolve,
+which is what `NifFile.cs:NameOf` does.
+
+`nif.xml:BSSkin::BoneData` is a bone count and then one `nif.xml:BSSkinBoneTrans`
+per bone, 68 bytes each: a `NiBound` (three floats and a radius), a `Matrix33`
+rotation, a `Vector3` translation and a scale float, in that order.
+`NifShape.cs:ReadSkin` reads the same fields in the same order and builds the same
+matrix, so a bone's bind transform is the stored rotation scaled by the stored
+scale with the translation in the fourth row. When the data reference is absent or
+names another block type, the reader keeps the names and leaves the transforms at
+their defaults, as that method does. A count that differs from the bone count is a
+`parse_error` (`src/nif/skin.cpp:read_bones`).
+
+Cross-checked against `NifShape.cs` outside this repository on four vanilla meshes
+(`MaleBody.nif`, `FemaleBody.nif`, `1stPersonFemaleBody.nif`, `RadRoach.nif`): all
+eight skinned shapes agree on the skinned verdict, every bone name, every bind
+matrix, every weight and every bone index.
+
+## Shader property and texture set
+
+`nif.xml` does not fully pin `BSLightingShaderProperty` at BS 130. Its `stopcond`
+names a `Name` field the revision never declares, and its shader-type field is
+gated on a `Shader Type` field that `nif.xml` gives NiObjectNET only below BS 130.
+The order below is what the vanilla data shows, and it fits every one of the
+1,111,752 shapes in the corpus that carry a material; every one of those names ends
+in `.bgsm`:
+
+1. `Shader Type` u32, then `Name`, an i32 string-table index, then the `NiObjectNET`
+   extra-data list and controller in `nif.xml` order.
+2. `Shader Flags 1` u32 and `Shader Flags 2` u32.
+3. UV offset and UV scale, two floats each.
+4. Texture set, an i32 `BSShaderTextureSet` reference.
+5. Emissive colour (three floats), emissive multiple, root material (an i32 string
+   index), texture clamp mode, alpha, refraction strength, smoothness, specular
+   colour (three floats), specular strength, subsurface rolloff, rimlight power,
+   backlight power (present when rimlight power is `FLT_MAX`), grayscale to palette
+   scale, fresnel power, and the six-float wetness block.
+6. A shader-type tail: at type 1 an environment map scale and two bytes, at type 5 a
+   three-float skin tint colour and a float, at type 6 a three-float hair tint colour.
+
+The reader stops after the texture set reference. Nothing it exposes depends on the
+tail, and the tail's conditional fields are what makes the layout uncertain.
+
+`NifShape.cs` reads neither of these blocks; the material path in step 1 is the
+`Name` of the shader property, which is the BGSM or BGEM when the shape uses a
+material file and empty when it does not.
+
+`nif.xml:BSShaderTextureSet` is a slot count and then one sized string per slot,
+empty for an unused slot. Corpus: 1,152,037 shapes carry a texture set, 11,520,370
+slots in total, of which 3,740,219 are non-empty - 3,740,160 ending in `.dds`, 53 in
+`.tga`, 2 in `.dd` and 4 with no extension. Those are vanilla data, passed through
+unchanged.
 
 ## Transforms and billboards
 
@@ -181,20 +284,33 @@ infinity and NaN.
 
 ## Deliberate omissions
 
-- No JSON, no C ABI, no shader or alpha or texture property decoding, no skin
-  decoding, no collision.
-- Trailing bytes inside a block are not validated.
-- Shader, alpha and skin references are stored, not followed.
+- No JSON and no collision.
+- Only `BSLightingShaderProperty` is followed. `BSEffectShaderProperty` and the
+  other shader property types are stored as references and read for nothing.
+- Trailing bytes inside a block are not validated, and the shader property's tail
+  after the texture set reference is not read (see Parity-pending item 25).
+- Alpha properties are not followed; `Shape::alpha_ref` stores the reference.
 - UV2 values are read past and discarded; `Shape` has no field for them.
-- The `bitangents` vector is always empty (see Parity-pending).
+- The vertex tail slot (bit 8, `Eye Data` in `nif.xml`) is read past.
 
 ## Parity-pending
 
-Not pinned by the sources. The code follows the default in each case; the corpus
-run (`tests/test_nif_corpus.cpp`) and a later RE or CK check decide.
+Not pinned by the sources when the item was written. The code follows the default in each
+case; the corpus run (`tests/test_nif_corpus.cpp`) and a later RE or CK check decide.
+Numbers do not move: an item that has since been settled says so and stays for the record.
 
 1. Rotation storage order: row-major 3x3 applied to column vectors
    (`p' = s * R * p + t`). Default used. Sources read and skip the nine floats.
+   SETTLED against vanilla data: composing `skeleton.nif` with this reading and
+   comparing it with the `skeleton.hkx` reference pose (composed with the same
+   row-vector `Matrix4x4.CreateScale * CreateFromQuaternion * CreateTranslation`
+   product BGS's `AnimationPose.ReferencePose` uses, an independent oracle that
+   agrees to 1e-4) gives a maximum position error of 0.0063 units and a mean of
+   0.0016 over the 74 HKX bones with a node name in the NIF, with the identity
+   axis mapping as the best of all 48 signed permutations. The row-vector reading
+   of the same floats gives a maximum error of 138.4 over the same pairs, so the
+   stored matrix is applied as `R * p`. 49 of the 74 agree within 1e-3; the rest
+   differ only in the last decimals of a float, and 8 of the 74 are exact.
 2. Composition convention for `shape_to_global` (see above). Default used.
 3. Node-type allowlist (`src/nif/nif.cpp:k_node_types`): `NiNode` and the other
    fourteen names. Only `BSMultiBoundNode` is pinned, by `F4LODGEN@06db2894:166`.
@@ -209,17 +325,20 @@ run (`tests/test_nif_corpus.cpp`) and a later RE or CK check decide.
    Any type-specific trailing fields are not read.
 7. `BSSubIndexTriShape` and `BSMeshLODTriShape`: `NifShape.cs:Shapes` reads them
    with the `BSTriShape` layout. Per-type trailing fields are not read.
-8. Meaning of `shader_ref` and `alpha_ref` (the two refs after skin), and of the 16
-   bytes after the collision ref. `NifShape.cs` skips them.
+8. `shader_ref` is settled: `nif.xml:BSTriShape` lists Bounding Sphere, Skin,
+   Shader Property and Alpha Property in that order, and the 16 bytes are the bounding
+   sphere. `alpha_ref` points at a `NiAlphaProperty` whose layout is not read.
 9. Meaning of the vertex-descriptor flag bits beyond their positions. Only the bit
    positions are pinned.
-10. Normal and tangent encoding: three bytes mapped to `b / 255 * 2 - 1`, fourth byte
-    unread. Not pinned; `NifShape.cs` does not decode them.
+10. Normal and tangent encoding is settled by `nif.xml:BSVertexData`: three bytes
+    mapped to `b / 255 * 2 - 1`, and the fourth byte is Bitangent Y or Z (see the
+    vertex section). `NifShape.cs` does not decode them.
 11. Colour encoding: four bytes mapped to `b / 255`. Not pinned.
 12. UV encoding: two binary16 values, as the 4-byte width suggests. Not pinned.
-13. Two bytes after a half-precision position are skipped. Their meaning (the
-    bitangent X slot in common Gamebryo layouts) is not pinned.
-14. Bitangents: left empty. The packing is not pinned.
+13. The bytes after a position are settled: Bitangent X, one float at full precision
+    and one `hfloat` at half precision (`nif.xml:BSVertexData`).
+14. Bitangents are settled: stored, not reconstructed, and read as described in the
+    vertex section.
 15. Full-precision position slot width: 16 bytes. Settled by the vanilla corpus:
     descriptor 0x0041b00000650407 places UV at byte 16 (stride 28); decoding UV
     at 12 gives invalid UVs. `NifShape.cs:Layout` uses 16 as well.
@@ -243,3 +362,145 @@ run (`tests/test_nif_corpus.cpp`) and a later RE or CK check decide.
 22. Four export-info strings are skipped without validation
     (`F4LODGEN@06db2894:413-425`; `NifFile.cs:ParseCore` lines 79-83).
 23. Shape name is read from the NiAVObject name (`NifShape.cs:ReadShape` line 106).
+24. The tangent is read whenever bit 4 is set, while `nif.xml:BSVertexData` reads it
+    only when bits 3 and 4 are both set. Both readings consume four bytes, so the
+    stride check cannot distinguish them, and no vanilla shape carries bit 4 without
+    bit 3. The bitangent follows `nif.xml` and needs both.
+25. The leading u32 of `BSLightingShaderProperty` is read as `Shader Type` because the
+    shader-type tail follows it. `nif.xml`'s version condition for that NiObjectNET
+    field excludes BS 130, so the corpus decides; all 1,111,752 material-bearing
+    shapes read a `.bgsm` name at the offset the field implies.
+
+## Scene graph
+
+`read_nif` keeps every node block it understands in `NifFile::nodes()` (the C ABI
+exposes them through `radicle_nif_node_*`, the C# binding as `NifFile.Nodes`).
+A `Node` carries its block index, its block type, its `NiObjectNET` name, its
+parent as a node-list index (-1 for a root), its children as the block indices
+the file stores (shapes included), and its local `NiAVObject` transform.
+
+The node prefix follows `nif.xml` for BS 130 and user version 12, in this order,
+and it is the same prefix the shapes read:
+
+1. `NiObjectNET`: `Name` (an i32 string-table index, -1 for none), then
+   `Num Extra Data List` and the `Extra Data List Ref` entries (since 10.0.1.0;
+   `Extra Data Ref` is `until 4.2.2.0` and so never appears), then `Controller Ref`.
+   `Shader Type` is a `NiObjectNET` field for 20.2.0.7, but the installed data only
+   carries it on `BSLightingShaderProperty` blocks, so a node's first field is the
+   name - proven by every node block ending exactly at its declared size.
+2. `NiAVObject`: `Flags` as a u32 (`#BSVER# #GT# 26`, so 130 takes the u32 branch),
+   `Translation` (three floats), `Rotation` (`Matrix33`, nine floats),
+   `Scale` (one float), then `Collision Object Ref`.
+3. `NiNode`: `Num Children` u32 and the child references. `Effects` is gated on
+   `#NI_BS_LT_FO4#`, which excludes this reader, so FO4 has no effects list here -
+   settled by the corpus: all 896,993 node blocks of the 226,177 vanilla NIFs parse
+   with the children list last, in block order.
+
+`read_children` skips negative child references and range-checks the rest against
+the block count, so a wrong node type cannot silently produce a fake child edge.
+
+### The node-type allowlist
+
+`src/nif/nif.cpp:k_node_types` is the same fifteen names as before, and the
+vanilla corpus now proves it covers everything that has an `NiNode`-shaped
+prefix. Histogram over 226,177 NIFs (Fallout 4 1.10.163, `FO4_DATA_DIR` set to
+the stock Data folder): `NiNode` 893,570, `BSValueNode` 1,783, `NiBillboardNode`
+709, `BSLeafAnimNode` 349, `BSOrderedNode` 235, `BSBlastNode` 148,
+`BSDamageStage` 121, `NiSwitchNode` 61, `BSMultiBoundNode` 16, `BSTreeNode` 1.
+No `BSFadeNode`, `NiLODNode`, `BSRangeNode`, `BSDebrisNode` or `NiSortAdjustNode`
+occurs in a vanilla `.nif` (they appear in the LOD `.bto`/`.btr` block types,
+which this corpus does not read).
+
+The only vanilla block whose name contains `Node` and is not a node is
+`BSFurnitureMarkerNode`, and it is not `NiNode`-derived: `nif.xml` gives it
+`inherit="BSFurnitureMarker"`, and its bytes agree - a u32 marker count where a
+node has its name index. Reading it as a node would take that count for a name,
+so it stays an opaque sized block, and `radicle_nif_node_for_block` returns -1 for
+it. The corpus counts it and prints it as `not a node despite the name`.
+
+### Node hierarchy against the HKX reference pose
+
+Vanilla `Meshes\Actors\Character\CharacterAssets\skeleton.nif` has 129 node
+blocks and 74 names in common with the 95 bones of the sibling `skeleton.hkx`.
+Of the 72 common bones whose HKX parent is also in the NIF, 71 name the same
+parent node. The one difference is `CamTarget`, whose NIF parent is
+`CamTargetParent` while the HKX parents it to `Root`; that is a property of the
+two shipped assets, not a reading difference.
+
+The 45 `*_skin` helper bones `MaleBody.nif` skins to all exist as nodes in BOTH
+files: 45 of them are nodes of `skeleton.nif` (which carries 129 nodes) and the
+same 45 are 45 of the 59 nodes of `MaleBody.nif`. Each reaches an HKX bone in one
+to three hops, for example `Belly_skin -> SPINE1 -> COM`,
+`Chest_skin -> Chest`, `UpperBelly_skin -> SPINE2 -> SPINE1 -> COM` and
+`RArm_ShoulderFat_skin -> RArm_Collarbone`.
+
+`BSSkin::BoneData`'s stored per-bone transform is NOT the helper's global
+transform: for the 45 helpers the global transform built from the node hierarchy
+(which matches the HKX reference pose to 0.0063) differs from the stored bind by
+up to 120.5 in its largest element, and from the stored bind's inverse by up to
+127.9. Whatever the stored `BSSkinBoneTrans` is relative to, it is not the
+bone's place in the scene graph; the reader still exposes it verbatim.
+
+### Shape parents
+
+Every vanilla shape sits under a node: 1,206,190 of 1,206,190 shapes have a node
+ancestor, and `shape_parent_node` (the C ABI's `radicle_nif_shape_parent_node`,
+the C# `NifShape.ParentNodeIndex`/`ParentNode`) agrees with the block parent for
+all of them. `shape_to_global` still excludes root nodes.
+
+## Skin policy
+
+- `BSSkin::BoneData` whose count disagrees with the skin's bone count is a
+  `parse_error`, not a silent identity transform. An absent or mistyped data
+  reference still yields names with default transforms, as `NifShape.cs:ReadSkin`
+  does; that case has no transforms in the file to read.
+- Bone indices are one byte per vertex, so a skin can only address its first 256
+  bones: index 255 is the largest a shape can name, and a `BSSkin::Instance` with
+  more bones leaves the rest unreachable. The reader refuses a file whose indices
+  are past the end of the skin's bone list instead of reading a bone that is not
+  there. The corpus has 0 out-of-range indices over 168,238 bones in 23,375
+  skinned shapes.
+- The 68-byte `BSSkinBoneTrans` this reader reads is the transform
+  `NifShape.cs:ReadSkin` reads; the corpus cross-check against BGS's own reader
+  is unchanged.
+
+## Shader property failures
+
+A `BSLightingShaderProperty` or `BSShaderTextureSet` that does not parse no longer
+fails the whole file. `read_shape` catches the `parse_error`, leaves the material
+path and the texture slots empty, and records the reason in `Shape::warning`,
+which the C ABI exposes as `radicle_nif_shape_warning` and the binding as
+`NifShape.Warning`. The geometry, the skin and the transform of that shape are
+still decoded. Vanilla data never needs this: 0 of 1,206,190 shapes record a
+warning, so no shipped file has a shader block this reader cannot follow.
+
+## C ABI thread safety
+
+- Every `radicle_nif_*` accessor is read-only on a handle and safe to call from
+  several threads at once; the handle's node list and shape list are built once in
+  `radicle_nif_read` and never mutated afterwards.
+- `radicle_nif_destroy` must not race any other call on the same handle. Handles
+  are independent of one another.
+- `radicle_last_error` is thread-local and stays valid until the next Radicle C
+  API call on the same thread, as `include/fo4/c_api.h` states.
+- The same contract holds for `radicle_dds_*`: the functions are pure, and
+  `fo4::texture` holds no state between calls.
+
+## Parity-pending status
+
+- Item 3 (node-type allowlist): settled by the corpus histogram above. The
+  fifteen names are the node types vanilla data uses; `BSFurnitureMarkerNode` is
+  deliberately outside the list, with its raw layout as evidence.
+- Item 4 (`NiBillboardNode` mode as a u16 after the children list): still the
+  reader's reading; 709 vanilla billboard nodes parse with it, and the corpus
+  reads their children without a single failure.
+- Item 20 (a shape with a zero data size, vertex count or stride yields an empty
+  shape): unchanged.
+
+## Node graph safety
+
+The fifteen NiNode-derived types in `src/nif/nif.cpp:k_node_types` are NiNode, BSFadeNode, BSMultiBoundNode, BSOrderedNode, BSLeafAnimNode, BSTreeNode, NiBillboardNode, NiSwitchNode, NiLODNode, BSValueNode, BSRangeNode, BSDebrisNode, BSBlastNode, BSDamageStage and NiSortAdjustNode; the vanilla corpus uses ten of them.
+
+`read_nif` refuses a file whose parent links form a loop, including a node that lists itself as its own child, with the parse_error `node parent chain contains a cycle`. The check walks each block's parent chain once with a three-state marker, so it is linear in the block count and never recurses; a 10,000-deep acyclic chain reads (`NifNodes.ReadsAVeryDeepAcyclicChain`). The managed `NifNode.WorldMatrix` composes its ancestors in a loop capped at the node count rather than by recursion, so a deep tree cannot overflow the stack and a loop that reached it anyway would throw instead of hanging.
+
+A skinned shape whose skin instance lists no bones keeps its geometry, but its per-vertex weights and bone indices are dropped and the shape warning says `the skin lists no bones, so its weights were dropped`: indices with nothing to index are never handed to a consumer. Eight vanilla skinned shapes have no resolvable bone list.
