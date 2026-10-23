@@ -324,3 +324,19 @@ TEST(Ba2Texture, RejectsBadSentinel) {
   serialized[71] = std::byte{0x00};
   EXPECT_THROW(fo4::archive::read_ba2_texture(serialized), Ba2Error);
 }
+
+TEST(Ba2Texture, ExtractRejectsCompressedChunkBeyondZlibBound) {
+  Ba2TextureEntry entry;
+  entry.path = "textures\\x.dds";
+  Ba2TextureChunk chunk;
+  chunk.data = repeated(8, 0);
+  chunk.decompressed_size = 1u << 30;
+  chunk.compressed = true;
+  entry.chunks.push_back(std::move(chunk));
+  try {
+    static_cast<void>(fo4::archive::extract_ba2_texture_entry(entry));
+    FAIL() << "expected 1 GiB claim from 8 packed bytes to fail";
+  } catch (const Ba2Error& error) {
+    EXPECT_NE(std::string(error.what()).find("expansion bound"), std::string::npos);
+  }
+}

@@ -229,6 +229,10 @@ xEdit's per-format case table (`Core/wbDDS.pas:610-764`); the default branch use
 `Radicle/docs/BA2.md` under "DDS header rule" groups the cases by flag with their
 line ranges. Radicle's zero-width refusal stays in `dds_header_for`.
 
+## src/archive/ba2_file.hpp:require_zlib_expansion_bound
+
+Both BA2 extract paths (`src/archive/ba2.cpp:extract_ba2_general_entry` and `src/archive/ba2_texture.cpp:extract_ba2_texture_entry`) call this for every compressed chunk in their first loop, before any buffer is allocated. A chunk fails with `Ba2Error` when its declared decompressed size is above its packed bytes times 1032 plus 64, the deflate maximum expansion with slack; `src/plugin/reader.cpp:inflate_record_payload` uses the same bound. Before this check an 8-byte packed chunk declaring 1 GiB made the extract reserve and zero-fill 1 GiB before zlib rejected it. The bound does not stop a valid deflate stream that really expands to 1 GiB; that case is still capped by `k_max_extract_total_bytes` (1 GiB) in both extract functions. Tests: `Radicle/tests/test_ba2_hardening.cpp:Ba2Hardening.CompressedChunkBeyondZlibBoundFailsBeforeAllocation` and `Radicle/tests/test_ba2_texture.cpp:Ba2Texture.ExtractRejectsCompressedChunkBeyondZlibBound`.
+
 ## tools/corpus/ba2_measure.py:measure
 
 Read-only, stdlib-only corpus check for `docs/BA2.md`. It walks each root-level

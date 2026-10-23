@@ -224,6 +224,9 @@ Ba2GeneralArchive read_ba2_general_file(const std::filesystem::path& path) {
 std::vector<std::byte> extract_ba2_general_entry(const Ba2GeneralEntry& entry) {
   std::size_t total = 0;
   for (const auto& chunk : entry.chunks) {
+    if (chunk.compressed) {
+      detail::require_zlib_expansion_bound(chunk.data.size(), chunk.decompressed_size);
+    }
     if (chunk.decompressed_size > std::numeric_limits<std::size_t>::max() - total) {
       throw Ba2Error("BA2 entry is too large to extract");
     }
