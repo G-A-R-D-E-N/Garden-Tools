@@ -45,9 +45,9 @@ typedef struct radicle_swf_info {
 typedef struct radicle_swf_tag {
   uint16_t code;
   uint32_t length;
-  size_t offset;
+  size_t offset;               /* must be the byte offset of the payload, past its header, inside the decompressed tag stream; not a file offset */
   size_t parent;
-  uint16_t sprite_id;          /* must be 0 when the tag sits in the root frame */
+  uint16_t sprite_id;          /* must be 0 for a tag outside any sprite; a DefineSprite tag reports its own id */
   uint8_t inside_sprite;
   uint8_t long_header;
   size_t payload_size;
@@ -68,7 +68,7 @@ typedef struct radicle_swf_frame_label {
 
 /* `parsed` is 0 when the block did not parse; the other fields must still be valid then. */
 typedef struct radicle_swf_abc_info {
-  const char* name;
+  const char* name;            /* must be the tag-header name for DoABC2 (82); the C ABI decodes a DoABC (72) name from its own header */
   uint32_t flags;
   size_t tag_index;
   size_t payload_size;
@@ -178,7 +178,7 @@ RADICLE_API radicle_status radicle_swf_abc_multiname_at(const radicle_swf* swf, 
 RADICLE_API size_t radicle_swf_abc_method_count(const radicle_swf* swf, size_t abc);
 RADICLE_API radicle_status radicle_swf_abc_method_at(const radicle_swf* swf, size_t abc, size_t index,
                                                      radicle_swf_method_pool* out_method);
-/* Returns malloc'd UTF-8 text the caller must release with radicle_free_bytes. */
+/* Returns malloc'd UTF-8 text the caller must release with radicle_free_bytes; the buffer is NUL-terminated one byte past *out_size and must stay non-null even when *out_size is 0. */
 RADICLE_API radicle_status radicle_swf_abc_method_disassemble(const radicle_swf* swf, size_t abc, size_t index,
                                                               uint8_t** out_text, size_t* out_size);
 

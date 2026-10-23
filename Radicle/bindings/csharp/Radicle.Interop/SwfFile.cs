@@ -245,7 +245,7 @@ public sealed unsafe class SwfFile : IDisposable
         Call.Check(RadicleNative.SwfAbcMethodDisassemble(use.Pointer, (nuint)abc, (nuint)methodIndex, &text, &size));
         try
         {
-            return Utf8.Read((IntPtr)text) ?? string.Empty;
+            return System.Text.Encoding.UTF8.GetString(Utf8.Raw((IntPtr)text, size));
         }
         finally
         {
@@ -389,9 +389,10 @@ public sealed unsafe class SwfFile : IDisposable
             SwfOwner.Script => methodIndex == 0
                 ? RadicleNative.SwfAbcScriptAt(swf, (nuint)abc, (nuint)(int)ownerIndex, &method)
                 : throw new ArgumentOutOfRangeException(nameof(methodIndex)),
-            _ => methodIndex == 0
+            SwfOwner.Function => methodIndex == 0
                 ? RadicleNative.SwfAbcFunctionAt(swf, (nuint)abc, (nuint)(int)ownerIndex, &method)
                 : throw new ArgumentOutOfRangeException(nameof(methodIndex)),
+            _ => throw new ArgumentOutOfRangeException(nameof(owner)),
         };
         Call.Check(status);
         return method;

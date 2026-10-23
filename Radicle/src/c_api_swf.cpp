@@ -1,13 +1,17 @@
 #include "fo4/c_api_swf.h"
 
 #include "c_api_env_internal.hpp"
+#include "c_api_internal.hpp"
 #include "fo4/abc/opcodes.hpp"
 #include "fo4/abc/summary.hpp"
 #include "fo4/swf/swf.hpp"
 
+#include <algorithm>
+#include <cstddef>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <memory>
 #include <new>
 #include <span>
 #include <string>
@@ -17,6 +21,7 @@
 using radicle_c_detail::clear_error;
 using radicle_c_detail::fail;
 using radicle_c_detail::fail_exception;
+using radicle_c_detail::utf8_path;
 using radicle_c_env_detail::guarded;
 
 namespace {
@@ -84,6 +89,22 @@ std::string null_terminated_string(std::span<const std::byte> payload) {
   return text;
 }
 
+// Requires a DoABC payload of u32 flags, a NUL-terminated name, then ABC bytes; a broken header yields an empty span.
+std::span<const std::byte> split_do_abc(std::span<const std::byte> payload, abc_view& view) {
+  if (payload.size() < 4) return {};
+  const auto rest = payload.subspan(4);
+  const auto nul = std::find(rest.begin(), rest.end(), std::byte{0});
+  if (nul == rest.end()) return {};
+  std::uint32_t flags = 0;
+  for (std::size_t byte = 0; byte < 4; ++byte) {
+    flags |= std::to_integer<std::uint32_t>(payload[byte]) << (8 * byte);
+  }
+  const auto length = static_cast<std::size_t>(nul - rest.begin());
+  view.flags = flags;
+  view.name.assign(reinterpret_cast<const char*>(rest.data()), length);
+  return rest.subspan(length + 1);
+}
+
 void flatten_tags(const fo4::swf::SwfTag& tag,
                   std::size_t parent,
                   std::uint16_t sprite_id,
@@ -129,21 +150,20 @@ void build_abc_views(radicle_swf& swf) {
     auto payload = block.payload;
     const auto flat_index =
         block.tag_index < root_flat_index.size() ? root_flat_index[block.tag_index] : block.tag_index;
-    if (swf.tags[flat_index].tag->code == fo4::swf::tag::kDoAbc && payload.size() >= 4) {
-      // DoABC keeps its payload whole; the flags must be skipped before the ABC data starts.
-      payload = payload.subspan(4);
-    }
     abc_view view;
     view.name = block.name;
     view.flags = block.flags;
     view.tag_index = flat_index;
+    if (swf.tags[flat_index].tag->code == fo4::swf::tag::kDoAbc) {
+      payload = split_do_abc(payload, view);
+    }
     view.payload_size = payload.size();
     const auto status = fo4::abc::AbcFile::parse(
         reinterpret_cast<const std::uint8_t*>(payload.data()), payload.size(), view.file);
     view.parsed = status == fo4::abc::AbcStatus::Ok;
     if (view.parsed) {
       // A block that fails to summarize must keep an empty summary; parsed stays 1.
-      (void)fo4::abc::summarize(view.file, view.summary);
+      if (fo4::abc::summarize(view.file, view.summary) != fo4::abc::AbcStatus::Ok) view.summary = {};
       for (std::uint32_t index = 0; index < view.file.methods.size(); ++index) {
         view.method_names.push_back(view.file.method_name(index));
         view.method_return_types.push_back(view.file.multiname_at(view.file.methods[index].return_type));
@@ -172,7 +192,7 @@ radicle_status open_from_bytes(const std::uint8_t* bytes, std::size_t size, radi
 }
 
 std::vector<std::byte> read_file(const char* path) {
-  std::ifstream in(path, std::ios::binary);
+  std::ifstream in(utf8_path(path), std::ios::binary);
   if (!in) return {};
   std::vector<std::byte> bytes;
   char buffer[8192];
@@ -236,9 +256,11 @@ void fill_call(const fo4::abc::AbcCallSite& site, radicle_swf_call& out) {
 }
 
 std::uint8_t* copy_text(const std::string& text, std::size_t* out_size) {
-  auto* buffer = static_cast<std::uint8_t*>(std::malloc(text.size()));
-  if (buffer == nullptr && !text.empty()) return nullptr;
+  // invariant: the buffer carries a trailing NUL that *out_size does not count.
+  auto* buffer = static_cast<std::uint8_t*>(std::malloc(text.size() + 1));
+  if (buffer == nullptr) return nullptr;
   if (!text.empty()) std::memcpy(buffer, text.data(), text.size());
+  buffer[text.size()] = 0;
   *out_size = text.size();
   return buffer;
 }
@@ -285,7 +307,8 @@ radicle_status radicle_swf_open_ba2(const radicle_ba2* ba2, const char* path, ra
     const auto extracted = radicle_ba2_extract(ba2, index, &bytes, &size);
     if (extracted != RADICLE_STATUS_OK) return extracted;
     const auto status = open_from_bytes(bytes, size, out_swf);
-    radicle_free_bytes(bytes);
+    // Requires std::free here: radicle_free_bytes would clear the refusal message.
+    std::free(bytes);
     return status;
   });
 }
@@ -630,7 +653,7 @@ radicle_status radicle_swf_abc_method_disassemble(const radicle_swf* swf, size_t
     const auto status = fo4::abc::disassemble(view->file, body->code, text, body->exceptions);
     if (status != fo4::abc::AbcStatus::Ok) return fail(RADICLE_STATUS_PARSE_ERROR, "the method body did not decode");
     auto* buffer = copy_text(text, out_size);
-    if (buffer == nullptr && !text.empty()) return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to allocate the listing");
+    if (buffer == nullptr) return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to allocate the listing");
     *out_text = buffer;
     return RADICLE_STATUS_OK;
   });

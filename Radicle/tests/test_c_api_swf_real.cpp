@@ -141,6 +141,8 @@ TEST(CApiSwfReal, ReadsEveryInterfaceMovieThroughTheArchiveAndTheBytesPathAlike)
   std::size_t movies = 0;
   std::size_t abc_classes = 0;
   std::size_t parsed_blocks = 0;
+  std::size_t unparsed_blocks = 0;
+  std::string unparsed_paths;
   std::uint64_t aggregate = 1469598103934665603ull;  // FNV-1a offset basis
 
   for (std::size_t index = 0; index < archive_info.entry_count; ++index) {
@@ -178,13 +180,19 @@ TEST(CApiSwfReal, ReadsEveryInterfaceMovieThroughTheArchiveAndTheBytesPathAlike)
     for (const auto& tag : parsed.file.tags) expected_tags += tree_size(tag);
     EXPECT_EQ(info.tag_count, expected_tags) << path;
 
+    std::size_t movie_unparsed = 0;
     for (std::size_t abc = 0; abc < info.abc_count; ++abc) {
       radicle_swf_abc_info block{};
       ASSERT_EQ(radicle_swf_abc_info_at(swf.get(), abc, &block), RADICLE_STATUS_OK);
-      if (block.parsed == 0) continue;
+      if (block.parsed == 0) {
+        ++movie_unparsed;
+        continue;
+      }
       ++parsed_blocks;
       abc_classes += radicle_swf_abc_class_count(swf.get(), abc);
     }
+    unparsed_blocks += movie_unparsed;
+    if (movie_unparsed != 0) unparsed_paths += (unparsed_paths.empty() ? "" : ";") + path;
 
     aggregate = fnv1a(aggregate, path);
     aggregate = fnv1a(aggregate, archive_dump);
@@ -196,5 +204,7 @@ TEST(CApiSwfReal, ReadsEveryInterfaceMovieThroughTheArchiveAndTheBytesPathAlike)
   RecordProperty("movies", std::to_string(movies));
   RecordProperty("parsed_abc_blocks", std::to_string(parsed_blocks));
   RecordProperty("abc_classes", std::to_string(abc_classes));
+  RecordProperty("unparsed_abc_blocks", std::to_string(unparsed_blocks));
+  if (unparsed_blocks != 0) RecordProperty("unparsed_abc_movies", unparsed_paths);
   RecordProperty("dump_hash", std::to_string(aggregate));
 }

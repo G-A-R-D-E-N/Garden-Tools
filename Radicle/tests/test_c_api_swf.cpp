@@ -1,13 +1,17 @@
 #include "abc_test_support.hpp"
 #include "fo4/c_api.h"
+#include "fo4/c_api_env.h"
 #include "fo4/c_api_swf.h"
 #include "swf_movie_builder.hpp"
+#include "temp_data_dir.hpp"
 
 #include <gtest/gtest.h>
 
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <memory>
 #include <span>
 #include <string>
@@ -308,6 +312,115 @@ TEST(CApiSwfTest, SummarizesAbcAndDisassemblesAMethodBody) {
             RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(listing, nullptr);
   EXPECT_EQ(listing_size, 0u);
+}
+
+// Regression: a DoABC (72) block must strip its flags and name before the ABC data parses, and a broken header stays unparsed.
+TEST(CApiSwfTest, DecodesADoAbcHeaderAndRefusesAnUnterminatedName) {
+  const auto abc = fo4::test::build_abc();
+  const auto movie_with = [](const SwfBuilder& payload) {
+    SwfBuilder builder;
+    builder.rect(0, 11000, 0, 8000, 15);
+    builder.u16(0x0C00);
+    builder.u16(1);
+    builder.tag(72, payload.body, false);
+    builder.tag(0);
+    return wrap_body(builder.body, 10, false, false);
+  };
+
+  SwfBuilder abc_tag;
+  abc_tag.u32(1);
+  abc_tag.text("frame 1");
+  abc_tag.bytes(std::span<const std::byte>(reinterpret_cast<const std::byte*>(abc.data()), abc.size()));
+  const auto file = open(movie_with(abc_tag));
+  ASSERT_NE(file, nullptr);
+
+  radicle_swf_abc_info info{};
+  ASSERT_EQ(radicle_swf_abc_info_at(file.get(), 0, &info), RADICLE_STATUS_OK);
+  EXPECT_EQ(info.parsed, 1);
+  EXPECT_STREQ(info.name, "frame 1");
+  EXPECT_EQ(info.flags, 1u);
+  EXPECT_EQ(info.payload_size, abc.size());
+  EXPECT_EQ(radicle_swf_abc_class_count(file.get(), 0), 1u);
+
+  uint8_t* listing = nullptr;
+  size_t listing_size = 0;
+  ASSERT_EQ(radicle_swf_abc_method_disassemble(file.get(), 0, 0, &listing, &listing_size), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  const auto text = text_of(listing, listing_size);
+  radicle_free_bytes(listing);
+  EXPECT_NE(text.find("callpropvoid"), std::string::npos) << text;
+
+  SwfBuilder unterminated;
+  unterminated.u32(0);
+  unterminated.u8('x');
+  const auto broken = open(movie_with(unterminated));
+  ASSERT_NE(broken, nullptr);
+  ASSERT_EQ(radicle_swf_abc_info_at(broken.get(), 0, &info), RADICLE_STATUS_OK);
+  EXPECT_EQ(info.parsed, 0);
+  EXPECT_STREQ(info.name, "");
+  EXPECT_EQ(info.payload_size, 0u);
+}
+
+// Regression: a non-ASCII loose path must reach the loader as UTF-8 on Windows, and a missing or null path must be refused.
+TEST(CApiSwfTest, OpensALooseMovieByUtf8PathAndRefusesMissingAndNullPaths) {
+  SwfBuilder builder;
+  builder.rect(0, 100, 0, 100, 9);
+  builder.u16(0x0C00);
+  builder.u16(1);
+  builder.tag(1);
+  builder.tag(0);
+  const auto movie = wrap_body(builder.body, 9, false, false);
+
+  fo4::test::TempDataDir dir;
+  const auto loose = dir.path() / std::filesystem::path(u8"movie_\u00e9.swf");
+  {
+    std::ofstream out(loose, std::ios::binary);
+    out.write(reinterpret_cast<const char*>(movie.data()), static_cast<std::streamsize>(movie.size()));
+  }
+  const auto loose_utf8 = loose.u8string();
+  radicle_swf* raw = nullptr;
+  ASSERT_EQ(radicle_swf_open_path(reinterpret_cast<const char*>(loose_utf8.c_str()), &raw), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  const SwfHandle from_path(raw);
+  const auto from_bytes = open(movie);
+  radicle_swf_info path_info{};
+  radicle_swf_info bytes_info{};
+  ASSERT_EQ(radicle_swf_get_info(from_path.get(), &path_info), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_swf_get_info(from_bytes.get(), &bytes_info), RADICLE_STATUS_OK);
+  EXPECT_EQ(path_info.tag_count, bytes_info.tag_count);
+  EXPECT_EQ(path_info.frame_count, bytes_info.frame_count);
+
+  const auto missing_utf8 = (dir.path() / "missing.swf").u8string();
+  EXPECT_EQ(radicle_swf_open_path(reinterpret_cast<const char*>(missing_utf8.c_str()), &raw),
+            RADICLE_STATUS_IO_ERROR);
+  EXPECT_EQ(raw, nullptr);
+  EXPECT_EQ(radicle_swf_open_path(nullptr, &raw), RADICLE_STATUS_INVALID_ARGUMENT);
+}
+
+// Regression: an LZMA refusal reached through an archive must keep its message after the extracted buffer is released.
+TEST(CApiSwfTest, KeepsTheLzmaMessageWhenAnArchiveMovieIsRefused) {
+  const std::vector<uint8_t> lzma{'Z', 'W', 'S', 13, 0, 0, 0, 0, 1, 2, 3};
+  const radicle_ba2_file files[] = {{"movie.swf", lzma.data(), lzma.size()}};
+  uint8_t* archive = nullptr;
+  size_t archive_size = 0;
+  ASSERT_EQ(radicle_ba2_write_general(files, 1, 1, 0, &archive, &archive_size), RADICLE_STATUS_OK);
+  fo4::test::TempDataDir dir;
+  const auto archive_path = dir.path() / "movies.ba2";
+  {
+    std::ofstream out(archive_path, std::ios::binary);
+    out.write(reinterpret_cast<const char*>(archive), static_cast<std::streamsize>(archive_size));
+  }
+  radicle_free_bytes(archive);
+
+  radicle_ba2* raw_archive = nullptr;
+  ASSERT_EQ(radicle_ba2_open(archive_path.string().c_str(), &raw_archive), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  const std::unique_ptr<radicle_ba2, decltype(&radicle_ba2_close)> ba2(raw_archive, &radicle_ba2_close);
+
+  radicle_swf* raw = nullptr;
+  EXPECT_EQ(radicle_swf_open_ba2(ba2.get(), "movie.swf", &raw), RADICLE_STATUS_PARSE_ERROR);
+  EXPECT_EQ(raw, nullptr);
+  EXPECT_NE(std::string(radicle_last_error()).find("LZMA"), std::string::npos);
 }
 
 // Regression: an unparsed DoABC block must report parsed=0 and must not answer a method pool.
