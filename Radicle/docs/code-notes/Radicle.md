@@ -4686,6 +4686,9 @@ Null-checks the weather array and rejects any invalid link with RADICLE_STATUS_I
 ### Radicle/include/fo4/pex_analysis/script_set.hpp:enumerate_script_candidates
 - Callers must pass resolver roots that do not overlap. Overlapping roots break the loose load index in Radicle/src/pex_analysis/script_set.cpp:loose_load_index.
 
+### Radicle/tests/test_script_set.cpp:ScriptSet.FirstLooseRootWinsLikeAssetResolverLocate
+- On Windows `Radicle/src/archive/assets.cpp:child` returns the requested lowercase spelling when the case-insensitive exact probe hits, so `AssetResolver::locate` gives `scripts/quest/foo.pex`. `Radicle/src/archive/assets.cpp:walk_loose` (used by `AssetResolver::list`) keeps the on-disk `Scripts/Quest/Foo.pex`. Both name one file, but `std::filesystem::path` equality is case-sensitive on MSVC, so the test checks identity with `std::filesystem::equivalent`. Linux returns the on-disk spelling from both, which is why it passed there. The Windows spelling difference in `locate` is left as is; it is harmless for reads.
+
 ### Radicle/tests/test_script_set_real.cpp:ScriptSetReal
 - The 10331 candidate and winner pins are not measured yet. They are marked TODO-verify in the file. The two pins are equal, so the test also assumes no script name appears in two containers.
 

@@ -121,5 +121,6 @@ TEST(ScriptSet, FirstLooseRootWinsLikeAssetResolverLocate) {
   EXPECT_EQ(winners[0].winner.load_index, 1);
   EXPECT_EQ(winners[0].winner.size, 1u);
   EXPECT_EQ(winners[0].replaced, 1u);
-  EXPECT_EQ(std::filesystem::path(winners[0].winner.container), resolver.locate("Scripts/Quest/Foo.pex")->loose_path);
+  EXPECT_TRUE(std::filesystem::equivalent(std::filesystem::path(winners[0].winner.container),
+                                          resolver.locate("Scripts/Quest/Foo.pex")->loose_path));
 }
