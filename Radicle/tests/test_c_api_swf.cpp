@@ -62,7 +62,7 @@ SwfHandle open_abc_movie() {
   SwfBuilder abc_tag;
   abc_tag.u32(0);
   abc_tag.text("frame 1");
-  abc_tag.bytes(abc);
+  abc_tag.bytes(std::span<const std::byte>(reinterpret_cast<const std::byte*>(abc.data()), abc.size()));
   file.tag(72, abc_tag.body, false);
 
   SwfBuilder sprite;
