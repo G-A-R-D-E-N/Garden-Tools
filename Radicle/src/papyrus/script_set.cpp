@@ -63,11 +63,11 @@ bool outranks(const ScriptCandidate& left, const ScriptCandidate& right) {
 }  // namespace
 
 std::string normalize_script_name(std::string_view relative_path) {
-  std::string name(relative_path);
+  std::string name = lower(relative_path);
   std::replace(name.begin(), name.end(), '\\', '/');
   while (!name.empty() && name.front() == '/') name.erase(name.begin());
   if (ends_with(name, ".pex")) name.resize(name.size() - 4);
-  return lower(name);
+  return name;
 }
 
 std::optional<std::string> script_name_from_entry(std::string_view entry_path) {
