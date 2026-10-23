@@ -22,6 +22,8 @@
 #include "fo4/c_api_cell.h"
 #include "fo4/c_api_patch.h"
 #include "fo4/c_api_conflict.h"
+#include "fo4/c_api_nif.h"
+#include "fo4/c_api_dds.h"
 #include <cstddef>
 #include <cstdio>
 
