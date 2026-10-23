@@ -293,7 +293,7 @@ TEST_P(ClimateWeatherReal, LinksAndOptionalSubrecordsEditOfficialRecordsAndKeepE
   RecordProperty("records_edited", static_cast<int>(targets.size()));
 }
 
-TEST(ClimateWeatherRealEdit, Fallout4ClimateAndWeatherEditsReDecodeAfterWriteAndReload) {
+TEST(ClimateWeatherEditReal, Fallout4ClimateAndWeatherEditsReDecodeAfterWriteAndReload) {
   bool skip = false;
   const auto path = official("Fallout4.esm", skip);
   if (skip) GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data";
