@@ -90,13 +90,60 @@ std::vector<std::byte> place1_payload() {
   return builder.body;
 }
 
-std::vector<std::byte> place3_class_image_payload() {
+std::vector<std::byte> place3_image_with_character_payload() {
   SwfBuilder builder;
-  builder.u8(0x02);
+  builder.u8(0x06);
+  builder.u8(0x10);
+  builder.u16(1);
+  builder.u16(1);
+  builder.push_bits(0, 1);
+  builder.push_bits(0, 1);
+  builder.push_bits(0, 5);
+  builder.align();
+  return builder.body;
+}
+
+std::vector<std::byte> place3_image_without_character_payload() {
+  SwfBuilder builder;
+  builder.u8(0x00);
   builder.u8(0x10);
   builder.u16(1);
   builder.text("BitmapData");
+  return builder.body;
+}
+
+std::vector<std::byte> place3_class_name_payload() {
+  SwfBuilder builder;
+  builder.u8(0x02);
+  builder.u8(0x08);
+  builder.u16(1);
+  builder.text("Hat");
   builder.u16(12);
+  return builder.body;
+}
+
+std::vector<std::byte> place3_all_filter_kinds_payload() {
+  SwfBuilder builder;
+  builder.u8(0x00);
+  builder.u8(0x01);
+  builder.u16(1);
+  builder.u8(6);
+  builder.u8(2);
+  for (int index = 0; index < 15; ++index) builder.u8(0);
+  builder.u8(3);
+  for (int index = 0; index < 27; ++index) builder.u8(0);
+  builder.u8(4);
+  builder.u8(3);
+  for (int index = 0; index < 3 * 5 + 19; ++index) builder.u8(0);
+  builder.u8(5);
+  builder.u8(2);
+  builder.u8(3);
+  for (int index = 0; index < 13 + 4 * 2 * 3; ++index) builder.u8(0);
+  builder.u8(6);
+  for (int index = 0; index < 80; ++index) builder.u8(0);
+  builder.u8(7);
+  builder.u8(1);
+  for (int index = 0; index < 5 + 19; ++index) builder.u8(0);
   return builder.body;
 }
 
@@ -196,14 +243,40 @@ TEST(SwfPlacement, PlaceObject1DecodesMatrixAndRgbColorTransformWithoutAlpha) {
   EXPECT_EQ(place.color_transform->add, (std::array<std::int32_t, 4>{0, 0, 0, 0}));
 }
 
-TEST(SwfPlacement, PlaceObject3ReadsClassNameBeforeCharacterWhenImageAndCharacterAreSet) {
-  const auto bytes = movie_of({{70, place3_class_image_payload()}});
+TEST(SwfPlacement, PlaceObject3ImageWithCharacterHasNoClassName) {
+  const auto bytes = movie_of({{70, place3_image_with_character_payload()}});
+  const auto result = fo4::swf::read_swf(bytes);
+  ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
+  const auto& place = *result.file.tags[0].placement;
+  EXPECT_FALSE(place.class_name.has_value());
+  EXPECT_EQ(place.character_id, std::optional<std::uint16_t>(1));
+  EXPECT_EQ(place.depth, 1);
+  EXPECT_TRUE(place.matrix.has_value());
+}
+
+TEST(SwfPlacement, PlaceObject3ImageWithoutCharacterReadsClassName) {
+  const auto bytes = movie_of({{70, place3_image_without_character_payload()}});
   const auto result = fo4::swf::read_swf(bytes);
   ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
   const auto& place = *result.file.tags[0].placement;
   EXPECT_EQ(place.class_name, std::optional<std::string>("BitmapData"));
+  EXPECT_FALSE(place.character_id.has_value());
+}
+
+TEST(SwfPlacement, PlaceObject3HasClassNameReadsNameBeforeCharacter) {
+  const auto bytes = movie_of({{70, place3_class_name_payload()}});
+  const auto result = fo4::swf::read_swf(bytes);
+  ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
+  const auto& place = *result.file.tags[0].placement;
+  EXPECT_EQ(place.class_name, std::optional<std::string>("Hat"));
   EXPECT_EQ(place.character_id, std::optional<std::uint16_t>(12));
-  EXPECT_EQ(place.depth, 1);
+}
+
+TEST(SwfPlacement, PlaceObject3SkipsEveryFilterKindByItsSpecSize) {
+  const auto bytes = movie_of({{70, place3_all_filter_kinds_payload()}});
+  const auto result = fo4::swf::read_swf(bytes);
+  ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
+  EXPECT_EQ(result.file.tags[0].placement->filter_count, 6);
 }
 
 TEST(SwfPlacement, PlaceObject3SkipsFilterListAndReadsBlendCacheVisibleAndBackground) {

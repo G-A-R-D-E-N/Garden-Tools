@@ -136,7 +136,7 @@ SwfStatus decode_place_object2(std::span<const std::byte> data, bool version3,
   place.move = (flags & 0x01u) != 0;
   place.has_clip_actions = (flags & 0x80u) != 0;
   const bool has_image = (flags3 & 0x10u) != 0;
-  const bool has_class_name = (flags3 & 0x08u) != 0 || (has_image && has_character);
+  const bool has_class_name = (flags3 & 0x08u) != 0 || (has_image && !has_character);
   const bool has_cache = (flags3 & 0x04u) != 0;
   const bool has_blend = (flags3 & 0x02u) != 0;
   const bool has_filters = (flags3 & 0x01u) != 0;
