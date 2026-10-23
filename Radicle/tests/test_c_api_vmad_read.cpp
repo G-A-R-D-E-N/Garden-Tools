@@ -136,20 +136,20 @@ TEST_F(CApiVmadReadTest, ReadsScriptsPropertiesAndObjectElements) {
   ASSERT_EQ(radicle_vmad_script_count(scripts.get()), 1u);
 
   radicle_vmad_script script{};
-  ASSERT_EQ(radicle_vmad_script(scripts.get(), 0, &script), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_vmad_scripts_script(scripts.get(), 0, &script), RADICLE_STATUS_OK);
   EXPECT_EQ(std::string(script.name), "ReadScript");
   EXPECT_EQ(script.property_count, 2u);
   EXPECT_EQ(script.unsupported, 0);
 
   radicle_vmad_property property{};
-  ASSERT_EQ(radicle_vmad_property(scripts.get(), 0, 0, &property), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_vmad_scripts_property(scripts.get(), 0, 0, &property), RADICLE_STATUS_OK);
   EXPECT_EQ(std::string(property.name), "Label");
   EXPECT_EQ(property.value_kind, RADICLE_VMAD_TEXT);
   ASSERT_NE(property.text, nullptr);
   EXPECT_EQ(std::string(property.text), "Alpha");
   EXPECT_EQ(property.element_total, 0u);
 
-  ASSERT_EQ(radicle_vmad_property(scripts.get(), 0, 1, &property), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_vmad_scripts_property(scripts.get(), 0, 1, &property), RADICLE_STATUS_OK);
   EXPECT_EQ(std::string(property.name), "Targets");
   EXPECT_EQ(property.element_kind, RADICLE_VMAD_OBJECT);
   EXPECT_EQ(property.declared_element_count, 2u);
@@ -157,14 +157,14 @@ TEST_F(CApiVmadReadTest, ReadsScriptsPropertiesAndObjectElements) {
   ASSERT_EQ(radicle_vmad_element_count(scripts.get(), 0, 1), 2u);
 
   radicle_vmad_element element{};
-  ASSERT_EQ(radicle_vmad_element(scripts.get(), 0, 1, 0, &element), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_vmad_scripts_element(scripts.get(), 0, 1, 0, &element), RADICLE_STATUS_OK);
   EXPECT_EQ(element.kind, RADICLE_VMAD_OBJECT);
   EXPECT_EQ(element.object_form_id, 0x805u);
   EXPECT_EQ(element.alias, -1);
   EXPECT_EQ(element.index_in_property, 0u);
   EXPECT_EQ(element.member_name, nullptr);
 
-  ASSERT_EQ(radicle_vmad_element(scripts.get(), 0, 1, 1, &element), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_vmad_scripts_element(scripts.get(), 0, 1, 1, &element), RADICLE_STATUS_OK);
   EXPECT_EQ(element.object_form_id, 0x806u);
   EXPECT_EQ(element.alias, 3);
   EXPECT_EQ(element.index_in_property, 1u);
@@ -183,11 +183,11 @@ TEST_F(CApiVmadReadTest, RefusesRecordsWithoutVmadAndBadIndexes) {
   ASSERT_EQ(radicle_record_vmad_scripts(env.get(), winner(env.get(), 0x800), &raw), RADICLE_STATUS_OK);
   const ScriptsHandle scripts(raw);
   radicle_vmad_script script{};
-  EXPECT_EQ(radicle_vmad_script(scripts.get(), 1, &script), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_vmad_scripts_script(scripts.get(), 1, &script), RADICLE_STATUS_INVALID_ARGUMENT);
   radicle_vmad_property property{};
-  EXPECT_EQ(radicle_vmad_property(scripts.get(), 0, 2, &property), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_vmad_scripts_property(scripts.get(), 0, 2, &property), RADICLE_STATUS_INVALID_ARGUMENT);
   radicle_vmad_element element{};
-  EXPECT_EQ(radicle_vmad_element(scripts.get(), 0, 1, 2, &element), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_vmad_scripts_element(scripts.get(), 0, 1, 2, &element), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_vmad_element_count(scripts.get(), 0, 2), 0u);
   EXPECT_EQ(radicle_vmad_script_count(nullptr), 0u);
   radicle_vmad_scripts_destroy(nullptr);

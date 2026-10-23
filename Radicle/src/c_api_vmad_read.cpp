@@ -63,10 +63,13 @@ struct radicle_vmad_scripts {
   std::vector<element_row> elements;
 };
 
-namespace {
+using radicle_c_detail::clear_error;
+using radicle_c_detail::fail;
+using radicle_c_env_detail::belongs_to_env;
+using radicle_c_env_detail::guarded;
+using radicle_c_env_detail::to_ref;
 
-using namespace radicle_c_detail;
-using namespace radicle_c_env_detail;
+namespace {
 
 void fill_scalar(const fo4::VmadProperty& property, property_row& row) {
   if (property.object) {
@@ -265,9 +268,9 @@ size_t radicle_vmad_script_count(const radicle_vmad_scripts* scripts) {
   return scripts == nullptr ? 0 : scripts->scripts.size();
 }
 
-radicle_status radicle_vmad_script(const radicle_vmad_scripts* scripts,
-                                    size_t index,
-                                    radicle_vmad_script* out_script) {
+radicle_status radicle_vmad_scripts_script(const radicle_vmad_scripts* scripts,
+                                            size_t index,
+                                            radicle_vmad_script* out_script) {
   clear_error();
   if (scripts == nullptr || out_script == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "scripts and out_script are required");
@@ -283,10 +286,10 @@ radicle_status radicle_vmad_script(const radicle_vmad_scripts* scripts,
   return RADICLE_STATUS_OK;
 }
 
-radicle_status radicle_vmad_property(const radicle_vmad_scripts* scripts,
-                                      size_t script_index,
-                                      size_t property_index,
-                                      radicle_vmad_property* out_property) {
+radicle_status radicle_vmad_scripts_property(const radicle_vmad_scripts* scripts,
+                                              size_t script_index,
+                                              size_t property_index,
+                                              radicle_vmad_property* out_property) {
   clear_error();
   if (scripts == nullptr || out_property == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "scripts and out_property are required");
@@ -326,11 +329,11 @@ size_t radicle_vmad_element_count(const radicle_vmad_scripts* scripts,
   return scripts->properties[script.first_property + property_index].element_count;
 }
 
-radicle_status radicle_vmad_element(const radicle_vmad_scripts* scripts,
-                                     size_t script_index,
-                                     size_t property_index,
-                                     size_t element_index,
-                                     radicle_vmad_element* out_element) {
+radicle_status radicle_vmad_scripts_element(const radicle_vmad_scripts* scripts,
+                                             size_t script_index,
+                                             size_t property_index,
+                                             size_t element_index,
+                                             radicle_vmad_element* out_element) {
   clear_error();
   if (scripts == nullptr || out_element == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "scripts and out_element are required");

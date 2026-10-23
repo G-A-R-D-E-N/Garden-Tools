@@ -2811,17 +2811,17 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_vmad_script_count")]
     public static extern nuint VmadScriptCount(IntPtr scripts);
 
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_vmad_script")]
-    public static extern Status VmadScript(IntPtr scripts, nuint index, VmadScript* out_script);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_vmad_scripts_script")]
+    public static extern Status VmadScriptsScript(IntPtr scripts, nuint index, VmadScript* out_script);
 
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_vmad_property")]
-    public static extern Status VmadProperty(IntPtr scripts, nuint script_index, nuint property_index, VmadProperty* out_property);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_vmad_scripts_property")]
+    public static extern Status VmadScriptsProperty(IntPtr scripts, nuint script_index, nuint property_index, VmadProperty* out_property);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_vmad_element_count")]
     public static extern nuint VmadElementCount(IntPtr scripts, nuint script_index, nuint property_index);
 
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_vmad_element")]
-    public static extern Status VmadElement(IntPtr scripts, nuint script_index, nuint property_index, nuint element_index, VmadElement* out_element);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_vmad_scripts_element")]
+    public static extern Status VmadScriptsElement(IntPtr scripts, nuint script_index, nuint property_index, nuint element_index, VmadElement* out_element);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_package_decode")]
     public static extern Status PackageDecode(IntPtr env, IntPtr record, PackageInfo** out_package);

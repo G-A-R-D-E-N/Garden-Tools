@@ -74,22 +74,22 @@ RADICLE_API radicle_status radicle_record_vmad_scripts(const radicle_env* env,
                                                        radicle_vmad_scripts** out_scripts);
 RADICLE_API void radicle_vmad_scripts_destroy(radicle_vmad_scripts* scripts);
 RADICLE_API size_t radicle_vmad_script_count(const radicle_vmad_scripts* scripts);
-RADICLE_API radicle_status radicle_vmad_script(const radicle_vmad_scripts* scripts,
-                                               size_t index,
-                                               radicle_vmad_script* out_script);
-// Invariant: script_index and property_index must index what radicle_vmad_script reported.
-RADICLE_API radicle_status radicle_vmad_property(const radicle_vmad_scripts* scripts,
-                                                 size_t script_index,
-                                                 size_t property_index,
-                                                 radicle_vmad_property* out_property);
+RADICLE_API radicle_status radicle_vmad_scripts_script(const radicle_vmad_scripts* scripts,
+                                                       size_t index,
+                                                       radicle_vmad_script* out_script);
+// Invariant: script_index and property_index must index what radicle_vmad_scripts_script reported.
+RADICLE_API radicle_status radicle_vmad_scripts_property(const radicle_vmad_scripts* scripts,
+                                                         size_t script_index,
+                                                         size_t property_index,
+                                                         radicle_vmad_property* out_property);
 RADICLE_API size_t radicle_vmad_element_count(const radicle_vmad_scripts* scripts,
                                               size_t script_index,
                                               size_t property_index);
-RADICLE_API radicle_status radicle_vmad_element(const radicle_vmad_scripts* scripts,
-                                                size_t script_index,
-                                                size_t property_index,
-                                                size_t element_index,
-                                                radicle_vmad_element* out_element);
+RADICLE_API radicle_status radicle_vmad_scripts_element(const radicle_vmad_scripts* scripts,
+                                                        size_t script_index,
+                                                        size_t property_index,
+                                                        size_t element_index,
+                                                        radicle_vmad_element* out_element);
 
 #ifdef __cplusplus
 }

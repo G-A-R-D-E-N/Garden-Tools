@@ -23,9 +23,11 @@ struct radicle_pex_chain_report {
   std::vector<std::size_t> first_chain_name;  // invariant: parallel to findings
 };
 
-namespace {
+using radicle_c_detail::clear_error;
+using radicle_c_detail::fail;
+using radicle_c_env_detail::guarded;
 
-using namespace radicle_c_detail;
+namespace {
 
 const fo4::pex::PexFile* to_file(const radicle_pex* pex) {
   return pex == nullptr ? nullptr : &pex->value;
