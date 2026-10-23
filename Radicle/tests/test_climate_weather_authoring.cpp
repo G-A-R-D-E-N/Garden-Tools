@@ -561,7 +561,7 @@ TEST(ClimateWeatherAuthoring, SetClimateWeathersAddsAnAbsentWlstAfterEdidAndRefu
   EXPECT_EQ(climate.weathers[0].chance, 7);
 
   auto entries = fixture();
-  entries[0].subs[1].data.push_back(std::byte{0});
+  entries[0].subs[1].second.push_back(std::byte{0});
   auto odd = read(build(entries, true));
   const auto odd_before = snapshot(odd);
   EXPECT_THROW(fo4::env::set_climate_weathers(odd, key(k_clmt), weathers), fo4::env::WorldDecodeError);
