@@ -4556,3 +4556,7 @@ A location ALCC and a reference ALEA must not survive a no-fill kind change: eac
 CIS1 must rank with the CTDA head of its run, so a rename that writes no conditions must keep the whole run.
 
 `Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION` is 51 after merging `nomad/602-remaining` (ABI 48, eight bumps from base 40) into `nomad/dev` (ABI 43, three bumps from base 40): both added exports, so the merged surface takes the next unused number, pinned by `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsFiftyOne` and `Radicle/bindings/csharp/Radicle.Interop/RadicleNative.g.cs:RadicleNative.CompiledAbiVersion`.
+
+## Radicle/tests/vmad_writer_fixture.hpp:subrecord
+
+`subrecord` finds the record under the owner the caller passes, `Vmad.esp` by default, and throws `fixture record missing` when nothing matches. A plugin read from a file takes its owner from the file name (`Radicle/src/plugin/reader.cpp:read_plugin_from_owned_bytes`), so a copy saved as `Saved.esp` or `Refused.esp` keys its records to that name and a lookup under `Vmad.esp` finds nothing. The helper used to dereference that null result, which crashed `Radicle/tests/test_vmad_quest_fragments.cpp:VmadQuestFragments.CApiPairFormEditsOneOfTwoBindingsAndRefusesBadInput` and `VmadQuestFragments.CApiPairFormRefusesDuplicatePairAndLeavesBytesUnchanged` on Native Linux Debug with no output after `[ RUN ]`. A missing record now throws, so the test fails instead of crashing.

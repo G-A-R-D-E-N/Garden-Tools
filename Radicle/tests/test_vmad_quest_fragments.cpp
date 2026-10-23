@@ -570,7 +570,7 @@ TEST(VmadQuestFragments, CApiPairFormEditsOneOfTwoBindingsAndRefusesBadInput) {
   EXPECT_EQ(radicle_plugin_remove_quest_vmad_fragment(plugin.handle, key, 10, 5), RADICLE_STATUS_OK);
   const auto output = plugin.root / "Saved.esp";
   ASSERT_EQ(radicle_plugin_write_file(plugin.handle, output.string().c_str()), RADICLE_STATUS_OK);
-  const auto remaining = extras_of(fixture::subrecord(fo4::read_plugin_file(output)).data);
+  const auto remaining = extras_of(fixture::subrecord(fo4::read_plugin_file(output), "Saved.esp").data);
   ASSERT_EQ(remaining.fragments.size(), 1u);
   expect_fragment(remaining.fragments[0], 10, 0, 0, 0, "Fragment_10");
 }
@@ -589,6 +589,6 @@ TEST(VmadQuestFragments, CApiPairFormRefusesDuplicatePairAndLeavesBytesUnchanged
   EXPECT_NE(std::string(radicle_last_error()).find("stage index twice"), std::string::npos);
   const auto output = plugin.root / "Refused.esp";
   ASSERT_EQ(radicle_plugin_write_file(plugin.handle, output.string().c_str()), RADICLE_STATUS_OK);
-  EXPECT_EQ(fixture::subrecord(fo4::read_plugin_file(output)).data,
+  EXPECT_EQ(fixture::subrecord(fo4::read_plugin_file(output), "Refused.esp").data,
             fixture::subrecord(read_plugin(bytes, "Vmad.esp")).data);
 }
