@@ -1,6 +1,7 @@
 #include "fo4/hkx/animation.hpp"
 #include "fo4/hkx/layout.hpp"
 #include "fo4/hkx/packfile.hpp"
+#include "hkx_animation_manifest.hpp"
 #include "hkx_test_fixture.hpp"
 
 #include <gtest/gtest.h>
@@ -176,6 +177,45 @@ std::vector<std::byte> spline_packfile(int block_offset_override, int mask_size_
   });
 }
 
+// Invariant: one identity-masked track, so a four-byte block needs no payload after its mask.
+std::vector<std::byte> spline_shape_packfile(std::uint32_t tracks, std::uint32_t frames, std::uint32_t blocks,
+                                             std::uint32_t max_frames) {
+  std::vector<std::byte> names;
+  const auto name_at =
+      add_class_name(names, signature_of("hkaSplineCompressedAnimation"), "hkaSplineCompressedAnimation");
+  std::vector<std::byte> data(fo4::hkx::find_layout("hkaSplineCompressedAnimation")->size, std::byte{0});
+  std::vector<std::uint32_t> local;
+
+  const std::size_t blob_at = data.size();
+  for (int i = 0; i < 4; ++i) data.push_back(std::byte{0});
+  const std::size_t blob_size = data.size() - blob_at;
+
+  const std::size_t offsets_at = data.size();
+  const std::uint32_t offset_count = blocks == 0 ? 1u : blocks;
+  for (std::uint32_t block = 0; block < offset_count; ++block) put_u32(data, 0);
+
+  set_int_member(data, "hkaAnimation", "type", 0);
+  set_float_member(data, "hkaAnimation", "duration", 1.0f);
+  set_int_member(data, "hkaAnimation", "numberOfTransformTracks", tracks);
+  set_int_member(data, "hkaAnimation", "numberOfFloatTracks", 0);
+  set_int_member(data, "hkaSplineCompressedAnimation", "numFrames", frames);
+  set_int_member(data, "hkaSplineCompressedAnimation", "numBlocks", blocks);
+  set_int_member(data, "hkaSplineCompressedAnimation", "maxFramesPerBlock", max_frames);
+  set_int_member(data, "hkaSplineCompressedAnimation", "maskAndQuantizationSize", 0);
+  set_float_member(data, "hkaSplineCompressedAnimation", "blockDuration", 1.0f);
+  set_float_member(data, "hkaSplineCompressedAnimation", "frameDuration", 1.0f);
+  link(local, member_at("hkaSplineCompressedAnimation", "blockOffsets"), offsets_at);
+  set_count(data, member_at("hkaSplineCompressedAnimation", "blockOffsets"), offset_count);
+  link(local, member_at("hkaSplineCompressedAnimation", "data"), blob_at);
+  set_count(data, member_at("hkaSplineCompressedAnimation", "data"), blob_size);
+
+  return build_packfile({
+      TestSection{"__classnames__", names, {}, {}, {}},
+      TestSection{"__types__", {}, {}, {}, {}},
+      TestSection{"__data__", std::move(data), std::move(local), {}, {0, 0, name_at}},
+  });
+}
+
 std::size_t append_string(std::vector<std::byte>& data, const std::string& text) {
   const std::size_t at = data.size();
   for (char ch : text) data.push_back(static_cast<std::byte>(ch));
@@ -259,6 +299,31 @@ std::vector<std::byte> binding_packfile() {
   });
 }
 
+// Invariant: the animation pointer is a global fixup into the same section, as in vanilla files.
+std::vector<std::byte> binding_with_animation_packfile() {
+  std::vector<std::byte> names;
+  const auto binding_name = add_class_name(names, signature_of("hkaAnimationBinding"), "hkaAnimationBinding");
+  const auto animation_name = add_class_name(names, signature_of("hkaInterleavedUncompressedAnimation"),
+                                             "hkaInterleavedUncompressedAnimation");
+  const std::size_t binding_offset = 0;
+  std::vector<std::byte> data(fo4::hkx::find_layout("hkaAnimationBinding")->size, std::byte{0});
+  const std::size_t animation_offset = data.size();
+  data.resize(data.size() + fo4::hkx::find_layout("hkaInterleavedUncompressedAnimation")->size, std::byte{0});
+
+  std::vector<std::uint32_t> global;
+  global.push_back(static_cast<std::uint32_t>(binding_offset + member_at("hkaAnimationBinding", "animation")));
+  global.push_back(2);
+  global.push_back(static_cast<std::uint32_t>(animation_offset));
+
+  return build_packfile({
+      TestSection{"__classnames__", names, {}, {}, {}},
+      TestSection{"__types__", {}, {}, {}, {}},
+      TestSection{"__data__", std::move(data), {}, std::move(global),
+                  {static_cast<std::uint32_t>(binding_offset), 0, binding_name,
+                   static_cast<std::uint32_t>(animation_offset), 0, animation_name}},
+  });
+}
+
 }  // namespace
 
 TEST(HkxAnimation, DecodesEveryFrameOfEveryInterleavedTrack) {
@@ -331,6 +396,97 @@ TEST(HkxAnimation, SplinePayloadThatStartsPastTheBlockIsTruncated) {
   ASSERT_EQ(read_packfile(bytes, packfile), HkxStatus::Ok);
   HkxAnimation animation;
   EXPECT_EQ(read_animation(packfile, animation), HkxStatus::Truncated);
+}
+
+TEST(HkxAnimation, ASplineFrameCountBeyondTheDeclaredBlocksIsBadSection) {
+  // Detects arrays sized from numFrames: the declared block geometry must cover every frame.
+  const auto bytes = spline_shape_packfile(1, 100, 1, 2);
+  HkxPackfile packfile;
+  ASSERT_EQ(read_packfile(bytes, packfile), HkxStatus::Ok);
+  HkxAnimation animation;
+  EXPECT_EQ(read_animation(packfile, animation), HkxStatus::BadSection);
+}
+
+TEST(HkxAnimation, ASplineFrameCountOfTwoBillionIsRefusedBeforeAllocating) {
+  // Detects a decoder that trusts numFrames, which must never size hundreds of gigabytes of samples.
+  const auto bytes = spline_shape_packfile(1, 0x7FFFFFFFu, 1, 2);
+  HkxPackfile packfile;
+  ASSERT_EQ(read_packfile(bytes, packfile), HkxStatus::Ok);
+  HkxAnimation animation;
+  EXPECT_EQ(read_animation(packfile, animation), HkxStatus::BadSection);
+  EXPECT_TRUE(animation.tracks.empty());
+}
+
+TEST(HkxAnimation, ASplineTrackCountBeyondTheDataArrayIsTruncated) {
+  // Detects a track array sized from numberOfTransformTracks before the mask room must be checked.
+  const auto bytes = spline_shape_packfile(4096, 2, 1, 2);
+  HkxPackfile packfile;
+  ASSERT_EQ(read_packfile(bytes, packfile), HkxStatus::Ok);
+  HkxAnimation animation;
+  EXPECT_EQ(read_animation(packfile, animation), HkxStatus::Truncated);
+  EXPECT_TRUE(animation.tracks.empty());
+}
+
+TEST(HkxAnimation, ASplineTrackCountOfTwoBillionIsRefusedBeforeAllocating) {
+  // Detects a resized track array built from a declared count the data must be able to hold.
+  const auto bytes = spline_shape_packfile(0x7FFFFFFFu, 2, 1, 2);
+  HkxPackfile packfile;
+  ASSERT_EQ(read_packfile(bytes, packfile), HkxStatus::Ok);
+  HkxAnimation animation;
+  EXPECT_EQ(read_animation(packfile, animation), HkxStatus::BadSection);
+  EXPECT_TRUE(animation.tracks.empty());
+}
+
+TEST(HkxAnimation, ASplineClipThatDeclaresNoBlocksIsRejected) {
+  // Detects a geometry computation that must refuse numBlocks zero before it can divide by it.
+  const auto bytes = spline_shape_packfile(1, 2, 0, 2);
+  HkxPackfile packfile;
+  ASSERT_EQ(read_packfile(bytes, packfile), HkxStatus::Ok);
+  HkxAnimation animation;
+  EXPECT_EQ(read_animation(packfile, animation), HkxStatus::BadSection);
+  EXPECT_TRUE(animation.tracks.empty());
+}
+
+TEST(HkxAnimation, ASplineClipThatDeclaresNoFramesPerBlockIsRejected) {
+  // Detects a division by maxFramesPerBlock, which must be checked before the geometry is computed.
+  const auto bytes = spline_shape_packfile(1, 2, 1, 0);
+  HkxPackfile packfile;
+  ASSERT_EQ(read_packfile(bytes, packfile), HkxStatus::Ok);
+  HkxAnimation animation;
+  EXPECT_EQ(read_animation(packfile, animation), HkxStatus::BadSection);
+  EXPECT_TRUE(animation.tracks.empty());
+}
+
+TEST(HkxAnimation, ASplineBlockCountThatOvershootsTheFrameCountIsRejected) {
+  // Detects a padded non-last block: a block count the frames cannot fill must be refused.
+  const auto bytes = spline_shape_packfile(1, 3, 2, 4);
+  HkxPackfile packfile;
+  ASSERT_EQ(read_packfile(bytes, packfile), HkxStatus::Ok);
+  HkxAnimation animation;
+  EXPECT_EQ(read_animation(packfile, animation), HkxStatus::BadSection);
+}
+
+TEST(HkxAnimation, TheManifestPinsTheDecodedShapeAndPosesOfTheHandBuiltSpline) {
+  // Detects manifest format drift and a pose that must decode to the hand-computed 0 and 10.
+  const auto bytes = spline_packfile(-1, -1);
+  HkxPackfile packfile;
+  ASSERT_EQ(read_packfile(bytes, packfile), HkxStatus::Ok);
+  HkxAnimation animation;
+  ASSERT_EQ(read_animation(packfile, animation), HkxStatus::Ok);
+  EXPECT_EQ(fo4::test::hkx::animation_manifest(animation),
+            "hkx-animation-manifest 1\n"
+            "class hkaSplineCompressedAnimation\n"
+            "frames 2\n"
+            "tracks 1\n"
+            "blocks 1\n"
+            "max_frames_per_block 2\n"
+            "duration_tenk 10000\n"
+            "frame_duration_tenk 10000\n"
+            "track 0 flags 100 1 000\n"
+            "track 0 first 0 0 0 0 0 0 10000 10000 10000 10000\n"
+            "track 0 middle 100000 0 0 0 0 0 10000 10000 10000 10000\n"
+            "track 0 last 100000 0 0 0 0 0 10000 10000 10000 10000\n"
+            "hash e91624ff10f43fd1\n");
 }
 
 TEST(HkxAnimation, DecodesAnnotationTrackNamesTimesAndText) {
@@ -406,6 +562,24 @@ TEST(HkxAnimationBinding, DecodesSkeletonNameTrackMapAndBlendHint) {
   EXPECT_EQ(binding.transform_track_to_bone_indices, (std::vector<std::int16_t>{0, 4, -1}));
   EXPECT_TRUE(binding.float_track_to_float_slot_indices.empty());
   EXPECT_EQ(binding.blend_hint, 1);
+  EXPECT_FALSE(binding.animation_offset.has_value());
+}
+
+TEST(HkxAnimationBinding, ResolvesTheAnimationPointerThroughItsGlobalFixup) {
+  // Detects a binding report that never says which animation it must be paired with.
+  const auto bytes = binding_with_animation_packfile();
+  HkxPackfile packfile;
+  ASSERT_EQ(read_packfile(bytes, packfile), HkxStatus::Ok);
+  HkxAnimationBinding binding;
+  ASSERT_EQ(read_binding(packfile, binding), HkxStatus::Ok);
+  ASSERT_TRUE(binding.animation_offset.has_value());
+
+  bool names_an_animation = false;
+  for (const fo4::hkx::HkxObjectView& object : packfile.objects) {
+    if (object.offset != *binding.animation_offset) continue;
+    names_an_animation = object.class_name == "hkaInterleavedUncompressedAnimation";
+  }
+  EXPECT_TRUE(names_an_animation);
 }
 
 TEST(HkxAnimationBinding, ReadBindingReportsMissingObjectWhenNoBindingIsPresent) {

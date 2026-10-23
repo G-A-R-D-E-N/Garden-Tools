@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -18,6 +19,17 @@ using detail::read_string;
 using detail::value_at;
 
 constexpr std::size_t kInt16Size = 2;
+
+// Requires the global fixup form too: the animation lives in the same section, behind no local fixup.
+std::optional<std::size_t> pointer_target(const HkxPackfile& packfile, const HkxSection& section, std::size_t source) {
+  if (const auto local = local_target(section, source)) return local;
+  for (const HkxRemoteFixup& fixup : section.global_fixups) {
+    if (fixup.source != source) continue;
+    if (fixup.section != packfile.data_section) return std::nullopt;
+    return static_cast<std::size_t>(fixup.destination);
+  }
+  return std::nullopt;
+}
 
 HkxStatus read_track_map(const HkxSection& section, std::size_t field, std::size_t pointer_size,
                          std::vector<std::int16_t>& out) {
@@ -37,6 +49,7 @@ HkxStatus decode_binding(const HkxPackfile& packfile, const HkxObjectView& objec
                          HkxAnimationBinding& out) {
   const HkxSection& section = packfile.sections[packfile.data_section];
   const auto name_at = find_member_offset(layout, "originalSkeletonName");
+  const auto animation_at = find_member_offset(layout, "animation");
   const auto transforms_at = find_member_offset(layout, "transformTrackToBoneIndices");
   const auto floats_at = find_member_offset(layout, "floatTrackToFloatSlotIndices");
   const auto partitions_at = find_member_offset(layout, "partitionIndices");
@@ -49,6 +62,12 @@ HkxStatus decode_binding(const HkxPackfile& packfile, const HkxObjectView& objec
     if (const auto status = read_string(section, *target, out.original_skeleton_name); status != HkxStatus::Ok) {
       return status;
     }
+  }
+
+  if (const auto animation_field = animation_at ? std::optional<std::size_t>(object.offset + *animation_at)
+                                                : std::nullopt;
+      animation_field && in_section(section, *animation_field, packfile.pointer_size)) {
+    out.animation_offset = pointer_target(packfile, section, *animation_field);
   }
 
   const std::size_t blend_field = object.offset + static_cast<std::size_t>(*blend_at);

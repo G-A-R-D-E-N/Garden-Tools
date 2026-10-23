@@ -2,15 +2,35 @@
 #include "fo4/hkx/animation.hpp"
 #include "fo4/hkx/packfile.hpp"
 #include "fo4/hkx/skeleton.hpp"
+#include "hkx_animation_manifest.hpp"
 #include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <string>
 #include <vector>
+
+namespace {
+
+std::string read_text_file(const std::filesystem::path& path) {
+  std::ifstream stream(path, std::ios::binary);
+  return std::string(std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>());
+}
+
+// Requires the manifest to compare equal whatever line endings a checkout produced.
+std::string without_carriage_returns(std::string text) {
+  text.erase(std::remove(text.begin(), text.end(), '\r'), text.end());
+  return text;
+}
+
+}  // namespace
 
 TEST(HkxSkeletonRealData, ReadsVanillaHumanSkeletonFromAnimationsArchive) {
   const char* dir = std::getenv("FO4_DATA_DIR");
@@ -81,4 +101,34 @@ TEST(HkxAnimationRealData, ReadsAVanillaSplineClipFromTheAnimationsArchive) {
                                    rotation[2] * rotation[2] + rotation[3] * rotation[3]);
     EXPECT_NEAR(length, 1.0f, 1e-4f);
   }
+}
+
+TEST(HkxAnimationRealData, MatchesTheBgsManifestForTheRadroachClip) {
+  // Detects a decode that must match BGS pose for pose on the same clip, as the manifest fixture holds.
+  const char* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) {
+    GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
+  }
+  record_game_build(detect_game_build(dir));
+  const std::vector<std::string> plugins{"Fallout4.esm"};
+  const auto archives = fo4::archive::archive_load_order(dir, {}, plugins);
+  if (archives.empty()) {
+    GTEST_SKIP() << "no Fallout 4 archives found under FO4_DATA_DIR";
+  }
+
+  const auto assets = fo4::archive::AssetResolver::open(dir, archives);
+  const auto location = assets.locate("meshes/actors/radroach/animations/turnleft90.hkx");
+  ASSERT_TRUE(location.has_value());
+  const auto bytes = assets.read(*location);
+
+  fo4::hkx::HkxPackfile packfile;
+  ASSERT_EQ(fo4::hkx::read_packfile(bytes, packfile), fo4::hkx::HkxStatus::Ok);
+  fo4::hkx::HkxAnimation animation;
+  ASSERT_EQ(fo4::hkx::read_animation(packfile, animation), fo4::hkx::HkxStatus::Ok);
+
+  const auto manifest_path =
+      std::filesystem::path{FO4_TESTDATA_DIR} / "hkx" / "radroach_turnleft90.animation-manifest.txt";
+  const std::string golden = without_carriage_returns(read_text_file(manifest_path));
+  ASSERT_FALSE(golden.empty()) << "missing " << manifest_path.string();
+  EXPECT_EQ(fo4::test::hkx::animation_manifest(animation), golden);
 }

@@ -37,6 +37,9 @@ struct AxisChannel {
 // Invariant: the degree must fit the fixed basis buffer, so a higher degree is a bad block.
 constexpr std::uint8_t kMaxSplineDegree = 7;
 
+// Invariant: a frame of one track decodes to forty bytes, so this cap bounds every array a file sizes.
+constexpr std::size_t kMaxDecodedSamples = 1u << 20;
+
 HkxStatus read_knots(Cursor& cursor, std::vector<float>& knots, std::uint16_t& items, std::uint8_t& degree) {
   if (!cursor.has(3)) return HkxStatus::Truncated;
   items = value_at<std::uint16_t>(cursor.bytes, cursor.at);
@@ -228,12 +231,22 @@ HkxStatus decode_spline_animation(const HkxPackfile& packfile, const HkxObjectVi
 
   std::size_t frames = static_cast<std::size_t>(declared_frames);
   if (frames == 0 && out.frame_duration > 0.0f && out.duration > 0.0f) {
-    frames = static_cast<std::size_t>(out.duration / out.frame_duration + 0.5f) + 1;
+    // Requires the derived count to stay in range: a huge duration must be refused, not converted.
+    const float ratio = out.duration / out.frame_duration + 0.5f;
+    if (!(ratio >= 0.0f) || ratio >= static_cast<float>(kMaxDecodedSamples)) return HkxStatus::BadSection;
+    frames = static_cast<std::size_t>(ratio) + 1;
   }
   out.frame_count = frames;
   const auto tracks = static_cast<std::size_t>(declared_tracks);
-  out.tracks.resize(tracks);
-  if (tracks == 0 || frames == 0) return HkxStatus::Ok;
+  if (tracks == 0) return HkxStatus::Ok;
+
+  // Requires every declared shape to be refused before an array is sized from it.
+  if (tracks > kMaxDecodedSamples) return HkxStatus::BadSection;
+  if (frames > kMaxDecodedSamples / tracks) return HkxStatus::BadSection;
+  if (frames == 0) {
+    out.tracks.resize(tracks);
+    return HkxStatus::Ok;
+  }
 
   Elements offset_elements;
   if (const auto status = elements_at(section, *block_offsets_at, packfile.pointer_size, 4, offset_elements);
@@ -246,12 +259,23 @@ HkxStatus decode_spline_animation(const HkxPackfile& packfile, const HkxObjectVi
   }
   if (out.blocks.count > offset_elements.count) return HkxStatus::Truncated;
 
+  // Invariant: the block geometry must cover every frame, so a short frame count is a bad section.
+  if (out.blocks.count == 0 || out.blocks.max_frames_per_block == 0) return HkxStatus::BadSection;
+  const std::size_t blocks_needed = frames / out.blocks.max_frames_per_block +
+                                    (frames % out.blocks.max_frames_per_block == 0 ? 0 : 1);
+  if (blocks_needed > out.blocks.count) return HkxStatus::BadSection;
+
+  // Requires room for one four-byte mask per track at the start of a block.
+  if (tracks > blob.count / 4) return HkxStatus::Truncated;
+  out.tracks.resize(tracks);
+
   const std::size_t mask_and_quantisation =
       mask_size == 0 ? align_up(4 * tracks, 4) : static_cast<std::size_t>(mask_size);
 
   for (std::size_t block = 0; block < out.blocks.count; ++block) {
     const std::size_t first_frame = block * out.blocks.max_frames_per_block;
     if (first_frame >= frames) continue;
+    // Invariant: only the last block is short, so an overshooting block count fails the frame-count check.
     const std::size_t block_frames =
         block + 1 == out.blocks.count ? frames - first_frame : out.blocks.max_frames_per_block;
     if (block_frames == 0) continue;

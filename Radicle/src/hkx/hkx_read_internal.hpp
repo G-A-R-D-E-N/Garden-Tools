@@ -3,6 +3,7 @@
 #include "fo4/hkx/layout.hpp"
 #include "fo4/hkx/packfile.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstring>
 #include <optional>
@@ -23,11 +24,13 @@ inline bool in_section(const HkxSection& section, std::size_t at, std::size_t wi
   return at <= section.data.size() && width <= section.data.size() - at;
 }
 
+// Requires the source-ordered table read_packfile sorts and de-duplicates, so one probe is enough.
 inline std::optional<std::size_t> local_target(const HkxSection& section, std::size_t source) {
-  for (const HkxLocalFixup& fixup : section.local_fixups) {
-    if (fixup.source == source) return fixup.destination;
-  }
-  return std::nullopt;
+  const auto found = std::lower_bound(
+      section.local_fixups.begin(), section.local_fixups.end(), source,
+      [](const HkxLocalFixup& fixup, std::size_t value) { return fixup.source < value; });
+  if (found == section.local_fixups.end() || found->source != source) return std::nullopt;
+  return found->destination;
 }
 
 struct Elements {

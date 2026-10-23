@@ -3,7 +3,9 @@
 #include "fo4/hkx/packfile.hpp"
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -62,6 +64,8 @@ HkxStatus read_animation(const HkxPackfile& packfile, HkxAnimation& out);
 
 struct HkxAnimationBinding {
   std::string original_skeleton_name;
+  // Invariant: nullopt when the animation pointer resolves through neither a local nor a global fixup.
+  std::optional<std::size_t> animation_offset{};
   std::vector<std::int16_t> transform_track_to_bone_indices;
   std::vector<std::int16_t> float_track_to_float_slot_indices;
   std::vector<std::int16_t> partition_indices;
