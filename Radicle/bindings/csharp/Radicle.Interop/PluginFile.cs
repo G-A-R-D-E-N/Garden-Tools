@@ -303,6 +303,18 @@ public sealed unsafe class PluginFile : IDisposable
         return Edit(record, (plugin, s, key) => RadicleNative.PluginSetVmadBool(plugin, key, si, pi, ei, value ? 1 : 0));
     }
 
+    public bool SetQuestVmadFragment(FormKey record, ushort stage, int stageIndex, string script, string function)
+    {
+        ArgumentNullException.ThrowIfNull(script);
+        ArgumentNullException.ThrowIfNull(function);
+        if (script.Contains('\0')) throw new ArgumentException("VMAD fragment script name cannot hold an embedded NUL through this API.", nameof(script));
+        if (function.Contains('\0')) throw new ArgumentException("VMAD fragment function name cannot hold an embedded NUL through this API.", nameof(function));
+        return Edit(record, (plugin, s, key) => RadicleNative.PluginSetQuestVmadFragment(plugin, key, stage, stageIndex, script, function));
+    }
+
+    public bool RemoveQuestVmadFragment(FormKey record, ushort stage, int stageIndex) =>
+        Edit(record, (plugin, s, key) => RadicleNative.PluginRemoveQuestVmadFragment(plugin, key, stage, stageIndex));
+
     public bool SetScalar(FormKey record, string path, string value, int index = 0)
     {
         ArgumentNullException.ThrowIfNull(path);

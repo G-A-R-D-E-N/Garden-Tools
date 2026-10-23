@@ -2096,7 +2096,7 @@ public unsafe struct LandBlend
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 52u;
+    public const uint CompiledAbiVersion = 54u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -2755,6 +2755,12 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_vmad_bool")]
     public static extern Status PluginSetVmadBool(IntPtr plugin, FormKey key, nuint script, nuint property, nuint element, int value);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_quest_vmad_fragment")]
+    public static extern Status PluginSetQuestVmadFragment(IntPtr plugin, FormKey key, ushort stage, int stage_index, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? script, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? function);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_remove_quest_vmad_fragment")]
+    public static extern Status PluginRemoveQuestVmadFragment(IntPtr plugin, FormKey key, ushort stage, int stage_index);
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_package_decode")]
     public static extern Status PackageDecode(IntPtr env, IntPtr record, PackageInfo** out_package);
 
@@ -3021,6 +3027,120 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_classify_conflicts")]
     public static extern Status EnvClassifyConflicts(IntPtr env, IntPtr** out_strings, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_read")]
+    public static extern Status NifRead(byte* bytes, nuint size, IntPtr* out_nif);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_destroy")]
+    public static extern void NifDestroy(IntPtr nif);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_node_count")]
+    public static extern Status NifNodeCount(IntPtr nif, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_node_block")]
+    public static extern Status NifNodeBlock(IntPtr nif, nuint index, uint* out_block);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_node_type")]
+    public static extern Status NifNodeType(IntPtr nif, nuint index, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_node_name")]
+    public static extern Status NifNodeName(IntPtr nif, nuint index, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_node_parent")]
+    public static extern Status NifNodeParent(IntPtr nif, nuint index, int* out_parent);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_node_children")]
+    public static extern Status NifNodeChildren(IntPtr nif, nuint index, uint** out_values, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_node_transform")]
+    public static extern Status NifNodeTransform(IntPtr nif, nuint index, float* out_translation, float* out_rotation, float* out_scale);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_node_for_block")]
+    public static extern Status NifNodeForBlock(IntPtr nif, uint block, int* out_node);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_shape_count")]
+    public static extern Status NifShapeCount(IntPtr nif, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_shape_name")]
+    public static extern Status NifShapeName(IntPtr nif, nuint index, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_shape_transform")]
+    public static extern Status NifShapeTransform(IntPtr nif, nuint index, float* out_translation, float* out_rotation, float* out_scale);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_shape_parent_node")]
+    public static extern Status NifShapeParentNode(IntPtr nif, nuint index, int* out_node);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_shape_refs")]
+    public static extern Status NifShapeRefs(IntPtr nif, nuint index, int* out_skin_ref, int* out_shader_ref, int* out_alpha_ref);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_shape_warning")]
+    public static extern Status NifShapeWarning(IntPtr nif, nuint index, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_shape_vertex_count")]
+    public static extern Status NifShapeVertexCount(IntPtr nif, nuint index, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_shape_positions")]
+    public static extern Status NifShapePositions(IntPtr nif, nuint index, float** out_values, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_shape_normals")]
+    public static extern Status NifShapeNormals(IntPtr nif, nuint index, float** out_values, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_shape_tangents")]
+    public static extern Status NifShapeTangents(IntPtr nif, nuint index, float** out_values, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_shape_bitangents")]
+    public static extern Status NifShapeBitangents(IntPtr nif, nuint index, float** out_values, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_shape_uvs")]
+    public static extern Status NifShapeUvs(IntPtr nif, nuint index, float** out_values, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_shape_colors")]
+    public static extern Status NifShapeColors(IntPtr nif, nuint index, float** out_values, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_shape_triangles")]
+    public static extern Status NifShapeTriangles(IntPtr nif, nuint index, ushort** out_values, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_shape_material")]
+    public static extern Status NifShapeMaterial(IntPtr nif, nuint index, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_shape_texture_count")]
+    public static extern Status NifShapeTextureCount(IntPtr nif, nuint index, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_shape_texture")]
+    public static extern Status NifShapeTexture(IntPtr nif, nuint index, nuint slot, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_shape_skinned")]
+    public static extern Status NifShapeSkinned(IntPtr nif, nuint index, int* out_skinned);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_shape_weights")]
+    public static extern Status NifShapeWeights(IntPtr nif, nuint index, float** out_values, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_shape_bone_indices")]
+    public static extern Status NifShapeBoneIndices(IntPtr nif, nuint index, byte** out_values, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_shape_bone_count")]
+    public static extern Status NifShapeBoneCount(IntPtr nif, nuint index, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_shape_bone_name")]
+    public static extern Status NifShapeBoneName(IntPtr nif, nuint index, nuint bone, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_shape_bone_transform")]
+    public static extern Status NifShapeBoneTransform(IntPtr nif, nuint index, nuint bone, float* out_center, float* out_radius, float* out_rotation, float* out_translation, float* out_scale);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_free_floats")]
+    public static extern void FreeFloats(float* values);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_free_triangles")]
+    public static extern void FreeTriangles(ushort* values);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_free_node_refs")]
+    public static extern void FreeNodeRefs(uint* values);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_dds_decode_rgba")]
+    public static extern Status DdsDecodeRgba(byte* bytes, nuint size, uint mip, byte reconstruct_z, byte** out_rgba, uint* out_width, uint* out_height);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_dds_info")]
+    public static extern Status DdsInfo(byte* bytes, nuint size, uint* out_format, uint* out_mip_count, uint* out_width, uint* out_height, ulong* out_payload_size, int* out_bc5);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_landscape_heights")]
     public static extern Status LandscapeHeights(IntPtr env, IntPtr record, LandHeights* out_heights);
