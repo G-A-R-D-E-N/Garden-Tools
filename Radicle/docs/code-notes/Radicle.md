@@ -2561,6 +2561,144 @@ Skipped on purpose:
 - Radicle/schema/fallout4/fields.json:ENCH\BaseEnchantment: `payload_sizes` went from [36] to [32, 36]. `SetOptionalFrom(8)` (Core/wbDefinitionsFO4.pas:6747) makes only member 8, Worn Restrictions (offset 32), optional. Base Enchantment is member 7 at offset 28 and is required, so the shortest ENIT xEdit reads cleanly is 32 bytes. A 28-byte ENIT is not that form, because the required member runs past the payload (Core/wbImplementation.pas:22588-22603 marks only members from the optional index as missing). What xEdit shows for 28 bytes is not verified, since no xEdit run was made. ENCH\WornRestrictions stays at [36]. A link write on a payload whose size is not in `payload_sizes` throws `schema::FormLinkFieldError` (`Radicle/src/plugin/field_writer.cpp:formlink_slots`, throw at :132) instead of returning `subrecord_missing`, so a 28-byte ENIT throws for both links and a 32-byte ENIT throws for Worn Restrictions. The target-type check in `set_record_formlink_field` (:399) runs before it, so the test writes Worn Restrictions with a local FLST target and checks the message names the payload size. Test: `Radicle/tests/test_scalar_embedded.cpp:EnchEnitShortFormsReadOnlyTheMembersXEditReadsCleanly`.
 - Radicle/tools/record_schema_codegen.py:parse_default: an authoring default is checked against each subrecord's `payload_size` (exact) and now also against the largest `minimum_payload_size` of its rows. Without this, the ENIT default (36 bytes) would no longer be checked once the ENCH scalars moved to `minimum_payload_size` 28. A default shorter than that minimum is rejected.
 - Radicle/tools/schema_codegen.py:main and Radicle/tools/formlink_schema_codegen.py:main regenerated `include/fo4/schema/generated_scalar_fields.inc` and `generated_formlink_lists.inc`. Radicle/tools/parity_matrix.py:main regenerated `docs/FO4_PARITY.md` (IMAD scalar rows 58 to 60).
+
+## NIF geometry, skin and shader C ABI
+
+- Radicle/include/fo4/nif/nif.hpp:Shape: gained `weights`, `bone_indices`, `bones`,
+  `material` and `textures`; `bitangents` is now filled instead of empty. `Bone` holds
+  the name plus the `BSSkinBoneTrans` fields in storage order, and `Shader` holds the
+  property block, its shader type, its name, its texture set reference and the set's
+  slots. `read_shader` and `read_bones` are the two new entry points; `docs/NIF.md`
+  pins both layouts and the evidence for them.
+- Radicle/src/nif/geometry.cpp:read_vertex: the byte layout follows
+  `nif.xml:BSVertexData`, so the two bytes the reader used to skip after a position are
+  Bitangent X (float at full precision, `hfloat` at half precision) and the fourth byte
+  of the normal and tangent fields are Bitangent Y and Z. The bitangent is stored, not
+  reconstructed, and is emitted only when bits 3 and 4 are both set, which keeps it at
+  exactly three floats per vertex. `read_shape` now follows the shader reference and the
+  skin reference; both are range-checked and an out-of-range reference is a
+  `parse_error`, while a reference to a different block type is tolerated the way
+  `NifShape.cs` tolerates it.
+- Radicle/src/nif/shader.cpp:read_shader: reads only `BSLightingShaderProperty` and stops
+  after the texture set reference. The leading u32 is read as `Shader Type` because the
+  shader-type tail follows it, even though `nif.xml`'s version condition for that
+  NiObjectNET field excludes BS 130; the corpus decides, and all 1,111,752
+  material-bearing vanilla shapes read a `.bgsm` name at the offset that implies. The
+  conditional tail is deliberately not read, so no format guess there can fail a file.
+- Radicle/src/nif/skin.cpp:read_bones: `BSSkin::Instance` then `BSSkin::BoneData`, 68
+  bytes per `BSSkinBoneTrans`. The tolerance rules match `NifShape.cs:ReadSkin`: an
+  absent or mistyped data reference keeps the names and leaves the transforms at their
+  defaults, while a bone count that disagrees with the skin's bone count is a
+  `parse_error` (skin.cpp:read_bones, see the skin entry under NIF node hierarchy,
+  stricter skin and DDS edges). Bone names go through a tolerant name lookup equivalent
+  to `NifFile.cs:NameOf`, so a stale node reference yields an empty name instead of a
+  parse error.
+- Radicle/include/fo4/c_api_nif.h and Radicle/src/c_api_nif.cpp: the `radicle_nif_*`
+  surface. A handle is opened from bytes because assets arrive through GameData and the
+  resolver. Shapes are decoded once at open. Empty arrays are `OK` with a NULL pointer
+  and a count of 0, floats come back with `radicle_free_floats`, triangle indices with
+  `radicle_free_triangles`, and every byte array with `radicle_free_bytes`.
+- Radicle/bindings/csharp/Radicle.Interop/NifFile.cs: `NifFile.FromBytes` snapshots every
+  shape into managed arrays and destroys the native handle before it returns, so the
+  wrapper holds no native state and cannot leak. `Radicle.Interop` declares its own
+  `Vector3` record for record payloads, so the geometry types are reached through a
+  `Numerics` namespace alias; the exposed types are `System.Numerics` ones, which is what
+  BGS's `NifShape` uses.
+- Verified: `Radicle/tests/test_c_api_nif.cpp` (ten tests over `tests/nif_fixture.hpp`) and
+  `Radicle/tests/test_nif.cpp` cover the fixture, `Radicle/tests/test_nif_corpus.cpp` covers
+  the vanilla corpus (226,454 NIFs, 1,207,017 shapes, 23,595 skinned shapes, 169,498 bones,
+  0 parse failures, every weight count and every bone index in range), and a throwaway
+  harness outside the repository compared BGS's `NifGeometry` against `NifFile.FromBytes`
+  on `MaleBody.nif`, `FemaleBody.nif`, `1stPersonFemaleBody.nif` and `RadRoach.nif`: all 8
+  skinned shapes agree on the skinned verdict, every bone name, every bind matrix, every
+  weight and every bone index.
+
+## DDS pixel decode
+
+- Radicle/src/texture/bcn.cpp is PluginEditTool's bcdec port, moved unchanged apart from
+  its namespace, its two entry points and a thrown `dds_error` instead of a returned one.
+  Radicle/THIRD_PARTY_NOTICES.md carries the attribution. PluginEditTool still holds its
+  own copy; pointing it at `fo4::texture` is the follow-up recorded in that file.
+- Radicle/src/texture/dds_codec.cpp parses the container (legacy FourCC and DX10) and
+  sizes mips; Radicle/src/texture/dds.cpp decodes one mip into RGBA8, unpacks the
+  uncompressed layouts and reconstructs Z for BC5. `docs/TEXTURES.md` lists the formats,
+  the header fields and the evidence.
+- Radicle/include/fo4/c_api_dds.h exposes `radicle_dds_decode_rgba` and `radicle_dds_info`;
+  `DdsImage` is the managed wrapper.
+- Radicle/src/c_api_dds.cpp:map_dds_error: every `dds_error` except `TooLarge` maps to
+  `RADICLE_STATUS_PARSE_ERROR`, so a caller cannot tell an unsupported format (BC6H,
+  BC4/BC5 SNORM, an unknown DXGI code) from a corrupt file except by the message text.
+- Radicle/src/texture/dds_codec.cpp:DdsInfo::mip_offset: mip N of a volume texture is not
+  supported correctly. DDS stores every depth slice of a mip in turn, but `mip_size` and
+  `mip_offset` count one slice, so the offset of mip 1 and up is wrong when depth is above
+  1, and mip 0 decodes only the first slice.
+- Radicle/src/texture/dds_codec.cpp:DdsInfo::mip_size and Radicle/src/texture/dds.cpp:decode_dds_rgba:
+  the mip shift is clamped to 31 because `read_dds` accepts up to 255 mips and a shift of 32
+  or more is undefined. A 16-bit dimension is already 0 after a shift of 16, floored to 1, so
+  the clamp changes no size.
+
+## NIF node hierarchy, stricter skin and DDS edges
+
+- Radicle/include/fo4/nif/nif.hpp:Node and NifFile::nodes: every node block the
+  reader understands is kept once, in block order, with its block index, block type,
+  `NiObjectNET` name, parent as a node-list index (-1 for a root), children as the
+  block indices the file stores, and its local `NiAVObject` transform.
+  `NifFile::node_for_block` maps a block to that list (or -1), and
+  `fo4::nif::shape_parent_node` gives a shape's nearest node ancestor.
+  `Shape` gained `parent_node` and `warning`.
+- Radicle/src/nif/nif.cpp: the node loop that already read the child lists now also
+  fills `nodes_` and the block-to-node map, and resolves each node's parent through
+  it. The prefix is the one `nif.xml` gives BS 130: `NiObjectNET` name, extra-data
+  list, controller; `NiAVObject` flags as a u32 (`#BSVER# #GT# 26`), translation,
+  3x3 rotation, scale, collision reference; then the children list. `Effects` is
+  gated on `#NI_BS_LT_FO4#`, so FO4 has none, which the corpus confirms: all
+  896,993 node blocks of 226,177 vanilla NIFs end exactly at the children list.
+  The sixteen-entry node allowlist is unchanged and now proven by the corpus
+  histogram in `docs/NIF.md`; `BSFurnitureMarkerNode` is the only vanilla block
+  whose name contains `Node` and is not one, and `nif.xml` says why
+  (`inherit="BSFurnitureMarker"`), as does its own bytes.
+- Radicle/include/fo4/c_api_nif.h, Radicle/src/c_api_nif.cpp: `radicle_nif_node_*`
+  (count, block, type, name, parent, children, transform, for-block) plus
+  `radicle_nif_shape_parent_node` and `radicle_nif_shape_warning`, and
+  `radicle_free_node_refs` for the child array. Children are block indices because
+  the file stores those and a child may be a shape; `node_for_block` turns one into
+  a node index when it is a node. `Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION` is 52, bumped from 51.
+- Radicle/bindings/csharp/Radicle.Interop/NifFile.cs: `NifNode` with
+  `ParentIndex`/`Parent`, `ChildBlocks` and `Children` (null where a child is not a
+  node), `LocalMatrix` and `WorldMatrix`, `NifShape.ParentNodeIndex`/`ParentNode` and
+  `NifShape.Warning`. `RadicleNative.g.cs` and `abi_layout_probe.cpp` were
+  regenerated; no struct layout changed, so the probe is byte-identical apart from
+  the new function bindings.
+- Radicle/src/nif/geometry.cpp: a `BSLightingShaderProperty` or
+  `BSShaderTextureSet` that does not parse now leaves the material and texture slots
+  empty and records `Shape::warning` instead of failing the file; the geometry, skin
+  and transform still read. A bone index past the end of the skin's bone list is a
+  `parse_error`.
+- Radicle/src/nif/skin.cpp: a `BSSkin::BoneData` whose count disagrees with the
+  skin's bone count is a `parse_error` rather than a silent identity transform. The
+  absent or mistyped data reference keeps names with default transforms, which is
+  what the file holds.
+- Radicle/src/texture/dds_codec.cpp: the DX10 array size and, for a volume texture,
+  the depth are refused above 65535, and `DdsInfo::payload_size` multiplies unsigned
+  with an overflow check, so a header that claims a wrapped byte count is
+  `InvalidDds`.
+- Radicle/src/texture/dds.cpp: `reconstruct_z` is refused with
+  `std::invalid_argument` unless the format is unsigned BC5 (82 or 83). BC5 SNORM,
+  BC1 and the uncompressed layouts no longer get a blue channel built from red and
+  green. `radicle_dds_decode_rgba` maps that to `RADICLE_STATUS_INVALID_ARGUMENT`.
+- Radicle/THIRD_PARTY_NOTICES.md: the full bcdec MIT and Unlicense text, not just a
+  reference.
+- Verified: `Radicle/tests/test_nif.cpp` (node tree, furniture-marker blocks, shader
+  warning, skin count mismatch, bone-index refusal, a skin the indices stay inside),
+  `Radicle/tests/test_c_api_nif.cpp` (the node accessors, the shape's parent node, the
+  warning accessor, out-of-range arguments), `Radicle/tests/test_dds.cpp` (the
+  reconstruct-z refusals, the array and depth bounds, the payload overflow, the C ABI
+  status for a refused reconstruct) and `Radicle/tests/test_nif_corpus.cpp`, which now
+  reads the node tree of all 226,177 vanilla NIFs - 896,993 nodes, every node's
+  parent and child edge consistent, 1,206,190 of 1,206,190 shapes with a node parent,
+  0 parse failures, 0 shape warnings. The managed suite mirrors the fixture and
+  covers the node tree, the composed world matrix and the shader warning in
+  `NifTests`, and the DDS edges in `DdsImageTests`.
 - Radicle/schema/fallout4/condition_functions.json and Radicle/src/schema/condition_functions.cpp:condition_function (#602 WP-7 D-21): typed FO4 condition function table. Source is xEdit pin 93cc0bc5, Core/wbDefinitionsFO4.pas: TConditionParameterType at :192-248 (50 types, ptNone to ptWorldspace, plus the Radicle-side `event_data_code` the Run On bullet below adds), wbConditionFunctions at :261-741 (479 functions, indices 0 to 817), and wbConditionParameters at :5124-5181, which maps each parameter type to its record signatures; the form_link signature lists come straight from those union entries, with sigBaseObjects (:74-80) expanded in xEdit order. NULL stays where xEdit lists it (base_object, faction_null, keyword, owner). Voice Type and Worldspace also carry an FLST-member signature set (:5178 and :5180) that the JSON does not model. Kinds: none, integer, string and float are direct; enum is any wbXEnum-typed entry (9 types); alias, event, packdata, quest_stage and event_data_code are other because they carry special encodings (5 types); form_link is 33 types. Per-function facts: ParamType3 appears only on GetPlayerControlsDisabled (:315, three integer parameters); Desc is never populated; Run On has no per-function restriction in the table, and the Run On table itself is modelled by the `condition_run_on` bullet below. Run On is handled at edit time by wbConditionRunOnAfterSet (Core/wbDefinitionsCommon.pas:1310, clears Reference when Run On is not 2), and wbConditionParam1Decider (Core/wbDefinitionsFO4.pas:826-827) keeps GetIsCurrentPackage parameter 1 a package when Run On is 5, so the alias index lands in parameter 3 instead. Actor and Reference union entries pass a persistence flag (Core/wbInterface.pas:4315) that the JSON does not carry. Flag check: ctda_functions.inc is generated from this table (see the GetInWorldspace bullet below). The reference mask table k_ctda_reference_params in Radicle/src/schema/form_links_ctda.cpp agrees with the reference, actor and package parameter set for every row. Lookup by name is a linear scan over 479 rows; add a sorted name index if lookups get hot. PET still has its own table (PluginEditTool/native/src/plugin/ConditionFunctions.cpp); switching PET to this table is a follow-up.
 - Radicle/include/fo4/schema/ctda_functions.inc (generated by Radicle/tools/condition_function_codegen.py:render_ctda from Radicle/schema/fallout4/condition_functions.json): the CTDA form link flags are now generated, bit0 and bit1 set when param 1 or 2 is a form_link in the table. GetInWorldspace (index 310, xEdit ptWorldSpace at Core/wbDefinitionsFO4.pas:422) was missing and is now `{310, 1}`, so its param 1 form ID is remapped on master reorder; this is the one row changed from the hand-kept file. The file header no longer uses the old form ID wording. The include site is Radicle/src/schema/form_links_ctda.cpp:22, unchanged, and the consumer is Radicle/src/schema/form_links_ctda.cpp:ctda_formid_offsets. Remap test: GetInWorldspaceParamOneIsRemappedOnMasterReorder in Radicle/tests/test_ctda_alias_formids.cpp. The reference mask table k_ctda_reference_params is still hand-kept and is not generated.
 - Radicle/schema/fallout4/fields.json:NPC_, WEAP, RACE and HAZD formlink_fields (#602 WP-9 B-50, C-51, C-26, B-16): one single-link row per whole 4-byte subrecord that xEdit defines as a checked single link (Core/wbInterface.pas:4283, 4-arg form). Targets are xEdit's list minus NULL. `nullable` follows xEdit's NULL target, not the required flag: xEdit accepts a NULL reference only when the list contains NULL (Core/wbInterface.pas:19380-19387). Five new rows are nullable: HAZD ImageSpaceModifier (MNAM, Core/wbDefinitionsFO4.pas:7185, [IMAD, NULL]), RACE Skin (WNAM, :11064, [ARMO, NULL]), WEAP BlockBashImpactDataSet (BIDS, :12894, [IPDS, NULL]), WEAP AlternateBlockMaterial (BAMT, :12895, [MATT, NULL]) and WEAP EquipmentType (ETYP, wbETYP :4867, [EQUP, NULL]). Every other new row is nullable false, including NPC_ Race (RNAM, :10370, required) and NPC_ Class (CNAM, :10406, required), because their lists have no NULL. Added NPC_ 27 rows (:10348-10444: INAM, VTCK, TPLT, LTPT, LTPC, RNAM, WNAM, ANAM, ATKR, SPOR, OCOR, GWOR, ECOR, FCPL, RCLR, CNAM, HCLF, BCLF, ZNAM, GNAM, CSCR, PFRN, DOFT, SOFT, DPLT, CRIF, FTST); WEAP 15 rows (:12886-13022: STCP, ETYP, BIDS, BAMT, YNAM, ZNAM, INRD, NNAM, INAM, LNAM, WAMD, WZMD, CNAM, EITM "Effect" from wbEnchantment(True) at :12891, and PTRN "Preview transform" from wbPTRN at :12885 via :5258, [TRNS]); RACE 21 rows (:11059-11344: WNAM, ATKR, GNAM, NAM4, NAM5, NAM7, CNAM, ONAM, LNAM, UNWP, WKMV, SWMV, FLMV, SNMV, DFTM, DFTF, NAM8, RNAM, SRAC, SADD, QSTI); HAZD ImageSpaceModifier (:7185). Skipped: NPC_ TPTA (:10353, struct wrapper), PNAM, PRKR, PKID and the Attacks array (:10377-10417, repeated) and NAM5 (:10422, wbUnknown, not a link); RACE VTCK (:11203) and HCLF (:11205), both wbArray pairs of 8 bytes; RACE NAM2 (:11245, ambiguous with the empty NAM2 markers at :11201 and :11226); RACE MTYP (:11251, inside the repeated wbRArrayS Movement Data Overrides); RACE QNAM (wbEquipSlot :11030-11036 inside the repeated wbRArray Equip Slots at :11255, corpus up to 8 per record, EQUP); RACE DATA struct members (:11069-11193). Corpus (7 masters: 4369 NPC_, 484 WEAP, 110 RACE, 78 HAZD): every row payload is 4 bytes only. Every nonzero value resolves to its targets. Fallout4.esm TPLT values 0x01000809 and 0x0100080A (NPC_ 0x080B and 0x080C) have master index 1, while Fallout4.esm lists no masters. Radicle's resolve_plugin_link (the plugin-link resolver in Radicle/src, near line 78) treats an index above the master count as the plugin itself, so they resolve to local LVLN 0x809 and 0x80A (HardcorePlayerSleepLCharWildlife and HardcorePlayerSleepLCharBugs), both in [LVLN, NPC_]. Counts with / nonzero: NPC_ INAM 2404, VTCK 4054, TPLT 3406, LTPT 206, LTPC 214, RNAM 4369, WNAM 1836, ANAM 246, ATKR 2610, GWOR 1, ECOR 2075, RCLR 1, CNAM 4369, HCLF 3498, ZNAM 2749, CSCR 1295, PFRN 95, DOFT 2899, SOFT 24, DPLT 2892, CRIF 1100, FTST 937 (SPOR, OCOR, FCPL, BCLF and GNAM absent); WEAP ETYP 482, BIDS 285, BAMT 90, YNAM 180, ZNAM 180, INRD 141, NNAM 33, INAM 433, LNAM 242, WAMD 280, WZMD 226, EITM 55, PTRN 388 (STCP and CNAM absent); RACE WNAM 104, GNAM 110, NAM4 107, CNAM 82, ONAM 107, LNAM 107, UNWP 87, WKMV 53, SWMV 3, FLMV 6, DFTM 15, DFTF 14, RNAM 5, SRAC 25, SADD 37, QSTI 59 (ATKR, NAM5, NAM7, SNMV and NAM8 absent); HAZD MNAM 2 (of 78). Radicle/tests/test_wp9_link_rows.cpp checks the schema row claim for each new row, rewrites its form ID on a master reorder, reads and retargets through the field API, and checks that a NULL target is refused on NPC_ Race and accepted on HAZD ImageSpaceModifier. Its remap check alone does not separate the new rows from the generic path, because every new row's signature is already in the 179-entry global signature table that the generic 4-byte remap branch of src/schema/form_links.cpp consults. Radicle/docs/FO4_PARITY.md and Radicle/include/fo4/schema/generated_formlink_lists.inc were regenerated from the new rows.

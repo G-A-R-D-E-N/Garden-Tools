@@ -125,6 +125,11 @@ add_library(fo4
   src/binary/cursor.cpp
   src/nif/nif.cpp
   src/nif/geometry.cpp
+  src/nif/shader.cpp
+  src/nif/skin.cpp
+  src/texture/bcn.cpp
+  src/texture/dds.cpp
+  src/texture/dds_codec.cpp
   src/forms/armor.cpp
   src/forms/armor_edit.cpp
   src/forms/cell.cpp
@@ -303,6 +308,7 @@ target_sources(radicle_c PRIVATE src/c_api_conflict.cpp)
 target_sources(fo4 PRIVATE src/patch/delta_patch.cpp)
 target_sources(fo4 PRIVATE src/patch/list_merge.cpp)
 target_sources(fo4 PRIVATE src/papyrus_source/lexer.cpp src/papyrus_source/parser.cpp src/papyrus_source/parser_decl.cpp src/papyrus_source/parser_expr.cpp src/papyrus_source/parser_stmt.cpp src/papyrus_source/summary.cpp)
+target_sources(radicle_c PRIVATE src/c_api_nif.cpp src/c_api_dds.cpp)
 
 if(RADICLE_INSTALL)
   include(GNUInstallDirs)
@@ -639,7 +645,10 @@ if(RADICLE_BUILD_TESTS)
     tests/test_ba2_real.cpp
     tests/test_ba2_versions_real.cpp
     tests/test_nif.cpp
+    tests/test_nif_nodes.cpp
     tests/test_nif_corpus.cpp
+    tests/test_c_api_nif.cpp
+    tests/test_dds.cpp
     tests/test_environment_writeback.cpp
     tests/test_writeback_real.cpp
     tests/test_environment_ref_fields.cpp
