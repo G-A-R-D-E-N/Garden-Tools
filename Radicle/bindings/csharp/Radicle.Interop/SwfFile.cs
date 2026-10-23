@@ -280,7 +280,7 @@ public sealed unsafe class SwfFile : IDisposable
             SwfTag tag;
             Call.Check(RadicleNative.SwfTagAt(use.Pointer, (nuint)index, &tag));
             tags.Add(new SwfTagRecord(index, tag.Code, Utf8.Read(tag.Name) ?? string.Empty, tag.Length, (long)tag.Offset,
-                                      tag.Parent == (nuint)ulong.MaxValue ? -1 : (int)tag.Parent, tag.SpriteId,
+                                      tag.Parent == nuint.MaxValue ? -1 : (int)tag.Parent, tag.SpriteId,
                                       tag.InsideSprite != 0, tag.LongHeader != 0, (long)tag.PayloadSize));
         }
         return tags;
