@@ -59,8 +59,17 @@ VmadStructureMutationStatus set_quest_vmad_fragment(Plugin& plugin, const FormKe
                                                     std::uint16_t stage, std::string_view script,
                                                     std::string_view function);
 
+VmadStructureMutationStatus set_quest_vmad_fragment(Plugin& plugin, const FormKey& record,
+                                                    std::uint16_t stage, std::int32_t stage_index,
+                                                    std::string_view script,
+                                                    std::string_view function);
+
 VmadStructureMutationStatus remove_quest_vmad_fragment(Plugin& plugin, const FormKey& record,
                                                        std::uint16_t stage);
+
+VmadStructureMutationStatus remove_quest_vmad_fragment(Plugin& plugin, const FormKey& record,
+                                                       std::uint16_t stage,
+                                                       std::int32_t stage_index);
 
 VmadStructureMutationStatus add_vmad_fragment(Plugin& plugin, const FormKey& record,
                                               std::uint32_t key, std::string_view script,
