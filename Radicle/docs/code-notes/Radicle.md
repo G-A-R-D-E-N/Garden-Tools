@@ -2587,10 +2587,12 @@ Skipped on purpose:
   conditional tail is deliberately not read, so no format guess there can fail a file.
 - Radicle/src/nif/skin.cpp:read_bones: `BSSkin::Instance` then `BSSkin::BoneData`, 68
   bytes per `BSSkinBoneTrans`. The tolerance rules match `NifShape.cs:ReadSkin`: an
-  absent or mistyped data reference, or a bone count that disagrees with it, keeps the
-  names and leaves the transforms at their defaults. Bone names go through a tolerant
-  name lookup equivalent to `NifFile.cs:NameOf`, so a stale node reference yields an
-  empty name instead of a parse error.
+  absent or mistyped data reference keeps the names and leaves the transforms at their
+  defaults, while a bone count that disagrees with the skin's bone count is a
+  `parse_error` (skin.cpp:read_bones, see the skin entry under NIF node hierarchy,
+  stricter skin and DDS edges). Bone names go through a tolerant name lookup equivalent
+  to `NifFile.cs:NameOf`, so a stale node reference yields an empty name instead of a
+  parse error.
 - Radicle/include/fo4/c_api_nif.h and Radicle/src/c_api_nif.cpp: the `radicle_nif_*`
   surface. A handle is opened from bytes because assets arrive through GameData and the
   resolver. Shapes are decoded once at open. Empty arrays are `OK` with a NULL pointer
@@ -2602,7 +2604,7 @@ Skipped on purpose:
   `Vector3` record for record payloads, so the geometry types are reached through a
   `Numerics` namespace alias; the exposed types are `System.Numerics` ones, which is what
   BGS's `NifShape` uses.
-- Verified: `Radicle/tests/test_c_api_nif.cpp` (six tests over `tests/nif_fixture.hpp`) and
+- Verified: `Radicle/tests/test_c_api_nif.cpp` (ten tests over `tests/nif_fixture.hpp`) and
   `Radicle/tests/test_nif.cpp` cover the fixture, `Radicle/tests/test_nif_corpus.cpp` covers
   the vanilla corpus (226,454 NIFs, 1,207,017 shapes, 23,595 skinned shapes, 169,498 bones,
   0 parse failures, every weight count and every bone index in range), and a throwaway
@@ -2623,6 +2625,18 @@ Skipped on purpose:
   the header fields and the evidence.
 - Radicle/include/fo4/c_api_dds.h exposes `radicle_dds_decode_rgba` and `radicle_dds_info`;
   `DdsImage` is the managed wrapper.
+- Radicle/src/c_api_dds.cpp:map_dds_error: every `dds_error` except `TooLarge` maps to
+  `RADICLE_STATUS_PARSE_ERROR`, so a caller cannot tell an unsupported format (BC6H,
+  BC4/BC5 SNORM, an unknown DXGI code) from a corrupt file except by the message text.
+- Radicle/src/texture/dds_codec.cpp:DdsInfo::mip_offset: mip N of a volume texture is not
+  supported correctly. DDS stores every depth slice of a mip in turn, but `mip_size` and
+  `mip_offset` count one slice, so the offset of mip 1 and up is wrong when depth is above
+  1, and mip 0 decodes only the first slice.
+- Radicle/src/texture/dds_codec.cpp:DdsInfo::mip_size and Radicle/src/texture/dds.cpp:decode_dds_rgba:
+  the mip shift is clamped to 31 because `read_dds` accepts up to 255 mips and a shift of 32
+  or more is undefined. A 16-bit dimension is already 0 after a shift of 16, floored to 1, so
+  the clamp changes no size.
+
 ## NIF node hierarchy, stricter skin and DDS edges
 
 - Radicle/include/fo4/nif/nif.hpp:Node and NifFile::nodes: every node block the

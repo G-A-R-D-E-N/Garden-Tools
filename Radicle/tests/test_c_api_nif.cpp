@@ -256,6 +256,14 @@ TEST(CapiNif, RejectsBadInput) {
   EXPECT_EQ(radicle_nif_shape_bone_transform(nif.get(), 0, 5, nullptr, nullptr, nullptr, nullptr, nullptr),
             RADICLE_STATUS_INVALID_ARGUMENT);
 }
+
+TEST(CapiNif, ResetsTheHandleOnInvalidArgument) {
+  int sentinel = 0;
+  auto* handle = reinterpret_cast<radicle_nif*>(&sentinel);
+  EXPECT_EQ(radicle_nif_read(nullptr, 0, &handle), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(handle, nullptr);
+}
+
 namespace {
 
 std::vector<nif_fixture::Block> bad_shader_blocks() {

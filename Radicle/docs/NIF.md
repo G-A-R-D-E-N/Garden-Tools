@@ -149,7 +149,9 @@ Vertex attribute offsets (`NifShape.cs:Layout` lines 143-162):
 - UV, UV2, normal, tangent and colour: 4 bytes each, in that order after the
   position (`NifShape.cs:Layout` lines 147-152).
 - Skin weights 8 bytes and indices 4 bytes, after the colour
-  (`NifShape.cs:Layout` lines 154-155). Skin data is not decoded.
+  (`NifShape.cs:Layout` lines 154-155). The weights and bone indices are decoded by
+  `src/nif/geometry.cpp:read_vertex`; the bone list and bind transforms are read by
+  `src/nif/skin.cpp:read_bones` (see Skin below).
 - Tail slot (bit 8): 4 bytes after the skin block, at the end of the vertex
   (byte 36 in the vanilla stride-40 layout, flags `0x17b`; the descriptor's
   offset nibble at bits 36-39 says 9, which is 36 bytes). Not decoded. Its
@@ -212,10 +214,10 @@ per bone, 68 bytes each: a `NiBound` (three floats and a radius), a `Matrix33`
 rotation, a `Vector3` translation and a scale float, in that order.
 `NifShape.cs:ReadSkin` reads the same fields in the same order and builds the same
 matrix, so a bone's bind transform is the stored rotation scaled by the stored
-scale with the translation in the fourth row. When the data reference is absent,
-names another block type, or its count differs from the bone count, the reader
-keeps the names and leaves the transforms at their defaults, exactly as that
-method does.
+scale with the translation in the fourth row. When the data reference is absent or
+names another block type, the reader keeps the names and leaves the transforms at
+their defaults, as that method does. A count that differs from the bone count is a
+`parse_error` (`src/nif/skin.cpp:read_bones`).
 
 Cross-checked against `NifShape.cs` outside this repository on four vanilla meshes
 (`MaleBody.nif`, `FemaleBody.nif`, `1stPersonFemaleBody.nif`, `RadRoach.nif`): all

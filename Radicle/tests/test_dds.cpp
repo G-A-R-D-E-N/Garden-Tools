@@ -382,3 +382,58 @@ TEST(CapiDds, ReportsAReconstructZRefusalAsInvalidArgument) {
   EXPECT_NE(rgba, nullptr);
   radicle_free_bytes(rgba);
 }
+
+TEST(DdsCodec, SizesAHundredMipChainWithoutShiftingPastTheWidth) {
+  const auto info = fo4::texture::read_dds(make_dds(71, {}, 100, 64, 64));
+  EXPECT_EQ(info.mip_count, 100);
+  EXPECT_EQ(info.payload_size(), 3488);
+  EXPECT_EQ(info.mip_size(99), 8);
+}
+
+TEST(CapiDds, ReportsAHundredMipHeaderAndRejectsAMipPastTheFile) {
+  const auto bytes = make_dds(71, {}, 100, 64, 64);
+  uint32_t format = 0;
+  uint32_t mips = 0;
+  uint32_t width = 0;
+  uint32_t height = 0;
+  uint64_t payload = 0;
+  int32_t bc5 = 0;
+  ASSERT_EQ(radicle_dds_info(bytes.data(), bytes.size(), &format, &mips, &width, &height, &payload, &bc5),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_EQ(mips, 100U);
+  EXPECT_EQ(payload, 3488U);
+
+  uint8_t* rgba = nullptr;
+  uint32_t decoded_width = 0;
+  uint32_t decoded_height = 0;
+  EXPECT_EQ(radicle_dds_decode_rgba(bytes.data(), bytes.size(), 99, 0, &rgba, &decoded_width, &decoded_height),
+            RADICLE_STATUS_PARSE_ERROR);
+  EXPECT_EQ(rgba, nullptr);
+}
+
+TEST(CapiDds, ResetsEveryOutputOnInvalidArgument) {
+  uint8_t sentinel = 0;
+  uint8_t* rgba = &sentinel;
+  uint32_t width = 9;
+  uint32_t height = 9;
+  EXPECT_EQ(radicle_dds_decode_rgba(nullptr, 0, 0, 0, &rgba, &width, &height), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(rgba, nullptr);
+  EXPECT_EQ(width, 0U);
+  EXPECT_EQ(height, 0U);
+
+  uint32_t format = 9;
+  uint32_t mips = 9;
+  uint32_t info_width = 9;
+  uint32_t info_height = 9;
+  uint64_t payload = 9;
+  int32_t bc5 = 9;
+  EXPECT_EQ(radicle_dds_info(nullptr, 0, &format, &mips, &info_width, &info_height, &payload, &bc5),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(format, 0U);
+  EXPECT_EQ(mips, 0U);
+  EXPECT_EQ(info_width, 0U);
+  EXPECT_EQ(info_height, 0U);
+  EXPECT_EQ(payload, 0U);
+  EXPECT_EQ(bc5, 0);
+}

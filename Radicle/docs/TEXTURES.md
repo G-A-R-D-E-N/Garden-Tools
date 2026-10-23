@@ -38,14 +38,17 @@ its bytes per 4x4 block and its bytes per pixel. An unknown format is
 mip index and a file that ends early are both `InvalidDds`. A file whose header says
 zero mips is treated as one.
 
-- Block formats: BC1 (70-72), BC2 (73-75), BC3 (76-78), BC4 (79-81), BC5 (82-84) and
-  BC7 (97-99) through `decode_block_format`. BC6H is rejected: it is HDR and the port
-  does not implement it.
+- Block formats: BC1 (70-72), BC2 (73-75), BC3 (76-78), BC4 (79, 80), BC5 (82, 83) and
+  BC7 (97-99) through `decode_block_format`. BC4_SNORM (81) and BC5_SNORM (84) are
+  accepted by `read_dds` and `radicle_dds_info` but not decodable: decode returns a
+  parse error. BC6H is rejected: it is HDR and the port does not implement it.
 - Uncompressed: R8G8B8A8 (28, 29), B8G8R8A8 (87, 91), B8G8R8X8 (88, 93), R8G8 (49),
   R8 (61, luminance), A8 (65), B5G6R5 (85), B5G5R5A1 (86) and B4G4R4A4 (115).
 - `reconstruct_z` rewrites the blue channel from red and green as
   `z = sqrt(max(0, 1 - x*x - y*y))`, mapping `b / 255 * 2 - 1` each way, which is what
-  a BC5 normal map needs. It is applied after the decode and ignores the format.
+  a BC5 normal map needs. It is applied after the decode and only for unsigned BC5
+  (82, 83); any other format throws `std::invalid_argument`, which
+  `radicle_dds_decode_rgba` reports as `RADICLE_STATUS_INVALID_ARGUMENT`.
 
 ## Evidence
 

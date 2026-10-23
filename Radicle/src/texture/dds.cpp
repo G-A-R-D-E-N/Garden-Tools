@@ -152,8 +152,9 @@ std::vector<std::uint8_t> decode_dds_rgba(std::span<const std::uint8_t> bytes,
                     "DDS: mip " + std::to_string(mip) + " was requested but the file holds " +
                         std::to_string(info.mip_count) + "."};
   }
-  width = static_cast<std::uint32_t>(std::max(1, info.width >> mip));
-  height = static_cast<std::uint32_t>(std::max(1, info.height >> mip));
+  const auto shift = std::min<std::uint32_t>(mip, 31U);
+  width = static_cast<std::uint32_t>(std::max(1, info.width >> shift));
+  height = static_cast<std::uint32_t>(std::max(1, info.height >> shift));
 
   const auto surface_length = info.mip_size(mip);
   const auto surface_start = static_cast<std::int64_t>(info.data_offset) + info.mip_offset(mip);

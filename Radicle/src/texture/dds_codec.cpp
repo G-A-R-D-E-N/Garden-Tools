@@ -177,7 +177,8 @@ std::int64_t mip_size(const DdsFormatInfo& format, int width, int height) noexce
 std::int64_t DdsInfo::payload_size() const {
   std::uint64_t total = 0;
   for (int mip = 0; mip < mip_count; ++mip) {
-    const auto level = fo4::texture::mip_size(format, width >> mip, height >> mip);
+    const auto shift = std::min(mip, 31);
+    const auto level = fo4::texture::mip_size(format, width >> shift, height >> shift);
     if (level < 0) {
       throw dds_error{"InvalidDds", "DDS: a mip level has a negative size."};
     }
@@ -189,7 +190,8 @@ std::int64_t DdsInfo::payload_size() const {
 }
 
 std::int64_t DdsInfo::mip_size(std::uint32_t mip) const noexcept {
-  return fo4::texture::mip_size(format, width >> mip, height >> mip);
+  const auto shift = std::min<std::uint32_t>(mip, 31U);
+  return fo4::texture::mip_size(format, width >> shift, height >> shift);
 }
 
 std::int64_t DdsInfo::mip_offset(std::uint32_t mip) const noexcept {

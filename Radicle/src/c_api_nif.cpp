@@ -146,10 +146,10 @@ extern "C" {
 
 radicle_status radicle_nif_read(const uint8_t* bytes, size_t size, radicle_nif** out_nif) {
   clear_error();
+  if (out_nif) *out_nif = nullptr;
   if (!bytes || size == 0 || !out_nif) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "bytes, size and out_nif are required");
   }
-  *out_nif = nullptr;
   return guarded("unknown exception while reading a NIF", [&] {
     auto handle = std::make_unique<radicle_nif>();
     handle->file =

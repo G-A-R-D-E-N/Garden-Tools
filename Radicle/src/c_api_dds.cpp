@@ -31,12 +31,12 @@ radicle_status radicle_dds_decode_rgba(const uint8_t* bytes,
                                        uint32_t* out_width,
                                        uint32_t* out_height) {
   clear_error();
+  if (out_rgba) *out_rgba = nullptr;
+  if (out_width) *out_width = 0;
+  if (out_height) *out_height = 0;
   if (!bytes || size == 0 || !out_rgba || !out_width || !out_height) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "bytes, size, out_rgba, out_width and out_height are required");
   }
-  *out_rgba = nullptr;
-  *out_width = 0;
-  *out_height = 0;
 
   try {
     std::uint32_t width = 0;
@@ -73,16 +73,16 @@ radicle_status radicle_dds_info(const uint8_t* bytes,
                                 uint64_t* out_payload_size,
                                 int32_t* out_bc5) {
   clear_error();
+  if (out_format) *out_format = 0;
+  if (out_mip_count) *out_mip_count = 0;
+  if (out_width) *out_width = 0;
+  if (out_height) *out_height = 0;
+  if (out_payload_size) *out_payload_size = 0;
+  if (out_bc5) *out_bc5 = 0;
   if (!bytes || size == 0 || !out_format || !out_mip_count || !out_width || !out_height || !out_payload_size ||
       !out_bc5) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "bytes, size and every output are required");
   }
-  *out_format = 0;
-  *out_mip_count = 0;
-  *out_width = 0;
-  *out_height = 0;
-  *out_payload_size = 0;
-  *out_bc5 = 0;
 
   try {
     const auto info = fo4::texture::read_dds(std::span<const std::uint8_t>(bytes, size));
