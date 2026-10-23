@@ -107,6 +107,31 @@ TEST(MaintenanceNested, RemoveRecordsKeepsParentWhoseChildStays) {
   EXPECT_EQ(fo4::find_record(reread, fo4::FormKey::parse("000801:Base.esm")), nullptr);
 }
 
+TEST(MaintenanceNested, RemoveRecordsDropsEmptyChildGroupOfTheParentItRemoves) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(1);
+  hedr.u32(0x900);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+  const auto top = fo4::test::begin_group(out, "CELL", 0);
+  const auto parent = fo4::test::begin_record(out, "CELL", 0, 0x00000800);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"Parent\0", 7});
+  fo4::test::end_record(out, parent);
+  const auto children = fo4::test::begin_group(out, "CELL", 6);
+  out.patch_u32(children + 8, 0x800);
+  fo4::test::end_group(out, children);
+  fo4::test::end_group(out, top);
+  auto base = fo4::read_plugin(out.bytes, "Base.esm");
+  const std::vector<fo4::FormKey> keys{fo4::FormKey::parse("000800:Base.esm")};
+  ASSERT_EQ(fo4::remove_records(base, keys), 1u);
+  EXPECT_TRUE(base.groups.empty());
+  const auto reread = fo4::read_plugin(fo4::write_plugin(base), "Base.esm");
+  EXPECT_TRUE(reread.groups.empty());
+}
+
 namespace {
 
 fo4::Plugin two_parents(std::string_view name, bool with_master, std::string_view parent, std::int32_t children_type,

@@ -161,13 +161,16 @@ std::size_t remove_from(Group& group, const std::set<FormKey>& keys) {
   std::size_t removed = 0;
   std::vector<GroupChild> kept;
   kept.reserve(group.children.size());
-  for (auto& child : group.children) {
+  for (std::size_t i = 0; i < group.children.size(); ++i) {
+    auto& child = group.children[i];
     if (auto* sub = std::get_if<Group>(&child)) {
       const auto count = remove_from(*sub, keys);
       removed += count;
       if (count != 0 && sub->children.empty()) continue;
     } else if (keys.contains(std::get<Record>(child).form_key)) {
       ++removed;
+      const auto* owned = record_child_group(group, i);
+      if (owned != nullptr && owned->children.empty()) ++i;
       continue;
     }
     kept.push_back(std::move(child));
