@@ -25,6 +25,7 @@
 #include "fo4/c_api_nif.h"
 #include "fo4/c_api_dds.h"
 #include "fo4/c_api_terrain.h"
+#include "fo4/c_api_swf.h"
 #include <cstddef>
 #include <cstdio>
 
@@ -1378,5 +1379,89 @@ int main() {
   printf("LandBlend.Layers %zu\n", offsetof(radicle_land_blend, layers));
   printf("LandBlend.LayerCount %zu\n", offsetof(radicle_land_blend, layer_count));
   printf("LandBlend.Internal %zu\n", offsetof(radicle_land_blend, internal));
+  printf("SwfInfo %zu\n", sizeof(radicle_swf_info));
+  printf("SwfInfo.Format %zu\n", offsetof(radicle_swf_info, format));
+  printf("SwfInfo.Compression %zu\n", offsetof(radicle_swf_info, compression));
+  printf("SwfInfo.Version %zu\n", offsetof(radicle_swf_info, version));
+  printf("SwfInfo.ActionScript3 %zu\n", offsetof(radicle_swf_info, action_script3));
+  printf("SwfInfo.HasMetadata %zu\n", offsetof(radicle_swf_info, has_metadata));
+  printf("SwfInfo.UseNetwork %zu\n", offsetof(radicle_swf_info, use_network));
+  printf("SwfInfo.UseGpu %zu\n", offsetof(radicle_swf_info, use_gpu));
+  printf("SwfInfo.UseDirectBlit %zu\n", offsetof(radicle_swf_info, use_direct_blit));
+  printf("SwfInfo.DeclaredLengthMatches %zu\n", offsetof(radicle_swf_info, declared_length_matches));
+  printf("SwfInfo.FrameCount %zu\n", offsetof(radicle_swf_info, frame_count));
+  printf("SwfInfo.FileLength %zu\n", offsetof(radicle_swf_info, file_length));
+  printf("SwfInfo.FrameRate %zu\n", offsetof(radicle_swf_info, frame_rate));
+  printf("SwfInfo.TagCount %zu\n", offsetof(radicle_swf_info, tag_count));
+  printf("SwfInfo.ShapeTags %zu\n", offsetof(radicle_swf_info, shape_tags));
+  printf("SwfInfo.BitmapTags %zu\n", offsetof(radicle_swf_info, bitmap_tags));
+  printf("SwfInfo.FontTags %zu\n", offsetof(radicle_swf_info, font_tags));
+  printf("SwfInfo.TextTags %zu\n", offsetof(radicle_swf_info, text_tags));
+  printf("SwfInfo.SoundTags %zu\n", offsetof(radicle_swf_info, sound_tags));
+  printf("SwfInfo.ExporterInfoTags %zu\n", offsetof(radicle_swf_info, exporter_info_tags));
+  printf("SwfInfo.ExternalImageTags %zu\n", offsetof(radicle_swf_info, external_image_tags));
+  printf("SwfInfo.FontTextureTags %zu\n", offsetof(radicle_swf_info, font_texture_tags));
+  printf("SwfInfo.SymbolCount %zu\n", offsetof(radicle_swf_info, symbol_count));
+  printf("SwfInfo.ExportCount %zu\n", offsetof(radicle_swf_info, export_count));
+  printf("SwfInfo.FrameLabelCount %zu\n", offsetof(radicle_swf_info, frame_label_count));
+  printf("SwfInfo.AbcCount %zu\n", offsetof(radicle_swf_info, abc_count));
+  printf("SwfTag %zu\n", sizeof(radicle_swf_tag));
+  printf("SwfTag.Code %zu\n", offsetof(radicle_swf_tag, code));
+  printf("SwfTag.Length %zu\n", offsetof(radicle_swf_tag, length));
+  printf("SwfTag.Offset %zu\n", offsetof(radicle_swf_tag, offset));
+  printf("SwfTag.Parent %zu\n", offsetof(radicle_swf_tag, parent));
+  printf("SwfTag.SpriteId %zu\n", offsetof(radicle_swf_tag, sprite_id));
+  printf("SwfTag.InsideSprite %zu\n", offsetof(radicle_swf_tag, inside_sprite));
+  printf("SwfTag.LongHeader %zu\n", offsetof(radicle_swf_tag, long_header));
+  printf("SwfTag.PayloadSize %zu\n", offsetof(radicle_swf_tag, payload_size));
+  printf("SwfTag.Name %zu\n", offsetof(radicle_swf_tag, name));
+  printf("SwfSymbol %zu\n", sizeof(radicle_swf_symbol));
+  printf("SwfSymbol.TagId %zu\n", offsetof(radicle_swf_symbol, tag_id));
+  printf("SwfSymbol.Name %zu\n", offsetof(radicle_swf_symbol, name));
+  printf("SwfFrameLabel %zu\n", sizeof(radicle_swf_frame_label));
+  printf("SwfFrameLabel.Name %zu\n", offsetof(radicle_swf_frame_label, name));
+  printf("SwfFrameLabel.TagIndex %zu\n", offsetof(radicle_swf_frame_label, tag_index));
+  printf("SwfFrameLabel.SpriteId %zu\n", offsetof(radicle_swf_frame_label, sprite_id));
+  printf("SwfFrameLabel.InsideSprite %zu\n", offsetof(radicle_swf_frame_label, inside_sprite));
+  printf("SwfAbcInfo %zu\n", sizeof(radicle_swf_abc_info));
+  printf("SwfAbcInfo.Name %zu\n", offsetof(radicle_swf_abc_info, name));
+  printf("SwfAbcInfo.Flags %zu\n", offsetof(radicle_swf_abc_info, flags));
+  printf("SwfAbcInfo.TagIndex %zu\n", offsetof(radicle_swf_abc_info, tag_index));
+  printf("SwfAbcInfo.PayloadSize %zu\n", offsetof(radicle_swf_abc_info, payload_size));
+  printf("SwfAbcInfo.Parsed %zu\n", offsetof(radicle_swf_abc_info, parsed));
+  printf("SwfMethod %zu\n", sizeof(radicle_swf_method));
+  printf("SwfMethod.Name %zu\n", offsetof(radicle_swf_method, name));
+  printf("SwfMethod.ReturnType %zu\n", offsetof(radicle_swf_method, return_type));
+  printf("SwfMethod.Flags %zu\n", offsetof(radicle_swf_method, flags));
+  printf("SwfMethod.InstructionCount %zu\n", offsetof(radicle_swf_method, instruction_count));
+  printf("SwfMethod.CallCount %zu\n", offsetof(radicle_swf_method, call_count));
+  printf("SwfMethod.MultinameCount %zu\n", offsetof(radicle_swf_method, multiname_count));
+  printf("SwfClass %zu\n", sizeof(radicle_swf_class));
+  printf("SwfClass.Name %zu\n", offsetof(radicle_swf_class, name));
+  printf("SwfClass.SuperName %zu\n", offsetof(radicle_swf_class, super_name));
+  printf("SwfClass.InterfaceCount %zu\n", offsetof(radicle_swf_class, interface_count));
+  printf("SwfClass.MethodCount %zu\n", offsetof(radicle_swf_class, method_count));
+  printf("SwfCall %zu\n", sizeof(radicle_swf_call));
+  printf("SwfCall.Offset %zu\n", offsetof(radicle_swf_call, offset));
+  printf("SwfCall.Opcode %zu\n", offsetof(radicle_swf_call, opcode));
+  printf("SwfCall.Target %zu\n", offsetof(radicle_swf_call, target));
+  printf("SwfCall.Receiver %zu\n", offsetof(radicle_swf_call, receiver));
+  printf("SwfCall.ArgumentCount %zu\n", offsetof(radicle_swf_call, argument_count));
+  printf("SwfCall.EventName %zu\n", offsetof(radicle_swf_call, event_name));
+  printf("SwfCall.Handler %zu\n", offsetof(radicle_swf_call, handler));
+  printf("SwfCall.IsExternalInterface %zu\n", offsetof(radicle_swf_call, is_external_interface));
+  printf("SwfCall.IsEventRegistration %zu\n", offsetof(radicle_swf_call, is_event_registration));
+  printf("SwfMethodPool %zu\n", sizeof(radicle_swf_method_pool));
+  printf("SwfMethodPool.Name %zu\n", offsetof(radicle_swf_method_pool, name));
+  printf("SwfMethodPool.ReturnType %zu\n", offsetof(radicle_swf_method_pool, return_type));
+  printf("SwfMethodPool.ParamCount %zu\n", offsetof(radicle_swf_method_pool, param_count));
+  printf("SwfMethodPool.Flags %zu\n", offsetof(radicle_swf_method_pool, flags));
+  printf("SwfMethodPool.HasBody %zu\n", offsetof(radicle_swf_method_pool, has_body));
+  printf("SwfMethodPool.MaxStack %zu\n", offsetof(radicle_swf_method_pool, max_stack));
+  printf("SwfMethodPool.LocalCount %zu\n", offsetof(radicle_swf_method_pool, local_count));
+  printf("SwfMethodPool.InitScopeDepth %zu\n", offsetof(radicle_swf_method_pool, init_scope_depth));
+  printf("SwfMethodPool.MaxScopeDepth %zu\n", offsetof(radicle_swf_method_pool, max_scope_depth));
+  printf("SwfMethodPool.CodeSize %zu\n", offsetof(radicle_swf_method_pool, code_size));
+  printf("SwfMethodPool.ExceptionCount %zu\n", offsetof(radicle_swf_method_pool, exception_count));
   return 0;
 }

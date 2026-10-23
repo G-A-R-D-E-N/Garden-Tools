@@ -27,7 +27,7 @@ public sealed unsafe class Ba2Archive : IDisposable
         _owner = owner;
     }
 
-    private HandleUse Use() => new(_handle, nameof(Ba2Archive));
+    internal HandleUse Use() => new(_handle, nameof(Ba2Archive));
 
     private HandleUse OwnerUse() => _owner is null ? default : _owner.Use();
 

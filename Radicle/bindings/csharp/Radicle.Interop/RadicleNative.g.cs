@@ -2093,10 +2093,130 @@ public unsafe struct LandBlend
     public IntPtr Internal;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfInfo
+{
+    public byte Format;
+    public byte Compression;
+    public byte Version;
+    public byte ActionScript3;
+    public byte HasMetadata;
+    public byte UseNetwork;
+    public byte UseGpu;
+    public byte UseDirectBlit;
+    public byte DeclaredLengthMatches;
+    public ushort FrameCount;
+    public uint FileLength;
+    public float FrameRate;
+    public nuint TagCount;
+    public nuint ShapeTags;
+    public nuint BitmapTags;
+    public nuint FontTags;
+    public nuint TextTags;
+    public nuint SoundTags;
+    public nuint ExporterInfoTags;
+    public nuint ExternalImageTags;
+    public nuint FontTextureTags;
+    public nuint SymbolCount;
+    public nuint ExportCount;
+    public nuint FrameLabelCount;
+    public nuint AbcCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfTag
+{
+    public ushort Code;
+    public uint Length;
+    public nuint Offset;
+    public nuint Parent;
+    public ushort SpriteId;
+    public byte InsideSprite;
+    public byte LongHeader;
+    public nuint PayloadSize;
+    public IntPtr Name;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfSymbol
+{
+    public ushort TagId;
+    public IntPtr Name;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfFrameLabel
+{
+    public IntPtr Name;
+    public nuint TagIndex;
+    public ushort SpriteId;
+    public byte InsideSprite;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfAbcInfo
+{
+    public IntPtr Name;
+    public uint Flags;
+    public nuint TagIndex;
+    public nuint PayloadSize;
+    public int Parsed;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfMethod
+{
+    public IntPtr Name;
+    public IntPtr ReturnType;
+    public uint Flags;
+    public nuint InstructionCount;
+    public nuint CallCount;
+    public nuint MultinameCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfClass
+{
+    public IntPtr Name;
+    public IntPtr SuperName;
+    public nuint InterfaceCount;
+    public nuint MethodCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfCall
+{
+    public nuint Offset;
+    public IntPtr Opcode;
+    public IntPtr Target;
+    public IntPtr Receiver;
+    public uint ArgumentCount;
+    public IntPtr EventName;
+    public IntPtr Handler;
+    public int IsExternalInterface;
+    public int IsEventRegistration;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfMethodPool
+{
+    public IntPtr Name;
+    public IntPtr ReturnType;
+    public uint ParamCount;
+    public byte Flags;
+    public int HasBody;
+    public uint MaxStack;
+    public uint LocalCount;
+    public uint InitScopeDepth;
+    public uint MaxScopeDepth;
+    public uint CodeSize;
+    public nuint ExceptionCount;
+}
+
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 54u;
+    public const uint CompiledAbiVersion = 57u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -3150,5 +3270,92 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_landscape_blend_free")]
     public static extern void LandscapeBlendFree(LandBlend* blend);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_open_bytes")]
+    public static extern Status SwfOpenBytes(byte* bytes, nuint size, IntPtr* out_swf);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_open_path")]
+    public static extern Status SwfOpenPath([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, IntPtr* out_swf);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_open_ba2")]
+    public static extern Status SwfOpenBa2(IntPtr ba2, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, IntPtr* out_swf);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_destroy")]
+    public static extern void SwfDestroy(IntPtr swf);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_get_info")]
+    public static extern Status SwfGetInfo(IntPtr swf, SwfInfo* out_info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_tag_count")]
+    public static extern nuint SwfTagCount(IntPtr swf);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_tag_at")]
+    public static extern Status SwfTagAt(IntPtr swf, nuint index, SwfTag* out_tag);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_tag_payload")]
+    public static extern Status SwfTagPayload(IntPtr swf, nuint index, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_symbol_count")]
+    public static extern nuint SwfSymbolCount(IntPtr swf);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_symbol_at")]
+    public static extern Status SwfSymbolAt(IntPtr swf, nuint index, SwfSymbol* out_symbol);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_export_count")]
+    public static extern nuint SwfExportCount(IntPtr swf);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_export_at")]
+    public static extern Status SwfExportAt(IntPtr swf, nuint index, SwfSymbol* out_export);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_frame_label_count")]
+    public static extern nuint SwfFrameLabelCount(IntPtr swf);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_frame_label_at")]
+    public static extern Status SwfFrameLabelAt(IntPtr swf, nuint index, SwfFrameLabel* out_label);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_abc_count")]
+    public static extern nuint SwfAbcCount(IntPtr swf);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_abc_info_at")]
+    public static extern Status SwfAbcInfoAt(IntPtr swf, nuint abc, SwfAbcInfo* out_info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_abc_class_count")]
+    public static extern nuint SwfAbcClassCount(IntPtr swf, nuint abc);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_abc_class_at")]
+    public static extern Status SwfAbcClassAt(IntPtr swf, nuint abc, nuint index, SwfClass* out_class);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_abc_class_interface")]
+    public static extern Status SwfAbcClassInterface(IntPtr swf, nuint abc, nuint index, nuint interface_index, IntPtr* out_name);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_abc_class_method")]
+    public static extern Status SwfAbcClassMethod(IntPtr swf, nuint abc, nuint index, nuint method_index, SwfMethod* out_method);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_abc_script_count")]
+    public static extern nuint SwfAbcScriptCount(IntPtr swf, nuint abc);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_abc_script_at")]
+    public static extern Status SwfAbcScriptAt(IntPtr swf, nuint abc, nuint index, SwfMethod* out_method);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_abc_function_count")]
+    public static extern nuint SwfAbcFunctionCount(IntPtr swf, nuint abc);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_abc_function_at")]
+    public static extern Status SwfAbcFunctionAt(IntPtr swf, nuint abc, nuint index, SwfMethod* out_method);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_abc_call_at")]
+    public static extern Status SwfAbcCallAt(IntPtr swf, nuint abc, nuint owner, nuint owner_index, nuint method_index, nuint call_index, SwfCall* out_call);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_abc_multiname_at")]
+    public static extern Status SwfAbcMultinameAt(IntPtr swf, nuint abc, nuint owner, nuint owner_index, nuint method_index, nuint index, IntPtr* out_name);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_abc_method_count")]
+    public static extern nuint SwfAbcMethodCount(IntPtr swf, nuint abc);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_abc_method_at")]
+    public static extern Status SwfAbcMethodAt(IntPtr swf, nuint abc, nuint index, SwfMethodPool* out_method);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_abc_method_disassemble")]
+    public static extern Status SwfAbcMethodDisassemble(IntPtr swf, nuint abc, nuint index, byte** out_text, nuint* out_size);
 
 }

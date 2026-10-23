@@ -329,6 +329,7 @@ target_sources(fo4 PRIVATE src/patch/delta_patch.cpp)
 target_sources(fo4 PRIVATE src/patch/list_merge.cpp)
 target_sources(fo4 PRIVATE src/papyrus_source/lexer.cpp src/papyrus_source/parser.cpp src/papyrus_source/parser_decl.cpp src/papyrus_source/parser_expr.cpp src/papyrus_source/parser_stmt.cpp src/papyrus_source/summary.cpp)
 target_sources(radicle_c PRIVATE src/c_api_nif.cpp src/c_api_dds.cpp)
+target_sources(radicle_c PRIVATE src/c_api_swf.cpp)
 
 if(RADICLE_INSTALL)
   include(GNUInstallDirs)
@@ -670,6 +671,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_nif_nodes.cpp
     tests/test_nif_corpus.cpp
     tests/test_c_api_nif.cpp
+    tests/test_c_api_swf.cpp
+    tests/test_c_api_swf_real.cpp
     tests/test_dds.cpp
     tests/test_environment_writeback.cpp
     tests/test_writeback_real.cpp
