@@ -54,6 +54,12 @@ public sealed record LandLayer(bool IsBase, FormKey? Texture, byte Quadrant, ush
 public sealed record Landscape(uint? Flags, float? HeightOffset, byte[]? Heights, byte[]? Normals, byte[]? Colors,
                                IReadOnlyList<LandLayer> Layers);
 
+public sealed record LandHeightGrid(float Base, float[] Heights);
+
+public sealed record LandBlendLayer(FormKey? Texture, float[] Weights);
+
+public sealed record LandBlend(IReadOnlyList<FormKey?> Base, IReadOnlyList<LandBlendLayer> Layers);
+
 public sealed record LightInfo(int Time, uint Radius, ByteColor Color, uint Flags, float FalloffExponent, float Fov,
                                float NearClip, float FlickerPeriod, float FlickerIntensityAmplitude,
                                float FlickerMovementAmplitude, float Constant, float Scalar, float? Exponent,
@@ -394,6 +400,37 @@ public sealed unsafe partial class RadicleEnvironment : IDisposable
         finally
         {
             RadicleNative.LandscapeFree(land);
+        }
+    }
+
+    public LandHeightGrid? LandscapeHeights(Record record)
+    {
+        using var use = Use(record);
+        Native.LandHeights heights;
+        Call.Check(RadicleNative.LandscapeHeights(use.Pointer, record.Handle, &heights));
+        return heights.HasHeights == 0 ? null : new LandHeightGrid(heights.Base, new ReadOnlySpan<float>(heights.Heights, 1089).ToArray());
+    }
+
+    public LandBlend LandscapeBlend(Record record)
+    {
+        using var use = Use(record);
+        Native.LandBlend* blend;
+        Call.Check(RadicleNative.LandscapeBlend(use.Pointer, record.Handle, &blend));
+        try
+        {
+            var layers = new List<LandBlendLayer>();
+            var native = (Native.LandBlendLayer*)blend->Layers;
+            for (var i = 0; i < (int)blend->LayerCount; ++i)
+            {
+                layers.Add(new LandBlendLayer(FormKey.FromNative(native[i].Texture),
+                                              new ReadOnlySpan<float>((float*)native[i].Weights, 1089).ToArray()));
+            }
+            return new LandBlend(new[] { FormKey.FromNative(blend->Base0), FormKey.FromNative(blend->Base1),
+                                         FormKey.FromNative(blend->Base2), FormKey.FromNative(blend->Base3) }, layers);
+        }
+        finally
+        {
+            RadicleNative.LandscapeBlendFree(blend);
         }
     }
 

@@ -1160,19 +1160,19 @@ Rows are `name\tchecked\tmaster_flag\tlight`; findings are `code\tplugin\tdetail
 
 ## Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION
 
-ABI 40 adds `radicle_plugin_list_read`, `radicle_ccc_read` and `radicle_load_order_assemble` (`Radicle/include/fo4/c_api_loadorder.h`) and the `radicle_official_table` enum. The pin is now `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsFiftyOne`; ABI 41 added `radicle_plugin_move_placed_ref` and ABI 42 added `radicle_record_conditions` and `radicle_plugin_set_conditions` (`Radicle/include/fo4/c_api_conditions.h`).
+ABI 40 adds `radicle_plugin_list_read`, `radicle_ccc_read` and `radicle_load_order_assemble` (`Radicle/include/fo4/c_api_loadorder.h`) and the `radicle_official_table` enum. The pin is now `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsFiftyTwo`; ABI 41 added `radicle_plugin_move_placed_ref` and ABI 42 added `radicle_record_conditions` and `radicle_plugin_set_conditions` (`Radicle/include/fo4/c_api_conditions.h`).
 
-ABI 48 adds `radicle_env_build_list_merge_patch` (`Radicle/include/fo4/c_api_patch.h`), `radicle_env_classify_conflicts` (`Radicle/include/fo4/c_api_conflict.h`) and `radicle_plugin_copy_record_override` (`Radicle/include/fo4/c_api_env.h`); the pin is now `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsFiftyOne`.
+ABI 48 adds `radicle_env_build_list_merge_patch` (`Radicle/include/fo4/c_api_patch.h`), `radicle_env_classify_conflicts` (`Radicle/include/fo4/c_api_conflict.h`) and `radicle_plugin_copy_record_override` (`Radicle/include/fo4/c_api_env.h`); the pin is now `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsFiftyTwo`.
 
 ## Radicle/src/archive/assets.cpp:AssetResolver::list
 
 `AssetResolver::list(prefix, extension, include_shadowed)` enumerates every loose file under `data_dir_` (recursive, regular files only) and every named archive entry, keys each one with `normalize_asset_path` (lower case, forward slashes, leading `data/` dropped) and keeps the winner per key the way `AssetResolver::locate` does: the loose file, then archives from the last to the first. With `include_shadowed` the losing copies follow their winner in that same order and carry `shadowed`. A prefix matches whole path components (`mesh` does not match `meshes/...`), an empty prefix means everything, an extension is compared case-insensitively against the end of the path, and entries of an archive without a name table are skipped because they have no path. Output is sorted by key, so two calls over the same data agree. `size` is the file size for loose files and `Ba2EntryInfo::unpacked_size` for archive entries. A prefix with `.`/`..` components throws `AssetPathError`, which `Radicle/src/c_api_archive.cpp:radicle_assets_list` reports as `RADICLE_STATUS_INVALID_ARGUMENT`.
 
-`Radicle/include/fo4/c_api_env.h` adds `radicle_assets_list`, `radicle_asset_list_count`, `radicle_asset_list_get` and `radicle_asset_list_destroy` (the exports arrived in ABI 41; the current ABI pin is `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsFiftyOne`). The list is a snapshot owned by the caller; entry paths stay valid until destroy. `Radicle/bindings/csharp/Radicle.Interop/Archives.cs:AssetResolver.List` copies the entries and always destroys the native list. Tests: `Radicle/tests/test_ba2_reader.cpp:Ba2ReaderTest.ListingReturnsTheSameWinnersAsLocateAndKeepsShadowedCopiesBehindThem` (winners agree with `locate`, shadowed order, component-wise prefix, unnamed-archive entries listed only when their path is known from a loose file or a named archive), `Ba2ReaderTest.CApiReadsArchivesAndAssets` (the C exports) and `Radicle.Interop.Tests/ArchiveTests.cs:ListsWinningAssetsWithOriginSizeAndShadowedCopies`.
+`Radicle/include/fo4/c_api_env.h` adds `radicle_assets_list`, `radicle_asset_list_count`, `radicle_asset_list_get` and `radicle_asset_list_destroy` (the exports arrived in ABI 41; the current ABI pin is `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsFiftyTwo`). The list is a snapshot owned by the caller; entry paths stay valid until destroy. `Radicle/bindings/csharp/Radicle.Interop/Archives.cs:AssetResolver.List` copies the entries and always destroys the native list. Tests: `Radicle/tests/test_ba2_reader.cpp:Ba2ReaderTest.ListingReturnsTheSameWinnersAsLocateAndKeepsShadowedCopiesBehindThem` (winners agree with `locate`, shadowed order, component-wise prefix, unnamed-archive entries listed only when their path is known from a loose file or a named archive), `Ba2ReaderTest.CApiReadsArchivesAndAssets` (the C exports) and `Radicle.Interop.Tests/ArchiveTests.cs:ListsWinningAssetsWithOriginSizeAndShadowedCopies`.
 
-`Radicle/src/archive/assets.cpp:AssetResolver::open_roots` takes an ordered list of loose roots, high to low priority (an MO2 profile's mods, then Data), and `Radicle/include/fo4/archive/assets.hpp:AssetResolver::roots` replaces the single `data_dir`. `AssetResolver::open` stays and wraps one root. `AssetResolver::locate` checks each root in order and the first root holding the file wins; `AssetResolver::list` walks the roots in the same order, so a copy in a lower root is reported as shadowed behind the winner, and loose files still beat every archive. Empty roots are skipped, and a root repeated later in the list is dropped, keeping its first occurrence; repeats are matched on `weakly_canonical` paths, case-insensitively on Windows (`Radicle/src/archive/assets.cpp:root_key`). `Radicle/include/fo4/c_api_env.h:radicle_assets_open_roots` and `Radicle/bindings/csharp/Radicle.Interop/Archives.cs:AssetResolver.OpenRoots` expose it (ABI 42, pinned at 42 until ABI 43, now by `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsFiftyOne`). Tests: `Radicle/tests/test_ba2_reader.cpp:Ba2ReaderTest.LooseRootsResolveHighToLowAndShadowLowerRoots` (locate, list shadowing, empty roots, the C export) and `Radicle.Interop.Tests/ArchiveTests.cs:OpenRootsLayersLooseRootsHighToLowOverArchives`.
+`Radicle/src/archive/assets.cpp:AssetResolver::open_roots` takes an ordered list of loose roots, high to low priority (an MO2 profile's mods, then Data), and `Radicle/include/fo4/archive/assets.hpp:AssetResolver::roots` replaces the single `data_dir`. `AssetResolver::open` stays and wraps one root. `AssetResolver::locate` checks each root in order and the first root holding the file wins; `AssetResolver::list` walks the roots in the same order, so a copy in a lower root is reported as shadowed behind the winner, and loose files still beat every archive. Empty roots are skipped, and a root repeated later in the list is dropped, keeping its first occurrence; repeats are matched on `weakly_canonical` paths, case-insensitively on Windows (`Radicle/src/archive/assets.cpp:root_key`). `Radicle/include/fo4/c_api_env.h:radicle_assets_open_roots` and `Radicle/bindings/csharp/Radicle.Interop/Archives.cs:AssetResolver.OpenRoots` expose it (ABI 42, pinned at 42 until ABI 43, now by `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsFiftyTwo`). Tests: `Radicle/tests/test_ba2_reader.cpp:Ba2ReaderTest.LooseRootsResolveHighToLowAndShadowLowerRoots` (locate, list shadowing, empty roots, the C export) and `Radicle.Interop.Tests/ArchiveTests.cs:OpenRootsLayersLooseRootsHighToLowOverArchives`.
 
-`Radicle/src/c_api_archive.cpp:radicle_ba2_write_general` and `Radicle/bindings/csharp/Radicle.Interop/Archives.cs:Ba2Writer.General` expose `fo4::archive::write_ba2_general` (ABI 43, pinned by `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsFiftyOne`). Each file becomes one GNRL entry with a single chunk, stored or zlib-compressed by the `compress` flag, and its three hashes come from `compute_ba2_hashes`, so archives written here carry real hashes instead of the zero placeholders hand-rolled test fixtures used. Versions are limited to the proven 1, 7 and 8. The test-internal `Ba2Writer` in `Radicle.Interop.Tests/Fixtures.cs` is removed; the same `Ba2Writer.General(params (path, data)[])` call now comes from the public type. Tests: `Radicle/tests/test_ba2_reader.cpp:Ba2ReaderTest.CApiWritesGeneralArchivesThatMatchTheNativeWriterAndReadBack` (bytes equal the native writer's, read back through `Ba2Reader`, unsupported version and null arguments refused) and the existing C# archive tests, which now build their fixtures through the public writer.
+`Radicle/src/c_api_archive.cpp:radicle_ba2_write_general` and `Radicle/bindings/csharp/Radicle.Interop/Archives.cs:Ba2Writer.General` expose `fo4::archive::write_ba2_general` (ABI 43, pinned by `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsFiftyTwo`). Each file becomes one GNRL entry with a single chunk, stored or zlib-compressed by the `compress` flag, and its three hashes come from `compute_ba2_hashes`, so archives written here carry real hashes instead of the zero placeholders hand-rolled test fixtures used. Versions are limited to the proven 1, 7 and 8. The test-internal `Ba2Writer` in `Radicle.Interop.Tests/Fixtures.cs` is removed; the same `Ba2Writer.General(params (path, data)[])` call now comes from the public type. Tests: `Radicle/tests/test_ba2_reader.cpp:Ba2ReaderTest.CApiWritesGeneralArchivesThatMatchTheNativeWriterAndReadBack` (bytes equal the native writer's, read back through `Ba2Reader`, unsupported version and null arguments refused) and the existing C# archive tests, which now build their fixtures through the public writer.
 
 ## Radicle/src/archive/assets.cpp:walk_loose
 
@@ -2632,7 +2632,7 @@ Known cost: link collection scans the whole source plugin with `collect_form_lin
 
 Destination is edited in place, so a caller that needs all-or-nothing works on a copy. The C ABI does that (below). Undecodable sources throw `std::invalid_argument` from `require_decodable`, and an unrepresentable EDID throws the stored-text error that `set_record_editor_id` raises through `stored_editor_id`; both propagate, as before. `set_record_editor_id` returns false only when the record is absent, and it returns true for an unchanged EDID. A false on a record the copy just placed therefore means a broken invariant, and it throws `std::logic_error`.
 
-C ABI: `radicle_plugin_copy_record_as_new` in `Radicle/include/fo4/c_api_env.h`, implemented in `Radicle/src/c_api_writeback.cpp`. It takes destination and source plugin handles, the record key, and nullable `editor_id`, `remove_prefix`, `remove_suffix`, `prefix` and `suffix` strings, then writes the new key to `out_key`. It follows `radicle_plugin_copy_placed_ref_new` in having no status out-parameter. Unsupported signatures map to `RADICLE_STATUS_INVALID_ARGUMENT`, and missing source and missing parent CELL or DIAL map to `RADICLE_STATUS_NOT_FOUND`. It copies the destination plugin before the call and assigns the copy only on success. This adds `RADICLE_ABI_VERSION` 43 to 44 in `Radicle/include/fo4/c_api.h`; `CApiQuest.AbiVersionIsFiftyOne` pins it, and `Radicle/bindings/csharp/Radicle.Interop/RadicleNative.g.cs` was regenerated with `bindings/csharp/tools/generate_interop.py include <cs out> <probe out>`. The layout probe did not change. Tests: `Radicle/tests/test_copy_as_new.cpp`.
+C ABI: `radicle_plugin_copy_record_as_new` in `Radicle/include/fo4/c_api_env.h`, implemented in `Radicle/src/c_api_writeback.cpp`. It takes destination and source plugin handles, the record key, and nullable `editor_id`, `remove_prefix`, `remove_suffix`, `prefix` and `suffix` strings, then writes the new key to `out_key`. It follows `radicle_plugin_copy_placed_ref_new` in having no status out-parameter. Unsupported signatures map to `RADICLE_STATUS_INVALID_ARGUMENT`, and missing source and missing parent CELL or DIAL map to `RADICLE_STATUS_NOT_FOUND`. It copies the destination plugin before the call and assigns the copy only on success. This adds `RADICLE_ABI_VERSION` 43 to 44 in `Radicle/include/fo4/c_api.h`; `CApiQuest.AbiVersionIsFiftyTwo` pins it, and `Radicle/bindings/csharp/Radicle.Interop/RadicleNative.g.cs` was regenerated with `bindings/csharp/tools/generate_interop.py include <cs out> <probe out>`. The layout probe did not change. Tests: `Radicle/tests/test_copy_as_new.cpp`.
 ## Radicle/schema/fallout4/fields.json:SCOL (#602 WP-9 C-37)
 
 xEdit SCOL is `Core/wbDefinitionsFO4.pas:12620-12648`: EDID, OBND (required), PTRN, the model group, FULL, FLTR, then `Parts` (required, sorted by ONAM). A part is ONAM (`Static`, non-nullable, 13 targets: ACTI, ALCH, AMMO, BOOK, CONT, DOOR, FLOR, FURN, MISC, MSTT, STAT, TERM, WEAP) followed by DATA (`wbStaticPartPlacements`, `Core/wbDefinitionsCommon.pas:9223-9233`, required array of 28-byte placements: position, rotation, scale). Rows: six OBND i16 scalars `SCOL\BoundMinX` to `SCOL\BoundMaxZ` (offsets 0 to 10, payload 12), `SCOL\Model` (MODL), `SCOL\Filter` (FLTR), `SCOL\PreviewTransform` (PTRN, TRNS, not nullable; corpus 13 of 13 resolve to TRNS) and `SCOL\PartStatic` (ONAM, repeated, not nullable, the 13 targets). No DATA row: parts are a repeated group and go through `Radicle/src/forms/static_collection.cpp`. FULL needed no row: it is in `localized_subrecords` and `generated_lstring_fields.inc` already. Authoring follows xEdit order: EDID 0..1, OBND 1..1 with a 12-byte zero default, PTRN, MODL 0..1 coupled, MODT, MODC, MODS, MODF, FULL and FLTR 0..1, ONAM and DATA 1..65535 coupled, so generic create returns `not_authorable` and generic add or remove of ONAM, DATA or MODL is refused. No `ONAM` precedent with a DATA pair exists in fields.json, and the layout check in `Radicle/src/plugin/subrecord_authoring.cpp:local_layout_valid` is monotone in rule order, so 2 or more parts are out of order for it. The only defaulted rule is OBND, which every vanilla record has, so no current generic add reaches that check. Generic add of an absent non-coupled subrecord returns `no_default`, OBND returns `already_present`; remove of FULL, MODT, MODC, MODS, MODF, FLTR or PTRN succeeds, and remove of OBND returns `below_minimum`. Double count: no SCOL handler exists in `Radicle/src/schema/form_link*.cpp`, so the ONAM row is the only counter. Corpus (seven masters, 3513 SCOL records: 2617 Fallout4.esm, 152 DLCRobot, 3 DLCworkshop01, 219 DLCworkshop03, 235 DLCCoast, 287 DLCNukaWorld): OBND in all 3513, MODL in 3512, PTRN in 13, FULL in 124 (Fallout4.esm) plus 21, 3, 198, 33 and 1, FLTR in 2244 (Fallout4.esm) plus 106, 3, 3, 136 and 211. 20 records have no parts (9 in Fallout4.esm). 22713 ONAM, each followed by exactly one DATA; every DATA is a non-empty multiple of 28 bytes. Every ONAM resolves through its own master list; zero or unresolved ONAM: 0, so the non-nullable row raises no CheckErrors finding. Fallout4.esm targets: STAT 15674, MISC 129, MSTT 21, BOOK 14, ALCH 19, ACTI 5, DOOR 5, CONT 4, AMMO 3, FURN 3, WEAP 1, all inside the list. Parts are not sorted by raw ONAM: 235 of 2581 Fallout4.esm records with two or more parts ascend; across the six DLC masters 89 ascend and 754 do not. Placement arrays are not sorted either (xEdit `wbArrayS` has no sort key): 2614 of 8317 arrays with two or more placements are sorted by position. Tests: `Radicle/tests/test_wp9_scol.cpp`; pin `Radicle/tests/test_subrecord_authoring.cpp:SubrecordAuthoring.GeneratedSchemaMarksSiblingOwnersCoupled`.
@@ -4513,4 +4513,208 @@ A location ALCC and a reference ALEA must not survive a no-fill kind change: eac
 
 CIS1 must rank with the CTDA head of its run, so a rename that writes no conditions must keep the whole run.
 
-`Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION` is 51 after merging `nomad/602-remaining` (ABI 48, eight bumps from base 40) into `nomad/dev` (ABI 43, three bumps from base 40): both added exports, so the merged surface takes the next unused number, pinned by `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsFiftyOne` and `Radicle/bindings/csharp/Radicle.Interop/RadicleNative.g.cs:RadicleNative.CompiledAbiVersion`.
+`Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION` is 51 after merging `nomad/602-remaining` (ABI 48, eight bumps from base 40) into `nomad/dev` (ABI 43, three bumps from base 40): both added exports, so the merged surface takes the next unused number, pinned by `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsFiftyTwo` and `Radicle/bindings/csharp/Radicle.Interop/RadicleNative.g.cs:RadicleNative.CompiledAbiVersion`.
+
+## Radicle/src/environment/placed.cpp:decode_placed_reference (#816)
+
+The REFR XEMI subrecord (emittance) is one 4-byte FormKey id, read with `single_link` exactly like XEZN, so it resolves through the plugin's master list and a second XEMI is refused by `once`. It is stored in `PlacedReferenceData::emittance` (`Radicle/include/fo4/environment/placed.hpp:PlacedReferenceData`). The target is not type-checked here: xEdit allows only LIGH or REGN (`C:/Users/Ricky/ds-proxy/xedit-src/Core/wbDefinitionsFO4.pas:11523`, `wbFormIDCk(XEMI, 'Emittance', [LIGH, REGN])`), and the caller looks up the target itself. The branch runs for every placed signature this decoder accepts (ACHR and the projectile, trap and hazard records too), since the same XEMI row exists on them (`wbDefinitionsFO4.pas:4611`, `:3256`).
+
+## Radicle/src/c_api_placed.cpp:build_view (#816)
+
+`radicle_placed_ref.has_emittance` is set from whether the decoded optional is present, and `emittance` is filled through the same `key` helper as `encounter_zone`, which yields the null key when absent. Both new fields come after `internal` at the end of `Radicle/include/fo4/c_api_env.h:radicle_placed_ref`, so no existing offset moved. The C# `PlacedRef.HasEmittance` and `PlacedRef.Emittance` lines and their probe offsets come from `Radicle/bindings/csharp/tools/generate_interop.py`, which regenerated `Radicle/bindings/csharp/Radicle.Interop/RadicleNative.g.cs` and `Radicle/bindings/csharp/tests/abi_layout_probe.cpp`. `AbiLayoutTests.EveryStructMatchesTheCLayout` checks those offsets against the probe output.
+
+## Radicle/bindings/csharp/Radicle.Interop/PlacedReferences.cs:PlacedReference (#816)
+
+`PlacedReference` takes `FormKey? Emittance = null` as its last parameter. `RadicleEnvironment.Convert` sets it from `HasEmittance`, not from the key's zero value, which is the same rule the other optional links follow. The default keeps existing callers compiling.
+
+## Radicle/tests/test_environment_placed.cpp:PlacedEnvironmentTest (#816)
+
+Fixture REFR 0x800 carries XEMI resolving to 0x917, and fixture REFR 0x809 carries none. `DecodesObjectReferenceFields` checks the resolved key, `EmittanceStaysEmptyForAReferenceWithoutXemi` checks that an absent XEMI yields no value (a regression where a stale or zero key was reported), and `CApiDecodesPlacedReferences` checks `has_emittance` and the resolved `emittance` through the C ABI.
+
+## Radicle/bindings/csharp/Radicle.Interop.Tests/EnvironmentTests.cs:EnvironmentTests.ExposesEmittanceOnlyWhenXemiIsPresent (#816)
+
+A REFR with XEMI reports the resolved FormKey through the managed `PlacedReference.Emittance`, and a REFR without XEMI reports null. It catches the wrapper dropping the field or ignoring `HasEmittance`.
+
+## Radicle/tests/test_placed_variants_real.cpp:XemiReferencesMatchCensusInDlcRobotAndWorkshop03 (#816)
+
+Counts the REFR records of a single-plugin load of DLCRobot.esm (expects 482) and DLCworkshop03.esm (expects 207) whose decoded `PlacedReferenceData::emittance` is set. The expectations were confirmed by a read-only raw scan of the two ESMs (37,693 and 8,184 REFR records, of which 482 and 207 carry XEMI; 35 and 9 are deleted, and the scan counts them as the test does). The regression it catches is an XEMI decode that drops or misplaces entries on real REFR layouts, which fixture bytes cannot show.
+## Radicle/src/pex_analysis/script_set.cpp:outranks
+
+Garden rule, not engine-proven. The order is copied from GE `opencw/OpenCw.Papyrus/ScriptCachePrecedence.cs:Compare` on origin/main: kind (archive before loose), then the higher load index, then the ordinal container path. The engine's real precedence for loose versus archive scripts and for CC archives is an open RE question (see the #812 RE request).
+
+## Radicle/src/pex_analysis/script_set.cpp:loose_load_index
+
+Garden rule, not engine-proven. `AssetResolver::roots()` is ordered high to low priority, so a loose script's load index is its root's position counted from the end (`roots.size() - 1 - i`), and the higher index wins. That keeps the winner equal to `Radicle/src/archive/assets.cpp:AssetResolver::locate`, which takes the first root that holds the file (`Radicle/tests/test_script_set.cpp:ScriptSet.FirstLooseRootWinsLikeAssetResolverLocate`).
+
+## Radicle/src/pex_analysis/script_set.cpp:enumerate_script_candidates
+
+Archive load index is the archive's position in `AssetResolver::archives()`. `archive_load_order` in `Radicle/src/archive/assets.cpp` already orders that list as INI archives first and then each plugin's archives, so the resolver order is the load order and no `AssembledLoadOrder` input is needed. The function lists every shadowed entry (`include_shadowed=true`), because resolution, not `AssetResolver::list`, decides the winner.
+
+## Radicle/src/pex_analysis/script_set.cpp:normalize_script_name
+
+Normalizes through `normalize_asset_path`, then strips the `scripts/` prefix and the `.pex` suffix, matching GE `NormalizeName` and `ArchiveScriptSource.ScriptName` in `opencw/OpenCw.Papyrus/ScriptSourceCandidate.cs`. It throws `AssetPathError` for a drive or a `.`/`..` component, so an archive entry with such a path is skipped by `enumerate_script_candidates` (the list already drops it).
+
+## Radicle/src/pex_analysis/script_set.cpp:resolve_script_set
+
+Groups by normalized name and returns the groups in ordinal name order, as GE `Resolve` does. The winner is the first candidate that no later candidate outranks, so exact ties keep the earlier input, as GE `PickWinner` does. `replaced` is the group size minus one. `ScriptWinner::index` is an addition beyond GE: it maps the winner back to the caller's span, which matters when two entries share a container and a name.
+
+## Radicle/include/fo4/c_api_pex.h:radicle_script_resolve
+
+The C ABI takes caller-supplied candidates, so C# keeps its own enumeration and calls this for the winners. Kind 0 is archive and 1 is loose; any other kind is `RADICLE_STATUS_INVALID_ARGUMENT`. Winners are returned in name order with `candidate_index` into the input array. Winner arrays are released with `radicle_script_free_winners`.
+
+## Radicle/src/c_api_pex.cpp:radicle_script_normalize_name
+
+Maps `AssetPathError` to `RADICLE_STATUS_INVALID_ARGUMENT` so no exception crosses the C boundary; the test `Radicle/tests/test_c_api_pex.cpp:ScriptNormalizeNameReportsInvalidArgumentForParentComponent` pins that.
+
+## Radicle/tests/test_script_set_real.cpp:VanillaAndDlcArchivesResolveToTheScannedWinnerCount
+
+Expected values come from a read-only throwaway scan on 2026-10-22 of `D:/SteamLibrary/steamapps/common/Fallout 4/Data`, using the plugin set `installed_master_and_cc_plugins` picks (7 official masters, plus 9 CC plugins listed in `Fallout4.ccc`, 16 plugins in all) and the same archive order as `archive_load_order`. That gave 55 archives, 10331 `Scripts/*.pex` entries, 10331 distinct names and 0 replaced, so `10331` is both the candidate and the winner count.
+
+## Radicle/include/fo4/c_api_pex.h:radicle_script_resolve (generator)
+
+`c_api_pex.h` is already in `Radicle/bindings/csharp/tools/generate_interop.py` HEADERS, so the generated `RadicleNative.g.cs` and `abi_layout_probe.cpp` carry the script exports after regeneration. No hand-written C# wrapper exists for the pex exports, and none was added.
+## Radicle/include/fo4/loadorder/mo2_profile.hpp:Mo2PathTranslator — optional translator parameter
+
+`read_mo2_instance` takes an optional `Mo2PathTranslator`, applied to ini path values before any derived folder is built. Without it, values are read as UTF-8 paths (`fo4::io::from_utf8`). fo4ide passes its Wine drive mapping (`PluginEditTool/native/src/mo2/Mo2Profile.cpp:nativePath`) so `gamepath` and `base_directory` are mapped before `%BASE_DIR%` and `data_dir` are derived.
+
+## Radicle/src/loadorder/mo2_profile.cpp:read_mo2_instance — instance folders
+
+`selected_profile` defaults to `Default`. `base_directory` defaults to the instance folder, and `%BASE_DIR%` in the later keys expands to it. `data_dir` is `gamepath/Data` when `gamepath` is set, and `Stock Folder/Data` replaces it when that is a directory (portable installs). With no `gamepath` and no `Stock Folder/Data`, `data_dir` is empty and the data root is left out of the asset roots. The read never throws; a missing ini gives the defaults. The `mod_directory` and `profiles_directory` keys are not verified against a real MO2 ini.
+
+## Radicle/src/loadorder/mo2_profile.cpp:read_mo2_profile — modlist and plugins
+
+`modlist.txt` lines starting with `+` are enabled and `-` disabled. `*` is treated as disabled, because no sample of it was checked. Other lines and empty names are skipped. A missing `modlist.txt` gives no mods. A separator is a name ending in `_separator`, matched case-insensitively. `plugins.txt` is read with `read_plugin_list`, so a missing file throws an IO error and an empty profile is never returned. `local_saves` and `local_settings` are not read; their keys were not verified.
+
+## Radicle/src/loadorder/mo2_profile.cpp:mo2_asset_roots_low_to_high — root order
+
+Roots are `data_dir` (skipped when empty), the enabled non-separator mod folders low to high, then `overwrite_dir` last, so the overwrite folder wins in `mo2_resolve_plugin_paths`. `radicle_mo2_asset_roots` in `Radicle/src/c_api_loadorder.cpp` returns the same order.
+
+## Radicle/src/loadorder/mo2_profile.cpp:mo2_resolve_plugin_paths — winners and folded keys
+
+Each root is indexed in order, and a later root overwrites an earlier entry. Keys are `fo4::text::fold(file name)`, so a case-only Unicode difference (`Ä.esp` against `ä.esp`) resolves to one plugin (#702). Lookups must use the folded key, because `fo4::PluginKey::filename()` returns the unfolded name. Test: `Radicle/tests/test_mo2_profile.cpp:NonAsciiModAndPluginNamesMatchAcrossUtf8ModlistAndWindows1252PluginsTxt`.
+
+## Radicle/include/fo4/io/path_text.hpp:from_utf8 — UTF-8 to path without the ANSI code page
+
+MSVC's `std::filesystem::path(std::string)` and `path::string()` use the ANSI code page. `from_utf8` builds the path from a `std::u8string`, so non-ASCII profile and mod folder names reach the file system unchanged. `read_mo2_profile` and `mo2_asset_roots_low_to_high` use it for the profile and mod folder names.
+
+## Radicle/src/c_api_loadorder.cpp:radicle_mo2_profile_read — output cleanup on failure
+
+Outputs are cleared before the read. When copying the plugin rows fails after the mod rows were copied, the mod rows are freed and `out_mod_rows` and `out_mod_count` are cleared. A NULL `profile` selects the instance's `selected_profile`.
+
+## Radicle/bindings/csharp/Radicle.Interop/LoadOrder.cs:LoadOrderFiles.ReadMo2PluginPaths — row split
+
+Rows are split on the first tab. The keys are folded file names, which cannot contain a tab on Windows, so the first tab is always the separator. `mo2_resolve_plugin_paths` returns one entry per key, so `ToDictionary` does not see duplicates.
+## Radicle/include/fo4/environment/terrain.hpp:decode_land_heights
+- Returns the 33x33 height grid of one LAND record. `base` is the raw VHGT offset; `heights` are final values, already scaled by 8.
+- Returns nullopt when VHGT is absent or the delta span is not 1089 bytes.
+- Ported from GardenEngine `opencw/Services/Terrain/LandHeights.cs` (Decode), checked against xEdit `wbDefinitionsCommon.pas` VHGT (lines 8698-8714).
+
+## Radicle/include/fo4/environment/terrain.hpp:decode_layer_alpha
+- One entry per non-base ATXT layer that has VTXT data, with the 17x17 opacity grid and the quadrant and layer number.
+- The texture is nullopt when the link resolves to null.
+- Ported from GardenEngine `opencw/Services/Terrain/LandLayers.cs` (DecodeAlpha). Reference: `wbDefinitionsCommon.pas` ATXT/BTXT/VTXT lines 8716-8763, `wbVTXTPosition` line 4350.
+
+## Radicle/include/fo4/environment/terrain.hpp:blend_cell_weights
+- Returns, per quadrant, the base texture (first base layer of that quadrant) and the 33x33 summed weights per non-null texture.
+- Ported from GardenEngine `LandLayers.cs` (CellWeights, no-neighbour overload). The per-quadrant top-8 slot selection (`Quadrant`) and the neighbour overload are not ported; the API has no slot output.
+
+## Radicle/src/environment/terrain.cpp:decode_land_heights
+- Row-start carry: each row starts from the x=0 value of the previous row, not from the base. Deltas are signed bytes multiplied by 8.
+- Test: `Radicle/tests/test_environment_terrain.cpp` TerrainLand.IntegratesDeltasWithRowStartCarry. Regression: a non-carry integration starts row 1 at 40 instead of 32.
+
+## Radicle/src/environment/terrain.cpp:layered_quadrant
+- Non-base alpha layers are summed in layer order. The first base texture of the quadrant takes max(1 - total, 0). When total exceeds 1 every entry is divided by total.
+- Tests: TerrainLand.BlendGivesGroundTheRemainderAndNormalisesOverfullVertices, TerrainLand.BaseTextureIsTheFirstBaseLayerOfEachQuadrant.
+
+## Radicle/src/environment/terrain.cpp:blend_cell_weights
+- Each quadrant's 17x17 is added into the 33x33 grid at offset ((quadrant & 1) * 16, (quadrant >> 1) * 16). Each vertex is divided by the number of quadrants that cover it: 1 interior, 2 on a shared edge, 4 at the centre.
+- The null texture (empty owner) is kept internally and is not emitted; this changes no other texture's weight.
+- Tests: TerrainLand.BlendMergesQuadrantEdgesIntoSharedVertices.
+
+## Radicle/src/environment/terrain.cpp:decode_alpha_grid
+- A VTXT position maps to row = position / 17 and col = position % 17. Rows of 17 or more are skipped. Opacity is clamped to [0, 1].
+- Tests: TerrainLand.MapsAlphaPositionsOntoTheSeventeenGrid, TerrainLand.SkipsAlphaPositionsOutsideTheGrid.
+
+## Radicle/include/fo4/c_api_terrain.h:radicle_landscape_heights
+- Fills `radicle_land_heights` (has_heights, base, 1089 heights). Fails with INVALID_ARGUMENT on null arguments or a record from another environment.
+- Lives in its own header because `Radicle/include/fo4/c_api_env.h` would pass 750 lines. The C# wrapper is `Radicle/bindings/csharp/Radicle.Interop/RadicleEnvironment.cs` LandscapeHeights.
+
+## Radicle/include/fo4/c_api_terrain.h:radicle_landscape_blend
+- Returns a heap blend owned by the caller. Its `base` and `layers[i].weights` pointers stay valid until `radicle_landscape_blend_free`.
+- Test: `Radicle/tests/test_environment_terrain.cpp` CApiExposesTerrain. C# wrapper LandscapeBlend, test LandscapeHeightsAndBlendDecodeTheCellLand.
+
+## Radicle/src/c_api_terrain.cpp:radicle_landscape_blend
+- `LandBlendHolder` owns the `LandVertexWeights` and the layer view. `internal` points at the holder; `radicle_landscape_blend_free` deletes it.
+
+## Radicle/tests/test_environment_terrain_real.cpp:CommonwealthCellsMatchGardenEngineReference
+- Loads only Fallout4.esm from FO4_DATA_DIR (skips without it). Checks three Commonwealth LAND records (0x00F540, 0x00F53F, 0x00F53E) with FNV-1a 64 pins over the height floats and over the blend (base ids, then per layer id and weights).
+- Invariants: heights finite, alpha in [0, 1], per-vertex weight total at most 1 + 1e-5, layers non-empty.
+- The pins come from GardenEngine's LandHeights/LandLayers output via a throwaway parser (concept-level). Its reference points are GardenEngine `LandHeights.cs`/`LandLayers.cs`, `wbDefinitionsCommon.pas` 8698-8763 and `wbVTXTPosition` 4350. The script was deleted; the pins are still TODO-verify against a real run.
+## src/environment/base_records.cpp:set_climate_weathers
+Rewrites only the CLMT WLST subrecord (12-byte entries: WTHR form, int32 chance, GLOB form). Links are encoded before any mutation, so an unlisted master fails closed with FormIdError (mapped to WorldDecodeError) and leaves the plugin unchanged. No master is inserted. Field layout cites wbDefinitionsFO4.pas:6115-6125.
+
+## src/environment/base_records.cpp:set_weather_colors
+Writes only the R, G and B bytes of one NAM0 colour slot at (group * time_slots + time) * 4. The fourth byte is left as stored. Group count and time-slot count come from weather_color_groups and weather_time_slots in fo4/forms/weather.hpp. NAM0 layout cites wbDefinitionsCommon.pas:9433 and wbWeatherTimeOfDay at wbDefinitionsCommon.pas:8335.
+
+## src/environment/base_records.cpp:set_weather_fog
+Replaces FNAM floats only when the distance count times 4 equals weather_fnam_size for the record's form version (32, 56 or 72 bytes). Field layout cites wbDefinitionsCommon.pas:9521-9555.
+
+## src/environment/base_records.cpp:set_weather_transition
+Writes one byte at k_weather_transition_offset (3) inside the DATA subrecord, which must be weather_data_size bytes. The delta is a raw uint8; converting it to hours needs min and max values the setter does not know, so that conversion stays in radicle_weather_transition_hours. Byte position cites wbDefinitionsFO4.pas WTHR DATA "Trans Delta" near lines 13034-13140.
+
+## src/environment/base_records.cpp:mark_edited
+Clears original_range, decompressed_payload, header.data_size and uncompressed_size on the edited record so the writer re-encodes it. Setters that find identical bytes return true without calling it.
+
+## src/c_api_base_records.cpp:optional_link
+Maps a null plugin with local_id 0 to the null FormKey (encodes to 0). Any other value goes through to_form_key. Used for the optional CLMT WLST global and the weather links.
+
+## src/c_api_base_records.cpp:radicle_plugin_set_climate_weathers
+Null-checks the weather array and rejects any invalid link with RADICLE_STATUS_INVALID_ARGUMENT before calling set_climate_weathers. Parse failures map to RADICLE_STATUS_PARSE_ERROR through guarded().
+
+`Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION` is 52 for the combined Radicle lanes (#809 `Radicle/include/fo4/c_api_loadorder.h:radicle_mo2_profile_read`, #812 `Radicle/include/fo4/c_api_pex.h:radicle_script_resolve`, #813 `Radicle/include/fo4/c_api_terrain.h:radicle_landscape_blend`, #815 `Radicle/include/fo4/c_api_records.h` weather setters, #816 `Radicle/include/fo4/environment/placed.hpp` emittance fields on `radicle_placed_ref`); pinned by `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsFiftyTwo`. #706 also claims 52, so whichever of the two lands second takes 53.
+
+### Radicle/bindings/csharp/tools/generate_interop.py:emit_probe
+- Every split array member gets its index suffix, because field_cs emits one C# field per element when the array is not a fixed scalar array. The probe names (for example LandBlend.Base0 to Base3) must match those C# field names, or AbiLayoutTests.EveryStructMatchesTheCLayout throws. A fixed scalar array keeps one probe line without a suffix.
+
+### Radicle/src/environment/base_records.cpp:set_climate_weathers
+- When the CLMT has no WLST and the list is non-empty, a WLST subrecord is inserted before the first subrecord that is not EDID. The xEdit CLMT definition orders EDID, then WLST, then FNAM, GNAM, the generic model and TNAM (C:/Users/Ricky/ds-proxy/xedit-src/Core/wbDefinitionsFO4.pas:6115-6126, WLST at line 6117). An empty list with no WLST leaves the record unchanged.
+- An existing WLST whose size is not a multiple of 12 throws WorldDecodeError before any byte is written.
+
+### Radicle/src/pex_analysis/script_set.cpp:loose_load_index
+- The first resolver root that lexically contains the loose file wins, and its index is roots.size() - 1 - i, so root 0 has the highest load index. Nested roots therefore misassign: a file under a nested root takes the outer root's index. AssetResolver::list (Radicle/src/archive/assets.cpp:AssetResolver::list) returns AssetListing values with a path and an AssetLocation only, so the walked root is not kept. The fix is to require non-overlapping roots (see Radicle/include/fo4/pex_analysis/script_set.hpp:enumerate_script_candidates).
+
+### Radicle/include/fo4/pex_analysis/script_set.hpp:enumerate_script_candidates
+- Callers must pass resolver roots that do not overlap. Overlapping roots break the loose load index in Radicle/src/pex_analysis/script_set.cpp:loose_load_index.
+
+### Radicle/tests/test_script_set_real.cpp:ScriptSetReal
+- The 10331 candidate and winner pins are not measured yet. They are marked TODO-verify in the file. The two pins are equal, so the test also assumes no script name appears in two containers.
+
+### Radicle/src/c_api_terrain.cpp:radicle_landscape_heights
+- *out_heights is zeroed after the argument and environment checks, before decoding, so a failed decode leaves no stale heights. Neighbour radicle_landscape_blend zeroes *out_blend the same way.
+
+### Radicle/src/environment/terrain.cpp:decode_alpha_grid
+- A non-finite VTXT opacity is stored as 0. std::clamp returns NaN unchanged, so without the isfinite check a NaN opacity would reach the alpha grid. Test: TerrainLand.MapsAlphaPositionsOntoTheSeventeenGrid in Radicle/tests/test_environment_terrain.cpp.
+
+### Radicle/src/c_api_loadorder.cpp:radicle_mo2_profile_read
+- A NULL profile selects the instance selected_profile. An empty profile string returns RADICLE_STATUS_INVALID_ARGUMENT, and so do radicle_mo2_asset_roots and radicle_mo2_plugin_paths in the same file. Test: CApiLoadOrder.Mo2ProfileRowsRootsAndPluginPathsFollowTheInstance in Radicle/tests/test_c_api_loadorder.cpp.
+
+### Radicle/include/fo4/c_api_loadorder.h:radicle_plugin_list_read
+- Row format, moved from the header: name<TAB>active(0 or 1)<TAB>line.
+
+### Radicle/include/fo4/c_api_loadorder.h:radicle_ccc_read
+- Names are returned in file order.
+
+### Radicle/include/fo4/c_api_loadorder.h:radicle_load_order_assemble
+- Rows, in load order: name<TAB>checked(0 or 1)<TAB>master_flag(0 or 1)<TAB>light(0 or 1). Findings: code<TAB>plugin<TAB>detail. *out_failed is 1 when the assembly aborted.
+
+### Radicle/include/fo4/c_api_loadorder.h:radicle_mo2_instance_read
+- Fields, in order: selected_profile, game_path, data_dir, base_dir, mods_dir, overwrite_dir, profiles_dir.
+
+### Radicle/include/fo4/c_api_loadorder.h:radicle_mo2_profile_read (row format)
+- Mod rows: name<TAB>enabled(0 or 1)<TAB>separator(0 or 1), listed high to low. Plugin rows match radicle_plugin_list_read.
+
+### Radicle/include/fo4/c_api_loadorder.h:radicle_mo2_asset_roots
+- Roots: data_dir, then enabled mod folders low to high, then overwrite_dir.
+
+### Radicle/include/fo4/c_api_loadorder.h:radicle_mo2_plugin_paths
+- Rows: key<TAB>path. The key is the case-folded file name of the winning plugin.

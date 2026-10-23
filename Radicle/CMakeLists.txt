@@ -116,6 +116,7 @@ add_library(fo4
   src/text/encoding.cpp
   src/loadorder/plugin_list.cpp
   src/loadorder/assemble.cpp
+  src/loadorder/mo2_profile.cpp
   src/formid.cpp
   src/archive/ba2.cpp
   src/archive/ba2_hash.cpp
@@ -244,6 +245,7 @@ add_library(fo4
   src/pex_analysis/callgraph.cpp
   src/pex_analysis/summary.cpp
   src/pex_analysis/fragments.cpp
+  src/pex_analysis/script_set.cpp
   src/abc/abc_file.cpp
   src/abc/abc_write.cpp
   src/abc/byte_reader.cpp
@@ -633,6 +635,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_environment_placed.cpp
     tests/test_environment_script_elements.cpp
     tests/test_environment_terrain.cpp
+    tests/test_environment_terrain_real.cpp
     tests/test_environment_strings.cpp
     tests/test_ba2_reader.cpp
     tests/test_ba2_long_names.cpp
@@ -670,6 +673,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_pex_oracle.cpp
     tests/test_papyrus_vm.cpp
     tests/test_pex_analysis.cpp
+    tests/test_script_set.cpp
+    tests/test_script_set_real.cpp
     tests/test_pex_disasm.cpp
     tests/test_papyrus_source.cpp
     tests/test_papyrus_source_real.cpp
@@ -692,6 +697,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_load_order_files.cpp
     tests/test_load_order_real.cpp
     tests/test_c_api_loadorder.cpp
+    tests/test_mo2_profile.cpp
     tests/test_c_api_referenced_by.cpp
     tests/test_c_api_conflict.cpp
     tests/test_regn_rows.cpp
