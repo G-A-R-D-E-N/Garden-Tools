@@ -227,6 +227,50 @@ public sealed unsafe class PluginFile : IDisposable
         });
     }
 
+    public bool SetClimateWeathers(FormKey climate, IReadOnlyList<ClimateWeather> weathers)
+    {
+        ArgumentNullException.ThrowIfNull(weathers);
+        return Edit(climate, (plugin, s, key) =>
+        {
+            var native = weathers.Select(w => new Native.ClimateWeather { Weather = s.Key(w.Weather), Chance = w.Chance, Global = s.Key(w.Global) }).ToArray();
+            fixed (Native.ClimateWeather* p = native)
+            {
+                return RadicleNative.PluginSetClimateWeathers(plugin, key, p, (nuint)native.Length);
+            }
+        });
+    }
+
+    public bool SetWeatherColors(FormKey weather, byte group, IReadOnlyList<ByteColor> times)
+    {
+        ArgumentNullException.ThrowIfNull(times);
+        return Edit(weather, (plugin, s, key) =>
+        {
+            var native = times.Select(c => new Native.ByteColor { Red = c.Red, Green = c.Green, Blue = c.Blue }).ToArray();
+            fixed (Native.ByteColor* p = native)
+            {
+                return RadicleNative.PluginSetWeatherColors(plugin, key, group, p, (nuint)native.Length);
+            }
+        });
+    }
+
+    public bool SetWeatherFog(FormKey weather, IReadOnlyList<float> distances)
+    {
+        ArgumentNullException.ThrowIfNull(distances);
+        var values = distances.ToArray();
+        return Edit(weather, (plugin, s, key) =>
+        {
+            fixed (float* p = values)
+            {
+                return RadicleNative.PluginSetWeatherFog(plugin, key, p, (nuint)values.Length);
+            }
+        });
+    }
+
+    public bool SetWeatherTransition(FormKey weather, byte transitionDelta)
+    {
+        return Edit(weather, (plugin, s, key) => RadicleNative.PluginSetWeatherTransition(plugin, key, transitionDelta));
+    }
+
     public bool SetVmadObject(FormKey record, int script, int property, FormKey? target, short alias = -1, int element = 0)
     {
         var si = Index(script); var pi = Index(property); var ei = Index(element);
@@ -258,6 +302,18 @@ public sealed unsafe class PluginFile : IDisposable
         var si = Index(script); var pi = Index(property); var ei = Index(element);
         return Edit(record, (plugin, s, key) => RadicleNative.PluginSetVmadBool(plugin, key, si, pi, ei, value ? 1 : 0));
     }
+
+    public bool SetQuestVmadFragment(FormKey record, ushort stage, int stageIndex, string script, string function)
+    {
+        ArgumentNullException.ThrowIfNull(script);
+        ArgumentNullException.ThrowIfNull(function);
+        if (script.Contains('\0')) throw new ArgumentException("VMAD fragment script name cannot hold an embedded NUL through this API.", nameof(script));
+        if (function.Contains('\0')) throw new ArgumentException("VMAD fragment function name cannot hold an embedded NUL through this API.", nameof(function));
+        return Edit(record, (plugin, s, key) => RadicleNative.PluginSetQuestVmadFragment(plugin, key, stage, stageIndex, script, function));
+    }
+
+    public bool RemoveQuestVmadFragment(FormKey record, ushort stage, int stageIndex) =>
+        Edit(record, (plugin, s, key) => RadicleNative.PluginRemoveQuestVmadFragment(plugin, key, stage, stageIndex));
 
     public bool SetScalar(FormKey record, string path, string value, int index = 0)
     {

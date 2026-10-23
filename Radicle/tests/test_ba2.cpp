@@ -118,6 +118,19 @@ TEST(Ba2General, ArchiveWithoutStringTablePreservesHashesAndLeavesPathsUnknown) 
   EXPECT_EQ(fo4::archive::extract_ba2_general_entry(reread.entries[0]), bytes("payload"));
 }
 
+TEST(Ba2General, WriterRefusesNamesWithBytesAbove0x7FInDirectoryStemOrExtension) {
+  const auto chunk = fo4::archive::make_stored_ba2_chunk(bytes("x"));
+  for (const std::string path : {"Meshes\\Caf\xE1.nif", "Caf\xED\\A.nif", "Meshes\\A.n\xE1"}) {
+    fo4::archive::Ba2GeneralArchive archive;
+    archive.entries = {{1u, 2u, 3u, 4u, path, {chunk}}};
+    EXPECT_THROW(fo4::archive::write_ba2_general(archive), fo4::archive::Ba2Error) << path;
+  }
+
+  fo4::archive::Ba2GeneralArchive ascii;
+  ascii.entries = {{1u, 2u, 3u, 4u, "Meshes\\Cafe.nif", {chunk}}};
+  EXPECT_NO_THROW(fo4::archive::write_ba2_general(ascii));
+}
+
 TEST(Ba2General, RoundTripsNextGenVersions7And8) {
   const std::string payload(2048, 'B');
   for (const std::uint32_t version : {7u, 8u}) {

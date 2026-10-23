@@ -615,6 +615,7 @@ TEST_F(Ba2ReaderTest, CApiWriteRefusesNonAsciiNamesSoUnverifiedHashesAreNeverWri
     out = &sentinel;
     size = 7;
     EXPECT_EQ(radicle_ba2_write_general(files, 1, 1, 0, &out, &size), RADICLE_STATUS_INVALID_ARGUMENT);
+    EXPECT_NE(std::string(radicle_last_error()).find("0x80"), std::string::npos);
     EXPECT_EQ(out, nullptr);
     EXPECT_EQ(size, 0u);
   };

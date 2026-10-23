@@ -47,6 +47,9 @@ const LocalizedStringEntry* find_string(const LocalizedStringTable& table,
 
 std::uint32_t next_string_id(const LocalizedStringTable& table) noexcept;
 std::uint32_t add_string(LocalizedStringTable& table, std::string_view text);
+void insert_string(LocalizedStringTable& table, std::uint32_t id, std::string_view text);
+bool set_string(LocalizedStringTable& table, std::uint32_t id, std::string_view text);
+bool remove_string(LocalizedStringTable& table, std::uint32_t id);
 
 StringTableKind string_table_kind(Signature record, Signature subrecord) noexcept;
 std::string_view string_table_extension(StringTableKind kind) noexcept;

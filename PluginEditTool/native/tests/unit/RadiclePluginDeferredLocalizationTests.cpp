@@ -191,3 +191,92 @@ TEST_CASE("Localized quest persistence stages alongside unrelated pending edits"
     REQUIRE(fo4::localization::find_string(table, 42u) != nullptr);
     REQUIRE(fo4::localization::find_string(table, 201u) != nullptr);
 }
+
+TEST_CASE("A string edit is refused while a localized quest edit is pending (regression: a SaveStringTables after SavePlugin overwrote the quest log IDs with the older DLSTRINGS table)") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, makePlugin());
+    writeLocalizationSet(root);
+    const auto dlstringsPath = root / "Strings" / "Patch_en.DLSTRINGS";
+    const auto dlstringsBefore = readBytes(dlstringsPath);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke(
+        "environment.LoadMo2",
+        nlohmann::json{{"plugins", nlohmann::json::array({{
+            {"name", "Patch.esp"},
+            {"path", path.string()},
+            {"source", "DeferredLocalization"},
+            {"resolved", true}
+        }})}}).has_value());
+    REQUIRE(backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000801:Patch.esp",
+            nlohmann::json::array({{{"index", 10}, {"logEntry", "New"}}}),
+            nlohmann::json{
+                {"language", "en"},
+                {"stringsDirectory", (root / "Strings").string()}
+            }
+        })).has_value());
+
+    const auto edit = backend.invoke(
+        "strings.SetString", nlohmann::json::array({"Patch.esp", "", "DLSTRINGS", 42, "Edited"}));
+    REQUIRE_FALSE(edit.has_value());
+    CHECK(edit.error().type == "StringEditBlockedByPendingLocalization");
+    CHECK(readBytes(dlstringsPath) == dlstringsBefore);
+
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    REQUIRE(backend.invoke("strings.SaveStringTables", nlohmann::json::array({"Patch.esp", ""})).has_value());
+    const auto table = fo4::localization::read_string_table_file(
+        dlstringsPath, fo4::localization::StringTableKind::dlstrings);
+    REQUIRE(fo4::localization::find_string(table, 201u) != nullptr);
+    REQUIRE(fo4::localization::find_string(table, 42u) != nullptr);
+    CHECK(fo4::localization::find_string(table, 42u)->text == rawBytes("Original"));
+}
+
+TEST_CASE("A localized quest edit is refused while a string edit is pending (regression: a quest table built from disk dropped the pending string edit when SaveStringTables wrote DLSTRINGS)") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, makePlugin());
+    writeLocalizationSet(root);
+    const auto dlstringsPath = root / "Strings" / "Patch_en.DLSTRINGS";
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke(
+        "environment.LoadMo2",
+        nlohmann::json{{"plugins", nlohmann::json::array({{
+            {"name", "Patch.esp"},
+            {"path", path.string()},
+            {"source", "DeferredLocalization"},
+            {"resolved", true}
+        }})}}).has_value());
+    REQUIRE(backend.invoke(
+        "strings.SetString", nlohmann::json::array({"Patch.esp", "", "DLSTRINGS", 42, "Edited"})).has_value());
+    const auto dlstringsBefore = readBytes(dlstringsPath);
+
+    const auto localized = backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({
+            "Patch.esp",
+            "000801:Patch.esp",
+            nlohmann::json::array({{{"index", 10}, {"logEntry", "New"}}}),
+            nlohmann::json{
+                {"language", "en"},
+                {"stringsDirectory", (root / "Strings").string()}
+            }
+        }));
+    REQUIRE_FALSE(localized.has_value());
+    CHECK(localized.error().type == "LocalizedEditBlockedByPendingStrings");
+    CHECK(readBytes(dlstringsPath) == dlstringsBefore);
+
+    REQUIRE(backend.invoke("strings.SaveStringTables", nlohmann::json::array({"Patch.esp", ""})).has_value());
+    const auto table = fo4::localization::read_string_table_file(
+        dlstringsPath, fo4::localization::StringTableKind::dlstrings);
+    REQUIRE(fo4::localization::find_string(table, 42u) != nullptr);
+    CHECK(fo4::localization::find_string(table, 42u)->text == rawBytes("Edited"));
+    CHECK(fo4::localization::find_string(table, 201u) == nullptr);
+}

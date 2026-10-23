@@ -353,6 +353,8 @@ typedef struct radicle_placed_ref {
   const radicle_script* scripts;
   size_t script_count;
   void* internal;
+  int32_t has_emittance;
+  radicle_form_key emittance;
 } radicle_placed_ref;
 
 /* RADICLE_STATUS_PARSE_ERROR for a non-placed record or a malformed present subrecord. */

@@ -180,7 +180,7 @@ radicle_status radicle_ba2_write_general(const radicle_ba2_file* files,
         return fail(RADICLE_STATUS_INVALID_ARGUMENT, "BA2 entry path must be 1 to 259 Windows-1252 bytes");
       }
       if (std::ranges::any_of(*stored, [](unsigned char ch) { return ch >= 0x80; })) {
-        return fail(RADICLE_STATUS_INVALID_ARGUMENT, "BA2 entry path must be ASCII: non-ASCII name hashes are not verified");
+        return fail(RADICLE_STATUS_INVALID_ARGUMENT, "BA2 entry path has a byte >= 0x80; the engine name hash is undefined for it");
       }
       const auto name = fo4::archive::normalize_ba2_name(*stored);
       if (name.empty()) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "BA2 entry path has no name after separators are removed");

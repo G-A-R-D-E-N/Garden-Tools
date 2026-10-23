@@ -93,6 +93,13 @@ public:
         });
     }
 
+    virtual Result<nlohmann::json> injectFormsIntoMaster(const nlohmann::json&) {
+        return std::unexpected(Error{
+            "InjectFormsIntoMasterUnavailable",
+            "Native inject-forms-into-master is unavailable for this backend"
+        });
+    }
+
     virtual Result<nlohmann::json> deepCopyAsOverride(const nlohmann::json&) {
         return std::unexpected(Error{
             "DeepCopyUnavailable",
@@ -183,6 +190,18 @@ public:
     }
     virtual Result<nlohmann::json> clearElement(const nlohmann::json&) {
         return std::unexpected(Error{"ElementBackendUnavailable", "Generic element clearing is unavailable"});
+    }
+    virtual Result<nlohmann::json> copyElementToSelected(const nlohmann::json&) {
+        return std::unexpected(Error{
+            "CopyElementToSelectedUnavailable",
+            "Bulk element copy is unavailable for this backend"
+        });
+    }
+    virtual Result<nlohmann::json> removeElementFromSelected(const nlohmann::json&) {
+        return std::unexpected(Error{
+            "RemoveElementFromSelectedUnavailable",
+            "Bulk element removal is unavailable for this backend"
+        });
     }
 
     virtual Result<nlohmann::json> getPlacedReferences(const nlohmann::json&) const {

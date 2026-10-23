@@ -1,7 +1,9 @@
 #include "fo4/c_api_loadorder.h"
 
 #include "c_api_internal.hpp"
+#include "fo4/io/path_text.hpp"
 #include "fo4/loadorder/load_order_files.hpp"
+#include "fo4/loadorder/mo2_profile.hpp"
 
 #include <cstdlib>
 #include <filesystem>
@@ -41,6 +43,10 @@ void free_partial(char** strings, std::size_t count) {
   if (strings == nullptr) return;
   for (std::size_t i = 0; i < count; ++i) std::free(strings[i]);
   std::free(strings);
+}
+
+std::string profile_name(const fo4::loadorder::Mo2Instance& instance, const char* profile) {
+  return profile == nullptr ? instance.selected_profile : std::string{profile};
 }
 
 }  // namespace
@@ -129,6 +135,114 @@ radicle_status radicle_load_order_assemble(const char* data_dir,
     }
     *out_failed = assembled.failed ? 1 : 0;
     return RADICLE_STATUS_OK;
+  });
+}
+
+radicle_status radicle_mo2_instance_read(const char* instance_dir, char*** out_fields, size_t* out_count) {
+  clear_error();
+  if (instance_dir == nullptr || out_fields == nullptr || out_count == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "instance_dir, out_fields and out_count are required");
+  }
+  *out_fields = nullptr;
+  *out_count = 0;
+  return guarded_io("unknown exception while reading the MO2 instance", [&] {
+    const auto instance = fo4::loadorder::read_mo2_instance(utf8_path(instance_dir));
+    const std::vector<std::string> fields{instance.selected_profile,
+                                          fo4::io::utf8(instance.game_path),
+                                          fo4::io::utf8(instance.data_dir),
+                                          fo4::io::utf8(instance.base_dir),
+                                          fo4::io::utf8(instance.mods_dir),
+                                          fo4::io::utf8(instance.overwrite_dir),
+                                          fo4::io::utf8(instance.profiles_dir)};
+    return copy_strings(fields, out_fields, out_count);
+  });
+}
+
+radicle_status radicle_mo2_profile_read(const char* instance_dir,
+                                        const char* profile,
+                                        char*** out_mod_rows,
+                                        size_t* out_mod_count,
+                                        char*** out_plugin_rows,
+                                        size_t* out_plugin_count) {
+  clear_error();
+  if (instance_dir == nullptr || out_mod_rows == nullptr || out_mod_count == nullptr ||
+      out_plugin_rows == nullptr || out_plugin_count == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "instance_dir and all outputs are required");
+  }
+  *out_mod_rows = nullptr;
+  *out_mod_count = 0;
+  *out_plugin_rows = nullptr;
+  *out_plugin_count = 0;
+  if (profile != nullptr && profile[0] == '\0') {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "profile must not be empty");
+  }
+  return guarded_io("unknown exception while reading the MO2 profile", [&] {
+    const auto instance = fo4::loadorder::read_mo2_instance(utf8_path(instance_dir));
+    const auto loaded = fo4::loadorder::read_mo2_profile(instance, profile_name(instance, profile));
+    std::vector<std::string> mods;
+    for (const auto& mod : loaded.mods_high_to_low) {
+      mods.push_back(mod.name + '\t' + flag_text(mod.enabled) + '\t' + flag_text(mod.is_separator));
+    }
+    std::vector<std::string> plugins;
+    for (const auto& entry : loaded.plugins.entries) {
+      plugins.push_back(entry.name + '\t' + flag_text(entry.active) + '\t' + std::to_string(entry.line));
+    }
+    auto status = copy_strings(mods, out_mod_rows, out_mod_count);
+    if (status == RADICLE_STATUS_OK) status = copy_strings(plugins, out_plugin_rows, out_plugin_count);
+    if (status != RADICLE_STATUS_OK) {
+      free_partial(*out_mod_rows, *out_mod_count);
+      *out_mod_rows = nullptr;
+      *out_mod_count = 0;
+    }
+    return status;
+  });
+}
+
+radicle_status radicle_mo2_asset_roots(const char* instance_dir,
+                                       const char* profile,
+                                       char*** out_roots,
+                                       size_t* out_count) {
+  clear_error();
+  if (instance_dir == nullptr || out_roots == nullptr || out_count == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "instance_dir, out_roots and out_count are required");
+  }
+  *out_roots = nullptr;
+  *out_count = 0;
+  if (profile != nullptr && profile[0] == '\0') {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "profile must not be empty");
+  }
+  return guarded_io("unknown exception while resolving MO2 asset roots", [&] {
+    const auto instance = fo4::loadorder::read_mo2_instance(utf8_path(instance_dir));
+    const auto loaded = fo4::loadorder::read_mo2_profile(instance, profile_name(instance, profile));
+    std::vector<std::string> roots;
+    for (const auto& root : fo4::loadorder::mo2_asset_roots_low_to_high(instance, loaded)) {
+      roots.push_back(fo4::io::utf8(root));
+    }
+    return copy_strings(roots, out_roots, out_count);
+  });
+}
+
+radicle_status radicle_mo2_plugin_paths(const char* instance_dir,
+                                        const char* profile,
+                                        char*** out_rows,
+                                        size_t* out_count) {
+  clear_error();
+  if (instance_dir == nullptr || out_rows == nullptr || out_count == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "instance_dir, out_rows and out_count are required");
+  }
+  *out_rows = nullptr;
+  *out_count = 0;
+  if (profile != nullptr && profile[0] == '\0') {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "profile must not be empty");
+  }
+  return guarded_io("unknown exception while resolving MO2 plugin paths", [&] {
+    const auto instance = fo4::loadorder::read_mo2_instance(utf8_path(instance_dir));
+    const auto loaded = fo4::loadorder::read_mo2_profile(instance, profile_name(instance, profile));
+    std::vector<std::string> rows;
+    for (const auto& [key, file] : fo4::loadorder::mo2_resolve_plugin_paths(instance, loaded)) {
+      rows.push_back(key + '\t' + fo4::io::utf8(file));
+    }
+    return copy_strings(rows, out_rows, out_count);
   });
 }
 

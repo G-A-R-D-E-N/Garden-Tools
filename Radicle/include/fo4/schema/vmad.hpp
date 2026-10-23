@@ -157,6 +157,7 @@ struct QuestVmadExtras {
   std::string unsupported_reason;
   bool fully_consumed{false};
   std::size_t count_offset{0};
+  std::size_t entries_begin{0};
 };
 
 QuestVmadExtras read_quest_vmad_extras(std::span<const std::byte> data, std::int16_t object_format);
