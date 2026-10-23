@@ -68,9 +68,11 @@ PexFile call_site_file() {
   pex.sourceFileName = "Garden.psc";
   pex.objects.push_back(object("Base", "", {function("Init", {}, true)}));
   pex.objects.push_back(object("Child", "Base",
-                               {function("Run", {call(kCallMethod, {ident("Run"), ident("self")}),
-                                                 call(kCallParent, {ident("Init")}),
-                                                 call(kCallStatic, {ident("Ghost"), ident("Nope")})})}));
+                               {function("Run", {call(kCallMethod, {ident("Run"), ident("self"),
+                                                                   ident("::nonevar")}),
+                                                 call(kCallParent, {ident("Init"), ident("::nonevar")}),
+                                                 call(kCallStatic, {ident("Ghost"), ident("Nope"),
+                                                                    ident("::nonevar")})})}));
   pex.rebuildStringTable();
   return pex;
 }
