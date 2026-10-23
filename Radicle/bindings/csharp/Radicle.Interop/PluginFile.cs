@@ -227,6 +227,50 @@ public sealed unsafe class PluginFile : IDisposable
         });
     }
 
+    public bool SetClimateWeathers(FormKey climate, IReadOnlyList<ClimateWeather> weathers)
+    {
+        ArgumentNullException.ThrowIfNull(weathers);
+        return Edit(climate, (plugin, s, key) =>
+        {
+            var native = weathers.Select(w => new Native.ClimateWeather { Weather = s.Key(w.Weather), Chance = w.Chance, Global = s.Key(w.Global) }).ToArray();
+            fixed (Native.ClimateWeather* p = native)
+            {
+                return RadicleNative.PluginSetClimateWeathers(plugin, key, p, (nuint)native.Length);
+            }
+        });
+    }
+
+    public bool SetWeatherColors(FormKey weather, byte group, IReadOnlyList<ByteColor> times)
+    {
+        ArgumentNullException.ThrowIfNull(times);
+        return Edit(weather, (plugin, s, key) =>
+        {
+            var native = times.Select(c => new Native.ByteColor { Red = c.Red, Green = c.Green, Blue = c.Blue }).ToArray();
+            fixed (Native.ByteColor* p = native)
+            {
+                return RadicleNative.PluginSetWeatherColors(plugin, key, group, p, (nuint)native.Length);
+            }
+        });
+    }
+
+    public bool SetWeatherFog(FormKey weather, IReadOnlyList<float> distances)
+    {
+        ArgumentNullException.ThrowIfNull(distances);
+        var values = distances.ToArray();
+        return Edit(weather, (plugin, s, key) =>
+        {
+            fixed (float* p = values)
+            {
+                return RadicleNative.PluginSetWeatherFog(plugin, key, p, (nuint)values.Length);
+            }
+        });
+    }
+
+    public bool SetWeatherTransition(FormKey weather, byte transitionDelta)
+    {
+        return Edit(weather, (plugin, s, key) => RadicleNative.PluginSetWeatherTransition(plugin, key, transitionDelta));
+    }
+
     public bool SetVmadObject(FormKey record, int script, int property, FormKey? target, short alias = -1, int element = 0)
     {
         var si = Index(script); var pi = Index(property); var ei = Index(element);

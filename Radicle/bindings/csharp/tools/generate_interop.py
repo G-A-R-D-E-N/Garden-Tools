@@ -11,7 +11,7 @@ import re
 import sys
 from pathlib import Path
 
-HEADERS = ["fo4/c_api.h", "fo4/c_api_env.h", "fo4/c_api_records.h", "fo4/c_api_materials.h", "fo4/c_api_maintenance.h", "fo4/c_api_navmesh.h", "fo4/c_api_sound.h", "fo4/c_api_pex.h", "fo4/c_api_material_file.h", "fo4/c_api_seq.h", "fo4/c_api_quest.h", "fo4/c_api_authoring.h", "fo4/c_api_vegetation.h", "fo4/c_api_vmad.h", "fo4/c_api_behavior.h", "fo4/c_api_dialogue.h", "fo4/c_api_loadorder.h", "fo4/c_api_conditions.h", "fo4/c_api_armor.h", "fo4/c_api_eyes.h", "fo4/c_api_faction.h", "fo4/c_api_components.h", "fo4/c_api_cell.h", "fo4/c_api_patch.h", "fo4/c_api_conflict.h", "fo4/c_api_nif.h", "fo4/c_api_dds.h"]
+HEADERS = ["fo4/c_api.h", "fo4/c_api_env.h", "fo4/c_api_records.h", "fo4/c_api_materials.h", "fo4/c_api_maintenance.h", "fo4/c_api_navmesh.h", "fo4/c_api_sound.h", "fo4/c_api_pex.h", "fo4/c_api_material_file.h", "fo4/c_api_seq.h", "fo4/c_api_quest.h", "fo4/c_api_authoring.h", "fo4/c_api_vegetation.h", "fo4/c_api_vmad.h", "fo4/c_api_behavior.h", "fo4/c_api_dialogue.h", "fo4/c_api_loadorder.h", "fo4/c_api_conditions.h", "fo4/c_api_armor.h", "fo4/c_api_eyes.h", "fo4/c_api_faction.h", "fo4/c_api_components.h", "fo4/c_api_cell.h", "fo4/c_api_patch.h", "fo4/c_api_conflict.h", "fo4/c_api_nif.h", "fo4/c_api_dds.h", "fo4/c_api_terrain.h"]
 
 SCALARS = {
     "int8_t": "sbyte", "uint8_t": "byte", "int16_t": "short", "uint16_t": "ushort",
@@ -212,7 +212,7 @@ def emit_probe(model):
         out.append(f'  printf("{cs} %zu\\n", sizeof({name}));')
         for ctype, field, array in model.structs[name]:
             for c_member, _ in field_cs(model, ctype, field, array)[1]:
-                cs_member = pascal(field) + (c_member[c_member.index("[") + 1:-1] if "[" in c_member and base_and_depth(ctype)[1] else "")
+                cs_member = pascal(field) + (c_member[c_member.index("[") + 1:-1] if "[" in c_member else "")
                 out.append(f'  printf("{cs}.{cs_member} %zu\\n", offsetof({name}, {c_member}));')
     out.append("  return 0;")
     out.append("}")
