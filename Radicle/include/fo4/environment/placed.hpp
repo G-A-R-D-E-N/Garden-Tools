@@ -132,6 +132,7 @@ struct PlacedReferenceData {
   std::optional<float> scale;
   std::optional<FormKey> layer;
   std::optional<FormKey> encounter_zone;
+  std::optional<FormKey> emittance;
   std::optional<FormKey> location_reference;
   std::vector<FormKey> location_ref_types;
   std::optional<EnableParent> enable_parent;

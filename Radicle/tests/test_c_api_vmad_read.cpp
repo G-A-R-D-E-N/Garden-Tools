@@ -13,6 +13,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -55,6 +56,32 @@ std::vector<std::byte> make_vmad() {
   out.u16(0);
   out.u16(3);
   out.u32(0x806);
+  return out.bytes;
+}
+
+std::vector<std::byte> make_struct_array_vmad() {
+  fo4::test::ByteWriter out;
+  out.u16(6);
+  out.u16(2);
+  out.u16(1);
+  wstring(out, "StructScript");
+  out.u8(0);
+  out.u16(1);
+  wstring(out, "Holder");
+  out.u8(7);
+  out.u8(1);
+  out.u32(2);
+  wstring(out, "Count");
+  out.u8(3);
+  out.u8(0);
+  out.u32(7);
+  wstring(out, "Targets");
+  out.u8(11);
+  out.u8(1);
+  out.u32(1);
+  out.u16(0);
+  out.u16(0xFFFF);
+  out.u32(0x805);
   return out.bytes;
 }
 
@@ -101,8 +128,8 @@ protected:
     std::filesystem::remove_all(root_, ec);
   }
 
-  EnvHandle open() {
-    const auto data = make_plugin({{"REFR", 0x800, {{"VMAD", make_vmad()}}}, {"STAT", 0x806, {}}});
+  EnvHandle open(std::vector<std::byte> vmad = make_vmad()) {
+    const auto data = make_plugin({{"REFR", 0x800, {{"VMAD", std::move(vmad)}}}, {"STAT", 0x806, {}}});
     const auto path = root_ / "Vmad.esp";
     std::ofstream(path, std::ios::binary).write(reinterpret_cast<const char*>(data.data()),
                                                  static_cast<std::streamsize>(data.size()));
@@ -191,4 +218,43 @@ TEST_F(CApiVmadReadTest, RefusesRecordsWithoutVmadAndBadIndexes) {
   EXPECT_EQ(radicle_vmad_element_count(scripts.get(), 0, 2), 0u);
   EXPECT_EQ(radicle_vmad_script_count(nullptr), 0u);
   radicle_vmad_scripts_destroy(nullptr);
+}
+
+TEST_F(CApiVmadReadTest, ReportsAStructMemberItCannotDecodeAsUnsupported) {
+  const auto env = open(make_struct_array_vmad());
+  ASSERT_NE(env, nullptr);
+  radicle_vmad_scripts* raw = nullptr;
+  ASSERT_EQ(radicle_record_vmad_scripts(env.get(), winner(env.get(), 0x800), &raw), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  const ScriptsHandle scripts(raw);
+  ASSERT_EQ(radicle_vmad_script_count(scripts.get()), 1u);
+
+  // Invariant: a struct holding an array member must report unsupported, because its scalar members are dropped too.
+  radicle_vmad_script script{};
+  ASSERT_EQ(radicle_vmad_scripts_script(scripts.get(), 0, &script), RADICLE_STATUS_OK);
+  EXPECT_EQ(std::string(script.name), "StructScript");
+  EXPECT_EQ(script.unsupported, 1);
+  EXPECT_EQ(script.property_count, 1u);
+
+  radicle_vmad_property property{};
+  ASSERT_EQ(radicle_vmad_scripts_property(scripts.get(), 0, 0, &property), RADICLE_STATUS_OK);
+  EXPECT_EQ(std::string(property.name), "Holder");
+  EXPECT_EQ(property.value_kind, RADICLE_VMAD_NONE);
+  EXPECT_EQ(property.declared_element_count, 2u);
+  EXPECT_EQ(property.element_total, 0u);
+  EXPECT_EQ(radicle_vmad_element_count(scripts.get(), 0, 0), 0u);
+
+  // Invariant: a rejected accessor must clear its out-parameter before the range check.
+  radicle_vmad_property stale_property{};
+  stale_property.name = "stale";
+  stale_property.declared_element_count = 9u;
+  EXPECT_EQ(radicle_vmad_scripts_property(scripts.get(), 0, 1, &stale_property), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(stale_property.name, static_cast<const char*>(nullptr));
+  EXPECT_EQ(stale_property.declared_element_count, 0u);
+  radicle_vmad_element stale_element{};
+  stale_element.kind = RADICLE_VMAD_INT;
+  stale_element.struct_index = 5u;
+  EXPECT_EQ(radicle_vmad_scripts_element(scripts.get(), 0, 0, 0, &stale_element), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(stale_element.kind, RADICLE_VMAD_NONE);
+  EXPECT_EQ(stale_element.struct_index, 0u);
 }

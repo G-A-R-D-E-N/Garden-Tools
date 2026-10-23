@@ -84,8 +84,10 @@ inline FormKey key(std::uint32_t local = 0x800, std::string_view owner = "Vmad.e
   return {PluginKey::from_filename(owner), LocalFormId{local}};
 }
 
-inline const Subrecord& subrecord(const Plugin& plugin) {
-  for (const auto& sub : find_record(plugin, key())->subrecords) {
+inline const Subrecord& subrecord(const Plugin& plugin, std::string_view owner = "Vmad.esp") {
+  const auto* record = find_record(plugin, key(0x800, owner));
+  if (record == nullptr) throw std::runtime_error("fixture record missing");
+  for (const auto& sub : record->subrecords) {
     if (sub.signature.to_string() == "VMAD") return sub;
   }
   throw std::runtime_error("fixture VMAD missing");

@@ -107,10 +107,11 @@ radicle_status radicle_pex_callgraph_build(const radicle_pex* const* files,
                                             radicle_pex_callgraph** out_graph) {
   clear_error();
   if (out_graph == nullptr) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_graph is required");
+  // Invariant: the out-parameter must be cleared before any later check rejects the call.
+  *out_graph = nullptr;
   if (file_count != 0 && files == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "files is required when file_count is not zero");
   }
-  *out_graph = nullptr;
   return guarded("unknown exception while building the call graph", [&] {
     const auto inputs = to_files(files, file_count);
     auto graph = std::make_unique<radicle_pex_callgraph>();
@@ -151,6 +152,7 @@ radicle_status radicle_pex_callgraph_call(const radicle_pex_callgraph* graph,
   if (graph == nullptr || out_site == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "graph and out_site are required");
   }
+  *out_site = {};
   if (index >= graph->graph.calls.size()) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "call index is out of range");
   fill_site(graph->graph.calls[index], out_site);
   return RADICLE_STATUS_OK;
@@ -168,6 +170,7 @@ radicle_status radicle_pex_callgraph_unresolved(const radicle_pex_callgraph* gra
   if (graph == nullptr || out_site == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "graph and out_site are required");
   }
+  *out_site = {};
   if (index >= graph->unresolved.size()) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "unresolved index is out of range");
   }
@@ -183,13 +186,14 @@ radicle_status radicle_pex_validate_parent_chains(const radicle_pex* const* file
                                                    radicle_pex_chain_report** out_report) {
   clear_error();
   if (out_report == nullptr) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_report is required");
+  // Invariant: the out-parameter must be cleared before any later check rejects the call.
+  *out_report = nullptr;
   if (file_count != 0 && files == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "files is required when file_count is not zero");
   }
   if (seed_type_count != 0 && seed_types == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "seed_types is required when seed_type_count is not zero");
   }
-  *out_report = nullptr;
   return guarded("unknown exception while walking parent chains", [&] {
     const auto inputs = to_files(files, file_count);
     std::vector<std::string> seeds;
@@ -234,9 +238,9 @@ radicle_status radicle_pex_chain_report_get(const radicle_pex_chain_report* repo
   if (report == nullptr || out_finding == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "report and out_finding are required");
   }
+  *out_finding = {};
   if (index >= report->findings.size()) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "finding index is out of range");
   const auto& finding = report->findings[index];
-  *out_finding = {};
   out_finding->file_index = finding.fileIndex;
   out_finding->object_index = finding.objectIndex;
   out_finding->object_name = finding.objectName.c_str();
@@ -254,6 +258,7 @@ radicle_status radicle_pex_chain_report_name(const radicle_pex_chain_report* rep
   if (report == nullptr || out_name == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "report and out_name are required");
   }
+  *out_name = nullptr;
   if (index >= report->chain_names.size()) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "chain name index is out of range");
   *out_name = report->chain_names[index].c_str();
   return RADICLE_STATUS_OK;

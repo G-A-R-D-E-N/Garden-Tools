@@ -650,6 +650,7 @@ QuestVmadExtras read_quest_vmad_extras(std::span<const std::byte> data, std::int
       }
     }
 
+    result.entries_begin = slice.position();
     result.fragments.reserve(fragment_count);
     for (std::uint16_t i = 0; i < fragment_count; ++i) {
       QuestVmadFragment fragment;

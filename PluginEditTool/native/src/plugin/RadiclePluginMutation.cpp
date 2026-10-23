@@ -207,6 +207,8 @@ Result<nlohmann::json> RadiclePluginBackend::invokeBackend(
     if (method == "SetQuestStages") return setQuestStages(arguments);
     if (method == "CopyAsOverride") return copyAsOverride(arguments);
     if (method == "CopyAsOverrideMany") return copyAsOverrideMany(arguments);
+    if (method == "CopyElementToSelected") return copyElementToSelected(arguments);
+    if (method == "RemoveElementFromSelected") return removeElementFromSelected(arguments);
     if (method == "AddMasters") return addMasters(arguments);
     if (method == "CheckEslEligibility") return checkEslEligibility(arguments);
     if (method == "GetPluginRecordTypes") return getPluginRecordTypes(arguments);

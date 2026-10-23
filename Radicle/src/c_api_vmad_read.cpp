@@ -78,11 +78,6 @@ void fill_scalar(const fo4::VmadProperty& property, property_row& row) {
     row.alias = property.alias.value_or(0);
     return;
   }
-  if (property.alias) {
-    row.value_kind = RADICLE_VMAD_ALIAS;
-    row.alias = *property.alias;
-    return;
-  }
   if (property.text) {
     row.value_kind = RADICLE_VMAD_TEXT;
     row.text = *property.text;
@@ -194,6 +189,9 @@ void fill_elements(const fo4::VmadProperty& property, property_row& row, radicle
   row.element_count = out.elements.size() - row.first_element;
 }
 
+constexpr std::uint8_t k_struct_type = 7;
+constexpr std::uint8_t k_struct_array_type = 17;
+
 void fill_handle(const fo4::VmadScripts& decoded, radicle_vmad_scripts& handle) {
   handle.unsupported = decoded.unsupported ? 1 : 0;
   handle.trailing_bytes = decoded.trailing_bytes;
@@ -210,6 +208,10 @@ void fill_handle(const fo4::VmadScripts& decoded, radicle_vmad_scripts& handle) 
       entry.declared_element_count = property.element_count.value_or(0);
       fill_scalar(property, entry);
       fill_elements(property, entry, handle);
+      // Invariant: a struct whose members this reader cannot decode must report unsupported, because its rows are lost.
+      if ((entry.type == k_struct_type || entry.type == k_struct_array_type) && !property.struct_elements) {
+        handle.unsupported = 1;
+      }
       handle.properties.push_back(std::move(entry));
     }
     row.property_count = handle.properties.size() - row.first_property;
@@ -275,9 +277,9 @@ radicle_status radicle_vmad_scripts_script(const radicle_vmad_scripts* scripts,
   if (scripts == nullptr || out_script == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "scripts and out_script are required");
   }
+  *out_script = {};
   if (index >= scripts->scripts.size()) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "script index is out of range");
   const auto& script = scripts->scripts[index];
-  *out_script = {};
   out_script->name = script.name.c_str();
   out_script->flags = script.flags;
   out_script->property_count = script.property_count;
@@ -294,6 +296,7 @@ radicle_status radicle_vmad_scripts_property(const radicle_vmad_scripts* scripts
   if (scripts == nullptr || out_property == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "scripts and out_property are required");
   }
+  *out_property = {};
   if (script_index >= scripts->scripts.size()) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "script index is out of range");
   }
@@ -302,7 +305,6 @@ radicle_status radicle_vmad_scripts_property(const radicle_vmad_scripts* scripts
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "property index is out of range");
   }
   const auto& property = scripts->properties[script.first_property + property_index];
-  *out_property = {};
   out_property->name = property.name.c_str();
   out_property->type = property.type;
   out_property->flags = property.flags;
@@ -338,6 +340,7 @@ radicle_status radicle_vmad_scripts_element(const radicle_vmad_scripts* scripts,
   if (scripts == nullptr || out_element == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "scripts and out_element are required");
   }
+  *out_element = {};
   if (script_index >= scripts->scripts.size()) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "script index is out of range");
   }
@@ -350,7 +353,6 @@ radicle_status radicle_vmad_scripts_element(const radicle_vmad_scripts* scripts,
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "element index is out of range");
   }
   const auto& element = scripts->elements[property.first_element + element_index];
-  *out_element = {};
   out_element->kind = static_cast<radicle_vmad_value_kind>(element.kind);
   out_element->member_name = element.member_name.empty() ? nullptr : element.member_name.c_str();
   out_element->struct_index = element.struct_index;

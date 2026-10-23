@@ -7,7 +7,7 @@
 extern "C" {
 #endif
 
-// Ordering: call sites follow file order, then object order, then function order, then instruction order.
+// Invariant: call sites follow file order, then object order, then function order, then instruction order.
 // Invariant: every string this API returns stays valid until the owning handle is destroyed.
 // A handle is not thread-safe; different handles may be used from different threads.
 

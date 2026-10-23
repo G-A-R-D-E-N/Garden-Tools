@@ -11,10 +11,18 @@ RADICLE_API radicle_status radicle_plugin_set_vmad_string(radicle_plugin* plugin
 RADICLE_API radicle_status radicle_plugin_set_vmad_int(radicle_plugin* plugin, radicle_form_key key, size_t script, size_t property, size_t element, int32_t value);
 RADICLE_API radicle_status radicle_plugin_set_vmad_float(radicle_plugin* plugin, radicle_form_key key, size_t script, size_t property, size_t element, float value);
 RADICLE_API radicle_status radicle_plugin_set_vmad_bool(radicle_plugin* plugin, radicle_form_key key, size_t script, size_t property, size_t element, int32_t value);
+RADICLE_API radicle_status radicle_plugin_set_quest_vmad_fragment(radicle_plugin* plugin, radicle_form_key key, uint16_t stage, int32_t stage_index, const char* script, const char* function);
+RADICLE_API radicle_status radicle_plugin_remove_quest_vmad_fragment(radicle_plugin* plugin, radicle_form_key key, uint16_t stage, int32_t stage_index);
 
 // The VMAD read ABI must decode the script list of any record, arrays and structs included.
 // Invariant: every string returned here stays valid until radicle_vmad_scripts_destroy.
-// A handle is not thread-safe; different handles may be used from different threads.
+// Invariant: a handle is not thread-safe; different handles may be used from different threads.
+// Invariant: script unsupported is set when a property could not be decoded, including a struct with a member that is
+// not an object, string, int, float or bool; such a property is not reported, so its script must be read as incomplete.
+// Invariant: for a struct array (type 17) declared_element_count is the number of structs, while element_total and the
+// rows count members, so a struct with zero members must produce no rows.
+// Invariant: for a struct property (type 7) declared_element_count is the member count.
+// Invariant: RADICLE_VMAD_ALIAS is reserved, because the reader reports an object reference as RADICLE_VMAD_OBJECT.
 
 typedef struct radicle_vmad_scripts radicle_vmad_scripts;
 

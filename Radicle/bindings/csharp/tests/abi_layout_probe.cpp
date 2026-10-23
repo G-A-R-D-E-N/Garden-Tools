@@ -22,6 +22,9 @@
 #include "fo4/c_api_cell.h"
 #include "fo4/c_api_patch.h"
 #include "fo4/c_api_conflict.h"
+#include "fo4/c_api_nif.h"
+#include "fo4/c_api_dds.h"
+#include "fo4/c_api_terrain.h"
 #include "fo4/c_api_pex_analysis.h"
 #include <cstddef>
 #include <cstdio>
@@ -249,6 +252,8 @@ int main() {
   printf("PlacedRef.Scripts %zu\n", offsetof(radicle_placed_ref, scripts));
   printf("PlacedRef.ScriptCount %zu\n", offsetof(radicle_placed_ref, script_count));
   printf("PlacedRef.Internal %zu\n", offsetof(radicle_placed_ref, internal));
+  printf("PlacedRef.HasEmittance %zu\n", offsetof(radicle_placed_ref, has_emittance));
+  printf("PlacedRef.Emittance %zu\n", offsetof(radicle_placed_ref, emittance));
   printf("LandLayer %zu\n", sizeof(radicle_land_layer));
   printf("LandLayer.IsBase %zu\n", offsetof(radicle_land_layer, is_base));
   printf("LandLayer.Texture %zu\n", offsetof(radicle_land_layer, texture));
@@ -723,6 +728,17 @@ int main() {
   printf("PexObjectCode.StructCount %zu\n", offsetof(radicle_pex_object_code, struct_count));
   printf("PexObjectCode.StructMembers %zu\n", offsetof(radicle_pex_object_code, struct_members));
   printf("PexObjectCode.StructMemberCount %zu\n", offsetof(radicle_pex_object_code, struct_member_count));
+  printf("ScriptCandidate %zu\n", sizeof(radicle_script_candidate));
+  printf("ScriptCandidate.Name %zu\n", offsetof(radicle_script_candidate, name));
+  printf("ScriptCandidate.NameSize %zu\n", offsetof(radicle_script_candidate, name_size));
+  printf("ScriptCandidate.Kind %zu\n", offsetof(radicle_script_candidate, kind));
+  printf("ScriptCandidate.Container %zu\n", offsetof(radicle_script_candidate, container));
+  printf("ScriptCandidate.ContainerSize %zu\n", offsetof(radicle_script_candidate, container_size));
+  printf("ScriptCandidate.LoadIndex %zu\n", offsetof(radicle_script_candidate, load_index));
+  printf("ScriptCandidate.Size %zu\n", offsetof(radicle_script_candidate, size));
+  printf("ScriptWinner %zu\n", sizeof(radicle_script_winner));
+  printf("ScriptWinner.CandidateIndex %zu\n", offsetof(radicle_script_winner, candidate_index));
+  printf("ScriptWinner.Replaced %zu\n", offsetof(radicle_script_winner, replaced));
   printf("MaterialColor3 %zu\n", sizeof(radicle_material_color3));
   printf("MaterialColor3.R %zu\n", offsetof(radicle_material_color3, r));
   printf("MaterialColor3.G %zu\n", offsetof(radicle_material_color3, g));
@@ -1381,6 +1397,21 @@ int main() {
   printf("ListMergeCounts %zu\n", sizeof(radicle_list_merge_counts));
   printf("ListMergeCounts.Merged %zu\n", offsetof(radicle_list_merge_counts, merged));
   printf("ListMergeCounts.Unchanged %zu\n", offsetof(radicle_list_merge_counts, unchanged));
+  printf("LandHeights %zu\n", sizeof(radicle_land_heights));
+  printf("LandHeights.HasHeights %zu\n", offsetof(radicle_land_heights, has_heights));
+  printf("LandHeights.Base %zu\n", offsetof(radicle_land_heights, base));
+  printf("LandHeights.Heights %zu\n", offsetof(radicle_land_heights, heights));
+  printf("LandBlendLayer %zu\n", sizeof(radicle_land_blend_layer));
+  printf("LandBlendLayer.Texture %zu\n", offsetof(radicle_land_blend_layer, texture));
+  printf("LandBlendLayer.Weights %zu\n", offsetof(radicle_land_blend_layer, weights));
+  printf("LandBlend %zu\n", sizeof(radicle_land_blend));
+  printf("LandBlend.Base0 %zu\n", offsetof(radicle_land_blend, base[0]));
+  printf("LandBlend.Base1 %zu\n", offsetof(radicle_land_blend, base[1]));
+  printf("LandBlend.Base2 %zu\n", offsetof(radicle_land_blend, base[2]));
+  printf("LandBlend.Base3 %zu\n", offsetof(radicle_land_blend, base[3]));
+  printf("LandBlend.Layers %zu\n", offsetof(radicle_land_blend, layers));
+  printf("LandBlend.LayerCount %zu\n", offsetof(radicle_land_blend, layer_count));
+  printf("LandBlend.Internal %zu\n", offsetof(radicle_land_blend, internal));
   printf("PexCallSite %zu\n", sizeof(radicle_pex_call_site));
   printf("PexCallSite.CallerFile %zu\n", offsetof(radicle_pex_call_site, caller_file));
   printf("PexCallSite.CallerObject %zu\n", offsetof(radicle_pex_call_site, caller_object));

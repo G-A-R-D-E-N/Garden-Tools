@@ -1,6 +1,6 @@
 import type { ConflictEntry } from '../backend';
 import { modeOf, type ConflictSelection, type SelectMode } from './conflictSelection';
-import { useCompareSelected } from './useConflictBatch';
+import { useOpenSelectedInTabs } from './useConflictBatch';
 
 export default function ConflictsPanel({ conflicts, conflictSel, conflictBusy, onRescan, onBatchCopy, onSelect, onClear, onOpen }: {
   conflicts: ConflictEntry[] | null;
@@ -12,7 +12,7 @@ export default function ConflictsPanel({ conflicts, conflictSel, conflictBusy, o
   onClear: () => void;
   onOpen: (formKey: string, winner: string) => Promise<void>;
 }) {
-  const { comparing, compare } = useCompareSelected();
+  const { comparing, compare } = useOpenSelectedInTabs();
   const picked = (conflicts ?? []).filter(c => conflictSel[c.FormKey]);
 
   return (

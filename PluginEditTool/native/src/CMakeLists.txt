@@ -32,10 +32,12 @@ add_library(
     plugin/RadiclePluginQuestExistingExtras.cpp
     plugin/RadiclePluginQuestLocalized.cpp
     plugin/RadiclePluginStrings.cpp
+    plugin/RadiclePluginStringsEdit.cpp
     plugin/RadiclePluginElement.cpp
     plugin/RadiclePluginMaintenance.cpp
     plugin/RadiclePluginCompact.cpp
     plugin/RadiclePluginRenumber.cpp
+    plugin/RadiclePluginInject.cpp
     plugin/RadiclePluginDeepCopy.cpp
     plugin/RadiclePluginReferenceRemap.cpp
     plugin/RadiclePluginOverridePatch.cpp
@@ -46,6 +48,7 @@ add_library(
     plugin/RadiclePluginCopyAsWrapper.cpp
     plugin/RadiclePluginCheck.cpp
     plugin/RadiclePluginBatchMutation.cpp
+    plugin/RadiclePluginBulkElements.cpp
     plugin/RadiclePluginMasterMutation.cpp
     plugin/RadiclePluginReadApi.cpp
     plugin/RadiclePluginEsl.cpp

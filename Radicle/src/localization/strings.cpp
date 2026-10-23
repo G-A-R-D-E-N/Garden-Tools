@@ -72,6 +72,16 @@ void validate_text_bytes(std::span<const std::byte> text) {
   }
 }
 
+std::vector<std::byte> encode_text(std::string_view text) {
+  std::vector<std::byte> encoded;
+  encoded.reserve(text.size());
+  for (const char ch : text) {
+    encoded.push_back(std::byte{static_cast<std::uint8_t>(ch)});
+  }
+  validate_text_bytes(encoded);
+  return encoded;
+}
+
 std::vector<std::size_t> record_starts(std::span<const std::byte> data,
                                        StringTableKind kind) {
   std::vector<std::size_t> starts;
@@ -286,16 +296,40 @@ std::uint32_t next_string_id(const LocalizedStringTable& table) noexcept {
 
 std::uint32_t add_string(LocalizedStringTable& table, std::string_view text) {
   if (text.empty()) return 0;
-  std::vector<std::byte> encoded;
-  encoded.reserve(text.size());
-  for (const char ch : text) {
-    encoded.push_back(std::byte{static_cast<std::uint8_t>(ch)});
-  }
-  validate_text_bytes(encoded);
+  auto encoded = encode_text(text);
   const auto id = next_string_id(table);
   if (id == 0) throw StringTableError("localized string table has no free ID");
   table.entries.push_back({id, std::move(encoded)});
   return id;
+}
+
+void insert_string(LocalizedStringTable& table, std::uint32_t id, std::string_view text) {
+  auto encoded = encode_text(text);
+  const auto it = std::lower_bound(table.entries.begin(), table.entries.end(), id,
+                                   [](const LocalizedStringEntry& entry, std::uint32_t value) {
+                                     return entry.id < value;
+                                   });
+  if (it != table.entries.end() && it->id == id) {
+    throw StringTableError("localized string table already has this string ID");
+  }
+  table.entries.insert(it, LocalizedStringEntry{id, std::move(encoded)});
+}
+
+bool set_string(LocalizedStringTable& table, std::uint32_t id, std::string_view text) {
+  auto encoded = encode_text(text);
+  const auto it = std::find_if(table.entries.begin(), table.entries.end(),
+                               [id](const auto& entry) { return entry.id == id; });
+  if (it == table.entries.end()) return false;
+  it->text = std::move(encoded);
+  return true;
+}
+
+bool remove_string(LocalizedStringTable& table, std::uint32_t id) {
+  const auto it = std::find_if(table.entries.begin(), table.entries.end(),
+                               [id](const auto& entry) { return entry.id == id; });
+  if (it == table.entries.end()) return false;
+  table.entries.erase(it);
+  return true;
 }
 
 StringTableKind string_table_kind(Signature record, Signature subrecord) noexcept {

@@ -206,25 +206,60 @@ TEST(CApiPexAnalysis, WalksParentChainsWithSeedsAndADepthLimit) {
   EXPECT_TRUE(saw_deep);
 }
 
+namespace {
+
+// A pointer or handle that a rejected call must overwrite; it is never dereferenced.
+template <typename T>
+T* sentinel() {
+  return reinterpret_cast<T*>(static_cast<std::uintptr_t>(1));
+}
+
+}  // namespace
+
 TEST(CApiPexAnalysis, RejectsBadArguments) {
-  radicle_pex_callgraph* graph = nullptr;
-  EXPECT_EQ(radicle_pex_callgraph_build(nullptr, 0, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+  // Invariant: a rejected call must clear its out-parameter before it validates the rest.
+  radicle_pex_callgraph* graph = sentinel<radicle_pex_callgraph>();
   EXPECT_EQ(radicle_pex_callgraph_build(nullptr, 1, &graph), RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(radicle_pex_callgraph_build(nullptr, 0, &graph), RADICLE_STATUS_OK);
+  EXPECT_EQ(graph, nullptr);
+  EXPECT_EQ(radicle_pex_callgraph_build(nullptr, 0, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+  ASSERT_EQ(radicle_pex_callgraph_build(nullptr, 0, &graph), RADICLE_STATUS_OK);
   ASSERT_NE(graph, nullptr);
   EXPECT_EQ(radicle_pex_callgraph_call_count(graph), 0u);
   radicle_pex_call_site site{};
+  site.instruction_index = 9u;
+  site.resolved = 1;
   EXPECT_EQ(radicle_pex_callgraph_call(graph, 0, &site), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(site.instruction_index, 0u);
+  EXPECT_EQ(site.resolved, 0);
+  site.instruction_index = 9u;
   EXPECT_EQ(radicle_pex_callgraph_unresolved(graph, 0, &site), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(site.instruction_index, 0u);
   EXPECT_EQ(radicle_pex_callgraph_totals(graph, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
   radicle_pex_callgraph_destroy(graph);
   radicle_pex_callgraph_destroy(nullptr);
 
-  radicle_pex_chain_report* report = nullptr;
+  radicle_pex_chain_report* report = sentinel<radicle_pex_chain_report>();
   EXPECT_EQ(radicle_pex_validate_parent_chains(nullptr, 1, nullptr, 0, 0, &report), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(report, nullptr);
+  report = sentinel<radicle_pex_chain_report>();
   EXPECT_EQ(radicle_pex_validate_parent_chains(nullptr, 0, nullptr, 1, 0, &report), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(report, nullptr);
   const char* seeds[] = {nullptr};
+  report = sentinel<radicle_pex_chain_report>();
   EXPECT_EQ(radicle_pex_validate_parent_chains(nullptr, 0, seeds, 1, 0, &report), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(report, nullptr);
   EXPECT_EQ(radicle_pex_chain_report_count(nullptr), 0u);
   EXPECT_EQ(radicle_pex_chain_report_checked(nullptr), 0u);
+
+  ASSERT_EQ(radicle_pex_validate_parent_chains(nullptr, 0, nullptr, 0, 0, &report), RADICLE_STATUS_OK);
+  const std::unique_ptr<radicle_pex_chain_report, ReportDeleter> empty(report);
+  radicle_pex_chain_finding finding{};
+  finding.file_index = 9u;
+  finding.problem = RADICLE_PEX_CHAIN_CYCLE;
+  EXPECT_EQ(radicle_pex_chain_report_get(empty.get(), 0, &finding), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(finding.file_index, 0u);
+  EXPECT_EQ(finding.problem, RADICLE_PEX_CHAIN_MISSING_PARENT);
+  const char* name = "stale";
+  EXPECT_EQ(radicle_pex_chain_report_name(empty.get(), 0, &name), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(name, static_cast<const char*>(nullptr));
 }

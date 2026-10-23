@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -14,6 +15,7 @@
 #include <set>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -74,6 +76,59 @@ std::optional<T> integerField(const nlohmann::json& object, const char* name) {
 inline std::string stringField(const nlohmann::json& object, const char* name) {
     if (!object.is_object() || !object.contains(name) || !object.at(name).is_string()) return {};
     return object.at(name).get<std::string>();
+}
+
+inline nlohmann::json dumpPayload(const nlohmann::json& payload) {
+    return nlohmann::json(payload.dump());
+}
+
+inline bool parseIndex(std::string_view text, std::size_t& value) {
+    if (text.empty()) return false;
+    const auto* begin = text.data();
+    const auto* end = begin + text.size();
+    const auto [ptr, error] = std::from_chars(begin, end, value, 10);
+    return error == std::errc{} && ptr == end;
+}
+
+struct AuthoringPath {
+    fo4::Signature signature{};
+    std::optional<std::size_t> occurrence;
+};
+
+inline std::optional<AuthoringPath> parseAuthoringPath(std::string_view path) {
+    constexpr std::string_view prefix = "Authoring\\";
+    if (!path.starts_with(prefix)) return std::nullopt;
+    path.remove_prefix(prefix.size());
+    if (path.size() < 4) return std::nullopt;
+    AuthoringPath result{fo4::Signature::from_string(path.substr(0, 4)), std::nullopt};
+    if (path.size() > 4) {
+        if (path[4] != '[' || path.back() != ']') return std::nullopt;
+        std::size_t index = 0;
+        if (!parseIndex(path.substr(5, path.size() - 6), index)) return std::nullopt;
+        result.occurrence = index;
+    }
+    return result;
+}
+
+inline Result<std::string> stringLanguage(const nlohmann::json& arguments) {
+    auto language = stringArgument(arguments, 1);
+    if (language.empty()) return std::string("en");
+    const bool valid = std::all_of(language.begin(), language.end(), [](unsigned char ch) {
+        return std::isalnum(ch) != 0;
+    });
+    if (!valid) {
+        return std::unexpected(Error{
+            "InvalidStringLanguage",
+            "string table language must be an alphanumeric token"
+        });
+    }
+    return language;
+}
+
+inline std::string displayText(std::string_view language, const std::vector<std::byte>& bytes) {
+    const std::string raw(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+    if (language != "en" && fo4::text::is_valid_utf8(raw)) return raw;
+    return fo4::text::windows1252_to_utf8(raw);
 }
 
 inline Result<fo4::FormKey> formKeyArgument(std::string_view text) {
