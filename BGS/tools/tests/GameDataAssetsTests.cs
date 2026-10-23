@@ -307,6 +307,7 @@ public sealed class GameDataAssetsTests
 
         File.WriteAllText(Path.Combine(mods, "modlist.txt"), "+Middle\n");
         Assert.Equal(Path.Combine(mods, "modlist.txt"), GameData.ModlistPath(mods, null));
+        Assert.Null(GameData.ModlistPath(mods, "Missing"));
 
         using var taken = GameData.DiscoverModded(dataFolder, mods, "Fallen World");
 
