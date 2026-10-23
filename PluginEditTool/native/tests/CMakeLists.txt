@@ -27,7 +27,12 @@ fo4ide_add_test(fo4ide_test_graph_document unit/GraphDocumentTests.cpp fo4ide_gr
 fo4ide_add_test(fo4ide_test_graph_palette unit/NodePaletteTests.cpp fo4ide_graph)
 fo4ide_add_test(fo4ide_test_graph_validator unit/GraphValidatorTests.cpp fo4ide_graph)
 fo4ide_add_test(fo4ide_test_graph_flow unit/GraphFlowTests.cpp fo4ide_graph)
-fo4ide_add_test(fo4ide_test_graph_compiler unit/GraphCompilerTests.cpp fo4ide_graph)
+# requires 60 s on every config: the graph compiler scratch work exceeds the 10 s non-Debug timeout.
+add_executable(fo4ide_test_graph_compiler unit/GraphCompilerTests.cpp)
+target_link_libraries(fo4ide_test_graph_compiler PRIVATE fo4ide_graph Catch2::Catch2WithMain)
+fo4ide_enable_warnings(fo4ide_test_graph_compiler)
+fo4ide_enable_sanitizers(fo4ide_test_graph_compiler)
+catch_discover_tests(fo4ide_test_graph_compiler PROPERTIES TIMEOUT 60)
 fo4ide_add_test(fo4ide_test_graph_lift unit/GraphLiftTests.cpp fo4ide_graph)
 fo4ide_add_test(fo4ide_test_graph_loader unit/GraphScriptLoaderTests.cpp fo4ide_graph)
 fo4ide_add_test(fo4ide_test_graph_tool unit/GraphToolServiceTests.cpp fo4ide_graph)

@@ -33,7 +33,8 @@ public class GraphScratchTests
     [Fact]
     public void A_scratch_folder_left_by_a_crashed_run_is_swept_and_a_recent_one_is_kept()
     {
-        var parent = Path.Combine(Path.GetTempPath(), "fo4re-graph-sweep-test-" + Guid.NewGuid().ToString("N"));
+        GraphScratch.Clear();
+        var parent = Path.Combine(Path.GetTempPath(), "fo4re-graph-scratch");
         var old = Path.Combine(parent, "crashed-" + Guid.NewGuid().ToString("N"));
         var recent = Path.Combine(parent, "other-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(old);
@@ -42,13 +43,14 @@ public class GraphScratchTests
         Directory.SetLastWriteTimeUtc(old, DateTime.UtcNow.AddDays(-2));
         try
         {
-            GraphScratch.SweepOld(parent);
+            _ = GraphScratch.Root;
             Directory.Exists(old).Should().BeFalse();
             Directory.Exists(recent).Should().BeTrue();
         }
         finally
         {
-            Directory.Delete(parent, true);
+            GraphScratch.Clear();
+            if (Directory.Exists(recent)) Directory.Delete(recent, true);
         }
     }
 
