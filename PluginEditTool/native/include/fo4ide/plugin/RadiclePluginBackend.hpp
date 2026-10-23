@@ -271,6 +271,8 @@ private:
                           std::string_view language,
                           fo4::env::StringSource source,
                           fo4::localization::LocalizedStringTable table);
+    void discardStagedStringTables(std::string_view plugin);
+    bool hasStagedStringTables(std::string_view plugin) const;
     bool stringTablePending(std::string_view plugin,
                             std::string_view language,
                             fo4::env::StringSource source) const;

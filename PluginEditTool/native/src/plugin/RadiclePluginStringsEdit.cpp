@@ -38,10 +38,6 @@ struct ImportRow {
     std::string encoded;
 };
 
-nlohmann::json dumpPayload(const nlohmann::json& payload) {
-    return nlohmann::json(payload.dump());
-}
-
 Result<StringSource> stringSourceArgument(std::string_view label) {
     for (const auto source : {StringSource::normal, StringSource::dl, StringSource::il}) {
         if (fo4::env::string_source_extension(source) == label) return source;
@@ -162,8 +158,8 @@ Result<nlohmann::json> RadiclePluginBackend::setString(const nlohmann::json& arg
     if (!tables) return std::unexpected(tables.error());
     auto table = effectiveTable(*tables, target->source);
     if (!fo4::localization::set_string(table, *id, *text)) return std::unexpected(missingStringId(*target, *id));
-    stageStringTable(target->plugin, target->language, target->source, std::move(table));
-    return dumpPayload({{"id", *id}, {"pending", true}});
+    stageStringTable(loaded->name, target->language, target->source, std::move(table));
+    return support::dumpPayload({{"id", *id}, {"pending", true}});
 }
 
 Result<nlohmann::json> RadiclePluginBackend::addString(const nlohmann::json& arguments) {
@@ -189,8 +185,8 @@ Result<nlohmann::json> RadiclePluginBackend::addString(const nlohmann::json& arg
     } catch (const std::exception& error) {
         return std::unexpected(Error{"StringEditFailed", error.what()});
     }
-    stageStringTable(target->plugin, target->language, target->source, std::move(table));
-    return dumpPayload({{"id", id}, {"pending", true}});
+    stageStringTable(loaded->name, target->language, target->source, std::move(table));
+    return support::dumpPayload({{"id", id}, {"pending", true}});
 }
 
 Result<nlohmann::json> RadiclePluginBackend::removeString(const nlohmann::json& arguments) {
@@ -208,8 +204,8 @@ Result<nlohmann::json> RadiclePluginBackend::removeString(const nlohmann::json& 
     if (!tables) return std::unexpected(tables.error());
     auto table = effectiveTable(*tables, target->source);
     if (!fo4::localization::remove_string(table, *id)) return std::unexpected(missingStringId(*target, *id));
-    stageStringTable(target->plugin, target->language, target->source, std::move(table));
-    return dumpPayload({{"id", *id}, {"pending", true}});
+    stageStringTable(loaded->name, target->language, target->source, std::move(table));
+    return support::dumpPayload({{"id", *id}, {"pending", true}});
 }
 
 Result<nlohmann::json> RadiclePluginBackend::importStrings(const nlohmann::json& arguments) {
@@ -247,8 +243,8 @@ Result<nlohmann::json> RadiclePluginBackend::importStrings(const nlohmann::json&
             fo4::localization::set_string(table, row.id, row.encoded);
         }
     }
-    stageStringTable(target->plugin, target->language, target->source, std::move(table));
-    return dumpPayload({{"rows", rows->size()}, {"mode", mode}, {"pending", true}});
+    stageStringTable(loaded->name, target->language, target->source, std::move(table));
+    return support::dumpPayload({{"rows", rows->size()}, {"mode", mode}, {"pending", true}});
 }
 
 Result<nlohmann::json> RadiclePluginBackend::exportStrings(const nlohmann::json& arguments) const {
@@ -273,7 +269,7 @@ Result<nlohmann::json> RadiclePluginBackend::exportStrings(const nlohmann::json&
             {"text", support::displayText(target->language, entry.text)}
         });
     }
-    return dumpPayload({
+    return support::dumpPayload({
         {"kind", std::string(fo4::env::string_source_extension(target->source))},
         {"language", target->language},
         {"rows", rows}
@@ -302,7 +298,7 @@ Result<nlohmann::json> RadiclePluginBackend::saveStringTables(const nlohmann::js
         std::scoped_lock staged(stagedStringsMutex_);
         for (const auto& [key, table] : stagedStrings_) {
             const auto& [name, lang, source] = key;
-            if (name == pluginName && lang == *language) pending.emplace_back(source, table);
+            if (name == loaded->name && lang == *language) pending.emplace_back(source, table);
         }
     }
     std::vector<std::string> written;
@@ -322,11 +318,11 @@ Result<nlohmann::json> RadiclePluginBackend::saveStringTables(const nlohmann::js
     }
     {
         std::scoped_lock staged(stagedStringsMutex_);
-        std::erase_if(stagedStrings_, [&pluginName, &language](const auto& entry) {
-            return std::get<0>(entry.first) == pluginName && std::get<1>(entry.first) == *language;
+        std::erase_if(stagedStrings_, [&loaded, &language](const auto& entry) {
+            return std::get<0>(entry.first) == loaded->name && std::get<1>(entry.first) == *language;
         });
     }
-    return dumpPayload({{"saved", written}});
+    return support::dumpPayload({{"saved", written}});
 }
 
 Result<nlohmann::json> RadiclePluginBackend::discardStringEdits(const nlohmann::json& arguments) {
@@ -336,20 +332,38 @@ Result<nlohmann::json> RadiclePluginBackend::discardStringEdits(const nlohmann::
     if (!language) return std::unexpected(language.error());
 
     OpLock lock(*this, OpLock::Mode::Write, {pluginName});
+    const auto* loaded = findPlugin(pluginName);
+    const auto name = loaded != nullptr ? loaded->name : pluginName;
     std::scoped_lock staged(stagedStringsMutex_);
-    const auto discarded = std::erase_if(stagedStrings_, [&pluginName, &language](const auto& entry) {
-        return std::get<0>(entry.first) == pluginName && std::get<1>(entry.first) == *language;
+    const auto discarded = std::erase_if(stagedStrings_, [&name, &language](const auto& entry) {
+        return std::get<0>(entry.first) == name && std::get<1>(entry.first) == *language;
     });
-    return dumpPayload({{"discarded", discarded}});
+    return support::dumpPayload({{"discarded", discarded}});
+}
+
+void RadiclePluginBackend::discardStagedStringTables(std::string_view plugin) {
+    std::scoped_lock staged(stagedStringsMutex_);
+    std::erase_if(stagedStrings_, [plugin](const auto& entry) {
+        return std::get<0>(entry.first) == plugin;
+    });
+}
+
+bool RadiclePluginBackend::hasStagedStringTables(std::string_view plugin) const {
+    std::scoped_lock staged(stagedStringsMutex_);
+    return std::any_of(stagedStrings_.begin(), stagedStrings_.end(), [plugin](const auto& entry) {
+        return std::get<0>(entry.first) == plugin;
+    });
 }
 
 void RadiclePluginBackend::stageStringTable(std::string_view plugin,
                                             std::string_view language,
                                             StringSource source,
                                             StringTable table) {
+    CommitScope commit;
     std::scoped_lock staged(stagedStringsMutex_);
     stagedStrings_.insert_or_assign(StagedStringKey{std::string(plugin), std::string(language), source},
                                     std::move(table));
+    ++mutationEpoch_;
 }
 
 bool RadiclePluginBackend::stringTablePending(std::string_view plugin,

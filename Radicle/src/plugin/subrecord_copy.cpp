@@ -5,6 +5,7 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/subrecord_authoring.hpp"
 #include "fo4/schema/form_links.hpp"
+#include "fo4/schema/localized_fields.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -59,6 +60,11 @@ SubrecordCopyStatus copy_record_subrecord(Plugin& destination,
   const auto source_index = nth_occurrence(*source_record, subrecord, occurrence);
   if (!source_index) return SubrecordCopyStatus::source_occurrence_missing;
   const auto& element = source_record->subrecords[*source_index];
+  if (schema::is_localized_field(source_record->header.signature, subrecord) &&
+      (source.header.tes4_flags.is_localized() != destination.header.tes4_flags.is_localized() ||
+       (source.header.tes4_flags.is_localized() && source.key != destination.key))) {
+    return SubrecordCopyStatus::localized_mismatch;
+  }
 
   for (const auto& hit : collect_form_links(source)) {
     if (hit.record != source_key || hit.subrecord != subrecord || hit.subrecord_ordinal != occurrence) {

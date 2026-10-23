@@ -331,6 +331,7 @@ TEST_CASE("Native InjectFormsIntoMaster refuses ids past the light master's loca
     renumberWriteBytes(root / "Injector.esp", injectSourceBytes());
 
     const auto lightBounds = fo4::local_form_id_range(fo4::read_plugin_file(root / "Light.esl"));
+    REQUIRE(lightBounds.second == 0xFFFu);
 
     fo4ide::plugin::RadiclePluginBackend backend;
     REQUIRE(backend.invoke("environment.LoadMo2",

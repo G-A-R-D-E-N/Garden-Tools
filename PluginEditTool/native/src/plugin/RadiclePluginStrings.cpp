@@ -125,7 +125,7 @@ Result<nlohmann::json> RadiclePluginBackend::listStringTables(const nlohmann::js
             {"count", found.table.entries.size()},
             {"source", found.archive.empty() ? std::string("loose") : found.archive}
         };
-        if (stringTablePending(pluginName, *language, found.source)) row["pending"] = true;
+        if (stringTablePending(loaded->name, *language, found.source)) row["pending"] = true;
         rows.push_back(std::move(row));
     }
     nlohmann::json skippedRows = nlohmann::json::array();
@@ -190,7 +190,7 @@ Result<nlohmann::json> RadiclePluginBackend::getStrings(const nlohmann::json& ar
         {"limit", limit},
         {"rows", rows}
     };
-    if (stringTablePending(pluginName, *language, found->source)) payload["pending"] = true;
+    if (stringTablePending(loaded->name, *language, found->source)) payload["pending"] = true;
     return nlohmann::json(payload.dump());
 }
 
@@ -219,7 +219,7 @@ Result<nlohmann::json> RadiclePluginBackend::lookupString(const nlohmann::json& 
             {"id", *id},
             {"text", support::displayText(*language, entry->text)}
         };
-        if (stringTablePending(pluginName, *language, found.source)) row["pending"] = true;
+        if (stringTablePending(loaded->name, *language, found.source)) row["pending"] = true;
         rows.push_back(std::move(row));
     }
     return nlohmann::json(rows.dump());

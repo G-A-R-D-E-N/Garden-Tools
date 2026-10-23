@@ -142,7 +142,7 @@ export interface CompareCell { value: string; differs: boolean }
 export interface CompareRow { field: string; label: string; cells: CompareCell[]; differs: boolean }
 export interface CompareView { columns: CompareColumn[]; rows: CompareRow[] }
 
-export function buildCompareView(picked: { formKey: string; plugin: string; matrix: ConflictMatrix }[]): CompareView {
+function buildCompareView(picked: { formKey: string; plugin: string; matrix: ConflictMatrix }[]): CompareView {
   const labels = new Map<string, string>();
   const valuesByColumn = picked.map(p => {
     const col = Math.max(0, p.matrix.Plugins.indexOf(p.plugin));
@@ -169,10 +169,9 @@ export function useCompareSelected() {
     if (!b) return;
     setComparing(true);
     try {
-      const loaded: { formKey: string; plugin: string; matrix: ConflictMatrix }[] = [];
-      for (const p of picked) {
-        loaded.push({ ...p, matrix: JSON.parse(await b.GetConflictMatrix(p.formKey)) });
-      }
+      const loaded: { formKey: string; plugin: string; matrix: ConflictMatrix }[] = await Promise.all(
+        picked.map(async p => ({ ...p, matrix: JSON.parse(await b.GetConflictMatrix(p.formKey)) })),
+      );
       setView(buildCompareView(loaded));
     } finally { setComparing(false); }
   };

@@ -1,12 +1,10 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
-#include <charconv>
 #include <cstddef>
 #include <exception>
 #include <optional>
 #include <string>
 #include <string_view>
-#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -15,6 +13,7 @@
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/subrecord_authoring.hpp>
 #include <fo4/plugin/subrecord_copy.hpp>
+#include <fo4/plugin/visit.hpp>
 
 namespace fo4ide::plugin {
 namespace {
@@ -37,15 +36,9 @@ struct BulkWorking {
 };
 
 std::optional<BulkElement> bulkAuthoringElement(std::string_view path) {
-    constexpr std::string_view prefix = "Authoring\\";
-    if (!path.starts_with(prefix)) return std::nullopt;
-    path.remove_prefix(prefix.size());
-    if (path.size() < 7 || path[4] != '[' || path.back() != ']') return std::nullopt;
-    const auto digits = path.substr(5, path.size() - 6);
-    std::size_t occurrence = 0;
-    const auto [end, error] = std::from_chars(digits.data(), digits.data() + digits.size(), occurrence, 10);
-    if (error != std::errc{} || end != digits.data() + digits.size()) return std::nullopt;
-    return BulkElement{fo4::Signature::from_string(path.substr(0, 4)), occurrence};
+    const auto parsed = support::parseAuthoringPath(path);
+    if (!parsed) return std::nullopt;
+    return BulkElement{parsed->signature, parsed->occurrence.value_or(0)};
 }
 
 bool parseBulkTargets(std::string_view text, std::vector<BulkTarget>& targets, nlohmann::json& failures) {
@@ -108,6 +101,8 @@ std::string copyReason(fo4::SubrecordCopyStatus status) {
             return "ElementUnknownOrder: A valid insertion order cannot be established";
         case fo4::SubrecordCopyStatus::no_default:
             return "ElementNoDefault: No usable default is proven for this subrecord";
+        case fo4::SubrecordCopyStatus::localized_mismatch:
+            return "ElementLocalized: Localized text IDs copy only within one localized plugin or between inline plugins";
     }
     return "ElementCopyFailed: Unknown copy status";
 }
@@ -135,6 +130,16 @@ std::size_t occurrencesIn(const fo4::Record& record, fo4::Signature signature) {
     return count;
 }
 
+void restoreRecord(fo4::Plugin& plugin, const fo4::Record& snapshot) {
+    fo4::Record* found = nullptr;
+    fo4::visit_records(plugin, [&](fo4::Record& record) {
+        if (found == nullptr && record.header.signature != fo4::sig_tes4 && record.form_key == snapshot.form_key) {
+            found = &record;
+        }
+    });
+    if (found != nullptr) *found = snapshot;
+}
+
 }  // namespace
 
 Result<nlohmann::json> RadiclePluginBackend::copyElementToSelected(const nlohmann::json& arguments) {
@@ -145,7 +150,7 @@ Result<nlohmann::json> RadiclePluginBackend::copyElementToSelected(const nlohman
 
     const auto element = bulkAuthoringElement(path);
     if (!element) {
-        return std::unexpected(Error{"ElementPathUnsupported", "Bulk copy requires an Authoring\\SIG[n] path"});
+        return std::unexpected(Error{"ElementPathUnsupported", "Bulk copy requires an Authoring\\SIG or Authoring\\SIG[n] path"});
     }
     nlohmann::json failures = nlohmann::json::array();
     std::vector<BulkTarget> targets;
@@ -183,14 +188,27 @@ Result<nlohmann::json> RadiclePluginBackend::copyElementToSelected(const nlohman
                 failures.push_back(bulkFailure(target, guard->type + ": " + guard->message));
                 continue;
             }
-            auto& entry = bulkWorkingFor(working, target.plugin, loaded->plugin);
-            const auto status = fo4::copy_record_subrecord(
-                entry.plugin, target.key, source->plugin, sourceKey, element->signature, element->occurrence);
+            auto& entry = bulkWorkingFor(working, loaded->name, loaded->plugin);
+            const auto* current = fo4::find_record(entry.plugin, target.key);
+            if (current == nullptr) {
+                failures.push_back(bulkFailure(target, copyReason(fo4::SubrecordCopyStatus::record_missing)));
+                continue;
+            }
+            const fo4::Record snapshot = *current;
+            fo4::SubrecordCopyStatus status = fo4::SubrecordCopyStatus::record_missing;
+            try {
+                status = fo4::copy_record_subrecord(
+                    entry.plugin, target.key, source->plugin, sourceKey, element->signature, element->occurrence);
+            } catch (...) {
+                restoreRecord(entry.plugin, snapshot);
+                throw;
+            }
             if (status == fo4::SubrecordCopyStatus::copied) {
                 entry.changed = true;
                 ++applied;
                 continue;
             }
+            restoreRecord(entry.plugin, snapshot);
             failures.push_back(bulkFailure(target, copyReason(status)));
         } catch (const std::exception& error) {
             failures.push_back(bulkFailure(target, std::string("ElementCopyFailed: ") + error.what()));
@@ -206,9 +224,9 @@ Result<nlohmann::json> RadiclePluginBackend::copyElementToSelected(const nlohman
         }
     }
 
-    return nlohmann::json(nlohmann::json{
+    return support::dumpPayload({
         {"applied", applied}, {"skipped", nlohmann::json::array()}, {"failures", std::move(failures)}
-    }.dump());
+    });
 }
 
 Result<nlohmann::json> RadiclePluginBackend::removeElementFromSelected(const nlohmann::json& arguments) {
@@ -217,7 +235,7 @@ Result<nlohmann::json> RadiclePluginBackend::removeElementFromSelected(const nlo
 
     const auto element = bulkAuthoringElement(path);
     if (!element) {
-        return std::unexpected(Error{"ElementPathUnsupported", "Bulk removal requires an Authoring\\SIG[n] path"});
+        return std::unexpected(Error{"ElementPathUnsupported", "Bulk removal requires an Authoring\\SIG or Authoring\\SIG[n] path"});
     }
     nlohmann::json failures = nlohmann::json::array();
     nlohmann::json skipped = nlohmann::json::array();
@@ -243,7 +261,7 @@ Result<nlohmann::json> RadiclePluginBackend::removeElementFromSelected(const nlo
                 failures.push_back(bulkFailure(target, guard->type + ": " + guard->message));
                 continue;
             }
-            auto& entry = bulkWorkingFor(working, target.plugin, loaded->plugin);
+            auto& entry = bulkWorkingFor(working, loaded->name, loaded->plugin);
             if (fo4::find_record(entry.plugin, target.key) == nullptr) {
                 failures.push_back(bulkFailure(target, "RecordNotFound: Record is not present"));
                 continue;
@@ -272,9 +290,9 @@ Result<nlohmann::json> RadiclePluginBackend::removeElementFromSelected(const nlo
         }
     }
 
-    return nlohmann::json(nlohmann::json{
+    return support::dumpPayload({
         {"applied", applied}, {"skipped", std::move(skipped)}, {"failures", std::move(failures)}
-    }.dump());
+    });
 }
 
 }  // namespace fo4ide::plugin

@@ -420,8 +420,8 @@ TEST_CASE("Native CopyElementToSelected makes each selected record's element equ
         {{"plugin", "TargetB.esp"}, {"formKey", keyB.to_string()}},
         {{"plugin", "Missing.esp"}, {"formKey", keyA.to_string()}}
     });
-    const auto report = parseResult(backend.copyElementToSelected(nlohmann::json::array({
-        "Source.esp", sourceKey.to_string(), "Authoring\ICON[0]", targets.dump()})));
+    const auto report = parseResult(backend.invokeBackend("CopyElementToSelected", nlohmann::json::array({
+        "Source.esp", sourceKey.to_string(), "Authoring\\ICON[0]", targets.dump()})));
     CHECK(report.at("applied") == 2);
     CHECK(report.at("skipped").empty());
     REQUIRE(report.at("failures").size() == 1);
@@ -455,8 +455,8 @@ TEST_CASE("Native RemoveElementFromSelected removes where present, skips where a
         {{"plugin", "TargetA.esp"}, {"formKey", keyA.to_string()}},
         {{"plugin", "TargetB.esp"}, {"formKey", keyB.to_string()}}
     });
-    const auto removed = parseResult(backend.removeElementFromSelected(nlohmann::json::array({
-        "Authoring\ICON[0]", targets.dump()})));
+    const auto removed = parseResult(backend.invokeBackend("RemoveElementFromSelected", nlohmann::json::array({
+        "Authoring\\ICON[0]", targets.dump()})));
     CHECK(removed.at("applied") == 1);
     REQUIRE(removed.at("skipped").size() == 1);
     CHECK(removed.at("skipped")[0].at("plugin") == "TargetB.esp");
@@ -468,9 +468,39 @@ TEST_CASE("Native RemoveElementFromSelected removes where present, skips where a
     const nlohmann::json requiredTarget = nlohmann::json::array({
         {{"plugin", "TargetB.esp"}, {"formKey", keyB.to_string()}}
     });
-    const auto refused = parseResult(backend.removeElementFromSelected(nlohmann::json::array({
-        "Authoring\DATA[0]", requiredTarget.dump()})));
+    const auto refused = parseResult(backend.invokeBackend("RemoveElementFromSelected", nlohmann::json::array({
+        "Authoring\\DATA[0]", requiredTarget.dump()})));
     CHECK(refused.at("applied") == 0);
     REQUIRE(refused.at("failures").size() == 1);
     CHECK(refused.at("failures")[0].at("reason").get<std::string>().starts_with("ElementBelowMinimum"));
+}
+
+TEST_CASE("Native CopyElementToSelected accepts Authoring\\ICON without an index (regression: ElementPathUnsupported for the non-indexed path)") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto sourcePath = root / "Source.esp";
+    const auto targetPath = root / "Target.esp";
+    const auto sourceKey = makeArmorFile(sourcePath, "Source.esp", std::uint8_t{7});
+    const auto targetKey = makeArmorFile(targetPath, "Target.esp", std::uint8_t{3});
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Source.esp", sourcePath),
+            pluginEntry("Target.esp", targetPath)
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const nlohmann::json targets = nlohmann::json::array({
+        {{"plugin", "Target.esp"}, {"formKey", targetKey.to_string()}}
+    });
+    const auto report = parseResult(backend.invokeBackend("CopyElementToSelected", nlohmann::json::array({
+        "Source.esp", sourceKey.to_string(), "Authoring\\ICON", targets.dump()})));
+    CHECK(report.at("applied") == 1);
+    CHECK(report.at("failures").empty());
+
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Target.esp"})).has_value());
+    const std::vector<std::byte> expected{std::byte{7}, std::byte{0}};
+    CHECK(iconsOf(targetPath, targetKey) == std::vector<std::vector<std::byte>>{expected});
 }

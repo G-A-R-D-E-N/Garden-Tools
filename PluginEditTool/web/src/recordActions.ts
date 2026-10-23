@@ -390,11 +390,11 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
     });
     if (!start) return;
     try {
-      const preview = await b.InjectFormsIntoMaster(plug, master.trim(), start, false);
+      const preview = await b.InjectFormsIntoMaster(plug, master.trim(), start.trim(), false);
       setStatus(preview);
       if (!preview.startsWith('DRY RUN')) return;
       if (!await askConfirm({ title: 'Confirm', message: preview, confirmLabel: 'Proceed' })) return;
-      setStatus(await b.InjectFormsIntoMaster(plug, master.trim(), start, true));
+      setStatus(await b.InjectFormsIntoMaster(plug, master.trim(), start.trim(), true));
       await onReload();
     } catch (e) { setStatus('Inject failed: ' + errorText(e)); }
   };
@@ -541,6 +541,7 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
     if (!b || targets.length === 0) return;
     try {
       reportBulk('copied', await b.CopyElementToSelected(matrix.Plugins[col], matrix.FormKey, r.Field, JSON.stringify(targets)));
+      await onReload();
     } catch (e) { setStatus('Copy to selected failed: ' + errorText(e)); }
   };
 
@@ -553,6 +554,7 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
       message: `Remove ${r.DisplayLabel || r.Field} from ${targets.length} selected record(s)?` })) return;
     try {
       reportBulk('removed', await b.RemoveElementFromSelected(r.Field, JSON.stringify(targets)));
+      await onReload();
     } catch (e) { setStatus('Remove from selected failed: ' + errorText(e)); }
   };
 

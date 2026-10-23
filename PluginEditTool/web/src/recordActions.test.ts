@@ -205,6 +205,7 @@ it('sends the element path and every selected record except the source to CopyEl
   await act(async () => { await result.current.copyElementToSelected(0, subrecordRow); });
 
   expect(CopyElementToSelected).toHaveBeenCalledWith('Patch.esp', '000800:Patch.esp', 'Authoring\\ICON[0]', JSON.stringify([other]));
+  expect(onReload).toHaveBeenCalledTimes(1);
 });
 
 it('sends the same targets to RemoveElementFromSelected after confirmation', async () => {
@@ -214,6 +215,7 @@ it('sends the same targets to RemoveElementFromSelected after confirmation', asy
 
   expect(dialogs.confirm).toHaveBeenCalled();
   expect(RemoveElementFromSelected).toHaveBeenCalledWith('Authoring\\ICON[0]', JSON.stringify([other]));
+  expect(onReload).toHaveBeenCalledTimes(1);
 });
 
 it('never calls the bridge when the source is the only selected record', async () => {

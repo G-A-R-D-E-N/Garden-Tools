@@ -28,7 +28,7 @@ export default function RecordContextMenu({
   const bulkTargets = bulkTargetsFor(menu.col);
   const bulkPath = menu.row.Field.startsWith('Authoring\\');
   const bulkEnabled = bulkPath && selectedCount > 1 && bulkTargets.length > 0;
-  const bulkTitle = !bulkPath ? 'Only subrecord elements (Authoring\\SIG[n]) can be used on other records'
+  const bulkTitle = !bulkPath ? 'Only subrecord elements (Authoring\\SIG or Authoring\\SIG[n]) can be used on other records'
     : 'Select at least two records, with at least one besides this record, to use this';
   return (
     <div className="rv-context" style={{ left: menu.x, top: menu.y }} onClick={e => e.stopPropagation()}>

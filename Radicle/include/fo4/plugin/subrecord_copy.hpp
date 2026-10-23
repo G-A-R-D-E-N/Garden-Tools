@@ -17,6 +17,7 @@ enum class SubrecordCopyStatus {
   not_authorable,
   unknown_order,
   no_default,
+  localized_mismatch,
 };
 
 SubrecordCopyStatus copy_record_subrecord(Plugin& destination,

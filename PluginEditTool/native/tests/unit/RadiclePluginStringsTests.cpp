@@ -105,6 +105,18 @@ nlohmann::json tablesOf(fo4ide::plugin::RadiclePluginBackend& backend, nlohmann:
     return rowsOf(backend, "ListStringTables", std::move(args))["tables"];
 }
 
+#ifdef FO4IDE_TEST_HOOKS
+fo4ide::plugin::RadiclePluginBackend* stringEditBackend = nullptr;
+bool stringEditStagedInHook = false;
+
+void stageStringEditInHook() {
+    if (stringEditBackend == nullptr) return;
+    stringEditStagedInHook = stringEditBackend->invoke(
+        "strings.SetString", nlohmann::json::array({"Patch.esp", "", "STRINGS", 10, "Late edit"})).has_value();
+    stringEditBackend = nullptr;
+}
+#endif
+
 }
 
 TEST_CASE("ListStringTables reports the tables present for the plugin language") {
@@ -508,6 +520,91 @@ TEST_CASE("Discard drops staged string edits so reads show the saved table again
     CHECK_FALSE(page.contains("pending"));
     const auto tables = tablesOf(backend, nlohmann::json::array({"Patch.esp", ""}));
     CHECK_FALSE(tables[0].contains("pending"));
+}
+
+TEST_CASE("Staged string edits block a LoadMo2 or OpenPlugin reload without discardPending instead of dropping them (regression: silent loss of staged strings on reload)") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeStrings(root);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadPlugin(backend, root);
+    REQUIRE(backend.invoke("strings.SetString", nlohmann::json::array({"Patch.esp", "", "STRINGS", 10, "Edited"})).has_value());
+
+    const auto path = root / "Patch.esp";
+    auto environment = nlohmann::json{{"plugins", nlohmann::json::array({{
+        {"name", "Patch.esp"},
+        {"path", path.string()},
+        {"source", "PluginStrings"},
+        {"resolved", true}
+    }})}};
+    const auto reloaded = backend.invoke("environment.LoadMo2", environment);
+    REQUIRE_FALSE(reloaded.has_value());
+    CHECK(reloaded.error().type == "PluginHasPendingChanges");
+    const auto reopened = backend.invoke("backend.OpenPlugin", nlohmann::json::array({path.string()}));
+    REQUIRE_FALSE(reopened.has_value());
+    CHECK(reopened.error().type == "PluginHasPendingChanges");
+    const auto kept = rowsOf(backend, "GetStrings", nlohmann::json::array({"Patch.esp", "", "STRINGS", "", 0, 200}));
+    CHECK(kept["rows"][0]["text"] == "Edited");
+    CHECK(kept["pending"] == true);
+    const auto listed = backend.invoke("appInterop.GetPlugins", nlohmann::json::array());
+    REQUIRE(listed.has_value());
+    CHECK(nlohmann::json::parse(listed->get<std::string>())[0]["Pending"] == true);
+
+    environment["discardPending"] = true;
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+    const auto discarded = tablesOf(backend, nlohmann::json::array({"Patch.esp", ""}));
+    CHECK_FALSE(discarded[0].contains("pending"));
+}
+
+TEST_CASE("LoadMo2 discardPending refuses a string edit staged after consent instead of dropping it (regression: staged string edit made after consent was silently discarded)") {
+#ifdef FO4IDE_TEST_HOOKS
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeStrings(root);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadPlugin(backend, root);
+
+    auto environment = nlohmann::json{{"plugins", nlohmann::json::array({{
+        {"name", "Patch.esp"},
+        {"path", (root / "Patch.esp").string()},
+        {"source", "PluginStrings"},
+        {"resolved", true}
+    }})}};
+    environment["discardPending"] = true;
+
+    stringEditBackend = &backend;
+    fo4ide::plugin::setLoadMo2AfterPendingCheckHook(&stageStringEditInHook);
+    const auto reloaded = backend.invoke("environment.LoadMo2", environment);
+    fo4ide::plugin::setLoadMo2AfterPendingCheckHook(nullptr);
+
+    CHECK(stringEditStagedInHook);
+    REQUIRE_FALSE(reloaded.has_value());
+    CHECK(reloaded.error().type == "PluginHasPendingChanges");
+    const auto kept = rowsOf(backend, "GetStrings", nlohmann::json::array({"Patch.esp", "", "STRINGS", "", 0, 200}));
+    CHECK(kept["pending"] == true);
+    CHECK(kept["rows"][0]["text"] == "Late edit");
+#else
+    SUCCEED("FO4IDE_TEST_HOOKS is required for the LoadMo2 string edit consent race");
+#endif
+}
+
+TEST_CASE("DiscardPlugin on a clean plugin drops its staged string edits (regression: discardPlugin returned early and left the string edit pending)") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeStrings(root);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadPlugin(backend, root);
+    REQUIRE(backend.invoke("strings.SetString", nlohmann::json::array({"Patch.esp", "", "STRINGS", 10, "Edited"})).has_value());
+
+    const auto discarded = backend.invoke("backend.DiscardPlugin", nlohmann::json::array({"Patch.esp"}));
+    REQUIRE(discarded.has_value());
+
+    const auto listed = backend.invoke("appInterop.GetPlugins", nlohmann::json::array());
+    REQUIRE(listed.has_value());
+    CHECK(nlohmann::json::parse(listed->get<std::string>())[0]["Pending"] == false);
+    const auto page = rowsOf(backend, "GetStrings", nlohmann::json::array({"Patch.esp", "", "STRINGS", "", 0, 200}));
+    CHECK(page["rows"][0]["text"] == "Apple pie");
+    CHECK_FALSE(page.contains("pending"));
 }
 
 TEST_CASE("Saving string tables into the backend Data folder is refused and leaves the file unchanged") {
