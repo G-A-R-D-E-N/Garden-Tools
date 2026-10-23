@@ -62,6 +62,12 @@ bool read_rect(std::span<const std::byte> data, std::size_t offset, SwfRect& out
 SwfStatus decode_tag_payload(const std::vector<std::byte>& payload, SwfTag& out_tag,
                              unsigned depth, std::size_t& tags_left);
 
+SwfStatus decode_shape_tag(std::span<const std::byte> data, SwfTag& out_tag);
+
+SwfStatus decode_bitmap_tag(std::span<const std::byte> data, SwfTag& out_tag);
+
+SwfStatus decode_text_tag(std::span<const std::byte> data, SwfTag& out_tag);
+
 SwfStatus decode_tag_stream(std::span<const std::byte> data, std::size_t begin, std::size_t end,
                             unsigned depth, std::vector<SwfTag>& out, std::size_t& stop,
                             std::size_t& tags_left);

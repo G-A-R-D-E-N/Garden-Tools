@@ -255,6 +255,9 @@ add_library(fo4
   src/papyrus/execute.cpp
   src/swf/swf.cpp
   src/swf/swf_tags.cpp
+  src/swf/swf_shape.cpp
+  src/swf/swf_bitmap.cpp
+  src/swf/swf_text.cpp
   src/swf/swf_write.cpp
   src/pex_analysis/opcodes.cpp
   src/pex_analysis/cfg.cpp
