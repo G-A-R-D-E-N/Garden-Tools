@@ -93,6 +93,7 @@ HkxStatus read_section(std::span<const std::byte> bytes, std::size_t header, std
   ranges.push_back(range);
 
   section.tag = read_tag(bytes, header);
+  section.file_offset = base;
   const auto data = bytes.subspan(base, mark(0));
   section.data.assign(data.begin(), data.end());
   if (const auto status = read_local_table(bytes.subspan(base + mark(0), mark(1) - mark(0)), section.local_fixups);
