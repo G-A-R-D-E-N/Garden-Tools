@@ -1,6 +1,7 @@
 #include "fo4/c_api_pex.h"
 
 #include "c_api_internal.hpp"
+#include "c_api_pex_internal.hpp"
 #include "fo4/pex/pex.hpp"
 
 #include <cstdlib>
@@ -14,11 +15,6 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
-
-struct radicle_pex {
-  fo4::pex::PexFile value;
-  std::unordered_map<std::string, size_t> strings;
-};
 
 namespace {
 

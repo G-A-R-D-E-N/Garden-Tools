@@ -242,6 +242,7 @@ add_library(fo4
   src/pex_analysis/cfg.cpp
   src/pex_analysis/disasm.cpp
   src/pex_analysis/callgraph.cpp
+  src/pex_analysis/parent_chain.cpp
   src/pex_analysis/summary.cpp
   src/pex_analysis/fragments.cpp
   src/abc/abc_file.cpp
@@ -300,6 +301,7 @@ target_sources(radicle_c PRIVATE src/c_api_dialogue.cpp)
 target_sources(radicle_c PRIVATE src/c_api_armor.cpp src/c_api_eyes.cpp src/c_api_faction.cpp src/c_api_components.cpp src/c_api_cell.cpp)
 target_sources(radicle_c PRIVATE src/c_api_patch.cpp)
 target_sources(radicle_c PRIVATE src/c_api_conflict.cpp)
+target_sources(radicle_c PRIVATE src/c_api_pex_analysis.cpp src/c_api_vmad_read.cpp)
 target_sources(fo4 PRIVATE src/patch/delta_patch.cpp)
 target_sources(fo4 PRIVATE src/patch/list_merge.cpp)
 target_sources(fo4 PRIVATE src/papyrus_source/lexer.cpp src/papyrus_source/parser.cpp src/papyrus_source/parser_decl.cpp src/papyrus_source/parser_expr.cpp src/papyrus_source/parser_stmt.cpp src/papyrus_source/summary.cpp)
@@ -580,6 +582,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_vmad.cpp
     tests/test_vmad_unsupported.cpp
     tests/test_vmad_array_elements.cpp
+    tests/test_c_api_vmad_read.cpp
     tests/test_vmad_structure.cpp
     tests/test_vmad_quest_fragments.cpp
     tests/test_vmad_fragments.cpp
@@ -670,6 +673,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_pex_oracle.cpp
     tests/test_papyrus_vm.cpp
     tests/test_pex_analysis.cpp
+    tests/test_pex_analysis_c_api.cpp
     tests/test_pex_disasm.cpp
     tests/test_papyrus_source.cpp
     tests/test_papyrus_source_real.cpp
