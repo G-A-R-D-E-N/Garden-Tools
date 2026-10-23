@@ -201,6 +201,40 @@ RADICLE_API radicle_status radicle_pex_object_code_get(const radicle_pex* pex,
 
 RADICLE_API void radicle_pex_free_object_code(radicle_pex_object_code* code);
 
+typedef enum radicle_pex_source_kind {
+  RADICLE_PEX_SOURCE_ARCHIVE = 0,
+  RADICLE_PEX_SOURCE_LOOSE = 1
+} radicle_pex_source_kind;
+
+typedef struct radicle_script_candidate {
+  const uint8_t* name;
+  size_t name_size;
+  uint8_t kind;
+  const uint8_t* container;
+  size_t container_size;
+  int32_t load_index;
+  uint64_t size;
+} radicle_script_candidate;
+
+typedef struct radicle_script_winner {
+  size_t candidate_index;
+  size_t replaced;
+} radicle_script_winner;
+
+/* Requires radicle_free_bytes. */
+RADICLE_API radicle_status radicle_script_normalize_name(const uint8_t* bytes,
+                                                         size_t size,
+                                                         uint8_t** out_bytes,
+                                                         size_t* out_size);
+
+/* Requires radicle_script_free_winners. */
+RADICLE_API radicle_status radicle_script_resolve(const radicle_script_candidate* candidates,
+                                                  size_t count,
+                                                  radicle_script_winner** out_winners,
+                                                  size_t* out_count);
+
+RADICLE_API void radicle_script_free_winners(radicle_script_winner* winners);
+
 #ifdef __cplusplus
 }
 #endif

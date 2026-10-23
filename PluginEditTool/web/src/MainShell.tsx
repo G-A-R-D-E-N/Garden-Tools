@@ -45,6 +45,7 @@ import FavouritesList from './Shell/FavouritesList';
 import { useRecordOpening } from './Shell/useRecordOpening';
 import { useEnvironment } from './Shell/useEnvironment';
 import { useCompareSelected, useConflictBatch } from './Shell/useConflictBatch';
+import CompareView from './Shell/CompareView';
 import { modeOf, selectRow, type ConflictSelection, type SelectMode } from './Shell/conflictSelection';
 import type { SearchHit } from './backend';
 import type { RecordTab } from './RecordView';
@@ -288,7 +289,7 @@ export default function MainShell() {
   const [recSel, setRecSel] = useState<ConflictSelection>({});
   const [recAnchor, setRecAnchor] = useState<string | null>(null);
   const [recHits, setRecHits] = useState<Record<string, SearchHit>>({});
-  const { comparing: recComparing, compare: compareRecords } = useCompareSelected();
+  const { comparing: recComparing, view: compareView, compare: compareRecords, closeView: closeCompareView } = useCompareSelected();
   const visibleHits = searchResults ?? [];
   const visibleKeys = new Set(visibleHits.map(hitKey));
   const loadedSet = loadOrderSummary?.Plugins ? new Set(loadOrderSummary.Plugins) : null;
@@ -506,9 +507,9 @@ export default function MainShell() {
                       </button>
                       <button
                         className="sidebar-action-btn"
-                        disabled={conflictBusy || recComparing || recDupes || recPicked.length !== 2}
-                        title={recDupes ? 'Both selections are the same record; open it to see every plugin\'s version' : recPicked.length === 2 ? 'Open the two selected records in record tabs' : 'Select exactly two records to compare'}
-                        onClick={() => compareRecords(recPicked.map(h => ({ formKey: h.FormKey, plugin: h.Plugin })), openByFormKey)}
+                        disabled={conflictBusy || recComparing || recDupes || recPicked.length < 2}
+                        title={recDupes ? 'Both selections are the same record; open it to see every plugin\'s version' : recPicked.length >= 2 ? 'Show the selected records side by side' : 'Select at least two records to compare'}
+                        onClick={() => compareRecords(recPicked.map(h => ({ formKey: h.FormKey, plugin: h.Plugin }))).catch(err => setErrorStr(errorMessage(err) ?? JSON.stringify(err)))}
                       >
                         Compare selected
                       </button>
@@ -607,6 +608,7 @@ export default function MainShell() {
             </div>
 
             <div className={`editor-content ${openRecord && !recordLoading ? 'has-record' : ''}`}>
+              {compareView && <CompareView view={compareView} onClose={closeCompareView} />}
               {recordLoading ? (
                 <div className="welcome-screen glass-panel">
                   <Database size={48} color="var(--border-color)" />
@@ -623,6 +625,8 @@ export default function MainShell() {
                   highlightField={aiHighlightField}
                   highlightSeq={aiHighlightSeq}
                   onPluginsChanged={() => { void refreshPlugins(); }}
+                  selectedRecords={recPicked.map(h => ({ plugin: h.Plugin, formKey: h.FormKey }))}
+                  setErrorStr={setErrorStr}
                 />
               ) : (
                 <div className="welcome-screen glass-panel">

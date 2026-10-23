@@ -455,3 +455,81 @@ TEST(RecordFlags, UndeleteTreatsOverrideWhoseOwnerIsNotLoadedAsInjected) {
             fo4::UndeleteStatus::injected_record);
   EXPECT_EQ(fo4::write_plugin(plugin), before);
 }
+
+TEST(RecordFlags, UndeleteRefusesPlayerMasterPrependAtMasterLimitWithoutChange) {
+  std::vector<std::string> names;
+  for (std::size_t i = 0; i < fo4::k_max_plugin_masters; ++i) {
+    names.push_back("Mod" + std::to_string(i) + ".esm");
+  }
+  const std::vector<std::string_view> masters(names.begin(), names.end());
+  auto plugin = load(CellPlugin{
+      .name = "Patch.esp",
+      .masters = masters,
+      .cell_form = 0xFD000900,
+      .ref_flags = fo4::RecordFlags::deleted,
+      .ref_form = 0xFD000800,
+      .ref_subs = {{"NAME", std::string{'\x01', '\x08', '\0', '\0'}},
+                   {"DATA", position_data(1.0f, 2.0f, 3.0f)}},
+  });
+  const auto ref = fo4::FormKey::parse("000800:Patch.esp");
+  const auto before = fo4::write_plugin(plugin);
+  const auto state = fo4::test::plugin_state(plugin);
+  EXPECT_EQ(fo4::undelete_and_disable_reference(plugin, fo4::env::Environment{}, ref),
+            fo4::UndeleteStatus::incomplete_reference);
+  EXPECT_EQ(plugin.header.masters.size(), fo4::k_max_plugin_masters);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+  EXPECT_EQ(fo4::test::plugin_state(plugin), state);
+  const auto* record = fo4::find_record(plugin, ref);
+  ASSERT_NE(record, nullptr);
+  EXPECT_TRUE(record->header.flags.is_deleted());
+  EXPECT_EQ(subrecord_named(*record, "XESP"), nullptr);
+}
+
+TEST(RecordFlags, UndeleteRefusesPlayerMasterPrependWhenAnotherRecordIsUndecodableWithoutChange) {
+  const CellPlugin patch{
+      .name = "Patch.esp",
+      .masters = {"Base.esm"},
+      .cell_form = 0x01000900,
+      .ref_flags = fo4::RecordFlags::deleted,
+      .ref_form = 0x01000800,
+      .ref_subs = {{"NAME", std::string{'\x01', '\x08', '\0', '\0'}},
+                   {"DATA", position_data(1.0f, 2.0f, 3.0f)}},
+  };
+  auto bytes = build_plugin(patch);
+  fo4::test::ByteWriter stray;
+  const auto group = fo4::test::begin_group(stray, "REFR", 0);
+  const auto record = fo4::test::begin_record(stray, "REFR", fo4::RecordFlags::compressed, 0x01000801);
+  stray.u32(32);
+  stray.raw(std::string_view{"not-zlib-data-at-all"});
+  fo4::test::end_record(stray, record);
+  fo4::test::end_group(stray, group);
+  bytes.insert(bytes.end(), stray.bytes.begin(), stray.bytes.end());
+  auto plugin = fo4::read_plugin(bytes, "Patch.esp");
+  const auto ref = fo4::FormKey::parse("000800:Patch.esp");
+  const auto before = fo4::write_plugin(plugin);
+  const auto state = fo4::test::plugin_state(plugin);
+  EXPECT_EQ(fo4::undelete_and_disable_reference(plugin, fo4::env::Environment{}, ref),
+            fo4::UndeleteStatus::incomplete_reference);
+  EXPECT_EQ(plugin.header.masters.size(), 1u);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+  EXPECT_EQ(fo4::test::plugin_state(plugin), state);
+}
+
+TEST(RecordFlags, UndeleteDoesNotPrependMasterWhenThePluginIsFallout4) {
+  auto plugin = load(CellPlugin{
+      .name = "Fallout4.esm",
+      .ref_flags = fo4::RecordFlags::deleted,
+  });
+  const auto ref = fo4::FormKey::parse("000800:Fallout4.esm");
+  ASSERT_EQ(fo4::undelete_and_disable_reference(plugin, fo4::env::Environment{}, ref),
+            fo4::UndeleteStatus::undeleted);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Fallout4.esm");
+  EXPECT_TRUE(reread.header.masters.empty());
+  const auto* record = fo4::find_record(reread, ref);
+  ASSERT_NE(record, nullptr);
+  const auto* xesp = subrecord_named(*record, "XESP");
+  ASSERT_NE(xesp, nullptr);
+  EXPECT_EQ(as_text(xesp->data), std::string("\x14\0\0\0\x01\0\0\0", 8));
+  EXPECT_EQ(resolved_link(reread, *xesp), fo4::FormKey::parse("000014:Fallout4.esm"));
+}

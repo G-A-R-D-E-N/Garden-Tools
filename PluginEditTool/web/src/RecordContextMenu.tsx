@@ -21,9 +21,15 @@ export default function RecordContextMenu({
 }) {
   const {
     copyAsOverrideInto, savePlugin, deleteRecord, renumberFormId, compactEsl, cleanMasters, cleanPlugin, copyAsNewRecord,
-    deepCopyAsOverride, changeReferencingRecords, removeItm, addMasters, renumberPlugin, createSeq, createSchemaRecord,
+    deepCopyAsOverride, changeReferencingRecords, removeItm, addMasters, renumberPlugin, injectIntoMaster, createSeq, createSchemaRecord,
     checkCircularLeveled, checkForErrors, findUnreachable, lootReport, updateOnam, compareTo, copyAsDisabledOverrideInto, copyAsWrapperInto, copyText, elementAction, askImpact,
+    copyElementToSelected, removeElementFromSelected, bulkTargetsFor, selectedCount,
   } = actions;
+  const bulkTargets = bulkTargetsFor(menu.col);
+  const bulkPath = menu.row.Field.startsWith('Authoring\\');
+  const bulkEnabled = bulkPath && selectedCount > 1 && bulkTargets.length > 0;
+  const bulkTitle = !bulkPath ? 'Only subrecord elements (Authoring\\SIG or Authoring\\SIG[n]) can be used on other records'
+    : 'Select at least two records, with at least one besides this record, to use this';
   return (
     <div className="rv-context" style={{ left: menu.x, top: menu.y }} onClick={e => e.stopPropagation()}>
       {!menu.row.HasChildren && menu.row.Editable?.[menu.col] !== false && (
@@ -55,6 +61,10 @@ export default function RecordContextMenu({
           <Minus size={13} /> Remove
         </button>
       )}
+      <button disabled={!bulkEnabled} title={bulkEnabled ? undefined : bulkTitle}
+        onClick={() => copyElementToSelected(menu.col, menu.row)}><Copy size={13} /> Copy to selected records</button>
+      <button className="rv-danger" disabled={!bulkEnabled} title={bulkEnabled ? undefined : bulkTitle}
+        onClick={() => removeElementFromSelected(menu.col, menu.row)}><Minus size={13} /> Remove from selected records</button>
       {(elementActions?.canMoveUp || elementActions?.canMoveDown) && (
         <>
           <button disabled={!elementActions?.canMoveUp}
@@ -112,6 +122,7 @@ export default function RecordContextMenu({
       <button onClick={() => addMasters(menu.col)}><Plus size={13} /> Add masters...</button>
       <button onClick={() => cleanMasters(menu.col)}><Eraser size={13} /> Clean masters</button>
       <button onClick={() => renumberPlugin(menu.col)}><Hash size={13} /> Renumber all FormIDs...</button>
+      <button onClick={() => injectIntoMaster(menu.col)}><Hash size={13} /> Inject Forms into master...</button>
       <button onClick={() => createSeq(menu.col)}><FilePlus2 size={13} /> Create SEQ file</button>
       <button onClick={() => checkCircularLeveled(menu.col)}><ListFilter size={13} /> Check circular leveled lists</button>
       <button onClick={() => checkForErrors(menu.col)}><ListFilter size={13} /> Check for errors</button>

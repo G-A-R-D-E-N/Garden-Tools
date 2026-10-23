@@ -368,6 +368,49 @@ RecordRenumberStatus renumber_local_record(Plugin& plugin,
   return RecordRenumberStatus::renumbered;
 }
 
+RecordRenumberStatus inject_local_record(Plugin& plugin,
+                                         const FormKey& record_key,
+                                         const FormKey& new_key) {
+  if (record_key.owner() != plugin.key) return RecordRenumberStatus::not_local;
+  require_plugin_decodable(plugin, "inject");
+  const auto context = plugin_form_id_context(plugin);
+  const auto is_master = std::any_of(context.masters.begin(), context.masters.end(),
+                                     [&](const MasterDescriptor& master) {
+                                       return master.key == new_key.owner();
+                                     });
+  if (!is_master) throw FormIdError("injected owner is not a master of this plugin");
+
+  auto next = plugin;
+  assign_record_form_keys(next);
+  auto* target = find_top_level_record(next, record_key);
+  if (target == nullptr) {
+    if (find_record(next, record_key) != nullptr) {
+      throw FormIdError("nested record injection is not supported");
+    }
+    return RecordRenumberStatus::record_missing;
+  }
+
+  if (find_record(next, new_key) != nullptr) return RecordRenumberStatus::target_exists;
+
+  rekey_form_links(next, record_key, new_key);
+  relabel_record_child_groups(next, record_key, new_key);
+  target = find_top_level_record(next, record_key);
+  if (target == nullptr) {
+    throw FormIdError("record disappeared during FormLink rekey");
+  }
+
+  target->form_key = new_key;
+  target->header.form_id = encode_plugin_form_id(new_key, plugin_form_id_context(next));
+  target->original_range.clear();
+  target->decompressed_payload.clear();
+  target->header.data_size = 0;
+  target->uncompressed_size = 0;
+
+  next.original_range.clear();
+  plugin = std::move(next);
+  return RecordRenumberStatus::renumbered;
+}
+
 ReferenceRepointResult repoint_record_references(std::span<Plugin*> plugins,
                                                  const FormKey& from,
                                                  const FormKey& to) {

@@ -50,6 +50,31 @@ public sealed class GameDataDeniedListingTests
     }
 
     [Fact]
+    public void DiscoverModdedFallsBackToPlainArchivesWhenTheModlistCannotBeRead()
+    {
+        using var root = new TestArchives.TempDirectory("bgs-gamedata-denied-modlist");
+        string dataFolder = Path.Combine(root.Path, "Data");
+        string mods = Path.Combine(root.Path, "mods");
+        string plugins = Path.Combine(root.Path, "plugins.txt");
+        Directory.CreateDirectory(dataFolder);
+        Directory.CreateDirectory(Path.Combine(mods, "mods", "Readable"));
+        TestArchives.WriteGeneralBa2(Path.Combine(dataFolder, "Base.ba2"), ("meshes/y/only.hkx", Encoding.ASCII.GetBytes("base")));
+        TestArchives.WriteGeneralBa2(Path.Combine(mods, "mods", "Readable", "Readable.ba2"), ("meshes/y/only.hkx", Encoding.ASCII.GetBytes("mod")));
+        string modlist = Path.Combine(mods, "modlist.txt");
+        File.WriteAllText(modlist, "+Readable\n");
+        if (!DenyReading(modlist)) return;
+        try
+        {
+            using var modded = GameData.DiscoverModded(dataFolder, mods, null, plugins);
+            using var plain = GameData.Discover(dataFolder, plugins);
+
+            Assert.Equal(plain.ArchivePaths, modded.ArchivePaths);
+            Assert.Equal(plain.ModRoots, modded.ModRoots);
+        }
+        finally { RestoreListing(modlist); }
+    }
+
+    [Fact]
     public void SubgraphIndexKeepsReadableLooseManifestsWhenAModRootListingIsDenied()
     {
         using var root = new TestArchives.TempDirectory("bgs-gamedata-denied-subgraph");
@@ -76,12 +101,19 @@ public sealed class GameDataDeniedListingTests
         finally { RestoreListing(deniedFileData); }
     }
 
-    private static bool DenyListing(string folder)
+    private static bool DenyListing(string folder) => DenyAccess(folder, () => Directory.EnumerateFiles(folder).ToList());
+
+    private static bool DenyReading(string file) => DenyAccess(file, () => File.ReadAllBytes(file));
+
+    private static bool DenyAccess(string path, Action probe)
     {
-        if (OperatingSystem.IsWindows()) Icacls(folder, "/deny", $"{WindowsIdentity.GetCurrent().Name}:(RD)");
-        else File.SetUnixFileMode(folder, UnixFileMode.None);
-        try { Directory.EnumerateFiles(folder).ToList(); return false; }
+        if (OperatingSystem.IsWindows()) Icacls(path, "/deny", $"{WindowsIdentity.GetCurrent().Name}:(RD)");
+        else File.SetUnixFileMode(path, UnixFileMode.None);
+        try { probe(); }
         catch (UnauthorizedAccessException) { return true; }
+        if (Environment.GetEnvironmentVariable("BGS_REQUIRE_DENY_TESTS") == "1")
+            Assert.Fail($"denying access to {path} had no effect, so the denied-access test cannot prove its point");
+        return false;
     }
 
     private static void RestoreListing(string folder)

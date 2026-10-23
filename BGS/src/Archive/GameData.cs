@@ -108,8 +108,18 @@ public sealed partial class GameData : IDisposable
         string? modlist = ModlistPath(mods, profile);
         if (modlist != null)
         {
+            string[] lines;
+            try
+            {
+                lines = File.ReadAllLines(modlist);
+            }
+            catch (Exception e) when (e is UnauthorizedAccessException || (e is IOException && e is not (FileNotFoundException or DirectoryNotFoundException)))
+            {
+                lines = Array.Empty<string>();
+            }
+
             // Bottom-up: the last root wins, and MO2 puts the winning mod on the first line.
-            foreach (string raw in File.ReadAllLines(modlist).Reverse())
+            foreach (string raw in lines.Reverse())
             {
                 string line = raw.Trim();
                 if (line.Length == 0 || line[0] == '#') continue;
