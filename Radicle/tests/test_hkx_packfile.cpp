@@ -170,6 +170,36 @@ TEST(HkxPackfile, RejectsTwoObjectsClaimingTheSameOffset) {
   EXPECT_EQ(read_packfile(bytes, packfile), HkxStatus::DuplicateFixup);
 }
 
+TEST(HkxPackfile, AcceptsAFillerTailThatStopsInsideAFixupEntry) {
+  // Detects a length check that must accept TurnLeft90.hkx, whose virtual table ends in filler.
+  std::vector<std::byte> names;
+  const std::uint32_t name_at = add_class_name(names, kSkeletonSignature, "hkaSkeleton");
+  const auto bytes = build_packfile({
+      TestSection{"__classnames__", names, {}, {}, {}},
+      TestSection{"__types__", {}, {}, {}, {}},
+      TestSection{"__data__", filled(16, std::byte{0}), {}, {},
+                  {0, 0, name_at, 0xFFFFFFFFu, 0xFFFFFFFFu}},
+  });
+  HkxPackfile packfile;
+  ASSERT_EQ(read_packfile(bytes, packfile), HkxStatus::Ok);
+  ASSERT_EQ(packfile.objects.size(), 1u);
+  EXPECT_EQ(packfile.objects[0].class_name, "hkaSkeleton");
+}
+
+TEST(HkxPackfile, RejectsAFixupTableWhosePartialTailIsNotFiller) {
+  // Detects a reader that ignores a truncated entry: bytes after the last whole entry must be filler.
+  std::vector<std::byte> names;
+  const std::uint32_t name_at = add_class_name(names, kSkeletonSignature, "hkaSkeleton");
+  const auto bytes = build_packfile({
+      TestSection{"__classnames__", names, {}, {}, {}},
+      TestSection{"__types__", {}, {}, {}, {}},
+      TestSection{"__data__", filled(16, std::byte{0}), {}, {},
+                  {0, 0, name_at, 0x12345678u, 0x9ABCDEF0u}},
+  });
+  HkxPackfile packfile;
+  EXPECT_EQ(read_packfile(bytes, packfile), HkxStatus::BadSection);
+}
+
 TEST(HkxPackfile, RejectsAPackfileVersionTheLayoutTableWasNotMeasuredFrom) {
   auto bytes = single_object_packfile("hkaSkeleton", kSkeletonSignature, filled(16, std::byte{0}), {});
   patch_u32(bytes, 0x0C, 10);
