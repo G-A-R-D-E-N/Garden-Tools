@@ -12,10 +12,11 @@ there, and whether the file carries `hknpBSMaterial`.
 Discovery belongs to `GameData`: the folder's archives in the game's own load order, plus loose files
 (and, for an MO2 instance, the enabled mods), merged by virtual path with the game's precedence. The
 archives it reads are the `.ba2` files directly under the `Data` folder — the ones the game loads —
-ordered by `plugins.txt`, plus the enabled mod roots' own top-level archives; an archive buried in a
-Data subfolder is not part of the game's data tree and is not censused. A loose skeleton that
-overrides a packed copy is censused once, as the winner, and the copies it hides are listed in the
-row's `details` as `shadowed: <virtual path> [<archive or loose>]`. The name rule is
+ordered by `plugins.txt` (alphabetically when there is none), plus the enabled mod roots' own top-level
+archives; an archive buried in a Data subfolder is not part of the game's data tree and is not censused.
+A winner that hides copies from another source (a loose file over an archive, or one archive over
+another) is censused once, and the copies it hides are listed in the row's `details` (JSON mode) as
+`shadowed: <virtual path> [<archive or loose>]`. The name rule is
 `GameData.IsSkeletonName` — a `.hkx` whose file name starts with `skeleton`, matched case-insensitively
 — so `Skeleton.hkx` is found on Linux as well as on Windows. A skeleton that cannot be read (over the
 512 MB HKX cap, or an IO or permission failure) is reported as `unreadable` with the reason.
@@ -42,18 +43,19 @@ output is a census rather than a pass/fail list: `SKELETON ONLY` is reported and
 | mapper | Whether `hkaSkeletonMapper` is present, and how many animation-to-ragdoll mappings it produced. |
 | `hknpBSMaterial` | Whether the file carries the Fallout 4 material object. |
 
-A row can carry extra findings beyond its status: an unusual container that still read, bodies whose
-shapes BGS cannot preview, body or constraint entries that could not be read, and older `hkp` objects
-next to a readable ragdoll. They are listed in the row's `details` in JSON mode and printed under the
-`why:` line in human mode.
+Beyond its status, a row can have extra classifier findings: an unusual container that still read,
+bodies whose shapes BGS cannot preview, body or constraint entries that could not be read, and older
+`hkp` objects next to a readable ragdoll. The census does not print those extra findings. Each row shows
+its headline (`why:` in `details` in JSON mode) and the first `next:` hint any finding carries. Human
+mode prints the headline and `next:` under the status line only for rows that are not `OK`.
 
 ### Statuses
 
 | Status | What it means |
 |---|---|
 | `OK` | A readable ragdoll: bodies, capsule shapes and a usable mapper. |
-| `SKELETON ONLY` | No `hknpRagdollData`. Legitimate for animations, hair and props; the reason a custom skeleton's physics is "missing". 154 of the 195 vanilla skeletons are this, and it never fails the scan. |
-| `LEGACY PHYSICS` | The file holds older `hkp` rigid bodies, shapes or a physics system instead of `hknp` bodies. `hkp` **constraint data** alone is normal inside a Fallout 4 ragdoll and never causes this. |
+| `SKELETON ONLY` | No `hknpRagdollData` and no older `hkp` bodies or shapes (those are `LEGACY PHYSICS`). Legitimate for animations, hair and props; the reason a custom skeleton's physics is "missing". 154 of the 195 vanilla skeletons are this, and it never fails the scan. |
+| `LEGACY PHYSICS` | The file holds older `hkp` rigid bodies, shapes or a physics system and no `hknpRagdollData`. When a readable ragdoll is present, those older objects are ignored and never make the status `LEGACY PHYSICS`. `hkp` **constraint data** alone is normal inside a Fallout 4 ragdoll and never causes this. |
 | `UNSUPPORTED SHAPES` | A ragdoll is present and readable, but some bodies use a shape BGS cannot preview yet (only `hknpCapsuleShape` is drawn), or a body/constraint entry could not be read. The class names and counts are listed. |
 | `MAPPER MISSING` | A readable ragdoll that cannot follow the animation. Either the file has no `hkaSkeletonMapper` at all, or one is present but none of its mappings link this ragdoll to the animation skeleton. |
 | `NO BODIES` | `hknpRagdollData` is present but declares no body, or none of its bodies carried a readable frame. |
@@ -62,7 +64,8 @@ next to a readable ragdoll. They are listed in the row's `details` in JSON mode 
 
 The container is never refused before it is read: BGS attempts the parse and the extraction first, so
 a file with an unusual container that still yields a readable ragdoll keeps the status its physics
-deserves and gains an extra `Info` finding naming the container problem.
+deserves. The classifier adds an `Info` finding that names the container problem, but the census does
+not print it: the row's JSON `next:` line carries that finding's hint, which does not name the problem.
 
 ## Reading the output
 
@@ -96,8 +99,8 @@ The three rows above are real output from the vanilla install; the full run is w
 
 - `<status> <path>  [<source>]` — `loose` is a file on disk; anything else is the `.ba2` the entry
   came from.
-- `  read N/N packed` and `  checked N/N loose` are progress written to **stderr**, throttled to ~20
-  updates total. Under `--json` stdout carries only the report.
+- `  read N/N packed` and `  checked N/N loose` are progress written to **stderr**, throttled to about
+  20 updates per loop. Under `--json` stdout carries only the report.
 
 ## Exit codes
 
@@ -108,9 +111,10 @@ The three rows above are real output from the vanilla install; the full run is w
   `PARSE ERROR`, or an entry could not be read at all.
 - `2` — usage error: the folder is missing or was not given.
 
-The `done` line reports skeleton-only files separately from the `with no usable ragdoll` count, and
-that count is exactly the five statuses above plus the unreadable entries: skeleton-only files are
-never part of it.
+The `done` line reports skeleton-only files separately from the `with no usable ragdoll` count. That
+count is exactly the `LEGACY PHYSICS`, `MAPPER MISSING`, `NO BODIES`, `WRONG CONTAINER` and `PARSE ERROR`
+rows: skeleton-only files are never part of it, and unreadable entries are counted on their own
+(`N unreadable`), though they still make the exit code `1`.
 
 ## JSON summary and findings
 
