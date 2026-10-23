@@ -124,8 +124,9 @@ void build_abc_views(radicle_swf& swf) {
     view.flags = block.flags;
     view.tag_index = block.tag_index;
     view.payload_size = block.payload.size();
-    view.parsed = view.file.parse(reinterpret_cast<const std::uint8_t*>(block.payload.data()),
-                                   block.payload.size()) == fo4::abc::AbcStatus::Ok;
+    const auto status = fo4::abc::AbcFile::parse(
+        reinterpret_cast<const std::uint8_t*>(block.payload.data()), block.payload.size(), view.file);
+    view.parsed = status == fo4::abc::AbcStatus::Ok;
     if (view.parsed) {
       // A block that fails to summarize must keep an empty summary; parsed stays 1.
       (void)fo4::abc::summarize(view.file, view.summary);
