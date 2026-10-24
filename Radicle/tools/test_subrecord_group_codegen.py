@@ -340,6 +340,30 @@ class SubrecordGroupCodegenTests(unittest.TestCase):
                      counted(subrecord="WNAM", path="TEST" + BS + "Array", label="Array", count_subrecord=None,
                              members=[member("ArrayA", 0)]))
 
+    def test_subrecord_group_run_may_be_uncounted(self):
+        fields, _arrays, groups = self.load_schema(
+            group(count_subrecord=None, members=[group_member("NAM1", payload_size=0)],
+                  run=group_run(count_member="", members=[
+                      group_member("INDX", payload_size=4),
+                      group_member("DATA", required=False, repeatable=True, payload_size=0),
+                      group_member("INTV", payload_size=0)])))
+        self.assertEqual(groups[0]["run"]["count_member"], "")
+        text = schema_codegen.render(fields, _arrays, groups)
+        self.assertIn('SubrecordGroupRunDescriptor{Signature{}, '
+                      'std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_run_members_0)},', text)
+        self.assertIn('{Signature::from_string("DATA"), false, true, 0, std::span<const std::uint8_t>{}, '
+                      'false, false, false},', text)
+
+    def test_subrecord_group_run_members_cannot_repeat_a_group_member(self):
+        count = count_row(subrecord="COCT")
+        self.rejects("is repeated or is the count subrecord",
+                     group(run=group_run(count_member="",
+                                         members=[group_member("CNTO", payload_size=4)])), count)
+        self.rejects("is repeated or is the count subrecord",
+                     group(count_subrecord=None, members=[group_member("NAM1", payload_size=0)],
+                           run=group_run(count_member="", members=[group_member("NAM1", payload_size=0)])))
+        self.load_schema(group(run=group_run(count_member="")), count)
+
     def test_subrecord_group_links_join_the_formlink_table(self):
         _rows, _nested, fields, _unions = self.link_schema(fields=[group(), count_row(subrecord="COCT")])
         self.assertEqual([(row["path"], row["subrecord"], row["offset"], row["address"]["repeated"])
