@@ -195,7 +195,7 @@ std::vector<std::byte> make_latin1_vmad() {
   out.u16(1);
   wstring(out, "Caf\xE9");
   out.u8(0);
-  out.u16(2);
+  out.u16(3);
   wstring(out, "Caf\xE9");
   out.u8(2);
   out.u8(0);
@@ -204,6 +204,14 @@ std::vector<std::byte> make_latin1_vmad() {
   out.u8(12);
   out.u8(0);
   out.u32(1);
+  wstring(out, "Caf\xC3\xA9");
+  wstring(out, "Holder");
+  out.u8(7);
+  out.u8(0);
+  out.u32(1);
+  wstring(out, "Caf\xE9");
+  out.u8(2);
+  out.u8(0);
   wstring(out, "Caf\xC3\xA9");
   return out.bytes;
 }
@@ -553,7 +561,7 @@ TEST_F(CApiVmadReadTest, ReadsPlainStructsAndStructArrays) {
   EXPECT_EQ(radicle_vmad_scripts_element(scripts.get(), 0, 1, 2, &element), RADICLE_STATUS_INVALID_ARGUMENT);
 }
 
-TEST_F(CApiVmadReadTest, ConvertsWindows1252NamesAndTextToUtf8) {
+TEST_F(CApiVmadReadTest, ConvertsNamesFromWindows1252AndKeepsUtf8Values) {
   const auto env = open(make_latin1_vmad());
   ASSERT_NE(env, nullptr);
   radicle_vmad_scripts* raw = nullptr;
@@ -562,16 +570,23 @@ TEST_F(CApiVmadReadTest, ConvertsWindows1252NamesAndTextToUtf8) {
   const ScriptsHandle scripts(raw);
   radicle_vmad_script script{};
   ASSERT_EQ(radicle_vmad_scripts_script(scripts.get(), 0, &script), RADICLE_STATUS_OK);
-  // Invariant: names reach the caller as UTF-8, converted from the Windows-1252 bytes the file stores.
+  // Invariant: names reach the caller as UTF-8, converted from the Windows-1252 bytes the file stores,
+  // while string values are stored as UTF-8 and must not be converted.
   EXPECT_EQ(std::string(script.name), "Caf\xC3\xA9");
   radicle_vmad_property property{};
   ASSERT_EQ(radicle_vmad_scripts_property(scripts.get(), 0, 0, &property), RADICLE_STATUS_OK);
   EXPECT_EQ(std::string(property.name), "Caf\xC3\xA9");
   ASSERT_NE(property.text, nullptr);
-  // Invariant: VMAD string values are stored as UTF-8 and must be returned unchanged.
+  // Invariant: string values are UTF-8 and returned unchanged, so converting them again would double-encode them.
   EXPECT_EQ(std::string(property.text), "Caf\xC3\xA9");
   radicle_vmad_element element{};
   ASSERT_EQ(radicle_vmad_scripts_element(scripts.get(), 0, 1, 0, &element), RADICLE_STATUS_OK);
+  ASSERT_NE(element.text, nullptr);
+  EXPECT_EQ(std::string(element.text), "Caf\xC3\xA9");
+  ASSERT_EQ(radicle_vmad_scripts_property(scripts.get(), 0, 2, &property), RADICLE_STATUS_OK);
+  EXPECT_EQ(property.element_kind, RADICLE_VMAD_STRUCT_MEMBER);
+  ASSERT_EQ(radicle_vmad_scripts_element(scripts.get(), 0, 2, 0, &element), RADICLE_STATUS_OK);
+  EXPECT_EQ(std::string(element.member_name), "Caf\xC3\xA9");
   ASSERT_NE(element.text, nullptr);
   EXPECT_EQ(std::string(element.text), "Caf\xC3\xA9");
 }
