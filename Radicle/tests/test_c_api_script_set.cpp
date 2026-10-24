@@ -110,7 +110,7 @@ TEST_F(CApiScriptSetTest, ResolvesReadsAndCountsReplacedPayloads) {
   ASSERT_NE(set, nullptr);
   ASSERT_EQ(radicle_script_set_count(set), 2u);
 
-  radicle_script_winner winner{};
+  radicle_script_set_winner winner{};
   ASSERT_EQ(radicle_script_set_get(set, 0, &winner), RADICLE_STATUS_OK);
   EXPECT_EQ(std::string(winner.name), "actors/foo");
   EXPECT_EQ(std::string(winner.winner.name), "actors/foo");
@@ -149,7 +149,7 @@ TEST_F(CApiScriptSetTest, ExplicitLoadIndexMovesTheWinner) {
 
   radicle_script_set* set = nullptr;
   ASSERT_EQ(radicle_script_set_resolve(assets, nullptr, 0, &set), RADICLE_STATUS_OK);
-  radicle_script_winner winner{};
+  radicle_script_set_winner winner{};
   ASSERT_EQ(radicle_script_set_get(set, 0, &winner), RADICLE_STATUS_OK);
   EXPECT_TRUE(std::filesystem::equivalent(std::filesystem::path(winner.winner.container), high_path));
   radicle_script_set_destroy(set);
@@ -196,7 +196,7 @@ TEST_F(CApiScriptSetTest, RejectsBadArguments) {
   radicle_script_set* set = nullptr;
   ASSERT_EQ(radicle_script_set_resolve(assets, nullptr, 0, &set), RADICLE_STATUS_OK);
   ASSERT_EQ(radicle_script_set_count(set), 1u);
-  radicle_script_winner winner{};
+  radicle_script_set_winner winner{};
   winner.name = "stale";
   winner.winner.load_index = 9;
   winner.replaced = 7u;
@@ -210,7 +210,18 @@ TEST_F(CApiScriptSetTest, RejectsBadArguments) {
   EXPECT_EQ(radicle_script_set_read(set, 1, &bytes, &size), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(bytes, nullptr);
   EXPECT_EQ(size, 0u);
+  bytes = sentinel<uint8_t>();
+  size = 99u;
+  EXPECT_EQ(radicle_script_set_read(nullptr, 0, &bytes, &size), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(bytes, nullptr);
+  EXPECT_EQ(size, 0u);
+  winner.name = "stale";
+  winner.winner.load_index = 9;
+  winner.replaced = 7u;
   EXPECT_EQ(radicle_script_set_get(nullptr, 0, &winner), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(winner.name, static_cast<const char*>(nullptr));
+  EXPECT_EQ(winner.winner.load_index, 0);
+  EXPECT_EQ(winner.replaced, 0u);
   EXPECT_EQ(radicle_script_set_count(nullptr), 0u);
   radicle_script_set_destroy(nullptr);
   radicle_script_set_destroy(set);
