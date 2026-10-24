@@ -162,6 +162,38 @@ class FormLinkListSegmentTests(unittest.TestCase):
         self.assertEqual(shards, {})
         self.assertIn("k_generated_packed_segment_counters[] = {\n  std::uint32_t{},\n};", rendered)
 
+    def test_render_shards_whole_records_below_the_line_limit(self):
+        document = {
+            "version": 1,
+            "records": [
+                {"signature": record, "fields": [], "formlink_lists": [
+                    row(path=f"{record}\\Links", subrecord="PNAM",
+                        targets=[f"T{index:03d}" for index in range(400)])]}
+                for record in ("TEST", "TESU")
+            ],
+            "keyword_records": [],
+            "target_unions": [{"name": "sigBaseObjects", "targets": ["STAT"]}],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "fields.json"
+            path.write_text(json.dumps(document), encoding="utf-8")
+            lists, nested, fields, unions = formlink_schema_codegen.load_lists(path)
+        rendered, shards = formlink_schema_codegen.render(lists, nested, fields, unions)
+        names = sorted(shards)
+        self.assertEqual(names, ["generated_formlink_lists_formlink_list_targets_shard00.inc",
+                                 "generated_formlink_lists_formlink_list_targets_shard01.inc"])
+        self.assertEqual([line for line in rendered.splitlines() if line.startswith("#include")],
+                         [f'#include "{name}"' for name in names])
+        for record, name in zip(("TEST", "TESU"), names):
+            self.assertIn(f": records {record} to {record}, 400 entries.", shards[name])
+            self.assertEqual(sum(1 for line in shards[name].splitlines()
+                                 if line.startswith("  Signature::from_string")), 400)
+        formlink_schema_codegen.render_shard("k_generated_test", 0, 1,
+                                             [("TEST", ["  Signature{},"] * 747)])
+        with self.assertRaisesRegex(ValueError, "exceeds 750 lines"):
+            formlink_schema_codegen.render_shard("k_generated_test", 0, 1,
+                                                 [("TEST", ["  Signature{},"] * 748)])
+
 
 if __name__ == "__main__":
     unittest.main()

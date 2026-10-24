@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <span>
 #include <string>
@@ -12,6 +13,9 @@ struct Ba2Hashes {
   std::uint32_t extension{0};
   std::uint32_t directory{0};
 };
+
+// Constraint: writers must refuse paths at or past this length; they hash to zero.
+inline constexpr std::size_t k_max_ba2_path_length = 260;
 
 // BA2 name-hash CRC-32: table-based, init 0, no final XOR.
 std::uint32_t ba2_crc32(std::span<const std::byte> data);

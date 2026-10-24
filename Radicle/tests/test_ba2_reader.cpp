@@ -463,8 +463,8 @@ TEST_F(Ba2ReaderTest, CApiWritesGeneralArchivesThatMatchTheNativeWriterAndReadBa
 }
 
 TEST_F(Ba2ReaderTest, CApiWriteGeneralReportsCallerErrorsAsInvalidArgument) {
-  const char data[] = "x";
-  const auto buffer = reinterpret_cast<const uint8_t*>(data);
+  const char payload[] = "x";
+  const auto buffer = reinterpret_cast<const uint8_t*>(payload);
   uint8_t* bytes = nullptr;
   size_t size = 0;
 
@@ -491,6 +491,16 @@ TEST_F(Ba2ReaderTest, CApiWriteGeneralReportsCallerErrorsAsInvalidArgument) {
   for (const auto& entry : separator) refuse(&entry, 1, 1);
   for (const auto& entry : non_1252) refuse(&entry, 1, 1);
 
+  const std::string at_hash_limit(260, 'a');
+  const std::string under_hash_limit(259, 'a');
+  const radicle_ba2_file too_long[] = {{at_hash_limit.c_str(), buffer, 1}};
+  const radicle_ba2_file longest[] = {{under_hash_limit.c_str(), buffer, 1}};
+  refuse(too_long, 1, 1);
+  ASSERT_EQ(radicle_ba2_write_general(longest, 1, 1, 0, &bytes, &size), RADICLE_STATUS_OK);
+  radicle_free_bytes(bytes);
+  bytes = nullptr;
+  size = 0;
+
 #if SIZE_MAX > 0xFFFFFFFFu
   const radicle_ba2_file oversized[] = {{"Meshes\\Gun.nif", buffer, size_t{1} << 32}};
   refuse(oversized, 1, 1);
@@ -503,8 +513,8 @@ TEST_F(Ba2ReaderTest, CApiWriteGeneralReportsCallerErrorsAsInvalidArgument) {
 }
 
 TEST_F(Ba2ReaderTest, CApiWrittenNonAsciiPathsHashTheirWindows1252Bytes) {
-  const char data[] = "x";
-  const radicle_ba2_file files[] = {{"Meshes\\Caf\xC3\xA9.nif", reinterpret_cast<const uint8_t*>(data), 1}};
+  const char payload[] = "x";
+  const radicle_ba2_file files[] = {{"Meshes\\Caf\xC3\xA9.nif", reinterpret_cast<const uint8_t*>(payload), 1}};
   uint8_t* bytes = nullptr;
   size_t size = 0;
   ASSERT_EQ(radicle_ba2_write_general(files, 1, 1, 0, &bytes, &size), RADICLE_STATUS_OK);
@@ -514,7 +524,11 @@ TEST_F(Ba2ReaderTest, CApiWrittenNonAsciiPathsHashTheirWindows1252Bytes) {
 
   const auto reader = Ba2Reader::open(write_file(data() / "Cafe.ba2", written));
   EXPECT_EQ(text_of(reader.extract(*reader.find("meshes/caf\xC3\xA9.nif"))), "x");
+  EXPECT_EQ(reader.entries()[0].name_hash, 0x8AF76F07u);
+  EXPECT_EQ(reader.entries()[0].directory_hash, 0x0B70CE37u);
+  EXPECT_EQ(reader.entries()[0].extension_hash, 0x0066696Eu);
   EXPECT_EQ(reader.entries()[0].name_hash, fo4::archive::compute_ba2_hashes("Meshes\\Caf\xE9.nif").name);
+  EXPECT_NE(reader.entries()[0].name_hash, fo4::archive::compute_ba2_hashes("Meshes\\Caf\xC3\xA9.nif").name);
 }
 
 TEST_F(Ba2ReaderTest, CApiReadsArchivesAndAssets) {
