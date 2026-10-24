@@ -2111,6 +2111,10 @@ Validates one `subrecord_group` row and returns `(group, rows, links)`. Member s
 
 Appends each group member link to the record's FormLink rows before the usual checks, so a group link gets the same path, offset, target and overlap rules as an ordinary FormLink field. The FormLink/scalar overlap check runs over the expanded group scalars too, so a link and a member scalar in one CNTO payload are checked together.
 
+## Radicle/tools/formlink_schema_codegen.py:render
+
+The two tables that grow with the schema outgrew one header. `k_generated_formlink_field_targets`, `k_generated_formlink_list_anchors` and `k_generated_formlink_fields` now emit their rows into shard files, `render_shard` names each one `generated_formlink_lists_<table>_shard<NN>.inc` and declares the header of its own record span on line three. `chunk_entries` groups rows by record and packs whole records until `SHARD_ENTRY_LIMIT` (600) rows would be exceeded, so a shard never splits one record's rows and no generated file reaches the 750-line source limit; `render_shard` raises if a shard still would. The parent keeps a single array per table and pulls the shards in with `#include "<shard>"` inside the braces, in order, so `first_target`, `first_anchor` and `first_segment` stay plain offsets into one array and no descriptor changed. The include names are bare file names, which resolve against the including file's own directory, so the parent cannot be relocated in the tree without regenerating. Shards are written next to `--output`, `main` drops a shard left over from a larger schema, and `--check` reports a stale or orphan shard as well as a stale parent. Read with the shards expanded, the output is identical to the single-file version apart from these header comments.
+
 ## Radicle/tools/parity_matrix.py:formlink_rows
 
 Expands group links through `parse_subrecord_group` as `load_lists` does, so the FO4_PARITY FormLink counts and kind table include group links.
