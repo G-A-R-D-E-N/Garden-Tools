@@ -1,4 +1,7 @@
 #include "fo4/archive/assets.hpp"
+#include "fo4/c_api.h"
+#include "fo4/c_api_env.h"
+#include "fo4/c_api_script_set.h"
 #include "fo4/archive/ba2.hpp"
 #include "fo4/archive/ba2_hash.hpp"
 #include "fo4/pex_analysis/script_set.hpp"
@@ -15,6 +18,8 @@
 #include <filesystem>
 #include <iostream>
 #include <map>
+#include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <string_view>
@@ -249,4 +254,89 @@ TEST(ScriptSetReal, LooseScriptBeatsAnOfficialArchiveWhateverTheLoadIndex) {
                                           loose_root.path() / "Scripts" / (target_name + ".pex")));
   EXPECT_EQ(winner->replaced, 1u);
   EXPECT_EQ(resolver.read(winner->winner.location), loose_payload);
+}
+
+TEST(ScriptSetReal, CApiResolvesTheShadowingModArchiveLikeTheCppResolver) {
+  const char* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
+  const std::filesystem::path data_dir = dir;
+  const auto archives = fo4::archive::archive_load_order(data_dir, {}, installed_master_and_cc_plugins(data_dir));
+  ASSERT_FALSE(archives.empty());
+
+  std::string target_name;
+  std::set<std::string> official_names;
+  std::size_t official_winners = 0;
+  {
+    const auto resolver = fo4::archive::AssetResolver::open({}, archives);
+    const auto winners = fo4::pex_analysis::resolve_script_set(
+        fo4::pex_analysis::enumerate_script_candidates(resolver));
+    ASSERT_FALSE(winners.empty());
+    target_name = winners.front().winner.name;
+    official_winners = winners.size();
+    for (const auto& winner : winners) official_names.insert(winner.winner.name);
+  }
+
+  std::string added_name = "radicle_c_api_new_script";
+  while (official_names.contains(added_name)) added_name += "_x";
+  const auto mod_payload = marker_bytes(std::string_view("c api shadow"));
+  const auto added_payload = marker_bytes(std::string_view("c api added"));
+  fo4::test::TempDataDir mod_dir;
+  const auto mod_archive = write_mod_archive(mod_dir.path(), {
+      {archive_entry_for(target_name), mod_payload},
+      {archive_entry_for(added_name), added_payload},
+  });
+
+  std::vector<std::string> texts;
+  for (const auto& archive : archives) texts.push_back(archive.string());
+  texts.push_back(mod_archive.string());
+  std::vector<const char*> paths;
+  for (const auto& text : texts) paths.push_back(text.c_str());
+
+  radicle_assets* raw_assets = nullptr;
+  ASSERT_EQ(radicle_assets_open_roots(nullptr, 0, paths.data(), paths.size(), &raw_assets), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  const std::unique_ptr<radicle_assets, void (*)(radicle_assets*)> assets(raw_assets, radicle_assets_destroy);
+  radicle_script_set* raw_set = nullptr;
+  ASSERT_EQ(radicle_script_set_resolve(assets.get(), nullptr, 0, &raw_set), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  const std::unique_ptr<radicle_script_set, void (*)(radicle_script_set*)> set(raw_set, radicle_script_set_destroy);
+  const auto count = radicle_script_set_count(set.get());
+  ASSERT_EQ(count, official_winners + 1);
+
+  std::optional<std::size_t> shadow_index;
+  std::optional<std::size_t> added_index;
+  for (std::size_t index = 0; index < count; ++index) {
+    radicle_script_set_winner winner{};
+    ASSERT_EQ(radicle_script_set_get(set.get(), index, &winner), RADICLE_STATUS_OK) << radicle_last_error();
+    const std::string name = winner.name == nullptr ? std::string() : std::string(winner.name);
+    if (name == target_name) shadow_index = index;
+    if (name == added_name) added_index = index;
+  }
+  ASSERT_TRUE(shadow_index.has_value());
+  ASSERT_TRUE(added_index.has_value());
+
+  const auto read_winner = [&](std::size_t index) {
+    uint8_t* bytes = nullptr;
+    std::size_t size = 0;
+    EXPECT_EQ(radicle_script_set_read(set.get(), index, &bytes, &size), RADICLE_STATUS_OK) << radicle_last_error();
+    std::vector<std::byte> out;
+    for (std::size_t i = 0; i < size; ++i) out.push_back(std::byte{bytes[i]});
+    radicle_free_bytes(bytes);
+    return out;
+  };
+
+  // Invariant: the ABI must report the same shadowing winner the C++ resolver does, not only the same name set.
+  radicle_script_set_winner shadowed{};
+  ASSERT_EQ(radicle_script_set_get(set.get(), *shadow_index, &shadowed), RADICLE_STATUS_OK);
+  EXPECT_EQ(std::string(shadowed.winner.path), "scripts/" + target_name + ".pex");
+  EXPECT_EQ(std::filesystem::path(shadowed.winner.container).filename(), mod_archive.filename());
+  EXPECT_EQ(shadowed.winner.origin, RADICLE_ASSET_ARCHIVE);
+  EXPECT_EQ(shadowed.replaced, 1u);
+  EXPECT_EQ(read_winner(*shadow_index), mod_payload);
+
+  radicle_script_set_winner added{};
+  ASSERT_EQ(radicle_script_set_get(set.get(), *added_index, &added), RADICLE_STATUS_OK);
+  EXPECT_EQ(std::filesystem::path(added.winner.container).filename(), mod_archive.filename());
+  EXPECT_EQ(added.replaced, 0u);
+  EXPECT_EQ(read_winner(*added_index), added_payload);
 }
