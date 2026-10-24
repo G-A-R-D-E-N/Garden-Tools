@@ -506,7 +506,7 @@ def shard_files(output: Path):
     return sorted(output.parent.glob(f"{output.stem}_*_shard[0-9][0-9].inc"))
 
 
-def render(lists, nested_lists, fields, unions, stem: str):
+def render(lists, nested_lists, fields, unions, stem: str = "generated_formlink_lists"):
     shards = {}
     lines = list(GENERATED_HEADER)
 

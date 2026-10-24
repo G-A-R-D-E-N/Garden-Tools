@@ -127,7 +127,9 @@ class FormLinkListSegmentTests(unittest.TestCase):
             load_rows([segment(segment_index=0), row(path="TEST\\More")])
 
     def test_render_emits_the_segment_table_and_descriptor_fields(self):
-        rendered = formlink_schema_codegen.render(load_rows([segment(segment_index=1)]), [], [], [])
+        rendered, shards = formlink_schema_codegen.render(
+            load_rows([segment(segment_index=1)]), [], [], [])
+        self.assertEqual(shards, {})
         self.assertIn("k_generated_packed_segment_counters[] = {\n  8,\n  4,\n  0,\n};", rendered)
         self.assertIn("Signature::from_string(\"CNTS\"), false, true, false, true, 0, 1, 0, 0, 0, 1, 0, 3, 12, 0, Signature{}}",
                       rendered)
@@ -141,19 +143,23 @@ class FormLinkListSegmentTests(unittest.TestCase):
         self.assertEqual(rows[0]["counter_offset"], 20)
 
     def test_render_emits_the_counter_offset(self):
-        rendered = formlink_schema_codegen.render(
+        rendered, shards = formlink_schema_codegen.render(
             load_rows([row(path="TEST\\Counter", counter="CNTS", counter_offset=20)]), [], [], [])
+        self.assertEqual(shards, {})
         self.assertIn("Signature::from_string(\"CNTS\"), false, true, false, true, 0, 1, 0, 0, 0, 0, 0, 0, 0, 20, Signature{}}",
                       rendered)
 
     def test_element_tail_is_emitted_and_requires_per_subrecord_storage(self):
-        rendered = formlink_schema_codegen.render(load_rows([row(element_tail="RNAM")]), [], [], [])
+        rendered, shards = formlink_schema_codegen.render(
+            load_rows([row(element_tail="RNAM")]), [], [], [])
+        self.assertEqual(shards, {})
         self.assertIn('0, 0, 0, 0, 0, 0, 0, Signature::from_string("RNAM")}', rendered)
         with self.assertRaisesRegex(ValueError, "element_tail requires per_subrecord storage"):
             load(segment(element_tail="RNAM"))
 
     def test_render_keeps_a_placeholder_without_segments(self):
-        rendered = formlink_schema_codegen.render(load_rows([row()]), [], [], [])
+        rendered, shards = formlink_schema_codegen.render(load_rows([row()]), [], [], [])
+        self.assertEqual(shards, {})
         self.assertIn("k_generated_packed_segment_counters[] = {\n  std::uint32_t{},\n};", rendered)
 
 
