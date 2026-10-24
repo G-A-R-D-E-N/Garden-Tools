@@ -689,7 +689,8 @@ def main() -> int:
 
     for path, text in expected.items():
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
+        with path.open("w", encoding="utf-8", newline="\n") as handle:
+            handle.write(text)
     for path in orphans:
         path.unlink()
     return 0
