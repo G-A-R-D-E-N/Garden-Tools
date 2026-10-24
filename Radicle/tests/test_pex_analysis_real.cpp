@@ -29,7 +29,8 @@ std::string folded(std::string text) {
 
 bool official_archive(const std::string& container) {
   const auto name = folded(std::filesystem::path(container).filename().string());
-  return name.rfind("cc", 0) != 0;
+  const bool ba2 = name.size() > 4 && name.compare(name.size() - 4, 4, ".ba2") == 0;
+  return ba2 && (name.rfind("fallout4", 0) == 0 || name.rfind("dlc", 0) == 0);
 }
 
 struct VanillaScripts {
