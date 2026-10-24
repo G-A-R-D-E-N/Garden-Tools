@@ -221,12 +221,12 @@ TEST(VmadReadReal, Fallout4EsmCountsAndStructArraysMatchTheCppReader) {
   EXPECT_EQ(api_arrays, reader_arrays);
   EXPECT_EQ(api_structs, reader_structs);
   EXPECT_EQ(api_struct_arrays, reader_struct_arrays);
-  EXPECT_EQ(api_vmads, 13315u);
-  EXPECT_EQ(api_scripts, 11779u);
-  EXPECT_EQ(api_properties, 23217u);
-  EXPECT_EQ(api_arrays, 1438u);
+  EXPECT_EQ(api_vmads, 13697u);
+  EXPECT_EQ(api_scripts, 12272u);
+  EXPECT_EQ(api_properties, 25231u);
+  EXPECT_EQ(api_arrays, 1535u);
   EXPECT_EQ(api_structs, 10u);
-  EXPECT_EQ(api_struct_arrays, 263u);
+  EXPECT_EQ(api_struct_arrays, 319u);
   EXPECT_EQ(api_unsupported, 0u);
   EXPECT_EQ(api_refused, 0u);
 
