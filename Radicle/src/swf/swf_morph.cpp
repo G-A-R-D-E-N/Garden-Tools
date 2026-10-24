@@ -130,10 +130,13 @@ SwfStatus decode_morph_tag(std::span<const std::byte> data, SwfTag& out_tag) {
       return SwfStatus::malformed_tag;
     }
     cursor.position = next;
-    if (!read_rect(data, cursor.position, morph.end_edge_bounds, next) || !cursor.u8(morph.flags)) {
+    if (!read_rect(data, cursor.position, morph.end_edge_bounds, next)) {
       return SwfStatus::malformed_tag;
     }
     cursor.position = next;
+    if (!cursor.u8(morph.flags)) {
+      return SwfStatus::malformed_tag;
+    }
     morph.has_edge_bounds = true;
   } else {
     morph.start_edge_bounds = morph.start_bounds;
