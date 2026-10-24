@@ -535,6 +535,17 @@ TEST(SwfJpeg, DefineBitsJpeg3RejectsAnAlphaPlaneThatDoesNotMatchTheJpegGeometry)
   EXPECT_EQ(result.status, SwfStatus::malformed_tag);
 }
 
+TEST(SwfJpeg, DefineBitsJpeg3SeesTheSofBehindFillBytes) {
+  auto image = minimal_jpeg(2, 3);
+  image.insert(image.begin() + 2, static_cast<std::byte>(0xFF));
+  const auto rejected = read_one(35, jpeg3_payload(image, 5));
+  EXPECT_EQ(rejected.status, SwfStatus::malformed_tag);
+  const auto accepted = read_one(35, jpeg3_payload(image, 6));
+  ASSERT_TRUE(accepted.ok()) << fo4::swf::status_name(accepted.status);
+  EXPECT_TRUE(accepted.file.tags[0].jpeg.has_value());
+  EXPECT_EQ(accepted.file.tags[0].jpeg->image_size, image.size());
+}
+
 TEST(SwfJpeg, DefineBitsJpeg4ReadsTheDeblockBeforeTheImage) {
   // Regression: DefineBitsJPEG4 must read its deblocking factor before the image.
   const auto image = minimal_jpeg(2, 3);

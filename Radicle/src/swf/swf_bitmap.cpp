@@ -32,8 +32,15 @@ JpegSize scan_jpeg_size(std::span<const std::byte> data) {
     if (byte_at(data, position) != 0xFF) {
       return size;
     }
-    const auto marker = byte_at(data, position + 1);
-    position += 2;
+    auto marker_position = position + 1;
+    while (marker_position < data.size() && byte_at(data, marker_position) == 0xFF) {
+      ++marker_position;
+    }
+    if (marker_position >= data.size()) {
+      return size;
+    }
+    const auto marker = byte_at(data, marker_position);
+    position = marker_position + 1;
     if (marker == 0xD9 || marker == 0xDA) {
       return size;
     }
