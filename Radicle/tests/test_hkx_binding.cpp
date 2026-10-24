@@ -109,8 +109,7 @@ TEST(HkxAnimationBinding, ResolvesTheAnimationPointerThroughItsGlobalFixup) {
 }
 
 TEST(HkxAnimationBinding, IgnoresAGlobalFixupDestinationPastTheDataSection) {
-  // Detects an animation offset taken from a fixup no object can start at. read_packfile refuses such a
-  // table, so the destination must be widened after the read to pin the binding's own range check.
+  // Detects an offset from a fixup past the data section; the destination must be widened after the read.
   const auto bytes = binding_with_animation_packfile();
   HkxPackfile packfile;
   ASSERT_EQ(read_packfile(bytes, packfile), HkxStatus::Ok);

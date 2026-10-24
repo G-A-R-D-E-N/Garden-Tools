@@ -307,7 +307,7 @@ inline std::vector<std::byte> spline_mixed_position_packfile() {
   });
 }
 
-inline std::vector<std::byte> spline_zero_frame_packfile() {
+inline std::vector<std::byte> spline_zero_frame_packfile(std::size_t data_size = 0) {
   std::vector<std::byte> names;
   const auto name_at =
       add_class_name(names, signature_of("hkaSplineCompressedAnimation"), "hkaSplineCompressedAnimation");
@@ -324,7 +324,10 @@ inline std::vector<std::byte> spline_zero_frame_packfile() {
   set_int_member(data, "hkaSplineCompressedAnimation", "maskAndQuantizationSize", 4);
   set_float_member(data, "hkaSplineCompressedAnimation", "blockDuration", 0.0f);
   set_float_member(data, "hkaSplineCompressedAnimation", "frameDuration", 0.0f);
-  set_count(data, member_at("hkaSplineCompressedAnimation", "data"), 0);
+  const std::size_t blob_at = data.size();
+  data.resize(blob_at + data_size, std::byte{0});
+  if (data_size > 0) link(local, member_at("hkaSplineCompressedAnimation", "data"), blob_at);
+  set_count(data, member_at("hkaSplineCompressedAnimation", "data"), data_size);
 
   return build_packfile({
       TestSection{"__classnames__", names, {}, {}, {}},

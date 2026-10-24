@@ -156,8 +156,7 @@ TEST(HkxAnimationRealData, DecodesEveryFrameOfAVanillaTwoBlockClip) {
     }
   }
 
-  // Requires the later block to own the shared frame: a packed stride repeats frame 255 at 256, so
-  // the step out of the seam must collapse against the steps either side of it on every moving track.
+  // Requires the aggregate of the seam step against its neighbour mean, so a packed block stride fails.
   const auto seam = fo4::test::hkx::seam_ratio(animation, 1e-4f);
   ASSERT_GE(seam.moving, 16u) << "only " << seam.moving << " tracks move around the seam";
   const bool median_holds = seam.median >= 0.5f;

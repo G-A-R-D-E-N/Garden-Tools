@@ -387,6 +387,20 @@ TEST(HkxAnimation, ASplineClipWithNoFramesAndNoDataIsTruncated) {
   EXPECT_TRUE(animation.tracks.empty());
 }
 
+TEST(HkxAnimation, ASplineClipWithNoFramesAndRoomForTheMasksDecodesNoSamples) {
+  // Detects a zero-frame clip refused once the mask room is present: it must decode with empty samples.
+  const auto bytes = spline_zero_frame_packfile(4);
+  HkxPackfile packfile;
+  ASSERT_EQ(read_packfile(bytes, packfile), HkxStatus::Ok);
+  HkxAnimation animation;
+  ASSERT_EQ(read_animation(packfile, animation), HkxStatus::Ok);
+  EXPECT_EQ(animation.frame_count, 0u);
+  ASSERT_EQ(animation.tracks.size(), 1u);
+  EXPECT_TRUE(animation.tracks[0].translations.empty());
+  EXPECT_TRUE(animation.tracks[0].rotations.empty());
+  EXPECT_TRUE(animation.tracks[0].scales.empty());
+}
+
 TEST(HkxAnimation, DecodesAThreeComponentQuaternionAtTwentyFourBits) {
   // Detects the 24-bit format read at the 40-bit width, which must consume three bytes per control point.
   const auto bytes = spline_rotation_packfile(3, 1);

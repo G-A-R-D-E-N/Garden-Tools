@@ -33,11 +33,8 @@ struct SeamRatio {
   float median{0.0f};
 };
 
-// Requires a frame on both sides of the seam step and two more after it, because the seam step is
-// the pair a packed block stride duplicates and its ratio to the neighbour mean must collapse to
-// zero there. The neighbour mean must use the two steps either side so one fast frame cannot move
-// it, and the floor must leave a still track out because it cannot show a collapse.
-inline SeamRatio seam_ratio(const fo4::hkx::HkxAnimation& animation, float floor) {
+// Requires the seam step and two neighbours either side; the ratio must collapse under a packed stride.
+inline SeamRatio seam_ratio(const fo4::hkx::HkxAnimation& animation, float min_step) {
   SeamRatio result;
   if (animation.blocks.max_frames_per_block < 4) return result;
   const std::size_t seam = animation.blocks.max_frames_per_block - 1;
@@ -48,7 +45,7 @@ inline SeamRatio seam_ratio(const fo4::hkx::HkxAnimation& animation, float floor
     if (track.translations.size() < seam + 4 || track.rotations.size() < seam + 4) continue;
     const float neighbours = 0.25f * (pose_step(track, seam - 3) + pose_step(track, seam - 2) +
                                       pose_step(track, seam + 1) + pose_step(track, seam + 2));
-    if (!(neighbours > floor)) continue;
+    if (!(neighbours > min_step)) continue;
     ratios.push_back(pose_step(track, seam) / neighbours);
   }
 
