@@ -51,6 +51,20 @@ Ba2GeneralEntry general(std::string path, std::string_view payload, bool compres
   return entry;
 }
 
+// Constraint: Windows only gives directory symlinks to an elevated session, while a
+// junction needs no privilege and weakly_canonical must resolve both to the target.
+bool create_directory_alias(const std::filesystem::path& target, const std::filesystem::path& link) {
+  std::error_code ec;
+  std::filesystem::create_directory_symlink(target, link, ec);
+  if (!ec) return true;
+#if defined(_WIN32)
+  const auto command = "cmd /c mklink /J \"" + link.string() + "\" \"" + target.string() + "\" > NUL";
+  return std::system(command.c_str()) == 0;
+#else
+  return false;
+#endif
+}
+
 class Ba2ReaderTest : public ::testing::Test {
 protected:
   void SetUp() override {
@@ -306,6 +320,30 @@ TEST_F(Ba2ReaderTest, RejectsDriveAndStreamPaths) {
   }
 }
 
+TEST_F(Ba2ReaderTest, ExtensionFilterMatchesMultiDotSuffixesOnADotBoundary) {
+  write_file(data() / "meshes" / "pack.tar.gz", bytes_of("pack"));
+  write_file(data() / "meshes" / "pack.gz", bytes_of("gz"));
+  write_file(data() / "meshes" / "xtar.gz", bytes_of("xtar"));
+  write_file(data() / "meshes" / "foonif", bytes_of("suffix"));
+  const auto assets = fo4::archive::AssetResolver::open(data(), {});
+
+  const auto tarballs = assets.list("meshes", ".tar.gz", false);
+  ASSERT_EQ(tarballs.size(), 1u);
+  EXPECT_EQ(tarballs[0].path, "meshes/pack.tar.gz");
+  EXPECT_EQ(tarballs[0].size, 4u);
+
+  // Constraint: the caller may omit the leading dot; the match must still start on
+  // one, so "xtar.gz" must not match ".tar.gz".
+  const auto bare = assets.list("meshes", "tar.gz", false);
+  ASSERT_EQ(bare.size(), 1u);
+  EXPECT_EQ(bare[0].path, "meshes/pack.tar.gz");
+
+  // Constraint: a one-dot filter must still name the last dot component.
+  EXPECT_EQ(assets.list("meshes", ".gz", false).size(), 3u);
+  EXPECT_EQ(assets.list("meshes", ".nif", false).size(), 0u);
+  EXPECT_EQ(assets.list("meshes", "gzip", false).size(), 0u);
+}
+
 TEST_F(Ba2ReaderTest, StringTablesFallBackToArchives) {
   fo4::test::ByteWriter out;
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0x81, 0);
@@ -419,16 +457,32 @@ TEST_F(Ba2ReaderTest, RepeatedLooseRootIsKeptOnceAtItsFirstPosition) {
 
 TEST_F(Ba2ReaderTest, LooseWalkTerminatesOnDirectorySymlinkBackToItsParent) {
   write_file(data() / "meshes" / "x.nif", bytes_of("x"));
-  try {
-    std::filesystem::create_directory_symlink(data() / "meshes", data() / "meshes" / "up");
-  } catch (const std::filesystem::filesystem_error& error) {
-    GTEST_SKIP() << "directory symlinks need a privilege this session lacks: " << error.what();
+  if (!create_directory_alias(data() / "meshes", data() / "meshes" / "up")) {
+    GTEST_SKIP() << "directory symlinks and junctions are both unavailable in this session";
   }
   const auto assets = fo4::archive::AssetResolver::open(data(), {});
   const auto all = assets.list("", ".nif", true);
   ASSERT_EQ(all.size(), 1u);
   EXPECT_EQ(all[0].path, "meshes/x.nif");
   EXPECT_EQ(text_of(assets.read(*assets.locate("meshes/x.nif"))), "x");
+}
+
+TEST_F(Ba2ReaderTest, LooseWalkListsASymlinkedSiblingUnderBothKeys) {
+  write_file(data() / "meshes" / "x.nif", bytes_of("x"));
+  if (!create_directory_alias(data() / "meshes", data() / "a_link")) {
+    GTEST_SKIP() << "directory symlinks and junctions are both unavailable in this session";
+  }
+  const auto assets = fo4::archive::AssetResolver::open(data(), {});
+  const auto all = assets.list("", ".nif", true);
+  std::vector<std::string> keys;
+  for (const auto& item : all) keys.push_back(item.path);
+  EXPECT_EQ(keys, (std::vector<std::string>{"a_link/x.nif", "meshes/x.nif"}));
+  for (const auto& key : {"a_link/x.nif", "meshes/x.nif"}) {
+    SCOPED_TRACE(key);
+    const auto located = assets.locate(key);
+    ASSERT_TRUE(located.has_value());
+    EXPECT_EQ(text_of(assets.read(*located)), "x");
+  }
 }
 
 TEST_F(Ba2ReaderTest, LooseWalkLeavesTheDataFolderOutOfTheTree) {
@@ -505,15 +559,28 @@ TEST_F(Ba2ReaderTest, CApiWriteGeneralReportsCallerErrorsAsInvalidArgument) {
   for (const auto& entry : separator) refuse(&entry, 1, 1);
   for (const auto& entry : non_1252) refuse(&entry, 1, 1);
 
+  // Constraint: 259 bytes is the longest path the writer accepts, so the fixture must
+  // carry a directory and both hashes must be non-zero; the 260-byte "." hashes to zero.
   const std::string at_hash_limit(260, 'a');
-  const std::string under_hash_limit(259, 'a');
+  const std::string under_hash_limit = "Meshes\\" + std::string(252, 'a');
+  ASSERT_EQ(under_hash_limit.size(), 259u);
   const radicle_ba2_file too_long[] = {{at_hash_limit.c_str(), buffer, 1}};
   const radicle_ba2_file longest[] = {{under_hash_limit.c_str(), buffer, 1}};
   refuse(too_long, 1, 1);
   ASSERT_EQ(radicle_ba2_write_general(longest, 1, 1, 0, &bytes, &size), RADICLE_STATUS_OK);
+  const std::vector<std::byte> written(reinterpret_cast<const std::byte*>(bytes),
+                                       reinterpret_cast<const std::byte*>(bytes) + size);
   radicle_free_bytes(bytes);
   bytes = nullptr;
   size = 0;
+
+  const auto hashes = fo4::archive::compute_ba2_hashes(under_hash_limit);
+  EXPECT_NE(hashes.name, 0u);
+  EXPECT_NE(hashes.directory, 0u);
+  const auto longest_reader = Ba2Reader::open(write_file(data() / "Longest.ba2", written));
+  ASSERT_EQ(longest_reader.entries().size(), 1u);
+  EXPECT_EQ(longest_reader.entries()[0].name_hash, hashes.name);
+  EXPECT_EQ(longest_reader.entries()[0].directory_hash, hashes.directory);
 
 #if SIZE_MAX > 0xFFFFFFFFu
   const radicle_ba2_file oversized[] = {{"Meshes\\Gun.nif", buffer, size_t{1} << 32}};

@@ -64,7 +64,7 @@ std::optional<std::filesystem::path> child(const std::filesystem::path& dir, std
 
 void walk_loose(const std::filesystem::path& dir, const std::filesystem::path& root, int depth,
                 std::vector<std::pair<std::string, std::filesystem::path>>& out,
-                std::set<std::string>& visited) {
+                std::set<std::string>& ancestors) {
   constexpr int k_max_depth = 64;
   std::error_code ec;
   std::vector<std::filesystem::path> children;
@@ -76,8 +76,12 @@ void walk_loose(const std::filesystem::path& dir, const std::filesystem::path& r
   for (const auto& path : children) {
     std::error_code entry_ec;
     if (std::filesystem::is_directory(path, entry_ec)) {
-      if (depth < k_max_depth && visited.insert(root_key(path)).second) {
-        walk_loose(path, root, depth + 1, out, visited);
+      // Constraint: only the ancestor chain is deduped, so a link back to an ancestor
+      // cannot loop, while a sibling link must list its own keys that locate() finds.
+      const auto key = root_key(path);
+      if (depth < k_max_depth && ancestors.insert(key).second) {
+        walk_loose(path, root, depth + 1, out, ancestors);
+        ancestors.erase(key);
       }
       continue;
     }
@@ -206,16 +210,18 @@ std::vector<AssetListing> AssetResolver::list(std::string_view prefix, std::stri
       return false;
     }
     if (wanted_extension.empty()) return true;
-    const auto dot = path.rfind('.');
-    return dot != std::string::npos && dot + wanted_extension.size() == path.size() &&
-           std::string_view(path).substr(dot) == wanted_extension;
+    // Constraint: a multi-dot filter names the whole suffix ('.tar.gz' lists
+    // pack.tar.gz but not xtar.gz), and the match must begin at the filter's dot;
+    // a one-dot filter still requires the last dot component.
+    if (path.size() <= wanted_extension.size() || !path.ends_with(wanted_extension)) return false;
+    return path[path.size() - wanted_extension.size()] == '.';
   };
   std::vector<AssetListing> found;
   std::set<std::string> keys;
   for (const auto& root : roots_) {
     std::vector<std::pair<std::string, std::filesystem::path>> loose;
-    std::set<std::string> visited{root_key(root)};
-    walk_loose(root, root, 0, loose, visited);
+    std::set<std::string> ancestors{root_key(root)};
+    walk_loose(root, root, 0, loose, ancestors);
     for (auto& [key, path] : loose) {
       if (!wanted(key)) continue;
       std::error_code ec;
