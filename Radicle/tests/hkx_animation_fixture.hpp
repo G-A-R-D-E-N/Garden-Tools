@@ -277,7 +277,7 @@ inline std::vector<std::byte> spline_mixed_position_packfile() {
   data.push_back(std::byte{0x07});
   data.push_back(std::byte{0x00});
   data.push_back(std::byte{0x01});
-  for (const std::uint8_t knot : {0, 0, 1, 2, 3, 4, 5, 6, 7, 7}) {
+  for (const int knot : {0, 0, 1, 2, 3, 4, 5, 6, 7, 7}) {
     data.push_back(static_cast<std::byte>(knot));
   }
   pad_to(data, data_offset, 4);
