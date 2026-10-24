@@ -56,10 +56,10 @@ radicle_status radicle_script_set_resolve(const radicle_assets* assets,
                                           size_t root_load_index_count,
                                           radicle_script_set** out_set) {
   clear_error();
+  if (out_set != nullptr) *out_set = nullptr;
   if (assets == nullptr || out_set == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "assets and out_set are required");
   }
-  *out_set = nullptr;
   if (root_load_index_count != 0 && root_load_index == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "root_load_index is required when its count is not zero");
   }
@@ -87,10 +87,10 @@ radicle_status radicle_script_set_get(const radicle_script_set* set,
                                       size_t index,
                                       radicle_script_set_winner* out_winner) {
   clear_error();
+  if (out_winner != nullptr) *out_winner = {};
   if (set == nullptr || out_winner == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "set and out_winner are required");
   }
-  *out_winner = {};
   if (index >= set->winners.size()) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "winner index is out of range");
   const auto& winner = set->winners[index];
   out_winner->name = winner.winner.name.c_str();
