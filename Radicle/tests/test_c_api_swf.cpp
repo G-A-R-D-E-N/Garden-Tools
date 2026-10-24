@@ -6,6 +6,7 @@
 #include "temp_data_dir.hpp"
 
 #include <gtest/gtest.h>
+#include <zlib.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -453,4 +454,188 @@ TEST(CApiSwfTest, ReportsAnAbcBlockThatDoesNotParse) {
             RADICLE_STATUS_PARSE_ERROR);
   EXPECT_EQ(listing, nullptr);
   EXPECT_EQ(radicle_swf_abc_info_at(file.get(), 1, &abc), RADICLE_STATUS_INVALID_ARGUMENT);
+}
+
+namespace {
+
+void art_be16(SwfBuilder& builder, std::uint32_t value) {
+  builder.u8((value >> 8) & 0xFFu);
+  builder.u8(value & 0xFFu);
+}
+
+std::vector<std::byte> art_shape_payload() {
+  SwfBuilder body;
+  body.u16(44);
+  body.rect(0, 400, 0, 300, 10);
+  body.u8(1);
+  body.u8(0x00);
+  body.u8(0x12);
+  body.u8(0x34);
+  body.u8(0x56);
+  body.u8(0x78);
+  body.u8(0);
+  body.u8(0x10);
+  body.push_bits(0, 1);
+  body.push_bits(0x02, 5);
+  body.push_bits(0, 1);
+  body.push_bits(1, 1);
+  body.push_bits(1, 1);
+  body.push_bits(5, 4);
+  body.push_bits(1, 1);
+  body.push_bits(10, 7);
+  body.push_bits(20, 7);
+  body.push_bits(0, 6);
+  body.align();
+  return body.body;
+}
+
+std::vector<std::byte> art_morph_payload() {
+  SwfBuilder middle;
+  middle.u8(0);
+  middle.u8(0);
+  middle.u8(0x00);
+  middle.push_bits(0, 6);
+  middle.align();
+  SwfBuilder body;
+  body.u16(45);
+  body.rect(0, 400, 0, 300, 9);
+  body.rect(0, 500, 0, 350, 9);
+  body.rect(0, 380, 0, 280, 9);
+  body.rect(0, 480, 0, 330, 9);
+  body.u8(0);
+  body.u32(static_cast<std::uint32_t>(middle.body.size()));
+  body.bytes(middle.body);
+  body.u8(0);
+  body.push_bits(0, 6);
+  body.align();
+  return body.body;
+}
+
+std::vector<std::byte> art_lossless_payload() {
+  std::vector<std::uint8_t> raw(16, 0x21);
+  uLongf packed = compressBound(static_cast<uLong>(raw.size()));
+  std::vector<std::byte> buffer(static_cast<std::size_t>(packed));
+  EXPECT_EQ(compress2(reinterpret_cast<Bytef*>(buffer.data()), &packed,
+                      reinterpret_cast<const Bytef*>(raw.data()), static_cast<uLong>(raw.size()),
+                      Z_BEST_COMPRESSION),
+            Z_OK);
+  buffer.resize(static_cast<std::size_t>(packed));
+  SwfBuilder body;
+  body.u16(46);
+  body.u8(5);
+  body.u16(2);
+  body.u16(2);
+  body.bytes(buffer);
+  return body.body;
+}
+
+std::vector<std::byte> art_jpeg_payload() {
+  SwfBuilder image;
+  image.u8(0xFF);
+  image.u8(0xD8);
+  image.u8(0xFF);
+  image.u8(0xC0);
+  art_be16(image, 11);
+  image.u8(8);
+  art_be16(image, 3);
+  art_be16(image, 2);
+  image.u8(1);
+  image.u8(1);
+  image.u8(0x11);
+  image.u8(0);
+  image.u8(0xFF);
+  image.u8(0xD9);
+  std::vector<std::uint8_t> plane(6, 0x33);
+  uLongf packed = compressBound(static_cast<uLong>(plane.size()));
+  std::vector<std::byte> alpha(static_cast<std::size_t>(packed));
+  EXPECT_EQ(compress2(reinterpret_cast<Bytef*>(alpha.data()), &packed,
+                      reinterpret_cast<const Bytef*>(plane.data()), static_cast<uLong>(plane.size()),
+                      Z_BEST_COMPRESSION),
+            Z_OK);
+  alpha.resize(static_cast<std::size_t>(packed));
+  SwfBuilder body;
+  body.u16(47);
+  body.u32(static_cast<std::uint32_t>(image.body.size()));
+  body.u16(0x0100);
+  body.bytes(image.body);
+  body.bytes(alpha);
+  return body.body;
+}
+
+SwfHandle open_art_movie() {
+  SwfBuilder file;
+  file.rect(0, 11000, 0, 8000, 15);
+  file.u16(0x0C00);
+  file.u16(1);
+  file.tag(32, art_shape_payload(), false);
+  file.tag(84, art_morph_payload(), false);
+  file.tag(36, art_lossless_payload(), false);
+  file.tag(90, art_jpeg_payload(), false);
+  file.tag(0);
+  return open(wrap_body(file.body, 10, false, false));
+}
+
+}  // namespace
+
+// Regression: an art getter must not report another kind of art for the tag it is given.
+TEST(CApiSwfTest, ReadsDecodedShapeMorphBitmapAndJpegArt) {
+  const auto file = open_art_movie();
+  ASSERT_NE(file, nullptr);
+
+  radicle_swf_shape shape{};
+  ASSERT_EQ(radicle_swf_shape_at(file.get(), 0, &shape), RADICLE_STATUS_OK);
+  EXPECT_EQ(shape.character_id, 44);
+  EXPECT_EQ(shape.version, 3);
+  EXPECT_EQ(shape.has_edge_bounds, 0);
+  EXPECT_EQ(shape.bounds.x_max, 400);
+  EXPECT_EQ(shape.edge_bounds.x_max, 400);
+  EXPECT_EQ(shape.fill_style_count, 1u);
+  EXPECT_EQ(shape.line_style_count, 0u);
+  EXPECT_EQ(shape.edge_count, 1u);
+  EXPECT_EQ(shape.curved_edge_count, 0u);
+  EXPECT_EQ(shape.style_change_count, 1u);
+
+  radicle_swf_fill_style fill{};
+  ASSERT_EQ(radicle_swf_shape_fill_at(file.get(), 0, 0, &fill), RADICLE_STATUS_OK);
+  EXPECT_EQ(fill.kind, 0x00);
+  EXPECT_EQ(fill.color, 0x78123456u);
+  EXPECT_EQ(fill.has_matrix, 0);
+  EXPECT_EQ(fill.stop_count, 0u);
+
+  radicle_swf_morph_shape morph{};
+  ASSERT_EQ(radicle_swf_morph_at(file.get(), 1, &morph), RADICLE_STATUS_OK);
+  EXPECT_EQ(morph.character_id, 45);
+  EXPECT_EQ(morph.version, 2);
+  EXPECT_EQ(morph.has_edge_bounds, 1);
+  EXPECT_EQ(morph.start_bounds.x_max, 400);
+  EXPECT_EQ(morph.end_bounds.x_max, 500);
+  EXPECT_EQ(morph.start_edge_bounds.x_max, 380);
+  EXPECT_EQ(morph.end_edge_bounds.x_max, 480);
+  EXPECT_EQ(morph.fill_style_count, 0u);
+  EXPECT_EQ(morph.start_edge_count, 0u);
+
+  radicle_swf_bitmap_info bitmap{};
+  ASSERT_EQ(radicle_swf_bitmap_at(file.get(), 2, &bitmap), RADICLE_STATUS_OK);
+  EXPECT_EQ(bitmap.character_id, 46);
+  EXPECT_EQ(bitmap.format, 5);
+  EXPECT_EQ(bitmap.width, 2);
+  EXPECT_EQ(bitmap.height, 2);
+  EXPECT_EQ(bitmap.has_color_table, 0);
+  EXPECT_GT(bitmap.data_size, 0u);
+
+  radicle_swf_jpeg_info jpeg{};
+  ASSERT_EQ(radicle_swf_jpeg_at(file.get(), 3, &jpeg), RADICLE_STATUS_OK);
+  EXPECT_EQ(jpeg.character_id, 47);
+  EXPECT_EQ(jpeg.deblock, 0x0100u);
+  EXPECT_EQ(jpeg.image_size, 17u);
+  EXPECT_EQ(jpeg.has_alpha, 1);
+  EXPECT_GT(jpeg.alpha_size, 0u);
+
+  radicle_swf_fill_style wrong{};
+  EXPECT_EQ(radicle_swf_shape_fill_at(file.get(), 1, 0, &wrong), RADICLE_STATUS_NOT_FOUND);
+  radicle_swf_jpeg_tables_info tables{};
+  EXPECT_EQ(radicle_swf_jpeg_tables_at(file.get(), 0, &tables), RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(radicle_swf_shape_at(file.get(), 99, &shape), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_swf_shape_fill_at(file.get(), 0, 1, &fill), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_swf_shape_at(nullptr, 0, &shape), RADICLE_STATUS_INVALID_ARGUMENT);
 }

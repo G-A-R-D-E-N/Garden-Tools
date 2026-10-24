@@ -66,6 +66,90 @@ typedef struct radicle_swf_frame_label {
   uint8_t inside_sprite;
 } radicle_swf_frame_label;
 
+typedef struct radicle_swf_rect {
+  int32_t x_min;
+  int32_t x_max;
+  int32_t y_min;
+  int32_t y_max;
+} radicle_swf_rect;
+
+typedef struct radicle_swf_shape {
+  uint16_t character_id;
+  uint8_t version;             /* 1..4 */
+  uint8_t has_edge_bounds;
+  uint8_t flags;               /* DefineShape4 flags byte; 0 for the earlier tags */
+  radicle_swf_rect bounds;
+  radicle_swf_rect edge_bounds;
+  size_t fill_style_count;
+  size_t line_style_count;
+  uint32_t edge_count;
+  uint32_t curved_edge_count;
+  uint32_t style_change_count;
+} radicle_swf_shape;
+
+typedef struct radicle_swf_fill_style {
+  uint8_t kind;
+  uint32_t color;              /* 0xAARRGGBB; an RGB solid fill carries 0xFF for alpha */
+  uint16_t bitmap_id;
+  uint8_t spread;
+  uint8_t interpolation;
+  int16_t focal_point;         /* 8.8 fixed, meaningful only for kind 0x13 */
+  int32_t has_matrix;
+  int32_t matrix[6];           /* scale_x, scale_y, rotate_skew0, rotate_skew1, translate_x, translate_y */
+  size_t stop_count;
+} radicle_swf_fill_style;
+
+typedef struct radicle_swf_gradient_stop {
+  uint8_t ratio;
+  uint32_t color;              /* 0xAARRGGBB */
+} radicle_swf_gradient_stop;
+
+typedef struct radicle_swf_line_style {
+  uint16_t width;
+  uint16_t flags;
+  uint32_t color;              /* 0xAARRGGBB, used when the style carries no fill */
+  int32_t has_fill;
+  int32_t has_miter_limit;
+  uint16_t miter_limit;        /* 8.8 fixed */
+} radicle_swf_line_style;
+
+typedef struct radicle_swf_morph_shape {
+  uint16_t character_id;
+  uint8_t version;             /* 1 DefineMorphShape, 2 DefineMorphShape2 */
+  uint8_t has_edge_bounds;
+  uint8_t flags;
+  radicle_swf_rect start_bounds;
+  radicle_swf_rect end_bounds;
+  radicle_swf_rect start_edge_bounds;
+  radicle_swf_rect end_edge_bounds;
+  uint32_t fill_style_count;
+  uint32_t line_style_count;
+  uint32_t start_edge_count;
+  uint32_t end_edge_count;
+} radicle_swf_morph_shape;
+
+typedef struct radicle_swf_bitmap_info {
+  uint16_t character_id;
+  uint8_t format;               /* 3 colour map, 4 RGB15, 5 RGB32 */
+  uint16_t width;
+  uint16_t height;
+  int32_t has_color_table;
+  uint8_t color_table_size;
+  size_t data_size;
+} radicle_swf_bitmap_info;
+
+typedef struct radicle_swf_jpeg_info {
+  uint16_t character_id;
+  uint16_t deblock;             /* 8.8 fixed, only DefineBitsJPEG4 carries one */
+  size_t image_size;
+  int32_t has_alpha;
+  size_t alpha_size;
+} radicle_swf_jpeg_info;
+
+typedef struct radicle_swf_jpeg_tables_info {
+  size_t size;
+} radicle_swf_jpeg_tables_info;
+
 /* `parsed` is 0 when the block did not parse; the other fields must still be valid then. */
 typedef struct radicle_swf_abc_info {
   const char* name;            /* must be the tag-header name for DoABC2 (82); the C ABI decodes a DoABC (72) name from its own header */
@@ -141,6 +225,23 @@ RADICLE_API radicle_status radicle_swf_export_at(const radicle_swf* swf, size_t 
 RADICLE_API size_t radicle_swf_frame_label_count(const radicle_swf* swf);
 RADICLE_API radicle_status radicle_swf_frame_label_at(const radicle_swf* swf, size_t index,
                                                       radicle_swf_frame_label* out_label);
+
+/* The tag index must be one `radicle_swf_tag_at` accepts. */
+RADICLE_API radicle_status radicle_swf_shape_at(const radicle_swf* swf, size_t index, radicle_swf_shape* out_shape);
+RADICLE_API radicle_status radicle_swf_shape_fill_at(const radicle_swf* swf, size_t index, size_t fill,
+                                                     radicle_swf_fill_style* out_style);
+RADICLE_API radicle_status radicle_swf_shape_fill_stop_at(const radicle_swf* swf, size_t index, size_t fill,
+                                                          size_t stop, radicle_swf_gradient_stop* out_stop);
+RADICLE_API radicle_status radicle_swf_shape_line_at(const radicle_swf* swf, size_t index, size_t line,
+                                                     radicle_swf_line_style* out_style);
+RADICLE_API radicle_status radicle_swf_morph_at(const radicle_swf* swf, size_t index,
+                                                radicle_swf_morph_shape* out_morph);
+RADICLE_API radicle_status radicle_swf_bitmap_at(const radicle_swf* swf, size_t index,
+                                                 radicle_swf_bitmap_info* out_bitmap);
+RADICLE_API radicle_status radicle_swf_jpeg_at(const radicle_swf* swf, size_t index,
+                                               radicle_swf_jpeg_info* out_jpeg);
+RADICLE_API radicle_status radicle_swf_jpeg_tables_at(const radicle_swf* swf, size_t index,
+                                                      radicle_swf_jpeg_tables_info* out_tables);
 
 /* ABC blocks; indexes must address what radicle_swf_abc_count reports. */
 RADICLE_API size_t radicle_swf_abc_count(const radicle_swf* swf);

@@ -2154,6 +2154,108 @@ public unsafe struct SwfFrameLabel
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfRect
+{
+    public int XMin;
+    public int XMax;
+    public int YMin;
+    public int YMax;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfShape
+{
+    public ushort CharacterId;
+    public byte Version;
+    public byte HasEdgeBounds;
+    public byte Flags;
+    public SwfRect Bounds;
+    public SwfRect EdgeBounds;
+    public nuint FillStyleCount;
+    public nuint LineStyleCount;
+    public uint EdgeCount;
+    public uint CurvedEdgeCount;
+    public uint StyleChangeCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfFillStyle
+{
+    public byte Kind;
+    public uint Color;
+    public ushort BitmapId;
+    public byte Spread;
+    public byte Interpolation;
+    public short FocalPoint;
+    public int HasMatrix;
+    public fixed int Matrix[6];
+    public nuint StopCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfGradientStop
+{
+    public byte Ratio;
+    public uint Color;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfLineStyle
+{
+    public ushort Width;
+    public ushort Flags;
+    public uint Color;
+    public int HasFill;
+    public int HasMiterLimit;
+    public ushort MiterLimit;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfMorphShape
+{
+    public ushort CharacterId;
+    public byte Version;
+    public byte HasEdgeBounds;
+    public byte Flags;
+    public SwfRect StartBounds;
+    public SwfRect EndBounds;
+    public SwfRect StartEdgeBounds;
+    public SwfRect EndEdgeBounds;
+    public uint FillStyleCount;
+    public uint LineStyleCount;
+    public uint StartEdgeCount;
+    public uint EndEdgeCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfBitmapInfo
+{
+    public ushort CharacterId;
+    public byte Format;
+    public ushort Width;
+    public ushort Height;
+    public int HasColorTable;
+    public byte ColorTableSize;
+    public nuint DataSize;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfJpegInfo
+{
+    public ushort CharacterId;
+    public ushort Deblock;
+    public nuint ImageSize;
+    public int HasAlpha;
+    public nuint AlphaSize;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfJpegTablesInfo
+{
+    public nuint Size;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct SwfAbcInfo
 {
     public IntPtr Name;
@@ -2216,7 +2318,7 @@ public unsafe struct SwfMethodPool
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 57u;
+    public const uint CompiledAbiVersion = 58u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -3312,6 +3414,30 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_frame_label_at")]
     public static extern Status SwfFrameLabelAt(IntPtr swf, nuint index, SwfFrameLabel* out_label);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_shape_at")]
+    public static extern Status SwfShapeAt(IntPtr swf, nuint index, SwfShape* out_shape);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_shape_fill_at")]
+    public static extern Status SwfShapeFillAt(IntPtr swf, nuint index, nuint fill, SwfFillStyle* out_style);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_shape_fill_stop_at")]
+    public static extern Status SwfShapeFillStopAt(IntPtr swf, nuint index, nuint fill, nuint stop, SwfGradientStop* out_stop);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_shape_line_at")]
+    public static extern Status SwfShapeLineAt(IntPtr swf, nuint index, nuint line, SwfLineStyle* out_style);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_morph_at")]
+    public static extern Status SwfMorphAt(IntPtr swf, nuint index, SwfMorphShape* out_morph);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_bitmap_at")]
+    public static extern Status SwfBitmapAt(IntPtr swf, nuint index, SwfBitmapInfo* out_bitmap);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_jpeg_at")]
+    public static extern Status SwfJpegAt(IntPtr swf, nuint index, SwfJpegInfo* out_jpeg);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_jpeg_tables_at")]
+    public static extern Status SwfJpegTablesAt(IntPtr swf, nuint index, SwfJpegTablesInfo* out_tables);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_abc_count")]
     public static extern nuint SwfAbcCount(IntPtr swf);
