@@ -29,18 +29,24 @@ std::vector<std::byte> marker_bytes(std::string_view text) {
   return out;
 }
 
-std::filesystem::path write_mod_archive(const std::filesystem::path& dir, std::string_view entry_path,
-                                        const std::vector<std::byte>& payload) {
+struct ModEntry {
+  std::string path;
+  std::vector<std::byte> payload;
+};
+
+std::filesystem::path write_mod_archive(const std::filesystem::path& dir, const std::vector<ModEntry>& files) {
   fo4::archive::Ba2GeneralArchive archive;
   archive.has_string_table = true;
-  fo4::archive::Ba2GeneralEntry entry;
-  const auto hashes = fo4::archive::compute_ba2_hashes(entry_path);
-  entry.name_hash = hashes.name;
-  entry.extension_hash = hashes.extension;
-  entry.directory_hash = hashes.directory;
-  entry.path = std::string(entry_path);
-  entry.chunks.push_back(fo4::archive::make_stored_ba2_chunk(payload));
-  archive.entries.push_back(std::move(entry));
+  for (const auto& file : files) {
+    fo4::archive::Ba2GeneralEntry entry;
+    const auto hashes = fo4::archive::compute_ba2_hashes(file.path);
+    entry.name_hash = hashes.name;
+    entry.extension_hash = hashes.extension;
+    entry.directory_hash = hashes.directory;
+    entry.path = file.path;
+    entry.chunks.push_back(fo4::archive::make_stored_ba2_chunk(file.payload));
+    archive.entries.push_back(std::move(entry));
+  }
   const auto path = dir / "ShadowMod - Main.ba2";
   fo4::archive::write_ba2_general_file(archive, path);
   return path;
@@ -109,6 +115,7 @@ TEST(ScriptSetReal, ModArchiveShadowingAnOfficialScriptFollowsTheLoadIndex) {
   std::string target_name;
   std::filesystem::path official_container;
   std::vector<std::byte> official_bytes;
+  std::set<std::string> official_names;
   std::size_t official_winners = 0;
   {
     const auto official_resolver = fo4::archive::AssetResolver::open({}, archives);
@@ -121,12 +128,19 @@ TEST(ScriptSetReal, ModArchiveShadowingAnOfficialScriptFollowsTheLoadIndex) {
     official_container = target.winner.container;
     official_bytes = official_resolver.read(target.winner.location);
     official_winners = official.size();
+    for (const auto& winner : official) official_names.insert(winner.winner.name);
   }
   ASSERT_FALSE(official_bytes.empty());
 
+  std::string added_name = "radicle_mod_new_script";
+  while (official_names.contains(added_name)) added_name += "_x";
   const auto mod_payload = marker_bytes(std::string_view("shadowed by a mod archive"));
+  const auto added_payload = marker_bytes(std::string_view("added by a mod archive"));
   fo4::test::TempDataDir mod_dir;
-  const auto mod_archive = write_mod_archive(mod_dir.path(), archive_entry_for(target_name), mod_payload);
+  const auto mod_archive = write_mod_archive(mod_dir.path(), {
+      {archive_entry_for(target_name), mod_payload},
+      {archive_entry_for(added_name), added_payload},
+  });
 
   std::vector<std::filesystem::path> mod_last = archives;
   mod_last.push_back(mod_archive);
@@ -134,8 +148,8 @@ TEST(ScriptSetReal, ModArchiveShadowingAnOfficialScriptFollowsTheLoadIndex) {
     const auto shadowing = fo4::archive::AssetResolver::open({}, mod_last);
     const auto shadowed_candidates = fo4::pex_analysis::enumerate_script_candidates(shadowing);
     const auto shadowed = fo4::pex_analysis::resolve_script_set(shadowed_candidates);
-    EXPECT_EQ(shadowed.size(), official_winners);
-    EXPECT_EQ(shadowed_candidates.size(), official_winners + 1);
+    EXPECT_EQ(shadowed.size(), official_winners + 1);
+    EXPECT_EQ(shadowed_candidates.size(), official_winners + 2);
     const auto winner = std::find_if(shadowed.begin(), shadowed.end(), [&](const auto& candidate) {
       return candidate.winner.name == target_name;
     });
@@ -143,6 +157,17 @@ TEST(ScriptSetReal, ModArchiveShadowingAnOfficialScriptFollowsTheLoadIndex) {
     EXPECT_EQ(std::filesystem::path(winner->winner.container).filename(), mod_archive.filename());
     EXPECT_EQ(winner->replaced, 1u);
     EXPECT_EQ(shadowing.read(winner->winner.location), mod_payload);
+    // Invariant: a name only the mod defines is added, not shadowed, so it must carry no replaced count.
+    const auto added = std::find_if(shadowed.begin(), shadowed.end(), [&](const auto& candidate) {
+      return candidate.winner.name == added_name;
+    });
+    ASSERT_NE(added, shadowed.end());
+    EXPECT_EQ(std::filesystem::path(added->winner.container).filename(), mod_archive.filename());
+    EXPECT_EQ(added->replaced, 0u);
+    EXPECT_EQ(shadowing.read(added->winner.location), added_payload);
+    std::size_t replaced = 0;
+    for (const auto& candidate : shadowed) replaced += candidate.replaced;
+    EXPECT_EQ(replaced, 1u);
   }
 
   std::vector<std::filesystem::path> mod_first = archives;
@@ -151,7 +176,7 @@ TEST(ScriptSetReal, ModArchiveShadowingAnOfficialScriptFollowsTheLoadIndex) {
     const auto losing = fo4::archive::AssetResolver::open({}, mod_first);
     const auto losing_winners = fo4::pex_analysis::resolve_script_set(
         fo4::pex_analysis::enumerate_script_candidates(losing));
-    ASSERT_EQ(losing_winners.size(), official_winners);
+    ASSERT_EQ(losing_winners.size(), official_winners + 1);
     const auto winner = std::find_if(losing_winners.begin(), losing_winners.end(), [&](const auto& candidate) {
       return candidate.winner.name == target_name;
     });
@@ -159,6 +184,14 @@ TEST(ScriptSetReal, ModArchiveShadowingAnOfficialScriptFollowsTheLoadIndex) {
     EXPECT_EQ(std::filesystem::path(winner->winner.container).filename(), official_container.filename());
     EXPECT_EQ(winner->replaced, 1u);
     EXPECT_EQ(losing.read(winner->winner.location), official_bytes);
+    // Invariant: the added name wins from the mod archive whatever its load index, because nothing competes for it.
+    const auto added = std::find_if(losing_winners.begin(), losing_winners.end(), [&](const auto& candidate) {
+      return candidate.winner.name == added_name;
+    });
+    ASSERT_NE(added, losing_winners.end());
+    EXPECT_EQ(std::filesystem::path(added->winner.container).filename(), mod_archive.filename());
+    EXPECT_EQ(added->replaced, 0u);
+    EXPECT_EQ(losing.read(added->winner.location), added_payload);
   }
 }
 
