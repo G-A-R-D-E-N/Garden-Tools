@@ -10,10 +10,6 @@ import schema_codegen  # noqa: E402
 SHARD_ROW_BUDGET = 500
 
 
-def shard_key(field):
-    return field["record"]
-
-
 def shard_rows(rows, budget=SHARD_ROW_BUDGET):
     shards = []
     current = []
@@ -47,7 +43,7 @@ def render_output(fields, arrays, groups, output: Path):
               "// Do not hand-edit; update the JSON source and regenerate.\n")
     files = {output: "\n".join(head + [f'#include "{name}"' for name in names] + tail)}
     for name, shard in zip(names, shards):
-        files[output.parent / name] = (header + f"// Rows {shard[0][0]} to {shard[-1][0]}.\n"
+        files[output.parent / name] = (header + f"// Records {shard[0][0]} to {shard[-1][0]}.\n"
                                        + "\n".join(line for _key, line in shard) + "\n")
     return files
 

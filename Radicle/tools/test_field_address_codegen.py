@@ -574,7 +574,7 @@ class ControlByteSignatureTests(unittest.TestCase):
         self.assertEqual([field["subrecord"] for field in fields], [chr(0) + "IAD"] * 2)
 
     def test_signature_length_and_byte_range_still_bind(self):
-        for value in ("DAT", "DATAA", ""):
+        for value in ("DAT", "DATAA", "", chr(0x100) + "IAD"):
             with self.subTest(value=value):
                 with self.assertRaisesRegex(ValueError, "counted_array signatures"):
                     self.load_schema(counted(count_subrecord=None, subrecord=value))
