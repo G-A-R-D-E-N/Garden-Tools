@@ -392,6 +392,7 @@ TEST(CApiPexAnalysis, RejectsBadArguments) {
   EXPECT_EQ(radicle_pex_chain_report_name(empty.get(), 0, &name), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(name, static_cast<const char*>(nullptr));
 }
+
 TEST(CApiPexAnalysis, MatchesNamesWithoutCaseAndResolvesAcrossFiles) {
   const auto names = parse(names_file());
   ASSERT_NE(names, nullptr);
