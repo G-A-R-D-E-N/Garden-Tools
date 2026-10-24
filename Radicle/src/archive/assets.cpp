@@ -193,13 +193,19 @@ std::optional<AssetLocation> AssetResolver::locate_in_archives(std::string_view 
 std::vector<AssetListing> AssetResolver::list(std::string_view prefix, std::string_view extension,
                                               bool include_shadowed) const {
   const auto wanted_prefix = prefix.empty() ? std::string() : normalize_asset_path(prefix);
-  const auto wanted_extension = lower(extension);
+  auto wanted_extension = lower(extension);
+  if (!wanted_extension.empty() && wanted_extension.front() != '.') {
+    wanted_extension.insert(wanted_extension.begin(), '.');
+  }
   const auto wanted = [&](const std::string& path) {
     if (!wanted_prefix.empty() && path != wanted_prefix &&
         !(path.size() > wanted_prefix.size() && path.starts_with(wanted_prefix) && path[wanted_prefix.size()] == '/')) {
       return false;
     }
-    return wanted_extension.empty() || path.ends_with(wanted_extension);
+    if (wanted_extension.empty()) return true;
+    const auto dot = path.rfind('.');
+    return dot != std::string::npos && dot + wanted_extension.size() == path.size() &&
+           std::string_view(path).substr(dot) == wanted_extension;
   };
   std::vector<AssetListing> found;
   std::set<std::string> keys;
@@ -227,6 +233,8 @@ std::vector<AssetListing> AssetResolver::list(std::string_view prefix, std::stri
         continue;
       }
       if (!wanted(key)) continue;
+      const auto resolved = archives_[i].find(key);
+      if (!resolved || *resolved != e) continue;
       keys.insert(key);
       per_archive[i].push_back({std::move(key), {AssetOrigin::archive, {}, i, e}, entries[e].unpacked_size(), false});
     }

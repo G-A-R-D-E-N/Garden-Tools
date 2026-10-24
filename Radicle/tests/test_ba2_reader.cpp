@@ -245,9 +245,11 @@ TEST_F(Ba2ReaderTest, ListingReturnsTheSameWinnersAsLocateAndKeepsShadowedCopies
                                             general("Meshes\\a.hkx", "x"), general("Textures\\t.nif", "t")});
   const auto high = write_general("High.ba2", {general("meshes\\shared.nif", "high"), general("meshes\\over.nif", "archived")});
   const auto unnamed = write_general("Unnamed.ba2", {general("meshes\\lowonly.nif", "h")}, false);
+  const auto odd = write_general("Odd.ba2", {general("Meshes\\\\Rain.nif", "rain"),
+                                            general("Data\\Meshes\\Hail.nif", "hail")});
   write_file(data() / "MESHES" / "Over.NIF", bytes_of("loose"));
   write_file(data() / "Data" / "Meshes" / "Nested.nif", bytes_of("nested"));
-  const std::vector<std::filesystem::path> archives{low, high, unnamed};
+  const std::vector<std::filesystem::path> archives{low, high, unnamed, odd};
   const auto assets = fo4::archive::AssetResolver::open(data(), archives);
 
   const auto winners = assets.list("Data\\Meshes", ".NIF", false);
@@ -282,6 +284,17 @@ TEST_F(Ba2ReaderTest, ListingReturnsTheSameWinnersAsLocateAndKeepsShadowedCopies
   EXPECT_EQ(assets.list("", ".hkx", false).size(), 1u);
   EXPECT_EQ(assets.list("mesh", ".nif", false).size(), 0u);
   EXPECT_THROW(static_cast<void>(assets.list("meshes/../x", "", false)), fo4::archive::AssetPathError);
+
+  EXPECT_FALSE(assets.locate("meshes/rain.nif").has_value());
+  EXPECT_FALSE(assets.locate("meshes/hail.nif").has_value());
+  for (const auto& item : all) EXPECT_TRUE(assets.locate(item.path).has_value()) << item.path;
+
+  write_file(data() / "meshes" / "foonif", bytes_of("suffix"));
+  const auto bare = assets.list("", "nif", false);
+  EXPECT_EQ(bare.size(), assets.list("", ".nif", false).size());
+  EXPECT_EQ(std::count_if(bare.begin(), bare.end(),
+                          [](const auto& item) { return item.path == "meshes/foonif"; }),
+            0);
 }
 
 TEST_F(Ba2ReaderTest, RejectsDriveAndStreamPaths) {
