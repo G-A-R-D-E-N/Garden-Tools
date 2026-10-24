@@ -60,7 +60,7 @@ async function pickPlugin(firstRow = 'Apple pie') {
   await screen.findByText(firstRow);
 }
 
-beforeEach(() => { confirm.mockResolvedValue(true); });
+beforeEach(() => { confirm.mockReset(); confirm.mockResolvedValue(true); });
 
 afterEach(() => {
   cleanup();
