@@ -105,46 +105,58 @@ TEST(ScriptSetReal, ModArchiveShadowingAnOfficialScriptFollowsTheLoadIndex) {
   const auto archives = fo4::archive::archive_load_order(data_dir, {}, installed_master_and_cc_plugins(data_dir));
   ASSERT_FALSE(archives.empty());
 
-  const auto official_resolver = fo4::archive::AssetResolver::open({}, archives);
-  const auto official = fo4::pex_analysis::resolve_script_set(
-      fo4::pex_analysis::enumerate_script_candidates(official_resolver));
-  ASSERT_FALSE(official.empty());
-  const auto& target = official.front();
-  ASSERT_EQ(target.winner.kind, fo4::pex_analysis::ScriptSourceKind::archive);
-  const auto official_bytes = official_resolver.read(target.winner.location);
+  std::string target_name;
+  std::filesystem::path official_container;
+  std::vector<std::byte> official_bytes;
+  std::size_t official_winners = 0;
+  {
+    const auto official_resolver = fo4::archive::AssetResolver::open({}, archives);
+    const auto official = fo4::pex_analysis::resolve_script_set(
+        fo4::pex_analysis::enumerate_script_candidates(official_resolver));
+    ASSERT_FALSE(official.empty());
+    const auto& target = official.front();
+    ASSERT_EQ(target.winner.kind, fo4::pex_analysis::ScriptSourceKind::archive);
+    target_name = target.winner.name;
+    official_container = target.winner.container;
+    official_bytes = official_resolver.read(target.winner.location);
+    official_winners = official.size();
+  }
   ASSERT_FALSE(official_bytes.empty());
 
   const auto mod_payload = marker_bytes(std::string_view("shadowed by a mod archive"));
   fo4::test::TempDataDir mod_dir;
-  const auto mod_archive = write_mod_archive(mod_dir.path(), archive_entry_for(target.winner.name), mod_payload);
+  const auto mod_archive = write_mod_archive(mod_dir.path(), archive_entry_for(target_name), mod_payload);
 
   std::vector<std::filesystem::path> mod_last = archives;
   mod_last.push_back(mod_archive);
-  const auto shadowing = fo4::archive::AssetResolver::open({}, mod_last);
-  const auto shadowed_candidates = fo4::pex_analysis::enumerate_script_candidates(shadowing);
-  const auto shadowed = fo4::pex_analysis::resolve_script_set(shadowed_candidates);
-  EXPECT_EQ(shadowed.size(), official.size());
-  EXPECT_EQ(shadowed_candidates.size(), official.size() + 1);
-  const auto shadowed_winner = std::find_if(shadowed.begin(), shadowed.end(), [&](const auto& winner) {
-    return winner.winner.name == target.winner.name;
-  });
-  ASSERT_NE(shadowed_winner, shadowed.end());
-  EXPECT_EQ(std::filesystem::path(shadowed_winner->winner.container).filename(), mod_archive.filename());
-  EXPECT_EQ(shadowed_winner->replaced, 1u);
-  EXPECT_EQ(shadowing.read(shadowed_winner->winner.location), mod_payload);
+  {
+    const auto shadowing = fo4::archive::AssetResolver::open({}, mod_last);
+    const auto shadowed_candidates = fo4::pex_analysis::enumerate_script_candidates(shadowing);
+    const auto shadowed = fo4::pex_analysis::resolve_script_set(shadowed_candidates);
+    EXPECT_EQ(shadowed.size(), official_winners);
+    EXPECT_EQ(shadowed_candidates.size(), official_winners + 1);
+    const auto winner = std::find_if(shadowed.begin(), shadowed.end(), [&](const auto& candidate) {
+      return candidate.winner.name == target_name;
+    });
+    ASSERT_NE(winner, shadowed.end());
+    EXPECT_EQ(std::filesystem::path(winner->winner.container).filename(), mod_archive.filename());
+    EXPECT_EQ(winner->replaced, 1u);
+    EXPECT_EQ(shadowing.read(winner->winner.location), mod_payload);
+  }
 
   std::vector<std::filesystem::path> mod_first = archives;
   mod_first.insert(mod_first.begin(), mod_archive);
-  const auto losing = fo4::archive::AssetResolver::open({}, mod_first);
-  const auto losing_winners = fo4::pex_analysis::resolve_script_set(
-      fo4::pex_analysis::enumerate_script_candidates(losing));
-  ASSERT_EQ(losing_winners.size(), official.size());
-  const auto losing_winner = std::find_if(losing_winners.begin(), losing_winners.end(), [&](const auto& winner) {
-    return winner.winner.name == target.winner.name;
-  });
-  ASSERT_NE(losing_winner, losing_winners.end());
-  EXPECT_EQ(std::filesystem::path(losing_winner->winner.container).filename(),
-            std::filesystem::path(target.winner.container).filename());
-  EXPECT_EQ(losing_winner->replaced, 1u);
-  EXPECT_EQ(losing.read(losing_winner->winner.location), official_bytes);
+  {
+    const auto losing = fo4::archive::AssetResolver::open({}, mod_first);
+    const auto losing_winners = fo4::pex_analysis::resolve_script_set(
+        fo4::pex_analysis::enumerate_script_candidates(losing));
+    ASSERT_EQ(losing_winners.size(), official_winners);
+    const auto winner = std::find_if(losing_winners.begin(), losing_winners.end(), [&](const auto& candidate) {
+      return candidate.winner.name == target_name;
+    });
+    ASSERT_NE(winner, losing_winners.end());
+    EXPECT_EQ(std::filesystem::path(winner->winner.container).filename(), official_container.filename());
+    EXPECT_EQ(winner->replaced, 1u);
+    EXPECT_EQ(losing.read(winner->winner.location), official_bytes);
+  }
 }
