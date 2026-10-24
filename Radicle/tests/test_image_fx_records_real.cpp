@@ -10,7 +10,9 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <iterator>
 #include <map>
@@ -131,6 +133,59 @@ TEST(ImageFxRecordsReal, EveryImadRecordDecodesTheHdrMultInterpolatorRows) {
   EXPECT_EQ(elements, 494u);
   EXPECT_EQ(known_time, "0");
   EXPECT_EQ(known_value, "1");
+}
+
+TEST(ImageFxRecordsReal, ImadMultAndAddCountsMatchTheDnamPairs) {
+  const auto* directory = std::getenv("FO4_DATA_DIR");
+  if (!directory) {
+    GTEST_SKIP() << "set FO4_DATA_DIR to run official-master coverage";
+  }
+  record_game_build(detect_game_build(directory));
+  const auto path = std::filesystem::path(directory) / "Fallout4.esm";
+  ASSERT_TRUE(std::filesystem::is_regular_file(path));
+  const auto plugin = fo4::read_plugin_file(path);
+  const auto imad = fo4::Signature::from_string("IMAD");
+  const auto dnam = fo4::Signature::from_string("DNAM");
+  std::size_t records = 0;
+  std::size_t pairs = 0;
+  std::size_t mismatched = 0;
+  std::size_t odd_sizes = 0;
+  std::size_t first_slot_elements = 0;
+  std::size_t missing = 0;
+  fo4::visit_records(plugin, [&](const fo4::Record& record) {
+    if (record.header.signature != imad) return;
+    ++records;
+    std::span<const std::byte> counts;
+    for (const auto& subrecord : record.subrecords) {
+      if (subrecord.signature == dnam) counts = subrecord.data;
+    }
+    ASSERT_GE(counts.size(), 176u) << record.form_key.to_string();
+    for (std::uint32_t slot = 0; slot < 21; ++slot) {
+      const auto mult_sig = fo4::Signature::from_bytes(0x44414900u + slot);
+      const auto add_sig = fo4::Signature::from_bytes(0x44414940u + slot);
+      std::size_t mult_bytes = 0;
+      std::size_t add_bytes = 0;
+      for (const auto& subrecord : record.subrecords) {
+        if (subrecord.signature == mult_sig) mult_bytes = subrecord.data.size();
+        if (subrecord.signature == add_sig) add_bytes = subrecord.data.size();
+      }
+      std::uint32_t mult_count = 0;
+      std::uint32_t add_count = 0;
+      std::memcpy(&mult_count, counts.data() + 8 + 8 * slot, sizeof(mult_count));
+      std::memcpy(&add_count, counts.data() + 12 + 8 * slot, sizeof(add_count));
+      ++pairs;
+      if (mult_bytes == 0 || add_bytes == 0) ++missing;
+      if (mult_bytes % 8 != 0 || add_bytes % 8 != 0) ++odd_sizes;
+      if (mult_count != mult_bytes / 8 || add_count != add_bytes / 8) ++mismatched;
+      if (slot == 0) first_slot_elements += mult_bytes / 8;
+    }
+  });
+  EXPECT_EQ(records, 247u);
+  EXPECT_EQ(pairs, 247u * 21u);
+  EXPECT_EQ(missing, 0u);
+  EXPECT_EQ(odd_sizes, 0u);
+  EXPECT_EQ(mismatched, 0u);
+  EXPECT_EQ(first_slot_elements, 494u);
 }
 
 INSTANTIATE_TEST_SUITE_P(OfficialMasters, ImageFxRecordsReal, testing::Values(
