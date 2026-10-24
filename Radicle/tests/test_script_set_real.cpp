@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -159,4 +160,60 @@ TEST(ScriptSetReal, ModArchiveShadowingAnOfficialScriptFollowsTheLoadIndex) {
     EXPECT_EQ(winner->replaced, 1u);
     EXPECT_EQ(losing.read(winner->winner.location), official_bytes);
   }
+}
+
+TEST(ScriptSetReal, LooseScriptBeatsAnOfficialArchiveWhateverTheLoadIndex) {
+  const char* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
+  const std::filesystem::path data_dir = dir;
+  const auto archives = fo4::archive::archive_load_order(data_dir, {}, installed_master_and_cc_plugins(data_dir));
+
+  std::string target_name;
+  std::filesystem::path official_container;
+  std::vector<std::byte> official_bytes;
+  std::size_t official_winners = 0;
+  std::size_t official_archive_index = 0;
+  {
+    const auto official_resolver = fo4::archive::AssetResolver::open({}, archives);
+    const auto winners = fo4::pex_analysis::resolve_script_set(
+        fo4::pex_analysis::enumerate_script_candidates(official_resolver));
+    const auto target = std::find_if(winners.begin(), winners.end(), [](const auto& winner) {
+      return winner.winner.kind == fo4::pex_analysis::ScriptSourceKind::archive &&
+             winner.winner.location.archive > 0;
+    });
+    ASSERT_NE(target, winners.end());
+    target_name = target->winner.name;
+    official_container = target->winner.container;
+    official_archive_index = target->winner.location.archive;
+    official_bytes = official_resolver.read(target->winner.location);
+    official_winners = winners.size();
+  }
+  ASSERT_FALSE(official_bytes.empty());
+
+  fo4::test::TempDataDir loose_root;
+  const auto loose_payload = marker_bytes(std::string_view("loose copy wins"));
+  loose_root.write("Scripts/" + target_name + ".pex", loose_payload, 1);
+
+  const std::vector<std::filesystem::path> roots{loose_root.path()};
+  const auto resolver = fo4::archive::AssetResolver::open_roots(roots, archives);
+  // Invariant: the loose copy takes the lowest index an archive can hold, so only the kind rule can pick it.
+  const std::array<std::int32_t, 1> lowest{0};
+  ASSERT_GT(official_archive_index, static_cast<std::size_t>(lowest.front()));
+  const auto candidates = fo4::pex_analysis::enumerate_script_candidates(resolver, lowest);
+  EXPECT_EQ(candidates.size(), official_winners + 1);
+  EXPECT_NE(std::find_if(candidates.begin(), candidates.end(), [&](const auto& candidate) {
+    return candidate.name == target_name && candidate.kind == fo4::pex_analysis::ScriptSourceKind::archive &&
+           std::filesystem::path(candidate.container).filename() == official_container.filename();
+  }), candidates.end());
+  const auto winners = fo4::pex_analysis::resolve_script_set(resolver, lowest);
+  ASSERT_EQ(winners.size(), official_winners);
+  const auto winner = std::find_if(winners.begin(), winners.end(), [&](const auto& candidate) {
+    return candidate.winner.name == target_name;
+  });
+  ASSERT_NE(winner, winners.end());
+  EXPECT_EQ(winner->winner.kind, fo4::pex_analysis::ScriptSourceKind::loose);
+  EXPECT_TRUE(std::filesystem::equivalent(std::filesystem::path(winner->winner.container),
+                                          loose_root.path() / "Scripts" / (target_name + ".pex")));
+  EXPECT_EQ(winner->replaced, 1u);
+  EXPECT_EQ(resolver.read(winner->winner.location), loose_payload);
 }
