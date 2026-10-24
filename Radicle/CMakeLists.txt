@@ -706,6 +706,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_c_api_script_set.cpp
     tests/test_pex_analysis.cpp
     tests/test_pex_analysis_c_api.cpp
+    tests/test_pex_analysis_real.cpp
     tests/test_script_set.cpp
     tests/test_script_set_real.cpp
     tests/test_pex_disasm.cpp
