@@ -165,6 +165,34 @@ std::vector<std::byte> define_shape_4_payload() {
   return body.body;
 }
 
+std::vector<std::byte> define_shape_2_new_styles_lines_payload() {
+  SwfBuilder body;
+  shape_head(body, 23);
+  body.u8(1);
+  solid_fill(body, false, 0x010203);
+  body.u8(1);
+  body.u16(5);
+  rgb(body, 0x14, 0x15, 0x16);
+  body.u8(0x11);
+  body.push_bits(0, 1);
+  body.push_bits(0x10, 5);
+  body.align();
+  body.u8(2);
+  solid_fill(body, false, 0x040506);
+  solid_fill(body, false, 0x0B0C0D);
+  body.u8(1);
+  body.u16(7);
+  rgb(body, 0x0E, 0x0F, 0x10);
+  body.u8(0x21);
+  body.push_bits(0, 1);
+  body.push_bits(0x0A, 5);
+  body.push_bits(1, 2);
+  body.push_bits(1, 1);
+  body.push_bits(0, 6);
+  body.align();
+  return body.body;
+}
+
 std::vector<std::byte> define_shape_2_new_styles_payload() {
   SwfBuilder body;
   shape_head(body, 21);
@@ -411,6 +439,16 @@ TEST(SwfShape, NewStylesRecordReplacesTheArraysAndTheBitWidths) {
   EXPECT_TRUE(shape.line_styles.empty());
   EXPECT_EQ(shape.style_change_count, 2u);
   EXPECT_EQ(shape.edge_count, 0u);
+
+  const auto with_lines = read_one(22, define_shape_2_new_styles_lines_payload());
+  ASSERT_TRUE(with_lines.ok()) << fo4::swf::status_name(with_lines.status);
+  const auto& replaced = *with_lines.file.tags[0].shape;
+  ASSERT_EQ(replaced.fill_styles.size(), 2u);
+  EXPECT_EQ(replaced.fill_styles[1].color, 0xFF0B0C0Du);
+  ASSERT_EQ(replaced.line_styles.size(), 1u);
+  EXPECT_EQ(replaced.line_styles[0].width, 7u);
+  EXPECT_EQ(replaced.line_styles[0].color, 0xFF0E0F10u);
+  EXPECT_EQ(replaced.style_change_count, 2u);
 }
 
 TEST(SwfShape, ExtendedStyleCountsUseTheTwoByteForm) {

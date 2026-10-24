@@ -169,10 +169,12 @@ SwfStatus decode_morph_tag(std::span<const std::byte> data, SwfTag& out_tag) {
   if (!cursor.u8(bits)) {
     return SwfStatus::malformed_tag;
   }
+  SwfShapeStyles start_styles;
+  start_styles.fill_bits = static_cast<unsigned>(bits >> 4);
+  start_styles.line_bits = static_cast<unsigned>(bits & 0x0Fu);
   ShapeRecordCounts start_counts;
   std::size_t start_end = 0;
-  if (!read_shape_records(data, cursor.position, version, static_cast<unsigned>(bits >> 4),
-                          static_cast<unsigned>(bits & 0x0Fu), start_counts, start_end)) {
+  if (!read_shape_records(data, cursor.position, version, start_styles, start_counts, start_end)) {
     return SwfStatus::malformed_tag;
   }
   Cursor edges{data, start_end};
@@ -183,10 +185,12 @@ SwfStatus decode_morph_tag(std::span<const std::byte> data, SwfTag& out_tag) {
   if (!edges.u8(end_bits)) {
     return SwfStatus::malformed_tag;
   }
+  SwfShapeStyles end_styles;
+  end_styles.fill_bits = static_cast<unsigned>(end_bits >> 4);
+  end_styles.line_bits = static_cast<unsigned>(end_bits & 0x0Fu);
   ShapeRecordCounts end_counts;
   std::size_t end_end = 0;
-  if (!read_shape_records(data, edges.position, version, static_cast<unsigned>(end_bits >> 4),
-                          static_cast<unsigned>(end_bits & 0x0Fu), end_counts, end_end)) {
+  if (!read_shape_records(data, edges.position, version, end_styles, end_counts, end_end)) {
     return SwfStatus::malformed_tag;
   }
   if (end_end != data.size()) {

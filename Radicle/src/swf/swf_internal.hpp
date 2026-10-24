@@ -85,8 +85,7 @@ bool read_shape_styles(Cursor& cursor, unsigned version, SwfShapeStyles& out);
 
 // Requires an EndShapeRecord; `next` is the byte the aligned stream ends on.
 bool read_shape_records(std::span<const std::byte> data, std::size_t start, unsigned version,
-                        unsigned fill_bits, unsigned line_bits, ShapeRecordCounts& counts,
-                        std::size_t& next);
+                        SwfShapeStyles& styles, ShapeRecordCounts& counts, std::size_t& next);
 
 std::string to_text(std::span<const std::byte> bytes);
 
