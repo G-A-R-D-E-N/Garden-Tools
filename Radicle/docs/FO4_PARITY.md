@@ -65,7 +65,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144 (11 L4 rows have an authoring constr
 | BOOK | 5891 | 30 | 5 | 10 | - | 3 | yes | yes | - | yes | 1 | L4 |
 | BPTD | 7693 | - | - | - | - | 1 | - | - | - | yes | - | L0 |
 | CAMS | 7880 | 23 | 1 | 2 | - | - | yes | - | - | - | 1 | L4 |
-| CELL | 5953 | 34 | 1 | 13 | 2 | 1 | - | - | forms/cell, environment/world | yes | 1 | L4 |
+| CELL | 5953 | 34 | 1 | 13 | 2 | 1 | yes | - | forms/cell, environment/world | yes | 1 | L4 |
 | CLAS | 6102 | 2 | 1 | 1 | - | 2 | yes | - | - | - | 1 | L4 |
 | CLFM | 9572 | 2 | - | - | - | 1 | yes | - | - | - | 1 | L4 |
 | CLMT | 6115 | 14 | 3 | 2 | - | - | yes | - | environment/base_records | - | 2 | L4 |
