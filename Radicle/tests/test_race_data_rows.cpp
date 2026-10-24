@@ -60,7 +60,7 @@ Bytes race_data(std::size_t size) {
   return data;
 }
 
-Bytes race_plugin(std::uint16_t form_version, const Bytes& data) {
+Bytes race_plugin(std::uint16_t form_version, const Bytes& data, const Bytes& spct = {}) {
   ByteWriter out;
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
   ByteWriter hedr;
@@ -74,6 +74,7 @@ Bytes race_plugin(std::uint16_t form_version, const Bytes& data) {
   const auto record = fo4::test::begin_record(out, "RACE", 0, 0x00000800, form_version);
   fo4::test::write_subrecord(out, "EDID", std::string_view{"Legacy\0", 7});
   fo4::test::write_subrecord(out, "DATA", data);
+  if (!spct.empty()) fo4::test::write_subrecord(out, "SPCT", spct);
   fo4::test::end_record(out, record);
   fo4::test::end_group(out, group);
   return out.bytes;
@@ -92,14 +93,23 @@ std::int64_t value_of(const fo4::schema::ScalarDescriptor& scalar, std::string_v
   return found == scalar.names.end() ? 0 : found->value;
 }
 
-Bytes data_of(const fo4::Plugin& plugin) {
+Bytes subrecord_bytes(const fo4::Plugin& plugin, std::string_view signature) {
   const auto* record = fo4::find_record(plugin, key());
   EXPECT_NE(record, nullptr);
   if (record == nullptr) return {};
   for (const auto& sub : record->subrecords) {
-    if (sub.signature.to_string() == "DATA") return sub.data;
+    if (sub.signature.to_string() == signature) return sub.data;
   }
   return {};
+}
+
+Bytes data_of(const fo4::Plugin& plugin) { return subrecord_bytes(plugin, "DATA"); }
+
+std::string read_row(const fo4::Plugin& plugin, std::string_view path) {
+  const auto field = row(path);
+  const auto bytes = subrecord_bytes(plugin, field.scalar.subrecord.to_string());
+  return fo4::schema::decode_scalar(fo4::schema::scalar_field_bytes(bytes, field.scalar),
+                                    field.scalar);
 }
 
 bool exposed(const fo4::Plugin& plugin, std::string_view path) {
@@ -200,6 +210,31 @@ TEST(RaceDataRows, VanillaLayoutReadsAndWritesAtFormVersion131) {
   EXPECT_EQ(data_of(reread), expected);
   EXPECT_EQ(read(reread, "RACE\\Size"), "2");
   EXPECT_EQ(read(reread, "RACE\\ShieldBipedObject"), "-1");
+}
+
+TEST(RaceDataRows, SpellCountRowReadsAndWritesTheSpctSubrecord) {
+  const auto count = row("RACE\\SpellCount");
+  EXPECT_EQ(count.scalar.subrecord, fo4::Signature::from_string("SPCT"));
+  EXPECT_FALSE(count.scalar.embedded);
+  EXPECT_EQ(count.scalar.offset, 0u);
+  EXPECT_EQ(count.scalar.storage, fo4::schema::ScalarStorage::u32);
+  EXPECT_EQ(count.scalar.payload_size, 4u);
+  EXPECT_EQ(count.scalar.min_form_version, 0);
+
+  auto plugin = fo4::read_plugin(race_plugin(131, race_data(200), u32_bytes(2)), "Legacy.esp");
+  EXPECT_EQ(read_row(plugin, "RACE\\SpellCount"), "2");
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key(), row("RACE\\SpellCount"), "3"),
+            fo4::ScalarMutationStatus::updated);
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Legacy.esp");
+  EXPECT_EQ(read_row(reread, "RACE\\SpellCount"), "3");
+  EXPECT_EQ(subrecord_bytes(reread, "SPCT"), u32_bytes(3));
+  EXPECT_EQ(data_of(reread), race_data(200));
+
+  auto absent = fo4::read_plugin(race_plugin(131, race_data(200)), "Legacy.esp");
+  const auto before = data_of(absent);
+  EXPECT_EQ(fo4::set_record_scalar(absent, key(), row("RACE\\SpellCount"), "3"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(data_of(absent), before);
 }
 
 TEST(RaceDataRows, ShiftedMembersAreHiddenBelowTheirFormVersionGate) {

@@ -158,7 +158,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | PMIS | 5951 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
 | PROJ | 7115 | 40 | 4 | 15 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
 | QUST | 10684 | 6 | 4 | 3 | 1 | 3 | yes | - | forms/quest_alias_edit, forms/quest_aliases_decode, forms/quest_objectives, forms/quest_stages | - | 7 | L4 |
-| RACE | 11054 | 112 | 14 | 42 | 9 | 5 | yes | yes | forms/race, forms/race_body | yes | 1 | L4 |
+| RACE | 11054 | 113 | 14 | 42 | 9 | 5 | yes | yes | forms/race, forms/race_body | yes | 1 | L4 |
 | REFR | 11347 | 52 | - | 25 | 1 | - | yes | - | forms/placed_reference, forms/placed_reference_edit | yes | 1 | L4 |
 | REGN | 11870 | 12 | 1 | 7 | - | 1 | yes | - | - | yes | - | L4 |
 | RELA | 8848 | 2 | - | 3 | - | - | yes | - | - | - | 1 | L4 |
@@ -311,7 +311,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | PMIS | 11 | 1 | 1 | 2 | - | f32, i32, u32, u8 | 2 | - | - | existing_only |
 | PROJ | 37 | 1 | - | 2 | 4 | f32, i16, i32, u16, u32, u8 | 12 | 9 | - | existing_only |
 | QUST | 3 | - | 2 | 1 | 4 | f32, u16, u32, u8 | - | - | - | existing_only |
-| RACE | 100 | - | 9 | 3 | 14 | f32, i16, i32, u16, u32, u8 | 82 | 3 | - | existing_only |
+| RACE | 101 | - | 9 | 3 | 14 | f32, i16, i32, u16, u32, u8 | 82 | 3 | - | existing_only |
 | REFR | 43 | 1 | 5 | 3 | - | f32, i32, u32, u8 | 14 | 13 | - | existing_only |
 | REGN | 9 | - | 2 | 1 | 1 | f32, u32, u8 | 7 | 8 | - | existing_only |
 | RELA | - | - | 1 | 1 | - | u8 | - | - | - | existing_only |

@@ -13,13 +13,16 @@
 #include "fo4/forms/leveled_spell.hpp"
 #include "fo4/forms/race.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "fo4/schema/scalar.hpp"
 #include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
+#include <cstddef>
 #include <cstdlib>
 #include <filesystem>
 #include <functional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -172,4 +175,58 @@ TEST(TypedFamiliesRealData, DecodesEveryShippedRecordFamily) {
       GTEST_SKIP() << "no " << family.label << " records in the shipped masters";
     }
   }
+}
+
+// Invariant: the SPCT count must equal the number of SPLO subrecords on the record.
+TEST(TypedFamiliesRealData, RaceSpellCountAgreesWithTheActorEffectList) {
+  const char* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) {
+    GTEST_SKIP() << "set FO4_DATA_DIR to the Fallout 4 Data folder to run this";
+  }
+  record_game_build(detect_game_build(dir));
+  const auto shipped = masters(dir);
+  if (shipped.size() != 7) {
+    GTEST_SKIP() << "the measured totals need all seven official masters, found " << shipped.size();
+  }
+  const auto field = fo4::schema::scalar_field_descriptor("RACE\\SpellCount");
+  ASSERT_TRUE(field.has_value());
+  const auto race = fo4::Signature::from_string("RACE");
+  const auto spct = fo4::Signature::from_string("SPCT");
+  const auto splo = fo4::Signature::from_string("SPLO");
+  std::size_t records = 0;
+  std::size_t with_count = 0;
+  std::size_t one = 0;
+  std::size_t two = 0;
+  std::size_t odd_size = 0;
+  std::size_t mismatched = 0;
+  for (const auto& path : shipped) {
+    const auto plugin = fo4::read_plugin_file(path);
+    for (const auto* record : fo4::collect_records(plugin)) {
+      if (record->header.signature != race) continue;
+      ++records;
+      std::size_t effects = 0;
+      std::span<const std::byte> counts;
+      for (const auto& sub : record->subrecords) {
+        if (sub.signature == splo) ++effects;
+        if (sub.signature == spct) counts = sub.data;
+      }
+      if (counts.empty()) continue;
+      ++with_count;
+      if (counts.size() != 4) {
+        ++odd_size;
+        continue;
+      }
+      const auto text = fo4::schema::decode_scalar(
+          fo4::schema::scalar_field_bytes(counts, field->scalar), field->scalar);
+      if (text == "1") ++one;
+      if (text == "2") ++two;
+      if (text != std::to_string(effects)) ++mismatched;
+    }
+  }
+  EXPECT_EQ(records, 110u);
+  EXPECT_EQ(with_count, 91u);
+  EXPECT_EQ(one, 56u);
+  EXPECT_EQ(two, 35u);
+  EXPECT_EQ(odd_size, 0u);
+  EXPECT_EQ(mismatched, 0u);
 }
