@@ -45,6 +45,8 @@ RADICLE_API radicle_status radicle_script_set_get(const radicle_script_set* set,
                                                   size_t index,
                                                   radicle_script_set_winner* out_winner);
 /* Invariant: reads the winner's own asset location, so a load index that contradicts the root order still reads its bytes. */
+/* Invariant: an empty winner payload is OK with *out_bytes NULL and *out_size 0, and radicle_free_bytes(NULL) is a no-op. */
+/* Invariant: a payload that cannot be read is RADICLE_STATUS_PARSE_ERROR. */
 RADICLE_API radicle_status radicle_script_set_read(const radicle_script_set* set,
                                                    size_t index,
                                                    uint8_t** out_bytes,
