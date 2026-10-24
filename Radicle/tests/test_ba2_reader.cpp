@@ -462,6 +462,61 @@ TEST_F(Ba2ReaderTest, CApiWritesGeneralArchivesThatMatchTheNativeWriterAndReadBa
   EXPECT_EQ(radicle_ba2_write_general(nullptr, 1, 1, 0, &bytes, &size), RADICLE_STATUS_INVALID_ARGUMENT);
 }
 
+TEST_F(Ba2ReaderTest, CApiWriteGeneralReportsCallerErrorsAsInvalidArgument) {
+  const char data[] = "x";
+  const auto buffer = reinterpret_cast<const uint8_t*>(data);
+  uint8_t* bytes = nullptr;
+  size_t size = 0;
+
+  const radicle_ba2_file files[] = {{"Meshes\\Gun.nif", buffer, 1}};
+  const auto refuse = [&](const radicle_ba2_file* entries, size_t count, uint32_t version) {
+    bytes = reinterpret_cast<uint8_t*>(static_cast<uintptr_t>(1));
+    size = 7;
+    EXPECT_EQ(radicle_ba2_write_general(entries, count, version, 0, &bytes, &size),
+              RADICLE_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(bytes, nullptr);
+    EXPECT_EQ(size, 0u);
+  };
+
+  refuse(files, 1, 5);
+  refuse(files, 1, 0);
+
+  const radicle_ba2_file trailing[] = {{"Meshes\\", buffer, 1}};
+  const radicle_ba2_file separator[] = {{"\\", buffer, 1},
+                                        {"/", buffer, 1},
+                                        {"Meshes/", buffer, 1}};
+  const radicle_ba2_file non_1252[] = {{"Meshes\\\xC4\x80.nif", buffer, 1},
+                                       {"Meshes\\\xFF.nif", buffer, 1}};
+  refuse(trailing, 1, 1);
+  for (const auto& entry : separator) refuse(&entry, 1, 1);
+  for (const auto& entry : non_1252) refuse(&entry, 1, 1);
+
+#if SIZE_MAX > 0xFFFFFFFFu
+  const radicle_ba2_file oversized[] = {{"Meshes\\Gun.nif", buffer, size_t{1} << 32}};
+  refuse(oversized, 1, 1);
+  refuse(files, size_t{1} << 32, 1);
+#endif
+
+  ASSERT_EQ(radicle_ba2_write_general(files, 1, 1, 0, &bytes, &size), RADICLE_STATUS_OK);
+  EXPECT_NE(bytes, nullptr);
+  radicle_free_bytes(bytes);
+}
+
+TEST_F(Ba2ReaderTest, CApiWrittenNonAsciiPathsHashTheirWindows1252Bytes) {
+  const char data[] = "x";
+  const radicle_ba2_file files[] = {{"Meshes\\Caf\xC3\xA9.nif", reinterpret_cast<const uint8_t*>(data), 1}};
+  uint8_t* bytes = nullptr;
+  size_t size = 0;
+  ASSERT_EQ(radicle_ba2_write_general(files, 1, 1, 0, &bytes, &size), RADICLE_STATUS_OK);
+  const std::vector<std::byte> written(reinterpret_cast<const std::byte*>(bytes),
+                                       reinterpret_cast<const std::byte*>(bytes) + size);
+  radicle_free_bytes(bytes);
+
+  const auto reader = Ba2Reader::open(write_file(data() / "Cafe.ba2", written));
+  EXPECT_EQ(text_of(reader.extract(*reader.find("meshes/caf\xC3\xA9.nif"))), "x");
+  EXPECT_EQ(reader.entries()[0].name_hash, fo4::archive::compute_ba2_hashes("Meshes\\Caf\xE9.nif").name);
+}
+
 TEST_F(Ba2ReaderTest, CApiReadsArchivesAndAssets) {
   const auto low = write_general("Low.ba2", {general("Meshes\\Shared.nif", "low")});
   const auto high = write_general("High.ba2", {general("Meshes\\Shared.nif", "high")});

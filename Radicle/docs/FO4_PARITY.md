@@ -37,9 +37,9 @@ Derived from the repository by `Radicle/tools/parity_matrix.py`; 147 signatures 
 
 Columns: xEdit line is the registration line in the pinned definitions. Rows, authoring, keyword list and FormLink counts come from `schema/fallout4/fields.json`. Typed module lists the `TYPED_MODULES` files that name the signature. Mixed remap means the signature is named in `src/schema/form_link_mixed.cpp` or `src/schema/form_link_records.cpp`. Real-data tests count registered `tests/*_real.cpp` files that name it. `-` means none.
 
-Tier: L4 has field rows, FormLink fields or authoring constraints; L2 has a typed module, no rows or lists; L3 has FormLink list rows only; L1 has a keyword list only; L0 has none of these. Remap evidence (the Mixed remap column and the form_links.cpp record checks) does not affect the tier. L5 (dedicated PET route) is not derived.
+Tier: L4 has field rows, FormLink fields or authoring constraints; L2 has a typed module, no rows or lists; L3 has FormLink list rows only; L1 has a keyword list only; L0 has none of these. A record with an authoring constraint but no scalar, string or FormLink field rows is still L4, and the tier counts break those out. Remap evidence (the Mixed remap column and the form_links.cpp record checks) does not affect the tier. L5 (dedicated PET route) is not derived.
 
-Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
+Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144 (11 L4 rows have an authoring constraint and no scalar, string or FormLink field rows: DEBR, DFOB, DMGT, DOBJ, EYES, FLST, NAVM, OTFT, OVIS, PLYR, STAG; FormLink list rows are also present on DFOB, FLST, OTFT).
 
 ### Per-signature coverage
 
