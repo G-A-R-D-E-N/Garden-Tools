@@ -32,6 +32,16 @@ inline void patch_u32(std::vector<std::byte>& bytes, std::size_t at, std::uint32
   for (std::size_t i = 0; i < 4; ++i) bytes[at + i] = static_cast<std::byte>((value >> (8 * i)) & 0xFF);
 }
 
+// Requires room for the pointer, count and capacity of one array member.
+inline void reserve_array(std::vector<std::byte>& bytes, std::size_t field) {
+  if (bytes.size() < field + 12) bytes.resize(field + 12, std::byte{0});
+}
+
+inline void set_count(std::vector<std::byte>& bytes, std::size_t field, std::size_t count) {
+  reserve_array(bytes, field);
+  patch_u32(bytes, field + 8, static_cast<std::uint32_t>(count));
+}
+
 inline std::vector<std::byte> build_packfile(const std::vector<TestSection>& sections) {
   std::vector<std::byte> header;
   put_u32(header, 0x57E0E057u);

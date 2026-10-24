@@ -721,6 +721,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_abc_real.cpp
     tests/test_hkx_packfile.cpp
     tests/test_hkx_animation.cpp
+    tests/test_hkx_binding.cpp
     tests/test_hkx_real.cpp
     tests/test_c_api_material_file.cpp
     tests/test_seq.cpp

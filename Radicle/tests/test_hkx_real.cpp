@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -100,6 +101,59 @@ TEST(HkxAnimationRealData, ReadsAVanillaSplineClipFromTheAnimationsArchive) {
     const float length = std::sqrt(rotation[0] * rotation[0] + rotation[1] * rotation[1] +
                                    rotation[2] * rotation[2] + rotation[3] * rotation[3]);
     EXPECT_NEAR(length, 1.0f, 1e-4f);
+  }
+}
+
+TEST(HkxAnimationRealData, DecodesEveryFrameOfAVanillaTwoBlockClip) {
+  // Detects a two-block clip decoded with the wrong block stride, which must leave the shared frame to the later block.
+  const char* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) {
+    GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
+  }
+  record_game_build(detect_game_build(dir));
+  const std::vector<std::string> plugins{"Fallout4.esm"};
+  const auto archives = fo4::archive::archive_load_order(dir, {}, plugins);
+  if (archives.empty()) {
+    GTEST_SKIP() << "no Fallout 4 archives found under FO4_DATA_DIR";
+  }
+
+  const auto assets = fo4::archive::AssetResolver::open(dir, archives);
+  const auto location =
+      assets.locate("meshes/actors/character/animations/weapon/rifle/confident/poseb_idle1.hkx");
+  ASSERT_TRUE(location.has_value());
+  const auto bytes = assets.read(*location);
+
+  fo4::hkx::HkxPackfile packfile;
+  ASSERT_EQ(fo4::hkx::read_packfile(bytes, packfile), fo4::hkx::HkxStatus::Ok);
+  fo4::hkx::HkxAnimation animation;
+  ASSERT_EQ(fo4::hkx::read_animation(packfile, animation), fo4::hkx::HkxStatus::Ok);
+
+  EXPECT_EQ(animation.kind, fo4::hkx::HkxAnimationKind::Spline);
+  EXPECT_EQ(animation.blocks.count, 2u);
+  EXPECT_EQ(animation.blocks.max_frames_per_block, 256u);
+  // Invariant: two blocks of 256 frames share one boundary frame, so 255 + 59 covers all 314 frames.
+  EXPECT_EQ(animation.frame_count, 314u);
+  EXPECT_EQ(animation.tracks.size(), 94u);
+  EXPECT_GT(animation.frame_count, animation.blocks.max_frames_per_block);
+  EXPECT_NEAR(animation.blocks.block_duration,
+              static_cast<float>(animation.blocks.max_frames_per_block - 1) * animation.frame_duration, 1e-4f);
+  EXPECT_NEAR(animation.duration, static_cast<float>(animation.frame_count - 1) * animation.frame_duration, 1e-3f);
+
+  for (const fo4::hkx::HkxAnimationTrack& track : animation.tracks) {
+    ASSERT_EQ(track.translations.size(), animation.frame_count);
+    ASSERT_EQ(track.rotations.size(), animation.frame_count);
+    ASSERT_EQ(track.scales.size(), animation.frame_count);
+    for (const std::array<float, 4>& rotation : track.rotations) {
+      const float length = std::sqrt(rotation[0] * rotation[0] + rotation[1] * rotation[1] +
+                                     rotation[2] * rotation[2] + rotation[3] * rotation[3]);
+      ASSERT_NEAR(length, 1.0f, 1e-3f);
+    }
+    for (const std::array<float, 3>& translation : track.translations) {
+      for (const float value : translation) ASSERT_TRUE(std::isfinite(value));
+    }
+    for (const std::array<float, 3>& scale : track.scales) {
+      for (const float value : scale) ASSERT_TRUE(std::isfinite(value));
+    }
   }
 }
 

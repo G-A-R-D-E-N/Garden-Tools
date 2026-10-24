@@ -68,11 +68,24 @@ inline int rotation_align(int format) {
   return 4;
 }
 
+// Requires one of Havok's six rotation quantisations; an unknown format has no width.
 inline int rotation_width(int format) {
-  if (format == 0) return 4;
-  if (format == 2) return 6;
-  if (format == 5) return 16;
-  return 5;
+  switch (format) {
+    case 0:
+      return 4;
+    case 1:
+      return 5;
+    case 2:
+      return 6;
+    case 3:
+      return 3;
+    case 4:
+      return 2;
+    case 5:
+      return 16;
+    default:
+      return 0;
+  }
 }
 
 inline std::size_t align_up(std::size_t value, std::size_t to) {
@@ -174,7 +187,7 @@ inline std::array<float, 4> evaluate_quat(int span, int degree, float t, std::sp
   return normalize_quat(total);
 }
 
-// Requires the block's rotation quantisation format; the width is 4, 5, 6 or 16 bytes.
+// Requires the block's rotation quantisation format; the width is 2, 3, 4, 5, 6 or 16 bytes.
 inline std::array<float, 4> decode_quat(int format, std::span<const std::byte> bytes, std::size_t& off) {
   std::uint64_t raw = 0;
   switch (format) {
@@ -210,6 +223,44 @@ inline std::array<float, 4> decode_quat(int format, std::span<const std::byte> b
         if ((raw & kSigns[c]) != 0) q[c] = -q[c];
       }
       return normalize_quat(q);
+    }
+    case 3: {
+      const auto b0 = std::to_integer<std::uint8_t>(bytes[off]);
+      const auto b1 = std::to_integer<std::uint8_t>(bytes[off + 1]);
+      const auto b2 = std::to_integer<std::uint8_t>(bytes[off + 2]);
+      off += 3;
+      constexpr float kScale = 0.01122391716169123054604514860484f;
+      const std::size_t largest = static_cast<std::size_t>(((b0 >> 7) & 1) | ((b1 >> 6) & 2));
+      const bool negative = (b2 >> 7) != 0;
+      const std::array<float, 3> packed = {
+          (static_cast<float>(b0 & 0x7F) - 63.0f) * kScale,
+          (static_cast<float>(b1 & 0x7F) - 63.0f) * kScale,
+          (static_cast<float>(b2 & 0x7F) - 63.0f) * kScale,
+      };
+      std::array<float, 4> q{};
+      std::size_t next = 0;
+      float squares = 0.0f;
+      for (std::size_t component = 0; component < 4; ++component) {
+        if (component == largest) continue;
+        q[component] = packed[next++];
+        squares += q[component] * q[component];
+      }
+      q[largest] = std::sqrt(std::max(0.0f, 1.0f - squares));
+      if (negative) q[largest] = -q[largest];
+      return normalize_quat(q);
+    }
+    case 4: {
+      const auto b0 = std::to_integer<std::uint8_t>(bytes[off]);
+      const auto b1 = std::to_integer<std::uint8_t>(bytes[off + 1]);
+      off += 2;
+      constexpr float kNibbles = 7.0f;
+      const std::array<float, 4> q = {
+          static_cast<float>(b0 & 0x0F) - kNibbles,
+          static_cast<float>(b0 >> 4) - kNibbles,
+          static_cast<float>(b1 & 0x0F) - kNibbles,
+          static_cast<float>(b1 >> 4) - kNibbles,
+      };
+      return normalize_quat({q[0] / kNibbles, q[1] / kNibbles, q[2] / kNibbles, q[3] / kNibbles});
     }
     case 2: {
       std::uint16_t xr = 0;
