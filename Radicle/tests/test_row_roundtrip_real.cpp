@@ -2,6 +2,7 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "fo4/plugin/writer.hpp"
+#include "fo4/schema/formlink_lists.hpp"
 #include "fo4/schema/scalar.hpp"
 #include "real_data_build.hpp"
 
@@ -212,6 +213,97 @@ void roundtrip_family(const char* family, Signature signature) {
       << family << " changed more subrecords than the distinct subrecords its rows name";
 }
 
+
+void roundtrip_links(const char* family, Signature signature) {
+  const auto* directory = std::getenv("FO4_DATA_DIR");
+  if (directory == nullptr) {
+    GTEST_SKIP() << "set FO4_DATA_DIR to run official-master coverage";
+  }
+  record_game_build(detect_game_build(directory));
+  const auto path = std::filesystem::path(directory) / "Fallout4.esm";
+  ASSERT_TRUE(std::filesystem::is_regular_file(path)) << path.string();
+  const auto plugin = fo4::read_plugin_file(path);
+  const auto rows = fo4::schema::formlink_fields(signature);
+  ASSERT_FALSE(rows.empty()) << family << " has no FormLink rows";
+
+  std::optional<fo4::FormKey> chosen;
+  fo4::visit_records(plugin, [&](const fo4::Record& record) {
+    if (chosen.has_value() || record.header.signature != signature) return;
+    for (const auto& field : rows) {
+      const auto count = fo4::record_field_count(plugin, record.form_key, field);
+      if (count && *count > 0) {
+        chosen = record.form_key;
+        return;
+      }
+    }
+  });
+  ASSERT_TRUE(chosen.has_value()) << family << " has no record carrying one of its links";
+  const auto key = *chosen;
+
+  std::optional<fo4::FormKey> target;
+  fo4::visit_records(plugin, [&](const fo4::Record& record) {
+    if (target.has_value() || record.header.signature != signature) return;
+    for (const auto& field : rows) {
+      const auto allowed = fo4::schema::formlink_field_targets(field);
+      if (allowed.empty() || allowed.front() != record.header.signature) continue;
+      if (record.form_key == key) continue;
+      target = record.form_key;
+      return;
+    }
+  });
+  ASSERT_TRUE(target.has_value()) << family << " has no second record to link to";
+
+  auto edited = fo4::read_plugin_file(path);
+  const auto* live = fo4::find_record(edited, key);
+  ASSERT_NE(live, nullptr) << key.to_string();
+  const auto before = snapshot(*live);
+
+  std::size_t exercised = 0;
+  std::vector<Signature> distinct;
+  for (const auto& field : rows) {
+    if (!fo4::schema::formlink_field_allowed(field, target->local())) continue;
+    const auto count = fo4::record_field_count(edited, key, field);
+    if (!count || *count == 0) continue;
+    const auto* current = fo4::find_record(edited, key);
+    ASSERT_NE(current, nullptr);
+    const auto prior = snapshot(*current);
+    if (fo4::set_record_formlink_field(edited, key, field, 0, *target) !=
+        fo4::FormLinkFieldMutationStatus::updated) {
+      continue;
+    }
+    const auto* probe = fo4::find_record(edited, key);
+    ASSERT_NE(probe, nullptr);
+    if (same_record(prior, *probe)) continue;
+    if (std::find(distinct.begin(), distinct.end(), field.subrecord) == distinct.end()) {
+      distinct.push_back(field.subrecord);
+    }
+    ++exercised;
+  }
+  ASSERT_GT(exercised, 0u) << family << " wrote no link";
+  const auto* written = fo4::find_record(edited, key);
+  ASSERT_NE(written, nullptr);
+  const auto after_edit = snapshot(*written);
+  const auto bytes = fo4::write_plugin(edited);
+  const auto reread = fo4::read_plugin(bytes, "RowRoundtrip.esm");
+  const auto* restored = fo4::find_record(reread, key);
+  ASSERT_NE(restored, nullptr) << key.to_string();
+  EXPECT_TRUE(same_record(after_edit, *restored))
+      << family << " did not re-read the edited link byte for byte";
+  std::size_t changed = 0;
+  for (std::size_t index = 0; index < before.size(); ++index) {
+    const bool differs = before[index].data.size() != after_edit[index].data.size() ||
+        !std::equal(before[index].data.begin(), before[index].data.end(),
+                    after_edit[index].data.begin());
+    if (!differs) continue;
+    ++changed;
+    EXPECT_TRUE(std::find(distinct.begin(), distinct.end(), before[index].signature) != distinct.end())
+        << family << " changed " << before[index].signature.to_string()
+        << " which no edited link names";
+  }
+  EXPECT_GE(changed, 1u) << family;
+  EXPECT_LE(changed, distinct.size()) << family;
+}
+
 }  // namespace
 
 TEST(RowRoundtripReal, CellRowsSurviveWriteAndReread) {
@@ -307,4 +399,16 @@ TEST(RowRoundtripReal, RaceLinkRowsResolveOnEveryRecord) {
   EXPECT_EQ(records, 45u);
   EXPECT_EQ(absent_links, 39u) << "the severable explosion link is present on 6 of 45 RACE records";
   EXPECT_GT(resolved, 0u) << "no RACE FormLink row resolved a value";
+}
+
+TEST(RowRoundtripReal, ArmorLinkRowsSurviveWriteAndReread) {
+  roundtrip_links("ARMO", fo4::Signature::from_string("ARMO"));
+}
+
+TEST(RowRoundtripReal, ArmorAddonLinkRowsSurviveWriteAndReread) {
+  roundtrip_links("ARMA", fo4::Signature::from_string("ARMA"));
+}
+
+TEST(RowRoundtripReal, RaceLinkRowsSurviveWriteAndReread) {
+  roundtrip_links("RACE", fo4::Signature::from_string("RACE"));
 }
