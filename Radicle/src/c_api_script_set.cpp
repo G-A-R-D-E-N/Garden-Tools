@@ -24,8 +24,8 @@ radicle_asset_location to_c_location(const fo4::archive::AssetLocation& location
   return {RADICLE_ASSET_ARCHIVE, location.archive, location.entry};
 }
 
-radicle_script_candidate to_c_candidate(const fo4::pex_analysis::ScriptCandidate& candidate) {
-  radicle_script_candidate out{};
+radicle_script_set_candidate to_c_candidate(const fo4::pex_analysis::ScriptCandidate& candidate) {
+  radicle_script_set_candidate out{};
   out.name = candidate.name.c_str();
   out.path = candidate.path.c_str();
   out.origin = candidate.kind == fo4::pex_analysis::ScriptSourceKind::loose ? RADICLE_ASSET_LOOSE
@@ -85,7 +85,7 @@ size_t radicle_script_set_count(const radicle_script_set* set) {
 
 radicle_status radicle_script_set_get(const radicle_script_set* set,
                                       size_t index,
-                                      radicle_script_winner* out_winner) {
+                                      radicle_script_set_winner* out_winner) {
   clear_error();
   if (set == nullptr || out_winner == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "set and out_winner are required");

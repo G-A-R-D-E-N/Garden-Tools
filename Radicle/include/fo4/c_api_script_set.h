@@ -16,7 +16,7 @@ extern "C" {
 
 typedef struct radicle_script_set radicle_script_set;
 
-typedef struct radicle_script_candidate {
+typedef struct radicle_script_set_candidate {
   const char* name;
   const char* path;
   radicle_asset_origin origin;
@@ -25,13 +25,13 @@ typedef struct radicle_script_candidate {
   int32_t load_index;
   uint64_t size;
   radicle_asset_location location;
-} radicle_script_candidate;
+} radicle_script_set_candidate;
 
-typedef struct radicle_script_winner {
+typedef struct radicle_script_set_winner {
   const char* name;
-  radicle_script_candidate winner;
+  radicle_script_set_candidate winner;
   uint32_t replaced;
-} radicle_script_winner;
+} radicle_script_set_winner;
 
 // Requires root_load_index to hold radicle_assets_root_count indexes, or NULL with a count of zero for the high-to-low root order.
 RADICLE_API radicle_status radicle_script_set_resolve(const radicle_assets* assets,
@@ -42,7 +42,7 @@ RADICLE_API size_t radicle_script_set_count(const radicle_script_set* set);
 // Invariant: winners are ordered by name, and an index at or past the count is RADICLE_STATUS_INVALID_ARGUMENT.
 RADICLE_API radicle_status radicle_script_set_get(const radicle_script_set* set,
                                                   size_t index,
-                                                  radicle_script_winner* out_winner);
+                                                  radicle_script_set_winner* out_winner);
 // Invariant: reads the winner's own asset location, so a load index that contradicts the root order still reads its bytes.
 RADICLE_API radicle_status radicle_script_set_read(const radicle_script_set* set,
                                                    size_t index,

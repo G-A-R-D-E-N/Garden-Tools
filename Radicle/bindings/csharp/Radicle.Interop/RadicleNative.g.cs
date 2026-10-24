@@ -1081,20 +1081,19 @@ public unsafe struct PexObjectCode
 public unsafe struct ScriptCandidate
 {
     public IntPtr Name;
-    public IntPtr Path;
-    public AssetOrigin Origin;
+    public nuint NameSize;
+    public byte Kind;
     public IntPtr Container;
+    public nuint ContainerSize;
     public int LoadIndex;
     public ulong Size;
-    public AssetLocation Location;
 }
 
 [StructLayout(LayoutKind.Sequential)]
 public unsafe struct ScriptWinner
 {
-    public IntPtr Name;
-    public ScriptCandidate Winner;
-    public uint Replaced;
+    public nuint CandidateIndex;
+    public nuint Replaced;
 }
 
 public enum MaterialFormat : int
@@ -2095,7 +2094,7 @@ public unsafe struct LandBlend
 }
 
 [StructLayout(LayoutKind.Sequential)]
-public unsafe struct ScriptCandidate
+public unsafe struct ScriptSetCandidate
 {
     public IntPtr Name;
     public IntPtr Path;
@@ -2107,10 +2106,10 @@ public unsafe struct ScriptCandidate
 }
 
 [StructLayout(LayoutKind.Sequential)]
-public unsafe struct ScriptWinner
+public unsafe struct ScriptSetWinner
 {
     public IntPtr Name;
-    public ScriptCandidate Winner;
+    public ScriptSetCandidate Winner;
     public uint Replaced;
 }
 
@@ -3182,7 +3181,7 @@ public static unsafe partial class RadicleNative
     public static extern nuint ScriptSetCount(IntPtr set);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_set_get")]
-    public static extern Status ScriptSetGet(IntPtr set, nuint index, ScriptWinner* out_winner);
+    public static extern Status ScriptSetGet(IntPtr set, nuint index, ScriptSetWinner* out_winner);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_set_read")]
     public static extern Status ScriptSetRead(IntPtr set, nuint index, byte** out_bytes, nuint* out_size);
