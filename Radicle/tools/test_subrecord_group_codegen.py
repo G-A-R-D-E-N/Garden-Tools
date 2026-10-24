@@ -162,9 +162,9 @@ class SubrecordGroupCodegenTests(unittest.TestCase):
 
     def test_subrecord_group_successors_are_distinct_and_not_members(self):
         count = count_row(subrecord="COCT")
-        self.rejects("successors must be distinct four-character signatures", group(successors=["DATA", "DATA"]), count)
-        self.rejects("successors must be distinct four-character signatures", group(successors="DATA"), count)
-        self.rejects("successors must be distinct four-character signatures", group(successors=["DA"]), count)
+        self.rejects("successors must be distinct four printable ASCII", group(successors=["DATA", "DATA"]), count)
+        self.rejects("successors must be distinct four printable ASCII", group(successors="DATA"), count)
+        self.rejects("successors must be distinct four printable ASCII", group(successors=["DA"]), count)
         self.rejects("successors cannot be members or the count subrecord", group(successors=["CNTO"]), count)
         self.rejects("successors cannot be members or the count subrecord", group(successors=["COCT"]), count)
 
@@ -249,7 +249,7 @@ class SubrecordGroupCodegenTests(unittest.TestCase):
         self.rejects("subrecord_group members must be a non-empty array", group(members=[]), count)
         self.rejects("subrecord_group member keys must be a subset", group(members=[group_member("CNTO", extra=1)]),
                      count)
-        self.rejects("subrecord_group member signature must be four printable ASCII",
+        self.rejects("subrecord_group member signature must be four bytes",
                      group(members=[group_member("CN")]), count)
         self.rejects("required and repeatable must be booleans",
                      group(members=[group_member("CNTO", required="yes")]), count)

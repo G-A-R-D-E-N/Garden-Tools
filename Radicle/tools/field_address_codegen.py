@@ -26,7 +26,7 @@ def valid_signature(value):
 
 
 def printable_signature(value):
-    return all(0x20 <= ord(ch) <= 0x7E for ch in value)
+    return isinstance(value, str) and len(value) == 4 and all(0x20 <= ord(ch) <= 0x7E for ch in value)
 
 
 def cpp_signature(value):
@@ -43,7 +43,7 @@ def parse_when(when, path, own_subrecord):
     if unknown:
         raise ValueError(f"unknown when keys {sorted(unknown)} for {path!r}")
     subrecord = when.get("subrecord", "")
-    if subrecord != "" and not valid_signature(subrecord):
+    if subrecord != "" and not printable_signature(subrecord):
         raise ValueError(f"when.subrecord must be four printable ASCII characters: {path!r}")
     if subrecord == own_subrecord:
         raise ValueError(f"when.subrecord must be omitted to read the field's own subrecord: {path!r}")

@@ -112,14 +112,16 @@ TEST(ImageFxRecordsReal, EveryImadRecordDecodesTheHdrMultInterpolatorRows) {
     if (record.header.signature != fo4::Signature::from_string("IMAD")) return;
     ++records;
     std::span<const std::byte> mult;
-    std::size_t value_bytes = 0;
     for (const auto& subrecord : record.subrecords) {
       if (subrecord.signature == time->scalar.subrecord) mult = subrecord.data;
-      if (subrecord.signature == value->scalar.subrecord) value_bytes += subrecord.data.size();
     }
+
     ASSERT_FALSE(mult.empty()) << record.form_key.to_string();
     ASSERT_EQ(mult.size() % 8, 0u) << record.form_key.to_string();
-    EXPECT_EQ(mult.size(), value_bytes) << record.form_key.to_string();
+    const auto times = fo4::schema::scalar_field_bytes(mult, time->scalar);
+    const auto values = fo4::schema::scalar_field_bytes(mult, value->scalar);
+    EXPECT_EQ(times.size(), mult.size() / 2) << record.form_key.to_string();
+    EXPECT_EQ(values.size(), times.size()) << record.form_key.to_string();
     elements += mult.size() / 8;
     if (record.form_key.local().value() != 0x24A3C4u) return;
     known_time = fo4::schema::decode_scalar(fo4::schema::scalar_field_bytes(mult, time->scalar),
