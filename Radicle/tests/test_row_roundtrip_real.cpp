@@ -7,6 +7,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdlib>
 #include <filesystem>
@@ -118,7 +119,7 @@ void roundtrip_family(const char* family, Signature signature) {
 
   Tally tally;
   struct EditedRow {
-    const ScalarFieldDescriptor* field;
+    ScalarFieldDescriptor field;
     std::string expected;
   };
   std::vector<EditedRow> edited_rows;
@@ -157,7 +158,7 @@ void roundtrip_family(const char* family, Signature signature) {
       ++tally.skipped;
       continue;
     }
-    edited_rows.push_back({&field, decoded});
+    edited_rows.push_back({field, decoded});
     ++tally.exercised;
   }
 
@@ -176,8 +177,8 @@ void roundtrip_family(const char* family, Signature signature) {
       << family << " did not re-read the edited record byte for byte";
 
   for (const auto& row : edited_rows) {
-    EXPECT_EQ(decode_row(*restored, *row.field), row.expected)
-        << family << " lost " << row.field->path << " across the write";
+    EXPECT_EQ(decode_row(*restored, row.field), row.expected)
+        << family << " lost " << row.field.path << " across the write";
   }
   EXPECT_EQ(edited_rows.size(), tally.exercised) << family;
 
@@ -195,13 +196,20 @@ void roundtrip_family(const char* family, Signature signature) {
     ++changed;
     bool named = false;
     for (const auto& row : edited_rows) {
-      if (row.field->scalar.subrecord == before[index].signature) named = true;
+      if (row.field.scalar.subrecord == before[index].signature) named = true;
     }
     EXPECT_TRUE(named) << family << " changed " << before[index].signature.to_string()
                        << " which no edited row names";
   }
-  EXPECT_GT(changed, 0u) << family;
-  EXPECT_LE(changed, edited_rows.size()) << family << " changed more subrecords than rows edited";
+  std::vector<Signature> distinct;
+  for (const auto& row : edited_rows) {
+    if (std::find(distinct.begin(), distinct.end(), row.field.scalar.subrecord) == distinct.end()) {
+      distinct.push_back(row.field.scalar.subrecord);
+    }
+  }
+  EXPECT_GE(changed, 1u) << family;
+  EXPECT_LE(changed, distinct.size())
+      << family << " changed more subrecords than the distinct subrecords its rows name";
 }
 
 }  // namespace
