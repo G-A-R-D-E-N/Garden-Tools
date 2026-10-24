@@ -21,7 +21,7 @@ typedef struct radicle_script_set_candidate {
   const char* name;
   const char* path;
   radicle_asset_origin origin;
-  // Invariant: the loose payload path, or the archive file path for an archived payload.
+  /* Invariant: the loose payload path, or the archive file path for an archived payload. */
   const char* container;
   int32_t load_index;
   uint64_t size;
