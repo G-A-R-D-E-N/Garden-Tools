@@ -63,7 +63,8 @@ std::optional<std::filesystem::path> child(const std::filesystem::path& dir, std
 }
 
 void walk_loose(const std::filesystem::path& dir, const std::filesystem::path& root, int depth,
-                std::vector<std::pair<std::string, std::filesystem::path>>& out) {
+                std::vector<std::pair<std::string, std::filesystem::path>>& out,
+                std::set<std::string>& visited) {
   constexpr int k_max_depth = 64;
   std::error_code ec;
   std::vector<std::filesystem::path> children;
@@ -75,7 +76,9 @@ void walk_loose(const std::filesystem::path& dir, const std::filesystem::path& r
   for (const auto& path : children) {
     std::error_code entry_ec;
     if (std::filesystem::is_directory(path, entry_ec)) {
-      if (depth < k_max_depth) walk_loose(path, root, depth + 1, out);
+      if (depth < k_max_depth && visited.insert(root_key(path)).second) {
+        walk_loose(path, root, depth + 1, out, visited);
+      }
       continue;
     }
     if (!std::filesystem::is_regular_file(path, entry_ec)) continue;
@@ -211,7 +214,8 @@ std::vector<AssetListing> AssetResolver::list(std::string_view prefix, std::stri
   std::set<std::string> keys;
   for (const auto& root : roots_) {
     std::vector<std::pair<std::string, std::filesystem::path>> loose;
-    walk_loose(root, root, 0, loose);
+    std::set<std::string> visited{root_key(root)};
+    walk_loose(root, root, 0, loose, visited);
     for (auto& [key, path] : loose) {
       if (!wanted(key)) continue;
       std::error_code ec;

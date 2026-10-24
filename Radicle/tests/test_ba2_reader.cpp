@@ -426,7 +426,8 @@ TEST_F(Ba2ReaderTest, LooseWalkTerminatesOnDirectorySymlinkBackToItsParent) {
   }
   const auto assets = fo4::archive::AssetResolver::open(data(), {});
   const auto all = assets.list("", ".nif", true);
-  EXPECT_EQ(std::count_if(all.begin(), all.end(), [](const auto& item) { return item.path == "meshes/x.nif"; }), 1);
+  ASSERT_EQ(all.size(), 1u);
+  EXPECT_EQ(all[0].path, "meshes/x.nif");
   EXPECT_EQ(text_of(assets.read(*assets.locate("meshes/x.nif"))), "x");
 }
 
