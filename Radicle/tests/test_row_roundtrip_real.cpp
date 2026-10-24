@@ -221,3 +221,39 @@ TEST(RowRoundtripReal, WorldRowsSurviveWriteAndReread) {
 TEST(RowRoundtripReal, TerminalRowsSurviveWriteAndReread) {
   roundtrip_family("TERM", fo4::Signature::from_string("TERM"));
 }
+
+TEST(RowRoundtripReal, QuestRowsSurviveWriteAndReread) {
+  roundtrip_family("QUST", fo4::Signature::from_string("QUST"));
+}
+
+TEST(RowRoundtripReal, ObjectModRowsSurviveWriteAndReread) {
+  roundtrip_family("OMOD", fo4::Signature::from_string("OMOD"));
+}
+
+TEST(RowRoundtripReal, PerkRowsSurviveWriteAndReread) {
+  roundtrip_family("PERK", fo4::Signature::from_string("PERK"));
+}
+
+TEST(RowRoundtripReal, InfoRowsSurviveWriteAndReread) {
+  roundtrip_family("INFO", fo4::Signature::from_string("INFO"));
+}
+
+TEST(RowRoundtripReal, FootstepSetRowsSurviveWriteAndReread) {
+  roundtrip_family("FSTS", fo4::Signature::from_string("FSTS"));
+}
+
+TEST(RowRoundtripReal, LensRowsSurviveWriteAndReread) {
+  roundtrip_family("LENS", fo4::Signature::from_string("LENS"));
+}
+
+TEST(RowRoundtripReal, MaterialSwapRowsSurviveWriteAndReread) {
+  roundtrip_family("MSWP", fo4::Signature::from_string("MSWP"));
+}
+
+TEST(RowRoundtripReal, ArmorRowsSurviveWriteAndReread) {
+  roundtrip_family("ARMO", fo4::Signature::from_string("ARMO"));
+}
+
+TEST(RowRoundtripReal, ArmorAddonRowsSurviveWriteAndReread) {
+  roundtrip_family("ARMA", fo4::Signature::from_string("ARMA"));
+}
