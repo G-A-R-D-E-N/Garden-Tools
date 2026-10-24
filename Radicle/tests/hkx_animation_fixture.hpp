@@ -307,4 +307,30 @@ inline std::vector<std::byte> spline_mixed_position_packfile() {
   });
 }
 
+inline std::vector<std::byte> spline_zero_frame_packfile() {
+  std::vector<std::byte> names;
+  const auto name_at =
+      add_class_name(names, signature_of("hkaSplineCompressedAnimation"), "hkaSplineCompressedAnimation");
+  std::vector<std::byte> data(fo4::hkx::find_layout("hkaSplineCompressedAnimation")->size, std::byte{0});
+  std::vector<std::uint32_t> local;
+
+  set_int_member(data, "hkaAnimation", "type", 0);
+  set_float_member(data, "hkaAnimation", "duration", 0.0f);
+  set_int_member(data, "hkaAnimation", "numberOfTransformTracks", 1);
+  set_int_member(data, "hkaAnimation", "numberOfFloatTracks", 0);
+  set_int_member(data, "hkaSplineCompressedAnimation", "numFrames", 0);
+  set_int_member(data, "hkaSplineCompressedAnimation", "numBlocks", 1);
+  set_int_member(data, "hkaSplineCompressedAnimation", "maxFramesPerBlock", 2);
+  set_int_member(data, "hkaSplineCompressedAnimation", "maskAndQuantizationSize", 4);
+  set_float_member(data, "hkaSplineCompressedAnimation", "blockDuration", 0.0f);
+  set_float_member(data, "hkaSplineCompressedAnimation", "frameDuration", 0.0f);
+  set_count(data, member_at("hkaSplineCompressedAnimation", "data"), 0);
+
+  return build_packfile({
+      TestSection{"__classnames__", names, {}, {}, {}},
+      TestSection{"__types__", {}, {}, {}, {}},
+      TestSection{"__data__", std::move(data), std::move(local), {}, {0, 0, name_at}},
+  });
+}
+
 }  // namespace fo4::test::hkx

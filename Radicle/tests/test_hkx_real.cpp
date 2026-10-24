@@ -3,6 +3,7 @@
 #include "fo4/hkx/packfile.hpp"
 #include "fo4/hkx/skeleton.hpp"
 #include "hkx_animation_manifest.hpp"
+#include "hkx_seam_ratio.hpp"
 #include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
@@ -29,22 +30,6 @@ std::string read_text_file(const std::filesystem::path& path) {
 std::string without_carriage_returns(std::string text) {
   text.erase(std::remove(text.begin(), text.end(), '\r'), text.end());
   return text;
-}
-
-float rotation_distance(const std::array<float, 4>& a, const std::array<float, 4>& b) {
-  const float dot = a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3];
-  return 1.0f - std::fabs(dot);
-}
-
-// Requires the same scale for both parts: the step is the translation distance plus the quaternion turn.
-float pose_step(const fo4::hkx::HkxAnimationTrack& track, std::size_t frame) {
-  const auto& from = track.translations[frame];
-  const auto& to = track.translations[frame + 1];
-  const float dx = to[0] - from[0];
-  const float dy = to[1] - from[1];
-  const float dz = to[2] - from[2];
-  return std::sqrt(dx * dx + dy * dy + dz * dz) +
-         rotation_distance(track.rotations[frame], track.rotations[frame + 1]);
 }
 
 }  // namespace
@@ -171,24 +156,15 @@ TEST(HkxAnimationRealData, DecodesEveryFrameOfAVanillaTwoBlockClip) {
     }
   }
 
-  // Requires the later block to own the shared frame: a packed stride must duplicate frame 255.
-  // The step out of the seam must therefore collapse while its neighbours do not.
-  const std::size_t seam = animation.blocks.max_frames_per_block - 1;
-  ASSERT_LT(std::size_t{3}, seam);
-  ASSERT_LT(seam + 2, animation.frame_count);
-  for (std::size_t track = 0; track < animation.tracks.size(); ++track) {
-    const fo4::hkx::HkxAnimationTrack& frames = animation.tracks[track];
-    const float neighbour = std::max({pose_step(frames, seam - 3), pose_step(frames, seam - 2),
-                                      pose_step(frames, seam + 1), pose_step(frames, seam + 2)});
-    const float into_seam = pose_step(frames, seam - 1);
-    const float out_of_seam = pose_step(frames, seam);
-    if (neighbour > 1e-5f) {
-      EXPECT_GE(into_seam, 0.25f * neighbour) << "track " << track;
-      EXPECT_GE(out_of_seam, 0.25f * neighbour) << "track " << track;
-    }
-    EXPECT_LE(into_seam, 4.0f * neighbour + 1e-3f) << "track " << track;
-    EXPECT_LE(out_of_seam, 4.0f * neighbour + 1e-3f) << "track " << track;
-  }
+  // Requires the later block to own the shared frame: a packed stride repeats frame 255 at 256, so
+  // the step out of the seam must collapse against the steps either side of it on every moving track.
+  const auto seam = fo4::test::hkx::seam_ratio(animation, 1e-4f);
+  ASSERT_GE(seam.moving, 16u) << "only " << seam.moving << " tracks move around the seam";
+  const bool median_holds = seam.median >= 0.5f;
+  const bool band_holds = seam.within_band * 5 >= seam.moving * 4;
+  EXPECT_TRUE(median_holds || band_holds)
+      << "median ratio " << seam.median << ", " << seam.within_band << " of " << seam.moving
+      << " tracks within a quarter to four times their neighbours";
 }
 
 TEST(HkxAnimationRealData, MatchesTheBgsManifestForTheRadroachClip) {

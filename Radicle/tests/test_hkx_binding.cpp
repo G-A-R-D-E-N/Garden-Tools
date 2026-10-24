@@ -108,6 +108,21 @@ TEST(HkxAnimationBinding, ResolvesTheAnimationPointerThroughItsGlobalFixup) {
   EXPECT_TRUE(names_an_animation);
 }
 
+TEST(HkxAnimationBinding, IgnoresAGlobalFixupDestinationPastTheDataSection) {
+  // Detects an animation offset taken from a fixup no object can start at. read_packfile refuses such a
+  // table, so the destination must be widened after the read to pin the binding's own range check.
+  const auto bytes = binding_with_animation_packfile();
+  HkxPackfile packfile;
+  ASSERT_EQ(read_packfile(bytes, packfile), HkxStatus::Ok);
+  fo4::hkx::HkxSection& section = packfile.sections[packfile.data_section];
+  ASSERT_EQ(section.global_fixups.size(), 1u);
+  section.global_fixups.front().destination = static_cast<std::uint32_t>(section.data.size());
+
+  HkxAnimationBinding binding;
+  ASSERT_EQ(read_binding(packfile, binding), HkxStatus::Ok);
+  EXPECT_FALSE(binding.animation_offset.has_value());
+}
+
 TEST(HkxAnimationBinding, ReadBindingReportsMissingObjectWhenNoBindingIsPresent) {
   const auto bytes = single_object_packfile("hkRootLevelContainer", signature_of("hkRootLevelContainer"),
                                             filled(32, std::byte{0}), {});

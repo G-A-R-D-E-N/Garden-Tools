@@ -201,9 +201,9 @@ HkxStatus read_animation(const HkxPackfile& packfile, HkxAnimation& out) {
     return HkxStatus::MissingObject;
   }
 
-  out.class_name = animation->class_name;
   const HkxClassLayout* layout = find_layout(animation->class_name, animation->signature);
   if (layout == nullptr) return HkxStatus::UnsupportedLayout;
+  out.class_name = animation->class_name;
 
   const HkxStatus status = animation->class_name == "hkaSplineCompressedAnimation"
                                ? detail::decode_spline_animation(packfile, *animation, *layout, out)

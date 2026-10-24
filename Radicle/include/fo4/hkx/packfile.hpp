@@ -36,7 +36,7 @@ struct HkxRemoteFixup {
 
 struct HkxSection {
   std::string tag;
-  // Offset of the section in the file, so stream alignment reproduces BGS's file-relative padding.
+  // Requires the section start: alignment rounds against the file offset, not the section data.
   std::size_t file_offset{0};
   std::vector<std::byte> data;
   std::vector<HkxLocalFixup> local_fixups;

@@ -3,6 +3,7 @@
 #include "fo4/hkx/packfile.hpp"
 #include "hkx_animation_fixture.hpp"
 #include "hkx_animation_manifest.hpp"
+#include "hkx_seam_ratio.hpp"
 #include "hkx_test_fixture.hpp"
 
 #include <gtest/gtest.h>
@@ -222,6 +223,16 @@ TEST(HkxAnimation, AnInterleavedTransformArrayThatIsNotWholeFramesIsBadSection) 
   EXPECT_TRUE(animation.tracks.empty());
 }
 
+TEST(HkxAnimation, AnInterleavedClipWithTracksAndNoTransformsIsBadSection) {
+  // Detects a frame count divided out of an empty array: a file claiming tracks must hold their samples.
+  const auto bytes = interleaved_shape_packfile(2, 0);
+  HkxPackfile packfile;
+  ASSERT_EQ(read_packfile(bytes, packfile), HkxStatus::Ok);
+  HkxAnimation animation;
+  EXPECT_EQ(read_animation(packfile, animation), HkxStatus::BadSection);
+  EXPECT_TRUE(animation.tracks.empty());
+}
+
 TEST(HkxAnimation, SplineClipEvaluatesAHandBuiltLinearSplineAtKnownFrames) {
   const auto bytes = spline_packfile(-1, -1);
   HkxPackfile packfile;
@@ -366,6 +377,16 @@ TEST(HkxAnimation, ASplinePositionChannelReadsControlPointsOnlyForItsSplineAxes)
   EXPECT_FLOAT_EQ(animation.tracks[1].translations[0][2], 9.0f);
 }
 
+TEST(HkxAnimation, ASplineClipWithNoFramesAndNoDataIsTruncated) {
+  // Detects a spline decode that must check the mask room even when there are no frames to read.
+  const auto bytes = spline_zero_frame_packfile();
+  HkxPackfile packfile;
+  ASSERT_EQ(read_packfile(bytes, packfile), HkxStatus::Ok);
+  HkxAnimation animation;
+  EXPECT_EQ(read_animation(packfile, animation), HkxStatus::Truncated);
+  EXPECT_TRUE(animation.tracks.empty());
+}
+
 TEST(HkxAnimation, DecodesAThreeComponentQuaternionAtTwentyFourBits) {
   // Detects the 24-bit format read at the 40-bit width, which must consume three bytes per control point.
   const auto bytes = spline_rotation_packfile(3, 1);
@@ -419,6 +440,40 @@ TEST(HkxAnimation, ASplineDegreeAboveThreeIsRejected) {
   ASSERT_EQ(read_packfile(bytes, packfile), HkxStatus::Ok);
   HkxAnimation animation;
   EXPECT_EQ(read_animation(packfile, animation), HkxStatus::BadSection);
+}
+
+TEST(HkxAnimation, TheSeamRatioAggregateCollapsesOnlyForAPackedBlockStride) {
+  // Detects a packed stride at the aggregate: it must repeat frame 255 at 256, so the seam step
+  // must fall to zero while the stride-255 reading keeps it level with its neighbours.
+  constexpr std::size_t kTracks = 16;
+  constexpr std::size_t kBlockFrames = 256;
+  constexpr std::size_t kFrames = 300;
+  const auto ramped_clip = [&](bool packed) {
+    HkxAnimation animation;
+    animation.blocks.count = 2;
+    animation.blocks.max_frames_per_block = kBlockFrames;
+    animation.frame_count = kFrames;
+    animation.tracks.resize(kTracks);
+    for (fo4::hkx::HkxAnimationTrack& track : animation.tracks) {
+      for (std::size_t frame = 0; frame < kFrames; ++frame) {
+        const float value =
+            packed && frame >= kBlockFrames ? static_cast<float>(frame - 1) : static_cast<float>(frame);
+        track.translations.push_back({value, 0.0f, 0.0f});
+        track.rotations.push_back({0.0f, 0.0f, 0.0f, 1.0f});
+        track.scales.push_back({1.0f, 1.0f, 1.0f});
+      }
+    }
+    return animation;
+  };
+
+  const auto held = fo4::test::hkx::seam_ratio(ramped_clip(false), 1e-4f);
+  const auto collapsed = fo4::test::hkx::seam_ratio(ramped_clip(true), 1e-4f);
+  EXPECT_EQ(held.moving, kTracks);
+  EXPECT_EQ(held.within_band, held.moving);
+  EXPECT_GE(held.median, 0.5f);
+  EXPECT_EQ(collapsed.moving, kTracks);
+  EXPECT_EQ(collapsed.within_band, 0u);
+  EXPECT_LT(collapsed.median, 0.5f);
 }
 
 TEST(HkxAnimation, TheManifestPinsTheDecodedShapeAndPosesOfTheHandBuiltSpline) {
@@ -493,6 +548,8 @@ TEST(HkxAnimation, ReadAnimationRefusesAnAnimationWhoseSignatureDoesNotMatchTheL
   ASSERT_EQ(read_packfile(bytes, packfile), HkxStatus::Ok);
   HkxAnimation animation;
   EXPECT_EQ(read_animation(packfile, animation), HkxStatus::UnsupportedLayout);
+  EXPECT_TRUE(animation.class_name.empty());
+  EXPECT_TRUE(animation.tracks.empty());
 }
 
 TEST(HkxAnimation, EveryShorterDataArrayOfASplineFileIsRejected) {
