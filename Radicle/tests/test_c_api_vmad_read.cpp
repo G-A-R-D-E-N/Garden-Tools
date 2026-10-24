@@ -60,7 +60,7 @@ std::vector<std::byte> make_vmad() {
   return out.bytes;
 }
 
-std::vector<std::byte> make_struct_array_vmad() {
+std::vector<std::byte> make_struct_with_array_member_vmad() {
   fo4::test::ByteWriter out;
   out.u16(6);
   out.u16(2);
@@ -192,7 +192,7 @@ std::vector<std::byte> make_latin1_vmad() {
   fo4::test::ByteWriter out;
   out.u16(6);
   out.u16(2);
-  out.u16(1);
+  out.u16(2);
   wstring(out, "Caf\xE9");
   out.u8(0);
   out.u16(3);
@@ -213,6 +213,13 @@ std::vector<std::byte> make_latin1_vmad() {
   out.u8(2);
   out.u8(0);
   wstring(out, "Caf\xC3\xA9");
+  wstring(out, "Quo\x93te\x9F");
+  out.u8(0);
+  out.u16(1);
+  wstring(out, "");
+  out.u8(2);
+  out.u8(0);
+  wstring(out, "\x80");
   return out.bytes;
 }
 
@@ -233,6 +240,12 @@ std::vector<std::byte> make_unsupported_vmad() {
 std::vector<std::byte> with_trailing(std::vector<std::byte> bytes, std::size_t extra) {
   for (std::size_t i = 0; i < extra; ++i) bytes.push_back(std::byte{0xAB});
   return bytes;
+}
+
+// A pointer that a rejected call must overwrite; it is never dereferenced.
+template <typename T>
+T* sentinel() {
+  return reinterpret_cast<T*>(static_cast<std::uintptr_t>(1));
 }
 
 std::vector<std::byte> make_undecodable_plugin() {
@@ -374,8 +387,13 @@ TEST_F(CApiVmadReadTest, RefusesRecordsWithoutVmadAndBadIndexes) {
   radicle_vmad_scripts* raw = nullptr;
   EXPECT_EQ(radicle_record_vmad_scripts(env.get(), winner(env.get(), 0x806), &raw), RADICLE_STATUS_NOT_FOUND);
   EXPECT_EQ(raw, nullptr);
-  EXPECT_EQ(radicle_record_vmad_scripts(nullptr, winner(env.get(), 0x800), &raw), RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(radicle_record_vmad_scripts(env.get(), nullptr, &raw), RADICLE_STATUS_INVALID_ARGUMENT);
+  // Invariant: a rejected call clears the caller's handle before the argument and environment checks.
+  radicle_vmad_scripts* stale = sentinel<radicle_vmad_scripts>();
+  EXPECT_EQ(radicle_record_vmad_scripts(nullptr, winner(env.get(), 0x800), &stale), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(stale, nullptr);
+  stale = sentinel<radicle_vmad_scripts>();
+  EXPECT_EQ(radicle_record_vmad_scripts(env.get(), nullptr, &stale), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(stale, nullptr);
   EXPECT_EQ(radicle_record_vmad_scripts(env.get(), winner(env.get(), 0x800), nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
 
   ASSERT_EQ(radicle_record_vmad_scripts(env.get(), winner(env.get(), 0x800), &raw), RADICLE_STATUS_OK);
@@ -392,7 +410,7 @@ TEST_F(CApiVmadReadTest, RefusesRecordsWithoutVmadAndBadIndexes) {
 }
 
 TEST_F(CApiVmadReadTest, ReportsAStructMemberItCannotDecodeAsUnsupported) {
-  const auto env = open(make_struct_array_vmad());
+  const auto env = open(make_struct_with_array_member_vmad());
   ASSERT_NE(env, nullptr);
   radicle_vmad_scripts* raw = nullptr;
   ASSERT_EQ(radicle_record_vmad_scripts(env.get(), winner(env.get(), 0x800), &raw), RADICLE_STATUS_OK)
@@ -587,9 +605,20 @@ TEST_F(CApiVmadReadTest, ConvertsNamesFromWindows1252AndKeepsUtf8Values) {
   EXPECT_EQ(property.element_kind, RADICLE_VMAD_STRUCT_MEMBER);
   ASSERT_EQ(radicle_vmad_scripts_element(scripts.get(), 0, 2, 0, &element), RADICLE_STATUS_OK);
   EXPECT_EQ(std::string(element.member_name), "Caf\xC3\xA9");
-  ASSERT_NE(element.text, nullptr);
-  EXPECT_EQ(std::string(element.text), "Caf\xC3\xA9");
+  ASSERT_NE(element.text, nullptr);  EXPECT_EQ(std::string(element.text), "Caf\xC3\xA9");
+
+  radicle_vmad_script second{};
+  ASSERT_EQ(radicle_vmad_scripts_script(scripts.get(), 1, &second), RADICLE_STATUS_OK);
+  // Invariant: bytes 0x80, 0x93 and 0x9F must decode as Windows-1252 (euro, left double quote, Y diaeresis) and not as Latin-1 U+0080, U+0093 and U+009F.
+  EXPECT_EQ(std::string(second.name), "Quo\xE2\x80\x9Cte\xC5\xB8");
+  ASSERT_EQ(radicle_vmad_scripts_property(scripts.get(), 1, 0, &property), RADICLE_STATUS_OK);
+  // Invariant: an empty name is a valid UTF-8 string, not a missing one, so the pointer must not be NULL.
+  ASSERT_NE(property.name, nullptr);
+  EXPECT_EQ(std::string(property.name), "");
+  ASSERT_NE(property.text, nullptr);
+  EXPECT_EQ(std::string(property.text), "\x80");
 }
+
 TEST_F(CApiVmadReadTest, ReportsTruncatedVmadAsParseError) {
   auto truncated = make_vmad();
   truncated.resize(truncated.size() - 4);

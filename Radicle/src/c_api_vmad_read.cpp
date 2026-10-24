@@ -237,16 +237,15 @@ radicle_status radicle_record_vmad_scripts(const radicle_env* env,
                                             const radicle_record* record,
                                             radicle_vmad_scripts** out_scripts) {
   clear_error();
+  if (out_scripts != nullptr) *out_scripts = nullptr;
   if (env == nullptr || record == nullptr || out_scripts == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env, record and out_scripts are required");
   }
-  *out_scripts = nullptr;
   return guarded("unknown exception while decoding a record VMAD", [&] {
     const auto* ref = to_ref(record);
     if (!belongs_to_env(env, ref)) {
       return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to env");
     }
-    if (ref->record == nullptr) return fail(RADICLE_STATUS_NOT_FOUND, "record has no VMAD subrecord");
     // Invariant: an undecodable record reports a decode failure, never NOT_FOUND, because its payload is unknown.
     try {
       fo4::require_decodable(*ref->record);
