@@ -371,6 +371,20 @@ std::vector<std::byte> morph_new_styles_payload() {
   return body.body;
 }
 
+// COLORMAPDATA is one compressed block: the palette must precede the pixel bytes inside the stream.
+std::vector<std::uint8_t> colour_map_palette(std::uint8_t table_size, bool alpha) {
+  std::vector<std::uint8_t> palette;
+  for (std::uint32_t index = 0; index <= table_size; ++index) {
+    palette.push_back(static_cast<std::uint8_t>(index + 1));
+    palette.push_back(static_cast<std::uint8_t>(index + 2));
+    palette.push_back(static_cast<std::uint8_t>(index + 3));
+    if (alpha) {
+      palette.push_back(0xFF);
+    }
+  }
+  return palette;
+}
+
 std::vector<std::byte> lossless_payload(std::uint16_t format, std::uint16_t width,
                                         std::uint16_t height, std::size_t row_bytes,
                                         std::uint8_t table_size, bool alpha) {
@@ -379,17 +393,12 @@ std::vector<std::byte> lossless_payload(std::uint16_t format, std::uint16_t widt
   body.u8(format);
   body.u16(width);
   body.u16(height);
+  std::vector<std::uint8_t> raw(row_bytes * height, 0x7F);
   if (format == 3) {
     body.u8(table_size);
-    for (std::uint32_t index = 0; index <= table_size; ++index) {
-      if (alpha) {
-        rgba(body, index, index, index, 0xFF);
-      } else {
-        rgb(body, index, index, index);
-      }
-    }
+    const auto palette = colour_map_palette(table_size, alpha);
+    raw.insert(raw.begin(), palette.begin(), palette.end());
   }
-  std::vector<std::uint8_t> raw(row_bytes * height, 0x7F);
   body.bytes(zlib_bytes(raw));
   return body.body;
 }
@@ -513,6 +522,20 @@ TEST(SwfShape, ExtendedStyleCountsUseTheTwoByteForm) {
   EXPECT_TRUE(shape.line_styles.empty());
 }
 
+TEST(SwfShape, StyleCountIsBoundedByTheRemainingBytes) {
+  // Regression: an extended count must not exceed the bytes that could encode it.
+  SwfBuilder body;
+  shape_head(body, 8);
+  body.u8(0xFF);
+  body.u16(0xFFFF);
+  body.u8(0);
+  body.u8(0x10);
+  body.u8(0);
+  const auto result = read_one(22, body.body);
+  EXPECT_EQ(result.status, SwfStatus::malformed_tag);
+  EXPECT_FALSE(result.file.tags[0].shape.has_value());
+}
+
 TEST(SwfShape, BytesAfterTheEndRecordAreMalformed) {
   // Regression: a payload must be refused when bytes follow its end record.
   auto payload = define_shape_3_payload();
@@ -569,6 +592,20 @@ TEST(SwfMorph, NewStylesRecordParsesMorphStylePairs) {
   EXPECT_EQ(morph.end_edge_count, 0u);
 }
 
+TEST(SwfMorph, StyleCountIsBoundedByTheRemainingBytes) {
+  // Regression: an extended morph style count must not exceed the bytes that could encode it.
+  SwfBuilder body;
+  body.u16(15);
+  body.rect(0, 100, 0, 100, 10);
+  body.rect(0, 120, 0, 90, 10);
+  body.u8(0xFF);
+  body.u16(0xFFFF);
+  body.u8(0);
+  const auto result = read_one(46, body.body);
+  EXPECT_EQ(result.status, SwfStatus::malformed_tag);
+  EXPECT_FALSE(result.file.tags[0].morph_shape.has_value());
+}
+
 TEST(SwfBitmap, LosslessRgb15InflatesToThePaddedRowSize) {
   // Regression: a lossless row must be padded to four bytes, or every odd width is refused.
   const auto result = read_one(20, lossless_payload(4, 3, 2, 8, 0, false));
@@ -583,7 +620,7 @@ TEST(SwfBitmap, LosslessRgb15InflatesToThePaddedRowSize) {
 }
 
 TEST(SwfBitmap, LosslessFirstFormatUsesEightBitRows) {
-  // Regression: format 3 must use one byte per pixel after its palette.
+  // Regression: format 3 must use one byte per pixel after the palette in the same stream.
   const auto result = read_one(20, lossless_payload(3, 5, 3, 8, 3, false));
   ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
   const auto& bitmap = *result.file.tags[0].bitmap;
@@ -593,14 +630,30 @@ TEST(SwfBitmap, LosslessFirstFormatUsesEightBitRows) {
   EXPECT_GT(bitmap.data_size, 0u);
 }
 
-TEST(SwfBitmap, LosslessColourMapSkipsTheRgbaPaletteBeforeTheStream) {
-  // Regression: the compressed stream must start after the palette.
+TEST(SwfBitmap, LosslessColourMapInflatesThePaletteInsideTheStream) {
+  // Regression: COLORMAPDATA is one compressed block, so the palette must inflate with the rows.
   const auto result = read_one(36, lossless_payload(3, 2, 2, 4, 0, true));
   ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
   const auto& bitmap = *result.file.tags[0].bitmap;
   ASSERT_TRUE(bitmap.color_table_size.has_value());
   EXPECT_EQ(*bitmap.color_table_size, 0u);
-  EXPECT_EQ(bitmap.data_size, zlib_bytes(std::vector<std::uint8_t>(8, 0x7F)).size());
+  auto raw = colour_map_palette(0, true);
+  raw.insert(raw.end(), 8, 0x7F);
+  EXPECT_EQ(bitmap.data_size, zlib_bytes(raw).size());
+}
+
+TEST(SwfBitmap, LosslessColourMapRequiresThePaletteInTheStream) {
+  // Regression: the inflated size must be the palette plus the rows, not the rows alone.
+  SwfBuilder body;
+  body.u16(3);
+  body.u8(3);
+  body.u16(2);
+  body.u16(2);
+  body.u8(0);
+  body.bytes(zlib_bytes(std::vector<std::uint8_t>(8, 0x7F)));
+  const auto result = read_one(36, body.body);
+  EXPECT_EQ(result.status, SwfStatus::malformed_tag);
+  EXPECT_FALSE(result.file.tags[0].bitmap.has_value());
 }
 
 TEST(SwfBitmap, LosslessRejectsAStreamThatInflatesToTheWrongSize) {
@@ -614,6 +667,18 @@ TEST(SwfBitmap, LosslessRejectsAStreamThatInflatesToTheWrongSize) {
   const auto result = read_one(20, body.body);
   EXPECT_EQ(result.status, SwfStatus::malformed_tag);
   EXPECT_FALSE(result.file.tags[0].bitmap.has_value());
+}
+
+TEST(SwfBitmap, LosslessRejectsGeometryBeyondTheByteCap) {
+  // Regression: the row times height product must be checked before it is formed.
+  SwfBuilder body;
+  body.u16(3);
+  body.u8(5);
+  body.u16(0xFFFF);
+  body.u16(0xFFFF);
+  body.bytes(zlib_bytes(std::vector<std::uint8_t>(8, 0x7F)));
+  const auto result = read_one(20, body.body);
+  EXPECT_EQ(result.status, SwfStatus::malformed_tag);
 }
 
 TEST(SwfJpeg, DefineBitsJpeg3SplitsTheImageFromTheAlphaPlane) {

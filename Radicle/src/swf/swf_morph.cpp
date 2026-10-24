@@ -112,7 +112,8 @@ bool read_style_count(Cursor& cursor, std::size_t& count) {
 
 bool read_morph_styles(Cursor& cursor, unsigned version, SwfShapeStyles& out,
                        std::size_t& fill_count, std::size_t& line_count) {
-  if (!read_style_count(cursor, fill_count)) {
+  if (!read_style_count(cursor, fill_count) ||
+      !style_count_fits(cursor, fill_count, kMinFillStyleBytes)) {
     return false;
   }
   for (std::size_t index = 0; index < fill_count; ++index) {
@@ -120,7 +121,8 @@ bool read_morph_styles(Cursor& cursor, unsigned version, SwfShapeStyles& out,
       return false;
     }
   }
-  if (!read_style_count(cursor, line_count)) {
+  if (!read_style_count(cursor, line_count) ||
+      !style_count_fits(cursor, line_count, kMinLineStyleBytes)) {
     return false;
   }
   for (std::size_t index = 0; index < line_count; ++index) {

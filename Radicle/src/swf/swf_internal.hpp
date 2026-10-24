@@ -77,6 +77,13 @@ struct ShapeRecordCounts {
   std::uint32_t style_changes{0};
 };
 
+// Each style entry requires its type byte; a line style requires its two UI16 widths (SWF 19).
+constexpr std::size_t kMinFillStyleBytes = 1;
+constexpr std::size_t kMinLineStyleBytes = 4;
+
+// A declared style count must not exceed the bytes left that could encode it.
+bool style_count_fits(const Cursor& cursor, std::size_t count, std::size_t minimum_bytes);
+
 bool read_fill_style(Cursor& cursor, unsigned version, SwfFillStyle& out);
 
 bool read_line_style(Cursor& cursor, unsigned version, SwfLineStyle& out);

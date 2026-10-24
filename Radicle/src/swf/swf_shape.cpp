@@ -96,6 +96,12 @@ bool Cursor::matrix(SwfMatrix& out) {
   return true;
 }
 
+bool style_count_fits(const Cursor& cursor, std::size_t count, std::size_t minimum_bytes) {
+  const auto remaining =
+      cursor.position < cursor.data.size() ? cursor.data.size() - cursor.position : 0;
+  return count <= remaining / minimum_bytes;
+}
+
 bool read_fill_style(Cursor& cursor, unsigned version, SwfFillStyle& out) {
   std::uint8_t kind = 0;
   if (!cursor.u8(kind)) {
@@ -195,6 +201,9 @@ bool read_shape_styles(Cursor& cursor, unsigned version, SwfShapeStyles& out) {
     }
     fill_count = extended;
   }
+  if (!style_count_fits(cursor, fill_count, kMinFillStyleBytes)) {
+    return false;
+  }
   for (std::size_t index = 0; index < fill_count; ++index) {
     SwfFillStyle fill;
     if (!read_fill_style(cursor, version, fill)) {
@@ -212,6 +221,9 @@ bool read_shape_styles(Cursor& cursor, unsigned version, SwfShapeStyles& out) {
       return false;
     }
     line_count = extended;
+  }
+  if (!style_count_fits(cursor, line_count, kMinLineStyleBytes)) {
+    return false;
   }
   for (std::size_t index = 0; index < line_count; ++index) {
     SwfLineStyle line;

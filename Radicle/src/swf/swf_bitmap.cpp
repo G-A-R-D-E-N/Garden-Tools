@@ -163,13 +163,12 @@ SwfStatus decode_bitmap_tag(std::span<const std::byte> data, SwfTag& out_tag) {
     default:
       return SwfStatus::malformed_tag;
   }
-  if (cursor.position > data.size() || data.size() - cursor.position < palette) {
-    return SwfStatus::malformed_tag;
-  }
-  cursor.position += palette;
   const auto pixels = static_cast<std::size_t>(bitmap.format == 3 ? 1u : (bitmap.format == 4 ? 2u : 4u));
   const auto row = (static_cast<std::size_t>(bitmap.width) * pixels + 3u) & ~std::size_t{3};
-  const auto expected = row * static_cast<std::size_t>(bitmap.height);
+  if (row > kMaxBitmapBytes / static_cast<std::size_t>(bitmap.height)) {
+    return SwfStatus::malformed_tag;
+  }
+  const auto expected = row * static_cast<std::size_t>(bitmap.height) + palette;
   if (expected > kMaxBitmapBytes) {
     return SwfStatus::malformed_tag;
   }
