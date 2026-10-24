@@ -33,8 +33,52 @@ struct MovieStats {
   std::size_t exporter_info_movies{0};
   std::size_t external_image_movies{0};
   std::size_t font_texture_movies{0};
+  std::size_t shape_count{0};
+  std::size_t morph_count{0};
+  std::size_t bitmap_count{0};
+  std::size_t jpeg_count{0};
+  std::size_t jpeg_tables_count{0};
+  std::size_t art_failures{0};
   std::map<std::string, std::size_t> versions;
 };
+
+void check_art(const fo4::swf::SwfTag& tag, MovieStats& stats) {
+  switch (tag.code) {
+    case fo4::swf::tag::kDefineShape:
+    case fo4::swf::tag::kDefineShape2:
+    case fo4::swf::tag::kDefineShape3:
+    case fo4::swf::tag::kDefineShape4:
+      ++stats.shape_count;
+      if (!tag.shape) ++stats.art_failures;
+      break;
+    case fo4::swf::tag::kDefineMorphShape:
+    case fo4::swf::tag::kDefineMorphShape2:
+      ++stats.morph_count;
+      if (!tag.morph_shape) ++stats.art_failures;
+      break;
+    case fo4::swf::tag::kDefineBitsLossless:
+    case fo4::swf::tag::kDefineBitsLossless2:
+      ++stats.bitmap_count;
+      if (!tag.bitmap) ++stats.art_failures;
+      break;
+    case fo4::swf::tag::kDefineBits:
+    case fo4::swf::tag::kDefineBitsJpeg2:
+    case fo4::swf::tag::kDefineBitsJpeg3:
+    case fo4::swf::tag::kDefineBitsJpeg4:
+      ++stats.jpeg_count;
+      if (!tag.jpeg) ++stats.art_failures;
+      break;
+    case fo4::swf::tag::kJpegTables:
+      ++stats.jpeg_tables_count;
+      if (!tag.jpeg_tables) ++stats.art_failures;
+      break;
+    default:
+      break;
+  }
+  for (const auto& child : tag.children) {
+    check_art(child, stats);
+  }
+}
 
 void check_movie(const std::string& name, std::span<const std::byte> bytes, MovieStats& stats) {
   ++stats.total;
@@ -65,6 +109,9 @@ void check_movie(const std::string& name, std::span<const std::byte> bytes, Movi
   stats.font_texture_movies += summary.font_texture_tags != 0 ? 1u : 0u;
   ++stats.versions["v" + std::to_string(summary.version) + (summary.is_gfx ? "-gfx" : "-swf") +
                     (summary.compressed ? "-zlib" : "-raw")];
+  for (const auto& tag : result.file.tags) {
+    check_art(tag, stats);
+  }
   const std::vector<std::byte> original(bytes.begin(), bytes.end());
   EXPECT_EQ(fo4::swf::write_swf(result.file), original) << name;
 }
@@ -123,6 +170,16 @@ TEST(SwfRealData, ParsesEveryInterfaceMovieAndRoundTripsByteIdentically) {
 
   EXPECT_GT(stats.movies, 0u);
   EXPECT_EQ(stats.movies + stats.lzma, stats.total);
+  // Regression: every shipped shape, morph, bitmap and JPEG tag must decode.
+  EXPECT_EQ(stats.art_failures, 0u);
+  EXPECT_GT(stats.shape_count, 0u);
+  EXPECT_GT(stats.bitmap_count, 0u);
+  RecordProperty("shape_tags", std::to_string(stats.shape_count));
+  RecordProperty("morph_tags", std::to_string(stats.morph_count));
+  RecordProperty("lossless_tags", std::to_string(stats.bitmap_count));
+  RecordProperty("jpeg_tags", std::to_string(stats.jpeg_count));
+  RecordProperty("jpeg_tables_tags", std::to_string(stats.jpeg_tables_count));
+  RecordProperty("art_failures", std::to_string(stats.art_failures));
   RecordProperty("movies", std::to_string(stats.movies));
   RecordProperty("gfx_movies", std::to_string(stats.gfx));
   RecordProperty("compressed_movies", std::to_string(stats.compressed));

@@ -53,6 +53,41 @@ private:
   std::size_t bit_position_{0};
 };
 
+struct Cursor {
+  std::span<const std::byte> data;
+  std::size_t position{0};
+
+  bool u8(std::uint8_t& out);
+  bool u16(std::uint16_t& out);
+  bool u32(std::uint32_t& out);
+  bool matrix(SwfMatrix& out);
+};
+
+struct SwfShapeStyles {
+  std::vector<SwfFillStyle> fills;
+  std::vector<SwfLineStyle> lines;
+  unsigned fill_bits{0};
+  unsigned line_bits{0};
+};
+
+struct ShapeRecordCounts {
+  std::uint32_t records{0};
+  std::uint32_t edges{0};
+  std::uint32_t curved_edges{0};
+  std::uint32_t style_changes{0};
+};
+
+bool read_fill_style(Cursor& cursor, unsigned version, SwfFillStyle& out);
+
+bool read_line_style(Cursor& cursor, unsigned version, SwfLineStyle& out);
+
+bool read_shape_styles(Cursor& cursor, unsigned version, SwfShapeStyles& out);
+
+// Requires an EndShapeRecord; `next` is the byte the aligned stream ends on.
+bool read_shape_records(std::span<const std::byte> data, std::size_t start, unsigned version,
+                        unsigned fill_bits, unsigned line_bits, ShapeRecordCounts& counts,
+                        std::size_t& next);
+
 std::string to_text(std::span<const std::byte> bytes);
 
 std::uint8_t byte_at(std::span<const std::byte> bytes, std::size_t index) noexcept;
@@ -70,6 +105,10 @@ SwfStatus decode_placement_tag(std::span<const std::byte> data, SwfTag& out_tag)
 SwfStatus decode_shape_tag(std::span<const std::byte> data, SwfTag& out_tag);
 
 SwfStatus decode_bitmap_tag(std::span<const std::byte> data, SwfTag& out_tag);
+
+SwfStatus decode_morph_tag(std::span<const std::byte> data, SwfTag& out_tag);
+
+SwfStatus decode_jpeg_tag(std::span<const std::byte> data, SwfTag& out_tag);
 
 SwfStatus decode_text_tag(std::span<const std::byte> data, SwfTag& out_tag);
 

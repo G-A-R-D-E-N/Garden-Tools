@@ -346,6 +346,15 @@ SwfStatus decode_tag_payload(const std::vector<std::byte>& payload, SwfTag& out_
     case tag::kDefineBitsLossless:
     case tag::kDefineBitsLossless2:
       return decode_bitmap_tag(data, out_tag);
+    case tag::kDefineBits:
+    case tag::kJpegTables:
+    case tag::kDefineBitsJpeg2:
+    case tag::kDefineBitsJpeg3:
+    case tag::kDefineBitsJpeg4:
+      return decode_jpeg_tag(data, out_tag);
+    case tag::kDefineMorphShape:
+    case tag::kDefineMorphShape2:
+      return decode_morph_tag(data, out_tag);
     case tag::kDefineFont:
     case tag::kDefineFont2:
     case tag::kDefineFont3:
