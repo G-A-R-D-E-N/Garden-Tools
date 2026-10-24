@@ -7,12 +7,13 @@
 extern "C" {
 #endif
 
-// Invariant: every Scripts/**.pex payload the assets reach resolves to one winner per name.
-// Invariant: a loose payload beats an archive payload, then a higher load index wins, then the ordinally greater container path.
-// Invariant: a name is a lower case path under Scripts/ without the .pex extension, so names compare without regard to case.
-// Invariant: a set borrows the radicle_assets handle it was resolved from, which must outlive the set.
-// Invariant: strings returned here stay valid until radicle_script_set_destroy and are owned by the set.
-// Invariant: a set is not thread-safe; different sets may be used from different threads, and radicle_last_error is shared.
+/* Invariant: every Scripts/**.pex payload the assets reach resolves to one winner per name. */
+/* Invariant: a loose payload beats an archive payload, then a higher load index wins, then the ordinally greater container path. */
+/* Invariant: a name is a lower case path under Scripts/ without the .pex extension, so names compare without regard to case. */
+/* Invariant: a set borrows the radicle_assets handle it was resolved from, which must outlive the set. */
+/* Invariant: strings returned here stay valid until radicle_script_set_destroy and are owned by the set. */
+/* Invariant: a set is not thread-safe; different sets may be used from different threads, and radicle_last_error is shared. */
+/* Invariant: a rejected call clears every out-parameter it was given when that pointer is not NULL. */
 
 typedef struct radicle_script_set radicle_script_set;
 
@@ -33,17 +34,17 @@ typedef struct radicle_script_set_winner {
   uint32_t replaced;
 } radicle_script_set_winner;
 
-// Requires root_load_index to hold radicle_assets_root_count indexes, or NULL with a count of zero for the high-to-low root order.
+/* Requires root_load_index to hold radicle_assets_root_count indexes, or NULL with a count of zero for the high-to-low root order. */
 RADICLE_API radicle_status radicle_script_set_resolve(const radicle_assets* assets,
                                                       const int32_t* root_load_index,
                                                       size_t root_load_index_count,
                                                       radicle_script_set** out_set);
 RADICLE_API size_t radicle_script_set_count(const radicle_script_set* set);
-// Invariant: winners are ordered by name, and an index at or past the count is RADICLE_STATUS_INVALID_ARGUMENT.
+/* Invariant: winners are ordered by name, and an index at or past the count is RADICLE_STATUS_INVALID_ARGUMENT. */
 RADICLE_API radicle_status radicle_script_set_get(const radicle_script_set* set,
                                                   size_t index,
                                                   radicle_script_set_winner* out_winner);
-// Invariant: reads the winner's own asset location, so a load index that contradicts the root order still reads its bytes.
+/* Invariant: reads the winner's own asset location, so a load index that contradicts the root order still reads its bytes. */
 RADICLE_API radicle_status radicle_script_set_read(const radicle_script_set* set,
                                                    size_t index,
                                                    uint8_t** out_bytes,
