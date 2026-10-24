@@ -178,11 +178,15 @@ TEST(VmadReadReal, Fallout4EsmCountsAndStructArraysMatchTheCppReader) {
   std::size_t api_structs = 0;
   std::size_t api_struct_arrays = 0;
   std::size_t api_unsupported = 0;
+  std::size_t api_refused = 0;
   for (std::size_t i = 0; i < env_record_count; ++i) {
     radicle_vmad_scripts* raw_scripts = nullptr;
     const auto status = radicle_record_vmad_scripts(env.get(), env_records.get()[i], &raw_scripts);
     if (status == RADICLE_STATUS_NOT_FOUND) continue;
-    ASSERT_EQ(status, RADICLE_STATUS_OK) << radicle_last_error();
+    if (status != RADICLE_STATUS_OK) {
+      ++api_refused;
+      continue;
+    }
     const std::unique_ptr<radicle_vmad_scripts, void (*)(radicle_vmad_scripts*)> scripts(
         raw_scripts, radicle_vmad_scripts_destroy);
     ++api_vmads;
@@ -209,7 +213,8 @@ TEST(VmadReadReal, Fallout4EsmCountsAndStructArraysMatchTheCppReader) {
   std::cout << "VmadRead vmads=" << api_vmads << " scripts=" << api_scripts
             << " properties=" << api_properties << " arrays=" << api_arrays
             << " structs=" << api_structs << " struct-arrays=" << api_struct_arrays
-            << " unsupported scripts=" << api_unsupported << "\n";
+            << " unsupported scripts=" << api_unsupported << " refused records=" << api_refused
+            << "\n";
   EXPECT_EQ(api_vmads, vmads);
   EXPECT_EQ(api_scripts, reader_scripts);
   EXPECT_EQ(api_properties, reader_properties);
@@ -223,6 +228,7 @@ TEST(VmadReadReal, Fallout4EsmCountsAndStructArraysMatchTheCppReader) {
   EXPECT_EQ(api_structs, 10u);
   EXPECT_EQ(api_struct_arrays, 263u);
   EXPECT_EQ(api_unsupported, 0u);
+  EXPECT_EQ(api_refused, 0u);
 
   const char* plugin_name = "Fallout4.esm";
   const radicle_record* sample = nullptr;
