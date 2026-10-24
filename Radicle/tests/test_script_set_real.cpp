@@ -339,6 +339,8 @@ TEST(ScriptSetReal, CApiResolvesTheShadowingModArchiveLikeTheCppResolver) {
   ASSERT_FALSE(archives.empty());
 
   std::string target_name;
+  std::string respelled_name;
+  std::string official_spelling;
   std::set<std::string> official_names;
   std::size_t official_winners = 0;
   {
@@ -349,16 +351,40 @@ TEST(ScriptSetReal, CApiResolvesTheShadowingModArchiveLikeTheCppResolver) {
     target_name = winners.front().winner.name;
     official_winners = winners.size();
     for (const auto& winner : winners) official_names.insert(winner.winner.name);
+    const auto respelled = std::find_if(winners.begin(), winners.end(), [&](const auto& winner) {
+      return winner.winner.name != target_name &&
+             winner.winner.kind == fo4::pex_analysis::ScriptSourceKind::archive &&
+             winner.winner.name.find('/') != std::string::npos;
+    });
+    ASSERT_NE(respelled, winners.end());
+    respelled_name = respelled->winner.name;
+    const auto& entry = resolver.archives()
+                            .at(respelled->winner.location.archive)
+                            .entries()
+                            .at(respelled->winner.location.entry);
+    official_spelling = entry.path;
   }
 
   std::string added_name = "radicle_c_api_new_script";
   while (official_names.contains(added_name)) added_name += "_x";
+  // The third entry must name an official script with only its case and separators spelled differently.
+  std::string respelled_spelling;
+  for (const char ch : official_spelling) {
+    if (ch == '/' || ch == '\\') {
+      respelled_spelling.push_back(ch == '/' ? '\\' : '/');
+      continue;
+    }
+    respelled_spelling.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(ch))));
+  }
+  ASSERT_NE(respelled_spelling, official_spelling);
   const auto mod_payload = marker_bytes(std::string_view("c api shadow"));
   const auto added_payload = marker_bytes(std::string_view("c api added"));
+  const auto respelled_payload = marker_bytes(std::string_view("c api respelled"));
   fo4::test::TempDataDir mod_dir;
   const auto mod_archive = write_mod_archive(mod_dir.path(), {
       {archive_entry_for(target_name), mod_payload},
       {archive_entry_for(added_name), added_payload},
+      {respelled_spelling, respelled_payload},
   });
 
   std::vector<std::string> texts;
@@ -380,15 +406,20 @@ TEST(ScriptSetReal, CApiResolvesTheShadowingModArchiveLikeTheCppResolver) {
 
   std::optional<std::size_t> shadow_index;
   std::optional<std::size_t> added_index;
+  std::optional<std::size_t> respelled_index;
+  std::size_t replaced_total = 0;
   for (std::size_t index = 0; index < count; ++index) {
     radicle_script_set_winner winner{};
     ASSERT_EQ(radicle_script_set_get(set.get(), index, &winner), RADICLE_STATUS_OK) << radicle_last_error();
     const std::string name = winner.name == nullptr ? std::string() : std::string(winner.name);
+    replaced_total += winner.replaced;
     if (name == target_name) shadow_index = index;
     if (name == added_name) added_index = index;
+    if (name == respelled_name) respelled_index = index;
   }
   ASSERT_TRUE(shadow_index.has_value());
   ASSERT_TRUE(added_index.has_value());
+  ASSERT_TRUE(respelled_index.has_value());
 
   const auto read_winner = [&](std::size_t index) {
     uint8_t* bytes = nullptr;
@@ -414,4 +445,15 @@ TEST(ScriptSetReal, CApiResolvesTheShadowingModArchiveLikeTheCppResolver) {
   EXPECT_EQ(std::filesystem::path(added.winner.container).filename(), mod_archive.filename());
   EXPECT_EQ(added.replaced, 0u);
   EXPECT_EQ(read_winner(*added_index), added_payload);
+
+  // Invariant: a respelled entry must report the canonical script path, not the spelling its archive stores.
+  radicle_script_set_winner respelled{};
+  ASSERT_EQ(radicle_script_set_get(set.get(), *respelled_index, &respelled), RADICLE_STATUS_OK);
+  EXPECT_EQ(std::string(respelled.winner.path), "scripts/" + respelled_name + ".pex");
+  EXPECT_NE(std::string(respelled.winner.path), respelled_spelling);
+  EXPECT_EQ(std::filesystem::path(respelled.winner.container).filename(), mod_archive.filename());
+  EXPECT_EQ(respelled.winner.origin, RADICLE_ASSET_ARCHIVE);
+  EXPECT_EQ(respelled.replaced, 1u);
+  EXPECT_EQ(read_winner(*respelled_index), respelled_payload);
+  EXPECT_EQ(replaced_total, 2u);
 }
