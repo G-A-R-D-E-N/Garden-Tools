@@ -35,6 +35,7 @@ struct MovieStats {
   std::size_t font_texture_movies{0};
   std::size_t shape_count{0};
   std::size_t morph_count{0};
+  std::size_t morph2_count{0};
   std::size_t bitmap_count{0};
   std::size_t jpeg_count{0};
   std::size_t jpeg_tables_count{0};
@@ -60,6 +61,7 @@ struct MovieStats {
     font_texture_movies += other.font_texture_movies;
     shape_count += other.shape_count;
     morph_count += other.morph_count;
+    morph2_count += other.morph2_count;
     bitmap_count += other.bitmap_count;
     jpeg_count += other.jpeg_count;
     jpeg_tables_count += other.jpeg_tables_count;
@@ -83,6 +85,7 @@ void check_art(const fo4::swf::SwfTag& tag, MovieStats& stats) {
     case fo4::swf::tag::kDefineMorphShape:
     case fo4::swf::tag::kDefineMorphShape2:
       ++stats.morph_count;
+      stats.morph2_count += tag.code == fo4::swf::tag::kDefineMorphShape2 ? 1u : 0u;
       if (!tag.morph_shape) ++stats.art_failures;
       break;
     case fo4::swf::tag::kDefineBitsLossless:
@@ -161,6 +164,7 @@ void record_archive_art(const std::string& key, const MovieStats& stats) {
   testing::Test::RecordProperty(key + "_movies", std::to_string(stats.movies));
   testing::Test::RecordProperty(key + "_shape_tags", std::to_string(stats.shape_count));
   testing::Test::RecordProperty(key + "_morph_tags", std::to_string(stats.morph_count));
+  testing::Test::RecordProperty(key + "_morph2_tags", std::to_string(stats.morph2_count));
   testing::Test::RecordProperty(key + "_lossless_tags", std::to_string(stats.bitmap_count));
   testing::Test::RecordProperty(key + "_art_failures", std::to_string(stats.art_failures));
 }
@@ -242,6 +246,7 @@ TEST(SwfRealData, ParsesEveryShippedMovieAndRoundTripsByteIdentically) {
   EXPECT_GT(stats.bitmap_count, 0u);
   RecordProperty("shape_tags", std::to_string(stats.shape_count));
   RecordProperty("morph_tags", std::to_string(stats.morph_count));
+  RecordProperty("morph2_tags", std::to_string(stats.morph2_count));
   RecordProperty("lossless_tags", std::to_string(stats.bitmap_count));
   RecordProperty("jpeg_tags", std::to_string(stats.jpeg_count));
   RecordProperty("jpeg_tables_tags", std::to_string(stats.jpeg_tables_count));
