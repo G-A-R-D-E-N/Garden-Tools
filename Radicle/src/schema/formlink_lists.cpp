@@ -244,10 +244,11 @@ FormLinkListMutationStatus insert_packed_element(
       insertion = *counter_index + 1;
     } else {
       const auto anchored = empty_list_insertion_point(*record, descriptor);
-      if (!anchored.has_value()) {
+      if (!anchored.has_value() && descriptor.counter == Signature{}) {
         return FormLinkListMutationStatus::insertion_boundary_unavailable;
       }
-      insertion = *anchored;
+      // Constraint: a declared counter is created before the array, so an empty list without an anchor appends at the end of the record.
+      insertion = anchored.value_or(record->subrecords.size());
     }
     Subrecord created;
     created.signature = descriptor.subrecord;
