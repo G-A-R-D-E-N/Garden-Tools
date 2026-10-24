@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <iterator>
 #include <map>
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -88,6 +89,48 @@ TEST_P(ImageFxRecordsReal, EveryBatchRecordMatchesItsAuthoringAndDecodesEveryRow
   if (std::string_view(GetParam()) == "Fallout4.esm") {
     EXPECT_GT(batch_records, 0u);
   }
+}
+
+TEST(ImageFxRecordsReal, EveryImadRecordDecodesTheHdrMultInterpolatorRows) {
+  const auto* directory = std::getenv("FO4_DATA_DIR");
+  if (!directory) {
+    GTEST_SKIP() << "set FO4_DATA_DIR to run official-master coverage";
+  }
+  record_game_build(detect_game_build(directory));
+  const auto path = std::filesystem::path(directory) / "Fallout4.esm";
+  ASSERT_TRUE(std::filesystem::is_regular_file(path));
+  const auto plugin = fo4::read_plugin_file(path);
+  const auto time = fo4::schema::scalar_field_descriptor("IMAD\\HDREyeAdaptSpeedMultTime");
+  const auto value = fo4::schema::scalar_field_descriptor("IMAD\\HDREyeAdaptSpeedMultValue");
+  ASSERT_TRUE(time.has_value());
+  ASSERT_TRUE(value.has_value());
+  std::size_t records = 0;
+  std::size_t elements = 0;
+  std::string known_time;
+  std::string known_value;
+  fo4::visit_records(plugin, [&](const fo4::Record& record) {
+    if (record.header.signature != fo4::Signature::from_string("IMAD")) return;
+    ++records;
+    std::span<const std::byte> mult;
+    std::size_t value_bytes = 0;
+    for (const auto& subrecord : record.subrecords) {
+      if (subrecord.signature == time->scalar.subrecord) mult = subrecord.data;
+      if (subrecord.signature == value->scalar.subrecord) value_bytes += subrecord.data.size();
+    }
+    ASSERT_FALSE(mult.empty()) << record.form_key.to_string();
+    ASSERT_EQ(mult.size() % 8, 0u) << record.form_key.to_string();
+    EXPECT_EQ(mult.size(), value_bytes) << record.form_key.to_string();
+    elements += mult.size() / 8;
+    if (record.form_key.local().value() != 0x24A3C4u) return;
+    known_time = fo4::schema::decode_scalar(fo4::schema::scalar_field_bytes(mult, time->scalar),
+                                            time->scalar);
+    known_value = fo4::schema::decode_scalar(fo4::schema::scalar_field_bytes(mult, value->scalar),
+                                             value->scalar);
+  });
+  EXPECT_EQ(records, 247u);
+  EXPECT_EQ(elements, 494u);
+  EXPECT_EQ(known_time, "0");
+  EXPECT_EQ(known_value, "1");
 }
 
 INSTANTIATE_TEST_SUITE_P(OfficialMasters, ImageFxRecordsReal, testing::Values(

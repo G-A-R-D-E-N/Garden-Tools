@@ -104,7 +104,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | HDPT | 7006 | 10 | 2 | 4 | 1 | 1 | yes | - | - | - | 1 | L4 |
 | IDLE | 9646 | 5 | 3 | 2 | - | - | yes | - | environment/behavior | - | 2 | L4 |
 | IDLM | 7098 | 17 | 1 | 3 | - | - | yes | yes | - | yes | 1 | L4 |
-| IMAD | 7466 | 142 | - | - | - | - | yes | - | - | - | 1 | L4 |
+| IMAD | 7466 | 184 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | IMGS | 7393 | 36 | 1 | - | - | - | yes | - | - | - | 3 | L4 |
 | INFO | 9672 | 14 | 7 | 13 | - | 2 | yes | - | forms/info_copy, environment/dialogue | - | 2 | L4 |
 | INGR | 9788 | 29 | 5 | 9 | - | 1 | yes | yes | - | - | 1 | L4 |
@@ -258,7 +258,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | HDPT | 7 | - | 2 | 1 | 2 | u32, u8 | 2 | 7 | - | existing_only |
 | IDLE | 5 | - | - | - | 3 | u16, u8 | - | - | - | existing_only |
 | IDLM | 16 | - | - | 1 | 1 | f32, i16, u32, u8 | - | 7 | - | existing_only |
-| IMAD | 138 | - | 3 | 1 | - | f32, u32, u8 | - | 78 | - | existing_only |
+| IMAD | 180 | - | 3 | 1 | - | f32, u32, u8 | - | 120 | - | existing_only |
 | IMGS | 35 | - | 1 | - | 1 | f32, u16 | - | - | - | existing_only |
 | INFO | 14 | - | - | - | 7 | i32, u16, u32, u8 | 15 | - | - | existing_only |
 | INGR | 25 | 1 | - | 3 | 5 | f32, i16, i32, u32, u8 | 12 | 9 | - | existing_only |

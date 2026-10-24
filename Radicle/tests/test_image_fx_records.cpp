@@ -21,6 +21,8 @@ namespace {
 
 using Bytes = std::vector<std::byte>;
 
+constexpr std::string_view k_hdr_mult_iad{"\x00IAD", 4};
+
 struct Sub {
   std::string_view signature;
   Bytes data;
@@ -101,6 +103,11 @@ std::vector<std::byte> make_plugin() {
   put(imad_iad, 4, f32(6.0f));
   put(imad_iad, 8, f32(0.75f));
   put(imad_iad, 12, f32(1.5f));
+  Bytes imad_mult = zeros(16);
+  put(imad_mult, 0, f32(0.125f));
+  put(imad_mult, 4, f32(3.5f));
+  put(imad_mult, 8, f32(1.25f));
+  put(imad_mult, 12, f32(-2.5f));
   Bytes imad_nam5 = zeros(8);
   put(imad_nam5, 0, f32(0.5f));
   put(imad_nam5, 4, f32(1.5f));
@@ -109,7 +116,8 @@ std::vector<std::byte> make_plugin() {
   put(imad_nam6, 4, f32(0.5f));
   write_record(out, "IMAD", 3001,
                {{"EDID", zstr("RadicleImageAdapter")}, {"DNAM", imad_full}, {"BNAM", imad_bnam},
-                {"TNAM", imad_tnam}, {"NAM3", imad_nam3}, {"@IAD", imad_iad}, {"NAM5", imad_nam5},
+                {"TNAM", imad_tnam}, {"NAM3", imad_nam3}, {k_hdr_mult_iad, imad_mult},
+                {"@IAD", imad_iad}, {"NAM5", imad_nam5},
                 {"NAM6", imad_nam6}});
   write_record(out, "IMAD", 3002,
                {{"EDID", zstr("RadicleImageAdapterTwo")}, {"DNAM", zeros(244)}, {"NAM6", zeros(8)}},
@@ -280,6 +288,33 @@ TEST(ImageFxSynthetic, TimeInterpolatorArraysDecodeAndEditOneStrideElement) {
   EXPECT_EQ(slice(payload(reread, 3001, "BNAM"), 12, 4), f32(7.5f));
   EXPECT_EQ(slice(payload(reread, 3001, "@IAD"), 4, 4), f32(6.0f));
   EXPECT_EQ(slice(payload(reread, 3001, "@IAD"), 12, 4), f32(8.5f));
+}
+
+TEST(ImageFxSynthetic, HdrMultInterpolatorRowsDecodeAndEditOneStrideElement) {
+  auto plugin = load();
+  EXPECT_EQ(fo4::record_field_count(plugin, key(3001), "IMAD\\HDREyeAdaptSpeedMultTime"), 2u);
+  EXPECT_EQ(fo4::record_field_count(plugin, key(3001), "IMAD\\HDREyeAdaptSpeedMultValue"), 2u);
+  EXPECT_EQ(fo4::record_field_count(plugin, key(3002), "IMAD\\HDREyeAdaptSpeedMultTime"), 0u);
+  EXPECT_EQ(decoded_value(plugin, 3001, "IMAD\\HDREyeAdaptSpeedMultTime"), "0.125");
+  EXPECT_EQ(decoded_value(plugin, 3001, "IMAD\\HDREyeAdaptSpeedMultValue"), "3.5");
+  EXPECT_EQ(decoded_value(plugin, 3001, "IMAD\\HDREyeAdaptSpeedAddValue"), "6");
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key(3001), scalar("IMAD\\HDREyeAdaptSpeedMultValue"), 1, "9.5"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key(3001), scalar("IMAD\\HDREyeAdaptSpeedMultTime"), 2, "1"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key(3002), scalar("IMAD\\HDREyeAdaptSpeedMultTime"), 0, "1"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto mult = payload(reread, 3001, k_hdr_mult_iad);
+  EXPECT_EQ(mult.size(), 16u);
+  EXPECT_EQ(slice(mult, 0, 4), f32(0.125f));
+  EXPECT_EQ(slice(mult, 4, 4), f32(3.5f));
+  EXPECT_EQ(slice(mult, 8, 4), f32(1.25f));
+  EXPECT_EQ(slice(mult, 12, 4), f32(9.5f));
+  EXPECT_EQ(slice(payload(reread, 3001, "@IAD"), 4, 4), f32(6.0f));
+  EXPECT_EQ(slice(payload(reread, 3001, "@IAD"), 12, 4), f32(1.5f));
 }
 
 TEST(ImageFxSynthetic, DepthOfFieldVignetteInterpolatorsAreGatedByFormVersion118) {

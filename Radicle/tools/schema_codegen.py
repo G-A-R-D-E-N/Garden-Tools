@@ -7,8 +7,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from field_address_codegen import (is_count, parse_address, parse_segment, reject_overlaps,  # noqa: E402
-                                   render_address)
+from field_address_codegen import (cpp_signature, is_count, parse_address, parse_segment,  # noqa: E402
+                                   reject_overlaps, render_address)
 
 STORAGES = {"u8", "u16", "u32", "i32", "f32", "i8", "i16"}
 KINDS = {"scalar", "string"}
@@ -64,7 +64,7 @@ def numeric(value, name: str, path: str) -> float:
 
 
 def valid_signature(value: str) -> bool:
-    return len(value) == 4 and all(0x20 <= ord(ch) <= 0x7E for ch in value)
+    return len(value) == 4 and all(ord(ch) <= 0xFF for ch in value)
 
 
 def parse_names(names, presentation: str, storage: str, minimum: float, maximum: float, path: str):
@@ -585,7 +585,7 @@ def names_key(field):
 def render_group_members(members, lines, defaults):
     specs = []
     for member in members:
-        spec = (f"Signature::from_string({cpp_string(member['subrecord'])}), "
+        spec = (f"{cpp_signature(member['subrecord'])}, "
                 f"{'true' if member['required'] else 'false'}, "
                 f"{'true' if member['repeatable'] else 'false'}, {member['payload_size']}, ")
         if member["default"] is not None:
@@ -688,7 +688,7 @@ def render(fields, arrays=(), groups=()) -> str:
             f"Signature::from_string({cpp_string(field['record'])}), " +
             f"{cpp_string(field['path'])}, " +
             "ScalarDescriptor{" +
-            f"Signature::from_string({cpp_string(field['subrecord'])}), " +
+            f"{cpp_signature(field['subrecord'])}, " +
             f"{cpp_string(field['label'])}, " +
             f"ScalarStorage::{field['storage']}, " +
             f"ScalarPresentation::{presentation}, " +
@@ -711,8 +711,8 @@ def render(fields, arrays=(), groups=()) -> str:
                 f"Signature::from_string({cpp_string(array['record'])}), " +
                 f"{cpp_string(array['path'])}, " +
                 f"{cpp_string(array['label'])}, " +
-                f"Signature::from_string({cpp_string(array['subrecord'])}), " +
-                (f"Signature::from_string({cpp_string(array['count_subrecord'])})" if array["count_subrecord"]
+                f"{cpp_signature(array['subrecord'])}, " +
+                (f"{cpp_signature(array['count_subrecord'])}" if array["count_subrecord"]
                  else "Signature{}") + ", " +
                 f"{array['stride']}" +
                 (f", {segment['count_word']}, {segment['index']}, {segment['count']}" if segment else "") +
@@ -731,17 +731,9 @@ def main() -> int:
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
 
+    import schema_output  # noqa: E402
     fields, arrays, groups = load_schema(args.schema)
-    expected = render(fields, arrays, groups)
-    if args.check:
-        if not args.output.exists() or args.output.read_text(encoding="utf-8") != expected:
-            print(f"generated schema is stale: {args.output}")
-            return 1
-        return 0
-
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(expected, encoding="utf-8")
-    return 0
+    return schema_output.emit(fields, arrays, groups, args.output, args.check)
 
 
 if __name__ == "__main__":
