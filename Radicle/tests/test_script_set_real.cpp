@@ -547,4 +547,21 @@ TEST(ScriptSetReal, CApiScriptResolveFoldsACallerBuiltNameThatIsSpelledDifferent
   std::size_t replaced = 0;
   for (std::size_t i = 0; i < count; ++i) replaced += winners[i].replaced;
   EXPECT_EQ(replaced, 1u);
+
+  // The resolver must group by the name bytes it is handed, so an unfolded caller spelling is its own script.
+  auto unfolded = rows;
+  unfolded.back().name = reinterpret_cast<const uint8_t*>(caller_spelling.data());
+  unfolded.back().name_size = caller_spelling.size();
+  radicle_script_winner* unfolded_winners = nullptr;
+  std::size_t unfolded_count = 0;
+  ASSERT_EQ(radicle_script_resolve(unfolded.data(), unfolded.size(), &unfolded_winners, &unfolded_count),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  const std::unique_ptr<radicle_script_winner, void (*)(radicle_script_winner*)> unfolded_guard(
+      unfolded_winners, radicle_script_free_winners);
+  EXPECT_EQ(unfolded_count, retail_winners + 1);
+  const auto unfolded_winner = std::find_if(unfolded_winners, unfolded_winners + unfolded_count,
+                                            [&](const auto& row) { return row.candidate_index == mod_row; });
+  ASSERT_NE(unfolded_winner, unfolded_winners + unfolded_count);
+  EXPECT_EQ(unfolded_winner->replaced, 0u);
 }
