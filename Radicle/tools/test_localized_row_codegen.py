@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """Validation of the localized flag on string rows in schema_codegen.py and the record authoring tables in record_schema_codegen.py."""
 
+import contextlib
+import io
 import json
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import record_schema_codegen  # noqa: E402
@@ -174,6 +177,74 @@ class RecordShardCodegenTests(unittest.TestCase):
         parent, shards = self.render(2)
         self.assertEqual(shards, {})
         self.assertIn('Signature::from_string("R001"), RecordPlacement::top_level, 1, 1', parent)
+
+
+class RecordShardCheckTests(unittest.TestCase):
+    """--check must fail on a shard that drifted or that the schema no longer produces."""
+
+    def run_tool(self, *arguments):
+        with mock.patch("sys.argv", ["record_schema_codegen.py", *arguments]), \
+                contextlib.redirect_stdout(io.StringIO()) as captured:
+            status = record_schema_codegen.main()
+        return status, captured.getvalue()
+
+    def written(self, directory, record_count=700):
+        schema = Path(directory) / "fields.json"
+        records = [{
+            "signature": f"R{index:03d}",
+            "authoring": {"placement": "top_level", "subrecords": [
+                {"signature": "DATA", "minimum": 0, "maximum": 1},
+            ]},
+        } for index in range(record_count)]
+        schema.write_text(json.dumps({"version": 1, "records": records}), encoding="utf-8")
+        output = Path(directory) / "generated_record_constraints.inc"
+        status, text = self.run_tool("--schema", str(schema), "--output", str(output))
+        self.assertEqual((status, text), (0, ""))
+        return schema, output
+
+    def test_check_reports_a_stale_shard_and_the_writer_repairs_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            schema, output = self.written(directory)
+            # Constraint: the record table shards too at 700 records, so pick the rule shards.
+            shards = [path for path in record_schema_codegen.shard_files(output)
+                      if "subrecord_authoring_constraints" in path.name]
+            self.assertEqual(len(shards), 2, shards)
+            drifted = shards[1]
+            drifted.write_text(drifted.read_text(encoding="utf-8") + "  // drift\n", encoding="utf-8")
+
+            status, text = self.run_tool("--schema", str(schema), "--output", str(output), "--check")
+            self.assertEqual(status, 1)
+            self.assertIn(f"stale: {drifted}", text)
+            self.assertNotIn(f"stale: {output}", text)
+
+            self.assertEqual(self.run_tool("--schema", str(schema), "--output", str(output))[0], 0)
+            self.assertEqual(self.run_tool("--schema", str(schema), "--output", str(output),
+                                           "--check"), (0, ""))
+
+    def test_check_reports_a_stale_parent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            schema, output = self.written(directory)
+            output.write_text(output.read_text(encoding="utf-8").replace("#include", "// include"),
+                              encoding="utf-8")
+            status, text = self.run_tool("--schema", str(schema), "--output", str(output), "--check")
+            self.assertEqual(status, 1)
+            self.assertIn(f"stale: {output}", text)
+
+    def test_check_reports_an_orphan_shard_and_the_writer_removes_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            schema, output = self.written(directory)
+            orphan = output.with_name(
+                "generated_record_constraints_subrecord_authoring_constraints_shard02.inc")
+            orphan.write_text('  Signature::from_string("DATA"),\n', encoding="utf-8")
+
+            status, text = self.run_tool("--schema", str(schema), "--output", str(output), "--check")
+            self.assertEqual(status, 1)
+            self.assertIn(f"orphan shard: {orphan}", text)
+
+            self.assertEqual(self.run_tool("--schema", str(schema), "--output", str(output))[0], 0)
+            self.assertFalse(orphan.exists())
+            self.assertEqual(self.run_tool("--schema", str(schema), "--output", str(output),
+                                           "--check"), (0, ""))
 
 
 if __name__ == "__main__":

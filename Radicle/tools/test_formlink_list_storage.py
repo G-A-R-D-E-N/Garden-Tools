@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """Validation tests for the storage and explicit anchor keys of formlink_lists rows in formlink_schema_codegen.py."""
 
+import contextlib
+import io
 import json
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import formlink_schema_codegen  # noqa: E402
@@ -193,6 +196,67 @@ class FormLinkListSegmentTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "exceeds 750 lines"):
             formlink_schema_codegen.render_shard("k_generated_test", 0, 1,
                                                  [("TEST", ["  Signature{},"] * 748)])
+
+
+class FormLinkShardCheckTests(unittest.TestCase):
+    """--check must fail on a shard that drifted or that the schema no longer produces."""
+
+    def run_tool(self, *arguments):
+        with mock.patch("sys.argv", ["formlink_schema_codegen.py", *arguments]), \
+                contextlib.redirect_stdout(io.StringIO()) as captured:
+            status = formlink_schema_codegen.main()
+        return status, captured.getvalue()
+
+    def written(self, directory):
+        document = {
+            "version": 1,
+            "records": [
+                {"signature": record, "fields": [], "formlink_lists": [
+                    row(path=f"{record}\\Links", subrecord="PNAM",
+                        targets=[f"T{index:03d}" for index in range(400)])]}
+                for record in ("TEST", "TESU")
+            ],
+            "keyword_records": [],
+            "target_unions": [{"name": "sigBaseObjects", "targets": ["STAT"]}],
+        }
+        schema = Path(directory) / "fields.json"
+        schema.write_text(json.dumps(document), encoding="utf-8")
+        output = Path(directory) / "generated_formlink_lists.inc"
+        status, text = self.run_tool("--schema", str(schema), "--output", str(output))
+        self.assertEqual((status, text), (0, ""))
+        return schema, output
+
+    def test_check_reports_a_stale_shard_and_the_writer_repairs_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            schema, output = self.written(directory)
+            shards = formlink_schema_codegen.shard_files(output)
+            self.assertEqual(len(shards), 2, shards)
+            drifted = shards[0]
+            drifted.write_text(drifted.read_text(encoding="utf-8") + "  // drift\n", encoding="utf-8")
+
+            status, text = self.run_tool("--schema", str(schema), "--output", str(output), "--check")
+            self.assertEqual(status, 1)
+            self.assertIn(f"stale: {drifted}", text)
+            self.assertNotIn(f"stale: {output}", text)
+
+            self.assertEqual(self.run_tool("--schema", str(schema), "--output", str(output))[0], 0)
+            self.assertEqual(self.run_tool("--schema", str(schema), "--output", str(output),
+                                           "--check"), (0, ""))
+
+    def test_check_reports_an_orphan_shard_and_the_writer_removes_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            schema, output = self.written(directory)
+            orphan = output.with_name("generated_formlink_lists_formlink_list_targets_shard02.inc")
+            orphan.write_text('  Signature::from_string("STAT"),\n', encoding="utf-8")
+
+            status, text = self.run_tool("--schema", str(schema), "--output", str(output), "--check")
+            self.assertEqual(status, 1)
+            self.assertIn(f"orphan shard: {orphan}", text)
+
+            self.assertEqual(self.run_tool("--schema", str(schema), "--output", str(output))[0], 0)
+            self.assertFalse(orphan.exists())
+            self.assertEqual(self.run_tool("--schema", str(schema), "--output", str(output),
+                                           "--check"), (0, ""))
 
 
 if __name__ == "__main__":
