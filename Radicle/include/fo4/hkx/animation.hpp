@@ -14,12 +14,10 @@ namespace fo4::hkx {
 enum class HkxAnimationKind : std::uint8_t {
   Interleaved = 0,
   Spline = 1,
-  // Invariant: a class this reader does not decode is reported as a view, never dropped.
   View = 2,
 };
 
 struct HkxAnimationTrack {
-  // invariant: every decoded array holds frame_count entries
   std::vector<std::array<float, 3>> translations{};
   std::vector<std::array<float, 4>> rotations{};  // x, y, z, w
   std::vector<std::array<float, 3>> scales{};
@@ -55,7 +53,6 @@ struct HkxAnimation {
   HkxAnimationBlocks blocks{};
   std::vector<HkxAnimationTrack> tracks;
   std::vector<HkxAnnotationTrack> annotation_tracks;
-  // invariant: empty with float_track_count above zero means the float payload is not decoded
   std::vector<float> float_tracks{};
 };
 
@@ -64,7 +61,6 @@ HkxStatus read_animation(const HkxPackfile& packfile, HkxAnimation& out);
 
 struct HkxAnimationBinding {
   std::string original_skeleton_name;
-  // Invariant: nullopt when the animation pointer resolves through neither a local nor a global fixup.
   std::optional<std::size_t> animation_offset{};
   std::vector<std::int16_t> transform_track_to_bone_indices;
   std::vector<std::int16_t> float_track_to_float_slot_indices;

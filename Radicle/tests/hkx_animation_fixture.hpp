@@ -39,7 +39,6 @@ inline void pad_to(std::vector<std::byte>& data, std::size_t data_offset, std::s
   while ((data_offset + data.size()) % to != 0) data.push_back(std::byte{0});
 }
 
-// Invariant: one track, two frames, a linear spline on x, a static rotation and an identity scale.
 inline std::vector<std::byte> spline_packfile(int block_offset_override, int mask_size_override) {
   std::vector<std::byte> names;
   const auto name_at =
@@ -50,13 +49,11 @@ inline std::vector<std::byte> spline_packfile(int block_offset_override, int mas
 
   const std::size_t blob_at = data.size();
   const std::size_t mask_size = mask_size_override < 0 ? 4 : static_cast<std::size_t>(mask_size_override);
-  // Invariant: 8-bit position quantisation, uncompressed rotation, x spline, static rotation.
   data.push_back(std::byte{0x14});
   data.push_back(std::byte{0x10});
   data.push_back(std::byte{0x01});
   data.push_back(std::byte{0x00});
 
-  // Invariant: one control interval, degree 1, two control points, knots 0 0 1 1.
   data.push_back(std::byte{0x01});
   data.push_back(std::byte{0x00});
   data.push_back(std::byte{0x01});
@@ -69,7 +66,6 @@ inline std::vector<std::byte> spline_packfile(int block_offset_override, int mas
   data.push_back(std::byte{0xFF});
   pad_to(data, data_offset, 4);
 
-  // Invariant: a static identity rotation in the uncompressed format.
   put_float(data, 0.0f);
   put_float(data, 0.0f);
   put_float(data, 0.0f);
@@ -104,7 +100,6 @@ inline std::vector<std::byte> spline_packfile(int block_offset_override, int mas
   });
 }
 
-// Invariant: one identity-masked track, so a four-byte block needs no payload after its mask.
 inline std::vector<std::byte> spline_shape_packfile(std::uint32_t tracks, std::uint32_t frames, std::uint32_t blocks,
                                              std::uint32_t max_frames) {
   std::vector<std::byte> names;
@@ -143,7 +138,6 @@ inline std::vector<std::byte> spline_shape_packfile(std::uint32_t tracks, std::u
   });
 }
 
-// Invariant: two blocks of four frames over seven frames, each block statically holding its own x translation.
 inline std::vector<std::byte> spline_two_block_packfile() {
   std::vector<std::byte> names;
   const auto name_at =
@@ -158,7 +152,7 @@ inline std::vector<std::byte> spline_two_block_packfile() {
   for (const float value : {11.0f, 77.0f}) {
     block_offsets.push_back(static_cast<std::uint32_t>(data.size() - blob_at));
     data.push_back(std::byte{0x00});
-    data.push_back(std::byte{0x01});  // Invariant: static x translation, identity rotation and scale.
+    data.push_back(std::byte{0x01});
     data.push_back(std::byte{0x00});
     data.push_back(std::byte{0x00});
     put_float(data, value);
@@ -190,7 +184,6 @@ inline std::vector<std::byte> spline_two_block_packfile() {
   });
 }
 
-// Invariant: two frames, one rotation spline holding two control points of one quantisation format.
 inline std::vector<std::byte> spline_rotation_packfile(int format, int degree) {
   std::vector<std::byte> names;
   const auto name_at =
@@ -203,7 +196,7 @@ inline std::vector<std::byte> spline_rotation_packfile(int format, int degree) {
   const std::size_t blob_at = data.size();
   data.push_back(static_cast<std::byte>((format << 2) & 0x3C));
   data.push_back(std::byte{0x00});
-  data.push_back(std::byte{0xF0});  // Invariant: the rotation must be dynamic.
+  data.push_back(std::byte{0xF0});
   data.push_back(std::byte{0x00});
 
   data.push_back(std::byte{0x01});
@@ -216,12 +209,10 @@ inline std::vector<std::byte> spline_rotation_packfile(int format, int degree) {
   pad_to(data, data_offset, format == 4 ? 2 : 1);
   for (int point = 0; point < 2; ++point) {
     if (format == 3) {
-      // Invariant: largest component y, positive, with the other three at the middle of their range.
       data.push_back(std::byte{0xBF});
       data.push_back(std::byte{0x3F});
       data.push_back(std::byte{0x3F});
     } else {
-      // Invariant: nibbles 14 7 7 7, which decode to plus one on x.
       data.push_back(std::byte{0x7E});
       data.push_back(std::byte{0x77});
     }
@@ -254,7 +245,6 @@ inline std::vector<std::byte> spline_rotation_packfile(int format, int degree) {
   });
 }
 
-// Invariant: one block whose first track mixes a spline axis, a static axis and an identity axis.
 inline std::vector<std::byte> spline_mixed_position_packfile() {
   std::vector<std::byte> names;
   const auto name_at =

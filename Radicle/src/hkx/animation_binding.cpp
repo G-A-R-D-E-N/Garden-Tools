@@ -26,6 +26,7 @@ std::optional<std::size_t> pointer_target(const HkxPackfile& packfile, const Hkx
   for (const HkxRemoteFixup& fixup : section.global_fixups) {
     if (fixup.source != source) continue;
     if (fixup.section != packfile.data_section) return std::nullopt;
+    if (!in_section(section, fixup.destination, 1)) return std::nullopt;
     return static_cast<std::size_t>(fixup.destination);
   }
   return std::nullopt;

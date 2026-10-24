@@ -15,6 +15,7 @@
 namespace fo4::hkx {
 namespace {
 
+constexpr std::size_t kMaxDecodedSamples = 1u << 20;
 constexpr std::size_t kQsTransformSize = 48;
 constexpr std::size_t kQsRotationOffset = 16;
 constexpr std::size_t kQsScaleOffset = 32;
@@ -73,16 +74,19 @@ HkxStatus decode_interleaved_animation(const HkxPackfile& packfile, const HkxObj
   if (declared_tracks < 0 || out.float_track_count < 0) return HkxStatus::BadSection;
 
   const auto tracks = static_cast<std::size_t>(declared_tracks);
-  out.tracks.resize(tracks);
   if (tracks == 0) return HkxStatus::Ok;
 
+  // Requires the array before any resize: a declared count the data cannot cover must not size the tracks.
   Elements transforms;
   if (const auto status = elements_at(section, *transforms_at, packfile.pointer_size, kQsTransformSize, transforms);
       status != HkxStatus::Ok) {
     return status;
   }
-  if (transforms.count % tracks != 0) return HkxStatus::BadSection;
+  if (tracks > transforms.count || transforms.count % tracks != 0) return HkxStatus::BadSection;
   const std::size_t frames = transforms.count / tracks;
+  if (tracks > kMaxDecodedSamples || frames > kMaxDecodedSamples / tracks) return HkxStatus::BadSection;
+
+  out.tracks.resize(tracks);
   out.frame_count = frames;
   out.blocks.count = 1;
   out.blocks.max_frames_per_block = frames;
@@ -204,8 +208,16 @@ HkxStatus read_animation(const HkxPackfile& packfile, HkxAnimation& out) {
   const HkxStatus status = animation->class_name == "hkaSplineCompressedAnimation"
                                ? detail::decode_spline_animation(packfile, *animation, *layout, out)
                                : detail::decode_interleaved_animation(packfile, *animation, *layout, out);
-  if (status != HkxStatus::Ok) return status;
-  return detail::decode_annotation_tracks(packfile, *animation, out.annotation_tracks);
+  if (status != HkxStatus::Ok) {
+    out = HkxAnimation{};
+    return status;
+  }
+  if (const auto annotations = detail::decode_annotation_tracks(packfile, *animation, out.annotation_tracks);
+      annotations != HkxStatus::Ok) {
+    out = HkxAnimation{};
+    return annotations;
+  }
+  return HkxStatus::Ok;
 }
 
 }  // namespace fo4::hkx

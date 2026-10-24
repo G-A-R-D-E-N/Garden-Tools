@@ -17,7 +17,6 @@ namespace {
 
 using detail::member_field;
 
-// Invariant: spline streams pad to file offsets, so the cursor carries the section's file offset.
 struct Cursor {
   std::span<const std::byte> bytes;
   std::size_t at{0};
@@ -30,15 +29,11 @@ struct Cursor {
 };
 
 struct AxisChannel {
-  ChannelKind kind{ChannelKind::Identity};
   float min{0.0f};
   float max{0.0f};
 };
 
-// Invariant: the spline degree must stay inside Havok's maximum of three, so a higher degree is a bad block.
 constexpr std::uint8_t kMaxSplineDegree = 3;
-
-// Invariant: a frame of one track decodes to forty bytes, so this cap bounds every array a file sizes.
 constexpr std::size_t kMaxDecodedSamples = 1u << 20;
 
 HkxStatus read_knots(Cursor& cursor, std::vector<float>& knots, std::uint16_t& items, std::uint8_t& degree) {
@@ -93,7 +88,6 @@ HkxStatus decode_vector_channel(Cursor& cursor, const std::array<ChannelKind, 3>
 
   std::array<AxisChannel, 3> channels{};
   for (std::size_t axis = 0; axis < 3; ++axis) {
-    channels[axis].kind = kinds[axis];
     if (kinds[axis] == ChannelKind::Spline) {
       if (!cursor.has(8)) return HkxStatus::Truncated;
       channels[axis].min = value_at<float>(cursor.bytes, cursor.at);
@@ -111,7 +105,7 @@ HkxStatus decode_vector_channel(Cursor& cursor, const std::array<ChannelKind, 3>
   std::array<std::vector<float>, 3> control_points;
   for (std::size_t point = 0; point < points; ++point) {
     for (std::size_t axis = 0; axis < 3; ++axis) {
-      if (channels[axis].kind != ChannelKind::Spline) continue;
+      if (kinds[axis] != ChannelKind::Spline) continue;
       const auto value = read_scalar(cursor, quantisation, channels[axis].min, channels[axis].max);
       if (!value) return HkxStatus::Truncated;
       control_points[axis].push_back(*value);
@@ -123,10 +117,10 @@ HkxStatus decode_vector_channel(Cursor& cursor, const std::array<ChannelKind, 3>
     std::array<float, 3> value{identity, identity, identity};
     const float at = static_cast<float>(frame);
     for (std::size_t axis = 0; axis < 3; ++axis) {
-      if (channels[axis].kind == ChannelKind::Spline && !control_points[axis].empty()) {
+      if (kinds[axis] == ChannelKind::Spline && !control_points[axis].empty()) {
         const int span = find_knot_span(degree, at, static_cast<int>(control_points[axis].size()), knots);
         value[axis] = evaluate_scalar(span, degree, at, knots, control_points[axis]);
-      } else if (channels[axis].kind == ChannelKind::Static) {
+      } else if (kinds[axis] == ChannelKind::Static) {
         value[axis] = channels[axis].min;
       }
     }
@@ -136,11 +130,17 @@ HkxStatus decode_vector_channel(Cursor& cursor, const std::array<ChannelKind, 3>
 }
 
 HkxStatus decode_rotation_channel(Cursor& cursor, const TrackMask& mask, std::span<std::array<float, 4>> out) {
-  const int format = mask.rot_quantisation;
-  const int alignment = rotation_align(format);
-  const std::size_t width = static_cast<std::size_t>(rotation_width(format));
+  constexpr std::array<float, 4> kIdentity{0.0f, 0.0f, 0.0f, 1.0f};
+  if (mask.rot == ChannelKind::Identity) {
+    for (std::array<float, 4>& sample : out) sample = kIdentity;
+    return HkxStatus::Ok;
+  }
+
   // Requires a quantisation the reader decodes: an unknown format would be read at the wrong width.
+  const int format = mask.rot_quantisation;
+  const std::size_t width = static_cast<std::size_t>(rotation_width(format));
   if (width == 0) return HkxStatus::BadSection;
+  const int alignment = rotation_align(format);
 
   if (mask.rot == ChannelKind::Spline) {
     std::vector<float> knots;
@@ -174,15 +174,9 @@ HkxStatus decode_rotation_channel(Cursor& cursor, const TrackMask& mask, std::sp
   }
 
   if (alignment > 1) cursor.align(static_cast<std::size_t>(alignment));
-  if (mask.rot == ChannelKind::Static) {
-    if (!cursor.has(width)) return HkxStatus::Truncated;
-    const std::array<float, 4> quaternion = decode_quat(format, cursor.bytes, cursor.at);
-    for (std::array<float, 4>& sample : out) sample = quaternion;
-    return HkxStatus::Ok;
-  }
-
-  const std::array<float, 4> identity{0.0f, 0.0f, 0.0f, 1.0f};
-  for (std::array<float, 4>& sample : out) sample = identity;
+  if (!cursor.has(width)) return HkxStatus::Truncated;
+  const std::array<float, 4> quaternion = decode_quat(format, cursor.bytes, cursor.at);
+  for (std::array<float, 4>& sample : out) sample = quaternion;
   return HkxStatus::Ok;
 }
 
@@ -245,6 +239,12 @@ HkxStatus decode_spline_animation(const HkxPackfile& packfile, const HkxObjectVi
   // Requires every declared shape to be refused before an array is sized from it.
   if (tracks > kMaxDecodedSamples) return HkxStatus::BadSection;
   if (frames > kMaxDecodedSamples / tracks) return HkxStatus::BadSection;
+
+  Elements blob;
+  if (const auto status = elements_at(section, *data_at, packfile.pointer_size, 1, blob); status != HkxStatus::Ok) {
+    return status;
+  }
+  if (tracks > blob.count / 4) return HkxStatus::Truncated;
   if (frames == 0) {
     out.tracks.resize(tracks);
     return HkxStatus::Ok;
@@ -255,13 +255,8 @@ HkxStatus decode_spline_animation(const HkxPackfile& packfile, const HkxObjectVi
       status != HkxStatus::Ok) {
     return status;
   }
-  Elements blob;
-  if (const auto status = elements_at(section, *data_at, packfile.pointer_size, 1, blob); status != HkxStatus::Ok) {
-    return status;
-  }
   if (out.blocks.count > offset_elements.count) return HkxStatus::Truncated;
 
-  // Invariant: a block holds max_frames_per_block samples and the next block starts one frame earlier.
   if (out.blocks.count == 0 || out.blocks.max_frames_per_block < 2) return HkxStatus::BadSection;
   const std::size_t max_frames = out.blocks.max_frames_per_block;
   const std::size_t stride = max_frames - 1;
@@ -269,8 +264,6 @@ HkxStatus decode_spline_animation(const HkxPackfile& packfile, const HkxObjectVi
   if (out.blocks.count - 1 > frames / stride) return HkxStatus::BadSection;
   if ((out.blocks.count - 1) * stride + max_frames < frames) return HkxStatus::BadSection;
 
-  // Requires room for one four-byte mask per track at the start of a block.
-  if (tracks > blob.count / 4) return HkxStatus::Truncated;
   out.tracks.resize(tracks);
   for (HkxAnimationTrack& track : out.tracks) {
     track.translations.resize(frames);
@@ -284,7 +277,6 @@ HkxStatus decode_spline_animation(const HkxPackfile& packfile, const HkxObjectVi
   for (std::size_t block = 0; block < out.blocks.count; ++block) {
     const std::size_t first_frame = block * stride;
     if (first_frame >= frames) return HkxStatus::BadSection;
-    // Invariant: only the last block is short, and a later block owns the frame it shares with the one before it.
     const std::size_t block_frames = std::min(max_frames, frames - first_frame);
     const std::size_t block_offset =
         value_at<std::uint32_t>(section.data, offset_elements.first + block * 4);

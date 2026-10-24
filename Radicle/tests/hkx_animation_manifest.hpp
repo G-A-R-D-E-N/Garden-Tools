@@ -11,7 +11,6 @@
 
 namespace fo4::test::hkx {
 
-// Invariant: the manifest holds integers only, so a hash of it cannot drift on float formatting.
 inline std::int64_t manifest_ten_thousandths(float value) {
   return std::llround(static_cast<double>(value) * 10000.0);
 }

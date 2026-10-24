@@ -31,6 +31,22 @@ std::string without_carriage_returns(std::string text) {
   return text;
 }
 
+float rotation_distance(const std::array<float, 4>& a, const std::array<float, 4>& b) {
+  const float dot = a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3];
+  return 1.0f - std::fabs(dot);
+}
+
+// Requires the same scale for both parts: the step is the translation distance plus the quaternion turn.
+float pose_step(const fo4::hkx::HkxAnimationTrack& track, std::size_t frame) {
+  const auto& from = track.translations[frame];
+  const auto& to = track.translations[frame + 1];
+  const float dx = to[0] - from[0];
+  const float dy = to[1] - from[1];
+  const float dz = to[2] - from[2];
+  return std::sqrt(dx * dx + dy * dy + dz * dz) +
+         rotation_distance(track.rotations[frame], track.rotations[frame + 1]);
+}
+
 }  // namespace
 
 TEST(HkxSkeletonRealData, ReadsVanillaHumanSkeletonFromAnimationsArchive) {
@@ -131,7 +147,6 @@ TEST(HkxAnimationRealData, DecodesEveryFrameOfAVanillaTwoBlockClip) {
   EXPECT_EQ(animation.kind, fo4::hkx::HkxAnimationKind::Spline);
   EXPECT_EQ(animation.blocks.count, 2u);
   EXPECT_EQ(animation.blocks.max_frames_per_block, 256u);
-  // Invariant: two blocks of 256 frames share one boundary frame, so 255 + 59 covers all 314 frames.
   EXPECT_EQ(animation.frame_count, 314u);
   EXPECT_EQ(animation.tracks.size(), 94u);
   EXPECT_GT(animation.frame_count, animation.blocks.max_frames_per_block);
@@ -154,6 +169,25 @@ TEST(HkxAnimationRealData, DecodesEveryFrameOfAVanillaTwoBlockClip) {
     for (const std::array<float, 3>& scale : track.scales) {
       for (const float value : scale) ASSERT_TRUE(std::isfinite(value));
     }
+  }
+
+  // Requires the later block to own the shared frame: a packed stride must duplicate frame 255.
+  // The step out of the seam must therefore collapse while its neighbours do not.
+  const std::size_t seam = animation.blocks.max_frames_per_block - 1;
+  ASSERT_LT(std::size_t{3}, seam);
+  ASSERT_LT(seam + 2, animation.frame_count);
+  for (std::size_t track = 0; track < animation.tracks.size(); ++track) {
+    const fo4::hkx::HkxAnimationTrack& frames = animation.tracks[track];
+    const float neighbour = std::max({pose_step(frames, seam - 3), pose_step(frames, seam - 2),
+                                      pose_step(frames, seam + 1), pose_step(frames, seam + 2)});
+    const float into_seam = pose_step(frames, seam - 1);
+    const float out_of_seam = pose_step(frames, seam);
+    if (neighbour > 1e-5f) {
+      EXPECT_GE(into_seam, 0.25f * neighbour) << "track " << track;
+      EXPECT_GE(out_of_seam, 0.25f * neighbour) << "track " << track;
+    }
+    EXPECT_LE(into_seam, 4.0f * neighbour + 1e-3f) << "track " << track;
+    EXPECT_LE(out_of_seam, 4.0f * neighbour + 1e-3f) << "track " << track;
   }
 }
 

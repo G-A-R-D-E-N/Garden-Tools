@@ -52,7 +52,6 @@ std::vector<std::byte> binding_packfile() {
   });
 }
 
-// Invariant: the animation pointer is a global fixup into the same section, as in vanilla files.
 std::vector<std::byte> binding_with_animation_packfile() {
   std::vector<std::byte> names;
   const auto binding_name = add_class_name(names, signature_of("hkaAnimationBinding"), "hkaAnimationBinding");

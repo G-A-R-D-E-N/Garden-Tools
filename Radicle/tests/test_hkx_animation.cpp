@@ -80,6 +80,34 @@ std::vector<std::byte> interleaved_packfile(std::size_t tracks, std::size_t fram
   });
 }
 
+std::vector<std::byte> interleaved_shape_packfile(std::uint32_t declared_tracks, std::size_t transform_count) {
+  std::vector<std::byte> names;
+  const auto name_at = add_class_name(names, signature_of("hkaInterleavedUncompressedAnimation"),
+                                      "hkaInterleavedUncompressedAnimation");
+  std::vector<std::byte> data(fo4::hkx::find_layout("hkaInterleavedUncompressedAnimation")->size, std::byte{0});
+  std::vector<std::uint32_t> local;
+
+  const std::size_t transforms_at = data.size();
+  for (std::size_t i = 0; i < transform_count; ++i) {
+    put_identity_transform(data, static_cast<float>(i), 0.0f, 0.0f);
+  }
+
+  set_int_member(data, "hkaAnimation", "type", 1);
+  set_float_member(data, "hkaAnimation", "duration", 1.0f);
+  set_int_member(data, "hkaAnimation", "numberOfTransformTracks", declared_tracks);
+  set_int_member(data, "hkaAnimation", "numberOfFloatTracks", 0);
+  if (transform_count > 0) {
+    link(local, member_at("hkaInterleavedUncompressedAnimation", "transforms"), transforms_at);
+  }
+  set_count(data, member_at("hkaInterleavedUncompressedAnimation", "transforms"),
+            static_cast<std::uint32_t>(transform_count));
+
+  return build_packfile({
+      TestSection{"__classnames__", names, {}, {}, {}},
+      TestSection{"__types__", {}, {}, {}, {}},
+      TestSection{"__data__", std::move(data), std::move(local), {}, {0, 0, name_at}},
+  });
+}
 
 std::size_t append_string(std::vector<std::byte>& data, const std::string& text) {
   const std::size_t at = data.size();
@@ -172,6 +200,26 @@ TEST(HkxAnimation, DecodesInterleavedFloatTracksInFrameOrder) {
   ASSERT_EQ(animation.float_tracks.size(), 6u);
   EXPECT_FLOAT_EQ(animation.float_tracks[0], 0.0f);
   EXPECT_FLOAT_EQ(animation.float_tracks[5], 5.0f);
+}
+
+TEST(HkxAnimation, AnInterleavedTrackCountOfTwoBillionIsRefusedBeforeAllocating) {
+  // Detects a track array resized from numberOfTransformTracks before the transforms array must cover it.
+  const auto bytes = interleaved_shape_packfile(0x7FFFFFFFu, 1);
+  HkxPackfile packfile;
+  ASSERT_EQ(read_packfile(bytes, packfile), HkxStatus::Ok);
+  HkxAnimation animation;
+  EXPECT_EQ(read_animation(packfile, animation), HkxStatus::BadSection);
+  EXPECT_TRUE(animation.tracks.empty());
+}
+
+TEST(HkxAnimation, AnInterleavedTransformArrayThatIsNotWholeFramesIsBadSection) {
+  // Detects a frame count from a division the declared track count must divide evenly.
+  const auto bytes = interleaved_shape_packfile(2, 3);
+  HkxPackfile packfile;
+  ASSERT_EQ(read_packfile(bytes, packfile), HkxStatus::Ok);
+  HkxAnimation animation;
+  EXPECT_EQ(read_animation(packfile, animation), HkxStatus::BadSection);
+  EXPECT_TRUE(animation.tracks.empty());
 }
 
 TEST(HkxAnimation, SplineClipEvaluatesAHandBuiltLinearSplineAtKnownFrames) {
@@ -447,14 +495,27 @@ TEST(HkxAnimation, ReadAnimationRefusesAnAnimationWhoseSignatureDoesNotMatchTheL
   EXPECT_EQ(read_animation(packfile, animation), HkxStatus::UnsupportedLayout);
 }
 
-TEST(HkxAnimation, EveryCutOffLengthOfASplineFileIsRejectedWithoutReadingPastTheEnd) {
-  const auto bytes = spline_packfile(-1, -1);
-  const std::span<const std::byte> whole(bytes);
-  for (std::size_t length = 0; length < bytes.size(); ++length) {
-    HkxPackfile packfile;
-    const auto status = read_packfile(whole.first(length), packfile);
-    if (status != HkxStatus::Ok) continue;
+TEST(HkxAnimation, EveryShorterDataArrayOfASplineFileIsRejected) {
+  // Detects a block read that must stop at the declared data array rather than the section.
+  auto bytes = spline_packfile(-1, -1);
+  HkxPackfile packfile;
+  ASSERT_EQ(read_packfile(bytes, packfile), HkxStatus::Ok);
+  HkxAnimation whole;
+  ASSERT_EQ(read_animation(packfile, whole), HkxStatus::Ok);
+  const fo4::hkx::HkxSection& section = packfile.sections[packfile.data_section];
+  ASSERT_FALSE(packfile.objects.empty());
+  const std::size_t count_at = section.file_offset + packfile.objects.front().offset +
+                               member_at("hkaSplineCompressedAnimation", "data") + packfile.pointer_size;
+  std::uint32_t full = 0;
+  std::memcpy(&full, bytes.data() + count_at, sizeof full);
+  ASSERT_GT(full, 4u);
+
+  for (std::uint32_t count = 0; count < full; ++count) {
+    auto cut = bytes;
+    patch_u32(cut, count_at, count);
+    HkxPackfile cut_packfile;
+    ASSERT_EQ(read_packfile(cut, cut_packfile), HkxStatus::Ok) << "count " << count;
     HkxAnimation animation;
-    EXPECT_NE(read_animation(packfile, animation), HkxStatus::Ok) << "length " << length;
+    EXPECT_NE(read_animation(cut_packfile, animation), HkxStatus::Ok) << "count " << count;
   }
 }

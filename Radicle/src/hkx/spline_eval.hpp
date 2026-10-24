@@ -23,13 +23,6 @@ struct TrackMask {
   std::array<ChannelKind, 3> pos{};
   ChannelKind rot{ChannelKind::Identity};
   std::array<ChannelKind, 3> scale{};
-
-  bool any_pos_spline() const {
-    return pos[0] == ChannelKind::Spline || pos[1] == ChannelKind::Spline || pos[2] == ChannelKind::Spline;
-  }
-  bool any_scale_spline() const {
-    return scale[0] == ChannelKind::Spline || scale[1] == ChannelKind::Spline || scale[2] == ChannelKind::Spline;
-  }
 };
 
 inline ChannelKind axis_kind(std::uint8_t flags, int axis) {
@@ -101,7 +94,6 @@ inline float read_quantised16(std::uint16_t raw, float min, float max) {
   return min + (max - min) * (static_cast<float>(raw) / 65535.0f);
 }
 
-// Invariant: a knot is a byte, so a block covers at most 256 frames.
 inline int find_knot_span(int degree, float t, int control_points, std::span<const float> knots) {
   if (control_points <= 0 || knots.empty()) return 0;
   if (t >= knots[static_cast<std::size_t>(control_points)]) return control_points - 1;
@@ -229,7 +221,7 @@ inline std::array<float, 4> decode_quat(int format, std::span<const std::byte> b
       const auto b1 = std::to_integer<std::uint8_t>(bytes[off + 1]);
       const auto b2 = std::to_integer<std::uint8_t>(bytes[off + 2]);
       off += 3;
-      constexpr float kScale = 0.01122391716169123054604514860484f;
+      const float kScale = 1.0f / (63.0f * std::sqrt(2.0f));
       const std::size_t largest = static_cast<std::size_t>(((b0 >> 7) & 1) | ((b1 >> 6) & 2));
       const bool negative = (b2 >> 7) != 0;
       const std::array<float, 3> packed = {
