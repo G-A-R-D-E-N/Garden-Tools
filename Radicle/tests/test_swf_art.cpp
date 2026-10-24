@@ -319,6 +319,58 @@ std::vector<std::byte> morph_payload(bool version_two) {
   return body.body;
 }
 
+std::vector<std::byte> morph_start_edges_new_styles(const std::vector<std::byte>& styles_and_bits) {
+  SwfBuilder body;
+  body.bytes(styles_and_bits);
+  body.push_bits(0, 1);
+  body.push_bits(0x10, 5);
+  body.align();
+  body.u8(1);
+  body.u8(0x00);
+  rgba(body, 1, 2, 3, 4);
+  rgba(body, 5, 6, 7, 8);
+  body.u8(0);
+  body.u8(0x20);
+  body.push_bits(0, 1);
+  body.push_bits(0x02, 5);
+  body.push_bits(3, 2);
+  body.push_bits(0, 6);
+  body.align();
+  return body.body;
+}
+
+std::vector<std::byte> morph_end_edges_new_styles() {
+  SwfBuilder body;
+  body.u8(0x20);
+  body.push_bits(0, 1);
+  body.push_bits(0x10, 5);
+  body.align();
+  body.u8(1);
+  body.u8(0x00);
+  rgba(body, 9, 10, 11, 12);
+  rgba(body, 13, 14, 15, 16);
+  body.u8(0);
+  body.u8(0x20);
+  body.push_bits(0, 1);
+  body.push_bits(0x02, 5);
+  body.push_bits(3, 2);
+  body.push_bits(0, 6);
+  body.align();
+  return body.body;
+}
+
+std::vector<std::byte> morph_new_styles_payload() {
+  SwfBuilder body;
+  body.u16(14);
+  body.rect(0, 100, 0, 100, 10);
+  body.rect(0, 120, 0, 90, 10);
+  const auto start = morph_start_edges_new_styles(morph_styles(false));
+  body.u32(static_cast<std::uint32_t>(start.size()));
+  body.bytes(start);
+  body.bytes(morph_end_edges_new_styles());
+  return body.body;
+}
+
 std::vector<std::byte> lossless_payload(std::uint16_t format, std::uint16_t width,
                                         std::uint16_t height, std::size_t row_bytes,
                                         std::uint8_t table_size, bool alpha) {
@@ -504,6 +556,17 @@ TEST(SwfMorph, DefineMorphShapeOneHasNoEdgeBoundsOrLineFlags) {
   EXPECT_EQ(morph.line_style_count, 1u);
   EXPECT_EQ(morph.start_edge_count, 1u);
   EXPECT_EQ(morph.end_edge_count, 1u);
+}
+
+TEST(SwfMorph, NewStylesRecordParsesMorphStylePairs) {
+  const auto result = read_one(46, morph_new_styles_payload());
+  ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
+  const auto& morph = *result.file.tags[0].morph_shape;
+  EXPECT_EQ(morph.character_id, 14u);
+  EXPECT_EQ(morph.fill_style_count, 2u);
+  EXPECT_EQ(morph.line_style_count, 1u);
+  EXPECT_EQ(morph.start_edge_count, 0u);
+  EXPECT_EQ(morph.end_edge_count, 0u);
 }
 
 TEST(SwfBitmap, LosslessRgb15InflatesToThePaddedRowSize) {

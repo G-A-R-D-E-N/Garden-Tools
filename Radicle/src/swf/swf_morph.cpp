@@ -110,6 +110,33 @@ bool read_style_count(Cursor& cursor, std::size_t& count) {
 
 }  // namespace
 
+bool read_morph_styles(Cursor& cursor, unsigned version, SwfShapeStyles& out,
+                       std::size_t& fill_count, std::size_t& line_count) {
+  if (!read_style_count(cursor, fill_count)) {
+    return false;
+  }
+  for (std::size_t index = 0; index < fill_count; ++index) {
+    if (!read_morph_fill_style(cursor)) {
+      return false;
+    }
+  }
+  if (!read_style_count(cursor, line_count)) {
+    return false;
+  }
+  for (std::size_t index = 0; index < line_count; ++index) {
+    if (!read_morph_line_style(cursor, version)) {
+      return false;
+    }
+  }
+  std::uint8_t bits = 0;
+  if (!cursor.u8(bits)) {
+    return false;
+  }
+  out.fill_bits = static_cast<unsigned>(bits >> 4);
+  out.line_bits = static_cast<unsigned>(bits & 0x0Fu);
+  return true;
+}
+
 SwfStatus decode_morph_tag(std::span<const std::byte> data, SwfTag& out_tag) {
   const unsigned version = out_tag.code == tag::kDefineMorphShape2 ? 2u : 1u;
   Cursor cursor{data, 0};
@@ -151,33 +178,15 @@ SwfStatus decode_morph_tag(std::span<const std::byte> data, SwfTag& out_tag) {
     return SwfStatus::malformed_tag;
   }
   std::size_t fill_count = 0;
-  if (!read_style_count(cursor, fill_count)) {
-    return SwfStatus::malformed_tag;
-  }
-  for (std::size_t index = 0; index < fill_count; ++index) {
-    if (!read_morph_fill_style(cursor)) {
-      return SwfStatus::malformed_tag;
-    }
-  }
   std::size_t line_count = 0;
-  if (!read_style_count(cursor, line_count)) {
-    return SwfStatus::malformed_tag;
-  }
-  for (std::size_t index = 0; index < line_count; ++index) {
-    if (!read_morph_line_style(cursor, version)) {
-      return SwfStatus::malformed_tag;
-    }
-  }
-  std::uint8_t bits = 0;
-  if (!cursor.u8(bits)) {
-    return SwfStatus::malformed_tag;
-  }
   SwfShapeStyles start_styles;
-  start_styles.fill_bits = static_cast<unsigned>(bits >> 4);
-  start_styles.line_bits = static_cast<unsigned>(bits & 0x0Fu);
+  if (!read_morph_styles(cursor, version, start_styles, fill_count, line_count)) {
+    return SwfStatus::malformed_tag;
+  }
   ShapeRecordCounts start_counts;
   std::size_t start_end = 0;
-  if (!read_shape_records(data, cursor.position, version, start_styles, start_counts, start_end)) {
+  if (!read_shape_records(data, cursor.position, version, true, start_styles, start_counts,
+                          start_end)) {
     return SwfStatus::malformed_tag;
   }
   Cursor edges{data, start_end};
@@ -193,7 +202,7 @@ SwfStatus decode_morph_tag(std::span<const std::byte> data, SwfTag& out_tag) {
   end_styles.line_bits = static_cast<unsigned>(end_bits & 0x0Fu);
   ShapeRecordCounts end_counts;
   std::size_t end_end = 0;
-  if (!read_shape_records(data, edges.position, version, end_styles, end_counts, end_end)) {
+  if (!read_shape_records(data, edges.position, version, true, end_styles, end_counts, end_end)) {
     return SwfStatus::malformed_tag;
   }
   if (end_end != data.size()) {

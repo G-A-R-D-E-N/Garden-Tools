@@ -230,7 +230,8 @@ bool read_shape_styles(Cursor& cursor, unsigned version, SwfShapeStyles& out) {
 }
 
 bool read_shape_records(std::span<const std::byte> data, std::size_t start, unsigned version,
-                        SwfShapeStyles& styles, ShapeRecordCounts& counts, std::size_t& next) {
+                        bool morph, SwfShapeStyles& styles, ShapeRecordCounts& counts,
+                        std::size_t& next) {
   BitReader bits(data, start * 8);
   while (true) {
     if (counts.records >= kMaxShapeRecords) {
@@ -308,7 +309,12 @@ bool read_shape_records(std::span<const std::byte> data, std::size_t start, unsi
       bits.align();
       Cursor cursor{data, bits.byte_position()};
       SwfShapeStyles replacement;
-      if (!read_shape_styles(cursor, version, replacement)) {
+      std::size_t fill_count = 0;
+      std::size_t line_count = 0;
+      const bool parsed =
+          morph ? read_morph_styles(cursor, version, replacement, fill_count, line_count)
+                : read_shape_styles(cursor, version, replacement);
+      if (!parsed) {
         return false;
       }
       styles = std::move(replacement);
@@ -366,7 +372,7 @@ SwfStatus decode_shape_tag(std::span<const std::byte> data, SwfTag& out_tag) {
   }
   ShapeRecordCounts counts;
   std::size_t records_end = 0;
-  if (!read_shape_records(data, cursor.position, version, styles, counts, records_end)) {
+  if (!read_shape_records(data, cursor.position, version, false, styles, counts, records_end)) {
     return SwfStatus::malformed_tag;
   }
   if (records_end != data.size()) {
