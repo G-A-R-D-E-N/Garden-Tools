@@ -10,10 +10,6 @@
 #include <string>
 #include <vector>
 
-struct radicle_assets {
-  fo4::archive::AssetResolver value;
-};
-
 struct radicle_asset_list {
   std::vector<fo4::archive::AssetListing> items;
 };
@@ -248,6 +244,11 @@ void radicle_assets_destroy(radicle_assets* assets) {
 size_t radicle_assets_archive_count(const radicle_assets* assets) {
   clear_error();
   return assets == nullptr ? 0 : assets->value.archives().size();
+}
+
+size_t radicle_assets_root_count(const radicle_assets* assets) {
+  clear_error();
+  return assets == nullptr ? 0 : assets->value.roots().size();
 }
 
 radicle_status radicle_assets_get_archive(const radicle_assets* assets, size_t index, const radicle_ba2** out_ba2) {

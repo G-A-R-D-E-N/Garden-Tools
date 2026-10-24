@@ -2215,6 +2215,26 @@ public unsafe struct PexChainFinding
     public nuint ChainNameCount;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ScriptSetCandidate
+{
+    public IntPtr Name;
+    public IntPtr Path;
+    public AssetOrigin Origin;
+    public IntPtr Container;
+    public int LoadIndex;
+    public ulong Size;
+    public AssetLocation Location;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ScriptSetWinner
+{
+    public IntPtr Name;
+    public ScriptSetCandidate Winner;
+    public uint Replaced;
+}
+
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
@@ -2399,6 +2419,9 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_assets_archive_count")]
     public static extern nuint AssetsArchiveCount(IntPtr assets);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_assets_root_count")]
+    public static extern nuint AssetsRootCount(IntPtr assets);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_assets_get_archive")]
     public static extern Status AssetsGetArchive(IntPtr assets, nuint index, IntPtr* out_ba2);
@@ -3332,5 +3355,20 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_chain_report_name")]
     public static extern Status PexChainReportName(IntPtr report, nuint index, IntPtr* out_name);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_set_resolve")]
+    public static extern Status ScriptSetResolve(IntPtr assets, int* root_load_index, nuint root_load_index_count, IntPtr* out_set);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_set_count")]
+    public static extern nuint ScriptSetCount(IntPtr set);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_set_get")]
+    public static extern Status ScriptSetGet(IntPtr set, nuint index, ScriptSetWinner* out_winner);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_set_read")]
+    public static extern Status ScriptSetRead(IntPtr set, nuint index, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_set_destroy")]
+    public static extern void ScriptSetDestroy(IntPtr set);
 
 }

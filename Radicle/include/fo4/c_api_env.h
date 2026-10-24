@@ -541,6 +541,8 @@ RADICLE_API radicle_status radicle_assets_open_roots(const char* const* root_pat
                                                      radicle_assets** out_assets);
 RADICLE_API void radicle_assets_destroy(radicle_assets* assets);
 RADICLE_API size_t radicle_assets_archive_count(const radicle_assets* assets);
+/* Invariant: empty and duplicate entries are dropped, so this can be fewer than the count radicle_assets_open_roots was given. */
+RADICLE_API size_t radicle_assets_root_count(const radicle_assets* assets);
 RADICLE_API radicle_status radicle_assets_get_archive(const radicle_assets* assets,
                                                       size_t index,
                                                       const radicle_ba2** out_ba2);

@@ -26,6 +26,7 @@
 #include "fo4/c_api_dds.h"
 #include "fo4/c_api_terrain.h"
 #include "fo4/c_api_pex_analysis.h"
+#include "fo4/c_api_script_set.h"
 #include <cstddef>
 #include <cstdio>
 
@@ -1444,5 +1445,17 @@ int main() {
   printf("PexChainFinding.Depth %zu\n", offsetof(radicle_pex_chain_finding, depth));
   printf("PexChainFinding.FirstChainName %zu\n", offsetof(radicle_pex_chain_finding, first_chain_name));
   printf("PexChainFinding.ChainNameCount %zu\n", offsetof(radicle_pex_chain_finding, chain_name_count));
+  printf("ScriptSetCandidate %zu\n", sizeof(radicle_script_set_candidate));
+  printf("ScriptSetCandidate.Name %zu\n", offsetof(radicle_script_set_candidate, name));
+  printf("ScriptSetCandidate.Path %zu\n", offsetof(radicle_script_set_candidate, path));
+  printf("ScriptSetCandidate.Origin %zu\n", offsetof(radicle_script_set_candidate, origin));
+  printf("ScriptSetCandidate.Container %zu\n", offsetof(radicle_script_set_candidate, container));
+  printf("ScriptSetCandidate.LoadIndex %zu\n", offsetof(radicle_script_set_candidate, load_index));
+  printf("ScriptSetCandidate.Size %zu\n", offsetof(radicle_script_set_candidate, size));
+  printf("ScriptSetCandidate.Location %zu\n", offsetof(radicle_script_set_candidate, location));
+  printf("ScriptSetWinner %zu\n", sizeof(radicle_script_set_winner));
+  printf("ScriptSetWinner.Name %zu\n", offsetof(radicle_script_set_winner, name));
+  printf("ScriptSetWinner.Winner %zu\n", offsetof(radicle_script_set_winner, winner));
+  printf("ScriptSetWinner.Replaced %zu\n", offsetof(radicle_script_set_winner, replaced));
   return 0;
 }
