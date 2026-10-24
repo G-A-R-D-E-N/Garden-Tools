@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -198,6 +199,80 @@ TEST(ScriptSetReal, ModArchiveShadowingAnOfficialScriptFollowsTheLoadIndex) {
     EXPECT_EQ(added->replaced, 0u);
     EXPECT_EQ(losing.read(added->winner.location), added_payload);
   }
+}
+
+TEST(ScriptSetReal, ModArchiveEntrySpellingFoldsToTheOfficialScriptName) {
+  const char* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
+  const std::filesystem::path data_dir = dir;
+  const auto archives = fo4::archive::archive_load_order(data_dir, {}, installed_master_and_cc_plugins(data_dir));
+  ASSERT_FALSE(archives.empty());
+
+  std::string target_name;
+  std::string official_spelling;
+  std::vector<std::byte> official_bytes;
+  std::size_t official_winners = 0;
+  {
+    const auto official_resolver = fo4::archive::AssetResolver::open({}, archives);
+    const auto official = fo4::pex_analysis::resolve_script_set(
+        fo4::pex_analysis::enumerate_script_candidates(official_resolver));
+    ASSERT_FALSE(official.empty());
+    const auto target = std::find_if(official.begin(), official.end(), [](const auto& candidate) {
+      return candidate.winner.kind == fo4::pex_analysis::ScriptSourceKind::archive &&
+             candidate.winner.name.find('/') != std::string::npos;
+    });
+    ASSERT_NE(target, official.end());
+    target_name = target->winner.name;
+    official_winners = official.size();
+    official_bytes = official_resolver.read(target->winner.location);
+    const auto& entry = official_resolver.archives()
+                            .at(target->winner.location.archive)
+                            .entries()
+                            .at(target->winner.location.entry);
+    official_spelling = entry.path;
+  }
+  ASSERT_FALSE(official_bytes.empty());
+  ASSERT_EQ(fo4::pex_analysis::script_name_from_entry(official_spelling),
+            std::optional<std::string>(target_name));
+
+  // The mod entry must name the same script with only its case and separators spelled differently.
+  std::string mod_spelling;
+  for (const char ch : official_spelling) {
+    if (ch == '/' || ch == '\\') {
+      mod_spelling.push_back(ch == '/' ? '\\' : '/');
+      continue;
+    }
+    mod_spelling.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(ch))));
+  }
+  ASSERT_NE(mod_spelling, official_spelling);
+  ASSERT_EQ(fo4::archive::normalize_asset_path(mod_spelling), "scripts/" + target_name + ".pex");
+  ASSERT_EQ(fo4::pex_analysis::script_name_from_entry(mod_spelling),
+            std::optional<std::string>(target_name));
+
+  const auto mod_payload = marker_bytes(std::string_view("shadowed by a respelled entry"));
+  fo4::test::TempDataDir mod_dir;
+  const auto mod_archive = write_mod_archive(mod_dir.path(), {{mod_spelling, mod_payload}});
+
+  std::vector<std::filesystem::path> mod_last = archives;
+  mod_last.push_back(mod_archive);
+  const auto resolver = fo4::archive::AssetResolver::open({}, mod_last);
+  const auto candidates = fo4::pex_analysis::enumerate_script_candidates(resolver);
+  const auto winners = fo4::pex_analysis::resolve_script_set(candidates);
+
+  // Invariant: respelling a name adds a candidate but no name, so it can only shadow, never extend the set.
+  EXPECT_EQ(candidates.size(), official_winners + 1);
+  EXPECT_EQ(winners.size(), official_winners);
+  const auto winner = std::find_if(winners.begin(), winners.end(), [&](const auto& candidate) {
+    return candidate.winner.name == target_name;
+  });
+  ASSERT_NE(winner, winners.end());
+  EXPECT_EQ(std::filesystem::path(winner->winner.container).filename(), mod_archive.filename());
+  EXPECT_EQ(winner->replaced, 1u);
+  EXPECT_EQ(winner->winner.path, "scripts/" + target_name + ".pex");
+  EXPECT_EQ(resolver.read(winner->winner.location), mod_payload);
+  std::size_t replaced = 0;
+  for (const auto& candidate : winners) replaced += candidate.replaced;
+  EXPECT_EQ(replaced, 1u);
 }
 
 TEST(ScriptSetReal, LooseScriptBeatsAnOfficialArchiveWhateverTheLoadIndex) {
