@@ -124,7 +124,7 @@ class RecordPairCodegenTests(unittest.TestCase):
                 }],
             }
             path.write_text(json.dumps(document), encoding="utf-8")
-            return record_schema_codegen.render(record_schema_codegen.load_constraints(path))
+            return record_schema_codegen.render(record_schema_codegen.load_constraints(path))[0]
 
     def test_a_schema_without_pairs_renders_a_valid_empty_array(self):
         rendered = self.render({"signature": "DATA", "minimum": 0, "maximum": 1})
@@ -139,6 +139,41 @@ class RecordPairCodegenTests(unittest.TestCase):
                       rendered)
         self.assertIn('Signature::from_string("DATA"), '
                       'Signature::from_string("GNAM")', rendered)
+
+
+class RecordShardCodegenTests(unittest.TestCase):
+    def render(self, record_count):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "fields.json"
+            records = [{
+                "signature": f"R{index:03d}",
+                "authoring": {"placement": "top_level", "subrecords": [
+                    {"signature": "DATA", "minimum": 0, "maximum": 1},
+                ]},
+            } for index in range(record_count)]
+            path.write_text(json.dumps({"version": 1, "records": records}), encoding="utf-8")
+            return record_schema_codegen.render(record_schema_codegen.load_constraints(path))
+
+    def test_a_long_rule_table_is_split_into_ordered_shards_within_the_line_limit(self):
+        parent, shards = self.render(700)
+        rules = sorted(name for name in shards if "subrecord_authoring_constraints" in name)
+        self.assertEqual(len(rules), 2, rules)
+        for name, text in shards.items():
+            self.assertLessEqual(len(text.splitlines()), 750, name)
+            self.assertTrue(text.startswith(record_schema_codegen.GENERATED_HEADER[0]))
+        includes = [line for line in parent.splitlines() if line.startswith("#include ")]
+        self.assertEqual(sorted(includes), sorted(f'#include "{name}"' for name in shards))
+        self.assertEqual(includes[:2], [f'#include "{name}"' for name in rules])
+        self.assertIn("Shard 1 of 2", shards[rules[0]])
+        self.assertIn("records R000 to R599", shards[rules[0]])
+        self.assertIn("Shard 2 of 2", shards[rules[1]])
+        self.assertEqual(shards[rules[0]].count('Signature::from_string("DATA")'), 600)
+        self.assertEqual(shards[rules[1]].count('Signature::from_string("DATA")'), 100)
+
+    def test_a_short_rule_table_stays_inline(self):
+        parent, shards = self.render(2)
+        self.assertEqual(shards, {})
+        self.assertIn('Signature::from_string("R001"), RecordPlacement::top_level, 1, 1', parent)
 
 
 if __name__ == "__main__":
