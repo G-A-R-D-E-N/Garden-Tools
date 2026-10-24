@@ -104,11 +104,11 @@ radicle_status radicle_script_set_read(const radicle_script_set* set,
                                         uint8_t** out_bytes,
                                         size_t* out_size) {
   clear_error();
+  if (out_bytes != nullptr) *out_bytes = nullptr;
+  if (out_size != nullptr) *out_size = 0;
   if (set == nullptr || out_bytes == nullptr || out_size == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "set, out_bytes and out_size are required");
   }
-  *out_bytes = nullptr;
-  *out_size = 0;
   if (index >= set->winners.size()) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "winner index is out of range");
   return guarded("unknown exception while reading a script payload", [&] {
     return copy_bytes(set->assets->value.read(set->winners[index].winner.location), out_bytes, out_size);

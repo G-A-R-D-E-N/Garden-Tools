@@ -210,6 +210,11 @@ TEST_F(CApiScriptSetTest, RejectsBadArguments) {
   EXPECT_EQ(radicle_script_set_read(set, 1, &bytes, &size), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(bytes, nullptr);
   EXPECT_EQ(size, 0u);
+  bytes = sentinel<uint8_t>();
+  size = 99u;
+  EXPECT_EQ(radicle_script_set_read(nullptr, 0, &bytes, &size), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(bytes, nullptr);
+  EXPECT_EQ(size, 0u);
   winner.name = "stale";
   winner.winner.load_index = 9;
   winner.replaced = 7u;
