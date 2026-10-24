@@ -412,3 +412,63 @@ TEST(RowRoundtripReal, ArmorAddonLinkRowsSurviveWriteAndReread) {
 TEST(RowRoundtripReal, RaceLinkRowsSurviveWriteAndReread) {
   roundtrip_links("RACE", fo4::Signature::from_string("RACE"));
 }
+
+TEST(RowRoundtripReal, WeaponRowsSurviveWriteAndReread) {
+  roundtrip_family("WEAP", fo4::Signature::from_string("WEAP"));
+}
+
+TEST(RowRoundtripReal, SpellRowsSurviveWriteAndReread) {
+  roundtrip_family("SPEL", fo4::Signature::from_string("SPEL"));
+}
+
+TEST(RowRoundtripReal, PotionRowsSurviveWriteAndReread) {
+  roundtrip_family("ALCH", fo4::Signature::from_string("ALCH"));
+}
+
+TEST(RowRoundtripReal, IngredientRowsSurviveWriteAndReread) {
+  roundtrip_family("INGR", fo4::Signature::from_string("INGR"));
+}
+
+TEST(RowRoundtripReal, KeyRowsSurviveWriteAndReread) {
+  roundtrip_family("KEYM", fo4::Signature::from_string("KEYM"));
+}
+
+TEST(RowRoundtripReal, LightRowsSurviveWriteAndReread) {
+  roundtrip_family("LIGH", fo4::Signature::from_string("LIGH"));
+}
+
+TEST(RowRoundtripReal, MiscItemRowsSurviveWriteAndReread) {
+  roundtrip_family("MISC", fo4::Signature::from_string("MISC"));
+}
+
+TEST(RowRoundtripReal, ContainerRowsSurviveWriteAndReread) {
+  roundtrip_family("CONT", fo4::Signature::from_string("CONT"));
+}
+
+TEST(RowRoundtripReal, BookRowsSurviveWriteAndReread) {
+  roundtrip_family("BOOK", fo4::Signature::from_string("BOOK"));
+}
+
+TEST(RowRoundtripReal, AmmoRowsSurviveWriteAndReread) {
+  roundtrip_family("AMMO", fo4::Signature::from_string("AMMO"));
+}
+
+TEST(RowRoundtripReal, ConstructibleObjectRowsSurviveWriteAndReread) {
+  roundtrip_family("COBJ", fo4::Signature::from_string("COBJ"));
+}
+
+TEST(RowRoundtripReal, FloraRowsSurviveWriteAndReread) {
+  roundtrip_family("FLOR", fo4::Signature::from_string("FLOR"));
+}
+
+TEST(RowRoundtripReal, FurnitureRowsSurviveWriteAndReread) {
+  roundtrip_family("FURN", fo4::Signature::from_string("FURN"));
+}
+
+TEST(RowRoundtripReal, ActivatorRowsSurviveWriteAndReread) {
+  roundtrip_family("ACTI", fo4::Signature::from_string("ACTI"));
+}
+
+TEST(RowRoundtripReal, StaticRowsSurviveWriteAndReread) {
+  roundtrip_family("STAT", fo4::Signature::from_string("STAT"));
+}
