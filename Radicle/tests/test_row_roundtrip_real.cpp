@@ -257,3 +257,46 @@ TEST(RowRoundtripReal, ArmorRowsSurviveWriteAndReread) {
 TEST(RowRoundtripReal, ArmorAddonRowsSurviveWriteAndReread) {
   roundtrip_family("ARMA", fo4::Signature::from_string("ARMA"));
 }
+
+TEST(RowRoundtripReal, NpcRowsSurviveWriteAndReread) {
+  roundtrip_family("NPC_", fo4::Signature::from_string("NPC_"));
+}
+
+TEST(RowRoundtripReal, RaceRowsSurviveWriteAndReread) {
+  roundtrip_family("RACE", fo4::Signature::from_string("RACE"));
+}
+
+TEST(RowRoundtripReal, RaceLinkRowsResolveOnEveryRecord) {
+  const auto* directory = std::getenv("FO4_DATA_DIR");
+  if (directory == nullptr) {
+    GTEST_SKIP() << "set FO4_DATA_DIR to run official-master coverage";
+  }
+  record_game_build(detect_game_build(directory));
+  const auto path = std::filesystem::path(directory) / "Fallout4.esm";
+  ASSERT_TRUE(std::filesystem::is_regular_file(path)) << path.string();
+  const auto plugin = fo4::read_plugin_file(path);
+  const auto race = fo4::Signature::from_string("RACE");
+  const auto rows = fo4::schema::formlink_fields(race);
+  ASSERT_FALSE(rows.empty()) << "RACE has no FormLink rows";
+  std::size_t records = 0;
+  std::size_t resolved = 0;
+  std::size_t absent_links = 0;
+  fo4::visit_records(plugin, [&](const fo4::Record& record) {
+    if (record.header.signature != race) return;
+    ++records;
+    for (const auto& field : rows) {
+      const auto count = fo4::record_field_count(plugin, record.form_key, field);
+      ASSERT_TRUE(count.has_value()) << field.path << " on " << record.form_key.to_string();
+      if (*count > 0) ++resolved;
+    }
+    const auto severable = fo4::schema::scalar_field_descriptor("RACE\SeverableExplosion");
+    if (severable.has_value()) {
+      const auto count = fo4::record_field_count(plugin, record.form_key, *severable);
+      ASSERT_TRUE(count.has_value());
+      if (*count == 0) ++absent_links;
+    }
+  });
+  EXPECT_EQ(records, 45u);
+  EXPECT_EQ(absent_links, 39u) << "the severable explosion link is present on 6 of 45 RACE records";
+  EXPECT_GT(resolved, 0u) << "no RACE FormLink row resolved a value";
+}
