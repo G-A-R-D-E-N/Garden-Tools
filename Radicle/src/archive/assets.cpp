@@ -76,8 +76,7 @@ void walk_loose(const std::filesystem::path& dir, const std::filesystem::path& r
   for (const auto& path : children) {
     std::error_code entry_ec;
     if (std::filesystem::is_directory(path, entry_ec)) {
-      // Constraint: only the ancestor chain is deduped, so a link back to an ancestor
-      // cannot loop, while a sibling link must list its own keys that locate() finds.
+      // Constraint: only the ancestor chain is deduped, and a sibling link must list its own keys.
       const auto key = root_key(path);
       if (depth < k_max_depth && ancestors.insert(key).second) {
         walk_loose(path, root, depth + 1, out, ancestors);
@@ -210,11 +209,8 @@ std::vector<AssetListing> AssetResolver::list(std::string_view prefix, std::stri
       return false;
     }
     if (wanted_extension.empty()) return true;
-    // Constraint: a multi-dot filter names the whole suffix ('.tar.gz' lists
-    // pack.tar.gz but not xtar.gz), and the match must begin at the filter's dot;
-    // a one-dot filter still requires the last dot component.
-    if (path.size() <= wanted_extension.size() || !path.ends_with(wanted_extension)) return false;
-    return path[path.size() - wanted_extension.size()] == '.';
+    // Constraint: the filter must match as a whole suffix starting on a dot.
+    return path.ends_with(wanted_extension);
   };
   std::vector<AssetListing> found;
   std::set<std::string> keys;

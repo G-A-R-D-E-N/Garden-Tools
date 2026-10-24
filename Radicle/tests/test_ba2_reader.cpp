@@ -51,8 +51,7 @@ Ba2GeneralEntry general(std::string path, std::string_view payload, bool compres
   return entry;
 }
 
-// Constraint: Windows only gives directory symlinks to an elevated session, while a
-// junction needs no privilege and weakly_canonical must resolve both to the target.
+// Constraint: weakly_canonical must resolve a junction as well as a directory symlink.
 bool create_directory_alias(const std::filesystem::path& target, const std::filesystem::path& link) {
   std::error_code ec;
   std::filesystem::create_directory_symlink(target, link, ec);
@@ -325,6 +324,7 @@ TEST_F(Ba2ReaderTest, ExtensionFilterMatchesMultiDotSuffixesOnADotBoundary) {
   write_file(data() / "meshes" / "pack.gz", bytes_of("gz"));
   write_file(data() / "meshes" / "xtar.gz", bytes_of("xtar"));
   write_file(data() / "meshes" / "foonif", bytes_of("suffix"));
+  write_file(data() / ".gz", bytes_of("top"));
   const auto assets = fo4::archive::AssetResolver::open(data(), {});
 
   const auto tarballs = assets.list("meshes", ".tar.gz", false);
@@ -332,14 +332,14 @@ TEST_F(Ba2ReaderTest, ExtensionFilterMatchesMultiDotSuffixesOnADotBoundary) {
   EXPECT_EQ(tarballs[0].path, "meshes/pack.tar.gz");
   EXPECT_EQ(tarballs[0].size, 4u);
 
-  // Constraint: the caller may omit the leading dot; the match must still start on
-  // one, so "xtar.gz" must not match ".tar.gz".
+  // Constraint: the caller may omit the leading dot, but the match must still start on one.
   const auto bare = assets.list("meshes", "tar.gz", false);
   ASSERT_EQ(bare.size(), 1u);
   EXPECT_EQ(bare[0].path, "meshes/pack.tar.gz");
 
   // Constraint: a one-dot filter must still name the last dot component.
   EXPECT_EQ(assets.list("meshes", ".gz", false).size(), 3u);
+  EXPECT_EQ(assets.list("", ".gz", false).size(), 4u);
   EXPECT_EQ(assets.list("meshes", ".nif", false).size(), 0u);
   EXPECT_EQ(assets.list("meshes", "gzip", false).size(), 0u);
 }
@@ -559,8 +559,7 @@ TEST_F(Ba2ReaderTest, CApiWriteGeneralReportsCallerErrorsAsInvalidArgument) {
   for (const auto& entry : separator) refuse(&entry, 1, 1);
   for (const auto& entry : non_1252) refuse(&entry, 1, 1);
 
-  // Constraint: 259 bytes is the longest path the writer accepts, so the fixture must
-  // carry a directory and both hashes must be non-zero; the 260-byte "." hashes to zero.
+  // Constraint: the 259-byte fixture must carry a directory so both hashes stay non-zero.
   const std::string at_hash_limit(260, 'a');
   const std::string under_hash_limit = "Meshes\\" + std::string(252, 'a');
   ASSERT_EQ(under_hash_limit.size(), 259u);
