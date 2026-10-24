@@ -40,6 +40,35 @@ struct MovieStats {
   std::size_t jpeg_tables_count{0};
   std::size_t art_failures{0};
   std::map<std::string, std::size_t> versions;
+
+  MovieStats& operator+=(const MovieStats& other) {
+    total += other.total;
+    movies += other.movies;
+    gfx += other.gfx;
+    compressed += other.compressed;
+    action_script3 += other.action_script3;
+    lzma += other.lzma;
+    symbols += other.symbols;
+    abc_blocks += other.abc_blocks;
+    shape_movies += other.shape_movies;
+    bitmap_movies += other.bitmap_movies;
+    font_movies += other.font_movies;
+    text_movies += other.text_movies;
+    sound_movies += other.sound_movies;
+    exporter_info_movies += other.exporter_info_movies;
+    external_image_movies += other.external_image_movies;
+    font_texture_movies += other.font_texture_movies;
+    shape_count += other.shape_count;
+    morph_count += other.morph_count;
+    bitmap_count += other.bitmap_count;
+    jpeg_count += other.jpeg_count;
+    jpeg_tables_count += other.jpeg_tables_count;
+    art_failures += other.art_failures;
+    for (const auto& [key, count] : other.versions) {
+      versions[key] += count;
+    }
+    return *this;
+  }
 };
 
 void check_art(const fo4::swf::SwfTag& tag, MovieStats& stats) {
@@ -116,6 +145,26 @@ void check_movie(const std::string& name, std::span<const std::byte> bytes, Movi
   EXPECT_EQ(fo4::swf::write_swf(result.file), original) << name;
 }
 
+MovieStats scan_archive(const std::filesystem::path& path) {
+  MovieStats stats;
+  const auto archive = fo4::archive::read_ba2_general_file(path);
+  for (const auto& entry : archive.entries) {
+    if (!is_movie(entry.path)) {
+      continue;
+    }
+    check_movie(entry.path, fo4::archive::extract_ba2_general_entry(entry), stats);
+  }
+  return stats;
+}
+
+void record_archive_art(const std::string& key, const MovieStats& stats) {
+  testing::Test::RecordProperty(key + "_movies", std::to_string(stats.movies));
+  testing::Test::RecordProperty(key + "_shape_tags", std::to_string(stats.shape_count));
+  testing::Test::RecordProperty(key + "_morph_tags", std::to_string(stats.morph_count));
+  testing::Test::RecordProperty(key + "_lossless_tags", std::to_string(stats.bitmap_count));
+  testing::Test::RecordProperty(key + "_art_failures", std::to_string(stats.art_failures));
+}
+
 std::string version_histogram(const MovieStats& stats) {
   std::string text;
   for (const auto& [key, count] : stats.versions) {
@@ -129,7 +178,7 @@ std::string version_histogram(const MovieStats& stats) {
 
 }  // namespace
 
-TEST(SwfRealData, ParsesEveryInterfaceMovieAndRoundTripsByteIdentically) {
+TEST(SwfRealData, ParsesEveryShippedMovieAndRoundTripsByteIdentically) {
   const char* dir = std::getenv("FO4_DATA_DIR");
   if (dir == nullptr) {
     GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
@@ -158,14 +207,31 @@ TEST(SwfRealData, ParsesEveryInterfaceMovieAndRoundTripsByteIdentically) {
     if (!std::filesystem::exists(archive_path)) {
       GTEST_SKIP() << "no Interface movies and no Fallout4 - Interface.ba2 in FO4_DATA_DIR";
     }
-    const auto archive = fo4::archive::read_ba2_general_file(archive_path);
-    for (const auto& entry : archive.entries) {
-      if (!is_movie(entry.path)) {
-        continue;
-      }
-      const auto bytes = fo4::archive::extract_ba2_general_entry(entry);
-      check_movie(entry.path, bytes, stats);
+    const auto interface = scan_archive(archive_path);
+    record_archive_art("interface", interface);
+    stats += interface;
+  }
+
+  struct DlcArchive {
+    const char* key;
+    const char* file;
+  };
+  const DlcArchive dlc_archives[] = {
+      {"dlccoast", "DLCCoast - Main.ba2"},
+      {"dlcnukaworld", "DLCNukaWorld - Main.ba2"},
+      {"dlcrobot", "DLCRobot - Main.ba2"},
+  };
+  for (const auto& dlc : dlc_archives) {
+    const auto path = data_dir / dlc.file;
+    if (!std::filesystem::exists(path)) {
+      testing::Test::RecordProperty(std::string(dlc.key) + "_movies", std::string{"absent"});
+      continue;
     }
+    const auto local = scan_archive(path);
+    record_archive_art(dlc.key, local);
+    EXPECT_EQ(local.art_failures, 0u) << dlc.file;
+    EXPECT_GT(local.movies + local.lzma, 0u) << dlc.file;
+    stats += local;
   }
 
   EXPECT_GT(stats.movies, 0u);
