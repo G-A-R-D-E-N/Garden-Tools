@@ -25,11 +25,25 @@ using fo4::pex_analysis::ScriptSourceKind;
 using fo4::test::TempDataDir;
 
 ScriptCandidate loose(std::string name, std::string container, std::int32_t load_index) {
-  return {std::move(name), ScriptSourceKind::loose, std::move(container), load_index, 1};
+  const auto path = "scripts/" + name + ".pex";
+  return {std::move(name),
+          ScriptSourceKind::loose,
+          std::move(container),
+          load_index,
+          1,
+          path,
+          fo4::archive::AssetLocation{}};
 }
 
 ScriptCandidate archive(std::string name, std::string container, std::int32_t load_index) {
-  return {std::move(name), ScriptSourceKind::archive, std::move(container), load_index, 1};
+  const auto path = "scripts/" + name + ".pex";
+  return {std::move(name),
+          ScriptSourceKind::archive,
+          std::move(container),
+          load_index,
+          1,
+          path,
+          fo4::archive::AssetLocation{}};
 }
 
 }  // namespace
@@ -129,7 +143,7 @@ TEST(ScriptSet, FirstLooseRootWinsLikeAssetResolverLocate) {
 }
 
 TEST(ScriptName, ReadsOnlySafeScriptsEntries) {
-  EXPECT_EQ(script_name_from_entry("Scripts\Actors\Foo.PEX"), std::optional<std::string>{"actors/foo"});
+  EXPECT_EQ(script_name_from_entry("Scripts\\Actors\\Foo.PEX"), std::optional<std::string>{"actors/foo"});
   EXPECT_EQ(script_name_from_entry("/scripts/a b.pex"), std::optional<std::string>{"a b"});
   EXPECT_FALSE(script_name_from_entry("Data/Scripts/foo.pex").has_value());
   EXPECT_FALSE(script_name_from_entry("Meshes/foo.pex").has_value());
@@ -137,7 +151,7 @@ TEST(ScriptName, ReadsOnlySafeScriptsEntries) {
   EXPECT_FALSE(script_name_from_entry("Scripts/a<b.pex").has_value());
   EXPECT_FALSE(script_name_from_entry("Scripts/./foo.pex").has_value());
   EXPECT_FALSE(script_name_from_entry("Scripts/trailing./foo.pex").has_value());
-  EXPECT_FALSE(script_name_from_entry("Scripts\..\foo.pex").has_value());
+  EXPECT_FALSE(script_name_from_entry("Scripts\\..\\foo.pex").has_value());
   // Invariant: the rule runs after ".pex" is dropped, so these are refused instead of becoming "" and "dir/".
   EXPECT_FALSE(script_name_from_entry("Scripts/.pex").has_value());
   EXPECT_FALSE(script_name_from_entry("Scripts/dir/.pex").has_value());
