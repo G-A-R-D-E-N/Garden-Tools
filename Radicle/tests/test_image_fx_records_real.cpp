@@ -9,6 +9,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -19,6 +20,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace {
 
@@ -146,6 +148,40 @@ TEST(ImageFxRecordsReal, ImadMultAndAddCountsMatchTheDnamPairs) {
   const auto path = std::filesystem::path(directory) / "Fallout4.esm";
   ASSERT_TRUE(std::filesystem::is_regular_file(path));
   const auto plugin = fo4::read_plugin_file(path);
+  const std::array<std::string_view, 21> names = {
+      "HDREyeAdaptSpeed", "HDRBloomBlurRadius", "HDRBloomThreshold", "HDRBloomScale",
+      "HDRTargetLumMin", "HDRTargetLumMax", "HDRSunlightScale", "HDRSkyScale",
+      "HDRUnused8", "HDRUnused9", "HDRUnused10", "HDRUnused11", "HDRUnused12",
+      "HDRUnused13", "HDRUnused14", "HDRUnused15", "HDRUnused16",
+      "CinematicSaturation", "CinematicBrightness", "CinematicContrast", "CinematicUnused"};
+  struct Slot {
+    fo4::schema::ScalarFieldDescriptor mult;
+    fo4::schema::ScalarFieldDescriptor add;
+  };
+  std::vector<Slot> slots;
+  for (std::size_t index = 0; index < names.size(); ++index) {
+    const auto prefix = std::string("IMAD\\") + std::string(names[index]);
+    const auto mult_time = fo4::schema::scalar_field_descriptor(prefix + "MultTime");
+    const auto mult_value = fo4::schema::scalar_field_descriptor(prefix + "MultValue");
+    const auto add_time = fo4::schema::scalar_field_descriptor(prefix + "AddTime");
+    const auto add_value = fo4::schema::scalar_field_descriptor(prefix + "AddValue");
+    ASSERT_TRUE(mult_time.has_value()) << prefix;
+    ASSERT_TRUE(mult_value.has_value()) << prefix;
+    ASSERT_TRUE(add_time.has_value()) << prefix;
+    ASSERT_TRUE(add_value.has_value()) << prefix;
+    EXPECT_EQ(mult_time->scalar.subrecord,
+              fo4::Signature::from_bytes(static_cast<std::uint32_t>(0x44414900u + index))) << prefix;
+    EXPECT_EQ(add_time->scalar.subrecord,
+              fo4::Signature::from_bytes(static_cast<std::uint32_t>(0x44414940u + index))) << prefix;
+    EXPECT_EQ(mult_value->scalar.subrecord, mult_time->scalar.subrecord) << prefix;
+    EXPECT_EQ(add_value->scalar.subrecord, add_time->scalar.subrecord) << prefix;
+    EXPECT_EQ(mult_time->scalar.offset, 0u) << prefix;
+    EXPECT_EQ(mult_value->scalar.offset, 4u) << prefix;
+    EXPECT_EQ(add_time->scalar.offset, 0u) << prefix;
+    EXPECT_EQ(add_value->scalar.offset, 4u) << prefix;
+    slots.push_back({*mult_time, *add_time});
+  }
+  ASSERT_EQ(slots.size(), names.size());
   const auto imad = fo4::Signature::from_string("IMAD");
   const auto dnam = fo4::Signature::from_string("DNAM");
   std::size_t records = 0;
@@ -162,14 +198,12 @@ TEST(ImageFxRecordsReal, ImadMultAndAddCountsMatchTheDnamPairs) {
       if (subrecord.signature == dnam) counts = subrecord.data;
     }
     ASSERT_GE(counts.size(), 176u) << record.form_key.to_string();
-    for (std::uint32_t slot = 0; slot < 21; ++slot) {
-      const auto mult_sig = fo4::Signature::from_bytes(0x44414900u + slot);
-      const auto add_sig = fo4::Signature::from_bytes(0x44414940u + slot);
+    for (std::size_t slot = 0; slot < slots.size(); ++slot) {
       std::size_t mult_bytes = 0;
       std::size_t add_bytes = 0;
       for (const auto& subrecord : record.subrecords) {
-        if (subrecord.signature == mult_sig) mult_bytes = subrecord.data.size();
-        if (subrecord.signature == add_sig) add_bytes = subrecord.data.size();
+        if (subrecord.signature == slots[slot].mult.scalar.subrecord) mult_bytes = subrecord.data.size();
+        if (subrecord.signature == slots[slot].add.scalar.subrecord) add_bytes = subrecord.data.size();
       }
       std::uint32_t mult_count = 0;
       std::uint32_t add_count = 0;
