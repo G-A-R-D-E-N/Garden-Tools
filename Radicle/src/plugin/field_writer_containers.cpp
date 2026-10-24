@@ -89,9 +89,11 @@ std::vector<SubrecordGroupSpan> group_spans(const Record& record, const schema::
       while (end < subs.size()) {
         const auto member = member_index(group.members, subs[end].signature);
         if (!member) break;
-        if (*member < last || (*member == last && !group.members[*member].repeatable)) {
-          throw refuse("has " + subs[end].signature.to_string() + " out of order or repeated");
+        if (*member < last) {
+          throw refuse("has " + subs[end].signature.to_string() + " out of order");
         }
+        // Invariant: a non-repeatable member already counted ends this span, so the next model starts one.
+        if (counts[*member] != 0 && !group.members[*member].repeatable) break;
         last = *member;
         ++counts[*member];
         check_size(group.members, *member, subs[end]);
