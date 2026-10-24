@@ -125,7 +125,7 @@ std::vector<std::byte> place3_class_name_payload() {
 std::vector<std::byte> place3_all_filter_kinds_payload() {
   SwfBuilder builder;
   builder.u8(0x00);
-  builder.u8(0x01);
+  builder.u8(0x03);
   builder.u16(1);
   builder.u8(6);
   builder.u8(2);
@@ -144,6 +144,7 @@ std::vector<std::byte> place3_all_filter_kinds_payload() {
   builder.u8(7);
   builder.u8(1);
   for (int index = 0; index < 5 + 19; ++index) builder.u8(0);
+  builder.u8(9);
   return builder.body;
 }
 
@@ -273,10 +274,13 @@ TEST(SwfPlacement, PlaceObject3HasClassNameReadsNameBeforeCharacter) {
 }
 
 TEST(SwfPlacement, PlaceObject3SkipsEveryFilterKindByItsSpecSize) {
+  // Regression: the blend mode after the filter list must pin the last filter's size.
   const auto bytes = movie_of({{70, place3_all_filter_kinds_payload()}});
   const auto result = fo4::swf::read_swf(bytes);
   ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
-  EXPECT_EQ(result.file.tags[0].placement->filter_count, 6);
+  const auto& place = *result.file.tags[0].placement;
+  EXPECT_EQ(place.filter_count, 6);
+  EXPECT_EQ(place.blend_mode, std::optional<std::uint8_t>(9));
 }
 
 TEST(SwfPlacement, PlaceObject3SkipsFilterListAndReadsBlendCacheVisibleAndBackground) {

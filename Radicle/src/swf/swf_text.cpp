@@ -8,38 +8,6 @@ namespace fo4::swf::detail {
 
 namespace {
 
-bool read_matrix_at(std::span<const std::byte> data, std::size_t offset,
-                    std::size_t& next) noexcept {
-  BitReader bits(data, offset * 8);
-  std::uint32_t flag = 0;
-  std::uint32_t nbits = 0;
-  std::int32_t value = 0;
-  if (!bits.read_unsigned(1, flag)) {
-    return false;
-  }
-  if (flag != 0) {
-    if (!bits.read_unsigned(5, nbits) || !bits.read_signed(nbits, value) ||
-        !bits.read_signed(nbits, value)) {
-      return false;
-    }
-  }
-  if (!bits.read_unsigned(1, flag)) {
-    return false;
-  }
-  if (flag != 0) {
-    if (!bits.read_unsigned(5, nbits) || !bits.read_signed(nbits, value) ||
-        !bits.read_signed(nbits, value)) {
-      return false;
-    }
-  }
-  if (!bits.read_unsigned(5, nbits) || !bits.read_signed(nbits, value) ||
-      !bits.read_signed(nbits, value)) {
-    return false;
-  }
-  next = bits.byte_position();
-  return true;
-}
-
 bool decode_text_records(std::span<const std::byte> data, std::size_t offset, bool rgba,
                          unsigned glyph_bits, unsigned advance_bits, SwfText& out) noexcept {
   std::size_t position = offset;
@@ -145,15 +113,18 @@ SwfStatus decode_text_tag(std::span<const std::byte> data, SwfTag& out_tag) {
       SwfReader reader(data, 0);
       SwfText text;
       std::size_t bounds_next = 0;
-      std::size_t matrix_next = 0;
       std::uint8_t glyph_bits = 0;
       std::uint8_t advance_bits = 0;
       if (!reader.read_u16(text.character_id) ||
-          !read_rect(data, reader.position(), text.bounds, bounds_next) ||
-          !read_matrix_at(data, bounds_next, matrix_next)) {
+          !read_rect(data, reader.position(), text.bounds, bounds_next)) {
         return SwfStatus::malformed_tag;
       }
-      SwfReader after_matrix(data, matrix_next);
+      BitReader matrix_bits(data, bounds_next * 8);
+      SwfMatrix matrix;
+      if (!read_matrix(matrix_bits, matrix)) {
+        return SwfStatus::malformed_tag;
+      }
+      SwfReader after_matrix(data, matrix_bits.byte_position());
       if (!after_matrix.read_u8(glyph_bits) || !after_matrix.read_u8(advance_bits) ||
           !decode_text_records(data, after_matrix.position(),
                                out_tag.code == tag::kDefineText2, glyph_bits, advance_bits, text)) {
