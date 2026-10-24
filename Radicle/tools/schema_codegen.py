@@ -281,11 +281,14 @@ def parse_subrecord_group(field, record_signature: str):
         if not isinstance(run, dict) or set(run) != GROUP_RUN_KEYS:
             raise ValueError(f"subrecord_group run keys must be exactly {sorted(GROUP_RUN_KEYS)}: {path!r}")
         count_member = run.get("count_member", "")
-        if not isinstance(count_member, str) or not valid_signature(count_member):
-            raise ValueError(f"subrecord_group run count_member must be four printable ASCII characters: {path!r}")
-        holder = next((member for member in parsed if member["subrecord"] == count_member), None)
-        if holder is None or holder["payload_size"] != WIDTHS["u32"] or holder["repeatable"]:
-            raise ValueError(f"subrecord_group run count_member must be a four-byte non-repeatable member: {path!r}")
+        if not isinstance(count_member, str) or (count_member and not valid_signature(count_member)):
+            raise ValueError("subrecord_group run count_member must be four printable ASCII characters "
+                             f"or empty for an uncounted run: {path!r}")
+        if count_member:
+            holder = next((member for member in parsed if member["subrecord"] == count_member), None)
+            if holder is None or holder["payload_size"] != WIDTHS["u32"] or holder["repeatable"]:
+                raise ValueError(
+                    f"subrecord_group run count_member must be a four-byte non-repeatable member: {path!r}")
         run_members = run.get("members")
         if not isinstance(run_members, list) or not run_members:
             raise ValueError(f"subrecord_group run members must be a non-empty array: {path!r}")
@@ -625,8 +628,9 @@ def render_subrecord_groups(groups):
             lines.append(f"constexpr SubrecordGroupMemberDescriptor k_subrecord_group_run_members_{index}[] = {{")
             lines.extend(run_members)
             lines.append("};")
-            run = ("SubrecordGroupRunDescriptor{Signature::from_string(" +
-                   cpp_string(group["run"]["count_member"]) + "), " +
+            counter = (f"Signature::from_string({cpp_string(group['run']['count_member'])})"
+                       if group["run"]["count_member"] else "Signature{}")
+            run = ("SubrecordGroupRunDescriptor{" + counter + ", " +
                    f"std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_run_members_{index})" +
                    "}")
         entries.append(
