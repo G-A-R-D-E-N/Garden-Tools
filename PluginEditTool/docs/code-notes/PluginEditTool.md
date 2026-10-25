@@ -52,3 +52,10 @@ label add/remove) still need either the same treatment or new native exports.
 plan. `SwfInterop` exposes `ReadEditText`/`EditEditText` for the panel (colour/rect/text are flattened JSON; the
 colour stays `0xAARRGGBB`), and `SwfDocumentServiceTests.EditsEditTextThroughTheSameHistory` pins the edit plus
 its undo. The panel fields for this verb and the placement/label property edits are still next.
+## web/src/SwfPanel.tsx (edit-text properties)
+
+Selecting a character whose kind is EditText calls `ReadEditText` through the host bridge and fills the right-hand
+fields (text, colour, bounds rect); Apply sends `EditEditText` with those values and folds the returned state
+back into the header. The field-level refusal banner is the same one all commands use, so a Radicle refusal
+appears next to the panel verbatim. The web test drives open → select edit text → change text → apply and asserts
+the bridge call. Placement transform/depth/keyframe editing and label add/remove are still out of the panel.

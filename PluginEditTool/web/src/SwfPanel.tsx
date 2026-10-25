@@ -21,6 +21,8 @@ type SwfHost = {
   Redo(): Promise<string>;
   State(): Promise<string>;
   Save(): Promise<string>;
+  ReadEditText(tagIndex: number): Promise<string>;
+  EditEditText(tagIndex: number, text: string, colorHex: string, x0: number, x1: number, y0: number, y1: number): Promise<string>;
 };
 
 function host(): SwfHost | null {
@@ -45,6 +47,8 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
   const [state, setState] = useState<StateReply>({ revision: 0, undo: 0, redo: 0, dirty: false });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [editTag, setEditTag] = useState<number | null>(null);
+  const [editText, setEditText] = useState({ text: '', color: '', x0: 0, x1: 0, y0: 0, y1: 0 });
 
   const refresh = useCallback(async () => {
     const bridge = host();
@@ -94,6 +98,27 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     setLabels(labelsReply.labels ?? []);
   }, [selectedLabel, labelName]);
 
+  const pickCharacter = useCallback(async (character: CharacterRow) => {
+    if (character.kind !== 'EditText') return;
+    const bridge = host();
+    if (!bridge) return;
+    const reply = parse<{ id: number; text: string; color: string; x0: number; x1: number; y0: number; y1: number; error?: string }>(
+      await bridge.ReadEditText(character.tagIndex));
+    if (reply.error) { setError(reply.error); return; }
+    setError('');
+    setEditTag(character.tagIndex);
+    setEditText({ text: reply.text, color: reply.color, x0: reply.x0, x1: reply.x1, y0: reply.y0, y1: reply.y1 });
+  }, []);
+
+  const applyEditText = useCallback(async () => {
+    const bridge = host();
+    if (!bridge || editTag === null) return;
+    const reply = parse<StateReply>(await bridge.EditEditText(
+      editTag, editText.text, editText.color, editText.x0, editText.x1, editText.y0, editText.y1));
+    if (reply.error) { setError(reply.error); return; }
+    setError('');
+    setState(reply);
+  }, [editTag, editText]);
   const command = useCallback(async (action: 'undo' | 'redo' | 'save') => {
     const bridge = host();
     if (!bridge) return;
@@ -132,7 +157,11 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
           <h4>Characters</h4>
           <ul>
             {characters.map(character => (
-              <li key={character.id}>{character.kind} #{character.id} {character.name || character.imported}</li>
+              <li key={character.id}>
+                <button type="button" onClick={() => void pickCharacter(character)}>
+                  {character.kind} #{character.id} {character.name || character.imported}
+                </button>
+              </li>
             ))}
           </ul>
           <h4>Timelines</h4>
@@ -169,6 +198,17 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
         </main>
         <aside className="swf-right">
           <h4>Properties</h4>
+          {editTag === null ? <p>Select an edit-text character to edit its fields.</p> : (
+            <div className="swf-fields">
+              <label>Text <input value={editText.text} onChange={event => setEditText({ ...editText, text: event.target.value })} /></label>
+              <label>Colour <input value={editText.color} onChange={event => setEditText({ ...editText, color: event.target.value })} /></label>
+              <label>X0 <input type="number" value={editText.x0} onChange={event => setEditText({ ...editText, x0: Number(event.target.value) })} /></label>
+              <label>X1 <input type="number" value={editText.x1} onChange={event => setEditText({ ...editText, x1: Number(event.target.value) })} /></label>
+              <label>Y0 <input type="number" value={editText.y0} onChange={event => setEditText({ ...editText, y0: Number(event.target.value) })} /></label>
+              <label>Y1 <input type="number" value={editText.y1} onChange={event => setEditText({ ...editText, y1: Number(event.target.value) })} /></label>
+              <button type="button" onClick={() => void applyEditText()}>Apply</button>
+            </div>
+          )}
           <p>Revision {state.revision} · undo {state.undo} · redo {state.redo}</p>
           <p>Shape rendering is not part of this round; the table above is the display list.</p>
         </aside>

@@ -13,6 +13,8 @@ function stubBridge(overrides: Record<string, unknown> = {}) {
     Redo: vi.fn(async () => JSON.stringify({ changed: true, revision: 3, undo: 1, redo: 0, dirty: true })),
     State: vi.fn(async () => JSON.stringify({ revision: 0, undo: 0, redo: 0, dirty: false })),
     Save: vi.fn(async () => JSON.stringify({ saved: 'Interface/Test.swf' })),
+    ReadEditText: vi.fn(async () => JSON.stringify({ id: 11, text: 'hello', color: 'FF112233', x0: 0, x1: 400, y0: 0, y1: 200 })),
+    EditEditText: vi.fn(async () => JSON.stringify({ changed: true, revision: 4, undo: 2, redo: 0, dirty: true })),
     ...overrides,
   };
   vi.stubGlobal('chrome', { webview: { hostObjects: { swf } } });
@@ -51,5 +53,19 @@ describe('SwfPanel', () => {
     fireEvent.click(await screen.findByText(/root · start/));
     await act(async () => { fireEvent.click(screen.getByText('Rename')); });
     expect(await screen.findByText(/already exists on this timeline/)).toBeTruthy();
+  });
+
+  it('edits edit-text fields and keeps them in the history', async () => {
+    const swf = stubBridge();
+    render(<SwfPanel onClose={() => {}} />);
+    fireEvent.change(screen.getByPlaceholderText('Interface/Test.swf'), { target: { value: 'Interface/Test.swf' } });
+    await act(async () => { fireEvent.click(screen.getByText('Open')); });
+    await act(async () => { fireEvent.click(await screen.findByText(/EditText #11/)); });
+    await waitFor(() => expect(swf.ReadEditText).toHaveBeenCalledWith(0));
+
+    const textField = await screen.findByDisplayValue('hello');
+    fireEvent.change(textField, { target: { value: 'hello world' } });
+    await act(async () => { fireEvent.click(screen.getByText('Apply')); });
+    await waitFor(() => expect(swf.EditEditText).toHaveBeenCalledWith(0, 'hello world', 'FF112233', 0, 400, 0, 200));
   });
 });
