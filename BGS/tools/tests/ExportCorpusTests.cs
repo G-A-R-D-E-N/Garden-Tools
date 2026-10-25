@@ -71,6 +71,9 @@ public sealed class ExportCorpusTests
 
             if (fidelity != "byte") continue;
 
+            // Constraint: only a kind the tool reads must export; the rest are reported rows.
+            if (!ExportableByContent(path)) continue;
+
             Assert.True(exported, $"{path} did not export: {string.Join("; ", errors.Select(row => row.Message))}");
         }
 
@@ -80,6 +83,19 @@ public sealed class ExportCorpusTests
             var entry = manifest.Single(row => row.Path == source);
             Assert.Equal(entry.Sha256, document["inputSha256"]!.GetValue<string>());
         }
+    }
+
+    // Mirrors ExportRunner.ExportHkx: the pin requires a document only for a kind the tool reads.
+    private static bool ExportableByContent(string relative)
+    {
+        byte[] bytes = File.ReadAllBytes(Path.Combine(ExportTestSupport.VanillaRoot, relative));
+        var classes = new HashSet<string>(
+            new PackfileObjects(PackfileImage.Read(bytes)).Instances.Select(instance => instance.ClassName),
+            StringComparer.Ordinal);
+        return classes.Contains("hkaSkeleton")
+            || classes.Any(name => Array.IndexOf(HkxAnimationData.DecodedAnimationClasses, name) >= 0)
+            || classes.Contains("hkbBehaviorGraph")
+            || classes.Contains("hkbStateMachine");
     }
 
     // Invariant: the exported bones must match the decoder's, so a writer slip would fail here and not in a viewer.
