@@ -81,6 +81,10 @@ public:
     Result<nlohmann::json> editLeveledListEntry(const nlohmann::json& arguments) override;
     Result<nlohmann::json> getNpc(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> editNpcEntries(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> addScript(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> removeScript(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> addScriptProperty(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> removeScriptProperty(const nlohmann::json& arguments) override;
     Result<nlohmann::json> getFaction(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> editFactionEntries(const nlohmann::json& arguments) override;
     Result<nlohmann::json> getWeaponDamageTypes(const nlohmann::json& arguments) const override;

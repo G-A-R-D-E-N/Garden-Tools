@@ -235,6 +235,19 @@ public:
     virtual Result<nlohmann::json> editNpcEntries(const nlohmann::json&) {
         return std::unexpected(Error{"NpcBackendUnavailable", "NPC writes are unavailable"});
     }
+    // Constraint: script structure writes keep the in-memory plugin unchanged on refusal.
+    virtual Result<nlohmann::json> addScript(const nlohmann::json&) {
+        return std::unexpected(Error{"ScriptBackendUnavailable", "Script writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> removeScript(const nlohmann::json&) {
+        return std::unexpected(Error{"ScriptBackendUnavailable", "Script writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> addScriptProperty(const nlohmann::json&) {
+        return std::unexpected(Error{"ScriptBackendUnavailable", "Script property writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> removeScriptProperty(const nlohmann::json&) {
+        return std::unexpected(Error{"ScriptBackendUnavailable", "Script property writes are unavailable"});
+    }
     virtual Result<nlohmann::json> getFaction(const nlohmann::json&) const {
         return std::unexpected(Error{"FactionBackendUnavailable", "Faction queries are unavailable"});
     }

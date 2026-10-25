@@ -54,6 +54,7 @@ add_library(
     plugin/RadiclePluginEsl.cpp
     plugin/RadiclePluginCell.cpp
     plugin/RadiclePluginTypedRecords.cpp
+    plugin/RadiclePluginScripts.cpp
     plugin/ConditionCodec.cpp
     plugin/ConditionFunctions.cpp
 )

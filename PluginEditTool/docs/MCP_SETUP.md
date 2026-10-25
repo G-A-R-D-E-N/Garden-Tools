@@ -154,6 +154,10 @@ These read the winning version of a leveled list, NPC_, FACT or WEAP record and 
 | `edit_npc_entries` | `plugin`, `form_key`, `list`, `op`, [`index`], [`value`] | memory | Adds, sets or removes one entry; `list` is `factions`, `perks` or `inventory`. `index` is required for `set` and `remove`, `value` for `add` and `set`. |
 | `get_faction` | `form_key` | no | A FACT record's relations and ranks. A localized rank title reads as `{"stringId": n}`. |
 | `edit_faction_entries` | `plugin`, `form_key`, `list`, `op`, [`index`], [`value`] | memory | Adds, sets or removes one relation or rank; `list` is `relations` or `ranks`. |
+| `add_script` | `plugin`, `form_key`, `script` [`flags`, `index`] | memory | Adds one script to the record's VMAD, creating an empty VMAD when the record has none. `script` is the Papyrus script name, `flags` the optional script flags byte and `index` the optional script-list position; the result names the new index. Call `save_plugin` to persist. |
+| `remove_script` | `plugin`, `form_key`, `script_index` | memory | Removes one script and its properties by script index. Call `save_plugin` to persist. |
+| `add_script_property` | `plugin`, `form_key`, `script_index`, `name`, `type` [`flags`, `index`] | memory | Adds one property to a script. `type` is the VMAD property type byte (1 object, 2 string, 3 int, 4 float, 5 bool, 7 struct, 11-15 arrays, 17 struct array); `flags` is the optional property flags byte and `index` the optional property-list position. Set the value with `set_field` or the typed VMAD setters. Call `save_plugin` to persist. |
+| `remove_script_property` | `plugin`, `form_key`, `script_index`, `property_index` | memory | Removes one property by property index. Call `save_plugin` to persist. |
 | `get_weapon_damage_types` | `form_key` | no | A WEAP record's damage types (read-only). |
 
 ### Profile and host state
