@@ -7,6 +7,8 @@ type LabelRow = { name: string; tagIndex: number; spriteId: number; insideSprite
 type InstanceRow = {
   depth: number; character: number; name: string; x: number; y: number;
   scaleX: number; scaleY: number; rotation: number; instanceId: number;
+  boundsX: number; boundsY: number; boundsWidth: number; boundsHeight: number;
+  hasBounds: boolean; clipDepth: number;
 };
 type StateReply = { changed?: boolean; revision: number; undo: number; redo: number; dirty: boolean; error?: string };
 type ErrorReply = { error?: string };
@@ -246,7 +248,21 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
             <label>Timeline <input type="number" min={0} value={timeline} onChange={event => void pickFrame(Number(event.target.value), 0)} /></label>
             <label>Frame <input type="number" min={0} value={frame} onChange={event => void pickFrame(timeline, Number(event.target.value))} /></label>
           </div>
-          <table>
+          <div className="swf-stage" aria-label="bounds">
+            {instances.filter(row => row.hasBounds).map(row => (
+              <div
+                key={`box-${row.instanceId}`}
+                className="swf-box"
+                data-testid={`swf-box-${row.instanceId}`}
+                style={{
+                  left: `${row.boundsX}px`, top: `${row.boundsY}px`,
+                  width: `${Math.max(2, row.boundsWidth)}px`, height: `${Math.max(2, row.boundsHeight)}px`,
+                }}
+              >
+                <span>{row.depth}</span>
+              </div>
+            ))}
+          </div>          <table>
             <thead><tr><th>Depth</th><th>Character</th><th>Name</th><th>X</th><th>Y</th><th>Scale</th><th>Rotate</th></tr></thead>
             <tbody>
               {instances.map(row => (

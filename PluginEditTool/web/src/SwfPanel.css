@@ -10,4 +10,5 @@
 .swf-left li { margin: 2px 0; }
 .swf-centre table { border-collapse: collapse; width: 100%; }
 .swf-centre th, .swf-centre td { border-bottom: 1px solid #4444; padding: 2px 6px; text-align: left; }
-.swf-scrubber { display: flex; gap: 12px; margin-bottom: 8px; }
+.swf-scrubber { display: flex; gap: 12px; margin-bottom: 8px; }.swf-stage { position: relative; height: 320px; margin-bottom: 8px; border: 1px solid #4444; overflow: hidden; background: #0001; }
+.swf-box { position: absolute; border: 1px dashed #7aa; font-size: 10px; color: #7aa; }

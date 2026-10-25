@@ -91,3 +91,9 @@ equal, adding scale to a matrix that had none, and the wrong-tag refusal.
 Selecting a placement now also reads its MATRIX through `PlacementMatrix`; the right panel exposes X/Y, ScaleX/ScaleY
 and Rotate0/Rotate1 fields and Apply sends `SetTransform`, keeping depth and every other byte (the codec replaces only
 the matrix span). The web test drives select → apply depth → apply transform and asserts both bridge calls.
+## web/src/SwfPanel.tsx (bounds boxes)
+
+The centre now draws a bounds box per display-list instance whose frame expansion carried bounds: `SwfInterop.Frame`
+adds the bounds rect/flags/clip depth to each row, and the panel positions a dashed absolutely-positioned box in a
+relative stage with the depth label. This is the round's rendering substitute: no shape canvas, only the placement
+bounds. The web test asserts the box test id exists for the fixture instance.

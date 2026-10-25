@@ -54,6 +54,8 @@ public class SwfInterop
             x = i.Transform.TranslateX, y = i.Transform.TranslateY,
             scaleX = i.Transform.ScaleX, scaleY = i.Transform.ScaleY,
             rotation = i.Transform.RotateSkew0, instanceId = i.InstanceId,
+            boundsX = i.Bounds.X, boundsY = i.Bounds.Y, boundsWidth = i.Bounds.Width,
+            boundsHeight = i.Bounds.Height, hasBounds = i.HasBounds, clipDepth = i.ClipDepth,
         }).ToArray(),
     }));
 

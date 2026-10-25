@@ -7,7 +7,7 @@ function stubBridge(overrides: Record<string, unknown> = {}) {
     Open: vi.fn(async () => JSON.stringify({ revision: 0, undo: 0, redo: 0, dirty: false })),
     Characters: vi.fn(async () => JSON.stringify({ characters: [{ id: 11, kind: 'EditText', tagIndex: 0, name: '', imported: '' }] })),
     FrameLabels: vi.fn(async () => JSON.stringify({ labels: [{ name: 'start', tagIndex: 1, spriteId: 0, insideSprite: false }] })),
-    Frame: vi.fn(async () => JSON.stringify({ rows: [{ depth: 1, character: 11, name: '', x: 10, y: 20, scaleX: 1, scaleY: 1, rotation: 0, instanceId: 7 }] })),
+    Frame: vi.fn(async () => JSON.stringify({ rows: [{ depth: 1, character: 11, name: '', x: 10, y: 20, scaleX: 1, scaleY: 1, rotation: 0, instanceId: 7, boundsX: 5, boundsY: 6, boundsWidth: 40, boundsHeight: 30, hasBounds: true, clipDepth: 0 }] })),
     RenameLabel: vi.fn(async () => JSON.stringify({ changed: true, revision: 1, undo: 1, redo: 0, dirty: true })),
     Undo: vi.fn(async () => JSON.stringify({ changed: true, revision: 2, undo: 0, redo: 1, dirty: true })),
     Redo: vi.fn(async () => JSON.stringify({ changed: true, revision: 3, undo: 1, redo: 0, dirty: true })),
@@ -87,5 +87,6 @@ describe('SwfPanel', () => {
 
     await act(async () => { fireEvent.click(screen.getByText('Apply transform')); });
     await waitFor(() => expect(swf.SetTransform).toHaveBeenCalledWith(2, 0, 0, 0, 0, 0, 0));
+    expect(screen.getByTestId('swf-box-7')).toBeTruthy();
   });
 });
