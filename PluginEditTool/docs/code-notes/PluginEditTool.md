@@ -109,3 +109,9 @@ For a placement inside a DefineSprite, `InsertKeyframe` finds the sprite frame's
 Move-flagged placement tag (short or long header as the length needs) into the sprite payload at that child's header
 offset, and replaces the DefineSprite tag through the plan. The fixture's sprite now carries a placement, so the
 service test pins the insertion and undo on that timeline too.
+## FO4RecordEditor.Core/Services/SwfDocumentService.cs:SwfDocument.OpenResolved (archive/asset open)
+
+`OpenResolved` takes the logical asset path and a resolver delegate (the host's existing asset resolution), reads the
+bytes and builds the same document as a loose file. The document deliberately keeps no filesystem path for this
+form, so Save requires an explicit target; the host can therefore open BA2-resolved bytes and write back through its
+own asset-write path. The service test drives a resolver over the fixture bytes and asserts the reads.

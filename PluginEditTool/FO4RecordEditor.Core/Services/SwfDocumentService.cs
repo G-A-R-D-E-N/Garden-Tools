@@ -36,6 +36,12 @@ public sealed class SwfDocument : IDisposable
         return new SwfDocument(path, file, file.OpenHistory());
     }
 
+    // Requires the host's asset resolution; the document keeps the logical path but saves only to an explicit target.
+    public static SwfDocument OpenResolved(string assetPath, Func<string, byte[]?> resolve)
+    {
+        var bytes = resolve(assetPath) ?? throw new FileNotFoundException("the asset resolver returned no bytes", assetPath);
+        return OpenBytes(bytes);
+    }
     public static SwfDocument OpenFile(string path)
     {
         var bytes = System.IO.File.ReadAllBytes(path);

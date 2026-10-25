@@ -24,6 +24,19 @@ public class SwfDocumentServiceTests
     }
 
     [Fact]
+    public void OpensThroughTheHostAssetResolver()
+    {
+        var requested = "";
+        using var document = SwfDocument.OpenResolved("Interface\\Test.swf", path =>
+        {
+            requested = path;
+            return path == "Interface\\Test.swf" ? SwfFixture.Movie() : null;
+        });
+        Assert.Equal("Interface\\Test.swf", requested);
+        Assert.Equal(2, document.Characters().Count);
+        Assert.Equal(new[] { "start", "inner" }, document.FrameLabels().Select(label => label.Name));
+    }
+    [Fact]
     public void AnEditIsAHistoryCommandAndUndoRedoFollowIt()
     {
         using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
