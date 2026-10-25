@@ -5184,3 +5184,39 @@ refusal path and that a refused model leaves the other getters usable. `Radicle/
 model for every shipped Interface movie and records `characters` and `character_model_failures`, so a shipped movie that
 defines an id twice or names an unknown id fails the real-data suite. Nothing here was built or run locally; CI is the
 first build, and the ABI 67 layout is uncompared against a built probe until then.
+
+## Radicle/include/fo4/swf/swf_text_edit.hpp:apply_edit_text and the frame-label verbs (A4 + A5 as editing)
+
+`Radicle/src/swf/swf_tags.cpp:decode_edit_text` now stores the layout block instead of skipping it, so the
+decoded `Radicle/include/fo4/swf/swf.hpp:SwfEditText` carries every declared tag-37 field: bounds, both flag
+bytes, font id and class, height, colour, max length, align/left/right/indent/leading, variable and initial
+text. The layout is an optional `SwfEditTextLayout` that is present exactly when the flags2 layout bit is set,
+and the signed leading is kept as the 1/20-pixel value the file carries.
+
+Editing is `Radicle/include/fo4/swf/swf_text_edit.hpp:replace_edit_text`, which re-encodes the payload from
+the decoded view and hands the bytes to the tag plan through `Radicle/include/fo4/swf/swf_text_edit.hpp:apply_edit_text`.
+The re-encode is field-ordered like the decoder and reuses the original id/RECT prefix unless the bounds are
+edited, so a text edit keeps every earlier byte at its original value, a colour edit differs in exactly the four
+colour bytes, and an unset edit reproduces the payload byte for byte. New text on a field that had no initial
+text sets the HasText bit; a bounds edit picks the narrowest RECT that fits the four new coordinates and keeps
+every later field value, refusing values that do not fit the 31-bit RECT. A refusal never reaches the plan, and
+a plan refusal leaves the movie bytes untouched.
+
+Frame labels are `Radicle/include/fo4/swf/swf_text_edit.hpp:list_frame_labels` on the root timeline
+(`timeline_id` 0) or on a `DefineSprite` timeline (its character id), reported in tag order with the 0-based
+frame each label sits on. `:rename_frame_label`, `:add_frame_label` and `:remove_frame_label` go through the
+tag plan: a root edit replaces, inserts before the requested frame's `ShowFrame`, or removes the label tag; a
+sprite edit rebuilds the `DefineSprite` payload and replaces that one tag, because a child index is not a plan
+index. Splices reuse the original tag header form and shift the length field only for the edited tag. A name
+already used on the same timeline is a refusal, as is an empty name, an out-of-range label or frame, and an id
+that is not a `DefineSprite`. Removal needed one addition to `Radicle/include/fo4/swf/swf.hpp:SwfTagPlan`: a
+removal list that refuses the End tag, a duplicate index, or an index that is also replaced, and the `Crt`
+plan conversion simply leaves it empty.
+
+Tests: `Radicle/tests/test_swf_edit_text.cpp` pins the full field read, the byte-identical unset edit, the
+text prefix, the four-byte colour diff, the bounds re-encode, and the two refusals;
+`Radicle/tests/test_swf_label_edit.cpp` pins root and sprite listing, rename on both timelines, add at a frame,
+remove and re-read after `write_swf`, duplicate refusal with the bytes unchanged, and the unknown-timeline and
+unreached-frame refusals. `Radicle/tests/test_swf_real.cpp` counts `edit_text_tags` and `edit_text_layouts` over
+every shipped Interface movie and requires at least one edit-text tag. Nothing here was built or run locally;
+CI is the first compiler.

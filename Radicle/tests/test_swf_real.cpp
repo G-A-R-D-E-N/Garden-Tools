@@ -57,6 +57,8 @@ struct MovieStats {
   std::size_t art_failures{0};
   std::size_t characters{0};
   std::size_t character_failures{0};
+  std::size_t edit_text_tags{0};
+  std::size_t edit_text_layouts{0};
   std::map<std::string, std::size_t> versions;
 
   MovieStats& operator+=(const MovieStats& other) {
@@ -98,6 +100,8 @@ struct MovieStats {
     art_failures += other.art_failures;
     characters += other.characters;
     character_failures += other.character_failures;
+    edit_text_tags += other.edit_text_tags;
+    edit_text_layouts += other.edit_text_layouts;
     for (const auto& [key, count] : other.versions) {
       versions[key] += count;
     }
@@ -438,6 +442,12 @@ void check_movie(const std::string& name, std::span<const std::byte> bytes, Movi
                     (summary.compressed ? "-zlib" : "-raw")];
   for (const auto& tag : result.file.tags) {
     check_art(tag, stats);
+    if (tag.code == fo4::swf::tag::kDefineEditText) {
+      ++stats.edit_text_tags;
+      if (tag.edit_text && tag.edit_text->layout) {
+        ++stats.edit_text_layouts;
+      }
+    }
   }
   fo4::swf::SwfCharacterModel characters;
   std::string character_message;
@@ -550,6 +560,7 @@ TEST(SwfRealData, ParsesEveryShippedMovieAndRoundTripsByteIdentically) {
   // Regression: every shipped shape, morph, bitmap and JPEG tag must decode.
   EXPECT_EQ(stats.art_failures, 0u);
   EXPECT_EQ(stats.character_failures, 0u) << "character_model_failures";
+  EXPECT_GT(stats.edit_text_tags, 0u) << "edit_text_tags";
   EXPECT_GT(stats.shape_count, 0u);
   EXPECT_GT(stats.bitmap_count, 0u);
   EXPECT_GT(stats.morph_fill_pairs, 0u);
@@ -578,6 +589,8 @@ TEST(SwfRealData, ParsesEveryShippedMovieAndRoundTripsByteIdentically) {
   RecordProperty("jpeg_tables_tags", std::to_string(stats.jpeg_tables_count));
   RecordProperty("art_failures", std::to_string(stats.art_failures));
   RecordProperty("characters", std::to_string(stats.characters));
+  RecordProperty("edit_text_tags", std::to_string(stats.edit_text_tags));
+  RecordProperty("edit_text_layouts", std::to_string(stats.edit_text_layouts));
   RecordProperty("character_model_failures", std::to_string(stats.character_failures));
   RecordProperty("movies", std::to_string(stats.movies));
   RecordProperty("gfx_movies", std::to_string(stats.gfx));

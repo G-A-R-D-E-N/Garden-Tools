@@ -542,21 +542,31 @@ bool apply_tag_plan(SwfFile& file, const SwfTagPlan& plan, SwfTagPlanResult& out
     replaced_indices.push_back(replacement.tag_index);
   }
 
-  std::vector<std::size_t> insert_positions;
+  std::vector<std::size_t> removed_indices;
+  for (const auto& removal : plan.removals) {
+    if (removal.tag_index >= count || (has_end && removal.tag_index == count - 1) ||
+        std::find(removed_indices.begin(), removed_indices.end(), removal.tag_index) !=
+            removed_indices.end() ||
+        std::find(replaced_indices.begin(), replaced_indices.end(), removal.tag_index) !=
+            replaced_indices.end()) {
+      return false;
+    }
+    removed_indices.push_back(removal.tag_index);
+  }
+
   for (const auto& insertion : plan.insertions) {
     if (insertion.before_tag_index > insert_limit || insertion.tag.code > 0x03FFu ||
         insertion.tag.code == tag::kEnd ||
         insertion.tag.payload.size() > std::numeric_limits<std::uint32_t>::max()) {
       return false;
     }
-    insert_positions.push_back(insertion.before_tag_index);
   }
 
-  if (count + plan.insertions.size() > detail::kMaxTags) {
+  if (count - plan.removals.size() + plan.insertions.size() > detail::kMaxTags) {
     return false;
   }
 
-  bool changed = !plan.insertions.empty();
+  bool changed = !plan.insertions.empty() || !plan.removals.empty();
   for (const auto& replacement : plan.replacements) {
     if (file.tags[replacement.tag_index].payload != replacement.payload) {
       changed = true;
@@ -568,9 +578,9 @@ bool apply_tag_plan(SwfFile& file, const SwfTagPlan& plan, SwfTagPlanResult& out
     return true;
   }
 
-  std::vector<SwfTag> next = file.tags;
+  std::vector<SwfTag> next_tags = file.tags;
   for (const auto& replacement : plan.replacements) {
-    SwfTag& target = next[replacement.tag_index];
+    SwfTag& target = next_tags[replacement.tag_index];
     target.payload = replacement.payload;
     target.length = static_cast<std::uint32_t>(target.payload.size());
     target.clear_decoded();
@@ -581,52 +591,59 @@ bool apply_tag_plan(SwfFile& file, const SwfTagPlan& plan, SwfTagPlanResult& out
   }
 
   struct PendingInsert {
-    std::size_t position;
     std::size_t plan_index;
     const SwfTag* tag;
   };
-  std::vector<PendingInsert> inserts;
-  inserts.reserve(plan.insertions.size());
+  std::vector<std::vector<PendingInsert>> inserts_at(count + 1);
   for (std::size_t index = 0; index < plan.insertions.size(); ++index) {
-    inserts.push_back(PendingInsert{plan.insertions[index].before_tag_index, index,
-                                   &plan.insertions[index].tag});
+    inserts_at[plan.insertions[index].before_tag_index].push_back(
+        PendingInsert{index, &plan.insertions[index].tag});
   }
-  std::sort(inserts.begin(), inserts.end(), [](const PendingInsert& left, const PendingInsert& right) {
-    if (left.position != right.position) {
-      return left.position > right.position;
+
+  std::vector<SwfTag> next;
+  next.reserve(count - plan.removals.size() + plan.insertions.size());
+  std::vector<std::size_t> inserted_tag_indices(plan.insertions.size(), 0);
+  bool failed = false;
+  const auto append_inserts = [&](std::size_t position) {
+    for (const PendingInsert& entry : inserts_at[position]) {
+      SwfTag inserted = *entry.tag;
+      inserted.length = static_cast<std::uint32_t>(inserted.payload.size());
+      inserted.offset = 0;
+      inserted.long_header = false;
+      inserted.children.clear();
+      inserted.clear_decoded();
+      std::size_t tags_left = detail::kMaxTags;
+      if (detail::decode_tag_payload(inserted.payload, inserted, 0, tags_left) != SwfStatus::ok) {
+        failed = true;
+        return;
+      }
+      inserted_tag_indices[entry.plan_index] = next.size();
+      next.push_back(std::move(inserted));
     }
-    return left.plan_index > right.plan_index;
-  });
-  for (const PendingInsert& entry : inserts) {
-    SwfTag inserted = *entry.tag;
-    inserted.length = static_cast<std::uint32_t>(inserted.payload.size());
-    inserted.offset = 0;
-    inserted.long_header = false;
-    inserted.children.clear();
-    inserted.clear_decoded();
-    std::size_t tags_left = detail::kMaxTags;
-    if (detail::decode_tag_payload(inserted.payload, inserted, 0, tags_left) != SwfStatus::ok) {
-      return false;
+  };
+  for (std::size_t index = 0; index < count && !failed; ++index) {
+    append_inserts(index);
+    if (failed) {
+      break;
     }
-    next.insert(next.begin() + static_cast<std::ptrdiff_t>(entry.position), std::move(inserted));
+    if (std::find(removed_indices.begin(), removed_indices.end(), index) !=
+        removed_indices.end()) {
+      continue;
+    }
+    next.push_back(std::move(next_tags[index]));
+  }
+  if (!failed) {
+    append_inserts(count);
+  }
+  if (failed) {
+    return false;
   }
 
   file.tags = std::move(next);
-  out.inserted_tag_indices.clear();
-  out.inserted_tag_indices.reserve(insert_positions.size());
-  for (std::size_t index = 0; index < insert_positions.size(); ++index) {
-    std::size_t earlier = 0;
-    for (std::size_t other = 0; other < insert_positions.size(); ++other) {
-      if (insert_positions[other] < insert_positions[index]) {
-        ++earlier;
-      } else if (insert_positions[other] == insert_positions[index] && other < index) {
-        ++earlier;
-      }
-    }
-    out.inserted_tag_indices.push_back(insert_positions[index] + earlier);
-  }
+  out.inserted_tag_indices = std::move(inserted_tag_indices);
   out.changed = true;
   return true;
+}
 }
 
 }  // namespace fo4::swf

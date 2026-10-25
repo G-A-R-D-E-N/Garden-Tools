@@ -251,8 +251,16 @@ bool decode_edit_text(std::span<const std::byte> data, SwfEditText& out) {
     }
     out.max_length = max_length;
   }
-  if ((out.flags2 & 0x20u) != 0 && !reader.skip(9)) {
-    return false;
+  if ((out.flags2 & 0x20u) != 0) {
+    SwfEditTextLayout layout;
+    std::uint16_t leading = 0;
+    if (!reader.read_u8(layout.align) || !reader.read_u16(layout.left_margin) ||
+        !reader.read_u16(layout.right_margin) || !reader.read_u16(layout.indent) ||
+        !reader.read_u16(leading)) {
+      return false;
+    }
+    layout.leading = static_cast<std::int16_t>(leading);
+    out.layout = layout;
   }
   if (!reader.read_zstring(out.variable)) {
     return false;
