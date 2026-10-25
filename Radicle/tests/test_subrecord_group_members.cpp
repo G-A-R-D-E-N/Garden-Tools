@@ -1,0 +1,225 @@
+#include "fo4/c_api_env.h"
+#include "fo4/plugin/mutation.hpp"
+#include "fo4/plugin/reader.hpp"
+#include "fo4/schema/scalar.hpp"
+#include "plugin_bytes.hpp"
+
+#include <gtest/gtest.h>
+
+#include <algorithm>
+#include <chrono>
+#include <cstddef>
+#include <cstdint>
+#include <exception>
+#include <filesystem>
+#include <fstream>
+#include <initializer_list>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <vector>
+
+namespace {
+
+using Bytes = std::vector<std::byte>;
+using fo4::Signature;
+using fo4::test::ByteWriter;
+
+constexpr std::string_view k_key = "000800:Patch.esp";
+
+Bytes zstr(std::string_view text) {
+  ByteWriter out;
+  out.raw(text);
+  out.u8(0);
+  return out.bytes;
+}
+
+Bytes response(std::uint8_t number) {
+  ByteWriter out;
+  out.u32(0x810);
+  out.u8(number);
+  out.u32(0x811);
+  out.u8(0xAB);
+  out.u16(90);
+  out.u32(0xFFFFFFFF);
+  out.u32(42);
+  return out.bytes;
+}
+
+Bytes make_plugin(bool with_bytes, bool with_marker) {
+  ByteWriter out;
+  out.bytes = fo4::test::make_tes4_plugin(0, 1.0f, {"Fallout4.esm"});
+  const auto top = fo4::test::begin_group(out, "DIAL", 0);
+  const auto record = fo4::test::begin_record(out, "INFO", 0, 0x01000800u);
+  fo4::test::write_subrecord(out, "EDID", zstr("RadicleInfo"));
+  fo4::test::write_subrecord(out, "TRDA", response(1));
+  for (const auto* member : {"NAM1", "NAM2", "NAM3", "NAM4"}) {
+    fo4::test::write_subrecord(out, member, Bytes{std::byte{0}});
+  }
+  if (with_bytes) {
+    fo4::test::write_subrecord(out, "NAM9", Bytes{std::byte{0xDE}, std::byte{0xAD}});
+  }
+  if (with_marker) fo4::test::write_subrecord(out, "WZMD", Bytes{});
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, top);
+  return out.bytes;
+}
+
+fo4::schema::SubrecordGroupDescriptor response_group() {
+  const auto descriptor = fo4::schema::subrecord_group_descriptor(
+      Signature::from_string("INFO"), "INFO\\Response");
+  EXPECT_TRUE(descriptor.has_value());
+  return descriptor.value_or(fo4::schema::SubrecordGroupDescriptor{});
+}
+
+std::vector<Signature> payload_signatures(const fo4::Plugin& plugin, const fo4::FormKey& record_key) {
+  std::vector<Signature> out;
+  const auto* record = fo4::find_record(plugin, record_key);
+  if (record == nullptr) return out;
+  for (const auto& subrecord : record->subrecords) out.push_back(subrecord.signature);
+  return out;
+}
+
+std::size_t count_of(const std::vector<Signature>& signatures, Signature signature) {
+  return static_cast<std::size_t>(
+      std::count(signatures.begin(), signatures.end(), signature));
+}
+
+template <typename Fn>
+std::string thrown_message(Fn&& fn) {
+  try {
+    fn();
+  } catch (const std::exception& error) {
+    return error.what();
+  }
+  return {};
+}
+
+}  // namespace
+
+TEST(SubrecordGroupMembers, MarkerIsInsertedAtItsDeclarationPositionAndClearedAgain) {
+  // Constraint: a zero-byte marker must be insertable and removable alone, and its insertion must not disturb the required response members.
+  auto plugin = fo4::read_plugin(make_plugin(false, false), "Patch.esp");
+  const auto record_key = fo4::FormKey::parse(k_key);
+  const auto group = response_group();
+  const auto marker = Signature::from_string("WZMD");
+  const auto before = payload_signatures(plugin, record_key);
+  ASSERT_EQ(count_of(before, marker), std::size_t{0});
+
+  ASSERT_EQ(fo4::set_record_subrecord_group_member(plugin, record_key, group, 0, marker, true),
+            fo4::SubrecordGroupMutationStatus::updated);
+  const auto after = payload_signatures(plugin, record_key);
+  ASSERT_EQ(after.size(), before.size() + 1);
+  EXPECT_EQ(after.back(), marker);
+  const auto* record = fo4::find_record(plugin, record_key);
+  ASSERT_NE(record, nullptr);
+  EXPECT_TRUE(record->subrecords.back().data.empty());
+
+  EXPECT_EQ(fo4::set_record_subrecord_group_member(plugin, record_key, group, 0, marker, true),
+            fo4::SubrecordGroupMutationStatus::unchanged);
+  EXPECT_EQ(payload_signatures(plugin, record_key), after);
+
+  EXPECT_EQ(fo4::set_record_subrecord_group_member(plugin, record_key, group, 0, marker, false),
+            fo4::SubrecordGroupMutationStatus::updated);
+  EXPECT_EQ(payload_signatures(plugin, record_key), before);
+  EXPECT_EQ(fo4::set_record_subrecord_group_member(plugin, record_key, group, 0, marker, false),
+            fo4::SubrecordGroupMutationStatus::unchanged);
+}
+
+TEST(SubrecordGroupMembers, OptionalMemberKeepsItsDeclarationSlotWhenReinserted) {
+  auto plugin = fo4::read_plugin(make_plugin(true, false), "Patch.esp");
+  const auto record_key = fo4::FormKey::parse(k_key);
+  const auto group = response_group();
+  const auto bytes_member = Signature::from_string("NAM9");
+  const auto before = payload_signatures(plugin, record_key);
+  ASSERT_EQ(count_of(before, bytes_member), std::size_t{1});
+
+  ASSERT_EQ(fo4::set_record_subrecord_group_member(plugin, record_key, group, 0, bytes_member, false),
+            fo4::SubrecordGroupMutationStatus::updated);
+  const auto removed = payload_signatures(plugin, record_key);
+  EXPECT_EQ(count_of(removed, bytes_member), std::size_t{0});
+  EXPECT_EQ(removed.size(), before.size() - 1);
+
+  ASSERT_EQ(fo4::set_record_subrecord_group_member(plugin, record_key, group, 0, bytes_member, true),
+            fo4::SubrecordGroupMutationStatus::updated);
+  const auto restored = payload_signatures(plugin, record_key);
+  EXPECT_EQ(restored, before);
+  const auto* record = fo4::find_record(plugin, record_key);
+  ASSERT_NE(record, nullptr);
+  for (const auto& subrecord : record->subrecords) {
+    if (subrecord.signature == bytes_member) EXPECT_TRUE(subrecord.data.empty());
+  }
+}
+
+TEST(SubrecordGroupMembers, RefusesRequiredUnknownAndOffRangeRequests) {
+  auto plugin = fo4::read_plugin(make_plugin(false, false), "Patch.esp");
+  const auto record_key = fo4::FormKey::parse(k_key);
+  const auto group = response_group();
+  const auto before = payload_signatures(plugin, record_key);
+
+  EXPECT_EQ(thrown_message([&] {
+              fo4::set_record_subrecord_group_member(plugin, record_key, group, 0,
+                                                     Signature::from_string("TRDA"), false);
+            }),
+            "INFO\\Response member TRDA is required");
+  EXPECT_EQ(thrown_message([&] {
+              fo4::set_record_subrecord_group_member(plugin, record_key, group, 0,
+                                                     Signature::from_string("ZZZZ"), true);
+            }),
+            "INFO\\Response has no ZZZZ member");
+  EXPECT_EQ(fo4::set_record_subrecord_group_member(plugin, record_key, group, 1,
+                                                   Signature::from_string("WZMD"), true),
+            fo4::SubrecordGroupMutationStatus::index_out_of_range);
+  EXPECT_EQ(payload_signatures(plugin, record_key), before);
+
+  const auto* record = fo4::find_record(plugin, record_key);
+  ASSERT_NE(record, nullptr);
+  EXPECT_EQ(std::string(group.path), "INFO\\Response");
+  EXPECT_EQ(record->subrecords.front().signature, Signature::from_string("EDID"));
+}
+
+TEST(SubrecordGroupMembers, CApiSetsAndClearsTheMarker) {
+  const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
+  const auto root = std::filesystem::temp_directory_path() / ("radicle_c_group_" + std::to_string(id));
+  std::filesystem::create_directories(root);
+  const auto path = root / "CGroup.esp";
+  const auto bytes = make_plugin(true, false);
+  std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+  stream.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+  stream.close();
+
+  radicle_plugin* plugin = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(path.string().c_str(), &plugin), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  const radicle_form_key key{"CGroup.esp", 0x800};
+
+  EXPECT_EQ(radicle_plugin_subrecord_group_member_set(plugin, key, "INFO\\Response", 0, "WZMD", 1),
+            RADICLE_STATUS_OK) << radicle_last_error();
+  EXPECT_EQ(radicle_plugin_subrecord_group_member_set(plugin, key, "INFO\\Response", 0, "WZMD", 1),
+            RADICLE_STATUS_OK) << radicle_last_error();
+
+  const auto saved_path = root / "Saved.esp";
+  ASSERT_EQ(radicle_plugin_write_file(plugin, saved_path.string().c_str()), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  const auto saved = fo4::read_plugin_file(saved_path);
+  const auto record_key = fo4::FormKey::parse("000800:CGroup.esp");
+  EXPECT_EQ(count_of(payload_signatures(saved, record_key), Signature::from_string("WZMD")),
+            std::size_t{1});
+
+  EXPECT_EQ(radicle_plugin_subrecord_group_member_set(plugin, key, "INFO\\Response", 0, "WZMD", 0),
+            RADICLE_STATUS_OK) << radicle_last_error();
+  EXPECT_EQ(radicle_plugin_subrecord_group_member_set(plugin, key, "INFO\\Response", 0, "WZMD", 1),
+            RADICLE_STATUS_OK) << radicle_last_error();
+  EXPECT_EQ(radicle_plugin_subrecord_group_member_set(plugin, key, "INFO\\Response", 0, "TRDA", 0),
+            RADICLE_STATUS_INVALID_ARGUMENT) << radicle_last_error();
+  EXPECT_EQ(radicle_plugin_subrecord_group_member_set(plugin, key, "INFO\\Response", 0, "WZM", 1),
+            RADICLE_STATUS_INVALID_ARGUMENT) << radicle_last_error();
+  EXPECT_EQ(radicle_plugin_subrecord_group_member_set(plugin, key, "NOPE\\Response", 0, "WZMD", 1),
+            RADICLE_STATUS_INVALID_ARGUMENT) << radicle_last_error();
+  EXPECT_EQ(radicle_plugin_subrecord_group_member_set(plugin, key, "INFO\\Response", 4, "WZMD", 1),
+            RADICLE_STATUS_NOT_FOUND) << radicle_last_error();
+
+  radicle_plugin_destroy(plugin);
+  std::error_code error;
+  std::filesystem::remove_all(root, error);
+}
