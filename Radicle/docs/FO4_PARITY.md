@@ -68,7 +68,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | CELL | 5953 | 34 | 1 | 13 | 2 | 1 | - | - | forms/cell, environment/world | yes | 2 | L4 |
 | CLAS | 6102 | 2 | 1 | 1 | - | 2 | yes | - | - | - | 1 | L4 |
 | CLFM | 9572 | 2 | - | - | - | 1 | yes | - | - | - | 1 | L4 |
-| CLMT | 6115 | 14 | 3 | 2 | - | - | yes | - | environment/base_records | - | 2 | L4 |
+| CLMT | 6115 | 14 | 3 | 2 | - | - | yes | - | environment/base_records | - | 4 | L4 |
 | CMPO | 12294 | 7 | - | 3 | - | 1 | yes | - | - | - | 1 | L4 |
 | COBJ | 10266 | 2 | - | 5 | 1 | 1 | yes | - | forms/components | yes | 1 | L4 |
 | COLL | 9547 | 6 | 1 | - | 1 | 1 | yes | - | - | yes | 2 | L4 |

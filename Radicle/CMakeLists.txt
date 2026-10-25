@@ -517,6 +517,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_delta_patch.cpp
     tests/test_list_merge.cpp
     tests/test_climate_weather_authoring.cpp
+    tests/test_clmt_weather_entries.cpp
+    tests/test_clmt_weather_real.cpp
     tests/test_climate_weather_c_api.cpp
     tests/test_climate_weather_real.cpp
     tests/test_quest_authoring_real.cpp

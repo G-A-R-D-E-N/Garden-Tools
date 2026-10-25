@@ -55,6 +55,10 @@ TEST(RowRoundtripReal, TerminalRowsSurviveWriteAndReread) {
   row_roundtrip::roundtrip_family("TERM", Signature::from_string("TERM"));
 }
 
+TEST(RowRoundtripReal, ClimateRowsSurviveWriteAndReread) {
+  row_roundtrip::roundtrip_family("CLMT", Signature::from_string("CLMT"));
+}
+
 TEST(RowRoundtripReal, QuestRowsSurviveWriteAndReread) {
   row_roundtrip::roundtrip_family("QUST", Signature::from_string("QUST"));
 }
