@@ -110,6 +110,19 @@ public class SwfDocumentServiceTests
     }
 
     [Fact]
+    public void InsertsASpriteKeyframeIntoTheSpritePayload()
+    {
+        using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
+        var sprite = document.Movie.Tags.First(tag => tag.Code == 39);
+        var placement = document.Placements().First(item => item.InsideSprite);
+        var before = document.Movie.Tags.Count(tag => tag.Parent == sprite.Index && tag.Code == 26);
+        var result = document.InsertKeyframe(placement.TagIndex, 0);
+        Assert.True(result.Changed);
+        Assert.Equal(before + 1, document.Movie.Tags.Count(tag => tag.Parent == sprite.Index && tag.Code == 26));
+        document.Undo();
+        Assert.Equal(before, document.Movie.Tags.Count(tag => tag.Parent == sprite.Index && tag.Code == 26));
+    }
+    [Fact]
     public void RefusesAKeyframeOnANonPlacementTag()
     {
         using var document = SwfDocument.OpenBytes(SwfFixture.Movie());

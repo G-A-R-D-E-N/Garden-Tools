@@ -103,3 +103,9 @@ A first keyframe form: for a root PlaceObject2 placement, `InsertKeyframe` copie
 clears the character bit, and inserts the copy before the requested frame's root ShowFrame through the plan, so it is
 one history command that undo removes. A sprite placement or a non-PlaceObject2 tag is refused this round;
 `SwfInterop.InsertKeyframe` and the panel's "Keyframe at frame" button (scrubber frame) use it.
+## FO4RecordEditor.Core/Services/SwfDocumentService.cs:SwfDocument.InsertKeyframe (sprite timelines)
+
+For a placement inside a DefineSprite, `InsertKeyframe` finds the sprite frame's ShowFrame child, splices a new
+Move-flagged placement tag (short or long header as the length needs) into the sprite payload at that child's header
+offset, and replaces the DefineSprite tag through the plan. The fixture's sprite now carries a placement, so the
+service test pins the insertion and undo on that timeline too.

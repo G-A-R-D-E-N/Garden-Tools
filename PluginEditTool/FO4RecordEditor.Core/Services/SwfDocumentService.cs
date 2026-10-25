@@ -101,13 +101,37 @@ public sealed class SwfDocument : IDisposable
     public SwfPlanResultRecord InsertKeyframe(int tagIndex, int frame)
     {
         var tag = Movie.Tags[tagIndex];
-        if (tag.Code != 26 || tag.InsideSprite)
-            throw new InvalidOperationException("only a root PlaceObject2 placement can carry a keyframe this round");
-        var showFrames = Movie.Tags.Where(item => item.Code == 1 && !item.InsideSprite).ToArray();
-        if (frame < 0 || frame >= showFrames.Length) throw new ArgumentOutOfRangeException(nameof(frame));
+        if (tag.Code != 26) throw new InvalidOperationException("only a PlaceObject2 placement can carry a keyframe this round");
         var payload = Movie.Payload(tagIndex);
         payload[0] = (byte)((payload[0] & ~0x02) | 0x01);
-        return Apply(new SwfPlanSpec().Insert(showFrames[frame].Index, 26, payload));
+        if (!tag.InsideSprite)
+        {
+            var showFrames = Movie.Tags.Where(item => item.Code == 1 && !item.InsideSprite).ToArray();
+            if (frame < 0 || frame >= showFrames.Length) throw new ArgumentOutOfRangeException(nameof(frame));
+            return Apply(new SwfPlanSpec().Insert(showFrames[frame].Index, 26, payload));
+        }
+        var sprite = Movie.Tags[tag.Parent];
+        if (sprite.Code != 39) throw new InvalidOperationException("the placement parent is not a DefineSprite");
+        var spriteFrames = Movie.Tags.Where(item => item.Parent == sprite.Index && item.Code == 1).ToArray();
+        if (frame < 0 || frame >= spriteFrames.Length) throw new ArgumentOutOfRangeException(nameof(frame));
+        var target = spriteFrames[frame];
+        var headerSize = target.LongHeader ? 6 : 2;
+        var headerStart = target.Offset - (ulong)headerSize;
+        var spritePayload = Movie.Payload(sprite.Index);
+        var next = new List<byte>(spritePayload.Length + payload.Length + 6);
+        for (var index = 0ul; index < headerStart; ++index) next.Add(spritePayload[(int)index]);
+        if (payload.Length >= 0x3F)
+        {
+            next.AddRange(BitConverter.GetBytes((ushort)((26 << 6) | 0x3F)));
+            next.AddRange(BitConverter.GetBytes((uint)payload.Length));
+        }
+        else
+        {
+            next.AddRange(BitConverter.GetBytes((ushort)((26 << 6) | payload.Length)));
+        }
+        next.AddRange(payload);
+        for (var index = headerStart; index < (ulong)spritePayload.Length; ++index) next.Add(spritePayload[(int)index]);
+        return Apply(new SwfPlanSpec().Replace(sprite.Index, next.ToArray()));
     }
     // Constraint: the save must back the on-disk asset up before the first byte of the new file lands.
     public string Save(string? targetPath = null)

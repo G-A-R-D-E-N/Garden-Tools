@@ -240,10 +240,10 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
           </ul>
           <h4>Placements</h4>
           <ul>
-            {placements.filter(item => !item.insideSprite).map(item => (
+            {placements.map(item => (
               <li key={item.tagIndex}>
                 <button type="button" onClick={() => void pickPlacement(item)}>
-                  depth {item.depth} · {item.character ?? 0}
+                  {item.insideSprite ? `sprite @${item.tagIndex}` : `depth ${item.depth}`} · {item.character ?? 0}
                 </button>
               </li>
             ))}

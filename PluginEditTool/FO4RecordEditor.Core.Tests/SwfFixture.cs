@@ -93,6 +93,11 @@ internal static class SwfFixture
         sprite.AddRange(U16(14));
         sprite.AddRange(U16(1));
         sprite.AddRange(Tag(43, Z("inner")));
+        var spritePlace = new List<byte> { 0x03 };
+        spritePlace.AddRange(U16(2));
+        spritePlace.AddRange(U16(11));
+        spritePlace.Add(0x00);
+        sprite.AddRange(Tag(26, spritePlace.ToArray()));
         sprite.AddRange(Tag(1, Array.Empty<byte>()));
         sprite.AddRange(Tag(0, Array.Empty<byte>()));
 
