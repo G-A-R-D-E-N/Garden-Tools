@@ -308,6 +308,7 @@ std::vector<SwfInstanceEditTarget> instance_targets(const SwfDisplayList& displa
     target.sprite_tag_index = placement.sprite_tag_index;
     target.has_authored_matrix = placement.has_authored_matrix;
     target.transform_tag_index = placement.transform_tag_index;
+    target.create_tag_index = placement.create_tag_index;
     out.push_back(std::move(target));
   }
   return out;

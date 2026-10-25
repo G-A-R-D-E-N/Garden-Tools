@@ -38,6 +38,8 @@ struct SwfInstancePlacement {
   std::size_t sprite_tag_index{0};
   bool has_authored_matrix{false};
   std::size_t transform_tag_index{0};
+  /* Invariant: the tag that created the object, top level for a root instance and a child index for a sprite one. */
+  std::size_t create_tag_index{0};
 
   bool operator==(const SwfInstancePlacement&) const = default;
 };

@@ -28,6 +28,7 @@ struct LocalInstance {
   std::uint16_t character_id{0};
   std::uint32_t created_frame{0};
   std::uint32_t serial{0};
+  std::size_t create_tag_index{0};
   std::optional<std::size_t> transform_tag_index;
   std::string name;
   SwfTransform transform{};
@@ -141,6 +142,7 @@ bool replay(const std::vector<std::vector<Operation>>& operations, std::uint16_t
       instance.character_id = *operation.character_id;
       instance.created_frame = static_cast<std::uint32_t>(frame);
       instance.serial = serials[operation.depth]++;
+      instance.create_tag_index = operation.tag_index;
       if (operation.move && existing != active.end()) {
         instance.name = existing->second.name;
         instance.transform = existing->second.transform;
@@ -227,6 +229,7 @@ public:
         placement.sprite_tag_index = timeline.sprite_tag_index;
         placement.has_authored_matrix = local.transform_tag_index.has_value();
         placement.transform_tag_index = local.transform_tag_index.value_or(0);
+        placement.create_tag_index = local.create_tag_index;
         placements_->push_back(std::move(placement));
       }
       const auto child = sprites_.find(local.character_id);
