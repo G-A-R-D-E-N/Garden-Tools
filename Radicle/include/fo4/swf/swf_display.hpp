@@ -24,8 +24,20 @@ struct SwfFrameInstance {
   bool has_bounds{false};
   bool is_sprite{false};
   std::optional<std::uint16_t> clip_depth;
+  /* Invariant: the tag that created the object, top level for a root row and a child index inside its DefineSprite. */
+  std::size_t create_tag_index{0};
+  /* Invariant: absent until a placement authors a MATRIX, otherwise the address of the one that last authored it. */
+  std::optional<std::size_t> transform_tag_index;
 
-  bool operator==(const SwfFrameInstance&) const = default;
+  /* Invariant: compares what the frame displays, never where each placement lives. */
+  bool operator==(const SwfFrameInstance& other) const {
+    return instance_id == other.instance_id && depth == other.depth &&
+           character_id == other.character_id && timeline_id == other.timeline_id &&
+           timeline_frame == other.timeline_frame && name == other.name && path == other.path &&
+           transform == other.transform && world_transform == other.world_transform &&
+           bounds == other.bounds && has_bounds == other.has_bounds && is_sprite == other.is_sprite &&
+           clip_depth == other.clip_depth;
+  }
 };
 
 /* Invariant: transform_tag_index names the placement that last authored the visible MATRIX. */
@@ -61,7 +73,7 @@ struct SwfDisplayTimeline {
 struct SwfDisplayOptions {
   std::size_t max_instances{250000};
   unsigned max_depth{64};
-  /* Constraint: off by default, so a read-only frame handle does not pay for edit addressing. */
+  /* Constraint: off by default, so a read-only frame handle does not pay for the separate placement list. */
   bool record_placements{false};
 };
 

@@ -291,6 +291,84 @@ TEST(SwfDisplay, StopsAtASelfReferencingSprite) {
   EXPECT_EQ(paths_of(root), "Loop,Loop/Loop");
 }
 
+TEST(SwfDisplay, AddressesANestedSpriteRowWithItsOwnSpriteLocalPlacement) {
+  // Invariant: a sprite child's row must address a child of its DefineSprite, never a top-level tag.
+  const auto sprite = sprite_tag(9, 1, {
+      {26, place2(0x26, 1, 5, matrix_translate(50, 0), "Cell")},
+      {1, {}},
+  });
+  const auto movie = movie_of(1, {
+      {32, shape_definition()},
+      {39, sprite},
+      {26, place2(0x26, 1, 9, matrix_translate(200, 100), "Art")},
+      {1, {}},
+  });
+  const auto result = fo4::swf::read_swf(movie);
+  ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
+  const auto& file = result.file;
+  const auto display = fo4::swf::build_display_list(file);
+  ASSERT_EQ(display.status, SwfTimelineStatus::ok) << display.message;
+  ASSERT_EQ(display.timelines.size(), 2u);
+  const auto* art = find(display.timelines[0].frames[0], "Art");
+  const auto* cell = find(display.timelines[0].frames[0], "Art/Cell");
+  ASSERT_NE(art, nullptr);
+  ASSERT_NE(cell, nullptr);
+
+  // Invariant: a root row's create_tag_index must name the top-level placement that created it.
+  ASSERT_LT(art->create_tag_index, file.tags.size());
+  EXPECT_EQ(file.tags[art->create_tag_index].code, 26);
+  ASSERT_TRUE(file.tags[art->create_tag_index].placement.has_value());
+  EXPECT_EQ(file.tags[art->create_tag_index].placement->character_id.value_or(0), 9);
+  ASSERT_TRUE(art->transform_tag_index.has_value());
+  EXPECT_EQ(*art->transform_tag_index, art->create_tag_index);
+
+  // Invariant: a sprite row's create_tag_index must name a child of the defining DefineSprite.
+  const fo4::swf::SwfTag* definition = nullptr;
+  for (const auto& tag : file.tags) {
+    if (tag.code == 39 && tag.sprite_id && *tag.sprite_id == 9) {
+      definition = &tag;
+    }
+  }
+  ASSERT_NE(definition, nullptr);
+  ASSERT_LT(cell->create_tag_index, definition->children.size());
+  const auto& placement_tag = definition->children[cell->create_tag_index];
+  EXPECT_EQ(placement_tag.code, 26);
+  ASSERT_TRUE(placement_tag.placement.has_value());
+  EXPECT_EQ(placement_tag.placement->depth, 1);
+  EXPECT_EQ(placement_tag.placement->character_id.value_or(0), 5);
+  ASSERT_TRUE(cell->transform_tag_index.has_value());
+  EXPECT_EQ(*cell->transform_tag_index, cell->create_tag_index);
+  // Invariant: the address is sprite local, so the top-level stream must hold a different tag at that index.
+  ASSERT_LT(cell->create_tag_index, file.tags.size());
+  EXPECT_NE(file.tags[cell->create_tag_index].code, 26);
+}
+
+TEST(SwfDisplay, LeavesTheTransformIndexEmptyUntilAPlacementAuthorsAMatrix) {
+  // Invariant: a row with no authored matrix must have no transform address, so tag zero is never one.
+  const auto movie = movie_of(2, {
+      {32, shape_definition()},
+      {26, place2(0x22, 1, 5, {}, "Box")},
+      {1, {}},
+      {26, place2(0x05, 1, std::nullopt, matrix_translate(100, 0), "")},
+      {1, {}},
+  });
+  const auto display = display_of(movie);
+  ASSERT_EQ(display.status, SwfTimelineStatus::ok) << display.message;
+  const auto& root = display.timelines[0].frames;
+  ASSERT_EQ(root.size(), 2u);
+  const auto* placed = find(root[0], "Box");
+  const auto* moved = find(root[1], "Box");
+  ASSERT_NE(placed, nullptr);
+  ASSERT_NE(moved, nullptr);
+
+  EXPECT_FALSE(placed->transform_tag_index.has_value());
+  ASSERT_TRUE(moved->transform_tag_index.has_value());
+  EXPECT_EQ(moved->instance_id, placed->instance_id);
+  EXPECT_EQ(moved->create_tag_index, placed->create_tag_index);
+  EXPECT_NE(*moved->transform_tag_index, moved->create_tag_index);
+  EXPECT_DOUBLE_EQ(moved->transform.translate_x, 5.0);
+}
+
 TEST(SwfDisplay, RejectsWorkPastTheInstanceBudget) {
   const auto sprite = sprite_tag(9, 1, {
       {26, place2(0x22, 1, 5, {}, "Cell")},

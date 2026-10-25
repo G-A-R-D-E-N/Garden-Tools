@@ -212,6 +212,8 @@ public:
       instance.transform = local.transform;
       instance.world_transform = world;
       instance.clip_depth = local.clip_depth;
+      instance.create_tag_index = local.create_tag_index;
+      instance.transform_tag_index = local.transform_tag_index;
       instance.is_sprite = sprites_.find(local.character_id) != sprites_.end();
       const auto bounds = shape_bounds_.find(local.character_id);
       if (bounds != shape_bounds_.end()) {
