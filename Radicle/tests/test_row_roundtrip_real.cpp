@@ -12,8 +12,10 @@
 #include <cstddef>
 #include <cstdlib>
 #include <filesystem>
+#include <initializer_list>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace {
@@ -304,6 +306,139 @@ void roundtrip_links(const char* family, Signature signature) {
   EXPECT_LE(changed, distinct.size()) << family;
 }
 
+bool same_snapshot(const std::vector<SubrecordBytes>& left,
+                   const std::vector<SubrecordBytes>& right) {
+  if (left.size() != right.size()) return false;
+  for (std::size_t index = 0; index < left.size(); ++index) {
+    if (left[index].signature != right[index].signature) return false;
+    if (left[index].data != right[index].data) return false;
+  }
+  return true;
+}
+
+void roundtrip_lists(const char* family,
+                     Signature signature,
+                     std::initializer_list<std::string_view> paths) {
+  const auto* directory = std::getenv("FO4_DATA_DIR");
+  if (directory == nullptr) {
+    GTEST_SKIP() << "set FO4_DATA_DIR to run official-master coverage";
+  }
+  record_game_build(detect_game_build(directory));
+  const auto path = std::filesystem::path(directory) / "Fallout4.esm";
+  ASSERT_TRUE(std::filesystem::is_regular_file(path)) << path.string();
+  const auto plugin = fo4::read_plugin_file(path);
+
+  std::vector<fo4::schema::FormLinkListDescriptor> descriptors;
+  for (const auto base : paths) {
+    const auto descriptor = fo4::schema::formlink_list_descriptor(signature, base);
+    ASSERT_TRUE(descriptor.has_value()) << base;
+    descriptors.push_back(*descriptor);
+  }
+
+  std::optional<fo4::FormKey> chosen;
+  fo4::visit_records(plugin, [&](const fo4::Record& record) {
+    if (chosen.has_value() || record.header.signature != signature) return;
+    for (const auto& descriptor : descriptors) {
+      const auto count = fo4::schema::record_formlink_list_size(plugin, record.form_key, descriptor);
+      if (count && *count > 0) {
+        chosen = record.form_key;
+        return;
+      }
+    }
+  });
+  ASSERT_TRUE(chosen.has_value()) << family << " has no record carrying one of its lists";
+  const auto key = *chosen;
+
+  auto edited = fo4::read_plugin_file(path);
+  const auto* live = fo4::find_record(edited, key);
+  ASSERT_NE(live, nullptr) << key.to_string();
+  const auto before = snapshot(*live);
+  std::vector<std::size_t> initial_counts;
+  for (const auto& descriptor : descriptors) {
+    initial_counts.push_back(fo4::schema::record_formlink_list_size(edited, key, descriptor).value_or(0));
+  }
+
+  std::size_t exercised = 0;
+  std::size_t writes = 0;
+  for (std::size_t which = 0; which < descriptors.size(); ++which) {
+    const auto& descriptor = descriptors[which];
+    auto values = fo4::schema::record_formlink_list_values(edited, key, descriptor);
+    ASSERT_TRUE(values.has_value()) << descriptor.path;
+    const auto count = values->size();
+
+    if (count == 0) continue;
+    std::optional<fo4::FormKey> different;
+    for (const auto& value : *values) {
+      if (value != values->front()) {
+        different = value;
+        break;
+      }
+    }
+    if (different.has_value()) {
+      const auto original = values->front();
+      ASSERT_EQ(fo4::schema::set_record_formlink_list_element(edited, key, descriptor, 0, *different),
+                fo4::schema::FormLinkListMutationStatus::updated)
+          << descriptor.path;
+      const auto swapped = fo4::schema::record_formlink_list_values(edited, key, descriptor);
+      ASSERT_TRUE(swapped.has_value());
+      ASSERT_EQ(swapped->size(), count);
+      ASSERT_EQ(swapped->at(0), *different);
+      ASSERT_EQ(fo4::schema::set_record_formlink_list_element(edited, key, descriptor, 0, original),
+                fo4::schema::FormLinkListMutationStatus::updated)
+          << descriptor.path;
+      ++writes;
+    }
+
+    const auto appended = values->front();
+    ASSERT_EQ(fo4::schema::insert_record_formlink_list_element(edited, key, descriptor, count,
+                                                               appended),
+              fo4::schema::FormLinkListMutationStatus::updated)
+        << descriptor.path;
+    const auto grown_record = fo4::find_record(edited, key);
+    ASSERT_NE(grown_record, nullptr);
+    const auto grown = snapshot(*grown_record);
+    const auto grown_values = fo4::schema::record_formlink_list_values(edited, key, descriptor);
+    ASSERT_TRUE(grown_values.has_value());
+    ASSERT_EQ(grown_values->size(), count + 1) << descriptor.path;
+    EXPECT_EQ(grown_values->back(), appended) << descriptor.path;
+    for (std::size_t other = 0; other < descriptors.size(); ++other) {
+      const auto other_count =
+          fo4::schema::record_formlink_list_size(edited, key, descriptors[other]).value_or(0);
+      const auto expected = other == which ? count + 1 : initial_counts[other];
+      EXPECT_EQ(other_count, expected) << descriptors[other].path << " after appending " << descriptor.path;
+    }
+
+    for (const auto& subrecord : grown) {
+      const bool kept = std::any_of(before.begin(), before.end(), [&](const SubrecordBytes& original) {
+        return original.signature == subrecord.signature && original.data == subrecord.data;
+      });
+      if (kept) continue;
+      EXPECT_TRUE(subrecord.signature == descriptor.subrecord ||
+                  subrecord.signature == descriptor.counter)
+          << family << " changed " << subrecord.signature.to_string() << " for " << descriptor.path;
+    }
+
+    const auto bytes = fo4::write_plugin(edited);
+    const auto reread = fo4::read_plugin(bytes, "RowRoundtrip.esm");
+    const auto* restored = fo4::find_record(reread, key);
+    ASSERT_NE(restored, nullptr) << key.to_string();
+    EXPECT_TRUE(same_record(grown, *restored))
+        << family << " did not re-read the appended " << descriptor.path << " link byte for byte";
+
+    ASSERT_EQ(fo4::schema::remove_record_formlink_list_element(edited, key, descriptor, count),
+              fo4::schema::FormLinkListMutationStatus::updated)
+        << descriptor.path;
+    const auto* reverted = fo4::find_record(edited, key);
+    ASSERT_NE(reverted, nullptr);
+    EXPECT_TRUE(same_snapshot(before, snapshot(*reverted)))
+        << family << " did not restore " << descriptor.path << " after an append and a remove";
+    ++exercised;
+  }
+
+  EXPECT_GT(writes, 0u) << family << " set no list element";
+  EXPECT_GT(exercised, 0u) << family << " exercised no list";
+}
+
 }  // namespace
 
 TEST(RowRoundtripReal, CellRowsSurviveWriteAndReread) {
@@ -340,6 +475,13 @@ TEST(RowRoundtripReal, InfoRowsSurviveWriteAndReread) {
 
 TEST(RowRoundtripReal, FootstepSetRowsSurviveWriteAndReread) {
   roundtrip_family("FSTS", fo4::Signature::from_string("FSTS"));
+}
+
+TEST(RowRoundtripReal, FootstepSetCategoryListsSurviveWriteAndReread) {
+  roundtrip_lists("FSTS", fo4::Signature::from_string("FSTS"),
+                  {"FSTS\\WalkingFootsteps", "FSTS\\RunningFootsteps",
+                   "FSTS\\SprintingFootsteps", "FSTS\\SneakingFootsteps",
+                   "FSTS\\SwimmingFootsteps"});
 }
 
 TEST(RowRoundtripReal, LensRowsSurviveWriteAndReread) {
