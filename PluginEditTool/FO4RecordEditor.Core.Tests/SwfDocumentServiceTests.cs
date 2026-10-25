@@ -1,0 +1,98 @@
+using System;
+using System.IO;
+using System.Linq;
+using FO4RecordEditor.Services;
+using Radicle.Interop;
+using Xunit;
+
+namespace FO4RecordEditor.Core.Tests;
+
+public class SwfDocumentServiceTests
+{
+    [Fact]
+    public void OpensAMovieAndExposesCharactersLabelsAndTheFirstFrame()
+    {
+        using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
+        Assert.Equal(2, document.Characters().Count);
+        Assert.Equal(new[] { "start", "inner" }, document.FrameLabels().Select(label => label.Name));
+        Assert.Equal((ushort)14, document.Timeline(1).CharacterId);
+        var frame = document.Frame(0, 0);
+        Assert.Single(frame);
+        Assert.Equal((ushort)11, frame[0].CharacterId);
+        Assert.Equal((ushort)1, frame[0].Depth);
+        Assert.False(document.Dirty);
+    }
+
+    [Fact]
+    public void AnEditIsAHistoryCommandAndUndoRedoFollowIt()
+    {
+        using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
+        var showFrame = document.Movie.Tags.First(tag => tag.Code == 1 && !tag.InsideSprite);
+        var applied = document.Apply(new SwfPlanSpec().Replace(showFrame.Index, new byte[] { 0x00 }));
+        Assert.True(applied.Changed);
+        Assert.True(document.Dirty);
+        Assert.Equal(1, document.UndoCount);
+
+        document.Undo();
+        Assert.Equal(0, document.UndoCount);
+        Assert.Equal(1, document.RedoCount);
+        document.Redo();
+        Assert.Equal(1, document.UndoCount);
+    }
+
+    [Fact]
+    public void SavingBacksUpThePreviousBytesBeforeWritingTheEdit()
+    {
+        var original = SwfFixture.Movie();
+        using var directory = new TemporaryDirectory();
+        var path = directory.Write("Interface\\Test.swf", original);
+
+        using (var document = SwfDocument.OpenFile(path))
+        {
+            var label = document.Movie.Tags.First(tag => tag.Code == 43 && !tag.InsideSprite);
+            document.Apply(new SwfPlanSpec().Replace(label.Index, new byte[] { (byte)'m', (byte)'e', (byte)'n', (byte)'u', 0 }));
+            var saved = document.Save();
+            Assert.Equal(path, saved);
+        }
+
+        Assert.True(File.Exists(path + ".bak"));
+        Assert.Equal(original, File.ReadAllBytes(path + ".bak"));
+        Assert.NotEqual(original, File.ReadAllBytes(path));
+    }
+
+    [Fact]
+    public void ARefusalLeavesTheHistoryUntouchedAndCarriesTheMessage()
+    {
+        using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
+        var error = Assert.Throws<RadicleException>(() =>
+            document.Apply(new SwfPlanSpec().Replace(99, new byte[] { 0 })));
+        Assert.False(string.IsNullOrWhiteSpace(error.Message));
+        Assert.Equal(0ul, document.Revision);
+        Assert.Equal(0, document.UndoCount);
+        Assert.False(document.Dirty);
+    }
+
+    private sealed class TemporaryDirectory : IDisposable
+    {
+        public TemporaryDirectory()
+        {
+            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "pet-swf-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(Path);
+        }
+
+        public string Path { get; }
+
+        public string Write(string relative, byte[] contents)
+        {
+            var file = System.IO.Path.Combine(Path, relative);
+            Directory.CreateDirectory(System.IO.Path.GetDirectoryName(file)!);
+            File.WriteAllBytes(file, contents);
+            return file;
+        }
+
+        public void Dispose()
+        {
+            try { Directory.Delete(Path, recursive: true); } catch (IOException) { }
+        }
+    }
+}
