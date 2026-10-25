@@ -17,9 +17,22 @@ using radicle_c_env_detail::guarded;
 
 struct radicle_swf_frames {
   fo4::swf::SwfDisplayList display;
+  std::shared_ptr<radicle_swf_detail::revision_state> revision;
+  std::uint64_t built_revision{0};
 };
 
 namespace {
+
+// Invariant: every accessor must fail once the movie revision this list copied has moved.
+bool stale(const radicle_swf_frames* frames) {
+  return frames != nullptr && frames->revision && frames->revision->alive &&
+         frames->revision->revision != frames->built_revision;
+}
+
+radicle_status fail_stale() {
+  return fail(RADICLE_STATUS_INVALID_ARGUMENT,
+              "this frame list was built before the movie was edited; reopen it");
+}
 
 const fo4::swf::SwfDisplayTimeline* timeline_at(const radicle_swf_frames* frames, std::size_t index) {
   if (frames == nullptr || index >= frames->display.timelines.size()) {
@@ -75,6 +88,8 @@ radicle_status radicle_swf_frames_open(const radicle_swf* swf, radicle_swf_frame
                   frames->display.message.empty() ? "the display list did not build"
                                                   : frames->display.message.c_str());
     }
+    frames->revision = swf->revision;
+    frames->built_revision = swf->revision ? swf->revision->revision : 0;
     *out_frames = frames.release();
     return RADICLE_STATUS_OK;
   });
@@ -84,6 +99,10 @@ void radicle_swf_frames_destroy(radicle_swf_frames* frames) { delete frames; }
 
 size_t radicle_swf_frames_timeline_count(const radicle_swf_frames* frames) {
   clear_error();
+  if (stale(frames)) {
+    fail_stale();
+    return 0;
+  }
   return frames == nullptr ? 0 : frames->display.timelines.size();
 }
 
@@ -92,6 +111,7 @@ radicle_status radicle_swf_frames_timeline_at(const radicle_swf_frames* frames, 
   clear_error();
   if (out_character_id) *out_character_id = 0;
   if (out_frame_count) *out_frame_count = 0;
+  if (stale(frames)) return fail_stale();
   const auto* found = timeline_at(frames, index);
   if (found == nullptr || out_character_id == nullptr || out_frame_count == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "frames, an in-range index and both outputs are required");
@@ -105,6 +125,7 @@ radicle_status radicle_swf_frames_instance_count(const radicle_swf_frames* frame
                                                  size_t frame, size_t* out_count) {
   clear_error();
   if (out_count) *out_count = 0;
+  if (stale(frames)) return fail_stale();
   const auto* found = frame_at(frames, timeline, frame);
   if (found == nullptr || out_count == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT,
@@ -119,6 +140,7 @@ radicle_status radicle_swf_frames_instance_at(const radicle_swf_frames* frames, 
                                               radicle_swf_frames_instance* out_instance) {
   clear_error();
   if (out_instance) *out_instance = {};
+  if (stale(frames)) return fail_stale();
   const auto* found = frame_at(frames, timeline, frame);
   if (found == nullptr || out_instance == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT,

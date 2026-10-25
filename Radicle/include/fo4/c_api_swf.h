@@ -7,8 +7,9 @@
 extern "C" {
 #endif
 
-/* A parsed movie. A string it hands back must stay valid until radicle_swf_destroy and the
-   caller must not free one; opening parses once, so every getter is a pure function of the bytes. */
+/* A parsed movie. A string it hands back must stay valid until radicle_swf_destroy or the next
+   accepted plan, and the caller must not free one; every getter must stay a pure function of the
+   tags in force, because a plan must rewrite them. */
 typedef struct radicle_swf radicle_swf;
 
 #define RADICLE_SWF_NO_INDEX ((size_t)-1)
@@ -407,7 +408,9 @@ typedef struct radicle_swf_frames_instance {
   const char* path;            /* must never be null; instance path from the root, e.g. "Art/Cell" */
 } radicle_swf_frames_instance;
 
-/* A per-frame display list; every string it hands back must stay valid until radicle_swf_frames_destroy, so the handle may outlive the movie. */
+/* A per-frame display list; every string it hands back must stay valid until radicle_swf_frames_destroy, so
+   the handle may outlive the movie. Every accessor on it must refuse once a plan has moved the movie's
+   revision, because the list must keep reporting the frames it copied at open. */
 RADICLE_API radicle_status radicle_swf_frames_open(const radicle_swf* swf, radicle_swf_frames** out_frames);
 RADICLE_API void radicle_swf_frames_destroy(radicle_swf_frames* frames);
 RADICLE_API size_t radicle_swf_frames_timeline_count(const radicle_swf_frames* frames);
@@ -418,6 +421,47 @@ RADICLE_API radicle_status radicle_swf_frames_instance_count(const radicle_swf_f
 RADICLE_API radicle_status radicle_swf_frames_instance_at(const radicle_swf_frames* frames, size_t timeline,
                                                          size_t frame, size_t index,
                                                          radicle_swf_frames_instance* out_instance);
+
+/* One tag body a plan replaces: `tag_index` must address a top-level tag that radicle_swf_tag_at reports,
+   because a sprite body must be edited by replacing its DefineSprite tag instead. */
+typedef struct radicle_swf_tag_replacement {
+  size_t tag_index;
+  const uint8_t* payload;      /* must decode as the tag's own code, or the whole plan is refused */
+  size_t size;
+} radicle_swf_tag_replacement;
+
+/* One tag a plan inserts: `before_tag_index` must address a top-level tag, and naming the terminal End
+   tag must insert the new tag ahead of it. */
+typedef struct radicle_swf_tag_insertion {
+  size_t before_tag_index;
+  uint16_t code;               /* must lie in 1..0x3FF; the End code 0 must be refused */
+  const uint8_t* payload;
+  size_t size;
+} radicle_swf_tag_insertion;
+
+/* A plan must apply all-or-nothing: a refusal must leave every tag body, the revision and the bytes
+   that radicle_swf_write_bytes must return exactly as they were before the call. */
+typedef struct radicle_swf_tag_plan {
+  const radicle_swf_tag_replacement* replacements;
+  size_t replacement_count;
+  const radicle_swf_tag_insertion* insertions;
+  size_t insertion_count;
+} radicle_swf_tag_plan;
+
+typedef struct radicle_swf_plan_result {
+  uint8_t changed;             /* must be 0 when the plan matched the bytes in force, so the revision must not move */
+  uint64_t revision;           /* must be the handle's revision after the call, advanced only when changed is 1 */
+} radicle_swf_plan_result;
+
+/* Applies a plan and must rebuild every cached view before any getter sees the new tags. */
+RADICLE_API radicle_status radicle_swf_apply_plan(radicle_swf* swf, const radicle_swf_tag_plan* plan,
+                                                  radicle_swf_plan_result* out_result);
+/* The revision must start at 0, advance only for a plan that changed the movie, and never move for a refusal. */
+RADICLE_API uint64_t radicle_swf_revision(const radicle_swf* swf);
+/* Returns malloc'd bytes the caller must release with radicle_free_bytes; an unedited handle must
+   reproduce the bytes it was opened from, and a no-op plan must leave that output unchanged. */
+RADICLE_API radicle_status radicle_swf_write_bytes(const radicle_swf* swf, uint8_t** out_bytes,
+                                                   size_t* out_size);
 
 
 #ifdef __cplusplus

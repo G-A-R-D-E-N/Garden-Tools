@@ -1600,5 +1600,22 @@ int main() {
   printf("SwfFramesInstance.Bounds %zu\n", offsetof(radicle_swf_frames_instance, bounds));
   printf("SwfFramesInstance.Name %zu\n", offsetof(radicle_swf_frames_instance, name));
   printf("SwfFramesInstance.Path %zu\n", offsetof(radicle_swf_frames_instance, path));
+  printf("SwfTagReplacement %zu\n", sizeof(radicle_swf_tag_replacement));
+  printf("SwfTagReplacement.TagIndex %zu\n", offsetof(radicle_swf_tag_replacement, tag_index));
+  printf("SwfTagReplacement.Payload %zu\n", offsetof(radicle_swf_tag_replacement, payload));
+  printf("SwfTagReplacement.Size %zu\n", offsetof(radicle_swf_tag_replacement, size));
+  printf("SwfTagInsertion %zu\n", sizeof(radicle_swf_tag_insertion));
+  printf("SwfTagInsertion.BeforeTagIndex %zu\n", offsetof(radicle_swf_tag_insertion, before_tag_index));
+  printf("SwfTagInsertion.Code %zu\n", offsetof(radicle_swf_tag_insertion, code));
+  printf("SwfTagInsertion.Payload %zu\n", offsetof(radicle_swf_tag_insertion, payload));
+  printf("SwfTagInsertion.Size %zu\n", offsetof(radicle_swf_tag_insertion, size));
+  printf("SwfTagPlan %zu\n", sizeof(radicle_swf_tag_plan));
+  printf("SwfTagPlan.Replacements %zu\n", offsetof(radicle_swf_tag_plan, replacements));
+  printf("SwfTagPlan.ReplacementCount %zu\n", offsetof(radicle_swf_tag_plan, replacement_count));
+  printf("SwfTagPlan.Insertions %zu\n", offsetof(radicle_swf_tag_plan, insertions));
+  printf("SwfTagPlan.InsertionCount %zu\n", offsetof(radicle_swf_tag_plan, insertion_count));
+  printf("SwfPlanResult %zu\n", sizeof(radicle_swf_plan_result));
+  printf("SwfPlanResult.Changed %zu\n", offsetof(radicle_swf_plan_result, changed));
+  printf("SwfPlanResult.Revision %zu\n", offsetof(radicle_swf_plan_result, revision));
   return 0;
 }

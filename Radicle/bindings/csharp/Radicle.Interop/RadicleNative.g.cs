@@ -2422,10 +2422,43 @@ public unsafe struct SwfFramesInstance
     public IntPtr Path;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfTagReplacement
+{
+    public nuint TagIndex;
+    public IntPtr Payload;
+    public nuint Size;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfTagInsertion
+{
+    public nuint BeforeTagIndex;
+    public ushort Code;
+    public IntPtr Payload;
+    public nuint Size;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfTagPlan
+{
+    public IntPtr Replacements;
+    public nuint ReplacementCount;
+    public IntPtr Insertions;
+    public nuint InsertionCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfPlanResult
+{
+    public byte Changed;
+    public ulong Revision;
+}
+
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 65u;
+    public const uint CompiledAbiVersion = 66u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -3644,5 +3677,14 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_frames_instance_at")]
     public static extern Status SwfFramesInstanceAt(IntPtr frames, nuint timeline, nuint frame, nuint index, SwfFramesInstance* out_instance);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_apply_plan")]
+    public static extern Status SwfApplyPlan(IntPtr swf, SwfTagPlan* plan, SwfPlanResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_revision")]
+    public static extern ulong SwfRevision(IntPtr swf);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_write_bytes")]
+    public static extern Status SwfWriteBytes(IntPtr swf, byte** out_bytes, nuint* out_size);
 
 }

@@ -567,6 +567,7 @@ bool apply_tag_plan(SwfFile& file, const SwfTagPlan& plan, SwfTagPlanResult& out
     out = {};
     return true;
   }
+  out.changed = true;
 
   std::vector<SwfTag> next = file.tags;
   for (const auto& replacement : plan.replacements) {

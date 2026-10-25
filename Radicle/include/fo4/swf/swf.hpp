@@ -482,6 +482,8 @@ struct SwfTagPlan {
 
 struct SwfTagPlanResult {
   std::vector<std::size_t> inserted_tag_indices;
+  /* Invariant: a plan whose bodies all match the bytes in force must report false and move nothing. */
+  bool changed{false};
 };
 
 struct SwfReadResult {

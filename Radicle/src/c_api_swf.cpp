@@ -76,44 +76,44 @@ void flatten_tags(const fo4::swf::SwfTag& tag,
                   std::size_t parent,
                   std::uint16_t sprite_id,
                   bool inside_sprite,
-                  radicle_swf& swf) {
-  const auto index = swf.tags.size();
+                  radicle_swf_detail::swf_views& views) {
+  const auto index = views.tags.size();
   // A DefineSprite tag must report the id its children carry, not only its parent's.
   const auto own_sprite = tag.sprite_id.has_value() ? *tag.sprite_id : sprite_id;
-  swf.tags.push_back(tag_view{&tag, parent, own_sprite, inside_sprite});
+  views.tags.push_back(tag_view{&tag, parent, own_sprite, inside_sprite});
   const auto child_sprite = own_sprite;
   const auto child_inside = tag.sprite_id.has_value() ? true : inside_sprite;
   for (const auto& child : tag.children) {
-    flatten_tags(child, index, child_sprite, child_inside, swf);
+    flatten_tags(child, index, child_sprite, child_inside, views);
   }
 }
 
-void collect_records(radicle_swf& swf) {
-  for (std::size_t index = 0; index < swf.tags.size(); ++index) {
-    const auto& view = swf.tags[index];
+void collect_records(radicle_swf_detail::swf_views& views) {
+  for (std::size_t index = 0; index < views.tags.size(); ++index) {
+    const auto& view = views.tags[index];
     const auto& tag = *view.tag;
     if (tag.symbols) {
-      swf.symbols.insert(swf.symbols.end(), tag.symbols->begin(), tag.symbols->end());
+      views.symbols.insert(views.symbols.end(), tag.symbols->begin(), tag.symbols->end());
     }
     if (tag.exports) {
-      swf.exports.insert(swf.exports.end(), tag.exports->begin(), tag.exports->end());
+      views.exports.insert(views.exports.end(), tag.exports->begin(), tag.exports->end());
     }
     if (tag.code == fo4::swf::tag::kFrameLabel) {
-      swf.frame_labels.push_back(null_terminated_string(tag.payload));
-      swf.frame_label_tags.push_back(index);
-      swf.frame_label_sprites.push_back(view.sprite_id);
-      swf.frame_label_inside_sprite.push_back(view.inside_sprite ? 1 : 0);
+      views.frame_labels.push_back(null_terminated_string(tag.payload));
+      views.frame_label_tags.push_back(index);
+      views.frame_label_sprites.push_back(view.sprite_id);
+      views.frame_label_inside_sprite.push_back(view.inside_sprite ? 1 : 0);
     }
   }
 }
 
-void build_abc_views(radicle_swf& swf) {
+void build_abc_views(const fo4::swf::SwfFile& file, radicle_swf_detail::swf_views& views) {
   // abc_blocks indexes root tags, so each block must report the flat index radicle_swf_tag_at takes.
   std::vector<std::size_t> root_flat_index;
-  for (std::size_t index = 0; index < swf.tags.size(); ++index) {
-    if (swf.tags[index].parent == RADICLE_SWF_NO_INDEX) root_flat_index.push_back(index);
+  for (std::size_t index = 0; index < views.tags.size(); ++index) {
+    if (views.tags[index].parent == RADICLE_SWF_NO_INDEX) root_flat_index.push_back(index);
   }
-  for (const auto& block : fo4::swf::abc_blocks(swf.file)) {
+  for (const auto& block : fo4::swf::abc_blocks(file)) {
     auto payload = block.payload;
     const auto flat_index =
         block.tag_index < root_flat_index.size() ? root_flat_index[block.tag_index] : block.tag_index;
@@ -121,7 +121,7 @@ void build_abc_views(radicle_swf& swf) {
     view.name = block.name;
     view.flags = block.flags;
     view.tag_index = flat_index;
-    if (swf.tags[flat_index].tag->code == fo4::swf::tag::kDoAbc) {
+    if (views.tags[flat_index].tag->code == fo4::swf::tag::kDoAbc) {
       payload = split_do_abc(payload, view);
     }
     view.payload_size = payload.size();
@@ -136,7 +136,7 @@ void build_abc_views(radicle_swf& swf) {
         view.method_return_types.push_back(view.file.multiname_at(view.file.methods[index].return_type));
       }
     }
-    swf.abcs.push_back(std::move(view));
+    views.abcs.push_back(std::move(view));
   }
 }
 
@@ -231,23 +231,35 @@ std::uint8_t* copy_text(const std::string& text, std::size_t* out_size) {
 
 namespace radicle_swf_detail {
 
-// Invariant: every cached view must be rebuilt here before any getter runs.
-void rebuild_views(radicle_swf& swf) {
-  swf.tags.clear();
-  swf.symbols.clear();
-  swf.exports.clear();
-  swf.frame_labels.clear();
-  swf.frame_label_tags.clear();
-  swf.frame_label_sprites.clear();
-  swf.frame_label_inside_sprite.clear();
-  swf.abcs.clear();
-  swf.morph_frames.clear();
-  swf.summary = fo4::swf::summarize(swf.file);
-  for (const auto& tag : swf.file.tags) {
-    flatten_tags(tag, RADICLE_SWF_NO_INDEX, 0, false, swf);
+// Invariant: every cached view must be built here before any getter runs, and a throw must leave the handle intact.
+void build_views(const fo4::swf::SwfFile& file, swf_views& out) {
+  out = {};
+  out.summary = fo4::swf::summarize(file);
+  for (const auto& tag : file.tags) {
+    flatten_tags(tag, RADICLE_SWF_NO_INDEX, 0, false, out);
   }
-  collect_records(swf);
-  build_abc_views(swf);
+  collect_records(out);
+  build_abc_views(file, out);
+}
+
+// Invariant: the install must move, never copy, so every tag_view keeps pointing at the same tags.
+void install_views(radicle_swf& swf, swf_views&& views) {
+  swf.summary = std::move(views.summary);
+  swf.tags = std::move(views.tags);
+  swf.symbols = std::move(views.symbols);
+  swf.exports = std::move(views.exports);
+  swf.frame_labels = std::move(views.frame_labels);
+  swf.frame_label_tags = std::move(views.frame_label_tags);
+  swf.frame_label_sprites = std::move(views.frame_label_sprites);
+  swf.frame_label_inside_sprite = std::move(views.frame_label_inside_sprite);
+  swf.abcs = std::move(views.abcs);
+  swf.morph_frames.clear();
+}
+
+void rebuild_views(radicle_swf& swf) {
+  swf_views views;
+  build_views(swf.file, views);
+  install_views(swf, std::move(views));
 }
 
 }  // namespace radicle_swf_detail
@@ -300,6 +312,8 @@ radicle_status radicle_swf_open_ba2(const radicle_ba2* ba2, const char* path, ra
 
 void radicle_swf_destroy(radicle_swf* swf) {
   clear_error();
+  // Requires the shared state to stay alive for a frame list that outlives this handle.
+  if (swf != nullptr && swf->revision) swf->revision->alive = false;
   delete swf;
 }
 
