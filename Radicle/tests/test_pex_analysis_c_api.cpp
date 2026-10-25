@@ -562,3 +562,52 @@ TEST(CApiPexAnalysis, TreatsNullFilesAndIgnoresGrandparentFunctions) {
   EXPECT_EQ(radicle_pex_chain_report_checked(report.get()), 3u);
   EXPECT_EQ(radicle_pex_chain_report_count(report.get()), 0u);
 }
+
+TEST(CApiPexAnalysis, NamesTheFixedOperandRolesOfEveryCallShape) {
+  // Must report callmethod's three fixed operands as name, receiver and result, in that order.
+  EXPECT_EQ(radicle_pex_call_operand_role(kCallMethod, 0), RADICLE_PEX_OPERAND_FUNCTION_NAME);
+  EXPECT_EQ(radicle_pex_call_operand_role(kCallMethod, 1), RADICLE_PEX_OPERAND_RECEIVER);
+  EXPECT_EQ(radicle_pex_call_operand_role(kCallMethod, 2), RADICLE_PEX_OPERAND_RESULT);
+  // Must report callparent's two fixed operands as name and result, with no receiver in either slot.
+  EXPECT_EQ(radicle_pex_call_operand_role(kCallParent, 0), RADICLE_PEX_OPERAND_FUNCTION_NAME);
+  EXPECT_EQ(radicle_pex_call_operand_role(kCallParent, 1), RADICLE_PEX_OPERAND_RESULT);
+  // Must report callstatic's three fixed operands as owning script, name and result, in that order.
+  EXPECT_EQ(radicle_pex_call_operand_role(kCallStatic, 0), RADICLE_PEX_OPERAND_OWNING_SCRIPT);
+  EXPECT_EQ(radicle_pex_call_operand_role(kCallStatic, 1), RADICLE_PEX_OPERAND_FUNCTION_NAME);
+  EXPECT_EQ(radicle_pex_call_operand_role(kCallStatic, 2), RADICLE_PEX_OPERAND_RESULT);
+}
+
+TEST(CApiPexAnalysis, GivesNoRoleToVariadicOrMissingOperands) {
+  // Must keep a variadic argument role-free, so a caller never reads an argument as the receiver.
+  EXPECT_EQ(radicle_pex_call_operand_role(kCallMethod, 3), RADICLE_PEX_OPERAND_NONE);
+  EXPECT_EQ(radicle_pex_call_operand_role(kCallParent, 2), RADICLE_PEX_OPERAND_NONE);
+  EXPECT_EQ(radicle_pex_call_operand_role(kCallStatic, 3), RADICLE_PEX_OPERAND_NONE);
+  // Must keep a far index role-free rather than reading past the fixed operands.
+  EXPECT_EQ(radicle_pex_call_operand_role(kCallMethod, 4096), RADICLE_PEX_OPERAND_NONE);
+}
+
+TEST(CApiPexAnalysis, NamesNoRoleOutsideTheThreeCallOpcodes) {
+  // Must leave every non-call opcode role-free, so propset and assign cannot be read as calls.
+  for (std::uint8_t opcode = 0; opcode <= 46; ++opcode) {
+    if (opcode == kCallMethod || opcode == kCallParent || opcode == kCallStatic) continue;
+    for (std::size_t index = 0; index < 4; ++index) {
+      EXPECT_EQ(radicle_pex_call_operand_role(opcode, index), RADICLE_PEX_OPERAND_NONE)
+          << "opcode " << static_cast<int>(opcode) << " index " << index;
+    }
+  }
+  // Must keep an opcode past the 0..46 name table role-free instead of indexing it.
+  EXPECT_EQ(radicle_pex_call_operand_role(47, 0), RADICLE_PEX_OPERAND_NONE);
+  EXPECT_EQ(radicle_pex_call_operand_role(255, 1), RADICLE_PEX_OPERAND_NONE);
+}
+
+TEST(CApiPexAnalysis, AgreesWithTheFixedOperandCountOfEveryCallOpcode) {
+  // Must name exactly as many roles as the encoder writes fixed operands for each call opcode.
+  for (const std::uint8_t opcode : {kCallMethod, kCallParent, kCallStatic}) {
+    std::size_t roles = 0;
+    while (roles < 8 && radicle_pex_call_operand_role(opcode, roles) != RADICLE_PEX_OPERAND_NONE) {
+      ++roles;
+    }
+    EXPECT_EQ(roles, static_cast<std::size_t>(PexFile::kOpCodes[opcode].args))
+        << "opcode " << static_cast<int>(opcode);
+  }
+}

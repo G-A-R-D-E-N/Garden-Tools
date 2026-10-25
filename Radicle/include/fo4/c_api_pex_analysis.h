@@ -11,6 +11,19 @@ extern "C" {
 // Invariant: every string this API returns stays valid until the owning handle is destroyed.
 // A handle is not thread-safe; different handles may be used from different threads.
 
+/* Invariant: a role is named only for the fixed operands of the three call opcodes. */
+/* Invariant: an opcode outside that range, or an index at or past its fixed operands, is RADICLE_PEX_OPERAND_NONE. */
+/* Requires no handle: the lookup reads a fixed table, allocates nothing and cannot fail. */
+typedef enum radicle_pex_operand_role {
+  RADICLE_PEX_OPERAND_NONE = 0,
+  RADICLE_PEX_OPERAND_FUNCTION_NAME = 1,
+  RADICLE_PEX_OPERAND_RECEIVER = 2,
+  RADICLE_PEX_OPERAND_OWNING_SCRIPT = 3,
+  RADICLE_PEX_OPERAND_RESULT = 4
+} radicle_pex_operand_role;
+
+RADICLE_API radicle_pex_operand_role radicle_pex_call_operand_role(uint8_t opcode, size_t index);
+
 typedef struct radicle_pex_callgraph radicle_pex_callgraph;
 
 typedef enum radicle_pex_call_kind {
