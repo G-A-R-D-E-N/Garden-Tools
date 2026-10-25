@@ -71,6 +71,10 @@ TEST(RowRoundtripReal, LtexRowsSurviveWriteAndReread) {
   row_roundtrip::roundtrip_family("LTEX", Signature::from_string("LTEX"));
 }
 
+TEST(RowRoundtripReal, WaterRowsSurviveWriteAndReread) {
+  row_roundtrip::roundtrip_family("WATR", Signature::from_string("WATR"));
+}
+
 TEST(RowRoundtripReal, ClimateRowsSurviveWriteAndReread) {
   row_roundtrip::roundtrip_family("CLMT", Signature::from_string("CLMT"));
 }

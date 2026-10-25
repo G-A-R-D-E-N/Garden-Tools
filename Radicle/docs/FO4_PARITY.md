@@ -187,7 +187,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | TRNS | 12774 | 9 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | TXST | 6984 | 19 | 9 | - | - | - | yes | - | environment/terrain | - | 2 | L4 |
 | VTYP | 7950 | 1 | - | - | - | - | yes | - | - | - | 1 | L4 |
-| WATR | 12788 | 71 | 4 | 5 | - | 1 | yes | - | environment/base_records | - | 1 | L4 |
+| WATR | 12788 | 71 | 4 | 5 | - | 1 | yes | - | environment/base_records | - | 2 | L4 |
 | WEAP | 12877 | 67 | 3 | 34 | - | 2 | yes | yes | forms/weapon | yes | 3 | L4 |
 | WRLD | 13110 | 37 | 4 | 8 | - | 1 | yes | - | environment/world | yes | 2 | L4 |
 | WTHR | 13034 | 131 | 33 | 9 | - | - | yes | - | forms/weather, environment/base_records | - | 2 | L4 |
