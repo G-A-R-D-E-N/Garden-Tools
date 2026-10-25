@@ -110,6 +110,16 @@ public class SwfDocumentServiceTests
         Assert.Contains(document.FrameLabels(), item => item.Name == "start");
     }
     [Fact]
+    public void AddsALabelOnASpriteTimeline()
+    {
+        using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
+        var result = document.AddLabel(0, "spriteMenu", 14);
+        Assert.True(result.Changed);
+        Assert.Contains(document.FrameLabels(), label => label.Name == "spriteMenu" && label.SpriteId == 14);
+        document.Undo();
+        Assert.DoesNotContain(document.FrameLabels(), label => label.Name == "spriteMenu");
+    }
+    [Fact]
     public void RefusesADuplicateLabelBeforeTouchingTheHistory()
     {
         using var document = SwfDocument.OpenBytes(SwfFixture.Movie());

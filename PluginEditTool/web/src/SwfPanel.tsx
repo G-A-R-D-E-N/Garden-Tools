@@ -25,7 +25,7 @@ type SwfHost = {
   Redo(): Promise<string>;
   State(): Promise<string>;
   Save(): Promise<string>;
-  AddLabel(frame: number, name: string): Promise<string>;
+  AddLabel(frame: number, name: string, timeline: number): Promise<string>;
   RemoveLabel(tagIndex: number): Promise<string>;
   Placements(): Promise<string>;
   SetDepth(tagIndex: number, depth: number): Promise<string>;
@@ -139,13 +139,13 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
   const addLabel = useCallback(async () => {
     const bridge = host();
     if (!bridge || !labelName.trim()) return;
-    const reply = parse<StateReply>(await bridge.AddLabel(frame, labelName.trim()));
+    const reply = parse<StateReply>(await bridge.AddLabel(frame, labelName.trim(), timeline));
     if (reply.error) { setError(reply.error); return; }
     setError('');
     setState(reply);
     const labelsReply = parse<{ labels: LabelRow[] }>(await bridge.FrameLabels());
     setLabels(labelsReply.labels ?? []);
-  }, [frame, labelName]);
+  }, [frame, labelName, timeline]);
   const pickPlacement = useCallback(async (item: PlacementRow) => {
     const bridge = host();
     if (!bridge) return;

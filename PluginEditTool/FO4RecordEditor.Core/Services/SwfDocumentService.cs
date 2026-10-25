@@ -76,15 +76,41 @@ public sealed class SwfDocument : IDisposable
     public SwfEditTextRecord EditText(int tagIndex) => Movie.EditText(tagIndex);
 
     // Requires a root-timeline frame the movie reaches; a duplicate name on the root timeline is refused.
-    public SwfPlanResultRecord AddLabel(int frame, string name)
+    public SwfPlanResultRecord AddLabel(int frame, string name, int timeline = 0)
     {
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("a frame label needs a name", nameof(name));
-        if (Movie.FrameLabels.Any(label => label.SpriteId == 0 && !label.InsideSprite && label.Name == name))
+        if (Movie.FrameLabels.Any(label => label.SpriteId == timeline && label.InsideSprite == (timeline != 0) &&
+                                           label.Name == name))
             throw new InvalidOperationException("a frame label with that name already exists on this timeline");
-        var showFrames = Movie.Tags.Where(tag => tag.Code == 1 && !tag.InsideSprite).ToArray();
-        if (frame < 0 || frame >= showFrames.Length) throw new ArgumentOutOfRangeException(nameof(frame));
         var payload = System.Text.Encoding.UTF8.GetBytes(name).Concat(new byte[] { 0 }).ToArray();
-        return Apply(new SwfPlanSpec().Insert(showFrames[frame].Index, 43, payload));
+        if (timeline == 0)
+        {
+            var showFrames = Movie.Tags.Where(tag => tag.Code == 1 && !tag.InsideSprite).ToArray();
+            if (frame < 0 || frame >= showFrames.Length) throw new ArgumentOutOfRangeException(nameof(frame));
+            return Apply(new SwfPlanSpec().Insert(showFrames[frame].Index, 43, payload));
+        }
+        var sprite = Movie.Tags.FirstOrDefault(tag => tag.Code == 39 && tag.SpriteId == (ushort)timeline);
+        if (sprite == null) throw new InvalidOperationException($"timeline {timeline} is not a DefineSprite in this movie");
+        var spriteFrames = Movie.Tags.Where(tag => tag.Parent == sprite.Index && tag.Code == 1).ToArray();
+        if (frame < 0 || frame >= spriteFrames.Length) throw new ArgumentOutOfRangeException(nameof(frame));
+        var target = spriteFrames[frame];
+        var headerSize = target.LongHeader ? 6 : 2;
+        var headerStart = target.Offset - (ulong)headerSize;
+        var spritePayload = Movie.Payload(sprite.Index);
+        var next = new List<byte>(spritePayload.Length + payload.Length + 6);
+        for (var index = 0ul; index < headerStart; ++index) next.Add(spritePayload[(int)index]);
+        if (payload.Length >= 0x3F)
+        {
+            next.AddRange(BitConverter.GetBytes((ushort)((43 << 6) | 0x3F)));
+            next.AddRange(BitConverter.GetBytes((uint)payload.Length));
+        }
+        else
+        {
+            next.AddRange(BitConverter.GetBytes((ushort)((43 << 6) | payload.Length)));
+        }
+        next.AddRange(payload);
+        for (var index = headerStart; index < (ulong)spritePayload.Length; ++index) next.Add(spritePayload[(int)index]);
+        return Apply(new SwfPlanSpec().Replace(sprite.Index, next.ToArray()));
     }
     public IReadOnlyList<SwfPlacementRecord> Placements() => Movie.Placements();
 

@@ -121,3 +121,9 @@ The C plan now carries a removal list (`radicle_swf_tag_removal`, regenerated in
 is a FrameLabel and applies a one-removal plan; undo replays the command list from the original bytes and restores the
 label. The panel's Remove button calls it for the selected label. The removal verb stays at ABI 67 because that surface
 was never pushed before this round.
+## FO4RecordEditor.Core/Services/SwfDocumentService.cs:SwfDocument.AddLabel (sprite timelines)
+
+`AddLabel` now takes the timeline id: root uses a plan insertion before the frame's ShowFrame, a sprite timeline finds
+the DefineSprite tag, splices the FrameLabel tag into the sprite payload at the target child's header offset and
+replaces that tag through the plan. Duplicate names are checked per timeline; the service test pins sprite add + undo.
+The panel passes its current timeline scrubber value.

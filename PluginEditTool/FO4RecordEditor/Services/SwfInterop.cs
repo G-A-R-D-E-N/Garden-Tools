@@ -121,9 +121,9 @@ public class SwfInterop
         Snapshot(Document().InsertKeyframe(tagIndex, frame).Changed));
     public Task<string> RemoveLabel(int tagIndex) => Run(() =>
         Snapshot(Document().RemoveLabel(tagIndex).Changed));
-    public Task<string> AddLabel(int frame, string name) => Run(() =>
+    public Task<string> AddLabel(int frame, string name, int timeline) => Run(() =>
     {
-        var result = Document().AddLabel(frame, name);
+        var result = Document().AddLabel(frame, name, timeline);
         return Snapshot(result.Changed);
     });
     public Task<string> Undo() => Run(() => { Document().Undo(); return Snapshot(false); });
