@@ -236,7 +236,8 @@ def main() -> int:
         return 0
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(expected, encoding="utf-8")
+    with open(args.output, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(expected)
     return 0
 
 
