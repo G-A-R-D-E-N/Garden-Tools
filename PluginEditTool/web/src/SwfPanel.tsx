@@ -11,6 +11,8 @@ type InstanceRow = {
 type StateReply = { changed?: boolean; revision: number; undo: number; redo: number; dirty: boolean; error?: string };
 type ErrorReply = { error?: string };
 
+type PlacementRow = { tagIndex: number; depth: number; character: number | null; insideSprite: boolean };
+
 type SwfHost = {
   Open(path: string): Promise<string>;
   Characters(): Promise<string>;
@@ -22,6 +24,8 @@ type SwfHost = {
   State(): Promise<string>;
   Save(): Promise<string>;
   AddLabel(frame: number, name: string): Promise<string>;
+  Placements(): Promise<string>;
+  SetDepth(tagIndex: number, depth: number): Promise<string>;
   ReadEditText(tagIndex: number): Promise<string>;
   EditEditText(tagIndex: number, text: string, colorHex: string, x0: number, x1: number, y0: number, y1: number): Promise<string>;
 };
@@ -49,6 +53,9 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [editTag, setEditTag] = useState<number | null>(null);
+  const [placements, setPlacements] = useState<PlacementRow[]>([]);
+  const [placementTag, setPlacementTag] = useState<number | null>(null);
+  const [placementDepth, setPlacementDepth] = useState(0);
   const [editText, setEditText] = useState({ text: '', color: '', x0: 0, x1: 0, y0: 0, y1: 0 });
 
   const refresh = useCallback(async () => {
@@ -73,6 +80,8 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
       setLabels(labelReply.labels ?? []);
       const rows = parse<{ rows: InstanceRow[] }>(await bridge.Frame(timeline, frame));
       setInstances(rows.rows ?? []);
+      const placementReply = parse<{ placements: PlacementRow[] }>(await bridge.Placements());
+      setPlacements(placementReply.placements ?? []);
     } finally {
       setBusy(false);
     }
@@ -130,6 +139,16 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     const labelsReply = parse<{ labels: LabelRow[] }>(await bridge.FrameLabels());
     setLabels(labelsReply.labels ?? []);
   }, [frame, labelName]);
+  const applyDepth = useCallback(async () => {
+    const bridge = host();
+    if (!bridge || placementTag === null) return;
+    const reply = parse<StateReply>(await bridge.SetDepth(placementTag, placementDepth));
+    if (reply.error) { setError(reply.error); return; }
+    setError('');
+    setState(reply);
+    const placementReply = parse<{ placements: PlacementRow[] }>(await bridge.Placements());
+    setPlacements(placementReply.placements ?? []);
+  }, [placementTag, placementDepth]);
   const command = useCallback(async (action: 'undo' | 'redo' | 'save') => {
     const bridge = host();
     if (!bridge) return;
@@ -185,7 +204,16 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
               </li>
             ))}
           </ul>
-          <h4>Label</h4>
+          <h4>Placements</h4>
+          <ul>
+            {placements.filter(item => !item.insideSprite).map(item => (
+              <li key={item.tagIndex}>
+                <button type="button" onClick={() => { setPlacementTag(item.tagIndex); setPlacementDepth(item.depth); }}>
+                  depth {item.depth} · {item.character ?? 0}
+                </button>
+              </li>
+            ))}
+          </ul>          <h4>Label</h4>
           <input value={labelName} onChange={event => setLabelName(event.target.value)} disabled={!selectedLabel} />
           <button type="button" onClick={() => void renameLabel()} disabled={!selectedLabel}>Rename</button>
           <button type="button" onClick={() => void addLabel()} disabled={!labelName.trim()}>Add at frame</button>
@@ -221,7 +249,12 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
               <button type="button" onClick={() => void applyEditText()}>Apply</button>
             </div>
           )}
-          <p>Revision {state.revision} · undo {state.undo} · redo {state.redo}</p>
+          {placementTag !== null && (
+            <div className="swf-fields">
+              <label>Depth <input type="number" min={0} value={placementDepth} onChange={event => setPlacementDepth(Number(event.target.value))} /></label>
+              <button type="button" onClick={() => void applyDepth()}>Apply depth</button>
+            </div>
+          )}          <p>Revision {state.revision} · undo {state.undo} · redo {state.redo}</p>
           <p>Shape rendering is not part of this round; the table above is the display list.</p>
         </aside>
       </div>

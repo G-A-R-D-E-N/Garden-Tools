@@ -14,6 +14,8 @@ function stubBridge(overrides: Record<string, unknown> = {}) {
     State: vi.fn(async () => JSON.stringify({ revision: 0, undo: 0, redo: 0, dirty: false })),
     Save: vi.fn(async () => JSON.stringify({ saved: 'Interface/Test.swf' })),
     AddLabel: vi.fn(async () => JSON.stringify({ changed: true, revision: 5, undo: 3, redo: 0, dirty: true })),
+    Placements: vi.fn(async () => JSON.stringify({ placements: [{ tagIndex: 2, depth: 1, character: 11, insideSprite: false }] })),
+    SetDepth: vi.fn(async () => JSON.stringify({ changed: true, revision: 6, undo: 4, redo: 0, dirty: true })),
     ReadEditText: vi.fn(async () => JSON.stringify({ id: 11, text: 'hello', color: 'FF112233', x0: 0, x1: 400, y0: 0, y1: 200 })),
     EditEditText: vi.fn(async () => JSON.stringify({ changed: true, revision: 4, undo: 2, redo: 0, dirty: true })),
     ...overrides,
@@ -68,5 +70,17 @@ describe('SwfPanel', () => {
     fireEvent.change(textField, { target: { value: 'hello world' } });
     await act(async () => { fireEvent.click(screen.getByText('Apply')); });
     await waitFor(() => expect(swf.EditEditText).toHaveBeenCalledWith(0, 'hello world', 'FF112233', 0, 400, 0, 200));
+  });
+
+  it('changes a placement depth through the history', async () => {
+    const swf = stubBridge();
+    render(<SwfPanel onClose={() => {}} />);
+    fireEvent.change(screen.getByPlaceholderText('Interface/Test.swf'), { target: { value: 'Interface/Test.swf' } });
+    await act(async () => { fireEvent.click(screen.getByText('Open')); });
+    await act(async () => { fireEvent.click(await screen.findByText(/depth 1 · 11/)); });
+    const depthField = await screen.findByDisplayValue('1');
+    fireEvent.change(depthField, { target: { value: '7' } });
+    await act(async () => { fireEvent.click(screen.getByText('Apply depth')); });
+    await waitFor(() => expect(swf.SetDepth).toHaveBeenCalledWith(2, 7));
   });
 });

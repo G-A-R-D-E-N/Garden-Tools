@@ -73,3 +73,9 @@ Placement tags have no ABI 67 getter, so `Placements()` parses the root and spri
 place and sends the payload through the tag plan, keeping every other byte. `SwfDocument.SetDepth` and
 `SwfInterop.Placements`/`SetDepth` expose it. `SwfPlacementTests` pins the read, the in-place patch, the undo and
 the wrong-tag refusal. Transform/keyframe composition is the next placement step.
+## web/src/SwfPanel.tsx (placement depth properties)
+
+Open also fetches `Placements`, the left column lists root placements (depth/character), and selecting one fills the
+right-hand depth field; Apply sends `SetDepth` and refreshes the placement list and history header. The web test
+drives open → select placement → change depth → apply and asserts the bridge call. Transform/keyframe fields are
+still the remaining placement properties.
