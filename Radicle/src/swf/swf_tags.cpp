@@ -273,6 +273,27 @@ SwfStatus decode_tag_payload(const std::vector<std::byte>& payload, SwfTag& out_
       }
       return nested == SwfStatus::ok ? SwfStatus::ok : SwfStatus::malformed_tag;
     }
+    case tag::kImportAssets:
+    case tag::kImportAssets2: {
+      SwfReader reader(data, 0);
+      SwfImportAssets imports;
+      imports.version = out_tag.code == tag::kImportAssets2 ? 2 : 1;
+      if (!reader.read_zstring(imports.source_movie)) {
+        return SwfStatus::malformed_tag;
+      }
+      if (imports.version == 2) {
+        std::uint8_t reserved = 0;
+        std::uint8_t reserved_again = 0;
+        if (!reader.read_u8(reserved) || !reader.read_u8(reserved_again)) {
+          return SwfStatus::malformed_tag;
+        }
+      }
+      if (!decode_symbol_list(data.subspan(reader.position()), imports.symbols)) {
+        return SwfStatus::malformed_tag;
+      }
+      out_tag.imports = std::move(imports);
+      return SwfStatus::ok;
+    }
     case tag::kSymbolClass:
     case tag::kExportAssets: {
       std::vector<SwfSymbol> symbols;

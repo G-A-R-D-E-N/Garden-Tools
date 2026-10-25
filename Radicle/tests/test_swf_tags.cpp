@@ -618,3 +618,64 @@ TEST(SwfTagDecode, TruncatedPayloadsKeepRawBytesAndParsingContinues) {
     EXPECT_EQ(fo4::swf::write_swf(result.file), bytes);
   }
 }
+
+TEST(SwfTags, ReadsImportAssetsAndImportAssets2WithTheSharedMovie) {
+  SwfBuilder first;
+  first.text("Shared.swf");
+  first.u16(2);
+  first.u16(10);
+  first.text("FontA");
+  first.u16(11);
+  first.text("IconB");
+  const auto imported =
+      fo4::swf::read_swf(movie_with(fo4::swf::tag::kImportAssets, first.body));
+  ASSERT_EQ(imported.status, SwfStatus::ok);
+  ASSERT_TRUE(imported.file.tags[0].imports.has_value());
+  const auto& one = *imported.file.tags[0].imports;
+  EXPECT_EQ(one.version, 1);
+  EXPECT_EQ(one.source_movie, "Shared.swf");
+  ASSERT_EQ(one.symbols.size(), 2u);
+  EXPECT_EQ(one.symbols[0].tag_id, 10);
+  EXPECT_EQ(one.symbols[0].name, "FontA");
+  EXPECT_EQ(one.symbols[1].tag_id, 11);
+  EXPECT_EQ(one.symbols[1].name, "IconB");
+
+  SwfBuilder second;
+  second.text("Shared2.swf");
+  second.u8(0xAB);
+  second.u8(0xCD);
+  second.u16(1);
+  second.u16(12);
+  second.text("Thing");
+  const auto imported2 =
+      fo4::swf::read_swf(movie_with(fo4::swf::tag::kImportAssets2, second.body));
+  ASSERT_EQ(imported2.status, SwfStatus::ok);
+  ASSERT_TRUE(imported2.file.tags[0].imports.has_value());
+  const auto& two = *imported2.file.tags[0].imports;
+  EXPECT_EQ(two.version, 2);
+  EXPECT_EQ(two.source_movie, "Shared2.swf");
+  ASSERT_EQ(two.symbols.size(), 1u);
+  EXPECT_EQ(two.symbols[0].name, "Thing");
+}
+
+TEST(SwfTags, RefusesAnImportAssetListThatRunsOutOfBytes) {
+  SwfBuilder truncated;
+  truncated.text("Shared.swf");
+  truncated.u16(2);
+  truncated.u16(10);
+  truncated.text("FontA");
+  const auto result =
+      fo4::swf::read_swf(movie_with(fo4::swf::tag::kImportAssets, truncated.body));
+  EXPECT_EQ(result.status, SwfStatus::malformed_tag);
+  ASSERT_EQ(result.file.tags.size(), 3u);
+  EXPECT_FALSE(result.file.tags[0].imports.has_value());
+  EXPECT_EQ(result.file.tags[0].payload, truncated.body);
+
+  SwfBuilder unterminated;
+  unterminated.text("Shared.swf");
+  unterminated.u16(1);
+  unterminated.u16(10);
+  const auto no_name =
+      fo4::swf::read_swf(movie_with(fo4::swf::tag::kImportAssets2, unterminated.body));
+  EXPECT_EQ(no_name.status, SwfStatus::malformed_tag);
+}

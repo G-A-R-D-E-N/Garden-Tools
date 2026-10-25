@@ -149,6 +149,12 @@ struct SwfSymbol {
   std::string name;
 };
 
+struct SwfImportAssets {
+  std::string source_movie;
+  std::uint8_t version{1};
+  std::vector<SwfSymbol> symbols;
+};
+
 struct SwfAbc {
   std::uint32_t flags{0};
   std::string name;
@@ -414,6 +420,7 @@ struct SwfTag {
   std::optional<std::uint16_t> sprite_frame_count;
   std::optional<std::vector<SwfSymbol>> symbols;
   std::optional<std::vector<SwfSymbol>> exports;
+  std::optional<SwfImportAssets> imports;
   std::optional<SwfAbc> abc;
   std::optional<SwfAction> action;
   std::optional<SwfBinaryData> binary_data;
