@@ -370,4 +370,10 @@ TEST(CApiSwfEdit, RejectsAFrameListBuiltBeforeAnEdit) {
   FramesHandle after(reopened);
   EXPECT_EQ(radicle_swf_frames_instance_count(after.get(), 0, 0, &count), RADICLE_STATUS_OK);
   EXPECT_EQ(count, 0u);
+
+  // Constraint: destroying the movie must not turn a stale list into a readable one.
+  swf.reset();
+  EXPECT_EQ(radicle_swf_frames_instance_count(frames.get(), 0, 0, &count),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_swf_frames_instance_count(after.get(), 0, 0, &count), RADICLE_STATUS_OK);
 }

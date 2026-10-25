@@ -312,8 +312,6 @@ radicle_status radicle_swf_open_ba2(const radicle_ba2* ba2, const char* path, ra
 
 void radicle_swf_destroy(radicle_swf* swf) {
   clear_error();
-  // Requires the shared state to stay alive for a frame list that outlives this handle.
-  if (swf != nullptr && swf->revision) swf->revision->alive = false;
   delete swf;
 }
 

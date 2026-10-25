@@ -51,10 +51,9 @@ struct swf_views {
   std::vector<abc_view> abcs;
 };
 
-/* Invariant: every frame-list handle must share one state, so destroy must mark it dead rather than drop it. */
+/* Invariant: every frame-list handle shares one state, so the revision outlives the movie handle. */
 struct revision_state {
   std::uint64_t revision{0};
-  bool alive{true};
 };
 
 }  // namespace radicle_swf_detail

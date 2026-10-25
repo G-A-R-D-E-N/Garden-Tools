@@ -25,7 +25,7 @@ namespace {
 
 // Invariant: every accessor must fail once the movie revision this list copied has moved.
 bool stale(const radicle_swf_frames* frames) {
-  return frames != nullptr && frames->revision && frames->revision->alive &&
+  return frames != nullptr && frames->revision &&
          frames->revision->revision != frames->built_revision;
 }
 
