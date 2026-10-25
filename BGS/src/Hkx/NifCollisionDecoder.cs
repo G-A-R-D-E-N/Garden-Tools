@@ -23,14 +23,19 @@ public static class NifCollisionDecoder
     private const int CustomPrimitive = 3;
     private const int ExternalPrimitive = 4;
 
-    public static bool TryDecode(ReadOnlySpan<byte> blob, out NifCollisionModel? model, out string error)
+    public static bool TryDecode(ReadOnlySpan<byte> blob, out NifCollisionModel? model, out string error) =>
+        TryDecode(blob, null, out model, out error);
+
+    // Constraint: attribution is passed in, never read from the blob, so a system no object names decodes without one.
+    public static bool TryDecode(ReadOnlySpan<byte> blob, NifCollisionAttribution? attribution,
+                                 out NifCollisionModel? model, out string error)
     {
         model = null;
         error = "";
 
         try
         {
-            model = Decode(blob, out error);
+            model = Decode(blob, attribution, out error);
             return model != null;
         }
         catch (Exception failure)
@@ -41,7 +46,8 @@ public static class NifCollisionDecoder
         }
     }
 
-    private static NifCollisionModel? Decode(ReadOnlySpan<byte> blob, out string error)
+    private static NifCollisionModel? Decode(ReadOnlySpan<byte> blob, NifCollisionAttribution? attribution,
+                                             out string error)
     {
         error = "";
 
@@ -80,6 +86,7 @@ public static class NifCollisionDecoder
             PointerSize = image.Layout.PointerSize,
             LengthPrefixed = prefixed,
             SystemClass = system.ClassName,
+            Attribution = attribution,
         };
 
         // Constraint: a class whose blob signature disagrees with the class table is refused, never decoded at the table's offsets.

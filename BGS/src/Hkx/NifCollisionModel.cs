@@ -56,11 +56,25 @@ public sealed class NifCollisionShape
     public int VertexCount => Vertices.Count / 3;
 }
 
+// Constraint: these are the NIF collision object's facts, handed in by the reader that found the system; a blob states none of them.
+public sealed class NifCollisionAttribution
+{
+    public int OwnerBlock { get; init; } = -1;
+    public ushort Flags { get; init; }
+    public int SystemRef { get; init; } = -1;
+    public uint BodyId { get; init; }
+    public int TargetBlock { get; init; } = -1;
+    public int TargetNode { get; init; } = -1;
+    public string TargetNodeName { get; init; } = "";
+}
+
 public sealed class NifCollisionModel
 {
     public int PointerSize { get; init; }
     public bool LengthPrefixed { get; init; }
     public string SystemClass { get; init; } = "";
+    // Constraint: Describe and Sha256Hex cover the payload only, so two NIFs naming one system keep one hash.
+    public NifCollisionAttribution? Attribution { get; init; }
     public List<NifCollisionBody> Bodies { get; } = new();
     public List<NifCollisionShape> Shapes { get; } = new();
     public List<string> Notes { get; } = new();

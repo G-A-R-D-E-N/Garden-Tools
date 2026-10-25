@@ -142,6 +142,35 @@ public sealed class NifCollisionDecoderTests
         Assert.DoesNotContain("note ", text);
     }
 
+    // Regression: attribution supplied by the NIF reader must reach the model unchanged and stay out of the digest.
+    [Fact]
+    public void KeepsTheAttributionItsCallerSupplies()
+    {
+        var attribution = new NifCollisionAttribution
+        {
+            OwnerBlock = 1,
+            Flags = 0x0003,
+            SystemRef = 0,
+            BodyId = 0x01234567,
+            TargetBlock = 4,
+            TargetNode = 0,
+            TargetNodeName = "Body",
+        };
+
+        Assert.True(NifCollisionDecoder.TryDecode(NifCollisionFixture.Build().Bytes, attribution,
+                                                 out var model, out string error), error);
+        var attributed = model!;
+
+        Assert.Same(attribution, attributed.Attribution);
+        var kept = attributed.Attribution!;
+        Assert.Equal(0x01234567u, kept.BodyId);
+        Assert.Equal("Body", kept.TargetNodeName);
+
+        var plain = Decode(NifCollisionFixture.Build().Bytes);
+        Assert.Null(plain.Attribution);
+        Assert.Equal(plain.Sha256Hex(), attributed.Sha256Hex());
+    }
+
     // Regression: consuming the length prefix must not shift every member offset.
     [Fact]
     public void AcceptsAFourByteLengthPrefix()
@@ -275,7 +304,8 @@ public sealed class NifCollisionDecoderTests
                 if (collision.Bytes.Length == 0) continue;
                 blobs++;
 
-                if (!NifCollisionDecoder.TryDecode(collision.Bytes, out var model, out var error))
+                var attribution = collision.OwnerBlock >= 0 ? Attributed(collision) : null;
+                if (!NifCollisionDecoder.TryDecode(collision.Bytes, attribution, out var model, out var error))
                 {
                     failures++;
                     lines.Add($"{Path.GetRelativePath(root, path)}#{collision.Block} FAIL {error}");
@@ -283,7 +313,9 @@ public sealed class NifCollisionDecoderTests
                 }
 
                 lines.Add($"{Path.GetRelativePath(root, path)}#{collision.Block} {model!.SystemClass} " +
-                          $"{model.Bodies.Count} {model.Shapes.Count} {model.Sha256Hex()}");
+                          $"{model.Bodies.Count} {model.Shapes.Count} {model.Sha256Hex()} " +
+                          $"{collision.OwnerBlock} {collision.Flags} {collision.SystemRef} " +
+                          $"{collision.BodyId} {collision.TargetBlock} {collision.TargetNodeIndex}");
             }
         }
 
@@ -297,6 +329,17 @@ public sealed class NifCollisionDecoderTests
         Assert.Equal(0, failures);
         Assert.True(blobs > 0, "FO4_NIF_DIR holds no NIF carrying collision");
     }
+
+    private static NifCollisionAttribution Attributed(NifCollisionBlob collision) => new()
+    {
+        OwnerBlock = collision.OwnerBlock,
+        Flags = collision.Flags,
+        SystemRef = collision.SystemRef,
+        BodyId = collision.BodyId,
+        TargetBlock = collision.TargetBlock,
+        TargetNode = collision.TargetNodeIndex,
+        TargetNodeName = collision.TargetNode?.Name ?? "",
+    };
 
     private static int Find(byte[] haystack, byte[] needle)
     {
