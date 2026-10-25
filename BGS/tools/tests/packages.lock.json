@@ -708,6 +708,12 @@
           "Microsoft.Extensions.AI.OpenAI": "[10.10.0, )"
         }
       },
+      "export": {
+        "type": "Project",
+        "dependencies": {
+          "BehaviourGraph.Core": "[1.0.0, )"
+        }
+      },
       "radicle.interop": {
         "type": "Project"
       },
