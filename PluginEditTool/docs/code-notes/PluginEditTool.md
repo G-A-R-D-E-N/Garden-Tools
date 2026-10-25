@@ -34,3 +34,14 @@ The Interface (SWF) panel is registered the same way as the other asset panels: 
 button with the `Boxes` icon after Papyrus, and a conditional `SwfPanel` render beside `PapyrusPanel`/`NifPanel`.
 The host bridge is picked up by the existing `[RpcExpose]` scan as `hostObjects.swf`, which is the name the panel
 test stubs. Archive-resolved open and the semantic edit verbs are still deferred.
+## Radicle/bindings/csharp/Radicle.Interop/SwfEditText.cs:SwfEditTextCodec (edit-text fields)
+
+Tag 37 has no ABI 67 getter, so the managed layer parses and re-encodes the decoded tag payload itself:
+`SwfEditTextCodec.Parse` reads bounds (RECT bits), both flag bytes, font id/class, height, colour, max length,
+layout, variable and initial text, and `Write` reproduces the decoder order and reuses the original id/RECT
+prefix unless the bounds are edited, so a text or colour edit keeps every earlier byte. `SwfFile.EditText` and
+`SwfFile.EditEditText` expose it and send the rewritten payload through the normal tag plan, so history,
+revision and refusal behaviour are unchanged. Tests in `SwfEditTextTests.cs` pin the full read, the
+prefix-preserving text edit, colour and bounds edits, the no-op plan, and the wrong-tag refusal. This is the
+"compose from tag payloads in PET" path for edit text; the remaining property edits (transform/depth/keyframe,
+label add/remove) still need either the same treatment or new native exports.
