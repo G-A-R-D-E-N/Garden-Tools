@@ -723,7 +723,7 @@ RADICLE_API radicle_status radicle_plugin_subrecord_group_member_set(radicle_plu
                                                                     const char* group_path,
                                                                     size_t index,
                                                                     const char* member,
-                                                                    int present);
+                                                                    int32_t present);
 
 RADICLE_API radicle_status radicle_env_plugin_records(const radicle_env* env,
                                                       size_t plugin_index,

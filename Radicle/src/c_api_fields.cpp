@@ -329,7 +329,7 @@ radicle_status radicle_plugin_subrecord_group_member_set(radicle_plugin* plugin,
                                                          const char* group_path,
                                                          size_t index,
                                                          const char* member,
-                                                         int present) {
+                                                         int32_t present) {
   clear_error();
   return guarded("unknown exception while setting a subrecord group member", [&] {
     const auto form_key = to_form_key(key);
