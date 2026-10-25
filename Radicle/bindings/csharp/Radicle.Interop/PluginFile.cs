@@ -312,6 +312,26 @@ public sealed unsafe class PluginFile : IDisposable
         return Edit(record, (plugin, s, key) => RadicleNative.PluginSetQuestVmadFragment(plugin, key, stage, stageIndex, script, function));
     }
 
+    public int AddPackageProcedure(FormKey record, int parentIndex, string procedure)
+    {
+        ArgumentNullException.ThrowIfNull(procedure);
+        if (procedure.Contains('\0')) throw new ArgumentException("Procedure name cannot hold an embedded NUL through this API.", nameof(procedure));
+        var parent = Index(parentIndex);
+        using var use = Use();
+        using var strings = new NativeStrings();
+        nuint added;
+        Call.Check(RadicleNative.PackageProcedureAdd(use.Pointer, strings.Key(record), parent, procedure, &added));
+        return (int)added;
+    }
+
+    public void RemovePackageProcedure(FormKey record, int nodeIndex)
+    {
+        var at = Index(nodeIndex);
+        using var use = Use();
+        using var strings = new NativeStrings();
+        Call.Check(RadicleNative.PackageProcedureRemove(use.Pointer, strings.Key(record), at));
+    }
+
     public int AddSoundFile(FormKey record, string file)
     {
         ArgumentNullException.ThrowIfNull(file);

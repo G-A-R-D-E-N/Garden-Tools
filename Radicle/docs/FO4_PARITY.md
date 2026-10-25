@@ -144,7 +144,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | OMOD | 12501 | 15 | 1 | 2 | 2 | 2 | yes | - | - | yes | 1 | L4 |
 | OTFT | 9357 | - | - | - | 1 | - | yes | - | - | yes | 1 | L4 |
 | OVIS | 12546 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
-| PACK | 10526 | 26 | - | 12 | - | - | yes | - | environment/behavior | - | 3 | L4 |
+| PACK | 10526 | 26 | - | 12 | - | - | yes | - | environment/behavior | - | 5 | L4 |
 | PARW | 5944 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
 | PBAR | 5945 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
 | PBEA | 5946 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |

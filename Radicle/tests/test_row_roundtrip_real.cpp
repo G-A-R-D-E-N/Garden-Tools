@@ -79,6 +79,10 @@ TEST(RowRoundtripReal, ClimateRowsSurviveWriteAndReread) {
   row_roundtrip::roundtrip_family("CLMT", Signature::from_string("CLMT"));
 }
 
+TEST(RowRoundtripReal, PackageRowsSurviveWriteAndReread) {
+  row_roundtrip::roundtrip_family("PACK", Signature::from_string("PACK"));
+}
+
 TEST(RowRoundtripReal, SoundDescriptorRowsSurviveWriteAndReread) {
   row_roundtrip::roundtrip_family("SNDR", Signature::from_string("SNDR"));
 }

@@ -284,6 +284,74 @@ radicle_status radicle_package_input_remove(radicle_plugin* plugin, radicle_form
   });
 }
 
+namespace {
+
+radicle_status package_tree_failure(fo4::env::PackageTreeMutationStatus status) {
+  using Status = fo4::env::PackageTreeMutationStatus;
+  switch (status) {
+    case Status::updated:
+    case Status::unchanged:
+      return RADICLE_STATUS_OK;
+    case Status::record_missing:
+      return fail(RADICLE_STATUS_NOT_FOUND, "plugin has no such record");
+    case Status::not_a_package:
+      return fail(RADICLE_STATUS_PARSE_ERROR, "expected a PACK record");
+    case Status::undecodable:
+      return fail(RADICLE_STATUS_PARSE_ERROR, "the procedure tree does not decode");
+    case Status::index_out_of_range:
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "procedure node index is out of range");
+    case Status::not_a_container:
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "a procedure can only be added under a branch node");
+    case Status::not_a_leaf:
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "only leaf procedure nodes can be removed");
+    case Status::root_node:
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the root procedure node cannot be removed");
+    case Status::unknown_procedure:
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "procedure type is not one of the stored names");
+    case Status::inputs_required:
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                  "procedure needs data inputs, which this export cannot supply");
+    case Status::reference_orphaned:
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                  "removal would orphan a PKC2 data input or PFO2 override");
+    case Status::tree_full:
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "procedure tree depth limit reached");
+  }
+  return fail(RADICLE_STATUS_INTERNAL_ERROR, "unknown package tree status");
+}
+
+}
+
+radicle_status radicle_package_procedure_add(radicle_plugin* plugin, radicle_form_key key,
+                                             size_t parent_index, const char* procedure,
+                                             size_t* out_node_index) {
+  if (out_node_index != nullptr) *out_node_index = 0;
+  clear_error();
+  const auto form_key = to_form_key(key);
+  if (plugin == nullptr || !form_key || procedure == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, record key and procedure are required");
+  }
+  return guarded("unknown exception while adding a PACK procedure", [&] {
+    std::size_t added = 0;
+    const auto status = fo4::env::add_package_procedure_node(plugin->value, *form_key, parent_index, procedure, &added);
+    const auto mapped = package_tree_failure(status);
+    if (mapped == RADICLE_STATUS_OK && out_node_index != nullptr) *out_node_index = added;
+    return mapped;
+  });
+}
+
+radicle_status radicle_package_procedure_remove(radicle_plugin* plugin, radicle_form_key key,
+                                                size_t node_index) {
+  clear_error();
+  const auto form_key = to_form_key(key);
+  if (plugin == nullptr || !form_key) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin and a valid record key are required");
+  }
+  return guarded("unknown exception while removing a PACK procedure", [&] {
+    return package_tree_failure(fo4::env::remove_package_procedure_node(plugin->value, *form_key, node_index));
+  });
+}
+
 const char* radicle_package_location_type_name(int32_t type) {
   if (type < 0 || type > static_cast<int32_t>(fo4::env::PackageLocationType::alias_collection_item)) return nullptr;
   return fo4::env::package_location_type_name(static_cast<fo4::env::PackageLocationType>(type));

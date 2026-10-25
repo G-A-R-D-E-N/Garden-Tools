@@ -555,6 +555,9 @@ if(RADICLE_BUILD_TESTS)
     tests/test_condition_scopes_real.cpp
     tests/test_condition_functions.cpp
     tests/test_package_targets.cpp
+    tests/test_package_tree.cpp
+    tests/test_package_tree_c_api.cpp
+    tests/test_package_tree_real.cpp
     tests/test_perk_entrypoints.cpp
     tests/test_perk_rows.cpp
     tests/test_vegetation.cpp

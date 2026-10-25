@@ -141,7 +141,7 @@ def main(executable):
                 gap_path = root / "overwrite" / gap
                 gap_base = gap_path.read_bytes()
                 tools = {tool["name"]: tool for tool in rpc("tools/list")["tools"]}
-                for name in ("create_placed_object", "create_interior_cell", "get_leveled_list", "set_leveled_list_settings", "edit_leveled_list_entry", "get_npc", "edit_npc_entries", "get_faction", "edit_faction_entries", "get_weapon_damage_types", "add_sound_file", "remove_sound_file", "set_sound_base", "create_sound"):
+                for name in ("create_placed_object", "create_interior_cell", "get_leveled_list", "set_leveled_list_settings", "edit_leveled_list_entry", "get_npc", "edit_npc_entries", "get_faction", "edit_faction_entries", "get_weapon_damage_types", "add_sound_file", "remove_sound_file", "add_package_procedure", "remove_package_procedure", "set_sound_base", "create_sound"):
                     assert name in tools, f"Missing MCP tool: {name}"
                 placed_schema = tools["create_placed_object"]["inputSchema"]
                 assert placed_schema["properties"]["x"]["type"] == "number", placed_schema

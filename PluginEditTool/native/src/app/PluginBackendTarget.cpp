@@ -487,6 +487,8 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "SetLeveledListSettings") return backend_.setLeveledListSettings(args);
         if (method == "EditLeveledListEntry") return backend_.editLeveledListEntry(args);
         if (method == "GetNpc") return backend_.getNpc(args);
+        if (method == "AddPackageProcedure") return backend_.addPackageProcedure(args);
+        if (method == "RemovePackageProcedure") return backend_.removePackageProcedure(args);
         if (method == "AddSoundFile") return backend_.addSoundFile(args);
         if (method == "RemoveSoundFile") return backend_.removeSoundFile(args);
         if (method == "SetSoundBase") return backend_.setSoundBase(args);

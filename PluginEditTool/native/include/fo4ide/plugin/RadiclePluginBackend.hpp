@@ -83,6 +83,8 @@ public:
     Result<nlohmann::json> editNpcEntries(const nlohmann::json& arguments) override;
     Result<nlohmann::json> getFaction(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> addSoundFile(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> addPackageProcedure(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> removePackageProcedure(const nlohmann::json& arguments) override;
     Result<nlohmann::json> removeSoundFile(const nlohmann::json& arguments) override;
     Result<nlohmann::json> setSoundBase(const nlohmann::json& arguments) override;
     Result<nlohmann::json> createSound(const nlohmann::json& arguments) override;

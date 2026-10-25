@@ -21,6 +21,10 @@ struct PackageProcedureNode {
   std::optional<std::uint32_t> flags;
   std::size_t opaque_begin{0}, opaque_end{0};
   std::vector<std::size_t> children;
+  std::size_t begin{0}, end{0};
+  std::size_t condition_begin{0}, condition_end{0};
+  std::size_t children_anchor{0};
+  std::size_t prcb_index{0};
 };
 
 enum class PackageInputValueKind : std::uint8_t {
@@ -105,5 +109,32 @@ PackageInputMutationStatus set_package_data_input(Plugin& plugin,
 PackageInputMutationStatus remove_package_data_input(Plugin& plugin,
                                                      const FormKey& record_key,
                                                      std::uint8_t id);
+
+enum class PackageTreeMutationStatus {
+  updated,
+  unchanged,
+  record_missing,
+  not_a_package,
+  undecodable,
+  index_out_of_range,
+  not_a_container,
+  not_a_leaf,
+  root_node,
+  unknown_procedure,
+  inputs_required,
+  reference_orphaned,
+  tree_full,
+};
+
+// Constraint: the tree is rebuilt from the decoded model and every branch count is recomputed.
+PackageTreeMutationStatus add_package_procedure_node(Plugin& plugin,
+                                                     const FormKey& record_key,
+                                                     std::size_t parent_index,
+                                                     std::string_view procedure,
+                                                     std::size_t* out_node_index = nullptr);
+
+PackageTreeMutationStatus remove_package_procedure_node(Plugin& plugin,
+                                                        const FormKey& record_key,
+                                                        std::size_t node_index);
 
 }

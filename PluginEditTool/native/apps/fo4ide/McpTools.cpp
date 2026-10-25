@@ -151,6 +151,10 @@ bool registerPluginTools(fo4ide::mcp::Registry& registry,
              {{"plugin", "string"}, {"form_key", "string"}, {"target", "string", true}})) return false;
     if (!add("create_sound", "Create a SOUN sound marker or an FSTS footstep set with proved defaults in memory; signature must be SOUN or FSTS. Call save_plugin to persist", "backend", "CreateSound",
              {{"plugin", "string"}, {"signature", "string"}, {"editor_id", "string"}})) return false;
+    if (!add("add_package_procedure", "Add a leaf procedure node under a PACK procedure-tree branch in memory. parent_index addresses the decoded tree node; the result names the new node index. Procedures that need data inputs and removals that would orphan an input are refused. Call save_plugin to persist", "backend", "AddPackageProcedure",
+             {{"plugin", "string"}, {"form_key", "string"}, {"parent_index", "integer"}, {"procedure", "string"}})) return false;
+    if (!add("remove_package_procedure", "Remove one leaf procedure node from a PACK procedure tree in memory, recomputing the branch counts. Call save_plugin to persist", "backend", "RemovePackageProcedure",
+             {{"plugin", "string"}, {"form_key", "string"}, {"node_index", "integer"}})) return false;
     if (!add("get_weapon_damage_types", "Get a WEAP record's damage types by FormKey from the winning version (read-only)", "backend", "GetWeaponDamageTypes",
              {{"form_key", "string"}})) return false;
     return true;

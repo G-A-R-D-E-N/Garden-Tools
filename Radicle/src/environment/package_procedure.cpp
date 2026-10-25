@@ -198,21 +198,28 @@ std::uint32_t read_conditions(Scan& scan) {
 
 std::size_t read_node(Scan& scan, std::vector<PackageProcedureNode>& nodes, std::size_t depth) {
   if (depth > max_depth) throw Unreconciled{};
+  const auto begin = scan.at;
   const auto branch = name_in(scan.subs[scan.take(sig("ANAM"))], branch_types);
   const auto index = nodes.size();
   nodes.emplace_back();
+  nodes[index].begin = begin;
   nodes[index].kind = branch == "Procedure" ? PackageProcedureKind::leaf : PackageProcedureKind::container;
   nodes[index].name = std::string{branch};
+  nodes[index].condition_begin = scan.at;
   nodes[index].condition_count = read_conditions(scan);
+  nodes[index].condition_end = scan.at;
   if (nodes[index].kind == PackageProcedureKind::leaf) {
     nodes[index].name = std::string{name_in(scan.subs[scan.take(sig("PNAM"))], procedures)};
     nodes[index].opaque_begin = scan.at;
     while (scan.at < scan.subs.size() && !ends_leaf(scan.subs[scan.at].signature)) ++scan.at;
     nodes[index].opaque_end = scan.at;
     skip_flag_override(scan);
+    nodes[index].end = scan.at;
     return index;
   }
+  nodes[index].prcb_index = scan.at;
   const auto& prcb = scan.subs[scan.take(sig("PRCB"), 8)];
+  nodes[index].children_anchor = scan.at;
   nodes[index].child_count = Reader::u32(prcb, 0);
   nodes[index].flags = Reader::u32(prcb, 4);
   for (std::uint32_t i = 0; i < nodes[index].child_count; ++i) {
@@ -220,6 +227,7 @@ std::size_t read_node(Scan& scan, std::vector<PackageProcedureNode>& nodes, std:
     nodes[index].children.push_back(child);
   }
   skip_flag_override(scan);
+  nodes[index].end = scan.at;
   return index;
 }
 
@@ -508,4 +516,203 @@ PackageInputMutationStatus remove_package_data_input(Plugin& plugin,
   return PackageInputMutationStatus::updated;
 }
 
+namespace {
+
+std::vector<std::byte> tree_zstring(std::string_view text) {
+  std::vector<std::byte> out;
+  out.reserve(text.size() + 1);
+  for (const char ch : text) out.push_back(std::byte{static_cast<std::uint8_t>(ch)});
+  out.push_back(std::byte{0});
+  return out;
 }
+
+std::vector<std::byte> tree_dword(std::uint32_t value) {
+  std::vector<std::byte> out(4, std::byte{0});
+  write_dword(out, 0, value);
+  return out;
+}
+
+std::optional<std::size_t> parent_of(const PackageProcedureTree& tree, std::size_t node) {
+  for (std::size_t index = 0; index < tree.nodes.size(); ++index) {
+    for (const auto child : tree.nodes[index].children) {
+      if (child == node) return index;
+    }
+  }
+  return std::nullopt;
+}
+
+std::size_t node_depth(const PackageProcedureTree& tree, std::size_t node) {
+  std::size_t depth = 0;
+  auto current = parent_of(tree, node);
+  while (current) {
+    ++depth;
+    current = parent_of(tree, *current);
+  }
+  return depth;
+}
+
+bool leaf_carries_reference(const Record& record, const PackageProcedureNode& node) {
+  for (std::size_t at = node.opaque_begin; at < node.end; ++at) {
+    const auto tag = record.subrecords[at].signature;
+    if (tag == sig("PKC2") || tag == sig("PFO2") || tag == sig("PFOR")) return true;
+  }
+  return false;
+}
+
+struct Rebuild {
+  const Record& record;
+  const PackageProcedureTree& tree;
+  std::size_t synthetic{static_cast<std::size_t>(-1)};
+  std::optional<std::size_t> skip;
+  std::string_view procedure;
+  std::vector<Subrecord> out;
+};
+
+std::size_t emit_node(Rebuild& rebuild, std::size_t index) {
+  const auto& node = rebuild.tree.nodes[index];
+  std::size_t emitted = 0;
+  if (index == rebuild.synthetic) {
+    rebuild.out.push_back(Subrecord{sig("ANAM"), tree_zstring("Procedure"), false});
+    rebuild.out.push_back(Subrecord{sig("CITC"), tree_dword(0), false});
+    rebuild.out.push_back(Subrecord{sig("PNAM"), tree_zstring(rebuild.procedure), false});
+    return 1;
+  }
+  rebuild.out.push_back(rebuild.record.subrecords[node.begin]);
+  for (std::size_t at = node.condition_begin; at < node.condition_end; ++at) {
+    rebuild.out.push_back(rebuild.record.subrecords[at]);
+  }
+  std::size_t flags_begin = node.end;
+  if (node.kind == PackageProcedureKind::leaf) {
+    rebuild.out.push_back(rebuild.record.subrecords[node.condition_end]);
+    for (std::size_t at = node.opaque_begin; at < node.opaque_end; ++at) {
+      rebuild.out.push_back(rebuild.record.subrecords[at]);
+    }
+    flags_begin = node.opaque_end;
+  } else {
+    Subrecord prcb = rebuild.record.subrecords[node.prcb_index];
+    std::size_t children = 0;
+    for (const auto child : node.children) {
+      if (rebuild.skip && *rebuild.skip == child) continue;
+      ++children;
+    }
+    write_dword(prcb.data, 0, static_cast<std::uint32_t>(children));
+    rebuild.out.push_back(std::move(prcb));
+    std::optional<std::size_t> last_emitted;
+    for (const auto child : node.children) {
+      if (rebuild.skip && *rebuild.skip == child) continue;
+      emitted += emit_node(rebuild, child);
+      last_emitted = child;
+    }
+    flags_begin = last_emitted ? rebuild.tree.nodes[*last_emitted].end : node.children_anchor;
+  }
+  for (std::size_t at = flags_begin; at < node.end; ++at) {
+    rebuild.out.push_back(rebuild.record.subrecords[at]);
+  }
+  return emitted + 1;
+}
+
+void rebuild_into(Record& target, const PackageProcedureTree& tree, Rebuild& rebuild) {
+  const auto tree_begin = tree.nodes.front().begin;
+  const auto tree_end = tree.nodes.front().end;
+  if (tree_begin >= tree_end || tree_end > target.subrecords.size()) {
+    throw schema::ScalarError("package procedure tree region is malformed");
+  }
+  rebuild.out.clear();
+  emit_node(rebuild, 0);
+  target.subrecords.erase(target.subrecords.begin() + static_cast<std::ptrdiff_t>(tree_begin),
+                          target.subrecords.begin() + static_cast<std::ptrdiff_t>(tree_end));
+  target.subrecords.insert(target.subrecords.begin() + static_cast<std::ptrdiff_t>(tree_begin),
+                           std::make_move_iterator(rebuild.out.begin()),
+                           std::make_move_iterator(rebuild.out.end()));
+}
+
+void rebuild_checked(Plugin& plugin, Record& record, const PackageProcedureTree& tree, Rebuild& rebuild) {
+  Record candidate = record;
+  rebuild_into(candidate, tree, rebuild);
+  const auto check = decode_package_procedure(candidate);
+  if (!check.decoded) throw schema::ScalarError("the rebuilt package procedure tree does not decode");
+  record = std::move(candidate);
+  fo4::detail::mark_record_modified(plugin, record);
+}
+
+}  // namespace
+
+PackageTreeMutationStatus add_package_procedure_node(Plugin& plugin,
+                                                     const FormKey& record_key,
+                                                     std::size_t parent_index,
+                                                     std::string_view procedure,
+                                                     std::size_t* out_node_index) {
+  if (out_node_index != nullptr) *out_node_index = 0;
+  auto* record = fo4::detail::locate_mutable_record(plugin, record_key);
+  if (record == nullptr) return PackageTreeMutationStatus::record_missing;
+  if (record->header.signature != sig("PACK")) return PackageTreeMutationStatus::not_a_package;
+  const auto tree = decode_package_procedure(*record);
+  if (!tree.decoded) return PackageTreeMutationStatus::undecodable;
+  if (parent_index >= tree.nodes.size()) return PackageTreeMutationStatus::index_out_of_range;
+  if (tree.nodes[parent_index].kind != PackageProcedureKind::container) {
+    return PackageTreeMutationStatus::not_a_container;
+  }
+  if (std::find(procedures.begin(), procedures.end(), procedure) == procedures.end()) {
+    return PackageTreeMutationStatus::unknown_procedure;
+  }
+  if (const auto required = expected_input_count(procedure); required.has_value() && *required > 0) {
+    return PackageTreeMutationStatus::inputs_required;
+  }
+  if (node_depth(tree, parent_index) + 1 >= max_depth) return PackageTreeMutationStatus::tree_full;
+
+  auto model = tree;
+  const auto added = model.nodes.size();
+  PackageProcedureNode node;
+  node.kind = PackageProcedureKind::leaf;
+  node.name = std::string{procedure};
+  model.nodes.push_back(std::move(node));
+  model.nodes[parent_index].children.push_back(added);
+
+  Rebuild rebuild{*record, model, added, std::nullopt, procedure, {}};
+  rebuild_checked(plugin, *record, model, rebuild);
+  if (out_node_index != nullptr) {
+    const auto rebuilt = decode_package_procedure(*record);
+    if (rebuilt.decoded && parent_index < rebuilt.nodes.size() &&
+        !rebuilt.nodes[parent_index].children.empty()) {
+      *out_node_index = rebuilt.nodes[parent_index].children.back();
+    }
+  }
+  return PackageTreeMutationStatus::updated;
+}
+
+PackageTreeMutationStatus remove_package_procedure_node(Plugin& plugin,
+                                                        const FormKey& record_key,
+                                                        std::size_t node_index) {
+  auto* record = fo4::detail::locate_mutable_record(plugin, record_key);
+  if (record == nullptr) return PackageTreeMutationStatus::record_missing;
+  if (record->header.signature != sig("PACK")) return PackageTreeMutationStatus::not_a_package;
+  const auto tree = decode_package_procedure(*record);
+  if (!tree.decoded) return PackageTreeMutationStatus::undecodable;
+  if (node_index >= tree.nodes.size()) return PackageTreeMutationStatus::index_out_of_range;
+  const auto& node = tree.nodes[node_index];
+  if (node.kind != PackageProcedureKind::leaf) return PackageTreeMutationStatus::not_a_leaf;
+  if (!parent_of(tree, node_index).has_value()) return PackageTreeMutationStatus::root_node;
+  if (leaf_carries_reference(*record, node)) return PackageTreeMutationStatus::reference_orphaned;
+
+  auto model = tree;
+  PackageProcedureNode* parent = nullptr;
+  for (auto& candidate : model.nodes) {
+    for (const auto child : candidate.children) {
+      if (child == node_index) {
+        parent = &candidate;
+        break;
+      }
+    }
+    if (parent != nullptr) break;
+  }
+  if (parent == nullptr) return PackageTreeMutationStatus::root_node;
+  auto& children = parent->children;
+  children.erase(std::remove(children.begin(), children.end(), node_index), children.end());
+  if (parent->child_count > 0) --parent->child_count;
+
+  Rebuild rebuild{*record, model, static_cast<std::size_t>(-1), node_index, {}, {}};
+  rebuild_checked(plugin, *record, model, rebuild);
+  return PackageTreeMutationStatus::updated;
+}
+
+}  // namespace fo4::env

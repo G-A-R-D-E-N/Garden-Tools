@@ -191,6 +191,14 @@ public:
         return recordTypedCall("EditFactionEntries", args);
     }
 
+    fo4ide::Result<nlohmann::json> addPackageProcedure(const nlohmann::json& args) override {
+        return recordTypedCall("AddPackageProcedure", args);
+    }
+
+    fo4ide::Result<nlohmann::json> removePackageProcedure(const nlohmann::json& args) override {
+        return recordTypedCall("RemovePackageProcedure", args);
+    }
+
     fo4ide::Result<nlohmann::json> addSoundFile(const nlohmann::json& args) override {
         return recordTypedCall("AddSoundFile", args);
     }
@@ -656,7 +664,8 @@ TEST_CASE("PluginBackendTarget routes the typed record methods and the strings n
     const std::vector<std::string> methods{
         "SetLeveledListSettings", "EditLeveledListEntry", "GetNpc", "EditNpcEntries", "GetFaction",
         "EditFactionEntries", "GetWeaponDamageTypes", "CreatePlacedObject", "CreateInteriorCell",
-        "AddSoundFile", "RemoveSoundFile", "SetSoundBase", "CreateSound"};
+        "AddSoundFile", "RemoveSoundFile", "SetSoundBase", "CreateSound",
+        "AddPackageProcedure", "RemovePackageProcedure"};
     for (const auto& method : methods) {
         const auto result = target.invoke(method, args);
         REQUIRE(result.has_value());
@@ -686,6 +695,8 @@ TEST_CASE("IPluginBackend defaults report distinct unavailable errors for the ty
     unavailable(base.createPlacedObject(args), "CellBackendUnavailable");
     unavailable(base.createInteriorCell(args), "CellBackendUnavailable");
     unavailable(base.addSoundFile(args), "SoundBackendUnavailable");
+    unavailable(base.addPackageProcedure(args), "PackageBackendUnavailable");
+    unavailable(base.removePackageProcedure(args), "PackageBackendUnavailable");
     unavailable(base.removeSoundFile(args), "SoundBackendUnavailable");
     unavailable(base.setSoundBase(args), "SoundBackendUnavailable");
     unavailable(base.createSound(args), "SoundBackendUnavailable");
