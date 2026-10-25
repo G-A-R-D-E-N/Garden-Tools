@@ -304,7 +304,7 @@ public sealed class ExportGraphPlanTests
         Assert.Empty(second["children"]!.AsArray());
     }
 
-    // Invariant: a generator that is its own ancestor becomes one stub instead of recursing forever.
+    // Invariant: a non-machine generator that is its own ancestor becomes one stub instead of recursing forever.
     [Fact]
     public void GeneratorCycleBecomesASharedStub()
     {
@@ -322,6 +322,51 @@ public sealed class ExportGraphPlanTests
                     <hkobject class="hkbStateMachineStateInfo" name="#93" signature="0x0">
                         <hkparam name="name">Loops</hkparam>
                         <hkparam name="stateId">0</hkparam>
+                        <hkparam name="generator">#94</hkparam>
+                    </hkobject>
+                    <hkobject class="hkbBlenderGenerator" name="#94" signature="0x0">
+                        <hkparam name="name">LoopBlend</hkparam>
+                        <hkparam name="children" numelements="1">#95</hkparam>
+                    </hkobject>
+                    <hkobject class="hkbBlenderGeneratorChild" name="#95" signature="0x0">
+                        <hkparam name="generator">#94</hkparam>
+                    </hkobject>
+                </hksection>
+            </hkpackfile>
+            """;
+
+        var plan = GraphPlan.Build(BehaviourGraphModel.Parse(xml));
+
+        Assert.Single(plan.Machines);
+        var blend = Assert.Single(plan.Machines[0].States).Generator!;
+        Assert.Equal(PlanNodeKind.Blend, blend.Kind);
+        Assert.Equal(PlanNodeKind.Shared, Assert.Single(blend.Children).Kind);
+        Assert.Equal(1, plan.RevisitedGenerators);
+
+        var document = JsonNode.Parse(GraphExport.Json(plan, "cycle.hkx"))!.AsObject();
+        Assert.Equal("shared",
+                     document["machines"]![0]!["states"]![0]!["generator"]!["children"]![0]!["kind"]!
+                         .GetValue<string>());
+    }
+
+    // Invariant: a machine that closes a cycle keeps the index of the copy already written, so recursion stays followable.
+    [Fact]
+    public void MachineCycleReferenceCarriesItsWrittenIndex()
+    {
+        const string xml = """
+            <hkpackfile classversion="11" contentsversion="hk_2014.1.0-r1">
+                <hksection name="__data__">
+                    <hkobject class="hkbBehaviorGraph" name="#91" signature="0x0">
+                        <hkparam name="name">RecursiveGraph</hkparam>
+                        <hkparam name="rootGenerator">#92</hkparam>
+                    </hkobject>
+                    <hkobject class="hkbStateMachine" name="#92" signature="0x0">
+                        <hkparam name="name">Root</hkparam>
+                        <hkparam name="states" numelements="1">#93</hkparam>
+                    </hkobject>
+                    <hkobject class="hkbStateMachineStateInfo" name="#93" signature="0x0">
+                        <hkparam name="name">Reenters</hkparam>
+                        <hkparam name="stateId">0</hkparam>
                         <hkparam name="generator">#92</hkparam>
                     </hkobject>
                 </hksection>
@@ -331,11 +376,17 @@ public sealed class ExportGraphPlanTests
         var plan = GraphPlan.Build(BehaviourGraphModel.Parse(xml));
 
         Assert.Single(plan.Machines);
-        Assert.Equal(PlanNodeKind.Shared, Assert.Single(plan.Machines[0].States).Generator!.Kind);
-        Assert.Equal(1, plan.RevisitedGenerators);
+        var reentry = Assert.Single(plan.Machines[0].States).Generator!;
+        Assert.Equal(PlanNodeKind.Machine, reentry.Kind);
+        Assert.Equal(0, reentry.Machine);
+        Assert.Empty(reentry.Children);
+        Assert.Equal(0, plan.RevisitedGenerators);
 
-        var document = JsonNode.Parse(GraphExport.Json(plan, "cycle.hkx"))!.AsObject();
-        Assert.Equal("shared", document["machines"]![0]!["states"]![0]!["generator"]!["kind"]!.GetValue<string>());
+        var document = JsonNode.Parse(GraphExport.Json(plan, "recursive.hkx"))!.AsObject();
+        var written = document["machines"]![0]!["states"]![0]!["generator"]!.AsObject();
+        Assert.Equal("machine", written["kind"]!.GetValue<string>());
+        Assert.Equal(0, written["machine"]!.GetValue<int>());
+        Assert.Contains("closes a cycle", written["detail"]!.GetValue<string>());
     }
 
     // Invariant: a truncated plan still points at machines it already wrote, and its gap counts every stub.

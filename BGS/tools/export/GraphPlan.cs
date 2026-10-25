@@ -154,6 +154,10 @@ public sealed class GraphPlan
 
         if (!path.Add(generator.Id))
         {
+            // Invariant: a machine already written keeps its index even when it closes a cycle, so recursion stays followable.
+            if (generator.Class == "hkbStateMachine" && _machinesById.TryGetValue(generator.Id, out int written))
+                return MachineReference(generator, written, "this reference closes a cycle");
+
             RevisitedGenerators++;
             return new PlanNode
             {
@@ -265,14 +269,16 @@ public sealed class GraphPlan
         return Unmapped(generator, "no mapping for this generator class");
     }
 
-    private static PlanNode MachineReference(HkObject machineObject, int written) =>
+    private static PlanNode MachineReference(HkObject machineObject, int written, string note = "") =>
         new PlanNode
         {
             Kind = PlanNodeKind.Machine,
             Class = machineObject.Class,
             Name = machineObject.Str("name"),
             Machine = written,
-            Detail = $"already written as machine {written}",
+            Detail = note.Length == 0
+                ? $"already written as machine {written}"
+                : $"already written as machine {written}; {note}",
         };
 
     private PlanNode MachineNode(BehaviourGraphModel model, HkObject machineObject, HashSet<string> path)
