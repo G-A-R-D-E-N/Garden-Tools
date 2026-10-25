@@ -77,4 +77,51 @@ struct SwfDepthReassignResult {
 bool reassign_instance_depth(SwfFile& file, std::uint32_t root_frame, std::uint32_t instance_id,
                              std::uint16_t destination_depth, SwfDepthReassignResult& out);
 
+/* Invariant: one authored root frame without sprite expansion, so fields the display list drops stay visible. */
+struct SwfAuthoredFrameObject {
+  std::uint16_t depth{0};
+  std::uint16_t character_id{0};
+  std::string name;
+  std::string class_name;
+  std::optional<std::uint16_t> ratio;
+  std::optional<std::uint16_t> clip_depth;
+  /* Invariant: the depth of the innermost live mask range that covers this object. */
+  std::optional<std::uint16_t> masked_by_depth;
+  std::uint16_t filter_count{0};
+  std::optional<std::uint8_t> blend_mode;
+  /* Invariant: absent until a placement on this frame's path authors a MATRIX. */
+  std::optional<SwfMatrix> matrix;
+  std::size_t create_tag_index{0};
+  std::size_t transform_tag_index{0};
+
+  bool operator==(const SwfAuthoredFrameObject&) const = default;
+};
+
+struct SwfAuthoredFrame {
+  std::vector<SwfAuthoredFrameObject> objects;
+};
+
+/* Requires the frame to be completed by a ShowFrame; identity when the object authored no MATRIX. */
+SwfTransform authored_transform(const std::optional<SwfMatrix>& matrix) noexcept;
+
+bool build_authored_frame(const std::vector<SwfTag>& tags, std::uint32_t frame,
+                          SwfAuthoredFrame& out, std::string& message);
+
+struct SwfKeyframeInsertResult {
+  std::uint32_t root_frame{0};
+  std::uint16_t depth{0};
+  /* Invariant: the inserted tag's index after the insertion, which is the pre-insertion ShowFrame index. */
+  std::size_t inserted_tag_index{0};
+  std::string message;
+};
+
+/* Invariant: a refusal must leave the tag count and every tag body untouched and set message. */
+bool insert_instance_transform_keyframe(SwfFile& file, std::uint32_t root_frame,
+                                        std::uint32_t instance_id, SwfKeyframeInsertResult& out);
+
+/* Requires the requested transform to fit the MATRIX fields; the frame and later frames carry it. */
+bool insert_instance_transform_keyframe(SwfFile& file, std::uint32_t root_frame,
+                                        std::uint32_t instance_id, const SwfTransform& transform,
+                                        SwfKeyframeInsertResult& out);
+
 }  // namespace fo4::swf
