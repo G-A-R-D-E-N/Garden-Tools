@@ -453,6 +453,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_wp9_cobj_rows.cpp
     tests/test_wp9_race_weap_rows.cpp
     tests/test_race_data_rows.cpp
+    tests/test_race_tint_rows.cpp
+    tests/test_race_tint_real.cpp
     tests/test_race_data_links.cpp
     tests/test_race_link_rows.cpp
     tests/test_wp9_scol.cpp
