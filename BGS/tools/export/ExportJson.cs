@@ -14,12 +14,8 @@ public sealed class ExportJson
     private bool _empty = true;
     private bool _named;
 
-    public ExportJson() : this(false)
-    {
-    }
-
     // Constraint: a JSONL row must stay on one line, so this mode only drops the pretty-print separators.
-    public ExportJson(bool singleLine)
+    public ExportJson(bool singleLine = false)
     {
         _singleLine = singleLine;
     }

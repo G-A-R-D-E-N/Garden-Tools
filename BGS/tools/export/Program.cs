@@ -33,8 +33,10 @@ public static class Program
         document per artifact, index.json lists what this run wrote with input and output
         hashes, and errors.jsonl holds one JSON object per line for every failed input.
 
-        Exit codes: 0 every input exported, 1 usage or output failure, 2 at least one
-        input failed (its row is in errors.jsonl).
+        Exit codes: 0 every input exported; 2 when an input failed (its row is in
+        errors.jsonl) or when a run's output directory cannot be created (the row is
+        reported on the log only, errors.jsonl cannot be written); 1 for usage errors and
+        for --schema-only output failures.
         """;
 
     public static int Main(string[] args) => Run(args, Console.Out, Console.Error);

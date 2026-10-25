@@ -549,7 +549,7 @@ public sealed class ExportGraphPlanTests
         Assert.Equal(PlanNodeKind.Blend, blend.Kind);
         Assert.Empty(blend.Children);
         Assert.Equal(1, plan.GapCount("generator-reference-unresolved"));
-        Assert.Contains(plan.Warnings, warning => warning.Contains("#999", StringComparison.Ordinal));
+        Assert.Contains(plan.Warnings, warning => warning.Contains("'999'", StringComparison.Ordinal));
 
         var document = JsonNode.Parse(GraphExport.Json(plan, "dangling-blend.hkx"))!.AsObject();
         var gaps = document["gaps"]!.AsArray()
@@ -596,6 +596,43 @@ public sealed class ExportGraphPlanTests
         Assert.Equal(PlanNodeKind.Select, selector.Kind);
         Assert.Equal("Only.hkx", Assert.Single(selector.Children).AnimationName);
         Assert.Equal(1, plan.GapCount("generator-reference-unresolved"));
-        Assert.Contains(plan.Warnings, warning => warning.Contains("#999", StringComparison.Ordinal));
+        Assert.Contains(plan.Warnings, warning => warning.Contains("'999'", StringComparison.Ordinal));
+    }
+
+    // Invariant: a blend child whose wrapper object is absent still reports the wrapper it could not follow.
+    [Fact]
+    public void AMissingBlendChildWrapperBecomesAGapRow()
+    {
+        const string xml = """
+            <hkpackfile classversion="11" contentsversion="hk_2014.1.0-r1">
+                <hksection name="__data__">
+                    <hkobject class="hkbBehaviorGraph" name="#91" signature="0x0">
+                        <hkparam name="name">MissingWrapperGraph</hkparam>
+                        <hkparam name="rootGenerator">#92</hkparam>
+                    </hkobject>
+                    <hkobject class="hkbStateMachine" name="#92" signature="0x0">
+                        <hkparam name="name">Root</hkparam>
+                        <hkparam name="states" numelements="1">#93</hkparam>
+                    </hkobject>
+                    <hkobject class="hkbStateMachineStateInfo" name="#93" signature="0x0">
+                        <hkparam name="name">Missing</hkparam>
+                        <hkparam name="stateId">0</hkparam>
+                        <hkparam name="generator">#96</hkparam>
+                    </hkobject>
+                    <hkobject class="hkbBlenderGenerator" name="#96" signature="0x0">
+                        <hkparam name="name">Blend</hkparam>
+                        <hkparam name="children" numelements="1">#998</hkparam>
+                    </hkobject>
+                </hksection>
+            </hkpackfile>
+            """;
+
+        var plan = GraphPlan.Build(BehaviourGraphModel.Parse(xml));
+
+        var blend = Assert.Single(Assert.Single(plan.Machines).States).Generator!;
+        Assert.Equal(PlanNodeKind.Blend, blend.Kind);
+        Assert.Empty(blend.Children);
+        Assert.Equal(1, plan.GapCount("generator-reference-unresolved"));
+        Assert.Contains(plan.Warnings, warning => warning.Contains("'998'", StringComparison.Ordinal));
     }
 }

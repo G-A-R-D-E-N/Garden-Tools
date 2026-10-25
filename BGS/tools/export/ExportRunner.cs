@@ -285,19 +285,20 @@ public sealed class ExportRunner
             return;
         }
 
-        // Constraint: errors.jsonl rows go through the same writer as every document, so escaping cannot drift.
-        var lines = _errors
-            .OrderBy(row => row.Source, StringComparer.Ordinal)
+        File.WriteAllText(path, string.Concat(ErrorLines(_errors)), Utf8);
+    }
+
+    // Constraint: rows sort by source then message and each is one line, so a two-run diff stays stable.
+    internal static IReadOnlyList<string> ErrorLines(IEnumerable<ExportErrorRow> rows) =>
+        rows.OrderBy(row => row.Source, StringComparer.Ordinal)
             .ThenBy(row => row.Message, StringComparer.Ordinal)
             .Select(row => new ExportJson(singleLine: true)
                 .Object()
                 .Name("source").Text(row.Source)
                 .Name("message").Text(row.Message)
                 .EndObject()
-                .Finish());
-
-        File.WriteAllText(path, string.Concat(lines), Utf8);
-    }
+                .Finish())
+            .ToArray();
 
     private static byte[] Read(string path)
     {

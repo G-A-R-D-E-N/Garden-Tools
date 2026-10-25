@@ -30,6 +30,28 @@ public sealed class ExportSchemaTests
         Assert.NotEmpty(row["message"]!.GetValue<string>());
     }
 
+    // Invariant: a row with a newline, a quote and a backslash stays one valid line and rows sort by source then message.
+    [Fact]
+    public void ErrorRowsEscapeControlCharactersAndSortBySourceThenMessage()
+    {
+        var rows = new[]
+        {
+            new ExportErrorRow("b.nif", "second \"quoted\" \\ path\nnext line"),
+            new ExportErrorRow("a.hkx", "first"),
+        };
+
+        string[] lines = ExportRunner.ErrorLines(rows).Select(line => line.TrimEnd('\n')).ToArray();
+
+        Assert.Equal(2, lines.Length);
+        var first = JsonNode.Parse(lines[0])!.AsObject();
+        var second = JsonNode.Parse(lines[1])!.AsObject();
+        Assert.Equal("a.hkx", first["source"]!.GetValue<string>());
+        Assert.Equal("b.nif", second["source"]!.GetValue<string>());
+        Assert.Equal("second \"quoted\" \\ path\nnext line", second["message"]!.GetValue<string>());
+        Assert.DoesNotContain("\n", lines[1], StringComparison.Ordinal);
+        Assert.Contains("\\n", lines[1], StringComparison.Ordinal);
+    }
+
     // Invariant: schema.json must list every format the tool writes, itself included, with at least one field each.
     [Fact]
     public void SchemaListsItselfAndEveryDocumentFormat()

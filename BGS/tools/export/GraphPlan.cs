@@ -70,10 +70,16 @@ public sealed class GraphPlan
 {
     public const int MaximumWarnings = 40;
 
+    private const string MissingReferenceExplanation =
+        "a generator reference did not resolve: a state generator, a blend child or a selector child";
+
+    private const int MaximumChildWarnings = 5;
+
     private const int MaximumResolvedNodes = 200_000;
 
     private readonly Dictionary<string, int> _machinesById = new(StringComparer.Ordinal);
     private int _resolvedNodes;
+    private int _missingChildWarnings;
     private bool _budgetNoted;
 
     private static readonly Dictionary<string, string> PassThrough = new(StringComparer.Ordinal)
@@ -303,8 +309,7 @@ public sealed class GraphPlan
             if (generator == null)
             {
                 MissingGenerators++;
-                NoteGap("generator-reference-unresolved",
-                        "a generator reference did not resolve: a state generator, a blend child or a selector child");
+                NoteGap("generator-reference-unresolved", MissingReferenceExplanation);
                 if (MissingGenerators <= 5 && Warnings.Count < MaximumWarnings)
                     Warnings.Add($"state '{info.Str("name")}' in '{machine.Name}' has no resolvable generator");
             }
@@ -347,7 +352,7 @@ public sealed class GraphPlan
             var inner = Resolve(model, model.Follow(wrapper, "generator"), path);
             if (inner == null)
             {
-                NoteMissingChild(wrapperId);
+                NoteMissingChild(wrapper?.Ref("generator") ?? wrapperId);
                 continue;
             }
 
@@ -436,8 +441,11 @@ public sealed class GraphPlan
 
     private void NoteMissingChild(string reference)
     {
-        NoteGap("generator-reference-unresolved",
-                "a generator reference did not resolve: a state generator, a blend child or a selector child");
+        NoteGap("generator-reference-unresolved", MissingReferenceExplanation);
+
+        // Constraint: child warnings are capped at five so dangling children cannot crowd out later warnings.
+        if (_missingChildWarnings >= MaximumChildWarnings) return;
+        _missingChildWarnings++;
 
         if (Warnings.Count < MaximumWarnings)
             Warnings.Add($"generator child '{reference}' did not resolve to an object");
