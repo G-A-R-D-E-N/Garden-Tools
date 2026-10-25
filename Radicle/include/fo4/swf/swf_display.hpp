@@ -28,6 +28,20 @@ struct SwfFrameInstance {
   bool operator==(const SwfFrameInstance&) const = default;
 };
 
+/* Invariant: transform_tag_index names the placement that last authored the visible MATRIX. */
+struct SwfInstancePlacement {
+  std::uint32_t instance_id{0};
+  std::uint32_t frame{0};
+  std::string path;
+  bool inside_sprite{false};
+  std::uint16_t sprite_id{0};
+  std::size_t sprite_tag_index{0};
+  bool has_authored_matrix{false};
+  std::size_t transform_tag_index{0};
+
+  bool operator==(const SwfInstancePlacement&) const = default;
+};
+
 struct SwfDisplayFrame {
   std::uint32_t frame{0};
   std::vector<SwfFrameInstance> instances;
@@ -49,6 +63,8 @@ struct SwfDisplayOptions {
 
 struct SwfDisplayList {
   std::vector<SwfDisplayTimeline> timelines;
+  /* Invariant: only the root traversal fills this. */
+  std::vector<SwfInstancePlacement> placements;
   SwfTimelineStatus status{SwfTimelineStatus::malformed};
   std::string message;
 };

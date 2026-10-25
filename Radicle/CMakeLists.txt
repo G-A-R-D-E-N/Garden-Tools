@@ -262,6 +262,7 @@ add_library(fo4
   src/swf/swf_text.cpp
   src/swf/swf_timeline.cpp
   src/swf/swf_display.cpp
+  src/swf/swf_edit.cpp
   src/swf/swf_write.cpp
   src/pex_analysis/opcodes.cpp
   src/pex_analysis/cfg.cpp
@@ -729,6 +730,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_swf_plan.cpp
     tests/test_swf_place.cpp
     tests/test_swf_display.cpp
+    tests/test_swf_edit.cpp
     tests/test_swf_art.cpp
     tests/test_swf_morph_tween.cpp
     tests/test_swf_real.cpp

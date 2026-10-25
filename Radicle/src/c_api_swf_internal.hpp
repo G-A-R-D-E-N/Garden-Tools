@@ -53,3 +53,10 @@ struct radicle_swf {
   std::vector<radicle_swf_detail::abc_view> abcs;
   mutable std::vector<radicle_swf_detail::morph_frame> morph_frames;
 };
+
+namespace radicle_swf_detail {
+
+/* Every cached view holds pointers into file.tags, so a mutation must rebuild them before any getter runs. */
+void rebuild_views(radicle_swf& swf);
+
+}  // namespace radicle_swf_detail

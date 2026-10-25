@@ -148,12 +148,7 @@ radicle_status open_from_bytes(const std::uint8_t* bytes, std::size_t size, radi
   auto swf = std::make_unique<radicle_swf>();
   swf->file = std::move(result.file);
   swf->declared_length_matches = result.declared_length_matches;
-  swf->summary = fo4::swf::summarize(swf->file);
-  for (const auto& tag : swf->file.tags) {
-    flatten_tags(tag, RADICLE_SWF_NO_INDEX, 0, false, *swf);
-  }
-  collect_records(*swf);
-  build_abc_views(*swf);
+  radicle_swf_detail::rebuild_views(*swf);
   *out_swf = swf.release();
   return RADICLE_STATUS_OK;
 }
@@ -233,6 +228,29 @@ std::uint8_t* copy_text(const std::string& text, std::size_t* out_size) {
 }
 
 }  // namespace
+
+namespace radicle_swf_detail {
+
+// Invariant: every cached view must be rebuilt here before any getter runs.
+void rebuild_views(radicle_swf& swf) {
+  swf.tags.clear();
+  swf.symbols.clear();
+  swf.exports.clear();
+  swf.frame_labels.clear();
+  swf.frame_label_tags.clear();
+  swf.frame_label_sprites.clear();
+  swf.frame_label_inside_sprite.clear();
+  swf.abcs.clear();
+  swf.morph_frames.clear();
+  swf.summary = fo4::swf::summarize(swf.file);
+  for (const auto& tag : swf.file.tags) {
+    flatten_tags(tag, RADICLE_SWF_NO_INDEX, 0, false, swf);
+  }
+  collect_records(swf);
+  build_abc_views(swf);
+}
+
+}  // namespace radicle_swf_detail
 
 extern "C" {
 
