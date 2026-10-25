@@ -1,5 +1,7 @@
 #include "fo4/swf/swf_edit.hpp"
 
+#include "fo4/swf/swf_display.hpp"
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -60,7 +62,6 @@ struct LifetimeScan {
   std::vector<std::size_t> rewrite_tag_indices;
   std::size_t end_tag_index{0};
   std::optional<std::size_t> terminator_tag_index;
-  bool terminator_moves_character{false};
 };
 
 bool is_placement_tag(std::uint16_t code) noexcept {
@@ -127,6 +128,11 @@ bool scan_lifetime(const std::vector<DepthEvent>& events, std::size_t start_tag,
       const auto target = active.find(event.depth);
       const bool effective = target != active.end() && removal_matches(event, target->second);
       if (!effective) {
+        if (started && ours && event.depth == source_depth) {
+          message = "a tag-five removal at the source depth names a different character, which the "
+                    "display replay erases anyway";
+          return false;
+        }
         continue;
       }
       active.erase(target);
@@ -172,9 +178,13 @@ bool scan_lifetime(const std::vector<DepthEvent>& events, std::size_t start_tag,
       out.rewrite_tag_indices.push_back(event.tag_index);
       continue;
     }
+    if (event.move) {
+      message = "the lifetime ends with a Move that takes a character at the source depth, which the "
+                "rewrite would leave referring to an empty depth";
+      return false;
+    }
     out.end_tag_index = event.tag_index;
     out.terminator_tag_index = event.tag_index;
-    out.terminator_moves_character = event.move;
     return true;
   }
   if (!started) {
@@ -185,30 +195,10 @@ bool scan_lifetime(const std::vector<DepthEvent>& events, std::size_t start_tag,
   return true;
 }
 
-// Constraint: a Move that takes a character inherits the visible state, so the replacement must restate it.
-bool validate_move_carry(const std::vector<SwfTag>& tags,
-                         const std::vector<std::size_t>& rewrite_tag_indices,
-                         const SwfPlacement& creating, std::size_t terminator_tag_index,
-                         std::string& message) {
-  if (terminator_tag_index >= tags.size()) {
-    message = "the replacement terminator tag index is out of range";
-    return false;
-  }
-  const SwfTag& terminator_tag = tags[terminator_tag_index];
-  if (terminator_tag.code != tag::kPlaceObject2) {
-    message = "the replacement uses PlaceObject state that is not fully modeled by the editor";
-    return false;
-  }
-  if (!terminator_tag.placement) {
-    message = "the replacement payload did not decode";
-    return false;
-  }
-  const SwfPlacement& terminator = *terminator_tag.placement;
-  if (terminator.has_clip_actions) {
-    message = "the replacement carries clip actions that the editor does not model";
-    return false;
-  }
-  for (const std::size_t index : rewrite_tag_indices) {
+// Constraint: a v1, v3 or clip-action tag leaves state the depth rewrite cannot restate.
+bool validate_lifetime_state(const std::vector<SwfTag>& tags, const LifetimeScan& lifetime,
+                             std::string& message) {
+  for (const std::size_t index : lifetime.rewrite_tag_indices) {
     if (index >= tags.size()) {
       message = "a lifetime tag index is out of range";
       return false;
@@ -222,42 +212,17 @@ bool validate_move_carry(const std::vector<SwfTag>& tags,
       message = "a lifetime PlaceObject version three is not fully modeled by the editor";
       return false;
     }
-    if (tag.code != tag::kPlaceObject2 || !tag.placement) {
-      continue;
-    }
-    const SwfPlacement& placement = *tag.placement;
-    if (placement.has_clip_actions) {
+    if (tag.code == tag::kPlaceObject2 && tag.placement && tag.placement->has_clip_actions) {
       message = "the object lifetime carries clip actions that the editor does not model";
       return false;
     }
-    if (placement.matrix && !terminator.matrix) {
-      message = "the replacement inherits the authored matrix state at the source depth";
-      return false;
-    }
-    if (placement.color_transform && !terminator.color_transform) {
-      message = "the replacement inherits the authored color-transform state at the source depth";
-      return false;
-    }
-    if (placement.ratio && !terminator.ratio) {
-      message = "the replacement inherits the authored ratio state at the source depth";
-      return false;
-    }
-    if (placement.name && !terminator.name) {
-      message = "the replacement inherits the authored instance name at the source depth";
-      return false;
-    }
-    if (placement.clip_depth && !terminator.clip_depth) {
-      message = "the replacement inherits the authored clip depth at the source depth";
-      return false;
-    }
   }
-  if (creating.name != terminator.name) {
-    message = "the replacement inherits the authored instance name at the source depth";
-    return false;
-  }
-  if (creating.clip_depth != terminator.clip_depth) {
-    message = "the replacement inherits the authored clip depth at the source depth";
-    return false;
+  if (lifetime.terminator_tag_index) {
+    const std::size_t index = *lifetime.terminator_tag_index;
+    if (index < tags.size() && tags[index].placement && tags[index].placement->has_clip_actions) {
+      message = "the replacement carries clip actions that the editor does not model";
+      return false;
+    }
   }
   return true;
 }
@@ -356,9 +321,7 @@ bool reassign_instance_depth(SwfFile& file, std::uint32_t root_frame, std::uint3
                      out.message)) {
     return false;
   }
-  if (lifetime.terminator_tag_index && lifetime.terminator_moves_character &&
-      !validate_move_carry(file.tags, lifetime.rewrite_tag_indices, creating,
-                           *lifetime.terminator_tag_index, out.message)) {
+  if (!validate_lifetime_state(file.tags, lifetime, out.message)) {
     return false;
   }
 
@@ -449,13 +412,33 @@ bool reassign_instance_depth(SwfFile& file, std::uint32_t root_frame, std::uint3
     out.message = "the tag plan was refused";
     return false;
   }
-  const auto preview_targets = build_instance_edit_targets(preview, root_frame);
-  const auto moved = std::find_if(preview_targets.begin(), preview_targets.end(),
-                                  [&](const SwfInstanceEditTarget& target) {
-                                    return !target.inside_sprite &&
-                                           target.create_tag_index == found->create_tag_index;
-                                  });
-  if (moved == preview_targets.end()) {
+  // Constraint: the proof must find the moved instance at the destination depth, not only its tag.
+  SwfDisplayOptions preview_options;
+  preview_options.record_placements = true;
+  const SwfDisplayList preview_display = build_display_list(preview, preview_options);
+  if (preview_display.status != SwfTimelineStatus::ok || preview_display.timelines.empty()) {
+    out.message = "the rewritten movie could not be displayed";
+    return false;
+  }
+  std::optional<std::uint32_t> moved_id;
+  for (const auto& placement : preview_display.placements) {
+    if (placement.frame == root_frame && !placement.inside_sprite &&
+        placement.create_tag_index == found->create_tag_index) {
+      moved_id = placement.instance_id;
+      break;
+    }
+  }
+  bool at_destination = false;
+  const auto& preview_frames = preview_display.timelines.front().frames;
+  if (moved_id && root_frame < preview_frames.size()) {
+    for (const auto& instance : preview_frames[root_frame].instances) {
+      if (instance.instance_id == *moved_id) {
+        at_destination = instance.depth == destination_depth;
+        break;
+      }
+    }
+  }
+  if (!at_destination) {
     out.message = "the reassigned object did not resolve at the destination depth after the rewrite";
     return false;
   }
@@ -465,7 +448,7 @@ bool reassign_instance_depth(SwfFile& file, std::uint32_t root_frame, std::uint3
     out.message = "the tag plan was refused";
     return false;
   }
-  out.new_instance_id = moved->instance_id;
+  out.new_instance_id = *moved_id;
   out.replaced_tag_indices.reserve(bodies.size());
   for (const auto& entry : bodies) {
     out.replaced_tag_indices.push_back(entry.first);

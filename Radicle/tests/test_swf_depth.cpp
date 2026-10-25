@@ -330,7 +330,8 @@ TEST(SwfDepthReassign, RenamesTheDepthAcrossTheLifetimeAndEveryFrame) {
 
   // Constraint: the matrix the lifetime authored must survive the move untouched.
   EXPECT_EQ(frames[1][0].transform.translate_x, 5.0);
-  EXPECT_EQ(file.tags.size(), 7u);  // Six authored tags plus End, so the rewrite added no tag.
+  // Invariant: the rewrite replaces authored tags only, so the tag count does not grow.
+  EXPECT_EQ(file.tags.size(), 7u);
 }
 
 TEST(SwfDepthReassign, SynthesizesOneRemovalAtTheDestination) {
@@ -348,7 +349,8 @@ TEST(SwfDepthReassign, SynthesizesOneRemovalAtTheDestination) {
   ASSERT_TRUE(fo4::swf::reassign_instance_depth(file, 0, hero->instance_id, 9, result))
       << result.message;
   ASSERT_EQ(result.inserted_tag_indices.size(), 1u);
-  ASSERT_EQ(file.tags.size(), 6u);  // Four authored tags plus End plus the synthesized removal.
+  // Invariant: the synthesized removal is the only tag the rewrite adds.
+  ASSERT_EQ(file.tags.size(), 6u);
 
   const auto frames = root_frames(file);
   ASSERT_GE(frames.size(), 2u);
@@ -367,54 +369,47 @@ TEST(SwfDepthReassign, SynthesizesOneRemovalAtTheDestination) {
   EXPECT_TRUE(other_found);
 }
 
-TEST(SwfDepthReassign, RejectsAMoveWithCharacterThatOmitsAnAuthoredMatrix) {
-  const auto source = movie_of({{26, place2(5, 9, "hero", Matrix{}, std::nullopt)},
-                                {1, {}},
-                                {26, move2_character(5, 12, std::nullopt, std::string_view{"hero"})},
-                                {1, {}}});
-  auto file = open(source);
+TEST(SwfDepthReassign, RejectsAMoveTerminatorThatTakesACharacter) {
+  // Constraint: nothing is live at the source after the rewrite, so such a Move cannot replay.
+  const std::vector<TagPayload> without_matrix{
+      {26, place2(5, 9, "hero", Matrix{}, std::nullopt)},
+      {1, {}},
+      {26, move2_character(5, 12, std::nullopt, std::string_view{"hero"})},
+      {1, {}}};
+  const std::vector<TagPayload> without_name{
+      {26, place2(5, 9, "hero", Matrix{}, std::nullopt)},
+      {1, {}},
+      {26, move2_character(5, 12, Matrix{}, std::nullopt)},
+      {1, {}}};
+  for (const auto& tags : {without_matrix, without_name}) {
+    const auto source = movie_of(tags);
+    auto file = open(source);
+    const auto targets = fo4::swf::build_instance_edit_targets(file, 0);
+    const auto* hero = find_target(targets, "hero");
+    ASSERT_NE(hero, nullptr);
 
-  const auto targets = fo4::swf::build_instance_edit_targets(file, 0);
-  const auto* hero = find_target(targets, "hero");
-  ASSERT_NE(hero, nullptr);
-
-  fo4::swf::SwfDepthReassignResult result;
-  EXPECT_FALSE(fo4::swf::reassign_instance_depth(file, 0, hero->instance_id, 9, result));
-  EXPECT_NE(result.message.find("inherits the authored matrix"), std::string::npos)
-      << result.message;
-  EXPECT_EQ(fo4::swf::write_swf(file), source);
-}
-
-TEST(SwfDepthReassign, RejectsAMoveWithCharacterThatOmitsAnAuthoredName) {
-  const auto source = movie_of({{26, place2(5, 9, "hero", Matrix{}, std::nullopt)},
-                                {1, {}},
-                                {26, move2_character(5, 12, Matrix{}, std::nullopt)},
-                                {1, {}}});
-  auto file = open(source);
-
-  const auto targets = fo4::swf::build_instance_edit_targets(file, 0);
-  const auto* hero = find_target(targets, "hero");
-  ASSERT_NE(hero, nullptr);
-
-  fo4::swf::SwfDepthReassignResult result;
-  EXPECT_FALSE(fo4::swf::reassign_instance_depth(file, 0, hero->instance_id, 9, result));
-  EXPECT_NE(result.message.find("inherits the authored instance name"), std::string::npos)
-      << result.message;
-  EXPECT_EQ(fo4::swf::write_swf(file), source);
+    fo4::swf::SwfDepthReassignResult result;
+    EXPECT_FALSE(fo4::swf::reassign_instance_depth(file, 0, hero->instance_id, 9, result));
+    EXPECT_NE(result.message.find("Move that takes a character"), std::string::npos)
+        << result.message;
+    EXPECT_EQ(fo4::swf::write_swf(file), source);
+  }
 }
 
 TEST(SwfDepthReassign, RejectsALifetimeOrTerminatorTheCarryRuleCannotModel) {
   // Constraint: a v1 or v3 lifetime tag and clip actions leave state the carry rule cannot restate.
   const std::vector<std::vector<TagPayload>> movies{
-      {{4, place1(9, 5, Matrix{})}, {1, {}}, {26, move2_character(5, 12, Matrix{}, std::nullopt)},
+      {{4, place1(9, 5, Matrix{})},
+       {1, {}},
+       {26, place2(5, 12, "other", Matrix{}, std::nullopt)},
        {1, {}}},
       {{70, place3(5, 9, "", Matrix{}, 7)},
        {1, {}},
-       {26, move2_character(5, 12, Matrix{}, std::nullopt)},
+       {26, place2(5, 12, "other", Matrix{}, std::nullopt)},
        {1, {}}},
       {{26, place2_clip_actions(5, 9, "hero")},
        {1, {}},
-       {26, move2_character(5, 12, Matrix{}, std::string_view{"hero"})},
+       {26, place2(5, 12, "other", Matrix{}, std::nullopt)},
        {1, {}}},
   };
   const std::vector<std::string> expected{"not fully modeled", "not fully modeled", "clip actions"};
@@ -436,28 +431,50 @@ TEST(SwfDepthReassign, RejectsASourceOrDestinationInsideAMaskRange) {
   // Constraint: a mask at depth 3 covers 4 to 6, so neither end may sit inside that range.
   const auto make = [](std::uint16_t source_depth) {
     return movie_of({{26, place2(3, 9, "mask", Matrix{}, static_cast<std::uint16_t>(6))},
-                     {1, {}},
                      {26, place2(source_depth, 11, "hero", Matrix{}, std::nullopt)},
                      {1, {}}});
   };
   {
-    auto file = open(make(5));
+    const auto source = make(5);
+    auto file = open(source);
     const auto targets = fo4::swf::build_instance_edit_targets(file, 0);
     const auto* hero = find_target(targets, "hero");
     ASSERT_NE(hero, nullptr);
     fo4::swf::SwfDepthReassignResult result;
     EXPECT_FALSE(fo4::swf::reassign_instance_depth(file, 0, hero->instance_id, 9, result));
     EXPECT_NE(result.message.find("mask"), std::string::npos) << result.message;
+    EXPECT_EQ(fo4::swf::write_swf(file), source);
   }
   {
-    auto file = open(make(9));
+    const auto source = make(9);
+    auto file = open(source);
     const auto targets = fo4::swf::build_instance_edit_targets(file, 0);
     const auto* hero = find_target(targets, "hero");
     ASSERT_NE(hero, nullptr);
     fo4::swf::SwfDepthReassignResult result;
     EXPECT_FALSE(fo4::swf::reassign_instance_depth(file, 0, hero->instance_id, 5, result));
     EXPECT_NE(result.message.find("mask"), std::string::npos) << result.message;
+    EXPECT_EQ(fo4::swf::write_swf(file), source);
   }
+}
+
+TEST(SwfDepthReassign, RejectsATagFiveRemovalOfAnotherCharacterAtTheSourceDepth) {
+  // Constraint: the scan ignores a mismatched tag-five removal but the display replay erases the depth.
+  const auto source = movie_of({{26, place2(5, 9, "hero", Matrix{}, std::nullopt)},
+                                {1, {}},
+                                {5, remove_object(12, 5)},
+                                {1, {}}});
+  auto file = open(source);
+
+  const auto targets = fo4::swf::build_instance_edit_targets(file, 0);
+  const auto* hero = find_target(targets, "hero");
+  ASSERT_NE(hero, nullptr);
+
+  fo4::swf::SwfDepthReassignResult result;
+  EXPECT_FALSE(fo4::swf::reassign_instance_depth(file, 0, hero->instance_id, 9, result));
+  EXPECT_NE(result.message.find("names a different character"), std::string::npos)
+      << result.message;
+  EXPECT_EQ(fo4::swf::write_swf(file), source);
 }
 
 TEST(SwfDepthReassign, RejectsAControlTagThatTargetsTheDestination) {
