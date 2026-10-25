@@ -201,6 +201,12 @@ RADICLE_API radicle_status radicle_pex_object_code_get(const radicle_pex* pex,
 
 RADICLE_API void radicle_pex_free_object_code(radicle_pex_object_code* code);
 
+/* Invariant: an opcode past the 47-entry table is refused, never given a synthesized name. */
+/* Requires radicle_free_bytes. */
+RADICLE_API radicle_status radicle_pex_opcode_name(uint8_t opcode,
+                                                   uint8_t** out_bytes,
+                                                   size_t* out_size);
+
 typedef enum radicle_pex_source_kind {
   RADICLE_PEX_SOURCE_ARCHIVE = 0,
   RADICLE_PEX_SOURCE_LOOSE = 1

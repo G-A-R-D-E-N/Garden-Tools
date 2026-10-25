@@ -2116,7 +2116,7 @@ public unsafe struct ScriptSetWinner
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 55u;
+    public const uint CompiledAbiVersion = 56u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -2633,6 +2633,9 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_free_object_code")]
     public static extern void PexFreeObjectCode(PexObjectCode* code);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_opcode_name")]
+    public static extern Status PexOpcodeName(byte opcode, byte** out_bytes, nuint* out_size);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_normalize_name")]
     public static extern Status ScriptNormalizeName(byte* bytes, nuint size, byte** out_bytes, nuint* out_size);
