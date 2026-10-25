@@ -344,7 +344,7 @@ TEST(FstsRows, EmptyCategoryListCreatesItsCounterOnTheFirstInsert) {
   // Constraint: a set with neither XCNT nor DATA must create the counter with its first link (regression: insertion_boundary_unavailable).
   auto plugin = fo4::read_plugin(footstep_plugin(false, {}), "Patch.esp");
   const auto record = fo4::FormKey::parse(k_key);
-  const auto walking = list("FSTS\WalkingFootsteps");
+  const auto walking = list("FSTS\\WalkingFootsteps");
 
   EXPECT_EQ(list_size(plugin, record, walking), std::size_t{0});
   EXPECT_TRUE(subrecord_bytes(plugin, record, fo4::Signature::from_string("XCNT")).empty());
@@ -380,7 +380,7 @@ TEST(FstsRows, CategoryAppendStopsAtTheListBoundary) {
   // Constraint: an append must stop at index == size and a refusal must not step a count word (regression: refused append still wrote XCNT).
   auto plugin = fo4::read_plugin(make_plugin({1, 2, 0, 1, 1}), "Patch.esp");
   const auto record = fo4::FormKey::parse(k_key);
-  const auto running = list("FSTS\RunningFootsteps");
+  const auto running = list("FSTS\\RunningFootsteps");
   const auto step = fo4::FormKey::parse("000815:Patch.esp");
 
   EXPECT_EQ(fo4::schema::insert_record_formlink_list_element(plugin, record, running, 2, step),
@@ -404,21 +404,21 @@ TEST(FstsRows, CategoryCountMismatchFailsClosedWithTheExactMessage) {
                                              {0x01000815, 0x01000814, 0x01000812, 0x01000813}),
                                  "Patch.esp");
   const auto record = fo4::FormKey::parse(k_key);
-  const auto walking = list("FSTS\WalkingFootsteps");
+  const auto walking = list("FSTS\\WalkingFootsteps");
   const auto step = fo4::FormKey::parse("000815:Patch.esp");
 
   EXPECT_EQ(thrown_message([&] { fo4::schema::record_formlink_list_size(plugin, record, walking); }),
-            "FSTS\WalkingFootsteps counters do not match the link array");
+            "FSTS\\WalkingFootsteps counters do not match the link array");
   EXPECT_EQ(thrown_message([&] { fo4::schema::record_formlink_list_values(plugin, record, walking); }),
-            "FSTS\WalkingFootsteps counters do not match the link array");
+            "FSTS\\WalkingFootsteps counters do not match the link array");
   EXPECT_EQ(thrown_message([&] {
               fo4::schema::insert_record_formlink_list_element(plugin, record, walking, 0, step);
             }),
-            "FSTS\WalkingFootsteps counters do not match the link array");
+            "FSTS\\WalkingFootsteps counters do not match the link array");
   EXPECT_EQ(thrown_message([&] {
               fo4::schema::remove_record_formlink_list_element(plugin, record, walking, 0);
             }),
-            "FSTS\WalkingFootsteps counters do not match the link array");
+            "FSTS\\WalkingFootsteps counters do not match the link array");
   EXPECT_EQ(subrecord_bytes(plugin, record, fo4::Signature::from_string("XCNT")),
             words({1, 2, 0, 1, 1}));
   EXPECT_EQ(subrecord_bytes(plugin, record, fo4::Signature::from_string("DATA")),
@@ -428,12 +428,12 @@ TEST(FstsRows, CategoryCountMismatchFailsClosedWithTheExactMessage) {
   EXPECT_EQ(thrown_message([&] {
               fo4::schema::record_formlink_list_size(short_counter, record, walking);
             }),
-            "FSTS\WalkingFootsteps counter subrecord has the wrong size");
+            "FSTS\\WalkingFootsteps counter subrecord has the wrong size");
   EXPECT_EQ(thrown_message([&] {
               fo4::schema::insert_record_formlink_list_element(short_counter, record, walking, 0,
                                                                step);
             }),
-            "FSTS\WalkingFootsteps counter subrecord has the wrong size");
+            "FSTS\\WalkingFootsteps counter subrecord has the wrong size");
   EXPECT_EQ(subrecord_bytes(short_counter, record, fo4::Signature::from_string("XCNT")),
             words({1, 2, 0}));
 }
@@ -443,15 +443,15 @@ TEST(FstsRows, CounterWordsAtTheRepresentableMaximumDoNotWrap) {
   auto plugin = fo4::read_plugin(
       footstep_plugin(true, {0xFFFFFFFFu, 1, 0, 0, 0}), "Patch.esp");
   const auto record = fo4::FormKey::parse(k_key);
-  const auto walking = list("FSTS\WalkingFootsteps");
+  const auto walking = list("FSTS\\WalkingFootsteps");
 
   EXPECT_EQ(thrown_message([&] { fo4::schema::record_formlink_list_size(plugin, record, walking); }),
-            "FSTS\WalkingFootsteps counters do not match the link array");
+            "FSTS\\WalkingFootsteps counters do not match the link array");
   EXPECT_EQ(thrown_message([&] {
               fo4::schema::insert_record_formlink_list_element(
                   plugin, record, walking, 0, fo4::FormKey::parse("000815:Patch.esp"));
             }),
-            "FSTS\WalkingFootsteps counters do not match the link array");
+            "FSTS\\WalkingFootsteps counters do not match the link array");
   EXPECT_EQ(subrecord_bytes(plugin, record, fo4::Signature::from_string("XCNT")),
             words({0xFFFFFFFFu, 1, 0, 0, 0}));
   EXPECT_TRUE(subrecord_bytes(plugin, record, fo4::Signature::from_string("DATA")).empty());
@@ -459,5 +459,5 @@ TEST(FstsRows, CounterWordsAtTheRepresentableMaximumDoNotWrap) {
   auto with_link = fo4::read_plugin(make_plugin({0xFFFFFFFFu, 1, 0, 0, 0}, {0x01000815}),
                                     "Patch.esp");
   EXPECT_EQ(thrown_message([&] { fo4::schema::record_formlink_list_size(with_link, record, walking); }),
-            "FSTS\WalkingFootsteps counters do not match the link array");
+            "FSTS\\WalkingFootsteps counters do not match the link array");
 }
