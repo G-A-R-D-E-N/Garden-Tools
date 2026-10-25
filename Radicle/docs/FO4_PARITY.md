@@ -117,7 +117,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | LAND | 9846 | - | - | - | - | - | - | - | environment/terrain | yes | - | L2 |
 | LAYR | 12400 | - | - | 1 | - | - | yes | - | environment/base_records | - | 1 | L4 |
 | LCRT | 6962 | 5 | - | - | - | - | yes | - | - | - | 1 | L4 |
-| LCTN | 8039 | 6 | - | 4 | - | 1 | yes | yes | - | yes | 1 | L4 |
+| LCTN | 8039 | 16 | - | 30 | - | 1 | yes | yes | - | yes | 1 | L4 |
 | LENS | 12405 | 12 | 2 | - | - | - | yes | - | - | - | 2 | L4 |
 | LGTM | 8629 | 81 | - | 1 | - | - | yes | - | environment/world | - | 1 | L4 |
 | LIGH | 9871 | 44 | 6 | 10 | - | 1 | yes | yes | environment/base_records | - | 3 | L4 |
@@ -270,7 +270,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | KYWD | 4 | - | 1 | - | 2 | u32, u8 | - | - | - | existing_only |
 | LAYR | - | - | - | - | - | - | - | - | - | existing_only |
 | LCRT | 4 | - | 1 | - | - | u32, u8 | - | - | - | existing_only |
-| LCTN | 6 | - | - | - | - | f32, u8 | - | - | - | existing_only |
+| LCTN | 14 | - | - | 2 | - | f32, i16, u8 | 3 | 33 | - | existing_only |
 | LENS | 11 | - | - | 1 | 2 | f32, u32 | 11 | - | - | existing_only |
 | LGTM | 81 | - | - | - | - | f32, i32, u8 | - | - | - | existing_only |
 | LIGH | 40 | 1 | - | 3 | 6 | f32, i16, i32, u32, u8 | 12 | 11 | - | existing_only |
