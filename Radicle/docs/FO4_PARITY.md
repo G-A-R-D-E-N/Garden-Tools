@@ -99,7 +99,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | GDRY | 12322 | 15 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | GLOB | 6921 | 2 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | GMST | 6936 | 3 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
-| GRAS | 9612 | 23 | 1 | 1 | - | - | yes | - | environment/vegetation | - | 1 | L4 |
+| GRAS | 9612 | 23 | 1 | 1 | - | - | yes | - | environment/vegetation | - | 2 | L4 |
 | HAZD | 7180 | 22 | 1 | 6 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
 | HDPT | 7006 | 10 | 2 | 4 | 1 | 1 | yes | - | - | - | 1 | L4 |
 | IDLE | 9646 | 5 | 3 | 2 | - | - | yes | - | environment/behavior | - | 2 | L4 |
@@ -122,7 +122,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | LGTM | 8629 | 81 | - | 1 | - | - | yes | - | environment/world | - | 1 | L4 |
 | LIGH | 9871 | 44 | 6 | 10 | - | 1 | yes | yes | environment/base_records | - | 3 | L4 |
 | LSCR | 9946 | 4 | 1 | 2 | - | 1 | yes | - | - | - | 1 | L4 |
-| LTEX | 9967 | 3 | - | 2 | 1 | - | yes | - | environment/terrain, environment/vegetation | - | 1 | L4 |
+| LTEX | 9967 | 3 | - | 2 | 1 | - | yes | - | environment/terrain, environment/vegetation | - | 2 | L4 |
 | LVLI | 10009 | 10 | - | 3 | - | 1 | yes | - | forms/leveled_list | yes | 1 | L4 |
 | LVLN | 9986 | 17 | 1 | 3 | - | - | yes | - | forms/leveled_list | yes | 1 | L4 |
 | LVSP | 10033 | 9 | - | - | - | 1 | yes | - | forms/leveled_list, forms/leveled_spell | - | 1 | L4 |
@@ -183,7 +183,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | TACT | 5672 | 24 | 3 | 7 | - | 1 | yes | yes | - | - | 1 | L4 |
 | TERM | 12671 | 29 | 7 | 7 | - | 7 | yes | yes | - | yes | 2 | L4 |
 | TES4 | 12091 | - | - | - | - | - | - | - | - | yes | 5 | L0 |
-| TREE | 12134 | 29 | 1 | 3 | - | 1 | yes | - | environment/vegetation | - | 1 | L4 |
+| TREE | 12134 | 29 | 1 | 3 | - | 1 | yes | - | environment/vegetation | - | 2 | L4 |
 | TRNS | 12774 | 9 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | TXST | 6984 | 19 | 9 | - | - | - | yes | - | environment/terrain | - | 2 | L4 |
 | VTYP | 7950 | 1 | - | - | - | - | yes | - | - | - | 1 | L4 |

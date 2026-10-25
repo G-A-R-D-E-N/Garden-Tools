@@ -55,6 +55,22 @@ TEST(RowRoundtripReal, TerminalRowsSurviveWriteAndReread) {
   row_roundtrip::roundtrip_family("TERM", Signature::from_string("TERM"));
 }
 
+TEST(RowRoundtripReal, GrasRowsSurviveWriteAndReread) {
+  row_roundtrip::roundtrip_family("GRAS", Signature::from_string("GRAS"));
+}
+
+TEST(RowRoundtripReal, TreeRowsSurviveWriteAndReread) {
+  row_roundtrip::roundtrip_family("TREE", Signature::from_string("TREE"));
+}
+
+TEST(RowRoundtripReal, FlorRowsSurviveWriteAndReread) {
+  row_roundtrip::roundtrip_family("FLOR", Signature::from_string("FLOR"));
+}
+
+TEST(RowRoundtripReal, LtexRowsSurviveWriteAndReread) {
+  row_roundtrip::roundtrip_family("LTEX", Signature::from_string("LTEX"));
+}
+
 TEST(RowRoundtripReal, ClimateRowsSurviveWriteAndReread) {
   row_roundtrip::roundtrip_family("CLMT", Signature::from_string("CLMT"));
 }
