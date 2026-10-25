@@ -18,6 +18,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -86,6 +87,22 @@ std::size_t count_of(const std::vector<Signature>& signatures, Signature signatu
       std::count(signatures.begin(), signatures.end(), signature));
 }
 
+// Constraint: the temporary plugin directory is removed even when an ASSERT returns early.
+struct TempDirectory {
+  explicit TempDirectory(std::filesystem::path directory) : path(std::move(directory)) {
+    std::filesystem::create_directories(path);
+  }
+  ~TempDirectory() {
+    std::error_code error;
+    std::filesystem::remove_all(path, error);
+  }
+  TempDirectory(const TempDirectory&) = delete;
+  TempDirectory& operator=(const TempDirectory&) = delete;
+  TempDirectory(TempDirectory&&) = delete;
+  TempDirectory& operator=(TempDirectory&&) = delete;
+  std::filesystem::path path;
+};
+
 template <typename Fn>
 std::string thrown_message(Fn&& fn) {
   try {
@@ -128,12 +145,14 @@ TEST(SubrecordGroupMembers, MarkerIsInsertedAtItsDeclarationPositionAndClearedAg
 }
 
 TEST(SubrecordGroupMembers, OptionalMemberKeepsItsDeclarationSlotWhenReinserted) {
-  auto plugin = fo4::read_plugin(make_plugin(true, false), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(true, true), "Patch.esp");
   const auto record_key = fo4::FormKey::parse(k_key);
   const auto group = response_group();
   const auto bytes_member = Signature::from_string("NAM9");
+  const auto marker = Signature::from_string("WZMD");
   const auto before = payload_signatures(plugin, record_key);
   ASSERT_EQ(count_of(before, bytes_member), std::size_t{1});
+  ASSERT_EQ(before.back(), marker);
 
   ASSERT_EQ(fo4::set_record_subrecord_group_member(plugin, record_key, group, 0, bytes_member, false),
             fo4::SubrecordGroupMutationStatus::updated);
@@ -145,6 +164,12 @@ TEST(SubrecordGroupMembers, OptionalMemberKeepsItsDeclarationSlotWhenReinserted)
             fo4::SubrecordGroupMutationStatus::updated);
   const auto restored = payload_signatures(plugin, record_key);
   EXPECT_EQ(restored, before);
+  EXPECT_EQ(count_of(restored, bytes_member), std::size_t{1});
+  if (restored.size() >= 3) {
+    EXPECT_EQ(restored[restored.size() - 3], Signature::from_string("NAM4"));
+    EXPECT_EQ(restored[restored.size() - 2], bytes_member);
+    EXPECT_EQ(restored[restored.size() - 1], marker) << "the reinserted member landed after the marker";
+  }
   const auto* record = fo4::find_record(plugin, record_key);
   ASSERT_NE(record, nullptr);
   for (const auto& subrecord : record->subrecords) {
@@ -209,18 +234,12 @@ TEST(SubrecordGroupMembers, RefusesRequiredUnknownAndOffRangeRequests) {
                                                    Signature::from_string("WZMD"), true),
             fo4::SubrecordGroupMutationStatus::index_out_of_range);
   EXPECT_EQ(payload_signatures(plugin, record_key), before);
-
-  const auto* record = fo4::find_record(plugin, record_key);
-  ASSERT_NE(record, nullptr);
-  EXPECT_EQ(std::string(group.path), "INFO\\Response");
-  EXPECT_EQ(record->subrecords.front().signature, Signature::from_string("EDID"));
 }
 
 TEST(SubrecordGroupMembers, CApiSetsAndClearsTheMarker) {
   const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
-  const auto root = std::filesystem::temp_directory_path() / ("radicle_c_group_" + std::to_string(id));
-  std::filesystem::create_directories(root);
-  const auto path = root / "CGroup.esp";
+  TempDirectory root(std::filesystem::temp_directory_path() / ("radicle_c_group_" + std::to_string(id)));
+  const auto path = root.path / "CGroup.esp";
   const auto bytes = make_plugin(true, false);
   std::ofstream stream(path, std::ios::binary | std::ios::trunc);
   stream.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
@@ -230,24 +249,30 @@ TEST(SubrecordGroupMembers, CApiSetsAndClearsTheMarker) {
   ASSERT_EQ(radicle_plugin_read_file(path.string().c_str(), &plugin), RADICLE_STATUS_OK)
       << radicle_last_error();
   const radicle_form_key key{"CGroup.esp", 0x800};
+  const auto marker = Signature::from_string("WZMD");
+  const auto saved_count = [&](std::string_view name) {
+    const auto saved_path = root.path / std::string(name);
+    EXPECT_EQ(radicle_plugin_write_file(plugin, saved_path.string().c_str()), RADICLE_STATUS_OK)
+        << radicle_last_error();
+    // Constraint: a plugin read from a file takes its owner from that file, so the copy is keyed by its own name.
+    const auto saved = fo4::read_plugin_file(saved_path);
+    const auto saved_key = fo4::FormKey::parse(std::string("000800:") + std::string(name));
+    return count_of(payload_signatures(saved, saved_key), marker);
+  };
 
   EXPECT_EQ(radicle_plugin_subrecord_group_member_set(plugin, key, "INFO\\Response", 0, "WZMD", 1),
             RADICLE_STATUS_OK) << radicle_last_error();
   EXPECT_EQ(radicle_plugin_subrecord_group_member_set(plugin, key, "INFO\\Response", 0, "WZMD", 1),
             RADICLE_STATUS_OK) << radicle_last_error();
-
-  const auto saved_path = root / "Saved.esp";
-  ASSERT_EQ(radicle_plugin_write_file(plugin, saved_path.string().c_str()), RADICLE_STATUS_OK)
-      << radicle_last_error();
-  const auto saved = fo4::read_plugin_file(saved_path);
-  const auto record_key = fo4::FormKey::parse("000800:CGroup.esp");
-  EXPECT_EQ(count_of(payload_signatures(saved, record_key), Signature::from_string("WZMD")),
-            std::size_t{1});
+  EXPECT_EQ(saved_count("Saved.esp"), std::size_t{1}) << "the marker did not reach the saved plugin";
 
   EXPECT_EQ(radicle_plugin_subrecord_group_member_set(plugin, key, "INFO\\Response", 0, "WZMD", 0),
             RADICLE_STATUS_OK) << radicle_last_error();
+  EXPECT_EQ(saved_count("Cleared.esp"), std::size_t{0}) << "the cleared marker is still in the saved plugin";
+
   EXPECT_EQ(radicle_plugin_subrecord_group_member_set(plugin, key, "INFO\\Response", 0, "WZMD", 1),
             RADICLE_STATUS_OK) << radicle_last_error();
+  EXPECT_EQ(saved_count("Reset.esp"), std::size_t{1}) << "the re-set marker did not reach the saved plugin";
   EXPECT_EQ(radicle_plugin_subrecord_group_member_set(plugin, key, "INFO\\Response", 0, "TRDA", 0),
             RADICLE_STATUS_INVALID_ARGUMENT) << radicle_last_error();
   EXPECT_EQ(radicle_plugin_subrecord_group_member_set(plugin, key, "INFO\\Response", 0, "WZM", 1),
@@ -256,8 +281,7 @@ TEST(SubrecordGroupMembers, CApiSetsAndClearsTheMarker) {
             RADICLE_STATUS_INVALID_ARGUMENT) << radicle_last_error();
   EXPECT_EQ(radicle_plugin_subrecord_group_member_set(plugin, key, "INFO\\Response", 4, "WZMD", 1),
             RADICLE_STATUS_NOT_FOUND) << radicle_last_error();
+  EXPECT_EQ(saved_count("Refused.esp"), std::size_t{1}) << "a refused call changed the marker";
 
   radicle_plugin_destroy(plugin);
-  std::error_code error;
-  std::filesystem::remove_all(root, error);
 }

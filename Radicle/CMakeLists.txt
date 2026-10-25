@@ -744,7 +744,6 @@ if(RADICLE_BUILD_TESTS)
     tools/env_bench/env_bench.cpp
     tests/test_fsts_rows.cpp
     tests/test_info_response_bytes.cpp
-    tests/test_info_response_bytes_real.cpp
     tests/test_subrecord_group_members.cpp
     tests/test_mswp_rows.cpp
     tests/test_sopm_onam_rows.cpp

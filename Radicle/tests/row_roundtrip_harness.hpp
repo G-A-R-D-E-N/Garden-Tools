@@ -13,7 +13,9 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <exception>
 #include <filesystem>
 #include <iostream>
@@ -133,7 +135,12 @@ inline bool inside_bounds(const ScalarFieldDescriptor& field, const std::string&
 struct Tally {
   std::size_t rows = 0;
   std::size_t exercised = 0;
-  std::size_t skipped = 0;
+  std::size_t whole_payload = 0;
+  std::size_t derived = 0;
+  std::size_t absent = 0;
+  std::size_t unresolved = 0;
+  std::size_t shared = 0;
+  std::size_t no_candidate = 0;
 };
 
 // Constraint: every skip is logged with its reason so a family that stops proving a row is visible in the log.
@@ -152,67 +159,98 @@ inline void roundtrip_family(const char* family, Signature signature) {
   const auto plugin = fo4::read_plugin_file(path);
   const auto rows = fo4::schema::scalar_fields(signature);
   ASSERT_FALSE(rows.empty()) << family;
-
-  std::optional<fo4::FormKey> chosen;
+  std::vector<fo4::FormKey> keys;
   fo4::visit_records(plugin, [&](const fo4::Record& record) {
-    if (chosen.has_value() || record.header.signature != signature) return;
-    for (const auto& field : rows) {
-      const auto count = fo4::record_field_count(plugin, record.form_key, field);
-      if (count && *count > 0) {
-        chosen = record.form_key;
-        return;
-      }
-    }
+    if (record.header.signature == signature) keys.push_back(record.form_key);
   });
-  ASSERT_TRUE(chosen.has_value()) << family << " has no record carrying one of its rows";
-  const auto key = *chosen;
-  auto edited = fo4::read_plugin_file(path);
-  const auto* live = fo4::find_record(edited, key);
-  ASSERT_NE(live, nullptr) << key.to_string();
-  const auto before = snapshot(*live);
+  ASSERT_FALSE(keys.empty()) << family << " has no record of its signature";
 
+  auto edited = fo4::read_plugin_file(path);
   Tally tally;
   struct EditedRow {
     ScalarFieldDescriptor field;
+    fo4::FormKey key;
     std::string expected;
   };
+  struct EditedRecord {
+    fo4::FormKey key;
+    std::vector<SubrecordBytes> before;
+    std::vector<EditedSpan> spans;
+  };
   std::vector<EditedRow> edited_rows;
-  std::vector<EditedSpan> edited_spans;
+  std::vector<EditedRecord> edited_records;
+  std::size_t carried = 0;
   for (const auto& field : rows) {
     ++tally.rows;
     if (field.scalar.storage == ScalarStorage::zstring ||
         field.scalar.storage == ScalarStorage::fixed_string ||
         field.scalar.storage == ScalarStorage::bytes) {
-      ++tally.skipped;
-      skip_note(family, field.path, "whole-payload storage has its own round-trip test");
+      ++tally.whole_payload;
+      skip_note(family, field.path,
+                "whole-payload row cannot prove a resize here; EDID and INFO NAM9 have their own entries");
       continue;
     }
-    const auto count = fo4::record_field_count(edited, key, field);
-    if (!count || *count == 0) {
-      ++tally.skipped;
-      skip_note(family, field.path, "row absent from the chosen record");
-      continue;
-    }
-    const auto* current = fo4::find_record(edited, key);
-    ASSERT_NE(current, nullptr);
-    const auto slot = slot_of(*current, field, 0);
-    if (!slot.has_value()) {
-      ++tally.skipped;
-      skip_note(family, field.path, "row does not resolve a slot here");
-      continue;
-    }
-    const EditedSpan span{slot->subrecord, slot->offset, row_width(*current, field, *slot), field.path};
-    const auto shared = std::find_if(edited_spans.begin(), edited_spans.end(),
-                                     [&](const EditedSpan& taken) { return overlaps(taken, span); });
-    if (shared != edited_spans.end()) {
-      ++tally.skipped;
-      skip_note(family, field.path, "bytes already written by an earlier row");
+    // Constraint: a derived count row is owned by the list that writes it, and set_record_scalar refuses it.
+    if (fo4::schema::is_derived_scalar_row(field.record, field.scalar.subrecord)) {
+      ++tally.derived;
+      skip_note(family, field.path, "derived count row, written by its list");
       continue;
     }
 
+    // Constraint: a row runs on any record that carries it, so a record is not fixed before the rows are seen.
+    std::optional<fo4::FormKey> chosen;
+    std::optional<EditedSpan> chosen_span;
+    bool row_carried = false, row_resolved = false;
+    for (const auto& key : keys) {
+      const auto count = fo4::record_field_count(edited, key, field);
+      if (!count || *count == 0) continue;
+      row_carried = true;
+      const auto* current = fo4::find_record(edited, key);
+      ASSERT_NE(current, nullptr);
+      const auto candidate_slot = slot_of(*current, field, 0);
+      if (!candidate_slot.has_value()) continue;
+      row_resolved = true;
+      const EditedSpan span{candidate_slot->subrecord, candidate_slot->offset,
+                            row_width(*current, field, *candidate_slot), field.path};
+      const auto taken = std::find_if(
+          edited_records.begin(), edited_records.end(),
+          [&](const EditedRecord& record) {
+            if (record.key != key) return false;
+            return std::any_of(record.spans.begin(), record.spans.end(),
+                               [&](const EditedSpan& earlier) { return overlaps(earlier, span); });
+          });
+      if (taken != edited_records.end()) continue;
+      chosen = key;
+      chosen_span = span;
+      break;
+    }
+    if (!row_carried) {
+      ++tally.absent;
+      skip_note(family, field.path, "no record carries the row");
+      continue;
+    }
+    ++carried;
+    if (!chosen.has_value()) {
+      ++tally.unresolved;
+      skip_note(family, field.path,
+                row_resolved ? "bytes already written by an earlier row on every record carrying it"
+                             : "row resolves no slot on the records carrying it");
+      continue;
+    }
+    const auto key = *chosen;
+    const auto span = *chosen_span;
+    auto record = std::find_if(edited_records.begin(), edited_records.end(),
+                               [&](const EditedRecord& candidate) { return candidate.key == key; });
+    if (record == edited_records.end()) {
+      const auto* live = fo4::find_record(edited, key);
+      ASSERT_NE(live, nullptr);
+      edited_records.push_back({key, snapshot(*live), {}});
+      record = edited_records.end() - 1;
+    }
+    const auto* current = fo4::find_record(edited, key);
+    ASSERT_NE(current, nullptr);
     const auto original = decode_row(*current, field);
-    std::string applied;
-    std::string decoded;
+    std::string applied, decoded;
     for (const auto& candidate : candidates(field)) {
       if (!inside_bounds(field, candidate) || candidate == original) continue;
       if (fo4::set_record_scalar(edited, key, field, 0, candidate) !=
@@ -232,61 +270,114 @@ inline void roundtrip_family(const char* family, Signature signature) {
           << family << " could not revert a rejected candidate for " << field.path;
     }
     if (applied.empty()) {
-      ++tally.skipped;
+      ++tally.no_candidate;
       skip_note(family, field.path, "no candidate decodes to a new value");
       continue;
     }
-    edited_spans.push_back(span);
-    edited_rows.push_back({field, decoded});
+    // Constraint: the write must move the bytes at the subrecord and offset the descriptor declares.
+    const auto* probe = fo4::find_record(edited, key);
+    ASSERT_NE(probe, nullptr);
+    ASSERT_LT(span.subrecord, probe->subrecords.size());
+    const auto& payload = probe->subrecords[span.subrecord].data;
+    EXPECT_EQ(probe->subrecords[span.subrecord].signature, field.scalar.subrecord) << field.path;
+    const auto encoded = fo4::schema::encode_scalar(applied, field.scalar);
+    ASSERT_LE(span.offset + encoded.size(), payload.size()) << field.path;
+    EXPECT_TRUE(std::equal(encoded.begin(), encoded.end(),
+                           payload.begin() + static_cast<std::ptrdiff_t>(span.offset)))
+        << family << " wrote " << field.path << " off its declared slot";
+    if (field.scalar.address.stride == 0 && field.scalar.address.array_offset == 0 &&
+        field.scalar.address.segment.count == 0) {
+      EXPECT_EQ(span.offset, field.scalar.offset) << family << " " << field.path;
+    }
+    record->spans.push_back(span);
+    edited_rows.push_back({field, key, decoded});
     ++tally.exercised;
   }
 
   ASSERT_GT(tally.exercised, 0u) << family << " exercised no row";
-  const auto* written = fo4::find_record(edited, key);
-  ASSERT_NE(written, nullptr);
-  const auto after_edit = snapshot(*written);
-  ASSERT_EQ(before.size(), after_edit.size())
-      << family << " changed the record's subrecord count, so a scalar write is not what ran";
-  EXPECT_FALSE(same_record(before, *written))
-      << family << " wrote nothing to the record";
+  EXPECT_EQ(tally.unresolved, 0u) << family << " has a carried row that resolves no slot";
+  // Constraint: a carried row is either edited or skipped for a reason the harness cannot avoid, so none vanishes.
+  EXPECT_EQ(tally.exercised + tally.shared + tally.unresolved + tally.no_candidate, carried)
+      << family << " dropped a carried row without a reason";
+  EXPECT_EQ(tally.rows, carried + tally.absent + tally.derived + tally.whole_payload)
+      << family << " counted rows do not add up";
+  // Constraint: a carried row is never skipped for bytes an earlier row wrote, so the record choice must free it.
+  EXPECT_EQ(tally.shared, 0u) << family << " skipped a carried row whose bytes an earlier row had written";
 
   const auto bytes = fo4::write_plugin(edited);
   const auto reread = fo4::read_plugin(bytes, path);
-  const auto* restored = fo4::find_record(reread, key);
-  ASSERT_NE(restored, nullptr) << key.to_string();
-  EXPECT_TRUE(same_record(after_edit, *restored))
-      << family << " did not re-read the edited record byte for byte";
-
-  for (const auto& row : edited_rows) {
-    EXPECT_EQ(decode_row(*restored, row.field), row.expected)
-        << family << " lost " << row.field.path << " across the write";
-  }
-  EXPECT_EQ(edited_rows.size(), tally.exercised) << family;
-
-  std::size_t changed = 0;
-  for (std::size_t index = 0; index < before.size(); ++index) {
-    if (before[index].signature != after_edit[index].signature) {
-      ++changed;
-      continue;
+  for (const auto& record : edited_records) {
+    const auto* written = fo4::find_record(edited, record.key);
+    ASSERT_NE(written, nullptr) << record.key.to_string();
+    const auto after_edit = snapshot(*written);
+    ASSERT_EQ(record.before.size(), after_edit.size())
+        << family << " changed the subrecord count of " << record.key.to_string();
+    EXPECT_FALSE(same_record(record.before, *written))
+        << family << " wrote nothing to " << record.key.to_string();
+    const auto* restored = fo4::find_record(reread, record.key);
+    ASSERT_NE(restored, nullptr) << record.key.to_string();
+    EXPECT_TRUE(same_record(after_edit, *restored))
+        << family << " did not re-read " << record.key.to_string() << " byte for byte";
+    std::size_t changed = 0;
+    for (std::size_t index = 0; index < record.before.size(); ++index) {
+      if (record.before[index].signature != after_edit[index].signature ||
+          record.before[index].data != after_edit[index].data) {
+        ++changed;
+      }
+      if (record.before[index].data == after_edit[index].data) continue;
+      bool named = false;
+      for (const auto& row : edited_rows) {
+        if (row.key == record.key && row.field.scalar.subrecord == record.before[index].signature) {
+          named = true;
+        }
+      }
+      EXPECT_TRUE(named) << family << " changed " << record.before[index].signature.to_string()
+                         << " on " << record.key.to_string() << " which no edited row names";
     }
-    if (before[index].data == after_edit[index].data) continue;
-    ++changed;
-    bool named = false;
+    EXPECT_GE(changed, 1u) << family;
     for (const auto& row : edited_rows) {
-      if (row.field.scalar.subrecord == before[index].signature) named = true;
-    }
-    EXPECT_TRUE(named) << family << " changed " << before[index].signature.to_string()
-                       << " which no edited row names";
-  }
-  std::vector<Signature> distinct;
-  for (const auto& row : edited_rows) {
-    if (std::find(distinct.begin(), distinct.end(), row.field.scalar.subrecord) == distinct.end()) {
-      distinct.push_back(row.field.scalar.subrecord);
+      if (row.key != record.key) continue;
+      EXPECT_EQ(decode_row(*restored, row.field), row.expected)
+          << family << " lost " << row.field.path << " across the write";
     }
   }
-  EXPECT_GE(changed, 1u) << family;
-  EXPECT_LE(changed, distinct.size())
-      << family << " changed more subrecords than the distinct subrecords its rows name";
+}
+
+inline std::string_view link_status_name(fo4::FormLinkFieldMutationStatus status) {
+  switch (status) {
+    case fo4::FormLinkFieldMutationStatus::updated: return "updated";
+    case fo4::FormLinkFieldMutationStatus::unchanged: return "unchanged";
+    case fo4::FormLinkFieldMutationStatus::record_missing: return "record_missing";
+    case fo4::FormLinkFieldMutationStatus::record_mismatch: return "record_mismatch";
+    case fo4::FormLinkFieldMutationStatus::subrecord_missing: return "subrecord_missing";
+  }
+  return "unknown";
+}
+
+// Constraint: a link slot is read back through the shape the setter writes, so a setter that reports updated without moving the bytes is visible.
+inline std::optional<std::uint32_t> formlink_slot_raw(
+    const fo4::Record& record,
+    const fo4::schema::FormLinkFieldDescriptor& field,
+    std::size_t index) {
+  fo4::schema::FieldShape shape;
+  shape.subrecord = field.subrecord;
+  shape.offset = field.offset;
+  shape.width = sizeof(std::uint32_t);
+  shape.min_form_version = field.min_form_version;
+  shape.max_form_version = field.max_form_version;
+  const auto resolved = fo4::schema::resolve_field_slots(record, shape, field.address);
+  if (resolved.duplicate || resolved.malformed || index >= resolved.slots.size()) {
+    return std::nullopt;
+  }
+  const auto slot = resolved.slots[index];
+  if (!slot.valid || slot.misfit || slot.subrecord >= record.subrecords.size()) {
+    return std::nullopt;
+  }
+  const auto& data = record.subrecords[slot.subrecord].data;
+  if (slot.offset + sizeof(std::uint32_t) > data.size()) return std::nullopt;
+  std::uint32_t raw = 0;
+  std::memcpy(&raw, data.data() + slot.offset, sizeof(raw));
+  return raw;
 }
 
 inline void roundtrip_links(const char* family, Signature signature) {
@@ -337,30 +428,50 @@ inline void roundtrip_links(const char* family, Signature signature) {
   const auto before = snapshot(*live);
 
   std::size_t exercised = 0;
+  std::size_t skipped = 0;
+  std::size_t admitted = 0;
   std::vector<Signature> distinct;
+  std::vector<fo4::schema::FormLinkFieldDescriptor> written;
+  const auto expected_raw =
+      fo4::encode_plugin_form_id(*target, fo4::plugin_form_id_context(edited)).value();
   for (const auto& field : rows) {
     if (!fo4::schema::formlink_field_target_allowed(field, target_signature)) continue;
     const auto count = fo4::record_field_count(edited, key, field);
     if (!count || *count == 0) continue;
+    ++admitted;
     const auto* current = fo4::find_record(edited, key);
     ASSERT_NE(current, nullptr);
     const auto prior = snapshot(*current);
-    if (fo4::set_record_formlink_field(edited, key, field, 0, *target) !=
-        fo4::FormLinkFieldMutationStatus::updated) {
+    const auto status = fo4::set_record_formlink_field(edited, key, field, 0, *target);
+    if (status != fo4::FormLinkFieldMutationStatus::updated) {
+      ++skipped;
+      skip_note(family, field.path,
+                std::string("link setter reported ") + std::string(link_status_name(status)));
       continue;
     }
     const auto* probe = fo4::find_record(edited, key);
     ASSERT_NE(probe, nullptr);
-    if (same_record(prior, *probe)) continue;
+    if (same_record(prior, *probe)) {
+      ++skipped;
+      skip_note(family, field.path, "link setter reported updated but left the bytes alone");
+      continue;
+    }
+    const auto raw = formlink_slot_raw(*probe, field, 0);
+    ASSERT_TRUE(raw.has_value()) << family << " cannot read back " << field.path;
+    EXPECT_EQ(*raw, expected_raw)
+        << family << " wrote a " << field.path << " that does not decode to its target";
     if (std::find(distinct.begin(), distinct.end(), field.subrecord) == distinct.end()) {
       distinct.push_back(field.subrecord);
     }
+    written.push_back(field);
     ++exercised;
   }
   ASSERT_GT(exercised, 0u) << family << " wrote no link";
-  const auto* written = fo4::find_record(edited, key);
-  ASSERT_NE(written, nullptr);
-  const auto after_edit = snapshot(*written);
+  // Constraint: an admitted link row is either written or skipped for a named reason, so none can vanish.
+  EXPECT_EQ(exercised + skipped, admitted) << family << " dropped an admitted link row without a reason";
+  const auto* final_record = fo4::find_record(edited, key);
+  ASSERT_NE(final_record, nullptr);
+  const auto after_edit = snapshot(*final_record);
   ASSERT_EQ(before.size(), after_edit.size())
       << family << " changed the record's subrecord count, so a link write is not what ran";
   const auto bytes = fo4::write_plugin(edited);
@@ -369,6 +480,14 @@ inline void roundtrip_links(const char* family, Signature signature) {
   ASSERT_NE(restored, nullptr) << key.to_string();
   EXPECT_TRUE(same_record(after_edit, *restored))
       << family << " did not re-read the edited link byte for byte";
+  const auto reread_raw =
+      fo4::encode_plugin_form_id(*target, fo4::plugin_form_id_context(reread)).value();
+  for (const auto& field : written) {
+    const auto raw = formlink_slot_raw(*restored, field, 0);
+    ASSERT_TRUE(raw.has_value()) << family << " lost " << field.path << " across the write";
+    EXPECT_EQ(*raw, reread_raw)
+        << family << " re-read " << field.path << " as something other than its target";
+  }
   std::size_t changed = 0;
   for (std::size_t index = 0; index < before.size(); ++index) {
     if (before[index].signature != after_edit[index].signature ||
@@ -418,9 +537,9 @@ inline void roundtrip_lists(const char* family,
       return;
     }
   });
-  if (!chosen.has_value()) {
-    GTEST_SKIP() << family << " has no record with two distinct values in one of its lists";
-  }
+  // Constraint: an official master must carry a record whose list holds two distinct links, so a missing one fails instead of skipping.
+  ASSERT_TRUE(chosen.has_value())
+      << family << " has no record with two distinct values in one of its lists";
   const auto key = *chosen;
   auto edited = fo4::read_plugin_file(path);
   const auto* live = fo4::find_record(edited, key);
@@ -557,9 +676,9 @@ inline void roundtrip_strings(const char* family, Signature signature) {
     if (decode_row(record, *editor).size() < 3) return;
     chosen = record.form_key;
   });
-  if (!chosen.has_value()) {
-    GTEST_SKIP() << family << " has no record with an editor ID of at least three characters";
-  }
+  // Constraint: an official master must carry a record with a long enough editor ID, so a missing one fails instead of skipping.
+  ASSERT_TRUE(chosen.has_value())
+      << family << " has no record with an editor ID of at least three characters";
   const auto key = *chosen;
 
   auto edited = fo4::read_plugin_file(path);

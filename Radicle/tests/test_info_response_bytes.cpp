@@ -18,6 +18,7 @@
 namespace {
 
 using Bytes = std::vector<std::byte>;
+using fo4::Signature;
 using fo4::test::ByteWriter;
 
 constexpr std::string_view k_key = "000800:Patch.esp";
@@ -84,6 +85,28 @@ std::string nam9_message(const fo4::Plugin& plugin, const fo4::FormKey& record_k
     return fo4::schema::decode_scalar(subrecord.data, row().scalar);
   }
   return {};
+}
+
+std::optional<Bytes> subrecord_payload(const fo4::Plugin& plugin,
+                                      const fo4::FormKey& record_key,
+                                      Signature signature) {
+  const auto* record = fo4::find_record(plugin, record_key);
+  EXPECT_NE(record, nullptr);
+  if (record == nullptr) return std::nullopt;
+  for (const auto& subrecord : record->subrecords) {
+    if (subrecord.signature == signature) return subrecord.data;
+  }
+  return std::nullopt;
+}
+
+std::vector<Signature> subrecord_signatures(const fo4::Plugin& plugin,
+                                           const fo4::FormKey& record_key) {
+  std::vector<Signature> out;
+  const auto* record = fo4::find_record(plugin, record_key);
+  EXPECT_NE(record, nullptr);
+  if (record == nullptr) return out;
+  for (const auto& subrecord : record->subrecords) out.push_back(subrecord.signature);
+  return out;
 }
 
 template <typename Fn>
@@ -166,24 +189,37 @@ TEST(InfoResponseBytes, SetKeepsTheResponseShapeAndTheMarkerIntact) {
   auto plugin = fo4::read_plugin(make_plugin({}), "Patch.esp");
   const auto record_key = fo4::FormKey::parse(k_key);
   const auto field = row();
+  const auto trda = Signature::from_string("TRDA");
+  const auto nam9 = Signature::from_string("NAM9");
 
   ASSERT_EQ(fo4::set_record_scalar(plugin, record_key, field, 0, "cafebabe"),
             fo4::ScalarMutationStatus::updated);
-  const auto* record = fo4::find_record(plugin, record_key);
-  ASSERT_NE(record, nullptr);
-  bool marker = false;
-  for (const auto& subrecord : record->subrecords) {
-    if (subrecord.signature != fo4::Signature::from_string("WZMD")) continue;
-    marker = true;
-    EXPECT_TRUE(subrecord.data.empty());
-  }
-  EXPECT_TRUE(marker);
+  const std::vector<Signature> shape{Signature::from_string("EDID"), trda,
+                                     Signature::from_string("NAM1"),
+                                     Signature::from_string("NAM2"),
+                                     Signature::from_string("NAM3"),
+                                     Signature::from_string("NAM4"), nam9,
+                                     Signature::from_string("WZMD")};
+  EXPECT_EQ(subrecord_signatures(plugin, record_key), shape)
+      << "the NAM9 write changed the response's member order";
+  const auto prefix = subrecord_payload(plugin, record_key, trda);
+  ASSERT_TRUE(prefix.has_value()) << "the NAM9 write dropped the TRDA prefix";
+  EXPECT_EQ(*prefix, response(1)) << "the NAM9 write changed the TRDA prefix bytes";
+  const auto marker = subrecord_payload(plugin, record_key, Signature::from_string("WZMD"));
+  ASSERT_TRUE(marker.has_value()) << "the NAM9 write dropped the zero-byte WZMD marker";
+  EXPECT_TRUE(marker->empty()) << "the zero-byte WZMD marker gained a payload";
+  EXPECT_EQ(subrecord_payload(plugin, record_key, nam9), std::optional<Bytes>{Bytes{std::byte{0xCA},
+                                                                                    std::byte{0xFE},
+                                                                                    std::byte{0xBA},
+                                                                                    std::byte{0xBE}}});
 
   const auto number = fo4::schema::scalar_field_descriptor(
-      fo4::Signature::from_string("INFO"), "INFO\\ResponseNumber");
+      Signature::from_string("INFO"), "INFO\\ResponseNumber");
   ASSERT_TRUE(number.has_value());
   EXPECT_EQ(fo4::record_field_count(plugin, record_key, *number), std::optional<std::size_t>{1});
   EXPECT_EQ(fo4::set_record_scalar(plugin, record_key, *number, 0, "2"),
             fo4::ScalarMutationStatus::updated);
   EXPECT_EQ(nam9_message(plugin, record_key), "cafebabe");
+  EXPECT_EQ(subrecord_signatures(plugin, record_key), shape)
+      << "a response-number write changed the member order after a NAM9 write";
 }
