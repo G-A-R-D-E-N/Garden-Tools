@@ -114,10 +114,9 @@ std::vector<std::byte> sprite_movie() {
   sprite.tag(0);
 
   SwfBuilder place;
-  place.u8(0x06);
+  place.u8(0x02);
   place.u16(1);
   place.u16(7);
-  place.text("Holder");
 
   SwfBuilder body;
   body.rect(0, 11000, 0, 8000, 15);
