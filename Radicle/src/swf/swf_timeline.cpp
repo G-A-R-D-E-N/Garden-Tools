@@ -31,6 +31,15 @@ bool is_image_code(std::uint16_t code) {
          code == tag::kDefineBitsLossless || code == tag::kDefineBitsLossless2;
 }
 
+std::optional<std::uint16_t> leading_character_id(const SwfTag& tag) {
+  detail::SwfReader reader(tag.payload, 0);
+  std::uint16_t value = 0;
+  if (!reader.read_u16(value)) {
+    return std::nullopt;
+  }
+  return value;
+}
+
 std::string character_kind(std::uint16_t code) {
   if (is_shape_code(code)) {
     return "shape";
@@ -85,22 +94,73 @@ std::string clean_text(std::string_view value) {
   return out;
 }
 
+void append_u_escape(std::string& out, std::uint32_t code_point) {
+  constexpr char digits[] = "0123456789ABCDEF";
+  out += "\\u";
+  out.push_back(digits[(code_point >> 12) & 0xFu]);
+  out.push_back(digits[(code_point >> 8) & 0xFu]);
+  out.push_back(digits[(code_point >> 4) & 0xFu]);
+  out.push_back(digits[code_point & 0xFu]);
+}
+
+bool escapes_as_u(std::uint32_t code_point) {
+  return code_point == 0x26u || code_point == 0x27u || code_point == 0x2Bu ||
+         code_point == 0x3Cu || code_point == 0x3Eu;
+}
+
 std::string quote_text(std::string_view value) {
   std::string out;
   out.push_back('"');
-  for (const char ch : value) {
-    if (ch == '\\') {
-      out += "\\\\";
-    } else if (ch == '"') {
+  std::size_t index = 0;
+  while (index < value.size()) {
+    const auto lead = static_cast<unsigned char>(value[index]);
+    std::uint32_t code_point = 0xFFFDu;
+    std::size_t length = 1;
+    if (lead < 0x80u) {
+      code_point = lead;
+    } else if ((lead & 0xE0u) == 0xC0u && index + 1 < value.size()) {
+      code_point = ((lead & 0x1Fu) << 6) |
+                   (static_cast<unsigned char>(value[index + 1]) & 0x3Fu);
+      length = 2;
+    } else if ((lead & 0xF0u) == 0xE0u && index + 2 < value.size()) {
+      code_point = ((lead & 0x0Fu) << 12) |
+                   ((static_cast<unsigned char>(value[index + 1]) & 0x3Fu) << 6) |
+                   (static_cast<unsigned char>(value[index + 2]) & 0x3Fu);
+      length = 3;
+    } else if ((lead & 0xF8u) == 0xF0u && index + 3 < value.size()) {
+      code_point = ((lead & 0x07u) << 18) |
+                   ((static_cast<unsigned char>(value[index + 1]) & 0x3Fu) << 12) |
+                   ((static_cast<unsigned char>(value[index + 2]) & 0x3Fu) << 6) |
+                   (static_cast<unsigned char>(value[index + 3]) & 0x3Fu);
+      length = 4;
+    }
+    index += length;
+    if (code_point == 0x22u) {
       out += "\\\"";
-    } else if (ch == '\n') {
-      out += "\\n";
-    } else if (ch == '\r') {
-      out += "\\r";
-    } else if (ch == '\t') {
+    } else if (code_point == 0x5Cu) {
+      out += "\\\\";
+    } else if (code_point == 0x08u) {
+      out += "\\b";
+    } else if (code_point == 0x09u) {
       out += "\\t";
+    } else if (code_point == 0x0Au) {
+      out += "\\n";
+    } else if (code_point == 0x0Cu) {
+      out += "\\f";
+    } else if (code_point == 0x0Du) {
+      out += "\\r";
+    } else if (code_point < 0x20u || escapes_as_u(code_point)) {
+      append_u_escape(out, code_point);
+    } else if (code_point >= 0x7Fu) {
+      if (code_point >= 0x10000u) {
+        const std::uint32_t offset = code_point - 0x10000u;
+        append_u_escape(out, 0xD800u + (offset >> 10));
+        append_u_escape(out, 0xDC00u + (offset & 0x3FFu));
+      } else {
+        append_u_escape(out, code_point);
+      }
     } else {
-      out.push_back(ch);
+      out.push_back(static_cast<char>(code_point));
     }
   }
   out.push_back('"');
@@ -108,7 +168,7 @@ std::string quote_text(std::string_view value) {
 }
 
 std::string format_number(double value) {
-  const double rounded = std::round(value * 10.0) / 10.0;
+  const double rounded = std::nearbyint(value * 10.0) / 10.0;
   const double fixed = rounded == 0.0 ? 0.0 : rounded;
   std::ostringstream stream;
   stream << std::fixed << std::setprecision(1) << fixed;
@@ -174,9 +234,6 @@ bool build_timeline(const std::vector<SwfTag>& tags, std::uint16_t character_id,
             return false;
           }
           object = existing->second;
-        } else if (!placement.character_id) {
-          message = "placement carries neither a character nor a move";
-          return false;
         }
         if (placement.character_id) {
           object.character_id = *placement.character_id;
@@ -195,6 +252,9 @@ bool build_timeline(const std::vector<SwfTag>& tags, std::uint16_t character_id,
         }
         object.depth = placement.depth;
         active[placement.depth] = object;
+        if (object.character_id == 0) {
+          break;
+        }
         SwfPlacementRow row;
         row.tag_index = tag_index;
         row.frame = frames + 1;
@@ -243,6 +303,9 @@ MovieIndex build_index(const SwfFile& file) {
     } else if (tag.edit_text) {
       character_id = tag.edit_text->character_id;
       index.edit_texts.emplace(tag.edit_text->character_id, &*tag.edit_text);
+    } else if (tag.code == tag::kDefineButton || tag.code == tag::kDefineButton2 ||
+               tag.code == tag::kDefineVideoStream) {
+      character_id = leading_character_id(tag);
     }
     if (character_id) {
       index.kinds.emplace(*character_id, character_kind(tag.code));
@@ -306,9 +369,9 @@ void walk_placements(const SwfMovie& movie, const MovieIndex& index,
   }
 }
 
-std::string text_field_detail(const SwfEditText& field) {
+std::string text_field_detail(const SwfEditText& field, const SwfTransform& transform) {
   std::string detail;
-  const SwfBounds box = transformed_bounds(SwfTransform{}, field.bounds);
+  const SwfBounds box = transformed_bounds(transform, field.bounds);
   detail += ", rect (" + format_number(box.x) + ", " + format_number(box.y) + ", " +
             format_number(box.width) + " x " + format_number(box.height) + ")";
   if (!field.text.empty()) {
@@ -545,7 +608,7 @@ std::string inspect_swf(const SwfFile& file, std::string_view name,
     }
     const auto field = index.edit_texts.find(row.character_id);
     if (field != index.edit_texts.end()) {
-      detail += text_field_detail(*field->second);
+      detail += text_field_detail(*field->second, row.transform);
     }
     const std::string label = row.path + (row.name.empty() ? "(unnamed)" : row.name);
     out += "- " + clean_text(label) + ": " + clean_text(detail) + "\n";
