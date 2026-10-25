@@ -75,9 +75,13 @@ TEST(NifCollisionRealData, VanillaCollisionSystemsCarryPackfileBytes) {
   std::size_t magic_after_length = 0;
   std::size_t empty_payloads = 0;
   std::size_t odd_payloads = 0;
+  std::size_t attributed = 0;
+  std::size_t attributed_with_node = 0;
+  std::size_t unattributed = 0;
   std::size_t failures = 0;
   std::string first_failure;
   std::string first_odd_payload;
+  std::string first_unattributed;
 
   for (const auto& reader : assets.archives()) {
     if (reader.kind() != fo4::archive::Ba2Kind::general) continue;
@@ -106,6 +110,15 @@ TEST(NifCollisionRealData, VanillaCollisionSystemsCarryPackfileBytes) {
           } else {
             ADD_FAILURE() << path << ": unexpected collision block type " << blob.type;
           }
+          if (blob.owner >= 0) {
+            ++attributed;
+            if (blob.target_node >= 0) ++attributed_with_node;
+          } else {
+            ++unattributed;
+            if (first_unattributed.empty()) {
+              first_unattributed = path + " block " + std::to_string(blob.block);
+            }
+          }
         }
       } catch (const fo4::parse_error& error) {
         ++failures;
@@ -118,9 +131,13 @@ TEST(NifCollisionRealData, VanillaCollisionSystemsCarryPackfileBytes) {
   std::cout << "nifs " << nifs << ", bhkPhysicsSystem " << physics << ", bhkRagdollSystem " << ragdoll
             << ", packfile at 0: " << magic_at_zero << ", packfile after a 4-byte prefix: " << magic_after_length
             << ", empty payloads " << empty_payloads << ", payloads with neither magic: " << odd_payloads
-            << ", failures " << failures << '\n';
+            << ", attributed systems " << attributed << ", with a target node " << attributed_with_node
+            << ", unattributed systems " << unattributed << ", failures " << failures << '\n';
   if (!first_odd_payload.empty()) {
     std::cout << "first payload without a packfile magic: " << first_odd_payload << '\n';
+  }
+  if (!first_unattributed.empty()) {
+    std::cout << "first system without a collision object: " << first_unattributed << '\n';
   }
   RecordProperty("nif_count", std::to_string(nifs));
   RecordProperty("physics_system_count", std::to_string(physics));
@@ -128,6 +145,9 @@ TEST(NifCollisionRealData, VanillaCollisionSystemsCarryPackfileBytes) {
   RecordProperty("packfile_at_zero_count", std::to_string(magic_at_zero));
   RecordProperty("packfile_after_prefix_count", std::to_string(magic_after_length));
   RecordProperty("payload_without_known_magic_count", std::to_string(odd_payloads));
+  RecordProperty("attributed_system_count", std::to_string(attributed));
+  RecordProperty("target_node_count", std::to_string(attributed_with_node));
+  RecordProperty("unattributed_system_count", std::to_string(unattributed));
 
   EXPECT_EQ(failures, 0U) << first_failure;
   EXPECT_GT(nifs, 0U);

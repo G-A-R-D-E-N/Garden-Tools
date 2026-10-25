@@ -3139,6 +3139,18 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_collision_bytes")]
     public static extern Status NifCollisionBytes(IntPtr nif, nuint index, byte** out_bytes, nuint* out_size);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_collision_owner_block")]
+    public static extern Status NifCollisionOwnerBlock(IntPtr nif, nuint index, int* out_block);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_collision_body_id")]
+    public static extern Status NifCollisionBodyId(IntPtr nif, nuint index, uint* out_body_id);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_collision_target_block")]
+    public static extern Status NifCollisionTargetBlock(IntPtr nif, nuint index, int* out_block);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_collision_target_node")]
+    public static extern Status NifCollisionTargetNode(IntPtr nif, nuint index, int* out_node);
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_free_floats")]
     public static extern void FreeFloats(float* values);
 

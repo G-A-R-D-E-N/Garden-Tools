@@ -137,6 +137,17 @@ public sealed class NifCollisionBlob
     public required string Type { get; init; }
 
     public required byte[] Bytes { get; init; }
+
+    // Invariant: all four are the reader's "none" values when no bhkNPCollisionObject names this system.
+    public required int OwnerBlock { get; init; }
+
+    public required uint BodyId { get; init; }
+
+    public required int TargetBlock { get; init; }
+
+    public required int TargetNodeIndex { get; init; }
+
+    public NifNode? TargetNode { get; init; }
 }
 
 public sealed class NifFile
@@ -166,7 +177,7 @@ public sealed class NifFile
         {
             var nodes = ReadNodes(handle);
             var shapes = ReadShapes(handle, nodes);
-            var collisions = ReadCollisions(handle);
+            var collisions = ReadCollisions(handle, nodes);
             return new NifFile(nodes, shapes, collisions);
         }
         finally
@@ -226,7 +237,7 @@ public sealed class NifFile
         return nodes;
     }
 
-    private static unsafe NifCollisionBlob[] ReadCollisions(IntPtr handle)
+    private static unsafe NifCollisionBlob[] ReadCollisions(IntPtr handle, NifNode[] nodes)
     {
         nuint count = 0;
         Call.Check(RadicleNative.NifCollisionCount(handle, &count));
@@ -244,10 +255,27 @@ public sealed class NifFile
             nuint payloadSize = 0;
             Call.Check(RadicleNative.NifCollisionBytes(handle, (nuint)index, &payload, &payloadSize));
 
+            int ownerBlock = -1;
+            Call.Check(RadicleNative.NifCollisionOwnerBlock(handle, (nuint)index, &ownerBlock));
+
+            uint bodyId = 0;
+            Call.Check(RadicleNative.NifCollisionBodyId(handle, (nuint)index, &bodyId));
+
+            int targetBlock = -1;
+            Call.Check(RadicleNative.NifCollisionTargetBlock(handle, (nuint)index, &targetBlock));
+
+            int targetNode = -1;
+            Call.Check(RadicleNative.NifCollisionTargetNode(handle, (nuint)index, &targetNode));
+
             collisions[index] = new NifCollisionBlob {
                 Block = checked((int)block),
                 Type = Encoding.Latin1.GetString(Call.TakeBytes(type, typeSize)),
                 Bytes = Call.TakeBytes(payload, payloadSize),
+                OwnerBlock = ownerBlock,
+                BodyId = bodyId,
+                TargetBlock = targetBlock,
+                TargetNodeIndex = targetNode,
+                TargetNode = targetNode >= 0 && targetNode < nodes.Length ? nodes[targetNode] : null,
             };
         }
         return collisions;

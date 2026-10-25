@@ -159,13 +159,30 @@ public class NifTests
     }
 
     [Fact]
-    public void DecodesCollisionBlobsWithTheirBlockAndType()
+    public void DecodesCollisionBlobsWithTheirBlockTypeOwnerBodyAndTarget()
     {
         var nif = NifFile.FromBytes(NifFixtures.CollisionNif());
         var blob = Assert.Single(nif.Collisions);
         Assert.Equal(0, blob.Block);
         Assert.Equal("bhkPhysicsSystem", blob.Type);
         Assert.Equal(new byte[] { 0x57, 0xE0, 0xE0, 0x57, 0x10, 0xC0, 0xC0, 0x10 }, blob.Bytes);
+        Assert.Equal(1, blob.OwnerBlock);
+        Assert.Equal(7U, blob.BodyId);
+        Assert.Equal(2, blob.TargetBlock);
+        Assert.Equal(0, blob.TargetNodeIndex);
+        Assert.Equal("collision", blob.TargetNode!.Name);
+    }
+
+    [Fact]
+    public void KeepsASystemWithoutAnObjectUnattributed()
+    {
+        var nif = NifFile.FromBytes(NifFixtures.UnownedCollisionNif());
+        var blob = Assert.Single(nif.Collisions);
+        Assert.Equal(-1, blob.OwnerBlock);
+        Assert.Equal(0U, blob.BodyId);
+        Assert.Equal(-1, blob.TargetBlock);
+        Assert.Equal(-1, blob.TargetNodeIndex);
+        Assert.Null(blob.TargetNode);
     }
 
     private static void ReadEmpty() => NifFile.FromBytes(ReadOnlySpan<byte>.Empty);

@@ -37,6 +37,15 @@ Block collision_block(const std::string& type, const std::vector<std::uint8_t>& 
   return Block{type, w.bytes()};
 }
 
+Block collision_object_block(std::int32_t target, std::int32_t data, std::uint32_t body_id) {
+  Writer w;
+  w.i32(target);
+  w.u16(0);
+  w.i32(data);
+  w.u32(body_id);
+  return Block{"bhkNPCollisionObject", w.bytes()};
+}
+
 std::vector<std::uint8_t> take_bytes(uint8_t* bytes, size_t size) {
   std::vector<std::uint8_t> result(bytes, bytes + size);
   radicle_free_bytes(bytes);
@@ -111,6 +120,39 @@ TEST(CapiNifCollision, RejectsBadArgumentsAndIndexes) {
             RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_nif_collision_bytes(nif.get(), 0, nullptr, &payload_size),
             RADICLE_STATUS_INVALID_ARGUMENT);
+
+  int32_t owner = 0;
+  EXPECT_EQ(radicle_nif_collision_owner_block(nif.get(), 3, &owner), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_nif_collision_owner_block(nif.get(), 0, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_nif_collision_body_id(nif.get(), 0, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_nif_collision_target_block(nif.get(), 0, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_nif_collision_target_node(nif.get(), 0, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+}
+
+TEST(CapiNifCollision, ReadsTheOwnerBodyAndTargetOfASystem) {
+  const std::vector<std::byte> bytes = nif_fixture::build_nif(
+      {"collision"},
+      {nif_fixture::node_block("NiNode", 0, {}, {}), collision_block("bhkPhysicsSystem", {0x57, 0xE0, 0xE0, 0x57}),
+       collision_object_block(0, 1, 0x77)},
+      {0});
+  Nif nif(bytes);
+  ASSERT_NE(nif.get(), nullptr);
+
+  int32_t owner = -2;
+  ASSERT_EQ(radicle_nif_collision_owner_block(nif.get(), 0, &owner), RADICLE_STATUS_OK);
+  EXPECT_EQ(owner, 2);
+
+  uint32_t body = 0;
+  ASSERT_EQ(radicle_nif_collision_body_id(nif.get(), 0, &body), RADICLE_STATUS_OK);
+  EXPECT_EQ(body, 0x77U);
+
+  int32_t target = -2;
+  ASSERT_EQ(radicle_nif_collision_target_block(nif.get(), 0, &target), RADICLE_STATUS_OK);
+  EXPECT_EQ(target, 0);
+
+  int32_t node = -2;
+  ASSERT_EQ(radicle_nif_collision_target_node(nif.get(), 0, &node), RADICLE_STATUS_OK);
+  EXPECT_EQ(node, 0);
 }
 
 TEST(CapiNifCollision, RefusesAMalformedCollisionBlockWithoutACrash) {

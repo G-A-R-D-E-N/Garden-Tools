@@ -35,6 +35,15 @@ std::vector<std::byte> blob_bytes(const std::vector<std::uint8_t>& values) {
   return out;
 }
 
+Block collision_object_block(std::int32_t target, std::int32_t data, std::uint32_t body_id) {
+  Writer w;
+  w.i32(target);
+  w.u16(0);
+  w.i32(data);
+  w.u32(body_id);
+  return Block{"bhkNPCollisionObject", w.bytes()};
+}
+
 }  // namespace
 
 TEST(NifCollision, ReadsPhysicsAndRagdollBlobsInBlockOrder) {
@@ -91,4 +100,83 @@ TEST(NifCollision, RejectsADeclaredLengthPastTheEndOfItsBlock) {
       nif_build::build_nif({}, {raw_block("bhkPhysicsSystem", {0x09, 0x00, 0x00, 0x00, 0xAA, 0xBB})}, {}));
   nif_build::expect_parse_error([&] { fo4::nif::read_collision_blobs(nif); },
                                 "collision blob length runs past the end of its block");
+}
+
+TEST(NifCollision, AttachesTheOwningObjectBodyIdAndTargetNode) {
+  const auto nif = fo4::nif::read_nif(nif_build::build_nif(
+      {"collision"},
+      {nif_build::named_node_block("NiNode", 0, {}, {}),
+       collision_block("bhkPhysicsSystem", {0x57, 0xE0, 0xE0, 0x57}), collision_object_block(0, 1, 0x1234)},
+      {0}));
+  const auto blobs = fo4::nif::read_collision_blobs(nif);
+  ASSERT_EQ(blobs.size(), 1U);
+  EXPECT_EQ(blobs[0].owner, 2);
+  EXPECT_EQ(blobs[0].body_id, 0x1234U);
+  EXPECT_EQ(blobs[0].target, 0);
+  ASSERT_EQ(blobs[0].target_node, 0);
+  EXPECT_EQ(nif.nodes()[static_cast<std::size_t>(blobs[0].target_node)].name, "collision");
+}
+
+TEST(NifCollision, AttachesAnObjectThatPrecedesItsSystem) {
+  const auto nif = fo4::nif::read_nif(nif_build::build_nif(
+      {}, {collision_object_block(2, 1, 5), collision_block("bhkPhysicsSystem", {0x01}),
+           nif_build::node_block("NiNode", {}, {})},
+      {}));
+  const auto blobs = fo4::nif::read_collision_blobs(nif);
+  ASSERT_EQ(blobs.size(), 1U);
+  EXPECT_EQ(blobs[0].owner, 0);
+  EXPECT_EQ(blobs[0].body_id, 5U);
+  EXPECT_EQ(blobs[0].target, 2);
+  EXPECT_EQ(blobs[0].target_node, 0);
+}
+
+TEST(NifCollision, KeepsASystemWithoutAnObjectUnattributed) {
+  const auto nif = fo4::nif::read_nif(
+      nif_build::build_nif({}, {collision_block("bhkRagdollSystem", {0x01})}, {}));
+  const auto blobs = fo4::nif::read_collision_blobs(nif);
+  ASSERT_EQ(blobs.size(), 1U);
+  EXPECT_EQ(blobs[0].owner, -1);
+  EXPECT_EQ(blobs[0].body_id, 0U);
+  EXPECT_EQ(blobs[0].target, -1);
+  EXPECT_EQ(blobs[0].target_node, -1);
+}
+
+TEST(NifCollision, IgnoresAnObjectWhoseDataIsNotACollisionSystem) {
+  const auto nif = fo4::nif::read_nif(
+      nif_build::build_nif({}, {collision_block("bhkPhysicsSystem", {0x01}),
+                                nif_build::node_block("NiNode", {}, {}), collision_object_block(1, 1, 9)},
+                           {}));
+  const auto blobs = fo4::nif::read_collision_blobs(nif);
+  ASSERT_EQ(blobs.size(), 1U);
+  EXPECT_EQ(blobs[0].owner, -1);
+  EXPECT_EQ(blobs[0].body_id, 0U);
+}
+
+TEST(NifCollision, KeepsTheFirstOfTwoObjectsNamingTheSameSystem) {
+  const auto nif = fo4::nif::read_nif(nif_build::build_nif(
+      {}, {collision_block("bhkPhysicsSystem", {0x01}), collision_object_block(-1, 0, 7),
+           collision_object_block(-1, 0, 9)},
+      {}));
+  const auto blobs = fo4::nif::read_collision_blobs(nif);
+  ASSERT_EQ(blobs.size(), 1U);
+  EXPECT_EQ(blobs[0].owner, 1);
+  EXPECT_EQ(blobs[0].body_id, 7U);
+}
+
+TEST(NifCollision, IgnoresATargetOutsideTheBlockTable) {
+  const auto nif = fo4::nif::read_nif(nif_build::build_nif(
+      {}, {collision_block("bhkPhysicsSystem", {0x01}), collision_object_block(99, 0, 3)}, {}));
+  const auto blobs = fo4::nif::read_collision_blobs(nif);
+  ASSERT_EQ(blobs.size(), 1U);
+  EXPECT_EQ(blobs[0].owner, 1);
+  EXPECT_EQ(blobs[0].body_id, 3U);
+  EXPECT_EQ(blobs[0].target, -1);
+  EXPECT_EQ(blobs[0].target_node, -1);
+}
+
+TEST(NifCollision, RejectsACollisionObjectShorterThanItsFields) {
+  const auto nif = fo4::nif::read_nif(nif_build::build_nif(
+      {}, {raw_block("bhkNPCollisionObject", {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})}, {}));
+  nif_build::expect_parse_error([&] { fo4::nif::read_collision_blobs(nif); },
+                                "collision object is shorter than its fields");
 }

@@ -562,6 +562,52 @@ radicle_status radicle_nif_collision_bytes(const radicle_nif* nif,
   return copy_bytes(blob->bytes, out_bytes, out_size);
 }
 
+radicle_status radicle_nif_collision_owner_block(const radicle_nif* nif,
+                                                 size_t index,
+                                                 int32_t* out_block) {
+  clear_error();
+  radicle_status status = RADICLE_STATUS_OK;
+  const auto* blob = find_collision(nif, index, status);
+  if (!blob) return status;
+  if (!out_block) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_block is required");
+  *out_block = blob->owner;
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_nif_collision_body_id(const radicle_nif* nif,
+                                             size_t index,
+                                             uint32_t* out_body_id) {
+  clear_error();
+  radicle_status status = RADICLE_STATUS_OK;
+  const auto* blob = find_collision(nif, index, status);
+  if (!blob) return status;
+  if (!out_body_id) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_body_id is required");
+  *out_body_id = blob->body_id;
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_nif_collision_target_block(const radicle_nif* nif,
+                                                  size_t index,
+                                                  int32_t* out_block) {
+  clear_error();
+  radicle_status status = RADICLE_STATUS_OK;
+  const auto* blob = find_collision(nif, index, status);
+  if (!blob) return status;
+  if (!out_block) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_block is required");
+  *out_block = blob->target;
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_nif_collision_target_node(const radicle_nif* nif, size_t index, int32_t* out_node) {
+  clear_error();
+  radicle_status status = RADICLE_STATUS_OK;
+  const auto* blob = find_collision(nif, index, status);
+  if (!blob) return status;
+  if (!out_node) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_node is required");
+  *out_node = blob->target_node;
+  return RADICLE_STATUS_OK;
+}
+
 void radicle_free_floats(float* values) {
   clear_error();
   std::free(values);

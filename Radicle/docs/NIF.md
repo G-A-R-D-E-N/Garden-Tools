@@ -7,7 +7,8 @@ geometry for `BSTriShape`, `BSSubIndexTriShape`, `BSMeshLODTriShape` and
 indices, its bones with their bind transforms, its `BSLightingShaderProperty`
 +material path and its `BSShaderTextureSet` slots. Not in scope: JSON, collision
 decoding, alpha properties, and the fragment, effect and water shader property types.
-`include/fo4/nif/collision.hpp` adds the raw collision payloads; see
+`include/fo4/nif/collision.hpp` adds the raw collision payloads with the
+`bhkNPCollisionObject` that owns each system, its Body ID and target node; see
 `docs/code-notes/Radicle.md`, `read_collision_blobs`.
 `include/fo4/c_api_nif.h` exposes all of it to C, and
 `bindings/csharp/Radicle.Interop/NifFile.cs` to C#.
