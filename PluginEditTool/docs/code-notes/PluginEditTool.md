@@ -28,3 +28,9 @@ and dirty marker in the header, and binds Ctrl/Cmd+Z / Shift+Z / Y to undo/redo.
 `hostObjects.swf` bridge exactly like the other PET panels and drives open → select label → rename → undo →
 redo → save plus the verbatim-refusal path. Wiring the panel into `MainShell` and the backend type surface is
 deferred to the next round; nothing was built or run locally.
+## web/src/MainShell.tsx (SWF panel registration)
+
+The Interface (SWF) panel is registered the same way as the other asset panels: `showSwf` state, an activity-bar
+button with the `Boxes` icon after Papyrus, and a conditional `SwfPanel` render beside `PapyrusPanel`/`NifPanel`.
+The host bridge is picked up by the existing `[RpcExpose]` scan as `hostObjects.swf`, which is the name the panel
+test stubs. Archive-resolved open and the semantic edit verbs are still deferred.
