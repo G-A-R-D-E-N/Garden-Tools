@@ -8954,14 +8954,7 @@
           "payload_size": 12,
           "insertion": "existing_only"
         },
-        {
-          "path": "QUST\\Type",
-          "label": "Type",
-          "kind": "scalar",
-          "subrecord": "DNAM",
-          "offset": 8,
-          "storage": "u8",
-          "presentation": "enum",
+        {"path": "QUST\\Type", "label": "Type", "kind": "scalar", "subrecord": "DNAM", "offset": 8, "storage": "u8", "presentation": "enum",
           "names": [
             { "value": 0, "name": "None" },
             { "value": 1, "name": "Main Quest" },
