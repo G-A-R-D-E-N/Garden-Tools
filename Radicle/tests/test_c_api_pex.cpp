@@ -616,6 +616,24 @@ TEST(CApiPex, OpcodeNameMatchesTheTableForEveryTableEntry) {
   }
 }
 
+namespace {
+
+std::string opcode_name(std::uint8_t opcode) {
+  uint8_t* bytes = nullptr;
+  size_t size = 0;
+  if (radicle_pex_opcode_name(opcode, &bytes, &size) != RADICLE_STATUS_OK) return std::string();
+  std::string name(reinterpret_cast<const char*>(bytes), size);
+  radicle_free_bytes(bytes);
+  return name;
+}
+
+}  // namespace
+
+TEST(CApiPex, OpcodeNamePinsTheFirstAndLastTableEntries) {
+  EXPECT_EQ(opcode_name(0), "nop");
+  EXPECT_EQ(opcode_name(46), "array_clear");
+}
+
 TEST(CApiPex, OpcodeNameRefusesAByteOutsideTheTable) {
   uint8_t* bytes = reinterpret_cast<uint8_t*>(1);
   size_t size = 9;

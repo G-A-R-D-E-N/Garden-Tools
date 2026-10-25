@@ -4,6 +4,7 @@
 #include "fo4/papyrus_source/parser.hpp"
 #include "fo4/papyrus_source/summary.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <new>
 #include <string>
@@ -21,13 +22,6 @@ std::string row_text(const std::string& value) {
     }
   }
   return out;
-}
-
-bool listed(const std::vector<std::string>& values, const std::string& value) {
-  for (const std::string& candidate : values) {
-    if (candidate == value) return true;
-  }
-  return false;
 }
 
 }  // namespace
@@ -71,12 +65,13 @@ radicle_status radicle_papyrus_source_summary(const uint8_t* source,
     const fo4::psc::ScriptSummary summary = fo4::psc::summarize(parsed.script);
     rows.push_back("script\t" + row_text(summary.name) + "\t" + row_text(summary.extends) + "\t" +
                    row_text(summary.autoState));
-    for (const std::string& module : summary.imports) {
-      rows.push_back("import\t" + row_text(module));
+    for (const std::string& import_name : summary.imports) {
+      rows.push_back("import\t" + row_text(import_name));
     }
     for (const std::string& property : summary.declaredProperties) {
-      rows.push_back("property\t" + row_text(property) + "\t" +
-                     (listed(summary.autoProperties, property) ? "1" : "0"));
+      const bool is_auto = std::find(summary.autoProperties.begin(), summary.autoProperties.end(),
+                                     property) != summary.autoProperties.end();
+      rows.push_back("property\t" + row_text(property) + "\t" + (is_auto ? "1" : "0"));
     }
     for (const std::string& state : summary.states) {
       rows.push_back("state\t" + row_text(state));

@@ -635,6 +635,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_esl_compaction.cpp
     tests/test_c_api_maintenance.cpp
     tests/test_c_api_pex.cpp
+    tests/test_c_api_papyrus_source.cpp
     tests/test_c_api_seq.cpp
     tests/test_c_api_quest.cpp
     tests/test_ba2.cpp

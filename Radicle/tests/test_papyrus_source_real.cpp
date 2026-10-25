@@ -106,6 +106,9 @@ TEST(PapyrusSourceRealTest, CApiSummaryMatchesTheParserOnEveryCorpusScript) {
       const fo4::psc::ScriptSummary summary = fo4::psc::summarize(direct.script);
       EXPECT_EQ(first, "script\t" + summary.name + "\t" + summary.extends + "\t" + summary.autoState)
           << path.string();
+      EXPECT_EQ(count, 1u + summary.imports.size() + summary.declaredProperties.size() +
+                           summary.states.size() + summary.functions.size())
+          << path.string();
     } else {
       const std::string prefix = "error\t" + std::to_string(direct.error.position.line) + "\t" +
                                  std::to_string(direct.error.position.column) + "\t";
