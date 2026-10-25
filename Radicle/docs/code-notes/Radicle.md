@@ -5220,3 +5220,36 @@ remove and re-read after `write_swf`, duplicate refusal with the bytes unchanged
 unreached-frame refusals. `Radicle/tests/test_swf_real.cpp` counts `edit_text_tags` and `edit_text_layouts` over
 every shipped Interface movie and requires at least one edit-text tag. Nothing here was built or run locally;
 CI is the first compiler.
+
+## Radicle/include/fo4/swf/swf_history.hpp:SwfEditHistory (edit history at ABI 67)
+
+`Radicle/src/swf/swf_history.cpp:SwfEditHistory::apply` turns every tag-plan edit into a
+`Radicle/include/fo4/swf/swf_history.hpp:SwfEditCommand` holding the plan and the revision it produced. A
+no-op plan is not a command: apply probes the plan on a copy of the current file first and returns success
+without touching the history when the plan matches the bytes in force. A command is appended only after the
+probe accepts it, and a refused plan leaves `commands_`, the applied prefix, the revision and the file
+untouched.
+
+Undo and redo are `Radicle/src/swf/swf_history.cpp:SwfEditHistory::replay`: it always reopens the bytes the
+history was opened from and applies the first N commands again, never the edited file, so an undo of a
+sequence equals the same sequence applied forward. `replay` builds the new file in a local and commits it
+only on success, so a replay refusal leaves the previous state live; the revision advances once per
+successful apply, undo or redo. Applying after an undo truncates the redo tail, `undo_count` and
+`redo_count` report the two sides, and `write_bytes` serializes the live file.
+
+The C surface adds an opaque `Radicle/include/fo4/c_api_swf.h:radicle_swf_history` and the verbs
+`:radicle_swf_history_create` (from a movie handle, starting at the bytes that handle serializes),
+`:radicle_swf_history_apply`, `:radicle_swf_history_undo`, `:radicle_swf_history_redo`,
+`:radicle_swf_history_revision`, `:radicle_swf_history_undo_count`, `:radicle_swf_history_redo_count`,
+`:radicle_swf_history_write_bytes` and `:radicle_swf_history_destroy`. Plan indices keep the
+`radicle_swf_tag_at` flat-index contract: `Radicle/src/c_api_swf_history.cpp:translate` maps a flat index to
+the top-level position the native plan stores and refuses a child index, exactly like `radicle_swf_apply_plan`.
+The verbs were added at ABI 67 inside this round before it was ever pushed, so there is still one bump for the
+round; the managed interop was regenerated (3,758 lines) and the layout probe is unchanged because the
+history handle is opaque.
+
+Tests: `Radicle/tests/test_swf_history.cpp` pins command counting, the byte-identified undo/redo sequence, the
+forward-vs-undo equality, a refused edit leaving revision/counts/bytes unchanged, the redo-tail truncation,
+and a history that never opened. `Radicle/tests/test_c_api_swf_history.cpp` pins the same through the C
+handle, the revision counter, the flat-index refusal and the missing-argument paths. Nothing here was built
+or run locally; CI is the first compiler.

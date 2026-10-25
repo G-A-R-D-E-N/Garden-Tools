@@ -3728,4 +3728,31 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_character_by_id")]
     public static extern Status SwfCharacterById(IntPtr swf, ushort character_id, SwfCharacter* out_character);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_history_create")]
+    public static extern Status SwfHistoryCreate(IntPtr swf, IntPtr* out_history);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_history_destroy")]
+    public static extern void SwfHistoryDestroy(IntPtr history);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_history_apply")]
+    public static extern Status SwfHistoryApply(IntPtr history, SwfTagPlan* plan, SwfPlanResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_history_undo")]
+    public static extern Status SwfHistoryUndo(IntPtr history, SwfPlanResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_history_redo")]
+    public static extern Status SwfHistoryRedo(IntPtr history, SwfPlanResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_history_revision")]
+    public static extern ulong SwfHistoryRevision(IntPtr history);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_history_undo_count")]
+    public static extern Status SwfHistoryUndoCount(IntPtr history, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_history_redo_count")]
+    public static extern Status SwfHistoryRedoCount(IntPtr history, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_history_write_bytes")]
+    public static extern Status SwfHistoryWriteBytes(IntPtr history, byte** out_bytes, nuint* out_size);
+
 }

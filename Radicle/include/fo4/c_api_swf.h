@@ -501,6 +501,30 @@ RADICLE_API radicle_status radicle_swf_character_at(const radicle_swf* swf, size
 RADICLE_API radicle_status radicle_swf_character_by_id(const radicle_swf* swf, uint16_t character_id,
                                                        radicle_swf_character* out_character);
 
+typedef struct radicle_swf_history radicle_swf_history;
+
+/* Must start from the bytes the handle currently serializes, so an unedited handle starts at its opened bytes. */
+RADICLE_API radicle_status radicle_swf_history_create(const radicle_swf* swf,
+                                                      radicle_swf_history** out_history);
+RADICLE_API void radicle_swf_history_destroy(radicle_swf_history* history);
+/* Must append one command only when the plan changes the movie; a refusal must move no history state. */
+RADICLE_API radicle_status radicle_swf_history_apply(radicle_swf_history* history,
+                                                     const radicle_swf_tag_plan* plan,
+                                                     radicle_swf_plan_result* out_result);
+/* Must reopen the original bytes and replay the remaining prefix, so undo equals the forward sequence. */
+RADICLE_API radicle_status radicle_swf_history_undo(radicle_swf_history* history,
+                                                    radicle_swf_plan_result* out_result);
+RADICLE_API radicle_status radicle_swf_history_redo(radicle_swf_history* history,
+                                                    radicle_swf_plan_result* out_result);
+/* Must advance only when a call changes the movie, and never for a refusal. */
+RADICLE_API uint64_t radicle_swf_history_revision(const radicle_swf_history* history);
+RADICLE_API radicle_status radicle_swf_history_undo_count(const radicle_swf_history* history,
+                                                          size_t* out_count);
+RADICLE_API radicle_status radicle_swf_history_redo_count(const radicle_swf_history* history,
+                                                          size_t* out_count);
+RADICLE_API radicle_status radicle_swf_history_write_bytes(const radicle_swf_history* history,
+                                                           uint8_t** out_bytes, size_t* out_size);
+
 #ifdef __cplusplus
 }
 #endif
