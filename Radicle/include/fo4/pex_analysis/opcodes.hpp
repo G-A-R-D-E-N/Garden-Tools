@@ -82,6 +82,9 @@ enum class PexOperandRole : std::uint8_t {
 // Invariant: an index at or past those fixed operands is None, so a variadic argument never has a role.
 PexOperandRole pex_call_operand_role(std::uint8_t op, std::size_t index);
 
+// Invariant: a role the opcode's table does not carry yields kNoIndex, never a guessed position.
+std::size_t pex_call_operand_index(std::uint8_t op, PexOperandRole role);
+
 inline bool pex_is_conditional_jump(std::uint8_t op) {
   return op == static_cast<std::uint8_t>(PexOp::JmpT) ||
          op == static_cast<std::uint8_t>(PexOp::JmpF);

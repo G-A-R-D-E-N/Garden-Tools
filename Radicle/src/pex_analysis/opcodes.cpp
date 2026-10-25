@@ -35,6 +35,14 @@ PexOperandRole pex_call_operand_role(std::uint8_t op, std::size_t index) {
   return PexOperandRole::None;
 }
 
+std::size_t pex_call_operand_index(std::uint8_t op, PexOperandRole role) {
+  for (std::size_t index = 0;; ++index) {
+    const PexOperandRole candidate = pex_call_operand_role(op, index);
+    if (candidate == PexOperandRole::None) return kNoIndex;
+    if (candidate == role) return index;
+  }
+}
+
 std::string pex_value_text(const fo4::pex::PexValue& value) {
   char buffer[48];
   switch (value.type) {

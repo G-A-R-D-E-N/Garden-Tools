@@ -112,19 +112,6 @@ AccessList operand_accesses(std::uint8_t op) {
   }
 }
 
-std::size_t call_result_operand(std::uint8_t op) {
-  switch (static_cast<PexOp>(op)) {
-    case PexOp::CallMethod:
-      return 2;
-    case PexOp::CallParent:
-      return 1;
-    case PexOp::CallStatic:
-      return 2;
-    default:
-      return kNoIndex;
-  }
-}
-
 struct DeclaredName {
   std::string name;
   std::string type;
@@ -220,15 +207,14 @@ void collect_accesses(const fo4::pex::PexFunction& function, const PexFunctionRe
   for (std::size_t i = 0; i < function.instructions.size(); ++i) {
     const auto& instruction = function.instructions[i];
     if (pex_is_call(instruction.opCode)) {
-      const auto result = call_result_operand(instruction.opCode);
-      if (instruction.opCode == static_cast<std::uint8_t>(PexOp::CallMethod) &&
-          instruction.args.size() > 1) {
-        const auto& expression = instruction.args[1];
-        if (expression.type == fo4::pex::PexValueType::Identifier) {
-          const auto* match = find_declared(declared, expression.str);
-          if (match != nullptr) {
-            record_access(out, ref, i, *match, PexAccessKind::Read);
-          }
+      const std::size_t result = pex_call_operand_index(instruction.opCode, PexOperandRole::Result);
+      const std::size_t receiver =
+          pex_call_operand_index(instruction.opCode, PexOperandRole::Receiver);
+      if (instruction.args.size() > receiver &&
+          instruction.args[receiver].type == fo4::pex::PexValueType::Identifier) {
+        const auto* match = find_declared(declared, instruction.args[receiver].str);
+        if (match != nullptr) {
+          record_access(out, ref, i, *match, PexAccessKind::Read);
         }
       }
       for (auto a = result; a < instruction.args.size(); ++a) {
@@ -369,25 +355,32 @@ PexCallGraph build_call_graph(std::span<const fo4::pex::PexFile* const> files) {
                                  ? PexCallKind::Parent
                                  : PexCallKind::Static);
 
+          // Invariant: every call operand position comes from the role table, never an index here.
+          const std::size_t nameOperand =
+              pex_call_operand_index(instruction.opCode, PexOperandRole::FunctionName);
           std::string targetObject;
-          std::size_t nameOperand = 0;
           if (site.kind == PexCallKind::Static) {
-            if (!instruction.args.empty() &&
-                instruction.args[0].type == fo4::pex::PexValueType::Identifier) {
-              targetObject = instruction.args[0].str;
+            const std::size_t scriptOperand =
+                pex_call_operand_index(instruction.opCode, PexOperandRole::OwningScript);
+            if (instruction.args.size() > scriptOperand &&
+                instruction.args[scriptOperand].type == fo4::pex::PexValueType::Identifier) {
+              targetObject = instruction.args[scriptOperand].str;
             }
-            nameOperand = 1;
           } else if (site.kind == PexCallKind::Parent) {
             targetObject = object.parentClassName;
-          } else if (instruction.args.size() > 1 &&
-                     instruction.args[1].type == fo4::pex::PexValueType::Identifier) {
-            const auto& expression = instruction.args[1];
-            if (pex_name_equal(expression.str, "self")) {
-              targetObject = object.name;
-              site.selfTarget = true;
-            } else {
-              targetObject = declared_type_of(function, expression.str, declared);
-              if (targetObject.empty()) targetObject = expression.str;
+          } else {
+            const std::size_t receiverOperand =
+                pex_call_operand_index(instruction.opCode, PexOperandRole::Receiver);
+            if (instruction.args.size() > receiverOperand &&
+                instruction.args[receiverOperand].type == fo4::pex::PexValueType::Identifier) {
+              const auto& expression = instruction.args[receiverOperand];
+              if (pex_name_equal(expression.str, "self")) {
+                targetObject = object.name;
+                site.selfTarget = true;
+              } else {
+                targetObject = declared_type_of(function, expression.str, declared);
+                if (targetObject.empty()) targetObject = expression.str;
+              }
             }
           }
           if (instruction.args.size() > nameOperand &&
