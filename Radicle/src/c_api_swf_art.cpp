@@ -240,6 +240,7 @@ radicle_status radicle_swf_morph_frame_count(const radicle_swf* swf, size_t inde
   if (!tag->morph_shape) {
     return fail(RADICLE_STATUS_NOT_FOUND, "the tag carries no decoded morph shape");
   }
+  *out_count = morph_frame(swf, index, ratio).size();
   return RADICLE_STATUS_OK;
 }
 
