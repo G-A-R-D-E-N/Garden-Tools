@@ -65,6 +65,27 @@ public class SwfInterop
         return Snapshot(result.Changed);
     });
 
+    public Task<string> ReadEditText(int tagIndex) => Run(() =>
+    {
+        var text = Document().EditText(tagIndex);
+        return Json(new
+        {
+            id = text.CharacterId, text = text.Text, variable = text.Variable,
+            color = text.Color is null ? "" : text.Color.Value.ToString("X8"),
+            x0 = text.Bounds.XMin, x1 = text.Bounds.XMax, y0 = text.Bounds.YMin, y1 = text.Bounds.YMax,
+        });
+    });
+
+    public Task<string> EditEditText(int tagIndex, string text, string colorHex,
+                                     int x0, int x1, int y0, int y1) => Run(() =>
+    {
+        uint? color = string.IsNullOrWhiteSpace(colorHex)
+            ? null
+            : Convert.ToUInt32(colorHex.TrimStart('#'), 16);
+        var result = Document().EditEditText(tagIndex,
+            new SwfEditTextEdit(text, color, new SwfRectRecord(x0, x1, y0, y1)));
+        return Snapshot(result.Changed);
+    });
     public Task<string> Undo() => Run(() => { Document().Undo(); return Snapshot(false); });
 
     public Task<string> Redo() => Run(() => { Document().Redo(); return Snapshot(false); });

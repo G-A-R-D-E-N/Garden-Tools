@@ -66,6 +66,15 @@ public sealed class SwfDocument : IDisposable
 
     public byte[] WriteBytes() => _history.WriteBytes();
 
+    public SwfEditTextRecord EditText(int tagIndex) => Movie.EditText(tagIndex);
+
+    // Constraint: an edit-text write goes through the same plan and history path as every other edit.
+    public SwfPlanResultRecord EditEditText(int tagIndex, SwfEditTextEdit edit)
+    {
+        var record = Movie.EditText(tagIndex);
+        var payload = SwfEditTextCodec.Write(record, Movie.Payload(tagIndex), edit);
+        return Apply(new SwfPlanSpec().Replace(tagIndex, payload));
+    }
     // Constraint: the save must back the on-disk asset up before the first byte of the new file lands.
     public string Save(string? targetPath = null)
     {

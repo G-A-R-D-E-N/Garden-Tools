@@ -45,3 +45,10 @@ revision and refusal behaviour are unchanged. Tests in `SwfEditTextTests.cs` pin
 prefix-preserving text edit, colour and bounds edits, the no-op plan, and the wrong-tag refusal. This is the
 "compose from tag payloads in PET" path for edit text; the remaining property edits (transform/depth/keyframe,
 label add/remove) still need either the same treatment or new native exports.
+## FO4RecordEditor.Core/Services/SwfDocumentService.cs:SwfDocument.EditEditText (edit-text through the history)
+
+`SwfDocument.EditText` reads the managed tag-37 record and `EditEditText` writes the re-encoded payload through
+`Apply`, so an edit-text change is one history command with the same undo/redo/refusal behaviour as any other
+plan. `SwfInterop` exposes `ReadEditText`/`EditEditText` for the panel (colour/rect/text are flattened JSON; the
+colour stays `0xAARRGGBB`), and `SwfDocumentServiceTests.EditsEditTextThroughTheSameHistory` pins the edit plus
+its undo. The panel fields for this verb and the placement/label property edits are still next.

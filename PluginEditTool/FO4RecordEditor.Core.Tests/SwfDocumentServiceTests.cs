@@ -61,6 +61,20 @@ public class SwfDocumentServiceTests
     }
 
     [Fact]
+    public void EditsEditTextThroughTheSameHistory()
+    {
+        using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
+        var result = document.EditEditText(0, new SwfEditTextEdit(Text: "hello", Color: 0x80112233u));
+        Assert.True(result.Changed);
+        var text = document.EditText(0);
+        Assert.Equal("hello", text.Text);
+        Assert.Equal(0x80112233u, text.Color);
+        Assert.Equal("variable", text.Variable);
+        document.Undo();
+        Assert.Equal(string.Empty, document.EditText(0).Text);
+        Assert.Null(document.EditText(0).Color);
+    }
+    [Fact]
     public void ARefusalLeavesTheHistoryUntouchedAndCarriesTheMessage()
     {
         using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
