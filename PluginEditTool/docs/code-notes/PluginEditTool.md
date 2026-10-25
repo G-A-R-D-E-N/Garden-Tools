@@ -127,3 +127,9 @@ was never pushed before this round.
 the DefineSprite tag, splices the FrameLabel tag into the sprite payload at the target child's header offset and
 replaces that tag through the plan. Duplicate names are checked per timeline; the service test pins sprite add + undo.
 The panel passes its current timeline scrubber value.
+## FO4RecordEditor/Services/SwfInterop.cs:SwfInterop.Open (loose or archive)
+
+Open checks for a loose file first; otherwise it asks the existing PET `AssetResolver` (`Resolve` + `Materialize`) and
+opens the materialized bytes, so a BA2-resolved Interface movie enters the same document/history path. A path that is
+neither loose nor resolvable comes back as a JSON error. Saving a resolved document back into its archive is not wired
+yet because PET has no generic asset-write path; the document save writes a target path with a `.bak`.

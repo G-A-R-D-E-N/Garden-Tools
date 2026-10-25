@@ -19,12 +19,22 @@ public class SwfInterop
     private static SwfDocument? _document;
     private static readonly object Gate = new();
 
+    // Constraint: a loose path opens directly; anything else goes through the existing PET asset resolver.
     public Task<string> Open(string path) => Run(() =>
     {
         lock (Gate)
         {
             _document?.Dispose();
-            _document = SwfDocument.OpenFile(path);
+            _document = null;
+            var loose = File.Exists(path) ? path : null;
+            if (loose == null)
+            {
+                var hit = AssetResolver.Resolve(path);
+                if (hit != null) loose = AssetResolver.Materialize(hit);
+            }
+            if (loose == null || !File.Exists(loose))
+                throw new FileNotFoundException("the movie was not found as a loose file or a resolved archive asset", path);
+            _document = SwfDocument.OpenFile(loose);
             return Snapshot();
         }
     });
