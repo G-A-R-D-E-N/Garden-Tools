@@ -136,6 +136,12 @@ RADICLE_API radicle_status radicle_nif_collision_bytes(const radicle_nif* nif,
 RADICLE_API radicle_status radicle_nif_collision_owner_block(const radicle_nif* nif,
                                                              size_t index,
                                                              int32_t* out_block);
+RADICLE_API radicle_status radicle_nif_collision_flags(const radicle_nif* nif,
+                                                       size_t index,
+                                                       uint16_t* out_flags);
+RADICLE_API radicle_status radicle_nif_collision_system_ref(const radicle_nif* nif,
+                                                            size_t index,
+                                                            int32_t* out_block);
 RADICLE_API radicle_status radicle_nif_collision_body_id(const radicle_nif* nif,
                                                          size_t index,
                                                          uint32_t* out_body_id);

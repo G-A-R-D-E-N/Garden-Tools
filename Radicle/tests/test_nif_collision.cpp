@@ -35,10 +35,13 @@ std::vector<std::byte> blob_bytes(const std::vector<std::uint8_t>& values) {
   return out;
 }
 
-Block collision_object_block(std::int32_t target, std::int32_t data, std::uint32_t body_id) {
+Block collision_object_block(std::int32_t target,
+                             std::int32_t data,
+                             std::uint32_t body_id,
+                             std::uint16_t flags = 0) {
   Writer w;
   w.i32(target);
-  w.u16(0);
+  w.u16(flags);
   w.i32(data);
   w.u32(body_id);
   return Block{"bhkNPCollisionObject", w.bytes()};
@@ -102,15 +105,18 @@ TEST(NifCollision, RejectsADeclaredLengthPastTheEndOfItsBlock) {
                                 "collision blob length runs past the end of its block");
 }
 
-TEST(NifCollision, AttachesTheOwningObjectBodyIdAndTargetNode) {
+TEST(NifCollision, AttachesTheOwningObjectFlagsSystemBodyIdAndTarget) {
   const auto nif = fo4::nif::read_nif(nif_build::build_nif(
       {"collision"},
       {nif_build::named_node_block("NiNode", 0, {}, {}),
-       collision_block("bhkPhysicsSystem", {0x57, 0xE0, 0xE0, 0x57}), collision_object_block(0, 1, 0x1234)},
+       collision_block("bhkPhysicsSystem", {0x57, 0xE0, 0xE0, 0x57}),
+       collision_object_block(0, 1, 0x1234, 0x0003)},
       {0}));
   const auto blobs = fo4::nif::read_collision_blobs(nif);
   ASSERT_EQ(blobs.size(), 1U);
   EXPECT_EQ(blobs[0].owner, 2);
+  EXPECT_EQ(blobs[0].flags, std::uint16_t{0x0003});
+  EXPECT_EQ(blobs[0].system_ref, 1);
   EXPECT_EQ(blobs[0].body_id, 0x1234U);
   EXPECT_EQ(blobs[0].target, 0);
   ASSERT_EQ(blobs[0].target_node, 0);
@@ -136,6 +142,8 @@ TEST(NifCollision, KeepsASystemWithoutAnObjectUnattributed) {
   const auto blobs = fo4::nif::read_collision_blobs(nif);
   ASSERT_EQ(blobs.size(), 1U);
   EXPECT_EQ(blobs[0].owner, -1);
+  EXPECT_EQ(blobs[0].flags, std::uint16_t{0});
+  EXPECT_EQ(blobs[0].system_ref, -1);
   EXPECT_EQ(blobs[0].body_id, 0U);
   EXPECT_EQ(blobs[0].target, -1);
   EXPECT_EQ(blobs[0].target_node, -1);
@@ -149,6 +157,8 @@ TEST(NifCollision, IgnoresAnObjectWhoseDataIsNotACollisionSystem) {
   const auto blobs = fo4::nif::read_collision_blobs(nif);
   ASSERT_EQ(blobs.size(), 1U);
   EXPECT_EQ(blobs[0].owner, -1);
+  EXPECT_EQ(blobs[0].flags, std::uint16_t{0});
+  EXPECT_EQ(blobs[0].system_ref, -1);
   EXPECT_EQ(blobs[0].body_id, 0U);
 }
 
@@ -160,6 +170,7 @@ TEST(NifCollision, KeepsTheFirstOfTwoObjectsNamingTheSameSystem) {
   const auto blobs = fo4::nif::read_collision_blobs(nif);
   ASSERT_EQ(blobs.size(), 1U);
   EXPECT_EQ(blobs[0].owner, 1);
+  EXPECT_EQ(blobs[0].system_ref, 0);
   EXPECT_EQ(blobs[0].body_id, 7U);
 }
 

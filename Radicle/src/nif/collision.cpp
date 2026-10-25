@@ -41,6 +41,7 @@ CollisionBlob read_blob(const NifFile& nif, std::uint32_t block) {
 
 struct CollisionOwner {
   std::int32_t target{-1};
+  std::uint16_t flags{0};
   std::int32_t system{-1};
   std::uint32_t body_id{0};
 };
@@ -54,7 +55,7 @@ CollisionOwner read_owner(const NifFile& nif, std::uint32_t block) {
   auto cursor = detail::block_cursor(nif, block);
   CollisionOwner owner;
   owner.target = cursor.read_i32();
-  static_cast<void>(cursor.read_u16());
+  owner.flags = cursor.read_u16();
   owner.system = cursor.read_i32();
   owner.body_id = cursor.read_u32();
   return owner;
@@ -86,6 +87,8 @@ std::vector<CollisionBlob> read_collision_blobs(const NifFile& nif) {
     // Invariant: the first object naming a system owns it, so two owners stay deterministic by block order.
     if (blob.owner >= 0) continue;
     blob.owner = static_cast<std::int32_t>(block);
+    blob.flags = owner.flags;
+    blob.system_ref = system;
     blob.body_id = owner.body_id;
     blob.target = block_ref(nif, owner.target);
     if (blob.target >= 0) blob.target_node = nif.node_for_block(static_cast<std::uint32_t>(blob.target));

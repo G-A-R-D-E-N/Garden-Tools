@@ -574,6 +574,26 @@ radicle_status radicle_nif_collision_owner_block(const radicle_nif* nif,
   return RADICLE_STATUS_OK;
 }
 
+radicle_status radicle_nif_collision_flags(const radicle_nif* nif, size_t index, uint16_t* out_flags) {
+  clear_error();
+  radicle_status status = RADICLE_STATUS_OK;
+  const auto* blob = find_collision(nif, index, status);
+  if (!blob) return status;
+  if (!out_flags) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_flags is required");
+  *out_flags = blob->flags;
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_nif_collision_system_ref(const radicle_nif* nif, size_t index, int32_t* out_block) {
+  clear_error();
+  radicle_status status = RADICLE_STATUS_OK;
+  const auto* blob = find_collision(nif, index, status);
+  if (!blob) return status;
+  if (!out_block) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_block is required");
+  *out_block = blob->system_ref;
+  return RADICLE_STATUS_OK;
+}
+
 radicle_status radicle_nif_collision_body_id(const radicle_nif* nif,
                                              size_t index,
                                              uint32_t* out_body_id) {

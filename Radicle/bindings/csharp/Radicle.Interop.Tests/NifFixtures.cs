@@ -129,11 +129,11 @@ internal static class NifFixtures
     private static Block NodeBlock(string type, int name, float[] translation, float scale, int[] children) =>
         new(type, NodeBody(name, translation, Identity, scale, children));
 
-    private static byte[] CollisionObjectBody(int target, int data, uint bodyId)
+    private static byte[] CollisionObjectBody(int target, int data, uint bodyId, ushort flags = 0)
     {
         var w = new Writer();
         w.I32(target);
-        w.U16(0);
+        w.U16(flags);
         w.I32(data);
         w.U32(bodyId);
         return w.Bytes();
@@ -298,7 +298,7 @@ internal static class NifFixtures
         var blocks = new List<Block>
         {
             new("bhkPhysicsSystem", blob.Bytes()),
-            new("bhkNPCollisionObject", CollisionObjectBody(2, 0, 7)),
+            new("bhkNPCollisionObject", CollisionObjectBody(2, 0, 7, 0x0003)),
             NodeBlock("NiNode", 0, new float[] { 0, 0, 0 }, 1.0f, Array.Empty<int>()),
         };
         return BuildNif(new[] { "collision" }, blocks, new[] { 2 });

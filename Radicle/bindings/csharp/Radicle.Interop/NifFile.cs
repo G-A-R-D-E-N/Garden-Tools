@@ -138,8 +138,13 @@ public sealed class NifCollisionBlob
 
     public required byte[] Bytes { get; init; }
 
-    // Invariant: all four are the reader's "none" values when no bhkNPCollisionObject names this system.
+    // Invariant: every owner field is the reader's "none" value when no bhkNPCollisionObject names this system.
     public required int OwnerBlock { get; init; }
+
+    public required ushort Flags { get; init; }
+
+    // Constraint: equals Block whenever OwnerBlock is set, because Data must name a system block.
+    public required int SystemRef { get; init; }
 
     public required uint BodyId { get; init; }
 
@@ -258,6 +263,12 @@ public sealed class NifFile
             int ownerBlock = -1;
             Call.Check(RadicleNative.NifCollisionOwnerBlock(handle, (nuint)index, &ownerBlock));
 
+            ushort flags = 0;
+            Call.Check(RadicleNative.NifCollisionFlags(handle, (nuint)index, &flags));
+
+            int systemRef = -1;
+            Call.Check(RadicleNative.NifCollisionSystemRef(handle, (nuint)index, &systemRef));
+
             uint bodyId = 0;
             Call.Check(RadicleNative.NifCollisionBodyId(handle, (nuint)index, &bodyId));
 
@@ -272,6 +283,8 @@ public sealed class NifFile
                 Type = Encoding.Latin1.GetString(Call.TakeBytes(type, typeSize)),
                 Bytes = Call.TakeBytes(payload, payloadSize),
                 OwnerBlock = ownerBlock,
+                Flags = flags,
+                SystemRef = systemRef,
                 BodyId = bodyId,
                 TargetBlock = targetBlock,
                 TargetNodeIndex = targetNode,

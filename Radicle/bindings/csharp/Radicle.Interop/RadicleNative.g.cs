@@ -3142,6 +3142,12 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_collision_owner_block")]
     public static extern Status NifCollisionOwnerBlock(IntPtr nif, nuint index, int* out_block);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_collision_flags")]
+    public static extern Status NifCollisionFlags(IntPtr nif, nuint index, ushort* out_flags);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_collision_system_ref")]
+    public static extern Status NifCollisionSystemRef(IntPtr nif, nuint index, int* out_block);
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_collision_body_id")]
     public static extern Status NifCollisionBodyId(IntPtr nif, nuint index, uint* out_body_id);
 

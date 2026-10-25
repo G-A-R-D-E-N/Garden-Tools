@@ -37,10 +37,13 @@ Block collision_block(const std::string& type, const std::vector<std::uint8_t>& 
   return Block{type, w.bytes()};
 }
 
-Block collision_object_block(std::int32_t target, std::int32_t data, std::uint32_t body_id) {
+Block collision_object_block(std::int32_t target,
+                             std::int32_t data,
+                             std::uint32_t body_id,
+                             std::uint16_t flags = 0) {
   Writer w;
   w.i32(target);
-  w.u16(0);
+  w.u16(flags);
   w.i32(data);
   w.u32(body_id);
   return Block{"bhkNPCollisionObject", w.bytes()};
@@ -124,16 +127,19 @@ TEST(CapiNifCollision, RejectsBadArgumentsAndIndexes) {
   int32_t owner = 0;
   EXPECT_EQ(radicle_nif_collision_owner_block(nif.get(), 3, &owner), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_nif_collision_owner_block(nif.get(), 0, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_nif_collision_flags(nif.get(), 3, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_nif_collision_flags(nif.get(), 0, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_nif_collision_system_ref(nif.get(), 0, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_nif_collision_body_id(nif.get(), 0, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_nif_collision_target_block(nif.get(), 0, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_nif_collision_target_node(nif.get(), 0, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
 }
 
-TEST(CapiNifCollision, ReadsTheOwnerBodyAndTargetOfASystem) {
+TEST(CapiNifCollision, ReadsTheOwnerFlagsSystemBodyAndTargetOfASystem) {
   const std::vector<std::byte> bytes = nif_fixture::build_nif(
       {"collision"},
       {nif_fixture::node_block("NiNode", 0, {}, {}), collision_block("bhkPhysicsSystem", {0x57, 0xE0, 0xE0, 0x57}),
-       collision_object_block(0, 1, 0x77)},
+       collision_object_block(0, 1, 0x77, 0x0002)},
       {0});
   Nif nif(bytes);
   ASSERT_NE(nif.get(), nullptr);
@@ -141,6 +147,14 @@ TEST(CapiNifCollision, ReadsTheOwnerBodyAndTargetOfASystem) {
   int32_t owner = -2;
   ASSERT_EQ(radicle_nif_collision_owner_block(nif.get(), 0, &owner), RADICLE_STATUS_OK);
   EXPECT_EQ(owner, 2);
+
+  uint16_t flags = 0;
+  ASSERT_EQ(radicle_nif_collision_flags(nif.get(), 0, &flags), RADICLE_STATUS_OK);
+  EXPECT_EQ(flags, std::uint16_t{0x0002});
+
+  int32_t system_ref = -2;
+  ASSERT_EQ(radicle_nif_collision_system_ref(nif.get(), 0, &system_ref), RADICLE_STATUS_OK);
+  EXPECT_EQ(system_ref, 1);
 
   uint32_t body = 0;
   ASSERT_EQ(radicle_nif_collision_body_id(nif.get(), 0, &body), RADICLE_STATUS_OK);

@@ -77,6 +77,7 @@ TEST(NifCollisionRealData, VanillaCollisionSystemsCarryPackfileBytes) {
   std::size_t odd_payloads = 0;
   std::size_t attributed = 0;
   std::size_t attributed_with_node = 0;
+  std::size_t flagged = 0;
   std::size_t unattributed = 0;
   std::size_t failures = 0;
   std::string first_failure;
@@ -113,6 +114,7 @@ TEST(NifCollisionRealData, VanillaCollisionSystemsCarryPackfileBytes) {
           if (blob.owner >= 0) {
             ++attributed;
             if (blob.target_node >= 0) ++attributed_with_node;
+            if (blob.flags != 0) ++flagged;
           } else {
             ++unattributed;
             if (first_unattributed.empty()) {
@@ -132,6 +134,7 @@ TEST(NifCollisionRealData, VanillaCollisionSystemsCarryPackfileBytes) {
             << ", packfile at 0: " << magic_at_zero << ", packfile after a 4-byte prefix: " << magic_after_length
             << ", empty payloads " << empty_payloads << ", payloads with neither magic: " << odd_payloads
             << ", attributed systems " << attributed << ", with a target node " << attributed_with_node
+            << ", with object flags " << flagged
             << ", unattributed systems " << unattributed << ", failures " << failures << '\n';
   if (!first_odd_payload.empty()) {
     std::cout << "first payload without a packfile magic: " << first_odd_payload << '\n';
