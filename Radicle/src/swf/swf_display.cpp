@@ -317,7 +317,8 @@ SwfDisplayList build_display_list(const SwfFile& file, const SwfDisplayOptions& 
     sprites.emplace(entry.first, std::move(timeline));
   }
 
-  Expander expander(sprites, shape_bounds, options, &out.placements);
+  Expander expander(sprites, shape_bounds, options,
+                    options.record_placements ? &out.placements : nullptr);
   SwfDisplayTimeline root_display;
   root_display.character_id = 0;
   for (std::uint32_t frame = 0; frame < root.frames.size(); ++frame) {

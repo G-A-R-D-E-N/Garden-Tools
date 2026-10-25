@@ -74,6 +74,45 @@ std::vector<std::byte> place2(std::uint16_t depth, std::uint16_t character, std:
   return builder.body;
 }
 
+// Constraint: a v3 body has two flag bytes and its blend mode follows the name.
+std::vector<std::byte> place3(std::uint16_t depth, std::uint16_t character, std::string_view name,
+                              const Matrix& matrix, std::uint8_t blend) {
+  SwfBuilder builder;
+  builder.u8(0x26);  // Constraint: HasCharacter|HasMatrix|HasName.
+  builder.u8(0x02);  // Constraint: HasBlendMode lives in the second flag byte.
+  builder.u16(depth);
+  builder.u16(character);
+  push_matrix(builder, matrix);
+  builder.text(name);
+  builder.u8(blend);
+  return builder.body;
+}
+
+// Move|HasMatrix without a character: it must re-author the MATRIX of a live depth.
+std::vector<std::byte> move2_matrix(std::uint16_t depth, const Matrix& matrix) {
+  SwfBuilder builder;
+  builder.u8(0x05);
+  builder.u16(depth);
+  push_matrix(builder, matrix);
+  return builder.body;
+}
+
+// Constraint: a v1 body has no flag byte, so its MATRIX offset is four and a CXFORM may follow.
+std::vector<std::byte> place1(std::uint16_t character, std::uint16_t depth, const Matrix& matrix) {
+  SwfBuilder builder;
+  builder.u16(character);
+  builder.u16(depth);
+  push_matrix(builder, matrix);
+  builder.push_bits(0, 1);  // Constraint: no additive term.
+  builder.push_bits(1, 1);  // Constraint: multiplicative term present.
+  builder.push_bits(8, 4);  // Constraint: eight bits per channel.
+  builder.push_bits(64, 8);
+  builder.push_bits(64, 8);
+  builder.push_bits(64, 8);
+  builder.align();
+  return builder.body;
+}
+
 // HasCharacter only: no MATRIX, so a target in this lifetime must be refused.
 std::vector<std::byte> place2_without_matrix(std::uint16_t depth, std::uint16_t character) {
   SwfBuilder builder;
@@ -225,7 +264,7 @@ TEST(SwfEditTransform, KeepsAnUnchangedTransformByteExact) {
   EXPECT_EQ(file.tags[0].payload, open(source).tags[0].payload);
 }
 
-TEST(SwfEditTransform, RejectsAnInstanceWhoseMatrixComesFromAnEarlierMove) {
+TEST(SwfEditTransform, RejectsAnInstanceWithNoAuthoredMatrix) {
   // Frame 1 replaces the object without a MATRIX, so this lifetime must refuse an edit.
   const auto source = movie_of({{26, place2(3, 9, "Hat", Matrix{}, std::nullopt)},
                                 {1, {}},
@@ -259,7 +298,7 @@ TEST(SwfEditTransform, RejectsAnInstanceWhoseMatrixComesFromAnEarlierMove) {
 
 TEST(SwfEditTransform, EditsTwoInstancesOfOneSharedPlacementInOnePlan) {
   // One sprite child is visible twice, so both ids must name the same authored bytes.
-  const auto source = movie_of({{39, sprite_payload(42, 1, {{26, place2(3, 9, "child", Matrix{}, std::nullopt)}})},
+  const auto source = movie_of({{39, sprite_payload(42, 1, {{26, place2(3, 9, "child", Matrix{}, std::nullopt)}, {1, {}}})},
                                 {26, place2(5, 42, "left", Matrix{}, std::nullopt)},
                                 {26, place2(6, 42, "right", Matrix{}, std::nullopt)},
                                 {1, {}}});
@@ -296,7 +335,7 @@ TEST(SwfEditTransform, EditsTwoInstancesOfOneSharedPlacementInOnePlan) {
 }
 
 TEST(SwfEditTransform, RewritesASpriteChildPlacementInsideItsDefineSprite) {
-  const auto source = movie_of({{39, sprite_payload(42, 1, {{26, place2(3, 9, "child", Matrix{}, 4)}})},
+  const auto source = movie_of({{39, sprite_payload(42, 1, {{26, place2(3, 9, "child", Matrix{}, 4)}, {1, {}}})},
                                 {26, place2(5, 42, "hero", Matrix{}, std::nullopt)},
                                 {1, {}}});
   auto file = open(source);
@@ -319,7 +358,8 @@ TEST(SwfEditTransform, RewritesASpriteChildPlacementInsideItsDefineSprite) {
   EXPECT_EQ(*reread.tags[0].sprite_id, 42);
   ASSERT_TRUE(reread.tags[0].sprite_frame_count.has_value());
   EXPECT_EQ(*reread.tags[0].sprite_frame_count, 1);
-  ASSERT_EQ(reread.tags[0].children.size(), 2u);
+  // Constraint: the rebuild must keep the child, the ShowFrame and the End tag.
+  ASSERT_EQ(reread.tags[0].children.size(), 3u);
   const auto& rewritten = reread.tags[0].children[0];
   ASSERT_TRUE(rewritten.placement.has_value());
   ASSERT_TRUE(rewritten.placement->matrix.has_value());
@@ -359,4 +399,127 @@ TEST(SwfEditTransform, RoundTripsAFreshMatrixThroughWriteAndReparse) {
   EXPECT_EQ(matrix.translate_y, -60);
   ASSERT_TRUE(reread.tags[0].placement->name.has_value());
   EXPECT_EQ(*reread.tags[0].placement->name, "Hat");
+}
+
+TEST(SwfEditTransform, EditsTheEarlierPlacementThatAuthoredTheVisibleMatrix) {
+  // Frame 1 re-authors the matrix on a Move, so the edit must rewrite that Move rather than the creating
+  // placement, and the name must still come from the creation.
+  const auto source = movie_of({{26, place2(3, 9, "Hat", Matrix{}, std::nullopt)},
+                                {1, {}},
+                                {26, move2_matrix(3, Matrix{65536, 65536, 0, 0, 100, 0})},
+                                {1, {}}});
+  auto file = open(source);
+
+  const auto targets = fo4::swf::build_instance_edit_targets(file, 1);
+  const auto* hat = find_target(targets, "Hat");
+  ASSERT_NE(hat, nullptr);
+  EXPECT_TRUE(hat->has_authored_matrix);
+  EXPECT_EQ(hat->transform_tag_index, 2u);
+
+  SwfTransformEditResult result;
+  ASSERT_TRUE(fo4::swf::apply_instance_transforms(
+      file, 1, {SwfInstanceTransformEdit{hat->instance_id, transform_of(65536, 65536, 0, 0, 20, 0)}},
+      result))
+      << result.message;
+  ASSERT_EQ(result.replaced_tag_indices.size(), 1u);
+  EXPECT_EQ(result.replaced_tag_indices[0], 2u);
+
+  const auto reread = open(fo4::swf::write_swf(file));
+  ASSERT_TRUE(reread.tags[2].placement.has_value());
+  EXPECT_TRUE(reread.tags[2].placement->move);
+  EXPECT_FALSE(reread.tags[2].placement->character_id.has_value());
+  ASSERT_TRUE(reread.tags[2].placement->matrix.has_value());
+  EXPECT_EQ(reread.tags[2].placement->matrix->translate_x, 20);
+  // Constraint: the creating placement must keep its bytes and its name.
+  EXPECT_EQ(reread.tags[0].payload, open(source).tags[0].payload);
+  ASSERT_TRUE(reread.tags[0].placement->name.has_value());
+  EXPECT_EQ(*reread.tags[0].placement->name, "Hat");
+
+  const auto settled = fo4::swf::write_swf(file);
+  SwfTransformEditResult unknown;
+  EXPECT_FALSE(fo4::swf::apply_instance_transforms(
+      file, 1, {SwfInstanceTransformEdit{999999u, SwfTransform{}}}, unknown));
+  EXPECT_NE(unknown.message.find("not found"), std::string::npos) << unknown.message;
+  EXPECT_EQ(fo4::swf::write_swf(file), settled);
+}
+
+TEST(SwfEditTransform, RewritesAVersionOnePlacementMatrix) {
+  // PlaceObject v1 has no flag byte and a CXFORM after the MATRIX, so the splice starts at offset four and
+  // must leave the colour transform intact.
+  const auto source = movie_of({{4, place1(9, 3, Matrix{})}, {1, {}}});
+  auto file = open(source);
+
+  const auto targets = fo4::swf::build_instance_edit_targets(file, 0);
+  const auto* hat = find_target(targets, "#9");
+  ASSERT_NE(hat, nullptr);
+  EXPECT_TRUE(hat->has_authored_matrix);
+
+  SwfTransformEditResult result;
+  ASSERT_TRUE(fo4::swf::apply_instance_transforms(
+      file, 0, {SwfInstanceTransformEdit{hat->instance_id, transform_of(65536, 65536, 0, 0, 40, -20)}},
+      result))
+      << result.message;
+
+  const auto reread = open(fo4::swf::write_swf(file));
+  ASSERT_TRUE(reread.tags[0].placement.has_value());
+  ASSERT_TRUE(reread.tags[0].placement->matrix.has_value());
+  EXPECT_EQ(reread.tags[0].placement->matrix->translate_x, 40);
+  EXPECT_EQ(reread.tags[0].placement->matrix->translate_y, -20);
+  ASSERT_TRUE(reread.tags[0].placement->color_transform.has_value());
+  EXPECT_EQ(reread.tags[0].placement->color_transform->multiply[0], 64);
+}
+
+TEST(SwfEditTransform, RefusesASpriteBodyTheChildListDoesNotExplain) {
+  // Constraint: bytes after the sprite's End cannot be re-emitted, so the edit must refuse.
+  SwfBuilder trailing;
+  trailing.u16(42);
+  trailing.u16(1);
+  trailing.tag(26, place2(3, 9, "child", Matrix{}, std::nullopt), false);
+  trailing.tag(1);
+  trailing.tag(0);
+  trailing.u8(0xAB);
+  trailing.u8(0xCD);
+  const auto source = movie_of({{39, trailing.body},
+                                {26, place2(5, 42, "hero", Matrix{}, std::nullopt)},
+                                {1, {}}});
+  auto file = open(source);
+
+  const auto targets = fo4::swf::build_instance_edit_targets(file, 0);
+  const auto* child = find_target(targets, "hero/child");
+  ASSERT_NE(child, nullptr);
+
+  SwfTransformEditResult result;
+  EXPECT_FALSE(fo4::swf::apply_instance_transforms(
+      file, 0, {SwfInstanceTransformEdit{child->instance_id, transform_of(65536, 65536, 0, 0, 20, 0)}},
+      result));
+  EXPECT_NE(result.message.find("could not be rebuilt"), std::string::npos) << result.message;
+  EXPECT_EQ(fo4::swf::write_swf(file), source);
+}
+
+TEST(SwfEditTransform, RewritesAPlaceObjectThreeMatrixAndKeepsTheBlendMode) {
+  // Constraint: the splice must not read the second flag byte or the blend mode as MATRIX bytes.
+  const auto source = movie_of({{70, place3(3, 9, "Hat", Matrix{}, 7)}, {1, {}}});
+  auto file = open(source);
+
+  const auto targets = fo4::swf::build_instance_edit_targets(file, 0);
+  const auto* hat = find_target(targets, "Hat");
+  ASSERT_NE(hat, nullptr);
+  EXPECT_TRUE(hat->has_authored_matrix);
+
+  SwfTransformEditResult result;
+  ASSERT_TRUE(fo4::swf::apply_instance_transforms(
+      file, 0, {SwfInstanceTransformEdit{hat->instance_id, transform_of(65536, 65536, 0, 0, -40, 60)}},
+      result))
+      << result.message;
+
+  const auto reread = open(fo4::swf::write_swf(file));
+  ASSERT_TRUE(reread.tags[0].placement.has_value());
+  const auto& placement = *reread.tags[0].placement;
+  ASSERT_TRUE(placement.matrix.has_value());
+  EXPECT_EQ(placement.matrix->translate_x, -40);
+  EXPECT_EQ(placement.matrix->translate_y, 60);
+  ASSERT_TRUE(placement.blend_mode.has_value());
+  EXPECT_EQ(*placement.blend_mode, 7);
+  ASSERT_TRUE(placement.name.has_value());
+  EXPECT_EQ(*placement.name, "Hat");
 }

@@ -151,14 +151,10 @@ bool append_tag(std::vector<std::byte>& out, const SwfTag& tag, std::span<const 
 }
 
 // Constraint: the rebuilt body must keep the id, the frame count and every child header.
-bool rebuild_sprite_payload(const SwfTag& sprite,
-                            const std::map<std::size_t, std::vector<std::byte>>& replaced,
-                            std::vector<std::byte>& out) {
+bool assemble_sprite_body(const SwfTag& sprite,
+                          const std::map<std::size_t, std::vector<std::byte>>& replaced,
+                          std::vector<std::byte>& out) {
   if (!sprite.sprite_id.has_value() || !sprite.sprite_frame_count.has_value()) {
-    return false;
-  }
-  // Precondition: a sprite with no children cannot be rebuilt.
-  if (sprite.children.empty() && sprite.payload.size() > 4) {
     return false;
   }
   out.clear();
@@ -177,6 +173,17 @@ bool rebuild_sprite_payload(const SwfTag& sprite,
     }
   }
   return true;
+}
+
+// Precondition: the unedited rebuild must equal the body, so an edit cannot drop bytes it does not explain.
+bool rebuild_sprite_payload(const SwfTag& sprite,
+                            const std::map<std::size_t, std::vector<std::byte>>& replaced,
+                            std::vector<std::byte>& out) {
+  std::vector<std::byte> base;
+  if (!assemble_sprite_body(sprite, {}, base) || base != sprite.payload) {
+    return false;
+  }
+  return assemble_sprite_body(sprite, replaced, out);
 }
 
 // Constraint: the caller passes an already quantized MATRIX so an edit cannot re-round itself.
@@ -287,7 +294,9 @@ bool replace_placement_transform(std::uint16_t tag_code, std::span<const std::by
 std::vector<SwfInstanceEditTarget> build_instance_edit_targets(const SwfFile& file,
                                                                std::uint32_t root_frame) {
   std::vector<SwfInstanceEditTarget> out;
-  const SwfDisplayList display = build_display_list(file);
+  SwfDisplayOptions options;
+  options.record_placements = true;
+  const SwfDisplayList display = build_display_list(file, options);
   if (display.status != SwfTimelineStatus::ok) {
     return out;
   }

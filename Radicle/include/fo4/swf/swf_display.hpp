@@ -59,6 +59,8 @@ struct SwfDisplayTimeline {
 struct SwfDisplayOptions {
   std::size_t max_instances{250000};
   unsigned max_depth{64};
+  /* Constraint: off by default, so a read-only frame handle does not pay for edit addressing. */
+  bool record_placements{false};
 };
 
 struct SwfDisplayList {
