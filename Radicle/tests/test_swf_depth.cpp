@@ -434,6 +434,8 @@ TEST(SwfDepthReassign, RejectsASourceOrDestinationInsideAMaskRange) {
                      {26, place2(source_depth, 11, "hero", Matrix{}, std::nullopt)},
                      {1, {}}});
   };
+  const std::string in_range =
+      "the source or destination depth falls inside a mask range; the depth reassignment is unsafe";
   {
     const auto source = make(5);
     auto file = open(source);
@@ -442,7 +444,7 @@ TEST(SwfDepthReassign, RejectsASourceOrDestinationInsideAMaskRange) {
     ASSERT_NE(hero, nullptr);
     fo4::swf::SwfDepthReassignResult result;
     EXPECT_FALSE(fo4::swf::reassign_instance_depth(file, 0, hero->instance_id, 9, result));
-    EXPECT_NE(result.message.find("mask"), std::string::npos) << result.message;
+    EXPECT_NE(result.message.find(in_range), std::string::npos) << result.message;
     EXPECT_EQ(fo4::swf::write_swf(file), source);
   }
   {
@@ -453,11 +455,22 @@ TEST(SwfDepthReassign, RejectsASourceOrDestinationInsideAMaskRange) {
     ASSERT_NE(hero, nullptr);
     fo4::swf::SwfDepthReassignResult result;
     EXPECT_FALSE(fo4::swf::reassign_instance_depth(file, 0, hero->instance_id, 5, result));
-    EXPECT_NE(result.message.find("mask"), std::string::npos) << result.message;
+    EXPECT_NE(result.message.find(in_range), std::string::npos) << result.message;
     EXPECT_EQ(fo4::swf::write_swf(file), source);
   }
+  {
+    // Constraint: both ends outside the range must move, so a check that refuses every masked movie fails here.
+    const auto source = make(9);
+    auto file = open(source);
+    const auto targets = fo4::swf::build_instance_edit_targets(file, 0);
+    const auto* hero = find_target(targets, "hero");
+    ASSERT_NE(hero, nullptr);
+    fo4::swf::SwfDepthReassignResult result;
+    EXPECT_TRUE(fo4::swf::reassign_instance_depth(file, 0, hero->instance_id, 11, result))
+        << result.message;
+    EXPECT_EQ(result.destination_depth, 11u);
+  }
 }
-
 TEST(SwfDepthReassign, RejectsATagFiveRemovalOfAnotherCharacterAtTheSourceDepth) {
   // Constraint: the scan ignores a mismatched tag-five removal but the display replay erases the depth.
   const auto source = movie_of({{26, place2(5, 9, "hero", Matrix{}, std::nullopt)},
