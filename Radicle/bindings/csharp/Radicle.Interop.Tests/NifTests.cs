@@ -158,6 +158,16 @@ public class NifTests
         Assert.Equal("Root", shape.ParentNode!.Name);
     }
 
+    [Fact]
+    public void DecodesCollisionBlobsWithTheirBlockAndType()
+    {
+        var nif = NifFile.FromBytes(NifFixtures.CollisionNif());
+        var blob = Assert.Single(nif.Collisions);
+        Assert.Equal(0, blob.Block);
+        Assert.Equal("bhkPhysicsSystem", blob.Type);
+        Assert.Equal(new byte[] { 0x57, 0xE0, 0xE0, 0x57, 0x10, 0xC0, 0xC0, 0x10 }, blob.Bytes);
+    }
+
     private static void ReadEmpty() => NifFile.FromBytes(ReadOnlySpan<byte>.Empty);
 
     [Fact]

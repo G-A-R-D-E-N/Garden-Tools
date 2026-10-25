@@ -279,6 +279,20 @@ internal static class NifFixtures
         var blocks = new List<Block> { new("NiNode", NodeBody(-1, new float[] { 0, 0, 0 }, Identity, 1.0f, new[] { 0 })) };
         return BuildNif(Array.Empty<string>(), blocks, new[] { 0 });
     }
+    internal static byte[] CollisionNif()
+    {
+        var payload = new byte[] { 0x57, 0xE0, 0xE0, 0x57, 0x10, 0xC0, 0xC0, 0x10 };
+        var blob = new Writer();
+        blob.U32((uint)payload.Length);
+        blob.Append(payload);
+        var blocks = new List<Block>
+        {
+            new("bhkPhysicsSystem", blob.Bytes()),
+            NodeBlock("NiNode", 0, new float[] { 0, 0, 0 }, 1.0f, Array.Empty<int>()),
+        };
+        return BuildNif(new[] { "collision" }, blocks, new[] { 1 });
+    }
+
     internal static byte[] BadShaderNif()
     {
         var blocks = new List<Block>

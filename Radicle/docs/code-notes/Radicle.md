@@ -4951,3 +4951,25 @@ Data source: `BGS/src/Hkx/HavokClassLayouts.json` supplies member offsets and in
 ## Radicle/tests/vmad_writer_fixture.hpp:subrecord
 
 `subrecord` finds the record under the owner the caller passes, `Vmad.esp` by default, and throws `fixture record missing` when nothing matches. A plugin read from a file takes its owner from the file name (`Radicle/src/plugin/reader.cpp:read_plugin_from_owned_bytes`), so a copy saved as `Saved.esp` or `Refused.esp` keys its records to that name and a lookup under `Vmad.esp` finds nothing. The helper used to dereference that null result, which crashed `Radicle/tests/test_vmad_quest_fragments.cpp:VmadQuestFragments.CApiPairFormEditsOneOfTwoBindingsAndRefusesBadInput` and `VmadQuestFragments.CApiPairFormRefusesDuplicatePairAndLeavesBytesUnchanged` on Native Linux Debug with no output after `[ RUN ]`. A missing record now throws, so the test fails instead of crashing.
+
+## Radicle/include/fo4/nif/collision.hpp:read_collision_blobs
+
+Returns one entry per `bhkPhysicsSystem` or `bhkRagdollSystem` block, in block order: the block index, the block type, and the block's `Binary Data` ByteArray payload. Nothing is decoded: no Havok class, fixup, shape or body is read, and the payload is neither magic-checked nor stripped of any inner length prefix. A caller that needs the packfile starting at offset 0 or 4 decides that itself (GE's old reader accepted either).
+
+Source facts: `nif.xml` makes `bhkSystem` abstract over `NiObject` with no fields of its own (`nif.xml:8296-8298`), and both `bhkPhysicsSystem` and `bhkRagdollSystem` add exactly one field, `Binary Data` of type `ByteArray` (`nif.xml:8309-8312` and `:8314-8317`, versions `#FO4# #F76#`). `ByteArray` is a u32 `Data Size` followed by that many bytes (`nif.xml:1687-1690`). `nif.xml` also records the referencing object: `bhkNPCollisionObject` adds `Flags` (`bhkCOFlags`, u16 storage), `Data` (Ref to `bhkSystem`) and `Body ID` (u32) to the inherited `Target` (Ref) from `NiCollisionObject` (`nif.xml:8300-8308`, `:3374-3380`); this reader does not follow that reference, so a blob carries no owner object, body id or node here.
+
+Bounds: a block shorter than the 4-byte length prefix, or a declared length that runs past the block's end, is a `parse_error` naming the block's file offset. Trailing bytes after the declared payload are ignored, matching the reader-wide rule that trailing bytes inside a block are not validated (`docs/NIF.md`, Deliberate omissions). A zero length is a valid blob with empty bytes, so a file that records an empty system is not silently dropped.
+
+Tests: `Radicle/tests/test_nif_collision.cpp:ReadsPhysicsAndRagdollBlobsInBlockOrder`, `:ReadsAZeroLengthPayloadAsAnEmptyBlob`, `:IgnoresTrailingBytesAfterTheDeclaredLength`, `:IgnoresBlocksThatAreNotCollisionSystems`, `:RejectsABlockShorterThanItsLengthPrefix`, `:RejectsADeclaredLengthPastTheEndOfItsBlock`.
+
+## Radicle/include/fo4/c_api_nif.h:radicle_nif_collision_bytes
+
+`radicle_nif_read` decodes the collision list once, beside the shapes, so a malformed collision block refuses the whole handle with `RADICLE_STATUS_PARSE_ERROR` instead of crashing. `radicle_nif_collision_count`, `_block`, `_type` and `_bytes` mirror the shape accessors: an out-of-range index or a null output is `RADICLE_STATUS_INVALID_ARGUMENT`, an empty payload is `OK` with a null pointer and a count of 0, and a non-empty payload is freed with `radicle_free_bytes`. `Radicle/bindings/csharp/Radicle.Interop/NifFile.cs:NifFile.Collisions` exposes the same list as `NifCollisionBlob` records (`Block`, `Type`, `Bytes`).
+
+The C surface grew by four entry points and no struct, so `RADICLE_ABI_VERSION` still reads 54; the bump this change needs is 55. The committed `RadicleNative.g.cs` was extended by hand with the four declarations in header order because codegen does not run on this machine; `radicle_csharp_interop_up_to_date` regenerates and diffs it in CI.
+
+Tests: `Radicle/tests/test_c_api_nif_collision.cpp:ReadsTheBlobBlockTypeAndPayload`, `:ReportsAnEmptyCollisionListAsZeroAndAnEmptyPayloadAsNull`, `:RejectsBadArgumentsAndIndexes`, `:RefusesAMalformedCollisionBlockWithoutACrash`, and `Radicle/bindings/csharp/Radicle.Interop.Tests/NifTests.cs:DecodesCollisionBlobsWithTheirBlockAndType`.
+
+## Radicle/tests/test_nif_collision_real.cpp:VanillaCollisionSystemsCarryPackfileBytes
+
+Scans general archives from `FO4_DATA_DIR` until it has seen 200 collision systems, reads every NIF through `read_nif`, and asserts that no scanned file fails and at least one `bhkPhysicsSystem` exists. For each physics payload it records whether the four-byte packfile magic `57 E0 E0 57` sits at offset 0 (a bare packfile) or at offset 4 (a length-prefixed packfile), and fails when it sits at neither and the payload is not empty. Which offset vanilla uses is not asserted as a fixed choice; the recorded properties `packfile_at_zero_count` and `packfile_after_prefix_count` answer it for the next piece, and the reader stays agnostic. `ragdoll_system_count` records `bhkRagdollSystem` blocks without requiring one.

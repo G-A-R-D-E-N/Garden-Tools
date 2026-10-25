@@ -2,8 +2,10 @@
 
 #include "c_api_internal.hpp"
 #include "fo4/error.hpp"
+#include "fo4/nif/collision.hpp"
 #include "fo4/nif/nif.hpp"
 
+#include <cstddef>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
@@ -16,6 +18,7 @@
 struct radicle_nif {
   fo4::nif::NifFile file;
   std::vector<fo4::nif::Shape> shapes;
+  std::vector<fo4::nif::CollisionBlob> collisions;
 };
 
 namespace {
@@ -114,6 +117,21 @@ radicle_status copy_byte_values(const std::vector<std::uint8_t>& values, uint8_t
   return RADICLE_STATUS_OK;
 }
 
+radicle_status copy_blob(const std::vector<std::byte>& values, uint8_t** out_bytes, size_t* out_size) {
+  if (!out_bytes || !out_size) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_bytes and out_size are required");
+  }
+  *out_bytes = nullptr;
+  *out_size = 0;
+  if (values.empty()) return RADICLE_STATUS_OK;
+  auto* buffer = static_cast<uint8_t*>(std::malloc(values.size()));
+  if (!buffer) return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to allocate a NIF collision blob");
+  std::memcpy(buffer, values.data(), values.size());
+  *out_bytes = buffer;
+  *out_size = values.size();
+  return RADICLE_STATUS_OK;
+}
+
 const fo4::nif::Shape* find_shape(const radicle_nif* nif, size_t index, radicle_status& status) {
   if (!nif) {
     status = fail(RADICLE_STATUS_INVALID_ARGUMENT, "nif is required");
@@ -125,6 +143,19 @@ const fo4::nif::Shape* find_shape(const radicle_nif* nif, size_t index, radicle_
   }
   status = RADICLE_STATUS_OK;
   return &nif->shapes[index];
+}
+
+const fo4::nif::CollisionBlob* find_collision(const radicle_nif* nif, size_t index, radicle_status& status) {
+  if (!nif) {
+    status = fail(RADICLE_STATUS_INVALID_ARGUMENT, "nif is required");
+    return nullptr;
+  }
+  if (index >= nif->collisions.size()) {
+    status = fail(RADICLE_STATUS_INVALID_ARGUMENT, "collision index is out of range");
+    return nullptr;
+  }
+  status = RADICLE_STATUS_OK;
+  return &nif->collisions[index];
 }
 
 const fo4::nif::Node* find_node(const radicle_nif* nif, size_t index, radicle_status& status) {
@@ -155,6 +186,7 @@ radicle_status radicle_nif_read(const uint8_t* bytes, size_t size, radicle_nif**
     handle->file =
         fo4::nif::read_nif(std::span<const std::byte>(reinterpret_cast<const std::byte*>(bytes), size));
     handle->shapes = fo4::nif::read_shapes(handle->file);
+    handle->collisions = fo4::nif::read_collision_blobs(handle->file);
     *out_nif = handle.release();
     return RADICLE_STATUS_OK;
   });
@@ -502,6 +534,45 @@ radicle_status radicle_nif_shape_bone_transform(const radicle_nif* nif,
   std::memcpy(out_translation, entry.translation, sizeof entry.translation);
   *out_scale = entry.scale;
   return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_nif_collision_count(const radicle_nif* nif, size_t* out_count) {
+  clear_error();
+  if (!nif || !out_count) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "nif and out_count are required");
+  *out_count = nif->collisions.size();
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_nif_collision_block(const radicle_nif* nif, size_t index, uint32_t* out_block) {
+  clear_error();
+  radicle_status status = RADICLE_STATUS_OK;
+  const auto* blob = find_collision(nif, index, status);
+  if (!blob) return status;
+  if (!out_block) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_block is required");
+  *out_block = blob->block;
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_nif_collision_type(const radicle_nif* nif,
+                                          size_t index,
+                                          uint8_t** out_bytes,
+                                          size_t* out_size) {
+  clear_error();
+  radicle_status status = RADICLE_STATUS_OK;
+  const auto* blob = find_collision(nif, index, status);
+  if (!blob) return status;
+  return copy_bytes(blob->type, out_bytes, out_size);
+}
+
+radicle_status radicle_nif_collision_bytes(const radicle_nif* nif,
+                                           size_t index,
+                                           uint8_t** out_bytes,
+                                           size_t* out_size) {
+  clear_error();
+  radicle_status status = RADICLE_STATUS_OK;
+  const auto* blob = find_collision(nif, index, status);
+  if (!blob) return status;
+  return copy_blob(blob->bytes, out_bytes, out_size);
 }
 
 void radicle_free_floats(float* values) {

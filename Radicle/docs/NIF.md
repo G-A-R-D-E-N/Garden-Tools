@@ -5,8 +5,10 @@ NiNode-family child lists, shape-to-global transforms, billboard-node mode, and
 geometry for `BSTriShape`, `BSSubIndexTriShape`, `BSMeshLODTriShape` and
 `BSDynamicTriShape`. A shape also decodes its bitangents, its skin weights and bone
 indices, its bones with their bind transforms, its `BSLightingShaderProperty`
-+material path and its `BSShaderTextureSet` slots. Not in scope: JSON, collision,
-alpha properties, and the fragment, effect and water shader property types.
++material path and its `BSShaderTextureSet` slots. Not in scope: JSON, collision
+decoding, alpha properties, and the fragment, effect and water shader property types.
+`include/fo4/nif/collision.hpp` extracts the raw `bhkPhysicsSystem` and
+`bhkRagdollSystem` ByteArray payloads and decodes nothing.
 `include/fo4/c_api_nif.h` exposes all of it to C, and
 `bindings/csharp/Radicle.Interop/NifFile.cs` to C#.
 
