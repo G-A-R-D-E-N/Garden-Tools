@@ -1,4 +1,5 @@
 #include "fo4/swf/swf.hpp"
+#include "fo4/swf/swf_timeline.hpp"
 #include "swf_movie_builder.hpp"
 
 #include <gtest/gtest.h>
@@ -136,11 +137,6 @@ TEST(SwfTagPlan, RejectsDuplicateTargetsAndWideCodesWithoutChangingBytes) {
   duplicate.replacements.push_back(SwfTagReplacement{1, color_payload(0x32)});
   EXPECT_FALSE(fo4::swf::apply_tag_plan(file, duplicate, result));
 
-  SwfTagPlan duplicate_insert;
-  duplicate_insert.insertions.push_back(SwfTagInsertion{2, background(0x31)});
-  duplicate_insert.insertions.push_back(SwfTagInsertion{2, background(0x32)});
-  EXPECT_FALSE(fo4::swf::apply_tag_plan(file, duplicate_insert, result));
-
   SwfTag wide = background(0x31);
   wide.code = 0x0400;
   SwfTagPlan wide_code;
@@ -164,4 +160,82 @@ TEST(SwfTagPlan, AcceptsANoOpReplacementByteExactly) {
   ASSERT_TRUE(fo4::swf::apply_tag_plan(file, plan, result));
   EXPECT_TRUE(result.inserted_tag_indices.empty());
   EXPECT_EQ(fo4::swf::write_swf(file), bytes);
+}
+
+TEST(SwfTagPlan, InsertsAtOnePositionInPlanOrderAndReportsPlanOrder) {
+  auto file = read(plan_movie());
+  SwfTagPlan plan;
+  plan.insertions.push_back(SwfTagInsertion{2, background(0x31)});
+  plan.insertions.push_back(SwfTagInsertion{2, background(0x32)});
+  SwfTagPlanResult result;
+  ASSERT_TRUE(fo4::swf::apply_tag_plan(file, plan, result));
+  ASSERT_EQ(file.tags.size(), 6u);
+  EXPECT_EQ(file.tags[2].payload, color_payload(0x31));
+  EXPECT_EQ(file.tags[3].payload, color_payload(0x32));
+  ASSERT_EQ(result.inserted_tag_indices.size(), 2u);
+  EXPECT_EQ(result.inserted_tag_indices[0], 2u);
+  EXPECT_EQ(result.inserted_tag_indices[1], 3u);
+
+  auto second = read(plan_movie());
+  SwfTagPlan reversed;
+  reversed.insertions.push_back(SwfTagInsertion{2, background(0x41)});
+  reversed.insertions.push_back(SwfTagInsertion{1, background(0x42)});
+  SwfTagPlanResult reversed_result;
+  ASSERT_TRUE(fo4::swf::apply_tag_plan(second, reversed, reversed_result));
+  ASSERT_EQ(second.tags.size(), 6u);
+  EXPECT_EQ(second.tags[1].payload, color_payload(0x42));
+  EXPECT_EQ(second.tags[3].payload, color_payload(0x41));
+  ASSERT_EQ(reversed_result.inserted_tag_indices.size(), 2u);
+  EXPECT_EQ(reversed_result.inserted_tag_indices[0], 3u);
+  EXPECT_EQ(reversed_result.inserted_tag_indices[1], 1u);
+}
+
+TEST(SwfTagPlan, RejectsAPlanWhosePayloadDoesNotDecode) {
+  auto file = read(plan_movie());
+  const auto before = fo4::swf::write_swf(file);
+  SwfTagPlanResult result;
+
+  SwfTag truncated;
+  truncated.code = fo4::swf::tag::kPlaceObject2;
+  truncated.payload = {std::byte{0x02}};
+  SwfTagPlan inserted;
+  inserted.insertions.push_back(SwfTagInsertion{2, truncated});
+  EXPECT_FALSE(fo4::swf::apply_tag_plan(file, inserted, result));
+  EXPECT_EQ(file.tags.size(), 4u);
+  EXPECT_EQ(fo4::swf::write_swf(file), before);
+
+  SwfTagPlan replaced;
+  replaced.replacements.push_back(SwfTagReplacement{0, {std::byte{0x01}}});
+  EXPECT_FALSE(fo4::swf::apply_tag_plan(file, replaced, result));
+  EXPECT_EQ(file.tags.size(), 4u);
+  EXPECT_EQ(fo4::swf::write_swf(file), before);
+}
+
+TEST(SwfTagPlan, ReplacingATagClearsItsDecodedImports) {
+  SwfBuilder builder;
+  builder.rect(0, 11000, 0, 8000, 15);
+  builder.u16(0x0C00);
+  builder.u16(1);
+  SwfBuilder imports;
+  imports.text("SharedFonts.swf");
+  imports.u8(0);
+  imports.u8(0);
+  imports.u16(1);
+  imports.u16(7);
+  imports.text("Bold");
+  builder.tag(71, imports.body, false);
+  builder.tag(1);
+  builder.tag(0);
+  const auto bytes = wrap_body(builder.body, 10, false, false);
+
+  auto result = fo4::swf::read_swf(bytes);
+  ASSERT_EQ(result.status, SwfStatus::ok);
+  ASSERT_TRUE(result.file.tags[0].imports.has_value());
+  EXPECT_NE(fo4::swf::inspect_swf(result.file, "imports.swf").find("Imports: SharedFonts.swf (1 symbols)"),
+            std::string::npos);
+
+  const std::vector<std::byte> malformed{std::byte{0x01}};
+  ASSERT_TRUE(fo4::swf::replace_tag_payload(result.file, 0, malformed));
+  EXPECT_FALSE(result.file.tags[0].imports.has_value());
+  EXPECT_EQ(fo4::swf::inspect_swf(result.file, "imports.swf").find("Imports:"), std::string::npos);
 }
