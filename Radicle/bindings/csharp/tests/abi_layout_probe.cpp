@@ -1609,11 +1609,15 @@ int main() {
   printf("SwfTagInsertion.Code %zu\n", offsetof(radicle_swf_tag_insertion, code));
   printf("SwfTagInsertion.Payload %zu\n", offsetof(radicle_swf_tag_insertion, payload));
   printf("SwfTagInsertion.Size %zu\n", offsetof(radicle_swf_tag_insertion, size));
+  printf("SwfTagRemoval %zu\n", sizeof(radicle_swf_tag_removal));
+  printf("SwfTagRemoval.TagIndex %zu\n", offsetof(radicle_swf_tag_removal, tag_index));
   printf("SwfTagPlan %zu\n", sizeof(radicle_swf_tag_plan));
   printf("SwfTagPlan.Replacements %zu\n", offsetof(radicle_swf_tag_plan, replacements));
   printf("SwfTagPlan.ReplacementCount %zu\n", offsetof(radicle_swf_tag_plan, replacement_count));
   printf("SwfTagPlan.Insertions %zu\n", offsetof(radicle_swf_tag_plan, insertions));
   printf("SwfTagPlan.InsertionCount %zu\n", offsetof(radicle_swf_tag_plan, insertion_count));
+  printf("SwfTagPlan.Removals %zu\n", offsetof(radicle_swf_tag_plan, removals));
+  printf("SwfTagPlan.RemovalCount %zu\n", offsetof(radicle_swf_tag_plan, removal_count));
   printf("SwfPlanResult %zu\n", sizeof(radicle_swf_plan_result));
   printf("SwfPlanResult.Changed %zu\n", offsetof(radicle_swf_plan_result, changed));
   printf("SwfPlanResult.Revision %zu\n", offsetof(radicle_swf_plan_result, revision));

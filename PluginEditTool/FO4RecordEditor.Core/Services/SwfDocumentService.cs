@@ -139,6 +139,13 @@ public sealed class SwfDocument : IDisposable
         for (var index = headerStart; index < (ulong)spritePayload.Length; ++index) next.Add(spritePayload[(int)index]);
         return Apply(new SwfPlanSpec().Replace(sprite.Index, next.ToArray()));
     }
+    // Requires the tag index of a frame label; the removal is one history command and undo restores the tag.
+    public SwfPlanResultRecord RemoveLabel(int tagIndex)
+    {
+        var tag = Movie.Tags[tagIndex];
+        if (tag.Code != 43) throw new InvalidOperationException("the tag is not a frame label");
+        return Apply(new SwfPlanSpec().Remove(tagIndex));
+    }
     // Constraint: the save must back the on-disk asset up before the first byte of the new file lands.
     public string Save(string? targetPath = null)
     {

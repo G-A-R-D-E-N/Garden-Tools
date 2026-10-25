@@ -69,6 +69,8 @@ public sealed class SwfPlanSpec
 
     public List<(int BeforeTagIndex, ushort Code, byte[] Payload)> Insertions { get; } = new();
 
+    public List<int> Removals { get; } = new();
+
     public SwfPlanSpec Replace(int tagIndex, ReadOnlySpan<byte> payload)
     {
         Replacements.Add((tagIndex, payload.ToArray()));
@@ -78,6 +80,11 @@ public sealed class SwfPlanSpec
     public SwfPlanSpec Insert(int beforeTagIndex, ushort code, ReadOnlySpan<byte> payload)
     {
         Insertions.Add((beforeTagIndex, code, payload.ToArray()));
+        return this;
+    }
+    public SwfPlanSpec Remove(int tagIndex)
+    {
+        Removals.Add(tagIndex);
         return this;
     }
 }
@@ -270,11 +277,13 @@ internal sealed unsafe class SwfNativePlan : IDisposable
     private readonly List<IntPtr> _payloads;
     private readonly IntPtr _replacements;
     private readonly IntPtr _insertions;
+    private readonly IntPtr _removals;
 
-    private SwfNativePlan(IntPtr replacements, IntPtr insertions, List<IntPtr> payloads)
+    private SwfNativePlan(IntPtr replacements, IntPtr insertions, IntPtr removals, List<IntPtr> payloads)
     {
         _replacements = replacements;
         _insertions = insertions;
+        _removals = removals;
         _payloads = payloads;
     }
 
@@ -295,7 +304,11 @@ internal sealed unsafe class SwfNativePlan : IDisposable
                 ? IntPtr.Zero
                 : System.Runtime.InteropServices.Marshal.AllocHGlobal(
                     checked(spec.Insertions.Count * sizeof(SwfTagInsertion)));
-            var plan = new SwfNativePlan(replacements, insertions, payloads);
+            var removals = spec.Removals.Count == 0
+                ? IntPtr.Zero
+                : System.Runtime.InteropServices.Marshal.AllocHGlobal(
+                    checked(spec.Removals.Count * sizeof(SwfTagRemoval)));
+            var plan = new SwfNativePlan(replacements, insertions, removals, payloads);
             var replacementPtr = (SwfTagReplacement*)replacements;
             for (var index = 0; index < spec.Replacements.Count; ++index)
             {
@@ -319,12 +332,19 @@ internal sealed unsafe class SwfNativePlan : IDisposable
                     Size = (nuint)payload.Length,
                 };
             }
+            var removalPtr = (SwfTagRemoval*)removals;
+            for (var index = 0; index < spec.Removals.Count; ++index)
+            {
+                removalPtr[index] = new SwfTagRemoval { TagIndex = (nuint)spec.Removals[index] };
+            }
             plan.Value = new SwfTagPlan
             {
                 Replacements = replacements,
                 ReplacementCount = (nuint)spec.Replacements.Count,
                 Insertions = insertions,
                 InsertionCount = (nuint)spec.Insertions.Count,
+                Removals = removals,
+                RemovalCount = (nuint)spec.Removals.Count,
             };
             return plan;
         }
@@ -350,6 +370,7 @@ internal sealed unsafe class SwfNativePlan : IDisposable
     {
         if (_replacements != IntPtr.Zero) System.Runtime.InteropServices.Marshal.FreeHGlobal(_replacements);
         if (_insertions != IntPtr.Zero) System.Runtime.InteropServices.Marshal.FreeHGlobal(_insertions);
+        if (_removals != IntPtr.Zero) System.Runtime.InteropServices.Marshal.FreeHGlobal(_removals);
         foreach (var pointer in _payloads)
         {
             if (pointer != IntPtr.Zero) System.Runtime.InteropServices.Marshal.FreeHGlobal(pointer);

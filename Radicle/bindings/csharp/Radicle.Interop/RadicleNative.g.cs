@@ -2455,12 +2455,20 @@ public unsafe struct SwfTagInsertion
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfTagRemoval
+{
+    public nuint TagIndex;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct SwfTagPlan
 {
     public IntPtr Replacements;
     public nuint ReplacementCount;
     public IntPtr Insertions;
     public nuint InsertionCount;
+    public IntPtr Removals;
+    public nuint RemovalCount;
 }
 
 [StructLayout(LayoutKind.Sequential)]

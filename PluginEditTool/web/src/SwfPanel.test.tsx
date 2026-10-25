@@ -14,6 +14,7 @@ function stubBridge(overrides: Record<string, unknown> = {}) {
     State: vi.fn(async () => JSON.stringify({ revision: 0, undo: 0, redo: 0, dirty: false })),
     Save: vi.fn(async () => JSON.stringify({ saved: 'Interface/Test.swf' })),
     AddLabel: vi.fn(async () => JSON.stringify({ changed: true, revision: 5, undo: 3, redo: 0, dirty: true })),
+    RemoveLabel: vi.fn(async () => JSON.stringify({ changed: true, revision: 9, undo: 7, redo: 0, dirty: true })),
     Placements: vi.fn(async () => JSON.stringify({ placements: [{ tagIndex: 2, depth: 1, character: 11, insideSprite: false }] })),
     SetDepth: vi.fn(async () => JSON.stringify({ changed: true, revision: 6, undo: 4, redo: 0, dirty: true })),
     PlacementMatrix: vi.fn(async () => JSON.stringify({ x: 0, y: 0, scaleX: 0, scaleY: 0, rotate0: 0, rotate1: 0 })),

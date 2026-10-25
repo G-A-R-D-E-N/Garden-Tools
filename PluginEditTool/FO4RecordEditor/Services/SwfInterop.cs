@@ -119,6 +119,8 @@ public class SwfInterop
         });
     public Task<string> InsertKeyframe(int tagIndex, int frame) => Run(() =>
         Snapshot(Document().InsertKeyframe(tagIndex, frame).Changed));
+    public Task<string> RemoveLabel(int tagIndex) => Run(() =>
+        Snapshot(Document().RemoveLabel(tagIndex).Changed));
     public Task<string> AddLabel(int frame, string name) => Run(() =>
     {
         var result = Document().AddLabel(frame, name);

@@ -51,6 +51,9 @@ radicle_status translate(const radicle_swf& swf, const radicle_swf_tag_plan& pla
   if (plan.insertion_count != 0 && plan.insertions == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the plan carries no insertion array");
   }
+  if (plan.removal_count != 0 && plan.removals == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the plan carries no removal array");
+  }
   out = {};
   for (std::size_t index = 0; index < plan.replacement_count; ++index) {
     const auto& entry = plan.replacements[index];
@@ -85,6 +88,14 @@ radicle_status translate(const radicle_swf& swf, const radicle_swf_tag_plan& pla
     tag.code = entry.code;
     tag.payload = copy_payload(entry.payload, entry.size);
     out.insertions.push_back(fo4::swf::SwfTagInsertion{position, std::move(tag)});
+  }
+  for (std::size_t index = 0; index < plan.removal_count; ++index) {
+    std::size_t position = 0;
+    if (!top_level_position(swf, plan.removals[index].tag_index, position)) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                  "a plan removal index must address a top-level tag; replace the DefineSprite tag instead");
+    }
+    out.removals.push_back(fo4::swf::SwfTagRemoval{position});
   }
   return RADICLE_STATUS_OK;
 }

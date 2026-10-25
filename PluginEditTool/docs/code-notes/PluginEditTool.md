@@ -115,3 +115,9 @@ service test pins the insertion and undo on that timeline too.
 bytes and builds the same document as a loose file. The document deliberately keeps no filesystem path for this
 form, so Save requires an explicit target; the host can therefore open BA2-resolved bytes and write back through its
 own asset-write path. The service test drives a resolver over the fixture bytes and asserts the reads.
+## FO4RecordEditor.Core/Services/SwfDocumentService.cs:SwfDocument.RemoveLabel (label removal)
+
+The C plan now carries a removal list (`radicle_swf_tag_removal`, regenerated interop), so `RemoveLabel` verifies the tag
+is a FrameLabel and applies a one-removal plan; undo replays the command list from the original bytes and restores the
+label. The panel's Remove button calls it for the selected label. The removal verb stays at ABI 67 because that surface
+was never pushed before this round.

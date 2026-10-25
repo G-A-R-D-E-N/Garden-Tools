@@ -26,6 +26,7 @@ type SwfHost = {
   State(): Promise<string>;
   Save(): Promise<string>;
   AddLabel(frame: number, name: string): Promise<string>;
+  RemoveLabel(tagIndex: number): Promise<string>;
   Placements(): Promise<string>;
   SetDepth(tagIndex: number, depth: number): Promise<string>;
   PlacementMatrix(tagIndex: number): Promise<string>;
@@ -183,6 +184,17 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     const placementReply = parse<{ placements: PlacementRow[] }>(await bridge.Placements());
     setPlacements(placementReply.placements ?? []);
   }, [placementTag, placementDepth]);
+  const removeLabel = useCallback(async () => {
+    const bridge = host();
+    if (!bridge || !selectedLabel) return;
+    const reply = parse<StateReply>(await bridge.RemoveLabel(selectedLabel.tagIndex));
+    if (reply.error) { setError(reply.error); return; }
+    setError('');
+    setState(reply);
+    setSelectedLabel(null);
+    const labelsReply = parse<{ labels: LabelRow[] }>(await bridge.FrameLabels());
+    setLabels(labelsReply.labels ?? []);
+  }, [selectedLabel]);
   const command = useCallback(async (action: 'undo' | 'redo' | 'save') => {
     const bridge = host();
     if (!bridge) return;
@@ -251,6 +263,7 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
           <input value={labelName} onChange={event => setLabelName(event.target.value)} disabled={!selectedLabel} />
           <button type="button" onClick={() => void renameLabel()} disabled={!selectedLabel}>Rename</button>
           <button type="button" onClick={() => void addLabel()} disabled={!labelName.trim()}>Add at frame</button>
+          <button type="button" onClick={() => void removeLabel()} disabled={!selectedLabel}>Remove</button>
         </aside>
         <main className="swf-centre">
           <div className="swf-scrubber">

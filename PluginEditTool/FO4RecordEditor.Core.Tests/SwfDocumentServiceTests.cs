@@ -99,6 +99,17 @@ public class SwfDocumentServiceTests
     }
 
     [Fact]
+    public void RemovesAFrameLabelAndUndoRestoresIt()
+    {
+        using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
+        var label = document.Movie.Tags.First(tag => tag.Code == 43 && !tag.InsideSprite);
+        var result = document.RemoveLabel(label.Index);
+        Assert.True(result.Changed);
+        Assert.DoesNotContain(document.FrameLabels(), item => item.Name == "start");
+        document.Undo();
+        Assert.Contains(document.FrameLabels(), item => item.Name == "start");
+    }
+    [Fact]
     public void RefusesADuplicateLabelBeforeTouchingTheHistory()
     {
         using var document = SwfDocument.OpenBytes(SwfFixture.Movie());

@@ -441,11 +441,18 @@ typedef struct radicle_swf_tag_insertion {
 
 /* A plan must apply all-or-nothing: a refusal must leave every tag body, the revision and the bytes
    that radicle_swf_write_bytes must return exactly as they were before the call. */
+/* Constraint: a removal names one tag of the stream the plan was built against; the End tag must be refused. */
+typedef struct radicle_swf_tag_removal {
+  size_t tag_index;
+} radicle_swf_tag_removal;
+
 typedef struct radicle_swf_tag_plan {
   const radicle_swf_tag_replacement* replacements;
   size_t replacement_count;
   const radicle_swf_tag_insertion* insertions;
   size_t insertion_count;
+  const radicle_swf_tag_removal* removals;
+  size_t removal_count;
 } radicle_swf_tag_plan;
 
 typedef struct radicle_swf_plan_result {
