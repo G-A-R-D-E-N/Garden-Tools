@@ -148,6 +148,14 @@ inline void skip_note(const char* family, std::string_view path, std::string_vie
   std::clog << family << ": skipped " << path << " (" << reason << ")\n";
 }
 
+// Constraint: one tally line per family, so a floor has a number in the log to be read from.
+inline void tally_note(const char* family, const Tally& tally) {
+  std::clog << family << ": rows=" << tally.rows << " exercised=" << tally.exercised
+            << " shared=" << tally.shared << " no_candidate=" << tally.no_candidate
+            << " unresolved=" << tally.unresolved << " absent=" << tally.absent
+            << " derived=" << tally.derived << " whole_payload=" << tally.whole_payload << "\n";
+}
+
 inline void roundtrip_family(const char* family, Signature signature) {
   const auto* directory = std::getenv("FO4_DATA_DIR");
   if (directory == nullptr) {
@@ -293,7 +301,6 @@ inline void roundtrip_family(const char* family, Signature signature) {
     edited_rows.push_back({field, key, decoded});
     ++tally.exercised;
   }
-
   ASSERT_GT(tally.exercised, 0u)
       << family
       << " exercised no row; read exercised/shared/unresolved/no_candidate from the first CI log with "
@@ -306,7 +313,7 @@ inline void roundtrip_family(const char* family, Signature signature) {
       << family << " counted rows do not add up";
   // Constraint: a carried row is never skipped for bytes an earlier row wrote, so the record choice must free it.
   EXPECT_EQ(tally.shared, 0u) << family << " skipped a carried row whose bytes an earlier row had written";
-
+  tally_note(family, tally);
   const auto bytes = fo4::write_plugin(edited);
   const auto reread = fo4::read_plugin(bytes, path);
   for (const auto& record : edited_records) {
