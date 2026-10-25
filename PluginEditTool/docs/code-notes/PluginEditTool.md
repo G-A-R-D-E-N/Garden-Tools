@@ -16,3 +16,15 @@ Tests: `FO4RecordEditor.Core.Tests/SwfDocumentServiceTests.cs` and `SwfFixture.c
 movie (edit text, root label, placement, sprite label) and pin characters, labels, the first frame,
 edit/undo/redo counts, the backup-before-save behaviour and a refused edit leaving revision and history
 untouched. Nothing was built or run locally; CI is the first compiler.
+## FO4RecordEditor/Services/SwfInterop.cs:SwfInterop and web/src/SwfPanel.tsx (SWF editor panel)
+
+`SwfInterop` is the host bridge the panel calls through `chrome.webview.hostObjects.swf`: `Open` builds the
+one `SwfDocument`, `Characters`/`FrameLabels`/`Frame` return the read side as JSON, `RenameLabel` composes a
+one-replacement tag plan from the flat tag index, `Undo`/`Redo`/`State` drive the history, and `Save` writes
+through the document. Every method returns JSON, and a `RadicleException` comes back as `{ error, status }`
+so the panel can show the Radicle message verbatim next to the field. `SwfPanel` renders the character and
+label lists on the left, the frame scrubber and display-list table in the centre, the history/save controls
+and dirty marker in the header, and binds Ctrl/Cmd+Z / Shift+Z / Y to undo/redo. The web test stubs the
+`hostObjects.swf` bridge exactly like the other PET panels and drives open → select label → rename → undo →
+redo → save plus the verbatim-refusal path. Wiring the panel into `MainShell` and the backend type surface is
+deferred to the next round; nothing was built or run locally.
