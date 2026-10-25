@@ -5622,3 +5622,31 @@ verbatim. Tests in `Radicle/bindings/csharp/Radicle.Interop.Tests/SwfEditingTest
 movie bytes from `SwfFixtures.Movie()` and pin characters, labels, the frame-0 display list, the
 plan/history undo-redo round trip, and the refusal message. Nothing was built or run locally; CI is the
 first compiler.
+## Radicle/include/fo4/abc/edit.hpp:insert_instruction / delete_instruction (instruction editing)
+
+`Radicle/src/abc/edit.cpp:insert_instruction` and `:delete_instruction` edit one AVM2 method body
+through the existing `decode_code`/`encode_code` pair rather than through a second instruction model: the
+body is decoded to `AbcInstruction`s, the edit is applied to that vector, every absolute branch and switch
+target is shifted by the inserted or deleted length, exception `from`/`to`/`target` offsets are shifted the
+same way, instruction offsets are recomputed, and `encode_code` writes the relative operands back. A target
+that names the deleted instruction, or an exception range that begins or ends inside it, is a refusal
+(`AbcEditStatus::BranchTargetsDeletedInstruction` / `ExceptionRangeAffected`); an inserted instruction that
+carries its own branch or switch is refused too, because its relative operands are meaningless at the new
+address.
+
+`Radicle/src/abc/edit.cpp:verify_and_commit` is the last step of every edit: it decodes the rewritten body,
+raises `local_count` to the highest local slot any instruction names when that is above the declared count,
+runs `Radicle/src/abc/abc_verify.cpp:verify_method_flow` with a temporary stack ceiling so a body that needs
+more stack can still be measured, then sets `max_stack` to the larger of the declared value and the observed
+depth. Any verifier refusal restores the body byte for byte, including `local_count`, `max_stack` and the
+exception table, so a refused edit is invisible to the caller. A body with no edit decodes and re-encodes to
+its own bytes, which `Radicle/tests/test_abc_edit.cpp` asserts together with a full parse/serialize round
+trip.
+
+Tests: `Radicle/tests/test_abc_edit.cpp` pins the branch shift on insert, the byte-identical revert on
+delete, the first-instruction insertion, the non-boundary and non-single-instruction refusals, the deleted
+branch target refusal, the exception-range shift and restore, the `local_count` raise for an inserted
+local-slot instruction, and the verifier refusal restoring the body. `Radicle/tests/test_abc_real.cpp` now
+inserts and deletes a `nop` at offset 0 of the first body of every shipped Interface ABC block and requires
+the code, stack/local counts and exception table to come back byte-identical, recording `edit_roundtrips`
+and `edit_mismatches`. Nothing here was built or run locally; CI is the first compiler.

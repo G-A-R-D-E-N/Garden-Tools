@@ -283,6 +283,7 @@ add_library(fo4
   src/abc/constant_pool.cpp
   src/abc/opcodes.cpp
   src/abc/disassembly.cpp
+  src/abc/edit.cpp
   src/abc/summary.cpp
   src/abc/abc_flow.cpp
   src/abc/abc_stack.cpp
@@ -771,6 +772,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_papyrus_source.cpp
     tests/test_papyrus_source_real.cpp
     tests/test_abc.cpp
+    tests/test_abc_edit.cpp
     tests/test_abc_pool.cpp
     tests/test_abc_write.cpp
     tests/test_abc_summary.cpp

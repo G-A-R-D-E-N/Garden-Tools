@@ -1,4 +1,5 @@
 #include "fo4/abc/abc.hpp"
+#include "fo4/abc/edit.hpp"
 #include "fo4/abc/flow.hpp"
 #include "fo4/abc/opcodes.hpp"
 #include "fo4/abc/summary.hpp"
@@ -9,6 +10,7 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -52,6 +54,8 @@ struct AbcStats {
   std::size_t bodies{0};
   std::size_t instructions{0};
   std::size_t reencode_mismatches{0};
+  std::size_t edit_roundtrips{0};
+  std::size_t edit_mismatches{0};
   std::size_t verified_flows{0};
   std::size_t basic_blocks{0};
   std::size_t unreachable_blocks{0};
@@ -135,6 +139,41 @@ void check_block(const std::string& name, std::span<const std::byte> payload, Ab
     EXPECT_EQ(operand_status, fo4::abc::AbcStatus::Ok)
         << name << ": " << fo4::abc::status_name(operand_status);
     stats.instructions += instructions.size();
+
+    if (body_index == 0) {
+      fo4::abc::AbcFile edited = file;
+      const std::array<std::uint8_t, 1> nop{0x02};
+      std::string edit_message;
+      const bool inserted =
+          fo4::abc::insert_instruction(edited, 0, 0, nop, edit_message) ==
+          fo4::abc::AbcEditStatus::Ok;
+      const bool reverted =
+          inserted && fo4::abc::delete_instruction(edited, 0, 0, edit_message) ==
+                           fo4::abc::AbcEditStatus::Ok;
+      if (reverted) {
+        ++stats.edit_roundtrips;
+        const auto& back = edited.bodies[0];
+        bool same = back.code == body.code && back.max_stack == body.max_stack &&
+                    back.local_count == body.local_count &&
+                    back.exceptions.size() == body.exceptions.size();
+        if (same) {
+          for (std::size_t entry = 0; entry < back.exceptions.size(); ++entry) {
+            const auto& left = back.exceptions[entry];
+            const auto& right = body.exceptions[entry];
+            if (left.from != right.from || left.to != right.to ||
+                left.target != right.target || left.exc_type != right.exc_type ||
+                left.var_name != right.var_name) {
+              same = false;
+              break;
+            }
+          }
+        }
+        if (!same) {
+          ++stats.edit_mismatches;
+          EXPECT_EQ(back.code, body.code) << name << ": body 0 did not revert to its own bytes";
+        }
+      }
+    }
 
     std::vector<std::uint8_t> reencoded;
     const auto encode_status = fo4::abc::encode_code(instructions, reencoded);
@@ -276,6 +315,8 @@ TEST(AbcCorpusReal, DecodesEveryShippedInterfaceAbcBlock) {
   EXPECT_EQ(stats.serialize_mismatches, 0u);
   EXPECT_EQ(stats.reencode_mismatches, 0u)
       << "bodies whose instruction stream did not re-encode to its own bytes";
+  EXPECT_EQ(stats.edit_mismatches, 0u)
+      << "bodies whose nop insert/delete did not revert to their own bytes";
   EXPECT_EQ(stats.verified_flows, stats.bodies)
       << "flow_refusal_histogram: " << histogram_text(stats.flow_refusals);
   EXPECT_EQ(stats.unsupported_total(), 0u)
@@ -294,6 +335,8 @@ TEST(AbcCorpusReal, DecodesEveryShippedInterfaceAbcBlock) {
   RecordProperty("bodies", std::to_string(stats.bodies));
   RecordProperty("instructions", std::to_string(stats.instructions));
   RecordProperty("reencode_mismatches", std::to_string(stats.reencode_mismatches));
+  RecordProperty("edit_roundtrips", std::to_string(stats.edit_roundtrips));
+  RecordProperty("edit_mismatches", std::to_string(stats.edit_mismatches));
   RecordProperty("verified_flows", std::to_string(stats.verified_flows));
   RecordProperty("basic_blocks", std::to_string(stats.basic_blocks));
   RecordProperty("unreachable_blocks", std::to_string(stats.unreachable_blocks));
