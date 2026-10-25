@@ -364,6 +364,20 @@ struct SwfText {
   std::size_t glyph_count{0};
 };
 
+struct SwfEditText {
+  std::uint16_t character_id{0};
+  SwfRect bounds{};
+  std::uint8_t flags1{0};
+  std::uint8_t flags2{0};
+  std::optional<std::uint16_t> font_id;
+  std::string font_class;
+  std::optional<std::uint16_t> font_height_twips;
+  std::optional<std::uint32_t> color;
+  std::optional<std::uint16_t> max_length;
+  std::string variable;
+  std::string text;
+};
+
 struct SwfSound {
   std::uint16_t sound_id{0};
   std::uint8_t format{0};
@@ -428,6 +442,7 @@ struct SwfTag {
   std::optional<SwfBitmap> bitmap;
   std::optional<SwfFont> font;
   std::optional<SwfText> text;
+  std::optional<SwfEditText> edit_text;
   std::optional<SwfSound> sound;
   std::optional<SwfExporterInfo> exporter_info;
   std::optional<SwfExternalImage> external_image;

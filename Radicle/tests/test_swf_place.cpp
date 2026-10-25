@@ -1,4 +1,6 @@
 #include "fo4/swf/swf.hpp"
+#include "fo4/swf/swf_timeline.hpp"
+#include "swf_art_fixtures.hpp"
 #include "swf_movie_builder.hpp"
 
 #include <gtest/gtest.h>
@@ -347,4 +349,198 @@ TEST(SwfPlacement, TruncatedPlacementKeepsRawPayloadAndTheNextTagStillParses) {
   EXPECT_EQ(result.file.tags[0].payload, truncated);
   EXPECT_EQ(result.file.tags[1].code, fo4::swf::tag::kShowFrame);
   EXPECT_EQ(fo4::swf::write_swf(result.file), bytes);
+}
+
+namespace {
+
+using fo4::swf::build_movie;
+using fo4::swf::census;
+using fo4::swf::inspect_swf;
+using fo4::swf::SwfTimelineStatus;
+
+std::vector<std::byte> matrix_translation(std::int32_t x, std::int32_t y) {
+  SwfBuilder bits;
+  bits.push_bits(0, 1);
+  bits.push_bits(0, 1);
+  bits.push_bits(11, 5);
+  bits.push_bits(static_cast<std::uint32_t>(x) & 0x7FFu, 11);
+  bits.push_bits(static_cast<std::uint32_t>(y) & 0x7FFu, 11);
+  bits.align();
+  return bits.body;
+}
+
+std::vector<std::byte> place2_tag(std::uint8_t flags, std::uint16_t depth,
+                                  std::optional<std::uint16_t> character,
+                                  const std::vector<std::byte>& matrix, const std::string& name) {
+  SwfBuilder body;
+  body.u8(flags);
+  body.u16(depth);
+  if (character) {
+    body.u16(*character);
+  }
+  if (!matrix.empty()) {
+    body.bytes(matrix);
+  }
+  if (!name.empty()) {
+    body.text(name);
+  }
+  return body.body;
+}
+
+std::vector<std::byte> place3_class_only_tag(std::uint16_t depth, const std::string& name) {
+  SwfBuilder body;
+  body.u8(0x00);
+  body.u8(0x08);
+  body.u16(depth);
+  body.text(name);
+  return body.body;
+}
+
+std::vector<std::byte> edit_text_tag(std::uint16_t id, const std::string& text) {
+  SwfBuilder body;
+  body.u16(id);
+  body.rect(0, 200, 0, 40, 11);
+  body.u8(0x80);
+  body.u8(0x00);
+  body.u8(0x00);
+  body.text(text);
+  return body.body;
+}
+
+std::vector<std::byte> frame_label_tag(const std::string& label) {
+  SwfBuilder body;
+  body.text(label);
+  return body.body;
+}
+
+std::vector<std::byte> symbol_class_tag(std::uint16_t id, const std::string& name) {
+  SwfBuilder body;
+  body.u16(1);
+  body.u16(id);
+  body.text(name);
+  return body.body;
+}
+
+std::vector<std::byte> sprite_tag(std::uint16_t id, std::uint16_t frames,
+                                  const std::vector<TagPayload>& children) {
+  SwfBuilder body;
+  body.u16(id);
+  body.u16(frames);
+  for (const auto& [code, payload] : children) {
+    body.tag(code, payload, false);
+  }
+  body.tag(0);
+  return body.body;
+}
+
+}  // namespace
+
+TEST(SwfTimeline, CarriesDepthStateAcrossAReplacement) {
+  const auto bytes = movie_of({
+      {26, place2_tag(0x26, 1, 1, matrix_translation(240, -40), "Shifted")},
+      {26, place2_tag(0x03, 1, 2, {}, "")},
+      {1, {}},
+  });
+  const auto result = fo4::swf::read_swf(bytes);
+  ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
+  const auto movie = build_movie(result.file);
+  ASSERT_EQ(movie.status, SwfTimelineStatus::ok) << movie.message;
+  ASSERT_EQ(movie.root.placements.size(), 2u);
+  EXPECT_EQ(movie.root.placements[1].character_id, 2);
+  EXPECT_EQ(movie.root.placements[1].name, "Shifted");
+  EXPECT_DOUBLE_EQ(movie.root.placements[1].transform.translate_x, 12.0);
+  EXPECT_DOUBLE_EQ(movie.root.placements[1].transform.translate_y, -2.0);
+  ASSERT_EQ(movie.root.frames.size(), 1u);
+  ASSERT_EQ(movie.root.frames[0].objects.size(), 1u);
+  EXPECT_EQ(movie.root.frames[0].objects[0].character_id, 2);
+  EXPECT_EQ(movie.root.frames[0].objects[0].name, "Shifted");
+}
+
+TEST(SwfTimeline, MoveOnlyUpdateCarriesIntoALaterReplacement) {
+  const auto bytes = movie_of({
+      {26, place2_tag(0x26, 1, 1, matrix_translation(240, -40), "Shifted")},
+      {26, place2_tag(0x05, 1, std::nullopt, matrix_translation(500, 80), "")},
+      {26, place2_tag(0x03, 1, 2, {}, "")},
+      {1, {}},
+  });
+  const auto result = fo4::swf::read_swf(bytes);
+  ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
+  const auto movie = build_movie(result.file);
+  ASSERT_EQ(movie.status, SwfTimelineStatus::ok) << movie.message;
+  ASSERT_EQ(movie.root.placements.size(), 3u);
+  EXPECT_DOUBLE_EQ(movie.root.placements[1].transform.translate_x, 25.0);
+  EXPECT_DOUBLE_EQ(movie.root.placements[1].transform.translate_y, 4.0);
+  EXPECT_DOUBLE_EQ(movie.root.placements[2].transform.translate_x, 25.0);
+  EXPECT_EQ(movie.root.placements[2].character_id, 2);
+}
+
+TEST(SwfTimeline, RemovalClearsTheInheritedDepthState) {
+  const auto bytes = movie_of({
+      {26, place2_tag(0x26, 1, 1, matrix_translation(240, -40), "Shifted")},
+      {28, {std::byte{0x01}, std::byte{0x00}}},
+      {26, place2_tag(0x22, 1, 2, {}, "Fresh")},
+      {1, {}},
+  });
+  const auto result = fo4::swf::read_swf(bytes);
+  ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
+  const auto movie = build_movie(result.file);
+  ASSERT_EQ(movie.status, SwfTimelineStatus::ok) << movie.message;
+  ASSERT_EQ(movie.root.placements.size(), 2u);
+  EXPECT_EQ(movie.root.placements[1].name, "Fresh");
+  EXPECT_EQ(movie.root.placements[1].transform, fo4::swf::SwfTransform{});
+  ASSERT_EQ(movie.root.frames[0].objects.size(), 1u);
+  EXPECT_EQ(movie.root.frames[0].objects[0].character_id, 2);
+}
+
+TEST(SwfTimeline, RejectsMoveAtAnUndefinedDepthAndAClassOnlyPlacement) {
+  const auto move = movie_of({{26, place2_tag(0x05, 1, std::nullopt, matrix_translation(20, 0), "")},
+                             {1, {}}});
+  const auto move_result = fo4::swf::read_swf(move);
+  ASSERT_TRUE(move_result.ok()) << fo4::swf::status_name(move_result.status);
+  EXPECT_EQ(build_movie(move_result.file).status, SwfTimelineStatus::malformed);
+
+  const auto class_only = movie_of({{70, place3_class_only_tag(1, "OwnedImage")}, {1, {}}});
+  const auto class_result = fo4::swf::read_swf(class_only);
+  ASSERT_TRUE(class_result.ok()) << fo4::swf::status_name(class_result.status);
+  EXPECT_EQ(build_movie(class_result.file).status, SwfTimelineStatus::malformed);
+}
+
+TEST(SwfTimeline, CountsDefinitionsLabelsAndInspectionRows) {
+  const auto bytes = movie_of({
+      {2, swf_art_test::define_shape_3_payload()},
+      {37, edit_text_tag(2, "Hi")},
+      {39, sprite_tag(3, 1,
+                      {{26, place2_tag(0x22, 1, 5, {}, "Child")}, {43, frame_label_tag("idle")}, {1, {}}})},
+      {43, frame_label_tag("open")},
+      {76, symbol_class_tag(0, "OwnedFixture")},
+      {26, place2_tag(0x22, 1, 5, {}, "Art")},
+      {26, place2_tag(0x22, 2, 2, {}, "Title")},
+      {1, {}},
+  });
+  const auto result = fo4::swf::read_swf(bytes);
+  ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
+  const auto counts = census(result.file);
+  EXPECT_EQ(counts.shapes, 1u);
+  EXPECT_EQ(counts.sprites, 1u);
+  EXPECT_EQ(counts.text_fields, 1u);
+  EXPECT_EQ(counts.symbols, 1u);
+  EXPECT_EQ(counts.root_labels, 1u);
+  EXPECT_EQ(counts.sprite_labels, 1u);
+  EXPECT_EQ(counts.labelled_sprite_definitions, 1u);
+
+  const std::string report = inspect_swf(result.file, "owned.swf");
+  const auto has = [&report](const std::string& needle) {
+    return report.find(needle) != std::string::npos;
+  };
+  EXPECT_TRUE(has("## owned.swf")) << report;
+  EXPECT_TRUE(has("Document class: OwnedFixture")) << report;
+  EXPECT_TRUE(has("Root frame labels: open@1")) << report;
+  EXPECT_TRUE(has("Totals: 1 shapes, 1 sprites, 0 morph shapes, 0 images, 1 text fields.")) << report;
+  EXPECT_TRUE(has("Frame-label census: 1 root labels, 1 sprite labels in 1 of 1 sprite definitions"))
+      << report;
+  EXPECT_TRUE(has("- Art: sprite #3, first frame 1, at (0, 0)")) << report;
+  EXPECT_TRUE(has("- Art/Child: shape #5, first frame 1, at (0, 0), size 100 x 50")) << report;
+  EXPECT_TRUE(has("    states: idle@1")) << report;
+  EXPECT_TRUE(has("text \"Hi\"")) << report;
+  EXPECT_TRUE(has("rect (0, 0, 10 x 2)")) << report;
 }

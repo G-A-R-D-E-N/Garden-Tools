@@ -201,6 +201,68 @@ bool decode_symbol_list(std::span<const std::byte> payload, std::vector<SwfSymbo
 
 }  // namespace
 
+bool decode_edit_text(std::span<const std::byte> data, SwfEditText& out) {
+  SwfReader head(data, 0);
+  if (!head.read_u16(out.character_id)) {
+    return false;
+  }
+  std::size_t position = 0;
+  if (!read_rect(data, 2, out.bounds, position)) {
+    return false;
+  }
+  SwfReader reader(data, position);
+  if (!reader.read_u8(out.flags1) || !reader.read_u8(out.flags2)) {
+    return false;
+  }
+  if ((out.flags1 & 0x01u) != 0) {
+    std::uint16_t font_id = 0;
+    if (!reader.read_u16(font_id)) {
+      return false;
+    }
+    out.font_id = font_id;
+  }
+  if ((out.flags2 & 0x80u) != 0 && !reader.read_zstring(out.font_class)) {
+    return false;
+  }
+  if ((out.flags1 & 0x01u) != 0 || (out.flags2 & 0x80u) != 0) {
+    std::uint16_t height = 0;
+    if (!reader.read_u16(height)) {
+      return false;
+    }
+    out.font_height_twips = height;
+  }
+  if ((out.flags1 & 0x04u) != 0) {
+    std::uint8_t red = 0;
+    std::uint8_t green = 0;
+    std::uint8_t blue = 0;
+    std::uint8_t alpha = 0;
+    if (!reader.read_u8(red) || !reader.read_u8(green) || !reader.read_u8(blue) ||
+        !reader.read_u8(alpha)) {
+      return false;
+    }
+    out.color = (static_cast<std::uint32_t>(alpha) << 24) |
+                (static_cast<std::uint32_t>(red) << 16) |
+                (static_cast<std::uint32_t>(green) << 8) | static_cast<std::uint32_t>(blue);
+  }
+  if ((out.flags1 & 0x02u) != 0) {
+    std::uint16_t max_length = 0;
+    if (!reader.read_u16(max_length)) {
+      return false;
+    }
+    out.max_length = max_length;
+  }
+  if ((out.flags2 & 0x20u) != 0 && !reader.skip(9)) {
+    return false;
+  }
+  if (!reader.read_zstring(out.variable)) {
+    return false;
+  }
+  if ((out.flags1 & 0x80u) != 0 && !reader.read_zstring(out.text)) {
+    return false;
+  }
+  return true;
+}
+
 SwfStatus decode_tag_payload(const std::vector<std::byte>& payload, SwfTag& out_tag,
                              unsigned depth, std::size_t& tags_left) {
   const std::span<const std::byte> data(payload);
@@ -382,6 +444,14 @@ SwfStatus decode_tag_payload(const std::vector<std::byte>& payload, SwfTag& out_
     case tag::kDefineText:
     case tag::kDefineText2:
       return decode_text_tag(data, out_tag);
+    case tag::kDefineEditText: {
+      SwfEditText edit;
+      if (!decode_edit_text(data, edit)) {
+        return SwfStatus::malformed_tag;
+      }
+      out_tag.edit_text = std::move(edit);
+      return SwfStatus::ok;
+    }
     case tag::kDefineSound: {
       SwfReader reader(data, 0);
       SwfSound sound;

@@ -339,6 +339,7 @@ void SwfTag::clear_decoded() {
   bitmap.reset();
   font.reset();
   text.reset();
+  edit_text.reset();
   sound.reset();
   exporter_info.reset();
   external_image.reset();

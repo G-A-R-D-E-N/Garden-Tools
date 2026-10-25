@@ -260,6 +260,7 @@ add_library(fo4
   src/swf/swf_morph.cpp
   src/swf/swf_bitmap.cpp
   src/swf/swf_text.cpp
+  src/swf/swf_timeline.cpp
   src/swf/swf_write.cpp
   src/pex_analysis/opcodes.cpp
   src/pex_analysis/cfg.cpp
