@@ -139,6 +139,20 @@ std::vector<std::byte> move2_name(std::uint16_t depth, std::string_view name) {
   return builder.body;
 }
 
+// Constraint: HasCharacter|HasMatrix|HasName|HasClipDepth, so the placement is an authored mask.
+std::vector<std::byte> place2_mask(std::uint16_t depth, std::uint16_t character,
+                                   std::string_view name, const Matrix& matrix,
+                                   std::uint16_t clip_depth) {
+  SwfBuilder builder;
+  builder.u8(0x66);
+  builder.u16(depth);
+  builder.u16(character);
+  push_matrix(builder, matrix);
+  builder.text(name);
+  builder.u16(clip_depth);
+  return builder.body;
+}
+
 std::vector<std::byte> remove2(std::uint16_t depth) {
   SwfBuilder builder;
   builder.u16(depth);
@@ -541,7 +555,7 @@ TEST(SwfKeyframe, PreservesPlaceObjectThreeFiltersAndBlendMode) {
 
 TEST(SwfKeyframe, KeepsMaskMembershipOnTheTargetFrame) {
   // Constraint: the mask at depth three covers four to six, so the widget must stay masked by it.
-  const auto source = movie_of({{26, place2(3, 9, "mask", Matrix{})},
+  const auto source = movie_of({{26, place2_mask(3, 9, "mask", Matrix{}, 6)},
                                 {26, place2(5, 7, "widget", Matrix{})},
                                 {1, {}},
                                 {1, {}}});
