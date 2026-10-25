@@ -677,6 +677,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_nif_corpus.cpp
     tests/test_c_api_nif.cpp
     tests/test_c_api_swf.cpp
+    tests/test_c_api_swf_morph.cpp
     tests/test_c_api_swf_real.cpp
     tests/test_dds.cpp
     tests/test_environment_writeback.cpp
@@ -724,6 +725,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_swf_tags.cpp
     tests/test_swf_place.cpp
     tests/test_swf_art.cpp
+    tests/test_swf_morph_tween.cpp
     tests/test_swf_real.cpp
     tests/test_abc_real.cpp
     tests/test_hkx_packfile.cpp

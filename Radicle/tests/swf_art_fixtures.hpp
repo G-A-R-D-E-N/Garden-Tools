@@ -365,6 +365,103 @@ inline std::vector<std::byte> morph_nested_fill_kinds() {
   return body.body;
 }
 
+inline void morph_translate_matrix(SwfBuilder& body, std::int32_t x, std::int32_t y) {
+  body.push_bits(0, 1);
+  body.push_bits(0, 1);
+  body.push_bits(6, 5);
+  signed_bits(body, x, 6);
+  signed_bits(body, y, 6);
+  body.align();
+}
+
+inline void morph_translate_pair(SwfBuilder& body, std::int32_t x, std::int32_t y) {
+  morph_translate_matrix(body, x, y);
+  morph_translate_matrix(body, -x, -y);
+}
+
+inline std::vector<std::byte> morph_every_kind_styles() {
+  SwfBuilder body;
+  body.u8(8);
+  body.u8(0x00);
+  rgba(body, 0x11, 0x22, 0x33, 0x44);
+  rgba(body, 0x55, 0x66, 0x77, 0x88);
+  body.u8(0x10);
+  morph_translate_pair(body, 5, 6);
+  body.u8(0x51);
+  body.u8(10);
+  rgba(body, 1, 2, 3, 4);
+  body.u8(20);
+  rgba(body, 5, 6, 7, 8);
+  body.u8(0x12);
+  morph_translate_pair(body, 7, 8);
+  body.u8(0xA2);
+  body.u8(30);
+  rgba(body, 9, 10, 11, 12);
+  body.u8(40);
+  rgba(body, 13, 14, 15, 16);
+  body.u8(50);
+  rgba(body, 17, 18, 19, 20);
+  body.u8(60);
+  rgba(body, 21, 22, 23, 24);
+  body.u8(0x13);
+  morph_translate_pair(body, 9, 10);
+  body.u8(0x51);
+  body.u8(70);
+  rgba(body, 25, 26, 27, 28);
+  body.u8(80);
+  rgba(body, 29, 30, 31, 32);
+  body.u16(0x0140);
+  body.u16(0x00C0);
+  const std::uint8_t bitmap_kinds[] = {0x40, 0x41, 0x42, 0x43};
+  for (unsigned index = 0; index < 4; ++index) {
+    body.u8(bitmap_kinds[index]);
+    body.u16(static_cast<std::uint32_t>(21 + index));
+    morph_translate_pair(body, static_cast<std::int32_t>(11 + 2 * index),
+                         static_cast<std::int32_t>(12 + 2 * index));
+  }
+  body.u8(2);
+  body.u16(40);
+  body.u16(80);
+  body.u8(0x26);
+  body.u8(0x00);
+  body.u16(0x0300);
+  body.u16(0x0480);
+  rgba(body, 0x30, 0x31, 0x32, 0x33);
+  rgba(body, 0x34, 0x35, 0x36, 0x37);
+  body.u16(5);
+  body.u16(10);
+  body.u8(0x08);
+  body.u8(0x00);
+  body.u8(0x10);
+  morph_translate_pair(body, 19, 20);
+  body.u8(0x22);
+  body.u8(90);
+  rgba(body, 0x40, 0x41, 0x42, 0x43);
+  body.u8(100);
+  rgba(body, 0x44, 0x45, 0x46, 0x47);
+  body.u8(110);
+  rgba(body, 0x48, 0x49, 0x4A, 0x4B);
+  body.u8(120);
+  rgba(body, 0x4C, 0x4D, 0x4E, 0x4F);
+  body.u8(0x43);
+  return body.body;
+}
+
+inline std::vector<std::byte> morph_every_kind_payload() {
+  SwfBuilder body;
+  body.u16(16);
+  body.rect(0, 500, 0, 400, 11);
+  body.rect(0, 520, 0, 420, 11);
+  body.rect(0, 480, 0, 380, 11);
+  body.rect(0, 500, 0, 400, 11);
+  body.u8(0x00);
+  const auto middle = start_edges(morph_every_kind_styles());
+  body.u32(static_cast<std::uint32_t>(middle.size()));
+  body.bytes(middle);
+  body.bytes(end_edges());
+  return body.body;
+}
+
 inline std::vector<std::byte> morph_new_styles_edges(const std::vector<std::byte>& styles_and_bits,
                                               const std::vector<std::byte>& nested) {
   SwfBuilder body;
@@ -375,7 +472,7 @@ inline std::vector<std::byte> morph_new_styles_edges(const std::vector<std::byte
   body.bytes(nested);
   body.push_bits(0, 1);
   body.push_bits(0x02, 5);
-  body.push_bits(3, 2);
+  body.push_bits(1, 2);
   body.push_bits(0, 6);
   body.align();
   return body.body;

@@ -93,7 +93,7 @@ internal sealed class SwfHandle : SafeHandleZeroOrMinusOneIsInvalid
 }
 
 // A parsed movie; reads must happen once at open time so the same bytes give the same records.
-public sealed unsafe class SwfFile : IDisposable
+public sealed unsafe partial class SwfFile : IDisposable
 {
     private readonly SwfHandle _handle;
 
@@ -110,6 +110,11 @@ public sealed unsafe class SwfFile : IDisposable
             Exports = ReadSymbols(_handle, Info.ExportCount, exports: true);
             FrameLabels = ReadFrameLabels(_handle, Info.FrameLabelCount);
             AbcBlocks = ReadAbcBlocks(_handle, Info.AbcCount);
+            Shapes = ReadShapes(_handle, Tags);
+            Bitmaps = ReadBitmaps(_handle, Tags);
+            Jpegs = ReadJpegs(_handle, Tags);
+            JpegTables = ReadJpegTables(_handle, Tags);
+            Morphs = ReadMorphs(_handle, Tags);
         }
         catch
         {

@@ -31,6 +31,12 @@ struct abc_view {
   bool parsed{false};
 };
 
+struct morph_frame {
+  bool filled{false};
+  double ratio{0.0};
+  std::vector<fo4::swf::SwfShapeRecord> commands;
+};
+
 }  // namespace radicle_swf_detail
 
 struct radicle_swf {
@@ -45,4 +51,5 @@ struct radicle_swf {
   std::vector<std::uint16_t> frame_label_sprites;
   std::vector<std::uint8_t> frame_label_inside_sprite;
   std::vector<radicle_swf_detail::abc_view> abcs;
+  mutable std::vector<radicle_swf_detail::morph_frame> morph_frames;
 };

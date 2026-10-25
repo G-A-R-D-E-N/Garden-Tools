@@ -212,6 +212,24 @@ struct SwfLineStyle {
   std::optional<SwfFillStyle> fill;
 };
 
+enum class SwfShapeRecordKind : std::uint8_t {
+  move = 0,
+  style_change = 1,
+  straight_edge = 2,
+  curved_edge = 3,
+};
+
+struct SwfShapeRecord {
+  SwfShapeRecordKind kind{SwfShapeRecordKind::move};
+  std::int32_t x{0};
+  std::int32_t y{0};
+  std::int32_t control_x{0};
+  std::int32_t control_y{0};
+  std::uint16_t fill0{0};
+  std::uint16_t fill1{0};
+  std::uint16_t line{0};
+};
+
 struct SwfShape {
   std::uint16_t shape_id{0};
   SwfRect bounds{};
@@ -220,9 +238,42 @@ struct SwfShape {
   std::uint8_t flags{0};
   std::vector<SwfFillStyle> fill_styles;
   std::vector<SwfLineStyle> line_styles;
+  std::vector<SwfShapeRecord> records;
   std::uint32_t edge_count{0};
   std::uint32_t curved_edge_count{0};
   std::uint32_t style_change_count{0};
+};
+
+struct SwfMorphGradientStop {
+  std::uint8_t start_ratio{0};
+  std::uint8_t end_ratio{0};
+  std::uint32_t start_color{0};
+  std::uint32_t end_color{0};
+};
+
+struct SwfMorphFillStyle {
+  std::uint8_t type{0};
+  std::uint32_t start_color{0};
+  std::uint32_t end_color{0};
+  std::optional<SwfMatrix> start_matrix;
+  std::optional<SwfMatrix> end_matrix;
+  std::uint8_t spread{0};
+  std::uint8_t interpolation{0};
+  std::vector<SwfMorphGradientStop> stops;
+  std::optional<std::int16_t> start_focal_point;
+  std::optional<std::int16_t> end_focal_point;
+  std::uint16_t bitmap_id{0};
+};
+
+struct SwfMorphLineStyle {
+  std::uint16_t start_width{0};
+  std::uint16_t end_width{0};
+  std::uint16_t flags{0};
+  std::optional<std::uint16_t> start_miter_limit;
+  std::optional<std::uint16_t> end_miter_limit;
+  std::optional<SwfMorphFillStyle> fill;
+  std::uint32_t start_color{0};
+  std::uint32_t end_color{0};
 };
 
 struct SwfMorphShape {
@@ -234,11 +285,17 @@ struct SwfMorphShape {
   SwfRect start_edge_bounds{};
   SwfRect end_edge_bounds{};
   std::uint8_t flags{0};
+  std::vector<SwfMorphFillStyle> fill_styles;
+  std::vector<SwfMorphLineStyle> line_styles;
+  std::vector<SwfShapeRecord> start_records;
+  std::vector<SwfShapeRecord> end_records;
   std::uint32_t fill_style_count{0};
   std::uint32_t line_style_count{0};
   std::uint32_t start_edge_count{0};
   std::uint32_t end_edge_count{0};
 };
+
+std::vector<SwfShapeRecord> interpolate_morph_commands(const SwfMorphShape& morph, double ratio);
 
 struct SwfBitmap {
   std::uint16_t character_id{0};

@@ -85,7 +85,26 @@ typedef struct radicle_swf_shape {
   uint32_t edge_count;
   uint32_t curved_edge_count;
   uint32_t style_change_count;
+  size_t record_count;
 } radicle_swf_shape;
+
+typedef enum radicle_swf_record_kind {
+  RADICLE_SWF_RECORD_MOVE = 0,
+  RADICLE_SWF_RECORD_STYLE_CHANGE = 1,
+  RADICLE_SWF_RECORD_STRAIGHT_EDGE = 2,
+  RADICLE_SWF_RECORD_CURVED_EDGE = 3,
+} radicle_swf_record_kind;
+
+typedef struct radicle_swf_shape_record {
+  radicle_swf_record_kind kind;
+  int32_t x;
+  int32_t y;
+  int32_t control_x;
+  int32_t control_y;
+  uint16_t fill0;
+  uint16_t fill1;
+  uint16_t line;
+} radicle_swf_shape_record;
 
 typedef struct radicle_swf_fill_style {
   uint8_t kind;
@@ -126,7 +145,47 @@ typedef struct radicle_swf_morph_shape {
   uint32_t line_style_count;
   uint32_t start_edge_count;
   uint32_t end_edge_count;
+  size_t start_record_count;
+  size_t end_record_count;
 } radicle_swf_morph_shape;
+
+typedef struct radicle_swf_morph_gradient_stop {
+  uint8_t start_ratio;
+  uint8_t end_ratio;
+  uint32_t start_color;
+  uint32_t end_color;
+} radicle_swf_morph_gradient_stop;
+
+typedef struct radicle_swf_morph_fill_style {
+  uint8_t kind;
+  uint32_t start_color;
+  uint32_t end_color;
+  uint16_t bitmap_id;
+  uint8_t spread;
+  uint8_t interpolation;
+  int32_t has_start_focal;
+  int16_t start_focal;
+  int32_t has_end_focal;
+  int16_t end_focal;
+  int32_t has_start_matrix;
+  int32_t start_matrix[6];
+  int32_t has_end_matrix;
+  int32_t end_matrix[6];
+  size_t stop_count;
+} radicle_swf_morph_fill_style;
+
+typedef struct radicle_swf_morph_line_style {
+  uint16_t start_width;
+  uint16_t end_width;
+  uint16_t flags;
+  uint32_t start_color;
+  uint32_t end_color;
+  int32_t has_fill;
+  int32_t has_start_miter;
+  uint16_t start_miter;
+  int32_t has_end_miter;
+  uint16_t end_miter;
+} radicle_swf_morph_line_style;
 
 typedef struct radicle_swf_bitmap_info {
   uint16_t character_id;
@@ -234,8 +293,38 @@ RADICLE_API radicle_status radicle_swf_shape_fill_stop_at(const radicle_swf* swf
                                                           size_t stop, radicle_swf_gradient_stop* out_stop);
 RADICLE_API radicle_status radicle_swf_shape_line_at(const radicle_swf* swf, size_t index, size_t line,
                                                      radicle_swf_line_style* out_style);
+RADICLE_API radicle_status radicle_swf_shape_record_at(const radicle_swf* swf, size_t index, size_t record,
+                                                       radicle_swf_shape_record* out_record);
+RADICLE_API radicle_status radicle_swf_shape_line_fill_at(const radicle_swf* swf, size_t index, size_t line,
+                                                          radicle_swf_fill_style* out_fill);
+RADICLE_API radicle_status radicle_swf_shape_line_fill_stop_at(const radicle_swf* swf, size_t index, size_t line,
+                                                               size_t stop, radicle_swf_gradient_stop* out_stop);
 RADICLE_API radicle_status radicle_swf_morph_at(const radicle_swf* swf, size_t index,
                                                 radicle_swf_morph_shape* out_morph);
+RADICLE_API radicle_status radicle_swf_morph_start_record_at(const radicle_swf* swf, size_t index,
+                                                             size_t record,
+                                                             radicle_swf_shape_record* out_record);
+RADICLE_API radicle_status radicle_swf_morph_end_record_at(const radicle_swf* swf, size_t index,
+                                                           size_t record,
+                                                           radicle_swf_shape_record* out_record);
+RADICLE_API radicle_status radicle_swf_morph_frame_count(const radicle_swf* swf, size_t index,
+                                                         double ratio, size_t* out_count);
+RADICLE_API radicle_status radicle_swf_morph_frame_record_at(const radicle_swf* swf, size_t index,
+                                                             double ratio, size_t record,
+                                                             radicle_swf_shape_record* out_record);
+RADICLE_API radicle_status radicle_swf_morph_fill_at(const radicle_swf* swf, size_t index, size_t fill,
+                                                     radicle_swf_morph_fill_style* out_fill);
+RADICLE_API radicle_status radicle_swf_morph_fill_stop_at(const radicle_swf* swf, size_t index,
+                                                          size_t fill, size_t stop,
+                                                          radicle_swf_morph_gradient_stop* out_stop);
+RADICLE_API radicle_status radicle_swf_morph_line_at(const radicle_swf* swf, size_t index, size_t line,
+                                                     radicle_swf_morph_line_style* out_line);
+RADICLE_API radicle_status radicle_swf_morph_line_fill_at(const radicle_swf* swf, size_t index,
+                                                          size_t line,
+                                                          radicle_swf_morph_fill_style* out_fill);
+RADICLE_API radicle_status radicle_swf_morph_line_fill_stop_at(const radicle_swf* swf, size_t index,
+                                                               size_t line, size_t stop,
+                                                               radicle_swf_morph_gradient_stop* out_stop);
 RADICLE_API radicle_status radicle_swf_bitmap_at(const radicle_swf* swf, size_t index,
                                                  radicle_swf_bitmap_info* out_bitmap);
 RADICLE_API radicle_status radicle_swf_jpeg_at(const radicle_swf* swf, size_t index,

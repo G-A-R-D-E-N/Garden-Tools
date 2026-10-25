@@ -3,8 +3,10 @@
 
 #include "fo4/c_api_swf.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 using radicle_c_detail::clear_error;
 using radicle_c_detail::fail;
@@ -16,6 +18,22 @@ const fo4::swf::SwfTag* decoded_tag(const radicle_swf* swf, std::size_t index) {
     return nullptr;
   }
   return swf->tags[index].tag;
+}
+
+const std::vector<fo4::swf::SwfShapeRecord>& morph_frame(const radicle_swf* swf, std::size_t index,
+                                                         double ratio) {
+  if (swf->morph_frames.size() != swf->tags.size()) {
+    swf->morph_frames.resize(swf->tags.size());
+  }
+  auto& frame = swf->morph_frames[index];
+  const double clamped = std::clamp(ratio, 0.0, 1.0);
+  if (!frame.filled || frame.ratio != clamped) {
+    frame.commands =
+        fo4::swf::interpolate_morph_commands(*swf->tags[index].tag->morph_shape, clamped);
+    frame.ratio = clamped;
+    frame.filled = true;
+  }
+  return frame.commands;
 }
 
 void fill_rect(const fo4::swf::SwfRect& rect, radicle_swf_rect& out) {
@@ -59,6 +77,98 @@ void fill_fill_style(const fo4::swf::SwfFillStyle& style, radicle_swf_fill_style
   }
 }
 
+void fill_matrix(const fo4::swf::SwfMatrix& matrix, std::int32_t (&out)[6]) {
+  out[0] = matrix.scale_x;
+  out[1] = matrix.scale_y;
+  out[2] = matrix.rotate_skew0;
+  out[3] = matrix.rotate_skew1;
+  out[4] = matrix.translate_x;
+  out[5] = matrix.translate_y;
+}
+
+void fill_gradient_stop(const fo4::swf::SwfGradientStop& stop, radicle_swf_gradient_stop& out) {
+  out = {};
+  out.ratio = stop.ratio;
+  out.color = stop.color;
+}
+
+void fill_gradient_stop(const fo4::swf::SwfMorphGradientStop& stop,
+                        radicle_swf_morph_gradient_stop& out) {
+  out = {};
+  out.start_ratio = stop.start_ratio;
+  out.end_ratio = stop.end_ratio;
+  out.start_color = stop.start_color;
+  out.end_color = stop.end_color;
+}
+
+void fill_morph_fill_style(const fo4::swf::SwfMorphFillStyle& style,
+                           radicle_swf_morph_fill_style& out) {
+  out = {};
+  out.kind = style.type;
+  out.start_color = style.start_color;
+  out.end_color = style.end_color;
+  out.bitmap_id = style.bitmap_id;
+  out.spread = style.spread;
+  out.interpolation = style.interpolation;
+  out.stop_count = style.stops.size();
+  out.has_start_focal = style.start_focal_point.has_value() ? 1 : 0;
+  out.start_focal = style.start_focal_point.value_or(0);
+  out.has_end_focal = style.end_focal_point.has_value() ? 1 : 0;
+  out.end_focal = style.end_focal_point.value_or(0);
+  if (style.start_matrix) {
+    out.has_start_matrix = 1;
+    fill_matrix(*style.start_matrix, out.start_matrix);
+  }
+  if (style.end_matrix) {
+    out.has_end_matrix = 1;
+    fill_matrix(*style.end_matrix, out.end_matrix);
+  }
+}
+
+void fill_shape_record(const fo4::swf::SwfShapeRecord& source, radicle_swf_shape_record& out) {
+  out = {};
+  switch (source.kind) {
+    case fo4::swf::SwfShapeRecordKind::move:
+      out.kind = RADICLE_SWF_RECORD_MOVE;
+      break;
+    case fo4::swf::SwfShapeRecordKind::style_change:
+      out.kind = RADICLE_SWF_RECORD_STYLE_CHANGE;
+      break;
+    case fo4::swf::SwfShapeRecordKind::straight_edge:
+      out.kind = RADICLE_SWF_RECORD_STRAIGHT_EDGE;
+      break;
+    case fo4::swf::SwfShapeRecordKind::curved_edge:
+      out.kind = RADICLE_SWF_RECORD_CURVED_EDGE;
+      break;
+  }
+  out.x = source.x;
+  out.y = source.y;
+  out.control_x = source.control_x;
+  out.control_y = source.control_y;
+  out.fill0 = source.fill0;
+  out.fill1 = source.fill1;
+  out.line = source.line;
+}
+
+radicle_status morph_record_at(const radicle_swf* swf, size_t index, size_t record, bool end_stream,
+                               radicle_swf_shape_record* out_record) {
+  clear_error();
+  if (out_record) *out_record = {};
+  const auto* tag = decoded_tag(swf, index);
+  if (tag == nullptr || out_record == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "swf, out_record and a tag index are required");
+  }
+  if (!tag->morph_shape) {
+    return fail(RADICLE_STATUS_NOT_FOUND, "the tag carries no decoded morph shape");
+  }
+  const auto& records = end_stream ? tag->morph_shape->end_records : tag->morph_shape->start_records;
+  if (record >= records.size()) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the morph record index is out of range");
+  }
+  fill_shape_record(records[record], *out_record);
+  return RADICLE_STATUS_OK;
+}
+
 }  // namespace
 
 extern "C" {
@@ -86,6 +196,69 @@ radicle_status radicle_swf_shape_at(const radicle_swf* swf, size_t index,
   out_shape->edge_count = shape.edge_count;
   out_shape->curved_edge_count = shape.curved_edge_count;
   out_shape->style_change_count = shape.style_change_count;
+  out_shape->record_count = shape.records.size();
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_swf_shape_record_at(const radicle_swf* swf, size_t index, size_t record,
+                                          radicle_swf_shape_record* out_record) {
+  clear_error();
+  if (out_record) *out_record = {};
+  const auto* tag = decoded_tag(swf, index);
+  if (tag == nullptr || out_record == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "swf, out_record and a tag index are required");
+  }
+  if (!tag->shape) {
+    return fail(RADICLE_STATUS_NOT_FOUND, "the tag carries no decoded shape");
+  }
+  if (record >= tag->shape->records.size()) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the shape record index is out of range");
+  }
+  fill_shape_record(tag->shape->records[record], *out_record);
+  return RADICLE_STATUS_OK;
+}
+
+
+radicle_status radicle_swf_morph_start_record_at(const radicle_swf* swf, size_t index, size_t record,
+                                                 radicle_swf_shape_record* out_record) {
+  return morph_record_at(swf, index, record, false, out_record);
+}
+
+radicle_status radicle_swf_morph_end_record_at(const radicle_swf* swf, size_t index, size_t record,
+                                               radicle_swf_shape_record* out_record) {
+  return morph_record_at(swf, index, record, true, out_record);
+}
+
+radicle_status radicle_swf_morph_frame_count(const radicle_swf* swf, size_t index, double ratio,
+                                             size_t* out_count) {
+  clear_error();
+  if (out_count) *out_count = 0;
+  const auto* tag = decoded_tag(swf, index);
+  if (tag == nullptr || out_count == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "swf, out_count and a tag index are required");
+  }
+  if (!tag->morph_shape) {
+    return fail(RADICLE_STATUS_NOT_FOUND, "the tag carries no decoded morph shape");
+  }
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_swf_morph_frame_record_at(const radicle_swf* swf, size_t index, double ratio,
+                                                 size_t record, radicle_swf_shape_record* out_record) {
+  clear_error();
+  if (out_record) *out_record = {};
+  const auto* tag = decoded_tag(swf, index);
+  if (tag == nullptr || out_record == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "swf, out_record and a tag index are required");
+  }
+  if (!tag->morph_shape) {
+    return fail(RADICLE_STATUS_NOT_FOUND, "the tag carries no decoded morph shape");
+  }
+  const auto& commands = morph_frame(swf, index, ratio);
+  if (record >= commands.size()) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the morph frame record index is out of range");
+  }
+  fill_shape_record(commands[record], *out_record);
   return RADICLE_STATUS_OK;
 }
 
@@ -125,8 +298,7 @@ radicle_status radicle_swf_shape_fill_stop_at(const radicle_swf* swf, size_t ind
   if (stop >= stops.size()) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the gradient stop index is out of range");
   }
-  out_stop->ratio = stops[stop].ratio;
-  out_stop->color = stops[stop].color;
+  fill_gradient_stop(stops[stop], *out_stop);
   return RADICLE_STATUS_OK;
 }
 
@@ -154,6 +326,52 @@ radicle_status radicle_swf_shape_line_at(const radicle_swf* swf, size_t index, s
   return RADICLE_STATUS_OK;
 }
 
+radicle_status radicle_swf_shape_line_fill_at(const radicle_swf* swf, size_t index, size_t line,
+                                              radicle_swf_fill_style* out_fill) {
+  clear_error();
+  if (out_fill) *out_fill = {};
+  const auto* tag = decoded_tag(swf, index);
+  if (tag == nullptr || out_fill == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "swf, out_fill and a tag index are required");
+  }
+  if (!tag->shape) {
+    return fail(RADICLE_STATUS_NOT_FOUND, "the tag carries no decoded shape");
+  }
+  if (line >= tag->shape->line_styles.size()) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the line style index is out of range");
+  }
+  if (!tag->shape->line_styles[line].fill) {
+    return fail(RADICLE_STATUS_NOT_FOUND, "the line style carries no fill");
+  }
+  fill_fill_style(*tag->shape->line_styles[line].fill, *out_fill);
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_swf_shape_line_fill_stop_at(const radicle_swf* swf, size_t index, size_t line,
+                                                   size_t stop, radicle_swf_gradient_stop* out_stop) {
+  clear_error();
+  if (out_stop) *out_stop = {};
+  const auto* tag = decoded_tag(swf, index);
+  if (tag == nullptr || out_stop == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "swf, out_stop and a tag index are required");
+  }
+  if (!tag->shape) {
+    return fail(RADICLE_STATUS_NOT_FOUND, "the tag carries no decoded shape");
+  }
+  if (line >= tag->shape->line_styles.size()) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the line style index is out of range");
+  }
+  if (!tag->shape->line_styles[line].fill) {
+    return fail(RADICLE_STATUS_NOT_FOUND, "the line style carries no fill");
+  }
+  const auto& stops = tag->shape->line_styles[line].fill->stops;
+  if (stop >= stops.size()) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the gradient stop index is out of range");
+  }
+  fill_gradient_stop(stops[stop], *out_stop);
+  return RADICLE_STATUS_OK;
+}
+
 radicle_status radicle_swf_morph_at(const radicle_swf* swf, size_t index,
                                     radicle_swf_morph_shape* out_morph) {
   clear_error();
@@ -178,6 +396,129 @@ radicle_status radicle_swf_morph_at(const radicle_swf* swf, size_t index,
   out_morph->line_style_count = morph.line_style_count;
   out_morph->start_edge_count = morph.start_edge_count;
   out_morph->end_edge_count = morph.end_edge_count;
+  out_morph->start_record_count = morph.start_records.size();
+  out_morph->end_record_count = morph.end_records.size();
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_swf_morph_fill_at(const radicle_swf* swf, size_t index, size_t fill,
+                                         radicle_swf_morph_fill_style* out_fill) {
+  clear_error();
+  if (out_fill) *out_fill = {};
+  const auto* tag = decoded_tag(swf, index);
+  if (tag == nullptr || out_fill == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "swf, out_fill and a tag index are required");
+  }
+  if (!tag->morph_shape) {
+    return fail(RADICLE_STATUS_NOT_FOUND, "the tag carries no decoded morph shape");
+  }
+  const auto& fills = tag->morph_shape->fill_styles;
+  if (fill >= fills.size()) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the morph fill style index is out of range");
+  }
+  fill_morph_fill_style(fills[fill], *out_fill);
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_swf_morph_fill_stop_at(const radicle_swf* swf, size_t index, size_t fill,
+                                              size_t stop,
+                                              radicle_swf_morph_gradient_stop* out_stop) {
+  clear_error();
+  if (out_stop) *out_stop = {};
+  const auto* tag = decoded_tag(swf, index);
+  if (tag == nullptr || out_stop == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "swf, out_stop and a tag index are required");
+  }
+  if (!tag->morph_shape) {
+    return fail(RADICLE_STATUS_NOT_FOUND, "the tag carries no decoded morph shape");
+  }
+  const auto& fills = tag->morph_shape->fill_styles;
+  if (fill >= fills.size()) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the morph fill style index is out of range");
+  }
+  const auto& stops = fills[fill].stops;
+  if (stop >= stops.size()) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the gradient stop index is out of range");
+  }
+  fill_gradient_stop(stops[stop], *out_stop);
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_swf_morph_line_at(const radicle_swf* swf, size_t index, size_t line,
+                                         radicle_swf_morph_line_style* out_line) {
+  clear_error();
+  if (out_line) *out_line = {};
+  const auto* tag = decoded_tag(swf, index);
+  if (tag == nullptr || out_line == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "swf, out_line and a tag index are required");
+  }
+  if (!tag->morph_shape) {
+    return fail(RADICLE_STATUS_NOT_FOUND, "the tag carries no decoded morph shape");
+  }
+  const auto& lines = tag->morph_shape->line_styles;
+  if (line >= lines.size()) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the morph line style index is out of range");
+  }
+  const auto& style = lines[line];
+  out_line->start_width = style.start_width;
+  out_line->end_width = style.end_width;
+  out_line->flags = style.flags;
+  out_line->start_color = style.start_color;
+  out_line->end_color = style.end_color;
+  out_line->has_fill = style.fill.has_value() ? 1 : 0;
+  out_line->has_start_miter = style.start_miter_limit.has_value() ? 1 : 0;
+  out_line->start_miter = style.start_miter_limit.value_or(0);
+  out_line->has_end_miter = style.end_miter_limit.has_value() ? 1 : 0;
+  out_line->end_miter = style.end_miter_limit.value_or(0);
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_swf_morph_line_fill_at(const radicle_swf* swf, size_t index, size_t line,
+                                              radicle_swf_morph_fill_style* out_fill) {
+  clear_error();
+  if (out_fill) *out_fill = {};
+  const auto* tag = decoded_tag(swf, index);
+  if (tag == nullptr || out_fill == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "swf, out_fill and a tag index are required");
+  }
+  if (!tag->morph_shape) {
+    return fail(RADICLE_STATUS_NOT_FOUND, "the tag carries no decoded morph shape");
+  }
+  const auto& lines = tag->morph_shape->line_styles;
+  if (line >= lines.size()) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the morph line style index is out of range");
+  }
+  if (!lines[line].fill) {
+    return fail(RADICLE_STATUS_NOT_FOUND, "the morph line style carries no fill");
+  }
+  fill_morph_fill_style(*lines[line].fill, *out_fill);
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_swf_morph_line_fill_stop_at(const radicle_swf* swf, size_t index, size_t line,
+                                                   size_t stop,
+                                                   radicle_swf_morph_gradient_stop* out_stop) {
+  clear_error();
+  if (out_stop) *out_stop = {};
+  const auto* tag = decoded_tag(swf, index);
+  if (tag == nullptr || out_stop == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "swf, out_stop and a tag index are required");
+  }
+  if (!tag->morph_shape) {
+    return fail(RADICLE_STATUS_NOT_FOUND, "the tag carries no decoded morph shape");
+  }
+  const auto& lines = tag->morph_shape->line_styles;
+  if (line >= lines.size()) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the morph line style index is out of range");
+  }
+  if (!lines[line].fill) {
+    return fail(RADICLE_STATUS_NOT_FOUND, "the morph line style carries no fill");
+  }
+  const auto& stops = lines[line].fill->stops;
+  if (stop >= stops.size()) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the gradient stop index is out of range");
+  }
+  fill_gradient_stop(stops[stop], *out_stop);
   return RADICLE_STATUS_OK;
 }
 

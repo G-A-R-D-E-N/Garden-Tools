@@ -2,6 +2,7 @@
 #include "swf_movie_builder.hpp"
 
 #include <gtest/gtest.h>
+#include <zlib.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -28,11 +29,20 @@ std::vector<std::byte> movie_with(std::uint16_t code, std::span<const std::byte>
   return wrap_body(builder.body, 10, false, false);
 }
 
+std::vector<std::byte> shape_tail(SwfBuilder& builder) {
+  builder.u8(0);
+  builder.u8(0);
+  builder.u8(0);
+  builder.push_bits(0, 6);
+  builder.align();
+  return builder.body;
+}
+
 std::vector<std::byte> shape_payload(std::uint16_t shape_id) {
   SwfBuilder builder;
   builder.u16(shape_id);
   builder.rect(0, 200, 0, 100, 9);
-  return builder.body;
+  return shape_tail(builder);
 }
 
 std::vector<std::byte> shape4_payload() {
@@ -41,7 +51,18 @@ std::vector<std::byte> shape4_payload() {
   builder.rect(0, 200, 0, 100, 9);
   builder.rect(0, 190, 0, 90, 9);
   builder.u8(0x05);
-  return builder.body;
+  return shape_tail(builder);
+}
+
+std::vector<std::byte> zlib_bytes(std::span<const std::uint8_t> raw) {
+  uLongf packed = compressBound(static_cast<uLong>(raw.size()));
+  std::vector<std::byte> buffer(static_cast<std::size_t>(packed));
+  EXPECT_EQ(compress2(reinterpret_cast<Bytef*>(buffer.data()), &packed,
+                      reinterpret_cast<const Bytef*>(raw.data()), static_cast<uLong>(raw.size()),
+                      Z_BEST_COMPRESSION),
+            Z_OK);
+  buffer.resize(static_cast<std::size_t>(packed));
+  return buffer;
 }
 
 std::vector<std::byte> lossless_payload(std::uint16_t character_id, std::uint8_t format,
@@ -52,9 +73,14 @@ std::vector<std::byte> lossless_payload(std::uint16_t character_id, std::uint8_t
   builder.u8(format);
   builder.u16(width);
   builder.u16(height);
+  const auto pixels = static_cast<std::size_t>(format == 3 ? 1 : (format == 4 ? 2 : 4));
+  const auto row = (static_cast<std::size_t>(width) * pixels + 3u) & ~std::size_t{3};
+  std::vector<std::uint8_t> raw(row * height, 0x40);
   if (palette.has_value()) {
     builder.u8(*palette);
+    raw.insert(raw.begin(), static_cast<std::size_t>(*palette + 1) * 3u, 0x11);
   }
+  builder.bytes(zlib_bytes(raw));
   return builder.body;
 }
 

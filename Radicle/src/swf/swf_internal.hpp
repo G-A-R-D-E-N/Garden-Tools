@@ -70,6 +70,20 @@ struct SwfShapeStyles {
   unsigned line_bits{0};
 };
 
+struct SwfMorphStyles {
+  std::vector<SwfMorphFillStyle> fills;
+  std::vector<SwfMorphLineStyle> lines;
+  unsigned fill_bits{0};
+  unsigned line_bits{0};
+};
+
+struct StyleBounds {
+  std::size_t fills{0};
+  std::size_t lines{0};
+  std::size_t fill_base{0};
+  std::size_t line_base{0};
+};
+
 struct ShapeRecordCounts {
   std::uint32_t records{0};
   std::uint32_t edges{0};
@@ -90,13 +104,15 @@ bool read_line_style(Cursor& cursor, unsigned version, SwfLineStyle& out);
 
 bool read_shape_styles(Cursor& cursor, unsigned version, SwfShapeStyles& out);
 
-bool read_morph_styles(Cursor& cursor, unsigned version, SwfShapeStyles& out,
-                       std::size_t& fill_count, std::size_t& line_count);
+bool read_morph_styles(Cursor& cursor, unsigned version, SwfMorphStyles& out);
 
-// Requires an EndShapeRecord; `next` is the byte the aligned stream ends on.
 bool read_shape_records(std::span<const std::byte> data, std::size_t start, unsigned version,
-                        bool morph, SwfShapeStyles& styles, ShapeRecordCounts& counts,
-                        std::size_t& next);
+                        SwfShapeStyles& styles, StyleBounds& bounds, ShapeRecordCounts& counts,
+                        std::vector<SwfShapeRecord>& records, std::size_t& next);
+
+bool read_morph_records(std::span<const std::byte> data, std::size_t start, unsigned version,
+                        SwfMorphStyles& styles, StyleBounds& bounds, ShapeRecordCounts& counts,
+                        std::vector<SwfShapeRecord>& records, std::size_t& next);
 
 std::string to_text(std::span<const std::byte> bytes);
 

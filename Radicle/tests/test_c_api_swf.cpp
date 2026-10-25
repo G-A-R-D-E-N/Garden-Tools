@@ -2,6 +2,7 @@
 #include "fo4/c_api.h"
 #include "fo4/c_api_env.h"
 #include "fo4/c_api_swf.h"
+#include "swf_art_fixtures.hpp"
 #include "swf_movie_builder.hpp"
 #include "temp_data_dir.hpp"
 
@@ -494,14 +495,25 @@ std::vector<std::byte> art_morph_payload() {
   middle.u8(0);
   middle.u8(0);
   middle.u8(0x00);
+  middle.push_bits(0, 1);
+  middle.push_bits(0x01, 5);
+  middle.push_bits(4, 5);
+  middle.push_bits(3, 4);
+  middle.push_bits(0x0E, 4);
+  middle.push_bits(1, 1);
+  middle.push_bits(1, 1);
+  middle.push_bits(2, 4);
+  middle.push_bits(1, 1);
+  middle.push_bits(5, 4);
+  middle.push_bits(6, 4);
   middle.push_bits(0, 6);
   middle.align();
   SwfBuilder body;
   body.u16(45);
-  body.rect(0, 400, 0, 300, 9);
-  body.rect(0, 500, 0, 350, 9);
-  body.rect(0, 380, 0, 280, 9);
-  body.rect(0, 480, 0, 330, 9);
+  body.rect(0, 400, 0, 300, 12);
+  body.rect(0, 500, 0, 350, 12);
+  body.rect(0, 380, 0, 280, 12);
+  body.rect(0, 480, 0, 330, 12);
   body.u8(0);
   body.u32(static_cast<std::uint32_t>(middle.body.size()));
   body.bytes(middle.body);
@@ -595,6 +607,23 @@ TEST(CApiSwfTest, ReadsDecodedShapeMorphBitmapAndJpegArt) {
   EXPECT_EQ(shape.curved_edge_count, 0u);
   EXPECT_EQ(shape.style_change_count, 1u);
 
+  EXPECT_EQ(shape.record_count, 2u);
+  radicle_swf_shape_record record{};
+  ASSERT_EQ(radicle_swf_shape_record_at(file.get(), 0, 0, &record), RADICLE_STATUS_OK);
+  EXPECT_EQ(record.kind, RADICLE_SWF_RECORD_STYLE_CHANGE);
+  EXPECT_EQ(record.fill0, 0);
+  EXPECT_EQ(record.fill1, 0);
+  EXPECT_EQ(record.line, 0);
+  EXPECT_EQ(record.x, 0);
+  EXPECT_EQ(record.y, 0);
+  ASSERT_EQ(radicle_swf_shape_record_at(file.get(), 0, 1, &record), RADICLE_STATUS_OK);
+  EXPECT_EQ(record.kind, RADICLE_SWF_RECORD_STRAIGHT_EDGE);
+  EXPECT_EQ(record.x, 10);
+  EXPECT_EQ(record.y, 20);
+  EXPECT_EQ(radicle_swf_shape_record_at(file.get(), 0, 2, &record), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_swf_shape_record_at(file.get(), 1, 0, &record), RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(radicle_swf_shape_record_at(nullptr, 0, 0, &record), RADICLE_STATUS_INVALID_ARGUMENT);
+
   radicle_swf_fill_style fill{};
   ASSERT_EQ(radicle_swf_shape_fill_at(file.get(), 0, 0, &fill), RADICLE_STATUS_OK);
   EXPECT_EQ(fill.kind, 0x00);
@@ -612,7 +641,22 @@ TEST(CApiSwfTest, ReadsDecodedShapeMorphBitmapAndJpegArt) {
   EXPECT_EQ(morph.start_edge_bounds.x_max, 380);
   EXPECT_EQ(morph.end_edge_bounds.x_max, 480);
   EXPECT_EQ(morph.fill_style_count, 0u);
-  EXPECT_EQ(morph.start_edge_count, 0u);
+  EXPECT_EQ(morph.start_edge_count, 1u);
+  EXPECT_EQ(morph.end_edge_count, 0u);
+  EXPECT_EQ(morph.start_record_count, 2u);
+  EXPECT_EQ(morph.end_record_count, 0u);
+  ASSERT_EQ(radicle_swf_morph_start_record_at(file.get(), 1, 0, &record), RADICLE_STATUS_OK);
+  EXPECT_EQ(record.kind, RADICLE_SWF_RECORD_MOVE);
+  EXPECT_EQ(record.x, 3);
+  EXPECT_EQ(record.y, -2);
+  ASSERT_EQ(radicle_swf_morph_start_record_at(file.get(), 1, 1, &record), RADICLE_STATUS_OK);
+  EXPECT_EQ(record.kind, RADICLE_SWF_RECORD_STRAIGHT_EDGE);
+  EXPECT_EQ(record.x, 5);
+  EXPECT_EQ(record.y, 6);
+  EXPECT_EQ(radicle_swf_morph_start_record_at(file.get(), 1, 2, &record), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_swf_morph_end_record_at(file.get(), 1, 0, &record), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_swf_morph_start_record_at(file.get(), 0, 0, &record), RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(radicle_swf_morph_end_record_at(nullptr, 1, 0, &record), RADICLE_STATUS_INVALID_ARGUMENT);
 
   radicle_swf_bitmap_info bitmap{};
   ASSERT_EQ(radicle_swf_bitmap_at(file.get(), 2, &bitmap), RADICLE_STATUS_OK);
@@ -638,4 +682,42 @@ TEST(CApiSwfTest, ReadsDecodedShapeMorphBitmapAndJpegArt) {
   EXPECT_EQ(radicle_swf_shape_at(file.get(), 99, &shape), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_swf_shape_fill_at(file.get(), 0, 1, &fill), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_swf_shape_at(nullptr, 0, &shape), RADICLE_STATUS_INVALID_ARGUMENT);
+}
+
+TEST(CApiSwfTest, ReadsAShapeLineFillThroughTheGetters) {
+  const auto file = open(swf_art_test::movie_with(83, swf_art_test::define_shape_4_payload()));
+  ASSERT_NE(file, nullptr);
+
+  radicle_swf_shape shape{};
+  ASSERT_EQ(radicle_swf_shape_at(file.get(), 0, &shape), RADICLE_STATUS_OK);
+  EXPECT_EQ(shape.line_style_count, 2u);
+
+  radicle_swf_line_style line{};
+  radicle_swf_fill_style fill{};
+  radicle_swf_gradient_stop stop{};
+  ASSERT_EQ(radicle_swf_shape_line_at(file.get(), 0, 0, &line), RADICLE_STATUS_OK);
+  EXPECT_EQ(line.has_fill, 0);
+  EXPECT_EQ(line.has_miter_limit, 1);
+  EXPECT_EQ(line.miter_limit, 0x0300);
+  EXPECT_EQ(radicle_swf_shape_line_fill_at(file.get(), 0, 0, &fill), RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(radicle_swf_shape_line_fill_stop_at(file.get(), 0, 0, 0, &stop),
+            RADICLE_STATUS_NOT_FOUND);
+
+  ASSERT_EQ(radicle_swf_shape_line_at(file.get(), 0, 1, &line), RADICLE_STATUS_OK);
+  EXPECT_EQ(line.has_fill, 1);
+  EXPECT_EQ(line.has_miter_limit, 0);
+  EXPECT_EQ(line.color, 0u);
+
+  ASSERT_EQ(radicle_swf_shape_line_fill_at(file.get(), 0, 1, &fill), RADICLE_STATUS_OK);
+  EXPECT_EQ(fill.kind, 0x00);
+  EXPECT_EQ(fill.color, 0xFF778899u);
+  EXPECT_EQ(fill.has_matrix, 0);
+  EXPECT_EQ(fill.stop_count, 0u);
+
+  EXPECT_EQ(radicle_swf_shape_line_fill_stop_at(file.get(), 0, 1, 0, &stop),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_swf_shape_line_fill_at(file.get(), 0, 2, &fill), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_swf_shape_line_fill_stop_at(file.get(), 0, 2, 0, &stop),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_swf_shape_line_fill_at(nullptr, 0, 1, &fill), RADICLE_STATUS_INVALID_ARGUMENT);
 }
