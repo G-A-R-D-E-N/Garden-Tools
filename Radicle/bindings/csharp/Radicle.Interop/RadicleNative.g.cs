@@ -2096,7 +2096,7 @@ public unsafe struct LandBlend
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 69u;
+    public const uint CompiledAbiVersion = 55u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
