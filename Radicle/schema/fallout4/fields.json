@@ -20608,7 +20608,8 @@
           {
             "signature": "SDSC",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00000000"
           },
           {
             "signature": "REPT",
@@ -20802,13 +20803,15 @@
             "signature": "XCNT",
             "minimum": 1,
             "maximum": 1,
-            "coupled": true
+            "coupled": true,
+            "default": "0000000000000000000000000000000000000000"
           },
           {
             "signature": "DATA",
             "minimum": 1,
             "maximum": 1,
-            "coupled": true
+            "coupled": true,
+            "default": ""
           }
         ]
       },

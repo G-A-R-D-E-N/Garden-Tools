@@ -3,6 +3,7 @@
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/subrecord_authoring.hpp"
+#include "fo4/plugin/sound_writer.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/formlink_lists.hpp"
@@ -15,6 +16,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <map>
 #include <set>
@@ -354,6 +356,105 @@ TEST_P(SoundWriterReal, LinksAndOptionalSubrecordsEditOfficialRecordsAndKeepEver
   RecordProperty("subrecords_added", added);
   RecordProperty("subrecords_removed", removed);
   RecordProperty("records_edited", static_cast<int>(targets.size()));
+}
+
+TEST_P(SoundWriterReal, AddsAndRemovesFilesAndBaseLinksOnOfficialDescriptors) {
+  bool skip = false;
+  const auto path = official(GetParam(), skip);
+  if (skip) { GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data"; }
+  record_game_build(detect_game_build(path.parent_path()));
+  auto sample = sound_sample(fo4::read_plugin_file(path), path);
+  auto original = sample;
+  int file_edits = 0;
+  int base_edits = 0;
+  bool base_proven = false;
+  std::vector<fo4::FormKey> touched;
+  fo4::FormKey first_descriptor{};
+  fo4::visit_records(original, [&](const fo4::Record& record) {
+    if (record.header.signature != sig("SNDR")) { return; }
+    if (first_descriptor.owner().empty()) first_descriptor = record.form_key;
+    const auto subs = subs_of(original, record.form_key);
+    bool has_rate_group = false;
+    bool auto_weapon = false;
+    for (const auto& [name, bytes] : subs) {
+      if (rate_group_member(sig(name.c_str()))) has_rate_group = true;
+      if (name == "CNAM" && bytes.size() == 4) {
+        std::uint32_t kind = 0;
+        std::memcpy(&kind, bytes.data(), 4);
+        auto_weapon = kind == 0xED157AE3u;
+      }
+    }
+    const auto* live = fo4::find_record(sample, record.form_key);
+    ASSERT_NE(live, nullptr);
+    if (!has_rate_group || file_edits != 0) {
+      if (auto_weapon && !base_proven) {
+        const auto snapshot = *live;
+        const auto removed = fo4::remove_sound_descriptor_base(sample, record.form_key);
+        if (removed == fo4::SoundDescriptorMutationStatus::updated) {
+          const auto added = fo4::add_sound_descriptor_base(sample, record.form_key, first_descriptor);
+          if (added == fo4::SoundDescriptorMutationStatus::updated) {
+            const auto restored = fo4::remove_sound_descriptor_base(sample, record.form_key);
+            if (restored == fo4::SoundDescriptorMutationStatus::updated) {
+              base_proven = true;
+              ++base_edits;
+              touched.push_back(record.form_key);
+            }
+          }
+        }
+        if (subs_of(sample, record.form_key) != subs_of(original, record.form_key)) {
+          auto* restore = fo4::find_record(sample, record.form_key);
+          if (restore != nullptr) *restore = snapshot;
+        }
+      }
+      return;
+    }
+    if (fo4::add_sound_descriptor_file(sample, record.form_key, "radicle\\real.wav") !=
+        fo4::SoundDescriptorMutationStatus::updated) {
+      return;
+    }
+    const auto* record_now = fo4::find_record(sample, record.form_key);
+    ASSERT_NE(record_now, nullptr);
+    bool found_file = false;
+    for (const auto& sub : record_now->subrecords) {
+      if (sub.signature.to_string() != "ANAM") continue;
+      const std::string_view text(reinterpret_cast<const char*>(sub.data.data()), sub.data.size());
+      if (!text.empty() && text.back() == '\0' && text.substr(0, text.size() - 1) == "radicle\\real.wav") {
+        found_file = true;
+      }
+    }
+    EXPECT_TRUE(found_file);
+    std::size_t file_index = 0;
+    std::size_t seen = 0;
+    for (const auto& sub : record_now->subrecords) {
+      if (sub.signature.to_string() != "ANAM") continue;
+      const std::string_view text(reinterpret_cast<const char*>(sub.data.data()), sub.data.size());
+      if (!text.empty() && text.back() == '\0' && text.substr(0, text.size() - 1) == "radicle\\real.wav") {
+        file_index = seen;
+      }
+      ++seen;
+    }
+    EXPECT_EQ(fo4::remove_sound_descriptor_file(sample, record.form_key, file_index),
+              fo4::SoundDescriptorMutationStatus::updated);
+    const auto restored = subs_of(sample, record.form_key);
+    EXPECT_EQ(restored, subs);
+    ++file_edits;
+    touched.push_back(record.form_key);
+  });
+  for (const auto& key : touched) {
+    const auto* live = fo4::find_record(sample, key);
+    ASSERT_NE(live, nullptr);
+    const auto before = subs_of(original, key);
+    const auto after = subs_of(sample, key);
+    EXPECT_EQ(after, before) << key.to_string();
+  }
+  const auto reread = fo4::read_plugin(fo4::write_plugin(sample), path);
+  for (const auto& key : touched) {
+    const auto* live = fo4::find_record(reread, key);
+    ASSERT_NE(live, nullptr);
+    EXPECT_EQ(subs_of(reread, key), subs_of(original, key)) << key.to_string();
+  }
+  RecordProperty("file_edits", file_edits);
+  RecordProperty("base_edits", base_edits);
 }
 
 INSTANTIATE_TEST_SUITE_P(OfficialMasters, SoundWriterReal,

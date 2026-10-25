@@ -1,6 +1,7 @@
 #include "sound_writer_fixture.hpp"
 
 #include "fo4/schema/form_links.hpp"
+#include "fo4/plugin/sound_writer.hpp"
 
 #include <gtest/gtest.h>
 
@@ -294,4 +295,99 @@ TEST(SoundAuthoring, MarkerMusicAndFootstepFieldsWriteOnlyTheirBytes) {
   const auto set = fo4::env::decode_footstep_set(saved.env(), saved.record(k_set));
   EXPECT_EQ(set.categories[4].at(0), key(k_step));
   EXPECT_EQ(set.categories[0].at(0), key(k_step2));
+}
+
+TEST(SoundAuthoring, AddsAndRemovesSoundFilesAroundRateGroups) {
+  auto plugin = read(build(fixture()));
+  EXPECT_EQ(fo4::add_sound_descriptor_file(plugin, key(k_std), "c.wav"),
+            fo4::SoundDescriptorMutationStatus::updated);
+  EXPECT_EQ(payloads(plugin, k_std, "ANAM"),
+            (std::vector<Bytes>{zstr("a.wav"), zstr("b.wav"), zstr("c.wav")}));
+  EXPECT_EQ(order(plugin, k_std),
+            (Order{"EDID", "CNAM", "GNAM", "SNAM", "ANAM", "ANAM", "ANAM", "ONAM", "CTDA", "LNAM", "BNAM"}));
+  EXPECT_EQ(fo4::add_sound_descriptor_file(plugin, key(k_auto), "x.wav"),
+            fo4::SoundDescriptorMutationStatus::updated);
+  EXPECT_EQ(order(plugin, k_auto),
+            (Order{"EDID", "CNAM", "ANAM", "BNAM", "ITMC", "ITMS", "INTV", "FNAM", "ITME", "ITMS", "INTV",
+                   "FNAM", "ITME"}));
+  EXPECT_EQ(fo4::remove_sound_descriptor_file(plugin, key(k_std), 1),
+            fo4::SoundDescriptorMutationStatus::updated);
+  EXPECT_EQ(payloads(plugin, k_std, "ANAM"), (std::vector<Bytes>{zstr("a.wav"), zstr("c.wav")}));
+  EXPECT_EQ(fo4::remove_sound_descriptor_file(plugin, key(k_std), 9),
+            fo4::SoundDescriptorMutationStatus::index_out_of_range);
+  EXPECT_EQ(fo4::remove_sound_descriptor_file(plugin, key(k_marker), 0),
+            fo4::SoundDescriptorMutationStatus::record_mismatch);
+  EXPECT_EQ(fo4::remove_sound_descriptor_file(plugin, key(k_bare), 0),
+            fo4::SoundDescriptorMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::remove_sound_descriptor_file(plugin, key(0x8FF), 0),
+            fo4::SoundDescriptorMutationStatus::record_missing);
+  EXPECT_TRUE(refused(plugin, [&] {
+    fo4::add_sound_descriptor_file(plugin, key(k_std), std::string_view{"a\0b", 3});
+  }));
+  const auto reloaded = reload(plugin);
+  EXPECT_EQ(payloads(reloaded, k_std, "ANAM"), (std::vector<Bytes>{zstr("a.wav"), zstr("c.wav")}));
+  EXPECT_EQ(payloads(reloaded, k_auto, "ANAM"), (std::vector<Bytes>{zstr("x.wav")}));
+  EXPECT_EQ(order(reloaded, k_auto),
+            (Order{"EDID", "CNAM", "ANAM", "BNAM", "ITMC", "ITMS", "INTV", "FNAM", "ITME", "ITMS", "INTV",
+                   "FNAM", "ITME"}));
+}
+
+TEST(SoundAuthoring, BaseDescriptorLinkFollowsTheAutoWeaponDiscriminator) {
+  auto plugin = read(build(fixture()));
+  EXPECT_EQ(fo4::remove_sound_descriptor_base(plugin, key(k_auto)),
+            fo4::SoundDescriptorMutationStatus::updated);
+  EXPECT_TRUE(payloads(plugin, k_auto, "BNAM").empty());
+  EXPECT_EQ(fo4::remove_sound_descriptor_base(plugin, key(k_auto)),
+            fo4::SoundDescriptorMutationStatus::subrecord_missing);
+  EXPECT_TRUE(refused(plugin, [&] { fo4::add_sound_descriptor_base(plugin, key(k_auto), fo4::FormKey{}); }));
+  EXPECT_EQ(fo4::remove_sound_descriptor_base(plugin, key(k_std)),
+            fo4::SoundDescriptorMutationStatus::discriminator_unproven);
+  EXPECT_EQ(fo4::remove_sound_descriptor_base(plugin, key(k_nokind)),
+            fo4::SoundDescriptorMutationStatus::discriminator_unproven);
+  EXPECT_EQ(fo4::remove_sound_descriptor_base(plugin, key(k_bare)),
+            fo4::SoundDescriptorMutationStatus::discriminator_unproven);
+  EXPECT_EQ(fo4::add_sound_descriptor_base(plugin, key(k_std), key(k_std)),
+            fo4::SoundDescriptorMutationStatus::discriminator_unproven);
+  EXPECT_EQ(fo4::add_sound_descriptor_base(plugin, key(k_compound), key(k_std)),
+            fo4::SoundDescriptorMutationStatus::discriminator_unproven);
+  EXPECT_EQ(fo4::add_sound_descriptor_base(plugin, key(k_nokind), key(k_std)),
+            fo4::SoundDescriptorMutationStatus::discriminator_unproven);
+  EXPECT_EQ(fo4::add_sound_descriptor_base(plugin, key(k_auto), key(k_compound)),
+            fo4::SoundDescriptorMutationStatus::updated);
+  EXPECT_EQ(payloads(plugin, k_auto, "BNAM"), (std::vector<Bytes>{words({k_compound})}));
+  EXPECT_EQ(fo4::add_sound_descriptor_base(plugin, key(k_auto), key(k_std)),
+            fo4::SoundDescriptorMutationStatus::already_present);
+  EXPECT_TRUE(refused(plugin, [&] { fo4::add_sound_descriptor_base(plugin, key(k_auto), key(k_misc)); }));
+  const auto reloaded = reload(plugin);
+  EXPECT_EQ(payloads(reloaded, k_auto, "BNAM"), (std::vector<Bytes>{words({k_compound})}));
+  EXPECT_EQ(order(reloaded, k_auto),
+            (Order{"EDID", "CNAM", "BNAM", "ITMC", "ITMS", "INTV", "FNAM", "ITME", "ITMS", "INTV", "FNAM",
+                   "ITME"}));
+}
+
+TEST(SoundAuthoring, CreatesSoundMarkerAndFootstepSetFromProvenDefaults) {
+  auto plugin = read(build(fixture()));
+  const auto marker = fo4::create_record(plugin, sig("SOUN"), "NewMarker");
+  ASSERT_EQ(marker.status, fo4::RecordCreateStatus::created);
+  const auto marker_id = marker.key.local().value();
+  EXPECT_EQ(order(plugin, marker_id), (Order{"EDID", "OBND", "SDSC"}));
+  EXPECT_EQ(payloads(plugin, marker_id, "OBND"), (std::vector<Bytes>{filled(12, 0)}));
+  EXPECT_EQ(payloads(plugin, marker_id, "SDSC"), (std::vector<Bytes>{words({0})}));
+  EXPECT_EQ(payloads(plugin, marker_id, "EDID"), (std::vector<Bytes>{zstr("NewMarker")}));
+  EXPECT_TRUE(authoring_clean(plugin, marker_id));
+  const auto set = fo4::create_record(plugin, sig("FSTS"), "NewFootstepSet");
+  ASSERT_EQ(set.status, fo4::RecordCreateStatus::created);
+  const auto set_id = set.key.local().value();
+  EXPECT_EQ(order(plugin, set_id), (Order{"EDID", "XCNT", "DATA"}));
+  EXPECT_EQ(payloads(plugin, set_id, "XCNT"), (std::vector<Bytes>{filled(20, 0)}));
+  EXPECT_EQ(payloads(plugin, set_id, "DATA"), (std::vector<Bytes>{Bytes{}}));
+  EXPECT_TRUE(authoring_clean(plugin, set_id));
+  const SavedEnvironment saved(reload(plugin));
+  const auto decoded_marker = fo4::env::decode_sound_marker(saved.env(), saved.record(marker_id));
+  EXPECT_FALSE(decoded_marker.repeat.has_value());
+  const auto decoded_set = fo4::env::decode_footstep_set(saved.env(), saved.record(set_id));
+  for (const auto& category : decoded_set.categories) EXPECT_TRUE(category.empty());
+  for (const auto count : fo4::env::decode_footstep_counts(*saved.record(set_id).record)) {
+    EXPECT_EQ(count, 0u);
+  }
 }
