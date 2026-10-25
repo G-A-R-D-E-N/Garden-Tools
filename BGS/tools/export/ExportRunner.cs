@@ -6,7 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using OpenCommonwealth.Services.Hkx;
-using OpenCommonwealth.Services.Nif;
+using Radicle.Interop;
 
 namespace BehaviourStudio.Tools.Export;
 
@@ -158,24 +158,35 @@ public sealed class ExportRunner
 
     private void ExportNif(byte[] bytes, string source, string stem, string inputSha)
     {
-        var nif = NifFile.Parse(bytes, source);
-        var embedded = NifPhysics.Read(nif);
-        if (embedded.Count == 0)
+        // Constraint: one NIF parse, so the object naming a system comes from the same read as the payload it names.
+        var nif = NifFile.FromBytes(bytes);
+        if (nif.Collisions.Count == 0)
             throw new InvalidDataException("this NIF holds no bhkPhysicsSystem or bhkRagdollSystem");
 
-        bool single = embedded.Count == 1;
-        foreach (var blob in embedded)
+        bool single = nif.Collisions.Count == 1;
+        foreach (var blob in nif.Collisions)
         {
-            if (!NifCollisionDecoder.TryDecode(blob.Bytes, out var model, out string error))
+            var attribution = blob.OwnerBlock >= 0 ? Attributed(blob) : null;
+            if (!NifCollisionDecoder.TryDecode(blob.Bytes, attribution, out var model, out string error))
                 throw new InvalidDataException(
-                    $"collision block {blob.BlockIndex} ({blob.BlockType}) did not decode: {error}");
+                    $"collision block {blob.Block} ({blob.Type}) did not decode: {error}");
 
-            string suffix = single ? ".collision.json" : $".{blob.BlockIndex}.collision.json";
+            string suffix = single ? ".collision.json" : $".{blob.Block}.collision.json";
             Write(ExportFormats.CollisionFolder, stem, suffix,
-                  CollisionExport.Json(model!, source, blob.BlockIndex, blob.BlockType), source,
-                  inputSha);
+                  CollisionExport.Json(model!, source, blob.Block, blob.Type), source, inputSha);
         }
     }
+
+    private static NifCollisionAttribution Attributed(NifCollisionBlob blob) => new()
+    {
+        OwnerBlock = blob.OwnerBlock,
+        Flags = blob.Flags,
+        SystemRef = blob.SystemRef,
+        BodyId = blob.BodyId,
+        TargetBlock = blob.TargetBlock,
+        TargetNode = blob.TargetNodeIndex,
+        TargetNodeName = blob.TargetNode?.Name ?? "",
+    };
 
     private bool Attempt(string source, string kind, Action action)
     {
@@ -281,7 +292,7 @@ public sealed class ExportRunner
     private static bool IsInputFailure(Exception failure) =>
         failure is IOException or InvalidDataException or InvalidOperationException or ArgumentException
             or UnauthorizedAccessException or NotSupportedException or FormatException
-            or OverflowException or IndexOutOfRangeException;
+            or OverflowException or IndexOutOfRangeException or RadicleException;
 
     private sealed record IndexRow(string Kind, string Source, string Target, string InputSha256,
                                    string Sha256, long Bytes);

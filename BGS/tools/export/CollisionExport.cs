@@ -16,7 +16,27 @@ public static class CollisionExport
             .Name("pointerSize").Number(model.PointerSize)
             .Name("lengthPrefixed").Boolean(model.LengthPrefixed)
             .Name("systemClass").Text(model.SystemClass)
-            .Name("bodies").Array();
+            .Name("attribution");
+
+        // Invariant: an unattributed system writes null instead of zeroes, so no consumer reads block 0 as its owner.
+        if (model.Attribution is { } attribution)
+        {
+            json.Object()
+                .Name("ownerBlock").Number(attribution.OwnerBlock)
+                .Name("flags").Number((int)attribution.Flags)
+                .Name("systemRef").Number(attribution.SystemRef)
+                .Name("bodyId").Number(attribution.BodyId)
+                .Name("targetBlock").Number(attribution.TargetBlock)
+                .Name("targetNode").Number(attribution.TargetNode)
+                .Name("targetNodeName").Text(attribution.TargetNodeName)
+                .EndObject();
+        }
+        else
+        {
+            json.Null();
+        }
+
+        json.Name("bodies").Array();
 
         foreach (var body in model.Bodies)
         {

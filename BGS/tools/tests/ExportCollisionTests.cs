@@ -62,6 +62,42 @@ public sealed class ExportCollisionTests
         Assert.Equal(model.Notes.Count, document["notes"]!.AsArray().Count);
     }
 
+    // Invariant: the object that names a system must reach the document, and a system no object names must say so.
+    [Fact]
+    public void AttributionReachesTheDocumentOnlyWhenAnObjectNamedTheSystem()
+    {
+        var attribution = new NifCollisionAttribution
+        {
+            OwnerBlock = 12,
+            Flags = 0x0003,
+            SystemRef = 7,
+            BodyId = 0x0002A1B4,
+            TargetBlock = 9,
+            TargetNode = 0,
+            TargetNodeName = "Body",
+        };
+
+        Assert.True(NifCollisionDecoder.TryDecode(NifCollisionFixture.Build().Bytes, attribution,
+                                                  out var model, out string error), error);
+        var document = JsonNode.Parse(
+            CollisionExport.Json(model!, "synthetic.nif", 7, "bhkPhysicsSystem"))!.AsObject();
+
+        var written = document["attribution"]!.AsObject();
+        Assert.Equal(12, written["ownerBlock"]!.GetValue<int>());
+        Assert.Equal(0x0003, written["flags"]!.GetValue<int>());
+        Assert.Equal(7, written["systemRef"]!.GetValue<int>());
+        Assert.Equal(0x0002A1B4u, written["bodyId"]!.GetValue<uint>());
+        Assert.Equal(9, written["targetBlock"]!.GetValue<int>());
+        Assert.Equal(0, written["targetNode"]!.GetValue<int>());
+        Assert.Equal("Body", written["targetNodeName"]!.GetValue<string>());
+
+        Assert.True(NifCollisionDecoder.TryDecode(NifCollisionFixture.Build().Bytes,
+                                                  out var unattributed, out string plainError), plainError);
+        var bare = JsonNode.Parse(
+            CollisionExport.Json(unattributed!, "synthetic.nif", 7, "bhkPhysicsSystem"))!.AsObject();
+        Assert.Null(bare["attribution"]);
+    }
+
     // Invariant: a NIF without a collision system must be reported, not skipped and not crashed on.
     [Fact]
     public void ANifWithoutCollisionIsAnErrorRowAndWritesNoDocument()
