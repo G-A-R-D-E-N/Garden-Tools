@@ -72,6 +72,9 @@ AbcStatus decode_code(const std::vector<std::uint8_t>& code,
                       std::vector<AbcInstruction>& out,
                       std::span<const AbcException> exceptions = {});
 
+/* Invariant: offsets and lengths are the decoded ones, so the size equals instruction.length. */
+AbcStatus encode_code(const std::vector<AbcInstruction>& code, std::vector<std::uint8_t>& out);
+
 AbcStatus validate_operand_pools(const AbcFile& file,
                                  const std::vector<AbcInstruction>& code);
 
