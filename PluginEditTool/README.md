@@ -129,6 +129,27 @@ The executable looks for `web\dist\` beside itself first, which keeps packaged b
 of the source checkout. Radicle is linked as `radicle.dll`, so the editor starts only when that DLL
 is in the same folder.
 
+## Deploying a build
+
+The deployed copy comes from CI, not from a local build. `native-ci.yml` job
+**FO4IDE package (Windows, MSVC, shared Radicle)** builds the shared configuration on the Windows
+runner, checks that the executable imports `radicle.dll`, checks that `radicle_abi_version()` matches
+`RADICLE_ABI_VERSION`, runs the native MCP smoke, and uploads the release package as the
+`fo4ide-package` artifact.
+
+To deploy:
+
+1. Download the `fo4ide-package` artifact of the `nomad/dev` run.
+2. Back up the current install:
+   `Copy-Item -Recurse E:\Tools\FO4IDE\FO4IDE E:\Tools\FO4IDE\backup-<timestamp>`.
+3. Replace the folder with the package contents (the `FO4RecordEditor-<date>` folder's contents,
+   including `radicle.dll` and `web\dist`).
+4. Verify the backend and the tool surface:
+   `python -c "import ctypes; l=ctypes.CDLL(r'E:\Tools\FO4IDE\FO4IDE\radicle.dll'); l.radicle_abi_version.restype=ctypes.c_uint32; print(l.radicle_abi_version())"`
+   must print the `RADICLE_ABI_VERSION` of that commit, and the MCP tool list must contain the
+   tools the build claims (ask the client for `tools/list`, or run
+   `PluginEditTool\native\tests\native_mcp_smoke.py` against the deployed executable).
+
 ## Building from source
 
 ### Windows

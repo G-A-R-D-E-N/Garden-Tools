@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [string] $Version = (Get-Date -Format 'yyyy.MM.dd'),
+    [string] $BuildDir = $env:FO4IDE_BUILD_DIR,
     [string] $NiftoolPath = $env:NIFTOOL_PATH,
     [string] $TexconvPath = $env:TEXCONV_PATH,
     [string] $CkWikiPath = $env:CK_WIKI_PATH,
@@ -17,7 +18,10 @@ Set-StrictMode -Version Latest
 
 $Root        = $PSScriptRoot
 $NativeDir   = Join-Path $Root 'native'
-$NativeBuild = Join-Path $NativeDir 'build\package-win-x64'
+# -BuildDir stages an existing configured build (CI builds once with Ninja and
+# runs this script against that tree). Without it the script configures and
+# builds its own Visual Studio tree, which is what a release machine does.
+$NativeBuild = if ($BuildDir) { (Resolve-Path -LiteralPath $BuildDir).Path } else { Join-Path $NativeDir 'build\package-win-x64' }
 $WebDir      = Join-Path $Root 'web'
 $Staging     = Join-Path $Root "dist\FO4RecordEditor-$Version"
 $ZipPath     = Join-Path $Root "dist\FO4RecordEditor-$Version.zip"
@@ -48,29 +52,33 @@ if (-not (Test-Path $WebDist)) {
 }
 
 Step 'Configuring the native C++ host'
-$Generator = if ($env:FO4IDE_CMAKE_GENERATOR) { $env:FO4IDE_CMAKE_GENERATOR } else { 'Visual Studio 17 2022' }
-$Configure = @(
-    '-S', $NativeDir,
-    '-B', $NativeBuild,
-    '-G', $Generator,
-    '-DFO4IDE_BUILD_TESTS=OFF',
-    '-DFO4IDE_BUILD_HTTP=ON',
-    # Radicle is the editor's backend: build one radicle.dll that carries the
-    # C++ API and the C ABI, and link the editor against it.
-    '-DRADICLE_SHARED=ON',
-    # Force the pinned static fallback so release packages never depend on an
-    # arbitrary developer-machine zlib DLL.
-    '-DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON'
-)
-if ($Generator -match 'Visual Studio') {
-    $Configure += @('-A', 'x64')
-}
-& cmake @Configure
-if ($LASTEXITCODE -ne 0) { throw 'Native CMake configure failed.' }
+if ($BuildDir) {
+    Warn "Staging from the existing build in $NativeBuild (-BuildDir); no configure or build."
+} else {
+    $Generator = if ($env:FO4IDE_CMAKE_GENERATOR) { $env:FO4IDE_CMAKE_GENERATOR } else { 'Visual Studio 17 2022' }
+    $Configure = @(
+        '-S', $NativeDir,
+        '-B', $NativeBuild,
+        '-G', $Generator,
+        '-DFO4IDE_BUILD_TESTS=OFF',
+        '-DFO4IDE_BUILD_HTTP=ON',
+        # Radicle is the editor's backend: build one radicle.dll that carries the
+        # C++ API and the C ABI, and link the editor against it.
+        '-DRADICLE_SHARED=ON',
+        # Force the pinned static fallback so release packages never depend on an
+        # arbitrary developer-machine zlib DLL.
+        '-DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON'
+    )
+    if ($Generator -match 'Visual Studio') {
+        $Configure += @('-A', 'x64')
+    }
+    & cmake @Configure
+    if ($LASTEXITCODE -ne 0) { throw 'Native CMake configure failed.' }
 
-Step 'Building FO4RecordEditor.exe (Release)'
-cmake --build $NativeBuild --config Release --target fo4ide
-if ($LASTEXITCODE -ne 0) { throw 'Native C++ build failed. Scroll up for the compiler error.' }
+    Step 'Building FO4RecordEditor.exe (Release)'
+    cmake --build $NativeBuild --config Release --target fo4ide
+    if ($LASTEXITCODE -ne 0) { throw 'Native C++ build failed. Scroll up for the compiler error.' }
+}
 
 $NativeExe = Get-ChildItem $NativeBuild -Filter 'FO4RecordEditor.exe' -Recurse -File |
     Sort-Object LastWriteTime -Descending |
