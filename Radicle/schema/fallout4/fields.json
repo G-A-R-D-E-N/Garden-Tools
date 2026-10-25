@@ -30502,6 +30502,15 @@
           "subrecord": "XMRK",
           "insertion": "existing_only"
         },
+        {"path": "TERM\\MarkerOffsetX", "label": "Marker offset X", "kind": "scalar", "subrecord": "SNAM", "offset": 0, "stride": 24, "min_form_version": 125, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "TERM\\MarkerOffsetY", "label": "Marker offset Y", "kind": "scalar", "subrecord": "SNAM", "offset": 4, "stride": 24, "min_form_version": 125, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "TERM\\MarkerOffsetZ", "label": "Marker offset Z", "kind": "scalar", "subrecord": "SNAM", "offset": 8, "stride": 24, "min_form_version": 125, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "TERM\\MarkerRotationZ", "label": "Marker rotation Z", "kind": "scalar", "subrecord": "SNAM", "offset": 12, "stride": 24, "min_form_version": 125, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "TERM\\MarkerOffsetXBelow125", "label": "Marker offset X (below form version 125)", "kind": "scalar", "subrecord": "SNAM", "offset": 0, "stride": 20, "max_form_version": 125, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "TERM\\MarkerOffsetYBelow125", "label": "Marker offset Y (below form version 125)", "kind": "scalar", "subrecord": "SNAM", "offset": 4, "stride": 20, "max_form_version": 125, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "TERM\\MarkerOffsetZBelow125", "label": "Marker offset Z (below form version 125)", "kind": "scalar", "subrecord": "SNAM", "offset": 8, "stride": 20, "max_form_version": 125, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "TERM\\MarkerRotationZBelow125", "label": "Marker rotation Z (below form version 125)", "kind": "scalar", "subrecord": "SNAM", "offset": 12, "stride": 20, "max_form_version": 125, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "TERM\\MarkerEntryTypes", "label": "Marker entry types", "kind": "scalar", "subrecord": "SNAM", "offset": 20, "stride": 24, "min_form_version": 125, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Front"}, {"bit": 1, "name": "Rear"}, {"bit": 2, "name": "Right"}, {"bit": 3, "name": "Left"}, {"bit": 4, "name": "Other"}, {"bit": 5, "name": "Unused 5"}, {"bit": 6, "name": "Unused 6"}, {"bit": 7, "name": "Unused 7"}], "minimum": 0, "maximum": 255, "insertion": "existing_only"},
         {
           "path": "TERM\\Properties",
           "label": "Properties",
@@ -30705,6 +30714,8 @@
           "insertion": "existing_only"
         },
         {"path": "TERM\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"},
+        {"path": "TERM\\MarkerKeyword", "label": "Marker keyword", "subrecord": "SNAM", "offset": 16, "stride": 24, "min_form_version": 125, "targets": ["KYWD"], "nullable": true, "insertion": "existing_only"},
+        {"path": "TERM\\MarkerKeywordBelow125", "label": "Marker keyword (below form version 125)", "subrecord": "SNAM", "offset": 16, "stride": 20, "max_form_version": 125, "targets": ["KYWD"], "nullable": true, "insertion": "existing_only"},
         {"path": "TERM\\ItemSubmenu", "label": "Submenu", "subrecord": "TNAM", "offset": 0, "targets": ["TERM"], "nullable": false, "repeated": true, "payload_sizes": [4], "insertion": "existing_only"}
       ],
       "localized_subrecords": [

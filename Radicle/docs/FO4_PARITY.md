@@ -181,7 +181,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | STAG | 12663 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
 | STAT | 12045 | 19 | 5 | 5 | - | 1 | yes | - | environment/base_records | yes | 3 | L4 |
 | TACT | 5672 | 24 | 3 | 7 | - | 1 | yes | yes | - | - | 1 | L4 |
-| TERM | 12671 | 20 | 7 | 5 | - | 7 | yes | yes | - | yes | 2 | L4 |
+| TERM | 12671 | 29 | 7 | 7 | - | 7 | yes | yes | - | yes | 2 | L4 |
 | TES4 | 12091 | - | - | - | - | - | - | - | - | yes | 5 | L0 |
 | TREE | 12134 | 29 | 1 | 3 | - | 1 | yes | - | environment/vegetation | - | 1 | L4 |
 | TRNS | 12774 | 9 | - | - | - | - | yes | - | - | - | 1 | L4 |
@@ -334,7 +334,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | STAG | - | - | - | - | - | - | - | - | - | - |
 | STAT | 18 | - | - | 1 | 5 | f32, i16, u32, u8 | - | 9 | - | existing_only |
 | TACT | 21 | 1 | - | 2 | 3 | f32, i16, i32, u32, u8 | 12 | 9 | - | existing_only |
-| TERM | 17 | - | 1 | 2 | 7 | f32, i16, i32, u16, u32, u8 | 10 | 9 | - | existing_only |
+| TERM | 25 | - | 1 | 3 | 7 | f32, i16, i32, u16, u32, u8 | 10 | 20 | - | existing_only |
 | TREE | 29 | - | - | - | 1 | f32, i16, u32, u8 | - | 7 | - | existing_only |
 | TRNS | 9 | - | - | - | - | f32 | - | - | - | existing_only |
 | TXST | 17 | - | - | 2 | 9 | f32, i16, u16, u8 | - | - | - | existing_only |
