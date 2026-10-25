@@ -42,7 +42,9 @@ radicle_status guarded(const char* what, Body body) {
   }
 }
 
-radicle_status copy_bytes(const std::string& value, uint8_t** out_bytes, size_t* out_size) {
+// Constraint: one malloc-and-copy must serve both names and collision payloads.
+template <typename Bytes>
+radicle_status copy_bytes(const Bytes& value, uint8_t** out_bytes, size_t* out_size) {
   if (!out_bytes || !out_size) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_bytes and out_size are required");
   }
@@ -50,7 +52,7 @@ radicle_status copy_bytes(const std::string& value, uint8_t** out_bytes, size_t*
   *out_size = 0;
   if (value.empty()) return RADICLE_STATUS_OK;
   auto* buffer = static_cast<uint8_t*>(std::malloc(value.size()));
-  if (!buffer) return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to allocate a NIF string");
+  if (!buffer) return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to allocate a NIF buffer");
   std::memcpy(buffer, value.data(), value.size());
   *out_bytes = buffer;
   *out_size = value.size();
@@ -114,21 +116,6 @@ radicle_status copy_byte_values(const std::vector<std::uint8_t>& values, uint8_t
   std::memcpy(buffer, values.data(), values.size());
   *out_values = buffer;
   *out_count = values.size();
-  return RADICLE_STATUS_OK;
-}
-
-radicle_status copy_blob(const std::vector<std::byte>& values, uint8_t** out_bytes, size_t* out_size) {
-  if (!out_bytes || !out_size) {
-    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_bytes and out_size are required");
-  }
-  *out_bytes = nullptr;
-  *out_size = 0;
-  if (values.empty()) return RADICLE_STATUS_OK;
-  auto* buffer = static_cast<uint8_t*>(std::malloc(values.size()));
-  if (!buffer) return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to allocate a NIF collision blob");
-  std::memcpy(buffer, values.data(), values.size());
-  *out_bytes = buffer;
-  *out_size = values.size();
   return RADICLE_STATUS_OK;
 }
 
@@ -572,7 +559,7 @@ radicle_status radicle_nif_collision_bytes(const radicle_nif* nif,
   radicle_status status = RADICLE_STATUS_OK;
   const auto* blob = find_collision(nif, index, status);
   if (!blob) return status;
-  return copy_blob(blob->bytes, out_bytes, out_size);
+  return copy_bytes(blob->bytes, out_bytes, out_size);
 }
 
 void radicle_free_floats(float* values) {

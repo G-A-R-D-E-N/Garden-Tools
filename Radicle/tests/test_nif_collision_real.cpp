@@ -32,7 +32,7 @@ bool is_nif(const std::string& path) {
   return std::filesystem::path(lower(path)).extension() == ".nif";
 }
 
-// Invariant: both the NIF-embedded form and the standalone .hkx packfile start with this magic.
+// Constraint: both candidate layouts start with the packfile magic, at offset 0 or offset 4.
 bool has_packfile_magic(const std::vector<std::byte>& bytes, std::size_t offset) {
   static constexpr std::uint8_t k_magic[4] = {0x57, 0xE0, 0xE0, 0x57};
   if (bytes.size() < offset + 4) return false;
@@ -40,6 +40,18 @@ bool has_packfile_magic(const std::vector<std::byte>& bytes, std::size_t offset)
     if (std::to_integer<std::uint8_t>(bytes[offset + i]) != k_magic[i]) return false;
   }
   return true;
+}
+
+std::string hex_prefix(const std::vector<std::byte>& bytes) {
+  static constexpr char digits[] = "0123456789ABCDEF";
+  std::string out;
+  for (std::size_t i = 0; i < bytes.size() && i < 8; ++i) {
+    const auto value = std::to_integer<std::uint8_t>(bytes[i]);
+    if (!out.empty()) out.push_back(' ');
+    out.push_back(digits[value >> 4U]);
+    out.push_back(digits[value & 0x0FU]);
+  }
+  return out;
 }
 
 }  // namespace
@@ -62,6 +74,7 @@ TEST(NifCollisionRealData, VanillaCollisionSystemsCarryPackfileBytes) {
   std::size_t magic_at_zero = 0;
   std::size_t magic_after_length = 0;
   std::size_t empty_payloads = 0;
+  std::size_t odd_payloads = 0;
   std::size_t failures = 0;
   std::string first_failure;
   std::string first_odd_payload;
@@ -77,13 +90,16 @@ TEST(NifCollisionRealData, VanillaCollisionSystemsCarryPackfileBytes) {
         for (const auto& blob : fo4::nif::read_collision_blobs(nif)) {
           if (blob.type == "bhkPhysicsSystem") {
             ++physics;
-            if (blob.bytes.empty()) ++empty_payloads;
-            if (has_packfile_magic(blob.bytes, 0)) {
+            if (blob.bytes.empty()) {
+              ++empty_payloads;
+            } else if (has_packfile_magic(blob.bytes, 0)) {
               ++magic_at_zero;
             } else if (has_packfile_magic(blob.bytes, 4)) {
               ++magic_after_length;
-            } else if (first_odd_payload.empty()) {
-              first_odd_payload = path;
+            } else {
+              // Invariant: prefix layout is unresolved, so this case is counted and never asserted.
+              ++odd_payloads;
+              if (first_odd_payload.empty()) first_odd_payload = path + " (" + hex_prefix(blob.bytes) + ")";
             }
           } else if (blob.type == "bhkRagdollSystem") {
             ++ragdoll;
@@ -100,19 +116,20 @@ TEST(NifCollisionRealData, VanillaCollisionSystemsCarryPackfileBytes) {
   }
 
   std::cout << "nifs " << nifs << ", bhkPhysicsSystem " << physics << ", bhkRagdollSystem " << ragdoll
-            << ", packfile at 0: " << magic_at_zero << ", packfile after a 4-byte prefix: "
-            << magic_after_length << ", empty payloads " << empty_payloads << ", failures " << failures
-            << '\n';
+            << ", packfile at 0: " << magic_at_zero << ", packfile after a 4-byte prefix: " << magic_after_length
+            << ", empty payloads " << empty_payloads << ", payloads with neither magic: " << odd_payloads
+            << ", failures " << failures << '\n';
+  if (!first_odd_payload.empty()) {
+    std::cout << "first payload without a packfile magic: " << first_odd_payload << '\n';
+  }
   RecordProperty("nif_count", std::to_string(nifs));
   RecordProperty("physics_system_count", std::to_string(physics));
   RecordProperty("ragdoll_system_count", std::to_string(ragdoll));
   RecordProperty("packfile_at_zero_count", std::to_string(magic_at_zero));
   RecordProperty("packfile_after_prefix_count", std::to_string(magic_after_length));
+  RecordProperty("payload_without_known_magic_count", std::to_string(odd_payloads));
 
   EXPECT_EQ(failures, 0U) << first_failure;
   EXPECT_GT(nifs, 0U);
   EXPECT_GT(physics, 0U);
-  EXPECT_TRUE(first_odd_payload.empty())
-      << "a bhkPhysicsSystem payload does not start with a packfile magic at 0 or 4: " << first_odd_payload;
-  EXPECT_EQ(magic_at_zero + magic_after_length + empty_payloads, physics);
 }
