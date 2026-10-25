@@ -4969,3 +4969,28 @@ Exposes `Radicle/include/fo4/pex_analysis/opcodes.hpp:pex_op_name` over the 47-e
 ABI 56 is one above this branch's 55. #824, the SWF art branch and the 602 stack also claim numbers, so the lead renumbers at merge and the export itself needs no further change. `Radicle/tests/test_c_api_quest.cpp:AbiVersionIsFiftySix` pins both the compiled macro and `radicle_abi_version`.
 
 Tests: `Radicle/tests/test_c_api_pex.cpp:OpcodeNameMatchesTheTableForEveryTableEntry` round-trips all 47 entries through the C call and compares each with `pex_op_name`. That catches the regression this export exists to remove: an engine-side copy of the table binds its own opcode numbers to the wrong names when Radicle's order or spelling moves. `OpcodeNameRefusesAByteOutsideTheTable` pre-fills the out-parameters with a sentinel and requires both cleared plus the exact message for 47 and 255, so a refused call cannot hand back a stale buffer. `OpcodeNameRequiresItsOutputParameters` covers the null-argument refusal.
+
+## Radicle/include/fo4/c_api_papyrus_source.h:radicle_papyrus_source_summary
+
+Exposes `Radicle/include/fo4/papyrus_source/parser.hpp:parse` and `Radicle/include/fo4/papyrus_source/summary.hpp:summarize` so an editor can refuse a `.psc` before it launches Bethesda's compiler, without a second parser. The C++ namespace is `fo4::psc`, not `fo4::papyrus_source`. The export is how GardenEngine and the PluginEditTool read the same parse the tests read: it adds no behaviour of its own.
+
+The result is a flat tab-separated row set, the shape `Radicle/include/fo4/c_api_quest.h` already uses, released with `radicle_free_string_array`; the array and every row are copies owned by the caller. One documented grammar, in row order:
+
+```
+script    <name> <parent> <auto state>
+import    <module>
+property  <name> <auto 0|1>
+state     <path>
+function  <name> <state> <native 0|1> <event 0|1>
+error     <line> <column> <message>
+```
+
+An absent parent, auto state or function state is an empty field, so a function outside any state carries one empty field, its state, between its name and its two flags. A successful parse emits one `script` row first followed by its imports, declared properties, states and functions, and no `error` row. A failed parse emits exactly one `error` row and nothing else, carries the parser's own message and position, and is `RADICLE_STATUS_OK`: a bad file is the answer the caller asked for, not a tool failure, which is the distinction the editor needs. Every field has tab, carriage return, newline and NUL replaced by a space, so a row is always one line whatever the parser's message quotes.
+
+`ScriptSummary::calledFunctions`, `propertiesRead`, `propertiesWritten` and `stateTransitions` are deliberately not rows: they are flow analysis for the runtime consumers, an editor deciding whether a file parses does not read them, and each would multiply the row count for every function. The per-function lists stay unexported for the same reason.
+
+Refusals are separate from parse failures: a null `source`, an empty one, a size above `RADICLE_PAPYRUS_SOURCE_MAX_BYTES` (4 MiB) or a null out-parameter returns `RADICLE_STATUS_INVALID_ARGUMENT` with `source is required`, `source must not be empty`, `source size <n> is above the 4194304-byte cap` or `out_rows and out_count are required`, and every out-parameter is cleared first. The cap is tested before the buffer is read, so a caller whose size disagrees with its buffer cannot make this layer read past it. Nothing else in the C ABI imports the Papyrus source parser, so this export also sets the first bound on what a caller may hand it.
+
+Export 2 adds no ABI number of its own: it ships at 56, the number export 1 set on this branch (one above the branch's 55), and the lead renumbers at merge.
+
+Tests: `Radicle/tests/test_papyrus_source.cpp:CApiSummaryReportsTheFieldsAnEditorNeeds` pins the exact row set for a script with an import, an auto property, an auto-read-only property, an event, a global function, a state and a state function, so a dropped field, a changed flag order or a reordered row kind fails it - the editor's row reader depends on all three. `CApiSummaryReportsAParseFailureAsARow` requires a lexer failure at line 2 column 11 to come back as one `error` row with status OK, which catches the regression this export exists to prevent: a syntax error reported as a tool error, which the caller cannot tell from a broken library. `CApiSummaryRefusesMissingEmptyAndOversizedSources` pre-fills both out-parameters, requires them cleared, and passes a short buffer with a size above the cap, so it also fails if the cap check ever moves after the read. `Radicle/tests/test_papyrus_source_real.cpp:CApiSummaryMatchesTheParserOnEveryCorpusScript` runs on the `FO4_PSC_CORPUS` corpus and requires the C rows to agree with a direct parse for every file, the `script` row field for field or the `error` row's line and column.

@@ -26,6 +26,7 @@
 #include "fo4/c_api_dds.h"
 #include "fo4/c_api_terrain.h"
 #include "fo4/c_api_script_set.h"
+#include "fo4/c_api_papyrus_source.h"
 #include <cstddef>
 #include <cstdio>
 
