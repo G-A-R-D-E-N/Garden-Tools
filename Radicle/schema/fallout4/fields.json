@@ -10558,6 +10558,14 @@
         ]
       },
       "fields": [
+        {"path": "REFR\\PositionX", "label": "Position X", "kind": "scalar", "subrecord": "DATA", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 24, "insertion": "existing_only"},
+        {"path": "REFR\\PositionY", "label": "Position Y", "kind": "scalar", "subrecord": "DATA", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 24, "insertion": "existing_only"},
+        {"path": "REFR\\PositionZ", "label": "Position Z", "kind": "scalar", "subrecord": "DATA", "offset": 8, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 24, "insertion": "existing_only"},
+        {"path": "REFR\\RotationX", "label": "Rotation X", "kind": "scalar", "subrecord": "DATA", "offset": 12, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 24, "insertion": "existing_only"},
+        {"path": "REFR\\RotationY", "label": "Rotation Y", "kind": "scalar", "subrecord": "DATA", "offset": 16, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 24, "insertion": "existing_only"},
+        {"path": "REFR\\RotationZ", "label": "Rotation Z", "kind": "scalar", "subrecord": "DATA", "offset": 20, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 24, "insertion": "existing_only"},
+        {"path": "REFR\\OwnerNoCrime", "label": "No Crime", "kind": "scalar", "subrecord": "XOWN", "offset": 8, "storage": "u8", "presentation": "enum", "minimum": 0, "maximum": 255, "payload_size": 12, "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "insertion": "existing_only"},
+        {"path": "REFR\\OwnerRank", "label": "Faction rank", "kind": "scalar", "subrecord": "XRNK", "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "insertion": "existing_only"},
         {"path": "REFR\\ReflectionType", "label": "Reflection type", "kind": "scalar", "subrecord": "XPWR", "offset": 4, "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Reflection"}, {"bit": 1, "name": "Refraction"}], "minimum": 0, "maximum": 4294967295, "repeated": true, "payload_size": 8, "insertion": "existing_only"},
         {"path": "REFR\\RagdollBoneId", "label": "Ragdoll bone id", "kind": "scalar", "subrecord": "XRGD", "offset": 0, "stride": 28, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
         {"path": "REFR\\RagdollPositionX", "label": "Ragdoll position X", "kind": "scalar", "subrecord": "XRGD", "offset": 4, "stride": 28, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
@@ -11094,6 +11102,13 @@
         {"path": "REFR\\DecalHeightScale", "label": "Decal height scale", "kind": "scalar", "subrecord": "XPDD", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 4, "payload_size": 8, "insertion": "existing_only"}
       ],
       "formlink_fields": [
+        {"path": "REFR\\Base", "label": "Base", "subrecord": "NAME", "offset": 0, "target_union": "sigBaseObjects", "nullable": true, "payload_sizes": [4], "insertion": "existing_only"},
+        {"path": "REFR\\Owner", "label": "Owner", "subrecord": "XOWN", "offset": 0, "payload_sizes": [12], "targets": ["FACT", "NPC_"], "nullable": false, "insertion": "existing_only"},
+        {"path": "REFR\\LinkedRoom", "label": "Linked room", "subrecord": "XLRM", "offset": 0, "payload_sizes": [4], "targets": ["REFR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
+        {"path": "REFR\\LinkedOcclusionRight", "label": "Linked occlusion right", "subrecord": "XORD", "offset": 0, "payload_sizes": [16], "targets": ["REFR"], "nullable": true, "insertion": "existing_only"},
+        {"path": "REFR\\LinkedOcclusionLeft", "label": "Linked occlusion left", "subrecord": "XORD", "offset": 4, "payload_sizes": [16], "targets": ["REFR"], "nullable": true, "insertion": "existing_only"},
+        {"path": "REFR\\LinkedOcclusionBottom", "label": "Linked occlusion bottom", "subrecord": "XORD", "offset": 8, "payload_sizes": [16], "targets": ["REFR"], "nullable": true, "insertion": "existing_only"},
+        {"path": "REFR\\LinkedOcclusionTop", "label": "Linked occlusion top", "subrecord": "XORD", "offset": 12, "payload_sizes": [16], "targets": ["REFR"], "nullable": true, "insertion": "existing_only"},
         {"path": "REFR\\ReflectedBy", "label": "Reflected by", "subrecord": "XPWR", "offset": 0, "payload_sizes": [8, 4], "targets": ["ACHR", "REFR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
         {
           "path": "REFR\\EncounterZone",
@@ -34209,6 +34224,15 @@
     {
       "signature": "ACHR",
       "fields": [
+        {"path": "ACHR\\PositionX", "label": "Position X", "kind": "scalar", "subrecord": "DATA", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 24, "insertion": "existing_only"},
+        {"path": "ACHR\\PositionY", "label": "Position Y", "kind": "scalar", "subrecord": "DATA", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 24, "insertion": "existing_only"},
+        {"path": "ACHR\\PositionZ", "label": "Position Z", "kind": "scalar", "subrecord": "DATA", "offset": 8, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 24, "insertion": "existing_only"},
+        {"path": "ACHR\\RotationX", "label": "Rotation X", "kind": "scalar", "subrecord": "DATA", "offset": 12, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 24, "insertion": "existing_only"},
+        {"path": "ACHR\\RotationY", "label": "Rotation Y", "kind": "scalar", "subrecord": "DATA", "offset": 16, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 24, "insertion": "existing_only"},
+        {"path": "ACHR\\RotationZ", "label": "Rotation Z", "kind": "scalar", "subrecord": "DATA", "offset": 20, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 24, "insertion": "existing_only"},
+        {"path": "ACHR\\BipedRotationX", "label": "Biped rotation X", "kind": "scalar", "subrecord": "XRGB", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "ACHR\\BipedRotationY", "label": "Biped rotation Y", "kind": "scalar", "subrecord": "XRGB", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "ACHR\\BipedRotationZ", "label": "Biped rotation Z", "kind": "scalar", "subrecord": "XRGB", "offset": 8, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 12, "insertion": "existing_only"},
         {"path": "ACHR\\ReflectionType", "label": "Reflection type", "kind": "scalar", "subrecord": "XPWR", "offset": 4, "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Reflection"}, {"bit": 1, "name": "Refraction"}], "minimum": 0, "maximum": 4294967295, "repeated": true, "payload_size": 8, "insertion": "existing_only"},
         {"path": "ACHR\\PatrolIdleTime", "label": "Patrol idle time", "kind": "scalar", "subrecord": "XPRD", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
         {"path": "ACHR\\LevelModifier", "label": "Level modifier", "kind": "scalar", "subrecord": "XLCM", "storage": "i32", "presentation": "enum", "names": [{"value": 0, "name": "Easy"}, {"value": 1, "name": "Medium"}, {"value": 2, "name": "Hard"}, {"value": 3, "name": "Very Hard"}], "minimum": -2147483648, "maximum": 2147483647, "insertion": "existing_only"},

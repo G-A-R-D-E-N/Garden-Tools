@@ -481,6 +481,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_exterior_cell_grid_real.cpp
     tests/test_exterior_cell_creation.cpp
     tests/test_interior_cell_create.cpp
+    tests/test_placed_data_rows.cpp
     tests/test_placed_reference.cpp
     tests/test_placed_reference_copy.cpp
     tests/test_copy_as_new.cpp
