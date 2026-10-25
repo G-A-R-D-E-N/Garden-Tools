@@ -9,6 +9,8 @@ namespace FO4RecordEditor.Services;
 // Constraint: one document owns one history, and every edit goes through it so undo/redo is the only writer.
 public sealed class SwfDocument : IDisposable
 {
+    static SwfDocument() => RadicleNative.EnsureLoaded();
+
     private readonly SwfEditHistory _history;
 
     private SwfDocument(string? path, SwfFile file, SwfEditHistory history)

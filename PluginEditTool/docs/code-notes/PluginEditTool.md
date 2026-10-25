@@ -143,3 +143,30 @@ existing file to `<path>.bak` and writes the new bytes, matching the backup-firs
 A display-list row is now a selection affordance: clicking it matches the row's depth (and character when present) to
 the placement list and selects that placement as the edit target, so the properties panel follows the centre table as
 well as the explicit placement list. The web test clicks the fixture row and asserts `PlacementMatrix` was requested.
+## Radicle native delivery for the managed editor (read-only trace, item 1)
+
+The native PET app builds Radicle from the sibling checkout: `PluginEditTool/native/CMakeLists.txt:53` sets
+`RADICLE_DIR` to `../../Radicle`, `:63` pulls it in with `add_subdirectory`, and `:72-73` clear the
+`VERSION`/`SOVERSION` properties so the build emits a plain `libradicle.so` (the ntfs3 volume cannot create the
+version symlinks). That library is the C ABI: `Radicle/CMakeLists.txt:326` defines the shared `radicle_c` target and
+`:345` adds `src/c_api_swf.cpp`, `src/c_api_swf_art.cpp`, `src/c_api_swf_characters.cpp`,
+`src/c_api_swf_display.cpp`, `src/c_api_swf_edit.cpp` and `src/c_api_swf_history.cpp`, with the SWF models at
+`:268-270`; `Radicle/include/fo4/c_api.h:16` is `RADICLE_ABI_VERSION 67u`. So the ABI 67 SWF entry points do ship in
+the library when the tree is this one — nothing was missing from the build.
+
+The managed side resolves the library in `Radicle/bindings/csharp/Radicle.Interop/Core.cs`: `:29` installs the
+`DllImportResolver`, `:31` exposes `SetPath`, `:49` prefers `RADICLE_NATIVE_PATH`, and `:53` falls back to
+`NativeLibrary.TryLoad` beside the assembly. Before this change no file under `PluginEditTool` set
+`RADICLE_NATIVE_PATH`, called `RadicleLibrary.SetPath`, or copied the library next to the managed output (a grep of
+every PET `.cs`/`.csproj`/packaging file found none), so the managed Core/Server/Test host had no delivery path.
+
+Wired now: `FO4RecordEditor.Core/Services/RadicleNative.cs` (`EnsureLoaded`/`Configure`/`CandidatePaths`) prefers
+`RADICLE_NATIVE_PATH`, then probes the deployed layout (app dir, `native/`, `radicle/`, `runtimes/<rid>/native/`)
+and the build layout (`Radicle/build/<config>`, `build/<config>`, six parent levels), and both managed entry points
+(`SwfDocument` and `SwfInterop`) call it in their static constructors; `RadicleNativeTests` pin the candidate order
+and the found/missing probe. Packaging still has to place the library where the probe looks (or set the variable):
+the Linux deb ships only the native host (`packaging/linux/build-deb.sh:68` says services run in the native
+backend), and that native host links the C++ `fo4` target (`PluginEditTool/native/src/CMakeLists.txt:60`), not
+`radicle_c`. The native production host therefore needs no change for its own Radicle use, but a native host object
+bridge is still required if the SWF panel is to run inside that native host rather than the managed
+Core/Server/Test host; that bridge is not part of this round.

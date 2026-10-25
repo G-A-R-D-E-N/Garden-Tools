@@ -16,6 +16,8 @@ namespace FO4RecordEditor.Services;
 [RpcExpose]
 public class SwfInterop
 {
+    static SwfInterop() => RadicleNative.EnsureLoaded();
+
     private static SwfDocument? _document;
     private static readonly object Gate = new();
 
