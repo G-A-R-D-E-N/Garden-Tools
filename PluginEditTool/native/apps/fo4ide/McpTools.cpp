@@ -143,6 +143,14 @@ bool registerPluginTools(fo4ide::mcp::Registry& registry,
              {{"form_key", "string"}, {"plugin", "string", true}})) return false;
     if (!add("edit_faction_entries", "Add, set or remove one FACT relation or rank in memory. list is relations or ranks; index is required for set and remove and indexes the named plugin's version; value is required for add and set. Call save_plugin to persist", "backend", "EditFactionEntries",
              {{"plugin", "string"}, {"form_key", "string"}, {"list", "string"}, {"op", "string"}, {"index", "integer", true}, {"value", "object", true}})) return false;
+    if (!add("add_sound_file", "Add one file name to an SNDR sound descriptor in memory. The file is an ANAM entry inserted after the last one and before the descriptors; the result names the new index. Call save_plugin to persist", "backend", "AddSoundFile",
+             {{"plugin", "string"}, {"form_key", "string"}, {"file", "string"}})) return false;
+    if (!add("remove_sound_file", "Remove one SNDR file name by its ANAM index in memory. Call save_plugin to persist", "backend", "RemoveSoundFile",
+             {{"plugin", "string"}, {"form_key", "string"}, {"file_index", "integer"}})) return false;
+    if (!add("set_sound_base", "Set or remove the BNAM base-descriptor link of an SNDR in memory. Only an AutoWeapon descriptor carries that link; an empty target removes it. Call save_plugin to persist", "backend", "SetSoundBase",
+             {{"plugin", "string"}, {"form_key", "string"}, {"target", "string", true}})) return false;
+    if (!add("create_sound", "Create a SOUN sound marker or an FSTS footstep set with proved defaults in memory; signature must be SOUN or FSTS. Call save_plugin to persist", "backend", "CreateSound",
+             {{"plugin", "string"}, {"signature", "string"}, {"editor_id", "string"}})) return false;
     if (!add("get_weapon_damage_types", "Get a WEAP record's damage types by FormKey from the winning version (read-only)", "backend", "GetWeaponDamageTypes",
              {{"form_key", "string"}})) return false;
     return true;

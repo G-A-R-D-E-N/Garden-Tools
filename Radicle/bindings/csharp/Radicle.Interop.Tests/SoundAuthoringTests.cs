@@ -46,6 +46,36 @@ public class SoundAuthoringTests
     private static Status Refusal(Action action) => Assert.Throws<RadicleException>(action).Status;
 
     [Fact]
+    public void StructureEditsAddRemoveFilesSetTheBaseLinkAndCreateRecords()
+    {
+        using var temp = new TempDirectory();
+        using var plugin = PluginFile.Read(temp.Write("Snd.esp", Source()));
+        var added = plugin.AddSoundFile(Std, "c.wav");
+        plugin.SetSoundFile(Std, added, "d.wav");
+        plugin.AddSoundFile(Bare, "e.wav");
+        plugin.RemoveSoundFile(Bare, 0);
+        plugin.AddSoundBaseLink(Auto, Comp);
+        plugin.RemoveSoundBaseLink(Auto);
+        plugin.AddSoundBaseLink(Auto, Comp);
+        var marker = plugin.CreateSoundRecord("SOUN", "NewMarker");
+        var steps = plugin.CreateSoundRecord("FSTS", "NewSteps");
+        Assert.Throws<RadicleException>(() => plugin.CreateSoundRecord("MISC", "Nope"));
+        Assert.Throws<RadicleException>(() => plugin.AddSoundBaseLink(Std, Auto));
+        Assert.Throws<RadicleException>(() => plugin.RemoveSoundBaseLink(Std));
+        Assert.Throws<RadicleException>(() => plugin.RemoveSoundFile(Std, 99));
+        Assert.Throws<ArgumentException>(() => plugin.AddSoundFile(Std, "a\0b"));
+        var path = Path.Combine(temp.Path, "Saved.esp");
+        plugin.Write(path);
+        using var env = RadicleEnvironment.Load(new[] { path });
+        var descriptor = env.SoundDescriptor(env.Winner(new Radicle.Interop.FormKey("Saved.esp", 0x800))!.Value);
+        Assert.Contains("d.wav", descriptor.Files);
+        var autoDescriptor = env.SoundDescriptor(env.Winner(new Radicle.Interop.FormKey("Saved.esp", 0x802))!.Value);
+        Assert.Equal(new Radicle.Interop.FormKey("Saved.esp", 0x801), autoDescriptor.BaseDescriptor);
+        Assert.NotEqual(0u, marker.LocalId);
+        Assert.NotEqual(0u, steps.LocalId);
+    }
+
+    [Fact]
     public void DescriptorFieldsFollowTheKindAndSurviveReload()
     {
         using var temp = new TempDirectory();

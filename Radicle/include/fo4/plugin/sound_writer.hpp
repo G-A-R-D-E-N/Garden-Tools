@@ -22,11 +22,17 @@ enum class SoundDescriptorMutationStatus {
 // Constraint: file names are the SNDR ANAM array, inserted after the last ANAM and before the descriptors.
 SoundDescriptorMutationStatus add_sound_descriptor_file(Plugin& plugin,
                                                         const FormKey& descriptor,
-                                                        std::string_view file);
+                                                        std::string_view file,
+                                                        std::size_t* out_index = nullptr);
 
 SoundDescriptorMutationStatus remove_sound_descriptor_file(Plugin& plugin,
                                                            const FormKey& descriptor,
                                                            std::size_t index);
+
+SoundDescriptorMutationStatus set_sound_descriptor_file(Plugin& plugin,
+                                                        const FormKey& descriptor,
+                                                        std::size_t index,
+                                                        std::string_view file);
 
 // Constraint: the BNAM base-descriptor arm exists only when CNAM is AutoWeapon; other kinds keep the values struct.
 SoundDescriptorMutationStatus add_sound_descriptor_base(Plugin& plugin,

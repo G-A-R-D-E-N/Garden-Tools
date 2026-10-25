@@ -1,6 +1,10 @@
 #include "c_api_env_internal.hpp"
 #include "fo4/c_api_sound.h"
 #include "fo4/environment/sound.hpp"
+#include "fo4/plugin/reader.hpp"
+#include "fo4/plugin/sound_writer.hpp"
+#include "fo4/plugin/subrecord_authoring.hpp"
+#include "fo4/text/encoding.hpp"
 
 #include <memory>
 
@@ -38,6 +42,74 @@ bool valid(const radicle_env* env, const radicle_record* record, const void* out
 radicle_status invalid() { return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env, record and output are required"); }
 
 radicle_status foreign() { return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment"); }
+
+}
+
+namespace {
+
+radicle_status sound_structure_status(fo4::SoundDescriptorMutationStatus status, const char* target) {
+  const auto message = [&](const char* tail) { return std::string(target) + tail; };
+  switch (status) {
+    case fo4::SoundDescriptorMutationStatus::updated:
+    case fo4::SoundDescriptorMutationStatus::unchanged:
+      return RADICLE_STATUS_OK;
+    case fo4::SoundDescriptorMutationStatus::record_missing:
+      return fail(RADICLE_STATUS_NOT_FOUND, "plugin has no such record");
+    case fo4::SoundDescriptorMutationStatus::record_mismatch: {
+      const auto text = message(" is not an SNDR record");
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, text.c_str());
+    }
+    case fo4::SoundDescriptorMutationStatus::discriminator_unproven: {
+      const auto text = message(" has no proven AutoWeapon discriminator for the BNAM base link");
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, text.c_str());
+    }
+    case fo4::SoundDescriptorMutationStatus::already_present: {
+      const auto text = message(" is already present and a second copy is refused");
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, text.c_str());
+    }
+    case fo4::SoundDescriptorMutationStatus::subrecord_missing: {
+      const auto text = message(" has no such subrecord");
+      return fail(RADICLE_STATUS_NOT_FOUND, text.c_str());
+    }
+    case fo4::SoundDescriptorMutationStatus::index_out_of_range: {
+      const auto text = message(" index is out of range");
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, text.c_str());
+    }
+    case fo4::SoundDescriptorMutationStatus::payload_unproven: {
+      const auto text = message(" payload does not match the proven BNAM arm");
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, text.c_str());
+    }
+  }
+  return fail(RADICLE_STATUS_INTERNAL_ERROR, "unknown sound structure status");
+}
+
+template <class Mutate>
+radicle_status sound_structure_edit(radicle_plugin* plugin, radicle_form_key key, const char* target,
+                                    Mutate mutate) {
+  clear_error();
+  const auto record_key = to_form_key(key);
+  if (plugin == nullptr || !record_key) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin and a valid record key are required");
+  }
+  return guarded("unknown exception while editing a sound descriptor", [&] {
+    try {
+      return sound_structure_status(mutate(*record_key), target);
+    } catch (const fo4::schema::ScalarError& error) {
+      return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
+    } catch (const fo4::FormIdError& error) {
+      return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
+    }
+  });
+}
+
+void require_file_name(const char* file, const char* what) {
+  if (file == nullptr || file[0] == '\0') {
+    throw fo4::schema::ScalarError(std::string(what) + " is required");
+  }
+  if (!fo4::text::is_valid_utf8(file)) {
+    throw fo4::schema::ScalarError(std::string(what) + " must be valid UTF-8");
+  }
+}
 
 }
 
@@ -261,4 +333,83 @@ radicle_status radicle_sound_big_rumble_send(uint8_t rumble_control, double* out
   return RADICLE_STATUS_OK;
 }
 
+radicle_status radicle_plugin_add_sound_file(radicle_plugin* plugin, radicle_form_key key,
+                                             const char* file, size_t* out_file_index) {
+  if (out_file_index != nullptr) *out_file_index = 0;
+  return sound_structure_edit(plugin, key, "SNDR file", [&](const fo4::FormKey& record) {
+    require_file_name(file, "SNDR file name");
+    std::size_t added = 0;
+    const auto status = fo4::add_sound_descriptor_file(plugin->value, record, file, &added);
+    if (status == fo4::SoundDescriptorMutationStatus::updated && out_file_index != nullptr) {
+      *out_file_index = added;
+    }
+    return status;
+  });
+}
+
+radicle_status radicle_plugin_remove_sound_file(radicle_plugin* plugin, radicle_form_key key,
+                                                size_t file_index) {
+  return sound_structure_edit(plugin, key, "SNDR file", [&](const fo4::FormKey& record) {
+    return fo4::remove_sound_descriptor_file(plugin->value, record, file_index);
+  });
+}
+
+radicle_status radicle_plugin_set_sound_file(radicle_plugin* plugin, radicle_form_key key,
+                                             size_t file_index, const char* file) {
+  return sound_structure_edit(plugin, key, "SNDR file", [&](const fo4::FormKey& record) {
+    require_file_name(file, "SNDR file name");
+    return fo4::set_sound_descriptor_file(plugin->value, record, file_index, file);
+  });
+}
+
+radicle_status radicle_plugin_add_sound_base_link(radicle_plugin* plugin, radicle_form_key key,
+                                                  radicle_form_key target) {
+  return sound_structure_edit(plugin, key, "SNDR base link", [&](const fo4::FormKey& record) {
+    const auto form_key = to_form_key(target);
+    if (!form_key) throw fo4::schema::ScalarError("invalid SNDR base link target");
+    return fo4::add_sound_descriptor_base(plugin->value, record, *form_key);
+  });
+}
+
+radicle_status radicle_plugin_remove_sound_base_link(radicle_plugin* plugin, radicle_form_key key) {
+  return sound_structure_edit(plugin, key, "SNDR base link", [&](const fo4::FormKey& record) {
+    return fo4::remove_sound_descriptor_base(plugin->value, record);
+  });
+}
+
+radicle_status radicle_plugin_create_sound_record(radicle_plugin* plugin, const char* signature,
+                                                  const char* editor_id_utf8,
+                                                  radicle_form_key* out_key) {
+  clear_error();
+  if (out_key != nullptr) *out_key = {nullptr, 0};
+  if (plugin == nullptr || signature == nullptr || editor_id_utf8 == nullptr || out_key == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, signature, editor ID and out_key are required");
+  }
+  const std::string_view name(signature);
+  if (name != "SOUN" && name != "FSTS") {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "only SOUN and FSTS records are created by this export");
+  }
+  return guarded("unknown exception while creating a sound record", [&] {
+    using Status = fo4::RecordCreateStatus;
+    const auto stored = fo4::text::utf8_to_windows1252(editor_id_utf8);
+    if (!stored) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "editor ID is not valid UTF-8 representable in Windows-1252");
+    }
+    const auto result = fo4::create_record(plugin->value, fo4::Signature::from_string(name), *stored);
+    switch (result.status) {
+      case Status::created:
+        *out_key = {plugin->value.key.filename().data(), result.key.local().value()};
+        return RADICLE_STATUS_OK;
+      case Status::not_authorable:
+        return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record type has no authoring schema");
+      case Status::no_default:
+        return fail(RADICLE_STATUS_INVALID_ARGUMENT, "a required subrecord has no registered default payload");
+      case Status::invalid_editor_id:
+        return fail(RADICLE_STATUS_INVALID_ARGUMENT, "editor ID cannot be stored for this record type");
+      case Status::preflight_failed:
+        return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the default record failed authoring preflight");
+    }
+    return fail(RADICLE_STATUS_INTERNAL_ERROR, "unknown record create status");
+  });
+}
 }

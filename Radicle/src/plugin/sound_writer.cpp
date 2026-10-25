@@ -101,7 +101,9 @@ bool discriminator_is_base(const Record& record) {
 
 SoundDescriptorMutationStatus add_sound_descriptor_file(Plugin& plugin,
                                                         const FormKey& descriptor,
-                                                        std::string_view file) {
+                                                        std::string_view file,
+                                                        std::size_t* out_index) {
+  if (out_index != nullptr) *out_index = 0;
   auto* record = locate_mutable_record(plugin, descriptor);
   if (record == nullptr) return SoundDescriptorMutationStatus::record_missing;
   if (record->header.signature != k_sndr) return SoundDescriptorMutationStatus::record_mismatch;
@@ -109,9 +111,14 @@ SoundDescriptorMutationStatus add_sound_descriptor_file(Plugin& plugin,
     throw schema::ScalarError("SNDR file name cannot contain an embedded NUL");
   }
   const auto position = file_name_position(*record);
+  std::size_t added = 0;
+  for (std::size_t at = 0; at < position; ++at) {
+    if (record->subrecords[at].signature == k_anam) ++added;
+  }
   record->subrecords.insert(record->subrecords.begin() + static_cast<std::ptrdiff_t>(position),
                             Subrecord{k_anam, string_payload(file), false});
   mark_record_modified(plugin, *record);
+  if (out_index != nullptr) *out_index = added;
   return SoundDescriptorMutationStatus::updated;
 }
 
@@ -131,6 +138,35 @@ SoundDescriptorMutationStatus remove_sound_descriptor_file(Plugin& plugin,
                            static_cast<std::ptrdiff_t>(positions[index]));
   mark_record_modified(plugin, *record);
   return SoundDescriptorMutationStatus::updated;
+}
+
+SoundDescriptorMutationStatus set_sound_descriptor_file(Plugin& plugin,
+                                                        const FormKey& descriptor,
+                                                        std::size_t index,
+                                                        std::string_view file) {
+  auto* record = locate_mutable_record(plugin, descriptor);
+  if (record == nullptr) return SoundDescriptorMutationStatus::record_missing;
+  if (record->header.signature != k_sndr) return SoundDescriptorMutationStatus::record_mismatch;
+  if (file.find('\0') != std::string_view::npos) {
+    throw schema::ScalarError("SNDR file name cannot contain an embedded NUL");
+  }
+  std::size_t seen = 0;
+  for (std::size_t at = 0; at < record->subrecords.size(); ++at) {
+    if (record->subrecords[at].signature != k_anam) continue;
+    if (seen != index) {
+      ++seen;
+      continue;
+    }
+    auto payload = string_payload(file);
+    if (record->subrecords[at].data == payload) {
+      return SoundDescriptorMutationStatus::unchanged;
+    }
+    record->subrecords[at].data = std::move(payload);
+    mark_record_modified(plugin, *record);
+    return SoundDescriptorMutationStatus::updated;
+  }
+  return record->subrecords.empty() ? SoundDescriptorMutationStatus::subrecord_missing
+                                    : SoundDescriptorMutationStatus::index_out_of_range;
 }
 
 SoundDescriptorMutationStatus add_sound_descriptor_base(Plugin& plugin,

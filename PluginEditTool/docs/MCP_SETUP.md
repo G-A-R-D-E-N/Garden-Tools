@@ -154,6 +154,10 @@ These read the winning version of a leveled list, NPC_, FACT or WEAP record and 
 | `edit_npc_entries` | `plugin`, `form_key`, `list`, `op`, [`index`], [`value`] | memory | Adds, sets or removes one entry; `list` is `factions`, `perks` or `inventory`. `index` is required for `set` and `remove`, `value` for `add` and `set`. |
 | `get_faction` | `form_key` | no | A FACT record's relations and ranks. A localized rank title reads as `{"stringId": n}`. |
 | `edit_faction_entries` | `plugin`, `form_key`, `list`, `op`, [`index`], [`value`] | memory | Adds, sets or removes one relation or rank; `list` is `relations` or `ranks`. |
+| `add_sound_file` | `plugin`, `form_key`, `file` | memory | Adds one ANAM file name to an SNDR sound descriptor, after the last file and before the descriptors. The result names the new index. Call `save_plugin` to persist. |
+| `remove_sound_file` | `plugin`, `form_key`, `file_index` | memory | Removes one SNDR file name by its ANAM index. Call `save_plugin` to persist. |
+| `set_sound_base` | `plugin`, `form_key` [`target`] | memory | Sets or removes the BNAM base-descriptor link of an SNDR. Only an AutoWeapon descriptor carries that arm; an empty or omitted `target` removes the link. Call `save_plugin` to persist. |
+| `create_sound` | `plugin`, `signature`, `editor_id` | memory | Creates a SOUN sound marker or an FSTS footstep set from proved defaults; any other signature is refused. Call `save_plugin` to persist. |
 | `get_weapon_damage_types` | `form_key` | no | A WEAP record's damage types (read-only). |
 
 ### Profile and host state

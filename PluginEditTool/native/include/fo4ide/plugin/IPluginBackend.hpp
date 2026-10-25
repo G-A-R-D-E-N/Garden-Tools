@@ -235,6 +235,19 @@ public:
     virtual Result<nlohmann::json> editNpcEntries(const nlohmann::json&) {
         return std::unexpected(Error{"NpcBackendUnavailable", "NPC writes are unavailable"});
     }
+    // Constraint: sound structure writes keep the in-memory plugin unchanged on refusal.
+    virtual Result<nlohmann::json> addSoundFile(const nlohmann::json&) {
+        return std::unexpected(Error{"SoundBackendUnavailable", "Sound file writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> removeSoundFile(const nlohmann::json&) {
+        return std::unexpected(Error{"SoundBackendUnavailable", "Sound file writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> setSoundBase(const nlohmann::json&) {
+        return std::unexpected(Error{"SoundBackendUnavailable", "Sound base-link writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> createSound(const nlohmann::json&) {
+        return std::unexpected(Error{"SoundBackendUnavailable", "Sound record creation is unavailable"});
+    }
     virtual Result<nlohmann::json> getFaction(const nlohmann::json&) const {
         return std::unexpected(Error{"FactionBackendUnavailable", "Faction queries are unavailable"});
     }

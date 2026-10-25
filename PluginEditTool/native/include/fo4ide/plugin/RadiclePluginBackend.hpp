@@ -82,6 +82,10 @@ public:
     Result<nlohmann::json> getNpc(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> editNpcEntries(const nlohmann::json& arguments) override;
     Result<nlohmann::json> getFaction(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> addSoundFile(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> removeSoundFile(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> setSoundBase(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> createSound(const nlohmann::json& arguments) override;
     Result<nlohmann::json> editFactionEntries(const nlohmann::json& arguments) override;
     Result<nlohmann::json> getWeaponDamageTypes(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> conditionFunctionParams() const override {
