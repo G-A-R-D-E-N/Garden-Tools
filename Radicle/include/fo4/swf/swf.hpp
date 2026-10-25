@@ -450,6 +450,25 @@ struct SwfFile {
   bool source_compressed_body_known{false};
 };
 
+struct SwfTagReplacement {
+  std::size_t tag_index{0};
+  std::vector<std::byte> payload;
+};
+
+struct SwfTagInsertion {
+  std::size_t before_tag_index{0};
+  SwfTag tag;
+};
+
+struct SwfTagPlan {
+  std::vector<SwfTagReplacement> replacements;
+  std::vector<SwfTagInsertion> insertions;
+};
+
+struct SwfTagPlanResult {
+  std::vector<std::size_t> inserted_tag_indices;
+};
+
 struct SwfReadResult {
   SwfFile file;
   SwfStatus status{SwfStatus::ok};
@@ -500,6 +519,8 @@ std::vector<std::byte> write_swf(const SwfFile& file);
 std::vector<std::byte> write_swf(const SwfFile& file, SwfCompression compression);
 
 bool replace_tag_payload(SwfFile& file, std::size_t tag_index, std::span<const std::byte> payload);
+
+bool apply_tag_plan(SwfFile& file, const SwfTagPlan& plan, SwfTagPlanResult& out);
 
 std::span<const std::byte> abc_payload(const SwfTag& tag) noexcept;
 std::vector<SwfAbcBlock> abc_blocks(const SwfFile& file);

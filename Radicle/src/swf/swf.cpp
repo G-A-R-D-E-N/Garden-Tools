@@ -4,12 +4,15 @@
 
 #include <zlib.h>
 
+#include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <new>
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace fo4::swf {
 
@@ -517,6 +520,89 @@ bool replace_tag_payload(SwfFile& file, std::size_t tag_index, std::span<const s
   target.clear_decoded();
   std::size_t tags_left = detail::kMaxTags;
   detail::decode_tag_payload(target.payload, target, 0, tags_left);
+  return true;
+}
+
+bool apply_tag_plan(SwfFile& file, const SwfTagPlan& plan, SwfTagPlanResult& out) {
+  const std::size_t count = file.tags.size();
+  const bool has_end = count > 0 && file.tags.back().code == tag::kEnd;
+  const std::size_t insert_limit = has_end ? count - 1 : count;
+
+  std::vector<std::size_t> replaced_indices;
+  for (const auto& replacement : plan.replacements) {
+    if (replacement.tag_index >= count ||
+        (has_end && replacement.tag_index == count - 1) ||
+        replacement.payload.size() > std::numeric_limits<std::uint32_t>::max() ||
+        std::find(replaced_indices.begin(), replaced_indices.end(), replacement.tag_index) !=
+            replaced_indices.end()) {
+      return false;
+    }
+    replaced_indices.push_back(replacement.tag_index);
+  }
+
+  std::vector<std::size_t> insert_positions;
+  for (const auto& insertion : plan.insertions) {
+    if (insertion.before_tag_index > insert_limit || insertion.tag.code > 0x03FFu ||
+        insertion.tag.code == tag::kEnd ||
+        insertion.tag.payload.size() > std::numeric_limits<std::uint32_t>::max() ||
+        std::find(insert_positions.begin(), insert_positions.end(), insertion.before_tag_index) !=
+            insert_positions.end()) {
+      return false;
+    }
+    insert_positions.push_back(insertion.before_tag_index);
+  }
+
+  if (count + plan.insertions.size() > detail::kMaxTags) {
+    return false;
+  }
+
+  bool changed = !plan.insertions.empty();
+  for (const auto& replacement : plan.replacements) {
+    if (file.tags[replacement.tag_index].payload != replacement.payload) {
+      changed = true;
+      break;
+    }
+  }
+  if (!changed) {
+    out = {};
+    return true;
+  }
+
+  std::vector<SwfTag> next = file.tags;
+  for (const auto& replacement : plan.replacements) {
+    SwfTag& target = next[replacement.tag_index];
+    target.payload = replacement.payload;
+    target.length = static_cast<std::uint32_t>(target.payload.size());
+    target.clear_decoded();
+    std::size_t tags_left = detail::kMaxTags;
+    detail::decode_tag_payload(target.payload, target, 0, tags_left);
+  }
+
+  std::vector<std::pair<std::size_t, const SwfTag*>> inserts;
+  inserts.reserve(plan.insertions.size());
+  for (const auto& insertion : plan.insertions) {
+    inserts.emplace_back(insertion.before_tag_index, &insertion.tag);
+  }
+  std::sort(inserts.begin(), inserts.end(),
+            [](const auto& left, const auto& right) { return left.first > right.first; });
+  for (const auto& entry : inserts) {
+    SwfTag inserted = *entry.second;
+    inserted.length = static_cast<std::uint32_t>(inserted.payload.size());
+    inserted.offset = 0;
+    inserted.long_header = false;
+    inserted.children.clear();
+    inserted.clear_decoded();
+    std::size_t tags_left = detail::kMaxTags;
+    detail::decode_tag_payload(inserted.payload, inserted, 0, tags_left);
+    next.insert(next.begin() + static_cast<std::ptrdiff_t>(entry.first), std::move(inserted));
+  }
+
+  file.tags = std::move(next);
+  out.inserted_tag_indices.clear();
+  std::sort(insert_positions.begin(), insert_positions.end());
+  for (std::size_t index = 0; index < insert_positions.size(); ++index) {
+    out.inserted_tag_indices.push_back(insert_positions[index] + index);
+  }
   return true;
 }
 

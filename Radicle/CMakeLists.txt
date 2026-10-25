@@ -723,6 +723,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_material_file_real.cpp
     tests/test_swf.cpp
     tests/test_swf_tags.cpp
+    tests/test_swf_plan.cpp
     tests/test_swf_place.cpp
     tests/test_swf_art.cpp
     tests/test_swf_morph_tween.cpp
