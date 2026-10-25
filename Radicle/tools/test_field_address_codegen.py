@@ -138,6 +138,33 @@ class SchemaCodegenTests(unittest.TestCase):
         self.rejects("minimum_payload_size", scalar(payload_size=8, minimum_payload_size=12))
         self.rejects("minimum_payload_size requires an embedded field", string(minimum_payload_size=12))
 
+    def test_bytes_storage_covers_the_whole_payload_and_renders_as_hex(self):
+        field = self.load(scalar(storage="bytes", offset=None, minimum=None, maximum=None))[0]
+        self.assertEqual(field["storage"], "bytes")
+        self.assertFalse(field["embedded"])
+        self.assertIn("ScalarStorage::bytes", schema_codegen.render([field]))
+
+    def test_bytes_storage_rejects_a_slot_a_presentation_and_names(self):
+        self.rejects("bytes storage must cover the whole payload",
+                     scalar(storage="bytes", offset=4))
+        self.rejects("bytes storage requires identity presentation",
+                     scalar(storage="bytes", offset=None, minimum=None, maximum=None,
+                            presentation="enum", names=[enum_entry(1, "One")]))
+        self.rejects("bytes storage does not accept names",
+                     scalar(storage="bytes", offset=None, minimum=None, maximum=None,
+                            names=[enum_entry(1, "One")]))
+
+    def test_bytes_row_defaults_must_be_even_hex_and_are_not_applied(self):
+        self.rejects("bytes row default must be hexadecimal",
+                     scalar(storage="bytes", offset=None, minimum=None, maximum=None,
+                            default="0g"))
+        self.rejects("bytes row default must be an even-length hex string",
+                     scalar(storage="bytes", offset=None, minimum=None, maximum=None,
+                            default="abc"))
+        self.rejects("bytes row default is not applied by any insertion policy",
+                     scalar(storage="bytes", offset=None, minimum=None, maximum=None,
+                            default="abcd"))
+
     def test_min_form_version_gates_a_row_and_rejects_bad_values(self):
         field = self.load(scalar(min_form_version=97))[0]
         self.assertEqual(field["min_form_version"], 97)

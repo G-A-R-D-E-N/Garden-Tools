@@ -228,7 +228,10 @@ ScalarMutationStatus write_scalar(Plugin& plugin,
     slot_size = existing.size();
   }
 
-  if (is_string && member_string) {
+  if (field.scalar.storage == schema::ScalarStorage::bytes) {
+    // Constraint: a bytes row owns the whole payload, so a write replaces it at whatever length the value encodes to.
+    data = encoded;
+  } else if (is_string && member_string) {
     // Constraint: a variable-length member string row that owns the whole payload must resize it to the encoded value; every other member string row requires the encoded value to fit the slot the subrecord already carries.
     const auto* member = group_member(*member_group, field.scalar.subrecord);
     if (member != nullptr && member->payload_size == 0 && slot.offset == 0 &&

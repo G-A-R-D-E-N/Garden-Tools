@@ -16,6 +16,13 @@ namespace {
 
 #include "fo4/schema/generated_scalar_fields.inc"
 
+int hex_digit(char ch) {
+  if (ch >= '0' && ch <= '9') return ch - '0';
+  if (ch >= 'a' && ch <= 'f') return ch - 'a' + 10;
+  if (ch >= 'A' && ch <= 'F') return ch - 'A' + 10;
+  return -1;
+}
+
 void append_u16(std::vector<std::byte>& out, std::uint16_t value) {
   out.push_back(std::byte{static_cast<std::uint8_t>(value)});
   out.push_back(std::byte{static_cast<std::uint8_t>(value >> 8)});
@@ -199,7 +206,8 @@ std::optional<ScalarDescriptor> scalar_descriptor(Signature subrecord) noexcept 
   }
   if (!only || only->embedded || only->address.repeated ||
       only->storage == ScalarStorage::zstring ||
-      only->storage == ScalarStorage::fixed_string) {
+      only->storage == ScalarStorage::fixed_string ||
+      only->storage == ScalarStorage::bytes) {
     return std::nullopt;
   }
   return *only;
@@ -207,6 +215,7 @@ std::optional<ScalarDescriptor> scalar_descriptor(Signature subrecord) noexcept 
 
 std::span<const std::byte> scalar_field_bytes(std::span<const std::byte> payload,
                                               const ScalarDescriptor& descriptor) {
+  if (descriptor.storage == ScalarStorage::bytes) return payload;
   if (descriptor.storage == ScalarStorage::fixed_string) {
     return fixed_string_bytes(payload, descriptor);
   }
@@ -253,6 +262,9 @@ FieldShape scalar_field_shape(const ScalarDescriptor& descriptor) noexcept {
 std::span<const std::byte> scalar_slot_bytes(std::span<const std::byte> payload,
                                              const FieldSlot& slot,
                                              const ScalarDescriptor& descriptor) {
+  if (descriptor.storage == ScalarStorage::bytes) {
+    return payload.subspan(slot.offset);
+  }
   if (descriptor.storage == ScalarStorage::fixed_string) {
     return fixed_string_bytes(payload, descriptor);
   }
@@ -266,6 +278,10 @@ std::span<const std::byte> scalar_slot_bytes(std::span<const std::byte> payload,
 void patch_scalar_field(std::span<std::byte> payload,
                         const ScalarDescriptor& descriptor,
                         std::span<const std::byte> encoded) {
+  if (descriptor.storage == ScalarStorage::bytes) {
+    throw ScalarError(std::string(descriptor.field_name) +
+                      " is a variable-length payload and cannot be patched in place");
+  }
   const auto width = scalar_storage_size(descriptor.storage);
   if (encoded.size() != width) {
     throw ScalarError(std::string(descriptor.field_name) + " encoded to the wrong width");
@@ -400,6 +416,7 @@ std::size_t scalar_storage_size(ScalarStorage storage) noexcept {
       return 4;
     case ScalarStorage::zstring:
     case ScalarStorage::fixed_string:
+    case ScalarStorage::bytes:
       return 0;
   }
   return 0;
@@ -423,6 +440,17 @@ std::optional<std::int64_t> scalar_name_value(const ScalarDescriptor& descriptor
 
 std::string decode_scalar(std::span<const std::byte> data,
                           const ScalarDescriptor& descriptor) {
+  if (descriptor.storage == ScalarStorage::bytes) {
+    static constexpr char k_hex[] = "0123456789abcdef";
+    std::string out;
+    out.reserve(data.size() * 2);
+    for (const auto byte : data) {
+      const auto value = std::to_integer<unsigned int>(byte);
+      out.push_back(k_hex[value >> 4]);
+      out.push_back(k_hex[value & 0x0FU]);
+    }
+    return out;
+  }
   if (descriptor.storage == ScalarStorage::fixed_string) {
     const auto slot = fixed_string_bytes(data, descriptor);
     const auto* begin = reinterpret_cast<const char*>(slot.data());
@@ -451,6 +479,7 @@ std::string decode_scalar(std::span<const std::byte> data,
       return std::to_string(static_cast<std::int16_t>(read_u16(data)));
     case ScalarStorage::zstring:
     case ScalarStorage::fixed_string:
+    case ScalarStorage::bytes:
       break;
     case ScalarStorage::u16:
       return std::to_string(read_u16(data));
@@ -519,6 +548,20 @@ std::vector<std::byte> encode_scalar(std::string_view text,
                           std::to_string(descriptor.payload_size) + " characters");
       }
       for (const char ch : text) out.push_back(std::byte{static_cast<std::uint8_t>(ch)});
+      break;
+    }
+    case ScalarStorage::bytes: {
+      if (text.size() % 2 != 0) {
+        throw ScalarError(std::string(descriptor.field_name) + " is not an even-length hex string");
+      }
+      for (std::size_t index = 0; index < text.size(); index += 2) {
+        const auto high = hex_digit(text[index]);
+        const auto low = hex_digit(text[index + 1]);
+        if (high < 0 || low < 0) {
+          throw ScalarError(std::string(descriptor.field_name) + " is not hexadecimal");
+        }
+        out.push_back(std::byte{static_cast<std::uint8_t>((high << 4) | low)});
+      }
       break;
     }
     case ScalarStorage::u16: {

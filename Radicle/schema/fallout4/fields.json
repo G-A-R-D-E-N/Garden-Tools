@@ -26482,6 +26482,16 @@
           "insertion": "existing_only"
         },
         {
+          "path": "INFO\\ResponseBytes",
+          "label": "Response NAM9 bytes",
+          "kind": "scalar",
+          "subrecord": "NAM9",
+          "storage": "bytes",
+          "presentation": "identity",
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
           "path": "INFO\\Response",
           "label": "Response",
           "kind": "subrecord_group",

@@ -8,9 +8,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from field_address_codegen import (cpp_signature, is_count, parse_address, parse_segment,  # noqa: E402
-                                   printable_signature, reject_overlaps, render_address)
+                                   printable_signature, reject_bytes_row, reject_overlaps,
+                                   render_address)
 
-STORAGES = {"u8", "u16", "u32", "i32", "f32", "i8", "i16"}
+STORAGES = {"u8", "u16", "u32", "i32", "f32", "i8", "i16", "bytes"}
 KINDS = {"scalar", "string"}
 STRING_FORBIDDEN = {"storage", "presentation", "minimum", "maximum", "stride", "array_offset", "names"}
 PRESENTATIONS = {"identity", "percent_0_100", "enum", "flags"}
@@ -30,7 +31,7 @@ GROUP_RUN_KEYS = {"count_member", "members"}
 GROUP_ROW_FORBIDDEN = {"subrecord", "repeated", "stride", "array_offset", "when", "payload_size", "minimum_payload_size"}
 GROUP_LINK_KEYS = {"path", "label", "offset", "nullable", "insertion", "target_union", "targets"}
 HEX_DIGITS = "0123456789abcdefABCDEF"
-WIDTHS = {"u8": 1, "u16": 2, "u32": 4, "i32": 4, "f32": 4, "i8": 1, "i16": 2}
+WIDTHS = {"u8": 1, "u16": 2, "u32": 4, "i32": 4, "f32": 4, "i8": 1, "i16": 2, "bytes": 0}
 INTEGER_BOUNDS = {
     "i8": (-0x80, 0x7F),
     "i16": (-0x8000, 0x7FFF),
@@ -417,6 +418,9 @@ def load_schema(schema_path: Path):
             if storage not in STORAGES and not is_string:
                 raise ValueError(f"unsupported scalar storage: {storage!r}")
 
+            if storage == "bytes":
+                reject_bytes_row(field, path, embedded, presentation)
+
             address = parse_address(field, path, subrecord, embedded, WIDTHS.get(storage, 0))
             if presentation not in PRESENTATIONS:
                 raise ValueError(f"unsupported scalar presentation: {presentation!r}")
@@ -463,7 +467,7 @@ def load_schema(schema_path: Path):
                 if max_form_version <= min_form_version:
                     raise ValueError(f"max_form_version must exceed min_form_version: {path!r}")
 
-            if is_string:
+            if is_string or storage == "bytes":
                 minimum = maximum = 0.0
             else:
                 minimum = numeric(field.get("minimum"), "minimum", path)

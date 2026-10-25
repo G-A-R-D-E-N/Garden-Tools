@@ -743,6 +743,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_npc_furn_attach_slots.cpp
     tools/env_bench/env_bench.cpp
     tests/test_fsts_rows.cpp
+    tests/test_info_response_bytes.cpp
+    tests/test_info_response_bytes_real.cpp
     tests/test_mswp_rows.cpp
     tests/test_sopm_onam_rows.cpp
     tests/test_stat_lod_rows.cpp

@@ -222,3 +222,23 @@ def render_address(address):
                     f"{', true' if when['negated'] else ', false'}}}")
     return (f"FieldAddress{{{'true' if address['repeated'] else 'false'}, {address['stride']}, "
             f"{address['array_offset']}, {rendered}{trailing}}}")
+
+
+HEX_DIGITS = "0123456789abcdefABCDEF"
+
+
+def reject_bytes_row(field, path, embedded, presentation):
+    if embedded:
+        raise ValueError(f"bytes storage must cover the whole payload: {path!r}")
+    if presentation != "identity":
+        raise ValueError(f"bytes storage requires identity presentation: {path!r}")
+    if "names" in field:
+        raise ValueError(f"bytes storage does not accept names: {path!r}")
+    if "default" not in field:
+        return
+    default = field["default"]
+    if not isinstance(default, str) or any(ch not in HEX_DIGITS for ch in default):
+        raise ValueError(f"bytes row default must be hexadecimal: {path!r}")
+    if len(default) % 2 != 0:
+        raise ValueError(f"bytes row default must be an even-length hex string: {path!r}")
+    raise ValueError(f"bytes row default is not applied by any insertion policy: {path!r}")
