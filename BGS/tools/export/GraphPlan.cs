@@ -102,7 +102,8 @@ public sealed class GraphPlan
     public int StateCount => Machines.Sum(machine => machine.States.Count);
     public int TransitionCount => Machines.Sum(machine => machine.Transitions.Count);
     public int StatesWithGenerator => Machines.Sum(
-        machine => machine.States.Count(state => state.Generator is { Kind: not PlanNodeKind.Unmapped }));
+        machine => machine.States.Count(
+            state => state.Generator is { Kind: not PlanNodeKind.Unmapped and not PlanNodeKind.Shared }));
     public int TransitionsWithEvent => Machines.Sum(
         machine => machine.Transitions.Count(transition => transition.EventId >= 0));
     public int TransitionsWithCondition => Machines.Sum(
@@ -302,7 +303,8 @@ public sealed class GraphPlan
             if (generator == null)
             {
                 MissingGenerators++;
-                NoteGap("generator-reference-unresolved", "a state's generator reference did not resolve to an object");
+                NoteGap("generator-reference-unresolved",
+                        "a generator reference did not resolve: a state generator, a blend child or a selector child");
                 if (MissingGenerators <= 5 && Warnings.Count < MaximumWarnings)
                     Warnings.Add($"state '{info.Str("name")}' in '{machine.Name}' has no resolvable generator");
             }
@@ -343,7 +345,11 @@ public sealed class GraphPlan
         {
             var wrapper = model.Get(wrapperId);
             var inner = Resolve(model, model.Follow(wrapper, "generator"), path);
-            if (inner == null) continue;
+            if (inner == null)
+            {
+                NoteMissingChild(wrapperId);
+                continue;
+            }
 
             if (wrapper != null && TryFloat(wrapper.Str("weight"), out float weight))
             {
@@ -370,7 +376,13 @@ public sealed class GraphPlan
         foreach (string childId in generator.Refs("generators"))
         {
             var inner = Resolve(model, model.Get(childId), path);
-            if (inner != null) node.Children.Add(inner);
+            if (inner == null)
+            {
+                NoteMissingChild(childId);
+                continue;
+            }
+
+            node.Children.Add(inner);
         }
 
         NoteBlend(node);
@@ -420,6 +432,15 @@ public sealed class GraphPlan
                 Duration = duration,
             });
         }
+    }
+
+    private void NoteMissingChild(string reference)
+    {
+        NoteGap("generator-reference-unresolved",
+                "a generator reference did not resolve: a state generator, a blend child or a selector child");
+
+        if (Warnings.Count < MaximumWarnings)
+            Warnings.Add($"generator child '{reference}' did not resolve to an object");
     }
 
     private void NoteBlend(PlanNode node)

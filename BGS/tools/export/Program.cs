@@ -121,7 +121,8 @@ public static class Program
             return new ExportRunner(directory, output).Run(inputs, batch);
         }
         catch (Exception failure) when (failure is IOException or UnauthorizedAccessException
-                                        or InvalidDataException or ArgumentException)
+                                        or InvalidDataException or ArgumentException
+                                        or NotSupportedException or System.Security.SecurityException)
         {
             error.WriteLine(failure.Message);
             return 1;

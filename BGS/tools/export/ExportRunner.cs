@@ -4,7 +4,6 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 using OpenCommonwealth.Services.Hkx;
 using Radicle.Interop;
 
@@ -18,11 +17,6 @@ public sealed class ExportRunner
 
     private static readonly UTF8Encoding Utf8 = new(false);
 
-    private static readonly JsonSerializerOptions ErrorOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-    };
-
     private readonly string _output;
     private readonly TextWriter _log;
     private readonly List<ExportErrorRow> _errors = new();
@@ -35,10 +29,12 @@ public sealed class ExportRunner
         _log = log ?? throw new ArgumentNullException(nameof(log));
     }
 
+    public IReadOnlyList<ExportErrorRow> Errors => _errors;
+
     public int Run(IReadOnlyList<string> inputs, bool batch)
     {
         ArgumentNullException.ThrowIfNull(inputs);
-        Directory.CreateDirectory(_output);
+        if (!TryPrepareOutput()) return 2;
 
         var files = new List<(string Path, string Root)>();
         foreach (string input in inputs)
@@ -74,6 +70,24 @@ public sealed class ExportRunner
         _log.WriteLine($"exported {_documents.Count} document(s) from {files.Count} input(s); " +
                        $"{_errors.Count} error(s)");
         return _errors.Count == 0 ? 0 : 2;
+    }
+
+    // Constraint: an output directory that cannot be created is a row and an exit code, not an exception out of Run.
+    private bool TryPrepareOutput()
+    {
+        try
+        {
+            Directory.CreateDirectory(_output);
+            return true;
+        }
+        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException
+                                        or NotSupportedException or System.Security.SecurityException
+                                        or ArgumentException)
+        {
+            _errors.Add(new ExportErrorRow(_output, "output directory: " + Detail(failure)));
+            _log.WriteLine("cannot prepare the output directory: " + failure.Message);
+            return false;
+        }
     }
 
     public static void WriteSchema(string output)
@@ -163,17 +177,31 @@ public sealed class ExportRunner
         if (nif.Collisions.Count == 0)
             throw new InvalidDataException("this NIF holds no bhkPhysicsSystem or bhkRagdollSystem");
 
-        bool single = nif.Collisions.Count == 1;
-        foreach (var blob in nif.Collisions)
-        {
-            var attribution = blob.OwnerBlock >= 0 ? Attributed(blob) : null;
-            if (!NifCollisionDecoder.TryDecode(blob.Bytes, attribution, out var model, out string error))
-                throw new InvalidDataException(
-                    $"collision block {blob.Block} ({blob.Type}) did not decode: {error}");
+        ExportCollisionBlobs(nif.Collisions, source, stem, inputSha);
+    }
 
-            string suffix = single ? ".collision.json" : $".{blob.Block}.collision.json";
-            Write(ExportFormats.CollisionFolder, stem, suffix,
-                  CollisionExport.Json(model!, source, blob.Block, blob.Type), source, inputSha);
+    // Constraint: a bad blob is one row, so a NIF's other collision systems still export.
+    internal void ExportCollisionBlobs(IReadOnlyList<NifCollisionBlob> blobs, string source, string stem,
+                                       string inputSha)
+    {
+        bool single = blobs.Count == 1;
+        foreach (var blob in blobs)
+        {
+            try
+            {
+                var attribution = blob.OwnerBlock >= 0 ? Attributed(blob) : null;
+                if (!NifCollisionDecoder.TryDecode(blob.Bytes, attribution, out var model, out string error))
+                    throw new InvalidDataException(
+                        $"collision block {blob.Block} ({blob.Type}) did not decode: {error}");
+
+                string suffix = single ? ".collision.json" : $".{blob.Block}.collision.json";
+                Write(ExportFormats.CollisionFolder, stem, suffix,
+                      CollisionExport.Json(model!, source, blob.Block, blob.Type), source, inputSha);
+            }
+            catch (Exception failure) when (failure is not OperationCanceledException)
+            {
+                _errors.Add(new ExportErrorRow(source, Detail(failure)));
+            }
         }
     }
 
@@ -188,16 +216,21 @@ public sealed class ExportRunner
         TargetNodeName = blob.TargetNode?.Name ?? "",
     };
 
-    private bool Attempt(string source, string kind, Action action)
+    private bool Attempt(string source, string kind, Action action) =>
+        AttemptKind(source, kind, action, _errors);
+
+    // Constraint: one kind failing must not stop the file's other kinds, so every failure becomes a row.
+    internal static bool AttemptKind(string source, string kind, Action action,
+                                     ICollection<ExportErrorRow> errors)
     {
         try
         {
             action();
             return true;
         }
-        catch (Exception failure) when (IsInputFailure(failure))
+        catch (Exception failure) when (failure is not OperationCanceledException)
         {
-            _errors.Add(new ExportErrorRow(source, kind + ": " + failure.Message));
+            errors.Add(new ExportErrorRow(source, kind + ": " + Detail(failure)));
             return false;
         }
     }
@@ -252,12 +285,18 @@ public sealed class ExportRunner
             return;
         }
 
+        // Constraint: errors.jsonl rows go through the same writer as every document, so escaping cannot drift.
         var lines = _errors
             .OrderBy(row => row.Source, StringComparer.Ordinal)
             .ThenBy(row => row.Message, StringComparer.Ordinal)
-            .Select(row => JsonSerializer.Serialize(row, ErrorOptions));
+            .Select(row => new ExportJson(singleLine: true)
+                .Object()
+                .Name("source").Text(row.Source)
+                .Name("message").Text(row.Message)
+                .EndObject()
+                .Finish());
 
-        File.WriteAllText(path, string.Join('\n', lines) + "\n", Utf8);
+        File.WriteAllText(path, string.Concat(lines), Utf8);
     }
 
     private static byte[] Read(string path)

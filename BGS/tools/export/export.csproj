@@ -21,6 +21,9 @@
     <Compile Include="SchemaDocument.cs" />
   </ItemGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="BehaviourGraph.Tests" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="../../src/BehaviourGraph.Core.csproj" />
   </ItemGroup>
 </Project>

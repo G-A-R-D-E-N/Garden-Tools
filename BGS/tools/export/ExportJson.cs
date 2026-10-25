@@ -9,9 +9,20 @@ namespace BehaviourStudio.Tools.Export;
 public sealed class ExportJson
 {
     private readonly StringBuilder _text = new();
+    private readonly bool _singleLine;
     private int _depth;
     private bool _empty = true;
     private bool _named;
+
+    public ExportJson() : this(false)
+    {
+    }
+
+    // Constraint: a JSONL row must stay on one line, so this mode only drops the pretty-print separators.
+    public ExportJson(bool singleLine)
+    {
+        _singleLine = singleLine;
+    }
 
     public ExportJson Object()
     {
@@ -108,7 +119,7 @@ public sealed class ExportJson
     private ExportJson Close(char bracket)
     {
         _depth--;
-        if (!_empty)
+        if (!_empty && !_singleLine)
         {
             _text.Append('\n');
             Indent();
@@ -135,12 +146,19 @@ public sealed class ExportJson
         }
 
         if (!_empty) _text.Append(',');
-        _text.Append('\n');
-        Indent();
+        if (!_singleLine)
+        {
+            _text.Append('\n');
+            Indent();
+        }
+
         _empty = false;
     }
 
-    private void Indent() => _text.Append(' ', _depth * 2);
+    private void Indent()
+    {
+        if (!_singleLine) _text.Append(' ', _depth * 2);
+    }
 
     private void Quote(string value)
     {

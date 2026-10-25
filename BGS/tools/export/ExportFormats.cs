@@ -10,6 +10,7 @@ public static class ExportFormats
     public const string Collision = "bgs.collision";
     public const string Schema = "bgs.schema";
     public const string Index = "bgs.export-index";
+    public const string Errors = "bgs.export-errors";
 
     public const string SchemaFile = "schema.json";
     public const string IndexFile = "index.json";

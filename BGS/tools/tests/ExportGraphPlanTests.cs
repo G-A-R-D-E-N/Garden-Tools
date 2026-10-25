@@ -468,4 +468,134 @@ public sealed class ExportGraphPlanTests
 
         Assert.Contains("12 generator node(s) were left unexpanded", notes);
     }
+
+    // Invariant: a state whose generator is a shared stub has no usable generator, so the stats must not count it.
+    [Fact]
+    public void AStateWhoseGeneratorIsASharedStubIsNotCounted()
+    {
+        const string xml = """
+            <hkpackfile classversion="11" contentsversion="hk_2014.1.0-r1">
+                <hksection name="__data__">
+                    <hkobject class="hkbBehaviorGraph" name="#91" signature="0x0">
+                        <hkparam name="name">SharedStubGraph</hkparam>
+                        <hkparam name="rootGenerator">#96</hkparam>
+                    </hkobject>
+                    <hkobject class="hkbBlenderGenerator" name="#96" signature="0x0">
+                        <hkparam name="name">Outer</hkparam>
+                        <hkparam name="children" numelements="1">#97</hkparam>
+                    </hkobject>
+                    <hkobject class="hkbBlenderGeneratorChild" name="#97" signature="0x0">
+                        <hkparam name="generator">#92</hkparam>
+                    </hkobject>
+                    <hkobject class="hkbStateMachine" name="#92" signature="0x0">
+                        <hkparam name="name">Root</hkparam>
+                        <hkparam name="states" numelements="1">#93</hkparam>
+                    </hkobject>
+                    <hkobject class="hkbStateMachineStateInfo" name="#93" signature="0x0">
+                        <hkparam name="name">Loops</hkparam>
+                        <hkparam name="stateId">0</hkparam>
+                        <hkparam name="generator">#96</hkparam>
+                    </hkobject>
+                </hksection>
+            </hkpackfile>
+            """;
+
+        var plan = GraphPlan.Build(BehaviourGraphModel.Parse(xml));
+
+        var state = Assert.Single(Assert.Single(plan.Machines).States);
+        Assert.Equal(PlanNodeKind.Shared, state.Generator!.Kind);
+        Assert.Equal(1, plan.RevisitedGenerators);
+        Assert.Equal(0, plan.StatesWithGenerator);
+
+        var document = JsonNode.Parse(GraphExport.Json(plan, "shared-stub.hkx"))!.AsObject();
+        Assert.Equal(0, document["stats"]!["statesWithGenerator"]!.GetValue<int>());
+        Assert.Equal(1, document["stats"]!["revisitedGenerators"]!.GetValue<int>());
+    }
+
+    // Invariant: a blend child whose generator reference does not resolve must become a gap row, not vanish.
+    [Fact]
+    public void ADanglingBlendChildBecomesAGapRow()
+    {
+        const string xml = """
+            <hkpackfile classversion="11" contentsversion="hk_2014.1.0-r1">
+                <hksection name="__data__">
+                    <hkobject class="hkbBehaviorGraph" name="#91" signature="0x0">
+                        <hkparam name="name">DanglingBlendGraph</hkparam>
+                        <hkparam name="rootGenerator">#92</hkparam>
+                    </hkobject>
+                    <hkobject class="hkbStateMachine" name="#92" signature="0x0">
+                        <hkparam name="name">Root</hkparam>
+                        <hkparam name="states" numelements="1">#93</hkparam>
+                    </hkobject>
+                    <hkobject class="hkbStateMachineStateInfo" name="#93" signature="0x0">
+                        <hkparam name="name">Dangling</hkparam>
+                        <hkparam name="stateId">0</hkparam>
+                        <hkparam name="generator">#96</hkparam>
+                    </hkobject>
+                    <hkobject class="hkbBlenderGenerator" name="#96" signature="0x0">
+                        <hkparam name="name">Blend</hkparam>
+                        <hkparam name="children" numelements="1">#97</hkparam>
+                    </hkobject>
+                    <hkobject class="hkbBlenderGeneratorChild" name="#97" signature="0x0">
+                        <hkparam name="generator">#999</hkparam>
+                    </hkobject>
+                </hksection>
+            </hkpackfile>
+            """;
+
+        var plan = GraphPlan.Build(BehaviourGraphModel.Parse(xml));
+
+        var blend = Assert.Single(Assert.Single(plan.Machines).States).Generator!;
+        Assert.Equal(PlanNodeKind.Blend, blend.Kind);
+        Assert.Empty(blend.Children);
+        Assert.Equal(1, plan.GapCount("generator-reference-unresolved"));
+        Assert.Contains(plan.Warnings, warning => warning.Contains("#999", StringComparison.Ordinal));
+
+        var document = JsonNode.Parse(GraphExport.Json(plan, "dangling-blend.hkx"))!.AsObject();
+        var gaps = document["gaps"]!.AsArray()
+            .Select(gap => gap!.AsObject())
+            .ToDictionary(gap => gap["key"]!.GetValue<string>(), gap => gap["count"]!.GetValue<int>());
+        Assert.Equal(1, gaps["generator-reference-unresolved"]);
+    }
+
+    // Invariant: a selector child whose generator reference does not resolve must become a gap row too.
+    [Fact]
+    public void ADanglingSelectorChildBecomesAGapRow()
+    {
+        const string xml = """
+            <hkpackfile classversion="11" contentsversion="hk_2014.1.0-r1">
+                <hksection name="__data__">
+                    <hkobject class="hkbBehaviorGraph" name="#91" signature="0x0">
+                        <hkparam name="name">DanglingSelectorGraph</hkparam>
+                        <hkparam name="rootGenerator">#92</hkparam>
+                    </hkobject>
+                    <hkobject class="hkbStateMachine" name="#92" signature="0x0">
+                        <hkparam name="name">Root</hkparam>
+                        <hkparam name="states" numelements="1">#93</hkparam>
+                    </hkobject>
+                    <hkobject class="hkbStateMachineStateInfo" name="#93" signature="0x0">
+                        <hkparam name="name">Select</hkparam>
+                        <hkparam name="stateId">0</hkparam>
+                        <hkparam name="generator">#96</hkparam>
+                    </hkobject>
+                    <hkobject class="hkbManualSelectorGenerator" name="#96" signature="0x0">
+                        <hkparam name="name">Select</hkparam>
+                        <hkparam name="generators" numelements="2">#97 #999</hkparam>
+                    </hkobject>
+                    <hkobject class="hkbClipGenerator" name="#97" signature="0x0">
+                        <hkparam name="name">OnlyClip</hkparam>
+                        <hkparam name="animationName">Only.hkx</hkparam>
+                    </hkobject>
+                </hksection>
+            </hkpackfile>
+            """;
+
+        var plan = GraphPlan.Build(BehaviourGraphModel.Parse(xml));
+
+        var selector = Assert.Single(Assert.Single(plan.Machines).States).Generator!;
+        Assert.Equal(PlanNodeKind.Select, selector.Kind);
+        Assert.Equal("Only.hkx", Assert.Single(selector.Children).AnimationName);
+        Assert.Equal(1, plan.GapCount("generator-reference-unresolved"));
+        Assert.Contains(plan.Warnings, warning => warning.Contains("#999", StringComparison.Ordinal));
+    }
 }

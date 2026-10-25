@@ -93,7 +93,7 @@ public static class SchemaDocument
                 new Field("events", "string[]", "hkbBehaviorGraphStringData event names"),
                 new Field("variables", "string[]", "hkbBehaviorGraphStringData variable names"),
                 new Field("gaps", "array", "what the plan could not carry, with the count of each kind"),
-                new Field("gaps[].key", "string", "gap identifier: blend-branch-not-wired, blend-weight-ignored, generator-unmapped, generator-reference-unresolved or plan-node-budget"),
+                new Field("gaps[].key", "string", "gap identifier: blend-branch-not-wired, blend-weight-ignored, generator-unmapped, generator-reference-unresolved (a state generator, blend child or selector child that did not resolve) or plan-node-budget"),
                 new Field("gaps[].count", "integer", "how many times this gap was met"),
                 new Field("gaps[].explanation", "string", "what the gap means for a consumer"),
                 new Field("unmappedGenerators", "array", "generator classes that fell back to a placeholder, sorted by class"),
@@ -103,7 +103,7 @@ public static class SchemaDocument
                 new Field("stats", "object", "counts over the whole plan"),
                 new Field("stats.states", "integer", "states over every machine"),
                 new Field("stats.transitions", "integer", "transitions over every machine"),
-                new Field("stats.statesWithGenerator", "integer", "states whose generator is not a placeholder"),
+                new Field("stats.statesWithGenerator", "integer", "states whose generator reference resolved to a real generator, so an unmapped placeholder or a shared stub is not counted"),
                 new Field("stats.transitionsWithEvent", "integer", "transitions naming an event"),
                 new Field("stats.transitionsWithCondition", "integer", "transitions carrying condition text"),
                 new Field("stats.blendNodes", "integer", "blend and selector nodes resolved"),
@@ -170,10 +170,24 @@ public static class SchemaDocument
                 new Field("documents[].sha256", "string", "SHA-256 of the written document"),
                 new Field("documents[].bytes", "integer", "document length in bytes"),
             }),
-            new Format("bgs.export-errors", "errors.jsonl: one JSON object per line, one line per failed input.", new[]
+            new Format(ExportFormats.Errors, "errors.jsonl: one single-line JSON object per failed input, written by the same JSON writer as every document.", new[]
             {
                 new Field("source", "string", "input path as given, relative to the batch root"),
                 new Field("message", "string", "what failed, as the reader reported it"),
+            }),
+            new Format(ExportFormats.Schema, "schema.json: this file, listing every document format and its fields.", new[]
+            {
+                new Field("format", "string", "always " + ExportFormats.Schema),
+                new Field("version", "integer", "format version, currently 1"),
+                new Field("notes", "string", "what the schema covers"),
+                new Field("formats", "array", "one entry per document format, this one included"),
+                new Field("formats[].name", "string", "document format name, a bgs.* string"),
+                new Field("formats[].version", "integer", "format version of that document"),
+                new Field("formats[].summary", "string", "what that document holds"),
+                new Field("formats[].fields", "array", "one entry per field or field path"),
+                new Field("formats[].fields[].path", "string", "field path, [] marking an array element"),
+                new Field("formats[].fields[].type", "string", "JSON type of the field"),
+                new Field("formats[].fields[].notes", "string", "meaning, units and nullability of the field"),
             }),
         };
 
