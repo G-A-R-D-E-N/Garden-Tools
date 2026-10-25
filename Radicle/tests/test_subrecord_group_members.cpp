@@ -165,11 +165,10 @@ TEST(SubrecordGroupMembers, OptionalMemberKeepsItsDeclarationSlotWhenReinserted)
   const auto restored = payload_signatures(plugin, record_key);
   EXPECT_EQ(restored, before);
   EXPECT_EQ(count_of(restored, bytes_member), std::size_t{1});
-  if (restored.size() >= 3) {
-    EXPECT_EQ(restored[restored.size() - 3], Signature::from_string("NAM4"));
-    EXPECT_EQ(restored[restored.size() - 2], bytes_member);
-    EXPECT_EQ(restored[restored.size() - 1], marker) << "the reinserted member landed after the marker";
-  }
+  ASSERT_EQ(restored.size(), std::size_t{8}) << "the reinserted element lost a member";
+  EXPECT_EQ(restored[5], Signature::from_string("NAM4"));
+  EXPECT_EQ(restored[6], bytes_member);
+  EXPECT_EQ(restored[7], marker) << "the reinserted member landed after the marker";
   const auto* record = fo4::find_record(plugin, record_key);
   ASSERT_NE(record, nullptr);
   for (const auto& subrecord : record->subrecords) {
