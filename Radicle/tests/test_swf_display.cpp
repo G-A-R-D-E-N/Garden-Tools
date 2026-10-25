@@ -157,9 +157,10 @@ TEST(SwfDisplay, LoopsAChildTimelineWhoseLengthDiffersFromItsParent) {
 }
 
 TEST(SwfDisplay, AdvancesTwoInstancesOfOneSpriteIndependently) {
+  // Invariant: the marker exists only on the child's second frame, so a row reveals its own cursor.
   const auto sprite = sprite_tag(9, 2, {
-      {26, place2(0x22, 1, 5, {}, "Cell")},
       {1, {}},
+      {26, place2(0x22, 1, 5, {}, "Cell")},
       {1, {}},
   });
   const auto movie = movie_of(4, {
@@ -176,8 +177,23 @@ TEST(SwfDisplay, AdvancesTwoInstancesOfOneSpriteIndependently) {
   ASSERT_EQ(display.status, SwfTimelineStatus::ok) << display.message;
   const auto& root = display.timelines[0].frames;
   ASSERT_EQ(root.size(), 4u);
-  EXPECT_EQ(paths_of(root[1]), "Early,Late,Late/Cell");
-  EXPECT_EQ(paths_of(root[2]), "Early,Early/Cell,Late");
+  EXPECT_EQ(paths_of(root[0]), "Early");
+  EXPECT_EQ(paths_of(root[1]), "Early,Early/Cell,Late");
+  EXPECT_EQ(paths_of(root[2]), "Early,Late,Late/Cell");
+  EXPECT_EQ(paths_of(root[3]), "Early,Early/Cell,Late");
+
+  // Invariant: a placement born on root frame 2 reaches the child's second frame one root frame later.
+  const auto* early_cell = find(root[3], "Early/Cell");
+  const auto* late_cell = find(root[2], "Late/Cell");
+  ASSERT_NE(early_cell, nullptr);
+  ASSERT_NE(late_cell, nullptr);
+  EXPECT_EQ(early_cell->timeline_frame, 1u);
+  EXPECT_EQ(late_cell->timeline_frame, 1u);
+  EXPECT_EQ(early_cell->timeline_id, 9);
+  EXPECT_EQ(late_cell->timeline_id, 9);
+  EXPECT_NE(early_cell->instance_id, late_cell->instance_id);
+  EXPECT_EQ(find(root[2], "Early/Cell"), nullptr);
+  EXPECT_EQ(find(root[1], "Late/Cell"), nullptr);
 }
 
 TEST(SwfDisplay, KeepsAnInstanceIdAcrossAMoveAndRenewsItAfterARemove) {
