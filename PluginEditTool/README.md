@@ -117,14 +117,17 @@ Windows release packages use this layout:
 
 ```text
 FO4RecordEditor.exe     native C++ editor + MCP server
+radicle.dll             Radicle backend (C++ API + C ABI); must stay beside the exe
 web\dist\               React UI loaded by WebView2
 tools\                  optional external helper programs
+sdk\                    Radicle C ABI headers and the import library
 mcp.sample.json         sample MCP client configuration
 docs\MCP_SETUP.md       MCP setup and tool-surface documentation
 ```
 
 The executable looks for `web\dist\` beside itself first, which keeps packaged builds independent
-of the source checkout.
+of the source checkout. Radicle is linked as `radicle.dll`, so the editor starts only when that DLL
+is in the same folder.
 
 ## Building from source
 
