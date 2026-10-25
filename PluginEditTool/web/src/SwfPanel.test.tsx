@@ -81,7 +81,8 @@ describe('SwfPanel', () => {
     render(<SwfPanel onClose={() => {}} />);
     fireEvent.change(screen.getByPlaceholderText('Interface/Test.swf'), { target: { value: 'Interface/Test.swf' } });
     await act(async () => { fireEvent.click(screen.getByText('Open')); });
-    await act(async () => { fireEvent.click(await screen.findByText(/depth 1 · 11/)); });
+    await act(async () => { fireEvent.click(await screen.findByTestId('swf-row-7')); });
+    await waitFor(() => expect(swf.PlacementMatrix).toHaveBeenCalledWith(2));
     const depthField = await screen.findByDisplayValue('1');
     fireEvent.change(depthField, { target: { value: '7' } });
     await act(async () => { fireEvent.click(screen.getByText('Apply depth')); });

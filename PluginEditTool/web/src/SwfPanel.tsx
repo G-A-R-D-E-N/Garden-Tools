@@ -174,6 +174,11 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     setError('');
     setState(reply);
   }, [placementTag, frame]);
+  const pickInstance = useCallback((row: InstanceRow) => {
+    const match = placements.find(item => item.depth === row.depth &&
+      (item.character === row.character || row.character === 0));
+    if (match) void pickPlacement(match);
+  }, [placements, pickPlacement]);
   const applyDepth = useCallback(async () => {
     const bridge = host();
     if (!bridge || placementTag === null) return;
@@ -288,7 +293,7 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
             <thead><tr><th>Depth</th><th>Character</th><th>Name</th><th>X</th><th>Y</th><th>Scale</th><th>Rotate</th></tr></thead>
             <tbody>
               {instances.map(row => (
-                <tr key={row.instanceId}>
+                <tr key={row.instanceId} data-testid={`swf-row-${row.instanceId}`} onClick={() => pickInstance(row)}>
                   <td>{row.depth}</td><td>{row.character}</td><td>{row.name}</td>
                   <td>{row.x.toFixed(1)}</td><td>{row.y.toFixed(1)}</td>
                   <td>{row.scaleX.toFixed(2)}×{row.scaleY.toFixed(2)}</td><td>{row.rotation.toFixed(3)}</td>

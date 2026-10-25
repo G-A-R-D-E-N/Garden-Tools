@@ -138,3 +138,8 @@ yet because PET has no generic asset-write path; the document save writes a targ
 The SWF document save now goes through the core `WriteService` static partial: `SaveAsset(path, bytes)` copies the
 existing file to `<path>.bak` and writes the new bytes, matching the backup-first rule the other write paths follow.
 `SwfDocument.Save` delegates to it, so the editor's Save and a future host asset-write hook share one implementation.
+## web/src/SwfPanel.tsx (display-list row selection)
+
+A display-list row is now a selection affordance: clicking it matches the row's depth (and character when present) to
+the placement list and selects that placement as the edit target, so the properties panel follows the centre table as
+well as the explicit placement list. The web test clicks the fixture row and asserts `PlacementMatrix` was requested.
