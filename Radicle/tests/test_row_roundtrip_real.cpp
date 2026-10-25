@@ -439,6 +439,98 @@ void roundtrip_lists(const char* family,
   EXPECT_GT(exercised, 0u) << family << " exercised no list";
 }
 
+std::size_t editor_id_payload(const fo4::Plugin& plugin, const fo4::FormKey& key) {
+  const auto* record = fo4::find_record(plugin, key);
+  if (record == nullptr) return 0;
+  for (const auto& subrecord : record->subrecords) {
+    if (subrecord.signature == Signature::from_string("EDID")) return subrecord.data.size();
+  }
+  return 0;
+}
+
+void roundtrip_strings(const char* family, Signature signature) {
+  const auto* directory = std::getenv("FO4_DATA_DIR");
+  if (directory == nullptr) {
+    GTEST_SKIP() << "set FO4_DATA_DIR to run official-master coverage";
+  }
+  record_game_build(detect_game_build(directory));
+  const auto path = std::filesystem::path(directory) / "Fallout4.esm";
+  ASSERT_TRUE(std::filesystem::is_regular_file(path)) << path.string();
+  const auto plugin = fo4::read_plugin_file(path);
+
+  std::optional<ScalarFieldDescriptor> editor;
+  for (const auto& field : fo4::schema::scalar_fields(signature)) {
+    if (field.scalar.subrecord == Signature::from_string("EDID") &&
+        field.scalar.storage == ScalarStorage::zstring) {
+      editor = field;
+      break;
+    }
+  }
+  ASSERT_TRUE(editor.has_value()) << family << " has no editor ID string row";
+
+  std::optional<fo4::FormKey> chosen;
+  fo4::visit_records(plugin, [&](const fo4::Record& record) {
+    if (chosen.has_value() || record.header.signature != signature) return;
+    if (fo4::record_field_count(plugin, record.form_key, *editor).value_or(0) == std::size_t{1}) {
+      chosen = record.form_key;
+    }
+  });
+  ASSERT_TRUE(chosen.has_value()) << family << " has no record carrying an editor ID";
+  const auto key = *chosen;
+
+  auto edited = fo4::read_plugin_file(path);
+  const auto* live = fo4::find_record(edited, key);
+  ASSERT_NE(live, nullptr) << key.to_string();
+  const auto before = snapshot(*live);
+  const auto original = decode_row(*live, *editor);
+  ASSERT_FALSE(original.empty()) << key.to_string();
+  const auto longer = original + "_Radicle602";
+  const auto shorter = original.substr(0, original.size() / 2 + 1);
+  ASSERT_LT(shorter.size(), original.size());
+  ASSERT_GT(longer.size(), original.size());
+
+  ASSERT_EQ(fo4::set_record_string(edited, key, *editor, 0, longer),
+            fo4::ScalarMutationStatus::updated);
+  const auto* grown = fo4::find_record(edited, key);
+  ASSERT_NE(grown, nullptr);
+  EXPECT_EQ(decode_row(*grown, *editor), longer);
+  EXPECT_EQ(editor_id_payload(edited, key), longer.size() + 1)
+      << family << " did not grow the editor ID payload to the new length";
+  const auto grown_snapshot = snapshot(*grown);
+
+  auto bytes = fo4::write_plugin(edited);
+  auto reread = fo4::read_plugin(bytes, "RowRoundtrip.esm");
+  const auto* restored = fo4::find_record(reread, key);
+  ASSERT_NE(restored, nullptr) << key.to_string();
+  EXPECT_TRUE(same_record(grown_snapshot, *restored))
+      << family << " did not re-read the longer editor ID byte for byte";
+  EXPECT_EQ(decode_row(*restored, *editor), longer);
+
+  ASSERT_EQ(fo4::set_record_string(reread, key, *editor, 0, shorter),
+            fo4::ScalarMutationStatus::updated);
+  const auto* shrunk = fo4::find_record(reread, key);
+  ASSERT_NE(shrunk, nullptr);
+  EXPECT_EQ(decode_row(*shrunk, *editor), shorter);
+  EXPECT_EQ(editor_id_payload(reread, key), shorter.size() + 1)
+      << family << " did not shrink the editor ID payload to the new length";
+  const auto shrunk_snapshot = snapshot(*shrunk);
+
+  bytes = fo4::write_plugin(reread);
+  const auto second = fo4::read_plugin(bytes, "RowRoundtrip.esm");
+  const auto* shortened = fo4::find_record(second, key);
+  ASSERT_NE(shortened, nullptr) << key.to_string();
+  EXPECT_TRUE(same_record(shrunk_snapshot, *shortened))
+      << family << " did not re-read the shorter editor ID byte for byte";
+  EXPECT_EQ(decode_row(*shortened, *editor), shorter);
+
+  ASSERT_EQ(fo4::set_record_string(edited, key, *editor, 0, original),
+            fo4::ScalarMutationStatus::updated);
+  const auto* reverted = fo4::find_record(edited, key);
+  ASSERT_NE(reverted, nullptr);
+  EXPECT_TRUE(same_snapshot(before, snapshot(*reverted)))
+      << family << " did not restore the editor ID after a longer and a shorter write";
+}
+
 }  // namespace
 
 TEST(RowRoundtripReal, CellRowsSurviveWriteAndReread) {
@@ -475,6 +567,14 @@ TEST(RowRoundtripReal, InfoRowsSurviveWriteAndReread) {
 
 TEST(RowRoundtripReal, FootstepSetRowsSurviveWriteAndReread) {
   roundtrip_family("FSTS", fo4::Signature::from_string("FSTS"));
+}
+
+TEST(RowRoundtripReal, FootstepSetEditorIdSurvivesALengthChange) {
+  roundtrip_strings("FSTS", fo4::Signature::from_string("FSTS"));
+}
+
+TEST(RowRoundtripReal, WeaponEditorIdSurvivesALengthChange) {
+  roundtrip_strings("WEAP", fo4::Signature::from_string("WEAP"));
 }
 
 TEST(RowRoundtripReal, FootstepSetCategoryListsSurviveWriteAndReread) {
