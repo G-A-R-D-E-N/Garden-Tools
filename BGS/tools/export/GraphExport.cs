@@ -10,6 +10,11 @@ public static class GraphExport
         if (plan.RootMachine < 0)
             notes.Add("no root state machine was resolved, so the plan holds no entry point");
 
+        int unexpanded = plan.GapCount("plan-node-budget");
+        if (unexpanded > 0)
+            notes.Add($"{unexpanded} generator node(s) were left unexpanded at the plan node budget, " +
+                      "so this plan stops short of the graph and gaps[plan-node-budget] counts them");
+
         var json = new ExportJson().Object()
             .Name("format").Text(ExportFormats.BehaviourGraph)
             .Name("version").Number(ExportFormats.Version)

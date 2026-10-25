@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Text;
 using System.Text.Json.Nodes;
 using BehaviourStudio.Tools.Export;
 using OpenCommonwealth.Services.Hkx;
@@ -335,5 +336,85 @@ public sealed class ExportGraphPlanTests
 
         var document = JsonNode.Parse(GraphExport.Json(plan, "cycle.hkx"))!.AsObject();
         Assert.Equal("shared", document["machines"]![0]!["states"]![0]!["generator"]!["kind"]!.GetValue<string>());
+    }
+
+    // Invariant: a truncated plan still points at machines it already wrote, and its gap counts every stub.
+    [Fact]
+    public void BudgetedPlanCountsItsStubsAndKeepsMachineReferences()
+    {
+        const int Levels = 17;
+
+        var xml = new StringBuilder();
+        xml.Append("<hkpackfile classversion=\"11\" contentsversion=\"hk_2014.1.0-r1\"><hksection name=\"__data__\">");
+        xml.Append("<hkobject class=\"hkbBehaviorGraph\" name=\"#91\" signature=\"0x0\">")
+           .Append("<hkparam name=\"name\">BudgetGraph</hkparam>")
+           .Append("<hkparam name=\"rootGenerator\">#92</hkparam></hkobject>");
+        xml.Append("<hkobject class=\"hkbStateMachine\" name=\"#92\" signature=\"0x0\">")
+           .Append("<hkparam name=\"name\">Root</hkparam>")
+           .Append("<hkparam name=\"states\" numelements=\"3\">#93 #94 #95</hkparam></hkobject>");
+
+        foreach (var (state, name, generator) in new[] { (93, "Before", 96), (94, "Chain", 100), (95, "After", 96) })
+            xml.Append($"<hkobject class=\"hkbStateMachineStateInfo\" name=\"#{state}\" signature=\"0x0\">")
+               .Append($"<hkparam name=\"name\">{name}</hkparam>")
+               .Append($"<hkparam name=\"stateId\">{state - 93}</hkparam>")
+               .Append($"<hkparam name=\"generator\">#{generator}</hkparam></hkobject>");
+
+        xml.Append("<hkobject class=\"hkbStateMachine\" name=\"#96\" signature=\"0x0\">")
+           .Append("<hkparam name=\"name\">Written</hkparam>")
+           .Append("<hkparam name=\"states\" numelements=\"1\">#97</hkparam></hkobject>");
+        xml.Append("<hkobject class=\"hkbStateMachineStateInfo\" name=\"#97\" signature=\"0x0\">")
+           .Append("<hkparam name=\"name\">Only</hkparam><hkparam name=\"stateId\">0</hkparam>")
+           .Append("<hkparam name=\"generator\">#98</hkparam></hkobject>");
+        xml.Append("<hkobject class=\"hkbClipGenerator\" name=\"#98\" signature=\"0x0\">")
+           .Append("<hkparam name=\"name\">WrittenClip</hkparam>")
+           .Append("<hkparam name=\"animationName\">Written.hkx</hkparam></hkobject>");
+
+        for (int level = 0; level < Levels; level++)
+        {
+            int blend = 100 + level;
+            int first = 120 + level * 2;
+            int next = level + 1 < Levels ? blend + 1 : 300;
+
+            xml.Append($"<hkobject class=\"hkbBlenderGenerator\" name=\"#{blend}\" signature=\"0x0\">")
+               .Append($"<hkparam name=\"name\">Blend{level}</hkparam>")
+               .Append($"<hkparam name=\"children\" numelements=\"2\">#{first} #{first + 1}</hkparam>")
+               .Append("</hkobject>");
+
+            for (int child = 0; child < 2; child++)
+                xml.Append($"<hkobject class=\"hkbBlenderGeneratorChild\" name=\"#{first + child}\" signature=\"0x0\">")
+                   .Append("<hkparam name=\"weight\">0.5</hkparam>")
+                   .Append($"<hkparam name=\"generator\">#{next}</hkparam>")
+                   .Append("</hkobject>");
+        }
+
+        xml.Append("<hkobject class=\"hkbClipGenerator\" name=\"#300\" signature=\"0x0\">")
+           .Append("<hkparam name=\"name\">Leaf</hkparam>")
+           .Append("<hkparam name=\"animationName\">Leaf.hkx</hkparam></hkobject>");
+        xml.Append("</hksection></hkpackfile>");
+
+        var plan = GraphPlan.Build(BehaviourGraphModel.Parse(xml.ToString()));
+
+        Assert.Equal(2, plan.Machines.Count);
+        Assert.Equal(3, plan.Machines[0].States.Count);
+
+        var after = plan.Machines[0].States[2].Generator!;
+        Assert.Equal(PlanNodeKind.Machine, after.Kind);
+        Assert.Equal(1, after.Machine);
+
+        int stubs = plan.GapCount("plan-node-budget");
+        Assert.True(stubs > 1, $"plan-node-budget counted {stubs} stub(s); it must count every stub");
+    }
+
+    // Invariant: a truncated plan names the truncation and its size in notes, so a short plan is measurable.
+    [Fact]
+    public void PlanNotesNameTheTruncationCount()
+    {
+        var plan = GraphPlan.Build(BehaviourGraphModel.Parse(Xml));
+        plan.NoteGap("plan-node-budget", "generator nodes left unexpanded", 12);
+
+        var document = JsonNode.Parse(GraphExport.Json(plan, "notes.hkx"))!.AsObject();
+        string notes = document["notes"]!.ToJsonString();
+
+        Assert.Contains("12 generator node(s) were left unexpanded", notes);
     }
 }

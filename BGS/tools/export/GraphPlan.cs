@@ -177,13 +177,18 @@ public sealed class GraphPlan
     // Constraint: the node budget bounds repeated expansion, so a pathological graph cannot exhaust memory.
     private PlanNode? ResolveOnce(BehaviourGraphModel model, HkObject generator, HashSet<string> path)
     {
+        // Invariant: a machine already in machines[] keeps its index past the budget, so truncation cannot orphan it.
+        if (generator.Class == "hkbStateMachine" && _machinesById.TryGetValue(generator.Id, out int written))
+            return MachineReference(generator, written);
+
         if (++_resolvedNodes > MaximumResolvedNodes)
         {
+            NoteGap("plan-node-budget",
+                    "generator nodes the plan left unexpanded at its node budget, counted per node");
+
             if (!_budgetNoted)
             {
                 _budgetNoted = true;
-                NoteGap("plan-node-budget",
-                        "the plan stops expanding generator branches past its node budget");
                 if (Warnings.Count < MaximumWarnings)
                     Warnings.Add("plan node budget reached; deeper generator branches are shared stubs");
             }
@@ -260,18 +265,18 @@ public sealed class GraphPlan
         return Unmapped(generator, "no mapping for this generator class");
     }
 
+    private static PlanNode MachineReference(HkObject machineObject, int written) =>
+        new PlanNode
+        {
+            Kind = PlanNodeKind.Machine,
+            Class = machineObject.Class,
+            Name = machineObject.Str("name"),
+            Machine = written,
+            Detail = $"already written as machine {written}",
+        };
+
     private PlanNode MachineNode(BehaviourGraphModel model, HkObject machineObject, HashSet<string> path)
     {
-        if (_machinesById.TryGetValue(machineObject.Id, out int written))
-            return new PlanNode
-            {
-                Kind = PlanNodeKind.Machine,
-                Class = machineObject.Class,
-                Name = machineObject.Str("name"),
-                Machine = written,
-                Detail = $"already written as machine {written}",
-            };
-
         var machine = new PlanMachine
         {
             Name = machineObject.Str("name"),
