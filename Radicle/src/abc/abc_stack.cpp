@@ -16,12 +16,14 @@ AbcFlowStatus stack_effect(const AbcFile& file, const AbcInstruction& instructio
   const auto multiname_pops = [&](std::uint64_t& out) {
     std::uint32_t index = 0;
     if (!u30_operand(instruction, 0, AbcOperandRole::Multiname, index)) {
-      return set_issue(issue, AbcFlowStatus::UnmodelledStackEffect, instruction.offset,
+      return set_issue(issue, AbcFlowStatus::UnmodelledStackEffect,
+                       static_cast<std::uint32_t>(instruction.offset),
                        std::string{mnemonic_of(instruction)} + " has no multiname operand");
     }
     const std::uint32_t runtime = multiname_runtime_pops(file, index);
     if (runtime == kNoFlowIndex) {
-      return set_issue(issue, AbcFlowStatus::MultinameIndexOutOfRange, instruction.offset,
+      return set_issue(issue, AbcFlowStatus::MultinameIndexOutOfRange,
+                       static_cast<std::uint32_t>(instruction.offset),
                        std::string{mnemonic_of(instruction)} + " reads multiname " +
                            std::to_string(index) + " outside the pool");
     }
@@ -31,7 +33,8 @@ AbcFlowStatus stack_effect(const AbcFile& file, const AbcInstruction& instructio
   const auto count_at = [&](std::size_t index, std::uint64_t& out) {
     std::uint32_t value = 0;
     if (!u30_operand(instruction, index, AbcOperandRole::Count, value)) {
-      return set_issue(issue, AbcFlowStatus::UnmodelledStackEffect, instruction.offset,
+      return set_issue(issue, AbcFlowStatus::UnmodelledStackEffect,
+                       static_cast<std::uint32_t>(instruction.offset),
                        std::string{mnemonic_of(instruction)} + " has no count operand " +
                            std::to_string(index));
     }
@@ -60,6 +63,7 @@ AbcFlowStatus stack_effect(const AbcFile& file, const AbcInstruction& instructio
     case 0xF0:
     case 0xF1:
     case 0xF2:
+    case 0xF3:
       return AbcFlowStatus::Ok;
     case 0x03:
     case 0x07:
@@ -343,7 +347,8 @@ AbcFlowStatus stack_effect(const AbcFile& file, const AbcInstruction& instructio
       pushes = 1;
       return AbcFlowStatus::Ok;
     default:
-      return set_issue(issue, AbcFlowStatus::UnmodelledStackEffect, instruction.offset,
+      return set_issue(issue, AbcFlowStatus::UnmodelledStackEffect,
+                       static_cast<std::uint32_t>(instruction.offset),
                        "opcode " + hex_offset(opcode) + " (" + mnemonic_of(instruction) +
                            ") has no modelled stack effect");
   }
@@ -405,7 +410,8 @@ AbcFlowStatus verify_stack(const AbcFile& file, const AbcMethodBody& body,
         return status;
       }
       if (depth < pops) {
-        return set_issue(issue, AbcFlowStatus::StackUnderflow, instruction.offset,
+        return set_issue(issue, AbcFlowStatus::StackUnderflow,
+                         static_cast<std::uint32_t>(instruction.offset),
                          std::string{mnemonic_of(instruction)} + " needs " +
                              std::to_string(pops) + " stack value(s) but " +
                              std::to_string(depth) + " are live");
@@ -415,7 +421,8 @@ AbcFlowStatus verify_stack(const AbcFile& file, const AbcMethodBody& body,
         observed_max_stack = static_cast<std::uint32_t>(depth);
       }
       if (depth > body.max_stack) {
-        return set_issue(issue, AbcFlowStatus::StackLimitExceeded, instruction.offset,
+        return set_issue(issue, AbcFlowStatus::StackLimitExceeded,
+                         static_cast<std::uint32_t>(instruction.offset),
                          "operand stack reaches " + std::to_string(depth) +
                              " past declared max_stack " + std::to_string(body.max_stack));
       }
@@ -495,7 +502,8 @@ AbcFlowStatus verify_scope(const AbcMethodBody& body, const AbcMethodFlow& flow,
             observed_max_scope_depth = static_cast<std::uint32_t>(depth);
           }
           if (depth > body.max_scope_depth) {
-            return set_issue(issue, AbcFlowStatus::ScopeLimitExceeded, instruction.offset,
+            return set_issue(issue, AbcFlowStatus::ScopeLimitExceeded,
+                             static_cast<std::uint32_t>(instruction.offset),
                              "scope depth reaches " + std::to_string(depth) +
                                  " past declared max_scope_depth " +
                                  std::to_string(body.max_scope_depth));
@@ -503,7 +511,8 @@ AbcFlowStatus verify_scope(const AbcMethodBody& body, const AbcMethodFlow& flow,
           break;
         case 0x1D:
           if (depth <= init_scope_depth) {
-            return set_issue(issue, AbcFlowStatus::ScopeUnderflow, instruction.offset,
+            return set_issue(issue, AbcFlowStatus::ScopeUnderflow,
+                             static_cast<std::uint32_t>(instruction.offset),
                              "popscope would drop below init_scope_depth " +
                                  std::to_string(init_scope_depth));
           }
@@ -512,12 +521,14 @@ AbcFlowStatus verify_scope(const AbcMethodBody& body, const AbcMethodFlow& flow,
         case 0x65: {
           std::uint32_t scope_index = 0;
           if (!u30_operand(instruction, 0, AbcOperandRole::Count, scope_index)) {
-            return set_issue(issue, AbcFlowStatus::UnmodelledStackEffect, instruction.offset,
+            return set_issue(issue, AbcFlowStatus::UnmodelledStackEffect,
+                             static_cast<std::uint32_t>(instruction.offset),
                              "getscopeobject has no scope index operand");
           }
           const std::uint64_t local = depth - init_scope_depth;
           if (scope_index >= local) {
-            return set_issue(issue, AbcFlowStatus::ScopeIndexOutOfRange, instruction.offset,
+            return set_issue(issue, AbcFlowStatus::ScopeIndexOutOfRange,
+                             static_cast<std::uint32_t>(instruction.offset),
                              "local scope index " + std::to_string(scope_index) +
                                  " is out of range with " + std::to_string(local) +
                                  " local scope entries");

@@ -139,7 +139,7 @@ TEST(Abc, ParsesMethodOptionsParamNamesTraitsAndExceptions) {
   EXPECT_EQ(helper->exceptions[0].from, 0u);
   EXPECT_EQ(helper->exceptions[0].to, 1u);
   EXPECT_EQ(helper->exceptions[0].exc_type, kMultinameTest);
-  EXPECT_EQ(file.string_at(helper->exceptions[0].var_name), "helper");
+  EXPECT_EQ(file.multiname_at(helper->exceptions[0].var_name), "helper");
 }
 
 TEST(Abc, ParsesEveryByteAndRejectsTrailingBytes) {

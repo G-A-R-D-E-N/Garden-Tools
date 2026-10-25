@@ -5,6 +5,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <iomanip>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -28,7 +30,11 @@ inline const char* mnemonic_of(const AbcInstruction& instruction) {
   return instruction.mnemonic == nullptr ? "" : instruction.mnemonic;
 }
 
-inline std::string hex_offset(std::uint32_t offset) { return "0x" + std::to_string(offset); }
+inline std::string hex_offset(std::uint32_t offset) {
+  std::ostringstream text;
+  text << "0x" << std::hex << std::setw(4) << std::setfill('0') << offset;
+  return text.str();
+}
 
 /* Requires the caller to name the role the opcode's operand table gives that slot. */
 inline bool u30_operand(const AbcInstruction& instruction, std::size_t index, AbcOperandRole role,

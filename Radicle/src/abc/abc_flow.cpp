@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <string>
 #include <utility>
 #include <vector>
@@ -73,15 +74,26 @@ bool ends_with_switch(const AbcInstruction& instruction) {
 }
 
 void push_edge(AbcBasicBlock& block, std::uint32_t target, AbcEdgeKind kind) {
-  for (const AbcControlFlowEdge& edge : block.successors) {
-    if (edge.target == target && edge.kind == kind) {
-      return;
-    }
-  }
   AbcControlFlowEdge edge;
   edge.target = target;
   edge.kind = kind;
   block.successors.push_back(edge);
+}
+
+/* Constraint: duplicates are removed once per block, so a wide switch stays linear. */
+void sort_unique_edges(AbcBasicBlock& block) {
+  const auto order = [](const AbcControlFlowEdge& left, const AbcControlFlowEdge& right) {
+    if (left.target != right.target) {
+      return left.target < right.target;
+    }
+    return left.kind < right.kind;
+  };
+  const auto same = [](const AbcControlFlowEdge& left, const AbcControlFlowEdge& right) {
+    return left.target == right.target && left.kind == right.kind;
+  };
+  std::sort(block.successors.begin(), block.successors.end(), order);
+  block.successors.erase(std::unique(block.successors.begin(), block.successors.end(), same),
+                         block.successors.end());
 }
 
 AbcFlowStatus fail(AbcFlowIssue& issue, AbcFlowStatus status, std::uint32_t offset,
@@ -221,11 +233,13 @@ AbcFlowStatus build_control_flow(const std::vector<AbcInstruction>& instructions
   std::uint32_t expected = 0;
   for (const AbcInstruction& instruction : instructions) {
     if (instruction.length == 0 || instruction.offset != expected) {
-      return fail(issue, AbcFlowStatus::InstructionLayout, instruction.offset,
+      return fail(issue, AbcFlowStatus::InstructionLayout,
+                  static_cast<std::uint32_t>(instruction.offset),
                   "instruction layout at 0x" + std::to_string(instruction.offset) +
                       " is not contiguous at 0x" + std::to_string(expected));
     }
-    expected = instruction.offset + static_cast<std::uint32_t>(instruction.length);
+    expected = static_cast<std::uint32_t>(instruction.offset) +
+               static_cast<std::uint32_t>(instruction.length);
   }
   const std::uint32_t code_len = expected;
   out.code_len = code_len;
@@ -244,8 +258,8 @@ AbcFlowStatus build_control_flow(const std::vector<AbcInstruction>& instructions
       }
     }
     if (ends_block(instruction.opcode)) {
-      const std::uint32_t next =
-          instruction.offset + static_cast<std::uint32_t>(instruction.length);
+      const std::uint32_t next = static_cast<std::uint32_t>(instruction.offset) +
+                                 static_cast<std::uint32_t>(instruction.length);
       if (next < code_len) {
         leaders.push_back(next);
       }
@@ -304,6 +318,7 @@ AbcFlowStatus build_control_flow(const std::vector<AbcInstruction>& instructions
     } else if (!is_terminal_opcode(last.opcode) && block.end_offset < code_len) {
       push_edge(block, block.end_offset, AbcEdgeKind::Fallthrough);
     }
+    sort_unique_edges(block);
     out.blocks.push_back(std::move(block));
   }
 
@@ -343,12 +358,14 @@ AbcFlowStatus build_control_flow(const std::vector<AbcInstruction>& instructions
     explicit_targets(last, targets);
     for (const std::uint32_t target : targets) {
       if (!is_target_offset(last) || target >= code_len) {
-        return fail(issue, AbcFlowStatus::TargetOutsideCode, last.offset,
+        return fail(issue, AbcFlowStatus::TargetOutsideCode,
+                  static_cast<std::uint32_t>(last.offset),
                     "control-flow target 0x" + std::to_string(target) +
                         " is outside code length 0x" + std::to_string(code_len));
       }
       if (instruction_index_at(instructions, target) == kNoFlowIndex) {
-        return fail(issue, AbcFlowStatus::TargetInsideInstruction, last.offset,
+        return fail(issue, AbcFlowStatus::TargetInsideInstruction,
+                  static_cast<std::uint32_t>(last.offset),
                     "control-flow target 0x" + std::to_string(target) +
                         " lands inside an instruction");
       }
@@ -481,13 +498,16 @@ AbcFlowStatus build_exception_graph(const AbcMethodBody& body,
   }
 
   entries.clear();
+  // Constraint: each reachable instruction is scanned once, because the entry set only grows.
+  std::vector<std::uint8_t> scanned(instructions.size(), 0);
+  std::vector<std::uint32_t> found;
   const std::size_t guard_limit = instructions.size() + 2;
   for (std::size_t guard = 0; guard < guard_limit; ++guard) {
     const AbcFlowStatus status = build_control_flow(instructions, entries, graph, issue);
     if (status != AbcFlowStatus::Ok) {
       return status;
     }
-    std::vector<std::uint32_t> active;
+    found.clear();
     for (const AbcBasicBlock& block : graph.blocks) {
       if (!block.reachable) {
         continue;
@@ -495,28 +515,39 @@ AbcFlowStatus build_exception_graph(const AbcMethodBody& body,
       const std::size_t end = static_cast<std::size_t>(block.first_instruction) +
                               static_cast<std::size_t>(block.instruction_count);
       for (std::size_t at = block.first_instruction; at < end; ++at) {
+        if (scanned[at] != 0) {
+          continue;
+        }
+        scanned[at] = 1;
         const AbcInstruction& instruction = instructions[at];
         if (!opcode_can_throw(instruction.opcode)) {
           continue;
         }
         for (const AbcExceptionRegion& region : regions) {
-          if (!region.covers(instruction.offset)) {
+          if (!region.covers(static_cast<std::uint32_t>(instruction.offset))) {
             continue;
           }
           const AbcFlowStatus region_status = validate_region(region, graph.code_len, issue);
           if (region_status != AbcFlowStatus::Ok) {
             return region_status;
           }
-          active.push_back(region.target);
+          found.push_back(region.target);
         }
       }
     }
-    std::sort(active.begin(), active.end());
-    active.erase(std::unique(active.begin(), active.end()), active.end());
-    if (active == entries) {
+    if (found.empty()) {
       return AbcFlowStatus::Ok;
     }
-    entries = std::move(active);
+    std::sort(found.begin(), found.end());
+    found.erase(std::unique(found.begin(), found.end()), found.end());
+    std::vector<std::uint32_t> merged;
+    merged.reserve(entries.size() + found.size());
+    std::set_union(entries.begin(), entries.end(), found.begin(), found.end(),
+                   std::back_inserter(merged));
+    if (merged == entries) {
+      return AbcFlowStatus::Ok;
+    }
+    entries = std::move(merged);
   }
   return fail(issue, AbcFlowStatus::FlowIterationLimit, kNoFlowIndex,
               "the exception-entry fixpoint did not converge");

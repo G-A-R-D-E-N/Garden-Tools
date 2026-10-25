@@ -89,15 +89,17 @@ TEST(AbcVerify, RejectsADepthPastTheDeclaredMaxStack) {
 }
 
 TEST(AbcVerify, RejectsAnExceptionRangePastTheCode) {
+  // Constraint: the throw at offset 0 is what puts the range in front of the check.
   const std::vector<AbcException> exceptions{AbcException{0, 99, 0, 0, 0}};
-  const auto probe = run({0x24, 0x01, 0x29, 0x47}, 4, 0, 1, exceptions);
+  const auto probe = run({0x03, 0x47}, 4, 0, 1, exceptions);
   EXPECT_EQ(probe.status, AbcFlowStatus::ExceptionRangeInvalid);
   EXPECT_EQ(probe.issue.offset, 0u);
 }
 
 TEST(AbcVerify, RejectsAHandlerTargetInsideItsProtectedRange) {
+  // Constraint: the throw at offset 0 falls inside the range, so the target rule is reached.
   const std::vector<AbcException> exceptions{AbcException{0, 3, 2, 0, 0}};
-  const auto probe = run({0x24, 0x01, 0x29, 0x47}, 4, 0, 1, exceptions);
+  const auto probe = run({0x03, 0x47, 0x47, 0x47}, 4, 0, 1, exceptions);
   EXPECT_EQ(probe.status, AbcFlowStatus::ExceptionTargetInvalid);
   EXPECT_EQ(probe.issue.offset, 2u);
 }
@@ -155,7 +157,72 @@ TEST(AbcVerify, VerifiesEveryBodyOfTheFixtureFile) {
   }
 }
 
+TEST(AbcVerify, SweepsHostileBodyMutationsWithoutCrashing) {
+  // Constraint: a mutation may only turn a verified body into a refusal, never into a crash or a hang.
+  const fo4::abc::AbcFile pristine = fixture_file();
+  const std::vector<std::vector<std::uint8_t>> seeds{
+      {0x60, 0x01, 0x29, 0x47},
+      {0x24, 0x01, 0x24, 0x02, 0xA0, 0x29, 0x47},
+      {0x10, 0x00, 0x00, 0x00, 0x47},
+      {0x1B, 0x00, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x47},
+  };
+  std::uint64_t state = 0x9E3779B97F4A7C15ull;
+  const auto next = [&state]() {
+    state ^= state << 13;
+    state ^= state >> 7;
+    state ^= state << 17;
+    return state;
+  };
+  for (const auto& seed : seeds) {
+    for (int mutation = 0; mutation < 64; ++mutation) {
+      fo4::abc::AbcFile file = pristine;
+      file.bodies[0].code = seed;
+      file.bodies[0].exceptions.clear();
+      const std::size_t touches = 1 + static_cast<std::size_t>(mutation % 3);
+      for (std::size_t touch = 0; touch < touches; ++touch) {
+        const std::size_t at = static_cast<std::size_t>(next() % seed.size());
+        file.bodies[0].code[at] =
+            static_cast<std::uint8_t>(file.bodies[0].code[at] + (next() & 0x1Fu) + 1u);
+      }
+      fo4::abc::AbcMethodFlow flow;
+      fo4::abc::AbcFlowIssue issue;
+      const fo4::abc::AbcFlowStatus status = fo4::abc::verify_method_flow(file, 0, flow, issue);
+      EXPECT_EQ(flow.body, 0u);
+      EXPECT_EQ(flow.method, file.bodies[0].method);
+      EXPECT_TRUE(issue.offset == fo4::abc::kNoFlowIndex ||
+                  issue.offset <= file.bodies[0].code.size());
+      if (status == fo4::abc::AbcFlowStatus::Ok) {
+        EXPECT_TRUE(flow.verified);
+        EXPECT_TRUE(issue.ok());
+      } else {
+        EXPECT_FALSE(flow.verified);
+        EXPECT_FALSE(issue.message.empty());
+      }
+    }
+  }
+
+  for (const std::uint32_t from : {0u, 1u, 7u}) {
+    for (const std::uint32_t to : {0u, 2u, 99u}) {
+      for (const std::uint32_t target : {0u, 3u, 99u}) {
+        fo4::abc::AbcFile file = pristine;
+        file.bodies[2].exceptions[0] = AbcException{from, to, target, 0, 0};
+        fo4::abc::AbcMethodFlow flow;
+        fo4::abc::AbcFlowIssue issue;
+        const fo4::abc::AbcFlowStatus status = fo4::abc::verify_method_flow(file, 2, flow, issue);
+        EXPECT_EQ(flow.body, 2u);
+        if (status == fo4::abc::AbcFlowStatus::Ok) {
+          EXPECT_TRUE(flow.verified);
+          EXPECT_TRUE(issue.ok());
+        } else {
+          EXPECT_FALSE(flow.verified);
+          EXPECT_FALSE(issue.message.empty());
+        }
+      }
+    }
+  }
+}
 TEST(AbcVerify, ReportsTheFailingBodyIndexAndKeepsFlowsParallel) {
+
   fo4::abc::AbcFile file = fixture_file();
   file.bodies[1].code = {0x29, 0x47};
   std::vector<AbcMethodFlow> flows;

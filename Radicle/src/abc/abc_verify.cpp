@@ -63,11 +63,13 @@ AbcFlowStatus verify_method_context(const AbcFile& file, const AbcMethodBody& bo
     for (std::size_t at = block.first_instruction; at < end; ++at) {
       const AbcInstruction& instruction = flow.instructions[at];
       if (instruction.opcode == 0x57 && !method.needs_activation()) {
-        return set_issue(issue, AbcFlowStatus::MethodFlagMissing, instruction.offset,
+        return set_issue(issue, AbcFlowStatus::MethodFlagMissing,
+                         static_cast<std::uint32_t>(instruction.offset),
                          "newactivation needs the method NEED_ACTIVATION flag");
       }
       if ((instruction.opcode == 0x06 || instruction.opcode == 0x07) && !method.sets_dxns()) {
-        return set_issue(issue, AbcFlowStatus::MethodFlagMissing, instruction.offset,
+        return set_issue(issue, AbcFlowStatus::MethodFlagMissing,
+                         static_cast<std::uint32_t>(instruction.offset),
                          std::string{mnemonic_of(instruction)} +
                              " needs the method SET_DXNS flag");
       }
@@ -123,7 +125,8 @@ AbcFlowStatus verify_exception_metadata(const AbcFile& file, const AbcMethodBody
 AbcFlowStatus require_local(const AbcMethodBody& body, const AbcInstruction& instruction,
                             std::uint32_t index, AbcFlowIssue& issue) {
   if (index >= body.local_count) {
-    return set_issue(issue, AbcFlowStatus::LocalIndexOutOfRange, instruction.offset,
+    return set_issue(issue, AbcFlowStatus::LocalIndexOutOfRange,
+                     static_cast<std::uint32_t>(instruction.offset),
                      "local register " + std::to_string(index) + " is outside " +
                          std::to_string(body.local_count) + " declared local(s)");
   }
@@ -151,7 +154,8 @@ AbcFlowStatus verify_local_registers(const AbcMethodBody& body, const AbcMethodF
         case 0xC2:
         case 0xC3:
           if (!u30_operand(instruction, 0, AbcOperandRole::Count, first)) {
-            return set_issue(issue, AbcFlowStatus::UnmodelledStackEffect, instruction.offset,
+            return set_issue(issue, AbcFlowStatus::UnmodelledStackEffect,
+                             static_cast<std::uint32_t>(instruction.offset),
                              std::string{mnemonic_of(instruction)} + " has no local operand");
           }
           if (const AbcFlowStatus status = require_local(body, instruction, first, issue);
@@ -163,7 +167,8 @@ AbcFlowStatus verify_local_registers(const AbcMethodBody& body, const AbcMethodF
           std::uint32_t second = 0;
           if (!u30_operand(instruction, 0, AbcOperandRole::Count, first) ||
               !u30_operand(instruction, 1, AbcOperandRole::Count, second)) {
-            return set_issue(issue, AbcFlowStatus::UnmodelledStackEffect, instruction.offset,
+            return set_issue(issue, AbcFlowStatus::UnmodelledStackEffect,
+                             static_cast<std::uint32_t>(instruction.offset),
                              "hasnext2 has no register pair");
           }
           if (const AbcFlowStatus status = require_local(body, instruction, first, issue);
@@ -175,7 +180,8 @@ AbcFlowStatus verify_local_registers(const AbcMethodBody& body, const AbcMethodF
             return status;
           }
           if (first == second) {
-            return set_issue(issue, AbcFlowStatus::LocalIndexOutOfRange, instruction.offset,
+            return set_issue(issue, AbcFlowStatus::LocalIndexOutOfRange,
+                             static_cast<std::uint32_t>(instruction.offset),
                              "hasnext2 uses local " + std::to_string(first) +
                                  " for both object and index registers");
           }
@@ -258,11 +264,13 @@ AbcFlowStatus verify_scalar_pool_indices(const AbcFile& file, const AbcMethodFlo
           !u30_operand(instruction, operand, AbcOperandRole::UInt, index) &&
           !u30_operand(instruction, operand, AbcOperandRole::Double, index) &&
           !u30_operand(instruction, operand, AbcOperandRole::Namespace, index)) {
-        return set_issue(issue, AbcFlowStatus::UnmodelledStackEffect, instruction.offset,
+        return set_issue(issue, AbcFlowStatus::UnmodelledStackEffect,
+                         static_cast<std::uint32_t>(instruction.offset),
                          std::string{mnemonic_of(instruction)} + " has no " + kind + " operand");
       }
       if (index == 0 || static_cast<std::size_t>(index) >= limit) {
-        return set_issue(issue, AbcFlowStatus::PoolIndexInvalid, instruction.offset,
+        return set_issue(issue, AbcFlowStatus::PoolIndexInvalid,
+                         static_cast<std::uint32_t>(instruction.offset),
                          "references " + std::string{kind} + " pool index " +
                              std::to_string(index) + " with valid indices 1.." +
                              std::to_string(limit == 0 ? 0 : limit - 1));
@@ -287,11 +295,13 @@ AbcFlowStatus verify_table_indices(const AbcFile& file, const AbcMethodFlow& flo
         case 0x40:
         case 0x44:
           if (!u30_operand(instruction, 0, AbcOperandRole::Method, index)) {
-            return set_issue(issue, AbcFlowStatus::UnmodelledStackEffect, instruction.offset,
+            return set_issue(issue, AbcFlowStatus::UnmodelledStackEffect,
+                             static_cast<std::uint32_t>(instruction.offset),
                              std::string{mnemonic_of(instruction)} + " has no method operand");
           }
           if (static_cast<std::size_t>(index) >= file.methods.size()) {
-            return set_issue(issue, AbcFlowStatus::MethodIndexOutOfRange, instruction.offset,
+            return set_issue(issue, AbcFlowStatus::MethodIndexOutOfRange,
+                             static_cast<std::uint32_t>(instruction.offset),
                              std::string{mnemonic_of(instruction)} + " references method " +
                                  std::to_string(index) + " of " +
                                  std::to_string(file.methods.size()));
@@ -299,11 +309,13 @@ AbcFlowStatus verify_table_indices(const AbcFile& file, const AbcMethodFlow& flo
           break;
         case 0x58:
           if (!u30_operand(instruction, 0, AbcOperandRole::Class, index)) {
-            return set_issue(issue, AbcFlowStatus::UnmodelledStackEffect, instruction.offset,
+            return set_issue(issue, AbcFlowStatus::UnmodelledStackEffect,
+                             static_cast<std::uint32_t>(instruction.offset),
                              "newclass has no class operand");
           }
           if (static_cast<std::size_t>(index) >= file.instances.size()) {
-            return set_issue(issue, AbcFlowStatus::ClassIndexOutOfRange, instruction.offset,
+            return set_issue(issue, AbcFlowStatus::ClassIndexOutOfRange,
+                             static_cast<std::uint32_t>(instruction.offset),
                              "newclass references class " + std::to_string(index) + " of " +
                                  std::to_string(file.instances.size()));
           }
@@ -329,15 +341,18 @@ AbcFlowStatus verify_body_opcodes(const AbcFile& file, const AbcMethodBody& body
       std::uint32_t index = 0;
       switch (instruction.opcode) {
         case 0x43:
-          return set_issue(issue, AbcFlowStatus::OpcodeNotPermitted, instruction.offset,
+          return set_issue(issue, AbcFlowStatus::OpcodeNotPermitted,
+                           static_cast<std::uint32_t>(instruction.offset),
                            "callmethod is not permitted in user bytecode");
         case 0x5A:
           if (!u30_operand(instruction, 0, AbcOperandRole::Count, index)) {
-            return set_issue(issue, AbcFlowStatus::UnmodelledStackEffect, instruction.offset,
+            return set_issue(issue, AbcFlowStatus::UnmodelledStackEffect,
+                             static_cast<std::uint32_t>(instruction.offset),
                              "newcatch has no exception index");
           }
           if (index >= body.exceptions.size()) {
-            return set_issue(issue, AbcFlowStatus::PoolIndexInvalid, instruction.offset,
+            return set_issue(issue, AbcFlowStatus::PoolIndexInvalid,
+                             static_cast<std::uint32_t>(instruction.offset),
                              "newcatch index " + std::to_string(index) + " is outside " +
                                  std::to_string(body.exceptions.size()) + " exception(s)");
           }
@@ -348,17 +363,20 @@ AbcFlowStatus verify_body_opcodes(const AbcFile& file, const AbcMethodBody& body
         case 0x86:
         case 0xB2: {
           if (!u30_operand(instruction, 0, AbcOperandRole::Multiname, index)) {
-            return set_issue(issue, AbcFlowStatus::UnmodelledStackEffect, instruction.offset,
+            return set_issue(issue, AbcFlowStatus::UnmodelledStackEffect,
+                             static_cast<std::uint32_t>(instruction.offset),
                              mnemonic_of(instruction));
           }
           const std::uint32_t runtime = multiname_runtime_pops(file, index);
           if (runtime == kNoFlowIndex) {
-            return set_issue(issue, AbcFlowStatus::MultinameIndexOutOfRange, instruction.offset,
+            return set_issue(issue, AbcFlowStatus::MultinameIndexOutOfRange,
+                             static_cast<std::uint32_t>(instruction.offset),
                              std::string{mnemonic_of(instruction)} + " reads multiname " +
                                  std::to_string(index) + " outside the pool");
           }
           if (runtime != 0) {
-            return set_issue(issue, AbcFlowStatus::MultinameIndexOutOfRange, instruction.offset,
+            return set_issue(issue, AbcFlowStatus::MultinameIndexOutOfRange,
+                             static_cast<std::uint32_t>(instruction.offset),
                              std::string{mnemonic_of(instruction)} +
                                  " needs a non-runtime multiname; pool entry " +
                                  std::to_string(index) + " needs " + std::to_string(runtime) +
@@ -371,11 +389,13 @@ AbcFlowStatus verify_body_opcodes(const AbcFile& file, const AbcMethodBody& body
         case 0x6E:
         case 0x6F:
           if (!u30_operand(instruction, 0, AbcOperandRole::Count, index)) {
-            return set_issue(issue, AbcFlowStatus::UnmodelledStackEffect, instruction.offset,
+            return set_issue(issue, AbcFlowStatus::UnmodelledStackEffect,
+                             static_cast<std::uint32_t>(instruction.offset),
                              std::string{mnemonic_of(instruction)} + " has no slot operand");
           }
           if (index == 0) {
-            return set_issue(issue, AbcFlowStatus::SlotIndexInvalid, instruction.offset,
+            return set_issue(issue, AbcFlowStatus::SlotIndexInvalid,
+                             static_cast<std::uint32_t>(instruction.offset),
                              std::string{mnemonic_of(instruction)} +
                                  " uses invalid slot index 0");
           }
