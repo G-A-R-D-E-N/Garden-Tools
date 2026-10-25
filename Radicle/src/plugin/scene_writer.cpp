@@ -2,9 +2,11 @@
 
 #include "../environment/scene_layout.hpp"
 #include "record_edit.hpp"
+#include "scene_writer_internal.hpp"
 
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
+#include "fo4/plugin/vmad_writer.hpp"
 #include "fo4/schema/scalar.hpp"
 
 #include <algorithm>
@@ -14,6 +16,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <vector>
 
 namespace fo4 {
 namespace {
@@ -174,14 +177,7 @@ schema::ScalarDescriptor descriptor_for(const ScalarEntry& entry) {
 }
 
 env::detail::SceneLayout checked_layout(const Record& record) {
-  if (record.header.signature != k_scen) {
-    throw schema::ScalarError("scene fields do not apply to " + record.header.signature.to_string() + " records");
-  }
-  try {
-    return env::detail::scene_layout(record.subrecords);
-  } catch (const env::detail::SceneLayoutError& error) {
-    throw schema::ScalarError("malformed scene " + error.tag.to_string() + ": " + error.what());
-  }
+  return detail::checked_scene_layout(record);
 }
 
 std::optional<Range> scope_range(const env::detail::SceneLayout& layout,
@@ -244,25 +240,12 @@ std::vector<std::byte> u32_payload(std::uint32_t value) {
           std::byte{static_cast<std::uint8_t>((value >> 24) & 0xFFu)}};
 }
 
-std::size_t tail_anchor(const Record& record) {
-  for (std::size_t at = 0; at < record.subrecords.size(); ++at) {
-    const auto tag = record.subrecords[at].signature;
-    if (tag == s("PNAM") || tag == s("INAM") || tag == s("CRIS") || tag == s("SCQS") ||
-        tag == s("TNAM")) {
-      return at;
-    }
-  }
-  return record.subrecords.size();
-}
+std::size_t tail_anchor(const Record& record) { return detail::tail_anchor(record); }
 
 std::size_t phase_anchor(const env::detail::SceneLayout& layout,
                          const Record& record,
                          std::size_t index) {
-  if (index < layout.phases.size()) return layout.phases[index].open;
-  if (!layout.phases.empty()) return layout.phases.back().close + 1;
-  if (!layout.actors.empty()) return layout.actors.front();
-  if (!layout.actions.empty()) return layout.actions.front().open;
-  return tail_anchor(record);
+  return detail::phase_anchor(layout, record, index);
 }
 
 std::vector<Subrecord> new_phase_subrecords(std::string_view name) {
@@ -281,27 +264,19 @@ Range phase_body(const env::detail::SceneLayout& layout, std::size_t index) {
 }
 
 std::size_t groups_end(const env::detail::SceneLayout& layout, const Record& record) {
-  if (!layout.actions.empty()) return layout.actions.back().close + 1;
-  if (!layout.actors.empty()) return layout.actors.back() + 3;
-  if (!layout.phases.empty()) return layout.phases.back().close + 1;
-  return tail_anchor(record);
+  return detail::groups_end(layout, record);
 }
 
 std::size_t actor_anchor(const env::detail::SceneLayout& layout,
                          const Record& record,
                          std::size_t index) {
-  if (index < layout.actors.size()) return layout.actors[index];
-  if (!layout.actors.empty()) return layout.actors.back() + 3;
-  if (!layout.actions.empty()) return layout.actions.front().open;
-  return groups_end(layout, record);
+  return detail::actor_anchor(layout, record, index);
 }
 
 std::size_t action_anchor(const env::detail::SceneLayout& layout,
                           const Record& record,
                           std::size_t index) {
-  if (index < layout.actions.size()) return layout.actions[index].open;
-  if (!layout.actions.empty()) return layout.actions.back().close + 1;
-  return groups_end(layout, record);
+  return detail::action_anchor(layout, record, index);
 }
 
 std::vector<std::byte> i32_payload(std::int32_t value) {
@@ -322,10 +297,11 @@ std::vector<Subrecord> new_actor_subrecords() {
   };
 }
 
-std::vector<Subrecord> new_action_subrecords(std::uint16_t type) {
+std::vector<Subrecord> new_action_subrecords(std::uint16_t type, std::uint32_t index) {
   return {
       Subrecord{s("ANAM"), u16_payload(type), false},
       Subrecord{s("ALID"), i32_payload(-1), false},
+      Subrecord{s("INAM"), u32_payload(index), false},
       Subrecord{s("ANAM"), {}, false},
   };
 }
@@ -476,6 +452,15 @@ SubrecordGroupMutationStatus insert_scene_phase(Plugin& plugin,
   if (record == nullptr) return SubrecordGroupMutationStatus::record_missing;
   const auto layout = checked_layout(*record);
   if (index > layout.phases.size()) return SubrecordGroupMutationStatus::index_out_of_range;
+  const auto count = layout.phases.size();
+  const auto references = detail::action_phase_references(*record, layout, count);
+  std::vector<std::uint32_t> mapping(count);
+  for (std::size_t old = 0; old < count; ++old) {
+    mapping[old] = static_cast<std::uint32_t>(old < index ? old : old + 1);
+  }
+  detail::check_phase_mapping(references, mapping);
+  detail::remap_scene_phase_vmad(plugin, *record, mapping);
+  detail::remap_phase_references(*record, references, mapping);
   return insert_at(plugin, *record, phase_anchor(layout, *record, index), new_phase_subrecords(name));
 }
 
@@ -484,6 +469,21 @@ SubrecordGroupMutationStatus remove_scene_phase(Plugin& plugin, const FormKey& s
   if (record == nullptr) return SubrecordGroupMutationStatus::record_missing;
   const auto layout = checked_layout(*record);
   if (index >= layout.phases.size()) return SubrecordGroupMutationStatus::index_out_of_range;
+  const auto count = layout.phases.size();
+  const auto references = detail::action_phase_references(*record, layout, count);
+  std::vector<std::uint32_t> mapping(count);
+  for (std::size_t old = 0; old < count; ++old) {
+    if (old < index) {
+      mapping[old] = static_cast<std::uint32_t>(old);
+    } else if (old == index) {
+      mapping[old] = k_scene_phase_removed;
+    } else {
+      mapping[old] = static_cast<std::uint32_t>(old - 1);
+    }
+  }
+  detail::check_phase_mapping(references, mapping);
+  detail::remap_scene_phase_vmad(plugin, *record, mapping);
+  detail::remap_phase_references(*record, references, mapping);
   const auto begin = record->subrecords.begin() + static_cast<std::ptrdiff_t>(layout.phases[index].open);
   const auto end = record->subrecords.begin() + static_cast<std::ptrdiff_t>(layout.phases[index].close) + 1;
   record->subrecords.erase(begin, end);
@@ -543,7 +543,13 @@ SubrecordGroupMutationStatus insert_scene_action(Plugin& plugin,
   if (type >= 7) throw schema::ScalarError("scene action type is not in the stored enum");
   const auto layout = checked_layout(*record);
   if (index > layout.actions.size()) return SubrecordGroupMutationStatus::index_out_of_range;
-  return insert_at(plugin, *record, action_anchor(layout, *record, index), new_action_subrecords(type));
+  const auto base = detail::action_index_base(*record, layout);
+  const auto status = insert_at(plugin, *record, action_anchor(layout, *record, index),
+                                new_action_subrecords(type, base + static_cast<std::uint32_t>(index)));
+  const auto moved = checked_layout(*record);
+  detail::renumber_actions(*record, moved, base);
+  mark_record_modified(plugin, *record);
+  return status;
 }
 
 SubrecordGroupMutationStatus remove_scene_action(Plugin& plugin,
@@ -553,9 +559,12 @@ SubrecordGroupMutationStatus remove_scene_action(Plugin& plugin,
   if (record == nullptr) return SubrecordGroupMutationStatus::record_missing;
   const auto layout = checked_layout(*record);
   if (index >= layout.actions.size()) return SubrecordGroupMutationStatus::index_out_of_range;
+  const auto base = detail::action_index_base(*record, layout);
   const auto begin = record->subrecords.begin() + static_cast<std::ptrdiff_t>(layout.actions[index].open);
   const auto end = record->subrecords.begin() + static_cast<std::ptrdiff_t>(layout.actions[index].close) + 1;
   record->subrecords.erase(begin, end);
+  const auto moved = checked_layout(*record);
+  detail::renumber_actions(*record, moved, base);
   mark_record_modified(plugin, *record);
   return SubrecordGroupMutationStatus::updated;
 }

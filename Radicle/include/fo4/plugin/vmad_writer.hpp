@@ -3,6 +3,8 @@
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/schema/vmad.hpp"
 
+#include <cstdint>
+#include <span>
 #include <string_view>
 #include <variant>
 
@@ -12,6 +14,9 @@ struct VmadObjectValue {
   FormKey target;
   std::int16_t alias{-1};
 };
+
+// Constraint: remap_scene_phase_indices treats this entry as the phase the edit removes.
+inline constexpr std::uint32_t k_scene_phase_removed = 0xFFFFFFFFu;
 
 using VmadValue = std::variant<VmadObjectValue, std::string, std::int32_t, float, bool>;
 
@@ -98,5 +103,10 @@ VmadStructureMutationStatus remove_scene_vmad_phase_fragment(Plugin& plugin,
                                                              const FormKey& record,
                                                              std::uint32_t phase_index,
                                                              std::uint8_t phase_flag);
+
+// Constraint: rewrites every scene phase fragment index through old_to_new; a removed phase is not representable.
+VmadStructureMutationStatus remap_scene_phase_indices(Plugin& plugin,
+                                                      const FormKey& record,
+                                                      std::span<const std::uint32_t> old_to_new);
 
 }
