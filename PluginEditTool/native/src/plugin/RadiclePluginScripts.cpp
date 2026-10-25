@@ -241,6 +241,11 @@ Result<nlohmann::json> RadiclePluginBackend::addScriptProperty(const nlohmann::j
         return std::unexpected(Error{"InvalidPropertyName", k_invalid_property_name});
     }
     if (!type) return std::unexpected(Error{"PropertyTypeMissing", "Property type is required"});
+    const auto property = propertyForType(propertyName, *type, flags);
+    if (!property) {
+        return std::unexpected(Error{"PropertyTypeUnsupported",
+                                     "Property type is not authorable; 0 and 16 have no fixed value layout"});
+    }
 
     fo4::FormKey key;
     try {
@@ -284,11 +289,6 @@ Result<nlohmann::json> RadiclePluginBackend::addScriptProperty(const nlohmann::j
         }
         const auto count = scripts.scripts[*scriptIndex].properties.size();
         added = requestedIndex.value_or(count);
-        const auto property = propertyForType(propertyName, *type, flags);
-        if (!property) {
-            return std::unexpected(Error{"PropertyTypeUnsupported",
-                                         "Property type is not authorable; 0 and 16 have no fixed value layout"});
-        }
         const auto status = fo4::add_vmad_property(mutated, key, *scriptIndex, added, *property);
         if (const auto failure = vmadFailure(status, "VMAD property"); !failure.empty()) {
             return std::unexpected(Error{"PropertyWriteFailed", failure});

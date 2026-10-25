@@ -192,7 +192,7 @@ TEST(CApiVmadWriter, StructureExportsAddScriptsAndEveryPropertyType) {
   EXPECT_EQ(radicle_plugin_add_vmad_fragment(plugin, key, 0, "PF_Test", "F"), RADICLE_STATUS_INVALID_ARGUMENT);
   ASSERT_EQ(radicle_plugin_write_file(plugin, file.out("Saved.esp").string().c_str()), RADICLE_STATUS_OK);
   auto reparsed = fo4::read_plugin_file(file.out("Saved.esp"));
-  const auto* record = fo4::find_record(reparsed, fixture::key(0x800, "Vmad.esp"));
+  const auto* record = fo4::find_record(reparsed, fixture::key(0x800, "Saved.esp"));
   ASSERT_NE(record, nullptr);
   const auto* vmad = vmad_of(*record);
   ASSERT_NE(vmad, nullptr);
@@ -219,7 +219,7 @@ TEST(CApiVmadWriter, StructureExportsAddScriptsAndEveryPropertyType) {
   EXPECT_EQ(radicle_plugin_remove_vmad_script(plugin, key, 0), RADICLE_STATUS_INVALID_ARGUMENT);
   ASSERT_EQ(radicle_plugin_write_file(plugin, file.out("Empty.esp").string().c_str()), RADICLE_STATUS_OK);
   auto emptied = fo4::read_plugin_file(file.out("Empty.esp"));
-  const auto* emptied_record = fo4::find_record(emptied, fixture::key(0x800, "Vmad.esp"));
+  const auto* emptied_record = fo4::find_record(emptied, fixture::key(0x800, "Empty.esp"));
   ASSERT_NE(emptied_record, nullptr);
   const auto* emptied_vmad = vmad_of(*emptied_record);
   ASSERT_NE(emptied_vmad, nullptr);
@@ -228,7 +228,7 @@ TEST(CApiVmadWriter, StructureExportsAddScriptsAndEveryPropertyType) {
 
 TEST(CApiVmadWriter, StructureRefusalsLeaveTheFileByteIdentical) {
   namespace fixture = fo4::test::vmad;
-  const auto bytes = fixture::plugin_bytes_without_vmad("MISC");
+  const auto bytes = fixture::plugin_bytes_without_vmad("SCEN");
   CApiVmadFile file(bytes);
   ASSERT_TRUE(file.open());
   const radicle_form_key key{"Vmad.esp", 0x800};
@@ -259,7 +259,7 @@ TEST(CApiVmadWriter, GenericFragmentsAddAndRemoveOnEveryFragmentRecordShape) {
               RADICLE_STATUS_INVALID_ARGUMENT);
     ASSERT_EQ(radicle_plugin_write_file(plugin, file.out("Scene.esp").string().c_str()), RADICLE_STATUS_OK);
     auto reparsed = fo4::read_plugin_file(file.out("Scene.esp"));
-    const auto* record = fo4::find_record(reparsed, fixture::key(0x800, "Vmad.esp"));
+    const auto* record = fo4::find_record(reparsed, fixture::key(0x800, "Scene.esp"));
     ASSERT_NE(record, nullptr);
     const auto* vmad = vmad_of(*record);
     ASSERT_NE(vmad, nullptr);

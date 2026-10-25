@@ -216,7 +216,7 @@ TEST_CASE("Native script refusals leave the plugin untouched and report a named 
              [&](const nlohmann::json& args) { return backend.addScriptProperty(args); });
     refusals(nlohmann::json::array({"Patch.esp", "000801:Patch.esp", 4}), "ScriptWriteFailed",
              [&](const nlohmann::json& args) { return backend.removeScript(args); });
-    refusals(nlohmann::json::array({"Patch.esp", bare, 0, 0}), "ScriptWriteFailed",
+    refusals(nlohmann::json::array({"Patch.esp", bare, 0, 0}), "PropertyWriteFailed",
              [&](const nlohmann::json& args) { return backend.removeScriptProperty(args); });
 
     CHECK_FALSE(scriptEditPending(backend, 1));

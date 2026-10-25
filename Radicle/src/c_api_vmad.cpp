@@ -2,6 +2,8 @@
 #include "fo4/c_api_vmad.h"
 #include "fo4/plugin/vmad_writer.hpp"
 
+#include <limits>
+
 namespace {
 
 using namespace radicle_c_detail;
@@ -125,6 +127,13 @@ void require_name(const char* value, const char* what) {
   }
 }
 
+std::int16_t alias_from_int(int value) {
+  if (value < std::numeric_limits<std::int16_t>::min() || value > std::numeric_limits<std::int16_t>::max()) {
+    throw fo4::schema::ScalarError("VMAD alias does not fit in 16 bits");
+  }
+  return static_cast<std::int16_t>(value);
+}
+
 fo4::VmadProperty default_property(const char* name, std::uint8_t type, std::uint8_t flags) {
   require_name(name, "VMAD property name");
   fo4::VmadProperty property;
@@ -134,7 +143,7 @@ fo4::VmadProperty default_property(const char* name, std::uint8_t type, std::uin
   switch (type) {
     case 1:
       property.object = fo4::RawFormId{0u};
-      property.alias = -1;
+      property.alias = alias_from_int(-1);
       return property;
     case 2:
       property.text = std::string{};
@@ -153,7 +162,8 @@ fo4::VmadProperty default_property(const char* name, std::uint8_t type, std::uin
       return property;
     case 11:
       property.element_count = 1u;
-      property.object_elements = std::vector<fo4::VmadObjectElement>{{fo4::RawFormId{0u}, -1}};
+      property.object_elements =
+          std::vector<fo4::VmadObjectElement>{{fo4::RawFormId{0u}, alias_from_int(-1)}};
       return property;
     case 12:
       property.element_count = 1u;
