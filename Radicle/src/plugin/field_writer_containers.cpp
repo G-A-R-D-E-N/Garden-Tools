@@ -440,12 +440,22 @@ SubrecordGroupMutationStatus set_record_subrecord_group_member(
   if (index >= spans.size()) return SubrecordGroupMutationStatus::index_out_of_range;
   const auto span = spans[index];
   std::optional<std::size_t> existing;
+  std::size_t occurrences = 0;
   for (std::size_t position = span.first; position < span.end; ++position) {
-    if (target->subrecords[position].signature == member_signature) existing = position;
+    if (target->subrecords[position].signature != member_signature) continue;
+    existing = position;
+    ++occurrences;
   }
 
   if (!present) {
     if (!existing.has_value()) return SubrecordGroupMutationStatus::unchanged;
+    // Constraint: a clear names one member, so a member that repeats inside the element refuses instead of dropping an arbitrary copy.
+    if (occurrences > 1) {
+      throw schema::SubrecordGroupError(std::string(group.path) + " member " +
+                                        member_signature.to_string() + " appears " +
+                                        std::to_string(occurrences) +
+                                        " times and cannot be cleared as one");
+    }
     target->subrecords.erase(target->subrecords.begin() +
                              static_cast<std::ptrdiff_t>(*existing));
     mark_record_modified(plugin, *target);

@@ -7,6 +7,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -149,6 +150,43 @@ TEST(SubrecordGroupMembers, OptionalMemberKeepsItsDeclarationSlotWhenReinserted)
   for (const auto& subrecord : record->subrecords) {
     if (subrecord.signature == bytes_member) EXPECT_TRUE(subrecord.data.empty());
   }
+}
+
+TEST(SubrecordGroupMembers, ClearingARepeatedMemberRefusesInsteadOfDroppingOneCopy) {
+  // Constraint: a clear names one member, so a member that repeats inside one element refuses rather than losing an arbitrary copy.
+  const Signature sculpt_lead = Signature::from_string("BSMP");
+  const Signature sculpt_mesh = Signature::from_string("BSMB");
+  const std::array<fo4::schema::SubrecordGroupMemberDescriptor, 2> members{{
+      {sculpt_lead, true, false, 4},
+      {sculpt_mesh, false, true, 0},
+  }};
+  fo4::schema::SubrecordGroupDescriptor group{};
+  group.record = Signature::from_string("ARMA");
+  group.path = "ARMA\\SculptData";
+  group.label = "Sculpt data";
+  group.members = members;
+
+  ByteWriter out;
+  out.bytes = fo4::test::make_tes4_plugin(0, 1.0f, {"Fallout4.esm"});
+  const auto top = fo4::test::begin_group(out, "ARMA", 0);
+  const auto record = fo4::test::begin_record(out, "ARMA", 0, 0x01000800u);
+  fo4::test::write_subrecord(out, "EDID", zstr("RadicleArmor"));
+  fo4::test::write_subrecord(out, "BSMP", Bytes{std::byte{1}, std::byte{0}, std::byte{0}, std::byte{0}});
+  fo4::test::write_subrecord(out, "BSMB", Bytes{std::byte{0x01}});
+  fo4::test::write_subrecord(out, "BSMB", Bytes{std::byte{0x02}});
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, top);
+
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto record_key = fo4::FormKey::parse(k_key);
+  const auto before = payload_signatures(plugin, record_key);
+  ASSERT_EQ(count_of(before, sculpt_mesh), std::size_t{2});
+
+  EXPECT_EQ(thrown_message([&] {
+              fo4::set_record_subrecord_group_member(plugin, record_key, group, 0, sculpt_mesh, false);
+            }),
+            "ARMA\\SculptData member BSMB appears 2 times and cannot be cleared as one");
+  EXPECT_EQ(payload_signatures(plugin, record_key), before);
 }
 
 TEST(SubrecordGroupMembers, RefusesRequiredUnknownAndOffRangeRequests) {
