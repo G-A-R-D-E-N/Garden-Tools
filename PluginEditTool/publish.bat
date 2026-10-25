@@ -39,9 +39,12 @@ if not exist "web\dist\" (
 )
 
 echo Configuring native C++ host...
+REM Radicle is the editor's backend: one radicle.dll carries the C++ API and the
+REM C ABI, and the editor links against it.
 cmake -S native -B "%NATIVE_BUILD%" -G "Visual Studio 17 2022" -A x64 ^
   -DFO4IDE_BUILD_TESTS=OFF ^
   -DFO4IDE_BUILD_HTTP=ON ^
+  -DRADICLE_SHARED=ON ^
   -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON
 if errorlevel 1 (
   echo NATIVE CMAKE CONFIGURE FAILED.
@@ -81,20 +84,16 @@ if not defined DEPLOY (
     exit /b 1
   )
 
-  REM The editor statically links Radicle, so radicle.dll is not a dependency of
-  REM the exe. It is the SDK surface other consumers load by name, so ship it too.
-  echo Building the Radicle C ABI shared library...
-  cmake --build "%NATIVE_BUILD%" --config Release --target radicle_c
-  if errorlevel 1 (
-    echo RADICLE C ABI BUILD FAILED.
+  REM The editor links against radicle.dll (Radicle is its backend), so the DLL
+  REM sits next to the executable that the linker produced. Ship it with the exe.
+  set "RADICLE_DLL=!NATIVE_EXE:FO4RecordEditor.exe=radicle.dll!"
+  if /i "!RADICLE_DLL!"=="!NATIVE_EXE!" (
+    echo Could not derive the radicle.dll path from !NATIVE_EXE!.
     popd
     exit /b 1
   )
-
-  set "RADICLE_DLL="
-  for /r "%NATIVE_BUILD%" %%F in (radicle.dll) do set "RADICLE_DLL=%%~fF"
-  if not defined RADICLE_DLL (
-    echo radicle_c built but radicle.dll was not found.
+  if not exist "!RADICLE_DLL!" (
+    echo The editor was built against a shared Radicle but radicle.dll is not next to !NATIVE_EXE!.
     popd
     exit /b 1
   )

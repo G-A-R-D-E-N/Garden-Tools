@@ -55,6 +55,9 @@ $Configure = @(
     '-G', $Generator,
     '-DFO4IDE_BUILD_TESTS=OFF',
     '-DFO4IDE_BUILD_HTTP=ON',
+    # Radicle is the editor's backend: build one radicle.dll that carries the
+    # C++ API and the C ABI, and link the editor against it.
+    '-DRADICLE_SHARED=ON',
     # Force the pinned static fallback so release packages never depend on an
     # arbitrary developer-machine zlib DLL.
     '-DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON'
@@ -76,21 +79,18 @@ if ($null -eq $NativeExe) {
     throw "Native build completed but FO4RecordEditor.exe was not found under $NativeBuild"
 }
 
-Step 'Building the Radicle C ABI shared library'
-# The editor statically links Radicle, so radicle.dll is not a dependency of the
-# exe. It is the SDK surface that other consumers (the C# Radicle.Interop
-# bindings) load by name, so the package ships it with its headers.
-cmake --build $NativeBuild --config Release --target radicle_c
-if ($LASTEXITCODE -ne 0) { throw 'Radicle C ABI build failed. Scroll up for the compiler error.' }
-
-$RadicleDll = Join-Path $NativeBuild 'bin\Release\radicle.dll'
+Step 'Locating the Radicle backend library'
+# The editor links against radicle.dll (Radicle is its backend), so the linker
+# puts the DLL next to the executable it loaded. Look there first, then fall
+# back to a search so a changed output directory cannot break packaging.
+$RadicleDll = Join-Path (Split-Path $NativeExe.FullName) 'radicle.dll'
 if (-not (Test-Path $RadicleDll)) {
     $RadicleDll = Get-ChildItem $NativeBuild -Filter 'radicle.dll' -Recurse -File |
         Sort-Object LastWriteTime -Descending |
         Select-Object -First 1 -ExpandProperty FullName
 }
-if (-not (Test-Path $RadicleDll)) {
-    throw "radicle_c built but radicle.dll was not found under $NativeBuild"
+if (-not $RadicleDll -or -not (Test-Path $RadicleDll)) {
+    throw "The editor was built against a shared Radicle but radicle.dll was not found under $NativeBuild"
 }
 
 Step 'Staging the package'
