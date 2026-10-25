@@ -81,6 +81,45 @@ if not defined DEPLOY (
     exit /b 1
   )
 
+  REM The editor statically links Radicle, so radicle.dll is not a dependency of
+  REM the exe. It is the SDK surface other consumers load by name, so ship it too.
+  echo Building the Radicle C ABI shared library...
+  cmake --build "%NATIVE_BUILD%" --config Release --target radicle_c
+  if errorlevel 1 (
+    echo RADICLE C ABI BUILD FAILED.
+    popd
+    exit /b 1
+  )
+
+  set "RADICLE_DLL="
+  for /r "%NATIVE_BUILD%" %%F in (radicle.dll) do set "RADICLE_DLL=%%~fF"
+  if not defined RADICLE_DLL (
+    echo radicle_c built but radicle.dll was not found.
+    popd
+    exit /b 1
+  )
+
+  copy /Y "!RADICLE_DLL!" "%DEPLOY%\radicle.dll" >nul
+  if errorlevel 1 (
+    echo Failed to copy radicle.dll to !DEPLOY!.
+    popd
+    exit /b 1
+  )
+
+  if exist "%DEPLOY%\sdk\include\fo4\" rmdir /S /Q "%DEPLOY%\sdk\include\fo4"
+  mkdir "%DEPLOY%\sdk\include\fo4" >nul 2>nul
+  copy /Y "%ROOT%..\Radicle\include\fo4\c_api*.h" "%DEPLOY%\sdk\include\fo4\" >nul
+  if errorlevel 1 (
+    echo Failed to copy the Radicle C ABI headers to !DEPLOY!.
+    popd
+    exit /b 1
+  )
+  mkdir "%DEPLOY%\sdk\lib" >nul 2>nul
+  copy /Y "%NATIVE_BUILD%\lib\Release\radicle.lib" "%DEPLOY%\sdk\lib\radicle.lib" >nul
+  if errorlevel 1 (
+    echo WARNING: radicle.lib was not found; C++ consumers will need it from a local build.
+  )
+
   if exist "%DEPLOY%\web\dist\" rmdir /S /Q "%DEPLOY%\web\dist"
   mkdir "%DEPLOY%\web\dist" >nul 2>nul
   robocopy "web\dist" "%DEPLOY%\web\dist" /MIR /NJH /NJS /NDL /NC /NS /NP >nul

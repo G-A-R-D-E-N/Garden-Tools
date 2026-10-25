@@ -76,10 +76,44 @@ if ($null -eq $NativeExe) {
     throw "Native build completed but FO4RecordEditor.exe was not found under $NativeBuild"
 }
 
+Step 'Building the Radicle C ABI shared library'
+# The editor statically links Radicle, so radicle.dll is not a dependency of the
+# exe. It is the SDK surface that other consumers (the C# Radicle.Interop
+# bindings) load by name, so the package ships it with its headers.
+cmake --build $NativeBuild --config Release --target radicle_c
+if ($LASTEXITCODE -ne 0) { throw 'Radicle C ABI build failed. Scroll up for the compiler error.' }
+
+$RadicleDll = Join-Path $NativeBuild 'bin\Release\radicle.dll'
+if (-not (Test-Path $RadicleDll)) {
+    $RadicleDll = Get-ChildItem $NativeBuild -Filter 'radicle.dll' -Recurse -File |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1 -ExpandProperty FullName
+}
+if (-not (Test-Path $RadicleDll)) {
+    throw "radicle_c built but radicle.dll was not found under $NativeBuild"
+}
+
 Step 'Staging the package'
 if (Test-Path $Staging) { Remove-Item $Staging -Recurse -Force }
 New-Item -ItemType Directory -Path $Staging -Force | Out-Null
 Copy-Item $NativeExe.FullName (Join-Path $Staging 'FO4RecordEditor.exe') -Force
+Copy-Item $RadicleDll (Join-Path $Staging 'radicle.dll') -Force
+
+$SdkInclude = Join-Path $Staging 'sdk\include\fo4'
+New-Item -ItemType Directory -Path $SdkInclude -Force | Out-Null
+Copy-Item (Join-Path $Root '..\Radicle\include\fo4\c_api*.h') $SdkInclude -Force
+if ((Get-ChildItem $SdkInclude -Filter '*.h' -File).Count -eq 0) {
+    throw "The Radicle C ABI headers were not found under $Root\..\Radicle\include\fo4"
+}
+$RadicleLib = Get-ChildItem $NativeBuild -Filter 'radicle.lib' -Recurse -File |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 1 -ExpandProperty FullName
+if ($RadicleLib) {
+    $SdkLib = New-Item -ItemType Directory -Path (Join-Path $Staging 'sdk\lib') -Force
+    Copy-Item $RadicleLib $SdkLib -Force
+} else {
+    Warn 'radicle.lib was not found; C++ consumers will need it from a local build.'
+}
 
 $WebStage = Join-Path $Staging 'web\dist'
 New-Item -ItemType Directory -Path $WebStage -Force | Out-Null
