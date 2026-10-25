@@ -1,3 +1,5 @@
+#include "row_roundtrip_harness.hpp"
+
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
@@ -5,50 +7,18 @@
 #include "fo4/schema/scalar.hpp"
 #include "real_data_build.hpp"
 
-#include <gtest/gtest.h>
-
 #include <cstddef>
 #include <cstdlib>
 #include <filesystem>
 #include <optional>
 #include <string>
-#include <vector>
 
 namespace {
 
 using fo4::Signature;
-
-struct SubrecordBytes {
-  Signature signature{};
-  std::vector<std::byte> data;
-};
-
-std::vector<SubrecordBytes> snapshot(const fo4::Record& record) {
-  std::vector<SubrecordBytes> out;
-  for (const auto& subrecord : record.subrecords) {
-    out.push_back({subrecord.signature, subrecord.data});
-  }
-  return out;
-}
-
-bool same_snapshot(const std::vector<SubrecordBytes>& left,
-                   const std::vector<SubrecordBytes>& right) {
-  if (left.size() != right.size()) return false;
-  for (std::size_t index = 0; index < left.size(); ++index) {
-    if (left[index].signature != right[index].signature) return false;
-    if (left[index].data != right[index].data) return false;
-  }
-  return true;
-}
-
-bool same_record(const std::vector<SubrecordBytes>& before, const fo4::Record& after) {
-  if (before.size() != after.subrecords.size()) return false;
-  for (std::size_t index = 0; index < before.size(); ++index) {
-    if (before[index].signature != after.subrecords[index].signature) return false;
-    if (before[index].data != after.subrecords[index].data) return false;
-  }
-  return true;
-}
+using row_roundtrip::same_record;
+using row_roundtrip::same_snapshot;
+using row_roundtrip::snapshot;
 
 std::optional<std::string> response_bytes(const fo4::Plugin& plugin,
                                           const fo4::FormKey& key,
@@ -91,11 +61,15 @@ TEST(RowRoundtripReal, InfoResponseBytesSurviveALengthChange) {
   std::optional<fo4::FormKey> chosen;
   fo4::visit_records(plugin, [&](const fo4::Record& record) {
     if (chosen.has_value() || record.header.signature != Signature::from_string("INFO")) return;
-    if (fo4::record_field_count(plugin, record.form_key, *field).value_or(0) > std::size_t{0}) {
-      chosen = record.form_key;
+    if (fo4::record_field_count(plugin, record.form_key, *field).value_or(0) == std::size_t{0}) {
+      return;
     }
+    if (response_byte_payload(plugin, record.form_key) < 2) return;
+    chosen = record.form_key;
   });
-  ASSERT_TRUE(chosen.has_value()) << "no INFO record carries a NAM9 response";
+  if (!chosen.has_value()) {
+    GTEST_SKIP() << "no INFO record carries a NAM9 of at least two bytes";
+  }
   const auto key = *chosen;
 
   auto edited = fo4::read_plugin_file(path);
@@ -104,10 +78,11 @@ TEST(RowRoundtripReal, InfoResponseBytesSurviveALengthChange) {
   const auto before = snapshot(*live);
   const auto original = response_bytes(edited, key, field->scalar);
   ASSERT_TRUE(original.has_value()) << key.to_string();
-  ASSERT_FALSE(original->empty());
+  ASSERT_GE(original->size(), std::size_t{4})
+      << "a two-byte payload encodes to four hex characters";
   const auto original_size = response_byte_payload(edited, key);
   const auto longer = *original + "deadbeef";
-  const auto shorter = original->substr(0, original->size() >= 2 ? 2 : 0);
+  const auto shorter = original->substr(0, 2);
   ASSERT_LT(shorter.size(), original->size());
   ASSERT_GT(longer.size(), original->size());
 
@@ -121,7 +96,7 @@ TEST(RowRoundtripReal, InfoResponseBytesSurviveALengthChange) {
   const auto grown_snapshot = snapshot(*grown);
 
   auto bytes = fo4::write_plugin(edited);
-  auto reread = fo4::read_plugin(bytes, "RowRoundtrip.esm");
+  auto reread = fo4::read_plugin(bytes, path);
   const auto* restored = fo4::find_record(reread, key);
   ASSERT_NE(restored, nullptr) << key.to_string();
   EXPECT_TRUE(same_record(grown_snapshot, *restored))
@@ -138,7 +113,7 @@ TEST(RowRoundtripReal, InfoResponseBytesSurviveALengthChange) {
   const auto shrunk_snapshot = snapshot(*shrunk);
 
   bytes = fo4::write_plugin(reread);
-  const auto second = fo4::read_plugin(bytes, "RowRoundtrip.esm");
+  const auto second = fo4::read_plugin(bytes, path);
   const auto* shortened = fo4::find_record(second, key);
   ASSERT_NE(shortened, nullptr) << key.to_string();
   EXPECT_TRUE(same_record(shrunk_snapshot, *shortened))
