@@ -26,6 +26,8 @@ type SwfHost = {
   AddLabel(frame: number, name: string): Promise<string>;
   Placements(): Promise<string>;
   SetDepth(tagIndex: number, depth: number): Promise<string>;
+  PlacementMatrix(tagIndex: number): Promise<string>;
+  SetTransform(tagIndex: number, x: number, y: number, scaleX: number, scaleY: number, rotate0: number, rotate1: number): Promise<string>;
   ReadEditText(tagIndex: number): Promise<string>;
   EditEditText(tagIndex: number, text: string, colorHex: string, x0: number, x1: number, y0: number, y1: number): Promise<string>;
 };
@@ -56,6 +58,7 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
   const [placements, setPlacements] = useState<PlacementRow[]>([]);
   const [placementTag, setPlacementTag] = useState<number | null>(null);
   const [placementDepth, setPlacementDepth] = useState(0);
+  const [matrix, setMatrix] = useState({ x: 0, y: 0, scaleX: 0, scaleY: 0, rotate0: 0, rotate1: 0 });
   const [editText, setEditText] = useState({ text: '', color: '', x0: 0, x1: 0, y0: 0, y1: 0 });
 
   const refresh = useCallback(async () => {
@@ -139,6 +142,26 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     const labelsReply = parse<{ labels: LabelRow[] }>(await bridge.FrameLabels());
     setLabels(labelsReply.labels ?? []);
   }, [frame, labelName]);
+  const pickPlacement = useCallback(async (item: PlacementRow) => {
+    const bridge = host();
+    if (!bridge) return;
+    setPlacementTag(item.tagIndex);
+    setPlacementDepth(item.depth);
+    const reply = parse<{ x: number; y: number; scaleX: number; scaleY: number; rotate0: number; rotate1: number; error?: string }>(
+      await bridge.PlacementMatrix(item.tagIndex));
+    if (reply.error) { setError(reply.error); return; }
+    setMatrix({ x: reply.x, y: reply.y, scaleX: reply.scaleX, scaleY: reply.scaleY, rotate0: reply.rotate0, rotate1: reply.rotate1 });
+  }, []);
+
+  const applyTransform = useCallback(async () => {
+    const bridge = host();
+    if (!bridge || placementTag === null) return;
+    const reply = parse<StateReply>(await bridge.SetTransform(
+      placementTag, matrix.x, matrix.y, matrix.scaleX, matrix.scaleY, matrix.rotate0, matrix.rotate1));
+    if (reply.error) { setError(reply.error); return; }
+    setError('');
+    setState(reply);
+  }, [placementTag, matrix]);
   const applyDepth = useCallback(async () => {
     const bridge = host();
     if (!bridge || placementTag === null) return;
@@ -208,7 +231,7 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
           <ul>
             {placements.filter(item => !item.insideSprite).map(item => (
               <li key={item.tagIndex}>
-                <button type="button" onClick={() => { setPlacementTag(item.tagIndex); setPlacementDepth(item.depth); }}>
+                <button type="button" onClick={() => void pickPlacement(item)}>
                   depth {item.depth} · {item.character ?? 0}
                 </button>
               </li>
@@ -252,7 +275,13 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
           {placementTag !== null && (
             <div className="swf-fields">
               <label>Depth <input type="number" min={0} value={placementDepth} onChange={event => setPlacementDepth(Number(event.target.value))} /></label>
-              <button type="button" onClick={() => void applyDepth()}>Apply depth</button>
+              <button type="button" onClick={() => void applyDepth()}>Apply depth</button>              <label>X <input type="number" value={matrix.x} onChange={event => setMatrix({ ...matrix, x: Number(event.target.value) })} /></label>
+              <label>Y <input type="number" value={matrix.y} onChange={event => setMatrix({ ...matrix, y: Number(event.target.value) })} /></label>
+              <label>ScaleX <input type="number" value={matrix.scaleX} onChange={event => setMatrix({ ...matrix, scaleX: Number(event.target.value) })} /></label>
+              <label>ScaleY <input type="number" value={matrix.scaleY} onChange={event => setMatrix({ ...matrix, scaleY: Number(event.target.value) })} /></label>
+              <label>Rotate0 <input type="number" value={matrix.rotate0} onChange={event => setMatrix({ ...matrix, rotate0: Number(event.target.value) })} /></label>
+              <label>Rotate1 <input type="number" value={matrix.rotate1} onChange={event => setMatrix({ ...matrix, rotate1: Number(event.target.value) })} /></label>
+              <button type="button" onClick={() => void applyTransform()}>Apply transform</button>
             </div>
           )}          <p>Revision {state.revision} · undo {state.undo} · redo {state.redo}</p>
           <p>Shape rendering is not part of this round; the table above is the display list.</p>

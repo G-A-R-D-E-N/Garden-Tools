@@ -86,3 +86,8 @@ values and their span, and `Write` re-encodes only that span (adding scale/rotat
 keeps the prefix and suffix bytes. `SwfFile.PlacementMatrix`/`SetPlacementTransform`, `SwfDocument` and `SwfInterop`
 expose the read and the plan edit; `SwfPlacementMatrixTests` pin identity read, translate edit with other bytes
 equal, adding scale to a matrix that had none, and the wrong-tag refusal.
+## web/src/SwfPanel.tsx (placement transform properties)
+
+Selecting a placement now also reads its MATRIX through `PlacementMatrix`; the right panel exposes X/Y, ScaleX/ScaleY
+and Rotate0/Rotate1 fields and Apply sends `SetTransform`, keeping depth and every other byte (the codec replaces only
+the matrix span). The web test drives select → apply depth → apply transform and asserts both bridge calls.

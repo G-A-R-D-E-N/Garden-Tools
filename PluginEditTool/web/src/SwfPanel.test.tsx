@@ -16,6 +16,8 @@ function stubBridge(overrides: Record<string, unknown> = {}) {
     AddLabel: vi.fn(async () => JSON.stringify({ changed: true, revision: 5, undo: 3, redo: 0, dirty: true })),
     Placements: vi.fn(async () => JSON.stringify({ placements: [{ tagIndex: 2, depth: 1, character: 11, insideSprite: false }] })),
     SetDepth: vi.fn(async () => JSON.stringify({ changed: true, revision: 6, undo: 4, redo: 0, dirty: true })),
+    PlacementMatrix: vi.fn(async () => JSON.stringify({ x: 0, y: 0, scaleX: 0, scaleY: 0, rotate0: 0, rotate1: 0 })),
+    SetTransform: vi.fn(async () => JSON.stringify({ changed: true, revision: 7, undo: 5, redo: 0, dirty: true })),
     ReadEditText: vi.fn(async () => JSON.stringify({ id: 11, text: 'hello', color: 'FF112233', x0: 0, x1: 400, y0: 0, y1: 200 })),
     EditEditText: vi.fn(async () => JSON.stringify({ changed: true, revision: 4, undo: 2, redo: 0, dirty: true })),
     ...overrides,
@@ -82,5 +84,8 @@ describe('SwfPanel', () => {
     fireEvent.change(depthField, { target: { value: '7' } });
     await act(async () => { fireEvent.click(screen.getByText('Apply depth')); });
     await waitFor(() => expect(swf.SetDepth).toHaveBeenCalledWith(2, 7));
+
+    await act(async () => { fireEvent.click(screen.getByText('Apply transform')); });
+    await waitFor(() => expect(swf.SetTransform).toHaveBeenCalledWith(2, 0, 0, 0, 0, 0, 0));
   });
 });
