@@ -138,7 +138,7 @@ public sealed class NifCollisionDecoderTests
         Assert.Contains("layout 8 bare hknpPhysicsSystemData", text);
         Assert.Contains("bodies 3", text);
         Assert.Contains("s 0 hknpSphereShape Sphere 0.75 0 0 0", text);
-        Assert.Contains("s 3 hknpCompressedMeshShape CompressedMesh 0 4 2 0", text);
+        Assert.Contains("s 3 hknpCompressedMeshShape CompressedMesh 0.0 4 2 0", text);
         Assert.DoesNotContain("note ", text);
     }
 
