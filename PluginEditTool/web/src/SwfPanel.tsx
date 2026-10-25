@@ -21,6 +21,7 @@ type SwfHost = {
   Redo(): Promise<string>;
   State(): Promise<string>;
   Save(): Promise<string>;
+  AddLabel(frame: number, name: string): Promise<string>;
   ReadEditText(tagIndex: number): Promise<string>;
   EditEditText(tagIndex: number, text: string, colorHex: string, x0: number, x1: number, y0: number, y1: number): Promise<string>;
 };
@@ -119,6 +120,16 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     setError('');
     setState(reply);
   }, [editTag, editText]);
+  const addLabel = useCallback(async () => {
+    const bridge = host();
+    if (!bridge || !labelName.trim()) return;
+    const reply = parse<StateReply>(await bridge.AddLabel(frame, labelName.trim()));
+    if (reply.error) { setError(reply.error); return; }
+    setError('');
+    setState(reply);
+    const labelsReply = parse<{ labels: LabelRow[] }>(await bridge.FrameLabels());
+    setLabels(labelsReply.labels ?? []);
+  }, [frame, labelName]);
   const command = useCallback(async (action: 'undo' | 'redo' | 'save') => {
     const bridge = host();
     if (!bridge) return;
@@ -177,6 +188,7 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
           <h4>Label</h4>
           <input value={labelName} onChange={event => setLabelName(event.target.value)} disabled={!selectedLabel} />
           <button type="button" onClick={() => void renameLabel()} disabled={!selectedLabel}>Rename</button>
+          <button type="button" onClick={() => void addLabel()} disabled={!labelName.trim()}>Add at frame</button>
         </aside>
         <main className="swf-centre">
           <div className="swf-scrubber">

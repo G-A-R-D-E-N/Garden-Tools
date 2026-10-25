@@ -86,6 +86,11 @@ public class SwfInterop
             new SwfEditTextEdit(text, color, new SwfRectRecord(x0, x1, y0, y1)));
         return Snapshot(result.Changed);
     });
+    public Task<string> AddLabel(int frame, string name) => Run(() =>
+    {
+        var result = Document().AddLabel(frame, name);
+        return Snapshot(result.Changed);
+    });
     public Task<string> Undo() => Run(() => { Document().Undo(); return Snapshot(false); });
 
     public Task<string> Redo() => Run(() => { Document().Redo(); return Snapshot(false); });

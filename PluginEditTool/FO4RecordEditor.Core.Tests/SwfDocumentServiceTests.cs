@@ -75,6 +75,25 @@ public class SwfDocumentServiceTests
         Assert.Null(document.EditText(0).Color);
     }
     [Fact]
+    public void AddsAFrameLabelThroughAnInsertionPlan()
+    {
+        using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
+        var result = document.AddLabel(0, "menu");
+        Assert.True(result.Changed);
+        Assert.Contains(document.FrameLabels(), label => label.Name == "menu" && !label.InsideSprite);
+        document.Undo();
+        Assert.DoesNotContain(document.FrameLabels(), label => label.Name == "menu");
+    }
+
+    [Fact]
+    public void RefusesADuplicateLabelBeforeTouchingTheHistory()
+    {
+        using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
+        var error = Assert.Throws<InvalidOperationException>(() => document.AddLabel(0, "start"));
+        Assert.Contains("already exists", error.Message);
+        Assert.Equal(0ul, document.Revision);
+    }
+    [Fact]
     public void ARefusalLeavesTheHistoryUntouchedAndCarriesTheMessage()
     {
         using var document = SwfDocument.OpenBytes(SwfFixture.Movie());

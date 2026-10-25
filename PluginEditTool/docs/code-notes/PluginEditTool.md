@@ -59,3 +59,10 @@ fields (text, colour, bounds rect); Apply sends `EditEditText` with those values
 back into the header. The field-level refusal banner is the same one all commands use, so a Radicle refusal
 appears next to the panel verbatim. The web test drives open → select edit text → change text → apply and asserts
 the bridge call. Placement transform/depth/keyframe editing and label add/remove are still out of the panel.
+## FO4RecordEditor.Core/Services/SwfDocumentService.cs:SwfDocument.AddLabel (label insertion)
+
+`AddLabel` finds the tag index of the requested root ShowFrame, refuses a duplicate root-timeline name and a frame
+the timeline does not reach, then inserts a new FrameLabel tag through the plan, so the label add is one history
+command that undo removes. `SwfInterop.AddLabel` exposes it to the panel and the panel's "Add at frame" button
+uses the label name field and the current scrubber frame. Removal and sprite-timeline adds still need payload
+composition or a native removal verb.

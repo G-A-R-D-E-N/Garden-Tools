@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.IO;
 using Radicle.Interop;
 
@@ -68,6 +69,17 @@ public sealed class SwfDocument : IDisposable
 
     public SwfEditTextRecord EditText(int tagIndex) => Movie.EditText(tagIndex);
 
+    // Requires a root-timeline frame the movie reaches; a duplicate name on the root timeline is refused.
+    public SwfPlanResultRecord AddLabel(int frame, string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("a frame label needs a name", nameof(name));
+        if (Movie.FrameLabels.Any(label => label.SpriteId == 0 && !label.InsideSprite && label.Name == name))
+            throw new InvalidOperationException("a frame label with that name already exists on this timeline");
+        var showFrames = Movie.Tags.Where(tag => tag.Code == 1 && !tag.InsideSprite).ToArray();
+        if (frame < 0 || frame >= showFrames.Length) throw new ArgumentOutOfRangeException(nameof(frame));
+        var payload = System.Text.Encoding.UTF8.GetBytes(name).Concat(new byte[] { 0 }).ToArray();
+        return Apply(new SwfPlanSpec().Insert(showFrames[frame].Index, 43, payload));
+    }
     // Constraint: an edit-text write goes through the same plan and history path as every other edit.
     public SwfPlanResultRecord EditEditText(int tagIndex, SwfEditTextEdit edit)
     {
