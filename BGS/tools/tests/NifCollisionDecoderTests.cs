@@ -11,6 +11,15 @@ namespace BehaviourStudio.Tests;
 // Invariant: the decoder fails closed on a truncated or hostile blob and never depends on a fixed offset.
 public sealed class NifCollisionDecoderTests
 {
+    public sealed class NifCorpusFactAttribute : FactAttribute
+    {
+        public NifCorpusFactAttribute()
+        {
+            if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("FO4_NIF_DIR")))
+                Skip = "Set FO4_NIF_DIR to run the vanilla collision corpus.";
+        }
+    }
+
     private static NifCollisionModel Decode(byte[] bytes)
     {
         Assert.True(NifCollisionDecoder.TryDecode(bytes, out var model, out var error), error);
@@ -66,6 +75,52 @@ public sealed class NifCollisionDecoderTests
         Assert.Equal(new[] { 0, 1, 2, 1, 2, 3 }, mesh.Triangles);
         Assert.Equal(new[] { 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 0.0f, 0.0f, 0.0f },
                      mesh.Vertices);
+    }
+
+    // Regression: a table offset change must fail here instead of silently moving the fixture with it.
+    [Fact]
+    public void TableOffsetsMatchTheMeasuredCollisionLayout()
+    {
+        Assert.Equal(64, CollisionPackfile.Member("hknpPhysicsSystemData", "bodyCinfos"));
+        Assert.Equal(48, CollisionPackfile.Member("hknpBodyCinfo", "position"));
+        Assert.Equal(64, CollisionPackfile.Member("hknpBodyCinfo", "orientation"));
+        Assert.Equal(18, CollisionPackfile.Member("hknpBodyCinfo", "materialId"));
+        Assert.Equal(18, CollisionPackfile.Member("hknpMaterial", "dynamicFriction"));
+        Assert.Equal(22, CollisionPackfile.Member("hknpMaterial", "restitution"));
+        Assert.Equal(20, CollisionPackfile.Member("hknpBSMaterial", "uiMaterialCRC"));
+        Assert.Equal(48, CollisionPackfile.Member("hknpConvexPolytopeShape", "vertices"));
+        Assert.Equal(68, CollisionPackfile.Member("hknpConvexPolytopeShape", "faces"));
+        Assert.Equal(72, CollisionPackfile.Member("hknpConvexPolytopeShape", "indices"));
+        Assert.Equal(96, CollisionPackfile.Member("hknpCompressedMeshShape", "data"));
+        Assert.Equal(16, CollisionPackfile.Member("hknpCompressedMeshShapeData", "meshTree"));
+        Assert.Equal(80, CollisionPackfile.Member("hkcdStaticMeshTreeBaseSection", "primitives"));
+        Assert.Equal(88, CollisionPackfile.Member("hkcdStaticMeshTreeBaseSection", "numPackedVertices"));
+        Assert.Equal(89, CollisionPackfile.Member("hkcdStaticMeshTreeBaseSection", "numSharedIndices"));
+        Assert.Equal(92, CollisionPackfile.Member("hkcdStaticMeshTreeBaseSection", "page"));
+    }
+
+    // Regression: a dynamic compound must decode through the inherited instance array, not fall back to unknown.
+    [Fact]
+    public void DecodesDynamicCompoundInstances()
+    {
+        var model = Decode(NifCollisionFixture.BuildDynamicCompound().Bytes);
+
+        Assert.Equal(4, model.Shapes.Count);
+        Assert.Equal(NifCollisionShapeKind.Compound, model.Shapes[1].Kind);
+        Assert.Equal("hknpDynamicCompoundShape", model.Shapes[1].Class);
+        Assert.Equal(2, model.Shapes[1].Instances.Count);
+        Assert.Equal(0, model.Shapes[1].Instances[0].Shape);
+        Assert.Equal(2, model.Shapes[1].Instances[1].Shape);
+    }
+
+    // Regression: a free-list hole must be skipped instead of surfacing as an instance with no shape.
+    [Fact]
+    public void SkipsCompoundFreeListHoles()
+    {
+        var model = Decode(NifCollisionFixture.BuildWithFreeListHole().Bytes);
+
+        Assert.Equal(2, model.Shapes[1].Instances.Count);
+        Assert.Contains("note compound free-list holes skipped", model.Describe());
     }
 
     // Regression: the manifest must stay byte-stable across runs so corpus hashes compare.
@@ -141,24 +196,31 @@ public sealed class NifCollisionDecoderTests
         Assert.Contains("is signed 0xdeadbeef", error);
     }
 
-    // Regression: every truncation must return false rather than throw out of TryDecode.
+    // Regression: a cut blob must be refused with an error or decode whole, never throw out of TryDecode.
     [Fact]
     public void NeverThrowsOnTruncatedBlobs()
     {
         var bytes = NifCollisionFixture.Build().Bytes;
 
+        for (int length = 0; length < PackfileImage.HeaderSize; length++)
+        {
+            var cut = new byte[length];
+            Array.Copy(bytes, cut, length);
+            Assert.False(NifCollisionDecoder.TryDecode(cut, out _, out _));
+        }
+
         for (int length = 0; length <= bytes.Length; length++)
         {
             var cut = new byte[length];
             Array.Copy(bytes, cut, length);
-            NifCollisionDecoder.TryDecode(cut, out _, out _);
+            if (!NifCollisionDecoder.TryDecode(cut, out _, out var error)) Assert.NotEmpty(error);
         }
 
         for (int tail = 0; tail < 64 && tail < bytes.Length; tail++)
         {
             var cut = new byte[bytes.Length - tail];
             Array.Copy(bytes, cut, cut.Length);
-            NifCollisionDecoder.TryDecode(cut, out _, out _);
+            if (!NifCollisionDecoder.TryDecode(cut, out _, out var error)) Assert.NotEmpty(error);
         }
     }
 
@@ -187,12 +249,10 @@ public sealed class NifCollisionDecoderTests
     }
 
     // Regression: a vanilla blob that stops decoding, or a changed hash, must fail the corpus manifest.
-    // Requires FO4_NIF_DIR; a committed fixtures/nif-collision/manifest.txt, once produced, is compared.
-    [Fact]
+    [NifCorpusFact]
     public void VanillaNifCollisionBlobsDecodeToStableHashes()
     {
-        var root = Environment.GetEnvironmentVariable("FO4_NIF_DIR");
-        if (string.IsNullOrEmpty(root)) return;
+        var root = Environment.GetEnvironmentVariable("FO4_NIF_DIR")!;
 
         var lines = new List<string>();
         int blobs = 0;

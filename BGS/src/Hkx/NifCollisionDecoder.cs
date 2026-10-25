@@ -20,6 +20,8 @@ public static class NifCollisionDecoder
     private const int MaxSections = 1024;
     private const int MaxVertices = 1 << 20;
     private const int MaxTriangles = 1 << 20;
+    private const int CustomPrimitive = 3;
+    private const int ExternalPrimitive = 4;
 
     public static bool TryDecode(ReadOnlySpan<byte> blob, out NifCollisionModel? model, out string error)
     {
@@ -135,18 +137,19 @@ public static class NifCollisionDecoder
             ? objects.ReadRefAt(at + s, out _)
             : null;
 
-        ushort id = materialId is int value && value >= 0 && value <= ushort.MaxValue ? (ushort)value : (ushort)0;
+        bool hasMaterial = materialId is int known && known >= 0 && known <= ushort.MaxValue;
+        ushort id = hasMaterial ? (ushort)materialId.GetValueOrDefault() : (ushort)0;
 
         return new NifCollisionBody
         {
             Index = index,
             Shape = target == null ? -1 : shapes.IndexOf(target),
             MaterialId = id,
-            MaterialHash = id < hashes.Count ? hashes[id] : 0u,
+            MaterialHash = hasMaterial && id < hashes.Count ? hashes[id] : 0u,
             Flags = flags ?? 0,
             Position = position ?? new float[4],
             Orientation = orientation ?? new float[4],
-            Response = id < materials.Count ? materials[id] : new NifCollisionResponse(),
+            Response = hasMaterial && id < materials.Count ? materials[id] : new NifCollisionResponse(),
         };
     }
 
@@ -293,16 +296,21 @@ public static class NifCollisionDecoder
             if (layout.OffsetOf("faces") is not int facesAt || layout.OffsetOf("indices") is not int indicesAt) return;
             if (_objects.RelArrayAt(instance.Offset + indicesAt, 1) is not { } indices) return;
 
-            var faceLayout = LayoutWalker.Active(HavokClassTypes.Shipped, "hknpConvexPolytopeShapeFace",
-                                                _objects.PointerWidth);
+            var faceClass = HavokClassTypes.Shipped.Members(instance.ClassName)
+                .FirstOrDefault(member => member.Name == "faces")?.CType;
+            if (faceClass == null) return;
+
+            var faceLayout = LayoutWalker.Active(HavokClassTypes.Shipped, faceClass, _objects.PointerWidth);
             if (faceLayout == null || faceLayout.Size <= 0) return;
+            if (faceLayout.OffsetOf("firstIndex") is not int firstIndexAt) return;
+            if (faceLayout.OffsetOf("numIndices") is not int numIndicesAt) return;
             if (_objects.RelArrayAt(instance.Offset + facesAt, faceLayout.Size) is not { } faces) return;
 
             for (int i = 0; i < faces.Count; i++)
             {
                 int at = faces.At + i * faceLayout.Size;
-                int first = _objects.ReadNarrowAt(at + (faceLayout.OffsetOf("firstIndex") ?? 0), 2) ?? 0;
-                int count = _objects.ReadNarrowAt(at + (faceLayout.OffsetOf("numIndices") ?? 2), 1) ?? 0;
+                int first = _objects.ReadNarrowAt(at + firstIndexAt, 2) ?? 0;
+                int count = _objects.ReadNarrowAt(at + numIndicesAt, 1) ?? 0;
                 if (count < 3 || first < 0 || first + count > indices.Count) continue;
 
                 for (int corner = 1; corner + 1 < count; corner++)
@@ -334,18 +342,25 @@ public static class NifCollisionDecoder
             var instanceLayout = LayoutWalker.Active(HavokClassTypes.Shipped, "hknpShapeInstance",
                                                     _objects.PointerWidth);
             if (instanceLayout == null || instanceLayout.Size <= 0) return;
+            if (instanceLayout.OffsetOf("shape") is not int shapeAt) return;
             if (_objects.ArrayAt(instance.Offset + instancesAt, instanceLayout.Size) is not { } array) return;
 
             for (int i = 0; i < array.Count && i < MaxShapes; i++)
             {
                 int at = array.At + i * instanceLayout.Size;
-                var child = instanceLayout.OffsetOf("shape") is int s ? _objects.ReadRefAt(at + s, out _) : null;
+                var child = _objects.ReadRefAt(at + shapeAt, out _);
+                if (child == null)
+                {
+                    NoteOnce("compound free-list holes skipped");
+                    continue;
+                }
+
                 var transform = _objects.ReadFloatsAt(at + (instanceLayout.OffsetOf("transform") ?? 0), 16);
                 var scale = instanceLayout.OffsetOf("scale") is int sc ? _objects.ReadFloatsAt(at + sc, 4) : null;
 
                 shape.Instances.Add(new NifCollisionInstance
                 {
-                    Shape = child == null ? -1 : IndexOf(child, depth + 1),
+                    Shape = IndexOf(child, depth + 1),
                     Transform = transform ?? new float[16],
                     Scale = scale ?? new float[4],
                 });
@@ -455,17 +470,16 @@ public static class NifCollisionDecoder
                 int c = _objects.ReadNarrowAt(entry + 2, 1) ?? -1;
                 int d = _objects.ReadNarrowAt(entry + 3, 1) ?? -1;
                 if (a < 0 || b < 0 || c < 0 || d < 0) break;
+                if (b == d)
+                {
+                    if (c == CustomPrimitive || c == ExternalPrimitive)
+                        NoteOnce("custom or external mesh primitives skipped");
+                    continue;
+                }
                 if (shape.Triangles.Count / 3 >= MaxTriangles) { NoteOnce($"triangles capped at {MaxTriangles}"); return false; }
 
-                if (c == d)
-                {
-                    Triangle(shape, a, b, c, baseVertex);
-                }
-                else if (b != d)
-                {
-                    Triangle(shape, a, b, c, baseVertex);
-                    Triangle(shape, a, c, d, baseVertex);
-                }
+                Triangle(shape, a, b, c, baseVertex);
+                if (c != d) Triangle(shape, a, c, d, baseVertex);
             }
 
             return true;

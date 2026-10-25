@@ -1,5 +1,4 @@
 using System;
-using OpenCommonwealth.Services.Hkx;
 
 namespace BehaviourStudio.Tests;
 
@@ -12,7 +11,13 @@ internal static class NifCollisionFixture
     public const uint MaterialHash0 = 0x11223344u;
     public const uint MaterialHash1 = 0x55667788u;
 
-    public static CollisionSample Build()
+    public static CollisionSample Build() => Build("hknpCompoundShape", false);
+
+    public static CollisionSample BuildDynamicCompound() => Build("hknpDynamicCompoundShape", false);
+
+    public static CollisionSample BuildWithFreeListHole() => Build("hknpCompoundShape", true);
+
+    private static CollisionSample Build(string compoundClass, bool freeListHole)
     {
         var file = new CollisionPackfile();
 
@@ -30,10 +35,11 @@ internal static class NifCollisionFixture
         file.RelArray(polytope + CollisionPackfile.Member("hknpConvexPolytopeShape", "indices"),
                       new byte[] { 0, 1, 2 }, 3);
 
-        int compound = file.AddObject("hknpCompoundShape");
+        int compound = file.AddObject(compoundClass);
         int instanceSize = CollisionPackfile.Size("hknpShapeInstance");
-        int instances = file.Array(compound + CollisionPackfile.Member("hknpCompoundShape", "instances"),
-                                   new byte[2 * instanceSize], 2);
+        int instanceCount = freeListHole ? 3 : 2;
+        int instances = file.Array(compound + CollisionPackfile.Member(compoundClass, "instances"),
+                                   new byte[instanceCount * instanceSize], instanceCount);
 
         Identify(file, instances, 0);
         int transformAt = CollisionPackfile.Member("hknpShapeInstance", "transform");
@@ -102,6 +108,7 @@ internal static class NifCollisionFixture
     public static byte[] Prefix(byte[] bytes)
     {
         var prefixed = new byte[bytes.Length + 4];
+        BitConverter.GetBytes((uint)bytes.Length).CopyTo(prefixed, 0);
         bytes.CopyTo(prefixed, 4);
         return prefixed;
     }
