@@ -98,6 +98,7 @@ std::string thrown_message(Fn&& fn) {
 
 }  // namespace
 
+// Constraint: the row must read the payload itself as lowercase hex; the regression this detects is a byte-array read that decodes as text or echoes the raw span.
 TEST(InfoResponseBytes, ReadsThePayloadAsLowercaseHex) {
   const auto plugin = fo4::read_plugin(
       make_plugin({std::byte{0xDE}, std::byte{0xAD}, std::byte{0xBE}, std::byte{0xEF}}), "Patch.esp");
@@ -160,6 +161,7 @@ TEST(InfoResponseBytes, RefusesMalformedHexWithTheExactMessages) {
   EXPECT_EQ(nam9_message(reread, record_key), "dead");
 }
 
+// Constraint: a bytes write must leave the response grouping and its zero-byte marker alone; the regression this detects is a write that drops WZMD or breaks TRDA,NAM1..NAM4.
 TEST(InfoResponseBytes, SetKeepsTheResponseShapeAndTheMarkerIntact) {
   auto plugin = fo4::read_plugin(make_plugin({}), "Patch.esp");
   const auto record_key = fo4::FormKey::parse(k_key);
