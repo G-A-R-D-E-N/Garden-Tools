@@ -5150,3 +5150,37 @@ Everything here stays inside C++. `Radicle/src/c_api_swf_display.cpp:radicle_swf
 Tests, written before the implementation, extend `Radicle/tests/test_swf_display.cpp` rather than opening a translation unit for two fields (`SwfDisplay`, nine cases now). `AddressesANestedSpriteRowWithItsOwnSpriteLocalPlacement` pins that a root row names the top-level placement that created it and a sprite row names a child of the defining `DefineSprite`, with the same slot read out of the top-level stream resolving to a different tag, which is the corruption the sprite-local rule prevents. `LeavesTheTransformIndexEmptyUntilAPlacementAuthorsAMatrix` pins the empty optional on a placement that inherits its matrix, the `Move` that then takes ownership, and `create_tag_index` staying on the creating tag while the instance id survives the move.
 
 This branch was compiled and run, though not through the project's CMake build: this checkout has no system zlib and no fetched googletest, so configuring `fo4_tests` would mean plumbing both by hand anyway. The check is instead a hand-rolled MSVC 14.44 (Visual Studio 2022 Community, `/std:c++latest /W4`) build of the thirteen `Radicle/src/swf` translation units, zlib from a cached `garden_zlib` source, googletest 1.17, and the four SWF test translation units, linked into one binary. All thirteen sources compile warning-free at `/W4`. At the first commit the four suites showed 41 cases with 39 passing, and both failures reproduced identically on a pristine extract of the parent commit `1c76a1170` built the same way, so neither was introduced here. `SwfDisplay.AdvancesTwoInstancesOfOneSpriteIndependently` was a defect in the case itself, as the second commit records, and its fix leaves the display suite green; `SwfDepthReassign.RejectsASourceOrDestinationInsideAMaskRange` belonged to the depth branch and is fixed in review round one, so this note no longer calls either one outstanding. The combined stack has not been rebuilt since those fixes, so its 41 of 41 is not a measured result. What the run does prove is the equality decision: all twelve `SwfKeyframe` cases, including `SweepsEveryRootInstanceAndFrameForRenderNeutrality` and the two that compare `root_display_frames` across an insertion, pass with the address fields outside `operator==`, and the two new `SwfDisplay` cases pass with them populated.
+
+## Radicle/include/fo4/swf/swf_characters.hpp:build_character_model (A6 character model, ABI 67)
+
+The character model is one pass over the top-level tags. `Radicle/src/swf/swf_characters.cpp:build_character_model`
+records one row per character id a placement can name: the kind (shape 2/22/32/83, morph 46/84, bitmap 6/20/21/35/36/90,
+text 11/33, edit text 37, font 10/48/75/91, sprite 39, button 7/34, sound 14, video 60, imported 57/71), the defining
+tag index, the drawn bounds for a shape, morph, text or edit-text definition, the pixel size a lossless bitmap carries,
+and the names the two name tables attach. The bounds come from the decoder view the tag already holds, so the model
+adds no second read of the payload: `SwfTag::shape`, `:morph_shape`, `:bitmap`, `:text`, `:edit_text` and `:font` are
+the source, and a raw definition (`DefineButton` 7/34, `DefineFont4` 91, `DefineVideoStream` 60) is named from its
+leading UI16 because that is the only field those tags carry before their format-specific body. ImportAssets pairs are
+characters too: they enter as kind imported with the source movie and the symbol name, and a placement can name them
+exactly like a local definition. `SymbolClass` names are attached first and `ExportAssets` only fills an unnamed id, so
+a class name always wins over an export name. Rows are sorted by id, and `Radicle/src/swf/swf_characters.cpp:find_character`
+is the lookup the C surface uses.
+
+Three conditions are refusals rather than guesses, and a refusal clears the model instead of returning a partial map:
+two definitions of one id, a character tag whose payload is shorter than the leading UI16 the model needs, and a
+`SymbolClass` or `ExportAssets` id that no definition or import carries. A placement id is not re-validated here: the
+display list already treats an unknown character as an omission, and the model only answers "which character is this".
+The C ABI adds `Radicle/include/fo4/c_api_swf.h:radicle_swf_character_count`, `:radicle_swf_character_at` and
+`:radicle_swf_character_by_id` on ABI 67; the model is built once per revision and cached on the handle (a refused
+model is cached with its message, so every character getter reports the same refusal), and `radicle_swf_character`
+carries the id, kind, flags, defining tag index, twip bounds, bitmap pixel size and the three name pointers. The
+regenerated `Radicle/bindings/csharp/Radicle.Interop/RadicleNative.g.cs` and `Radicle/bindings/csharp/tests/abi_layout_probe.cpp`
+carry the new struct, enum and exports; the ABI pin moved to `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsSixtySeven`.
+
+Tests: `Radicle/tests/test_swf_characters.cpp` builds one hand-authored movie carrying every kind, a duplicate-id movie,
+an unknown-name-table movie and a truncated-button movie, and pins the kinds, tag indices, bounds, bitmap sizes, sorted
+order and every refusal. `Radicle/tests/test_c_api_swf_characters.cpp` pins the three exports, the NOT_FOUND path, the
+refusal path and that a refused model leaves the other getters usable. `Radicle/tests/test_swf_real.cpp` now builds the
+model for every shipped Interface movie and records `characters` and `character_model_failures`, so a shipped movie that
+defines an id twice or names an unknown id fails the real-data suite. Nothing here was built or run locally; CI is the
+first build, and the ABI 67 layout is uncompared against a built probe until then.

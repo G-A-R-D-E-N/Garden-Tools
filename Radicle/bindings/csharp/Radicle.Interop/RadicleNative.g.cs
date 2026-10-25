@@ -2101,6 +2101,21 @@ public enum SwfRecordKind : int
     CurvedEdge = 3,
 }
 
+public enum SwfCharacterKind : int
+{
+    Shape = 0,
+    Morph = 1,
+    Bitmap = 2,
+    Text = 3,
+    EditText = 4,
+    Font = 5,
+    Sprite = 6,
+    Button = 7,
+    Sound = 8,
+    Video = 9,
+    Imported = 10,
+}
+
 [StructLayout(LayoutKind.Sequential)]
 public unsafe struct SwfInfo
 {
@@ -2455,10 +2470,27 @@ public unsafe struct SwfPlanResult
     public ulong Revision;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfCharacter
+{
+    public ushort CharacterId;
+    public byte Kind;
+    public byte HasBounds;
+    public byte HasBitmapSize;
+    public byte Reserved;
+    public nuint TagIndex;
+    public SwfRect Bounds;
+    public ushort BitmapWidth;
+    public ushort BitmapHeight;
+    public IntPtr Name;
+    public IntPtr ImportedFrom;
+    public IntPtr ImportedName;
+}
+
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 66u;
+    public const uint CompiledAbiVersion = 67u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -3686,5 +3718,14 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_write_bytes")]
     public static extern Status SwfWriteBytes(IntPtr swf, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_character_count")]
+    public static extern Status SwfCharacterCount(IntPtr swf, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_character_at")]
+    public static extern Status SwfCharacterAt(IntPtr swf, nuint index, SwfCharacter* out_character);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_character_by_id")]
+    public static extern Status SwfCharacterById(IntPtr swf, ushort character_id, SwfCharacter* out_character);
 
 }

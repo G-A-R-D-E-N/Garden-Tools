@@ -254,6 +254,7 @@ void install_views(radicle_swf& swf, swf_views&& views) {
   swf.frame_label_inside_sprite = std::move(views.frame_label_inside_sprite);
   swf.abcs = std::move(views.abcs);
   swf.morph_frames.clear();
+  swf.characters = {};
 }
 
 void rebuild_views(radicle_swf& swf) {

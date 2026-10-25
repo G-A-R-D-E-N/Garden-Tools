@@ -1617,5 +1617,18 @@ int main() {
   printf("SwfPlanResult %zu\n", sizeof(radicle_swf_plan_result));
   printf("SwfPlanResult.Changed %zu\n", offsetof(radicle_swf_plan_result, changed));
   printf("SwfPlanResult.Revision %zu\n", offsetof(radicle_swf_plan_result, revision));
+  printf("SwfCharacter %zu\n", sizeof(radicle_swf_character));
+  printf("SwfCharacter.CharacterId %zu\n", offsetof(radicle_swf_character, character_id));
+  printf("SwfCharacter.Kind %zu\n", offsetof(radicle_swf_character, kind));
+  printf("SwfCharacter.HasBounds %zu\n", offsetof(radicle_swf_character, has_bounds));
+  printf("SwfCharacter.HasBitmapSize %zu\n", offsetof(radicle_swf_character, has_bitmap_size));
+  printf("SwfCharacter.Reserved %zu\n", offsetof(radicle_swf_character, reserved));
+  printf("SwfCharacter.TagIndex %zu\n", offsetof(radicle_swf_character, tag_index));
+  printf("SwfCharacter.Bounds %zu\n", offsetof(radicle_swf_character, bounds));
+  printf("SwfCharacter.BitmapWidth %zu\n", offsetof(radicle_swf_character, bitmap_width));
+  printf("SwfCharacter.BitmapHeight %zu\n", offsetof(radicle_swf_character, bitmap_height));
+  printf("SwfCharacter.Name %zu\n", offsetof(radicle_swf_character, name));
+  printf("SwfCharacter.ImportedFrom %zu\n", offsetof(radicle_swf_character, imported_from));
+  printf("SwfCharacter.ImportedName %zu\n", offsetof(radicle_swf_character, imported_name));
   return 0;
 }
