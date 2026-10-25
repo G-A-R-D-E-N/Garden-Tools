@@ -79,3 +79,10 @@ Open also fetches `Placements`, the left column lists root placements (depth/cha
 right-hand depth field; Apply sends `SetDepth` and refreshes the placement list and history header. The web test
 drives open → select placement → change depth → apply and asserts the bridge call. Transform/keyframe fields are
 still the remaining placement properties.
+## Radicle/bindings/csharp/Radicle.Interop/SwfPlacementMatrix.cs:SwfPlacementMatrixCodec (transform edit)
+
+The MATRIX block of a placement is bit-packed between byte-aligned fields; `Read` decodes the scale/rotate/translate
+values and their span, and `Write` re-encodes only that span (adding scale/rotate when an edit asks for them) and
+keeps the prefix and suffix bytes. `SwfFile.PlacementMatrix`/`SetPlacementTransform`, `SwfDocument` and `SwfInterop`
+expose the read and the plan edit; `SwfPlacementMatrixTests` pin identity read, translate edit with other bytes
+equal, adding scale to a matrix that had none, and the wrong-tag refusal.

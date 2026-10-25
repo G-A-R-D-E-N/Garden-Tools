@@ -92,6 +92,11 @@ public sealed class SwfDocument : IDisposable
         var payload = SwfEditTextCodec.Write(record, Movie.Payload(tagIndex), edit);
         return Apply(new SwfPlanSpec().Replace(tagIndex, payload));
     }
+    public SwfPlacementMatrix PlacementTransform(int tagIndex) => Movie.PlacementMatrix(tagIndex);
+
+    // Requires a placement tag index; the transform edit keeps the depth and every other placement byte.
+    public SwfPlanResultRecord SetPlacementTransform(int tagIndex, SwfPlacementTransformEdit edit) =>
+        Movie.SetPlacementTransform(tagIndex, edit);
     // Constraint: the save must back the on-disk asset up before the first byte of the new file lands.
     public string Save(string? targetPath = null)
     {

@@ -97,6 +97,24 @@ public class SwfInterop
 
     public Task<string> SetDepth(int tagIndex, int depth) => Run(() =>
         Snapshot(Document().SetDepth(tagIndex, (ushort)depth).Changed));
+    public Task<string> PlacementMatrix(int tagIndex) => Run(() =>
+    {
+        var matrix = Document().PlacementTransform(tagIndex);
+        return Json(new
+        {
+            hasScale = matrix.HasScale, scaleX = matrix.ScaleX, scaleY = matrix.ScaleY,
+            hasRotate = matrix.HasRotate, rotate0 = matrix.Rotate0, rotate1 = matrix.Rotate1,
+            x = matrix.TranslateX, y = matrix.TranslateY,
+        });
+    });
+
+    public Task<string> SetTransform(int tagIndex, int x, int y, int scaleX, int scaleY, int rotate0, int rotate1) =>
+        Run(() =>
+        {
+            var result = Document().SetPlacementTransform(tagIndex,
+                new SwfPlacementTransformEdit(x, y, scaleX, scaleY, rotate0, rotate1));
+            return Snapshot(result.Changed);
+        });
     public Task<string> AddLabel(int frame, string name) => Run(() =>
     {
         var result = Document().AddLabel(frame, name);
