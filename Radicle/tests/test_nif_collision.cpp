@@ -125,7 +125,7 @@ TEST(NifCollision, AttachesTheOwningObjectFlagsSystemBodyIdAndTarget) {
 
 TEST(NifCollision, AttachesAnObjectThatPrecedesItsSystem) {
   const auto nif = fo4::nif::read_nif(nif_build::build_nif(
-      {}, {collision_object_block(2, 1, 5), collision_block("bhkPhysicsSystem", {0x01}),
+      {"node"}, {collision_object_block(2, 1, 5), collision_block("bhkPhysicsSystem", {0x01}),
            nif_build::node_block("NiNode", {}, {})},
       {}));
   const auto blobs = fo4::nif::read_collision_blobs(nif);
@@ -151,7 +151,7 @@ TEST(NifCollision, KeepsASystemWithoutAnObjectUnattributed) {
 
 TEST(NifCollision, IgnoresAnObjectWhoseDataIsNotACollisionSystem) {
   const auto nif = fo4::nif::read_nif(
-      nif_build::build_nif({}, {collision_block("bhkPhysicsSystem", {0x01}),
+      nif_build::build_nif({"node"}, {collision_block("bhkPhysicsSystem", {0x01}),
                                 nif_build::node_block("NiNode", {}, {}), collision_object_block(1, 1, 9)},
                            {}));
   const auto blobs = fo4::nif::read_collision_blobs(nif);
