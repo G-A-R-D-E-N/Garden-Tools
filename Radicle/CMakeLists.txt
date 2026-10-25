@@ -261,6 +261,7 @@ add_library(fo4
   src/swf/swf_bitmap.cpp
   src/swf/swf_text.cpp
   src/swf/swf_timeline.cpp
+  src/swf/swf_display.cpp
   src/swf/swf_write.cpp
   src/pex_analysis/opcodes.cpp
   src/pex_analysis/cfg.cpp
@@ -335,7 +336,7 @@ target_sources(fo4 PRIVATE src/patch/delta_patch.cpp)
 target_sources(fo4 PRIVATE src/patch/list_merge.cpp)
 target_sources(fo4 PRIVATE src/papyrus_source/lexer.cpp src/papyrus_source/parser.cpp src/papyrus_source/parser_decl.cpp src/papyrus_source/parser_expr.cpp src/papyrus_source/parser_stmt.cpp src/papyrus_source/summary.cpp)
 target_sources(radicle_c PRIVATE src/c_api_nif.cpp src/c_api_dds.cpp)
-target_sources(radicle_c PRIVATE src/c_api_swf.cpp src/c_api_swf_art.cpp)
+target_sources(radicle_c PRIVATE src/c_api_swf.cpp src/c_api_swf_art.cpp src/c_api_swf_display.cpp)
 
 if(RADICLE_INSTALL)
   include(GNUInstallDirs)
@@ -679,6 +680,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_c_api_nif.cpp
     tests/test_c_api_swf.cpp
     tests/test_c_api_swf_morph.cpp
+    tests/test_c_api_swf_display.cpp
     tests/test_c_api_swf_real.cpp
     tests/test_dds.cpp
     tests/test_environment_writeback.cpp
@@ -726,6 +728,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_swf_tags.cpp
     tests/test_swf_plan.cpp
     tests/test_swf_place.cpp
+    tests/test_swf_display.cpp
     tests/test_swf_art.cpp
     tests/test_swf_morph_tween.cpp
     tests/test_swf_real.cpp

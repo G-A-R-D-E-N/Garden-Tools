@@ -372,6 +372,53 @@ RADICLE_API radicle_status radicle_swf_abc_method_at(const radicle_swf* swf, siz
 RADICLE_API radicle_status radicle_swf_abc_method_disassemble(const radicle_swf* swf, size_t abc, size_t index,
                                                               uint8_t** out_text, size_t* out_size);
 
+typedef struct radicle_swf_frames radicle_swf_frames;
+
+typedef struct radicle_swf_transform {
+  double scale_x;
+  double rotate_skew0;
+  double rotate_skew1;
+  double scale_y;
+  double translate_x;          /* must be in points */
+  double translate_y;          /* must be in points */
+} radicle_swf_transform;
+
+typedef struct radicle_swf_bounds {
+  double x;
+  double y;
+  double width;
+  double height;
+} radicle_swf_bounds;
+
+typedef struct radicle_swf_frames_instance {
+  uint32_t instance_id;        /* must stay with an instance across a move and must change when a placement carries a character */
+  uint32_t timeline_frame;     /* must be the 0-based frame of timeline_id this expansion used */
+  uint16_t depth;
+  uint16_t character_id;
+  uint16_t timeline_id;        /* must be 0 for the root timeline, else the DefineSprite character that owns the instance */
+  uint16_t clip_depth;         /* must be read only when has_clip_depth is 1 */
+  uint8_t is_sprite;
+  uint8_t has_bounds;          /* must be 0 for a character without shape bounds */
+  uint8_t has_clip_depth;
+  radicle_swf_transform transform;        /* must be local to timeline_id */
+  radicle_swf_transform world_transform;  /* must be composed from the root */
+  radicle_swf_bounds bounds;              /* must be in world points */
+  const char* name;            /* must never be null; "" when the instance is unnamed */
+  const char* path;            /* must never be null; instance path from the root, e.g. "Art/Cell" */
+} radicle_swf_frames_instance;
+
+/* A per-frame display list; every string it hands back must stay valid until radicle_swf_frames_destroy, so the handle may outlive the movie. */
+RADICLE_API radicle_status radicle_swf_frames_open(const radicle_swf* swf, radicle_swf_frames** out_frames);
+RADICLE_API void radicle_swf_frames_destroy(radicle_swf_frames* frames);
+RADICLE_API size_t radicle_swf_frames_timeline_count(const radicle_swf_frames* frames);
+RADICLE_API radicle_status radicle_swf_frames_timeline_at(const radicle_swf_frames* frames, size_t index,
+                                                          uint16_t* out_character_id, size_t* out_frame_count);
+RADICLE_API radicle_status radicle_swf_frames_instance_count(const radicle_swf_frames* frames, size_t timeline,
+                                                            size_t frame, size_t* out_count);
+RADICLE_API radicle_status radicle_swf_frames_instance_at(const radicle_swf_frames* frames, size_t timeline,
+                                                         size_t frame, size_t index,
+                                                         radicle_swf_frames_instance* out_instance);
+
 
 #ifdef __cplusplus
 }

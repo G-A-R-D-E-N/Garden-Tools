@@ -2383,10 +2383,49 @@ public unsafe struct SwfMethodPool
     public nuint ExceptionCount;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfTransform
+{
+    public double ScaleX;
+    public double RotateSkew0;
+    public double RotateSkew1;
+    public double ScaleY;
+    public double TranslateX;
+    public double TranslateY;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfBounds
+{
+    public double X;
+    public double Y;
+    public double Width;
+    public double Height;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfFramesInstance
+{
+    public uint InstanceId;
+    public uint TimelineFrame;
+    public ushort Depth;
+    public ushort CharacterId;
+    public ushort TimelineId;
+    public ushort ClipDepth;
+    public byte IsSprite;
+    public byte HasBounds;
+    public byte HasClipDepth;
+    public SwfTransform Transform;
+    public SwfTransform WorldTransform;
+    public SwfBounds Bounds;
+    public IntPtr Name;
+    public IntPtr Path;
+}
+
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 64u;
+    public const uint CompiledAbiVersion = 65u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -3587,5 +3626,23 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_abc_method_disassemble")]
     public static extern Status SwfAbcMethodDisassemble(IntPtr swf, nuint abc, nuint index, byte** out_text, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_frames_open")]
+    public static extern Status SwfFramesOpen(IntPtr swf, IntPtr* out_frames);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_frames_destroy")]
+    public static extern void SwfFramesDestroy(IntPtr frames);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_frames_timeline_count")]
+    public static extern nuint SwfFramesTimelineCount(IntPtr frames);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_frames_timeline_at")]
+    public static extern Status SwfFramesTimelineAt(IntPtr frames, nuint index, ushort* out_character_id, nuint* out_frame_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_frames_instance_count")]
+    public static extern Status SwfFramesInstanceCount(IntPtr frames, nuint timeline, nuint frame, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_frames_instance_at")]
+    public static extern Status SwfFramesInstanceAt(IntPtr frames, nuint timeline, nuint frame, nuint index, SwfFramesInstance* out_instance);
 
 }
