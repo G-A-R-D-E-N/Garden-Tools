@@ -97,6 +97,18 @@ public sealed class SwfDocument : IDisposable
     // Requires a placement tag index; the transform edit keeps the depth and every other placement byte.
     public SwfPlanResultRecord SetPlacementTransform(int tagIndex, SwfPlacementTransformEdit edit) =>
         Movie.SetPlacementTransform(tagIndex, edit);
+    // Requires a root PlaceObject2 tag and a reached frame; the copy becomes a move row at that frame.
+    public SwfPlanResultRecord InsertKeyframe(int tagIndex, int frame)
+    {
+        var tag = Movie.Tags[tagIndex];
+        if (tag.Code != 26 || tag.InsideSprite)
+            throw new InvalidOperationException("only a root PlaceObject2 placement can carry a keyframe this round");
+        var showFrames = Movie.Tags.Where(item => item.Code == 1 && !item.InsideSprite).ToArray();
+        if (frame < 0 || frame >= showFrames.Length) throw new ArgumentOutOfRangeException(nameof(frame));
+        var payload = Movie.Payload(tagIndex);
+        payload[0] = (byte)((payload[0] & ~0x02) | 0x01);
+        return Apply(new SwfPlanSpec().Insert(showFrames[frame].Index, 26, payload));
+    }
     // Constraint: the save must back the on-disk asset up before the first byte of the new file lands.
     public string Save(string? targetPath = null)
     {

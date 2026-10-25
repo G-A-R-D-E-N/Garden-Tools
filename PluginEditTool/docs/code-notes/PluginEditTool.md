@@ -97,3 +97,9 @@ The centre now draws a bounds box per display-list instance whose frame expansio
 adds the bounds rect/flags/clip depth to each row, and the panel positions a dashed absolutely-positioned box in a
 relative stage with the depth label. This is the round's rendering substitute: no shape canvas, only the placement
 bounds. The web test asserts the box test id exists for the fixture instance.
+## FO4RecordEditor.Core/Services/SwfDocumentService.cs:SwfDocument.InsertKeyframe (keyframe at frame)
+
+A first keyframe form: for a root PlaceObject2 placement, `InsertKeyframe` copies its payload, forces the Move flag and
+clears the character bit, and inserts the copy before the requested frame's root ShowFrame through the plan, so it is
+one history command that undo removes. A sprite placement or a non-PlaceObject2 tag is refused this round;
+`SwfInterop.InsertKeyframe` and the panel's "Keyframe at frame" button (scrubber frame) use it.

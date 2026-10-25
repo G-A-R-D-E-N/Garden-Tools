@@ -30,6 +30,7 @@ type SwfHost = {
   SetDepth(tagIndex: number, depth: number): Promise<string>;
   PlacementMatrix(tagIndex: number): Promise<string>;
   SetTransform(tagIndex: number, x: number, y: number, scaleX: number, scaleY: number, rotate0: number, rotate1: number): Promise<string>;
+  InsertKeyframe(tagIndex: number, frame: number): Promise<string>;
   ReadEditText(tagIndex: number): Promise<string>;
   EditEditText(tagIndex: number, text: string, colorHex: string, x0: number, x1: number, y0: number, y1: number): Promise<string>;
 };
@@ -164,6 +165,14 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     setError('');
     setState(reply);
   }, [placementTag, matrix]);
+  const insertKeyframe = useCallback(async () => {
+    const bridge = host();
+    if (!bridge || placementTag === null) return;
+    const reply = parse<StateReply>(await bridge.InsertKeyframe(placementTag, frame));
+    if (reply.error) { setError(reply.error); return; }
+    setError('');
+    setState(reply);
+  }, [placementTag, frame]);
   const applyDepth = useCallback(async () => {
     const bridge = host();
     if (!bridge || placementTag === null) return;
@@ -291,7 +300,8 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
           {placementTag !== null && (
             <div className="swf-fields">
               <label>Depth <input type="number" min={0} value={placementDepth} onChange={event => setPlacementDepth(Number(event.target.value))} /></label>
-              <button type="button" onClick={() => void applyDepth()}>Apply depth</button>              <label>X <input type="number" value={matrix.x} onChange={event => setMatrix({ ...matrix, x: Number(event.target.value) })} /></label>
+              <button type="button" onClick={() => void applyDepth()}>Apply depth</button>
+              <button type="button" onClick={() => void insertKeyframe()}>Keyframe at frame</button>              <label>X <input type="number" value={matrix.x} onChange={event => setMatrix({ ...matrix, x: Number(event.target.value) })} /></label>
               <label>Y <input type="number" value={matrix.y} onChange={event => setMatrix({ ...matrix, y: Number(event.target.value) })} /></label>
               <label>ScaleX <input type="number" value={matrix.scaleX} onChange={event => setMatrix({ ...matrix, scaleX: Number(event.target.value) })} /></label>
               <label>ScaleY <input type="number" value={matrix.scaleY} onChange={event => setMatrix({ ...matrix, scaleY: Number(event.target.value) })} /></label>

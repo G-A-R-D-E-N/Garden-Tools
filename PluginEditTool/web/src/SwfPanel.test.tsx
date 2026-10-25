@@ -18,6 +18,7 @@ function stubBridge(overrides: Record<string, unknown> = {}) {
     SetDepth: vi.fn(async () => JSON.stringify({ changed: true, revision: 6, undo: 4, redo: 0, dirty: true })),
     PlacementMatrix: vi.fn(async () => JSON.stringify({ x: 0, y: 0, scaleX: 0, scaleY: 0, rotate0: 0, rotate1: 0 })),
     SetTransform: vi.fn(async () => JSON.stringify({ changed: true, revision: 7, undo: 5, redo: 0, dirty: true })),
+    InsertKeyframe: vi.fn(async () => JSON.stringify({ changed: true, revision: 8, undo: 6, redo: 0, dirty: true })),
     ReadEditText: vi.fn(async () => JSON.stringify({ id: 11, text: 'hello', color: 'FF112233', x0: 0, x1: 400, y0: 0, y1: 200 })),
     EditEditText: vi.fn(async () => JSON.stringify({ changed: true, revision: 4, undo: 2, redo: 0, dirty: true })),
     ...overrides,

@@ -94,6 +94,30 @@ public class SwfDocumentServiceTests
         Assert.Equal(0ul, document.Revision);
     }
     [Fact]
+    public void InsertsAPlacementKeyframeAndUndoesIt()
+    {
+        using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
+        var placement = document.Placements().First(item => !item.InsideSprite);
+        var before = document.Movie.Tags.Count(tag => tag.Code == 26);
+        var result = document.InsertKeyframe(placement.TagIndex, 0);
+        Assert.True(result.Changed);
+        Assert.Equal(before + 1, document.Movie.Tags.Count(tag => tag.Code == 26));
+        var inserted = document.Movie.Tags.Last(tag => tag.Code == 26);
+        Assert.Equal((byte)26, inserted.Code);
+        Assert.True((document.Movie.Payload(inserted.Index)[0] & 0x01) != 0);
+        document.Undo();
+        Assert.Equal(before, document.Movie.Tags.Count(tag => tag.Code == 26));
+    }
+
+    [Fact]
+    public void RefusesAKeyframeOnANonPlacementTag()
+    {
+        using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
+        var label = document.Movie.Tags.First(tag => tag.Code == 43);
+        Assert.Throws<InvalidOperationException>(() => document.InsertKeyframe(label.Index, 0));
+        Assert.Equal(0ul, document.Revision);
+    }
+    [Fact]
     public void ARefusalLeavesTheHistoryUntouchedAndCarriesTheMessage()
     {
         using var document = SwfDocument.OpenBytes(SwfFixture.Movie());

@@ -117,6 +117,8 @@ public class SwfInterop
                 new SwfPlacementTransformEdit(x, y, scaleX, scaleY, rotate0, rotate1));
             return Snapshot(result.Changed);
         });
+    public Task<string> InsertKeyframe(int tagIndex, int frame) => Run(() =>
+        Snapshot(Document().InsertKeyframe(tagIndex, frame).Changed));
     public Task<string> AddLabel(int frame, string name) => Run(() =>
     {
         var result = Document().AddLabel(frame, name);
