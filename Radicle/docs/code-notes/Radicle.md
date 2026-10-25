@@ -5253,3 +5253,16 @@ forward-vs-undo equality, a refused edit leaving revision/counts/bytes unchanged
 and a history that never opened. `Radicle/tests/test_c_api_swf_history.cpp` pins the same through the C
 handle, the revision counter, the flat-index refusal and the missing-argument paths. Nothing here was built
 or run locally; CI is the first compiler.
+
+## Radicle/bindings/csharp/Radicle.Interop/SwfEditing.cs:SwfFile.ApplyPlan (PET editor read/edit surface)
+
+The managed `SwfFile` partial grows the edit-side surface over ABI 67: `Characters()` reads the character
+model (kind, id, defining tag, bounds or bitmap size, name/import), `OpenFrames()` reads timelines and the
+per-frame display list with depth, character, name and transforms, `OpenHistory()` returns the replay
+history with apply/undo/redo, counts, revision and write-bytes, and `ApplyPlan`/`WriteBytes` expose the
+raw tag plan and the current bytes. Each wrapper owns one native handle through a `SafeHandle` and every
+non-Ok status becomes a `RadicleException` carrying the Radicle message, so a refusal reaches the caller
+verbatim. Tests in `Radicle/bindings/csharp/Radicle.Interop.Tests/SwfEditingTests.cs` use hand-built
+movie bytes from `SwfFixtures.Movie()` and pin characters, labels, the frame-0 display list, the
+plan/history undo-redo round trip, and the refusal message. Nothing was built or run locally; CI is the
+first compiler.
