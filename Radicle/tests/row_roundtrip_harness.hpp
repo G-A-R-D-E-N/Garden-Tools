@@ -294,7 +294,10 @@ inline void roundtrip_family(const char* family, Signature signature) {
     ++tally.exercised;
   }
 
-  ASSERT_GT(tally.exercised, 0u) << family << " exercised no row";
+  ASSERT_GT(tally.exercised, 0u)
+      << family
+      << " exercised no row; read exercised/shared/unresolved/no_candidate from the first CI log with "
+         "FO4_DATA_DIR set before setting a floor for this family";
   EXPECT_EQ(tally.unresolved, 0u) << family << " has a carried row that resolves no slot";
   // Constraint: a carried row is either edited or skipped for a reason the harness cannot avoid, so none vanishes.
   EXPECT_EQ(tally.exercised + tally.shared + tally.unresolved + tally.no_candidate, carried)
