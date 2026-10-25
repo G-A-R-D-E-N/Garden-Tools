@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -82,6 +83,41 @@ std::vector<std::byte> place2_without_matrix(std::uint16_t depth, std::uint16_t 
   builder.u16(depth);
   builder.u16(character);
   builder.text(name);
+  return builder.body;
+}
+
+// Constraint: HasCharacter|HasMatrix|HasRatio|HasName|HasClipDepth, ratio before clip depth and name.
+std::vector<std::byte> place2_ratio_clip(std::uint16_t depth, std::uint16_t character,
+                                         std::string_view name, const Matrix& matrix,
+                                         std::uint16_t ratio, std::uint16_t clip_depth) {
+  SwfBuilder builder;
+  builder.u8(0x76);
+  builder.u16(depth);
+  builder.u16(character);
+  push_matrix(builder, matrix);
+  builder.u16(ratio);
+  builder.text(name);
+  builder.u16(clip_depth);
+  return builder.body;
+}
+
+// Constraint: PlaceObject3 authors a blur filter and a blend mode after the placement fields.
+std::vector<std::byte> place3_blend_filter(std::uint16_t depth, std::uint16_t character,
+                                           std::string_view name, const Matrix& matrix,
+                                           std::uint8_t blend) {
+  SwfBuilder builder;
+  builder.u8(0x26);
+  builder.u8(0x03);
+  builder.u16(depth);
+  builder.u16(character);
+  push_matrix(builder, matrix);
+  builder.text(name);
+  builder.u8(1);
+  builder.u8(1);
+  for (int index = 0; index < 9; ++index) {
+    builder.u8(0);
+  }
+  builder.u8(blend);
   return builder.body;
 }
 
@@ -454,7 +490,151 @@ TEST(SwfKeyframe, KeepsASameFrameNameMoveAndMakesTheKeyframeTheSource) {
   EXPECT_EQ(root_display_frames(file), before);
 }
 
+TEST(SwfKeyframe, PreservesRatioAndClipDepthOnTheTargetFrame) {
+  const auto source =
+      movie_of({{26, place2_ratio_clip(5, 7, "widget", Matrix{}, 128, 9)}, {1, {}}, {1, {}}});
+  auto file = open(source);
+  const auto before = root_display_frames(file);
+  const auto targets = fo4::swf::build_instance_edit_targets(file, 1);
+  const auto* widget = find_target(targets, "widget");
+  ASSERT_NE(widget, nullptr);
+
+  fo4::swf::SwfKeyframeInsertResult result;
+  ASSERT_TRUE(fo4::swf::insert_instance_transform_keyframe(file, 1, widget->instance_id, result))
+      << result.message;
+
+  SwfAuthoredFrame frame;
+  std::string message;
+  ASSERT_TRUE(fo4::swf::build_authored_frame(file.tags, 1, frame, message)) << message;
+  const auto* object = authored_at(frame, widget->create_tag_index);
+  ASSERT_NE(object, nullptr);
+  ASSERT_TRUE(object->ratio.has_value());
+  EXPECT_EQ(*object->ratio, 128);
+  ASSERT_TRUE(object->clip_depth.has_value());
+  EXPECT_EQ(*object->clip_depth, 9);
+  EXPECT_EQ(root_display_frames(file), before);
+}
+
+TEST(SwfKeyframe, PreservesPlaceObjectThreeFiltersAndBlendMode) {
+  const auto source =
+      movie_of({{70, place3_blend_filter(5, 7, "widget", Matrix{}, 5)}, {1, {}}, {1, {}}});
+  auto file = open(source);
+  const auto before = root_display_frames(file);
+  const auto targets = fo4::swf::build_instance_edit_targets(file, 1);
+  const auto* widget = find_target(targets, "widget");
+  ASSERT_NE(widget, nullptr);
+
+  fo4::swf::SwfKeyframeInsertResult result;
+  ASSERT_TRUE(fo4::swf::insert_instance_transform_keyframe(file, 1, widget->instance_id, result))
+      << result.message;
+
+  SwfAuthoredFrame frame;
+  std::string message;
+  ASSERT_TRUE(fo4::swf::build_authored_frame(file.tags, 1, frame, message)) << message;
+  const auto* object = authored_at(frame, widget->create_tag_index);
+  ASSERT_NE(object, nullptr);
+  EXPECT_EQ(object->filter_count, 1);
+  ASSERT_TRUE(object->blend_mode.has_value());
+  EXPECT_EQ(*object->blend_mode, 5);
+  EXPECT_EQ(root_display_frames(file), before);
+}
+
+TEST(SwfKeyframe, KeepsMaskMembershipOnTheTargetFrame) {
+  // Constraint: the mask at depth three covers four to six, so the widget must stay masked by it.
+  const auto source = movie_of({{26, place2(3, 9, "mask", Matrix{})},
+                                {26, place2(5, 7, "widget", Matrix{})},
+                                {1, {}},
+                                {1, {}}});
+  auto file = open(source);
+  const auto before = root_display_frames(file);
+  const auto targets = fo4::swf::build_instance_edit_targets(file, 1);
+  const auto* widget = find_target(targets, "widget");
+  ASSERT_NE(widget, nullptr);
+
+  fo4::swf::SwfKeyframeInsertResult result;
+  ASSERT_TRUE(fo4::swf::insert_instance_transform_keyframe(file, 1, widget->instance_id, result))
+      << result.message;
+
+  SwfAuthoredFrame frame;
+  std::string message;
+  ASSERT_TRUE(fo4::swf::build_authored_frame(file.tags, 1, frame, message)) << message;
+  const auto* object = authored_at(frame, widget->create_tag_index);
+  ASSERT_NE(object, nullptr);
+  ASSERT_TRUE(object->masked_by_depth.has_value());
+  EXPECT_EQ(*object->masked_by_depth, 3);
+  EXPECT_EQ(root_display_frames(file), before);
+}
+
+TEST(SwfKeyframe, RejectsATransformTheMatrixFieldsCannotHold) {
+  const auto source =
+      movie_of({{26, place2(5, 7, "widget", Matrix{})}, {1, {}}, {1, {}}});
+  auto file = open(source);
+  const auto targets = fo4::swf::build_instance_edit_targets(file, 1);
+  const auto* widget = find_target(targets, "widget");
+  ASSERT_NE(widget, nullptr);
+
+  SwfTransform nan = transform_of(400, 0);
+  nan.scale_x = std::numeric_limits<double>::quiet_NaN();
+  fo4::swf::SwfKeyframeInsertResult not_a_number;
+  EXPECT_FALSE(fo4::swf::insert_instance_transform_keyframe(file, 1, widget->instance_id,
+                                                            nan, not_a_number));
+  EXPECT_EQ(fo4::swf::write_swf(file), source);
+
+  SwfTransform overflowing;
+  overflowing.scale_x = 32768.0;
+  fo4::swf::SwfKeyframeInsertResult too_wide;
+  EXPECT_FALSE(fo4::swf::insert_instance_transform_keyframe(file, 1, widget->instance_id,
+                                                            overflowing, too_wide));
+  EXPECT_NE(too_wide.message.find("fit the MATRIX fields"), std::string::npos)
+      << too_wide.message;
+  EXPECT_EQ(fo4::swf::write_swf(file), source);
+}
+
+TEST(SwfKeyframe, RejectsAnOutOfRangeRootFrame) {
+  const auto source =
+      movie_of({{26, place2(5, 7, "widget", Matrix{})}, {1, {}}, {1, {}}});
+  auto file = open(source);
+
+  fo4::swf::SwfKeyframeInsertResult result;
+  EXPECT_FALSE(fo4::swf::insert_instance_transform_keyframe(file, 9, 1, result));
+  EXPECT_NE(result.message.find("no renderable root frame"), std::string::npos) << result.message;
+  EXPECT_EQ(fo4::swf::write_swf(file), source);
+}
+
+TEST(SwfKeyframe, RejectsAnUnknownInstanceId) {
+  const auto source =
+      movie_of({{26, place2(5, 7, "widget", Matrix{})}, {1, {}}, {1, {}}});
+  auto file = open(source);
+
+  fo4::swf::SwfKeyframeInsertResult result;
+  EXPECT_FALSE(fo4::swf::insert_instance_transform_keyframe(file, 1, 999999u, result));
+  EXPECT_NE(result.message.find("instance id not found"), std::string::npos) << result.message;
+  EXPECT_EQ(fo4::swf::write_swf(file), source);
+}
+
+TEST(SwfKeyframe, InsertsAfterADoActionTag) {
+  // Constraint: the inserted Move lands at the ShowFrame, so a DoAction earlier in the frame stays first.
+  const auto source = movie_of({{26, place2(5, 7, "widget", Matrix{})},
+                                {1, {}},
+                                {12, {std::byte{0x00}}},
+                                {1, {}}});
+  auto file = open(source);
+  const auto before = root_display_frames(file);
+  const auto targets = fo4::swf::build_instance_edit_targets(file, 1);
+  const auto* widget = find_target(targets, "widget");
+  ASSERT_NE(widget, nullptr);
+
+  fo4::swf::SwfKeyframeInsertResult result;
+  ASSERT_TRUE(fo4::swf::insert_instance_transform_keyframe(file, 1, widget->instance_id, result))
+      << result.message;
+  ASSERT_LT(result.inserted_tag_index, file.tags.size());
+  EXPECT_EQ(file.tags[result.inserted_tag_index].code, 26u);
+  ASSERT_GT(result.inserted_tag_index, 0u);
+  EXPECT_EQ(file.tags[result.inserted_tag_index - 1].code, 12u);
+  EXPECT_EQ(root_display_frames(file), before);
+}
 TEST(SwfKeyframe, SweepsEveryRootInstanceAndFrameForRenderNeutrality) {
+
   const std::vector<std::vector<TagPayload>> corpus{
       {{26, place2(5, 7, "a", Matrix{})}, {1, {}}, {1, {}}, {1, {}}},
       {{26, place2(5, 7, "a", Matrix{})}, {1, {}}, {26, move2_name(5, "renamed")}, {1, {}}, {1, {}}},

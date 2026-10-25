@@ -101,9 +101,10 @@ struct SwfAuthoredFrame {
   std::vector<SwfAuthoredFrameObject> objects;
 };
 
-/* Requires the frame to be completed by a ShowFrame; identity when the object authored no MATRIX. */
+/* Invariant: the identity transform when no MATRIX was authored. */
 SwfTransform authored_transform(const std::optional<SwfMatrix>& matrix) noexcept;
 
+/* Requires the frame to be completed by a ShowFrame. */
 bool build_authored_frame(const std::vector<SwfTag>& tags, std::uint32_t frame,
                           SwfAuthoredFrame& out, std::string& message);
 
