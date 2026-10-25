@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
 
@@ -17,7 +18,7 @@ public sealed class HkObject
     public string Str(string field) => Scalars.TryGetValue(field, out var v) ? v : "";
 
     public int Int(string field, int fallback = -1)
-        => int.TryParse(Str(field), out var v) ? v : fallback;
+        => int.TryParse(Str(field), NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : fallback;
 
     public string? Ref(string field)
     {

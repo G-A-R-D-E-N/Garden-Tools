@@ -70,6 +70,12 @@ public sealed class GraphPlan
 {
     public const int MaximumWarnings = 40;
 
+    private const int MaximumResolvedNodes = 200_000;
+
+    private readonly Dictionary<string, int> _machinesById = new(StringComparer.Ordinal);
+    private int _resolvedNodes;
+    private bool _budgetNoted;
+
     private static readonly Dictionary<string, string> PassThrough = new(StringComparer.Ordinal)
     {
         ["hkbModifierGenerator"] = "generator",
@@ -141,11 +147,12 @@ public sealed class GraphPlan
         return plan;
     }
 
-    private PlanNode? Resolve(BehaviourGraphModel model, HkObject? generator, HashSet<string> visited)
+    // Constraint: only an ancestor cycle stubs a generator, so a shared subtree keeps its payload at every occurrence.
+    private PlanNode? Resolve(BehaviourGraphModel model, HkObject? generator, HashSet<string> path)
     {
         if (generator == null) return null;
 
-        if (!visited.Add(generator.Id))
+        if (!path.Add(generator.Id))
         {
             RevisitedGenerators++;
             return new PlanNode
@@ -153,7 +160,40 @@ public sealed class GraphPlan
                 Kind = PlanNodeKind.Shared,
                 Class = generator.Class,
                 Name = generator.Str("name"),
-                Detail = "already resolved through another state",
+                Detail = "cycle: already being resolved above this point in the tree",
+            };
+        }
+
+        try
+        {
+            return ResolveOnce(model, generator, path);
+        }
+        finally
+        {
+            path.Remove(generator.Id);
+        }
+    }
+
+    // Constraint: the node budget bounds repeated expansion, so a pathological graph cannot exhaust memory.
+    private PlanNode? ResolveOnce(BehaviourGraphModel model, HkObject generator, HashSet<string> path)
+    {
+        if (++_resolvedNodes > MaximumResolvedNodes)
+        {
+            if (!_budgetNoted)
+            {
+                _budgetNoted = true;
+                NoteGap("plan-node-budget",
+                        "the plan stops expanding generator branches past its node budget");
+                if (Warnings.Count < MaximumWarnings)
+                    Warnings.Add("plan node budget reached; deeper generator branches are shared stubs");
+            }
+
+            return new PlanNode
+            {
+                Kind = PlanNodeKind.Shared,
+                Class = generator.Class,
+                Name = generator.Str("name"),
+                Detail = "plan node budget reached",
             };
         }
 
@@ -196,22 +236,22 @@ public sealed class GraphPlan
                 };
 
             case "hkbStateMachine":
-                return MachineNode(model, generator, visited);
+                return MachineNode(model, generator, path);
 
             case "hkbBlenderGenerator":
             case "hkbPoseMatchingGenerator":
-                return WrappedNode(model, generator, visited, "children");
+                return WrappedNode(model, generator, path, "children");
 
             case "hkbManualSelectorGenerator":
-                return SelectorNode(model, generator, visited);
+                return SelectorNode(model, generator, path);
 
             case "hkbLayerGenerator":
-                return WrappedNode(model, generator, visited, "layers");
+                return WrappedNode(model, generator, path, "layers");
         }
 
         if (PassThrough.TryGetValue(generator.Class, out string? field))
         {
-            var inner = Resolve(model, model.Follow(generator, field), visited);
+            var inner = Resolve(model, model.Follow(generator, field), path);
             if (inner != null) return inner;
 
             return Unmapped(generator, $"{generator.Class}.{field} was null");
@@ -220,8 +260,18 @@ public sealed class GraphPlan
         return Unmapped(generator, "no mapping for this generator class");
     }
 
-    private PlanNode MachineNode(BehaviourGraphModel model, HkObject machineObject, HashSet<string> visited)
+    private PlanNode MachineNode(BehaviourGraphModel model, HkObject machineObject, HashSet<string> path)
     {
+        if (_machinesById.TryGetValue(machineObject.Id, out int written))
+            return new PlanNode
+            {
+                Kind = PlanNodeKind.Machine,
+                Class = machineObject.Class,
+                Name = machineObject.Str("name"),
+                Machine = written,
+                Detail = $"already written as machine {written}",
+            };
+
         var machine = new PlanMachine
         {
             Name = machineObject.Str("name"),
@@ -230,6 +280,7 @@ public sealed class GraphPlan
 
         int index = Machines.Count;
         Machines.Add(machine);
+        _machinesById[machineObject.Id] = index;
 
         foreach (string stateId in machineObject.Refs("states"))
         {
@@ -249,7 +300,7 @@ public sealed class GraphPlan
             {
                 StateId = info.Int("stateId"),
                 Name = info.Str("name"),
-                Generator = Resolve(model, generator, visited),
+                Generator = Resolve(model, generator, path),
             };
             machine.States.Add(state);
 
@@ -267,7 +318,7 @@ public sealed class GraphPlan
         };
     }
 
-    private PlanNode WrappedNode(BehaviourGraphModel model, HkObject generator, HashSet<string> visited,
+    private PlanNode WrappedNode(BehaviourGraphModel model, HkObject generator, HashSet<string> path,
                                  string field)
     {
         var node = new PlanNode
@@ -280,7 +331,7 @@ public sealed class GraphPlan
         foreach (string wrapperId in generator.Refs(field))
         {
             var wrapper = model.Get(wrapperId);
-            var inner = Resolve(model, model.Follow(wrapper, "generator"), visited);
+            var inner = Resolve(model, model.Follow(wrapper, "generator"), path);
             if (inner == null) continue;
 
             if (wrapper != null && TryFloat(wrapper.Str("weight"), out float weight))
@@ -296,7 +347,7 @@ public sealed class GraphPlan
         return node;
     }
 
-    private PlanNode SelectorNode(BehaviourGraphModel model, HkObject generator, HashSet<string> visited)
+    private PlanNode SelectorNode(BehaviourGraphModel model, HkObject generator, HashSet<string> path)
     {
         var node = new PlanNode
         {
@@ -307,7 +358,7 @@ public sealed class GraphPlan
 
         foreach (string childId in generator.Refs("generators"))
         {
-            var inner = Resolve(model, model.Get(childId), visited);
+            var inner = Resolve(model, model.Get(childId), path);
             if (inner != null) node.Children.Add(inner);
         }
 

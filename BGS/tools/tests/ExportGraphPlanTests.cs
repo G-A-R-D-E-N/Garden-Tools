@@ -181,4 +181,159 @@ public sealed class ExportGraphPlanTests
 
         Assert.Equal(3, document["stats"]!["states"]!.GetValue<int>());
     }
+
+    // Invariant: a shared clip keeps its payload in every occurrence, so a consumer can build every branch.
+    [Fact]
+    public void SharedGeneratorKeepsItsPayloadInEveryOccurrence()
+    {
+        const string xml = """
+            <hkpackfile classversion="11" contentsversion="hk_2014.1.0-r1">
+                <hksection name="__data__">
+                    <hkobject class="hkbBehaviorGraph" name="#91" signature="0x0">
+                        <hkparam name="name">SharedGraph</hkparam>
+                        <hkparam name="rootGenerator">#92</hkparam>
+                    </hkobject>
+                    <hkobject class="hkbStateMachine" name="#92" signature="0x0">
+                        <hkparam name="name">Root</hkparam>
+                        <hkparam name="states" numelements="1">#93</hkparam>
+                    </hkobject>
+                    <hkobject class="hkbStateMachineStateInfo" name="#93" signature="0x0">
+                        <hkparam name="name">BlendState</hkparam>
+                        <hkparam name="stateId">0</hkparam>
+                        <hkparam name="generator">#97</hkparam>
+                    </hkobject>
+                    <hkobject class="hkbBlenderGenerator" name="#97" signature="0x0">
+                        <hkparam name="name">Blend</hkparam>
+                        <hkparam name="children" numelements="2">#98 #99</hkparam>
+                    </hkobject>
+                    <hkobject class="hkbBlenderGeneratorChild" name="#98" signature="0x0">
+                        <hkparam name="weight">0.5</hkparam>
+                        <hkparam name="generator">#105</hkparam>
+                    </hkobject>
+                    <hkobject class="hkbBlenderGeneratorChild" name="#99" signature="0x0">
+                        <hkparam name="weight">0.5</hkparam>
+                        <hkparam name="generator">#105</hkparam>
+                    </hkobject>
+                    <hkobject class="hkbClipGenerator" name="#105" signature="0x0">
+                        <hkparam name="name">SharedClip</hkparam>
+                        <hkparam name="animationName">Shared.hkx</hkparam>
+                        <hkparam name="playbackSpeed">1.25</hkparam>
+                    </hkobject>
+                </hksection>
+            </hkpackfile>
+            """;
+
+        var plan = GraphPlan.Build(BehaviourGraphModel.Parse(xml));
+        var machine = Assert.Single(plan.Machines);
+        var blend = machine.States[0].Generator!;
+
+        Assert.Equal(PlanNodeKind.Blend, blend.Kind);
+        Assert.Equal(2, blend.Children.Count);
+        Assert.All(blend.Children, child => Assert.Equal(PlanNodeKind.Clip, child.Kind));
+        Assert.All(blend.Children, child => Assert.Equal("Shared.hkx", child.AnimationName));
+        Assert.All(blend.Children, child => Assert.Equal(1.25f, child.Speed, 6));
+        Assert.Equal(0, plan.RevisitedGenerators);
+
+        var document = JsonNode.Parse(GraphExport.Json(plan, "shared.hkx"))!.AsObject();
+        var children = document["machines"]![0]!["states"]![0]!["generator"]!["children"]!.AsArray();
+        Assert.Equal(2, children.Count);
+        Assert.All(children, child => Assert.Equal("clip", child!["kind"]!.GetValue<string>()));
+    }
+
+    // Invariant: a shared state machine is written once and referenced by index, so its states are not duplicated.
+    [Fact]
+    public void SharedStateMachineIsWrittenOnceAndReferencedByIndex()
+    {
+        const string xml = """
+            <hkpackfile classversion="11" contentsversion="hk_2014.1.0-r1">
+                <hksection name="__data__">
+                    <hkobject class="hkbBehaviorGraph" name="#91" signature="0x0">
+                        <hkparam name="name">SharedMachineGraph</hkparam>
+                        <hkparam name="rootGenerator">#92</hkparam>
+                    </hkobject>
+                    <hkobject class="hkbStateMachine" name="#92" signature="0x0">
+                        <hkparam name="name">Root</hkparam>
+                        <hkparam name="states" numelements="2">#93 #94</hkparam>
+                    </hkobject>
+                    <hkobject class="hkbStateMachineStateInfo" name="#93" signature="0x0">
+                        <hkparam name="name">First</hkparam>
+                        <hkparam name="stateId">0</hkparam>
+                        <hkparam name="generator">#95</hkparam>
+                    </hkobject>
+                    <hkobject class="hkbStateMachineStateInfo" name="#94" signature="0x0">
+                        <hkparam name="name">Second</hkparam>
+                        <hkparam name="stateId">1</hkparam>
+                        <hkparam name="generator">#95</hkparam>
+                    </hkobject>
+                    <hkobject class="hkbStateMachine" name="#95" signature="0x0">
+                        <hkparam name="name">Shared</hkparam>
+                        <hkparam name="states" numelements="1">#96</hkparam>
+                    </hkobject>
+                    <hkobject class="hkbStateMachineStateInfo" name="#96" signature="0x0">
+                        <hkparam name="name">ClipState</hkparam>
+                        <hkparam name="stateId">0</hkparam>
+                        <hkparam name="generator">#106</hkparam>
+                    </hkobject>
+                    <hkobject class="hkbClipGenerator" name="#106" signature="0x0">
+                        <hkparam name="name">SharedMachineClip</hkparam>
+                        <hkparam name="animationName">Machine.hkx</hkparam>
+                    </hkobject>
+                </hksection>
+            </hkpackfile>
+            """;
+
+        var plan = GraphPlan.Build(BehaviourGraphModel.Parse(xml));
+
+        Assert.Equal(2, plan.Machines.Count);
+        Assert.Equal(0, plan.RootMachine);
+        Assert.Equal(2, plan.Machines[0].States.Count);
+        Assert.Equal("Shared", plan.Machines[1].Name);
+        Assert.Equal("Machine.hkx", Assert.Single(plan.Machines[1].States).Generator!.AnimationName);
+
+        Assert.All(plan.Machines[0].States,
+                   state => Assert.Equal(1, state.Generator!.Machine));
+        Assert.All(plan.Machines[0].States,
+                   state => Assert.Empty(state.Generator!.Children));
+        Assert.Equal(0, plan.RevisitedGenerators);
+
+        var document = JsonNode.Parse(GraphExport.Json(plan, "shared-machine.hkx"))!.AsObject();
+        var second = document["machines"]![0]!["states"]![1]!["generator"]!.AsObject();
+        Assert.Equal("machine", second["kind"]!.GetValue<string>());
+        Assert.Equal(1, second["machine"]!.GetValue<int>());
+        Assert.Empty(second["children"]!.AsArray());
+    }
+
+    // Invariant: a generator that is its own ancestor becomes one stub instead of recursing forever.
+    [Fact]
+    public void GeneratorCycleBecomesASharedStub()
+    {
+        const string xml = """
+            <hkpackfile classversion="11" contentsversion="hk_2014.1.0-r1">
+                <hksection name="__data__">
+                    <hkobject class="hkbBehaviorGraph" name="#91" signature="0x0">
+                        <hkparam name="name">CycleGraph</hkparam>
+                        <hkparam name="rootGenerator">#92</hkparam>
+                    </hkobject>
+                    <hkobject class="hkbStateMachine" name="#92" signature="0x0">
+                        <hkparam name="name">Root</hkparam>
+                        <hkparam name="states" numelements="1">#93</hkparam>
+                    </hkobject>
+                    <hkobject class="hkbStateMachineStateInfo" name="#93" signature="0x0">
+                        <hkparam name="name">Loops</hkparam>
+                        <hkparam name="stateId">0</hkparam>
+                        <hkparam name="generator">#92</hkparam>
+                    </hkobject>
+                </hksection>
+            </hkpackfile>
+            """;
+
+        var plan = GraphPlan.Build(BehaviourGraphModel.Parse(xml));
+
+        Assert.Single(plan.Machines);
+        Assert.Equal(PlanNodeKind.Shared, Assert.Single(plan.Machines[0].States).Generator!.Kind);
+        Assert.Equal(1, plan.RevisitedGenerators);
+
+        var document = JsonNode.Parse(GraphExport.Json(plan, "cycle.hkx"))!.AsObject();
+        Assert.Equal("shared", document["machines"]![0]!["states"]![0]!["generator"]!["kind"]!.GetValue<string>());
+    }
 }

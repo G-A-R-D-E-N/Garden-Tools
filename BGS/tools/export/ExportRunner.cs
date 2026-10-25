@@ -51,8 +51,7 @@ public sealed class ExportRunner
                     continue;
                 }
 
-                foreach (string found in Directory.EnumerateFiles(input, "*", SearchOption.AllDirectories))
-                    if (IsExportable(found)) files.Add((found, input));
+                Collect(input, files);
                 continue;
             }
 
@@ -83,6 +82,20 @@ public sealed class ExportRunner
         File.WriteAllText(Path.Combine(output, ExportFormats.SchemaFile), SchemaDocument.Json(), Utf8);
     }
 
+    // Invariant: a directory that cannot be walked becomes a row, so no input tree part vanishes without one.
+    private void Collect(string input, List<(string Path, string Root)> files)
+    {
+        try
+        {
+            foreach (string found in Directory.EnumerateFiles(input, "*", SearchOption.AllDirectories))
+                if (IsExportable(found)) files.Add((found, input));
+        }
+        catch (Exception failure) when (failure is not OperationCanceledException)
+        {
+            _errors.Add(new ExportErrorRow(input, "directory walk stopped: " + Detail(failure)));
+        }
+    }
+
     private void ExportOne(string path, string root, bool batch)
     {
         string source = SourceName(path, root, batch);
@@ -101,10 +114,7 @@ public sealed class ExportRunner
         catch (Exception failure) when (failure is not OperationCanceledException)
         {
             // Invariant: no exception escapes a single input, so one bad file cannot end a batch.
-            string detail = IsInputFailure(failure)
-                ? failure.Message
-                : failure.GetType().Name + ": " + failure.Message;
-            _errors.Add(new ExportErrorRow(source, detail));
+            _errors.Add(new ExportErrorRow(source, Detail(failure)));
         }
     }
 
@@ -264,6 +274,9 @@ public sealed class ExportRunner
     private static bool IsExportable(string path) =>
         path.EndsWith(".hkx", StringComparison.OrdinalIgnoreCase) ||
         path.EndsWith(".nif", StringComparison.OrdinalIgnoreCase);
+
+    private static string Detail(Exception failure) =>
+        IsInputFailure(failure) ? failure.Message : failure.GetType().Name + ": " + failure.Message;
 
     private static bool IsInputFailure(Exception failure) =>
         failure is IOException or InvalidDataException or InvalidOperationException or ArgumentException

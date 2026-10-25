@@ -106,6 +106,24 @@ public sealed class ExportCollisionTests
             .Where(path => !path.EndsWith(ExportFormats.IndexFile, StringComparison.Ordinal)));
     }
 
+    // Invariant: a batch argument that is not a directory becomes a row, so no input disappears silently.
+    [Fact]
+    public void ABatchArgumentThatIsNotADirectoryIsARow()
+    {
+        string directory = ExportTestSupport.Temp("batch-file");
+        string input = Path.Combine(directory, "not-a-directory.hkx");
+        File.WriteAllBytes(input, new byte[8]);
+
+        string output = Path.Combine(directory, "out");
+        int code = Program.Run(new[] { "--out", output, "--batch", input }, TextWriter.Null, TextWriter.Null);
+
+        Assert.Equal(2, code);
+        var row = JsonNode.Parse(Assert.Single(File.ReadAllLines(
+            Path.Combine(output, ExportFormats.ErrorFile))))!.AsObject();
+        Assert.Equal(input, row["source"]!.GetValue<string>());
+        Assert.Equal("batch input is not a directory", row["message"]!.GetValue<string>());
+    }
+
     // Invariant: a missing path must be an error row, so one bad argument cannot end a batch.
     [Fact]
     public void AMissingInputIsAnErrorRowWithoutThrowing()
