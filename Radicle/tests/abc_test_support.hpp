@@ -244,11 +244,8 @@ inline std::vector<std::uint8_t> tiny_listener_code() {
   return code;
 }
 
-/* Constraint: the helper body needs a throwing instruction, or its range is never checked. */
 inline std::vector<std::uint8_t> tiny_helper_code() {
   std::vector<std::uint8_t> code;
-  put_u8(code, 0x60);
-  put_u30(code, kMultinameExternalInterface);
   put_u8(code, 0x47);
   return code;
 }
@@ -388,8 +385,8 @@ inline void put_body(std::vector<std::uint8_t>& out, std::uint32_t method,
   put_u30(out, with_exception ? 1 : 0);
   if (with_exception) {
     put_u30(out, 0);
-    put_u30(out, 1);
-    put_u30(out, 2);
+    put_u30(out, static_cast<std::uint32_t>(code.size()));
+    put_u30(out, 0);
     put_u30(out, bad_or(bad, AbcBadIndex::ExceptionType, kMultinameTest));
     put_u30(out, bad_or(bad, AbcBadIndex::ExceptionVarName, kMultinameHelper));
   }

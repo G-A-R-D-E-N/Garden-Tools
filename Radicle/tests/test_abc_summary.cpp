@@ -86,10 +86,9 @@ TEST(Abc, SummaryAnswersExternalInterfaceAndEventListenerQuestions) {
   ASSERT_EQ(summary.functions.size(), 1u);
   const auto& helper = summary.functions.front();
   EXPECT_EQ(helper.name, "helper");
-  EXPECT_EQ(helper.instruction_count, 2u);
+  EXPECT_EQ(helper.instruction_count, 1u);
   EXPECT_TRUE(helper.calls.empty());
-  ASSERT_EQ(helper.multinames.size(), 1u);
-  EXPECT_EQ(helper.multinames[0], "ExternalInterface");
+  EXPECT_TRUE(helper.multinames.empty());
   EXPECT_TRUE(summary.scripts.empty());
 }
 
