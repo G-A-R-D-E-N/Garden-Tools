@@ -1,3 +1,4 @@
+#include "c_api_env_internal.hpp"
 #include "c_api_internal.hpp"
 #include "c_api_swf_internal.hpp"
 
