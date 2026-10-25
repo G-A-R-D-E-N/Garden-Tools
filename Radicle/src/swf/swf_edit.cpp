@@ -291,15 +291,11 @@ bool replace_placement_transform(std::uint16_t tag_code, std::span<const std::by
   return splice_matrix(tag_code, body, matrix, out);
 }
 
-std::vector<SwfInstanceEditTarget> build_instance_edit_targets(const SwfFile& file,
-                                                               std::uint32_t root_frame) {
+namespace {
+
+std::vector<SwfInstanceEditTarget> instance_targets(const SwfDisplayList& display,
+                                                    std::uint32_t root_frame) {
   std::vector<SwfInstanceEditTarget> out;
-  SwfDisplayOptions options;
-  options.record_placements = true;
-  const SwfDisplayList display = build_display_list(file, options);
-  if (display.status != SwfTimelineStatus::ok) {
-    return out;
-  }
   for (const auto& placement : display.placements) {
     if (placement.frame != root_frame) {
       continue;
@@ -317,6 +313,19 @@ std::vector<SwfInstanceEditTarget> build_instance_edit_targets(const SwfFile& fi
   return out;
 }
 
+}  // namespace
+
+std::vector<SwfInstanceEditTarget> build_instance_edit_targets(const SwfFile& file,
+                                                               std::uint32_t root_frame) {
+  SwfDisplayOptions options;
+  options.record_placements = true;
+  const SwfDisplayList display = build_display_list(file, options);
+  if (display.status != SwfTimelineStatus::ok) {
+    return {};
+  }
+  return instance_targets(display, root_frame);
+}
+
 bool apply_instance_transforms(SwfFile& file, std::uint32_t root_frame,
                                const std::vector<SwfInstanceTransformEdit>& edits,
                                SwfTransformEditResult& out) {
@@ -324,9 +333,20 @@ bool apply_instance_transforms(SwfFile& file, std::uint32_t root_frame,
   if (edits.empty()) {
     return true;
   }
-  const auto targets = build_instance_edit_targets(file, root_frame);
+  SwfDisplayOptions options;
+  options.record_placements = true;
+  const SwfDisplayList display = build_display_list(file, options);
+  if (display.status != SwfTimelineStatus::ok) {
+    out.message = "the movie timeline could not be walked";
+    return false;
+  }
+  if (display.timelines.empty() || root_frame >= display.timelines.front().frames.size()) {
+    out.message = "the root frame index is out of range";
+    return false;
+  }
+  const auto targets = instance_targets(display, root_frame);
   if (targets.empty()) {
-    out.message = "the movie has no renderable root frame";
+    out.message = "the root frame has no instances";
     return false;
   }
 
@@ -347,6 +367,11 @@ bool apply_instance_transforms(SwfFile& file, std::uint32_t root_frame,
     }
     SwfMatrix matrix;
     if (!matrix_from_transform(edit.transform, matrix)) {
+      out.message = "the transform does not fit the MATRIX fields";
+      return false;
+    }
+    std::vector<std::byte> encoded;
+    if (!encode_matrix_fields(matrix, encoded)) {
       out.message = "the transform does not fit the MATRIX fields";
       return false;
     }

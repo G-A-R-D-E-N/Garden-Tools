@@ -202,6 +202,48 @@ TEST(SwfEditTransform, EncodesTheMinimumBitWidthTheValuesNeed) {
   const auto scaled = fo4::swf::encode_matrix(transform_of(131072, 65536, 0, 0, 20, -20));
   ASSERT_EQ(scaled.size(), 8u);
   EXPECT_EQ(std::to_integer<unsigned>(scaled.front()) & 0x80u, 0x80u);
+  // Constraint: rotate and negative scale take a 17-bit field each, so 85 bits pad to eleven bytes.
+  const auto rotated = fo4::swf::encode_matrix(transform_of(-65536, 32768, 32768, -32768, 0, 0));
+  EXPECT_EQ(rotated,
+            (std::vector<std::byte>{std::byte{0xC6}, std::byte{0x00}, std::byte{0x00},
+                                    std::byte{0x80}, std::byte{0x00}, std::byte{0xC5},
+                                    std::byte{0x00}, std::byte{0x01}, std::byte{0x80},
+                                    std::byte{0x00}, std::byte{0x00}}));
+  // Constraint: a 2^15 scale does not fit 31 signed bits, so encoding must refuse it.
+  SwfTransform huge;
+  huge.scale_x = 32768.0;
+  EXPECT_TRUE(fo4::swf::encode_matrix(huge).empty());
+}
+
+TEST(SwfEditTransform, RejectsATransformThatNeedsMoreThanTheMatrixFields) {
+  const auto source = movie_of({{26, place2(3, 9, "Hat", Matrix{}, std::nullopt)}, {1, {}}});
+  auto file = open(source);
+  const auto targets = fo4::swf::build_instance_edit_targets(file, 0);
+  const auto* hat = find_target(targets, "Hat");
+  ASSERT_NE(hat, nullptr);
+
+  SwfTransform overflow;
+  overflow.scale_x = -16385.0;
+  SwfTransformEditResult result;
+  EXPECT_FALSE(fo4::swf::apply_instance_transforms(
+      file, 0, {SwfInstanceTransformEdit{hat->instance_id, overflow}}, result));
+  EXPECT_NE(result.message.find("does not fit"), std::string::npos) << result.message;
+  EXPECT_EQ(fo4::swf::write_swf(file), source);
+}
+
+TEST(SwfEditTransform, SeparatesAnEmptyFrameFromAnOutOfRangeFrame) {
+  const auto source = movie_of({{1, {}}, {1, {}}});
+  auto file = open(source);
+  const SwfInstanceTransformEdit edit{1u, SwfTransform{}};
+
+  SwfTransformEditResult empty_frame;
+  EXPECT_FALSE(fo4::swf::apply_instance_transforms(file, 0, {edit}, empty_frame));
+  EXPECT_NE(empty_frame.message.find("no instances"), std::string::npos) << empty_frame.message;
+
+  SwfTransformEditResult out_of_range;
+  EXPECT_FALSE(fo4::swf::apply_instance_transforms(file, 9, {edit}, out_of_range));
+  EXPECT_NE(out_of_range.message.find("out of range"), std::string::npos) << out_of_range.message;
+  EXPECT_EQ(fo4::swf::write_swf(file), source);
 }
 
 TEST(SwfEditTransform, RewritesTheMatrixAndLeavesEveryOtherPayloadByteIdentical) {
@@ -320,6 +362,22 @@ TEST(SwfEditTransform, EditsTwoInstancesOfOneSharedPlacementInOnePlan) {
       result))
       << result.message;
   ASSERT_EQ(result.replaced_tag_indices.size(), 1u);
+  // Constraint: both ids address one authored placement, so one write must move that placement once.
+  EXPECT_EQ(left->sprite_tag_index, right->sprite_tag_index);
+  EXPECT_EQ(left->transform_tag_index, right->transform_tag_index);
+  const auto written = fo4::swf::write_swf(file);
+  EXPECT_NE(written, source);
+  const auto reread = open(written);
+  ASSERT_EQ(reread.tags.size(), 5u);
+  ASSERT_EQ(reread.tags[0].children.size(), 3u);
+  const auto& rewritten = reread.tags[0].children[0];
+  ASSERT_TRUE(rewritten.placement.has_value());
+  ASSERT_TRUE(rewritten.placement->matrix.has_value());
+  EXPECT_EQ(rewritten.placement->matrix->translate_x, 20);
+  EXPECT_EQ(rewritten.placement->matrix->translate_y, 0);
+  // Constraint: the two referencing placements carry no authored transform, so their bytes stay.
+  EXPECT_EQ(reread.tags[1].payload, open(source).tags[1].payload);
+  EXPECT_EQ(reread.tags[2].payload, open(source).tags[2].payload);
 
   // Constraint: two different transforms for one shared placement must conflict.
   auto fresh = open(source);
@@ -372,7 +430,7 @@ TEST(SwfEditTransform, RewritesASpriteChildPlacementInsideItsDefineSprite) {
   EXPECT_EQ(*rewritten.placement->name, "child");
 }
 
-TEST(SwfEditTransform, RoundTripsAFreshMatrixThroughWriteAndReparse) {
+TEST(SwfEditTransform, WritesAFreshMatrixAndReparsesTheWrittenFile) {
   const auto source = movie_of({{26, place2(3, 9, "Hat", Matrix{98304, 32768, 16384, -8192, 250, -60}, std::nullopt)},
                                 {1, {}}});
   auto file = open(source);
@@ -402,8 +460,7 @@ TEST(SwfEditTransform, RoundTripsAFreshMatrixThroughWriteAndReparse) {
 }
 
 TEST(SwfEditTransform, EditsTheEarlierPlacementThatAuthoredTheVisibleMatrix) {
-  // Frame 1 re-authors the matrix on a Move, so the edit must rewrite that Move rather than the creating
-  // placement, and the name must still come from the creation.
+  // Frame 1 re-authors the matrix on a Move, so the edit must rewrite that Move, not the creation.
   const auto source = movie_of({{26, place2(3, 9, "Hat", Matrix{}, std::nullopt)},
                                 {1, {}},
                                 {26, move2_matrix(3, Matrix{65536, 65536, 0, 0, 100, 0})},
@@ -444,8 +501,7 @@ TEST(SwfEditTransform, EditsTheEarlierPlacementThatAuthoredTheVisibleMatrix) {
 }
 
 TEST(SwfEditTransform, RewritesAVersionOnePlacementMatrix) {
-  // PlaceObject v1 has no flag byte and a CXFORM after the MATRIX, so the splice starts at offset four and
-  // must leave the colour transform intact.
+  // Constraint: a v1 body has no flag byte and a CXFORM after the MATRIX, so the splice must keep it.
   const auto source = movie_of({{4, place1(9, 3, Matrix{})}, {1, {}}});
   auto file = open(source);
 
