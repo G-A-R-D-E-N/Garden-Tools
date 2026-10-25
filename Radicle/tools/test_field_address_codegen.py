@@ -186,8 +186,12 @@ class SchemaCodegenTests(unittest.TestCase):
         self.rejects("smaller than the field end", scalar(payload_size=7))
         self.rejects("positive integer", scalar(payload_size=0))
 
-    def test_repeated_and_stride_are_exclusive(self):
-        self.rejects("mutually exclusive", scalar(repeated=True, stride=8))
+    def test_repeated_strided_rows_take_every_matching_subrecord(self):
+        field = self.load(scalar(repeated=True, stride=8))[0]
+        self.assertTrue(field["address"]["repeated"])
+        self.assertEqual(field["address"]["stride"], 8)
+        self.assertIn("FieldAddress{true, 8, 0, FieldDiscriminator{}}", schema_codegen.render([field]))
+        self.rejects("stride requires an offset", scalar(repeated=True, offset=None, stride=8))
         self.assertTrue(self.load(scalar(offset=None, repeated=True))[0]["address"]["repeated"])
 
     def test_stride_rules(self):
@@ -422,8 +426,9 @@ class SchemaCodegenTests(unittest.TestCase):
     def test_formlink_fields_share_the_rules(self):
         rows, _nested, fields, _unions = self.link(link(repeated=True))[0:4]
         self.assertTrue(fields[0]["address"]["repeated"])
-        with self.assertRaisesRegex(ValueError, "mutually exclusive"):
-            self.link(link(repeated=True, stride=8))
+        strided = self.link(link(repeated=True, stride=8))[2][0]
+        self.assertTrue(strided["address"]["repeated"])
+        self.assertEqual(strided["address"]["stride"], 8)
         with self.assertRaisesRegex(ValueError, "inside one stride element"):
             self.link(link(offset=6, stride=8))
         with self.assertRaisesRegex(ValueError, "when.equals"):

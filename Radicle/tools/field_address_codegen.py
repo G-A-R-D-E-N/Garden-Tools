@@ -121,8 +121,7 @@ def parse_address(row, path, subrecord, has_offset, width):
             raise ValueError(f"array_offset requires stride: {path!r}")
         if not is_count(array_offset, 0):
             raise ValueError(f"array_offset must be a non-negative integer: {path!r}")
-    if repeated and stride:
-        raise ValueError(f"repeated and stride are mutually exclusive: {path!r}")
+    # Constraint: repeated with stride means every matching subrecord contributes its own strided elements, which is how a struct array that repeats inside one record (RACE TTEC) is addressed.
     if stride:
         if not has_offset:
             raise ValueError(f"stride requires an offset: {path!r}")

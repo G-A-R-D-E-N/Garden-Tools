@@ -10016,7 +10016,29 @@
         {"path": "RACE\\AttackEvent", "label": "Attack event", "kind": "string", "subrecord": "ATKE", "repeated": true, "insertion": "existing_only"},
         {"path": "RACE\\AttackDescription", "label": "Attack description", "kind": "string", "subrecord": "ATKT", "repeated": true, "insertion": "existing_only"},
         {"path": "RACE\\ModelPath", "label": "Model path", "kind": "string", "subrecord": "MODL", "repeated": true, "insertion": "existing_only"},
-        {"path": "RACE\\MorphPresetCount", "label": "Morph preset count", "kind": "scalar", "subrecord": "MPPC", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "repeated": true, "insertion": "existing_only"}
+        {"path": "RACE\\MorphPresetCount", "label": "Morph preset count", "kind": "scalar", "subrecord": "MPPC", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "repeated": true, "insertion": "existing_only"},
+        {"kind": "subrecord_group", "path": "RACE\\TintLayerOption", "label": "Tint layer option", "insertion": "existing_only", "successors": ["TTGE"], "members": [
+          {"subrecord": "TETI", "required": true, "repeatable": false, "payload_size": 4, "fields": [
+            {"path": "RACE\\TintLayerSlot", "label": "Tint layer slot", "kind": "scalar", "offset": 0, "storage": "u16", "presentation": "enum", "names": [{"value": 0, "name": "Forehead Mask"}, {"value": 1, "name": "Eyes Mask"}, {"value": 2, "name": "Nose Mask"}, {"value": 3, "name": "Ears Mask"}, {"value": 4, "name": "Cheeks Mask"}, {"value": 5, "name": "Mouth Mask"}, {"value": 6, "name": "Neck Mask"}, {"value": 7, "name": "Lip Color"}, {"value": 8, "name": "Cheek Color"}, {"value": 9, "name": "Eyeliner"}, {"value": 10, "name": "Eye Socket Upper"}, {"value": 11, "name": "Eye Socket Lower"}, {"value": 12, "name": "Skin Tone"}, {"value": 13, "name": "Paint"}, {"value": 14, "name": "Laugh Lines"}, {"value": 15, "name": "Cheek Color Lower"}, {"value": 16, "name": "Nose"}, {"value": 17, "name": "Chin"}, {"value": 18, "name": "Neck"}, {"value": 19, "name": "Forehead"}, {"value": 20, "name": "Dirt"}, {"value": 21, "name": "Scars"}, {"value": 22, "name": "Face Detail"}, {"value": 23, "name": "Brows"}, {"value": 24, "name": "Wrinkles"}, {"value": 25, "name": "Beards"}], "minimum": 0, "maximum": 25, "insertion": "existing_only"},
+            {"path": "RACE\\TintLayerIndex", "label": "Tint layer index", "kind": "scalar", "offset": 2, "storage": "u16", "presentation": "identity", "minimum": 0, "maximum": 65535, "insertion": "existing_only"}
+          ]},
+          {"subrecord": "TTGP", "required": true, "repeatable": false, "payload_size": 0, "localized": true, "skippable": true, "default": "00"},
+          {"subrecord": "TTEF", "required": false, "repeatable": false, "payload_size": 2},
+          {"subrecord": "CTDA", "required": false, "repeatable": true, "payload_size": 32},
+          {"subrecord": "TTET", "required": false, "repeatable": true, "payload_size": 0},
+          {"subrecord": "TTEB", "required": false, "repeatable": false, "payload_size": 4},
+          {"subrecord": "TTEC", "required": false, "repeatable": true, "payload_size": 0},
+          {"subrecord": "TTED", "required": false, "repeatable": false, "payload_size": 4}
+        ]},
+        {"path": "RACE\\TintLayerName", "label": "Tint layer name", "kind": "string", "subrecord": "TTGP", "localized": true, "repeated": true, "insertion": "existing_only"},
+        {"path": "RACE\\TintLayerFlags", "label": "Tint layer flags", "kind": "scalar", "subrecord": "TTEF", "offset": 0, "storage": "u16", "presentation": "flags", "names": [{"bit": 0, "name": "On/Off only"}, {"bit": 1, "name": "Chargen Detail"}, {"bit": 2, "name": "Takes Skin Tone"}], "minimum": 0, "maximum": 65535, "repeated": true, "payload_size": 2, "insertion": "existing_only"},
+        {"path": "RACE\\TintLayerTexture", "label": "Tint layer texture", "kind": "string", "subrecord": "TTET", "repeated": true, "insertion": "existing_only"},
+        {"path": "RACE\\TintLayerBlendOperation", "label": "Tint layer blend operation", "kind": "scalar", "subrecord": "TTEB", "offset": 0, "storage": "u32", "presentation": "enum", "names": [{"value": 0, "name": "Default"}, {"value": 1, "name": "Multiply"}, {"value": 2, "name": "Overlay"}, {"value": 3, "name": "Soft Light"}, {"value": 4, "name": "Hard Light"}], "minimum": 0, "maximum": 4, "repeated": true, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "RACE\\TintTemplateColorAlpha", "label": "Tint template color alpha", "kind": "scalar", "subrecord": "TTEC", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "stride": 14, "repeated": true, "insertion": "existing_only"},
+        {"path": "RACE\\TintTemplateColorTemplateIndex", "label": "Tint template color template index", "kind": "scalar", "subrecord": "TTEC", "offset": 8, "storage": "u16", "presentation": "identity", "minimum": 0, "maximum": 65535, "stride": 14, "repeated": true, "insertion": "existing_only"},
+        {"path": "RACE\\TintTemplateColorBlendOperation", "label": "Tint template color blend operation", "kind": "scalar", "subrecord": "TTEC", "offset": 10, "storage": "u32", "presentation": "enum", "names": [{"value": 0, "name": "Default"}, {"value": 1, "name": "Multiply"}, {"value": 2, "name": "Overlay"}, {"value": 3, "name": "Soft Light"}, {"value": 4, "name": "Hard Light"}], "minimum": 0, "maximum": 4, "stride": 14, "repeated": true, "insertion": "existing_only"},
+        {"path": "RACE\\TintLayerDefault", "label": "Tint layer default", "kind": "scalar", "subrecord": "TTED", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "RACE\\TintLayerCategoryIndex", "label": "Tint layer category index", "kind": "scalar", "subrecord": "TTGE", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "repeated": true, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {
@@ -10482,6 +10504,17 @@
           "nullable": true,
           "stride": 4,
           "min_form_version": 78,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\TintTemplateColor",
+          "label": "Tint template color",
+          "subrecord": "TTEC",
+          "offset": 0,
+          "stride": 14,
+          "repeated": true,
+          "targets": ["CLFM"],
+          "nullable": false,
           "insertion": "existing_only"
         }
       ],
