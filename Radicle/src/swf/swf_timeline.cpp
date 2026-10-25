@@ -209,9 +209,11 @@ bool build_timeline(const std::vector<SwfTag>& tags, std::uint16_t character_id,
       }
       case tag::kRemoveObject:
       case tag::kRemoveObject2: {
-        if (tag.removal) {
-          active.erase(tag.removal->depth);
+        if (!tag.removal) {
+          message = "removal payload did not decode";
+          return false;
         }
+        active.erase(tag.removal->depth);
         break;
       }
       case tag::kPlaceObject:

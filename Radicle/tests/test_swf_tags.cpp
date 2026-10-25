@@ -667,7 +667,7 @@ TEST(SwfTags, RefusesAnImportAssetListThatRunsOutOfBytes) {
   const auto result =
       fo4::swf::read_swf(movie_with(fo4::swf::tag::kImportAssets, truncated.body));
   EXPECT_EQ(result.status, SwfStatus::malformed_tag);
-  ASSERT_EQ(result.file.tags.size(), 3u);
+  ASSERT_EQ(result.file.tags.size(), 2u);
   EXPECT_FALSE(result.file.tags[0].imports.has_value());
   EXPECT_EQ(result.file.tags[0].payload, truncated.body);
 

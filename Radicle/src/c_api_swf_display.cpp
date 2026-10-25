@@ -1,5 +1,6 @@
 #include "fo4/c_api_swf.h"
 
+#include "c_api_env_internal.hpp"
 #include "c_api_internal.hpp"
 #include "c_api_swf_internal.hpp"
 #include "fo4/swf/swf_display.hpp"

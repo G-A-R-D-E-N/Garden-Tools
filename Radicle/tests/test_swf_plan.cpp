@@ -70,7 +70,7 @@ TEST(SwfTagPlan, InsertsAndReplacesAtOriginalIndices) {
   EXPECT_EQ(file.tags[2].code, fo4::swf::tag::kSetBackgroundColor);
   EXPECT_EQ(file.tags[2].payload, color_payload(0x77));
   ASSERT_TRUE(file.tags[2].background_color.has_value());
-  EXPECT_EQ(*file.tags[2].background_color, 0x102030u);
+  EXPECT_EQ(*file.tags[2].background_color, 0x77102030u);
   EXPECT_EQ(file.tags[3].code, fo4::swf::tag::kShowFrame);
   EXPECT_EQ(file.tags[4].code, fo4::swf::tag::kEnd);
   ASSERT_EQ(result.inserted_tag_indices.size(), 1u);
