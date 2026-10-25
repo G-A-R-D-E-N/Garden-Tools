@@ -172,17 +172,11 @@ public sealed class SwfDocument : IDisposable
         if (tag.Code != 43) throw new InvalidOperationException("the tag is not a frame label");
         return Apply(new SwfPlanSpec().Remove(tagIndex));
     }
-    // Constraint: the save must back the on-disk asset up before the first byte of the new file lands.
+    // Constraint: the save goes through the existing WriteService asset path, which backs the asset up first.
     public string Save(string? targetPath = null)
     {
         var destination = targetPath ?? Path ?? throw new InvalidOperationException("the document has no path to save to");
-        if (System.IO.File.Exists(destination))
-        {
-            var backup = destination + ".bak";
-            System.IO.File.Copy(destination, backup, overwrite: true);
-        }
-        System.IO.File.WriteAllBytes(destination, WriteBytes());
-        return destination;
+        return WriteService.SaveAsset(destination, WriteBytes());
     }
 
     public void Dispose()

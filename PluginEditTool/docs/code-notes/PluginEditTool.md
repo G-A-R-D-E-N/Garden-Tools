@@ -133,3 +133,8 @@ Open checks for a loose file first; otherwise it asks the existing PET `AssetRes
 opens the materialized bytes, so a BA2-resolved Interface movie enters the same document/history path. A path that is
 neither loose nor resolvable comes back as a JSON error. Saving a resolved document back into its archive is not wired
 yet because PET has no generic asset-write path; the document save writes a target path with a `.bak`.
+## FO4RecordEditor.Core/Services/WriteService.Asset.cs:WriteService.SaveAsset (SWF document save)
+
+The SWF document save now goes through the core `WriteService` static partial: `SaveAsset(path, bytes)` copies the
+existing file to `<path>.bak` and writes the new bytes, matching the backup-first rule the other write paths follow.
+`SwfDocument.Save` delegates to it, so the editor's Save and a future host asset-write hook share one implementation.
