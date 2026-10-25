@@ -104,4 +104,69 @@ public sealed class VmadAuthoringTests
         Assert.Throws<ArgumentException>(() => plugin.SetQuestVmadFragment(key, 10, 0, "QF_Test", "Fragment\0_10"));
         Assert.Equal(bytes, plugin.ToBytes());
     }
+
+    private static byte[] SceneVmad()
+    {
+        using var stream = new MemoryStream();
+        using var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true);
+        void Name(string text) { writer.Write((ushort)text.Length); writer.Write(Encoding.ASCII.GetBytes(text)); }
+        writer.Write((short)6); writer.Write((short)2); writer.Write((ushort)1);
+        Name("Script"); writer.Write((byte)3); writer.Write((ushort)0);
+        writer.Write((byte)3);
+        writer.Write((byte)0);
+        Name("PF_Frag"); writer.Write((byte)0); writer.Write((ushort)0);
+        writer.Write((ushort)0);
+        writer.Flush();
+        return stream.ToArray();
+    }
+
+    [Fact]
+    public void StructureEditsAddScriptsPropertiesAndFragments()
+    {
+        using var temp = new TempDirectory();
+        var bytes = PluginWriter.Build(0, Array.Empty<string>(),
+            PluginWriter.Top("REFR", new Rec("REFR", 0x800, new[] { ("ZZZZ", new byte[] { 7, 8 }) })),
+            PluginWriter.Top("SCEN", new Rec("SCEN", 0x801, new[] { ("VMAD", SceneVmad()) })));
+        using var plugin = PluginFile.Read(temp.Write("Vmad.esp", bytes));
+        var key = new FormKey("Vmad.esp", 0x800);
+        var scene = new FormKey("Vmad.esp", 0x801);
+        plugin.AddVmad(key);
+        Assert.Throws<RadicleException>(() => plugin.AddVmad(key));
+        Assert.Equal(0, plugin.AddVmadScript(key, 0, "PF_Test", 1));
+        var beforeRefusal = plugin.ToBytes();
+        Assert.Throws<RadicleException>(() => plugin.AddVmadScript(key, 1, "pf_test", 1));
+        Assert.Throws<RadicleException>(() => plugin.AddVmadScript(key, 9, "Other"));
+        Assert.Throws<ArgumentException>(() => plugin.AddVmadScript(key, 1, ""));
+        Assert.Throws<ArgumentNullException>(() => plugin.AddVmadScript(key, 1, null!));
+        Assert.Equal(beforeRefusal, plugin.ToBytes());
+        var types = new byte[] { 1, 2, 3, 4, 5, 7, 11, 12, 13, 14, 15, 17 };
+        for (var index = 0; index < types.Length; ++index)
+        {
+            Assert.Equal(index, plugin.AddVmadProperty(key, 0, index, "P" + types[index], types[index]));
+        }
+        Assert.True(plugin.SetVmadInt(key, 0, 2, -7));
+        Assert.True(plugin.SetVmadInt(key, 0, 8, 7));
+        Assert.Throws<RadicleException>(() => plugin.AddVmadProperty(key, 0, types.Length, "Bad", 16));
+        Assert.Throws<RadicleException>(() => plugin.RemoveVmadProperty(key, 0, 40));
+        var path = Path.Combine(temp.Path, "Saved.esp");
+        plugin.Write(path);
+        using (var env = RadicleEnvironment.Load(new[] { path }))
+        {
+            var record = env.Winner(new FormKey("Saved.esp", 0x800))!.Value;
+            var script = Assert.Single(env.PlacedReference(record).Scripts);
+            Assert.Equal("PF_Test", script.Name);
+            Assert.Equal((byte)1, script.Flags);
+            Assert.Equal(-7, script.Properties[2].Integer);
+            Assert.Equal(1u, script.Properties[8].ElementCount);
+        }
+        plugin.AddVmadFragment(scene, 0, "PF_Frag", "Fragment_0");
+        Assert.Throws<RadicleException>(() => plugin.AddVmadFragment(scene, 0, "PF_Frag", "Fragment_0"));
+        Assert.Throws<RadicleException>(() => plugin.AddVmadFragment(scene, 4, "PF_Frag", "Fragment_4"));
+        plugin.RemoveVmadFragment(scene, 0);
+        Assert.Throws<RadicleException>(() => plugin.RemoveVmadFragment(scene, 0));
+        Assert.Throws<RadicleException>(() => plugin.AddVmadFragment(key, 0, "PF_Frag", "Fragment_0"));
+        plugin.RemoveVmadProperty(key, 0, 8);
+        plugin.RemoveVmadScript(key, 0);
+        Assert.Throws<RadicleException>(() => plugin.RemoveVmadScript(key, 0));
+    }
 }

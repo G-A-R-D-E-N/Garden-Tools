@@ -315,6 +315,73 @@ public sealed unsafe class PluginFile : IDisposable
     public bool RemoveQuestVmadFragment(FormKey record, ushort stage, int stageIndex) =>
         Edit(record, (plugin, s, key) => RadicleNative.PluginRemoveQuestVmadFragment(plugin, key, stage, stageIndex));
 
+    public void AddVmad(FormKey record)
+    {
+        using var use = Use();
+        using var strings = new NativeStrings();
+        Call.Check(RadicleNative.PluginAddVmad(use.Pointer, strings.Key(record)));
+    }
+
+    public int AddVmadScript(FormKey record, int index, string scriptName, byte flags = 0)
+    {
+        ArgumentNullException.ThrowIfNull(scriptName);
+        if (scriptName.Contains('\0')) throw new ArgumentException("VMAD script name cannot hold an embedded NUL through this API.", nameof(scriptName));
+        var at = Index(index);
+        using var use = Use();
+        using var strings = new NativeStrings();
+        nuint added;
+        Call.Check(RadicleNative.PluginAddVmadScript(use.Pointer, strings.Key(record), at, scriptName, flags, &added));
+        return (int)added;
+    }
+
+    public void RemoveVmadScript(FormKey record, int scriptIndex)
+    {
+        var at = Index(scriptIndex);
+        using var use = Use();
+        using var strings = new NativeStrings();
+        Call.Check(RadicleNative.PluginRemoveVmadScript(use.Pointer, strings.Key(record), at));
+    }
+
+    public int AddVmadProperty(FormKey record, int scriptIndex, int index, string name, byte type, byte flags = 0)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        if (name.Contains('\0')) throw new ArgumentException("VMAD property name cannot hold an embedded NUL through this API.", nameof(name));
+        var script = Index(scriptIndex);
+        var at = Index(index);
+        using var use = Use();
+        using var strings = new NativeStrings();
+        nuint added;
+        Call.Check(RadicleNative.PluginAddVmadProperty(use.Pointer, strings.Key(record), script, at, name, type, flags, &added));
+        return (int)added;
+    }
+
+    public void RemoveVmadProperty(FormKey record, int scriptIndex, int propertyIndex)
+    {
+        var script = Index(scriptIndex);
+        var property = Index(propertyIndex);
+        using var use = Use();
+        using var strings = new NativeStrings();
+        Call.Check(RadicleNative.PluginRemoveVmadProperty(use.Pointer, strings.Key(record), script, property));
+    }
+
+    public void AddVmadFragment(FormKey record, uint fragmentKey, string script, string function)
+    {
+        ArgumentNullException.ThrowIfNull(script);
+        ArgumentNullException.ThrowIfNull(function);
+        if (script.Contains('\0')) throw new ArgumentException("VMAD fragment script name cannot hold an embedded NUL through this API.", nameof(script));
+        if (function.Contains('\0')) throw new ArgumentException("VMAD fragment function name cannot hold an embedded NUL through this API.", nameof(function));
+        using var use = Use();
+        using var strings = new NativeStrings();
+        Call.Check(RadicleNative.PluginAddVmadFragment(use.Pointer, strings.Key(record), fragmentKey, script, function));
+    }
+
+    public void RemoveVmadFragment(FormKey record, uint fragmentKey)
+    {
+        using var use = Use();
+        using var strings = new NativeStrings();
+        Call.Check(RadicleNative.PluginRemoveVmadFragment(use.Pointer, strings.Key(record), fragmentKey));
+    }
+
     public bool SetScalar(FormKey record, string path, string value, int index = 0)
     {
         ArgumentNullException.ThrowIfNull(path);

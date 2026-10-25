@@ -470,3 +470,23 @@ TEST(VmadStructure, StructureEditsPreserveTheQuestFragmentTail) {
   EXPECT_EQ(now.size(), 6u + tail.size());
   EXPECT_EQ(slice(now, 6, now.size()), tail);
 }
+
+TEST(VmadStructure, DuplicateScriptNameIsRefusedCaseInsensitively) {
+  auto plugin = read_plugin(fixture::plugin_bytes(), "Vmad.esp");
+  const auto before = write_plugin(plugin);
+  EXPECT_EQ(add_vmad_script(plugin, fixture::key(), 1, "Script", 0),
+            VmadStructureMutationStatus::already_present);
+  EXPECT_EQ(add_vmad_script(plugin, fixture::key(), 1, "script", 1),
+            VmadStructureMutationStatus::already_present);
+  EXPECT_EQ(write_plugin(plugin), before);
+  EXPECT_THROW(static_cast<void>(add_vmad_script(plugin, fixture::key(), 1, "", 0)),
+               schema::ScalarError);
+  EXPECT_EQ(write_plugin(plugin), before);
+  EXPECT_EQ(add_vmad_script(plugin, fixture::key(), 1, "Other", 0),
+            VmadStructureMutationStatus::updated);
+  auto reparsed = read_plugin(write_plugin(plugin), "Vmad.esp");
+  const auto scripts = read_vmad_scripts(fixture::subrecord(reparsed).data);
+  ASSERT_EQ(scripts.scripts.size(), 2u);
+  EXPECT_EQ(scripts.scripts[0].name, "Script");
+  EXPECT_EQ(scripts.scripts[1].name, "Other");
+}

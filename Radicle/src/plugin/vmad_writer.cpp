@@ -3,6 +3,7 @@
 #include "record_edit.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstddef>
 #include <cstring>
@@ -493,8 +494,20 @@ VmadStructureMutationStatus add_vmad_script(Plugin& plugin, const FormKey& recor
   VmadEdit edit;
   const auto lookup = load_vmad(plugin, record_key, edit);
   if (lookup != VmadLookup::ok) return absent_status(lookup);
+  if (name.empty()) throw schema::ScalarError("VMAD script name is required");
   if (index > edit.scripts.scripts.size()) {
     return VmadStructureMutationStatus::index_out_of_range;
+  }
+  // Constraint: Papyrus script identifiers compare case-insensitively, so a second entry for one script is refused.
+  const auto same_name = [](std::string_view left, std::string_view right) {
+    return left.size() == right.size() &&
+           std::equal(left.begin(), left.end(), right.begin(), [](char a, char b) {
+             return std::tolower(static_cast<unsigned char>(a)) ==
+                    std::tolower(static_cast<unsigned char>(b));
+           });
+  };
+  for (const auto& script : edit.scripts.scripts) {
+    if (same_name(script.name, name)) return VmadStructureMutationStatus::already_present;
   }
   if (edit.scripts.scripts.size() >= std::numeric_limits<std::uint16_t>::max()) {
     throw schema::ScalarError("the VMAD script list is full");

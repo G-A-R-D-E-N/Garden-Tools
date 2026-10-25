@@ -47,7 +47,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- | --- | ---: | --- |
 | AACT | 6970 | 5 | 1 | 1 | - | 1 | yes | - | - | - | 1 | L4 |
 | ACHR | 4483 | 28 | 1 | 21 | 1 | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
-| ACTI | 5611 | 29 | 3 | 14 | - | 2 | yes | yes | environment/base_records | yes | 1 | L4 |
+| ACTI | 5611 | 29 | 3 | 14 | - | 2 | yes | yes | environment/base_records | yes | 2 | L4 |
 | ADDN | 7796 | 16 | 1 | 3 | - | - | yes | - | - | - | 1 | L4 |
 | AECH | 12206 | 12 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | ALCH | 5691 | 29 | 5 | 11 | - | 3 | yes | yes | - | yes | 1 | L4 |

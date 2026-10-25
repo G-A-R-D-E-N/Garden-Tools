@@ -5,6 +5,7 @@
 #include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <array>
 #include <cstdlib>
 #include <filesystem>
@@ -109,6 +110,84 @@ TEST_P(VmadWriterOfficial, PropertyOrderAndCappedMutationPreserveOtherRecords) {
   RecordProperty("vmad_records_checked", checked);
   RecordProperty("vmad_opaque_preserved", opaque);
   RecordProperty("records_mutated", changed.size());
+}
+
+TEST(VmadWriterOfficial, AddsAScriptToAVanillaActiAndQuestOverrideAndRereads) {
+  const char* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) GTEST_SKIP() << "set FO4_DATA_DIR for read-only official coverage";
+  record_game_build(detect_game_build(dir));
+  const auto path = std::filesystem::path(dir) / "Fallout4.esm";
+  ASSERT_TRUE(std::filesystem::exists(path));
+  auto plugin = fo4::read_plugin_file(path);
+  const auto has_vmad = [](const fo4::Record& record) {
+    return std::any_of(record.subrecords.begin(), record.subrecords.end(),
+                       [](const fo4::Subrecord& sub) { return sub.signature.to_string() == "VMAD"; });
+  };
+  const auto complete_vmad = [](const fo4::Record& record, fo4::Signature signature) {
+    for (const auto& sub : record.subrecords) {
+      if (sub.signature.to_string() == "VMAD") {
+        return fo4::vmad_coverage(sub.data, signature).complete();
+      }
+    }
+    return false;
+  };
+  const auto acti_signature = fo4::Signature::from_string("ACTI");
+  const fo4::Record* acti = nullptr;
+  const fo4::Record* quest = nullptr;
+  fo4::visit_records(plugin, [&](fo4::Record& record) {
+    if (acti == nullptr && record.header.signature == acti_signature && !has_vmad(record)) {
+      acti = &record;
+    }
+    if (quest == nullptr && record.header.signature == fo4::sig_qust &&
+        complete_vmad(record, fo4::sig_qust)) {
+      quest = &record;
+    }
+  });
+  ASSERT_NE(acti, nullptr);
+  ASSERT_NE(quest, nullptr);
+  struct Target {
+    const fo4::Record* record;
+    const char* script;
+    bool needs_vmad;
+  };
+  const Target targets[] = {{acti, "RadicleCAbiActi", true}, {quest, "RadicleCAbiQuest", false}};
+  for (const auto& target : targets) {
+    const auto key = target.record->form_key;
+    std::size_t index = 0;
+    if (target.needs_vmad) {
+      ASSERT_EQ(fo4::add_vmad(plugin, key), fo4::VmadStructureMutationStatus::updated);
+    } else {
+      for (const auto& sub : target.record->subrecords) {
+        if (sub.signature.to_string() != "VMAD") continue;
+        index = fo4::read_vmad_scripts(sub.data).scripts.size();
+      }
+    }
+    ASSERT_EQ(fo4::add_vmad_script(plugin, key, index, target.script, 1),
+              fo4::VmadStructureMutationStatus::updated);
+  }
+  const auto saved = fo4::write_plugin(plugin);
+  auto reparsed = fo4::read_plugin(saved, "Fallout4.esm");
+  for (const auto& target : targets) {
+    const auto* after = fo4::find_record(reparsed, target.record->form_key);
+    ASSERT_NE(after, nullptr);
+    const fo4::Subrecord* vmad = nullptr;
+    for (const auto& sub : after->subrecords) {
+      if (sub.signature.to_string() == "VMAD") vmad = &sub;
+    }
+    ASSERT_NE(vmad, nullptr);
+    const auto scripts = fo4::read_vmad_scripts(vmad->data);
+    EXPECT_TRUE(std::any_of(scripts.scripts.begin(), scripts.scripts.end(),
+                            [&](const fo4::VmadScript& script) { return script.name == target.script; }));
+    EXPECT_EQ(after->subrecords.size(), target.record->subrecords.size() + (target.needs_vmad ? 1 : 0));
+    std::size_t other = 0;
+    for (const auto& sub : after->subrecords) {
+      if (sub.signature.to_string() == "VMAD") continue;
+      ASSERT_LT(other, target.record->subrecords.size());
+      EXPECT_EQ(sub.signature, target.record->subrecords[other].signature);
+      EXPECT_EQ(sub.data, target.record->subrecords[other].data);
+      ++other;
+    }
+  }
 }
 
 INSTANTIATE_TEST_SUITE_P(Official, VmadWriterOfficial, ::testing::Values(

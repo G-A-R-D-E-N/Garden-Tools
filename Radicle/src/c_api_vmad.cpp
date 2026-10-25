@@ -66,6 +66,121 @@ radicle_status fragment_edit(radicle_plugin* plugin, radicle_form_key key, Mutat
   });
 }
 
+radicle_status structure_status(fo4::VmadStructureMutationStatus status, const char* target) {
+  const auto message = [&](const char* tail) { return std::string(target) + tail; };
+  switch (status) {
+    case fo4::VmadStructureMutationStatus::updated:
+    case fo4::VmadStructureMutationStatus::unchanged:
+      return RADICLE_STATUS_OK;
+    case fo4::VmadStructureMutationStatus::already_present: {
+      const auto text = message(" is already present and a second copy is refused");
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, text.c_str());
+    }
+    case fo4::VmadStructureMutationStatus::record_missing:
+      return fail(RADICLE_STATUS_NOT_FOUND, "plugin has no such record");
+    case fo4::VmadStructureMutationStatus::subrecord_missing:
+      return fail(RADICLE_STATUS_NOT_FOUND,
+                  "record has no VMAD subrecord; add one before editing its structure");
+    case fo4::VmadStructureMutationStatus::binding_missing: {
+      const auto text = message(" binding is absent from the VMAD");
+      return fail(RADICLE_STATUS_NOT_FOUND, text.c_str());
+    }
+    case fo4::VmadStructureMutationStatus::index_out_of_range: {
+      const auto text = message(" index is out of range");
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, text.c_str());
+    }
+    case fo4::VmadStructureMutationStatus::not_authorable: {
+      const auto text = message(" structure edits are not authorable on this record type");
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, text.c_str());
+    }
+  }
+  return fail(RADICLE_STATUS_INTERNAL_ERROR, "unknown VMAD structure status");
+}
+
+template <class Mutate>
+radicle_status structure_edit(radicle_plugin* plugin, radicle_form_key key, const char* target,
+                              Mutate mutate) {
+  clear_error();
+  const auto record_key = to_form_key(key);
+  if (plugin == nullptr || !record_key) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin and a valid record key are required");
+  }
+  return guarded("unknown exception while editing the VMAD structure", [&] {
+    try {
+      return structure_status(mutate(*record_key), target);
+    } catch (const fo4::schema::ScalarError& error) {
+      return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
+    } catch (const fo4::FormIdError& error) {
+      return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
+    }
+  });
+}
+
+void require_name(const char* value, const char* what) {
+  if (value == nullptr || value[0] == '\0') {
+    throw fo4::schema::ScalarError(std::string(what) + " is required");
+  }
+  if (!fo4::text::is_valid_utf8(value)) {
+    throw fo4::schema::ScalarError(std::string(what) + " must be valid UTF-8");
+  }
+}
+
+fo4::VmadProperty default_property(const char* name, std::uint8_t type, std::uint8_t flags) {
+  require_name(name, "VMAD property name");
+  fo4::VmadProperty property;
+  property.name = name;
+  property.type = type;
+  property.flags = flags;
+  switch (type) {
+    case 1:
+      property.object = fo4::RawFormId{0u};
+      property.alias = -1;
+      return property;
+    case 2:
+      property.text = std::string{};
+      return property;
+    case 3:
+      property.integer = std::int32_t{0};
+      return property;
+    case 4:
+      property.real = 0.0f;
+      return property;
+    case 5:
+      property.boolean = false;
+      return property;
+    case 7:
+      property.struct_elements = std::vector<fo4::VmadStruct>{fo4::VmadStruct{}};
+      return property;
+    case 11:
+      property.element_count = 1u;
+      property.object_elements = std::vector<fo4::VmadObjectElement>{{fo4::RawFormId{0u}, -1}};
+      return property;
+    case 12:
+      property.element_count = 1u;
+      property.text_elements = std::vector<std::string>{std::string{}};
+      return property;
+    case 13:
+      property.element_count = 1u;
+      property.integer_elements = std::vector<std::int32_t>{std::int32_t{0}};
+      return property;
+    case 14:
+      property.element_count = 1u;
+      property.real_elements = std::vector<float>{0.0f};
+      return property;
+    case 15:
+      property.element_count = 1u;
+      property.boolean_elements = std::vector<bool>{false};
+      return property;
+    case 17:
+      property.element_count = 1u;
+      property.struct_elements = std::vector<fo4::VmadStruct>{fo4::VmadStruct{}};
+      return property;
+    default:
+      throw fo4::schema::ScalarError(
+          "VMAD property type is not authorable; 0 and 16 have no fixed value layout");
+  }
+}
+
 }
 
 extern "C" {
@@ -127,6 +242,72 @@ radicle_status radicle_plugin_remove_quest_vmad_fragment(radicle_plugin* plugin,
                                                          uint16_t stage, int32_t stage_index) {
   return fragment_edit(plugin, key, [&](const fo4::FormKey& record) {
     return fo4::remove_quest_vmad_fragment(plugin->value, record, stage, stage_index);
+  });
+}
+
+radicle_status radicle_plugin_add_vmad(radicle_plugin* plugin, radicle_form_key key) {
+  return structure_edit(plugin, key, "VMAD", [&](const fo4::FormKey& record) {
+    return fo4::add_vmad(plugin->value, record);
+  });
+}
+
+radicle_status radicle_plugin_add_vmad_script(radicle_plugin* plugin, radicle_form_key key,
+                                              size_t index, const char* script_name,
+                                              uint8_t flags, size_t* out_script_index) {
+  if (out_script_index != nullptr) *out_script_index = 0;
+  return structure_edit(plugin, key, "VMAD script", [&](const fo4::FormKey& record) {
+    require_name(script_name, "VMAD script name");
+    const auto status = fo4::add_vmad_script(plugin->value, record, index, script_name, flags);
+    if (status == fo4::VmadStructureMutationStatus::updated && out_script_index != nullptr) {
+      *out_script_index = index;
+    }
+    return status;
+  });
+}
+
+radicle_status radicle_plugin_remove_vmad_script(radicle_plugin* plugin, radicle_form_key key,
+                                                 size_t script_index) {
+  return structure_edit(plugin, key, "VMAD script", [&](const fo4::FormKey& record) {
+    return fo4::remove_vmad_script(plugin->value, record, script_index);
+  });
+}
+
+radicle_status radicle_plugin_add_vmad_property(radicle_plugin* plugin, radicle_form_key key,
+                                                size_t script_index, size_t index,
+                                                const char* name, uint8_t type, uint8_t flags,
+                                                size_t* out_property_index) {
+  if (out_property_index != nullptr) *out_property_index = 0;
+  return structure_edit(plugin, key, "VMAD property", [&](const fo4::FormKey& record) {
+    const auto property = default_property(name, type, flags);
+    const auto status = fo4::add_vmad_property(plugin->value, record, script_index, index, property);
+    if (status == fo4::VmadStructureMutationStatus::updated && out_property_index != nullptr) {
+      *out_property_index = index;
+    }
+    return status;
+  });
+}
+
+radicle_status radicle_plugin_remove_vmad_property(radicle_plugin* plugin, radicle_form_key key,
+                                                   size_t script_index, size_t property_index) {
+  return structure_edit(plugin, key, "VMAD property", [&](const fo4::FormKey& record) {
+    return fo4::remove_vmad_property(plugin->value, record, script_index, property_index);
+  });
+}
+
+radicle_status radicle_plugin_add_vmad_fragment(radicle_plugin* plugin, radicle_form_key key,
+                                                uint32_t fragment_key, const char* script,
+                                                const char* function) {
+  return structure_edit(plugin, key, "VMAD fragment", [&](const fo4::FormKey& record) {
+    require_name(script, "VMAD fragment script name");
+    require_name(function, "VMAD fragment function name");
+    return fo4::add_vmad_fragment(plugin->value, record, fragment_key, script, function);
+  });
+}
+
+radicle_status radicle_plugin_remove_vmad_fragment(radicle_plugin* plugin, radicle_form_key key,
+                                                   uint32_t fragment_key) {
+  return structure_edit(plugin, key, "VMAD fragment", [&](const fo4::FormKey& record) {
+    return fo4::remove_vmad_fragment(plugin->value, record, fragment_key);
   });
 }
 
