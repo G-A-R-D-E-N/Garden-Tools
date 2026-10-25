@@ -86,6 +86,17 @@ public class SwfInterop
             new SwfEditTextEdit(text, color, new SwfRectRecord(x0, x1, y0, y1)));
         return Snapshot(result.Changed);
     });
+    public Task<string> Placements() => Run(() => Json(new
+    {
+        placements = Document().Placements().Select(item => new
+        {
+            tagIndex = item.TagIndex, depth = item.Depth, character = item.CharacterId,
+            insideSprite = item.InsideSprite,
+        }).ToArray(),
+    }));
+
+    public Task<string> SetDepth(int tagIndex, int depth) => Run(() =>
+        Snapshot(Document().SetDepth(tagIndex, (ushort)depth).Changed));
     public Task<string> AddLabel(int frame, string name) => Run(() =>
     {
         var result = Document().AddLabel(frame, name);

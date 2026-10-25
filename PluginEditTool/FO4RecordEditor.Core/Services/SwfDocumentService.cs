@@ -80,6 +80,11 @@ public sealed class SwfDocument : IDisposable
         var payload = System.Text.Encoding.UTF8.GetBytes(name).Concat(new byte[] { 0 }).ToArray();
         return Apply(new SwfPlanSpec().Insert(showFrames[frame].Index, 43, payload));
     }
+    public IReadOnlyList<SwfPlacementRecord> Placements() => Movie.Placements();
+
+    // Requires a placement tag index; the depth change is one history command.
+    public SwfPlanResultRecord SetDepth(int tagIndex, ushort depth) => Apply(new SwfPlanSpec().Replace(
+        tagIndex, SwfPlacementCodec.WithDepth(Movie.Payload(tagIndex), Movie.Tags[tagIndex].Code, depth)));
     // Constraint: an edit-text write goes through the same plan and history path as every other edit.
     public SwfPlanResultRecord EditEditText(int tagIndex, SwfEditTextEdit edit)
     {

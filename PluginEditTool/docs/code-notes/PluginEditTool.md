@@ -66,3 +66,10 @@ the timeline does not reach, then inserts a new FrameLabel tag through the plan,
 command that undo removes. `SwfInterop.AddLabel` exposes it to the panel and the panel's "Add at frame" button
 uses the label name field and the current scrubber frame. Removal and sprite-timeline adds still need payload
 composition or a native removal verb.
+## Radicle/bindings/csharp/Radicle.Interop/SwfPlacements.cs:SwfPlacementCodec (depth edit)
+
+Placement tags have no ABI 67 getter, so `Placements()` parses the root and sprite placement payloads
+(PlaceObject 4, PlaceObject2 26, PlaceObject3 70) for depth/character, and `SetDepth` patches the depth bytes in
+place and sends the payload through the tag plan, keeping every other byte. `SwfDocument.SetDepth` and
+`SwfInterop.Placements`/`SetDepth` expose it. `SwfPlacementTests` pins the read, the in-place patch, the undo and
+the wrong-tag refusal. Transform/keyframe composition is the next placement step.
