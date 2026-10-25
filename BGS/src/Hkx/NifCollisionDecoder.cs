@@ -249,25 +249,24 @@ public static class NifCollisionDecoder
             }
 
             var kind = KindOf(instance.ClassName);
+            var layout = LayoutWalker.Active(HavokClassTypes.Shipped, instance.ClassName, _objects.PointerWidth);
             var shape = new NifCollisionShape
             {
                 Index = _model.Shapes.Count,
                 Class = instance.ClassName,
                 Kind = kind,
+                ConvexRadius = layout?.OffsetOf("convexRadius") is int radius
+                    ? _objects.ReadFloatAt(instance.Offset + radius) ?? 0.0f
+                    : 0.0f,
             };
             _model.Shapes.Add(shape);
             _byOffset[instance.Offset] = shape.Index;
 
-            var layout = LayoutWalker.Active(HavokClassTypes.Shipped, instance.ClassName, _objects.PointerWidth);
             if (layout == null)
             {
                 NoteOnce($"{instance.ClassName} cannot be laid out at this pointer width");
                 return shape.Index;
             }
-
-            shape.ConvexRadius = layout.OffsetOf("convexRadius") is int radius
-                ? _objects.ReadFloatAt(instance.Offset + radius) ?? 0.0f
-                : 0.0f;
 
             switch (kind)
             {
