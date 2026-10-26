@@ -162,6 +162,7 @@ TEST_F(CApiPapyrusRuntimeTest, AttachesInitializesRunsAnEventAndReadsAVariable) 
   EXPECT_EQ(status, RADICLE_PAPYRUS_STATUS_OK);
   EXPECT_EQ(radicle_papyrus_runtime_lifecycle(runtime_, instance), RADICLE_PAPYRUS_LIFECYCLE_READY);
 
+  ASSERT_EQ(radicle_papyrus_runtime_register_native(runtime_, "Hook", "Hit", RADICLE_PAPYRUS_NATIVE_STATIC, "", 0), RADICLE_STATUS_OK);
   ASSERT_EQ(radicle_papyrus_runtime_send_event(runtime_, instance, "Ping", nullptr, 0, &status),
             RADICLE_STATUS_OK);
   EXPECT_EQ(status, RADICLE_PAPYRUS_STATUS_OK);
@@ -222,6 +223,7 @@ TEST_F(CApiPapyrusRuntimeTest, OverridesRegistrationsAndRefusals) {
   ASSERT_EQ(radicle_papyrus_runtime_initialize(runtime_, instance, &status), RADICLE_STATUS_OK);
 
   ASSERT_EQ(radicle_papyrus_runtime_register_override(runtime_, "Actor", "Ping", -1), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_papyrus_runtime_register_native(runtime_, "Hook", "Hit", RADICLE_PAPYRUS_NATIVE_STATIC, "", 0), RADICLE_STATUS_OK);
   ASSERT_EQ(radicle_papyrus_runtime_send_event(runtime_, instance, "Ping", nullptr, 0, &status),
             RADICLE_STATUS_OK);
   EXPECT_EQ(state_.overrides, 1);
