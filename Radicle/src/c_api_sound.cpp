@@ -3,6 +3,7 @@
 #include "fo4/environment/sound.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/sound_writer.hpp"
+#include "fo4/schema/scalar.hpp"
 #include "fo4/plugin/subrecord_authoring.hpp"
 #include "fo4/text/encoding.hpp"
 
