@@ -3,6 +3,7 @@
 #include "record_edit.hpp"
 
 #include "fo4/plugin/reader.hpp"
+#include "fo4/schema/formlink_lists.hpp"
 #include "fo4/schema/scalar.hpp"
 
 #include <cstdint>
@@ -190,10 +191,8 @@ SoundDescriptorMutationStatus add_sound_descriptor_base(Plugin& plugin,
       throw schema::FormLinkFieldError("SNDR Base Descriptor target type is not allowed");
     }
   }
-  const auto encoded = encode_plugin_form_id(target, plugin_form_id_context(plugin));
-  if (!encoded.has_value()) throw schema::FormLinkFieldError("SNDR Base Descriptor target is not encodable");
+  const auto raw = encode_plugin_form_id(target, plugin_form_id_context(plugin)).value();
   std::vector<std::byte> payload(4, std::byte{0});
-  const auto raw = encoded->value();
   for (std::size_t byte = 0; byte < 4; ++byte) {
     payload[byte] = std::byte{static_cast<std::uint8_t>((raw >> (8 * byte)) & 0xFFu)};
   }
