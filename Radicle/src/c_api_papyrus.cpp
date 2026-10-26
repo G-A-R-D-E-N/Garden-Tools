@@ -284,7 +284,7 @@ radicle_status radicle_papyrus_run(radicle_papyrus* runtime, const char* script,
     }
     const fo4::papyrus::Result result = runtime->interpreter.runFunction(script, function, values);
     *out_status = toCStatus(result.status);
-    *out_instructions = result.instructions;
+    if (out_instructions != nullptr) *out_instructions = result.instructions;
     if (result.status != Status::Ok) return RADICLE_STATUS_OK;
     return radicle_c_papyrus_detail::make_value(result.value, out_result);
   });
