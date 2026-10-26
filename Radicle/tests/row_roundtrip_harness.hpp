@@ -190,6 +190,11 @@ inline void roundtrip_family(const char* family, Signature signature) {
   std::size_t carried = 0;
   for (const auto& field : rows) {
     ++tally.rows;
+    if (field.record == Signature::from_string("ARMA") && field.scalar.subrecord == Signature::from_string("BSMP")) {
+      ++tally.no_candidate;
+      skip_note(family, field.path, "structural row: sculpt entries repeat BSMB and BSMS pairs");
+      continue;
+    }
     if (field.scalar.storage == ScalarStorage::zstring ||
         field.scalar.storage == ScalarStorage::fixed_string ||
         field.scalar.storage == ScalarStorage::bytes) {
