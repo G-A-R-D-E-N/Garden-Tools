@@ -1,4 +1,5 @@
 #include "fo4/abc/abc.hpp"
+#include "fo4/abc/flow.hpp"
 #include "fo4/abc/opcodes.hpp"
 #include "fo4/abc/summary.hpp"
 #include "fo4/archive/ba2.hpp"
@@ -50,10 +51,16 @@ struct AbcStats {
   std::size_t serialize_mismatches{0};
   std::size_t bodies{0};
   std::size_t instructions{0};
+  std::size_t reencode_mismatches{0};
+  std::size_t verified_flows{0};
+  std::size_t basic_blocks{0};
+  std::size_t unreachable_blocks{0};
+  std::size_t observed_max_stack{0};
   std::size_t classes{0};
   std::size_t methods{0};
   std::size_t scripts{0};
   std::map<std::string, std::size_t> unsupported;
+  std::map<std::string, std::size_t> flow_refusals;
   std::map<std::string, std::size_t> class_histogram;
   std::map<std::string, std::size_t> method_histogram;
   std::map<std::string, std::size_t> script_histogram;
@@ -114,7 +121,8 @@ void check_block(const std::string& name, std::span<const std::byte> payload, Ab
                          << ", first differing offset " << difference << " of "
                          << payload.size();
 
-  for (const fo4::abc::AbcMethodBody& body : file.bodies) {
+  for (std::size_t body_index = 0; body_index < file.bodies.size(); ++body_index) {
+    const fo4::abc::AbcMethodBody& body = file.bodies[body_index];
     ++stats.bodies;
     std::vector<fo4::abc::AbcInstruction> instructions;
     const auto decode_status = fo4::abc::decode_code(body.code, instructions, body.exceptions);
@@ -127,6 +135,36 @@ void check_block(const std::string& name, std::span<const std::byte> payload, Ab
     EXPECT_EQ(operand_status, fo4::abc::AbcStatus::Ok)
         << name << ": " << fo4::abc::status_name(operand_status);
     stats.instructions += instructions.size();
+
+    std::vector<std::uint8_t> reencoded;
+    const auto encode_status = fo4::abc::encode_code(instructions, reencoded);
+    EXPECT_EQ(encode_status, fo4::abc::AbcStatus::Ok)
+        << name << ": body " << body_index << ": " << fo4::abc::status_name(encode_status);
+    if (encode_status != fo4::abc::AbcStatus::Ok || reencoded != body.code) {
+      ++stats.reencode_mismatches;
+      EXPECT_EQ(reencoded, body.code)
+          << name << ": body " << body_index << " did not re-encode to its own bytes";
+    }
+
+    fo4::abc::AbcMethodFlow flow;
+    fo4::abc::AbcFlowIssue issue;
+    const auto flow_status = fo4::abc::verify_method_flow(
+        file, static_cast<std::uint32_t>(body_index), flow, issue);
+    EXPECT_EQ(flow_status, fo4::abc::AbcFlowStatus::Ok)
+        << name << ": body " << body_index << " method " << body.method << " at offset "
+        << issue.offset << " (" << fo4::abc::flow_status_name(flow_status)
+        << "): " << issue.message;
+    if (flow_status != fo4::abc::AbcFlowStatus::Ok) {
+      ++stats.flow_refusals[fo4::abc::flow_status_name(flow_status)];
+    } else {
+      ++stats.verified_flows;
+      stats.basic_blocks += flow.graph.blocks.size();
+      stats.unreachable_blocks += flow.graph.unreachable_block_count();
+      if (flow.observed_max_stack > stats.observed_max_stack) {
+        stats.observed_max_stack = flow.observed_max_stack;
+      }
+    }
+
     std::string listing;
     const auto listing_status = fo4::abc::disassemble(file, body.code, listing, body.exceptions);
     EXPECT_EQ(listing_status, fo4::abc::AbcStatus::Ok)
@@ -236,6 +274,10 @@ TEST(AbcCorpusReal, DecodesEveryShippedInterfaceAbcBlock) {
   EXPECT_EQ(stats.blocks, stats.parsed + stats.unsupported_total());
   EXPECT_EQ(stats.trailing_bytes_blocks, 0u);
   EXPECT_EQ(stats.serialize_mismatches, 0u);
+  EXPECT_EQ(stats.reencode_mismatches, 0u)
+      << "bodies whose instruction stream did not re-encode to its own bytes";
+  EXPECT_EQ(stats.verified_flows, stats.bodies)
+      << "flow_refusal_histogram: " << histogram_text(stats.flow_refusals);
   EXPECT_EQ(stats.unsupported_total(), 0u)
       << "unsupported_status_histogram: " << histogram_text(stats.unsupported);
   EXPECT_EQ(stats.lzma, 0u);
@@ -251,6 +293,12 @@ TEST(AbcCorpusReal, DecodesEveryShippedInterfaceAbcBlock) {
   RecordProperty("unsupported_status_histogram", histogram_text(stats.unsupported));
   RecordProperty("bodies", std::to_string(stats.bodies));
   RecordProperty("instructions", std::to_string(stats.instructions));
+  RecordProperty("reencode_mismatches", std::to_string(stats.reencode_mismatches));
+  RecordProperty("verified_flows", std::to_string(stats.verified_flows));
+  RecordProperty("basic_blocks", std::to_string(stats.basic_blocks));
+  RecordProperty("unreachable_blocks", std::to_string(stats.unreachable_blocks));
+  RecordProperty("observed_max_stack", std::to_string(stats.observed_max_stack));
+  RecordProperty("flow_refusal_histogram", histogram_text(stats.flow_refusals));
   RecordProperty("total_classes", std::to_string(stats.classes));
   RecordProperty("total_methods", std::to_string(stats.methods));
   RecordProperty("total_scripts", std::to_string(stats.scripts));

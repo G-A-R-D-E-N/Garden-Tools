@@ -280,6 +280,9 @@ add_library(fo4
   src/abc/opcodes.cpp
   src/abc/disassembly.cpp
   src/abc/summary.cpp
+  src/abc/abc_flow.cpp
+  src/abc/abc_stack.cpp
+  src/abc/abc_verify.cpp
   src/hkx/layout.cpp
   src/hkx/packfile.cpp
   src/hkx/skeleton.cpp
@@ -726,6 +729,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_abc_pool.cpp
     tests/test_abc_write.cpp
     tests/test_abc_summary.cpp
+    tests/test_abc_flow.cpp
+    tests/test_abc_verify.cpp
     tests/test_material_file.cpp
     tests/test_material_file_real.cpp
     tests/test_swf.cpp
