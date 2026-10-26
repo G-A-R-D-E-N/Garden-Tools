@@ -104,7 +104,7 @@ std::string editorIdOf(const fo4::Plugin& plugin, const fo4::FormKey& key) {
 }
 
 std::string formKeyText(std::uint32_t local) {
-    char buffer[16]{};
+    char buffer[32]{};
     std::snprintf(buffer, sizeof(buffer), "%06X:Patch.esp", local);
     return buffer;
 }
