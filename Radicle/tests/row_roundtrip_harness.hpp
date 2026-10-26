@@ -403,31 +403,27 @@ inline void roundtrip_links(const char* family, Signature signature) {
   ASSERT_FALSE(rows.empty()) << family << " has no FormLink rows";
 
   std::optional<fo4::FormKey> chosen;
-  fo4::visit_records(plugin, [&](const fo4::Record& record) {
-    if (chosen.has_value() || record.header.signature != signature) return;
-    for (const auto& field : rows) {
+  std::optional<fo4::FormKey> target;
+  for (const auto& field : rows) {
+    const auto allowed = fo4::schema::formlink_field_targets(field);
+    if (allowed.empty()) continue;
+    fo4::visit_records(plugin, [&](const fo4::Record& record) {
+      if (chosen.has_value() || record.header.signature != signature) return;
       const auto count = fo4::record_field_count(plugin, record.form_key, field);
-      if (count && *count > 0) {
-        chosen = record.form_key;
-        return;
-      }
-    }
-  });
+      if (count && *count > 0) chosen = record.form_key;
+    });
+    if (!chosen.has_value()) continue;
+    fo4::visit_records(plugin, [&](const fo4::Record& record) {
+      if (target.has_value() || record.form_key == *chosen) return;
+      if (std::find(allowed.begin(), allowed.end(), record.header.signature) == allowed.end()) return;
+      target = record.form_key;
+    });
+    if (target.has_value()) break;
+    chosen.reset();
+  }
   ASSERT_TRUE(chosen.has_value()) << family << " has no record carrying one of its links";
   const auto key = *chosen;
-
-  std::optional<fo4::FormKey> target;
-  fo4::visit_records(plugin, [&](const fo4::Record& record) {
-    if (target.has_value() || record.header.signature != signature) return;
-    for (const auto& field : rows) {
-      const auto allowed = fo4::schema::formlink_field_targets(field);
-      if (allowed.empty() || allowed.front() != record.header.signature) continue;
-      if (record.form_key == key) continue;
-      target = record.form_key;
-      return;
-    }
-  });
-  ASSERT_TRUE(target.has_value()) << family << " has no second record to link to";
+  ASSERT_TRUE(target.has_value()) << family << " has no record to link to";
   const auto* target_record = fo4::find_record(plugin, *target);
   ASSERT_NE(target_record, nullptr) << target->to_string();
   const auto target_signature = target_record->header.signature;
