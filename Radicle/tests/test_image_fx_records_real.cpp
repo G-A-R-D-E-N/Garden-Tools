@@ -124,7 +124,9 @@ TEST(ImageFxRecordsReal, EveryImadRecordDecodesTheHdrMultInterpolatorRows) {
     ASSERT_EQ(mult.size() % 8, 0u) << record.form_key.to_string();
     const auto times = fo4::schema::scalar_field_bytes(mult, time->scalar);
     const auto values = fo4::schema::scalar_field_bytes(mult, value->scalar);
-    EXPECT_EQ(times.size(), mult.size() / 2) << record.form_key.to_string();
+    const auto width = fo4::schema::scalar_storage_size(time->scalar.storage);
+    EXPECT_EQ(times.size(), width) << record.form_key.to_string();
+    EXPECT_EQ(values.size(), width) << record.form_key.to_string();
     EXPECT_EQ(values.size(), times.size()) << record.form_key.to_string();
     elements += mult.size() / 8;
     if (record.form_key.local().value() != 0x24A3C4u) return;
