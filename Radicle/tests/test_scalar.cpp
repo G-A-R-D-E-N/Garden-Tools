@@ -48,7 +48,7 @@ TEST(ScalarSchema, GeneratedRefrFieldsAreRecordQualified) {
   EXPECT_FALSE(fo4::schema::scalar_field_descriptor(k_misc, "REFR\\Scale").has_value());
 
   const auto fields = fo4::schema::scalar_fields(k_refr);
-  ASSERT_EQ(fields.size(), 52u);
+  ASSERT_EQ(fields.size(), 80u);
   const auto has = [&fields](std::string_view path) {
     return std::any_of(fields.begin(), fields.end(), [path](const auto& field) { return field.path == path; });
   };

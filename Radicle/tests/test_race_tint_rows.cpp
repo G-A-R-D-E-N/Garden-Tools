@@ -89,10 +89,8 @@ std::vector<std::byte> make_plugin(const Subs& subs, std::uint32_t tes4_flags = 
   ByteWriter hedr;
   hedr.f32(1.0f);
   hedr.u32(2);
-  hedr.u32(0x900);
+  hedr.u32(0x0C00);
   fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
-  fo4::test::write_subrecord(out, "MAST", std::string_view{"Fallout4.esm\0", 13});
-  fo4::test::write_subrecord(out, "DATA", Bytes(8));
   fo4::test::end_record(out, tes4);
 
   const auto colors = fo4::test::begin_group(out, "CLFM", 0);

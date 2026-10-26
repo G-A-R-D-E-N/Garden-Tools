@@ -5209,3 +5209,10 @@ The INNR entry above modelled a nested run that a member of the outer run counts
 
 - `add_record_subrecord` fills the new subrecord from the authoring rule's default bytes (`Radicle/src/plugin/subrecord_authoring.cpp:default_payload`, `:48-54`). For CLMT the `WLST` rule's default is one zeroed 12-byte weather entry, so a record created with `create_record` and then given `WLST` by `add_record_subrecord` already carries one entry before any `insert_record_counted_element` call.
 - `Radicle/tests/test_clmt_weather_entries.cpp:ClmtWeatherTypes.CreatedClimateTakesWeatherEntriesFromProvenDefaults` adds one element and then inserts two more, so it asserts a 36-byte payload and a field count of 3, not 2. The test previously expected 2 and never ran; it is fixed here against the measured behaviour rather than changing the writer, because the seeded element is the proven default the creation path exists to provide.
+## Radicle/tests/test_scalar.cpp:ScalarSchema.GeneratedRefrFieldsAreRecordQualified (REFR row count pin, #602)
+
+- The pinned REFR scalar row count moves from 52 to 80 because this stack adds REFR rows (the teleport XTEL, occlusion-plane XOCP and radio XRDO families landed with the placed-data work). The value is measured from `fo4::schema::scalar_fields(k_refr)` in a local MSVC Debug build of `fo4_tests`, not counted by hand.
+
+## Radicle/tests/test_race_tint_rows.cpp:RaceTintRows (synthetic fixture declares no master, #602 C-22)
+
+- The synthetic plugin in this file writes RACE and CLFM form IDs as Patch.esp-local values (`000800`, `0B01`, `0B02`) and the tests look them up with `FormKey::parse("...:Patch.esp")`. The fixture used to declare `Fallout4.esm` as a master, which makes every raw form ID resolve against the master, so `find_record` could not see the RACE record and all six tests failed. The master and its DATA row are removed and HEDR next-object-id is raised to `0x0C00` so it stays above the highest local ID; no product code changed.
