@@ -82,7 +82,7 @@ std::string sha256Hex(std::string_view bytes) {
         compress(state, reinterpret_cast<const std::uint8_t*>(bytes.data()) + i * 64);
     }
     std::array<std::uint8_t, 128> tail{};
-    const std::size_t remaining = bytes.size() - full * 64;
+    const std::size_t remaining = (bytes.size() - full * 64) % 64;
     for (std::size_t i = 0; i < remaining; ++i) {
         tail[i] = static_cast<std::uint8_t>(bytes[full * 64 + i]);
     }
