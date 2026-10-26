@@ -391,13 +391,13 @@ PackageTreeMutationStatus remove_package_procedure_node(Plugin& plugin,
   if (model.nodes[*parent].child_count > 0) --model.nodes[*parent].child_count;
 
   Record candidate = working;
-  Rebuild rebuild{working, model, static_cast<std::size_t>(-1), node_index, {}, {}};
+  Rebuild rebuild{working, model, static_cast<std::size_t>(-1), node_index, {}, {}, {}};
   rebuild_into(candidate, model, rebuild);
   if (any_drop) {
     erase_dropped_inputs(candidate, tree, drop);
     write_dword(candidate.subrecords[*pkcu].data, 0, static_cast<std::uint32_t>(kept));
     if (const auto counter = input_block_counter(candidate, *pkcu)) {
-      candidate.subrecords[*counter].data[0] = std::byte{kept <= max_input_id ? static_cast<std::uint8_t>(kept) : 0};
+      candidate.subrecords[*counter].data[0] = std::byte{static_cast<std::uint8_t>(kept <= max_input_id ? kept : 0)};
     }
   }
   commit_rebuilt(plugin, *record, std::move(candidate));
