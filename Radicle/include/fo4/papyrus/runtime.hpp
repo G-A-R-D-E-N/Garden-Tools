@@ -4,6 +4,7 @@
 #include "fo4/papyrus/interpreter.hpp"
 #include "fo4/papyrus/owner.hpp"
 #include "fo4/papyrus/registration.hpp"
+#include "fo4/papyrus/save_state.hpp"
 #include "fo4/pex/pex.hpp"
 
 #include <cstddef>
@@ -113,6 +114,8 @@ public:
     bool tryRegisterNative(std::string script, std::string function, NativeRegistration registration);
     void registerOverride(std::string script, std::string function, std::int32_t parameterCount,
                           OverrideHandler handler);
+
+    std::vector<SavedThread> captureThreads() const;
 
     RegistrationRegistry& registrations() { return registrations_; }
     const RegistrationRegistry& registrations() const { return registrations_; }
