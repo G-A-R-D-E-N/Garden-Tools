@@ -107,7 +107,6 @@ TEST(SoundSubrecords, UnknownSubrecordsBlockAddButKeepFieldEdits) {
 
 TEST(SoundSubrecords, CreateUsesProvenDefaultsAndRefusesUnprovableRecords) {
   auto plugin = read(build({}));
-  const auto before = fo4::write_plugin(plugin);
   EXPECT_EQ(fo4::create_record(plugin, sig("SOUN"), "NewMarker").status, fo4::RecordCreateStatus::created);
   EXPECT_EQ(fo4::create_record(plugin, sig("FSTS"), "NewSet").status, fo4::RecordCreateStatus::created);
 
