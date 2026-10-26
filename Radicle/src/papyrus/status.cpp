@@ -46,6 +46,10 @@ const char* statusName(Status status) {
             return "StringTooLong";
         case Status::GateRefused:
             return "GateRefused";
+        case Status::Paused:
+            return "Paused";
+        case Status::Latent:
+            return "Latent";
     }
     return "Unknown";
 }
@@ -74,6 +78,8 @@ bool isFatal(Status status) {
         case Status::FunctionNotFound:
         case Status::ArgumentCountMismatch:
         case Status::StringTooLong:
+        case Status::Paused:
+        case Status::Latent:
             return false;
     }
     return true;

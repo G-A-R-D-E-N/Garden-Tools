@@ -46,7 +46,9 @@ typedef enum radicle_papyrus_status {
   RADICLE_PAPYRUS_STATUS_HOST_ERROR = 17,
   RADICLE_PAPYRUS_STATUS_INTERNAL_ERROR = 18,
   RADICLE_PAPYRUS_STATUS_STRING_TOO_LONG = 19,
-  RADICLE_PAPYRUS_STATUS_GATE_REFUSED = 20
+  RADICLE_PAPYRUS_STATUS_GATE_REFUSED = 20,
+  RADICLE_PAPYRUS_STATUS_PAUSED = 21,
+  RADICLE_PAPYRUS_STATUS_LATENT = 22
 } radicle_papyrus_status;
 
 /* Requires: a callback returns 1 when it handled the request, 0 to fall back, and any returned value handle is freed by the runtime. */

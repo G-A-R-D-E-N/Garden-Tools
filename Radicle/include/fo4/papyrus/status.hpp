@@ -26,6 +26,8 @@ enum class Status : std::uint8_t {
     InternalError,
     StringTooLong,
     GateRefused,
+    Paused,
+    Latent,
 };
 
 const char* statusName(Status status);

@@ -28,6 +28,7 @@
 #include "fo4/c_api_pex_analysis.h"
 #include "fo4/c_api_script_set.h"
 #include "fo4/c_api_papyrus.h"
+#include "fo4/c_api_papyrus_runtime.h"
 #include <cstddef>
 #include <cstdio>
 
@@ -1466,5 +1467,19 @@ int main() {
   printf("PapyrusCallbacks.GetProperty %zu\n", offsetof(radicle_papyrus_callbacks, get_property));
   printf("PapyrusCallbacks.SetProperty %zu\n", offsetof(radicle_papyrus_callbacks, set_property));
   printf("PapyrusCallbacks.CallNative %zu\n", offsetof(radicle_papyrus_callbacks, call_native));
+  printf("PapyrusStepResult %zu\n", sizeof(radicle_papyrus_step_result));
+  printf("PapyrusStepResult.Spent %zu\n", offsetof(radicle_papyrus_step_result, spent));
+  printf("PapyrusStepResult.Completed %zu\n", offsetof(radicle_papyrus_step_result, completed));
+  printf("PapyrusStepResult.Parked %zu\n", offsetof(radicle_papyrus_step_result, parked));
+  printf("PapyrusStepResult.Paused %zu\n", offsetof(radicle_papyrus_step_result, paused));
+  printf("PapyrusStepResult.Refused %zu\n", offsetof(radicle_papyrus_step_result, refused));
+  printf("PapyrusStepResult.Dropped %zu\n", offsetof(radicle_papyrus_step_result, dropped));
+  printf("PapyrusStepResult.Waiting %zu\n", offsetof(radicle_papyrus_step_result, waiting));
+  printf("PapyrusRuntimeCallbacks %zu\n", sizeof(radicle_papyrus_runtime_callbacks));
+  printf("PapyrusRuntimeCallbacks.User %zu\n", offsetof(radicle_papyrus_runtime_callbacks, user));
+  printf("PapyrusRuntimeCallbacks.Gate %zu\n", offsetof(radicle_papyrus_runtime_callbacks, gate));
+  printf("PapyrusRuntimeCallbacks.CallNative %zu\n", offsetof(radicle_papyrus_runtime_callbacks, call_native));
+  printf("PapyrusRuntimeCallbacks.OverrideFunction %zu\n", offsetof(radicle_papyrus_runtime_callbacks, override_function));
+  printf("PapyrusRuntimeCallbacks.BeginLatent %zu\n", offsetof(radicle_papyrus_runtime_callbacks, begin_latent));
   return 0;
 }

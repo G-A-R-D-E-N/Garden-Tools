@@ -143,6 +143,11 @@ Result Interpreter::run(const pex::PexObject* object, const pex::PexFunction& fu
     returnValue_ = Value{};
     result_ = Value{};
     frames_.clear();
+    paused_ = false;
+    latent_ = false;
+    latentToken_ = 0;
+    latentDestination_ = pex::PexValue{};
+    sliceInstructions_ = 0;
 
     if (function.isNative) {
         Result nativeResult;
@@ -167,44 +172,7 @@ Result Interpreter::run(const pex::PexObject* object, const pex::PexFunction& fu
         failed.status = pushed;
         return failed;
     }
-
-    while (!frames_.empty() && firstError_ == Status::Ok) {
-        if (instructions_ >= limits_.maxInstructions) {
-            record(Status::InstructionBudgetExceeded);
-            break;
-        }
-        const std::size_t frameIndex = frames_.size() - 1;
-        Frame& frame = frames_[frameIndex];
-        if (frame.function == nullptr || frame.ip >= frame.function->instructions.size()) {
-            hasReturn_ = false;
-            returnValue_ = Value{};
-            popFrame(noneValue());
-            continue;
-        }
-        const pex::PexInstruction& instruction = frame.function->instructions[frame.ip];
-        std::size_t next = frame.ip + 1;
-        ++instructions_;
-        const Status status = execute(instruction, frame, next);
-        if (status != Status::Ok) {
-            record(status);
-            break;
-        }
-        if (hasReturn_) {
-            hasReturn_ = false;
-            const Value value = returnValue_;
-            returnValue_ = Value{};
-            popFrame(value);
-            continue;
-        }
-        frames_[frameIndex].ip = next;
-    }
-
-    Result result;
-    result.status = firstError_;
-    result.value = firstError_ == Status::Ok ? result_ : noneValue();
-    result.instructions = instructions_;
-    result.callDepth = maxDepth_;
-    return result;
+    return finish(runLoop(limits_.maxInstructions));
 }
 
 Status Interpreter::pushFrame(const pex::PexObject* object, const pex::PexFunction& function,
@@ -272,6 +240,12 @@ Status Interpreter::invoke(Frame& frame, const Value& self, const pex::PexObject
     std::string target = nativeScript;
     if (target.empty() && script != nullptr) target = script->name;
 
+    std::uint64_t latentToken = 0;
+    Status latentStatus = Status::Ok;
+    if (host_.callLatent(target, functionName, args, latentStatus, latentToken)) {
+        return suspendLatent(destination, latentToken);
+    }
+
     Value out;
     Status status = Status::Ok;
     if (host_.callNative(target, functionName, args, out, status)) {
@@ -289,7 +263,10 @@ Status Interpreter::gotoState(Frame& frame, const Value& receiver, const std::ve
     if (receiver.type != ValueType::Object || receiver.object == nullptr) {
         return Status::NullObject;
     }
-    receiver.object->state = args[0].str;
+    Status status = Status::Ok;
+    if (!host_.setState(*receiver.object, args[0].str, status)) {
+        return status == Status::Ok ? Status::HostError : status;
+    }
     return storeResult(frame, destination, noneValue());
 }
 
