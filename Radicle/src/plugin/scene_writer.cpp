@@ -240,8 +240,6 @@ std::vector<std::byte> u32_payload(std::uint32_t value) {
           std::byte{static_cast<std::uint8_t>((value >> 24) & 0xFFu)}};
 }
 
-std::size_t tail_anchor(const Record& record) { return detail::tail_anchor(record); }
-
 std::size_t phase_anchor(const env::detail::SceneLayout& layout,
                          const Record& record,
                          std::size_t index) {
@@ -261,10 +259,6 @@ std::vector<Subrecord> new_phase_subrecords(std::string_view name) {
 
 Range phase_body(const env::detail::SceneLayout& layout, std::size_t index) {
   return Range{layout.phases[index].open + 1, layout.phases[index].close};
-}
-
-std::size_t groups_end(const env::detail::SceneLayout& layout, const Record& record) {
-  return detail::groups_end(layout, record);
 }
 
 std::size_t actor_anchor(const env::detail::SceneLayout& layout,
