@@ -20,8 +20,8 @@ struct ScriptCandidate {
   std::string container;  // invariant: the loose payload path or the archive file path
   std::int32_t load_index{0};
   std::uint64_t size{0};
-  std::string path;  // invariant: normalized data-relative path, ".pex" kept
-  fo4::archive::AssetLocation location{};  // invariant: names the payload this candidate stands for
+  std::string path;  // invariant: normalized data-relative path, ".pex" kept; empty for a caller-built candidate
+  fo4::archive::AssetLocation location{};  // invariant: names the payload this candidate stands for; empty for a caller-built candidate
 };
 
 struct ScriptWinner {

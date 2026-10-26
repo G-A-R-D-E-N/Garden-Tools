@@ -15,6 +15,7 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -489,8 +490,14 @@ radicle_status radicle_script_resolve(const radicle_script_candidate* candidates
           (!item.container && item.container_size != 0)) {
         return fail(RADICLE_STATUS_INVALID_ARGUMENT, "script candidate needs a known kind and non-null strings");
       }
-      input.push_back({bytes_text(item.name, item.name_size), static_cast<fo4::pex_analysis::ScriptSourceKind>(item.kind),
-                       bytes_text(item.container, item.container_size), item.load_index, item.size});
+      // Invariant: a caller-built candidate has an empty path and location.
+      fo4::pex_analysis::ScriptCandidate candidate;
+      candidate.name = bytes_text(item.name, item.name_size);
+      candidate.kind = static_cast<fo4::pex_analysis::ScriptSourceKind>(item.kind);
+      candidate.container = bytes_text(item.container, item.container_size);
+      candidate.load_index = item.load_index;
+      candidate.size = item.size;
+      input.push_back(std::move(candidate));
     }
     const auto winners = fo4::pex_analysis::resolve_script_set(input);
     if (winners.empty()) {
