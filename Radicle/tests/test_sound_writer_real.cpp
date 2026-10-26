@@ -402,7 +402,10 @@ TEST_P(SoundWriterReal, AddsAndRemovesFilesAndBaseLinksOnOfficialDescriptors) {
           }
         }
         if (subs_of(sample, record.form_key) != subs_of(original, record.form_key)) {
-          auto* restore = fo4::find_record(sample, record.form_key);
+          fo4::Record* restore = nullptr;
+          fo4::visit_records(sample, [&](fo4::Record& candidate) {
+            if (restore == nullptr && candidate.form_key == record.form_key) restore = &candidate;
+          });
           if (restore != nullptr) *restore = snapshot;
         }
       }
