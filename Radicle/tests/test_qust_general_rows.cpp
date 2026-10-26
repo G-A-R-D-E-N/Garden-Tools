@@ -334,7 +334,7 @@ TEST(QustGeneralRows, TypeIsOneByteWideAndDelayTimeIsAFloatAtOffsetFour) {
   EXPECT_EQ(std::to_integer<std::uint8_t>(payload[10]), 0xBB);
   EXPECT_EQ(std::to_integer<std::uint8_t>(payload[11]), 0xCC);
   EXPECT_EQ(Bytes(payload.begin() + 4, payload.begin() + 8),
-            std::vector<std::byte>{std::byte{0x00}, std::byte{0x00}, std::byte{0x50}, std::byte{0x40}});
+            (std::vector<std::byte>{std::byte{0x00}, std::byte{0x00}, std::byte{0x50}, std::byte{0x40}}));
 }
 
 TEST(QustGeneralRows, RefusesGeneralValuesOutsideTheRowRange) {

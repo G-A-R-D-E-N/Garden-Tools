@@ -511,7 +511,7 @@ TEST(PlacedDataRows, TeleportRowsSplitDoorTransformFlagsAndInterior) {
   ASSERT_TRUE(rotation_z.has_value());
   EXPECT_EQ(fo4::set_record_scalar(reread, patch_key(0x0C14), *rotation_z, "0.75"),
             fo4::ScalarMutationStatus::updated);
-  const auto rotated = fo4::read_plugin(fo4::write_plugin(reread), "Patch.esp");
+  auto rotated = fo4::read_plugin(fo4::write_plugin(reread), "Patch.esp");
   const auto rotated_payload = payload_at(rotated, 0x0C14, "XTEL");
   ASSERT_TRUE(rotated_payload.has_value());
   EXPECT_EQ(Bytes(rotated_payload->begin() + 24, rotated_payload->begin() + 28), f32_bytes(0.75f));
@@ -559,7 +559,7 @@ TEST(PlacedDataRows, OcclusionPlaneRowsAddressSizePositionAndQuaternion) {
   ASSERT_TRUE(height.has_value());
   EXPECT_EQ(fo4::set_record_scalar(writable, patch_key(0x0C14), *height, "250.0"),
             fo4::ScalarMutationStatus::updated);
-  const auto reread = fo4::read_plugin(fo4::write_plugin(writable), "Patch.esp");
+  auto reread = fo4::read_plugin(fo4::write_plugin(writable), "Patch.esp");
   const auto payload = payload_at(reread, 0x0C14, "XOCP");
   ASSERT_TRUE(payload.has_value());
   ASSERT_EQ(payload->size(), 36u);
@@ -606,7 +606,7 @@ TEST(PlacedDataRows, RadioRowsAddressThreeDistancesAndOneFlagWord) {
   auto writable = fo4::read_plugin(make_plugin(), "Patch.esp");
   EXPECT_EQ(fo4::set_record_scalar(writable, patch_key(0x0C14), *radio_flags, "0"),
             fo4::ScalarMutationStatus::updated);
-  const auto reread = fo4::read_plugin(fo4::write_plugin(writable), "Patch.esp");
+  auto reread = fo4::read_plugin(fo4::write_plugin(writable), "Patch.esp");
   const auto payload = payload_at(reread, 0x0C14, "XRDO");
   ASSERT_TRUE(payload.has_value());
   ASSERT_EQ(payload->size(), 16u);

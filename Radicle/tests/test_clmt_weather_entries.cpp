@@ -1,5 +1,6 @@
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "fo4/plugin/subrecord_authoring.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/scalar.hpp"
 #include "plugin_bytes.hpp"
@@ -16,6 +17,12 @@
 namespace {
 
 using Bytes = std::vector<std::byte>;
+
+Bytes concat(const Bytes& left, const Bytes& right) {
+  Bytes out = left;
+  out.insert(out.end(), right.begin(), right.end());
+  return out;
+}
 
 constexpr auto k_clmt = fo4::Signature::from_string("CLMT");
 constexpr auto k_wlst = fo4::Signature::from_string("WLST");
@@ -129,7 +136,7 @@ TEST(ClmtWeatherTypes, DescriptorIsAPayloadCountedTwelveByteArray) {
   EXPECT_EQ(array.count_subrecord, fo4::Signature{});
   EXPECT_EQ(array.stride, 12u);
   EXPECT_FALSE(fo4::schema::is_counted_array_count_subrecord(k_clmt, k_wlst));
-  EXPECT_EQ(fo4::record_field_count(*fo4::read_plugin(
+  EXPECT_EQ(fo4::record_field_count(fo4::read_plugin(
                                         make_plugin(wlst_entry(0x00000801u, 100, 0)), "Patch.esp"),
                                     climate_key(), "CLMT\\WeatherChance"),
             1u);
@@ -138,7 +145,7 @@ TEST(ClmtWeatherTypes, DescriptorIsAPayloadCountedTwelveByteArray) {
 TEST(ClmtWeatherTypes, InsertAddsAZeroedEntryAndShiftsTheWeatherLanes) {
   const auto first = wlst_entry(0x00000801u, 75, 0x00000810u);
   const auto second = wlst_entry(0x00000801u, 25, 0);
-  auto plugin = fo4::read_plugin(make_plugin(first + second), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(concat(first, second)), "Patch.esp");
   const auto before = *payload(plugin, k_wlst);
   ASSERT_EQ(before.size(), 24u);
 
@@ -177,7 +184,7 @@ TEST(ClmtWeatherTypes, InsertAddsAZeroedEntryAndShiftsTheWeatherLanes) {
 TEST(ClmtWeatherTypes, RemoveDropsOneEntryAndRefusesToEmptyTheArray) {
   const auto first = wlst_entry(0x00000801u, 75, 0x00000810u);
   const auto second = wlst_entry(0x00000801u, 25, 0);
-  auto plugin = fo4::read_plugin(make_plugin(first + second), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(concat(first, second)), "Patch.esp");
 
   EXPECT_EQ(fo4::remove_record_counted_element(plugin, climate_key(), weather_types(), 2),
             fo4::CountedArrayMutationStatus::index_out_of_range);
@@ -189,7 +196,7 @@ TEST(ClmtWeatherTypes, RemoveDropsOneEntryAndRefusesToEmptyTheArray) {
   EXPECT_EQ(fo4::remove_record_counted_element(plugin, climate_key(), weather_types(), 0),
             fo4::CountedArrayMutationStatus::would_empty);
 
-  const auto bare = fo4::read_plugin(make_plugin({}, false), "Patch.esp");
+  auto bare = fo4::read_plugin(make_plugin({}, false), "Patch.esp");
   EXPECT_EQ(fo4::insert_record_counted_element(bare, climate_key(), weather_types(), 0),
             fo4::CountedArrayMutationStatus::subrecord_missing);
   EXPECT_EQ(fo4::remove_record_counted_element(bare, fo4::FormKey::parse("000899:Patch.esp"),

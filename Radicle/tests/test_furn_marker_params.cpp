@@ -250,13 +250,13 @@ TEST(FurnMarkerParams, LegacyTwentyByteElementsReadAndWriteBelowFormVersion125) 
 }
 
 TEST(FurnMarkerParams, EachMarkerLayoutHidesOutsideItsFormVersionWindow) {
-  const auto modern = fo4::read_plugin(make_plugin(snam(1), 125), "Patch.esp");
+  auto modern = fo4::read_plugin(make_plugin(snam(1), 125), "Patch.esp");
   EXPECT_EQ(read_member(modern, "FURN\\MarkerOffsetX", 0), "0");
   EXPECT_EQ(read_member(modern, "FURN\\MarkerOffsetXBelow125", 0), "absent");
   EXPECT_EQ(fo4::set_record_scalar(modern, furn_key(), scalar("FURN\\MarkerOffsetXBelow125"), 0, "1"),
             fo4::ScalarMutationStatus::subrecord_missing);
 
-  const auto legacy = fo4::read_plugin(make_plugin(snam_legacy(1), 124), "Patch.esp");
+  auto legacy = fo4::read_plugin(make_plugin(snam_legacy(1), 124), "Patch.esp");
   EXPECT_EQ(read_member(legacy, "FURN\\MarkerOffsetXBelow125", 0), "0");
   EXPECT_EQ(read_member(legacy, "FURN\\MarkerOffsetX", 0), "absent");
   EXPECT_EQ(fo4::set_record_scalar(legacy, furn_key(), scalar("FURN\\MarkerOffsetX"), 0, "1"),

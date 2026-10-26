@@ -208,10 +208,8 @@ TEST(InfoResponseBytes, SetKeepsTheResponseShapeAndTheMarkerIntact) {
   const auto marker = subrecord_payload(plugin, record_key, Signature::from_string("WZMD"));
   ASSERT_TRUE(marker.has_value()) << "the NAM9 write dropped the zero-byte WZMD marker";
   EXPECT_TRUE(marker->empty()) << "the zero-byte WZMD marker gained a payload";
-  EXPECT_EQ(subrecord_payload(plugin, record_key, nam9), std::optional<Bytes>{Bytes{std::byte{0xCA},
-                                                                                    std::byte{0xFE},
-                                                                                    std::byte{0xBA},
-                                                                                    std::byte{0xBE}}});
+  EXPECT_EQ(subrecord_payload(plugin, record_key, nam9),
+            (std::optional<Bytes>{Bytes{std::byte{0xCA}, std::byte{0xFE}, std::byte{0xBA}, std::byte{0xBE}}}));
 
   const auto number = fo4::schema::scalar_field_descriptor(
       Signature::from_string("INFO"), "INFO\\ResponseNumber");
