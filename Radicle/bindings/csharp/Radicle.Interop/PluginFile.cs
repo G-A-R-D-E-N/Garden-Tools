@@ -362,7 +362,7 @@ public sealed unsafe class PluginFile : IDisposable
         using var use = Use();
         Native.FormKey key;
         Call.Check(RadicleNative.PluginCreateSoundRecord(use.Pointer, signature, editorId, &key));
-        return FormKey.FromNative(key);
+        return FormKey.FromNative(key).Value;
     }
 
     public bool RemoveQuestVmadFragment(FormKey record, ushort stage, int stageIndex) =>
