@@ -284,6 +284,12 @@ add_library(fo4
   src/abc/abc_flow.cpp
   src/abc/abc_stack.cpp
   src/abc/abc_verify.cpp
+  src/avm2/name.cpp
+  src/avm2/value.cpp
+  src/avm2/coercion.cpp
+  src/avm2/object.cpp
+  src/avm2/class.cpp
+  src/avm2/runtime.cpp
   src/hkx/layout.cpp
   src/hkx/packfile.cpp
   src/hkx/skeleton.cpp
@@ -732,6 +738,9 @@ if(RADICLE_BUILD_TESTS)
     tests/test_abc_summary.cpp
     tests/test_abc_flow.cpp
     tests/test_abc_verify.cpp
+    tests/test_avm2_value.cpp
+    tests/test_avm2_object.cpp
+    tests/test_avm2_runtime.cpp
     tests/test_material_file.cpp
     tests/test_material_file_real.cpp
     tests/test_swf.cpp
