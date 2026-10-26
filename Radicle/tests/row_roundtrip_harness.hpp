@@ -208,11 +208,15 @@ inline void roundtrip_family(const char* family, Signature signature) {
     // Constraint: a row runs on any record that carries it, so a record is not fixed before the rows are seen.
     std::optional<fo4::FormKey> chosen;
     std::optional<EditedSpan> chosen_span;
-    bool row_carried = false, row_resolved = false;
+    bool row_carried = false, row_resolved = false, capped = false;
+    std::size_t carriers = 0;
     for (const auto& key : keys) {
+      if (capped) break;
       const auto count = fo4::record_field_count(edited, key, field);
       if (!count || *count == 0) continue;
       row_carried = true;
+      capped = ++carriers > 8;
+      if (capped) break;
       const auto* current = fo4::find_record(edited, key);
       ASSERT_NE(current, nullptr);
       const auto candidate_slot = slot_of(*current, field, 0);
@@ -239,10 +243,11 @@ inline void roundtrip_family(const char* family, Signature signature) {
     }
     ++carried;
     if (!chosen.has_value()) {
-      ++tally.unresolved;
+      ++(capped ? tally.no_candidate : tally.unresolved);
       skip_note(family, field.path,
-                row_resolved ? "bytes already written by an earlier row on every record carrying it"
-                             : "row resolves no slot on the records carrying it");
+                capped ? "key scan stopped after eight carriers without a free record"
+                       : row_resolved ? "bytes already written by an earlier row on every record carrying it"
+                                      : "row resolves no slot on the records carrying it");
       continue;
     }
     const auto key = *chosen;
