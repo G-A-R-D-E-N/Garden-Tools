@@ -283,7 +283,8 @@ SubrecordGroupMutationStatus move_scene_phase(Plugin& plugin, const FormKey& sce
   const auto references = detail::action_phase_references(*record, layout, count);
   const auto span = layout.phases[from];
   auto anchor_index = to;
-  if (to >= from && to + 1 < count) anchor_index = to + 1;
+  // Constraint: a forward move inserts after the phase that ends up at `to`, including the last one.
+  if (to > from) { anchor_index = to + 1; }
   const auto anchor = detail::phase_anchor(layout, *record, anchor_index);
   detail::remap_scene_phase_vmad(plugin, *record, old_to_new);
   detail::remap_phase_references(*record, references, old_to_new);
@@ -304,7 +305,8 @@ SubrecordGroupMutationStatus move_scene_action(Plugin& plugin, const FormKey& sc
   const auto base = detail::action_index_base(*record, layout);
   const auto span = layout.actions[from];
   auto anchor_index = to;
-  if (to >= from && to + 1 < layout.actions.size()) anchor_index = to + 1;
+  // Constraint: a forward move inserts after the action that ends up at `to`, including the last one.
+  if (to > from) { anchor_index = to + 1; }
   const auto anchor = detail::action_anchor(layout, *record, anchor_index);
   detail::move_span(*record, span.open, span.close, anchor);
   const auto moved = detail::checked_scene_layout(*record);

@@ -531,19 +531,19 @@ TEST(VmadFragments, ScenePhaseIndicesFollowTheGivenOrderOrRefuse) {
   const std::vector<PhaseEntry> phases{{1, 2, 0, "Phase_2"}, {2, 5, 0xFF, "Phase_5"}};
   auto plugin = read_plugin(
       fixture::plugin_bytes(vmad_bytes(scene_tail(0x03, entries, phases)), "SCEN"), "Vmad.esp");
-  EXPECT_EQ(remap_scene_phase_indices(plugin, fixture::key(),
-                                      std::vector<std::uint32_t>{3, 4, 0, 1, 2, 5}),
+  const std::vector<std::uint32_t> order{3, 4, 0, 1, 2, 5};
+  EXPECT_EQ(remap_scene_phase_indices(plugin, fixture::key(), order),
             VmadStructureMutationStatus::updated);
   const auto remapped = saved_vmad(plugin);
   EXPECT_TRUE(vmad_coverage(remapped, sig_scen).complete());
   EXPECT_EQ(remapped,
-            vmad_bytes(scene_tail(0x03, entries, {{1, 0, 0, "Phase_2"}, {2, 1, 0xFF, "Phase_5"}})));
-  EXPECT_EQ(remap_scene_phase_indices(plugin, fixture::key(),
-                                      std::vector<std::uint32_t>{3, 4, 0, 1, 2, 5}),
+            vmad_bytes(scene_tail(0x03, entries, {{1, 0, 0, "Phase_2"}, {2, 5, 0xFF, "Phase_5"}})));
+  const std::vector<std::uint32_t> settled{0, 1, 2, 3, 4, 5};
+  EXPECT_EQ(remap_scene_phase_indices(plugin, fixture::key(), settled),
             VmadStructureMutationStatus::unchanged);
   EXPECT_EQ(fixture::subrecord(plugin).data, remapped);
 
-  const std::vector<std::uint32_t> removes_bound{0, k_scene_phase_removed, 2, 3, 4, 5};
+  const std::vector<std::uint32_t> removes_bound{k_scene_phase_removed, 1, 2, 3, 4, 5};
   EXPECT_THROW(static_cast<void>(remap_scene_phase_indices(plugin, fixture::key(), removes_bound)),
                schema::ScalarError);
   const std::vector<std::uint32_t> too_short{0};
@@ -551,8 +551,9 @@ TEST(VmadFragments, ScenePhaseIndicesFollowTheGivenOrderOrRefuse) {
                schema::ScalarError);
   EXPECT_EQ(fixture::subrecord(plugin).data, remapped);
 
-  auto packed = read_plugin(fixture::plugin_bytes(vmad_bytes(flagged_tail(0x03, {{7, "F0"}})), "PACK"),
-                            "Vmad.esp");
+  auto packed = read_plugin(
+      fixture::plugin_bytes(vmad_bytes(flagged_tail(0x03, {{7, "F0"}, {8, "F1"}})), "PACK"),
+      "Vmad.esp");
   EXPECT_EQ(remap_scene_phase_indices(packed, fixture::key(),
                                       std::vector<std::uint32_t>{1, 0}),
             VmadStructureMutationStatus::not_authorable);

@@ -108,9 +108,9 @@ TEST(ScenePhaseEdit, APhaseAppendedLastLandsBeforeTheActors) {
 
 TEST(ScenePhaseEdit, RemovingAnUnreferencedPhaseErasesExactlyItsOwnSubrecords) {
   auto plugin = read(build());
-  EXPECT_EQ(scalar(plugin, k_scene, "SCEN\\Action\\StartPhase", 1, "0"), Scalar::updated);
-  EXPECT_EQ(scalar(plugin, k_scene, "SCEN\\Action\\EndPhase", 0, "0"), Scalar::updated);
-  EXPECT_EQ(scalar(plugin, k_scene, "SCEN\\Action\\EndPhase", 2, "0"), Scalar::updated);
+  EXPECT_EQ(fo4::set_scene_scalar(plugin, key(k_scene), "SCEN\\Action\\StartPhase", 1, "0"), Scalar::updated);
+  EXPECT_EQ(fo4::set_scene_scalar(plugin, key(k_scene), "SCEN\\Action\\EndPhase", 0, "0"), Scalar::updated);
+  EXPECT_EQ(fo4::set_scene_scalar(plugin, key(k_scene), "SCEN\\Action\\EndPhase", 2, "0"), Scalar::updated);
   const auto before = snapshot(plugin, k_scene);
   ASSERT_GT(before.size(), 4u);
 
@@ -185,8 +185,7 @@ TEST(ScenePhaseEdit, MovingAPhaseRemapsEveryActionPhaseReference) {
   EXPECT_EQ(scene.actions[1].start_phase, 0u);
   EXPECT_EQ(scene.actions[2].start_phase, 1u);
   EXPECT_EQ(scene.actions[2].end_phase, 0u);
-  EXPECT_EQ(fo4::move_scene_phase(plugin, key(k_scene), 0, 1),
-            fo4::SubrecordGroupMutationStatus::unchanged);
+  EXPECT_EQ(fo4::move_scene_phase(plugin, key(k_scene), 0, 1), Group::updated);
   EXPECT_EQ(fo4::move_scene_phase(plugin, key(k_scene), 1, 1),
             fo4::SubrecordGroupMutationStatus::unchanged);
   EXPECT_EQ(fo4::move_scene_phase(plugin, key(k_scene), 2, 0),
