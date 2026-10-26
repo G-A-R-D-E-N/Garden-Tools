@@ -2,6 +2,7 @@
 
 #include "../plugin/record_edit.hpp"
 #include "fo4/environment/environment.hpp"
+#include "fo4/schema/scalar.hpp"
 #include "record_reader.hpp"
 
 #include <algorithm>
