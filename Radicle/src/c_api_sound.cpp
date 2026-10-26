@@ -70,7 +70,7 @@ radicle_status sound_structure_status(fo4::SoundDescriptorMutationStatus status,
     }
     case fo4::SoundDescriptorMutationStatus::subrecord_missing: {
       const auto text = message(" has no such subrecord");
-      return fail(RADICLE_STATUS_NOT_FOUND, text.c_str());
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, text.c_str());
     }
     case fo4::SoundDescriptorMutationStatus::index_out_of_range: {
       const auto text = message(" index is out of range");
