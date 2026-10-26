@@ -579,7 +579,8 @@ TEST(RaceDataRows, BipedObjectConditionHidesOutsideItsFormVersionWindow) {
   const auto condition = link("RACE\\BipedObjectCondition");
   const auto legacy_count = fo4::record_field_count(legacy, key(), condition);
   ASSERT_TRUE(legacy_count.has_value());
-  EXPECT_EQ(*legacy_count, 0u);
+  // Constraint: the count is positional, so the form-version gate only clears slot validity.
+  EXPECT_EQ(*legacy_count, 32u);
   EXPECT_EQ(fo4::set_record_formlink_field(legacy, key(), condition, 0, local_key(0x0000036C)),
             fo4::FormLinkFieldMutationStatus::subrecord_missing);
   const auto kept = fo4::read_plugin(fo4::write_plugin(legacy), "Legacy.esp");

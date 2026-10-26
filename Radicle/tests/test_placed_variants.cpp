@@ -183,8 +183,9 @@ TEST(PlacedVariants, EveryScalarAndFormLinkRowReadsItsSubrecord) {
       }
     }
   });
-  EXPECT_EQ(scalar_rows, 8u * 10u + 3u + 2u);
-  EXPECT_EQ(link_rows, 8u * 3u + 2u);
+  // Constraint: the variant rows add the XESP pair, so a variant matches one row more than REFR.
+  EXPECT_EQ(scalar_rows, kVariants.size() * 10u + 9u + 3u);
+  EXPECT_EQ(link_rows, kVariants.size() * 3u + 2u + 2u);
 }
 
 TEST(PlacedVariants, EditsOneScalarAndOneLinkPerRecordAndRoundTrips) {

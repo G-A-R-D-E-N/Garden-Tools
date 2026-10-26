@@ -564,11 +564,10 @@ TEST(LctnReferenceArrays, EveryArrayRowWritesItsOwnSlotAndRereads) {
     EXPECT_EQ(link_slot(written, *field, 0), 0x00000B01u);
     const auto after = payload_of(written, row.subrecord);
     ASSERT_EQ(after.size(), before.size());
-    std::size_t changed = 0;
-    for (std::size_t at = 0; at < after.size(); ++at) {
-      if (after[at] != before[at]) ++changed;
-    }
-    EXPECT_EQ(changed, 4u);
+    // Constraint: only the addressed four-byte slot may change.
+    auto expected = before;
+    put(expected, field->offset, u32_bytes(0x00000B01u));
+    EXPECT_EQ(after, expected);
   }
   for (const auto& row : k_array_scalar_rows) {
     SCOPED_TRACE(row.path);
@@ -584,11 +583,13 @@ TEST(LctnReferenceArrays, EveryArrayRowWritesItsOwnSlotAndRereads) {
     EXPECT_EQ(scalar_text(written, *field, 0), value);
     const auto after = payload_of(written, row.subrecord);
     ASSERT_EQ(after.size(), before.size());
-    std::size_t changed = 0;
-    for (std::size_t at = 0; at < after.size(); ++at) {
-      if (after[at] != before[at]) ++changed;
-    }
-    EXPECT_EQ(changed, row.storage == k_flags ? 1u : 2u);
+    // Constraint: only the addressed slot may change.
+    const auto slots = fo4::schema::resolve_field_slots(
+        written, fo4::schema::scalar_field_shape(field->scalar), field->scalar.address);
+    ASSERT_FALSE(slots.slots.empty());
+    auto expected = before;
+    put(expected, slots.slots[0].offset, fo4::schema::encode_scalar(value, field->scalar));
+    EXPECT_EQ(after, expected);
   }
 }
 

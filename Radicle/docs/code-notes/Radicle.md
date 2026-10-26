@@ -5216,3 +5216,17 @@ The INNR entry above modelled a nested run that a member of the outer run counts
 ## Radicle/tests/test_race_tint_rows.cpp:RaceTintRows (synthetic fixture declares no master, #602 C-22)
 
 - The synthetic plugin in this file writes RACE and CLFM form IDs as Patch.esp-local values (`000800`, `0B01`, `0B02`) and the tests look them up with `FormKey::parse("...:Patch.esp")`. The fixture used to declare `Fallout4.esm` as a master, which makes every raw form ID resolve against the master, so `find_record` could not see the RACE record and all six tests failed. The master and its DATA row are removed and HEDR next-object-id is raised to `0x0C00` so it stays above the highest local ID; no product code changed.
+## Radicle/tests/test_magic_location_records.cpp:LctnReferenceArrays (changed-byte pins, #602 B-29)
+
+- The array-row case used to pin a changed-byte count (4 for links, 1 or 2 for scalars). The pins were wrong because the fixture values and the written values share their high bytes: a written `00000B01` differs by two bytes from a `00000Axx` entry, and a written grid coordinate of -4 (`0xFFFC`) keeps the high byte of -3. The slot itself always read back correctly.
+- The case now builds the expected payload from the record before the write (same bytes, one four-byte slot replaced) and compares the whole payload, so every byte outside the addressed slot must stay identical. Measured in a local MSVC Debug run; the GCC lane is the remaining check.
+
+## Radicle/tests/test_placed_variants.cpp:PlacedVariants (REFR row-count pins, #602)
+
+- The scalar and link row-count pins omitted the fixture's single persistent REFR record. Measured per record in a local MSVC Debug run: each of the eight variant records matches 10 scalar and 3 link rows, the persistent REFR matches 9 and 2, and ADDN matches 3 and 2, so the totals are `kVariants.size() * 10u + 9u + 3u` (92) and `kVariants.size() * 3u + 2u + 2u` (28).
+- The variant records match one more pair than REFR because they row the XESP enable-parent pair (scalar `PARW\EnableParentFlags`, link `PARW\EnableParent`); REFR has no XESP row yet, which is the still-open item noted at `Radicle/docs/code-notes/Radicle.md:3252`.
+
+## Radicle/tests/test_race_data_rows.cpp:RaceDataRows.BipedObjectConditionHidesOutsideItsFormVersionWindow (positional row count, #602 C-24)
+
+- `fo4::record_field_count` returns `resolve_field_slots(...).slots.size()`, and `resolve_field_slots` pushes one slot per stride element, clearing only the slot's `valid` flag when a form-version gate does not apply. A version-77 RBPC payload still counts every positional slot, so the case asserts 32 rather than 0; that matches the sibling assertion at the version-78 boundary and the same positional-count precedent recorded for the version-gated IMAD rows.
+- The hidden half of the case is unchanged and still proves the gate: the write returns `subrecord_missing` and the RBPC payload stays byte-identical.
