@@ -130,6 +130,7 @@ Status Interpreter::runLoop(std::size_t sliceBudget) {
         ++sliceInstructions_;
         const Status status = execute(instruction, frame, next);
         if (status == Status::Latent) {
+            frames_[frameIndex].ip = next;
             latent_ = true;
             break;
         }
