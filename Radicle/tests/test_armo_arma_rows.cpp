@@ -421,7 +421,7 @@ TEST(ARMOARMARows, StaggerRatingEnumRejectsValuesOutsideItsNames) {
 }
 
 TEST(ARMOARMARows, ReadsArmorSubrecordsThroughTheRows) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   EXPECT_EQ(scalar_bytes(plugin, k_armo_key, "ARMO", "ARMO\\Value"), u32_bytes(0xFFFFFFF9u));
   EXPECT_EQ(scalar_bytes(plugin, k_armo_key, "ARMO", "ARMO\\Weight"), floats({1.5f}));
   EXPECT_EQ(scalar_bytes(plugin, k_armo_key, "ARMO", "ARMO\\Health"), u32_bytes(500));

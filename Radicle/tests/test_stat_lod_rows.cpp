@@ -87,7 +87,7 @@ TEST(StatLodRows, RowsUseTheXEditForwardStringLayout) {
 }
 
 TEST(StatLodRows, ReadsEachSlotUpToItsTerminator) {
-  const auto plugin = fo4::read_plugin(
+  auto plugin = fo4::read_plugin(
       make_plugin(mnam({"meshes\\lod\\first.nif", "meshes\\lod\\second.nif"})), "Patch.esp");
   const auto record = fo4::FormKey::parse(k_key);
   const auto* found = fo4::find_record(plugin, record);

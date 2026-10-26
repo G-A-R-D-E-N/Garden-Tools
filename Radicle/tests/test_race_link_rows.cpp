@@ -257,7 +257,7 @@ TEST(RaceLinkRows, CollectsTheNewSubrecordsAsFormLinks) {
                                   {"MTYP", u32_bytes(0x01000A22u)},
                                   {"QNAM", u32_bytes(0x01000A23u)}},
                                  false);
-  const auto plugin = fo4::read_plugin(bytes, "Patch.esp");
+  auto plugin = fo4::read_plugin(bytes, "Patch.esp");
   const auto hits = fo4::collect_form_links(plugin);
 
   const auto count = [&](std::string_view signature) {

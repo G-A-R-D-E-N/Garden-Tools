@@ -142,7 +142,7 @@ TEST(TypedFamiliesRealData, DecodesEveryShippedRecordFamily) {
   };
 
   for (const auto& path : masters(dir)) {
-    const auto plugin = fo4::read_plugin_file(path);
+    auto plugin = fo4::read_plugin_file(path);
     if (path == fallout) expect_localized_ids(plugin);
     for (const auto* record : fo4::collect_records(plugin)) {
       for (auto& family : families) {
@@ -201,7 +201,7 @@ TEST(TypedFamiliesRealData, RaceSpellCountAgreesWithTheActorEffectList) {
   std::size_t mismatched = 0;
   std::size_t effects_without_count = 0;
   for (const auto& path : shipped) {
-    const auto plugin = fo4::read_plugin_file(path);
+    auto plugin = fo4::read_plugin_file(path);
     for (const auto* record : fo4::collect_records(plugin)) {
       if (record->header.signature != race) continue;
       ++records;

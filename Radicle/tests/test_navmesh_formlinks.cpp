@@ -338,7 +338,7 @@ TEST(FormLink, NavmBaseObjectOnamArrayRemapsWithoutTouchingVertexIndexes) {
 }
 
 TEST(FormLink, NavmCollectionReportsOnlyOnamBaseObjectsFromThisSlice) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "NavmeshPatch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "NavmeshPatch.esp");
   const auto hits = fo4::collect_form_links(plugin);
 
   std::vector<fo4::RawFormId> onamHits;
@@ -464,7 +464,7 @@ TEST(FormLink, NaviNvmiNvppAndNvsiMixedPayloadsRemapStructurally) {
 }
 
 TEST(FormLink, MalformedNvnmFailsClosedInsteadOfScanningUint32s) {
-  const auto plugin = fo4::read_plugin(
+  auto plugin = fo4::read_plugin(
       make_mixed_navmesh_plugin(true), "NavmeshPatch.esp");
   const auto key = fo4::FormKey::parse("000800:NavmeshPatch.esp");
   EXPECT_TRUE(hits_for(plugin, key, "NVNM").empty());
@@ -494,7 +494,7 @@ TEST(FormLink, UnsupportedNvnmVersionsRefuseRemapWithoutChangingBytes) {
 }
 
 TEST(FormLink, MalformedMnamFailsClosedInsteadOfScanningTriangleIndexes) {
-  const auto plugin = fo4::read_plugin(
+  auto plugin = fo4::read_plugin(
       make_mixed_navmesh_plugin(false, true), "NavmeshPatch.esp");
   const auto key = fo4::FormKey::parse("000800:NavmeshPatch.esp");
   EXPECT_TRUE(hits_for(plugin, key, "MNAM").empty());

@@ -14,14 +14,14 @@ std::filesystem::path testdata(const char* name) {
 }  // namespace
 
 TEST(FormKeyLoad, LocalRecordResolvesAgainstThePluginItself) {
-  const auto plugin = fo4::read_plugin_file(testdata("FW_HeatherSurvivalPatch.esp"));
+  auto plugin = fo4::read_plugin_file(testdata("FW_HeatherSurvivalPatch.esp"));
   const auto* mgef = fo4::find_record(plugin, fo4::RawFormId{0x03000800});
   ASSERT_NE(mgef, nullptr);
   EXPECT_EQ(mgef->form_key, fo4::FormKey::parse("000800:FW_HeatherSurvivalPatch.esp"));
 }
 
 TEST(FormKeyLoad, OverrideResolvesAgainstTheOwningMaster) {
-  const auto plugin = fo4::read_plugin_file(testdata("FW_HeatherSurvivalPatch.esp"));
+  auto plugin = fo4::read_plugin_file(testdata("FW_HeatherSurvivalPatch.esp"));
   const auto* tea = fo4::find_record(plugin, fo4::RawFormId{0x010EC5B7});
   ASSERT_NE(tea, nullptr);
   EXPECT_EQ(tea->form_key, fo4::FormKey::parse("0EC5B7:llamaCompanionHeatherv2.esp"));
@@ -43,7 +43,7 @@ TEST(FormKeyLoad, EspSmallFileSetsCurrentKindLight) {
   fo4::test::write_subrecord(out, "DATA", data.bytes);
   fo4::test::end_record(out, tes4);
 
-  const auto plugin = fo4::read_plugin(out.bytes, "FlaggedLight.esp");
+  auto plugin = fo4::read_plugin(out.bytes, "FlaggedLight.esp");
   EXPECT_FALSE(plugin.key.looks_light());
   EXPECT_TRUE(plugin.header.tes4_flags.is_small_file());
   const auto ctx = fo4::plugin_form_id_context(plugin);
@@ -61,13 +61,13 @@ TEST(FormKeyLoad, EslExtensionWithoutLightFlagSetsCurrentKindLight) {
   fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
   fo4::test::end_record(out, tes4);
 
-  const auto plugin = fo4::read_plugin(out.bytes, "Extension.esl");
+  auto plugin = fo4::read_plugin(out.bytes, "Extension.esl");
   EXPECT_FALSE(plugin.header.tes4_flags.is_small_file());
   EXPECT_EQ(fo4::plugin_form_id_context(plugin).current_kind, fo4::PluginKind::light);
 }
 
 TEST(FormKeyLoad, FindRecordByFormKey) {
-  const auto plugin = fo4::read_plugin_file(testdata("FW_HeatherSurvivalPatch.esp"));
+  auto plugin = fo4::read_plugin_file(testdata("FW_HeatherSurvivalPatch.esp"));
   const auto* spell =
       fo4::find_record(plugin, fo4::FormKey::parse("000801:FW_HeatherSurvivalPatch.esp"));
   ASSERT_NE(spell, nullptr);

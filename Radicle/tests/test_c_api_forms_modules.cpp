@@ -170,7 +170,7 @@ TEST_F(FormsModulesCApi, ComponentsSupportReportsCoveredSignatures) {
 }
 
 TEST_F(FormsModulesCApi, SetComponentsReplacesTheStoredArray) {
-  const auto plugin = read_plugin();
+  auto plugin = read_plugin();
   const radicle_component_entry entries[] = {
       {key_of(0x804), 4},
       {key_of(0x800), 7},
@@ -202,7 +202,7 @@ TEST_F(FormsModulesCApi, SetComponentsReplacesTheStoredArray) {
 }
 
 TEST_F(FormsModulesCApi, EyesCreateDecodeAndSetText) {
-  const auto plugin = read_plugin();
+  auto plugin = read_plugin();
   radicle_eyes_creation creation{};
   creation.editor_id = "TestEyes";
   creation.full_text = "Blue eyes";
@@ -263,7 +263,7 @@ TEST_F(FormsModulesCApi, EyesCreateDecodeAndSetText) {
 }
 
 TEST_F(FormsModulesCApi, ArmorCreateDecodeAndSetModels) {
-  const auto plugin = read_plugin();
+  auto plugin = read_plugin();
   radicle_armor_creation creation{};
   creation.editor_id = "TestArmor";
   creation.male_world_model = "male.nif";
@@ -382,7 +382,7 @@ TEST_F(FormsModulesCApi, ArmorCreateDecodeAndSetModels) {
 }
 
 TEST_F(FormsModulesCApi, FactionCreateRelationAndRank) {
-  const auto plugin = read_plugin();
+  auto plugin = read_plugin();
   radicle_form_key faction_key{};
   ASSERT_EQ(radicle_plugin_create_faction(plugin.get(), "TestFaction", "Test Faction", 0x1,
                                           &faction_key),
@@ -496,7 +496,7 @@ TEST_F(FormsModulesCApi, ExteriorCellLayoutUsesFlooredGridGroups) {
 }
 
 TEST_F(FormsModulesCApi, InteriorCellCreationAndExteriorRefusal) {
-  const auto plugin = read_plugin();
+  auto plugin = read_plugin();
   radicle_form_key cell_key{};
   ASSERT_EQ(radicle_plugin_create_interior_cell(plugin.get(), "TestCell", &cell_key),
             RADICLE_STATUS_OK);

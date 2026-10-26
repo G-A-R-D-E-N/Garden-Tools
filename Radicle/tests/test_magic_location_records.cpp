@@ -237,7 +237,7 @@ const fo4::Subrecord* find_subrecord(const fo4::Record& record, fo4::Signature s
 }  // namespace
 
 TEST(MagicLocationSynthetic, EveryScalarRowDecodesOnTheFixture) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   for (const auto& item : k_items) {
     const auto signature = fo4::Signature::from_string(item.signature);
     const auto* record = fo4::find_record(plugin, fo4::FormKey::parse(item.key));
@@ -306,7 +306,7 @@ TEST(MagicLocationSynthetic, EditsOneRowPerRecordAndRereads) {
 }
 
 TEST(MagicLocationSynthetic, FixtureRecordsPassAuthoringPreflight) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   for (const auto& item : k_items) {
     const auto issues =
         fo4::schema::preflight_authoring_record(plugin, fo4::FormKey::parse(item.key));
@@ -482,7 +482,7 @@ TEST(LctnReferenceArrays, RowsCarryTheXEditLayoutAndTargetSet) {
 }
 
 TEST(LctnReferenceArrays, EachElementAddressesItsOwnSlot) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto& record = arrays_record(plugin);
   const auto persist = fo4::schema::formlink_field_descriptor(k_lctn, "LCTN\\MasterPersistReference");
   const auto grid_y = fo4::schema::scalar_field_descriptor(k_lctn, "LCTN\\MasterPersistReferenceGridY");

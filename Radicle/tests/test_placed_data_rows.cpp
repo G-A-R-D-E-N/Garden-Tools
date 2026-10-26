@@ -188,7 +188,7 @@ TEST(PlacedDataRows, PositionAndRotationRowsAddressTheSixFloatsOfTheDataStruct) 
   const char* members[] = {"PositionX", "PositionY", "PositionZ", "RotationX", "RotationY",
                           "RotationZ"};
   const float values[] = {1.5f, -2.25f, 3.0f, 0.5f, -1.0f, 6.25f};
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   for (std::size_t index = 0; index < 6; ++index) {
     SCOPED_TRACE(members[index]);
     const auto path = path_of("REFR", members[index]);
@@ -242,7 +242,7 @@ TEST(PlacedDataRows, ActorDataSharesTheReferenceLayout) {
     EXPECT_EQ(achr->scalar.storage, refr->scalar.storage);
   }
 
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto position_x = scalar_value(plugin, 0x0D10, "ACHR", "ACHR\\PositionX");
   const auto rotation_z = scalar_value(plugin, 0x0D10, "ACHR", "ACHR\\RotationZ");
   ASSERT_TRUE(position_x.has_value());
@@ -259,7 +259,7 @@ TEST(PlacedDataRows, BipedRotationRowsReadTheTwelveByteXrgbAndLeaveTheFourByteBa
   EXPECT_EQ(biped_y->scalar.payload_size, 12u);
   EXPECT_EQ(biped_y->scalar.offset, 4u);
 
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto x = scalar_value(plugin, 0x0D10, "ACHR", "ACHR\\BipedRotationX");
   const auto y = scalar_value(plugin, 0x0D10, "ACHR", "ACHR\\BipedRotationY");
   const auto z = scalar_value(plugin, 0x0D10, "ACHR", "ACHR\\BipedRotationZ");
@@ -471,7 +471,7 @@ TEST(PlacedDataRows, TeleportRowsSplitDoorTransformFlagsAndInterior) {
   const char* members[] = {"TeleportPositionX", "TeleportPositionY", "TeleportPositionZ",
                            "TeleportRotationX", "TeleportRotationY", "TeleportRotationZ"};
   const float values[] = {1.0f, 2.0f, 3.0f, 0.5f, -0.25f, 1.5f};
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   for (std::size_t index = 0; index < 6; ++index) {
     SCOPED_TRACE(members[index]);
     const auto path = path_of("REFR", members[index]);
@@ -540,7 +540,7 @@ TEST(PlacedDataRows, OcclusionPlaneRowsAddressSizePositionAndQuaternion) {
                            "OcclusionPlaneRotationQ1", "OcclusionPlaneRotationQ2",
                            "OcclusionPlaneRotationQ3", "OcclusionPlaneRotationQ4"};
   const float values[] = {100.0f, 200.0f, 10.0f, 20.0f, 30.0f, 0.5f, 0.0f, 0.25f, 1.0f};
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   for (std::size_t index = 0; index < 9; ++index) {
     SCOPED_TRACE(members[index]);
     const auto path = path_of("REFR", members[index]);
@@ -583,7 +583,7 @@ TEST(PlacedDataRows, OcclusionPlaneRowsAddressSizePositionAndQuaternion) {
 TEST(PlacedDataRows, RadioRowsAddressThreeDistancesAndOneFlagWord) {
   const char* members[] = {"RadioFrequency", "RadioMinWeakDistance", "RadioMaxWeakDistance"};
   const float values[] = {98.5f, 10.0f, 500.0f};
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   for (std::size_t index = 0; index < 3; ++index) {
     SCOPED_TRACE(members[index]);
     const auto path = path_of("REFR", members[index]);

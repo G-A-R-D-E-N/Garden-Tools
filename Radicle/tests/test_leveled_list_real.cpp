@@ -28,7 +28,7 @@ TEST_P(LeveledListReal, EveryLeveledItemAndNpcDecodesWithoutFailure) {
   if (!std::filesystem::is_regular_file(path)) {
     GTEST_SKIP() << GetParam() << " is not installed";
   }
-  const auto plugin = fo4::read_plugin_file(path);
+  auto plugin = fo4::read_plugin_file(path);
   const auto item = fo4::Signature::from_string("LVLI");
   const auto npc = fo4::Signature::from_string("LVLN");
   std::vector<fo4::FormKey> lists;

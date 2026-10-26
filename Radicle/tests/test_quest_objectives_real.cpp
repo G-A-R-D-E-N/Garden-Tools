@@ -41,7 +41,7 @@ TEST(QuestObjectivesRealData, DecodesEveryShippedQuest) {
     const auto path = std::filesystem::path{dir} / name;
     if (!std::filesystem::exists(path)) continue;
     ++files;
-    const auto plugin = fo4::read_plugin_file(path);
+    auto plugin = fo4::read_plugin_file(path);
     const fo4::RecordIndex index{plugin};
     for (const auto* record : fo4::collect_records(plugin)) {
       if (record->header.signature != k_qust) continue;

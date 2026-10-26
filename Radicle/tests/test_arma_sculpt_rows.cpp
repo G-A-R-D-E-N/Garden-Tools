@@ -154,7 +154,7 @@ TEST(ARMASculptRows, GroupDescribesOneEntryPerBoneScaleSet) {
                 ->path,
             k_sculpt_path);
 
-  const auto plugin = load(two_entries());
+  auto plugin = load(two_entries());
   const auto spans = fo4::subrecord_group_spans(plugin, fo4::FormKey::parse(k_arma_key), group);
   ASSERT_TRUE(spans.has_value());
   ASSERT_EQ(spans->size(), 2u);

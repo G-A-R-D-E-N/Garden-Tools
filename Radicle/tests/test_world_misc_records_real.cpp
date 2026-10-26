@@ -38,7 +38,7 @@ TEST_P(WorldMiscRecordsReal, EveryBatchRecordMatchesItsAuthoringAndDecodesEveryR
   record_game_build(detect_game_build(directory));
   const auto path = std::filesystem::path(directory) / GetParam();
   ASSERT_TRUE(std::filesystem::is_regular_file(path));
-  const auto plugin = fo4::read_plugin_file(path);
+  auto plugin = fo4::read_plugin_file(path);
   std::size_t batch_records = 0;
   std::size_t linked[std::size(k_batch)] = {};
   fo4::visit_records(plugin, [&](const fo4::Record& record) {
@@ -95,7 +95,7 @@ TEST(NavmeshObstacleReal, NocmRecordKeepsEveryUncountedRunUnderOneModel) {
     GTEST_SKIP() << "set FO4_DATA_DIR to run official-master coverage";
   }
   record_game_build(detect_game_build(directory));
-  const auto plugin = fo4::read_plugin_file(std::filesystem::path(directory) / "Fallout4.esm");
+  auto plugin = fo4::read_plugin_file(std::filesystem::path(directory) / "Fallout4.esm");
   const auto group = fo4::schema::subrecord_group_descriptor(
       fo4::Signature::from_string("NOCM"), R"(NOCM\Obstacle)");
   ASSERT_TRUE(group.has_value());

@@ -123,7 +123,7 @@ std::string thrown_message(Fn&& fn) {
 
 // Constraint: the row must read the payload itself as lowercase hex; the regression this detects is a byte-array read that decodes as text or echoes the raw span.
 TEST(InfoResponseBytes, ReadsThePayloadAsLowercaseHex) {
-  const auto plugin = fo4::read_plugin(
+  auto plugin = fo4::read_plugin(
       make_plugin({std::byte{0xDE}, std::byte{0xAD}, std::byte{0xBE}, std::byte{0xEF}}), "Patch.esp");
   const auto record_key = fo4::FormKey::parse(k_key);
   const auto field = row();

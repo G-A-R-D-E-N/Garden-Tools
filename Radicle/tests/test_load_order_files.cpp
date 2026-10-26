@@ -591,7 +591,7 @@ TEST(LoadOrderFiles, ResolvedFilesFromSeveralFoldersAssembleLikeOneDataFolder) {
   TempDataDir second;
   const auto master = make_tes4_plugin(k_master, 1.0f, {});
   const auto dependent = make_tes4_plugin(k_master, 1.0f, {"Fallout4.esm"});
-  const auto plugin = make_tes4_plugin(0, 1.0f, {});
+  auto plugin = make_tes4_plugin(0, 1.0f, {});
   whole.write("Fallout4.esm", master, 1);
   whole.write("DLCRobot.esm", dependent, 2);
   whole.write("Late.esp", plugin, 3);

@@ -195,7 +195,7 @@ TEST(WP9MiscRowsB, NewScalarRowsHaveXEditOffsetsStorageAndPayloadFloor) {
 }
 
 TEST(WP9MiscRowsB, DecalAndMaterialRowsReadTheirPayloadBytes) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const Bytes red{std::byte{0x11}};
   const Bytes green{std::byte{0x22}};
   const Bytes blue{std::byte{0x33}};

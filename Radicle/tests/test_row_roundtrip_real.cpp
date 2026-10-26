@@ -142,7 +142,7 @@ TEST(RowRoundtripReal, RaceLinkRowsResolveOnEveryRecord) {
   record_game_build(detect_game_build(directory));
   const auto path = std::filesystem::path(directory) / "Fallout4.esm";
   ASSERT_TRUE(std::filesystem::is_regular_file(path)) << path.string();
-  const auto plugin = fo4::read_plugin_file(path);
+  auto plugin = fo4::read_plugin_file(path);
   const auto race = Signature::from_string("RACE");
   const auto rows = fo4::schema::formlink_fields(race);
   ASSERT_FALSE(rows.empty()) << "RACE has no FormLink rows";
@@ -256,7 +256,7 @@ TEST(RowRoundtripReal, InfoResponseBytesSurviveALengthChange) {
   record_game_build(detect_game_build(directory));
   const auto path = std::filesystem::path(directory) / "Fallout4.esm";
   ASSERT_TRUE(std::filesystem::is_regular_file(path)) << path.string();
-  const auto plugin = fo4::read_plugin_file(path);
+  auto plugin = fo4::read_plugin_file(path);
 
   const auto field = fo4::schema::scalar_field_descriptor(
       Signature::from_string("INFO"), "INFO\\ResponseBytes");

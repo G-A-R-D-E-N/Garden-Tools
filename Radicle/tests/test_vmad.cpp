@@ -91,7 +91,7 @@ std::vector<std::byte> plugin_with_vmad_record(std::string_view signature,
 }
 
 void expect_master_remap_refused(const std::vector<std::byte>& bytes) {
-  const auto plugin = fo4::read_plugin(bytes, "Patch.esp");
+  auto plugin = fo4::read_plugin(bytes, "Patch.esp");
   const auto before = fo4::write_plugin(plugin);
   EXPECT_THROW(
       fo4::remap_plugin_masters(
@@ -480,7 +480,7 @@ TEST(Vmad, TermFragmentsRemapAndConsumeTheWholePayload) {
   const auto bytes = plugin_with_vmad_record("TERM", 0x03000820, vmad);
   const auto key = fo4::FormKey::parse("000820:Patch.esp");
 
-  const auto plugin = fo4::read_plugin(bytes, "Patch.esp");
+  auto plugin = fo4::read_plugin(bytes, "Patch.esp");
   const auto hits = vmad_hits(plugin, key);
   ASSERT_EQ(hits.size(), 1u);
   EXPECT_EQ(hits[0].key, fo4::FormKey::parse("00009A:RadiationOverhaul.esp"));
@@ -508,7 +508,7 @@ TEST(Vmad, TruncatedPayloadIsCaveatedInDetailedCollection) {
   vmad.u16(20);
   vmad.raw(std::string_view{"x"});
 
-  const auto plugin = fo4::read_plugin(
+  auto plugin = fo4::read_plugin(
       plugin_with_vmad_record("ACTI", 0x03000800, vmad), "Patch.esp");
   const auto collection = fo4::collect_form_links_detailed(plugin);
   EXPECT_EQ(collection.records_with_incomplete_vmad, 1u);
@@ -530,7 +530,7 @@ TEST(Vmad, TrailingDataKeepsPartialLinksButIsCaveated) {
   vmad.u32(0x0200009B);
   vmad.u32(0x0200009C);
 
-  const auto plugin = fo4::read_plugin(
+  auto plugin = fo4::read_plugin(
       plugin_with_vmad_record("ACTI", 0x03000800, vmad), "Patch.esp");
   const auto key = fo4::FormKey::parse("000800:Patch.esp");
   const auto collection = fo4::collect_form_links_detailed(plugin);
@@ -553,7 +553,7 @@ TEST(Vmad, CompletePayloadIsNotCaveated) {
   vmad.u8(1);
   object_v2(vmad, 0x0200009A);
 
-  const auto plugin = fo4::read_plugin(
+  auto plugin = fo4::read_plugin(
       plugin_with_vmad_record("ACTI", 0x03000800, vmad), "Patch.esp");
   const auto collection = fo4::collect_form_links_detailed(plugin);
   EXPECT_EQ(collection.records_with_incomplete_vmad, 0u);
@@ -581,7 +581,7 @@ TEST(Vmad, NestedStructPropertyFailsClosedInTheWalker) {
   vmad.u8(1);
   object_v2(vmad, 0x0200009A);
 
-  const auto plugin = fo4::read_plugin(
+  auto plugin = fo4::read_plugin(
       plugin_with_vmad_record("ACTI", 0x03000800, vmad), "Patch.esp");
   const auto collection = fo4::collect_form_links_detailed(plugin);
   EXPECT_EQ(collection.records_with_incomplete_vmad, 1u);

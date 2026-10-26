@@ -256,7 +256,7 @@ TEST(QustGeneralRows, RowsDescribeTheGeneralDataBlock) {
 }
 
 TEST(QustGeneralRows, ReadsTheGeneralDataAndLinks) {
-  const auto plugin = load();
+  auto plugin = load();
   EXPECT_EQ(read_member(plugin, "QUST\\Name", 0), "Name");
   EXPECT_EQ(read_member(plugin, "QUST\\Flags", 0), "1");
   EXPECT_EQ(read_member(plugin, "QUST\\Priority", 0), "30");
@@ -465,7 +465,7 @@ TEST(QustGeneralRows, AuthoringCreatesAQuestWithTheGeneralDataDefaults) {
 }
 
 TEST(QustGeneralRows, AuthoringOrderAcceptsNestedStageAndObjectiveSubrecords) {
-  const auto plugin = load(nested_condition_pieces());
+  auto plugin = load(nested_condition_pieces());
   const auto issues = fo4::schema::preflight_authoring_record(plugin, record_key());
   for (const auto& issue : issues) {
     EXPECT_NE(issue.code, "subrecord_order_invalid") << issue.path;
@@ -497,7 +497,7 @@ TEST(QustGeneralRows, ObjectiveDisplayTextIsNotTheQuestDescription) {
 
   auto pieces = head;
   pieces.insert(pieces.end(), objectives.begin(), objectives.end());
-  const auto plugin = load(pieces);
+  auto plugin = load(pieces);
   for (const auto& issue : fo4::schema::preflight_record(record_of(plugin))) {
     EXPECT_NE(issue.code, "duplicate_scalar_subrecord") << issue.path;
   }

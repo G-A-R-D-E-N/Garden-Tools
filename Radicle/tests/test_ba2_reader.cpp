@@ -309,7 +309,7 @@ TEST_F(Ba2ReaderTest, StringTablesFallBackToArchives) {
   fo4::test::write_subrecord(out, "FULL", full.bytes);
   fo4::test::end_record(out, record);
   fo4::test::end_group(out, group);
-  const auto plugin = write_file(data() / "Base.esm", out.bytes);
+  auto plugin = write_file(data() / "Base.esm", out.bytes);
 
   fo4::localization::LocalizedStringTable table{fo4::localization::StringTableKind::strings,
                                                  {{0x10, bytes_of("Archived Commonwealth")}}};

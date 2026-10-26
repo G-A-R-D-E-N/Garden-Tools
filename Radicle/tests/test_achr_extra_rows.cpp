@@ -199,7 +199,7 @@ TEST(AchrExtraRows, WaterCurrentAndLocationRefTypeRowsAreAddressedAsXEditDoes) {
 }
 
 TEST(AchrExtraRows, LinkedActivateParentSplineAndVelocityRowsReadFromThePlugin) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto& full = actor(plugin, 0x810u);
 
   EXPECT_EQ(link_raw(full, "ACHR\\LinkedReferenceKeyword"), 0x00000A90u);

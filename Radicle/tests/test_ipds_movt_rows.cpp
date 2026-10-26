@@ -238,7 +238,7 @@ TEST(IPDSRows, DataGroupHoldsOneEightBytePnamPerSpan) {
   EXPECT_TRUE(group.members[0].default_payload.empty());
 
   constexpr std::string_view key = "000C01:Patch.esp";
-  const auto plugin = fo4::read_plugin(make_impact_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_impact_plugin(), "Patch.esp");
   const auto spans = fo4::subrecord_group_spans(plugin, fo4::FormKey::parse(key), group);
   ASSERT_TRUE(spans.has_value());
   ASSERT_EQ(spans->size(), 2u);
@@ -325,7 +325,7 @@ TEST(MOVTRows, ScalarRowsHaveXEditOffsetsStorageAndTheSpedFloor) {
 }
 
 TEST(MOVTRows, ReadsStandingWalkRunAndSprintFromA112ByteSped) {
-  const auto plugin = fo4::read_plugin(make_movt_plugin(ramp(28)), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_movt_plugin(ramp(28)), "Patch.esp");
   const std::string_view key = "000C02:Patch.esp";
   EXPECT_EQ(scalar_bytes(plugin, key, "MOVT\\LeftStanding"), floats({1.0f}));
   EXPECT_EQ(scalar_bytes(plugin, key, "MOVT\\LeftSprint"), floats({4.0f}));
@@ -339,7 +339,7 @@ TEST(MOVTRows, ShorterSpedPayloadsHideTheSpeedRows) {
   constexpr std::string_view key = "000C02:Patch.esp";
   for (const auto size : sizes) {
     SCOPED_TRACE(size);
-    const auto plugin = fo4::read_plugin(make_movt_plugin(ramp(size / 4)), "Patch.esp");
+    auto plugin = fo4::read_plugin(make_movt_plugin(ramp(size / 4)), "Patch.esp");
     for (const auto& row : k_sped_rows) {
       SCOPED_TRACE(row.path);
       EXPECT_TRUE(scalar_bytes(plugin, key, row.path).empty());
@@ -395,7 +395,7 @@ TEST(MOVTRows, LegacySpeedRowsCoverThe40And44ByteLayouts) {
 
 TEST(MOVTRows, MiddleSpeedRowsCoverThe68ByteLayout) {
   constexpr std::string_view key = "000C02:Patch.esp";
-  const auto plugin = fo4::read_plugin(make_movt_plugin(ramp(17), 90), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_movt_plugin(ramp(17), 90), "Patch.esp");
   EXPECT_EQ(scalar_bytes(plugin, key, "MOVT\\LeftWalkFrom60"), floats({1.0f}));
   EXPECT_EQ(scalar_bytes(plugin, key, "MOVT\\LeftRunFrom60"), floats({2.0f}));
   EXPECT_EQ(scalar_bytes(plugin, key, "MOVT\\RightWalkFrom60"), floats({3.0f}));

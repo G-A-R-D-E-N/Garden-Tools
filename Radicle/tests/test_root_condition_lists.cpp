@@ -330,7 +330,7 @@ TEST(RootConditionLists, CApiCreatesCobjListThroughRadicleExport) {
                  std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()))};
   std::filesystem::create_directories(root.path / "out");
   const auto input = root.path / "Cond.esp";
-  const auto plugin = make_plugin("COBJ", {{"DESC", zeros(4)}, {"CNAM", zeros(4)}});
+  auto plugin = make_plugin("COBJ", {{"DESC", zeros(4)}, {"CNAM", zeros(4)}});
   const auto bytes = fo4::write_plugin(plugin);
   {
     std::ofstream stream(input, std::ios::binary);

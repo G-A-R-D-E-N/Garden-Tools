@@ -166,7 +166,7 @@ TEST(WP9MiscRowsC, SndrDescriptorTypeUsesXEditNames) {
   EXPECT_FALSE(fo4::schema::scalar_value_name(field->scalar, 1).has_value());
 
   const auto out = make_plugin();
-  const auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
   const auto raw = u32_at(subrecord_data(plugin, "001001:Patch.esp", "CNAM"), 0);
   EXPECT_EQ(raw, 0x54651A43u);
   EXPECT_EQ(*fo4::schema::scalar_value_name(field->scalar, raw), "Compound");

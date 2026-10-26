@@ -98,7 +98,7 @@ std::vector<std::byte> make_plugin(std::uint8_t unsupported_type,
 void expect_remap_refused(std::uint8_t type, bool nested = false,
                           std::uint32_t array_count = 1) {
   const auto bytes = make_plugin(type, nested, array_count);
-  const auto plugin = fo4::read_plugin(bytes, "VariablePatch.esp");
+  auto plugin = fo4::read_plugin(bytes, "VariablePatch.esp");
   EXPECT_EQ(fo4::write_plugin(plugin), bytes);
   const auto* record = fo4::find_record(
       plugin, fo4::FormKey::parse("000800:VariablePatch.esp"));
@@ -197,7 +197,7 @@ TEST(Vmad, UnexposedScalarObjectWordsStopTheTypedReader) {
       fo4::test::write_subrecord(out, "VMAD", vmad.bytes);
       fo4::test::end_record(out, record);
       fo4::test::end_group(out, group);
-      const auto plugin = fo4::read_plugin(out.bytes, "WordPatch.esp");
+      auto plugin = fo4::read_plugin(out.bytes, "WordPatch.esp");
       EXPECT_EQ(fo4::write_plugin(plugin), out.bytes);
     }
   }
@@ -379,7 +379,7 @@ TEST(Vmad, EmptyQuestFragmentHeaderHasNoFlagsOrProperties) {
 TEST(Vmad, EmptyVariableArrayPreservesValuesAndRemapsFollowingReferences) {
   for (const bool nested : {false, true}) {
     const auto bytes = make_plugin(16, nested, 0, true);
-    const auto plugin = fo4::read_plugin(bytes, "VariablePatch.esp");
+    auto plugin = fo4::read_plugin(bytes, "VariablePatch.esp");
     EXPECT_EQ(fo4::write_plugin(plugin), bytes);
     const auto key = fo4::FormKey::parse("000800:VariablePatch.esp");
     const auto* record = fo4::find_record(plugin, key);
@@ -412,7 +412,7 @@ TEST(Vmad, EmptyVariableArrayPreservesValuesAndRemapsFollowingReferences) {
 
 TEST(Vmad, EmptyVariableArrayDoesNotPermitUnknownTailOrTruncatedCountRemap) {
   const auto bytes = make_plugin(16, false, 0);
-  const auto plugin = fo4::read_plugin(bytes, "VariablePatch.esp");
+  auto plugin = fo4::read_plugin(bytes, "VariablePatch.esp");
   const auto* record = fo4::find_record(plugin, fo4::FormKey::parse("000800:VariablePatch.esp"));
   ASSERT_NE(record, nullptr);
   const auto& payload = record->subrecords[0].data;
@@ -529,7 +529,7 @@ TEST(Vmad, VariablePropertyRefusesTheWholeVmadIncludingLaterScriptsAndTail) {
   fo4::test::write_subrecord(out, "VMAD", vmad.bytes);
   fo4::test::end_record(out, record);
   fo4::test::end_group(out, group);
-  const auto plugin = fo4::read_plugin(out.bytes, "VariablePatch.esp");
+  auto plugin = fo4::read_plugin(out.bytes, "VariablePatch.esp");
   EXPECT_THROW(
       {
         fo4::remap_plugin_masters(

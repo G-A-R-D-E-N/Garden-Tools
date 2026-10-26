@@ -72,7 +72,7 @@ TEST(PluginDiff, FlagChangeIsAHeaderChange) {
 }
 
 TEST(PluginDiff, IdenticalPluginsHaveNoDiff) {
-  const auto plugin = make_plugin({{0x800, std::string_view{"Same\0", 5}}});
+  auto plugin = make_plugin({{0x800, std::string_view{"Same\0", 5}}});
   EXPECT_TRUE(fo4::diff_plugins(plugin, plugin).empty());
 }
 

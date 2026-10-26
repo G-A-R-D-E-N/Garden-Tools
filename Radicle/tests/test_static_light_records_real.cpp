@@ -40,7 +40,7 @@ TEST_P(StaticLightReal, BatchRowsDecodeAndAuthoringMinimumsHold) {
   record_game_build(detect_game_build(directory));
   const auto path = std::filesystem::path(directory) / GetParam();
   ASSERT_TRUE(std::filesystem::is_regular_file(path));
-  const auto plugin = fo4::read_plugin_file(path);
+  auto plugin = fo4::read_plugin_file(path);
   std::vector<fo4::FormKey> keys;
   fo4::visit_records(plugin, [&](const fo4::Record& record) {
     if (in_batch(record.header.signature)) keys.push_back(record.form_key);

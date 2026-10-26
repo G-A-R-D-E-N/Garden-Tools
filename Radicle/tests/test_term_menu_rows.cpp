@@ -371,7 +371,7 @@ TEST(TermMenuRows, HolotapeGroupNamesItsCountAndItsMember) {
 }
 
 TEST(TermMenuRows, ReadsBodyTextAndMenuItemsByOccurrence) {
-  const auto plugin = load();
+  auto plugin = load();
   EXPECT_EQ(read_member(plugin, "TERM\\BodyText", 0), "Body one");
   EXPECT_EQ(read_member(plugin, "TERM\\BodyText", 1), "Body two");
   EXPECT_EQ(read_member(plugin, "TERM\\ItemText", 0), "Item one");
@@ -425,7 +425,7 @@ TEST(TermMenuRows, RefusesItemValuesOutsideTheRowRange) {
 }
 
 TEST(TermMenuRows, ReadsHolotapeRunsCountAndLink) {
-  const auto plugin = load();
+  auto plugin = load();
   EXPECT_EQ(read_member(plugin, "TERM\\HolotapeTotal", 0), "2");
   EXPECT_EQ(read_member(plugin, "TERM\\HolotapeCount", 0), "1");
   EXPECT_EQ(read_member(plugin, "TERM\\HolotapeCount", 1), "2");

@@ -159,7 +159,7 @@ TEST(FstsRows, XcntCountRowsUseTheXEditStructLayout) {
 }
 
 TEST(FstsRows, ReadsTheFiveCategoryCounts) {
-  const auto plugin = fo4::read_plugin(make_plugin({1, 2, 0, 1, 1}), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin({1, 2, 0, 1, 1}), "Patch.esp");
   const auto record = fo4::FormKey::parse(k_key);
 
   const std::array<std::pair<std::string_view, std::string_view>, 5> expected{{
@@ -220,7 +220,7 @@ TEST(FstsRows, ShortXcntPayloadsHideTheCountsPastTheirEnd) {
 }
 
 TEST(FstsRows, CategoryListsSliceThePackedFootstepArray) {
-  const auto plugin = fo4::read_plugin(make_plugin({1, 2, 0, 1, 1}), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin({1, 2, 0, 1, 1}), "Patch.esp");
   const auto record = fo4::FormKey::parse(k_key);
 
   const auto swimming = list("FSTS\\SwimmingFootsteps");

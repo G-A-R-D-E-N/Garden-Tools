@@ -140,7 +140,7 @@ TEST(FormLinkSchemaRemap, SchemaOffsetsCoverGeneratedRowsOutsideOwnedBranches) {
     if (owned_by_other_branch(field)) continue;
     SCOPED_TRACE(std::string(field.path));
     ++checked;
-    const auto plugin = single_record_plugin("Schema.esp", field.record.to_string(),
+    auto plugin = single_record_plugin("Schema.esp", field.record.to_string(),
                                              row_subrecords(field), {}, k_own_record);
     const auto* record = fo4::find_record(plugin, fo4::FormKey::parse("000802:Schema.esp"));
     ASSERT_NE(record, nullptr);
@@ -160,7 +160,7 @@ TEST(FormLinkSchemaRemap, SchemaOffsetsCoverGeneratedRowsOutsideOwnedBranches) {
 TEST(FormLinkSchemaRemap, GeneratedRowsNeverTargetDeliberateNonFormIdSubrecords) {
   for (const auto& field : fo4::schema::k_generated_formlink_fields) {
     SCOPED_TRACE(std::string(field.path));
-    const auto plugin = single_record_plugin("Schema.esp", field.record.to_string(),
+    auto plugin = single_record_plugin("Schema.esp", field.record.to_string(),
                                              row_subrecords(field), {}, k_own_record);
     const auto* record = fo4::find_record(plugin, fo4::FormKey::parse("000802:Schema.esp"));
     ASSERT_NE(record, nullptr);
@@ -280,7 +280,7 @@ TEST(FormLinkSchemaRemap, FailedWhenGateSkipsSchemaRow) {
   for (const auto gate : {match, match + 1}) {
     auto cnam = zeroed(4);
     put_value(cnam, 0, gate, 4);
-    const auto plugin = single_record_plugin("Schema.esp", "SNDR",
+    auto plugin = single_record_plugin("Schema.esp", "SNDR",
                                              {{"CNAM", cnam}, {"BNAM", bnam}}, {}, k_own_record);
     const auto* record = fo4::find_record(plugin, fo4::FormKey::parse("000802:Schema.esp"));
     ASSERT_NE(record, nullptr);

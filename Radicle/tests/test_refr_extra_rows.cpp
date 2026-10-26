@@ -388,7 +388,7 @@ TEST(REFRExtraRows, LinkRowsNameTheirSubrecordsOffsetsAndTargets) {
 }
 
 TEST(REFRExtraRows, ReadsScalarsAndLinksFromThePlugin) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto key = "000C10:Patch.esp";
   EXPECT_EQ(scalar_bytes(plugin, "REFR", key, "REFR\\Radius"), floats({4.5f}));
   EXPECT_EQ(scalar_bytes(plugin, "REFR", key, "REFR\\ItemCount"), i32_bytes(-3));
@@ -564,7 +564,7 @@ TEST(REFRExtraRows, WritesScalarsAndLinksThenRereads) {
 }
 
 TEST(REFRExtraRows, LinkedActivateParentPortalPowerGridSplineAndWaterRowsReadFromThePlugin) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto key = "000C10:Patch.esp";
 
   EXPECT_EQ(link_raw(plugin, "REFR", key, "REFR\\LinkedKeyword"), 0x00000A90u);

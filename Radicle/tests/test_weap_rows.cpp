@@ -126,7 +126,7 @@ std::vector<Piece> base() {
 }  // namespace
 
 TEST(WeapRows, UnknownDnamAndFnamRunsReadAtTheirOffsets) {
-  const auto plugin = fo4::read_plugin(make_plugin(base()), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(base()), "Patch.esp");
   EXPECT_EQ(read_member(plugin, "WEAP\\UnknownAfterAnimationAttackSeconds"), "4660");
   EXPECT_EQ(read_member(plugin, "WEAP\\UnknownEnd"), "2864434397");
   EXPECT_EQ(read_member(plugin, "WEAP\\BoltAnimationSeconds"), "1122867");

@@ -213,7 +213,7 @@ const fo4::FormKey k_quest = fo4::FormKey::parse("000800:Quest.esp");
 }
 
 TEST(QuestAliasBoundary, RejectsSecondAliasArrayAfterTail) {
-  const auto plugin = fo4::read_plugin(
+  auto plugin = fo4::read_plugin(
       quest_bytes(true, false), "Quest.esp");
   EXPECT_THROW(
       static_cast<void>(fo4::forms::decode_quest_aliases(
@@ -222,7 +222,7 @@ TEST(QuestAliasBoundary, RejectsSecondAliasArrayAfterTail) {
 }
 
 TEST(QuestAliasBoundary, RejectsDuplicateAliasIdsDuringDecode) {
-  const auto plugin = fo4::read_plugin(
+  auto plugin = fo4::read_plugin(
       quest_bytes(false, true), "Quest.esp");
   EXPECT_THROW(
       static_cast<void>(fo4::forms::decode_quest_aliases(
@@ -231,7 +231,7 @@ TEST(QuestAliasBoundary, RejectsDuplicateAliasIdsDuringDecode) {
 }
 
 TEST(QuestAliasCollectionGrouping, GroupsContiguousAlcsRunAsOneAliasWithOrderedEntries) {
-  const auto plugin = fo4::read_plugin(multi_entry_collection_quest(), "Quest.esp");
+  auto plugin = fo4::read_plugin(multi_entry_collection_quest(), "Quest.esp");
   const auto quest = fo4::FormKey::parse("000800:Quest.esp");
   const auto aliases = fo4::forms::decode_quest_aliases(plugin, quest);
 

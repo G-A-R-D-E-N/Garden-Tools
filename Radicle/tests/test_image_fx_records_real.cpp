@@ -46,7 +46,7 @@ TEST_P(ImageFxRecordsReal, EveryBatchRecordMatchesItsAuthoringAndDecodesEveryRow
   record_game_build(detect_game_build(directory));
   const auto path = std::filesystem::path(directory) / GetParam();
   ASSERT_TRUE(std::filesystem::is_regular_file(path));
-  const auto plugin = fo4::read_plugin_file(path);
+  auto plugin = fo4::read_plugin_file(path);
   std::size_t batch_records = 0;
   std::map<std::string, std::size_t> sampled;
   fo4::visit_records(plugin, [&](const fo4::Record& record) {
@@ -103,7 +103,7 @@ TEST(ImageFxRecordsReal, EveryImadRecordDecodesTheHdrMultInterpolatorRows) {
   record_game_build(detect_game_build(directory));
   const auto path = std::filesystem::path(directory) / "Fallout4.esm";
   ASSERT_TRUE(std::filesystem::is_regular_file(path));
-  const auto plugin = fo4::read_plugin_file(path);
+  auto plugin = fo4::read_plugin_file(path);
   const auto time = fo4::schema::scalar_field_descriptor("IMAD\\HDREyeAdaptSpeedMultTime");
   const auto value = fo4::schema::scalar_field_descriptor("IMAD\\HDREyeAdaptSpeedMultValue");
   ASSERT_TRUE(time.has_value());
@@ -147,7 +147,7 @@ TEST(ImageFxRecordsReal, ImadMultAndAddCountsMatchTheDnamPairs) {
   record_game_build(detect_game_build(directory));
   const auto path = std::filesystem::path(directory) / "Fallout4.esm";
   ASSERT_TRUE(std::filesystem::is_regular_file(path));
-  const auto plugin = fo4::read_plugin_file(path);
+  auto plugin = fo4::read_plugin_file(path);
   const std::array<std::string_view, 21> names = {
       "HDREyeAdaptSpeed", "HDRBloomBlurRadius", "HDRBloomThreshold", "HDRBloomScale",
       "HDRTargetLumMin", "HDRTargetLumMax", "HDRSunlightScale", "HDRSkyScale",

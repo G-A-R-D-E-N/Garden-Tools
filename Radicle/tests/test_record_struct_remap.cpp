@@ -330,7 +330,7 @@ TEST(RecordStructRemap, CollectReportsUnclaimedListedPayloadsOutsideTheAllowList
   append_record(out, "ZZZZ", 0x02000100,
                 {{"NAME", payload(6, {})}, {"NAME", payload(4, {{0, 0x01000200}})}});
   append_record(out, "ACTI", 0x02000101, {{"FNAM", payload(2, {})}});
-  const auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
   const auto collection = fo4::collect_form_links_detailed(plugin);
   ASSERT_EQ(collection.unclaimed_link_payloads.size(), 1u);
   const auto& unclaimed = collection.unclaimed_link_payloads.front();

@@ -235,7 +235,7 @@ TEST(RaceTintRows, GroupSplitsOptionsAtGroupNamesAndCategoryIndexes) {
   ASSERT_TRUE(fo4::schema::subrecord_group_for_member(k_race, k_ttgp).has_value());
   EXPECT_EQ(fo4::schema::subrecord_group_for_member(k_race, k_ttgp)->path, k_group_path);
 
-  const auto plugin = load(two_groups());
+  auto plugin = load(two_groups());
   const auto spans = fo4::subrecord_group_spans(plugin, key(), group);
   ASSERT_TRUE(spans.has_value());
   ASSERT_EQ(spans->size(), 3u);
@@ -344,7 +344,7 @@ TEST(RaceTintRows, OptionRowsCarryXEditOffsetsStorageAndNames) {
 
 // Constraint: TTEC elements are 14 bytes and a payload that is not a whole number of them is ragged.
 TEST(RaceTintRows, TemplateColorsStrideFourteenBytesAndRejectRaggedPayloads) {
-  const auto plugin = load({{"TTGP", zstr("Skin")},
+  auto plugin = load({{"TTGP", zstr("Skin")},
                             {"TETI", teti(12, 0)},
                             {"TTGP", zstr("Skin Tone")},
                             {"TTEC", concat({ttec_element(0x00000B01u, 0.25f, 3, 1),
@@ -425,7 +425,7 @@ TEST(RaceTintRows, WritesTouchOnlyTheAddressedOption) {
 
 // Constraint: a localized TTGP carries a four-byte string id, so inline writes are refused.
 TEST(RaceTintRows, LocalizedNamesAreFourByteStringIds) {
-  const auto plugin = load({{"TTGP", u32_bytes(0x00035763u)},
+  auto plugin = load({{"TTGP", u32_bytes(0x00035763u)},
                             {"TETI", teti(7, 3)},
                             {"TTGP", u32_bytes(0x00035764u)}},
                            0x80);
@@ -448,7 +448,7 @@ TEST(RaceTintRows, LocalizedNamesAreFourByteStringIds) {
 
 // Constraint: TTGE is a successor, so it ends the group and a later TTGP starts a new span.
 TEST(RaceTintRows, SecondGroupOptionsStayReachableAfterTheCategoryIndex) {
-  const auto plugin = load(two_groups());
+  auto plugin = load(two_groups());
   const auto spans = fo4::subrecord_group_spans(plugin, key(), tint_group());
   ASSERT_TRUE(spans.has_value());
   ASSERT_EQ(spans->size(), 3u);

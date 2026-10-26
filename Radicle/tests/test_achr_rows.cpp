@@ -393,7 +393,7 @@ TEST(AchrRows, LinkRowsNameTheirSubrecordsOffsetsAndTargets) {
 }
 
 TEST(AchrRows, ReadsScalarsAndLinksFromThePlugin) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto& full = actor(plugin, 0x810u);
 
   const auto radius = scalar_bytes(full, "ACHR\\Radius");
@@ -657,7 +657,7 @@ TEST(AchrRows, StridedRagdollRowsAddressEachBoneAndGateTheStride) {
 }
 
 TEST(AchrRows, ShortLockPayloadReadsAsAbsentAndDropsTheKeyLinkOffset) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto& full = actor(plugin, 0x810u);
   const auto& short_lock = actor(plugin, 0x811u);
   EXPECT_EQ(short_lock.subrecords.size(), 27u);

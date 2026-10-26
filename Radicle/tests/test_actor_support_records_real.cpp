@@ -39,7 +39,7 @@ TEST_P(ActorSupportReal, EveryBatchRecordMatchesItsAuthoringAndDecodesEveryRow) 
   record_game_build(detect_game_build(directory));
   const auto path = std::filesystem::path(directory) / GetParam();
   ASSERT_TRUE(std::filesystem::is_regular_file(path));
-  const auto plugin = fo4::read_plugin_file(path);
+  auto plugin = fo4::read_plugin_file(path);
   std::size_t batch_records = 0;
   std::map<fo4::Signature, std::size_t> sampled;
   fo4::visit_records(plugin, [&](const fo4::Record& record) {

@@ -125,7 +125,7 @@ TEST(MswpRows, RowsUseTheXEditSubrecordsAndStorage) {
 }
 
 TEST(MswpRows, ReadsEverySubstitutionPairAndTheColorIndex) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto record = fo4::FormKey::parse(k_key);
 
   EXPECT_EQ(fo4::record_field_count(plugin, record, row("MSWP\\OriginalMaterial")),
@@ -202,7 +202,7 @@ TEST(MswpRows, InterleavedSubstitutionsPassAuthoringPreflight) {
   ASSERT_EQ(rules.size(), 1u);
   EXPECT_EQ(rules[0].signature, fo4::Signature::from_string("EDID"));
 
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   for (const auto& issue : fo4::schema::preflight_authoring_record(plugin, fo4::FormKey::parse(k_key))) {
     EXPECT_NE(issue.severity, fo4::schema::PreflightSeverity::error) << issue.path << ": " << issue.message;
     EXPECT_NE(issue.code, "subrecord_order_invalid") << issue.path;
@@ -246,7 +246,7 @@ TEST(MswpRows, SubstitutionGroupIsALeaderRunOfSkippableMembers) {
 }
 
 TEST(MswpRows, SpansSkipTheTreeFolderAndFollowEachLeader) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto spans = fo4::subrecord_group_spans(plugin, fo4::FormKey::parse(k_key), substitutions());
   ASSERT_TRUE(spans.has_value());
   ASSERT_EQ(spans->size(), 2u);

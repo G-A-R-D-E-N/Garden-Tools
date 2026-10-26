@@ -44,7 +44,7 @@ TEST_P(RaceTintReal, EveryTintSubrecordIsModelledAndSitsInsideItsOption) {
   record_game_build(build);
   const auto path = std::filesystem::path(directory) / GetParam();
   ASSERT_TRUE(std::filesystem::is_regular_file(path));
-  const auto plugin = fo4::read_plugin_file(path);
+  auto plugin = fo4::read_plugin_file(path);
 
   const auto race = fo4::Signature::from_string("RACE");
   const auto group =

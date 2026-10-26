@@ -87,7 +87,7 @@ fo4::Plugin make_condition_plugin(const std::vector<Condition>& conditions) {
 }
 
 std::vector<fo4::CheckFinding> findings_for(const std::vector<Condition>& conditions) {
-  const auto plugin = make_condition_plugin(conditions);
+  auto plugin = make_condition_plugin(conditions);
   const std::vector<const fo4::Plugin*> load_order{&plugin};
   return fo4::check_load_order(load_order);
 }

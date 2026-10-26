@@ -88,7 +88,7 @@ TEST(Reachability, LowIdsInACustomFirstMasterAreNotEngineRoots) {
   fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
   fo4::test::end_record(out, tes4);
   top_record(out, "KYWD", 0x014, {});
-  const auto plugin = fo4::read_plugin(out.bytes, "CustomMaster.esm");
+  auto plugin = fo4::read_plugin(out.bytes, "CustomMaster.esm");
   EXPECT_EQ(unreachable(plugin), std::vector<std::string>{"000014:CustomMaster.esm"});
 }
 
@@ -121,7 +121,7 @@ TEST(Reachability, NoReachLinksDoNotReachTheirTarget) {
   top_record(out, "GLOB", 0x815, {});
   top_record(out, "COBJ", 0x813,
              {{"CNAM", u32(0x812)}, {"BNAM", u32(0x810)}, {"CTDA", ctda(0x04, 0x815, 0x814)}});
-  const auto plugin = fo4::read_plugin(out.bytes, "Fallout4.esm");
+  auto plugin = fo4::read_plugin(out.bytes, "Fallout4.esm");
   const auto links = fo4::collect_form_links(plugin);
   EXPECT_TRUE(std::ranges::any_of(links, [](const fo4::FormLinkHit& hit) {
     return hit.subrecord.to_string() == "CTDA" && hit.offset == 12 && hit.key.local().value() == 0x814;

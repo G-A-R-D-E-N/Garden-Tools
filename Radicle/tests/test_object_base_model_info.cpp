@@ -3,7 +3,7 @@
 using namespace object_base_fixture;
 
 TEST(ObjectBaseRecordsSynthetic, ModelInfoRowsDecodeEveryTextureAndMaterialEntry) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto door_key = fo4::FormKey::parse("000803:Patch.esp");
   const auto cont_key = fo4::FormKey::parse("000802:Patch.esp");
   const auto* door = fo4::find_record(plugin, door_key);

@@ -136,7 +136,7 @@ std::vector<Piece> obstacle_body(const std::vector<std::size_t>& first, const st
 }
 
 void expect_obstacle_refusal(const std::vector<Piece>& body, std::string_view message) {
-  const auto plugin = fo4::read_plugin(make_nocm_plugin(body), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_nocm_plugin(body), "Patch.esp");
   try {
     static_cast<void>(fo4::subrecord_group_spans(plugin, record_key(), obstacle()));
     ADD_FAILURE() << "expected a refusal containing " << message;
@@ -233,7 +233,7 @@ TEST(NestedGroupRuns, InnrNamingRulesDescriptorNamesItsNestedRunAndCount) {
 }
 
 TEST(NestedGroupRuns, SpansScopeEachNestedRunToItsOwnCountSubrecord) {
-  const auto plugin = fo4::read_plugin(make_plugin(naming_body(2, 1)), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(naming_body(2, 1)), "Patch.esp");
   const auto spans = fo4::subrecord_group_spans(plugin, record_key(), naming_rules());
   ASSERT_TRUE(spans.has_value());
   ASSERT_EQ(spans->size(), 2u);
@@ -265,7 +265,7 @@ TEST(NestedGroupRuns, CountMismatchAndMissingLeaderFailClosed) {
        {"WNAM", zstr("RadicleName")}, {"KSIZ", u32_bytes(1)}, {"KWDA", u32_bytes(0x911)}, {"YNAM", u16_bytes(0)},
        {"WNAM", zstr("RadicleName")}, {"KSIZ", u32_bytes(1)}, {"KWDA", u32_bytes(0x911)}, {"YNAM", u16_bytes(1)}}};
   for (const auto& body : malformed) {
-    const auto plugin = fo4::read_plugin(make_plugin(body), "Patch.esp");
+    auto plugin = fo4::read_plugin(make_plugin(body), "Patch.esp");
     EXPECT_THROW(static_cast<void>(fo4::subrecord_group_spans(plugin, record_key(), naming_rules())),
                  fo4::schema::SubrecordGroupError);
   }
@@ -382,7 +382,7 @@ TEST(NestedGroupRuns, NocmObstacleDescriptorNamesItsUncountedRuns) {
 }
 
 TEST(NestedGroupRuns, NocmSpansGroupEveryUncountedRunUnderItsModel) {
-  const auto plugin = fo4::read_plugin(make_nocm_plugin(obstacle_body({2, 0}, {1})), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_nocm_plugin(obstacle_body({2, 0}, {1})), "Patch.esp");
   const auto spans = fo4::subrecord_group_spans(plugin, record_key(), obstacle());
   ASSERT_TRUE(spans.has_value());
   ASSERT_EQ(spans->size(), 2u);
@@ -436,7 +436,7 @@ TEST(NestedGroupRuns, NocmSingleModelSpansCoverItsRunsAndItsModel) {
 }
 
 TEST(NestedGroupRuns, NocmModelWithoutRunsStartsItsOwnSpan) {
-  const auto plugin = fo4::read_plugin(
+  auto plugin = fo4::read_plugin(
       make_nocm_plugin({{"EDID", zstr("NavmeshObstacleCoverManager")}, {"INDX", u32_bytes(0)},
                         {"INTV", u32_bytes(0)}, {"NAM1", zstr("ModelA")}, {"NAM1", zstr("ModelB")}}),
       "Patch.esp");

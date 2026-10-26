@@ -502,7 +502,7 @@ const fo4::Record* omod_record(const fo4::Plugin& plugin) {
 }  // namespace
 
 TEST(OmodData, DecodesHeaderSlotsItemsAndIncludes) {
-  const auto plugin = fo4::read_plugin(make_plugin(omod_data()), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(omod_data()), "Patch.esp");
   const auto* record = omod_record(plugin);
   ASSERT_NE(record, nullptr);
   const auto data = fo4::forms::read_omod_data(plugin, *record);
@@ -640,7 +640,7 @@ TEST(OmodData, EditsArraysAndRewritesTheirCounts) {
 
 TEST(OmodData, RefusesMalformedPayloadsAndForeignRecords) {
   const auto decode = [](Bytes payload) {
-    const auto plugin = fo4::read_plugin(make_plugin(std::move(payload)), "Patch.esp");
+    auto plugin = fo4::read_plugin(make_plugin(std::move(payload)), "Patch.esp");
     const auto* record = omod_record(plugin);
     EXPECT_NE(record, nullptr);
     if (record == nullptr) return fo4::forms::OmodData{};
