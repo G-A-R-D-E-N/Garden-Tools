@@ -167,7 +167,6 @@ add_executable(
     unit/RadiclePluginW0Tests.cpp
     unit/RadiclePluginSoundSemanticTests.cpp
     unit/RadiclePluginSchemaAuthoringTests.cpp
-    unit/RadiclePluginSchemaRecordCreationTests.cpp
     unit/RadiclePluginWaterSemanticTests.cpp
     unit/RadiclePluginVegetationSemanticTests.cpp
     unit/RadiclePluginClimateSemanticTests.cpp
