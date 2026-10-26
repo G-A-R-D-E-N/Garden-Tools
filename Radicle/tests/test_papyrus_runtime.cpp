@@ -119,9 +119,9 @@ class RuntimeTest : public ::testing::Test {
 TEST_F(RuntimeTest, AttachInitializesOnceAndRunsAnEvent) {
   int hits = 0;
   addScript(script("Actor", {state("", {method("OnInit", "None", {}, {ins("return", {id("::NoneVar")})}),
-                                      method("Hit", "None", {}, {ins("return", {id("::NoneVar")})})})}));
+                                      method("Hit", "None", {}, {ins("callstatic", {literal("Hook"), literal("Hit"), id("::nonevar")}), ins("return", {id("::NoneVar")})})})}));
   buildRuntime();
-  runtime().registerNative("Actor", "Hit",
+  runtime().registerNative("Hook", "Hit",
                            NativeRegistration{NativeTargetKind::Static, "",
                                               [&hits](const Value&, const std::vector<Value>&, Value& out,
                                                       Status&) {
@@ -185,7 +185,7 @@ TEST_F(RuntimeTest, AnEventDuringOnInitIsRefusedOrQueuedByPolicy) {
   runtime().registerNative(
       "Hook", "Emit",
       NativeRegistration{NativeTargetKind::Static, "",
-                         [&runtime = runtime(), id, &observed](const Value&, const std::vector<Value>&,
+                         [&runtime = runtime(), &id, &observed](const Value&, const std::vector<Value>&,
                                                                Value& out, Status&) {
                            observed = runtime.sendEvent(id, "Ping");
                            out = fo4::papyrus::noneValue();
@@ -208,7 +208,7 @@ TEST_F(RuntimeTest, AnEventDuringOnInitIsRefusedOrQueuedByPolicy) {
 }
 
 TEST_F(RuntimeTest, ASliceParksAndThenDropsARunawayScript) {
-  addScript(script("Loop", {state("", {method("Spin", "None", {}, {ins("jmp", {number(-1)})})})}));
+  addScript(script("Loop", {state("", {method("Spin", "None", {}, {ins("jmp", {number(0)})})})}));
   buildRuntime();
   runtime().setMaxParksPerEvent(2);
   const auto instance = runtime().attach("Loop", OwnerId::forForm("000804:Loop.esp"));
