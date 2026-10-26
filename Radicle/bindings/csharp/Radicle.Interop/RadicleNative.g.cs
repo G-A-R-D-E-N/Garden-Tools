@@ -1393,6 +1393,63 @@ public unsafe struct GrassLinks
     public IntPtr Internal;
 }
 
+public enum VmadValueKind : int
+{
+    None = 0,
+    Object = 1,
+    Alias = 2,
+    Text = 3,
+    Int = 4,
+    Real = 5,
+    Bool = 6,
+    StructMember = 7,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct VmadScript
+{
+    public IntPtr Name;
+    public byte Flags;
+    public nuint PropertyCount;
+    public nuint TrailingBytes;
+    public int Unsupported;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct VmadProperty
+{
+    public IntPtr Name;
+    public byte Type;
+    public byte Flags;
+    public VmadValueKind ValueKind;
+    public uint ObjectFormId;
+    public short Alias;
+    public IntPtr Text;
+    public int Integer;
+    public float Real;
+    public int Boolean;
+    public uint DeclaredElementCount;
+    public VmadValueKind ElementKind;
+    public nuint ElementTotal;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct VmadElement
+{
+    public VmadValueKind Kind;
+    public IntPtr MemberName;
+    public nuint StructIndex;
+    public nuint IndexInProperty;
+    public byte Type;
+    public byte Flags;
+    public uint ObjectFormId;
+    public short Alias;
+    public IntPtr Text;
+    public int Integer;
+    public float Real;
+    public int Boolean;
+}
+
 public enum PackageInputValueKind : int
 {
     None = 0,
@@ -2093,10 +2150,95 @@ public unsafe struct LandBlend
     public IntPtr Internal;
 }
 
+public enum PexCallKind : int
+{
+    Method = 0,
+    Parent = 1,
+    Static = 2,
+}
+
+public enum PexFunctionSlot : int
+{
+    State = 0,
+    PropertyRead = 1,
+    PropertyWrite = 2,
+}
+
+public enum PexChainProblem : int
+{
+    MissingParent = 0,
+    Cycle = 1,
+    TooDeep = 2,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PexCallSite
+{
+    public nuint CallerFile;
+    public nuint CallerObject;
+    public nuint CallerState;
+    public nuint CallerFunction;
+    public PexFunctionSlot CallerSlot;
+    public IntPtr CallerObjectName;
+    public IntPtr CallerFunctionName;
+    public nuint InstructionIndex;
+    public PexCallKind Kind;
+    public IntPtr ObjectName;
+    public IntPtr FunctionName;
+    public int SelfTarget;
+    public int Resolved;
+    public int NativeTarget;
+    public nuint TargetFile;
+    public nuint TargetObject;
+    public nuint TargetState;
+    public nuint TargetFunction;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PexCallTotals
+{
+    public nuint CallCount;
+    public nuint UnresolvedCount;
+    public nuint NativeCount;
+    public nuint RootCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PexChainFinding
+{
+    public nuint FileIndex;
+    public nuint ObjectIndex;
+    public IntPtr ObjectName;
+    public PexChainProblem Problem;
+    public nuint Depth;
+    public nuint FirstChainName;
+    public nuint ChainNameCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ScriptSetCandidate
+{
+    public IntPtr Name;
+    public IntPtr Path;
+    public AssetOrigin Origin;
+    public IntPtr Container;
+    public int LoadIndex;
+    public ulong Size;
+    public AssetLocation Location;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ScriptSetWinner
+{
+    public IntPtr Name;
+    public ScriptSetCandidate Winner;
+    public uint Replaced;
+}
+
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 54u;
+    public const uint CompiledAbiVersion = 56u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -2277,6 +2419,9 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_assets_archive_count")]
     public static extern nuint AssetsArchiveCount(IntPtr assets);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_assets_root_count")]
+    public static extern nuint AssetsRootCount(IntPtr assets);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_assets_get_archive")]
     public static extern Status AssetsGetArchive(IntPtr assets, nuint index, IntPtr* out_ba2);
@@ -2761,6 +2906,27 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_remove_quest_vmad_fragment")]
     public static extern Status PluginRemoveQuestVmadFragment(IntPtr plugin, FormKey key, ushort stage, int stage_index);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_record_vmad_scripts")]
+    public static extern Status RecordVmadScripts(IntPtr env, IntPtr record, IntPtr* out_scripts);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_vmad_scripts_destroy")]
+    public static extern void VmadScriptsDestroy(IntPtr scripts);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_vmad_script_count")]
+    public static extern nuint VmadScriptCount(IntPtr scripts);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_vmad_scripts_script")]
+    public static extern Status VmadScriptsScript(IntPtr scripts, nuint index, VmadScript* out_script);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_vmad_scripts_property")]
+    public static extern Status VmadScriptsProperty(IntPtr scripts, nuint script_index, nuint property_index, VmadProperty* out_property);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_vmad_element_count")]
+    public static extern nuint VmadElementCount(IntPtr scripts, nuint script_index, nuint property_index);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_vmad_scripts_element")]
+    public static extern Status VmadScriptsElement(IntPtr scripts, nuint script_index, nuint property_index, nuint element_index, VmadElement* out_element);
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_package_decode")]
     public static extern Status PackageDecode(IntPtr env, IntPtr record, PackageInfo** out_package);
 
@@ -3150,5 +3316,59 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_landscape_blend_free")]
     public static extern void LandscapeBlendFree(LandBlend* blend);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_callgraph_build")]
+    public static extern Status PexCallgraphBuild(IntPtr* files, nuint file_count, IntPtr* out_graph);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_callgraph_destroy")]
+    public static extern void PexCallgraphDestroy(IntPtr graph);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_callgraph_totals")]
+    public static extern Status PexCallgraphTotals(IntPtr graph, PexCallTotals* out_totals);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_callgraph_call_count")]
+    public static extern nuint PexCallgraphCallCount(IntPtr graph);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_callgraph_call")]
+    public static extern Status PexCallgraphCall(IntPtr graph, nuint index, PexCallSite* out_site);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_callgraph_unresolved_count")]
+    public static extern nuint PexCallgraphUnresolvedCount(IntPtr graph);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_callgraph_unresolved")]
+    public static extern Status PexCallgraphUnresolved(IntPtr graph, nuint index, PexCallSite* out_site);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_validate_parent_chains")]
+    public static extern Status PexValidateParentChains(IntPtr* files, nuint file_count, IntPtr* seed_types, nuint seed_type_count, nuint depth_limit, IntPtr* out_report);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_chain_report_destroy")]
+    public static extern void PexChainReportDestroy(IntPtr report);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_chain_report_checked")]
+    public static extern nuint PexChainReportChecked(IntPtr report);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_chain_report_count")]
+    public static extern nuint PexChainReportCount(IntPtr report);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_chain_report_get")]
+    public static extern Status PexChainReportGet(IntPtr report, nuint index, PexChainFinding* out_finding);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_chain_report_name")]
+    public static extern Status PexChainReportName(IntPtr report, nuint index, IntPtr* out_name);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_set_resolve")]
+    public static extern Status ScriptSetResolve(IntPtr assets, int* root_load_index, nuint root_load_index_count, IntPtr* out_set);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_set_count")]
+    public static extern nuint ScriptSetCount(IntPtr set);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_set_get")]
+    public static extern Status ScriptSetGet(IntPtr set, nuint index, ScriptSetWinner* out_winner);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_set_read")]
+    public static extern Status ScriptSetRead(IntPtr set, nuint index, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_script_set_destroy")]
+    public static extern void ScriptSetDestroy(IntPtr set);
 
 }

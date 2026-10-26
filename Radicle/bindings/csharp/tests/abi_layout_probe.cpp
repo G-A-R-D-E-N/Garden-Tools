@@ -25,6 +25,8 @@
 #include "fo4/c_api_nif.h"
 #include "fo4/c_api_dds.h"
 #include "fo4/c_api_terrain.h"
+#include "fo4/c_api_pex_analysis.h"
+#include "fo4/c_api_script_set.h"
 #include <cstddef>
 #include <cstdio>
 
@@ -904,6 +906,39 @@ int main() {
   printf("GrassLinks.Grasses %zu\n", offsetof(radicle_grass_links, grasses));
   printf("GrassLinks.GrassCount %zu\n", offsetof(radicle_grass_links, grass_count));
   printf("GrassLinks.Internal %zu\n", offsetof(radicle_grass_links, internal));
+  printf("VmadScript %zu\n", sizeof(radicle_vmad_script));
+  printf("VmadScript.Name %zu\n", offsetof(radicle_vmad_script, name));
+  printf("VmadScript.Flags %zu\n", offsetof(radicle_vmad_script, flags));
+  printf("VmadScript.PropertyCount %zu\n", offsetof(radicle_vmad_script, property_count));
+  printf("VmadScript.TrailingBytes %zu\n", offsetof(radicle_vmad_script, trailing_bytes));
+  printf("VmadScript.Unsupported %zu\n", offsetof(radicle_vmad_script, unsupported));
+  printf("VmadProperty %zu\n", sizeof(radicle_vmad_property));
+  printf("VmadProperty.Name %zu\n", offsetof(radicle_vmad_property, name));
+  printf("VmadProperty.Type %zu\n", offsetof(radicle_vmad_property, type));
+  printf("VmadProperty.Flags %zu\n", offsetof(radicle_vmad_property, flags));
+  printf("VmadProperty.ValueKind %zu\n", offsetof(radicle_vmad_property, value_kind));
+  printf("VmadProperty.ObjectFormId %zu\n", offsetof(radicle_vmad_property, object_form_id));
+  printf("VmadProperty.Alias %zu\n", offsetof(radicle_vmad_property, alias));
+  printf("VmadProperty.Text %zu\n", offsetof(radicle_vmad_property, text));
+  printf("VmadProperty.Integer %zu\n", offsetof(radicle_vmad_property, integer));
+  printf("VmadProperty.Real %zu\n", offsetof(radicle_vmad_property, real));
+  printf("VmadProperty.Boolean %zu\n", offsetof(radicle_vmad_property, boolean));
+  printf("VmadProperty.DeclaredElementCount %zu\n", offsetof(radicle_vmad_property, declared_element_count));
+  printf("VmadProperty.ElementKind %zu\n", offsetof(radicle_vmad_property, element_kind));
+  printf("VmadProperty.ElementTotal %zu\n", offsetof(radicle_vmad_property, element_total));
+  printf("VmadElement %zu\n", sizeof(radicle_vmad_element));
+  printf("VmadElement.Kind %zu\n", offsetof(radicle_vmad_element, kind));
+  printf("VmadElement.MemberName %zu\n", offsetof(radicle_vmad_element, member_name));
+  printf("VmadElement.StructIndex %zu\n", offsetof(radicle_vmad_element, struct_index));
+  printf("VmadElement.IndexInProperty %zu\n", offsetof(radicle_vmad_element, index_in_property));
+  printf("VmadElement.Type %zu\n", offsetof(radicle_vmad_element, type));
+  printf("VmadElement.Flags %zu\n", offsetof(radicle_vmad_element, flags));
+  printf("VmadElement.ObjectFormId %zu\n", offsetof(radicle_vmad_element, object_form_id));
+  printf("VmadElement.Alias %zu\n", offsetof(radicle_vmad_element, alias));
+  printf("VmadElement.Text %zu\n", offsetof(radicle_vmad_element, text));
+  printf("VmadElement.Integer %zu\n", offsetof(radicle_vmad_element, integer));
+  printf("VmadElement.Real %zu\n", offsetof(radicle_vmad_element, real));
+  printf("VmadElement.Boolean %zu\n", offsetof(radicle_vmad_element, boolean));
   printf("BehaviorCondition %zu\n", sizeof(radicle_behavior_condition));
   printf("BehaviorCondition.FlagsByte %zu\n", offsetof(radicle_behavior_condition, flags_byte));
   printf("BehaviorCondition.ComparisonRaw %zu\n", offsetof(radicle_behavior_condition, comparison_raw));
@@ -1378,5 +1413,49 @@ int main() {
   printf("LandBlend.Layers %zu\n", offsetof(radicle_land_blend, layers));
   printf("LandBlend.LayerCount %zu\n", offsetof(radicle_land_blend, layer_count));
   printf("LandBlend.Internal %zu\n", offsetof(radicle_land_blend, internal));
+  printf("PexCallSite %zu\n", sizeof(radicle_pex_call_site));
+  printf("PexCallSite.CallerFile %zu\n", offsetof(radicle_pex_call_site, caller_file));
+  printf("PexCallSite.CallerObject %zu\n", offsetof(radicle_pex_call_site, caller_object));
+  printf("PexCallSite.CallerState %zu\n", offsetof(radicle_pex_call_site, caller_state));
+  printf("PexCallSite.CallerFunction %zu\n", offsetof(radicle_pex_call_site, caller_function));
+  printf("PexCallSite.CallerSlot %zu\n", offsetof(radicle_pex_call_site, caller_slot));
+  printf("PexCallSite.CallerObjectName %zu\n", offsetof(radicle_pex_call_site, caller_object_name));
+  printf("PexCallSite.CallerFunctionName %zu\n", offsetof(radicle_pex_call_site, caller_function_name));
+  printf("PexCallSite.InstructionIndex %zu\n", offsetof(radicle_pex_call_site, instruction_index));
+  printf("PexCallSite.Kind %zu\n", offsetof(radicle_pex_call_site, kind));
+  printf("PexCallSite.ObjectName %zu\n", offsetof(radicle_pex_call_site, object_name));
+  printf("PexCallSite.FunctionName %zu\n", offsetof(radicle_pex_call_site, function_name));
+  printf("PexCallSite.SelfTarget %zu\n", offsetof(radicle_pex_call_site, self_target));
+  printf("PexCallSite.Resolved %zu\n", offsetof(radicle_pex_call_site, resolved));
+  printf("PexCallSite.NativeTarget %zu\n", offsetof(radicle_pex_call_site, native_target));
+  printf("PexCallSite.TargetFile %zu\n", offsetof(radicle_pex_call_site, target_file));
+  printf("PexCallSite.TargetObject %zu\n", offsetof(radicle_pex_call_site, target_object));
+  printf("PexCallSite.TargetState %zu\n", offsetof(radicle_pex_call_site, target_state));
+  printf("PexCallSite.TargetFunction %zu\n", offsetof(radicle_pex_call_site, target_function));
+  printf("PexCallTotals %zu\n", sizeof(radicle_pex_call_totals));
+  printf("PexCallTotals.CallCount %zu\n", offsetof(radicle_pex_call_totals, call_count));
+  printf("PexCallTotals.UnresolvedCount %zu\n", offsetof(radicle_pex_call_totals, unresolved_count));
+  printf("PexCallTotals.NativeCount %zu\n", offsetof(radicle_pex_call_totals, native_count));
+  printf("PexCallTotals.RootCount %zu\n", offsetof(radicle_pex_call_totals, root_count));
+  printf("PexChainFinding %zu\n", sizeof(radicle_pex_chain_finding));
+  printf("PexChainFinding.FileIndex %zu\n", offsetof(radicle_pex_chain_finding, file_index));
+  printf("PexChainFinding.ObjectIndex %zu\n", offsetof(radicle_pex_chain_finding, object_index));
+  printf("PexChainFinding.ObjectName %zu\n", offsetof(radicle_pex_chain_finding, object_name));
+  printf("PexChainFinding.Problem %zu\n", offsetof(radicle_pex_chain_finding, problem));
+  printf("PexChainFinding.Depth %zu\n", offsetof(radicle_pex_chain_finding, depth));
+  printf("PexChainFinding.FirstChainName %zu\n", offsetof(radicle_pex_chain_finding, first_chain_name));
+  printf("PexChainFinding.ChainNameCount %zu\n", offsetof(radicle_pex_chain_finding, chain_name_count));
+  printf("ScriptSetCandidate %zu\n", sizeof(radicle_script_set_candidate));
+  printf("ScriptSetCandidate.Name %zu\n", offsetof(radicle_script_set_candidate, name));
+  printf("ScriptSetCandidate.Path %zu\n", offsetof(radicle_script_set_candidate, path));
+  printf("ScriptSetCandidate.Origin %zu\n", offsetof(radicle_script_set_candidate, origin));
+  printf("ScriptSetCandidate.Container %zu\n", offsetof(radicle_script_set_candidate, container));
+  printf("ScriptSetCandidate.LoadIndex %zu\n", offsetof(radicle_script_set_candidate, load_index));
+  printf("ScriptSetCandidate.Size %zu\n", offsetof(radicle_script_set_candidate, size));
+  printf("ScriptSetCandidate.Location %zu\n", offsetof(radicle_script_set_candidate, location));
+  printf("ScriptSetWinner %zu\n", sizeof(radicle_script_set_winner));
+  printf("ScriptSetWinner.Name %zu\n", offsetof(radicle_script_set_winner, name));
+  printf("ScriptSetWinner.Winner %zu\n", offsetof(radicle_script_set_winner, winner));
+  printf("ScriptSetWinner.Replaced %zu\n", offsetof(radicle_script_set_winner, replaced));
   return 0;
 }
