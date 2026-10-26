@@ -213,8 +213,8 @@ TEST(CApiVmadWriter, StructureExportsAddScriptsAndEveryPropertyType) {
   EXPECT_EQ(decoded.scripts[0].properties[5].struct_elements->size(), 1u);
   EXPECT_EQ(decoded.scripts[0].properties[11].element_count, 1u);
   EXPECT_EQ(radicle_plugin_remove_vmad_property(plugin, key, 0, 8), RADICLE_STATUS_OK);
-  EXPECT_EQ(radicle_plugin_remove_vmad_property(plugin, key, 0, 11), RADICLE_STATUS_OK);
-  EXPECT_EQ(radicle_plugin_remove_vmad_property(plugin, key, 0, 11), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_remove_vmad_property(plugin, key, 0, 10), RADICLE_STATUS_OK);
+  EXPECT_EQ(radicle_plugin_remove_vmad_property(plugin, key, 0, 10), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_plugin_remove_vmad_script(plugin, key, 0), RADICLE_STATUS_OK);
   EXPECT_EQ(radicle_plugin_remove_vmad_script(plugin, key, 0), RADICLE_STATUS_INVALID_ARGUMENT);
   ASSERT_EQ(radicle_plugin_write_file(plugin, file.out("Empty.esp").string().c_str()), RADICLE_STATUS_OK);
