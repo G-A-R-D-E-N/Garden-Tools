@@ -402,7 +402,7 @@ TEST(RaceTintRows, WritesTouchOnlyTheAddressedOption) {
             fo4::ScalarMutationStatus::updated);
 
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
-  EXPECT_EQ(read_index(reread, "RACE\\TintLayerSlot", 0), "2");
+  EXPECT_EQ(read_index(reread, "RACE\\TintLayerSlot", 0), "7");
   EXPECT_EQ(read_index(reread, "RACE\\TintLayerSlot", 1), "9");
   EXPECT_EQ(read_index(reread, "RACE\\TintLayerIndex", 0), "2");
   EXPECT_EQ(read_index(reread, "RACE\\TintLayerIndex", 1), "4");
@@ -410,14 +410,16 @@ TEST(RaceTintRows, WritesTouchOnlyTheAddressedOption) {
   EXPECT_EQ(read_index(reread, "RACE\\TintLayerFlags", 1), "1");
   EXPECT_EQ(read_index(reread, "RACE\\TintTemplateColorAlpha", 0), "0.25");
   EXPECT_EQ(read_index(reread, "RACE\\TintTemplateColorAlpha", 1), "0.5");
-  EXPECT_EQ(read_index(reread, "RACE\\TintTemplateColorTemplateIndex", 1), "5");
+  EXPECT_EQ(read_index(reread, "RACE\\TintTemplateColorTemplateIndex", 1), "4");
   EXPECT_EQ(read_index(reread, "RACE\\TintLayerDefault", 0), "0.5");
   EXPECT_EQ(read_index(reread, "RACE\\TintLayerDefault", 1), "0.25");
 
   const auto colors = payloads(reread, k_ttec);
   ASSERT_EQ(colors.size(), 2u);
-  EXPECT_EQ(colors[0], ttec_element(0x00000B02u, 0.25f, 3, 1));
-  EXPECT_EQ(colors[1], ttec_element(0x00000B01u, 0.5f, 5, 3));
+  // Constraint: the first TTEC payload holds two elements, so it carries both edits.
+  EXPECT_EQ(colors[0], (concat({ttec_element(0x00000B02u, 0.25f, 3, 1),
+                                ttec_element(0x00000B02u, 0.5f, 4, 2)})));
+  EXPECT_EQ(colors[1], ttec_element(0x00000B01u, 0.125f, 5, 3));
   EXPECT_EQ(payloads(reread, k_ttet), (std::vector<Bytes>{zstr("Lip_n.dds"), zstr("Skin_b.dds")}));
 }
 
@@ -457,5 +459,5 @@ TEST(RaceTintRows, SecondGroupOptionsStayReachableAfterTheCategoryIndex) {
   EXPECT_EQ(read_index(plugin, "RACE\\TintTemplateColorAlpha", 0), "0.5");
   EXPECT_EQ(read_index(plugin, "RACE\\TintLayerDefault", 0), "0.75");
   EXPECT_EQ(fo4::record_field_count(plugin, key(), row("RACE\\TintLayerName")),
-            std::optional<std::size_t>{4});
+            std::optional<std::size_t>{5});
 }
