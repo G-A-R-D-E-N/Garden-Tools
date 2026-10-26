@@ -86,8 +86,7 @@ struct SoundFile {
 
 std::vector<std::pair<std::string, Bytes>> subs_of(const fo4::Plugin& plugin, std::uint32_t local) {
   std::vector<std::pair<std::string, Bytes>> out;
-  const auto* record = fo4::find_record(plugin, fo4::FormKey{fo4::PluginKey::from_filename("Snd.esp"),
-                                                             fo4::LocalFormId{local}});
+  const auto* record = fo4::find_record(plugin, fo4::FormKey{plugin.key, fo4::LocalFormId{local}});
   if (record == nullptr) return out;
   for (const auto& sub : record->subrecords) out.emplace_back(sub.signature.to_string(), sub.data);
   return out;

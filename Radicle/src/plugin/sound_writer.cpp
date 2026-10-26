@@ -177,11 +177,6 @@ SoundDescriptorMutationStatus add_sound_descriptor_base(Plugin& plugin,
   if (record == nullptr) return SoundDescriptorMutationStatus::record_missing;
   if (record->header.signature != k_sndr) return SoundDescriptorMutationStatus::record_mismatch;
   if (!discriminator_is_base(*record)) return SoundDescriptorMutationStatus::discriminator_unproven;
-  std::size_t bnam_count = 0;
-  for (const auto& sub : record->subrecords) {
-    if (sub.signature == k_bnam) ++bnam_count;
-  }
-  if (bnam_count != 0) return SoundDescriptorMutationStatus::already_present;
   if (target.owner().empty()) {
     throw schema::ScalarError("SNDR Base Descriptor target is required");
   }
@@ -191,6 +186,11 @@ SoundDescriptorMutationStatus add_sound_descriptor_base(Plugin& plugin,
       throw schema::FormLinkFieldError("SNDR Base Descriptor target type is not allowed");
     }
   }
+  std::size_t bnam_count = 0;
+  for (const auto& sub : record->subrecords) {
+    if (sub.signature == k_bnam) ++bnam_count;
+  }
+  if (bnam_count != 0) return SoundDescriptorMutationStatus::already_present;
   const auto raw = encode_plugin_form_id(target, plugin_form_id_context(plugin)).value();
   std::vector<std::byte> payload(4, std::byte{0});
   for (std::size_t byte = 0; byte < 4; ++byte) {
