@@ -307,6 +307,19 @@ AliasFillReport fillQuestAliases(const std::vector<QuestAliasInput>& aliases,
         AliasOutcome outcome;
         outcome.owner = OwnerId::forQuestAlias(alias.quest, alias.aliasId);
         outcome.kind = alias.kind;
+        if (alias.kind == AliasFillKind::FindMatching || alias.kind == AliasFillKind::UniqueActor) {
+            report.open += 1;
+            outcome.state = AliasState::Open;
+            outcome.reason = std::string("the ") + aliasKindName(alias.kind) +
+                             " fill needs the actor runtime, so the alias was left empty and counted";
+            const std::string actorKind = aliasKindName(alias.kind);
+            if (std::find(report.openKinds.begin(), report.openKinds.end(), actorKind) ==
+                report.openKinds.end()) {
+                report.openKinds.push_back(actorKind);
+            }
+            report.aliases.push_back(std::move(outcome));
+            continue;
+        }
         const std::string key = aliasFillKey(alias.kind);
         if (gate && !gate(key)) {
             report.open += 1;
@@ -334,8 +347,7 @@ AliasFillReport fillQuestAliases(const std::vector<QuestAliasInput>& aliases,
                 break;
             case AliasFillKind::FindMatching:
             case AliasFillKind::UniqueActor:
-                throw std::invalid_argument("the " + std::string(aliasKindName(alias.kind)) +
-                                            " fill needs the actor runtime");
+                break;
         }
         report.filled += 1;
         outcome.state = AliasState::Filled;
