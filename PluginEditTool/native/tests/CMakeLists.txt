@@ -167,12 +167,14 @@ add_executable(
     unit/RadiclePluginW0Tests.cpp
     unit/RadiclePluginSoundSemanticTests.cpp
     unit/RadiclePluginSchemaAuthoringTests.cpp
+    unit/RadiclePluginSchemaRecordCreationTests.cpp
     unit/RadiclePluginWaterSemanticTests.cpp
     unit/RadiclePluginVegetationSemanticTests.cpp
     unit/RadiclePluginClimateSemanticTests.cpp
     unit/RadiclePluginPreflightTests.cpp
     unit/RadiclePluginArmorCreationTests.cpp
     unit/RadiclePluginRaceCreationTests.cpp
+    unit/RadiclePluginRichCreationTests.cpp
     unit/RadiclePluginFormLinkListTests.cpp
     unit/RadiclePluginListItemTests.cpp
     unit/RadiclePluginComponentsTests.cpp
