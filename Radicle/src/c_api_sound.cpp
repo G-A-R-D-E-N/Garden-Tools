@@ -386,6 +386,9 @@ radicle_status radicle_plugin_create_sound_record(radicle_plugin* plugin, const 
   if (plugin == nullptr || signature == nullptr || editor_id_utf8 == nullptr || out_key == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, signature, editor ID and out_key are required");
   }
+  if (editor_id_utf8[0] == '\0') {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "editor ID is required");
+  }
   const std::string_view name(signature);
   if (name != "SOUN" && name != "FSTS") {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "only SOUN and FSTS records are created by this export");
