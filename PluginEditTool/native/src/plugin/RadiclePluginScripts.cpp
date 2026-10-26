@@ -63,7 +63,7 @@ std::optional<fo4::VmadProperty> propertyForType(std::string name, std::uint8_t 
     switch (type) {
         case 1:
             property.object = fo4::RawFormId{0u};
-            property.alias = -1;
+            property.alias = static_cast<std::int16_t>(-1);
             return property;
         case 2:
             property.text = std::string{};
@@ -82,7 +82,8 @@ std::optional<fo4::VmadProperty> propertyForType(std::string name, std::uint8_t 
             return property;
         case 11:
             property.element_count = 1u;
-            property.object_elements = std::vector<fo4::VmadObjectElement>{{fo4::RawFormId{0u}, -1}};
+            property.object_elements =
+                std::vector<fo4::VmadObjectElement>{{fo4::RawFormId{0u}, static_cast<std::int16_t>(-1)}};
             return property;
         case 12:
             property.element_count = 1u;
