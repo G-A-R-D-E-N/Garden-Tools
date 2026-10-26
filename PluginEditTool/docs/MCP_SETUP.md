@@ -5,8 +5,8 @@
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
 FO4IDE implements it: launched with `--mcp`, `FO4RecordEditor.exe` opens no window and speaks
 line-delimited JSON-RPC on stdin and stdout (protocol version 2024-11-05, server name `fo4editor`).
-It advertises **49 tools**: 17 for plugins and records, 12 for typed records, 4 for MO2 profile and host state, 5 for
-Papyrus, 4 for NIFs, 2 for materials, 4 for audio and 1 for BA2 archives.
+It advertises **51 tools**: 17 for plugins and records, 12 for typed records, 4 for MO2 profile and host state, 5 for
+Papyrus, 4 for NIFs, 2 for materials, 4 for audio, 1 for BA2 archives and 2 for PACK procedure trees.
 
 The server is the native C++23 host that the desktop editor also runs on, and it needs no other
 runtime. Radicle, the C++ plugin library built into the app, parses, edits and writes the plugins.
