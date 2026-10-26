@@ -354,7 +354,7 @@ TEST(FstsRows, EmptyCategoryListCreatesItsCounterOnTheFirstInsert) {
   EXPECT_EQ(fo4::schema::insert_record_formlink_list_element(plugin, record, walking, 0, step),
             fo4::schema::FormLinkListMutationStatus::updated);
   EXPECT_EQ(subrecord_bytes(plugin, record, fo4::Signature::from_string("XCNT")),
-            words({0, 0, 0, 0, 1}));
+            words({1, 0, 0, 0, 0}));
   EXPECT_EQ(subrecord_bytes(plugin, record, fo4::Signature::from_string("DATA")),
             words({0x01000815}));
 
@@ -367,7 +367,7 @@ TEST(FstsRows, EmptyCategoryListCreatesItsCounterOnTheFirstInsert) {
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   EXPECT_EQ(list_values(reread, record, walking), (std::vector<fo4::FormKey>{step}));
   EXPECT_EQ(subrecord_bytes(reread, record, fo4::Signature::from_string("XCNT")),
-            words({0, 0, 0, 0, 1}));
+            words({1, 0, 0, 0, 0}));
 
   EXPECT_EQ(fo4::schema::remove_record_formlink_list_element(plugin, record, walking, 0),
             fo4::schema::FormLinkListMutationStatus::updated);

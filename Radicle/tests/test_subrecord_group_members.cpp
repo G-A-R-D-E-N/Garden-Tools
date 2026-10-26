@@ -172,7 +172,9 @@ TEST(SubrecordGroupMembers, OptionalMemberKeepsItsDeclarationSlotWhenReinserted)
   const auto* record = fo4::find_record(plugin, record_key);
   ASSERT_NE(record, nullptr);
   for (const auto& subrecord : record->subrecords) {
-    if (subrecord.signature == bytes_member) EXPECT_TRUE(subrecord.data.empty());
+    if (subrecord.signature == bytes_member) {
+      EXPECT_TRUE(subrecord.data.empty());
+    }
   }
 }
 

@@ -35,12 +35,6 @@ fo4::schema::CountedArrayDescriptor weather_types() {
   return fo4::schema::counted_array_descriptor(k_clmt, "CLMT\\WeatherTypes").value();
 }
 
-Bytes u32_bytes(std::uint32_t value) {
-  fo4::test::ByteWriter out;
-  out.u32(value);
-  return out.bytes;
-}
-
 Bytes zstr(std::string_view text) {
   fo4::test::ByteWriter out;
   out.raw(text);

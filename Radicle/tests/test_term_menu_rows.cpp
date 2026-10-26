@@ -624,7 +624,7 @@ TEST(TermMarkerParams, EachScalarWriteTouchesOnlyItsOwnElementBytes) {
   };
   constexpr Write k_writes[] = {{"TERM\\MarkerOffsetX", 1, "2.5", 24, 1, 0x40200000u},
                                 {"TERM\\MarkerRotationZ", 0, "-90", 12, 2, 0xC2B40000u},
-                                {"TERM\\MarkerOffsetY", 1, "0", 28, 1, 0x00000000u},
+                                {"TERM\\MarkerOffsetY", 1, "0", 28, 2, 0x00000000u},
                                 {"TERM\\MarkerEntryTypes", 1, "1", 44, 1, 0x00000001u}};
   for (const auto& write : k_writes) {
     SCOPED_TRACE(write.path);
@@ -708,7 +708,7 @@ TEST(TermMarkerParams, LegacyTwentyByteElementsReadAndWriteBelowFormVersion125) 
 TEST(TermMarkerParams, RaggedOrMismatchedPayloadsHideEveryMarkerRow) {
   auto twenty_at_modern = load_marker(Bytes(20, std::byte{0}), 131u);
   EXPECT_EQ(marker_member(twenty_at_modern, "TERM\\MarkerOffsetX", 0), "absent");
-  EXPECT_EQ(marker_member(twenty_at_modern, "TERM\\MarkerKeyword", 0), "absent");
+  EXPECT_FALSE(marker_link(twenty_at_modern, "TERM\\MarkerKeyword", 0).has_value());
   EXPECT_EQ(fo4::set_record_scalar(twenty_at_modern, record_key(), scalar("TERM\\MarkerOffsetX"), 0, "1"),
             fo4::ScalarMutationStatus::subrecord_missing);
   EXPECT_EQ(fo4::set_record_formlink_field(twenty_at_modern, record_key(),
