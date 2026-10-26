@@ -225,8 +225,8 @@ TEST(ClmtWeatherTypes, CreatedClimateTakesWeatherEntriesFromProvenDefaults) {
   for (const auto& subrecord : record->subrecords) {
     if (subrecord.signature != k_wlst) continue;
     ++wlst_payloads;
-    EXPECT_EQ(subrecord.data.size(), 24u);
+    EXPECT_EQ(subrecord.data.size(), 36u);  // seeded default element plus the two inserts
   }
   EXPECT_EQ(wlst_payloads, 1u);
-  EXPECT_EQ(fo4::record_field_count(reread, created.key, "CLMT\\WeatherChance"), 2u);
+  EXPECT_EQ(fo4::record_field_count(reread, created.key, "CLMT\\WeatherChance"), 3u);
 }

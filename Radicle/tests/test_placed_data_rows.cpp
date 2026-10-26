@@ -641,7 +641,7 @@ TEST(PlacedDataRows, EveryTeleportOcclusionAndRadioRowWritesWithoutMovingANeighb
       {"REFR\\OcclusionPlaneRotationQ1", "26.5"}, {"REFR\\OcclusionPlaneRotationQ2", "27.5"},
       {"REFR\\OcclusionPlaneRotationQ3", "28.5"}, {"REFR\\OcclusionPlaneRotationQ4", "29.5"},
       {"REFR\\RadioFrequency", "31.5"},       {"REFR\\RadioMinWeakDistance", "32.5"},
-      {"REFR\\RadioMaxWeakDistance", "33.5"}, {"REFR\\RadioFlags", "1"},
+      {"REFR\\RadioMaxWeakDistance", "33.5"}, {"REFR\\RadioFlags", "0"},
   };
 
   const auto baseline = fo4::read_plugin(make_plugin(), "Patch.esp");
