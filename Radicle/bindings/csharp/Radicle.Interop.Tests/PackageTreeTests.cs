@@ -48,7 +48,7 @@ public class PackageTreeTests
         Assert.Equal(2u, tree.Nodes[0].ChildCount);
         Assert.Equal("Wander", tree.Nodes[added].Name);
         plugin.RemovePackageProcedure(key, added);
-        Assert.Throws<RadicleException>(() => plugin.AddPackageProcedure(key, 0, "Travel"));
+        Assert.Throws<RadicleException>(() => plugin.AddPackageProcedure(key, 0, "Fly"));
         Assert.Throws<RadicleException>(() => plugin.AddPackageProcedure(key, 1, "Activate"));
         Assert.Throws<RadicleException>(() => plugin.RemovePackageProcedure(key, 0));
         Assert.Throws<RadicleException>(() => plugin.RemovePackageProcedure(key, 9));

@@ -16,30 +16,9 @@ std::string packageTreeFailure(fo4::env::PackageTreeMutationStatus status) {
         case fo4::env::PackageTreeMutationStatus::updated:
         case fo4::env::PackageTreeMutationStatus::unchanged:
             return {};
-        case fo4::env::PackageTreeMutationStatus::record_missing:
-            return "Record is not present in the plugin";
-        case fo4::env::PackageTreeMutationStatus::not_a_package:
-            return "Record is not a PACK package";
-        case fo4::env::PackageTreeMutationStatus::undecodable:
-            return "The package procedure tree does not decode";
-        case fo4::env::PackageTreeMutationStatus::index_out_of_range:
-            return "Procedure node index is out of range";
-        case fo4::env::PackageTreeMutationStatus::not_a_container:
-            return "A procedure can only be added under a branch node";
-        case fo4::env::PackageTreeMutationStatus::not_a_leaf:
-            return "Only leaf procedure nodes can be removed";
-        case fo4::env::PackageTreeMutationStatus::root_node:
-            return "The root procedure node cannot be removed";
-        case fo4::env::PackageTreeMutationStatus::unknown_procedure:
-            return "Procedure type is not one of the stored names";
-        case fo4::env::PackageTreeMutationStatus::inputs_required:
-            return "Procedure needs data inputs, which this tool cannot supply";
-        case fo4::env::PackageTreeMutationStatus::reference_orphaned:
-            return "Removal would orphan a PKC2 data input or PFO2 override";
-        case fo4::env::PackageTreeMutationStatus::tree_full:
-            return "Procedure tree depth limit reached";
+        default:
+            return fo4::env::package_tree_mutation_status_message(status);
     }
-    return "The package tree edit reported an unknown status";
 }
 
 std::optional<fo4::FormKey> formKeyArgument(const std::string& text) {

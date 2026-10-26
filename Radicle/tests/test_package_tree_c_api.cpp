@@ -45,9 +45,11 @@ TEST(CApiPackageTree, AddsAndRemovesNodesWithOutIndexResetAndNamedRefusals) {
   EXPECT_EQ(radicle_package_procedure_add(plugin, key, 1, "Activate", &added), RADICLE_STATUS_OK);
   EXPECT_NE(added, 0u);
   added = 99;
-  EXPECT_EQ(radicle_package_procedure_add(plugin, key, 1, "Travel", &added), RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(added, 0u);
+  EXPECT_EQ(radicle_package_procedure_add(plugin, key, 1, "Travel", &added), RADICLE_STATUS_OK);
+  EXPECT_NE(added, 0u);
+  added = 99;
   EXPECT_EQ(radicle_package_procedure_add(plugin, key, 2, "Activate", &added), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(added, 0u);
   EXPECT_EQ(radicle_package_procedure_add(plugin, key, 0, nullptr, &added), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_package_procedure_remove(plugin, key, 1), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_package_procedure_remove(plugin, radicle_form_key{"Pack.esp", 0x801}, 2),
@@ -58,5 +60,8 @@ TEST(CApiPackageTree, AddsAndRemovesNodesWithOutIndexResetAndNamedRefusals) {
   const auto* record = fo4::find_record(saved, fo4::FormKey{fo4::PluginKey::from_filename("Pack.esp"),
                                                              fo4::LocalFormId{0x800}});
   ASSERT_NE(record, nullptr);
-  EXPECT_TRUE(fo4::env::decode_package_procedure(*record).decoded);
+  const auto decoded = fo4::env::decode_package_procedure(*record);
+  EXPECT_TRUE(decoded.decoded);
+  EXPECT_EQ(decoded.nodes.size(), 6u);
+  EXPECT_EQ(decoded.inputs.size(), 8u);
 }

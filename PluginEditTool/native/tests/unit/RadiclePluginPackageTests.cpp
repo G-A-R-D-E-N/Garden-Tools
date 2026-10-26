@@ -112,7 +112,7 @@ TEST_CASE("Native package procedure edits add and remove a leaf through save and
     const auto added = backend.addPackageProcedure(nlohmann::json::array({"Pack.esp", key, 1, "Activate"}));
     REQUIRE(added.has_value());
     REQUIRE(backend.removePackageProcedure(nlohmann::json::array({"Pack.esp", key, 1})).has_value());
-    const auto refused = backend.addPackageProcedure(nlohmann::json::array({"Pack.esp", key, 1, "Travel"}));
+    const auto refused = backend.addPackageProcedure(nlohmann::json::array({"Pack.esp", key, 1, "Fly"}));
     REQUIRE_FALSE(refused.has_value());
     CHECK(refused.error().type == "PackageWriteFailed");
     REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Pack.esp"})).has_value());

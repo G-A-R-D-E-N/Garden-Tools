@@ -94,6 +94,7 @@ const char* package_target_type_name(PackageTargetType type);
 
 PackageProcedureTree decode_package_procedure(const Record& record);
 std::optional<std::uint32_t> expected_input_count(std::string_view leaf_name);
+bool is_known_procedure(std::string_view name);
 std::optional<PackageInputValueKind> package_input_value_kind(std::string_view type_name);
 
 PackageInputMutationStatus add_package_data_input(Plugin& plugin,
@@ -121,10 +122,17 @@ enum class PackageTreeMutationStatus {
   not_a_leaf,
   root_node,
   unknown_procedure,
-  inputs_required,
+  leaf_payload_undetermined,
+  input_id_conflict,
   reference_orphaned,
+  templated_package,
+  input_creation_failed,
   tree_full,
 };
+
+inline constexpr std::size_t package_tree_max_depth = 64;
+
+const char* package_tree_mutation_status_message(PackageTreeMutationStatus status);
 
 // Constraint: the tree is rebuilt from the decoded model and every branch count is recomputed.
 PackageTreeMutationStatus add_package_procedure_node(Plugin& plugin,

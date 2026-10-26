@@ -288,34 +288,28 @@ namespace {
 
 radicle_status package_tree_failure(fo4::env::PackageTreeMutationStatus status) {
   using Status = fo4::env::PackageTreeMutationStatus;
+  const auto message = fo4::env::package_tree_mutation_status_message(status);
   switch (status) {
     case Status::updated:
     case Status::unchanged:
       return RADICLE_STATUS_OK;
     case Status::record_missing:
-      return fail(RADICLE_STATUS_NOT_FOUND, "plugin has no such record");
+      return fail(RADICLE_STATUS_NOT_FOUND, message);
     case Status::not_a_package:
-      return fail(RADICLE_STATUS_PARSE_ERROR, "expected a PACK record");
     case Status::undecodable:
-      return fail(RADICLE_STATUS_PARSE_ERROR, "the procedure tree does not decode");
+      return fail(RADICLE_STATUS_PARSE_ERROR, message);
     case Status::index_out_of_range:
-      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "procedure node index is out of range");
     case Status::not_a_container:
-      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "a procedure can only be added under a branch node");
     case Status::not_a_leaf:
-      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "only leaf procedure nodes can be removed");
     case Status::root_node:
-      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the root procedure node cannot be removed");
     case Status::unknown_procedure:
-      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "procedure type is not one of the stored names");
-    case Status::inputs_required:
-      return fail(RADICLE_STATUS_INVALID_ARGUMENT,
-                  "procedure needs data inputs, which this export cannot supply");
+    case Status::leaf_payload_undetermined:
+    case Status::input_id_conflict:
     case Status::reference_orphaned:
-      return fail(RADICLE_STATUS_INVALID_ARGUMENT,
-                  "removal would orphan a PKC2 data input or PFO2 override");
+    case Status::templated_package:
+    case Status::input_creation_failed:
     case Status::tree_full:
-      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "procedure tree depth limit reached");
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, message);
   }
   return fail(RADICLE_STATUS_INTERNAL_ERROR, "unknown package tree status");
 }
