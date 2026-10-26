@@ -5,6 +5,7 @@
 #include "fo4/pex/pex.hpp"
 
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace fo4::papyrus {
@@ -20,6 +21,9 @@ public:
                              Status& status) = 0;
     virtual bool callNative(const std::string& script, const std::string& function,
                             const std::vector<Value>& args, Value& out, Status& status) = 0;
+
+    // Invariant: gate is default-allow; a Host may refuse a semantic key.
+    virtual bool gate(std::string_view key);
 
     virtual bool getVariable(const ObjectRef& object, const std::string& name, Value& out,
                              Status& status);

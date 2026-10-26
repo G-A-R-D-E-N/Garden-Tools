@@ -252,6 +252,7 @@ add_library(fo4
   src/papyrus/host.cpp
   src/papyrus/array_ops.cpp
   src/papyrus/interpreter.cpp
+  src/papyrus/struct_ops.cpp
   src/papyrus/execute.cpp
   src/swf/swf.cpp
   src/swf/swf_tags.cpp
@@ -326,7 +327,7 @@ target_sources(radicle_c PRIVATE src/c_api_dialogue.cpp)
 target_sources(radicle_c PRIVATE src/c_api_armor.cpp src/c_api_eyes.cpp src/c_api_faction.cpp src/c_api_components.cpp src/c_api_cell.cpp)
 target_sources(radicle_c PRIVATE src/c_api_patch.cpp)
 target_sources(radicle_c PRIVATE src/c_api_conflict.cpp)
-target_sources(radicle_c PRIVATE src/c_api_pex_analysis.cpp src/c_api_vmad_read.cpp src/c_api_script_set.cpp)
+target_sources(radicle_c PRIVATE src/c_api_pex_analysis.cpp src/c_api_vmad_read.cpp src/c_api_script_set.cpp src/c_api_papyrus.cpp)
 target_sources(fo4 PRIVATE src/patch/delta_patch.cpp)
 target_sources(fo4 PRIVATE src/patch/list_merge.cpp)
 target_sources(fo4 PRIVATE src/papyrus_source/lexer.cpp src/papyrus_source/parser.cpp src/papyrus_source/parser_decl.cpp src/papyrus_source/parser_expr.cpp src/papyrus_source/parser_stmt.cpp src/papyrus_source/summary.cpp)
@@ -703,6 +704,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_pex_corpus.cpp
     tests/test_pex_oracle.cpp
     tests/test_papyrus_vm.cpp
+    tests/test_papyrus_structs.cpp
+    tests/test_c_api_papyrus.cpp
     tests/test_c_api_script_set.cpp
     tests/test_pex_analysis.cpp
     tests/test_pex_analysis_c_api.cpp
