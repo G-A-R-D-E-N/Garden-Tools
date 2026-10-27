@@ -33,11 +33,6 @@ using support::joinNames;
 
 namespace {
 
-std::string stringArgument(const nlohmann::json& args, std::size_t index) {
-    if (!args.is_array() || index >= args.size() || !args[index].is_string()) return {};
-    return args[index].get<std::string>();
-}
-
 bool optionalBoolArgument(const nlohmann::json& args, std::size_t index, bool& value) {
     value = false;
     if (!args.is_array() || index >= args.size() || args[index].is_null()) return true;
@@ -219,10 +214,10 @@ Result<nlohmann::json> RadiclePluginBackend::invokeBackend(
 
 Result<nlohmann::json> RadiclePluginBackend::setConditionsAtPath(
     const nlohmann::json& arguments) {
-    const auto pluginName = stringArgument(arguments, 0);
-    const auto recordId = stringArgument(arguments, 1);
-    const auto path = stringArgument(arguments, 2);
-    const auto conditionsJson = stringArgument(arguments, 3);
+    const auto pluginName = support::stringArgument(arguments, 0);
+    const auto recordId = support::stringArgument(arguments, 1);
+    const auto path = support::stringArgument(arguments, 2);
+    const auto conditionsJson = support::stringArgument(arguments, 3);
     if (pluginName.empty()) {
         return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
     }
@@ -377,10 +372,10 @@ Result<nlohmann::json> RadiclePluginBackend::setConditionsAtPath(
 }
 
 Result<nlohmann::json> RadiclePluginBackend::setField(const nlohmann::json& arguments) {
-    const auto pluginName = stringArgument(arguments, 0);
-    const auto formKeyText = stringArgument(arguments, 1);
-    const auto field = stringArgument(arguments, 2);
-    const auto value = stringArgument(arguments, 3);
+    const auto pluginName = support::stringArgument(arguments, 0);
+    const auto formKeyText = support::stringArgument(arguments, 1);
+    const auto field = support::stringArgument(arguments, 2);
+    const auto value = support::stringArgument(arguments, 3);
 
     if (pluginName.empty()) {
         return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
@@ -558,9 +553,9 @@ Result<nlohmann::json> RadiclePluginBackend::setField(const nlohmann::json& argu
 
 Result<nlohmann::json> RadiclePluginBackend::copyAsOverride(
     const nlohmann::json& arguments) {
-    const auto sourceName = stringArgument(arguments, 0);
-    const auto formKeyText = stringArgument(arguments, 1);
-    const auto targetName = stringArgument(arguments, 2);
+    const auto sourceName = support::stringArgument(arguments, 0);
+    const auto formKeyText = support::stringArgument(arguments, 1);
+    const auto targetName = support::stringArgument(arguments, 2);
 
     if (sourceName.empty()) {
         return std::unexpected(Error{"SourcePluginMissing", "Source plugin name is empty"});
@@ -578,9 +573,9 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverride(
 
 Result<nlohmann::json> RadiclePluginBackend::copyAsOverrideLocked(
     const nlohmann::json& arguments, bool initiallyDisabled) {
-    const auto sourceName = stringArgument(arguments, 0);
-    const auto formKeyText = stringArgument(arguments, 1);
-    const auto targetName = stringArgument(arguments, 2);
+    const auto sourceName = support::stringArgument(arguments, 0);
+    const auto formKeyText = support::stringArgument(arguments, 1);
+    const auto targetName = support::stringArgument(arguments, 2);
     bool overwrite = false;
 
     if (!support::tryBoolArgument(arguments, 3, overwrite)) {
