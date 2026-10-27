@@ -238,13 +238,16 @@ void put_u8(std::vector<std::uint8_t>& out, std::uint32_t value) {
   out.push_back(static_cast<std::uint8_t>(value & 0xFFu));
 }
 
-void put_u30(std::vector<std::uint8_t>& out, std::uint32_t value) {
-  std::uint32_t remaining = value & 0x3FFFFFFFu;
-  while (remaining >= 0x80u) {
-    put_u8(out, (remaining & 0x7Fu) | 0x80u);
-    remaining >>= 7;
+void put_u32(std::vector<std::uint8_t>& out, std::uint32_t value) {
+  while (value >= 0x80u) {
+    put_u8(out, (value & 0x7Fu) | 0x80u);
+    value >>= 7;
   }
-  put_u8(out, remaining);
+  put_u8(out, value);
+}
+
+void put_u30(std::vector<std::uint8_t>& out, std::uint32_t value) {
+  put_u32(out, value & 0x3FFFFFFFu);
 }
 
 void put_s24(std::vector<std::uint8_t>& out, std::int32_t value) {
@@ -343,9 +346,11 @@ AbcStatus decode_code(const std::uint8_t* code, std::size_t size,
       operand.role = operand_spec.role;
       switch (operand_spec.encoding) {
         case Enc::U30:
-          operand.value = reader.u30();
           if (operand_spec.role == Role::Immediate) {
+            operand.value = reader.u32();
             operand.immediate = static_cast<std::int16_t>(operand.value);
+          } else {
+            operand.value = reader.u30();
           }
           break;
         case Enc::S24:
@@ -454,7 +459,11 @@ AbcStatus encode_code(const std::vector<AbcInstruction>& code, std::vector<std::
       const AbcDecodedOperand& operand = instruction.operands[index];
       switch (spec.encoding) {
         case AbcOperandEncoding::U30:
-          put_u30(out, operand.value);
+          if (spec.role == AbcOperandRole::Immediate) {
+            put_u32(out, operand.value);
+          } else {
+            put_u30(out, operand.value);
+          }
           break;
         case AbcOperandEncoding::S24:
           put_s24(out, static_cast<std::int32_t>(static_cast<std::int64_t>(operand.target) - next));

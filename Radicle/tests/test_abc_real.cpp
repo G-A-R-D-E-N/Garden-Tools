@@ -181,8 +181,11 @@ void check_block(const std::string& name, std::span<const std::byte> payload, Ab
         << name << ": body " << body_index << ": " << fo4::abc::status_name(encode_status);
     if (encode_status != fo4::abc::AbcStatus::Ok || reencoded != body.code) {
       ++stats.reencode_mismatches;
-      EXPECT_EQ(reencoded, body.code)
-          << name << ": body " << body_index << " did not re-encode to its own bytes";
+      EXPECT_TRUE(reencoded == body.code)
+          << name << ": body " << body_index << " did not re-encode to its own bytes"
+          << "; first difference at byte "
+          << first_difference(std::as_bytes(std::span<const std::uint8_t>(body.code)), reencoded)
+          << " of " << body.code.size();
     }
 
     fo4::abc::AbcMethodFlow flow;

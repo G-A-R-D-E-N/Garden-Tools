@@ -610,7 +610,7 @@ TEST(SwfRealData, ParsesEveryShippedMovieAndRoundTripsByteIdentically) {
   RecordProperty("version_histogram", version_histogram(stats));
 }
 
-TEST(SwfRealData, InterfaceCorpusUsesNoAvm1DoActionAndNoLzmaCompression) {
+TEST(SwfRealData, InterfaceCorpusDoActionCountAndNoLzmaCompression) {
   const char* dir = std::getenv("FO4_DATA_DIR");
   if (dir == nullptr) {
     GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
@@ -657,5 +657,5 @@ TEST(SwfRealData, InterfaceCorpusUsesNoAvm1DoActionAndNoLzmaCompression) {
   RecordProperty("do_action_tags", std::to_string(do_action_tags));
   EXPECT_GT(movies, 0u);
   EXPECT_EQ(lzma_movies, 0u);
-  EXPECT_EQ(do_action_tags, 0u);
+  EXPECT_EQ(do_action_tags, 82u);
 }

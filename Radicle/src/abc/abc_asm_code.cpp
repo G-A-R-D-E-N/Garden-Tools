@@ -176,15 +176,21 @@ struct BodyParser {
               return fail("instruction count operand is malformed");
             }
           } else if (spec.role == AbcOperandRole::Immediate) {
-            std::int32_t immediate = 0;
-            if (!parse_i32(tokens[token], immediate)) {
-              return fail("instruction immediate operand is malformed");
+            std::uint32_t wide = 0;
+            if (parse_u32(tokens[token], wide) && wide >= 0xFFFF8000u) {
+              operand.value = wide;
+              operand.immediate = static_cast<std::int16_t>(wide);
+            } else {
+              std::int32_t immediate = 0;
+              if (!parse_i32(tokens[token], immediate)) {
+                return fail("instruction immediate operand is malformed");
+              }
+              if (immediate != static_cast<std::int16_t>(immediate)) {
+                return fail("instruction immediate operand does not fit 16 bits");
+              }
+              operand.immediate = immediate;
+              operand.value = static_cast<std::uint16_t>(immediate);
             }
-            if (immediate != static_cast<std::int16_t>(immediate)) {
-              return fail("instruction immediate operand does not fit 16 bits");
-            }
-            operand.immediate = immediate;
-            operand.value = static_cast<std::uint16_t>(immediate);
           } else if (!parse_ref(tokens[token], operand.value)) {
             return fail("instruction reference operand is malformed");
           }

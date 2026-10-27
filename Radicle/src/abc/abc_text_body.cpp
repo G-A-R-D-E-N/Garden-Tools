@@ -73,6 +73,9 @@ std::string render_operand(const AbcFile& file, const AbcDecodedOperand& operand
     case AbcOperandRole::Count:
       return std::to_string(operand.value);
     case AbcOperandRole::Immediate:
+      if (operand.value > 0xFFFFu) {
+        return std::to_string(operand.value);
+      }
       return std::to_string(operand.immediate);
     case AbcOperandRole::Offset:
       return "-> " + label_for(labels, static_cast<std::size_t>(operand.target));
@@ -100,6 +103,12 @@ std::string render_body(const AbcFile& file, const AbcMethodBody& body, std::siz
 
   std::vector<AbcInstruction> instructions;
   const AbcStatus status = decode_code(body.code, instructions, body.exceptions);
+  std::vector<std::size_t> offsets;
+  collect_label_offsets(instructions, body.exceptions, offsets);
+  std::map<std::size_t, std::string> labels;
+  for (std::size_t label_index = 0; label_index < offsets.size(); ++label_index) {
+    labels[offsets[label_index]] = "L" + std::to_string(label_index);
+  }
   if (status != AbcStatus::Ok) {
     out += "    ; decode failed: " + std::string{status_name(status)} + "\n";
     out += "    ; raw";
@@ -108,12 +117,6 @@ std::string render_body(const AbcFile& file, const AbcMethodBody& body, std::siz
     }
     out += "\n";
   } else {
-    std::vector<std::size_t> offsets;
-    collect_label_offsets(instructions, body.exceptions, offsets);
-    std::map<std::size_t, std::string> labels;
-    for (std::size_t label_index = 0; label_index < offsets.size(); ++label_index) {
-      labels[offsets[label_index]] = "L" + std::to_string(label_index);
-    }
     out += "    code\n";
     for (const AbcInstruction& instruction : instructions) {
       const auto label = labels.find(instruction.offset);
@@ -134,24 +137,10 @@ std::string render_body(const AbcFile& file, const AbcMethodBody& body, std::siz
   }
 
   out += "    exceptions " + std::to_string(body.exceptions.size()) + "\n";
-  std::map<std::size_t, std::string> exception_labels;
-  {
-    std::vector<std::size_t> offsets;
-    for (const AbcException& exception : body.exceptions) {
-      offsets.push_back(exception.from);
-      offsets.push_back(exception.to);
-      offsets.push_back(exception.target);
-    }
-    std::sort(offsets.begin(), offsets.end());
-    offsets.erase(std::unique(offsets.begin(), offsets.end()), offsets.end());
-    for (std::size_t label_index = 0; label_index < offsets.size(); ++label_index) {
-      exception_labels[offsets[label_index]] = "L" + std::to_string(label_index);
-    }
-  }
   for (const AbcException& exception : body.exceptions) {
-    out += "      exception " + label_for(exception_labels, exception.from) + " " +
-           label_for(exception_labels, exception.to) + " " +
-           label_for(exception_labels, exception.target);
+    out += "      exception " + label_for(labels, exception.from) + " " +
+           label_for(labels, exception.to) + " " +
+           label_for(labels, exception.target);
     out += " type " + multiname_ref(file, exception.exc_type);
     out += " var " + string_ref(file, exception.var_name) + "\n";
   }
