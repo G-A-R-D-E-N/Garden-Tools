@@ -72,6 +72,13 @@ class DisplayObject : public Object, public std::enable_shared_from_this<Display
   DisplayObject* root() const noexcept;
   DisplayObject* stage() const noexcept;
 
+  double stage_width() const noexcept { return stage_width_; }
+  void set_stage_width(double value) noexcept { stage_width_ = value; }
+  double stage_height() const noexcept { return stage_height_; }
+  void set_stage_height(double value) noexcept { stage_height_ = value; }
+  double frame_rate() const noexcept { return frame_rate_; }
+  void set_frame_rate(double value) noexcept { frame_rate_ = value; }
+
   virtual bool is_container() const noexcept { return false; }
   virtual bool is_movie_clip() const noexcept { return false; }
 
@@ -98,6 +105,9 @@ class DisplayObject : public Object, public std::enable_shared_from_this<Display
   bool mouse_children_{true};
   bool button_mode_{false};
   bool assigned_{false};
+  double stage_width_{0.0};
+  double stage_height_{0.0};
+  double frame_rate_{24.0};
   DisplayObject* parent_{nullptr};
   std::string name_;
 };
@@ -146,8 +156,12 @@ class MovieClip : public DisplayObjectContainer {
   /* Requires a linked runtime; advances one frame and runs the frame lifecycle hooks in order. */
   ExecutionResult advance_frame(Interpreter& interpreter);
 
-  /* The lifecycle order must stay construct, frameScript, enterFrame, exitFrame. */
+  /* The lifecycle order must stay construct, placement, frameScript, enterFrame, exitFrame. */
   ExecutionResult run_frame_lifecycle(Interpreter& interpreter);
+
+ protected:
+  /* The bridge subclass must apply the timeline's PlaceObject/RemoveObject rows here. */
+  virtual ExecutionResult apply_frame_state(Interpreter& interpreter);
 
  private:
   ExecutionResult run_frame_script(Interpreter& interpreter);

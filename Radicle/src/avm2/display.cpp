@@ -201,15 +201,32 @@ ExecutionResult MovieClip::advance_frame(Interpreter& interpreter) {
 }
 
 ExecutionResult MovieClip::run_frame_lifecycle(Interpreter& interpreter) {
+  ExecutionResult placement = apply_frame_state(interpreter);
+  if (!placement.ok()) {
+    return placement;
+  }
   ExecutionResult script = run_frame_script(interpreter);
   if (!script.ok()) {
     return script;
   }
-  (void)interpreter;
   return script;
 }
 
+ExecutionResult MovieClip::apply_frame_state(Interpreter& interpreter) {
+  (void)interpreter;
+  return ExecutionResult{};
+}
+
 ExecutionResult MovieClip::run_frame_script(Interpreter& interpreter) {
+  if (display_class() != nullptr) {
+    const std::string frame_name = "frame" + std::to_string(current_frame_);
+    const Trait* frame_trait =
+        display_class()->resolve_instance_trait(multiname_for(frame_name));
+    if (frame_trait != nullptr && frame_trait->function != nullptr) {
+      return interpreter.call_function(*frame_trait->function, detail::borrowed_object(*this), {},
+                                       0);
+    }
+  }
   if (timeline_ == nullptr || timeline_->frame_script_file == nullptr) {
     return ExecutionResult{};
   }
@@ -341,6 +358,13 @@ bool read_display_property(Interpreter& interpreter, DisplayObject& object,
   if (name == "numChildren" && object.is_container()) {
     out = Value::number(
         static_cast<double>(static_cast<DisplayObjectContainer&>(object).children().size()));
+    return true;
+  }
+  if ((name == "stageWidth" || name == "stageHeight" || name == "frameRate") &&
+      object.stage() == &object) {
+    out = Value::number(name == "stageWidth"     ? object.stage_width()
+                        : name == "stageHeight"  ? object.stage_height()
+                                                 : object.frame_rate());
     return true;
   }
   if (name == "currentFrame" && object.is_movie_clip()) {
