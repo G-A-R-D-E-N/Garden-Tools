@@ -42,7 +42,7 @@ public static class SwfEditTextCodec
             uint value = 0;
             for (var index = 0; index < count; ++index)
             {
-                var current = (_data[_bit >> 3] >> (7 - (_bit & 7))) & 1u;
+                var current = (uint)((_data[_bit >> 3] >> (7 - (_bit & 7))) & 1);
                 value = (value << 1) | current;
                 ++_bit;
             }
