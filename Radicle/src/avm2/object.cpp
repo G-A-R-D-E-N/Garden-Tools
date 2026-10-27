@@ -98,6 +98,8 @@ const char* object_kind_name(ObjectKind kind) noexcept {
       return "display";
     case ObjectKind::Event:
       return "event";
+    case ObjectKind::ByteArray:
+      return "bytearray";
   }
   return "unknown";
 }

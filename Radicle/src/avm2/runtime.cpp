@@ -653,6 +653,9 @@ RuntimeLoad Runtime::link() {
   if (install_builtins() != RuntimeStatus::Ok) {
     return fail(RuntimeStatus::InvalidTrait, "the builtin class table does not install");
   }
+  if (install_bytearray_builtins() != RuntimeStatus::Ok) {
+    return fail(RuntimeStatus::InvalidTrait, "the flash.utils classes do not install");
+  }
   if (build_class_shells() != RuntimeStatus::Ok) {
     return fail(RuntimeStatus::DuplicateClass, "a class name is defined twice");
   }

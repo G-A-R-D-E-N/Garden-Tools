@@ -346,6 +346,7 @@ add_library(fo4
   src/avm2/native_text.cpp
   src/avm2/native_net.cpp
   src/avm2/native_system.cpp
+  src/avm2/native_bytearray.cpp
   src/hkx/layout.cpp
   src/hkx/packfile.cpp
   src/hkx/skeleton.cpp
@@ -845,6 +846,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_avm2_string_utf16.cpp
     tests/test_avm2_static_text.cpp
     tests/test_avm2_system_classes.cpp
+    tests/test_avm2_bytearray.cpp
     tests/test_swf_fonts.cpp
     tests/test_swf_fonts_real.cpp
     tests/test_material_file.cpp

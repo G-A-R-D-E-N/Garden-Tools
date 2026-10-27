@@ -189,6 +189,7 @@ std::string object_default_to_string(const Object& object) {
     case ObjectKind::Namespace:
     case ObjectKind::Display:
     case ObjectKind::Event:
+    case ObjectKind::ByteArray:
       return "[object Object]";
   }
   return "[object Object]";
