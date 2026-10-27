@@ -318,7 +318,7 @@ AbcStatus parse_trait(Cursor& cursor, AbcTrait& out) {
   cursor.skip(cursor.peek());
   out.kind = kind;
   std::uint32_t value = 0;
-  if (!cursor.text("name", out.name) || !cursor.text("attrs", value)) {
+  if (!cursor.text("name", out.name) || !cursor.skip("attrs") || !cursor.u32(value)) {
     cursor.invalid("trait name/attrs expected");
     return AbcStatus::InconsistentModel;
   }
@@ -326,7 +326,8 @@ AbcStatus parse_trait(Cursor& cursor, AbcTrait& out) {
   switch (out.kind) {
     case AbcTraitKind::Slot:
     case AbcTraitKind::Const: {
-      if (!cursor.text("slot", out.slot_id) || !cursor.text("type", out.type_name)) {
+      if (!cursor.skip("slot") || !cursor.u32(out.slot_id) ||
+          !cursor.text("type", out.type_name)) {
         cursor.invalid("slot trait needs slot/type");
         return AbcStatus::InconsistentModel;
       }
@@ -359,7 +360,8 @@ AbcStatus parse_trait(Cursor& cursor, AbcTrait& out) {
     }
     case AbcTraitKind::Class:
     case AbcTraitKind::Function:
-      if (!cursor.text("slot", out.slot_id) || !cursor.text("class", out.class_index)) {
+      if (!cursor.skip("slot") || !cursor.u32(out.slot_id) ||
+          !cursor.text("class", out.class_index)) {
         cursor.invalid("class trait needs slot/class");
         return AbcStatus::InconsistentModel;
       }
@@ -367,7 +369,8 @@ AbcStatus parse_trait(Cursor& cursor, AbcTrait& out) {
     case AbcTraitKind::Method:
     case AbcTraitKind::Getter:
     case AbcTraitKind::Setter:
-      if (!cursor.text("disp", out.disp_id) || !cursor.text("method", out.method_index)) {
+      if (!cursor.skip("disp") || !cursor.u32(out.disp_id) ||
+          !cursor.text("method", out.method_index)) {
         cursor.invalid("method trait needs disp/method");
         return AbcStatus::InconsistentModel;
       }

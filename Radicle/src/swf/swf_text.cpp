@@ -101,7 +101,7 @@ SwfStatus decode_text_tag(std::span<const std::byte> data, SwfTag& out_tag) {
       }
       font.glyph_count = glyph_count;
       font.wide_offsets = (font.flags & 0x08u) != 0;
-      font.wide_codes = (font.flags & 0x04u) != 0;
+      font.wide_codes = font.define_font3 || (font.flags & 0x04u) != 0;
       font.has_layout = (font.flags & 0x80u) != 0;
       const std::size_t offset_table_start = reader.position();
       font.glyph_offsets.resize(glyph_count);

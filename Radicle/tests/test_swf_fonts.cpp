@@ -1,5 +1,7 @@
 #include <fo4/swf/swf.hpp>
 
+#include "swf_movie_builder.hpp"
+
 #include <gtest/gtest.h>
 
 #include <cstddef>
@@ -67,44 +69,15 @@ std::vector<std::byte> font_payload(std::uint16_t font_id, std::uint8_t flags,
   return payload;
 }
 
-void append_tag(std::vector<std::byte>& bytes, std::uint16_t code,
-                const std::vector<std::byte>& payload) {
-  const std::uint16_t header = static_cast<std::uint16_t>((code << 6u) | 0x3Fu);
-  bytes.push_back(static_cast<std::byte>(header & 0xFFu));
-  bytes.push_back(static_cast<std::byte>((header >> 8u) & 0xFFu));
-  const auto length = static_cast<std::uint32_t>(payload.size());
-  bytes.push_back(static_cast<std::byte>(length & 0xFFu));
-  bytes.push_back(static_cast<std::byte>((length >> 8u) & 0xFFu));
-  bytes.push_back(static_cast<std::byte>((length >> 16u) & 0xFFu));
-  bytes.push_back(static_cast<std::byte>((length >> 24u) & 0xFFu));
-  bytes.insert(bytes.end(), payload.begin(), payload.end());
-}
-
 std::vector<std::byte> build_swf(std::uint16_t tag_code,
                                  const std::vector<std::byte>& tag_payload) {
-  std::vector<std::byte> body;
-  append_tag(body, tag_code, tag_payload);
-  body.push_back(std::byte{0});
-  body.push_back(std::byte{0});
-
-  std::vector<std::byte> bytes{std::byte{'F'}, std::byte{'W'}, std::byte{'S'}, std::byte{10}};
-  bytes.push_back(std::byte{0});
-  bytes.push_back(std::byte{0});
-  bytes.push_back(std::byte{0});
-  bytes.push_back(std::byte{0});
-  bytes.push_back(std::byte{1});
-  bytes.push_back(std::byte{0});
-  bytes.push_back(std::byte{24});
-  bytes.push_back(std::byte{0});
-  bytes.push_back(std::byte{1});
-  bytes.push_back(std::byte{0});
-  bytes.insert(bytes.end(), body.begin(), body.end());
-  const auto file_length = static_cast<std::uint32_t>(bytes.size());
-  bytes[4] = static_cast<std::byte>(file_length & 0xFFu);
-  bytes[5] = static_cast<std::byte>((file_length >> 8u) & 0xFFu);
-  bytes[6] = static_cast<std::byte>((file_length >> 16u) & 0xFFu);
-  bytes[7] = static_cast<std::byte>((file_length >> 24u) & 0xFFu);
-  return bytes;
+  swf_test::SwfBuilder builder;
+  builder.rect(0, 11000, 0, 8000, 15);
+  builder.u16(0x0C00);
+  builder.u16(1);
+  builder.tag(tag_code, tag_payload, false);
+  builder.tag(0);
+  return swf_test::wrap_body(builder.body, 10, false, false);
 }
 
 }  // namespace

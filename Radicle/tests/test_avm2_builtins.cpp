@@ -384,6 +384,25 @@ TEST(Avm2Builtins, ArrayEveryAcceptsAPositivePredicate) {
   EXPECT_TRUE(result.value.as_boolean());
 }
 
+TEST(Avm2Builtins, ArraySortLeavesAnArrayWithItsElementsInTextOrder) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t sort = script.multiname("sort");
+  const std::uint32_t length = script.multiname("length");
+  avm2_test::CodeBuilder code;
+  code.pushbyte(3);
+  code.pushbyte(1);
+  code.pushbyte(2);
+  code.newarray(3);
+  code.callproperty(sort, 0);
+  code.getproperty(length);
+  code.returnvalue();
+  const ExecutionResult result = run_initializer(script, code);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_number_like())
+      << fo4::avm2::value_kind_name(result.value.kind());
+  EXPECT_DOUBLE_EQ(fo4::avm2::to_number(result.value), 3.0);
+}
+
 TEST(Avm2Builtins, ArrayReduceSumsTheElements) {
   avm2_test::ScriptBuilder script;
   const std::uint32_t reduce = script.multiname("reduce");
@@ -400,8 +419,8 @@ TEST(Avm2Builtins, ArrayReduceSumsTheElements) {
   code.pushbyte(2);
   code.pushbyte(3);
   code.newarray(3);
-  code.pushbyte(0);
   code.newfunction(callback);
+  code.pushbyte(0);
   code.callproperty(reduce, 2);
   code.returnvalue();
   const ExecutionResult result = run_initializer(script, code);
