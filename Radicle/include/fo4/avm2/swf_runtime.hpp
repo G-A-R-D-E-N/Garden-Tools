@@ -137,7 +137,7 @@ class SwfRuntime {
   Runtime* runtime_{nullptr};
   SoundEventQueue sounds_fallback_;
   double accumulator_{0.0};
-  std::weak_ptr<DisplayObject> mouse_over_;
+  std::vector<std::weak_ptr<DisplayObject>> roll_chain_;
   std::weak_ptr<DisplayObject> mouse_down_;
   bool playing_{true};
   bool started_{false};

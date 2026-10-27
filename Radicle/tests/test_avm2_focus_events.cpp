@@ -58,6 +58,26 @@ std::string read_log(Runtime& runtime) {
   return value.as_string();
 }
 
+void define_global(Runtime& runtime, const char* name) {
+  Property& property =
+      runtime.global_object()->define_own_property(fo4::avm2::primary_key(public_name(name)));
+  property.kind = fo4::avm2::PropertyKind::Value;
+  property.value = Value::null();
+}
+
+const fo4::avm2::Object* related_of(Runtime& runtime, const char* holder) {
+  Value event;
+  if (!runtime.global_object()->read_value(public_name(holder), event) || !event.is_object()) {
+    return nullptr;
+  }
+  Value related;
+  if (!event.as_object()->read_value(public_name("relatedObject"), related) ||
+      !related.is_object()) {
+    return nullptr;
+  }
+  return related.as_object().get();
+}
+
 struct Fixture {
   avm2_test::ScriptBuilder script;
   std::vector<std::uint32_t> methods;
@@ -76,6 +96,16 @@ struct Fixture {
     body.initproperty(log_name);
     body.returnvoid();
     return script.method("append_" + tag, body.bytes(), 2);
+  }
+
+  std::uint32_t store_body(const std::string& tag, const std::string& holder) {
+    avm2_test::CodeBuilder body;
+    const std::uint32_t holder_name = script.multiname(holder);
+    body.findpropstrict(holder_name);
+    body.getlocal(1);
+    body.initproperty(holder_name);
+    body.returnvoid();
+    return script.method("store_" + tag, body.bytes(), 2);
   }
 
   std::uint32_t log_multiname() { return script.multiname("log"); }
@@ -212,6 +242,76 @@ TEST(Avm2FocusEvents, MouseDownOnATabEnabledObjectMovesStageFocus) {
   movie->mouse_event(*fixture.interpreter, 210.0, 10.0, 0, true);
   EXPECT_EQ(movie->stage()->focus().get(), second.get());
   EXPECT_EQ(read_log(fixture.runtime), "ioi");
+}
+
+TEST(Avm2FocusEvents, RollStateSurvivesRemovingTheHoveredChild) {
+  Fixture fixture;
+  const std::uint32_t outer_over_body = fixture.append_body("o");
+  const std::uint32_t inner_out_body = fixture.append_body("I");
+  const std::uint32_t outer_out_body = fixture.append_body("O");
+  fixture.finish();
+  const std::shared_ptr<SwfRuntime> movie =
+      SwfRuntime::create(fixture.runtime, *fixture.interpreter, minimal_movie());
+  ASSERT_NE(movie, nullptr);
+  auto* root = static_cast<DisplayObjectContainer*>(movie->root().get());
+  auto outer = make_sprite(fixture.runtime);
+  auto inner = make_sprite(fixture.runtime);
+  ASSERT_NE(outer, nullptr);
+  ASSERT_NE(inner, nullptr);
+  outer->set_width(100.0);
+  outer->set_height(100.0);
+  inner->set_width(50.0);
+  inner->set_height(50.0);
+  ASSERT_TRUE(root->add_child(outer));
+  ASSERT_TRUE(static_cast<DisplayObjectContainer*>(outer.get())->add_child(inner));
+  ASSERT_TRUE(fo4::avm2::add_event_listener(*outer, "rollOver",
+                                            Value::object(fixture.function(outer_over_body)),
+                                            false, 0));
+  ASSERT_TRUE(fo4::avm2::add_event_listener(*outer, "rollOut",
+                                            Value::object(fixture.function(outer_out_body)),
+                                            false, 0));
+  ASSERT_TRUE(fo4::avm2::add_event_listener(*inner, "rollOut",
+                                            Value::object(fixture.function(inner_out_body)),
+                                            false, 0));
+  movie->mouse_move(*fixture.interpreter, 10.0, 10.0);
+  EXPECT_EQ(read_log(fixture.runtime), "o");
+  ASSERT_TRUE(static_cast<DisplayObjectContainer*>(outer.get())->remove_child(inner));
+  movie->mouse_move(*fixture.interpreter, 70.0, 70.0);
+  EXPECT_EQ(read_log(fixture.runtime), "oI");
+  movie->mouse_move(*fixture.interpreter, 500.0, 500.0);
+  EXPECT_EQ(read_log(fixture.runtime), "oIO");
+}
+
+TEST(Avm2FocusEvents, RollEventsCarryTheObjectMovedFromOrTo) {
+  Fixture fixture;
+  const std::uint32_t out_body = fixture.store_body("out", "out_event");
+  const std::uint32_t over_body = fixture.store_body("over", "over_event");
+  fixture.finish();
+  define_global(fixture.runtime, "out_event");
+  define_global(fixture.runtime, "over_event");
+  const std::shared_ptr<SwfRuntime> movie =
+      SwfRuntime::create(fixture.runtime, *fixture.interpreter, minimal_movie());
+  ASSERT_NE(movie, nullptr);
+  auto* root = static_cast<DisplayObjectContainer*>(movie->root().get());
+  auto outer = make_sprite(fixture.runtime);
+  auto other = make_sprite(fixture.runtime);
+  ASSERT_NE(outer, nullptr);
+  ASSERT_NE(other, nullptr);
+  outer->set_width(100.0);
+  outer->set_height(100.0);
+  other->set_x(200.0);
+  other->set_width(50.0);
+  other->set_height(50.0);
+  ASSERT_TRUE(root->add_child(outer));
+  ASSERT_TRUE(root->add_child(other));
+  ASSERT_TRUE(fo4::avm2::add_event_listener(*outer, "rollOut",
+                                            Value::object(fixture.function(out_body)), false, 0));
+  ASSERT_TRUE(fo4::avm2::add_event_listener(*other, "rollOver",
+                                            Value::object(fixture.function(over_body)), false, 0));
+  movie->mouse_move(*fixture.interpreter, 10.0, 10.0);
+  movie->mouse_move(*fixture.interpreter, 220.0, 10.0);
+  EXPECT_EQ(related_of(fixture.runtime, "out_event"), other.get());
+  EXPECT_EQ(related_of(fixture.runtime, "over_event"), outer.get());
 }
 
 }  // namespace
