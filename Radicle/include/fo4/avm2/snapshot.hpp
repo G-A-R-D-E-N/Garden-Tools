@@ -80,14 +80,6 @@ struct SnapshotEntry {
 };
 
 
-  Kind kind{Kind::Play};
-  std::uint16_t sound_id{0};
-  double volume{1.0};
-  std::uint32_t loops{0};
-
-  bool operator==(const SnapshotSoundEvent&) const = default;
-};
-
 struct FrameSnapshot {
   std::vector<SnapshotEntry> entries;
   std::vector<SnapshotSoundEvent> sounds;

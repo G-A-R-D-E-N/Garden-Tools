@@ -4,6 +4,7 @@
 #include <fo4/avm2/events.hpp>
 #include <fo4/avm2/interpreter.hpp>
 #include <fo4/avm2/name.hpp>
+#include <fo4/avm2/net.hpp>
 #include <fo4/avm2/runtime.hpp>
 #include <fo4/avm2/text.hpp>
 
