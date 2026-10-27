@@ -168,6 +168,185 @@ TEST(Avm2StringUtf16, FromCharCodeKeepsAnUnpairedSurrogate) {
   EXPECT_EQ(result.value.as_string(), kLoneHigh);
 }
 
+TEST(Avm2StringUtf16, IndexOfClampsANegativeStartToZero) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t index_of = script.multiname("indexOf");
+  avm2_test::CodeBuilder code;
+  code.pushstring(script.string_of("a" + kSmile + "b"));
+  code.pushstring(script.string_of(kSmile));
+  code.pushint(script.add_int(-1));
+  code.callproperty(index_of, 2);
+  code.returnvalue();
+  const ExecutionResult result = run_initializer(script, code);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_int32());
+  EXPECT_EQ(result.value.as_int32(), 1);
+}
+
+TEST(Avm2StringUtf16, IndexOfDoesNotMatchAPairStartingInsideIt) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t index_of = script.multiname("indexOf");
+  avm2_test::CodeBuilder code;
+  code.pushstring(script.string_of("a" + kSmile + "b"));
+  code.pushstring(script.string_of(kSmile));
+  code.pushbyte(2);
+  code.callproperty(index_of, 2);
+  code.returnvalue();
+  const ExecutionResult result = run_initializer(script, code);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_int32());
+  EXPECT_EQ(result.value.as_int32(), -1);
+}
+
+TEST(Avm2StringUtf16, LastIndexOfSearchesBackFromTheStartCodeUnit) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t last_index_of = script.multiname("lastIndexOf");
+  avm2_test::CodeBuilder code;
+  code.pushstring(script.string_of("a" + kSmile + "b" + kSmile + "b"));
+  code.pushstring(script.string_of("b"));
+  code.pushbyte(5);
+  code.callproperty(last_index_of, 2);
+  code.returnvalue();
+  const ExecutionResult result = run_initializer(script, code);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_int32());
+  EXPECT_EQ(result.value.as_int32(), 3);
+}
+
+TEST(Avm2StringUtf16, LastIndexOfFindsAPairThatStartsAtOrBeforeTheStart) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t last_index_of = script.multiname("lastIndexOf");
+  avm2_test::CodeBuilder code;
+  code.pushstring(script.string_of("a" + kSmile + "b" + kSmile + "b"));
+  code.pushstring(script.string_of(kSmile));
+  code.pushbyte(2);
+  code.callproperty(last_index_of, 2);
+  code.returnvalue();
+  const ExecutionResult result = run_initializer(script, code);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_int32());
+  EXPECT_EQ(result.value.as_int32(), 1);
+}
+
+TEST(Avm2StringUtf16, SubstrCountsCodeUnitsFromANegativeStart) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t substr = script.multiname("substr");
+  avm2_test::CodeBuilder code;
+  code.pushstring(script.string_of("a" + kSmile + "b"));
+  code.pushbyte(1);
+  code.pushbyte(2);
+  code.callproperty(substr, 2);
+  code.pushstring(script.string_of("a" + kSmile + "b"));
+  code.pushint(script.add_int(-1));
+  code.callproperty(substr, 1);
+  code.add();
+  code.returnvalue();
+  const ExecutionResult result = run_initializer(script, code);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_string());
+  EXPECT_EQ(result.value.as_string(), kSmile + "b");
+}
+
+TEST(Avm2StringUtf16, SliceAcceptsNegativeBoundsInCodeUnits) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t slice = script.multiname("slice");
+  avm2_test::CodeBuilder code;
+  code.pushstring(script.string_of("a" + kSmile + "b"));
+  code.pushbyte(1);
+  code.pushint(script.add_int(-1));
+  code.callproperty(slice, 2);
+  code.pushstring(script.string_of("a" + kSmile + "b"));
+  code.pushint(script.add_int(-1));
+  code.callproperty(slice, 1);
+  code.add();
+  code.returnvalue();
+  const ExecutionResult result = run_initializer(script, code);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_string());
+  EXPECT_EQ(result.value.as_string(), kSmile + "b");
+}
+
+TEST(Avm2StringUtf16, SplitByAPairSeparatorKeepsThePairWhole) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t split = script.multiname("split");
+  const std::uint32_t join = script.multiname("join");
+  avm2_test::CodeBuilder code;
+  code.pushstring(script.string_of("a" + kSmile + "b" + kSmile + "c"));
+  code.pushstring(script.string_of(kSmile));
+  code.callproperty(split, 1);
+  code.pushstring(script.string_of("|"));
+  code.callproperty(join, 1);
+  code.returnvalue();
+  const ExecutionResult result = run_initializer(script, code);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_string());
+  EXPECT_EQ(result.value.as_string(), "a|b|c");
+}
+
+TEST(Avm2StringUtf16, SplitWithAnEmptySeparatorSplitsAPairIntoItsHalves) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t split = script.multiname("split");
+  const std::uint32_t join = script.multiname("join");
+  avm2_test::CodeBuilder code;
+  code.pushstring(script.string_of(kSmile));
+  code.pushstring(script.string_of(""));
+  code.callproperty(split, 1);
+  code.pushstring(script.string_of("|"));
+  code.callproperty(join, 1);
+  code.returnvalue();
+  const ExecutionResult result = run_initializer(script, code);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_string());
+  EXPECT_EQ(result.value.as_string(), kLoneHigh + "|" + kLoneLow);
+}
+
+TEST(Avm2StringUtf16, FromCharCodeKeepsOnlyTheLowSixteenBits) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t string_class = script.multiname("String");
+  const std::uint32_t from_char_code = script.multiname("fromCharCode");
+  avm2_test::CodeBuilder code;
+  code.getlex(string_class);
+  code.pushint(script.add_int(0x1D83D));
+  code.pushint(script.add_int(0xDE00));
+  code.callproperty(from_char_code, 2);
+  code.returnvalue();
+  const ExecutionResult result = run_initializer(script, code);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_string());
+  EXPECT_EQ(result.value.as_string(), kSmile);
+}
+
+TEST(Avm2StringUtf16, FromCharCodeWithNoArgumentsIsEmpty) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t string_class = script.multiname("String");
+  const std::uint32_t from_char_code = script.multiname("fromCharCode");
+  avm2_test::CodeBuilder code;
+  code.getlex(string_class);
+  code.callproperty(from_char_code, 0);
+  code.returnvalue();
+  const ExecutionResult result = run_initializer(script, code);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_string());
+  EXPECT_EQ(result.value.as_string(), "");
+}
+
+TEST(Avm2StringUtf16, FromCharCodeJoinsAHighHalfWithALaterLowHalf) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t string_class = script.multiname("String");
+  const std::uint32_t from_char_code = script.multiname("fromCharCode");
+  avm2_test::CodeBuilder code;
+  code.getlex(string_class);
+  code.pushint(script.add_int(0x61));
+  code.pushint(script.add_int(0xD83D));
+  code.pushint(script.add_int(0xDE00));
+  code.callproperty(from_char_code, 3);
+  code.returnvalue();
+  const ExecutionResult result = run_initializer(script, code);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_string());
+  EXPECT_EQ(result.value.as_string(), "a" + kSmile);
+}
+
 TEST(Avm2StringUtf16, ConcatenatedSurrogateHalvesEqualTheCharacter) {
   avm2_test::ScriptBuilder script;
   const std::uint32_t char_at = script.multiname("charAt");

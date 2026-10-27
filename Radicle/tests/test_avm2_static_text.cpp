@@ -60,19 +60,42 @@ const std::vector<std::byte> kOutsideFontPayload = bytes_of({
     0x00,
 });
 
-std::vector<std::byte> static_text_movie(const std::vector<std::byte>& text_payload) {
+const std::vector<std::byte> kZeroGlyphFirstPayload = bytes_of({
+    0x07, 0x00, 0x00, 0x00, 0x02, 0x08,
+    0x81, 0x00, 0x00, 0x00,
+    0x88, 0x01, 0x00, 0x40, 0x00, 0x01, 0x00, 0x00,
+    0x80, 0x01, 0x40, 0x00,
+    0x00,
+});
+
+const std::vector<std::byte> kRgbaTwoGlyphPayload = bytes_of({
+    0x07, 0x00, 0x00, 0x00, 0x02, 0x08,
+    0x8C, 0x01, 0x00, 0x11, 0x22, 0x33, 0x44, 0x40, 0x00, 0x02, 0x00, 0x10, 0x00,
+    0x00,
+});
+
+const std::vector<std::byte> kFontPayloadXY = bytes_of({
+    0x01, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x06, 0x00, 0x58, 0x59,
+});
+
+std::vector<std::byte> static_text_movie(const std::vector<std::byte>& text_payload,
+                                         const std::vector<std::byte>& font = kFontPayload,
+                                         std::uint16_t text_tag = fo4::swf::tag::kDefineText) {
   swf_test::SwfBuilder builder;
   builder.rect(0, 11000, 0, 8000, 15);
   builder.u16(0x0C00);
   builder.u16(1);
-  builder.tag(fo4::swf::tag::kDefineFont2, kFontPayload, false);
-  builder.tag(fo4::swf::tag::kDefineText, text_payload, false);
+  builder.tag(fo4::swf::tag::kDefineFont2, font, false);
+  builder.tag(text_tag, text_payload, false);
   builder.tag(0);
   return swf_test::wrap_body(builder.body, 10, false, false);
 }
 
-fo4::swf::SwfFile placed_static_text_file(const std::vector<std::byte>& text_payload) {
-  const fo4::swf::SwfReadResult result = fo4::swf::read_swf(static_text_movie(text_payload));
+fo4::swf::SwfFile placed_static_text_file(const std::vector<std::byte>& text_payload,
+                                          const std::vector<std::byte>& font = kFontPayload,
+                                          std::uint16_t text_tag = fo4::swf::tag::kDefineText) {
+  const fo4::swf::SwfReadResult result =
+      fo4::swf::read_swf(static_text_movie(text_payload, font, text_tag));
   EXPECT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
   fo4::swf::SwfFile file = result.file;
   fo4::swf::SwfTag place;
@@ -147,6 +170,50 @@ TEST(Avm2StaticText, SnapshotKeepsStaticTextAsAShape) {
   ASSERT_EQ(snapshot.entries.size(), 2u);
   EXPECT_EQ(snapshot.entries[1].kind, SnapshotEntryKind::Shape);
   EXPECT_EQ(snapshot.entries[1].character_id, 7u);
+}
+
+TEST(Avm2StaticText, DefineText2ReadsGlyphsPastEachRgbaColour) {
+  Harness harness;
+  const std::shared_ptr<SwfRuntime> movie = SwfRuntime::create(
+      harness.runtime, harness.interpreter,
+      placed_static_text_file(kRgbaTwoGlyphPayload, kFontPayload, fo4::swf::tag::kDefineText2));
+  ASSERT_NE(movie, nullptr);
+  ASSERT_EQ(movie->root()->children().size(), 1u);
+  const auto* text = dynamic_cast<const StaticTextObject*>(movie->root()->children()[0].get());
+  ASSERT_NE(text, nullptr);
+  EXPECT_EQ(text->text(), "Hi");
+}
+
+TEST(Avm2StaticText, ZeroGlyphRecordWithoutFontDoesNotBlankTheText) {
+  Harness harness;
+  const std::shared_ptr<SwfRuntime> movie = SwfRuntime::create(
+      harness.runtime, harness.interpreter, placed_static_text_file(kZeroGlyphFirstPayload));
+  ASSERT_NE(movie, nullptr);
+  ASSERT_EQ(movie->root()->children().size(), 1u);
+  const auto* text = dynamic_cast<const StaticTextObject*>(movie->root()->children()[0].get());
+  ASSERT_NE(text, nullptr);
+  EXPECT_EQ(text->text(), "Hi");
+}
+
+TEST(Avm2StaticText, FontIdReusedByAnotherMovieReadsItsOwnFont) {
+  Harness harness;
+  const std::shared_ptr<SwfRuntime> first = SwfRuntime::create(
+      harness.runtime, harness.interpreter, placed_static_text_file(kTwoRecordPayload));
+  const std::shared_ptr<SwfRuntime> second = SwfRuntime::create(
+      harness.runtime, harness.interpreter,
+      placed_static_text_file(kTwoRecordPayload, kFontPayloadXY));
+  ASSERT_NE(first, nullptr);
+  ASSERT_NE(second, nullptr);
+  ASSERT_EQ(first->root()->children().size(), 1u);
+  ASSERT_EQ(second->root()->children().size(), 1u);
+  const auto* first_text =
+      dynamic_cast<const StaticTextObject*>(first->root()->children()[0].get());
+  const auto* second_text =
+      dynamic_cast<const StaticTextObject*>(second->root()->children()[0].get());
+  ASSERT_NE(first_text, nullptr);
+  ASSERT_NE(second_text, nullptr);
+  EXPECT_EQ(first_text->text(), "Hi");
+  EXPECT_EQ(second_text->text(), "XY");
 }
 
 }  // namespace

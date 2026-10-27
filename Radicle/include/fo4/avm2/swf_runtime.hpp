@@ -70,6 +70,8 @@ struct SwfMovieData {
   std::map<std::uint16_t, SwfCharacterBounds> character_bounds;
   std::map<std::uint16_t, SwfTextFieldData> text_fields;
   std::map<std::uint16_t, std::vector<StaticTextRecord>> static_texts;
+  /* Invariant: font_owner is unique per created movie and never 0. */
+  std::uint64_t font_owner{0};
   std::vector<FontResource> fonts;
   std::vector<SoundResource> sounds;
   std::string root_class_name;

@@ -12,6 +12,7 @@
 #include "native_internal.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <map>
@@ -26,6 +27,11 @@ namespace fo4::avm2 {
 namespace {
 
 thread_local std::string g_create_error;
+
+std::uint64_t next_font_owner() {
+  static std::atomic<std::uint64_t> last{0};
+  return ++last;
+}
 
 void set_event_value(EventObject& event, const char* name, Value value) {
   Property& property = event.define_own_property(primary_key(builtin_name(name)));
@@ -130,13 +136,16 @@ void apply_character_definition(DisplayObject& object, const SwfMovieData& data,
   }
   const auto static_text = data.static_texts.find(character_id);
   if (static_text != data.static_texts.end() && object.is_static_text()) {
-    static_cast<StaticTextObject&>(object).set_records(static_text->second);
+    auto& static_object = static_cast<StaticTextObject&>(object);
+    static_object.set_font_owner(data.font_owner);
+    static_object.set_records(static_text->second);
   }
   const auto text = data.text_fields.find(character_id);
   if (text == data.text_fields.end() || !object.is_text_field()) {
     return;
   }
   auto& field = static_cast<TextFieldObject&>(object);
+  field.set_font_owner(data.font_owner);
   field.set_format(text->second.format);
   field.set_word_wrap(text->second.word_wrap);
   field.set_multiline(text->second.multiline);
@@ -321,8 +330,10 @@ std::shared_ptr<SwfRuntime> SwfRuntime::create(Runtime& runtime, Interpreter& in
   if (stage_class == nullptr) {
     return fail("the Stage class is missing");
   }
-  for (const FontResource& font : data->fonts) {
-    runtime.fonts().add(font);
+  data->font_owner = next_font_owner();
+  for (FontResource font : data->fonts) {
+    font.owner = data->font_owner;
+    runtime.fonts().add(std::move(font));
   }
   auto stage_object = make_display_object(runtime, *stage_class);
   auto stage = std::dynamic_pointer_cast<DisplayObjectContainer>(stage_object);

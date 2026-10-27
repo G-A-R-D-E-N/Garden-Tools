@@ -341,6 +341,7 @@ add_library(fo4
   src/avm2/events.cpp
   src/avm2/native_events.cpp
   src/avm2/text.cpp
+  src/avm2/utf16.cpp
   src/avm2/native_text.cpp
   src/avm2/native_net.cpp
   src/hkx/layout.cpp
