@@ -328,7 +328,13 @@ std::string valueToString(const Value& value) {
     return "None";
 }
 
-bool equalValues(const Value& left, const Value& right) {
+namespace {
+
+constexpr int kMaxEqualDepth = 32;
+constexpr int kMaxEqualStructVisits = 4096;
+
+bool equalValuesWithin(const Value& left, const Value& right, int depth, int& budget) {
+    if (depth > kMaxEqualDepth) return false;
     const bool leftNone = isNoneLike(left);
     const bool rightNone = isNoneLike(right);
     if (leftNone || rightNone) return leftNone && rightNone;
@@ -356,16 +362,37 @@ bool equalValues(const Value& left, const Value& right) {
         case ValueType::Array:
             if (left.array->elements.size() != right.array->elements.size()) return false;
             for (std::size_t i = 0; i < left.array->elements.size(); ++i) {
-                if (!equalValues(left.array->elements[i], right.array->elements[i])) return false;
+                if (!equalValuesWithin(left.array->elements[i], right.array->elements[i],
+                                       depth + 1, budget)) {
+                    return false;
+                }
             }
             return true;
-        case ValueType::Struct:
-            // Invariant: Papyrus does not compare struct values.
-            return false;
+        case ValueType::Struct: {
+            if (left.structure == right.structure) return true;
+            if (!sameName(left.structure->typeName, right.structure->typeName)) return false;
+            if (left.structure->members.size() != right.structure->members.size()) return false;
+            if (--budget < 0) return false;
+            for (const auto& entry : left.structure->members) {
+                const auto found = right.structure->members.find(entry.first);
+                if (found == right.structure->members.end()) return false;
+                if (!equalValuesWithin(entry.second, found->second, depth + 1, budget)) {
+                    return false;
+                }
+            }
+            return true;
+        }
         case ValueType::None:
             return true;
     }
     return false;
+}
+
+}
+
+bool equalValues(const Value& left, const Value& right) {
+    int budget = kMaxEqualStructVisits;
+    return equalValuesWithin(left, right, 0, budget);
 }
 
 bool orderValues(const Value& left, const Value& right, int& order) {

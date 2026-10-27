@@ -297,7 +297,7 @@ TEST(PapyrusStructs, StructsAreReferenceValuesSharedThroughAssignment) {
   EXPECT_EQ(result.value.integer, 21);
 }
 
-TEST(PapyrusStructs, NestedStructMembersAreCreatedAndReadable) {
+TEST(PapyrusStructs, NestedStructMembersAreAssignedAndReadable) {
   TestHost host;
   host.addScript(script("Nested",
                         {structure("Inner", {member("Value", "Int")}),
@@ -305,8 +305,10 @@ TEST(PapyrusStructs, NestedStructMembersAreCreatedAndReadable) {
                         {},
                         {state("", {method("Run", "Int", {}, {typed("outer", "Outer"), typed("child", "Inner")},
                                           {ins("struct_create", {id("outer")}),
-                                           ins("struct_get", {id("child"), id("outer"), literal("Child")}),
+                                           ins("struct_create", {id("child")}),
                                            ins("struct_set", {id("child"), literal("Value"), number(5)}),
+                                           ins("struct_set",
+                                               {id("outer"), literal("Child"), id("child")}),
                                            ins("struct_get", {id("out"), id("outer"), literal("Child")}),
                                            ins("struct_get", {id("out"), id("out"), literal("Value")}),
                                            ins("return", {id("out")})})})}));
@@ -392,6 +394,201 @@ TEST(PapyrusStructs, GotoStateHonoursTheHostGate) {
                                            ins("return", {id("::NoneVar")})})}),
                          state("Alert", {})}));
   EXPECT_EQ(run(host, "Gated", "Go").status, Status::GateRefused);
+}
+
+PexObject equalityScript(std::int32_t rightX) {
+  return script("Equal", {structure("Point", {member("X", "Int"), member("Label", "String")})}, {},
+                {state("", {method("Run", "Bool", {}, {typed("a", "Point"), typed("b", "Point")},
+                                   {ins("struct_create", {id("a")}),
+                                    ins("struct_create", {id("b")}),
+                                    ins("struct_set", {id("a"), literal("X"), number(3)}),
+                                    ins("struct_set", {id("b"), literal("X"), number(rightX)}),
+                                    ins("cmp_eq", {id("out"), id("a"), id("b")}),
+                                    ins("return", {id("out")})})})});
+}
+
+TEST(PapyrusStructs, StructEqualityComparesMembersNotIdentity) {
+  TestHost host;
+  host.addScript(equalityScript(3));
+  const Result same = run(host, "Equal", "Run");
+  ASSERT_EQ(same.status, Status::Ok);
+  EXPECT_TRUE(same.value.boolean);
+  host.addScript(equalityScript(4));
+  const Result differ = run(host, "Equal", "Run");
+  ASSERT_EQ(differ.status, Status::Ok);
+  EXPECT_FALSE(differ.value.boolean);
+}
+
+TEST(PapyrusStructs, StructEqualityOfACyclicStructStopsAtTheDepthCap) {
+  TestHost host;
+  host.addScript(script(
+      "Cycle", {structure("Node", {member("X", "Node"), member("Y", "Node")})}, {},
+      {state("", {method("Run", "Bool", {}, {typed("a", "Node"), typed("b", "Node")},
+                         {ins("struct_create", {id("a")}),
+                          ins("struct_create", {id("b")}),
+                          ins("struct_set", {id("a"), literal("X"), id("a")}),
+                          ins("struct_set", {id("a"), literal("Y"), id("a")}),
+                          ins("struct_set", {id("b"), literal("X"), id("b")}),
+                          ins("struct_set", {id("b"), literal("Y"), id("b")}),
+                          ins("cmp_eq", {id("out"), id("a"), id("b")}),
+                          ins("struct_set", {id("a"), literal("X"), id("::NoneVar")}),
+                          ins("struct_set", {id("a"), literal("Y"), id("::NoneVar")}),
+                          ins("struct_set", {id("b"), literal("X"), id("::NoneVar")}),
+                          ins("struct_set", {id("b"), literal("Y"), id("::NoneVar")}),
+                          ins("return", {id("out")})})})}));
+  const Result result = run(host, "Cycle", "Run");
+  ASSERT_EQ(result.status, Status::Ok);
+  EXPECT_FALSE(result.value.boolean);
+}
+
+PexObject chainScript() {
+  std::vector<PexTypedName> locals;
+  std::vector<PexInstruction> body;
+  for (int i = 0; i < 16; ++i) {
+    for (char side : {'a', 'b'}) {
+      const std::string name = std::string(1, side) + std::to_string(i);
+      locals.push_back(typed(name, "Node"));
+      body.push_back(ins("struct_create", {id(name)}));
+    }
+  }
+  for (int i = 0; i < 15; ++i) {
+    for (char side : {'a', 'b'}) {
+      const std::string self = std::string(1, side) + std::to_string(i);
+      const std::string next = std::string(1, side) + std::to_string(i + 1);
+      body.push_back(ins("struct_set", {id(self), literal("X"), id(next)}));
+      body.push_back(ins("struct_set", {id(self), literal("Y"), id(next)}));
+    }
+  }
+  body.push_back(ins("cmp_eq", {id("out"), id("a0"), id("b0")}));
+  body.push_back(ins("return", {id("out")}));
+  return script("Chain", {structure("Node", {member("X", "Node"), member("Y", "Node")})}, {},
+                {state("", {method("Run", "Bool", {}, locals, body)})});
+}
+
+TEST(PapyrusStructs, StructEqualityOfSharedChainsStopsAtTheVisitBudget) {
+  TestHost host;
+  host.addScript(chainScript());
+  const Result result = run(host, "Chain", "Run");
+  ASSERT_EQ(result.status, Status::Ok);
+  EXPECT_FALSE(result.value.boolean);
+}
+
+TEST(PapyrusStructs, StructTypedMemberStartsAsNoneUntilAssigned) {
+  TestHost host;
+  host.addScript(script("Nested", {structure("Inner", {member("Value", "Int")}),
+                                   structure("Outer", {member("Child", "Inner")})},
+                        {},
+                        {state("", {method("Run", "Var", {}, {typed("outer", "Outer")},
+                                          {ins("struct_create", {id("outer")}),
+                                           ins("struct_get", {id("out"), id("outer"),
+                                                              literal("Child")}),
+                                           ins("return", {id("out")})})})}));
+  const Result result = run(host, "Nested", "Run");
+  ASSERT_EQ(result.status, Status::Ok);
+  EXPECT_EQ(result.value.type, ValueType::None);
+}
+
+TEST(PapyrusStructs, SelfNestingStructCreatesOneStructWithANoneMember) {
+  TestHost host;
+  host.addScript(script("Wide", {structure("Wide", {member("Next", "Wide")})}, {},
+                        {state("", {method("Run", "Var", {}, {typed("w", "Wide")},
+                                          {ins("struct_create", {id("w")}),
+                                           ins("struct_get", {id("out"), id("w"),
+                                                              literal("Next")}),
+                                           ins("return", {id("out")})})})}));
+  const Result result = run(host, "Wide", "Run");
+  ASSERT_EQ(result.status, Status::Ok);
+  EXPECT_EQ(result.value.type, ValueType::None);
+}
+
+TEST(PapyrusStructs, NoneMemberDefaultKeepsTheScalarZero) {
+  PexValue none;
+  none.type = PexValueType::None;
+  PexStructMember count = member("Count", "Int");
+  count.defaultValue = none;
+  TestHost host;
+  host.addScript(script("Defaults", {structure("Holder", {count})}, {},
+                        {state("", {method("Run", "Int", {}, {typed("h", "Holder")},
+                                          {ins("struct_create", {id("h")}),
+                                           ins("struct_get", {id("out"), id("h"),
+                                                              literal("Count")}),
+                                           ins("return", {id("out")})})})}));
+  const Result result = run(host, "Defaults", "Run");
+  ASSERT_EQ(result.status, Status::Ok);
+  EXPECT_EQ(result.value.type, ValueType::Integer);
+  EXPECT_EQ(result.value.integer, 0);
+}
+
+std::vector<PexInstruction> threeEntries() {
+  return {ins("array_create", {id("items"), number(3)}),
+          ins("struct_create", {id("entry")}),
+          ins("struct_set", {id("entry"), literal("Id"), number(2)}),
+          ins("array_setelement", {id("items"), number(0), id("entry")}),
+          ins("struct_create", {id("entry")}),
+          ins("struct_set", {id("entry"), literal("Id"), number(7)}),
+          ins("array_setelement", {id("items"), number(1), id("entry")}),
+          ins("struct_create", {id("entry")}),
+          ins("struct_set", {id("entry"), literal("Id"), number(9)}),
+          ins("array_setelement", {id("items"), number(2), id("entry")})};
+}
+
+Result probeSearch(std::vector<PexInstruction> setup, PexInstruction search) {
+  setup.push_back(std::move(search));
+  setup.push_back(ins("return", {id("out")}));
+  TestHost host;
+  host.addScript(script(
+      "Search", {structure("Entry", {member("Id", "Int")})}, {},
+      {state("", {method("Probe", "Int", {}, {typed("items", "Entry[]"), typed("entry", "Entry")},
+                         std::move(setup))})}));
+  return run(host, "Search", "Probe");
+}
+
+TEST(PapyrusStructs, StructSearchReturnsMinusOneForANullArray) {
+  const Result result = probeSearch(
+      {}, ins("array_findstruct", {id("items"), id("out"), literal("Id"), number(1), number(0)}));
+  ASSERT_EQ(result.status, Status::Ok);
+  EXPECT_EQ(result.value.integer, -1);
+}
+
+TEST(PapyrusStructs, StructSearchTreatsOutOfRangeStartsAsMinusOne) {
+  const PexInstruction forward =
+      ins("array_findstruct", {id("items"), id("out"), literal("Id"), number(9), number(-1)});
+  EXPECT_EQ(probeSearch(threeEntries(), forward).value.integer, -1);
+  const PexInstruction reverseBelow =
+      ins("array_rfindstruct", {id("items"), id("out"), literal("Id"), number(2), number(-2)});
+  EXPECT_EQ(probeSearch(threeEntries(), reverseBelow).value.integer, -1);
+  const PexInstruction reversePast =
+      ins("array_rfindstruct", {id("items"), id("out"), literal("Id"), number(2), number(5)});
+  EXPECT_EQ(probeSearch(threeEntries(), reversePast).value.integer, -1);
+}
+
+TEST(PapyrusStructs, StructSearchMatchesANoneElementOnlyForANoneValue) {
+  const Result result = probeSearch(
+      {ins("array_create", {id("items"), number(3)})},
+      ins("array_findstruct", {id("items"), id("out"), literal("Id"), id("::NoneVar"), number(0)}));
+  ASSERT_EQ(result.status, Status::Ok);
+  EXPECT_EQ(result.value.integer, 0);
+}
+
+TEST(PapyrusStructs, StructSearchRejectsAnUnknownMemberAndAMemberTypeMismatch) {
+  const PexInstruction unknown =
+      ins("array_findstruct", {id("items"), id("out"), literal("Nope"), number(9), number(0)});
+  EXPECT_EQ(probeSearch(threeEntries(), unknown).status, Status::UnknownIdentifier);
+  const PexInstruction mismatch =
+      ins("array_findstruct", {id("items"), id("out"), literal("Id"), literal("9"), number(0)});
+  EXPECT_EQ(probeSearch(threeEntries(), mismatch).status, Status::TypeMismatch);
+}
+
+TEST(PapyrusStructs, StructSearchRejectsAnArrayThatIsNotOfStructs) {
+  TestHost host;
+  host.addScript(script("Ints", {structure("Entry", {member("Id", "Int")})}, {},
+                        {state("", {method("Probe", "Int", {}, {typed("items", "Int[]")},
+                                          {ins("array_create", {id("items"), number(3)}),
+                                           ins("array_findstruct",
+                                               {id("items"), id("out"), literal("Id"), number(0),
+                                                number(0)}),
+                                           ins("return", {id("out")})})})}));
+  EXPECT_EQ(run(host, "Ints", "Probe").status, Status::TypeMismatch);
 }
 
 }  // namespace

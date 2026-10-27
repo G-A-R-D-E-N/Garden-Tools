@@ -1,3 +1,5 @@
+#include <fo4/c_api.h>
+#include <fo4/c_api_papyrus_source.h>
 #include <fo4/papyrus_source/parser.hpp>
 #include <fo4/papyrus_source/summary.hpp>
 
@@ -5,6 +7,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -79,4 +82,40 @@ TEST(PapyrusSourceRealTest, ParsesEveryCorpusScript) {
   }
   EXPECT_GT(parsed, 0u);
   EXPECT_GT(functions, 0u);
+}
+
+TEST(PapyrusSourceRealTest, CApiSummaryMatchesTheParserOnEveryCorpusScript) {
+  const std::vector<std::filesystem::path> files = corpus_files();
+  if (files.empty()) {
+    GTEST_SKIP() << "no .psc corpus found; set FO4_PSC_CORPUS to a directory of scripts";
+  }
+  std::size_t checked = 0;
+  for (const std::filesystem::path& path : files) {
+    const std::string source = read_text(path);
+    if (source.empty()) continue;
+    char** rows = nullptr;
+    size_t count = 0;
+    ASSERT_EQ(radicle_papyrus_source_summary(reinterpret_cast<const std::uint8_t*>(source.data()), source.size(),
+                                             &rows, &count),
+              RADICLE_STATUS_OK)
+        << path.string() << ": " << radicle_last_error();
+    ASSERT_GT(count, 0u) << path.string();
+    const std::string first(rows[0]);
+    const fo4::psc::ParseResult direct = fo4::psc::parse(source);
+    if (direct.ok()) {
+      const fo4::psc::ScriptSummary summary = fo4::psc::summarize(direct.script);
+      EXPECT_EQ(first, "script\t" + summary.name + "\t" + summary.extends + "\t" + summary.autoState)
+          << path.string();
+      EXPECT_EQ(count, 1u + summary.imports.size() + summary.declaredProperties.size() +
+                           summary.states.size() + summary.functions.size())
+          << path.string();
+    } else {
+      const std::string prefix = "error\t" + std::to_string(direct.error.position.line) + "\t" +
+                                 std::to_string(direct.error.position.column) + "\t";
+      EXPECT_EQ(first.rfind(prefix, 0), 0u) << path.string() << ": " << first;
+    }
+    radicle_free_string_array(rows, count);
+    ++checked;
+  }
+  EXPECT_GT(checked, 0u);
 }
