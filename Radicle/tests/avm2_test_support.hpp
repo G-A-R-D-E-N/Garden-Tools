@@ -204,6 +204,34 @@ class ScriptBuilder {
     return static_cast<std::uint32_t>(multinames_.size());
   }
 
+  std::uint32_t multiname_l(std::uint32_t ns_set = 1u) {
+    MultinameEntry entry;
+    entry.kind = fo4::abc::AbcMultinameKind::MultinameL;
+    entry.ns_set = ns_set;
+    multinames_.push_back(entry);
+    return static_cast<std::uint32_t>(multinames_.size());
+  }
+
+  std::uint32_t rtqname_l() {
+    MultinameEntry entry;
+    entry.kind = fo4::abc::AbcMultinameKind::RTQNameL;
+    multinames_.push_back(entry);
+    return static_cast<std::uint32_t>(multinames_.size());
+  }
+
+  std::uint32_t namespace_set(const std::vector<std::uint32_t>& namespaces) {
+    ns_sets_.push_back(namespaces);
+    return static_cast<std::uint32_t>(ns_sets_.size());
+  }
+
+  std::uint32_t rtqname(const std::string& name) {
+    MultinameEntry entry;
+    entry.kind = fo4::abc::AbcMultinameKind::RTQName;
+    entry.name = string_of(name);
+    multinames_.push_back(entry);
+    return static_cast<std::uint32_t>(multinames_.size());
+  }
+
   std::uint32_t add_double(double value) {
     doubles_.push_back(value);
     return static_cast<std::uint32_t>(doubles_.size());
@@ -263,16 +291,22 @@ class ScriptBuilder {
     for (const std::string& package : package_names_) {
       fo4::abc::AbcNamespace name_space;
       name_space.kind = fo4::abc::AbcNamespaceKind::Package;
-      name_space.name = string_of(package);
+      /* Pool string 0 must be the empty string that names the default package. */
+      name_space.name = package.empty() ? 0u : string_of(package);
       file.pool.namespaces.push_back(name_space);
     }
     file.pool.ns_sets.push_back(fo4::abc::AbcNsSet{});
+    /* Pool ns_set 1 must stay the public set that multiname_l names. */
+    for (const std::vector<std::uint32_t>& namespaces : ns_sets_) {
+      file.pool.ns_sets.push_back(fo4::abc::AbcNsSet{namespaces});
+    }
     file.pool.multinames.push_back(fo4::abc::AbcMultiname{});
     for (const MultinameEntry& entry : multinames_) {
       fo4::abc::AbcMultiname multiname;
-      multiname.kind = fo4::abc::AbcMultinameKind::QName;
+      multiname.kind = entry.kind;
       multiname.name = entry.name;
       multiname.ns = entry.name_space;
+      multiname.ns_set = entry.ns_set;
       file.pool.multinames.push_back(multiname);
     }
     file.pool.ints.push_back(0);
@@ -294,12 +328,15 @@ class ScriptBuilder {
 
  private:
   struct MultinameEntry {
+    fo4::abc::AbcMultinameKind kind{fo4::abc::AbcMultinameKind::QName};
     std::uint32_t name{0};
     std::uint32_t name_space{1};
+    std::uint32_t ns_set{0};
   };
 
   std::vector<std::string> strings_;
   std::vector<std::string> package_names_{std::string{}};
+  std::vector<std::vector<std::uint32_t>> ns_sets_{{1u}};
   std::vector<MultinameEntry> multinames_;
   std::vector<std::int32_t> ints_;
   std::vector<double> doubles_;

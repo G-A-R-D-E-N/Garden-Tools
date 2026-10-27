@@ -1,40 +1,11 @@
-      case op::k_instanceof: {
-        Value type;
-        pop_value(type);
-        Value value;
-        if (status == InterpreterStatus::Ok) {
-          pop_value(value);
-        }
-        if (status == InterpreterStatus::Ok) {
-          push_value(Value::boolean(is_instance_of(value, type)));
-        }
-        break;
-      }
-      case op::k_in: {
-        Value object;
-        pop_value(object);
-        Value name;
-        if (status == InterpreterStatus::Ok) {
-          pop_value(name);
-        }
-        if (status != InterpreterStatus::Ok) {
-          break;
-        }
-        bool present = false;
-        if (object.is_object()) {
-          Multiname multiname;
-          multiname.kind = MultinameKind::QName;
-          multiname.name = to_string(name);
-          multiname.namespaces.push_back(Namespace{});
-          present = object.as_object()->has_property(multiname);
-        }
-        push_value(Value::boolean(present));
-        break;
-      }
       case op::k_getproperty: {
         const Multiname* multiname = resolve_multiname(*frame.file, multiname_operand(instruction));
         if (multiname == nullptr) {
           return fail(InterpreterStatus::TypeError, "getproperty has an invalid multiname");
+        }
+        status = resolve_runtime_multiname(frame, 0, multiname, message);
+        if (status != InterpreterStatus::Ok) {
+          break;
         }
         Value object;
         pop_value(object);
@@ -69,6 +40,10 @@
         const Multiname* multiname = resolve_multiname(*frame.file, multiname_operand(instruction));
         if (multiname == nullptr) {
           return fail(InterpreterStatus::TypeError, "setproperty has an invalid multiname");
+        }
+        status = resolve_runtime_multiname(frame, 1, multiname, message);
+        if (status != InterpreterStatus::Ok) {
+          break;
         }
         Value value;
         pop_value(value);
@@ -126,6 +101,10 @@
         const Multiname* multiname = resolve_multiname(*frame.file, multiname_operand(instruction));
         if (multiname == nullptr) {
           return fail(InterpreterStatus::TypeError, "findproperty has an invalid multiname");
+        }
+        status = resolve_runtime_multiname(frame, 0, multiname, message);
+        if (status != InterpreterStatus::Ok) {
+          break;
         }
         Object* owner = nullptr;
         bool found = false;
@@ -187,6 +166,10 @@
         if (multiname == nullptr) {
           return fail(InterpreterStatus::TypeError, "deleteproperty has an invalid multiname");
         }
+        status = resolve_runtime_multiname(frame, 0, multiname, message);
+        if (status != InterpreterStatus::Ok) {
+          break;
+        }
         Value object;
         pop_value(object);
         if (status != InterpreterStatus::Ok) {
@@ -204,6 +187,11 @@
         }
         if (frame.owner_class == nullptr || frame.owner_class->super == nullptr) {
           return fail(InterpreterStatus::TypeError, "super access outside a class hierarchy");
+        }
+        const std::size_t above = instruction.opcode == op::k_setsuper ? 1u : 0u;
+        status = resolve_runtime_multiname(frame, above, multiname, message);
+        if (status != InterpreterStatus::Ok) {
+          break;
         }
         if (instruction.opcode == op::k_setsuper) {
           Value value;
@@ -418,6 +406,10 @@
           return fail(InterpreterStatus::TypeError, "constructprop has an invalid multiname");
         }
         const std::uint32_t count = count_operand(instruction);
+        status = resolve_runtime_multiname(frame, count, multiname, message);
+        if (status != InterpreterStatus::Ok) {
+          break;
+        }
         std::vector<Value> arguments;
         status = pop_arguments(frame, count, arguments, message);
         Value target;
@@ -457,6 +449,10 @@
           return fail(InterpreterStatus::TypeError, "callproperty has an invalid multiname");
         }
         const std::uint32_t count = count_operand(instruction);
+        status = resolve_runtime_multiname(frame, count, multiname, message);
+        if (status != InterpreterStatus::Ok) {
+          break;
+        }
         std::vector<Value> arguments;
         status = pop_arguments(frame, count, arguments, message);
         Value receiver;
@@ -505,6 +501,10 @@
           return fail(InterpreterStatus::TypeError, "callsuper outside a class hierarchy");
         }
         const std::uint32_t count = count_operand(instruction);
+        status = resolve_runtime_multiname(frame, count, multiname, message);
+        if (status != InterpreterStatus::Ok) {
+          break;
+        }
         std::vector<Value> arguments;
         status = pop_arguments(frame, count, arguments, message);
         Value receiver;

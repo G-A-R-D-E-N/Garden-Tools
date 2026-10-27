@@ -21,6 +21,39 @@ namespace fo4::avm2 {
 
 using namespace detail;
 
+InterpreterStatus Interpreter::pop_runtime_operands(Frame& frame, std::size_t above,
+                                                    const Multiname*& multiname,
+                                                    std::string& message) {
+  const std::size_t name_parts = multiname->has_fixed_name() ? 0u : 1u;
+  const std::size_t namespace_parts = multiname->has_fixed_namespace() ? 0u : 1u;
+  const std::size_t parts = name_parts + namespace_parts;
+  if (frame.stack.size() < above + parts) {
+    message = "runtime multiname operands are missing from the operand stack";
+    return InterpreterStatus::StackUnderflow;
+  }
+  const std::size_t base = frame.stack.size() - above - parts;
+  Multiname& resolved = frame.runtime_name;
+  resolved = *multiname;
+  if (name_parts == 1) {
+    resolved.name = to_string(frame.stack[frame.stack.size() - above - 1]);
+  }
+  if (namespace_parts == 1) {
+    resolved.kind = MultinameKind::QName;
+    resolved.namespaces = {Namespace{NamespaceKind::Package, to_string(frame.stack[base])}};
+  } else {
+    resolved.kind = MultinameKind::QNameSet;
+    const auto is_public = [](const Namespace& space) {
+      return is_public_namespace(space.kind) && space.name.empty();
+    };
+    static_cast<void>(
+        std::stable_partition(resolved.namespaces.begin(), resolved.namespaces.end(), is_public));
+  }
+  frame.stack.erase(frame.stack.begin() + static_cast<std::ptrdiff_t>(base),
+                    frame.stack.begin() + static_cast<std::ptrdiff_t>(base + parts));
+  multiname = &resolved;
+  return InterpreterStatus::Ok;
+}
+
 ExecutionResult Interpreter::get_property(Frame& frame, Object& object,
                                           const Multiname& multiname, std::size_t depth) {
   (void)frame;
