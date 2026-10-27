@@ -412,13 +412,13 @@ TEST(Avm2Events, SwfRuntimeRoutesMouseInputToTheHitObject) {
   ASSERT_TRUE(fo4::avm2::add_event_listener(*target, "mouseOut",
                                             Value::object(fixture.function(out_body)), false, 0));
   movie->mouse_event(*fixture.interpreter, 50.0, 50.0, 0, true);
-  EXPECT_EQ(read_log(fixture.runtime), "dr");
+  EXPECT_EQ(read_log(fixture.runtime), "vdr");
   movie->mouse_event(*fixture.interpreter, 50.0, 50.0, 0, false);
-  EXPECT_EQ(read_log(fixture.runtime), "drc");
+  EXPECT_EQ(read_log(fixture.runtime), "vdrc");
   movie->mouse_move(*fixture.interpreter, 60.0, 60.0);
-  EXPECT_EQ(read_log(fixture.runtime), "drcv");
+  EXPECT_EQ(read_log(fixture.runtime), "vdrc");
   movie->mouse_move(*fixture.interpreter, 500.0, 500.0);
-  EXPECT_EQ(read_log(fixture.runtime), "drcvu");
+  EXPECT_EQ(read_log(fixture.runtime), "vdrcu");
 }
 
 TEST(Avm2Events, SwfRuntimeRoutesKeysToTheStageFocus) {

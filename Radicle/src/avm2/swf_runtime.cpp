@@ -75,24 +75,51 @@ std::vector<std::shared_ptr<DisplayObject>> display_chain(
   return chain;
 }
 
-std::vector<std::shared_ptr<DisplayObject>> chain_except(const std::shared_ptr<DisplayObject>& from,
-                                                         const std::shared_ptr<DisplayObject>& to) {
-  const std::vector<std::shared_ptr<DisplayObject>> to_chain = display_chain(to);
-  std::vector<std::shared_ptr<DisplayObject>> nodes = display_chain(from);
-  nodes.erase(std::remove_if(nodes.begin(), nodes.end(),
-                             [&to_chain](const std::shared_ptr<DisplayObject>& node) {
-                               return std::find(to_chain.begin(), to_chain.end(), node) !=
-                                      to_chain.end();
-                             }),
-              nodes.end());
-  return nodes;
-}
-
 void dispatch_pointer(Interpreter& interpreter, const char* type,
-                      const std::shared_ptr<DisplayObject>& node, double x, double y) {
+                      const std::shared_ptr<DisplayObject>& node,
+                      const std::shared_ptr<DisplayObject>& related, double x, double y) {
   std::shared_ptr<EventObject> event = pointer_event(interpreter, type, *node, x, y);
   if (event != nullptr) {
+    set_event_value(*event, "relatedObject",
+                    related == nullptr ? Value::null() : Value::object(related));
     dispatch_event(interpreter, node, event, 0);
+  }
+}
+
+bool contains_node(const std::vector<std::shared_ptr<DisplayObject>>& nodes,
+                   const std::shared_ptr<DisplayObject>& node) {
+  return std::find(nodes.begin(), nodes.end(), node) != nodes.end();
+}
+
+void update_roll(Interpreter& interpreter, std::vector<std::weak_ptr<DisplayObject>>& rolled,
+                 const std::shared_ptr<DisplayObject>& target, double x, double y) {
+  std::shared_ptr<DisplayObject> previous;
+  if (!rolled.empty()) {
+    previous = rolled.front().lock();
+  }
+  std::vector<std::shared_ptr<DisplayObject>> before;
+  for (const auto& weak : rolled) {
+    if (std::shared_ptr<DisplayObject> node = weak.lock()) {
+      before.push_back(node);
+    }
+  }
+  const std::vector<std::shared_ptr<DisplayObject>> after = display_chain(target);
+  rolled.assign(after.begin(), after.end());
+  if (previous != nullptr && previous != target) {
+    dispatch_pointer(interpreter, "mouseOut", previous, target, x, y);
+  }
+  for (const auto& node : before) {
+    if (!contains_node(after, node)) {
+      dispatch_pointer(interpreter, "rollOut", node, target, x, y);
+    }
+  }
+  if (previous != target) {
+    dispatch_pointer(interpreter, "mouseOver", target, previous, x, y);
+  }
+  for (auto node = after.rbegin(); node != after.rend(); ++node) {
+    if (!contains_node(before, *node)) {
+      dispatch_pointer(interpreter, "rollOver", *node, previous, x, y);
+    }
   }
 }
 
@@ -477,6 +504,7 @@ void SwfRuntime::mouse_event(Interpreter& interpreter, double x, double y, std::
   root_->set_mouse_position(x, y);
   if (stage_ != nullptr) stage_->set_mouse_position(x, y);
   const std::shared_ptr<DisplayObject> target = pointer_target(root_, x, y);
+  update_roll(interpreter, roll_chain_, target, x, y);
   std::shared_ptr<EventObject> event =
       pointer_event(interpreter, down ? "mouseDown" : "mouseUp", *target, x, y);
   if (event == nullptr) {
@@ -527,27 +555,7 @@ void SwfRuntime::mouse_move(Interpreter& interpreter, double x, double y) {
   root_->set_mouse_position(x, y);
   if (stage_ != nullptr) stage_->set_mouse_position(x, y);
   const std::shared_ptr<DisplayObject> target = pointer_target(root_, x, y);
-  const std::shared_ptr<DisplayObject> previous = mouse_over_.lock();
-  if (previous != target) {
-    mouse_over_ = target;
-    if (previous != nullptr) {
-      std::shared_ptr<EventObject> out = pointer_event(interpreter, "mouseOut", *previous, x, y);
-      if (out != nullptr) {
-        dispatch_event(interpreter, previous, out, 0);
-      }
-    }
-    for (const auto& node : chain_except(previous, target)) {
-      dispatch_pointer(interpreter, "rollOut", node, x, y);
-    }
-    std::shared_ptr<EventObject> over = pointer_event(interpreter, "mouseOver", *target, x, y);
-    if (over != nullptr) {
-      dispatch_event(interpreter, target, over, 0);
-    }
-    const std::vector<std::shared_ptr<DisplayObject>> entered = chain_except(target, previous);
-    for (auto node = entered.rbegin(); node != entered.rend(); ++node) {
-      dispatch_pointer(interpreter, "rollOver", *node, x, y);
-    }
-  }
+  update_roll(interpreter, roll_chain_, target, x, y);
   std::shared_ptr<EventObject> event = pointer_event(interpreter, "mouseMove", *target, x, y);
   if (event != nullptr) {
     dispatch_event(interpreter, target, event, 0);
