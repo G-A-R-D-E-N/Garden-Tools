@@ -48,7 +48,62 @@ std::vector<SubrecordGroupSpan> group_spans(const Record& record, const schema::
     });
     if (counter != subs.end()) first = static_cast<std::size_t>(counter - subs.begin()) + 1;
   }
+  const auto consume_run = [&](std::size_t& end) {
+    SubrecordGroupSpan nested{};
+    nested.first = end;
+    std::vector<std::size_t> counts(group.run.members.size());
+    std::size_t last = 0;
+    counts[0] = 1;
+    check_size(group.run.members, 0, subs[end]);
+    ++end;
+    while (end < subs.size()) {
+      const auto member = member_index(group.run.members, subs[end].signature);
+      if (!member || *member == 0) break;
+      if (*member < last || (*member == last && !group.run.members[*member].repeatable)) {
+        throw refuse("has " + subs[end].signature.to_string() + " out of order or repeated");
+      }
+      last = *member;
+      ++counts[*member];
+      check_size(group.run.members, *member, subs[end]);
+      ++end;
+    }
+    for (std::size_t m = 0; m < group.run.members.size(); ++m) {
+      if (group.run.members[m].required && counts[m] == 0) {
+        throw refuse("has a run without required " + group.run.members[m].subrecord.to_string());
+      }
+    }
+    nested.end = end;
+    return nested;
+  };
+  const bool uncounted_runs = !group.run.members.empty() && group.run.count_member == Signature{};
   while (first < subs.size()) {
+    if (uncounted_runs && subs[first].signature == group.run.members[0].subrecord) {
+      SubrecordGroupSpan span{};
+      span.first = first;
+      std::size_t end = first;
+      while (end < subs.size() && subs[end].signature == group.run.members[0].subrecord) {
+        span.runs.push_back(consume_run(end));
+      }
+      std::vector<std::size_t> counts(group.members.size());
+      // Constraint: an uncounted span closes on at most one trailing member, so its group declares only one.
+      if (end < subs.size()) {
+        const auto member = member_index(group.members, subs[end].signature);
+        if (member) {
+          ++counts[*member];
+          check_size(group.members, *member, subs[end]);
+          ++end;
+        }
+      }
+      for (std::size_t m = 0; m < group.members.size(); ++m) {
+        if (group.members[m].required && counts[m] == 0) {
+          throw refuse("has a run without required " + group.members[m].subrecord.to_string());
+        }
+      }
+      span.end = end;
+      spans.push_back(std::move(span));
+      first = end;
+      continue;
+    }
     const auto leader = member_index(group.members, subs[first].signature);
     if (!leader) {
       if (member_index(group.run.members, subs[first].signature)) {
@@ -82,31 +137,7 @@ std::vector<SubrecordGroupSpan> group_spans(const Record& record, const schema::
         if (end >= subs.size() || subs[end].signature != run.members[0].subrecord) {
           throw refuse("count does not match its nested runs");
         }
-        SubrecordGroupSpan nested{};
-        nested.first = end;
-        std::size_t nested_last = 0;
-        std::vector<std::size_t> nested_counts(run.members.size());
-        nested_counts[0] = 1;
-        check_size(run.members, 0, subs[end]);
-        ++end;
-        while (end < subs.size()) {
-          const auto inner = member_index(run.members, subs[end].signature);
-          if (!inner || *inner == 0) break;
-          if (*inner < nested_last || (*inner == nested_last && !run.members[*inner].repeatable)) {
-            throw refuse("has " + subs[end].signature.to_string() + " out of order or repeated");
-          }
-          nested_last = *inner;
-          ++nested_counts[*inner];
-          check_size(run.members, *inner, subs[end]);
-          ++end;
-        }
-        for (std::size_t m = 0; m < run.members.size(); ++m) {
-          if (run.members[m].required && nested_counts[m] == 0) {
-            throw refuse("has a run without required " + run.members[m].subrecord.to_string());
-          }
-        }
-        nested.end = end;
-        span.runs.push_back(std::move(nested));
+        span.runs.push_back(consume_run(end));
       }
     };
     nested_runs(subs[first]);
@@ -321,6 +352,9 @@ SubrecordGroupMutationStatus insert_record_subrecord_group(Plugin& plugin,
   auto* target = find_mutable_record(plugin, record_key);
   if (target == nullptr) return SubrecordGroupMutationStatus::record_missing;
   require_subrecord_group_record(*target, group);
+  if (!group.run.members.empty() && group.run.count_member == Signature{}) {
+    throw schema::SubrecordGroupError(std::string(group.path) + " spans uncounted sub-runs");
+  }
   const auto spans = group_spans(*target, group);
   const bool counted = group.count_subrecord != Signature{};
   const auto counter = group_counter(*target, group, spans.size());
@@ -375,6 +409,9 @@ SubrecordGroupMutationStatus remove_record_subrecord_group(Plugin& plugin,
   auto* target = find_mutable_record(plugin, record_key);
   if (target == nullptr) return SubrecordGroupMutationStatus::record_missing;
   require_subrecord_group_record(*target, group);
+  if (!group.run.members.empty() && group.run.count_member == Signature{}) {
+    throw schema::SubrecordGroupError(std::string(group.path) + " spans uncounted sub-runs");
+  }
   const auto spans = group_spans(*target, group);
   const bool counted = group.count_subrecord != Signature{};
   const auto counter = group_counter(*target, group, spans.size());
