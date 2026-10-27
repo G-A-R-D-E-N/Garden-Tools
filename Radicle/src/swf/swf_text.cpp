@@ -60,6 +60,18 @@ bool decode_text_records(std::span<const std::byte> data, std::size_t offset, bo
   return false;
 }
 
+bool read_font_code(SwfReader& reader, bool wide, std::uint16_t& code) {
+  if (wide) {
+    return reader.read_u16(code);
+  }
+  std::uint8_t narrow = 0;
+  if (!reader.read_u8(narrow)) {
+    return false;
+  }
+  code = narrow;
+  return true;
+}
+
 }  // namespace
 
 SwfStatus decode_text_tag(std::span<const std::byte> data, SwfTag& out_tag) {
@@ -76,6 +88,14 @@ SwfStatus decode_text_tag(std::span<const std::byte> data, SwfTag& out_tag) {
       if (reader.remaining() < static_cast<std::size_t>(font.glyph_count) * 2u) {
         return SwfStatus::malformed_tag;
       }
+      for (std::uint32_t index = 0; index < font.glyph_count; ++index) {
+        std::uint16_t offset = first_offset;
+        if (index != 0 && !reader.read_u16(offset)) {
+          return SwfStatus::malformed_tag;
+        }
+        font.glyph_offsets.push_back(offset);
+      }
+      read_glyph_shapes(data, 2, font);
       out_tag.font = font;
       return SwfStatus::ok;
     }
@@ -120,49 +140,31 @@ SwfStatus decode_text_tag(std::span<const std::byte> data, SwfTag& out_tag) {
         }
         font.glyph_offsets[index] = offset;
       }
-      std::size_t code_table_offset = 0;
-      if (font.has_layout) {
-        if (font.wide_offsets) {
-          std::uint32_t wide = 0;
-          if (!reader.read_u32(wide)) {
-            return SwfStatus::malformed_tag;
-          }
-          code_table_offset = wide;
-        } else {
-          std::uint16_t narrow = 0;
-          if (!reader.read_u16(narrow)) {
-            return SwfStatus::malformed_tag;
-          }
-          code_table_offset = narrow;
+      std::uint32_t code_table_offset = 0;
+      if (font.wide_offsets) {
+        if (!reader.read_u32(code_table_offset)) {
+          return SwfStatus::malformed_tag;
         }
+      } else {
+        std::uint16_t narrow = 0;
+        if (!reader.read_u16(narrow)) {
+          return SwfStatus::malformed_tag;
+        }
+        code_table_offset = narrow;
       }
-      for (const std::uint32_t offset : font.glyph_offsets) {
-        if (offset >= data.size()) {
+      read_glyph_shapes(data, offset_table_start, font);
+      const std::size_t code_table_absolute = offset_table_start + code_table_offset;
+      if (code_table_absolute < reader.position() || code_table_absolute > data.size()) {
+        return SwfStatus::malformed_tag;
+      }
+      SwfReader codes_reader(data, code_table_absolute);
+      font.glyph_codes.resize(glyph_count);
+      for (std::uint32_t index = 0; index < glyph_count; ++index) {
+        if (!read_font_code(codes_reader, font.wide_codes, font.glyph_codes[index])) {
           return SwfStatus::malformed_tag;
         }
       }
       if (font.has_layout) {
-        const std::size_t code_table_absolute = offset_table_start + code_table_offset;
-        if (code_table_absolute < reader.position() || code_table_absolute >= data.size()) {
-          return SwfStatus::malformed_tag;
-        }
-        SwfReader codes_reader(data, code_table_absolute);
-        font.glyph_codes.resize(glyph_count);
-        for (std::uint32_t index = 0; index < glyph_count; ++index) {
-          std::uint16_t code = 0;
-          if (font.wide_codes) {
-            if (!codes_reader.read_u16(code)) {
-              return SwfStatus::malformed_tag;
-            }
-          } else {
-            std::uint8_t narrow = 0;
-            if (!codes_reader.read_u8(narrow)) {
-              return SwfStatus::malformed_tag;
-            }
-            code = narrow;
-          }
-          font.glyph_codes[index] = code;
-        }
         SwfReader layout_reader(data, codes_reader.position());
         if (!layout_reader.read_u16(font.ascent) || !layout_reader.read_u16(font.descent) ||
             !layout_reader.read_s16(font.leading)) {
@@ -185,13 +187,22 @@ SwfStatus decode_text_tag(std::span<const std::byte> data, SwfTag& out_tag) {
           if (!read_rect(data, bounds_position, rect, next)) {
             return SwfStatus::malformed_tag;
           }
+          font.glyph_bounds.push_back(rect);
           bounds_position = next;
         }
         SwfReader kerning_reader(data, bounds_position);
         std::uint16_t kerning_count = 0;
-        if (!kerning_reader.read_u16(kerning_count) ||
-            !kerning_reader.skip(static_cast<std::size_t>(kerning_count) * 6u)) {
+        if (!kerning_reader.read_u16(kerning_count)) {
           return SwfStatus::malformed_tag;
+        }
+        for (std::uint16_t index = 0; index < kerning_count; ++index) {
+          SwfKerning pair;
+          if (!read_font_code(kerning_reader, font.wide_codes, pair.code1) ||
+              !read_font_code(kerning_reader, font.wide_codes, pair.code2) ||
+              !kerning_reader.read_s16(pair.adjustment)) {
+            return SwfStatus::malformed_tag;
+          }
+          font.kerning.push_back(pair);
         }
       }
       out_tag.font = font;

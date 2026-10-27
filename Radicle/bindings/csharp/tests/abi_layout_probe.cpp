@@ -1660,6 +1660,10 @@ int main() {
   printf("SwfPlanResult %zu\n", sizeof(radicle_swf_plan_result));
   printf("SwfPlanResult.Changed %zu\n", offsetof(radicle_swf_plan_result, changed));
   printf("SwfPlanResult.Revision %zu\n", offsetof(radicle_swf_plan_result, revision));
+  printf("SwfGlyph %zu\n", sizeof(radicle_swf_glyph));
+  printf("SwfGlyph.FillBits %zu\n", offsetof(radicle_swf_glyph, fill_bits));
+  printf("SwfGlyph.LineBits %zu\n", offsetof(radicle_swf_glyph, line_bits));
+  printf("SwfGlyph.RecordCount %zu\n", offsetof(radicle_swf_glyph, record_count));
   printf("SwfCharacter %zu\n", sizeof(radicle_swf_character));
   printf("SwfCharacter.CharacterId %zu\n", offsetof(radicle_swf_character, character_id));
   printf("SwfCharacter.Kind %zu\n", offsetof(radicle_swf_character, kind));

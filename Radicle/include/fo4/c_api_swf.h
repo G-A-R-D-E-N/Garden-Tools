@@ -483,6 +483,25 @@ typedef struct radicle_swf_plan_result {
 /* Applies a plan and must rebuild every cached view before any getter sees the new tags. */
 RADICLE_API radicle_status radicle_swf_apply_plan(radicle_swf* swf, const radicle_swf_tag_plan* plan,
                                                   radicle_swf_plan_result* out_result);
+
+typedef struct radicle_swf_glyph {
+  uint8_t fill_bits;           /* the SHAPE header nibble, 0..15 */
+  uint8_t line_bits;           /* the SHAPE header nibble, 0..15 */
+  size_t record_count;
+} radicle_swf_glyph;
+
+/* The tag index must be one radicle_swf_tag_at accepts and name a decoded DefineFont, DefineFont2 or DefineFont3. */
+RADICLE_API radicle_status radicle_swf_font_glyph_count(const radicle_swf* swf, size_t index, size_t* out_count);
+RADICLE_API radicle_status radicle_swf_font_glyph_at(const radicle_swf* swf, size_t index, size_t glyph,
+                                                     radicle_swf_glyph* out_glyph);
+RADICLE_API radicle_status radicle_swf_font_glyph_record_at(const radicle_swf* swf, size_t index, size_t glyph,
+                                                            size_t record, radicle_swf_shape_record* out_record);
+/* Requires records to hold record_count entries; the revision advances only when the glyph shape changed. */
+RADICLE_API radicle_status radicle_swf_font_replace_glyph(radicle_swf* swf, size_t index, size_t glyph,
+                                                          uint8_t fill_bits, uint8_t line_bits,
+                                                          const radicle_swf_shape_record* records,
+                                                          size_t record_count,
+                                                          radicle_swf_plan_result* out_result);
 /* The revision must start at 0, advance only for a plan that changed the movie, and never move for a refusal. */
 RADICLE_API uint64_t radicle_swf_revision(const radicle_swf* swf);
 /* Returns malloc'd bytes the caller must release with radicle_free_bytes; an unedited handle must

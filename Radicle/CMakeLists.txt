@@ -279,6 +279,8 @@ add_library(fo4
   src/swf/swf_text_edit.cpp
   src/swf/swf_write.cpp
   src/swf/swf_lzma.cpp
+  src/swf/swf_glyph.cpp
+  src/swf/swf_glyph_edit.cpp
   src/swf/swf_census.cpp
   src/pex_analysis/opcodes.cpp
   src/pex_analysis/cfg.cpp
@@ -749,6 +751,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_c_api_swf_characters.cpp
     tests/test_c_api_swf_history.cpp
     tests/test_c_api_swf_edit.cpp
+    tests/test_c_api_swf_glyph.cpp
     tests/test_c_api_swf_real.cpp
     tests/test_dds.cpp
     tests/test_environment_writeback.cpp
@@ -833,6 +836,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_material_file.cpp
     tests/test_material_file_real.cpp
     tests/test_swf.cpp
+    tests/test_swf_glyph.cpp
     tests/test_swf_lzma.cpp
     tests/test_swf_sound.cpp
     tests/test_swf_tags.cpp
