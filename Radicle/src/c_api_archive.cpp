@@ -157,7 +157,9 @@ radicle_status radicle_ba2_write_general(const radicle_ba2_file* files,
   *out_bytes = nullptr;
   *out_size = 0;
   if (!fo4::archive::is_supported_ba2_general_version(version)) {
-    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "unsupported BA2 general version");
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                (std::string("unsupported BA2 general version ") + std::to_string(version) +
+                 "; supported GNRL versions are 1, 7 and 8").c_str());
   }
   if constexpr (sizeof(size_t) > sizeof(std::uint32_t)) {
     if (file_count > std::numeric_limits<std::uint32_t>::max()) {

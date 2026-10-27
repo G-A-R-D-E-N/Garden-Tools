@@ -603,6 +603,7 @@ TEST_F(Ba2ReaderTest, CApiWriteGeneralReportsCallerErrorsAsInvalidArgument) {
   };
 
   refuse(files, 1, 5);
+  EXPECT_STREQ(radicle_last_error(), "unsupported BA2 general version 5; supported GNRL versions are 1, 7 and 8");
   refuse(files, 1, 0);
 
   const radicle_ba2_file trailing[] = {{"Meshes\\", buffer, 1}};
