@@ -3,7 +3,9 @@
 #include <fo4/abc/abc.hpp>
 #include <fo4/avm2/class.hpp>
 #include <fo4/avm2/fonts.hpp>
+#include <fo4/avm2/host.hpp>
 #include <fo4/avm2/name.hpp>
+#include <fo4/avm2/sound.hpp>
 #include <fo4/avm2/object.hpp>
 #include <fo4/avm2/value.hpp>
 
@@ -11,10 +13,13 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <map>
 #include <unordered_map>
 #include <vector>
 
 namespace fo4::avm2 {
+
+class MovieClip;
 
 enum class RuntimeStatus : std::uint8_t {
   Ok = 0,
@@ -62,6 +67,18 @@ class Runtime {
   Object* global_object() const noexcept { return global_object_.get(); }
   FontRegistry& fonts() noexcept { return fonts_; }
   const FontRegistry& fonts() const noexcept { return fonts_; }
+  HostBridge& host() noexcept { return host_; }
+  const HostBridge& host() const noexcept { return host_; }
+  SoundEventQueue& sound_events() noexcept { return sound_events_; }
+  const SoundEventQueue& sound_events() const noexcept { return sound_events_; }
+  /* Requires a decoded resource; returns the runtime id the host plays by. */
+  std::uint32_t register_sound(SoundResource resource);
+  const SoundResource* find_sound(std::uint32_t id) const;
+  /* A loaded movie's independent root clip must be advanced by the host frame driver. */
+  void register_movie_clip(const std::shared_ptr<MovieClip>& clip);
+  const std::vector<std::shared_ptr<MovieClip>>& movie_clips() const noexcept {
+    return movie_clips_;
+  }
 
   const Class* find_class(const Multiname& multiname) const;
   const Class* find_class(std::string_view rendered_name) const;
@@ -107,6 +124,11 @@ class Runtime {
   std::vector<ScriptEntry> scripts_;
   std::shared_ptr<Object> global_object_;
   FontRegistry fonts_;
+  HostBridge host_;
+  SoundEventQueue sound_events_;
+  std::map<std::uint32_t, SoundResource> sound_table_;
+  std::uint32_t next_sound_id_{1};
+  std::vector<std::shared_ptr<MovieClip>> movie_clips_;
   bool linked_{false};
   bool failed_{false};
 };

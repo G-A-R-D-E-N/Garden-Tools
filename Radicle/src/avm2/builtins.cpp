@@ -420,6 +420,55 @@ RuntimeStatus Runtime::install_builtins() {
         static_cast<std::uint32_t>(native::Id::dictionary_construct);
   }
 
+  const auto add_static_getter = [](Class& klass, std::string name, native::Id id) {
+    auto function = std::make_shared<FunctionObject>(name, nullptr, kNoMethod);
+    function->set_native_id(static_cast<std::uint32_t>(id));
+    function->set_owner_class(&klass);
+    Trait trait;
+    trait.multiname = package_name(name);
+    trait.kind = TraitKind::Getter;
+    trait.disp_id = 0;
+    trait.method_index = kNoMethod;
+    trait.function = std::move(function);
+    klass.class_traits.push_back(std::move(trait));
+  };
+
+  Class* external_interface = add_builtin_class("ExternalInterface", "flash.external", object_class);
+  Class* url_request_class = add_builtin_class("URLRequest", "flash.net", object_class);
+  Class* url_loader_class = add_builtin_class("URLLoader", "flash.net", event_dispatcher);
+  Class* loader_class = add_builtin_class("Loader", "flash.display", display_container);
+  Class* application_domain = add_builtin_class("ApplicationDomain", "flash.system", object_class);
+  Class* sound_class = add_builtin_class("Sound", "flash.media", event_dispatcher);
+  Class* sound_channel_class = add_builtin_class("SoundChannel", "flash.media", event_dispatcher);
+  Class* sound_transform_class = add_builtin_class("SoundTransform", "flash.media", object_class);
+  if (external_interface == nullptr || url_request_class == nullptr ||
+      url_loader_class == nullptr || loader_class == nullptr || application_domain == nullptr ||
+      sound_class == nullptr || sound_channel_class == nullptr ||
+      sound_transform_class == nullptr) {
+    return RuntimeStatus::InvalidTrait;
+  }
+  add_method(*external_interface, "call", native::Id::ext_call, true);
+  add_method(*external_interface, "addCallback", native::Id::ext_add_callback, true);
+  add_static_getter(*external_interface, "available", native::Id::ext_available);
+  url_request_class->native_constructor = static_cast<std::uint32_t>(native::Id::instance_construct);
+  url_loader_class->native_constructor = static_cast<std::uint32_t>(native::Id::url_loader_construct);
+  add_method(*url_loader_class, "load", native::Id::url_loader_load, false);
+  loader_class->native_constructor = static_cast<std::uint32_t>(native::Id::display_construct);
+  add_method(*loader_class, "load", native::Id::loader_load, false);
+  application_domain->native_constructor =
+      static_cast<std::uint32_t>(native::Id::instance_construct);
+  add_method(*application_domain, "getDefinition", native::Id::app_domain_get_definition, false);
+  add_static_getter(*application_domain, "currentDomain", native::Id::app_domain_current);
+  sound_class->native_constructor = static_cast<std::uint32_t>(native::Id::sound_construct);
+  add_method(*sound_class, "load", native::Id::sound_load, false);
+  add_method(*sound_class, "play", native::Id::sound_play, false);
+  add_method(*sound_class, "close", native::Id::sound_close, false);
+  sound_channel_class->native_constructor =
+      static_cast<std::uint32_t>(native::Id::instance_construct);
+  add_method(*sound_channel_class, "stop", native::Id::sound_channel_stop, false);
+  sound_transform_class->native_constructor =
+      static_cast<std::uint32_t>(native::Id::instance_construct);
+
   const auto add_global_function = [this](std::string name, native::Id id) {
     auto function = std::make_shared<FunctionObject>(name, nullptr, kNoMethod);
     function->set_native_id(static_cast<std::uint32_t>(id));
@@ -440,6 +489,9 @@ RuntimeStatus Runtime::install_builtins() {
   add_global_function("uint", native::Id::to_uint_value);
   add_global_function("Object", native::Id::to_object_value);
   add_global_function("getTimer", native::Id::get_timer);
+  add_global_function("getDefinitionByName", native::Id::definition_by_name);
+  add_global_function("getQualifiedClassName", native::Id::qualified_class_name);
+  add_global_function("getQualifiedSuperclassName", native::Id::qualified_superclass_name);
 
   const auto add_global_value = [this](std::string name, Value value) {
     Property& property = global_object_->define_own_property(primary_key(package_name(name)));

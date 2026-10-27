@@ -141,6 +141,23 @@ enum class Id : std::uint32_t {
   text_field_get_line_text,
   text_field_set_text_format,
   text_field_get_text_format,
+  instance_construct,
+  ext_available,
+  ext_call,
+  ext_add_callback,
+  definition_by_name,
+  qualified_class_name,
+  qualified_superclass_name,
+  app_domain_current,
+  app_domain_get_definition,
+  loader_load,
+  url_loader_construct,
+  url_loader_load,
+  sound_construct,
+  sound_load,
+  sound_play,
+  sound_close,
+  sound_channel_stop,
 };
 
 }  // namespace fo4::avm2::native

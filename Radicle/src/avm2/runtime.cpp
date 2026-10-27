@@ -219,6 +219,23 @@ RuntimeStatus resolve_multiname(const abc::AbcFile& file, std::uint32_t index, M
 
 Runtime::Runtime() : global_object_(std::make_shared<Object>()) {}
 
+std::uint32_t Runtime::register_sound(SoundResource resource) {
+  const std::uint32_t id = next_sound_id_++;
+  sound_table_.emplace(id, std::move(resource));
+  return id;
+}
+
+const SoundResource* Runtime::find_sound(std::uint32_t id) const {
+  const auto found = sound_table_.find(id);
+  return found == sound_table_.end() ? nullptr : &found->second;
+}
+
+void Runtime::register_movie_clip(const std::shared_ptr<MovieClip>& clip) {
+  if (clip != nullptr) {
+    movie_clips_.push_back(clip);
+  }
+}
+
 RuntimeLoad Runtime::add_file(const abc::AbcFile& file) {
   RuntimeLoad result;
   if (linked_ || failed_) {

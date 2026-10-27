@@ -195,9 +195,5 @@ std::uint64_t snapshot_hash(const FrameSnapshot& snapshot) {
   return hasher.value();
 }
 
-void SoundEventQueue::append_to(FrameSnapshot& snapshot) {
-  snapshot.sounds.insert(snapshot.sounds.end(), events_.begin(), events_.end());
-  events_.clear();
-}
 
 }  // namespace fo4::avm2

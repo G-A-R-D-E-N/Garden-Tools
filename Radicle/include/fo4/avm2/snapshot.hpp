@@ -1,6 +1,7 @@
 #pragma once
 
 #include <fo4/avm2/display.hpp>
+#include <fo4/avm2/sound.hpp>
 
 #include <cstddef>
 #include <cstdint>
@@ -77,8 +78,6 @@ struct SnapshotEntry {
   bool operator==(const SnapshotEntry&) const = default;
 };
 
-struct SnapshotSoundEvent {
-  enum class Kind : std::uint8_t { Play = 0, Stop, Volume };
 
   Kind kind{Kind::Play};
   std::uint16_t sound_id{0};
@@ -100,18 +99,5 @@ FrameSnapshot build_frame_snapshot(const DisplayObject& root);
 
 /* A snapshot's own fields must hash only from its contents, so equal snapshots hash equal. */
 std::uint64_t snapshot_hash(const FrameSnapshot& snapshot);
-
-/* The sound queue must be drained by exactly one snapshot, so a host never plays an event twice. */
-class SoundEventQueue {
- public:
-  void push(SnapshotSoundEvent event) { events_.push_back(std::move(event)); }
-  void append_to(FrameSnapshot& snapshot);
-  void clear() noexcept { events_.clear(); }
-  const std::vector<SnapshotSoundEvent>& events() const noexcept { return events_; }
-  bool empty() const noexcept { return events_.empty(); }
-
- private:
-  std::vector<SnapshotSoundEvent> events_;
-};
 
 }  // namespace fo4::avm2

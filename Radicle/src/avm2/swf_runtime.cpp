@@ -214,7 +214,11 @@ std::shared_ptr<SwfRuntime> SwfRuntime::create(Runtime& runtime, Interpreter& in
   stage->set_frame_rate(data->frame_rate);
 
   auto runtime_movie = std::shared_ptr<SwfRuntime>(new SwfRuntime());
+  runtime_movie->runtime_ = &runtime;
   runtime_movie->data_ = std::move(data);
+  for (const SoundResource& resource : runtime_movie->data_->sounds) {
+    runtime.register_sound(resource);
+  }
   runtime_movie->stage_ = stage;
   runtime_movie->root_ = build_movie_root(runtime, runtime_movie->data_);
   if (runtime_movie->root_ == nullptr) {
@@ -244,6 +248,18 @@ void SwfRuntime::advance(Interpreter& interpreter, double dt_seconds) {
     if (!result.ok()) {
       playing_ = false;
       break;
+    }
+    if (runtime_ != nullptr) {
+      const std::vector<std::shared_ptr<MovieClip>> clips = runtime_->movie_clips();
+      for (const auto& clip : clips) {
+        if (clip != nullptr) {
+          const ExecutionResult clip_result = clip->advance_frame(interpreter);
+          if (!clip_result.ok()) {
+            playing_ = false;
+            break;
+          }
+        }
+      }
     }
     accumulator_ -= 1.0;
   }
@@ -289,9 +305,15 @@ void SwfRuntime::mouse_event(Interpreter& interpreter, double x, double y, std::
   dispatch_event(interpreter, root_, event, 0);
 }
 
+SoundEventQueue& SwfRuntime::sound_events() {
+  return runtime_ == nullptr ? sounds_fallback_ : runtime_->sound_events();
+}
+
 FrameSnapshot SwfRuntime::take_snapshot() {
   FrameSnapshot snapshot = root_ == nullptr ? FrameSnapshot{} : build_frame_snapshot(*root_);
-  sounds_.append_to(snapshot);
+  if (runtime_ != nullptr) {
+    runtime_->sound_events().append_to(snapshot.sounds);
+  }
   return snapshot;
 }
 

@@ -267,8 +267,11 @@ std::shared_ptr<DisplayObject> make_display_object(Runtime& runtime, Class& klas
   Class* container_class = find_display_class(runtime, "flash.display::DisplayObjectContainer");
   Class* movie_clip = find_display_class(runtime, "flash.display::MovieClip");
   std::shared_ptr<DisplayObject> object;
+  Class* loader_class = find_display_class(runtime, "flash.display::Loader");
   Class* text_field_class = find_display_class(runtime, "flash.text::TextField");
-  if (text_field_class != nullptr && klass.is_subclass_of(text_field_class)) {
+  if (loader_class != nullptr && klass.is_subclass_of(loader_class)) {
+    object = std::make_shared<LoaderObject>(&klass);
+  } else if (text_field_class != nullptr && klass.is_subclass_of(text_field_class)) {
     object = std::make_shared<TextFieldObject>(&klass, &runtime.fonts());
   } else if (movie_clip != nullptr && klass.is_subclass_of(movie_clip)) {
     object = std::make_shared<MovieClip>(&klass);

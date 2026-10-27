@@ -145,6 +145,23 @@ void collect_timeline(const std::vector<swf::SwfTag>& tags, std::uint32_t declar
         }
         break;
       }
+      case swf::tag::kDefineSound: {
+        if (tag.sound.has_value()) {
+          SoundResource resource;
+          resource.source_id = tag.sound->sound_id;
+          resource.format = tag.sound->format;
+          resource.rate = tag.sound->rate;
+          resource.sample_16bit = tag.sound->sample_16bit;
+          resource.stereo = tag.sound->stereo;
+          resource.sample_count = tag.sound->sample_count;
+          resource.payload.reserve(tag.payload.size());
+          for (const std::byte raw : tag.payload) {
+            resource.payload.push_back(static_cast<std::uint8_t>(raw));
+          }
+          data.sounds.push_back(std::move(resource));
+        }
+        break;
+      }
       case swf::tag::kSymbolClass: {
         read_symbol_classes(tag.payload, data.symbol_classes, data.root_class_name);
         break;

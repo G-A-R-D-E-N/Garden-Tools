@@ -44,6 +44,7 @@ struct SwfMovieData {
   std::map<std::uint16_t, SwfTimelineRows> sprites;
   std::map<std::uint16_t, std::string> symbol_classes;
   std::vector<FontResource> fonts;
+  std::vector<SoundResource> sounds;
   std::string root_class_name;
   double frame_rate{24.0};
   double stage_width{0.0};
@@ -76,7 +77,7 @@ class SwfRuntime {
   /* The host must take one snapshot per rendered frame; it drains the sound queue. */
   FrameSnapshot take_snapshot();
   FrameSnapshot snapshot() const;
-  SoundEventQueue& sound_events() noexcept { return sounds_; }
+  SoundEventQueue& sound_events();
   /* Host input must go through these; keyboard targets the root clip and mouse the stage. */
   void key_event(Interpreter& interpreter, std::uint32_t key_code, bool down);
   void mouse_event(Interpreter& interpreter, double x, double y, std::int32_t button, bool down);
@@ -94,7 +95,8 @@ class SwfRuntime {
   std::shared_ptr<SwfMovieData> data_;
   std::shared_ptr<DisplayObjectContainer> stage_;
   std::shared_ptr<MovieClip> root_;
-  SoundEventQueue sounds_;
+  Runtime* runtime_{nullptr};
+  SoundEventQueue sounds_fallback_;
   double accumulator_{0.0};
   bool playing_{true};
   bool started_{false};
