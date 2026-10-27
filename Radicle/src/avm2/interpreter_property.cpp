@@ -2,6 +2,7 @@
 
 #include "interpreter_internal.hpp"
 
+#include <fo4/avm2/bytearray.hpp>
 #include <fo4/avm2/class.hpp>
 #include <fo4/avm2/coercion.hpp>
 #include <fo4/avm2/display.hpp>
@@ -506,10 +507,33 @@ InterpreterStatus Interpreter::coerce_value(const Multiname& multiname, Value& v
   return InterpreterStatus::TypeError;
 }
 
+namespace {
+
+bool byte_array_index_access(ByteArrayObject& bytes, const Multiname& multiname, bool write,
+                             Value& value) {
+  std::uint32_t index = 0;
+  if (!multiname.has_fixed_name() || !is_array_index(multiname.name, index)) {
+    return false;
+  }
+  if (write) {
+    bytes.set_byte_at(index, static_cast<std::uint8_t>(to_uint32(value)));
+  } else {
+    value = Value::uint32(bytes.byte_at(index));
+  }
+  return true;
+}
+
+}  // namespace
+
 InterpreterStatus Interpreter::array_property(Object& object, const Multiname& multiname,
                                               bool write, Value& value, bool& handled,
                                               std::string& message) {
   handled = false;
+  if (object.kind() == ObjectKind::ByteArray) {
+    handled = byte_array_index_access(static_cast<ByteArrayObject&>(object), multiname, write,
+                                      value);
+    return InterpreterStatus::Ok;
+  }
   if (object.kind() != ObjectKind::Array) {
     return InterpreterStatus::Ok;
   }

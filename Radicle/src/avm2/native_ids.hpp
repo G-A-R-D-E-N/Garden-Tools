@@ -213,6 +213,20 @@ enum class Id : std::uint32_t {
   bgs_set_save_data,
   bgs_close_holotape,
   bgs_show_tutorial_overlay,
+  bytearray_construct,
+  bytearray_length_get,
+  bytearray_length_set,
+  bytearray_position_get,
+  bytearray_position_set,
+  bytearray_endian_get,
+  bytearray_endian_set,
+  bytearray_bytes_available_get,
+  bytearray_write_byte,
+  bytearray_read_byte,
+  bytearray_read_unsigned_byte,
+  bytearray_write_utf_bytes,
+  bytearray_read_utf_bytes,
+  bytearray_clear,
 };
 
 }  // namespace fo4::avm2::native
