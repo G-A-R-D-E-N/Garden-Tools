@@ -273,7 +273,7 @@ TEST(Avm2Builtins, ArraySortOrdersNumericElementsByText) {
   code.returnvalue();
   const ExecutionResult result = run_initializer(script, code);
   ASSERT_TRUE(result.ok()) << result.message;
-  ASSERT_TRUE(result.value.is_int32());
+  ASSERT_TRUE(result.value.is_int32()) << fo4::avm2::value_kind_name(result.value.kind());
   EXPECT_EQ(result.value.as_int32(), 1);
 }
 
@@ -406,7 +406,7 @@ TEST(Avm2Builtins, ArrayReduceSumsTheElements) {
   code.returnvalue();
   const ExecutionResult result = run_initializer(script, code);
   ASSERT_TRUE(result.ok()) << result.message;
-  ASSERT_TRUE(result.value.is_int32());
+  ASSERT_TRUE(result.value.is_int32()) << fo4::avm2::value_kind_name(result.value.kind());
   EXPECT_EQ(result.value.as_int32(), 6);
 }
 

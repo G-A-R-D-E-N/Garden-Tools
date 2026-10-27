@@ -98,7 +98,7 @@ std::vector<std::byte> font_payload() {
 std::vector<std::byte> font2_payload() {
   SwfBuilder builder;
   builder.u16(12);
-  builder.u8(0x8Cu);
+  builder.u8(0x0Cu);
   builder.u8(1);
   builder.sized_text("Body");
   builder.u16(2);
@@ -111,7 +111,7 @@ std::vector<std::byte> font2_payload() {
 std::vector<std::byte> font3_payload() {
   SwfBuilder builder;
   builder.u16(13);
-  builder.u8(0x84u);
+  builder.u8(0x00u);
   builder.u8(1);
   builder.sized_text("Cn");
   builder.u16(3);
@@ -295,6 +295,37 @@ struct BrokenTag {
 };
 
 }  // namespace
+
+TEST(SwfTagDecode, EveryNewTagPayloadDecodesInIsolation) {
+  struct Case {
+    std::uint16_t code;
+    std::vector<std::byte> payload;
+  };
+  std::vector<Case> cases;
+  cases.push_back({2, shape_payload(7)});
+  cases.push_back({22, shape_payload(8)});
+  cases.push_back({32, shape_payload(9)});
+  cases.push_back({83, shape4_payload()});
+  cases.push_back({20, lossless_payload(3, 3, 16, 8, 255)});
+  cases.push_back({36, lossless_payload(4, 4, 32, 16, std::nullopt)});
+  cases.push_back({10, font_payload()});
+  cases.push_back({48, font2_payload()});
+  cases.push_back({75, font3_payload()});
+  cases.push_back({11, text_payload(20, false)});
+  cases.push_back({33, text_payload(21, true)});
+  cases.push_back({14, sound_payload()});
+  cases.push_back({9, background_color_payload(0x44)});
+  cases.push_back({1000, exporter_info_payload()});
+  cases.push_back({1001, external_image_payload(4, false, "Z.png", "Z.png.dds")});
+  cases.push_back({1009, external_image_payload(0x00010001u, true, "Y.png", "Y.png.dds")});
+  cases.push_back({1002, font_texture_payload()});
+  for (const Case& item : cases) {
+    const auto bytes = movie_with(item.code, item.payload);
+    const auto result = fo4::swf::read_swf(bytes);
+    EXPECT_TRUE(result.ok()) << "tag " << item.code << " returned "
+                             << fo4::swf::status_name(result.status);
+  }
+}
 
 TEST(SwfTagDecode, DecodesShapeBoundsForEveryDefineShapeVariant) {
   const auto bytes = all_kinds_movie();
