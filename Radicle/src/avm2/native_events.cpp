@@ -207,7 +207,8 @@ ExecutionResult dispatcher_dispatch_event(Interpreter& interpreter, const Value&
   if (event == nullptr) {
     return native_value(Value::boolean(true));
   }
-  std::shared_ptr<Object> event_shared = event_value.as_object();
+  std::shared_ptr<EventObject> event_shared =
+      std::static_pointer_cast<EventObject>(event_value.as_object());
   ExecutionResult result =
       dispatch_event(interpreter, self.as_object(), event_shared, depth);
   if (!result.ok()) {
