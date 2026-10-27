@@ -7,6 +7,7 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <string>
 
@@ -88,6 +89,18 @@ TEST(Avm2DisplaySnapshot, AChangedAlphaChangesTheHash) {
   const std::uint64_t before = display_snapshot_hash(*tree.root);
   tree.sprite->set_alpha(1.0);
   EXPECT_NE(display_snapshot_hash(*tree.root), before);
+}
+
+TEST(Avm2DisplaySnapshot, NonFiniteAndOutOfRangeValuesPrintAsWords) {
+  Class klass;
+  klass.name = "flash.display::Sprite";
+  const auto object = std::make_shared<DisplayObject>(&klass);
+  object->set_width(1e300);
+  object->set_height(std::numeric_limits<double>::quiet_NaN());
+  object->set_alpha(-std::numeric_limits<double>::infinity());
+  const std::string text = display_snapshot_text(*object);
+  EXPECT_NE(text.find(" bounds=0 0 inf nan matrix="), std::string::npos) << text;
+  EXPECT_NE(text.find(" alpha=-inf children=0"), std::string::npos) << text;
 }
 
 TEST(Fnv1a64, MatchesThePublishedVectors) {

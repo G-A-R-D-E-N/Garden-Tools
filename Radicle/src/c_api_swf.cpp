@@ -36,8 +36,6 @@ radicle_status map_swf_status(fo4::swf::SwfStatus status, const std::string& mes
       return RADICLE_STATUS_OK;
     case fo4::swf::SwfStatus::empty_input:
       return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the movie bytes are empty");
-    case fo4::swf::SwfStatus::unsupported_compression:
-      return fail(RADICLE_STATUS_PARSE_ERROR, "LZMA (ZWS) movies are not supported yet");
     case fo4::swf::SwfStatus::out_of_memory:
       return fail(RADICLE_STATUS_OUT_OF_MEMORY, message.empty() ? "out of memory while reading the movie" : message.c_str());
     default:

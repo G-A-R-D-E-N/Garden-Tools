@@ -7,6 +7,27 @@
 
 namespace fo4::swf {
 
+namespace {
+
+bool styles_are_in_range(const SwfGlyph& shape, std::string& message) {
+  for (const SwfShapeRecord& record : shape.records) {
+    if (record.kind != SwfShapeRecordKind::style_change) {
+      continue;
+    }
+    if (record.fill0 > 1 || record.fill1 > 1) {
+      message = "a glyph style change names a fill style other than the implicit fill style 1";
+      return false;
+    }
+    if (record.line != 0) {
+      message = "a glyph style change names a line style, but a glyph SHAPE has no line styles";
+      return false;
+    }
+  }
+  return true;
+}
+
+}  // namespace
+
 bool replace_glyph_payload(const SwfTag& tag, std::size_t glyph_index, const SwfGlyph& shape,
                            std::vector<std::byte>& out, std::string& message) {
   out.clear();
@@ -22,6 +43,9 @@ bool replace_glyph_payload(const SwfTag& tag, std::size_t glyph_index, const Swf
   }
   if (glyph_index >= tag.font->glyphs.size()) {
     message = "the glyph index is out of range";
+    return false;
+  }
+  if (!styles_are_in_range(shape, message)) {
     return false;
   }
   SwfFont font = *tag.font;
