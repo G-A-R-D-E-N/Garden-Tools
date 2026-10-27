@@ -2,6 +2,7 @@
 
 #include <fo4/abc/abc.hpp>
 #include <fo4/avm2/class.hpp>
+#include <fo4/avm2/fonts.hpp>
 #include <fo4/avm2/name.hpp>
 #include <fo4/avm2/object.hpp>
 #include <fo4/avm2/value.hpp>
@@ -59,6 +60,8 @@ class Runtime {
   const std::vector<Class*>& classes() const noexcept { return classes_; }
   const std::vector<ScriptEntry>& scripts() const noexcept { return scripts_; }
   Object* global_object() const noexcept { return global_object_.get(); }
+  FontRegistry& fonts() noexcept { return fonts_; }
+  const FontRegistry& fonts() const noexcept { return fonts_; }
 
   const Class* find_class(const Multiname& multiname) const;
   const Class* find_class(std::string_view rendered_name) const;
@@ -103,6 +106,7 @@ class Runtime {
   std::unordered_map<const Class*, Class*> vector_classes_;
   std::vector<ScriptEntry> scripts_;
   std::shared_ptr<Object> global_object_;
+  FontRegistry fonts_;
   bool linked_{false};
   bool failed_{false};
 };

@@ -355,6 +355,16 @@ struct SwfFont {
   std::string name;
   bool wide_offsets{false};
   bool wide_codes{false};
+  bool define_font3{false};
+  bool has_layout{false};
+  std::vector<std::uint32_t> glyph_offsets;
+  std::vector<std::uint16_t> glyph_codes;
+  /* Invariant: advances are em fractions (glyph advance / units per em). */
+  std::vector<double> advances;
+  std::uint32_t units_per_em{1024};
+  std::uint16_t ascent{0};
+  std::uint16_t descent{0};
+  std::int16_t leading{0};
 };
 
 struct SwfText {

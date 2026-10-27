@@ -5,6 +5,7 @@
 #include <fo4/avm2/interpreter.hpp>
 #include <fo4/avm2/name.hpp>
 #include <fo4/avm2/runtime.hpp>
+#include <fo4/avm2/text.hpp>
 
 #include "interpreter_internal.hpp"
 
@@ -266,7 +267,10 @@ std::shared_ptr<DisplayObject> make_display_object(Runtime& runtime, Class& klas
   Class* container_class = find_display_class(runtime, "flash.display::DisplayObjectContainer");
   Class* movie_clip = find_display_class(runtime, "flash.display::MovieClip");
   std::shared_ptr<DisplayObject> object;
-  if (movie_clip != nullptr && klass.is_subclass_of(movie_clip)) {
+  Class* text_field_class = find_display_class(runtime, "flash.text::TextField");
+  if (text_field_class != nullptr && klass.is_subclass_of(text_field_class)) {
+    object = std::make_shared<TextFieldObject>(&klass, &runtime.fonts());
+  } else if (movie_clip != nullptr && klass.is_subclass_of(movie_clip)) {
     object = std::make_shared<MovieClip>(&klass);
   } else if (container_class != nullptr && klass.is_subclass_of(container_class)) {
     object = std::make_shared<DisplayObjectContainer>(&klass);
@@ -370,6 +374,53 @@ bool read_display_property(Interpreter& interpreter, DisplayObject& object,
         static_cast<double>(static_cast<DisplayObjectContainer&>(object).children().size()));
     return true;
   }
+  if (object.is_text_field()) {
+    auto& text_field = static_cast<TextFieldObject&>(object);
+    if (name == "text") {
+      out = Value::string(text_field.text());
+      return true;
+    }
+    if (name == "htmlText") {
+      out = Value::string(text_field.html_text());
+      return true;
+    }
+    if (name == "textColor") {
+      out = Value::uint32(text_field.text_color());
+      return true;
+    }
+    if (name == "textWidth") {
+      out = Value::number(text_field.text_width());
+      return true;
+    }
+    if (name == "textHeight") {
+      out = Value::number(text_field.text_height());
+      return true;
+    }
+    if (name == "numLines") {
+      out = Value::number(static_cast<double>(text_field.line_count()));
+      return true;
+    }
+    if (name == "wordWrap") {
+      out = Value::boolean(text_field.word_wrap());
+      return true;
+    }
+    if (name == "multiline") {
+      out = Value::boolean(text_field.multiline());
+      return true;
+    }
+    if (name == "autoSize") {
+      out = Value::uint32(static_cast<std::uint32_t>(text_field.auto_size()));
+      return true;
+    }
+    if (name == "defaultTextFormat") {
+      out = make_text_format_instance(interpreter, text_field.format());
+      return true;
+    }
+    if (name == "length") {
+      out = Value::number(static_cast<double>(text_field.text().size()));
+      return true;
+    }
+  }
   if ((name == "stageWidth" || name == "stageHeight" || name == "frameRate") &&
       object.stage() == &object) {
     out = Value::number(name == "stageWidth"     ? object.stage_width()
@@ -472,6 +523,40 @@ bool write_display_property(DisplayObject& object, const Multiname& multiname,
   if (name == "name") {
     object.set_name(to_string(value));
     return true;
+  }
+  if (object.is_text_field()) {
+    auto& text_field = static_cast<TextFieldObject&>(object);
+    if (name == "text") {
+      text_field.set_text(to_string(value));
+      return true;
+    }
+    if (name == "htmlText") {
+      text_field.set_html_text(to_string(value));
+      return true;
+    }
+    if (name == "textColor") {
+      text_field.set_text_color(static_cast<std::uint32_t>(to_number(value)));
+      return true;
+    }
+    if (name == "wordWrap") {
+      text_field.set_word_wrap(to_boolean(value));
+      return true;
+    }
+    if (name == "multiline") {
+      text_field.set_multiline(to_boolean(value));
+      return true;
+    }
+    if (name == "autoSize") {
+      text_field.set_auto_size(static_cast<TextFieldAutoSize>(to_int32(value)));
+      return true;
+    }
+    if (name == "defaultTextFormat") {
+      text_field.set_format(read_text_format_instance(value));
+      return true;
+    }
+    if (name == "textWidth" || name == "textHeight" || name == "numLines") {
+      return true;
+    }
   }
   if (name == "mouseEnabled") {
     object.set_mouse_enabled(to_boolean(value));

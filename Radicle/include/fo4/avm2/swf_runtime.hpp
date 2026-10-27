@@ -1,6 +1,7 @@
 #pragma once
 
 #include <fo4/avm2/display.hpp>
+#include <fo4/avm2/fonts.hpp>
 #include <fo4/avm2/interpreter.hpp>
 #include <fo4/avm2/object.hpp>
 #include <fo4/avm2/runtime.hpp>
@@ -41,6 +42,7 @@ struct SwfMovieData {
   SwfTimelineRows root;
   std::map<std::uint16_t, SwfTimelineRows> sprites;
   std::map<std::uint16_t, std::string> symbol_classes;
+  std::vector<FontResource> fonts;
   std::string root_class_name;
   double frame_rate{24.0};
   double stage_width{0.0};

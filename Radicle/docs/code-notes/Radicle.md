@@ -5302,3 +5302,53 @@ Events are now a real part of the runtime. `Radicle/include/fo4/avm2/events.hpp`
 **Tests.** `Radicle/tests/test_avm2_events.cpp` builds listener methods in hand-assembled ABC that append a tag to a global string and asserts: capture/target/bubble order "ctb" on a parent/child sprite tree, "ct" for a non-bubbling event, stopPropagation on the target producing "cs" and skipping the bubble, a MovieClip dispatching enterFrame then exitFrame as "ex", a Timer with delay 100/repeat 2 firing twice and completing from `advance_host_time(250)` with `getTimer` at 250, the Keyboard class constant A == 65, and host key input reaching a root-clip keyDown listener while `SwfRuntime::advance` moves the host clock.
 
 **Still open for R5/R7.** Focus events are constructed and modelled but focus traversal (stage.focus assignment, FocusEvent dispatch on change) is not wired; mouse events target the root rather than a hit-tested object; `willTrigger`/weak listeners and listener `this` semantics are the simple AS3 shape; Loader/URLLoader dispatch and the host-call/ExternalInterface bridge remain R7. Next round starts R6 (TextField/TextFormat over the decoded fonts) or R7's loading/storage/sound surface, whichever the remaining census rows point at. Nothing was built locally; CI is the compile evidence.
+
+## R6: embedded font decode, TextField/TextFormat and laid-out glyph runs (#807 R6)
+
+Text is now modelled end to end. The SWF side finally decodes DefineFont2/DefineFont3 in full:
+`Radicle/include/fo4/swf/swf.hpp` extends `SwfFont` with the shape offset table, the code table,
+per-glyph advance widths normalised to em fractions (the tag's units per em are 1024 or 20480 for
+DefineFont3), the font ascent/descent/leading and the layout flag, and
+`Radicle/src/swf/swf_text.cpp` reads the offset table, the code-table offset, the code table, the
+layout block, the bounds table and the kerning table with bounds checks, so a malformed font is
+reported instead of half-read. The wide-offset/wide-code/layout flag bits were the wrong ones before
+(0x08 is HasLayout, not wide offsets), which this fixes. `SwfReader` gained `read_s16` for the
+advance and leading entries.
+
+**Text model.** `Radicle/include/fo4/avm2/fonts.hpp` adds `FontGlyph`/`FontResource`/`FontRegistry`
+(a glyph keeps its code and em-fraction advance, the registry answers by character id or by name),
+`Radicle/include/fo4/avm2/text.hpp` adds `TextFormatData`, `GlyphPlacement`, `TextRun` and
+`TextFieldObject` (a `DisplayObject` with text/htmlText/format/autoSize/wordWrap/multiline and a
+measured textWidth/textHeight), and `Radicle/src/avm2/text.cpp` lays the string out: one run per line,
+each character resolved to a glyph and advance from the format's font (falling back to half an em per
+byte when no font is attached), with glyph positions accumulated in the run and the measured box
+recomputed. The htmlText subset strips tags and decodes the five basic entities, which is the part the
+census uses. TextFormat instances round-trip through `make_text_format_instance`/
+`read_text_format_instance`, so AS3 can pass formats in and out.
+
+**Classes and bridge.** `flash.text::TextField` (moved out of flash.display to its correct package,
+super InteractiveObject) and `flash.text::TextFormat` are installed; a TextField instance is created
+as a `TextFieldObject` wired to the runtime's font registry, its properties are answered by the
+display property path (`text`, `htmlText`, `textColor`, `textWidth`, `textHeight`, `numLines`,
+`wordWrap`, `multiline`, `autoSize`, `defaultTextFormat`, `length`) and `appendText`, `getLineText`,
+`setTextFormat` and `getTextFormat` are natives in `native_text.cpp`. The SWF bridge collects the font
+tags into `SwfMovieData::fonts` and `SwfRuntime::create` installs them into `Runtime::fonts()`, so a
+movie's TextFields lay out against its own embedded fonts. `make_display_object` picks
+`TextFieldObject` for a TextField-class symbol.
+
+**Tests.** `tests/test_swf_fonts.cpp` builds synthetic DefineFont3 and DefineFont2 SWFs and asserts
+glyph codes, em-fraction advances (0.5/0.25 in both unit systems), ascent/leading, offsets and the
+font3 flag. `tests/test_avm2_text.cpp` covers glyph layout with a hand-built font (2 glyphs, positions
+0/10, width 15, height 24), newline runs, htmlText tag stripping and entity decoding, TextFormat round
+trip, script-visible text/textWidth/numLines, and appendText plus getLineText through natives.
+`tests/test_swf_fonts_real.cpp` (FO4_DATA_DIR gated) decodes the fonts in `fonts_programs.swf` and
+`fonts_en.swf`, asserting fonts, layout fonts and total glyph counts are non-zero and that every layout
+font's advance table matches its glyph count.
+
+**Still open for R6/R7.** The text runs are exposed as a C++ model but not yet carried by the R8
+snapshot; DefineText/DefineEditText characters are not instantiated by the SWF bridge yet (script-created
+TextFields and fonts are), word wrap is not applied (explicit newlines only), non-ASCII strings are laid
+out byte-by-byte because the interpreter's strings are still UTF-8 bytes rather than UTF-16, and the
+rendering side needs the font outline data that the decoded offsets allow but does not yet read. Next
+round continues with instantiating DefineEditText/DefineText characters, the UTF-16 string move, or R7's
+loading/storage/sound/host calls. Nothing was built locally; CI is the compile evidence.

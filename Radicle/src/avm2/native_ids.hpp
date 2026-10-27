@@ -136,6 +136,11 @@ enum class Id : std::uint32_t {
   timer_start,
   timer_stop,
   timer_reset,
+  text_format_construct,
+  text_field_append_text,
+  text_field_get_line_text,
+  text_field_set_text_format,
+  text_field_get_text_format,
 };
 
 }  // namespace fo4::avm2::native

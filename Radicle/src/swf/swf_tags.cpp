@@ -32,6 +32,15 @@ bool SwfReader::read_u8(std::uint8_t& out) noexcept {
   return true;
 }
 
+bool SwfReader::read_s16(std::int16_t& out) noexcept {
+  std::uint16_t value = 0;
+  if (!read_u16(value)) {
+    return false;
+  }
+  out = static_cast<std::int16_t>(value);
+  return true;
+}
+
 bool SwfReader::read_u16(std::uint16_t& out) noexcept {
   if (remaining() < 2) {
     return false;

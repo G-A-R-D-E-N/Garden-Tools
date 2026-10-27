@@ -199,6 +199,9 @@ std::shared_ptr<SwfRuntime> SwfRuntime::create(Runtime& runtime, Interpreter& in
   if (stage_class == nullptr) {
     return nullptr;
   }
+  for (const FontResource& font : data->fonts) {
+    runtime.fonts().add(font);
+  }
   auto stage_object = make_display_object(runtime, *stage_class);
   auto stage = std::dynamic_pointer_cast<DisplayObjectContainer>(stage_object);
   if (stage == nullptr) {

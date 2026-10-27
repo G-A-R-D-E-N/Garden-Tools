@@ -26,6 +26,7 @@ public:
 
   bool read_u8(std::uint8_t& out) noexcept;
   bool read_u16(std::uint16_t& out) noexcept;
+  bool read_s16(std::int16_t& out) noexcept;
   bool read_u32(std::uint32_t& out) noexcept;
   bool read_zstring(std::string& out);
   bool read_sized_string(std::string& out);

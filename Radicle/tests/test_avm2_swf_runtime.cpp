@@ -118,7 +118,7 @@ fo4::swf::SwfFile build_movie(bool with_symbol_class) {
   root.push_back(make_tag(fo4::swf::tag::kShowFrame));
   if (with_symbol_class) {
     root.insert(root.begin() + 1,
-                symbol_class_tag({{5, "flash.display::TextField"}, {0, "flash.display::Sprite"}}));
+                symbol_class_tag({{5, "flash.text::TextField"}, {0, "flash.display::Sprite"}}));
   }
   file.tags = std::move(root);
   return file;
@@ -218,7 +218,7 @@ TEST(Avm2SwfRuntime, SymbolClassChoosesThePlacedCharacterClass) {
   const DisplayObject* placed = movie->root()->children()[1].get();
   ASSERT_NE(placed, nullptr);
   ASSERT_NE(placed->display_class(), nullptr);
-  EXPECT_EQ(placed->display_class()->name, "flash.display::TextField");
+  EXPECT_EQ(placed->display_class()->name, "flash.text::TextField");
 }
 
 TEST(Avm2SwfRuntime, TwoIdenticalRunsProduceTheSameFrameSequence) {

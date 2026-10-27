@@ -1,6 +1,7 @@
 #include <fo4/avm2/swf_runtime.hpp>
 
 #include <fo4/avm2/display.hpp>
+#include <fo4/avm2/fonts.hpp>
 #include <fo4/swf/swf.hpp>
 
 #include <algorithm>
@@ -119,6 +120,28 @@ void collect_timeline(const std::vector<swf::SwfTag>& tags, std::uint32_t declar
         label.frame = frame_index + 1;
         if (!label.name.empty()) {
           out.labels.push_back(std::move(label));
+        }
+        break;
+      }
+      case swf::tag::kDefineFont2:
+      case swf::tag::kDefineFont3: {
+        if (tag.font.has_value()) {
+          FontResource font;
+          font.character_id = tag.font->font_id;
+          font.name = tag.font->name;
+          font.units_per_em = tag.font->units_per_em;
+          font.has_layout = tag.font->has_layout;
+          font.glyphs.resize(tag.font->glyph_count);
+          for (std::size_t index = 0; index < font.glyphs.size(); ++index) {
+            font.glyphs[index].glyph_id = static_cast<std::uint16_t>(index);
+            if (index < tag.font->glyph_codes.size()) {
+              font.glyphs[index].code = tag.font->glyph_codes[index];
+            }
+            if (index < tag.font->advances.size()) {
+              font.glyphs[index].advance = tag.font->advances[index];
+            }
+          }
+          data.fonts.push_back(std::move(font));
         }
         break;
       }

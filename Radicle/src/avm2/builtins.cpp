@@ -360,11 +360,13 @@ RuntimeStatus Runtime::install_builtins() {
   Class* stage = add_builtin_class("Stage", "flash.display", display_container);
   Class* shape = add_builtin_class("Shape", "flash.display", display_object);
   Class* bitmap = add_builtin_class("Bitmap", "flash.display", display_object);
-  Class* text_field = add_builtin_class("TextField", "flash.display", interactive_object);
+  Class* text_field = add_builtin_class("TextField", "flash.text", interactive_object);
+  Class* text_format = add_builtin_class("TextFormat", "flash.text", object_class);
   Class* simple_button = add_builtin_class("SimpleButton", "flash.display", interactive_object);
   if (display_object == nullptr || interactive_object == nullptr || display_container == nullptr ||
       sprite == nullptr || movie_clip == nullptr || stage == nullptr || shape == nullptr ||
-      bitmap == nullptr || text_field == nullptr || simple_button == nullptr) {
+      bitmap == nullptr || text_field == nullptr || simple_button == nullptr ||
+      text_format == nullptr) {
     return RuntimeStatus::InvalidTrait;
   }
   for (Class* display_class : {display_object, interactive_object, display_container, sprite,
@@ -388,6 +390,11 @@ RuntimeStatus Runtime::install_builtins() {
   add_method(*movie_clip, "play", native::Id::display_play, false);
   add_method(*movie_clip, "nextFrame", native::Id::display_next_frame, false);
   add_method(*movie_clip, "prevFrame", native::Id::display_prev_frame, false);
+  add_method(*text_field, "appendText", native::Id::text_field_append_text, false);
+  add_method(*text_field, "getLineText", native::Id::text_field_get_line_text, false);
+  add_method(*text_field, "setTextFormat", native::Id::text_field_set_text_format, false);
+  add_method(*text_field, "getTextFormat", native::Id::text_field_get_text_format, false);
+  text_format->native_constructor = static_cast<std::uint32_t>(native::Id::text_format_construct);
 
   Class* point_class = add_builtin_class("Point", "flash.geom", object_class);
   Class* rectangle_class = add_builtin_class("Rectangle", "flash.geom", object_class);
