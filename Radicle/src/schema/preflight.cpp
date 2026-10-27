@@ -432,8 +432,9 @@ std::vector<PreflightIssue> preflight_authoring_record(
             : "record must be a direct child of a topic children GRUP"));
   }
 
-  // Constraint: a CELL is a direct child of its matching top-level GRUP or of an interior/exterior cell block GRUP.
+  // Constraint: a CELL is a direct child of its matching top-level GRUP, a world children GRUP, or an interior/exterior cell block GRUP.
   const bool cell_block =
+      location.parent_group_type == static_cast<std::int32_t>(GroupType::world_children) ||
       location.parent_group_type == static_cast<std::int32_t>(GroupType::interior_cell_block) ||
       location.parent_group_type == static_cast<std::int32_t>(GroupType::interior_cell_subblock) ||
       location.parent_group_type == static_cast<std::int32_t>(GroupType::exterior_cell_block) ||
@@ -444,7 +445,7 @@ std::vector<PreflightIssue> preflight_authoring_record(
         record_key,
         location.record->header.signature.to_string(),
         "record_placement_invalid",
-        "record must be a direct child of a top-level CELL GRUP or of an interior/exterior cell block GRUP"));
+        "record must be a direct child of a top-level CELL GRUP, a world children GRUP, or an interior/exterior cell block GRUP"));
   }
 
   const auto rules = authoring_subrecords(*constraint);

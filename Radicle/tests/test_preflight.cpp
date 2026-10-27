@@ -78,8 +78,9 @@ fo4::Plugin plugin_with_top_record(fo4::Record record) {
 fo4::Plugin cell_under_parent_chain(std::string_view top_label,
                                     std::vector<fo4::GroupType> chain) {
   fo4::Group current;
+  current.header.group_type = static_cast<std::int32_t>(chain.back());
   current.children.emplace_back(authored_record("CELL", 0x800, {"EDID", "DATA"}));
-  for (auto type = chain.rbegin(); type != chain.rend(); ++type) {
+  for (auto type = chain.rbegin() + 1; type != chain.rend(); ++type) {
     fo4::Group wrapper;
     wrapper.header.group_type = static_cast<std::int32_t>(*type);
     wrapper.children.emplace_back(std::move(current));
@@ -301,6 +302,11 @@ TEST(AuthoringPreflight, CellPlacementAcceptsInteriorAndExteriorCellBlocks) {
 
   auto top_level = plugin_with_top_record(authored_record("CELL", 0x800, {"EDID", "DATA"}));
   EXPECT_FALSE(has_issue(fo4::schema::preflight_authoring_record(top_level, key),
+                         "record_placement_invalid"));
+
+  const auto world_top_cell =
+      cell_under_parent_chain("WRLD", {fo4::GroupType::world_children});
+  EXPECT_FALSE(has_issue(fo4::schema::preflight_authoring_record(world_top_cell, key),
                          "record_placement_invalid"));
 
   const auto cell_children =
