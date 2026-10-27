@@ -130,6 +130,7 @@ TEST(Avm2Script, SwfRuntimeLinksAndRunsTheMoviesAbcBlocks) {
   ASSERT_TRUE(read.ok()) << fo4::swf::status_name(read.status);
 
   Runtime runtime;
+  ASSERT_TRUE(runtime.link().ok());
   Interpreter interpreter{runtime};
   const std::shared_ptr<SwfRuntime> movie = SwfRuntime::create(runtime, interpreter, read.file);
   ASSERT_NE(movie, nullptr) << fo4::avm2::SwfRuntime::last_error();

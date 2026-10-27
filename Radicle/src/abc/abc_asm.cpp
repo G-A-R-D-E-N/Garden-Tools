@@ -349,7 +349,7 @@ struct Assembler {
       return fail("instance header is malformed");
     }
     std::uint32_t flags = 0;
-    if (!header_cursor.text("flags", flags)) {
+    if (!header_cursor.skip("flags") || !header_cursor.u32(flags)) {
       return fail("instance flags are malformed");
     }
     instance.flags = static_cast<std::uint8_t>(flags);
