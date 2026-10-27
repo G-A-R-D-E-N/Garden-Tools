@@ -32,7 +32,6 @@ public partial class SwfTests
         U30(0);
         U30(0);
         U30(2);
-        U30(0);
         U30(3);
         bytes.Add((byte)'F');
         bytes.Add((byte)'o');
