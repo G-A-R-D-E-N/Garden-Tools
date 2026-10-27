@@ -434,6 +434,9 @@ std::shared_ptr<SwfRuntime> SwfRuntime::create(Runtime& runtime, Interpreter& in
       }
     }
   }
+  if (options.bgs_host) {
+    install_bgs_code_object(runtime, *runtime_movie->root_);
+  }
   runtime_movie->playing_ = options.start_playing;
   runtime_movie->root_->set_playing(runtime_movie->playing_);
   stage->add_child(runtime_movie->root_);

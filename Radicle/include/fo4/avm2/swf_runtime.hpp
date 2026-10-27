@@ -84,6 +84,7 @@ struct SwfRuntimeOptions {
   bool start_playing{true};
   std::size_t max_sprite_depth{32};
   std::size_t max_tags{200000};
+  bool bgs_host{false};
 };
 
 /* Requires the file's parsed tags; builds the movie data with no AVM2 state involved. */

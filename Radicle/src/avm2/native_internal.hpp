@@ -79,4 +79,8 @@ class LoaderObject;
 /* Requires a loader whose domain is already set; a cached contentLoaderInfo takes that domain. */
 void refresh_content_loader_info(Interpreter& interpreter, LoaderObject& loader);
 
+bool try_bgs_native(Interpreter& interpreter, native::Id id, const std::vector<Value>& arguments,
+                    ExecutionResult& out);
+void install_bgs_code_object(Runtime& runtime, Object& root);
+
 }  // namespace fo4::avm2

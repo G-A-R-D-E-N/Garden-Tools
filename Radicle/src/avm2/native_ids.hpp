@@ -201,6 +201,17 @@ enum class Id : std::uint32_t {
   app_domain_construct,
   app_domain_has_definition,
   loader_context_construct,
+  bgs_register_sound,
+  bgs_play_sound,
+  bgs_play_registered_sound,
+  bgs_stop_registered_sound,
+  bgs_pause_registered_sound,
+  bgs_get_highscore,
+  bgs_set_highscore,
+  bgs_get_save_data,
+  bgs_set_save_data,
+  bgs_close_holotape,
+  bgs_show_tutorial_overlay,
 };
 
 }  // namespace fo4::avm2::native
