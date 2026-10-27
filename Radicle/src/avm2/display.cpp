@@ -339,6 +339,18 @@ bool read_display_property(Interpreter& interpreter, DisplayObject& object,
     out = object.bitmap_data();
     return true;
   }
+  if (name == "graphics") {
+    out = object.graphics();
+    return true;
+  }
+  if (name == "stageFocusRect") {
+    out = Value::boolean(object.stage_focus_rect());
+    return true;
+  }
+  if (name == "focus") {
+    out = Value::null();
+    return true;
+  }
   if (name == "name") {
     out = Value::string(object.name());
     return true;
@@ -543,6 +555,10 @@ bool write_display_property(DisplayObject& object, const Multiname& multiname,
   }
   if (name == "bitmapData") {
     object.set_bitmap_data(value);
+    return true;
+  }
+  if (name == "stageFocusRect") {
+    object.set_stage_focus_rect(to_boolean(value));
     return true;
   }
   if (name == "name") {

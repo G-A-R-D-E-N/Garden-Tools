@@ -463,6 +463,19 @@ RuntimeStatus Runtime::install_builtins() {
     klass.class_traits.push_back(std::move(trait));
   };
 
+  const auto add_instance_getter = [](Class& klass, std::string name, native::Id id) {
+    auto function = std::make_shared<FunctionObject>(name, nullptr, kNoMethod);
+    function->set_native_id(static_cast<std::uint32_t>(id));
+    function->set_owner_class(&klass);
+    Trait trait;
+    trait.multiname = package_name(name);
+    trait.kind = TraitKind::Getter;
+    trait.disp_id = 0;
+    trait.method_index = kNoMethod;
+    trait.function = std::move(function);
+    klass.instance_traits.push_back(std::move(trait));
+  };
+
   const auto add_static_getter = [](Class& klass, std::string name, native::Id id) {
     auto function = std::make_shared<FunctionObject>(name, nullptr, kNoMethod);
     function->set_native_id(static_cast<std::uint32_t>(id));
@@ -566,6 +579,43 @@ RuntimeStatus Runtime::install_builtins() {
                         shadow_filter_class, matrix_filter_class}) {
     filter->native_constructor = static_cast<std::uint32_t>(native::Id::compat_construct);
     add_method(*filter, "clone", native::Id::compat_null, false);
+  }
+  Class* graphics_class = add_builtin_class("Graphics", "flash.display", object_class);
+  Class* loader_info_class = add_builtin_class("LoaderInfo", "flash.display", object_class);
+  if (graphics_class == nullptr || loader_info_class == nullptr) {
+    return RuntimeStatus::InvalidTrait;
+  }
+  graphics_class->native_constructor = static_cast<std::uint32_t>(native::Id::graphics_construct);
+  add_method(*graphics_class, "beginFill", native::Id::graphics_begin_fill, false);
+  add_method(*graphics_class, "beginGradientFill", native::Id::graphics_begin_gradient_fill, false);
+  add_method(*graphics_class, "endFill", native::Id::graphics_end_fill, false);
+  add_method(*graphics_class, "lineStyle", native::Id::graphics_line_style, false);
+  add_method(*graphics_class, "moveTo", native::Id::graphics_move_to, false);
+  add_method(*graphics_class, "lineTo", native::Id::graphics_line_to, false);
+  add_method(*graphics_class, "curveTo", native::Id::graphics_curve_to, false);
+  add_method(*graphics_class, "drawRect", native::Id::graphics_draw_rect, false);
+  add_method(*graphics_class, "drawCircle", native::Id::graphics_draw_circle, false);
+  add_method(*graphics_class, "drawRoundRect", native::Id::graphics_draw_round_rect, false);
+  add_method(*graphics_class, "clear", native::Id::graphics_clear, false);
+  add_method(*graphics_class, "copyFrom", native::Id::graphics_copy_from, false);
+  loader_info_class->native_constructor = static_cast<std::uint32_t>(native::Id::instance_construct);
+  if (display_object != nullptr) {
+    add_instance_getter(*display_object, "graphics", native::Id::display_graphics);
+    add_accessor(*display_object, "transform", native::Id::display_transform_get,
+                 native::Id::display_transform_set);
+    add_method(*display_object, "getBounds", native::Id::display_get_bounds, false);
+    add_method(*display_object, "hitTest", native::Id::display_hit_test, false);
+    add_method(*display_object, "hitTestPoint", native::Id::display_hit_test_point, false);
+    add_method(*display_object, "hitTestObject", native::Id::display_hit_test_object, false);
+  }
+  if (loader_class != nullptr) {
+    add_instance_getter(*loader_class, "contentLoaderInfo",
+                        native::Id::loader_content_loader_info);
+    add_instance_getter(*loader_class, "loaderInfo", native::Id::loader_content_loader_info);
+    add_method(*loader_class, "unloadAndStop", native::Id::loader_unload_and_stop, false);
+  }
+  if (event_class != nullptr) {
+    add_method(*event_class, "formatToString", native::Id::event_format_to_string, false);
   }
   if (keyboard_class != nullptr) {
     add_method(*keyboard_class, "isDown", native::Id::compat_false, true);

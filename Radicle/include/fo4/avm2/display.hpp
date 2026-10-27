@@ -61,6 +61,12 @@ class DisplayObject : public Object, public std::enable_shared_from_this<Display
     for (int index = 0; index < 4; ++index) color_add_[index] = values[index];
   }
 
+  /* A drawable must keep one Graphics object for its lifetime, because scripts keep drawing into it. */
+  const Value& graphics() const noexcept { return graphics_; }
+  void set_graphics(Value value) { graphics_ = std::move(value); }
+  bool stage_focus_rect() const noexcept { return stage_focus_rect_; }
+  void set_stage_focus_rect(bool value) noexcept { stage_focus_rect_ = value; }
+
   /* A Bitmap must keep the BitmapData the script assigned, so a snapshot can report it. */
   const Value& bitmap_data() const noexcept { return bitmap_data_; }
   void set_bitmap_data(Value value) { bitmap_data_ = std::move(value); }
@@ -125,6 +131,8 @@ class DisplayObject : public Object, public std::enable_shared_from_this<Display
   double alpha_{1.0};
   std::vector<Value> filters_;
   Value bitmap_data_;
+  Value graphics_;
+  bool stage_focus_rect_{true};
   double color_multiply_[4]{1.0, 1.0, 1.0, 1.0};
   double color_add_[4]{0.0, 0.0, 0.0, 0.0};
   double width_{0.0};
