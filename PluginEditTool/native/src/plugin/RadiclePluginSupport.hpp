@@ -51,6 +51,12 @@ inline bool boolArgument(const nlohmann::json& args, std::size_t index, bool fal
     return args[index].get<bool>();
 }
 
+inline bool tryBoolArgument(const nlohmann::json& args, std::size_t index, bool& value) {
+    if (!args.is_array() || index >= args.size() || !args[index].is_boolean()) return false;
+    value = args[index].get<bool>();
+    return true;
+}
+
 inline std::string localHex(std::uint32_t value) {
     return std::format("{:06X}", value);
 }
