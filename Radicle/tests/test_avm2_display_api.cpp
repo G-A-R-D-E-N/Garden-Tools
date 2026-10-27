@@ -44,7 +44,9 @@ struct Harness {
 
 fo4::avm2::Value property(const fo4::avm2::Value& object, const char* name) {
   if (!object.is_object()) return fo4::avm2::Value::undefined();
-  fo4::avm2::Multiname multiname = fo4::avm2::builtin_name(name);
+  fo4::avm2::Multiname multiname;
+  multiname.name = name;
+  multiname.namespaces.push_back(fo4::avm2::Namespace{});
   fo4::avm2::Value out;
   if (!object.as_object()->read_value(multiname, out)) return fo4::avm2::Value::undefined();
   return out;
