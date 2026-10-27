@@ -92,6 +92,36 @@ ExecutionResult number_to_fixed(const Value& self, const std::vector<Value>& arg
   return native_value(Value::string(std::string{buffer.data(), written.ptr}));
 }
 
+ExecutionResult number_to_exponential(const Value& self, const std::vector<Value>& arguments) {
+  const double value = to_number(native_self(self));
+  std::int32_t digits = to_int32(argument_at(arguments, 0));
+  if (digits < 0 || digits > 20) {
+    digits = 6;
+  }
+  std::array<char, 400> buffer{};
+  const auto written = std::to_chars(buffer.data(), buffer.data() + buffer.size(), value,
+                                     std::chars_format::scientific, digits);
+  if (written.ec != std::errc{}) {
+    return native_value(Value::string(to_string(Value::number(value))));
+  }
+  return native_value(Value::string(std::string{buffer.data(), written.ptr}));
+}
+
+ExecutionResult number_to_precision(const Value& self, const std::vector<Value>& arguments) {
+  const double value = to_number(native_self(self));
+  std::int32_t digits = to_int32(argument_at(arguments, 0));
+  if (digits < 1 || digits > 21) {
+    digits = 21;
+  }
+  std::array<char, 400> buffer{};
+  const auto written = std::to_chars(buffer.data(), buffer.data() + buffer.size(), value,
+                                     std::chars_format::general, digits - 1);
+  if (written.ec != std::errc{}) {
+    return native_value(Value::string(to_string(Value::number(value))));
+  }
+  return native_value(Value::string(std::string{buffer.data(), written.ptr}));
+}
+
 ExecutionResult number_value_of(const Value& self) {
   return native_value(Value::number(to_number(native_self(self))));
 }
@@ -178,6 +208,12 @@ bool try_primitive_native(Interpreter& interpreter, native::Id id, const Value& 
       return true;
     case native::Id::number_to_fixed:
       out = number_to_fixed(self, arguments);
+      return true;
+    case native::Id::number_to_exponential:
+      out = number_to_exponential(self, arguments);
+      return true;
+    case native::Id::number_to_precision:
+      out = number_to_precision(self, arguments);
       return true;
     case native::Id::number_value_of:
       out = number_value_of(self);

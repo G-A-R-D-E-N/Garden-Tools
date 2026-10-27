@@ -71,6 +71,9 @@ class Runtime {
      resolve. A function created after link must call this explicitly. */
   void bind_function_class(FunctionObject& function);
 
+  /* A linked runtime must create and cache the concrete Vector.<T> class on first use. */
+  Class* resolve_vector_class(Class* element);
+
  private:
   struct FileState {
     const abc::AbcFile* file{nullptr};
@@ -97,6 +100,7 @@ class Runtime {
   std::unordered_map<std::string, Class*> class_by_key_;
   std::unordered_map<std::string, Class*> class_by_local_name_;
   std::unordered_map<std::string, Class*> class_by_instance_;
+  std::unordered_map<const Class*, Class*> vector_classes_;
   std::vector<ScriptEntry> scripts_;
   std::shared_ptr<Object> global_object_;
   bool linked_{false};

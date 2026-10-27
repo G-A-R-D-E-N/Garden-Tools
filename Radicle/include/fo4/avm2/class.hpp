@@ -72,6 +72,7 @@ struct Class {
   std::uint32_t iinit{kNoMethod};
   std::uint32_t cinit{kNoMethod};
   std::uint32_t native_constructor{0};
+  Class* vector_element{nullptr};
   bool is_sealed{false};
   bool is_final{false};
   bool is_interface{false};

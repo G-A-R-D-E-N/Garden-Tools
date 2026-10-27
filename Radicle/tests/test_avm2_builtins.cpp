@@ -311,4 +311,142 @@ TEST(Avm2Builtins, TypeErrorConstructionKeepsTheSubclassName) {
   EXPECT_EQ(result.value.as_string(), "TypeError: bad value");
 }
 
+
+
+TEST(Avm2Builtins, MathAcosOfOneIsZero) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t math = script.multiname("Math");
+  const std::uint32_t acos = script.multiname("acos");
+  avm2_test::CodeBuilder code;
+  code.getlex(math);
+  code.pushbyte(1);
+  code.callproperty(acos, 1);
+  code.returnvalue();
+  const ExecutionResult result = run_initializer(script, code);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_number_like());
+  EXPECT_DOUBLE_EQ(result.value.as_number(), 0.0);
+}
+
+TEST(Avm2Builtins, ReadsTheNumberMaxValueConstant) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t number_class = script.multiname("Number");
+  const std::uint32_t max_value = script.multiname("MAX_VALUE");
+  avm2_test::CodeBuilder code;
+  code.getlex(number_class);
+  code.getproperty(max_value);
+  code.returnvalue();
+  const ExecutionResult result = run_initializer(script, code);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_number_like());
+  EXPECT_GT(result.value.as_number(), 1e308);
+}
+
+TEST(Avm2Builtins, StringLocaleCompareOrdersText) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t compare = script.multiname("localeCompare");
+  avm2_test::CodeBuilder code;
+  code.pushstring(script.string_of("alpha"));
+  code.pushstring(script.string_of("beta"));
+  code.callproperty(compare, 1);
+  code.returnvalue();
+  const ExecutionResult result = run_initializer(script, code);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_int32());
+  EXPECT_EQ(result.value.as_int32(), -1);
+}
+
+TEST(Avm2Builtins, ArrayEveryAcceptsAPositivePredicate) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t every = script.multiname("every");
+  const std::uint32_t callback = script.method("positive", [] {
+    avm2_test::CodeBuilder body;
+    body.getlocal(1);
+    body.pushbyte(0);
+    body.ifgt("positive");
+    body.pushfalse();
+    body.returnvalue();
+    body.label("positive");
+    body.pushtrue();
+    body.returnvalue();
+    return body.bytes();
+  }(), 2);
+  avm2_test::CodeBuilder code;
+  code.pushbyte(1);
+  code.pushbyte(2);
+  code.newarray(2);
+  code.newfunction(callback);
+  code.callproperty(every, 1);
+  code.returnvalue();
+  const ExecutionResult result = run_initializer(script, code);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_boolean());
+  EXPECT_TRUE(result.value.as_boolean());
+}
+
+TEST(Avm2Builtins, ArrayReduceSumsTheElements) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t reduce = script.multiname("reduce");
+  const std::uint32_t callback = script.method("add", [] {
+    avm2_test::CodeBuilder body;
+    body.getlocal(1);
+    body.getlocal(2);
+    body.add();
+    body.returnvalue();
+    return body.bytes();
+  }(), 3);
+  avm2_test::CodeBuilder code;
+  code.pushbyte(1);
+  code.pushbyte(2);
+  code.pushbyte(3);
+  code.newarray(3);
+  code.pushbyte(0);
+  code.newfunction(callback);
+  code.callproperty(reduce, 2);
+  code.returnvalue();
+  const ExecutionResult result = run_initializer(script, code);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_int32());
+  EXPECT_EQ(result.value.as_int32(), 6);
+}
+
+TEST(Avm2Builtins, TypedVectorCoercesPushedElements) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t vector = script.multiname("Vector", "__AS3__.vec");
+  const std::uint32_t int_class = script.multiname("int");
+  const std::uint32_t push = script.multiname("push");
+  const std::uint32_t first = script.multiname("0");
+  avm2_test::CodeBuilder code;
+  code.getlex(vector);
+  code.getlex(int_class);
+  code.applytype(1);
+  code.construct(0);
+  code.dup();
+  code.pushstring(script.string_of("7"));
+  code.callproperty(push, 1);
+  code.pop();
+  code.getproperty(first);
+  code.returnvalue();
+  const ExecutionResult result = run_initializer(script, code);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_int32());
+  EXPECT_EQ(result.value.as_int32(), 7);
+}
+
+TEST(Avm2Builtins, ArrayConstructorWithOneNumberSetsLength) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t array_class = script.multiname("Array");
+  const std::uint32_t length = script.multiname("length");
+  avm2_test::CodeBuilder code;
+  code.getlex(array_class);
+  code.pushbyte(3);
+  code.construct(1);
+  code.getproperty(length);
+  code.returnvalue();
+  const ExecutionResult result = run_initializer(script, code);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_number_like());
+  EXPECT_EQ(result.value.as_number(), 3.0);
+}
+
 }  // namespace

@@ -53,6 +53,39 @@ ExecutionResult Interpreter::get_property(Frame& frame, Object& object,
     result.value = std::move(out);
     return result;
   }
+  if (object.kind() == ObjectKind::Function && multiname.has_fixed_name()) {
+    const auto& function = static_cast<const FunctionObject&>(object);
+    if (multiname.name == "length") {
+      ExecutionResult result;
+      result.value = Value::number(static_cast<double>(function.param_count()));
+      return result;
+    }
+    if (multiname.name == "prototype") {
+      const Key key = primary_key(multiname);
+      if (const Property* existing = object.find_own_property(key)) {
+        ExecutionResult result;
+        result.value = existing->value;
+        return result;
+      }
+      auto prototype = std::make_shared<Object>();
+      prepare_plain_object(*prototype);
+      Property& property = object.define_own_property(key);
+      property.kind = PropertyKind::Value;
+      property.value = Value::object(std::move(prototype));
+      ExecutionResult result;
+      result.value = property.value;
+      return result;
+    }
+  }
+  if (object.kind() == ObjectKind::Class && multiname.has_fixed_name() &&
+      multiname.name == "prototype") {
+    const Class* klass = static_cast<const ClassObject&>(object).represented_class();
+    ExecutionResult result;
+    result.value = klass == nullptr || klass->prototype_object == nullptr
+                       ? Value::undefined()
+                       : Value::object(klass->prototype_object);
+    return result;
+  }
   if (object.kind() == ObjectKind::Error && multiname.has_fixed_name()) {
     const auto& error = static_cast<const ErrorObject&>(object);
     if (multiname.name == "name") {
@@ -239,6 +272,17 @@ ExecutionResult Interpreter::construct(Frame& frame, const ClassObject& class_ob
   if (!initialized.ok()) {
     return initialized;
   }
+  if (klass->vector_element != nullptr) {
+    auto array = std::make_shared<ArrayObject>();
+    array->set_instance_class(klass);
+    array->set_element_class(klass->vector_element);
+    if (klass->prototype_object != nullptr) {
+      array->set_prototype(klass->prototype_object);
+    }
+    ExecutionResult result;
+    result.value = Value::object(std::move(array));
+    return result;
+  }
   auto instance = std::make_shared<Object>();
   instance->set_instance_class(klass);
   klass->apply_slot_defaults(*instance);
@@ -355,6 +399,13 @@ InterpreterStatus Interpreter::array_property(Object& object, const Multiname& m
   }
   handled = true;
   if (write) {
+    if (array.element_class() != nullptr) {
+      const InterpreterStatus coerced = coerce_value(array.element_class()->name_multiname, value,
+                                                     message);
+      if (coerced != InterpreterStatus::Ok) {
+        return coerced;
+      }
+    }
     if (array.elements().size() <= index) {
       array.elements().resize(static_cast<std::size_t>(index) + 1);
     }

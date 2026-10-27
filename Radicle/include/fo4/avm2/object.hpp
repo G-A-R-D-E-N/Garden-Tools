@@ -177,8 +177,12 @@ class ArrayObject : public Object {
   const std::vector<Value>& elements() const noexcept { return elements_; }
   std::vector<Value>& elements() noexcept { return elements_; }
 
+  Class* element_class() const noexcept { return element_class_; }
+  void set_element_class(Class* element_class) noexcept { element_class_ = element_class; }
+
  private:
   std::vector<Value> elements_;
+  Class* element_class_{nullptr};
 };
 
 class ErrorObject : public Object {

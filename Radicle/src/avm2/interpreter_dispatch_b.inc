@@ -535,19 +535,40 @@
         const std::uint32_t count = count_operand(instruction);
         std::vector<Value> arguments;
         status = pop_arguments(frame, count, arguments, message);
-        Value type;
+        Value base;
         if (status == InterpreterStatus::Ok) {
-          pop_value(type);
+          pop_value(base);
         }
         if (status != InterpreterStatus::Ok) {
           break;
         }
-        auto vector = std::make_shared<ArrayObject>();
-        vector->elements() = std::move(arguments);
-        if (const Class* vector_class = runtime_.find_class("__AS3__.vec::Vector")) {
-          vector->set_instance_class(const_cast<Class*>(vector_class));
+        Class* base_class = nullptr;
+        if (base.is_object() && base.as_object()->kind() == ObjectKind::Class) {
+          base_class = static_cast<const ClassObject&>(*base.as_object()).represented_class();
         }
-        push_value(Value::object(std::move(vector)));
+        if (base_class == nullptr) {
+          push_value(base);
+          break;
+        }
+        Class* element_class = nullptr;
+        if (!arguments.empty() && arguments[0].is_object() &&
+            arguments[0].as_object()->kind() == ObjectKind::Class) {
+          element_class =
+              static_cast<const ClassObject&>(*arguments[0].as_object()).represented_class();
+        }
+        const bool vector_family =
+            base_class->name == "__AS3__.vec::Vector" ||
+            (base_class->super != nullptr && base_class->super->name == "__AS3__.vec::Vector");
+        if (!vector_family) {
+          push_value(base);
+          break;
+        }
+        Class* concrete = runtime_.resolve_vector_class(element_class);
+        if (concrete == nullptr || concrete->class_object == nullptr) {
+          return fail(InterpreterStatus::TypeError,
+                      "cannot resolve the element type of a Vector");
+        }
+        push_value(Value::object(concrete->class_object));
         break;
       }
       case op::k_hasnext2: {

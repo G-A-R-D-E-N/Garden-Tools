@@ -464,6 +464,36 @@ std::shared_ptr<FunctionObject> Runtime::function_for_method(const abc::AbcFile&
   return function;
 }
 
+Class* Runtime::resolve_vector_class(Class* element) {
+  const auto cached = vector_classes_.find(element);
+  if (cached != vector_classes_.end()) {
+    return cached->second;
+  }
+  Class* base = nullptr;
+  if (const Class* found = find_class("__AS3__.vec::Vector")) {
+    base = const_cast<Class*>(found);
+  }
+  if (base == nullptr) {
+    return nullptr;
+  }
+  auto owned = std::make_unique<Class>();
+  owned->name = element == nullptr ? base->name + ".<*>" : base->name + ".<" + element->name + ">";
+  owned->name_multiname = base->name_multiname;
+  owned->super = base;
+  owned->external = false;
+  owned->linked = true;
+  owned->vector_element = element;
+  Class* klass = owned.get();
+  klass->prototype_object = std::make_shared<Object>();
+  klass->prototype_object->set_prototype(base->prototype_object);
+  klass->class_object = std::make_shared<ClassObject>(klass);
+  klass->class_object->set_prototype(base->class_object);
+  klass->slot_count = klass->compute_slot_count();
+  vector_classes_.emplace(element, klass);
+  owned_classes_.push_back(std::move(owned));
+  return klass;
+}
+
 void Runtime::bind_function_class(FunctionObject& function) {
   const Class* function_class = find_class("Function");
   if (function_class != nullptr) {

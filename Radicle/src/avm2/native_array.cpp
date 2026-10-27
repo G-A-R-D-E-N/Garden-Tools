@@ -53,7 +53,8 @@ std::size_t end_index(const std::vector<Value>& arguments, std::size_t size,
   return std::min(static_cast<std::size_t>(end), size);
 }
 
-ExecutionResult array_construct(Interpreter& interpreter, const std::vector<Value>& arguments) {
+ExecutionResult array_construct(Interpreter& interpreter, const Value& self,
+                                  const std::vector<Value>& arguments) {
   std::vector<Value> elements;
   if (arguments.size() == 1 && arguments[0].is_number_like()) {
     const double length = to_number(arguments[0]);
@@ -63,16 +64,34 @@ ExecutionResult array_construct(Interpreter& interpreter, const std::vector<Valu
     }
   }
   elements = arguments;
-  return native_value(Value::object(interpreter.make_array(std::move(elements))));
+  auto array = interpreter.make_array(std::move(elements));
+  Class* klass = nullptr;
+  if (self.is_object() && self.as_object()->kind() == ObjectKind::Class) {
+    klass = static_cast<const ClassObject&>(*self.as_object()).represented_class();
+  }
+  if (klass != nullptr && klass->vector_element != nullptr) {
+    array->set_instance_class(klass);
+    array->set_element_class(klass->vector_element);
+  }
+  return native_value(Value::object(std::move(array)));
 }
 
-ExecutionResult array_push(const std::vector<Value>& arguments, const Value& self) {
+ExecutionResult array_push(Interpreter& interpreter, const Value& self,
+                            const std::vector<Value>& arguments) {
   ArrayObject* array = array_self(self);
   if (array == nullptr) {
     return native_value(Value::number(0.0));
   }
   for (const Value& argument : arguments) {
-    array->elements().push_back(argument);
+    Value element = argument;
+    if (array->element_class() != nullptr) {
+      std::string message;
+      ExecutionResult coerced = interpreter.coerce_to_class(*array->element_class(), element, message);
+      if (!coerced.ok()) {
+        return coerced;
+      }
+    }
+    array->elements().push_back(std::move(element));
   }
   return native_value(Value::number(static_cast<double>(array->elements().size())));
 }
@@ -97,12 +116,25 @@ ExecutionResult array_shift(const Value& self) {
   return native_value(std::move(value));
 }
 
-ExecutionResult array_unshift(const Value& self, const std::vector<Value>& arguments) {
+ExecutionResult array_unshift(Interpreter& interpreter, const Value& self,
+                               const std::vector<Value>& arguments) {
   ArrayObject* array = array_self(self);
   if (array == nullptr) {
     return native_value(Value::number(0.0));
   }
-  array->elements().insert(array->elements().begin(), arguments.begin(), arguments.end());
+  std::vector<Value> elements;
+  for (const Value& argument : arguments) {
+    Value element = argument;
+    if (array->element_class() != nullptr) {
+      std::string message;
+      ExecutionResult coerced = interpreter.coerce_to_class(*array->element_class(), element, message);
+      if (!coerced.ok()) {
+        return coerced;
+      }
+    }
+    elements.push_back(std::move(element));
+  }
+  array->elements().insert(array->elements().begin(), elements.begin(), elements.end());
   return native_value(Value::number(static_cast<double>(array->elements().size())));
 }
 
@@ -337,6 +369,84 @@ ExecutionResult array_filter(Interpreter& interpreter, const Value& self,
   return native_value(Value::object(interpreter.make_array(std::move(kept))));
 }
 
+ExecutionResult array_every(Interpreter& interpreter, const Value& self,
+                            const std::vector<Value>& arguments, std::size_t depth) {
+  ArrayObject* array = array_self(self);
+  const Value callback = argument_at(arguments, 0);
+  if (array == nullptr || !callback.is_object() ||
+      callback.as_object()->kind() != ObjectKind::Function) {
+    return native_value(Value::boolean(true));
+  }
+  const auto& function = static_cast<const FunctionObject&>(*callback.as_object());
+  const Value this_arg = argument_at(arguments, 1);
+  for (std::size_t index = 0; index < array->elements().size(); ++index) {
+    ExecutionResult called = interpreter.call_function(
+        function, this_arg,
+        {array->elements()[index], Value::int32(static_cast<std::int32_t>(index)),
+         detail::borrowed_object(*array)},
+        depth + 1);
+    if (!called.ok()) {
+      return called;
+    }
+    if (!to_boolean(called.value)) {
+      return native_value(Value::boolean(false));
+    }
+  }
+  return native_value(Value::boolean(true));
+}
+
+ExecutionResult array_some(Interpreter& interpreter, const Value& self,
+                           const std::vector<Value>& arguments, std::size_t depth) {
+  ArrayObject* array = array_self(self);
+  const Value callback = argument_at(arguments, 0);
+  if (array == nullptr || !callback.is_object() ||
+      callback.as_object()->kind() != ObjectKind::Function) {
+    return native_value(Value::boolean(false));
+  }
+  const auto& function = static_cast<const FunctionObject&>(*callback.as_object());
+  const Value this_arg = argument_at(arguments, 1);
+  for (std::size_t index = 0; index < array->elements().size(); ++index) {
+    ExecutionResult called = interpreter.call_function(
+        function, this_arg,
+        {array->elements()[index], Value::int32(static_cast<std::int32_t>(index)),
+         detail::borrowed_object(*array)},
+        depth + 1);
+    if (!called.ok()) {
+      return called;
+    }
+    if (to_boolean(called.value)) {
+      return native_value(Value::boolean(true));
+    }
+  }
+  return native_value(Value::boolean(false));
+}
+
+ExecutionResult array_reduce(Interpreter& interpreter, const Value& self,
+                             const std::vector<Value>& arguments, std::size_t depth) {
+  ArrayObject* array = array_self(self);
+  const Value callback = argument_at(arguments, 0);
+  if (array == nullptr || !callback.is_object() ||
+      callback.as_object()->kind() != ObjectKind::Function || array->elements().empty()) {
+    return native_value(argument_at(arguments, 1));
+  }
+  const auto& function = static_cast<const FunctionObject&>(*callback.as_object());
+  const bool has_initial = arguments.size() > 1;
+  Value accumulator = has_initial ? arguments[1] : array->elements()[0];
+  const std::size_t begin = has_initial ? 0 : 1;
+  for (std::size_t index = begin; index < array->elements().size(); ++index) {
+    ExecutionResult called = interpreter.call_function(
+        function, Value::undefined(),
+        {accumulator, array->elements()[index], Value::int32(static_cast<std::int32_t>(index)),
+         detail::borrowed_object(*array)},
+        depth + 1);
+    if (!called.ok()) {
+      return called;
+    }
+    accumulator = called.value;
+  }
+  return native_value(accumulator);
+}
+
 ExecutionResult array_to_string(const Value& self) {
   ArrayObject* array = array_self(self);
   if (array == nullptr) {
@@ -361,10 +471,10 @@ bool try_array_native(Interpreter& interpreter, native::Id id, const Value& self
                       ExecutionResult& out) {
   switch (id) {
     case native::Id::array_construct:
-      out = array_construct(interpreter, arguments);
+      out = array_construct(interpreter, self, arguments);
       return true;
     case native::Id::array_push:
-      out = array_push(arguments, self);
+      out = array_push(interpreter, self, arguments);
       return true;
     case native::Id::array_pop:
       out = array_pop(self);
@@ -373,7 +483,7 @@ bool try_array_native(Interpreter& interpreter, native::Id id, const Value& self
       out = array_shift(self);
       return true;
     case native::Id::array_unshift:
-      out = array_unshift(self, arguments);
+      out = array_unshift(interpreter, self, arguments);
       return true;
     case native::Id::array_slice:
       out = array_slice(interpreter, self, arguments);
@@ -407,6 +517,15 @@ bool try_array_native(Interpreter& interpreter, native::Id id, const Value& self
       return true;
     case native::Id::array_filter:
       out = array_filter(interpreter, self, arguments, depth);
+      return true;
+    case native::Id::array_every:
+      out = array_every(interpreter, self, arguments, depth);
+      return true;
+    case native::Id::array_some:
+      out = array_some(interpreter, self, arguments, depth);
+      return true;
+    case native::Id::array_reduce:
+      out = array_reduce(interpreter, self, arguments, depth);
       return true;
     case native::Id::array_to_string:
       out = array_to_string(self);

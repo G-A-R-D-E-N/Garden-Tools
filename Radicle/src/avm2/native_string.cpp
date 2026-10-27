@@ -245,6 +245,15 @@ ExecutionResult string_trim(const Value& self) {
   return native_value(Value::string(text.substr(begin, end - begin)));
 }
 
+ExecutionResult string_locale_compare(const Value& self, const std::vector<Value>& arguments) {
+  const std::string text = string_self(self);
+  const std::string other = to_string(argument_at(arguments, 0));
+  if (text < other) {
+    return native_value(Value::int32(-1));
+  }
+  return native_value(Value::int32(text > other ? 1 : 0));
+}
+
 ExecutionResult string_from_char_code(const std::vector<Value>& arguments) {
   std::string text;
   for (const Value& argument : arguments) {
@@ -303,6 +312,9 @@ bool try_string_native(Interpreter& interpreter, native::Id id, const Value& sel
     case native::Id::string_to_string:
     case native::Id::string_value_of:
       out = native_value(Value::string(string_self(self)));
+      return true;
+    case native::Id::string_locale_compare:
+      out = string_locale_compare(self, arguments);
       return true;
     case native::Id::string_from_char_code:
       out = string_from_char_code(arguments);

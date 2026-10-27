@@ -121,6 +121,15 @@ bool try_math_native(Interpreter& interpreter, native::Id id, const Value& self,
     case native::Id::math_atan2:
       out = math_atan2(arguments);
       return true;
+    case native::Id::math_acos:
+      out = math_unary(arguments, [](double value) { return std::acos(value); });
+      return true;
+    case native::Id::math_asin:
+      out = math_unary(arguments, [](double value) { return std::asin(value); });
+      return true;
+    case native::Id::math_atan:
+      out = math_unary(arguments, [](double value) { return std::atan(value); });
+      return true;
     case native::Id::math_log:
       out = math_unary(arguments, [](double value) { return std::log(value); });
       return true;

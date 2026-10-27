@@ -91,6 +91,15 @@ enum class Id : std::uint32_t {
   array_to_string,
   error_construct,
   error_to_string,
+  math_acos,
+  math_asin,
+  math_atan,
+  number_to_exponential,
+  number_to_precision,
+  string_locale_compare,
+  array_every,
+  array_some,
+  array_reduce,
 };
 
 }  // namespace fo4::avm2::native

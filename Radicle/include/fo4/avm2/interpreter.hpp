@@ -89,6 +89,8 @@ class Interpreter {
                                  std::size_t depth);
   std::shared_ptr<Object> make_instance(Class& klass);
   std::shared_ptr<ArrayObject> make_array(std::vector<Value> elements);
+  /* Requires a resolvable class type; coerces through the class's declared type name. */
+  ExecutionResult coerce_to_class(const Class& target, Value& value, std::string& message);
   Value box(const Value& value);
   static Value unbox(const Value& value);
   Value global_this();

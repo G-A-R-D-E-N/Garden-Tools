@@ -99,6 +99,18 @@ std::shared_ptr<ArrayObject> Interpreter::make_array(std::vector<Value> elements
   return array;
 }
 
+ExecutionResult Interpreter::coerce_to_class(const Class& target, Value& value,
+                                              std::string& message) {
+  const InterpreterStatus status = coerce_value(target.name_multiname, value, message);
+  if (status != InterpreterStatus::Ok) {
+    ExecutionResult failure;
+    failure.status = status;
+    failure.message = std::move(message);
+    return failure;
+  }
+  return ExecutionResult{};
+}
+
 std::shared_ptr<ArrayObject> make_array_value(Interpreter& interpreter,
                                               std::vector<Value> elements) {
   return interpreter.make_array(std::move(elements));

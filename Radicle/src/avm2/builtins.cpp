@@ -92,6 +92,8 @@ RuntimeStatus Runtime::install_builtins() {
 
   add_method(*number_class, "toString", native::Id::number_to_string, false);
   add_method(*number_class, "toFixed", native::Id::number_to_fixed, false);
+  add_method(*number_class, "toExponential", native::Id::number_to_exponential, false);
+  add_method(*number_class, "toPrecision", native::Id::number_to_precision, false);
   add_method(*number_class, "valueOf", native::Id::number_value_of, false);
   number_class->native_constructor = static_cast<std::uint32_t>(native::Id::number_construct);
 
@@ -123,6 +125,7 @@ RuntimeStatus Runtime::install_builtins() {
   add_method(*string_class, "trim", native::Id::string_trim, false);
   add_method(*string_class, "toString", native::Id::string_to_string, false);
   add_method(*string_class, "valueOf", native::Id::string_value_of, false);
+  add_method(*string_class, "localeCompare", native::Id::string_locale_compare, false);
   add_method(*string_class, "fromCharCode", native::Id::string_from_char_code, true);
 
   add_method(*array_class, "push", native::Id::array_push, false);
@@ -140,6 +143,9 @@ RuntimeStatus Runtime::install_builtins() {
   add_method(*array_class, "forEach", native::Id::array_for_each, false);
   add_method(*array_class, "map", native::Id::array_map, false);
   add_method(*array_class, "filter", native::Id::array_filter, false);
+  add_method(*array_class, "every", native::Id::array_every, false);
+  add_method(*array_class, "some", native::Id::array_some, false);
+  add_method(*array_class, "reduce", native::Id::array_reduce, false);
   add_method(*array_class, "toString", native::Id::array_to_string, false);
   array_class->native_constructor = static_cast<std::uint32_t>(native::Id::array_construct);
 
@@ -158,6 +164,9 @@ RuntimeStatus Runtime::install_builtins() {
   add_method(*vector_class, "forEach", native::Id::array_for_each, false);
   add_method(*vector_class, "map", native::Id::array_map, false);
   add_method(*vector_class, "filter", native::Id::array_filter, false);
+  add_method(*vector_class, "every", native::Id::array_every, false);
+  add_method(*vector_class, "some", native::Id::array_some, false);
+  add_method(*vector_class, "reduce", native::Id::array_reduce, false);
   add_method(*vector_class, "toString", native::Id::array_to_string, false);
   vector_class->native_constructor = static_cast<std::uint32_t>(native::Id::array_construct);
 
@@ -176,6 +185,9 @@ RuntimeStatus Runtime::install_builtins() {
   add_method(*math_class, "atan2", native::Id::math_atan2, true);
   add_method(*math_class, "log", native::Id::math_log, true);
   add_method(*math_class, "exp", native::Id::math_exp, true);
+  add_method(*math_class, "acos", native::Id::math_acos, true);
+  add_method(*math_class, "asin", native::Id::math_asin, true);
+  add_method(*math_class, "atan", native::Id::math_atan, true);
 
   std::uint32_t number_slot = 0;
   add_constant(*number_class, "MAX_VALUE", Value::number(kNumberMaxValue), number_slot);
