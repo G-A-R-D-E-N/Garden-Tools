@@ -104,9 +104,9 @@ TEST(AbcAsm, RejectsAnUnknownOpcode) {
   ASSERT_NE(info, nullptr);
   const std::string mnemonic = info->mnemonic;
   std::string text = fo4::abc::render_abc_text(file);
-  const std::size_t position = text.find(" " + mnemonic + "\n");
+  const std::size_t position = text.find(" " + mnemonic);
   ASSERT_NE(position, std::string::npos);
-  text.replace(position, mnemonic.size() + 2, " notanopcode\n");
+  text.replace(position, mnemonic.size() + 1, " notanopcode");
   AbcFile assembled;
   fo4::abc::AbcTextError error;
   EXPECT_EQ(fo4::abc::assemble_abc_text(text, assembled, &error), AbcStatus::InconsistentModel);

@@ -335,8 +335,9 @@ std::shared_ptr<SwfRuntime> SwfRuntime::create(Runtime& runtime, Interpreter& in
     if (!prepare_result.ok()) {
       return fail("the document class initializer failed");
     }
-    if (runtime_movie->root_class_->iinit != kNoMethod) {
-      FunctionObject constructor(runtime_movie->root_class_->name, nullptr,
+    if (runtime_movie->root_class_->iinit != kNoMethod &&
+        runtime_movie->root_class_->file != nullptr) {
+      FunctionObject constructor(runtime_movie->root_class_->name, runtime_movie->root_class_->file,
                                  runtime_movie->root_class_->iinit);
       constructor.set_owner_class(runtime_movie->root_class_);
       const ExecutionResult constructor_result = interpreter.call_function(

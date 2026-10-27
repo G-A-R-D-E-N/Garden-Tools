@@ -290,10 +290,12 @@ ExecutionResult array_sort(Interpreter& interpreter, const Value& self,
     }
     return left_text > right_text ? 1 : 0;
   };
-  std::stable_sort(array->elements().begin(), array->elements().end(),
+  std::vector<Value> sorted = array->elements();
+  std::stable_sort(sorted.begin(), sorted.end(),
                    [&compare_values](const Value& left, const Value& right) {
                      return compare_values(left, right) < 0;
                    });
+  array->elements() = std::move(sorted);
   return native_value(self);
 }
 

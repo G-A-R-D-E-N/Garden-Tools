@@ -139,7 +139,7 @@ TEST(AbcEdit, RefusesToDeleteAnInstructionABranchTargets) {
 
 TEST(AbcEdit, InsertingShiftsAndRestoresAnExceptionRange) {
   auto file = fixture_file();
-  set_body(file, {0x03, 0x47}, {AbcException{0, 1, 1, 0, 0}});
+  set_body(file, {0x20, 0x03, 0x47}, {AbcException{0, 2, 2, 0, 0}});
   std::string message;
   const std::uint8_t nop = 0x02;
   ASSERT_EQ(fo4::abc::insert_instruction(file, 0, 0, std::span<const std::uint8_t>(&nop, 1), message),
@@ -147,12 +147,12 @@ TEST(AbcEdit, InsertingShiftsAndRestoresAnExceptionRange) {
       << message;
   ASSERT_EQ(file.bodies[0].exceptions.size(), 1u);
   EXPECT_EQ(file.bodies[0].exceptions[0].from, 1u);
-  EXPECT_EQ(file.bodies[0].exceptions[0].to, 2u);
-  EXPECT_EQ(file.bodies[0].exceptions[0].target, 2u);
+  EXPECT_EQ(file.bodies[0].exceptions[0].to, 3u);
+  EXPECT_EQ(file.bodies[0].exceptions[0].target, 3u);
   ASSERT_EQ(fo4::abc::delete_instruction(file, 0, 0, message), AbcEditStatus::Ok) << message;
   EXPECT_EQ(file.bodies[0].exceptions[0].from, 0u);
-  EXPECT_EQ(file.bodies[0].exceptions[0].to, 1u);
-  EXPECT_EQ(file.bodies[0].exceptions[0].target, 1u);
+  EXPECT_EQ(file.bodies[0].exceptions[0].to, 2u);
+  EXPECT_EQ(file.bodies[0].exceptions[0].target, 2u);
 }
 
 TEST(AbcEdit, RaisesTheLocalCountWhenTheInsertedInstructionNamesALocal) {

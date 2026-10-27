@@ -277,6 +277,25 @@ TEST(Avm2Builtins, ArraySortOrdersNumericElementsByText) {
   EXPECT_EQ(result.value.as_int32(), 1);
 }
 
+TEST(Avm2Builtins, ArraySortThenJoinShowsTheOrder) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t sort = script.multiname("sort");
+  const std::uint32_t join = script.multiname("join");
+  avm2_test::CodeBuilder code;
+  code.pushbyte(3);
+  code.pushbyte(1);
+  code.pushbyte(2);
+  code.newarray(3);
+  code.callproperty(sort, 0);
+  code.pushstring(script.string_of(","));
+  code.callproperty(join, 1);
+  code.returnvalue();
+  const ExecutionResult result = run_initializer(script, code);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_string()) << fo4::avm2::value_kind_name(result.value.kind());
+  EXPECT_EQ(result.value.as_string(), "1,2,3");
+}
+
 TEST(Avm2Builtins, ErrorConversionCarriesTheMessage) {
   avm2_test::ScriptBuilder script;
   const std::uint32_t error_class = script.multiname("Error");
