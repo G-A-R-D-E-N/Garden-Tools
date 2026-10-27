@@ -2860,7 +2860,7 @@ public unsafe struct PapyrusAliasReport
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 72u;
+    public const uint CompiledAbiVersion = 73u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();

@@ -115,6 +115,11 @@ bool read_morph_records(std::span<const std::byte> data, std::size_t start, unsi
                         SwfMorphStyles& styles, StyleBounds& bounds, ShapeRecordCounts& counts,
                         std::vector<SwfShapeRecord>& records, std::size_t& next);
 
+bool lzma_decode_swf(std::span<const std::byte> input, std::size_t out_size,
+                     std::vector<std::byte>& out);
+
+std::vector<std::byte> lzma_encode_swf(std::span<const std::byte> body);
+
 std::string to_text(std::span<const std::byte> bytes);
 
 std::uint8_t byte_at(std::span<const std::byte> bytes, std::size_t index) noexcept;

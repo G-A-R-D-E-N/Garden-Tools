@@ -278,6 +278,7 @@ add_library(fo4
   src/swf/swf_history.cpp
   src/swf/swf_text_edit.cpp
   src/swf/swf_write.cpp
+  src/swf/swf_lzma.cpp
   src/swf/swf_census.cpp
   src/pex_analysis/opcodes.cpp
   src/pex_analysis/cfg.cpp
@@ -830,6 +831,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_material_file.cpp
     tests/test_material_file_real.cpp
     tests/test_swf.cpp
+    tests/test_swf_lzma.cpp
+    tests/test_swf_sound.cpp
     tests/test_swf_tags.cpp
     tests/test_swf_plan.cpp
     tests/test_swf_place.cpp

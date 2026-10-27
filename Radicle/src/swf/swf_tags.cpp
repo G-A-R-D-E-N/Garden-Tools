@@ -485,6 +485,34 @@ SwfStatus decode_tag_payload(const std::vector<std::byte>& payload, SwfTag& out_
       out_tag.sound = sound;
       return SwfStatus::ok;
     }
+    case tag::kSoundStreamHead:
+    case tag::kSoundStreamHead2: {
+      SwfReader reader(data, 0);
+      SwfSoundStreamHead head;
+      std::uint8_t playback = 0;
+      std::uint8_t stream = 0;
+      if (!reader.read_u8(playback) || !reader.read_u8(stream) ||
+          !reader.read_u16(head.sample_count)) {
+        return SwfStatus::malformed_tag;
+      }
+      head.reserved = static_cast<std::uint8_t>(playback >> 4);
+      head.playback_rate = static_cast<std::uint8_t>((playback >> 2) & 0x03u);
+      head.playback_16bit = (playback & 0x02u) != 0;
+      head.playback_stereo = (playback & 0x01u) != 0;
+      head.compression = static_cast<std::uint8_t>(stream >> 4);
+      head.rate = static_cast<std::uint8_t>((stream >> 2) & 0x03u);
+      head.sample_16bit = (stream & 0x02u) != 0;
+      head.stereo = (stream & 0x01u) != 0;
+      if (head.compression == 2) {
+        std::int16_t latency = 0;
+        if (!reader.read_s16(latency)) {
+          return SwfStatus::malformed_tag;
+        }
+        head.latency_seek = latency;
+      }
+      out_tag.sound_stream_head = head;
+      return SwfStatus::ok;
+    }
     case tag::kExporterInfo: {
       SwfReader reader(data, 0);
       SwfExporterInfo info;

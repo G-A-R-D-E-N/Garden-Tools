@@ -28,6 +28,11 @@ void append_u32(std::vector<std::byte>& out, std::uint32_t value) {
   out.push_back(static_cast<std::byte>((value >> 24) & 0xFFu));
 }
 
+std::byte sound_format_byte(unsigned high, unsigned rate, bool sample_16bit, bool stereo) noexcept {
+  return static_cast<std::byte>(((high & 0x0Fu) << 4) | ((rate & 0x03u) << 2) |
+                                (sample_16bit ? 0x02u : 0u) | (stereo ? 0x01u : 0u));
+}
+
 unsigned bits_for(std::int32_t value) noexcept {
   if (value == 0) {
     return 0;
@@ -111,9 +116,6 @@ std::vector<std::byte> deflate_body(std::span<const std::byte> body) {
 }  // namespace
 
 std::vector<std::byte> write_swf(const SwfFile& file, SwfCompression compression) {
-  if (compression == SwfCompression::lzma) {
-    throw std::runtime_error("SWF LZMA (ZWS) compression is not supported");
-  }
   std::vector<std::byte> body;
   append_rect(body, file.header.frame_size);
   append_u16(body, file.header.frame_rate);
@@ -144,9 +146,14 @@ std::vector<std::byte> write_swf(const SwfFile& file, SwfCompression compression
       unchanged ? file.header.file_length : static_cast<std::uint32_t>(actual);
 
   const bool gfx = file.header.format == SwfFormat::gfx;
+  if (gfx && compression == SwfCompression::lzma) {
+    throw std::runtime_error("GFx movies have no LZMA (ZWS) signature");
+  }
   const char* signature = nullptr;
   if (gfx) {
     signature = compression == SwfCompression::zlib ? "CFX" : "GFX";
+  } else if (compression == SwfCompression::lzma) {
+    signature = "ZWS";
   } else {
     signature = compression == SwfCompression::zlib ? "CWS" : "FWS";
   }
@@ -162,8 +169,17 @@ std::vector<std::byte> write_swf(const SwfFile& file, SwfCompression compression
     out.insert(out.end(), body.begin(), body.end());
     return out;
   }
-  if (unchanged && file.source_compressed_body_known) {
+  if (unchanged && file.source_compressed_body_known && compression == file.header.compression) {
     out.insert(out.end(), file.source_compressed_body.begin(), file.source_compressed_body.end());
+    return out;
+  }
+  if (compression == SwfCompression::lzma) {
+    const auto packed = lzma_encode_swf(body);
+    if (packed.size() > std::numeric_limits<std::uint32_t>::max()) {
+      throw std::length_error("SWF LZMA stream exceeds the 32-bit compressed length field");
+    }
+    append_u32(out, static_cast<std::uint32_t>(packed.size()));
+    out.insert(out.end(), packed.begin(), packed.end());
     return out;
   }
   const auto packed = deflate_body(body);
@@ -173,6 +189,27 @@ std::vector<std::byte> write_swf(const SwfFile& file, SwfCompression compression
 
 std::vector<std::byte> write_swf(const SwfFile& file) {
   return write_swf(file, file.header.compression);
+}
+
+std::vector<std::byte> encode_define_sound(const SwfSound& sound, std::span<const std::byte> data) {
+  std::vector<std::byte> out;
+  append_u16(out, sound.sound_id);
+  out.push_back(sound_format_byte(sound.format, sound.rate, sound.sample_16bit, sound.stereo));
+  append_u32(out, sound.sample_count);
+  out.insert(out.end(), data.begin(), data.end());
+  return out;
+}
+
+std::vector<std::byte> encode_sound_stream_head(const SwfSoundStreamHead& head) {
+  std::vector<std::byte> out;
+  out.push_back(sound_format_byte(head.reserved, head.playback_rate, head.playback_16bit,
+                                  head.playback_stereo));
+  out.push_back(sound_format_byte(head.compression, head.rate, head.sample_16bit, head.stereo));
+  append_u16(out, head.sample_count);
+  if (head.latency_seek.has_value()) {
+    append_u16(out, static_cast<std::uint16_t>(*head.latency_seek));
+  }
+  return out;
 }
 
 }  // namespace fo4::swf

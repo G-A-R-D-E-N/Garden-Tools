@@ -408,6 +408,20 @@ struct SwfSound {
   std::size_t data_size{0};
 };
 
+struct SwfSoundStreamHead {
+  std::uint8_t reserved{0};
+  std::uint8_t playback_rate{0};
+  bool playback_16bit{false};
+  bool playback_stereo{false};
+  std::uint8_t compression{0};
+  std::uint8_t rate{0};
+  bool sample_16bit{false};
+  bool stereo{false};
+  std::uint16_t sample_count{0};
+  /* Invariant: latency_seek is present exactly when compression is 2 (MP3). */
+  std::optional<std::int16_t> latency_seek;
+};
+
 struct SwfExporterInfo {
   std::uint16_t version{0};
   std::uint32_t flags{0};
@@ -464,6 +478,7 @@ struct SwfTag {
   std::optional<SwfText> text;
   std::optional<SwfEditText> edit_text;
   std::optional<SwfSound> sound;
+  std::optional<SwfSoundStreamHead> sound_stream_head;
   std::optional<SwfExporterInfo> exporter_info;
   std::optional<SwfExternalImage> external_image;
   std::optional<SwfFontTextureInfo> font_texture;
@@ -560,6 +575,9 @@ SwfReadResult read_swf(std::span<const std::byte> bytes, std::size_t max_tags);
 
 std::vector<std::byte> write_swf(const SwfFile& file);
 std::vector<std::byte> write_swf(const SwfFile& file, SwfCompression compression);
+
+std::vector<std::byte> encode_define_sound(const SwfSound& sound, std::span<const std::byte> data);
+std::vector<std::byte> encode_sound_stream_head(const SwfSoundStreamHead& head);
 
 bool replace_tag_payload(SwfFile& file, std::size_t tag_index, std::span<const std::byte> payload);
 

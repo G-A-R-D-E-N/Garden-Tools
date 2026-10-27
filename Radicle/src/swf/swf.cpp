@@ -342,6 +342,7 @@ void SwfTag::clear_decoded() {
   text.reset();
   edit_text.reset();
   sound.reset();
+  sound_stream_head.reset();
   exporter_info.reset();
   external_image.reset();
   font_texture.reset();
@@ -381,16 +382,34 @@ SwfReadResult read_swf(std::span<const std::byte> bytes, std::size_t max_tags) {
   header.version = byte_at(bytes, 3);
   header.file_length = read_u32_at(bytes, 4);
 
-  if (header.compression == SwfCompression::lzma) {
-    result.status = SwfStatus::unsupported_compression;
-    result.message = "LZMA (ZWS) SWF compression is not supported";
-    return result;
-  }
-
   std::vector<std::byte> body;
   std::vector<std::byte> extra;
   std::size_t source_length = 0;
-  if (header.compression == SwfCompression::zlib) {
+  if (header.compression == SwfCompression::lzma) {
+    const auto declared =
+        header.file_length > 8 ? static_cast<std::size_t>(header.file_length) - 8 : std::size_t{0};
+    if (declared > detail::kMaxBodyBytes) {
+      result.status = SwfStatus::decompress_failed;
+      result.message = "decompressed SWF body exceeds the size cap";
+      return result;
+    }
+    bool decoded = false;
+    try {
+      decoded = bytes.size() >= 12 && detail::lzma_decode_swf(bytes.subspan(12), declared, body);
+    } catch (const std::bad_alloc&) {
+      result.status = SwfStatus::out_of_memory;
+      result.message = "SWF body ran out of memory while decompressing";
+      return result;
+    }
+    if (!decoded) {
+      result.status = SwfStatus::decompress_failed;
+      result.message = "LZMA failed to decompress the SWF body";
+      return result;
+    }
+    source_length = body.size();
+    result.file.source_compressed_body.assign(bytes.begin() + 8, bytes.end());
+    result.file.source_compressed_body_known = true;
+  } else if (header.compression == SwfCompression::zlib) {
     try {
       if (!inflate_body(bytes.subspan(8), body, result.message)) {
         result.status = SwfStatus::decompress_failed;
