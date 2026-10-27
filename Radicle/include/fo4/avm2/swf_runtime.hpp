@@ -85,6 +85,9 @@ class SwfRuntime {
   /* Host input must go through these; keyboard targets the root clip and mouse the stage. */
   void key_event(Interpreter& interpreter, std::uint32_t key_code, bool down);
   void mouse_event(Interpreter& interpreter, double x, double y, std::int32_t button, bool down);
+  void mouse_move(Interpreter& interpreter, double x, double y);
+  void mouse_wheel(Interpreter& interpreter, double x, double y, std::int32_t delta);
+  void char_event(Interpreter& interpreter, std::uint32_t char_code);
   void set_playing(bool playing);
   bool playing() const;
 

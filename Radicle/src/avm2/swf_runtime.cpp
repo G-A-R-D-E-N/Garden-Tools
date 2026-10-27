@@ -367,6 +367,60 @@ FrameSnapshot SwfRuntime::snapshot() const {
   return root_ == nullptr ? FrameSnapshot{} : build_frame_snapshot(*root_);
 }
 
+void SwfRuntime::mouse_move(Interpreter& interpreter, double x, double y) {
+  if (root_ == nullptr) {
+    return;
+  }
+  std::shared_ptr<EventObject> event =
+      make_event(interpreter.runtime(), "mouseMove", true, false, "MouseEvent");
+  if (event == nullptr) {
+    return;
+  }
+  Property& x_property = event->define_own_property(primary_key(builtin_name("stageX")));
+  x_property.kind = PropertyKind::Value;
+  x_property.value = Value::number(x);
+  Property& y_property = event->define_own_property(primary_key(builtin_name("stageY")));
+  y_property.kind = PropertyKind::Value;
+  y_property.value = Value::number(y);
+  dispatch_event(interpreter, root_, event, 0);
+}
+
+void SwfRuntime::mouse_wheel(Interpreter& interpreter, double x, double y, std::int32_t delta) {
+  if (root_ == nullptr) {
+    return;
+  }
+  std::shared_ptr<EventObject> event =
+      make_event(interpreter.runtime(), "mouseWheel", true, false, "MouseEvent");
+  if (event == nullptr) {
+    return;
+  }
+  Property& x_property = event->define_own_property(primary_key(builtin_name("stageX")));
+  x_property.kind = PropertyKind::Value;
+  x_property.value = Value::number(x);
+  Property& y_property = event->define_own_property(primary_key(builtin_name("stageY")));
+  y_property.kind = PropertyKind::Value;
+  y_property.value = Value::number(y);
+  Property& delta_property = event->define_own_property(primary_key(builtin_name("delta")));
+  delta_property.kind = PropertyKind::Value;
+  delta_property.value = Value::int32(delta);
+  dispatch_event(interpreter, root_, event, 0);
+}
+
+void SwfRuntime::char_event(Interpreter& interpreter, std::uint32_t char_code) {
+  if (root_ == nullptr) {
+    return;
+  }
+  std::shared_ptr<EventObject> event =
+      make_event(interpreter.runtime(), "textInput", true, false, "TextEvent");
+  if (event == nullptr) {
+    return;
+  }
+  Property& char_property = event->define_own_property(primary_key(builtin_name("charCode")));
+  char_property.kind = PropertyKind::Value;
+  char_property.value = Value::uint32(char_code);
+  dispatch_event(interpreter, root_, event, 0);
+}
+
 void SwfRuntime::set_playing(bool playing) {
   playing_ = playing;
   if (root_ != nullptr) {

@@ -314,6 +314,7 @@ add_library(fo4
   src/avm2/swf_runtime.cpp
   src/avm2/snapshot.cpp
   src/avm2/amf.cpp
+  src/avm2/replay.cpp
   src/avm2/native_shared.cpp
   src/avm2/events.cpp
   src/avm2/native_events.cpp
@@ -379,7 +380,7 @@ target_sources(fo4 PRIVATE src/patch/delta_patch.cpp)
 target_sources(fo4 PRIVATE src/patch/list_merge.cpp)
 target_sources(fo4 PRIVATE src/papyrus_source/lexer.cpp src/papyrus_source/parser.cpp src/papyrus_source/parser_decl.cpp src/papyrus_source/parser_expr.cpp src/papyrus_source/parser_stmt.cpp src/papyrus_source/summary.cpp)
 target_sources(radicle_c PRIVATE src/c_api_nif.cpp src/c_api_dds.cpp)
-target_sources(radicle_c PRIVATE src/c_api_swf.cpp src/c_api_swf_art.cpp src/c_api_swf_display.cpp src/c_api_swf_edit.cpp src/c_api_swf_abc_write.cpp)
+target_sources(radicle_c PRIVATE src/c_api_swf.cpp src/c_api_swf_art.cpp src/c_api_swf_display.cpp src/c_api_swf_edit.cpp src/c_api_swf_abc_write.cpp src/c_api_runtime.cpp)
 
 if(RADICLE_INSTALL)
   include(GNUInstallDirs)
@@ -784,6 +785,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_avm2_host.cpp
     tests/test_avm2_script.cpp
     tests/test_avm2_shared.cpp
+    tests/test_c_api_runtime.cpp
+    tests/test_c_api_runtime_real.cpp
     tests/test_avm2_events.cpp
     tests/test_avm2_text.cpp
     tests/test_swf_fonts.cpp
