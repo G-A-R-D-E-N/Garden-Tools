@@ -36,7 +36,7 @@ The host bridge is picked up by the existing `[RpcExpose]` scan as `hostObjects.
 test stubs. Archive-resolved open and the semantic edit verbs are still deferred.
 ## Radicle/bindings/csharp/Radicle.Interop/SwfEditText.cs:SwfEditTextCodec (edit-text fields)
 
-Tag 37 has no ABI 70 getter, so the managed layer parses and re-encodes the decoded tag payload itself:
+Tag 37 has no ABI 71 getter, so the managed layer parses and re-encodes the decoded tag payload itself:
 `SwfEditTextCodec.Parse` reads bounds (RECT bits), both flag bytes, font id/class, height, colour, max length,
 layout, variable and initial text, and `Write` reproduces the decoder order and reuses the original id/RECT
 prefix unless the bounds are edited, so a text or colour edit keeps every earlier byte. `SwfFile.EditText` and
@@ -68,7 +68,7 @@ uses the label name field and the current scrubber frame. Removal and sprite-tim
 composition or a native removal verb.
 ## Radicle/bindings/csharp/Radicle.Interop/SwfPlacements.cs:SwfPlacementCodec (depth edit)
 
-Placement tags have no ABI 70 getter, so `Placements()` parses the root and sprite placement payloads
+Placement tags have no ABI 71 getter, so `Placements()` parses the root and sprite placement payloads
 (PlaceObject 4, PlaceObject2 26, PlaceObject3 70) for depth/character, and `SetDepth` patches the depth bytes in
 place and sends the payload through the tag plan, keeping every other byte. `SwfDocument.SetDepth` and
 `SwfInterop.Placements`/`SetDepth` expose it. `SwfPlacementTests` pins the read, the in-place patch, the undo and
@@ -119,7 +119,7 @@ own asset-write path. The service test drives a resolver over the fixture bytes 
 
 The C plan now carries a removal list (`radicle_swf_tag_removal`, regenerated interop), so `RemoveLabel` verifies the tag
 is a FrameLabel and applies a one-removal plan; undo replays the command list from the original bytes and restores the
-label. The panel's Remove button calls it for the selected label. The removal verb stays at ABI 70 because that surface
+label. The panel's Remove button calls it for the selected label. The removal verb stays at ABI 71 because that surface
 was never pushed before this round.
 ## FO4RecordEditor.Core/Services/SwfDocumentService.cs:SwfDocument.AddLabel (sprite timelines)
 
@@ -151,7 +151,7 @@ The native PET app builds Radicle from the sibling checkout: `PluginEditTool/nat
 version symlinks). That library is the C ABI: `Radicle/CMakeLists.txt:326` defines the shared `radicle_c` target and
 `:345` adds `src/c_api_swf.cpp`, `src/c_api_swf_art.cpp`, `src/c_api_swf_characters.cpp`,
 `src/c_api_swf_display.cpp`, `src/c_api_swf_edit.cpp` and `src/c_api_swf_history.cpp`, with the SWF models at
-`:268-270`; `Radicle/include/fo4/c_api.h:16` is `RADICLE_ABI_VERSION 70u`. So the ABI 70 SWF entry points do ship in
+`:268-270`; `Radicle/include/fo4/c_api.h:16` is `RADICLE_ABI_VERSION 71u`. So the ABI 71 SWF entry points do ship in
 the library when the tree is this one — nothing was missing from the build.
 
 The managed side resolves the library in `Radicle/bindings/csharp/Radicle.Interop/Core.cs`: `:29` installs the
