@@ -155,5 +155,5 @@ TEST(Avm2Script, AliasesDuplicateClassesFromASecondMovieFile) {
   ASSERT_TRUE(runtime.add_file(second).ok());
   ASSERT_TRUE(runtime.link_added_file(1).ok());
   EXPECT_EQ(runtime.class_count(), classes_after_first);
-  EXPECT_NE(runtime.find_class(Foo), nullptr);
+  EXPECT_NE(runtime.find_class("Foo"), nullptr);
 }
