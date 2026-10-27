@@ -20,6 +20,8 @@ struct FontResource {
   std::string name;
   std::uint32_t units_per_em{1024};
   bool has_layout{false};
+  /* Invariant: owner is the movie key the font was registered under; 0 is the runtime-level key. */
+  std::uint64_t owner{0};
   std::vector<FontGlyph> glyphs;
 
   /* Requires glyphs in glyph order; returns the index of the glyph for a code or npos. */
@@ -29,9 +31,10 @@ struct FontResource {
 class FontRegistry {
  public:
   void add(FontResource font);
-  const FontResource* find(std::uint16_t character_id) const;
-  const FontResource* find_by_name(std::string_view name) const;
-  const FontResource* first_with_layout() const;
+  /* Requires the owner key of the movie that holds the text; find never crosses owners, and owner 0 (script-made text) matches any owner in find_by_name and first_with_layout. */
+  const FontResource* find(std::uint64_t owner, std::uint16_t character_id) const;
+  const FontResource* find_by_name(std::uint64_t owner, std::string_view name) const;
+  const FontResource* first_with_layout(std::uint64_t owner) const;
   std::size_t size() const noexcept { return fonts_.size(); }
   const std::vector<FontResource>& fonts() const noexcept { return fonts_; }
 

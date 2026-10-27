@@ -4,6 +4,7 @@
 #include <fo4/avm2/display.hpp>
 #include <fo4/avm2/fonts.hpp>
 #include <fo4/avm2/object.hpp>
+#include <fo4/avm2/utf16.hpp>
 #include <fo4/avm2/value.hpp>
 
 #include <cstddef>
@@ -56,6 +57,7 @@ class TextFieldObject : public DisplayObject {
   bool is_text_field() const noexcept override { return true; }
 
   void set_font_registry(FontRegistry* registry) noexcept { registry_ = registry; }
+  void set_font_owner(std::uint64_t owner) noexcept { font_owner_ = owner; }
 
   const std::string& text() const noexcept { return text_; }
   void set_text(std::string text);
@@ -85,6 +87,7 @@ class TextFieldObject : public DisplayObject {
 
  private:
   FontRegistry* registry_{nullptr};
+  std::uint64_t font_owner_{0};
   std::string text_;
   std::string html_text_;
   TextFormatData format_{};
@@ -109,18 +112,15 @@ class StaticTextObject : public DisplayObject {
   bool is_static_text() const noexcept override { return true; }
 
   void set_records(std::vector<StaticTextRecord> records) { records_ = std::move(records); }
+  void set_font_owner(std::uint64_t owner) noexcept { font_owner_ = owner; }
   /* Requires the registry that holds the record fonts; one unmapped glyph makes the text empty. */
   std::string text() const;
 
  private:
   const FontRegistry* registry_{nullptr};
+  std::uint64_t font_owner_{0};
   std::vector<StaticTextRecord> records_;
 };
-
-/* Requires UTF-8 input. */
-std::u16string utf16_from_utf8(std::string_view text);
-/* Requires UTF-16 input. */
-std::string utf8_from_utf16(std::u16string_view units);
 
 /* Requires a linked runtime; creates the TextFormat instance carrying the data. */
 Value make_text_format_instance(Interpreter& interpreter, const TextFormatData& format);

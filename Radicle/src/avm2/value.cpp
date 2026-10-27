@@ -1,6 +1,6 @@
 #include <fo4/avm2/value.hpp>
 
-#include <fo4/avm2/text.hpp>
+#include <fo4/avm2/utf16.hpp>
 
 #include <cstddef>
 #include <stdexcept>
