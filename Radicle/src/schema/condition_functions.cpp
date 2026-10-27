@@ -58,4 +58,8 @@ const ConditionRunOn* condition_run_on(std::uint32_t value) {
   return &*it;
 }
 
+std::span<const ConditionRunOn> condition_run_ons() {
+  return k_generated_condition_run_on;
+}
+
 }  // namespace fo4::schema
