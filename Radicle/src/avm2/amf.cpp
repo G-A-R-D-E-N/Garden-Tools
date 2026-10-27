@@ -33,8 +33,8 @@ class Writer {
       return;
     }
     byte(static_cast<std::uint8_t>((value >> 22u) | 0x80u));
-    byte(static_cast<std::uint8_t>((value >> 15u) & 0x7Fu | 0x80u));
-    byte(static_cast<std::uint8_t>((value >> 8u) & 0x7Fu | 0x80u));
+    byte(static_cast<std::uint8_t>(((value >> 15u) & 0x7Fu) | 0x80u));
+    byte(static_cast<std::uint8_t>(((value >> 8u) & 0x7Fu) | 0x80u));
     byte(static_cast<std::uint8_t>(value & 0xFFu));
   }
   void double_bits(double value) {

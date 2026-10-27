@@ -104,6 +104,7 @@ class SwfRuntime {
 
   std::shared_ptr<SwfMovieData> data_;
   std::deque<abc::AbcFile> abc_files_;
+  std::size_t next_script_{0};
   Class* root_class_{nullptr};
   std::shared_ptr<DisplayObjectContainer> stage_;
   std::shared_ptr<MovieClip> root_;
