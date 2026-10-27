@@ -5,12 +5,24 @@
 #include "fo4/text/encoding.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <string>
 #include <vector>
 
 namespace fo4::archive::detail {
+
+inline constexpr std::uint64_t k_zlib_max_expansion = 1032;
+inline constexpr std::uint64_t k_zlib_slack_bytes = 64;
+
+inline void require_zlib_expansion_bound(std::size_t packed_size, std::uint32_t unpacked_size) {
+  if (unpacked_size > static_cast<std::uint64_t>(packed_size) * k_zlib_max_expansion + k_zlib_slack_bytes) {
+    throw Ba2Error("BA2 compressed chunk declares " + std::to_string(unpacked_size) +
+                   " bytes from " + std::to_string(packed_size) +
+                   " packed bytes; exceeds zlib expansion bound");
+  }
+}
 
 inline std::vector<std::byte> read_file_bytes(const std::filesystem::path& path) {
   const auto name = io::utf8(path);
