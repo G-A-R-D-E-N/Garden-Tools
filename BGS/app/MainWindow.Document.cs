@@ -163,6 +163,7 @@ public partial class MainWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        CancelIndexOnClose();
         _gameData?.Dispose();
         _gameData = null;
         base.OnClosed(e);
@@ -202,6 +203,27 @@ public partial class MainWindow : Window
 
     private bool SaveAnimation()
     {
+        if (_animationData == null)
+        {
+            _frameEditAnswer.Text = "This is not an animation file.";
+            _frameEditAnswer.Foreground = Ux.BadBrush;
+            return false;
+        }
+
+        if (_readOnly)
+        {
+            _frameEditAnswer.Text = "Not saved: " + _readOnlyWhy;
+            _frameEditAnswer.Foreground = Ux.BadBrush;
+            return false;
+        }
+
+        if (!_animationEdited)
+        {
+            _frameEditAnswer.Text = "Nothing to save: this clip has not been changed.";
+            _frameEditAnswer.Foreground = Ux.MutedBrush;
+            return false;
+        }
+
         if (!WriteAnimation()) return false;
         return ReloadAfterWrite(animation: true);
     }
@@ -249,6 +271,7 @@ public partial class MainWindow : Window
 
         var result = AnimationSaveTransaction.Commit(
             _hkxPath, anim, _sourceStamp, _editTrack, _editFrame,
+            timeline: _animationTimeline,
             verificationFault: VerifyFaultForTest);
         if (!result.Committed)
         {
@@ -260,6 +283,7 @@ public partial class MainWindow : Window
         _animationEdited = false;
         _frameEditAnswer.Text = result.Message;
         _frameEditAnswer.Foreground = Ux.MetaBrush;
+        RefreshSaveAnimationState();
         SetStatus(result.Message, Ux.MetaBrush);
         RefreshSourceStamp();
         return true;

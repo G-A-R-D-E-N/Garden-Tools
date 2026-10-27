@@ -90,7 +90,7 @@ public static class SplineQuat
             case 1: Write40(q, into, at); break;
             case 2: Write48(q, into, at); break;
             case 5: WritePlain(q, into, at); break;
-            default: throw Unsupported(format);
+            default: throw UnsupportedForWrite(format);
         }
     }
 
@@ -151,7 +151,10 @@ public static class SplineQuat
     };
 
     internal static NotSupportedException Unsupported(int format) =>
-        new($"spline rotation quantization {format} is not supported (only 1, 2 and 5 are)");
+        AnimationCompression.UnsupportedSplineEncoding(format);
+
+    internal static NotSupportedException UnsupportedForWrite(int format) =>
+        AnimationCompression.UnsupportedSplineEncodingForWrite(format);
 
     public static float AngleBetween(Quaternion a, Quaternion b)
     {
