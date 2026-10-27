@@ -44,4 +44,13 @@ class SoundChannelObject : public Object {
   double pan{0.0};
 };
 
+/* A SharedObject must keep its name and last decoded data so flush can write the same body back. */
+class SharedObjectObject : public Object {
+ public:
+  explicit SharedObjectObject(Class* shared_class);
+  std::string name;
+  Value data;
+  bool dirty{false};
+};
+
 }  // namespace fo4::avm2

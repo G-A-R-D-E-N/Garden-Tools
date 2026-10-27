@@ -420,6 +420,30 @@ RuntimeStatus Runtime::install_builtins() {
         static_cast<std::uint32_t>(native::Id::dictionary_construct);
   }
 
+  const auto add_accessor = [](Class& klass, std::string name, native::Id getter_id,
+                               native::Id setter_id) {
+    auto getter = std::make_shared<FunctionObject>(name, nullptr, kNoMethod);
+    getter->set_native_id(static_cast<std::uint32_t>(getter_id));
+    getter->set_owner_class(&klass);
+    auto setter = std::make_shared<FunctionObject>(name, nullptr, kNoMethod);
+    setter->set_native_id(static_cast<std::uint32_t>(setter_id));
+    setter->set_owner_class(&klass);
+    Trait trait;
+    trait.multiname = package_name(name);
+    trait.kind = TraitKind::Getter;
+    trait.disp_id = 0;
+    trait.method_index = kNoMethod;
+    trait.function = std::move(getter);
+    klass.instance_traits.push_back(trait);
+    Trait setter_trait;
+    setter_trait.multiname = package_name(name);
+    setter_trait.kind = TraitKind::Setter;
+    setter_trait.disp_id = 0;
+    setter_trait.method_index = kNoMethod;
+    setter_trait.function = std::move(setter);
+    klass.instance_traits.push_back(std::move(setter_trait));
+  };
+
   const auto add_static_getter = [](Class& klass, std::string name, native::Id id) {
     auto function = std::make_shared<FunctionObject>(name, nullptr, kNoMethod);
     function->set_native_id(static_cast<std::uint32_t>(id));
@@ -468,6 +492,18 @@ RuntimeStatus Runtime::install_builtins() {
   add_method(*sound_channel_class, "stop", native::Id::sound_channel_stop, false);
   sound_transform_class->native_constructor =
       static_cast<std::uint32_t>(native::Id::instance_construct);
+  Class* shared_object_class = add_builtin_class("SharedObject", "flash.net", event_dispatcher);
+  if (shared_object_class == nullptr) {
+    return RuntimeStatus::InvalidTrait;
+  }
+  shared_object_class->native_constructor =
+      static_cast<std::uint32_t>(native::Id::instance_construct);
+  add_method(*shared_object_class, "getLocal", native::Id::shared_get_local, true);
+  add_accessor(*shared_object_class, "data", native::Id::shared_data_get,
+               native::Id::shared_data_set);
+  add_method(*shared_object_class, "flush", native::Id::shared_flush, false);
+  add_method(*shared_object_class, "clear", native::Id::shared_clear, false);
+  add_method(*shared_object_class, "close", native::Id::shared_close, false);
 
   const auto add_global_function = [this](std::string name, native::Id id) {
     auto function = std::make_shared<FunctionObject>(name, nullptr, kNoMethod);

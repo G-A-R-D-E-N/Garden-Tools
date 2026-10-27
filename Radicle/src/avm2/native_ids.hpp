@@ -158,6 +158,12 @@ enum class Id : std::uint32_t {
   sound_play,
   sound_close,
   sound_channel_stop,
+  shared_get_local,
+  shared_data_get,
+  shared_data_set,
+  shared_flush,
+  shared_clear,
+  shared_close,
 };
 
 }  // namespace fo4::avm2::native
