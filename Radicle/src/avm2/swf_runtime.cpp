@@ -120,6 +120,8 @@ class SwfTimelineClip : public MovieClip {
       object->set_y(row.translate_y);
       object->set_scale_x(row.scale_x);
       object->set_scale_y(row.scale_y);
+      object->set_character_id(row.character_id);
+      object->set_clip_depth(row.has_clip_depth ? static_cast<std::int32_t>(row.clip_depth) : 0);
       if (!row.name.empty()) {
         object->set_name(row.name);
       }
@@ -285,6 +287,16 @@ void SwfRuntime::mouse_event(Interpreter& interpreter, double x, double y, std::
   button_property.kind = PropertyKind::Value;
   button_property.value = Value::int32(button);
   dispatch_event(interpreter, root_, event, 0);
+}
+
+FrameSnapshot SwfRuntime::take_snapshot() {
+  FrameSnapshot snapshot = root_ == nullptr ? FrameSnapshot{} : build_frame_snapshot(*root_);
+  sounds_.append_to(snapshot);
+  return snapshot;
+}
+
+FrameSnapshot SwfRuntime::snapshot() const {
+  return root_ == nullptr ? FrameSnapshot{} : build_frame_snapshot(*root_);
 }
 
 void SwfRuntime::set_playing(bool playing) {

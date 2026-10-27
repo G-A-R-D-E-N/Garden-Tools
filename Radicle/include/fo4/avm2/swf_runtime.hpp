@@ -2,6 +2,7 @@
 
 #include <fo4/avm2/display.hpp>
 #include <fo4/avm2/fonts.hpp>
+#include <fo4/avm2/snapshot.hpp>
 #include <fo4/avm2/interpreter.hpp>
 #include <fo4/avm2/object.hpp>
 #include <fo4/avm2/runtime.hpp>
@@ -72,6 +73,10 @@ class SwfRuntime {
                                             const SwfRuntimeOptions& options = {});
 
   void advance(Interpreter& interpreter, double dt_seconds);
+  /* The host must take one snapshot per rendered frame; it drains the sound queue. */
+  FrameSnapshot take_snapshot();
+  FrameSnapshot snapshot() const;
+  SoundEventQueue& sound_events() noexcept { return sounds_; }
   /* Host input must go through these; keyboard targets the root clip and mouse the stage. */
   void key_event(Interpreter& interpreter, std::uint32_t key_code, bool down);
   void mouse_event(Interpreter& interpreter, double x, double y, std::int32_t button, bool down);
@@ -89,6 +94,7 @@ class SwfRuntime {
   std::shared_ptr<SwfMovieData> data_;
   std::shared_ptr<DisplayObjectContainer> stage_;
   std::shared_ptr<MovieClip> root_;
+  SoundEventQueue sounds_;
   double accumulator_{0.0};
   bool playing_{true};
   bool started_{false};

@@ -86,11 +86,21 @@ class DisplayObject : public Object, public std::enable_shared_from_this<Display
   void set_display_class(Class* display_class) noexcept { display_class_ = display_class; }
   Class* display_class() const noexcept { return display_class_; }
 
+  std::uint32_t character_id() const noexcept { return character_id_; }
+  void set_character_id(std::uint32_t character_id) noexcept { character_id_ = character_id; }
+  std::int32_t clip_depth() const noexcept { return clip_depth_; }
+  void set_clip_depth(std::int32_t clip_depth) noexcept { clip_depth_ = clip_depth; }
+  std::uint8_t blend_mode() const noexcept { return blend_mode_; }
+  void set_blend_mode(std::uint8_t blend_mode) noexcept { blend_mode_ = blend_mode; }
+
   bool assigned() const noexcept { return assigned_; }
   void set_assigned(bool assigned) noexcept { assigned_ = assigned; }
 
  private:
   Class* display_class_{nullptr};
+  std::uint32_t character_id_{0};
+  std::int32_t clip_depth_{0};
+  std::uint8_t blend_mode_{0};
   double x_{0.0};
   double y_{0.0};
   double scale_x_{1.0};

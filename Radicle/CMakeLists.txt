@@ -311,6 +311,7 @@ add_library(fo4
   src/avm2/native_display.cpp
   src/avm2/swf_movie_data.cpp
   src/avm2/swf_runtime.cpp
+  src/avm2/snapshot.cpp
   src/avm2/events.cpp
   src/avm2/native_events.cpp
   src/avm2/text.cpp
@@ -775,6 +776,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_avm2_builtins.cpp
     tests/test_avm2_display.cpp
     tests/test_avm2_swf_runtime.cpp
+    tests/test_avm2_snapshot.cpp
     tests/test_avm2_events.cpp
     tests/test_avm2_text.cpp
     tests/test_swf_fonts.cpp
