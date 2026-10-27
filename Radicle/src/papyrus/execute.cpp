@@ -246,7 +246,7 @@ Status Interpreter::execute(const pex::PexInstruction& instruction, Frame& frame
     if (std::strcmp(op, "struct_create") == 0) {
         const std::string declared = declaredOperandType(frame, instruction.args[0]);
         Value created;
-        const Status status = makeStruct(frame.object, declared, 0, created);
+        const Status status = makeStruct(frame.object, declared, created);
         if (status != Status::Ok) return status;
         return storeResult(frame, instruction.args[0], created);
     }

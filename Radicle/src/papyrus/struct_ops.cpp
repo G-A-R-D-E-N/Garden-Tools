@@ -10,7 +10,6 @@ namespace fo4::papyrus {
 namespace {
 
 constexpr int kMaxInheritanceHops = 64;
-constexpr std::size_t kMaxStructDepth = 16;
 
 }  // namespace
 
@@ -28,19 +27,15 @@ const pex::PexStruct* Interpreter::findStruct(const pex::PexObject* object,
 }
 
 Status Interpreter::makeStruct(const pex::PexObject* object, const std::string& typeName,
-                               std::size_t depth, Value& out) const {
-    if (depth > kMaxStructDepth) return Status::TypeMismatch;
+                               Value& out) const {
     const pex::PexStruct* definition = findStruct(object, typeName);
     if (definition == nullptr) return Status::UnknownIdentifier;
     auto structure = std::make_shared<Struct>();
     structure->typeName = definition->name;
     for (const pex::PexStructMember& member : definition->members) {
-        Value memberValue;
-        if (findStruct(object, member.type) != nullptr) {
-            const Status nested = makeStruct(object, member.type, depth + 1, memberValue);
-            if (nested != Status::Ok) return nested;
-        } else if (member.defaultValue.has_value() &&
-                   member.defaultValue->type != pex::PexValueType::Identifier) {
+        Value memberValue = defaultValueFor(member.type);
+        if (member.defaultValue.has_value() &&
+            member.defaultValue->type != pex::PexValueType::Identifier) {
             Value literal;
             const pex::PexValue& source = *member.defaultValue;
             switch (source.type) {
@@ -63,10 +58,10 @@ Status Interpreter::makeStruct(const pex::PexObject* object, const std::string& 
                     literal = noneValue();
                     break;
             }
-            const Status coerced = coerce(literal, member.type, memberValue);
-            if (coerced != Status::Ok) return coerced;
-        } else {
-            memberValue = defaultValueFor(member.type);
+            if (!isNoneLike(literal)) {
+                const Status coerced = coerce(literal, member.type, memberValue);
+                if (coerced != Status::Ok) return coerced;
+            }
         }
         structure->members.emplace(lowerAscii(member.name), std::move(memberValue));
     }
@@ -118,8 +113,6 @@ Status Interpreter::findStructInArray(Frame& frame, const pex::PexInstruction& i
     Value array;
     Status status = readOperand(frame, instruction.args[0], array);
     if (status != Status::Ok) return status;
-    if (isNoneLike(array)) return Status::NullArray;
-    if (array.type != ValueType::Array) return Status::TypeMismatch;
     if (instruction.args[2].type != pex::PexValueType::String) return Status::TypeMismatch;
     const std::string member = lowerAscii(instruction.args[2].str);
     Value wanted;
@@ -128,35 +121,45 @@ Status Interpreter::findStructInArray(Frame& frame, const pex::PexInstruction& i
     Value start;
     status = readOperand(frame, instruction.args[4], start);
     if (status != Status::Ok) return status;
+    if (isNoneLike(array)) return storeResult(frame, instruction.args[1], integerValue(-1));
+    if (array.type != ValueType::Array) return Status::TypeMismatch;
 
     const std::int32_t size = static_cast<std::int32_t>(array.array->elements.size());
+    if (size == 0) return storeResult(frame, instruction.args[1], integerValue(-1));
+    const pex::PexStruct* definition = findStruct(frame.object, array.array->elementTypeName);
+    if (definition == nullptr) return Status::TypeMismatch;
     std::int32_t position = reverse ? size - 1 : 0;
     if (!isNoneLike(start)) {
         if (start.type != ValueType::Integer) return Status::TypeMismatch;
         position = start.integer;
-        if (reverse && position < 0) position += size;
+        if (reverse && position == -1) position = size - 1;
     }
-    if (reverse) {
-        if (position >= size) position = size - 1;
-        for (std::int32_t i = position; i >= 0; --i) {
-            const Value& element = array.array->elements[static_cast<std::size_t>(i)];
-            if (element.type != ValueType::Struct || element.structure == nullptr) continue;
-            const auto found = element.structure->members.find(member);
-            if (found == element.structure->members.end()) continue;
-            if (equalValues(found->second, wanted)) {
-                return storeResult(frame, instruction.args[1], integerValue(i));
-            }
+    const pex::PexStructMember* declared = nullptr;
+    for (const pex::PexStructMember& candidate : definition->members) {
+        if (sameName(candidate.name, instruction.args[2].str)) {
+            declared = &candidate;
+            break;
         }
-    } else {
-        if (position < 0) position = 0;
-        for (std::int32_t i = position; i < size; ++i) {
-            const Value& element = array.array->elements[static_cast<std::size_t>(i)];
-            if (element.type != ValueType::Struct || element.structure == nullptr) continue;
-            const auto found = element.structure->members.find(member);
-            if (found == element.structure->members.end()) continue;
-            if (equalValues(found->second, wanted)) {
-                return storeResult(frame, instruction.args[1], integerValue(i));
-            }
+    }
+    const std::int32_t step = reverse ? -1 : 1;
+    for (std::int32_t i = position; i >= 0 && i < size; i += step) {
+        const Value& element = array.array->elements[static_cast<std::size_t>(i)];
+        if (isNoneLike(element)) {
+            if (isNoneLike(wanted)) return storeResult(frame, instruction.args[1], integerValue(i));
+            continue;
+        }
+        if (element.type != ValueType::Struct) return Status::TypeMismatch;
+        if (declared == nullptr) return Status::UnknownIdentifier;
+        const auto found = element.structure->members.find(member);
+        if (found == element.structure->members.end()) return Status::UnknownIdentifier;
+        const ValueType expected = findStruct(frame.object, declared->type) != nullptr
+                                       ? ValueType::Struct
+                                       : declaredValueType(declared->type);
+        if (!isNoneLike(wanted) && expected != ValueType::None && expected != wanted.type) {
+            return Status::TypeMismatch;
+        }
+        if (equalValues(found->second, wanted)) {
+            return storeResult(frame, instruction.args[1], integerValue(i));
         }
     }
     return storeResult(frame, instruction.args[1], integerValue(-1));
