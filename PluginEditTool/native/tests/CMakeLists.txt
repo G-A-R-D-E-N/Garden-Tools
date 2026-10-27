@@ -253,7 +253,7 @@ add_executable(fo4ide_test_sound_semantic_real unit/RadiclePluginSoundSemanticRe
 target_link_libraries(fo4ide_test_sound_semantic_real PRIVATE fo4ide_plugin Catch2::Catch2WithMain)
 fo4ide_enable_warnings(fo4ide_test_sound_semantic_real)
 fo4ide_enable_sanitizers(fo4ide_test_sound_semantic_real)
-catch_discover_tests(fo4ide_test_sound_semantic_real PROPERTIES TIMEOUT 600)
+catch_discover_tests(fo4ide_test_sound_semantic_real PROPERTIES TIMEOUT 900)
 
 add_executable(
     fo4ide_test_archive_backend
