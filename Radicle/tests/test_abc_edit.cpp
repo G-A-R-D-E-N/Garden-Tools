@@ -192,4 +192,117 @@ TEST(AbcEdit, RefusesAMissingBody) {
                                          message),
             AbcEditStatus::NoSuchBody);
   EXPECT_EQ(fo4::abc::delete_instruction(file, 99, 0, message), AbcEditStatus::NoSuchBody);
+  EXPECT_EQ(fo4::abc::replace_instruction(file, 99, 0, std::span<const std::uint8_t>(&nop, 1),
+                                          message),
+            AbcEditStatus::NoSuchBody);
+  EXPECT_EQ(fo4::abc::refresh_body_limits(file, 99, message), AbcEditStatus::NoSuchBody);
+}
+
+TEST(AbcEdit, RefreshRaisesMaxStackToTheMeasuredDepth) {
+  auto file = fixture_file();
+  set_body(file, {0x24, 0x01, 0x24, 0x02, 0x29, 0x29, 0x47});
+  file.bodies[0].max_stack = 1;
+  std::string message;
+  ASSERT_EQ(fo4::abc::refresh_body_limits(file, 0, message), AbcEditStatus::Ok) << message;
+  EXPECT_EQ(file.bodies[0].max_stack, 2u);
+  EXPECT_EQ(file.bodies[0].local_count, 1u);
+  EXPECT_EQ(body_code_size(file), 7u);
+}
+
+TEST(AbcEdit, RefreshNeverLowersADeclaredMaxStack) {
+  auto file = fixture_file();
+  set_body(file, {0x24, 0x01, 0x29, 0x47});
+  std::string message;
+  ASSERT_EQ(fo4::abc::refresh_body_limits(file, 0, message), AbcEditStatus::Ok) << message;
+  EXPECT_EQ(file.bodies[0].max_stack, 4u);
+}
+
+TEST(AbcEdit, RefreshRaisesLocalCountForALocalSlot) {
+  auto file = fixture_file();
+  set_body(file, {0x62, 0x05, 0x29, 0x47});
+  std::string message;
+  ASSERT_EQ(fo4::abc::refresh_body_limits(file, 0, message), AbcEditStatus::Ok) << message;
+  EXPECT_EQ(file.bodies[0].local_count, 6u);
+  EXPECT_EQ(file.bodies[0].max_stack, 4u);
+}
+
+TEST(AbcEdit, RefreshRefusesABranchThatMergesWithDifferentDepthsAndKeepsTheBody) {
+  auto file = fixture_file();
+  set_body(file, {0x26, 0x11, 0x02, 0x00, 0x00, 0x24, 0x01, 0x47});
+  const auto before = code_of(file);
+  std::string message;
+  EXPECT_EQ(fo4::abc::refresh_body_limits(file, 0, message), AbcEditStatus::VerifierRefused);
+  EXPECT_NE(message.find("verifier refused"), std::string::npos) << message;
+  EXPECT_EQ(code_of(file), before);
+  EXPECT_EQ(file.bodies[0].max_stack, 4u);
+  EXPECT_EQ(file.bodies[0].local_count, 1u);
+}
+
+TEST(AbcEdit, ReplacingAnInstructionKeepsABranchOnTheReplacedOffset) {
+  auto file = fixture_file();
+  set_body(file, {0x10, 0x00, 0x00, 0x00, 0x02, 0x47});
+  std::string message;
+  const std::uint8_t push_one[2] = {0x24, 0x01};
+  ASSERT_EQ(fo4::abc::replace_instruction(file, 0, 4, std::span<const std::uint8_t>(push_one, 2),
+                                          message),
+            AbcEditStatus::Ok)
+      << message;
+  EXPECT_EQ(code_of(file), (std::vector<std::uint8_t>{0x10, 0x00, 0x00, 0x00, 0x24, 0x01, 0x47}));
+  std::vector<fo4::abc::AbcInstruction> code;
+  ASSERT_EQ(fo4::abc::decode_code(file.bodies[0].code, code), fo4::abc::AbcStatus::Ok);
+  ASSERT_EQ(code.size(), 3u);
+  EXPECT_EQ(code[0].operands[0].target, 4);
+  EXPECT_EQ(code[1].offset, 4u);
+  EXPECT_EQ(code[2].offset, 6u);
+}
+
+TEST(AbcEdit, ReplacingAnInstructionMovesALaterBranchTargetByTheLengthChange) {
+  auto file = fixture_file();
+  set_body(file, {0x10, 0x01, 0x00, 0x00, 0x02, 0x47});
+  std::string message;
+  const std::uint8_t push_one[2] = {0x24, 0x01};
+  ASSERT_EQ(fo4::abc::replace_instruction(file, 0, 4, std::span<const std::uint8_t>(push_one, 2),
+                                          message),
+            AbcEditStatus::Ok)
+      << message;
+  EXPECT_EQ(code_of(file), (std::vector<std::uint8_t>{0x10, 0x02, 0x00, 0x00, 0x24, 0x01, 0x47}));
+  std::vector<fo4::abc::AbcInstruction> code;
+  ASSERT_EQ(fo4::abc::decode_code(file.bodies[0].code, code), fo4::abc::AbcStatus::Ok);
+  ASSERT_EQ(code.size(), 3u);
+  EXPECT_EQ(code[0].operands[0].target, 6);
+  EXPECT_EQ(code[2].offset, 6u);
+}
+
+TEST(AbcEdit, ReplaceRefusesABranchAndAnOffsetThatIsNotAnInstructionStart) {
+  auto file = fixture_file();
+  set_body(file, {0x10, 0x00, 0x00, 0x00, 0x02, 0x47});
+  const auto before = code_of(file);
+  std::string message;
+  const std::uint8_t nop = 0x02;
+  const std::uint8_t jump[4] = {0x10, 0x00, 0x00, 0x00};
+  const std::uint8_t two_nops[2] = {0x02, 0x02};
+  EXPECT_EQ(fo4::abc::replace_instruction(file, 0, 4, std::span<const std::uint8_t>(jump, 4), message),
+            AbcEditStatus::InsertedInstructionBranches);
+  EXPECT_EQ(fo4::abc::replace_instruction(file, 0, 4, std::span<const std::uint8_t>(two_nops, 2),
+                                          message),
+            AbcEditStatus::BadInsertedInstruction);
+  EXPECT_EQ(fo4::abc::replace_instruction(file, 0, 1, std::span<const std::uint8_t>(&nop, 1), message),
+            AbcEditStatus::NotAnInstructionBoundary);
+  EXPECT_EQ(fo4::abc::replace_instruction(file, 0, 6, std::span<const std::uint8_t>(&nop, 1), message),
+            AbcEditStatus::NotAnInstructionBoundary);
+  EXPECT_EQ(code_of(file), before);
+}
+
+TEST(AbcEdit, ReplaceRestoresTheBodyWhenTheVerifierRefuses) {
+  auto file = fixture_file();
+  set_body(file, {0x10, 0x00, 0x00, 0x00, 0x02, 0x47});
+  const auto before = code_of(file);
+  std::string message;
+  const std::uint8_t return_value = 0x48;
+  EXPECT_EQ(fo4::abc::replace_instruction(file, 0, 4,
+                                          std::span<const std::uint8_t>(&return_value, 1), message),
+            AbcEditStatus::VerifierRefused);
+  EXPECT_NE(message.find("verifier refused"), std::string::npos) << message;
+  EXPECT_EQ(code_of(file), before);
+  EXPECT_EQ(file.bodies[0].max_stack, 4u);
 }

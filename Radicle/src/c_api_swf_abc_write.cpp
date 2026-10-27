@@ -6,12 +6,14 @@
 #include "fo4/abc/abc.hpp"
 #include "fo4/abc/abc_asm.hpp"
 #include "fo4/abc/abc_text.hpp"
+#include "fo4/abc/edit.hpp"
 #include "fo4/swf/swf.hpp"
 
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -21,6 +23,9 @@ using radicle_c_detail::fail;
 using radicle_c_env_detail::guarded;
 
 namespace {
+
+using InstructionEdit = fo4::abc::AbcEditStatus (*)(fo4::abc::AbcFile&, std::uint32_t, std::size_t,
+                                                    std::span<const std::uint8_t>, std::string&);
 
 const radicle_swf_detail::abc_view* abc_at(const radicle_swf* swf, std::size_t index) {
   return swf == nullptr || index >= swf->abcs.size() ? nullptr : &swf->abcs[index];
@@ -46,10 +51,85 @@ std::uint8_t* copy_bytes(const std::vector<std::uint8_t>& bytes, std::size_t* ou
   return buffer;
 }
 
-void put_u32(std::vector<std::byte>& out, std::uint32_t value) {
-  for (int index = 0; index < 4; ++index) {
-    out.push_back(static_cast<std::byte>((value >> (8 * index)) & 0xFFu));
+radicle_status check_block(const radicle_swf* swf, std::size_t abc, const std::uint8_t* text,
+                           std::size_t size) {
+  if (swf == nullptr) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "swf is required");
+  if (text == nullptr || size == 0) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "text and size are required");
   }
+  const auto* view = abc_at(swf, abc);
+  if (view == nullptr) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the ABC index is out of range");
+  if (!view->parsed) return fail(RADICLE_STATUS_PARSE_ERROR, "the ABC block did not parse");
+  if (view->tag_index >= swf->file.tags.size()) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the ABC tag index is out of range");
+  }
+  const std::uint16_t code = swf->file.tags[view->tag_index].code;
+  if (code != fo4::swf::tag::kDoAbc2 && code != fo4::swf::tag::kDoAbc) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the ABC block is not a DoABC or DoABC2 tag");
+  }
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status apply_file(radicle_swf* swf, std::size_t abc, const fo4::abc::AbcFile& file) {
+  std::vector<std::uint8_t> abc_bytes;
+  if (file.serialize(abc_bytes) != fo4::abc::AbcStatus::Ok) {
+    return fail(RADICLE_STATUS_PARSE_ERROR, "the assembled model does not serialize");
+  }
+  const auto* view = abc_at(swf, abc);
+  const std::size_t tag_index = view->tag_index;
+  const std::uint32_t flags = view->flags;
+  const std::string name = view->name;
+  std::vector<std::byte> payload(4 + name.size() + 1 + abc_bytes.size());
+  std::byte* cursor = payload.data();
+  for (int index = 0; index < 4; ++index) {
+    *cursor++ = static_cast<std::byte>((flags >> (8 * index)) & 0xFFu);
+  }
+  if (!name.empty()) std::memcpy(cursor, name.data(), name.size());
+  cursor += name.size();
+  *cursor++ = std::byte{0};
+  if (!abc_bytes.empty()) std::memcpy(cursor, abc_bytes.data(), abc_bytes.size());
+  const radicle_swf_tag_replacement replacement{
+      tag_index, reinterpret_cast<const std::uint8_t*>(payload.data()), payload.size()};
+  const radicle_swf_tag_plan plan{&replacement, 1, nullptr, 0, nullptr, 0};
+  radicle_swf_plan_result result{};
+  return radicle_swf_apply_plan(swf, &plan, &result);
+}
+
+// Requires before to be the block the handle holds; only bodies whose code bytes changed are measured.
+radicle_status refresh_changed_bodies(const fo4::abc::AbcFile& before, fo4::abc::AbcFile& file) {
+  for (std::uint32_t index = 0; index < file.bodies.size(); ++index) {
+    const bool changed =
+        index >= before.bodies.size() || before.bodies[index].code != file.bodies[index].code;
+    if (!changed) continue;
+    std::string message;
+    if (fo4::abc::refresh_body_limits(file, index, message) != fo4::abc::AbcEditStatus::Ok) {
+      return fail(RADICLE_STATUS_PARSE_ERROR, message.c_str());
+    }
+  }
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status apply_instruction_edit(radicle_swf* swf, std::size_t abc, std::uint32_t body,
+                                      std::size_t offset, const std::uint8_t* text, std::size_t size,
+                                      InstructionEdit edit) {
+  clear_error();
+  if (const radicle_status status = check_block(swf, abc, text, size); status != RADICLE_STATUS_OK) {
+    return status;
+  }
+  return guarded("unknown exception while editing an ABC instruction", [&] {
+    std::vector<std::uint8_t> instruction;
+    fo4::abc::AbcTextError error;
+    const std::string_view source(reinterpret_cast<const char*>(text), size);
+    if (fo4::abc::assemble_instruction_text(source, instruction, &error) != fo4::abc::AbcStatus::Ok) {
+      return fail(RADICLE_STATUS_PARSE_ERROR, error.message.c_str());
+    }
+    fo4::abc::AbcFile file = swf->abcs[abc].file;
+    std::string message;
+    if (edit(file, body, offset, instruction, message) != fo4::abc::AbcEditStatus::Ok) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, message.c_str());
+    }
+    return apply_file(swf, abc, file);
+  });
 }
 
 }  // namespace
@@ -111,23 +191,10 @@ radicle_status radicle_swf_abc_assemble(const radicle_swf* swf, size_t abc, cons
 radicle_status radicle_swf_abc_apply_text(radicle_swf* swf, size_t abc, const uint8_t* text,
                                           size_t size) {
   clear_error();
-  if (swf == nullptr) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "swf is required");
-  if (text == nullptr || size == 0) {
-    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "text and size are required");
+  if (const radicle_status status = check_block(swf, abc, text, size); status != RADICLE_STATUS_OK) {
+    return status;
   }
-  const auto* view = abc_at(swf, abc);
-  if (view == nullptr) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the ABC index is out of range");
-  if (!view->parsed) return fail(RADICLE_STATUS_PARSE_ERROR, "the ABC block did not parse");
-  const std::size_t tag_index = view->tag_index;
-  const std::uint32_t flags = view->flags;
-  const std::string name = view->name;
-  if (tag_index >= swf->file.tags.size()) {
-    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the ABC tag index is out of range");
-  }
-  const std::uint16_t code = swf->file.tags[tag_index].code;
-  if (code != fo4::swf::tag::kDoAbc2 && code != fo4::swf::tag::kDoAbc) {
-    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the ABC block is not a DoABC or DoABC2 tag");
-  }
+  const fo4::abc::AbcFile& before = swf->abcs[abc].file;
   return guarded("unknown exception while applying ABC text", [&] {
     fo4::abc::AbcFile file;
     fo4::abc::AbcTextError error;
@@ -135,26 +202,22 @@ radicle_status radicle_swf_abc_apply_text(radicle_swf* swf, size_t abc, const ui
     if (fo4::abc::assemble_abc_text(source, file, &error) != fo4::abc::AbcStatus::Ok) {
       return fail(RADICLE_STATUS_PARSE_ERROR, error.message.c_str());
     }
-    std::vector<std::uint8_t> abc_bytes;
-    if (file.serialize(abc_bytes) != fo4::abc::AbcStatus::Ok) {
-      return fail(RADICLE_STATUS_PARSE_ERROR, "the assembled model does not serialize");
+    if (const radicle_status status = refresh_changed_bodies(before, file);
+        status != RADICLE_STATUS_OK) {
+      return status;
     }
-    std::vector<std::byte> payload;
-    payload.reserve(abc_bytes.size() + name.size() + 5);
-    put_u32(payload, flags);
-    for (const char letter : name) {
-      payload.push_back(static_cast<std::byte>(static_cast<unsigned char>(letter)));
-    }
-    payload.push_back(std::byte{0});
-    for (const std::uint8_t byte : abc_bytes) {
-      payload.push_back(static_cast<std::byte>(byte));
-    }
-    const radicle_swf_tag_replacement replacement{
-        tag_index, reinterpret_cast<const std::uint8_t*>(payload.data()), payload.size()};
-    const radicle_swf_tag_plan plan{&replacement, 1, nullptr, 0, nullptr, 0};
-    radicle_swf_plan_result result{};
-    return radicle_swf_apply_plan(swf, &plan, &result);
+    return apply_file(swf, abc, file);
   });
+}
+
+radicle_status radicle_swf_abc_insert_instruction(radicle_swf* swf, size_t abc, uint32_t body,
+                                                  size_t offset, const uint8_t* text, size_t size) {
+  return apply_instruction_edit(swf, abc, body, offset, text, size, fo4::abc::insert_instruction);
+}
+
+radicle_status radicle_swf_abc_replace_instruction(radicle_swf* swf, size_t abc, uint32_t body,
+                                                   size_t offset, const uint8_t* text, size_t size) {
+  return apply_instruction_edit(swf, abc, body, offset, text, size, fo4::abc::replace_instruction);
 }
 
 }  // extern "C"

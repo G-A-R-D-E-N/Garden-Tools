@@ -21,43 +21,57 @@ bool is_offset_operand(const AbcOperandSpec& spec) {
 }
 
 // Constraint: a branch target must keep naming an instruction start, so a shift is applied only at or after it.
-void shift_targets(std::vector<AbcInstruction>& code, std::size_t from_index, std::uint32_t offset,
-                   std::uint32_t delta, bool is_insert) {
-  for (std::size_t index = 0; index < code.size(); ++index) {
-    if (index == from_index) {
-      continue;
-    }
-    for (AbcDecodedOperand& operand : code[index].operands) {
-      if (operand.role != AbcOperandRole::Offset && operand.role != AbcOperandRole::Switch) {
-        continue;
-      }
+void shift_code_targets(std::vector<AbcInstruction>& code, std::uint32_t boundary,
+                        std::int32_t delta) {
+  const auto moved = [boundary](std::int32_t target) {
+    return target >= static_cast<std::int32_t>(boundary);
+  };
+  for (AbcInstruction& instruction : code) {
+    for (AbcDecodedOperand& operand : instruction.operands) {
       if (operand.role == AbcOperandRole::Offset) {
-        if (is_insert ? operand.target >= static_cast<std::int32_t>(offset)
-                      : operand.target >= static_cast<std::int32_t>(offset + delta)) {
-          operand.target += is_insert ? static_cast<std::int32_t>(delta)
-                                      : -static_cast<std::int32_t>(delta);
+        if (moved(operand.target)) {
+          operand.target += delta;
         }
-      } else {
+      } else if (operand.role == AbcOperandRole::Switch) {
         for (std::int32_t& target : operand.case_targets) {
-          if (is_insert ? target >= static_cast<std::int32_t>(offset)
-                        : target >= static_cast<std::int32_t>(offset + delta)) {
-            target += is_insert ? static_cast<std::int32_t>(delta)
-                                : -static_cast<std::int32_t>(delta);
+          if (moved(target)) {
+            target += delta;
           }
         }
-        if (is_insert ? operand.target >= static_cast<std::int32_t>(offset)
-                      : operand.target >= static_cast<std::int32_t>(offset + delta)) {
-          operand.target += is_insert ? static_cast<std::int32_t>(delta)
-                                      : -static_cast<std::int32_t>(delta);
+        if (moved(operand.target)) {
+          operand.target += delta;
         }
       }
     }
   }
 }
 
+void shift_exceptions(std::vector<AbcException>& exceptions, std::uint32_t boundary,
+                      std::int32_t delta) {
+  const auto moved = [boundary, delta](std::uint32_t& value) {
+    if (value >= boundary) {
+      value = static_cast<std::uint32_t>(static_cast<std::int64_t>(value) + delta);
+    }
+  };
+  for (AbcException& exception : exceptions) {
+    moved(exception.from);
+    moved(exception.to);
+    moved(exception.target);
+  }
+}
+
 bool target_deleted(std::int32_t target, std::uint32_t offset, std::uint32_t delta) {
   return target >= static_cast<std::int32_t>(offset) &&
          target < static_cast<std::int32_t>(offset + delta);
+}
+
+std::size_t index_at(const std::vector<AbcInstruction>& code, std::size_t offset) {
+  for (std::size_t candidate = 0; candidate < code.size(); ++candidate) {
+    if (code[candidate].offset == offset) {
+      return candidate;
+    }
+  }
+  return code.size();
 }
 
 void recompute_offsets(std::vector<AbcInstruction>& code) {
@@ -123,7 +137,29 @@ AbcEditStatus verify_and_commit(AbcFile& file, std::uint32_t body_index,
   return AbcEditStatus::Ok;
 }
 
-
+AbcEditStatus decode_inserted(std::span<const std::uint8_t> instruction, AbcInstruction& out,
+                              std::string& message) {
+  std::vector<AbcInstruction> decoded;
+  if (instruction.empty() ||
+      decode_code(instruction.data(), instruction.size(), decoded) != AbcStatus::Ok ||
+      decoded.size() != 1 || decoded[0].length != instruction.size()) {
+    message = "the inserted bytes must be exactly one decodable instruction";
+    return AbcEditStatus::BadInsertedInstruction;
+  }
+  const AbcOpcodeInfo* info = opcode_info(decoded[0].opcode);
+  if (info == nullptr) {
+    message = "the inserted opcode is not modelled";
+    return AbcEditStatus::BadInsertedInstruction;
+  }
+  for (std::size_t operand = 0; operand < info->operand_count; ++operand) {
+    if (is_offset_operand(info->operands[operand])) {
+      message = "an inserted instruction must not carry its own branch or switch";
+      return AbcEditStatus::InsertedInstructionBranches;
+    }
+  }
+  out = decoded[0];
+  return AbcEditStatus::Ok;
+}
 
 }  // namespace
 
@@ -167,43 +203,21 @@ AbcEditStatus insert_instruction(AbcFile& file, std::uint32_t body_index, std::s
     message = "the method body code does not decode";
     return AbcEditStatus::DecodeFailed;
   }
-  std::size_t index = code.size();
-  bool boundary = offset == body.code.size();
-  for (std::size_t candidate = 0; candidate < code.size(); ++candidate) {
-    if (code[candidate].offset == offset) {
-      index = candidate;
-      boundary = true;
-      break;
-    }
-  }
-  if (!boundary) {
+  const std::size_t index = index_at(code, offset);
+  if (index == code.size() && offset != body.code.size()) {
     message = "the offset is not an instruction boundary";
     return AbcEditStatus::NotAnInstructionBoundary;
   }
 
-  std::vector<AbcInstruction> inserted;
-  if (instruction.empty() ||
-      decode_code(instruction.data(), instruction.size(), inserted) != AbcStatus::Ok ||
-      inserted.size() != 1 || inserted[0].length != instruction.size()) {
-    message = "the inserted bytes must be exactly one decodable instruction";
-    return AbcEditStatus::BadInsertedInstruction;
+  AbcInstruction inserted;
+  if (const AbcEditStatus status = decode_inserted(instruction, inserted, message);
+      status != AbcEditStatus::Ok) {
+    return status;
   }
-  const AbcOpcodeInfo* info = opcode_info(inserted[0].opcode);
-  if (info == nullptr) {
-    message = "the inserted opcode is not modelled";
-    return AbcEditStatus::BadInsertedInstruction;
-  }
-  for (std::size_t operand = 0; operand < info->operand_count; ++operand) {
-    if (is_offset_operand(info->operands[operand])) {
-      message = "an inserted instruction must not carry its own branch or switch";
-      return AbcEditStatus::InsertedInstructionBranches;
-    }
-  }
-
-  const std::uint32_t delta = static_cast<std::uint32_t>(inserted[0].length);
+  const auto delta = static_cast<std::int32_t>(inserted.length);
   std::vector<AbcInstruction> next = code;
-  next.insert(next.begin() + static_cast<std::ptrdiff_t>(index), inserted[0]);
-  shift_targets(next, index, static_cast<std::uint32_t>(offset), delta, true);
+  next.insert(next.begin() + static_cast<std::ptrdiff_t>(index), inserted);
+  shift_code_targets(next, static_cast<std::uint32_t>(offset), delta);
   recompute_offsets(next);
   std::vector<std::uint8_t> encoded;
   if (encode_code(next, encoded) != AbcStatus::Ok) {
@@ -211,17 +225,7 @@ AbcEditStatus insert_instruction(AbcFile& file, std::uint32_t body_index, std::s
     return AbcEditStatus::EncodeFailed;
   }
   body.code = std::move(encoded);
-  for (AbcException& exception : body.exceptions) {
-    if (exception.from >= offset) {
-      exception.from += delta;
-    }
-    if (exception.to >= offset) {
-      exception.to += delta;
-    }
-    if (exception.target >= offset) {
-      exception.target += delta;
-    }
-  }
+  shift_exceptions(body.exceptions, static_cast<std::uint32_t>(offset), delta);
   return verify_and_commit(file, body_index, original, message);
 }
 
@@ -239,13 +243,7 @@ AbcEditStatus delete_instruction(AbcFile& file, std::uint32_t body_index, std::s
     message = "the method body code does not decode";
     return AbcEditStatus::DecodeFailed;
   }
-  std::size_t index = code.size();
-  for (std::size_t candidate = 0; candidate < code.size(); ++candidate) {
-    if (code[candidate].offset == offset) {
-      index = candidate;
-      break;
-    }
-  }
+  const std::size_t index = index_at(code, offset);
   if (index == code.size()) {
     message = "the offset is not an instruction boundary";
     return AbcEditStatus::NotAnInstructionBoundary;
@@ -287,7 +285,9 @@ AbcEditStatus delete_instruction(AbcFile& file, std::uint32_t body_index, std::s
 
   std::vector<AbcInstruction> next = code;
   next.erase(next.begin() + static_cast<std::ptrdiff_t>(index));
-  shift_targets(next, next.size(), static_cast<std::uint32_t>(offset), delta, false);
+  const auto boundary = static_cast<std::uint32_t>(offset + delta);
+  const auto shift = -static_cast<std::int32_t>(delta);
+  shift_code_targets(next, boundary, shift);
   recompute_offsets(next);
   std::vector<std::uint8_t> encoded;
   if (encode_code(next, encoded) != AbcStatus::Ok) {
@@ -295,17 +295,60 @@ AbcEditStatus delete_instruction(AbcFile& file, std::uint32_t body_index, std::s
     return AbcEditStatus::EncodeFailed;
   }
   body.code = std::move(encoded);
-  for (AbcException& exception : body.exceptions) {
-    if (exception.from >= offset + delta) {
-      exception.from -= delta;
-    }
-    if (exception.to >= offset + delta) {
-      exception.to -= delta;
-    }
-    if (exception.target >= offset + delta) {
-      exception.target -= delta;
-    }
+  shift_exceptions(body.exceptions, boundary, shift);
+  return verify_and_commit(file, body_index, original, message);
+}
+
+AbcEditStatus replace_instruction(AbcFile& file, std::uint32_t body_index, std::size_t offset,
+                                  std::span<const std::uint8_t> instruction, std::string& message) {
+  message.clear();
+  if (body_index >= file.bodies.size()) {
+    message = "no such method body";
+    return AbcEditStatus::NoSuchBody;
   }
+  AbcMethodBody& body = file.bodies[body_index];
+  const AbcMethodBody original = body;
+  std::vector<AbcInstruction> code;
+  if (decode_code(body.code, code, body.exceptions) != AbcStatus::Ok) {
+    message = "the method body code does not decode";
+    return AbcEditStatus::DecodeFailed;
+  }
+  const std::size_t index = index_at(code, offset);
+  if (index == code.size()) {
+    message = "the offset is not an instruction boundary";
+    return AbcEditStatus::NotAnInstructionBoundary;
+  }
+
+  AbcInstruction replacement;
+  if (const AbcEditStatus status = decode_inserted(instruction, replacement, message);
+      status != AbcEditStatus::Ok) {
+    return status;
+  }
+  const auto old_length = static_cast<std::uint32_t>(code[index].length);
+  const auto boundary = static_cast<std::uint32_t>(offset) + old_length;
+  const auto new_length = static_cast<std::int32_t>(replacement.length);
+  const auto delta = new_length - static_cast<std::int32_t>(old_length);
+  std::vector<AbcInstruction> next = code;
+  next[index] = replacement;
+  shift_code_targets(next, boundary, delta);
+  recompute_offsets(next);
+  std::vector<std::uint8_t> encoded;
+  if (encode_code(next, encoded) != AbcStatus::Ok) {
+    message = "the edited code does not encode";
+    return AbcEditStatus::EncodeFailed;
+  }
+  body.code = std::move(encoded);
+  shift_exceptions(body.exceptions, boundary, delta);
+  return verify_and_commit(file, body_index, original, message);
+}
+
+AbcEditStatus refresh_body_limits(AbcFile& file, std::uint32_t body_index, std::string& message) {
+  message.clear();
+  if (body_index >= file.bodies.size()) {
+    message = "no such method body";
+    return AbcEditStatus::NoSuchBody;
+  }
+  const AbcMethodBody original = file.bodies[body_index];
   return verify_and_commit(file, body_index, original, message);
 }
 
