@@ -4,6 +4,7 @@
 #include "fo4/abc/summary.hpp"
 #include "fo4/c_api_swf.h"
 #include "fo4/swf/swf.hpp"
+#include "fo4/swf/swf_characters.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -56,6 +57,13 @@ struct revision_state {
   std::uint64_t revision{0};
 };
 
+/* Invariant: one build per movie revision; a refusal is cached with its message. */
+struct character_cache {
+  bool built{false};
+  fo4::swf::SwfCharacterModel model;
+  std::string message;
+};
+
 }  // namespace radicle_swf_detail
 
 struct radicle_swf {
@@ -73,6 +81,7 @@ struct radicle_swf {
   std::vector<std::uint8_t> frame_label_inside_sprite;
   std::vector<radicle_swf_detail::abc_view> abcs;
   mutable std::vector<radicle_swf_detail::morph_frame> morph_frames;
+  mutable radicle_swf_detail::character_cache characters;
 };
 
 namespace radicle_swf_detail {

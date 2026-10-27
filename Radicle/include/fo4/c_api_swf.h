@@ -454,11 +454,18 @@ typedef struct radicle_swf_tag_insertion {
 
 /* A plan must apply all-or-nothing: a refusal must leave every tag body, the revision and the bytes
    that radicle_swf_write_bytes must return exactly as they were before the call. */
+/* Constraint: a removal names one tag of the stream the plan was built against; the End tag must be refused. */
+typedef struct radicle_swf_tag_removal {
+  size_t tag_index;
+} radicle_swf_tag_removal;
+
 typedef struct radicle_swf_tag_plan {
   const radicle_swf_tag_replacement* replacements;
   size_t replacement_count;
   const radicle_swf_tag_insertion* insertions;
   size_t insertion_count;
+  const radicle_swf_tag_removal* removals;
+  size_t removal_count;
 } radicle_swf_tag_plan;
 
 typedef struct radicle_swf_plan_result {
@@ -476,6 +483,67 @@ RADICLE_API uint64_t radicle_swf_revision(const radicle_swf* swf);
 RADICLE_API radicle_status radicle_swf_write_bytes(const radicle_swf* swf, uint8_t** out_bytes,
                                                    size_t* out_size);
 
+typedef enum radicle_swf_character_kind {
+  RADICLE_SWF_CHARACTER_SHAPE = 0,
+  RADICLE_SWF_CHARACTER_MORPH = 1,
+  RADICLE_SWF_CHARACTER_BITMAP = 2,
+  RADICLE_SWF_CHARACTER_TEXT = 3,
+  RADICLE_SWF_CHARACTER_EDIT_TEXT = 4,
+  RADICLE_SWF_CHARACTER_FONT = 5,
+  RADICLE_SWF_CHARACTER_SPRITE = 6,
+  RADICLE_SWF_CHARACTER_BUTTON = 7,
+  RADICLE_SWF_CHARACTER_SOUND = 8,
+  RADICLE_SWF_CHARACTER_VIDEO = 9,
+  RADICLE_SWF_CHARACTER_IMPORTED = 10,
+} radicle_swf_character_kind;
+
+typedef struct radicle_swf_character {
+  uint16_t character_id;
+  uint8_t kind;                /* radicle_swf_character_kind */
+  uint8_t has_bounds;
+  uint8_t has_bitmap_size;
+  uint8_t reserved;
+  size_t tag_index;            /* the defining tag; the ImportAssets tag for an imported character */
+  radicle_swf_rect bounds;     /* twips; zero unless has_bounds is 1 */
+  uint16_t bitmap_width;       /* pixels; zero unless has_bitmap_size is 1 */
+  uint16_t bitmap_height;
+  const char* name;            /* SymbolClass or ExportAssets name; "" when unnamed, never null */
+  const char* imported_from;   /* ImportAssets source movie; "" unless the character is imported */
+  const char* imported_name;   /* imported symbol name; "" unless the character is imported */
+} radicle_swf_character;
+
+/* Must build once per revision and report every defining tag once, sorted by character_id. */
+RADICLE_API radicle_status radicle_swf_character_count(const radicle_swf* swf, size_t* out_count);
+/* Must refuse an out-of-range index with INVALID_ARGUMENT. */
+RADICLE_API radicle_status radicle_swf_character_at(const radicle_swf* swf, size_t index,
+                                                    radicle_swf_character* out_character);
+/* Must refuse an unknown id with NOT_FOUND; a refused model must fail every character getter. */
+RADICLE_API radicle_status radicle_swf_character_by_id(const radicle_swf* swf, uint16_t character_id,
+                                                       radicle_swf_character* out_character);
+
+typedef struct radicle_swf_history radicle_swf_history;
+
+/* Must start from the bytes the handle currently serializes, so an unedited handle starts at its opened bytes. */
+RADICLE_API radicle_status radicle_swf_history_create(const radicle_swf* swf,
+                                                      radicle_swf_history** out_history);
+RADICLE_API void radicle_swf_history_destroy(radicle_swf_history* history);
+/* Must append one command only when the plan changes the movie; a refusal must move no history state. */
+RADICLE_API radicle_status radicle_swf_history_apply(radicle_swf_history* history,
+                                                     const radicle_swf_tag_plan* plan,
+                                                     radicle_swf_plan_result* out_result);
+/* Must reopen the original bytes and replay the remaining prefix, so undo equals the forward sequence. */
+RADICLE_API radicle_status radicle_swf_history_undo(radicle_swf_history* history,
+                                                    radicle_swf_plan_result* out_result);
+RADICLE_API radicle_status radicle_swf_history_redo(radicle_swf_history* history,
+                                                    radicle_swf_plan_result* out_result);
+/* Must advance only when a call changes the movie, and never for a refusal. */
+RADICLE_API uint64_t radicle_swf_history_revision(const radicle_swf_history* history);
+RADICLE_API radicle_status radicle_swf_history_undo_count(const radicle_swf_history* history,
+                                                          size_t* out_count);
+RADICLE_API radicle_status radicle_swf_history_redo_count(const radicle_swf_history* history,
+                                                          size_t* out_count);
+RADICLE_API radicle_status radicle_swf_history_write_bytes(const radicle_swf_history* history,
+                                                           uint8_t** out_bytes, size_t* out_size);
 
 #ifdef __cplusplus
 }

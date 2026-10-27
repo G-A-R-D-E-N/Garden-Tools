@@ -2101,6 +2101,21 @@ public enum SwfRecordKind : int
     CurvedEdge = 3,
 }
 
+public enum SwfCharacterKind : int
+{
+    Shape = 0,
+    Morph = 1,
+    Bitmap = 2,
+    Text = 3,
+    EditText = 4,
+    Font = 5,
+    Sprite = 6,
+    Button = 7,
+    Sound = 8,
+    Video = 9,
+    Imported = 10,
+}
+
 [StructLayout(LayoutKind.Sequential)]
 public unsafe struct SwfInfo
 {
@@ -2440,12 +2455,20 @@ public unsafe struct SwfTagInsertion
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfTagRemoval
+{
+    public nuint TagIndex;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct SwfTagPlan
 {
     public IntPtr Replacements;
     public nuint ReplacementCount;
     public IntPtr Insertions;
     public nuint InsertionCount;
+    public IntPtr Removals;
+    public nuint RemovalCount;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -2455,10 +2478,27 @@ public unsafe struct SwfPlanResult
     public ulong Revision;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfCharacter
+{
+    public ushort CharacterId;
+    public byte Kind;
+    public byte HasBounds;
+    public byte HasBitmapSize;
+    public byte Reserved;
+    public nuint TagIndex;
+    public SwfRect Bounds;
+    public ushort BitmapWidth;
+    public ushort BitmapHeight;
+    public IntPtr Name;
+    public IntPtr ImportedFrom;
+    public IntPtr ImportedName;
+}
+
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 69u;
+    public const uint CompiledAbiVersion = 70u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -3695,5 +3735,41 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_write_bytes")]
     public static extern Status SwfWriteBytes(IntPtr swf, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_character_count")]
+    public static extern Status SwfCharacterCount(IntPtr swf, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_character_at")]
+    public static extern Status SwfCharacterAt(IntPtr swf, nuint index, SwfCharacter* out_character);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_character_by_id")]
+    public static extern Status SwfCharacterById(IntPtr swf, ushort character_id, SwfCharacter* out_character);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_history_create")]
+    public static extern Status SwfHistoryCreate(IntPtr swf, IntPtr* out_history);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_history_destroy")]
+    public static extern void SwfHistoryDestroy(IntPtr history);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_history_apply")]
+    public static extern Status SwfHistoryApply(IntPtr history, SwfTagPlan* plan, SwfPlanResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_history_undo")]
+    public static extern Status SwfHistoryUndo(IntPtr history, SwfPlanResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_history_redo")]
+    public static extern Status SwfHistoryRedo(IntPtr history, SwfPlanResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_history_revision")]
+    public static extern ulong SwfHistoryRevision(IntPtr history);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_history_undo_count")]
+    public static extern Status SwfHistoryUndoCount(IntPtr history, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_history_redo_count")]
+    public static extern Status SwfHistoryRedoCount(IntPtr history, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_history_write_bytes")]
+    public static extern Status SwfHistoryWriteBytes(IntPtr history, byte** out_bytes, nuint* out_size);
 
 }

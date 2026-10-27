@@ -13,7 +13,7 @@
   #define RADICLE_API
 #endif
 
-#define RADICLE_ABI_VERSION 69u
+#define RADICLE_ABI_VERSION 70u
 
 #ifdef __cplusplus
 extern "C" {

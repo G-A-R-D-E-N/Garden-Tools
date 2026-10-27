@@ -374,6 +374,14 @@ struct SwfText {
   std::size_t glyph_count{0};
 };
 
+struct SwfEditTextLayout {
+  std::uint8_t align{0};
+  std::uint16_t left_margin{0};
+  std::uint16_t right_margin{0};
+  std::uint16_t indent{0};
+  std::int16_t leading{0};
+};
+
 struct SwfEditText {
   std::uint16_t character_id{0};
   SwfRect bounds{};
@@ -384,6 +392,8 @@ struct SwfEditText {
   std::optional<std::uint16_t> font_height_twips;
   std::optional<std::uint32_t> color;
   std::optional<std::uint16_t> max_length;
+  /* Invariant: present exactly when flags2 carries the layout bit; the leading is signed 1/20 px. */
+  std::optional<SwfEditTextLayout> layout;
   std::string variable;
   std::string text;
 };
@@ -485,9 +495,15 @@ struct SwfTagInsertion {
   SwfTag tag;
 };
 
+/* Constraint: a removal index names a tag in the plan stream and must never name the End tag. */
+struct SwfTagRemoval {
+  std::size_t tag_index{0};
+};
+
 struct SwfTagPlan {
   std::vector<SwfTagReplacement> replacements;
   std::vector<SwfTagInsertion> insertions;
+  std::vector<SwfTagRemoval> removals;
 };
 
 struct SwfTagPlanResult {

@@ -5505,3 +5505,120 @@ CI on every push so the compile evidence catches up with these changes.
 ## Duplicate class names across loaded Program movies (#807 R7)
 
 A census of the Program groups (AtomicCommand, Grognak, PipFall, RedMenace, ZetaInvaders and their sibling asset SWFs) shows 24-29 class names repeated across movies, mostly the shared scaleform.clik constants but also common hvr/Holotapes classes. Strict duplicate rejection made a Loader child movie fail as soon as it defined one of those, which would stop every program at its first asset load. src/avm2/runtime_link.cpp:Runtime::build_shells_for_file now treats a repeated fully-qualified class name as an alias: the first definition stays authoritative and the new file's class-index references resolve to it, so the second movie links, its scripts run, and both movies share one class identity the way the Scaleform app domain behaves. A unit test links the same ABC twice and asserts the class count does not grow and the class still resolves.
+## Radicle/include/fo4/swf/swf_characters.hpp:build_character_model (A6 character model, ABI 70)
+
+The character model is one pass over the top-level tags. `Radicle/src/swf/swf_characters.cpp:build_character_model`
+records one row per character id a placement can name: the kind (shape 2/22/32/83, morph 46/84, bitmap 6/20/21/35/36/90,
+text 11/33, edit text 37, font 10/48/75/91, sprite 39, button 7/34, sound 14, video 60, imported 57/71), the defining
+tag index, the drawn bounds for a shape, morph, text or edit-text definition, the pixel size a lossless bitmap carries,
+and the names the two name tables attach. The bounds come from the decoder view the tag already holds, so the model
+adds no second read of the payload: `SwfTag::shape`, `:morph_shape`, `:bitmap`, `:text`, `:edit_text` and `:font` are
+the source, and a raw definition (`DefineButton` 7/34, `DefineFont4` 91, `DefineVideoStream` 60) is named from its
+leading UI16 because that is the only field those tags carry before their format-specific body. ImportAssets pairs are
+characters too: they enter as kind imported with the source movie and the symbol name, and a placement can name them
+exactly like a local definition. `SymbolClass` names are attached first and `ExportAssets` only fills an unnamed id, so
+a class name always wins over an export name. Rows are sorted by id, and `Radicle/src/swf/swf_characters.cpp:find_character`
+is the lookup the C surface uses.
+
+Three conditions are refusals rather than guesses, and a refusal clears the model instead of returning a partial map:
+two definitions of one id, a character tag whose payload is shorter than the leading UI16 the model needs, and a
+`SymbolClass` or `ExportAssets` id that no definition or import carries. A placement id is not re-validated here: the
+display list already treats an unknown character as an omission, and the model only answers "which character is this".
+The C ABI adds `Radicle/include/fo4/c_api_swf.h:radicle_swf_character_count`, `:radicle_swf_character_at` and
+`:radicle_swf_character_by_id` on ABI 70; the model is built once per revision and cached on the handle (a refused
+model is cached with its message, so every character getter reports the same refusal), and `radicle_swf_character`
+carries the id, kind, flags, defining tag index, twip bounds, bitmap pixel size and the three name pointers. The
+regenerated `Radicle/bindings/csharp/Radicle.Interop/RadicleNative.g.cs` and `Radicle/bindings/csharp/tests/abi_layout_probe.cpp`
+carry the new struct, enum and exports; the ABI pin moved to `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsSixtySeven`.
+
+Tests: `Radicle/tests/test_swf_characters.cpp` builds one hand-authored movie carrying every kind, a duplicate-id movie,
+an unknown-name-table movie and a truncated-button movie, and pins the kinds, tag indices, bounds, bitmap sizes, sorted
+order and every refusal. `Radicle/tests/test_c_api_swf_characters.cpp` pins the three exports, the NOT_FOUND path, the
+refusal path and that a refused model leaves the other getters usable. `Radicle/tests/test_swf_real.cpp` now builds the
+model for every shipped Interface movie and records `characters` and `character_model_failures`, so a shipped movie that
+defines an id twice or names an unknown id fails the real-data suite. Nothing here was built or run locally; CI is the
+first build, and the ABI 70 layout is uncompared against a built probe until then.
+
+## Radicle/include/fo4/swf/swf_text_edit.hpp:apply_edit_text and the frame-label verbs (A4 + A5 as editing)
+
+`Radicle/src/swf/swf_tags.cpp:decode_edit_text` now stores the layout block instead of skipping it, so the
+decoded `Radicle/include/fo4/swf/swf.hpp:SwfEditText` carries every declared tag-37 field: bounds, both flag
+bytes, font id and class, height, colour, max length, align/left/right/indent/leading, variable and initial
+text. The layout is an optional `SwfEditTextLayout` that is present exactly when the flags2 layout bit is set,
+and the signed leading is kept as the 1/20-pixel value the file carries.
+
+Editing is `Radicle/include/fo4/swf/swf_text_edit.hpp:replace_edit_text`, which re-encodes the payload from
+the decoded view and hands the bytes to the tag plan through `Radicle/include/fo4/swf/swf_text_edit.hpp:apply_edit_text`.
+The re-encode is field-ordered like the decoder and reuses the original id/RECT prefix unless the bounds are
+edited, so a text edit keeps every earlier byte at its original value, a colour edit differs in exactly the four
+colour bytes, and an unset edit reproduces the payload byte for byte. New text on a field that had no initial
+text sets the HasText bit; a bounds edit picks the narrowest RECT that fits the four new coordinates and keeps
+every later field value, refusing values that do not fit the 31-bit RECT. A refusal never reaches the plan, and
+a plan refusal leaves the movie bytes untouched.
+
+Frame labels are `Radicle/include/fo4/swf/swf_text_edit.hpp:list_frame_labels` on the root timeline
+(`timeline_id` 0) or on a `DefineSprite` timeline (its character id), reported in tag order with the 0-based
+frame each label sits on. `:rename_frame_label`, `:add_frame_label` and `:remove_frame_label` go through the
+tag plan: a root edit replaces, inserts before the requested frame's `ShowFrame`, or removes the label tag; a
+sprite edit rebuilds the `DefineSprite` payload and replaces that one tag, because a child index is not a plan
+index. Splices reuse the original tag header form and shift the length field only for the edited tag. A name
+already used on the same timeline is a refusal, as is an empty name, an out-of-range label or frame, and an id
+that is not a `DefineSprite`. Removal needed one addition to `Radicle/include/fo4/swf/swf.hpp:SwfTagPlan`: a
+removal list that refuses the End tag, a duplicate index, or an index that is also replaced, and the `Crt`
+plan conversion simply leaves it empty.
+
+Tests: `Radicle/tests/test_swf_edit_text.cpp` pins the full field read, the byte-identical unset edit, the
+text prefix, the four-byte colour diff, the bounds re-encode, and the two refusals;
+`Radicle/tests/test_swf_label_edit.cpp` pins root and sprite listing, rename on both timelines, add at a frame,
+remove and re-read after `write_swf`, duplicate refusal with the bytes unchanged, and the unknown-timeline and
+unreached-frame refusals. `Radicle/tests/test_swf_real.cpp` counts `edit_text_tags` and `edit_text_layouts` over
+every shipped Interface movie and requires at least one edit-text tag. Nothing here was built or run locally;
+CI is the first compiler.
+
+## Radicle/include/fo4/swf/swf_history.hpp:SwfEditHistory (edit history at ABI 70)
+
+`Radicle/src/swf/swf_history.cpp:SwfEditHistory::apply` turns every tag-plan edit into a
+`Radicle/include/fo4/swf/swf_history.hpp:SwfEditCommand` holding the plan and the revision it produced. A
+no-op plan is not a command: apply probes the plan on a copy of the current file first and returns success
+without touching the history when the plan matches the bytes in force. A command is appended only after the
+probe accepts it, and a refused plan leaves `commands_`, the applied prefix, the revision and the file
+untouched.
+
+Undo and redo are `Radicle/src/swf/swf_history.cpp:SwfEditHistory::replay`: it always reopens the bytes the
+history was opened from and applies the first N commands again, never the edited file, so an undo of a
+sequence equals the same sequence applied forward. `replay` builds the new file in a local and commits it
+only on success, so a replay refusal leaves the previous state live; the revision advances once per
+successful apply, undo or redo. Applying after an undo truncates the redo tail, `undo_count` and
+`redo_count` report the two sides, and `write_bytes` serializes the live file.
+
+The C surface adds an opaque `Radicle/include/fo4/c_api_swf.h:radicle_swf_history` and the verbs
+`:radicle_swf_history_create` (from a movie handle, starting at the bytes that handle serializes),
+`:radicle_swf_history_apply`, `:radicle_swf_history_undo`, `:radicle_swf_history_redo`,
+`:radicle_swf_history_revision`, `:radicle_swf_history_undo_count`, `:radicle_swf_history_redo_count`,
+`:radicle_swf_history_write_bytes` and `:radicle_swf_history_destroy`. Plan indices keep the
+`radicle_swf_tag_at` flat-index contract: `Radicle/src/c_api_swf_history.cpp:translate` maps a flat index to
+the top-level position the native plan stores and refuses a child index, exactly like `radicle_swf_apply_plan`.
+The verbs were added at ABI 70 inside this round before it was ever pushed, so there is still one bump for the
+round. The PET branch numbered this surface 67, but 67 to 69 on this lineage are the ABC write side, the runtime
+and the AVM2 compatibility classes, so the merge moved it to 70 (`Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION`).
+The managed interop was regenerated (3,775 lines) and the layout probe is unchanged because the
+history handle is opaque.
+
+Tests: `Radicle/tests/test_swf_history.cpp` pins command counting, the byte-identified undo/redo sequence, the
+forward-vs-undo equality, a refused edit leaving revision/counts/bytes unchanged, the redo-tail truncation,
+and a history that never opened. `Radicle/tests/test_c_api_swf_history.cpp` pins the same through the C
+handle, the revision counter, the flat-index refusal and the missing-argument paths. Nothing here was built
+or run locally; CI is the first compiler.
+
+## Radicle/bindings/csharp/Radicle.Interop/SwfEditing.cs:SwfFile.ApplyPlan (PET editor read/edit surface)
+
+The managed `SwfFile` partial grows the edit-side surface over ABI 70: `Characters()` reads the character
+model (kind, id, defining tag, bounds or bitmap size, name/import), `OpenFrames()` reads timelines and the
+per-frame display list with depth, character, name and transforms, `OpenHistory()` returns the replay
+history with apply/undo/redo, counts, revision and write-bytes, and `ApplyPlan`/`WriteBytes` expose the
+raw tag plan and the current bytes. Each wrapper owns one native handle through a `SafeHandle` and every
+non-Ok status becomes a `RadicleException` carrying the Radicle message, so a refusal reaches the caller
+verbatim. Tests in `Radicle/bindings/csharp/Radicle.Interop.Tests/SwfEditingTests.cs` use hand-built
+movie bytes from `SwfFixtures.Movie()` and pin characters, labels, the frame-0 display list, the
+plan/history undo-redo round trip, and the refusal message. Nothing was built or run locally; CI is the
+first compiler.
