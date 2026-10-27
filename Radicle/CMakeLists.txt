@@ -336,6 +336,7 @@ add_library(fo4
   src/avm2/amf.cpp
   src/avm2/replay.cpp
   src/avm2/native_shared.cpp
+  src/avm2/native_bgs.cpp
   src/avm2/native_compat.cpp
   src/avm2/sound_decode.cpp
   src/avm2/events.cpp
@@ -826,6 +827,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_avm2_swf_runtime.cpp
     tests/test_avm2_snapshot.cpp
     tests/test_avm2_host.cpp
+    tests/test_avm2_bgs_bridge.cpp
     tests/test_avm2_domain.cpp
     tests/test_avm2_script.cpp
     tests/test_avm2_shared.cpp
