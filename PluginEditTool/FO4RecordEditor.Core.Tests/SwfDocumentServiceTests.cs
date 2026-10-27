@@ -9,7 +9,7 @@ namespace FO4RecordEditor.Core.Tests;
 
 public class SwfDocumentServiceTests
 {
-    [Fact]
+    [NativeFact]
     public void OpensAMovieAndExposesCharactersLabelsAndTheFirstFrame()
     {
         using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
@@ -23,7 +23,7 @@ public class SwfDocumentServiceTests
         Assert.False(document.Dirty);
     }
 
-    [Fact]
+    [NativeFact]
     public void OpensThroughTheHostAssetResolver()
     {
         var requested = "";
@@ -36,7 +36,7 @@ public class SwfDocumentServiceTests
         Assert.Equal(2, document.Characters().Count);
         Assert.Equal(new[] { "start", "inner" }, document.FrameLabels().Select(label => label.Name));
     }
-    [Fact]
+    [NativeFact]
     public void AnEditIsAHistoryCommandAndUndoRedoFollowIt()
     {
         using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
@@ -53,7 +53,7 @@ public class SwfDocumentServiceTests
         Assert.Equal(1, document.UndoCount);
     }
 
-    [Fact]
+    [NativeFact]
     public void SavingBacksUpThePreviousBytesBeforeWritingTheEdit()
     {
         var original = SwfFixture.Movie();
@@ -73,7 +73,7 @@ public class SwfDocumentServiceTests
         Assert.NotEqual(original, File.ReadAllBytes(path));
     }
 
-    [Fact]
+    [NativeFact]
     public void EditsEditTextThroughTheSameHistory()
     {
         using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
@@ -87,7 +87,7 @@ public class SwfDocumentServiceTests
         Assert.Equal(string.Empty, document.EditText(0).Text);
         Assert.Null(document.EditText(0).Color);
     }
-    [Fact]
+    [NativeFact]
     public void AddsAFrameLabelThroughAnInsertionPlan()
     {
         using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
@@ -98,7 +98,7 @@ public class SwfDocumentServiceTests
         Assert.DoesNotContain(document.FrameLabels(), label => label.Name == "menu");
     }
 
-    [Fact]
+    [NativeFact]
     public void RemovesAFrameLabelAndUndoRestoresIt()
     {
         using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
@@ -109,7 +109,7 @@ public class SwfDocumentServiceTests
         document.Undo();
         Assert.Contains(document.FrameLabels(), item => item.Name == "start");
     }
-    [Fact]
+    [NativeFact]
     public void AddsALabelOnASpriteTimeline()
     {
         using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
@@ -119,7 +119,7 @@ public class SwfDocumentServiceTests
         document.Undo();
         Assert.DoesNotContain(document.FrameLabels(), label => label.Name == "spriteMenu");
     }
-    [Fact]
+    [NativeFact]
     public void RefusesADuplicateLabelBeforeTouchingTheHistory()
     {
         using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
@@ -127,7 +127,7 @@ public class SwfDocumentServiceTests
         Assert.Contains("already exists", error.Message);
         Assert.Equal(0ul, document.Revision);
     }
-    [Fact]
+    [NativeFact]
     public void InsertsAPlacementKeyframeAndUndoesIt()
     {
         using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
@@ -145,7 +145,7 @@ public class SwfDocumentServiceTests
         Assert.Equal(before, document.Movie.Tags.Count(tag => tag.Code == 26));
     }
 
-    [Fact]
+    [NativeFact]
     public void InsertsASpriteKeyframeIntoTheSpritePayload()
     {
         using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
@@ -158,7 +158,7 @@ public class SwfDocumentServiceTests
         document.Undo();
         Assert.Equal(before, document.Movie.Tags.Count(tag => tag.Parent == sprite.Index && tag.Code == 26));
     }
-    [Fact]
+    [NativeFact]
     public void RefusesAKeyframeOnANonPlacementTag()
     {
         using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
@@ -166,7 +166,7 @@ public class SwfDocumentServiceTests
         Assert.Throws<InvalidOperationException>(() => document.InsertKeyframe(label.Index, 0));
         Assert.Equal(0ul, document.Revision);
     }
-    [Fact]
+    [NativeFact]
     public void ARefusalLeavesTheHistoryUntouchedAndCarriesTheMessage()
     {
         using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
@@ -178,7 +178,7 @@ public class SwfDocumentServiceTests
         Assert.False(document.Dirty);
     }
 
-    [Fact]
+    [NativeFact]
     public void AnEditTextEditedTwiceKeepsBothEdits()
     {
         using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
@@ -190,7 +190,7 @@ public class SwfDocumentServiceTests
         Assert.Equal("variable", text.Variable);
     }
 
-    [Fact]
+    [NativeFact]
     public void SetPlacementTransformIsUndoable()
     {
         using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
@@ -206,7 +206,7 @@ public class SwfDocumentServiceTests
         Assert.False(document.Dirty);
     }
 
-    [Fact]
+    [NativeFact]
     public void RenameLabelChangesTheNameThroughTheHistory()
     {
         using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
@@ -218,7 +218,7 @@ public class SwfDocumentServiceTests
         Assert.Contains(document.FrameLabels(), item => item.Name == "start");
     }
 
-    [Fact]
+    [NativeFact]
     public void RenameLabelRefusesANonLabelTag()
     {
         using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
@@ -228,7 +228,7 @@ public class SwfDocumentServiceTests
         Assert.Equal(0ul, document.Revision);
     }
 
-    [Fact]
+    [NativeFact]
     public void SavingAResolvedAssetWithoutATargetRefuses()
     {
         using var document = SwfDocument.OpenResolved("Interface\\Test.swf", _ => SwfFixture.Movie());
@@ -236,7 +236,7 @@ public class SwfDocumentServiceTests
         Assert.Contains("read-only", error.Message);
     }
 
-    [Fact]
+    [NativeFact]
     public void ASecondSaveKeepsTheFirstBackup()
     {
         var original = SwfFixture.Movie();
