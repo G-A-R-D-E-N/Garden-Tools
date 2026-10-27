@@ -1,6 +1,14 @@
 #include "fo4/c_api.h"
 #include "fo4/c_api_env.h"
 #include "fo4/c_api_runtime.h"
+#include "fo4/avm2/host.hpp"
+#include "fo4/avm2/interpreter.hpp"
+#include "fo4/avm2/replay.hpp"
+#include "fo4/avm2/runtime.hpp"
+#include "fo4/avm2/swf_runtime.hpp"
+#include "fo4/avm2/value.hpp"
+#include "fo4/swf/swf.hpp"
+#include "fake_bgs_host.hpp"
 #include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
@@ -8,12 +16,17 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <exception>
 #include <filesystem>
 #include <iostream>
 #include <map>
 #include <memory>
+#include <optional>
+#include <set>
+#include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -41,18 +54,21 @@ struct ResolverHost {
   std::size_t missed{0};
 };
 
+std::vector<std::string> candidate_paths(const ResolverHost& host, std::string_view path) {
+  std::vector<std::string> candidates;
+  candidates.emplace_back(path);
+  candidates.emplace_back(host.movie_directory + std::string{path});
+  const std::size_t slash = path.find_last_of("\\/");
+  if (slash != std::string_view::npos) candidates.emplace_back(std::string{path.substr(slash + 1)});
+  return candidates;
+}
+
 radicle_status resolve_asset(void* user, const char* path, uint8_t** out_bytes, size_t* out_size) {
   auto* host = static_cast<ResolverHost*>(user);
   if (path == nullptr || out_bytes == nullptr || out_size == nullptr || host->archive == nullptr) {
     return RADICLE_STATUS_INVALID_ARGUMENT;
   }
-  std::vector<std::string> candidates;
-  candidates.emplace_back(path);
-  candidates.emplace_back(host->movie_directory + path);
-  const std::string_view raw{path};
-  const std::size_t slash = raw.find_last_of("\\/");
-  if (slash != std::string_view::npos) candidates.emplace_back(std::string{raw.substr(slash + 1)});
-  for (const std::string& candidate : candidates) {
+  for (const std::string& candidate : candidate_paths(*host, path)) {
     std::size_t index = 0;
     if (radicle_ba2_find(host->archive, candidate.c_str(), &index) != RADICLE_STATUS_OK) continue;
     if (radicle_ba2_extract(host->archive, index, out_bytes, out_size) != RADICLE_STATUS_OK) continue;
@@ -61,6 +77,25 @@ radicle_status resolve_asset(void* user, const char* path, uint8_t** out_bytes, 
   }
   ++host->missed;
   return RADICLE_STATUS_NOT_FOUND;
+}
+
+std::optional<std::vector<std::uint8_t>> resolve_bytes(ResolverHost& host, std::string_view path) {
+  for (const std::string& candidate : candidate_paths(host, path)) {
+    std::size_t index = 0;
+    if (radicle_ba2_find(host.archive, candidate.c_str(), &index) != RADICLE_STATUS_OK) continue;
+    std::uint8_t* bytes = nullptr;
+    size_t size = 0;
+    if (radicle_ba2_extract(host.archive, index, &bytes, &size) != RADICLE_STATUS_OK) {
+      if (bytes != nullptr) radicle_free_bytes(bytes);
+      continue;
+    }
+    std::vector<std::uint8_t> copy(bytes, bytes + size);
+    radicle_free_bytes(bytes);
+    ++host.resolved;
+    return copy;
+  }
+  ++host.missed;
+  return std::nullopt;
 }
 
 std::string directory_of(std::string_view path) {
@@ -188,20 +223,25 @@ std::string basename_of(std::string_view path) {
   return slash == std::string_view::npos ? std::string{path} : std::string{path.substr(slash + 1)};
 }
 
-std::uint64_t hash_sequence(const std::vector<std::uint64_t>& values) {
-  std::uint64_t hash = 1469598103934665603ULL;
-  for (const std::uint64_t value : values) {
-    hash ^= value;
-    hash *= 1099511628211ULL;
-  }
-  return hash;
-}
+struct PinnedProgram {
+  const char* program;
+  std::uint64_t snapshot_hash;
+  std::uint64_t host_log_hash;
+};
 
-std::vector<std::uint64_t> program_replay_hashes(radicle_movie& movie) {
-  std::vector<radicle_runtime_input> inputs;
-  const auto add = [&inputs](double time_ms, std::uint8_t kind, double x, double y,
+constexpr PinnedProgram kPinned[] = {
+    {"AtomicCommand.swf", 0, 0}, {"GJ_Defrag.swf", 0, 0},     {"Grognak.swf", 0, 0},
+    {"PipFall.swf", 0, 0},       {"RedMenace.swf", 0, 0},     {"TurretHack.swf", 0, 0},
+    {"ZetaInvaders.swf", 0, 0},
+};
+
+constexpr std::size_t kProgramFrames = 180;
+
+std::vector<fo4::avm2::ReplayInput> program_inputs() {
+  std::vector<fo4::avm2::ReplayInput> inputs;
+  const auto add = [&inputs](double time_ms, fo4::avm2::ReplayInputKind kind, double x, double y,
                              std::uint32_t key) {
-    radicle_runtime_input input{};
+    fo4::avm2::ReplayInput input;
     input.time_ms = time_ms;
     input.kind = kind;
     input.x = x;
@@ -209,26 +249,129 @@ std::vector<std::uint64_t> program_replay_hashes(radicle_movie& movie) {
     input.key_code = key;
     inputs.push_back(input);
   };
+  using Kind = fo4::avm2::ReplayInputKind;
   for (int frame = 0; frame < 40; ++frame) {
-    add(static_cast<double>(frame) * 41.6667, RADICLE_INPUT_MOUSE_MOVE, 300.0 + frame * 4.0,
+    add(static_cast<double>(frame) * 41.6667, Kind::MouseMove, 300.0 + frame * 4.0,
         200.0 + frame * 2.0, 0);
   }
-  add(600.0, RADICLE_INPUT_MOUSE_DOWN, 460.0, 280.0, 0);
-  add(650.0, RADICLE_INPUT_MOUSE_UP, 460.0, 280.0, 0);
-  add(900.0, RADICLE_INPUT_KEY_DOWN, 0.0, 0.0, 13);
-  add(950.0, RADICLE_INPUT_KEY_UP, 0.0, 0.0, 13);
-  add(1200.0, RADICLE_INPUT_KEY_DOWN, 0.0, 0.0, 32);
-  add(1250.0, RADICLE_INPUT_KEY_UP, 0.0, 0.0, 32);
-  add(2400.0, RADICLE_INPUT_MOUSE_DOWN, 500.0, 300.0, 0);
-  add(2450.0, RADICLE_INPUT_MOUSE_UP, 500.0, 300.0, 0);
-  std::vector<std::uint64_t> hashes(180, 0);
-  size_t count = 0;
-  EXPECT_EQ(radicle_movie_replay(&movie, inputs.data(), inputs.size(), 1.0 / 24.0, 180,
-                                 hashes.data(), hashes.size(), &count),
-            RADICLE_STATUS_OK)
-      << radicle_last_error();
-  EXPECT_EQ(count, 180u);
-  return hashes;
+  add(600.0, Kind::MouseDown, 460.0, 280.0, 0);
+  add(650.0, Kind::MouseUp, 460.0, 280.0, 0);
+  add(900.0, Kind::KeyDown, 0.0, 0.0, 13);
+  add(950.0, Kind::KeyUp, 0.0, 0.0, 13);
+  add(1200.0, Kind::KeyDown, 0.0, 0.0, 32);
+  add(1250.0, Kind::KeyUp, 0.0, 0.0, 32);
+  add(2400.0, Kind::MouseDown, 500.0, 300.0, 0);
+  add(2450.0, Kind::MouseUp, 500.0, 300.0, 0);
+  return inputs;
+}
+
+struct ProgramRun {
+  std::string failure;
+  std::vector<std::uint64_t> hashes;
+  std::uint64_t host_log{0};
+  std::size_t bgs_calls{0};
+  std::size_t asset_misses{0};
+
+  bool ok() const noexcept { return failure.empty(); }
+};
+
+void drive_movie(fo4::avm2::SwfRuntime& movie, fo4::avm2::Interpreter& interpreter,
+                 const std::vector<fo4::avm2::ReplayInput>& inputs, bool init, ProgramRun& run) {
+  const auto call = [&](std::string_view name, const std::vector<fo4::avm2::Value>& arguments) {
+    const fo4::avm2::ExecutionResult result = movie.call_root(interpreter, name, arguments);
+    if (!result.ok()) run.failure = std::string{name} + " failed: " + result.message;
+    return result.ok();
+  };
+  const std::vector<fo4::avm2::Value> platform{fo4::avm2::Value::number(0.0),
+                                               fo4::avm2::Value::boolean(false)};
+  if (init && (!call("SetPlatform", platform) || !call("InitProgram", {}))) return;
+  const fo4::avm2::ReplayResult replayed =
+      fo4::avm2::replay(movie, interpreter, inputs, 1.0 / 24.0, kProgramFrames);
+  if (replayed.frames != kProgramFrames) {
+    run.failure = "the replay stopped after " + std::to_string(replayed.frames) + " frames";
+    return;
+  }
+  run.hashes = replayed.frame_hashes;
+  if (!init) return;
+  if (!movie.playing()) {
+    run.failure = "a frame script failed and the movie stopped";
+    return;
+  }
+  const std::set<std::uint64_t> distinct(replayed.frame_hashes.begin(),
+                                         replayed.frame_hashes.end());
+  if (distinct.size() <= 1) {
+    run.failure = "state never changed: the frame hashes have " + std::to_string(distinct.size()) +
+                  " distinct value";
+    return;
+  }
+}
+
+ProgramRun run_program_body(const radicle_ba2* archive, const std::string& movie_path,
+                            const std::vector<fo4::avm2::ReplayInput>& inputs, bool init) {
+  ProgramRun run;
+  ResolverHost resolver{archive, directory_of(movie_path)};
+  const std::optional<std::vector<std::uint8_t>> movie_bytes = resolve_bytes(resolver, movie_path);
+  if (!movie_bytes) {
+    run.failure = "the archive entry could not be extracted";
+    return run;
+  }
+  const fo4::swf::SwfReadResult read = fo4::swf::read_swf(std::span<const std::byte>(
+      reinterpret_cast<const std::byte*>(movie_bytes->data()), movie_bytes->size()));
+  if (!read.ok()) {
+    run.failure = "the movie does not parse: " + std::string{fo4::swf::status_name(read.status)};
+    return run;
+  }
+  fake_bgs::FakeBgsHost host;
+  fo4::avm2::Runtime runtime;
+  fo4::avm2::Interpreter interpreter{runtime};
+  fo4::avm2::HostCallbacks callbacks;
+  callbacks.resolve_asset = [&resolver](std::string_view path) {
+    return resolve_bytes(resolver, path);
+  };
+  callbacks.host_call = [&host](std::string_view method, std::vector<std::string> arguments) {
+    return host.host_call(method, std::move(arguments));
+  };
+  runtime.host().set_callbacks(std::move(callbacks));
+  const fo4::avm2::RuntimeLoad linked = runtime.link();
+  if (!linked.ok()) {
+    run.failure = "the runtime did not link: " + linked.message;
+    return run;
+  }
+  fo4::avm2::SwfRuntimeOptions options;
+  options.bgs_host = true;
+  const std::shared_ptr<fo4::avm2::SwfRuntime> movie =
+      fo4::avm2::SwfRuntime::create(runtime, interpreter, read.file, options);
+  if (movie == nullptr) {
+    run.failure = "the movie could not be created: " + fo4::avm2::SwfRuntime::last_error();
+    return run;
+  }
+  drive_movie(*movie, interpreter, inputs, init, run);
+  movie->release_fonts();
+  run.host_log = host.log_hash();
+  for (const fake_bgs::Call& call : host.calls()) {
+    if (call.method.rfind("bgs.", 0) == 0) ++run.bgs_calls;
+  }
+  run.asset_misses = resolver.missed;
+  return run;
+}
+
+ProgramRun run_program(const radicle_ba2* archive, const std::string& movie_path,
+                       const std::vector<fo4::avm2::ReplayInput>& inputs, bool init) {
+  try {
+    return run_program_body(archive, movie_path, inputs, init);
+  } catch (const std::exception& error) {
+    ProgramRun run;
+    run.failure = std::string{"exception: "} + error.what();
+    return run;
+  }
+}
+
+void check_pins(const char* program, const ProgramRun& run) {
+  for (const PinnedProgram& pin : kPinned) {
+    if (std::string_view{pin.program} != program) continue;
+    if (pin.snapshot_hash != 0) EXPECT_EQ(run.hashes.back(), pin.snapshot_hash) << program;
+    if (pin.host_log_hash != 0) EXPECT_EQ(run.host_log, pin.host_log_hash) << program;
+  }
 }
 
 }  // namespace
@@ -264,62 +407,75 @@ TEST(CApiRuntimeReal, ReplaysTheSevenProgramsDeterministically) {
     by_basename.emplace(lower_ascii(basename_of(path)), std::string{path});
   }
 
-  const char* programs[] = {"AtomicCommand.swf", "GJ_Defrag.swf",    "Grognak.swf",
-                            "PipFall.swf",       "RedMenace.swf",    "TurretHack.swf",
-                            "ZetaInvaders.swf"};
+  const std::pair<const char*, bool> programs[] = {
+      {"AtomicCommand.swf", true}, {"GJ_Defrag.swf", false}, {"Grognak.swf", true},
+      {"PipFall.swf", true},       {"RedMenace.swf", true},  {"TurretHack.swf", false},
+      {"ZetaInvaders.swf", true}};
+  const std::vector<fo4::avm2::ReplayInput> inputs = program_inputs();
   std::size_t ran = 0;
   std::size_t mismatches = 0;
-  for (const char* program : programs) {
+  std::string failed;
+  for (const auto& [program, expects_bgs] : programs) {
     const std::string key = lower_ascii(program);
     const std::string property_name = "program_" + std::string{program};
     const auto found = by_basename.find(key);
     if (found == by_basename.end()) {
-      std::cerr << "[seven-programs] " << program << ": missing from Fallout4 - Interface.ba2"
+      std::cerr << "[r8-programs] " << program << ": missing from Fallout4 - Interface.ba2"
                 << std::endl;
+      failed += std::string{program} + ": missing from the archive\n";
       RecordProperty(property_name.c_str(), "missing");
       continue;
     }
     const std::string& movie_path = found->second;
-    const auto open_and_replay = [&](std::vector<std::uint64_t>& hashes) {
-      ResolverHost resolver{archive.get(), directory_of(movie_path)};
-      radicle_runtime_host callbacks{};
-      callbacks.user = &resolver;
-      callbacks.resolve_asset = resolve_asset;
-      radicle_runtime* raw_runtime = nullptr;
-      if (radicle_runtime_open(&callbacks, &raw_runtime) != RADICLE_STATUS_OK) return false;
-      RuntimeHandle runtime(raw_runtime);
-      radicle_movie* raw_movie = nullptr;
-      if (radicle_runtime_open_movie_from_ba2(runtime.get(), archive.get(), movie_path.c_str(),
-                                              &raw_movie) != RADICLE_STATUS_OK) {
-        return false;
-      }
-      MovieHandle movie(raw_movie);
-      hashes = program_replay_hashes(*movie);
-      return true;
-    };
-    std::vector<std::uint64_t> first;
-    if (!open_and_replay(first)) {
-      std::cerr << "[seven-programs] " << program << " (" << movie_path
-                << ") skipped on the first run: " << radicle_last_error() << std::endl;
-      RecordProperty(property_name.c_str(), (std::string{"skipped: "} + radicle_last_error()).c_str());
+    ProgramRun first = run_program(archive.get(), movie_path, inputs, true);
+    if (first.ok() && expects_bgs && first.bgs_calls == 0) {
+      first.failure = "no bgs call reached the host";
+    }
+    if (!first.ok()) {
+      std::cerr << "[r8-programs] " << program << " (" << movie_path
+                << ") failed on the first run: " << first.failure << std::endl;
+      failed += std::string{program} + ": " + first.failure + "\n";
+      RecordProperty(property_name.c_str(), ("failed: " + first.failure).c_str());
       continue;
     }
-    std::vector<std::uint64_t> second;
-    if (!open_and_replay(second)) {
-      std::cerr << "[seven-programs] " << program << " (" << movie_path
-                << ") failed on the second run: " << radicle_last_error() << std::endl;
+    const ProgramRun second = run_program(archive.get(), movie_path, inputs, true);
+    if (!second.ok()) {
+      std::cerr << "[r8-programs] " << program << " (" << movie_path
+                << ") failed on the second run: " << second.failure << std::endl;
+      failed += std::string{program} + " (second run): " + second.failure + "\n";
       RecordProperty(property_name.c_str(), "replay failed on the second run");
       ++mismatches;
       continue;
     }
-    RecordProperty(property_name.c_str(), ("ran hash=" + std::to_string(hash_sequence(first))).c_str());
     ++ran;
-    EXPECT_EQ(first, second) << program << " replay is not deterministic";
-    if (first != second) ++mismatches;
+    std::cerr << "R8_HASH " << program << ' ' << first.hashes.back() << ' ' << first.host_log
+              << ' ' << first.bgs_calls << std::endl;
+    EXPECT_EQ(first.hashes, second.hashes) << program << " replay is not deterministic";
+    EXPECT_EQ(first.host_log, second.host_log) << program << " host call log is not deterministic";
+    if (first.hashes != second.hashes || first.host_log != second.host_log) {
+      failed += std::string{program} + ": replay or host log is not deterministic\n";
+      ++mismatches;
+    }
+    check_pins(program, first);
+    RecordProperty(property_name.c_str(),
+                   "ran snapshot=" + std::to_string(first.hashes.back()) +
+                       " hostlog=" + std::to_string(first.host_log) +
+                       " bgs_calls=" + std::to_string(first.bgs_calls) +
+                       " asset_misses=" + std::to_string(first.asset_misses));
   }
+
+  for (const char* control_name : {"atomiccommand.swf", "pipfall.swf"}) {
+    const auto control = by_basename.find(control_name);
+    EXPECT_TRUE(control != by_basename.end()) << control_name << " is needed for the control";
+    if (control == by_basename.end()) continue;
+    const ProgramRun base = run_program(archive.get(), control->second, inputs, true);
+    ASSERT_TRUE(base.ok()) << control_name << ": " << base.failure;
+    const ProgramRun altered = run_program(archive.get(), control->second, inputs, false);
+    EXPECT_NE(altered.hashes, base.hashes) << control_name << ": the frame hashes ignore the scripts";
+    EXPECT_NE(altered.host_log, base.host_log) << control_name << ": the host log ignores the init";
+  }
+
   RecordProperty("ran", std::to_string(ran));
-  EXPECT_EQ(mismatches, 0u);
-  if (ran == 0) {
-    GTEST_SKIP() << "no Program movie could be opened yet; see the program_* properties";
-  }
+  EXPECT_EQ(mismatches, 0u) << failed;
+  EXPECT_EQ(ran, 7u) << failed;
 }
