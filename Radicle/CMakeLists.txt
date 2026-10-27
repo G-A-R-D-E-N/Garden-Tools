@@ -310,6 +310,7 @@ add_library(fo4
   src/avm2/class.cpp
   src/avm2/runtime.cpp
   src/avm2/runtime_link.cpp
+  src/avm2/domain.cpp
   src/avm2/interpreter.cpp
   src/avm2/interpreter_ops.cpp
   src/avm2/interpreter_property.cpp
@@ -815,6 +816,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_avm2_swf_runtime.cpp
     tests/test_avm2_snapshot.cpp
     tests/test_avm2_host.cpp
+    tests/test_avm2_domain.cpp
     tests/test_avm2_script.cpp
     tests/test_avm2_shared.cpp
     tests/test_c_api_runtime.cpp

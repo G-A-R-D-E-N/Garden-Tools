@@ -499,13 +499,14 @@ RuntimeStatus Runtime::install_builtins() {
   Class* url_loader_class = add_builtin_class("URLLoader", "flash.net", event_dispatcher);
   Class* loader_class = add_builtin_class("Loader", "flash.display", display_container);
   Class* application_domain = add_builtin_class("ApplicationDomain", "flash.system", object_class);
+  Class* loader_context_class = add_builtin_class("LoaderContext", "flash.system", object_class);
   Class* sound_class = add_builtin_class("Sound", "flash.media", event_dispatcher);
   Class* sound_channel_class = add_builtin_class("SoundChannel", "flash.media", event_dispatcher);
   Class* sound_transform_class = add_builtin_class("SoundTransform", "flash.media", object_class);
   if (external_interface == nullptr || url_request_class == nullptr ||
       url_loader_class == nullptr || loader_class == nullptr || application_domain == nullptr ||
       sound_class == nullptr || sound_channel_class == nullptr ||
-      sound_transform_class == nullptr) {
+      sound_transform_class == nullptr || loader_context_class == nullptr) {
     return RuntimeStatus::InvalidTrait;
   }
   add_method(*external_interface, "call", native::Id::ext_call, true);
@@ -516,9 +517,10 @@ RuntimeStatus Runtime::install_builtins() {
   add_method(*url_loader_class, "load", native::Id::url_loader_load, false);
   loader_class->native_constructor = static_cast<std::uint32_t>(native::Id::display_construct);
   add_method(*loader_class, "load", native::Id::loader_load, false);
-  application_domain->native_constructor =
-      static_cast<std::uint32_t>(native::Id::instance_construct);
+  application_domain->native_constructor = static_cast<std::uint32_t>(native::Id::app_domain_construct);
   add_method(*application_domain, "getDefinition", native::Id::app_domain_get_definition, false);
+  add_method(*application_domain, "hasDefinition", native::Id::app_domain_has_definition, false);
+  loader_context_class->native_constructor = static_cast<std::uint32_t>(native::Id::instance_construct);
   add_static_getter(*application_domain, "currentDomain", native::Id::app_domain_current);
   sound_class->native_constructor = static_cast<std::uint32_t>(native::Id::sound_construct);
   add_method(*sound_class, "load", native::Id::sound_load, false);

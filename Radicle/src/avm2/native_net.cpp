@@ -109,10 +109,52 @@ ExecutionResult instance_construct(Interpreter& interpreter, const Value& self) 
   return native_value(Value::object(interpreter.make_instance(*klass)));
 }
 
+ApplicationDomainObject* domain_self(const Value& self) {
+  if (!self.is_object() ||
+      !is_instance_of_class(*self.as_object(), "flash.system::ApplicationDomain")) {
+    return nullptr;
+  }
+  return dynamic_cast<ApplicationDomainObject*>(self.as_object().get());
+}
+
+Value dynamic_value(const Object& object, std::string_view name) {
+  Multiname multiname;
+  multiname.name = std::string{name};
+  multiname.namespaces.push_back(Namespace{});
+  Value value;
+  if (!object.read_value(multiname, value)) {
+    return Value::undefined();
+  }
+  return value;
+}
+
+std::shared_ptr<ApplicationDomainObject> context_domain(const Value& context) {
+  const std::shared_ptr<Object> object = value_object(context);
+  if (object == nullptr) {
+    return nullptr;
+  }
+  return std::dynamic_pointer_cast<ApplicationDomainObject>(
+      value_object(dynamic_value(*object, "applicationDomain")));
+}
+
+ExecutionResult app_domain_construct(Interpreter& interpreter, const Value& self,
+                                     const std::vector<Value>& arguments) {
+  Class* klass = class_from_self(self);
+  if (klass == nullptr) {
+    return native_value(Value::null());
+  }
+  std::shared_ptr<ApplicationDomainObject> parent =
+      std::dynamic_pointer_cast<ApplicationDomainObject>(value_object(argument_at(arguments, 0)));
+  if (parent == nullptr) {
+    parent = interpreter.runtime().current_domain();
+  }
+  return native_value(
+      Value::object(std::make_shared<ApplicationDomainObject>(klass, std::move(parent))));
+}
+
 ExecutionResult ext_available(Interpreter& interpreter, const Value& self) {
-  (void)interpreter;
   (void)self;
-  return native_value(Value::boolean(interpreter.runtime().host().callbacks().host_call != nullptr));
+  return native_value(Value::boolean(interpreter.runtime().host().available()));
 }
 
 ExecutionResult ext_call(Interpreter& interpreter, const Value& self,
@@ -128,9 +170,13 @@ ExecutionResult ext_call(Interpreter& interpreter, const Value& self,
   return native_value(answer.has_value() ? Value::string(*answer) : Value::null());
 }
 
-ExecutionResult ext_add_callback(const Value& self, const std::vector<Value>& arguments) {
+ExecutionResult ext_add_callback(Interpreter& interpreter, const Value& self,
+                                 const std::vector<Value>& arguments) {
   (void)self;
-  (void)arguments;
+  const std::shared_ptr<Object> function = value_object(argument_at(arguments, 1));
+  if (function != nullptr && function->is_callable()) {
+    interpreter.runtime().set_external_callback(to_string(argument_at(arguments, 0)), function);
+  }
   return native_value(Value::undefined());
 }
 
@@ -168,17 +214,33 @@ ExecutionResult qualified_class_name(const Value& value, bool superclass) {
 }
 
 ExecutionResult app_domain_current(Interpreter& interpreter, const Value& self) {
-  Class* klass = class_from_self(self);
-  if (klass == nullptr) {
-    return native_value(Value::null());
-  }
-  return native_value(Value::object(interpreter.make_instance(*klass)));
+  (void)self;
+  return native_value(Value::object(interpreter.runtime().current_domain()));
 }
 
 ExecutionResult app_domain_get_definition(Interpreter& interpreter, const Value& self,
                                           const std::vector<Value>& arguments) {
-  (void)self;
-  return definition_by_name(interpreter, Value::undefined(), arguments);
+  const ApplicationDomainObject* domain = domain_self(self);
+  if (domain == nullptr) {
+    return native_value(Value::null());
+  }
+  const std::string name = to_string(argument_at(arguments, 0));
+  const Class* klass = interpreter.runtime().find_domain_definition(*domain, name);
+  if (klass == nullptr) {
+    return native_value(Value::null());
+  }
+  return native_value(Value::object(klass->class_object));
+}
+
+ExecutionResult app_domain_has_definition(Interpreter& interpreter, const Value& self,
+                                          const std::vector<Value>& arguments) {
+  const ApplicationDomainObject* domain = domain_self(self);
+  if (domain == nullptr) {
+    return native_value(Value::boolean(false));
+  }
+  const std::string name = to_string(argument_at(arguments, 0));
+  return native_value(
+      Value::boolean(interpreter.runtime().find_domain_definition(*domain, name) != nullptr));
 }
 
 std::string request_url(const Value& request) {
@@ -221,7 +283,9 @@ ExecutionResult loader_load(Interpreter& interpreter, const Value& self,
     return native_value(Value::undefined());
   }
   loader->movie = std::make_shared<fo4::swf::SwfFile>(read.file);
-  loader->child_runtime = SwfRuntime::create(interpreter.runtime(), interpreter, *loader->movie);
+  const std::shared_ptr<ApplicationDomainObject> domain = context_domain(argument_at(arguments, 1));
+  loader->child_runtime =
+      SwfRuntime::create(interpreter.runtime(), interpreter, *loader->movie, {}, domain);
   const std::shared_ptr<SwfRuntime>& child = loader->child_runtime;
   if (child == nullptr) {
     dispatch_type(interpreter, self, "ioError", depth);
@@ -359,7 +423,13 @@ bool try_net_native(Interpreter& interpreter, native::Id id, const Value& self,
       out = ext_call(interpreter, self, arguments);
       return true;
     case native::Id::ext_add_callback:
-      out = ext_add_callback(self, arguments);
+      out = ext_add_callback(interpreter, self, arguments);
+      return true;
+    case native::Id::app_domain_construct:
+      out = app_domain_construct(interpreter, self, arguments);
+      return true;
+    case native::Id::app_domain_has_definition:
+      out = app_domain_has_definition(interpreter, self, arguments);
       return true;
     case native::Id::definition_by_name:
       out = definition_by_name(interpreter, self, arguments);

@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -10,6 +11,8 @@
 #include <vector>
 
 namespace fo4::avm2 {
+
+using HostFunction = std::function<std::optional<std::string>(std::vector<std::string> arguments)>;
 
 /* A host must supply callbacks at open time; a missing hook must report unavailable. */
 struct HostCallbacks {
@@ -45,6 +48,12 @@ class HostBridge {
   const HostStats& stats() const noexcept { return stats_; }
   HostStats& stats() noexcept { return stats_; }
 
+  /* A named host function must answer its method before the unnamed host_call hook is tried. */
+  void install_function(std::string method, HostFunction function) {
+    functions_[std::move(method)] = std::move(function);
+  }
+  bool available() const noexcept { return callbacks_.host_call != nullptr || !functions_.empty(); }
+
   std::optional<std::vector<std::uint8_t>> resolve_asset(std::string_view path);
   std::optional<std::string> call_host(std::string_view method,
                                        std::vector<std::string> arguments);
@@ -54,6 +63,7 @@ class HostBridge {
  private:
   HostCallbacks callbacks_{};
   HostStats stats_{};
+  std::map<std::string, HostFunction> functions_;
 };
 
 inline std::optional<std::vector<std::uint8_t>> HostBridge::resolve_asset(std::string_view path) {
@@ -72,11 +82,13 @@ inline std::optional<std::vector<std::uint8_t>> HostBridge::resolve_asset(std::s
 inline std::optional<std::string> HostBridge::call_host(std::string_view method,
                                                        std::vector<std::string> arguments) {
   ++stats_.host_calls;
-  if (!callbacks_.host_call) {
-    ++stats_.host_call_misses;
-    return std::nullopt;
+  std::optional<std::string> result;
+  const auto named = functions_.find(std::string{method});
+  if (named != functions_.end()) {
+    result = named->second(std::move(arguments));
+  } else if (callbacks_.host_call) {
+    result = callbacks_.host_call(method, std::move(arguments));
   }
-  std::optional<std::string> result = callbacks_.host_call(method, std::move(arguments));
   if (!result.has_value()) {
     ++stats_.host_call_misses;
   }

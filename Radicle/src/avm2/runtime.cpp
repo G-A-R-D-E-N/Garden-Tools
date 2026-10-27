@@ -236,14 +236,15 @@ void Runtime::register_movie_clip(const std::shared_ptr<MovieClip>& clip) {
   }
 }
 
-RuntimeLoad Runtime::add_file(const abc::AbcFile& file) {
+RuntimeLoad Runtime::add_file(const abc::AbcFile& file,
+                              std::shared_ptr<ApplicationDomainObject> domain) {
   RuntimeLoad result;
   if (failed_) {
     result.status = RuntimeStatus::AlreadyLinked;
     result.message = "add_file after a failed link";
     return result;
   }
-  files_.push_back(FileState{&file});
+  files_.push_back(FileState{&file, false, std::move(domain)});
   return result;
 }
 

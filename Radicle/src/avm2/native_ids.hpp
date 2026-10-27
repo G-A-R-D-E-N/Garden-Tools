@@ -198,6 +198,8 @@ enum class Id : std::uint32_t {
   event_format_to_string,
   keyboard_is_down,
   display_loader_info,
+  app_domain_construct,
+  app_domain_has_definition,
 };
 
 }  // namespace fo4::avm2::native

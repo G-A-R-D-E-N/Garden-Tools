@@ -98,7 +98,8 @@ class SwfRuntime {
   /* Requires a linked runtime; applies frame 1 of the root timeline before returning. */
   static std::shared_ptr<SwfRuntime> create(Runtime& runtime, Interpreter& interpreter,
                                             const swf::SwfFile& file,
-                                            const SwfRuntimeOptions& options = {});
+                                            const SwfRuntimeOptions& options = {},
+                                            std::shared_ptr<ApplicationDomainObject> domain = nullptr);
   /* A failed create must leave the reason available here for host diagnostics. */
   static const std::string& last_error();
 

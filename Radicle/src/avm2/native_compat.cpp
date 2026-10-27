@@ -337,14 +337,12 @@ ExecutionResult display_transform_set(Interpreter& interpreter, const Value& sel
 
 Value make_loader_info(Interpreter& interpreter) {
   Class* info_class = find_class(interpreter, "flash.display::LoaderInfo");
-  Class* domain_class = find_class(interpreter, "flash.system::ApplicationDomain");
   Class* object_class = find_class(interpreter, "Object");
-  if (info_class == nullptr || domain_class == nullptr || object_class == nullptr) {
+  if (info_class == nullptr || object_class == nullptr) {
     return Value::null();
   }
   auto info = interpreter.make_instance(*info_class);
-  set_property(*info, "applicationDomain",
-               Value::object(interpreter.make_instance(*domain_class)));
+  set_property(*info, "applicationDomain", Value::object(interpreter.runtime().current_domain()));
   set_property(*info, "parameters",
                Value::object(interpreter.make_instance(*object_class)));
   return Value::object(std::move(info));
