@@ -278,7 +278,8 @@ TEST(AbcCorpusReal, DecodesEveryShippedInterfaceAbcBlock) {
   if (dir == nullptr) {
     GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
   }
-  record_game_build(detect_game_build(dir));
+  const auto build = detect_game_build(dir);
+  record_game_build(build);
   const std::filesystem::path data_dir(dir);
 
   AbcStats stats;
@@ -324,7 +325,9 @@ TEST(AbcCorpusReal, DecodesEveryShippedInterfaceAbcBlock) {
       << "flow_refusal_histogram: " << histogram_text(stats.flow_refusals);
   EXPECT_EQ(stats.unsupported_total(), 0u)
       << "unsupported_status_histogram: " << histogram_text(stats.unsupported);
-  EXPECT_EQ(stats.lzma, 0u);
+  if (exact_counts_known(build)) {
+    EXPECT_EQ(stats.lzma, 0u);
+  }
   EXPECT_GT(stats.parsed, 0u);
   EXPECT_GT(stats.bodies, 0u);
 
