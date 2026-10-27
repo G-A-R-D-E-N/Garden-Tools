@@ -2,6 +2,7 @@
 #include <fo4/avm2/coercion.hpp>
 #include <fo4/avm2/display.hpp>
 #include <fo4/avm2/events.hpp>
+#include <fo4/avm2/hit_test.hpp>
 #include <fo4/avm2/interpreter.hpp>
 #include <fo4/avm2/name.hpp>
 #include <fo4/avm2/object.hpp>
@@ -239,6 +240,42 @@ ExecutionResult display_get_bounds(Interpreter& interpreter, const Value& self) 
                                       object->height()));
 }
 
+const DisplayObject* display_argument(const std::vector<Value>& arguments) {
+  const Value value = argument_at(arguments, 0);
+  if (!value.is_object() || value.as_object()->kind() != ObjectKind::Display) {
+    return nullptr;
+  }
+  return static_cast<const DisplayObject*>(value.as_object().get());
+}
+
+ExecutionResult display_hit_test(const Value& self, const std::vector<Value>& arguments) {
+  DisplayObject* object = display_self(self);
+  if (object == nullptr) {
+    return native_value(Value::boolean(false));
+  }
+  if (const DisplayObject* other = display_argument(arguments)) {
+    return native_value(Value::boolean(hit_test_object(*object, *other)));
+  }
+  return native_value(Value::boolean(hit_test_point(*object, to_number(argument_at(arguments, 0)),
+                                                    to_number(argument_at(arguments, 1)))));
+}
+
+ExecutionResult display_hit_test_point(const Value& self, const std::vector<Value>& arguments) {
+  DisplayObject* object = display_self(self);
+  if (object == nullptr) {
+    return native_value(Value::boolean(false));
+  }
+  return native_value(Value::boolean(hit_test_point(*object, to_number(argument_at(arguments, 0)),
+                                                    to_number(argument_at(arguments, 1)))));
+}
+
+ExecutionResult display_hit_test_object(const Value& self, const std::vector<Value>& arguments) {
+  DisplayObject* object = display_self(self);
+  const DisplayObject* other = display_argument(arguments);
+  return native_value(Value::boolean(object != nullptr && other != nullptr &&
+                                     hit_test_object(*object, *other)));
+}
+
 ExecutionResult display_transform_get(Interpreter& interpreter, const Value& self) {
   DisplayObject* object = display_self(self);
   if (object == nullptr) {
@@ -423,13 +460,13 @@ bool try_compat_native(Interpreter& interpreter, native::Id id, const Value& sel
       out = display_get_bounds(interpreter, self);
       return true;
     case native::Id::display_hit_test:
-      out = native_value(Value::null());
+      out = display_hit_test(self, arguments);
       return true;
     case native::Id::display_hit_test_point:
-      out = native_value(Value::boolean(false));
+      out = display_hit_test_point(self, arguments);
       return true;
     case native::Id::display_hit_test_object:
-      out = native_value(Value::boolean(false));
+      out = display_hit_test_object(self, arguments);
       return true;
     case native::Id::display_transform_get:
       out = display_transform_get(interpreter, self);

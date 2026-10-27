@@ -227,6 +227,16 @@ ExecutionResult dispatcher_has_listener(Interpreter& interpreter, const Value& s
       has_event_listener(*self.as_object(), to_string(argument_at(arguments, 0)))));
 }
 
+ExecutionResult dispatcher_will_trigger(Interpreter& interpreter, const Value& self,
+                                        const std::vector<Value>& arguments) {
+  (void)interpreter;
+  if (!self.is_object()) {
+    return native_value(Value::boolean(false));
+  }
+  return native_value(Value::boolean(
+      will_trigger(self.as_object(), to_string(argument_at(arguments, 0)))));
+}
+
 ExecutionResult timer_construct(Interpreter& interpreter, const Value& self,
                                 const std::vector<Value>& arguments) {
   Class* klass = nullptr;
@@ -303,6 +313,9 @@ bool try_event_native(Interpreter& interpreter, native::Id id, const Value& self
       return true;
     case native::Id::dispatcher_dispatch_event:
       out = dispatcher_dispatch_event(interpreter, self, arguments, depth);
+      return true;
+    case native::Id::dispatcher_will_trigger:
+      out = dispatcher_will_trigger(interpreter, self, arguments);
       return true;
     case native::Id::dispatcher_has_listener:
       out = dispatcher_has_listener(interpreter, self, arguments);

@@ -17,6 +17,8 @@ namespace {
 
 constexpr double kPi = 3.14159265358979323846;
 
+}  // namespace
+
 SnapshotMatrix local_matrix(const DisplayObject& object) {
   const double radians = object.rotation() * kPi / 180.0;
   const double cosine = std::cos(radians);
@@ -30,6 +32,8 @@ SnapshotMatrix local_matrix(const DisplayObject& object) {
   matrix.ty = object.y();
   return matrix;
 }
+
+namespace {
 
 SnapshotMatrix compose(const SnapshotMatrix& parent, const SnapshotMatrix& child) {
   SnapshotMatrix result;

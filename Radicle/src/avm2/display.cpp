@@ -345,7 +345,8 @@ bool read_display_property(Interpreter& interpreter, DisplayObject& object,
     return true;
   }
   if (name == "focus") {
-    out = Value::null();
+    const std::shared_ptr<DisplayObject> focus = object.focus();
+    out = focus == nullptr ? Value::null() : Value::object(focus);
     return true;
   }
   if (name == "name") {

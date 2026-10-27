@@ -87,7 +87,7 @@ class SwfRuntime {
   FrameSnapshot take_snapshot();
   FrameSnapshot snapshot() const;
   SoundEventQueue& sound_events();
-  /* Host input must go through these; keyboard targets the root clip and mouse the stage. */
+  /* Host input must go through these; keys go to the stage focus, mouse to the hit object. */
   void key_event(Interpreter& interpreter, std::uint32_t key_code, bool down);
   void mouse_event(Interpreter& interpreter, double x, double y, std::int32_t button, bool down);
   void mouse_move(Interpreter& interpreter, double x, double y);
@@ -113,6 +113,8 @@ class SwfRuntime {
   Runtime* runtime_{nullptr};
   SoundEventQueue sounds_fallback_;
   double accumulator_{0.0};
+  std::weak_ptr<DisplayObject> mouse_over_;
+  std::weak_ptr<DisplayObject> mouse_down_;
   bool playing_{true};
   bool started_{false};
 };

@@ -132,6 +132,7 @@ enum class Id : std::uint32_t {
   dispatcher_remove_listener,
   dispatcher_dispatch_event,
   dispatcher_has_listener,
+  dispatcher_will_trigger,
   timer_construct,
   timer_start,
   timer_stop,

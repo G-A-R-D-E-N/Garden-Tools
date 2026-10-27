@@ -66,6 +66,9 @@ class DisplayObject : public Object, public std::enable_shared_from_this<Display
   void set_graphics(Value value) { graphics_ = std::move(value); }
   bool stage_focus_rect() const noexcept { return stage_focus_rect_; }
   void set_stage_focus_rect(bool value) noexcept { stage_focus_rect_ = value; }
+  /* Invariant: focus is held weakly, so the stage never keeps a removed object alive. */
+  std::shared_ptr<DisplayObject> focus() const { return focus_.lock(); }
+  void set_focus(const std::shared_ptr<DisplayObject>& target) { focus_ = target; }
 
   /* A Bitmap must keep the BitmapData the script assigned, so a snapshot can report it. */
   const Value& bitmap_data() const noexcept { return bitmap_data_; }
@@ -140,6 +143,7 @@ class DisplayObject : public Object, public std::enable_shared_from_this<Display
   std::vector<Value> filters_;
   Value bitmap_data_;
   Value graphics_;
+  std::weak_ptr<DisplayObject> focus_;
   bool stage_focus_rect_{true};
   double color_multiply_[4]{1.0, 1.0, 1.0, 1.0};
   double color_add_[4]{0.0, 0.0, 0.0, 0.0};

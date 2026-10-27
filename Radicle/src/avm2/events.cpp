@@ -9,6 +9,8 @@
 #include <fo4/avm2/runtime.hpp>
 #include <fo4/avm2/value.hpp>
 
+#include "native_internal.hpp"
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -64,6 +66,21 @@ ExecutionResult invoke_listeners(Interpreter& interpreter, Object& node,
     }
   }
   return ExecutionResult{};
+}
+
+ExecutionResult dispatch_focus(Interpreter& interpreter, const std::shared_ptr<DisplayObject>& node,
+                               const char* type, const std::shared_ptr<DisplayObject>& related,
+                               std::size_t depth) {
+  std::shared_ptr<EventObject> event =
+      make_event(interpreter.runtime(), type, true, false, "FocusEvent");
+  if (event == nullptr) {
+    return ExecutionResult{};
+  }
+  Property& related_property =
+      event->define_own_property(primary_key(builtin_name("relatedObject")));
+  related_property.kind = PropertyKind::Value;
+  related_property.value = related == nullptr ? Value::null() : Value::object(related);
+  return dispatch_event(interpreter, node, event, depth);
 }
 
 }  // namespace
@@ -187,6 +204,37 @@ bool has_event_listener(const Object& target, std::string_view type) {
     }
   }
   return false;
+}
+
+bool will_trigger(const std::shared_ptr<Object>& target, std::string_view type) {
+  if (target == nullptr) {
+    return false;
+  }
+  for (const auto& node : propagation_path(target)) {
+    if (has_event_listener(*node, type)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+ExecutionResult set_display_focus(Interpreter& interpreter, DisplayObject& owner,
+                                  const std::shared_ptr<DisplayObject>& target, std::size_t depth) {
+  const std::shared_ptr<DisplayObject> previous = owner.focus();
+  if (previous == target) {
+    return ExecutionResult{};
+  }
+  owner.set_focus(target);
+  if (previous != nullptr) {
+    ExecutionResult result = dispatch_focus(interpreter, previous, "focusOut", target, depth);
+    if (!result.ok()) {
+      return result;
+    }
+  }
+  if (target == nullptr) {
+    return ExecutionResult{};
+  }
+  return dispatch_focus(interpreter, target, "focusIn", previous, depth);
 }
 
 TimerObject::TimerObject(Class* timer_class, double delay, std::int32_t repeat_count)

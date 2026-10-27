@@ -215,6 +215,13 @@ ExecutionResult Interpreter::set_property(Frame& frame, Object& object,
     }
   }
   if (object.kind() == ObjectKind::Display) {
+    if (multiname.has_fixed_name() && multiname.name == "focus") {
+      std::shared_ptr<DisplayObject> target;
+      if (value.is_object() && value.as_object()->kind() == ObjectKind::Display) {
+        target = std::static_pointer_cast<DisplayObject>(value.as_object());
+      }
+      return set_display_focus(*this, static_cast<DisplayObject&>(object), target, depth);
+    }
     if (write_display_property(static_cast<DisplayObject&>(object), multiname, value)) {
       return ExecutionResult{};
     }

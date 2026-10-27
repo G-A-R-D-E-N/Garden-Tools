@@ -2,6 +2,7 @@
 
 #include <fo4/avm2/display.hpp>
 #include <fo4/avm2/events.hpp>
+#include <fo4/avm2/hit_test.hpp>
 #include <fo4/avm2/interpreter.hpp>
 #include <fo4/avm2/name.hpp>
 #include <fo4/avm2/object.hpp>
@@ -23,6 +24,38 @@ namespace fo4::avm2 {
 namespace {
 
 thread_local std::string g_create_error;
+
+void set_event_value(EventObject& event, const char* name, Value value) {
+  Property& property = event.define_own_property(primary_key(builtin_name(name)));
+  property.kind = PropertyKind::Value;
+  property.value = std::move(value);
+}
+
+std::shared_ptr<DisplayObject> pointer_target(const std::shared_ptr<MovieClip>& root, double x,
+                                              double y) {
+  std::shared_ptr<DisplayObject> target = mouse_target_at(root, x, y);
+  if (target != nullptr) {
+    return target;
+  }
+  return root;
+}
+
+std::shared_ptr<EventObject> pointer_event(Interpreter& interpreter, const char* type,
+                                           const DisplayObject& target, double x, double y) {
+  std::shared_ptr<EventObject> event =
+      make_event(interpreter.runtime(), type, true, false, "MouseEvent");
+  if (event == nullptr) {
+    return event;
+  }
+  double local_x = 0.0;
+  double local_y = 0.0;
+  stage_to_local(target, x, y, local_x, local_y);
+  set_event_value(*event, "stageX", Value::number(x));
+  set_event_value(*event, "stageY", Value::number(y));
+  set_event_value(*event, "localX", Value::number(local_x));
+  set_event_value(*event, "localY", Value::number(local_y));
+  return event;
+}
 
 std::shared_ptr<TimelineDefinition> timeline_from_rows(const SwfTimelineRows& rows) {
   auto timeline = std::make_shared<TimelineDefinition>();
@@ -342,7 +375,14 @@ void SwfRuntime::key_event(Interpreter& interpreter, std::uint32_t key_code, boo
   Property& char_property = event->define_own_property(primary_key(builtin_name("charCode")));
   char_property.kind = PropertyKind::Value;
   char_property.value = Value::uint32(0);
-  dispatch_event(interpreter, root_, event, 0);
+  std::shared_ptr<DisplayObject> target;
+  if (stage_ != nullptr) {
+    target = stage_->focus();
+  }
+  if (target == nullptr) {
+    target = root_;
+  }
+  dispatch_event(interpreter, target, event, 0);
 }
 
 void SwfRuntime::mouse_event(Interpreter& interpreter, double x, double y, std::int32_t button,
@@ -352,21 +392,32 @@ void SwfRuntime::mouse_event(Interpreter& interpreter, double x, double y, std::
   }
   root_->set_mouse_position(x, y);
   if (stage_ != nullptr) stage_->set_mouse_position(x, y);
+  const std::shared_ptr<DisplayObject> target = pointer_target(root_, x, y);
   std::shared_ptr<EventObject> event =
-      make_event(interpreter.runtime(), down ? "mouseDown" : "mouseUp", true, false, "MouseEvent");
+      pointer_event(interpreter, down ? "mouseDown" : "mouseUp", *target, x, y);
   if (event == nullptr) {
     return;
   }
-  Property& x_property = event->define_own_property(primary_key(builtin_name("stageX")));
-  x_property.kind = PropertyKind::Value;
-  x_property.value = Value::number(x);
-  Property& y_property = event->define_own_property(primary_key(builtin_name("stageY")));
-  y_property.kind = PropertyKind::Value;
-  y_property.value = Value::number(y);
-  Property& button_property = event->define_own_property(primary_key(builtin_name("button")));
-  button_property.kind = PropertyKind::Value;
-  button_property.value = Value::int32(button);
-  dispatch_event(interpreter, root_, event, 0);
+  set_event_value(*event, "button", Value::int32(button));
+  if (down) {
+    mouse_down_ = target;
+    if (stage_ != nullptr && (target->is_text_field() || target->tab_enabled())) {
+      set_display_focus(interpreter, *stage_, target, 0);
+    }
+  }
+  dispatch_event(interpreter, target, event, 0);
+  if (down) {
+    return;
+  }
+  const bool clicked = mouse_down_.lock() == target;
+  mouse_down_.reset();
+  if (!clicked) {
+    return;
+  }
+  std::shared_ptr<EventObject> click = pointer_event(interpreter, "click", *target, x, y);
+  if (click != nullptr) {
+    dispatch_event(interpreter, target, click, 0);
+  }
 }
 
 SoundEventQueue& SwfRuntime::sound_events() {
@@ -391,39 +442,38 @@ void SwfRuntime::mouse_move(Interpreter& interpreter, double x, double y) {
   }
   root_->set_mouse_position(x, y);
   if (stage_ != nullptr) stage_->set_mouse_position(x, y);
-  std::shared_ptr<EventObject> event =
-      make_event(interpreter.runtime(), "mouseMove", true, false, "MouseEvent");
-  if (event == nullptr) {
-    return;
+  const std::shared_ptr<DisplayObject> target = pointer_target(root_, x, y);
+  const std::shared_ptr<DisplayObject> previous = mouse_over_.lock();
+  if (previous != target) {
+    mouse_over_ = target;
+    if (previous != nullptr) {
+      std::shared_ptr<EventObject> out = pointer_event(interpreter, "mouseOut", *previous, x, y);
+      if (out != nullptr) {
+        dispatch_event(interpreter, previous, out, 0);
+      }
+    }
+    std::shared_ptr<EventObject> over = pointer_event(interpreter, "mouseOver", *target, x, y);
+    if (over != nullptr) {
+      dispatch_event(interpreter, target, over, 0);
+    }
   }
-  Property& x_property = event->define_own_property(primary_key(builtin_name("stageX")));
-  x_property.kind = PropertyKind::Value;
-  x_property.value = Value::number(x);
-  Property& y_property = event->define_own_property(primary_key(builtin_name("stageY")));
-  y_property.kind = PropertyKind::Value;
-  y_property.value = Value::number(y);
-  dispatch_event(interpreter, root_, event, 0);
+  std::shared_ptr<EventObject> event = pointer_event(interpreter, "mouseMove", *target, x, y);
+  if (event != nullptr) {
+    dispatch_event(interpreter, target, event, 0);
+  }
 }
 
 void SwfRuntime::mouse_wheel(Interpreter& interpreter, double x, double y, std::int32_t delta) {
   if (root_ == nullptr) {
     return;
   }
-  std::shared_ptr<EventObject> event =
-      make_event(interpreter.runtime(), "mouseWheel", true, false, "MouseEvent");
+  const std::shared_ptr<DisplayObject> target = pointer_target(root_, x, y);
+  std::shared_ptr<EventObject> event = pointer_event(interpreter, "mouseWheel", *target, x, y);
   if (event == nullptr) {
     return;
   }
-  Property& x_property = event->define_own_property(primary_key(builtin_name("stageX")));
-  x_property.kind = PropertyKind::Value;
-  x_property.value = Value::number(x);
-  Property& y_property = event->define_own_property(primary_key(builtin_name("stageY")));
-  y_property.kind = PropertyKind::Value;
-  y_property.value = Value::number(y);
-  Property& delta_property = event->define_own_property(primary_key(builtin_name("delta")));
-  delta_property.kind = PropertyKind::Value;
-  delta_property.value = Value::int32(delta);
-  dispatch_event(interpreter, root_, event, 0);
+  set_event_value(*event, "delta", Value::int32(delta));
+  dispatch_event(interpreter, target, event, 0);
 }
 
 void SwfRuntime::char_event(Interpreter& interpreter, std::uint32_t char_code) {

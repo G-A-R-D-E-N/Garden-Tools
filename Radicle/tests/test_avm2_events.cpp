@@ -1,5 +1,6 @@
 #include <fo4/avm2/display.hpp>
 #include <fo4/avm2/events.hpp>
+#include <fo4/avm2/hit_test.hpp>
 #include <fo4/avm2/interpreter.hpp>
 #include <fo4/avm2/name.hpp>
 #include <fo4/avm2/object.hpp>
@@ -296,6 +297,149 @@ TEST(Avm2Events, SwfRuntimeDispatchesHostKeyInputToTheRoot) {
   EXPECT_DOUBLE_EQ(fixture.interpreter->host_time_ms(), 0.0);
   movie->advance(*fixture.interpreter, 1.0 / 24.0);
   EXPECT_GT(fixture.interpreter->host_time_ms(), 0.0);
+}
+
+TEST(Avm2Events, MouseTargetIsTheTopmostHitChild) {
+  Fixture fixture;
+  fixture.finish();
+  auto root = make_sprite(fixture.runtime);
+  auto lower = make_sprite(fixture.runtime);
+  auto upper = make_sprite(fixture.runtime);
+  ASSERT_NE(root, nullptr);
+  ASSERT_NE(lower, nullptr);
+  ASSERT_NE(upper, nullptr);
+  auto* container = static_cast<fo4::avm2::DisplayObjectContainer*>(root.get());
+  lower->set_width(100.0);
+  lower->set_height(100.0);
+  upper->set_x(50.0);
+  upper->set_y(50.0);
+  upper->set_width(100.0);
+  upper->set_height(100.0);
+  ASSERT_TRUE(container->add_child(lower));
+  ASSERT_TRUE(container->add_child(upper));
+  EXPECT_EQ(fo4::avm2::mouse_target_at(root, 60.0, 60.0).get(), upper.get());
+  EXPECT_EQ(fo4::avm2::mouse_target_at(root, 10.0, 10.0).get(), lower.get());
+  EXPECT_EQ(fo4::avm2::mouse_target_at(root, 200.0, 200.0).get(), nullptr);
+  upper->set_mouse_enabled(false);
+  EXPECT_EQ(fo4::avm2::mouse_target_at(root, 60.0, 60.0).get(), lower.get());
+}
+
+TEST(Avm2Events, HitTestFollowsTheParentTransform) {
+  Fixture fixture;
+  fixture.finish();
+  auto root = make_sprite(fixture.runtime);
+  auto child = make_sprite(fixture.runtime);
+  auto other = make_sprite(fixture.runtime);
+  ASSERT_TRUE(static_cast<fo4::avm2::DisplayObjectContainer*>(root.get())->add_child(child));
+  child->set_x(10.0);
+  child->set_scale_x(2.0);
+  child->set_scale_y(2.0);
+  child->set_width(10.0);
+  child->set_height(10.0);
+  other->set_x(25.0);
+  other->set_y(15.0);
+  other->set_width(10.0);
+  other->set_height(10.0);
+  EXPECT_TRUE(fo4::avm2::hit_test_point(*child, 25.0, 15.0));
+  EXPECT_FALSE(fo4::avm2::hit_test_point(*child, 5.0, 5.0));
+  EXPECT_TRUE(fo4::avm2::hit_test_object(*child, *other));
+  other->set_x(40.0);
+  other->set_y(40.0);
+  EXPECT_FALSE(fo4::avm2::hit_test_object(*child, *other));
+  root->set_visible(false);
+  EXPECT_FALSE(fo4::avm2::hit_test_point(*child, 25.0, 15.0));
+}
+
+TEST(Avm2Events, FocusChangeDispatchesFocusOutThenFocusIn) {
+  Fixture fixture;
+  const std::uint32_t in_body = fixture.append_body("i");
+  const std::uint32_t out_body = fixture.append_body("o");
+  fixture.finish();
+  auto stage = make_sprite(fixture.runtime);
+  auto first = make_sprite(fixture.runtime);
+  auto second = make_sprite(fixture.runtime);
+  ASSERT_TRUE(fo4::avm2::add_event_listener(*first, "focusOut",
+                                            Value::object(fixture.function(out_body)), false, 0));
+  ASSERT_TRUE(fo4::avm2::add_event_listener(*second, "focusIn",
+                                            Value::object(fixture.function(in_body)), false, 0));
+  ASSERT_TRUE(fo4::avm2::set_display_focus(*fixture.interpreter, *stage, first, 0).ok());
+  EXPECT_EQ(stage->focus().get(), first.get());
+  ASSERT_TRUE(fo4::avm2::set_display_focus(*fixture.interpreter, *stage, second, 0).ok());
+  EXPECT_EQ(stage->focus().get(), second.get());
+  EXPECT_EQ(read_log(fixture.runtime), "oi");
+}
+
+TEST(Avm2Events, WillTriggerSeesDisplayAncestors) {
+  Fixture fixture;
+  const std::uint32_t body = fixture.append_body("p");
+  fixture.finish();
+  auto parent = make_sprite(fixture.runtime);
+  auto child = make_sprite(fixture.runtime);
+  ASSERT_TRUE(static_cast<fo4::avm2::DisplayObjectContainer*>(parent.get())->add_child(child));
+  ASSERT_TRUE(fo4::avm2::add_event_listener(*parent, "ping",
+                                            Value::object(fixture.function(body)), false, 0));
+  EXPECT_TRUE(fo4::avm2::will_trigger(child, "ping"));
+  EXPECT_TRUE(fo4::avm2::will_trigger(parent, "ping"));
+  EXPECT_FALSE(fo4::avm2::will_trigger(child, "other"));
+}
+
+TEST(Avm2Events, SwfRuntimeRoutesMouseInputToTheHitObject) {
+  Fixture fixture;
+  const std::uint32_t down_body = fixture.append_body("d");
+  const std::uint32_t bubble_body = fixture.append_body("r");
+  const std::uint32_t click_body = fixture.append_body("c");
+  const std::uint32_t over_body = fixture.append_body("v");
+  const std::uint32_t out_body = fixture.append_body("u");
+  fixture.finish();
+  const std::shared_ptr<SwfRuntime> movie =
+      SwfRuntime::create(fixture.runtime, *fixture.interpreter, minimal_movie());
+  ASSERT_NE(movie, nullptr);
+  auto target = make_sprite(fixture.runtime);
+  ASSERT_NE(target, nullptr);
+  target->set_width(100.0);
+  target->set_height(100.0);
+  ASSERT_TRUE(static_cast<fo4::avm2::DisplayObjectContainer*>(movie->root().get())
+                  ->add_child(target));
+  ASSERT_TRUE(fo4::avm2::add_event_listener(*target, "mouseDown",
+                                            Value::object(fixture.function(down_body)), false, 0));
+  ASSERT_TRUE(fo4::avm2::add_event_listener(*movie->root(), "mouseDown",
+                                            Value::object(fixture.function(bubble_body)), false,
+                                            0));
+  ASSERT_TRUE(fo4::avm2::add_event_listener(*target, "click",
+                                            Value::object(fixture.function(click_body)), false, 0));
+  ASSERT_TRUE(fo4::avm2::add_event_listener(*target, "mouseOver",
+                                            Value::object(fixture.function(over_body)), false, 0));
+  ASSERT_TRUE(fo4::avm2::add_event_listener(*target, "mouseOut",
+                                            Value::object(fixture.function(out_body)), false, 0));
+  movie->mouse_event(*fixture.interpreter, 50.0, 50.0, 0, true);
+  EXPECT_EQ(read_log(fixture.runtime), "dr");
+  movie->mouse_event(*fixture.interpreter, 50.0, 50.0, 0, false);
+  EXPECT_EQ(read_log(fixture.runtime), "drc");
+  movie->mouse_move(*fixture.interpreter, 60.0, 60.0);
+  EXPECT_EQ(read_log(fixture.runtime), "drcv");
+  movie->mouse_move(*fixture.interpreter, 500.0, 500.0);
+  EXPECT_EQ(read_log(fixture.runtime), "drcvu");
+}
+
+TEST(Avm2Events, SwfRuntimeRoutesKeysToTheStageFocus) {
+  Fixture fixture;
+  const std::uint32_t key_body = fixture.append_body("k");
+  const std::uint32_t root_body = fixture.append_body("r");
+  fixture.finish();
+  const std::shared_ptr<SwfRuntime> movie =
+      SwfRuntime::create(fixture.runtime, *fixture.interpreter, minimal_movie());
+  ASSERT_NE(movie, nullptr);
+  auto target = make_sprite(fixture.runtime);
+  ASSERT_NE(target, nullptr);
+  ASSERT_TRUE(static_cast<fo4::avm2::DisplayObjectContainer*>(movie->root().get())
+                  ->add_child(target));
+  ASSERT_TRUE(fo4::avm2::add_event_listener(*target, "keyDown",
+                                            Value::object(fixture.function(key_body)), false, 0));
+  ASSERT_TRUE(fo4::avm2::add_event_listener(*movie->root(), "keyDown",
+                                            Value::object(fixture.function(root_body)), false, 0));
+  ASSERT_TRUE(fo4::avm2::set_display_focus(*fixture.interpreter, *movie->stage(), target, 0).ok());
+  movie->key_event(*fixture.interpreter, 65, true);
+  EXPECT_EQ(read_log(fixture.runtime), "kr");
 }
 
 }  // namespace

@@ -87,6 +87,9 @@ struct FrameSnapshot {
   bool operator==(const FrameSnapshot&) const = default;
 };
 
+/* Requires only the object itself; the matrix is its own translation, rotation and scale. */
+SnapshotMatrix local_matrix(const DisplayObject& object);
+
 /* A display tree must snapshot depth-first in child order with composed transforms. */
 FrameSnapshot build_frame_snapshot(const DisplayObject& root);
 

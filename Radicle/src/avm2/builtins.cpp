@@ -250,6 +250,7 @@ RuntimeStatus Runtime::install_builtins() {
              false);
   add_method(*event_dispatcher, "dispatchEvent", native::Id::dispatcher_dispatch_event, false);
   add_method(*event_dispatcher, "hasEventListener", native::Id::dispatcher_has_listener, false);
+  add_method(*event_dispatcher, "willTrigger", native::Id::dispatcher_will_trigger, false);
   event_class->native_constructor = static_cast<std::uint32_t>(native::Id::event_construct);
   add_method(*event_class, "preventDefault", native::Id::event_prevent_default, false);
   add_method(*event_class, "stopPropagation", native::Id::event_stop_propagation, false);
