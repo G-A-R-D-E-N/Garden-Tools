@@ -31,6 +31,7 @@
 #include "fo4/c_api_papyrus_runtime.h"
 #include "fo4/c_api_papyrus_save.h"
 #include "fo4/c_api_papyrus_quest.h"
+#include "fo4/c_api_papyrus_source.h"
 #include <cstddef>
 #include <cstdio>
 

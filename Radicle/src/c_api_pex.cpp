@@ -3,8 +3,10 @@
 #include "c_api_internal.hpp"
 #include "c_api_pex_internal.hpp"
 #include "fo4/pex/pex.hpp"
+#include "fo4/pex_analysis/opcodes.hpp"
 #include "fo4/pex_analysis/script_set.hpp"
 
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
@@ -446,6 +448,30 @@ void radicle_pex_free_object_code(radicle_pex_object_code* code) {
   std::free(code->structs);
   std::free(code->struct_members);
   *code = radicle_pex_object_code{};
+}
+
+radicle_status radicle_pex_opcode_name(uint8_t opcode, uint8_t** out_bytes, size_t* out_size) {
+  clear_error();
+  if (!out_bytes || !out_size) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_bytes and out_size are required");
+  }
+  *out_bytes = nullptr;
+  *out_size = 0;
+  if (opcode > static_cast<uint8_t>(fo4::pex_analysis::PexOp::ArrayClear)) {
+    char message[64];
+    std::snprintf(message, sizeof(message), "opcode %u is outside the 0..46 name table",
+                  static_cast<unsigned>(opcode));
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, message);
+  }
+  try {
+    return copy_bytes(fo4::pex_analysis::pex_op_name(opcode), out_bytes, out_size);
+  } catch (const std::bad_alloc& error) {
+    return fail_exception(RADICLE_STATUS_OUT_OF_MEMORY, error);
+  } catch (const std::exception& error) {
+    return fail_exception(RADICLE_STATUS_INTERNAL_ERROR, error);
+  } catch (...) {
+    return fail(RADICLE_STATUS_INTERNAL_ERROR, "unknown exception while reading an opcode name");
+  }
 }
 
 radicle_status radicle_script_normalize_name(const uint8_t* bytes,
