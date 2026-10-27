@@ -2458,7 +2458,7 @@ public unsafe struct SwfPlanResult
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 66u;
+    public const uint CompiledAbiVersion = 67u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -3659,6 +3659,15 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_abc_method_disassemble")]
     public static extern Status SwfAbcMethodDisassemble(IntPtr swf, nuint abc, nuint index, byte** out_text, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_abc_text")]
+    public static extern Status SwfAbcText(IntPtr swf, nuint abc, byte** out_text, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_abc_assemble")]
+    public static extern Status SwfAbcAssemble(IntPtr swf, nuint abc, byte* text, nuint size, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_abc_apply_text")]
+    public static extern Status SwfAbcApplyText(IntPtr swf, nuint abc, byte* text, nuint size);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_frames_open")]
     public static extern Status SwfFramesOpen(IntPtr swf, IntPtr* out_frames);

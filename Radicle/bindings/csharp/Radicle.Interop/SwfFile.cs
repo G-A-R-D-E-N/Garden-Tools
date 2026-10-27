@@ -258,6 +258,75 @@ public sealed unsafe partial class SwfFile : IDisposable
         }
     }
 
+    public string AbcText(int abc)
+    {
+        using var use = Use();
+        byte* text = null;
+        nuint size = 0;
+        Call.Check(RadicleNative.SwfAbcText(use.Pointer, (nuint)abc, &text, &size));
+        try
+        {
+            return System.Text.Encoding.UTF8.GetString(Utf8.Raw((IntPtr)text, size));
+        }
+        finally
+        {
+            if (text != null) RadicleNative.FreeBytes(text);
+        }
+    }
+
+    public byte[] AssembleAbc(int abc, string text)
+    {
+        using var use = Use();
+        var utf8 = System.Text.Encoding.UTF8.GetBytes(text);
+        byte* outBytes = null;
+        nuint outSize = 0;
+        unsafe
+        {
+            fixed (byte* input = utf8)
+            {
+                Call.Check(RadicleNative.SwfAbcAssemble(use.Pointer, (nuint)abc, input, (nuint)utf8.Length,
+                                                        &outBytes, &outSize));
+            }
+        }
+        try
+        {
+            return Utf8.Raw((IntPtr)outBytes, outSize);
+        }
+        finally
+        {
+            if (outBytes != null) RadicleNative.FreeBytes(outBytes);
+        }
+    }
+
+    public void ApplyAbcText(int abc, string text)
+    {
+        using var use = Use();
+        var utf8 = System.Text.Encoding.UTF8.GetBytes(text);
+        unsafe
+        {
+            fixed (byte* input = utf8)
+            {
+                Call.Check(RadicleNative.SwfAbcApplyText(use.Pointer, (nuint)abc, input, (nuint)utf8.Length));
+            }
+        }
+    }
+
+    public byte[] WriteBytes()
+    {
+        using var use = Use();
+        byte* bytes = null;
+        nuint size = 0;
+        Call.Check(RadicleNative.SwfWriteBytes(use.Pointer, &bytes, &size));
+        try
+        {
+            return Utf8.Raw((IntPtr)bytes, size);
+        }
+        finally
+        {
+            if (bytes != null) RadicleNative.FreeBytes(bytes);
+        }
+    }
+
     public void Dispose() => _handle.Dispose();
 
     private static SwfMovieInfo ReadInfo(SwfHandle handle)

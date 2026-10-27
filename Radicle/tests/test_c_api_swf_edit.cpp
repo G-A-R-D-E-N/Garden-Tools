@@ -1,5 +1,6 @@
 #include "fo4/c_api.h"
 #include "fo4/c_api_swf.h"
+#include "abc_test_support.hpp"
 #include "swf_art_fixtures.hpp"
 #include "swf_movie_builder.hpp"
 
@@ -7,11 +8,15 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <memory>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
+
+#include "fo4/abc/abc.hpp"
 
 namespace {
 
@@ -375,4 +380,69 @@ TEST(CApiSwfEdit, RejectsAFrameListBuiltBeforeAnEdit) {
   EXPECT_EQ(radicle_swf_frames_instance_count(frames.get(), 0, 0, &count),
             RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_swf_frames_instance_count(after.get(), 0, 0, &count), RADICLE_STATUS_OK);
+}
+
+TEST(CApiSwfAbcWrite, DumpsAssemblesAndAppliesAnEditedDoAbc2Block) {
+  const std::vector<std::uint8_t> abc = fo4::test::build_abc();
+  SwfBuilder builder;
+  builder.rect(0, 200, 0, 100, 9);
+  builder.u16(24u * 256u);
+  builder.u16(1);
+  SwfBuilder payload;
+  payload.u32(0);
+  payload.text("edited");
+  payload.bytes(std::span<const std::byte>(reinterpret_cast<const std::byte*>(abc.data()),
+                                           abc.size()));
+  builder.tag(fo4::swf::tag::kDoAbc2, payload.body, true);
+  builder.tag(fo4::swf::tag::kEnd);
+  SwfHandle swf = open(swf_test::wrap_body(builder.body, 10, false, false));
+  ASSERT_NE(swf, nullptr);
+  ASSERT_EQ(radicle_swf_abc_count(swf.get()), 1u);
+
+  std::uint8_t* text_raw = nullptr;
+  std::size_t text_size = 0;
+  ASSERT_EQ(radicle_swf_abc_text(swf.get(), 0, &text_raw, &text_size), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  std::string text(reinterpret_cast<const char*>(text_raw), text_size);
+  radicle_free_bytes(text_raw);
+  EXPECT_NE(text.find("abc 46.16"), std::string::npos);
+  EXPECT_NE(text.find("body 0 method"), std::string::npos);
+
+  std::uint8_t* abc_raw = nullptr;
+  std::size_t abc_size = 0;
+  ASSERT_EQ(radicle_swf_abc_assemble(swf.get(), 0,
+                                     reinterpret_cast<const std::uint8_t*>(text.data()),
+                                     text.size(), &abc_raw, &abc_size),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  ASSERT_EQ(abc_size, abc.size());
+  EXPECT_EQ(std::memcmp(abc_raw, abc.data(), abc.size()), 0);
+  radicle_free_bytes(abc_raw);
+
+  const std::string edited = []() {
+    return std::string{"  string 1 \"RadicleEdit\"\n"};
+  }();
+  std::string changed = text;
+  const std::size_t line = changed.find("  string 1 \"");
+  ASSERT_NE(line, std::string::npos);
+  const std::size_t line_end = changed.find('\n', line);
+  ASSERT_NE(line_end, std::string::npos);
+  changed.replace(line, line_end - line + 1, edited);
+  ASSERT_EQ(radicle_swf_abc_apply_text(swf.get(), 0,
+                                       reinterpret_cast<const std::uint8_t*>(changed.data()),
+                                       changed.size()),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  const auto bytes = written(swf.get());
+  ASSERT_FALSE(bytes.empty());
+
+  SwfHandle reopened = open(bytes);
+  ASSERT_NE(reopened, nullptr);
+  std::uint8_t* after_raw = nullptr;
+  std::size_t after_size = 0;
+  ASSERT_EQ(radicle_swf_abc_text(reopened.get(), 0, &after_raw, &after_size), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  std::string after(reinterpret_cast<const char*>(after_raw), after_size);
+  radicle_free_bytes(after_raw);
+  EXPECT_NE(after.find("RadicleEdit"), std::string::npos);
 }

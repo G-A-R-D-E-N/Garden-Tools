@@ -373,6 +373,19 @@ RADICLE_API radicle_status radicle_swf_abc_method_at(const radicle_swf* swf, siz
 RADICLE_API radicle_status radicle_swf_abc_method_disassemble(const radicle_swf* swf, size_t abc, size_t index,
                                                               uint8_t** out_text, size_t* out_size);
 
+/* The whole-block text form must be NUL-terminated one byte past *out_size. */
+RADICLE_API radicle_status radicle_swf_abc_text(const radicle_swf* swf, size_t abc, uint8_t** out_text,
+                                                size_t* out_size);
+
+/* Assembles text produced by radicle_swf_abc_text back into ABC bytes; the malloc'd buffer must carry
+   a trailing NUL and the caller must release it with radicle_free_bytes. */
+RADICLE_API radicle_status radicle_swf_abc_assemble(const radicle_swf* swf, size_t abc, const uint8_t* text,
+                                                    size_t size, uint8_t** out_bytes, size_t* out_size);
+
+/* Assembles the text and must rewrite that DoABC/DoABC2 body all-or-nothing. */
+RADICLE_API radicle_status radicle_swf_abc_apply_text(radicle_swf* swf, size_t abc, const uint8_t* text,
+                                                      size_t size);
+
 typedef struct radicle_swf_frames radicle_swf_frames;
 
 typedef struct radicle_swf_transform {

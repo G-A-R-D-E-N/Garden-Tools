@@ -8,7 +8,7 @@ using Xunit;
 
 namespace Radicle.Interop.Tests;
 
-public class SwfTests
+public partial class SwfTests
 {
     private sealed class BitWriter
     {
