@@ -5880,3 +5880,15 @@ Tests: `Radicle/tests/test_swf_sound.cpp` covers a DefineSound payload rebuilt b
 ## Phase 7 open items (#806)
 
 Font glyph outline editing (item 2 of the phase-7 brief) is not implemented. `Radicle/src/swf/swf_text.cpp:decode_text_tag` decodes the DefineFont/2/3 layout tables but not the per-glyph SHAPE bytes, and the C ABI has no glyph edit verb. Remaining: decode each glyph's SHAPE from `SwfFont::glyph_offsets`, validate a replacement SHAPE, and rebuild the offset table and code-table offset.
+
+## Radicle/src/avm2/interpreter_dispatch_b.inc:k_callproperty returns the owning receiver (#807 CI fix)
+
+`Interpreter::call_property` passes the method `this` as `borrowed_object`, a `shared_ptr` with a no-op deleter. A native such as `Array.sort` or `Array.reverse` returns `self`, so the pushed result was a non-owning alias of the receiver. When the receiver lived only on the operand stack (`newarray` then `callproperty sort`), the owning `receiver` local died at the end of the opcode and the next `getproperty` or `callproperty join` read a freed array, giving `undefined` or "avm2 value is not an object". The opcode now pushes the owning `receiver` whenever the result object is the same pointer. Tests: `Radicle/tests/test_avm2_builtins.cpp:Avm2Builtins.ArraySortOrdersNumericElementsByText` and `ArraySortThenJoinShowsTheOrder`.
+
+## Radicle/src/avm2/swf_runtime.cpp:SwfRuntime::create next_script_ (#807 CI fix)
+
+`next_script_` started at 0, so a movie created inside a runtime that already had linked scripts re-ran them. `Loader.load` runs from inside script 0, so the loader re-entered the running initializer, recursed and overflowed the stack (segfault in `Radicle/tests/test_avm2_domain.cpp` LoaderContextDomainReceivesTheSecondMovieDefinitions and LoaderWithoutAContextLoadsIntoTheCurrentDomain). `create` now starts at `runtime.scripts().size()`, so only scripts linked from the movie's own ABC blocks run.
+
+## Radicle/tests/test_avm2_document_class.cpp:document_class_abc (#807 CI fix)
+
+The constructor body did run once the document class constructor was bound to its ABC file; the test ABC simply had no "yes" string, so `pushstring 4` stored the property name "documentReady". The pool now holds "yes" at index 5 and the constructor pushes it.

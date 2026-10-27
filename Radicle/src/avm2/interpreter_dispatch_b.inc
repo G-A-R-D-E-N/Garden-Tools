@@ -486,7 +486,12 @@
           return nested;
         }
         if (instruction.opcode != op::k_callpropvoid) {
-          push_value(nested.value);
+          /* A method returning its borrowed this must be replaced by the owning receiver. */
+          if (nested.value.is_object() && nested.value.as_object() == receiver.as_object()) {
+            push_value(receiver);
+          } else {
+            push_value(nested.value);
+          }
         }
         break;
       }

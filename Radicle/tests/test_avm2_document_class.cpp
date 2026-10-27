@@ -38,11 +38,12 @@ std::vector<std::uint8_t> document_class_abc() {
   put_u30(out, 0);
   put_u30(out, 0);
   put_u30(out, 0);
-  put_u30(out, 5);
+  put_u30(out, 6);
   put_string(out, "DocumentClass");
   put_string(out, "flash.display");
   put_string(out, "MovieClip");
   put_string(out, "documentReady");
+  put_string(out, "yes");
   put_u30(out, 3);
   put_u8(out, 0x16);
   put_u30(out, 0);
@@ -98,7 +99,7 @@ std::vector<std::uint8_t> document_class_abc() {
   constructor_code.push_back(0x5D);
   put_u30(constructor_code, 3);
   constructor_code.push_back(0x2C);
-  put_u30(constructor_code, 4);
+  put_u30(constructor_code, 5);
   constructor_code.push_back(0x68);
   put_u30(constructor_code, 3);
   constructor_code.push_back(0x47);

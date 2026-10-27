@@ -297,6 +297,8 @@ std::shared_ptr<SwfRuntime> SwfRuntime::create(Runtime& runtime, Interpreter& in
   auto runtime_movie = std::shared_ptr<SwfRuntime>(new SwfRuntime());
   runtime_movie->runtime_ = &runtime;
   runtime_movie->data_ = std::move(data);
+  /* The movie must run only its own scripts, never ones the host already ran or is running. */
+  runtime_movie->next_script_ = runtime.scripts().size();
   for (const SoundResource& resource : runtime_movie->data_->sounds) {
     runtime.register_sound(resource);
   }
