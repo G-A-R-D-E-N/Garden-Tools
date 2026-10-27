@@ -20,6 +20,14 @@ struct Limits {
     std::size_t maxStringLength{1048576};
 };
 
+struct ThreadSnapshot {
+    std::string function;
+    std::int32_t pc{0};
+    std::vector<std::string> locals;
+    std::optional<std::uint64_t> latentToken;
+    std::string latentNative;
+};
+
 struct Result {
     Status status{Status::Ok};
     Value value;
@@ -52,6 +60,7 @@ public:
     // Invariant: only the token the run reported resumes it, and a value resumes it exactly once.
     Result completeLatent(std::uint64_t token, const Value& value, std::size_t sliceBudget);
     bool suspended() const { return !frames_.empty(); }
+    ThreadSnapshot snapshot() const;
     std::uint64_t latentToken() const { return latentToken_; }
     void abort();
 
@@ -76,7 +85,8 @@ private:
                const Value& self, const std::vector<Value>& args);
     Status runLoop(std::size_t sliceBudget);
     Result finish(Status status) const;
-    Status suspendLatent(const pex::PexValue& destination, std::uint64_t token);
+    Status suspendLatent(const pex::PexValue& destination, std::uint64_t token,
+                         const std::string& native);
     Status execute(const pex::PexInstruction& instruction, Frame& frame, std::size_t& next);
     Status invoke(Frame& frame, const Value& self, const pex::PexObject* script,
                   const std::string& state, const std::string& nativeScript,
@@ -130,6 +140,7 @@ private:
     bool latent_{false};
     std::uint64_t latentToken_{0};
     pex::PexValue latentDestination_;
+    std::string latentNative_;
     std::size_t sliceInstructions_{0};
 };
 

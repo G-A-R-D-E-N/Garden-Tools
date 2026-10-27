@@ -1,6 +1,7 @@
 #include "c_api_env_internal.hpp"
 #include "c_api_internal.hpp"
 #include "c_api_papyrus_internal.hpp"
+#include "c_api_papyrus_runtime_internal.hpp"
 #include "c_api_pex_internal.hpp"
 #include "fo4/c_api_papyrus_runtime.h"
 #include "fo4/papyrus/runtime.hpp"
@@ -31,13 +32,6 @@ using fo4::papyrus::ScriptRegistration;
 using fo4::papyrus::Status;
 using fo4::papyrus::Value;
 
-struct radicle_papyrus_runtime {
-  radicle_papyrus_runtime_callbacks callbacks{};
-  std::vector<const radicle_pex*> pex_files;
-  Runtime runtime;
-
-  radicle_papyrus_runtime() : runtime(std::vector<const fo4::pex::PexObject*>{}) {}
-};
 
 namespace {
 

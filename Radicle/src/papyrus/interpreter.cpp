@@ -243,7 +243,7 @@ Status Interpreter::invoke(Frame& frame, const Value& self, const pex::PexObject
     std::uint64_t latentToken = 0;
     Status latentStatus = Status::Ok;
     if (host_.callLatent(target, functionName, args, latentStatus, latentToken)) {
-        return suspendLatent(destination, latentToken);
+        return suspendLatent(destination, latentToken, functionName);
     }
 
     Value out;

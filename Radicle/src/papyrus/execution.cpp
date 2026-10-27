@@ -203,11 +203,27 @@ void Interpreter::abort() {
     result_ = Value{};
 }
 
-Status Interpreter::suspendLatent(const pex::PexValue& destination, std::uint64_t token) {
+Status Interpreter::suspendLatent(const pex::PexValue& destination, std::uint64_t token,
+                                  const std::string& native) {
     latent_ = true;
     latentToken_ = token;
     latentDestination_ = destination;
+    latentNative_ = native;
     return Status::Latent;
+}
+
+ThreadSnapshot Interpreter::snapshot() const {
+    ThreadSnapshot snapshot;
+    if (frames_.empty()) return snapshot;
+    const Frame& frame = frames_.back();
+    if (frame.function != nullptr) snapshot.function = frame.function->name;
+    snapshot.pc = static_cast<std::int32_t>(frame.ip);
+    for (const Slot& slot : frame.slots) snapshot.locals.push_back(valueToString(slot.value));
+    if (latent_) {
+        snapshot.latentToken = latentToken_;
+        snapshot.latentNative = latentNative_;
+    }
+    return snapshot;
 }
 
 
