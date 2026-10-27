@@ -169,7 +169,8 @@ class SwfTimelineClip : public MovieClip {
 }  // namespace
 
 std::shared_ptr<MovieClip> build_movie_root(Runtime& runtime,
-                                            const std::shared_ptr<SwfMovieData>& data) {
+                                            const std::shared_ptr<SwfMovieData>& data,
+                                            Class** out_root_class) {
   if (data == nullptr) {
     return nullptr;
   }
@@ -184,6 +185,9 @@ std::shared_ptr<MovieClip> build_movie_root(Runtime& runtime,
   }
   if (root_class == nullptr) {
     return nullptr;
+  }
+  if (out_root_class != nullptr) {
+    out_root_class[0] = root_class;
   }
   auto root = std::make_shared<SwfTimelineClip>(root_class, data, &data->root, 0);
   root->set_playing(true);
@@ -219,10 +223,52 @@ std::shared_ptr<SwfRuntime> SwfRuntime::create(Runtime& runtime, Interpreter& in
   for (const SoundResource& resource : runtime_movie->data_->sounds) {
     runtime.register_sound(resource);
   }
+  const auto abc_blocks = swf::abc_blocks(file);
+  for (const swf::SwfAbcBlock& block : abc_blocks) {
+    runtime_movie->abc_files_.emplace_back();
+    abc::AbcFile& abc_file = runtime_movie->abc_files_.back();
+    if (abc::AbcFile::parse(reinterpret_cast<const std::uint8_t*>(block.payload.data()),
+                            block.payload.size(), abc_file) != abc::AbcStatus::Ok) {
+      return nullptr;
+    }
+    if (!runtime.add_file(abc_file).ok()) {
+      return nullptr;
+    }
+    if (!runtime.link_added_file(runtime.file_count() - 1).ok()) {
+      return nullptr;
+    }
+    while (runtime_movie->next_script_ < runtime.scripts().size()) {
+      const ExecutionResult script_result =
+          interpreter.run_script(static_cast<std::uint32_t>(runtime_movie->next_script_));
+      ++runtime_movie->next_script_;
+      if (!script_result.ok()) {
+        return nullptr;
+      }
+    }
+  }
   runtime_movie->stage_ = stage;
-  runtime_movie->root_ = build_movie_root(runtime, runtime_movie->data_);
+  runtime_movie->root_ =
+      build_movie_root(runtime, runtime_movie->data_, &runtime_movie->root_class_);
   if (runtime_movie->root_ == nullptr) {
     return nullptr;
+  }
+  if (runtime_movie->root_class_ != nullptr) {
+    runtime_movie->root_class_->apply_slot_defaults(*runtime_movie->root_);
+    const ExecutionResult prepare_result =
+        interpreter.prepare_class(*runtime_movie->root_class_, 0);
+    if (!prepare_result.ok()) {
+      return nullptr;
+    }
+    if (runtime_movie->root_class_->iinit != kNoMethod) {
+      FunctionObject constructor(runtime_movie->root_class_->name, nullptr,
+                                 runtime_movie->root_class_->iinit);
+      constructor.set_owner_class(runtime_movie->root_class_);
+      const ExecutionResult constructor_result = interpreter.call_function(
+          constructor, Value::object(runtime_movie->root_), {}, 0);
+      if (!constructor_result.ok()) {
+        return nullptr;
+      }
+    }
   }
   runtime_movie->playing_ = options.start_playing;
   runtime_movie->root_->set_playing(runtime_movie->playing_);

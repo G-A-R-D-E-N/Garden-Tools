@@ -219,8 +219,8 @@ ExecutionResult loader_load(Interpreter& interpreter, const Value& self,
     return native_value(Value::undefined());
   }
   loader->movie = std::make_shared<fo4::swf::SwfFile>(read.file);
-  const std::shared_ptr<SwfRuntime> child =
-      SwfRuntime::create(interpreter.runtime(), interpreter, *loader->movie);
+  loader->child_runtime = SwfRuntime::create(interpreter.runtime(), interpreter, *loader->movie);
+  const std::shared_ptr<SwfRuntime>& child = loader->child_runtime;
   if (child == nullptr) {
     dispatch_type(interpreter, self, "ioError", depth);
     return native_value(Value::undefined());

@@ -60,6 +60,9 @@ class Runtime {
 
   RuntimeLoad add_file(const abc::AbcFile& file);
   RuntimeLoad link();
+  /* Requires a linked runtime; links the file added at file_index and registers its scripts. */
+  RuntimeLoad link_added_file(std::size_t file_index);
+  std::size_t file_count() const noexcept { return files_.size(); }
 
   bool linked() const noexcept { return linked_; }
   const std::vector<Class*>& classes() const noexcept { return classes_; }
@@ -97,11 +100,13 @@ class Runtime {
  private:
   struct FileState {
     const abc::AbcFile* file{nullptr};
+    bool scripts_registered{false};
   };
 
   Class* ensure_external_class(const Multiname& multiname);
   Class* add_builtin_class(std::string name, std::string package, Class* super);
   RuntimeStatus build_class_shells();
+  RuntimeStatus build_shells_for_file(const abc::AbcFile& file);
   RuntimeStatus resolve_hierarchy();
   RuntimeStatus build_traits();
   RuntimeStatus install_builtins();

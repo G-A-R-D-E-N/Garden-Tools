@@ -85,6 +85,8 @@ class Interpreter {
   /* Builtin natives must share this surface; depth is the caller's call depth. */
   ExecutionResult call_function(const FunctionObject& function, Value this_value,
                                 std::vector<Value> arguments, std::size_t depth);
+  /* Requires a linked runtime; runs the class initializer once before any instance is built. */
+  ExecutionResult prepare_class(Class& klass, std::size_t depth);
   ExecutionResult read_property(Object& object, const Multiname& multiname, std::size_t depth);
   ExecutionResult write_property(Object& object, const Multiname& multiname, const Value& value,
                                  std::size_t depth);

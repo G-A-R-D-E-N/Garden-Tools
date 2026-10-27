@@ -5392,3 +5392,32 @@ The runtime now crosses the host boundary. `Radicle/include/fo4/avm2/host.hpp` d
 **Tests.** `Radicle/tests/test_avm2_host.cpp` drives a host with an in-memory asset map and a recording host-call hook: ExternalInterface.call forwards method and stringified arguments and returns the host answer (counters included), available reflects the hook, getDefinitionByName resolves a builtin class, getQualifiedClassName reports the rendered class name, URLLoader.load reads a config through the resolver and exposes it as `data`, and Sound.load + Sound.play over a resolved payload queues exactly one Play event that `SwfRuntime::take_snapshot` drains with a registered sound id.
 
 Still open for R7: SharedObject storage is not exposed yet, the loaded movie's ApplicationDomain separation is not modelled, Scaleform bridge calls use the same host-call hook but have no dedicated surface, DefineSound bodies are registered but not decoded to PCM, and the runtime C ABI that carries the host callbacks from GardenEngine does not exist. Next: SharedObject + AMF data, sound playback state in the snapshot, or the runtime C ABI and replay driver.
+
+## Incremental linking and movie script execution
+
+A loaded movie now brings its own ABC into the runtime. `Runtime::add_file` accepts a file after
+`link()` and `Runtime::link_added_file` links just that file on an already-linked runtime: it builds the
+file's class shells, resolves the hierarchy (new classes may extend loaded or builtin classes), rebuilds
+prototypes, builds traits only for classes that do not have them yet (`Class::traits_built`), reapplies
+class slots, and registers the file's script entries once (`FileState::scripts_registered`). The full
+link path now ends `build_traits` by recomputing each class's slot count after traits exist, which the
+prototype pass previously computed too early.
+
+`SwfRuntime::create` now parses every DoABC block of the movie into storage owned by the runtime
+(`abc_files_`, a deque so runtime pointers stay valid), adds each to the `Runtime`, links it
+incrementally, and runs each newly registered script initializer in order before frame 1. It then takes
+the document class chosen by `build_movie_root` (the SymbolClass id-0 class when it is a MovieClip
+subclass), applies its slot defaults, prepares the class (running its initializer once), and invokes the
+instance constructor with the root clip as `this`, so a program's document class constructor runs before
+the first frame. `LoaderObject` keeps the loaded child `SwfRuntime` alive, which keeps the loaded
+movie's ABC storage alive for the lifetime of the class pointers the runtime holds.
+
+Tests: `Radicle/tests/test_avm2_script.cpp` links a second file on an already-linked runtime, checks its
+script list grows and that running the new script sees the updated global, and checks a repeated
+`link_added_file` reports `AlreadyLinked`; it also builds a small SWF with a DoABC2 tag whose script
+writes a global, runs `SwfRuntime::create`, and asserts the movie's script executed (one file, one
+script, expected global value). The document-class constructor path shares the same code but is not yet
+covered by a synthetic class test, and the real Programs corpus is still the next acceptance gate.
+
+Still open: updated atlases/timelines, SharedObject/AMF, LZMA movie compression, and the replay driver
+plus the runtime C ABI that the R8 acceptance needs.

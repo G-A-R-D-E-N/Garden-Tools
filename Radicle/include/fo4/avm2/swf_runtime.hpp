@@ -8,8 +8,11 @@
 #include <fo4/avm2/runtime.hpp>
 #include <fo4/swf/swf.hpp>
 
+#include <fo4/abc/abc.hpp>
+
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <map>
 #include <memory>
 #include <string>
@@ -63,7 +66,8 @@ std::shared_ptr<SwfMovieData> read_swf_movie_data(const swf::SwfFile& file,
 
 /* A linked runtime must build the root clip, using the linked document class when present. */
 std::shared_ptr<MovieClip> build_movie_root(Runtime& runtime,
-                                            const std::shared_ptr<SwfMovieData>& data);
+                                            const std::shared_ptr<SwfMovieData>& data,
+                                            Class** out_root_class = nullptr);
 
 /* The host driver must be the only clock; the same dt sequence must give the same frames. */
 class SwfRuntime {
@@ -93,6 +97,8 @@ class SwfRuntime {
   SwfRuntime() = default;
 
   std::shared_ptr<SwfMovieData> data_;
+  std::deque<abc::AbcFile> abc_files_;
+  Class* root_class_{nullptr};
   std::shared_ptr<DisplayObjectContainer> stage_;
   std::shared_ptr<MovieClip> root_;
   Runtime* runtime_{nullptr};

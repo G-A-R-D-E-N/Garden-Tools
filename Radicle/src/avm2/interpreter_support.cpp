@@ -56,6 +56,10 @@ ExecutionResult Interpreter::call_function(const FunctionObject& function, Value
   return invoke(function, std::move(this_value), std::move(arguments), {}, depth);
 }
 
+ExecutionResult Interpreter::prepare_class(Class& klass, std::size_t depth) {
+  return ensure_class_initialized(klass, depth);
+}
+
 ExecutionResult Interpreter::read_property(Object& object, const Multiname& multiname,
                                            std::size_t depth) {
   Frame frame;

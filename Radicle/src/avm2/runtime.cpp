@@ -238,56 +238,13 @@ void Runtime::register_movie_clip(const std::shared_ptr<MovieClip>& clip) {
 
 RuntimeLoad Runtime::add_file(const abc::AbcFile& file) {
   RuntimeLoad result;
-  if (linked_ || failed_) {
+  if (failed_) {
     result.status = RuntimeStatus::AlreadyLinked;
-    result.message = "add_file after link";
+    result.message = "add_file after a failed link";
     return result;
   }
   files_.push_back(FileState{&file});
   return result;
-}
-
-RuntimeStatus Runtime::build_class_shells() {
-  for (const FileState& state : files_) {
-    const abc::AbcFile& file = *state.file;
-    if (file.instances.size() != file.classes.size()) {
-      return RuntimeStatus::InvalidTrait;
-    }
-    for (std::uint32_t index = 0; index < file.instances.size(); ++index) {
-      Multiname name_multiname;
-      if (resolve_multiname(file, file.instances[index].name, name_multiname) !=
-          RuntimeStatus::Ok) {
-        return RuntimeStatus::InvalidMultiname;
-      }
-      auto owned = std::make_unique<Class>();
-      owned->name_multiname = name_multiname;
-      owned->name = render_multiname(name_multiname);
-      owned->file = &file;
-      owned->instance_index = index;
-      owned->super_index = file.instances[index].super_index;
-      owned->interface_indices = file.instances[index].interfaces;
-      owned->iinit = file.instances[index].iinit;
-      owned->cinit = file.classes[index].cinit;
-      owned->is_sealed = file.instances[index].is_sealed();
-      owned->is_final = file.instances[index].is_final();
-      owned->is_interface = file.instances[index].is_interface();
-      Class* klass = owned.get();
-      const std::string key = key_for_multiname(name_multiname);
-      if (!key.empty()) {
-        const auto inserted = class_by_key_.emplace(key, klass);
-        if (!inserted.second) {
-          return RuntimeStatus::DuplicateClass;
-        }
-      }
-      if (name_multiname.has_fixed_name()) {
-        class_by_local_name_.emplace(name_multiname.name, klass);
-      }
-      class_by_instance_[instance_key(file, index)] = klass;
-      classes_.push_back(klass);
-      owned_classes_.push_back(std::move(owned));
-    }
-  }
-  return RuntimeStatus::Ok;
 }
 
 const Class* Runtime::find_class(const Multiname& multiname) const {
@@ -520,9 +477,10 @@ void Runtime::bind_function_class(FunctionObject& function) {
 
 RuntimeStatus Runtime::build_traits() {
   for (Class* klass : classes_) {
-    if (klass->external || klass->file == nullptr) {
+    if (klass->external || klass->file == nullptr || klass->traits_built) {
       continue;
     }
+    klass->traits_built = true;
     const abc::AbcFile& file = *klass->file;
     const auto build_trait = [this, &file, klass](const abc::AbcTrait& source, Trait& out) {
       if (resolve_multiname(file, source.name, out.multiname) != RuntimeStatus::Ok) {
@@ -607,7 +565,11 @@ void Runtime::register_class_global(Class& klass) {
 }
 
 RuntimeStatus Runtime::build_script_globals() {
-  for (const FileState& state : files_) {
+  for (FileState& state : files_) {
+    if (state.scripts_registered) {
+      continue;
+    }
+    state.scripts_registered = true;
     const abc::AbcFile& file = *state.file;
     for (std::uint32_t script_index = 0; script_index < file.scripts.size(); ++script_index) {
       const abc::AbcScriptInfo& script = file.scripts[script_index];
@@ -656,6 +618,7 @@ RuntimeStatus Runtime::build_script_globals() {
   }
   for (Class* klass : classes_) {
     register_class_global(*klass);
+    klass->slot_count = klass->compute_slot_count();
   }
   return RuntimeStatus::Ok;
 }

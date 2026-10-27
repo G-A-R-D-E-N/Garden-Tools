@@ -84,6 +84,7 @@ struct Class {
   std::shared_ptr<Object> prototype_object;
   std::shared_ptr<ClassObject> class_object;
   bool linked{false};
+  bool traits_built{false};
 
   const Trait* find_own_instance_trait(const Multiname& multiname) const;
   const Trait* find_own_class_trait(const Multiname& multiname) const;
