@@ -164,7 +164,7 @@ TEST(Avm2DocumentClass, ConstructorRunsOnTheRootClipBeforeFrameOne) {
   ASSERT_TRUE(runtime.link().ok());
   const std::shared_ptr<fo4::avm2::SwfRuntime> movie =
       fo4::avm2::SwfRuntime::create(runtime, interpreter, read.file);
-  ASSERT_NE(movie, nullptr);
+  ASSERT_NE(movie, nullptr) << fo4::avm2::SwfRuntime::last_error();
   ASSERT_NE(movie->root(), nullptr);
   ASSERT_NE(movie->root()->display_class(), nullptr);
   EXPECT_EQ(movie->root()->display_class()->name, "DocumentClass");

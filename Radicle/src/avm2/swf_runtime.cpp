@@ -22,6 +22,8 @@ namespace fo4::avm2 {
 
 namespace {
 
+thread_local std::string g_create_error;
+
 std::shared_ptr<TimelineDefinition> timeline_from_rows(const SwfTimelineRows& rows) {
   auto timeline = std::make_shared<TimelineDefinition>();
   timeline->frame_count = std::max<std::uint32_t>(1, rows.frame_count);
@@ -198,16 +200,23 @@ std::shared_ptr<MovieClip> build_movie_root(Runtime& runtime,
   return root;
 }
 
+const std::string& SwfRuntime::last_error() { return g_create_error; }
+
 std::shared_ptr<SwfRuntime> SwfRuntime::create(Runtime& runtime, Interpreter& interpreter,
                                                const swf::SwfFile& file,
                                                const SwfRuntimeOptions& options) {
+  g_create_error.clear();
+  const auto fail = [](std::string message) {
+    g_create_error = std::move(message);
+    return nullptr;
+  };
   auto data = read_swf_movie_data(file, options);
   if (data == nullptr) {
-    return nullptr;
+    return fail("the movie data could not be read");
   }
   Class* stage_class = const_cast<Class*>(runtime.find_class("flash.display::Stage"));
   if (stage_class == nullptr) {
-    return nullptr;
+    return fail("the Stage class is missing");
   }
   for (const FontResource& font : data->fonts) {
     runtime.fonts().add(font);
@@ -215,7 +224,7 @@ std::shared_ptr<SwfRuntime> SwfRuntime::create(Runtime& runtime, Interpreter& in
   auto stage_object = make_display_object(runtime, *stage_class);
   auto stage = std::dynamic_pointer_cast<DisplayObjectContainer>(stage_object);
   if (stage == nullptr) {
-    return nullptr;
+    return fail("the stage object is not a container");
   }
   stage->set_stage_width(data->stage_width);
   stage->set_stage_height(data->stage_height);
@@ -233,20 +242,20 @@ std::shared_ptr<SwfRuntime> SwfRuntime::create(Runtime& runtime, Interpreter& in
     abc::AbcFile& abc_file = runtime_movie->abc_files_.back();
     if (abc::AbcFile::parse(reinterpret_cast<const std::uint8_t*>(block.payload.data()),
                             block.payload.size(), abc_file) != abc::AbcStatus::Ok) {
-      return nullptr;
+      return fail("an ABC block did not parse");
     }
     if (!runtime.add_file(abc_file).ok()) {
-      return nullptr;
+      return fail("the runtime refused the movie ABC file");
     }
     if (!runtime.link_added_file(runtime.file_count() - 1).ok()) {
-      return nullptr;
+      return fail("the movie ABC file did not link");
     }
     while (runtime_movie->next_script_ < runtime.scripts().size()) {
       const ExecutionResult script_result =
           interpreter.run_script(static_cast<std::uint32_t>(runtime_movie->next_script_));
       ++runtime_movie->next_script_;
       if (!script_result.ok()) {
-        return nullptr;
+        return fail("a movie script initializer failed: " + script_result.message);
       }
     }
   }
@@ -254,14 +263,14 @@ std::shared_ptr<SwfRuntime> SwfRuntime::create(Runtime& runtime, Interpreter& in
   runtime_movie->root_ =
       build_movie_root(runtime, runtime_movie->data_, &runtime_movie->root_class_);
   if (runtime_movie->root_ == nullptr) {
-    return nullptr;
+    return fail("the root clip could not be built");
   }
   if (runtime_movie->root_class_ != nullptr) {
     runtime_movie->root_class_->apply_slot_defaults(*runtime_movie->root_);
     const ExecutionResult prepare_result =
         interpreter.prepare_class(*runtime_movie->root_class_, 0);
     if (!prepare_result.ok()) {
-      return nullptr;
+      return fail("the document class initializer failed");
     }
     if (runtime_movie->root_class_->iinit != kNoMethod) {
       FunctionObject constructor(runtime_movie->root_class_->name, nullptr,
@@ -270,7 +279,7 @@ std::shared_ptr<SwfRuntime> SwfRuntime::create(Runtime& runtime, Interpreter& in
       const ExecutionResult constructor_result = interpreter.call_function(
           constructor, Value::object(runtime_movie->root_), {}, 0);
       if (!constructor_result.ok()) {
-        return nullptr;
+        return fail("the document class constructor failed: " + constructor_result.message);
       }
     }
   }
@@ -280,7 +289,7 @@ std::shared_ptr<SwfRuntime> SwfRuntime::create(Runtime& runtime, Interpreter& in
   const ExecutionResult first_frame =
       runtime_movie->root_->goto_frame(interpreter, 1, runtime_movie->playing_);
   if (!first_frame.ok()) {
-    return nullptr;
+    return fail("frame 1 failed: " + first_frame.message);
   }
   runtime_movie->started_ = true;
   return runtime_movie;

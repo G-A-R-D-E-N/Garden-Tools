@@ -72,6 +72,7 @@ struct Fixture {
     avm2_test::CodeBuilder body;
     const std::uint32_t log_name = log_multiname();
     body.findpropstrict(log_name);
+    body.dup();
     body.getproperty(log_name);
     body.pushstring(script.string_of(tag));
     body.add();
@@ -88,6 +89,7 @@ struct Fixture {
     body.callproperty(stop_name, 0);
     body.pop();
     body.findpropstrict(log_name);
+    body.dup();
     body.getproperty(log_name);
     body.pushstring(script.string_of(tag));
     body.add();

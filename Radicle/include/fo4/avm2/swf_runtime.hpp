@@ -79,6 +79,8 @@ class SwfRuntime {
   static std::shared_ptr<SwfRuntime> create(Runtime& runtime, Interpreter& interpreter,
                                             const swf::SwfFile& file,
                                             const SwfRuntimeOptions& options = {});
+  /* A failed create must leave the reason available here for host diagnostics. */
+  static const std::string& last_error();
 
   void advance(Interpreter& interpreter, double dt_seconds);
   /* The host must take one snapshot per rendered frame; it drains the sound queue. */

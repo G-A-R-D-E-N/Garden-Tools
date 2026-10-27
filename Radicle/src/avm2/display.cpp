@@ -340,10 +340,6 @@ bool read_display_property(Interpreter& interpreter, DisplayObject& object,
     out = object.bitmap_data();
     return true;
   }
-  if (name == "graphics") {
-    out = object.graphics();
-    return true;
-  }
   if (name == "stageFocusRect") {
     out = Value::boolean(object.stage_focus_rect());
     return true;

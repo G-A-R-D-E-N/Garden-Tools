@@ -132,7 +132,7 @@ TEST(Avm2Script, SwfRuntimeLinksAndRunsTheMoviesAbcBlocks) {
   Runtime runtime;
   Interpreter interpreter{runtime};
   const std::shared_ptr<SwfRuntime> movie = SwfRuntime::create(runtime, interpreter, read.file);
-  ASSERT_NE(movie, nullptr);
+  ASSERT_NE(movie, nullptr) << fo4::avm2::SwfRuntime::last_error();
   EXPECT_EQ(runtime.file_count(), 1u);
   EXPECT_EQ(runtime.scripts().size(), 1u);
   EXPECT_EQ(global_string(runtime, "booted"), "yes");
@@ -155,5 +155,5 @@ TEST(Avm2Script, AliasesDuplicateClassesFromASecondMovieFile) {
   ASSERT_TRUE(runtime.add_file(second).ok());
   ASSERT_TRUE(runtime.link_added_file(1).ok());
   EXPECT_EQ(runtime.class_count(), classes_after_first);
-  EXPECT_NE(runtime.find_class("Foo"), nullptr);
+  EXPECT_EQ(runtime.class_at(first, 0), runtime.class_at(second, 0));
 }
