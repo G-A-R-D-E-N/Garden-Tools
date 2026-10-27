@@ -34,6 +34,18 @@ const std::vector<std::byte> kDefineText2Payload = bytes_of({
     0x00,
 });
 
+const std::vector<std::byte> kDefineTextOffsetsPayload = bytes_of({
+    0x0B, 0x00, 0x00, 0x00, 0x04, 0x08,
+    0x83, 0x06, 0x00, 0xF8, 0xFF, 0x00,
+    0x00,
+});
+
+const std::vector<std::byte> kDefineTextEditedPayload = bytes_of({
+    0x0B, 0x00, 0x00, 0x00, 0x04, 0x08,
+    0x83, 0x0C, 0x00, 0xFE, 0xFF, 0x00,
+    0x00,
+});
+
 std::vector<std::byte> text_movie(const std::vector<std::byte>& payload, std::uint16_t code) {
   swf_test::SwfBuilder builder;
   builder.rect(0, 11000, 0, 8000, 15);
@@ -107,6 +119,47 @@ TEST(SwfTextGlyphTest, DecodesDefineText2RgbaColourAndNegativeAdvance) {
   ASSERT_EQ(record.glyphs.size(), 1u);
   EXPECT_EQ(record.glyphs[0].glyph_index, 5u);
   EXPECT_EQ(record.glyphs[0].advance, -20);
+}
+
+TEST(SwfTextGlyphTest, DecodesDefineTextRecordWithBothOffsetFlags) {
+  const auto result =
+      fo4::swf::read_swf(text_movie(kDefineTextOffsetsPayload, fo4::swf::tag::kDefineText));
+  ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
+  ASSERT_TRUE(result.file.tags[0].text.has_value());
+  const auto& text = *result.file.tags[0].text;
+  EXPECT_EQ(text.character_id, 11);
+  EXPECT_EQ(text.record_count, 1u);
+  EXPECT_EQ(text.glyph_count, 0u);
+  ASSERT_EQ(text.records.size(), 1u);
+
+  const auto& record = text.records[0];
+  EXPECT_FALSE(record.font_id.has_value());
+  EXPECT_FALSE(record.color.has_value());
+  ASSERT_TRUE(record.x_offset.has_value());
+  EXPECT_EQ(*record.x_offset, 6);
+  ASSERT_TRUE(record.y_offset.has_value());
+  EXPECT_EQ(*record.y_offset, -8);
+  EXPECT_FALSE(record.height.has_value());
+  EXPECT_TRUE(record.glyphs.empty());
+}
+
+TEST(SwfTextGlyphTest, WritesAnEditedDefineTextBackWithItsOffsets) {
+  const auto bytes = text_movie(kDefineTextOffsetsPayload, fo4::swf::tag::kDefineText);
+  auto result = fo4::swf::read_swf(bytes);
+  ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
+  EXPECT_EQ(fo4::swf::write_swf(result.file), bytes);
+
+  ASSERT_TRUE(fo4::swf::replace_tag_payload(result.file, 0, kDefineTextEditedPayload));
+  const auto reread = fo4::swf::read_swf(fo4::swf::write_swf(result.file));
+  ASSERT_TRUE(reread.ok()) << fo4::swf::status_name(reread.status);
+  EXPECT_EQ(reread.file.tags[0].payload, kDefineTextEditedPayload);
+  ASSERT_TRUE(reread.file.tags[0].text.has_value());
+  ASSERT_EQ(reread.file.tags[0].text->records.size(), 1u);
+  const auto& record = reread.file.tags[0].text->records[0];
+  ASSERT_TRUE(record.x_offset.has_value());
+  EXPECT_EQ(*record.x_offset, 12);
+  ASSERT_TRUE(record.y_offset.has_value());
+  EXPECT_EQ(*record.y_offset, -2);
 }
 
 TEST(SwfTextGlyphTest, RejectsMalformedRecordsAndKeepsThePayload) {

@@ -14,8 +14,18 @@ namespace fo4::avm2 {
 namespace {
 
 constexpr double kFixedScale = 10000.0;
+constexpr double kFixedLimit = 9.0e18;
 
-std::string fixed(double value) { return std::to_string(std::llround(value * kFixedScale)); }
+std::string fixed(double value) {
+  const double scaled = value * kFixedScale;
+  if (std::isnan(scaled)) {
+    return "nan";
+  }
+  if (!(std::fabs(scaled) < kFixedLimit)) {
+    return scaled < 0.0 ? "-inf" : "inf";
+  }
+  return std::to_string(std::llround(scaled));
+}
 
 void append_node(const DisplayObject& object, std::size_t level, std::size_t depth,
                  const SnapshotMatrix& parent, std::string& out) {

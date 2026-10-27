@@ -485,8 +485,8 @@ RADICLE_API radicle_status radicle_swf_apply_plan(radicle_swf* swf, const radicl
                                                   radicle_swf_plan_result* out_result);
 
 typedef struct radicle_swf_glyph {
-  uint8_t fill_bits;           /* the SHAPE header nibble, 0..15 */
-  uint8_t line_bits;           /* the SHAPE header nibble, 0..15 */
+  uint8_t fill_bits;           /* NumFillBits of the glyph SHAPE header, 0..15 */
+  uint8_t line_bits;           /* NumLineBits of the glyph SHAPE header, 0..15 */
   size_t record_count;
 } radicle_swf_glyph;
 

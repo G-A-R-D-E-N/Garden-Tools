@@ -132,6 +132,35 @@ TEST(SwfGlyphTest, ReplacesOneGlyphShapeAndRefusesAnUnknownGlyph) {
   EXPECT_FALSE(message.empty());
 }
 
+TEST(SwfGlyphTest, RefusesStyleReferencesOutsideTheImplicitStyleLists) {
+  const auto result = fo4::swf::read_swf(
+      define_font_movie(kFontPayload, fo4::swf::tag::kDefineFont));
+  ASSERT_TRUE(result.ok());
+
+  SwfShapeRecord edge{SwfShapeRecordKind::straight_edge};
+  edge.x = 8;
+  SwfShapeRecord style{SwfShapeRecordKind::style_change};
+  style.fill1 = 2;
+  SwfGlyph shape;
+  shape.fill_bits = 2;
+  shape.records = {style, edge};
+
+  std::vector<std::byte> payload{std::byte{0x55}};
+  std::string message;
+  EXPECT_FALSE(fo4::swf::replace_glyph_payload(result.file.tags[0], 0, shape, payload, message));
+  EXPECT_TRUE(payload.empty());
+  EXPECT_NE(message.find("fill style"), std::string::npos) << message;
+
+  style.fill1 = 1;
+  style.line = 1;
+  shape.fill_bits = 1;
+  shape.line_bits = 1;
+  shape.records = {style, edge};
+  EXPECT_FALSE(fo4::swf::replace_glyph_payload(result.file.tags[0], 0, shape, payload, message));
+  EXPECT_TRUE(payload.empty());
+  EXPECT_NE(message.find("line style"), std::string::npos) << message;
+}
+
 TEST(SwfGlyphTest, EncodesDefineFont2WithLayoutAndWideCodes) {
   SwfFont font;
   font.font_id = 5;
