@@ -523,6 +523,9 @@
         "dependencies": {
           "Noggog.CSharpExt": "[4.2.0, )"
         }
+      },
+      "radicle.interop": {
+        "type": "Project"
       }
     }
   }
