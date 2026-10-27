@@ -148,15 +148,25 @@ struct Assembler {
     switch (kind) {
       case AbcMultinameKind::QName:
       case AbcMultinameKind::QNameA:
-        if (token + 3 > tokens.size() || tokens[token] != "name" ||
-            !take_ref(multiname.name) || token >= tokens.size() || tokens[token] != "ns" ||
-            !take_ref(multiname.ns)) {
+        if (token + 3 > tokens.size() || tokens[token] != "name") {
+          return fail("qname multiname is malformed");
+        }
+        ++token;
+        if (!take_ref(multiname.name) || token >= tokens.size() || tokens[token] != "ns") {
+          return fail("qname multiname is malformed");
+        }
+        ++token;
+        if (!take_ref(multiname.ns)) {
           return fail("qname multiname is malformed");
         }
         break;
       case AbcMultinameKind::RTQName:
       case AbcMultinameKind::RTQNameA:
-        if (token + 1 > tokens.size() || tokens[token] != "name" || !take_ref(multiname.name)) {
+        if (token + 1 > tokens.size() || tokens[token] != "name") {
+          return fail("rtqname multiname is malformed");
+        }
+        ++token;
+        if (!take_ref(multiname.name)) {
           return fail("rtqname multiname is malformed");
         }
         break;
@@ -165,21 +175,34 @@ struct Assembler {
         break;
       case AbcMultinameKind::Multiname:
       case AbcMultinameKind::MultinameA:
-        if (token + 3 > tokens.size() || tokens[token] != "name" ||
-            !take_ref(multiname.name) || token >= tokens.size() || tokens[token] != "ns_set" ||
-            !take_ref(multiname.ns_set)) {
+        if (token + 3 > tokens.size() || tokens[token] != "name") {
+          return fail("multiname is malformed");
+        }
+        ++token;
+        if (!take_ref(multiname.name) || token >= tokens.size() || tokens[token] != "ns_set") {
+          return fail("multiname is malformed");
+        }
+        ++token;
+        if (!take_ref(multiname.ns_set)) {
           return fail("multiname is malformed");
         }
         break;
       case AbcMultinameKind::MultinameL:
       case AbcMultinameKind::MultinameLA:
-        if (token + 1 > tokens.size() || tokens[token] != "ns_set" ||
-            !take_ref(multiname.ns_set)) {
+        if (token + 1 > tokens.size() || tokens[token] != "ns_set") {
+          return fail("multinamel is malformed");
+        }
+        ++token;
+        if (!take_ref(multiname.ns_set)) {
           return fail("multinamel is malformed");
         }
         break;
       case AbcMultinameKind::TypeName: {
-        if (token + 1 > tokens.size() || tokens[token] != "base" || !take_ref(multiname.name)) {
+        if (token + 1 > tokens.size() || tokens[token] != "base") {
+          return fail("typename multiname is malformed");
+        }
+        ++token;
+        if (!take_ref(multiname.name)) {
           return fail("typename multiname is malformed");
         }
         while (token < tokens.size()) {

@@ -206,13 +206,16 @@ TEST(Avm2Runtime, RegistersScriptFunctionTraitsOnTheGlobalScope) {
   EXPECT_NE(function.body(), nullptr);
 }
 
-TEST(Avm2Runtime, RefusesReuseAfterLink) {
+TEST(Avm2Runtime, AddsFilesAfterLinkByAliasingTheirClasses) {
   const AbcFile file = build_parsed_abc();
   Runtime runtime;
   ASSERT_TRUE(runtime.add_file(file).ok());
   ASSERT_TRUE(runtime.link().ok());
+  const std::size_t classes = runtime.class_count();
   EXPECT_EQ(runtime.link().status, RuntimeStatus::AlreadyLinked);
-  EXPECT_EQ(runtime.add_file(file).status, RuntimeStatus::AlreadyLinked);
+  EXPECT_TRUE(runtime.add_file(file).ok());
+  EXPECT_TRUE(runtime.link_added_file(1).ok());
+  EXPECT_EQ(runtime.class_count(), classes);
 }
 
 TEST(Avm2Runtime, ReportsABrokenLinkWithoutKeepingHalfTheState) {
