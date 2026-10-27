@@ -20,11 +20,20 @@ struct Limits {
     std::size_t maxStringLength{1048576};
 };
 
+struct ThreadSnapshot {
+    std::string function;
+    std::int32_t pc{0};
+    std::vector<std::string> locals;
+    std::optional<std::uint64_t> latentToken;
+    std::string latentNative;
+};
+
 struct Result {
     Status status{Status::Ok};
     Value value;
     std::size_t instructions{0};
     std::size_t callDepth{0};
+    std::uint64_t latentToken{0};
 
     bool ok() const { return status == Status::Ok; }
 };
@@ -42,6 +51,18 @@ public:
                        const std::vector<Value>& args = {});
     Result runObjectFunction(const pex::PexObject& object, const pex::PexFunction& function,
                              const Value& self, const std::vector<Value>& args = {});
+    // Invariant: a slice budget is per call and never more than Limits::maxInstructions in total.
+    Result startFunction(const std::string& scriptName, const std::string& functionName,
+                         const std::vector<Value>& args, std::size_t sliceBudget);
+    Result startFunction(const Value& self, const std::string& functionName,
+                         const std::vector<Value>& args, std::size_t sliceBudget);
+    Result resumeSlice(std::size_t sliceBudget);
+    // Invariant: only the token the run reported resumes it, and a value resumes it exactly once.
+    Result completeLatent(std::uint64_t token, const Value& value, std::size_t sliceBudget);
+    bool suspended() const { return !frames_.empty(); }
+    ThreadSnapshot snapshot() const;
+    std::uint64_t latentToken() const { return latentToken_; }
+    void abort();
 
 private:
     struct Slot {
@@ -62,6 +83,10 @@ private:
 
     Result run(const pex::PexObject* object, const pex::PexFunction& function, const std::string& state,
                const Value& self, const std::vector<Value>& args);
+    Status runLoop(std::size_t sliceBudget);
+    Result finish(Status status) const;
+    Status suspendLatent(const pex::PexValue& destination, std::uint64_t token,
+                         const std::string& native);
     Status execute(const pex::PexInstruction& instruction, Frame& frame, std::size_t& next);
     Status invoke(Frame& frame, const Value& self, const pex::PexObject* script,
                   const std::string& state, const std::string& nativeScript,
@@ -85,6 +110,16 @@ private:
     const pex::PexFunction* findFunction(const pex::PexObject& object, const std::string& state,
                                          const std::string& name,
                                          const pex::PexObject** owner) const;
+    const pex::PexStruct* findStruct(const pex::PexObject* object, const std::string& name) const;
+    Status makeStruct(const pex::PexObject* object, const std::string& typeName,
+                      std::size_t depth, Value& out) const;
+    Status structGet(Frame& frame, const pex::PexValue& destination, const pex::PexValue& structure,
+                     const std::string& member);
+    Status structSet(Frame& frame, const pex::PexValue& structure, const std::string& member,
+                     const pex::PexValue& value);
+    Status findStructInArray(Frame& frame, const pex::PexInstruction& instruction, bool reverse);
+    Status gotoState(Frame& frame, const Value& receiver, const std::vector<Value>& args,
+                     const pex::PexValue& destination);
     bool isObjectOfType(const Value& value, const std::string& typeName) const;
     Status coerce(const Value& value, const std::string& declaredType, Value& out) const;
     Status castTo(const Value& source, const std::string& sourceType,
@@ -101,6 +136,12 @@ private:
     Value returnValue_;
     bool hasReturn_{false};
     Status firstError_{Status::Ok};
+    bool paused_{false};
+    bool latent_{false};
+    std::uint64_t latentToken_{0};
+    pex::PexValue latentDestination_;
+    std::string latentNative_;
+    std::size_t sliceInstructions_{0};
 };
 
 }

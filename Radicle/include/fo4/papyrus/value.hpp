@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -15,6 +16,7 @@ enum class ValueType : std::uint8_t {
     Bool = 4,
     Object = 5,
     Array = 6,
+    Struct = 7,
 };
 
 struct ObjectRef {
@@ -24,6 +26,7 @@ struct ObjectRef {
 };
 
 struct Array;
+struct Struct;
 
 struct Value {
     ValueType type{ValueType::None};
@@ -33,12 +36,19 @@ struct Value {
     bool boolean{false};
     std::shared_ptr<ObjectRef> object;
     std::shared_ptr<Array> array;
+    std::shared_ptr<Struct> structure;
 };
 
 struct Array {
     ValueType elementType{ValueType::None};
     std::string elementTypeName{"Var"};
     std::vector<Value> elements;
+};
+
+// Invariant: a struct is a reference value and its members are keyed by the folded name.
+struct Struct {
+    std::string typeName;
+    std::map<std::string, Value> members;
 };
 
 Value noneValue();
@@ -48,6 +58,7 @@ Value floatValue(float number);
 Value boolValue(bool flag);
 Value objectValue(std::uint64_t handle, std::string type, std::string state);
 Value arrayValue(std::shared_ptr<Array> array);
+Value structValue(std::shared_ptr<Struct> structure);
 
 bool isNoneLike(const Value& value);
 std::string typeName(ValueType type);

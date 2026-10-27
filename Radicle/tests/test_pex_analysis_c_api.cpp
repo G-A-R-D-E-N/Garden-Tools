@@ -152,7 +152,7 @@ PexFile typed_receiver_file() {
                       call(kCallMethod, {ident("Init"), ident("P"), ident("::nonevar")}),
                       call(kCallMethod, {ident("Init"), ident("L"), ident("::nonevar")})};
   PexObject host = object("Host", "", {});
-  host.variables.push_back({"Who", "Base"});
+  host.variables.push_back({"Who", "Base", 0, std::nullopt, false});
   host.states[0].functions.push_back(std::move(run));
   pex.objects.push_back(std::move(host));
   pex.rebuildStringTable();
