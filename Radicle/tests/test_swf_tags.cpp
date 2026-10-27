@@ -16,6 +16,7 @@ namespace {
 
 using fo4::swf::SwfFile;
 using fo4::swf::SwfStatus;
+using fo4::swf::SwfTag;
 using swf_test::SwfBuilder;
 using swf_test::wrap_body;
 
@@ -289,13 +290,15 @@ std::vector<std::byte> all_kinds_movie() {
   return wrap_body(all_kinds_body(), 10, false, false);
 }
 
-std::size_t tag_index(const SwfFile& file, std::uint16_t code) {
-  for (std::size_t index = 0; index < file.tags.size(); ++index) {
-    if (file.tags[index].code == code) {
-      return index;
+const SwfTag& tag_with_code(const SwfFile& file, std::uint16_t code) {
+  static const SwfTag missing{};
+  for (const SwfTag& tag : file.tags) {
+    if (tag.code == code) {
+      return tag;
     }
   }
-  return file.tags.size();
+  ADD_FAILURE() << "no SWF tag with code " << code;
+  return missing;
 }
 
 struct BrokenTag {
@@ -341,23 +344,22 @@ TEST(SwfTagDecode, DecodesShapeBoundsForEveryDefineShapeVariant) {
   const auto bytes = all_kinds_movie();
   const auto result = fo4::swf::read_swf(bytes);
   ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
-  const auto& tags = result.file.tags;
 
-  ASSERT_TRUE(tags[tag_index(result.file, 2)].shape.has_value());
-  const auto& shape = *tags[tag_index(result.file, 2)].shape;
+  ASSERT_TRUE(tag_with_code(result.file, 2).shape.has_value());
+  const auto& shape = *tag_with_code(result.file, 2).shape;
   EXPECT_EQ(shape.shape_id, 7);
   EXPECT_EQ(shape.bounds, (fo4::swf::SwfRect{0, 200, 0, 100, 9}));
   EXPECT_FALSE(shape.has_edge_bounds);
 
-  ASSERT_TRUE(tags[tag_index(result.file, 22)].shape.has_value());
-  EXPECT_EQ(tags[tag_index(result.file, 22)].shape->shape_id, 8);
-  EXPECT_EQ(tags[tag_index(result.file, 22)].shape->bounds,
+  ASSERT_TRUE(tag_with_code(result.file, 22).shape.has_value());
+  EXPECT_EQ(tag_with_code(result.file, 22).shape->shape_id, 8);
+  EXPECT_EQ(tag_with_code(result.file, 22).shape->bounds,
             (fo4::swf::SwfRect{0, 200, 0, 100, 9}));
-  ASSERT_TRUE(tags[tag_index(result.file, 32)].shape.has_value());
-  EXPECT_EQ(tags[tag_index(result.file, 32)].shape->shape_id, 9);
+  ASSERT_TRUE(tag_with_code(result.file, 32).shape.has_value());
+  EXPECT_EQ(tag_with_code(result.file, 32).shape->shape_id, 9);
 
-  ASSERT_TRUE(tags[tag_index(result.file, 83)].shape.has_value());
-  const auto& shape4 = *tags[tag_index(result.file, 83)].shape;
+  ASSERT_TRUE(tag_with_code(result.file, 83).shape.has_value());
+  const auto& shape4 = *tag_with_code(result.file, 83).shape;
   EXPECT_EQ(shape4.shape_id, 10);
   EXPECT_TRUE(shape4.has_edge_bounds);
   EXPECT_EQ(shape4.edge_bounds, (fo4::swf::SwfRect{0, 190, 0, 90, 9}));
@@ -368,7 +370,7 @@ TEST(SwfTagDecode, DecodesLosslessBitmapHeaderAndPaletteSize) {
   const auto result = fo4::swf::read_swf(all_kinds_movie());
   ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
 
-  const auto& palettized = result.file.tags[tag_index(result.file, 20)];
+  const auto& palettized = tag_with_code(result.file, 20);
   ASSERT_TRUE(palettized.bitmap.has_value());
   EXPECT_EQ(palettized.bitmap->character_id, 3);
   EXPECT_EQ(palettized.bitmap->format, 3);
@@ -377,7 +379,7 @@ TEST(SwfTagDecode, DecodesLosslessBitmapHeaderAndPaletteSize) {
   ASSERT_TRUE(palettized.bitmap->color_table_size.has_value());
   EXPECT_EQ(*palettized.bitmap->color_table_size, 255);
 
-  const auto& direct = result.file.tags[tag_index(result.file, 36)];
+  const auto& direct = tag_with_code(result.file, 36);
   ASSERT_TRUE(direct.bitmap.has_value());
   EXPECT_EQ(direct.bitmap->character_id, 4);
   EXPECT_EQ(direct.bitmap->format, 4);
@@ -390,13 +392,13 @@ TEST(SwfTagDecode, DecodesFontGlyphCountsForEveryDefineFontVariant) {
   const auto result = fo4::swf::read_swf(all_kinds_movie());
   ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
 
-  const auto& font = result.file.tags[tag_index(result.file, 10)];
+  const auto& font = tag_with_code(result.file, 10);
   ASSERT_TRUE(font.font.has_value());
   EXPECT_EQ(font.font->font_id, 11);
   EXPECT_EQ(font.font->glyph_count, 3u);
   EXPECT_TRUE(font.font->name.empty());
 
-  const auto& font2 = result.file.tags[tag_index(result.file, 48)];
+  const auto& font2 = tag_with_code(result.file, 48);
   ASSERT_TRUE(font2.font.has_value());
   EXPECT_EQ(font2.font->font_id, 12);
   EXPECT_EQ(font2.font->glyph_count, 2u);
@@ -405,7 +407,7 @@ TEST(SwfTagDecode, DecodesFontGlyphCountsForEveryDefineFontVariant) {
   EXPECT_TRUE(font2.font->wide_offsets);
   EXPECT_TRUE(font2.font->wide_codes);
 
-  const auto& font3 = result.file.tags[tag_index(result.file, 75)];
+  const auto& font3 = tag_with_code(result.file, 75);
   ASSERT_TRUE(font3.font.has_value());
   EXPECT_EQ(font3.font->font_id, 13);
   EXPECT_EQ(font3.font->glyph_count, 3u);
@@ -418,14 +420,14 @@ TEST(SwfTagDecode, CountsTextRecordsAndGlyphEntries) {
   const auto result = fo4::swf::read_swf(all_kinds_movie());
   ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
 
-  const auto& text = result.file.tags[tag_index(result.file, 11)];
+  const auto& text = tag_with_code(result.file, 11);
   ASSERT_TRUE(text.text.has_value());
   EXPECT_EQ(text.text->character_id, 20);
   EXPECT_EQ(text.text->bounds, (fo4::swf::SwfRect{0, 1000, 0, 500, 11}));
   EXPECT_EQ(text.text->record_count, 2u);
   EXPECT_EQ(text.text->glyph_count, 3u);
 
-  const auto& text2 = result.file.tags[tag_index(result.file, 33)];
+  const auto& text2 = tag_with_code(result.file, 33);
   ASSERT_TRUE(text2.text.has_value());
   EXPECT_EQ(text2.text->character_id, 21);
   EXPECT_EQ(text2.text->record_count, 2u);
@@ -436,7 +438,7 @@ TEST(SwfTagDecode, DecodesSoundHeaderAndSampleCount) {
   const auto result = fo4::swf::read_swf(all_kinds_movie());
   ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
 
-  const auto& sound = result.file.tags[tag_index(result.file, 14)];
+  const auto& sound = tag_with_code(result.file, 14);
   ASSERT_TRUE(sound.sound.has_value());
   EXPECT_EQ(sound.sound->sound_id, 30);
   EXPECT_EQ(sound.sound->format, 2);
@@ -451,7 +453,7 @@ TEST(SwfTagDecode, DecodesScaleformExporterImageAndFontTextureTags) {
   const auto result = fo4::swf::read_swf(all_kinds_movie());
   ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
 
-  const auto& exporter = result.file.tags[tag_index(result.file, 1000)];
+  const auto& exporter = tag_with_code(result.file, 1000);
   ASSERT_TRUE(exporter.exporter_info.has_value());
   EXPECT_EQ(exporter.exporter_info->version, 0x0401);
   EXPECT_EQ(exporter.exporter_info->flags, 3u);
@@ -460,7 +462,7 @@ TEST(SwfTagDecode, DecodesScaleformExporterImageAndFontTextureTags) {
   EXPECT_EQ(exporter.exporter_info->swf_name, "HUDMenu");
   EXPECT_EQ(exporter.exporter_info->code_offset_count, 2u);
 
-  const auto& external = result.file.tags[tag_index(result.file, 1001)];
+  const auto& external = tag_with_code(result.file, 1001);
   ASSERT_TRUE(external.external_image.has_value());
   EXPECT_EQ(external.external_image->character_id, 4u);
   EXPECT_EQ(external.external_image->bitmap_format, 2);
@@ -469,12 +471,12 @@ TEST(SwfTagDecode, DecodesScaleformExporterImageAndFontTextureTags) {
   EXPECT_EQ(external.external_image->export_name, "Z.png");
   EXPECT_EQ(external.external_image->file_name, "Z.png.dds");
 
-  const auto& external4 = result.file.tags[tag_index(result.file, 1009)];
+  const auto& external4 = tag_with_code(result.file, 1009);
   ASSERT_TRUE(external4.external_image.has_value());
   EXPECT_EQ(external4.external_image->character_id, 0x00010001u);
   EXPECT_EQ(external4.external_image->file_name, "Y.png.dds");
 
-  const auto& texture = result.file.tags[tag_index(result.file, 1002)];
+  const auto& texture = tag_with_code(result.file, 1002);
   ASSERT_TRUE(texture.font_texture.has_value());
   EXPECT_EQ(texture.font_texture->texture_id, 6u);
   EXPECT_EQ(texture.font_texture->texture_format, 2);
