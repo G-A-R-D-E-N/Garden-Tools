@@ -143,6 +143,7 @@ class Runtime {
   RuntimeStatus resolve_hierarchy();
   RuntimeStatus build_traits();
   RuntimeStatus install_builtins();
+  RuntimeStatus install_system_builtins();
   RuntimeStatus build_script_globals();
   void apply_class_slots();
   void build_prototypes();

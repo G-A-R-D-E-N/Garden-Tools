@@ -6010,6 +6010,21 @@ Owner-0 registration order: `Radicle/src/avm2/text.cpp:FontRegistry::first_with_
 ## Snapshot colour offsets and the snapshot hash (#807 follow-up)
 
 `Radicle/src/avm2/snapshot.cpp:make_entry` stores each colour offset in an `int32` (`SnapshotColorTransform`), but a script can assign any Number to `colorTransform.redOffset`. `Radicle/src/avm2/snapshot.cpp:color_offset` returns 0 for NaN and clamps every other value to the int32 range before the cast, so an out-of-range offset is no longer undefined behaviour. The display-tree text already prints a scaled magnitude (value times 10000) of 9e18 or more as `inf` (`Radicle/src/avm2/display_snapshot.cpp:fixed`). `Radicle/src/avm2/snapshot.cpp:snapshot_hash` keeps the `Hasher` offset basis 1469598103934665603 unchanged; the FNV-1a 64 basis is 14695981039346656037, and changing it is the owner's decision. Test: `Radicle/tests/test_avm2_snapshot.cpp:ColorOffsetsOutsideTheIntRangeClampToIt`.
+## Radicle/src/avm2/native_system.cpp:Runtime::install_system_builtins (R8 L3a static classes, #807)
+
+`Runtime::install_system_builtins` runs as the last step of `Radicle/src/avm2/builtins.cpp:Runtime::install_builtins`, so `flash.events::EventDispatcher` already exists when its `find_class` lookup runs. It installs `flash.text::TextFieldAutoSize`, `flash.system::Capabilities`, `flash.system::Security`, `flash.system::SecurityDomain` (shell only), `flash.text::Font`, `flash.filters::BitmapFilterQuality` and the interface `flash.events::IEventDispatcher`.
+
+The constants and fixed values are `TraitKind::Const` class traits, the same mechanism as `Math.PI`, not native getters. A script read is identical. A write to them is not rejected by this code. `Capabilities.version` ("WIN 32,0,0,0") is a guessed value. `Capabilities.languages` and `SecurityDomain.currentDomain` are not installed; the plan lists them for Grognak, and whether a movie reads them is unverified.
+
+`Security.sandboxType` is "application" as the L3a plan says. The plan also says Grognak compares `sandboxType` with `REMOTE`, which is false under this value. Unverified against the movie.
+
+`IEventDispatcher` sets `Class::is_interface` and is pushed into `EventDispatcher` `interfaces`, so `Class::implements_interface` holds for every EventDispatcher subclass.
+
+`Font.enumerateFonts` is `native::Id::font_enumerate_fonts`. `try_system_native` in `Radicle/src/avm2/native_system.cpp` handles it, and `Radicle/src/avm2/interpreter_support.cpp` dispatches to it before `try_compat_native`. `Font.registerFont` and the Security no-ops `allowDomain`, `allowInsecureDomain` and `loadPolicyFile` reuse `native::Id::compat_undefined`.
+
+`Radicle/src/avm2/display.cpp:write_display_property` maps the string constants through `auto_size_from_value`, and an integer still maps to the enum. `Radicle/src/avm2/display.cpp:read_display_property` returns the name from `auto_size_name`. It used to return the enum number, so any script that compared the old number now sees a string. No existing test reads `autoSize`.
+
+Not built or run locally. CI is the check for `tests/test_avm2_system_classes.cpp`.
 
 ## utf16 helpers in their own header
 

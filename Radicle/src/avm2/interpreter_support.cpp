@@ -232,6 +232,9 @@ ExecutionResult Interpreter::call_native_id(std::uint32_t native_id, const Value
   if (try_shared_native(*this, id, self, arguments, depth, result)) {
     return result;
   }
+  if (try_system_native(*this, id, self, arguments, depth, result)) {
+    return result;
+  }
   if (try_compat_native(*this, id, self, arguments, depth, result)) {
     return result;
   }

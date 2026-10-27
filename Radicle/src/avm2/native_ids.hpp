@@ -201,6 +201,7 @@ enum class Id : std::uint32_t {
   app_domain_construct,
   app_domain_has_definition,
   loader_context_construct,
+  font_enumerate_fonts,
 };
 
 }  // namespace fo4::avm2::native

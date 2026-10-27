@@ -38,6 +38,25 @@ Multiname multiname_for(std::string_view name) {
   return multiname;
 }
 
+const char* auto_size_name(TextFieldAutoSize value) {
+  static const char* const names[] = {"none", "left", "center", "right"};
+  return names[static_cast<std::uint8_t>(value)];
+}
+
+TextFieldAutoSize auto_size_from_value(const Value& value) {
+  if (!value.is_string()) {
+    const std::int32_t number = to_int32(value);
+    return number >= 0 && number < 4 ? static_cast<TextFieldAutoSize>(number)
+                                     : TextFieldAutoSize::none;
+  }
+  for (std::uint8_t index = 0; index < 4; ++index) {
+    if (value.as_string() == auto_size_name(static_cast<TextFieldAutoSize>(index))) {
+      return static_cast<TextFieldAutoSize>(index);
+    }
+  }
+  return TextFieldAutoSize::none;
+}
+
 }  // namespace
 
 std::uint32_t TimelineDefinition::frame_for_label(const std::string& name) const {
@@ -439,7 +458,7 @@ bool read_display_property(Interpreter& interpreter, DisplayObject& object,
       return true;
     }
     if (name == "autoSize") {
-      out = Value::uint32(static_cast<std::uint32_t>(text_field.auto_size()));
+      out = Value::string(auto_size_name(text_field.auto_size()));
       return true;
     }
     if (name == "defaultTextFormat") {
@@ -603,7 +622,7 @@ bool write_display_property(DisplayObject& object, const Multiname& multiname,
       return true;
     }
     if (name == "autoSize") {
-      text_field.set_auto_size(static_cast<TextFieldAutoSize>(to_int32(value)));
+      text_field.set_auto_size(auto_size_from_value(value));
       return true;
     }
     if (name == "defaultTextFormat") {
