@@ -41,6 +41,8 @@ struct radicle_movie {
 
 struct radicle_runtime_snapshot {
   fo4::avm2::FrameSnapshot frame;
+  std::vector<std::vector<radicle_runtime_run>> runs;
+  std::vector<std::vector<radicle_runtime_glyph>> glyphs;
 };
 
 namespace {
@@ -166,6 +168,29 @@ fo4::avm2::ReplayInput to_replay(const radicle_runtime_input& input) {
   return replay;
 }
 
+void fill_runs(const fo4::avm2::SnapshotEntry& source, radicle_runtime_snapshot& snapshot,
+               std::size_t entry_index) {
+  std::vector<radicle_runtime_run>& runs = snapshot.runs[entry_index];
+  std::vector<std::vector<radicle_runtime_glyph>>& glyph_lists = snapshot.glyphs;
+  runs.clear();
+  runs.reserve(source.runs.size());
+  for (const fo4::avm2::SnapshotTextRun& run : source.runs) {
+    std::vector<radicle_runtime_glyph> glyphs;
+    glyphs.reserve(run.glyphs.size());
+    for (const fo4::avm2::SnapshotGlyph& glyph : run.glyphs) {
+      glyphs.push_back(radicle_runtime_glyph{glyph.font_id, glyph.glyph_id, glyph.x, glyph.advance});
+    }
+    const std::size_t run_index = runs.size();
+    runs.push_back(radicle_runtime_run{run.font_id, run.font_size, run.x, run.y, run.color, 0,
+                                       nullptr});
+    glyph_lists[entry_index].push_back(std::move(glyphs));
+    if (!glyph_lists[entry_index].back().empty()) {
+      runs[run_index].glyph_count = glyph_lists[entry_index].back().size();
+      runs[run_index].glyphs = glyph_lists[entry_index].back().data();
+    }
+  }
+}
+
 void fill_entry(const fo4::avm2::SnapshotEntry& source, radicle_runtime_entry& out) {
   out = {};
   out.kind = static_cast<std::uint8_t>(source.kind);
@@ -284,6 +309,11 @@ radicle_status radicle_movie_snapshot(radicle_movie* movie, radicle_runtime_snap
   return guarded("unknown exception while taking a snapshot", [&] {
     auto snapshot = std::make_unique<radicle_runtime_snapshot>();
     snapshot->frame = movie->movie->take_snapshot();
+    snapshot->runs.resize(snapshot->frame.entries.size());
+    snapshot->glyphs.resize(snapshot->frame.entries.size());
+    for (std::size_t index = 0; index < snapshot->frame.entries.size(); ++index) {
+      fill_runs(snapshot->frame.entries[index], *snapshot, index);
+    }
     *out_snapshot = snapshot.release();
     return RADICLE_STATUS_OK;
   });
@@ -303,6 +333,8 @@ radicle_status radicle_runtime_snapshot_entry_at(const radicle_runtime_snapshot*
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the snapshot entry index is out of range");
   }
   fill_entry(snapshot->frame.entries[index], *out_entry);
+  out_entry->runs = snapshot->runs[index].empty() ? nullptr : snapshot->runs[index].data();
+  out_entry->run_count = snapshot->runs[index].size();
   return RADICLE_STATUS_OK;
 }
 

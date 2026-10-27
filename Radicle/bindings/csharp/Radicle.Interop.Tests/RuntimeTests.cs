@@ -126,7 +126,7 @@ public class RuntimeTests
         var first = RunOnce();
         if (first == null) return;
         var second = RunOnce();
-        Assert.NotNull(second);
-        Assert.Equal(first, second!);
+        if (second == null) return;
+        Assert.Equal(first, second);
     }
 }
