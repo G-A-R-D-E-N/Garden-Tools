@@ -189,6 +189,11 @@ TEST_CASE("PluginEditTool refuses rich record payloads it cannot prove") {
     REQUIRE_FALSE(globBadType.has_value());
     CHECK(globBadType.error().type == "InvalidRecordCreationPayload");
 
+    const auto globShortAlias = backend.invokeBackend(
+        "CreateRecord", nlohmann::json::array({"Patch.esp", "GLOB", {{"editorId", "ShortAlias"}, {"type", "s"}}}));
+    REQUIRE_FALSE(globShortAlias.has_value());
+    CHECK(globShortAlias.error().type == "InvalidRecordCreationPayload");
+
     const auto unsupported = backend.invokeBackend(
         "CreateRecord", nlohmann::json::array({"Patch.esp", "MISC", {{"editorId", "StillRefused"}}}));
     REQUIRE_FALSE(unsupported.has_value());
