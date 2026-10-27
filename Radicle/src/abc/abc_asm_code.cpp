@@ -26,6 +26,21 @@ std::size_t u30_size(std::uint32_t value) {
   return size;
 }
 
+bool same_instruction(const AbcInstruction& parsed, const AbcInstruction& decoded) {
+  if (parsed.opcode != decoded.opcode || parsed.operands.size() != decoded.operands.size()) {
+    return false;
+  }
+  for (std::size_t index = 0; index < parsed.operands.size(); ++index) {
+    const AbcDecodedOperand& from_text = parsed.operands[index];
+    const AbcDecodedOperand& from_bytes = decoded.operands[index];
+    if (from_text.immediate != from_bytes.immediate ||
+        (from_text.role != AbcOperandRole::Immediate && from_text.value != from_bytes.value)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 struct PendingBranch {
   std::size_t instruction{0};
   std::size_t operand{0};
@@ -128,17 +143,24 @@ struct BodyParser {
     if (offset != code_size) {
       return fail("instruction offsets are not contiguous");
     }
-    const std::uint8_t opcode = opcode_for(tokens[1]);
+    return parse_operation(tokens, 1);
+  }
+
+  bool parse_operation(const std::vector<std::string>& tokens, std::size_t mnemonic) {
+    if (tokens.size() <= mnemonic) {
+      return fail("instruction line is malformed");
+    }
+    const std::uint8_t opcode = opcode_for(tokens[mnemonic]);
     const AbcOpcodeInfo* info = opcode == 0xFF ? nullptr : opcode_info(opcode);
     if (info == nullptr) {
-      return fail("unknown opcode " + tokens[1]);
+      return fail("unknown opcode " + tokens[mnemonic]);
     }
     AbcInstruction instruction;
     instruction.offset = code_size;
     instruction.opcode = opcode;
     instruction.mnemonic = info->mnemonic;
     const std::size_t instruction_index = instructions.size();
-    std::size_t token = 2;
+    std::size_t token = mnemonic + 1;
     std::size_t length = 1;
     for (std::size_t operand_index = 0; operand_index < info->operand_count; ++operand_index) {
       const AbcOperandSpec& spec = info->operands[operand_index];
@@ -393,4 +415,42 @@ AbcStatus parse_body(AbcFile& file, std::size_t body_index,
   return AbcStatus::Ok;
 }
 
+AbcStatus parse_instruction_text(std::string_view text, std::vector<std::uint8_t>& out,
+                                 std::string& error) {
+  AbcFile scratch;
+  BodyParser parser{scratch, error, {}, {}, {}, {}, {}, {}, 0, false, false, 0};
+  bool ok = parser.parse_operation(split_tokens(text), 0);
+  if (ok && (!parser.branches.empty() || !parser.switches.empty())) {
+    ok = parser.fail("branch operands need a method body");
+  }
+  if (ok && encode_code(parser.instructions, out) != AbcStatus::Ok) {
+    ok = parser.fail("instruction does not encode");
+  }
+  std::vector<AbcInstruction> decoded;
+  if (ok && (decode_code(out, decoded) != AbcStatus::Ok || decoded.size() != 1 ||
+             !same_instruction(parser.instructions[0], decoded[0]))) {
+    ok = parser.fail("instruction does not round trip through the decoder");
+  }
+  if (!ok) {
+    out.clear();
+    return AbcStatus::InconsistentModel;
+  }
+  return AbcStatus::Ok;
+}
+
 }  // namespace fo4::abc::detail::text
+
+namespace fo4::abc {
+
+AbcStatus assemble_instruction_text(std::string_view text, std::vector<std::uint8_t>& out,
+                                    AbcTextError* error) {
+  std::string message;
+  const AbcStatus status = detail::text::parse_instruction_text(text, out, message);
+  if (status != AbcStatus::Ok && error != nullptr) {
+    error->line = 1;
+    error->message = message;
+  }
+  return status;
+}
+
+}  // namespace fo4::abc

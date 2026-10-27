@@ -54,4 +54,7 @@ AbcStatus parse_trait(Cursor& cursor, AbcTrait& out);
 AbcStatus parse_body(AbcFile& file, std::size_t body_index,
                      const std::vector<std::string>& block, std::string& error);
 
+AbcStatus parse_instruction_text(std::string_view text, std::vector<std::uint8_t>& out,
+                                 std::string& error);
+
 }  // namespace fo4::abc::detail::text

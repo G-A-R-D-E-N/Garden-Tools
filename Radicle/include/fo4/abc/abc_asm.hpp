@@ -3,8 +3,10 @@
 #include <fo4/abc/abc.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace fo4::abc {
 
@@ -15,5 +17,9 @@ struct AbcTextError {
 
 /* Requires render_abc_text output; a bad line must return InconsistentModel with *error. */
 AbcStatus assemble_abc_text(std::string_view text, AbcFile& out, AbcTextError* error = nullptr);
+
+/* Requires one branch-free line such as "pushbyte -3" with @N refs; a branch must be refused. */
+AbcStatus assemble_instruction_text(std::string_view text, std::vector<std::uint8_t>& out,
+                                    AbcTextError* error = nullptr);
 
 }  // namespace fo4::abc

@@ -21,6 +21,29 @@ AbcFile parse_or_fail(const std::vector<std::uint8_t>& bytes) {
   return file;
 }
 
+bool branch_free_text(const fo4::abc::AbcInstruction& instruction, std::string& out) {
+  out = instruction.mnemonic;
+  for (const fo4::abc::AbcDecodedOperand& operand : instruction.operands) {
+    switch (operand.role) {
+      case fo4::abc::AbcOperandRole::Offset:
+      case fo4::abc::AbcOperandRole::Switch:
+        return false;
+      case fo4::abc::AbcOperandRole::None:
+        break;
+      case fo4::abc::AbcOperandRole::Count:
+        out += " " + std::to_string(operand.value);
+        break;
+      case fo4::abc::AbcOperandRole::Immediate:
+        out += " " + std::to_string(operand.immediate);
+        break;
+      default:
+        out += " @" + std::to_string(operand.value);
+        break;
+    }
+  }
+  return true;
+}
+
 }  // namespace
 
 TEST(AbcAsm, DumpAssembleSerializeRoundTripsTheSyntheticFixtureByteForByte) {
@@ -88,4 +111,54 @@ TEST(AbcAsm, RejectsAnUnknownOpcode) {
   fo4::abc::AbcTextError error;
   EXPECT_EQ(fo4::abc::assemble_abc_text(text, assembled, &error), AbcStatus::InconsistentModel);
   EXPECT_FALSE(error.message.empty());
+}
+
+TEST(AbcAsm, AssemblesOneInstructionToItsOpcodeAndOperandBytes) {
+  std::vector<std::uint8_t> bytes;
+  ASSERT_EQ(fo4::abc::assemble_instruction_text("pushbyte -3", bytes), AbcStatus::Ok);
+  EXPECT_EQ(bytes, (std::vector<std::uint8_t>{0x24, 0xFD}));
+  ASSERT_EQ(fo4::abc::assemble_instruction_text("getlocal 1", bytes), AbcStatus::Ok);
+  EXPECT_EQ(bytes, (std::vector<std::uint8_t>{0x62, 0x01}));
+  ASSERT_EQ(fo4::abc::assemble_instruction_text("returnvoid", bytes), AbcStatus::Ok);
+  EXPECT_EQ(bytes, (std::vector<std::uint8_t>{0x47}));
+}
+
+TEST(AbcAsm, EveryBranchFreeFixtureInstructionRoundTripsThroughTheDecoder) {
+  const AbcFile file = parse_or_fail(fo4::test::build_abc());
+  std::size_t checked = 0;
+  for (const fo4::abc::AbcMethodBody& body : file.bodies) {
+    std::vector<fo4::abc::AbcInstruction> instructions;
+    ASSERT_EQ(fo4::abc::decode_code(body.code, instructions, body.exceptions), AbcStatus::Ok);
+    for (const fo4::abc::AbcInstruction& instruction : instructions) {
+      std::string text;
+      if (!branch_free_text(instruction, text)) {
+        continue;
+      }
+      std::vector<std::uint8_t> bytes;
+      ASSERT_EQ(fo4::abc::assemble_instruction_text(text, bytes), AbcStatus::Ok) << text;
+      std::vector<fo4::abc::AbcInstruction> reread;
+      ASSERT_EQ(fo4::abc::decode_code(bytes, reread), AbcStatus::Ok) << text;
+      ASSERT_EQ(reread.size(), 1u) << text;
+      std::string reread_text;
+      ASSERT_TRUE(branch_free_text(reread[0], reread_text)) << text;
+      EXPECT_EQ(reread_text, text);
+      ++checked;
+    }
+  }
+  EXPECT_GT(checked, 0u);
+}
+
+TEST(AbcAsm, RefusesInstructionTextThatIsNotOneBranchFreeInstruction) {
+  const char* const refused[] = {"", "notanopcode", "getlocal", "returnvoid 1", "jump -> L0",
+                                 "pushbyte 300"};
+  for (const char* text : refused) {
+    std::vector<std::uint8_t> bytes{0x01};
+    fo4::abc::AbcTextError error;
+    EXPECT_EQ(fo4::abc::assemble_instruction_text(text, bytes, &error),
+              AbcStatus::InconsistentModel)
+        << text;
+    EXPECT_FALSE(error.message.empty()) << text;
+    EXPECT_EQ(error.line, 1u) << text;
+    EXPECT_TRUE(bytes.empty()) << text;
+  }
 }
