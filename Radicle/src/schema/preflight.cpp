@@ -411,9 +411,12 @@ std::vector<PreflightIssue> preflight_authoring_record(
       : constraint->placement == RecordPlacement::topic_children ? static_cast<std::int32_t>(GroupType::topic_children)
                                                                  : -1;
   const bool cell_reference = constraint->placement == RecordPlacement::cell_reference_children;
+  // Invariant: only REFR may sit in a visible-distant children group.
   const bool cell_reference_parent =
       location.parent_group_type == static_cast<std::int32_t>(GroupType::cell_persistent_children) ||
-      location.parent_group_type == static_cast<std::int32_t>(GroupType::cell_temporary_children);
+      location.parent_group_type == static_cast<std::int32_t>(GroupType::cell_temporary_children) ||
+      (location.parent_group_type == static_cast<std::int32_t>(GroupType::cell_visible_distant_children) &&
+       location.record->header.signature == Signature::from_string("REFR"));
   if ((required_parent >= 0 && location.parent_group_type != required_parent) ||
       (cell_reference && !cell_reference_parent)) {
     issues.push_back(authoring_issue(
@@ -425,7 +428,7 @@ std::vector<PreflightIssue> preflight_authoring_record(
             : constraint->placement == RecordPlacement::quest_children
             ? "record must be a direct child of a quest children GRUP"
             : cell_reference
-            ? "record must be a direct child of a cell persistent or temporary children GRUP"
+            ? "record must be a direct child of a cell persistent, temporary or visible-distant children GRUP"
             : "record must be a direct child of a topic children GRUP"));
   }
 

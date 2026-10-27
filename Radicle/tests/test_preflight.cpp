@@ -257,14 +257,15 @@ TEST(AuthoringPreflight, CellReferenceVariantAtTopLevelFails) {
   EXPECT_TRUE(has_issue(issues, "record_placement_invalid"));
 }
 
-fo4::Plugin refr_in_cell(fo4::Record record) {
+fo4::Plugin refr_in_cell(fo4::Record record,
+                         fo4::GroupType bucket = fo4::GroupType::cell_persistent_children) {
   fo4::Plugin plugin;
   plugin.key = fo4::PluginKey::from_filename("Patch.esp");
   auto outer = top_group("CELL");
   fo4::Group children;
   children.header.group_type = static_cast<std::int32_t>(fo4::GroupType::cell_children);
   fo4::Group nested;
-  nested.header.group_type = static_cast<std::int32_t>(fo4::GroupType::cell_persistent_children);
+  nested.header.group_type = static_cast<std::int32_t>(bucket);
   nested.children.emplace_back(std::move(record));
   children.children.emplace_back(std::move(nested));
   outer.children.emplace_back(std::move(children));
@@ -321,6 +322,18 @@ TEST(AuthoringPreflight, RefrOrderedReferencePassesAndMisorderedReferenceFails) 
   const auto top_level = plugin_with_top_record(
       refr_with_data({"NAME", "DATA"}));
   EXPECT_TRUE(has_issue(fo4::schema::preflight_authoring_record(top_level, key),
+                        "record_placement_invalid"));
+}
+
+TEST(AuthoringPreflight, VisibleDistantChildrenAcceptReferencesOnly) {
+  const auto key = fo4::FormKey::parse("000800:Patch.esp");
+  const auto refr = refr_in_cell(refr_with_data({"NAME", "XSCL", "DATA"}),
+                                 fo4::GroupType::cell_visible_distant_children);
+  EXPECT_TRUE(fo4::schema::preflight_authoring_record(refr, key).empty());
+
+  const auto phzd = refr_in_cell(authored_record("PHZD", 0x800, {}),
+                                 fo4::GroupType::cell_visible_distant_children);
+  EXPECT_TRUE(has_issue(fo4::schema::preflight_authoring_record(phzd, key),
                         "record_placement_invalid"));
 }
 
