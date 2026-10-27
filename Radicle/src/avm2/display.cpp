@@ -45,7 +45,9 @@ const char* auto_size_name(TextFieldAutoSize value) {
 
 TextFieldAutoSize auto_size_from_value(const Value& value) {
   if (!value.is_string()) {
-    return static_cast<TextFieldAutoSize>(to_int32(value));
+    const std::int32_t number = to_int32(value);
+    return number >= 0 && number < 4 ? static_cast<TextFieldAutoSize>(number)
+                                     : TextFieldAutoSize::none;
   }
   for (std::uint8_t index = 0; index < 4; ++index) {
     if (value.as_string() == auto_size_name(static_cast<TextFieldAutoSize>(index))) {

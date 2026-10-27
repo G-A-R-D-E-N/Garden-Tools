@@ -149,6 +149,26 @@ TEST(Avm2SystemClasses, TextFieldAutoSizeAcceptsTheConstantAndReadsItBack) {
   EXPECT_EQ(result.value.as_string(), "left");
 }
 
+TEST(Avm2SystemClasses, TextFieldAutoSizeReadsNoneForAnOutOfRangeNumber) {
+  Runtime runtime;
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder code;
+  const std::uint32_t auto_size = script.multiname("autoSize");
+  code.getlex(script.multiname("TextField", "flash.text"));
+  code.construct(0);
+  code.setlocal(1);
+  code.getlocal(1);
+  code.pushbyte(7);
+  code.setproperty(auto_size);
+  code.getlocal(1);
+  code.getproperty(auto_size);
+  code.returnvalue();
+  const ExecutionResult result = run_program(runtime, script, code, 2);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_string());
+  EXPECT_EQ(result.value.as_string(), "none");
+}
+
 TEST(Avm2SystemClasses, EventDispatcherImplementsTheIEventDispatcherInterface) {
   Runtime runtime;
   avm2_test::ScriptBuilder script;
