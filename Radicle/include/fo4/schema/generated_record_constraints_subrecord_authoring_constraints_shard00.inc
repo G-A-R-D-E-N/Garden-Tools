@@ -240,7 +240,7 @@
   {Signature::from_string("XCLW"), 0, 1, nullptr, 0, false, false},
   {Signature::from_string("XCLR"), 0, 65535, nullptr, 0, true, false},
   {Signature::from_string("XLCN"), 0, 1, nullptr, 0, false, false},
-  {Signature::from_string("XWCN"), 0, 1, nullptr, 0, false, false},
+  {Signature::from_string("XWCN"), 0, 1, nullptr, 0, false, true},
   {Signature::from_string("XWCU"), 0, 65535, nullptr, 0, false, false},
   {Signature::from_string("XCWT"), 0, 1, nullptr, 0, false, false},
   {Signature::from_string("XOWN"), 0, 1, nullptr, 0, false, false},

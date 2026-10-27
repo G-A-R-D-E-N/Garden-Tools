@@ -23008,7 +23008,7 @@
           { "signature": "XCLW", "minimum": 0, "maximum": 1 },
           { "signature": "XCLR", "minimum": 0, "maximum": 65535, "uncounted": true },
           { "signature": "XLCN", "minimum": 0, "maximum": 1 },
-          { "signature": "XWCN", "minimum": 0, "maximum": 1 },
+          { "signature": "XWCN", "minimum": 0, "maximum": 1, "coupled": true },
           { "signature": "XWCU", "minimum": 0, "maximum": 65535 },
           { "signature": "XCWT", "minimum": 0, "maximum": 1 },
           { "signature": "XOWN", "minimum": 0, "maximum": 1 },
