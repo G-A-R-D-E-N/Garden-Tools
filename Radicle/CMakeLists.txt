@@ -286,6 +286,9 @@ add_library(fo4
   src/abc/abc_verify.cpp
   src/abc/abc_text.cpp
   src/abc/abc_text_body.cpp
+  src/abc/abc_asm_lex.cpp
+  src/abc/abc_asm.cpp
+  src/abc/abc_asm_code.cpp
   src/avm2/name.cpp
   src/avm2/value.cpp
   src/avm2/coercion.cpp
@@ -762,6 +765,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_abc_verify.cpp
     tests/test_abc_text.cpp
     tests/test_abc_text_real.cpp
+    tests/test_abc_asm.cpp
+    tests/test_abc_asm_real.cpp
     tests/test_avm2_value.cpp
     tests/test_avm2_object.cpp
     tests/test_avm2_runtime.cpp
