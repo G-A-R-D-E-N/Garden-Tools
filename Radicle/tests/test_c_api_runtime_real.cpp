@@ -49,7 +49,7 @@ radicle_status resolve_asset(void* user, const char* path, uint8_t** out_bytes, 
   candidates.emplace_back(path);
   candidates.emplace_back(host->movie_directory + path);
   const std::string_view raw{path};
-  const std::size_t slash = raw.find_last_of("\/");
+  const std::size_t slash = raw.find_last_of("\\/");
   if (slash != std::string_view::npos) candidates.emplace_back(std::string{raw.substr(slash + 1)});
   for (const std::string& candidate : candidates) {
     std::size_t index = 0;
@@ -63,7 +63,7 @@ radicle_status resolve_asset(void* user, const char* path, uint8_t** out_bytes, 
 }
 
 std::string directory_of(std::string_view path) {
-  const std::size_t slash = path.find_last_of("\/");
+  const std::size_t slash = path.find_last_of("\\/");
   return slash == std::string_view::npos ? std::string{} : std::string{path.substr(0, slash + 1)};
 }
 
