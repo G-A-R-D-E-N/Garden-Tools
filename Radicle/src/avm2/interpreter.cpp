@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <limits>
 #include <cstdint>
 #include <map>
 #include <memory>

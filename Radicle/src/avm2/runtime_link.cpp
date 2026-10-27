@@ -4,9 +4,39 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 
 namespace fo4::avm2 {
+
+namespace {
+
+std::string class_key(NamespaceKind kind, std::string_view name_space, std::string_view local_name) {
+  std::string key;
+  key += static_cast<char>(static_cast<std::uint8_t>(kind));
+  key += '\x1f';
+  key += name_space;
+  key += '\x1f';
+  key += local_name;
+  return key;
+}
+
+std::string key_for_multiname(const Multiname& multiname) {
+  if (multiname.namespaces.empty() || !multiname.has_fixed_name()) {
+    return {};
+  }
+  const Namespace& name_space = multiname.namespaces.front();
+  return class_key(name_space.kind, name_space.name, multiname.name);
+}
+
+std::string instance_key(const abc::AbcFile& file, std::uint32_t instance_index) {
+  std::string key = std::to_string(reinterpret_cast<std::uintptr_t>(&file));
+  key += '#';
+  key += std::to_string(instance_index);
+  return key;
+}
+
+}  // namespace
 
 RuntimeStatus Runtime::build_shells_for_file(const abc::AbcFile& file) {
   if (file.instances.size() != file.classes.size()) {
