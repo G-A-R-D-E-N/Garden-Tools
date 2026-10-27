@@ -10464,7 +10464,7 @@
           { "signature": "XTEL", "minimum": 0, "maximum": 1 },
           { "signature": "XTNM", "minimum": 0, "maximum": 1 },
           { "signature": "XMBR", "minimum": 0, "maximum": 1 },
-          { "signature": "XWCN", "minimum": 0, "maximum": 1 },
+          { "signature": "XWCN", "minimum": 0, "maximum": 1, "coupled": true },
           { "signature": "XASP", "minimum": 0, "maximum": 1 },
           { "signature": "XATP", "minimum": 0, "maximum": 1 },
           { "signature": "XAMC", "minimum": 0, "maximum": 1 },
