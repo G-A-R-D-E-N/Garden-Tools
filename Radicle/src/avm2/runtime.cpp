@@ -188,6 +188,7 @@ RuntimeStatus resolve_multiname(const abc::AbcFile& file, std::uint32_t index, M
     case abc::AbcMultinameKind::RTQNameL:
     case abc::AbcMultinameKind::RTQNameLA:
       out.kind = MultinameKind::Dynamic;
+      out.attribute = multiname.kind == abc::AbcMultinameKind::RTQNameLA;
       return RuntimeStatus::Ok;
     case abc::AbcMultinameKind::Multiname:
     case abc::AbcMultinameKind::MultinameA:

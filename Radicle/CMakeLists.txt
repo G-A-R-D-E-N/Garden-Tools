@@ -821,6 +821,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_avm2_scope_depth.cpp
     tests/test_avm2_scripts_real.cpp
     tests/test_avm2_builtins.cpp
+    tests/test_avm2_runtime_names.cpp
     tests/test_avm2_display.cpp
     tests/test_avm2_swf_runtime.cpp
     tests/test_avm2_snapshot.cpp

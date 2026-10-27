@@ -124,6 +124,7 @@ class Interpreter {
     std::size_t entry_scope_count{0};
     std::size_t ip{0};
     std::map<const Object*, std::vector<Key>> iterator_keys;
+    Multiname runtime_name;
   };
 
   ExecutionResult execute_frame(Frame& frame, std::size_t depth);
@@ -139,6 +140,15 @@ class Interpreter {
   InterpreterStatus pop(Frame& frame, Value& value, std::string& message);
   InterpreterStatus pop_arguments(Frame& frame, std::size_t count, std::vector<Value>& out,
                                   std::string& message);
+  InterpreterStatus resolve_runtime_multiname(Frame& frame, std::size_t above,
+                                              const Multiname*& multiname, std::string& message) {
+    if (multiname->has_fixed_name() && multiname->has_fixed_namespace()) {
+      return InterpreterStatus::Ok;
+    }
+    return pop_runtime_operands(frame, above, multiname, message);
+  }
+  InterpreterStatus pop_runtime_operands(Frame& frame, std::size_t above,
+                                         const Multiname*& multiname, std::string& message);
   InterpreterStatus jump_to_offset(Frame& frame, std::int32_t offset, std::string& message);
   std::uint32_t instruction_index_at(const Frame& frame, std::int32_t offset) const;
 

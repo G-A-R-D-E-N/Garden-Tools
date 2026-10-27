@@ -476,6 +476,39 @@
         }
         break;
       }
+      case op::k_instanceof: {
+        Value type;
+        pop_value(type);
+        Value value;
+        if (status == InterpreterStatus::Ok) {
+          pop_value(value);
+        }
+        if (status == InterpreterStatus::Ok) {
+          push_value(Value::boolean(is_instance_of(value, type)));
+        }
+        break;
+      }
+      case op::k_in: {
+        Value object;
+        pop_value(object);
+        Value name;
+        if (status == InterpreterStatus::Ok) {
+          pop_value(name);
+        }
+        if (status != InterpreterStatus::Ok) {
+          break;
+        }
+        bool present = false;
+        if (object.is_object()) {
+          Multiname multiname;
+          multiname.kind = MultinameKind::QName;
+          multiname.name = to_string(name);
+          multiname.namespaces.push_back(Namespace{});
+          present = object.as_object()->has_property(multiname);
+        }
+        push_value(Value::boolean(present));
+        break;
+      }
       case op::k_not: {
         Value value;
         pop_value(value);
