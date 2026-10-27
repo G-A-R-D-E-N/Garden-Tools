@@ -445,6 +445,10 @@ RuntimeStatus Runtime::install_builtins() {
   };
 
   const auto add_static_constant = [](Class& klass, std::string name, std::uint32_t value) {
+    if (klass.class_object == nullptr) {
+      klass.prototype_object = std::make_shared<Object>();
+      klass.class_object = std::make_shared<ClassObject>(&klass);
+    }
     Property& property = klass.class_object->define_own_property(primary_key(package_name(name)));
     property.kind = PropertyKind::Value;
     property.value = Value::uint32(value);
