@@ -369,8 +369,12 @@ ProgramRun run_program(const radicle_ba2* archive, const std::string& movie_path
 void check_pins(const char* program, const ProgramRun& run) {
   for (const PinnedProgram& pin : kPinned) {
     if (std::string_view{pin.program} != program) continue;
-    if (pin.snapshot_hash != 0) EXPECT_EQ(run.hashes.back(), pin.snapshot_hash) << program;
-    if (pin.host_log_hash != 0) EXPECT_EQ(run.host_log, pin.host_log_hash) << program;
+    if (pin.snapshot_hash != 0) {
+      EXPECT_EQ(run.hashes.back(), pin.snapshot_hash) << program;
+    }
+    if (pin.host_log_hash != 0) {
+      EXPECT_EQ(run.host_log, pin.host_log_hash) << program;
+    }
   }
 }
 
