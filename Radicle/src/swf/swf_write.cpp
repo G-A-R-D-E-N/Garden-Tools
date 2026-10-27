@@ -174,7 +174,7 @@ std::vector<std::byte> write_swf(const SwfFile& file, SwfCompression compression
     return out;
   }
   if (compression == SwfCompression::lzma) {
-    const auto packed = lzma_encode_swf(body);
+    const auto packed = detail::lzma_encode_swf(body);
     if (packed.size() > std::numeric_limits<std::uint32_t>::max()) {
       throw std::length_error("SWF LZMA stream exceeds the 32-bit compressed length field");
     }
