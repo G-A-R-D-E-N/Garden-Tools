@@ -38,12 +38,6 @@ std::string stringArgument(const nlohmann::json& args, std::size_t index) {
     return args[index].get<std::string>();
 }
 
-bool boolArgument(const nlohmann::json& args, std::size_t index, bool& value) {
-    if (!args.is_array() || index >= args.size() || !args[index].is_boolean()) return false;
-    value = args[index].get<bool>();
-    return true;
-}
-
 bool optionalBoolArgument(const nlohmann::json& args, std::size_t index, bool& value) {
     value = false;
     if (!args.is_array() || index >= args.size() || args[index].is_null()) return true;
@@ -589,7 +583,7 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverrideLocked(
     const auto targetName = stringArgument(arguments, 2);
     bool overwrite = false;
 
-    if (!boolArgument(arguments, 3, overwrite)) {
+    if (!support::tryBoolArgument(arguments, 3, overwrite)) {
         return std::unexpected(Error{"InvalidOverwriteFlag", "Overwrite flag must be boolean"});
     }
     bool allowLosing = false;

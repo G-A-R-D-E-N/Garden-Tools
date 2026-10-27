@@ -1,5 +1,7 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
+#include "RadiclePluginSupport.hpp"
+
 #include <algorithm>
 #include <exception>
 #include <format>
@@ -21,12 +23,6 @@ namespace {
 std::string stringArgument(const nlohmann::json& args, std::size_t index) {
     if (!args.is_array() || index >= args.size() || !args[index].is_string()) return {};
     return args[index].get<std::string>();
-}
-
-bool boolArgument(const nlohmann::json& args, std::size_t index, bool& value) {
-    if (!args.is_array() || index >= args.size() || !args[index].is_boolean()) return false;
-    value = args[index].get<bool>();
-    return true;
 }
 
 std::unexpected<Error> readOnlyError(std::string_view name) {
@@ -136,7 +132,7 @@ Result<nlohmann::json> RadiclePluginBackend::cleanUnusedMasters(const nlohmann::
     const auto name = stringArgument(arguments, 0);
     if (name.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
     bool apply = true;
-    if (arguments.is_array() && arguments.size() > 1 && !boolArgument(arguments, 1, apply)) {
+    if (arguments.is_array() && arguments.size() > 1 && !support::tryBoolArgument(arguments, 1, apply)) {
         return std::unexpected(Error{"InvalidApplyFlag", "Apply flag must be boolean"});
     }
 
@@ -216,7 +212,7 @@ Result<nlohmann::json> RadiclePluginBackend::setLight(const nlohmann::json& argu
     const auto name = stringArgument(arguments, 0);
     bool light = false;
     if (name.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
-    if (!boolArgument(arguments, 1, light)) {
+    if (!support::tryBoolArgument(arguments, 1, light)) {
         return std::unexpected(Error{"InvalidLightFlag", "Light flag must be boolean"});
     }
 

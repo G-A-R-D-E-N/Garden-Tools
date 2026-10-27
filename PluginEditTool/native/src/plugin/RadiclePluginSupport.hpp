@@ -46,6 +46,21 @@ inline std::string stringArgument(const nlohmann::json& args, std::size_t index)
     return args[index].get<std::string>();
 }
 
+inline bool boolArgument(const nlohmann::json& args, std::size_t index, bool fallback = false) {
+    if (!args.is_array() || index >= args.size() || !args[index].is_boolean()) return fallback;
+    return args[index].get<bool>();
+}
+
+inline bool tryBoolArgument(const nlohmann::json& args, std::size_t index, bool& value) {
+    if (!args.is_array() || index >= args.size() || !args[index].is_boolean()) return false;
+    value = args[index].get<bool>();
+    return true;
+}
+
+inline std::string localHex(std::uint32_t value) {
+    return std::format("{:06X}", value);
+}
+
 inline nlohmann::json argumentAt(const nlohmann::json& args, std::size_t index) {
     return args.is_array() && index < args.size() ? args[index] : nlohmann::json();
 }

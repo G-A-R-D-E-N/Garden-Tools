@@ -496,7 +496,7 @@ TEST_F(Ba2ReaderTest, LooseWalkLeavesTheDataFolderOutOfTheTree) {
   EXPECT_EQ(all[0].location.loose_path, data() / "meshes" / "x.nif");
 }
 
-TEST_F(Ba2ReaderTest, CApiWritesGeneralArchivesThatMatchTheNativeWriterAndReadBack) {
+TEST_F(Ba2ReaderTest, CApiWritesGeneralArchivesThatReadBack) {
   const std::string big(4096, 'm');
   const radicle_ba2_file files[] = {
       {"Meshes\\Gun.nif", reinterpret_cast<const uint8_t*>("gun"), 3},
@@ -508,11 +508,6 @@ TEST_F(Ba2ReaderTest, CApiWritesGeneralArchivesThatMatchTheNativeWriterAndReadBa
   const std::vector<std::byte> written(reinterpret_cast<const std::byte*>(bytes),
                                        reinterpret_cast<const std::byte*>(bytes) + size);
   radicle_free_bytes(bytes);
-
-  Ba2GeneralArchive expected;
-  expected.entries = {general("Meshes\\Gun.nif", "gun", true), general("Materials\\Gun.bgsm", big, true),
-                      general("Empty.txt", "", true)};
-  EXPECT_EQ(written, fo4::archive::write_ba2_general(expected));
 
   const auto path = write_file(data() / "Written.ba2", written);
   const auto reader = Ba2Reader::open(path);
@@ -528,6 +523,67 @@ TEST_F(Ba2ReaderTest, CApiWritesGeneralArchivesThatMatchTheNativeWriterAndReadBa
   const radicle_ba2_file no_path[] = {{nullptr, nullptr, 0}};
   EXPECT_EQ(radicle_ba2_write_general(no_path, 1, 1, 0, &bytes, &size), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_ba2_write_general(nullptr, 1, 1, 0, &bytes, &size), RADICLE_STATUS_INVALID_ARGUMENT);
+}
+
+TEST_F(Ba2ReaderTest, CApiWritesPinnedBytesForOneGeneralEntry) {
+  const char payload[] = "x";
+  const radicle_ba2_file files[] = {{"a.txt", reinterpret_cast<const uint8_t*>(payload), 1}};
+  uint8_t* bytes = nullptr;
+  size_t size = 0;
+  ASSERT_EQ(radicle_ba2_write_general(files, 1, 1, 0, &bytes, &size), RADICLE_STATUS_OK);
+  const std::vector<uint8_t> got(bytes, bytes + size);
+  const std::vector<std::byte> written(reinterpret_cast<const std::byte*>(bytes),
+                                       reinterpret_cast<const std::byte*>(bytes) + size);
+  radicle_free_bytes(bytes);
+
+  const std::vector<uint8_t> expected = {
+      0x42, 0x54, 0x44, 0x58, 0x01, 0x00, 0x00, 0x00, 0x47, 0x4E, 0x52, 0x4C,
+      0x01, 0x00, 0x00, 0x00, 0x3D, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0xCE, 0x51, 0xB5, 0x3A, 0x74, 0x78, 0x74, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x01, 0x10, 0x00, 0x3C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x0D, 0xF0, 0xAD, 0xBA,
+      0x78, 0x05, 0x00, 0x61, 0x2E, 0x74, 0x78, 0x74,
+  };
+  EXPECT_EQ(got, expected);
+
+  const auto reader = Ba2Reader::open(write_file(data() / "Pinned.ba2", written));
+  ASSERT_EQ(reader.entries().size(), 1u);
+  EXPECT_EQ(reader.entries()[0].name_hash, 0x3AB551CEu);
+  EXPECT_EQ(text_of(reader.extract(*reader.find("a.txt"))), "x");
+}
+
+TEST_F(Ba2ReaderTest, CApiWritesVersionSevenGeneralArchives) {
+  const char payload[] = "x";
+  const radicle_ba2_file files[] = {{"a.txt", reinterpret_cast<const uint8_t*>(payload), 1}};
+  uint8_t* bytes = nullptr;
+  size_t size = 0;
+  ASSERT_EQ(radicle_ba2_write_general(files, 1, 7, 0, &bytes, &size), RADICLE_STATUS_OK);
+  const std::vector<std::byte> written(reinterpret_cast<const std::byte*>(bytes),
+                                       reinterpret_cast<const std::byte*>(bytes) + size);
+  radicle_free_bytes(bytes);
+
+  const auto reader = Ba2Reader::open(write_file(data() / "Seven.ba2", written));
+  EXPECT_EQ(reader.version(), 7u);
+  EXPECT_EQ(text_of(reader.extract(*reader.find("a.txt"))), "x");
+}
+
+TEST_F(Ba2ReaderTest, CApiWritesHeaderOnlyArchiveForZeroEntries) {
+  uint8_t* bytes = nullptr;
+  size_t size = 0;
+  ASSERT_EQ(radicle_ba2_write_general(nullptr, 0, 1, 0, &bytes, &size), RADICLE_STATUS_OK);
+  const std::vector<uint8_t> got(bytes, bytes + size);
+  const std::vector<std::byte> written(reinterpret_cast<const std::byte*>(bytes),
+                                       reinterpret_cast<const std::byte*>(bytes) + size);
+  radicle_free_bytes(bytes);
+
+  const std::vector<uint8_t> expected = {0x42, 0x54, 0x44, 0x58, 0x01, 0x00, 0x00, 0x00,
+                                         0x47, 0x4E, 0x52, 0x4C, 0x00, 0x00, 0x00, 0x00,
+                                         0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+  EXPECT_EQ(got, expected);
+
+  const auto reader = Ba2Reader::open(write_file(data() / "Empty.ba2", written));
+  EXPECT_EQ(reader.version(), 1u);
+  EXPECT_TRUE(reader.entries().empty());
 }
 
 TEST_F(Ba2ReaderTest, CApiWriteGeneralReportsCallerErrorsAsInvalidArgument) {
@@ -558,6 +614,8 @@ TEST_F(Ba2ReaderTest, CApiWriteGeneralReportsCallerErrorsAsInvalidArgument) {
   refuse(trailing, 1, 1);
   for (const auto& entry : separator) refuse(&entry, 1, 1);
   for (const auto& entry : non_1252) refuse(&entry, 1, 1);
+  const radicle_ba2_file dot_paths[] = {{".", buffer, 1}, {"\\.", buffer, 1}};
+  for (const auto& entry : dot_paths) refuse(&entry, 1, 1);
 
   // Constraint: the 259-byte fixture must carry a directory so both hashes stay non-zero.
   const std::string at_hash_limit(260, 'a');

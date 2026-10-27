@@ -738,7 +738,7 @@ SceneVmadExtras read_scene_vmad_extras(std::span<const std::byte> data,
   } catch (const UnsupportedVmadProperty&) {
     result.unsupported = true;
     result.unsupported_reason = "a VMAD property in the scene extras is unsupported";
-  } catch (const std::exception& error) {
+  } catch (const parse_error& error) {
     result.unsupported = true;
     result.unsupported_reason = error.what();
   }

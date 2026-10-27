@@ -29,6 +29,11 @@ def printable_signature(value):
     return all(0x20 <= ord(ch) <= 0x7E for ch in value)
 
 
+def cpp_string(value: str) -> str:
+    # Invariant: JSON escaping is only valid for the ASCII field metadata.
+    return json.dumps(value, ensure_ascii=True)
+
+
 def cpp_signature(value):
     if printable_signature(value):
         return f"Signature::from_string({json.dumps(value, ensure_ascii=True)})"
