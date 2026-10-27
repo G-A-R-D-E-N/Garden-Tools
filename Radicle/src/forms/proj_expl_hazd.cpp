@@ -160,6 +160,9 @@ std::span<const std::byte> require_payload(const Record& record, Signature signa
 }
 
 void require_clean_editor_id(std::string_view editor_id) {
+  if (editor_id.empty()) {
+    throw ProjExplHazdError("editor ID is empty; PROJ, EXPL and HAZD require one");
+  }
   if (editor_id.find('\0') != std::string_view::npos) {
     throw ProjExplHazdError("editor ID may not contain a null byte");
   }
