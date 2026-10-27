@@ -58,7 +58,7 @@
   {Signature::from_string("XTEL"), 0, 1, nullptr, 0, false, false},
   {Signature::from_string("XTNM"), 0, 1, nullptr, 0, false, false},
   {Signature::from_string("XMBR"), 0, 1, nullptr, 0, false, false},
-  {Signature::from_string("XWCN"), 0, 1, nullptr, 0, false, false},
+  {Signature::from_string("XWCN"), 0, 1, nullptr, 0, false, true},
   {Signature::from_string("XASP"), 0, 1, nullptr, 0, false, false},
   {Signature::from_string("XATP"), 0, 1, nullptr, 0, false, false},
   {Signature::from_string("XAMC"), 0, 1, nullptr, 0, false, false},
