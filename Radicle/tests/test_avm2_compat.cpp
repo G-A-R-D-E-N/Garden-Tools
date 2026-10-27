@@ -42,10 +42,11 @@ struct Harness {
   }
 };
 
-fo4::avm2::Value property(Interpreter& interpreter, const fo4::avm2::Value& object,
-                          const char* name) {
+fo4::avm2::Value property(const fo4::avm2::Value& object, const char* name) {
   if (!object.is_object()) return fo4::avm2::Value::undefined();
-  fo4::avm2::Multiname multiname = fo4::avm2::builtin_name(name);
+  fo4::avm2::Multiname multiname;
+  multiname.name = name;
+  multiname.namespaces.push_back(fo4::avm2::Namespace{});
   fo4::avm2::Value out;
   if (!object.as_object()->read_value(multiname, out)) return fo4::avm2::Value::undefined();
   return out;
@@ -66,9 +67,9 @@ TEST(Avm2Compat, ConstructsBitmapDataAndReadsItsFields) {
   const ExecutionResult result = harness.run(script, code, 1);
   ASSERT_TRUE(result.ok()) << result.message;
   ASSERT_TRUE(result.value.is_object());
-  EXPECT_DOUBLE_EQ(property(harness.interpreter, result.value, "width").as_number(), 10.0);
-  EXPECT_DOUBLE_EQ(property(harness.interpreter, result.value, "height").as_number(), 20.0);
-  EXPECT_TRUE(property(harness.interpreter, result.value, "transparent").as_boolean());
+  EXPECT_DOUBLE_EQ(property(result.value, "width").as_number(), 10.0);
+  EXPECT_DOUBLE_EQ(property(result.value, "height").as_number(), 20.0);
+  EXPECT_TRUE(property(result.value, "transparent").as_boolean());
 }
 
 TEST(Avm2Compat, ConstructsFiltersAndKeyboardConstants) {
@@ -76,8 +77,6 @@ TEST(Avm2Compat, ConstructsFiltersAndKeyboardConstants) {
   avm2_test::ScriptBuilder script;
   avm2_test::CodeBuilder code;
   const std::uint32_t blur = script.multiname("BlurFilter", "flash.filters");
-  const std::uint32_t keyboard = script.multiname("Keyboard", "flash.ui");
-  const std::uint32_t up = script.multiname("UP");
   code.getlex(blur);
   code.pushbyte(2);
   code.pushbyte(3);
@@ -121,7 +120,7 @@ TEST(Avm2Compat, ConstructsFiltersAndKeyboardConstants) {
 
 TEST(Avm2Compat, DisplayFiltersAndBitmapDataReachTheSnapshot) {
   fo4::avm2::DisplayObject object(nullptr);
-  object.set_filters({fo4::avm2::Value::number(1.0)});
+  object.filters() = {fo4::avm2::Value::number(1.0)};
   object.set_bitmap_data(fo4::avm2::Value::number(2.0));
   const fo4::avm2::FrameSnapshot snapshot = fo4::avm2::build_frame_snapshot(object);
   ASSERT_EQ(snapshot.entries.size(), 1u);

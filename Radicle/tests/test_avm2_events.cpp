@@ -32,6 +32,7 @@ using fo4::avm2::MovieClip;
 using fo4::avm2::Multiname;
 using fo4::avm2::MultinameKind;
 using fo4::avm2::Namespace;
+using fo4::avm2::Property;
 using fo4::avm2::Runtime;
 using fo4::avm2::SwfRuntime;
 using fo4::avm2::TimerObject;
