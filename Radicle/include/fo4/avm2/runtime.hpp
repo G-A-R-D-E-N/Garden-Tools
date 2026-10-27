@@ -62,6 +62,7 @@ class Runtime {
 
   const Class* find_class(const Multiname& multiname) const;
   const Class* find_class(std::string_view rendered_name) const;
+  const Class* class_at(const abc::AbcFile& file, std::uint32_t instance_index) const;
 
  private:
   struct FileState {

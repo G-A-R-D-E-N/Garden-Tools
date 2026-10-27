@@ -291,6 +291,10 @@ const Class* Runtime::find_class(const Multiname& multiname) const {
   return found == class_by_local_name_.end() ? nullptr : found->second;
 }
 
+const Class* Runtime::class_at(const abc::AbcFile& file, std::uint32_t instance_index) const {
+  return class_for_instance(file, instance_index);
+}
+
 const Class* Runtime::find_class(std::string_view rendered_name) const {
   for (const Class* klass : classes_) {
     if (std::string_view{klass->name} == rendered_name) {
@@ -415,7 +419,7 @@ RuntimeStatus Runtime::build_traits() {
       continue;
     }
     const abc::AbcFile& file = *klass->file;
-    const auto build_trait = [this, &file](const abc::AbcTrait& source, Trait& out) {
+    const auto build_trait = [this, &file, klass](const abc::AbcTrait& source, Trait& out) {
       if (resolve_multiname(file, source.name, out.multiname) != RuntimeStatus::Ok) {
         return RuntimeStatus::InvalidMultiname;
       }
@@ -463,6 +467,7 @@ RuntimeStatus Runtime::build_traits() {
           if (out.function == nullptr) {
             return RuntimeStatus::InvalidTrait;
           }
+          out.function->set_owner_class(klass);
           break;
       }
       return RuntimeStatus::Ok;
