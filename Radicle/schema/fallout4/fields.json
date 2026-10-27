@@ -22990,7 +22990,7 @@
     {
       "signature": "CELL",
       "authoring": {
-        "placement": "cell_children",
+        "placement": "cell_block",
         "subrecords": [
           { "signature": "EDID", "minimum": 0, "maximum": 1 },
           { "signature": "FULL", "minimum": 0, "maximum": 1 },

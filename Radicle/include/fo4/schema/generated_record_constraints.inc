@@ -311,7 +311,7 @@ inline constexpr RecordAuthoringConstraint k_generated_record_authoring_constrai
   {Signature::from_string("BNDS"), RecordPlacement::top_level, 179, 4},
   {Signature::from_string("BOOK"), RecordPlacement::top_level, 183, 31},
   {Signature::from_string("CAMS"), RecordPlacement::top_level, 214, 9},
-  {Signature::from_string("CELL"), RecordPlacement::cell_children, 223, 32},
+  {Signature::from_string("CELL"), RecordPlacement::cell_block, 223, 32},
   {Signature::from_string("CLAS"), RecordPlacement::top_level, 255, 6},
   {Signature::from_string("CLFM"), RecordPlacement::top_level, 261, 5},
   {Signature::from_string("CLMT"), RecordPlacement::top_level, 266, 10},
