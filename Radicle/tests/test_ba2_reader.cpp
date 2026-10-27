@@ -614,6 +614,8 @@ TEST_F(Ba2ReaderTest, CApiWriteGeneralReportsCallerErrorsAsInvalidArgument) {
   refuse(trailing, 1, 1);
   for (const auto& entry : separator) refuse(&entry, 1, 1);
   for (const auto& entry : non_1252) refuse(&entry, 1, 1);
+  const radicle_ba2_file dot_paths[] = {{".", buffer, 1}, {"\\.", buffer, 1}};
+  for (const auto& entry : dot_paths) refuse(&entry, 1, 1);
 
   // Constraint: the 259-byte fixture must carry a directory so both hashes stay non-zero.
   const std::string at_hash_limit(260, 'a');
