@@ -1,7 +1,11 @@
 #include <fo4/avm2/value.hpp>
 
+#include <fo4/avm2/text.hpp>
+
+#include <cstddef>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 
 namespace fo4::avm2 {
 
@@ -9,6 +13,17 @@ namespace {
 
 [[noreturn]] void wrong_kind(const char* wanted) {
   throw std::logic_error(std::string{"avm2 value is not "} + wanted);
+}
+
+void join_surrogate_halves(std::string& text) {
+  for (std::size_t index = text.find('\xED'); index != std::string::npos;
+       index = text.find('\xED', index + 1)) {
+    const std::u16string units = utf16_from_utf8(std::string_view(text).substr(index, 6));
+    if (units.size() >= 2 && units[0] >= 0xD800 && units[0] <= 0xDBFF && units[1] >= 0xDC00 &&
+        units[1] <= 0xDFFF) {
+      text.replace(index, 6, utf8_from_utf16(units.substr(0, 2)));
+    }
+  }
 }
 
 }  // namespace
@@ -49,6 +64,7 @@ Value Value::number(double number) {
 
 Value Value::string(std::string text) {
   Value value;
+  join_surrogate_halves(text);
   value.storage_ = std::move(text);
   return value;
 }

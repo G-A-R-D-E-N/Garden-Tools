@@ -1,6 +1,7 @@
 #include <fo4/avm2/coercion.hpp>
 #include <fo4/avm2/interpreter.hpp>
 #include <fo4/avm2/name.hpp>
+#include <fo4/avm2/text.hpp>
 #include <fo4/avm2/value.hpp>
 
 #include "native_internal.hpp"
@@ -39,103 +40,85 @@ std::size_t clamp_index(std::int32_t value, std::size_t low, std::size_t high) {
   return static_cast<std::size_t>(value);
 }
 
-std::string utf8_from_code_point(std::uint32_t code_point) {
-  std::string text;
-  if (code_point < 0x80u) {
-    text.push_back(static_cast<char>(code_point));
-  } else if (code_point < 0x800u) {
-    text.push_back(static_cast<char>(0xC0u | (code_point >> 6)));
-    text.push_back(static_cast<char>(0x80u | (code_point & 0x3Fu)));
-  } else if (code_point < 0x10000u) {
-    text.push_back(static_cast<char>(0xE0u | (code_point >> 12)));
-    text.push_back(static_cast<char>(0x80u | ((code_point >> 6) & 0x3Fu)));
-    text.push_back(static_cast<char>(0x80u | (code_point & 0x3Fu)));
-  } else {
-    text.push_back(static_cast<char>(0xF0u | ((code_point >> 18) & 0x07u)));
-    text.push_back(static_cast<char>(0x80u | ((code_point >> 12) & 0x3Fu)));
-    text.push_back(static_cast<char>(0x80u | ((code_point >> 6) & 0x3Fu)));
-    text.push_back(static_cast<char>(0x80u | (code_point & 0x3Fu)));
-  }
-  return text;
+ExecutionResult units_result(std::u16string_view units) {
+  return native_value(Value::string(utf8_from_utf16(units)));
 }
 
 ExecutionResult string_char_at(const Value& self, const std::vector<Value>& arguments) {
-  const std::string text = string_self(self);
+  const std::u16string units = utf16_from_utf8(string_self(self));
   const std::int32_t index = int_argument(arguments, 0, 0);
-  if (index < 0 || static_cast<std::size_t>(index) >= text.size()) {
+  if (index < 0 || static_cast<std::size_t>(index) >= units.size()) {
     return native_value(Value::string(std::string{}));
   }
-  return native_value(Value::string(std::string(1, text[static_cast<std::size_t>(index)])));
+  return units_result(std::u16string_view(units).substr(static_cast<std::size_t>(index), 1));
 }
 
 ExecutionResult string_char_code_at(const Value& self, const std::vector<Value>& arguments) {
-  const std::string text = string_self(self);
+  const std::u16string units = utf16_from_utf8(string_self(self));
   const std::int32_t index = int_argument(arguments, 0, 0);
-  if (index < 0 || static_cast<std::size_t>(index) >= text.size()) {
+  if (index < 0 || static_cast<std::size_t>(index) >= units.size()) {
     return native_value(Value::number(std::numeric_limits<double>::quiet_NaN()));
   }
-  const auto byte = static_cast<unsigned char>(text[static_cast<std::size_t>(index)]);
-  return native_value(Value::number(static_cast<double>(byte)));
+  return native_value(Value::number(static_cast<double>(units[static_cast<std::size_t>(index)])));
 }
 
 ExecutionResult string_index_of(const Value& self, const std::vector<Value>& arguments) {
-  const std::string text = string_self(self);
-  const std::string needle = to_string(argument_at(arguments, 0));
-  const std::int32_t from = int_argument(arguments, 1, 0);
-  if (from < 0) {
-    return native_value(Value::int32(0));
-  }
-  const std::size_t start = clamp_index(from, 0, text.size());
-  const std::size_t found = text.find(needle, start);
-  return native_value(Value::int32(found == std::string::npos ? -1
-                                                             : static_cast<std::int32_t>(found)));
+  const std::u16string units = utf16_from_utf8(string_self(self));
+  const std::u16string needle = utf16_from_utf8(to_string(argument_at(arguments, 0)));
+  const std::size_t start = clamp_index(int_argument(arguments, 1, 0), 0, units.size());
+  const std::size_t found = units.find(needle, start);
+  return native_value(Value::int32(found == std::u16string::npos
+                                       ? -1
+                                       : static_cast<std::int32_t>(found)));
 }
 
 ExecutionResult string_last_index_of(const Value& self, const std::vector<Value>& arguments) {
-  const std::string text = string_self(self);
-  const std::string needle = to_string(argument_at(arguments, 0));
+  const std::u16string units = utf16_from_utf8(string_self(self));
+  const std::u16string needle = utf16_from_utf8(to_string(argument_at(arguments, 0)));
   const Value from_value = argument_at(arguments, 1);
-  const std::size_t from =
-      from_value.is_undefined() ? text.size() : clamp_index(to_int32(from_value), 0, text.size());
-  const std::size_t found = text.rfind(needle, from);
-  return native_value(Value::int32(found == std::string::npos ? -1
-                                                             : static_cast<std::int32_t>(found)));
+  const std::size_t from = from_value.is_undefined()
+                               ? units.size()
+                               : clamp_index(to_int32(from_value), 0, units.size());
+  const std::size_t found = units.rfind(needle, from);
+  return native_value(Value::int32(found == std::u16string::npos
+                                       ? -1
+                                       : static_cast<std::int32_t>(found)));
 }
 
 ExecutionResult string_substr(const Value& self, const std::vector<Value>& arguments) {
-  const std::string text = string_self(self);
+  const std::u16string units = utf16_from_utf8(string_self(self));
   std::int32_t start = int_argument(arguments, 0, 0);
   if (start < 0) {
-    start = static_cast<std::int32_t>(text.size()) + start;
+    start = static_cast<std::int32_t>(units.size()) + start;
     if (start < 0) {
       start = 0;
     }
   }
   const std::int32_t length = int_argument(arguments, 1,
-                                           static_cast<std::int32_t>(text.size()));
-  if (length <= 0 || static_cast<std::size_t>(start) >= text.size()) {
+                                           static_cast<std::int32_t>(units.size()));
+  if (length <= 0 || static_cast<std::size_t>(start) >= units.size()) {
     return native_value(Value::string(std::string{}));
   }
-  const std::size_t begin = clamp_index(start, 0, text.size());
-  const std::size_t end = std::min(text.size(), begin + static_cast<std::size_t>(length));
-  return native_value(Value::string(text.substr(begin, end - begin)));
+  const std::size_t begin = clamp_index(start, 0, units.size());
+  const std::size_t end = std::min(units.size(), begin + static_cast<std::size_t>(length));
+  return units_result(units.substr(begin, end - begin));
 }
 
 ExecutionResult string_substring(const Value& self, const std::vector<Value>& arguments) {
-  const std::string text = string_self(self);
-  std::size_t begin = clamp_index(int_argument(arguments, 0, 0), 0, text.size());
+  const std::u16string units = utf16_from_utf8(string_self(self));
+  std::size_t begin = clamp_index(int_argument(arguments, 0, 0), 0, units.size());
   std::size_t end = argument_at(arguments, 1).is_undefined()
-                        ? text.size()
-                        : clamp_index(to_int32(argument_at(arguments, 1)), 0, text.size());
+                        ? units.size()
+                        : clamp_index(to_int32(argument_at(arguments, 1)), 0, units.size());
   if (begin > end) {
     std::swap(begin, end);
   }
-  return native_value(Value::string(text.substr(begin, end - begin)));
+  return units_result(units.substr(begin, end - begin));
 }
 
 ExecutionResult string_slice(const Value& self, const std::vector<Value>& arguments) {
-  const std::string text = string_self(self);
-  const auto resolve = [size = text.size()](std::int32_t value) {
+  const std::u16string units = utf16_from_utf8(string_self(self));
+  const auto resolve = [size = units.size()](std::int32_t value) {
     if (value < 0) {
       const std::int64_t adjusted = static_cast<std::int64_t>(size) + value;
       return adjusted < 0 ? std::size_t{0} : static_cast<std::size_t>(adjusted);
@@ -144,43 +127,44 @@ ExecutionResult string_slice(const Value& self, const std::vector<Value>& argume
   };
   const std::size_t begin = resolve(int_argument(arguments, 0, 0));
   const std::size_t end = argument_at(arguments, 1).is_undefined()
-                              ? text.size()
+                              ? units.size()
                               : resolve(to_int32(argument_at(arguments, 1)));
   if (begin >= end) {
     return native_value(Value::string(std::string{}));
   }
-  return native_value(Value::string(text.substr(begin, end - begin)));
+  return units_result(units.substr(begin, end - begin));
 }
 
 ExecutionResult string_split(Interpreter& interpreter, const Value& self,
                              const std::vector<Value>& arguments) {
   const std::string text = string_self(self);
+  const std::u16string units = utf16_from_utf8(text);
   const Value delimiter = argument_at(arguments, 0);
   const std::int32_t limit = int_argument(arguments, 1, 0);
   std::vector<Value> parts;
-  const auto push_part = [&parts, limit](const std::string& part) {
+  const auto push_part = [&parts, limit](std::u16string_view part) {
     if (limit > 0 && parts.size() >= static_cast<std::size_t>(limit)) {
       return;
     }
-    parts.push_back(Value::string(part));
+    parts.push_back(Value::string(utf8_from_utf16(part)));
   };
   if (delimiter.is_undefined() || to_string(delimiter) == text) {
-    push_part(text);
+    push_part(units);
   } else {
-    const std::string separator = to_string(delimiter);
+    const std::u16string separator = utf16_from_utf8(to_string(delimiter));
     if (separator.empty()) {
-      for (const char character : text) {
-        push_part(std::string(1, character));
+      for (std::size_t index = 0; index < units.size(); ++index) {
+        push_part(std::u16string_view(units).substr(index, 1));
       }
     } else {
       std::size_t start = 0;
-      while (start <= text.size()) {
-        const std::size_t found = text.find(separator, start);
-        if (found == std::string::npos) {
-          push_part(text.substr(start));
+      while (start <= units.size()) {
+        const std::size_t found = units.find(separator, start);
+        if (found == std::u16string::npos) {
+          push_part(std::u16string_view(units).substr(start));
           break;
         }
-        push_part(text.substr(start, found - start));
+        push_part(std::u16string_view(units).substr(start, found - start));
         start = found + separator.size();
       }
     }
@@ -255,12 +239,11 @@ ExecutionResult string_locale_compare(const Value& self, const std::vector<Value
 }
 
 ExecutionResult string_from_char_code(const std::vector<Value>& arguments) {
-  std::string text;
+  std::u16string units;
   for (const Value& argument : arguments) {
-    const std::uint32_t code_point = static_cast<std::uint32_t>(to_int32(argument));
-    text += utf8_from_code_point(code_point);
+    units.push_back(static_cast<char16_t>(static_cast<std::uint16_t>(to_int32(argument))));
   }
-  return native_value(Value::string(std::move(text)));
+  return units_result(units);
 }
 
 }  // namespace

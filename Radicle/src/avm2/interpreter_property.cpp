@@ -6,6 +6,7 @@
 #include <fo4/avm2/coercion.hpp>
 #include <fo4/avm2/display.hpp>
 #include <fo4/avm2/events.hpp>
+#include <fo4/avm2/text.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -27,7 +28,7 @@ ExecutionResult Interpreter::get_property(Frame& frame, Object& object,
     const std::string& text = object.primitive().as_string();
     if (multiname.name == "length") {
       ExecutionResult result;
-      result.value = Value::number(static_cast<double>(text.size()));
+      result.value = Value::number(static_cast<double>(utf16_from_utf8(text).size()));
       return result;
     }
     bool numeric = !multiname.name.empty();
@@ -36,9 +37,11 @@ ExecutionResult Interpreter::get_property(Frame& frame, Object& object,
     }
     if (numeric && multiname.name.size() <= 10) {
       const std::size_t index = static_cast<std::size_t>(std::stoul(multiname.name));
+      const std::u16string units = utf16_from_utf8(text);
       ExecutionResult result;
-      result.value = index < text.size() ? Value::string(std::string(1, text[index]))
-                                         : Value::undefined();
+      result.value = index < units.size()
+                         ? Value::string(utf8_from_utf16(units.substr(index, 1)))
+                         : Value::undefined();
       return result;
     }
   }
