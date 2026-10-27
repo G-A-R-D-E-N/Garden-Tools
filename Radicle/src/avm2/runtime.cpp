@@ -295,6 +295,38 @@ const Class* Runtime::class_at(const abc::AbcFile& file, std::uint32_t instance_
   return class_for_instance(file, instance_index);
 }
 
+Class* Runtime::resolve_or_create_global_class(const Multiname& multiname) {
+  if (!multiname.has_fixed_name()) {
+    return nullptr;
+  }
+  Class* klass = nullptr;
+  if (const Class* found = find_class(multiname)) {
+    klass = const_cast<Class*>(found);
+  } else {
+    klass = ensure_external_class(multiname);
+  }
+  if (klass == nullptr) {
+    return nullptr;
+  }
+  if (klass->class_object == nullptr) {
+    klass->prototype_object = std::make_shared<Object>();
+    klass->class_object = std::make_shared<ClassObject>(klass);
+    klass->slot_count = klass->compute_slot_count();
+    klass->linked = true;
+  }
+  register_class_global(*klass);
+  return klass;
+}
+
+void Runtime::apply_class_slots() {
+  for (Class* klass : classes_) {
+    klass->class_slot_count = klass->compute_class_slot_count();
+    if (klass->class_object != nullptr) {
+      klass->apply_class_slot_defaults(*klass->class_object);
+    }
+  }
+}
+
 const Class* Runtime::find_class(std::string_view rendered_name) const {
   for (const Class* klass : classes_) {
     if (std::string_view{klass->name} == rendered_name) {
@@ -590,6 +622,7 @@ RuntimeLoad Runtime::link() {
   if (build_traits() != RuntimeStatus::Ok) {
     return fail(RuntimeStatus::InvalidTrait, "a trait does not resolve");
   }
+  apply_class_slots();
   if (build_script_globals() != RuntimeStatus::Ok) {
     return fail(RuntimeStatus::InvalidTrait, "a script trait does not resolve");
   }

@@ -144,6 +144,25 @@ bool Class::implements_interface(const Class* other) const {
 
 std::uint32_t Class::method_index_for(const Trait& trait) const { return trait.method_index; }
 
+std::size_t Class::compute_class_slot_count() const {
+  std::size_t count = 0;
+  for (const Trait& trait : class_traits) {
+    if (trait.is_slot_like()) {
+      count = std::max<std::size_t>(count, static_cast<std::size_t>(trait.slot_id) + 1);
+    }
+  }
+  return count;
+}
+
+void Class::apply_class_slot_defaults(Object& class_object) const {
+  class_object.resize_slots(class_slot_count);
+  for (const Trait& trait : class_traits) {
+    if (trait.is_slot_like() && trait.has_default && trait.slot_id < class_slot_count) {
+      class_object.slots()[trait.slot_id] = trait.default_value;
+    }
+  }
+}
+
 void Class::apply_slot_defaults(Object& instance) const {
   instance.resize_slots(slot_count);
   std::vector<const Class*> chain;

@@ -42,6 +42,10 @@
           break;
         }
         if (!object.is_object()) {
+          if (limits_.lenient_builtins) {
+            push_value(Value::undefined());
+            break;
+          }
           return fail(InterpreterStatus::NullReference,
                       "cannot read " + property_text(*multiname) + " from " +
                           value_kind_name(object.kind()));
@@ -49,6 +53,10 @@
         ExecutionResult nested = get_property(frame, *object.as_object(), *multiname, depth);
         if (!nested.ok()) {
           return nested;
+        }
+        ExecutionResult initialized = initialize_class_value(nested.value, depth);
+        if (!initialized.ok()) {
+          return initialized;
         }
         push_value(nested.value);
         break;
@@ -69,6 +77,9 @@
           break;
         }
         if (!object.is_object()) {
+          if (limits_.lenient_builtins) {
+            break;
+          }
           return fail(InterpreterStatus::NullReference,
                       "cannot write " + property_text(*multiname) + " on " +
                           value_kind_name(object.kind()));
@@ -99,6 +110,10 @@
         ExecutionResult nested = get_property(frame, *owner, *multiname, depth);
         if (!nested.ok()) {
           return nested;
+        }
+        ExecutionResult initialized = initialize_class_value(nested.value, depth);
+        if (!initialized.ok()) {
+          return initialized;
         }
         push_value(nested.value);
         break;
@@ -285,6 +300,11 @@
           return fail(InterpreterStatus::ClassIndexOutOfRange,
                       "class index " + std::to_string(index) + " has no linked class");
         }
+        ExecutionResult initialized =
+            initialize_class_value(Value::object(klass->class_object), depth);
+        if (!initialized.ok()) {
+          return initialized;
+        }
         push_value(Value::object(klass->class_object));
         break;
       }
@@ -304,10 +324,14 @@
           break;
         }
         if (!function.is_object() || function.as_object()->kind() != ObjectKind::Function) {
+          if (limits_.lenient_builtins) {
+            push_value(Value::undefined());
+            break;
+          }
           return fail(InterpreterStatus::CannotCall, "call target is not a function");
         }
         ExecutionResult nested = invoke(static_cast<const FunctionObject&>(*function.as_object()),
-                                        receiver, std::move(arguments), frame.scopes, depth);
+                                        receiver, std::move(arguments), {}, depth);
         if (!nested.ok()) {
           return nested;
         }
@@ -326,6 +350,10 @@
           break;
         }
         if (!target.is_object() || target.as_object()->kind() != ObjectKind::Class) {
+          if (limits_.lenient_builtins) {
+            push_value(Value::undefined());
+            break;
+          }
           return fail(InterpreterStatus::CannotConstruct, "construct target is not a class");
         }
         ExecutionResult nested = construct(
@@ -418,8 +446,10 @@
           break;
         }
         if (!receiver.is_object()) {
-          if (instruction.opcode == op::k_callproplex) {
-            push_value(Value::undefined());
+          if (limits_.lenient_builtins || instruction.opcode == op::k_callproplex) {
+            if (instruction.opcode != op::k_callpropvoid) {
+              push_value(Value::undefined());
+            }
             break;
           }
           return fail(InterpreterStatus::NullReference,
@@ -610,8 +640,26 @@
           if (target >= frame.instructions.size()) {
             continue;
           }
+          bool type_matches = exception.exc_type == 0;
+          if (!type_matches) {
+            const Multiname* catch_type = resolve_multiname(*frame.file, exception.exc_type);
+            if (catch_type == nullptr) {
+              type_matches = true;
+            } else {
+              const Class* target_class = runtime_.find_class(*catch_type);
+              if (target_class == nullptr || target_class->class_object == nullptr) {
+                type_matches = true;
+              } else {
+                type_matches = is_instance_of(value, borrowed_object(*target_class->class_object));
+              }
+            }
+          }
+          if (!type_matches) {
+            continue;
+          }
           frame.stack.clear();
           frame.stack.push_back(value);
+          frame.scopes.resize(frame.entry_scope_count);
           frame.ip = target;
           caught = true;
           break;
@@ -622,7 +670,11 @@
         }
         break;
       }
-      case op::k_newcatch:
+      case op::k_newcatch: {
+        auto catch_scope = std::make_shared<Object>();
+        push_value(Value::object(std::move(catch_scope)));
+        break;
+      }
       case op::k_getouterscope:
         return fail(InterpreterStatus::NotImplemented,
                     std::string{"opcode "} + instruction.mnemonic + " is not implemented yet");

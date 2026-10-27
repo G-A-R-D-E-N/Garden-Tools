@@ -745,6 +745,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_avm2_object.cpp
     tests/test_avm2_runtime.cpp
     tests/test_avm2_interpreter.cpp
+    tests/test_avm2_scripts_real.cpp
     tests/test_material_file.cpp
     tests/test_material_file_real.cpp
     tests/test_swf.cpp

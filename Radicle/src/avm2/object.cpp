@@ -9,9 +9,10 @@ namespace fo4::avm2 {
 
 namespace {
 
-const Trait* find_getter_or_setter(const Class& owner, const Trait& trait, bool getter) {
+const Trait* find_accessor_counterpart(const std::vector<Trait>& traits, const Trait& trait,
+                                       bool getter) {
   const TraitKind wanted = getter ? TraitKind::Getter : TraitKind::Setter;
-  for (const Trait& candidate : owner.instance_traits) {
+  for (const Trait& candidate : traits) {
     if (candidate.kind != wanted) {
       continue;
     }
@@ -21,6 +22,60 @@ const Trait* find_getter_or_setter(const Class& owner, const Trait& trait, bool 
     }
   }
   return nullptr;
+}
+
+/* Requires a linked chain; a matching trait must fill result from class or instance traits. */
+bool lookup_class_traits(Class* start, bool static_traits, const Multiname& multiname,
+                         const std::vector<Value>* slots, PropertyLookup& result) {
+  for (Class* klass = start; klass != nullptr; klass = klass->super) {
+    const std::vector<Trait>& traits = static_traits ? klass->class_traits : klass->instance_traits;
+    for (const Trait& trait : traits) {
+      if (!trait_matches(trait, multiname)) {
+        continue;
+      }
+      result.owner = klass;
+      result.trait = &trait;
+      if (trait.is_slot_like()) {
+        result.kind = LookupKind::Slot;
+        result.slot = trait.slot_id;
+        if (slots != nullptr && trait.slot_id < slots->size()) {
+          result.value = (*slots)[trait.slot_id];
+        }
+        return true;
+      }
+      if (trait.kind == TraitKind::Method) {
+        result.kind = LookupKind::Method;
+        return true;
+      }
+      if (trait.kind == TraitKind::Getter || trait.kind == TraitKind::Setter) {
+        result.kind = LookupKind::Accessor;
+        const Trait* getter = trait.kind == TraitKind::Getter
+                                  ? &trait
+                                  : find_accessor_counterpart(traits, trait, true);
+        const Trait* setter = trait.kind == TraitKind::Setter
+                                  ? &trait
+                                  : find_accessor_counterpart(traits, trait, false);
+        if (getter != nullptr) {
+          result.getter = getter->function;
+        }
+        if (setter != nullptr) {
+          result.setter = setter->function;
+        }
+        return true;
+      }
+      if (trait.kind == TraitKind::Class || trait.kind == TraitKind::Function) {
+        result.kind = LookupKind::Slot;
+        result.slot = trait.slot_id;
+        if (trait.nested_class != nullptr) {
+          result.value = Value::object(trait.nested_class);
+        } else if (trait.function != nullptr) {
+          result.value = Value::object(trait.function);
+        }
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 }  // namespace
@@ -85,55 +140,14 @@ PropertyLookup Object::lookup(const Multiname& multiname) const {
       }
       return result;
     }
-    Class* owning_class = current->instance_class();
-    if (owning_class == nullptr) {
-      continue;
-    }
-    for (Class* klass = owning_class; klass != nullptr; klass = klass->super) {
-      for (const Trait& trait : klass->instance_traits) {
-        if (!trait_matches(trait, multiname)) {
-          continue;
-        }
-        result.owner = klass;
-        result.trait = &trait;
-        if (trait.is_slot_like()) {
-          result.kind = LookupKind::Slot;
-          result.slot = trait.slot_id;
-          if (trait.slot_id < current->slots_.size()) {
-            result.value = current->slots_[trait.slot_id];
-          }
-          return result;
-        }
-        if (trait.kind == TraitKind::Method) {
-          result.kind = LookupKind::Method;
-          return result;
-        }
-        if (trait.kind == TraitKind::Getter || trait.kind == TraitKind::Setter) {
-          result.kind = LookupKind::Accessor;
-          const Trait* getter = trait.kind == TraitKind::Getter
-                                    ? &trait
-                                    : find_getter_or_setter(*klass, trait, true);
-          const Trait* setter = trait.kind == TraitKind::Setter
-                                    ? &trait
-                                    : find_getter_or_setter(*klass, trait, false);
-          if (getter != nullptr) {
-            result.getter = getter->function;
-          }
-          if (setter != nullptr) {
-            result.setter = setter->function;
-          }
-          return result;
-        }
-        if (trait.kind == TraitKind::Class || trait.kind == TraitKind::Function) {
-          result.kind = LookupKind::Slot;
-          result.slot = trait.slot_id;
-          if (trait.nested_class != nullptr) {
-            result.value = Value::object(trait.nested_class);
-          } else if (trait.function != nullptr) {
-            result.value = Value::object(trait.function);
-          }
-          return result;
-        }
+    if (current->instance_class_ != nullptr) {
+      if (lookup_class_traits(current->instance_class_, false, multiname, &current->slots_,
+                              result)) {
+        return result;
+      }
+    } else if (current->class_scope_ != nullptr) {
+      if (lookup_class_traits(current->class_scope_, true, multiname, &current->slots_, result)) {
+        return result;
       }
     }
   }
@@ -240,6 +254,7 @@ std::string FunctionObject::return_type_name() const {
 ClassObject::ClassObject(Class* represented_class)
     : Object(ObjectKind::Class), represented_class_(represented_class) {
   set_dynamic(true);
+  set_class_scope(represented_class);
 }
 
 ArrayObject::ArrayObject() : Object(ObjectKind::Array) { set_dynamic(true); }

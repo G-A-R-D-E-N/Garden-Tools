@@ -158,6 +158,9 @@ ExecutionResult Interpreter::invoke(const FunctionObject& function, Value this_v
   const abc::AbcFile* file = function.file();
   const abc::AbcMethodBody* body = function.body();
   if (file == nullptr || body == nullptr) {
+    if (limits_.lenient_builtins) {
+      return ExecutionResult{};
+    }
     return fail(InterpreterStatus::NotImplemented,
                 "native function " + function.name() + " is not bound");
   }
@@ -208,10 +211,39 @@ ExecutionResult Interpreter::invoke(const FunctionObject& function, Value this_v
     }
     frame.scopes.push_back(frame.owner_class->class_object.get());
   }
+  frame.entry_scope_count = frame.scopes.size();
   ++frames_;
   ExecutionResult result = execute_frame(frame, depth + 1);
   frames_ -= 1;
   return result;
+}
+
+ExecutionResult Interpreter::ensure_class_initialized(Class& klass, std::size_t depth) {
+  if (klass.initialization != ClassInitializationState::Uninitialized) {
+    return ExecutionResult{};
+  }
+  if (klass.external || klass.file == nullptr || klass.cinit == kNoMethod) {
+    klass.initialization = ClassInitializationState::Initialized;
+    return ExecutionResult{};
+  }
+  klass.initialization = ClassInitializationState::Initializing;
+  auto initializer = std::make_shared<FunctionObject>(klass.file->method_name(klass.cinit),
+                                                      klass.file, klass.cinit);
+  initializer->set_owner_class(&klass);
+  ExecutionResult result = invoke(*initializer, Value::object(klass.class_object), {}, {}, depth);
+  klass.initialization = ClassInitializationState::Initialized;
+  return result;
+}
+
+ExecutionResult Interpreter::initialize_class_value(const Value& value, std::size_t depth) {
+  if (!value.is_object() || value.as_object()->kind() != ObjectKind::Class) {
+    return ExecutionResult{};
+  }
+  Class* klass = static_cast<const ClassObject&>(*value.as_object()).represented_class();
+  if (klass == nullptr) {
+    return ExecutionResult{};
+  }
+  return ensure_class_initialized(*klass, depth);
 }
 
 ExecutionResult Interpreter::execute_frame(Frame& frame, std::size_t depth) {
@@ -268,7 +300,9 @@ ExecutionResult Interpreter::run_script(std::size_t script_index) {
   }
   FunctionObject initializer(script.file->method_name(script.init_method), script.file,
                              script.init_method);
-  return invoke(initializer, Value::undefined(), {}, {}, 0);
+  Object* global = runtime_.global_object();
+  const Value this_value = global == nullptr ? Value::undefined() : borrowed_object(*global);
+  return invoke(initializer, this_value, {}, {}, 0);
 }
 
 ExecutionResult Interpreter::run_function(const FunctionObject& function, Value this_value,

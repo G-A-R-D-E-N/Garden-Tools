@@ -80,6 +80,9 @@ class Object {
   Class* instance_class() const noexcept { return instance_class_; }
   void set_instance_class(Class* instance_class) noexcept { instance_class_ = instance_class; }
 
+  Class* class_scope() const noexcept { return class_scope_; }
+  void set_class_scope(Class* class_scope) noexcept { class_scope_ = class_scope; }
+
   const std::shared_ptr<Object>& prototype() const noexcept { return prototype_; }
   void set_prototype(std::shared_ptr<Object> prototype);
 
@@ -109,6 +112,7 @@ class Object {
   ObjectKind kind_{ObjectKind::Object};
   bool dynamic_{true};
   Class* instance_class_{nullptr};
+  Class* class_scope_{nullptr};
   std::shared_ptr<Object> prototype_;
   std::vector<Value> slots_;
   std::unordered_map<Key, Property, KeyHash> dynamic_;

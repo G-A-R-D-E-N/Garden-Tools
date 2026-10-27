@@ -44,6 +44,8 @@ struct InterpreterLimits {
   std::size_t max_instructions{1000000};
   std::size_t max_call_depth{128};
   std::size_t max_stack{65536};
+  /* A probe may refuse an unbound builtin instead of stopping; the default must refuse. */
+  bool lenient_builtins{false};
 };
 
 /* Invariant: a failing result names the opcode and offset that refused when one was executing. */
@@ -88,6 +90,7 @@ class Interpreter {
     std::vector<Object*> scopes;
     Value this_value;
     Class* owner_class{nullptr};
+    std::size_t entry_scope_count{0};
     std::size_t ip{0};
     std::map<const Object*, std::vector<Key>> iterator_keys;
   };
@@ -119,6 +122,8 @@ class Interpreter {
                                 const std::vector<Value>& arguments, std::size_t depth);
   ExecutionResult construct(Frame& frame, const ClassObject& class_object,
                             const std::vector<Value>& arguments, std::size_t depth);
+  ExecutionResult ensure_class_initialized(Class& klass, std::size_t depth);
+  ExecutionResult initialize_class_value(const Value& value, std::size_t depth);
   bool is_instance_of(const Value& value, const Value& type) const;
   InterpreterStatus coerce_value(const Multiname& multiname, Value& value,
                                  std::string& message);

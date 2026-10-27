@@ -277,4 +277,132 @@ TEST(Avm2Interpreter, RunsTheSameScriptToTheSameValueTwice) {
   EXPECT_TRUE(fo4::avm2::strict_equals(first.value, second.value));
 }
 
+
+
+TEST(Avm2Interpreter, HandsTheGlobalObjectToAScriptInitializer) {
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder code;
+  code.getlocal0();
+  code.returnvalue();
+  const std::uint32_t method = script.method("init", code.bytes(), 1);
+  abc::AbcFile file = script.finish(method);
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  Interpreter interpreter(runtime);
+  const ExecutionResult result = interpreter.run_script(0);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_object());
+  EXPECT_EQ(result.value.as_object().get(), runtime.global_object());
+}
+
+TEST(Avm2Interpreter, CreatesAnExternalClassForAnUnresolvedPackageName) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t sprite = script.multiname("Sprite", "flash.display");
+  avm2_test::CodeBuilder code;
+  code.findpropstrict(sprite);
+  code.getproperty(sprite);
+  code.returnvalue();
+  const std::uint32_t method = script.method("init", code.bytes(), 1);
+  abc::AbcFile file = script.finish(method);
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  Interpreter interpreter(runtime);
+  const ExecutionResult result = interpreter.run_script(0);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_object());
+  EXPECT_EQ(result.value.as_object()->kind(), fo4::avm2::ObjectKind::Class);
+}
+
+TEST(Avm2Interpreter, RefusesAnUnboundNativeUnlessTheProbeIsLenient) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t native_method = script.method_native("nativeHelper");
+  avm2_test::CodeBuilder code;
+  code.pushnull();
+  code.newfunction(native_method);
+  code.call(0);
+  code.returnvalue();
+  const std::uint32_t method = script.method("init", code.bytes(), 1);
+  abc::AbcFile file = script.finish(method);
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+
+  Interpreter strict_interpreter(runtime);
+  const ExecutionResult strict = strict_interpreter.run_script(0);
+  EXPECT_EQ(strict.status, InterpreterStatus::NotImplemented);
+  EXPECT_NE(strict.message.find("nativeHelper"), std::string::npos) << strict.message;
+
+  fo4::avm2::InterpreterLimits lenient_limits;
+  lenient_limits.lenient_builtins = true;
+  Interpreter lenient_interpreter(runtime, lenient_limits);
+  const ExecutionResult lenient = lenient_interpreter.run_script(0);
+  ASSERT_TRUE(lenient.ok()) << lenient.message;
+  EXPECT_TRUE(lenient.value.is_undefined());
+}
+
+TEST(Avm2Interpreter, CatchesAThrownValueAndRunsTheHandler) {
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder code;
+  code.label("try");
+  code.pushstring(script.string_of("boom"));
+  code.throw_op();
+  code.label("after");
+  code.pushbyte(1);
+  code.returnvalue();
+  code.label("handler");
+  code.newcatch(0);
+  code.swap();
+  code.pop();
+  code.pop();
+  code.pushbyte(9);
+  code.returnvalue();
+  std::vector<fo4::abc::AbcException> exceptions(1);
+  exceptions[0].from = static_cast<std::uint32_t>(code.offset_of("try"));
+  exceptions[0].to = static_cast<std::uint32_t>(code.offset_of("handler"));
+  exceptions[0].target = static_cast<std::uint32_t>(code.offset_of("handler"));
+  const std::uint32_t method =
+      script.method_with_exceptions("init", code.bytes(), 1, exceptions);
+  abc::AbcFile file = script.finish(method);
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  Interpreter interpreter(runtime);
+  const ExecutionResult result = interpreter.run_script(0);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_int32());
+  EXPECT_EQ(result.value.as_int32(), 9);
+}
+
+TEST(Avm2Interpreter, LeavesAnExceptionUncaughtWhenTheHandlerTypeDoesNotMatch) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t type_name = script.multiname("TypeError", "flash.errors");
+  avm2_test::CodeBuilder code;
+  code.findpropstrict(type_name);
+  code.getproperty(type_name);
+  code.pop();
+  code.label("try");
+  code.pushstring(script.string_of("boom"));
+  code.throw_op();
+  code.label("handler");
+  code.pushbyte(9);
+  code.returnvalue();
+  std::vector<fo4::abc::AbcException> exceptions(1);
+  exceptions[0].from = static_cast<std::uint32_t>(code.offset_of("try"));
+  exceptions[0].to = static_cast<std::uint32_t>(code.offset_of("handler"));
+  exceptions[0].target = static_cast<std::uint32_t>(code.offset_of("handler"));
+  exceptions[0].exc_type = type_name;
+  const std::uint32_t method =
+      script.method_with_exceptions("init", code.bytes(), 1, exceptions);
+  abc::AbcFile file = script.finish(method);
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  Interpreter interpreter(runtime);
+  const ExecutionResult result = interpreter.run_script(0);
+  EXPECT_EQ(result.status, InterpreterStatus::UncaughtException);
+  EXPECT_NE(result.message.find("boom"), std::string::npos) << result.message;
+}
+
 }  // namespace

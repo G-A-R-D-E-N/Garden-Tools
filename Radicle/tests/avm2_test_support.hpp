@@ -49,6 +49,16 @@ class CodeBuilder {
 
   std::size_t position() const { return code_.size(); }
 
+  std::size_t offset_of(const std::string& label) const {
+    const auto found = labels_.find(label);
+    if (found == labels_.end()) {
+      throw std::runtime_error("unknown label " + label);
+    }
+    return found->second;
+  }
+
+  void newcatch(std::uint32_t exception_index) { op_u30(0x5A, exception_index); }
+
   void pushbyte(std::int32_t value) { byte(push_byte_opcode()); byte(static_cast<std::uint32_t>(value) & 0xFFu); }
   void pushnull() { op(0x20); }
   void pushundefined() { op(0x21); }
@@ -175,10 +185,23 @@ class ScriptBuilder {
     return static_cast<std::uint32_t>(strings_.size());
   }
 
-  std::uint32_t multiname(const std::string& name) {
-    const std::uint32_t string_index = string_of(name);
-    multiname_strings_.push_back(string_index);
-    return static_cast<std::uint32_t>(multiname_strings_.size());
+  std::uint32_t namespace_of(const std::string& name) {
+    string_of(name);
+    for (std::size_t index = 0; index < package_names_.size(); ++index) {
+      if (package_names_[index] == name) {
+        return static_cast<std::uint32_t>(index + 1);
+      }
+    }
+    package_names_.push_back(name);
+    return static_cast<std::uint32_t>(package_names_.size());
+  }
+
+  std::uint32_t multiname(const std::string& name, const std::string& package = {}) {
+    MultinameEntry entry;
+    entry.name = string_of(name);
+    entry.name_space = namespace_of(package);
+    multinames_.push_back(entry);
+    return static_cast<std::uint32_t>(multinames_.size());
   }
 
   std::uint32_t add_double(double value) {
@@ -193,6 +216,12 @@ class ScriptBuilder {
 
   std::uint32_t method(const std::string& name, std::vector<std::uint8_t> code,
                        std::uint32_t local_count) {
+    return method_with_exceptions(name, std::move(code), local_count, {});
+  }
+
+  std::uint32_t method_with_exceptions(const std::string& name, std::vector<std::uint8_t> code,
+                                       std::uint32_t local_count,
+                                       std::vector<fo4::abc::AbcException> exceptions) {
     fo4::abc::AbcMethodInfo info;
     info.param_count = 0;
     info.return_type = 0;
@@ -206,7 +235,19 @@ class ScriptBuilder {
     body.init_scope_depth = 0;
     body.max_scope_depth = 2;
     body.code = std::move(code);
+    body.exceptions = std::move(exceptions);
     bodies_.push_back(std::move(body));
+    return static_cast<std::uint32_t>(methods_.size() - 1);
+  }
+
+  /* A body-less method must report as an unbound native. */
+  std::uint32_t method_native(const std::string& name) {
+    fo4::abc::AbcMethodInfo info;
+    info.param_count = 0;
+    info.return_type = 0;
+    info.name = string_of(name);
+    info.flags = 0;
+    methods_.push_back(std::move(info));
     return static_cast<std::uint32_t>(methods_.size() - 1);
   }
 
@@ -219,14 +260,19 @@ class ScriptBuilder {
       file.pool.strings.push_back(value);
     }
     file.pool.namespaces.push_back(fo4::abc::AbcNamespace{fo4::abc::AbcNamespaceKind::Namespace, 0});
-    file.pool.namespaces.push_back(fo4::abc::AbcNamespace{fo4::abc::AbcNamespaceKind::Package, 0});
+    for (const std::string& package : package_names_) {
+      fo4::abc::AbcNamespace name_space;
+      name_space.kind = fo4::abc::AbcNamespaceKind::Package;
+      name_space.name = string_of(package);
+      file.pool.namespaces.push_back(name_space);
+    }
     file.pool.ns_sets.push_back(fo4::abc::AbcNsSet{});
     file.pool.multinames.push_back(fo4::abc::AbcMultiname{});
-    for (const std::uint32_t string_index : multiname_strings_) {
+    for (const MultinameEntry& entry : multinames_) {
       fo4::abc::AbcMultiname multiname;
       multiname.kind = fo4::abc::AbcMultinameKind::QName;
-      multiname.name = string_index;
-      multiname.ns = 1;
+      multiname.name = entry.name;
+      multiname.ns = entry.name_space;
       file.pool.multinames.push_back(multiname);
     }
     file.pool.ints.push_back(0);
@@ -247,8 +293,14 @@ class ScriptBuilder {
   }
 
  private:
+  struct MultinameEntry {
+    std::uint32_t name{0};
+    std::uint32_t name_space{1};
+  };
+
   std::vector<std::string> strings_;
-  std::vector<std::uint32_t> multiname_strings_;
+  std::vector<std::string> package_names_{std::string{}};
+  std::vector<MultinameEntry> multinames_;
   std::vector<std::int32_t> ints_;
   std::vector<double> doubles_;
   std::vector<fo4::abc::AbcMethodInfo> methods_;

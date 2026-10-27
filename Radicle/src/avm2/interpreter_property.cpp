@@ -2,6 +2,7 @@
 
 #include "interpreter_internal.hpp"
 
+#include <fo4/avm2/class.hpp>
 #include <fo4/avm2/coercion.hpp>
 
 #include <algorithm>
@@ -105,6 +106,19 @@ InterpreterStatus Interpreter::find_scope_binding(Frame& frame, const Multiname&
       return InterpreterStatus::Ok;
     }
   }
+  if (multiname.has_fixed_name() && !multiname.attribute) {
+    const bool package_named =
+        !multiname.namespaces.empty() && !multiname.namespaces.front().name.empty();
+    const bool capitalised =
+        !multiname.name.empty() && multiname.name.front() >= 'A' && multiname.name.front() <= 'Z';
+    if (package_named || capitalised) {
+      if (runtime_.resolve_or_create_global_class(multiname) != nullptr) {
+        owner = runtime_.global_object();
+        found = owner != nullptr;
+        return InterpreterStatus::Ok;
+      }
+    }
+  }
   if (create_on_global && !frame.scopes.empty() && multiname.has_fixed_name()) {
     Object* global = frame.scopes.front();
     if (global != nullptr && global->is_dynamic()) {
@@ -124,8 +138,17 @@ ExecutionResult Interpreter::call_property(Frame& frame, Object& receiver,
                                            const std::vector<Value>& arguments,
                                            std::size_t depth) {
   (void)frame;
+  if (receiver.kind() == ObjectKind::Class) {
+    ExecutionResult initialized = initialize_class_value(borrowed_object(receiver), depth);
+    if (!initialized.ok()) {
+      return initialized;
+    }
+  }
   const PropertyLookup lookup = receiver.lookup(multiname);
   if (!lookup.found()) {
+    if (limits_.lenient_builtins) {
+      return ExecutionResult{};
+    }
     return fail(InterpreterStatus::CannotCall,
                 "no property " + property_text(multiname) + " on a " +
                     object_kind_name(receiver.kind()));
@@ -148,6 +171,9 @@ ExecutionResult Interpreter::call_property(Frame& frame, Object& receiver,
     }
     if (!getter.value.is_object() ||
         getter.value.as_object()->kind() != ObjectKind::Function) {
+      if (limits_.lenient_builtins) {
+        return ExecutionResult{};
+      }
       return fail(InterpreterStatus::CannotCall,
                   "property " + property_text(multiname) + " is not callable");
     }
@@ -155,6 +181,9 @@ ExecutionResult Interpreter::call_property(Frame& frame, Object& receiver,
                   borrowed_object(receiver), arguments, {}, depth);
   }
   if (!lookup.value.is_object() || lookup.value.as_object()->kind() != ObjectKind::Function) {
+    if (limits_.lenient_builtins) {
+      return ExecutionResult{};
+    }
     return fail(InterpreterStatus::CannotCall,
                 "property " + property_text(multiname) + " is not callable");
   }
@@ -168,6 +197,10 @@ ExecutionResult Interpreter::construct(Frame& frame, const ClassObject& class_ob
   Class* klass = class_object.represented_class();
   if (klass == nullptr) {
     return fail(InterpreterStatus::CannotConstruct, "class object has no class");
+  }
+  ExecutionResult initialized = ensure_class_initialized(*klass, depth);
+  if (!initialized.ok()) {
+    return initialized;
   }
   auto instance = std::make_shared<Object>();
   instance->set_instance_class(klass);

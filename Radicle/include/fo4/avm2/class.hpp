@@ -52,6 +52,12 @@ struct Trait {
 
 bool trait_matches(const Trait& trait, const Multiname& access) noexcept;
 
+enum class ClassInitializationState : std::uint8_t {
+  Uninitialized = 0,
+  Initializing,
+  Initialized,
+};
+
 struct Class {
   std::string name;
   Multiname name_multiname;
@@ -70,7 +76,9 @@ struct Class {
   bool is_interface{false};
 
   bool external{false};
+  ClassInitializationState initialization{ClassInitializationState::Uninitialized};
   std::size_t slot_count{0};
+  std::size_t class_slot_count{0};
   std::shared_ptr<Object> prototype_object;
   std::shared_ptr<ClassObject> class_object;
   bool linked{false};
@@ -85,6 +93,10 @@ struct Class {
   std::size_t compute_slot_count() const;
 
   void apply_slot_defaults(Object& instance) const;
+
+  std::size_t compute_class_slot_count() const;
+
+  void apply_class_slot_defaults(Object& class_object) const;
 
   bool is_subclass_of(const Class* other) const;
   bool implements_interface(const Class* other) const;

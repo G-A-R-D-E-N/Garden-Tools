@@ -64,6 +64,9 @@ class Runtime {
   const Class* find_class(std::string_view rendered_name) const;
   const Class* class_at(const abc::AbcFile& file, std::uint32_t instance_index) const;
 
+  /* A linked runtime must create and register an external class on first unresolved use. */
+  Class* resolve_or_create_global_class(const Multiname& multiname);
+
  private:
   struct FileState {
     const abc::AbcFile* file{nullptr};
@@ -74,6 +77,7 @@ class Runtime {
   RuntimeStatus resolve_hierarchy();
   RuntimeStatus build_traits();
   RuntimeStatus build_script_globals();
+  void apply_class_slots();
   void build_prototypes();
   Class* class_for_instance(const abc::AbcFile& file, std::uint32_t instance_index) const;
   std::shared_ptr<FunctionObject> function_for_method(const abc::AbcFile& file,
