@@ -2,10 +2,108 @@
 #include "RadiclePluginSupport.hpp"
 
 #include <fo4/plugin/subrecord_authoring.hpp>
+#include <fo4/schema/preflight.hpp>
+#include <fo4/schema/record_constraints.hpp>
+
+#include <span>
+#include <vector>
 
 namespace fo4ide::plugin {
 
 using namespace lifecycle;
+
+namespace {
+
+Result<fo4::FormKey> createRichSchemaRecordLocked(fo4::Plugin& mutated,
+                                                  std::string_view signature,
+                                                  const nlohmann::json& payload) {
+    const auto* editor = editorIdPayloadField(payload);
+    if (editor == nullptr || !editor->is_string() ||
+        editor->get_ref<const std::string&>().empty()) {
+        return std::unexpected(Error{
+            "InvalidRecordCreationPayload",
+            std::string(signature) + " creation requires a non-empty string editorId"});
+    }
+    const auto editorId = support::encodeEditorId(editor->get_ref<const std::string&>());
+    if (!editorId) return std::unexpected(editorId.error());
+
+    const auto record = fo4::Signature::from_string(signature);
+    std::vector<fo4::schema::SubrecordAuthoringConstraint> rules;
+    bool explicitRules = false;
+    if (signature == "GLOB") {
+        const auto type = payload.find("type");
+        if (type == payload.end() || !type->is_string()) {
+            return std::unexpected(Error{
+                "InvalidRecordCreationPayload",
+                "GLOB creation requires a string type: short, long, float or boolean"});
+        }
+        static constexpr std::uint8_t codes[] = {115, 108, 102, 98};  // Short, Long, Float, Boolean
+        const auto name = type->get_ref<const std::string&>();
+        const int index = name == "short" || name == "s"       ? 0
+                          : name == "long" || name == "l"      ? 1
+                          : name == "float" || name == "f"     ? 2
+                          : name == "boolean" || name == "b"   ? 3
+                                                               : -1;
+        const std::uint8_t* data = index < 0 ? nullptr : &codes[static_cast<std::size_t>(index)];
+        if (data == nullptr) {
+            return std::unexpected(Error{
+                "InvalidRecordCreationPayload",
+                "GLOB type must be short, long, float or boolean"});
+        }
+        const auto constraint = fo4::schema::record_authoring_constraint(record);
+        if (!constraint) {
+            return std::unexpected(Error{
+                "RecordCreationRequiresSchema",
+                "No authoring schema is registered for GLOB"});
+        }
+        const auto generated = fo4::schema::authoring_subrecords(*constraint);
+        rules.assign(generated.begin(), generated.end());
+        bool found = false;
+        for (auto& rule : rules) {
+            if (rule.signature != fo4::Signature::from_string("FNAM")) continue;
+            rule.minimum = 1;
+            rule.maximum = 1;
+            rule.default_data = data;
+            rule.default_size = 1;
+            found = true;
+        }
+        if (!found) {
+            return std::unexpected(Error{
+                "RecordCreationRequiresSchema",
+                "GLOB's FNAM type subrecord is not in the authoring schema"});
+        }
+        explicitRules = true;
+    }
+
+    const auto created = explicitRules
+        ? fo4::create_record(mutated, record, *editorId, std::span<const fo4::schema::SubrecordAuthoringConstraint>(rules))
+        : fo4::create_record(mutated, record, *editorId);
+    switch (created.status) {
+        case fo4::RecordCreateStatus::created:
+            break;
+        case fo4::RecordCreateStatus::not_authorable:
+            return std::unexpected(Error{
+                "RecordCreationRequiresSchema",
+                std::string(signature) + " has no independent schema creation rule"});
+        case fo4::RecordCreateStatus::no_default:
+            return std::unexpected(Error{
+                "RecordNoDefault",
+                std::string(signature) + " requires a subrecord with no usable default"});
+        case fo4::RecordCreateStatus::invalid_editor_id:
+            return std::unexpected(Error{"InvalidEditorId", "Editor ID is not valid for this record"});
+        case fo4::RecordCreateStatus::preflight_failed:
+            return std::unexpected(Error{"RecordPreflightFailed", "Generated record failed schema validation"});
+    }
+    for (const auto& issue : fo4::schema::preflight_authoring_record(mutated, created.key)) {
+        if (issue.severity != fo4::schema::PreflightSeverity::error) continue;
+        return std::unexpected(Error{
+            "RecordPreflightFailed",
+            issue.path.empty() ? issue.message : issue.path + ": " + issue.message});
+    }
+    return created.key;
+}
+
+}  // namespace
 
 Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& arguments) {
     const auto pluginName = lifecycleStringArgument(arguments, 0);
@@ -22,12 +120,16 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
     }
     const bool schemaCreation = payload != nullptr && payload->contains("schema") &&
         payload->at("schema").is_boolean() && payload->at("schema").get<bool>();
-    if (!schemaCreation && signatureText != "ARMA" && signatureText != "ARMO" &&
+    const bool generatedLayoutCreation = schemaCreation;
+    if (!generatedLayoutCreation && signatureText != "ARMA" && signatureText != "ARMO" &&
         signatureText != "CELL" && signatureText != "EXPL" &&
         signatureText != "EYES" && signatureText != "FACT" &&
         signatureText != "HAZD" && signatureText != "LVLI" &&
         signatureText != "LVLN" && signatureText != "LVSP" &&
-        signatureText != "PROJ" && signatureText != "RACE") {
+        signatureText != "PROJ" && signatureText != "RACE" &&
+        signatureText != "QUST" && signatureText != "GLOB" &&
+        signatureText != "SPEL" && signatureText != "MGEF" &&
+        signatureText != "FLST" && signatureText != "MESG") {
         return std::unexpected(Error{
             "RecordCreationRequiresSchema",
             "Raw record creation is disabled until the schema pre-flight layer defines required fields and insertion order for " +
@@ -55,13 +157,13 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
         auto mutated = loaded->plugin;
         fo4::FormKey key;
 
-        if (schemaCreation) {
-            const auto editor = payload->find("editorId");
-            if (editor != payload->end() && !editor->is_string()) {
+        if (generatedLayoutCreation) {
+            const auto* editor = editorIdPayloadField(*payload);
+            if (editor != nullptr && !editor->is_string()) {
                 return std::unexpected(Error{"InvalidRecordCreationPayload", "Schema editorId must be a string"});
             }
-            const auto editorId = editor == payload->end() ? support::encodeEditorId(std::string_view{}) :
-                support::encodeEditorId(editor->get_ref<const std::string&>());
+            const auto requested = editor == nullptr ? std::string{} : editor->get<std::string>();
+            const auto editorId = support::encodeEditorId(requested);
             if (!editorId) return std::unexpected(editorId.error());
             const auto created = fo4::create_record(mutated, fo4::Signature::from_string(signatureText), *editorId);
             switch (created.status) {
@@ -367,6 +469,10 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
                 });
             }
             key = fo4::forms::create_armor_addon(mutated, creation);
+        } else if (generatedLayoutCreationSupported(signatureText)) {
+            const auto created = createRichSchemaRecordLocked(mutated, signatureText, *payload);
+            if (!created) return std::unexpected(created.error());
+            key = *created;
         } else if (signatureText == "PROJ" || signatureText == "EXPL" || signatureText == "HAZD") {
             const auto created = signatureText == "PROJ" ? createProjectileLocked(mutated, *payload)
                 : signatureText == "EXPL"                ? createExplosionLocked(mutated, *payload)

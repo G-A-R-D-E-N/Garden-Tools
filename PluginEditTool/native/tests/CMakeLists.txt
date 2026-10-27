@@ -173,6 +173,7 @@ add_executable(
     unit/RadiclePluginPreflightTests.cpp
     unit/RadiclePluginArmorCreationTests.cpp
     unit/RadiclePluginRaceCreationTests.cpp
+    unit/RadiclePluginRichCreationTests.cpp
     unit/RadiclePluginFormLinkListTests.cpp
     unit/RadiclePluginListItemTests.cpp
     unit/RadiclePluginComponentsTests.cpp

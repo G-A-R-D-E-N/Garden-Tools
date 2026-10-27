@@ -122,8 +122,9 @@ six hex digits, a colon and the plugin that owns the record.
 
 #### create_record payloads
 
-`type` is the signature and `payload` is an object. These twelve types have a verified layout. A payload
+`type` is the signature and `payload` is an object. These eighteen types have a verified layout. A payload
 that does not fit is rejected with `InvalidRecordCreationPayload`, and the message names the field.
+`editorId` may be written `editor_id`.
 
 | Type | Required fields | Optional fields |
 |---|---|---|
@@ -135,6 +136,8 @@ that does not fit is rejected with `InvalidRecordCreationPayload`, and the messa
 | `LVLI`, `LVLN` | none | `editorId`; `chanceNone`, `maxCount` and `flags` (each 0..255, `flags` uses only 0x01, 0x02 and 0x04). Creates an empty list; entries are added afterwards. A local entry must reference a record of a type the list accepts; references into other plugins are not type-checked. |
 | `FACT` | none | `editorId`, `fullName` (inline text; refused in localized plugins), `flags` (u32, bits 0x00000001 through 0x00010000). Creates a faction with no relations or ranks. |
 | `RACE` | `description`, `maleHeight`, `femaleHeight` | `editorId`, `fullName`, `flags`, `flags2`, `size`, `accelerationRate`, `decelerationRate`, `injuredHealthPct` |
+| `QUST`, `SPEL`, `MGEF`, `FLST`, `MESG` | `editorId` (non-empty; `editor_id` accepted) | none. Builds the schema's required subrecords from their registered defaults: `QUST` takes a zeroed `DNAM`, `MESG` an empty `DESC` plus `INAM` and `DNAM`, `MGEF` a zeroed `DATA`, `SPEL` `OBND`, `DESC` and `SPIT`, and `FLST` carries only its `EDID`. Nothing else is set at creation. |
+| `GLOB` | `editorId` (non-empty), `type` (`short`, `long`, `float` or `boolean`) | none. The type is the required `FNAM` byte the schema has no default for; `FLTV` is created as a zero `f32`. |
 | `PROJ`, `EXPL`, `HAZD` | none | `editorId`, `name`, `bounds` (six integers), and the type's own numbers and form-key links, for example `speed`, `range` and `explosionType` on `PROJ`; `force`, `damage` and `innerRadius` on `EXPL`; `radius`, `lifetime` and `spell` on `HAZD` |
 
 Any other signature is refused (`RecordCreationRequiresSchema`) unless the payload contains
