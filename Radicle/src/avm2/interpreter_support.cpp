@@ -213,6 +213,9 @@ ExecutionResult Interpreter::call_native_id(std::uint32_t native_id, const Value
   if (try_error_native(*this, id, self, arguments, depth, result)) {
     return result;
   }
+  if (try_display_native(*this, id, self, arguments, depth, result)) {
+    return result;
+  }
   ExecutionResult failure;
   failure.status = InterpreterStatus::NotImplemented;
   failure.message = "native " + std::to_string(native_id) + " is not bound";

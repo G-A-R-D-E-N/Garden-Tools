@@ -302,6 +302,8 @@ add_library(fo4
   src/avm2/native_string.cpp
   src/avm2/native_array.cpp
   src/avm2/native_error.cpp
+  src/avm2/display.cpp
+  src/avm2/native_display.cpp
   src/hkx/layout.cpp
   src/hkx/packfile.cpp
   src/hkx/skeleton.cpp
@@ -756,6 +758,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_avm2_interpreter.cpp
     tests/test_avm2_scripts_real.cpp
     tests/test_avm2_builtins.cpp
+    tests/test_avm2_display.cpp
     tests/test_material_file.cpp
     tests/test_material_file_real.cpp
     tests/test_swf.cpp

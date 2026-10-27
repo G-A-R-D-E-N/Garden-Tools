@@ -4,6 +4,7 @@
 
 #include <fo4/avm2/class.hpp>
 #include <fo4/avm2/coercion.hpp>
+#include <fo4/avm2/display.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -52,6 +53,15 @@ ExecutionResult Interpreter::get_property(Frame& frame, Object& object,
     ExecutionResult result;
     result.value = std::move(out);
     return result;
+  }
+  if (object.kind() == ObjectKind::Display) {
+    Value display_value;
+    if (read_display_property(*this, static_cast<DisplayObject&>(object), multiname,
+                              display_value)) {
+      ExecutionResult result;
+      result.value = std::move(display_value);
+      return result;
+    }
   }
   if (object.kind() == ObjectKind::Function && multiname.has_fixed_name()) {
     const auto& function = static_cast<const FunctionObject&>(object);
@@ -138,6 +148,11 @@ ExecutionResult Interpreter::set_property(Frame& frame, Object& object,
   }
   if (handled) {
     return ExecutionResult{};
+  }
+  if (object.kind() == ObjectKind::Display) {
+    if (write_display_property(static_cast<DisplayObject&>(object), multiname, value)) {
+      return ExecutionResult{};
+    }
   }
   if (define) {
     if (!multiname.has_fixed_name()) {

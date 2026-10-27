@@ -239,6 +239,68 @@ RuntimeStatus Runtime::install_builtins() {
     subclass->native_constructor = static_cast<std::uint32_t>(native::Id::error_construct);
   }
 
+  Class* display_object = add_builtin_class("DisplayObject", "flash.display", object_class);
+  Class* interactive_object = add_builtin_class("InteractiveObject", "flash.display", display_object);
+  Class* display_container =
+      add_builtin_class("DisplayObjectContainer", "flash.display", interactive_object);
+  Class* sprite = add_builtin_class("Sprite", "flash.display", display_container);
+  Class* movie_clip = add_builtin_class("MovieClip", "flash.display", sprite);
+  Class* stage = add_builtin_class("Stage", "flash.display", display_container);
+  Class* shape = add_builtin_class("Shape", "flash.display", display_object);
+  Class* bitmap = add_builtin_class("Bitmap", "flash.display", display_object);
+  Class* text_field = add_builtin_class("TextField", "flash.display", interactive_object);
+  Class* simple_button = add_builtin_class("SimpleButton", "flash.display", interactive_object);
+  if (display_object == nullptr || interactive_object == nullptr || display_container == nullptr ||
+      sprite == nullptr || movie_clip == nullptr || stage == nullptr || shape == nullptr ||
+      bitmap == nullptr || text_field == nullptr || simple_button == nullptr) {
+    return RuntimeStatus::InvalidTrait;
+  }
+  for (Class* display_class : {display_object, interactive_object, display_container, sprite,
+                               movie_clip, stage, shape, bitmap, text_field, simple_button}) {
+    display_class->native_constructor = static_cast<std::uint32_t>(native::Id::display_construct);
+  }
+  add_method(*display_object, "localToGlobal", native::Id::display_local_to_global, false);
+  add_method(*display_object, "globalToLocal", native::Id::display_global_to_local, false);
+  add_method(*display_container, "addChild", native::Id::display_add_child, false);
+  add_method(*display_container, "addChildAt", native::Id::display_add_child_at, false);
+  add_method(*display_container, "removeChild", native::Id::display_remove_child, false);
+  add_method(*display_container, "removeChildAt", native::Id::display_remove_child_at, false);
+  add_method(*display_container, "getChildAt", native::Id::display_get_child_at, false);
+  add_method(*display_container, "getChildByName", native::Id::display_get_child_by_name, false);
+  add_method(*display_container, "contains", native::Id::display_contains, false);
+  add_method(*display_container, "setChildIndex", native::Id::display_set_child_index, false);
+  add_method(*display_container, "swapChildren", native::Id::display_swap_children, false);
+  add_method(*movie_clip, "gotoAndPlay", native::Id::display_goto_and_play, false);
+  add_method(*movie_clip, "gotoAndStop", native::Id::display_goto_and_stop, false);
+  add_method(*movie_clip, "stop", native::Id::display_stop, false);
+  add_method(*movie_clip, "play", native::Id::display_play, false);
+  add_method(*movie_clip, "nextFrame", native::Id::display_next_frame, false);
+  add_method(*movie_clip, "prevFrame", native::Id::display_prev_frame, false);
+
+  Class* point_class = add_builtin_class("Point", "flash.geom", object_class);
+  Class* rectangle_class = add_builtin_class("Rectangle", "flash.geom", object_class);
+  Class* matrix_class = add_builtin_class("Matrix", "flash.geom", object_class);
+  Class* color_transform_class =
+      add_builtin_class("ColorTransform", "flash.geom", object_class);
+  Class* dictionary_class = add_builtin_class("Dictionary", "flash.utils", object_class);
+  if (point_class != nullptr) {
+    point_class->native_constructor = static_cast<std::uint32_t>(native::Id::geom_construct);
+  }
+  if (rectangle_class != nullptr) {
+    rectangle_class->native_constructor = static_cast<std::uint32_t>(native::Id::geom_construct);
+  }
+  if (matrix_class != nullptr) {
+    matrix_class->native_constructor = static_cast<std::uint32_t>(native::Id::geom_construct);
+  }
+  if (color_transform_class != nullptr) {
+    color_transform_class->native_constructor =
+        static_cast<std::uint32_t>(native::Id::geom_construct);
+  }
+  if (dictionary_class != nullptr) {
+    dictionary_class->native_constructor =
+        static_cast<std::uint32_t>(native::Id::dictionary_construct);
+  }
+
   const auto add_global_function = [this](std::string name, native::Id id) {
     auto function = std::make_shared<FunctionObject>(name, nullptr, kNoMethod);
     function->set_native_id(static_cast<std::uint32_t>(id));

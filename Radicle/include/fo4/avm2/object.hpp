@@ -24,6 +24,7 @@ enum class ObjectKind : std::uint8_t {
   Array,
   Error,
   Namespace,
+  Display,
 };
 
 const char* object_kind_name(ObjectKind kind) noexcept;

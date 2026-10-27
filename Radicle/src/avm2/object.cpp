@@ -94,6 +94,8 @@ const char* object_kind_name(ObjectKind kind) noexcept {
       return "error";
     case ObjectKind::Namespace:
       return "namespace";
+    case ObjectKind::Display:
+      return "display";
   }
   return "unknown";
 }

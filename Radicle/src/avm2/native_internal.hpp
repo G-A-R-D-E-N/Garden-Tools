@@ -39,6 +39,9 @@ bool try_array_native(Interpreter& interpreter, native::Id id, const Value& self
 bool try_error_native(Interpreter& interpreter, native::Id id, const Value& self,
                       const std::vector<Value>& arguments, std::size_t depth,
                       ExecutionResult& out);
+bool try_display_native(Interpreter& interpreter, native::Id id, const Value& self,
+                        const std::vector<Value>& arguments, std::size_t depth,
+                        ExecutionResult& out);
 
 /* Requires a named reachable property of the receiver; the name is a public package name. */
 Multiname builtin_name(std::string_view name);
