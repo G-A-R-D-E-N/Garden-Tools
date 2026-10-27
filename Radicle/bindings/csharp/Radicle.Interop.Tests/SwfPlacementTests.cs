@@ -49,4 +49,24 @@ public class SwfPlacementTests
         var label = movie.Tags.First(tag => tag.Code == 43);
         Assert.ThrowsAny<Exception>(() => movie.SetDepth(label.Index, 2));
     }
+
+    [Fact]
+    public void ReadsAPlaceObject3CharacterAfterItsClassName()
+    {
+        var payload = new byte[] { 0x06, 0x08, 0x03, 0x00, (byte)'C', (byte)'l', (byte)'s', 0x00, 0x0B, 0x00, 0x00 };
+        var record = SwfPlacementCodec.Parse(new SwfTagRecord(0, 70, "PlaceObject3", (uint)payload.Length, 0, -1, 0, false, false, payload.Length), payload);
+        Assert.Equal((ushort)3, record.Depth);
+        Assert.Equal((ushort)11, record.CharacterId);
+        SwfPlacementMatrixCodec.Read(70, payload, out var matrixStart, out var matrixEnd);
+        Assert.Equal(10, matrixStart);
+        Assert.Equal(11, matrixEnd);
+    }
+
+    [Fact]
+    public void IgnoresThePlaceObject3VisibleAndOpaqueFlagsWhenFindingTheCharacter()
+    {
+        var payload = new byte[] { 0x06, 0x60, 0x03, 0x00, 0x0B, 0x00, 0x00 };
+        var record = SwfPlacementCodec.Parse(new SwfTagRecord(0, 70, "PlaceObject3", (uint)payload.Length, 0, -1, 0, false, false, payload.Length), payload);
+        Assert.Equal((ushort)11, record.CharacterId);
+    }
 }

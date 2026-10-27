@@ -39,7 +39,7 @@ public class SwfPlacementMatrixTests
     [Fact]
     public void AddsAScaleWhenTheOriginalMatrixHadNone()
     {
-        using var movie = SwfFile.FromBytes(SwfFixtures.Movie());
+        using var movie = SwfFile.FromBytes(SwfFixtures.Movie(withMatrix: false));
         var tagIndex = RootPlacement(movie);
         movie.SetPlacementTransform(tagIndex, new SwfPlacementTransformEdit(ScaleX: 0x10000, ScaleY: 0x8000));
         var matrix = movie.PlacementMatrix(tagIndex);

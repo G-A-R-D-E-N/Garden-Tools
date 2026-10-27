@@ -38,7 +38,7 @@ public static class RadicleNative
                 RadicleLibrary.SetPath(fromEnvironment);
                 return;
             }
-            var found = FindFirstExisting(CandidatePaths(AppContext.BaseDirectory, Environment.CurrentDirectory));
+            var found = FindFirstExisting(CandidatePaths(AppContext.BaseDirectory));
             if (found != null) RadicleLibrary.SetPath(found);
         }
     }
@@ -46,8 +46,8 @@ public static class RadicleNative
     public static string? FindFirstExisting(IEnumerable<string> candidates) =>
         candidates.FirstOrDefault(File.Exists);
 
-    // Constraint: the probe mirrors the build layouts (app dir, runtimes folder, Radicle/build/<config>) without guessing beyond them.
-    public static IReadOnlyList<string> CandidatePaths(string baseDirectory, string? currentDirectory = null)
+    // Requires the probe to stay inside the app directory; RADICLE_NATIVE_PATH is the only way to point outside it.
+    public static IReadOnlyList<string> CandidatePaths(string baseDirectory)
     {
         var name = LibraryName;
         var paths = new List<string>();
@@ -57,19 +57,6 @@ public static class RadicleNative
         Add(Path.Combine(baseDirectory, "radicle"));
         Add(Path.Combine(baseDirectory, "runtimes", "win-x64", "native"));
         Add(Path.Combine(baseDirectory, "runtimes", "linux-x64", "native"));
-        foreach (var root in new[] { baseDirectory, currentDirectory })
-        {
-            if (string.IsNullOrWhiteSpace(root)) continue;
-            var directory = new DirectoryInfo(root);
-            for (var level = 0; level < 6 && directory != null; ++level, directory = directory.Parent)
-            {
-                foreach (var config in new[] { "Debug", "Release", "RelWithDebInfo", "MinSizeRel", "" })
-                {
-                    Add(Path.Combine(directory.FullName, "Radicle", "build", config));
-                    Add(Path.Combine(directory.FullName, "build", config));
-                }
-            }
-        }
         return paths.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
     }
 }

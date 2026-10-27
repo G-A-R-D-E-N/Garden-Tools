@@ -89,13 +89,13 @@ internal static class SwfFixtures
         return bytes.ToArray();
     }
 
-    private static byte[] PlaceObjectPayload()
+    private static byte[] PlaceObjectPayload(bool withMatrix)
     {
         var bytes = new List<byte>();
-        bytes.Add(0x03);
+        bytes.Add(withMatrix ? (byte)0x06 : (byte)0x02);
         bytes.AddRange(U16(1));
         bytes.AddRange(U16(11));
-        bytes.Add(0x00);
+        if (withMatrix) bytes.Add(0x00);
         return bytes.ToArray();
     }
 
@@ -110,12 +110,12 @@ internal static class SwfFixtures
         return bytes.ToArray();
     }
 
-    public static byte[] Movie()
+    public static byte[] Movie(bool withMatrix = true)
     {
         var tags = new List<byte>();
         tags.AddRange(Tag(37, EditTextPayload()));
         tags.AddRange(Tag(43, Z("start")));
-        tags.AddRange(Tag(26, PlaceObjectPayload()));
+        tags.AddRange(Tag(26, PlaceObjectPayload(withMatrix)));
         tags.AddRange(Tag(1, Array.Empty<byte>()));
         tags.AddRange(Tag(39, SpritePayload()));
         tags.AddRange(Tag(0, Array.Empty<byte>()));

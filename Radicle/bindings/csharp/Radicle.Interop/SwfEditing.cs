@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.Win32.SafeHandles;
 using Radicle.Interop.Native;
 
@@ -111,23 +112,6 @@ internal sealed class SwfHistoryHandle : SafeHandleZeroOrMinusOneIsInvalid
     }
 }
 
-internal sealed class SwfFramesUse : IDisposable
-{
-    private readonly SafeHandle _handle;
-
-    public SwfFramesUse(SafeHandle handle, string name)
-    {
-        var added = false;
-        handle.DangerousAddRef(ref added);
-        if (!added) throw new ObjectDisposedException(name);
-        _handle = handle;
-    }
-
-    public IntPtr Pointer => _handle.DangerousGetHandle();
-
-    public void Dispose() => _handle.DangerousRelease();
-}
-
 public sealed class SwfFrameSet : IDisposable
 {
     private readonly SwfFramesHandle _handle;
@@ -146,14 +130,14 @@ public sealed class SwfFrameSet : IDisposable
     {
         get
         {
-            using var use = new SwfFramesUse(_handle, nameof(SwfFrameSet));
+            using var use = new HandleUse(_handle, nameof(SwfFrameSet));
             return checked((int)RadicleNative.SwfFramesTimelineCount(use.Pointer));
         }
     }
 
     public unsafe (ushort CharacterId, int FrameCount) TimelineAt(int index)
     {
-        using var use = new SwfFramesUse(_handle, nameof(SwfFrameSet));
+        using var use = new HandleUse(_handle, nameof(SwfFrameSet));
         ushort characterId = 0;
         nuint frameCount = 0;
         Call.Check(RadicleNative.SwfFramesTimelineAt(use.Pointer, (nuint)index, &characterId, &frameCount));
@@ -162,7 +146,7 @@ public sealed class SwfFrameSet : IDisposable
 
     public unsafe IReadOnlyList<SwfFrameInstanceRecord> Instances(int timeline, int frame)
     {
-        using var use = new SwfFramesUse(_handle, nameof(SwfFrameSet));
+        using var use = new HandleUse(_handle, nameof(SwfFrameSet));
         nuint count = 0;
         Call.Check(RadicleNative.SwfFramesInstanceCount(use.Pointer, (nuint)timeline, (nuint)frame, &count));
         var instances = new SwfFrameInstanceRecord[checked((int)count)];
@@ -201,7 +185,7 @@ public sealed class SwfEditHistory : IDisposable
         return new SwfEditHistory(handle);
     }
 
-    private SwfFramesUse Use() => new(_handle, nameof(SwfEditHistory));
+    private HandleUse Use() => new(_handle, nameof(SwfEditHistory));
 
     public ulong Revision
     {
@@ -292,19 +276,22 @@ internal sealed unsafe class SwfNativePlan : IDisposable
     public static SwfNativePlan Create(SwfPlanSpec spec)
     {
         var payloads = new List<IntPtr>();
+        var replacements = IntPtr.Zero;
+        var insertions = IntPtr.Zero;
+        var removals = IntPtr.Zero;
         try
         {
             foreach (var (_, payload) in spec.Replacements) payloads.Add(Copy(payload));
             foreach (var (_, _, payload) in spec.Insertions) payloads.Add(Copy(payload));
-            var replacements = spec.Replacements.Count == 0
+            replacements = spec.Replacements.Count == 0
                 ? IntPtr.Zero
                 : System.Runtime.InteropServices.Marshal.AllocHGlobal(
                     checked(spec.Replacements.Count * sizeof(SwfTagReplacement)));
-            var insertions = spec.Insertions.Count == 0
+            insertions = spec.Insertions.Count == 0
                 ? IntPtr.Zero
                 : System.Runtime.InteropServices.Marshal.AllocHGlobal(
                     checked(spec.Insertions.Count * sizeof(SwfTagInsertion)));
-            var removals = spec.Removals.Count == 0
+            removals = spec.Removals.Count == 0
                 ? IntPtr.Zero
                 : System.Runtime.InteropServices.Marshal.AllocHGlobal(
                     checked(spec.Removals.Count * sizeof(SwfTagRemoval)));
@@ -350,10 +337,7 @@ internal sealed unsafe class SwfNativePlan : IDisposable
         }
         catch
         {
-            foreach (var pointer in payloads)
-            {
-                if (pointer != IntPtr.Zero) System.Runtime.InteropServices.Marshal.FreeHGlobal(pointer);
-            }
+            Free(new[] { replacements, insertions, removals }.Concat(payloads));
             throw;
         }
     }
@@ -366,12 +350,11 @@ internal sealed unsafe class SwfNativePlan : IDisposable
         return memory;
     }
 
-    public void Dispose()
+    public void Dispose() => Free(new[] { _replacements, _insertions, _removals }.Concat(_payloads));
+
+    private static void Free(IEnumerable<IntPtr> pointers)
     {
-        if (_replacements != IntPtr.Zero) System.Runtime.InteropServices.Marshal.FreeHGlobal(_replacements);
-        if (_insertions != IntPtr.Zero) System.Runtime.InteropServices.Marshal.FreeHGlobal(_insertions);
-        if (_removals != IntPtr.Zero) System.Runtime.InteropServices.Marshal.FreeHGlobal(_removals);
-        foreach (var pointer in _payloads)
+        foreach (var pointer in pointers)
         {
             if (pointer != IntPtr.Zero) System.Runtime.InteropServices.Marshal.FreeHGlobal(pointer);
         }

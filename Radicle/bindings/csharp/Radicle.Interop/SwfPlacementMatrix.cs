@@ -49,63 +49,16 @@ public static class SwfPlacementMatrixCodec
         public void Align() => _bit = (_bit + 7) & ~7;
     }
 
-    private static int MatrixOffset(int code, byte[] payload, out ushort? characterId)
-    {
-        characterId = null;
-        switch (code)
-        {
-            case 4:
-                if (payload.Length < 4) throw new ArgumentException("the placement payload is too short");
-                characterId = (ushort)(payload[0] | (payload[1] << 8));
-                return 4;
-            case 26:
-            {
-                if (payload.Length < 3) throw new ArgumentException("the placement payload is too short");
-                var flags = payload[0];
-                var offset = 3;
-                if ((flags & 0x02) != 0)
-                {
-                    if (payload.Length < offset + 2) throw new ArgumentException("the placement payload is too short");
-                    characterId = (ushort)(payload[offset] | (payload[offset + 1] << 8));
-                    offset += 2;
-                }
-                return offset;
-            }
-            case 70:
-            {
-                if (payload.Length < 4) throw new ArgumentException("the placement payload is too short");
-                var flags1 = payload[0];
-                var flags2 = payload[1];
-                var offset = 4;
-                if ((flags2 & 0x20) != 0)
-                {
-                    while (offset < payload.Length && payload[offset] != 0) ++offset;
-                    ++offset;
-                }
-                if ((flags1 & 0x02) != 0 || (flags2 & 0x40) != 0)
-                {
-                    if (payload.Length < offset + 2) throw new ArgumentException("the placement payload is too short");
-                    characterId = (ushort)(payload[offset] | (payload[offset + 1] << 8));
-                    offset += 2;
-                }
-                return offset;
-            }
-            default:
-                throw new ArgumentException("the tag is not a placement");
-        }
-    }
-
     private static bool HasMatrix(int code, byte[] payload) => code switch
     {
         4 => true,
-        26 => (payload[0] & 0x01) != 0,
-        70 => (payload[0] & 0x04) != 0,
+        26 or 70 => (payload[0] & 0x04) != 0,
         _ => false,
     };
 
     public static SwfPlacementMatrix Read(int code, byte[] payload, out int matrixStart, out int matrixEnd)
     {
-        matrixStart = MatrixOffset(code, payload, out _);
+        matrixStart = SwfPlacementCodec.HeaderEnd(code, payload, out _);
         if (!HasMatrix(code, payload))
         {
             matrixEnd = matrixStart;
@@ -203,6 +156,7 @@ public static class SwfPlacementMatrixCodec
         for (var index = 0; index < matrixStart; ++index) result.Add(payload[index]);
         result.AddRange(bytes);
         for (var index = matrixEnd; index < payload.Length; ++index) result.Add(payload[index]);
+        if (code is 26 or 70) result[0] = (byte)(result[0] | 0x04);
         return result.ToArray();
     }
 }
