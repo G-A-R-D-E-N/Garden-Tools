@@ -2,6 +2,7 @@
 #include "swf_movie_builder.hpp"
 
 #include <gtest/gtest.h>
+#include <zlib.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -28,11 +29,20 @@ std::vector<std::byte> movie_with(std::uint16_t code, std::span<const std::byte>
   return wrap_body(builder.body, 10, false, false);
 }
 
+std::vector<std::byte> shape_tail(SwfBuilder& builder) {
+  builder.u8(0);
+  builder.u8(0);
+  builder.u8(0);
+  builder.push_bits(0, 6);
+  builder.align();
+  return builder.body;
+}
+
 std::vector<std::byte> shape_payload(std::uint16_t shape_id) {
   SwfBuilder builder;
   builder.u16(shape_id);
   builder.rect(0, 200, 0, 100, 9);
-  return builder.body;
+  return shape_tail(builder);
 }
 
 std::vector<std::byte> shape4_payload() {
@@ -41,7 +51,18 @@ std::vector<std::byte> shape4_payload() {
   builder.rect(0, 200, 0, 100, 9);
   builder.rect(0, 190, 0, 90, 9);
   builder.u8(0x05);
-  return builder.body;
+  return shape_tail(builder);
+}
+
+std::vector<std::byte> zlib_bytes(std::span<const std::uint8_t> raw) {
+  uLongf packed = compressBound(static_cast<uLong>(raw.size()));
+  std::vector<std::byte> buffer(static_cast<std::size_t>(packed));
+  EXPECT_EQ(compress2(reinterpret_cast<Bytef*>(buffer.data()), &packed,
+                      reinterpret_cast<const Bytef*>(raw.data()), static_cast<uLong>(raw.size()),
+                      Z_BEST_COMPRESSION),
+            Z_OK);
+  buffer.resize(static_cast<std::size_t>(packed));
+  return buffer;
 }
 
 std::vector<std::byte> lossless_payload(std::uint16_t character_id, std::uint8_t format,
@@ -52,9 +73,14 @@ std::vector<std::byte> lossless_payload(std::uint16_t character_id, std::uint8_t
   builder.u8(format);
   builder.u16(width);
   builder.u16(height);
+  const auto pixels = static_cast<std::size_t>(format == 3 ? 1 : (format == 4 ? 2 : 4));
+  const auto row = (static_cast<std::size_t>(width) * pixels + 3u) & ~std::size_t{3};
+  std::vector<std::uint8_t> raw(row * height, 0x40);
   if (palette.has_value()) {
     builder.u8(*palette);
+    raw.insert(raw.begin(), static_cast<std::size_t>(*palette + 1) * 3u, 0x11);
   }
+  builder.bytes(zlib_bytes(raw));
   return builder.body;
 }
 
@@ -72,27 +98,37 @@ std::vector<std::byte> font_payload() {
 std::vector<std::byte> font2_payload() {
   SwfBuilder builder;
   builder.u16(12);
-  builder.u8(0x8Cu);
+  builder.u8(0x0Cu);
   builder.u8(1);
   builder.sized_text("Body");
   builder.u16(2);
   builder.u32(12);
-  builder.u32(20);
-  builder.u32(24);
+  builder.u32(14);
+  builder.u32(16);
+  builder.u16(0);
+  builder.u16(0);
+  builder.u16(65);
+  builder.u16(66);
   return builder.body;
 }
 
 std::vector<std::byte> font3_payload() {
   SwfBuilder builder;
   builder.u16(13);
-  builder.u8(0x84u);
+  builder.u8(0x00u);
   builder.u8(1);
   builder.sized_text("Cn");
   builder.u16(3);
-  builder.u16(6);
   builder.u16(8);
   builder.u16(10);
   builder.u16(12);
+  builder.u16(14);
+  builder.u16(0);
+  builder.u16(0);
+  builder.u16(0);
+  builder.u16(65);
+  builder.u16(66);
+  builder.u16(67);
   return builder.body;
 }
 
@@ -269,6 +305,37 @@ struct BrokenTag {
 };
 
 }  // namespace
+
+TEST(SwfTagDecode, EveryNewTagPayloadDecodesInIsolation) {
+  struct Case {
+    std::uint16_t code;
+    std::vector<std::byte> payload;
+  };
+  std::vector<Case> cases;
+  cases.push_back({2, shape_payload(7)});
+  cases.push_back({22, shape_payload(8)});
+  cases.push_back({32, shape_payload(9)});
+  cases.push_back({83, shape4_payload()});
+  cases.push_back({20, lossless_payload(3, 3, 16, 8, 255)});
+  cases.push_back({36, lossless_payload(4, 4, 32, 16, std::nullopt)});
+  cases.push_back({10, font_payload()});
+  cases.push_back({48, font2_payload()});
+  cases.push_back({75, font3_payload()});
+  cases.push_back({11, text_payload(20, false)});
+  cases.push_back({33, text_payload(21, true)});
+  cases.push_back({14, sound_payload()});
+  cases.push_back({9, background_color_payload(0x44)});
+  cases.push_back({1000, exporter_info_payload()});
+  cases.push_back({1001, external_image_payload(4, false, "Z.png", "Z.png.dds")});
+  cases.push_back({1009, external_image_payload(0x00010001u, true, "Y.png", "Y.png.dds")});
+  cases.push_back({1002, font_texture_payload()});
+  for (const Case& item : cases) {
+    const auto bytes = movie_with(item.code, item.payload);
+    const auto result = fo4::swf::read_swf(bytes);
+    EXPECT_TRUE(result.ok()) << "tag " << item.code << " returned "
+                             << fo4::swf::status_name(result.status);
+  }
+}
 
 TEST(SwfTagDecode, DecodesShapeBoundsForEveryDefineShapeVariant) {
   const auto bytes = all_kinds_movie();
@@ -591,4 +658,65 @@ TEST(SwfTagDecode, TruncatedPayloadsKeepRawBytesAndParsingContinues) {
     EXPECT_EQ(result.file.tags[2].code, fo4::swf::tag::kEnd);
     EXPECT_EQ(fo4::swf::write_swf(result.file), bytes);
   }
+}
+
+TEST(SwfTags, ReadsImportAssetsAndImportAssets2WithTheSharedMovie) {
+  SwfBuilder first;
+  first.text("Shared.swf");
+  first.u16(2);
+  first.u16(10);
+  first.text("FontA");
+  first.u16(11);
+  first.text("IconB");
+  const auto imported =
+      fo4::swf::read_swf(movie_with(fo4::swf::tag::kImportAssets, first.body));
+  ASSERT_EQ(imported.status, SwfStatus::ok);
+  ASSERT_TRUE(imported.file.tags[0].imports.has_value());
+  const auto& one = *imported.file.tags[0].imports;
+  EXPECT_EQ(one.version, 1);
+  EXPECT_EQ(one.source_movie, "Shared.swf");
+  ASSERT_EQ(one.symbols.size(), 2u);
+  EXPECT_EQ(one.symbols[0].tag_id, 10);
+  EXPECT_EQ(one.symbols[0].name, "FontA");
+  EXPECT_EQ(one.symbols[1].tag_id, 11);
+  EXPECT_EQ(one.symbols[1].name, "IconB");
+
+  SwfBuilder second;
+  second.text("Shared2.swf");
+  second.u8(0xAB);
+  second.u8(0xCD);
+  second.u16(1);
+  second.u16(12);
+  second.text("Thing");
+  const auto imported2 =
+      fo4::swf::read_swf(movie_with(fo4::swf::tag::kImportAssets2, second.body));
+  ASSERT_EQ(imported2.status, SwfStatus::ok);
+  ASSERT_TRUE(imported2.file.tags[0].imports.has_value());
+  const auto& two = *imported2.file.tags[0].imports;
+  EXPECT_EQ(two.version, 2);
+  EXPECT_EQ(two.source_movie, "Shared2.swf");
+  ASSERT_EQ(two.symbols.size(), 1u);
+  EXPECT_EQ(two.symbols[0].name, "Thing");
+}
+
+TEST(SwfTags, RefusesAnImportAssetListThatRunsOutOfBytes) {
+  SwfBuilder truncated;
+  truncated.text("Shared.swf");
+  truncated.u16(2);
+  truncated.u16(10);
+  truncated.text("FontA");
+  const auto result =
+      fo4::swf::read_swf(movie_with(fo4::swf::tag::kImportAssets, truncated.body));
+  EXPECT_EQ(result.status, SwfStatus::malformed_tag);
+  ASSERT_EQ(result.file.tags.size(), 2u);
+  EXPECT_FALSE(result.file.tags[0].imports.has_value());
+  EXPECT_EQ(result.file.tags[0].payload, truncated.body);
+
+  SwfBuilder unterminated;
+  unterminated.text("Shared.swf");
+  unterminated.u16(1);
+  unterminated.u16(10);
+  const auto no_name =
+      fo4::swf::read_swf(movie_with(fo4::swf::tag::kImportAssets2, unterminated.body));
+  EXPECT_EQ(no_name.status, SwfStatus::malformed_tag);
 }

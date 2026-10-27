@@ -1,0 +1,14 @@
+.swf-panel { display: flex; flex-direction: column; gap: 6px; padding: 8px; height: 100%; }
+.swf-head { display: flex; align-items: center; gap: 8px; }
+.swf-head input { flex: 1 1 240px; }
+.swf-dirty { color: #c80; font-weight: 600; }
+.swf-error { color: #c22; display: flex; align-items: center; gap: 6px; }
+.swf-body { display: grid; grid-template-columns: 260px 1fr 220px; gap: 12px; min-height: 0; }
+.swf-left, .swf-right { overflow: auto; }
+.swf-centre { overflow: auto; }
+.swf-left ul { list-style: none; margin: 0 0 8px; padding: 0; }
+.swf-left li { margin: 2px 0; }
+.swf-centre table { border-collapse: collapse; width: 100%; }
+.swf-centre th, .swf-centre td { border-bottom: 1px solid #4444; padding: 2px 6px; text-align: left; }
+.swf-scrubber { display: flex; gap: 12px; margin-bottom: 8px; }.swf-stage { position: relative; height: 320px; margin-bottom: 8px; border: 1px solid #4444; overflow: hidden; background: #0001; }
+.swf-box { position: absolute; border: 1px dashed #7aa; font-size: 10px; color: #7aa; }
