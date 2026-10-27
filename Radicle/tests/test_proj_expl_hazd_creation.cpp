@@ -371,3 +371,59 @@ TEST(ProjExplHazdCreation, DecodesTruncatedExplosionDataAsAPrefix) {
   EXPECT_EQ(decoded.projectile_count, 0u);
   EXPECT_EQ(decoded.stagger_magnitude, 0u);
 }
+
+TEST(ProjExplHazdCreation, EmptyEditorIdIsRefusedBeforeAnyMutation) {
+  auto plugin = fo4::read_plugin(make_target("EXPL"), "Patch.esp");
+  const auto before = fo4::write_plugin(plugin);
+
+  fo4::forms::ProjectileCreation projectile;
+  projectile.explosion_type = fo4::FormKey::parse("000800:Patch.esp");
+  EXPECT_THROW(static_cast<void>(fo4::forms::create_projectile(plugin, projectile)),
+               fo4::forms::ProjExplHazdError);
+
+  fo4::forms::ExplosionCreation explosion;
+  EXPECT_THROW(static_cast<void>(fo4::forms::create_explosion(plugin, explosion)),
+               fo4::forms::ProjExplHazdError);
+
+  fo4::forms::HazardCreation hazard;
+  hazard.model = "Effects\\FXFireMedSmokey01.nif";
+  EXPECT_THROW(static_cast<void>(fo4::forms::create_hazard(plugin, hazard)),
+               fo4::forms::ProjExplHazdError);
+
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(ProjExplHazdCreation, EmptyNameWritesNoFullSubrecordButNamedRecordKeepsIt) {
+  auto plugin = fo4::read_plugin(make_target("EXPL"), "Patch.esp");
+
+  fo4::forms::ProjectileCreation projectile;
+  projectile.editor_id = "NoNameProjectile";
+  projectile.name = std::string{};
+  projectile.explosion_type = fo4::FormKey::parse("000800:Patch.esp");
+  const auto projectile_key = fo4::forms::create_projectile(plugin, projectile);
+
+  fo4::forms::ExplosionCreation explosion;
+  explosion.editor_id = "NoNameExplosion";
+  explosion.name = std::string{};
+  const auto explosion_key = fo4::forms::create_explosion(plugin, explosion);
+
+  explosion.editor_id = "NamedExplosion";
+  explosion.name = std::string{"Named Explosion"};
+  const auto named_key = fo4::forms::create_explosion(plugin, explosion);
+
+  fo4::forms::HazardCreation hazard;
+  hazard.editor_id = "NoNameHazard";
+  hazard.name = std::string{};
+  hazard.model = "Effects\\FXFireMedSmokey01.nif";
+  const auto hazard_key = fo4::forms::create_hazard(plugin, hazard);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  for (const auto& key : {projectile_key, explosion_key, hazard_key}) {
+    const auto* record = fo4::find_record(reread, key);
+    ASSERT_NE(record, nullptr);
+    EXPECT_EQ(find_subrecord(*record, "FULL"), nullptr);
+  }
+  const auto* named = fo4::find_record(reread, named_key);
+  ASSERT_NE(named, nullptr);
+  EXPECT_NE(find_subrecord(*named, "FULL"), nullptr);
+}

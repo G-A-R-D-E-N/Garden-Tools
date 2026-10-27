@@ -383,9 +383,11 @@ FormKey create_projectile(Plugin& plugin, const ProjectileCreation& creation) {
   }
 
   // Measured shipped order: EDID OBND [FULL] ... DATA DNAM NAM1 VNAM.
-  record->subrecords.push_back(Subrecord{k_edid, zstring(stored_editor_id(creation.editor_id)), false});
+  if (!creation.editor_id.empty()) {
+    record->subrecords.push_back(Subrecord{k_edid, zstring(stored_editor_id(creation.editor_id)), false});
+  }
   record->subrecords.push_back(Subrecord{k_obnd, encode_bounds(creation.bounds), false});
-  if (creation.name.has_value()) {
+  if (creation.name.has_value() && !creation.name->empty()) {
     record->subrecords.push_back(Subrecord{k_full, zstring(stored_inline_text(*creation.name, "full name")), false});
   }
   // DATA is a zero-length marker in all 239 shipped records.
@@ -425,9 +427,11 @@ FormKey create_explosion(Plugin& plugin, const ExplosionCreation& creation) {
     throw ProjExplHazdError("newly allocated EXPL record could not be resolved");
   }
 
-  record->subrecords.push_back(Subrecord{k_edid, zstring(stored_editor_id(creation.editor_id)), false});
+  if (!creation.editor_id.empty()) {
+    record->subrecords.push_back(Subrecord{k_edid, zstring(stored_editor_id(creation.editor_id)), false});
+  }
   record->subrecords.push_back(Subrecord{k_obnd, encode_bounds(creation.bounds), false});
-  if (creation.name.has_value()) {
+  if (creation.name.has_value() && !creation.name->empty()) {
     record->subrecords.push_back(Subrecord{k_full, zstring(stored_inline_text(*creation.name, "full name")), false});
   }
   record->subrecords.push_back(Subrecord{k_data, std::move(data), false});
@@ -464,9 +468,11 @@ FormKey create_hazard(Plugin& plugin, const HazardCreation& creation) {
     throw ProjExplHazdError("newly allocated HAZD record could not be resolved");
   }
 
-  record->subrecords.push_back(Subrecord{k_edid, zstring(stored_editor_id(creation.editor_id)), false});
+  if (!creation.editor_id.empty()) {
+    record->subrecords.push_back(Subrecord{k_edid, zstring(stored_editor_id(creation.editor_id)), false});
+  }
   record->subrecords.push_back(Subrecord{k_obnd, encode_bounds(creation.bounds), false});
-  if (creation.name.has_value()) {
+  if (creation.name.has_value() && !creation.name->empty()) {
     record->subrecords.push_back(Subrecord{k_full, zstring(stored_inline_text(*creation.name, "full name")), false});
   }
   record->subrecords.push_back(Subrecord{k_modl, zstring(stored_inline_text(creation.model, "model path")), false});
