@@ -151,7 +151,7 @@ radicle_status radicle_swf_abc_apply_text(radicle_swf* swf, size_t abc, const ui
     }
     const radicle_swf_tag_replacement replacement{
         tag_index, reinterpret_cast<const std::uint8_t*>(payload.data()), payload.size()};
-    const radicle_swf_tag_plan plan{&replacement, 1, nullptr, 0};
+    const radicle_swf_tag_plan plan{&replacement, 1, nullptr, 0, nullptr, 0};
     radicle_swf_plan_result result{};
     return radicle_swf_apply_plan(swf, &plan, &result);
   });
