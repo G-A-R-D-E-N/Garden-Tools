@@ -51,7 +51,7 @@ SharedObjectObject* shared_self(const Value& self) {
 }
 
 Value empty_object(Interpreter& interpreter) {
-  const Class* object_class = interpreter.runtime().find_class("Object");
+  Class* object_class = const_cast<Class*>(interpreter.runtime().find_class("Object"));
   if (object_class == nullptr) {
     return Value::object(std::make_shared<Object>(ObjectKind::Object));
   }
