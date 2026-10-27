@@ -42,7 +42,7 @@ struct radicle_movie {
 struct radicle_runtime_snapshot {
   fo4::avm2::FrameSnapshot frame;
   std::vector<std::vector<radicle_runtime_run>> runs;
-  std::vector<std::vector<radicle_runtime_glyph>> glyphs;
+  std::vector<std::vector<std::vector<radicle_runtime_glyph>>> glyphs;
 };
 
 namespace {
@@ -171,7 +171,7 @@ fo4::avm2::ReplayInput to_replay(const radicle_runtime_input& input) {
 void fill_runs(const fo4::avm2::SnapshotEntry& source, radicle_runtime_snapshot& snapshot,
                std::size_t entry_index) {
   std::vector<radicle_runtime_run>& runs = snapshot.runs[entry_index];
-  std::vector<std::vector<radicle_runtime_glyph>>& glyph_lists = snapshot.glyphs;
+  std::vector<std::vector<std::vector<radicle_runtime_glyph>>>& glyph_lists = snapshot.glyphs;
   runs.clear();
   runs.reserve(source.runs.size());
   for (const fo4::avm2::SnapshotTextRun& run : source.runs) {
