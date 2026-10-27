@@ -102,7 +102,6 @@ const char* object_kind_name(ObjectKind kind) noexcept {
   return "unknown";
 }
 
-Object::Object() = default;
 
 Object::Object(ObjectKind kind) : kind_(kind) {}
 
