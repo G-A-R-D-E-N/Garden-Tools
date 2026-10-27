@@ -792,6 +792,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_avm2_compat.cpp
     tests/test_avm2_sound_decode.cpp
     tests/test_avm2_display_api.cpp
+    tests/test_avm2_document_class.cpp
     tests/test_avm2_events.cpp
     tests/test_avm2_text.cpp
     tests/test_swf_fonts.cpp
