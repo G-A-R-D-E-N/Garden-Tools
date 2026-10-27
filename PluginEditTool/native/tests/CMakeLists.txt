@@ -85,7 +85,7 @@ add_executable(
 target_link_libraries(fo4ide_test_graph PRIVATE fo4ide_graph Catch2::Catch2WithMain)
 fo4ide_enable_warnings(fo4ide_test_graph)
 fo4ide_enable_sanitizers(fo4ide_test_graph)
-catch_discover_tests(fo4ide_test_graph PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})
+catch_discover_tests(fo4ide_test_graph PROPERTIES TIMEOUT 120)
 
 add_executable(
     fo4ide_test_papyrus
