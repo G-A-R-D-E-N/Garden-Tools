@@ -5410,6 +5410,18 @@ Limits, in order of what matters for the corpus. Hit testing reads only the widt
 
 Tests: `Radicle/tests/test_avm2_events.cpp` covers the topmost-child target with a disabled upper child (`MouseTargetIsTheTopmostHitChild`), point and object hits through a scaled parent with a hidden ancestor (`HitTestFollowsTheParentTransform`), focusOut then focusIn order (`FocusChangeDispatchesFocusOutThenFocusIn`), willTrigger through a display ancestor (`WillTriggerSeesDisplayAncestors`), mouseDown bubbling to the hit object then click and mouseOver/mouseOut routing through `SwfRuntime` (`SwfRuntimeRoutesMouseInputToTheHitObject`), and key routing to the stage focus (`SwfRuntimeRoutesKeysToTheStageFocus`). Nothing was built locally; CI is the compile evidence.
 
+## R5 roll events: rollOver and rollOut boundary dispatch (#807 R5)
+
+`Radicle/src/avm2/swf_runtime.cpp:SwfRuntime::mouse_move` dispatches rollOut and rollOver along the display ancestor chains that differ between the previous mouse-over object (`SwfRuntime::mouse_over_`) and the new target. `Radicle/src/avm2/swf_runtime.cpp:chain_except` returns the nodes of one chain that are not ancestors-or-self of the other, innermost first; the chains are ancestor-closed, so the shared part is always a common suffix and common ancestors get neither roll event. The order on a change is mouseOut on the old target, rollOut on each node left, mouseOver on the new target, then rollOver on each node entered, outermost first.
+
+`Radicle/src/avm2/swf_runtime.cpp:pointer_event` makes rollOver and rollOut non-bubbling and leaves every other pointer event bubbling. `Radicle/src/avm2/swf_runtime.cpp:dispatch_pointer` targets each roll event at its own node, so a rollOver listener on an ancestor fires once from that ancestor's own dispatch and never from a descendant's bubble.
+
+Focus needed no change in this round: `Radicle/src/avm2/events.cpp:set_display_focus` moves focus and dispatches focusOut then focusIn, `Radicle/src/avm2/interpreter_property.cpp:Interpreter::set_property` routes a script `focus` write there, and `Radicle/src/avm2/display.cpp:read_display_property` answers the read.
+
+Limits. relatedObject is not set on rollOver, rollOut, mouseOver or mouseOut. `SwfRuntime::mouse_event` does not update `SwfRuntime::mouse_over_`, so a press delivered without a preceding `mouse_move` leaves the roll state stale until the next move. The mouseOut, rollOut, mouseOver, rollOver order is the commonly reported Player order and was not checked against the player. Focus is stored per owning object, so a script `focus` write on a non-stage display object moves that object's own focus rather than the stage's.
+
+Tests: `Radicle/tests/test_avm2_focus_events.cpp` covers the entry, stay, leave-within-ancestor and move-to-sibling boundary with the exact log order (`RollOverAndRollOutFollowTheAncestorBoundary`), and a host press moving stage focus to a tab-enabled object while a non-tab-enabled object leaves it (`MouseDownOnATabEnabledObjectMovesStageFocus`). Nothing was built locally; CI is the compile evidence.
+
 ## R6: embedded font decode, TextField/TextFormat and laid-out glyph runs (#807 R6)
 
 Text is now modelled end to end. The SWF side finally decodes DefineFont2/DefineFont3 in full:

@@ -832,6 +832,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_avm2_display_snapshot.cpp
     tests/test_avm2_document_class.cpp
     tests/test_avm2_events.cpp
+    tests/test_avm2_focus_events.cpp
     tests/test_avm2_text.cpp
     tests/test_avm2_string_utf16.cpp
     tests/test_avm2_static_text.cpp

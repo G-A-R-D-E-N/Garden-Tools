@@ -17,6 +17,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -43,8 +44,9 @@ std::shared_ptr<DisplayObject> pointer_target(const std::shared_ptr<MovieClip>& 
 
 std::shared_ptr<EventObject> pointer_event(Interpreter& interpreter, const char* type,
                                            const DisplayObject& target, double x, double y) {
+  const bool bubbles = std::string_view{type} != "rollOver" && std::string_view{type} != "rollOut";
   std::shared_ptr<EventObject> event =
-      make_event(interpreter.runtime(), type, true, false, "MouseEvent");
+      make_event(interpreter.runtime(), type, bubbles, false, "MouseEvent");
   if (event == nullptr) {
     return event;
   }
@@ -56,6 +58,36 @@ std::shared_ptr<EventObject> pointer_event(Interpreter& interpreter, const char*
   set_event_value(*event, "localX", Value::number(local_x));
   set_event_value(*event, "localY", Value::number(local_y));
   return event;
+}
+
+std::vector<std::shared_ptr<DisplayObject>> display_chain(
+    const std::shared_ptr<DisplayObject>& node) {
+  std::vector<std::shared_ptr<DisplayObject>> chain;
+  for (DisplayObject* current = node.get(); current != nullptr; current = current->parent()) {
+    chain.push_back(current->shared_from_this());
+  }
+  return chain;
+}
+
+std::vector<std::shared_ptr<DisplayObject>> chain_except(const std::shared_ptr<DisplayObject>& from,
+                                                         const std::shared_ptr<DisplayObject>& to) {
+  const std::vector<std::shared_ptr<DisplayObject>> to_chain = display_chain(to);
+  std::vector<std::shared_ptr<DisplayObject>> nodes = display_chain(from);
+  nodes.erase(std::remove_if(nodes.begin(), nodes.end(),
+                             [&to_chain](const std::shared_ptr<DisplayObject>& node) {
+                               return std::find(to_chain.begin(), to_chain.end(), node) !=
+                                      to_chain.end();
+                             }),
+              nodes.end());
+  return nodes;
+}
+
+void dispatch_pointer(Interpreter& interpreter, const char* type,
+                      const std::shared_ptr<DisplayObject>& node, double x, double y) {
+  std::shared_ptr<EventObject> event = pointer_event(interpreter, type, *node, x, y);
+  if (event != nullptr) {
+    dispatch_event(interpreter, node, event, 0);
+  }
 }
 
 std::shared_ptr<TimelineDefinition> timeline_from_rows(const SwfTimelineRows& rows) {
@@ -493,9 +525,16 @@ void SwfRuntime::mouse_move(Interpreter& interpreter, double x, double y) {
         dispatch_event(interpreter, previous, out, 0);
       }
     }
+    for (const auto& node : chain_except(previous, target)) {
+      dispatch_pointer(interpreter, "rollOut", node, x, y);
+    }
     std::shared_ptr<EventObject> over = pointer_event(interpreter, "mouseOver", *target, x, y);
     if (over != nullptr) {
       dispatch_event(interpreter, target, over, 0);
+    }
+    const std::vector<std::shared_ptr<DisplayObject>> entered = chain_except(target, previous);
+    for (auto node = entered.rbegin(); node != entered.rend(); ++node) {
+      dispatch_pointer(interpreter, "rollOver", *node, x, y);
     }
   }
   std::shared_ptr<EventObject> event = pointer_event(interpreter, "mouseMove", *target, x, y);
