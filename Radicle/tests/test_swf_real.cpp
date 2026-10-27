@@ -580,3 +580,53 @@ TEST(SwfRealData, ParsesEveryShippedMovieAndRoundTripsByteIdentically) {
   RecordProperty("font_texture_movies", std::to_string(stats.font_texture_movies));
   RecordProperty("version_histogram", version_histogram(stats));
 }
+
+TEST(SwfRealData, InterfaceCorpusUsesNoAvm1DoActionAndNoLzmaCompression) {
+  const char* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) {
+    GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
+  }
+  record_game_build(detect_game_build(dir));
+  const auto archive_path =
+      std::filesystem::path(dir) / "Fallout4 - Interface.ba2";
+  if (!std::filesystem::exists(archive_path)) {
+    GTEST_SKIP() << "no Fallout4 - Interface.ba2 in FO4_DATA_DIR";
+  }
+  const auto archive = fo4::archive::read_ba2_general_file(archive_path);
+  std::size_t movies = 0;
+  std::size_t lzma_movies = 0;
+  std::size_t do_action_tags = 0;
+  for (const auto& entry : archive.entries) {
+    if (!is_movie(entry.path)) {
+      continue;
+    }
+    ++movies;
+    const auto bytes = fo4::archive::extract_ba2_general_entry(entry);
+    if (bytes.size() >= 3 && bytes[0] == static_cast<std::byte>('Z') &&
+        bytes[1] == static_cast<std::byte>('W') && bytes[2] == static_cast<std::byte>('S')) {
+      ++lzma_movies;
+      continue;
+    }
+    const auto read = fo4::swf::read_swf(bytes);
+    if (!read.ok()) {
+      continue;
+    }
+    const auto count_do_action = [](const auto& self, const auto& tags) -> std::size_t {
+      std::size_t total = 0;
+      for (const auto& tag : tags) {
+        if (tag.code == fo4::swf::tag::kDoAction) {
+          ++total;
+        }
+        total += self(self, tag.children);
+      }
+      return total;
+    };
+    do_action_tags += count_do_action(count_do_action, read.file.tags);
+  }
+  RecordProperty("movies", std::to_string(movies));
+  RecordProperty("lzma_movies", std::to_string(lzma_movies));
+  RecordProperty("do_action_tags", std::to_string(do_action_tags));
+  EXPECT_GT(movies, 0u);
+  EXPECT_EQ(lzma_movies, 0u);
+  EXPECT_EQ(do_action_tags, 0u);
+}
