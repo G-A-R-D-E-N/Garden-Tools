@@ -15,6 +15,8 @@
 
 namespace fo4::avm2 {
 
+class Runtime;
+
 class Interpreter;
 
 struct TimelineFrameLabel {
@@ -232,7 +234,7 @@ class MovieClip : public DisplayObjectContainer {
 };
 
 /* Requires a linked runtime; resolves a display class by rendered name. */
-Class* find_display_class(const struct Runtime& runtime, std::string_view rendered_name);
+Class* find_display_class(const Runtime& runtime, std::string_view rendered_name);
 
 /* Requires a runtime whose display classes are installed; builds the display object for a class. */
 std::shared_ptr<DisplayObject> make_display_object(Runtime& runtime, Class& klass);

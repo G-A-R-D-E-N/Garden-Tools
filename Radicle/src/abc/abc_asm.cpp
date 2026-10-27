@@ -294,8 +294,8 @@ struct Assembler {
   }
 
   bool parse_trait_lines(const std::vector<std::string>& block, std::vector<AbcTrait>& out) {
-    for (const std::string& line : block) {
-      const std::vector<std::string> tokens = split_tokens(line);
+    for (const std::string& text : block) {
+      const std::vector<std::string> tokens = split_tokens(text);
       Cursor trait_cursor = cursor(tokens);
       AbcTrait trait;
       if (parse_trait(trait_cursor, trait) != AbcStatus::Ok) {

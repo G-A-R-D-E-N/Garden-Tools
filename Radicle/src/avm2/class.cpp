@@ -154,11 +154,11 @@ std::size_t Class::compute_class_slot_count() const {
   return count;
 }
 
-void Class::apply_class_slot_defaults(Object& class_object) const {
-  class_object.resize_slots(class_slot_count);
+void Class::apply_class_slot_defaults(Object& target) const {
+  target.resize_slots(class_slot_count);
   for (const Trait& trait : class_traits) {
     if (trait.is_slot_like() && trait.has_default && trait.slot_id < class_slot_count) {
-      class_object.slots()[trait.slot_id] = trait.default_value;
+      target.slots()[trait.slot_id] = trait.default_value;
     }
   }
 }

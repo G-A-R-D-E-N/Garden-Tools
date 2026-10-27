@@ -249,19 +249,20 @@ AbcEditStatus delete_instruction(AbcFile& file, std::uint32_t body_index, std::s
     return AbcEditStatus::NotAnInstructionBoundary;
   }
   const std::uint32_t delta = static_cast<std::uint32_t>(code[index].length);
+  const auto start = static_cast<std::uint32_t>(offset);
   for (const AbcInstruction& instruction : code) {
     for (const AbcDecodedOperand& operand : instruction.operands) {
-      if (operand.role == AbcOperandRole::Offset && target_deleted(operand.target, offset, delta)) {
+      if (operand.role == AbcOperandRole::Offset && target_deleted(operand.target, start, delta)) {
         message = "a branch targets the deleted instruction";
         return AbcEditStatus::BranchTargetsDeletedInstruction;
       }
       if (operand.role == AbcOperandRole::Switch) {
-        if (target_deleted(operand.target, offset, delta)) {
+        if (target_deleted(operand.target, start, delta)) {
           message = "a switch targets the deleted instruction";
           return AbcEditStatus::BranchTargetsDeletedInstruction;
         }
         for (const std::int32_t target : operand.case_targets) {
-          if (target_deleted(target, offset, delta)) {
+          if (target_deleted(target, start, delta)) {
             message = "a switch case targets the deleted instruction";
             return AbcEditStatus::BranchTargetsDeletedInstruction;
           }

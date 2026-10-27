@@ -396,10 +396,10 @@ ExecutionResult Interpreter::construct(Frame& frame, const ClassObject& class_ob
     auto initializer = std::make_shared<FunctionObject>(klass->file->method_name(klass->iinit),
                                                         klass->file, klass->iinit);
     initializer->set_owner_class(klass);
-    ExecutionResult initialized =
+    ExecutionResult constructed =
         invoke(*initializer, Value::object(instance), arguments, {}, depth);
-    if (!initialized.ok()) {
-      return initialized;
+    if (!constructed.ok()) {
+      return constructed;
     }
   }
   ExecutionResult result;

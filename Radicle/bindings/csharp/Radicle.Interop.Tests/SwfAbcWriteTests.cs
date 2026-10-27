@@ -67,12 +67,16 @@ public partial class SwfTests
 
     private static string EditFirstString(string text, string marker)
     {
-        var line = text.IndexOf("  string ", StringComparison.Ordinal);
-        if (line < 0) return string.Empty;
-        var quote = text.IndexOf('"', line);
-        var close = quote < 0 ? -1 : text.IndexOf('"', quote + 1);
-        if (close < 0) return string.Empty;
-        return text.Insert(close, marker);
+        var from = 0;
+        while ((from = text.IndexOf("  string ", from, StringComparison.Ordinal)) >= 0)
+        {
+            var quote = text.IndexOf('"', from);
+            var close = quote < 0 ? -1 : text.IndexOf('"', quote + 1);
+            if (close < 0) return string.Empty;
+            if (close > quote + 1) return text.Insert(close, marker);
+            from = close;
+        }
+        return string.Empty;
     }
 
     [Fact]
