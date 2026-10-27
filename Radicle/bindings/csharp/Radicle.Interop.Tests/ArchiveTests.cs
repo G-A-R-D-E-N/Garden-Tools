@@ -67,7 +67,7 @@ public class ArchiveTests
         Assert.Equal(new[] { "Meshes\\Gun.nif", "Materials\\Gun.bgsm" }, archive.Entries.Select(e => e.Path));
         Assert.All(archive.Entries, e => Assert.NotEqual(0u, e.NameHash));
         Assert.Equal(big, archive.Extract(archive.Find("materials/gun.bgsm")!.Value));
-        Assert.Equal(Status.ParseError, Assert.Throws<RadicleException>(() => Ba2Writer.General(files, version: 5, compress: false)).Status);
+        Assert.Equal(Status.InvalidArgument, Assert.Throws<RadicleException>(() => Ba2Writer.General(files, version: 5, compress: false)).Status);
     }
 
     [Fact]
