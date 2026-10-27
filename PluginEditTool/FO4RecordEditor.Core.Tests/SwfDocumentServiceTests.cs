@@ -136,9 +136,11 @@ public class SwfDocumentServiceTests
         var result = document.InsertKeyframe(placement.TagIndex, 0);
         Assert.True(result.Changed);
         Assert.Equal(before + 1, document.Movie.Tags.Count(tag => tag.Code == 26));
-        var inserted = document.Movie.Tags.Last(tag => tag.Code == 26);
-        Assert.Equal((byte)26, inserted.Code);
-        Assert.True((document.Movie.Payload(inserted.Index)[0] & 0x01) != 0);
+        var inserted = document.Movie.Tags.Where(tag => tag.Code == 26 && !tag.InsideSprite).Last();
+        Assert.Equal(new byte[] { 0x05, 0x01, 0x00, 0x00 }, document.Movie.Payload(inserted.Index));
+        var parsed = SwfPlacementCodec.Parse(inserted, document.Movie.Payload(inserted.Index));
+        Assert.Equal((ushort)1, parsed.Depth);
+        Assert.Null(parsed.CharacterId);
         document.Undo();
         Assert.Equal(before, document.Movie.Tags.Count(tag => tag.Code == 26));
     }
@@ -173,6 +175,81 @@ public class SwfDocumentServiceTests
         Assert.False(string.IsNullOrWhiteSpace(error.Message));
         Assert.Equal(0ul, document.Revision);
         Assert.Equal(0, document.UndoCount);
+        Assert.False(document.Dirty);
+    }
+
+    [Fact]
+    public void AnEditTextEditedTwiceKeepsBothEdits()
+    {
+        using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
+        document.EditEditText(0, new SwfEditTextEdit(Text: "hello", Color: 0x80112233u));
+        document.EditEditText(0, new SwfEditTextEdit(Text: "hello again"));
+        var text = document.EditText(0);
+        Assert.Equal("hello again", text.Text);
+        Assert.Equal(0x80112233u, text.Color);
+        Assert.Equal("variable", text.Variable);
+    }
+
+    [Fact]
+    public void SetPlacementTransformIsUndoable()
+    {
+        using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
+        var placement = document.Placements().First(item => !item.InsideSprite);
+        var result = document.SetPlacementTransform(placement.TagIndex,
+            new SwfPlacementTransformEdit(TranslateX: 40, TranslateY: 60));
+        Assert.True(result.Changed);
+        Assert.Equal(40, document.PlacementTransform(placement.TagIndex).TranslateX);
+        Assert.Equal(1, document.UndoCount);
+        Assert.True(document.Dirty);
+        document.Undo();
+        Assert.Equal(0, document.PlacementTransform(placement.TagIndex).TranslateX);
+        Assert.False(document.Dirty);
+    }
+
+    [Fact]
+    public void RenameLabelChangesTheNameThroughTheHistory()
+    {
+        using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
+        var label = document.Movie.Tags.First(tag => tag.Code == 43 && !tag.InsideSprite);
+        var result = document.RenameLabel(label.Index, "begin");
+        Assert.True(result.Changed);
+        Assert.Contains(document.FrameLabels(), item => item.Name == "begin");
+        document.Undo();
+        Assert.Contains(document.FrameLabels(), item => item.Name == "start");
+    }
+
+    [Fact]
+    public void RenameLabelRefusesANonLabelTag()
+    {
+        using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
+        var placement = document.Placements().First(item => !item.InsideSprite);
+        var error = Assert.Throws<InvalidOperationException>(() => document.RenameLabel(placement.TagIndex, "menu"));
+        Assert.Contains("not a frame label", error.Message);
+        Assert.Equal(0ul, document.Revision);
+    }
+
+    [Fact]
+    public void SavingAResolvedAssetWithoutATargetRefuses()
+    {
+        using var document = SwfDocument.OpenResolved("Interface\\Test.swf", _ => SwfFixture.Movie());
+        var error = Assert.Throws<InvalidOperationException>(() => document.Save());
+        Assert.Contains("read-only", error.Message);
+    }
+
+    [Fact]
+    public void ASecondSaveKeepsTheFirstBackup()
+    {
+        var original = SwfFixture.Movie();
+        using var directory = new TemporaryDirectory();
+        var path = directory.Write("Interface\\Test.swf", original);
+        using var document = SwfDocument.OpenFile(path);
+        var label = document.Movie.Tags.First(tag => tag.Code == 43 && !tag.InsideSprite).Index;
+        document.RenameLabel(label, "menu");
+        document.Save();
+        document.RenameLabel(label, "other");
+        document.Save();
+        Assert.Equal(original, File.ReadAllBytes(path + ".bak"));
+        Assert.Equal(document.WriteBytes(), File.ReadAllBytes(path));
         Assert.False(document.Dirty);
     }
 

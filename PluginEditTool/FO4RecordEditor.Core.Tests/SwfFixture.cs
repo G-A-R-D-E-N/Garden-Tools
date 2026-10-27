@@ -84,7 +84,7 @@ internal static class SwfFixture
         editText.Add(0);
         editText.AddRange(Z("variable"));
 
-        var place = new List<byte> { 0x03 };
+        var place = new List<byte> { 0x06 };
         place.AddRange(U16(1));
         place.AddRange(U16(11));
         place.Add(0x00);
@@ -93,7 +93,7 @@ internal static class SwfFixture
         sprite.AddRange(U16(14));
         sprite.AddRange(U16(1));
         sprite.AddRange(Tag(43, Z("inner")));
-        var spritePlace = new List<byte> { 0x03 };
+        var spritePlace = new List<byte> { 0x06 };
         spritePlace.AddRange(U16(2));
         spritePlace.AddRange(U16(11));
         spritePlace.Add(0x00);
