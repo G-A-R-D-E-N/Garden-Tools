@@ -2150,6 +2150,15 @@ public unsafe struct LandBlend
     public IntPtr Internal;
 }
 
+public enum PexOperandRole : int
+{
+    None = 0,
+    FunctionName = 1,
+    Receiver = 2,
+    OwningScript = 3,
+    Result = 4,
+}
+
 public enum PexCallKind : int
 {
     Method = 0,
@@ -2458,7 +2467,7 @@ public unsafe struct PapyrusAliasReport
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 60u;
+    public const uint CompiledAbiVersion = 61u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -3539,6 +3548,9 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_landscape_blend_free")]
     public static extern void LandscapeBlendFree(LandBlend* blend);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_call_operand_role")]
+    public static extern PexOperandRole PexCallOperandRole(byte opcode, nuint index);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_callgraph_build")]
     public static extern Status PexCallgraphBuild(IntPtr* files, nuint file_count, IntPtr* out_graph);

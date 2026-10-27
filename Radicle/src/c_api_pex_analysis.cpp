@@ -140,6 +140,23 @@ radicle_status radicle_pex_callgraph_totals(const radicle_pex_callgraph* graph,
   return RADICLE_STATUS_OK;
 }
 
+radicle_pex_operand_role radicle_pex_call_operand_role(uint8_t opcode, size_t index) {
+  clear_error();
+  switch (fo4::pex_analysis::pex_call_operand_role(opcode, index)) {
+    case fo4::pex_analysis::PexOperandRole::FunctionName:
+      return RADICLE_PEX_OPERAND_FUNCTION_NAME;
+    case fo4::pex_analysis::PexOperandRole::Receiver:
+      return RADICLE_PEX_OPERAND_RECEIVER;
+    case fo4::pex_analysis::PexOperandRole::OwningScript:
+      return RADICLE_PEX_OPERAND_OWNING_SCRIPT;
+    case fo4::pex_analysis::PexOperandRole::Result:
+      return RADICLE_PEX_OPERAND_RESULT;
+    case fo4::pex_analysis::PexOperandRole::None:
+      break;
+  }
+  return RADICLE_PEX_OPERAND_NONE;
+}
+
 size_t radicle_pex_callgraph_call_count(const radicle_pex_callgraph* graph) {
   clear_error();
   return graph == nullptr ? 0 : graph->graph.calls.size();
