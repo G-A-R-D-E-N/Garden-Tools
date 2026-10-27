@@ -8,8 +8,10 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace fo4::avm2 {
@@ -93,6 +95,26 @@ class TextFieldObject : public DisplayObject {
   double text_width_{0.0};
   double text_height_{0.0};
   std::size_t lines_{1};
+};
+
+struct StaticTextRecord {
+  std::optional<std::uint16_t> font_id;
+  std::vector<std::uint32_t> glyph_indexes;
+};
+
+class StaticTextObject : public DisplayObject {
+ public:
+  StaticTextObject(Class* display_class, const FontRegistry* registry);
+
+  bool is_static_text() const noexcept override { return true; }
+
+  void set_records(std::vector<StaticTextRecord> records) { records_ = std::move(records); }
+  /* Requires the registry that holds the record fonts; one unmapped glyph makes the text empty. */
+  std::string text() const;
+
+ private:
+  const FontRegistry* registry_{nullptr};
+  std::vector<StaticTextRecord> records_;
 };
 
 /* Requires UTF-8 input. */

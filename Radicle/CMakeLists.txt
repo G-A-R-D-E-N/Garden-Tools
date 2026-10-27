@@ -834,6 +834,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_avm2_events.cpp
     tests/test_avm2_text.cpp
     tests/test_avm2_string_utf16.cpp
+    tests/test_avm2_static_text.cpp
     tests/test_swf_fonts.cpp
     tests/test_swf_fonts_real.cpp
     tests/test_material_file.cpp

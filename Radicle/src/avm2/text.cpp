@@ -294,6 +294,29 @@ std::string TextFieldObject::line_text(std::size_t index) const {
   return utf8_from_utf16(units);
 }
 
+StaticTextObject::StaticTextObject(Class* display_class, const FontRegistry* registry)
+    : DisplayObject(display_class), registry_(registry) {}
+
+std::string StaticTextObject::text() const {
+  std::u16string units;
+  for (const StaticTextRecord& record : records_) {
+    if (registry_ == nullptr || !record.font_id.has_value()) {
+      return std::string{};
+    }
+    const FontResource* font = registry_->find(*record.font_id);
+    if (font == nullptr) {
+      return std::string{};
+    }
+    for (const std::uint32_t index : record.glyph_indexes) {
+      if (index >= font->glyphs.size()) {
+        return std::string{};
+      }
+      units.push_back(static_cast<char16_t>(font->glyphs[index].code));
+    }
+  }
+  return utf8_from_utf16(units);
+}
+
 Value make_text_format_instance(Interpreter& interpreter, const TextFormatData& format) {
   Class* klass = const_cast<Class*>(interpreter.runtime().find_class("flash.text::TextFormat"));
   if (klass == nullptr) {

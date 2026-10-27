@@ -119,6 +119,7 @@ class DisplayObject : public Object, public std::enable_shared_from_this<Display
   virtual bool is_container() const noexcept { return false; }
   virtual bool is_movie_clip() const noexcept { return false; }
   virtual bool is_text_field() const noexcept { return false; }
+  virtual bool is_static_text() const noexcept { return false; }
 
   void set_display_class(Class* display_class) noexcept { display_class_ = display_class; }
   Class* display_class() const noexcept { return display_class_; }

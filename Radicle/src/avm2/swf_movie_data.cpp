@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <utility>
@@ -100,6 +101,24 @@ SwfTextFieldData text_field_of(const swf::SwfEditText& edit) {
     field.format.leading = twips_to_pixels(edit.layout->leading);
   }
   return field;
+}
+
+std::vector<StaticTextRecord> static_text_records_of(const swf::SwfText& text) {
+  std::vector<StaticTextRecord> records;
+  std::optional<std::uint16_t> font_id;
+  for (const swf::SwfTextRecord& record : text.records) {
+    if (record.font_id.has_value()) {
+      font_id = record.font_id;
+    }
+    StaticTextRecord out;
+    out.font_id = font_id;
+    out.glyph_indexes.reserve(record.glyphs.size());
+    for (const swf::SwfTextGlyph& glyph : record.glyphs) {
+      out.glyph_indexes.push_back(glyph.glyph_index);
+    }
+    records.push_back(std::move(out));
+  }
+  return records;
 }
 
 void read_symbol_classes(std::span<const std::byte> payload,
@@ -210,6 +229,13 @@ void collect_timeline(const std::vector<swf::SwfTag>& tags, std::uint32_t declar
       case swf::tag::kDefineEditText: {
         if (tag.edit_text.has_value()) {
           data.text_fields[tag.edit_text->character_id] = text_field_of(*tag.edit_text);
+        }
+        break;
+      }
+      case swf::tag::kDefineText:
+      case swf::tag::kDefineText2: {
+        if (tag.text.has_value()) {
+          data.static_texts[tag.text->character_id] = static_text_records_of(*tag.text);
         }
         break;
       }
