@@ -29,8 +29,8 @@ class EventObject : public Object {
   bool default_prevented() const noexcept { return default_prevented_; }
   bool propagation_stopped() const noexcept { return propagation_stopped_; }
   bool immediate_stopped() const noexcept { return immediate_stopped_; }
-  Object* target() const noexcept { return target_; }
-  Object* current_target() const noexcept { return current_target_; }
+  const std::shared_ptr<Object>& target() const noexcept { return target_; }
+  const std::shared_ptr<Object>& current_target() const noexcept { return current_target_; }
   std::uint8_t event_phase() const noexcept { return event_phase_; }
 
   void prevent_default() noexcept { default_prevented_ = true; }
@@ -39,8 +39,8 @@ class EventObject : public Object {
     immediate_stopped_ = true;
     propagation_stopped_ = true;
   }
-  void set_target(Object* target) noexcept { target_ = target; }
-  void set_current_target(Object* current) noexcept { current_target_ = current; }
+  void set_target(const std::shared_ptr<Object>& target) { target_ = target; }
+  void set_current_target(const std::shared_ptr<Object>& current) { current_target_ = current; }
   void set_event_phase(std::uint8_t phase) noexcept { event_phase_ = phase; }
 
  private:
@@ -50,8 +50,8 @@ class EventObject : public Object {
   bool default_prevented_{false};
   bool propagation_stopped_{false};
   bool immediate_stopped_{false};
-  Object* target_{nullptr};
-  Object* current_target_{nullptr};
+  std::shared_ptr<Object> target_;
+  std::shared_ptr<Object> current_target_;
   std::uint8_t event_phase_{0};
 };
 

@@ -53,8 +53,8 @@ ExecutionResult invoke_listeners(Interpreter& interpreter, Object& node,
     if (!capture_only && event->event_phase() != 2 && listener.use_capture) {
       continue;
     }
-    event->set_current_target(node_value.get());
-    ExecutionResult result = interpreter.call_function(*listener.function, node_value,
+    event->set_current_target(node_value);
+    ExecutionResult result = interpreter.call_function(*listener.function, Value::object(node_value),
                                                        {Value::object(event)}, depth + 1);
     if (!result.ok()) {
       return result;
@@ -88,7 +88,7 @@ ExecutionResult dispatch_event(Interpreter& interpreter, const std::shared_ptr<O
     return ExecutionResult{};
   }
   const std::vector<std::shared_ptr<Object>> path = propagation_path(target);
-  event->set_target(target.get());
+  event->set_target(target);
   if (event->propagation_stopped()) {
     return ExecutionResult{};
   }
@@ -283,13 +283,13 @@ bool read_event_property(Interpreter& interpreter, EventObject& event, const Mul
     return true;
   }
   if (name == "target") {
-    Object* target = event.target();
-    out = target == nullptr ? Value::null() : Value::object(target->shared_from_this());
+    const auto& target = event.target();
+    out = target == nullptr ? Value::null() : Value::object(target);
     return true;
   }
   if (name == "currentTarget") {
-    Object* current = event.current_target();
-    out = current == nullptr ? Value::null() : Value::object(current->shared_from_this());
+    const auto& current = event.current_target();
+    out = current == nullptr ? Value::null() : Value::object(current);
     return true;
   }
   (void)interpreter;
