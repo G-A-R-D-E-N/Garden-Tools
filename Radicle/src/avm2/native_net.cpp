@@ -257,6 +257,7 @@ ExecutionResult url_loader_load(Interpreter& interpreter, const Value& self,
 }
 
 ExecutionResult sound_construct(Interpreter& interpreter, const Value& self) {
+  (void)interpreter;
   Class* klass = class_from_self(self);
   if (klass == nullptr) {
     return native_value(Value::null());
