@@ -95,8 +95,8 @@ class CodeBuilder {
   void negate() { op(0x90); }
   void increment() { op(0x91); }
   void decrement() { op(0x93); }
-  void bitor() { op(0xA9); }
-  void bitand() { op(0xA8); }
+  void bit_or() { op(0xA9); }
+  void bit_and() { op(0xA8); }
   void bitxor() { op(0xAA); }
   void lshift() { op(0xA5); }
   void rshift() { op(0xA6); }
