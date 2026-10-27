@@ -57,7 +57,8 @@ public sealed class SwfDocument : IDisposable
     {
         var saved = bytes.ToArray();
         var file = SwfFile.FromBytes(saved);
-        return new SwfDocument(path, file, file.OpenHistory(), resolved, saved);
+        var history = file.OpenHistory();
+        return new SwfDocument(path, file, history, resolved, history.WriteBytes());
     }
 
     public IReadOnlyList<SwfCharacterRecord> Characters() => Movie.Characters();
@@ -201,9 +202,12 @@ public sealed class SwfDocument : IDisposable
 
     private void Reopen()
     {
-        _current = _history.WriteBytes();
-        _movie.Dispose();
-        _movie = SwfFile.FromBytes(_current);
+        var bytes = _history.WriteBytes();
+        var next = SwfFile.FromBytes(bytes);
+        var old = _movie;
+        _current = bytes;
+        _movie = next;
+        old.Dispose();
     }
 
     private byte[] LabelPayload(string name, int timeline, int ownTagIndex)

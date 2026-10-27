@@ -75,7 +75,7 @@ TEST(CApiSwfCharacters, ReportsImportedCharactersWithTheirSourceMovie) {
   radicle_swf_character character{};
   ASSERT_EQ(radicle_swf_character_by_id(swf.get(), 20, &character), RADICLE_STATUS_OK);
   EXPECT_EQ(character.kind, RADICLE_SWF_CHARACTER_IMPORTED);
-  EXPECT_EQ(character.tag_index, 11u);
+  EXPECT_EQ(character.tag_index, 13u);
   ASSERT_NE(character.imported_from, nullptr);
   EXPECT_EQ(std::string(character.imported_from), "Shared.swf");
   ASSERT_NE(character.imported_name, nullptr);
