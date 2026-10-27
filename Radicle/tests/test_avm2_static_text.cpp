@@ -216,4 +216,30 @@ TEST(Avm2StaticText, FontIdReusedByAnotherMovieReadsItsOwnFont) {
   EXPECT_EQ(second_text->text(), "XY");
 }
 
+TEST(Avm2StaticText, ReleasingAMovieEvictsItsFontsAndKeepsTheOthers) {
+  Harness harness;
+  const std::shared_ptr<SwfRuntime> first = SwfRuntime::create(
+      harness.runtime, harness.interpreter, placed_static_text_file(kTwoRecordPayload));
+  const std::shared_ptr<SwfRuntime> second = SwfRuntime::create(
+      harness.runtime, harness.interpreter,
+      placed_static_text_file(kTwoRecordPayload, kFontPayloadXY));
+  ASSERT_NE(first, nullptr);
+  ASSERT_NE(second, nullptr);
+  ASSERT_EQ(second->root()->children().size(), 1u);
+  const auto* second_text =
+      dynamic_cast<const StaticTextObject*>(second->root()->children()[0].get());
+  ASSERT_NE(second_text, nullptr);
+  const std::uint64_t first_owner = first->data()->font_owner;
+  const std::uint64_t second_owner = second->data()->font_owner;
+  ASSERT_NE(first_owner, second_owner);
+  ASSERT_EQ(harness.runtime.fonts().size(), 2u);
+  ASSERT_NE(harness.runtime.fonts().find(first_owner, 1), nullptr);
+  first->release_fonts();
+  EXPECT_EQ(harness.runtime.fonts().find(first_owner, 1), nullptr);
+  ASSERT_EQ(harness.runtime.fonts().size(), 1u);
+  EXPECT_EQ(harness.runtime.fonts().fonts()[0].owner, second_owner);
+  EXPECT_NE(harness.runtime.fonts().find(second_owner, 1), nullptr);
+  EXPECT_EQ(second_text->text(), "XY");
+}
+
 }  // namespace

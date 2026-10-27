@@ -249,4 +249,25 @@ TEST(Avm2Text, TextIsLaidOutInUtf16CodeUnits) {
   EXPECT_EQ(fo4::avm2::utf8_from_utf16(fo4::avm2::utf16_from_utf8(text)), text);
 }
 
+TEST(Avm2Text, OwnerZeroReadsTheEarliestRegisteredLayoutFontAcrossOwners) {
+  FontRegistry registry;
+  FontResource first;
+  first.character_id = 1;
+  first.owner = 5;
+  first.has_layout = true;
+  first.glyphs.push_back(FontGlyph{0, 'A', 0.5});
+  FontResource second = first;
+  second.owner = 6;
+  registry.add(first);
+  registry.add(second);
+  ASSERT_NE(registry.first_with_layout(0), nullptr);
+  EXPECT_EQ(registry.first_with_layout(0)->owner, 5u);
+  EXPECT_EQ(registry.first_with_layout(6)->owner, 6u);
+  registry.remove_owner(5);
+  EXPECT_EQ(registry.size(), 1u);
+  EXPECT_EQ(registry.find(5, 1), nullptr);
+  ASSERT_NE(registry.first_with_layout(0), nullptr);
+  EXPECT_EQ(registry.first_with_layout(0)->owner, 6u);
+}
+
 }  // namespace

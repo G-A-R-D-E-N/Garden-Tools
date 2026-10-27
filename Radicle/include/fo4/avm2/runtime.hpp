@@ -75,8 +75,9 @@ class Runtime {
   const std::vector<Class*>& classes() const noexcept { return classes_; }
   const std::vector<ScriptEntry>& scripts() const noexcept { return scripts_; }
   Object* global_object() const noexcept { return global_object_.get(); }
-  FontRegistry& fonts() noexcept { return fonts_; }
-  const FontRegistry& fonts() const noexcept { return fonts_; }
+  FontRegistry& fonts() noexcept { return *fonts_; }
+  const FontRegistry& fonts() const noexcept { return *fonts_; }
+  const std::shared_ptr<FontRegistry>& font_registry() const noexcept { return fonts_; }
   HostBridge& host() noexcept { return host_; }
   const HostBridge& host() const noexcept { return host_; }
   SoundEventQueue& sound_events() noexcept { return sound_events_; }
@@ -160,7 +161,7 @@ class Runtime {
   std::unordered_map<const Class*, Class*> vector_classes_;
   std::vector<ScriptEntry> scripts_;
   std::shared_ptr<Object> global_object_;
-  FontRegistry fonts_;
+  std::shared_ptr<FontRegistry> fonts_{std::make_shared<FontRegistry>()};
   HostBridge host_;
   SoundEventQueue sound_events_;
   std::set<std::uint32_t> pressed_keys_;

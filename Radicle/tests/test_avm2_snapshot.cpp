@@ -12,16 +12,19 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
 
 namespace {
 
+using fo4::avm2::Class;
 using fo4::avm2::DisplayObject;
 using fo4::avm2::FrameSnapshot;
 using fo4::avm2::Interpreter;
 using fo4::avm2::Runtime;
+using fo4::avm2::SnapshotColorTransform;
 using fo4::avm2::SnapshotEntryKind;
 using fo4::avm2::SnapshotSoundEvent;
 using fo4::avm2::SwfRuntime;
@@ -207,6 +210,21 @@ TEST(Avm2Snapshot, SoundQueueIsDrainedByTheSnapshot) {
   EXPECT_TRUE(movie->sound_events().empty());
   const FrameSnapshot second = movie->take_snapshot();
   EXPECT_TRUE(second.sounds.empty());
+}
+
+TEST(Avm2Snapshot, ColorOffsetsOutsideTheIntRangeClampToIt) {
+  Class klass;
+  klass.name = "flash.display::Sprite";
+  const auto object = std::make_shared<DisplayObject>(&klass);
+  const double add[4] = {1e300, -1e300, std::numeric_limits<double>::quiet_NaN(), 12.0};
+  object->set_color_add(add);
+  const FrameSnapshot snapshot = fo4::avm2::build_frame_snapshot(*object);
+  ASSERT_EQ(snapshot.entries.size(), 1u);
+  const SnapshotColorTransform& color = snapshot.entries[0].color;
+  EXPECT_EQ(color.red_offset, std::numeric_limits<std::int32_t>::max());
+  EXPECT_EQ(color.green_offset, std::numeric_limits<std::int32_t>::min());
+  EXPECT_EQ(color.blue_offset, 0);
+  EXPECT_EQ(color.alpha_offset, 12);
 }
 
 }  // namespace
