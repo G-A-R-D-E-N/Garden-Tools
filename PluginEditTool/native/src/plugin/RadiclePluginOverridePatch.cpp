@@ -36,12 +36,6 @@ std::string stringArgument(const nlohmann::json& args, std::size_t index) {
     return args[index].get<std::string>();
 }
 
-bool boolArgument(const nlohmann::json& args, std::size_t index, bool& value) {
-    if (!args.is_array() || index >= args.size() || !args[index].is_boolean()) return false;
-    value = args[index].get<bool>();
-    return true;
-}
-
 int intArgument(const nlohmann::json& args, std::size_t index, int fallback) {
     if (!args.is_array() || index >= args.size()) return fallback;
     return core::jsonIntSaturated(args[index]).value_or(fallback);
@@ -108,7 +102,7 @@ Result<nlohmann::json> RadiclePluginBackend::createMergedPatch(const nlohmann::j
     const auto pluginsCsv = stringArgument(arguments, 0);
     const auto patchArg = trim(stringArgument(arguments, 1));
     bool apply = false;
-    boolArgument(arguments, 2, apply);
+    support::tryBoolArgument(arguments, 2, apply);
     constexpr int limit = 5000;
 
     if (patchArg.empty()) {
@@ -252,7 +246,7 @@ Result<nlohmann::json> RadiclePluginBackend::revertOverrides(const nlohmann::jso
     const auto signature = trim(stringArgument(arguments, 2));
     const auto containsComponent = trim(stringArgument(arguments, 3));
     bool apply = false;
-    boolArgument(arguments, 4, apply);
+    support::tryBoolArgument(arguments, 4, apply);
     int limit = intArgument(arguments, 5, 50);
     if (limit <= 0) limit = 50;
 

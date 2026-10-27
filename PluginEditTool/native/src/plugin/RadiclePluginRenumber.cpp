@@ -20,11 +20,6 @@
 namespace fo4ide::plugin {
 namespace {
 
-std::string renumberStringArgument(const nlohmann::json& args, std::size_t index) {
-    if (!args.is_array() || index >= args.size() || !args[index].is_string()) return {};
-    return args[index].get<std::string>();
-}
-
 bool topLevelContains(const fo4::Plugin& plugin, const fo4::FormKey& key) {
     for (const auto& group : plugin.groups) {
         if (group.header.group_type != static_cast<std::int32_t>(fo4::GroupType::top)) continue;
@@ -40,8 +35,8 @@ bool topLevelContains(const fo4::Plugin& plugin, const fo4::FormKey& key) {
 
 Result<nlohmann::json> RadiclePluginBackend::renumberPluginFormIds(
     const nlohmann::json& arguments) {
-    const auto pluginName = renumberStringArgument(arguments, 0);
-    auto startText = renumberStringArgument(arguments, 1);
+    const auto pluginName = support::stringArgument(arguments, 0);
+    auto startText = support::stringArgument(arguments, 1);
     const bool apply = support::boolArgument(arguments, 2);
 
     if (pluginName.empty() || startText.empty()) {

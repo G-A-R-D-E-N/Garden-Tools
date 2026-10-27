@@ -670,6 +670,10 @@ A nested record is refused with a `FormIdError` (`mutation.cpp:renumber_local_re
 
 `PluginEditTool/native/src/plugin/RadiclePluginSupport.hpp:eslCompactionBlockers(plugin, first, last)` returns the own out-of-range records that are nested, or are top-level with a form ID labelled child group. `compactToEsl` and `RadiclePluginEsl.cpp:checkEslEligibility` both run it after the capacity check, so eligibility never says "can fit by remapping" for a plugin compaction refuses. Eligibility reports "would be BLOCKED: N record(s) cannot be remapped here (<count> <SIG> nested | with child groups)". It calls `has_form_id_labelled_child_group` once per out-of-range top-level record (O(records x groups)), bounded by the 0xFFE capacity check and small next to the plugin copy in each `renumber_local_record`. Tests: `RadiclePluginCompactTests.cpp`.
 
+## PluginEditTool/native/src/plugin/RadiclePluginSupport.hpp:tryBoolArgument
+
+`PluginEditTool/native/src/plugin/RadiclePluginSupport.hpp:tryBoolArgument(args, index, value)` is the shared form of the per-TU `boolArgument(args, index, bool& value)` helper that `RadiclePluginBatchMutation.cpp`, `RadiclePluginMasters.cpp`, `RadiclePluginMutation.cpp` and `RadiclePluginOverridePatch.cpp` each used to define. It returns false and leaves `value` unchanged when the argument is missing or not a JSON boolean, so callers keep their default. It is not interchangeable with `support::boolArgument(args, index, fallback)`, which returns the value directly.
+
 ## src/environment/base_records.cpp: the HLOD and water record fields
 
 GardenEngine's object HLOD and water layers read five things Radicle did not decode, so porting them off the removed record library could not compile. They are decoded here rather than in a second record stack, and the exports moved `RADICLE_ABI_VERSION` to 4.
