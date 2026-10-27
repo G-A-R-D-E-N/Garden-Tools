@@ -55,6 +55,7 @@ bool valid_list(const char* const* values, size_t count) {
 bool valid_ba2_write_path(const char* path) {
   const std::string_view text(path);
   if (text.empty() || text.back() == '/' || text.back() == '\\') return false;
+  if (fo4::archive::normalize_ba2_name(text) == ".") return false;
   const auto stored = fo4::text::utf8_to_windows1252(text);
   return stored && !stored->empty() &&
          stored->size() < fo4::archive::k_max_ba2_path_length;
@@ -170,7 +171,7 @@ radicle_status radicle_ba2_write_general(const radicle_ba2_file* files,
     if (!valid_ba2_write_path(files[i].path)) {
       return fail(RADICLE_STATUS_INVALID_ARGUMENT,
                   "every file needs a Windows-1252 path shorter than 260 bytes that does not end "
-                  "in a separator");
+                  "in a separator and is not '.'");
     }
     if constexpr (sizeof(size_t) > sizeof(std::uint32_t)) {
       if (files[i].size > std::numeric_limits<std::uint32_t>::max()) {
