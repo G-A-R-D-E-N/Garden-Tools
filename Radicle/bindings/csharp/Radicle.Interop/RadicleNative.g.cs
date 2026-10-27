@@ -2536,6 +2536,14 @@ public unsafe struct SwfPlanResult
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfGlyph
+{
+    public byte FillBits;
+    public byte LineBits;
+    public nuint RecordCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct SwfCharacter
 {
     public ushort CharacterId;
@@ -2860,7 +2868,7 @@ public unsafe struct PapyrusAliasReport
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 73u;
+    public const uint CompiledAbiVersion = 74u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -4121,6 +4129,18 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_apply_plan")]
     public static extern Status SwfApplyPlan(IntPtr swf, SwfTagPlan* plan, SwfPlanResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_font_glyph_count")]
+    public static extern Status SwfFontGlyphCount(IntPtr swf, nuint index, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_font_glyph_at")]
+    public static extern Status SwfFontGlyphAt(IntPtr swf, nuint index, nuint glyph, SwfGlyph* out_glyph);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_font_glyph_record_at")]
+    public static extern Status SwfFontGlyphRecordAt(IntPtr swf, nuint index, nuint glyph, nuint record, SwfShapeRecord* out_record);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_font_replace_glyph")]
+    public static extern Status SwfFontReplaceGlyph(IntPtr swf, nuint index, nuint glyph, byte fill_bits, byte line_bits, SwfShapeRecord* records, nuint record_count, SwfPlanResult* out_result);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_revision")]
     public static extern ulong SwfRevision(IntPtr swf);

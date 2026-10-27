@@ -103,8 +103,12 @@ std::vector<std::byte> font2_payload() {
   builder.sized_text("Body");
   builder.u16(2);
   builder.u32(12);
-  builder.u32(20);
-  builder.u32(24);
+  builder.u32(14);
+  builder.u32(16);
+  builder.u16(0);
+  builder.u16(0);
+  builder.u16(65);
+  builder.u16(66);
   return builder.body;
 }
 
@@ -115,10 +119,16 @@ std::vector<std::byte> font3_payload() {
   builder.u8(1);
   builder.sized_text("Cn");
   builder.u16(3);
-  builder.u16(6);
   builder.u16(8);
   builder.u16(10);
   builder.u16(12);
+  builder.u16(14);
+  builder.u16(0);
+  builder.u16(0);
+  builder.u16(0);
+  builder.u16(65);
+  builder.u16(66);
+  builder.u16(67);
   return builder.body;
 }
 

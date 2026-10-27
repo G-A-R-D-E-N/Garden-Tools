@@ -115,6 +115,9 @@ bool read_morph_records(std::span<const std::byte> data, std::size_t start, unsi
                         SwfMorphStyles& styles, StyleBounds& bounds, ShapeRecordCounts& counts,
                         std::vector<SwfShapeRecord>& records, std::size_t& next);
 
+/* Requires all-or-nothing: any unreadable glyph leaves font.glyphs empty so the font tag still decodes. */
+void read_glyph_shapes(std::span<const std::byte> data, std::size_t table_start, SwfFont& font);
+
 bool lzma_decode_swf(std::span<const std::byte> input, std::size_t out_size,
                      std::vector<std::byte>& out);
 

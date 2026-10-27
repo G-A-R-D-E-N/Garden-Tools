@@ -1,15 +1,19 @@
+#include "c_api_env_internal.hpp"
 #include "c_api_internal.hpp"
 #include "c_api_swf_internal.hpp"
 
 #include "fo4/c_api_swf.h"
+#include "fo4/swf/swf_glyph_edit.hpp"
 
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 using radicle_c_detail::clear_error;
 using radicle_c_detail::fail;
+using radicle_c_env_detail::guarded;
 
 namespace {
 
@@ -167,6 +171,22 @@ radicle_status morph_record_at(const radicle_swf* swf, size_t index, size_t reco
   }
   fill_shape_record(records[record], *out_record);
   return RADICLE_STATUS_OK;
+}
+
+bool to_shape_record(const radicle_swf_shape_record& source, fo4::swf::SwfShapeRecord& out) {
+  if (static_cast<int>(source.kind) < 0 || source.kind > RADICLE_SWF_RECORD_CURVED_EDGE) {
+    return false;
+  }
+  out = {};
+  out.kind = static_cast<fo4::swf::SwfShapeRecordKind>(source.kind);
+  out.x = source.x;
+  out.y = source.y;
+  out.control_x = source.control_x;
+  out.control_y = source.control_y;
+  out.fill0 = source.fill0;
+  out.fill1 = source.fill1;
+  out.line = source.line;
+  return true;
 }
 
 }  // namespace
@@ -578,6 +598,102 @@ radicle_status radicle_swf_jpeg_tables_at(const radicle_swf* swf, size_t index,
   }
   out_tables->size = tag->jpeg_tables->size;
   return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_swf_font_glyph_count(const radicle_swf* swf, size_t index, size_t* out_count) {
+  clear_error();
+  if (out_count) *out_count = 0;
+  const auto* tag = decoded_tag(swf, index);
+  if (tag == nullptr || out_count == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "swf, out_count and a tag index are required");
+  }
+  if (!tag->font) {
+    return fail(RADICLE_STATUS_NOT_FOUND, "the tag carries no decoded font");
+  }
+  *out_count = tag->font->glyphs.size();
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_swf_font_glyph_at(const radicle_swf* swf, size_t index, size_t glyph,
+                                         radicle_swf_glyph* out_glyph) {
+  clear_error();
+  if (out_glyph) *out_glyph = {};
+  const auto* tag = decoded_tag(swf, index);
+  if (tag == nullptr || out_glyph == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "swf, out_glyph and a tag index are required");
+  }
+  if (!tag->font) {
+    return fail(RADICLE_STATUS_NOT_FOUND, "the tag carries no decoded font");
+  }
+  if (glyph >= tag->font->glyphs.size()) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the glyph index is out of range");
+  }
+  const auto& shape = tag->font->glyphs[glyph];
+  out_glyph->fill_bits = shape.fill_bits;
+  out_glyph->line_bits = shape.line_bits;
+  out_glyph->record_count = shape.records.size();
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_swf_font_glyph_record_at(const radicle_swf* swf, size_t index, size_t glyph,
+                                                size_t record, radicle_swf_shape_record* out_record) {
+  clear_error();
+  if (out_record) *out_record = {};
+  const auto* tag = decoded_tag(swf, index);
+  if (tag == nullptr || out_record == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "swf, out_record and a tag index are required");
+  }
+  if (!tag->font) {
+    return fail(RADICLE_STATUS_NOT_FOUND, "the tag carries no decoded font");
+  }
+  if (glyph >= tag->font->glyphs.size()) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the glyph index is out of range");
+  }
+  const auto& records = tag->font->glyphs[glyph].records;
+  if (record >= records.size()) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the shape record index is out of range");
+  }
+  fill_shape_record(records[record], *out_record);
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_swf_font_replace_glyph(radicle_swf* swf, size_t index, size_t glyph,
+                                              uint8_t fill_bits, uint8_t line_bits,
+                                              const radicle_swf_shape_record* records,
+                                              size_t record_count,
+                                              radicle_swf_plan_result* out_result) {
+  clear_error();
+  if (out_result) {
+    out_result->changed = 0;
+    out_result->revision = swf == nullptr || !swf->revision ? 0 : swf->revision->revision;
+  }
+  if (swf == nullptr || out_result == nullptr || (records == nullptr && record_count != 0)) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "swf, out_result and the record array are required");
+  }
+  return guarded("unknown exception while replacing a glyph shape", [&] {
+    const auto* tag = decoded_tag(swf, index);
+    if (tag == nullptr) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "a tag index is required");
+    }
+    fo4::swf::SwfGlyph shape;
+    shape.fill_bits = fill_bits;
+    shape.line_bits = line_bits;
+    shape.records.resize(record_count);
+    for (size_t position = 0; position < record_count; ++position) {
+      if (!to_shape_record(records[position], shape.records[position])) {
+        return fail(RADICLE_STATUS_INVALID_ARGUMENT, "a shape record kind is out of range");
+      }
+    }
+    std::vector<std::byte> payload;
+    std::string message;
+    if (!fo4::swf::replace_glyph_payload(*tag, glyph, shape, payload, message)) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, message.c_str());
+    }
+    const radicle_swf_tag_replacement replacement{
+        index, reinterpret_cast<const uint8_t*>(payload.data()), payload.size()};
+    const radicle_swf_tag_plan plan{&replacement, 1, nullptr, 0, nullptr, 0};
+    return radicle_swf_apply_plan(swf, &plan, out_result);
+  });
 }
 
 }  // extern "C"

@@ -347,6 +347,19 @@ struct SwfRemoval {
   std::uint16_t depth{0};
 };
 
+/* Invariant: a glyph SHAPE has no style table, so fill style 1 is the implicit text colour. */
+struct SwfGlyph {
+  std::uint8_t fill_bits{0};
+  std::uint8_t line_bits{0};
+  std::vector<SwfShapeRecord> records;
+};
+
+struct SwfKerning {
+  std::uint16_t code1{0};
+  std::uint16_t code2{0};
+  std::int16_t adjustment{0};
+};
+
 struct SwfFont {
   std::uint16_t font_id{0};
   std::uint32_t glyph_count{0};
@@ -358,9 +371,12 @@ struct SwfFont {
   bool define_font3{false};
   bool has_layout{false};
   std::vector<std::uint32_t> glyph_offsets;
+  std::vector<SwfGlyph> glyphs;
   std::vector<std::uint16_t> glyph_codes;
   /* Invariant: advances are em fractions (glyph advance / units per em). */
   std::vector<double> advances;
+  std::vector<SwfRect> glyph_bounds;
+  std::vector<SwfKerning> kerning;
   std::uint32_t units_per_em{1024};
   std::uint16_t ascent{0};
   std::uint16_t descent{0};
@@ -578,6 +594,13 @@ std::vector<std::byte> write_swf(const SwfFile& file, SwfCompression compression
 
 std::vector<std::byte> encode_define_sound(const SwfSound& sound, std::span<const std::byte> data);
 std::vector<std::byte> encode_sound_stream_head(const SwfSoundStreamHead& head);
+
+/* Requires every field to fit its SHAPE bit width (fill and line indices, edge deltas up to 17 bits). */
+bool encode_glyph_shape(const SwfGlyph& glyph, std::vector<std::byte>& out, std::string& message);
+
+/* Requires one glyph shape, advance, code and bounds per glyph; the offsets are recomputed from the layout. */
+bool encode_define_font(const SwfFont& font, std::uint16_t code, std::vector<std::byte>& out,
+                        std::string& message);
 
 bool replace_tag_payload(SwfFile& file, std::size_t tag_index, std::span<const std::byte> payload);
 
