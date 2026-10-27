@@ -1,6 +1,7 @@
 #pragma once
 
 #include "fo4/archive/ba2.hpp"
+#include "fo4/binary/zlib_bound.hpp"
 #include "fo4/io/path_text.hpp"
 #include "fo4/text/encoding.hpp"
 
@@ -13,11 +14,9 @@
 
 namespace fo4::archive::detail {
 
-inline constexpr std::uint64_t k_zlib_max_expansion = 1032;
-inline constexpr std::uint64_t k_zlib_slack_bytes = 64;
-
 inline void require_zlib_expansion_bound(std::size_t packed_size, std::uint32_t unpacked_size) {
-  if (unpacked_size > static_cast<std::uint64_t>(packed_size) * k_zlib_max_expansion + k_zlib_slack_bytes) {
+  if (unpacked_size > static_cast<std::uint64_t>(packed_size) * binary::k_zlib_max_expansion +
+                          binary::k_zlib_slack_bytes) {
     throw Ba2Error("BA2 compressed chunk declares " + std::to_string(unpacked_size) +
                    " bytes from " + std::to_string(packed_size) +
                    " packed bytes; exceeds zlib expansion bound");
