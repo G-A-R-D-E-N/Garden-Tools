@@ -16,6 +16,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <memory>
 #include <string>
 #include <utility>
@@ -213,7 +214,8 @@ ExecutionResult loader_load(Interpreter& interpreter, const Value& self,
     return native_value(Value::undefined());
   }
   loader->bytes = *bytes;
-  const fo4::swf::SwfReadResult read = fo4::swf::read_swf(loader->bytes);
+  const fo4::swf::SwfReadResult read = fo4::swf::read_swf(std::span<const std::byte>(
+      reinterpret_cast<const std::byte*>(loader->bytes.data()), loader->bytes.size()));
   if (!read.ok()) {
     dispatch_type(interpreter, self, "ioError", depth);
     return native_value(Value::undefined());
@@ -276,7 +278,8 @@ ExecutionResult sound_load(Interpreter& interpreter, const Value& self,
   }
   SoundResource resource;
   resource.payload = *bytes;
-  const fo4::swf::SwfReadResult read = fo4::swf::read_swf(*bytes);
+  const fo4::swf::SwfReadResult read = fo4::swf::read_swf(std::span<const std::byte>(
+      reinterpret_cast<const std::byte*>(bytes->data()), bytes->size()));
   if (read.ok()) {
     for (const fo4::swf::SwfTag& tag : read.file.tags) {
       if (tag.sound.has_value()) {
