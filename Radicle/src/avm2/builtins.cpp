@@ -711,7 +711,7 @@ RuntimeStatus Runtime::install_builtins() {
   add_global_value("NaN", Value::number(std::numeric_limits<double>::quiet_NaN()));
   add_global_value("Infinity", Value::number(std::numeric_limits<double>::infinity()));
   add_global_value("undefined", Value::undefined());
-  return RuntimeStatus::Ok;
+  return install_system_builtins();
 }
 
 }  // namespace fo4::avm2

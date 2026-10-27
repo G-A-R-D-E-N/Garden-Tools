@@ -5995,6 +5995,22 @@ Font tags: `Radicle/src/avm2/swf_movie_data.cpp:collect_timeline` registers Defi
 
 Owner 0 is the key of script-made text (`Radicle/src/avm2/display.cpp:display_construct` builds it without a movie). `Radicle/src/avm2/text.cpp:FontRegistry::find_by_name` and `first_with_layout` treat owner 0 as matching any owner so those fields still reach embedded fonts; `find` stays strict because the id collision it guards against needs a movie owner. A Loader-loaded child with no embedded font falls back to device metrics rather than borrowing the parent's font.
 
+## Radicle/src/avm2/native_system.cpp:Runtime::install_system_builtins (R8 L3a static classes, #807)
+
+`Runtime::install_system_builtins` runs as the last step of `Radicle/src/avm2/builtins.cpp:Runtime::install_builtins`, so `flash.events::EventDispatcher` already exists when its `find_class` lookup runs. It installs `flash.text::TextFieldAutoSize`, `flash.system::Capabilities`, `flash.system::Security`, `flash.system::SecurityDomain` (shell only), `flash.text::Font`, `flash.filters::BitmapFilterQuality` and the interface `flash.events::IEventDispatcher`.
+
+The constants and fixed values are `TraitKind::Const` class traits, the same mechanism as `Math.PI`, not native getters. A script read is identical. A write to them is not rejected by this code. `Capabilities.version` ("WIN 32,0,0,0") is a guessed value. `Capabilities.languages` and `SecurityDomain.currentDomain` are not installed; the plan lists them for Grognak, and whether a movie reads them is unverified.
+
+`Security.sandboxType` is "application" as the L3a plan says. The plan also says Grognak compares `sandboxType` with `REMOTE`, which is false under this value. Unverified against the movie.
+
+`IEventDispatcher` sets `Class::is_interface` and is pushed into `EventDispatcher` `interfaces`, so `Class::implements_interface` holds for every EventDispatcher subclass.
+
+`Font.enumerateFonts` is `native::Id::font_enumerate_fonts`. `try_system_native` in `Radicle/src/avm2/native_system.cpp` handles it, and `Radicle/src/avm2/interpreter_support.cpp` dispatches to it before `try_compat_native`. `Font.registerFont` and the Security no-ops `allowDomain`, `allowInsecureDomain` and `loadPolicyFile` reuse `native::Id::compat_undefined`.
+
+`Radicle/src/avm2/display.cpp:write_display_property` maps the string constants through `auto_size_from_value`, and an integer still maps to the enum. `Radicle/src/avm2/display.cpp:read_display_property` returns the name from `auto_size_name`. It used to return the enum number, so any script that compared the old number now sees a string. No existing test reads `autoSize`.
+
+Not built or run locally. CI is the check for `tests/test_avm2_system_classes.cpp`.
+
 ## utf16 helpers in their own header
 
 `Radicle/include/fo4/avm2/utf16.hpp` declares `utf16_from_utf8` and `utf8_from_utf16`, defined in `Radicle/src/avm2/utf16.cpp`. `Radicle/src/avm2/value.cpp:Value::string` includes only this header, so it no longer pulls in `text.hpp`. `Radicle/include/fo4/avm2/text.hpp` includes it, so existing users still compile.
