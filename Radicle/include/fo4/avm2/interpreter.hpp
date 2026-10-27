@@ -3,6 +3,7 @@
 #include <fo4/abc/abc.hpp>
 #include <fo4/abc/opcodes.hpp>
 #include <fo4/avm2/class.hpp>
+#include <fo4/avm2/events.hpp>
 #include <fo4/avm2/object.hpp>
 #include <fo4/avm2/runtime.hpp>
 #include <fo4/avm2/value.hpp>
@@ -98,6 +99,10 @@ class Interpreter {
   void prepare_plain_object(Object& object);
   /* The random source must depend only on this interpreter's seed. */
   double next_random();
+  /* Host time must only advance through these; getTimer and timers read it. */
+  HostClock& host_clock() noexcept { return host_clock_; }
+  double host_time_ms() const noexcept { return host_clock_.time_ms(); }
+  void advance_host_time(double dt_ms);
   ExecutionResult call_native_id(std::uint32_t native_id, const Value& self,
                                  const std::vector<Value>& arguments, std::size_t depth);
 
@@ -158,6 +163,7 @@ class Interpreter {
   std::size_t instructions_{0};
   std::size_t frames_{0};
   std::uint64_t random_state_{0x9E3779B97F4A7C15ULL};
+  HostClock host_clock_;
   std::uint8_t current_opcode_{0};
   std::uint32_t current_offset_{0};
   std::map<std::pair<const abc::AbcFile*, std::uint32_t>, Multiname> multinames_;

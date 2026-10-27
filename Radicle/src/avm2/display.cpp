@@ -1,6 +1,7 @@
 #include <fo4/avm2/display.hpp>
 
 #include <fo4/avm2/coercion.hpp>
+#include <fo4/avm2/events.hpp>
 #include <fo4/avm2/interpreter.hpp>
 #include <fo4/avm2/name.hpp>
 #include <fo4/avm2/runtime.hpp>
@@ -208,6 +209,15 @@ ExecutionResult MovieClip::run_frame_lifecycle(Interpreter& interpreter) {
   ExecutionResult script = run_frame_script(interpreter);
   if (!script.ok()) {
     return script;
+  }
+  const std::shared_ptr<Object> self = std::static_pointer_cast<Object>(shared_from_this());
+  ExecutionResult enter = dispatch_event(interpreter, self, "enterFrame", false, 0);
+  if (!enter.ok()) {
+    return enter;
+  }
+  ExecutionResult exit = dispatch_event(interpreter, self, "exitFrame", false, 0);
+  if (!exit.ok()) {
+    return exit;
   }
   return script;
 }

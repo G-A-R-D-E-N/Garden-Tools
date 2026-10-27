@@ -239,7 +239,119 @@ RuntimeStatus Runtime::install_builtins() {
     subclass->native_constructor = static_cast<std::uint32_t>(native::Id::error_construct);
   }
 
-  Class* display_object = add_builtin_class("DisplayObject", "flash.display", object_class);
+  Class* event_dispatcher = add_builtin_class("EventDispatcher", "flash.events", object_class);
+  Class* event_class = add_builtin_class("Event", "flash.events", object_class);
+  if (event_dispatcher == nullptr || event_class == nullptr) {
+    return RuntimeStatus::InvalidTrait;
+  }
+  event_dispatcher->native_constructor = static_cast<std::uint32_t>(native::Id::dispatcher_construct);
+  add_method(*event_dispatcher, "addEventListener", native::Id::dispatcher_add_listener, false);
+  add_method(*event_dispatcher, "removeEventListener", native::Id::dispatcher_remove_listener,
+             false);
+  add_method(*event_dispatcher, "dispatchEvent", native::Id::dispatcher_dispatch_event, false);
+  add_method(*event_dispatcher, "hasEventListener", native::Id::dispatcher_has_listener, false);
+  event_class->native_constructor = static_cast<std::uint32_t>(native::Id::event_construct);
+  add_method(*event_class, "preventDefault", native::Id::event_prevent_default, false);
+  add_method(*event_class, "stopPropagation", native::Id::event_stop_propagation, false);
+  add_method(*event_class, "stopImmediatePropagation", native::Id::event_stop_immediate, false);
+  add_method(*event_class, "isDefaultPrevented", native::Id::event_is_default_prevented, false);
+  add_method(*event_class, "clone", native::Id::event_clone, false);
+  add_method(*event_class, "toString", native::Id::event_to_string, false);
+  std::uint32_t event_slot = 0;
+  const char* event_constants[] = {
+      "ADDED",        "ADDED_TO_STAGE", "REMOVED",      "REMOVED_FROM_STAGE", "ENTER_FRAME",
+      "EXIT_FRAME",   "CHANGE",         "RENDER",       "TIMER",              "TIMER_COMPLETE",
+      "COMPLETE",     "OPEN",           "PROGRESS",     "IO_ERROR",           "SECURITY_ERROR",
+      "CLOSE",        "CONNECT",        "INIT",         "SELECT",             "CANCEL",
+      "SCROLL",       "RESIZE",         "FULLSCREEN",   "UNLOAD",             "ACTIVATE",
+      "DEACTIVATE",   "MOUSE_UP",       "MOUSE_DOWN",   "MOUSE_MOVE",         "MOUSE_OVER",
+      "MOUSE_OUT",    "CLICK",          "DOUBLE_CLICK", "ROLL_OVER",          "ROLL_OUT",
+      "MOUSE_WHEEL",  "KEY_DOWN",       "KEY_UP",       "FOCUS_IN",           "FOCUS_OUT",
+      "TEXT_INPUT",   "FRAME_CONSTRUCTED"};
+  for (const char* constant : event_constants) {
+    add_constant(*event_class, constant, Value::string(constant), event_slot);
+  }
+  const auto add_event_subclass = [&](const char* name) -> Class* {
+    Class* subclass = add_builtin_class(name, "flash.events", event_class);
+    if (subclass != nullptr) {
+      subclass->native_constructor = static_cast<std::uint32_t>(native::Id::event_construct);
+      add_method(*subclass, "toString", native::Id::event_to_string, false);
+    }
+    return subclass;
+  };
+  Class* keyboard_event = add_event_subclass("KeyboardEvent");
+  Class* mouse_event = add_event_subclass("MouseEvent");
+  Class* focus_event = add_event_subclass("FocusEvent");
+  Class* timer_event = add_event_subclass("TimerEvent");
+  add_event_subclass("ProgressEvent");
+  add_event_subclass("IOErrorEvent");
+  add_event_subclass("SecurityErrorEvent");
+  add_event_subclass("ErrorEvent");
+  if (keyboard_event != nullptr) {
+    std::uint32_t slot = 0;
+    add_constant(*keyboard_event, "KEY_DOWN", Value::string("keyDown"), slot);
+    add_constant(*keyboard_event, "KEY_UP", Value::string("keyUp"), slot);
+  }
+  if (mouse_event != nullptr) {
+    std::uint32_t slot = 0;
+    add_constant(*mouse_event, "CLICK", Value::string("click"), slot);
+    add_constant(*mouse_event, "DOUBLE_CLICK", Value::string("doubleClick"), slot);
+    add_constant(*mouse_event, "MOUSE_DOWN", Value::string("mouseDown"), slot);
+    add_constant(*mouse_event, "MOUSE_UP", Value::string("mouseUp"), slot);
+    add_constant(*mouse_event, "MOUSE_MOVE", Value::string("mouseMove"), slot);
+    add_constant(*mouse_event, "MOUSE_OVER", Value::string("mouseOver"), slot);
+    add_constant(*mouse_event, "MOUSE_OUT", Value::string("mouseOut"), slot);
+    add_constant(*mouse_event, "ROLL_OVER", Value::string("rollOver"), slot);
+    add_constant(*mouse_event, "ROLL_OUT", Value::string("rollOut"), slot);
+  }
+  if (focus_event != nullptr) {
+    std::uint32_t slot = 0;
+    add_constant(*focus_event, "FOCUS_IN", Value::string("focusIn"), slot);
+    add_constant(*focus_event, "FOCUS_OUT", Value::string("focusOut"), slot);
+    add_constant(*focus_event, "KEY_FOCUS_CHANGE", Value::string("keyFocusChange"), slot);
+    add_constant(*focus_event, "MOUSE_FOCUS_CHANGE", Value::string("mouseFocusChange"), slot);
+  }
+  if (timer_event != nullptr) {
+    std::uint32_t slot = 0;
+    add_constant(*timer_event, "TIMER", Value::string("timer"), slot);
+    add_constant(*timer_event, "TIMER_COMPLETE", Value::string("timerComplete"), slot);
+  }
+  Class* keyboard_class = add_builtin_class("Keyboard", "flash.ui", object_class);
+  Class* timer_class = add_builtin_class("Timer", "flash.utils", object_class);
+  if (keyboard_class == nullptr || timer_class == nullptr) {
+    return RuntimeStatus::InvalidTrait;
+  }
+  std::uint32_t keyboard_slot = 0;
+  for (int code = 'A'; code <= 'Z'; ++code) {
+    const std::string name(1, static_cast<char>(code));
+    add_constant(*keyboard_class, name, Value::uint32(static_cast<std::uint32_t>(code)),
+                 keyboard_slot);
+  }
+  const std::pair<const char*, std::uint32_t> keyboard_named[] = {
+      {"LEFT", 37},      {"UP", 38},        {"RIGHT", 39},     {"DOWN", 40},
+      {"SPACE", 32},     {"ENTER", 13},     {"ESCAPE", 27},    {"TAB", 9},
+      {"BACKSPACE", 8},  {"DELETE", 46},    {"HOME", 36},      {"END", 35},
+      {"PAGE_UP", 33},   {"PAGE_DOWN", 34}, {"INSERT", 45},    {"SHIFT", 16},
+      {"CONTROL", 17},   {"ALT", 18},       {"CAPS_LOCK", 20}};
+  for (const auto& [name, code] : keyboard_named) {
+    add_constant(*keyboard_class, name, Value::uint32(code), keyboard_slot);
+  }
+  for (int index = 0; index < 10; ++index) {
+    add_constant(*keyboard_class, "NUMBER_" + std::to_string(index),
+                 Value::uint32(static_cast<std::uint32_t>('0' + index)), keyboard_slot);
+    add_constant(*keyboard_class, "NUMPAD_" + std::to_string(index),
+                 Value::uint32(static_cast<std::uint32_t>(96 + index)), keyboard_slot);
+  }
+  for (int index = 1; index <= 12; ++index) {
+    add_constant(*keyboard_class, "F" + std::to_string(index),
+                 Value::uint32(static_cast<std::uint32_t>(111 + index)), keyboard_slot);
+  }
+  timer_class->native_constructor = static_cast<std::uint32_t>(native::Id::timer_construct);
+  add_method(*timer_class, "start", native::Id::timer_start, false);
+  add_method(*timer_class, "stop", native::Id::timer_stop, false);
+  add_method(*timer_class, "reset", native::Id::timer_reset, false);
+
+  Class* display_object = add_builtin_class("DisplayObject", "flash.display", event_dispatcher);
   Class* interactive_object = add_builtin_class("InteractiveObject", "flash.display", display_object);
   Class* display_container =
       add_builtin_class("DisplayObjectContainer", "flash.display", interactive_object);

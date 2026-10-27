@@ -173,7 +173,7 @@ bool try_top_native(Interpreter& interpreter, native::Id id, const Value& self,
       out = to_object(interpreter, argument_at(arguments, 0));
       return true;
     case native::Id::get_timer:
-      out = native_value(Value::number(0.0));
+      out = native_value(Value::number(interpreter.host_time_ms()));
       return true;
     default:
       return false;

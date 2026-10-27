@@ -96,6 +96,8 @@ const char* object_kind_name(ObjectKind kind) noexcept {
       return "namespace";
     case ObjectKind::Display:
       return "display";
+    case ObjectKind::Event:
+      return "event";
   }
   return "unknown";
 }

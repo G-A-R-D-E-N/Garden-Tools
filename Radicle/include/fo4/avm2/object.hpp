@@ -25,6 +25,7 @@ enum class ObjectKind : std::uint8_t {
   Error,
   Namespace,
   Display,
+  Event,
 };
 
 const char* object_kind_name(ObjectKind kind) noexcept;
@@ -65,6 +66,13 @@ struct PropertyLookup {
   bool found() const noexcept { return kind != LookupKind::Missing; }
 };
 
+struct EventListener {
+  std::string type;
+  std::shared_ptr<FunctionObject> function;
+  bool use_capture{false};
+  std::int32_t priority{0};
+};
+
 class Object {
  public:
   Object() = default;
@@ -90,6 +98,9 @@ class Object {
 
   const std::shared_ptr<Object>& prototype() const noexcept { return prototype_; }
   void set_prototype(std::shared_ptr<Object> prototype);
+
+  std::vector<EventListener>& event_listeners() noexcept { return event_listeners_; }
+  const std::vector<EventListener>& event_listeners() const noexcept { return event_listeners_; }
 
   const std::vector<Value>& slots() const noexcept { return slots_; }
   std::vector<Value>& slots() noexcept { return slots_; }
@@ -122,6 +133,7 @@ class Object {
   Value primitive_;
   std::shared_ptr<Object> prototype_;
   std::vector<Value> slots_;
+  std::vector<EventListener> event_listeners_;
   std::unordered_map<Key, Property, KeyHash> dynamic_;
 };
 

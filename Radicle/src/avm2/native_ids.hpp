@@ -120,6 +120,22 @@ enum class Id : std::uint32_t {
   display_global_to_local,
   geom_construct,
   dictionary_construct,
+  event_construct,
+  event_prevent_default,
+  event_stop_propagation,
+  event_stop_immediate,
+  event_is_default_prevented,
+  event_clone,
+  event_to_string,
+  dispatcher_construct,
+  dispatcher_add_listener,
+  dispatcher_remove_listener,
+  dispatcher_dispatch_event,
+  dispatcher_has_listener,
+  timer_construct,
+  timer_start,
+  timer_stop,
+  timer_reset,
 };
 
 }  // namespace fo4::avm2::native

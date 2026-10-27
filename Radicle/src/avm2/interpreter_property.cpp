@@ -5,6 +5,7 @@
 #include <fo4/avm2/class.hpp>
 #include <fo4/avm2/coercion.hpp>
 #include <fo4/avm2/display.hpp>
+#include <fo4/avm2/events.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -53,6 +54,38 @@ ExecutionResult Interpreter::get_property(Frame& frame, Object& object,
     ExecutionResult result;
     result.value = std::move(out);
     return result;
+  }
+  if (object.instance_class() != nullptr && object.instance_class()->name == "flash.utils::Timer" &&
+      multiname.has_fixed_name()) {
+    auto& timer = static_cast<TimerObject&>(object);
+    if (multiname.name == "delay") {
+      ExecutionResult result;
+      result.value = Value::number(timer.delay());
+      return result;
+    }
+    if (multiname.name == "repeatCount") {
+      ExecutionResult result;
+      result.value = Value::int32(timer.repeat_count());
+      return result;
+    }
+    if (multiname.name == "currentCount") {
+      ExecutionResult result;
+      result.value = Value::int32(timer.current_count());
+      return result;
+    }
+    if (multiname.name == "running") {
+      ExecutionResult result;
+      result.value = Value::boolean(timer.running());
+      return result;
+    }
+  }
+  if (object.kind() == ObjectKind::Event) {
+    Value event_value;
+    if (read_event_property(*this, static_cast<EventObject&>(object), multiname, event_value)) {
+      ExecutionResult result;
+      result.value = std::move(event_value);
+      return result;
+    }
   }
   if (object.kind() == ObjectKind::Display) {
     Value display_value;
@@ -149,8 +182,56 @@ ExecutionResult Interpreter::set_property(Frame& frame, Object& object,
   if (handled) {
     return ExecutionResult{};
   }
+  if (object.instance_class() != nullptr && object.instance_class()->name == "flash.utils::Timer" &&
+      multiname.has_fixed_name()) {
+    auto& timer = static_cast<TimerObject&>(object);
+    if (multiname.name == "delay") {
+      ExecutionResult result;
+      result.value = Value::number(timer.delay());
+      return result;
+    }
+    if (multiname.name == "repeatCount") {
+      ExecutionResult result;
+      result.value = Value::int32(timer.repeat_count());
+      return result;
+    }
+    if (multiname.name == "currentCount") {
+      ExecutionResult result;
+      result.value = Value::int32(timer.current_count());
+      return result;
+    }
+    if (multiname.name == "running") {
+      ExecutionResult result;
+      result.value = Value::boolean(timer.running());
+      return result;
+    }
+  }
+  if (object.kind() == ObjectKind::Event) {
+    Value event_value;
+    if (read_event_property(*this, static_cast<EventObject&>(object), multiname, event_value)) {
+      ExecutionResult result;
+      result.value = std::move(event_value);
+      return result;
+    }
+  }
   if (object.kind() == ObjectKind::Display) {
     if (write_display_property(static_cast<DisplayObject&>(object), multiname, value)) {
+      return ExecutionResult{};
+    }
+  }
+  if (object.instance_class() != nullptr && object.instance_class()->name == "flash.utils::Timer" &&
+      multiname.has_fixed_name()) {
+    auto& timer = static_cast<TimerObject&>(object);
+    if (multiname.name == "delay") {
+      timer.set_delay(to_number(value));
+      return ExecutionResult{};
+    }
+    if (multiname.name == "repeatCount") {
+      timer.set_repeat_count(to_int32(value));
+      return ExecutionResult{};
+    }
+    if (multiname.name == "running") {
+      timer.set_running(to_boolean(value));
       return ExecutionResult{};
     }
   }

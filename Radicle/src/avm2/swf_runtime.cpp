@@ -1,10 +1,13 @@
 #include <fo4/avm2/swf_runtime.hpp>
 
 #include <fo4/avm2/display.hpp>
+#include <fo4/avm2/events.hpp>
 #include <fo4/avm2/interpreter.hpp>
 #include <fo4/avm2/name.hpp>
 #include <fo4/avm2/object.hpp>
 #include <fo4/avm2/runtime.hpp>
+
+#include "native_internal.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -225,6 +228,7 @@ std::shared_ptr<SwfRuntime> SwfRuntime::create(Runtime& runtime, Interpreter& in
 }
 
 void SwfRuntime::advance(Interpreter& interpreter, double dt_seconds) {
+  interpreter.advance_host_time(dt_seconds * 1000.0);
   if (!playing_ || root_ == nullptr || !started_) {
     return;
   }
@@ -238,6 +242,46 @@ void SwfRuntime::advance(Interpreter& interpreter, double dt_seconds) {
     }
     accumulator_ -= 1.0;
   }
+}
+
+void SwfRuntime::key_event(Interpreter& interpreter, std::uint32_t key_code, bool down) {
+  if (root_ == nullptr) {
+    return;
+  }
+  std::shared_ptr<EventObject> event =
+      make_event(interpreter.runtime(), down ? "keyDown" : "keyUp", true, false, "KeyboardEvent");
+  if (event == nullptr) {
+    return;
+  }
+  Property& key_property = event->define_own_property(primary_key(builtin_name("keyCode")));
+  key_property.kind = PropertyKind::Value;
+  key_property.value = Value::uint32(key_code);
+  Property& char_property = event->define_own_property(primary_key(builtin_name("charCode")));
+  char_property.kind = PropertyKind::Value;
+  char_property.value = Value::uint32(0);
+  dispatch_event(interpreter, root_, event, 0);
+}
+
+void SwfRuntime::mouse_event(Interpreter& interpreter, double x, double y, std::int32_t button,
+                             bool down) {
+  if (root_ == nullptr) {
+    return;
+  }
+  std::shared_ptr<EventObject> event =
+      make_event(interpreter.runtime(), down ? "mouseDown" : "mouseUp", true, false, "MouseEvent");
+  if (event == nullptr) {
+    return;
+  }
+  Property& x_property = event->define_own_property(primary_key(builtin_name("stageX")));
+  x_property.kind = PropertyKind::Value;
+  x_property.value = Value::number(x);
+  Property& y_property = event->define_own_property(primary_key(builtin_name("stageY")));
+  y_property.kind = PropertyKind::Value;
+  y_property.value = Value::number(y);
+  Property& button_property = event->define_own_property(primary_key(builtin_name("button")));
+  button_property.kind = PropertyKind::Value;
+  button_property.value = Value::int32(button);
+  dispatch_event(interpreter, root_, event, 0);
 }
 
 void SwfRuntime::set_playing(bool playing) {
