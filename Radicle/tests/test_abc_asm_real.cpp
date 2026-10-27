@@ -65,9 +65,12 @@ void check_archive(const std::filesystem::path& archive_path, AssembleStats& sta
         continue;
       }
       std::vector<std::uint8_t> serialized;
-      if (assembled.serialize(serialized) != fo4::abc::AbcStatus::Ok ||
-          serialized.size() != block.payload.size() ||
-          !std::equal(serialized.begin(), serialized.end(), block.payload.begin())) {
+      bool identical = assembled.serialize(serialized) == fo4::abc::AbcStatus::Ok &&
+                       serialized.size() == block.payload.size();
+      for (std::size_t index = 0; identical && index < serialized.size(); ++index) {
+        identical = static_cast<std::byte>(serialized[index]) == block.payload[index];
+      }
+      if (!identical) {
         ++stats.serialize_mismatches;
         ADD_FAILURE() << entry.path << ": assembled block does not serialize to its bytes";
       }
