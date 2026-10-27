@@ -20,29 +20,62 @@ public static class SwfPlacementCodec
     private static int DepthOffset(int code) => code switch
     {
         26 => 1,
-        70 => 2,
         _ => 2,
     };
+
+    internal static int HeaderEnd(int code, byte[] payload, out ushort? characterId)
+    {
+        characterId = null;
+        switch (code)
+        {
+            case 4:
+                if (payload.Length < 4) throw new ArgumentException("the placement payload is too short");
+                characterId = (ushort)(payload[0] | (payload[1] << 8));
+                return 4;
+            case 26:
+            {
+                if (payload.Length < 3) throw new ArgumentException("the placement payload is too short");
+                var offset = 3;
+                if ((payload[0] & 0x02) != 0)
+                {
+                    if (payload.Length < offset + 2) throw new ArgumentException("the placement payload is too short");
+                    characterId = (ushort)(payload[offset] | (payload[offset + 1] << 8));
+                    offset += 2;
+                }
+                return offset;
+            }
+            case 70:
+            {
+                if (payload.Length < 4) throw new ArgumentException("the placement payload is too short");
+                var hasCharacter = (payload[0] & 0x02) != 0;
+                var hasClassName = (payload[1] & 0x08) != 0 || ((payload[1] & 0x10) != 0 && !hasCharacter);
+                var offset = 4;
+                if (hasClassName)
+                {
+                    var terminator = Array.IndexOf(payload, (byte)0, offset);
+                    if (terminator < 0) throw new ArgumentException("the placement payload is too short");
+                    offset = terminator + 1;
+                }
+                if (hasCharacter)
+                {
+                    if (payload.Length < offset + 2) throw new ArgumentException("the placement payload is too short");
+                    characterId = (ushort)(payload[offset] | (payload[offset + 1] << 8));
+                    offset += 2;
+                }
+                return offset;
+            }
+            default:
+                throw new ArgumentException("the tag is not a placement");
+        }
+    }
 
     public static SwfPlacementRecord Parse(SwfTagRecord tag, byte[] payload)
     {
         if (!IsPlacement(tag.Code)) throw new ArgumentException("the tag is not a placement", nameof(tag));
-        if (payload.Length < DepthOffset(tag.Code) + 2) throw new ArgumentException("the placement payload is too short");
         var offset = DepthOffset(tag.Code);
+        if (payload.Length < offset + 2) throw new ArgumentException("the placement payload is too short");
         var depth = (ushort)(payload[offset] | (payload[offset + 1] << 8));
-        ushort? characterId = null;
-        if (tag.Code == 26 && payload.Length > 3 && (payload[0] & 0x02) != 0 && payload.Length >= 5)
-        {
-            characterId = (ushort)(payload[3] | (payload[4] << 8));
-        }
-        else if (tag.Code == 4 && payload.Length >= 4)
-        {
-            characterId = (ushort)(payload[0] | (payload[1] << 8));
-        }
-        else if (tag.Code == 70 && payload.Length > 4 && (payload[0] & 0x02) != 0 && payload.Length >= 6)
-        {
-            characterId = (ushort)(payload[4] | (payload[5] << 8));
-        }
+        HeaderEnd(tag.Code, payload, out var characterId);
         return new SwfPlacementRecord(tag.Index, tag.Code, depth, characterId, tag.InsideSprite);
     }
 
