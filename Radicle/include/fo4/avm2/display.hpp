@@ -77,6 +77,12 @@ class DisplayObject : public Object, public std::enable_shared_from_this<Display
   void set_width(double value) noexcept { width_ = value; }
   double height() const noexcept { return height_; }
   void set_height(double value) noexcept { height_ = value; }
+  double origin_x() const noexcept { return origin_x_; }
+  double origin_y() const noexcept { return origin_y_; }
+  void set_origin(double x, double y) noexcept {
+    origin_x_ = x;
+    origin_y_ = y;
+  }
   bool visible() const noexcept { return visible_; }
   double mouse_x() const noexcept { return mouse_x_; }
   double mouse_y() const noexcept { return mouse_y_; }
@@ -149,6 +155,8 @@ class DisplayObject : public Object, public std::enable_shared_from_this<Display
   double color_add_[4]{0.0, 0.0, 0.0, 0.0};
   double width_{0.0};
   double height_{0.0};
+  double origin_x_{0.0};
+  double origin_y_{0.0};
   bool visible_{true};
   bool tab_enabled_{false};
   bool tab_children_{false};

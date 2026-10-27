@@ -179,4 +179,74 @@ TEST(Avm2Text, AppendTextAndGetLineTextWorkThroughNatives) {
   EXPECT_EQ(result.value.as_string(), "ABCD");
 }
 
+FontRegistry wrap_fonts() {
+  FontRegistry registry;
+  FontResource font;
+  font.character_id = 6;
+  font.glyphs.push_back(FontGlyph{0, 'A', 0.5});
+  font.glyphs.push_back(FontGlyph{1, ' ', 0.25});
+  font.glyphs.push_back(FontGlyph{2, 0xE9u, 0.25});
+  registry.add(font);
+  return registry;
+}
+
+TEST(Avm2Text, WordWrapBreaksAfterTheLastSpaceThatFits) {
+  FontRegistry registry = wrap_fonts();
+  auto field = std::make_shared<TextFieldObject>(nullptr, &registry);
+  TextFormatData format;
+  format.font_id = 6;
+  format.size = 20.0;
+  field->set_format(format);
+  field->set_width(25.0);
+  field->set_word_wrap(true);
+  field->set_text("AA AA");
+  ASSERT_EQ(field->runs().size(), 2u);
+  EXPECT_EQ(field->line_text(0), "AA ");
+  EXPECT_EQ(field->line_text(1), "AA");
+  EXPECT_EQ(field->line_count(), 2u);
+  EXPECT_DOUBLE_EQ(field->runs()[1].glyphs[1].x, 10.0);
+  EXPECT_DOUBLE_EQ(field->text_width(), 25.0);
+  EXPECT_DOUBLE_EQ(field->text_height(), 48.0);
+}
+
+TEST(Avm2Text, WordWrapBreaksInsideAWordWhenNoSpaceFits) {
+  FontRegistry registry = wrap_fonts();
+  auto field = std::make_shared<TextFieldObject>(nullptr, &registry);
+  TextFormatData format;
+  format.font_id = 6;
+  format.size = 20.0;
+  field->set_format(format);
+  field->set_width(25.0);
+  field->set_text("AAAA");
+  EXPECT_EQ(field->runs().size(), 1u);
+  field->set_word_wrap(true);
+  ASSERT_EQ(field->runs().size(), 2u);
+  EXPECT_EQ(field->line_text(0), "AA");
+  EXPECT_EQ(field->line_text(1), "AA");
+  field->set_word_wrap(false);
+  EXPECT_EQ(field->runs().size(), 1u);
+  EXPECT_DOUBLE_EQ(field->text_width(), 40.0);
+}
+
+TEST(Avm2Text, TextIsLaidOutInUtf16CodeUnits) {
+  FontRegistry registry = wrap_fonts();
+  auto field = std::make_shared<TextFieldObject>(nullptr, &registry);
+  TextFormatData format;
+  format.font_id = 6;
+  format.size = 20.0;
+  field->set_format(format);
+  const std::string text = "\xC3\xA9\xF0\x9F\x98\x80";
+  field->set_text(text);
+  ASSERT_EQ(field->runs().size(), 1u);
+  const auto& glyphs = field->runs()[0].glyphs;
+  ASSERT_EQ(glyphs.size(), 3u);
+  EXPECT_EQ(glyphs[0].code, 0xE9u);
+  EXPECT_DOUBLE_EQ(glyphs[0].advance, 5.0);
+  EXPECT_EQ(glyphs[1].code, 0xD83Du);
+  EXPECT_EQ(glyphs[2].code, 0xDE00u);
+  EXPECT_DOUBLE_EQ(field->text_width(), 25.0);
+  EXPECT_EQ(field->line_text(0), text);
+  EXPECT_EQ(fo4::avm2::utf8_from_utf16(fo4::avm2::utf16_from_utf8(text)), text);
+}
+
 }  // namespace

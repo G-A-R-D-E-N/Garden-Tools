@@ -2,7 +2,9 @@
 
 #include <fo4/avm2/display.hpp>
 #include <fo4/avm2/fonts.hpp>
+#include <fo4/avm2/text.hpp>
 #include <fo4/swf/swf.hpp>
+#include <fo4/swf/swf_characters.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -63,6 +65,41 @@ SwfPlacementRow placement_row(const swf::SwfPlacement& placement) {
     row.clip_depth = *placement.clip_depth;
   }
   return row;
+}
+
+SwfCharacterBounds character_bounds_of(const swf::SwfRect& rect) {
+  SwfCharacterBounds bounds;
+  bounds.origin_x = twips_to_pixels(rect.x_min);
+  bounds.origin_y = twips_to_pixels(rect.y_min);
+  bounds.width = twips_to_pixels(rect.x_max - rect.x_min);
+  bounds.height = twips_to_pixels(rect.y_max - rect.y_min);
+  return bounds;
+}
+
+SwfTextFieldData text_field_of(const swf::SwfEditText& edit) {
+  SwfTextFieldData field;
+  field.text = edit.text;
+  field.html = (edit.flags2 & 0x02u) != 0;
+  field.word_wrap = (edit.flags1 & 0x40u) != 0;
+  field.multiline = (edit.flags1 & 0x20u) != 0;
+  field.auto_size = (edit.flags2 & 0x40u) != 0 ? TextFieldAutoSize::left : TextFieldAutoSize::none;
+  field.format.font_name = edit.font_class;
+  if (edit.font_id.has_value()) {
+    field.format.font_id = *edit.font_id;
+  }
+  if (edit.font_height_twips.has_value()) {
+    field.format.size = twips_to_pixels(*edit.font_height_twips);
+  }
+  if (edit.color.has_value()) {
+    field.format.color = *edit.color & 0xFFFFFFu;
+  }
+  if (edit.layout.has_value()) {
+    field.format.left_margin = twips_to_pixels(edit.layout->left_margin);
+    field.format.right_margin = twips_to_pixels(edit.layout->right_margin);
+    field.format.indent = twips_to_pixels(edit.layout->indent);
+    field.format.leading = twips_to_pixels(edit.layout->leading);
+  }
+  return field;
 }
 
 void read_symbol_classes(std::span<const std::byte> payload,
@@ -170,6 +207,12 @@ void collect_timeline(const std::vector<swf::SwfTag>& tags, std::uint32_t declar
         }
         break;
       }
+      case swf::tag::kDefineEditText: {
+        if (tag.edit_text.has_value()) {
+          data.text_fields[tag.edit_text->character_id] = text_field_of(*tag.edit_text);
+        }
+        break;
+      }
       case swf::tag::kSymbolClass: {
         read_symbol_classes(tag.payload, data.symbol_classes, data.root_class_name);
         break;
@@ -219,6 +262,15 @@ std::shared_ptr<SwfMovieData> read_swf_movie_data(const swf::SwfFile& file,
   data->frame_rate = file.header.frame_rate_fps();
   data->stage_width = twips_to_pixels(file.header.frame_size.x_max - file.header.frame_size.x_min);
   data->stage_height = twips_to_pixels(file.header.frame_size.y_max - file.header.frame_size.y_min);
+  swf::SwfCharacterModel model;
+  std::string message;
+  if (swf::build_character_model(file, model, message)) {
+    for (const swf::SwfCharacter& character : model.characters) {
+      if (character.has_bounds) {
+        data->character_bounds[character.character_id] = character_bounds_of(character.bounds);
+      }
+    }
+  }
   data->root = collect_root(file, options, *data);
   return data;
 }

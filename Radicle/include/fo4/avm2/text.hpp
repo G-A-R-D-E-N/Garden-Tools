@@ -16,6 +16,7 @@ namespace fo4::avm2 {
 
 struct TextFormatData {
   std::string font_name;
+  std::uint16_t font_id{0};
   double size{12.0};
   std::uint32_t color{0xFF000000u};
   bool bold{false};
@@ -66,7 +67,7 @@ class TextFieldObject : public DisplayObject {
   TextFieldAutoSize auto_size() const noexcept { return auto_size_; }
   void set_auto_size(TextFieldAutoSize value) noexcept { auto_size_ = value; }
   bool word_wrap() const noexcept { return word_wrap_; }
-  void set_word_wrap(bool value) noexcept { word_wrap_ = value; }
+  void set_word_wrap(bool value);
   bool multiline() const noexcept { return multiline_; }
   void set_multiline(bool value) noexcept { multiline_ = value; }
   std::uint32_t text_color() const noexcept { return format_.color; }
@@ -93,6 +94,11 @@ class TextFieldObject : public DisplayObject {
   double text_height_{0.0};
   std::size_t lines_{1};
 };
+
+/* Requires UTF-8 input. */
+std::u16string utf16_from_utf8(std::string_view text);
+/* Requires UTF-16 input. */
+std::string utf8_from_utf16(std::u16string_view units);
 
 /* Requires a linked runtime; creates the TextFormat instance carrying the data. */
 Value make_text_format_instance(Interpreter& interpreter, const TextFormatData& format);

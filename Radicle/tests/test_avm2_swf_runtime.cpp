@@ -1,7 +1,9 @@
 #include <fo4/avm2/display.hpp>
+#include <fo4/avm2/hit_test.hpp>
 #include <fo4/avm2/interpreter.hpp>
 #include <fo4/avm2/runtime.hpp>
 #include <fo4/avm2/swf_runtime.hpp>
+#include <fo4/avm2/text.hpp>
 #include <fo4/avm2/value.hpp>
 #include <fo4/swf/swf.hpp>
 
@@ -236,6 +238,109 @@ TEST(Avm2SwfRuntime, TwoIdenticalRunsProduceTheSameFrameSequence) {
     return trace;
   };
   EXPECT_EQ(run_once(), run_once());
+}
+
+fo4::swf::SwfTag shape_tag(std::uint16_t shape_id, std::int32_t x_min, std::int32_t x_max,
+                           std::int32_t y_min, std::int32_t y_max) {
+  fo4::swf::SwfTag tag = make_tag(fo4::swf::tag::kDefineShape);
+  fo4::swf::SwfShape shape;
+  shape.shape_id = shape_id;
+  shape.bounds.x_min = x_min;
+  shape.bounds.x_max = x_max;
+  shape.bounds.y_min = y_min;
+  shape.bounds.y_max = y_max;
+  tag.shape = shape;
+  return tag;
+}
+
+fo4::swf::SwfTag font_tag(std::uint16_t font_id) {
+  fo4::swf::SwfTag tag = make_tag(fo4::swf::tag::kDefineFont3);
+  fo4::swf::SwfFont font;
+  font.font_id = font_id;
+  font.glyph_count = 2;
+  font.glyph_codes = {std::uint16_t{'A'}, std::uint16_t{' '}};
+  font.advances = {0.5, 0.25};
+  tag.font = font;
+  return tag;
+}
+
+fo4::swf::SwfTag edit_text_tag(std::uint16_t character_id, const char* text) {
+  fo4::swf::SwfTag tag = make_tag(fo4::swf::tag::kDefineEditText);
+  fo4::swf::SwfEditText edit;
+  edit.character_id = character_id;
+  edit.bounds.x_min = 0;
+  edit.bounds.x_max = 500;
+  edit.bounds.y_min = 0;
+  edit.bounds.y_max = 2000;
+  edit.flags1 = static_cast<std::uint8_t>(0x80u | 0x40u | 0x04u | 0x01u);
+  edit.font_id = 3;
+  edit.font_height_twips = 400;
+  edit.color = 0xFF112233u;
+  edit.text = text;
+  tag.edit_text = edit;
+  return tag;
+}
+
+fo4::swf::SwfFile build_placed_bounds_movie() {
+  fo4::swf::SwfFile file;
+  file.header.frame_rate = 24u * 256u;
+  file.header.frame_count = 1;
+  file.header.frame_size.x_min = 0;
+  file.header.frame_size.x_max = 16000;
+  file.header.frame_size.y_min = 0;
+  file.header.frame_size.y_max = 12000;
+  file.tags.push_back(shape_tag(20, -400, 800, -200, 400));
+  file.tags.push_back(font_tag(3));
+  file.tags.push_back(edit_text_tag(7, "AA AA"));
+  file.tags.push_back(place_tag(1, 20, 100.0, 50.0));
+  file.tags.push_back(place_tag(2, 7, 10.0, 20.0));
+  file.tags.push_back(make_tag(fo4::swf::tag::kShowFrame));
+  return file;
+}
+
+TEST(Avm2SwfRuntime, PlacedCharacterBoundsDriveHitTesting) {
+  Harness harness;
+  const fo4::swf::SwfFile file = build_placed_bounds_movie();
+  const std::shared_ptr<SwfRuntime> movie =
+      SwfRuntime::create(harness.runtime, harness.interpreter, file);
+  ASSERT_NE(movie, nullptr);
+  ASSERT_EQ(movie->root()->children().size(), 2u);
+  const DisplayObject& shape = *movie->root()->children()[0];
+  EXPECT_DOUBLE_EQ(shape.origin_x(), -20.0);
+  EXPECT_DOUBLE_EQ(shape.origin_y(), -10.0);
+  EXPECT_DOUBLE_EQ(shape.width(), 60.0);
+  EXPECT_DOUBLE_EQ(shape.height(), 30.0);
+  const std::shared_ptr<DisplayObject> shape_object = movie->root()->children()[0];
+  const std::shared_ptr<DisplayObject> field_object = movie->root()->children()[1];
+  EXPECT_EQ(fo4::avm2::mouse_target_at(movie->root(), 80.0, 40.0).get(), shape_object.get());
+  EXPECT_EQ(fo4::avm2::mouse_target_at(movie->root(), 140.0, 70.0).get(), shape_object.get());
+  EXPECT_EQ(fo4::avm2::mouse_target_at(movie->root(), 15.0, 30.0).get(), field_object.get());
+  EXPECT_EQ(fo4::avm2::mouse_target_at(movie->root(), 79.0, 60.0).get(), nullptr);
+  EXPECT_EQ(fo4::avm2::mouse_target_at(movie->root(), 141.0, 60.0).get(), nullptr);
+  EXPECT_EQ(fo4::avm2::mouse_target_at(movie->root(), 120.0, 71.0).get(), nullptr);
+}
+
+TEST(Avm2SwfRuntime, PlacedEditTextBecomesAWrappedTextField) {
+  Harness harness;
+  const fo4::swf::SwfFile file = build_placed_bounds_movie();
+  const std::shared_ptr<SwfRuntime> movie =
+      SwfRuntime::create(harness.runtime, harness.interpreter, file);
+  ASSERT_NE(movie, nullptr);
+  ASSERT_EQ(movie->root()->children().size(), 2u);
+  const auto* field =
+      dynamic_cast<fo4::avm2::TextFieldObject*>(movie->root()->children()[1].get());
+  ASSERT_NE(field, nullptr);
+  EXPECT_DOUBLE_EQ(field->width(), 25.0);
+  EXPECT_DOUBLE_EQ(field->height(), 100.0);
+  EXPECT_EQ(field->text(), "AA AA");
+  EXPECT_EQ(field->format().font_id, std::uint16_t{3});
+  EXPECT_EQ(field->text_color(), 0x112233u);
+  EXPECT_TRUE(field->word_wrap());
+  ASSERT_EQ(field->runs().size(), 2u);
+  EXPECT_EQ(field->line_text(0), "AA ");
+  EXPECT_EQ(field->line_text(1), "AA");
+  EXPECT_DOUBLE_EQ(field->text_width(), 25.0);
+  EXPECT_DOUBLE_EQ(field->text_height(), 48.0);
 }
 
 }  // namespace

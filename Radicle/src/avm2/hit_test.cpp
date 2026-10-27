@@ -29,8 +29,8 @@ bool has_size(const DisplayObject& object) {
 }
 
 bool inside_bounds(const DisplayObject& object, double x, double y) {
-  return has_size(object) && x >= 0.0 && x <= object.width() && y >= 0.0 &&
-         y <= object.height();
+  return has_size(object) && x >= object.origin_x() && x <= object.origin_x() + object.width() &&
+         y >= object.origin_y() && y <= object.origin_y() + object.height();
 }
 
 bool chain_visible(const DisplayObject& object) {
@@ -58,8 +58,12 @@ struct StageBounds {
 };
 
 StageBounds stage_bounds(const DisplayObject& object) {
-  std::array<double, 4> xs{0.0, object.width(), 0.0, object.width()};
-  std::array<double, 4> ys{0.0, 0.0, object.height(), object.height()};
+  const double left = object.origin_x();
+  const double top = object.origin_y();
+  const double right = left + object.width();
+  const double bottom = top + object.height();
+  std::array<double, 4> xs{left, right, left, right};
+  std::array<double, 4> ys{top, top, bottom, bottom};
   for (const DisplayObject* node = &object; node != nullptr; node = node->parent()) {
     const SnapshotMatrix matrix = local_matrix(*node);
     for (std::size_t index = 0; index < xs.size(); ++index) {

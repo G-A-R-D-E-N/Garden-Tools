@@ -236,7 +236,8 @@ ExecutionResult display_get_bounds(Interpreter& interpreter, const Value& self) 
   if (object == nullptr) {
     return native_value(Value::null());
   }
-  return native_value(rectangle_value(interpreter, object->x(), object->y(), object->width(),
+  return native_value(rectangle_value(interpreter, object->x() + object->origin_x(),
+                                      object->y() + object->origin_y(), object->width(),
                                       object->height()));
 }
 
