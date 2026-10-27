@@ -285,6 +285,9 @@
         if (status == InterpreterStatus::Ok) {
           auto array = std::make_shared<ArrayObject>();
           array->elements() = std::move(elements);
+          if (const Class* array_class = runtime_.find_class("Array")) {
+            array->set_instance_class(const_cast<Class*>(array_class));
+          }
           push_value(Value::object(std::move(array)));
         }
         break;
@@ -332,7 +335,7 @@
           const Class* called_class =
               static_cast<const ClassObject&>(*function.as_object()).represented_class();
           if (called_class != nullptr && called_class->native_constructor != 0) {
-            ExecutionResult converted = call_native_id(called_class->native_constructor, receiver,
+            ExecutionResult converted = call_native_id(called_class->native_constructor, function,
                                                        arguments, depth);
             if (!converted.ok()) {
               return converted;
@@ -541,6 +544,9 @@
         }
         auto vector = std::make_shared<ArrayObject>();
         vector->elements() = std::move(arguments);
+        if (const Class* vector_class = runtime_.find_class("__AS3__.vec::Vector")) {
+          vector->set_instance_class(const_cast<Class*>(vector_class));
+        }
         push_value(Value::object(std::move(vector)));
         break;
       }

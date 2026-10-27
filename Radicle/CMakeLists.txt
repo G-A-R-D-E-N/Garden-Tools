@@ -299,6 +299,9 @@ add_library(fo4
   src/avm2/native_primitive.cpp
   src/avm2/native_math.cpp
   src/avm2/native_top.cpp
+  src/avm2/native_string.cpp
+  src/avm2/native_array.cpp
+  src/avm2/native_error.cpp
   src/hkx/layout.cpp
   src/hkx/packfile.cpp
   src/hkx/skeleton.cpp

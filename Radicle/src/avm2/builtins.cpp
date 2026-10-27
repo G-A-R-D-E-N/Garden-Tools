@@ -69,10 +69,12 @@ RuntimeStatus Runtime::install_builtins() {
   Class* boolean_class = add_builtin_class("Boolean", "", object_class);
   Class* string_class = add_builtin_class("String", "", object_class);
   Class* math_class = add_builtin_class("Math", "", object_class);
-  add_builtin_class("Vector", "__AS3__.vec", object_class);
+  Class* array_class = add_builtin_class("Array", "", object_class);
+  Class* vector_class = add_builtin_class("Vector", "__AS3__.vec", object_class);
   if (object_class == nullptr || function_class == nullptr || class_class == nullptr ||
       number_class == nullptr || int_class == nullptr || uint_class == nullptr ||
-      boolean_class == nullptr || string_class == nullptr || math_class == nullptr) {
+      boolean_class == nullptr || string_class == nullptr || math_class == nullptr ||
+      array_class == nullptr || vector_class == nullptr) {
     return RuntimeStatus::InvalidTrait;
   }
 
@@ -105,6 +107,59 @@ RuntimeStatus Runtime::install_builtins() {
   add_method(*boolean_class, "valueOf", native::Id::boolean_value_of, false);
   boolean_class->native_constructor = static_cast<std::uint32_t>(native::Id::boolean_construct);
   string_class->native_constructor = static_cast<std::uint32_t>(native::Id::to_string_value);
+
+  add_method(*string_class, "charAt", native::Id::string_char_at, false);
+  add_method(*string_class, "charCodeAt", native::Id::string_char_code_at, false);
+  add_method(*string_class, "indexOf", native::Id::string_index_of, false);
+  add_method(*string_class, "lastIndexOf", native::Id::string_last_index_of, false);
+  add_method(*string_class, "substr", native::Id::string_substr, false);
+  add_method(*string_class, "substring", native::Id::string_substring, false);
+  add_method(*string_class, "slice", native::Id::string_slice, false);
+  add_method(*string_class, "split", native::Id::string_split, false);
+  add_method(*string_class, "toUpperCase", native::Id::string_to_upper, false);
+  add_method(*string_class, "toLowerCase", native::Id::string_to_lower, false);
+  add_method(*string_class, "replace", native::Id::string_replace, false);
+  add_method(*string_class, "concat", native::Id::string_concat, false);
+  add_method(*string_class, "trim", native::Id::string_trim, false);
+  add_method(*string_class, "toString", native::Id::string_to_string, false);
+  add_method(*string_class, "valueOf", native::Id::string_value_of, false);
+  add_method(*string_class, "fromCharCode", native::Id::string_from_char_code, true);
+
+  add_method(*array_class, "push", native::Id::array_push, false);
+  add_method(*array_class, "pop", native::Id::array_pop, false);
+  add_method(*array_class, "shift", native::Id::array_shift, false);
+  add_method(*array_class, "unshift", native::Id::array_unshift, false);
+  add_method(*array_class, "slice", native::Id::array_slice, false);
+  add_method(*array_class, "splice", native::Id::array_splice, false);
+  add_method(*array_class, "join", native::Id::array_join, false);
+  add_method(*array_class, "concat", native::Id::array_concat, false);
+  add_method(*array_class, "indexOf", native::Id::array_index_of, false);
+  add_method(*array_class, "lastIndexOf", native::Id::array_last_index_of, false);
+  add_method(*array_class, "reverse", native::Id::array_reverse, false);
+  add_method(*array_class, "sort", native::Id::array_sort, false);
+  add_method(*array_class, "forEach", native::Id::array_for_each, false);
+  add_method(*array_class, "map", native::Id::array_map, false);
+  add_method(*array_class, "filter", native::Id::array_filter, false);
+  add_method(*array_class, "toString", native::Id::array_to_string, false);
+  array_class->native_constructor = static_cast<std::uint32_t>(native::Id::array_construct);
+
+  add_method(*vector_class, "push", native::Id::array_push, false);
+  add_method(*vector_class, "pop", native::Id::array_pop, false);
+  add_method(*vector_class, "shift", native::Id::array_shift, false);
+  add_method(*vector_class, "unshift", native::Id::array_unshift, false);
+  add_method(*vector_class, "slice", native::Id::array_slice, false);
+  add_method(*vector_class, "splice", native::Id::array_splice, false);
+  add_method(*vector_class, "join", native::Id::array_join, false);
+  add_method(*vector_class, "concat", native::Id::array_concat, false);
+  add_method(*vector_class, "indexOf", native::Id::array_index_of, false);
+  add_method(*vector_class, "lastIndexOf", native::Id::array_last_index_of, false);
+  add_method(*vector_class, "reverse", native::Id::array_reverse, false);
+  add_method(*vector_class, "sort", native::Id::array_sort, false);
+  add_method(*vector_class, "forEach", native::Id::array_for_each, false);
+  add_method(*vector_class, "map", native::Id::array_map, false);
+  add_method(*vector_class, "filter", native::Id::array_filter, false);
+  add_method(*vector_class, "toString", native::Id::array_to_string, false);
+  vector_class->native_constructor = static_cast<std::uint32_t>(native::Id::array_construct);
 
   add_method(*math_class, "abs", native::Id::math_abs, true);
   add_method(*math_class, "min", native::Id::math_min, true);
@@ -152,6 +207,25 @@ RuntimeStatus Runtime::install_builtins() {
   add_constant(*math_class, "LOG10E", Value::number(0.43429448190325182765), math_slot);
   add_constant(*math_class, "SQRT1_2", Value::number(0.70710678118654752440), math_slot);
   add_constant(*math_class, "SQRT2", Value::number(1.41421356237309504880), math_slot);
+
+  Class* error_class = add_builtin_class("Error", "", object_class);
+  if (error_class == nullptr) {
+    return RuntimeStatus::InvalidTrait;
+  }
+  add_method(*error_class, "toString", native::Id::error_to_string, false);
+  error_class->native_constructor = static_cast<std::uint32_t>(native::Id::error_construct);
+  const char* error_names[] = {"TypeError",       "ReferenceError", "RangeError",
+                               "SyntaxError",     "URIError",       "SecurityError",
+                               "ArgumentError",   "EvalError",      "DefinitionError",
+                               "VerifyError",     "UninitializedError"};
+  for (const char* error_name : error_names) {
+    Class* subclass = add_builtin_class(error_name, "", error_class);
+    if (subclass == nullptr) {
+      return RuntimeStatus::InvalidTrait;
+    }
+    add_method(*subclass, "toString", native::Id::error_to_string, false);
+    subclass->native_constructor = static_cast<std::uint32_t>(native::Id::error_construct);
+  }
 
   const auto add_global_function = [this](std::string name, native::Id id) {
     auto function = std::make_shared<FunctionObject>(name, nullptr, kNoMethod);

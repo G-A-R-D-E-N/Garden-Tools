@@ -88,6 +88,7 @@ class Interpreter {
   ExecutionResult write_property(Object& object, const Multiname& multiname, const Value& value,
                                  std::size_t depth);
   std::shared_ptr<Object> make_instance(Class& klass);
+  std::shared_ptr<ArrayObject> make_array(std::vector<Value> elements);
   Value box(const Value& value);
   static Value unbox(const Value& value);
   Value global_this();

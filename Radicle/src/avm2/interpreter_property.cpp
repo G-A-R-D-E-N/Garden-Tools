@@ -53,6 +53,19 @@ ExecutionResult Interpreter::get_property(Frame& frame, Object& object,
     result.value = std::move(out);
     return result;
   }
+  if (object.kind() == ObjectKind::Error && multiname.has_fixed_name()) {
+    const auto& error = static_cast<const ErrorObject&>(object);
+    if (multiname.name == "name") {
+      ExecutionResult result;
+      result.value = Value::string(error.error_name());
+      return result;
+    }
+    if (multiname.name == "message") {
+      ExecutionResult result;
+      result.value = Value::string(error.message());
+      return result;
+    }
+  }
   const PropertyLookup lookup = object.lookup(multiname);
   if (!lookup.found()) {
     return ExecutionResult{};
@@ -218,7 +231,9 @@ ExecutionResult Interpreter::construct(Frame& frame, const ClassObject& class_ob
     return fail(InterpreterStatus::CannotConstruct, "class object has no class");
   }
   if (klass->native_constructor != 0) {
-    return call_native_id(klass->native_constructor, Value::undefined(), arguments, depth);
+    const Value class_self =
+        klass->class_object == nullptr ? Value::undefined() : Value::object(klass->class_object);
+    return call_native_id(klass->native_constructor, class_self, arguments, depth);
   }
   ExecutionResult initialized = ensure_class_initialized(*klass, depth);
   if (!initialized.ok()) {

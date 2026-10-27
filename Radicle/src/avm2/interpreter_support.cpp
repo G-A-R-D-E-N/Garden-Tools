@@ -90,6 +90,20 @@ std::shared_ptr<Object> Interpreter::make_instance(Class& klass) {
   return instance;
 }
 
+std::shared_ptr<ArrayObject> Interpreter::make_array(std::vector<Value> elements) {
+  auto array = std::make_shared<ArrayObject>();
+  array->elements() = std::move(elements);
+  if (const Class* array_class = find_builtin(runtime_, "Array")) {
+    array->set_instance_class(const_cast<Class*>(array_class));
+  }
+  return array;
+}
+
+std::shared_ptr<ArrayObject> make_array_value(Interpreter& interpreter,
+                                              std::vector<Value> elements) {
+  return interpreter.make_array(std::move(elements));
+}
+
 Value Interpreter::box(const Value& value) {
   const char* class_name = nullptr;
   switch (value.kind()) {
@@ -176,6 +190,15 @@ ExecutionResult Interpreter::call_native_id(std::uint32_t native_id, const Value
     return result;
   }
   if (try_top_native(*this, id, self, arguments, depth, result)) {
+    return result;
+  }
+  if (try_string_native(*this, id, self, arguments, depth, result)) {
+    return result;
+  }
+  if (try_array_native(*this, id, self, arguments, depth, result)) {
+    return result;
+  }
+  if (try_error_native(*this, id, self, arguments, depth, result)) {
     return result;
   }
   ExecutionResult failure;
