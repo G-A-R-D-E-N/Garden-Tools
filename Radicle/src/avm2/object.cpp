@@ -118,23 +118,23 @@ void Object::set_prototype(std::shared_ptr<Object> prototype) {
 void Object::resize_slots(std::size_t count) { slots_.resize(count); }
 
 const Property* Object::find_own_property(const Key& key) const {
-  const auto found = dynamic_.find(key);
-  return found == dynamic_.end() ? nullptr : &found->second;
+  const auto found = properties_.find(key);
+  return found == properties_.end() ? nullptr : &found->second;
 }
 
 Property* Object::find_own_property(const Key& key) {
-  const auto found = dynamic_.find(key);
-  return found == dynamic_.end() ? nullptr : &found->second;
+  const auto found = properties_.find(key);
+  return found == properties_.end() ? nullptr : &found->second;
 }
 
-Property& Object::define_own_property(const Key& key) { return dynamic_[key]; }
+Property& Object::define_own_property(const Key& key) { return properties_[key]; }
 
-bool Object::erase_own_property(const Key& key) { return dynamic_.erase(key) != 0; }
+bool Object::erase_own_property(const Key& key) { return properties_.erase(key) != 0; }
 
 PropertyLookup Object::lookup(const Multiname& multiname) const {
   PropertyLookup result;
   for (const Object* current = this; current != nullptr; current = current->prototype_.get()) {
-    for (const auto& [key, property] : current->dynamic_) {
+    for (const auto& [key, property] : current->properties_) {
       if (!key_matches(multiname, key)) {
         continue;
       }
@@ -176,7 +176,7 @@ bool Object::read_value(const Multiname& multiname, Value& out) const {
 
 bool Object::write_value(const Multiname& multiname, const Value& value) {
   for (Object* current = this; current != nullptr; current = current->prototype_.get()) {
-    for (auto& [key, property] : current->dynamic_) {
+    for (auto& [key, property] : current->properties_) {
       if (!key_matches(multiname, key)) {
         continue;
       }
@@ -213,9 +213,9 @@ bool Object::write_value(const Multiname& multiname, const Value& value) {
 bool Object::delete_property(const Multiname& multiname) {
   const PropertyLookup result = lookup(multiname);
   if (result.kind == LookupKind::Dynamic && result.property != nullptr) {
-    for (auto entry = dynamic_.begin(); entry != dynamic_.end(); ++entry) {
+    for (auto entry = properties_.begin(); entry != properties_.end(); ++entry) {
       if (&entry->second == result.property) {
-        dynamic_.erase(entry);
+        properties_.erase(entry);
         return true;
       }
     }

@@ -107,7 +107,7 @@ class Object {
   void resize_slots(std::size_t count);
 
   const std::unordered_map<Key, Property, KeyHash>& own_properties() const noexcept {
-    return dynamic_;
+    return properties_;
   }
   const Property* find_own_property(const Key& key) const;
   Property* find_own_property(const Key& key);
@@ -134,7 +134,7 @@ class Object {
   std::shared_ptr<Object> prototype_;
   std::vector<Value> slots_;
   std::vector<EventListener> event_listeners_;
-  std::unordered_map<Key, Property, KeyHash> dynamic_;
+  std::unordered_map<Key, Property, KeyHash> properties_;
 };
 
 inline constexpr std::uint32_t kNoMethod = 0xFFFFFFFFu;
