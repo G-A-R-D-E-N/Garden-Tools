@@ -195,6 +195,8 @@ enum class Id : std::uint32_t {
   loader_content_loader_info,
   loader_unload_and_stop,
   event_format_to_string,
+  keyboard_is_down,
+  display_loader_info,
 };
 
 }  // namespace fo4::avm2::native

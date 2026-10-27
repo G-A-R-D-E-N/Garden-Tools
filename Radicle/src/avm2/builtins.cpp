@@ -599,8 +599,15 @@ RuntimeStatus Runtime::install_builtins() {
   add_method(*graphics_class, "clear", native::Id::graphics_clear, false);
   add_method(*graphics_class, "copyFrom", native::Id::graphics_copy_from, false);
   loader_info_class->native_constructor = static_cast<std::uint32_t>(native::Id::instance_construct);
+  Class* regexp_class = add_builtin_class("RegExp", "", object_class);
+  if (regexp_class != nullptr) {
+    regexp_class->native_constructor = static_cast<std::uint32_t>(native::Id::compat_construct);
+    add_method(*regexp_class, "test", native::Id::compat_false, false);
+    add_method(*regexp_class, "exec", native::Id::compat_null, false);
+  }
   if (display_object != nullptr) {
     add_instance_getter(*display_object, "graphics", native::Id::display_graphics);
+    add_instance_getter(*display_object, "loaderInfo", native::Id::display_loader_info);
     add_accessor(*display_object, "transform", native::Id::display_transform_get,
                  native::Id::display_transform_set);
     add_method(*display_object, "getBounds", native::Id::display_get_bounds, false);
@@ -618,7 +625,7 @@ RuntimeStatus Runtime::install_builtins() {
     add_method(*event_class, "formatToString", native::Id::event_format_to_string, false);
   }
   if (keyboard_class != nullptr) {
-    add_method(*keyboard_class, "isDown", native::Id::compat_false, true);
+    add_method(*keyboard_class, "isDown", native::Id::keyboard_is_down, true);
     add_static_constant(*keyboard_class, "SPACE", 32);
     add_static_constant(*keyboard_class, "ENTER", 13);
     add_static_constant(*keyboard_class, "ESCAPE", 27);

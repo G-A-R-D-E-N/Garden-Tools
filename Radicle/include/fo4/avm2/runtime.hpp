@@ -14,6 +14,7 @@
 #include <memory>
 #include <string>
 #include <map>
+#include <set>
 #include <unordered_map>
 #include <vector>
 
@@ -73,6 +74,15 @@ class Runtime {
   HostBridge& host() noexcept { return host_; }
   const HostBridge& host() const noexcept { return host_; }
   SoundEventQueue& sound_events() noexcept { return sound_events_; }
+  /* The host must feed key state through the movie so Keyboard.isDown can answer. */
+  void set_key_pressed(std::uint32_t key_code, bool pressed) {
+    if (pressed) {
+      pressed_keys_.insert(key_code);
+    } else {
+      pressed_keys_.erase(key_code);
+    }
+  }
+  bool key_pressed(std::uint32_t key_code) const { return pressed_keys_.count(key_code) != 0; }
   const SoundEventQueue& sound_events() const noexcept { return sound_events_; }
   /* Requires a decoded resource; returns the runtime id the host plays by. */
   std::uint32_t register_sound(SoundResource resource);
@@ -131,6 +141,7 @@ class Runtime {
   FontRegistry fonts_;
   HostBridge host_;
   SoundEventQueue sound_events_;
+  std::set<std::uint32_t> pressed_keys_;
   std::map<std::uint32_t, SoundResource> sound_table_;
   std::uint32_t next_sound_id_{1};
   std::vector<std::shared_ptr<MovieClip>> movie_clips_;

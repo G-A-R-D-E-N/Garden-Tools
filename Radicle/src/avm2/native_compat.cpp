@@ -297,20 +297,40 @@ ExecutionResult display_transform_set(Interpreter& interpreter, const Value& sel
   return native_value(Value::undefined());
 }
 
+Value make_loader_info(Interpreter& interpreter) {
+  Class* info_class = find_class(interpreter, "flash.display::LoaderInfo");
+  Class* domain_class = find_class(interpreter, "flash.system::ApplicationDomain");
+  Class* object_class = find_class(interpreter, "Object");
+  if (info_class == nullptr || domain_class == nullptr || object_class == nullptr) {
+    return Value::null();
+  }
+  auto info = interpreter.make_instance(*info_class);
+  set_property(*info, "applicationDomain",
+               Value::object(interpreter.make_instance(*domain_class)));
+  set_property(*info, "parameters",
+               Value::object(interpreter.make_instance(*object_class)));
+  return Value::object(std::move(info));
+}
+
 ExecutionResult loader_content_loader_info(Interpreter& interpreter, const Value& self) {
   if (!self.is_object()) return native_value(Value::null());
   Object& loader = *self.as_object();
   Value existing = property_of(loader, "loaderInfo");
   if (existing.is_object()) return native_value(existing);
-  Class* info_class = find_class(interpreter, "flash.display::LoaderInfo");
-  Class* domain_class = find_class(interpreter, "flash.system::ApplicationDomain");
-  if (info_class == nullptr || domain_class == nullptr) return native_value(Value::null());
-  auto info = interpreter.make_instance(*info_class);
-  set_property(*info, "applicationDomain",
-               Value::object(interpreter.make_instance(*domain_class)));
-  Value value = Value::object(std::move(info));
+  Value value = make_loader_info(interpreter);
+  if (!value.is_object()) return native_value(Value::null());
   set_property(loader, "loaderInfo", value);
   return native_value(std::move(value));
+}
+
+ExecutionResult display_loader_info(Interpreter& interpreter, const Value& self) {
+  (void)self;
+  return native_value(make_loader_info(interpreter));
+}
+
+ExecutionResult keyboard_is_down(Interpreter& interpreter, const std::vector<Value>& arguments) {
+  const std::uint32_t key_code = static_cast<std::uint32_t>(to_number(argument_at(arguments, 0)));
+  return native_value(Value::boolean(interpreter.runtime().key_pressed(key_code)));
 }
 
 ExecutionResult event_format_to_string(const Value& self, const std::vector<Value>& arguments) {
@@ -425,6 +445,12 @@ bool try_compat_native(Interpreter& interpreter, native::Id id, const Value& sel
       return true;
     case native::Id::event_format_to_string:
       out = event_format_to_string(self, arguments);
+      return true;
+    case native::Id::keyboard_is_down:
+      out = keyboard_is_down(interpreter, arguments);
+      return true;
+    case native::Id::display_loader_info:
+      out = display_loader_info(interpreter, self);
       return true;
     default:
       return false;

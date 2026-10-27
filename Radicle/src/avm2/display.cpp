@@ -371,7 +371,7 @@ bool read_display_property(Interpreter& interpreter, DisplayObject& object,
     return true;
   }
   if (name == "mouseX" || name == "mouseY") {
-    out = Value::number(0.0);
+    out = Value::number(name == "mouseX" ? object.mouse_x() : object.mouse_y());
     return true;
   }
   if (name == "mouseEnabled") {
@@ -483,9 +483,16 @@ bool read_display_property(Interpreter& interpreter, DisplayObject& object,
     auto& clip = static_cast<MovieClip&>(object);
     std::vector<Value> labels;
     if (clip.timeline() != nullptr) {
+      const Class* frame_label_class =
+          interpreter.runtime().find_class("flash.display::FrameLabel");
       for (const TimelineFrameLabel& candidate : clip.timeline()->labels) {
-        auto label = std::make_shared<Object>();
-        interpreter.prepare_plain_object(*label);
+        std::shared_ptr<Object> label;
+        if (frame_label_class != nullptr) {
+          label = interpreter.make_instance(*const_cast<Class*>(frame_label_class));
+        } else {
+          label = std::make_shared<Object>();
+          interpreter.prepare_plain_object(*label);
+        }
         Property& name_property =
             label->define_own_property(primary_key(multiname_for("name")));
         name_property.kind = PropertyKind::Value;

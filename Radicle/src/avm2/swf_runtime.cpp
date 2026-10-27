@@ -319,6 +319,9 @@ void SwfRuntime::key_event(Interpreter& interpreter, std::uint32_t key_code, boo
   if (root_ == nullptr) {
     return;
   }
+  if (runtime_ != nullptr) {
+    runtime_->set_key_pressed(key_code, down);
+  }
   std::shared_ptr<EventObject> event =
       make_event(interpreter.runtime(), down ? "keyDown" : "keyUp", true, false, "KeyboardEvent");
   if (event == nullptr) {
@@ -338,6 +341,8 @@ void SwfRuntime::mouse_event(Interpreter& interpreter, double x, double y, std::
   if (root_ == nullptr) {
     return;
   }
+  root_->set_mouse_position(x, y);
+  if (stage_ != nullptr) stage_->set_mouse_position(x, y);
   std::shared_ptr<EventObject> event =
       make_event(interpreter.runtime(), down ? "mouseDown" : "mouseUp", true, false, "MouseEvent");
   if (event == nullptr) {
@@ -375,6 +380,8 @@ void SwfRuntime::mouse_move(Interpreter& interpreter, double x, double y) {
   if (root_ == nullptr) {
     return;
   }
+  root_->set_mouse_position(x, y);
+  if (stage_ != nullptr) stage_->set_mouse_position(x, y);
   std::shared_ptr<EventObject> event =
       make_event(interpreter.runtime(), "mouseMove", true, false, "MouseEvent");
   if (event == nullptr) {

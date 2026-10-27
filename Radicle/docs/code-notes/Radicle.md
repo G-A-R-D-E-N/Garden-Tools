@@ -5483,3 +5483,20 @@ Radicle/tests/test_c_api_runtime_real.cpp gains a seven-Program acceptance harne
 Phase 7's remaining items are gated on what the shipped corpus actually uses, so the data-runner test `SwfRealData.InterfaceCorpusUsesNoAvm1DoActionAndNoLzmaCompression` now scans every movie in `Fallout4 - Interface.ba2` and records the counts it finds. On the 1.10.984 corpus the scan sees 311 movie entries, all CWS or CFX, with zero ZWS (LZMA) movies and zero `DoAction` (tag 12) tags anywhere in the tag trees, including sprite children; the test asserts both counts stay zero so a future shipped movie that needs either item fails loudly instead of being silently unsupported.
 
 That closes the AVM1 `DoAction` question for the shipped Interface corpus: there is no shipped movie to justify an AVM1 decoder, so phase 7's DoAction item is evidence-closed rather than implemented. LZMA (ZWS) read/write stays open as a portability item for other inputs, but it is not required by the Interface movies the runtime and editor targets, and it still needs a linked LZMA library plus the CI dependency plumbing before it can be implemented.
+
+
+## Mouse/key state, FrameLabel objects and the missing RegExp class (#807 R7)
+
+Program scripts poll Keyboard.isDown, read mouseX/mouseY and expect currentLabels to hold real
+lash.display::FrameLabel instances, so the runtime now tracks that state. DisplayObject stores the
+host pointer position and the SWF runtime updates it on the root clip and stage for every mouse
+move/down/up; mouseX/mouseY read it instead of a hardcoded zero. Runtime keeps a pressed-key set
+that SwfRuntime::key_event updates, and Keyboard.isDown answers from it (the host still owns the
+real key state, this only mirrors what the input log delivered). currentLabels builds
+FrameLabel instances through the class when it is installed, keeping the labels typed. A minimal
+RegExp class (constructor, 	est false, exec null) keeps scripts that only construct or probe one
+running, and DisplayObject.loaderInfo returns a LoaderInfo with an pplicationDomain and an empty
+parameters object, complementing the Loader getters.
+
+Tests remain the synthetic C ABI/unit suites plus the seven-Program harness; the draft PR #849 now runs
+CI on every push so the compile evidence catches up with these changes.
