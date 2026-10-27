@@ -85,6 +85,16 @@ private:
     const pex::PexFunction* findFunction(const pex::PexObject& object, const std::string& state,
                                          const std::string& name,
                                          const pex::PexObject** owner) const;
+    const pex::PexStruct* findStruct(const pex::PexObject* object, const std::string& name) const;
+    Status makeStruct(const pex::PexObject* object, const std::string& typeName,
+                      std::size_t depth, Value& out) const;
+    Status structGet(Frame& frame, const pex::PexValue& destination, const pex::PexValue& structure,
+                     const std::string& member);
+    Status structSet(Frame& frame, const pex::PexValue& structure, const std::string& member,
+                     const pex::PexValue& value);
+    Status findStructInArray(Frame& frame, const pex::PexInstruction& instruction, bool reverse);
+    Status gotoState(Frame& frame, const Value& receiver, const std::vector<Value>& args,
+                     const pex::PexValue& destination);
     bool isObjectOfType(const Value& value, const std::string& typeName) const;
     Status coerce(const Value& value, const std::string& declaredType, Value& out) const;
     Status castTo(const Value& source, const std::string& sourceType,

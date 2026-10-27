@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -263,6 +264,10 @@ Status Interpreter::invoke(Frame& frame, const Value& self, const pex::PexObject
     if (function != nullptr && !function->isNative) {
         return pushFrame(owner, *function, state, self, destination, args);
     }
+    // Invariant: GoToState changes the receiver's state and returns None.
+    if (sameName(functionName, "GotoState")) {
+        return gotoState(frame, self, args, destination);
+    }
 
     std::string target = nativeScript;
     if (target.empty() && script != nullptr) target = script->name;
@@ -274,6 +279,18 @@ Status Interpreter::invoke(Frame& frame, const Value& self, const pex::PexObject
     }
     if (function != nullptr) return Status::FunctionNotFound;
     return status == Status::Ok ? Status::FunctionNotFound : status;
+}
+
+Status Interpreter::gotoState(Frame& frame, const Value& receiver, const std::vector<Value>& args,
+                              const pex::PexValue& destination) {
+    if (!host_.gate("vm.states.gotostate")) return Status::GateRefused;
+    if (args.size() != 1) return Status::ArgumentCountMismatch;
+    if (args[0].type != ValueType::String) return Status::TypeMismatch;
+    if (receiver.type != ValueType::Object || receiver.object == nullptr) {
+        return Status::NullObject;
+    }
+    receiver.object->state = args[0].str;
+    return storeResult(frame, destination, noneValue());
 }
 
 const pex::PexFunction* Interpreter::findFunction(const pex::PexObject& object,
@@ -470,6 +487,15 @@ Status Interpreter::coerce(const Value& value, const std::string& declaredType, 
         out = value;
         return Status::Ok;
     }
+    if (value.type == ValueType::Struct) {
+        if (value.structure != nullptr &&
+            (sameName(declaredType, "Var") || sameName(declaredType, "ScriptObject") ||
+             sameName(declaredType, value.structure->typeName))) {
+            out = value;
+            return Status::Ok;
+        }
+        return Status::TypeMismatch;
+    }
     switch (target) {
         case ValueType::Array:
             if (value.type != ValueType::Array) return Status::TypeMismatch;
@@ -513,6 +539,15 @@ Status Interpreter::castTo(const Value& source, const std::string& sourceType,
         out = noneValue();
         return Status::Ok;
     }
+    if (source.type == ValueType::Struct) {
+        if (source.structure != nullptr &&
+            (sameName(targetType, "Var") || sameName(targetType, "ScriptObject") ||
+             sameName(targetType, source.structure->typeName))) {
+            out = source;
+            return Status::Ok;
+        }
+        return Status::TypeMismatch;
+    }
     switch (declaredValueType(targetType)) {
         case ValueType::None:
             out = source;
@@ -550,7 +585,8 @@ Status Interpreter::toBool(const Value& value, bool& out) const {
         out = false;
         return Status::Ok;
     }
-    if (value.type == ValueType::Object || value.type == ValueType::Array) {
+    if (value.type == ValueType::Object || value.type == ValueType::Array ||
+        value.type == ValueType::Struct) {
         out = true;
         return Status::Ok;
     }

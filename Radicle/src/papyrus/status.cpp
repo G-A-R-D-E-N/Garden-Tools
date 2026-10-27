@@ -44,6 +44,8 @@ const char* statusName(Status status) {
             return "InternalError";
         case Status::StringTooLong:
             return "StringTooLong";
+        case Status::GateRefused:
+            return "GateRefused";
     }
     return "Unknown";
 }
@@ -58,6 +60,7 @@ bool isFatal(Status status) {
         case Status::InstructionBudgetExceeded:
         case Status::HostError:
         case Status::InternalError:
+        case Status::GateRefused:
             return true;
         case Status::Ok:
         case Status::UnknownIdentifier:

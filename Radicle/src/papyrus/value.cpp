@@ -62,10 +62,18 @@ Value arrayValue(std::shared_ptr<Array> array) {
     return value;
 }
 
+Value structValue(std::shared_ptr<Struct> structure) {
+    Value value;
+    value.type = ValueType::Struct;
+    value.structure = std::move(structure);
+    return value;
+}
+
 bool isNoneLike(const Value& value) {
     if (value.type == ValueType::None) return true;
     if (value.type == ValueType::Object) return value.object == nullptr;
     if (value.type == ValueType::Array) return value.array == nullptr;
+    if (value.type == ValueType::Struct) return value.structure == nullptr;
     return false;
 }
 
@@ -104,6 +112,8 @@ std::string typeName(ValueType type) {
             return "Object";
         case ValueType::Array:
             return "Array";
+        case ValueType::Struct:
+            return "Struct";
     }
     return "None";
 }
@@ -140,6 +150,8 @@ Value defaultValueFor(const std::string& declaredType) {
             return boolValue(false);
         case ValueType::Array:
             return arrayValue(nullptr);
+        case ValueType::Struct:
+            return structValue(nullptr);
         case ValueType::Object:
         case ValueType::None:
             return noneValue();
@@ -310,6 +322,8 @@ std::string valueToString(const Value& value) {
             text += "]";
             return text;
         }
+        case ValueType::Struct:
+            return value.structure == nullptr ? "None" : "[Struct]";
     }
     return "None";
 }
@@ -345,6 +359,9 @@ bool equalValues(const Value& left, const Value& right) {
                 if (!equalValues(left.array->elements[i], right.array->elements[i])) return false;
             }
             return true;
+        case ValueType::Struct:
+            // Invariant: Papyrus does not compare struct values.
+            return false;
         case ValueType::None:
             return true;
     }

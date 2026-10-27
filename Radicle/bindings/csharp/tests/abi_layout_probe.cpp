@@ -27,6 +27,7 @@
 #include "fo4/c_api_terrain.h"
 #include "fo4/c_api_pex_analysis.h"
 #include "fo4/c_api_script_set.h"
+#include "fo4/c_api_papyrus.h"
 #include <cstddef>
 #include <cstdio>
 
@@ -1457,5 +1458,13 @@ int main() {
   printf("ScriptSetWinner.Name %zu\n", offsetof(radicle_script_set_winner, name));
   printf("ScriptSetWinner.Winner %zu\n", offsetof(radicle_script_set_winner, winner));
   printf("ScriptSetWinner.Replaced %zu\n", offsetof(radicle_script_set_winner, replaced));
+  printf("PapyrusCallbacks %zu\n", sizeof(radicle_papyrus_callbacks));
+  printf("PapyrusCallbacks.User %zu\n", offsetof(radicle_papyrus_callbacks, user));
+  printf("PapyrusCallbacks.Gate %zu\n", offsetof(radicle_papyrus_callbacks, gate));
+  printf("PapyrusCallbacks.GetVariable %zu\n", offsetof(radicle_papyrus_callbacks, get_variable));
+  printf("PapyrusCallbacks.SetVariable %zu\n", offsetof(radicle_papyrus_callbacks, set_variable));
+  printf("PapyrusCallbacks.GetProperty %zu\n", offsetof(radicle_papyrus_callbacks, get_property));
+  printf("PapyrusCallbacks.SetProperty %zu\n", offsetof(radicle_papyrus_callbacks, set_property));
+  printf("PapyrusCallbacks.CallNative %zu\n", offsetof(radicle_papyrus_callbacks, call_native));
   return 0;
 }
