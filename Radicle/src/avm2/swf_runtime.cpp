@@ -267,7 +267,8 @@ const std::string& SwfRuntime::last_error() { return g_create_error; }
 
 std::shared_ptr<SwfRuntime> SwfRuntime::create(Runtime& runtime, Interpreter& interpreter,
                                                const swf::SwfFile& file,
-                                               const SwfRuntimeOptions& options) {
+                                               const SwfRuntimeOptions& options,
+                                               std::shared_ptr<ApplicationDomainObject> domain) {
   g_create_error.clear();
   const auto fail = [](std::string message) {
     g_create_error = std::move(message);
@@ -307,7 +308,7 @@ std::shared_ptr<SwfRuntime> SwfRuntime::create(Runtime& runtime, Interpreter& in
                             block.payload.size(), abc_file) != abc::AbcStatus::Ok) {
       return fail("an ABC block did not parse");
     }
-    if (!runtime.add_file(abc_file).ok()) {
+    if (!runtime.add_file(abc_file, domain).ok()) {
       return fail("the runtime refused the movie ABC file");
     }
     if (!runtime.link_added_file(runtime.file_count() - 1).ok()) {
