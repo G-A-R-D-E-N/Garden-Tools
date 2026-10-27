@@ -50,6 +50,9 @@ SnapshotEntryKind entry_kind(const DisplayObject& object) {
   if (object.is_text_field()) {
     return SnapshotEntryKind::Text;
   }
+  if (object.is_static_text()) {
+    return SnapshotEntryKind::Shape;
+  }
   const Class* klass = object.display_class();
   if (klass != nullptr) {
     if (klass->name.find("Bitmap") != std::string::npos) {

@@ -79,6 +79,9 @@ Class* resolve_character_class(Runtime& runtime, const SwfMovieData& data,
   if (data.text_fields.find(character_id) != data.text_fields.end()) {
     return const_cast<Class*>(runtime.find_class("flash.text::TextField"));
   }
+  if (data.static_texts.find(character_id) != data.static_texts.end()) {
+    return const_cast<Class*>(runtime.find_class("flash.text::StaticText"));
+  }
   if (Class* shape = const_cast<Class*>(runtime.find_class("flash.display::Shape"))) {
     return shape;
   }
@@ -92,6 +95,10 @@ void apply_character_definition(DisplayObject& object, const SwfMovieData& data,
     object.set_origin(bounds->second.origin_x, bounds->second.origin_y);
     object.set_width(bounds->second.width);
     object.set_height(bounds->second.height);
+  }
+  const auto static_text = data.static_texts.find(character_id);
+  if (static_text != data.static_texts.end() && object.is_static_text()) {
+    static_cast<StaticTextObject&>(object).set_records(static_text->second);
   }
   const auto text = data.text_fields.find(character_id);
   if (text == data.text_fields.end() || !object.is_text_field()) {

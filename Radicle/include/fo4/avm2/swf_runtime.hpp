@@ -69,6 +69,7 @@ struct SwfMovieData {
   /* Invariant: a character appears here only when its definition tag carries drawn bounds. */
   std::map<std::uint16_t, SwfCharacterBounds> character_bounds;
   std::map<std::uint16_t, SwfTextFieldData> text_fields;
+  std::map<std::uint16_t, std::vector<StaticTextRecord>> static_texts;
   std::vector<FontResource> fonts;
   std::vector<SoundResource> sounds;
   std::string root_class_name;

@@ -270,10 +270,13 @@ std::shared_ptr<DisplayObject> make_display_object(Runtime& runtime, Class& klas
   std::shared_ptr<DisplayObject> object;
   Class* loader_class = find_display_class(runtime, "flash.display::Loader");
   Class* text_field_class = find_display_class(runtime, "flash.text::TextField");
+  Class* static_text_class = find_display_class(runtime, "flash.text::StaticText");
   if (loader_class != nullptr && klass.is_subclass_of(loader_class)) {
     object = std::make_shared<LoaderObject>(&klass);
   } else if (text_field_class != nullptr && klass.is_subclass_of(text_field_class)) {
     object = std::make_shared<TextFieldObject>(&klass, &runtime.fonts());
+  } else if (static_text_class != nullptr && klass.is_subclass_of(static_text_class)) {
+    object = std::make_shared<StaticTextObject>(&klass, &runtime.fonts());
   } else if (movie_clip != nullptr && klass.is_subclass_of(movie_clip)) {
     object = std::make_shared<MovieClip>(&klass);
   } else if (container_class != nullptr && klass.is_subclass_of(container_class)) {
@@ -395,6 +398,10 @@ bool read_display_property(Interpreter& interpreter, DisplayObject& object,
   if (name == "numChildren" && object.is_container()) {
     out = Value::number(
         static_cast<double>(static_cast<DisplayObjectContainer&>(object).children().size()));
+    return true;
+  }
+  if (object.is_static_text() && name == "text") {
+    out = Value::string(static_cast<StaticTextObject&>(object).text());
     return true;
   }
   if (object.is_text_field()) {

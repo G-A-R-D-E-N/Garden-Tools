@@ -362,16 +362,18 @@ RuntimeStatus Runtime::install_builtins() {
   Class* shape = add_builtin_class("Shape", "flash.display", display_object);
   Class* bitmap = add_builtin_class("Bitmap", "flash.display", display_object);
   Class* text_field = add_builtin_class("TextField", "flash.text", interactive_object);
+  Class* static_text = add_builtin_class("StaticText", "flash.text", display_object);
   Class* text_format = add_builtin_class("TextFormat", "flash.text", object_class);
   Class* simple_button = add_builtin_class("SimpleButton", "flash.display", interactive_object);
   if (display_object == nullptr || interactive_object == nullptr || display_container == nullptr ||
       sprite == nullptr || movie_clip == nullptr || stage == nullptr || shape == nullptr ||
-      bitmap == nullptr || text_field == nullptr || simple_button == nullptr ||
-      text_format == nullptr) {
+      bitmap == nullptr || text_field == nullptr || static_text == nullptr ||
+      simple_button == nullptr || text_format == nullptr) {
     return RuntimeStatus::InvalidTrait;
   }
   for (Class* display_class : {display_object, interactive_object, display_container, sprite,
-                               movie_clip, stage, shape, bitmap, text_field, simple_button}) {
+                               movie_clip, stage, shape, bitmap, text_field, static_text,
+                               simple_button}) {
     display_class->native_constructor = static_cast<std::uint32_t>(native::Id::display_construct);
   }
   add_method(*display_object, "localToGlobal", native::Id::display_local_to_global, false);
