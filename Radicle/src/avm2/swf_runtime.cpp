@@ -121,6 +121,10 @@ class SwfTimelineClip : public MovieClip {
       object->set_scale_x(row.scale_x);
       object->set_scale_y(row.scale_y);
       object->set_character_id(row.character_id);
+      if (row.has_color_transform) {
+        object->set_color_multiply(row.color_multiply);
+        object->set_color_add(row.color_add);
+      }
       object->set_clip_depth(row.has_clip_depth ? static_cast<std::int32_t>(row.clip_depth) : 0);
       if (!row.name.empty()) {
         object->set_name(row.name);

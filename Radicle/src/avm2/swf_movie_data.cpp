@@ -50,6 +50,14 @@ SwfPlacementRow placement_row(const swf::SwfPlacement& placement) {
     row.translate_x = twips_to_pixels(matrix.translate_x);
     row.translate_y = twips_to_pixels(matrix.translate_y);
   }
+  if (placement.color_transform.has_value()) {
+    const swf::SwfColorTransform& transform = *placement.color_transform;
+    row.has_color_transform = true;
+    for (int channel = 0; channel < 4; ++channel) {
+      row.color_multiply[channel] = static_cast<double>(transform.multiply[channel]) / 256.0;
+      row.color_add[channel] = static_cast<double>(transform.add[channel]) / 256.0;
+    }
+  }
   if (placement.clip_depth.has_value()) {
     row.has_clip_depth = true;
     row.clip_depth = *placement.clip_depth;

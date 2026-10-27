@@ -51,6 +51,16 @@ class DisplayObject : public Object, public std::enable_shared_from_this<Display
 
   const std::vector<Value>& filters() const noexcept { return filters_; }
   std::vector<Value>& filters() noexcept { return filters_; }
+  /* A placed object must keep its colour transform so the snapshot reports it faithfully. */
+  const double* color_multiply() const noexcept { return color_multiply_; }
+  const double* color_add() const noexcept { return color_add_; }
+  void set_color_multiply(const double values[4]) noexcept {
+    for (int index = 0; index < 4; ++index) color_multiply_[index] = values[index];
+  }
+  void set_color_add(const double values[4]) noexcept {
+    for (int index = 0; index < 4; ++index) color_add_[index] = values[index];
+  }
+
   /* A Bitmap must keep the BitmapData the script assigned, so a snapshot can report it. */
   const Value& bitmap_data() const noexcept { return bitmap_data_; }
   void set_bitmap_data(Value value) { bitmap_data_ = std::move(value); }
@@ -115,6 +125,8 @@ class DisplayObject : public Object, public std::enable_shared_from_this<Display
   double alpha_{1.0};
   std::vector<Value> filters_;
   Value bitmap_data_;
+  double color_multiply_[4]{1.0, 1.0, 1.0, 1.0};
+  double color_add_[4]{0.0, 0.0, 0.0, 0.0};
   double width_{0.0};
   double height_{0.0};
   bool visible_{true};

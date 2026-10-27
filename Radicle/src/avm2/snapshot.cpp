@@ -70,7 +70,14 @@ SnapshotEntry make_entry(const DisplayObject& object, const std::string& path,
   entry.path = path;
   entry.name = object.name();
   entry.matrix = matrix;
-  entry.color.alpha_multiplier = object.alpha();
+  entry.color.red_multiplier = object.color_multiply()[0];
+  entry.color.green_multiplier = object.color_multiply()[1];
+  entry.color.blue_multiplier = object.color_multiply()[2];
+  entry.color.alpha_multiplier = object.color_multiply()[3] * object.alpha();
+  entry.color.red_offset = static_cast<std::int32_t>(object.color_add()[0]);
+  entry.color.green_offset = static_cast<std::int32_t>(object.color_add()[1]);
+  entry.color.blue_offset = static_cast<std::int32_t>(object.color_add()[2]);
+  entry.color.alpha_offset = static_cast<std::int32_t>(object.color_add()[3]);
   entry.filter_count = object.filters().size();
   if (object.is_text_field()) {
     const auto& text_field = static_cast<const TextFieldObject&>(object);

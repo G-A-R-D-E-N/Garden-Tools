@@ -33,6 +33,9 @@ struct SwfPlacementRow {
   double translate_y{0.0};
   bool has_clip_depth{false};
   std::uint16_t clip_depth{0};
+  bool has_color_transform{false};
+  double color_multiply[4]{1.0, 1.0, 1.0, 1.0};
+  double color_add[4]{0.0, 0.0, 0.0, 0.0};
 };
 
 /* Invariant: frames[i] must hold the rows that run when frame i+1 becomes current. */
