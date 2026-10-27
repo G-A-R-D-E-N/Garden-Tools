@@ -451,7 +451,7 @@ InterpreterStatus Interpreter::coerce_value(const Multiname& multiname, Value& v
     return InterpreterStatus::Ok;
   }
   if (!value.is_object()) {
-    message = "cannot coerce " + value_kind_name(value.kind()) + " to " + name;
+    message = std::string{"cannot coerce "} + value_kind_name(value.kind()) + " to " + name;
     return InterpreterStatus::TypeError;
   }
   const Class* value_class = value.as_object()->instance_class();
