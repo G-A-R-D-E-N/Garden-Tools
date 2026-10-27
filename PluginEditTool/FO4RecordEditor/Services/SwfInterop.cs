@@ -24,22 +24,20 @@ public class SwfInterop
     // Constraint: a loose path opens directly; anything else goes through the existing PET asset resolver.
     public Task<string> Open(string path) => Run(() =>
     {
-        lock (Gate)
-        {
-            _document?.Dispose();
-            _document = null;
-            var loose = File.Exists(path) ? path : null;
-            if (loose == null)
-            {
-                var hit = AssetResolver.Resolve(path);
-                if (hit != null) loose = AssetResolver.Materialize(hit);
-            }
-            if (loose == null || !File.Exists(loose))
-                throw new FileNotFoundException("the movie was not found as a loose file or a resolved archive asset", path);
-            _document = SwfDocument.OpenFile(loose);
-            return Snapshot();
-        }
+        _document?.Dispose();
+        _document = null;
+        _document = File.Exists(path)
+            ? SwfDocument.OpenFile(ToolPaths.RequireDataOrProjectPath(path))
+            : SwfDocument.OpenResolved(path, ResolveBytes);
+        return Snapshot();
     });
+
+    private static byte[]? ResolveBytes(string path)
+    {
+        var hit = AssetResolver.Resolve(path);
+        var file = hit == null ? null : AssetResolver.Materialize(hit);
+        return file == null ? null : File.ReadAllBytes(file);
+    }
 
     public Task<string> Characters() => Run(() => Json(new
     {
@@ -72,12 +70,7 @@ public class SwfInterop
     }));
 
     public Task<string> RenameLabel(int tagIndex, string name) => Run(() =>
-    {
-        var document = Document();
-        var payload = System.Text.Encoding.ASCII.GetBytes(name + "\0");
-        var result = document.Apply(new SwfPlanSpec().Replace(tagIndex, payload));
-        return Snapshot(result.Changed);
-    });
+        Snapshot(Document().RenameLabel(tagIndex, name).Changed));
 
     public Task<string> ReadEditText(int tagIndex) => Run(() =>
     {
@@ -166,12 +159,15 @@ public class SwfInterop
 
     private static Task<string> Run(Func<string> action) => Task.Run(() =>
     {
-        try { return action(); }
-        catch (RadicleException ex) { return Json(new { error = ex.Message, status = ex.Status.ToString() }); }
-        catch (Exception ex)
+        lock (Gate)
         {
-            DebugLog.Exception("Swf", ex);
-            return Json(new { error = ex.Message });
+            try { return action(); }
+            catch (RadicleException ex) { return Json(new { error = ex.Message, status = ex.Status.ToString() }); }
+            catch (Exception ex)
+            {
+                DebugLog.Exception("Swf", ex);
+                return Json(new { error = ex.Message });
+            }
         }
     });
 }

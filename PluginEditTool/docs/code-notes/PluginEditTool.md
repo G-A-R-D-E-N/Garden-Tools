@@ -99,22 +99,24 @@ relative stage with the depth label. This is the round's rendering substitute: n
 bounds. The web test asserts the box test id exists for the fixture instance.
 ## FO4RecordEditor.Core/Services/SwfDocumentService.cs:SwfDocument.InsertKeyframe (keyframe at frame)
 
-A first keyframe form: for a root PlaceObject2 placement, `InsertKeyframe` copies its payload, forces the Move flag and
-clears the character bit, and inserts the copy before the requested frame's root ShowFrame through the plan, so it is
-one history command that undo removes. A sprite placement or a non-PlaceObject2 tag is refused this round;
+For a PlaceObject2 placement, `InsertKeyframe` copies its payload, forces the Move flag, clears the character bit and drops
+the two character-id bytes that followed the depth, then inserts the copy before the requested frame's root ShowFrame
+through the plan, so it is one history command that undo removes. A non-PlaceObject2 tag is refused.
 `SwfInterop.InsertKeyframe` and the panel's "Keyframe at frame" button (scrubber frame) use it.
 ## FO4RecordEditor.Core/Services/SwfDocumentService.cs:SwfDocument.InsertKeyframe (sprite timelines)
 
 For a placement inside a DefineSprite, `InsertKeyframe` finds the sprite frame's ShowFrame child, splices a new
 Move-flagged placement tag (short or long header as the length needs) into the sprite payload at that child's header
-offset, and replaces the DefineSprite tag through the plan. The fixture's sprite now carries a placement, so the
-service test pins the insertion and undo on that timeline too.
+offset, and replaces the DefineSprite tag through the plan. The splice is the shared `SwfDocument.InsertSpriteChild`
+helper, also used by `AddLabel`; the copied Move row drops its character-id bytes the same way as the root form. The
+fixture's sprite carries a placement, so the service test pins the insertion and undo on that timeline too.
 ## FO4RecordEditor.Core/Services/SwfDocumentService.cs:SwfDocument.OpenResolved (archive/asset open)
 
 `OpenResolved` takes the logical asset path and a resolver delegate (the host's existing asset resolution), reads the
-bytes and builds the same document as a loose file. The document deliberately keeps no filesystem path for this
-form, so Save requires an explicit target; the host can therefore open BA2-resolved bytes and write back through its
-own asset-write path. The service test drives a resolver over the fixture bytes and asserts the reads.
+bytes and builds the same document as a loose file. `Path` keeps the logical asset path (never the materialized cache
+file) and the document is flagged resolved, so `Save()` without an explicit target throws a read-only message, while an
+explicit target writes there. The service test drives a resolver over the fixture bytes, asserts the reads, and asserts
+that `Save()` refuses.
 ## FO4RecordEditor.Core/Services/SwfDocumentService.cs:SwfDocument.RemoveLabel (label removal)
 
 The C plan now carries a removal list (`radicle_swf_tag_removal`, regenerated interop), so `RemoveLabel` verifies the tag
@@ -129,15 +131,16 @@ replaces that tag through the plan. Duplicate names are checked per timeline; th
 The panel passes its current timeline scrubber value.
 ## FO4RecordEditor/Services/SwfInterop.cs:SwfInterop.Open (loose or archive)
 
-Open checks for a loose file first; otherwise it asks the existing PET `AssetResolver` (`Resolve` + `Materialize`) and
-opens the materialized bytes, so a BA2-resolved Interface movie enters the same document/history path. A path that is
-neither loose nor resolvable comes back as a JSON error. Saving a resolved document back into its archive is not wired
-yet because PET has no generic asset-write path; the document save writes a target path with a `.bak`.
+Open takes a loose path only when it exists, and then only under the configured Data or project folders
+(`ToolPaths.RequireDataOrProjectPath`); any other loose path is refused. Anything else goes through
+`SwfDocument.OpenResolved` with a byte resolver built on the PET `AssetResolver` (`Resolve` then `Materialize`), which
+reads the materialized file. The cache file is only read, so Save never writes into the cache. Saving a resolved
+document back into its archive is not wired, and the UI Save has no target to pass, so it is refused.
 ## FO4RecordEditor.Core/Services/WriteService.Asset.cs:WriteService.SaveAsset (SWF document save)
 
-The SWF document save now goes through the core `WriteService` static partial: `SaveAsset(path, bytes)` copies the
-existing file to `<path>.bak` and writes the new bytes, matching the backup-first rule the other write paths follow.
-`SwfDocument.Save` delegates to it, so the editor's Save and a future host asset-write hook share one implementation.
+`SaveAsset(path, bytes)` copies the existing file to `<path>.bak` only when that backup does not exist, so later saves never
+replace the original bytes. The new bytes go to a temp file beside the target (`.<name>.<guid>.tmp`) that is moved over
+the target with `File.Move(..., overwrite: true)`; the temp is deleted in a finally. `SwfDocument.Save` delegates to it.
 ## web/src/SwfPanel.tsx (display-list row selection)
 
 A display-list row is now a selection affordance: clicking it matches the row's depth (and character when present) to
@@ -162,7 +165,8 @@ every PET `.cs`/`.csproj`/packaging file found none), so the managed Core/Server
 
 Wired now: `FO4RecordEditor.Core/Services/RadicleNative.cs` (`EnsureLoaded`/`Configure`/`CandidatePaths`) prefers
 `RADICLE_NATIVE_PATH`, then probes the deployed layout (app dir, `native/`, `radicle/`, `runtimes/<rid>/native/`)
-and the build layout (`Radicle/build/<config>`, `build/<config>`, six parent levels), and both managed entry points
+and no build folders (the cwd-ancestor `Radicle/build` and `build` walk was removed, so a dev build needs
+`RADICLE_NATIVE_PATH` or a copy in the app dir), and both managed entry points
 (`SwfDocument` and `SwfInterop`) call it in their static constructors; `RadicleNativeTests` pin the candidate order
 and the found/missing probe. Packaging still has to place the library where the probe looks (or set the variable):
 the Linux deb ships only the native host (`packaging/linux/build-deb.sh:68` says services run in the native
@@ -170,3 +174,22 @@ backend), and that native host links the C++ `fo4` target (`PluginEditTool/nativ
 `radicle_c`. The native production host therefore needs no change for its own Radicle use, but a native host object
 bridge is still required if the SWF panel is to run inside that native host rather than the managed
 Core/Server/Test host; that bridge is not part of this round.
+## FO4RecordEditor.Core/Services/ToolPaths.cs:ToolPaths.RequireUnderRoots (loose-path confinement)
+
+`RequireUnderRoots` resolves the path with `Path.GetFullPath` and accepts it only when it starts with a root plus a
+directory separator, compared case-insensitively. The separator refuses a sibling such as `<root>2\...`, and the full-path
+step refuses `..` escapes. An empty root list refuses everything. `RequireDataOrProjectPath` supplies the configured roots
+(DataFolder, Fallout4Path, Mo2InstancePath, OutputFolder) and `SwfInterop.Open` uses it for loose paths. `ToolPathsTests`
+pins the accepted path, the sibling, the escape and the empty list.
+## Radicle/bindings/csharp/Radicle.Interop/SwfEditText.cs:SwfEditTextCodec (duplicate of the C++ edit-text codec)
+
+`SwfEditTextCodec.Parse` and `Write` re-implement the DefineEditText (tag 37) field walk that the C++ side already has in
+`Radicle/include/fo4/swf/swf_text_edit.hpp` (`replace_edit_text`, `apply_edit_text`). The C ABI exports no edit-text verb:
+`Radicle/include/fo4/c_api_swf.h` has no edit-text function (its text verbs are the ABC ones, `radicle_swf_abc_text` and
+`radicle_swf_abc_apply_text`), so the managed codec is the only edit path today and cannot be retired yet. The intended
+consolidation is one native verb that takes the edit and returns the payload; once it exists, `SwfEditTextCodec.Write` and
+`SwfDocument.EditEditText` route through it and the managed walk is deleted, keeping the read only if the ABI lacks a getter.
+## FO4RecordEditor/Services/SwfInterop.cs:SwfInterop.Run (one lock per call)
+
+`Run` takes the static `Gate` around every action, so the document reference, its history and the lazy character cache are
+touched by one call at a time. `Open` runs inside `Run` and takes no lock of its own.

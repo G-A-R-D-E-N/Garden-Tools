@@ -11,10 +11,17 @@ public class RadicleNativeTests
     [Fact]
     public void TheBaseDirectoryCandidateComesFirst()
     {
-        var paths = RadicleNative.CandidatePaths("C:\\app", "C:\\work");
+        var paths = RadicleNative.CandidatePaths("C:\\app");
         Assert.Equal(Path.Combine("C:\\app", RadicleNative.LibraryName), paths[0]);
         Assert.Contains(Path.Combine("C:\\app", "native", RadicleNative.LibraryName), paths);
         Assert.Contains(Path.Combine("C:\\app", "runtimes", "win-x64", "native", RadicleNative.LibraryName), paths);
+    }
+
+    [Fact]
+    public void TheProbeNeverWalksBuildFoldersOutsideTheAppDirectory()
+    {
+        Assert.DoesNotContain(RadicleNative.CandidatePaths("C:\\app"),
+            path => path.Contains("build", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -26,7 +33,7 @@ public class RadicleNativeTests
             Directory.CreateDirectory(Path.Combine(root, "native"));
             var deployed = Path.Combine(root, "native", RadicleNative.LibraryName);
             File.WriteAllBytes(deployed, Array.Empty<byte>());
-            var found = RadicleNative.FindFirstExisting(RadicleNative.CandidatePaths(root, null));
+            var found = RadicleNative.FindFirstExisting(RadicleNative.CandidatePaths(root));
             Assert.Equal(deployed, found);
         }
         finally
@@ -39,6 +46,6 @@ public class RadicleNativeTests
     public void TheProbeReturnsNothingWhenNoCandidateExists()
     {
         var root = Path.Combine(Path.GetTempPath(), "pet-radicle-missing-" + Guid.NewGuid().ToString("N"));
-        Assert.Null(RadicleNative.FindFirstExisting(RadicleNative.CandidatePaths(root, null)));
+        Assert.Null(RadicleNative.FindFirstExisting(RadicleNative.CandidatePaths(root)));
     }
 }
