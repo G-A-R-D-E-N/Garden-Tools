@@ -407,14 +407,5 @@ public sealed unsafe partial class SwfFile
         return new SwfPlanResultRecord(result.Changed != 0, result.Revision);
     }
 
-    public unsafe byte[] WriteBytes()
-    {
-        using var use = UseForEditor();
-        byte* bytes = null;
-        nuint size = 0;
-        Call.Check(RadicleNative.SwfWriteBytes(use.Pointer, &bytes, &size));
-        return Call.TakeBytes(bytes, size);
-    }
-
     internal HandleUse UseForEditor() => Use();
 }

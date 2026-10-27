@@ -4,8 +4,6 @@ using Radicle.Interop.Native;
 
 namespace Radicle.Interop;
 
-public sealed record SwfRectRecord(int XMin, int XMax, int YMin, int YMax);
-
 public sealed record SwfMatrixRecord(int ScaleX, int ScaleY, int RotateSkew0, int RotateSkew1, int TranslateX,
                                      int TranslateY);
 
