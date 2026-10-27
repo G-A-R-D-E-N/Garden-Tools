@@ -33,10 +33,14 @@ RuntimeStatus Runtime::build_shells_for_file(const abc::AbcFile& file) {
       Class* klass = owned.get();
       const std::string key = key_for_multiname(name_multiname);
       if (!key.empty()) {
-        const auto inserted = class_by_key_.emplace(key, klass);
-        if (!inserted.second) {
-          return RuntimeStatus::DuplicateClass;
+        // A loaded sibling movie must not fail because it repeats a shared class such as the Scaleform
+        // constants, so the first definition must win and this file's references must alias it.
+        const auto existing = class_by_key_.find(key);
+        if (existing != class_by_key_.end()) {
+          class_by_instance_[instance_key(file, index)] = existing->second;
+          continue;
         }
+        class_by_key_.emplace(key, klass);
       }
       if (name_multiname.has_fixed_name()) {
         class_by_local_name_.emplace(name_multiname.name, klass);

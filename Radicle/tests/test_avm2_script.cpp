@@ -8,6 +8,7 @@
 #include <fo4/abc/abc.hpp>
 #include <fo4/swf/swf.hpp>
 
+#include "abc_test_support.hpp"
 #include "avm2_test_support.hpp"
 #include "swf_movie_builder.hpp"
 
@@ -138,3 +139,21 @@ TEST(Avm2Script, SwfRuntimeLinksAndRunsTheMoviesAbcBlocks) {
 }
 
 }  // namespace
+
+TEST(Avm2Script, AliasesDuplicateClassesFromASecondMovieFile) {
+  const std::vector<std::uint8_t> bytes = fo4::test::build_abc();
+  abc::AbcFile first;
+  ASSERT_EQ(abc::AbcFile::parse(bytes, first), abc::AbcStatus::Ok);
+  Runtime runtime;
+  Interpreter interpreter{runtime};
+  ASSERT_TRUE(runtime.add_file(first).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  const std::size_t classes_after_first = runtime.class_count();
+
+  abc::AbcFile second;
+  ASSERT_EQ(abc::AbcFile::parse(bytes, second), abc::AbcStatus::Ok);
+  ASSERT_TRUE(runtime.add_file(second).ok());
+  ASSERT_TRUE(runtime.link_added_file(1).ok());
+  EXPECT_EQ(runtime.class_count(), classes_after_first);
+  EXPECT_NE(runtime.find_class(Foo), nullptr);
+}

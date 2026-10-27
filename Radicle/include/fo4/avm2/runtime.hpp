@@ -64,6 +64,7 @@ class Runtime {
   /* Requires a linked runtime; links the file added at file_index and registers its scripts. */
   RuntimeLoad link_added_file(std::size_t file_index);
   std::size_t file_count() const noexcept { return files_.size(); }
+  std::size_t class_count() const noexcept { return classes_.size(); }
 
   bool linked() const noexcept { return linked_; }
   const std::vector<Class*>& classes() const noexcept { return classes_; }

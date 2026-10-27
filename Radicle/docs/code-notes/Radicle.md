@@ -5500,3 +5500,8 @@ parameters object, complementing the Loader getters.
 
 Tests remain the synthetic C ABI/unit suites plus the seven-Program harness; the draft PR #849 now runs
 CI on every push so the compile evidence catches up with these changes.
+
+
+## Duplicate class names across loaded Program movies (#807 R7)
+
+A census of the Program groups (AtomicCommand, Grognak, PipFall, RedMenace, ZetaInvaders and their sibling asset SWFs) shows 24-29 class names repeated across movies, mostly the shared scaleform.clik constants but also common hvr/Holotapes classes. Strict duplicate rejection made a Loader child movie fail as soon as it defined one of those, which would stop every program at its first asset load. src/avm2/runtime_link.cpp:Runtime::build_shells_for_file now treats a repeated fully-qualified class name as an alias: the first definition stays authoritative and the new file's class-index references resolve to it, so the second movie links, its scripts run, and both movies share one class identity the way the Scaleform app domain behaves. A unit test links the same ABC twice and asserts the class count does not grow and the class still resolves.
