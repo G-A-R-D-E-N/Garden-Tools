@@ -316,6 +316,95 @@ TEST(Avm2Domain, ContentLoaderInfoReportsTheRootDomainWithoutAContext) {
   EXPECT_TRUE(result.value.as_boolean());
 }
 
+TEST(Avm2Domain, LoadedContentLoaderInfoIsTheLoadersContentLoaderInfo) {
+  DomainHarness harness;
+  harness.assets["second.swf"] = second_movie();
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder code;
+  const std::uint32_t loader_class = script.multiname("Loader", "flash.display");
+  const std::uint32_t request_class = script.multiname("URLRequest", "flash.net");
+  const std::uint32_t url_name = script.multiname("url");
+  const std::uint32_t load_name = script.multiname("load");
+  const std::uint32_t child_at = script.multiname("getChildAt");
+  const std::uint32_t content_info = script.multiname("contentLoaderInfo");
+  const std::uint32_t loader_info = script.multiname("loaderInfo");
+  code.getlex(request_class);
+  code.construct(0);
+  code.setlocal(1);
+  code.getlocal(1);
+  code.pushstring(script.string_of("second.swf"));
+  code.setproperty(url_name);
+  code.getlex(loader_class);
+  code.construct(0);
+  code.setlocal(2);
+  code.getlocal(2);
+  code.getlocal(1);
+  code.callproperty(load_name, 1);
+  code.pop();
+  code.getlocal(2);
+  code.pushbyte(0);
+  code.callproperty(child_at, 1);
+  code.getproperty(loader_info);
+  code.getlocal(2);
+  code.getproperty(content_info);
+  code.strictequals();
+  code.returnvalue();
+  const ExecutionResult result = harness.run(script, code, 3);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_boolean());
+  EXPECT_TRUE(result.value.as_boolean());
+}
+
+TEST(Avm2Domain, HeldContentLoaderInfoTakesTheDomainOfALaterLoad) {
+  DomainHarness harness;
+  harness.assets["second.swf"] = second_movie();
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder code;
+  const std::uint32_t domain_class = script.multiname("ApplicationDomain", "flash.system");
+  const std::uint32_t context_class = script.multiname("LoaderContext", "flash.system");
+  const std::uint32_t request_class = script.multiname("URLRequest", "flash.net");
+  const std::uint32_t loader_class = script.multiname("Loader", "flash.display");
+  const std::uint32_t domain_name = script.multiname("applicationDomain");
+  const std::uint32_t url_name = script.multiname("url");
+  const std::uint32_t load_name = script.multiname("load");
+  const std::uint32_t content_info = script.multiname("contentLoaderInfo");
+  code.getlex(domain_class);
+  code.construct(0);
+  code.setlocal(1);
+  code.getlex(context_class);
+  code.construct(0);
+  code.setlocal(2);
+  code.getlocal(2);
+  code.getlocal(1);
+  code.setproperty(domain_name);
+  code.getlex(request_class);
+  code.construct(0);
+  code.setlocal(3);
+  code.getlocal(3);
+  code.pushstring(script.string_of("second.swf"));
+  code.setproperty(url_name);
+  code.getlex(loader_class);
+  code.construct(0);
+  code.setlocal(4);
+  code.getlocal(4);
+  code.getproperty(content_info);
+  code.setlocal(5);
+  code.getlocal(4);
+  code.getlocal(3);
+  code.getlocal(2);
+  code.callproperty(load_name, 2);
+  code.pop();
+  code.getlocal(5);
+  code.getproperty(domain_name);
+  code.getlocal(1);
+  code.strictequals();
+  code.returnvalue();
+  const ExecutionResult result = harness.run(script, code, 6);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_boolean());
+  EXPECT_TRUE(result.value.as_boolean());
+}
+
 TEST(Avm2Domain, LoaderContextConstructorStoresTheDomainArgument) {
   DomainHarness harness;
   avm2_test::ScriptBuilder script;
