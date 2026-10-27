@@ -11,7 +11,7 @@ public class SwfPlacementTests
     {
         using var movie = SwfFile.FromBytes(SwfFixtures.Movie());
         var placements = movie.Placements();
-        var root = Assert.Single(placements.Where(placement => !placement.InsideSprite));
+        var root = Assert.Single(placements, placement => !placement.InsideSprite);
         Assert.Equal(26, root.TagCode);
         Assert.Equal((ushort)1, root.Depth);
         Assert.Equal((ushort)11, root.CharacterId);

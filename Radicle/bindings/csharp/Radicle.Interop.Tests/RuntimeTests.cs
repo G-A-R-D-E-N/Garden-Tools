@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Radicle.Interop;
+using Radicle.Interop.Native;
 using Xunit;
 
 namespace Radicle.Interop.Tests;
