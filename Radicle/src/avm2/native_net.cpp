@@ -66,15 +66,13 @@ std::string dynamic_string(const Object& object, std::string_view name) {
   return value.as_string();
 }
 
-void define_dynamic_string(Interpreter& interpreter, Object& object, const char* name,
-                           std::string text) {
-  (void)interpreter;
+void define_dynamic_value(Object& object, const char* name, Value value) {
   Multiname multiname;
   multiname.name = name;
   multiname.namespaces.push_back(Namespace{});
   Property& property = object.define_own_property(primary_key(multiname));
   property.kind = PropertyKind::Value;
-  property.value = Value::string(std::move(text));
+  property.value = std::move(value);
 }
 
 std::shared_ptr<Object> value_object(const Value& value) {
@@ -150,6 +148,19 @@ ExecutionResult app_domain_construct(Interpreter& interpreter, const Value& self
   }
   return native_value(
       Value::object(std::make_shared<ApplicationDomainObject>(klass, std::move(parent))));
+}
+
+ExecutionResult loader_context_construct(Interpreter& interpreter, const Value& self,
+                                         const std::vector<Value>& arguments) {
+  Class* klass = class_from_self(self);
+  if (klass == nullptr) {
+    return native_value(Value::null());
+  }
+  auto context = interpreter.make_instance(*klass);
+  define_dynamic_value(*context, "applicationDomain",
+                       argument_at(arguments, 1).is_object() ? argument_at(arguments, 1)
+                                                             : Value::null());
+  return native_value(Value::object(std::move(context)));
 }
 
 ExecutionResult ext_available(Interpreter& interpreter, const Value& self) {
@@ -284,6 +295,7 @@ ExecutionResult loader_load(Interpreter& interpreter, const Value& self,
   }
   loader->movie = std::make_shared<fo4::swf::SwfFile>(read.file);
   const std::shared_ptr<ApplicationDomainObject> domain = context_domain(argument_at(arguments, 1));
+  loader->domain = domain;
   loader->child_runtime =
       SwfRuntime::create(interpreter.runtime(), interpreter, *loader->movie, {}, domain);
   const std::shared_ptr<SwfRuntime>& child = loader->child_runtime;
@@ -310,12 +322,12 @@ ExecutionResult url_loader_load(Interpreter& interpreter, const Value& self,
   const std::optional<std::vector<std::uint8_t>> bytes =
       interpreter.runtime().host().resolve_asset(url);
   if (!bytes.has_value()) {
-    define_dynamic_string(interpreter, *self.as_object(), "data", std::string{});
+    define_dynamic_value(*self.as_object(), "data", Value::string(std::string{}));
     dispatch_type(interpreter, self, "ioError", depth);
     return native_value(Value::undefined());
   }
   const std::string text(reinterpret_cast<const char*>(bytes->data()), bytes->size());
-  define_dynamic_string(interpreter, *self.as_object(), "data", text);
+  define_dynamic_value(*self.as_object(), "data", Value::string(text));
   dispatch_type(interpreter, self, "complete", depth);
   return native_value(Value::undefined());
 }
@@ -430,6 +442,9 @@ bool try_net_native(Interpreter& interpreter, native::Id id, const Value& self,
       return true;
     case native::Id::app_domain_has_definition:
       out = app_domain_has_definition(interpreter, self, arguments);
+      return true;
+    case native::Id::loader_context_construct:
+      out = loader_context_construct(interpreter, self, arguments);
       return true;
     case native::Id::definition_by_name:
       out = definition_by_name(interpreter, self, arguments);

@@ -200,6 +200,7 @@ enum class Id : std::uint32_t {
   display_loader_info,
   app_domain_construct,
   app_domain_has_definition,
+  loader_context_construct,
 };
 
 }  // namespace fo4::avm2::native

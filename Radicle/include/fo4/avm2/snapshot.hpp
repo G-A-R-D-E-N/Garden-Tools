@@ -90,6 +90,9 @@ struct FrameSnapshot {
 /* Requires only the object itself; the matrix is its own translation, rotation and scale. */
 SnapshotMatrix local_matrix(const DisplayObject& object);
 
+/* Requires child to be local to parent; the result maps child space into the parent's space. */
+SnapshotMatrix compose_matrix(const SnapshotMatrix& parent, const SnapshotMatrix& child);
+
 /* A display tree must snapshot depth-first in child order with composed transforms. */
 FrameSnapshot build_frame_snapshot(const DisplayObject& root);
 

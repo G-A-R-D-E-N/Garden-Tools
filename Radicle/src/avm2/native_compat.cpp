@@ -5,6 +5,7 @@
 #include <fo4/avm2/hit_test.hpp>
 #include <fo4/avm2/interpreter.hpp>
 #include <fo4/avm2/name.hpp>
+#include <fo4/avm2/net.hpp>
 #include <fo4/avm2/object.hpp>
 #include <fo4/avm2/runtime.hpp>
 #include <fo4/avm2/value.hpp>
@@ -335,14 +336,16 @@ ExecutionResult display_transform_set(Interpreter& interpreter, const Value& sel
   return native_value(Value::undefined());
 }
 
-Value make_loader_info(Interpreter& interpreter) {
+Value make_loader_info(Interpreter& interpreter,
+                       const std::shared_ptr<ApplicationDomainObject>& domain) {
   Class* info_class = find_class(interpreter, "flash.display::LoaderInfo");
   Class* object_class = find_class(interpreter, "Object");
   if (info_class == nullptr || object_class == nullptr) {
     return Value::null();
   }
   auto info = interpreter.make_instance(*info_class);
-  set_property(*info, "applicationDomain", Value::object(interpreter.runtime().current_domain()));
+  set_property(*info, "applicationDomain",
+               Value::object(domain == nullptr ? interpreter.runtime().current_domain() : domain));
   set_property(*info, "parameters",
                Value::object(interpreter.make_instance(*object_class)));
   return Value::object(std::move(info));
@@ -353,7 +356,11 @@ ExecutionResult loader_content_loader_info(Interpreter& interpreter, const Value
   Object& loader = *self.as_object();
   Value existing = property_of(loader, "loaderInfo");
   if (existing.is_object()) return native_value(existing);
-  Value value = make_loader_info(interpreter);
+  std::shared_ptr<ApplicationDomainObject> domain;
+  if (const auto* movie_loader = dynamic_cast<const LoaderObject*>(&loader)) {
+    domain = movie_loader->domain;
+  }
+  Value value = make_loader_info(interpreter, domain);
   if (!value.is_object()) return native_value(Value::null());
   set_property(loader, "loaderInfo", value);
   return native_value(std::move(value));
@@ -361,7 +368,7 @@ ExecutionResult loader_content_loader_info(Interpreter& interpreter, const Value
 
 ExecutionResult display_loader_info(Interpreter& interpreter, const Value& self) {
   (void)self;
-  return native_value(make_loader_info(interpreter));
+  return native_value(make_loader_info(interpreter, nullptr));
 }
 
 ExecutionResult keyboard_is_down(Interpreter& interpreter, const std::vector<Value>& arguments) {

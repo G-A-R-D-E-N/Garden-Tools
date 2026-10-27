@@ -33,9 +33,7 @@ SnapshotMatrix local_matrix(const DisplayObject& object) {
   return matrix;
 }
 
-namespace {
-
-SnapshotMatrix compose(const SnapshotMatrix& parent, const SnapshotMatrix& child) {
+SnapshotMatrix compose_matrix(const SnapshotMatrix& parent, const SnapshotMatrix& child) {
   SnapshotMatrix result;
   result.a = parent.a * child.a + parent.c * child.b;
   result.b = parent.b * child.a + parent.d * child.b;
@@ -45,6 +43,8 @@ SnapshotMatrix compose(const SnapshotMatrix& parent, const SnapshotMatrix& child
   result.ty = parent.b * child.tx + parent.d * child.ty + parent.ty;
   return result;
 }
+
+namespace {
 
 SnapshotEntryKind entry_kind(const DisplayObject& object) {
   if (object.is_text_field()) {
@@ -108,7 +108,8 @@ SnapshotEntry make_entry(const DisplayObject& object, const std::string& path,
 
 void walk(const DisplayObject& object, const std::string& path, const SnapshotMatrix& parent,
           bool root, std::vector<SnapshotEntry>& entries) {
-  const SnapshotMatrix matrix = root ? local_matrix(object) : compose(parent, local_matrix(object));
+  const SnapshotMatrix matrix =
+      root ? local_matrix(object) : compose_matrix(parent, local_matrix(object));
   entries.push_back(make_entry(object, path, matrix));
   if (!object.is_container()) {
     return;

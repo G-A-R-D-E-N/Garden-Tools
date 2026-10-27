@@ -520,7 +520,8 @@ RuntimeStatus Runtime::install_builtins() {
   application_domain->native_constructor = static_cast<std::uint32_t>(native::Id::app_domain_construct);
   add_method(*application_domain, "getDefinition", native::Id::app_domain_get_definition, false);
   add_method(*application_domain, "hasDefinition", native::Id::app_domain_has_definition, false);
-  loader_context_class->native_constructor = static_cast<std::uint32_t>(native::Id::instance_construct);
+  loader_context_class->native_constructor =
+      static_cast<std::uint32_t>(native::Id::loader_context_construct);
   add_static_getter(*application_domain, "currentDomain", native::Id::app_domain_current);
   sound_class->native_constructor = static_cast<std::uint32_t>(native::Id::sound_construct);
   add_method(*sound_class, "load", native::Id::sound_load, false);
