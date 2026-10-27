@@ -85,7 +85,7 @@ std::vector<SubrecordGroupSpan> group_spans(const Record& record, const schema::
         span.runs.push_back(consume_run(end));
       }
       std::vector<std::size_t> counts(group.members.size());
-      // Constraint: an uncounted span closes on at most one trailing member, so its group declares only one.
+      // Invariant: an uncounted span takes at most one trailing group member after its last run.
       if (end < subs.size()) {
         const auto member = member_index(group.members, subs[end].signature);
         if (member) {
