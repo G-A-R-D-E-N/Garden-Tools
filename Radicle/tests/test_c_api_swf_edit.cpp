@@ -73,7 +73,7 @@ struct Plan {
 
   radicle_swf_tag_plan view() const {
     return radicle_swf_tag_plan{replacements.data(), replacements.size(),
-                                insertions.data(), insertions.size()};
+                                insertions.data(), insertions.size(), nullptr, 0};
   }
 };
 
