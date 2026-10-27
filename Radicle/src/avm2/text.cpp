@@ -29,6 +29,10 @@ std::size_t FontResource::glyph_index_for_code(std::uint32_t code) const {
 
 void FontRegistry::add(FontResource font) { fonts_.push_back(std::move(font)); }
 
+void FontRegistry::remove_owner(std::uint64_t owner) {
+  std::erase_if(fonts_, [owner](const FontResource& font) { return font.owner == owner; });
+}
+
 const FontResource* FontRegistry::find(std::uint64_t owner, std::uint16_t character_id) const {
   for (const FontResource& font : fonts_) {
     if (font.owner == owner && font.character_id == character_id) {

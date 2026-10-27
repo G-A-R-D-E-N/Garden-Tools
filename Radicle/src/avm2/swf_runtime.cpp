@@ -313,6 +313,12 @@ std::shared_ptr<MovieClip> build_movie_root(Runtime& runtime,
 
 const std::string& SwfRuntime::last_error() { return g_create_error; }
 
+void SwfRuntime::release_fonts() {
+  if (fonts_ != nullptr && data_ != nullptr) {
+    fonts_->remove_owner(data_->font_owner);
+  }
+}
+
 std::shared_ptr<SwfRuntime> SwfRuntime::create(Runtime& runtime, Interpreter& interpreter,
                                                const swf::SwfFile& file,
                                                const SwfRuntimeOptions& options,
@@ -346,6 +352,7 @@ std::shared_ptr<SwfRuntime> SwfRuntime::create(Runtime& runtime, Interpreter& in
 
   auto runtime_movie = std::shared_ptr<SwfRuntime>(new SwfRuntime());
   runtime_movie->runtime_ = &runtime;
+  runtime_movie->fonts_ = runtime.font_registry();
   runtime_movie->data_ = std::move(data);
   /* The movie must run only its own scripts, never ones the host already ran or is running. */
   runtime_movie->next_script_ = runtime.scripts().size();

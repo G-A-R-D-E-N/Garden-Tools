@@ -105,6 +105,8 @@ class SwfRuntime {
                                             std::shared_ptr<ApplicationDomainObject> domain = nullptr);
   /* A failed create must leave the reason available here for host diagnostics. */
   static const std::string& last_error();
+  /* Requires that no text of this movie is read after the call. */
+  void release_fonts();
 
   void advance(Interpreter& interpreter, double dt_seconds);
   /* The host must take one snapshot per rendered frame; it drains the sound queue. */
@@ -135,6 +137,7 @@ class SwfRuntime {
   std::shared_ptr<DisplayObjectContainer> stage_;
   std::shared_ptr<MovieClip> root_;
   Runtime* runtime_{nullptr};
+  std::shared_ptr<FontRegistry> fonts_;
   SoundEventQueue sounds_fallback_;
   double accumulator_{0.0};
   std::weak_ptr<DisplayObject> mouse_over_;

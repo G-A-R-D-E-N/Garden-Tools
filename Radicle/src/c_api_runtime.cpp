@@ -272,7 +272,10 @@ radicle_status radicle_runtime_open_movie_from_ba2(radicle_runtime* runtime, con
   });
 }
 
-void radicle_movie_close(radicle_movie* movie) { delete movie; }
+void radicle_movie_close(radicle_movie* movie) {
+  if (movie != nullptr) movie->movie->release_fonts();
+  delete movie;
+}
 
 radicle_status radicle_movie_advance(radicle_movie* movie, double dt_seconds) {
   clear_error();

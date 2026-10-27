@@ -3,6 +3,7 @@
 #include <fo4/avm2/display.hpp>
 #include <fo4/avm2/text.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -46,6 +47,15 @@ SnapshotMatrix compose_matrix(const SnapshotMatrix& parent, const SnapshotMatrix
 
 namespace {
 
+constexpr double kOffsetLimit = 2147483647.0;
+
+std::int32_t color_offset(double value) {
+  if (std::isnan(value)) {
+    return 0;
+  }
+  return static_cast<std::int32_t>(std::clamp(value, -kOffsetLimit - 1.0, kOffsetLimit));
+}
+
 SnapshotEntryKind entry_kind(const DisplayObject& object) {
   if (object.is_text_field()) {
     return SnapshotEntryKind::Text;
@@ -81,10 +91,10 @@ SnapshotEntry make_entry(const DisplayObject& object, const std::string& path,
   entry.color.green_multiplier = object.color_multiply()[1];
   entry.color.blue_multiplier = object.color_multiply()[2];
   entry.color.alpha_multiplier = object.color_multiply()[3] * object.alpha();
-  entry.color.red_offset = static_cast<std::int32_t>(object.color_add()[0]);
-  entry.color.green_offset = static_cast<std::int32_t>(object.color_add()[1]);
-  entry.color.blue_offset = static_cast<std::int32_t>(object.color_add()[2]);
-  entry.color.alpha_offset = static_cast<std::int32_t>(object.color_add()[3]);
+  entry.color.red_offset = color_offset(object.color_add()[0]);
+  entry.color.green_offset = color_offset(object.color_add()[1]);
+  entry.color.blue_offset = color_offset(object.color_add()[2]);
+  entry.color.alpha_offset = color_offset(object.color_add()[3]);
   entry.filter_count = object.filters().size();
   if (object.is_text_field()) {
     const auto& text_field = static_cast<const TextFieldObject&>(object);

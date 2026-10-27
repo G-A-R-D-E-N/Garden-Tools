@@ -31,6 +31,8 @@ struct FontResource {
 class FontRegistry {
  public:
   void add(FontResource font);
+  /* Requires a nonzero movie owner key; the remaining fonts keep their registration order. */
+  void remove_owner(std::uint64_t owner);
   /* Requires the owner key of the movie that holds the text; find never crosses owners, and owner 0 (script-made text) matches any owner in find_by_name and first_with_layout. */
   const FontResource* find(std::uint64_t owner, std::uint16_t character_id) const;
   const FontResource* find_by_name(std::uint64_t owner, std::string_view name) const;
