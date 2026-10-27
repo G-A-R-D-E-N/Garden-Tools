@@ -48,6 +48,12 @@ class DisplayObject : public Object, public std::enable_shared_from_this<Display
   void set_rotation(double value) noexcept { rotation_ = value; }
   double alpha() const noexcept { return alpha_; }
   void set_alpha(double value) noexcept { alpha_ = value; }
+
+  const std::vector<Value>& filters() const noexcept { return filters_; }
+  std::vector<Value>& filters() noexcept { return filters_; }
+  /* A Bitmap must keep the BitmapData the script assigned, so a snapshot can report it. */
+  const Value& bitmap_data() const noexcept { return bitmap_data_; }
+  void set_bitmap_data(Value value) { bitmap_data_ = std::move(value); }
   double width() const noexcept { return width_; }
   void set_width(double value) noexcept { width_ = value; }
   double height() const noexcept { return height_; }
@@ -107,6 +113,8 @@ class DisplayObject : public Object, public std::enable_shared_from_this<Display
   double scale_y_{1.0};
   double rotation_{0.0};
   double alpha_{1.0};
+  std::vector<Value> filters_;
+  Value bitmap_data_;
   double width_{0.0};
   double height_{0.0};
   bool visible_{true};

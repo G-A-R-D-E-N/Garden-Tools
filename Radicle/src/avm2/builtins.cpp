@@ -444,6 +444,25 @@ RuntimeStatus Runtime::install_builtins() {
     klass.instance_traits.push_back(std::move(setter_trait));
   };
 
+  const auto add_static_constant = [](Class& klass, std::string name, std::uint32_t value) {
+    Property& property = klass.class_object->define_own_property(primary_key(package_name(name)));
+    property.kind = PropertyKind::Value;
+    property.value = Value::uint32(value);
+  };
+
+  const auto add_static_setter = [](Class& klass, std::string name, native::Id id) {
+    auto function = std::make_shared<FunctionObject>(name, nullptr, kNoMethod);
+    function->set_native_id(static_cast<std::uint32_t>(id));
+    function->set_owner_class(&klass);
+    Trait trait;
+    trait.multiname = package_name(name);
+    trait.kind = TraitKind::Setter;
+    trait.disp_id = 0;
+    trait.method_index = kNoMethod;
+    trait.function = std::move(function);
+    klass.class_traits.push_back(std::move(trait));
+  };
+
   const auto add_static_getter = [](Class& klass, std::string name, native::Id id) {
     auto function = std::make_shared<FunctionObject>(name, nullptr, kNoMethod);
     function->set_native_id(static_cast<std::uint32_t>(id));
@@ -505,6 +524,75 @@ RuntimeStatus Runtime::install_builtins() {
   add_method(*shared_object_class, "clear", native::Id::shared_clear, false);
   add_method(*shared_object_class, "close", native::Id::shared_close, false);
 
+  Class* bitmap_data_class = add_builtin_class("BitmapData", "flash.display", object_class);
+  Class* frame_label_class = add_builtin_class("FrameLabel", "flash.display", object_class);
+  Class* mouse_class = add_builtin_class("Mouse", "flash.ui", object_class);
+  Class* sound_mixer_class = add_builtin_class("SoundMixer", "flash.media", object_class);
+  Class* bitmap_filter_class = add_builtin_class("BitmapFilter", "flash.filters", object_class);
+  Class* blur_filter_class = add_builtin_class("BlurFilter", "flash.filters", object_class);
+  Class* glow_filter_class = add_builtin_class("GlowFilter", "flash.filters", object_class);
+  Class* shadow_filter_class = add_builtin_class("DropShadowFilter", "flash.filters", object_class);
+  Class* matrix_filter_class =
+      add_builtin_class("ColorMatrixFilter", "flash.filters", object_class);
+  if (bitmap_data_class == nullptr || frame_label_class == nullptr || mouse_class == nullptr ||
+      sound_mixer_class == nullptr || bitmap_filter_class == nullptr ||
+      blur_filter_class == nullptr || glow_filter_class == nullptr ||
+      shadow_filter_class == nullptr || matrix_filter_class == nullptr) {
+    return RuntimeStatus::InvalidTrait;
+  }
+  bitmap_data_class->native_constructor = static_cast<std::uint32_t>(native::Id::compat_construct);
+  for (const char* method : {"dispose", "lock", "unlock", "fillRect", "setPixel", "setPixel32",
+                             "copyPixels", "draw", "applyFilter", "scroll", "noise", "threshold",
+                             "perlinNoise"}) {
+    add_method(*bitmap_data_class, method, native::Id::compat_undefined, false);
+  }
+  add_method(*bitmap_data_class, "getPixel", native::Id::compat_number, false);
+  add_method(*bitmap_data_class, "getPixel32", native::Id::compat_number, false);
+  add_method(*bitmap_data_class, "rect", native::Id::compat_rect, false);
+  add_method(*bitmap_data_class, "getRect", native::Id::compat_rect, false);
+  add_method(*bitmap_data_class, "clone", native::Id::compat_null, false);
+  if (bitmap != nullptr) {
+    bitmap->native_constructor = static_cast<std::uint32_t>(native::Id::compat_construct);
+  }
+  frame_label_class->native_constructor = static_cast<std::uint32_t>(native::Id::compat_construct);
+  mouse_class->native_constructor = static_cast<std::uint32_t>(native::Id::instance_construct);
+  add_method(*mouse_class, "hide", native::Id::compat_undefined, true);
+  add_method(*mouse_class, "show", native::Id::compat_undefined, true);
+  sound_mixer_class->native_constructor = static_cast<std::uint32_t>(native::Id::instance_construct);
+  add_static_getter(*sound_mixer_class, "soundTransform", native::Id::compat_static_get);
+  add_static_setter(*sound_mixer_class, "soundTransform", native::Id::compat_static_set);
+  add_method(*sound_mixer_class, "stopAll", native::Id::compat_undefined, true);
+  for (Class* filter : {bitmap_filter_class, blur_filter_class, glow_filter_class,
+                        shadow_filter_class, matrix_filter_class}) {
+    filter->native_constructor = static_cast<std::uint32_t>(native::Id::compat_construct);
+    add_method(*filter, "clone", native::Id::compat_null, false);
+  }
+  if (keyboard_class != nullptr) {
+    add_method(*keyboard_class, "isDown", native::Id::compat_false, true);
+    add_static_constant(*keyboard_class, "SPACE", 32);
+    add_static_constant(*keyboard_class, "ENTER", 13);
+    add_static_constant(*keyboard_class, "ESCAPE", 27);
+    add_static_constant(*keyboard_class, "BACKSPACE", 8);
+    add_static_constant(*keyboard_class, "TAB", 9);
+    add_static_constant(*keyboard_class, "SHIFT", 16);
+    add_static_constant(*keyboard_class, "CONTROL", 17);
+    add_static_constant(*keyboard_class, "DELETE", 46);
+    add_static_constant(*keyboard_class, "LEFT", 37);
+    add_static_constant(*keyboard_class, "UP", 38);
+    add_static_constant(*keyboard_class, "RIGHT", 39);
+    add_static_constant(*keyboard_class, "DOWN", 40);
+    for (std::uint32_t index = 0; index < 26; ++index) {
+      add_static_constant(*keyboard_class, std::string(1, static_cast<char>('A' + index)),
+                          65 + index);
+    }
+    for (std::uint32_t index = 0; index < 10; ++index) {
+      add_static_constant(*keyboard_class, "NUMBER_" + std::to_string(index), 48 + index);
+    }
+    for (std::uint32_t index = 0; index < 12; ++index) {
+      add_static_constant(*keyboard_class, "F" + std::to_string(index + 1), 112 + index);
+    }
+  }
+
   const auto add_global_function = [this](std::string name, native::Id id) {
     auto function = std::make_shared<FunctionObject>(name, nullptr, kNoMethod);
     function->set_native_id(static_cast<std::uint32_t>(id));
@@ -528,6 +616,25 @@ RuntimeStatus Runtime::install_builtins() {
   add_global_function("getDefinitionByName", native::Id::definition_by_name);
   add_global_function("getQualifiedClassName", native::Id::qualified_class_name);
   add_global_function("getQualifiedSuperclassName", native::Id::qualified_superclass_name);
+  const auto add_global_function_ns = [this](std::string name, std::string package,
+                                             native::Id id) {
+    auto function = std::make_shared<FunctionObject>(name, nullptr, kNoMethod);
+    function->set_native_id(static_cast<std::uint32_t>(id));
+    bind_function_class(*function);
+    Namespace name_space;
+    name_space.kind = NamespaceKind::Package;
+    name_space.name = std::move(package);
+    Key key;
+    key.name_space = std::move(name_space);
+    key.name = std::move(name);
+    Property& property = global_object_->define_own_property(key);
+    property.kind = PropertyKind::Value;
+    property.value = Value::object(std::move(function));
+  };
+  add_global_function_ns("getQualifiedClassName", "flash.utils", native::Id::qualified_class_name);
+  add_global_function_ns("getQualifiedSuperclassName", "flash.utils",
+                         native::Id::qualified_superclass_name);
+  add_global_function_ns("getTimer", "flash.utils", native::Id::get_timer);
 
   const auto add_global_value = [this](std::string name, Value value) {
     Property& property = global_object_->define_own_property(primary_key(package_name(name)));

@@ -71,6 +71,7 @@ SnapshotEntry make_entry(const DisplayObject& object, const std::string& path,
   entry.name = object.name();
   entry.matrix = matrix;
   entry.color.alpha_multiplier = object.alpha();
+  entry.filter_count = object.filters().size();
   if (object.is_text_field()) {
     const auto& text_field = static_cast<const TextFieldObject&>(object);
     for (const TextRun& run : text_field.runs()) {
@@ -169,6 +170,7 @@ std::uint64_t snapshot_hash(const FrameSnapshot& snapshot) {
     hasher.i32(entry.color.green_offset);
     hasher.i32(entry.color.blue_offset);
     hasher.i32(entry.color.alpha_offset);
+    hasher.u32(static_cast<std::uint32_t>(entry.filter_count));
     hasher.u32(static_cast<std::uint32_t>(entry.runs.size()));
     for (const SnapshotTextRun& run : entry.runs) {
       hasher.u16(run.font_id);

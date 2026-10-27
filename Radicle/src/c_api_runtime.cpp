@@ -187,6 +187,7 @@ void fill_entry(const fo4::avm2::SnapshotEntry& source, radicle_runtime_entry& o
   out.colour[6] = static_cast<double>(source.color.blue_offset);
   out.colour[7] = static_cast<double>(source.color.alpha_offset);
   out.run_count = source.runs.size();
+  out.filter_count = source.filter_count;
 }
 
 }  // namespace

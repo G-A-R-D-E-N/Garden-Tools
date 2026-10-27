@@ -316,6 +316,7 @@ add_library(fo4
   src/avm2/amf.cpp
   src/avm2/replay.cpp
   src/avm2/native_shared.cpp
+  src/avm2/native_compat.cpp
   src/avm2/events.cpp
   src/avm2/native_events.cpp
   src/avm2/text.cpp
@@ -787,6 +788,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_avm2_shared.cpp
     tests/test_c_api_runtime.cpp
     tests/test_c_api_runtime_real.cpp
+    tests/test_avm2_compat.cpp
     tests/test_avm2_events.cpp
     tests/test_avm2_text.cpp
     tests/test_swf_fonts.cpp

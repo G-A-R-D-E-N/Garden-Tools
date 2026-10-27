@@ -329,6 +329,16 @@ bool read_display_property(Interpreter& interpreter, DisplayObject& object,
     out = Value::boolean(object.visible());
     return true;
   }
+  if (name == "filters") {
+    auto array = std::make_shared<ArrayObject>();
+    array->elements() = object.filters();
+    out = Value::object(std::move(array));
+    return true;
+  }
+  if (name == "bitmapData") {
+    out = object.bitmap_data();
+    return true;
+  }
   if (name == "name") {
     out = Value::string(object.name());
     return true;
@@ -521,6 +531,18 @@ bool write_display_property(DisplayObject& object, const Multiname& multiname,
   }
   if (name == "visible") {
     object.set_visible(to_boolean(value));
+    return true;
+  }
+  if (name == "filters") {
+    object.filters().clear();
+    if (value.is_object() && value.as_object()->kind() == ObjectKind::Array) {
+      const auto& array = static_cast<const ArrayObject&>(*value.as_object());
+      object.filters() = array.elements();
+    }
+    return true;
+  }
+  if (name == "bitmapData") {
+    object.set_bitmap_data(value);
     return true;
   }
   if (name == "name") {

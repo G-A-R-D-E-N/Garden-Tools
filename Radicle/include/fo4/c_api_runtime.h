@@ -65,6 +65,7 @@ typedef struct radicle_runtime_entry {
   double colour[8]; /* red/green/blue/alpha multipliers then offsets */
   size_t run_count;
   const radicle_runtime_run* runs; /* must stay valid until the snapshot is destroyed */
+  size_t filter_count;
 } radicle_runtime_entry;
 
 typedef struct radicle_runtime_sound {

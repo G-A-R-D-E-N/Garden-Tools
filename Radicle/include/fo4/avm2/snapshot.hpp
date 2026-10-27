@@ -74,6 +74,7 @@ struct SnapshotEntry {
   SnapshotMatrix matrix;
   SnapshotColorTransform color;
   std::vector<SnapshotTextRun> runs;
+  std::size_t filter_count{0};
 
   bool operator==(const SnapshotEntry&) const = default;
 };

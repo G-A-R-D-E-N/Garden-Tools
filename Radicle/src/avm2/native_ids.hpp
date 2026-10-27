@@ -164,6 +164,14 @@ enum class Id : std::uint32_t {
   shared_flush,
   shared_clear,
   shared_close,
+  compat_construct,
+  compat_rect,
+  compat_number,
+  compat_false,
+  compat_undefined,
+  compat_null,
+  compat_static_get,
+  compat_static_set,
 };
 
 }  // namespace fo4::avm2::native
