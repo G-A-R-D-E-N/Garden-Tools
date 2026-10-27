@@ -16,11 +16,6 @@
 namespace fo4ide::plugin {
 namespace {
 
-std::string stringArgument(const nlohmann::json& args, std::size_t index) {
-    if (!args.is_array() || index >= args.size() || !args[index].is_string()) return {};
-    return args[index].get<std::string>();
-}
-
 bool stringFieldIfPresent(const nlohmann::json& object, const char* key, std::string& value) {
     value.clear();
     const auto field = object.find(key);
@@ -48,8 +43,8 @@ struct BatchItem {
 
 Result<nlohmann::json> RadiclePluginBackend::copyAsOverrideMany(
     const nlohmann::json& arguments) {
-    const auto itemsText = stringArgument(arguments, 0);
-    const auto targetName = stringArgument(arguments, 1);
+    const auto itemsText = support::stringArgument(arguments, 0);
+    const auto targetName = support::stringArgument(arguments, 1);
     bool overwrite = false;
 
     if (itemsText.empty()) {
