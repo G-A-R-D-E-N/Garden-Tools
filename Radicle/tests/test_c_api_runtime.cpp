@@ -152,6 +152,101 @@ std::vector<std::uint64_t> run_replay(const std::vector<std::byte>& movie_bytes,
   return hashes;
 }
 
+abc::AbcTrait method_trait(std::uint32_t name, std::uint32_t method) {
+  abc::AbcTrait trait;
+  trait.name = name;
+  trait.kind = abc::AbcTraitKind::Method;
+  trait.method_index = method;
+  return trait;
+}
+
+abc::AbcFile member_root_file() {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t root = script.multiname("MemberRoot");
+  const std::uint32_t movie_clip = script.multiname("MovieClip", "flash.display");
+  const std::uint32_t string_type = script.multiname("String");
+  const std::uint32_t number_type = script.multiname("Number");
+  const std::uint32_t plain = script.multiname("Plain");
+  const std::uint32_t ping_name = script.multiname("Ping");
+  const std::uint32_t add_name = script.multiname("Add");
+  avm2_test::CodeBuilder constructor;
+  constructor.getlocal0();
+  constructor.pushscope();
+  constructor.getlocal0();
+  constructor.pushstring(script.string_of("text"));
+  constructor.initproperty(plain);
+  constructor.returnvoid();
+  const std::uint32_t constructor_method = script.method("MemberRoot", constructor.bytes(), 1);
+  avm2_test::CodeBuilder ping;
+  ping.getlocal(1);
+  ping.returnvalue();
+  const std::uint32_t ping_method = script.method("Ping", ping.bytes(), 2);
+  avm2_test::CodeBuilder add;
+  add.getlocal(1);
+  add.getlocal(2);
+  add.add();
+  add.returnvalue();
+  const std::uint32_t add_method = script.method("Add", add.bytes(), 3);
+  const std::uint32_t class_init = script.method("cinit", {0x47}, 1);
+  const std::uint32_t script_init = script.method("init", {0x47}, 1);
+  abc::AbcFile file = script.finish(script_init);
+  file.methods[ping_method].param_count = 1;
+  file.methods[ping_method].param_types = {string_type};
+  file.methods[ping_method].return_type = string_type;
+  file.methods[add_method].param_count = 2;
+  file.methods[add_method].param_types = {number_type, number_type};
+  file.methods[add_method].return_type = number_type;
+
+  abc::AbcInstanceInfo instance;
+  instance.name = root;
+  instance.super_index = movie_clip;
+  instance.iinit = constructor_method;
+  instance.traits = {method_trait(ping_name, ping_method), method_trait(add_name, add_method)};
+  file.instances.push_back(instance);
+  abc::AbcClassInfo klass;
+  klass.cinit = class_init;
+  file.classes.push_back(klass);
+  abc::AbcTrait class_trait;
+  class_trait.name = root;
+  class_trait.kind = abc::AbcTraitKind::Class;
+  class_trait.class_index = 0;
+  file.scripts.front().traits.push_back(class_trait);
+  return file;
+}
+
+std::vector<std::byte> member_root_movie() {
+  abc::AbcFile file = member_root_file();
+  std::vector<std::uint8_t> abc_bytes;
+  EXPECT_EQ(file.serialize(abc_bytes), abc::AbcStatus::Ok);
+  SwfBuilder abc_payload;
+  abc_payload.u32(0);
+  abc_payload.text("members");
+  abc_payload.bytes(std::span<const std::byte>(reinterpret_cast<const std::byte*>(abc_bytes.data()),
+                                               abc_bytes.size()));
+  SwfBuilder symbols;
+  symbols.u16(1);
+  symbols.u16(0);
+  symbols.text("MemberRoot");
+  SwfBuilder builder;
+  builder.rect(0, 200, 0, 100, 9);
+  builder.u16(24u * 256u);
+  builder.u16(1);
+  builder.tag(fo4::swf::tag::kDoAbc2, abc_payload.body, true);
+  builder.tag(fo4::swf::tag::kSymbolClass, symbols.body, false);
+  builder.tag(fo4::swf::tag::kShowFrame);
+  builder.tag(fo4::swf::tag::kEnd);
+  return swf_test::wrap_body(builder.body, 10, false, false);
+}
+
+MovieHandle open_member_movie(radicle_runtime* runtime, const std::vector<std::byte>& bytes) {
+  radicle_movie* raw_movie = nullptr;
+  EXPECT_EQ(radicle_runtime_open_movie(runtime, reinterpret_cast<const std::uint8_t*>(bytes.data()),
+                                       bytes.size(), &raw_movie),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  return MovieHandle(raw_movie);
+}
+
 }  // namespace
 
 TEST(CApiRuntime, AdvancingProducesAStableSnapshotSequence) {
@@ -227,4 +322,78 @@ TEST(CApiRuntime, RejectsAnOutOfRangeInputKind) {
   radicle_runtime_input input{};
   input.kind = 200;
   EXPECT_EQ(radicle_movie_input(movie.get(), &input), RADICLE_STATUS_INVALID_ARGUMENT);
+}
+
+TEST(CApiRuntime, MovieCallReturnsTypedResultsFromTheRootMethods) {
+  radicle_runtime_host host{};
+  radicle_runtime* raw_runtime = nullptr;
+  ASSERT_EQ(radicle_runtime_open(&host, &raw_runtime), RADICLE_STATUS_OK) << radicle_last_error();
+  RuntimeHandle runtime(raw_runtime);
+  const std::vector<std::byte> bytes = member_root_movie();
+  MovieHandle movie = open_member_movie(runtime.get(), bytes);
+  ASSERT_NE(movie.get(), nullptr) << radicle_last_error();
+
+  radicle_call_arg text{};
+  text.kind = RADICLE_CALL_ARG_STRING;
+  text.text = "hello";
+  uint8_t* out_text = nullptr;
+  size_t out_size = 0;
+  ASSERT_EQ(radicle_movie_call(movie.get(), "Ping", &text, 1, &out_text, &out_size),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  ASSERT_NE(out_text, nullptr);
+  EXPECT_EQ(std::string(reinterpret_cast<const char*>(out_text), out_size), "hello");
+  radicle_free_bytes(out_text);
+
+  radicle_call_arg numbers[2]{};
+  numbers[0].kind = RADICLE_CALL_ARG_NUMBER;
+  numbers[0].number = 2.0;
+  numbers[1].kind = RADICLE_CALL_ARG_NUMBER;
+  numbers[1].number = 3.0;
+  out_text = nullptr;
+  ASSERT_EQ(radicle_movie_call(movie.get(), "Add", numbers, 2, &out_text, &out_size),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  ASSERT_NE(out_text, nullptr);
+  EXPECT_EQ(std::string(reinterpret_cast<const char*>(out_text), out_size), "5");
+  radicle_free_bytes(out_text);
+
+  radicle_call_arg nothing{};
+  nothing.kind = RADICLE_CALL_ARG_NULL;
+  out_text = nullptr;
+  out_size = 99;
+  EXPECT_EQ(radicle_movie_call(movie.get(), "Ping", &nothing, 1, &out_text, &out_size),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_EQ(out_text, nullptr);
+  EXPECT_EQ(out_size, 0u);
+}
+
+TEST(CApiRuntime, MovieCallFailsCleanlyForAbsentOrNonMethodMembers) {
+  radicle_runtime_host host{};
+  radicle_runtime* raw_runtime = nullptr;
+  ASSERT_EQ(radicle_runtime_open(&host, &raw_runtime), RADICLE_STATUS_OK) << radicle_last_error();
+  RuntimeHandle runtime(raw_runtime);
+  const std::vector<std::byte> bytes = member_root_movie();
+  MovieHandle movie = open_member_movie(runtime.get(), bytes);
+  ASSERT_NE(movie.get(), nullptr) << radicle_last_error();
+
+  uint8_t* out_text = nullptr;
+  size_t out_size = 0;
+  EXPECT_EQ(radicle_movie_call(movie.get(), "NoSuchMember", nullptr, 0, &out_text, &out_size),
+            RADICLE_STATUS_NOT_FOUND);
+  EXPECT_NE(std::string(radicle_last_error()).find("NoSuchMember"), std::string::npos);
+  EXPECT_EQ(out_text, nullptr);
+
+  EXPECT_EQ(radicle_movie_call(movie.get(), "Plain", nullptr, 0, &out_text, &out_size),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_NE(std::string(radicle_last_error()).find("not a method"), std::string::npos);
+  EXPECT_EQ(out_text, nullptr);
+
+  radicle_call_arg bad{};
+  bad.kind = 200;
+  EXPECT_EQ(radicle_movie_call(movie.get(), "Ping", &bad, 1, &out_text, &out_size),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_movie_call(movie.get(), nullptr, nullptr, 0, &out_text, &out_size),
+            RADICLE_STATUS_INVALID_ARGUMENT);
 }

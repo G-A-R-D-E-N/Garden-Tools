@@ -17,6 +17,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace fo4::avm2 {
@@ -110,6 +111,9 @@ class SwfRuntime {
   void release_fonts();
 
   void advance(Interpreter& interpreter, double dt_seconds);
+  /* Requires a linked, created movie; an absent or non-method member fails with its reason and must not throw. */
+  ExecutionResult call_root(Interpreter& interpreter, std::string_view name,
+                            const std::vector<Value>& args);
   /* The host must take one snapshot per rendered frame; it drains the sound queue. */
   FrameSnapshot take_snapshot();
   FrameSnapshot snapshot() const;

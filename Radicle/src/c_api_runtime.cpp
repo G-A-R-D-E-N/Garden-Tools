@@ -3,6 +3,7 @@
 #include "c_api_env_internal.hpp"
 #include "c_api_internal.hpp"
 #include "fo4/abc/abc.hpp"
+#include "fo4/avm2/coercion.hpp"
 #include "fo4/avm2/host.hpp"
 #include "fo4/avm2/interpreter.hpp"
 #include "fo4/avm2/replay.hpp"
@@ -215,6 +216,28 @@ void fill_entry(const fo4::avm2::SnapshotEntry& source, radicle_runtime_entry& o
   out.filter_count = source.filter_count;
 }
 
+std::optional<fo4::avm2::Value> call_argument(const radicle_call_arg& argument) {
+  switch (argument.kind) {
+    case RADICLE_CALL_ARG_NULL:
+      return fo4::avm2::Value::null();
+    case RADICLE_CALL_ARG_BOOLEAN:
+      return fo4::avm2::Value::boolean(argument.flag != 0);
+    case RADICLE_CALL_ARG_NUMBER:
+      return fo4::avm2::Value::number(argument.number);
+    case RADICLE_CALL_ARG_STRING:
+      if (argument.text == nullptr) return std::nullopt;
+      return fo4::avm2::Value::string(argument.text);
+    default:
+      return std::nullopt;
+  }
+}
+
+radicle_status call_failure_status(fo4::avm2::InterpreterStatus status) {
+  if (status == fo4::avm2::InterpreterStatus::NoSuchProperty) return RADICLE_STATUS_NOT_FOUND;
+  if (status == fo4::avm2::InterpreterStatus::CannotCall) return RADICLE_STATUS_INVALID_ARGUMENT;
+  return RADICLE_STATUS_INTERNAL_ERROR;
+}
+
 }  // namespace
 
 extern "C" {
@@ -402,6 +425,47 @@ radicle_status radicle_movie_replay(radicle_movie* movie, const radicle_runtime_
       out_hashes[index] = result.frame_hashes[index];
     }
     *out_hash_count = result.frame_hashes.size();
+    return RADICLE_STATUS_OK;
+  });
+}
+
+radicle_status radicle_movie_call(radicle_movie* movie, const char* member_name,
+                                  const radicle_call_arg* arguments, size_t argument_count,
+                                  uint8_t** out_text, size_t* out_size) {
+  clear_error();
+  if (out_text) *out_text = nullptr;
+  if (out_size) *out_size = 0;
+  if (movie == nullptr || movie->movie == nullptr || movie->owner == nullptr ||
+      member_name == nullptr || out_text == nullptr || out_size == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                "movie, member_name, out_text and out_size are required");
+  }
+  if (argument_count != 0 && arguments == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "arguments are missing");
+  }
+  return guarded("unknown exception while calling a movie member", [&] {
+    std::vector<fo4::avm2::Value> values;
+    values.reserve(argument_count);
+    for (size_t index = 0; index < argument_count; ++index) {
+      std::optional<fo4::avm2::Value> value = call_argument(arguments[index]);
+      if (!value) {
+        return fail(RADICLE_STATUS_INVALID_ARGUMENT, "an argument kind or string is invalid");
+      }
+      values.push_back(std::move(*value));
+    }
+    const fo4::avm2::ExecutionResult result =
+        movie->movie->call_root(movie->owner->interpreter, member_name, values);
+    if (!result.ok()) return fail(call_failure_status(result.status), result.message.c_str());
+    if (result.value.is_nullish()) return RADICLE_STATUS_OK;
+    const std::string text = fo4::avm2::to_string(result.value);
+    auto* buffer = static_cast<std::uint8_t*>(std::malloc(text.size() + 1));
+    if (buffer == nullptr) {
+      return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to allocate the call result");
+    }
+    std::memcpy(buffer, text.data(), text.size());
+    buffer[text.size()] = 0;
+    *out_text = buffer;
+    *out_size = text.size();
     return RADICLE_STATUS_OK;
   });
 }

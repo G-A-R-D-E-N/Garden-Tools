@@ -449,6 +449,29 @@ std::shared_ptr<SwfRuntime> SwfRuntime::create(Runtime& runtime, Interpreter& in
   return runtime_movie;
 }
 
+ExecutionResult SwfRuntime::call_root(Interpreter& interpreter, std::string_view name,
+                                      const std::vector<Value>& args) {
+  ExecutionResult failure;
+  if (root_ == nullptr) {
+    failure.status = InterpreterStatus::NotLinked;
+    failure.message = "the movie has no root clip";
+    return failure;
+  }
+  const PropertyLookup lookup = root_->lookup(builtin_name(name));
+  if (!lookup.found()) {
+    failure.status = InterpreterStatus::NoSuchProperty;
+    failure.message = "the movie root has no member " + std::string{name};
+    return failure;
+  }
+  if (lookup.kind != LookupKind::Method || lookup.trait == nullptr ||
+      lookup.trait->function == nullptr) {
+    failure.status = InterpreterStatus::CannotCall;
+    failure.message = "the movie root member " + std::string{name} + " is not a method";
+    return failure;
+  }
+  return interpreter.call_function(*lookup.trait->function, Value::object(root_), args, 0);
+}
+
 void SwfRuntime::advance(Interpreter& interpreter, double dt_seconds) {
   interpreter.advance_host_time(dt_seconds * 1000.0);
   if (!playing_ || root_ == nullptr || !started_) {

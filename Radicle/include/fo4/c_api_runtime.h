@@ -96,6 +96,21 @@ typedef struct radicle_runtime_input {
   int32_t delta;
 } radicle_runtime_input;
 
+typedef enum radicle_call_arg_kind {
+  RADICLE_CALL_ARG_NULL = 0,
+  RADICLE_CALL_ARG_BOOLEAN = 1,
+  RADICLE_CALL_ARG_NUMBER = 2,
+  RADICLE_CALL_ARG_STRING = 3,
+} radicle_call_arg_kind;
+
+/* Only the field named by kind is read; text must stay valid until radicle_movie_call returns. */
+typedef struct radicle_call_arg {
+  uint8_t kind; /* radicle_call_arg_kind */
+  int32_t flag;
+  double number;
+  const char* text; /* UTF-8, NUL-terminated */
+} radicle_call_arg;
+
 RADICLE_API radicle_status radicle_runtime_open(const radicle_runtime_host* host,
                                                 radicle_runtime** out_runtime);
 RADICLE_API void radicle_runtime_close(radicle_runtime* runtime);
@@ -127,6 +142,11 @@ RADICLE_API radicle_status radicle_movie_replay(radicle_movie* movie,
                                                 size_t input_count, double frame_dt_seconds,
                                                 size_t frame_count, uint64_t* out_hashes,
                                                 size_t hash_capacity, size_t* out_hash_count);
+/* The member must be a public method of the root clip; the result text is released with radicle_free_bytes, and undefined or null returns NULL with size 0. */
+RADICLE_API radicle_status radicle_movie_call(radicle_movie* movie, const char* member_name,
+                                              const radicle_call_arg* arguments,
+                                              size_t argument_count, uint8_t** out_text,
+                                              size_t* out_size);
 
 #ifdef __cplusplus
 }
