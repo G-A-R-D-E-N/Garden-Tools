@@ -7,9 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
-#include <iomanip>
 #include <map>
-#include <sstream>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -27,13 +25,6 @@ std::string renumberStringArgument(const nlohmann::json& args, std::size_t index
     return args[index].get<std::string>();
 }
 
-bool renumberBoolArgument(const nlohmann::json& args,
-                          std::size_t index,
-                          bool fallback = false) {
-    if (!args.is_array() || index >= args.size() || !args[index].is_boolean()) return fallback;
-    return args[index].get<bool>();
-}
-
 bool topLevelContains(const fo4::Plugin& plugin, const fo4::FormKey& key) {
     for (const auto& group : plugin.groups) {
         if (group.header.group_type != static_cast<std::int32_t>(fo4::GroupType::top)) continue;
@@ -45,19 +36,13 @@ bool topLevelContains(const fo4::Plugin& plugin, const fo4::FormKey& key) {
     return false;
 }
 
-std::string localHex(std::uint32_t value) {
-    std::ostringstream out;
-    out << std::uppercase << std::hex << std::setw(6) << std::setfill('0') << value;
-    return out.str();
-}
-
 }  // namespace
 
 Result<nlohmann::json> RadiclePluginBackend::renumberPluginFormIds(
     const nlohmann::json& arguments) {
     const auto pluginName = renumberStringArgument(arguments, 0);
     auto startText = renumberStringArgument(arguments, 1);
-    const bool apply = renumberBoolArgument(arguments, 2, false);
+    const bool apply = support::boolArgument(arguments, 2);
 
     if (pluginName.empty() || startText.empty()) {
         return std::unexpected(Error{
@@ -108,8 +93,8 @@ Result<nlohmann::json> RadiclePluginBackend::renumberPluginFormIds(
     if (start < lowest || end64 > highest) {
         return std::unexpected(Error{
             "RenumberRangeInvalid",
-            "Requested range " + localHex(start) + "-" +
-                localHex(static_cast<std::uint32_t>(std::min<std::uint64_t>(end64, 0xFFFFFFu))) +
+            "Requested range " + support::localHex(start) + "-" +
+                support::localHex(static_cast<std::uint32_t>(std::min<std::uint64_t>(end64, 0xFFFFFFu))) +
                 " is outside this plugin's allowed local FormID range"
         });
     }
@@ -131,7 +116,7 @@ Result<nlohmann::json> RadiclePluginBackend::renumberPluginFormIds(
     if (mappings.empty()) {
         return nlohmann::json(
             "'" + pluginName + "' is already numbered consecutively from " +
-            localHex(start) + "; nothing to do.");
+            support::localHex(start) + "; nothing to do.");
     }
 
     std::map<fo4::FormKey, std::size_t> movingByOldKey;
@@ -165,7 +150,7 @@ Result<nlohmann::json> RadiclePluginBackend::renumberPluginFormIds(
         return nlohmann::json(
             "DRY RUN: would renumber " + std::to_string(mappings.size()) + " of " +
             std::to_string(nativeKeys.size()) + " record(s) in " + pluginName + " into " +
-            localHex(start) + "-" + localHex(static_cast<std::uint32_t>(end64)) +
+            support::localHex(start) + "-" + support::localHex(static_cast<std::uint32_t>(end64)) +
             ", repointing every supported in-plugin reference. References from OTHER plugins "
             "into this one will still point at the old ids. Re-run with apply=true.");
     }
@@ -218,8 +203,8 @@ Result<nlohmann::json> RadiclePluginBackend::renumberPluginFormIds(
         stagePluginMutationLocked(*loaded, std::move(mutated));
         return nlohmann::json(
             "Renumbered " + std::to_string(changed) + " record(s) in " + pluginName +
-            " into " + localHex(start) + "-" +
-            localHex(static_cast<std::uint32_t>(end64)) +
+            " into " + support::localHex(start) + "-" +
+            support::localHex(static_cast<std::uint32_t>(end64)) +
             " and repointed every supported in-plugin reference. References from other plugins "
             "into this one now dangle until patched. SavePlugin to persist.");
     } catch (const std::exception& error) {
