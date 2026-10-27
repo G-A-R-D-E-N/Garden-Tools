@@ -331,6 +331,7 @@ add_library(fo4
   src/avm2/swf_movie_data.cpp
   src/avm2/swf_runtime.cpp
   src/avm2/snapshot.cpp
+  src/avm2/display_snapshot.cpp
   src/avm2/hit_test.cpp
   src/avm2/amf.cpp
   src/avm2/replay.cpp
@@ -828,6 +829,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_avm2_compat.cpp
     tests/test_avm2_sound_decode.cpp
     tests/test_avm2_display_api.cpp
+    tests/test_avm2_display_snapshot.cpp
     tests/test_avm2_document_class.cpp
     tests/test_avm2_events.cpp
     tests/test_avm2_text.cpp

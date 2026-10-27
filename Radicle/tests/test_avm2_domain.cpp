@@ -209,7 +209,8 @@ TEST(Avm2Domain, HasDefinitionIsFalseForAnUnknownName) {
   EXPECT_FALSE(result.value.as_boolean());
 }
 
-ExecutionResult run_loader_script(DomainHarness& harness, bool with_context) {
+ExecutionResult run_loader_script(DomainHarness& harness, bool with_context,
+                                  bool compare_info = false) {
   avm2_test::ScriptBuilder script;
   avm2_test::CodeBuilder code;
   const std::uint32_t domain_class = script.multiname("ApplicationDomain", "flash.system");
@@ -219,6 +220,8 @@ ExecutionResult run_loader_script(DomainHarness& harness, bool with_context) {
   const std::uint32_t domain_name = script.multiname("applicationDomain");
   const std::uint32_t url_name = script.multiname("url");
   const std::uint32_t load_name = script.multiname("load");
+  const std::uint32_t content_info = script.multiname("contentLoaderInfo");
+  const std::uint32_t current_domain = script.multiname("currentDomain");
   if (with_context) {
     code.getlex(domain_class);
     code.construct(0);
@@ -248,7 +251,19 @@ ExecutionResult run_loader_script(DomainHarness& harness, bool with_context) {
     code.callproperty(load_name, 1);
   }
   code.pop();
-  if (with_context) {
+  if (compare_info) {
+    code.getlocal(4);
+    code.getproperty(content_info);
+    code.getproperty(domain_name);
+    if (with_context) {
+      code.getlocal(1);
+    } else {
+      code.getlex(domain_class);
+      code.getproperty(current_domain);
+    }
+    code.strictequals();
+    code.returnvalue();
+  } else if (with_context) {
     code.getlocal(1);
     code.returnvalue();
   } else {
@@ -281,6 +296,48 @@ TEST(Avm2Domain, LoaderWithoutAContextLoadsIntoTheCurrentDomain) {
   ASSERT_TRUE(result.ok()) << result.message;
   EXPECT_NE(harness.runtime.find_domain_definition(*harness.runtime.current_domain(), "Second"),
             nullptr);
+}
+
+TEST(Avm2Domain, ContentLoaderInfoReportsTheContextDomain) {
+  DomainHarness harness;
+  harness.assets["second.swf"] = second_movie();
+  const ExecutionResult result = run_loader_script(harness, true, true);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_boolean());
+  EXPECT_TRUE(result.value.as_boolean());
+}
+
+TEST(Avm2Domain, ContentLoaderInfoReportsTheRootDomainWithoutAContext) {
+  DomainHarness harness;
+  harness.assets["second.swf"] = second_movie();
+  const ExecutionResult result = run_loader_script(harness, false, true);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_boolean());
+  EXPECT_TRUE(result.value.as_boolean());
+}
+
+TEST(Avm2Domain, LoaderContextConstructorStoresTheDomainArgument) {
+  DomainHarness harness;
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder code;
+  const std::uint32_t domain_class = script.multiname("ApplicationDomain", "flash.system");
+  const std::uint32_t context_class = script.multiname("LoaderContext", "flash.system");
+  const std::uint32_t domain_name = script.multiname("applicationDomain");
+  code.getlex(domain_class);
+  code.construct(0);
+  code.setlocal(1);
+  code.getlex(context_class);
+  code.pushfalse();
+  code.getlocal(1);
+  code.construct(2);
+  code.getproperty(domain_name);
+  code.getlocal(1);
+  code.strictequals();
+  code.returnvalue();
+  const ExecutionResult result = harness.run(script, code, 2);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_boolean());
+  EXPECT_TRUE(result.value.as_boolean());
 }
 
 TEST(Avm2Domain, AddCallbackStoresAScriptFunctionThatTheHostCanInvoke) {

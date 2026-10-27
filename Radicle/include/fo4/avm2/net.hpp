@@ -16,12 +16,14 @@ namespace fo4::avm2 {
 
 /* A Loader must own its movie's root clip so a snapshot shows it under the Loader entry. */
 class SwfRuntime;
+class ApplicationDomainObject;
 
 class LoaderObject : public DisplayObjectContainer {
  public:
   explicit LoaderObject(Class* display_class);
   std::shared_ptr<MovieClip> content;
   std::shared_ptr<SwfRuntime> child_runtime;
+  std::shared_ptr<ApplicationDomainObject> domain;
   std::shared_ptr<swf::SwfFile> movie;
   std::vector<std::uint8_t> bytes;
   std::string data;
