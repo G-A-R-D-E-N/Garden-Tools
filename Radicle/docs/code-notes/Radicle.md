@@ -5857,3 +5857,26 @@ Known gaps: `getlex` still resolves through the runtime-wide class table, so a c
 ## Radicle/include/fo4/avm2/host.hpp:HostBridge::install_function (#807 R7 host function registry)
 
 `HostBridge::call_host` tries a host-installed named function first (`Radicle/include/fo4/avm2/host.hpp:HostBridge::install_function`), then falls back to the unnamed `HostCallbacks::host_call` hook. `HostBridge::available` backs `ExternalInterface.available` so a host that only installs named functions still reports available. `Radicle/src/avm2/native_net.cpp:ext_add_callback` stores the script Function in `Radicle/include/fo4/avm2/runtime.hpp:Runtime::set_external_callback`; the host reads it with `Runtime::external_callback` and invokes it through `Interpreter::call_function`. Tests: `Radicle/tests/test_avm2_domain.cpp`.
+## Radicle/src/swf/swf_lzma.cpp:lzma_decode_swf and Radicle/src/swf/swf_lzma.cpp:lzma_encode_swf (#806 phase 7, ZWS)
+
+No LZMA library is vendored or linked, so this TU is a self-contained LZMA codec. `lzma_decode_swf` takes the 5 LZMA property bytes followed by the raw stream and decodes exactly `out_size` bytes (the declared FileLength minus 8), because a ZWS stream normally has no end marker; an end marker before `out_size` is refused. The decoder implements literals, matched literals, simple matches and all four rep forms, following the LZMA specification's state machine. Input bytes past the end read as zero and are counted; more than `kMaxOverrun` (5) overruns fail the decode, which covers the encoder's 5-byte flush and no more.
+
+`lzma_encode_swf` writes properties `0x5D` (lc=3, lp=0, pb=2), a 16 MiB dictionary, and a stream of literals, simple matches found through a 3-byte hash of the most recent occurrence, and rep0 long matches. It never emits rep1..rep3 or short reps, so those decoder paths are checked only against the spec, not by a round trip.
+
+Container layout (`Radicle/src/swf/swf.cpp:read_swf`, `Radicle/src/swf/swf_write.cpp:write_swf`): `ZWS`, version, UI32 FileLength, UI32 compressed length (written as the byte count of properties plus stream), then the properties and stream from byte 12. The reader ignores the compressed length field. The layout was recalled from the SWF specification, not checked against a spec copy or a real ZWS file, since neither is in this tree and the shipped Interface corpus has no ZWS movie. The compressed-length semantics are the first thing to verify on a real movie.
+
+`Radicle/src/swf/swf_write.cpp:write_swf` reuses `source_compressed_body` only when the requested compression equals the one the movie was read with, so an unchanged ZWS movie round-trips byte-exactly and a CWS source written as ZWS never carries zlib bytes under a ZWS signature. A GFx movie with LZMA throws, because GFX has no LZMA signature.
+
+C ABI: `Radicle/src/c_api_swf.cpp:map_swf_status` keeps the `unsupported_compression` mapping, but `read_swf` no longer returns that status, so `radicle_swf_open_bytes` (through `Radicle/src/c_api_swf.cpp:open_from_bytes`) opens ZWS movies and `radicle_swf_info.compression` reports 2. `RADICLE_ABI_VERSION` moved to 73 (`Radicle/include/fo4/c_api.h`) and `Radicle/bindings/csharp/Radicle.Interop/RadicleNative.g.cs` was regenerated with `tools/generate_interop.py`; the only changed line is `CompiledAbiVersion`.
+
+Tests: `Radicle/tests/test_swf_lzma.cpp` checks the ZWS header fields (signature, FileLength, compressed length, props byte 0x5D, dictionary bytes 00 00 00 01, leading range-coder byte 0), a byte-exact round trip of an unchanged movie, a changed body re-encoded and read back, decompress failures for a stream with no bytes after the properties, bad properties byte 0xE1 and a non-zero leading range byte, and the GFx refusal. `Radicle/tests/test_swf.cpp:SwfContainerTest.ReportsZwsWithoutAValidStreamAsDecompressFailure` replaces the old "ZWS is unsupported" assertion.
+
+## Radicle/src/swf/swf_tags.cpp:decode_tag_payload SoundStreamHead (#806 phase 7, sound)
+
+Tags 18 and 45 decode into `Radicle/include/fo4/swf/swf.hpp:SwfSoundStreamHead`: the packed playback byte keeps its reserved nibble, and the stream byte gives compression, rate, size and type. The UI16 sample count is followed by an SI16 latency seek only when compression is 2 (MP3). Any other length is `malformed_tag`, so the raw payload is kept. `Radicle/src/swf/swf_write.cpp:encode_sound_stream_head` rebuilds the bytes from the struct; `Radicle/src/swf/swf_write.cpp:encode_define_sound` does the same for the DefineSound header, taking the sample bytes from the caller because `SwfSound` stores only their length.
+
+Tests: `Radicle/tests/test_swf_sound.cpp` covers a DefineSound payload rebuilt byte-exactly, a PCM stream head with reserved bits 0xA kept, an MP3 stream head with latency -1, and an MP3 head without its latency refused as malformed with the raw payload kept.
+
+## Phase 7 open items (#806)
+
+Font glyph outline editing (item 2 of the phase-7 brief) is not implemented. `Radicle/src/swf/swf_text.cpp:decode_text_tag` decodes the DefineFont/2/3 layout tables but not the per-glyph SHAPE bytes, and the C ABI has no glyph edit verb. Remaining: decode each glyph's SHAPE from `SwfFont::glyph_offsets`, validate a replacement SHAPE, and rebuild the offset table and code-table offset.

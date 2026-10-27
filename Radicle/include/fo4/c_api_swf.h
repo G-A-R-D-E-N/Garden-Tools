@@ -16,7 +16,7 @@ typedef struct radicle_swf radicle_swf;
 
 typedef struct radicle_swf_info {
   uint8_t format;              /* 0 SWF, 1 GFx */
-  uint8_t compression;         /* 0 none, 1 zlib, 2 lzma; an LZMA movie must not open */
+  uint8_t compression;         /* 0 none, 1 zlib, 2 lzma */
   uint8_t version;
   uint8_t action_script3;
   uint8_t has_metadata;
