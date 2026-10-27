@@ -383,11 +383,27 @@ struct SwfFont {
   std::int16_t leading{0};
 };
 
+struct SwfTextGlyph {
+  std::uint32_t glyph_index{0};
+  std::int32_t advance{0};
+};
+
+struct SwfTextRecord {
+  std::optional<std::uint16_t> font_id;
+  /* Invariant: colour is 0xAARRGGBB; DefineText RGB records store alpha 0xFF. */
+  std::optional<std::uint32_t> color;
+  std::optional<std::int16_t> x_offset;
+  std::optional<std::int16_t> y_offset;
+  std::optional<std::uint16_t> height;
+  std::vector<SwfTextGlyph> glyphs;
+};
+
 struct SwfText {
   std::uint16_t character_id{0};
   SwfRect bounds{};
   std::size_t record_count{0};
   std::size_t glyph_count{0};
+  std::vector<SwfTextRecord> records;
 };
 
 struct SwfEditTextLayout {

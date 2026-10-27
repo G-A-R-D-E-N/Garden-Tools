@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <span>
+#include <utility>
 
 namespace fo4::swf::detail {
 
@@ -11,51 +12,79 @@ namespace {
 bool decode_text_records(std::span<const std::byte> data, std::size_t offset, bool rgba,
                          unsigned glyph_bits, unsigned advance_bits, SwfText& out) noexcept {
   std::size_t position = offset;
-  std::size_t records = 0;
-  std::size_t glyphs = 0;
   while (position < data.size()) {
     const auto flags = byte_at(data, position);
     ++position;
     if (flags == 0) {
-      out.record_count = records;
-      out.glyph_count = glyphs;
+      out.record_count = out.records.size();
+      out.glyph_count = 0;
+      for (const auto& record : out.records) {
+        out.glyph_count += record.glyphs.size();
+      }
       return true;
     }
     if ((flags & 0x80u) == 0) {
       return false;
     }
-    const bool has_font = (flags & 0x08u) != 0;
-    const bool has_color = (flags & 0x04u) != 0;
-    const bool has_y_offset = (flags & 0x02u) != 0;
-    const bool has_x_offset = (flags & 0x01u) != 0;
-    std::size_t needed = has_font ? 4u : 0u;
-    if (has_color) {
-      needed += rgba ? 4u : 3u;
+    SwfTextRecord record;
+    SwfReader reader(data, position);
+    if ((flags & 0x08u) != 0) {
+      std::uint16_t font_id = 0;
+      if (!reader.read_u16(font_id)) {
+        return false;
+      }
+      record.font_id = font_id;
     }
-    if (has_x_offset) {
-      needed += 2u;
+    if ((flags & 0x04u) != 0) {
+      std::uint8_t red = 0;
+      std::uint8_t green = 0;
+      std::uint8_t blue = 0;
+      std::uint8_t alpha = 0xFFu;
+      if (!reader.read_u8(red) || !reader.read_u8(green) || !reader.read_u8(blue) ||
+          (rgba && !reader.read_u8(alpha))) {
+        return false;
+      }
+      record.color = (static_cast<std::uint32_t>(alpha) << 24) |
+                     (static_cast<std::uint32_t>(red) << 16) |
+                     (static_cast<std::uint32_t>(green) << 8) | static_cast<std::uint32_t>(blue);
     }
-    if (has_y_offset) {
-      needed += 2u;
+    if ((flags & 0x01u) != 0) {
+      std::int16_t x_offset = 0;
+      if (!reader.read_s16(x_offset)) {
+        return false;
+      }
+      record.x_offset = x_offset;
     }
-    if (data.size() - position < needed + 1u) {
+    if ((flags & 0x02u) != 0) {
+      std::int16_t y_offset = 0;
+      if (!reader.read_s16(y_offset)) {
+        return false;
+      }
+      record.y_offset = y_offset;
+    }
+    if ((flags & 0x08u) != 0) {
+      std::uint16_t height = 0;
+      if (!reader.read_u16(height)) {
+        return false;
+      }
+      record.height = height;
+    }
+    std::uint8_t glyph_total = 0;
+    if (!reader.read_u8(glyph_total)) {
       return false;
     }
-    position += needed;
-    const auto count = static_cast<std::size_t>(byte_at(data, position));
-    ++position;
-    BitReader bits(data, position * 8);
-    for (std::size_t index = 0; index < count; ++index) {
+    BitReader bits(data, reader.position() * 8);
+    for (std::size_t index = 0; index < static_cast<std::size_t>(glyph_total); ++index) {
       std::uint32_t glyph_index = 0;
       std::int32_t advance = 0;
       if (!bits.read_unsigned(glyph_bits, glyph_index) ||
           !bits.read_signed(advance_bits, advance)) {
         return false;
       }
+      record.glyphs.push_back(SwfTextGlyph{glyph_index, advance});
     }
     position = bits.byte_position();
-    glyphs += count;
-    ++records;
+    out.records.push_back(std::move(record));
   }
   return false;
 }

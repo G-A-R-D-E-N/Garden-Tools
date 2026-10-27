@@ -839,6 +839,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_material_file_real.cpp
     tests/test_swf.cpp
     tests/test_swf_glyph.cpp
+    tests/test_swf_text_glyph.cpp
     tests/test_swf_lzma.cpp
     tests/test_swf_sound.cpp
     tests/test_swf_tags.cpp
