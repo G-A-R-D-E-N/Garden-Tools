@@ -1,6 +1,8 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import SwfPanel from './SwfPanel';
+
+afterEach(cleanup);
 
 function stubBridge(overrides: Record<string, unknown> = {}) {
   const swf = {
