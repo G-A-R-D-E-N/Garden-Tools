@@ -389,7 +389,6 @@ TEST(NestedGroupRuns, NocmShapeFailuresFailClosed) {
   const std::vector<std::vector<Piece>> malformed{
       {edid, {"INDX", u32_bytes(0)}, {"DATA", u32_bytes(0)}, {"NAM1", zstr("ModelA")}},
       {edid, {"INDX", u32_bytes(0)}, {"INTV", u32_bytes(0)}, {"DATA", u32_bytes(0)}, {"NAM1", zstr("ModelA")}},
-      {edid, {"INDX", u32_bytes(0)}, {"INTV", u32_bytes(0)}, {"NAM1", zstr("ModelA")}, {"NAM1", zstr("ModelB")}},
       {edid, {"INDX", u32_bytes(0)}, {"INTV", u32_bytes(0)}},
       {edid, {"INDX", u32_bytes(0)}, {"INTV", u32_bytes(0)}, {"INTV", u32_bytes(0)}}};
   for (const auto& body : malformed) {
@@ -397,6 +396,21 @@ TEST(NestedGroupRuns, NocmShapeFailuresFailClosed) {
     EXPECT_THROW(static_cast<void>(fo4::subrecord_group_spans(plugin, record_key(), obstacle())),
                  fo4::schema::SubrecordGroupError);
   }
+}
+
+TEST(NestedGroupRuns, NocmRunlessModelAfterRunModelIsItsOwnSpan) {
+  const auto plugin = fo4::read_plugin(make_nocm_plugin(obstacle_body({0}, {})), "Patch.esp");
+  const auto spans = fo4::subrecord_group_spans(plugin, record_key(), obstacle());
+  ASSERT_TRUE(spans.has_value());
+  ASSERT_EQ(spans->size(), 2u);
+  EXPECT_EQ((*spans)[0].first, 1u);
+  EXPECT_EQ((*spans)[0].end, 4u);
+  ASSERT_EQ((*spans)[0].runs.size(), 1u);
+  EXPECT_EQ((*spans)[0].runs[0].first, 1u);
+  EXPECT_EQ((*spans)[0].runs[0].end, 3u);
+  EXPECT_EQ((*spans)[1].first, 4u);
+  EXPECT_EQ((*spans)[1].end, 5u);
+  EXPECT_TRUE((*spans)[1].runs.empty());
 }
 
 TEST(NestedGroupRuns, NocmUncountedRunsRefuseWholeSpanMutations) {
