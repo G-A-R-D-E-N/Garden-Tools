@@ -54,11 +54,11 @@ std::vector<std::uint8_t> document_class_abc() {
   put_u30(out, 1);
   put_u30(out, 1);
   put_u8(out, 0x07);
-  put_u30(out, 3);
   put_u30(out, 2);
+  put_u30(out, 3);
   put_u8(out, 0x07);
-  put_u30(out, 4);
   put_u30(out, 1);
+  put_u30(out, 4);
   put_u30(out, 2);
   for (int method = 0; method < 2; ++method) {
     put_u30(out, 0);

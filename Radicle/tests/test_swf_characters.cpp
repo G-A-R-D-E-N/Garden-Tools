@@ -166,7 +166,7 @@ TEST(SwfCharacters, NamesNothingForAnEntryThatDefinesNoCharacter) {
   EXPECT_TRUE(fo4::swf::build_character_model(result.file, model, message)) << message;
   EXPECT_FALSE(model.refused);
   ASSERT_EQ(model.characters.size(), 1u);
-  EXPECT_EQ(model.characters.front().character_id, 3u);
+  EXPECT_EQ(model.characters.front().character_id, 5u);
   EXPECT_TRUE(model.characters.front().name.empty());
   EXPECT_EQ(find(model, 0), nullptr);
   EXPECT_EQ(find(model, 20), nullptr);

@@ -31,7 +31,6 @@ std::vector<std::byte> font_payload(std::uint16_t font_id, std::uint8_t flags,
     payload.push_back(static_cast<std::byte>((value >> 24u) & 0xFFu));
   };
   const auto push_bits_rect = [&payload]() {
-    payload.push_back(std::byte{1});
     payload.push_back(std::byte{0});
   };
 
@@ -84,7 +83,7 @@ std::vector<std::byte> build_swf(std::uint16_t tag_code,
 
 TEST(SwfFonts, DecodesDefineFont3LayoutAndCodes) {
   const std::vector<std::byte> payload =
-      font_payload(7, 0x88u, 2, {0, 30}, {65, 66}, {10240, 5120}, false);
+      font_payload(7, 0x88u, 2, {0, 30}, {65, 66}, {10240, 5120}, true);
   const std::vector<std::byte> bytes = build_swf(fo4::swf::tag::kDefineFont3, payload);
   const fo4::swf::SwfReadResult result = fo4::swf::read_swf(bytes);
   ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);

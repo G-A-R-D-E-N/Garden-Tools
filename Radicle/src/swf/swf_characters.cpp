@@ -15,7 +15,7 @@ namespace {
 // Constraint: a raw character tag must start with its little-endian UI16 id.
 bool leading_id(const SwfTag& tag, std::uint16_t& out, std::string& message) {
   if (tag.payload.size() < 2) {
-    message = "tag " + std::to_string(tag.code) + " carries a character but no id";
+    message = "tag " + std::to_string(tag.code) + " carries a character but no character id";
     return false;
   }
   out = static_cast<std::uint16_t>(std::to_integer<std::uint16_t>(tag.payload[0]) |
@@ -56,6 +56,7 @@ bool refuse(SwfCharacterModel& model, std::string& message, std::string text) {
   model.refused = true;
   model.characters.clear();
   message = std::move(text);
+  model.message = message;
   return false;
 }
 

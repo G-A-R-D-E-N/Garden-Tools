@@ -46,12 +46,6 @@ std::uint8_t* copy_bytes(const std::vector<std::uint8_t>& bytes, std::size_t* ou
   return buffer;
 }
 
-void put_u32(std::vector<std::byte>& out, std::uint32_t value) {
-  for (int index = 0; index < 4; ++index) {
-    out.push_back(static_cast<std::byte>((value >> (8 * index)) & 0xFFu));
-  }
-}
-
 }  // namespace
 
 extern "C" {
@@ -139,16 +133,15 @@ radicle_status radicle_swf_abc_apply_text(radicle_swf* swf, size_t abc, const ui
     if (file.serialize(abc_bytes) != fo4::abc::AbcStatus::Ok) {
       return fail(RADICLE_STATUS_PARSE_ERROR, "the assembled model does not serialize");
     }
-    std::vector<std::byte> payload;
-    payload.reserve(abc_bytes.size() + name.size() + 5);
-    put_u32(payload, flags);
-    for (const char letter : name) {
-      payload.push_back(static_cast<std::byte>(static_cast<unsigned char>(letter)));
+    std::vector<std::byte> payload(4 + name.size() + 1 + abc_bytes.size());
+    std::byte* cursor = payload.data();
+    for (int index = 0; index < 4; ++index) {
+      *cursor++ = static_cast<std::byte>((flags >> (8 * index)) & 0xFFu);
     }
-    payload.push_back(std::byte{0});
-    for (const std::uint8_t byte : abc_bytes) {
-      payload.push_back(static_cast<std::byte>(byte));
-    }
+    if (!name.empty()) std::memcpy(cursor, name.data(), name.size());
+    cursor += name.size();
+    *cursor++ = std::byte{0};
+    if (!abc_bytes.empty()) std::memcpy(cursor, abc_bytes.data(), abc_bytes.size());
     const radicle_swf_tag_replacement replacement{
         tag_index, reinterpret_cast<const std::uint8_t*>(payload.data()), payload.size()};
     const radicle_swf_tag_plan plan{&replacement, 1, nullptr, 0, nullptr, 0};

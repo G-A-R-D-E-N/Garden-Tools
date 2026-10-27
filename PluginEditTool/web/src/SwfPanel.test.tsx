@@ -32,7 +32,7 @@ function stubBridge(overrides: Record<string, unknown> = {}) {
 
 describe('SwfPanel', () => {
   it('selects, renames, undoes, redoes and saves through the history', async () => {
-    const swf = stubBridge();
+    const swf = stubBridge({ State: vi.fn(async () => JSON.stringify({ revision: 2, undo: 1, redo: 1, dirty: true })) });
     render(<SwfPanel onClose={() => {}} />);
 
     fireEvent.change(screen.getByPlaceholderText('Interface/Test.swf'), { target: { value: 'Interface/Test.swf' } });

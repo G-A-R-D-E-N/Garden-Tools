@@ -133,7 +133,7 @@ struct BodyParser {
   }
 
   bool parse_instruction(const std::vector<std::string>& tokens) {
-    if (tokens.size() < 3) {
+    if (tokens.size() < 2) {
       return fail("instruction line is malformed");
     }
     std::uint32_t offset = 0;
