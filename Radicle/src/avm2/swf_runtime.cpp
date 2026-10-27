@@ -306,7 +306,7 @@ std::shared_ptr<MovieClip> build_movie_root(Runtime& runtime,
   if (out_root_class != nullptr) {
     out_root_class[0] = root_class;
   }
-  auto root = std::make_shared<SwfTimelineClip>(root_class, data, &data->root, 0);
+  auto root = std::make_shared<SwfTimelineClip>(root_class, data, &data->root, std::uint16_t{0});
   root->set_playing(true);
   return root;
 }
