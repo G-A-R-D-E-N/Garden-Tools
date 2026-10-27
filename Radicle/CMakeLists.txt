@@ -811,10 +811,12 @@ if(RADICLE_BUILD_TESTS)
     tests/test_abc_text_real.cpp
     tests/test_abc_asm.cpp
     tests/test_abc_asm_real.cpp
+    tests/test_abc_pushshort.cpp
     tests/test_avm2_value.cpp
     tests/test_avm2_object.cpp
     tests/test_avm2_runtime.cpp
     tests/test_avm2_interpreter.cpp
+    tests/test_avm2_scope_depth.cpp
     tests/test_avm2_scripts_real.cpp
     tests/test_avm2_builtins.cpp
     tests/test_avm2_display.cpp
@@ -840,6 +842,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_material_file.cpp
     tests/test_material_file_real.cpp
     tests/test_swf.cpp
+    tests/test_swf_doabc_round_trip.cpp
     tests/test_swf_glyph.cpp
     tests/test_swf_text_glyph.cpp
     tests/test_swf_lzma.cpp

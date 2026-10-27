@@ -58,6 +58,8 @@ const char* interpreter_status_name(InterpreterStatus status) noexcept {
       return "method index out of range";
     case InterpreterStatus::ClassIndexOutOfRange:
       return "class index out of range";
+    case InterpreterStatus::ScopeDepthExceeded:
+      return "scope depth exceeded";
   }
   return "unknown";
 }

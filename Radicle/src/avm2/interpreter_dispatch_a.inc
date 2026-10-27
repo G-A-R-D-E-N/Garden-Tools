@@ -177,6 +177,12 @@
           if (!value.is_object()) {
             return fail(InterpreterStatus::TypeError, "a scope must be an object");
           }
+          if (frame.scopes.size() + frame.body->init_scope_depth >=
+              frame.body->max_scope_depth + frame.entry_scope_count) {
+            return fail(InterpreterStatus::ScopeDepthExceeded,
+                        "scope depth would exceed max_scope_depth " +
+                            std::to_string(frame.body->max_scope_depth));
+          }
           frame.scopes.push_back(value.as_object().get());
         }
         break;

@@ -37,6 +37,7 @@ enum class InterpreterStatus : std::uint8_t {
   InstructionIndexOutOfRange,
   MethodIndexOutOfRange,
   ClassIndexOutOfRange,
+  ScopeDepthExceeded,
 };
 
 const char* interpreter_status_name(InterpreterStatus status) noexcept;

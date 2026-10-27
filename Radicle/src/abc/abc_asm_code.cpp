@@ -180,8 +180,11 @@ struct BodyParser {
             if (!parse_i32(tokens[token], immediate)) {
               return fail("instruction immediate operand is malformed");
             }
+            if (immediate != static_cast<std::int16_t>(immediate)) {
+              return fail("instruction immediate operand does not fit 16 bits");
+            }
             operand.immediate = immediate;
-            operand.value = static_cast<std::uint32_t>(immediate);
+            operand.value = static_cast<std::uint16_t>(immediate);
           } else if (!parse_ref(tokens[token], operand.value)) {
             return fail("instruction reference operand is malformed");
           }
