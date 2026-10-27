@@ -3,6 +3,7 @@
 #include <fo4/avm2/display.hpp>
 #include <fo4/avm2/fonts.hpp>
 #include <fo4/avm2/snapshot.hpp>
+#include <fo4/avm2/text.hpp>
 #include <fo4/avm2/interpreter.hpp>
 #include <fo4/avm2/object.hpp>
 #include <fo4/avm2/runtime.hpp>
@@ -45,10 +46,29 @@ struct SwfTimelineRows {
   std::vector<std::vector<SwfPlacementRow>> frames;
 };
 
+struct SwfCharacterBounds {
+  double origin_x{0.0};
+  double origin_y{0.0};
+  double width{0.0};
+  double height{0.0};
+};
+
+struct SwfTextFieldData {
+  std::string text;
+  bool html{false};
+  bool word_wrap{false};
+  bool multiline{false};
+  TextFieldAutoSize auto_size{TextFieldAutoSize::none};
+  TextFormatData format;
+};
+
 struct SwfMovieData {
   SwfTimelineRows root;
   std::map<std::uint16_t, SwfTimelineRows> sprites;
   std::map<std::uint16_t, std::string> symbol_classes;
+  /* Invariant: a character appears here only when its definition tag carries drawn bounds. */
+  std::map<std::uint16_t, SwfCharacterBounds> character_bounds;
+  std::map<std::uint16_t, SwfTextFieldData> text_fields;
   std::vector<FontResource> fonts;
   std::vector<SoundResource> sounds;
   std::string root_class_name;

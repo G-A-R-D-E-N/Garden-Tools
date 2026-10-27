@@ -59,6 +59,116 @@ const FontResource* FontRegistry::first_with_layout() const {
   return nullptr;
 }
 
+namespace {
+
+constexpr std::size_t kNone = static_cast<std::size_t>(-1);
+
+GlyphPlacement glyph_for(const FontResource* font, double size, std::uint32_t code) {
+  GlyphPlacement placement;
+  placement.code = code;
+  placement.glyph_id = static_cast<std::uint16_t>(code);
+  placement.advance = size * 0.5;
+  if (font != nullptr) {
+    const std::size_t glyph_index = font->glyph_index_for_code(code);
+    if (glyph_index != kNone) {
+      placement.glyph_id = static_cast<std::uint16_t>(glyph_index);
+      placement.advance = size * font->glyphs[glyph_index].advance;
+    }
+  }
+  return placement;
+}
+
+std::size_t wrap_cut(const FontResource* font, double size, const std::u16string& units,
+                     std::size_t begin, std::size_t end, double wrap_width) {
+  if (wrap_width <= 0.0) {
+    return end;
+  }
+  double pen = 0.0;
+  std::size_t last_break = kNone;
+  for (std::size_t index = begin; index < end; ++index) {
+    const double advance = glyph_for(font, size, static_cast<std::uint32_t>(units[index])).advance;
+    if (index > begin && pen + advance > wrap_width) {
+      return last_break != kNone ? last_break : index;
+    }
+    if (units[index] == u' ') {
+      last_break = index + 1;
+    }
+    pen += advance;
+  }
+  return end;
+}
+
+}  // namespace
+
+std::u16string utf16_from_utf8(std::string_view text) {
+  std::u16string units;
+  units.reserve(text.size());
+  std::size_t index = 0;
+  while (index < text.size()) {
+    const auto lead = static_cast<unsigned char>(text[index]);
+    std::size_t length = 1;
+    char32_t code = lead;
+    if (lead >= 0xC2u && lead <= 0xDFu) {
+      length = 2;
+      code = lead & 0x1Fu;
+    } else if (lead >= 0xE0u && lead <= 0xEFu) {
+      length = 3;
+      code = lead & 0x0Fu;
+    } else if (lead >= 0xF0u && lead <= 0xF4u) {
+      length = 4;
+      code = lead & 0x07u;
+    }
+    bool valid = index + length <= text.size();
+    for (std::size_t offset = 1; valid && offset < length; ++offset) {
+      const auto continuation = static_cast<unsigned char>(text[index + offset]);
+      valid = (continuation & 0xC0u) == 0x80u;
+      code = (code << 6) | (continuation & 0x3Fu);
+    }
+    if (!valid) {
+      length = 1;
+      code = lead;
+    }
+    if (code > 0xFFFFu) {
+      code -= 0x10000u;
+      units.push_back(static_cast<char16_t>(0xD800u + (code >> 10)));
+      units.push_back(static_cast<char16_t>(0xDC00u + (code & 0x3FFu)));
+    } else {
+      units.push_back(static_cast<char16_t>(code));
+    }
+    index += length;
+  }
+  return units;
+}
+
+std::string utf8_from_utf16(std::u16string_view units) {
+  std::string text;
+  text.reserve(units.size());
+  for (std::size_t index = 0; index < units.size(); ++index) {
+    char32_t code = units[index];
+    if (code >= 0xD800u && code <= 0xDBFFu && index + 1 < units.size() &&
+        units[index + 1] >= 0xDC00u && units[index + 1] <= 0xDFFFu) {
+      code = 0x10000u + ((code - 0xD800u) << 10) + (units[index + 1] - 0xDC00u);
+      ++index;
+    }
+    if (code < 0x80u) {
+      text.push_back(static_cast<char>(code));
+    } else if (code < 0x800u) {
+      text.push_back(static_cast<char>(0xC0u | (code >> 6)));
+      text.push_back(static_cast<char>(0x80u | (code & 0x3Fu)));
+    } else if (code < 0x10000u) {
+      text.push_back(static_cast<char>(0xE0u | (code >> 12)));
+      text.push_back(static_cast<char>(0x80u | ((code >> 6) & 0x3Fu)));
+      text.push_back(static_cast<char>(0x80u | (code & 0x3Fu)));
+    } else {
+      text.push_back(static_cast<char>(0xF0u | (code >> 18)));
+      text.push_back(static_cast<char>(0x80u | ((code >> 12) & 0x3Fu)));
+      text.push_back(static_cast<char>(0x80u | ((code >> 6) & 0x3Fu)));
+      text.push_back(static_cast<char>(0x80u | (code & 0x3Fu)));
+    }
+  }
+  return text;
+}
+
 TextFieldObject::TextFieldObject(Class* display_class, FontRegistry* registry)
     : DisplayObject(display_class), registry_(registry) {
   set_dynamic(true);
@@ -111,79 +221,77 @@ void TextFieldObject::set_format(TextFormatData format) {
   relayout();
 }
 
+void TextFieldObject::set_word_wrap(bool value) {
+  word_wrap_ = value;
+  relayout();
+}
+
 void TextFieldObject::relayout() {
   runs_.clear();
   text_width_ = 0.0;
   const FontResource* font = nullptr;
   if (registry_ != nullptr) {
-    font = registry_->find_by_name(format_.font_name);
+    if (format_.font_id != 0) {
+      font = registry_->find(format_.font_id);
+    }
+    if (font == nullptr) {
+      font = registry_->find_by_name(format_.font_name);
+    }
     if (font == nullptr) {
       font = registry_->first_with_layout();
     }
   }
   const double size = format_.size > 0.0 ? format_.size : 12.0;
   const double line_height = size * 1.2 + format_.leading;
-  std::size_t line_index = 0;
+  const double wrap_width = word_wrap_ ? width() - format_.left_margin - format_.right_margin : 0.0;
+  const std::u16string units = utf16_from_utf8(text_);
   std::size_t line_start = 0;
-  while (line_start <= text_.size()) {
-    std::size_t line_end = text_.find('\n', line_start);
-    if (line_end == std::string::npos) {
-      line_end = text_.size();
+  while (true) {
+    std::size_t line_end = units.find(u'\n', line_start);
+    if (line_end == std::u16string::npos) {
+      line_end = units.size();
     }
-    TextRun run;
-    run.font_id = font == nullptr ? 0 : font->character_id;
-    run.font_size = size;
-    run.color = format_.color;
-    run.x = format_.left_margin;
-    run.y = format_.indent + static_cast<double>(line_index) * line_height;
-    double pen_x = run.x;
-    for (std::size_t index = line_start; index < line_end; ++index) {
-      const auto code = static_cast<std::uint32_t>(static_cast<unsigned char>(text_[index]));
-      GlyphPlacement placement;
-      placement.code = code;
-      placement.glyph_id = static_cast<std::uint16_t>(code);
-      placement.advance = size * 0.5;
-      if (font != nullptr) {
-        const std::size_t glyph_index = font->glyph_index_for_code(code);
-        if (glyph_index != static_cast<std::size_t>(-1)) {
-          placement.glyph_id = static_cast<std::uint16_t>(glyph_index);
-          placement.advance = size * font->glyphs[glyph_index].advance;
-        }
+    std::size_t begin = line_start;
+    while (true) {
+      const std::size_t cut = wrap_cut(font, size, units, begin, line_end, wrap_width);
+      TextRun run;
+      run.font_id = font == nullptr ? 0 : font->character_id;
+      run.font_size = size;
+      run.color = format_.color;
+      run.x = format_.left_margin;
+      run.y = format_.indent + static_cast<double>(runs_.size()) * line_height;
+      double pen_x = run.x;
+      for (std::size_t index = begin; index < cut; ++index) {
+        GlyphPlacement placement = glyph_for(font, size, static_cast<std::uint32_t>(units[index]));
+        placement.x = pen_x;
+        pen_x += placement.advance;
+        run.glyphs.push_back(placement);
       }
-      placement.x = pen_x;
-      pen_x += placement.advance;
-      run.glyphs.push_back(placement);
+      text_width_ = std::max(text_width_, pen_x - run.x);
+      runs_.push_back(std::move(run));
+      if (cut >= line_end) {
+        break;
+      }
+      begin = cut;
     }
-    text_width_ = std::max(text_width_, pen_x - run.x);
-    runs_.push_back(std::move(run));
-    ++line_index;
-    if (line_end >= text_.size()) {
+    if (line_end >= units.size()) {
       break;
     }
     line_start = line_end + 1;
   }
-  lines_ = line_index;
+  lines_ = runs_.size();
   text_height_ = static_cast<double>(lines_) * line_height;
 }
 
 std::string TextFieldObject::line_text(std::size_t index) const {
-  std::size_t line_index = 0;
-  std::size_t line_start = 0;
-  while (line_start <= text_.size()) {
-    std::size_t line_end = text_.find('\n', line_start);
-    if (line_end == std::string::npos) {
-      line_end = text_.size();
-    }
-    if (line_index == index) {
-      return text_.substr(line_start, line_end - line_start);
-    }
-    if (line_end >= text_.size()) {
-      break;
-    }
-    ++line_index;
-    line_start = line_end + 1;
+  if (index >= runs_.size()) {
+    return {};
   }
-  return {};
+  std::u16string units;
+  for (const GlyphPlacement& glyph : runs_[index].glyphs) {
+    units.push_back(static_cast<char16_t>(glyph.code));
+  }
+  return utf8_from_utf16(units);
 }
 
 Value make_text_format_instance(Interpreter& interpreter, const TextFormatData& format) {

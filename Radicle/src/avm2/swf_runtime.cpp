@@ -7,6 +7,7 @@
 #include <fo4/avm2/name.hpp>
 #include <fo4/avm2/object.hpp>
 #include <fo4/avm2/runtime.hpp>
+#include <fo4/avm2/text.hpp>
 
 #include "native_internal.hpp"
 
@@ -75,10 +76,37 @@ Class* resolve_character_class(Runtime& runtime, const SwfMovieData& data,
   if (data.sprites.find(character_id) != data.sprites.end()) {
     return const_cast<Class*>(runtime.find_class("flash.display::MovieClip"));
   }
+  if (data.text_fields.find(character_id) != data.text_fields.end()) {
+    return const_cast<Class*>(runtime.find_class("flash.text::TextField"));
+  }
   if (Class* shape = const_cast<Class*>(runtime.find_class("flash.display::Shape"))) {
     return shape;
   }
   return const_cast<Class*>(runtime.find_class("flash.display::MovieClip"));
+}
+
+void apply_character_definition(DisplayObject& object, const SwfMovieData& data,
+                                std::uint16_t character_id) {
+  const auto bounds = data.character_bounds.find(character_id);
+  if (bounds != data.character_bounds.end()) {
+    object.set_origin(bounds->second.origin_x, bounds->second.origin_y);
+    object.set_width(bounds->second.width);
+    object.set_height(bounds->second.height);
+  }
+  const auto text = data.text_fields.find(character_id);
+  if (text == data.text_fields.end() || !object.is_text_field()) {
+    return;
+  }
+  auto& field = static_cast<TextFieldObject&>(object);
+  field.set_format(text->second.format);
+  field.set_word_wrap(text->second.word_wrap);
+  field.set_multiline(text->second.multiline);
+  field.set_auto_size(text->second.auto_size);
+  if (text->second.html) {
+    field.set_html_text(text->second.text);
+  } else {
+    field.set_text(text->second.text);
+  }
 }
 
 class SwfTimelineClip : public MovieClip {
@@ -127,7 +155,8 @@ class SwfTimelineClip : public MovieClip {
       }
       std::shared_ptr<DisplayObject> object;
       const auto found = objects_.find(row.depth);
-      if (found != objects_.end() && found->second->display_class() == klass) {
+      if (found != objects_.end() && found->second->display_class() == klass &&
+          found->second->character_id() == row.character_id) {
         object = found->second;
       } else {
         if (found != objects_.end()) {
@@ -147,6 +176,7 @@ class SwfTimelineClip : public MovieClip {
         if (object == nullptr) {
           continue;
         }
+        apply_character_definition(*object, *data_, row.character_id);
         add_child(object);
         objects_[row.depth] = object;
         just_created.push_back(row.depth);

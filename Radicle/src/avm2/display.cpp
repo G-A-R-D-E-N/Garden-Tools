@@ -440,7 +440,7 @@ bool read_display_property(Interpreter& interpreter, DisplayObject& object,
       return true;
     }
     if (name == "length") {
-      out = Value::number(static_cast<double>(text_field.text().size()));
+      out = Value::number(static_cast<double>(utf16_from_utf8(text_field.text()).size()));
       return true;
     }
   }
@@ -540,6 +540,9 @@ bool write_display_property(DisplayObject& object, const Multiname& multiname,
   }
   if (name == "width") {
     object.set_width(to_number(value));
+    if (object.is_text_field()) {
+      static_cast<TextFieldObject&>(object).relayout();
+    }
     return true;
   }
   if (name == "height") {
