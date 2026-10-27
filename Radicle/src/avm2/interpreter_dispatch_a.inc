@@ -189,6 +189,7 @@
         break;
       case op::k_newactivation: {
         auto activation = std::make_shared<Object>();
+        prepare_plain_object(*activation);
         push_value(Value::object(std::move(activation)));
         break;
       }

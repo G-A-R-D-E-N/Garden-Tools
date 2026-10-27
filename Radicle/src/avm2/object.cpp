@@ -102,6 +102,11 @@ Object::Object() = default;
 
 Object::Object(ObjectKind kind) : kind_(kind) {}
 
+void Object::set_primitive(Value value) {
+  primitive_ = std::move(value);
+  has_primitive_ = true;
+}
+
 void Object::set_prototype(std::shared_ptr<Object> prototype) {
   prototype_ = std::move(prototype);
 }

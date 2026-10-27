@@ -42,6 +42,9 @@
           break;
         }
         if (!object.is_object()) {
+          object = box(object);
+        }
+        if (!object.is_object()) {
           if (limits_.lenient_builtins) {
             push_value(Value::undefined());
             break;
@@ -253,6 +256,7 @@
       case op::k_newobject: {
         const std::uint32_t count = count_operand(instruction);
         auto object = std::make_shared<Object>();
+        prepare_plain_object(*object);
         for (std::uint32_t index = 0; index < count; ++index) {
           Value value;
           pop_value(value);
@@ -290,6 +294,7 @@
         auto function = std::make_shared<FunctionObject>(frame.file->method_name(method),
                                                          frame.file, method);
         function->captured_scope() = frame.scopes;
+        runtime_.bind_function_class(*function);
         push_value(Value::object(std::move(function)));
         break;
       }
@@ -322,6 +327,19 @@
         }
         if (status != InterpreterStatus::Ok) {
           break;
+        }
+        if (function.is_object() && function.as_object()->kind() == ObjectKind::Class) {
+          const Class* called_class =
+              static_cast<const ClassObject&>(*function.as_object()).represented_class();
+          if (called_class != nullptr && called_class->native_constructor != 0) {
+            ExecutionResult converted = call_native_id(called_class->native_constructor, receiver,
+                                                       arguments, depth);
+            if (!converted.ok()) {
+              return converted;
+            }
+            push_value(converted.value);
+            break;
+          }
         }
         if (!function.is_object() || function.as_object()->kind() != ObjectKind::Function) {
           if (limits_.lenient_builtins) {
@@ -444,6 +462,9 @@
         }
         if (status != InterpreterStatus::Ok) {
           break;
+        }
+        if (!receiver.is_object()) {
+          receiver = box(receiver);
         }
         if (!receiver.is_object()) {
           if (limits_.lenient_builtins || instruction.opcode == op::k_callproplex) {
@@ -672,6 +693,7 @@
       }
       case op::k_newcatch: {
         auto catch_scope = std::make_shared<Object>();
+        prepare_plain_object(*catch_scope);
         push_value(Value::object(std::move(catch_scope)));
         break;
       }

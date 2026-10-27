@@ -104,7 +104,7 @@ TEST(Avm2Runtime, ResolvesMultinamesToTheirRuntimeShape) {
   EXPECT_EQ(fo4::avm2::render_multiname(multiname), "*");
 }
 
-TEST(Avm2Runtime, LinksAClassWithExternalSuperAndInterface) {
+TEST(Avm2Runtime, LinksAClassWithBuiltinSuperAndExternalInterface) {
   const AbcFile file = build_parsed_abc();
   Runtime runtime;
   ASSERT_TRUE(runtime.add_file(file).ok());
@@ -118,7 +118,7 @@ TEST(Avm2Runtime, LinksAClassWithExternalSuperAndInterface) {
   EXPECT_FALSE(test_class->external);
   ASSERT_NE(test_class->super, nullptr);
   EXPECT_EQ(test_class->super->name, "Object");
-  EXPECT_TRUE(test_class->super->external);
+  EXPECT_FALSE(test_class->super->external);
   ASSERT_EQ(test_class->interfaces.size(), 1u);
   EXPECT_EQ(test_class->interfaces[0]->name, "click");
   EXPECT_EQ(test_class->super, runtime.find_class(qname("Object")));

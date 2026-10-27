@@ -78,6 +78,26 @@ class Interpreter {
 
   const InterpreterLimits& limits() const noexcept { return limits_; }
 
+  Runtime& runtime() noexcept { return runtime_; }
+  const Runtime& runtime() const noexcept { return runtime_; }
+
+  /* Builtin natives must share this surface; depth is the caller's call depth. */
+  ExecutionResult call_function(const FunctionObject& function, Value this_value,
+                                std::vector<Value> arguments, std::size_t depth);
+  ExecutionResult read_property(Object& object, const Multiname& multiname, std::size_t depth);
+  ExecutionResult write_property(Object& object, const Multiname& multiname, const Value& value,
+                                 std::size_t depth);
+  std::shared_ptr<Object> make_instance(Class& klass);
+  Value box(const Value& value);
+  static Value unbox(const Value& value);
+  Value global_this();
+  /* Requires a linked runtime; a plain object gets the Object builtin class so its methods resolve. */
+  void prepare_plain_object(Object& object);
+  /* The random source must depend only on this interpreter's seed. */
+  double next_random();
+  ExecutionResult call_native_id(std::uint32_t native_id, const Value& self,
+                                 const std::vector<Value>& arguments, std::size_t depth);
+
  private:
   struct Frame {
     const abc::AbcFile* file{nullptr};
@@ -134,6 +154,7 @@ class Interpreter {
   InterpreterLimits limits_;
   std::size_t instructions_{0};
   std::size_t frames_{0};
+  std::uint64_t random_state_{0x9E3779B97F4A7C15ULL};
   std::uint8_t current_opcode_{0};
   std::uint32_t current_offset_{0};
   std::map<std::pair<const abc::AbcFile*, std::uint32_t>, Multiname> multinames_;

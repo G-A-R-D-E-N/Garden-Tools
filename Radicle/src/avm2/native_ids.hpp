@@ -1,0 +1,61 @@
+#pragma once
+
+#include <cstdint>
+
+namespace fo4::avm2::native {
+
+/* Native builtins must be addressed by id so a function object binds one across units. */
+enum class Id : std::uint32_t {
+  none = 0,
+  object_construct,
+  object_to_string,
+  object_value_of,
+  object_has_own_property,
+  object_is_prototype_of,
+  object_property_is_enumerable,
+  function_call,
+  function_apply,
+  function_to_string,
+  number_construct,
+  number_to_string,
+  number_to_fixed,
+  number_value_of,
+  boolean_construct,
+  boolean_to_string,
+  boolean_value_of,
+  int_construct,
+  int_to_string,
+  int_value_of,
+  uint_construct,
+  uint_to_string,
+  uint_value_of,
+  math_abs,
+  math_min,
+  math_max,
+  math_floor,
+  math_ceil,
+  math_round,
+  math_sqrt,
+  math_pow,
+  math_random,
+  math_sin,
+  math_cos,
+  math_tan,
+  math_atan2,
+  math_log,
+  math_exp,
+  trace,
+  is_nan,
+  is_finite,
+  parse_int,
+  parse_float,
+  to_string_value,
+  to_number_value,
+  to_boolean_value,
+  to_int_value,
+  to_uint_value,
+  to_object_value,
+  get_timer,
+};
+
+}  // namespace fo4::avm2::native

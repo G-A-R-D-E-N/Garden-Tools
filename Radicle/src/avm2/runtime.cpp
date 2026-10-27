@@ -336,6 +336,23 @@ const Class* Runtime::find_class(std::string_view rendered_name) const {
   return nullptr;
 }
 
+Class* Runtime::add_builtin_class(std::string name, std::string package, Class* super) {
+  auto owned = std::make_unique<Class>();
+  owned->name = package.empty() ? name : package + "::" + name;
+  owned->name_multiname.kind = MultinameKind::QName;
+  owned->name_multiname.name = name;
+  owned->name_multiname.namespaces.push_back(Namespace{NamespaceKind::Package, package});
+  owned->super = super;
+  owned->external = false;
+  owned->linked = true;
+  Class* klass = owned.get();
+  class_by_key_.emplace(class_key(NamespaceKind::Package, package, name), klass);
+  class_by_local_name_.emplace(name, klass);
+  owned_classes_.push_back(std::move(owned));
+  classes_.push_back(klass);
+  return klass;
+}
+
 Class* Runtime::ensure_external_class(const Multiname& multiname) {
   if (multiname.has_fixed_name()) {
     if (multiname.has_fixed_namespace()) {
@@ -377,7 +394,7 @@ Class* Runtime::ensure_external_class(const Multiname& multiname) {
 RuntimeStatus Runtime::resolve_hierarchy() {
   for (std::size_t index = 0; index < classes_.size(); ++index) {
     Class* klass = classes_[index];
-    if (klass->external) {
+    if (klass->external || klass->file == nullptr) {
       continue;
     }
     const abc::AbcFile& file = *klass->file;
@@ -442,12 +459,21 @@ std::shared_ptr<FunctionObject> Runtime::function_for_method(const abc::AbcFile&
   if (method_index >= file.methods.size()) {
     return nullptr;
   }
-  return std::make_shared<FunctionObject>(std::move(name), &file, method_index);
+  auto function = std::make_shared<FunctionObject>(std::move(name), &file, method_index);
+  bind_function_class(*function);
+  return function;
+}
+
+void Runtime::bind_function_class(FunctionObject& function) {
+  const Class* function_class = find_class("Function");
+  if (function_class != nullptr) {
+    function.set_instance_class(const_cast<Class*>(function_class));
+  }
 }
 
 RuntimeStatus Runtime::build_traits() {
   for (Class* klass : classes_) {
-    if (klass->external) {
+    if (klass->external || klass->file == nullptr) {
       continue;
     }
     const abc::AbcFile& file = *klass->file;
@@ -612,6 +638,9 @@ RuntimeLoad Runtime::link() {
     failed_ = true;
     return result;
   };
+  if (install_builtins() != RuntimeStatus::Ok) {
+    return fail(RuntimeStatus::InvalidTrait, "the builtin class table does not install");
+  }
   if (build_class_shells() != RuntimeStatus::Ok) {
     return fail(RuntimeStatus::DuplicateClass, "a class name is defined twice");
   }

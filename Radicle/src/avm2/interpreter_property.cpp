@@ -21,6 +21,25 @@ using namespace detail;
 ExecutionResult Interpreter::get_property(Frame& frame, Object& object,
                                           const Multiname& multiname, std::size_t depth) {
   (void)frame;
+  if (object.has_primitive() && object.primitive().is_string() && multiname.has_fixed_name()) {
+    const std::string& text = object.primitive().as_string();
+    if (multiname.name == "length") {
+      ExecutionResult result;
+      result.value = Value::number(static_cast<double>(text.size()));
+      return result;
+    }
+    bool numeric = !multiname.name.empty();
+    for (const char character : multiname.name) {
+      numeric = numeric && character >= '0' && character <= '9';
+    }
+    if (numeric && multiname.name.size() <= 10) {
+      const std::size_t index = static_cast<std::size_t>(std::stoul(multiname.name));
+      ExecutionResult result;
+      result.value = index < text.size() ? Value::string(std::string(1, text[index]))
+                                         : Value::undefined();
+      return result;
+    }
+  }
   Value out;
   bool handled = false;
   std::string message;
@@ -197,6 +216,9 @@ ExecutionResult Interpreter::construct(Frame& frame, const ClassObject& class_ob
   Class* klass = class_object.represented_class();
   if (klass == nullptr) {
     return fail(InterpreterStatus::CannotConstruct, "class object has no class");
+  }
+  if (klass->native_constructor != 0) {
+    return call_native_id(klass->native_constructor, Value::undefined(), arguments, depth);
   }
   ExecutionResult initialized = ensure_class_initialized(*klass, depth);
   if (!initialized.ok()) {

@@ -158,6 +158,9 @@ ExecutionResult Interpreter::invoke(const FunctionObject& function, Value this_v
   const abc::AbcFile* file = function.file();
   const abc::AbcMethodBody* body = function.body();
   if (file == nullptr || body == nullptr) {
+    if (function.native_id() != kNoNative) {
+      return call_native_id(function.native_id(), this_value, arguments, depth);
+    }
     if (limits_.lenient_builtins) {
       return ExecutionResult{};
     }

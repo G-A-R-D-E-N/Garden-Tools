@@ -67,15 +67,21 @@ class Runtime {
   /* A linked runtime must create and register an external class on first unresolved use. */
   Class* resolve_or_create_global_class(const Multiname& multiname);
 
+  /* Requires a linked runtime; gives a function object the Function builtin class so its methods
+     resolve. A function created after link must call this explicitly. */
+  void bind_function_class(FunctionObject& function);
+
  private:
   struct FileState {
     const abc::AbcFile* file{nullptr};
   };
 
   Class* ensure_external_class(const Multiname& multiname);
+  Class* add_builtin_class(std::string name, std::string package, Class* super);
   RuntimeStatus build_class_shells();
   RuntimeStatus resolve_hierarchy();
   RuntimeStatus build_traits();
+  RuntimeStatus install_builtins();
   RuntimeStatus build_script_globals();
   void apply_class_slots();
   void build_prototypes();

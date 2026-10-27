@@ -83,6 +83,10 @@ class Object {
   Class* class_scope() const noexcept { return class_scope_; }
   void set_class_scope(Class* class_scope) noexcept { class_scope_ = class_scope; }
 
+  bool has_primitive() const noexcept { return has_primitive_; }
+  const Value& primitive() const noexcept { return primitive_; }
+  void set_primitive(Value value);
+
   const std::shared_ptr<Object>& prototype() const noexcept { return prototype_; }
   void set_prototype(std::shared_ptr<Object> prototype);
 
@@ -113,6 +117,8 @@ class Object {
   bool dynamic_{true};
   Class* instance_class_{nullptr};
   Class* class_scope_{nullptr};
+  bool has_primitive_{false};
+  Value primitive_;
   std::shared_ptr<Object> prototype_;
   std::vector<Value> slots_;
   std::unordered_map<Key, Property, KeyHash> dynamic_;

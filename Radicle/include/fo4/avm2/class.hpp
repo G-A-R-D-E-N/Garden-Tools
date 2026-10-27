@@ -71,6 +71,7 @@ struct Class {
   std::vector<Trait> class_traits;
   std::uint32_t iinit{kNoMethod};
   std::uint32_t cinit{kNoMethod};
+  std::uint32_t native_constructor{0};
   bool is_sealed{false};
   bool is_final{false};
   bool is_interface{false};
