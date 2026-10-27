@@ -87,7 +87,7 @@ std::vector<std::byte> build_swf(std::uint16_t tag_code,
   body.push_back(std::byte{0});
   body.push_back(std::byte{0});
 
-  std::vector<std::byte> bytes{'F', 'W', 'S', std::byte{10}};
+  std::vector<std::byte> bytes{std::byte{'F'}, std::byte{'W'}, std::byte{'S'}, std::byte{10}};
   bytes.push_back(std::byte{0});
   bytes.push_back(std::byte{0});
   bytes.push_back(std::byte{0});
