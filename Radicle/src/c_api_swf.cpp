@@ -7,7 +7,6 @@
 #include "fo4/abc/summary.hpp"
 #include "fo4/swf/swf.hpp"
 
-#include <algorithm>
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
@@ -54,22 +53,6 @@ std::string null_terminated_string(std::span<const std::byte> payload) {
   return text;
 }
 
-// Requires a DoABC payload of u32 flags, a NUL-terminated name, then ABC bytes; a broken header yields an empty span.
-std::span<const std::byte> split_do_abc(std::span<const std::byte> payload, abc_view& view) {
-  if (payload.size() < 4) return {};
-  const auto rest = payload.subspan(4);
-  const auto nul = std::find(rest.begin(), rest.end(), std::byte{0});
-  if (nul == rest.end()) return {};
-  std::uint32_t flags = 0;
-  for (std::size_t byte = 0; byte < 4; ++byte) {
-    flags |= std::to_integer<std::uint32_t>(payload[byte]) << (8 * byte);
-  }
-  const auto length = static_cast<std::size_t>(nul - rest.begin());
-  view.flags = flags;
-  view.name.assign(reinterpret_cast<const char*>(rest.data()), length);
-  return rest.subspan(length + 1);
-}
-
 void flatten_tags(const fo4::swf::SwfTag& tag,
                   std::size_t parent,
                   std::uint16_t sprite_id,
@@ -112,16 +95,13 @@ void build_abc_views(const fo4::swf::SwfFile& file, radicle_swf_detail::swf_view
     if (views.tags[index].parent == RADICLE_SWF_NO_INDEX) root_flat_index.push_back(index);
   }
   for (const auto& block : fo4::swf::abc_blocks(file)) {
-    auto payload = block.payload;
+    const auto payload = block.payload;
     const auto flat_index =
         block.tag_index < root_flat_index.size() ? root_flat_index[block.tag_index] : block.tag_index;
     abc_view view;
     view.name = block.name;
     view.flags = block.flags;
     view.tag_index = flat_index;
-    if (views.tags[flat_index].tag->code == fo4::swf::tag::kDoAbc) {
-      payload = split_do_abc(payload, view);
-    }
     view.payload_size = payload.size();
     const auto status = fo4::abc::AbcFile::parse(
         reinterpret_cast<const std::uint8_t*>(payload.data()), payload.size(), view.file);

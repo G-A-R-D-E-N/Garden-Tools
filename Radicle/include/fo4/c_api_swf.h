@@ -212,7 +212,7 @@ typedef struct radicle_swf_jpeg_tables_info {
 
 /* `parsed` is 0 when the block did not parse; the other fields must still be valid then. */
 typedef struct radicle_swf_abc_info {
-  const char* name;            /* must be the tag-header name for DoABC2 (82); the C ABI decodes a DoABC (72) name from its own header */
+  const char* name;            /* must be the DoABC2 (82) tag-header name; a DoABC (72) block has none, so it is "" */
   uint32_t flags;
   size_t tag_index;
   size_t payload_size;

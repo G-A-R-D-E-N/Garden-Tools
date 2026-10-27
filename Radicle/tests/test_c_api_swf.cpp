@@ -316,15 +316,15 @@ TEST(CApiSwfTest, SummarizesAbcAndDisassemblesAMethodBody) {
   EXPECT_EQ(listing_size, 0u);
 }
 
-// Regression: a DoABC (72) block must strip its flags and name before the ABC data parses, and a broken header stays unparsed.
-TEST(CApiSwfTest, DecodesADoAbcHeaderAndRefusesAnUnterminatedName) {
+TEST(CApiSwfTest, DecodesDoAbcBlocksByTheirTagLayoutAndRefusesAnUnterminatedName) {
   const auto abc = fo4::test::build_abc();
-  const auto movie_with = [](const SwfBuilder& payload) {
+  const auto abc_span = std::span<const std::byte>(reinterpret_cast<const std::byte*>(abc.data()), abc.size());
+  const auto movie_with = [](std::uint16_t code, const SwfBuilder& payload) {
     SwfBuilder builder;
     builder.rect(0, 11000, 0, 8000, 15);
     builder.u16(0x0C00);
     builder.u16(1);
-    builder.tag(72, payload.body, false);
+    builder.tag(code, payload.body, false);
     builder.tag(0);
     return wrap_body(builder.body, 10, false, false);
   };
@@ -332,8 +332,8 @@ TEST(CApiSwfTest, DecodesADoAbcHeaderAndRefusesAnUnterminatedName) {
   SwfBuilder abc_tag;
   abc_tag.u32(1);
   abc_tag.text("frame 1");
-  abc_tag.bytes(std::span<const std::byte>(reinterpret_cast<const std::byte*>(abc.data()), abc.size()));
-  const auto file = open(movie_with(abc_tag));
+  abc_tag.bytes(abc_span);
+  const auto file = open(movie_with(82, abc_tag));
   ASSERT_NE(file, nullptr);
 
   radicle_swf_abc_info info{};
@@ -352,15 +352,42 @@ TEST(CApiSwfTest, DecodesADoAbcHeaderAndRefusesAnUnterminatedName) {
   radicle_free_bytes(listing);
   EXPECT_NE(text.find("callpropvoid"), std::string::npos) << text;
 
+  SwfBuilder raw_tag;
+  raw_tag.bytes(abc_span);
+  const auto raw = open(movie_with(72, raw_tag));
+  ASSERT_NE(raw, nullptr);
+  ASSERT_EQ(radicle_swf_abc_info_at(raw.get(), 0, &info), RADICLE_STATUS_OK);
+  EXPECT_EQ(info.parsed, 1);
+  EXPECT_STREQ(info.name, "");
+  EXPECT_EQ(info.flags, 0u);
+  EXPECT_EQ(info.tag_index, 0u);
+  EXPECT_EQ(info.payload_size, abc.size());
+  EXPECT_EQ(radicle_swf_abc_class_count(raw.get(), 0), 1u);
+
+  uint8_t* rendered_raw = nullptr;
+  size_t rendered_size = 0;
+  ASSERT_EQ(radicle_swf_abc_text(raw.get(), 0, &rendered_raw, &rendered_size), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  const auto rendered = text_of(rendered_raw, rendered_size);
+  radicle_free_bytes(rendered_raw);
+  ASSERT_EQ(radicle_swf_abc_apply_text(raw.get(), 0, reinterpret_cast<const uint8_t*>(rendered.data()),
+                                       rendered.size()), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  uint8_t* payload = nullptr;
+  size_t payload_size = 0;
+  ASSERT_EQ(radicle_swf_tag_payload(raw.get(), info.tag_index, &payload, &payload_size), RADICLE_STATUS_OK);
+  ASSERT_EQ(payload_size, abc.size());
+  EXPECT_EQ(std::memcmp(payload, abc.data(), abc.size()), 0);
+  radicle_free_bytes(payload);
+
   SwfBuilder unterminated;
   unterminated.u32(0);
   unterminated.u8('x');
-  const auto broken = open(movie_with(unterminated));
-  ASSERT_NE(broken, nullptr);
-  ASSERT_EQ(radicle_swf_abc_info_at(broken.get(), 0, &info), RADICLE_STATUS_OK);
-  EXPECT_EQ(info.parsed, 0);
-  EXPECT_STREQ(info.name, "");
-  EXPECT_EQ(info.payload_size, 0u);
+  const auto broken = movie_with(82, unterminated);
+  radicle_swf* refused = nullptr;
+  EXPECT_EQ(radicle_swf_open_bytes(reinterpret_cast<const std::uint8_t*>(broken.data()), broken.size(), &refused),
+            RADICLE_STATUS_PARSE_ERROR);
+  EXPECT_EQ(refused, nullptr);
 }
 
 // Regression: a non-ASCII loose path must reach the loader as UTF-8 on Windows, and a missing or null path must be refused.

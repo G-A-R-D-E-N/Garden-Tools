@@ -60,10 +60,10 @@ radicle_status check_block(const radicle_swf* swf, std::size_t abc, const std::u
   const auto* view = abc_at(swf, abc);
   if (view == nullptr) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the ABC index is out of range");
   if (!view->parsed) return fail(RADICLE_STATUS_PARSE_ERROR, "the ABC block did not parse");
-  if (view->tag_index >= swf->file.tags.size()) {
+  if (view->tag_index >= swf->tags.size()) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the ABC tag index is out of range");
   }
-  const std::uint16_t code = swf->file.tags[view->tag_index].code;
+  const std::uint16_t code = swf->tags[view->tag_index].tag->code;
   if (code != fo4::swf::tag::kDoAbc2 && code != fo4::swf::tag::kDoAbc) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the ABC block is not a DoABC or DoABC2 tag");
   }
@@ -77,16 +77,20 @@ radicle_status apply_file(radicle_swf* swf, std::size_t abc, const fo4::abc::Abc
   }
   const auto* view = abc_at(swf, abc);
   const std::size_t tag_index = view->tag_index;
+  const bool has_header = swf->tags[tag_index].tag->code == fo4::swf::tag::kDoAbc2;
   const std::uint32_t flags = view->flags;
   const std::string name = view->name;
-  std::vector<std::byte> payload(4 + name.size() + 1 + abc_bytes.size());
+  const std::size_t header_size = has_header ? 4 + name.size() + 1 : 0;
+  std::vector<std::byte> payload(header_size + abc_bytes.size());
   std::byte* cursor = payload.data();
-  for (int index = 0; index < 4; ++index) {
-    *cursor++ = static_cast<std::byte>((flags >> (8 * index)) & 0xFFu);
+  if (has_header) {
+    for (int index = 0; index < 4; ++index) {
+      *cursor++ = static_cast<std::byte>((flags >> (8 * index)) & 0xFFu);
+    }
+    if (!name.empty()) std::memcpy(cursor, name.data(), name.size());
+    cursor += name.size();
+    *cursor++ = std::byte{0};
   }
-  if (!name.empty()) std::memcpy(cursor, name.data(), name.size());
-  cursor += name.size();
-  *cursor++ = std::byte{0};
   if (!abc_bytes.empty()) std::memcpy(cursor, abc_bytes.data(), abc_bytes.size());
   const radicle_swf_tag_replacement replacement{
       tag_index, reinterpret_cast<const std::uint8_t*>(payload.data()), payload.size()};
