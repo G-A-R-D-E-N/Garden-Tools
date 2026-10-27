@@ -6,10 +6,10 @@
 |---|---|
 | READ / EXPOSE | Leading script names, flags and known scalar values; array/struct counts; existing quest fragment/alias views; the scene phase fragment list (native `read_scene_vmad_extras` only, no C ABI or C# export) |
 | WRITE | Existing leading-script object/alias, string, signed integer, finite float and boolean values; existing elements of type 11 through 15 arrays |
-| ADD / REMOVE / CREATE | Leading scripts and their properties (every authorable property type, by index); the VMAD payload itself on the record types xEdit gives one; a fragment binding on QUST (an unused stage and stage index), PACK, INFO, SCEN (an unused flag bit), PERK and TERM (an unused fragment index); a scene phase fragment on SCEN |
+| ADD / REMOVE / CREATE | Leading scripts and their properties (every authorable property type, by index); the VMAD payload itself on the record types xEdit gives one; a fragment binding on QUST (an unused stage and stage index), PACK, INFO, SCEN (an unused flag bit), PERK and TERM (an unused fragment index); a scene phase fragment on SCEN (native only, no C ABI or C# export) |
 | REPLACE | A whole leading property, including its name, flags and type, and its struct members |
-| REPLACE | An existing fragment binding: its script name and its fragment (function) name. QUST bindings are addressed by the `(stage, stage index)` pair, PACK, INFO and SCEN bindings by flag bit, PERK and TERM bindings by fragment index, and scene phase fragments by phase index plus phase flag; the key, the unknown byte and the fragment extras script data keep their bytes |
-| REMOVE | A leading script, a leading property, an existing fragment binding, or an existing scene phase fragment |
+| REPLACE | An existing fragment binding: its script name and its fragment (function) name. QUST bindings are addressed by the `(stage, stage index)` pair, PACK, INFO and SCEN bindings by flag bit, PERK and TERM bindings by fragment index, and scene phase fragments by phase index plus phase flag (native only, no C ABI or C# export); the key, the unknown byte and the fragment extras script data keep their bytes |
+| REMOVE | A leading script, a leading property, an existing fragment binding, or an existing scene phase fragment (native only, no C ABI or C# export) |
 | REMAP | Existing complete VMAD grammar, including record-specific tails; unsupported properties fail closed |
 | OPAQUE | Variable type 6, nonempty type 16, nested struct members, array/struct element edits, fragment and alias script property values, creating a fragment section on a VMAD that has none, unknown versions/formats/tails |
 
