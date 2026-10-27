@@ -33,4 +33,11 @@ AbcEditStatus insert_instruction(AbcFile& file, std::uint32_t body, std::size_t 
 AbcEditStatus delete_instruction(AbcFile& file, std::uint32_t body, std::size_t offset,
                                  std::string& message);
 
+// Requires an instruction boundary and one branch-free instruction; a branch that targets the replaced offset keeps naming it.
+AbcEditStatus replace_instruction(AbcFile& file, std::uint32_t body, std::size_t offset,
+                                  std::span<const std::uint8_t> instruction, std::string& message);
+
+// Requires a body index; raises local_count and max_stack to what the verifier measures and leaves the body unchanged on refusal.
+AbcEditStatus refresh_body_limits(AbcFile& file, std::uint32_t body, std::string& message);
+
 }  // namespace fo4::abc

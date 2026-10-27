@@ -382,7 +382,9 @@ TEST(CApiSwfEdit, RejectsAFrameListBuiltBeforeAnEdit) {
   EXPECT_EQ(radicle_swf_frames_instance_count(after.get(), 0, 0, &count), RADICLE_STATUS_OK);
 }
 
-TEST(CApiSwfAbcWrite, DumpsAssemblesAndAppliesAnEditedDoAbc2Block) {
+namespace {
+
+SwfHandle open_abc_movie() {
   const std::vector<std::uint8_t> abc = fo4::test::build_abc();
   SwfBuilder builder;
   builder.rect(0, 200, 0, 100, 9);
@@ -395,7 +397,37 @@ TEST(CApiSwfAbcWrite, DumpsAssemblesAndAppliesAnEditedDoAbc2Block) {
                                            abc.size()));
   builder.tag(fo4::swf::tag::kDoAbc2, payload.body, true);
   builder.tag(fo4::swf::tag::kEnd);
-  SwfHandle swf = open(swf_test::wrap_body(builder.body, 10, false, false));
+  return open(swf_test::wrap_body(builder.body, 10, false, false));
+}
+
+std::string abc_text(const radicle_swf* swf) {
+  std::uint8_t* raw = nullptr;
+  std::size_t size = 0;
+  EXPECT_EQ(radicle_swf_abc_text(swf, 0, &raw, &size), RADICLE_STATUS_OK) << radicle_last_error();
+  std::string text = raw == nullptr ? std::string() : std::string(reinterpret_cast<const char*>(raw), size);
+  radicle_free_bytes(raw);
+  return text;
+}
+
+radicle_status insert_text(radicle_swf* swf, std::uint32_t body, std::size_t offset,
+                           const std::string& text) {
+  return radicle_swf_abc_insert_instruction(swf, 0, body, offset,
+                                            reinterpret_cast<const std::uint8_t*>(text.data()),
+                                            text.size());
+}
+
+radicle_status replace_text(radicle_swf* swf, std::uint32_t body, std::size_t offset,
+                            const std::string& text) {
+  return radicle_swf_abc_replace_instruction(swf, 0, body, offset,
+                                             reinterpret_cast<const std::uint8_t*>(text.data()),
+                                             text.size());
+}
+
+}  // namespace
+
+TEST(CApiSwfAbcWrite, DumpsAssemblesAndAppliesAnEditedDoAbc2Block) {
+  const std::vector<std::uint8_t> abc = fo4::test::build_abc();
+  SwfHandle swf = open_abc_movie();
   ASSERT_NE(swf, nullptr);
   ASSERT_EQ(radicle_swf_abc_count(swf.get()), 1u);
 
@@ -445,4 +477,46 @@ TEST(CApiSwfAbcWrite, DumpsAssemblesAndAppliesAnEditedDoAbc2Block) {
   std::string after(reinterpret_cast<const char*>(after_raw), after_size);
   radicle_free_bytes(after_raw);
   EXPECT_NE(after.find("RadicleEdit"), std::string::npos);
+}
+
+TEST(CApiSwfAbcWrite, InsertsOneInstructionThroughTheTagPlan) {
+  SwfHandle swf = open_abc_movie();
+  ASSERT_NE(swf, nullptr);
+  ASSERT_EQ(abc_text(swf.get()).find("      0 nop\n"), std::string::npos);
+  const std::uint64_t revision = radicle_swf_revision(swf.get());
+
+  ASSERT_EQ(insert_text(swf.get(), 2, 0, "nop"), RADICLE_STATUS_OK) << radicle_last_error();
+  EXPECT_GT(radicle_swf_revision(swf.get()), revision);
+  EXPECT_NE(abc_text(swf.get()).find("      0 nop\n"), std::string::npos);
+
+  const auto bytes = written(swf.get());
+  SwfHandle reopened = open(bytes);
+  ASSERT_NE(reopened, nullptr);
+  EXPECT_NE(abc_text(reopened.get()).find("      0 nop\n"), std::string::npos);
+}
+
+TEST(CApiSwfAbcWrite, ReplacesOneInstructionInPlace) {
+  SwfHandle swf = open_abc_movie();
+  ASSERT_NE(swf, nullptr);
+  ASSERT_EQ(insert_text(swf.get(), 2, 0, "nop"), RADICLE_STATUS_OK) << radicle_last_error();
+
+  ASSERT_EQ(replace_text(swf.get(), 2, 0, "pushtrue"), RADICLE_STATUS_OK) << radicle_last_error();
+  const std::string text = abc_text(swf.get());
+  EXPECT_NE(text.find("      0 pushtrue\n"), std::string::npos);
+  EXPECT_EQ(text.find("      0 nop\n"), std::string::npos);
+}
+
+TEST(CApiSwfAbcWrite, RefusesAnInstructionEditAndLeavesTheHandleUnchanged) {
+  SwfHandle swf = open_abc_movie();
+  ASSERT_NE(swf, nullptr);
+  const std::string before = abc_text(swf.get());
+  const std::uint64_t revision = radicle_swf_revision(swf.get());
+
+  EXPECT_EQ(insert_text(swf.get(), 2, 0, "returnvalue"), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_NE(std::string(radicle_last_error()).find("verifier refused"), std::string::npos);
+  EXPECT_EQ(insert_text(swf.get(), 2, 0, "jump -> L0"), RADICLE_STATUS_PARSE_ERROR);
+  EXPECT_EQ(replace_text(swf.get(), 2, 1, "nop"), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(insert_text(swf.get(), 9, 0, "nop"), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_swf_revision(swf.get()), revision);
+  EXPECT_EQ(abc_text(swf.get()), before);
 }

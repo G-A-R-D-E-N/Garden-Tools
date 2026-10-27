@@ -386,6 +386,13 @@ RADICLE_API radicle_status radicle_swf_abc_assemble(const radicle_swf* swf, size
 RADICLE_API radicle_status radicle_swf_abc_apply_text(radicle_swf* swf, size_t abc, const uint8_t* text,
                                                       size_t size);
 
+/* Requires a branch-free instruction text and an instruction boundary; a refusal must leave the handle unchanged. */
+RADICLE_API radicle_status radicle_swf_abc_insert_instruction(radicle_swf* swf, size_t abc, uint32_t body,
+                                                              size_t offset, const uint8_t* text, size_t size);
+/* Requires the same arguments as the insert, and replaces the instruction that starts at offset. */
+RADICLE_API radicle_status radicle_swf_abc_replace_instruction(radicle_swf* swf, size_t abc, uint32_t body,
+                                                               size_t offset, const uint8_t* text, size_t size);
+
 typedef struct radicle_swf_frames radicle_swf_frames;
 
 typedef struct radicle_swf_transform {
