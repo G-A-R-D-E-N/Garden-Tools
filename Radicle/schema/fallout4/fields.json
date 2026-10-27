@@ -9910,6 +9910,7 @@
           ]
         },
         {"path": "RACE\\MaleHeight", "label": "Male height", "kind": "scalar", "subrecord": "DATA", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "RACE\\SpellCount", "label": "Spell count", "kind": "scalar", "subrecord": "SPCT", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"},
         {"path": "RACE\\FemaleHeight", "label": "Female height", "kind": "scalar", "subrecord": "DATA", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
         {"path": "RACE\\MaleWeightThin", "label": "Male default weight thin", "kind": "scalar", "subrecord": "DATA", "offset": 8, "min_form_version": 109, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
         {"path": "RACE\\MaleWeightMuscular", "label": "Male default weight muscular", "kind": "scalar", "subrecord": "DATA", "offset": 12, "min_form_version": 109, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
