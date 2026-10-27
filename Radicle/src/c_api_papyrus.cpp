@@ -1,6 +1,7 @@
 #include "c_api_env_internal.hpp"
 #include "c_api_internal.hpp"
 #include "c_api_pex_internal.hpp"
+#include "c_api_papyrus_internal.hpp"
 #include "fo4/c_api_papyrus.h"
 #include "fo4/papyrus/interpreter.hpp"
 
@@ -20,9 +21,6 @@ using fo4::papyrus::Struct;
 using fo4::papyrus::Value;
 using fo4::papyrus::ValueType;
 
-struct radicle_papyrus_value {
-  Value value;
-};
 
 struct radicle_papyrus_object {
   ObjectRef ref;
@@ -32,7 +30,7 @@ namespace {
 
 constexpr std::size_t kMaxValueArray = 1u << 20;
 
-radicle_status makeValue(Value value, radicle_papyrus_value** out) {
+radicle_status make_value_impl(Value value, radicle_papyrus_value** out) {
   if (out == nullptr) return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_value is required");
   try {
     *out = new radicle_papyrus_value{std::move(value)};
@@ -86,6 +84,10 @@ radicle_papyrus_status toCStatus(Status status) {
       return RADICLE_PAPYRUS_STATUS_STRING_TOO_LONG;
     case Status::GateRefused:
       return RADICLE_PAPYRUS_STATUS_GATE_REFUSED;
+    case Status::Paused:
+      return RADICLE_PAPYRUS_STATUS_PAUSED;
+    case Status::Latent:
+      return RADICLE_PAPYRUS_STATUS_LATENT;
   }
   return RADICLE_PAPYRUS_STATUS_INTERNAL_ERROR;
 }
@@ -199,6 +201,16 @@ class CallbackHost final : public fo4::papyrus::Host {
 
 }  // namespace
 
+namespace radicle_c_papyrus_detail {
+
+radicle_status make_value(Value value, radicle_papyrus_value** out) {
+  return make_value_impl(std::move(value), out);
+}
+
+radicle_papyrus_status to_c_status(Status status) { return toCStatus(status); }
+
+}  // namespace radicle_c_papyrus_detail
+
 struct radicle_papyrus {
   radicle_papyrus_callbacks callbacks{};
   std::vector<const radicle_pex*> pex_files;
@@ -274,7 +286,7 @@ radicle_status radicle_papyrus_run(radicle_papyrus* runtime, const char* script,
     *out_status = toCStatus(result.status);
     if (out_instructions != nullptr) *out_instructions = result.instructions;
     if (result.status != Status::Ok) return RADICLE_STATUS_OK;
-    return makeValue(result.value, out_result);
+    return radicle_c_papyrus_detail::make_value(result.value, out_result);
   });
 }
 
@@ -323,6 +335,10 @@ const char* radicle_papyrus_status_name(radicle_papyrus_status status) {
       return "StringTooLong";
     case RADICLE_PAPYRUS_STATUS_GATE_REFUSED:
       return "GateRefused";
+    case RADICLE_PAPYRUS_STATUS_PAUSED:
+      return "Paused";
+    case RADICLE_PAPYRUS_STATUS_LATENT:
+      return "Latent";
   }
   return "Unknown";
 }
@@ -373,7 +389,7 @@ radicle_papyrus_value_kind radicle_papyrus_value_kind_of(const radicle_papyrus_v
 
 radicle_status radicle_papyrus_value_none(radicle_papyrus_value** out_value) {
   radicle_c_detail::clear_error();
-  return makeValue(fo4::papyrus::noneValue(), out_value);
+  return radicle_c_papyrus_detail::make_value(fo4::papyrus::noneValue(), out_value);
 }
 
 radicle_status radicle_papyrus_value_string(const char* text, size_t size, radicle_papyrus_value** out_value) {
@@ -381,22 +397,22 @@ radicle_status radicle_papyrus_value_string(const char* text, size_t size, radic
   if (text == nullptr && size != 0) {
     return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "text is required when size is not zero");
   }
-  return makeValue(fo4::papyrus::stringValue(size == 0 ? std::string() : std::string(text, size)), out_value);
+  return radicle_c_papyrus_detail::make_value(fo4::papyrus::stringValue(size == 0 ? std::string() : std::string(text, size)), out_value);
 }
 
 radicle_status radicle_papyrus_value_int(int32_t number, radicle_papyrus_value** out_value) {
   radicle_c_detail::clear_error();
-  return makeValue(fo4::papyrus::integerValue(number), out_value);
+  return radicle_c_papyrus_detail::make_value(fo4::papyrus::integerValue(number), out_value);
 }
 
 radicle_status radicle_papyrus_value_float(float number, radicle_papyrus_value** out_value) {
   radicle_c_detail::clear_error();
-  return makeValue(fo4::papyrus::floatValue(number), out_value);
+  return radicle_c_papyrus_detail::make_value(fo4::papyrus::floatValue(number), out_value);
 }
 
 radicle_status radicle_papyrus_value_bool(int32_t flag, radicle_papyrus_value** out_value) {
   radicle_c_detail::clear_error();
-  return makeValue(fo4::papyrus::boolValue(flag != 0), out_value);
+  return radicle_c_papyrus_detail::make_value(fo4::papyrus::boolValue(flag != 0), out_value);
 }
 
 radicle_status radicle_papyrus_value_object(uint64_t handle, const char* type, const char* state,
@@ -405,7 +421,7 @@ radicle_status radicle_papyrus_value_object(uint64_t handle, const char* type, c
   if (type == nullptr) {
     return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "type is required");
   }
-  return makeValue(fo4::papyrus::objectValue(handle, type, state == nullptr ? std::string() : std::string(state)),
+  return radicle_c_papyrus_detail::make_value(fo4::papyrus::objectValue(handle, type, state == nullptr ? std::string() : std::string(state)),
                    out_value);
 }
 
@@ -418,7 +434,7 @@ radicle_status radicle_papyrus_value_array(size_t count, radicle_papyrus_value**
     auto array = std::make_shared<fo4::papyrus::Array>();
     array->elements.reserve(count);
     for (size_t i = 0; i < count; ++i) array->elements.push_back(fo4::papyrus::noneValue());
-    return makeValue(fo4::papyrus::arrayValue(std::move(array)), out_value);
+    return radicle_c_papyrus_detail::make_value(fo4::papyrus::arrayValue(std::move(array)), out_value);
   });
 }
 
@@ -453,7 +469,7 @@ radicle_status radicle_papyrus_value_array_get(const radicle_papyrus_value* valu
   if (index >= value->value.array->elements.size()) {
     return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "array index is out of range");
   }
-  return makeValue(value->value.array->elements[index], out_element);
+  return radicle_c_papyrus_detail::make_value(value->value.array->elements[index], out_element);
 }
 
 radicle_status radicle_papyrus_value_struct(const char* type_name, radicle_papyrus_value** out_value) {
@@ -464,7 +480,7 @@ radicle_status radicle_papyrus_value_struct(const char* type_name, radicle_papyr
   return radicle_c_env_detail::guarded("unknown exception while creating a struct value", [&] {
     auto structure = std::make_shared<Struct>();
     structure->typeName = type_name;
-    return makeValue(fo4::papyrus::structValue(std::move(structure)), out_value);
+    return radicle_c_papyrus_detail::make_value(fo4::papyrus::structValue(std::move(structure)), out_value);
   });
 }
 
@@ -493,7 +509,7 @@ radicle_status radicle_papyrus_value_struct_get(const radicle_papyrus_value* val
   if (found == value->value.structure->members.end()) {
     return radicle_c_detail::fail(RADICLE_STATUS_NOT_FOUND, "the struct has no such member");
   }
-  return makeValue(found->second, out_member);
+  return radicle_c_papyrus_detail::make_value(found->second, out_member);
 }
 
 int32_t radicle_papyrus_value_int_of(const radicle_papyrus_value* value) {

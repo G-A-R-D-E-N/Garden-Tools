@@ -25,6 +25,7 @@ struct Result {
     Value value;
     std::size_t instructions{0};
     std::size_t callDepth{0};
+    std::uint64_t latentToken{0};
 
     bool ok() const { return status == Status::Ok; }
 };
@@ -42,6 +43,17 @@ public:
                        const std::vector<Value>& args = {});
     Result runObjectFunction(const pex::PexObject& object, const pex::PexFunction& function,
                              const Value& self, const std::vector<Value>& args = {});
+    // Invariant: a slice budget is per call and never more than Limits::maxInstructions in total.
+    Result startFunction(const std::string& scriptName, const std::string& functionName,
+                         const std::vector<Value>& args, std::size_t sliceBudget);
+    Result startFunction(const Value& self, const std::string& functionName,
+                         const std::vector<Value>& args, std::size_t sliceBudget);
+    Result resumeSlice(std::size_t sliceBudget);
+    // Invariant: only the token the run reported resumes it, and a value resumes it exactly once.
+    Result completeLatent(std::uint64_t token, const Value& value, std::size_t sliceBudget);
+    bool suspended() const { return !frames_.empty(); }
+    std::uint64_t latentToken() const { return latentToken_; }
+    void abort();
 
 private:
     struct Slot {
@@ -62,6 +74,9 @@ private:
 
     Result run(const pex::PexObject* object, const pex::PexFunction& function, const std::string& state,
                const Value& self, const std::vector<Value>& args);
+    Status runLoop(std::size_t sliceBudget);
+    Result finish(Status status) const;
+    Status suspendLatent(const pex::PexValue& destination, std::uint64_t token);
     Status execute(const pex::PexInstruction& instruction, Frame& frame, std::size_t& next);
     Status invoke(Frame& frame, const Value& self, const pex::PexObject* script,
                   const std::string& state, const std::string& nativeScript,
@@ -111,6 +126,11 @@ private:
     Value returnValue_;
     bool hasReturn_{false};
     Status firstError_{Status::Ok};
+    bool paused_{false};
+    bool latent_{false};
+    std::uint64_t latentToken_{0};
+    pex::PexValue latentDestination_;
+    std::size_t sliceInstructions_{0};
 };
 
 }

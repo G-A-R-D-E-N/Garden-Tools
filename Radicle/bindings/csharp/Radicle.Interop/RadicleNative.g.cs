@@ -2270,6 +2270,8 @@ public enum PapyrusStatus : int
     InternalError = 18,
     StringTooLong = 19,
     GateRefused = 20,
+    Paused = 21,
+    Latent = 22,
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -2284,10 +2286,70 @@ public unsafe struct PapyrusCallbacks
     public IntPtr CallNative;
 }
 
+public enum PapyrusLifecycle : int
+{
+    NotInitialized = 0,
+    Initializing = 1,
+    Ready = 2,
+    Failed = 3,
+}
+
+public enum PapyrusOwnerKind : int
+{
+    Form = 0,
+    PlacedReference = 1,
+    DynamicReference = 2,
+    QuestAlias = 3,
+    RuntimeInstance = 4,
+}
+
+public enum PapyrusClock : int
+{
+    RealTime = 0,
+    GameTime = 1,
+}
+
+public enum PapyrusNativeKind : int
+{
+    Static = 0,
+    ScriptInstance = 1,
+    EngineObject = 2,
+}
+
+public enum PapyrusOverrideOutcome : int
+{
+    NotRegistered = 0,
+    Declined = 1,
+    Handled = 2,
+    Refused = 3,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PapyrusStepResult
+{
+    public int Spent;
+    public int Completed;
+    public int Parked;
+    public int Paused;
+    public int Refused;
+    public int Dropped;
+    public int Waiting;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PapyrusRuntimeCallbacks
+{
+    public IntPtr User;
+    public IntPtr Gate;
+    public IntPtr CallNative;
+    public IntPtr OverrideFunction;
+    public IntPtr BeginLatent;
+}
+
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 57u;
+    public const uint CompiledAbiVersion = 58u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -3512,5 +3574,65 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_value_object_state")]
     public static extern IntPtr PapyrusValueObjectState(IntPtr value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_create")]
+    public static extern Status PapyrusRuntimeCreate(PapyrusRuntimeCallbacks* callbacks, IntPtr* out_runtime);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_destroy")]
+    public static extern void PapyrusRuntimeDestroy(IntPtr runtime);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_add_pex")]
+    public static extern Status PapyrusRuntimeAddPex(IntPtr runtime, IntPtr pex);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_attach")]
+    public static extern Status PapyrusRuntimeAttach(IntPtr runtime, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? script, PapyrusOwnerKind owner_kind, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? base_form_key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? discriminator, ulong* out_instance);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_detach")]
+    public static extern int PapyrusRuntimeDetach(IntPtr runtime, ulong instance);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_lifecycle")]
+    public static extern PapyrusLifecycle PapyrusRuntimeLifecycle(IntPtr runtime, ulong instance);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_failure")]
+    public static extern IntPtr PapyrusRuntimeFailure(IntPtr runtime, ulong instance);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_instance_state")]
+    public static extern IntPtr PapyrusRuntimeInstanceState(IntPtr runtime, ulong instance);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_initialize")]
+    public static extern Status PapyrusRuntimeInitialize(IntPtr runtime, ulong instance, PapyrusStatus* out_status);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_send_event")]
+    public static extern Status PapyrusRuntimeSendEvent(IntPtr runtime, ulong instance, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? function, IntPtr* args, nuint arg_count, PapyrusStatus* out_status);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_step")]
+    public static extern Status PapyrusRuntimeStep(IntPtr runtime, int budget, PapyrusStepResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_complete_latent")]
+    public static extern Status PapyrusRuntimeCompleteLatent(IntPtr runtime, ulong token, IntPtr value, int* out_accepted);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_register_native")]
+    public static extern Status PapyrusRuntimeRegisterNative(IntPtr runtime, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? script, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? function, PapyrusNativeKind kind, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? required_script, int latent);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_register_override")]
+    public static extern Status PapyrusRuntimeRegisterOverride(IntPtr runtime, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? script, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? function, int parameter_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_get_variable")]
+    public static extern Status PapyrusRuntimeGetVariable(IntPtr runtime, ulong instance, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, IntPtr* out_value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_set_variable")]
+    public static extern Status PapyrusRuntimeSetVariable(IntPtr runtime, ulong instance, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, IntPtr value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_register_custom_event")]
+    public static extern Status PapyrusRuntimeRegisterCustomEvent(IntPtr runtime, ulong instance, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? event_name, long* out_handle);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_register_timer")]
+    public static extern Status PapyrusRuntimeRegisterTimer(IntPtr runtime, ulong instance, double interval_seconds, int repeats, PapyrusClock clock, long* out_handle);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_unregister")]
+    public static extern Status PapyrusRuntimeUnregister(IntPtr runtime, long handle, int* out_removed);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_runtime_advance_clock")]
+    public static extern Status PapyrusRuntimeAdvanceClock(IntPtr runtime, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? owner, double delta_seconds, PapyrusClock clock, int* out_fired);
 
 }
