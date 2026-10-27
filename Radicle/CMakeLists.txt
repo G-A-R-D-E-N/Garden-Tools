@@ -753,6 +753,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_c_api_swf_characters.cpp
     tests/test_c_api_swf_history.cpp
     tests/test_c_api_swf_edit.cpp
+    tests/test_c_api_swf_abc_sprite.cpp
     tests/test_c_api_swf_glyph.cpp
     tests/test_c_api_swf_real.cpp
     tests/test_dds.cpp
