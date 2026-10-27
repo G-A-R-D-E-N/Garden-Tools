@@ -96,14 +96,14 @@ TEST(CApiSwfCharacters, RefusesADuplicateIdButLeavesTheOtherGettersUsable) {
   EXPECT_EQ(radicle_swf_tag_count(swf.get()), 4u);
 }
 
-TEST(CApiSwfCharacters, RefusesANameTableReferenceWithNoDefinition) {
-  const auto swf = open(swf_character_test::unknown_symbol_movie());
+TEST(CApiSwfCharacters, NamesNothingForANameTableEntryWithNoDefinition) {
+  const auto swf = open(swf_character_test::unnamed_symbol_movie());
   ASSERT_NE(swf, nullptr);
 
   std::size_t count = 0;
-  EXPECT_EQ(radicle_swf_character_count(swf.get(), &count), RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_NE(std::string(radicle_last_error()).find("unknown character"), std::string::npos)
+  EXPECT_EQ(radicle_swf_character_count(swf.get(), &count), RADICLE_STATUS_OK)
       << radicle_last_error();
+  EXPECT_EQ(count, 1u);
 }
 
 }  // namespace

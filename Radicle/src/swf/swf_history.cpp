@@ -77,15 +77,17 @@ bool SwfEditHistory::apply(const SwfTagPlan& plan, std::string& message) {
       return true;
     }
   }
-  const std::size_t previous_count = commands_.size();
   const std::size_t previous_applied = applied_;
   const std::uint64_t previous_revision = revision_;
+  std::vector<SwfEditCommand> redo_tail(commands_.begin() + static_cast<std::ptrdiff_t>(applied_),
+                                        commands_.end());
   commands_.resize(applied_);
   SwfEditCommand command;
   command.plan = plan;
   commands_.push_back(std::move(command));
   if (!replay(applied_ + 1, message)) {
-    commands_.resize(previous_count);
+    commands_.resize(previous_applied);
+    commands_.insert(commands_.end(), redo_tail.begin(), redo_tail.end());
     applied_ = previous_applied;
     revision_ = previous_revision;
     return false;

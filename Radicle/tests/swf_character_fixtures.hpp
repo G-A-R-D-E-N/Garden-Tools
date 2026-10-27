@@ -181,11 +181,14 @@ inline std::vector<std::byte> duplicate_movie() {
   });
 }
 
-// Constraint: a class name that no definition carries is an unknown reference.
-inline std::vector<std::byte> unknown_symbol_movie() {
+// Constraint: name-table entries for id 0 or for an undefined id must name nothing and never refuse the model.
+inline std::vector<std::byte> unnamed_symbol_movie() {
   return movie_of({
       {32, swf_art_test::define_shape_3_payload()},
-      {76, symbol_payload({{99, symbol_text("Missing.Class")}})},
+      {87, {std::byte{20}, std::byte{0}, std::byte{0}, std::byte{0}, std::byte{0}, std::byte{0}}},
+      {76, symbol_payload({{0, symbol_text("Main")},
+                           {20, symbol_text("Data")},
+                           {99, symbol_text("Missing.Class")}})},
       {1, {}},
   });
 }

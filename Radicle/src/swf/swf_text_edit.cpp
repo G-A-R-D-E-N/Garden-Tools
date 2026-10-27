@@ -441,6 +441,11 @@ bool rename_frame_label(SwfFile& file, std::uint16_t timeline_id, std::size_t la
   if (!append_zstring(payload, name, message)) {
     return false;
   }
+  const auto& source = (*timeline.tags)[rows[label_index].tag_index].payload;
+  const auto source_nul = std::find(source.begin(), source.end(), std::byte{0});
+  if (source_nul != source.end()) {
+    payload.insert(payload.end(), source_nul + 1, source.end());
+  }
   if (!timeline.sprite) {
     SwfTagPlan plan;
     SwfTagReplacement replacement;

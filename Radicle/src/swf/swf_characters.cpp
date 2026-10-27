@@ -38,19 +38,17 @@ bool add_character(SwfCharacterModel& model, std::map<std::uint16_t, std::size_t
   return true;
 }
 
-// Constraint: a name-table id must resolve to a definition the model already holds.
-bool apply_name(SwfCharacterModel& model, const std::map<std::uint16_t, std::size_t>& by_id,
-                const SwfSymbol& symbol, const char* table, bool overwrite, std::string& message) {
+// Constraint: a name-table entry for no defined character must name nothing, never refuse the model.
+void apply_name(SwfCharacterModel& model, const std::map<std::uint16_t, std::size_t>& by_id,
+                const SwfSymbol& symbol, bool overwrite) {
   const auto found = by_id.find(symbol.tag_id);
   if (found == by_id.end()) {
-    message = std::string(table) + " names unknown character id " + std::to_string(symbol.tag_id);
-    return false;
+    return;
   }
   SwfCharacter& character = model.characters[found->second];
   if (overwrite || character.name.empty()) {
     character.name = symbol.name;
   }
-  return true;
 }
 
 // Constraint: the model must be cleared and marked refused together so a caller never sees a partial map.
@@ -236,9 +234,7 @@ bool build_character_model(const SwfFile& file, SwfCharacterModel& out, std::str
       continue;
     }
     for (const SwfSymbol& symbol : *tag.symbols) {
-      if (!apply_name(out, by_id, symbol, "SymbolClass", true, message)) {
-        return refuse(out, message, message);
-      }
+      apply_name(out, by_id, symbol, true);
     }
   }
   for (const SwfTag& tag : file.tags) {
@@ -246,9 +242,7 @@ bool build_character_model(const SwfFile& file, SwfCharacterModel& out, std::str
       continue;
     }
     for (const SwfSymbol& symbol : *tag.exports) {
-      if (!apply_name(out, by_id, symbol, "ExportAssets", false, message)) {
-        return refuse(out, message, message);
-      }
+      apply_name(out, by_id, symbol, false);
     }
   }
 

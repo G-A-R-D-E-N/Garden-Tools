@@ -18,11 +18,21 @@ namespace {
 const fo4::swf::SwfCharacterModel& character_model(const radicle_swf* swf) {
   auto& cache = swf->characters;
   if (!cache.built) {
-    cache.built = true;
     cache.message.clear();
     fo4::swf::build_character_model(swf->file, cache.model, cache.message);
+    cache.built = true;
   }
   return cache.model;
+}
+
+std::size_t flat_index_of_root(const radicle_swf& swf, std::size_t position) {
+  std::size_t root = 0;
+  for (std::size_t index = 0; index < swf.tags.size(); ++index) {
+    if (swf.tags[index].parent != RADICLE_SWF_NO_INDEX) continue;
+    if (root == position) return index;
+    ++root;
+  }
+  return RADICLE_SWF_NO_INDEX;
 }
 
 void fill_rect(const fo4::swf::SwfRect& rect, radicle_swf_rect& out) {
@@ -33,13 +43,14 @@ void fill_rect(const fo4::swf::SwfRect& rect, radicle_swf_rect& out) {
   out.y_max = rect.y_max;
 }
 
-void fill_character(const fo4::swf::SwfCharacter& source, radicle_swf_character& out) {
+void fill_character(const radicle_swf& swf, const fo4::swf::SwfCharacter& source,
+                    radicle_swf_character& out) {
   out = {};
   out.character_id = source.character_id;
   out.kind = static_cast<std::uint8_t>(source.kind);
   out.has_bounds = static_cast<std::uint8_t>(source.has_bounds ? 1 : 0);
   out.has_bitmap_size = static_cast<std::uint8_t>(source.has_bitmap_size ? 1 : 0);
-  out.tag_index = source.tag_index;
+  out.tag_index = flat_index_of_root(swf, source.tag_index);
   if (source.has_bounds) {
     fill_rect(source.bounds, out.bounds);
   }
@@ -97,7 +108,7 @@ radicle_status radicle_swf_character_at(const radicle_swf* swf, size_t index,
     if (index >= model->characters.size()) {
       return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the character index is out of range");
     }
-    fill_character(model->characters[index], *out_character);
+    fill_character(*swf, model->characters[index], *out_character);
     return RADICLE_STATUS_OK;
   });
 }
@@ -120,7 +131,7 @@ radicle_status radicle_swf_character_by_id(const radicle_swf* swf, uint16_t char
       const std::string text = "character id " + std::to_string(character_id) + " is not defined";
       return fail(RADICLE_STATUS_NOT_FOUND, text.c_str());
     }
-    fill_character(*found, *out_character);
+    fill_character(*swf, *found, *out_character);
     return RADICLE_STATUS_OK;
   });
 }

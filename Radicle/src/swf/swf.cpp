@@ -644,6 +644,5 @@ bool apply_tag_plan(SwfFile& file, const SwfTagPlan& plan, SwfTagPlanResult& out
   out.changed = true;
   return true;
 }
-}
 
 }  // namespace fo4::swf

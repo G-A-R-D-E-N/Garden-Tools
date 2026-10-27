@@ -21,7 +21,6 @@ using radicle_c_env_detail::guarded;
 
 struct radicle_swf_history {
   fo4::swf::SwfEditHistory history;
-  std::vector<std::size_t> flat_map;
 };
 
 namespace {
@@ -67,7 +66,7 @@ std::vector<std::byte> copy_payload(const uint8_t* payload, size_t size) {
 }
 
 // Requires every plan index to name a top-level tag, matching radicle_swf_apply_plan.
-radicle_status translate(const radicle_swf_history& history, const radicle_swf_tag_plan& plan,
+radicle_status translate(const fo4::swf::SwfFile& file, const radicle_swf_tag_plan& plan,
                          fo4::swf::SwfTagPlan& out) {
   if (plan.replacement_count != 0 && plan.replacements == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the plan carries no replacement array");
@@ -75,11 +74,17 @@ radicle_status translate(const radicle_swf_history& history, const radicle_swf_t
   if (plan.insertion_count != 0 && plan.insertions == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the plan carries no insertion array");
   }
+  if (plan.removal_count != 0 && plan.removals == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the plan carries no removal array");
+  }
+  std::vector<std::size_t> flat_map;
+  std::size_t flat = 0;
+  build_flat_map(file.tags, flat, flat_map);
   out = {};
   for (std::size_t index = 0; index < plan.replacement_count; ++index) {
     const auto& entry = plan.replacements[index];
     std::size_t position = 0;
-    if (!top_level_positions(history.flat_map, entry.tag_index, position)) {
+    if (!top_level_positions(flat_map, entry.tag_index, position)) {
       return fail(RADICLE_STATUS_INVALID_ARGUMENT,
                   "a plan index must address a top-level tag; replace the DefineSprite tag instead");
     }
@@ -93,7 +98,7 @@ radicle_status translate(const radicle_swf_history& history, const radicle_swf_t
   for (std::size_t index = 0; index < plan.insertion_count; ++index) {
     const auto& entry = plan.insertions[index];
     std::size_t position = 0;
-    if (!top_level_positions(history.flat_map, entry.before_tag_index, position)) {
+    if (!top_level_positions(flat_map, entry.before_tag_index, position)) {
       return fail(RADICLE_STATUS_INVALID_ARGUMENT,
                   "a plan insertion index must address a top-level tag; replace the DefineSprite tag instead");
     }
@@ -109,6 +114,14 @@ radicle_status translate(const radicle_swf_history& history, const radicle_swf_t
     tag.code = entry.code;
     tag.payload = copy_payload(entry.payload, entry.size);
     out.insertions.push_back(fo4::swf::SwfTagInsertion{position, std::move(tag)});
+  }
+  for (std::size_t index = 0; index < plan.removal_count; ++index) {
+    std::size_t position = 0;
+    if (!top_level_positions(flat_map, plan.removals[index].tag_index, position)) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                  "a plan removal index must address a top-level tag; remove the DefineSprite tag instead");
+    }
+    out.removals.push_back(fo4::swf::SwfTagRemoval{position});
   }
   return RADICLE_STATUS_OK;
 }
@@ -136,8 +149,6 @@ radicle_status radicle_swf_history_create(const radicle_swf* swf,
     if (!history->history.open(bytes, message)) {
       return fail(RADICLE_STATUS_INVALID_ARGUMENT, message.c_str());
     }
-    std::size_t flat = 0;
-    build_flat_map(swf->file.tags, flat, history->flat_map);
     *out_history = history.release();
     return RADICLE_STATUS_OK;
   });
@@ -158,7 +169,7 @@ radicle_status radicle_swf_history_apply(radicle_swf_history* history,
   }
   return guarded("unknown exception while applying an edit command", [&] {
     fo4::swf::SwfTagPlan native;
-    const auto status = translate(*history, *plan, native);
+    const auto status = translate(history->history.file(), *plan, native);
     if (status != RADICLE_STATUS_OK) {
       return status;
     }

@@ -5775,3 +5775,14 @@ Two resolve APIs coexist and are not interchangeable. `Radicle/include/fo4/c_api
 VMAD read: names are Windows-1252 bytes converted to UTF-8, while string values are UTF-8 and are returned unchanged (`Radicle/include/fo4/c_api_vmad.h`); a property the decoder cannot read is not an error — its script reports `unsupported` and carries no rows for it, so a script must be read as incomplete rather than as empty. A struct array counts structs in `declared_element_count` and members in `element_total`, so a struct with no members contributes no row. Measured on `Fallout4.esm`: 13697 VMAD subrecords, 12272 scripts, 25231 properties, 1535 array properties, 10 struct properties, 319 struct-array properties.
 
 Where the engine-side reading came from: this repository holds no GardenEngine checkout, and a search of the worktree for `ScriptCachePrecedence` and `NativeCallSiteCensus` finds only these notes. The code was read from the `OpenCw.Papyrus` copy left in the #352 scratchpad (`scratchpad/ge352/opencw/OpenCw.Papyrus`: `ScriptCachePrecedence.cs`, `ScriptCacheBuilder.cs`, `ScriptSourceCandidate.cs`, `Census/NativeCallSiteCensus.cs`), which is the copy these notes already cite. Not in that copy, and therefore unknown here: the archive-side candidate enumeration and whatever strips `Scripts/` for it, `ScriptLibrary`, `MethodCallContract`, `PapyrusEventContract` and `LoadOrderAcceptance`. Those need one read against the live checkout before the port.
+
+## SWF plan review fixes (GT-806 cpp)
+
+- `Radicle/src/swf/swf.cpp:apply_tag_plan`: removals are validated against the original count (End, duplicate, replaced target all refused) and the rebuilt stream keeps inserts at their before-index; the stray closing brace that broke the TU was removed.
+- `Radicle/src/c_api_swf_history.cpp:translate`: the flat-to-top-level map is built from `history.file()` on every call, so the map can never go stale after an insert or removal; removals resolve through the same map as replacements and insertions.
+- `Radicle/src/swf/swf_history.cpp:SwfEditHistory::apply`: the redo tail is moved into a local before truncation and copied back on a refused replay, so a refused edit keeps every redo command.
+- `Radicle/src/c_api_swf_characters.cpp:character_model`: `cache.built` is set after `build_character_model` returns, so a throw leaves the cache unbuilt.
+- `Radicle/src/c_api_swf_characters.cpp:flat_index_of_root`: `radicle_swf_character.tag_index` is the flat index that `radicle_swf_tag_at` reports; the model keeps top-level positions internally.
+- `Radicle/src/swf/swf_characters.cpp:apply_name`: a name-table entry for id 0 or for an undefined id names nothing and does not refuse the model.
+- `Radicle/src/swf/swf_text_edit.cpp:rename_frame_label`: bytes after the first NUL of the original FrameLabel payload (the named-anchor flag) are kept.
+- `Radicle/src/abc/edit.cpp:required_local_count`: `hasnext2` contributes both local-register operands.

@@ -152,6 +152,70 @@ TEST(CApiSwfHistory, ARefusedPlanLeavesTheRevisionAndBytesUnchanged) {
   EXPECT_EQ(radicle_swf_history_revision(history.get()), revision);
 }
 
+TEST(CApiSwfHistory, RemovesATopLevelTagAndRefusesTheEndTag) {
+  const auto color = [](std::uint8_t value) {
+    return std::vector<std::byte>{std::byte{value}, std::byte{value}, std::byte{value}};
+  };
+  const auto swf = open(swf_character_test::movie_of({{9, color(1)}, {9, color(2)}}));
+  ASSERT_NE(swf, nullptr);
+  const auto history = open_history(swf);
+  ASSERT_NE(history, nullptr);
+
+  radicle_swf_tag_removal removal{};
+  removal.tag_index = 0;
+  radicle_swf_tag_plan plan{};
+  plan.removals = &removal;
+  plan.removal_count = 1;
+  radicle_swf_plan_result result{};
+  ASSERT_EQ(radicle_swf_history_apply(history.get(), &plan, &result), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_EQ(result.changed, 1);
+  EXPECT_EQ(result.revision, 1u);
+  EXPECT_EQ(history_bytes(history), swf_character_test::movie_of({{9, color(2)}}));
+
+  removal.tag_index = 1;
+  EXPECT_EQ(radicle_swf_history_apply(history.get(), &plan, &result),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_swf_history_revision(history.get()), 1u);
+}
+
+TEST(CApiSwfHistory, ResolvesFlatIndexesAgainstTheCurrentFile) {
+  const auto color = [](std::uint8_t value) {
+    return std::vector<std::byte>{std::byte{value}, std::byte{value}, std::byte{value}};
+  };
+  const std::vector<std::byte> sprite = {std::byte{7}, std::byte{0}, std::byte{1}, std::byte{0},
+                                         std::byte{0x40}, std::byte{0}, std::byte{0}, std::byte{0}};
+  const auto swf = open(swf_character_test::movie_of({{9, color(1)}, {9, color(2)}}));
+  ASSERT_NE(swf, nullptr);
+  const auto history = open_history(swf);
+  ASSERT_NE(history, nullptr);
+
+  radicle_swf_tag_insertion insertion{};
+  insertion.before_tag_index = 1;
+  insertion.code = 39;
+  insertion.payload = reinterpret_cast<const std::uint8_t*>(sprite.data());
+  insertion.size = sprite.size();
+  radicle_swf_tag_plan plan{};
+  plan.insertions = &insertion;
+  plan.insertion_count = 1;
+  radicle_swf_plan_result result{};
+  ASSERT_EQ(radicle_swf_history_apply(history.get(), &plan, &result), RADICLE_STATUS_OK)
+      << radicle_last_error();
+
+  const std::vector<std::uint8_t> replacement_payload = {3, 3, 3};
+  radicle_swf_tag_replacement replacement{};
+  replacement.tag_index = 4;
+  replacement.payload = replacement_payload.data();
+  replacement.size = replacement_payload.size();
+  plan = {};
+  plan.replacements = &replacement;
+  plan.replacement_count = 1;
+  ASSERT_EQ(radicle_swf_history_apply(history.get(), &plan, &result), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_EQ(history_bytes(history),
+            swf_character_test::movie_of({{9, color(1)}, {39, sprite}, {9, color(3)}}));
+}
+
 TEST(CApiSwfHistory, RejectsMissingArguments) {
   radicle_swf_history* history = nullptr;
   EXPECT_EQ(radicle_swf_history_create(nullptr, &history), RADICLE_STATUS_INVALID_ARGUMENT);

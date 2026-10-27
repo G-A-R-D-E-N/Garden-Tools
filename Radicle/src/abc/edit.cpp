@@ -73,6 +73,11 @@ std::uint32_t required_local_count(const std::vector<AbcInstruction>& code) {
   std::uint32_t needed = 0;
   for (const AbcInstruction& instruction : code) {
     const AbcOpcodeInfo* info = opcode_info(instruction.opcode);
+    if (info != nullptr && info->mnemonic != nullptr && std::string(info->mnemonic) == "hasnext2" &&
+        instruction.operands.size() == 2) {
+      needed = std::max({needed, instruction.operands[0].value + 1, instruction.operands[1].value + 1});
+      continue;
+    }
     if (info == nullptr || info->operand_count != 1 || instruction.operands.size() != 1) {
       continue;
     }

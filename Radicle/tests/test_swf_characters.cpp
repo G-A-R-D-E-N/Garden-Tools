@@ -158,15 +158,19 @@ TEST(SwfCharacters, RefusesADuplicateCharacterId) {
   EXPECT_TRUE(model.characters.empty());
 }
 
-TEST(SwfCharacters, RefusesAnUnknownNameTableReference) {
-  const auto result = fo4::swf::read_swf(swf_character_test::unknown_symbol_movie());
+TEST(SwfCharacters, NamesNothingForAnEntryThatDefinesNoCharacter) {
+  const auto result = fo4::swf::read_swf(swf_character_test::unnamed_symbol_movie());
   ASSERT_TRUE(result.ok());
   SwfCharacterModel model;
   std::string message;
-  EXPECT_FALSE(fo4::swf::build_character_model(result.file, model, message));
-  EXPECT_NE(message.find("unknown character"), std::string::npos) << message;
-  EXPECT_TRUE(model.characters.empty());
-  EXPECT_EQ(find(model, 5), nullptr);
+  EXPECT_TRUE(fo4::swf::build_character_model(result.file, model, message)) << message;
+  EXPECT_FALSE(model.refused);
+  ASSERT_EQ(model.characters.size(), 1u);
+  EXPECT_EQ(model.characters.front().character_id, 3u);
+  EXPECT_TRUE(model.characters.front().name.empty());
+  EXPECT_EQ(find(model, 0), nullptr);
+  EXPECT_EQ(find(model, 20), nullptr);
+  EXPECT_EQ(find(model, 99), nullptr);
 }
 
 TEST(SwfCharacters, RefusesACharacterTagWithoutItsLeadingId) {

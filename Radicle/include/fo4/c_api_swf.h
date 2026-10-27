@@ -452,13 +452,13 @@ typedef struct radicle_swf_tag_insertion {
   size_t size;
 } radicle_swf_tag_insertion;
 
-/* A plan must apply all-or-nothing: a refusal must leave every tag body, the revision and the bytes
-   that radicle_swf_write_bytes must return exactly as they were before the call. */
 /* Constraint: a removal names one tag of the stream the plan was built against; the End tag must be refused. */
 typedef struct radicle_swf_tag_removal {
   size_t tag_index;
 } radicle_swf_tag_removal;
 
+/* A plan must apply all-or-nothing: a refusal must leave every tag body, the revision and the bytes
+   that radicle_swf_write_bytes must return exactly as they were before the call. */
 typedef struct radicle_swf_tag_plan {
   const radicle_swf_tag_replacement* replacements;
   size_t replacement_count;
@@ -503,7 +503,7 @@ typedef struct radicle_swf_character {
   uint8_t has_bounds;
   uint8_t has_bitmap_size;
   uint8_t reserved;
-  size_t tag_index;            /* the defining tag; the ImportAssets tag for an imported character */
+  size_t tag_index;            /* flat index radicle_swf_tag_at reports for the defining tag; the ImportAssets tag when imported */
   radicle_swf_rect bounds;     /* twips; zero unless has_bounds is 1 */
   uint16_t bitmap_width;       /* pixels; zero unless has_bitmap_size is 1 */
   uint16_t bitmap_height;
