@@ -24,6 +24,7 @@ class LoaderObject : public DisplayObjectContainer {
   std::shared_ptr<MovieClip> content;
   std::shared_ptr<SwfRuntime> child_runtime;
   std::shared_ptr<ApplicationDomainObject> domain;
+  Value content_loader_info;
   std::shared_ptr<swf::SwfFile> movie;
   std::vector<std::uint8_t> bytes;
   std::string data;

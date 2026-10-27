@@ -74,4 +74,9 @@ ExecutionResult native_value(Value value);
 std::shared_ptr<ArrayObject> make_array_value(Interpreter& interpreter,
                                               std::vector<Value> elements);
 
+class LoaderObject;
+
+/* Requires a loader whose domain is already set; a cached contentLoaderInfo takes that domain. */
+void refresh_content_loader_info(Interpreter& interpreter, LoaderObject& loader);
+
 }  // namespace fo4::avm2

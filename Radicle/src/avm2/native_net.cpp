@@ -296,6 +296,7 @@ ExecutionResult loader_load(Interpreter& interpreter, const Value& self,
   loader->movie = std::make_shared<fo4::swf::SwfFile>(read.file);
   const std::shared_ptr<ApplicationDomainObject> domain = context_domain(argument_at(arguments, 1));
   loader->domain = domain;
+  refresh_content_loader_info(interpreter, *loader);
   loader->child_runtime =
       SwfRuntime::create(interpreter.runtime(), interpreter, *loader->movie, {}, domain);
   const std::shared_ptr<SwfRuntime>& child = loader->child_runtime;

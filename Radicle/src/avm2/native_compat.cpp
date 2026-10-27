@@ -336,6 +336,12 @@ ExecutionResult display_transform_set(Interpreter& interpreter, const Value& sel
   return native_value(Value::undefined());
 }
 
+void set_info_domain(Interpreter& interpreter, Object& info,
+                     const std::shared_ptr<ApplicationDomainObject>& domain) {
+  set_property(info, "applicationDomain",
+               Value::object(domain == nullptr ? interpreter.runtime().current_domain() : domain));
+}
+
 Value make_loader_info(Interpreter& interpreter,
                        const std::shared_ptr<ApplicationDomainObject>& domain) {
   Class* info_class = find_class(interpreter, "flash.display::LoaderInfo");
@@ -344,30 +350,31 @@ Value make_loader_info(Interpreter& interpreter,
     return Value::null();
   }
   auto info = interpreter.make_instance(*info_class);
-  set_property(*info, "applicationDomain",
-               Value::object(domain == nullptr ? interpreter.runtime().current_domain() : domain));
+  set_info_domain(interpreter, *info, domain);
   set_property(*info, "parameters",
                Value::object(interpreter.make_instance(*object_class)));
   return Value::object(std::move(info));
 }
 
+Value content_loader_info(Interpreter& interpreter, LoaderObject& loader) {
+  if (loader.content_loader_info.is_object()) return loader.content_loader_info;
+  Value value = make_loader_info(interpreter, loader.domain);
+  if (value.is_object()) loader.content_loader_info = value;
+  return value;
+}
+
 ExecutionResult loader_content_loader_info(Interpreter& interpreter, const Value& self) {
-  if (!self.is_object()) return native_value(Value::null());
-  Object& loader = *self.as_object();
-  Value existing = property_of(loader, "loaderInfo");
-  if (existing.is_object()) return native_value(existing);
-  std::shared_ptr<ApplicationDomainObject> domain;
-  if (const auto* movie_loader = dynamic_cast<const LoaderObject*>(&loader)) {
-    domain = movie_loader->domain;
-  }
-  Value value = make_loader_info(interpreter, domain);
-  if (!value.is_object()) return native_value(Value::null());
-  set_property(loader, "loaderInfo", value);
-  return native_value(std::move(value));
+  auto* loader = self.is_object() ? dynamic_cast<LoaderObject*>(self.as_object().get()) : nullptr;
+  if (loader == nullptr) return native_value(Value::null());
+  return native_value(content_loader_info(interpreter, *loader));
 }
 
 ExecutionResult display_loader_info(Interpreter& interpreter, const Value& self) {
-  (void)self;
+  auto* content = self.is_object() ? dynamic_cast<DisplayObject*>(self.as_object().get()) : nullptr;
+  auto* loader = content == nullptr ? nullptr : dynamic_cast<LoaderObject*>(content->parent());
+  if (loader != nullptr && loader->content.get() == content) {
+    return native_value(content_loader_info(interpreter, *loader));
+  }
   return native_value(make_loader_info(interpreter, nullptr));
 }
 
@@ -389,6 +396,12 @@ ExecutionResult event_format_to_string(const Value& self, const std::vector<Valu
 }
 
 }  // namespace
+
+void refresh_content_loader_info(Interpreter& interpreter, LoaderObject& loader) {
+  if (loader.content_loader_info.is_object()) {
+    set_info_domain(interpreter, *loader.content_loader_info.as_object(), loader.domain);
+  }
+}
 
 bool try_compat_native(Interpreter& interpreter, native::Id id, const Value& self,
                        const std::vector<Value>& arguments, std::size_t depth,

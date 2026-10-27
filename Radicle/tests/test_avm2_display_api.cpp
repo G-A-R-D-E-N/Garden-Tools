@@ -162,4 +162,25 @@ TEST(Avm2DisplayApi, LoaderExposesALoaderInfoWithAnApplicationDomain) {
   EXPECT_EQ(result.value.as_object()->instance_class()->name, "flash.system::ApplicationDomain");
 }
 
+TEST(Avm2DisplayApi, ContentLoaderInfoIsTheSameObjectOnEveryRead) {
+  Harness harness;
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder code;
+  const std::uint32_t loader = script.multiname("Loader", "flash.display");
+  const std::uint32_t info = script.multiname("contentLoaderInfo");
+  code.getlex(loader);
+  code.construct(0);
+  code.setlocal(1);
+  code.getlocal(1);
+  code.getproperty(info);
+  code.getlocal(1);
+  code.getproperty(info);
+  code.strictequals();
+  code.returnvalue();
+  const ExecutionResult result = harness.run(script, code, 2);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_boolean());
+  EXPECT_TRUE(result.value.as_boolean());
+}
+
 }  // namespace
