@@ -7,6 +7,7 @@
 #include "fo4/schema/form_links.hpp"
 #include "fo4/schema/form_link_mixed.hpp"
 #include "fo4/signature.hpp"
+#include "../plugin/record_edit.hpp"
 #include "placed_reference_copy_internal.hpp"
 
 #include <algorithm>
@@ -184,6 +185,22 @@ Group* ensure_reference_bucket(Group& cell_children,
         return group != nullptr && group->header.group_type > header.group_type;
       });
   return &std::get<Group>(*cell_children.children.insert(later, std::move(created)));
+}
+
+void move_reference_to_bucket(fo4::detail::MutableLocation& located,
+                              GroupType bucket_type,
+                              const PluginFormIdContext& context) {
+  auto& old_bucket = *located.path.back();
+  auto& cell_children = *located.path[located.path.size() - 2];
+  const auto old_header = old_bucket.header;
+  auto moved = std::move(std::get<Record>(old_bucket.children[located.index]));
+  old_bucket.children.erase(old_bucket.children.begin() + static_cast<std::ptrdiff_t>(located.index));
+
+  GroupHeader wanted = old_header;
+  wanted.group_type = static_cast<std::int32_t>(bucket_type);
+  ensure_reference_bucket(cell_children, wanted, context, context)
+      ->children.emplace_back(std::move(moved));
+  fo4::detail::erase_if_empty(cell_children, old_header);
 }
 
 PluginKind owner_kind(const Plugin& source, const PluginKey& owner) {
