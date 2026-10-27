@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -142,6 +143,11 @@ Result Interpreter::run(const pex::PexObject* object, const pex::PexFunction& fu
     returnValue_ = Value{};
     result_ = Value{};
     frames_.clear();
+    paused_ = false;
+    latent_ = false;
+    latentToken_ = 0;
+    latentDestination_ = pex::PexValue{};
+    sliceInstructions_ = 0;
 
     if (function.isNative) {
         Result nativeResult;
@@ -166,44 +172,7 @@ Result Interpreter::run(const pex::PexObject* object, const pex::PexFunction& fu
         failed.status = pushed;
         return failed;
     }
-
-    while (!frames_.empty() && firstError_ == Status::Ok) {
-        if (instructions_ >= limits_.maxInstructions) {
-            record(Status::InstructionBudgetExceeded);
-            break;
-        }
-        const std::size_t frameIndex = frames_.size() - 1;
-        Frame& frame = frames_[frameIndex];
-        if (frame.function == nullptr || frame.ip >= frame.function->instructions.size()) {
-            hasReturn_ = false;
-            returnValue_ = Value{};
-            popFrame(noneValue());
-            continue;
-        }
-        const pex::PexInstruction& instruction = frame.function->instructions[frame.ip];
-        std::size_t next = frame.ip + 1;
-        ++instructions_;
-        const Status status = execute(instruction, frame, next);
-        if (status != Status::Ok) {
-            record(status);
-            break;
-        }
-        if (hasReturn_) {
-            hasReturn_ = false;
-            const Value value = returnValue_;
-            returnValue_ = Value{};
-            popFrame(value);
-            continue;
-        }
-        frames_[frameIndex].ip = next;
-    }
-
-    Result result;
-    result.status = firstError_;
-    result.value = firstError_ == Status::Ok ? result_ : noneValue();
-    result.instructions = instructions_;
-    result.callDepth = maxDepth_;
-    return result;
+    return finish(runLoop(limits_.maxInstructions));
 }
 
 Status Interpreter::pushFrame(const pex::PexObject* object, const pex::PexFunction& function,
@@ -263,9 +232,19 @@ Status Interpreter::invoke(Frame& frame, const Value& self, const pex::PexObject
     if (function != nullptr && !function->isNative) {
         return pushFrame(owner, *function, state, self, destination, args);
     }
+    // Invariant: GoToState changes the receiver's state and returns None.
+    if (sameName(functionName, "GotoState")) {
+        return gotoState(frame, self, args, destination);
+    }
 
     std::string target = nativeScript;
     if (target.empty() && script != nullptr) target = script->name;
+
+    std::uint64_t latentToken = 0;
+    Status latentStatus = Status::Ok;
+    if (host_.callLatent(target, functionName, args, latentStatus, latentToken)) {
+        return suspendLatent(destination, latentToken, functionName);
+    }
 
     Value out;
     Status status = Status::Ok;
@@ -274,6 +253,21 @@ Status Interpreter::invoke(Frame& frame, const Value& self, const pex::PexObject
     }
     if (function != nullptr) return Status::FunctionNotFound;
     return status == Status::Ok ? Status::FunctionNotFound : status;
+}
+
+Status Interpreter::gotoState(Frame& frame, const Value& receiver, const std::vector<Value>& args,
+                              const pex::PexValue& destination) {
+    if (!host_.gate("vm.states.gotostate")) return Status::GateRefused;
+    if (args.size() != 1) return Status::ArgumentCountMismatch;
+    if (args[0].type != ValueType::String) return Status::TypeMismatch;
+    if (receiver.type != ValueType::Object || receiver.object == nullptr) {
+        return Status::NullObject;
+    }
+    Status status = Status::Ok;
+    if (!host_.setState(*receiver.object, args[0].str, status)) {
+        return status == Status::Ok ? Status::HostError : status;
+    }
+    return storeResult(frame, destination, noneValue());
 }
 
 const pex::PexFunction* Interpreter::findFunction(const pex::PexObject& object,
@@ -470,6 +464,15 @@ Status Interpreter::coerce(const Value& value, const std::string& declaredType, 
         out = value;
         return Status::Ok;
     }
+    if (value.type == ValueType::Struct) {
+        if (value.structure != nullptr &&
+            (sameName(declaredType, "Var") || sameName(declaredType, "ScriptObject") ||
+             sameName(declaredType, value.structure->typeName))) {
+            out = value;
+            return Status::Ok;
+        }
+        return Status::TypeMismatch;
+    }
     switch (target) {
         case ValueType::Array:
             if (value.type != ValueType::Array) return Status::TypeMismatch;
@@ -513,6 +516,15 @@ Status Interpreter::castTo(const Value& source, const std::string& sourceType,
         out = noneValue();
         return Status::Ok;
     }
+    if (source.type == ValueType::Struct) {
+        if (source.structure != nullptr &&
+            (sameName(targetType, "Var") || sameName(targetType, "ScriptObject") ||
+             sameName(targetType, source.structure->typeName))) {
+            out = source;
+            return Status::Ok;
+        }
+        return Status::TypeMismatch;
+    }
     switch (declaredValueType(targetType)) {
         case ValueType::None:
             out = source;
@@ -550,7 +562,8 @@ Status Interpreter::toBool(const Value& value, bool& out) const {
         out = false;
         return Status::Ok;
     }
-    if (value.type == ValueType::Object || value.type == ValueType::Array) {
+    if (value.type == ValueType::Object || value.type == ValueType::Array ||
+        value.type == ValueType::Struct) {
         out = true;
         return Status::Ok;
     }

@@ -27,6 +27,10 @@
 #include "fo4/c_api_terrain.h"
 #include "fo4/c_api_pex_analysis.h"
 #include "fo4/c_api_script_set.h"
+#include "fo4/c_api_papyrus.h"
+#include "fo4/c_api_papyrus_runtime.h"
+#include "fo4/c_api_papyrus_save.h"
+#include "fo4/c_api_papyrus_quest.h"
 #include "fo4/c_api_papyrus_source.h"
 #include <cstddef>
 #include <cstdio>
@@ -1458,5 +1462,96 @@ int main() {
   printf("ScriptSetWinner.Name %zu\n", offsetof(radicle_script_set_winner, name));
   printf("ScriptSetWinner.Winner %zu\n", offsetof(radicle_script_set_winner, winner));
   printf("ScriptSetWinner.Replaced %zu\n", offsetof(radicle_script_set_winner, replaced));
+  printf("PapyrusCallbacks %zu\n", sizeof(radicle_papyrus_callbacks));
+  printf("PapyrusCallbacks.User %zu\n", offsetof(radicle_papyrus_callbacks, user));
+  printf("PapyrusCallbacks.Gate %zu\n", offsetof(radicle_papyrus_callbacks, gate));
+  printf("PapyrusCallbacks.GetVariable %zu\n", offsetof(radicle_papyrus_callbacks, get_variable));
+  printf("PapyrusCallbacks.SetVariable %zu\n", offsetof(radicle_papyrus_callbacks, set_variable));
+  printf("PapyrusCallbacks.GetProperty %zu\n", offsetof(radicle_papyrus_callbacks, get_property));
+  printf("PapyrusCallbacks.SetProperty %zu\n", offsetof(radicle_papyrus_callbacks, set_property));
+  printf("PapyrusCallbacks.CallNative %zu\n", offsetof(radicle_papyrus_callbacks, call_native));
+  printf("PapyrusStepResult %zu\n", sizeof(radicle_papyrus_step_result));
+  printf("PapyrusStepResult.Spent %zu\n", offsetof(radicle_papyrus_step_result, spent));
+  printf("PapyrusStepResult.Completed %zu\n", offsetof(radicle_papyrus_step_result, completed));
+  printf("PapyrusStepResult.Parked %zu\n", offsetof(radicle_papyrus_step_result, parked));
+  printf("PapyrusStepResult.Paused %zu\n", offsetof(radicle_papyrus_step_result, paused));
+  printf("PapyrusStepResult.Refused %zu\n", offsetof(radicle_papyrus_step_result, refused));
+  printf("PapyrusStepResult.Dropped %zu\n", offsetof(radicle_papyrus_step_result, dropped));
+  printf("PapyrusStepResult.Waiting %zu\n", offsetof(radicle_papyrus_step_result, waiting));
+  printf("PapyrusRuntimeCallbacks %zu\n", sizeof(radicle_papyrus_runtime_callbacks));
+  printf("PapyrusRuntimeCallbacks.User %zu\n", offsetof(radicle_papyrus_runtime_callbacks, user));
+  printf("PapyrusRuntimeCallbacks.Gate %zu\n", offsetof(radicle_papyrus_runtime_callbacks, gate));
+  printf("PapyrusRuntimeCallbacks.CallNative %zu\n", offsetof(radicle_papyrus_runtime_callbacks, call_native));
+  printf("PapyrusRuntimeCallbacks.OverrideFunction %zu\n", offsetof(radicle_papyrus_runtime_callbacks, override_function));
+  printf("PapyrusRuntimeCallbacks.BeginLatent %zu\n", offsetof(radicle_papyrus_runtime_callbacks, begin_latent));
+  printf("PapyrusStageInput %zu\n", sizeof(radicle_papyrus_stage_input));
+  printf("PapyrusStageInput.Index %zu\n", offsetof(radicle_papyrus_stage_input, index));
+  printf("PapyrusStageInput.StartupStage %zu\n", offsetof(radicle_papyrus_stage_input, startup_stage));
+  printf("PapyrusStageInput.Fragments %zu\n", offsetof(radicle_papyrus_stage_input, fragments));
+  printf("PapyrusQuestStages %zu\n", sizeof(radicle_papyrus_quest_stages));
+  printf("PapyrusQuestStages.Quest %zu\n", offsetof(radicle_papyrus_quest_stages, quest));
+  printf("PapyrusQuestStages.Stages %zu\n", offsetof(radicle_papyrus_quest_stages, stages));
+  printf("PapyrusQuestStages.StageCount %zu\n", offsetof(radicle_papyrus_quest_stages, stage_count));
+  printf("PapyrusStageOutcome %zu\n", sizeof(radicle_papyrus_stage_outcome));
+  printf("PapyrusStageOutcome.Quest %zu\n", offsetof(radicle_papyrus_stage_outcome, quest));
+  printf("PapyrusStageOutcome.State %zu\n", offsetof(radicle_papyrus_stage_outcome, state));
+  printf("PapyrusStageOutcome.HasStage %zu\n", offsetof(radicle_papyrus_stage_outcome, has_stage));
+  printf("PapyrusStageOutcome.Stage %zu\n", offsetof(radicle_papyrus_stage_outcome, stage));
+  printf("PapyrusStageOutcome.Reason %zu\n", offsetof(radicle_papyrus_stage_outcome, reason));
+  printf("PapyrusStageReport %zu\n", sizeof(radicle_papyrus_stage_report));
+  printf("PapyrusStageReport.Outcomes %zu\n", offsetof(radicle_papyrus_stage_report, outcomes));
+  printf("PapyrusStageReport.Count %zu\n", offsetof(radicle_papyrus_stage_report, count));
+  printf("PapyrusStageReport.Identified %zu\n", offsetof(radicle_papyrus_stage_report, identified));
+  printf("PapyrusStageReport.Refused %zu\n", offsetof(radicle_papyrus_stage_report, refused));
+  printf("PapyrusStageReport.Unresolved %zu\n", offsetof(radicle_papyrus_stage_report, unresolved));
+  printf("PapyrusStageReport.Report %zu\n", offsetof(radicle_papyrus_stage_report, report));
+  printf("PapyrusStageReport.Digest %zu\n", offsetof(radicle_papyrus_stage_report, digest));
+  printf("PapyrusVmadShape %zu\n", sizeof(radicle_papyrus_vmad_shape));
+  printf("PapyrusVmadShape.Name %zu\n", offsetof(radicle_papyrus_vmad_shape, name));
+  printf("PapyrusVmadShape.Type %zu\n", offsetof(radicle_papyrus_vmad_shape, type));
+  printf("PapyrusVmadShape.HasAlias %zu\n", offsetof(radicle_papyrus_vmad_shape, has_alias));
+  printf("PapyrusVmadShape.HasElementCount %zu\n", offsetof(radicle_papyrus_vmad_shape, has_element_count));
+  printf("PapyrusVmadShape.ElementCount %zu\n", offsetof(radicle_papyrus_vmad_shape, element_count));
+  printf("PapyrusVmadShape.Text %zu\n", offsetof(radicle_papyrus_vmad_shape, text));
+  printf("PapyrusVmadShape.HasReal %zu\n", offsetof(radicle_papyrus_vmad_shape, has_real));
+  printf("PapyrusVmadShape.Real %zu\n", offsetof(radicle_papyrus_vmad_shape, real));
+  printf("PapyrusVmadShape.HasInteger %zu\n", offsetof(radicle_papyrus_vmad_shape, has_integer));
+  printf("PapyrusVmadShape.Integer %zu\n", offsetof(radicle_papyrus_vmad_shape, integer));
+  printf("PapyrusVmadShape.HasBoolean %zu\n", offsetof(radicle_papyrus_vmad_shape, has_boolean));
+  printf("PapyrusVmadShape.Boolean %zu\n", offsetof(radicle_papyrus_vmad_shape, boolean));
+  printf("PapyrusVmadShape.Object %zu\n", offsetof(radicle_papyrus_vmad_shape, object));
+  printf("PapyrusBoundProperty %zu\n", sizeof(radicle_papyrus_bound_property));
+  printf("PapyrusBoundProperty.OwnerKey %zu\n", offsetof(radicle_papyrus_bound_property, owner_key));
+  printf("PapyrusBoundProperty.Name %zu\n", offsetof(radicle_papyrus_bound_property, name));
+  printf("PapyrusBoundProperty.Kind %zu\n", offsetof(radicle_papyrus_bound_property, kind));
+  printf("PapyrusBoundProperty.Value %zu\n", offsetof(radicle_papyrus_bound_property, value));
+  printf("PapyrusBoundProperty.Reason %zu\n", offsetof(radicle_papyrus_bound_property, reason));
+  printf("PapyrusBindReport %zu\n", sizeof(radicle_papyrus_bind_report));
+  printf("PapyrusBindReport.Properties %zu\n", offsetof(radicle_papyrus_bind_report, properties));
+  printf("PapyrusBindReport.Count %zu\n", offsetof(radicle_papyrus_bind_report, count));
+  printf("PapyrusBindReport.Bound %zu\n", offsetof(radicle_papyrus_bind_report, bound));
+  printf("PapyrusBindReport.Unsupported %zu\n", offsetof(radicle_papyrus_bind_report, unsupported));
+  printf("PapyrusBindReport.SilentlyDefaulted %zu\n", offsetof(radicle_papyrus_bind_report, silently_defaulted));
+  printf("PapyrusBindReport.Report %zu\n", offsetof(radicle_papyrus_bind_report, report));
+  printf("PapyrusBindReport.Digest %zu\n", offsetof(radicle_papyrus_bind_report, digest));
+  printf("PapyrusAliasInput %zu\n", sizeof(radicle_papyrus_alias_input));
+  printf("PapyrusAliasInput.Quest %zu\n", offsetof(radicle_papyrus_alias_input, quest));
+  printf("PapyrusAliasInput.AliasId %zu\n", offsetof(radicle_papyrus_alias_input, alias_id));
+  printf("PapyrusAliasInput.Kind %zu\n", offsetof(radicle_papyrus_alias_input, kind));
+  printf("PapyrusAliasInput.Target %zu\n", offsetof(radicle_papyrus_alias_input, target));
+  printf("PapyrusAliasInput.Location %zu\n", offsetof(radicle_papyrus_alias_input, location));
+  printf("PapyrusAliasOutcome %zu\n", sizeof(radicle_papyrus_alias_outcome));
+  printf("PapyrusAliasOutcome.OwnerKey %zu\n", offsetof(radicle_papyrus_alias_outcome, owner_key));
+  printf("PapyrusAliasOutcome.Kind %zu\n", offsetof(radicle_papyrus_alias_outcome, kind));
+  printf("PapyrusAliasOutcome.State %zu\n", offsetof(radicle_papyrus_alias_outcome, state));
+  printf("PapyrusAliasOutcome.Value %zu\n", offsetof(radicle_papyrus_alias_outcome, value));
+  printf("PapyrusAliasOutcome.Reason %zu\n", offsetof(radicle_papyrus_alias_outcome, reason));
+  printf("PapyrusAliasReport %zu\n", sizeof(radicle_papyrus_alias_report));
+  printf("PapyrusAliasReport.Outcomes %zu\n", offsetof(radicle_papyrus_alias_report, outcomes));
+  printf("PapyrusAliasReport.Count %zu\n", offsetof(radicle_papyrus_alias_report, count));
+  printf("PapyrusAliasReport.Filled %zu\n", offsetof(radicle_papyrus_alias_report, filled));
+  printf("PapyrusAliasReport.Open %zu\n", offsetof(radicle_papyrus_alias_report, open));
+  printf("PapyrusAliasReport.Report %zu\n", offsetof(radicle_papyrus_alias_report, report));
+  printf("PapyrusAliasReport.Digest %zu\n", offsetof(radicle_papyrus_alias_report, digest));
   return 0;
 }

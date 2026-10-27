@@ -7,7 +7,7 @@
 extern "C" {
 #endif
 
-/* Invariant: every Scripts/**.pex payload the assets reach resolves to one winner per name. */
+/* Invariant: every `.pex` payload the assets reach under Scripts/ resolves to one winner per name. */
 /* Invariant: a loose payload beats an archive payload, then a higher load index wins, then the ordinally greater container path. */
 /* Invariant: a name is a lower case path under Scripts/ without the .pex extension, so names compare without regard to case. */
 /* Invariant: a set borrows the radicle_assets handle it was resolved from, which must outlive the set. */
