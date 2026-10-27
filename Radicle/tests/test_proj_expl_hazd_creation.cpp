@@ -375,20 +375,31 @@ TEST(ProjExplHazdCreation, DecodesTruncatedExplosionDataAsAPrefix) {
 TEST(ProjExplHazdCreation, EmptyEditorIdIsRefusedBeforeAnyMutation) {
   auto plugin = fo4::read_plugin(make_target("EXPL"), "Patch.esp");
   const auto before = fo4::write_plugin(plugin);
+  const auto refusal = [](auto&& create) -> std::string {
+    try {
+      create();
+    } catch (const fo4::forms::ProjExplHazdError& error) {
+      return error.what();
+    }
+    return {};
+  };
 
   fo4::forms::ProjectileCreation projectile;
   projectile.explosion_type = fo4::FormKey::parse("000800:Patch.esp");
-  EXPECT_THROW(static_cast<void>(fo4::forms::create_projectile(plugin, projectile)),
-               fo4::forms::ProjExplHazdError);
+  EXPECT_NE(refusal([&] { static_cast<void>(fo4::forms::create_projectile(plugin, projectile)); })
+                .find("editor ID is empty"),
+            std::string::npos);
 
   fo4::forms::ExplosionCreation explosion;
-  EXPECT_THROW(static_cast<void>(fo4::forms::create_explosion(plugin, explosion)),
-               fo4::forms::ProjExplHazdError);
+  EXPECT_NE(refusal([&] { static_cast<void>(fo4::forms::create_explosion(plugin, explosion)); })
+                .find("editor ID is empty"),
+            std::string::npos);
 
   fo4::forms::HazardCreation hazard;
   hazard.model = "Effects\\FXFireMedSmokey01.nif";
-  EXPECT_THROW(static_cast<void>(fo4::forms::create_hazard(plugin, hazard)),
-               fo4::forms::ProjExplHazdError);
+  EXPECT_NE(refusal([&] { static_cast<void>(fo4::forms::create_hazard(plugin, hazard)); })
+                .find("editor ID is empty"),
+            std::string::npos);
 
   EXPECT_EQ(fo4::write_plugin(plugin), before);
 }
