@@ -169,8 +169,8 @@ TEST(Avm2Object, ReportsMethodAndAccessorLookups) {
   ASSERT_TRUE(accessor.setter != nullptr);
   EXPECT_EQ(accessor.getter->name(), "Derived::get_value");
   EXPECT_EQ(accessor.setter->name(), "Derived::set_value");
-  Value ignored;
-  EXPECT_FALSE(object.read_value(qname("value"), ignored));
+  Value accessor_ignored;
+  EXPECT_FALSE(object.read_value(qname("value"), accessor_ignored));
   EXPECT_FALSE(object.write_value(qname("value"), Value::int32(1)));
 }
 
