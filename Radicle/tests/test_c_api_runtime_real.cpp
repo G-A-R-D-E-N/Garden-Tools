@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
+#include <iostream>
 #include <map>
 #include <memory>
 #include <string>
@@ -273,6 +274,8 @@ TEST(CApiRuntimeReal, ReplaysTheSevenProgramsDeterministically) {
     const std::string property_name = "program_" + std::string{program};
     const auto found = by_basename.find(key);
     if (found == by_basename.end()) {
+      std::cerr << "[seven-programs] " << program << ": missing from Fallout4 - Interface.ba2"
+                << std::endl;
       RecordProperty(property_name.c_str(), "missing");
       continue;
     }
@@ -296,11 +299,15 @@ TEST(CApiRuntimeReal, ReplaysTheSevenProgramsDeterministically) {
     };
     std::vector<std::uint64_t> first;
     if (!open_and_replay(first)) {
+      std::cerr << "[seven-programs] " << program << " (" << movie_path
+                << ") skipped on the first run: " << radicle_last_error() << std::endl;
       RecordProperty(property_name.c_str(), (std::string{"skipped: "} + radicle_last_error()).c_str());
       continue;
     }
     std::vector<std::uint64_t> second;
     if (!open_and_replay(second)) {
+      std::cerr << "[seven-programs] " << program << " (" << movie_path
+                << ") failed on the second run: " << radicle_last_error() << std::endl;
       RecordProperty(property_name.c_str(), "replay failed on the second run");
       ++mismatches;
       continue;
