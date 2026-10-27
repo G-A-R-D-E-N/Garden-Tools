@@ -431,14 +431,14 @@ RuntimeStatus Runtime::install_builtins() {
     Trait trait;
     trait.multiname = package_name(name);
     trait.kind = TraitKind::Getter;
-    trait.disp_id = 0;
+    trait.dispatch_id = 0;
     trait.method_index = kNoMethod;
     trait.function = std::move(getter);
     klass.instance_traits.push_back(trait);
     Trait setter_trait;
     setter_trait.multiname = package_name(name);
     setter_trait.kind = TraitKind::Setter;
-    setter_trait.disp_id = 0;
+    setter_trait.dispatch_id = 0;
     setter_trait.method_index = kNoMethod;
     setter_trait.function = std::move(setter);
     klass.instance_traits.push_back(std::move(setter_trait));
@@ -457,7 +457,7 @@ RuntimeStatus Runtime::install_builtins() {
     Trait trait;
     trait.multiname = package_name(name);
     trait.kind = TraitKind::Setter;
-    trait.disp_id = 0;
+    trait.dispatch_id = 0;
     trait.method_index = kNoMethod;
     trait.function = std::move(function);
     klass.class_traits.push_back(std::move(trait));
@@ -470,7 +470,7 @@ RuntimeStatus Runtime::install_builtins() {
     Trait trait;
     trait.multiname = package_name(name);
     trait.kind = TraitKind::Getter;
-    trait.disp_id = 0;
+    trait.dispatch_id = 0;
     trait.method_index = kNoMethod;
     trait.function = std::move(function);
     klass.instance_traits.push_back(std::move(trait));
@@ -483,7 +483,7 @@ RuntimeStatus Runtime::install_builtins() {
     Trait trait;
     trait.multiname = package_name(name);
     trait.kind = TraitKind::Getter;
-    trait.disp_id = 0;
+    trait.dispatch_id = 0;
     trait.method_index = kNoMethod;
     trait.function = std::move(function);
     klass.class_traits.push_back(std::move(trait));
