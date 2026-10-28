@@ -250,7 +250,8 @@ Result<nlohmann::json> PapyrusTarget::invoke(std::string_view method,
             const bool semantic = !semanticValue || semanticValue->is_null() || boolArgument(args, 1);
             const auto imports = stripQuotes(stringArgument(args, 2));
             const std::string* importsPtr = imports.empty() ? nullptr : &imports;
-            return nlohmann::json(papyrus::AnalysisService::check(source, true, semantic, importsPtr));
+            return nlohmann::json(papyrus::AnalysisService::check(
+                source, true, semantic, importsPtr, locator_.papyrusBaseImports()));
         } catch (const std::exception& ex) {
             return nlohmann::json("Error: " + std::string(ex.what()));
         }
@@ -274,7 +275,7 @@ Result<nlohmann::json> PapyrusTarget::invoke(std::string_view method,
             const std::string* pathPtr = isWhitespace(path) ? nullptr : &path;
             const std::string* importsPtr = isWhitespace(imports) ? nullptr : &imports;
             return nlohmann::json(papyrus::AnalysisService::symbolAtJson(
-                text, pathPtr, offset, importsPtr));
+                text, pathPtr, offset, importsPtr, locator_.papyrusBaseImports()));
         } catch (const std::exception& ex) {
             return nlohmann::json(nlohmann::json{{"error", ex.what()}}.dump());
         }
@@ -369,7 +370,8 @@ Result<nlohmann::json> PapyrusTarget::compile(const nlohmann::json& args) {
         const std::string* importsPtr = imports.empty() ? nullptr : &imports;
         const std::string* flagsPtr = flags.empty() ? nullptr : &flags;
         auto result = papyrus::AnalysisService::compile(source, outputPtr, importsPtr, release,
-                                                        debugInfo, flagsPtr);
+                                                        debugInfo, flagsPtr,
+                                                        locator_.papyrusBaseImports());
         if (engine == PapyrusEngine::Auto) {
             result += "\n\nNo PapyrusCompiler.exe was found, so the built-in compiler was used. "
                       "That is not a fallback to something lesser -- it is measured against the "

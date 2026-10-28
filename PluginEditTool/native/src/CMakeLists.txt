@@ -191,6 +191,7 @@ add_library(
     papyrus/Symbols.cpp
     papyrus/CreationKitFidelity.cpp
     papyrus/AnalysisService.cpp
+    papyrus/CompileScript.cpp
 )
 target_link_libraries(fo4ide_papyrus PUBLIC fo4ide_core fo4)
 fo4ide_enable_warnings(fo4ide_papyrus)
