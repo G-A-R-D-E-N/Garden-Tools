@@ -11,11 +11,11 @@ import re
 import sys
 from pathlib import Path
 
-HEADERS = ["fo4/c_api.h", "fo4/c_api_env.h", "fo4/c_api_records.h", "fo4/c_api_materials.h", "fo4/c_api_maintenance.h", "fo4/c_api_navmesh.h", "fo4/c_api_sound.h", "fo4/c_api_pex.h", "fo4/c_api_material_file.h", "fo4/c_api_seq.h", "fo4/c_api_quest.h", "fo4/c_api_authoring.h", "fo4/c_api_vegetation.h", "fo4/c_api_vmad.h", "fo4/c_api_behavior.h", "fo4/c_api_dialogue.h", "fo4/c_api_loadorder.h", "fo4/c_api_conditions.h", "fo4/c_api_armor.h", "fo4/c_api_eyes.h", "fo4/c_api_faction.h", "fo4/c_api_components.h", "fo4/c_api_cell.h", "fo4/c_api_patch.h", "fo4/c_api_conflict.h", "fo4/c_api_nif.h", "fo4/c_api_dds.h", "fo4/c_api_terrain.h", "fo4/c_api_swf.h", "fo4/c_api_pex_analysis.h", "fo4/c_api_script_set.h", "fo4/c_api_papyrus.h", "fo4/c_api_papyrus_runtime.h", "fo4/c_api_papyrus_save.h", "fo4/c_api_papyrus_quest.h", "fo4/c_api_papyrus_source.h"]
+HEADERS = ["fo4/c_api.h", "fo4/c_api_env.h", "fo4/c_api_records.h", "fo4/c_api_materials.h", "fo4/c_api_maintenance.h", "fo4/c_api_navmesh.h", "fo4/c_api_sound.h", "fo4/c_api_pex.h", "fo4/c_api_material_file.h", "fo4/c_api_seq.h", "fo4/c_api_quest.h", "fo4/c_api_authoring.h", "fo4/c_api_vegetation.h", "fo4/c_api_vmad.h", "fo4/c_api_behavior.h", "fo4/c_api_dialogue.h", "fo4/c_api_loadorder.h", "fo4/c_api_conditions.h", "fo4/c_api_armor.h", "fo4/c_api_eyes.h", "fo4/c_api_faction.h", "fo4/c_api_components.h", "fo4/c_api_cell.h", "fo4/c_api_patch.h", "fo4/c_api_conflict.h", "fo4/c_api_nif.h", "fo4/c_api_dds.h", "fo4/c_api_terrain.h", "fo4/c_api_swf.h", "fo4/c_api_pex_analysis.h", "fo4/c_api_script_set.h", "fo4/c_api_papyrus.h", "fo4/c_api_papyrus_runtime.h", "fo4/c_api_papyrus_save.h", "fo4/c_api_papyrus_quest.h", "fo4/c_api_papyrus_source.h", "fo4/c_api_papyrus_compiler.h", "fo4/c_api_graph.h", "fo4/c_api_papyrus_analysis.h"]
 
 SCALARS = {
     "int8_t": "sbyte", "uint8_t": "byte", "int16_t": "short", "uint16_t": "ushort",
-    "int32_t": "int", "uint32_t": "uint", "int64_t": "long", "uint64_t": "ulong",
+    "int": "int", "int32_t": "int", "uint32_t": "uint", "int64_t": "long", "uint64_t": "ulong",
     "size_t": "nuint", "float": "float", "double": "double", "char": "byte",
 }
 

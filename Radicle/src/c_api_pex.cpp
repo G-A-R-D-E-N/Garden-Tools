@@ -11,7 +11,6 @@
 #include <cstring>
 #include <fstream>
 #include <iterator>
-#include <memory>
 #include <new>
 #include <optional>
 #include <stdexcept>
@@ -228,12 +227,7 @@ radicle_status radicle_pex_parse(const uint8_t* bytes, size_t size, radicle_pex*
     if (size != 0) {
       input.assign(bytes, bytes + size);
     }
-    auto handle = std::make_unique<radicle_pex>();
-    handle->value = fo4::pex::PexFile::fromBytes(input);
-    for (size_t index = 0; index < handle->value.stringTable.size(); ++index) {
-      handle->strings.emplace(handle->value.stringTable[index], index);
-    }
-    *out_pex = handle.release();
+    *out_pex = make_pex_handle(fo4::pex::PexFile::fromBytes(input)).release();
     return RADICLE_STATUS_OK;
   } catch (const std::bad_alloc& error) {
     return fail_exception(RADICLE_STATUS_OUT_OF_MEMORY, error);
