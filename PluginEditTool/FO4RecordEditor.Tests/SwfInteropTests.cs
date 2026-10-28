@@ -165,5 +165,26 @@ public sealed class SwfInteropTests
         }
     }
 
+    [NativeFact]
+    public async Task FrameSvgRpcReturnsTheRootFrameAndAnEmptyStageBeyondTheTimeline()
+    {
+        // Invariant: FrameSvg replies the svg field for the root frame and a well-formed empty stage for a frame past the root timeline, and refuses a negative frame; detects a dropped svg field, a frame past the timeline refused as an error, or a negative frame wrapped into the uint range and exporting as svg.
+        await WithOpenMovie(SwfFixture.Movie(withShape: true), async swf =>
+        {
+            Assert.False(Parse(await swf.Open("Interface\\Test.swf")).TryGetProperty("error", out _));
+
+            var svg = Parse(await swf.FrameSvg(0)).GetProperty("svg").GetString() ?? string.Empty;
+            Assert.StartsWith("<svg", svg);
+
+            var beyond = Parse(await swf.FrameSvg(999));
+            Assert.False(beyond.TryGetProperty("error", out _));
+            Assert.StartsWith("<svg", beyond.GetProperty("svg").GetString() ?? string.Empty);
+
+            var negative = Parse(await swf.FrameSvg(-1));
+            Assert.Contains("0 or more", negative.GetProperty("error").GetString());
+            Assert.False(negative.TryGetProperty("svg", out _));
+        });
+    }
+
     private static JsonElement Parse(string json) => JsonDocument.Parse(json).RootElement;
 }

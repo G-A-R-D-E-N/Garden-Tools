@@ -16,3 +16,4 @@
 .swf-abc pre, .swf-inspect pre { max-height: 240px; overflow: auto; font-size: 11px; }
 .swf-shape { max-width: 100%; }
 .swf-bitmap { max-width: 100%; image-rendering: pixelated; }
+.swf-frame-image { max-width: 100%; }

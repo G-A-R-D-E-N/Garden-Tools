@@ -391,4 +391,98 @@ describe('SwfPanel', () => {
     expect(screen.queryByAltText('Bitmap preview')).toBeNull();
     expect(swf.BitmapPng).toHaveBeenNthCalledWith(2, 5);
   });
+
+  it('previews a chosen root frame through FrameSvg bounded to the root frame count and sends a refused frame to the error bar', async () => {
+    // Invariant: a frame change sends the root frame clamped to 0..frameCount-1 to FrameSvg and renders its svg; a refusal shows its message in the error bar and leaves no frame image; detects a frame sent past the root timeline or below zero, a sprite frame count used for the bound, and a refused frame left on screen as a stale image.
+    const swf = stubBridge({
+      Timeline: vi.fn(async (index: number) => JSON.stringify({ characterId: index === 1 ? 14 : 0, frameCount: 3 })),
+      FrameSvg: vi.fn(async (frame: number) => frame === 1
+        ? JSON.stringify({ error: 'could not compose root frame 1' })
+        : JSON.stringify({ svg: `<svg id="f${frame}"></svg>` })),
+    });
+    render(<SwfPanel onClose={() => {}} />);
+    fireEvent.change(screen.getByPlaceholderText('Interface/Test.swf'), { target: { value: 'Interface/Test.swf' } });
+    await act(async () => { fireEvent.click(screen.getByText('Open')); });
+    await waitFor(() => expect(screen.getByLabelText('Preview frame').getAttribute('max')).toBe('2'));
+    expect(swf.FrameSvg).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText('Preview frame'), { target: { value: '2' } });
+    expect((await screen.findByAltText('Frame preview')).getAttribute('src'))
+      .toBe(`data:image/svg+xml;utf8,${encodeURIComponent('<svg id="f2"></svg>')}`);
+
+    fireEvent.change(screen.getByLabelText('Preview frame'), { target: { value: '9' } });
+    await waitFor(() => expect(swf.FrameSvg).toHaveBeenCalledTimes(2));
+
+    fireEvent.change(screen.getByLabelText('Preview frame'), { target: { value: '-3' } });
+    await waitFor(() => expect(swf.FrameSvg).toHaveBeenCalledTimes(3));
+    expect((await screen.findByAltText('Frame preview')).getAttribute('src'))
+      .toBe(`data:image/svg+xml;utf8,${encodeURIComponent('<svg id="f0"></svg>')}`);
+
+    await act(async () => { fireEvent.click(screen.getByText('Next')); });
+    expect(await screen.findByText('could not compose root frame 1')).toBeTruthy();
+    expect(screen.queryByAltText('Frame preview')).toBeNull();
+    expect(swf.FrameSvg).toHaveBeenNthCalledWith(1, 2);
+    expect(swf.FrameSvg).toHaveBeenNthCalledWith(2, 2);
+    expect(swf.FrameSvg).toHaveBeenNthCalledWith(3, 0);
+    expect(swf.FrameSvg).toHaveBeenNthCalledWith(4, 1);
+  });
+
+  it('drops a stale FrameSvg reply that lands after a newer frame', async () => {
+    // Invariant: a late FrameSvg reply for an earlier frame must not replace the frame shown last; detects out-of-order replies overwriting the preview of a newer frame.
+    let resolveFirst: (text: string) => void = () => {};
+    const second = '<svg xmlns="http://www.w3.org/2000/svg" id="second"></svg>';
+    const swf = stubBridge({
+      Timeline: vi.fn(async (index: number) => JSON.stringify({ characterId: index === 1 ? 14 : 0, frameCount: 3 })),
+      FrameSvg: vi.fn()
+        .mockImplementationOnce(() => new Promise<string>(resolve => { resolveFirst = resolve; }))
+        .mockImplementationOnce(async () => JSON.stringify({ svg: second })),
+    });
+    render(<SwfPanel onClose={() => {}} />);
+    fireEvent.change(screen.getByPlaceholderText('Interface/Test.swf'), { target: { value: 'Interface/Test.swf' } });
+    await act(async () => { fireEvent.click(screen.getByText('Open')); });
+    await waitFor(() => expect(screen.getByLabelText('Preview frame').getAttribute('max')).toBe('2'));
+
+    fireEvent.change(screen.getByLabelText('Preview frame'), { target: { value: '1' } });
+    fireEvent.change(screen.getByLabelText('Preview frame'), { target: { value: '2' } });
+    expect((await screen.findByAltText('Frame preview')).getAttribute('src'))
+      .toBe(`data:image/svg+xml;utf8,${encodeURIComponent(second)}`);
+    await act(async () => {
+      resolveFirst(JSON.stringify({ svg: '<svg id="stale"></svg>' }));
+      await new Promise(done => setTimeout(done, 0));
+    });
+    expect(screen.getByAltText('Frame preview').getAttribute('src'))
+      .toBe(`data:image/svg+xml;utf8,${encodeURIComponent(second)}`);
+    expect(swf.FrameSvg).toHaveBeenNthCalledWith(1, 1);
+    expect(swf.FrameSvg).toHaveBeenNthCalledWith(2, 2);
+  });
+
+  it('drops a stale BitmapPng reply that lands after a newer bitmap pick', async () => {
+    // Invariant: a late BitmapPng reply for an earlier bitmap must not replace the preview of the bitmap picked last; detects out-of-order replies overwriting it on the bitmap branch.
+    let resolveFirst: (text: string) => void = () => {};
+    const second = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+    const swf = stubBridge({
+      Characters: vi.fn(async () => JSON.stringify({ characters: [
+        { id: 30, kind: 'Bitmap', tagIndex: 4, name: '', imported: '' },
+        { id: 31, kind: 'Bitmap', tagIndex: 5, name: '', imported: '' },
+      ] })),
+      BitmapPng: vi.fn()
+        .mockImplementationOnce(() => new Promise<string>(resolve => { resolveFirst = resolve; }))
+        .mockImplementationOnce(async () => JSON.stringify({ png: second })),
+    });
+    render(<SwfPanel onClose={() => {}} />);
+    fireEvent.change(screen.getByPlaceholderText('Interface/Test.swf'), { target: { value: 'Interface/Test.swf' } });
+    await act(async () => { fireEvent.click(screen.getByText('Open')); });
+    fireEvent.click(await screen.findByText(/Bitmap #30/));
+    fireEvent.click(screen.getByText(/Bitmap #31/));
+    expect((await screen.findByAltText('Bitmap preview')).getAttribute('src'))
+      .toBe(`data:image/png;base64,${second}`);
+    await act(async () => {
+      resolveFirst(JSON.stringify({ png: 'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg==' }));
+      await new Promise(done => setTimeout(done, 0));
+    });
+    expect(screen.getByAltText('Bitmap preview').getAttribute('src'))
+      .toBe(`data:image/png;base64,${second}`);
+    expect(swf.BitmapPng).toHaveBeenNthCalledWith(1, 4);
+    expect(swf.BitmapPng).toHaveBeenNthCalledWith(2, 5);
+  });
 });
