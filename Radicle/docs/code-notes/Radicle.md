@@ -8782,6 +8782,7 @@ Detects an encoder change that alters bytes of an unedited stream. It checks thr
 ## Radicle/src/avm1/interpreter.cpp:execute_actions
 
 - `execute_actions` takes an `Avm1Environment` (`Radicle/include/fo4/avm1/interpreter.hpp`) with the RNG seed and the elapsed milliseconds for GetTime. In `Radicle/include/fo4/avm1/interpreter.hpp:Avm1Environment` the default seed `0x2545F491` is an arbitrary nonzero constant. The seed must be nonzero, since a zero xorshift state stays zero. Existing callers that pass only the step limit and SWF version keep their behavior.
+
 ## src/papyrus/decompiler_internal.hpp:BodyState
 
 - Split of `decompiler.cpp` (727 lines, too close to the 750 cap) by responsibility. `decompiler.cpp` keeps `toSource`, `emitFunction`, `disassemble` and the `decompileBody` setup. `decompiler_expr.cpp:translateInstructions` turns each instruction into a `BodyState::put` or a statement. `decompiler_stmt.cpp:reconstructStatements` runs jump folding, the temp-call pass, local hoisting and `If`/`While`/`Else` structuring. The header holds the state those passes share: `BodyState`, `JKind`, `JInfo`, and the `iequals`, `startsWith` and `join` helpers.
