@@ -251,4 +251,50 @@ TEST_F(CApiPapyrusRuntimeTest, OverridesRegistrationsAndRefusals) {
   EXPECT_EQ(status, RADICLE_PAPYRUS_STATUS_FUNCTION_NOT_FOUND);
 }
 
+TEST_F(CApiPapyrusRuntimeTest, DetachReportsWhetherTheInstanceExisted) {
+  load(actorModel());
+  uint64_t instance = 0;
+  ASSERT_EQ(radicle_papyrus_runtime_attach(runtime_, "Actor", RADICLE_PAPYRUS_OWNER_FORM,
+                                           "000803:Actor.esp", "", &instance),
+            RADICLE_STATUS_OK);
+  EXPECT_EQ(radicle_papyrus_runtime_detach(runtime_, instance), 1);
+  EXPECT_EQ(radicle_papyrus_runtime_detach(runtime_, instance + 100), 0);
+  EXPECT_EQ(radicle_papyrus_runtime_detach(nullptr, instance), 0);
+}
+
+TEST_F(CApiPapyrusRuntimeTest, InstanceStateIsTheAutoStateAndAnUnknownInstanceHasNone) {
+  PexFile model = actorModel();
+  model.objects[0].autoStateName = "Idle";
+  model.objects[0].states[0].name = "Idle";
+  model.rebuildStringTable();
+  load(model);
+  uint64_t instance = 0;
+  ASSERT_EQ(radicle_papyrus_runtime_attach(runtime_, "Actor", RADICLE_PAPYRUS_OWNER_FORM,
+                                           "000804:Actor.esp", "", &instance),
+            RADICLE_STATUS_OK);
+  EXPECT_STREQ(radicle_papyrus_runtime_instance_state(runtime_, instance), "Idle");
+  EXPECT_STREQ(radicle_papyrus_runtime_instance_state(runtime_, instance + 100), "");
+  EXPECT_EQ(radicle_papyrus_runtime_instance_state(nullptr, instance), nullptr);
+}
+
+TEST_F(CApiPapyrusRuntimeTest, FailedInitializeReportsItsStatusAsTheFailureText) {
+  PexFile model = actorModel();
+  model.objects[0].states[0].functions[0].instructions = {
+      ins("callstatic", {literal("Missing"), literal("Hit"), id("result")}),
+      ins("return", {id("::NoneVar")})};
+  model.rebuildStringTable();
+  load(model);
+  uint64_t instance = 0;
+  ASSERT_EQ(radicle_papyrus_runtime_attach(runtime_, "Actor", RADICLE_PAPYRUS_OWNER_FORM,
+                                           "000805:Actor.esp", "", &instance),
+            RADICLE_STATUS_OK);
+  radicle_papyrus_status status = RADICLE_PAPYRUS_STATUS_OK;
+  ASSERT_EQ(radicle_papyrus_runtime_initialize(runtime_, instance, &status), RADICLE_STATUS_OK);
+  EXPECT_NE(status, RADICLE_PAPYRUS_STATUS_OK);
+  EXPECT_EQ(radicle_papyrus_runtime_lifecycle(runtime_, instance), RADICLE_PAPYRUS_LIFECYCLE_FAILED);
+  EXPECT_STREQ(radicle_papyrus_runtime_failure(runtime_, instance), radicle_papyrus_status_name(status));
+  EXPECT_STREQ(radicle_papyrus_runtime_failure(runtime_, instance + 100), "no such instance");
+  EXPECT_EQ(radicle_papyrus_runtime_failure(nullptr, instance), nullptr);
+}
+
 }  // namespace

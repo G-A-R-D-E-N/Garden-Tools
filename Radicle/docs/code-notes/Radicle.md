@@ -8384,3 +8384,82 @@ Detects checkfilter letting null or undefined through to the filter. Both must g
 ## Radicle/tests/test_avm2_late_ops.cpp:FinddefPushesTheScopeThatHoldsTheName
 
 Detects finddef pushing the global object or null when a pushed scope holds the name. The object built by newobject with the pair "k" and 1 is on the scope stack, so getproperty of "k" on the owner must give the int 1.
+## Radicle/src/graph/graph_lifter.cpp:GraphLifter::liftAssign
+
+- A compound assignment to a struct member (`s.X += v`) expands to `s.X = s.X + v`. The read is lifted through `liftExpression(*assign.target)`, which gives a `StructGet` for a struct member and the same `VariableGet` as before for an identifier. The target is lifted twice, so its receiver must be call-free; otherwise the lift is refused.
+- A struct member compound whose value calls a function is refused. The Papyrus emitter reads the member before it evaluates the value (`Radicle/src/papyrus/body_statement.cpp:BodyEmitter::emitAssign`), but a lifted `Call` node runs earlier in the exec chain than a pure `StructGet`, so the read would move after the call.
+- A plain struct member assignment lowers to a `StructSet` statement: config `member` holds the name, `target` holds the receiver and `value` holds the value. The value is lifted before the receiver, as the property and index paths already do.
+- A non-compound `p.Y = p.X + Next()` has the same reordering as properties and variables, which is the existing model and is not covered by the refusal. The Papyrus emitter reads `p.X` before the call (`Radicle/src/papyrus/body_expression.cpp:BodyEmitter::emitBinary`), but the lifted `Call` node runs earlier in the exec chain, so the read moves after the call.
+
+## Radicle/src/graph/graph_lifter_expr.cpp:GraphLifter::liftMember
+
+- A struct member read lowers to a `StructGet` with config `member`, input `target` and output `value`, mirroring `PropertyGet`. It also carries config `type` set from the resolver type of the member, so `NodeDefinition::pinsFor` can make the output pin concrete. Without that, a binary over the read cannot bind its generic type.
+
+## Radicle/src/graph/graph_lifter_expr.cpp:GraphLifter::liftExpression
+
+- `new T` lowers to a `StructNew` with config `type` and output `ret`, mirroring `NewArray`. `GraphLinearizer::buildPure` reads config `type` to emit `new T`.
+
+## Radicle/include/fo4/graph/node_definition.hpp:NodeDefinition::pinsFor
+
+- `StructGet` shares the `StructNew` case, so its output data pin takes the concrete type from config `type`. Its `target` input stays `any`.
+
+## Radicle/src/graph/graph_lifter.cpp:GraphLifter::liftStatement
+
+- `Point p = new Point` is a known ceiling. The lifter declares `Point p` at the top of the function and emits `p = new Point`. The Papyrus emitter gives a declaration with no initializer an `assign p None` first (`Radicle/src/papyrus/body_statement.cpp:BodyEmitter`, DefineStatement case), while an initialised declaration emits only `struct_create`. So the lifted pex has one extra instruction. The tests therefore write `Point p` and `p = new Point` on separate lines. Locals with an initializer have the same ceiling.
+
+## Radicle/src/graph/builtin_node_definitions.cpp:builtinDefinitions::all
+
+- The struct nodes are palette entries because `GraphValidator::resolveDefinitions` refuses any node whose definition is not on the palette.
+- `StructNew` and `StructGet` are pure. `GraphLinearizer::pull` refuses a value from a non-pure node (`kUseBeforeAssignment`), and a struct read has no exec pin to order it.
+
+## Radicle/src/graph/graph_linearizer.cpp:GraphLinearizer::lowerSimple
+
+- `StructSet` lowers to `member(target, config member) = value`, the same shape as `IndexSet`. Before this change `buildPure` had `StructNew` and `StructGet`, and nothing lowered `StructSet`.
+
+## Radicle/tests/test_graph_lift.cpp:GraphLift.StructNewGetAndSetSurviveATripThroughTheGraph
+
+- Detects a lifter that refuses `new T` or a struct member read, and a linearizer that drops `StructSet`. Each would leave the regenerated pex without its `struct_create`, `struct_get` or `struct_set`, and the pex comparer reports the first difference.
+- Hand-derived original sequence: `assign p None`, `struct_create p`, `assign $a 3`, `struct_set p X $a`, `struct_get $c p X`, `iadd $b $c 4`, `struct_set p Y $b`. The regenerated source is the same text, so its sequence is the same.
+
+## Radicle/tests/test_graph_lift.cpp:GraphLift.StructMemberCompoundAssignmentSurvivesATripThroughTheGraph
+
+- Detects a struct member compound that is refused again, or expanded to read or write the wrong member. `p.Y -= p.X` uses both members, so a swapped read or write shows as a difference.
+- Hand-derived original sequence: `assign p None`, `struct_create p`, `assign $a 1`, `struct_set p X $a`, `struct_get $d p X`, `iadd $e $d 2`, `struct_set p X $e`, `struct_get $f p Y`, `struct_get $g p X`, `isub $h $f $g`, `struct_set p Y $h`.
+- The regenerated source is `p.X = p.X + 2` and `p.Y = p.Y - p.X`. Its sequence is `struct_get, iadd, struct_set` and `struct_get, struct_get, isub, struct_set`, which matches.
+
+## Radicle/tests/test_graph_lift.cpp:GraphLift.StructMemberCompoundWithACallIsRefusedRatherThanReordered
+
+- Detects a lifter that accepts a call in the value of a struct member compound. That would move the member read after the call and change behaviour with no diagnostic.
+## Radicle/src/papyrus/quest_rules.cpp:bindVmadValues
+
+- `Radicle/src/papyrus/quest_rules.cpp:bindShape` binds one shape from its declared type. Scalars keep their old rules. `array` goes to `bindArray` and `struct` goes to `bindStruct`. `variable` and unknown kinds stay unsupported with a reason.
+- `Radicle/src/papyrus/quest_rules.cpp:bindArray` accepts only int, float, bool, string and object elements, and only when `elementCount` equals `elements.size()`. Otherwise the array is refused as not decoded yet. One element that fails to bind refuses the whole array, so no partial array is ever bound. A `Variable[]` shape carries elementType `Variable`, so it is refused as not a bindable scalar type.
+- `Radicle/src/papyrus/quest_rules.cpp:bindStruct` keys members by the folded name, as `Radicle/include/fo4/papyrus/value.hpp:Struct` requires. A repeated member name refuses the struct instead of letting the map drop one. VMAD stores no struct type name, so `Struct::typeName` stays empty.
+- `Radicle/include/fo4/papyrus/quest_rules.hpp:BoundProperty::isBound` now counts `Array` and `Struct`, so `Radicle/src/c_api_papyrus_quest.cpp:radicle_papyrus_bind_vmad_values` hands those values out. The C shape has no element or member fields, so C callers still get array and struct shapes refused. No ABI bump.
+- Regression detected by `Radicle/tests/test_papyrus_quest_rules.cpp:BindsIntAndObjectArraysAndAStructAndRefusesVariables`: a decoded array or struct reported as not decoded yet, a Variable or Variable[] property bound as a default, and a struct member lost to a duplicate name.
+
+## Radicle/tests/test_papyrus_quest_rules.cpp:BindsIntAndObjectArraysAndAStructAndRefusesVariables
+
+- Detects the int array, object array and struct being refused (expected bound=3 unsupported=2, with Counts and Refs holding 3 and 2 elements, Config holding speed=7 and label="go"), and a Variable or Variable[] property being bound instead of refused with a reason. Expected values were derived by hand from `Radicle/src/papyrus/quest_rules.cpp:bindShape`.
+
+## Radicle/tests/test_c_api_papyrus.cpp:CApiPapyrusTest tests
+
+- `Radicle/tests/test_c_api_papyrus.cpp:getPropertyCallback` now records the receiver handle, type and state. It answers only the property Label, with int 11.
+- `Radicle/tests/test_c_api_papyrus.cpp:readLabelOf` builds an object value and runs `Reader.Read`, whose `propget` on Label reaches the get_property callback through `Radicle/src/c_api_papyrus.cpp:readThrough`.
+- `Radicle/tests/test_c_api_papyrus.cpp:CApiPapyrusTest.ValueNoneIsTheNoneKindAndRefusesANullOutput` detects `radicle_papyrus_value_none` returning a non-none kind, or accepting a null out pointer without INVALID_ARGUMENT.
+- `Radicle/tests/test_c_api_papyrus.cpp:CApiPapyrusTest.ObjectHandleReadsTheReceiverInsideAPropertyCallback` detects `radicle_papyrus_object_handle` returning the wrong handle inside the callback, or a non-zero value for a null object.
+- `Radicle/tests/test_c_api_papyrus.cpp:CApiPapyrusTest.ObjectTypeNamesTheReceiverScriptAndNullHasNoType` detects `radicle_papyrus_object_type` naming the wrong script, or returning a non-null pointer for a null object.
+- `Radicle/tests/test_c_api_papyrus.cpp:CApiPapyrusTest.ObjectStateCarriesTheReceiverStateAndNullHasNoState` detects `radicle_papyrus_object_state` returning the wrong state, or a non-null pointer for a null object.
+
+## Radicle/tests/test_c_api_papyrus_runtime.cpp:CApiPapyrusRuntimeTest tests
+
+- `Radicle/tests/test_c_api_papyrus_runtime.cpp:DetachReportsWhetherTheInstanceExisted` detects `radicle_papyrus_runtime_detach` returning 1 for an unknown instance, or 0 for a live one, or crashing on a null runtime (`Radicle/src/papyrus/runtime.cpp:Runtime::detach`).
+- `Radicle/tests/test_c_api_papyrus_runtime.cpp:InstanceStateIsTheAutoStateAndAnUnknownInstanceHasNone` detects `radicle_papyrus_runtime_instance_state` reporting the owning script name instead of the instance state (`Radicle/src/papyrus/runtime.cpp:Runtime::attach` takes the auto state), or a null pointer for an unknown instance (`Runtime::instanceState` answers an empty string).
+- `Radicle/tests/test_c_api_papyrus_runtime.cpp:FailedInitializeReportsItsStatusAsTheFailureText` detects `radicle_papyrus_runtime_failure` returning an empty or stale text after a failed OnInit (`Runtime::initialize` stores `statusName`), and the wrong text for an unknown instance (`no such instance`). The failing OnInit calls an unregistered native, so the status is not Ok; the test does not pin which status, only that the failure text is the status name.
+
+## Radicle/tests/test_c_api_swf_characters.cpp:CApiSwfCharacters tests
+
+- `Radicle/tests/test_c_api_swf_characters.cpp:SymbolCountCountsTheSymbolClassEntriesOnly` detects `radicle_swf_symbol_count` counting ExportAssets entries as symbols. The every-kind fixture has 2 SymbolClass entries and 1 export, so the expected count is 2. The small fixture gives 1.
+- `Radicle/tests/test_c_api_swf_characters.cpp:ExportCountCountsTheExportAssetsEntriesOnly` detects `radicle_swf_export_count` counting SymbolClass entries (expected 1 for the every-kind fixture, 0 for the small one).
+- `Radicle/tests/test_c_api_swf_characters.cpp:ReadsEachGradientStopAndRefusesAnOutOfRangeOne` detects `radicle_swf_shape_fill_stop_at` reading the wrong stop or fill, not clearing the output on refusal, or accepting a solid fill with no stops. Stop colours are 0xAARRGGBB from the define_shape_3 fixture bytes (`Radicle/tests/swf_art_fixtures.hpp:define_shape_3_payload`), matching the 0x800000FF value that `Radicle/tests/test_swf_art.cpp` already pins.
+- Nothing was compiled or run on the development machine for these changes. CI must confirm them.

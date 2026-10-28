@@ -442,6 +442,15 @@ std::vector<std::shared_ptr<ir::IrStatement>> GraphLinearizer::lowerSimple(
             break;
         }
 
+        case GraphNodeKind::StructSet: {
+            const auto target = pull(PinRef{node.id, std::string(pinIds::kTarget)}, frame, into);
+            const auto value = pull(PinRef{node.id, std::string(pinIds::kValue)}, frame, into);
+            auto set = assign(member(target, node.configString("member").value_or("")), value);
+            set->nodeId = node.id;
+            out.push_back(std::move(set));
+            break;
+        }
+
         case GraphNodeKind::Call:
         case GraphNodeKind::ArrayOp: {
             auto call = buildCall(node, definition, frame, into);
