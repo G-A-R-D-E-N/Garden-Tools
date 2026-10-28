@@ -8360,6 +8360,100 @@ A row whose character is a DefineText or DefineText2 with a clip depth opens a m
 
 Expected strings were derived by hand. The glyph is a 1000-twip square (50 px, the path of `Radicle/tests/test_swf_svg.cpp:kRedSquare` at its size), at a DefineText height of 1024, so the font scale is 1 and the text matrix is the identity. The blue square is the 600-twip one, `Radicle/tests/test_swf_svg.cpp:kBlueSquare`. The clipPath ids follow the shape-mask convention `r<index>clip`. Nothing was compiled or run on the development machine for this change, so CI must confirm them.
 
+## Radicle/src/avm2/interpreter.cpp:Interpreter::execute_frame (AVM2 late ops census)
+
+Census from a source scan (not compiled or run): 169 named opcodes, 168 with a case in `Radicle/src/avm2/interpreter_dispatch_a.inc` through `interpreter_dispatch_e.inc`, and 1 without, `getdescendants` 0x59. This replaces the 12-opcode census above. The 11 added here are dxns 0x06, dxnslate 0x07, pushnamespace 0x31, finddef 0x5F, setpropertylate 0x69, deletepropertylate 0x6B, getglobalslot 0x6E, setglobalslot 0x6F, esc_xelem 0x71, esc_xattr 0x72 and checkfilter 0x78. All 11 new cases are in `Radicle/src/avm2/interpreter_dispatch_e.inc`, which `Radicle/src/avm2/interpreter.cpp:Interpreter::execute_frame` includes.
+
+getdescendants stays undispatched because this runtime has no XML or XMLList object model (see the R3 status note above), so there is no descendant set to return. It needs that model before a case can be added.
+
+## Radicle/src/avm2/interpreter_dispatch_e.inc:pushnamespace
+
+pushnamespace pushes the namespace URI as a string Value, not a namespace Value kind. The Value variant has no namespace kind and no Namespace builtin exists. The only consumer of a namespace operand, `Radicle/src/avm2/interpreter_property.cpp:Interpreter::pop_runtime_operands`, reads it with to_string and builds a Package namespace, so a string gives the same result there. The cost is that `typeof` and `is Namespace` see a string. Add a namespace kind when a Namespace class is modelled. The public namespace has the empty URI, so it pushes "".
+
+## Radicle/src/avm2/interpreter_dispatch_e.inc:setpropertylate
+
+The late opcodes 0x69 and 0x6B have no constant pool operand, so the name is on the operand stack. The case builds a RuntimeName multiname in the public namespace and resolves the name with `Radicle/src/avm2/interpreter_property.cpp:Interpreter::pop_runtime_operands`. setpropertylate passes above=1 because the value is on top, and deletepropertylate passes above=0. The stack order is object, name, value for set and object, name for delete. There is no getpropertylate opcode: getproperty (0x66) already handles a runtime name through `resolve_runtime_multiname` in `Radicle/src/avm2/interpreter_dispatch_b.inc`.
+
+## Radicle/src/avm2/interpreter_dispatch_e.inc:getglobalslot
+
+getglobalslot and setglobalslot address `frame.scopes.front()`, the object getglobalscope pushes. A read past the end of the slots is undefined, as getslot does. A write grows the slot vector, as setslot does. An empty scope list raises ScopeUnderflow.
+
+## Radicle/src/avm2/interpreter_dispatch_e.inc:dxns
+
+dxns and dxnslate store the URI in `Radicle/include/fo4/avm2/interpreter.hpp:Interpreter` (the Frame field `default_xml_namespace`). Nothing reads it yet, because the default XML namespace only affects E4X, which is not modelled. The effect is storage only. The value is per frame and is not inherited by callees.
+
+## Radicle/src/avm2/interpreter_xml_text.cpp:escape_xml_markup
+
+PROVISIONAL: the escape sets in `Radicle/src/avm2/interpreter_xml_text.cpp:escape_xml_markup` are unverified against ECMA-357, because no reference is available on this machine. The sets are the ones the change brief named: element content escapes `&`, `<` and `>`, and attribute values also escape `"` to `&quot;`. Open questions: whether `>` must also be escaped in attributes (this code escapes it in attributes, as it does in element content), and whether LF, CR and TAB become character references in attributes and CR in element content (this code escapes none of them). Behaviour is not changed by this note. The input is UTF-8 bytes; the escaped characters are ASCII, so multibyte sequences are never altered.
+
+## Radicle/src/avm2/interpreter_dispatch_e.inc:checkfilter
+
+checkfilter refuses only null and undefined, with a TypeError status. Other values pass and stay on the stack. Because XML is not modelled, a non-XML value that the real opcode refuses passes here.
+
+## Radicle/src/avm2/interpreter_dispatch_e.inc:finddef
+
+finddef resolves its operand as a static multiname and calls `Radicle/src/avm2/interpreter_property.cpp:Interpreter::find_scope_binding` with create_on_global false, the same way the getlex case in `Radicle/src/avm2/interpreter_dispatch_b.inc` does. The verifier groups 0x5F with getlex and it has no runtime-multiname operands, so no runtime name is popped. It searches the scope chain and pushes the owning scope, or null when no scope holds the name. PROVISIONAL against avmplus: the scope-chain search and the null on a miss are not verified. The real finddef may search only the domain definitions, and may refuse a missing definition. The avmplus reference was not available here.
+
+## Radicle/tests/test_avm2_late_ops.cpp:PushnamespaceReturnsTheUriOfTheConstantPoolEntry
+
+Detects pushnamespace returning the wrong constant pool entry, such as an off-by-one index, or the public namespace not being the empty URI. The expected values "flash.display" and "" follow from `Radicle/tests/avm2_test_support.hpp:ScriptBuilder::namespace_of`, where pool index 1 is the public package.
+
+## Radicle/tests/test_avm2_late_ops.cpp:DxnsLeavesTheOperandStackAlone
+
+Detects dxns consuming or pushing a stack value. With 9 under the URI, returnvalue must still return 9.
+
+## Radicle/tests/test_avm2_late_ops.cpp:DxnslatePopsTheUriItIsGiven
+
+Detects dxnslate leaving its operand on the stack. With 9 under the URI, returnvalue must return 9, not the URI string.
+
+## Radicle/tests/test_avm2_late_ops.cpp:SetpropertylateStoresTheValueUnderTheNameFromTheStack
+
+Detects setpropertylate reading the value and the name in the wrong order, or leaving the object behind. If name and value were swapped, getproperty of "k" would not return the int 42 that was pushed last.
+
+## Radicle/tests/test_avm2_late_ops.cpp:SetpropertylateRefusesANullObject
+
+Detects setpropertylate writing through a null object without an error. The expected status is NullReference, with a message starting "cannot write".
+
+## Radicle/tests/test_avm2_late_ops.cpp:DeletepropertylatePushesOnlyATrueBoolForAnExistingKey
+
+Checks only the value deletepropertylate pushes. After delete, swap and pop, only the boolean must remain, and it must be true. The test does not check the key afterwards; DeletepropertylateRemovesTheKeyNamedByTheStack does that.
+
+## Radicle/tests/test_avm2_late_ops.cpp:DeletepropertylateRemovesTheKeyNamedByTheStack
+
+Detects deletepropertylate reporting success without removing the key, or deleting a different name. After the delete, reading "k" must give undefined.
+
+## Radicle/tests/test_avm2_late_ops.cpp:GetglobalslotReadsTheGlobalObjectNotTheTopScope
+
+Detects getglobalslot reading the top scope object instead of the global object. The object pushed by pushscope has no slots, so reading it would give undefined instead of the int 7.
+
+## Radicle/tests/test_avm2_late_ops.cpp:GetglobalslotPastTheEndIsUndefined
+
+Detects getglobalslot indexing past the slot vector instead of returning undefined for a slot that was never written.
+
+## Radicle/tests/test_avm2_late_ops.cpp:EscXelemEscapesAmpersandAndAngleBracketsButNotQuotes
+
+Detects esc_xelem escaping double quotes in element content, or missing one of the three characters. The expected value is derived by hand from the input a&b<c>d"e.
+
+## Radicle/tests/test_avm2_late_ops.cpp:EscXattrAlsoEscapesDoubleQuotes
+
+Detects esc_xattr leaving a double quote unescaped, which would end an attribute early. The expected value is derived by hand from the same input.
+
+## Radicle/tests/test_avm2_late_ops.cpp:EscapeConvertsANonStringWithToStringFirst
+
+Detects the escape opcodes applying string operations to a raw number or null instead of converting with to_string first. The expected values "42" and "null" are the ToString results of the pushed int and null.
+
+## Radicle/tests/test_avm2_late_ops.cpp:CheckfilterLeavesANonNullValueOnTheStack
+
+Detects checkfilter consuming its operand, or refusing a non-null value. The int 5 must come back from returnvalue.
+
+## Radicle/tests/test_avm2_late_ops.cpp:CheckfilterRefusesNullAndUndefined
+
+Detects checkfilter letting null or undefined through to the filter. Both must give TypeError.
+
+## Radicle/tests/test_avm2_late_ops.cpp:FinddefPushesTheScopeThatHoldsTheName
+
+Detects finddef pushing the global object or null when a pushed scope holds the name. The object built by newobject with the pair "k" and 1 is on the scope stack, so getproperty of "k" on the owner must give the int 1.
+
 ## Radicle/src/graph/graph_lifter.cpp:GraphLifter::liftAssign
 
 - A compound assignment to a struct member (`s.X += v`) expands to `s.X = s.X + v`. The read is lifted through `liftExpression(*assign.target)`, which gives a `StructGet` for a struct member and the same `VariableGet` as before for an identifier. The target is lifted twice, so its receiver must be call-free; otherwise the lift is refused.
@@ -8459,3 +8553,45 @@ Expected strings were derived by hand. The glyph is a 1000-twip square (50 px, t
 - `Radicle/tests/test_papyrus_type_checker.cpp:ANonVoidFunctionWhoseEveryBranchReturnsIsFine` is the accepting shape: the same `If`/`ElseIf`/`Else` with every branch returning. It detects a false positive on a correct function. Expected: no diagnostics.
 - `Radicle/tests/test_papyrus_type_checker.cpp:ANonVoidFunctionWithAnIfWithoutAnElseIsRejected` is the boundary: a single `If` with a `Return` and no `Else`. It detects an `If` without `Else` counted as always returning. Expected: one `MissingReturn`.
 - `Radicle/tests/test_papyrus_type_checker.cpp:EventsVoidFunctionsAndNativeFunctionsMayEndWithoutAReturn` detects the check firing on an event, a void function or a native function. Expected: no diagnostics. The native case matters because the F4SE emitter's scripts declare native functions (`Radicle/tests/test_f4se_emitter.cpp:TheEmittedScriptsCompileToPexWithZeroDiagnostics` compiles them with zero diagnostics).
+## Radicle/src/abc/abc_write.cpp:type_name_expansion_too_large (ABC writer TypeName cap)
+
+- Mirror: `Radicle/src/abc/constant_pool.cpp:parse_multiname_pool` refuses a TypeName (kind 0x1D) whose expansion passes `detail::kMaxTypeNameExpansion` (64, now declared in `Radicle/src/abc/abc_internal.hpp`, so the parser and the writer read one constant). The expansion of a TypeName is 1 + expansion(name) + the sum of expansion(param) over its params; every other multiname expands to 1. The parser checks the running total after each addend, which is the same as checking the final total because every addend is at least 1 and the total never falls.
+- `Radicle/src/abc/abc_write.cpp:pool_encodable` calls `type_name_expansion_too_large` after its reference loop, so every name and param index is already known to be below its TypeName. A model over the cap returns `AbcStatus::TypeNameTooLarge` and `AbcFile::serialize` leaves `out` empty, instead of writing bytes that `AbcFile::parse` rejects.
+- Hand-derived boundary: a flat TypeName over QName 1 with 62 params expands to 64 and is accepted; with 63 params it expands to 65 and is refused. A chain of nested TypeNames, each with one param, expands to 2k + 1 at depth k: 31 levels give 63 (accepted), 32 levels give 65 (refused).
+- Regressions: `Radicle/tests/test_abc_write.cpp:TypeNameExpansionCapIsInclusiveAtSixtyFourNodes` detects a writer with no cap at all, or an off-by-one `>=` that refuses 64. `Radicle/tests/test_abc_write.cpp:TypeNameExpansionCountsNestedParametersAcrossLevels` detects a writer that counts only direct params: each nested level has one param, so only the summed expansion refuses at 32 levels.
+- This closes the "Known gap" bullet in the `Radicle/src/abc/abc_write.cpp:AbcFile::serialize (#806 phase 1)` section above.
+
+## Radicle/src/abc/abc_write.cpp:put_trait (checked, no change)
+
+- Correction to the "Remaining gap" bullet in the `Radicle/src/abc/abc_write.cpp:AbcFile::serialize (#806 phase 1)` section: `put_trait` does not write fields a kind does not use. Each kind writes only its own fields (Slot and Const: slot_id, type_name, value_index, and value_kind when value_index is non-zero; Class and Function: slot_id and class_index; Method, Getter and Setter: disp_id and method_index), plus metadata only when `has_metadata()`. The unused fields are never emitted, so there is no stray field to normalise.
+- The one in-memory value that does not reach the file is `value_kind` on a Slot or Const whose `value_index` is 0. The format has no byte for it, `Radicle/src/abc/abc_file.cpp:parse_traits` leaves it at Undefined, and the bytes are canonical. It is not normalised, because a refusal would reject models that carry a default kind.
+- The validity checks match the parser. `traits_values_known` tests `value_kind` only when `value_index` is non-zero, as `parse_traits` does, and `value_kind_known` lists the same kinds as `is_value_kind` in `Radicle/src/abc/abc_file.cpp`. A `has_metadata()` flag with an empty list writes a zero count, which the parser reads back.
+- Checked by reading `put_trait` and `parse_traits` side by side. Nothing was compiled or run.
+
+## Radicle/src/abc/abc_asm_code.cpp:BodyParser::parse_header (optional maxstack and local_count)
+
+- `maxstack` and `local_count` are optional keywords in the body header. `Radicle/src/abc/abc_text_body.cpp:render_body` still always writes them, so the dump form is unchanged. `max_stack_given` and `local_count_given` record which keywords the text carried. The other header keywords (`method`, `init_scope`, `max_scope`, `code_bytes`) stay required and in order.
+- A header that omits a keyword leaves that field at its default until `BodyParser::measure_omitted_limits` runs.
+- Regressions: the optional-keyword path is exercised by the three `AbcAsm` cases listed under `Radicle/tests/test_abc_asm.cpp:AbcAsm (omitted-limit cases)` below. A parser that still requires the keyword refuses every header from a stripped dump.
+
+## Radicle/src/abc/abc_asm_code.cpp:BodyParser::measure_omitted_limits (assembler limits)
+
+- The body is pushed to `file.bodies` first, because `Radicle/src/abc/abc_verify.cpp:verify_method_flow` reads the body by index. It is popped again on refusal. The verifier is the only check on this path, so a body with an omitted limit is held to the same rules a body edit is.
+- Omitted `local_count` is `1 + param_count + (1 if NEED_ARGUMENTS or NEED_REST)`, raised to `Radicle/src/abc/edit.cpp:required_local_count` of the decoded code. The parameter floor repeats the rule in `Radicle/src/abc/abc_verify.cpp:verify_method_context`, because `refresh_body_limits` only raises a count and would leave a method with parameters at 0. The verifier still checks the value, so a drift between the two shows up as a refusal.
+- Omitted `max_stack` is measured by running `verify_method_flow` with `detail::kVerifierStackCeiling` (4096, shared with `Radicle/src/abc/edit.cpp:verify_and_commit`) and then set to `flow.observed_max_stack`, the deepest stack the walk reaches.
+- Explicit values are never overwritten, even when the verifier would want a larger one. If any value is explicit the verifier runs with the explicit value in place, so an explicit `maxstack` below the observed depth makes assembly fail with `InconsistentModel` and the verifier's message. When both are explicit no verifier run happens, as before.
+- Hand-derived values for the synthetic fixture (`Radicle/tests/abc_test_support.hpp:build_abc`): body 0 is the constructor, method 0 with no params, so local_count is 1. getlex (depth 1), pushstring (2), callpropvoid with argc 1 (pops 2) and returnvoid give observed depth 2. Body 1 is the listener, method 1 with one param, so local_count is 2. getlex (1), pushstring (2), getlex (3), callpropvoid with argc 2 (pops 3) give observed depth 3.
+- Regressions: `Radicle/tests/test_abc_asm.cpp:AbcAsm.ComputesAnOmittedMaxStackFromTheVerifierAndKeepsTheExplicitLocalCount` detects max_stack left at 0 (the verifier refuses depth 1 against 0) or a measured value that is not the observed depth. `Radicle/tests/test_abc_asm.cpp:AbcAsm.ComputesAnOmittedLocalCountFromTheParameterCountAndMaxStackFromTheCode` detects a local_count taken from the code alone (0 instead of 2), which the verifier refuses as too small for the parameter, and a max_stack that is not measured. `Radicle/tests/test_abc_asm.cpp:AbcAsm.KeepsAnExplicitMaxStackWhenOnlyLocalCountIsOmitted` detects an assembler that overwrites an explicit max_stack with the measured 3.
+- For omitted values only, this supersedes the "Still open in phase 5/6" bullet of the `## ABC assembler: text back to a model (phase 5)` section above.
+
+## Radicle/src/abc/edit.cpp:required_local_count (shared, moved)
+
+- `required_local_count` moved out of the anonymous namespace in `Radicle/src/abc/edit.cpp` into `detail`, and `Radicle/src/abc/abc_internal.hpp` declares it, so `Radicle/src/abc/abc_asm_code.cpp:BodyParser::measure_omitted_limits` uses the same rule as `Radicle/src/abc/edit.cpp:verify_and_commit`. The verifier ceiling `kVerifierStackCeiling` moved to the same header. No behaviour changed for edits.
+
+## Radicle/tests/test_abc_asm.cpp:AbcAsm (omitted-limit cases)
+
+- The three new cases are `ComputesAnOmittedMaxStackFromTheVerifierAndKeepsTheExplicitLocalCount`, `ComputesAnOmittedLocalCountFromTheParameterCountAndMaxStackFromTheCode` and `KeepsAnExplicitMaxStackWhenOnlyLocalCountIsOmitted`. Each renders the fixture, removes or sets header keywords with `rewrite_header_field`, assembles, and checks the numbers derived above. The first two also run `Radicle/src/abc/abc_verify.cpp:verify_method_flow` on the assembled body and expect it to pass.
+
+## .github/workflows/native-ci.yml:REAL_DATA_TEST_REGEX
+
+- The Papyrus gates `PapyrusParseReal`, `PapyrusSemanticReal`, `PapyrusCodegenReal` and `PapyrusDecompilerReal` (`Radicle/tests/test_papyrus_parse_real.cpp`, `test_papyrus_semantic_real.cpp`, `test_papyrus_codegen_real.cpp`, `test_papyrus_decompiler_real.cpp`) are selected by the `[A-Za-z0-9_]*Real\.` branch, so the Fallout 4 data job runs them and the normal job excludes them. They read `FO4RE_PSC_*` and `FO4_PSC_CORPUS` rather than `FO4_DATA_DIR`, so the data job sets those from `$env:FO4_DATA_DIR` in its Test step (`.github/workflows/native-ci.yml:REAL_DATA_TEST_REGEX`). Without that, every gate skips and a Papyrus compile or decompile fidelity regression (a parse, resolve or type-check diagnostic on the vanilla scripts, or the decompile round-trip falling below 0.802) goes unnoticed. The PEX gates (`PapyrusDecompilerReal` and the codegen CK-differential test, which read `FO4_PEX_CORPUS`/`FO4RE_PEX_CORPUS`) stay unset and keep skipping (TODO in the Test step) until a staged `.pex` root is available. The gates now fail rather than skip when the roots exist: the semantic gate has zero diagnostic tolerance and the decompile round-trip floor is 0.802 with almost no margin, and the first data-runner run is unverified (`docs/papyrus-real-data-gates.md`). `PapyrusSourceRealTest` is not selected because it falls back to `Radicle/testdata/papyrus` and runs in the normal job.

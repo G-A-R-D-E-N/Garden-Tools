@@ -4,7 +4,9 @@
 #include <fo4/abc/opcodes.hpp>
 
 #include "abc_asm_internal.hpp"
+#include "abc_internal.hpp"
 
+#include <algorithm>
 #include <charconv>
 #include <cstddef>
 #include <cstdint>
@@ -100,6 +102,8 @@ struct BodyParser {
   bool in_code{false};
   bool saw_code{false};
   std::size_t expected_code_bytes{0};
+  bool max_stack_given{false};
+  bool local_count_given{false};
 
   bool fail(std::string_view message) {
     if (error.empty()) {
@@ -137,8 +141,16 @@ struct BodyParser {
       token += 2;
       return true;
     };
-    if (!keyword_ref("method", body.method) || !keyword_u32("maxstack", body.max_stack) ||
-        !keyword_u32("local_count", body.local_count) ||
+    const auto optional_u32 = [&](std::string_view keyword, std::uint32_t& out, bool& given) {
+      if (token >= tokens.size() || tokens[token] != keyword) {
+        return true;
+      }
+      given = true;
+      return keyword_u32(keyword, out);
+    };
+    if (!keyword_ref("method", body.method) ||
+        !optional_u32("maxstack", body.max_stack, max_stack_given) ||
+        !optional_u32("local_count", body.local_count, local_count_given) ||
         !keyword_u32("init_scope", body.init_scope_depth) ||
         !keyword_u32("max_scope", body.max_scope_depth)) {
       return fail("body header is malformed");
@@ -148,6 +160,41 @@ struct BodyParser {
       return fail("body code size is malformed");
     }
     expected_code_bytes = code_bytes;
+    return true;
+  }
+
+  bool measure_omitted_limits(std::size_t index, const std::vector<AbcInstruction>& code) {
+    if (max_stack_given && local_count_given) {
+      return true;
+    }
+    AbcMethodBody& measured = file.bodies[index];
+    if (!local_count_given) {
+      std::uint32_t parameter_locals = 0;
+      if (measured.method < file.methods.size()) {
+        const AbcMethodInfo& method = file.methods[measured.method];
+        const std::uint32_t variadic = (method.needs_arguments() || method.needs_rest()) ? 1u : 0u;
+        parameter_locals = 1 + method.param_count + variadic;
+      }
+      measured.local_count = std::max(parameter_locals, required_local_count(code));
+    }
+    if (!max_stack_given) {
+      measured.max_stack = kVerifierStackCeiling;
+    }
+    AbcMethodFlow flow;
+    AbcFlowIssue issue;
+    const AbcFlowStatus status =
+        verify_method_flow(file, static_cast<std::uint32_t>(index), flow, issue);
+    if (status != AbcFlowStatus::Ok || !flow.verified) {
+      std::string message =
+          std::string("the verifier refused the assembled body: ") + flow_status_name(status);
+      if (!issue.message.empty()) {
+        message += ": " + issue.message;
+      }
+      return fail(message);
+    }
+    if (!max_stack_given) {
+      measured.max_stack = flow.observed_max_stack;
+    }
     return true;
   }
 
@@ -481,6 +528,10 @@ AbcStatus parse_body(AbcFile& file, std::size_t body_index,
     return AbcStatus::InconsistentModel;
   }
   file.bodies.push_back(std::move(parser.body));
+  if (!parser.measure_omitted_limits(body_index, verified)) {
+    file.bodies.pop_back();
+    return AbcStatus::InconsistentModel;
+  }
   return AbcStatus::Ok;
 }
 

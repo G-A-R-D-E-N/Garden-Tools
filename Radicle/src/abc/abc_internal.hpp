@@ -17,6 +17,10 @@ AbcStatus parse_constant_pool(ByteReader& reader, AbcConstantPool& out);
 AbcStatus parse_metadata(ByteReader& reader, std::vector<AbcMetadata>& out);
 AbcStatus check_pool_indices(const AbcFile& file);
 
+inline constexpr std::size_t kMaxTypeNameExpansion = 64;
+inline constexpr std::uint32_t kVerifierStackCeiling = 4096;
+std::uint32_t required_local_count(const std::vector<AbcInstruction>& code);
+
 /* Invariant: method and body survive a set, so one seed per body lasts through a refusal. */
 inline AbcFlowStatus set_issue(AbcFlowIssue& issue, AbcFlowStatus status, std::uint32_t offset,
                                std::string message) {
