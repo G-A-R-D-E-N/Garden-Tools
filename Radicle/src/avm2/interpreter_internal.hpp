@@ -102,7 +102,9 @@ namespace op {
   constexpr std::uint8_t k_astypelate = 0x87;
   constexpr std::uint8_t k_negate = 0x90;
   constexpr std::uint8_t k_increment = 0x91;
+  constexpr std::uint8_t k_inclocal = 0x92;
   constexpr std::uint8_t k_decrement = 0x93;
+  constexpr std::uint8_t k_declocal = 0x94;
   constexpr std::uint8_t k_typeof = 0x95;
   constexpr std::uint8_t k_not = 0x96;
   constexpr std::uint8_t k_bitnot = 0x97;
@@ -129,6 +131,7 @@ namespace op {
   constexpr std::uint8_t k_in = 0xB4;
   constexpr std::uint8_t k_increment_i = 0xC0;
   constexpr std::uint8_t k_decrement_i = 0xC1;
+  constexpr std::uint8_t k_negate_i = 0xC4;
   constexpr std::uint8_t k_add_i = 0xC5;
   constexpr std::uint8_t k_subtract_i = 0xC6;
   constexpr std::uint8_t k_multiply_i = 0xC7;
