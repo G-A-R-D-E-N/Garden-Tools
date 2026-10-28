@@ -280,6 +280,8 @@ add_library(fo4
   src/papyrus/scheduler.cpp
   src/papyrus/execute.cpp
   src/papyrus/decompiler.cpp
+  src/papyrus/decompiler_expr.cpp
+  src/papyrus/decompiler_stmt.cpp
   src/papyrus/lexer.cpp
   src/papyrus/parser.cpp
   src/papyrus/parser_statement.cpp
@@ -381,6 +383,7 @@ add_library(fo4
   src/avm1/decode.cpp
   src/avm1/encode.cpp
   src/avm1/disassembly.cpp
+  src/avm1/control_ops.cpp
   src/avm1/function_ops.cpp
   src/avm1/interpreter.cpp
   src/avm1/object_ops.cpp
@@ -995,9 +998,11 @@ if(RADICLE_BUILD_TESTS)
     tests/test_swf_census.cpp
     tests/test_swf_census_real.cpp
     tests/test_avm1.cpp
+    tests/test_avm1_encode.cpp
     tests/test_avm1_ops.cpp
     tests/test_avm1_objects.cpp
     tests/test_avm1_functions.cpp
+    tests/test_avm1_control.cpp
     tests/test_avm1_real.cpp
     tests/test_swf_svg.cpp
     tests/test_swf_svg_text_matrix.cpp

@@ -146,11 +146,14 @@ bool Decoder::record(std::size_t end) {
       bodies[count++] = try_block->finally_size;
     }
   }
+  const std::size_t owner = out_.actions.size();
   out_.actions.push_back(std::move(action));
   for (std::size_t index = 0; index < count; ++index) {
+    const std::size_t first = out_.actions.size();
     if (!body(bodies[index], end)) {
       return false;
     }
+    out_.actions[owner].body_records[index] = out_.actions.size() - first;
   }
   return true;
 }

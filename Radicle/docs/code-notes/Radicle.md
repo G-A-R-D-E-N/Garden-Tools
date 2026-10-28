@@ -6443,7 +6443,7 @@ A `::remote_<Type>_<Event>` function is printed as `Event <Type>.<Event>(...)`, 
 
 ## src/papyrus/decompiler.cpp:Decompiler::decompileBody
 
-The body is decompiled twice. The first pass inlines `::temp` values. The second pass runs only when the first output still contains `::`, so a temp name that inlining could not resolve is printed without inlining. Four defects were fixed in PET and are kept as-is here:
+The body is decompiled twice, by `Decompiler::emitFunction`. `decompileBody` sets up `BodyState`, then runs `src/papyrus/decompiler_expr.cpp:translateInstructions` and returns `src/papyrus/decompiler_stmt.cpp:reconstructStatements`. The first pass inlines `::temp` values. The second pass runs only when the first output still contains `::`, so a temp name that inlining could not resolve is printed without inlining. Four defects were fixed in PET and are kept as-is here. Defects 1 to 3 are in `src/papyrus/decompiler_stmt.cpp:reconstructStatements`; defect 4 is in `src/papyrus/decompiler_expr.cpp:translateInstructions`:
 
 1. Locals hoisting zero-assignment. A local whose first write is an `assign` of its type's zero (`isZeroFor`) is declared at the top of the body, and that assignment is dropped (`zeroedByDeclaration`). A local whose first write is an unconditional statement is declared in place (`declaredAt`, `runsUnconditionally`). Any other local is hoisted.
 2. Dropped unused call results. A call whose `::temp` result is never read (`tempWasRead`) is emitted as a statement by the loop over `tempExpression`, so its side effect is kept.
@@ -7587,7 +7587,7 @@ Quoted text escapes a quote and a backslash with a backslash. Control bytes belo
 
 ## Radicle/src/avm1/encode.cpp:encode_actions
 
-Re-encode writes each payload in the layout the decoder reads, and it writes Length from the payload size. It does not write a record's offset, and it does not rebuild branch offsets from `Avm1Branch::target`. Each branch keeps the offset it was decoded with.
+Re-encode writes each payload in the layout the decoder reads, and it writes Length from the payload size. Branch offsets and body sizes are rebuilt from the record list, not copied from the decoded values. A branch names its target record by `Avm1Branch::target`, which matches a record's `Avm1Action::offset`. When no surviving record has that offset, the branch retargets to the first surviving record with a larger offset, which is the next record in the original order. If no such record survives, it retargets to the stream end, which is after the trailing bytes. The rule is `std::map::lower_bound` over record start positions in `encode_actions`, so the fallback is the stream end when no start is found. Details for the emitter, body sizes, and the identity field are in the tail sections of this file.
 
 Unverified in this change: the build, the unit tests, and the runner case. The runner case `Radicle/tests/test_swf_real.cpp:InterfaceGfxAvm1StreamsDecodeAndReencodeByteIdentically` depends on FO4_DATA_DIR and skips without it. Call's zero-length layout and the With, Try, GetURL and GotoFrame2 layouts are unmeasured.
 
@@ -8360,6 +8360,66 @@ A row whose character is a DefineText or DefineText2 with a clip depth opens a m
 
 Expected strings were derived by hand. The glyph is a 1000-twip square (50 px, the path of `Radicle/tests/test_swf_svg.cpp:kRedSquare` at its size), at a DefineText height of 1024, so the font scale is 1 and the text matrix is the identity. The blue square is the 600-twip one, `Radicle/tests/test_swf_svg.cpp:kBlueSquare`. The clipPath ids follow the shape-mask convention `r<index>clip`. Nothing was compiled or run on the development machine for this change, so CI must confirm them.
 
+## Radicle/src/avm1/control_ops.cpp:execute
+
+Adds the AVM1 control and object opcodes 0x2A Throw, 0x2B CastOp, 0x46 Enumerate, 0x54 InstanceOf, 0x55 Enumerate2, 0x69 Extends, 0x8F Try and 0x94 With. This supersedes the older refusal notes for these opcodes; ImplementsOp 0x2C stays refused by name. GetMember and SetMember on function prototypes stay deferred because there is no prototype model. Any other opcode still returns Unsupported.
+
+## Radicle/src/avm1/control_ops.cpp:try_regions
+
+A Try record (0x8F) carries flags (bit0 catch, bit1 finally, bit2 catch-in-register), try_size, catch_size and finally_size, then a catch name string or a register byte. The record offsets body, catch_at, finally_at and after_at are resolved through jump_index. On Thrown the operand stack is cut back to its depth at the Try. A caught value binds to the catch name in block.call->locals or in the globals, or to a register through function_ops::store_register. A finally runs with the pending throw saved aside. If the finally jumps or returns, that overrides the pending throw. If it does not, the throw is restored and returns Thrown. Known limit: a Return inside a finally with a pending exception can still rethrow when the Try ends the body.
+
+## Radicle/src/avm1/control_ops.cpp:run_with
+
+The With record (0x94) pops its object. A value that is not an object skips the body; this choice was made without a reference trace. An object is pushed onto block.scopes for the body, and scope_slot in function_ops.cpp consults it first for reads and writes. Try and With share one run-wide counter, run.regions, capped at kMaxNesting = 64 in control_ops.cpp. The 65th level returns ResourceLimit with "Try and With nesting reached the limit of 64 levels".
+
+## Radicle/src/avm1/control_ops.cpp:extends
+
+Superclass links live in Avm1Run::superclasses, keyed by the subclass body pointer. InstanceOf and CastOp use the constructed_by body recorded by invoke_method in function_ops.cpp. This is a constructor-body class model, not prototype objects. A link that would create a cycle returns InvalidStream. A non-function operand returns Unsupported.
+
+## Radicle/src/avm1/control_ops.cpp:push_names
+
+Enumerate and Enumerate2 push a null first, then the keys in insertion order, so the most recently added key is on top. Popping yields the keys most recently added first and ends on null. A non-object operand yields only null. Order is verified against Ruffle 0.6.0, not Flash: `E:\GardenEngine\GardenEngine-RE-Work\menu-reference\swf-runtime-01a0efb6\native-experiment\ruffle-0.6.0\core\src\avm1\activation.rs:action_enumerate` (line 1094) and `action_enumerate_2` (line 1111) push `get_keys` in reverse, and `core\src\avm1\object\script_object.rs:get_keys` lists own keys from `core\src\avm1\property_map.rs:PropertyMap::iter`, which yields the most recently added key first. Unverified: Ruffle's end sentinel is `Value::Undefined` (`activation.rs` line 1098), while this slice pushes null, and the Flash sentinel was not checked.
+
+## Radicle/src/avm1/interpreter.cpp:run_range
+
+Each record counts once against max_steps before it runs. Thrown overwrites result.opcode and result.offset but not result.status. The outer execute_actions turns an uncaught Thrown into the status Thrown with the message "the thrown value was not caught". On Ok the index is returned as resume so the enclosing Try or With can continue after its sub-range.
+
+## Radicle/src/avm1/interpreter.cpp:jump_index
+
+Known hole, not fixed: jump_index maps a target offset to an index in the flattened action vector and checks only that the target is a record start. A branch from top-level code into a DefineFunction or DefineFunction2 body is therefore accepted, and those records would run with block.call == nullptr. No test covers this path yet.
+
+## Radicle/src/avm1/function_ops.cpp:invoke
+
+Ceilings: kMaxCallDepth = 64 functions, and the step limit is counted per record in run_range. Each call builds its own scopes vector for With bodies. The construct path in invoke_method sets instance.object->constructed_by before the constructor runs.
+
+## Radicle/src/avm1/control_ops.cpp:cast_op
+
+The operand order is verified against Ruffle 0.6.0, the only oracle on disk: `E:\GardenEngine\GardenEngine-RE-Work\menu-reference\swf-runtime-01a0efb6\native-experiment\ruffle-0.6.0\core\src\avm1\activation.rs:action_cast_op` (line 905) pops the object first (line 906) and the constructor second (line 907), so the object is on top and the constructor is below. `activation.rs:action_instance_of` (line 1610) pops the constructor first, so CastOp and InstanceOf take their operands in opposite order. An earlier version of cast_op took the constructor from the top, the opposite of this oracle. Verified against Ruffle, not against Flash. No C# AVM1 interpreter was found under E:\GardenEngine: the .cs trees searched contain no CastOp or Enumerate2 implementation.
+
+## Radicle/src/avm1/control_ops.cpp:try_regions (Return inside a finally)
+
+Test `Radicle/tests/test_avm1_control.cpp:ReturnInsideAFinallyDropsAPendingThrow` pins that a Return in a finally, after a pending Throw, ends the call with the returned value and drops the throw. The finally run leaves resume at the block end, which is not at[3], so try_regions returns Ok and the pending throw is dropped. The test body keeps a record after the Try. When the Try is the last record of the block, resume equals at[3] and the pending throw is restored, which is the known limit above and is not pinned. Regression detected: a finally that resumed the pending throw would return Thrown and trace nothing from the call.
+
+## Radicle/src/avm1/control_ops.cpp:run_with
+
+Test `Radicle/tests/test_avm1_control.cpp:ThrowThatLeavesAWithPopsItsScope` detects a With whose scope stays on block.scopes when a Throw leaves the With. run_with pops the scope after run_range returns on every status, so a later read of x resolves to the global 10. A leaked scope would read the object's x, which is 1.
+
+## Radicle/tests/test_avm1_control.cpp:NestedTryAndWithStopAtSixtyFourLevels
+
+Decoder::body in `Radicle/src/avm1/decode.cpp` refuses a 65th nested body with TooDeep (kMaxBodyDepth = 64), so 65 static levels never reach the runtime guard in `Radicle/src/avm1/control_ops.cpp:run_try`. The test reaches the guard through recursion instead. Forty static Try levels, each with its body in the finally region, leave run.regions at 40. A function f whose body is a catch Try around a call to f adds one region per call. Call k runs its Try with regions at 40 + (k - 1), so call 25 is refused with "Try and With nesting reached the limit of 64 levels". Only 25 calls are live then, so run.depth stays below kMaxCallDepth = 64 in `Radicle/src/avm1/function_ops.cpp:invoke` and the region budget is the cap that fires. The 64 static levels still run for both Try and With. Regression detected: a Try or With that did not count against the shared run.regions would recurse until the native stack overflows, and the test would see no ResourceLimit.
+
+## Radicle/src/avm1/function_ops.cpp:invoke (Low: scope chain at definition)
+
+A function defined inside a With body gets empty scopes when it is called, because DefineFunction does not capture the scope chain. invoke starts each call from a fresh `std::vector<Avm1Data> scopes`, and a call made inside a With does not pass the caller's scopes either. Flash keeps the definition-time chain, so names that the With object would supply resolve wrongly here. Not fixed in this slice.
+
+## Radicle/src/avm1/interpreter.cpp:run_range (Low: opcode of an uncaught callee throw)
+
+When a Throw in a callee is not caught, run_range overwrites result.opcode and result.offset at each enclosing frame, so the report names the outermost CallFunction or Try rather than the Throw. `Radicle/tests/test_avm1_control.cpp:FinallyRunsBeforeAnUncaughtThrowKeepsGoing` asserts opcode 0x8F, the outer Try, so it pins this Low; a fix must change that assertion. Not fixed in this slice.
+
+## Radicle/tests/test_avm1.cpp (Low: stale test name in notes)
+
+Radicle.md still cites `Radicle/tests/test_avm1.cpp:ObjectAndFunctionOpcodesStayRefusedByName` at lines 7693, 7937 and 8059. No file under Radicle/tests defines that name now, so those citations point at nothing. Not fixed in this slice.
+
 ## Radicle/src/avm2/interpreter.cpp:Interpreter::execute_frame (AVM2 late ops census)
 
 Census from a source scan (not compiled or run): 169 named opcodes, 168 with a case in `Radicle/src/avm2/interpreter_dispatch_a.inc` through `interpreter_dispatch_e.inc`, and 1 without, `getdescendants` 0x59. This replaces the 12-opcode census above. The 11 added here are dxns 0x06, dxnslate 0x07, pushnamespace 0x31, finddef 0x5F, setpropertylate 0x69, deletepropertylate 0x6B, getglobalslot 0x6E, setglobalslot 0x6F, esc_xelem 0x71, esc_xattr 0x72 and checkfilter 0x78. All 11 new cases are in `Radicle/src/avm2/interpreter_dispatch_e.inc`, which `Radicle/src/avm2/interpreter.cpp:Interpreter::execute_frame` includes.
@@ -8534,6 +8594,21 @@ Detects finddef pushing the global object or null when a pushed scope holds the 
 - `Radicle/tests/test_c_api_swf_characters.cpp:ReadsEachGradientStopAndRefusesAnOutOfRangeOne` detects `radicle_swf_shape_fill_stop_at` reading the wrong stop or fill, not clearing the output on refusal, or accepting a solid fill with no stops. Stop colours are 0xAARRGGBB from the define_shape_3 fixture bytes (`Radicle/tests/swf_art_fixtures.hpp:define_shape_3_payload`), matching the 0x800000FF value that `Radicle/tests/test_swf_art.cpp` already pins.
 - Nothing was compiled or run on the development machine for these changes. CI must confirm them.
 
+## Radicle/src/papyrus/type_checker.cpp:TypeChecker::checkOverride
+
+- The override check now compares parameter types and the return type with the nearest parent function of the same name (`index_.baseChain`, `ScriptIndex::findMemberOn`), after the existing parameter-count check, which still returns early. Each side resolves with `Resolver::resolveTypeName` relative to its own script, so the parent's types are read in the parent's scope. A pair is reported only when both sides resolve and differ; an unknown type name never yields this diagnostic. Void is a known type: a void override of a typed parent is a mismatch, and two void functions match. Only the first mismatch per override is reported (parameter count, then parameters in order, then return type). The code stays `OverrideMismatch` (PAP0044), the existing override code.
+- Papyrus has no covariance, so an `Actor` parameter overriding a `Form` parameter is refused. The comparison is `Type::operator==`, which is case-insensitive on names, so `form` and `Form` match.
+- False-positive risk: a parent that resolves to a different script than the engine would pick (for example a same-named type in another folder) would now be refused. The real-corpus gate `PapyrusSemanticReal.ResolvesAndTypeChecksEveryCompleteCorpusScriptClean` (`Radicle/tests/test_papyrus_semantic_real.cpp`) has to run on the Fallout 4 data runner before this is trusted; it was not run here.
+- `Radicle/tests/test_papyrus_type_checker.cpp:AnOverrideWithADifferentParameterTypeIsRejected` detects an override that keeps the parameter count but changes `int` to `float`, which the count-only check accepted. Expected: one `OverrideMismatch` whose message contains `whose parameter 1 is 'int', not 'float'`.
+- `Radicle/tests/test_papyrus_type_checker.cpp:AnOverrideWithADifferentReturnTypeIsRejected` detects an override that changes the return type from `int` to `string` with the same parameters. Expected: one `OverrideMismatch` whose message contains `which returns int, not string`. The body returns a string, so no other diagnostic appears. This is a fourth refusing case beyond the one the brief asked for, because return type is a named gap.
+- `Radicle/tests/test_papyrus_type_checker.cpp:AnOverrideWithTheSameParameterAndReturnTypesIsFine` is the accepting shape: `int Function Go(int a)` returning `a` in both scripts. It detects the new comparison refusing a correct override. Expected: no diagnostics.
+- `Radicle/tests/test_papyrus_type_checker.cpp:AnOverrideMayNotNarrowAParameterToAChildObject` is the boundary: `Function Take(Actor)` overriding `Function Take(Form)`. It detects a covariant parameter accepted as an override. Expected: one `OverrideMismatch` with `whose parameter 1 is 'Form', not 'Actor'`.
+
+## Radicle/src/papyrus/type_checker.cpp:TypeChecker::checkCallable
+
+- A missing `Return` is accepted, so `TypeChecker::checkCallable` reports nothing for a typed function that can reach its end. The Creation Kit compiles such functions: 36 shipped vanilla functions fall off the end, for example `DN151_MovableWater.psc` `ClearName` and `VitaleCodeMaster.psc` `checkForSolution`. A rule that refused them was removed, because the real-data gate `PapyrusSemanticReal` has zero tolerance for a refused vanilla script.
+- `Radicle/tests/test_papyrus_type_checker.cpp:ANonVoidFunctionMayFallOffItsEndBecauseTheCreationKitCompilesIt` detects a missing-Return rule being reintroduced. Expected: no diagnostics for a typed function with no `Return` at all, and for one whose `If`/`ElseIf` has no `Else`.
+
 ## Radicle/src/abc/abc_write.cpp:type_name_expansion_too_large (ABC writer TypeName cap)
 
 - Mirror: `Radicle/src/abc/constant_pool.cpp:parse_multiname_pool` refuses a TypeName (kind 0x1D) whose expansion passes `detail::kMaxTypeNameExpansion` (64, now declared in `Radicle/src/abc/abc_internal.hpp`, so the parser and the writer read one constant). The expansion of a TypeName is 1 + expansion(name) + the sum of expansion(param) over its params; every other multiname expands to 1. The parser checks the running total after each addend, which is the same as checking the final total because every addend is at least 1 and the total never falls.
@@ -8576,6 +8651,52 @@ Detects finddef pushing the global object or null when a pushed scope holds the 
 ## .github/workflows/native-ci.yml:REAL_DATA_TEST_REGEX
 
 - The Papyrus gates `PapyrusParseReal`, `PapyrusSemanticReal`, `PapyrusCodegenReal` and `PapyrusDecompilerReal` (`Radicle/tests/test_papyrus_parse_real.cpp`, `test_papyrus_semantic_real.cpp`, `test_papyrus_codegen_real.cpp`, `test_papyrus_decompiler_real.cpp`) are selected by the `[A-Za-z0-9_]*Real\.` branch, so the Fallout 4 data job runs them and the normal job excludes them. They read `FO4RE_PSC_*` and `FO4_PSC_CORPUS` rather than `FO4_DATA_DIR`, so the data job sets those from `$env:FO4_DATA_DIR` in its Test step (`.github/workflows/native-ci.yml:REAL_DATA_TEST_REGEX`). Without that, every gate skips and a Papyrus compile or decompile fidelity regression (a parse, resolve or type-check diagnostic on the vanilla scripts, or the decompile round-trip falling below 0.802) goes unnoticed. The PEX gates (`PapyrusDecompilerReal` and the codegen CK-differential test, which read `FO4_PEX_CORPUS`/`FO4RE_PEX_CORPUS`) stay unset and keep skipping (TODO in the Test step) until a staged `.pex` root is available. The gates now fail rather than skip when the roots exist: the semantic gate has zero diagnostic tolerance and the decompile round-trip floor is 0.802 with almost no margin, and the first data-runner run is unverified (`docs/papyrus-real-data-gates.md`). `PapyrusSourceRealTest` is not selected because it falls back to `Radicle/testdata/papyrus` and runs in the normal job.
+
+## Radicle/include/fo4/avm1/avm1.hpp:Avm1Action
+
+`offset` is the record's identity. The decoder sets it to the record's byte offset in the decoded stream, and `Avm1Branch::target` names a record by that value. The interpreter already matches branches the same way. A record a caller creates defaults to `kNewRecordOffset`, which no branch can name, so an inserted record cannot take over a branch meant for the original record at offset 0. A caller that creates a branch sets `target` to the offset of the record it wants.
+
+`body_records` holds the record count of each body in presence order: the DefineFunction or With body, then the Try try body, then the catch body if flag 1 is set, then the finally body if flag 2 is set. Position alone does not tell the encoder which body a record belongs to. A caller that inserts or deletes a record inside a body must change that count, or the body size will be wrong.
+
+## Radicle/src/avm1/decode.cpp:Decoder::record
+
+`record` counts the records that `body` pushes for each body and stores the count in `body_records` of the owning container. This is the body membership the encoder reads back. Nothing else in the decoder changes for the encoder.
+
+## Radicle/src/avm1/encode.cpp:write_range
+
+Records are written in list order. A branch is written with a zero offset and its payload position is saved. A forward branch is written before its target, so the offset is patched after every record start is known. The Length of each record is a placeholder that is patched once its payload is written. Each branch offset is the target position minus the branch end, which is the payload position plus 2. `encode_actions` appends the trailing bytes before the patch pass, so the stream end is the position after them.
+
+## Radicle/src/avm1/encode.cpp:write_body
+
+A DefineFunction, DefineFunction2 or With body is the next `body_records` entries of the owning action, in list order, bounded by the enclosing range. A count that runs past the enclosing range is clamped, so the body takes only the records left. The body size is the 2 bytes at the end of the Function or With payload, and at payload offsets 1, 3 and 5 for a Try. Each size is the encoded byte count of its body, and it is written as 16 bits. A body over 65,535 bytes is written truncated, and so is a branch offset that does not fit in int16. These are the known ceilings of this encoder.
+
+## Radicle/tests/test_avm1_encode.cpp:InsertedRecordBeforeAJumpTargetGrowsTheJumpOffset
+
+Detects an encoder that copies the decoded Jump offset after a record is inserted before the Jump target. The input is `99 02 00 02 00 04 06 07 00`. The Jump is at 0 with offset 2, so its target is 0 + 5 + 2 = 7, the Stop record. A NextFrame (`04`) is inserted at index 3, before Stop. Stop moves to 8, so the new offset is 8 - 5 = 3. The expected output is `99 02 00 03 00 04 06 04 07 00`, which is 10 bytes.
+
+## Radicle/tests/test_avm1_encode.cpp:DeletedRecordInsideAJumpSpanShrinksTheJumpOffset
+
+Detects an encoder that keeps the Jump offset after a record inside the Jump span is deleted. On the same input, Play (`06`, offset 6) is deleted. Stop moves to 6, so the offset is 6 - 5 = 1. The expected output is `99 02 00 01 00 04 07 00`, which is 8 bytes.
+
+## Radicle/tests/test_avm1_encode.cpp:DeletedJumpTargetRetargetsToTheNextSurvivingRecord
+
+Detects an encoder that keeps a stale offset when its target record is deleted. Play and Stop are deleted, so the target at offset 7 has no surviving record. The first surviving record with a larger offset is End at offset 8. End moves to 6, so the offset is 6 - 5 = 1. A stale offset would be 2, which the test does not expect. The expected output is `99 02 00 01 00 04 00`, which is 7 bytes.
+
+## Radicle/tests/test_avm1_encode.cpp:DeletedJumpTargetWithNoSurvivorRetargetsToTheStreamEnd
+
+Detects an encoder that cannot retarget to the stream end when no surviving record follows the deleted target. This case is checked by `Radicle/src/avm1/encode.cpp:encode_actions` through its stream-end fallback. The input is `99 02 00 02 00 06 04 00`. The Jump is at 0 and targets offset 7, the End record. Play (offset 5) and End (offset 7) are deleted, which leaves Jump and NextFrame. Nothing survives at or after offset 7, so the target is the stream end. The stream is 6 bytes long (Jump 5 bytes plus NextFrame 1 byte), so the offset is 6 - 5 = 1. The expected output is `99 02 00 01 00 04`, which is 6 bytes.
+
+## Radicle/tests/test_avm1_encode.cpp:InsertedRecordInsideADefineFunctionBodyGrowsItsBodySize
+
+Detects an encoder that writes the decoded DefineFunction body size after a record is inserted into its body. The input is `9B 05 00 | 00 | 00 00 | 02 00 | 04 06 | 00`. The header is 8 bytes, the payload is 5 bytes, and the body is 2 bytes. A Stop (`07`) is inserted at index 3, and `body_records[0]` becomes 3. The body size becomes 3, so the expected output is `9B 05 00 00 00 00 03 00 04 06 07 00`, which is 12 bytes.
+
+## Radicle/tests/test_avm1_encode.cpp:InsertedRecordInsideACatchBodyGrowsOnlyTheCatchSize
+
+Detects an encoder that writes the wrong Try field after a record is inserted into the catch body. The input is `8F 09 00 | 01 | 01 00 | 01 00 | 00 00 | 65 00 | 04 | 06 | 00`. The payload is 9 bytes, with flags 1, try size 1, catch size 1, finally size 0 and catch name `e`. Stop is inserted into the catch body, and `body_records[1]` becomes 2. The try size stays 1, and the catch size becomes 2. The expected output is `8F 09 00 01 01 00 02 00 00 00 65 00 04 06 07 00`, which is 16 bytes.
+
+## Radicle/tests/test_avm1_encode.cpp:UneditedStreamsReencodeToTheirInputBytes
+
+Detects an encoder change that alters bytes of an unedited stream. It checks three inputs with a Jump, a DefineFunction and a Try with a catch, because each one goes through a different branch of the patch pass. Each input must re-encode to the same bytes, with no record or body edits.
 
 ## Radicle/tests/papyrus_corpus_roots.hpp:stratifiedSample (decompile sample selection)
 
@@ -8658,3 +8779,7 @@ Detects finddef pushing the global object or null when a pushed scope holds the 
 ## Radicle/tests/swf_movie_builder.hpp:movie_of
 
 - `movie_of`, `TagPayload`, `sprite_tag`, `place_full`, `matrix_full`, `square_with_fill`, and `square_shape` moved here from `test_swf_display.cpp` so the nine-slice render tests can build movies without copying them. `test_swf_display.cpp` was at 741 lines, over the 750 limit once the new tests were added. The bodies are unchanged; the only edit is `inline`.
+## src/papyrus/decompiler_internal.hpp:BodyState
+
+- Split of `decompiler.cpp` (727 lines, too close to the 750 cap) by responsibility. `decompiler.cpp` keeps `toSource`, `emitFunction`, `disassemble` and the `decompileBody` setup. `decompiler_expr.cpp:translateInstructions` turns each instruction into a `BodyState::put` or a statement. `decompiler_stmt.cpp:reconstructStatements` runs jump folding, the temp-call pass, local hoisting and `If`/`While`/`Else` structuring. The header holds the state those passes share: `BodyState`, `JKind`, `JInfo`, and the `iequals`, `startsWith` and `join` helpers.
+- `BodyState::put` is the single write path. With inlining on, a `::temp` destination goes to `temps` and `tempExpression`; `::NoneVar` becomes a bare statement; anything else becomes `name = expr`. The move changed no logic, names or output. The decompiler tests are the check that it stayed that way.

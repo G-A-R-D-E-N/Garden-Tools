@@ -1,5 +1,6 @@
 #include <fo4/avm1/interpreter.hpp>
 
+#include "control_ops.hpp"
 #include "function_ops.hpp"
 #include "object_ops.hpp"
 #include "state.hpp"
@@ -39,6 +40,8 @@ const char* run_status_name(Avm1RunStatus status) noexcept {
       return "step limit reached";
     case Avm1RunStatus::ResourceLimit:
       return "resource limit reached";
+    case Avm1RunStatus::Thrown:
+      return "an exception was not caught";
   }
   return "unknown";
 }
@@ -403,29 +406,6 @@ Avm1RunStatus extract_string(Avm1State& state, std::string& message, std::uint8_
   return push_result(state, string_value(source.substr(from, to - from)), message);
 }
 
-Avm1RunStatus jump_index(const Avm1Block& block, std::size_t target, std::size_t& index,
-                         std::string& message) {
-  const auto found = std::lower_bound(
-      block.actions.begin(), block.actions.end(), target,
-      [](const Avm1Action& action, std::size_t offset) { return action.offset < offset; });
-  if (found == block.actions.end()) {
-    if (target != block.end_offset) {
-      message = "the branch targets offset " + std::to_string(target) + ", past the " +
-                std::to_string(block.end_offset) + "-byte end of its block";
-      return Avm1RunStatus::BadBranch;
-    }
-    index = block.actions.size();
-    return Avm1RunStatus::Ok;
-  }
-  if (found->offset != target) {
-    message =
-        "the branch targets offset " + std::to_string(target) + ", which is not a record start";
-    return Avm1RunStatus::BadBranch;
-  }
-  index = static_cast<std::size_t>(found - block.actions.begin());
-  return Avm1RunStatus::Ok;
-}
-
 Avm1RunStatus branch_if(const Avm1Block& block, const Avm1Action& action, Avm1State& state,
                         std::size_t& next, std::string& message) {
   Avm1Data condition;
@@ -661,15 +641,39 @@ Avm1RunStatus execute_action(Avm1Run& run, const Avm1Block& block, const Avm1Act
     case 0x9D:
       return branch_if(block, action, state, next, message);
     default:
-      return unsupported(message);
+      return control_ops::execute(run, block, action, next, message);
   }
 }
 
 }  // namespace
 
-Avm1RunStatus run_block(Avm1Run& run, const Avm1Block& block) {
-  std::size_t index = 0;
-  while (index < block.actions.size()) {
+Avm1RunStatus jump_index(const Avm1Block& block, std::size_t target, std::size_t& index,
+                         std::string& message) {
+  const auto found = std::lower_bound(
+      block.actions.begin(), block.actions.end(), target,
+      [](const Avm1Action& action, std::size_t offset) { return action.offset < offset; });
+  if (found == block.actions.end()) {
+    if (target != block.end_offset) {
+      message = "the branch targets offset " + std::to_string(target) + ", past the " +
+                std::to_string(block.end_offset) + "-byte end of its block";
+      return Avm1RunStatus::BadBranch;
+    }
+    index = block.actions.size();
+    return Avm1RunStatus::Ok;
+  }
+  if (found->offset != target) {
+    message =
+        "the branch targets offset " + std::to_string(target) + ", which is not a record start";
+    return Avm1RunStatus::BadBranch;
+  }
+  index = static_cast<std::size_t>(found - block.actions.begin());
+  return Avm1RunStatus::Ok;
+}
+
+Avm1RunStatus run_range(Avm1Run& run, const Avm1Block& block, std::size_t first, std::size_t last,
+                        std::size_t& resume) {
+  std::size_t index = first;
+  while (index >= first && index < last) {
     const Avm1Action& action = block.actions[index];
     if (run.result.steps == run.max_steps) {
       run.result.opcode = action.code;
@@ -693,10 +697,12 @@ Avm1RunStatus run_block(Avm1Run& run, const Avm1Block& block) {
       detail = error.what();
     }
     if (status != Avm1RunStatus::Ok) {
-      if (run.result.status == Avm1RunStatus::Ok) {
-        run.result.status = status;
+      if (status == Avm1RunStatus::Thrown || run.result.status == Avm1RunStatus::Ok) {
         run.result.opcode = action.code;
         run.result.offset = action.offset;
+      }
+      if (status != Avm1RunStatus::Thrown && run.result.status == Avm1RunStatus::Ok) {
+        run.result.status = status;
         run.result.message = opcode_label(action.code) + ": " + detail;
       }
       return status;
@@ -705,7 +711,13 @@ Avm1RunStatus run_block(Avm1Run& run, const Avm1Block& block) {
     run.result.offset = action.offset;
     index = next;
   }
+  resume = index;
   return Avm1RunStatus::Ok;
+}
+
+Avm1RunStatus run_block(Avm1Run& run, const Avm1Block& block) {
+  std::size_t resume = 0;
+  return run_range(run, block, 0, block.actions.size(), resume);
 }
 
 Avm1Result execute_actions(const Avm1Stream& stream, std::size_t max_steps,
@@ -723,7 +735,11 @@ Avm1Result execute_actions(const Avm1Stream& stream, std::size_t max_steps,
                                                  : stream.actions.back().offset +
                                                        stream.actions.back().length +
                                                        stream.trailing.size();
-  run_block(run, Avm1Block{stream.actions, end, nullptr});
+  std::vector<Avm1Data> scopes;
+  if (run_block(run, Avm1Block{stream.actions, end, nullptr, &scopes}) == Avm1RunStatus::Thrown) {
+    result.status = Avm1RunStatus::Thrown;
+    result.message = "the thrown value was not caught";
+  }
   result.trace = std::move(state.trace);
   result.variables = std::move(state.variables);
   return result;
