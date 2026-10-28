@@ -8682,6 +8682,7 @@ Detects an encoder that writes the wrong Try field after a record is inserted in
 ## Radicle/tests/test_avm1_encode.cpp:UneditedStreamsReencodeToTheirInputBytes
 
 Detects an encoder change that alters bytes of an unedited stream. It checks three inputs with a Jump, a DefineFunction and a Try with a catch, because each one goes through a different branch of the patch pass. Each input must re-encode to the same bytes, with no record or body edits.
+
 ## Radicle/tests/papyrus_corpus_roots.hpp:stratifiedSample (decompile sample selection)
 
 - The decompile gate used to keep the first 1,500 `.psc` in path order, so every run measured the same alphabetical prefix. Late folders and namespaces were never exercised. `stratifiedSample` sorts the candidates by `sampleSortKey` (lowercase path relative to the first root that contains the file; a file under no root keeps its normalised full path), sorts the `(key, path)` pairs as a whole so ties across roots resolve on the full path, then takes every k-th file with k = ceil(N / limit).
