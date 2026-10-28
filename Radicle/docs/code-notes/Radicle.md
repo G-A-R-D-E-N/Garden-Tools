@@ -7867,7 +7867,7 @@ Tests: `Radicle/tests/test_avm1_objects.cpp:InitObjectThenGetMemberReadsEachPair
 
 ## Radicle/src/avm1/object_ops.cpp:Avm1Object::~Avm1Object
 
-The destructor moves each child that only this object holds (`use_count` 1) onto a worklist and releases the children from there, so a chain of objects does not recurse once per link. A child that another handle still holds is left alone, since that handle owns it. A cycle, an object that holds itself through a property, is never freed, because there is no collector; that is a known ceiling. `Radicle/tests/test_avm1_objects.cpp:DeepObjectChainTearsDownWithoutRecursion` builds a chain of 100000 objects and expects Ok after 2300010 steps. Not compiled or run on the development machine.
+The destructor moves every child object onto a worklist and releases them from there, expanding a node's own children only when it is popped with `use_count` 1, so neither a chain nor a graph that shares children recurses once per link: the last holder to be popped always sees the count at 1. A child that another handle outside the worklist still holds stays alive, since that handle owns it. A cycle, an object that holds itself through a property, is never freed, because there is no collector; that is a known ceiling. `Radicle/tests/test_avm1_objects.cpp:DeepObjectChainTearsDownWithoutRecursion` builds a chain of 100000 objects and expects Ok after 2300010 steps. Not compiled or run on the development machine.
 
 ## Radicle/src/avm1/state.hpp:Avm1State
 

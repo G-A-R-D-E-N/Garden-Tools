@@ -93,9 +93,8 @@ Avm1Object::~Avm1Object() {
   std::vector<std::shared_ptr<Avm1Object>> pending;
   const auto take_children = [&pending](Avm1Object& object) {
     for (auto& entry : object.properties) {
-      std::shared_ptr<Avm1Object>& child = entry.second.object;
-      if (child && child.use_count() == 1) {
-        pending.push_back(std::move(child));
+      if (entry.second.object) {
+        pending.push_back(std::move(entry.second.object));
       }
     }
   };
@@ -103,7 +102,9 @@ Avm1Object::~Avm1Object() {
   while (!pending.empty()) {
     std::shared_ptr<Avm1Object> node = std::move(pending.back());
     pending.pop_back();
-    take_children(*node);
+    if (node.use_count() == 1) {
+      take_children(*node);
+    }
   }
 }
 
