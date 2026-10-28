@@ -1,4 +1,5 @@
 #include <fo4/papyrus/code_generator.hpp>
+#include <fo4/papyrus/resolver.hpp>
 
 #include "body_emitter.hpp"
 #include "codegen_detail.hpp"
