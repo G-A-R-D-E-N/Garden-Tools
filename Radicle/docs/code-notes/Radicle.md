@@ -8595,6 +8595,7 @@ Detects finddef pushing the global object or null when a pushed scope holds the 
 - `kMinimumDecompileFidelity` stays at 0.802. It was set against the prefix sample. The stratified sample covers different files, so the measured rate moves, and no data-runner run has measured it yet. Editing the floor without that run would either hide a regression or fail a build that is actually fine.
 - Required next step: re-measure on the `fo4-data` runner with `FO4RE_PSC_ROOTS`. If the first stratified run is below 0.802, the decompiler gap is a bug to fix in its own PR. Do not lower the floor to make the gate pass.
 - Regression: the gate detects a decompile round-trip fidelity drop across the spread of the corpus. A prefix-only sample cannot show that, because a late-folder or large-script regression would never be selected.
+
 ## Radicle/include/fo4/swf/swf.hpp:SwfScalingGrid (DefineScalingGrid, tag 78)
 
 - `SwfScalingGrid` holds the CharacterId (UI16, little-endian, first in the payload) and the 9-slice splitter as a `SwfRect` in twips, stored in `SwfTag::scaling_grid`. The splitter is the RECT that follows the id, read by the same `read_rect` the edit-text and font decoders use.
