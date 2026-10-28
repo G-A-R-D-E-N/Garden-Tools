@@ -6443,7 +6443,7 @@ A `::remote_<Type>_<Event>` function is printed as `Event <Type>.<Event>(...)`, 
 
 ## src/papyrus/decompiler.cpp:Decompiler::decompileBody
 
-The body is decompiled twice. The first pass inlines `::temp` values. The second pass runs only when the first output still contains `::`, so a temp name that inlining could not resolve is printed without inlining. Four defects were fixed in PET and are kept as-is here:
+The body is decompiled twice, by `Decompiler::emitFunction`. `decompileBody` sets up `BodyState`, then runs `src/papyrus/decompiler_expr.cpp:translateInstructions` and returns `src/papyrus/decompiler_stmt.cpp:reconstructStatements`. The first pass inlines `::temp` values. The second pass runs only when the first output still contains `::`, so a temp name that inlining could not resolve is printed without inlining. Four defects were fixed in PET and are kept as-is here. Defects 1 to 3 are in `src/papyrus/decompiler_stmt.cpp:reconstructStatements`; defect 4 is in `src/papyrus/decompiler_expr.cpp:translateInstructions`:
 
 1. Locals hoisting zero-assignment. A local whose first write is an `assign` of its type's zero (`isZeroFor`) is declared at the top of the body, and that assignment is dropped (`zeroedByDeclaration`). A local whose first write is an unconditional statement is declared in place (`declaredAt`, `runsUnconditionally`). Any other local is hoisted.
 2. Dropped unused call results. A call whose `::temp` result is never read (`tempWasRead`) is emitted as a statement by the loop over `tempExpression`, so its side effect is kept.
@@ -8750,3 +8750,7 @@ Detects an encoder change that alters bytes of an unedited stream. It checks thr
 - A script that throws in the parse, compile, or lift path marks its callables as refused with reason `exception`. A throw before `callablesOf` runs counts no callables.
 - `GraphCompiler::clearScratch` runs after the loop, so scratch roots from this gate do not persist in the process temp folder.
 - The only assertion is the `lifted` floor (`test_graph_lift_real.cpp:kMinimumLiftedFraction`, 0.5). It is a placeholder, not a measurement, and must be re-measured on the fo4-data runner. The `roundtrip` count is printed in the `GRAPHLIFT` line and is not asserted until it is measured there.
+## src/papyrus/decompiler_internal.hpp:BodyState
+
+- Split of `decompiler.cpp` (727 lines, too close to the 750 cap) by responsibility. `decompiler.cpp` keeps `toSource`, `emitFunction`, `disassemble` and the `decompileBody` setup. `decompiler_expr.cpp:translateInstructions` turns each instruction into a `BodyState::put` or a statement. `decompiler_stmt.cpp:reconstructStatements` runs jump folding, the temp-call pass, local hoisting and `If`/`While`/`Else` structuring. The header holds the state those passes share: `BodyState`, `JKind`, `JInfo`, and the `iequals`, `startsWith` and `join` helpers.
+- `BodyState::put` is the single write path. With inlining on, a `::temp` destination goes to `temps` and `tempExpression`; `::NoneVar` becomes a bare statement; anything else becomes `name = expr`. The move changed no logic, names or output. The decompiler tests are the check that it stayed that way.
