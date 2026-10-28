@@ -8815,6 +8815,7 @@ Detects a body count past the list end that the encoder clamps silently. The inp
 ## Radicle/tests/test_avm1_encode.cpp:ValidateRejectsANestedBodyThatRunsPastItsParentRange
 
 Detects a validator that checks only the top-level list end and not the parent body. The input is the 23-byte nested Function and Try stream. The Try's try body count is set to 2, so the try body covers indices 2 and 3, and the Function body ends at 4. The catch body then starts at 4 and needs 1 record, which runs past the Function body. The expected result is BodyRecordsPastEnd.
+
 ## src/papyrus/decompiler_internal.hpp:BodyState
 
 - Split of `decompiler.cpp` (727 lines, too close to the 750 cap) by responsibility. `decompiler.cpp` keeps `toSource`, `emitFunction`, `disassemble` and the `decompileBody` setup. `decompiler_expr.cpp:translateInstructions` turns each instruction into a `BodyState::put` or a statement. `decompiler_stmt.cpp:reconstructStatements` runs jump folding, the temp-call pass, local hoisting and `If`/`While`/`Else` structuring. The header holds the state those passes share: `BodyState`, `JKind`, `JInfo`, and the `iequals`, `startsWith` and `join` helpers.
