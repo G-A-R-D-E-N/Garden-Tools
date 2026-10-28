@@ -128,4 +128,30 @@ describe('SwfPanel', () => {
     expect(await screen.findByText(/ABC block 0 is malformed/)).toBeTruthy();
     expect(screen.queryByText('No ABC scripts in this SWF.')).toBeNull();
   });
+
+  it('drops a Disassemble reply for a method that is no longer selected', async () => {
+    // Invariant: a late reply for an earlier method must not replace the listing of the selected method; detects out-of-order replies overwriting it.
+    let resolveFirst: (text: string) => void = () => {};
+    stubBridge({
+      AbcBlocks: vi.fn(async () => JSON.stringify({ blocks: [{ abc: 0, name: 'Interface', classes: [], scripts: [], methods: [
+        { index: 0, name: 'onLoad', returnType: 'void', hasBody: true },
+        { index: 1, name: 'onUnload', returnType: 'void', hasBody: true },
+      ] }] })),
+      Disassemble: vi.fn()
+        .mockImplementationOnce(() => new Promise<string>(resolve => { resolveFirst = resolve; }))
+        .mockImplementationOnce(async () => JSON.stringify({ text: 'second listing' })),
+    });
+    render(<SwfPanel onClose={() => {}} />);
+    fireEvent.change(screen.getByPlaceholderText('Interface/Test.swf'), { target: { value: 'Interface/Test.swf' } });
+    await act(async () => { fireEvent.click(screen.getByText('Open')); });
+    fireEvent.click(await screen.findByText(/onLoad : void/));
+    fireEvent.click(screen.getByText(/onUnload : void/));
+    await waitFor(() => expect(screen.getByLabelText('instructions').textContent).toBe('second listing'));
+    await act(async () => {
+      resolveFirst(JSON.stringify({ text: 'stale listing' }));
+      await new Promise(done => setTimeout(done, 0));
+    });
+    expect(screen.getByLabelText('instructions').textContent).toBe('second listing');
+    expect(screen.getByText(/onUnload : void/).getAttribute('aria-pressed')).toBe('true');
+  });
 });

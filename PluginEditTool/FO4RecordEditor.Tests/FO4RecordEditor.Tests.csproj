@@ -25,4 +25,8 @@
     <ProjectReference Include="..\FO4RecordEditor\FO4RecordEditor.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\FO4RecordEditor.Core.Tests\SwfFixture.cs" Link="SwfFixture.cs" />
+  </ItemGroup>
+
 </Project>

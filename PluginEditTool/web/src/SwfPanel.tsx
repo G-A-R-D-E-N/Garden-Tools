@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, RotateCcw, RotateCw, Save as SaveIcon } from 'lucide-react';
 import './SwfPanel.css';
 
@@ -71,6 +71,8 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
   const [abcBlocks, setAbcBlocks] = useState<AbcBlockRow[]>([]);
   const [abcError, setAbcError] = useState('');
   const [instructions, setInstructions] = useState('');
+  const [selectedMethod, setSelectedMethod] = useState<{ key: string; label: string } | null>(null);
+  const selectedMethodKey = useRef('');
 
   const refresh = useCallback(async () => {
     const bridge = host();
@@ -100,6 +102,8 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
       setAbcError(abcReply.error ?? '');
       setAbcBlocks(abcReply.blocks ?? []);
       setInstructions('');
+      setSelectedMethod(null);
+      selectedMethodKey.current = '';
     } finally {
       setBusy(false);
     }
@@ -214,10 +218,20 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
   const pickMethod = useCallback(async (block: AbcBlockRow, method: AbcMethodRow) => {
     const bridge = host();
     if (!bridge) return;
-    const reply = parse<{ text: string }>(await bridge.Disassemble(block.abc, method.index));
-    if (reply.error) { setAbcError(reply.error); setInstructions(''); return; }
-    setAbcError('');
-    setInstructions(reply.text);
+    const key = `${block.abc}:${method.index}`;
+    selectedMethodKey.current = key;
+    setSelectedMethod({ key, label: method.name || `method ${method.index}` });
+    setInstructions('');
+    try {
+      const reply = parse<{ text: string }>(await bridge.Disassemble(block.abc, method.index));
+      if (selectedMethodKey.current !== key) return;
+      if (reply.error) { setAbcError(reply.error); setInstructions(''); return; }
+      setAbcError('');
+      setInstructions(reply.text);
+    } catch (caught) {
+      if (selectedMethodKey.current !== key) return;
+      setAbcError(caught instanceof Error ? caught.message : String(caught));
+    }
   }, []);
   const command = useCallback(async (action: 'undo' | 'redo' | 'save') => {
     const bridge = host();
@@ -355,13 +369,18 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
             <ul>
               {abcBlocks.map(block => (
                 <li key={block.abc}>
-                  <strong>{block.name}</strong>
+                  <strong>{block.name || `ABC block ${block.abc}`}</strong>
                   <ul>
                     {block.classes.map((name, index) => <li key={`class-${index}`}>class {name}</li>)}
                     {block.scripts.map((name, index) => <li key={`script-${index}`}>script {name}</li>)}
                     {block.methods.map(method => (
                       <li key={method.index}>
-                        <button type="button" disabled={!method.hasBody} onClick={() => void pickMethod(block, method)}>
+                        <button
+                          type="button"
+                          disabled={!method.hasBody}
+                          aria-pressed={selectedMethod?.key === `${block.abc}:${method.index}`}
+                          onClick={() => void pickMethod(block, method)}
+                        >
                           {method.name || `method ${method.index}`} : {method.returnType}
                         </button>
                       </li>
@@ -370,6 +389,7 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
                 </li>
               ))}
             </ul>
+            {selectedMethod && <h5>{selectedMethod.label}</h5>}
             <pre aria-label="instructions">{instructions}</pre>
           </section>
         </aside>
