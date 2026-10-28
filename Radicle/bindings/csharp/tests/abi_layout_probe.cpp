@@ -33,6 +33,9 @@
 #include "fo4/c_api_papyrus_save.h"
 #include "fo4/c_api_papyrus_quest.h"
 #include "fo4/c_api_papyrus_source.h"
+#include "fo4/c_api_papyrus_compiler.h"
+#include "fo4/c_api_graph.h"
+#include "fo4/c_api_papyrus_analysis.h"
 #include <cstddef>
 #include <cstdio>
 
@@ -1813,5 +1816,9 @@ int main() {
   printf("PapyrusAliasReport.Open %zu\n", offsetof(radicle_papyrus_alias_report, open));
   printf("PapyrusAliasReport.Report %zu\n", offsetof(radicle_papyrus_alias_report, report));
   printf("PapyrusAliasReport.Digest %zu\n", offsetof(radicle_papyrus_alias_report, digest));
+  printf("PapyrusCompileOptions %zu\n", sizeof(radicle_papyrus_compile_options));
+  printf("PapyrusCompileOptions.Release %zu\n", offsetof(radicle_papyrus_compile_options, release));
+  printf("PapyrusCompileOptions.NoDebugInfo %zu\n", offsetof(radicle_papyrus_compile_options, no_debug_info));
+  printf("PapyrusCompileOptions.Imports %zu\n", offsetof(radicle_papyrus_compile_options, imports));
   return 0;
 }
