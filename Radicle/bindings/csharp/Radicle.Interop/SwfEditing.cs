@@ -187,6 +187,8 @@ public sealed class SwfEditHistory : IDisposable
 
     private HandleUse Use() => new(_handle, nameof(SwfEditHistory));
 
+    internal HandleUse UseForVerbs() => Use();
+
     public ulong Revision
     {
         get

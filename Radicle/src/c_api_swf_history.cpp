@@ -19,10 +19,6 @@ using radicle_c_detail::clear_error;
 using radicle_c_detail::fail;
 using radicle_c_env_detail::guarded;
 
-struct radicle_swf_history {
-  fo4::swf::SwfEditHistory history;
-};
-
 namespace {
 
 std::size_t subtree_size(const std::vector<fo4::swf::SwfTag>& tags) {

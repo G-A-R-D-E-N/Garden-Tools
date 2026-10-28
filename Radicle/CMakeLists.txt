@@ -480,7 +480,7 @@ target_sources(fo4 PRIVATE src/patch/delta_patch.cpp)
 target_sources(fo4 PRIVATE src/patch/list_merge.cpp)
 target_sources(fo4 PRIVATE src/papyrus_source/lexer.cpp src/papyrus_source/parser.cpp src/papyrus_source/parser_decl.cpp src/papyrus_source/parser_expr.cpp src/papyrus_source/parser_stmt.cpp src/papyrus_source/summary.cpp)
 target_sources(radicle_c PRIVATE src/c_api_nif.cpp src/c_api_dds.cpp)
-target_sources(radicle_c PRIVATE src/c_api_swf.cpp src/c_api_swf_art.cpp src/c_api_swf_characters.cpp src/c_api_swf_display.cpp src/c_api_swf_edit.cpp src/c_api_swf_history.cpp src/c_api_swf_abc_write.cpp src/c_api_runtime.cpp)
+target_sources(radicle_c PRIVATE src/c_api_swf.cpp src/c_api_swf_art.cpp src/c_api_swf_characters.cpp src/c_api_swf_display.cpp src/c_api_swf_edit.cpp src/c_api_swf_history.cpp src/c_api_swf_verbs.cpp src/c_api_swf_abc_write.cpp src/c_api_runtime.cpp)
 
 if(RADICLE_INSTALL)
   include(GNUInstallDirs)
