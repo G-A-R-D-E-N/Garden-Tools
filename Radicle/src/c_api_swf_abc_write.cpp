@@ -31,17 +31,7 @@ const radicle_swf_detail::abc_view* abc_at(const radicle_swf* swf, std::size_t i
   return swf == nullptr || index >= swf->abcs.size() ? nullptr : &swf->abcs[index];
 }
 
-/* Invariant: the buffer must carry a trailing NUL that *out_size does not count. */
-std::uint8_t* copy_text(const std::string& text, std::size_t* out_size) {
-  auto* buffer = static_cast<std::uint8_t*>(std::malloc(text.size() + 1));
-  if (buffer == nullptr) return nullptr;
-  if (!text.empty()) std::memcpy(buffer, text.data(), text.size());
-  buffer[text.size()] = 0;
-  out_size[0] = text.size();
-  return buffer;
-}
-
-/* A byte buffer must carry the same trailing-NUL invariant as copy_text. */
+/* A byte buffer must carry the same trailing-NUL invariant as radicle_swf_detail::copy_text. */
 std::uint8_t* copy_bytes(const std::vector<std::uint8_t>& bytes, std::size_t* out_size) {
   auto* buffer = static_cast<std::uint8_t*>(std::malloc(bytes.size() + 1));
   if (buffer == nullptr) return nullptr;
@@ -153,7 +143,7 @@ radicle_status radicle_swf_abc_text(const radicle_swf* swf, size_t abc, uint8_t*
   if (!view->parsed) return fail(RADICLE_STATUS_PARSE_ERROR, "the ABC block did not parse");
   return guarded("unknown exception while rendering ABC text", [&] {
     const std::string text = fo4::abc::render_abc_text(view->file);
-    auto* buffer = copy_text(text, out_size);
+    auto* buffer = radicle_swf_detail::copy_text(text, out_size);
     if (buffer == nullptr) return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to allocate the text");
     out_text[0] = buffer;
     return RADICLE_STATUS_OK;
