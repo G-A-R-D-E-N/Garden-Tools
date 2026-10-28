@@ -43,6 +43,14 @@ RADICLE_API radicle_status radicle_graph_describe_node(const char* node_type,
                                                        uint8_t** out_text,
                                                        size_t* out_size);
 
+/* Requires radicle_free_bytes; a script that will not load or lift is PARSE_ERROR with its reason and no text. */
+RADICLE_API radicle_status radicle_graph_load_script(const char* script_path,
+                                                     const char* imports,
+                                                     const char* const* base_imports,
+                                                     size_t base_count,
+                                                     uint8_t** out_text,
+                                                     size_t* out_size);
+
 #ifdef __cplusplus
 }
 #endif
