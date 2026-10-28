@@ -21,4 +21,7 @@ std::string shape_defs_to_svg(const SwfShape& shape, const std::string& id_prefi
 // Requires a decoded shape; the output has no <svg> wrapper.
 std::string shape_paths_to_svg(const SwfShape& shape, const std::string& id_prefix);
 
+// Requires a decoded shape and an id_prefix unique within the document; no stroke paths.
+std::string shape_fill_paths_to_svg(const SwfShape& shape, const std::string& id_prefix);
+
 }  // namespace fo4::swf

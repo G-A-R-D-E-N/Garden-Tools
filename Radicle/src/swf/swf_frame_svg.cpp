@@ -13,6 +13,7 @@ namespace fo4::swf {
 
 namespace {
 
+constexpr double kTwipsPerPixel = 20.0;
 constexpr double kMultiplyOne = 256.0;
 constexpr double kAddOne = 255.0;
 
@@ -47,13 +48,24 @@ std::string color_matrix_text(const SwfColorTransform& color) {
   return values;
 }
 
-std::string filter_text(const std::string& id, const SwfColorTransform& color) {
-  return "<defs><filter id=\"" + id + "\" color-interpolation-filters=\"sRGB\">"
+std::string stage_region_text(const SwfRect& stage) {
+  const double width = (static_cast<double>(stage.x_max) - stage.x_min) / kTwipsPerPixel;
+  const double height = (static_cast<double>(stage.y_max) - stage.y_min) / kTwipsPerPixel;
+  return " filterUnits=\"userSpaceOnUse\" x=\"" + svg_number(stage.x_min / kTwipsPerPixel) +
+         "\" y=\"" + svg_number(stage.y_min / kTwipsPerPixel) + "\" width=\"" + svg_number(width) +
+         "\" height=\"" + svg_number(height) + "\"";
+}
+
+std::string filter_text(const std::string& id, const SwfColorTransform& color,
+                        const SwfRect& stage) {
+  return "<defs><filter id=\"" + id + "\"" + stage_region_text(stage) +
+         " color-interpolation-filters=\"sRGB\">"
          "<feColorMatrix type=\"matrix\" values=\"" + color_matrix_text(color) +
          "\"/></filter></defs>\n";
 }
 
-std::string frame_body(const ShapeIndex& shapes, const SwfDisplayFrame& frame) {
+std::string frame_body(const ShapeIndex& shapes, const SwfDisplayFrame& frame,
+                       const SwfRect& stage) {
   std::string body;
   std::vector<Mask> masks;
   for (std::size_t index = 0; index < frame.instances.size(); ++index) {
@@ -77,14 +89,14 @@ std::string frame_body(const ShapeIndex& shapes, const SwfDisplayFrame& frame) {
       masks.push_back(Mask{level, row.depth, *row.clip_depth, id + "clip", false});
       body += shape_defs_to_svg(shape, id + "f") + "<clipPath id=\"" + id + "clip\" transform=\"" +
               transform_text(row.world_transform) + "\">\n" +
-              shape_paths_to_svg(shape, id + "f") + "</clipPath>\n";
+              shape_fill_paths_to_svg(shape, id + "f") + "</clipPath>\n";
       continue;
     }
     std::string content = "<g transform=\"" + transform_text(row.world_transform) + "\">\n" +
                           shape_defs_to_svg(shape, id + "f") +
                           shape_paths_to_svg(shape, id + "f") + "</g>\n";
     if (row.world_color_transform) {
-      content = filter_text(id + "color", *row.world_color_transform) +
+      content = filter_text(id + "color", *row.world_color_transform, stage) +
                 "<g filter=\"url(#" + id + "color)\">\n" + content + "</g>\n";
     }
     for (const Mask& mask : masks) {
@@ -108,7 +120,7 @@ std::string frame_to_svg(const SwfFile& file, const SwfDisplayList& display, std
   }
   std::string body;
   if (!display.timelines.empty() && frame < display.timelines.front().frames.size()) {
-    body = frame_body(shapes, display.timelines.front().frames[frame]);
+    body = frame_body(shapes, display.timelines.front().frames[frame], file.header.frame_size);
   }
   return svg_open(file.header.frame_size) + body + "</svg>\n";
 }

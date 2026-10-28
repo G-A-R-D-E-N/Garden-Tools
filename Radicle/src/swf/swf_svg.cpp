@@ -395,6 +395,10 @@ std::string shape_paths_to_svg(const SwfShape& shape, const std::string& id_pref
   return fill_paths(shape, edges, id_prefix) + stroke_paths(shape, edges);
 }
 
+std::string shape_fill_paths_to_svg(const SwfShape& shape, const std::string& id_prefix) {
+  return fill_paths(shape, trace_edges(shape), id_prefix);
+}
+
 std::string shape_to_svg(const SwfShape& shape) {
   return svg_open(shape.bounds) + shape_defs_to_svg(shape, "fill") +
          shape_paths_to_svg(shape, "fill") + "</svg>\n";

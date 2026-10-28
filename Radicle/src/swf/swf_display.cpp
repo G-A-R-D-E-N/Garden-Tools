@@ -176,6 +176,13 @@ bool replay(const std::vector<std::vector<Operation>>& operations, std::uint16_t
   return true;
 }
 
+constexpr std::int64_t kColorOne = 256;
+constexpr std::int64_t kColorLimit = 65536;
+
+std::int32_t clamp_color(std::int64_t value) {
+  return static_cast<std::int32_t>(std::clamp(value, -kColorLimit, kColorLimit));
+}
+
 std::optional<SwfColorTransform> compose_color(const std::optional<SwfColorTransform>& parent,
                                                const std::optional<SwfColorTransform>& child) {
   if (!parent) {
@@ -187,8 +194,10 @@ std::optional<SwfColorTransform> compose_color(const std::optional<SwfColorTrans
   SwfColorTransform out;
   out.has_alpha = parent->has_alpha || child->has_alpha;
   for (std::size_t channel = 0; channel < 4; ++channel) {
-    out.multiply[channel] = parent->multiply[channel] * child->multiply[channel] / 256;
-    out.add[channel] = parent->multiply[channel] * child->add[channel] / 256 + parent->add[channel];
+    const std::int64_t parent_multiply = parent->multiply[channel];
+    out.multiply[channel] = clamp_color(parent_multiply * child->multiply[channel] / kColorOne);
+    out.add[channel] = clamp_color(parent_multiply * child->add[channel] / kColorOne +
+                                   parent->add[channel]);
   }
   return out;
 }

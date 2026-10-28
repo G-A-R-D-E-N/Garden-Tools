@@ -183,14 +183,17 @@ std::vector<std::byte> color_multiply_add(std::int32_t multiply, std::int32_t ad
   bits.push_bits(static_cast<std::uint32_t>(multiply) & 0x3FFu, 10);
   bits.push_bits(256, 10);
   bits.push_bits(256, 10);
+  bits.push_bits(256, 10);
   bits.push_bits(static_cast<std::uint32_t>(add) & 0x3FFu, 10);
+  bits.push_bits(0, 10);
   bits.push_bits(0, 10);
   bits.push_bits(0, 10);
   bits.align();
   return bits.body;
 }
 
-std::vector<std::byte> square_shape(std::uint16_t id, std::int32_t size, std::uint32_t rgb) {
+std::vector<std::byte> square_shape(std::uint16_t id, std::int32_t size, std::uint32_t rgb,
+                                    bool stroke = false) {
   SwfBuilder body;
   body.u16(id);
   body.rect(0, size, 0, size, 12);
@@ -200,14 +203,26 @@ std::vector<std::byte> square_shape(std::uint16_t id, std::int32_t size, std::ui
   body.u8((rgb >> 8) & 0xFFu);
   body.u8(rgb & 0xFFu);
   body.u8(0xFF);
-  body.u8(0);
-  body.u8(0x10);
+  if (stroke) {
+    body.u8(1);
+    body.u16(20);
+    body.u8(0x00);
+    body.u8(0xFF);
+    body.u8(0x00);
+    body.u8(0xFF);
+  } else {
+    body.u8(0);
+  }
+  body.u8(stroke ? 0x11 : 0x10);
   body.push_bits(0, 1);
-  body.push_bits(0x03, 5);
+  body.push_bits(stroke ? 0x0B : 0x03, 5);
   body.push_bits(12, 5);
   body.push_bits(0, 12);
   body.push_bits(0, 12);
   body.push_bits(1, 1);
+  if (stroke) {
+    body.push_bits(1, 1);
+  }
   const std::int32_t edges[8] = {size, 0, 0, size, -size, 0, 0, -size};
   for (std::size_t index = 0; index < 8; index += 2) {
     body.push_bits(1, 1);
@@ -559,7 +574,8 @@ TEST(SwfFrameSvg, AppliesAPlacementColourTransformAsAColorMatrix) {
   });
   const std::string expected =
       kStageOpen +
-      "<defs><filter id=\"r0color\" color-interpolation-filters=\"sRGB\">"
+      "<defs><filter id=\"r0color\" filterUnits=\"userSpaceOnUse\" x=\"0\" y=\"0\" width=\"550\" "
+      "height=\"400\" color-interpolation-filters=\"sRGB\">"
       "<feColorMatrix type=\"matrix\" values=\"0.5 0 0 0 0.2 0 1 0 0 0 0 0 1 0 0 0 0 0 1 0\"/>"
       "</filter></defs>\n"
       "<g filter=\"url(#r0color)\">\n"
@@ -604,6 +620,19 @@ TEST(SwfFrameSvg, ClipsOnlyTheRowsInsideTheMaskDepthRange) {
       "</g>\n"
       "</g>\n"
       "<g transform=\"matrix(1 0 0 1 0 0)\">\n" + kRedSquare + "</g>\n"
+      "</svg>\n";
+  EXPECT_EQ(svg_of(movie, 0), expected);
+}
+
+TEST(SwfFrameSvg, ClipMaskUsesOnlyFillGeometry) {
+  const auto movie = movie_of(1, {
+      {32, square_shape(1, 1000, 0xFF0000, true)},
+      {26, place_full(1, 1, {}, {}, 2)},
+      {1, {}},
+  });
+  const std::string expected =
+      kStageOpen +
+      "<clipPath id=\"r0clip\" transform=\"matrix(1 0 0 1 0 0)\">\n" + kRedSquare + "</clipPath>\n"
       "</svg>\n";
   EXPECT_EQ(svg_of(movie, 0), expected);
 }
