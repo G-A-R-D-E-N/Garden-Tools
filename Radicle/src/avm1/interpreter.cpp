@@ -46,6 +46,7 @@ namespace {
 
 using text_ops::encode_code_unit;
 using text_ops::first_code_point;
+using text_ops::kCodePointVersion;
 using text_ops::to_text;
 using text_ops::unit_count;
 using text_ops::unit_offset;
@@ -384,7 +385,7 @@ std::size_t clamp_to_length(double number, std::size_t length) {
   return number >= static_cast<double>(length) ? length : static_cast<std::size_t>(number);
 }
 
-Avm1RunStatus extract_string(Avm1State& state, std::string& message) {
+Avm1RunStatus extract_string(Avm1State& state, std::string& message, std::uint8_t unit_version) {
   Avm1Data count;
   Avm1Data index;
   Avm1Data text;
@@ -399,11 +400,11 @@ Avm1RunStatus extract_string(Avm1State& state, std::string& message) {
   }
   const std::uint8_t version = state.swf_version;
   const std::string source = to_text(text, version);
-  const std::size_t units = unit_count(source, version);
+  const std::size_t units = unit_count(source, unit_version);
   const std::size_t start = clamp_to_length(to_number(index, version) - 1.0, units);
   const std::size_t length = clamp_to_length(to_number(count, version), units - start);
-  const std::size_t from = unit_offset(source, start, version);
-  const std::size_t to = unit_offset(source, start + length, version);
+  const std::size_t from = unit_offset(source, start, unit_version);
+  const std::size_t to = unit_offset(source, start + length, unit_version);
   return push_result(state, string_value(source.substr(from, to - from)), message);
 }
 
@@ -496,7 +497,14 @@ Avm1RunStatus execute_action(const Avm1Stream& stream, const Avm1Action& action,
         return number_value(static_cast<double>(unit_count(to_text(operand, version), version)));
       });
     case 0x15:
-      return extract_string(state, message);
+      return extract_string(state, message, version);
+    case 0x31:
+      return apply_unary(state, message, [version](const Avm1Data& operand) {
+        return number_value(
+            static_cast<double>(unit_count(to_text(operand, version), kCodePointVersion)));
+      });
+    case 0x35:
+      return extract_string(state, message, kCodePointVersion);
     case 0x17: {
       Avm1Data discarded;
       return pop(state, discarded, message);
