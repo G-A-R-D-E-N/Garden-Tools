@@ -505,6 +505,14 @@ Avm1RunStatus execute_action(const Avm1Stream& stream, const Avm1Action& action,
       });
     case 0x35:
       return extract_string(state, message, kCodePointVersion);
+    case 0x36:
+      return apply_unary(state, message, [version](const Avm1Data& operand) {
+        return number_value(static_cast<double>(first_code_point(to_text(operand, version))));
+      });
+    case 0x37:
+      return apply_unary(state, message, [version](const Avm1Data& operand) {
+        return string_value(encode_code_unit(to_uint32(operand, version) & 0xFFFFu));
+      });
     case 0x17: {
       Avm1Data discarded;
       return pop(state, discarded, message);
