@@ -135,6 +135,21 @@ public class SwfInterop
         Snapshot(Document().InsertAbcInstruction(abc, body, offset, text).Changed));
     public Task<string> ReplaceAbcInstruction(int abc, int body, int offset, string text) => Run(() =>
         Snapshot(Document().ReplaceAbcInstruction(abc, body, offset, text).Changed));
+    public Task<string> AbcBlocks() => Run(() => Json(new
+    {
+        blocks = Document().Movie.AbcBlocks.Select((block, abc) => new
+        {
+            abc, name = block.Name,
+            classes = block.Classes.Select(klass => klass.Name).ToArray(),
+            scripts = block.Scripts.Select(script => script.Name).ToArray(),
+            methods = Document().Movie.Methods(abc).Select((method, index) => new
+            {
+                index, name = method.Name, returnType = method.ReturnType, hasBody = method.HasBody,
+            }).ToArray(),
+        }).ToArray(),
+    }));
+    public Task<string> Disassemble(int abc, int methodIndex) => Run(() =>
+        Json(new { text = Document().Movie.Disassemble(abc, methodIndex) }));
     public Task<string> Undo() => Run(() => { Document().Undo(); return Snapshot(false); });
 
     public Task<string> Redo() => Run(() => { Document().Redo(); return Snapshot(false); });
