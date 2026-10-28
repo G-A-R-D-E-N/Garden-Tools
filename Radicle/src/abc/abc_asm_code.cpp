@@ -103,7 +103,11 @@ struct BodyParser {
 
   bool fail(std::string_view message) {
     if (error.empty()) {
-      error = "line " + std::to_string(first_line) + ": " + std::string{message};
+      std::string prefix;
+      if (first_line != 0) {
+        prefix = "line " + std::to_string(first_line) + ": ";
+      }
+      error = prefix + std::string{message};
     }
     return false;
   }
@@ -397,21 +401,33 @@ AbcStatus parse_body(AbcFile& file, std::size_t body_index,
     out = static_cast<std::int32_t>(found->second);
     return true;
   };
+  const auto check_s24 = [&parser](std::int32_t target, std::size_t origin) {
+    const std::int64_t relative =
+        static_cast<std::int64_t>(target) - static_cast<std::int64_t>(origin);
+    if (relative >= -(std::int64_t{1} << 23) && relative < (std::int64_t{1} << 23)) {
+      return true;
+    }
+    return parser.fail("target offset is outside the signed 24-bit range");
+  };
   for (const PendingBranch& branch : parser.branches) {
-    if (!resolve(branch.target,
-                 parser.instructions[branch.instruction].operands[branch.operand].target)) {
+    const AbcInstruction& instruction = parser.instructions[branch.instruction];
+    std::int32_t& target = parser.instructions[branch.instruction].operands[branch.operand].target;
+    if (!resolve(branch.target, target) ||
+        !check_s24(target, instruction.offset + instruction.length)) {
       return AbcStatus::InconsistentModel;
     }
   }
   for (const PendingSwitch& pending : parser.switches) {
+    const std::size_t offset = parser.instructions[pending.instruction].offset;
     AbcDecodedOperand& operand =
         parser.instructions[pending.instruction].operands[pending.operand];
-    if (!resolve(pending.default_target, operand.target)) {
+    if (!resolve(pending.default_target, operand.target) || !check_s24(operand.target, offset)) {
       return AbcStatus::InconsistentModel;
     }
     operand.case_targets.resize(pending.case_targets.size());
     for (std::size_t index = 0; index < pending.case_targets.size(); ++index) {
-      if (!resolve(pending.case_targets[index], operand.case_targets[index])) {
+      if (!resolve(pending.case_targets[index], operand.case_targets[index]) ||
+          !check_s24(operand.case_targets[index], offset)) {
         return AbcStatus::InconsistentModel;
       }
     }
@@ -449,6 +465,10 @@ AbcStatus parse_body(AbcFile& file, std::size_t body_index,
         !resolve(pending.target, target)) {
       return AbcStatus::InconsistentModel;
     }
+    if (from < 0 || to < 0 || target < 0) {
+      parser.fail("exception offset is negative");
+      return AbcStatus::InconsistentModel;
+    }
     exception.from = static_cast<std::uint32_t>(from);
     exception.to = static_cast<std::uint32_t>(to);
     exception.target = static_cast<std::uint32_t>(target);
@@ -467,7 +487,7 @@ AbcStatus parse_body(AbcFile& file, std::size_t body_index,
 AbcStatus parse_instruction_text(std::string_view text, std::vector<std::uint8_t>& out,
                                  std::string& error) {
   AbcFile scratch;
-  BodyParser parser{scratch, error, 1, {}, {}, {}, {}, {}, {}, 0, false, false, 0};
+  BodyParser parser{scratch, error, 0, {}, {}, {}, {}, {}, {}, 0, false, false, 0};
   bool ok = parser.parse_operation(split_tokens(text), 0);
   if (ok && (!parser.branches.empty() || !parser.switches.empty())) {
     ok = parser.fail("branch operands need a method body");

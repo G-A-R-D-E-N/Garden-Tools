@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 using fo4::abc::AbcFile;
@@ -164,24 +165,33 @@ TEST(AbcAsm, RefusesInstructionTextThatIsNotOneBranchFreeInstruction) {
 }
 
 TEST(AbcAsm, DeadBranchTargetsRenderAsAbsoluteOffsetsAndRoundTripByteForByte) {
-  // Regression: a dead target past the end or mid-instruction must print =offset, not a bare label.
+  // Invariant: a dead target past the end or mid-instruction prints =offset, never a label.
   struct DeadCode {
     std::vector<std::uint8_t> code;
-    std::string reference;
+    std::vector<std::string> references;
+    std::vector<fo4::abc::AbcException> exceptions;
   };
+  const DeadCode mixed{
+      {0x47, 0x10, 0xE8, 0x03, 0x00, 0x1B, 0xE3, 0x03, 0x00, 0x00, 0xFE, 0xFF, 0xFF},
+      {"-> =1005", "switch =1000 =3", "exception =2 "},
+      {{2, 13, 0, fo4::test::kMultinameTest, fo4::test::kMultinameHelper}}};
   const std::vector<DeadCode> cases{
-      {{0x47, 0x10, 0xE8, 0x03, 0x00}, "-> =1005"},
-      {{0x47, 0x10, 0xFE, 0xFF, 0xFF}, "-> =3"},
+      {{0x47, 0x10, 0xE8, 0x03, 0x00}, {"-> =1005"}, {}},
+      {{0x47, 0x10, 0xFE, 0xFF, 0xFF}, {"-> =3"}, {}},
+      mixed,
   };
   for (const DeadCode& dead : cases) {
     AbcFile file = parse_or_fail(fo4::test::build_abc());
     ASSERT_FALSE(file.bodies.empty());
     file.bodies[0].code = dead.code;
+    file.bodies[0].exceptions = dead.exceptions;
     std::vector<std::uint8_t> expected;
     ASSERT_EQ(file.serialize(expected), AbcStatus::Ok);
 
     const std::string text = fo4::abc::render_abc_text(file);
-    EXPECT_NE(text.find(dead.reference), std::string::npos) << text;
+    for (const std::string& reference : dead.references) {
+      EXPECT_NE(text.find(reference), std::string::npos) << reference << "\n" << text;
+    }
     AbcFile assembled;
     fo4::abc::AbcTextError error;
     ASSERT_EQ(fo4::abc::assemble_abc_text(text, assembled, &error), AbcStatus::Ok)
@@ -191,5 +201,33 @@ TEST(AbcAsm, DeadBranchTargetsRenderAsAbsoluteOffsetsAndRoundTripByteForByte) {
     std::vector<std::uint8_t> serialized;
     ASSERT_EQ(assembled.serialize(serialized), AbcStatus::Ok);
     EXPECT_EQ(serialized, expected);
+  }
+
+  AbcFile base = parse_or_fail(fo4::test::build_abc());
+  base.bodies[0].code = mixed.code;
+  base.bodies[0].exceptions = mixed.exceptions;
+  const std::string text = fo4::abc::render_abc_text(base);
+  AbcFile assembled_base;
+  ASSERT_EQ(fo4::abc::assemble_abc_text(text, assembled_base), AbcStatus::Ok) << text;
+  const std::pair<std::string, std::string> malformed[] = {
+      {"-> =1005", "-> ="},
+      {"-> =1005", "-> =abc"},
+      {"-> =1005", "-> =1x"},
+      {"-> =1005", "-> =2147483648"},
+      {"-> =1005", "-> =9000000"},
+      {"switch =1000", "switch =9000000"},
+      {"exception =2 ", "exception =-5 "},
+  };
+  for (const auto& [before, after] : malformed) {
+    std::string broken = text;
+    const std::size_t at = broken.find(before);
+    ASSERT_NE(at, std::string::npos) << before;
+    broken.replace(at, before.size(), after);
+    AbcFile assembled;
+    fo4::abc::AbcTextError error;
+    EXPECT_EQ(fo4::abc::assemble_abc_text(broken, assembled, &error),
+              AbcStatus::InconsistentModel)
+        << after;
+    EXPECT_FALSE(error.message.empty()) << after;
   }
 }
