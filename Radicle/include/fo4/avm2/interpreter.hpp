@@ -119,6 +119,7 @@ class Interpreter {
     std::vector<Value> locals;
     std::vector<Value> stack;
     std::vector<Object*> scopes;
+    const std::vector<Object*>* outer_scope{nullptr};
     Value this_value;
     Class* owner_class{nullptr};
     std::size_t entry_scope_count{0};
@@ -128,6 +129,9 @@ class Interpreter {
   };
 
   ExecutionResult execute_frame(Frame& frame, std::size_t depth);
+  ExecutionResult call_indexed(Frame& frame, const abc::AbcInstruction& instruction,
+                               std::size_t depth);
+  ExecutionResult outer_scope_value(const Frame& frame, std::uint32_t index) const;
   ExecutionResult invoke(const FunctionObject& function, Value this_value,
                          std::vector<Value> arguments, const std::vector<Object*>& scopes,
                          std::size_t depth);

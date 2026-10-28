@@ -5432,7 +5432,7 @@ The interpreter could execute synthetic methods but not a real script initialize
 
 **Probe and lenient limits.** `Radicle/include/fo4/avm2/interpreter.hpp:InterpreterLimits::lenient_builtins` is the probe mode: an unbound native returns undefined, an unbound method call on a builtin instance returns undefined, a read or call on a nullish value returns undefined and a non-function call target returns undefined, all where the strict mode reports NotImplemented, CannotCall or NullReference. That is how `Radicle/tests/test_avm2_scripts_real.cpp` reaches the opcodes after the first native call; it walks every `Programs/*.swf` in `Fallout4 - Interface.ba2`, parses each DoABC2 block, links one runtime per movie, runs every script initializer with a 50,000-instruction budget, records link failures, unbound-native stops and other messages as properties, and fails only when a script hits an opcode the interpreter does not implement (the R2 exit criterion). Strict mode keeps the refusal semantics for ordinary use. The new unit tests are in `Radicle/tests/test_avm2_interpreter.cpp`: the initializer receiver is the global object, an unresolved `flash.display::Sprite` becomes a class object, an unbound native refuses strictly and returns undefined leniently, a thrown value is caught by a matching region and the handler returns 9, and a handler whose type does not match the thrown string leaves the exception uncaught.
 
-**Still open for R2/R3.** `getouterscope` and the E4X opcodes remain NotImplemented; `callstatic`/`callmethod` are unused by the corpus but unimplemented; closures capture scopes but not activation locals (the corpus compiler copies captured locals into the activation scope's slots explicitly, so this has not blocked the initializers yet); and the builtin classes are bound in R3 (see the R3 sections below). The probe's data-runner output is the evidence for the opcode criterion; nothing was built locally.
+**Still open for R2/R3.** `getouterscope` in a method with no captured scope (a class method) and the E4X opcodes remain NotImplemented, see `Radicle/src/avm2/interpreter_property.cpp:Interpreter::outer_scope_value`; `callstatic`/`callmethod` are implemented in `Radicle/src/avm2/interpreter_property.cpp:Interpreter::call_indexed` but unused by the corpus, and the verifier still rejects `callmethod` in user bytecode (see `Radicle/src/abc/abc_verify.cpp:verify_body_opcodes`); closures capture scopes but not activation locals (the corpus compiler copies captured locals into the activation scope's slots explicitly, so this has not blocked the initializers yet); and the builtin classes are bound in R3 (see the R3 sections below). The probe's data-runner output is the evidence for the opcode criterion; nothing was built locally.
 
 ## R3 native builtin foundation: natives, boxing and core classes (#807 R3)
 
@@ -7853,6 +7853,77 @@ Test regressions, in `Radicle/tests/test_swf_display.cpp`: `SwfFrameSvg.ASlashIn
 
 MBCharToAscii (0x36) pops one value, converts it with `to_text` at the movie's version, and pushes `Radicle/src/avm1/text_ops.cpp:first_code_point` of the result, so the whole first UTF-8 code point counts at every SWF version and empty text pushes 0. MBAsciiToChar (0x37) pops one value, takes `to_uint32` (truncation toward zero, wrap modulo 2^32, NaN and infinity as 0), keeps the low 16 bits and pushes `Radicle/src/avm1/text_ops.cpp:encode_code_unit` of them, so the result is UTF-8 at every version. The code point read and the 16-bit wrap are from the SWF spec as recalled, unverified; no SWF spec mirror was available on the development machine to check them. Units 0xD800 to 0xDFFF encode as three-byte sequences, which is not valid UTF-8; this is a known gap, not checked against Flash. Regression: a byte read for 0x36 traces 240 on the U+1F600 row instead of 128512, and an unmasked 0x37 encodes 65601 as a malformed sequence instead of "A". Tests: `Radicle/tests/test_avm1_ops.cpp:MultibyteCharOpcodesUseCodePointsAtEveryVersion` and the two underflow rows for 0x36 and 0x37 in `Radicle/tests/test_avm1_ops.cpp:NewOperatorsRefuseAShortStack`.
 
+## Radicle/src/avm2/interpreter_property.cpp:Interpreter::call_indexed
+
+callmethod (0x43) and callstatic (0x44) pop the argument count (second operand) and the receiver, box a primitive receiver, and fail with NullReference ("<mnemonic> needs an object receiver") for null. callmethod reads its first operand as a dispatch id and resolves it over the receiver's instance class and its super chain, through `Radicle/src/avm2/class.cpp:Class::resolve_dispatch_trait`, which never matches id 0. A missing trait is CannotCall "callmethod has no method N on this receiver". callstatic reads its first operand as a method_info index into `frame.file`'s method table and refuses an index past the end with MethodIndexOutOfRange "callstatic method index N is outside the M-entry method table". Otherwise it builds a FunctionObject for that method with no captured scope and runs it through invoke with the receiver as this and no scope override, so the callee sees the global scope only. Any object receiver is accepted; the class is not required. The callstatic operand meaning (method_info index, argc, receiver as this) is recalled from the AVM2 overview, not verified against avmplus, whose source was not available on this machine.
+
+## Radicle/src/avm2/interpreter_property.cpp:Interpreter::outer_scope_value
+
+getouterscope (0x67) reads the captured scope list held by Frame::outer_scope (set in `Radicle/src/avm2/interpreter.cpp:Interpreter::invoke`), indexed directly, not through Frame::scopes. Index 0 being the global scope follows from newfunction capturing the whole scope stack (recalled from the AVM2 overview, unverified against avmplus). Only closures carry a captured scope, because newfunction is the only place it is recorded. A method with no captured scope (a class method, since newclass does not record one) returns NotImplemented "getouterscope needs a closure's captured outer scope; this method has none". Supporting that needs newclass to set captured_scope on every method FunctionObject and invoke's scope logic to change, a restructure outside this change, so it stays refused. An index at or past the captured size is ScopeUnderflow "getouterscope N is outside the M-entry captured outer scope". The NotImplemented message starts with "opcode ", so the real-data probe in `Radicle/tests/test_avm2_scripts_real.cpp:RunsEveryProgramsScriptInitializerWithoutUnimplementedOpcode` counts it as an unimplemented opcode; the ScopeUnderflow refusal is not counted.
+
+## Radicle/src/avm2/interpreter.cpp:Interpreter::invoke
+
+invoke sets `frame.outer_scope = &function.captured_scope()` next to owner_class. The pointer borrows the FunctionObject's vector; the frame is local to invoke and execute_frame returns before invoke does, and the caller holds the FunctionObject for the call, so the pointer is valid for the frame's life.
+
+## Radicle/src/avm2/class.cpp:Class::resolve_dispatch_trait
+
+Walks the class and its super chain and returns the first Method trait whose dispatch_id matches, so a subclass override shadows its base. Dispatch id 0 never matches: a compiler writes 0 for a method whose id it left for the VM to assign, and this runtime does not assign ids, so 0 names no method. Classes with no file are skipped (builtins and externals), because builtin traits are built with dispatch_id 0 in `Radicle/src/avm2/builtins.cpp`, so matching them would make id 0 resolve to a builtin. Used by callmethod in `Radicle/src/avm2/interpreter_property.cpp:Interpreter::call_indexed`. It matches dispatch ids, not method_info indices.
+
+## Radicle/src/abc/abc_verify.cpp:verify_body_opcodes
+
+Decision: the verifier's rejection of callmethod in user bytecode is unchanged. Lines 343 to 346 of `verify_body_opcodes` still refuse it with "callmethod is not permitted in user bytecode". The interpreter does not run the verifier, so the callmethod case in `Radicle/src/avm2/interpreter_dispatch_b.inc` executes bytecode the verifier refuses; the verifier is not consulted at run time.
+
+## Radicle/src/avm2/interpreter.cpp:Interpreter::execute_frame
+
+Opcode census from a source scan (not compiled or run). Named opcodes with no case in `interpreter_dispatch_a.inc` or `interpreter_dispatch_b.inc` fall to the default, which returns NotImplemented "opcode X is not implemented yet". Totals: 169 named, 138 dispatched, 31 not dispatched. The 31 are: dxns 0x06, dxnslate 0x07, hasnext 0x1F, pushnamespace 0x31, li8 0x35, li16 0x36, li32 0x37, lf32 0x38, lf64 0x39, si8 0x3A, si16 0x3B, si32 0x3C, sf32 0x3D, sf64 0x3E, sxi1 0x50, sxi8 0x51, sxi16 0x52, getdescendants 0x59, finddef 0x5F, setpropertylate 0x69, deletepropertylate 0x6B, getglobalslot 0x6E, setglobalslot 0x6F, esc_xelem 0x71, esc_xattr 0x72, checkfilter 0x78, coerce_b 0x81, coerce_i 0x83, coerce_d 0x84, coerce_u 0x88, coerce_o 0x89. NotImplemented also comes from `Radicle/src/avm2/interpreter_property.cpp:Interpreter::outer_scope_value`, which returns it for a getouterscope in a method with no captured scope.
+
+## Radicle/tests/test_avm2_call_indexed.cpp:CallstaticRunsTheMethodWithTheReceiverAsThis
+
+Detects callstatic failing to pass the receiver as this. The receiver is a Holder instance from construct; the method returns getlocal0, so the expected result is an object whose instance class is Holder, not the class object.
+
+## Radicle/tests/test_avm2_call_indexed.cpp:CallstaticRefusesAMethodIndexPastTheMethodTable
+
+Detects callstatic reading past the end of the method table, or running a stale method, instead of refusing. Index 7 in a one-method file must give MethodIndexOutOfRange with "callstatic" in the message.
+
+## Radicle/tests/test_avm2_call_indexed.cpp:CallstaticRefusesANullReceiver
+
+Detects callstatic on a null receiver dereferencing null instead of failing. The expected result is NullReference with "callstatic" in the message.
+
+## Radicle/tests/test_avm2_call_indexed.cpp:CallmethodDispatchesByDispatchIdOnTheInstance
+
+Detects callmethod on a constructed Holder instance failing to resolve dispatch id 1 through the instance class to the scale trait, or dropping the argument. The method returns its argument, so the expected int 4 is the pushed argument. The helper `run_holder_callmethod` is shared with the refusal tests below.
+
+## Radicle/tests/test_avm2_call_indexed.cpp:CallmethodFindsTheDispatchIdOnTheSuperClass
+
+Detects callmethod resolving only the receiver's own class. Derived has no traits and extends Holder, so dispatch id 1 must reach Holder's scale trait through the super chain and return 4; an own-class-only lookup gives CannotCall.
+
+## Radicle/tests/test_avm2_call_indexed.cpp:CallmethodRefusesDispatchIdZero
+
+Detects dispatch id 0, which compilers write as "VM assigns" (recalled, unverified against avmplus), matching a method whose dispatch_id is also 0. The scale trait is given dispatch id 0 and called with id 0; the expected result is CannotCall with "callmethod" in the message. Without the id-0 refusal it returns 4.
+
+## Radicle/tests/test_avm2_call_indexed.cpp:CallmethodRefusesAnUnknownDispatchId
+
+Detects callmethod with a dispatch id no trait carries (9, where scale has 1) returning a value or undefined instead of CannotCall with "callmethod" in the message.
+
+## Radicle/tests/test_avm2_call_indexed.cpp:CallmethodRefusesANullReceiver
+
+Detects callmethod on a null receiver dereferencing null instead of failing. The expected result is NullReference with "callmethod" in the message.
+
+## Radicle/tests/test_avm2_scope_depth.cpp:GetouterscopeReadsTheScopeCapturedByNewfunction
+
+Detects getouterscope 1 in a closure failing to read the captured scope, or reading the wrong entry. The expected value is 7, the captured object at index 1. Index 1 alone does not separate the captured scope from the frame's scope list, because both hold the same object there; `GetouterscopeIgnoresTheScopesPushedInsideTheClosure` is the case that does.
+
+## Radicle/tests/test_avm2_scope_depth.cpp:GetouterscopeIgnoresTheScopesPushedInsideTheClosure
+
+Detects getouterscope reading the frame's scope list instead of the captured scope. The closure pushes a scope of its own, so frame.scopes holds a third entry at index 2, while the captured scope has two entries. getouterscope 2 must refuse with ScopeUnderflow and "getouterscope" in the message.
+
+## Radicle/tests/test_avm2_scope_depth.cpp:GetouterscopeRefusesAnIndexPastTheCapturedScope
+
+Detects an out-of-range getouterscope (index 1 with a one-entry captured scope) returning a value or undefined instead of ScopeUnderflow with "getouterscope" in the message.
+
+## Radicle/tests/test_avm2_scope_depth.cpp:GetouterscopeRefusesAMethodWithoutACapturedScope
+
+Detects getouterscope in a script init method, which has no captured scope, returning a stale or null value instead of NotImplemented with "getouterscope" in the message.
 ## Radicle/src/avm1/object_ops.cpp:object_ops
 
 The object slice adds an object kind to the value type. `Radicle/include/fo4/avm1/interpreter.hpp:Avm1Data` has an `Object` kind and a `std::shared_ptr<Avm1Object>` handle, so an object is a reference: a copy of the value (through PushDuplicate, a variable or a property read) names the same `Avm1Object`. `Radicle/src/avm1/object_ops.hpp:Avm1Object` has no prototype, function or class. Its properties sit in a `std::map` for lookup and `order` keeps insertion order for a later enumerate record. `Radicle/src/avm1/object_ops.cpp:put` keeps the two in step and `Radicle/src/avm1/object_ops.cpp:erase_property` removes from both. The records `Radicle/src/avm1/object_ops.cpp:object_ops` runs are listed in `## Radicle/src/avm1/interpreter.cpp:execute_actions`. CallFunction, CallMethod, NewMethod, Enumerate, Enumerate2, InstanceOf and Extends stay refused by name.
@@ -7999,3 +8070,22 @@ This section supersedes the statements that CallFunction, CallMethod, NewMethod 
 - `Radicle/tests/test_avm1_functions.cpp:FunctionRefusalsAreNamedAndTraceNothing` detects an unsupported path that runs silently, such as a CallFunction of a missing name that yields undefined without a refusal, a refusal that loses its name, a register outside a function read as a value, a preload past the declared register count writing out of bounds (InvalidStream is required), and a preloaded _root that runs. Its first row detects a top-level Return that is refused instead of ending the list.
 
 Not compiled or run on the development machine for this change. The test file, the function model and these notes need CI to confirm the expected strings, step counts and status values.
+## Radicle/src/swf/swf_frame_svg.cpp:text_paths (static text rows)
+
+`Radicle/src/swf/swf_frame_svg.cpp:text_paths` draws a DefineText or DefineText2 row as glyph paths. Font, colour, height and the x and y position carry from one TEXTRECORD to the next, and a field a record omits keeps its previous value. Each glyph is `shape_fill_paths_to_svg` over its font's glyph records with one solid fill in the record colour. Its transform is `compose_transform(transform_from_matrix(text.matrix), glyph)`, where the glyph scale is height over 1024 for DefineFont and DefineFont2 and over 20480 for DefineFont3. The choice follows `define_font3`, not `units_per_em`, because the decoder only sets `units_per_em` for DefineFont3 when the font has a layout. The x cursor moves by each glyph's advance even when that glyph draws nothing. The whole row sits under its `world_transform` and takes the same colour filter as a shape row (`Radicle/src/swf/swf_frame_svg.cpp:frame_body`).
+
+Draws nothing for: a glyph index outside the font's glyph shapes, a record with no known font, no height yet, a font with no glyph shapes, and a text row that carries a clip depth. A clip-depth text row neither draws nor masks, because `frame_body` only opens masks for shapes and sprites. A record that never sets a colour draws black, which is a guess at Flash's default and is unverified.
+
+Out of scope: DefineButton rows, dynamic EditText, text used as a mask, and text inside a clip sprite, because `Radicle/src/swf/swf_frame_svg.cpp:sprite_clip_to_svg` only collects shapes and morphs.
+
+## Radicle/include/fo4/swf/swf.hpp:SwfText (text MATRIX exposed)
+
+`Radicle/include/fo4/swf/swf.hpp:SwfText` gained `matrix`, which `Radicle/src/swf/swf_text.cpp:decode_text_tag` now fills in place of a local it used to drop. The MATRIX was already parsed by `read_matrix`; this only keeps it. No new parsing was added.
+
+## Radicle/tests/test_swf_svg.cpp:SwfFrameSvg static text tests
+
+- `Radicle/tests/test_swf_svg.cpp:SwfFrameSvg.StaticTextDrawsEachGlyphAtItsCursorInTheRecordColour` detects text rows dropped from the frame, a cursor that ignores advances or resets wrongly, a missing glyph index that stops the row instead of being skipped, and record colour, y offset or height that does not carry to the next record. It also pins DefineFont2 scale: a 1024-unit square at height 1024 is 51.2 px.
+- `Radicle/tests/test_swf_svg.cpp:SwfFrameSvg.DefineFont3GlyphsScaleFromTheTwentyThousandUnitEm` detects a DefineFont3 glyph scaled on the DefineFont2 unit em, which would draw it 20 times too large.
+- `Radicle/tests/test_swf_svg.cpp:SwfFrameSvg.StaticTextAppliesItsMatrixAndSkipsFontsWithoutGlyphShapes` detects a DefineText MATRIX that is ignored, which would leave the glyph at `matrix(1 0 0 1 0 0)`, and a font with no glyph shapes that emits an empty group or indexes an empty glyph list.
+
+Expected strings were derived by hand from `Radicle/src/swf/swf_svg.cpp:loops_text` and `Radicle/src/swf/swf_svg.cpp:fill_paths`. Nothing was compiled or run on the development machine for this change, so CI must confirm them.

@@ -438,6 +438,8 @@ struct SwfTextRecord {
 struct SwfText {
   std::uint16_t character_id{0};
   SwfRect bounds{};
+  /* Invariant: the DefineText MATRIX after the bounds, applied to glyph space before placement. */
+  SwfMatrix matrix{};
   std::size_t record_count{0};
   std::size_t glyph_count{0};
   std::vector<SwfTextRecord> records;

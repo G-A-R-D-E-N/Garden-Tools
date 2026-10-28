@@ -88,6 +88,23 @@ const Trait* Class::resolve_class_trait(const Multiname& multiname) const {
   return nullptr;
 }
 
+const Trait* Class::resolve_dispatch_trait(std::uint32_t dispatch_id) const {
+  if (dispatch_id == 0) {
+    return nullptr;
+  }
+  for (const Class* klass = this; klass != nullptr; klass = klass->super) {
+    if (klass->external || klass->file == nullptr) {
+      continue;
+    }
+    for (const Trait& trait : klass->instance_traits) {
+      if (trait.kind == TraitKind::Method && trait.dispatch_id == dispatch_id) {
+        return &trait;
+      }
+    }
+  }
+  return nullptr;
+}
+
 const Trait* Class::find_slot_trait(std::uint32_t slot_id) const {
   for (const Class* klass = this; klass != nullptr; klass = klass->super) {
     for (const Trait& trait : klass->instance_traits) {

@@ -18,6 +18,10 @@ constexpr double kTwipsPerPixel = 20.0;
 constexpr double kMultiplyOne = 256.0;
 constexpr double kAddOne = 255.0;
 constexpr double kRatioLimit = 65535.0;
+constexpr double kFontUnits = 1024.0;
+constexpr double kFont3Units = 20480.0;
+constexpr std::uint8_t kSolidFill = 0x00;
+constexpr std::uint32_t kDefaultTextColor = 0xFF000000u;
 
 struct Mask {
   std::size_t level{0};
@@ -29,6 +33,8 @@ struct Mask {
 
 using ShapeIndex = std::map<std::uint16_t, const SwfShape*>;
 using MorphIndex = std::map<std::uint16_t, const SwfMorphShape*>;
+using TextIndex = std::map<std::uint16_t, const SwfText*>;
+using FontIndex = std::map<std::uint16_t, const SwfFont*>;
 
 std::string transform_text(const SwfTransform& transform) {
   return "matrix(" + svg_number(transform.scale_x) + " " + svg_number(transform.rotate_skew0) +
@@ -86,6 +92,53 @@ const SwfShape* row_shape(const ShapeIndex& shapes, const MorphIndex& morphs,
   return morph ? &*morph : nullptr;
 }
 
+std::string text_paths(const FontIndex& fonts, const SwfText& text) {
+  const SwfTransform text_transform = transform_from_matrix(text.matrix);
+  std::string paths;
+  const SwfFont* font = nullptr;
+  std::uint32_t color = kDefaultTextColor;
+  double height = 0.0;
+  std::int64_t x = 0;
+  std::int64_t y = 0;
+  for (const SwfTextRecord& record : text.records) {
+    if (record.font_id) {
+      const auto found = fonts.find(*record.font_id);
+      font = found == fonts.end() ? nullptr : found->second;
+    }
+    if (record.color) {
+      color = *record.color;
+    }
+    if (record.height) {
+      height = *record.height;
+    }
+    if (record.x_offset) {
+      x = *record.x_offset;
+    }
+    if (record.y_offset) {
+      y = *record.y_offset;
+    }
+    for (const SwfTextGlyph& glyph : record.glyphs) {
+      if (font && height > 0.0 && glyph.glyph_index < font->glyphs.size()) {
+        SwfFillStyle fill;
+        fill.type = kSolidFill;
+        fill.color = color;
+        SwfShape shape;
+        shape.fill_styles.push_back(fill);
+        shape.records = font->glyphs[glyph.glyph_index].records;
+        SwfTransform placed;
+        placed.scale_x = height / (font->define_font3 ? kFont3Units : kFontUnits);
+        placed.scale_y = placed.scale_x;
+        placed.translate_x = static_cast<double>(x) / kTwipsPerPixel;
+        placed.translate_y = static_cast<double>(y) / kTwipsPerPixel;
+        paths += shape_fill_paths_to_svg(shape, "text", {},
+                                         transform_text(compose_transform(text_transform, placed)));
+      }
+      x += glyph.advance;
+    }
+  }
+  return paths;
+}
+
 std::string sprite_clip_to_svg(const ShapeIndex& shapes, const MorphIndex& morphs,
                                const SvgBitmaps& bitmaps, const SwfDisplayFrame& frame,
                                std::size_t index) {
@@ -109,9 +162,9 @@ std::string sprite_clip_to_svg(const ShapeIndex& shapes, const MorphIndex& morph
   return defs + "<clipPath id=\"r" + std::to_string(index) + "clip\">\n" + paths + "</clipPath>\n";
 }
 
-std::string frame_body(const ShapeIndex& shapes, const MorphIndex& morphs,
-                       const SvgBitmaps& bitmaps, const SwfDisplayFrame& frame,
-                       const SwfRect& stage) {
+std::string frame_body(const ShapeIndex& shapes, const MorphIndex& morphs, const TextIndex& texts,
+                       const FontIndex& fonts, const SvgBitmaps& bitmaps,
+                       const SwfDisplayFrame& frame, const SwfRect& stage) {
   std::string body;
   std::vector<Mask> masks;
   std::size_t mask_end = 0;
@@ -145,13 +198,27 @@ std::string frame_body(const ShapeIndex& shapes, const MorphIndex& morphs,
       }
       continue;
     }
-    if (!row.world_visible || !shape) {
+    if (!row.world_visible) {
       continue;
     }
-    const SvgImages images = shape_images(*shape, bitmaps);
-    std::string content = "<g transform=\"" + transform_text(row.world_transform) + "\">\n" +
-                          shape_defs_to_svg(*shape, id + "f", images) +
-                          shape_paths_to_svg(*shape, id + "f", images) + "</g>\n";
+    std::string content;
+    if (shape) {
+      const SvgImages images = shape_images(*shape, bitmaps);
+      content = "<g transform=\"" + transform_text(row.world_transform) + "\">\n" +
+                shape_defs_to_svg(*shape, id + "f", images) +
+                shape_paths_to_svg(*shape, id + "f", images) + "</g>\n";
+    } else {
+      const auto text = texts.find(row.character_id);
+      if (row.clip_depth || text == texts.end()) {
+        continue;
+      }
+      const std::string paths = text_paths(fonts, *text->second);
+      if (paths.empty()) {
+        continue;
+      }
+      content = "<g transform=\"" + transform_text(row.world_transform) + "\">\n" + paths +
+                "</g>\n";
+    }
     if (row.world_color_transform) {
       content = filter_text(id + "color", *row.world_color_transform, stage) +
                 "<g filter=\"url(#" + id + "color)\">\n" + content + "</g>\n";
@@ -171,6 +238,8 @@ std::string frame_body(const ShapeIndex& shapes, const MorphIndex& morphs,
 std::string frame_to_svg(const SwfFile& file, const SwfDisplayList& display, std::uint32_t frame) {
   ShapeIndex shapes;
   MorphIndex morphs;
+  TextIndex texts;
+  FontIndex fonts;
   for (const SwfTag& tag : file.tags) {
     if (tag.shape) {
       shapes.emplace(tag.shape->shape_id, &*tag.shape);
@@ -178,12 +247,18 @@ std::string frame_to_svg(const SwfFile& file, const SwfDisplayList& display, std
     if (tag.morph_shape) {
       morphs.emplace(tag.morph_shape->character_id, &*tag.morph_shape);
     }
+    if (tag.text) {
+      texts.emplace(tag.text->character_id, &*tag.text);
+    }
+    if (tag.font) {
+      fonts.emplace(tag.font->font_id, &*tag.font);
+    }
   }
   const SvgBitmaps bitmaps = index_bitmaps(file);
   std::string body;
   if (!display.timelines.empty() && frame < display.timelines.front().frames.size()) {
-    body = frame_body(shapes, morphs, bitmaps, display.timelines.front().frames[frame],
-                      file.header.frame_size);
+    body = frame_body(shapes, morphs, texts, fonts, bitmaps,
+                      display.timelines.front().frames[frame], file.header.frame_size);
   }
   return svg_open(file.header.frame_size) + body + "</svg>\n";
 }
