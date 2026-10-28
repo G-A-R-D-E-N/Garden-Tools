@@ -2512,3 +2512,24 @@ Ceiling: the reader honours `mod_directory` and `profiles_directory`, which are 
 - The workflow-level `concurrency.group` still interpolates `version`. It is evaluated before any step runs, so the validation step cannot guard it; the value only names the queue.
 - Both checkouts set `persist-credentials: false`, so the job token is not left in `.git/config` for later steps.
 
+## PluginEditTool/tools/fetch-bundled-tools.ps1:Save-Url — pinned, hash-checked tool downloads
+
+Why: the FO4IDE zip used to ship no helper tools because the release lane read unset repository variables. texconv and ffmpeg are now fetched from `PluginEditTool/tools/bundled-tools.json` at exact versions. Every URL names a tag or a commit, never `latest`. `PluginEditTool/tools/bundled-tools.json` is the only place a pin lives.
+
+Order matters. The SHA256 is compared before anything is extracted or copied into the staging folder, so an unverified byte never reaches the zip. A mismatch, a missing archive member, or a download that fails three times throws, and `package.ps1` stops. Nothing is skipped silently. The downloaded file goes to the temp folder and is deleted in `finally`.
+
+`Save-Url` forces TLS 1.2 in the script because Windows PowerShell 5.1 (what the release runner uses) negotiates TLS 1.0 by default. The FFmpeg zip is read by its `member` (`bin/ffmpeg.exe`), matched as an exact path or as a suffix. Only that one file is taken from the archive; ffprobe and the rest of the build are left out.
+
+Verified while authoring (no binaries were downloaded to a scratch folder; the hashes are GitHub's upload digests from the release API, `sha256:` in each asset's `digest` field):
+- texconv: DirectXTex `may2026`, commit `4feb3e11a020f35b796fc769a74216a555d4f5ef`. Asset `texconv.exe`, 966480 bytes, sha256 `dcfdec10244e02cf5037fba089c55fb7e1326b1c8181742d77d15fa5cb5eef06`. The plain name is the x64 build; the `_arm64` asset is separate. License: MIT, Copyright (c) Microsoft Corporation (read from the `may2026` tag).
+- ffmpeg: BtbN/FFmpeg-Builds `autobuild-2026-10-27-18-38`, asset `ffmpeg-n9.0.2-36-g6882969ce9-win64-lgpl-9.0.zip`, 172594345 bytes, sha256 `79e8ff30c01ac58a2bc4e820c86be81d426ea0bee10df8030fc6ac3c72fe785c`. The BtbN `variants/defaults-lgpl.sh` at that tag sets `--enable-version3` and `LICENSE_FILE=COPYING.LGPLv3`; `build.sh` copies that file into the archive as `LICENSE.txt` and places `bin/` under a single top folder, which is where the `bin/ffmpeg.exe` member comes from. FFmpeg commit `6882969ce9fd2aa6aa1d0008b2bfe1c838aac11d` contains that `COPYING.LGPLv3`.
+- Not verified: the archive contents and the texconv architecture were inferred from build scripts and asset names, not from the bytes. The fixture run in authoring used a local archive with the same layout.
+
+## PluginEditTool/package.ps1:Bundling optional external tools — override or fetch
+
+A non-empty `-TexconvPath` (or `TEXCONV_PATH`) wins over the pinned texconv, and an `ffmpeg.exe` inside `-AudioToolsDir` wins over the pinned ffmpeg. An override that is not a file throws; it is never a silent warning. Without an override the script calls the fetcher. `-SkipAudioTools` skips ffmpeg too. xWMAEncode and the BmlFuz tools keep the folder path: no public pinned source exists for them. niftool is left alone and is not bundled by the release lane (`.github/workflows/release.yml` no longer passes `FO4IDE_NIFTOOL_PATH` or `FO4IDE_TEXCONV_PATH`).
+
+## .github/scripts/test_bundled_tools_manifest.py:BundledToolsManifestTest — manifest contract
+
+Regression targets: a `latest` or plain-`http` URL, a malformed SHA256, a Locator path that drifts from `PluginEditTool/native/src/tools/ToolLocator.cpp` (texconv must stay at `tools/texconv/Texconvx64.exe`, ffmpeg at `tools/audio/ffmpeg.exe`), a `member` that disagrees with the archive type, a package script that stops calling the fetcher, and the release lane bundling niftool or reading a texconv variable again. `native-ci.yml` runs it through `unittest discover -s .github/scripts`.
+
