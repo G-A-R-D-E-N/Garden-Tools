@@ -104,7 +104,9 @@ TEST(PapyrusSemanticReal, ResolvesAndTypeChecksEveryCompleteCorpusScriptClean) {
   }
 
   ASSERT_GT(complete, 0u) << files.size() << " files";
-  if (files.size() == kVanillaFiles) EXPECT_EQ(complete, kVanillaComplete);
+  if (files.size() == kVanillaFiles) {
+    EXPECT_EQ(complete, kVanillaComplete);
+  }
   std::string flagged;
   for (const auto& line : problems) flagged += "\n  " + line;
   EXPECT_TRUE(problems.empty()) << complete << " complete scripts;" << flagged;

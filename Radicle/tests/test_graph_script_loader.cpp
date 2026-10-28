@@ -71,7 +71,9 @@ TEST(GraphScriptLoader, GraphScriptLoaderASourceScriptBecomesAGraph) {
     EXPECT_FALSE(result.failure.has_value());
     EXPECT_TRUE(result.success());
     if (!result.success()) { SCOPED_TRACE((::testing::Message() << describe(result.diagnostics)).GetString()); }
-    if (result.document) EXPECT_FALSE(result.document->nodes.empty());
+    if (result.document) {
+      EXPECT_FALSE(result.document->nodes.empty());
+    }
 
     std::filesystem::remove_all(directory);
 }
