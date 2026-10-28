@@ -82,7 +82,7 @@ public class SwfDocumentServiceTests
         var text = document.EditText(0);
         Assert.Equal("hello", text.Text);
         Assert.Equal(0x80112233u, text.Color);
-        Assert.Equal("variable", text.Variable);
+        Assert.Equal("variable", document.Movie.EditText(0).Variable);
         document.Undo();
         Assert.Equal(string.Empty, document.EditText(0).Text);
         Assert.Null(document.EditText(0).Color);
@@ -91,9 +91,12 @@ public class SwfDocumentServiceTests
     [NativeFact]
     public void EditsAnEditTextPastASpriteAtItsFlatIndex()
     {
-        // Constraint: detects an edit-text write that indexes the top-level tree with a flat index, which lands on a different tag once a DefineSprite with children sits before the DefineEditText.
+        // Constraint: detects an edit-text read or write that indexes the top-level tree with a flat index, which lands on a different tag once a DefineSprite with children sits before the DefineEditText.
         using var document = SwfDocument.OpenBytes(SwfFixture.Movie(editTextPastSprite: true));
         var index = document.Movie.Tags.Single(tag => tag.Code == 37).Index;
+        var before = document.EditText(index);
+        Assert.Equal((ushort)11, before.CharacterId);
+        Assert.Equal(string.Empty, before.Text);
         var result = document.EditEditText(index, new SwfEditTextEdit(Text: "hello"));
         Assert.True(result.Changed);
         Assert.Equal("hello", document.EditText(index).Text);
@@ -213,7 +216,7 @@ public class SwfDocumentServiceTests
         var text = document.EditText(0);
         Assert.Equal("hello again", text.Text);
         Assert.Equal(0x80112233u, text.Color);
-        Assert.Equal("variable", text.Variable);
+        Assert.Equal("variable", document.Movie.EditText(0).Variable);
     }
 
     [NativeFact]

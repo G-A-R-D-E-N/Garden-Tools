@@ -46,9 +46,13 @@ transform edits still compose payloads in PET (`SwfPlacementCodec.WithDepth`, `S
 
 `SwfDocumentService.cs:SwfDocument.EditEditText` calls `SwfVerbs.ApplyEditText` on the document's own history (through
 `Verb`), so the DefineEditText rewrite is owned by Radicle and an edit-text change is one history command with the same
-undo/redo/refusal behaviour. `SwfDocument.EditText` still reads the managed tag-37 record with `SwfEditTextCodec.Parse`;
+undo/redo/refusal behaviour. `SwfDocumentService.cs:SwfDocument.EditText` reads through `SwfVerbs.ReadEditText` on the same
+history, so the read and the write share Radicle's codec; `SwfDocumentServiceTests.EditsAnEditTextPastASpriteAtItsFlatIndex`
+reads the flat index past a DefineSprite before and after the edit.
 `SwfInterop` exposes `ReadEditText`/`EditEditText` for the panel (colour/rect/text are flattened JSON; the colour stays
-`0xAARRGGBB`), and `SwfDocumentServiceTests.EditsEditTextThroughTheSameHistory` pins the edit plus its undo.
+`0xAARRGGBB`). The read reply has no `variable`: the native read does not export it and the panel never read it.
+`SwfDocumentServiceTests.EditsEditTextThroughTheSameHistory` pins the edit plus its undo, and checks `variable` through the
+managed `SwfFile.EditText` oracle.
 ## web/src/SwfPanel.tsx (edit-text properties)
 
 Selecting a character whose kind is EditText calls `ReadEditText` through the host bridge and fills the right-hand
@@ -202,8 +206,8 @@ pins the accepted path, the sibling, the escape and the empty list.
 `SwfEditTextCodec.Parse` and `Write` re-implement the DefineEditText (tag 37) field walk that the C++ side already has in
 `Radicle/include/fo4/swf/swf_text_edit.hpp` (`replace_edit_text`, `apply_edit_text`). The C ABI now exports the edit-text verbs `radicle_swf_edit_text_read` and `radicle_swf_edit_text_apply`
 (`Radicle/include/fo4/c_api_swf_verbs.h`). The PET document's write goes through `SwfVerbs.ApplyEditText`
-(`SwfDocumentService.cs:SwfDocument.EditEditText`). The managed write was removed from `SwfEditText.cs:SwfEditTextCodec` (`Write`) and `SwfEditText.cs:SwfFile.EditEditText`. PET does not call the native read yet:
-`SwfDocument.EditText` reads through the managed `Parse`.
+(`SwfDocumentService.cs:SwfDocument.EditEditText`). The managed write was removed from `SwfEditText.cs:SwfEditTextCodec` (`Write`) and `SwfEditText.cs:SwfFile.EditEditText`. PET's read now goes through
+`SwfVerbs.ReadEditText` (`SwfDocumentService.cs:SwfDocument.EditText`), so `Parse` only backs `SwfFile.EditText`.
 ## FO4RecordEditor/Services/SwfInterop.cs:SwfInterop.Run (one lock per call)
 
 `Run` takes the static `Gate` around every action, so the document reference, its history and the lazy character cache are
