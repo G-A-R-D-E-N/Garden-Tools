@@ -343,6 +343,33 @@ Avm1RunStatus swap_top(Avm1State& state, std::string& message) {
   return Avm1RunStatus::Ok;
 }
 
+std::size_t clamp_to_length(const Avm1Data& value, std::size_t length) {
+  const double number = to_number(value);
+  if (std::isnan(number) || number <= 0.0) {
+    return 0;
+  }
+  return number >= static_cast<double>(length) ? length : static_cast<std::size_t>(number);
+}
+
+Avm1RunStatus extract_string(Avm1State& state, std::string& message) {
+  Avm1Data count;
+  Avm1Data index;
+  Avm1Data text;
+  if (const Avm1RunStatus status = pop(state, count, message); status != Avm1RunStatus::Ok) {
+    return status;
+  }
+  if (const Avm1RunStatus status = pop(state, index, message); status != Avm1RunStatus::Ok) {
+    return status;
+  }
+  if (const Avm1RunStatus status = pop(state, text, message); status != Avm1RunStatus::Ok) {
+    return status;
+  }
+  const std::string source = to_text(text);
+  const std::size_t start = clamp_to_length(number_value(to_number(index) - 1.0), source.size());
+  const std::size_t length = clamp_to_length(count, source.size() - start);
+  return push_result(state, string_value(source.substr(start, length)), message);
+}
+
 Avm1RunStatus jump_index(const Avm1Stream& stream, std::size_t target, std::size_t& index,
                          std::string& message) {
   const auto found = std::lower_bound(
@@ -402,6 +429,10 @@ Avm1RunStatus execute_action(const Avm1Stream& stream, const Avm1Action& action,
       return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
         return number_value(to_number(left) / to_number(right));
       });
+    case 0x0F:
+      return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
+        return boolean_value(to_number(left) < to_number(right));
+      });
     case 0x10:
       return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
         return boolean_value(to_boolean(left) && to_boolean(right));
@@ -422,6 +453,8 @@ Avm1RunStatus execute_action(const Avm1Stream& stream, const Avm1Action& action,
       return apply_unary(state, message, [](const Avm1Data& operand) {
         return number_value(static_cast<double>(to_text(operand).size()));
       });
+    case 0x15:
+      return extract_string(state, message);
     case 0x17: {
       Avm1Data discarded;
       return pop(state, discarded, message);
@@ -441,6 +474,14 @@ Avm1RunStatus execute_action(const Avm1Stream& stream, const Avm1Action& action,
       });
     case 0x26:
       return trace_value(state, message);
+    case 0x29:
+      return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
+        return boolean_value(to_text(left) < to_text(right));
+      });
+    case 0x3F:
+      return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
+        return number_value(std::fmod(to_number(left), to_number(right)));
+      });
     case 0x47:
       return apply_binary(state, message, add_values);
     case 0x48:
@@ -463,6 +504,22 @@ Avm1RunStatus execute_action(const Avm1Stream& stream, const Avm1Action& action,
       return duplicate_top(state, message);
     case 0x4D:
       return swap_top(state, message);
+    case 0x50:
+      return apply_unary(state, message, [](const Avm1Data& operand) {
+        return number_value(to_number(operand) + 1.0);
+      });
+    case 0x51:
+      return apply_unary(state, message, [](const Avm1Data& operand) {
+        return number_value(to_number(operand) - 1.0);
+      });
+    case 0x67:
+      return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
+        return boolean_value(less_than(right, left));
+      });
+    case 0x68:
+      return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
+        return boolean_value(to_text(left) > to_text(right));
+      });
     case 0x88:
       state.constants = std::get<Avm1ConstantPool>(action.payload).strings;
       return Avm1RunStatus::Ok;
