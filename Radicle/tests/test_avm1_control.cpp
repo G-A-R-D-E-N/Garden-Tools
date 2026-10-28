@@ -125,7 +125,7 @@ Bytes nested(bool is_with, std::size_t levels) {
     body = is_with ? cat({push({text_value("obj")}), rec(0x1C, {}), with_record(body), body})
                    : cat({try_record(2, str(""), 0, 0, body.size()), body});
   }
-  return cat({push({text_value("obj"), int_value(0)}), rec(0x43, {}), rec(0x1D, {}), body});
+  return cat({push({text_value("obj"), int_value(0)}), rec(0x43, {}), rec(0x1D, {}), body, Bytes{0x00}});
 }
 
 // Invariant: a Throw inside a Try reaches the catch name, the catch body runs once, and the run continues after the Try; a Try that ignored the Throw would trace nothing from the catch.
