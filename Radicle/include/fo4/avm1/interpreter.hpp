@@ -18,6 +18,7 @@ enum class Avm1RunStatus : std::uint8_t {
   ConstantOutOfRange,
   BadBranch,
   StepLimit,
+  ResourceLimit,
 };
 
 const char* run_status_name(Avm1RunStatus status) noexcept;

@@ -3,9 +3,11 @@
 
 #include <gtest/gtest.h>
 
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <variant>
@@ -402,6 +404,12 @@ Bytes push_int(std::uint32_t value) {
   return rec(0x96, cat({Bytes{0x07}, le32(value)}));
 }
 
+Bytes push_double(double value) {
+  const auto bits = std::bit_cast<std::uint64_t>(value);
+  return rec(0x96, cat({Bytes{0x06}, le32(static_cast<std::uint32_t>(bits >> 32)),
+                        le32(static_cast<std::uint32_t>(bits))}));
+}
+
 // Invariant: Subtract and Divide must take the deeper operand first, so 10 - 4 traces 6 and 1 / 4 traces 0.25; a reversed pair would trace -6 and 4.
 TEST(Avm1Interpreter, ArithmeticResultIsTracedInOperandOrder) {
   const Bytes input = cat({
@@ -475,6 +483,101 @@ TEST(Avm1Interpreter, UnsupportedOpcodeIsRefusedByName) {
   EXPECT_EQ(result.offset, stream.actions[2].offset);
   EXPECT_NE(result.message.find("GetTime (0x34)"), std::string::npos);
   EXPECT_EQ(result.trace, (std::vector<std::string>{"1"}));
+}
+
+// Invariant: a Number traces in the ECMA-262 layout, so 1e20 prints in full, 1e21 and 1e-7 switch to exponent form, 0.000001 stays fixed, and 0.1 + 0.2 prints 0.3.
+TEST(Avm1Interpreter, DoublesTraceInTheEcmaScriptLayout) {
+  const Bytes input = cat({
+      push_double(1e20), rec(0x26, {}), push_double(1e21), rec(0x26, {}), push_double(0.000001),
+      rec(0x26, {}), push_double(1e-7), rec(0x26, {}), push_double(0.1), push_double(0.2),
+      rec(0x47, {}), rec(0x26, {}), Bytes{0x00},
+  });
+  const auto stream = decode(input);
+  ASSERT_TRUE(stream.ok()) << stream.message;
+  const auto result = fo4::avm1::execute_actions(stream);
+  ASSERT_TRUE(result.ok()) << result.message;
+  EXPECT_EQ(result.trace, (std::vector<std::string>{"100000000000000000000", "1e+21", "0.000001",
+                                                    "1e-7", "0.3"}));
+}
+
+// Invariant: a string that doubles must stop with ResourceLimit once it passes the 16 MiB cap, long before the step limit, so bad_alloc never escapes.
+TEST(Avm1Interpreter, DoublingStringStopsAtTheResourceCap) {
+  const Bytes input =
+      cat({push_text("aa"), rec(0x4C, {}), rec(0x21, {}), rec(0x99, le16(0xFFF9)), Bytes{0x00}});
+  const auto stream = decode(input);
+  ASSERT_TRUE(stream.ok()) << stream.message;
+  const auto result = fo4::avm1::execute_actions(stream);
+  EXPECT_EQ(result.status, fo4::avm1::Avm1RunStatus::ResourceLimit);
+  EXPECT_EQ(result.opcode, 0x21);
+  EXPECT_LT(result.steps, 1000u);
+}
+
+// Invariant: a Jump past the last record ends the run only when its target is exactly the stream size, so one byte further is BadBranch at the Jump offset.
+TEST(Avm1Interpreter, JumpPastTheStreamEndIsRefusedUnlessItIsTheStreamSize) {
+  auto stream = decode(cat({rec(0x99, le16(1)), Bytes{0x17, 0x00}}));
+  ASSERT_TRUE(stream.ok()) << stream.message;
+  auto& branch = std::get<fo4::avm1::Avm1Branch>(stream.actions[0].payload);
+  branch.target = 7;
+  EXPECT_TRUE(fo4::avm1::execute_actions(stream).ok());
+  branch.target = 8;
+  const auto result = fo4::avm1::execute_actions(stream);
+  EXPECT_EQ(result.status, fo4::avm1::Avm1RunStatus::BadBranch);
+  EXPECT_EQ(result.offset, 0u);
+}
+
+struct TableRow {
+  const char* name;
+  Bytes input;
+  fo4::avm1::Avm1RunStatus status;
+  std::vector<std::string> trace;
+};
+
+// Invariant: Equals2 follows ECMA-262 for null, undefined, text, Booleans and NaN, StringAdd keeps operand order, a constant inside the pool traces and one past it refuses, and an empty stack or an undecodable stream refuses by its own status.
+TEST(Avm1Interpreter, OperatorsConstantsAndRefusalsMatchTheTable) {
+  using fo4::avm1::Avm1RunStatus;
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  const std::vector<TableRow> rows = {
+      {"null equals undefined",
+       cat({rec(0x96, Bytes{0x02}), rec(0x96, Bytes{0x03}), rec(0x49, {}), rec(0x26, {}), Bytes{0x00}}),
+       Avm1RunStatus::Ok,
+       {"true"}},
+      {"text 1 equals number 1",
+       cat({push_text("1"), push_int(1), rec(0x49, {}), rec(0x26, {}), Bytes{0x00}}),
+       Avm1RunStatus::Ok,
+       {"true"}},
+      {"true equals number 1",
+       cat({rec(0x96, Bytes{0x05, 0x01}), push_int(1), rec(0x49, {}), rec(0x26, {}), Bytes{0x00}}),
+       Avm1RunStatus::Ok,
+       {"true"}},
+      {"NaN equals NaN",
+       cat({push_double(nan), push_double(nan), rec(0x49, {}), rec(0x26, {}), Bytes{0x00}}),
+       Avm1RunStatus::Ok,
+       {"false"}},
+      {"StringAdd keeps operand order",
+       cat({push_text("a"), push_text("b"), rec(0x21, {}), rec(0x26, {}), Bytes{0x00}}),
+       Avm1RunStatus::Ok,
+       {"ab"}},
+      {"ConstantPool then Push constant8",
+       cat({rec(0x88, cat({le16(2), str("x"), str("y")})), rec(0x96, Bytes{0x08, 0x01}),
+            rec(0x26, {}), Bytes{0x00}}),
+       Avm1RunStatus::Ok,
+       {"y"}},
+      {"constant past the pool",
+       cat({rec(0x88, cat({le16(1), str("x")})), rec(0x96, Bytes{0x08, 0x05}), rec(0x26, {}),
+            Bytes{0x00}}),
+       Avm1RunStatus::ConstantOutOfRange,
+       {}},
+      {"Pop on an empty stack", cat({Bytes{0x17}, Bytes{0x00}}), Avm1RunStatus::StackUnderflow, {}},
+      {"stream that does not decode", Bytes{0x17}, Avm1RunStatus::InvalidStream, {}},
+  };
+  for (const TableRow& row : rows) {
+    SCOPED_TRACE(row.name);
+    const auto stream = decode(row.input);
+    EXPECT_EQ(stream.ok(), row.status != Avm1RunStatus::InvalidStream);
+    const auto result = fo4::avm1::execute_actions(stream);
+    EXPECT_EQ(result.status, row.status) << result.message;
+    EXPECT_EQ(result.trace, row.trace);
+  }
 }
 
 }  // namespace
