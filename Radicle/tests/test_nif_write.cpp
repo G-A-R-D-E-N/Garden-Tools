@@ -1,16 +1,21 @@
 #include "fo4/error.hpp"
 #include "fo4/nif/nif.hpp"
+#include "fo4/nif/nif_import.hpp"
 #include "fo4/nif/nif_write.hpp"
 #include "nif_fixture.hpp"
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <array>
 #include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <span>
+#include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace {
@@ -19,6 +24,8 @@ using fo4::nif::apply_edits;
 using fo4::nif::block_transform;
 using fo4::nif::Edit;
 using fo4::nif::EditValue;
+using fo4::nif::import_obj;
+using fo4::nif::ImportOptions;
 using fo4::nif::NifFile;
 using fo4::nif::read_nif;
 using fo4::nif::read_shader;
@@ -106,6 +113,15 @@ Block node_with_two_extras() {
   w.i32(-1);
   w.u32(0);
   return Block{"NiNode", w.bytes()};
+}
+
+std::vector<std::byte> import_text(std::string_view obj, bool from_blender = false) {
+  ImportOptions options;
+  options.material = "materials\\body.bgsm";
+  options.tex_diffuse = "textures\\body_d.dds";
+  options.tex_normal = "textures\\body_n.dds";
+  options.from_blender = from_blender;
+  return import_obj(obj, options);
 }
 
 }  // namespace
@@ -366,4 +382,91 @@ TEST(NifWrite, RejectsEditsOnBrokenShapesAndShaders) {
   const auto trailing_shared = nif_with_root({nif_fixture::lighting_shader_block(1, -1, 3, 0, 0),
                                               nif_fixture::lighting_shader_block(1, -1, 3, 0, 0), trailing});
   expect_rejected(read_nif(trailing_shared), Edit{1, "tex0", as_text("x.dds")});
+}
+
+TEST(NifImport, QuadRoundTripsNamesTexturesPositionsUvsNormalsAndTriangles) {
+  const auto bytes = import_text(
+      "o Body\n"
+      "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\n"
+      "vt 0 0\nvt 65504 0\nvt 1 1\nvt 0.25 0.5\n"
+      "vn 0 0 1\n"
+      "f 1/1/1 2/2/1 3/3/1 4/4/1\n");
+  constexpr std::array<std::uint8_t, 8> vanilla_descriptor{0x07, 0x04, 0x65, 0x00, 0x00, 0xB0, 0x41, 0x00};
+  EXPECT_NE(std::search(bytes.begin(), bytes.end(), vanilla_descriptor.begin(), vanilla_descriptor.end(),
+                        [](std::byte lhs, std::uint8_t rhs) { return std::to_integer<std::uint8_t>(lhs) == rhs; }),
+            bytes.end());
+  const auto nif = read_nif(bytes);
+  const auto shapes = read_shapes(nif);
+  ASSERT_EQ(shapes.size(), 1U);
+  const auto& shape = shapes[0];
+  EXPECT_EQ(shape.warning, "");
+  EXPECT_EQ(shape.name, "Body");
+  EXPECT_EQ(shape.material, "materials\\body.bgsm");
+  ASSERT_GE(shape.textures.size(), 2U);
+  EXPECT_EQ(shape.textures[0], "textures\\body_d.dds");
+  EXPECT_EQ(shape.textures[1], "textures\\body_n.dds");
+  EXPECT_EQ(shape.verts, (std::vector<float>{0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0}));
+  EXPECT_EQ(shape.tris, (std::vector<std::uint16_t>{0, 1, 2, 0, 2, 3}));
+  EXPECT_EQ(shape.uvs, (std::vector<float>{0, 0, 65504, 0, 1, 1, 0.25f, 0.5f}));
+  ASSERT_EQ(shape.normals.size(), 12U);
+  for (std::size_t v = 0; v < 4; ++v) {
+    EXPECT_NEAR(shape.normals[3 * v], 0.0f, 0.01f);
+    EXPECT_NEAR(shape.normals[3 * v + 1], 0.0f, 0.01f);
+    EXPECT_NEAR(shape.normals[3 * v + 2], 1.0f, 0.01f);
+  }
+}
+
+TEST(NifImport, TangentFrameFollowsTheUvAxesWithSmoothedNormals) {
+  const auto bytes = import_text(
+      "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\n"
+      "vt 0 0\nvt 1 0\nvt 1 1\nvt 0 1\n"
+      "f 1/1 2/2 3/3 4/4\n");
+  const auto nif = read_nif(bytes);
+  const auto shapes = read_shapes(nif);
+  ASSERT_EQ(shapes.size(), 1U);
+  const auto& shape = shapes[0];
+  ASSERT_EQ(shape.tangents.size(), 12U);
+  ASSERT_EQ(shape.bitangents.size(), 12U);
+  for (std::size_t v = 0; v < 4; ++v) {
+    for (std::size_t k = 0; k < 3; ++k) {
+      EXPECT_NEAR(shape.normals[3 * v + k], k == 2 ? 1.0f : 0.0f, 0.01f);
+      EXPECT_NEAR(shape.tangents[3 * v + k], k == 0 ? 1.0f : 0.0f, 0.01f);
+      EXPECT_NEAR(shape.bitangents[3 * v + k], k == 1 ? 1.0f : 0.0f, 0.01f);
+    }
+  }
+}
+
+TEST(NifImport, BlenderYUpExportIsRestoredToZUp) {
+  const auto bytes = import_text("v 1 2 3\nv 0 0 0\nv 0 1 0\nf 1 2 3\n", true);
+  const auto nif = read_nif(bytes);
+  const auto shapes = read_shapes(nif);
+  ASSERT_EQ(shapes.size(), 1U);
+  const auto& verts = shapes[0].verts;
+  ASSERT_GE(verts.size(), 3U);
+  EXPECT_EQ(verts[0], 1.0f);
+  EXPECT_EQ(verts[1], -3.0f);
+  EXPECT_EQ(verts[2], 2.0f);
+}
+
+TEST(NifImport, RejectsObjThatWouldWriteAWrongNif) {
+  EXPECT_THROW(import_text("v 0 0 0\nv 1 0 0\nv 0 1 0\n"), std::runtime_error);
+  EXPECT_THROW(import_text("v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 4\n"), std::runtime_error);
+  EXPECT_THROW(import_text("v 0 0 0\nv 1 0 0\nv 0 1 0\nf 0 1 2\n"), std::runtime_error);
+  EXPECT_THROW(import_text("v 0 0 0\nv 1 0 0\nv 0 1 0\nvt 70000 0\nf 1/1 2 3\n"), std::runtime_error);
+  EXPECT_THROW(import_text("v 0 0 0\nv 1 0 0\nv nan 0 0\nf 1 2 3\n"), std::runtime_error);
+}
+
+TEST(NifImport, BoxCollisionIsRejectedInsteadOfDropped) {
+  ImportOptions options;
+  options.box_collision = true;
+  EXPECT_THROW(import_obj("v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n", options), std::runtime_error);
+}
+
+TEST(NifImport, RejectsMoreVerticesThanAShapeCanIndex) {
+  std::string obj;
+  for (int i = 0; i < 65536; ++i) obj += "v " + std::to_string(i) + " 0 0\n";
+  obj += "f";
+  for (int i = 1; i <= 65536; ++i) obj += " " + std::to_string(i);
+  obj += "\n";
+  EXPECT_THROW(import_text(obj), std::runtime_error);
 }

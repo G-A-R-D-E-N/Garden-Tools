@@ -1,10 +1,12 @@
 #include <fo4ide/assets/NifService.hpp>
 
+#include <fo4/nif/nif_import.hpp>
 #include <fo4ide/assets/NifRender.hpp>
 
 #include <chrono>
 #include <fstream>
 #include <functional>
+#include <iterator>
 #include <thread>
 #include <utility>
 
@@ -37,8 +39,8 @@ private:
     std::filesystem::path path_;
 };
 
-Result<std::string> commitEditedNif(const std::vector<std::byte>& bytes, const std::filesystem::path& writeTemp,
-                                    const std::filesystem::path& target) {
+Result<void> commitEditedNif(const std::vector<std::byte>& bytes, const std::filesystem::path& writeTemp,
+                             const std::filesystem::path& target) {
     Cleanup outputCleanup(writeTemp);
     try {
         std::ofstream stream(writeTemp, std::ios::binary | std::ios::trunc);
@@ -50,7 +52,30 @@ Result<std::string> commitEditedNif(const std::vector<std::byte>& bytes, const s
     } catch (const std::exception& ex) {
         return std::unexpected(Error{"NifEditFailed", ex.what()});
     }
-    return "set OK (in-process)\nSaved: " + pathArg(target);
+    return {};
+}
+
+Result<std::string> importInProcess(const std::filesystem::path& objPath, const std::filesystem::path& outputPath,
+                                    const NifImportOptions& options) {
+    std::ifstream stream(objPath, std::ios::binary);
+    if (!stream) return std::unexpected(Error{"FileNotFound", "Could not open OBJ: " + pathArg(objPath)});
+    const std::string text((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
+    const fo4::nif::ImportOptions nifOptions{options.material, options.diffuseTexture, options.normalTexture,
+                                             options.collisionBox, options.fromBlender};
+    std::vector<std::byte> bytes;
+    try {
+        bytes = fo4::nif::import_obj(text, nifOptions);
+    } catch (const std::exception& ex) {
+        return std::unexpected(Error{"NifImportFailed", ex.what()});
+    }
+    auto writeTemp = outputPath;
+    writeTemp += ".niftmp";
+    if (auto committed = commitEditedNif(bytes, writeTemp, outputPath); !committed) {
+        return std::unexpected(committed.error());
+    }
+    const auto verify = renderVerify(outputPath);
+    return "RESULT: import OK (in-process)\nSaved: " + pathArg(outputPath) + "\n" +
+        (verify ? *verify : verify.error().message);
 }
 
 }
@@ -102,6 +127,7 @@ Result<std::string> NifService::importObj(const std::filesystem::path& objPath,
                                           const NifImportOptions& options) const {
     if (auto valid = requireFile(objPath, "OBJ"); !valid) return std::unexpected(valid.error());
     if (outputPath.empty()) return std::unexpected(Error{"InvalidPath", "Output NIF path is empty"});
+    if (!niftoolResolves(executable_)) return importInProcess(objPath, outputPath, options);
 
     std::vector<std::string> arguments{"import", pathArg(objPath), pathArg(outputPath)};
     if (!options.material.empty()) {
@@ -136,7 +162,10 @@ Result<std::string> NifService::applyEdits(const std::filesystem::path& nifPath,
     if (!niftoolResolves(executable_)) {
         auto bytes = applyEditsInProcess(nifPath, edits);
         if (!bytes) return std::unexpected(bytes.error());
-        return commitEditedNif(*bytes, writeTemp, target);
+        if (auto committed = commitEditedNif(*bytes, writeTemp, target); !committed) {
+            return std::unexpected(committed.error());
+        }
+        return "set OK (in-process)\nSaved: " + pathArg(target);
     }
     const auto editsPath = uniqueEditsPath();
     Cleanup editsCleanup(editsPath);
@@ -173,7 +202,7 @@ Result<std::string> NifService::applyEdits(const std::filesystem::path& nifPath,
 Result<std::string> NifService::run(std::vector<std::string> arguments) const {
     if (executable_.empty()) {
         return std::unexpected(Error{"NifToolNotFound",
-            "niftool not installed; fix and import need it (set NIFTOOL_PATH or place niftool beside the application)"});
+            "niftool not installed; fix needs it (set NIFTOOL_PATH or place niftool beside the application)"});
     }
     if (!std::filesystem::is_regular_file(executable_)) {
         return std::unexpected(Error{"NifToolNotFound", "niftool executable not found: " + executable_.string()});

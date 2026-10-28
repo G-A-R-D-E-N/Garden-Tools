@@ -206,7 +206,15 @@ Keys follow `PluginEditTool/docs/internal/NIF_TOOLCHAIN.md`: `fo4`, `hasBSX` (a 
 
 ## PluginEditTool/native/src/assets/NifService.cpp:NifService::run — niftool-only authoring message
 
-`fix` and `importObj` always reach `run`. `applyEdits` reaches it only when the configured executable resolves; otherwise it saves in-process (see `NifService::applyEdits`). `verify`, `tree`, `geometry` and `inspect` reach `run` only when the configured executable resolves; otherwise they read in-process. An empty executable path now reports `niftool not installed; fix and import need it (set NIFTOOL_PATH or place niftool beside the application)`. A configured path that is missing is named in the error for `fix` and `importObj`. Before this change an empty path produced `niftool executable not found: ` with nothing after the colon, which reached the user as garbage text.
+`fix` always reaches `run`. `importObj` and `applyEdits` reach it only when the configured executable resolves; otherwise they run in-process (see `NifService::importObj` and `NifService::applyEdits`). `verify`, `tree`, `geometry` and `inspect` reach `run` only when the configured executable resolves; otherwise they read in-process. An empty executable path now reports `niftool not installed; fix needs it (set NIFTOOL_PATH or place niftool beside the application)`. A configured path that is missing is named in the error for `fix`. Before this change an empty path produced `niftool executable not found: ` with nothing after the colon, which reached the user as garbage text.
+
+## PluginEditTool/native/src/assets/NifService.cpp:NifService::importObj — in-process import when niftool does not resolve
+
+`importObj` reads the OBJ and, when the configured executable does not resolve, calls `importInProcess`, which runs Radicle's `fo4::nif::import_obj` (`Radicle/src/nif/import_build.cpp:import_obj`). The bytes go to `<output>.niftmp` and are renamed over the output by `commitEditedNif`, then `renderVerify` reads the written file back. The reply starts with `RESULT: import OK (in-process)`, then `Saved:`, then the verify report. `NifPanel.tsx` enables the open-folder button on `RESULT: import OK`, so a verify that lists `[FAIL]` checks still shows as OK in the panel while the NIF stays on disk. Box collision is refused before anything is written, because the Radicle writer has no collision block. When niftool resolves, every import still goes to niftool with the same arguments, as `NifServiceTests.cpp` "NifService preserves import option ordering" pins.
+
+- `PluginEditTool/native/tests/unit/NifServiceTests.cpp:NifService imports an OBJ in-process without niftool and the written NIF verifies`: regression: an in-process import writes a NIF that the verify rejects, or leaves a `.niftmp` file behind.
+- `PluginEditTool/native/tests/unit/NifServiceTests.cpp:NifService refuses box collision in-process and writes no NIF`: regression: a box collision request is dropped, so the NIF is saved without the collision the user asked for.
+- `PluginEditTool/native/tests/unit/NifServiceTests.cpp:NifService in-process import rejects an OBJ without faces and writes no NIF`: regression: an OBJ with no faces is written as an empty shape instead of failing.
 
 ## PluginEditTool/native/src/assets/NifService.cpp:NifService::geometry — niftool when it resolves, in-process fallback
 

@@ -145,6 +145,8 @@ add_library(fo4
   src/texture/dds_codec.cpp
   src/nif/write_edits.cpp
   src/nif/write_model.cpp
+  src/nif/import_obj.cpp
+  src/nif/import_build.cpp
   src/forms/armor.cpp
   src/forms/armor_edit.cpp
   src/forms/cell.cpp
