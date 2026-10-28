@@ -90,6 +90,7 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
   const [previewFrame, setPreviewFrame] = useState(0);
   const [frameSvg, setFrameSvg] = useState('');
   const frameRequest = useRef(0);
+  const syncedDoc = useRef('');
   const [inspectText, setInspectText] = useState('');
   const [inspectError, setInspectError] = useState('');
   const [actionTags, setActionTags] = useState<ActionTagRow[]>([]);
@@ -174,6 +175,7 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
       const opened = parse<StateReply>(await bridge.Open(path.trim()));
       if (opened.error) { setError(opened.error); return; }
       setState(opened);
+      syncedDoc.current = `${opened.revision}`;
       setSelectedLabel(null);
       await loadCharacters();
       await loadLabels(timeline);
@@ -377,9 +379,8 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [command]);
 
-  // Invariant: undo and redo leave revision unchanged, so the document key must include their counts.
-  const docKey = `${state.revision}:${state.undo}:${state.redo}`;
-  const syncedDoc = useRef(docKey);
+  // Invariant: every edit, undo and redo bumps revision, so it alone keys the preview redraw.
+  const docKey = `${state.revision}`;
   useEffect(() => {
     if (syncedDoc.current === docKey) return;
     syncedDoc.current = docKey;
