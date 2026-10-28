@@ -725,5 +725,14 @@ public partial class SwfTests
         file.AddRange(BitConverter.GetBytes((uint)(body.Count + 8)));
         file.AddRange(body);
         return file.ToArray();
+    public void ExportsTheLossless2BitmapAsPngAndRefusesANonBitmapTag()
+    {
+        using var swf = SwfFile.FromBytes(ArtMovie());
+
+        var png = swf.BitmapPng(1);
+        Assert.Equal(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }, png[..8]);
+
+        var refused = Assert.Throws<RadicleException>(() => swf.BitmapPng(0));
+        Assert.Equal(Status.NotFound, refused.Status);
     }
 }

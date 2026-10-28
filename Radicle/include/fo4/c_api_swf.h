@@ -339,6 +339,9 @@ RADICLE_API radicle_status radicle_swf_jpeg_at(const radicle_swf* swf, size_t in
                                                radicle_swf_jpeg_info* out_jpeg);
 RADICLE_API radicle_status radicle_swf_jpeg_tables_at(const radicle_swf* swf, size_t index,
                                                       radicle_swf_jpeg_tables_info* out_tables);
+/* Invariant: index is a flat radicle_swf_tag_at index of a tag with a decoded bitmap that has a PNG export; *out_png is malloc'd, release with radicle_free_bytes. */
+RADICLE_API radicle_status radicle_swf_bitmap_png(const radicle_swf* swf, size_t index,
+                                                  uint8_t** out_png, size_t* out_size);
 
 /* ABC blocks; indexes must address what radicle_swf_abc_count reports. */
 RADICLE_API size_t radicle_swf_abc_count(const radicle_swf* swf);
