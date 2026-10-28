@@ -664,4 +664,16 @@ public partial class SwfTests
         var refused = Assert.Throws<RadicleException>(() => swf.Avm1Disassemble(0));
         Assert.Equal(Status.InvalidArgument, refused.Status);
     }
+
+    [Fact]
+    public void ExportsTheLossless2BitmapAsPngAndRefusesANonBitmapTag()
+    {
+        using var swf = SwfFile.FromBytes(ArtMovie());
+
+        var png = swf.BitmapPng(1);
+        Assert.Equal(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }, png[..8]);
+
+        var refused = Assert.Throws<RadicleException>(() => swf.BitmapPng(0));
+        Assert.Equal(Status.NotFound, refused.Status);
+    }
 }

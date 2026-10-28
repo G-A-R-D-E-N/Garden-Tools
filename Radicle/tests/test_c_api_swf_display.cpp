@@ -1,5 +1,7 @@
 #include "fo4/c_api.h"
 #include "fo4/c_api_swf.h"
+#include "fo4/swf/swf.hpp"
+#include "fo4/swf/swf_bitmap_png.hpp"
 #include "swf_art_fixtures.hpp"
 #include "swf_movie_builder.hpp"
 
@@ -109,6 +111,20 @@ std::vector<std::byte> unplaceable_movie() {
   return wrap_body(body.body, 10, false, false);
 }
 
+std::vector<std::byte> png_movie() {
+  const std::vector<std::uint8_t> argb = {255, 10, 20, 30, 128, 64, 100, 32,
+                                          0,   0,  0,  0,  170, 3,  170, 85};
+  SwfBuilder file;
+  file.rect(0, 11000, 0, 8000, 15);
+  file.u16(0x0C00);
+  file.u16(1);
+  file.tag(1);
+  file.tag(36, swf_art_test::lossless_raw_payload(5, 2, 2, 0, argb), false);
+  file.tag(20, swf_art_test::lossless_payload(4, 2, 2, 4, 0, false), false);
+  file.tag(0);
+  return wrap_body(file.body, 10, false, false);
+}
+
 }  // namespace
 
 TEST(CApiSwfFrames, ExposesPerFrameInstancesAndWorldBounds) {
@@ -215,4 +231,55 @@ TEST(CApiSwfFrames, RejectsBadArgumentsAndUnplaceableMovies) {
   EXPECT_EQ(out, nullptr);
   EXPECT_NE(std::string(radicle_last_error()).find("depth"), std::string::npos)
       << radicle_last_error();
+}
+
+// Invariant: the exported PNG is the byte stream bitmap_to_png encodes for the same tag, never a second encoder's output.
+TEST(CApiSwfBitmapPng, ExportsTheCppEncoderBytesForALossless2Bitmap) {
+  const auto movie = png_movie();
+  const auto file = open(movie);
+  ASSERT_NE(file, nullptr);
+  const auto read = fo4::swf::read_swf(movie);
+  ASSERT_TRUE(read.ok());
+  const auto expected = fo4::swf::bitmap_to_png(*read.file.tags[1].bitmap);
+  ASSERT_TRUE(expected.has_value());
+
+  uint8_t* png = nullptr;
+  size_t size = 0;
+  ASSERT_EQ(radicle_swf_bitmap_png(file.get(), 1, &png, &size), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  const std::vector<std::uint8_t> actual(png, png + size);
+  radicle_free_bytes(png);
+  EXPECT_EQ(actual, *expected);
+  const std::vector<std::uint8_t> signature = {137, 80, 78, 71, 13, 10, 26, 10};
+  ASSERT_GE(actual.size(), signature.size());
+  EXPECT_EQ(std::vector<std::uint8_t>(actual.begin(), actual.begin() + 8), signature);
+}
+
+// Invariant: a refused PNG export clears both outputs, and a tag with no bitmap or a bitmap without a PNG export never yields bytes.
+TEST(CApiSwfBitmapPng, RefusesNonBitmapAndUnencodableTagsWithOutputsCleared) {
+  const auto file = open(png_movie());
+  ASSERT_NE(file, nullptr);
+
+  uint8_t sentinel = 0;
+  uint8_t* png = nullptr;
+  size_t size = 0;
+  const auto refuse = [&](const radicle_swf* swf, size_t index, radicle_status status) {
+    png = &sentinel;
+    size = 77;
+    EXPECT_EQ(radicle_swf_bitmap_png(swf, index, &png, &size), status) << radicle_last_error();
+    EXPECT_EQ(png, nullptr);
+    EXPECT_EQ(size, 0u);
+  };
+  refuse(file.get(), 0, RADICLE_STATUS_NOT_FOUND);
+  refuse(file.get(), 2, RADICLE_STATUS_INVALID_ARGUMENT);
+  refuse(file.get(), 99, RADICLE_STATUS_INVALID_ARGUMENT);
+  refuse(nullptr, 1, RADICLE_STATUS_INVALID_ARGUMENT);
+
+  png = &sentinel;
+  size = 77;
+  EXPECT_EQ(radicle_swf_bitmap_png(file.get(), 1, nullptr, &size), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(size, 0u);
+  png = &sentinel;
+  EXPECT_EQ(radicle_swf_bitmap_png(file.get(), 1, &png, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(png, nullptr);
 }
