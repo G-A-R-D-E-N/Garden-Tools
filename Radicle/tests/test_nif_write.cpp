@@ -1,5 +1,6 @@
 #include "fo4/error.hpp"
 #include "fo4/nif/nif.hpp"
+#include "fo4/nif/nif_fix.hpp"
 #include "fo4/nif/nif_import.hpp"
 #include "fo4/nif/nif_write.hpp"
 #include "nif_fixture.hpp"
@@ -23,6 +24,7 @@ namespace {
 using fo4::nif::apply_edits;
 using fo4::nif::block_transform;
 using fo4::nif::Edit;
+using fo4::nif::fix_nif;
 using fo4::nif::EditValue;
 using fo4::nif::import_obj;
 using fo4::nif::ImportOptions;
@@ -122,6 +124,56 @@ std::vector<std::byte> import_text(std::string_view obj, bool from_blender = fal
   options.tex_normal = "textures\\body_n.dds";
   options.from_blender = from_blender;
   return import_obj(obj, options);
+}
+
+std::uint32_t uint_at(std::span<const std::byte> bytes, std::size_t offset) {
+  std::uint32_t value = 0;
+  for (std::size_t i = 0; i < 4; ++i) {
+    value |= static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(bytes[offset + i])) << (8 * i);
+  }
+  return value;
+}
+
+std::vector<std::byte> quad_with_wrong_frame_nif() {
+  constexpr std::uint32_t flags = nif_fixture::k_full | nif_fixture::k_has_uv | nif_fixture::k_has_normal |
+                                  nif_fixture::k_has_tangent | nif_fixture::k_has_colour | nif_fixture::k_has_skin;
+  constexpr std::array<std::array<float, 2>, 4> corners{{{0.0f, 0.0f}, {1.0f, 0.0f}, {1.0f, 1.0f}, {0.0f, 1.0f}}};
+  constexpr std::array<std::array<std::uint16_t, 2>, 4> uvs{
+      {{0x0000, 0x0000}, {0x3C00, 0x0000}, {0x3C00, 0x3C00}, {0x0000, 0x3C00}}};
+  std::vector<std::byte> vertices;
+  for (std::size_t v = 0; v < 4; ++v) {
+    nif_fixture::Vertex vertex{};
+    vertex.position[0] = corners[v][0];
+    vertex.position[1] = corners[v][1];
+    vertex.bitangent_x = 0.7f;
+    vertex.uv[0] = uvs[v][0];
+    vertex.uv[1] = uvs[v][1];
+    vertex.normal[0] = 128;
+    vertex.normal[1] = 128;
+    vertex.normal[2] = 255;
+    vertex.tangent[0] = 128;
+    vertex.tangent[1] = 255;
+    vertex.tangent[2] = 128;
+    const auto encoded = nif_fixture::encode_vertex(vertex);
+    vertices.insert(vertices.end(), encoded.begin(), encoded.end());
+  }
+  const std::vector<nif_fixture::Block> blocks{
+      nif_fixture::node_block("NiNode", -1, Transform{}, {1}),
+      nif_fixture::shape_block("BSTriShape", -1, Transform{}, flags, 44, -1, 2, -1, vertices, {0, 1, 2, 0, 2, 3}),
+      nif_fixture::lighting_shader_block(1, -1, 3, 0x80400201U, 0x21U),
+      nif_fixture::texture_set_block({"textures\\body_d.dds", "textures\\body_n.dds"}),
+  };
+  return nif_fixture::build_nif({}, blocks, {0});
+}
+
+std::vector<std::byte> padded_paths_nif() {
+  const std::vector<nif_fixture::Block> blocks{
+      nif_fixture::node_block("NiNode", -1, Transform{}, {1}),
+      nif_fixture::shape_block("BSTriShape", -1, Transform{}, 0, 44, -1, 2, -1, {}, {}),
+      nif_fixture::lighting_shader_block(1, 0, 3, 0, 0),
+      nif_fixture::texture_set_block({" textures\\body_d.dds ", "textures\\body_n.dds\t"}),
+  };
+  return nif_fixture::build_nif({" materials\\body.bgsm "}, blocks, {0});
 }
 
 }  // namespace
@@ -469,4 +521,55 @@ TEST(NifImport, RejectsMoreVerticesThanAShapeCanIndex) {
   for (int i = 1; i <= 65536; ++i) obj += " " + std::to_string(i);
   obj += "\n";
   EXPECT_THROW(import_text(obj), std::runtime_error);
+}
+
+TEST(NifFix, RecomputesAWrongTangentFrameAndKeepsTheGeometry) {
+  const auto input = quad_with_wrong_frame_nif();
+  const auto before = read_shapes(read_nif(input));
+  const auto after = read_shapes(read_nif(fix_nif(read_nif(input))));
+  ASSERT_EQ(before.size(), 1U);
+  ASSERT_EQ(after.size(), 1U);
+  EXPECT_EQ(after[0].verts, before[0].verts);
+  EXPECT_EQ(after[0].uvs, before[0].uvs);
+  EXPECT_EQ(after[0].normals, before[0].normals);
+  EXPECT_EQ(after[0].tris, before[0].tris);
+  ASSERT_EQ(after[0].tangents.size(), 12U);
+  ASSERT_EQ(after[0].bitangents.size(), 12U);
+  for (std::size_t v = 0; v < 4; ++v) {
+    for (std::size_t k = 0; k < 3; ++k) {
+      EXPECT_NEAR(after[0].tangents[3 * v + k], k == 0 ? 1.0f : 0.0f, 0.01f);
+      EXPECT_NEAR(after[0].bitangents[3 * v + k], k == 1 ? 1.0f : 0.0f, 0.01f);
+    }
+  }
+}
+
+TEST(NifFix, AddsTheMissingBsxFlagsToTheRoot) {
+  const auto fixed = fix_nif(read_nif(quad_with_wrong_frame_nif()));
+  const auto nif = read_nif(fixed);
+  const auto root = block_bytes(fixed, nif, 0);
+  ASSERT_EQ(uint_at(root, 4), 1U);
+  const auto bsx = uint_at(root, 8);
+  ASSERT_LT(bsx, nif.blocks().size());
+  EXPECT_EQ(nif.blocks()[bsx].type, "BSXFlags");
+}
+
+TEST(NifFix, TrimsWhitespaceFromTexturePathsAndMaterialNames) {
+  const auto shapes = read_shapes(read_nif(fix_nif(read_nif(padded_paths_nif()))));
+  ASSERT_EQ(shapes.size(), 1U);
+  EXPECT_EQ(shapes[0].material, "materials\\body.bgsm");
+  ASSERT_EQ(shapes[0].textures.size(), 2U);
+  EXPECT_EQ(shapes[0].textures[0], "textures\\body_d.dds");
+  EXPECT_EQ(shapes[0].textures[1], "textures\\body_n.dds");
+}
+
+TEST(NifFix, RunningFixAgainChangesNothing) {
+  const auto once = fix_nif(read_nif(quad_with_wrong_frame_nif()));
+  const auto twice = fix_nif(read_nif(once));
+  EXPECT_TRUE(twice == once);
+}
+
+TEST(NifFix, RefusesARootThatIsNotANode) {
+  const auto nif = read_nif(nif_fixture::build_nif(
+      {}, {nif_fixture::shape_block("BSTriShape", -1, Transform{}, 0, 44, -1, -1, -1, {}, {})}, {0}));
+  EXPECT_THROW(fix_nif(nif), fo4::parse_error);
 }

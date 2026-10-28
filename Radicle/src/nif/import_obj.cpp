@@ -157,6 +157,8 @@ std::vector<Vec3> smooth_normals(const Parsed& parsed) {
   return sums;
 }
 
+}
+
 void add_tangent_frame(Mesh& mesh) {
   std::vector<Vec3> tangent_sums(mesh.positions.size());
   std::vector<Vec3> bitangent_sums(mesh.positions.size());
@@ -185,8 +187,6 @@ void add_tangent_frame(Mesh& mesh) {
     mesh.tangents.push_back(tangent);
     mesh.bitangents.push_back(dot(across, across) > 0.0f ? unit(across) : cross(normal, tangent));
   }
-}
-
 }
 
 Mesh read_obj(std::string_view text, bool from_blender) {
