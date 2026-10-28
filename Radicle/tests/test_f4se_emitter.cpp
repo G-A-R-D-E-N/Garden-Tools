@@ -572,6 +572,8 @@ TEST(F4seEmitter, TheEmittedScriptsCompileToPexWithZeroDiagnostics) {
         const auto reread = fo4::pex::PexFile::fromBytes(bytes);
         EXPECT_TRUE(reread.toBytes() == bytes);
         ASSERT_EQ(reread.objects.size(), 1u);
+        EXPECT_EQ(reread.objects[0].name, script);
+        EXPECT_FALSE(reread.objects[0].parentClassName.empty());
 
         std::vector<std::string> names;
         for (const auto& state : reread.objects[0].states) {
