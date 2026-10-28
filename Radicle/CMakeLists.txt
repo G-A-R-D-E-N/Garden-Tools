@@ -380,6 +380,7 @@ add_library(fo4
   src/avm1/decode.cpp
   src/avm1/encode.cpp
   src/avm1/disassembly.cpp
+  src/avm1/function_ops.cpp
   src/avm1/interpreter.cpp
   src/avm1/object_ops.cpp
   src/avm1/text_ops.cpp
@@ -990,6 +991,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_avm1.cpp
     tests/test_avm1_ops.cpp
     tests/test_avm1_objects.cpp
+    tests/test_avm1_functions.cpp
     tests/test_avm1_real.cpp
     tests/test_swf_svg.cpp
     tests/test_swf_svg_text_matrix.cpp
