@@ -8779,6 +8779,7 @@ Detects an encoder change that alters bytes of an unedited stream. It checks thr
 ## Radicle/tests/swf_movie_builder.hpp:movie_of
 
 - `movie_of`, `TagPayload`, `sprite_tag`, `place_full`, `matrix_full`, `square_with_fill`, and `square_shape` moved here from `test_swf_display.cpp` so the nine-slice render tests can build movies without copying them. `test_swf_display.cpp` was at 741 lines, over the 750 limit once the new tests were added. The bodies are unchanged; the only edit is `inline`.
+
 ## src/papyrus/decompiler_internal.hpp:BodyState
 
 - Split of `decompiler.cpp` (727 lines, too close to the 750 cap) by responsibility. `decompiler.cpp` keeps `toSource`, `emitFunction`, `disassemble` and the `decompileBody` setup. `decompiler_expr.cpp:translateInstructions` turns each instruction into a `BodyState::put` or a statement. `decompiler_stmt.cpp:reconstructStatements` runs jump folding, the temp-call pass, local hoisting and `If`/`While`/`Else` structuring. The header holds the state those passes share: `BodyState`, `JKind`, `JInfo`, and the `iequals`, `startsWith` and `join` helpers.
