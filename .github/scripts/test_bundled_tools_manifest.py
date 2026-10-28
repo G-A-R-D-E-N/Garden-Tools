@@ -22,6 +22,9 @@ class BundledToolsManifestTest(unittest.TestCase):
                 self.assertTrue(url.startswith("https://"), url)
                 self.assertNotIn("latest", url.lower(), url)
 
+    def test_short_lived_ffmpeg_pin_documents_its_expiry(self):
+        self.assertTrue(self.tools["ffmpeg"].get("pinNote"))
+
     def test_archive_member_is_set_exactly_for_zip_downloads(self):
         for tool in self.tools.values():
             self.assertEqual(tool["url"].endswith(".zip"), tool["member"] is not None, tool["id"])

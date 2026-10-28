@@ -36,14 +36,15 @@ its own copy of `build-info.txt`; `release-metadata` is the separate artifact wr
   before they go into the zip. The versions live in `PluginEditTool/tools/bundled-tools.json`:
   - texconv (Microsoft DirectXTex, MIT): `tools\texconv\`
   - ffmpeg (BtbN static build of FFmpeg, LGPL-3.0 or later): `tools\audio\ffmpeg.exe`
-  - Each one's license sits next to it as `LICENSE-<tool>.txt`.
+  - Each one's license sits next to it as `LICENSE-<tool>.txt`. A tool supplied through an override
+    path is not covered by this and gets no license file.
+  - The ffmpeg pin is an autobuild that BtbN prunes; see `pinNote` in `bundled-tools.json`.
 - Bundled from the owner's folders, when set: xWMAEncode.exe, BmlFuzEncode.exe and BmlFuzDecode.exe
   (`FO4IDE_AUDIO_TOOLS_DIR`), and the offline Creation Kit wiki (`FO4IDE_CK_WIKI_PATH`). If a
   variable is unset, that item is left out and the build prints a warning.
 - Not in the zip, found on the user's machine: Archive2.exe and PapyrusCompiler.exe come with the
   Fallout 4 Creation Kit and are detected from the Fallout 4 install.
-- Not in the zip: niftool. NIF authoring edits (writing NIF files) need it. Reading NIFs does not
-  need it once the in-process Radicle reads land.
+- Not in the zip: niftool. NIF authoring edits (writing NIF files) need it.
 
 Pinned versions only: a download never follows a "latest" link. To update a tool, change its URL,
 SHA256 and license URL together in `bundled-tools.json`.

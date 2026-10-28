@@ -38,13 +38,13 @@ or block index in whichever block follows. Every real Fallout 4 precombined mesh
 Verified against real vanilla data: across 166 such blocks in 8 real precombines, the on-disk block
 size matches the no-embedded-geometry layout exactly, zero mismatches.
 | [bcdec.h](https://github.com/iOrange/bcdec) | MIT / Unlicense (dual) | BC1-BC7 block decoding, ported to C# as `Services/Textures/BcnDecoder.cs`. |
-| [texconv](https://github.com/microsoft/DirectXTex) (DirectXTex) | MIT | DDS conversion fallback, for the few formats `BcnDecoder` does not handle. Shipped in the zip as `tools\texconv\Texconvx64.exe` (DirectXTex `may2026`). |
+| [texconv](https://github.com/microsoft/DirectXTex) (DirectXTex) | MIT | DDS conversion fallback, for the few formats `BcnDecoder` does not handle. Shipped as `tools\texconv\Texconvx64.exe` (DirectXTex `may2026`) when the build fetches its pin. |
 | [WPF-UI](https://github.com/lepoco/wpfui) | MIT | The desktop UI theme and controls. |
 | [Markdig.Wpf](https://github.com/Kryptos-FR/markdig.wpf) | MIT | Markdown rendering in the docs panel. |
 | [Newtonsoft.Json](https://github.com/JamesNK/Newtonsoft.Json) | MIT | JSON, including the MCP wire format. |
 | [Roslyn scripting](https://github.com/dotnet/roslyn) (`Microsoft.CodeAnalysis.CSharp.Scripting`) | MIT | The `run_script` C# escape hatch. |
 | [WebView2](https://developer.microsoft.com/microsoft-edge/webview2/) | Microsoft proprietary, redistributable | Hosts the editor's web UI. |
-| [ffmpeg](https://ffmpeg.org/) ([BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds) win64-lgpl static build) | LGPL-3.0 | Decodes/transcodes audio (and video's audio track) for the `audio_*` tools. Run as a separate process, not linked -- see below. Shipped in the zip as `tools\audio\ffmpeg.exe`. |
+| [ffmpeg](https://ffmpeg.org/) ([BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds) win64-lgpl static build) | LGPL-3.0 | Decodes/transcodes audio (and video's audio track) for the `audio_*` tools. Run as a separate process, not linked -- see below. Shipped as `tools\audio\ffmpeg.exe` when the build fetches its pin. |
 | xWMAEncode.exe (Microsoft, classic DirectX SDK, 2009) | Microsoft, unmodified redistributable | Encodes/decodes Fallout 4's xWMA (`.xwm`) format for the `audio_*` tools. |
 | BmlFuzEncode.exe / BmlFuzDecode.exe (BowmoreLover) | Freely redistributed alongside Yakitori Audio Converter | Packs/splits the `.fuz` voice container (xwm + lip) for the `audio_*` tools. |
 
@@ -152,11 +152,14 @@ none of the "combined work" complexity that applies to Mutagen/nifly above appli
   LGPL-3.0's source-availability obligation is satisfied by ffmpeg's own upstream source
   (ffmpeg.org) and BtbN's public, reproducible build scripts; nothing about this project modifies
   ffmpeg itself. Replaced the workspace's previous bundled copy, a 2012 nightly (`N-36890`) with
-  13 years of unpatched codec parsers -- see the Code Notes entry for that decision. The zip gets
-  this exact build from the pinned download in `PluginEditTool/tools/bundled-tools.json`, and its
-  SHA256 is checked before packaging. The source it was built from is FFmpeg commit
+  13 years of unpatched codec parsers -- see the Code Notes entry for that decision. When the build fetches
+  its pin from `PluginEditTool/tools/bundled-tools.json`, the zip gets this exact build, checked by
+  SHA256 before packaging. The source it was built from is FFmpeg commit
   `6882969ce9fd2aa6aa1d0008b2bfe1c838aac11d`, built with `--enable-version3`; the license text is
-  `COPYING.LGPLv3` at that commit, shipped as `tools\audio\LICENSE-ffmpeg.txt`.
+  `COPYING.LGPLv3` at that commit, shipped as `tools\audio\LICENSE-ffmpeg.txt`. An `ffmpeg.exe`
+  supplied through `FO4IDE_AUDIO_TOOLS_DIR` is not this build and is not covered here. The library
+  list compiled into this build is in BtbN's build scripts at the pinned tag (`variants/win64-lgpl.sh`,
+  `variants/defaults-lgpl.sh`, `scripts.d/`).
 - **xWMAEncode.exe** -- Microsoft's own tool from the classic DirectX SDK (June 2010 era; this build
   reports itself as "build 9.29.1962.0", copyright 2009). Not open-source, but it is the *only* tool
   that reads/writes Fallout 4's proprietary xWMA format, and it has been freely redistributed by
