@@ -170,6 +170,7 @@ class Interpreter {
   ExecutionResult ensure_class_initialized(Class& klass, std::size_t depth);
   ExecutionResult initialize_class_value(const Value& value, std::size_t depth);
   bool is_instance_of(const Value& value, const Value& type) const;
+  std::vector<Key>& enumeration_keys(Frame& frame, Object& object);
   InterpreterStatus coerce_value(const Multiname& multiname, Value& value,
                                  std::string& message);
   InterpreterStatus array_property(Object& object, const Multiname& multiname, bool write,

@@ -282,6 +282,7 @@ ExecutionResult Interpreter::execute_frame(Frame& frame, std::size_t depth) {
     switch (instruction.opcode) {
 #include "interpreter_dispatch_a.inc"
 #include "interpreter_dispatch_b.inc"
+#include "interpreter_dispatch_c.inc"
       default:
         return fail(InterpreterStatus::NotImplemented,
                     std::string{"opcode "} + instruction.mnemonic + " is not implemented yet");
