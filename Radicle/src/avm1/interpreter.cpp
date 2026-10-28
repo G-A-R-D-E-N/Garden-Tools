@@ -6,9 +6,11 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <exception>
 #include <format>
 #include <limits>
 #include <map>
+#include <new>
 #include <string>
 #include <utility>
 #include <variant>
@@ -32,6 +34,8 @@ const char* run_status_name(Avm1RunStatus status) noexcept {
       return "branch target is not a record start";
     case Avm1RunStatus::StepLimit:
       return "step limit reached";
+    case Avm1RunStatus::ResourceLimit:
+      return "resource limit reached";
   }
   return "unknown";
 }
@@ -40,6 +44,7 @@ namespace {
 
 constexpr const char* kUnderflow = "the operand stack has too few values";
 constexpr const char* kWhitespace = " \t\r\n";
+constexpr std::size_t kMaxStringBytes = std::size_t{16} * 1024 * 1024;
 
 struct Avm1State {
   std::vector<Avm1Data> stack;
@@ -104,7 +109,32 @@ std::string number_text(double value) {
   if (value == 0.0) {
     return "0";
   }
-  return std::format("{:.15g}", value);
+  const std::string scientific = std::format("{:.14e}", std::fabs(value));
+  const std::size_t e_at = scientific.find('e');
+  std::string digits = scientific.substr(0, 1) + scientific.substr(2, e_at - 2);
+  while (digits.size() > 1 && digits.back() == '0') {
+    digits.pop_back();
+  }
+  const int point = std::stoi(scientific.substr(e_at + 1)) + 1;
+  const int count = static_cast<int>(digits.size());
+  std::string out = value < 0.0 ? "-" : "";
+  if (count <= point && point <= 21) {
+    out += digits + std::string(static_cast<std::size_t>(point - count), '0');
+  } else if (0 < point && point <= 21) {
+    out += digits.substr(0, static_cast<std::size_t>(point)) + "." +
+           digits.substr(static_cast<std::size_t>(point));
+  } else if (-6 < point && point <= 0) {
+    out += "0." + std::string(static_cast<std::size_t>(-point), '0') + digits;
+  } else {
+    out += digits.substr(0, 1);
+    if (count > 1) {
+      out += "." + digits.substr(1);
+    }
+    const int exponent = point - 1;
+    out += exponent < 0 ? "e-" : "e+";
+    out += std::to_string(std::abs(exponent));
+  }
+  return out;
 }
 
 std::string to_text(const Avm1Data& data) {
@@ -190,6 +220,16 @@ Avm1RunStatus pop(Avm1State& state, Avm1Data& out, std::string& message) {
   return Avm1RunStatus::Ok;
 }
 
+Avm1RunStatus push_result(Avm1State& state, Avm1Data result, std::string& message) {
+  if (result.kind == Avm1DataKind::String && result.text.size() > kMaxStringBytes) {
+    message = "the result is " + std::to_string(result.text.size()) +
+              " bytes, past the string limit of " + std::to_string(kMaxStringBytes);
+    return Avm1RunStatus::ResourceLimit;
+  }
+  state.stack.push_back(std::move(result));
+  return Avm1RunStatus::Ok;
+}
+
 template <typename Combine>
 Avm1RunStatus apply_binary(Avm1State& state, std::string& message, Combine combine) {
   Avm1Data right;
@@ -200,8 +240,7 @@ Avm1RunStatus apply_binary(Avm1State& state, std::string& message, Combine combi
   if (const Avm1RunStatus status = pop(state, left, message); status != Avm1RunStatus::Ok) {
     return status;
   }
-  state.stack.push_back(combine(left, right));
-  return Avm1RunStatus::Ok;
+  return push_result(state, combine(left, right), message);
 }
 
 template <typename Transform>
@@ -210,8 +249,7 @@ Avm1RunStatus apply_unary(Avm1State& state, std::string& message, Transform tran
   if (const Avm1RunStatus status = pop(state, operand, message); status != Avm1RunStatus::Ok) {
     return status;
   }
-  state.stack.push_back(transform(operand));
-  return Avm1RunStatus::Ok;
+  return push_result(state, transform(operand), message);
 }
 
 Avm1RunStatus push_values(const Avm1Push& push, Avm1State& state, std::string& message) {
@@ -311,6 +349,13 @@ Avm1RunStatus jump_index(const Avm1Stream& stream, std::size_t target, std::size
       stream.actions.begin(), stream.actions.end(), target,
       [](const Avm1Action& action, std::size_t offset) { return action.offset < offset; });
   if (found == stream.actions.end()) {
+    const Avm1Action& last = stream.actions.back();
+    const std::size_t size = last.offset + last.length + stream.trailing.size();
+    if (target != size) {
+      message = "the branch targets offset " + std::to_string(target) + ", past the " +
+                std::to_string(size) + "-byte stream";
+      return Avm1RunStatus::BadBranch;
+    }
     index = stream.actions.size();
     return Avm1RunStatus::Ok;
   }
@@ -456,7 +501,16 @@ Avm1Result execute_actions(const Avm1Stream& stream, std::size_t max_steps) {
     result.steps += 1;
     std::size_t next = index + 1;
     std::string detail;
-    const Avm1RunStatus status = execute_action(stream, action, state, next, detail);
+    Avm1RunStatus status = Avm1RunStatus::Ok;
+    try {
+      status = execute_action(stream, action, state, next, detail);
+    } catch (const std::bad_alloc&) {
+      status = Avm1RunStatus::ResourceLimit;
+      detail = "the interpreter ran out of memory";
+    } catch (const std::exception& error) {
+      status = Avm1RunStatus::InvalidStream;
+      detail = error.what();
+    }
     if (status != Avm1RunStatus::Ok) {
       result.status = status;
       result.message = opcode_label(action.code) + ": " + detail;
