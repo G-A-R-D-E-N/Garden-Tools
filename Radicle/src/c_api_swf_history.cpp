@@ -120,6 +120,31 @@ bool top_level_position(const fo4::swf::SwfFile& file, std::size_t flat, std::si
   return false;
 }
 
+bool timeline_flat_indices(const fo4::swf::SwfFile& file, std::uint16_t timeline_id,
+                           std::vector<std::size_t>& out) {
+  out.clear();
+  const std::vector<fo4::swf::SwfTag>* tags = &file.tags;
+  std::size_t flat = 0;
+  if (timeline_id != 0) {
+    const fo4::swf::SwfTag* sprite = nullptr;
+    for (const auto& tag : file.tags) {
+      if (tag.code == fo4::swf::tag::kDefineSprite && tag.sprite_id && *tag.sprite_id == timeline_id) {
+        sprite = &tag;
+        break;
+      }
+      flat += 1 + subtree_size(tag.children);
+    }
+    if (sprite == nullptr) return false;
+    tags = &sprite->children;
+    flat += 1;
+  }
+  for (const auto& tag : *tags) {
+    out.push_back(flat);
+    flat += 1 + subtree_size(tag.children);
+  }
+  return true;
+}
+
 }  // namespace radicle_swf_detail
 
 extern "C" {

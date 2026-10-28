@@ -418,7 +418,7 @@ TEST(CApiSwfEdit, RejectsAFrameListBuiltBeforeAnEdit) {
   EXPECT_EQ(radicle_swf_frames_instance_count(after.get(), 0, 0, &count), RADICLE_STATUS_OK);
 }
 
-// Constraint: a placement row must carry the flat index radicle_swf_tag_at reports, on the root and on a sprite timeline.
+// Constraint: a placement row must carry the flat index radicle_swf_tag_at reports, on the root and on a sprite timeline. Regression: a display row reports the top-level position (1) instead of the flat index (4) of its PlaceObject2.
 TEST(CApiSwfVerbs, PlacementListTagIndexIsTheFlatIndexAfterASprite) {
   auto swf = open(placement_after_sprite_movie());
   ASSERT_NE(swf, nullptr);
@@ -447,6 +447,18 @@ TEST(CApiSwfVerbs, PlacementListTagIndexIsTheFlatIndexAfterASprite) {
   EXPECT_EQ(std::string(reinterpret_cast<const char*>(text), size),
             R"([{"tag_index":1,"depth":1,"character_id":7,"matrix":null,"filters":[]}])");
   radicle_free_bytes(text);
+
+  radicle_swf_frames* opened = nullptr;
+  ASSERT_EQ(radicle_swf_frames_open(swf.get(), &opened), RADICLE_STATUS_OK) << radicle_last_error();
+  const FramesHandle frames(opened);
+  radicle_swf_frames_instance root{};
+  ASSERT_EQ(radicle_swf_frames_instance_at(frames.get(), 0, 0, 0, &root), RADICLE_STATUS_OK);
+  EXPECT_EQ(root.create_tag_index, 4u);
+  EXPECT_EQ(root.transform_tag_index, UINT32_MAX);
+  radicle_swf_frames_instance sprite{};
+  ASSERT_EQ(radicle_swf_frames_instance_at(frames.get(), 1, 0, 0, &sprite), RADICLE_STATUS_OK);
+  EXPECT_EQ(sprite.timeline_id, 7);
+  EXPECT_EQ(sprite.create_tag_index, 1u);
 }
 
 // Constraint: a sprite timeline must be addressed by its DefineSprite id, never by the root timeline's labels.

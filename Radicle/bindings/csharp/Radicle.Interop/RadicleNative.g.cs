@@ -2492,6 +2492,8 @@ public unsafe struct SwfFramesInstance
     public SwfBounds Bounds;
     public IntPtr Name;
     public IntPtr Path;
+    public uint CreateTagIndex;
+    public uint TransformTagIndex;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -2913,7 +2915,7 @@ public unsafe struct PapyrusCompileOptions
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 80u;
+    public const uint CompiledAbiVersion = 82u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
