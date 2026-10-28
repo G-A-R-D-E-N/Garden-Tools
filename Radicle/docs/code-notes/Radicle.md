@@ -8225,6 +8225,7 @@ Clip rows show the clip frame that `Art/Cell` (or `Art/Cell/Leaf`) displays at r
 - `StoppedClipKeepsItsNestedClipPlaying` detects a child tied to its frozen parent's index. The parent stops at frame 1, giving Art/Cell 0,1,1,1,1, and the child keeps its own age, giving Art/Cell/Leaf 0,1,0,1,0. Tying the child to the parent index would show 0,1,1,1,1.
 - `ASpriteWithOnlyNonControlActionsStillLoops` detects a DoAction whose records are not frame controls being read as frame controls, for example a Pop read as a Stop. It expects 0,1,2,0,1, and the bug would show 0,1,1,1,1.
 - `AStopBehindABranchIsNotAppliedToTheClip` detects a flat extraction that applies a Stop behind a Jump. The tag is skipped, giving 0,1,2,0,1. Applying the Stop would show 0,1,1,1,1.
+
 ## Radicle/src/avm2/interpreter_memory.cpp:Interpreter::domain_memory_load
 
 Serves li8, li16, li32, lf32 and lf64 against `runtime_.current_domain()->domain_memory()`. The popped address goes through ToUint32, so a negative address becomes a large index and is refused. Bytes are gathered little-endian into a 64-bit accumulator, byte i at bit 8*i. li8 and li16 zero-extend because the accumulator holds only their width. li32 reads the low 32 bits as int32, so 0xFFFFFFFE reads as -2. lf32 bit-casts the low 32 bits to float and widens to double; lf64 bit-casts all 64 bits. The stack effect (pop 1, push 1) is already declared in `Radicle/src/abc/abc_stack.cpp` for 0x35 to 0x39.
