@@ -6281,6 +6281,7 @@ The INNR entry above modelled a nested run that a member of the outer run counts
 - Radicle/tests/test_nif_write.cpp:NameEditAppendsToStringTable: also checks that the root node, which shared string index 0 with the shape, keeps its old name.
 - Radicle/tests/test_nif_write.cpp:RejectsEditsOnBrokenShapesAndShaders: its shared malformed texture set case is a regression for the copy made before the slots were parsed, which indexed past the file's block table.
 - Radicle/tests/nif_fixture.hpp:build_nif: takes optional export strings, max string length and groups, and nif_fixture::shape_block and nif_fixture::lighting_shader_block take an extra-data count that defaults to 0.
+
 ## include/fo4/papyrus/decompiler.hpp:Decompiler
 
 Lift of PET's `Decompiler` (`PluginEditTool/native/include/fo4ide/papyrus/Decompiler.hpp`). Two changes beyond the namespace: the header names `fo4::pex` types directly instead of going through PET's `Pex.hpp` shim, and `<string_view>` is included. PET's class comment moved here: `Decompiler` ports PapyrusDecompiler, turns a `PexFile` into Papyrus source (`toSource`) or a text listing (`disassemble`), and mirrors the C# oracle's temp inlining, jump folding and local hoisting.
