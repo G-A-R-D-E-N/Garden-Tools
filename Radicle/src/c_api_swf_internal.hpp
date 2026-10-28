@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace radicle_swf_detail {
@@ -101,8 +102,9 @@ void install_views(radicle_swf& swf, swf_views&& views);
 void rebuild_views(radicle_swf& swf);
 
 /* Invariant: the buffer carries a trailing NUL that *out_size does not count; nullptr means malloc failed and *out_size is untouched. */
-std::uint8_t* copy_text(const std::string& text, std::size_t* out_size);
+std::uint8_t* copy_text(std::string_view text, std::size_t* out_size);
 // Constraint: a flat index from radicle_swf_tag_at must map to the top-level position a plan holds.
 bool top_level_position(const fo4::swf::SwfFile& file, std::size_t flat, std::size_t& out);
+std::size_t subtree_size(const std::vector<fo4::swf::SwfTag>& tags);
 
 }  // namespace radicle_swf_detail

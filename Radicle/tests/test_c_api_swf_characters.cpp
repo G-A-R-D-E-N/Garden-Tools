@@ -151,6 +151,10 @@ TEST(CApiSwfCharacters, RefusesNonShapesAndNullArgumentsWithOutputsCleared) {
   EXPECT_EQ(radicle_swf_shape_svg(nullptr, 5, &text, &size), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(text, nullptr);
   EXPECT_EQ(size, 0u);
+
+  text = &sentinel;
+  EXPECT_EQ(radicle_swf_shape_svg(swf.get(), 5, &text, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(text, nullptr);
 }
 
 }  // namespace
