@@ -7481,4 +7481,14 @@ A movie whose root has no `BGSCodeObj` opens with the bridge on and no functions
 
 Tests, both in `Radicle/tests/test_c_api_runtime.cpp`: `BgsOpenInstallsTheCodeObjectFunctionsOnlyWhenRequested` runs a root `Play` method that applies `BGSCodeObj.playSound`. With the flag off the host sees no call. With it on the host sees `bgs.playSound`. This catches an open that drops the flag or ignores it. `BgsOpenClearsItsMovieOutputOnEveryRefusal` starts from a non-NULL sentinel in `out_movie` and checks that a NULL runtime, a NULL `out_movie` (no crash), NULL bytes and unparsable bytes each leave it NULL. This catches a refusal that keeps a stale handle.
 
+ABI 78 to 79 adds the SWF edit verbs declared in `Radicle/include/fo4/c_api_swf_verbs.h` and implemented in `Radicle/src/c_api_swf_verbs.cpp`. The pin is now `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsSeventyNine`. `Radicle/bindings/csharp/tools/generate_interop.py:HEADERS` lists the header, so `Radicle/bindings/csharp/Radicle.Interop/RadicleNative.g.cs` regenerates the DllImports and structs. The managed side is `Radicle/bindings/csharp/Radicle.Interop/SwfVerbs.cs:SwfVerbs`, which reaches the handle through `Radicle/bindings/csharp/Radicle.Interop/SwfEditing.cs:SwfEditHistory.UseForVerbs`.
+
+Every verb runs `Radicle/src/c_api_swf_verbs.cpp:commit_edit`. It edits a copy of the file, derives a top-level tag plan with `Radicle/src/c_api_swf_verbs.cpp:plan_between`, and sends that plan through `SwfEditHistory::apply`. Undo, redo and the revision therefore follow the existing history rules, and a refused edit moves nothing. `plan_between` is positional. Equal tag counts give one payload replacement per changed index. Unequal counts keep the common prefix and suffix, remove the middle of the old list, and insert the new middle before the old suffix. This relies on replay being deterministic, so the same plan on the same state gives the same file.
+
+`radicle_swf_frame_label_rows` and `radicle_swf_placement_list_json` take a timeline id. Id 0 is the root timeline and any other id is the DefineSprite that owns it. `radicle_swf_placement_list_json` lists top-level placements of that timeline only, with the tag index, depth, character id, matrix and filters.
+
+`radicle_swf_reassign_instance_depth` and `radicle_swf_insert_instance_transform_keyframe` are root-timeline only, because the C++ `reassign_instance_depth` and `insert_instance_transform_keyframe` refuse sprite-internal instances. `radicle_swf_apply_instance_transforms` does reach sprite-internal instances, through `root_frame` and `instance_id`. Edit text is addressed by top-level tag index, so a DefineEditText inside a sprite is not reachable.
+
+The set-placement-depth verb was skipped. The C++ offers only `replace_placement_depth`, a body splice with no collision or mask proof, so `radicle_swf_reassign_instance_depth` is the proven depth edit.
+
 Not built or run locally. CI is the first compile and run.
