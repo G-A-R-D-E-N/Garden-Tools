@@ -120,7 +120,7 @@ public sealed class SwfDocument : IDisposable
     {
         if (Movie.Tags[tagIndex].InsideSprite) return Apply(new SwfPlanSpec().Replace(
             tagIndex, SwfPlacementCodec.WithDepth(Movie.Payload(tagIndex), Movie.Tags[tagIndex].Code, depth)));
-        var (rootFrame, instanceId) = RootInstance(row => row.CreateTagIndex == tagIndex);
+        var (rootFrame, instanceId) = RootInstance(RootRows(row => row.CreateTagIndex == tagIndex));
         return Verb(history => SwfVerbs.ReassignInstanceDepth(history, rootFrame, instanceId, depth, out _));
     }
 
@@ -130,16 +130,17 @@ public sealed class SwfDocument : IDisposable
 
     public SwfPlacementMatrix PlacementTransform(int tagIndex) => Movie.PlacementMatrix(tagIndex);
 
-    // Requires a placement tag index; a root placement's transform source is edited through the native transform verb.
+    // Requires a placement tag index; a root transform source with a row is edited natively, and any other placement takes the managed write.
     public SwfPlanResultRecord SetPlacementTransform(int tagIndex, SwfPlacementTransformEdit edit)
     {
         var tag = Movie.Tags[tagIndex];
-        if (!tag.InsideSprite)
+        var rows = tag.InsideSprite ? Array.Empty<SwfFrameInstanceRecord>() : RootRows(row => row.TransformTagIndex == tagIndex);
+        if (rows.Length > 0)
         {
-            var (rootFrame, instanceId) = RootInstance(row => row.TransformTagIndex == tagIndex);
             var transform = ToVerbTransform(Movie.PlacementMatrix(tagIndex), edit);
-            return Verb(history => SwfVerbs.ApplyInstanceTransforms(history, rootFrame,
-                new[] { new SwfInstanceTransformEdit(instanceId, transform) }));
+            var root = rows[0];
+            return Verb(history => SwfVerbs.ApplyInstanceTransforms(history, root.TimelineFrame,
+                new[] { new SwfInstanceTransformEdit(root.InstanceId, transform) }));
         }
         var payload = SwfPlacementMatrixCodec.Write(Movie.PlacementMatrix(tagIndex), tag.Code,
             Movie.Payload(tagIndex), edit);
@@ -155,8 +156,8 @@ public sealed class SwfDocument : IDisposable
         {
             var showFrames = Movie.Tags.Count(item => item.Code == 1 && !item.InsideSprite);
             if (frame < 0 || frame >= showFrames) throw new ArgumentOutOfRangeException(nameof(frame));
-            var (rootFrame, instanceId) = RootInstance(row => row.TimelineFrame == frame &&
-                (row.CreateTagIndex == tagIndex || row.TransformTagIndex == tagIndex));
+            var (rootFrame, instanceId) = RootInstance(RootRows(
+                row => row.CreateTagIndex == tagIndex || row.TransformTagIndex == tagIndex, frame));
             return Verb(history => SwfVerbs.InsertInstanceTransformKeyframe(history, rootFrame, instanceId));
         }
         var payload = Movie.Payload(tagIndex);
@@ -210,14 +211,22 @@ public sealed class SwfDocument : IDisposable
         return result;
     }
 
-    // Requires the matching rows to name exactly one instance; two instances behind one placement refuse instead of guessing.
-    private (uint Frame, uint InstanceId) RootInstance(Func<SwfFrameInstanceRecord, bool> addresses)
+    // Requires the rows of the first frame that names the placement, or of frame when one is given; later frames are not read.
+    private SwfFrameInstanceRecord[] RootRows(Func<SwfFrameInstanceRecord, bool> addresses, int? frame = null)
     {
         using var frames = Movie.OpenFrames();
-        var rows = Enumerable.Range(0, frames.TimelineAt(0).FrameCount)
-            .SelectMany(frame => frames.Instances(0, frame))
-            .Where(row => row.TimelineId == 0 && addresses(row))
-            .ToArray();
+        var candidates = frame is { } index ? new[] { index } : Enumerable.Range(0, frames.TimelineAt(0).FrameCount).ToArray();
+        foreach (var candidate in candidates)
+        {
+            var rows = frames.Instances(0, candidate).Where(row => row.TimelineId == 0 && addresses(row)).ToArray();
+            if (rows.Length > 0) return rows;
+        }
+        return Array.Empty<SwfFrameInstanceRecord>();
+    }
+
+    // Requires one instance among the rows; two instances on one frame refuse instead of guessing.
+    private static (uint Frame, uint InstanceId) RootInstance(SwfFrameInstanceRecord[] rows)
+    {
         if (rows.Length == 0) throw new InvalidOperationException("no root-timeline instance is addressed by that placement");
         var instances = rows.Select(row => row.InstanceId).Distinct().ToArray();
         if (instances.Length != 1) throw new InvalidOperationException("the placement addresses more than one instance; refusing to guess");

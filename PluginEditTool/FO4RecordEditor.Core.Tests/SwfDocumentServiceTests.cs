@@ -235,13 +235,19 @@ public class SwfDocumentServiceTests
         using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
         var placement = document.Placements().First(item => !item.InsideSprite);
         var result = document.SetPlacementTransform(placement.TagIndex,
-            new SwfPlacementTransformEdit(TranslateX: 40, TranslateY: 60));
+            new SwfPlacementTransformEdit(TranslateX: 40, TranslateY: 60, ScaleX: 0x20000, Rotate0: 0x8000));
         Assert.True(result.Changed);
-        Assert.Equal(40, document.PlacementTransform(placement.TagIndex).TranslateX);
+        var edited = document.PlacementTransform(placement.TagIndex);
+        Assert.Equal(40, edited.TranslateX);
+        Assert.Equal(0x20000, edited.ScaleX);
+        Assert.Equal(0x8000, edited.Rotate0);
+        Assert.True(edited.HasScale);
+        Assert.True(edited.HasRotate);
         Assert.Equal(1, document.UndoCount);
         Assert.True(document.Dirty);
         document.Undo();
         Assert.Equal(0, document.PlacementTransform(placement.TagIndex).TranslateX);
+        Assert.False(document.PlacementTransform(placement.TagIndex).HasScale);
         Assert.False(document.Dirty);
     }
 
@@ -271,6 +277,8 @@ public class SwfDocumentServiceTests
         Assert.Equal((ushort)5, document.Frame(0, 0).Single().Depth);
         document.Undo();
         Assert.Equal((ushort)1, document.Frame(0, 0).Single().Depth);
+        document.Redo();
+        Assert.Equal((ushort)5, document.Frame(0, 0).Single().Depth);
     }
 
     [NativeFact]
@@ -283,6 +291,36 @@ public class SwfDocumentServiceTests
         var placements = document.Placements();
         Assert.Equal((ushort)7, placements.Single(item => item.InsideSprite).Depth);
         Assert.Equal((ushort)1, placements.Single(item => !item.InsideSprite).Depth);
+    }
+
+    [NativeFact]
+    public void SetDepthOnAMoveRowRefusesBeforeTouchingTheHistory()
+    {
+        // Constraint: detects a depth edit on a move row that reaches the native verb and rewrites the creating placement instead of refusing.
+        using var document = SwfDocument.OpenBytes(SwfFixture.Movie(twoFrames: true));
+        var placement = document.Placements().First(item => !item.InsideSprite);
+        document.InsertKeyframe(placement.TagIndex, 1);
+        var move = document.Movie.Tags.Where(tag => tag.Code == 26 && !tag.InsideSprite).Last();
+        var revision = document.Revision;
+        var error = Assert.Throws<InvalidOperationException>(() => document.SetDepth(move.Index, 5));
+        Assert.Contains("no root-timeline instance", error.Message);
+        Assert.Equal(revision, document.Revision);
+        Assert.Equal((ushort)1, document.Placements().First(item => !item.InsideSprite).Depth);
+    }
+
+    [NativeFact]
+    public void ARootPlacementWithoutAMatrixTakesOneFromTheManagedWrite()
+    {
+        // Constraint: detects a transform edit on a matrix-less root placement that refuses, or that writes the matrix over the character id and depth, so the readback loses the edit or the placement.
+        using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
+        var placement = document.Placements().First(item => !item.InsideSprite);
+        document.Apply(new SwfPlanSpec().Replace(placement.TagIndex, new byte[] { 0x02, 0x01, 0x00, 0x0B, 0x00 }));
+        var result = document.SetPlacementTransform(placement.TagIndex, new SwfPlacementTransformEdit(TranslateX: 40));
+        Assert.True(result.Changed);
+        Assert.Equal(40, document.PlacementTransform(placement.TagIndex).TranslateX);
+        var root = document.Placements().Single(item => !item.InsideSprite);
+        Assert.Equal((ushort)1, root.Depth);
+        Assert.Equal((ushort?)11, root.CharacterId);
     }
 
     [NativeFact]
