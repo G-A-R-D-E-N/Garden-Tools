@@ -48,6 +48,10 @@ Bytes push_int(std::uint32_t value) {
   return rec(0x96, payload);
 }
 
+Bytes le16(std::uint16_t value) {
+  return Bytes{static_cast<std::uint8_t>(value & 0xFFu), static_cast<std::uint8_t>(value >> 8)};
+}
+
 fo4::avm1::Avm1Stream decode(const Bytes& input) {
   std::vector<std::byte> bytes;
   for (const std::uint8_t value : input) {
@@ -63,17 +67,17 @@ struct TableRow {
   std::vector<std::string> trace;
 };
 
-// Invariant: InitObject reads each (value, name) pair in stack order and GetMember reads it back, so a swapped pair traces the other value and a name that was never stored reads undefined.
+// Invariant: InitObject pushes each pair as name then value, with the value on top, and reads the pairs in push order, so a swapped name and value traces the other value and a name that was never stored reads undefined.
 TEST(Avm1Interpreter, InitObjectThenGetMemberReadsEachPair) {
   const std::vector<TableRow> rows = {
       {"two pairs read back in order",
-       cat({push_int(1), push_text("a"), push_int(2), push_text("b"), push_int(2), rec(0x43, {}),
+       cat({push_text("a"), push_int(1), push_text("b"), push_int(2), push_int(2), rec(0x43, {}),
             rec(0x4C, {}), push_text("a"), rec(0x4E, {}), rec(0x26, {}), push_text("b"),
             rec(0x4E, {}), rec(0x26, {}), Bytes{0x00}}),
        Avm1RunStatus::Ok,
        {"1", "2"}},
       {"a name never stored reads undefined",
-       cat({push_int(7), push_text("a"), push_int(1), rec(0x43, {}), push_text("b"), rec(0x4E, {}),
+       cat({push_text("a"), push_int(7), push_int(1), rec(0x43, {}), push_text("b"), rec(0x4E, {}),
             rec(0x26, {}), Bytes{0x00}}),
        Avm1RunStatus::Ok,
        {"undefined"}},
@@ -118,15 +122,16 @@ TEST(Avm1Interpreter, SetMemberAndArrayLengthFollowTheWrittenKey) {
   }
 }
 
-// Invariant: InitArray stores elements in push order and sets length to their count, so [10, 20] traces length 2 and element 1 is 20, and an empty array traces length 0; a reversed element order would trace 10 for element 1.
+// Invariant: InitArray takes the value on top of the stack under the count as element 0, so pushing 20 then 10 with a count of 2 gives length 2, element 0 is 10 and element 1 is 20, and an empty array traces length 0; a push-order array would trace 20 for element 0.
 TEST(Avm1Interpreter, InitArrayLengthAndElementOrder) {
   const std::vector<TableRow> rows = {
-      {"two elements",
-       cat({push_int(10), push_int(20), push_int(2), rec(0x42, {}), rec(0x4C, {}),
-            push_text("length"), rec(0x4E, {}), rec(0x26, {}), rec(0x4C, {}), push_int(1),
-            rec(0x4E, {}), rec(0x26, {}), Bytes{0x00}}),
+      {"two elements, the top value is element 0",
+       cat({push_int(20), push_int(10), push_int(2), rec(0x42, {}), rec(0x4C, {}),
+            push_text("length"), rec(0x4E, {}), rec(0x26, {}), rec(0x4C, {}), push_int(0),
+            rec(0x4E, {}), rec(0x26, {}), rec(0x4C, {}), push_int(1), rec(0x4E, {}), rec(0x26, {}),
+            Bytes{0x00}}),
        Avm1RunStatus::Ok,
-       {"2", "20"}},
+       {"2", "10", "20"}},
       {"no elements",
        cat({push_int(0), rec(0x42, {}), push_text("length"), rec(0x4E, {}), rec(0x26, {}),
             Bytes{0x00}}),
@@ -182,7 +187,7 @@ TEST(Avm1Interpreter, MemberAndConstructorRefusalsTraceNothing) {
 TEST(Avm1Interpreter, DeleteReturnsWhetherSomethingWasRemoved) {
   const std::vector<TableRow> rows = {
       {"a property and a variable are removed once",
-       cat({push_int(1), push_text("k"), push_int(1), rec(0x43, {}), rec(0x4C, {}),
+       cat({push_text("k"), push_int(1), push_int(1), rec(0x43, {}), rec(0x4C, {}),
             push_text("k"), rec(0x3A, {}), rec(0x26, {}), rec(0x4C, {}), push_text("k"),
             rec(0x3A, {}), rec(0x26, {}), push_text("v"), push_int(5), rec(0x1D, {}),
             push_text("v"), rec(0x3B, {}), rec(0x26, {}), push_text("v"), rec(0x3B, {}),
@@ -246,6 +251,29 @@ TEST(Avm1Interpreter, ObjectsConvertToTheObjectTextAndCompareByIdentity) {
     EXPECT_EQ(result.status, row.status) << result.message;
     EXPECT_EQ(result.trace, row.trace);
   }
+}
+
+// Invariant: a chain of 100000 objects, each holding the one before it, must tear down without recursing once per link, so the run ends Ok after exactly 23 * 100000 + 10 steps and releasing the result cannot overflow the stack; a recursive ~Avm1Object crashes this test at teardown.
+TEST(Avm1Interpreter, DeepObjectChainTearsDownWithoutRecursion) {
+  constexpr std::uint32_t kDepth = 100000;
+  const Bytes init = cat({push_text("i"), push_int(0), rec(0x1D, {})});
+  const Bytes test =
+      cat({push_text("i"), rec(0x1C, {}), push_int(kDepth), rec(0x48, {}), rec(0x12, {})});
+  const Bytes body = cat({
+      push_int(0), push_text("Object"), rec(0x40, {}), rec(0x4C, {}), push_text("child"),
+      push_text("head"), rec(0x1C, {}), rec(0x4F, {}), push_text("head"), rec(0x4D, {}),
+      rec(0x1D, {}), push_text("i"), push_text("i"), rec(0x1C, {}), rec(0x50, {}), rec(0x1D, {}),
+  });
+  const Bytes exit_if = rec(0x9D, le16(static_cast<std::uint16_t>(body.size() + 5)));
+  const Bytes back_jump = rec(
+      0x99, le16(static_cast<std::uint16_t>(-static_cast<int>(test.size() + body.size() + 10))));
+  const Bytes input = cat({init, test, exit_if, body, back_jump, Bytes{0x00}});
+  const auto stream = decode(input);
+  ASSERT_TRUE(stream.ok()) << stream.message;
+  const auto result = fo4::avm1::execute_actions(stream, 3000000);
+  ASSERT_TRUE(result.ok()) << result.message;
+  EXPECT_EQ(result.steps, std::size_t{23} * kDepth + 10);
+  EXPECT_EQ(result.variables.at("i").number, static_cast<double>(kDepth));
 }
 
 }  // namespace

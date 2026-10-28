@@ -14,6 +14,8 @@ struct Avm1Object {
   bool is_array{false};
   std::vector<std::string> order;
   std::map<std::string, Avm1Data> properties;
+
+  ~Avm1Object();
 };
 
 namespace object_ops {

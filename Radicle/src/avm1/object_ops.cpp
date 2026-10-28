@@ -65,7 +65,8 @@ Avm1Data make_object(bool is_array) {
   Avm1Data data{.kind = Avm1DataKind::Object, .object = std::make_shared<Avm1Object>()};
   data.object->is_array = is_array;
   if (is_array) {
-    put(*data.object, "length", Avm1Data{.kind = Avm1DataKind::Number, .number = 0.0});
+    data.object->properties.emplace("length",
+                                    Avm1Data{.kind = Avm1DataKind::Number, .number = 0.0});
   }
   return data;
 }
@@ -87,6 +88,24 @@ Avm1RunStatus pop_count(Avm1State& state, std::size_t slots, std::size_t& count,
 }
 
 }  // namespace
+
+Avm1Object::~Avm1Object() {
+  std::vector<std::shared_ptr<Avm1Object>> pending;
+  const auto take_children = [&pending](Avm1Object& object) {
+    for (auto& entry : object.properties) {
+      std::shared_ptr<Avm1Object>& child = entry.second.object;
+      if (child && child.use_count() == 1) {
+        pending.push_back(std::move(child));
+      }
+    }
+  };
+  take_children(*this);
+  while (!pending.empty()) {
+    std::shared_ptr<Avm1Object> node = std::move(pending.back());
+    pending.pop_back();
+    take_children(*node);
+  }
+}
 
 namespace object_ops {
 
@@ -115,9 +134,10 @@ Avm1RunStatus init_array(Avm1State& state, std::string& message) {
     return status;
   }
   Avm1Data array = make_object(true);
-  const std::size_t first = state.stack.size() - count;
+  const std::size_t top = state.stack.size();
+  const std::size_t first = top - count;
   for (std::size_t index = 0; index < count; ++index) {
-    put(*array.object, std::to_string(index), std::move(state.stack[first + index]));
+    put(*array.object, std::to_string(index), std::move(state.stack[top - 1 - index]));
   }
   state.stack.resize(first);
   state.stack.push_back(std::move(array));
@@ -133,9 +153,9 @@ Avm1RunStatus init_object(Avm1State& state, std::string& message) {
   Avm1Data object = make_object(false);
   const std::size_t first = state.stack.size() - 2 * count;
   for (std::size_t index = 0; index < count; ++index) {
-    const std::size_t value = first + 2 * index;
-    put(*object.object, to_text(state.stack[value + 1], state.swf_version),
-        std::move(state.stack[value]));
+    const std::size_t name = first + 2 * index;
+    put(*object.object, to_text(state.stack[name], state.swf_version),
+        std::move(state.stack[name + 1]));
   }
   state.stack.resize(first);
   state.stack.push_back(std::move(object));
