@@ -116,10 +116,8 @@ inline std::vector<std::byte> nifFile(const std::vector<FixtureBlock>& blocks,
         putUint(out, block.type.size(), 4);
         putText(out, block.type);
     }
-    for (std::size_t index = 0; index < blocks.size(); ++index) {
-        putUint(out, index, 2);
-        putUint(out, blocks[index].data.size(), 4);
-    }
+    for (std::size_t index = 0; index < blocks.size(); ++index) putUint(out, index, 2);
+    for (const auto& block : blocks) putUint(out, block.data.size(), 4);
     putUint(out, strings.size(), 4);
     putUint(out, 0, 4);
     for (const auto& text : strings) {
