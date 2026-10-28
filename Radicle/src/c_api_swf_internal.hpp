@@ -5,6 +5,7 @@
 #include "fo4/c_api_swf.h"
 #include "fo4/swf/swf.hpp"
 #include "fo4/swf/swf_characters.hpp"
+#include "fo4/swf/swf_history.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -82,6 +83,10 @@ struct radicle_swf {
   std::vector<radicle_swf_detail::abc_view> abcs;
   mutable std::vector<radicle_swf_detail::morph_frame> morph_frames;
   mutable radicle_swf_detail::character_cache characters;
+};
+
+struct radicle_swf_history {
+  fo4::swf::SwfEditHistory history;
 };
 
 namespace radicle_swf_detail {

@@ -114,6 +114,13 @@ Add `--gtest_output=xml:<dir>\<gate>.xml` to keep `RecordProperty` values. Each 
 - Pass: first and second hash vectors match, and every hash is nonzero (lines 199-209).
 - Skip: `the program movie needs a runtime feature that is still missing: <radicle_last_error>` (lines 195-198). A skip here is a missing runtime feature, not a pass.
 
+### 9. Every shape exports to well-formed SVG
+
+- Test: `SwfRealData.ExportsEveryShapeToWellFormedSvg` (`Radicle/tests/test_swf_real.cpp`, `check_svg_movie`).
+- Env: `FO4_DATA_DIR`. Reads only `Fallout4 - Interface.ba2`; loose files and DLC archives are not scanned. Skips without it.
+- Pass: `svg_shapes > 0` and `svg_failures == 0`. Each `shape_to_svg` output has balanced tags and no `nan` or `inf` text.
+- Proves: every DefineShape in the Interface archive exports to a balanced, finite SVG document. It does not prove the SVG draws like the game.
+
 ## What to record
 
 - The gtest summary lines: `[  PASSED  ]`, `[  FAILED  ]` and `[  SKIPPED ]`. Standard gtest output; the vendored gtest version is UNVERIFIED.

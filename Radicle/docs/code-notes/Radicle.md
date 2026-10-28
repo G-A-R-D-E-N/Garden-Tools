@@ -7506,5 +7506,83 @@ AS3 `blendMode` reads and writes through `Radicle/src/avm2/display.cpp:blend_mod
 Not applied: filter rendering, morph tessellation (the ratio is stored but does not change any drawn shape), and bitmap caching. Placed filters are not converted into `flash.filters` objects, so an AS3 read of `filters` does not show them and `filter_count` still counts only the AS3 array.
 
 Tests: `Radicle/tests/test_avm2_swf_runtime.cpp:MoveWithoutStateFlagsKeepsRatioBlendVisibleAndCache`, `MoveWithStateFlagsOverwritesRatioBlendVisibleAndCache`, `NonMovePlacementOverAnObjectResetsItsState`, `PlacedFilterListFollowsItsFlagOnModify` and `BlendModeAndVisibleReadAndWriteThroughTheDisplayState`. `Radicle/tests/test_avm2_snapshot.cpp:HiddenPlacementStaysInTheSnapshotFlagged` and `PlacedRatioFiltersAndCacheChangeTheSnapshotHash`. `Radicle/tests/test_avm2_display_snapshot.cpp:AChangedBlendVisibleOrRatioChangesTheHash`.
+ABI 78 to 79 adds the SWF edit verbs declared in `Radicle/include/fo4/c_api_swf_verbs.h` and implemented in `Radicle/src/c_api_swf_verbs.cpp`. The pin is now `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsSeventyNine`. `Radicle/bindings/csharp/tools/generate_interop.py:HEADERS` lists the header, so `Radicle/bindings/csharp/Radicle.Interop/RadicleNative.g.cs` regenerates the DllImports and structs. The managed side is `Radicle/bindings/csharp/Radicle.Interop/SwfVerbs.cs:SwfVerbs`, which reaches the handle through `Radicle/bindings/csharp/Radicle.Interop/SwfEditing.cs:SwfEditHistory.UseForVerbs`.
+
+Every verb runs `Radicle/src/c_api_swf_verbs.cpp:commit_edit`. It edits a copy of the file, derives a top-level tag plan with `Radicle/src/c_api_swf_verbs.cpp:plan_between`, and sends that plan through `SwfEditHistory::apply`. Undo, redo and the revision therefore follow the existing history rules, and a refused edit moves nothing. `plan_between` is positional. Equal tag counts give one payload replacement per changed index. Unequal counts keep the common prefix and suffix, remove the middle of the old list, and insert the new middle before the old suffix. This relies on replay being deterministic, so the same plan on the same state gives the same file.
+
+`radicle_swf_frame_label_rows` and `radicle_swf_placement_list_json` take a timeline id. Id 0 is the root timeline and any other id is the DefineSprite that owns it. `radicle_swf_placement_list_json` lists top-level placements of that timeline only, with the tag index, depth, character id, matrix and filters.
+
+`radicle_swf_reassign_instance_depth` and `radicle_swf_insert_instance_transform_keyframe` are root-timeline only, because the C++ `reassign_instance_depth` and `insert_instance_transform_keyframe` refuse sprite-internal instances. `radicle_swf_apply_instance_transforms` does reach sprite-internal instances, through `root_frame` and `instance_id`. Edit text is addressed by top-level tag index, so a DefineEditText inside a sprite is not reachable.
+
+The set-placement-depth verb was skipped. The C++ offers only `replace_placement_depth`, a body splice with no collision or mask proof, so `radicle_swf_reassign_instance_depth` is the proven depth edit.
 
 Not built or run locally. CI is the first compile and run.
+
+## Radicle/src/avm1/decode.cpp:Decoder::record
+
+A record with a code of 0x80 or higher has a u16 Length that covers only the fields in its own header. For DefineFunction (0x9B), DefineFunction2 (0x8E), With (0x94) and Try (0x8F), the body is not inside the Length. The body follows as separate records in the same stream, sized by `body_size`, `try_size`, `catch_size` and `finally_size`. `Decoder::body` checks each body against its block before it decodes it. The probe ran read-only over the three shipped GFx movies (RaceSex_menu.gfx, TutorialMenu.gfx, SafeZone.gfx). The header-only layout parsed all 148 DoAction and DoInitAction payloads (82 and 66). The body-inclusive layout failed 42 of them. The probe did not cover With, Try, GetURL, GotoFrame2 or Call, so their layouts come from the SWF spec, not from measurement.
+
+A record with a code below 0x80 is one byte and has no Length, so `Decoder::record` sets its length to 1 and `unknown` from `action_mnemonic`. An unknown code of 0x80 or higher keeps its declared bytes in `Avm1Raw` (`Decoder::payload` default case) and sets `unknown`. The code table covers every code of 0x80 or higher that has a payload case, so a known opcode is never flagged unknown.
+
+## Radicle/src/avm1/decode.cpp:Decoder::push_values
+
+The Push value widths were checked against the probe, and every value type parsed at the expected width. Double is stored as two little-endian u32 words, high word first, then low word. That word order is the SWF spec reading and has not been checked against a decoded value. A Boolean byte other than 0 or 1 is refused with BadPushValue at the type byte, because the encoder writes only 0 or 1 and an accepted byte would break the exact re-encode.
+
+## Radicle/src/avm1/decode.cpp:Decoder::resolve_branches
+
+A Jump (0x99) or If (0x9D) target is the end of its own record plus the signed offset. A target outside 0 to the stream size is refused with BranchOutOfRange at the branch offset. A target inside a record is refused with BranchNotRecord, because a listing label must name a record start. The stream end is a valid target, and it is the only boundary that is not a record start.
+
+## Radicle/src/avm1/decode.cpp:Decoder::run
+
+Bytes after the first End record are kept in `Avm1Stream::trailing` and written back by `encode_actions`, so the re-encode returns every input byte. The disassembly prints a `trailing N bytes` line for them. Nothing is decoded from the trailing bytes.
+
+## Radicle/include/fo4/avm1/avm1.hpp:decode_actions
+
+Typed payloads cover the record codes listed in the payload switch of `Radicle/src/avm1/decode.cpp:Decoder::payload`. Those are Frame, GetURL, the one-byte records, ConstantPool, WaitForFrame, the two text records, DefineFunction and DefineFunction2, Try, With, Push, Jump and If, Call (no payload) and GotoFrame2. Every other record of 0x80 or higher, and every unknown code below 0x80, is raw-preserved in `Avm1Raw` or as a byte. A failed decode clears `actions`. The status and offset are still set, so the caller can report the refusal.
+
+## Radicle/src/avm1/decode.cpp:Decoder::body
+
+Each nested body recurses through `block`, `record` and `body`. An unbounded chain of With records, at 5 bytes per level, could overflow a 1 MB stack. `kMaxBodyDepth` is 64, and the 65th nested body is refused with `TooDeep` at the offset where its body would start. `depth_` is incremented around the `block` call and decremented on the way back. Every return path in `block` returns a bool, so the counter is restored on success and on failure. The limit does not depend on the byte count, so it bounds the stack for any input size.
+
+The limit of 64 is a guess. The three shipped GFx movies were not measured for their maximum body depth, so a real file could in principle exceed it. Raise the constant if a real movie is refused.
+
+## Radicle/src/avm1/decode.cpp:Decoder::payload
+
+A ConstantPool count is checked against the bytes left in its record before `resize`. Each string needs at least one NUL byte, so a count larger than the bytes left cannot decode. `Decoder::function_header` does the same for the parameter count, which needs at least one byte per parameter. Without the check, a 65,535-string count allocates a large vector before the first string fails.
+
+## Radicle/src/avm1/disassembly.cpp:quote
+
+Quoted text escapes a quote and a backslash with a backslash. Control bytes below 0x20, and 0x7F, print as `\xNN`. This keeps one listing line on one line, because a raw newline in a Text value would otherwise split it.
+
+## Radicle/src/avm1/encode.cpp:encode_actions
+
+Re-encode writes each payload in the layout the decoder reads, and it writes Length from the payload size. It does not write a record's offset, and it does not rebuild branch offsets from `Avm1Branch::target`. Each branch keeps the offset it was decoded with.
+
+Unverified in this change: the build, the unit tests, and the runner case. The runner case `Radicle/tests/test_swf_real.cpp:InterfaceGfxAvm1StreamsDecodeAndReencodeByteIdentically` depends on FO4_DATA_DIR and skips without it. Call's zero-length layout and the With, Try, GetURL and GotoFrame2 layouts are unmeasured.
+
+Not built or run locally. CI is the first compile and run.
+## Radicle/src/swf/swf_svg.cpp:shape_to_svg (SWF shape to SVG)
+
+Fill rule is `nonzero`. `fill_edges` gives every edge its fill on the left: fill0 edges keep their direction and fill1 edges are reversed. With every region's boundary directed the same way, the winding number is positive inside a filled region and zero outside, so nonzero paints the union of the regions of one fill. Evenodd would cut holes where two regions of the same fill overlap, which the SWF fill model allows.
+
+Edge reversal: `Radicle/src/swf/swf_svg.cpp:reversed` swaps the start and end of an edge. A quadratic keeps its control point, so the reversed curve is the same curve.
+
+Loop chaining: `Radicle/src/swf/swf_svg.cpp:loops_text` joins the edges of one fill into closed loops by exact endpoint match and closes each with `Z`. Separate subpaths would each be closed by the fill with a chord, and those chords do not cancel when a boundary is split at a style change, so the fill would be wrong. A chain that never returns to its start is emitted open. `Radicle/src/swf/swf_svg.cpp:index_by_start` buckets the edges by start point in a `std::map` keyed on the twip `Point` (the ordering is the defaulted `<=>`), with each bucket in ascending edge index. `Radicle/src/swf/swf_svg.cpp:take_unused_from` takes the lowest unused edge in the bucket, marks it used and skips used entries lazily. That is the same edge the old linear scan picked, so the output is unchanged, and one fill chains in O(n log n).
+
+Style state: `Radicle/src/swf/swf_shape.cpp:read_records` sets `has_fill0`, `has_fill1` and `has_line` on each style change from SHAPE flag bits 0x02, 0x04 and 0x08. `Radicle/src/swf/swf_svg.cpp:trace_edges` then applies a flagged index even when it is 0, so an explicit 0 turns that side off for later edges, and leaves an unflagged index unchanged. `Radicle/src/swf/swf_write.cpp:write_style_change` writes a flag for the same condition, so a decoded glyph re-encodes with the original flags. A nonzero index counts as present even without its flag, which keeps hand-built records and the C ABI (`Radicle/src/c_api_swf_art.cpp`, which has no presence fields) writing and tracing as before. The C ABI therefore cannot carry an explicit 0 across the boundary; that needs an ABI change and is not made here.
+
+Twip scaling: `Radicle/src/swf/swf_svg.cpp:pixels` divides twips by 20. `Radicle/src/swf/swf_svg.cpp:number` prints fixed notation with six decimals through `std::to_chars` (`std::chars_format::fixed`, precision 6), then trims trailing zeros. `to_chars` does not read the C locale, so a comma-decimal locale cannot change the output. Its 32-byte buffer holds every value (int32 fixed-point or twips divided by 20, at most 26 characters). The integer hex colour in `hex_color` still uses `snprintf`; `%x` is not locale-dependent. Gradient matrices: scale and skew are 16.16 fixed point (divided by 65536), and the translation is in twips (divided by 20). `Radicle/src/swf/swf_svg.cpp:matrix_text` maps SWF `x' = ScaleX*x + RotateSkew1*y + TranslateX`, `y' = RotateSkew0*x + ScaleY*y + TranslateY` onto SVG `matrix(a b c d e f)` with `a = ScaleX`, `b = RotateSkew0`, `c = RotateSkew1`, `d = ScaleY`. This matches the composition in `Radicle/src/swf/swf_timeline.cpp`.
+
+Gradient extent: `Radicle/src/swf/swf_svg.cpp:gradient_text` uses `kGradientHalfPixels` (819.2 px, which is 16384 twips) for the linear span and the radial radius, in `userSpaceOnUse`. The focal point is `fx = focal / 256 * 819.2` (`focal_text`). Spread: 0 pad, 1 reflect, 2 repeat (`spread_name`). Unverified against the SWF spec; the local SWF reference folder was not present.
+
+Bitmap-fill gap: fill types 0x40 to 0x43 export as the flat placeholder `#808080` (`kPlaceholderColor`). No image is decoded. A stroke whose LineStyle2 fill is a gradient or bitmap also uses the placeholder (`Radicle/src/swf/swf_svg.cpp:stroke_paint`). A solid stroke fill uses its colour.
+
+Caps and joins: `Radicle/src/swf/swf_svg.cpp:cap_name` reads the start cap from bits 15-14 of the LineStyle2 flags (0 round, 1 butt, 2 square). `join_name` reads the join from bits 13-12 (0 round, 1 bevel, 2 miter). The miter limit is 8.8 fixed point. SVG has one linecap, so the end cap (bits 1-0) and NoClose (bit 2) are ignored. A LineStyle1 has flags 0 and so exports round caps and joins. Width 0 (hairline) exports as 1 px in `stroke_attributes`. Unverified against the SWF spec bit order; the fixture in `Radicle/tests/swf_art_fixtures.hpp` (`define_shape_4_payload`) agrees with it.
+
+Paint order: `shape_to_svg` writes every fill path first, in fill-style index order (`fill_paths`), then every stroke path in line-style order (`stroke_paths`). Interpolation mode (linearRGB) is not applied.
+
+Closed strokes: `Radicle/src/swf/swf_svg.cpp:stroke_text` records the first point of each contiguous run and appends `Z` when the run's last edge ends on that point, so a closed outline gets a closed join at its start corner (`closing_text`). An open run is unchanged. Fill paths are not touched, since `loops_text` already closed each loop.
+
+Gradient ids: `Radicle/src/swf/swf_svg.cpp:gradient_text` keeps the `fill<n>` ids. Each `shape_to_svg` call is one `<svg>` document, so ids collide only when a caller inlines two exported shapes into one page. A unique prefix needs a per-document value, which is a signature change, so it is not made here.
+
+Tests: exact-string expectations in `Radicle/tests/test_swf_svg.cpp` (including `ThousandsOfCollinearEdgesChainIntoOneClosedLoop` for the chaining and `ClosedStrokeLoopEndsInZ` for the stroke close), and the real-data well-formedness case `SwfRealData.ExportsEveryShapeToWellFormedSvg` in `Radicle/tests/test_swf_real.cpp`. Not compiled or run on the development machine; CI is the first compile and run.

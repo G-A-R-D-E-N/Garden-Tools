@@ -234,6 +234,9 @@ struct SwfShapeRecord {
   std::uint16_t fill0{0};
   std::uint16_t fill1{0};
   std::uint16_t line{0};
+  bool has_fill0{false};
+  bool has_fill1{false};
+  bool has_line{false};
 };
 
 struct SwfShape {
