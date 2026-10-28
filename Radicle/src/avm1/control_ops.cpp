@@ -48,7 +48,7 @@ void push_names(Avm1State& state, const Avm1Data& object) {
   if (object.kind != Avm1DataKind::Object) {
     return;
   }
-  for (auto key = object.object->order.rbegin(); key != object.object->order.rend(); ++key) {
+  for (auto key = object.object->order.begin(); key != object.object->order.end(); ++key) {
     state.stack.push_back(Avm1Data{.kind = Avm1DataKind::String, .text = *key});
   }
 }
@@ -93,7 +93,7 @@ Avm1RunStatus instance_of_op(Avm1Run& run, std::string& message) {
 Avm1RunStatus cast_op(Avm1Run& run, std::string& message) {
   Avm1Data value;
   Avm1Data constructor;
-  if (const Avm1RunStatus status = pop_pair(run.state, value, constructor, message);
+  if (const Avm1RunStatus status = pop_pair(run.state, constructor, value, message);
       status != Avm1RunStatus::Ok) {
     return status;
   }

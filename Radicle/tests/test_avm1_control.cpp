@@ -139,7 +139,7 @@ TEST(Avm1Control, ThrowIsCaughtByTheCatchNameAndTheRunContinues) {
   const auto result = execute_program(input);
   ASSERT_TRUE(result.ok()) << result.message;
   EXPECT_EQ(result.trace, (std::vector<std::string>{"5", "after"}));
-  EXPECT_EQ(result.steps, 8u);
+  EXPECT_EQ(result.steps, 9u);
   ASSERT_EQ(result.variables.count("e"), 1u);
   EXPECT_EQ(result.variables.at("e").kind, Avm1DataKind::Number);
   EXPECT_EQ(result.variables.at("e").number, 5.0);
@@ -191,7 +191,7 @@ TEST(Avm1Control, ThrowInACalleeIsCaughtByTheCallersTry) {
   const auto result = execute_program(input);
   ASSERT_TRUE(result.ok()) << result.message;
   EXPECT_EQ(result.trace, (std::vector<std::string>{"9"}));
-  EXPECT_EQ(result.steps, 9u);
+  EXPECT_EQ(result.steps, 10u);
 }
 
 // Invariant: a finally runs before an uncaught exception leaves its Try, and the exception keeps going; a finally that consumed the Throw would let the Trace after the Try run.
@@ -207,6 +207,23 @@ TEST(Avm1Control, FinallyRunsBeforeAnUncaughtThrowKeepsGoing) {
   EXPECT_EQ(result.status, Avm1RunStatus::Thrown);
   EXPECT_EQ(result.trace, (std::vector<std::string>{"f"}));
   EXPECT_EQ(result.opcode, 0x8F);
+}
+
+// Invariant: a Return inside a finally that follows a pending Throw ends the call with the returned value and drops the throw; a finally that resumed the throw would report Thrown and trace nothing from the call. The record after the Try keeps the Try off the block end, which is the known limit in Radicle.md.
+TEST(Avm1Control, ReturnInsideAFinallyDropsAPendingThrow) {
+  const Bytes try_body = cat({push({int_value(1)}), rec(0x2A, {})});
+  const Bytes finally_body = cat({push({int_value(5)}), rec(0x3E, {})});
+  const Bytes callee = cat({
+      try_record(2, str(""), try_body.size(), 0, finally_body.size()), try_body, finally_body,
+      push({int_value(99)}), rec(0x26, {}),
+  });
+  const Bytes input = cat({
+      define_v1("f", callee), push({int_value(0), text_value("f")}), rec(0x3D, {}), rec(0x26, {}),
+      Bytes{0x00},
+  });
+  const auto result = execute_program(input);
+  ASSERT_TRUE(result.ok()) << result.message;
+  EXPECT_EQ(result.trace, (std::vector<std::string>{"5"}));
 }
 
 // Invariant: a catch with CatchInRegister stores the thrown value in the function's register, not a variable; a catch that wrote a global would leave the register undefined and trace it.
@@ -284,22 +301,45 @@ TEST(Avm1Control, WithSkipsItsBodyForAValueThatIsNotAnObject) {
   EXPECT_EQ(result.trace, (std::vector<std::string>{"after"}));
 }
 
-// Invariant: Try and With share one nesting budget, so the 65th level is refused with ResourceLimit while the 64th still runs; an unbounded nest would overflow the native stack before the step limit.
+// Invariant: a Throw that leaves a With pops the With's scope, so a later read of x resolves to the global 10 and not to the object's x of 1; a scope left on the stack would trace 1.
+TEST(Avm1Control, ThrowThatLeavesAWithPopsItsScope) {
+  const Bytes with_body = cat({push({int_value(7)}), rec(0x2A, {})});
+  const Bytes try_body =
+      cat({push({text_value("o")}), rec(0x1C, {}), with_record(with_body), with_body});
+  const Bytes input = cat({
+      push({text_value("x"), int_value(10)}), rec(0x1D, {}),
+      push({text_value("o"), text_value("x"), int_value(1), int_value(1)}), rec(0x43, {}),
+      rec(0x1D, {}),
+      try_record(1, str("e"), try_body.size(), 0, 0), try_body,
+      push({text_value("x")}), rec(0x1C, {}), rec(0x26, {}), Bytes{0x00},
+  });
+  const auto result = execute_program(input);
+  ASSERT_TRUE(result.ok()) << result.message;
+  EXPECT_EQ(result.trace, (std::vector<std::string>{"10"}));
+}
+
+// Invariant: Try and With share one nesting budget, so 64 static levels run, and a recursion through Try is refused with ResourceLimit once the budget is spent; the 25th call hits 64 regions while the call depth is 25, under its cap of 64. An unbounded recursion would overflow the native stack before the step limit.
 TEST(Avm1Control, NestedTryAndWithStopAtSixtyFourLevels) {
   for (const bool is_with : {true, false}) {
     SCOPED_TRACE(is_with ? "With" : "Try");
     const auto within = execute_program(nested(is_with, 64));
     ASSERT_TRUE(within.ok()) << within.message;
     EXPECT_EQ(within.trace, (std::vector<std::string>{"7"}));
-    const auto past = execute_program(nested(is_with, 65));
-    EXPECT_EQ(past.status, Avm1RunStatus::ResourceLimit) << past.message;
-    EXPECT_NE(past.message.find("64 levels"), std::string::npos) << past.message;
-    EXPECT_TRUE(past.trace.empty());
   }
+  const Bytes call = cat({push({int_value(0), text_value("f")}), rec(0x3D, {})});
+  const Bytes callee = cat({try_record(1, str("e"), call.size(), 0, 0), call});
+  Bytes body = call;
+  for (std::size_t level = 0; level < 40; ++level) {
+    body = cat({try_record(2, str(""), 0, 0, body.size()), body});
+  }
+  const auto recursed = execute_program(cat({define_v1("f", callee), body, Bytes{0x00}}));
+  EXPECT_EQ(recursed.status, Avm1RunStatus::ResourceLimit) << recursed.message;
+  EXPECT_NE(recursed.message.find("Try and With nesting"), std::string::npos) << recursed.message;
+  EXPECT_TRUE(recursed.trace.empty());
 }
 
-// Invariant: Enumerate and Enumerate2 push the names in insertion order over a null floor, so popping traces a, b and then null; a missing variable or undefined yields only null, and a reversed order would trace b first.
-TEST(Avm1Control, EnumerateYieldsNamesInInsertionOrderOverANullFloor) {
+// Invariant: Enumerate and Enumerate2 push the names so the most recently added name pops first, over a null floor, so popping traces b, a and then null; a missing variable or undefined yields only null, and an insertion order would trace a first.
+TEST(Avm1Control, EnumerateYieldsTheMostRecentNameFirstOverANullFloor) {
   const Bytes object = cat({
       push({text_value("a"), int_value(1), text_value("b"), int_value(2)}),
       push({int_value(2)}), rec(0x43, {}),
@@ -307,10 +347,10 @@ TEST(Avm1Control, EnumerateYieldsNamesInInsertionOrderOverANullFloor) {
   const Bytes trace_three = cat({rec(0x26, {}), rec(0x26, {}), rec(0x26, {})});
   const Bytes set_o = cat({push({text_value("o")}), object, rec(0x1D, {})});
   const std::vector<std::pair<Bytes, std::vector<std::string>>> rows = {
-      {cat({object, rec(0x55, {}), trace_three, Bytes{0x00}}), {"a", "b", "null"}},
+      {cat({object, rec(0x55, {}), trace_three, Bytes{0x00}}), {"b", "a", "null"}},
       {cat({push({undefined_value()}), rec(0x55, {}), rec(0x26, {}), Bytes{0x00}}), {"null"}},
       {cat({set_o, push({text_value("o")}), rec(0x46, {}), trace_three, Bytes{0x00}}),
-       {"a", "b", "null"}},
+       {"b", "a", "null"}},
       {cat({push({text_value("missing")}), rec(0x46, {}), rec(0x26, {}), Bytes{0x00}}),
        {"null"}},
   };
@@ -341,9 +381,9 @@ TEST(Avm1Control, InstanceOfFollowsTheExtendsChain) {
 TEST(Avm1Control, CastOpKeepsAnInstanceAndNullsOtherObjects) {
   const Bytes input = cat({
       instance_prelude(),
-      push({text_value("i")}), rec(0x1C, {}), push({text_value("A")}), rec(0x1C, {}), rec(0x2B, {}),
+      push({text_value("A")}), rec(0x1C, {}), push({text_value("i")}), rec(0x1C, {}), rec(0x2B, {}),
       rec(0x44, {}), rec(0x26, {}),
-      push({int_value(0)}), rec(0x43, {}), push({text_value("A")}), rec(0x1C, {}), rec(0x2B, {}),
+      push({text_value("A")}), rec(0x1C, {}), push({int_value(0)}), rec(0x43, {}), rec(0x2B, {}),
       rec(0x44, {}), rec(0x26, {}), Bytes{0x00},
   });
   const auto result = execute_program(input);
