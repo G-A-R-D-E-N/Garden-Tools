@@ -276,6 +276,22 @@ public sealed unsafe partial class SwfFile : IDisposable
         return Call.TakeText(text, size);
     }
 
+    public byte[] BitmapPng(int flatTagIndex)
+    {
+        using var use = Use();
+        byte* bytes = null;
+        nuint size = 0;
+        Call.Check(RadicleNative.SwfBitmapPng(use.Pointer, (nuint)flatTagIndex, &bytes, &size));
+        try
+        {
+            return Utf8.Raw((IntPtr)bytes, size);
+        }
+        finally
+        {
+            if (bytes != null) RadicleNative.FreeBytes(bytes);
+        }
+    }
+
     public string AbcText(int abc)
     {
         using var use = Use();
@@ -298,6 +314,22 @@ public sealed unsafe partial class SwfFile : IDisposable
         byte* text = null;
         nuint size = 0;
         Call.Check(RadicleNative.SwfShapeSvg(use.Pointer, characterId, &text, &size));
+        try
+        {
+            return System.Text.Encoding.UTF8.GetString(Utf8.Raw((IntPtr)text, size));
+        }
+        finally
+        {
+            if (text != null) RadicleNative.FreeBytes(text);
+        }
+    }
+
+    public string FrameSvg(uint frame)
+    {
+        using var use = Use();
+        byte* text = null;
+        nuint size = 0;
+        Call.Check(RadicleNative.SwfFrameSvg(use.Pointer, frame, &text, &size));
         try
         {
             return System.Text.Encoding.UTF8.GetString(Utf8.Raw((IntPtr)text, size));

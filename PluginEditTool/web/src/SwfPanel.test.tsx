@@ -365,4 +365,30 @@ describe('SwfPanel', () => {
     expect(screen.getByAltText('Shape preview').getAttribute('src'))
       .toBe(`data:image/svg+xml;utf8,${encodeURIComponent(shape)}`);
   });
+
+  it('previews a picked bitmap as a PNG data URL by its flat tag index and shows a refused BitmapPng in the error bar', async () => {
+    // Invariant: a bitmap pick sends its tagIndex (not its character id) to BitmapPng and renders the reply as a base64 PNG; a refusal shows its message in the error bar and clears the previous preview; detects a bitmap read by character id, a PNG served with the wrong MIME type, and a refusal swallowed into a stale image.
+    const png = 'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg==';
+    const swf = stubBridge({
+      Characters: vi.fn(async () => JSON.stringify({ characters: [
+        { id: 30, kind: 'Bitmap', tagIndex: 4, name: '', imported: '' },
+        { id: 31, kind: 'Bitmap', tagIndex: 5, name: '', imported: '' },
+      ] })),
+      BitmapPng: vi.fn()
+        .mockImplementationOnce(async () => JSON.stringify({ png }))
+        .mockImplementationOnce(async () => JSON.stringify({ error: 'the tag carries no decoded bitmap' })),
+    });
+    render(<SwfPanel onClose={() => {}} />);
+    fireEvent.change(screen.getByPlaceholderText('Interface/Test.swf'), { target: { value: 'Interface/Test.swf' } });
+    await act(async () => { fireEvent.click(screen.getByText('Open')); });
+    fireEvent.click(await screen.findByText(/Bitmap #30/));
+    expect((await screen.findByAltText('Bitmap preview')).getAttribute('src'))
+      .toBe(`data:image/png;base64,${png}`);
+    expect(swf.BitmapPng).toHaveBeenNthCalledWith(1, 4);
+
+    fireEvent.click(screen.getByText(/Bitmap #31/));
+    expect(await screen.findByText('the tag carries no decoded bitmap')).toBeTruthy();
+    expect(screen.queryByAltText('Bitmap preview')).toBeNull();
+    expect(swf.BitmapPng).toHaveBeenNthCalledWith(2, 5);
+  });
 });

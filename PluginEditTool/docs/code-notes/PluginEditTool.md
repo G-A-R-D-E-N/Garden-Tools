@@ -284,3 +284,25 @@ Regression: the inspect text read from the wrong movie, or its `## <asset path>`
 ## FO4RecordEditor.Core.Tests/SwfDocumentServiceTests.cs:SwfDocumentServiceTests.Avm1DisassemblesADoActionTagAndRefusesANonActionTag
 
 Regression: a DoAction listed from a wrong flat index or payload offset (the expected text is exact), a non-action tag (a FrameLabel, code 43) decoded as bytecode instead of refused by `SwfDocumentService.cs:SwfDocument.Avm1Disassemble`, or a refused disassembly bumping `Revision`.
+
+## FO4RecordEditor/Services/SwfInterop.cs:SwfInterop.BitmapPng (bitmap preview RPC)
+
+`SwfInterop.BitmapPng(tagIndex)` calls `Document().Movie.BitmapPng`, which is the Radicle `radicle_swf_bitmap_png` wrapper (`Radicle/bindings/csharp/Radicle.Interop/SwfFile.cs:SwfFile.BitmapPng`), and replies `{png}` with the PNG bytes as base64. The index is the flat tag index that `Characters` reports as `tagIndex` for a bitmap, so the RPC needs no range check of its own: a negative index becomes an out-of-range `nuint` and Radicle refuses it as INVALID_ARGUMENT, and a non-bitmap tag is refused as NOT_FOUND. Both reach the panel as `{error, status}` through `Run`, the same shape as `ShapeSvg`. Radicle refuses a bitmap whose format is not 3 or 5, and a JPEG-defined character has no decoded bitmap, so the panel shows those as errors.
+
+## web/src/SwfPanel.tsx:SwfPanel.pickCharacter (bitmap preview selection)
+
+A `Bitmap` pick in `web/src/SwfPanel.tsx:SwfPanel.pickCharacter` sends `character.tagIndex` to `BitmapPng`, not `character.id`, because the Radicle export is keyed by the flat tag index. It shares the `shapeRequest` counter with the shape branch, so a late PNG reply cannot replace the preview of a newer pick, and every pick clears `bitmapPng` before it awaits. A refusal goes to the `swf-error` bar through `setError`, the same as a refused `ShapeSvg`. The image is an `<img alt="Bitmap preview">` whose `src` is `data:image/png;base64,` plus the reply; `web/src/SwfPanel.css` gives `.swf-bitmap` `max-width: 100%` and `image-rendering: pixelated` so small bitmaps scale up without smoothing.
+
+Tests: `web/src/SwfPanel.test.tsx:SwfPanel` picks two bitmap rows and asserts `BitmapPng` is called with tag 4 then tag 5, the PNG data URL is rendered for the first, and the refusal for the second shows its message with no image left over. Regression: a bitmap previewed from its character id, a PNG served under the wrong MIME type, or a refused export swallowed into a stale preview.
+
+## PluginEditTool/FO4RecordEditor.Core.Tests/SwfFixture.cs:SwfFixture.BitmapTag (opt-in lossless2 bitmap)
+
+`SwfFixture.Movie(withBitmap: true)` adds a DefineBitsLossless2 (36) character 20 at tag index 0: format 5, 2x2, zlib-compressed 16 zero bytes, built in `PluginEditTool/FO4RecordEditor.Core.Tests/SwfFixture.cs:SwfFixture.BitmapTag`. It is opt-in so the other document tests keep their character counts and flat indices.
+
+## PluginEditTool/FO4RecordEditor.Core.Tests/SwfDocumentServiceTests.cs:SwfDocumentServiceTests.ExportsABitmapCharacterAsAPngOfItsAuthoredSizeFromItsFlatTagIndex
+
+Regression: a PNG encoded from a different tag than the one `PluginEditTool/FO4RecordEditor.Core/Services/SwfDocumentService.cs:SwfDocument.Characters` reports, or encoded with the wrong width and height. `PluginEditTool/FO4RecordEditor.Core.Tests/SwfDocumentServiceTests.cs` reads the PNG signature and the IHDR width and height bytes (offsets 16 to 23) from `SwfDocument.Movie.BitmapPng`.
+
+## PluginEditTool/FO4RecordEditor.Tests/SwfInteropTests.cs:SwfInteropTests.BitmapPngRpcReturnsTheBase64PngForABitmapAndTheRefusalForANonBitmap
+
+Regression: a `png` field dropped or not base64 of the PNG bytes in `PluginEditTool/FO4RecordEditor/Services/SwfInterop.cs:SwfInterop.BitmapPng`, a bitmap exported from the character id instead of the `tagIndex` from `PluginEditTool/FO4RecordEditor/Services/SwfInterop.cs:SwfInterop.Characters`, or an edit-text tag exporting as a PNG instead of replying the error shape.

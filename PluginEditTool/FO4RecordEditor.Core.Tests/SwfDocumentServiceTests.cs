@@ -390,6 +390,17 @@ public class SwfDocumentServiceTests
     }
 
     [NativeFact]
+    public void ExportsABitmapCharacterAsAPngOfItsAuthoredSizeFromItsFlatTagIndex()
+    {
+        // Invariant: the PNG is encoded from the bitmap tag the Characters listing reports, with the authored 2x2 size in IHDR; detects a PNG encoded from a different tag or with the wrong width and height.
+        using var document = SwfDocument.OpenBytes(SwfFixture.Movie(withBitmap: true));
+        var bitmap = document.Characters().Single(character => character.Kind == SwfCharacterKind.Bitmap);
+        var png = document.Movie.BitmapPng(bitmap.TagIndex);
+        Assert.Equal(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }, png[..8]);
+        Assert.Equal(new byte[] { 0, 0, 0, 2, 0, 0, 0, 2 }, png[16..24]);
+    }
+
+    [NativeFact]
     public void SavingAResolvedAssetWithoutATargetRefuses()
     {
         using var document = SwfDocument.OpenResolved("Interface\\Test.swf", _ => SwfFixture.Movie());

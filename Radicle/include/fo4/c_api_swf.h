@@ -339,6 +339,9 @@ RADICLE_API radicle_status radicle_swf_jpeg_at(const radicle_swf* swf, size_t in
                                                radicle_swf_jpeg_info* out_jpeg);
 RADICLE_API radicle_status radicle_swf_jpeg_tables_at(const radicle_swf* swf, size_t index,
                                                       radicle_swf_jpeg_tables_info* out_tables);
+/* Invariant: index is a flat radicle_swf_tag_at index of a tag with a decoded bitmap that has a PNG export; *out_png is malloc'd, release with radicle_free_bytes. */
+RADICLE_API radicle_status radicle_swf_bitmap_png(const radicle_swf* swf, size_t index,
+                                                  uint8_t** out_png, size_t* out_size);
 
 /* ABC blocks; indexes must address what radicle_swf_abc_count reports. */
 RADICLE_API size_t radicle_swf_abc_count(const radicle_swf* swf);
@@ -558,6 +561,9 @@ RADICLE_API radicle_status radicle_swf_character_by_id(const radicle_swf* swf, u
 /* Must refuse a character that is not a decoded shape with NOT_FOUND. Returns malloc'd UTF-8 SVG text the caller must release with radicle_free_bytes; the buffer is NUL-terminated one byte past *out_size. */
 RADICLE_API radicle_status radicle_swf_shape_svg(const radicle_swf* swf, uint16_t character_id,
                                                  uint8_t** out_text, size_t* out_size);
+/* Must build the display list as radicle_swf_frames_open does and fail with PARSE_ERROR when it does not build. A frame past the root timeline is an empty stage, not a refusal. Returns malloc'd UTF-8 SVG text the caller must release with radicle_free_bytes; the buffer is NUL-terminated one byte past *out_size. */
+RADICLE_API radicle_status radicle_swf_frame_svg(const radicle_swf* swf, uint32_t frame,
+                                                 uint8_t** out_svg, size_t* out_size);
 
 typedef struct radicle_swf_history radicle_swf_history;
 

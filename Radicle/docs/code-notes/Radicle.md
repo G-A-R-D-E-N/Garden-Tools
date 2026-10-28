@@ -7771,3 +7771,33 @@ The expected base64 is `Radicle/tests/swf_art_fixtures.hpp:base64_text` applied 
 ## Radicle/tests/test_swf_display.cpp:SwfFrameSvg.BitmapFillPatternIsResolvedFromTheMoviesBitmapTags
 
 Drives the whole movie path (DefineBitsLossless2 tag 36 plus DefineShape3 tag 32 placed by PlaceObject2), so it fails if `frame_to_svg` stops passing the bitmap index down to `frame_body`.
+## Radicle/src/c_api_swf_display.cpp:radicle_swf_frame_svg
+
+The export builds its display list through `Radicle/src/c_api_swf_display.cpp:build_checked_display`, the helper `radicle_swf_frames_open` now also calls, so a movie whose display list does not build, or does not address its own tags, is refused with PARSE_ERROR by both exports. The SVG comes from `Radicle/src/swf/swf_frame_svg.cpp:frame_to_svg`; a frame past the root timeline draws an empty stage and is not refused. `frame_to_svg` never reads the flat tag indices, but the shared helper still runs them through the flat mapping so the two exports keep one validation. The ABI moved by one for this export (see the ABI 85 section at the tail); `Radicle/bindings/csharp/Radicle.Interop/RadicleNative.g.cs` was regenerated from `Radicle/include/fo4/c_api_swf.h`. Regression: a second display-list path that drifts from the frames export, or a frame past the root refused instead of returning the empty stage.
+
+## Radicle/src/c_api_swf_display.cpp:build_checked_display
+
+Extracted from the inline build in `radicle_swf_frames_open` with no behaviour change: build, refuse a non-ok status with the builder's message, then map the tag indices to flat positions. Regression: the SVG export validating a display list that the frames export would have refused, or the frames export losing its PARSE_ERROR refusal when the flat mapping fails.
+
+## Radicle/tests/test_c_api_swf_display.cpp:CApiSwfFrameSvg.ExportsTheRootFrameAsTheFrameToSvgDocument
+
+The fixture is a 1000-twip DefineShape3 filled #ff0000 and placed with an identity matrix on frame 0; the expected document is derived by hand (1000 twips is 50 px, identity prints `matrix(1 0 0 1 0 0)`) and must also equal `frame_to_svg` on the same bytes. The test also checks the NUL byte one past `*out_size`. Regression: the export diverging from `frame_to_svg` (a wrong display list or a shape lookup by the wrong id), or a missing terminator that a C caller reads as a string.
+
+## Radicle/tests/test_c_api_swf_display.cpp:CApiSwfFrameSvg.FrameBeyondTheRootTimelineIsAnEmptyStageNotARefusal
+
+Frame 3 on a one-frame movie must return OK with only the stage open and close tags. Regression: an out-of-range frame refused as INVALID_ARGUMENT, or a frame past the root timeline drawing the last frame's shapes.
+
+## Radicle/tests/test_c_api_swf_display.cpp:CApiSwfFrameSvg.RefusesNullArgumentsWithOutputsCleared
+
+Covers a null swf and each null out pointer, with the outputs preset to a sentinel and a size of 99. Regression: a null argument dereferenced (crash), or a refusal leaving the caller's old text pointer or size in place, so a later `radicle_free_bytes` frees a stale buffer.
+
+## Radicle/bindings/csharp/Radicle.Interop.Tests/SwfTests.cs:SwfTests.ExportsTheRootFrameAsSvgThroughTheManagedWrapper
+
+Exercises `Radicle/bindings/csharp/Radicle.Interop/SwfFile.cs:FrameSvg` on the same red square, built with the file's own `BitWriter` and `Rect` helpers. Regression: the managed wrapper losing its UTF-8 decode or its `FreeBytes` release, or the P/Invoke binding drifting from the header signature.
+## Radicle/src/c_api_swf_art.cpp:radicle_swf_bitmap_png (ABI 84, SWF bitmap PNG export)
+
+ABI 84 is 83 plus the one export `radicle_swf_bitmap_png`, which hands `fo4::swf::bitmap_to_png` through the C ABI for the decoded bitmap of the flat tag `radicle_swf_tag_at` indexes, the same index space `radicle_swf_bitmap_at` uses. The pin is `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsEightyFour`, and `Radicle/bindings/csharp/Radicle.Interop/RadicleNative.g.cs:CompiledAbiVersion` was regenerated with `generate_interop.py`; `Radicle/bindings/csharp/tests/abi_layout_probe.cpp` is unchanged because the export adds no struct layout. A tag with no decoded bitmap is `RADICLE_STATUS_NOT_FOUND`, matching `radicle_swf_bitmap_at`; a bitmap `bitmap_to_png` refuses (15-bit, or a geometry the packed stream no longer matches) is `RADICLE_STATUS_INVALID_ARGUMENT`, because the ABI has no unsupported-format status and the refusal is about the request, not a parse failure. The PNG is copied into an exact-size `malloc` buffer with no trailing NUL, unlike the text exports that go through `radicle_swf_detail::copy_text`, because the bytes are binary and `radicle_swf_write_bytes` uses the same exact-size shape. Every refusal clears both outputs and a NULL argument is `RADICLE_STATUS_INVALID_ARGUMENT`. The C# wrapper is `Radicle/bindings/csharp/Radicle.Interop/SwfFile.cs:SwfFile.BitmapPng`. Regression: a getter that returns bytes for a tag with no bitmap, an export that leaves a stale pointer on refusal, and a PNG that is not the one the C++ encoder produces for the same tag. Tests: `Radicle/tests/test_c_api_swf_display.cpp:CApiSwfBitmapPng.ExportsTheCppEncoderBytesForALossless2Bitmap`, `Radicle/tests/test_c_api_swf_display.cpp:CApiSwfBitmapPng.RefusesNonBitmapAndUnencodableTagsWithOutputsCleared`, `Radicle/bindings/csharp/Radicle.Interop.Tests/SwfTests.cs:SwfTests.ExportsTheLossless2BitmapAsPngAndRefusesANonBitmapTag`.
+
+## Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION (ABI 85, SWF frame SVG export)
+
+ABI 85 is 84 plus the one export `radicle_swf_frame_svg` from `Radicle/src/c_api_swf_display.cpp:radicle_swf_frame_svg`. The pin is `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsEightyFive`, and `Radicle/bindings/csharp/Radicle.Interop/RadicleNative.g.cs:CompiledAbiVersion` was regenerated with `generate_interop.py`. The lane was written against 83 and took 84 in parallel with `radicle_swf_bitmap_png`; the merge renumbered it to 85.
