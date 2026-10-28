@@ -8100,3 +8100,22 @@ Detects a hasnext loop that stops after the first key of a two-key object. The c
 ## Radicle/tests/test_avm2_more_ops.cpp:NewOpcodesRefuseAnEmptyStackWithStackUnderflow
 
 Detects a new opcode that returns a value from an empty stack instead of refusing with StackUnderflow. Covers sxi1, sxi8, sxi16, coerce_b, coerce_i, coerce_d, coerce_u, coerce_o and hasnext. Before this change these opcodes returned NotImplemented.
+## Radicle/src/swf/swf_frame_svg.cpp:text_paths (static text rows)
+
+`Radicle/src/swf/swf_frame_svg.cpp:text_paths` draws a DefineText or DefineText2 row as glyph paths. Font, colour, height and the x and y position carry from one TEXTRECORD to the next, and a field a record omits keeps its previous value. Each glyph is `shape_fill_paths_to_svg` over its font's glyph records with one solid fill in the record colour. Its transform is `compose_transform(transform_from_matrix(text.matrix), glyph)`, where the glyph scale is height over 1024 for DefineFont and DefineFont2 and over 20480 for DefineFont3. The choice follows `define_font3`, not `units_per_em`, because the decoder only sets `units_per_em` for DefineFont3 when the font has a layout. The x cursor moves by each glyph's advance even when that glyph draws nothing. The whole row sits under its `world_transform` and takes the same colour filter as a shape row (`Radicle/src/swf/swf_frame_svg.cpp:frame_body`).
+
+Draws nothing for: a glyph index outside the font's glyph shapes, a record with no known font, no height yet, a font with no glyph shapes, and a text row that carries a clip depth. A clip-depth text row neither draws nor masks, because `frame_body` only opens masks for shapes and sprites. A record that never sets a colour draws black, which is a guess at Flash's default and is unverified.
+
+Out of scope: DefineButton rows, dynamic EditText, text used as a mask, and text inside a clip sprite, because `Radicle/src/swf/swf_frame_svg.cpp:sprite_clip_to_svg` only collects shapes and morphs.
+
+## Radicle/include/fo4/swf/swf.hpp:SwfText (text MATRIX exposed)
+
+`Radicle/include/fo4/swf/swf.hpp:SwfText` gained `matrix`, which `Radicle/src/swf/swf_text.cpp:decode_text_tag` now fills in place of a local it used to drop. The MATRIX was already parsed by `read_matrix`; this only keeps it. No new parsing was added.
+
+## Radicle/tests/test_swf_svg.cpp:SwfFrameSvg static text tests
+
+- `Radicle/tests/test_swf_svg.cpp:SwfFrameSvg.StaticTextDrawsEachGlyphAtItsCursorInTheRecordColour` detects text rows dropped from the frame, a cursor that ignores advances or resets wrongly, a missing glyph index that stops the row instead of being skipped, and record colour, y offset or height that does not carry to the next record. It also pins DefineFont2 scale: a 1024-unit square at height 1024 is 51.2 px.
+- `Radicle/tests/test_swf_svg.cpp:SwfFrameSvg.DefineFont3GlyphsScaleFromTheTwentyThousandUnitEm` detects a DefineFont3 glyph scaled on the DefineFont2 unit em, which would draw it 20 times too large.
+- `Radicle/tests/test_swf_svg.cpp:SwfFrameSvg.StaticTextAppliesItsMatrixAndSkipsFontsWithoutGlyphShapes` detects a DefineText MATRIX that is ignored, which would leave the glyph at `matrix(1 0 0 1 0 0)`, and a font with no glyph shapes that emits an empty group or indexes an empty glyph list.
+
+Expected strings were derived by hand from `Radicle/src/swf/swf_svg.cpp:loops_text` and `Radicle/src/swf/swf_svg.cpp:fill_paths`. Nothing was compiled or run on the development machine for this change, so CI must confirm them.

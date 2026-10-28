@@ -190,26 +190,47 @@ const fo4::swf::SwfFrameInstance* row_at(const fo4::swf::SwfDisplayList& display
   return nullptr;
 }
 
-std::string frame_svg(std::vector<fo4::swf::SwfShape> shapes,
-                      std::vector<fo4::swf::SwfFrameInstance> rows,
-                      std::optional<fo4::swf::SwfMorphShape> morph = {}) {
+std::string tags_frame_svg(std::vector<fo4::swf::SwfTag> tags,
+                           std::vector<fo4::swf::SwfFrameInstance> rows) {
   fo4::swf::SwfFile file;
   file.header.frame_size.x_max = 11000;
   file.header.frame_size.y_max = 8000;
-  for (auto& shape : shapes) {
-    fo4::swf::SwfTag tag;
-    tag.shape = std::move(shape);
-    file.tags.push_back(std::move(tag));
-  }
-  if (morph) {
-    fo4::swf::SwfTag tag;
-    tag.morph_shape = std::move(morph);
-    file.tags.push_back(std::move(tag));
-  }
+  file.tags = std::move(tags);
   fo4::swf::SwfDisplayList display;
   display.timelines.emplace_back();
   display.timelines.front().frames.push_back(fo4::swf::SwfDisplayFrame{0, std::move(rows)});
   return fo4::swf::frame_to_svg(file, display, 0);
+}
+
+std::string frame_svg(std::vector<fo4::swf::SwfShape> shapes,
+                      std::vector<fo4::swf::SwfFrameInstance> rows,
+                      std::optional<fo4::swf::SwfMorphShape> morph = {}) {
+  std::vector<fo4::swf::SwfTag> tags;
+  for (auto& shape : shapes) {
+    fo4::swf::SwfTag tag;
+    tag.shape = std::move(shape);
+    tags.push_back(std::move(tag));
+  }
+  if (morph) {
+    fo4::swf::SwfTag tag;
+    tag.morph_shape = std::move(morph);
+    tags.push_back(std::move(tag));
+  }
+  return tags_frame_svg(std::move(tags), std::move(rows));
+}
+
+fo4::swf::SwfTag square_glyph_font_tag(std::uint16_t font_id, std::int32_t side,
+                                       bool define_font3) {
+  fo4::swf::SwfFont font;
+  font.font_id = font_id;
+  font.define_font3 = define_font3;
+  fo4::swf::SwfGlyph glyph;
+  glyph.records = {move_to(0, 0),    style_change(1, 0, 0), line_by(side, 0),
+                   line_by(0, side), line_by(-side, 0),     line_by(0, -side)};
+  font.glyphs.push_back(glyph);
+  fo4::swf::SwfTag tag;
+  tag.font = font;
+  return tag;
 }
 
 }  // namespace
@@ -607,4 +628,96 @@ TEST(SwfFrameSvg, MorphRowAtFullRatioDrawsTheEndShape) {
       "</g>\n"
       "</svg>\n";
   EXPECT_EQ(frame_svg({}, {row}, red_to_blue_square()), expected);
+}
+
+TEST(SwfFrameSvg, StaticTextDrawsEachGlyphAtItsCursorInTheRecordColour) {
+  fo4::swf::SwfTextRecord first;
+  first.font_id = 7;
+  first.color = 0xFFFF0000u;
+  first.x_offset = 200;
+  first.y_offset = 400;
+  first.height = 1024;
+  first.glyphs = {{0, 1280}, {9, 640}, {0, 0}};
+  fo4::swf::SwfTextRecord second;
+  second.color = 0xFF0000FFu;
+  second.y_offset = 800;
+  second.glyphs = {{0, 0}};
+  fo4::swf::SwfTag text_tag;
+  text_tag.text = fo4::swf::SwfText{};
+  text_tag.text->character_id = 9;
+  text_tag.text->records = {first, second};
+  auto row = frame_row(1, 9, 0);
+  row.world_transform.translate_x = 5;
+  row.world_transform.translate_y = 5;
+  const std::string expected =
+      kStage +
+      "<g transform=\"matrix(1 0 0 1 5 5)\">\n"
+      "<path d=\"M0 0L51.2 0L51.2 51.2L0 51.2L0 0Z\" transform=\"matrix(1 0 0 1 10 20)\" "
+      "fill=\"#ff0000\" fill-opacity=\"1\" fill-rule=\"nonzero\"/>\n"
+      "<path d=\"M0 0L51.2 0L51.2 51.2L0 51.2L0 0Z\" transform=\"matrix(1 0 0 1 106 20)\" "
+      "fill=\"#ff0000\" fill-opacity=\"1\" fill-rule=\"nonzero\"/>\n"
+      "<path d=\"M0 0L51.2 0L51.2 51.2L0 51.2L0 0Z\" transform=\"matrix(1 0 0 1 106 40)\" "
+      "fill=\"#0000ff\" fill-opacity=\"1\" fill-rule=\"nonzero\"/>\n"
+      "</g>\n"
+      "</svg>\n";
+  EXPECT_EQ(tags_frame_svg({square_glyph_font_tag(7, 1024, false), text_tag}, {row}), expected);
+}
+
+TEST(SwfFrameSvg, DefineFont3GlyphsScaleFromTheTwentyThousandUnitEm) {
+  fo4::swf::SwfTextRecord record;
+  record.font_id = 8;
+  record.color = 0xFF000000u;
+  record.height = 1024;
+  record.glyphs = {{0, 0}};
+  fo4::swf::SwfTag text_tag;
+  text_tag.text = fo4::swf::SwfText{};
+  text_tag.text->character_id = 10;
+  text_tag.text->records = {record};
+  const std::string expected =
+      kStage +
+      "<g transform=\"matrix(1 0 0 1 0 0)\">\n"
+      "<path d=\"M0 0L1024 0L1024 1024L0 1024L0 0Z\" transform=\"matrix(0.05 0 0 0.05 0 0)\" "
+      "fill=\"#000000\" fill-opacity=\"1\" fill-rule=\"nonzero\"/>\n"
+      "</g>\n"
+      "</svg>\n";
+  EXPECT_EQ(tags_frame_svg({square_glyph_font_tag(8, 20480, true), text_tag},
+                           {frame_row(1, 10, 0)}),
+            expected);
+}
+
+TEST(SwfFrameSvg, StaticTextAppliesItsMatrixAndSkipsFontsWithoutGlyphShapes) {
+  fo4::swf::SwfTextRecord record;
+  record.font_id = 7;
+  record.color = 0xFFFF0000u;
+  record.height = 1024;
+  record.glyphs = {{0, 0}};
+  fo4::swf::SwfTag text_tag;
+  text_tag.text = fo4::swf::SwfText{};
+  text_tag.text->character_id = 11;
+  text_tag.text->matrix.scale_x = 131072;
+  text_tag.text->matrix.scale_y = 131072;
+  text_tag.text->matrix.translate_x = 400;
+  text_tag.text->records = {record};
+  fo4::swf::SwfTextRecord empty_record;
+  empty_record.font_id = 13;
+  empty_record.height = 1024;
+  empty_record.glyphs = {{0, 0}};
+  fo4::swf::SwfTag empty_text_tag;
+  empty_text_tag.text = fo4::swf::SwfText{};
+  empty_text_tag.text->character_id = 12;
+  empty_text_tag.text->records = {empty_record};
+  fo4::swf::SwfTag empty_font_tag;
+  empty_font_tag.font = fo4::swf::SwfFont{};
+  empty_font_tag.font->font_id = 13;
+  const std::string expected =
+      kStage +
+      "<g transform=\"matrix(1 0 0 1 0 0)\">\n"
+      "<path d=\"M0 0L51.2 0L51.2 51.2L0 51.2L0 0Z\" transform=\"matrix(2 0 0 2 20 0)\" "
+      "fill=\"#ff0000\" fill-opacity=\"1\" fill-rule=\"nonzero\"/>\n"
+      "</g>\n"
+      "</svg>\n";
+  EXPECT_EQ(tags_frame_svg({square_glyph_font_tag(7, 1024, false), empty_font_tag, text_tag,
+                            empty_text_tag},
+                           {frame_row(1, 11, 0), frame_row(2, 12, 0)}),
+            expected);
 }
