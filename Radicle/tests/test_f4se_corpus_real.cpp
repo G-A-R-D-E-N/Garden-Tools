@@ -1,6 +1,4 @@
 #include <algorithm>
-#include <cctype>
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -18,32 +16,11 @@
 #include <fo4/f4se/type_map.hpp>
 #include <fo4/f4se/version_diff.hpp>
 
+#include "papyrus_corpus_roots.hpp"
+
+namespace helper = fo4::papyrus::test;
+
 namespace {
-
-std::string trim(std::string value) {
-    while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front()))) {
-        value.erase(value.begin());
-    }
-    while (!value.empty() && std::isspace(static_cast<unsigned char>(value.back()))) {
-        value.pop_back();
-    }
-    return value;
-}
-
-std::vector<std::filesystem::path> rootsFromEnv(const char* variable) {
-    std::vector<std::filesystem::path> roots;
-    const char* raw = std::getenv(variable);
-    if (!raw || !*raw) return roots;
-    std::istringstream stream(raw);
-    std::string part;
-    while (std::getline(stream, part, ';')) {
-        const auto cleaned = trim(part);
-        if (!cleaned.empty() && std::filesystem::is_directory(cleaned)) {
-            roots.emplace_back(cleaned);
-        }
-    }
-    return roots;
-}
 
 bool isDirectory(const std::filesystem::path& path) {
     std::error_code ec;
@@ -81,7 +58,7 @@ struct Tree {
 
 std::vector<Tree> trees() {
     std::vector<Tree> out;
-    for (const auto& root : rootsFromEnv("FO4RE_F4SE_SRC")) {
+    for (const auto& root : helper::rootsFromEnv("FO4RE_F4SE_SRC")) {
         for (const auto& directory : directoriesUnder(root)) {
             const auto cpp = directory / "f4se";
             const auto modified = directory / "scripts" / "modified";
@@ -122,7 +99,7 @@ std::string shorten(const std::filesystem::path& directory) {
 
 std::vector<std::filesystem::path> moduleDirectories() {
     std::vector<std::filesystem::path> found;
-    for (const auto& root : rootsFromEnv("FO4RE_F4SE_SRC")) {
+    for (const auto& root : helper::rootsFromEnv("FO4RE_F4SE_SRC")) {
         std::vector<std::filesystem::path> stack{root};
         std::error_code ec;
         while (!stack.empty()) {
