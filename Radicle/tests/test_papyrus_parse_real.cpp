@@ -6,7 +6,9 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstddef>
 #include <cstdlib>
+#include <exception>
 #include <filesystem>
 #include <fstream>
 #include <iterator>

@@ -1,8 +1,18 @@
 #include <fo4/graph/graph_script_loader.hpp>
 
 #include <cctype>
+#include <cstddef>
+#include <cstdint>
+#include <exception>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <utility>
+#include <vector>
 
 #include <fo4/papyrus/decompiler.hpp>
 #include <fo4/papyrus/parser.hpp>
