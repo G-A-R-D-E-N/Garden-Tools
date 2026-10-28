@@ -162,3 +162,34 @@ TEST(AbcAsm, RefusesInstructionTextThatIsNotOneBranchFreeInstruction) {
     EXPECT_TRUE(bytes.empty()) << text;
   }
 }
+
+TEST(AbcAsm, DeadBranchTargetsRenderAsAbsoluteOffsetsAndRoundTripByteForByte) {
+  // Regression: a dead target past the end or mid-instruction must print =offset, not a bare label.
+  struct DeadCode {
+    std::vector<std::uint8_t> code;
+    std::string reference;
+  };
+  const std::vector<DeadCode> cases{
+      {{0x47, 0x10, 0xE8, 0x03, 0x00}, "-> =1005"},
+      {{0x47, 0x10, 0xFE, 0xFF, 0xFF}, "-> =3"},
+  };
+  for (const DeadCode& dead : cases) {
+    AbcFile file = parse_or_fail(fo4::test::build_abc());
+    ASSERT_FALSE(file.bodies.empty());
+    file.bodies[0].code = dead.code;
+    std::vector<std::uint8_t> expected;
+    ASSERT_EQ(file.serialize(expected), AbcStatus::Ok);
+
+    const std::string text = fo4::abc::render_abc_text(file);
+    EXPECT_NE(text.find(dead.reference), std::string::npos) << text;
+    AbcFile assembled;
+    fo4::abc::AbcTextError error;
+    ASSERT_EQ(fo4::abc::assemble_abc_text(text, assembled, &error), AbcStatus::Ok)
+        << error.message << " at line " << error.line;
+    ASSERT_FALSE(assembled.bodies.empty());
+    EXPECT_EQ(assembled.bodies[0].code, dead.code);
+    std::vector<std::uint8_t> serialized;
+    ASSERT_EQ(assembled.serialize(serialized), AbcStatus::Ok);
+    EXPECT_EQ(serialized, expected);
+  }
+}

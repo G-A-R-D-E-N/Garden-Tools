@@ -5,6 +5,7 @@
 
 #include "abc_asm_internal.hpp"
 
+#include <charconv>
 #include <cstddef>
 #include <cstdint>
 #include <map>
@@ -41,23 +42,46 @@ bool same_instruction(const AbcInstruction& parsed, const AbcInstruction& decode
   return true;
 }
 
+struct PendingTarget {
+  std::string label;
+  std::int64_t absolute{0};
+  bool is_absolute{false};
+};
+
+/* An '=' token carries an absolute target offset and never a label. */
+bool pending_target(std::string_view token, PendingTarget& out) {
+  if (token.empty() || token.front() != '=') {
+    out.label = std::string{token};
+    return true;
+  }
+  std::int64_t absolute = 0;
+  const auto parsed = std::from_chars(token.data() + 1, token.data() + token.size(), absolute);
+  if (parsed.ec != std::errc{} || parsed.ptr != token.data() + token.size() ||
+      absolute != static_cast<std::int64_t>(static_cast<std::int32_t>(absolute))) {
+    return false;
+  }
+  out.is_absolute = true;
+  out.absolute = absolute;
+  return true;
+}
+
 struct PendingBranch {
   std::size_t instruction{0};
   std::size_t operand{0};
-  std::string label;
+  PendingTarget target;
 };
 
 struct PendingSwitch {
   std::size_t instruction{0};
   std::size_t operand{0};
-  std::string default_label;
-  std::vector<std::string> case_labels;
+  PendingTarget default_target;
+  std::vector<PendingTarget> case_targets;
 };
 
 struct PendingException {
-  std::string from;
-  std::string to;
-  std::string target;
+  PendingTarget from;
+  PendingTarget to;
+  PendingTarget target;
   std::uint32_t exc_type{0};
   std::uint32_t var_name{0};
 };
@@ -65,6 +89,7 @@ struct PendingException {
 struct BodyParser {
   AbcFile& file;
   std::string& error;
+  std::size_t first_line{0};
   AbcMethodBody body;
   std::vector<AbcInstruction> instructions;
   std::vector<PendingBranch> branches;
@@ -78,7 +103,7 @@ struct BodyParser {
 
   bool fail(std::string_view message) {
     if (error.empty()) {
-      error = std::string{message};
+      error = "line " + std::to_string(first_line) + ": " + std::string{message};
     }
     return false;
   }
@@ -200,12 +225,14 @@ struct BodyParser {
         }
         case AbcOperandEncoding::S24: {
           if (token + 1 >= tokens.size() || tokens[token] != "->") {
-            return fail("branch operand is missing a label");
+            return fail("branch operand is missing a target");
           }
           PendingBranch branch;
           branch.instruction = instruction_index;
           branch.operand = operand_index;
-          branch.label = tokens[token + 1];
+          if (!pending_target(tokens[token + 1], branch.target)) {
+            return fail("branch target is malformed");
+          }
           branches.push_back(std::move(branch));
           token += 2;
           length += 3;
@@ -237,18 +264,24 @@ struct BodyParser {
           }
           ++token;
           if (token >= tokens.size()) {
-            return fail("lookupswitch default label is missing");
+            return fail("lookupswitch default target is missing");
           }
           PendingSwitch pending;
           pending.instruction = instruction_index;
           pending.operand = operand_index;
-          pending.default_label = tokens[token];
+          if (!pending_target(tokens[token], pending.default_target)) {
+            return fail("lookupswitch default target is malformed");
+          }
           ++token;
           while (token < tokens.size()) {
-            pending.case_labels.push_back(tokens[token]);
+            PendingTarget case_target;
+            if (!pending_target(tokens[token], case_target)) {
+              return fail("lookupswitch case target is malformed");
+            }
+            pending.case_targets.push_back(std::move(case_target));
             ++token;
           }
-          const std::size_t cases = pending.case_labels.size();
+          const std::size_t cases = pending.case_targets.size();
           if (cases == 0) {
             return fail("lookupswitch needs at least one case");
           }
@@ -274,8 +307,9 @@ struct BodyParser {
 }  // namespace
 
 AbcStatus parse_body(AbcFile& file, std::size_t body_index,
-                     const std::vector<std::string>& block, std::string& error) {
-  BodyParser parser{file, error, {}, {}, {}, {}, {}, {}, 0, false, false, 0};
+                     const std::vector<std::string>& block, std::size_t first_line,
+                     std::string& error) {
+  BodyParser parser{file, error, first_line, {}, {}, {}, {}, {}, {}, 0, false, false, 0};
   if (!parser.parse_header(split_tokens(block.front()))) {
     return AbcStatus::InconsistentModel;
   }
@@ -311,9 +345,11 @@ AbcStatus parse_body(AbcFile& file, std::size_t body_index,
         parser.fail("exception line is malformed");
         return AbcStatus::InconsistentModel;
       }
-      pending.from = tokens[1];
-      pending.to = tokens[2];
-      pending.target = tokens[3];
+      if (!pending_target(tokens[1], pending.from) || !pending_target(tokens[2], pending.to) ||
+          !pending_target(tokens[3], pending.target)) {
+        parser.fail("exception target is malformed");
+        return AbcStatus::InconsistentModel;
+      }
       parser.exceptions.push_back(std::move(pending));
       continue;
     }
@@ -348,17 +384,21 @@ AbcStatus parse_body(AbcFile& file, std::size_t body_index,
     }
   }
 
-  const auto resolve = [&parser](const std::string& label, std::int32_t& out) {
-    const auto found = parser.labels.find(label);
+  const auto resolve = [&parser](const PendingTarget& target, std::int32_t& out) {
+    if (target.is_absolute) {
+      out = static_cast<std::int32_t>(target.absolute);
+      return true;
+    }
+    const auto found = parser.labels.find(target.label);
     if (found == parser.labels.end()) {
-      parser.fail("label " + label + " is not defined");
+      parser.fail("label " + target.label + " is not defined");
       return false;
     }
     out = static_cast<std::int32_t>(found->second);
     return true;
   };
   for (const PendingBranch& branch : parser.branches) {
-    if (!resolve(branch.label,
+    if (!resolve(branch.target,
                  parser.instructions[branch.instruction].operands[branch.operand].target)) {
       return AbcStatus::InconsistentModel;
     }
@@ -366,12 +406,12 @@ AbcStatus parse_body(AbcFile& file, std::size_t body_index,
   for (const PendingSwitch& pending : parser.switches) {
     AbcDecodedOperand& operand =
         parser.instructions[pending.instruction].operands[pending.operand];
-    if (!resolve(pending.default_label, operand.target)) {
+    if (!resolve(pending.default_target, operand.target)) {
       return AbcStatus::InconsistentModel;
     }
-    operand.case_targets.resize(pending.case_labels.size());
-    for (std::size_t index = 0; index < pending.case_labels.size(); ++index) {
-      if (!resolve(pending.case_labels[index], operand.case_targets[index])) {
+    operand.case_targets.resize(pending.case_targets.size());
+    for (std::size_t index = 0; index < pending.case_targets.size(); ++index) {
+      if (!resolve(pending.case_targets[index], operand.case_targets[index])) {
         return AbcStatus::InconsistentModel;
       }
     }
@@ -427,7 +467,7 @@ AbcStatus parse_body(AbcFile& file, std::size_t body_index,
 AbcStatus parse_instruction_text(std::string_view text, std::vector<std::uint8_t>& out,
                                  std::string& error) {
   AbcFile scratch;
-  BodyParser parser{scratch, error, {}, {}, {}, {}, {}, {}, 0, false, false, 0};
+  BodyParser parser{scratch, error, 1, {}, {}, {}, {}, {}, {}, 0, false, false, 0};
   bool ok = parser.parse_operation(split_tokens(text), 0);
   if (ok && (!parser.branches.empty() || !parser.switches.empty())) {
     ok = parser.fail("branch operands need a method body");

@@ -211,15 +211,34 @@ TEST(CApiSwfReal, ReadsEveryInterfaceMovieThroughTheArchiveAndTheBytesPathAlike)
 
 namespace {
 
-/* An edit must be visible without depending on a particular movie's string table. */
+/* Invariant: pool index 0 is empty, so the edit must target the first non-empty string. */
+std::size_t closing_quote(const std::string& text, std::size_t open) {
+  std::size_t at = open + 1;
+  while (at < text.size()) {
+    if (text[at] == '\\') {
+      at += 2;
+      continue;
+    }
+    if (text[at] == '"') return at;
+    ++at;
+  }
+  return std::string::npos;
+}
+
 std::string edit_first_string(std::string text, std::string_view marker) {
-  const std::size_t line = text.find("  string ");
-  if (line == std::string::npos) return {};
-  const std::size_t quote = text.find('"', line);
-  const std::size_t close = quote == std::string::npos ? std::string::npos : text.find('"', quote + 1);
-  if (close == std::string::npos) return {};
-  text.insert(close, std::string{marker});
-  return text;
+  std::size_t line = text.find("  string ");
+  while (line != std::string::npos) {
+    const std::size_t open = text.find('"', line);
+    if (open == std::string::npos) return {};
+    const std::size_t close = closing_quote(text, open);
+    if (close == std::string::npos) return {};
+    if (close > open + 1) {
+      text.insert(close, std::string{marker});
+      return text;
+    }
+    line = text.find("  string ", close + 1);
+  }
+  return {};
 }
 
 }  // namespace
