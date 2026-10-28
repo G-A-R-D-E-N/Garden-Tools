@@ -171,4 +171,39 @@ describe('SwfPanel', () => {
     expect(screen.queryByText(/class MenuClass/)).toBeNull();
     expect(screen.getByText('No ABC scripts in this SWF.')).toBeTruthy();
   });
+
+  it('previews a selected shape as an SVG image and drops a stale ShapeSvg reply', async () => {
+    // Invariant: a late ShapeSvg reply for an earlier shape must not replace the preview of the shape selected last, and selecting a non-shape clears the preview; detects out-of-order replies overwriting it and a stale preview surviving a non-shape selection.
+    let resolveFirst: (text: string) => void = () => {};
+    const second = '<svg xmlns="http://www.w3.org/2000/svg" id="second"></svg>';
+    const swf = stubBridge({
+      Characters: vi.fn(async () => JSON.stringify({ characters: [
+        { id: 20, kind: 'Shape', tagIndex: 0, name: '', imported: '' },
+        { id: 21, kind: 'Shape', tagIndex: 1, name: '', imported: '' },
+        { id: 22, kind: 'EditText', tagIndex: 2, name: '', imported: '' },
+      ] })),
+      ShapeSvg: vi.fn()
+        .mockImplementationOnce(() => new Promise<string>(resolve => { resolveFirst = resolve; }))
+        .mockImplementationOnce(async () => JSON.stringify({ svg: second })),
+    });
+    render(<SwfPanel onClose={() => {}} />);
+    fireEvent.change(screen.getByPlaceholderText('Interface/Test.swf'), { target: { value: 'Interface/Test.swf' } });
+    await act(async () => { fireEvent.click(screen.getByText('Open')); });
+    fireEvent.click(await screen.findByText(/Shape #20/));
+    fireEvent.click(screen.getByText(/Shape #21/));
+    expect((await screen.findByAltText('Shape preview')).getAttribute('src'))
+      .toBe(`data:image/svg+xml;utf8,${encodeURIComponent(second)}`);
+    await act(async () => {
+      resolveFirst(JSON.stringify({ svg: '<svg id="stale"></svg>' }));
+      await new Promise(done => setTimeout(done, 0));
+    });
+    expect(screen.getByAltText('Shape preview').getAttribute('src'))
+      .toBe(`data:image/svg+xml;utf8,${encodeURIComponent(second)}`);
+    expect(swf.ShapeSvg).toHaveBeenNthCalledWith(1, 20);
+    expect(swf.ShapeSvg).toHaveBeenNthCalledWith(2, 21);
+
+    fireEvent.click(screen.getByText(/EditText #22/));
+    await waitFor(() => expect(screen.queryByAltText('Shape preview')).toBeNull());
+    expect(swf.ShapeSvg).toHaveBeenCalledTimes(2);
+  });
 });

@@ -38,6 +38,7 @@ type SwfHost = {
   EditEditText(tagIndex: number, text: string, colorHex: string, x0: number, x1: number, y0: number, y1: number): Promise<string>;
   AbcBlocks(): Promise<string>;
   Disassemble(abc: number, methodIndex: number): Promise<string>;
+  ShapeSvg(characterId: number): Promise<string>;
 };
 
 function host(): SwfHost | null {
@@ -73,6 +74,8 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
   const [instructions, setInstructions] = useState('');
   const [selectedMethod, setSelectedMethod] = useState<{ key: string; label: string } | null>(null);
   const selectedMethodKey = useRef('');
+  const [shapeSvg, setShapeSvg] = useState('');
+  const shapeRequest = useRef(0);
 
   const refresh = useCallback(async () => {
     const bridge = host();
@@ -91,6 +94,8 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     setInstructions('');
     setSelectedMethod(null);
     selectedMethodKey.current = '';
+    shapeRequest.current += 1;
+    setShapeSvg('');
     try {
       const opened = parse<StateReply>(await bridge.Open(path.trim()));
       if (opened.error) { setError(opened.error); return; }
@@ -133,9 +138,19 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
   }, [selectedLabel, labelName]);
 
   const pickCharacter = useCallback(async (character: CharacterRow) => {
-    if (character.kind !== 'EditText') return;
     const bridge = host();
     if (!bridge) return;
+    const request = ++shapeRequest.current;
+    setShapeSvg('');
+    if (character.kind === 'Shape') {
+      const shape = parse<{ svg?: string }>(await bridge.ShapeSvg(character.id));
+      if (request !== shapeRequest.current) return;
+      if (shape.error) { setError(shape.error); return; }
+      setError('');
+      setShapeSvg(shape.svg ?? '');
+      return;
+    }
+    if (character.kind !== 'EditText') return;
     const reply = parse<{ id: number; text: string; color: string; x0: number; x1: number; y0: number; y1: number; error?: string }>(
       await bridge.ReadEditText(character.tagIndex));
     if (reply.error) { setError(reply.error); return; }
@@ -363,7 +378,7 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
               <button type="button" onClick={() => void applyTransform()}>Apply transform</button>
             </div>
           )}          <p>Revision {state.revision} · undo {state.undo} · redo {state.redo}</p>
-          <p>Shape rendering is not part of this round; the table above is the display list.</p>
+          {shapeSvg && <img className="swf-shape" alt="Shape preview" src={`data:image/svg+xml;utf8,${encodeURIComponent(shapeSvg)}`} />}
           <section className="swf-abc" aria-label="ABC scripts">
             <h4>Scripts (ABC)</h4>
             {abcError && <div className="swf-error" role="alert"><AlertTriangle size={14} /> {abcError}</div>}
