@@ -620,20 +620,30 @@ TEST(Avm1Interpreter, ComparisonOpcodesUseTheirOwnCoercion) {
   }
 }
 
-// Invariant: StringExtract reads the string, then the index, then the count from the top, and clamps both to the text, so "hello" at index 1 with count 3 traces "ell"; a swapped pair would trace "l".
+// Invariant: StringExtract reads the string, then the index, then the count from the top; the index is 1-based and clamped to the text, so "hello" at index 1 with count 3 traces "hel", and a swapped pair would trace "hel" for ("hello",3,1), which must trace "l".
 TEST(Avm1Interpreter, SubstringReadsIndexThenCountAndClamps) {
   using fo4::avm1::Avm1RunStatus;
   const std::vector<TableRow> rows = {
-      {"index 1 and count 3 take three characters",
+      {"index 1 and count 3 take the first three characters",
        cat({push_text("hello"), push_int(1), push_int(3), rec(0x15, {}), rec(0x26, {}),
             Bytes{0x00}}),
        Avm1RunStatus::Ok,
-       {"ell"}},
+       {"hel"}},
+      {"index 0 starts at the first character too",
+       cat({push_text("hello"), push_int(0), push_int(3), rec(0x15, {}), rec(0x26, {}),
+            Bytes{0x00}}),
+       Avm1RunStatus::Ok,
+       {"hel"}},
+      {"index 3 and count 1 take the third character",
+       cat({push_text("hello"), push_int(3), push_int(1), rec(0x15, {}), rec(0x26, {}),
+            Bytes{0x00}}),
+       Avm1RunStatus::Ok,
+       {"l"}},
       {"a count past the end stops at the end",
        cat({push_text("hello"), push_int(3), push_int(10), rec(0x15, {}), rec(0x26, {}),
             Bytes{0x00}}),
        Avm1RunStatus::Ok,
-       {"lo"}},
+       {"llo"}},
       {"an index past the end is empty",
        cat({push_text("hello"), push_int(9), push_int(2), rec(0x15, {}), rec(0x26, {}),
             Bytes{0x00}}),

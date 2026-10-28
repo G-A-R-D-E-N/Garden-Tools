@@ -365,7 +365,7 @@ Avm1RunStatus extract_string(Avm1State& state, std::string& message) {
     return status;
   }
   const std::string source = to_text(text);
-  const std::size_t start = clamp_to_length(index, source.size());
+  const std::size_t start = clamp_to_length(number_value(to_number(index) - 1.0), source.size());
   const std::size_t length = clamp_to_length(count, source.size() - start);
   return push_result(state, string_value(source.substr(start, length)), message);
 }
