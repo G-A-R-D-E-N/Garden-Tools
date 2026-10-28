@@ -1,4 +1,5 @@
 #include <fo4/avm1/avm1.hpp>
+#include <fo4/avm1/interpreter.hpp>
 
 #include <gtest/gtest.h>
 
@@ -391,6 +392,89 @@ TEST(Avm1, DisassemblyEscapesControlBytesInQuotedText) {
   const auto stream = decode(cat({rec(0x8B, str("a\nb")), Bytes{0x00}}));
   ASSERT_TRUE(stream.ok()) << stream.message;
   EXPECT_NE(fo4::avm1::disassemble_actions(stream).find("\"a\\x0Ab\""), std::string::npos);
+}
+
+Bytes push_text(std::string_view text) {
+  return rec(0x96, cat({Bytes{0x00}, str(text)}));
+}
+
+Bytes push_int(std::uint32_t value) {
+  return rec(0x96, cat({Bytes{0x07}, le32(value)}));
+}
+
+// Invariant: Subtract and Divide must take the deeper operand first, so 10 - 4 traces 6 and 1 / 4 traces 0.25; a reversed pair would trace -6 and 4.
+TEST(Avm1Interpreter, ArithmeticResultIsTracedInOperandOrder) {
+  const Bytes input = cat({
+      push_int(2), push_int(3), rec(0x0A, {}), push_int(4), rec(0x0C, {}), rec(0x26, {}),
+      push_int(10), push_int(4), rec(0x0B, {}), rec(0x26, {}),
+      push_int(1), push_int(4), rec(0x0D, {}), rec(0x26, {}), Bytes{0x00},
+  });
+  const auto stream = decode(input);
+  ASSERT_TRUE(stream.ok()) << stream.message;
+  const auto result = fo4::avm1::execute_actions(stream);
+  ASSERT_TRUE(result.ok()) << result.message;
+  EXPECT_EQ(result.trace, (std::vector<std::string>{"20", "6", "0.25"}));
+}
+
+// Invariant: a Jump and an If must land on the records their offsets name, so a counted loop traces 0, 1, 2 and exits when i reaches 3; a wrong branch offset is refused at decode.
+TEST(Avm1Interpreter, CountedLoopExitsThroughIfAndJump) {
+  const Bytes init = cat({push_text("i"), push_int(0), rec(0x1D, {})});
+  const Bytes test = cat({push_text("i"), rec(0x1C, {}), push_int(3), rec(0x48, {}), rec(0x12, {})});
+  const Bytes body = cat({
+      push_text("i"), rec(0x1C, {}), rec(0x26, {}), push_text("i"), push_text("i"),
+      rec(0x1C, {}), push_int(1), rec(0x47, {}), rec(0x1D, {}),
+  });
+  const Bytes exit_if = rec(0x9D, le16(static_cast<std::uint16_t>(body.size() + 5)));
+  const Bytes back_jump =
+      rec(0x99, le16(static_cast<std::uint16_t>(-static_cast<int>(test.size() + body.size() + 10))));
+  const Bytes input = cat({init, test, exit_if, body, back_jump, Bytes{0x00}});
+  const auto stream = decode(input);
+  ASSERT_TRUE(stream.ok()) << stream.message;
+  const auto result = fo4::avm1::execute_actions(stream);
+  ASSERT_TRUE(result.ok()) << result.message;
+  EXPECT_EQ(result.trace, (std::vector<std::string>{"0", "1", "2"}));
+  EXPECT_EQ(result.variables.at("i").number, 3.0);
+}
+
+// Invariant: a loop with no exit must stop at the step limit with StepLimit after exactly 100 records; without the limit this test never returns.
+TEST(Avm1Interpreter, SelfJumpStopsAtTheStepLimit) {
+  const auto stream = decode(cat({rec(0x99, le16(0xFFFB)), Bytes{0x00}}));
+  ASSERT_TRUE(stream.ok()) << stream.message;
+  const auto result = fo4::avm1::execute_actions(stream, 100);
+  EXPECT_EQ(result.status, fo4::avm1::Avm1RunStatus::StepLimit);
+  EXPECT_EQ(result.steps, 100u);
+  EXPECT_EQ(result.opcode, 0x99);
+  EXPECT_EQ(result.offset, 0u);
+}
+
+// Invariant: SetVariable must pop the value above its name, so the name keys the variable and "hi" reads back; a swapped pop would key "hi" instead.
+TEST(Avm1Interpreter, VariableRoundTripsThroughTheGlobalScope) {
+  const Bytes input = cat({
+      push_text("x"), push_text("hi"), rec(0x1D, {}), push_text("x"), rec(0x1C, {}), rec(0x26, {}),
+      push_text("missing"), rec(0x1C, {}), rec(0x26, {}), Bytes{0x00},
+  });
+  const auto stream = decode(input);
+  ASSERT_TRUE(stream.ok()) << stream.message;
+  const auto result = fo4::avm1::execute_actions(stream);
+  ASSERT_TRUE(result.ok()) << result.message;
+  EXPECT_EQ(result.trace, (std::vector<std::string>{"hi", "undefined"}));
+  ASSERT_EQ(result.variables.count("x"), 1u);
+  EXPECT_EQ(result.variables.at("x").kind, fo4::avm1::Avm1DataKind::String);
+  EXPECT_EQ(result.variables.at("x").text, "hi");
+  EXPECT_EQ(result.variables.count("hi"), 0u);
+}
+
+// Invariant: an opcode outside the slice must refuse at its own offset by name; a silent skip would run the Trace after it and trace "2".
+TEST(Avm1Interpreter, UnsupportedOpcodeIsRefusedByName) {
+  const auto stream =
+      decode(cat({push_int(1), rec(0x26, {}), rec(0x34, {}), push_int(2), rec(0x26, {}), Bytes{0x00}}));
+  ASSERT_TRUE(stream.ok()) << stream.message;
+  const auto result = fo4::avm1::execute_actions(stream);
+  EXPECT_EQ(result.status, fo4::avm1::Avm1RunStatus::Unsupported);
+  EXPECT_EQ(result.opcode, 0x34);
+  EXPECT_EQ(result.offset, stream.actions[2].offset);
+  EXPECT_NE(result.message.find("GetTime (0x34)"), std::string::npos);
+  EXPECT_EQ(result.trace, (std::vector<std::string>{"1"}));
 }
 
 }  // namespace
