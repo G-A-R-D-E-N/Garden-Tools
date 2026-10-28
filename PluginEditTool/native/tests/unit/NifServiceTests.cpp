@@ -320,7 +320,36 @@ TEST_CASE("NifService geometry reports a truncated NIF as an error") {
     CHECK(runner.calls == 0);
 }
 
-TEST_CASE("NifService fix without niftool names the missing tool") {
+TEST_CASE("NifService fix without niftool repairs in-process and the written NIF verifies") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto nif = root / "tree.nif";
+    const auto fixed = root / "fixed.nif";
+    fo4ide::test::writeBytes(nif, fo4ide::test::treeNif("Materials\\Clutter\\Thing.BGSM ",
+                                                       {" Textures\\Thing_d.dds ", "Textures\\Thing_n.dds"}));
+    const auto before = fileBytes(nif);
+
+    FakeRunner runner;
+    fo4ide::assets::NifService service(runner, std::filesystem::path{});
+    auto fix = service.fix(nif, fixed);
+
+    REQUIRE(fix.has_value());
+    CHECK(fix->starts_with("RESULT: fix OK (in-process)\nSaved: " + fixed.string() +
+                           "\nRESULT: 8 checks, 0 failed\n"));
+    CHECK(fileBytes(nif) == before);
+    CHECK(std::filesystem::is_regular_file(fixed));
+    CHECK_FALSE(std::filesystem::exists(fixed.string() + ".niftmp"));
+    CHECK(runner.calls == 0);
+
+    auto inspect = service.inspect(fixed);
+    REQUIRE(inspect.has_value());
+    const auto report = nlohmann::json::parse(*inspect);
+    CHECK(report.at("hasBSX") == true);
+    CHECK(report.at("shapes").at(0).at("shader") == "Materials\\Clutter\\Thing.BGSM");
+    CHECK(report.at("shapes").at(0).at("textures").at(0).at("path") == "Textures\\Thing_d.dds");
+}
+
+TEST_CASE("NifService fix without niftool refuses an unreadable NIF and writes nothing") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto nif = root / "sample.nif";
@@ -331,8 +360,31 @@ TEST_CASE("NifService fix without niftool names the missing tool") {
     auto fix = service.fix(nif, root / "fixed.nif");
 
     REQUIRE_FALSE(fix.has_value());
-    CHECK(fix.error().message.find("niftool not installed; fix needs it") != std::string::npos);
+    CHECK(fix.error().type == "NifFixFailed");
+    CHECK_FALSE(std::filesystem::exists(root / "fixed.nif"));
+    CHECK(fileBytes(nif) == "original nif");
     CHECK(runner.calls == 0);
+}
+
+TEST_CASE("NifService fix maps onto the niftool fix command when niftool resolves") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto tool = root / "niftool";
+    const auto nif = root / "sample.nif";
+    const auto fixed = root / "fixed.nif";
+    touch(tool);
+    touch(nif, "original nif");
+
+    FakeRunner runner;
+    fo4ide::assets::NifService service(runner, tool);
+    auto fix = service.fix(nif, fixed);
+
+    REQUIRE(fix.has_value());
+    CHECK(runner.calls == 1);
+    REQUIRE(runner.last.arguments.size() == 3);
+    CHECK(runner.last.arguments[0] == "fix");
+    CHECK(runner.last.arguments[1] == nif.string());
+    CHECK(runner.last.arguments[2] == fixed.string());
 }
 
 TEST_CASE("NifService reads in-process when the configured niftool is missing") {

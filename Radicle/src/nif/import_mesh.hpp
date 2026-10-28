@@ -22,5 +22,6 @@ struct Mesh {
 };
 
 Mesh read_obj(std::string_view text, bool from_blender);
+void add_tangent_frame(Mesh& mesh);
 
 }

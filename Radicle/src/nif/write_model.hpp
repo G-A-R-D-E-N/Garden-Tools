@@ -2,6 +2,8 @@
 
 #include "fo4/nif/nif.hpp"
 
+#include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -58,6 +60,25 @@ void append_int(Bytes& bytes, T value) {
   const auto offset = bytes.size();
   bytes.resize(offset + sizeof(T));
   write_int(bytes, offset, value);
+}
+
+inline std::uint16_t half_bits(float value) {
+  const auto sign = std::signbit(value) ? 0x8000U : 0U;
+  const float magnitude = std::fabs(value);
+  std::uint32_t bits = 0;
+  if (magnitude < 6.103515625e-5f) {
+    bits = static_cast<std::uint32_t>(std::lround(std::ldexp(magnitude, 24)));
+  } else {
+    int exponent = 0;
+    const float significand = std::frexp(magnitude, &exponent) * 2.0f - 1.0f;
+    bits = (static_cast<std::uint32_t>(exponent + 14) << 10U) +
+           static_cast<std::uint32_t>(std::lround(std::ldexp(significand, 10)));
+  }
+  return static_cast<std::uint16_t>(sign | bits);
+}
+
+inline std::uint8_t unit_byte(float value) {
+  return static_cast<std::uint8_t>(std::lround(std::clamp((value + 1.0f) * 127.5f, 0.0f, 255.0f)));
 }
 
 inline void append_text(Bytes& bytes, std::string_view text) {

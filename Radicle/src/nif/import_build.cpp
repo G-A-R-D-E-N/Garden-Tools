@@ -24,6 +24,8 @@ using import_detail::Vec3;
 using write_detail::Bytes;
 using write_detail::append_int;
 using write_detail::append_sized;
+using write_detail::half_bits;
+using write_detail::unit_byte;
 
 constexpr std::uint32_t k_nif_version = 0x14020007U;
 constexpr std::uint32_t k_user_version = 12;
@@ -43,25 +45,6 @@ constexpr std::int32_t k_texture_set_block = 3;
 constexpr std::int32_t k_bsx_block = 4;
 constexpr std::array<float, 13> k_identity_transform{0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f,
                                                      0.0f, 0.0f, 1.0f, 1.0f};
-
-std::uint16_t half_bits(float value) {
-  const auto sign = std::signbit(value) ? 0x8000U : 0U;
-  const float magnitude = std::fabs(value);
-  std::uint32_t bits = 0;
-  if (magnitude < 6.103515625e-5f) {
-    bits = static_cast<std::uint32_t>(std::lround(std::ldexp(magnitude, 24)));
-  } else {
-    int exponent = 0;
-    const float significand = std::frexp(magnitude, &exponent) * 2.0f - 1.0f;
-    bits = (static_cast<std::uint32_t>(exponent + 14) << 10U) +
-           static_cast<std::uint32_t>(std::lround(std::ldexp(significand, 10)));
-  }
-  return static_cast<std::uint16_t>(sign | bits);
-}
-
-std::uint8_t unit_byte(float value) {
-  return static_cast<std::uint8_t>(std::lround(std::clamp((value + 1.0f) * 127.5f, 0.0f, 255.0f)));
-}
 
 void put_float(Bytes& out, float value) { append_int(out, std::bit_cast<std::uint32_t>(value)); }
 
