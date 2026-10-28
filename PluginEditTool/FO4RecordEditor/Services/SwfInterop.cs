@@ -115,7 +115,8 @@ public class SwfInterop
         var matrix = Document().PlacementTransform(tagIndex);
         return Json(new
         {
-            hasScale = matrix.HasScale, scaleX = matrix.ScaleX, scaleY = matrix.ScaleY,
+            hasScale = matrix.HasScale, scaleX = matrix.HasScale ? matrix.ScaleX : 0x10000,
+            scaleY = matrix.HasScale ? matrix.ScaleY : 0x10000,
             hasRotate = matrix.HasRotate, rotate0 = matrix.Rotate0, rotate1 = matrix.Rotate1,
             x = matrix.TranslateX, y = matrix.TranslateY,
         });
