@@ -18,7 +18,7 @@ namespace {
 using text_ops::to_text;
 
 constexpr const char* kPrimitiveMembers =
-    "a member of a number, string or boolean is not in this slice";
+    "a member of a number, string, boolean or function is not in this slice";
 
 std::optional<std::uint32_t> array_index(const std::string& key) {
   if (key.empty() || key.size() > 10 || (key.size() > 1 && key.front() == '0')) {
@@ -71,22 +71,6 @@ Avm1Data make_object(bool is_array) {
   return data;
 }
 
-Avm1RunStatus pop_count(Avm1State& state, std::size_t slots, std::size_t& count,
-                        std::string& message) {
-  Avm1Data operand;
-  if (const Avm1RunStatus status = pop(state, operand, message); status != Avm1RunStatus::Ok) {
-    return status;
-  }
-  const double limit = static_cast<double>(state.stack.size() / slots);
-  if (operand.kind != Avm1DataKind::Number || !(operand.number >= 0.0 && operand.number <= limit) ||
-      std::floor(operand.number) != operand.number) {
-    message = "the element count is not a whole number the operand stack holds";
-    return Avm1RunStatus::StackUnderflow;
-  }
-  count = static_cast<std::size_t>(operand.number);
-  return Avm1RunStatus::Ok;
-}
-
 }  // namespace
 
 Avm1Object::~Avm1Object() {
@@ -109,6 +93,18 @@ Avm1Object::~Avm1Object() {
 }
 
 namespace object_ops {
+
+Avm1Data plain_object() { return make_object(false); }
+
+Avm1Data arguments_object(const std::vector<Avm1Data>& args) {
+  Avm1Data object = make_object(false);
+  for (std::size_t index = 0; index < args.size(); ++index) {
+    put(*object.object, std::to_string(index), args[index]);
+  }
+  put(*object.object, "length",
+      Avm1Data{.kind = Avm1DataKind::Number, .number = static_cast<double>(args.size())});
+  return object;
+}
 
 Avm1RunStatus new_object(Avm1State& state, std::string& message) {
   Avm1Data name;

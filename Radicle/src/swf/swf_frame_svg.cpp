@@ -35,6 +35,15 @@ using ShapeIndex = std::map<std::uint16_t, const SwfShape*>;
 using MorphIndex = std::map<std::uint16_t, const SwfMorphShape*>;
 using TextIndex = std::map<std::uint16_t, const SwfText*>;
 using FontIndex = std::map<std::uint16_t, const SwfFont*>;
+using ButtonIndex = std::map<std::uint16_t, const SwfButton*>;
+
+struct FrameLookup {
+  ShapeIndex shapes;
+  MorphIndex morphs;
+  TextIndex texts;
+  FontIndex fonts;
+  ButtonIndex buttons;
+};
 
 std::string transform_text(const SwfTransform& transform) {
   return "matrix(" + svg_number(transform.scale_x) + " " + svg_number(transform.rotate_skew0) +
@@ -78,22 +87,23 @@ std::size_t descendants_end(const SwfDisplayFrame& frame, std::size_t index) {
   return end;
 }
 
-const SwfShape* row_shape(const ShapeIndex& shapes, const MorphIndex& morphs,
-                          const SwfFrameInstance& row, std::optional<SwfShape>& morph) {
-  const auto found = shapes.find(row.character_id);
-  if (found != shapes.end()) {
+const SwfShape* character_shape(const FrameLookup& lookup, std::uint16_t character_id,
+                                std::optional<std::uint16_t> ratio, std::optional<SwfShape>& morph) {
+  const auto found = lookup.shapes.find(character_id);
+  if (found != lookup.shapes.end()) {
     return found->second;
   }
-  const auto morph_found = morphs.find(row.character_id);
-  if (morph_found == morphs.end()) {
+  const auto morph_found = lookup.morphs.find(character_id);
+  if (morph_found == lookup.morphs.end()) {
     return nullptr;
   }
-  morph = interpolate_morph_shape(*morph_found->second, row.ratio.value_or(0) / kRatioLimit);
+  morph = interpolate_morph_shape(*morph_found->second, ratio.value_or(0) / kRatioLimit);
   return morph ? &*morph : nullptr;
 }
 
-std::string text_paths(const FontIndex& fonts, const SwfText& text) {
-  const SwfTransform text_transform = transform_from_matrix(text.matrix);
+std::string text_paths(const FontIndex& fonts, const SwfText& text,
+                       const SwfTransform& outer = {}) {
+  const SwfTransform text_transform = compose_transform(outer, transform_from_matrix(text.matrix));
   std::string paths;
   const SwfFont* font = nullptr;
   std::uint32_t color = kDefaultTextColor;
@@ -139,9 +149,8 @@ std::string text_paths(const FontIndex& fonts, const SwfText& text) {
   return paths;
 }
 
-std::string sprite_clip_to_svg(const ShapeIndex& shapes, const MorphIndex& morphs,
-                               const SvgBitmaps& bitmaps, const SwfDisplayFrame& frame,
-                               std::size_t index) {
+std::string sprite_clip_to_svg(const FrameLookup& lookup, const SvgBitmaps& bitmaps,
+                               const SwfDisplayFrame& frame, std::size_t index) {
   const SwfFrameInstance& sprite = frame.instances[index];
   const std::size_t end = descendants_end(frame, index);
   std::string defs;
@@ -149,8 +158,15 @@ std::string sprite_clip_to_svg(const ShapeIndex& shapes, const MorphIndex& morph
   for (std::size_t child = index + 1; child < end; ++child) {
     const SwfFrameInstance& row = frame.instances[child];
     std::optional<SwfShape> morph;
-    const SwfShape* shape = row_shape(shapes, morphs, row, morph);
-    if (!shape || row.world_visible != sprite.world_visible) {
+    const SwfShape* shape = character_shape(lookup, row.character_id, row.ratio, morph);
+    if (row.world_visible != sprite.world_visible) {
+      continue;
+    }
+    if (!shape) {
+      const auto text = lookup.texts.find(row.character_id);
+      if (text != lookup.texts.end()) {
+        paths += text_paths(lookup.fonts, *text->second, row.world_transform);
+      }
       continue;
     }
     const SvgImages images = shape_images(*shape, bitmaps);
@@ -162,8 +178,57 @@ std::string sprite_clip_to_svg(const ShapeIndex& shapes, const MorphIndex& morph
   return defs + "<clipPath id=\"r" + std::to_string(index) + "clip\">\n" + paths + "</clipPath>\n";
 }
 
-std::string frame_body(const ShapeIndex& shapes, const MorphIndex& morphs, const TextIndex& texts,
-                       const FontIndex& fonts, const SvgBitmaps& bitmaps,
+std::string shape_group(const SvgBitmaps& bitmaps, const SwfShape& shape, const std::string& id,
+                        const SwfTransform& transform) {
+  const SvgImages images = shape_images(shape, bitmaps);
+  return "<g transform=\"" + transform_text(transform) + "\">\n" +
+         shape_defs_to_svg(shape, id + "f", images) + shape_paths_to_svg(shape, id + "f", images) +
+         "</g>\n";
+}
+
+std::string text_group(const FontIndex& fonts, const SwfText& text, const SwfTransform& transform) {
+  const std::string paths = text_paths(fonts, text);
+  if (paths.empty()) {
+    return {};
+  }
+  return "<g transform=\"" + transform_text(transform) + "\">\n" + paths + "</g>\n";
+}
+
+std::string character_group(const FrameLookup& lookup, const SvgBitmaps& bitmaps,
+                            std::uint16_t character_id, const std::string& id,
+                            const SwfTransform& transform) {
+  std::optional<SwfShape> morph;
+  if (const SwfShape* shape = character_shape(lookup, character_id, {}, morph)) {
+    return shape_group(bitmaps, *shape, id, transform);
+  }
+  const auto text = lookup.texts.find(character_id);
+  return text == lookup.texts.end() ? std::string{}
+                                    : text_group(lookup.fonts, *text->second, transform);
+}
+
+std::string button_group(const FrameLookup& lookup, const SvgBitmaps& bitmaps,
+                         const SwfButton& button, const std::string& id,
+                         const SwfTransform& transform) {
+  std::vector<SwfButtonRecord> up;
+  for (const SwfButtonRecord& record : button.records) {
+    if (record.up) {
+      up.push_back(record);
+    }
+  }
+  std::stable_sort(up.begin(), up.end(),
+                   [](const SwfButtonRecord& left, const SwfButtonRecord& right) {
+                     return left.depth < right.depth;
+                   });
+  std::string content;
+  for (std::size_t index = 0; index < up.size(); ++index) {
+    const auto record = compose_transform(transform, transform_from_matrix(up[index].matrix));
+    content += character_group(lookup, bitmaps, up[index].character_id,
+                               id + "u" + std::to_string(index), record);
+  }
+  return content;
+}
+
+std::string frame_body(const FrameLookup& lookup, const SvgBitmaps& bitmaps,
                        const SwfDisplayFrame& frame, const SwfRect& stage) {
   std::string body;
   std::vector<Mask> masks;
@@ -183,18 +248,24 @@ std::string frame_body(const ShapeIndex& shapes, const MorphIndex& morphs, const
       }
     }
     std::optional<SwfShape> morph;
-    const SwfShape* shape = row_shape(shapes, morphs, row, morph);
+    const SwfShape* shape = character_shape(lookup, row.character_id, row.ratio, morph);
     const std::string id = "r" + std::to_string(index);
-    if (row.clip_depth && (row.is_sprite || shape)) {
+    const auto text = lookup.texts.find(row.character_id);
+    const bool has_text = text != lookup.texts.end();
+    if (row.clip_depth && (row.is_sprite || shape || has_text)) {
       masks.push_back(Mask{level, row.depth, *row.clip_depth, id + "clip", false});
       if (row.is_sprite) {
         mask_end = descendants_end(frame, index);
-        body += sprite_clip_to_svg(shapes, morphs, bitmaps, frame, index);
-      } else {
+        body += sprite_clip_to_svg(lookup, bitmaps, frame, index);
+      } else if (shape) {
         const SvgImages images = shape_images(*shape, bitmaps);
         body += shape_defs_to_svg(*shape, id + "f", images) + "<clipPath id=\"" + id +
                 "clip\" transform=\"" + transform_text(row.world_transform) + "\">\n" +
                 shape_fill_paths_to_svg(*shape, id + "f", images) + "</clipPath>\n";
+      } else {
+        body += "<clipPath id=\"" + id + "clip\" transform=\"" +
+                transform_text(row.world_transform) + "\">\n" +
+                text_paths(lookup.fonts, *text->second) + "</clipPath>\n";
       }
       continue;
     }
@@ -202,22 +273,16 @@ std::string frame_body(const ShapeIndex& shapes, const MorphIndex& morphs, const
       continue;
     }
     std::string content;
+    const auto button = lookup.buttons.find(row.character_id);
     if (shape) {
-      const SvgImages images = shape_images(*shape, bitmaps);
-      content = "<g transform=\"" + transform_text(row.world_transform) + "\">\n" +
-                shape_defs_to_svg(*shape, id + "f", images) +
-                shape_paths_to_svg(*shape, id + "f", images) + "</g>\n";
-    } else {
-      const auto text = texts.find(row.character_id);
-      if (row.clip_depth || text == texts.end()) {
-        continue;
-      }
-      const std::string paths = text_paths(fonts, *text->second);
-      if (paths.empty()) {
-        continue;
-      }
-      content = "<g transform=\"" + transform_text(row.world_transform) + "\">\n" + paths +
-                "</g>\n";
+      content = shape_group(bitmaps, *shape, id, row.world_transform);
+    } else if (button != lookup.buttons.end() && !row.clip_depth) {
+      content = button_group(lookup, bitmaps, *button->second, id, row.world_transform);
+    } else if (has_text) {
+      content = text_group(lookup.fonts, *text->second, row.world_transform);
+    }
+    if (content.empty()) {
+      continue;
     }
     if (row.world_color_transform) {
       content = filter_text(id + "color", *row.world_color_transform, stage) +
@@ -236,29 +301,29 @@ std::string frame_body(const ShapeIndex& shapes, const MorphIndex& morphs, const
 }  // namespace
 
 std::string frame_to_svg(const SwfFile& file, const SwfDisplayList& display, std::uint32_t frame) {
-  ShapeIndex shapes;
-  MorphIndex morphs;
-  TextIndex texts;
-  FontIndex fonts;
+  FrameLookup lookup;
   for (const SwfTag& tag : file.tags) {
     if (tag.shape) {
-      shapes.emplace(tag.shape->shape_id, &*tag.shape);
+      lookup.shapes.emplace(tag.shape->shape_id, &*tag.shape);
     }
     if (tag.morph_shape) {
-      morphs.emplace(tag.morph_shape->character_id, &*tag.morph_shape);
+      lookup.morphs.emplace(tag.morph_shape->character_id, &*tag.morph_shape);
     }
     if (tag.text) {
-      texts.emplace(tag.text->character_id, &*tag.text);
+      lookup.texts.emplace(tag.text->character_id, &*tag.text);
     }
     if (tag.font) {
-      fonts.emplace(tag.font->font_id, &*tag.font);
+      lookup.fonts.emplace(tag.font->font_id, &*tag.font);
+    }
+    if (tag.button) {
+      lookup.buttons.emplace(tag.button->character_id, &*tag.button);
     }
   }
   const SvgBitmaps bitmaps = index_bitmaps(file);
   std::string body;
   if (!display.timelines.empty() && frame < display.timelines.front().frames.size()) {
-    body = frame_body(shapes, morphs, texts, fonts, bitmaps,
-                      display.timelines.front().frames[frame], file.header.frame_size);
+    body = frame_body(lookup, bitmaps, display.timelines.front().frames[frame],
+                      file.header.frame_size);
   }
   return svg_open(file.header.frame_size) + body + "</svg>\n";
 }

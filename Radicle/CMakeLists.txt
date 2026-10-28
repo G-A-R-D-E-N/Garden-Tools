@@ -381,6 +381,7 @@ add_library(fo4
   src/avm1/decode.cpp
   src/avm1/encode.cpp
   src/avm1/disassembly.cpp
+  src/avm1/function_ops.cpp
   src/avm1/interpreter.cpp
   src/avm1/object_ops.cpp
   src/avm1/text_ops.cpp
@@ -395,6 +396,7 @@ add_library(fo4
   src/avm2/interpreter.cpp
   src/avm2/interpreter_ops.cpp
   src/avm2/interpreter_property.cpp
+  src/avm2/interpreter_memory.cpp
   src/avm2/interpreter_support.cpp
   src/avm2/builtins.cpp
   src/avm2/native_object.cpp
@@ -961,6 +963,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_avm2_system_classes.cpp
     tests/test_avm2_bytearray.cpp
     tests/test_avm2_more_ops.cpp
+    tests/test_avm2_domain_memory.cpp
     tests/test_swf_fonts.cpp
     tests/test_swf_fonts_real.cpp
     tests/test_material_file.cpp
@@ -992,8 +995,12 @@ if(RADICLE_BUILD_TESTS)
     tests/test_avm1.cpp
     tests/test_avm1_ops.cpp
     tests/test_avm1_objects.cpp
+    tests/test_avm1_functions.cpp
     tests/test_avm1_real.cpp
     tests/test_swf_svg.cpp
+    tests/test_swf_svg_text_matrix.cpp
+    tests/test_swf_svg_buttons.cpp
+    tests/test_swf_svg_text_clip.cpp
     tests/test_abc_real.cpp
     tests/test_hkx_packfile.cpp
     tests/test_hkx_real.cpp

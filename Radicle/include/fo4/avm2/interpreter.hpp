@@ -175,6 +175,10 @@ class Interpreter {
                                  std::string& message);
   InterpreterStatus array_property(Object& object, const Multiname& multiname, bool write,
                                    Value& value, bool& handled, std::string& message);
+  InterpreterStatus domain_memory_load(std::uint8_t opcode, const Value& address, Value& value,
+                                       std::string& message);
+  InterpreterStatus domain_memory_store(std::uint8_t opcode, const Value& address,
+                                        const Value& value, std::string& message);
 
   Runtime& runtime_;
   InterpreterLimits limits_;

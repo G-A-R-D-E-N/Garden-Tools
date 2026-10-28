@@ -215,3 +215,72 @@ TEST(Avm2CallIndexed, CallmethodRefusesANullReceiver) {
   EXPECT_EQ(result.status, InterpreterStatus::NullReference);
   EXPECT_NE(result.message.find("callmethod"), std::string::npos) << result.message;
 }
+
+// Invariant: callstatic pops its arguments so that the first pushed value is local 1, so 10 then 3 subtracts to 7; reversed arguments would give -7.
+TEST(Avm2CallIndexed, CallstaticConsumesItsArgumentsInPushOrder) {
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder diff_code;
+  diff_code.getlocal(1);
+  diff_code.getlocal(2);
+  diff_code.subtract();
+  diff_code.returnvalue();
+  const std::uint32_t diff = script.method("diff", diff_code.bytes(), 3);
+  avm2_test::CodeBuilder constructor_code;
+  constructor_code.returnvoid();
+  const std::uint32_t constructor = script.method("ctor", constructor_code.bytes(), 1);
+  avm2_test::CodeBuilder scale_code;
+  scale_code.getlocal(1);
+  scale_code.returnvalue();
+  const std::uint32_t scale = script.method("scale", scale_code.bytes(), 2);
+  avm2_test::CodeBuilder code;
+  code.newclass(0);
+  code.construct(0);
+  code.pushbyte(10);
+  code.pushbyte(3);
+  code.callstatic(diff, 2);
+  code.returnvalue();
+  const std::uint32_t method = script.method("init", code.bytes(), 1);
+  abc::AbcFile file = holder_class_file(script, method, constructor, scale, diff);
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  Interpreter interpreter(runtime);
+  const ExecutionResult result = interpreter.run_script(0);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_int32());
+  EXPECT_EQ(result.value.as_int32(), 7);
+}
+
+// Invariant: callstatic boxes an int receiver into an object of the builtin int class holding 5 and passes it as this, so getlocal0 returns that box; a refused box would end in NullReference instead.
+TEST(Avm2CallIndexed, CallstaticBoxesAnIntReceiverAsThis) {
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder make_code;
+  make_code.getlocal0();
+  make_code.returnvalue();
+  const std::uint32_t make = script.method("make", make_code.bytes(), 1);
+  avm2_test::CodeBuilder constructor_code;
+  constructor_code.returnvoid();
+  const std::uint32_t constructor = script.method("ctor", constructor_code.bytes(), 1);
+  avm2_test::CodeBuilder scale_code;
+  scale_code.getlocal(1);
+  scale_code.returnvalue();
+  const std::uint32_t scale = script.method("scale", scale_code.bytes(), 2);
+  avm2_test::CodeBuilder code;
+  code.pushbyte(5);
+  code.callstatic(make, 0);
+  code.returnvalue();
+  const std::uint32_t method = script.method("init", code.bytes(), 1);
+  abc::AbcFile file = holder_class_file(script, method, constructor, scale, make);
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  Interpreter interpreter(runtime);
+  const ExecutionResult result = interpreter.run_script(0);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_object());
+  const auto& boxed = result.value.as_object();
+  EXPECT_EQ(boxed->instance_class(), runtime.find_class("int"));
+  ASSERT_TRUE(boxed->has_primitive());
+  EXPECT_TRUE(boxed->primitive().is_int32());
+  EXPECT_EQ(boxed->primitive().as_int32(), 5);
+}
