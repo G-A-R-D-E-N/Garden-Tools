@@ -339,6 +339,7 @@ add_library(fo4
   src/swf/swf_text.cpp
   src/swf/swf_timeline.cpp
   src/swf/swf_display.cpp
+  src/swf/swf_frame_control.cpp
   src/swf/swf_edit.cpp
   src/swf/swf_depth.cpp
   src/swf/swf_keyframe.cpp
@@ -980,6 +981,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_swf_place.cpp
     tests/test_swf_place_filters.cpp
     tests/test_swf_display.cpp
+    tests/test_swf_frame_control.cpp
     tests/test_swf_edit.cpp
     tests/test_swf_edit_text.cpp
     tests/test_swf_label_edit.cpp

@@ -397,6 +397,25 @@ bool traits_values_known(const std::vector<AbcTrait>& traits) {
   return true;
 }
 
+bool type_name_expansion_too_large(const AbcConstantPool& pool) {
+  std::vector<std::size_t> expansion(pool.multinames.size(), 1);
+  for (std::size_t i = 1; i < pool.multinames.size(); ++i) {
+    const AbcMultiname& multiname = pool.multinames[i];
+    if (multiname.kind != AbcMultinameKind::TypeName) {
+      continue;
+    }
+    std::size_t nodes = 1 + expansion[multiname.name];
+    for (const std::uint32_t param : multiname.params) {
+      nodes += expansion[param];
+    }
+    if (nodes > detail::kMaxTypeNameExpansion) {
+      return true;
+    }
+    expansion[i] = nodes;
+  }
+  return false;
+}
+
 AbcStatus pool_encodable(const AbcFile& file) {
   const AbcConstantPool& pool = file.pool;
   for (std::size_t i = 1; i < pool.namespaces.size(); ++i) {
@@ -419,6 +438,9 @@ AbcStatus pool_encodable(const AbcFile& file) {
     if (multiname_refs_past_end(pool, i, multiname)) {
       return AbcStatus::IndexOutOfRange;
     }
+  }
+  if (type_name_expansion_too_large(pool)) {
+    return AbcStatus::TypeNameTooLarge;
   }
   for (const AbcMethodInfo& method : file.methods) {
     for (const AbcOptionalValue& option : method.options) {
