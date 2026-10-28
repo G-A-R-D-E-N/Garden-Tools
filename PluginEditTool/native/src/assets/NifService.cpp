@@ -1,5 +1,7 @@
 #include <fo4ide/assets/NifService.hpp>
 
+#include <fo4ide/assets/NifRender.hpp>
+
 #include <chrono>
 #include <fstream>
 #include <functional>
@@ -46,12 +48,12 @@ Result<void> NifService::requireFile(const std::filesystem::path& path, std::str
 
 Result<std::string> NifService::inspect(const std::filesystem::path& nifPath) const {
     if (auto valid = requireFile(nifPath, "NIF"); !valid) return std::unexpected(valid.error());
-    return run({"inspect", pathArg(nifPath)});
+    return renderInspect(nifPath);
 }
 
 Result<std::string> NifService::geometry(const std::filesystem::path& nifPath) const {
     if (auto valid = requireFile(nifPath, "NIF"); !valid) return std::unexpected(valid.error());
-    return run({"geo", pathArg(nifPath)});
+    return renderGeometry(nifPath);
 }
 
 Result<std::string> NifService::verify(const std::filesystem::path& nifPath) const {
@@ -140,7 +142,11 @@ Result<std::string> NifService::applyEdits(const std::filesystem::path& nifPath,
 }
 
 Result<std::string> NifService::run(std::vector<std::string> arguments) const {
-    if (executable_.empty() || !std::filesystem::is_regular_file(executable_)) {
+    if (executable_.empty()) {
+        return std::unexpected(Error{"NifToolNotFound",
+            "niftool not installed; authoring needs it (set NIFTOOL_PATH or place niftool beside the application)"});
+    }
+    if (!std::filesystem::is_regular_file(executable_)) {
         return std::unexpected(Error{"NifToolNotFound", "niftool executable not found: " + executable_.string()});
     }
 

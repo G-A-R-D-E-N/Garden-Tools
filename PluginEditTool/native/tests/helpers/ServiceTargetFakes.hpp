@@ -3,7 +3,6 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 
@@ -34,17 +33,12 @@ class FakeRunner final : public fo4ide::process::Runner {
 public:
     fo4ide::process::Request last;
     fo4ide::process::Output output{true, false, 0, "native nif result", {}};
+    int calls = 0;
 
     fo4ide::Result<fo4ide::process::Output> run(const fo4ide::process::Request& request) override {
+        ++calls;
         last = request;
         return output;
-    }
-};
-
-class ThrowingRunner final : public fo4ide::process::Runner {
-public:
-    fo4ide::Result<fo4ide::process::Output> run(const fo4ide::process::Request&) override {
-        throw std::runtime_error("niftool blew up");
     }
 };
 

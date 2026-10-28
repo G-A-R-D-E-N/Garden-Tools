@@ -184,7 +184,8 @@ These read the winning version of a leveled list, NPC_, FACT or WEAP record and 
 
 | Tool | Arguments | Writes | What it does |
 |---|---|---|---|
-| `nif_inspect`, `nif_verify`, `nif_tree`, `nif_geometry` | `path` | no | Run niftool on a NIF: summary, verification, block tree and geometry. Need niftool. |
+| `nif_inspect`, `nif_geometry` | `path` | no | Read a NIF in-process: summary and geometry. No niftool needed. |
+| `nif_verify`, `nif_tree` | `path` | no | Run niftool on a NIF: verification and block tree. Need niftool. |
 | `material_inspect` | `path` | no | Reads a BGSM or BGEM material: `fileName`, `format`, `version` and its named `fields`. |
 | `material_set_fields` | `path`, `fields` [`output`] | disk | Sets named material fields (`fields` maps a name to a text value) and writes the result atomically to `output`, or back to `path` when no output is given. A conditional field such as `EmittanceColor` can be set only when its switch (`EmitEnabled`) is already true in the saved file: set the switch in one call and the field in the next. |
 | `audio_convert_to_xwm` | `source` [`output`, `bitrateBps`] | disk | Converts one audio or video file, or every supported file under a folder, to Fallout 4 XWM. Without `output` each `.xwm` goes next to its source; with a folder source, `output` is a folder that mirrors the layout. Needs xWMAEncode, plus ffmpeg for anything that is not PCM WAV. |
