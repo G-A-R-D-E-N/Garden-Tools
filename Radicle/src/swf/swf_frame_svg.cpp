@@ -60,11 +60,45 @@ std::string filter_text(const std::string& id, const SwfColorTransform& color,
          "\"/></filter></defs>\n";
 }
 
+std::size_t descendants_end(const SwfDisplayFrame& frame, std::size_t index) {
+  const std::size_t level = frame.instances[index].nesting_level;
+  std::size_t end = index + 1;
+  while (end < frame.instances.size() && frame.instances[end].nesting_level > level) {
+    ++end;
+  }
+  return end;
+}
+
+std::string sprite_clip_to_svg(const ShapeIndex& shapes, const SvgBitmaps& bitmaps,
+                               const SwfDisplayFrame& frame, std::size_t index) {
+  const SwfFrameInstance& sprite = frame.instances[index];
+  const std::size_t end = descendants_end(frame, index);
+  std::string defs;
+  std::string paths;
+  for (std::size_t child = index + 1; child < end; ++child) {
+    const SwfFrameInstance& row = frame.instances[child];
+    const auto found = shapes.find(row.character_id);
+    if (found == shapes.end() || row.world_visible != sprite.world_visible) {
+      continue;
+    }
+    const SwfShape& shape = *found->second;
+    const SvgImages images = shape_images(shape, bitmaps);
+    const std::string id = "r" + std::to_string(child);
+    defs += shape_defs_to_svg(shape, id + "f", images);
+    paths += shape_fill_paths_to_svg(shape, id + "f", images, transform_text(row.world_transform));
+  }
+  return defs + "<clipPath id=\"r" + std::to_string(index) + "clip\">\n" + paths + "</clipPath>\n";
+}
+
 std::string frame_body(const ShapeIndex& shapes, const SvgBitmaps& bitmaps,
                        const SwfDisplayFrame& frame, const SwfRect& stage) {
   std::string body;
   std::vector<Mask> masks;
+  std::size_t mask_end = 0;
   for (std::size_t index = 0; index < frame.instances.size(); ++index) {
+    if (index < mask_end) {
+      continue;
+    }
     const SwfFrameInstance& row = frame.instances[index];
     const std::size_t level = row.nesting_level;
     std::erase_if(masks, [&](const Mask& mask) {
@@ -75,23 +109,27 @@ std::string frame_body(const ShapeIndex& shapes, const SvgBitmaps& bitmaps,
         mask.inside = row.depth > mask.depth;
       }
     }
-    if (!row.world_visible) {
+    const auto found = shapes.find(row.character_id);
+    const std::string id = "r" + std::to_string(index);
+    if (row.clip_depth && (row.is_sprite || found != shapes.end())) {
+      masks.push_back(Mask{level, row.depth, *row.clip_depth, id + "clip", false});
+      if (row.is_sprite) {
+        mask_end = descendants_end(frame, index);
+        body += sprite_clip_to_svg(shapes, bitmaps, frame, index);
+      } else {
+        const SwfShape& shape = *found->second;
+        const SvgImages images = shape_images(shape, bitmaps);
+        body += shape_defs_to_svg(shape, id + "f", images) + "<clipPath id=\"" + id +
+                "clip\" transform=\"" + transform_text(row.world_transform) + "\">\n" +
+                shape_fill_paths_to_svg(shape, id + "f", images) + "</clipPath>\n";
+      }
       continue;
     }
-    const auto found = shapes.find(row.character_id);
-    if (found == shapes.end()) {
+    if (!row.world_visible || found == shapes.end()) {
       continue;
     }
     const SwfShape& shape = *found->second;
     const SvgImages images = shape_images(shape, bitmaps);
-    const std::string id = "r" + std::to_string(index);
-    if (row.clip_depth) {
-      masks.push_back(Mask{level, row.depth, *row.clip_depth, id + "clip", false});
-      body += shape_defs_to_svg(shape, id + "f", images) + "<clipPath id=\"" + id +
-              "clip\" transform=\"" + transform_text(row.world_transform) + "\">\n" +
-              shape_fill_paths_to_svg(shape, id + "f", images) + "</clipPath>\n";
-      continue;
-    }
     std::string content = "<g transform=\"" + transform_text(row.world_transform) + "\">\n" +
                           shape_defs_to_svg(shape, id + "f", images) +
                           shape_paths_to_svg(shape, id + "f", images) + "</g>\n";

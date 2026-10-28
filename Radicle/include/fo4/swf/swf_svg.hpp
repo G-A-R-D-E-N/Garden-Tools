@@ -47,6 +47,6 @@ std::string shape_paths_to_svg(const SwfShape& shape, const std::string& id_pref
 
 // Requires a decoded shape and an id_prefix unique within the document; no stroke paths.
 std::string shape_fill_paths_to_svg(const SwfShape& shape, const std::string& id_prefix,
-                                    const SvgImages& images);
+                                    const SvgImages& images, const std::string& transform = {});
 
 }  // namespace fo4::swf
