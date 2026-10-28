@@ -30,6 +30,7 @@ function stubBridge(overrides: Record<string, unknown> = {}) {
     InspectText: vi.fn(async () => JSON.stringify({ text: '## Interface\\Test.swf\nStage 11000x8000\nRoot frame labels: start@1\n' })),
     ActionTags: vi.fn(async () => JSON.stringify({ tags: [{ tagIndex: 9, code: 12, insideSprite: false }] })),
     Avm1Disassemble: vi.fn(async () => JSON.stringify({ text: '0000  Play\n0001  End\n' })),
+    FrameSvg: vi.fn(async () => JSON.stringify({ svg: '<svg></svg>' })),
     ...overrides,
   };
   vi.stubGlobal('chrome', { webview: { hostObjects: { swf } } });
@@ -404,27 +405,29 @@ describe('SwfPanel', () => {
     fireEvent.change(screen.getByPlaceholderText('Interface/Test.swf'), { target: { value: 'Interface/Test.swf' } });
     await act(async () => { fireEvent.click(screen.getByText('Open')); });
     await waitFor(() => expect(screen.getByLabelText('Preview frame').getAttribute('max')).toBe('2'));
-    expect(swf.FrameSvg).not.toHaveBeenCalled();
+    expect(swf.FrameSvg).toHaveBeenCalledTimes(1);
+    expect(swf.FrameSvg).toHaveBeenCalledWith(0);
 
     fireEvent.change(screen.getByLabelText('Preview frame'), { target: { value: '2' } });
     expect((await screen.findByAltText('Frame preview')).getAttribute('src'))
       .toBe(`data:image/svg+xml;utf8,${encodeURIComponent('<svg id="f2"></svg>')}`);
 
     fireEvent.change(screen.getByLabelText('Preview frame'), { target: { value: '9' } });
-    await waitFor(() => expect(swf.FrameSvg).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(swf.FrameSvg).toHaveBeenCalledTimes(3));
 
     fireEvent.change(screen.getByLabelText('Preview frame'), { target: { value: '-3' } });
-    await waitFor(() => expect(swf.FrameSvg).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(swf.FrameSvg).toHaveBeenCalledTimes(4));
     expect((await screen.findByAltText('Frame preview')).getAttribute('src'))
       .toBe(`data:image/svg+xml;utf8,${encodeURIComponent('<svg id="f0"></svg>')}`);
 
     await act(async () => { fireEvent.click(screen.getByText('Next')); });
     expect(await screen.findByText('could not compose root frame 1')).toBeTruthy();
     expect(screen.queryByAltText('Frame preview')).toBeNull();
-    expect(swf.FrameSvg).toHaveBeenNthCalledWith(1, 2);
+    expect(swf.FrameSvg).toHaveBeenNthCalledWith(1, 0);
     expect(swf.FrameSvg).toHaveBeenNthCalledWith(2, 2);
-    expect(swf.FrameSvg).toHaveBeenNthCalledWith(3, 0);
-    expect(swf.FrameSvg).toHaveBeenNthCalledWith(4, 1);
+    expect(swf.FrameSvg).toHaveBeenNthCalledWith(3, 2);
+    expect(swf.FrameSvg).toHaveBeenNthCalledWith(4, 0);
+    expect(swf.FrameSvg).toHaveBeenNthCalledWith(5, 1);
   });
 
   it('drops a stale FrameSvg reply that lands after a newer frame', async () => {
@@ -434,6 +437,7 @@ describe('SwfPanel', () => {
     const swf = stubBridge({
       Timeline: vi.fn(async (index: number) => JSON.stringify({ characterId: index === 1 ? 14 : 0, frameCount: 3 })),
       FrameSvg: vi.fn()
+        .mockImplementationOnce(async () => JSON.stringify({ svg: '<svg id="open"></svg>' }))
         .mockImplementationOnce(() => new Promise<string>(resolve => { resolveFirst = resolve; }))
         .mockImplementationOnce(async () => JSON.stringify({ svg: second })),
     });
@@ -452,8 +456,28 @@ describe('SwfPanel', () => {
     });
     expect(screen.getByAltText('Frame preview').getAttribute('src'))
       .toBe(`data:image/svg+xml;utf8,${encodeURIComponent(second)}`);
-    expect(swf.FrameSvg).toHaveBeenNthCalledWith(1, 1);
-    expect(swf.FrameSvg).toHaveBeenNthCalledWith(2, 2);
+    expect(swf.FrameSvg).toHaveBeenNthCalledWith(2, 1);
+    expect(swf.FrameSvg).toHaveBeenNthCalledWith(3, 2);
+  });
+
+  it('redraws the previewed frame after a document edit so the image shows the change', async () => {
+    // Invariant: a document edit re-requests FrameSvg for the frame being previewed; detects the preview keeping the pre-edit image after an edit, or an edit redrawing frame 0 instead of the preview frame.
+    const swf = stubBridge({
+      Timeline: vi.fn(async (index: number) => JSON.stringify({ characterId: index === 1 ? 14 : 0, frameCount: 3 })),
+    });
+    render(<SwfPanel onClose={() => {}} />);
+    fireEvent.change(screen.getByPlaceholderText('Interface/Test.swf'), { target: { value: 'Interface/Test.swf' } });
+    await act(async () => { fireEvent.click(screen.getByText('Open')); });
+    await waitFor(() => expect(screen.getByLabelText('Preview frame').getAttribute('max')).toBe('2'));
+    fireEvent.change(screen.getByLabelText('Preview frame'), { target: { value: '2' } });
+    await waitFor(() => expect(swf.FrameSvg).toHaveBeenCalledTimes(2));
+
+    await act(async () => { fireEvent.click(await screen.findByTestId('swf-row-7')); });
+    await waitFor(() => expect(swf.PlacementMatrix).toHaveBeenCalledWith(2));
+    await act(async () => { fireEvent.click(screen.getByText('Apply depth')); });
+    await waitFor(() => expect(swf.SetDepth).toHaveBeenCalledWith(2, 1));
+    await waitFor(() => expect(swf.FrameSvg).toHaveBeenCalledTimes(3));
+    expect(swf.FrameSvg).toHaveBeenLastCalledWith(2);
   });
 
   it('drops a stale BitmapPng reply that lands after a newer bitmap pick', async () => {

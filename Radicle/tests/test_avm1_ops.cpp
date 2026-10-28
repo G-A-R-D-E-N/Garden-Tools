@@ -10,7 +10,6 @@
 #include <limits>
 #include <string>
 #include <string_view>
-#include <utility>
 #include <vector>
 
 namespace {
@@ -361,6 +360,10 @@ TEST(Avm1Interpreter, NewOperatorsRefuseAShortStack) {
       {"MBStringExtract with two values",
        cat({push_int(1), push_int(1), rec(0x35, {}), Bytes{0x00}}), Avm1RunStatus::StackUnderflow,
        {}},
+      {"MBCharToAscii on an empty stack", cat({rec(0x36, {}), Bytes{0x00}}),
+       Avm1RunStatus::StackUnderflow, {}},
+      {"MBAsciiToChar on an empty stack", cat({rec(0x37, {}), Bytes{0x00}}),
+       Avm1RunStatus::StackUnderflow, {}},
   };
   for (const TableRow& row : rows) {
     SCOPED_TRACE(row.name);
@@ -369,22 +372,6 @@ TEST(Avm1Interpreter, NewOperatorsRefuseAShortStack) {
     const auto result = fo4::avm1::execute_actions(stream);
     EXPECT_EQ(result.status, row.status) << result.message;
     EXPECT_EQ(result.trace, row.trace);
-  }
-}
-
-// Invariant: MBCharToAscii and MBAsciiToChar stay refused by name, since the slice has no codepage for them; a byte-wise stand-in would trace a value instead of refusing.
-TEST(Avm1Interpreter, MultibyteCharOpcodesStayRefusedByName) {
-  const std::vector<std::pair<std::uint8_t, std::string_view>> refused = {
-      {0x36, "MBCharToAscii"}, {0x37, "MBAsciiToChar"}};
-  for (const auto& [code, name] : refused) {
-    SCOPED_TRACE(name);
-    const auto stream = decode(cat({rec(code, {}), rec(0x26, {}), Bytes{0x00}}));
-    ASSERT_TRUE(stream.ok()) << stream.message;
-    const auto result = fo4::avm1::execute_actions(stream);
-    EXPECT_EQ(result.status, fo4::avm1::Avm1RunStatus::Unsupported);
-    EXPECT_EQ(result.opcode, code);
-    EXPECT_NE(result.message.find(name), std::string::npos) << result.message;
-    EXPECT_TRUE(result.trace.empty());
   }
 }
 
@@ -574,6 +561,33 @@ TEST(Avm1Interpreter, MultibyteStringOpcodesCountCodePointsAtEveryVersion) {
        {"z"}},
       {"MB extract at 3 for 2 is z, clamped by code points on SWF 6", 6, extract_index_3_count_2,
        {"z"}},
+  };
+  for (const VersionRow& row : rows) {
+    SCOPED_TRACE(row.name);
+    EXPECT_EQ(traced(row.input, row.version), row.trace);
+  }
+}
+
+// Invariant: MBCharToAscii reads the first code point and MBAsciiToChar encodes its low 16 bits as UTF-8 at every SWF version, so U+1F600 traces 128512 where a byte read traces its lead byte 240, and 65601 traces A where an unmasked value does not.
+TEST(Avm1Interpreter, MultibyteCharOpcodesUseCodePointsAtEveryVersion) {
+  const Bytes grinning_face = push_text("\xF0\x9F\x98\x80");
+  const std::vector<VersionRow> rows = {
+      {"U+1F600 is 128512 from SWF 6", 6,
+       cat({grinning_face, rec(0x36, {}), rec(0x26, {}), Bytes{0x00}}), {"128512"}},
+      {"U+1F600 is 128512 on SWF 5", 5,
+       cat({grinning_face, rec(0x36, {}), rec(0x26, {}), Bytes{0x00}}), {"128512"}},
+      {"e-acute is 233 on SWF 5", 5,
+       cat({push_text("\xC3\xA9"), rec(0x36, {}), rec(0x26, {}), Bytes{0x00}}), {"233"}},
+      {"the empty text is 0", 6,
+       cat({push_text(""), rec(0x36, {}), rec(0x26, {}), Bytes{0x00}}), {"0"}},
+      {"65 is A", 6, cat({push_int(65), rec(0x37, {}), rec(0x26, {}), Bytes{0x00}}), {"A"}},
+      {"65601 wraps to A", 6, cat({push_int(65601), rec(0x37, {}), rec(0x26, {}), Bytes{0x00}}),
+       {"A"}},
+      {"233 is the two-byte e-acute on SWF 5", 5,
+       cat({push_int(233), rec(0x37, {}), rec(0x26, {}), Bytes{0x00}}), {"\xC3\xA9"}},
+      {"the euro sign survives MBAsciiToChar then MBCharToAscii", 6,
+       cat({push_int(8364), rec(0x37, {}), rec(0x36, {}), rec(0x26, {}), Bytes{0x00}}),
+       {"8364"}},
   };
   for (const VersionRow& row : rows) {
     SCOPED_TRACE(row.name);
