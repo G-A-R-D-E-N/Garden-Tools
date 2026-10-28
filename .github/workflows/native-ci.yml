@@ -234,17 +234,27 @@ jobs:
           test -f build/zlib-win/zlibstatic.lib
 
       - name: Configure (clang-cl / xwin, Release)
-        run: >
-          cmake -S Radicle -B build/radicle-win -G Ninja
-          -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/cmake/xwin-clang-cl.cmake
-          -DCMAKE_BUILD_TYPE=Release
-          -DBUILD_TESTING=OFF
-          -DRADICLE_BUILD_TESTS=OFF
-          -DZLIB_INCLUDE_DIR=${{ github.workspace }}/build/zlib-win
-          -DZLIB_LIBRARY=${{ github.workspace }}/build/zlib-win/zlibstatic.lib
-          -DZLIB_LIBRARY_RELEASE=${{ github.workspace }}/build/zlib-win/zlibstatic.lib
-          -DZLIB_LIBRARY_DEBUG=${{ github.workspace }}/build/zlib-win/zlibstatic.lib
-          ${CCACHE:+-DCMAKE_C_COMPILER_LAUNCHER=$CCACHE -DCMAKE_CXX_COMPILER_LAUNCHER=$CCACHE}
+        run: |
+          for attempt in 1 2 3; do
+            if cmake -S Radicle -B build/radicle-win -G Ninja \
+              -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/cmake/xwin-clang-cl.cmake \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DBUILD_TESTING=OFF \
+              -DRADICLE_BUILD_TESTS=OFF \
+              -DZLIB_INCLUDE_DIR=${{ github.workspace }}/build/zlib-win \
+              -DZLIB_LIBRARY=${{ github.workspace }}/build/zlib-win/zlibstatic.lib \
+              -DZLIB_LIBRARY_RELEASE=${{ github.workspace }}/build/zlib-win/zlibstatic.lib \
+              -DZLIB_LIBRARY_DEBUG=${{ github.workspace }}/build/zlib-win/zlibstatic.lib \
+              ${CCACHE:+-DCMAKE_C_COMPILER_LAUNCHER=$CCACHE -DCMAKE_CXX_COMPILER_LAUNCHER=$CCACHE}; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::configure failed after 3 attempts"
+              exit 1
+            fi
+            echo "::warning::configure attempt $attempt failed, retrying"
+            sleep $((attempt * 30))
+          done
 
       - name: Build
         run: cmake --build build/radicle-win
