@@ -738,4 +738,12 @@ public partial class SwfTests
         var refused = Assert.Throws<RadicleException>(() => swf.BitmapPng(0));
         Assert.Equal(Status.NotFound, refused.Status);
     }
+
+    [Fact]
+    public void ExportsTheDefineBitsImageAsJpegAndRefusesANonJpegTag()
+    {
+        using var swf = SwfFile.FromBytes(ArtMovie());
+        Assert.Equal(new byte[] { 0xFF, 0xD8, 0xFF, 0xD9 }, swf.BitmapJpeg(2));
+        Assert.Equal(Status.NotFound, Assert.Throws<RadicleException>(() => swf.BitmapJpeg(1)).Status);
+    }
 }
