@@ -1,6 +1,7 @@
 #include "fo4/archive/ba2.hpp"
 #include "fo4/swf/swf.hpp"
 #include "fo4/swf/swf_characters.hpp"
+#include "fo4/swf/swf_svg.hpp"
 #include "real_data_build.hpp"
 #include "real_data_movies.hpp"
 
@@ -497,6 +498,65 @@ std::string version_histogram(const MovieStats& stats) {
   return text;
 }
 
+struct SvgStats {
+  std::size_t shapes{0};
+  std::size_t failures{0};
+};
+
+bool svg_is_well_formed(const std::string& svg) {
+  if (svg.find("nan") != std::string::npos || svg.find("inf") != std::string::npos) {
+    return false;
+  }
+  std::vector<std::string> open;
+  for (std::size_t at = svg.find('<'); at != std::string::npos; at = svg.find('<', at)) {
+    const auto close = svg.find('>', at);
+    if (close == std::string::npos) {
+      return false;
+    }
+    const std::string tag = svg.substr(at + 1, close - at - 1);
+    at = close;
+    if (tag.empty()) {
+      return false;
+    }
+    if (tag.front() == '/') {
+      if (open.empty() || open.back() != tag.substr(1)) {
+        return false;
+      }
+      open.pop_back();
+    } else if (tag.back() != '/') {
+      open.push_back(tag.substr(0, tag.find_first_of(" />")));
+    }
+  }
+  return open.empty();
+}
+
+void check_svg_tag(const std::string& name, const fo4::swf::SwfTag& tag, SvgStats& stats) {
+  if (tag.shape) {
+    ++stats.shapes;
+    if (!svg_is_well_formed(fo4::swf::shape_to_svg(*tag.shape))) {
+      ++stats.failures;
+      ADD_FAILURE() << name << ": shape " << tag.shape->shape_id << " exports malformed SVG";
+    }
+  }
+  for (const auto& child : tag.children) {
+    check_svg_tag(name, child, stats);
+  }
+}
+
+void check_svg_movie(const std::string& name, std::span<const std::byte> bytes, SvgStats& stats) {
+  const auto result = fo4::swf::read_swf(bytes);
+  if (result.status == fo4::swf::SwfStatus::unsupported_compression) {
+    return;
+  }
+  EXPECT_TRUE(result.ok()) << name << ": " << fo4::swf::status_name(result.status);
+  if (!result.ok()) {
+    return;
+  }
+  for (const auto& tag : result.file.tags) {
+    check_svg_tag(name, tag, stats);
+  }
+}
+
 }  // namespace
 
 TEST(SwfRealData, ParsesEveryShippedMovieAndRoundTripsByteIdentically) {
@@ -658,4 +718,26 @@ TEST(SwfRealData, InterfaceCorpusDoActionCountAndNoLzmaCompression) {
   EXPECT_GT(movies, 0u);
   EXPECT_EQ(lzma_movies, 0u);
   EXPECT_EQ(do_action_tags, 82u);
+}
+
+TEST(SwfRealData, ExportsEveryShapeToWellFormedSvg) {
+  const char* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) {
+    GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
+  }
+  const auto archive_path = std::filesystem::path(dir) / "Fallout4 - Interface.ba2";
+  if (!std::filesystem::exists(archive_path)) {
+    GTEST_SKIP() << "no Fallout4 - Interface.ba2 in FO4_DATA_DIR";
+  }
+  const auto archive = fo4::archive::read_ba2_general_file(archive_path);
+  SvgStats stats;
+  for (const auto& entry : archive.entries) {
+    if (is_movie(entry.path)) {
+      check_svg_movie(entry.path, fo4::archive::extract_ba2_general_entry(entry), stats);
+    }
+  }
+  RecordProperty("svg_shapes", std::to_string(stats.shapes));
+  RecordProperty("svg_failures", std::to_string(stats.failures));
+  EXPECT_GT(stats.shapes, 0u);
+  EXPECT_EQ(stats.failures, 0u);
 }
