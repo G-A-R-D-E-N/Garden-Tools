@@ -311,6 +311,7 @@ SwfStatus decode_place_object2(std::span<const std::byte> data, bool version3,
   if (!version3) {
     return SwfStatus::ok;
   }
+  place.has_filter_list = has_filters;
   if (has_filters && !decode_filter_list(reader, place.filters)) {
     return SwfStatus::malformed_tag;
   }

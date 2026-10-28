@@ -70,6 +70,24 @@ SwfPlacementRow placement_row(const swf::SwfPlacement& placement) {
     row.has_clip_depth = true;
     row.clip_depth = *placement.clip_depth;
   }
+  if (placement.ratio.has_value()) {
+    row.has_ratio = true;
+    row.ratio = *placement.ratio;
+  }
+  if (placement.blend_mode.has_value()) {
+    row.has_blend_mode = true;
+    row.blend_mode = *placement.blend_mode;
+  }
+  if (placement.visible.has_value()) {
+    row.has_visible = true;
+    row.visible = *placement.visible;
+  }
+  if (placement.bitmap_cache.has_value()) {
+    row.has_bitmap_cache = true;
+    row.bitmap_cache = *placement.bitmap_cache != 0;
+  }
+  row.has_filters = placement.has_filter_list;
+  row.filters = placement.filters;
   return row;
 }
 

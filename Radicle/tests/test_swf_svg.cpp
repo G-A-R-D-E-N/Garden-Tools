@@ -3,6 +3,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 
@@ -162,6 +163,48 @@ TEST(SwfSvg, StrokeOnlyShapeMapsWidthCapAndJoinFlags) {
       "<path d=\"M0 0L50 0\" stroke=\"#102030\" stroke-opacity=\"1\" fill=\"none\" "
       "stroke-width=\"2\" stroke-linecap=\"butt\" stroke-linejoin=\"miter\" "
       "stroke-miterlimit=\"3\"/>\n"
+      "</svg>\n";
+  EXPECT_EQ(fo4::swf::shape_to_svg(shape), expected);
+}
+
+TEST(SwfSvg, ThousandsOfCollinearEdgesChainIntoOneClosedLoop) {
+  // Detects: loop chaining must find the next unused edge from a shared start point without losing or splitting edges; 3000 collinear pieces of one square outline must still form one M...Z subpath.
+  auto shape = sized_shape(3000, 3000);
+  shape.fill_styles.push_back(solid_fill(0xFF000000u));
+  shape.records = {move_to(0, 0), style_change(1, 0, 0)};
+  for (int i = 0; i < 750; ++i) {
+    shape.records.push_back(line_by(4, 0));
+  }
+  for (int i = 0; i < 750; ++i) {
+    shape.records.push_back(line_by(0, 4));
+  }
+  for (int i = 0; i < 750; ++i) {
+    shape.records.push_back(line_by(-4, 0));
+  }
+  for (int i = 0; i < 750; ++i) {
+    shape.records.push_back(line_by(0, -4));
+  }
+  const std::string svg = fo4::swf::shape_to_svg(shape);
+  EXPECT_EQ(std::count(svg.begin(), svg.end(), 'M'), 1);
+  EXPECT_EQ(std::count(svg.begin(), svg.end(), 'L'), 3000);
+  EXPECT_EQ(std::count(svg.begin(), svg.end(), 'Z'), 1);
+  EXPECT_NE(svg.find("<path d=\"M0 0L0.2 0L0.4 0"), std::string::npos);
+  EXPECT_NE(svg.find("L0 0Z\" fill=\"#000000\""), std::string::npos);
+}
+
+TEST(SwfSvg, ClosedStrokeLoopEndsInZ) {
+  // Detects: a stroke whose edges return to their start point must close with Z so the join at the start corner is drawn; an open M...L run leaves a missing corner.
+  auto shape = sized_shape(1000, 1000);
+  fo4::swf::SwfLineStyle line;
+  line.width = 20;
+  line.color = 0xFF102030u;
+  shape.line_styles.push_back(line);
+  shape.records = {move_to(0, 0), style_change(0, 0, 1), line_by(1000, 0), line_by(0, 1000),
+                   line_by(-1000, 0), line_by(0, -1000)};
+  const std::string expected =
+      "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 50 50\" width=\"50\" height=\"50\">\n"
+      "<path d=\"M0 0L50 0L50 50L0 50L0 0Z\" stroke=\"#102030\" stroke-opacity=\"1\" fill=\"none\" "
+      "stroke-width=\"1\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>\n"
       "</svg>\n";
   EXPECT_EQ(fo4::swf::shape_to_svg(shape), expected);
 }
