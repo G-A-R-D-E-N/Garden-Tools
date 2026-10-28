@@ -98,17 +98,10 @@ jobs:
         working-directory: PluginEditTool/web
         run: npm run build
 
-      # package.ps1 is the authority for what the zip contains: FO4RecordEditor.exe,
-      # web/dist, tools/* when the optional paths resolve, the shipped docs and
-      # mcp.sample.json. The optional tool paths come from repository variables so
-      # the owner can start bundling them without editing this workflow;
-      # package.ps1 warns and continues when one is unset, so no skip switch is
-      # passed for them. -SkipWeb: web/dist was built in the previous step.
+      # -SkipWeb: web/dist was built in the previous step.
       - name: Package FO4RecordEditor
         shell: powershell
         run: |
-          $env:NIFTOOL_PATH = '${{ vars.FO4IDE_NIFTOOL_PATH }}'
-          $env:TEXCONV_PATH = '${{ vars.FO4IDE_TEXCONV_PATH }}'
           $env:CK_WIKI_PATH = '${{ vars.FO4IDE_CK_WIKI_PATH }}'
           $env:FO4IDE_AUDIO_TOOLS_DIR = '${{ vars.FO4IDE_AUDIO_TOOLS_DIR }}'
           $env:FO4IDE_CMAKE_GENERATOR = 'Ninja'
