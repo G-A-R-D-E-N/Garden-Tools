@@ -21,6 +21,7 @@ struct Operation {
   std::optional<SwfTransform> transform;
   std::optional<std::string> name;
   std::optional<std::uint16_t> clip_depth;
+  std::optional<std::uint16_t> ratio;
   std::optional<SwfColorTransform> color_transform;
   std::optional<bool> visible;
 };
@@ -35,6 +36,7 @@ struct LocalInstance {
   std::string name;
   SwfTransform transform{};
   std::optional<std::uint16_t> clip_depth;
+  std::optional<std::uint16_t> ratio;
   std::optional<SwfColorTransform> color_transform;
   bool visible{true};
 };
@@ -94,6 +96,7 @@ bool collect_operations(const std::vector<SwfTag>& tags, std::vector<std::vector
       operation.name = *placement.name;
     }
     operation.clip_depth = placement.clip_depth;
+    operation.ratio = placement.ratio;
     operation.color_transform = placement.color_transform;
     operation.visible = placement.visible;
     current.push_back(std::move(operation));
@@ -141,6 +144,9 @@ bool replay(const std::vector<std::vector<Operation>>& operations, std::uint16_t
         if (operation.clip_depth) {
           target.clip_depth = operation.clip_depth;
         }
+        if (operation.ratio) {
+          target.ratio = operation.ratio;
+        }
         if (operation.color_transform) {
           target.color_transform = operation.color_transform;
         }
@@ -159,6 +165,7 @@ bool replay(const std::vector<std::vector<Operation>>& operations, std::uint16_t
         instance.name = existing->second.name;
         instance.transform = existing->second.transform;
         instance.clip_depth = existing->second.clip_depth;
+        instance.ratio = existing->second.ratio;
         instance.color_transform = existing->second.color_transform;
         instance.transform_tag_index = existing->second.transform_tag_index;
         instance.visible = existing->second.visible;
@@ -172,6 +179,9 @@ bool replay(const std::vector<std::vector<Operation>>& operations, std::uint16_t
       }
       if (operation.clip_depth) {
         instance.clip_depth = operation.clip_depth;
+      }
+      if (operation.ratio) {
+        instance.ratio = operation.ratio;
       }
       if (operation.color_transform) {
         instance.color_transform = operation.color_transform;
@@ -263,6 +273,7 @@ public:
       instance.transform = local.transform;
       instance.world_transform = world;
       instance.clip_depth = local.clip_depth;
+      instance.ratio = local.ratio;
       instance.world_color_transform = world_color;
       instance.world_visible = world_visible;
       instance.create_tag_index = local.create_tag_index;

@@ -26,6 +26,7 @@ struct SwfFrameInstance {
   bool has_bounds{false};
   bool is_sprite{false};
   std::optional<std::uint16_t> clip_depth;
+  std::optional<std::uint16_t> ratio;
   std::optional<SwfColorTransform> world_color_transform;
   /* Invariant: false when this row or any sprite above it is hidden by a PlaceObject3 visible flag. */
   bool world_visible{true};
@@ -42,7 +43,8 @@ struct SwfFrameInstance {
            transform == other.transform && world_transform == other.world_transform &&
            bounds == other.bounds && has_bounds == other.has_bounds && is_sprite == other.is_sprite &&
            nesting_level == other.nesting_level && clip_depth == other.clip_depth &&
-           world_color_transform == other.world_color_transform && world_visible == other.world_visible;
+           ratio == other.ratio && world_color_transform == other.world_color_transform &&
+           world_visible == other.world_visible;
   }
 };
 
