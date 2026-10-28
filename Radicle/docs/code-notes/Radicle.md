@@ -8286,3 +8286,35 @@ A row whose character is a DefineText or DefineText2 with a clip depth opens a m
 - `Radicle/tests/test_swf_svg_text_clip.cpp:SwfFrameSvgTextClip.StaticTextInsideAClipSpriteJoinsTheSpriteMask` detects a text child left out of the sprite clipPath (the blue square would paint unclipped), and a glyph that ignores its child's world transform (it would print at the origin, not at 20 px).
 
 Expected strings were derived by hand. The glyph is a 1000-twip square (50 px, the path of `Radicle/tests/test_swf_svg.cpp:kRedSquare` at its size), at a DefineText height of 1024, so the font scale is 1 and the text matrix is the identity. The blue square is the 600-twip one, `Radicle/tests/test_swf_svg.cpp:kBlueSquare`. The clipPath ids follow the shape-mask convention `r<index>clip`. Nothing was compiled or run on the development machine for this change, so CI must confirm them.
+
+## Radicle/src/avm1/control_ops.cpp:execute
+
+Adds the AVM1 control and object opcodes 0x2A Throw, 0x2B CastOp, 0x46 Enumerate, 0x54 InstanceOf, 0x55 Enumerate2, 0x69 Extends, 0x8F Try and 0x94 With. This supersedes the older refusal notes for these opcodes; ImplementsOp 0x2C stays refused by name. GetMember and SetMember on function prototypes stay deferred because there is no prototype model. Any other opcode still returns Unsupported.
+
+## Radicle/src/avm1/control_ops.cpp:try_regions
+
+A Try record (0x8F) carries flags (bit0 catch, bit1 finally, bit2 catch-in-register), try_size, catch_size and finally_size, then a catch name string or a register byte. The record offsets body, catch_at, finally_at and after_at are resolved through jump_index. On Thrown the operand stack is cut back to its depth at the Try. A caught value binds to the catch name in block.call->locals or in the globals, or to a register through function_ops::store_register. A finally runs with the pending throw saved aside. If the finally jumps or returns, that overrides the pending throw. If it does not, the throw is restored and returns Thrown. Known limit: a Return inside a finally with a pending exception can still rethrow when the Try ends the body.
+
+## Radicle/src/avm1/control_ops.cpp:run_with
+
+The With record (0x94) pops its object. A value that is not an object skips the body; this choice was made without a reference trace. An object is pushed onto block.scopes for the body, and scope_slot in function_ops.cpp consults it first for reads and writes. Try and With share one run-wide counter, run.regions, capped at kMaxNesting = 64 in control_ops.cpp. The 65th level returns ResourceLimit with "Try and With nesting reached the limit of 64 levels".
+
+## Radicle/src/avm1/control_ops.cpp:extends
+
+Superclass links live in Avm1Run::superclasses, keyed by the subclass body pointer. InstanceOf and CastOp use the constructed_by body recorded by invoke_method in function_ops.cpp. This is a constructor-body class model, not prototype objects. A link that would create a cycle returns InvalidStream. A non-function operand returns Unsupported.
+
+## Radicle/src/avm1/control_ops.cpp:push_names
+
+Enumerate and Enumerate2 push a null first, then the keys in reverse insertion order. Popping then yields the keys in insertion order and ends on null. A non-object operand yields only null.
+
+## Radicle/src/avm1/interpreter.cpp:run_range
+
+Each record counts once against max_steps before it runs. Thrown overwrites result.opcode and result.offset but not result.status. The outer execute_actions turns an uncaught Thrown into the status Thrown with the message "the thrown value was not caught". On Ok the index is returned as resume so the enclosing Try or With can continue after its sub-range.
+
+## Radicle/src/avm1/interpreter.cpp:jump_index
+
+Known hole, not fixed: jump_index maps a target offset to an index in the flattened action vector and checks only that the target is a record start. A branch from top-level code into a DefineFunction or DefineFunction2 body is therefore accepted, and those records would run with block.call == nullptr. No test covers this path yet.
+
+## Radicle/src/avm1/function_ops.cpp:invoke
+
+Ceilings: kMaxCallDepth = 64 functions, and the step limit is counted per record in run_range. Each call builds its own scopes vector for With bodies. The construct path in invoke_method sets instance.object->constructed_by before the constructor runs.
