@@ -1,8 +1,12 @@
 #include "fo4/swf/swf_svg.hpp"
 
+#include <charconv>
+#include <compare>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <map>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -29,8 +33,10 @@ struct Point {
   std::int64_t x{0};
   std::int64_t y{0};
 
-  bool operator==(const Point&) const = default;
+  auto operator<=>(const Point&) const = default;
 };
+
+using StartIndex = std::map<Point, std::vector<std::size_t>>;
 
 struct Edge {
   Point start;
@@ -44,8 +50,9 @@ struct Edge {
 
 std::string number(double value) {
   char buffer[32];
-  std::snprintf(buffer, sizeof buffer, "%.6f", value);
-  std::string text(buffer);
+  const auto result = std::to_chars(buffer, buffer + sizeof buffer, value,
+                                    std::chars_format::fixed, 6);
+  std::string text(buffer, result.ptr);
   while (text.back() == '0') {
     text.pop_back();
   }
@@ -143,19 +150,35 @@ std::vector<Edge> fill_edges(const std::vector<Edge>& edges, std::size_t index) 
   return out;
 }
 
-std::size_t find_unused_from(const std::vector<Edge>& edges, const std::vector<bool>& used,
-                             Point from) {
-  for (std::size_t index = 0; index < edges.size(); ++index) {
-    if (!used[index] && edges[index].start == from) {
-      return index;
-    }
+StartIndex index_by_start(const std::vector<Edge>& edges) {
+  StartIndex index;
+  for (std::size_t edge = edges.size(); edge-- > 0;) {
+    index[edges[edge].start].push_back(edge);
   }
-  return edges.size();
+  return index;
+}
+
+std::optional<std::size_t> take_unused_from(StartIndex& index, std::vector<bool>& used,
+                                            Point from) {
+  const auto bucket = index.find(from);
+  if (bucket == index.end()) {
+    return std::nullopt;
+  }
+  auto& starting = bucket->second;
+  while (!starting.empty() && used[starting.back()]) {
+    starting.pop_back();
+  }
+  if (starting.empty()) {
+    return std::nullopt;
+  }
+  used[starting.back()] = true;
+  return starting.back();
 }
 
 std::string loops_text(const std::vector<Edge>& edges) {
   std::string text;
   std::vector<bool> used(edges.size(), false);
+  StartIndex starts = index_by_start(edges);
   for (std::size_t first = 0; first < edges.size(); ++first) {
     if (used[first]) {
       continue;
@@ -165,13 +188,12 @@ std::string loops_text(const std::vector<Edge>& edges) {
     Point pen = edges[first].end;
     text += "M" + point_text(origin) + edge_text(edges[first]);
     while (pen != origin) {
-      const std::size_t next = find_unused_from(edges, used, pen);
-      if (next == edges.size()) {
+      const auto next = take_unused_from(starts, used, pen);
+      if (!next) {
         break;
       }
-      used[next] = true;
-      text += edge_text(edges[next]);
-      pen = edges[next].end;
+      text += edge_text(edges[*next]);
+      pen = edges[*next].end;
     }
     if (pen == origin) {
       text += "Z";
@@ -180,22 +202,29 @@ std::string loops_text(const std::vector<Edge>& edges) {
   return text;
 }
 
+const char* closing_text(bool connected, Point origin, Point pen) {
+  return connected && pen == origin ? "Z" : "";
+}
+
 std::string stroke_text(const std::vector<Edge>& edges, std::size_t line) {
   std::string text;
   bool connected = false;
+  Point origin;
   Point pen;
   for (const auto& edge : edges) {
     if (edge.line != line) {
       continue;
     }
     if (!connected || edge.start != pen) {
+      text += closing_text(connected, origin, pen);
       text += "M" + point_text(edge.start);
+      origin = edge.start;
     }
     text += edge_text(edge);
     pen = edge.end;
     connected = true;
   }
-  return text;
+  return text + closing_text(connected, origin, pen);
 }
 
 bool is_gradient(std::uint8_t type) {
