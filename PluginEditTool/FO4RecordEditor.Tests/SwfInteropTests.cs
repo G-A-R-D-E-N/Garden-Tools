@@ -133,5 +133,37 @@ public sealed class SwfInteropTests
         }
     }
 
+    [NativeFact]
+    public async Task BitmapPngRpcReturnsTheBase64PngForABitmapAndTheRefusalForANonBitmap()
+    {
+        // Invariant: BitmapPng replies the png field as base64 of the PNG bytes for the tag index the Characters listing gives a bitmap, and the error shape for an edit-text tag; detects a dropped png field, a png that is not base64 of the PNG signature, a bitmap read by character id, or a non-bitmap exporting as png.
+        var root = Path.Combine(Path.GetTempPath(), "fo4re-swf-bitmap-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, "Interface"));
+        File.WriteAllBytes(Path.Combine(root, "Interface", "Test.swf"), SwfFixture.Movie(withBitmap: true));
+        AssetResolver.SetSessionDataRoots(new[] { root });
+        try
+        {
+            var swf = new SwfInterop();
+            Assert.False(Parse(await swf.Open("Interface\\Test.swf")).TryGetProperty("error", out _));
+            var characters = Parse(await swf.Characters()).GetProperty("characters").EnumerateArray().ToArray();
+
+            var bitmap = characters.First(item => item.GetProperty("kind").GetString() == "Bitmap");
+            var reply = Parse(await swf.BitmapPng(bitmap.GetProperty("tagIndex").GetInt32()));
+            Assert.False(reply.TryGetProperty("error", out _));
+            var png = Convert.FromBase64String(reply.GetProperty("png").GetString() ?? string.Empty);
+            Assert.Equal(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }, png[..8]);
+
+            var text = characters.First(item => item.GetProperty("kind").GetString() == "EditText");
+            var refusal = Parse(await swf.BitmapPng(text.GetProperty("tagIndex").GetInt32()));
+            Assert.False(string.IsNullOrEmpty(refusal.GetProperty("error").GetString()));
+            Assert.False(refusal.TryGetProperty("png", out _));
+        }
+        finally
+        {
+            AssetResolver.SetSessionDataRoots(Array.Empty<string>());
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static JsonElement Parse(string json) => JsonDocument.Parse(json).RootElement;
 }
