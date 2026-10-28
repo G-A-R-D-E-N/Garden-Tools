@@ -138,6 +138,8 @@ std::string to_text(const Avm1Data& data, std::uint8_t swf_version) {
       return number_text(data.number);
     case Avm1DataKind::String:
       return data.text;
+    case Avm1DataKind::Object:
+      return "[object Object]";
   }
   return "undefined";
 }

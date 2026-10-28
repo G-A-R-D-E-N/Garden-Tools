@@ -7852,3 +7852,39 @@ Test regressions, in `Radicle/tests/test_swf_display.cpp`: `SwfFrameSvg.ASlashIn
 ## Radicle/src/avm1/interpreter.cpp:execute_action (MBCharToAscii 0x36 and MBAsciiToChar 0x37)
 
 MBCharToAscii (0x36) pops one value, converts it with `to_text` at the movie's version, and pushes `Radicle/src/avm1/text_ops.cpp:first_code_point` of the result, so the whole first UTF-8 code point counts at every SWF version and empty text pushes 0. MBAsciiToChar (0x37) pops one value, takes `to_uint32` (truncation toward zero, wrap modulo 2^32, NaN and infinity as 0), keeps the low 16 bits and pushes `Radicle/src/avm1/text_ops.cpp:encode_code_unit` of them, so the result is UTF-8 at every version. The code point read and the 16-bit wrap are from the SWF spec as recalled, unverified; no SWF spec mirror was available on the development machine to check them. Units 0xD800 to 0xDFFF encode as three-byte sequences, which is not valid UTF-8; this is a known gap, not checked against Flash. Regression: a byte read for 0x36 traces 240 on the U+1F600 row instead of 128512, and an unmasked 0x37 encodes 65601 as a malformed sequence instead of "A". Tests: `Radicle/tests/test_avm1_ops.cpp:MultibyteCharOpcodesUseCodePointsAtEveryVersion` and the two underflow rows for 0x36 and 0x37 in `Radicle/tests/test_avm1_ops.cpp:NewOperatorsRefuseAShortStack`.
+
+## Radicle/src/avm1/object_ops.cpp:object_ops
+
+The object slice adds an object kind to the value type. `Radicle/include/fo4/avm1/interpreter.hpp:Avm1Data` has an `Object` kind and a `std::shared_ptr<Avm1Object>` handle, so an object is a reference: a copy of the value (through PushDuplicate, a variable or a property read) names the same `Avm1Object`. `Radicle/src/avm1/object_ops.hpp:Avm1Object` has no prototype, function or class. Its properties sit in a `std::map` for lookup and `order` keeps insertion order for a later enumerate record. `Radicle/src/avm1/object_ops.cpp:put` keeps the two in step and `Radicle/src/avm1/object_ops.cpp:erase_property` removes from both. The executed set in `## Radicle/src/avm1/interpreter.cpp:execute_actions` is extended by NewObject (0x40), InitArray (0x42), InitObject (0x43), GetMember (0x4E), SetMember (0x4F), Delete (0x3A) and Delete2 (0x3B). CallFunction, CallMethod, NewMethod, Enumerate, Enumerate2, InstanceOf and Extends stay refused by name.
+
+An array is an `Avm1Object` with `is_array` set. `Radicle/src/avm1/object_ops.cpp:make_object` starts its `length` at 0, and `put` raises `length` to the index plus one when the key is a canonical array index (decimal, no leading zero, at most 4294967294). A write never lowers `length`. Setting `length` on an array refuses with Unsupported, since truncation is not in this slice. Deleting `length` from an array pushes false, since ECMA-262 marks it non-configurable (from memory, not checked against a copy of the spec).
+
+Opcodes. `Radicle/src/avm1/object_ops.cpp:new_object` creates an empty object only for `new Object` with a zero count; any other class or argument refuses. `Radicle/src/avm1/object_ops.cpp:init_array` pops a count and that many values, `Radicle/src/avm1/object_ops.cpp:init_object` pops a count and that many (value, name) pairs, and `Radicle/src/avm1/object_ops.cpp:get_member` and `Radicle/src/avm1/object_ops.cpp:set_member` take the name from the top of the stack with the object below it. `Radicle/src/avm1/object_ops.cpp:delete_member` and `Radicle/src/avm1/object_ops.cpp:delete_variable` push a Boolean for whether something was removed. A count that is not a Number, is not a whole number or is larger than the stack holds refuses with StackUnderflow, through `Radicle/src/avm1/object_ops.cpp:pop_count`.
+
+Unverified against the SWF spec v19 mirror, which is not on this machine: the operand order. NewObject pops the name first and then the count. InitArray stores values in push order. InitObject takes each pair as a value with its name on top, and stores the pairs in push order, so the first pair pushed is the first property. GetMember and SetMember pop the name first and then the object. A GetMember on undefined or null pushes undefined, and a SetMember on undefined or null does nothing, both from memory of AS2. A member of a number, string or boolean refuses, because without prototypes `"abc".length` has no answer here. Delete of a missing property or variable pushes false, while ECMA-262 `delete` of a missing reference is true; the Flash result is not checked.
+
+Tests: `Radicle/tests/test_avm1_objects.cpp:InitObjectThenGetMemberReadsEachPair`, `Radicle/tests/test_avm1_objects.cpp:SetMemberAndArrayLengthFollowTheWrittenKey`, `Radicle/tests/test_avm1_objects.cpp:InitArrayLengthAndElementOrder`, `Radicle/tests/test_avm1_objects.cpp:MemberAndConstructorRefusalsTraceNothing` and `Radicle/tests/test_avm1_objects.cpp:DeleteReturnsWhetherSomethingWasRemoved`. The TypeOf rows for object and array are in `Radicle/tests/test_avm1_ops.cpp:TypeOfNamesEachDataKind`. `Radicle/tests/test_avm1.cpp:ObjectAndFunctionOpcodesStayRefusedByName` now refuses CallMethod, NewMethod, Enumerate, InstanceOf and Extends, because GetMember is in this slice. Not compiled or run on the development machine; CI is the first compile and run.
+
+## Radicle/src/avm1/state.hpp:Avm1State
+
+`Avm1State`, `kUnderflow` and `pop` moved out of the anonymous namespace of `Radicle/src/avm1/interpreter.cpp` into this header, so `Radicle/src/avm1/object_ops.cpp` pops operands from the same stack without a second copy. The records that `execute_action` already runs behave as before.
+
+## Radicle/src/avm1/text_ops.cpp:to_text
+
+An object renders as `[object Object]`, which is the AS2 trace text of a plain object as recalled; not checked against the spec mirror. Arrays render the same way here. AS2 joins the elements with commas through Array.prototype.toString, which needs the prototype lane, so an array's text is a known gap. ToString (0x4B) and the text operands of StringAdd (0x21) and StringEquals (0x13) read this text.
+
+## Radicle/src/avm1/interpreter.cpp:loose_equal
+
+Two objects compare Equals2 equal only when they are the same `Avm1Object`, by pointer identity, and `Radicle/src/avm1/interpreter.cpp:strict_equal` uses the same identity. An object against a number or text converts to its text first, the ECMA-262 ToPrimitive path, so the object equals the text `[object Object]`. The ToPrimitive order is from ECMA-262 as recalled. Test: `Radicle/tests/test_avm1_objects.cpp:ObjectsConvertToTheObjectTextAndCompareByIdentity`.
+
+## Radicle/src/avm1/interpreter.cpp:add_values
+
+When either operand of Add2 (0x47) is an object, the result is text, because ToPrimitive gives an ordinary object its text and `+` then concatenates. So an object plus 1 traces `[object Object]1`, not NaN. From ECMA-262 as recalled; not checked against the spec mirror.
+
+## Radicle/src/avm1/interpreter.cpp:to_number
+
+ToNumber of an object is NaN, which is what ECMA-262 gives for the text `[object Object]`, since ToPrimitive then ToNumber of that text is NaN. `to_boolean` reads an object as true, as ECMA-262 does.
+
+## Ceilings of the object slice
+
+The object slice has these known gaps, so that none is read as AS2 behavior. Stored values are copied per step, since `Avm1Data` holds its text by value, and there is no byte budget for the properties of a run. A loop that stores a long string under many names can hold many copies up to the step limit; the operand stack has the same exposure through PushDuplicate, see `## Radicle/src/avm1/interpreter.cpp:push_result`. A per-run byte budget is the fix when a real movie needs one. `Radicle/src/avm1/interpreter.cpp:less_than` still compares an object as NaN, where ECMA-262 compares the object's text with a string. A count written as text (a String rather than a Number) refuses in `Radicle/src/avm1/object_ops.cpp:pop_count` rather than being converted.

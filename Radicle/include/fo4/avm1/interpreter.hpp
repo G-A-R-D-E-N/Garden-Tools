@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -29,13 +30,17 @@ enum class Avm1DataKind : std::uint8_t {
   Boolean,
   Number,
   String,
+  Object,
 };
+
+struct Avm1Object;
 
 struct Avm1Data {
   Avm1DataKind kind{Avm1DataKind::Undefined};
   bool boolean{false};
   double number{0.0};
   std::string text;
+  std::shared_ptr<Avm1Object> object;
 };
 
 struct Avm1Result {
