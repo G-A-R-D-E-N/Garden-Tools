@@ -145,7 +145,7 @@ a real height**, not a default sentinel. The original XCLW bytes remain intact.
 Interior height volumes and live rendering are outside this selection query.
 The selection result was added as ABI 28 after integrating main ABI 27. The
 current number is `RADICLE_ABI_VERSION` in `Radicle/include/fo4/c_api.h`, pinned
-by `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsSeventySeven`; if
+by `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsSeventyEight`; if
 another ABI PR merges first, re-bump against that pin. See
 `docs/code-notes/radicle-water-writer.md`.
 
