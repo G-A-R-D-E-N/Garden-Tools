@@ -581,7 +581,9 @@ TEST_CASE("NifService refuses box collision in-process and writes no NIF") {
 
     FakeRunner runner;
     fo4ide::assets::NifService service(runner, std::filesystem::path{});
-    auto result = service.importObj(obj, root / "quad.nif", {.collisionBox = true});
+    fo4ide::assets::NifImportOptions options;
+    options.collisionBox = true;
+    auto result = service.importObj(obj, root / "quad.nif", options);
 
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().message.find("box collision needs niftool") != std::string::npos);
