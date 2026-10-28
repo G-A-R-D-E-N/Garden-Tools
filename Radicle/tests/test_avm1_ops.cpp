@@ -356,6 +356,11 @@ TEST(Avm1Interpreter, NewOperatorsRefuseAShortStack) {
        Avm1RunStatus::StackUnderflow, {}},
       {"AsciiToChar on an empty stack", cat({rec(0x33, {}), Bytes{0x00}}),
        Avm1RunStatus::StackUnderflow, {}},
+      {"MBStringLength on an empty stack", cat({rec(0x31, {}), Bytes{0x00}}),
+       Avm1RunStatus::StackUnderflow, {}},
+      {"MBStringExtract with two values",
+       cat({push_int(1), push_int(1), rec(0x35, {}), Bytes{0x00}}), Avm1RunStatus::StackUnderflow,
+       {}},
   };
   for (const TableRow& row : rows) {
     SCOPED_TRACE(row.name);
@@ -367,11 +372,10 @@ TEST(Avm1Interpreter, NewOperatorsRefuseAShortStack) {
   }
 }
 
-// Invariant: the multibyte string opcodes stay refused by name, since the slice holds raw bytes with no codepage; a byte-wise stand-in would count UTF-8 text wrongly and trace a value instead of refusing.
-TEST(Avm1Interpreter, MultibyteStringOpcodesStayRefusedByName) {
+// Invariant: MBCharToAscii and MBAsciiToChar stay refused by name, since the slice has no codepage for them; a byte-wise stand-in would trace a value instead of refusing.
+TEST(Avm1Interpreter, MultibyteCharOpcodesStayRefusedByName) {
   const std::vector<std::pair<std::uint8_t, std::string_view>> refused = {
-      {0x31, "MBStringLength"}, {0x35, "MBStringExtract"}, {0x36, "MBCharToAscii"},
-      {0x37, "MBAsciiToChar"}};
+      {0x36, "MBCharToAscii"}, {0x37, "MBAsciiToChar"}};
   for (const auto& [code, name] : refused) {
     SCOPED_TRACE(name);
     const auto stream = decode(cat({rec(code, {}), rec(0x26, {}), Bytes{0x00}}));
@@ -546,6 +550,30 @@ TEST(Avm1Interpreter, StringLengthAndExtractCountCodePointsFromSwfSix) {
       {"SWF 6 extract at 3 for 2 is z, clamped by code points", 6, extract_index_3_count_2,
        {"z"}},
       {"SWF 5 extract at 3 for 2 is the last two bytes", 5, extract_index_3_count_2, {"\xA9z"}},
+  };
+  for (const VersionRow& row : rows) {
+    SCOPED_TRACE(row.name);
+    EXPECT_EQ(traced(row.input, row.version), row.trace);
+  }
+}
+
+// Invariant: MBStringLength and MBStringExtract count code points at every SWF version, so a version-gated byte count at SWF 5 would trace 4 on the length row and split the e-acute on the extract row.
+TEST(Avm1Interpreter, MultibyteStringOpcodesCountCodePointsAtEveryVersion) {
+  const Bytes text = push_text("a\xC3\xA9" "z");
+  const Bytes text_length = cat({text, rec(0x31, {}), rec(0x26, {}), Bytes{0x00}});
+  const Bytes extract_index_2_count_1 =
+      cat({text, push_int(2), push_int(1), rec(0x35, {}), rec(0x26, {}), Bytes{0x00}});
+  const Bytes extract_index_3_count_2 =
+      cat({text, push_int(3), push_int(2), rec(0x35, {}), rec(0x26, {}), Bytes{0x00}});
+  const std::vector<VersionRow> rows = {
+      {"a e-acute z is 3 code points on SWF 5", 5, text_length, {"3"}},
+      {"a e-acute z is 3 code points on SWF 6", 6, text_length, {"3"}},
+      {"MB extract at 2 for 1 is the e-acute on SWF 5", 5, extract_index_2_count_1, {"\xC3\xA9"}},
+      {"MB extract at 2 for 1 is the e-acute on SWF 6", 6, extract_index_2_count_1, {"\xC3\xA9"}},
+      {"MB extract at 3 for 2 is z, clamped by code points on SWF 5", 5, extract_index_3_count_2,
+       {"z"}},
+      {"MB extract at 3 for 2 is z, clamped by code points on SWF 6", 6, extract_index_3_count_2,
+       {"z"}},
   };
   for (const VersionRow& row : rows) {
     SCOPED_TRACE(row.name);

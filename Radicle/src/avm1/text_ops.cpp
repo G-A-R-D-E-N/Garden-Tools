@@ -143,11 +143,11 @@ std::string to_text(const Avm1Data& data, std::uint8_t swf_version) {
 }
 
 std::size_t unit_count(std::string_view text, std::uint8_t swf_version) {
-  return swf_version >= 6 ? code_point_count(text) : text.size();
+  return swf_version >= kCodePointVersion ? code_point_count(text) : text.size();
 }
 
 std::size_t unit_offset(std::string_view text, std::size_t units, std::uint8_t swf_version) {
-  return swf_version >= 6 ? byte_offset(text, units) : units;
+  return swf_version >= kCodePointVersion ? byte_offset(text, units) : units;
 }
 
 }  // namespace fo4::avm1::text_ops
