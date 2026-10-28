@@ -216,6 +216,8 @@ void fill_entry(const fo4::avm2::SnapshotEntry& source, radicle_runtime_entry& o
   out.colour[7] = static_cast<double>(source.color.alpha_offset);
   out.run_count = source.runs.size();
   out.filter_count = source.filter_count;
+  out.ratio = source.ratio.value_or(0);
+  out.cache_as_bitmap = source.cache_as_bitmap ? 1 : 0;
 }
 
 std::optional<fo4::avm2::Value> call_argument(const radicle_call_arg& argument) {
