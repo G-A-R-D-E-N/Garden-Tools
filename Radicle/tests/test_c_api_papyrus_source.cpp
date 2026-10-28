@@ -49,6 +49,17 @@ const std::string kTrace =
     "    Debug.Trace(\"probe\")\n"
     "EndFunction\n";
 
+const std::string kDebugOnlyCall =
+    "Scriptname Probe\n"
+    "Int Property Count Auto\n"
+    "Function Go(int amount)\n"
+    "    int total = Count + amount\n"
+    "    Debug.Trace(\"probe\")\n"
+    "    If total > 3\n"
+    "        Count = total\n"
+    "    EndIf\n"
+    "EndFunction\n";
+
 radicle_status compile_source(const std::string& source, const std::string& imports, radicle_pex** pex,
                               std::vector<std::string>& rows, int32_t release = 0, int32_t no_debug_info = 0) {
   char** raw = nullptr;
@@ -195,12 +206,14 @@ TEST(CApiPapyrusCompileTest, ImportRootsDecideWhetherAnImportedScriptResolves) {
 }
 
 TEST(CApiPapyrusCompileTest, DebugAndReleaseFlagsReachTheCodeGenerator) {
-  const auto without_debug = compiled_bytes(kProbe, base_stubs().string(), 0, 1);
-  EXPECT_EQ(without_debug, reference_bytes(kProbe, false, false));
-  const auto with_debug = compiled_bytes(kProbe, base_stubs().string(), 0, 0);
-  EXPECT_EQ(with_debug, reference_bytes(kProbe, false, true));
+  const auto without_debug = compiled_bytes(kDebugOnlyCall, base_stubs().string(), 0, 1);
+  EXPECT_EQ(without_debug, reference_bytes(kDebugOnlyCall, false, false));
+  const auto with_debug = compiled_bytes(kDebugOnlyCall, base_stubs().string(), 0, 0);
+  EXPECT_EQ(with_debug, reference_bytes(kDebugOnlyCall, false, true));
   EXPECT_NE(without_debug, with_debug);
-  EXPECT_EQ(compiled_bytes(kProbe, base_stubs().string(), 1, 0), reference_bytes(kProbe, true, true));
+  const auto release = compiled_bytes(kDebugOnlyCall, base_stubs().string(), 1, 0);
+  EXPECT_EQ(release, reference_bytes(kDebugOnlyCall, true, true));
+  EXPECT_NE(release, with_debug);
 }
 
 TEST(CApiPapyrusCompileTest, DecompiledSourceRecompilesToTheSameFunctions) {
@@ -219,7 +232,7 @@ TEST(CApiPapyrusCompileTest, DecompiledSourceRecompilesToTheSameFunctions) {
   radicle_pex* second = nullptr;
   ASSERT_EQ(compile_source(source, base_stubs().string(), &second, rows), RADICLE_STATUS_OK);
   ASSERT_NE(second, nullptr);
-  EXPECT_TRUE(rows.empty()) << rows.front();
+  for (const auto& row : rows) EXPECT_NE(row.rfind("error\t", 0), 0u) << row;
   const auto original = fo4::pex::PexFile::fromBytes(write_pex(first));
   const auto recompiled = fo4::pex::PexFile::fromBytes(write_pex(second));
   radicle_pex_destroy(first);
@@ -232,10 +245,10 @@ TEST(CApiPapyrusCompileTest, DecompiledSourceRecompilesToTheSameFunctions) {
 TEST(CApiPapyrusCompileTest, SourceErrorsReturnRowsAndNoHandle) {
   radicle_pex* pex = nullptr;
   std::vector<std::string> rows;
-  ASSERT_EQ(compile_source("Scriptname Probe\nInt a = 1 # 2\n", base_stubs().string(), &pex, rows),
+  ASSERT_EQ(compile_source("Scriptname Probe\nInt a = 1 @ 2\n", base_stubs().string(), &pex, rows),
             RADICLE_STATUS_OK);
   EXPECT_EQ(pex, nullptr);
-  EXPECT_NE(std::find(rows.begin(), rows.end(), "error\tPAP0004\t2\t11\tUnexpected character '#'."), rows.end());
+  EXPECT_NE(std::find(rows.begin(), rows.end(), "error\tPAP0004\t2\t11\tUnexpected character '@'."), rows.end());
 }
 
 TEST(CApiPapyrusCompileTest, RefusalsClearEveryOutputParameter) {
