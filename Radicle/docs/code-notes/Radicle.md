@@ -8750,6 +8750,7 @@ Detects an encoder change that alters bytes of an unedited stream. It checks thr
 - A script that throws in the parse, compile, or lift path marks its callables as refused with reason `exception`. A throw before `callablesOf` runs counts no callables.
 - `GraphCompiler::clearScratch` runs after the loop, so scratch roots from this gate do not persist in the process temp folder.
 - The only assertion is the `lifted` floor (`test_graph_lift_real.cpp:kMinimumLiftedFraction`, 0.5). It is a placeholder, not a measurement, and must be re-measured on the fo4-data runner. The `roundtrip` count is printed in the `GRAPHLIFT` line and is not asserted until it is measured there.
+
 ## src/papyrus/decompiler_internal.hpp:BodyState
 
 - Split of `decompiler.cpp` (727 lines, too close to the 750 cap) by responsibility. `decompiler.cpp` keeps `toSource`, `emitFunction`, `disassemble` and the `decompileBody` setup. `decompiler_expr.cpp:translateInstructions` turns each instruction into a `BodyState::put` or a statement. `decompiler_stmt.cpp:reconstructStatements` runs jump folding, the temp-call pass, local hoisting and `If`/`While`/`Else` structuring. The header holds the state those passes share: `BodyState`, `JKind`, `JInfo`, and the `iequals`, `startsWith` and `join` helpers.
