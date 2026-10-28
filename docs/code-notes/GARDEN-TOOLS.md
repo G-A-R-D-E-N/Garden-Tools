@@ -2621,7 +2621,14 @@ Regression targets, by test in `PluginEditTool/native/tests/unit/NifServiceTests
 - `NifService verify reports a truncated NIF as a failed header check`: verify throws instead of reporting.
 - `NifService verify flags a drive-letter texture path`: an absolute path leaks into the editor.
 - `NifService verify flags a child that two nodes both list`: the "listed under one parent only" check silently passes.
-- `NifService fix without niftool names the missing tool`: fix still needs niftool, so this test pins the missing-tool message for it. Verify runs in-process.
+- `PluginEditTool/native/tests/unit/NifServiceTests.cpp:NifService fix without niftool repairs in-process and the written NIF verifies`: fix still shelled out to niftool, or wrote the file without the in-process verify, or changed the source NIF. It also checks that the written NIF inspects with BSXFlags and the trimmed shader and texture paths.
+- `PluginEditTool/native/tests/unit/NifServiceTests.cpp:NifService fix without niftool refuses an unreadable NIF and writes nothing`: a corrupt NIF produced an output file or overwrote the source, or the in-process fix returned success instead of NifFixFailed.
+- `PluginEditTool/native/tests/unit/NifServiceTests.cpp:NifService fix maps onto the niftool fix command when niftool resolves`: fix bypasses niftool when niftool is configured, or passes the arguments in the wrong order.
+- `Radicle/tests/test_nif_write.cpp:NifFix RecomputesAWrongTangentFrameAndKeepsTheGeometry`: fix leaves a wrong tangent frame, or changes positions, UVs, normals or triangles while rewriting it.
+- `Radicle/tests/test_nif_write.cpp:NifFix AddsTheMissingBsxFlagsToTheRoot`: fix leaves a root with no BSXFlags extra, or puts the ref at the wrong extra-data slot.
+- `Radicle/tests/test_nif_write.cpp:NifFix TrimsWhitespaceFromTexturePathsAndMaterialNames`: a padded texture path or material name survives fix, so the editor shows a path that does not match the file on disk.
+- `Radicle/tests/test_nif_write.cpp:NifFix RunningFixAgainChangesNothing`: a second fix adds another BSXFlags or changes bytes, so repeated fix runs are not stable.
+- `Radicle/tests/test_nif_write.cpp:NifFix RefusesARootThatIsNotANode`: fix writes BSXFlags onto a root that is not a node instead of refusing.
 - `PluginEditTool/native/tests/unit/ServiceTargetsTests.cpp:NifTarget Tree returns the error JSON for an unreadable NIF with niftool absent`: a Tree failure returned as raw text, which the web `JSON.parse` cannot read.
 
 `Radicle/src/nif/block_transform.cpp:block_transform` reads the local transform of an AV-object block (a node or a shape) through `detail::read_av_header`. It is used for shape translation only. Regression targets: a shape translation read from a node's transform or from the wrong block makes the tree panel show the wrong position. `Radicle/tests/test_nif.cpp:BlockTransformReadsTheShapesOwnLocalTransform` checks the shape's own transform, and `PluginEditTool/native/tests/unit/NifServiceTests.cpp:NifService tree maps nodes and shape slots onto the editor contract in-process` checks that the fixture's shape translation reaches the tree.

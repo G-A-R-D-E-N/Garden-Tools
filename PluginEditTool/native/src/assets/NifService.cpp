@@ -1,5 +1,8 @@
 #include <fo4ide/assets/NifService.hpp>
 
+#include <fo4/error.hpp>
+#include <fo4/nif/nif.hpp>
+#include <fo4/nif/nif_fix.hpp>
 #include <fo4/nif/nif_import.hpp>
 #include <fo4ide/assets/NifRender.hpp>
 
@@ -7,6 +10,7 @@
 #include <fstream>
 #include <functional>
 #include <iterator>
+#include <span>
 #include <thread>
 #include <utility>
 
@@ -78,6 +82,28 @@ Result<std::string> importInProcess(const std::filesystem::path& objPath, const 
         (verify ? *verify : verify.error().message);
 }
 
+Result<std::string> fixInProcess(const std::filesystem::path& nifPath, const std::filesystem::path& outputPath) {
+    std::ifstream stream(nifPath, std::ios::binary);
+    if (!stream) return std::unexpected(Error{"FileNotFound", "Could not open NIF: " + pathArg(nifPath)});
+    const std::vector<char> raw((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
+    std::vector<std::byte> bytes;
+    try {
+        bytes = fo4::nif::fix_nif(fo4::nif::read_nif(std::as_bytes(std::span(raw))));
+    } catch (const fo4::parse_error& error) {
+        return std::unexpected(Error{"NifFixFailed", error.parse_message()});
+    } catch (const std::exception& ex) {
+        return std::unexpected(Error{"NifFixFailed", ex.what()});
+    }
+    auto writeTemp = outputPath;
+    writeTemp += ".niftmp";
+    if (auto committed = commitEditedNif(bytes, writeTemp, outputPath); !committed) {
+        return std::unexpected(committed.error());
+    }
+    const auto verify = renderVerify(outputPath);
+    return "RESULT: fix OK (in-process)\nSaved: " + pathArg(outputPath) + "\n" +
+        (verify ? *verify : verify.error().message);
+}
+
 }
 
 NifService::NifService(process::Runner& runner, std::filesystem::path executable)
@@ -119,6 +145,7 @@ Result<std::string> NifService::fix(const std::filesystem::path& nifPath,
                                     const std::filesystem::path& outputPath) const {
     if (auto valid = requireFile(nifPath, "NIF"); !valid) return std::unexpected(valid.error());
     if (outputPath.empty()) return std::unexpected(Error{"InvalidPath", "Output NIF path is empty"});
+    if (!niftoolResolves(executable_)) return fixInProcess(nifPath, outputPath);
     return run({"fix", pathArg(nifPath), pathArg(outputPath)});
 }
 
@@ -202,7 +229,7 @@ Result<std::string> NifService::applyEdits(const std::filesystem::path& nifPath,
 Result<std::string> NifService::run(std::vector<std::string> arguments) const {
     if (executable_.empty()) {
         return std::unexpected(Error{"NifToolNotFound",
-            "niftool not installed; fix needs it (set NIFTOOL_PATH or place niftool beside the application)"});
+            "niftool not installed (set NIFTOOL_PATH or place niftool beside the application)"});
     }
     if (!std::filesystem::is_regular_file(executable_)) {
         return std::unexpected(Error{"NifToolNotFound", "niftool executable not found: " + executable_.string()});
