@@ -51,6 +51,7 @@ struct Avm1Result {
 };
 
 /* Requires a stream from decode_actions; a stream that did not decode is refused before any record. */
-Avm1Result execute_actions(const Avm1Stream& stream, std::size_t max_steps = 1000000);
+Avm1Result execute_actions(const Avm1Stream& stream, std::size_t max_steps = 1000000,
+                           std::uint8_t swf_version = 0);
 
 }  // namespace fo4::avm1

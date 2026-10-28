@@ -52,6 +52,7 @@ struct Avm1State {
   std::vector<std::string> constants;
   std::map<std::string, Avm1Data> variables;
   std::vector<std::string> trace;
+  std::uint8_t swf_version{0};
 };
 
 Avm1Data number_value(double number) {
@@ -84,11 +85,18 @@ double parse_number(const std::string& text) {
   return value;
 }
 
-double to_number(const Avm1Data& data) {
+// Invariant: swf_version 0 keeps the unspecified rules, where null is 0 and undefined is NaN.
+double to_number(const Avm1Data& data, std::uint8_t swf_version) {
   switch (data.kind) {
     case Avm1DataKind::Undefined:
-      return std::numeric_limits<double>::quiet_NaN();
+      if (swf_version == 0 || swf_version >= 7) {
+        return std::numeric_limits<double>::quiet_NaN();
+      }
+      return 0.0;
     case Avm1DataKind::Null:
+      if (swf_version >= 7) {
+        return std::numeric_limits<double>::quiet_NaN();
+      }
       return 0.0;
     case Avm1DataKind::Boolean:
       return data.boolean ? 1.0 : 0.0;
@@ -185,7 +193,7 @@ bool to_boolean(const Avm1Data& data) {
   return false;
 }
 
-bool loose_equal(const Avm1Data& left, const Avm1Data& right) {
+bool loose_equal(const Avm1Data& left, const Avm1Data& right, std::uint8_t swf_version) {
   if (is_nullish(left) || is_nullish(right)) {
     return is_nullish(left) && is_nullish(right);
   }
@@ -199,30 +207,30 @@ bool loose_equal(const Avm1Data& left, const Avm1Data& right) {
     return left.text == right.text;
   }
   if (left.kind == Avm1DataKind::Boolean) {
-    return loose_equal(number_value(to_number(left)), right);
+    return loose_equal(number_value(to_number(left, swf_version)), right, swf_version);
   }
   if (right.kind == Avm1DataKind::Boolean) {
-    return loose_equal(left, number_value(to_number(right)));
+    return loose_equal(left, number_value(to_number(right, swf_version)), swf_version);
   }
-  return to_number(left) == to_number(right);
+  return to_number(left, swf_version) == to_number(right, swf_version);
 }
 
-bool less_than(const Avm1Data& left, const Avm1Data& right) {
+bool less_than(const Avm1Data& left, const Avm1Data& right, std::uint8_t swf_version) {
   if (left.kind == Avm1DataKind::String && right.kind == Avm1DataKind::String) {
     return left.text < right.text;
   }
-  return to_number(left) < to_number(right);
+  return to_number(left, swf_version) < to_number(right, swf_version);
 }
 
-Avm1Data add_values(const Avm1Data& left, const Avm1Data& right) {
+Avm1Data add_values(const Avm1Data& left, const Avm1Data& right, std::uint8_t swf_version) {
   if (left.kind == Avm1DataKind::String || right.kind == Avm1DataKind::String) {
     return string_value(to_text(left) + to_text(right));
   }
-  return number_value(to_number(left) + to_number(right));
+  return number_value(to_number(left, swf_version) + to_number(right, swf_version));
 }
 
-std::uint32_t to_uint32(const Avm1Data& data) {
-  const double number = to_number(data);
+std::uint32_t to_uint32(const Avm1Data& data, std::uint8_t swf_version) {
+  const double number = to_number(data, swf_version);
   if (!std::isfinite(number)) {
     return 0;
   }
@@ -232,6 +240,75 @@ std::uint32_t to_uint32(const Avm1Data& data) {
 
 Avm1Data int32_value(std::uint32_t bits) {
   return number_value(static_cast<double>(static_cast<std::int32_t>(bits)));
+}
+
+std::size_t utf8_length(std::uint8_t lead) {
+  if (lead < 0x80) {
+    return 1;
+  }
+  if (lead >= 0xC2 && lead <= 0xDF) {
+    return 2;
+  }
+  if (lead >= 0xE0 && lead <= 0xEF) {
+    return 3;
+  }
+  if (lead >= 0xF0 && lead <= 0xF4) {
+    return 4;
+  }
+  return 0;
+}
+
+std::uint32_t first_code_point(const std::string& text) {
+  const auto lead = static_cast<std::uint8_t>(text.front());
+  const std::size_t length = utf8_length(lead);
+  if (length == 0 || text.size() < length) {
+    return lead;
+  }
+  std::uint32_t value = length == 1 ? lead : lead & (0xFFu >> (length + 1));
+  for (std::size_t i = 1; i < length; ++i) {
+    const auto continuation = static_cast<std::uint8_t>(text[i]);
+    if ((continuation & 0xC0u) != 0x80u) {
+      return lead;
+    }
+    value = (value << 6) | (continuation & 0x3Fu);
+  }
+  constexpr std::uint32_t kShortest[] = {0, 0, 0x80, 0x800, 0x10000};
+  if (value < kShortest[length] || value > 0x10FFFFu) {
+    return lead;
+  }
+  return value;
+}
+
+double char_to_ascii(const Avm1Data& operand, std::uint8_t swf_version) {
+  const std::string text = to_text(operand);
+  if (text.empty()) {
+    return 0.0;
+  }
+  if (swf_version < 6) {
+    return static_cast<unsigned char>(text.front());
+  }
+  return first_code_point(text);
+}
+
+// Invariant: callers mask the unit to 16 bits, so three bytes is the longest form.
+std::string encode_code_unit(std::uint32_t unit) {
+  if (unit < 0x80) {
+    return std::string(1, static_cast<char>(unit));
+  }
+  if (unit < 0x800) {
+    return {static_cast<char>(0xC0u | (unit >> 6)), static_cast<char>(0x80u | (unit & 0x3Fu))};
+  }
+  return {static_cast<char>(0xE0u | (unit >> 12)),
+          static_cast<char>(0x80u | ((unit >> 6) & 0x3Fu)),
+          static_cast<char>(0x80u | (unit & 0x3Fu))};
+}
+
+Avm1Data ascii_to_char(const Avm1Data& operand, std::uint8_t swf_version) {
+  const std::uint32_t value = to_uint32(operand, swf_version);
+  if (swf_version < 6) {
+    return string_value(std::string(1, static_cast<char>(value & 0xFFu)));
+  }
+  return string_value(encode_code_unit(value & 0xFFFFu));
 }
 
 std::string opcode_label(std::uint8_t code) {
@@ -373,8 +450,7 @@ Avm1RunStatus swap_top(Avm1State& state, std::string& message) {
   return Avm1RunStatus::Ok;
 }
 
-std::size_t clamp_to_length(const Avm1Data& value, std::size_t length) {
-  const double number = to_number(value);
+std::size_t clamp_to_length(double number, std::size_t length) {
   if (std::isnan(number) || number <= 0.0) {
     return 0;
   }
@@ -395,8 +471,10 @@ Avm1RunStatus extract_string(Avm1State& state, std::string& message) {
     return status;
   }
   const std::string source = to_text(text);
-  const std::size_t start = clamp_to_length(number_value(to_number(index) - 1.0), source.size());
-  const std::size_t length = clamp_to_length(count, source.size() - start);
+  const std::size_t start =
+      clamp_to_length(to_number(index, state.swf_version) - 1.0, source.size());
+  const std::size_t length =
+      clamp_to_length(to_number(count, state.swf_version), source.size() - start);
   return push_result(state, string_value(source.substr(start, length)), message);
 }
 
@@ -439,33 +517,34 @@ Avm1RunStatus branch_if(const Avm1Stream& stream, const Avm1Action& action, Avm1
 
 Avm1RunStatus execute_action(const Avm1Stream& stream, const Avm1Action& action, Avm1State& state,
                              std::size_t& next, std::string& message) {
+  const std::uint8_t version = state.swf_version;
   switch (action.code) {
     case 0x00:
       next = stream.actions.size();
       return Avm1RunStatus::Ok;
     case 0x0A:
-      return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
-        return number_value(to_number(left) + to_number(right));
+      return apply_binary(state, message, [version](const Avm1Data& left, const Avm1Data& right) {
+        return number_value(to_number(left, version) + to_number(right, version));
       });
     case 0x0B:
-      return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
-        return number_value(to_number(left) - to_number(right));
+      return apply_binary(state, message, [version](const Avm1Data& left, const Avm1Data& right) {
+        return number_value(to_number(left, version) - to_number(right, version));
       });
     case 0x0C:
-      return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
-        return number_value(to_number(left) * to_number(right));
+      return apply_binary(state, message, [version](const Avm1Data& left, const Avm1Data& right) {
+        return number_value(to_number(left, version) * to_number(right, version));
       });
     case 0x0D:
-      return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
-        return number_value(to_number(left) / to_number(right));
+      return apply_binary(state, message, [version](const Avm1Data& left, const Avm1Data& right) {
+        return number_value(to_number(left, version) / to_number(right, version));
       });
     case 0x0E:
-      return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
-        return boolean_value(to_number(left) == to_number(right));
+      return apply_binary(state, message, [version](const Avm1Data& left, const Avm1Data& right) {
+        return boolean_value(to_number(left, version) == to_number(right, version));
       });
     case 0x0F:
-      return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
-        return boolean_value(to_number(left) < to_number(right));
+      return apply_binary(state, message, [version](const Avm1Data& left, const Avm1Data& right) {
+        return boolean_value(to_number(left, version) < to_number(right, version));
       });
     case 0x10:
       return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
@@ -494,8 +573,8 @@ Avm1RunStatus execute_action(const Avm1Stream& stream, const Avm1Action& action,
       return pop(state, discarded, message);
     }
     case 0x18:
-      return apply_unary(state, message, [](const Avm1Data& operand) {
-        const double number = to_number(operand);
+      return apply_unary(state, message, [version](const Avm1Data& operand) {
+        const double number = to_number(operand, version);
         return number_value(std::isnan(number) ? 0.0 : std::trunc(number));
       });
     case 0x1C:
@@ -513,36 +592,36 @@ Avm1RunStatus execute_action(const Avm1Stream& stream, const Avm1Action& action,
         return boolean_value(to_text(left) < to_text(right));
       });
     case 0x32:
-      return apply_unary(state, message, [](const Avm1Data& operand) {
-        const std::string text = to_text(operand);
-        return number_value(text.empty() ? 0.0 : static_cast<unsigned char>(text.front()));
+      return apply_unary(state, message, [version](const Avm1Data& operand) {
+        return number_value(char_to_ascii(operand, version));
       });
     case 0x33:
-      return apply_unary(state, message, [](const Avm1Data& operand) {
-        const auto byte = static_cast<char>(to_uint32(operand) & 0xFFu);
-        return string_value(std::string(1, byte));
+      return apply_unary(state, message, [version](const Avm1Data& operand) {
+        return ascii_to_char(operand, version);
       });
     case 0x3F:
-      return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
-        return number_value(std::fmod(to_number(left), to_number(right)));
+      return apply_binary(state, message, [version](const Avm1Data& left, const Avm1Data& right) {
+        return number_value(std::fmod(to_number(left, version), to_number(right, version)));
       });
     case 0x44:
       return apply_unary(state, message, [](const Avm1Data& operand) {
         return string_value(type_name(operand));
       });
     case 0x47:
-      return apply_binary(state, message, add_values);
+      return apply_binary(state, message, [version](const Avm1Data& left, const Avm1Data& right) {
+        return add_values(left, right, version);
+      });
     case 0x48:
-      return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
-        return boolean_value(less_than(left, right));
+      return apply_binary(state, message, [version](const Avm1Data& left, const Avm1Data& right) {
+        return boolean_value(less_than(left, right, version));
       });
     case 0x49:
-      return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
-        return boolean_value(loose_equal(left, right));
+      return apply_binary(state, message, [version](const Avm1Data& left, const Avm1Data& right) {
+        return boolean_value(loose_equal(left, right, version));
       });
     case 0x4A:
-      return apply_unary(state, message, [](const Avm1Data& operand) {
-        return number_value(to_number(operand));
+      return apply_unary(state, message, [version](const Avm1Data& operand) {
+        return number_value(to_number(operand, version));
       });
     case 0x4B:
       return apply_unary(state, message, [](const Avm1Data& operand) {
@@ -553,41 +632,42 @@ Avm1RunStatus execute_action(const Avm1Stream& stream, const Avm1Action& action,
     case 0x4D:
       return swap_top(state, message);
     case 0x50:
-      return apply_unary(state, message, [](const Avm1Data& operand) {
-        return number_value(to_number(operand) + 1.0);
+      return apply_unary(state, message, [version](const Avm1Data& operand) {
+        return number_value(to_number(operand, version) + 1.0);
       });
     case 0x51:
-      return apply_unary(state, message, [](const Avm1Data& operand) {
-        return number_value(to_number(operand) - 1.0);
+      return apply_unary(state, message, [version](const Avm1Data& operand) {
+        return number_value(to_number(operand, version) - 1.0);
       });
     case 0x60:
-      return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
-        return int32_value(to_uint32(left) & to_uint32(right));
+      return apply_binary(state, message, [version](const Avm1Data& left, const Avm1Data& right) {
+        return int32_value(to_uint32(left, version) & to_uint32(right, version));
       });
     case 0x61:
-      return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
-        return int32_value(to_uint32(left) | to_uint32(right));
+      return apply_binary(state, message, [version](const Avm1Data& left, const Avm1Data& right) {
+        return int32_value(to_uint32(left, version) | to_uint32(right, version));
       });
     case 0x62:
-      return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
-        return int32_value(to_uint32(left) ^ to_uint32(right));
+      return apply_binary(state, message, [version](const Avm1Data& left, const Avm1Data& right) {
+        return int32_value(to_uint32(left, version) ^ to_uint32(right, version));
       });
     case 0x63:
-      return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
-        return int32_value(to_uint32(left) << (to_uint32(right) & 31u));
+      return apply_binary(state, message, [version](const Avm1Data& left, const Avm1Data& right) {
+        return int32_value(to_uint32(left, version) << (to_uint32(right, version) & 31u));
       });
     case 0x64:
-      return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
-        const auto value = static_cast<std::int32_t>(to_uint32(left));
-        return number_value(static_cast<double>(value >> (to_uint32(right) & 31u)));
+      return apply_binary(state, message, [version](const Avm1Data& left, const Avm1Data& right) {
+        const auto value = static_cast<std::int32_t>(to_uint32(left, version));
+        return number_value(static_cast<double>(value >> (to_uint32(right, version) & 31u)));
       });
     case 0x65:
-      return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
-        return number_value(static_cast<double>(to_uint32(left) >> (to_uint32(right) & 31u)));
+      return apply_binary(state, message, [version](const Avm1Data& left, const Avm1Data& right) {
+        return number_value(
+            static_cast<double>(to_uint32(left, version) >> (to_uint32(right, version) & 31u)));
       });
     case 0x67:
-      return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
-        return boolean_value(less_than(right, left));
+      return apply_binary(state, message, [version](const Avm1Data& left, const Avm1Data& right) {
+        return boolean_value(less_than(right, left, version));
       });
     case 0x68:
       return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
@@ -610,7 +690,8 @@ Avm1RunStatus execute_action(const Avm1Stream& stream, const Avm1Action& action,
 
 }  // namespace
 
-Avm1Result execute_actions(const Avm1Stream& stream, std::size_t max_steps) {
+Avm1Result execute_actions(const Avm1Stream& stream, std::size_t max_steps,
+                           std::uint8_t swf_version) {
   Avm1Result result;
   if (!stream.ok()) {
     result.status = Avm1RunStatus::InvalidStream;
@@ -618,6 +699,7 @@ Avm1Result execute_actions(const Avm1Stream& stream, std::size_t max_steps) {
     return result;
   }
   Avm1State state;
+  state.swf_version = swf_version;
   std::size_t index = 0;
   while (index < stream.actions.size()) {
     const Avm1Action& action = stream.actions[index];
