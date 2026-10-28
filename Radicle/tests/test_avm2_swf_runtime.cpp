@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -57,6 +58,45 @@ fo4::swf::SwfTag remove_tag(std::uint16_t depth) {
   removal.depth = depth;
   tag.removal = removal;
   return tag;
+}
+
+fo4::swf::SwfTag move_tag(std::uint16_t depth, std::optional<fo4::swf::SwfMatrix> matrix) {
+  fo4::swf::SwfTag tag = make_tag(fo4::swf::tag::kPlaceObject2);
+  fo4::swf::SwfPlacement placement;
+  placement.depth = depth;
+  placement.move = true;
+  placement.matrix = matrix;
+  tag.placement = placement;
+  return tag;
+}
+
+fo4::swf::SwfMatrix translated(double x, double y) {
+  fo4::swf::SwfMatrix matrix;
+  matrix.translate_x = static_cast<std::int32_t>(x * 20.0);
+  matrix.translate_y = static_cast<std::int32_t>(y * 20.0);
+  return matrix;
+}
+
+fo4::swf::SwfMatrix rotated_45() {
+  fo4::swf::SwfMatrix matrix;
+  matrix.scale_x = 46341;
+  matrix.scale_y = 46341;
+  matrix.rotate_skew0 = 46341;
+  matrix.rotate_skew1 = -46341;
+  return matrix;
+}
+
+fo4::swf::SwfFile build_frames_movie(std::vector<std::vector<fo4::swf::SwfTag>> frames) {
+  fo4::swf::SwfFile file;
+  file.header.frame_rate = 24u * 256u;
+  file.header.frame_count = static_cast<std::uint16_t>(frames.size());
+  for (std::vector<fo4::swf::SwfTag>& frame : frames) {
+    for (fo4::swf::SwfTag& tag : frame) {
+      file.tags.push_back(std::move(tag));
+    }
+    file.tags.push_back(make_tag(fo4::swf::tag::kShowFrame));
+  }
+  return file;
 }
 
 fo4::swf::SwfTag label_tag(const char* name) {
@@ -341,6 +381,102 @@ TEST(Avm2SwfRuntime, PlacedEditTextBecomesAWrappedTextField) {
   EXPECT_EQ(field->line_text(1), "AA");
   EXPECT_DOUBLE_EQ(field->text_width(), 25.0);
   EXPECT_DOUBLE_EQ(field->text_height(), 48.0);
+}
+
+TEST(Avm2SwfRuntime, MoveOnlyPlacementKeepsTheTimelineObject) {
+  Harness harness;
+  const fo4::swf::SwfFile file = build_frames_movie(
+      {{place_tag(1, 20, 100.0, 50.0)}, {move_tag(1, std::nullopt)}});
+  const std::shared_ptr<SwfRuntime> movie =
+      SwfRuntime::create(harness.runtime, harness.interpreter, file);
+  ASSERT_NE(movie, nullptr);
+  ASSERT_EQ(movie->root()->children().size(), 1u);
+  const std::shared_ptr<DisplayObject> placed = movie->root()->children()[0];
+  movie->advance(harness.interpreter, 1.0 / 24.0);
+  ASSERT_EQ(movie->root()->children().size(), 1u);
+  EXPECT_EQ(movie->root()->children()[0].get(), placed.get());
+  EXPECT_NEAR(placed->x(), 100.0, 1e-9);
+  EXPECT_NEAR(placed->y(), 50.0, 1e-9);
+}
+
+TEST(Avm2SwfRuntime, MoveWithMatrixUpdatesOnlyTheMatrix) {
+  Harness harness;
+  const fo4::swf::SwfFile file = build_frames_movie(
+      {{place_tag_named(1, 20, "tween")}, {move_tag(1, translated(30.0, 40.0))}});
+  const std::shared_ptr<SwfRuntime> movie =
+      SwfRuntime::create(harness.runtime, harness.interpreter, file);
+  ASSERT_NE(movie, nullptr);
+  const std::shared_ptr<DisplayObject> placed = movie->root()->children()[0];
+  movie->advance(harness.interpreter, 1.0 / 24.0);
+  ASSERT_EQ(movie->root()->children().size(), 1u);
+  EXPECT_EQ(movie->root()->children()[0].get(), placed.get());
+  EXPECT_EQ(placed->name(), "tween");
+  EXPECT_EQ(placed->character_id(), 20u);
+  EXPECT_NEAR(placed->x(), 30.0, 1e-9);
+  EXPECT_NEAR(placed->y(), 40.0, 1e-9);
+}
+
+TEST(Avm2SwfRuntime, MoveWithANewCharacterReplacesTheObject) {
+  Harness harness;
+  fo4::swf::SwfTag replacement = move_tag(1, translated(30.0, 40.0));
+  replacement.placement->character_id = std::uint16_t{21};
+  const fo4::swf::SwfFile file =
+      build_frames_movie({{place_tag(1, 20, 100.0, 50.0)}, {replacement}});
+  const std::shared_ptr<SwfRuntime> movie =
+      SwfRuntime::create(harness.runtime, harness.interpreter, file);
+  ASSERT_NE(movie, nullptr);
+  const std::shared_ptr<DisplayObject> original = movie->root()->children()[0];
+  movie->advance(harness.interpreter, 1.0 / 24.0);
+  ASSERT_EQ(movie->root()->children().size(), 1u);
+  EXPECT_NE(movie->root()->children()[0].get(), original.get());
+  EXPECT_EQ(movie->root()->children()[0]->character_id(), 21u);
+  EXPECT_NEAR(movie->root()->children()[0]->x(), 30.0, 1e-9);
+}
+
+TEST(Avm2SwfRuntime, RotationFromMatrixSurvivesAMoveOnlyPlacement) {
+  Harness harness;
+  fo4::swf::SwfTag rotated = place_tag(1, 20, 0.0, 0.0);
+  rotated.placement->matrix = rotated_45();
+  const fo4::swf::SwfFile file =
+      build_frames_movie({{rotated}, {move_tag(1, std::nullopt)}});
+  const std::shared_ptr<SwfRuntime> movie =
+      SwfRuntime::create(harness.runtime, harness.interpreter, file);
+  ASSERT_NE(movie, nullptr);
+  const std::shared_ptr<DisplayObject> placed = movie->root()->children()[0];
+  EXPECT_NEAR(placed->rotation(), 45.0, 1e-3);
+  EXPECT_NEAR(placed->scale_x(), 1.0, 1e-3);
+  EXPECT_NEAR(placed->scale_y(), 1.0, 1e-3);
+  movie->advance(harness.interpreter, 1.0 / 24.0);
+  ASSERT_EQ(movie->root()->children().size(), 1u);
+  EXPECT_EQ(movie->root()->children()[0].get(), placed.get());
+  EXPECT_NEAR(placed->rotation(), 45.0, 1e-3);
+}
+
+TEST(Avm2SwfRuntime, MoveOnlyPlacementKeepsTheClipDepth) {
+  Harness harness;
+  fo4::swf::SwfTag masked = place_tag(1, 20, 0.0, 0.0);
+  masked.placement->clip_depth = std::uint16_t{4};
+  const fo4::swf::SwfFile file = build_frames_movie({{masked}, {move_tag(1, std::nullopt)}});
+  const std::shared_ptr<SwfRuntime> movie =
+      SwfRuntime::create(harness.runtime, harness.interpreter, file);
+  ASSERT_NE(movie, nullptr);
+  const std::shared_ptr<DisplayObject> placed = movie->root()->children()[0];
+  EXPECT_EQ(placed->clip_depth(), 4);
+  movie->advance(harness.interpreter, 1.0 / 24.0);
+  ASSERT_EQ(movie->root()->children().size(), 1u);
+  EXPECT_EQ(placed->clip_depth(), 4);
+}
+
+TEST(Avm2SwfRuntime, MoveWithoutAnObjectCreatesNothing) {
+  Harness harness;
+  const fo4::swf::SwfFile file =
+      build_frames_movie({{}, {move_tag(1, std::nullopt)}});
+  const std::shared_ptr<SwfRuntime> movie =
+      SwfRuntime::create(harness.runtime, harness.interpreter, file);
+  ASSERT_NE(movie, nullptr);
+  EXPECT_TRUE(movie->root()->children().empty());
+  movie->advance(harness.interpreter, 1.0 / 24.0);
+  EXPECT_TRUE(movie->root()->children().empty());
 }
 
 }  // namespace
