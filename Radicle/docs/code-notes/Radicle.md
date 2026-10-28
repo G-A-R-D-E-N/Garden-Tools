@@ -6281,3 +6281,73 @@ The INNR entry above modelled a nested run that a member of the outer run counts
 - Radicle/tests/test_nif_write.cpp:NameEditAppendsToStringTable: also checks that the root node, which shared string index 0 with the shape, keeps its old name.
 - Radicle/tests/test_nif_write.cpp:RejectsEditsOnBrokenShapesAndShaders: its shared malformed texture set case is a regression for the copy made before the slots were parsed, which indexed past the file's block table.
 - Radicle/tests/nif_fixture.hpp:build_nif: takes optional export strings, max string length and groups, and nif_fixture::shape_block and nif_fixture::lighting_shader_block take an extra-data count that defaults to 0.
+
+## Radicle/src/papyrus/resolver.cpp:Resolver::resolve (PET semantic layer, piece 2 of the Papyrus lift)
+
+- What moved. PluginEditTool's native Type, Binding, Resolver, TypeChecker, ScriptIndex and Symbols are now `fo4::papyrus` in `Radicle/include/fo4/papyrus/type.hpp`, `binding.hpp`, `resolver.hpp`, `type_checker.hpp`, `script_index.hpp` and `symbols.hpp`, with definitions in `Radicle/src/papyrus/type.cpp`, `binding.cpp`, `resolver.cpp`, `type_checker.cpp`, `script_index.cpp` and `symbols.cpp`. `Radicle/src/papyrus/declaration_check.cpp:declarationCheck` is PET's `declarationCheck` function alone, lifted out of `CodeGenerator.cpp` (lines 216 to 293, section header dropped); the rest of CodeGenerator, the user-flag table, the compiler and the decompiler stay in PET. `Radicle/src/papyrus/file_walk.cpp:enumeratePapyrusFiles` is PET's `walkPapyrusFiles` body lifted out of `AnalysisService.cpp` with the two file-local helpers it uses (`iequals`, `lower`); PET's one-line forwarder is folded away. `Radicle/include/fo4/papyrus/script_names.hpp:safeScriptObjectName` is PET's `ScriptNames.hpp` at the same path, namespace changed. Nothing from PluginEditTool is included, no C ABI was added and `RADICLE_ABI_VERSION` is untouched. `fo4::psc` and `fo4::pex_analysis` declare none of these names, so the namespace does not clash with them.
+
+- Byte-level fidelity was checked, not assumed. Each lifted header and source was compared with PET's after removing comment-only lines and blank lines and folding the namespace and include paths: zero differing lines for all twelve semantic files. `declarationCheck` matches PET's `CodeGenerator.cpp` lines 219 to 293 with zero differing lines. The walk differs from PET only by the dropped forwarder. Beyond namespace and includes the only edits are comment removal and the two lifetime constraint lines in `binding.hpp` and `script_index.hpp`.
+
+- Comments removed from the source, and where their reasoning now lives. Each entry says what the removed comment established.
+
+- `Radicle/include/fo4/papyrus/type.hpp:TypeKind` is the port of PET's `PapyrusTypeKind`.
+
+- `Radicle/include/fo4/papyrus/type.hpp:Type` has value semantics with structural equality. The element type of an array is held through `std::shared_ptr`, because an array can hold any type including another array. Primitives are static singletons.
+
+- `Radicle/include/fo4/papyrus/type.hpp:Type::primitive` looks a primitive up case-insensitively and returns nullptr when the name is not a primitive.
+
+- `Radicle/include/fo4/papyrus/type.hpp:isImplicit` and `isExplicit` are the port of PET's `PapyrusConversions`. Their `inherits` argument is the caller's "child extends ancestor" predicate, and the default answers that nothing inherits, so a bare call never invents a subclass relation.
+
+- `Radicle/include/fo4/papyrus/binding.hpp:BindingKind` is the port of `PapyrusBindingKind`.
+
+- `Radicle/include/fo4/papyrus/binding.hpp:Binding` points its `declaration` and `owner` into a Script that the ScriptIndex cache owns, so the index must outlive any binding it produced. The constraint line above `Resolution` states the same rule.
+
+- `Radicle/include/fo4/papyrus/binding.hpp:Resolution` maps are keyed on node identity. Expression and statement nodes are heap-allocated and keep a stable address; declaration nodes are value members of the parsed Script and are stable once parsing has finished; TypeRefs are value members too and are keyed by address. A change in any of those storage choices silently breaks every lookup, which is why the key type is a pointer.
+
+- `Radicle/include/fo4/papyrus/resolver.hpp:Resolver` is the port of `PapyrusResolver`. It binds every identifier, member and call site to a declaration or keyword and computes the type of every expression. Diagnostics are gated on the base chain being complete: a missing parent or a missing import suppresses name reporting, mirroring the C# oracle, so "no errors" never means "could not tell". `Radicle/include/fo4/papyrus/binding.hpp:Resolution` carries that flag as `baseChainComplete`.
+
+- `Radicle/include/fo4/papyrus/resolver.hpp:Resolver::resolveTypeName` resolves a type name for both the resolver and the type checker: primitives, structs on the base chain, `Owner:Struct`, and scripts. It returns nullopt when the name cannot be resolved.
+
+- `Radicle/include/fo4/papyrus/resolver.hpp:Resolver::Context` keeps its scope stack keyed by lowercased name, because Papyrus is case-insensitive like the C# oracle. Its `ownedBindings` and `ownedTypes` are deques so that the pointers handed out by `lookupName`, `bindingFor` and `computeType` stay valid while more entries are appended.
+
+- `Radicle/include/fo4/papyrus/resolver.hpp:Resolver` (the private expression entry points) take `Node*` and downcast internally, because the AST stores expressions as `unique_ptr<Node>`.
+
+- `Radicle/include/fo4/papyrus/type_checker.hpp:TypeChecker` is the port of `PapyrusTypeChecker`. It consumes a `Resolution` and reports type mismatches, argument-count and argument-name problems, invalid casts, override mismatches and parameter-order errors. It reports nothing when the base chain is incomplete, for the same reason the resolver does.
+
+- `Radicle/include/fo4/papyrus/type_checker.hpp:TypeChecker::inherits` writes to `inheritsCache_`, so every member stays non-const, as in the C# oracle, which has no const methods either.
+
+- `Radicle/src/papyrus/type_checker.cpp:visitChildExpressions` mirrors the C# `CheckExpression` default arm: it walks the children and re-checks any child expression. Call, Cast and Index are handled before the default arm reaches it.
+
+- `Radicle/include/fo4/papyrus/script_index.hpp:ScriptIndex` is the port of `PapyrusScriptIndex`. It walks its roots for `.psc` files, resolves a script name to a file (qualified name, then bare last segment), parses on demand through an `(size, mtime)`-keyed cache, and computes base chains. The index owns every parsed Script; the constraint line above the class states that the index must outlive the bindings and resolutions.
+
+- `Radicle/src/papyrus/script_index.cpp:ScriptIndex::findFile` tries the qualified name first and falls back to the bare last segment. A name with no colon is its own bare name.
+
+- `Radicle/src/papyrus/script_index.cpp:ScriptIndex::resolve` returns the parsed Script for a name, or nullptr when the name is on no root.
+
+- `Radicle/src/papyrus/script_index.cpp:ScriptIndex::parseCached` returns nullptr on an I/O failure or on a parse that cannot produce a Script at all. Hazard, carried over from PET unchanged: when the file's size or mtime changes, the cache entry's `unique_ptr` is replaced, so a Script pointer returned before the edit is freed. Callers must not hold a `Script*` across an edit to the file.
+
+- `Radicle/src/papyrus/script_index.cpp:ScriptIndex::baseChain` follows `Extends` into `[script, parent, grandparent, ...]` and is guarded against cycles. It is non-const because resolving a parent may populate the parse cache, as in the C#.
+
+- `Radicle/include/fo4/papyrus/script_index.hpp:ScriptIndex::byQualifiedName_` keys are lowercased and the values keep the canonical spelling. `Radicle/src/papyrus/script_index.cpp:ScriptIndex::scriptNames` returns the names sorted with an ordinal ignore-case comparison, mirroring the C# `ScriptNames`.
+
+- `Radicle/include/fo4/papyrus/script_index.hpp:ScriptIndex::parsed_` is keyed by the absolute path string.
+
+- `Radicle/src/papyrus/script_index.cpp:qualifiedNameOf` recomputes the qualified name from the file's on-disk path so the returned names keep their original casing, as the C# does (it keys by `QualifiedNameFor` and exposes the keys as ScriptNames). If no root contains the path it falls back to the lowercased key; the source comment says that should not happen.
+
+- `Radicle/src/papyrus/script_index.cpp:ScriptIndex::addRoot` is a manual depth-first walk that mirrors `PapyrusFileWalk`: case-insensitive `.psc` match, and symlinked directories are skipped (the C# checks that `LinkTarget` is null). The `..` check is defensive because `Path.GetRelativePath` never yields `..` for a file under its root. Roots are de-duplicated ignoring case, and the first root to provide a qualified name keeps it.
+
+- `Radicle/include/fo4/papyrus/symbols.hpp:SymbolKind` is ordered the same as the C# enum so the names serialize identically.
+
+- `Radicle/include/fo4/papyrus/symbols.hpp:Symbol` is the port of `PapyrusSymbol`. `Radicle/include/fo4/papyrus/symbols.hpp:AstPathEntry` is one entry on the C# generic node path. TypeRefs are value members of the AST rather than nodes, so a path entry is either a node or a type reference.
+
+- `Radicle/include/fo4/papyrus/symbols.hpp:pathTo` returns the chain of ancestors of the innermost node whose span contains the offset, root first, including TypeRef entries where the C# tree carries a type-reference node. It is empty when nothing contains the offset.
+
+- `Radicle/src/papyrus/symbols.cpp:childrenOf` lists a node's children in the C# enumeration order. Grouped properties sit under their group, as in the C# `Properties.Where(p => p.GroupName == null)`, and an IfBranch reports the same NodeKind as an if statement but carries a condition and a body instead of branches. `Radicle/src/papyrus/symbols.cpp:ChildRef` holds either a node or a type reference.
+
+- `Radicle/include/fo4/papyrus/symbols.hpp:Symbols` provides the document outline and name-based definition lookup (locals, parameters, this script's members, the Extends chain, imports, script names). It resolves by name only, with no type checker, so a member reached through an expression whose type is not written down cannot be resolved; it returns null rather than a guess.
+
+- `Radicle/src/papyrus/symbols.cpp:resolveTypeName` honours `#` as well as `:` in qualified names, because PET's decompiler emits `Script#Struct` type names. The C# oracle rejects `#`; this is the same divergence noted for the front end above, carried over unchanged.
+
+- Tests. `Radicle/tests/test_papyrus_resolver.cpp`, `test_papyrus_type_checker.cpp` and `test_papyrus_symbols.cpp` are case-for-case ports of PET's `PapyrusResolverTests`, `PapyrusTypeCheckerTests` and `PapyrusSymbolsTests` (Catch2 to gtest, test names from the PET titles). Helper-level `REQUIRE` and `FAIL` became `throw std::runtime_error`, because a gtest `ASSERT_*` cannot return from a helper that returns a value. `Radicle/tests/test_papyrus_script_index.cpp` and `Radicle/tests/test_papyrus_declaration_check.cpp` are new focused unit tests: PET has no native unit test for `ScriptIndex`, `enumeratePapyrusFiles` or the duplicate check, only corpus sweeps. `Radicle/tests/test_papyrus_semantic_real.cpp` holds the corpus gates: the symbols sweep (ported from PET's `PapyrusCorpusTests`), the duplicate-declaration sweep (ported, on `FO4RE_PSC_ROOTS`), and the new resolve and type-check gate over complete scripts on `FO4RE_PSC_CORPUS`, which asserts 7,832 complete scripts when the corpus has the documented 7,854 files.
+
+- Not in this lift. PET's `ScriptIndex` has no in-memory overlay root; the graph's self-reference publish is a PET graph concern. Codegen, the compiler, user flags and the decompiler were not lifted. Recursion depth in `Resolver`, `TypeChecker` and `childrenOf` is unbounded, as it is in PET; a hostile script could exhaust the stack, which is untested here.

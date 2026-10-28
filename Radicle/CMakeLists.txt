@@ -269,6 +269,14 @@ add_library(fo4
   src/papyrus/parser.cpp
   src/papyrus/parser_statement.cpp
   src/papyrus/parser_expression.cpp
+  src/papyrus/type.cpp
+  src/papyrus/binding.cpp
+  src/papyrus/resolver.cpp
+  src/papyrus/type_checker.cpp
+  src/papyrus/script_index.cpp
+  src/papyrus/symbols.cpp
+  src/papyrus/declaration_check.cpp
+  src/papyrus/file_walk.cpp
   src/swf/swf.cpp
   src/swf/swf_tags.cpp
   src/swf/swf_placement.cpp
@@ -817,6 +825,12 @@ if(RADICLE_BUILD_TESTS)
     tests/test_papyrus_lexer.cpp
     tests/test_papyrus_parser.cpp
     tests/test_papyrus_parse_real.cpp
+    tests/test_papyrus_resolver.cpp
+    tests/test_papyrus_type_checker.cpp
+    tests/test_papyrus_symbols.cpp
+    tests/test_papyrus_script_index.cpp
+    tests/test_papyrus_declaration_check.cpp
+    tests/test_papyrus_semantic_real.cpp
     tests/test_abc.cpp
     tests/test_abc_edit.cpp
     tests/test_abc_pool.cpp
