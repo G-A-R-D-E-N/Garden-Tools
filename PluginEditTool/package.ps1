@@ -116,13 +116,14 @@ if ($NiftoolPath -and (Test-Path -LiteralPath $NiftoolPath -PathType Leaf)) {
     Warn "niftool not bundled: -NiftoolPath / NIFTOOL_PATH is unset or not a file ('$NiftoolPath'); the nif_* external-tool operations will be unavailable."
 }
 
-if ($TexconvPath -and (Test-Path -LiteralPath $TexconvPath -PathType Leaf)) {
+if ($TexconvPath) {
+    if (-not (Test-Path -LiteralPath $TexconvPath -PathType Leaf)) { throw "TexconvPath is set but is not a file: '$TexconvPath'" }
     $dest = Join-Path $Staging 'tools\texconv'
     New-Item -ItemType Directory -Path $dest -Force | Out-Null
     Copy-Item -LiteralPath $TexconvPath (Join-Path $dest 'Texconvx64.exe') -Force
-    Write-Host "    texconv ($TexconvPath)"
+    Write-Host "    texconv override ($TexconvPath)"
 } else {
-    Warn "texconv not bundled: -TexconvPath / TEXCONV_PATH is unset or not a file ('$TexconvPath'); native DDS support still works, but texconv-only fallbacks will be unavailable."
+    & (Join-Path $Root 'tools\fetch-bundled-tools.ps1') -StagingDir $Staging -Id texconv
 }
 
 if (-not $SkipCkWiki) {
@@ -140,21 +141,28 @@ if (-not $SkipCkWiki) {
 }
 
 if (-not $SkipAudioTools) {
-    if ($AudioToolsDir -and (Test-Path -LiteralPath $AudioToolsDir -PathType Container)) {
-        $dest = Join-Path $Staging 'tools\audio'
-        New-Item -ItemType Directory -Path $dest -Force | Out-Null
+    $audioDest = Join-Path $Staging 'tools\audio'
+    New-Item -ItemType Directory -Path $audioDest -Force | Out-Null
+    $audioDirGiven = $AudioToolsDir -and (Test-Path -LiteralPath $AudioToolsDir -PathType Container)
+    if ($audioDirGiven -and (Test-Path -LiteralPath (Join-Path $AudioToolsDir 'ffmpeg.exe') -PathType Leaf)) {
+        Copy-Item -LiteralPath (Join-Path $AudioToolsDir 'ffmpeg.exe') $audioDest -Force
+        Write-Host "    ffmpeg.exe override ($AudioToolsDir)"
+    } else {
+        & (Join-Path $Root 'tools\fetch-bundled-tools.ps1') -StagingDir $Staging -Id ffmpeg
+    }
+    if ($audioDirGiven) {
         $missing = @()
-        foreach ($exe in 'ffmpeg.exe', 'xWMAEncode.exe', 'BmlFuzEncode.exe', 'BmlFuzDecode.exe') {
+        foreach ($exe in 'xWMAEncode.exe', 'BmlFuzEncode.exe', 'BmlFuzDecode.exe') {
             $src = Join-Path $AudioToolsDir $exe
-            if (Test-Path $src) { Copy-Item $src $dest -Force } else { $missing += $exe }
+            if (Test-Path $src) { Copy-Item $src $audioDest -Force } else { $missing += $exe }
         }
         if ($missing.Count -eq 0) {
-            Write-Host '    ffmpeg.exe, xWMAEncode.exe, BmlFuzEncode.exe, BmlFuzDecode.exe'
+            Write-Host '    xWMAEncode.exe, BmlFuzEncode.exe, BmlFuzDecode.exe'
         } else {
             Warn "Missing from ${AudioToolsDir}: $($missing -join ', ')"
         }
     } else {
-        Warn "Audio tools not bundled: -AudioToolsDir / FO4IDE_AUDIO_TOOLS_DIR is unset or not a folder ('$AudioToolsDir'); configure FFMPEG_PATH/XWMAENCODE_PATH on the target machine if needed."
+        Warn "xWMAEncode.exe and BmlFuz*.exe not bundled: -AudioToolsDir / FO4IDE_AUDIO_TOOLS_DIR is unset or not a folder ('$AudioToolsDir'); configure XWMAENCODE_PATH and BMLFUZ*_PATH on the target machine if needed."
     }
 } else {
     Warn 'Skipping the audio tools (-SkipAudioTools).'
