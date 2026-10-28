@@ -21,6 +21,7 @@ using fo4::papyrus::QuestStageInput;
 using fo4::papyrus::QuestStages;
 using fo4::papyrus::StageReport;
 using fo4::papyrus::StageState;
+using fo4::papyrus::ValueType;
 using fo4::papyrus::VmadValueShape;
 using fo4::papyrus::bindVmadValues;
 using fo4::papyrus::fillQuestAliases;
@@ -106,6 +107,89 @@ TEST(PapyrusQuestRules, BindsEveryScalarShapeAndRefusesTheRest) {
   EXPECT_TRUE(report.clean());
   EXPECT_NE(report.toReport().find("bound=3 unsupported=3"), std::string::npos);
   EXPECT_EQ(report.digest(), report.digest());
+}
+
+TEST(PapyrusQuestRules, BindsIntAndObjectArraysAndAStructAndRefusesVariables) {
+  const OwnerId owner = OwnerId::forForm("0001:Q.esp");
+  VmadValueShape ints;
+  ints.name = "Counts";
+  ints.type = "Array";
+  ints.elementType = "Int";
+  ints.elementCount = 3;
+  for (int value : {4, 5, 6}) {
+    VmadValueShape element;
+    element.integer = value;
+    ints.elements.push_back(element);
+  }
+  VmadValueShape refs;
+  refs.name = "Refs";
+  refs.type = "Array";
+  refs.elementType = "Object";
+  refs.elementCount = 2;
+  for (const char* ref : {"0002:Actor.esp", "0003:Actor.esp"}) {
+    VmadValueShape element;
+    element.object = ref;
+    refs.elements.push_back(element);
+  }
+  VmadValueShape speed;
+  speed.name = "Speed";
+  speed.type = "Int";
+  speed.integer = 7;
+  VmadValueShape label;
+  label.name = "Label";
+  label.type = "String";
+  label.text = "go";
+  VmadValueShape config;
+  config.name = "Config";
+  config.type = "Struct";
+  config.elementCount = 2;
+  config.members = {speed, label};
+  VmadValueShape any;
+  any.name = "Any";
+  any.type = "Variable";
+  VmadValueShape anys;
+  anys.name = "Anys";
+  anys.type = "Array";
+  anys.elementType = "Variable";
+  anys.elementCount = 0;
+
+  const auto report = bindVmadValues(owner, {ints, refs, config, any, anys});
+  ASSERT_EQ(report.properties.size(), 5u);
+  EXPECT_EQ(report.properties[0].name, "Any");
+  EXPECT_EQ(report.properties[0].kind, BoundKind::Unsupported);
+  EXPECT_NE(report.properties[0].reason.value_or(std::string()).find("runtime type is unknown"),
+            std::string::npos);
+  EXPECT_EQ(report.properties[1].name, "Anys");
+  EXPECT_EQ(report.properties[1].kind, BoundKind::Unsupported);
+  EXPECT_NE(report.properties[1].reason.value_or(std::string()).find("not a bindable scalar type"),
+            std::string::npos);
+
+  EXPECT_EQ(report.properties[2].name, "Config");
+  EXPECT_EQ(report.properties[2].kind, BoundKind::Struct);
+  ASSERT_EQ(report.properties[2].value.type, ValueType::Struct);
+  const auto& members = report.properties[2].value.structure->members;
+  ASSERT_EQ(members.size(), 2u);
+  EXPECT_EQ(members.at("speed").integer, 7);
+  EXPECT_EQ(members.at("label").str, "go");
+
+  EXPECT_EQ(report.properties[3].name, "Counts");
+  EXPECT_EQ(report.properties[3].kind, BoundKind::Array);
+  ASSERT_EQ(report.properties[3].value.type, ValueType::Array);
+  EXPECT_EQ(report.properties[3].value.array->elementType, ValueType::Integer);
+  const auto& counts = report.properties[3].value.array->elements;
+  ASSERT_EQ(counts.size(), 3u);
+  EXPECT_EQ(counts[0].integer, 4);
+  EXPECT_EQ(counts[2].integer, 6);
+
+  EXPECT_EQ(report.properties[4].name, "Refs");
+  EXPECT_EQ(report.properties[4].kind, BoundKind::Array);
+  const auto& targets = report.properties[4].value.array->elements;
+  ASSERT_EQ(targets.size(), 2u);
+  EXPECT_EQ(targets[1].object->type, "0003:Actor.esp");
+
+  EXPECT_EQ(report.bound, 3);
+  EXPECT_EQ(report.unsupported, 2);
+  EXPECT_TRUE(report.clean());
 }
 
 TEST(PapyrusQuestRules, FillsTheProvenAliasKindsAndLeavesTheActorsOpen) {
