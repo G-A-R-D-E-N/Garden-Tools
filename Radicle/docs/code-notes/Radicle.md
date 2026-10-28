@@ -7662,3 +7662,15 @@ A display row's `create_tag_index` and `transform_tag_index` are positions in th
 ## Radicle/src/c_api_swf_history.cpp:timeline_flat_indices
 
 A DefineSprite with id 0 is malformed and aliases the root, because `timeline_flat_indices` reads id 0 as the root timeline.
+
+## Radicle/src/swf/swf_bitmap.cpp:decode_bitmap_tag
+
+`SwfBitmap` now keeps the whole inflated stream in `pixels` (colour map first when format is 3, then the padded rows) and sets `has_alpha` from DefineBitsLossless2, so the PNG encoder can read pixels without re-inflating. Cost: every decoded bitmap tag holds up to 64 MiB of pixels for the life of the parsed file. The C ABI does not expose `pixels` (`radicle_swf_bitmap_info` copies only the scalar fields in `Radicle/src/c_api_swf_art.cpp:radicle_swf_bitmap_at`), so the ABI is unchanged. Regression: a PNG built from metadata alone would have no pixel data, and a Lossless2 bitmap decoded without `has_alpha` would be encoded as opaque. Tests: `Radicle/tests/test_swf_art.cpp:SwfBitmapPng.Lossless2UnpremultipliesAlphaIntoAnRgbaPng`.
+
+## Radicle/src/swf/swf_bitmap_png.cpp:bitmap_to_png
+
+Encodes formats 3 (colour map) and 5 (32-bit ARGB) to an 8-bit RGBA PNG with filter 0 on every row and `compress2` at `Z_BEST_COMPRESSION`, so the output is byte-deterministic for a given zlib. Format 4 (15-bit) is refused because its byte order is not verified against the spec or the C# oracle, and a bitmap whose pixel count does not match its geometry is refused. Un-premultiply follows `BitmapArtwork.Png` in `E:\GardenEngine\GardenEngine\git\audit-pr277\tools\SwfTools\BitmapArtwork.cs`: `channel * 255 / alpha` rounded half-to-even (`std::nearbyint`, matching `Math.Round`), clamped to 255, and alpha 0 keeps the stored channel. The oracle handles only format 5; the palette un-premultiply for Lossless2 is an extension and is not checked against a reference. Regression: premultiplied colour left in the output (the 50% pixel would read 64 instead of 128), a half-up tie rule (a 4.5 channel would read 5), and a refused 15-bit row being read as ARGB. Tests: `Radicle/tests/test_swf_art.cpp:SwfBitmapPng.Lossless2UnpremultipliesAlphaIntoAnRgbaPng`, `Radicle/tests/test_swf_art.cpp:SwfBitmapPng.ColourMappedRowsAreStridedAndLookedUpInThePalette`, `Radicle/tests/test_swf_art.cpp:SwfBitmapPng.RefusesFifteenBitRowsAndJpegBlobsWithoutAPng`.
+
+## Radicle/tests/test_swf_art.cpp:SwfBitmapPng.RefusesFifteenBitRowsAndJpegBlobsWithoutAPng
+
+A JPEG-based DefineBitsJpeg2 tag never produces an `SwfBitmap`, so the JPEG refusal is structural: the test asserts the tag has no bitmap and does carry the JPEG. The 15-bit case is the only refusal `bitmap_to_png` exercises. Regression: a JPEG blob reaching the lossless path, or a 15-bit row read as 32-bit ARGB.

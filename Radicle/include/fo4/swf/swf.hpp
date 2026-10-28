@@ -313,6 +313,9 @@ struct SwfBitmap {
   std::uint16_t height{0};
   std::optional<std::uint8_t> color_table_size;
   std::size_t data_size{0};
+  bool has_alpha{false};
+  /* Invariant: the whole inflated stream, with the colour map first when format is 3, then the padded rows. */
+  std::vector<std::byte> pixels;
 };
 
 struct SwfJpeg {

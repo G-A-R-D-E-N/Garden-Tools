@@ -73,11 +73,12 @@ JpegSize scan_jpeg_size(std::span<const std::byte> data) {
   return size;
 }
 
-bool inflate_to(std::span<const std::byte> input, std::size_t expected) {
+bool inflate_to(std::span<const std::byte> input, std::size_t expected,
+                std::vector<std::byte>& unpacked) {
   if (expected > kMaxBitmapBytes) {
     return false;
   }
-  std::vector<std::byte> unpacked(expected == 0 ? 1 : expected);
+  unpacked.assign(expected == 0 ? 1 : expected, std::byte{0});
   uLongf length = static_cast<uLongf>(unpacked.size());
   const auto code = uncompress(reinterpret_cast<Bytef*>(unpacked.data()), &length,
                                reinterpret_cast<const Bytef*>(input.data()),
@@ -173,10 +174,11 @@ SwfStatus decode_bitmap_tag(std::span<const std::byte> data, SwfTag& out_tag) {
     return SwfStatus::malformed_tag;
   }
   const auto packed = data.subspan(cursor.position);
-  if (packed.empty() || !inflate_to(packed, expected)) {
+  if (packed.empty() || !inflate_to(packed, expected, bitmap.pixels)) {
     return SwfStatus::malformed_tag;
   }
   bitmap.data_size = packed.size();
+  bitmap.has_alpha = out_tag.code == tag::kDefineBitsLossless2;
   out_tag.bitmap = bitmap;
   return SwfStatus::ok;
 }
