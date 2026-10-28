@@ -282,6 +282,26 @@ public class SwfDocumentServiceTests
     }
 
     [NativeFact]
+    public void InspectTextHeadsTheMovieWithItsAssetPathAndListsItsRootLabels()
+    {
+        using var document = SwfDocument.OpenResolved("Interface\\Test.swf", _ => SwfFixture.Movie());
+        var text = document.InspectText();
+        Assert.StartsWith("## Interface\\Test.swf\nStage ", text);
+        Assert.Contains("Root frame labels: start@", text);
+    }
+
+    [NativeFact]
+    public void Avm1DisassemblesADoActionTagAndRefusesANonActionTag()
+    {
+        using var document = SwfDocument.OpenBytes(SwfFixture.Movie(withAction: true));
+        var action = document.Movie.Tags.First(tag => tag.Code == 12);
+        Assert.Equal("0000  Play\n0001  Stop\n0002  Trace\n0003  End\n", document.Avm1Disassemble(action.Index));
+        var refusal = Assert.Throws<RadicleException>(() => document.Avm1Disassemble(document.Movie.Tags.First(tag => tag.Code == 43).Index));
+        Assert.Equal(Status.InvalidArgument, refusal.Status);
+        Assert.Equal(0ul, document.Revision);
+    }
+
+    [NativeFact]
     public void SavingAResolvedAssetWithoutATargetRefuses()
     {
         using var document = SwfDocument.OpenResolved("Interface\\Test.swf", _ => SwfFixture.Movie());

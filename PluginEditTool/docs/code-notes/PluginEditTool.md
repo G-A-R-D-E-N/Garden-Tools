@@ -240,3 +240,29 @@ Every character pick increments `shapeRequest` and clears `shapeSvg` before it a
 `SwfFixture.Movie(withShape: true)` adds an empty DefineShape (id 5, no fills, no lines, an end record). It is opt-in so the document-service tests keep their two-character count. The empty shape is enough to prove `ShapeSvg` returns a `<svg` document; a filled-shape path check would duplicate Radicle's own test.
 
 Tests: `FO4RecordEditor.Tests/SwfInteropTests.cs:SwfInteropTests.ShapeSvgRpcReturnsTheSvgForAShapeAndTheRefusalForANonShape` (shape returns `<svg`, EditText returns an error, ids 70000 and -1 are refused with `0..65535` and no svg), `web/src/SwfPanel.test.tsx:SwfPanel` (shape selection requests `ShapeSvg` and renders the image, a late reply for an earlier shape is ignored, a non-shape pick clears the preview, and a late `ReadEditText` reply after a newer shape selection opens no edit form).
+
+## FO4RecordEditor.Core/Services/SwfDocumentService.cs:SwfDocument.InspectText and SwfDocument.Avm1Disassemble (read-only SWF text)
+
+`InspectText` returns the Radicle inspection listing of the open movie, named by `ToString()` (the asset path, or `<bytes>` for a document opened from bytes). Radicle refuses a null name, so the heading is never null. `Avm1Disassemble` passes a flat tag index to `SwfFile.Avm1Disassemble` (`radicle_swf_avm1_disassemble`); only DoAction (12) and DoInitAction (59) are accepted. Radicle's refusal (an out-of-range index, another tag code, or an undecodable stream) surfaces as its `RadicleException`. Both read `Movie` and never enter the history, so neither changes `Revision` or `Dirty`.
+
+## FO4RecordEditor/Services/SwfInterop.cs:SwfInterop.InspectText, SwfInterop.ActionTags and SwfInterop.Avm1Disassemble (inspect RPCs)
+
+The three methods are public on the `[RpcExpose]` class, so `RpcDispatcher` routes them to the WebView2 host object and the server without registration. `InspectText` replies `{text}`. `ActionTags` replies `{tags: [{tagIndex, code, insideSprite}]}` for the code 12 and 59 tags in flat order; the panel passes those indices to `Avm1Disassemble`, which replies `{text}`. Refusals go through `Run` as `{error, status}`, the same shape as every other RPC.
+
+## web/src/SwfPanel.tsx:SwfPanel (Inspect section)
+
+The "Inspect" section sits above the ABC section in the right aside. `open` clears the inspect text, the action listing, the picked tag and its error before the host `Open` call, then loads `InspectText` and `ActionTags` after the ABC listing, so a refused re-open leaves no stale listing. `pickActionTag` (`web/src/SwfPanel.tsx:SwfPanel.pickActionTag`) increments `avm1Request` before its await and applies a reply only while its number is still current, the same guard the ABC view uses, so an out-of-order disassembly cannot replace the one picked last. A refused `InspectText` or `ActionTags` goes into the section alert; a refused `Avm1Disassemble` goes into the disassembly alert. The view is display-only and edits no SWF bytes.
+
+Tests: `web/src/SwfPanel.test.tsx:SwfPanel` picks `DoAction @9` and asserts `Avm1Disassemble(9)` and the listing text in the `avm1 disassembly` block. Regression: the disassembly call or the listing being dropped from the panel, or the pick sent with a different index.
+
+## FO4RecordEditor.Core.Tests/SwfFixture.cs:SwfFixture.ActionTag (opt-in DoAction)
+
+`SwfFixture.Movie(withAction: true)` adds a root DoAction whose bytes are Play, Stop, Trace, End (the bytes Radicle's `action_movie` uses in `Radicle/tests/test_c_api_swf_text.cpp`). It is opt-in so the other document-service tests keep their flat tag indices.
+
+## FO4RecordEditor.Core.Tests/SwfDocumentServiceTests.cs:SwfDocumentServiceTests.InspectTextHeadsTheMovieWithItsAssetPathAndListsItsRootLabels
+
+Regression: the inspect text read from the wrong movie, or its `## <asset path>` heading lost or replaced by the file name. It asserts the heading and the root label line only, not the full listing, which Radicle's own tests pin.
+
+## FO4RecordEditor.Core.Tests/SwfDocumentServiceTests.cs:SwfDocumentServiceTests.Avm1DisassemblesADoActionTagAndRefusesANonActionTag
+
+Regression: a DoAction listed from a wrong flat index or payload offset (the expected text is exact), a non-action tag (a FrameLabel, code 43) decoded as bytecode instead of refused by `SwfDocumentService.cs:SwfDocument.Avm1Disassemble`, or a refused disassembly bumping `Revision`.
