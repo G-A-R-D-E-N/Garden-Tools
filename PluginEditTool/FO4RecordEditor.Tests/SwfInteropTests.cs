@@ -15,13 +15,8 @@ public sealed class SwfInteropTests
     public async Task AbcRpcsReturnTheFieldsThePanelReadsAndTheRefusalShape()
     {
         // Invariant: the ABC RPC field names the web panel reads must not change; detects a renamed field or a dropped error shape.
-        var root = Path.Combine(Path.GetTempPath(), "fo4re-swf-rpc-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(Path.Combine(root, "Interface"));
-        File.WriteAllBytes(Path.Combine(root, "Interface", "Test.swf"), SwfFixture.Movie(withAbc: true));
-        AssetResolver.SetSessionDataRoots(new[] { root });
-        try
+        await WithOpenMovie(SwfFixture.Movie(withAbc: true), async swf =>
         {
-            var swf = new SwfInterop();
             Assert.False(Parse(await swf.Open("Interface\\Test.swf")).TryGetProperty("error", out _));
 
             var block = Parse(await swf.AbcBlocks()).GetProperty("blocks")[0];
@@ -43,6 +38,43 @@ public sealed class SwfInteropTests
 
             Assert.True(Parse(await swf.Open("Interface\\Missing.swf")).TryGetProperty("error", out _));
             Assert.Equal("no SWF document is open", Parse(await swf.AbcBlocks()).GetProperty("error").GetString());
+        });
+    }
+
+    [NativeFact]
+    public async Task FrameLabelRpcsTakeATimelineAndLabelIndexAndRefuseOutOfRange()
+    {
+        // Constraint: detects the label RPCs reverting to tag indices, dropping the timeline, a timeline index that does not resolve to its DefineSprite character id, or reporting a refused index as a change.
+        await WithOpenMovie(SwfFixture.Movie(), async swf =>
+        {
+            Assert.False(Parse(await swf.Open("Interface\\Test.swf")).TryGetProperty("error", out _));
+            Assert.Equal(14, Parse(await swf.Timeline(1)).GetProperty("characterId").GetInt32());
+            Assert.Equal(0, Parse(await swf.Timeline(0)).GetProperty("characterId").GetInt32());
+
+            var labels = Parse(await swf.FrameLabels(0)).GetProperty("labels");
+            Assert.Equal(0, labels[0].GetProperty("labelIndex").GetInt32());
+            Assert.Equal("start", labels[0].GetProperty("name").GetString());
+
+            Assert.True(Parse(await swf.RenameLabel(0, 0, "menu")).GetProperty("changed").GetBoolean());
+            var refusal = Parse(await swf.RenameLabel(0, 9, "menu"));
+            Assert.Contains("out of range", refusal.GetProperty("error").GetString());
+            Assert.True(refusal.TryGetProperty("status", out _));
+
+            Assert.True(Parse(await swf.RemoveLabel(0, 0)).GetProperty("changed").GetBoolean());
+            Assert.Equal(0, Parse(await swf.FrameLabels(0)).GetProperty("labels").GetArrayLength());
+            Assert.Equal(2, Parse(await swf.State()).GetProperty("undo").GetInt32());
+        });
+    }
+
+    private static async Task WithOpenMovie(byte[] movie, Func<SwfInterop, Task> body)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "fo4re-swf-rpc-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, "Interface"));
+        File.WriteAllBytes(Path.Combine(root, "Interface", "Test.swf"), movie);
+        AssetResolver.SetSessionDataRoots(new[] { root });
+        try
+        {
+            await body(new SwfInterop());
         }
         finally
         {

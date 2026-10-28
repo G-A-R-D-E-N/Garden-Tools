@@ -24,7 +24,7 @@ typedef struct radicle_swf_edit_text_fields {
   radicle_swf_rect bounds;
 } radicle_swf_edit_text_fields;
 
-/* Invariant: tag_index is a top-level tag that must decode as DefineEditText; *out_text is malloc'd with a trailing NUL, release with radicle_free_bytes. */
+/* Invariant: tag_index is the flat radicle_swf_tag_at index of a top-level DefineEditText; a tag inside a DefineSprite is refused. *out_text is malloc'd with a trailing NUL, release with radicle_free_bytes. */
 RADICLE_API radicle_status radicle_swf_edit_text_read(const radicle_swf_history* history, size_t tag_index,
                                                       radicle_swf_edit_text_info* out_info, uint8_t** out_text,
                                                       size_t* out_text_size);

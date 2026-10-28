@@ -48,11 +48,11 @@ public class SwfInterop
         }).ToArray(),
     }));
 
-    public Task<string> FrameLabels() => Run(() => Json(new
+    public Task<string> FrameLabels(int timeline) => Run(() => Json(new
     {
-        labels = Document().FrameLabels().Select(l => new
+        labels = Document().FrameLabelRows(timeline).Select(l => new
         {
-            name = l.Name, tagIndex = l.TagIndex, spriteId = l.SpriteId, insideSprite = l.InsideSprite,
+            labelIndex = l.LabelIndex, frame = l.Frame, name = l.Name,
         }).ToArray(),
     }));
 
@@ -69,8 +69,14 @@ public class SwfInterop
         }).ToArray(),
     }));
 
-    public Task<string> RenameLabel(int tagIndex, string name) => Run(() =>
-        Snapshot(Document().RenameLabel(tagIndex, name).Changed));
+    public Task<string> Timeline(int index) => Run(() =>
+    {
+        var timeline = Document().Timeline(index);
+        return Json(new { characterId = timeline.CharacterId, frameCount = timeline.FrameCount });
+    });
+
+    public Task<string> RenameLabel(int timeline, int labelIndex, string name) => Run(() =>
+        Snapshot(Document().RenameLabel(timeline, labelIndex, name).Changed));
 
     public Task<string> ReadEditText(int tagIndex) => Run(() =>
     {
@@ -124,8 +130,8 @@ public class SwfInterop
         });
     public Task<string> InsertKeyframe(int tagIndex, int frame) => Run(() =>
         Snapshot(Document().InsertKeyframe(tagIndex, frame).Changed));
-    public Task<string> RemoveLabel(int tagIndex) => Run(() =>
-        Snapshot(Document().RemoveLabel(tagIndex).Changed));
+    public Task<string> RemoveLabel(int timeline, int labelIndex) => Run(() =>
+        Snapshot(Document().RemoveLabel(timeline, labelIndex).Changed));
     public Task<string> AddLabel(int frame, string name, int timeline) => Run(() =>
     {
         var result = Document().AddLabel(frame, name, timeline);
