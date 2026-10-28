@@ -24,6 +24,7 @@ struct SwfFrameInstance {
   bool has_bounds{false};
   bool is_sprite{false};
   std::optional<std::uint16_t> clip_depth;
+  std::optional<SwfColorTransform> world_color_transform;
   /* Invariant: the tag that created the object, top level for a root row and a child index inside its DefineSprite. */
   std::size_t create_tag_index{0};
   /* Invariant: absent until a placement authors a MATRIX, otherwise the address of the one that last authored it. */
@@ -36,7 +37,7 @@ struct SwfFrameInstance {
            timeline_frame == other.timeline_frame && name == other.name && path == other.path &&
            transform == other.transform && world_transform == other.world_transform &&
            bounds == other.bounds && has_bounds == other.has_bounds && is_sprite == other.is_sprite &&
-           clip_depth == other.clip_depth;
+           clip_depth == other.clip_depth && world_color_transform == other.world_color_transform;
   }
 };
 
