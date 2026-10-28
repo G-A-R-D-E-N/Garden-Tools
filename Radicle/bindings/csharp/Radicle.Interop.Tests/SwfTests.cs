@@ -666,6 +666,68 @@ public partial class SwfTests
     }
 
     [Fact]
+    public void ExportsTheRootFrameAsSvgThroughTheManagedWrapper()
+    {
+        using var swf = SwfFile.FromBytes(RedSquareMovie());
+
+        var svg = swf.FrameSvg(0);
+
+        Assert.StartsWith("<svg", svg);
+        Assert.Contains("<path d=\"M0 0L50 0L50 50L0 50L0 0Z\"", svg);
+    }
+
+    private static byte[] RedSquareMovie()
+    {
+        var shape = new List<byte>();
+        shape.AddRange(BitConverter.GetBytes((ushort)1));
+        shape.AddRange(Rect(0, 1000, 0, 1000));
+        shape.Add(1);
+        shape.Add(0x00);
+        shape.AddRange(new byte[] { 0xFF, 0x00, 0x00, 0xFF });
+        shape.Add(0);
+        shape.Add(0x10);
+        var edges = new BitWriter();
+        edges.Push(0, 1);
+        edges.Push(0x03, 5);
+        edges.Push(12, 5);
+        edges.Push(0, 12);
+        edges.Push(0, 12);
+        edges.Push(1, 1);
+        int[] deltas = { 1000, 0, 0, 1000, -1000, 0, 0, -1000 };
+        for (var index = 0; index < deltas.Length; index += 2)
+        {
+            edges.Push(1, 1);
+            edges.Push(1, 1);
+            edges.Push(10, 4);
+            edges.Push(1, 1);
+            edges.Push((uint)deltas[index] & 0xFFFu, 12);
+            edges.Push((uint)deltas[index + 1] & 0xFFFu, 12);
+        }
+        edges.Push(0, 6);
+        shape.AddRange(edges.ToBytes());
+
+        var place = new List<byte>();
+        place.Add(0x06);
+        place.AddRange(BitConverter.GetBytes((ushort)1));
+        place.AddRange(BitConverter.GetBytes((ushort)1));
+        place.Add(0x00);
+
+        var body = new List<byte>();
+        body.AddRange(Rect(0, 11000, 0, 8000));
+        body.AddRange(BitConverter.GetBytes((ushort)0x0C00));
+        body.AddRange(BitConverter.GetBytes((ushort)1));
+        body.AddRange(Tag(32, shape.ToArray()));
+        body.AddRange(Tag(26, place.ToArray()));
+        body.AddRange(Tag(1, Array.Empty<byte>()));
+        body.AddRange(Tag(0, Array.Empty<byte>()));
+
+        var file = new List<byte> { (byte)'F', (byte)'W', (byte)'S', 10 };
+        file.AddRange(BitConverter.GetBytes((uint)(body.Count + 8)));
+        file.AddRange(body);
+        return file.ToArray();
+    }
+
+    [Fact]
     public void ExportsTheLossless2BitmapAsPngAndRefusesANonBitmapTag()
     {
         using var swf = SwfFile.FromBytes(ArtMovie());
