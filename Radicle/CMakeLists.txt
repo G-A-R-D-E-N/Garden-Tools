@@ -299,6 +299,7 @@ add_library(fo4
   src/papyrus/body_call.cpp
   src/papyrus/creation_kit_fidelity.cpp
   src/papyrus/compile_script.cpp
+  src/papyrus/analysis_service.cpp
   src/f4se/binding_validator.cpp
   src/f4se/cpp_emitter.cpp
   src/f4se/cpp_scanner.cpp
@@ -469,7 +470,7 @@ target_sources(radicle_c PRIVATE src/c_api_dialogue.cpp)
 target_sources(radicle_c PRIVATE src/c_api_armor.cpp src/c_api_eyes.cpp src/c_api_faction.cpp src/c_api_components.cpp src/c_api_cell.cpp)
 target_sources(radicle_c PRIVATE src/c_api_patch.cpp)
 target_sources(radicle_c PRIVATE src/c_api_conflict.cpp src/c_api_graph.cpp)
-target_sources(radicle_c PRIVATE src/c_api_pex_analysis.cpp src/c_api_vmad_read.cpp src/c_api_script_set.cpp src/c_api_papyrus.cpp src/c_api_papyrus_runtime.cpp src/c_api_papyrus_save.cpp src/c_api_papyrus_quest.cpp)
+target_sources(radicle_c PRIVATE src/c_api_pex_analysis.cpp src/c_api_vmad_read.cpp src/c_api_script_set.cpp src/c_api_papyrus.cpp src/c_api_papyrus_runtime.cpp src/c_api_papyrus_save.cpp src/c_api_papyrus_quest.cpp src/c_api_papyrus_compiler.cpp)
 target_sources(fo4 PRIVATE src/patch/delta_patch.cpp)
 target_sources(fo4 PRIVATE src/patch/list_merge.cpp)
 target_sources(fo4 PRIVATE src/papyrus_source/lexer.cpp src/papyrus_source/parser.cpp src/papyrus_source/parser_decl.cpp src/papyrus_source/parser_expr.cpp src/papyrus_source/parser_stmt.cpp src/papyrus_source/summary.cpp)
@@ -888,6 +889,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_papyrus_codegen.cpp
     tests/test_papyrus_codegen_real.cpp
     tests/test_papyrus_user_flags.cpp
+    tests/test_papyrus_analysis_service.cpp
     tests/test_f4se_type_map.cpp
     tests/test_f4se_cross_check.cpp
     tests/test_f4se_extractor.cpp

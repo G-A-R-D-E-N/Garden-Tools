@@ -44,12 +44,17 @@ SwfPlacementRow placement_row(const swf::SwfPlacement& placement) {
   SwfPlacementRow row;
   row.kind = SwfPlacementRow::Kind::Place;
   row.depth = placement.depth;
+  row.move = placement.move;
+  row.has_character = placement.character_id.has_value();
   row.character_id = placement.character_id.value_or(0);
   row.name = placement.name.value_or(std::string{});
   if (placement.matrix.has_value()) {
     const swf::SwfMatrix& matrix = *placement.matrix;
+    row.has_matrix = true;
     row.scale_x = fixed_to_double(matrix.scale_x);
     row.scale_y = fixed_to_double(matrix.scale_y);
+    row.rotate_skew0 = fixed_to_double(matrix.rotate_skew0);
+    row.rotate_skew1 = fixed_to_double(matrix.rotate_skew1);
     row.translate_x = twips_to_pixels(matrix.translate_x);
     row.translate_y = twips_to_pixels(matrix.translate_y);
   }
