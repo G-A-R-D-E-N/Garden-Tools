@@ -173,6 +173,8 @@ public class SwfInterop
             throw new ArgumentOutOfRangeException(nameof(characterId), "character id must be 0..65535");
         return Json(new { svg = Document().Movie.ShapeSvg((ushort)characterId) });
     });
+    public Task<string> BitmapPng(int tagIndex) => Run(() =>
+        Json(new { png = Convert.ToBase64String(Document().Movie.BitmapPng(tagIndex)) }));
     public Task<string> Undo() => Run(() => { Document().Undo(); return Snapshot(false); });
 
     public Task<string> Redo() => Run(() => { Document().Redo(); return Snapshot(false); });
