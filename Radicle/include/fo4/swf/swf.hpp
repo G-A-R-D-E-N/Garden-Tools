@@ -313,6 +313,9 @@ struct SwfBitmap {
   std::uint16_t height{0};
   std::optional<std::uint8_t> color_table_size;
   std::size_t data_size{0};
+  bool has_alpha{false};
+  /* Invariant: the zlib stream as the tag carried it, inflated on demand by bitmap_to_png. */
+  std::vector<std::byte> packed;
 };
 
 struct SwfJpeg {

@@ -141,6 +141,9 @@ SwfStatus decode_shape_tag(std::span<const std::byte> data, SwfTag& out_tag);
 
 SwfStatus decode_bitmap_tag(std::span<const std::byte> data, SwfTag& out_tag);
 
+bool inflate_to(std::span<const std::byte> input, std::size_t expected,
+                std::vector<std::byte>& unpacked);
+
 SwfStatus decode_morph_tag(std::span<const std::byte> data, SwfTag& out_tag);
 
 SwfStatus decode_jpeg_tag(std::span<const std::byte> data, SwfTag& out_tag);
