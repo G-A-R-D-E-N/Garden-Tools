@@ -996,6 +996,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_swf_census.cpp
     tests/test_swf_census_real.cpp
     tests/test_avm1.cpp
+    tests/test_avm1_encode.cpp
     tests/test_avm1_ops.cpp
     tests/test_avm1_objects.cpp
     tests/test_avm1_functions.cpp
