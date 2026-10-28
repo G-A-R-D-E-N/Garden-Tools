@@ -8033,7 +8033,7 @@ Recalled, not verified against Flash: CallFunction pops the name, then the argum
 
 Ceilings, each refused by name or documented here:
 - The suppress flags (0x02, 0x08, 0x20) are read and ignored.
-- There are no closures: a function sees the globals and its own locals and registers only.
+- There are no closures: a function sees the globals and its own locals and registers only. Function values compare equal per DefineFunction record (`Radicle/src/avm1/function_ops.cpp:define_function` caches one body per record offset), so two evaluations of one literal are equal here but not in Flash.
 - CallFunction runs with `this` undefined. `this` and `arguments` are reachable only as preload registers, not as names through GetVariable.
 - A preload of super, _root, _parent or _global is refused at call time with "preloading super, _root, _parent or _global is not in this slice" (`Radicle/src/avm1/function_ops.cpp:invoke`).
 - NewMethod creates a plain object with no prototype. The function's return value replaces it only when that value is an object.
@@ -8071,6 +8071,7 @@ This section supersedes the statements that CallFunction, CallMethod, NewMethod 
 - `Radicle/tests/test_avm1_functions.cpp:FunctionRefusalsAreNamedAndTraceNothing` detects an unsupported path that runs silently, such as a CallFunction of a missing name that yields undefined without a refusal, a refusal that loses its name, a register outside a function read as a value, a preload past the declared register count writing out of bounds (InvalidStream is required), and a preloaded _root that runs. Its first row detects a top-level Return that is refused instead of ending the list.
 
 Not compiled or run on the development machine for this change. The test file, the function model and these notes need CI to confirm the expected strings, step counts and status values.
+
 ## Radicle/src/avm2/interpreter_dispatch_c.inc:execute_frame
 
 hasnext (0x1F) pops the index, then the object, and pushes the next 1-based key index (index + 1) while keys remain, else 0. A non-object pushes 0. Its keys come from `Radicle/src/avm2/interpreter_property.cpp:Interpreter::enumeration_keys`, so hasnext, hasnext2, nextname and nextvalue read one list. sxi1 keeps only the low bit as -1 or 0. sxi8 and sxi16 sign-extend the low byte or low half of ToInt32. coerce_o pushes null for undefined and passes every other value through. The coerce_o and sxi semantics are recalled from the AVM2 overview, not verified against Flash. The verifier stack effects in `Radicle/src/abc/abc_stack.cpp:stack_effect` were already right for these opcodes (0x1F pops 2 and pushes 1; 0x50-0x52, 0x81-0x86 and 0x88-0x89 pop 1 and push 1), so the verifier is unchanged.
