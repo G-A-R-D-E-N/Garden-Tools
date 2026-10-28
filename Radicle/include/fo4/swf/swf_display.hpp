@@ -83,6 +83,8 @@ struct SwfDisplayOptions {
   unsigned max_depth{64};
   /* Constraint: off by default, so a read-only frame handle does not pay for the separate placement list. */
   bool record_placements{false};
+  /* Constraint: off by default, since frame-indexed consumers require the linear playhead. */
+  bool apply_frame_control{false};
 };
 
 struct SwfDisplayList {
