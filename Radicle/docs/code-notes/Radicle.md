@@ -7875,7 +7875,7 @@ Decision: the verifier's rejection of callmethod in user bytecode is unchanged. 
 
 ## Radicle/src/avm2/interpreter.cpp:Interpreter::execute_frame
 
-Opcode census from a source scan (not compiled or run). Named opcodes with no case in `interpreter_dispatch_a.inc` or `interpreter_dispatch_b.inc` fall to the default, which returns NotImplemented "opcode X is not implemented yet". Totals: 169 named, 138 dispatched, 31 not dispatched. The 31 are: dxns 0x06, dxnslate 0x07, hasnext 0x1F, pushnamespace 0x31, li8 0x35, li16 0x36, li32 0x37, lf32 0x38, lf64 0x39, si8 0x3A, si16 0x3B, si32 0x3C, sf32 0x3D, sf64 0x3E, sxi1 0x50, sxi8 0x51, sxi16 0x52, getdescendants 0x59, finddef 0x5F, setpropertylate 0x69, deletepropertylate 0x6B, getglobalslot 0x6E, setglobalslot 0x6F, esc_xelem 0x71, esc_xattr 0x72, checkfilter 0x78, coerce_b 0x81, coerce_i 0x83, coerce_d 0x84, coerce_u 0x88, coerce_o 0x89. NotImplemented also comes from `Radicle/src/avm2/interpreter_property.cpp:Interpreter::outer_scope_value`, which returns it for a getouterscope in a method with no captured scope.
+Opcode census from a source scan (not compiled or run). Named opcodes with no case in `interpreter_dispatch_a.inc` or `interpreter_dispatch_b.inc` fall to the default, which returns NotImplemented "opcode X is not implemented yet". Totals: 169 named, 147 dispatched, 22 not dispatched (after the AVM2 more-ops change; the earlier count was 138 and 31). The 22 are: dxns 0x06, dxnslate 0x07, pushnamespace 0x31, li8 0x35, li16 0x36, li32 0x37, lf32 0x38, lf64 0x39, si8 0x3A, si16 0x3B, si32 0x3C, sf32 0x3D, sf64 0x3E, getdescendants 0x59, finddef 0x5F, setpropertylate 0x69, deletepropertylate 0x6B, getglobalslot 0x6E, setglobalslot 0x6F, esc_xelem 0x71, esc_xattr 0x72, checkfilter 0x78. The more-ops change (`Radicle/src/avm2/interpreter.cpp:Interpreter::execute_frame`) dispatched hasnext 0x1F, sxi1 0x50, sxi8 0x51, sxi16 0x52, coerce_b 0x81, coerce_i 0x83, coerce_d 0x84, coerce_u 0x88 and coerce_o 0x89. The li/si/sf memory ops stay undispatched because no ApplicationDomain memory byte array exists. dxns, dxnslate, pushnamespace, finddef, getdescendants and E4X were left out of that change. NotImplemented also comes from `Radicle/src/avm2/interpreter_property.cpp:Interpreter::outer_scope_value`, which returns it for a getouterscope in a method with no captured scope.
 
 ## Radicle/tests/test_avm2_call_indexed.cpp:CallstaticRunsTheMethodWithTheReceiverAsThis
 
@@ -8024,3 +8024,79 @@ Unverified against Flash: that a morph interpolates line width and colour per ra
 ## Radicle/src/avm2/snapshot.cpp:Hasher (snapshot hash basis)
 
 `Radicle/src/avm2/snapshot.cpp:Hasher` now starts from the standard FNV-1a 64 offset basis 14695981039346656037, the same basis `Radicle/src/avm2/display_snapshot.cpp:fnv1a64` uses. The old basis 1469598103934665603 was one digit short, so every `Radicle/src/avm2/snapshot.cpp:snapshot_hash` value changed once, at this commit. No consumer should have persisted them: the hash is compared within a run (`Radicle/src/avm2/replay.cpp:replay`, `Radicle/src/c_api_runtime.cpp:radicle_runtime_snapshot_hash`), and the real-data pins in `Radicle/tests/test_c_api_runtime_real.cpp:kPinned` are all zero. A repo search found no persisted snapshot hash value.
+
+## Radicle/src/avm2/interpreter_dispatch_c.inc:execute_frame
+
+hasnext (0x1F) pops the index, then the object, and pushes the next 1-based key index (index + 1) while keys remain, else 0. A non-object pushes 0. Its keys come from `Radicle/src/avm2/interpreter_property.cpp:Interpreter::enumeration_keys`, so hasnext, hasnext2, nextname and nextvalue read one list. sxi1 keeps only the low bit as -1 or 0. sxi8 and sxi16 sign-extend the low byte or low half of ToInt32. coerce_o pushes null for undefined and passes every other value through. The coerce_o and sxi semantics are recalled from the AVM2 overview, not verified against Flash. The verifier stack effects in `Radicle/src/abc/abc_stack.cpp:stack_effect` were already right for these opcodes (0x1F pops 2 and pushes 1; 0x50-0x52 and 0x81-0x89 pop 1 and push 1), so the verifier is unchanged.
+
+## Radicle/src/avm2/interpreter_dispatch_a.inc:execute_frame
+
+coerce_i, coerce_u, coerce_d and coerce_b share the convert_* branch and its to_int32, to_uint32, to_number and to_boolean conversions. The coerce-to-type behaviour for null and undefined (0 or false) is recalled from the AVM2 overview, not verified. The convert_* opcodes were already dispatched, so no convert case was missing.
+
+## Radicle/src/avm2/interpreter_property.cpp:Interpreter::enumeration_keys
+
+Builds the key list for an object once per frame, keyed by object pointer in `Frame::iterator_keys`, and rebuilds only when that list is empty. Arrays enumerate index strings. Other objects enumerate own properties, which come from an unordered map so the order is hash order and not insertion order, then slot-like instance traits. This helper exists so hasnext and hasnext2 cannot disagree about the key list that nextname and nextvalue read. Known caveat, not changed here: the cache is never invalidated, so a second enumeration of the same object in the same frame reuses the first list and misses properties added between the two loops. This was already true for hasnext2.
+
+## Radicle/src/avm2/interpreter_dispatch_b.inc:execute_frame
+
+hasnext2 now calls `Radicle/src/avm2/interpreter_property.cpp:Interpreter::enumeration_keys` instead of building the key list inline. Behaviour is unchanged. The test Hasnext2LoopAgreesWithNextnameAndNextvalue in `Radicle/tests/test_avm2_more_ops.cpp` covers it.
+
+## Radicle/tests/test_avm2_more_ops.cpp:SxiOneSignExtendsTheLowBit
+
+Detects sxi1 (0x50) missing, or sign-extending as a mask that gives 1 or 0 instead of -1 or 0. Hand-derived: int 3 has low bit 1, so -1; int 2 has low bit 0, so 0.
+
+## Radicle/tests/test_avm2_more_ops.cpp:SxiEightSignExtendsTheLowByte
+
+Detects sxi8 (0x51) missing, or zero-extending the low byte. Hand-derived: 0x1FF has low byte 0xFF, so -1; 0x180 has low byte 0x80, so -128 (zero-extension would give 128); 0x7F gives 127.
+
+## Radicle/tests/test_avm2_more_ops.cpp:SxiSixteenSignExtendsTheLowHalf
+
+Detects sxi16 (0x52) missing, or zero-extending the low half. Hand-derived: 0x18000 has low half 0x8000, so -32768 (zero-extension would give 32768); 0x12345 has low half 0x2345, so 9029 (0x2345).
+
+## Radicle/tests/test_avm2_more_ops.cpp:CoerceBMakesANonZeroIntABoolean
+
+Detects coerce_b (0x81) missing, or returning the int 7 unchanged instead of the Boolean true.
+
+## Radicle/tests/test_avm2_more_ops.cpp:CoerceITruncatesADoubleToAnInt
+
+Detects coerce_i (0x83) missing, or rounding 3.9 to 4 instead of truncating to 3.
+
+## Radicle/tests/test_avm2_more_ops.cpp:CoerceDMakesAnIntANumber
+
+Detects coerce_d (0x84) missing, or leaving the int 7 as an int instead of a Number.
+
+## Radicle/tests/test_avm2_more_ops.cpp:CoerceUWrapsANegativeIntToAUint
+
+Detects coerce_u (0x88) missing, or keeping int -1 instead of the uint 4294967295 (2^32 - 1).
+
+## Radicle/tests/test_avm2_more_ops.cpp:CoerceOTurnsUndefinedIntoNullAndKeepsOtherValues
+
+Detects coerce_o (0x89) missing, or leaving undefined in place instead of null. The second run checks that the int 5 passes through unchanged.
+
+## Radicle/tests/test_avm2_more_ops.cpp:HasnextReturnsOneBasedIndexThenZeroAtTheEnd
+
+Detects hasnext (0x1F) missing, or returning a 0-based index, which would make the first key read as index 0 and end the loop. Hand-derived: hasnext(obj, 0) is 1 and hasnext(obj, 1) is 0 for a one-property object, so 1 * 10 + 0 = 10.
+
+## Radicle/tests/test_avm2_more_ops.cpp:HasnextOnANonObjectEnumeratesNothing
+
+Detects hasnext enumerating a non-object, which would read keys from a number. The expected result is 0.
+
+## Radicle/tests/test_avm2_more_ops.cpp:HasnextRefusesAShortStackWithStackUnderflow
+
+Detects hasnext reading a missing object as undefined on a one-item stack, instead of refusing with StackUnderflow. This is the only refusal path of hasnext; no wrong-type refusal exists because hasnext returns 0 for a non-object.
+
+## Radicle/tests/test_avm2_more_ops.cpp:HasnextLoopAgreesWithNextnameAndNextvalue
+
+Detects hasnext, nextname or nextvalue disagreeing on the 1-based key index, so the loop reads no key or the wrong one. Hand-derived: a one-property object {value: 7} gives "" + "value" + 7 = "value7".
+
+## Radicle/tests/test_avm2_more_ops.cpp:Hasnext2LoopAgreesWithNextnameAndNextvalue
+
+Detects the shared key helper changing hasnext2's register loop, so it reads a different key than nextname and nextvalue. Hand-derived result "value7", the same as the hasnext loop.
+
+## Radicle/tests/test_avm2_more_ops.cpp:HasnextLoopVisitsEveryKeyOfAnObject
+
+Detects a hasnext loop that stops after the first key of a two-key object. The check does not depend on key order, since the sum and the count are symmetric. Hand-derived: values 1 and 2 plus 100 per key give 1 + 100 + 2 + 100 = 203.
+
+## Radicle/tests/test_avm2_more_ops.cpp:NewOpcodesRefuseAnEmptyStackWithStackUnderflow
+
+Detects a new opcode that returns a value from an empty stack instead of refusing with StackUnderflow. Covers sxi1, sxi8, sxi16, coerce_b, coerce_i, coerce_d, coerce_u, coerce_o and hasnext. Before this change these opcodes returned NotImplemented.

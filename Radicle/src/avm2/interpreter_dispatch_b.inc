@@ -593,36 +593,7 @@
           push_value(Value::boolean(false));
           break;
         }
-        std::vector<Key>& keys = frame.iterator_keys[object.as_object().get()];
-        if (keys.empty()) {
-          if (object.as_object()->kind() == ObjectKind::Array) {
-            const auto& array = static_cast<const ArrayObject&>(*object.as_object());
-            for (std::size_t index = 0; index < array.elements().size(); ++index) {
-              Key key;
-              key.name = std::to_string(index);
-              keys.push_back(std::move(key));
-            }
-          } else {
-            for (const auto& entry : object.as_object()->own_properties()) {
-              keys.push_back(entry.first);
-            }
-            for (const Class* klass =
-                     object.as_object()->instance_class();
-                 klass != nullptr; klass = klass->super) {
-              for (const Trait& trait : klass->instance_traits) {
-                if (!trait.is_slot_like() || !trait.multiname.has_fixed_name()) {
-                  continue;
-                }
-                Key key;
-                key.name = trait.multiname.name;
-                if (!trait.multiname.namespaces.empty()) {
-                  key.name_space = trait.multiname.namespaces.front();
-                }
-                keys.push_back(std::move(key));
-              }
-            }
-          }
-        }
+        const std::vector<Key>& keys = enumeration_keys(frame, *object.as_object());
         const std::uint32_t cursor = to_uint32(frame.locals[index_register]);
         if (cursor < keys.size()) {
           frame.locals[object_register] = object;
