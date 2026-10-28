@@ -145,6 +145,47 @@ TEST(PapyrusTypeChecker, ABareReturnIsAlwaysFine) {
     EXPECT_TRUE(f.check("A").empty());
 }
 
+TEST(PapyrusTypeChecker, ANonVoidFunctionWhoseElseIfBranchFallsThroughIsRejected) {
+    Fixture f;
+    f.write("A",
+            "\nScriptName A\nint Function Pick(bool b, bool c)\n    If b\n        Return 1\n"
+            "    ElseIf c\n        int x = 2\n    Else\n        Return 3\n    EndIf\nEndFunction");
+
+    const auto diagnostics = f.check("A");
+    ASSERT_TRUE(diagnostics.size() == 1);
+    EXPECT_TRUE(diagnostics[0].code == DiagnosticCode::MissingReturn);
+    EXPECT_TRUE(diagnostics[0].message.find("'Pick' returns int") != std::string::npos);
+}
+
+TEST(PapyrusTypeChecker, ANonVoidFunctionWhoseEveryBranchReturnsIsFine) {
+    Fixture f;
+    f.write("A",
+            "\nScriptName A\nint Function Pick(bool b, bool c)\n    If b\n        Return 1\n"
+            "    ElseIf c\n        Return 2\n    Else\n        Return 3\n    EndIf\nEndFunction");
+
+    EXPECT_TRUE(f.check("A").empty());
+}
+
+TEST(PapyrusTypeChecker, ANonVoidFunctionWithAnIfWithoutAnElseIsRejected) {
+    Fixture f;
+    f.write("A",
+            "\nScriptName A\nint Function Pick(bool b)\n    If b\n        Return 1\n    EndIf\n"
+            "EndFunction");
+
+    const auto diagnostics = f.check("A");
+    ASSERT_TRUE(diagnostics.size() == 1);
+    EXPECT_TRUE(diagnostics[0].code == DiagnosticCode::MissingReturn);
+}
+
+TEST(PapyrusTypeChecker, EventsVoidFunctionsAndNativeFunctionsMayEndWithoutAReturn) {
+    Fixture f;
+    f.write("A",
+            "\nScriptName A\nint Function Ask() native\nFunction Nothing()\n    int x = 1\n"
+            "EndFunction\nEvent OnInit()\n    int x = 1\nEndEvent");
+
+    EXPECT_TRUE(f.check("A").empty());
+}
+
 namespace {
 
 constexpr std::string_view kCallee =
@@ -252,6 +293,53 @@ TEST(PapyrusTypeChecker, AMatchingOverrideIsFine) {
     f.write("Child", "\nScriptName Child extends Base\nFunction Go(int a)\nEndFunction");
 
     EXPECT_TRUE(f.check("Child").empty());
+}
+
+TEST(PapyrusTypeChecker, AnOverrideWithADifferentParameterTypeIsRejected) {
+    Fixture f;
+    f.write("Base", "\nScriptName Base\nFunction Go(int a)\nEndFunction");
+    f.write("Child", "\nScriptName Child extends Base\nFunction Go(float a)\nEndFunction");
+
+    const auto diagnostics = f.check("Child");
+    ASSERT_TRUE(diagnostics.size() == 1);
+    EXPECT_TRUE(diagnostics[0].code == DiagnosticCode::OverrideMismatch);
+    EXPECT_TRUE(diagnostics[0].message.find("whose parameter 1 is 'int', not 'float'") !=
+                std::string::npos);
+}
+
+TEST(PapyrusTypeChecker, AnOverrideWithADifferentReturnTypeIsRejected) {
+    Fixture f;
+    f.write("Base", "\nScriptName Base\nint Function Go()\n    return 1\nEndFunction");
+    f.write("Child", "\nScriptName Child extends Base\nstring Function Go()\n"
+                     "    return \"text\"\nEndFunction");
+
+    const auto diagnostics = f.check("Child");
+    ASSERT_TRUE(diagnostics.size() == 1);
+    EXPECT_TRUE(diagnostics[0].code == DiagnosticCode::OverrideMismatch);
+    EXPECT_TRUE(diagnostics[0].message.find("which returns int, not string") != std::string::npos);
+}
+
+TEST(PapyrusTypeChecker, AnOverrideWithTheSameParameterAndReturnTypesIsFine) {
+    Fixture f;
+    f.write("Base", "\nScriptName Base\nint Function Go(int a)\n    return a\nEndFunction");
+    f.write("Child", "\nScriptName Child extends Base\nint Function Go(int a)\n"
+                     "    return a\nEndFunction");
+
+    EXPECT_TRUE(f.check("Child").empty());
+}
+
+TEST(PapyrusTypeChecker, AnOverrideMayNotNarrowAParameterToAChildObject) {
+    Fixture f;
+    f.write("Form", "\nScriptName Form");
+    f.write("Actor", "\nScriptName Actor extends Form");
+    f.write("Base", "\nScriptName Base\nFunction Take(Form akForm)\nEndFunction");
+    f.write("Child", "\nScriptName Child extends Base\nFunction Take(Actor akForm)\nEndFunction");
+
+    const auto diagnostics = f.check("Child");
+    ASSERT_TRUE(diagnostics.size() == 1);
+    EXPECT_TRUE(diagnostics[0].code == DiagnosticCode::OverrideMismatch);
+    EXPECT_TRUE(diagnostics[0].message.find("whose parameter 1 is 'Form', not 'Actor'") !=
+                std::string::npos);
 }
 
 TEST(PapyrusTypeChecker, ARequiredParameterAfterAnOptionalOneIsRejected) {
