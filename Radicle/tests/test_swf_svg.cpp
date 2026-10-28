@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -118,14 +119,39 @@ fo4::swf::SwfFrameInstance frame_row(std::uint16_t depth, std::uint16_t characte
   return row;
 }
 
+fo4::swf::SwfMorphFillStyle solid_morph_fill(std::uint32_t start_argb, std::uint32_t end_argb) {
+  fo4::swf::SwfMorphFillStyle fill;
+  fill.type = 0x00;
+  fill.start_color = start_argb;
+  fill.end_color = end_argb;
+  return fill;
+}
+
+fo4::swf::SwfMorphShape red_to_blue_square() {
+  fo4::swf::SwfMorphShape morph;
+  morph.character_id = 3;
+  morph.fill_styles.push_back(solid_morph_fill(0xFFFF0000, 0xFF0000FF));
+  morph.start_records = {move_to(0, 0),    style_change(1, 0, 0), line_by(100, 0),
+                         line_by(0, 100), line_by(-100, 0),      line_by(0, -100)};
+  morph.end_records = {move_to(0, 0), line_by(200, 0), line_by(0, 200), line_by(-200, 0),
+                       line_by(0, -200)};
+  return morph;
+}
+
 std::string frame_svg(std::vector<fo4::swf::SwfShape> shapes,
-                      std::vector<fo4::swf::SwfFrameInstance> rows) {
+                      std::vector<fo4::swf::SwfFrameInstance> rows,
+                      std::optional<fo4::swf::SwfMorphShape> morph = {}) {
   fo4::swf::SwfFile file;
   file.header.frame_size.x_max = 11000;
   file.header.frame_size.y_max = 8000;
   for (auto& shape : shapes) {
     fo4::swf::SwfTag tag;
     tag.shape = std::move(shape);
+    file.tags.push_back(std::move(tag));
+  }
+  if (morph) {
+    fo4::swf::SwfTag tag;
+    tag.morph_shape = std::move(morph);
     file.tags.push_back(std::move(tag));
   }
   fo4::swf::SwfDisplayList display;
@@ -456,4 +482,40 @@ TEST(SwfFrameSvg, ASpriteMaskClipsWithItsShapeChildrenAndPaintsNothingItself) {
   EXPECT_EQ(frame_svg({solid_square(1, 1000, 0xFFFF0000), solid_square(2, 600, 0xFF0000FF)},
                       {mask, red_child, frame_row(2, 2, 1), frame_row(2, 2, 0)}),
             expected);
+}
+
+TEST(SwfFrameSvg, MorphRowAtRatioZeroDrawsTheStartShape) {
+  auto row = frame_row(1, 3, 0);
+  row.ratio = 0;
+  const std::string expected =
+      kStage +
+      "<g transform=\"matrix(1 0 0 1 0 0)\">\n"
+      "<path d=\"M0 0L5 0L5 5L0 5L0 0Z\" fill=\"#ff0000\" fill-opacity=\"1\" fill-rule=\"nonzero\"/>\n"
+      "</g>\n"
+      "</svg>\n";
+  EXPECT_EQ(frame_svg({}, {row}, red_to_blue_square()), expected);
+}
+
+TEST(SwfFrameSvg, MorphRowAtRatioHalfWayBlendsEdgesAndColour) {
+  auto row = frame_row(1, 3, 0);
+  row.ratio = 32768;
+  const std::string expected =
+      kStage +
+      "<g transform=\"matrix(1 0 0 1 0 0)\">\n"
+      "<path d=\"M0 0L7.5 0L7.5 7.5L0 7.5L0 0Z\" fill=\"#7f0080\" fill-opacity=\"1\" fill-rule=\"nonzero\"/>\n"
+      "</g>\n"
+      "</svg>\n";
+  EXPECT_EQ(frame_svg({}, {row}, red_to_blue_square()), expected);
+}
+
+TEST(SwfFrameSvg, MorphRowAtFullRatioDrawsTheEndShape) {
+  auto row = frame_row(1, 3, 0);
+  row.ratio = 65535;
+  const std::string expected =
+      kStage +
+      "<g transform=\"matrix(1 0 0 1 0 0)\">\n"
+      "<path d=\"M0 0L10 0L10 10L0 10L0 0Z\" fill=\"#0000ff\" fill-opacity=\"1\" fill-rule=\"nonzero\"/>\n"
+      "</g>\n"
+      "</svg>\n";
+  EXPECT_EQ(frame_svg({}, {row}, red_to_blue_square()), expected);
 }

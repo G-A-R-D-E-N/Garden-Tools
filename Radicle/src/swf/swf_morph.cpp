@@ -304,6 +304,46 @@ SwfShapeRecord blend_edges(const SwfShapeRecord& from, const SwfShapeRecord& to,
   return command;
 }
 
+constexpr std::uint8_t kSolidFill = 0x00;
+
+std::uint32_t blend_color(std::uint32_t start, std::uint32_t end, double ratio) {
+  std::uint32_t blended = 0;
+  for (unsigned shift = 0; shift < 32; shift += 8) {
+    const auto from = static_cast<std::int32_t>((start >> shift) & 0xFFu);
+    const auto to = static_cast<std::int32_t>((end >> shift) & 0xFFu);
+    blended |= static_cast<std::uint32_t>(blend_twips(from, to, ratio)) << shift;
+  }
+  return blended;
+}
+
+SwfFillStyle blend_solid_fill(const SwfMorphFillStyle& fill, double ratio) {
+  SwfFillStyle blended;
+  blended.type = kSolidFill;
+  blended.color = blend_color(fill.start_color, fill.end_color, ratio);
+  return blended;
+}
+
+SwfLineStyle blend_line_style(const SwfMorphLineStyle& line, double ratio) {
+  SwfLineStyle blended;
+  blended.width = static_cast<std::uint16_t>(blend_twips(line.start_width, line.end_width, ratio));
+  blended.color = blend_color(line.start_color, line.end_color, ratio);
+  blended.flags = line.flags;
+  if (line.start_miter_limit && line.end_miter_limit) {
+    blended.miter_limit = static_cast<std::uint16_t>(
+        blend_twips(*line.start_miter_limit, *line.end_miter_limit, ratio));
+  }
+  return blended;
+}
+
+SwfRect blend_rect(const SwfRect& start, const SwfRect& end, double ratio) {
+  SwfRect blended;
+  blended.x_min = blend_twips(start.x_min, end.x_min, ratio);
+  blended.y_min = blend_twips(start.y_min, end.y_min, ratio);
+  blended.x_max = blend_twips(start.x_max, end.x_max, ratio);
+  blended.y_max = blend_twips(start.y_max, end.y_max, ratio);
+  return blended;
+}
+
 }  // namespace
 
 std::vector<SwfShapeRecord> interpolate_morph_commands(const SwfMorphShape& morph, double ratio) {
@@ -334,6 +374,27 @@ std::vector<SwfShapeRecord> interpolate_morph_commands(const SwfMorphShape& morp
     commands.push_back(blend_edges(from, to, t));
   }
   return commands;
+}
+
+std::optional<SwfShape> interpolate_morph_shape(const SwfMorphShape& morph, double ratio) {
+  const double t = clamp_ratio(ratio);
+  SwfShape shape;
+  shape.shape_id = morph.character_id;
+  shape.bounds = blend_rect(morph.start_bounds, morph.end_bounds, t);
+  for (const SwfMorphFillStyle& fill : morph.fill_styles) {
+    if (fill.type != kSolidFill) {
+      return std::nullopt;
+    }
+    shape.fill_styles.push_back(blend_solid_fill(fill, t));
+  }
+  for (const SwfMorphLineStyle& line : morph.line_styles) {
+    if (line.fill) {
+      return std::nullopt;
+    }
+    shape.line_styles.push_back(blend_line_style(line, t));
+  }
+  shape.records = interpolate_morph_commands(morph, t);
+  return shape;
 }
 
 }  // namespace fo4::swf
