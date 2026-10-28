@@ -13,10 +13,12 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <numbers>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -184,6 +186,21 @@ void apply_character_definition(DisplayObject& object, const SwfMovieData& data,
   }
 }
 
+void apply_matrix(DisplayObject& object, const SwfPlacementRow& row) {
+  object.set_x(row.translate_x);
+  object.set_y(row.translate_y);
+  if (row.rotate_skew0 == 0.0 && row.rotate_skew1 == 0.0) {
+    object.set_rotation(0.0);
+    object.set_scale_x(row.scale_x);
+    object.set_scale_y(row.scale_y);
+    return;
+  }
+  const double determinant = row.scale_x * row.scale_y - row.rotate_skew0 * row.rotate_skew1;
+  object.set_rotation(std::atan2(row.rotate_skew0, row.scale_x) * 180.0 / std::numbers::pi);
+  object.set_scale_x(std::hypot(row.scale_x, row.rotate_skew0));
+  object.set_scale_y(std::copysign(std::hypot(row.rotate_skew1, row.scale_y), determinant));
+}
+
 class SwfTimelineClip : public MovieClip {
  public:
   SwfTimelineClip(Class* display_class, std::shared_ptr<SwfMovieData> data,
@@ -224,14 +241,22 @@ class SwfTimelineClip : public MovieClip {
         }
         continue;
       }
-      Class* klass = resolve_character_class(runtime, *data_, row.character_id);
-      if (klass == nullptr) {
-        continue;
+      Class* klass = nullptr;
+      if (row.has_character) {
+        klass = resolve_character_class(runtime, *data_, row.character_id);
+        if (klass == nullptr) {
+          continue;
+        }
       }
       std::shared_ptr<DisplayObject> object;
       const auto found = objects_.find(row.depth);
-      if (found != objects_.end() && found->second->display_class() == klass &&
-          found->second->character_id() == row.character_id) {
+      if (!row.has_character) {
+        if (found == objects_.end()) {
+          continue;
+        }
+        object = found->second;
+      } else if (found != objects_.end() && found->second->display_class() == klass &&
+                 found->second->character_id() == row.character_id) {
         object = found->second;
       } else {
         if (found != objects_.end()) {
@@ -256,16 +281,19 @@ class SwfTimelineClip : public MovieClip {
         objects_[row.depth] = object;
         just_created.push_back(row.depth);
       }
-      object->set_x(row.translate_x);
-      object->set_y(row.translate_y);
-      object->set_scale_x(row.scale_x);
-      object->set_scale_y(row.scale_y);
-      object->set_character_id(row.character_id);
+      if (row.has_matrix || !row.move) {
+        apply_matrix(*object, row);
+      }
+      if (row.has_character) {
+        object->set_character_id(row.character_id);
+      }
       if (row.has_color_transform) {
         object->set_color_multiply(row.color_multiply);
         object->set_color_add(row.color_add);
       }
-      object->set_clip_depth(row.has_clip_depth ? static_cast<std::int32_t>(row.clip_depth) : 0);
+      if (row.has_clip_depth || !row.move) {
+        object->set_clip_depth(row.has_clip_depth ? static_cast<std::int32_t>(row.clip_depth) : 0);
+      }
       if (!row.name.empty()) {
         object->set_name(row.name);
       }

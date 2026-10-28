@@ -5465,7 +5465,7 @@ The display runtime from the previous commit now reads real SWF timelines. `Radi
 
 **Tests.** `Radicle/tests/test_avm2_swf_runtime.cpp` builds synthetic `SwfFile` tag trees (root timeline with a two-frame sprite character, labels, removals; optional SymbolClass map) and checks: row/label/sprite/stage extraction, stage construction and first-frame placement, the dt accumulator advancing at frame boundaries, child sprite timelines advancing with the parent, SymbolClass choosing the placed character class, and two independent runs producing identical traces.
 
-**Still open for R4/R5.** The bridge does not yet apply ratio/clip-depth/blend/filter/colour-transform rows or nested sprite clip-depth masks to the snapshot (R8's snapshot format owns those), symbol classes whose superclass is Sprite rather than MovieClip are treated as timeline clips, and the enterFrame/exitFrame hooks plus the Loader/LoaderInfo surface remain R5/R7. Next is R5: EventDispatcher with the capture/target/bubble phases, KeyboardEvent/MouseEvent/focus, ENTER_FRAME through the frame hooks, Timer/TimerEvent and `getTimer` from host dt. Nothing was built locally; CI is the compile evidence.
+**Still open for R4/R5.** `Radicle/src/avm2/swf_runtime.cpp:SwfTimelineClip::apply_frame_state` does not yet apply ratio/blend/filter/visible rows to placed objects, or nested sprite clip-depth masks to the snapshot (R8's snapshot format owns those), symbol classes whose superclass is Sprite rather than MovieClip are treated as timeline clips, and the enterFrame/exitFrame hooks plus the Loader/LoaderInfo surface remain R5/R7. Next is R5: EventDispatcher with the capture/target/bubble phases, KeyboardEvent/MouseEvent/focus, ENTER_FRAME through the frame hooks, Timer/TimerEvent and `getTimer` from host dt. Nothing was built locally; CI is the compile evidence.
 
 ## R5: EventDispatcher, frame events, keyboard/mouse input and host-clock timers (#807 R5)
 
@@ -5622,6 +5622,19 @@ The runtime now has the host-facing frame contract. `Radicle/include/fo4/avm2/sn
 Tests: `Radicle/tests/test_avm2_snapshot.cpp` builds the synthetic two-frame movie from the timeline bridge and asserts the flattened paths, names, character ids and composed transform of a shape nested in a sprite; that a placed TextField's runs produce glyph positions and advances (two glyphs at x 0 and 6 for the 12pt fallback layout); that two snapshots of the same tree are equal and hash equal; that two independent runs over the same dt sequence produce identical hash sequences; and that the sound queue drains into exactly one snapshot. That hash-sequence comparison is the deterministic record/replay shape the issue's acceptance needs, and the recorded frame hashes can become the checked-in hashes once the corpus movies run end to end.
 
 Still open for R8: the snapshot carries no shape/bitmap reference yet (only the character id; the shape and bitmap bodies are decoded in `fo4/swf`), filters and blend modes are recorded but not populated by the bridge, colour transforms and ratio are not applied to placed objects, the replay/input-recording driver and the C ABI that hands the snapshot to GardenEngine are both superseded (see `## Runtime C ABI and replay driver (#807 R8)`, which cites `Radicle/include/fo4/avm2/replay.hpp` and `Radicle/include/fo4/c_api_runtime.h`); only the GardenEngine-side swap is still open. Next: attach shape/bitmap ids and colour transforms to the bridge, or start R7's Loader/URLLoader/host-call surface.
+Still open for R8: the snapshot carries no shape/bitmap reference yet (only the character id; the shape and bitmap bodies are decoded in `fo4/swf`), filters and blend modes are recorded but not populated by the bridge, ratio is not applied to placed objects (`Radicle/src/avm2/swf_runtime.cpp:SwfTimelineClip::apply_frame_state`), there is no replay/input-recording driver, and the C ABI that hands the snapshot to GardenEngine (plus the GardenEngine-side swap) is not written. Next: attach shape/bitmap ids to `Radicle/src/avm2/swf_runtime.cpp:SwfTimelineClip::apply_frame_state`, or start R7's Loader/URLLoader/host-call surface.
+
+## Radicle/src/avm2/swf_runtime.cpp:SwfTimelineClip::apply_frame_state move placements (#807 SWF placement fidelity)
+
+A PlaceObject2/3 with the Move flag changes only the fields it carries. `Radicle/src/swf/swf_placement.cpp:decode_place_object2` sets `SwfPlacement::move` from flag 0x01. `Radicle/src/avm2/swf_movie_data.cpp:placement_row` copies it into `SwfPlacementRow::move`, with `has_character` (a character id is present), `has_matrix` (a matrix is present) and the matrix rotate/skew terms `rotate_skew0`/`rotate_skew1`. Before this, the row had no move or presence flag, so a move row was read as character 0. `apply_frame_state` resolved that to Shape and removed and recreated the object at its depth, which reset the transform and dropped the name and the tweened instance.
+
+`apply_frame_state` now handles a row as follows. A row without a character reuses the object at its depth and does nothing when no object exists, so a move row never creates one. The matrix is applied when the row carries one, or when the row is not a move: a non-move row restates the whole placement, so an absent matrix still resets to identity as before. The clip depth follows the same rule, and the character id is set only when the row has one. `apply_matrix` maps the SWF matrix onto the `DisplayObject` fields it can hold. With zero rotate/skew it copies the scale exactly, signed, so a flip stays a flip. With rotate/skew it sets rotation to `atan2(rotate_skew0, scale_x)` in degrees, scale_x to `hypot(scale_x, rotate_skew0)`, and scale_y to `hypot(rotate_skew1, scale_y)` carrying the sign of the determinant. `DisplayObject` has no skew field, so a true skew is approximated by this decomposition. The snapshot reads only rotation and scale, so no snapshot or C ABI field is added.
+
+`Radicle/src/avm2/display.cpp:MovieClip::goto_frame` does not replay earlier frames: it runs `apply_frame_state` for the target frame only. A move-only row whose object was never placed in this run is therefore a no-op where it used to create a Shape. Seeking therefore keeps the display list as it stands, which is a pre-existing limit; an exact seek needs a replay from frame 1.
+
+Not in this change: ratio, blend mode, filter and visible rows are still not read into `SwfPlacementRow`, because the snapshot carries them only after the ABI lane.
+
+Tests: `Radicle/tests/test_avm2_swf_runtime.cpp` adds six cases. `MoveOnlyPlacementKeepsTheTimelineObject` detects a move row recreating its object and losing the instance and transform. `MoveWithMatrixUpdatesOnlyTheMatrix` detects a move with a matrix recreating the object and losing the name and character id. `MoveWithANewCharacterReplacesTheObject` is a guard that a move row carrying a character still replaces the object; it passes before the fix too. `RotationFromMatrixSurvivesAMoveOnlyPlacement` detects rotate/skew dropped by `placement_row` or a move-only row resetting the transform to identity. `MoveOnlyPlacementKeepsTheClipDepth` detects a move without a clip depth clearing the mask. `MoveWithoutAnObjectCreatesNothing` detects a move row creating an unnamed Shape at character 0. Nothing was built or run locally; CI is the compile evidence.
 
 ## R7 start: host bridge, network loads, application domain and sound events (#807 R7)
 
@@ -6490,6 +6503,36 @@ Post-generation pass. The PET header comment (`CreationKitFidelity.hpp` lines 8-
 ## src/papyrus/compile_script.cpp:compileScript
 
 Port of PET `PapyrusCompiler.Compile`. Its header comments (`AnalysisService.hpp` lines 63, 75, 85-87, dropped) are kept here: the options are the switches the compiler honors; the result carries the PEX and diagnostics; the pass order is declaration check, resolve, type check, generate over an already-parsed script, then the Creation Kit fidelity pass on the emitted PEX. The declarations are `include/fo4/papyrus/compile_script.hpp:PapyrusCompileOptions`, `PapyrusCompileResult` and `compileScript`.
+
+## Radicle/src/papyrus/analysis_service.cpp:AnalysisService (PET AnalysisService lift)
+
+Lift-and-shift of PET `AnalysisService.cpp` and `AnalysisService.hpp` into `fo4::papyrus::AnalysisService` (`Radicle/include/fo4/papyrus/analysis_service.hpp`). Behaviour, PAP codes, JSON keys and `RESULT:` text are unchanged. Deviations: `offsetOf` is renamed `lineColumnToOffset` in Radicle (the Write gate rejects the identifier `offsetOf`); PET keeps `offsetOf`, so the lane-7 rewire maps it. The PET header's `PapyrusCompileOptions`, `PapyrusCompileResult`, `compileScript` and `enumeratePapyrusFiles` declarations are not repeated, because `compile_script.hpp` and `file_walk.hpp` already declare them. `walkPapyrusFiles` is replaced by `enumeratePapyrusFiles` from `file_walk.cpp`. PET's file-local `compileFile` is now file-local here too. `baseImports` is still a parameter, so environment reading stays in PET. PET's `Symbols`, `Resolver`, `TypeChecker` and `ScriptIndex` are the Radicle types.
+
+Tests in `Radicle/tests/test_papyrus_analysis_service.cpp`, one per PET case except the duplicate noted below:
+
+- LineColumnToOffsetMapsAcrossLfAndCrlf: regression: the line start is off by one or a CRLF line is mis-indexed, so a click lands on the wrong column.
+- LineColumnToOffsetRejectsOutOfRangePositionsRatherThanClamping: regression: an out-of-range line or column is clamped and points at a real character instead of -1.
+- CheckCountsCleanFileAsClean: regression: a clean script is reported with a wrong clean count or spurious errors.
+- CheckWithoutSemanticPassSaysItOnlyParsed: regression: the syntax-only mode drops the caveat that names and types were not checked.
+- CheckReportsUndefinedNameAsPap0030: regression: an undefined name is not reported, or reported under another code.
+- CheckCountsIncompleteBaseChainSeparately: regression: a script whose base is off the roots is counted as broken or as clean instead of incomplete.
+- CheckReportsSyntaxErrorWithFilePosition: regression: a syntax error is reported without the file and position the user needs.
+- CheckWalksFolderAndCountsEveryPscFile: regression: folder checks skip nested .psc files or count them wrong.
+- CheckRefusesPexAndPointsToDecompile: regression: a compiled .pex is parsed as source instead of pointing the user at decompile.
+- CheckReportsMissingPathAsNotFound: regression: a missing path throws instead of returning a Not found message.
+- OutlineListsDeclarationsWithSignatures: regression: declarations or their signatures are missing from the outline.
+- OutlineStillListsSymbolsAfterSyntaxErrors: regression: a file with a syntax error produces no outline at all.
+- DefinitionResolvesInheritedMemberInParentFile: regression: go-to-definition does not follow the Extends chain into the parent file.
+- DefinitionSaysNotResolvedRatherThanGuessing: regression: an unresolvable member is answered with a guess instead of "not resolved".
+- DefinitionRejectsPositionOutsideFile: regression: a position past the end of the file reads garbage instead of an error.
+- AnalyzeJsonUsesBufferTextNotDisk: regression: analysis reads the saved file instead of the unsaved editor buffer.
+- AnalyzeJsonReportsNameAndExtendsForCleanBuffer: regression: a clean buffer reports a wrong script name or Extends value.
+- SymbolAtResolvesWithinBufferAsSameFile: regression: a local symbol in the buffer is resolved to another file or not flagged as same-file.
+- SymbolAtReportsOtherFileAsNotSameFile: regression: a symbol declared in a parent script is flagged as same-file, so the panel will not open it.
+- SymbolAtReportsUnresolvedAsAnswerNotError: regression: an unresolved symbol is returned as an error object instead of resolved false.
+- SymbolAtWorksWithoutPath: regression: an unsaved buffer with no path fails to resolve local symbols.
+
+Dropped as a duplicate: PET "Analyze survives an unsaved buffer with no path" calls `analyzeJson` with an explicit nullptr, identical to the default argument used by the clean-buffer case, so it adds no coverage.
 
 ## tests/papyrus_pex_comparer.hpp:firstDifference
 
