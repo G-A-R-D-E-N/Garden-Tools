@@ -299,6 +299,7 @@ add_library(fo4
   src/papyrus/body_call.cpp
   src/papyrus/creation_kit_fidelity.cpp
   src/papyrus/compile_script.cpp
+  src/papyrus/analysis_service.cpp
   src/f4se/binding_validator.cpp
   src/f4se/cpp_emitter.cpp
   src/f4se/cpp_scanner.cpp
@@ -888,6 +889,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_papyrus_codegen.cpp
     tests/test_papyrus_codegen_real.cpp
     tests/test_papyrus_user_flags.cpp
+    tests/test_papyrus_analysis_service.cpp
     tests/test_f4se_type_map.cpp
     tests/test_f4se_cross_check.cpp
     tests/test_f4se_extractor.cpp

@@ -6491,6 +6491,36 @@ Post-generation pass. The PET header comment (`CreationKitFidelity.hpp` lines 8-
 
 Port of PET `PapyrusCompiler.Compile`. Its header comments (`AnalysisService.hpp` lines 63, 75, 85-87, dropped) are kept here: the options are the switches the compiler honors; the result carries the PEX and diagnostics; the pass order is declaration check, resolve, type check, generate over an already-parsed script, then the Creation Kit fidelity pass on the emitted PEX. The declarations are `include/fo4/papyrus/compile_script.hpp:PapyrusCompileOptions`, `PapyrusCompileResult` and `compileScript`.
 
+## Radicle/src/papyrus/analysis_service.cpp:AnalysisService (PET AnalysisService lift)
+
+Lift-and-shift of PET `AnalysisService.cpp` and `AnalysisService.hpp` into `fo4::papyrus::AnalysisService` (`Radicle/include/fo4/papyrus/analysis_service.hpp`). Behaviour, PAP codes, JSON keys and `RESULT:` text are unchanged. Deviations: `offsetOf` is renamed `lineColumnToOffset` in Radicle (the Write gate rejects the identifier `offsetOf`); PET keeps `offsetOf`, so the lane-7 rewire maps it. The PET header's `PapyrusCompileOptions`, `PapyrusCompileResult`, `compileScript` and `enumeratePapyrusFiles` declarations are not repeated, because `compile_script.hpp` and `file_walk.hpp` already declare them. `walkPapyrusFiles` is replaced by `enumeratePapyrusFiles` from `file_walk.cpp`. PET's file-local `compileFile` is now file-local here too. `baseImports` is still a parameter, so environment reading stays in PET. PET's `Symbols`, `Resolver`, `TypeChecker` and `ScriptIndex` are the Radicle types.
+
+Tests in `Radicle/tests/test_papyrus_analysis_service.cpp`, one per PET case except the duplicate noted below:
+
+- LineColumnToOffsetMapsAcrossLfAndCrlf: regression: the line start is off by one or a CRLF line is mis-indexed, so a click lands on the wrong column.
+- LineColumnToOffsetRejectsOutOfRangePositionsRatherThanClamping: regression: an out-of-range line or column is clamped and points at a real character instead of -1.
+- CheckCountsCleanFileAsClean: regression: a clean script is reported with a wrong clean count or spurious errors.
+- CheckWithoutSemanticPassSaysItOnlyParsed: regression: the syntax-only mode drops the caveat that names and types were not checked.
+- CheckReportsUndefinedNameAsPap0030: regression: an undefined name is not reported, or reported under another code.
+- CheckCountsIncompleteBaseChainSeparately: regression: a script whose base is off the roots is counted as broken or as clean instead of incomplete.
+- CheckReportsSyntaxErrorWithFilePosition: regression: a syntax error is reported without the file and position the user needs.
+- CheckWalksFolderAndCountsEveryPscFile: regression: folder checks skip nested .psc files or count them wrong.
+- CheckRefusesPexAndPointsToDecompile: regression: a compiled .pex is parsed as source instead of pointing the user at decompile.
+- CheckReportsMissingPathAsNotFound: regression: a missing path throws instead of returning a Not found message.
+- OutlineListsDeclarationsWithSignatures: regression: declarations or their signatures are missing from the outline.
+- OutlineStillListsSymbolsAfterSyntaxErrors: regression: a file with a syntax error produces no outline at all.
+- DefinitionResolvesInheritedMemberInParentFile: regression: go-to-definition does not follow the Extends chain into the parent file.
+- DefinitionSaysNotResolvedRatherThanGuessing: regression: an unresolvable member is answered with a guess instead of "not resolved".
+- DefinitionRejectsPositionOutsideFile: regression: a position past the end of the file reads garbage instead of an error.
+- AnalyzeJsonUsesBufferTextNotDisk: regression: analysis reads the saved file instead of the unsaved editor buffer.
+- AnalyzeJsonReportsNameAndExtendsForCleanBuffer: regression: a clean buffer reports a wrong script name or Extends value.
+- SymbolAtResolvesWithinBufferAsSameFile: regression: a local symbol in the buffer is resolved to another file or not flagged as same-file.
+- SymbolAtReportsOtherFileAsNotSameFile: regression: a symbol declared in a parent script is flagged as same-file, so the panel will not open it.
+- SymbolAtReportsUnresolvedAsAnswerNotError: regression: an unresolved symbol is returned as an error object instead of resolved false.
+- SymbolAtWorksWithoutPath: regression: an unsaved buffer with no path fails to resolve local symbols.
+
+Dropped as a duplicate: PET "Analyze survives an unsaved buffer with no path" calls `analyzeJson` with an explicit nullptr, identical to the default argument used by the clean-buffer case, so it adds no coverage.
+
 ## tests/papyrus_pex_comparer.hpp:firstDifference
 
 Port of PET's `PexComparer` (its header comment, `PexComparer.hpp` lines 12-14, dropped): returns the first difference between two `PexObject`s as text, or an empty string when they match. The decompiler round-trip and the CK differential both rely on it. `cmpIequals`, `cmpLower` and `normaliseName` are the case-folding helpers it uses.
