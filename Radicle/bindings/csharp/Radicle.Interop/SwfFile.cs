@@ -292,6 +292,22 @@ public sealed unsafe partial class SwfFile : IDisposable
         }
     }
 
+    public byte[] BitmapJpeg(int flatTagIndex)
+    {
+        using var use = Use();
+        byte* bytes = null;
+        nuint size = 0;
+        Call.Check(RadicleNative.SwfBitmapJpeg(use.Pointer, (nuint)flatTagIndex, &bytes, &size));
+        try
+        {
+            return Utf8.Raw((IntPtr)bytes, size);
+        }
+        finally
+        {
+            if (bytes != null) RadicleNative.FreeBytes(bytes);
+        }
+    }
+
     public string AbcText(int abc)
     {
         using var use = Use();
