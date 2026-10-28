@@ -195,8 +195,11 @@ void fill_call(const fo4::abc::AbcCallSite& site, radicle_swf_call& out) {
   out.is_event_registration = fo4::abc::is_event_registration(site) ? 1 : 0;
 }
 
+}  // namespace
+
+namespace radicle_swf_detail {
+
 std::uint8_t* copy_text(const std::string& text, std::size_t* out_size) {
-  // invariant: the buffer carries a trailing NUL that *out_size does not count.
   auto* buffer = static_cast<std::uint8_t*>(std::malloc(text.size() + 1));
   if (buffer == nullptr) return nullptr;
   if (!text.empty()) std::memcpy(buffer, text.data(), text.size());
@@ -204,10 +207,6 @@ std::uint8_t* copy_text(const std::string& text, std::size_t* out_size) {
   *out_size = text.size();
   return buffer;
 }
-
-}  // namespace
-
-namespace radicle_swf_detail {
 
 // Invariant: every cached view must be built here before any getter runs, and a throw must leave the handle intact.
 void build_views(const fo4::swf::SwfFile& file, swf_views& out) {
@@ -628,7 +627,7 @@ radicle_status radicle_swf_abc_method_disassemble(const radicle_swf* swf, size_t
     std::string text;
     const auto status = fo4::abc::disassemble(view->file, body->code, text, body->exceptions);
     if (status != fo4::abc::AbcStatus::Ok) return fail(RADICLE_STATUS_PARSE_ERROR, "the method body did not decode");
-    auto* buffer = copy_text(text, out_size);
+    auto* buffer = radicle_swf_detail::copy_text(text, out_size);
     if (buffer == nullptr) return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to allocate the listing");
     *out_text = buffer;
     return RADICLE_STATUS_OK;

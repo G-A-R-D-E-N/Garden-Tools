@@ -17,16 +17,6 @@ using radicle_c_env_detail::guarded;
 
 namespace {
 
-// Invariant: the buffer carries a trailing NUL that *out_size does not count.
-std::uint8_t* copy_text(const std::string& text, std::size_t* out_size) {
-  auto* buffer = static_cast<std::uint8_t*>(std::malloc(text.size() + 1));
-  if (buffer == nullptr) return nullptr;
-  if (!text.empty()) std::memcpy(buffer, text.data(), text.size());
-  buffer[text.size()] = 0;
-  *out_size = text.size();
-  return buffer;
-}
-
 // Constraint: one build per movie revision; a refusal is cached with its message so every getter agrees.
 const fo4::swf::SwfCharacterModel& character_model(const radicle_swf* swf) {
   auto& cache = swf->characters;
@@ -170,7 +160,7 @@ radicle_status radicle_swf_shape_svg(const radicle_swf* swf, uint16_t character_
       return fail(RADICLE_STATUS_NOT_FOUND, text.c_str());
     }
     const std::string svg = fo4::swf::shape_to_svg(*swf->file.tags[found->tag_index].shape);
-    *out_text = copy_text(svg, out_size);
+    *out_text = radicle_swf_detail::copy_text(svg, out_size);
     if (*out_text == nullptr) {
       return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to allocate the SVG text");
     }
