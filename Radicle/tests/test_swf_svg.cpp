@@ -4,10 +4,12 @@
 #include "fo4/swf/swf_frame_svg.hpp"
 #include "fo4/swf/swf_svg.hpp"
 #include "swf_art_fixtures.hpp"
+#include "swf_movie_builder.hpp"
 
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -136,6 +138,56 @@ fo4::swf::SwfMorphShape red_to_blue_square() {
   morph.end_records = {move_to(0, 0), line_by(200, 0), line_by(0, 200), line_by(-200, 0),
                        line_by(0, -200)};
   return morph;
+}
+
+fo4::swf::SwfMorphShape line_morph_square() {
+  fo4::swf::SwfMorphShape morph = red_to_blue_square();
+  morph.fill_styles.clear();
+  morph.start_records[1] = style_change(0, 0, 1);
+  fo4::swf::SwfMorphLineStyle line;
+  line.start_width = 20;
+  line.end_width = 40;
+  line.start_color = 0xFF0000FFu;
+  line.end_color = 0xFF0000FFu;
+  morph.line_styles.push_back(line);
+  return morph;
+}
+
+std::vector<std::byte> place_object_2(std::uint8_t flags, std::uint16_t depth,
+                                      const std::vector<std::uint16_t>& fields) {
+  swf_test::SwfBuilder body;
+  body.u8(flags);
+  body.u16(depth);
+  for (const auto field : fields) {
+    body.u16(field);
+  }
+  return body.body;
+}
+
+std::vector<std::byte> ratio_movie() {
+  swf_test::SwfBuilder file;
+  file.rect(0, 11000, 0, 8000, 15);
+  file.u16(0x0C00);
+  file.u16(3);
+  file.tag(26, place_object_2(0x12, 1, {3, 16384}), false);
+  file.tag(26, place_object_2(0x02, 2, {3}), false);
+  file.tag(1);
+  file.tag(26, place_object_2(0x01, 1, {}), false);
+  file.tag(1);
+  file.tag(26, place_object_2(0x11, 1, {65535}), false);
+  file.tag(1);
+  file.tag(0);
+  return swf_test::wrap_body(file.body, 10, false, false);
+}
+
+const fo4::swf::SwfFrameInstance* row_at(const fo4::swf::SwfDisplayList& display,
+                                         std::size_t frame, std::uint16_t depth) {
+  for (const auto& row : display.timelines.front().frames[frame].instances) {
+    if (row.depth == depth) {
+      return &row;
+    }
+  }
+  return nullptr;
 }
 
 std::string frame_svg(std::vector<fo4::swf::SwfShape> shapes,
@@ -506,6 +558,43 @@ TEST(SwfFrameSvg, MorphRowAtRatioHalfWayBlendsEdgesAndColour) {
       "</g>\n"
       "</svg>\n";
   EXPECT_EQ(frame_svg({}, {row}, red_to_blue_square()), expected);
+}
+
+TEST(SwfFrameSvg, MorphLineWidthBlendsIntoAStrokeAtHalfWay) {
+  auto row = frame_row(1, 3, 0);
+  row.ratio = 32768;
+  const std::string expected =
+      kStage +
+      "<g transform=\"matrix(1 0 0 1 0 0)\">\n"
+      "<path d=\"M0 0L7.5 0L7.5 7.5L0 7.5L0 0Z\" stroke=\"#0000ff\" stroke-opacity=\"1\" fill=\"none\" "
+      "stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>\n"
+      "</g>\n"
+      "</svg>\n";
+  EXPECT_EQ(frame_svg({}, {row}, line_morph_square()), expected);
+}
+
+TEST(SwfFrameSvg, MorphWithAGradientFillDrawsNothing) {
+  auto morph = red_to_blue_square();
+  morph.fill_styles[0].type = 0x10;
+  auto row = frame_row(1, 3, 0);
+  row.ratio = 32768;
+  EXPECT_EQ(frame_svg({}, {row}, morph), kStage + "</svg>\n");
+}
+
+TEST(SwfFrameSvg, PlaceObjectRatioIsKeptAcrossAMoveAndOverridden) {
+  const auto result = fo4::swf::read_swf(ratio_movie());
+  ASSERT_TRUE(result.ok());
+  const auto display = fo4::swf::build_display_list(result.file);
+  ASSERT_EQ(display.status, fo4::swf::SwfTimelineStatus::ok);
+  ASSERT_EQ(display.timelines.front().frames.size(), 3u);
+  for (std::size_t frame = 0; frame < 3; ++frame) {
+    ASSERT_NE(row_at(display, frame, 1), nullptr);
+    ASSERT_NE(row_at(display, frame, 2), nullptr);
+    EXPECT_FALSE(row_at(display, frame, 2)->ratio.has_value());
+  }
+  EXPECT_EQ(row_at(display, 0, 1)->ratio, 16384);
+  EXPECT_EQ(row_at(display, 1, 1)->ratio, 16384);
+  EXPECT_EQ(row_at(display, 2, 1)->ratio, 65535);
 }
 
 TEST(SwfFrameSvg, MorphRowAtFullRatioDrawsTheEndShape) {
