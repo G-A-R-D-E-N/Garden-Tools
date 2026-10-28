@@ -131,6 +131,7 @@ Add `--gtest_output=xml:<dir>\<gate>.xml` to keep `RecordProperty` values. Each 
 - Whether the `fo4-data` runner has `FO4_DATA_DIR` set and which Fallout 4 build it has. The workflow reads the build in its "Print Fallout 4 build" step, but no value is in the repo.
 - The exact `fo4_tests.exe` location (derived from CMake, not built here).
 - The gtest summary and `GTEST_SKIP` output format for the vendored gtest version.
-- Whether 82 DoAction tags, 675 ABC blocks or the other AE counts hold on OG 1.10.163.0 or NG 1.10.984.0.- Whether the seven-program pins can be filled before the bridge fix lands. They cannot be trusted until it does.
+- Whether 82 DoAction tags, 675 ABC blocks or the other AE counts hold on OG 1.10.163.0 or NG 1.10.984.0.
+- Whether the seven-program pins can be filled before the bridge fix lands. They cannot be trusted until it does.
 - The `SetPlatform` and `InitProgram` argument types (gate 7).
 - Whether Radicle's census equals the manifest on a data runner. The row check runs only there and was not run here.
