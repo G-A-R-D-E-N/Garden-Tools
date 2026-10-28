@@ -120,6 +120,8 @@ RuntimeStatus Runtime::install_builtins() {
   add_method(*string_class, "split", native::Id::string_split, false);
   add_method(*string_class, "toUpperCase", native::Id::string_to_upper, false);
   add_method(*string_class, "toLowerCase", native::Id::string_to_lower, false);
+  add_method(*string_class, "toLocaleUpperCase", native::Id::string_to_upper, false);
+  add_method(*string_class, "toLocaleLowerCase", native::Id::string_to_lower, false);
   add_method(*string_class, "replace", native::Id::string_replace, false);
   add_method(*string_class, "concat", native::Id::string_concat, false);
   add_method(*string_class, "trim", native::Id::string_trim, false);

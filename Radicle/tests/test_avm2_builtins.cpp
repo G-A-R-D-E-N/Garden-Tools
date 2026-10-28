@@ -181,6 +181,20 @@ TEST(Avm2Builtins, StringToUpperCaseRaisesAsciiLetters) {
   EXPECT_EQ(result.value.as_string(), "ABC");
 }
 
+// Detects: toLocaleUpperCase missing from String; the call must not fail with NoSuchProperty.
+TEST(Avm2Builtins, StringToLocaleUpperCaseRaisesAsciiLetters) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t to_locale_upper = script.multiname("toLocaleUpperCase");
+  avm2_test::CodeBuilder code;
+  code.pushstring(script.string_of("abc"));
+  code.callproperty(to_locale_upper, 0);
+  code.returnvalue();
+  const ExecutionResult result = run_initializer(script, code);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_string());
+  EXPECT_EQ(result.value.as_string(), "ABC");
+}
+
 TEST(Avm2Builtins, StringIndexOfFindsASubstring) {
   avm2_test::ScriptBuilder script;
   const std::uint32_t index_of = script.multiname("indexOf");
