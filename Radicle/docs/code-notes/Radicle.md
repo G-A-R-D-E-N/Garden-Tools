@@ -8289,7 +8289,7 @@ Expected strings were derived by hand. The glyph is a 1000-twip square (50 px, t
 
 ## Radicle/src/avm2/interpreter.cpp:Interpreter::execute_frame (AVM2 late ops census)
 
-Census from a source scan (not compiled or run): 169 named opcodes, 168 with a case in `Radicle/src/avm2/interpreter_dispatch_a.inc` through `interpreter_dispatch_e.inc`, and 1 without, `getdescendants` 0x59. This replaces the 12-opcode census above. The 11 added here are dxns 0x06, dxnslate 0x07, pushnamespace 0x31, finddef 0x5F, setpropertylate 0x69, deletepropertylate 0x6B, getglobalslot 0x6E, setglobalslot 0x6F, esc_xelem 0x71, esc_xattr 0x72 and checkfilter 0x78. The new cases are in `Radicle/src/avm2/interpreter_dispatch_e.inc`, and finddef is a label on the findproperty case in `Radicle/src/avm2/interpreter_dispatch_b.inc`.
+Census from a source scan (not compiled or run): 169 named opcodes, 168 with a case in `Radicle/src/avm2/interpreter_dispatch_a.inc` through `interpreter_dispatch_e.inc`, and 1 without, `getdescendants` 0x59. This replaces the 12-opcode census above. The 11 added here are dxns 0x06, dxnslate 0x07, pushnamespace 0x31, finddef 0x5F, setpropertylate 0x69, deletepropertylate 0x6B, getglobalslot 0x6E, setglobalslot 0x6F, esc_xelem 0x71, esc_xattr 0x72 and checkfilter 0x78. All 11 new cases are in `Radicle/src/avm2/interpreter_dispatch_e.inc`, which `Radicle/src/avm2/interpreter.cpp:Interpreter::execute_frame` includes.
 
 getdescendants stays undispatched because this runtime has no XML or XMLList object model (see the R3 status note above), so there is no descendant set to return. It needs that model before a case can be added.
 
@@ -8311,19 +8311,15 @@ dxns and dxnslate store the URI in `Radicle/include/fo4/avm2/interpreter.hpp:Int
 
 ## Radicle/src/avm2/interpreter_xml_text.cpp:escape_xml_markup
 
-Element content escapes `&`, `<` and `>`. Attribute values also escape `"` to `&quot;`. This is the set the change brief named, which I did not check against the ECMA-357 text (no reference is available on this machine). ECMA-357 may also replace CR with a character reference in element content, and LF, CR and TAB in attributes. Those characters pass through unchanged here. The input is UTF-8 bytes; the escaped characters are ASCII, so multibyte sequences are never altered.
+PROVISIONAL: the escape sets in `Radicle/src/avm2/interpreter_xml_text.cpp:escape_xml_markup` are unverified against ECMA-357, because no reference is available on this machine. The sets are the ones the change brief named: element content escapes `&`, `<` and `>`, and attribute values also escape `"` to `&quot;`. Open questions: whether `>` must also be escaped in attributes (this code escapes it in attributes, as it does in element content), and whether LF, CR and TAB become character references in attributes and CR in element content (this code escapes none of them). Behaviour is not changed by this note. The input is UTF-8 bytes; the escaped characters are ASCII, so multibyte sequences are never altered.
 
 ## Radicle/src/avm2/interpreter_dispatch_e.inc:checkfilter
 
 checkfilter refuses only null and undefined, with a TypeError status. Other values pass and stay on the stack. Because XML is not modelled, a non-XML value that the real opcode refuses passes here.
 
-## Radicle/src/avm2/interpreter_dispatch_b.inc:finddef
+## Radicle/src/avm2/interpreter_dispatch_e.inc:finddef
 
-finddef takes the findproperty path with create_on_global false, because the flag is `instruction.opcode == op::k_findpropstrict`. It therefore searches the scope chain and pushes the owning scope, or null when no scope holds the name. The real finddef may refuse a missing definition instead. The avmplus reference was not available here, so this is not verified.
-
-## Radicle/src/abc/abc_stack.cpp:stack_effect
-
-The verifier has entries for all 11 added opcodes. For the group from 0x70 to 0x7A and from 0x80 to 0x97 (which includes esc_xelem 0x71, esc_xattr 0x72 and checkfilter 0x78), the case sets only `pushes = 1` and leaves `pops` at 0, the default in `verify_stack`. Those opcodes pop an operand, so the verifier appears to under-count the stack for them and for other unary ops in the group. The interpreter does not run the verifier, so this change does not depend on it. It is not changed here because the fix needs a per-opcode review of the group, and the verifier tests were not run here.
+finddef resolves its operand as a static multiname and calls `Radicle/src/avm2/interpreter_property.cpp:Interpreter::find_scope_binding` with create_on_global false, the same way the getlex case in `Radicle/src/avm2/interpreter_dispatch_b.inc` does. The verifier groups 0x5F with getlex and it has no runtime-multiname operands, so no runtime name is popped. It searches the scope chain and pushes the owning scope, or null when no scope holds the name. PROVISIONAL against avmplus: the scope-chain search and the null on a miss are not verified. The real finddef may search only the domain definitions, and may refuse a missing definition. The avmplus reference was not available here.
 
 ## Radicle/tests/test_avm2_late_ops.cpp:PushnamespaceReturnsTheUriOfTheConstantPoolEntry
 
@@ -8345,9 +8341,9 @@ Detects setpropertylate reading the value and the name in the wrong order, or le
 
 Detects setpropertylate writing through a null object without an error. The expected status is NullReference, with a message starting "cannot write".
 
-## Radicle/tests/test_avm2_late_ops.cpp:DeletepropertylateReturnsTrueForAnExistingKey
+## Radicle/tests/test_avm2_late_ops.cpp:DeletepropertylatePushesOnlyATrueBoolForAnExistingKey
 
-Detects deletepropertylate returning a non-boolean or leaving a stray operand. After delete, swap and pop, only the boolean must remain, and it must be true.
+Checks only the value deletepropertylate pushes. After delete, swap and pop, only the boolean must remain, and it must be true. The test does not check the key afterwards; DeletepropertylateRemovesTheKeyNamedByTheStack does that.
 
 ## Radicle/tests/test_avm2_late_ops.cpp:DeletepropertylateRemovesTheKeyNamedByTheStack
 

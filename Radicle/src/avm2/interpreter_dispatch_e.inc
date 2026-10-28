@@ -1,3 +1,21 @@
+      case op::k_finddef: {
+        const Multiname* multiname = resolve_multiname(*frame.file, multiname_operand(instruction));
+        if (multiname == nullptr) {
+          return fail(InterpreterStatus::TypeError, "finddef has an invalid multiname");
+        }
+        Object* owner = nullptr;
+        bool found = false;
+        status = find_scope_binding(frame, *multiname, false, owner, found, message);
+        if (status != InterpreterStatus::Ok) {
+          break;
+        }
+        if (found) {
+          push_value(borrowed_object(*owner));
+        } else {
+          push_value(Value::null());
+        }
+        break;
+      }
       case op::k_dxns:
         frame.default_xml_namespace = frame.file->string_at(string_operand(instruction));
         break;

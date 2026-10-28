@@ -123,7 +123,7 @@ TEST(Avm2LateOps, SetpropertylateRefusesANullObject) {
   EXPECT_TRUE(result.message.starts_with("cannot write")) << result.message;
 }
 
-TEST(Avm2LateOps, DeletepropertylateReturnsTrueForAnExistingKey) {
+TEST(Avm2LateOps, DeletepropertylatePushesOnlyATrueBoolForAnExistingKey) {
   avm2_test::ScriptBuilder script;
   avm2_test::CodeBuilder code;
   code.newobject(0);
