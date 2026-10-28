@@ -57,6 +57,26 @@ TextFieldAutoSize auto_size_from_value(const Value& value) {
   return TextFieldAutoSize::none;
 }
 
+constexpr std::uint8_t kBlendModeCount = 15;
+
+const char* blend_mode_name(std::uint8_t value) {
+  static const char* const names[kBlendModeCount] = {
+      "normal", "normal", "layer", "multiply", "screen", "lighten", "darken", "difference",
+      "add", "subtract", "invert", "alpha", "erase", "overlay", "hardlight"};
+  return names[value < kBlendModeCount ? value : 0];
+}
+
+std::uint8_t blend_mode_from_value(const Value& value) {
+  if (value.is_string()) {
+    for (std::uint8_t index = 0; index < kBlendModeCount; ++index) {
+      if (value.as_string() == blend_mode_name(index)) {
+        return index;
+      }
+    }
+  }
+  return 0;
+}
+
 }  // namespace
 
 std::uint32_t TimelineDefinition::frame_for_label(const std::string& name) const {
@@ -352,6 +372,10 @@ bool read_display_property(Interpreter& interpreter, DisplayObject& object,
     out = Value::boolean(object.visible());
     return true;
   }
+  if (name == "blendMode") {
+    out = Value::string(blend_mode_name(object.blend_mode()));
+    return true;
+  }
   if (name == "filters") {
     auto array = std::make_shared<ArrayObject>();
     array->elements() = object.filters();
@@ -577,6 +601,10 @@ bool write_display_property(DisplayObject& object, const Multiname& multiname,
   }
   if (name == "visible") {
     object.set_visible(to_boolean(value));
+    return true;
+  }
+  if (name == "blendMode") {
+    object.set_blend_mode(blend_mode_from_value(value));
     return true;
   }
   if (name == "filters") {

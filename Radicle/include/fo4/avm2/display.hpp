@@ -5,10 +5,12 @@
 #include <fo4/avm2/interpreter.hpp>
 #include <fo4/avm2/object.hpp>
 #include <fo4/avm2/value.hpp>
+#include <fo4/swf/swf.hpp>
 
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -132,6 +134,16 @@ class DisplayObject : public Object, public std::enable_shared_from_this<Display
   void set_clip_depth(std::int32_t clip_depth) noexcept { clip_depth_ = clip_depth; }
   std::uint8_t blend_mode() const noexcept { return blend_mode_; }
   void set_blend_mode(std::uint8_t blend_mode) noexcept { blend_mode_ = blend_mode; }
+  /* Invariant: absent for a display object that no placement gave a morph ratio. */
+  std::optional<std::uint16_t> ratio() const noexcept { return ratio_; }
+  void set_ratio(std::optional<std::uint16_t> ratio) noexcept { ratio_ = ratio; }
+  bool cache_as_bitmap() const noexcept { return cache_as_bitmap_; }
+  void set_cache_as_bitmap(bool value) noexcept { cache_as_bitmap_ = value; }
+  /* Invariant: the decoded PlaceObject3 filter list, kept apart from the AS3 filters array. */
+  const std::vector<swf::SwfFilter>& placed_filters() const noexcept { return placed_filters_; }
+  void set_placed_filters(std::vector<swf::SwfFilter> filters) {
+    placed_filters_ = std::move(filters);
+  }
 
   bool assigned() const noexcept { return assigned_; }
   void set_assigned(bool assigned) noexcept { assigned_ = assigned; }
@@ -141,6 +153,9 @@ class DisplayObject : public Object, public std::enable_shared_from_this<Display
   std::uint32_t character_id_{0};
   std::int32_t clip_depth_{0};
   std::uint8_t blend_mode_{0};
+  std::optional<std::uint16_t> ratio_;
+  bool cache_as_bitmap_{false};
+  std::vector<swf::SwfFilter> placed_filters_;
   double x_{0.0};
   double y_{0.0};
   double scale_x_{1.0};
