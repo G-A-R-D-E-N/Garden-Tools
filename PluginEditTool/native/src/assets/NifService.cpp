@@ -46,7 +46,7 @@ Result<std::string> commitEditedNif(const std::vector<std::byte>& bytes, const s
         stream.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
         stream.close();
         if (!stream) return std::unexpected(Error{"NifEditFailed", "Could not write output NIF: " + pathArg(writeTemp)});
-        std::filesystem::copy_file(writeTemp, target, std::filesystem::copy_options::overwrite_existing);
+        std::filesystem::rename(writeTemp, target);
     } catch (const std::exception& ex) {
         return std::unexpected(Error{"NifEditFailed", ex.what()});
     }
@@ -162,7 +162,7 @@ Result<std::string> NifService::applyEdits(const std::filesystem::path& nifPath,
     }
 
     try {
-        std::filesystem::copy_file(writeTemp, target, std::filesystem::copy_options::overwrite_existing);
+        std::filesystem::rename(writeTemp, target);
     } catch (const std::exception& ex) {
         return std::unexpected(Error{"NifEditFailed", ex.what()});
     }

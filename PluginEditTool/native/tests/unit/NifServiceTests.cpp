@@ -254,6 +254,11 @@ TEST_CASE("NifService reports a writer-rejected read-only key as NifEditFailed a
     CHECK(result.error().message.find("'verts' is read-only") != std::string::npos);
     CHECK(fileBytes(nif) == before);
     CHECK_FALSE(std::filesystem::exists(nif.string() + ".niftmp"));
+
+    auto negative = service.applyEdits(nif, nlohmann::json::array({{{"id", -1}, {"key", "name"}, {"value", "x"}}}));
+    REQUIRE_FALSE(negative.has_value());
+    CHECK(negative.error().message.find("unsigned block id") != std::string::npos);
+    CHECK(fileBytes(nif) == before);
 }
 
 TEST_CASE("NifService refuses missing inputs before spawning a process") {

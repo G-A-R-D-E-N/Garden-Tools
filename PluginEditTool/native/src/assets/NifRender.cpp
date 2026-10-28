@@ -208,15 +208,16 @@ Result<fo4::nif::Edit> toEdit(const nlohmann::json& raw) {
     const auto& rawId = raw.at("id");
     const auto& rawKey = raw.at("key");
     const auto& rawValue = raw.at("value");
-    if (!rawId.is_number_unsigned() || rawId.get<std::uint64_t>() > std::numeric_limits<std::uint32_t>::max() ||
+    if (!rawId.is_number_integer() || rawId.get<std::int64_t>() < 0 ||
+        rawId.get<std::int64_t>() > static_cast<std::int64_t>(std::numeric_limits<std::uint32_t>::max()) ||
         !rawKey.is_string()) {
         return std::unexpected(Error{"NifEditFailed", "NIF edit needs an unsigned block id and a text key"});
     }
-    const auto id = static_cast<std::uint32_t>(rawId.get<std::uint64_t>());
+    const auto id = static_cast<std::uint32_t>(rawId.get<std::int64_t>());
     const auto key = rawKey.get<std::string>();
     if (rawValue.is_string()) return fo4::nif::Edit{id, key, rawValue.get<std::string>()};
     if (rawValue.is_number()) return fo4::nif::Edit{id, key, rawValue.get<float>()};
-    if (rawValue.is_array() && std::ranges::all_of(rawValue, [](const nlohmann::json& item) { return item.is_number(); })) {
+    if (rawValue.is_array() && std::all_of(rawValue.begin(), rawValue.end(), [](const nlohmann::json& item) { return item.is_number(); })) {
         return fo4::nif::Edit{id, key, rawValue.get<std::vector<float>>()};
     }
     return std::unexpected(Error{"NifEditFailed", "key '" + key +
