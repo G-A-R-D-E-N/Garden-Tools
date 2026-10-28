@@ -339,6 +339,7 @@ add_library(fo4
   src/swf/swf_text.cpp
   src/swf/swf_timeline.cpp
   src/swf/swf_display.cpp
+  src/swf/swf_frame_control.cpp
   src/swf/swf_edit.cpp
   src/swf/swf_depth.cpp
   src/swf/swf_keyframe.cpp
@@ -397,6 +398,7 @@ add_library(fo4
   src/avm2/interpreter_ops.cpp
   src/avm2/interpreter_property.cpp
   src/avm2/interpreter_memory.cpp
+  src/avm2/interpreter_xml_text.cpp
   src/avm2/interpreter_support.cpp
   src/avm2/builtins.cpp
   src/avm2/native_object.cpp
@@ -964,6 +966,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_avm2_bytearray.cpp
     tests/test_avm2_more_ops.cpp
     tests/test_avm2_domain_memory.cpp
+    tests/test_avm2_late_ops.cpp
     tests/test_swf_fonts.cpp
     tests/test_swf_fonts_real.cpp
     tests/test_material_file.cpp
@@ -979,6 +982,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_swf_place.cpp
     tests/test_swf_place_filters.cpp
     tests/test_swf_display.cpp
+    tests/test_swf_frame_control.cpp
     tests/test_swf_edit.cpp
     tests/test_swf_edit_text.cpp
     tests/test_swf_label_edit.cpp

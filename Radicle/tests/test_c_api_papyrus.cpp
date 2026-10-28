@@ -103,6 +103,9 @@ struct CallbackState {
   int nativeCalls{0};
   std::string lastScript;
   std::string lastFunction;
+  std::uint64_t objectHandle{0};
+  std::string objectType;
+  std::string objectState;
 };
 
 int32_t gateCallback(void* user, const char* key) {
@@ -122,8 +125,14 @@ int32_t setVariableCallback(void*, const radicle_papyrus_object*, const char*, c
   return 1;
 }
 
-int32_t getPropertyCallback(void*, const radicle_papyrus_object*, const char*, radicle_papyrus_value**) {
-  return 0;
+int32_t getPropertyCallback(void* user, const radicle_papyrus_object* receiver, const char* name,
+                            radicle_papyrus_value** out_value) {
+  auto* state = static_cast<CallbackState*>(user);
+  if (std::strcmp(name, "Label") != 0) return 0;
+  state->objectHandle = radicle_papyrus_object_handle(receiver);
+  state->objectType = radicle_papyrus_object_type(receiver);
+  state->objectState = radicle_papyrus_object_state(receiver);
+  return radicle_papyrus_value_int(11, out_value) == RADICLE_STATUS_OK ? 1 : 0;
 }
 
 int32_t setPropertyCallback(void*, const radicle_papyrus_object*, const char*, const radicle_papyrus_value*) {
@@ -150,6 +159,33 @@ radicle_papyrus_callbacks callbacksFor(CallbackState& state) {
   callbacks.set_property = setPropertyCallback;
   callbacks.call_native = nativeCallback;
   return callbacks;
+}
+
+PexFile readerModel() {
+  PexFile model;
+  model.majorVersion = 3;
+  model.minorVersion = 9;
+  model.gameId = 2;
+  model.sourceFileName = "Reader.psc";
+  PexFunction read = method("Read", "Int", {PexTypedName{"target", "Reader"}},
+                            {ins("propget", {id("Label"), id("target"), id("out")}), ins("return", {id("out")})});
+  read.locals.push_back(PexTypedName{"out", "Int"});
+  model.objects.push_back(object("Reader", {}, {read}));
+  model.rebuildStringTable();
+  return model;
+}
+
+radicle_papyrus_value* readLabelOf(radicle_papyrus* runtime, std::uint64_t handle) {
+  radicle_papyrus_value* target = nullptr;
+  EXPECT_EQ(radicle_papyrus_value_object(handle, "Reader", "Alert", &target), RADICLE_STATUS_OK);
+  const radicle_papyrus_value* args[] = {target};
+  radicle_papyrus_value* result = nullptr;
+  radicle_papyrus_status status = RADICLE_PAPYRUS_STATUS_INTERNAL_ERROR;
+  EXPECT_EQ(radicle_papyrus_run(runtime, "Reader", "Read", args, 1, &result, &status, nullptr),
+            RADICLE_STATUS_OK);
+  EXPECT_EQ(status, RADICLE_PAPYRUS_STATUS_OK);
+  radicle_papyrus_value_destroy(target);
+  return result;
 }
 
 class CApiPapyrusTest : public ::testing::Test {
@@ -356,6 +392,46 @@ TEST_F(CApiPapyrusTest, RejectsBadArgumentsAndClearsOutParameters) {
   EXPECT_EQ(result, nullptr);
   EXPECT_EQ(instructions, 0u);
   radicle_papyrus_destroy(runtime);
+}
+
+TEST_F(CApiPapyrusTest, ValueNoneIsTheNoneKindAndRefusesANullOutput) {
+  radicle_papyrus_value* value = nullptr;
+  ASSERT_EQ(radicle_papyrus_value_none(&value), RADICLE_STATUS_OK);
+  ASSERT_NE(value, nullptr);
+  EXPECT_EQ(radicle_papyrus_value_kind_of(value), RADICLE_PAPYRUS_VALUE_NONE);
+  radicle_papyrus_value_destroy(value);
+  EXPECT_EQ(radicle_papyrus_value_none(nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+}
+
+TEST_F(CApiPapyrusTest, ObjectHandleReadsTheReceiverInsideAPropertyCallback) {
+  loadPex(readerModel());
+  createRuntime();
+  radicle_papyrus_value* result = readLabelOf(runtime_, 9);
+  ASSERT_NE(result, nullptr);
+  EXPECT_EQ(radicle_papyrus_value_int_of(result), 11);
+  EXPECT_EQ(state_.objectHandle, 9u);
+  radicle_papyrus_value_destroy(result);
+  EXPECT_EQ(radicle_papyrus_object_handle(nullptr), 0u);
+}
+
+TEST_F(CApiPapyrusTest, ObjectTypeNamesTheReceiverScriptAndNullHasNoType) {
+  loadPex(readerModel());
+  createRuntime();
+  radicle_papyrus_value* result = readLabelOf(runtime_, 9);
+  ASSERT_NE(result, nullptr);
+  EXPECT_EQ(state_.objectType, "Reader");
+  radicle_papyrus_value_destroy(result);
+  EXPECT_EQ(radicle_papyrus_object_type(nullptr), nullptr);
+}
+
+TEST_F(CApiPapyrusTest, ObjectStateCarriesTheReceiverStateAndNullHasNoState) {
+  loadPex(readerModel());
+  createRuntime();
+  radicle_papyrus_value* result = readLabelOf(runtime_, 9);
+  ASSERT_NE(result, nullptr);
+  EXPECT_EQ(state_.objectState, "Alert");
+  radicle_papyrus_value_destroy(result);
+  EXPECT_EQ(radicle_papyrus_object_state(nullptr), nullptr);
 }
 
 }  // namespace

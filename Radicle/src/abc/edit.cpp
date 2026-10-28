@@ -3,6 +3,8 @@
 #include <fo4/abc/flow.hpp>
 #include <fo4/abc/opcodes.hpp>
 
+#include "abc_internal.hpp"
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -13,8 +15,6 @@
 namespace fo4::abc {
 
 namespace {
-
-constexpr std::uint32_t kVerifierStackCeiling = 4096;
 
 bool is_offset_operand(const AbcOperandSpec& spec) {
   return spec.role == AbcOperandRole::Offset || spec.role == AbcOperandRole::Switch;
@@ -82,6 +82,10 @@ void recompute_offsets(std::vector<AbcInstruction>& code) {
   }
 }
 
+}  // namespace
+
+namespace detail {
+
 // Constraint: a local slot above the declared count would make the verifier refuse, so the count must rise.
 std::uint32_t required_local_count(const std::vector<AbcInstruction>& code) {
   std::uint32_t needed = 0;
@@ -108,6 +112,10 @@ std::uint32_t required_local_count(const std::vector<AbcInstruction>& code) {
   return needed;
 }
 
+}  // namespace detail
+
+namespace {
+
 // Constraint: a refusal must restore the body it was given, so every check runs against a copy first.
 AbcEditStatus verify_and_commit(AbcFile& file, std::uint32_t body_index,
                                 const AbcMethodBody& original, std::string& message) {
@@ -118,9 +126,9 @@ AbcEditStatus verify_and_commit(AbcFile& file, std::uint32_t body_index,
     message = "the edited code does not decode";
     return AbcEditStatus::DecodeFailed;
   }
-  body.local_count = std::max(original.local_count, required_local_count(code));
+  body.local_count = std::max(original.local_count, detail::required_local_count(code));
   const std::uint32_t original_max_stack = body.max_stack;
-  body.max_stack = std::max(original.max_stack, kVerifierStackCeiling);
+  body.max_stack = std::max(original.max_stack, detail::kVerifierStackCeiling);
   AbcMethodFlow flow;
   AbcFlowIssue issue;
   const AbcFlowStatus status = verify_method_flow(file, body_index, flow, issue);

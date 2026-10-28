@@ -259,9 +259,22 @@ std::vector<PinRef> GraphLifter::liftStatement(const papyrus::Statement& stateme
 std::vector<PinRef> GraphLifter::liftAssign(const papyrus::AssignStatement& assign,
                                             std::vector<PinRef> open) {
     const auto compound = compoundId(assign.op);
-    if (compound && dynamic_cast<const papyrus::IdentifierExpression*>(assign.target.get()) == nullptr) {
+    const auto* member = dynamic_cast<const papyrus::MemberExpression*>(assign.target.get());
+    const auto* memberBinding = member != nullptr ? resolution_->bindingFor(member) : nullptr;
+    const bool structMember =
+        memberBinding != nullptr && memberBinding->kind == papyrus::BindingKind::StructMember;
+
+    if (compound && !structMember &&
+        dynamic_cast<const papyrus::IdentifierExpression*>(assign.target.get()) == nullptr) {
         refuse("A compound assignment to something other than a plain variable cannot be "
                "expanded safely, because the target would be evaluated twice.",
+               assign.span);
+        return open;
+    }
+
+    if (compound && structMember && (containsCall(*member->target) || containsCall(*assign.value))) {
+        refuse("A compound assignment to a struct member whose receiver or value calls a function "
+               "cannot be expanded safely, because the member would be read at a different point.",
                assign.span);
         return open;
     }
@@ -275,18 +288,12 @@ std::vector<PinRef> GraphLifter::liftAssign(const papyrus::AssignStatement& assi
 
     std::optional<Value> value = liftExpression(*assign.value, open);
 
-    if (compound && value &&
-        dynamic_cast<const papyrus::IdentifierExpression*>(assign.target.get()) != nullptr) {
-        const auto& current = *static_cast<const papyrus::IdentifierExpression*>(assign.target.get());
-
-        const auto read = node(builtinDefs::kVariableGet, GraphNodeKind::VariableGet);
-        config(read, "name", current.name);
-        config(read, "type", typeName(current));
+    if (compound && value) {
+        const auto read = liftExpression(*assign.target, open);
 
         const auto combined = node(std::string(builtinDefs::kOperatorPrefix) + *compound,
                                    GraphNodeKind::Binary);
-        wire(PinRef{read, std::string(pinIds::kValue)},
-             PinRef{combined, std::string(pinIds::kLeft)});
+        if (read && read->pin) wire(*read->pin, PinRef{combined, std::string(pinIds::kLeft)});
         if (value->pin) {
             wire(*value->pin, PinRef{combined, std::string(pinIds::kRight)});
         } else if (value->literal) {
@@ -323,10 +330,21 @@ std::vector<PinRef> GraphLifter::liftAssign(const papyrus::AssignStatement& assi
         return std::vector<PinRef>{PinRef{id, std::string(pinIds::kThen)}};
     }
 
-    if (const auto* member = dynamic_cast<const papyrus::MemberExpression*>(assign.target.get())) {
-        const auto binding = resolution_->bindingFor(member);
-        if (binding == nullptr || binding->kind != papyrus::BindingKind::Property ||
-            binding->owner == nullptr) {
+    if (member != nullptr && structMember) {
+        const auto receiver = liftExpression(*member->target, open);
+        const auto id = node(builtinDefs::kStructSet, GraphNodeKind::StructSet);
+        config(id, "member", member->name);
+        enter(open, id);
+        if (receiver && receiver->pin) wire(*receiver->pin, PinRef{id, std::string(pinIds::kTarget)});
+        else if (receiver && receiver->literal) doc_->node(id)->pinValues[std::string(pinIds::kTarget)] = *receiver->literal;
+        if (value && value->pin) wire(*value->pin, PinRef{id, std::string(pinIds::kValue)});
+        else if (value && value->literal) doc_->node(id)->pinValues[std::string(pinIds::kValue)] = *value->literal;
+        return std::vector<PinRef>{PinRef{id, std::string(pinIds::kThen)}};
+    }
+
+    if (member != nullptr) {
+        if (memberBinding == nullptr || memberBinding->kind != papyrus::BindingKind::Property ||
+            memberBinding->owner == nullptr) {
             refuse("Assigning to '" + member->name +
                        "' is not something the graph can express yet.",
                    member->span);
@@ -334,7 +352,7 @@ std::vector<PinRef> GraphLifter::liftAssign(const papyrus::AssignStatement& assi
         }
 
         const auto target = liftExpression(*member->target, open);
-        const auto id = node(NodePalette::propertySetId(binding->owner->name, member->name),
+        const auto id = node(NodePalette::propertySetId(memberBinding->owner->name, member->name),
                              GraphNodeKind::PropertySet);
         enter(open, id);
         if (target && target->pin) wire(*target->pin, PinRef{id, std::string(pinIds::kSelf)});
