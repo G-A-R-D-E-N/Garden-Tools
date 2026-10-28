@@ -94,6 +94,20 @@ const abc::AbcDecodedOperand* switch_operand(const abc::AbcInstruction& instruct
 
 Value numeric_result(double value) { return Value::number(value); }
 
+Value int_range_result(double exact) {
+  if (exact >= -2147483648.0 && exact <= 2147483647.0) {
+    return Value::int32(static_cast<std::int32_t>(exact));
+  }
+  return numeric_result(exact);
+}
+
+Value uint_range_result(double exact) {
+  if (exact >= 0.0 && exact <= 4294967295.0) {
+    return Value::uint32(static_cast<std::uint32_t>(exact));
+  }
+  return numeric_result(exact);
+}
+
 Value add_values(const Value& left, const Value& right) {
   const Value left_primitive = to_primitive(left, PrimitiveHint::Default);
   const Value right_primitive = to_primitive(right, PrimitiveHint::Default);
@@ -101,12 +115,12 @@ Value add_values(const Value& left, const Value& right) {
     return Value::string(to_string(left_primitive) + to_string(right_primitive));
   }
   if (left_primitive.is_int32() && right_primitive.is_int32()) {
-    const auto sum = static_cast<std::uint32_t>(left_primitive.as_int32()) +
-                     static_cast<std::uint32_t>(right_primitive.as_int32());
-    return Value::int32(static_cast<std::int32_t>(sum));
+    return int_range_result(static_cast<double>(left_primitive.as_int32()) +
+                            static_cast<double>(right_primitive.as_int32()));
   }
   if (left_primitive.is_uint32() && right_primitive.is_uint32()) {
-    return Value::uint32(left_primitive.as_uint32() + right_primitive.as_uint32());
+    return uint_range_result(static_cast<double>(left_primitive.as_uint32()) +
+                             static_cast<double>(right_primitive.as_uint32()));
   }
   return numeric_result(to_number(left_primitive) + to_number(right_primitive));
 }
@@ -115,12 +129,12 @@ Value subtract_values(const Value& left, const Value& right) {
   const Value l = to_primitive(left, PrimitiveHint::Number);
   const Value r = to_primitive(right, PrimitiveHint::Number);
   if (l.is_int32() && r.is_int32()) {
-    const auto difference = static_cast<std::uint32_t>(l.as_int32()) -
-                            static_cast<std::uint32_t>(r.as_int32());
-    return Value::int32(static_cast<std::int32_t>(difference));
+    return int_range_result(static_cast<double>(l.as_int32()) -
+                            static_cast<double>(r.as_int32()));
   }
   if (l.is_uint32() && r.is_uint32()) {
-    return Value::uint32(l.as_uint32() - r.as_uint32());
+    return uint_range_result(static_cast<double>(l.as_uint32()) -
+                             static_cast<double>(r.as_uint32()));
   }
   return numeric_result(to_number(l) - to_number(r));
 }
@@ -129,12 +143,12 @@ Value multiply_values(const Value& left, const Value& right) {
   const Value l = to_primitive(left, PrimitiveHint::Number);
   const Value r = to_primitive(right, PrimitiveHint::Number);
   if (l.is_int32() && r.is_int32()) {
-    const auto product = static_cast<std::uint32_t>(l.as_int32()) *
-                         static_cast<std::uint32_t>(r.as_int32());
-    return Value::int32(static_cast<std::int32_t>(product));
+    return int_range_result(static_cast<double>(l.as_int32()) *
+                            static_cast<double>(r.as_int32()));
   }
   if (l.is_uint32() && r.is_uint32()) {
-    return Value::uint32(l.as_uint32() * r.as_uint32());
+    return uint_range_result(static_cast<double>(l.as_uint32()) *
+                             static_cast<double>(r.as_uint32()));
   }
   return numeric_result(to_number(l) * to_number(r));
 }
@@ -165,30 +179,27 @@ Value modulo_values(const Value& left, const Value& right) {
 
 Value negate_value(const Value& value) {
   if (value.is_int32()) {
-    return Value::int32(static_cast<std::int32_t>(0u - static_cast<std::uint32_t>(
-                                                    value.as_int32())));
+    return int_range_result(-static_cast<double>(value.as_int32()));
   }
   return numeric_result(-to_number(value));
 }
 
 Value increment_value(const Value& value) {
   if (value.is_int32()) {
-    return Value::int32(static_cast<std::int32_t>(static_cast<std::uint32_t>(value.as_int32()) +
-                                                  1u));
+    return int_range_result(static_cast<double>(value.as_int32()) + 1.0);
   }
   if (value.is_uint32()) {
-    return Value::uint32(value.as_uint32() + 1u);
+    return uint_range_result(static_cast<double>(value.as_uint32()) + 1.0);
   }
   return numeric_result(to_number(value) + 1.0);
 }
 
 Value decrement_value(const Value& value) {
   if (value.is_int32()) {
-    return Value::int32(static_cast<std::int32_t>(static_cast<std::uint32_t>(value.as_int32()) -
-                                                  1u));
+    return int_range_result(static_cast<double>(value.as_int32()) - 1.0);
   }
   if (value.is_uint32()) {
-    return Value::uint32(value.as_uint32() - 1u);
+    return uint_range_result(static_cast<double>(value.as_uint32()) - 1.0);
   }
   return numeric_result(to_number(value) - 1.0);
 }
