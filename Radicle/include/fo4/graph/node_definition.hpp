@@ -206,7 +206,8 @@ struct NodeDefinition {
                 return out;
             }
 
-            case GraphNodeKind::StructNew: {
+            case GraphNodeKind::StructNew:
+            case GraphNodeKind::StructGet: {
                 const auto resolved = written("type");
                 if (!resolved) return pins;
                 const auto type = typeFromWritten(*resolved);

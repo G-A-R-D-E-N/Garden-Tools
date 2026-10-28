@@ -8287,6 +8287,52 @@ A row whose character is a DefineText or DefineText2 with a clip depth opens a m
 
 Expected strings were derived by hand. The glyph is a 1000-twip square (50 px, the path of `Radicle/tests/test_swf_svg.cpp:kRedSquare` at its size), at a DefineText height of 1024, so the font scale is 1 and the text matrix is the identity. The blue square is the 600-twip one, `Radicle/tests/test_swf_svg.cpp:kBlueSquare`. The clipPath ids follow the shape-mask convention `r<index>clip`. Nothing was compiled or run on the development machine for this change, so CI must confirm them.
 
+## Radicle/src/graph/graph_lifter.cpp:GraphLifter::liftAssign
+
+- A compound assignment to a struct member (`s.X += v`) expands to `s.X = s.X + v`. The read is lifted through `liftExpression(*assign.target)`, which gives a `StructGet` for a struct member and the same `VariableGet` as before for an identifier. The target is lifted twice, so its receiver must be call-free; otherwise the lift is refused.
+- A struct member compound whose value calls a function is refused. The Papyrus emitter reads the member before it evaluates the value (`Radicle/src/papyrus/body_statement.cpp:BodyEmitter::emitAssign`), but a lifted `Call` node runs earlier in the exec chain than a pure `StructGet`, so the read would move after the call.
+- A plain struct member assignment lowers to a `StructSet` statement: config `member` holds the name, `target` holds the receiver and `value` holds the value. The value is lifted before the receiver, as the property and index paths already do.
+- A non-compound `p.Y = p.X + Next()` has the same reordering as properties and variables, which is the existing model and is not covered by the refusal. The Papyrus emitter reads `p.X` before the call (`Radicle/src/papyrus/body_expression.cpp:BodyEmitter::emitBinary`), but the lifted `Call` node runs earlier in the exec chain, so the read moves after the call.
+
+## Radicle/src/graph/graph_lifter_expr.cpp:GraphLifter::liftMember
+
+- A struct member read lowers to a `StructGet` with config `member`, input `target` and output `value`, mirroring `PropertyGet`. It also carries config `type` set from the resolver type of the member, so `NodeDefinition::pinsFor` can make the output pin concrete. Without that, a binary over the read cannot bind its generic type.
+
+## Radicle/src/graph/graph_lifter_expr.cpp:GraphLifter::liftExpression
+
+- `new T` lowers to a `StructNew` with config `type` and output `ret`, mirroring `NewArray`. `GraphLinearizer::buildPure` reads config `type` to emit `new T`.
+
+## Radicle/include/fo4/graph/node_definition.hpp:NodeDefinition::pinsFor
+
+- `StructGet` shares the `StructNew` case, so its output data pin takes the concrete type from config `type`. Its `target` input stays `any`.
+
+## Radicle/src/graph/graph_lifter.cpp:GraphLifter::liftStatement
+
+- `Point p = new Point` is a known ceiling. The lifter declares `Point p` at the top of the function and emits `p = new Point`. The Papyrus emitter gives a declaration with no initializer an `assign p None` first (`Radicle/src/papyrus/body_statement.cpp:BodyEmitter`, DefineStatement case), while an initialised declaration emits only `struct_create`. So the lifted pex has one extra instruction. The tests therefore write `Point p` and `p = new Point` on separate lines. Locals with an initializer have the same ceiling.
+
+## Radicle/src/graph/builtin_node_definitions.cpp:builtinDefinitions::all
+
+- The struct nodes are palette entries because `GraphValidator::resolveDefinitions` refuses any node whose definition is not on the palette.
+- `StructNew` and `StructGet` are pure. `GraphLinearizer::pull` refuses a value from a non-pure node (`kUseBeforeAssignment`), and a struct read has no exec pin to order it.
+
+## Radicle/src/graph/graph_linearizer.cpp:GraphLinearizer::lowerSimple
+
+- `StructSet` lowers to `member(target, config member) = value`, the same shape as `IndexSet`. Before this change `buildPure` had `StructNew` and `StructGet`, and nothing lowered `StructSet`.
+
+## Radicle/tests/test_graph_lift.cpp:GraphLift.StructNewGetAndSetSurviveATripThroughTheGraph
+
+- Detects a lifter that refuses `new T` or a struct member read, and a linearizer that drops `StructSet`. Each would leave the regenerated pex without its `struct_create`, `struct_get` or `struct_set`, and the pex comparer reports the first difference.
+- Hand-derived original sequence: `assign p None`, `struct_create p`, `assign $a 3`, `struct_set p X $a`, `struct_get $c p X`, `iadd $b $c 4`, `struct_set p Y $b`. The regenerated source is the same text, so its sequence is the same.
+
+## Radicle/tests/test_graph_lift.cpp:GraphLift.StructMemberCompoundAssignmentSurvivesATripThroughTheGraph
+
+- Detects a struct member compound that is refused again, or expanded to read or write the wrong member. `p.Y -= p.X` uses both members, so a swapped read or write shows as a difference.
+- Hand-derived original sequence: `assign p None`, `struct_create p`, `assign $a 1`, `struct_set p X $a`, `struct_get $d p X`, `iadd $e $d 2`, `struct_set p X $e`, `struct_get $f p Y`, `struct_get $g p X`, `isub $h $f $g`, `struct_set p Y $h`.
+- The regenerated source is `p.X = p.X + 2` and `p.Y = p.Y - p.X`. Its sequence is `struct_get, iadd, struct_set` and `struct_get, struct_get, isub, struct_set`, which matches.
+
+## Radicle/tests/test_graph_lift.cpp:GraphLift.StructMemberCompoundWithACallIsRefusedRatherThanReordered
+
+- Detects a lifter that accepts a call in the value of a struct member compound. That would move the member read after the call and change behaviour with no diagnostic.
 ## Radicle/src/papyrus/quest_rules.cpp:bindVmadValues
 
 - `Radicle/src/papyrus/quest_rules.cpp:bindShape` binds one shape from its declared type. Scalars keep their old rules. `array` goes to `bindArray` and `struct` goes to `bindStruct`. `variable` and unknown kinds stay unsupported with a reason.
