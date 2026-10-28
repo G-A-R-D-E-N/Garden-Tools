@@ -312,6 +312,21 @@ TEST(SwfPlacement, PlaceObject3VisibleFlagAloneDoesNotConsumeABackgroundColor) {
   EXPECT_FALSE(place.background_color.has_value());
 }
 
+TEST(SwfPlacement, PlaceObject3FilterFlagSetsHasFilterListEvenWhenListIsEmpty) {
+  // Regression: decode_place_object2 never set has_filter_list from flags3 bit 0x01, so an empty filter list read as no list. Invariant: has_filter_list follows that bit alone.
+  for (const bool flagged : {true, false}) {
+    SwfBuilder builder;
+    builder.u8(0x00);
+    builder.u8(flagged ? 0x01 : 0x00);
+    builder.u16(4);
+    if (flagged) builder.u8(0);
+    const auto result = fo4::swf::read_swf(movie_of({{70, builder.body}}));
+    ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
+    EXPECT_EQ(result.file.tags[0].placement->has_filter_list, flagged);
+    EXPECT_TRUE(result.file.tags[0].placement->filters.empty());
+  }
+}
+
 TEST(SwfPlacement, RemoveObjectAndRemoveObject2DecodeDepthWithAndWithoutCharacter) {
   SwfBuilder first;
   first.u16(7);

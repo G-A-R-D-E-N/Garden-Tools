@@ -201,6 +201,24 @@ void apply_matrix(DisplayObject& object, const SwfPlacementRow& row) {
   object.set_scale_y(std::copysign(std::hypot(row.rotate_skew1, row.scale_y), determinant));
 }
 
+void apply_placement_state(DisplayObject& object, const SwfPlacementRow& row) {
+  if (row.has_ratio || !row.move) {
+    object.set_ratio(row.has_ratio ? std::optional<std::uint16_t>{row.ratio} : std::nullopt);
+  }
+  if (row.has_blend_mode || !row.move) {
+    object.set_blend_mode(row.has_blend_mode ? row.blend_mode : std::uint8_t{0});
+  }
+  if (row.has_visible || !row.move) {
+    object.set_visible(row.has_visible ? row.visible : true);
+  }
+  if (row.has_bitmap_cache || !row.move) {
+    object.set_cache_as_bitmap(row.has_bitmap_cache && row.bitmap_cache);
+  }
+  if (row.has_filters || !row.move) {
+    object.set_placed_filters(row.filters);
+  }
+}
+
 class SwfTimelineClip : public MovieClip {
  public:
   SwfTimelineClip(Class* display_class, std::shared_ptr<SwfMovieData> data,
@@ -294,6 +312,7 @@ class SwfTimelineClip : public MovieClip {
       if (row.has_clip_depth || !row.move) {
         object->set_clip_depth(row.has_clip_depth ? static_cast<std::int32_t>(row.clip_depth) : 0);
       }
+      apply_placement_state(*object, row);
       if (!row.name.empty()) {
         object->set_name(row.name);
       }

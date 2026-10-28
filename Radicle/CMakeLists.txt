@@ -349,6 +349,7 @@ add_library(fo4
   src/swf/swf_glyph.cpp
   src/swf/swf_glyph_edit.cpp
   src/swf/swf_census.cpp
+  src/swf/swf_svg.cpp
   src/pex_analysis/opcodes.cpp
   src/pex_analysis/cfg.cpp
   src/pex_analysis/disasm.cpp
@@ -373,6 +374,10 @@ add_library(fo4
   src/abc/abc_asm_lex.cpp
   src/abc/abc_asm.cpp
   src/abc/abc_asm_code.cpp
+  src/avm1/opcodes.cpp
+  src/avm1/decode.cpp
+  src/avm1/encode.cpp
+  src/avm1/disassembly.cpp
   src/avm2/name.cpp
   src/avm2/value.cpp
   src/avm2/coercion.cpp
@@ -475,7 +480,7 @@ target_sources(fo4 PRIVATE src/patch/delta_patch.cpp)
 target_sources(fo4 PRIVATE src/patch/list_merge.cpp)
 target_sources(fo4 PRIVATE src/papyrus_source/lexer.cpp src/papyrus_source/parser.cpp src/papyrus_source/parser_decl.cpp src/papyrus_source/parser_expr.cpp src/papyrus_source/parser_stmt.cpp src/papyrus_source/summary.cpp)
 target_sources(radicle_c PRIVATE src/c_api_nif.cpp src/c_api_dds.cpp)
-target_sources(radicle_c PRIVATE src/c_api_swf.cpp src/c_api_swf_art.cpp src/c_api_swf_characters.cpp src/c_api_swf_display.cpp src/c_api_swf_edit.cpp src/c_api_swf_history.cpp src/c_api_swf_abc_write.cpp src/c_api_runtime.cpp)
+target_sources(radicle_c PRIVATE src/c_api_swf.cpp src/c_api_swf_art.cpp src/c_api_swf_characters.cpp src/c_api_swf_display.cpp src/c_api_swf_edit.cpp src/c_api_swf_history.cpp src/c_api_swf_verbs.cpp src/c_api_swf_abc_write.cpp src/c_api_runtime.cpp)
 
 if(RADICLE_INSTALL)
   include(GNUInstallDirs)
@@ -974,6 +979,9 @@ if(RADICLE_BUILD_TESTS)
     tests/test_swf_real.cpp
     tests/test_swf_census.cpp
     tests/test_swf_census_real.cpp
+    tests/test_avm1.cpp
+    tests/test_avm1_real.cpp
+    tests/test_swf_svg.cpp
     tests/test_abc_real.cpp
     tests/test_hkx_packfile.cpp
     tests/test_hkx_real.cpp

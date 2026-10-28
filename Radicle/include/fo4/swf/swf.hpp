@@ -234,6 +234,9 @@ struct SwfShapeRecord {
   std::uint16_t fill0{0};
   std::uint16_t fill1{0};
   std::uint16_t line{0};
+  bool has_fill0{false};
+  bool has_fill1{false};
+  bool has_line{false};
 };
 
 struct SwfShape {
@@ -348,6 +351,8 @@ struct SwfFilter {
   std::uint32_t default_color{0};
   bool clamp{false};
   bool preserve_alpha{false};
+
+  bool operator==(const SwfFilter&) const = default;
 };
 
 struct SwfPlacement {
@@ -362,6 +367,8 @@ struct SwfPlacement {
   std::optional<std::uint16_t> clip_depth;
   std::optional<std::string> class_name;
   std::vector<SwfFilter> filters;
+  /* Invariant: set exactly when the PlaceObject3 filter flag is present, so an empty list clears filters and an absent flag keeps them. */
+  bool has_filter_list{false};
   std::optional<std::uint8_t> blend_mode;
   std::optional<std::uint8_t> bitmap_cache;
   std::optional<bool> visible;
