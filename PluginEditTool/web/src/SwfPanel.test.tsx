@@ -27,6 +27,9 @@ function stubBridge(overrides: Record<string, unknown> = {}) {
     EditEditText: vi.fn(async () => JSON.stringify({ changed: true, revision: 4, undo: 2, redo: 0, dirty: true })),
     AbcBlocks: vi.fn(async () => JSON.stringify({ blocks: [{ abc: 0, name: 'Interface', classes: ['MenuClass'], scripts: ['Menu'], methods: [{ index: 0, name: 'onLoad', returnType: 'void', hasBody: true }] }] })),
     Disassemble: vi.fn(async () => JSON.stringify({ text: '      0 getlocal0\n      1 returnvoid\n' })),
+    InspectText: vi.fn(async () => JSON.stringify({ text: '## Interface\\Test.swf\nStage 11000x8000\nRoot frame labels: start@1\n' })),
+    ActionTags: vi.fn(async () => JSON.stringify({ tags: [{ tagIndex: 9, code: 12, insideSprite: false }] })),
+    Avm1Disassemble: vi.fn(async () => JSON.stringify({ text: '0000  Play\n0001  End\n' })),
     ...overrides,
   };
   vi.stubGlobal('chrome', { webview: { hostObjects: { swf } } });
@@ -97,6 +100,17 @@ describe('SwfPanel', () => {
     await act(async () => { fireEvent.click(screen.getByText('Apply transform')); });
     await waitFor(() => expect(swf.SetTransform).toHaveBeenCalledWith(2, 0, 0, 0, 0, 0, 0));
     expect(screen.getByTestId('swf-box-7')).toBeTruthy();
+  });
+
+  it('shows the inspect text and the disassembly of a picked DoAction tag', async () => {
+    const swf = stubBridge();
+    render(<SwfPanel onClose={() => {}} />);
+    fireEvent.change(screen.getByPlaceholderText('Interface/Test.swf'), { target: { value: 'Interface/Test.swf' } });
+    await act(async () => { fireEvent.click(screen.getByText('Open')); });
+    expect(await screen.findByText(/Root frame labels: start@1/)).toBeTruthy();
+    await act(async () => { fireEvent.click(screen.getByText('DoAction @9')); });
+    await waitFor(() => expect(swf.Avm1Disassemble).toHaveBeenCalledWith(9));
+    await waitFor(() => expect(screen.getByLabelText('avm1 disassembly').textContent).toContain('0000  Play'));
   });
 
   it('lists ABC classes and methods and shows the selected method instructions', async () => {
