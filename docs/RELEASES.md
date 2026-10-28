@@ -25,7 +25,8 @@ Nothing publishes automatically: `.github/workflows/release.yml` is a build-only
 
 `PluginEditTool/package.ps1` is the authority for what the zip contains: `FO4RecordEditor.exe`,
 `web/dist`, `tools/*` when the optional tool paths resolve, `README.md`, `LICENSE`,
-`THIRD_PARTY_NOTICES.md`, `docs/MCP_SETUP.md` and `mcp.sample.json`.
+`THIRD_PARTY_NOTICES.md`, `docs/MCP_SETUP.md`, `mcp.sample.json` and `build-info.txt`. The zip carries
+its own copy of `build-info.txt`; `release-metadata` is the separate artifact written by the workflow.
 
 ## Publish (owner-approved, after reviewing the artifacts)
 
