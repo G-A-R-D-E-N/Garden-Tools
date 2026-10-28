@@ -7743,3 +7743,31 @@ Encodes formats 3 (colour map) and 5 (32-bit ARGB) to an 8-bit RGBA PNG with fil
 ## Radicle/tests/test_swf_art.cpp:SwfBitmapPng.RefusesBitmapsThatCannotBeEncodedAsPng
 
 A JPEG-based DefineBitsJpeg2 tag never produces an `SwfBitmap`, so that refusal is structural: the test asserts the tag has no bitmap and does carry the JPEG. The other refusals go through `Radicle/src/swf/swf_bitmap_png.cpp:bitmap_to_png`: 15-bit (format 4), a width changed after decode so the packed stream no longer inflates to the geometry, and a palette index of 5 against a one-entry colour map. Regression: a JPEG blob reaching the lossless path, a 15-bit row read as ARGB, a short pixel buffer encoded as if complete, and an index read past the colour map.
+
+## Radicle/src/swf/swf_svg.cpp:bitmap_pattern
+
+A bitmap fill (type 0x40 to 0x43) becomes a `<pattern>` whose `<image>` is the referenced bitmap's PNG from `Radicle/src/swf/swf_bitmap_png.cpp:bitmap_to_png` in base64. The pattern is `patternUnits="userSpaceOnUse"` with `width`/`height` equal to the bitmap's pixel size and `patternTransform` from `matrix_text`. The matrix convention is the one `matrix_text` already applies to gradients: the linear part is unitless (a scale of 1.0 is one stage pixel per bitmap pixel) and the translation is divided by 20 twips per pixel. Pattern ids are `<prefix>bmp<N>` (`fill_id`), so they never collide with gradient ids `<prefix><N>`.
+
+Smoothing: 0x40 and 0x41 are smoothed and emit nothing extra; 0x42 and 0x43 add `image-rendering="pixelated"` on the `<image>`.
+
+Clipped fills (0x41, 0x43) are not clipped. The brief asked for a bitmap-sized pattern for them, but an SVG pattern always tiles across the whole plane, so a clipped fill renders exactly like a repeating one: the bitmap repeats outside its own bounds. Only a clipPath around the fill would stop that. Upgrade path: a `<clipPath>` holding a rect of the bitmap size under the fill matrix, referenced by `clip-path` on the fill path in `shape_fill_paths_to_svg`. Not done in this slice.
+
+Fallback: a missing bitmap id, a bitmap tag that is not in the file's top level, a JPEG bitmap (DefineBits and DefineBitsJPEG tags never produce an `SwfBitmap`), or a format that `bitmap_to_png` refuses (format 4, 15-bit) returns nullopt, so the fill keeps the old `#808080` placeholder and no pattern is emitted.
+
+## Radicle/src/swf/swf_svg.cpp:fill_attributes
+
+`fill_attributes` calls `bitmap_pattern` only to test whether a pattern exists, and `fill_defs` calls it again to emit the pattern. Each bitmap fill therefore encodes its PNG twice per shape emission, and `frame_to_svg` emits defs and paths per instance, so a frame with many instances of one bitmap-filled shape encodes that PNG about twice per instance. Known cost, not measured. Upgrade path: compute the pattern once per fill index and hand the result to both `fill_defs` and `fill_paths`.
+
+## Radicle/src/swf/swf_svg.cpp:index_bitmaps
+
+`index_bitmaps` keys each top-level `SwfTag::bitmap` by its `character_id` and keeps the first tag for a duplicate id, the same first-wins rule `frame_to_svg` uses for shapes. Bitmaps nested inside a sprite's children are not indexed, so a bitmap fill inside a sprite-defined shape falls back to the placeholder when its bitmap lives in a sprite. `Radicle/src/swf/swf_frame_svg.cpp:frame_to_svg` builds the index once per call and passes it to `frame_body`.
+
+`shape_to_svg(shape)` (one argument) is `shape_to_svg(shape, SwfFile{})`, so it prints the placeholder for every bitmap fill and stays byte-identical to the older output. `Radicle/src/c_api_swf_characters.cpp` (`radicle_swf_shape_svg`) now calls the two-argument overload, so a character export shows bitmap fills; the C ABI is unchanged.
+
+## Radicle/tests/test_swf_svg.cpp:SwfSvg.BitmapFillEmitsARepeatingPatternWithItsPngAndPixelTransform
+
+The expected base64 is `Radicle/tests/swf_art_fixtures.hpp:base64_text` applied to the bitmap's `bitmap_to_png` output, not a hardcoded string.
+
+## Radicle/tests/test_swf_display.cpp:SwfFrameSvg.BitmapFillPatternIsResolvedFromTheMoviesBitmapTags
+
+Drives the whole movie path (DefineBitsLossless2 tag 36 plus DefineShape3 tag 32 placed by PlaceObject2), so it fails if `frame_to_svg` stops passing the bitmap index down to `frame_body`.

@@ -159,7 +159,8 @@ radicle_status radicle_swf_shape_svg(const radicle_swf* swf, uint16_t character_
       const std::string text = "character id " + std::to_string(character_id) + " is not a decoded shape";
       return fail(RADICLE_STATUS_NOT_FOUND, text.c_str());
     }
-    const std::string svg = fo4::swf::shape_to_svg(*swf->file.tags[found->tag_index].shape);
+    const std::string svg =
+        fo4::swf::shape_to_svg(*swf->file.tags[found->tag_index].shape, swf->file);
     *out_text = radicle_swf_detail::copy_text(svg, out_size);
     if (*out_text == nullptr) {
       return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to allocate the SVG text");

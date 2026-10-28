@@ -1,4 +1,5 @@
 #include "fo4/swf/swf.hpp"
+#include "fo4/swf/swf_bitmap_png.hpp"
 #include "fo4/swf/swf_display.hpp"
 #include "fo4/swf/swf_frame_svg.hpp"
 #include "swf_art_fixtures.hpp"
@@ -192,17 +193,13 @@ std::vector<std::byte> color_multiply_add(std::int32_t multiply, std::int32_t ad
   return bits.body;
 }
 
-std::vector<std::byte> square_shape(std::uint16_t id, std::int32_t size, std::uint32_t rgb,
-                                    bool stroke = false) {
+std::vector<std::byte> square_with_fill(std::uint16_t id, std::int32_t size,
+                                        const std::vector<std::byte>& fill, bool stroke) {
   SwfBuilder body;
   body.u16(id);
   body.rect(0, size, 0, size, 12);
   body.u8(1);
-  body.u8(0x00);
-  body.u8((rgb >> 16) & 0xFFu);
-  body.u8((rgb >> 8) & 0xFFu);
-  body.u8(rgb & 0xFFu);
-  body.u8(0xFF);
+  body.bytes(fill);
   if (stroke) {
     body.u8(1);
     body.u16(20);
@@ -235,6 +232,27 @@ std::vector<std::byte> square_shape(std::uint16_t id, std::int32_t size, std::ui
   body.push_bits(0, 6);
   body.align();
   return body.body;
+}
+
+std::vector<std::byte> square_shape(std::uint16_t id, std::int32_t size, std::uint32_t rgb,
+                                    bool stroke = false) {
+  SwfBuilder fill;
+  fill.u8(0x00);
+  fill.u8((rgb >> 16) & 0xFFu);
+  fill.u8((rgb >> 8) & 0xFFu);
+  fill.u8(rgb & 0xFFu);
+  fill.u8(0xFF);
+  return square_with_fill(id, size, fill.body, stroke);
+}
+
+std::vector<std::byte> bitmap_square_shape(std::uint16_t id, std::int32_t size,
+                                           std::uint16_t bitmap_id, std::int32_t scale,
+                                           std::int32_t translate_x) {
+  SwfBuilder fill;
+  fill.u8(0x40);
+  fill.u16(bitmap_id);
+  fill.bytes(matrix_scale_translate(scale, translate_x, 0));
+  return square_with_fill(id, size, fill.body, false);
 }
 
 std::string svg_of(const std::vector<std::byte>& bytes, std::uint32_t frame) {
@@ -644,4 +662,37 @@ TEST(SwfFrameSvg, FrameOutsideTheRootTimelineDrawsAnEmptyStage) {
       {1, {}},
   });
   EXPECT_EQ(svg_of(movie, 3), kStageOpen + "</svg>\n");
+}
+
+TEST(SwfFrameSvg, BitmapFillPatternIsResolvedFromTheMoviesBitmapTags) {
+  // Detects: a placed shape's bitmap fill must resolve its bitmap through the movie's bitmap tags and emit the PNG pattern with the fill matrix scaled to pixels; a frame that drops the bitmap index draws the grey placeholder instead.
+  const std::vector<std::uint8_t> raw = {255, 255, 0, 0, 255, 0, 255, 0,
+                                         255, 0,   0, 255, 255, 255, 255, 255};
+  const auto bitmap =
+      swf_art_test::read_one(36, swf_art_test::lossless_raw_payload(5, 2, 2, 0, raw));
+  ASSERT_TRUE(bitmap.ok()) << fo4::swf::status_name(bitmap.status);
+  ASSERT_TRUE(bitmap.file.tags[0].bitmap.has_value());
+  const auto png = fo4::swf::bitmap_to_png(*bitmap.file.tags[0].bitmap);
+  ASSERT_TRUE(png.has_value());
+  const auto movie = movie_of(1, {
+      {36, swf_art_test::lossless_raw_payload(5, 2, 2, 0, raw)},
+      {32, bitmap_square_shape(1, 1000, 3, 131072, 400)},
+      {26, place_full(1, 1, {}, {})},
+      {1, {}},
+  });
+  const std::string expected =
+      kStageOpen +
+      "<g transform=\"matrix(1 0 0 1 0 0)\">\n"
+      "<defs>\n"
+      "<pattern id=\"r0fbmp1\" patternUnits=\"userSpaceOnUse\" width=\"2\" height=\"2\" "
+      "patternTransform=\"matrix(2 0 0 2 20 0)\">\n"
+      "<image width=\"2\" height=\"2\" href=\"data:image/png;base64," +
+      swf_art_test::base64_text(*png) +
+      "\"/>\n"
+      "</pattern>\n"
+      "</defs>\n"
+      "<path d=\"M0 0L50 0L50 50L0 50L0 0Z\" fill=\"url(#r0fbmp1)\" fill-rule=\"nonzero\"/>\n"
+      "</g>\n"
+      "</svg>\n";
+  EXPECT_EQ(svg_of(movie, 0), expected);
 }

@@ -1,11 +1,14 @@
 #include "fo4/swf/swf.hpp"
+#include "fo4/swf/swf_bitmap_png.hpp"
 #include "fo4/swf/swf_svg.hpp"
+#include "swf_art_fixtures.hpp"
 
 #include <gtest/gtest.h>
 
 #include <algorithm>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -59,6 +62,29 @@ fo4::swf::SwfFillStyle solid_fill(std::uint32_t argb) {
   fill.type = 0x00;
   fill.color = argb;
   return fill;
+}
+
+fo4::swf::SwfFillStyle bitmap_fill(std::uint8_t type, std::uint16_t bitmap_id, std::int32_t scale,
+                                   std::int32_t translate_x) {
+  fo4::swf::SwfFillStyle fill;
+  fill.type = type;
+  fill.bitmap_id = bitmap_id;
+  fo4::swf::SwfMatrix matrix;
+  matrix.scale_x = scale;
+  matrix.scale_y = scale;
+  matrix.translate_x = translate_x;
+  fill.matrix = matrix;
+  return fill;
+}
+
+fo4::swf::SwfReadResult two_by_two_bitmap() {
+  const std::vector<std::uint8_t> raw = {255, 255, 0,   0,   255, 0,   255, 0,
+                                         255, 0,   0,   255, 255, 255, 255, 255};
+  return swf_art_test::read_one(36, swf_art_test::lossless_raw_payload(5, 2, 2, 0, raw));
+}
+
+std::string square_path_fill(const char* fill) {
+  return std::string("<path d=\"M0 0L50 0L50 50L0 50L0 0Z\" ") + fill + " fill-rule=\"nonzero\"/>\n";
 }
 
 }  // namespace
@@ -215,4 +241,70 @@ TEST(SwfSvg, EmptyShapeExportsZeroViewBoxAndNoPaths) {
       "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 0 0\" width=\"0\" height=\"0\">\n"
       "</svg>\n";
   EXPECT_EQ(fo4::swf::shape_to_svg(fo4::swf::SwfShape{}), expected);
+}
+
+TEST(SwfSvg, BitmapFillEmitsARepeatingPatternWithItsPngAndPixelTransform) {
+  // Detects: a repeating bitmap fill must become a pattern whose image is the bitmap's PNG in base64 and whose patternTransform takes the fill matrix with its translation divided by 20 twips per pixel; a missing pattern, a wrong base64 tail or an untranslated matrix changes the expected text.
+  const auto bitmap = two_by_two_bitmap();
+  ASSERT_TRUE(bitmap.ok()) << fo4::swf::status_name(bitmap.status);
+  const auto png = fo4::swf::bitmap_to_png(*bitmap.file.tags[0].bitmap);
+  ASSERT_TRUE(png.has_value());
+  auto shape = sized_shape(1000, 1000);
+  shape.fill_styles.push_back(bitmap_fill(0x40, 3, 131072, 400));
+  shape.records = {move_to(0, 0), style_change(1, 0, 0), line_by(1000, 0), line_by(0, 1000),
+                   line_by(-1000, 0), line_by(0, -1000)};
+  const std::string expected =
+      "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 50 50\" width=\"50\" height=\"50\">\n"
+      "<defs>\n"
+      "<pattern id=\"fillbmp1\" patternUnits=\"userSpaceOnUse\" width=\"2\" height=\"2\" "
+      "patternTransform=\"matrix(2 0 0 2 20 0)\">\n"
+      "<image width=\"2\" height=\"2\" href=\"data:image/png;base64," +
+      swf_art_test::base64_text(*png) +
+      "\"/>\n"
+      "</pattern>\n"
+      "</defs>\n" +
+      square_path_fill("fill=\"url(#fillbmp1)\"") + "</svg>\n";
+  EXPECT_EQ(fo4::swf::shape_to_svg(shape, bitmap.file), expected);
+}
+
+TEST(SwfSvg, NonSmoothedBitmapFillRendersPixelated) {
+  // Detects: a non-smoothed bitmap fill (type 0x42) must carry image-rendering="pixelated" so hard-edged pixels are not blurred on scaling.
+  const auto bitmap = two_by_two_bitmap();
+  ASSERT_TRUE(bitmap.ok()) << fo4::swf::status_name(bitmap.status);
+  const auto png = fo4::swf::bitmap_to_png(*bitmap.file.tags[0].bitmap);
+  ASSERT_TRUE(png.has_value());
+  auto shape = sized_shape(1000, 1000);
+  shape.fill_styles.push_back(bitmap_fill(0x42, 3, 131072, 0));
+  shape.records = {move_to(0, 0), style_change(1, 0, 0), line_by(1000, 0), line_by(0, 1000),
+                   line_by(-1000, 0), line_by(0, -1000)};
+  const std::string expected =
+      "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 50 50\" width=\"50\" height=\"50\">\n"
+      "<defs>\n"
+      "<pattern id=\"fillbmp1\" patternUnits=\"userSpaceOnUse\" width=\"2\" height=\"2\" "
+      "patternTransform=\"matrix(2 0 0 2 0 0)\">\n"
+      "<image width=\"2\" height=\"2\" href=\"data:image/png;base64," +
+      swf_art_test::base64_text(*png) +
+      "\" image-rendering=\"pixelated\"/>\n"
+      "</pattern>\n"
+      "</defs>\n" +
+      square_path_fill("fill=\"url(#fillbmp1)\"") + "</svg>\n";
+  EXPECT_EQ(fo4::swf::shape_to_svg(shape, bitmap.file), expected);
+}
+
+TEST(SwfSvg, MissingOrUnencodableBitmapFallsBackToThePlaceholder) {
+  // Detects: a bitmap fill whose id is absent from the file, or whose bitmap bitmap_to_png refuses, must keep the grey placeholder with no pattern; a url to a pattern that was never emitted would leave the path unpainted, and a crash would fail the whole export.
+  auto shape = sized_shape(1000, 1000);
+  shape.fill_styles.push_back(bitmap_fill(0x40, 9, 131072, 400));
+  shape.records = {move_to(0, 0), style_change(1, 0, 0), line_by(1000, 0), line_by(0, 1000),
+                   line_by(-1000, 0), line_by(0, -1000)};
+  const std::string expected =
+      "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 50 50\" width=\"50\" height=\"50\">\n" +
+      square_path_fill("fill=\"#808080\"") + "</svg>\n";
+  EXPECT_EQ(fo4::swf::shape_to_svg(shape, fo4::swf::SwfFile{}), expected);
+  EXPECT_EQ(fo4::swf::shape_to_svg(shape), expected);
+  const auto format4 =
+      swf_art_test::read_one(20, swf_art_test::lossless_payload(4, 2, 2, 4, 0, false));
+  ASSERT_TRUE(format4.ok()) << fo4::swf::status_name(format4.status);
+  shape.fill_styles[0] = bitmap_fill(0x40, 3, 131072, 400);
+  EXPECT_EQ(fo4::swf::shape_to_svg(shape, format4.file), expected);
 }

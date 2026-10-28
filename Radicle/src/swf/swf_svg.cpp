@@ -1,5 +1,8 @@
 #include "fo4/swf/swf_svg.hpp"
 
+#include "fo4/swf/swf_bitmap_png.hpp"
+
+#include <algorithm>
 #include <charconv>
 #include <compare>
 #include <cstddef>
@@ -28,6 +31,8 @@ constexpr std::uint8_t kRadialFill = 0x12;
 constexpr std::uint8_t kFocalFill = 0x13;
 constexpr unsigned kMiterJoin = 2;
 constexpr const char* kPlaceholderColor = "#808080";
+constexpr const char* kBase64Alphabet =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 struct Point {
   std::int64_t x{0};
@@ -236,6 +241,57 @@ std::string matrix_text(const SwfMatrix& matrix) {
          svg_number(matrix.translate_y / kTwipsPerPixel) + ")";
 }
 
+bool is_bitmap(std::uint8_t type) {
+  return type >= 0x40 && type <= 0x43;
+}
+
+bool is_smoothed(std::uint8_t type) {
+  return type == 0x40 || type == 0x41;
+}
+
+std::string base64_text(const std::vector<std::uint8_t>& bytes) {
+  std::string text;
+  for (std::size_t offset = 0; offset < bytes.size(); offset += 3) {
+    const std::size_t left = std::min<std::size_t>(3, bytes.size() - offset);
+    std::uint32_t group = 0;
+    for (std::size_t index = 0; index < 3; ++index) {
+      group = (group << 8) | (index < left ? bytes[offset + index] : 0u);
+    }
+    for (std::size_t index = 0; index < 4; ++index) {
+      text += index <= left ? kBase64Alphabet[(group >> (18 - 6 * index)) & 0x3Fu] : '=';
+    }
+  }
+  return text;
+}
+
+std::string fill_id(const SwfFillStyle& fill, const std::string& id_prefix, std::size_t index) {
+  return id_prefix + (is_bitmap(fill.type) ? "bmp" : "") + std::to_string(index + 1);
+}
+
+std::optional<std::string> bitmap_pattern(const SwfFillStyle& fill, const std::string& id,
+                                          const SvgBitmaps& bitmaps) {
+  if (!is_bitmap(fill.type)) {
+    return std::nullopt;
+  }
+  const auto found = bitmaps.find(fill.bitmap_id);
+  if (found == bitmaps.end()) {
+    return std::nullopt;
+  }
+  const SwfBitmap& bitmap = *found->second;
+  const auto png = bitmap_to_png(bitmap);
+  if (!png) {
+    return std::nullopt;
+  }
+  const std::string width = svg_number(bitmap.width);
+  const std::string height = svg_number(bitmap.height);
+  const char* rendering = is_smoothed(fill.type) ? "" : " image-rendering=\"pixelated\"";
+  return "<pattern id=\"" + id + "\" patternUnits=\"userSpaceOnUse\" width=\"" + width +
+         "\" height=\"" + height + "\" patternTransform=\"" +
+         matrix_text(fill.matrix.value_or(SwfMatrix{})) + "\">\n<image width=\"" + width +
+         "\" height=\"" + height + "\" href=\"data:image/png;base64," + base64_text(*png) +
+         "\"" + rendering + "/>\n</pattern>\n";
+}
+
 std::string focal_text(const SwfFillStyle& fill) {
   if (fill.type != kFocalFill) {
     return "";
@@ -266,21 +322,26 @@ std::string gradient_text(const SwfFillStyle& fill, const std::string& id) {
   return text + "</" + tag + ">\n";
 }
 
-std::string gradient_defs(const std::vector<SwfFillStyle>& fills, const std::string& id_prefix) {
+std::string fill_defs(const std::vector<SwfFillStyle>& fills, const std::string& id_prefix,
+                      const SvgBitmaps& bitmaps) {
   std::string text;
   for (std::size_t index = 0; index < fills.size(); ++index) {
+    const std::string id = fill_id(fills[index], id_prefix, index);
     if (is_gradient(fills[index].type)) {
-      text += gradient_text(fills[index], id_prefix + std::to_string(index + 1));
+      text += gradient_text(fills[index], id);
+    } else if (const auto pattern = bitmap_pattern(fills[index], id, bitmaps)) {
+      text += *pattern;
     }
   }
   return text.empty() ? text : "<defs>\n" + text + "</defs>\n";
 }
 
-std::string fill_attributes(const SwfFillStyle& fill, const std::string& id) {
+std::string fill_attributes(const SwfFillStyle& fill, const std::string& id,
+                            const SvgBitmaps& bitmaps) {
   if (fill.type == kSolidFill) {
     return paint("fill", fill.color);
   }
-  if (is_gradient(fill.type)) {
+  if (is_gradient(fill.type) || bitmap_pattern(fill, id, bitmaps).has_value()) {
     return "fill=\"url(#" + id + ")\"";
   }
   return std::string("fill=\"") + kPlaceholderColor + "\"";
@@ -291,13 +352,13 @@ std::string path_element(const std::string& data, const std::string& attributes)
 }
 
 std::string fill_paths(const SwfShape& shape, const std::vector<Edge>& edges,
-                       const std::string& id_prefix) {
+                       const std::string& id_prefix, const SvgBitmaps& bitmaps) {
   std::string text;
   for (std::size_t index = 0; index < shape.fill_styles.size(); ++index) {
     const std::string data = loops_text(fill_edges(edges, index + 1));
     if (!data.empty()) {
-      text += path_element(data, fill_attributes(shape.fill_styles[index],
-                                                 id_prefix + std::to_string(index + 1)) +
+      const SwfFillStyle& fill = shape.fill_styles[index];
+      text += path_element(data, fill_attributes(fill, fill_id(fill, id_prefix, index), bitmaps) +
                                      " fill-rule=\"nonzero\"");
     }
   }
@@ -386,22 +447,40 @@ std::string svg_open(const SwfRect& bounds) {
          pixels(width) + "\" height=\"" + pixels(height) + "\">\n";
 }
 
-std::string shape_defs_to_svg(const SwfShape& shape, const std::string& id_prefix) {
-  return gradient_defs(shape.fill_styles, id_prefix);
+SvgBitmaps index_bitmaps(const SwfFile& file) {
+  SvgBitmaps bitmaps;
+  for (const SwfTag& tag : file.tags) {
+    if (tag.bitmap) {
+      bitmaps.emplace(tag.bitmap->character_id, &*tag.bitmap);
+    }
+  }
+  return bitmaps;
 }
 
-std::string shape_paths_to_svg(const SwfShape& shape, const std::string& id_prefix) {
+std::string shape_defs_to_svg(const SwfShape& shape, const std::string& id_prefix,
+                              const SvgBitmaps& bitmaps) {
+  return fill_defs(shape.fill_styles, id_prefix, bitmaps);
+}
+
+std::string shape_paths_to_svg(const SwfShape& shape, const std::string& id_prefix,
+                               const SvgBitmaps& bitmaps) {
   const auto edges = trace_edges(shape);
-  return fill_paths(shape, edges, id_prefix) + stroke_paths(shape, edges);
+  return fill_paths(shape, edges, id_prefix, bitmaps) + stroke_paths(shape, edges);
 }
 
-std::string shape_fill_paths_to_svg(const SwfShape& shape, const std::string& id_prefix) {
-  return fill_paths(shape, trace_edges(shape), id_prefix);
+std::string shape_fill_paths_to_svg(const SwfShape& shape, const std::string& id_prefix,
+                                    const SvgBitmaps& bitmaps) {
+  return fill_paths(shape, trace_edges(shape), id_prefix, bitmaps);
 }
 
 std::string shape_to_svg(const SwfShape& shape) {
-  return svg_open(shape.bounds) + shape_defs_to_svg(shape, "fill") +
-         shape_paths_to_svg(shape, "fill") + "</svg>\n";
+  return shape_to_svg(shape, SwfFile{});
+}
+
+std::string shape_to_svg(const SwfShape& shape, const SwfFile& file) {
+  const SvgBitmaps bitmaps = index_bitmaps(file);
+  return svg_open(shape.bounds) + shape_defs_to_svg(shape, "fill", bitmaps) +
+         shape_paths_to_svg(shape, "fill", bitmaps) + "</svg>\n";
 }
 
 }  // namespace fo4::swf
