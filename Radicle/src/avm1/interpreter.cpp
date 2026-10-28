@@ -1,5 +1,7 @@
 #include <fo4/avm1/interpreter.hpp>
 
+#include "object_ops.hpp"
+#include "state.hpp"
 #include "text_ops.hpp"
 
 #include <algorithm>
@@ -11,12 +13,10 @@
 #include <exception>
 #include <format>
 #include <limits>
-#include <map>
 #include <new>
 #include <string>
 #include <utility>
 #include <variant>
-#include <vector>
 
 namespace fo4::avm1 {
 
@@ -51,18 +51,9 @@ using text_ops::to_text;
 using text_ops::unit_count;
 using text_ops::unit_offset;
 
-constexpr const char* kUnderflow = "the operand stack has too few values";
 constexpr const char* kWhitespace = " \t\r\n";
 constexpr std::size_t kMaxStringBytes = std::size_t{16} * 1024 * 1024;
 constexpr double kUint32Range = 4294967296.0;
-
-struct Avm1State {
-  std::vector<Avm1Data> stack;
-  std::vector<std::string> constants;
-  std::map<std::string, Avm1Data> variables;
-  std::vector<std::string> trace;
-  std::uint8_t swf_version{0};
-};
 
 Avm1Data number_value(double number) {
   return Avm1Data{.kind = Avm1DataKind::Number, .number = number};
@@ -113,6 +104,8 @@ double to_number(const Avm1Data& data, std::uint8_t swf_version) {
       return data.number;
     case Avm1DataKind::String:
       return parse_number(data.text);
+    case Avm1DataKind::Object:
+      return std::numeric_limits<double>::quiet_NaN();
   }
   return std::numeric_limits<double>::quiet_NaN();
 }
@@ -129,6 +122,8 @@ std::string type_name(const Avm1Data& data) {
       return "number";
     case Avm1DataKind::String:
       return "string";
+    case Avm1DataKind::Object:
+      return "object";
   }
   return "undefined";
 }
@@ -144,6 +139,8 @@ bool to_boolean(const Avm1Data& data) {
       return data.number != 0.0 && !std::isnan(data.number);
     case Avm1DataKind::String:
       return !data.text.empty();
+    case Avm1DataKind::Object:
+      return true;
   }
   return false;
 }
@@ -159,6 +156,9 @@ bool loose_equal(const Avm1Data& left, const Avm1Data& right, std::uint8_t swf_v
     if (left.kind == Avm1DataKind::Number) {
       return left.number == right.number;
     }
+    if (left.kind == Avm1DataKind::Object) {
+      return left.object == right.object;
+    }
     return left.text == right.text;
   }
   if (left.kind == Avm1DataKind::Boolean) {
@@ -166,6 +166,12 @@ bool loose_equal(const Avm1Data& left, const Avm1Data& right, std::uint8_t swf_v
   }
   if (right.kind == Avm1DataKind::Boolean) {
     return loose_equal(left, number_value(to_number(right, swf_version)), swf_version);
+  }
+  if (left.kind == Avm1DataKind::Object) {
+    return loose_equal(string_value(to_text(left, swf_version)), right, swf_version);
+  }
+  if (right.kind == Avm1DataKind::Object) {
+    return loose_equal(left, string_value(to_text(right, swf_version)), swf_version);
   }
   return to_number(left, swf_version) == to_number(right, swf_version);
 }
@@ -184,6 +190,8 @@ bool strict_equal(const Avm1Data& left, const Avm1Data& right) {
       return left.number == right.number;
     case Avm1DataKind::String:
       return left.text == right.text;
+    case Avm1DataKind::Object:
+      return left.object == right.object;
   }
   return false;
 }
@@ -196,7 +204,8 @@ bool less_than(const Avm1Data& left, const Avm1Data& right, std::uint8_t swf_ver
 }
 
 Avm1Data add_values(const Avm1Data& left, const Avm1Data& right, std::uint8_t swf_version) {
-  if (left.kind == Avm1DataKind::String || right.kind == Avm1DataKind::String) {
+  if (left.kind == Avm1DataKind::String || right.kind == Avm1DataKind::String ||
+      left.kind == Avm1DataKind::Object || right.kind == Avm1DataKind::Object) {
     return string_value(to_text(left, swf_version) + to_text(right, swf_version));
   }
   return number_value(to_number(left, swf_version) + to_number(right, swf_version));
@@ -238,16 +247,6 @@ std::string opcode_label(std::uint8_t code) {
   const char* name = action_mnemonic(code);
   return std::format("{} (0x{:02X})", name != nullptr ? name : "unknown",
                      static_cast<unsigned>(code));
-}
-
-Avm1RunStatus pop(Avm1State& state, Avm1Data& out, std::string& message) {
-  if (state.stack.empty()) {
-    message = kUnderflow;
-    return Avm1RunStatus::StackUnderflow;
-  }
-  out = std::move(state.stack.back());
-  state.stack.pop_back();
-  return Avm1RunStatus::Ok;
 }
 
 Avm1RunStatus push_result(Avm1State& state, Avm1Data result, std::string& message) {
@@ -513,6 +512,10 @@ Avm1RunStatus execute_action(const Avm1Stream& stream, const Avm1Action& action,
       return apply_unary(state, message, [version](const Avm1Data& operand) {
         return string_value(encode_code_unit(to_uint32(operand, version) & 0xFFFFu));
       });
+    case 0x3A:
+      return object_ops::delete_member(state, message);
+    case 0x3B:
+      return object_ops::delete_variable(state, message);
     case 0x17: {
       Avm1Data discarded;
       return pop(state, discarded, message);
@@ -548,6 +551,12 @@ Avm1RunStatus execute_action(const Avm1Stream& stream, const Avm1Action& action,
       return apply_binary(state, message, [version](const Avm1Data& left, const Avm1Data& right) {
         return number_value(std::fmod(to_number(left, version), to_number(right, version)));
       });
+    case 0x40:
+      return object_ops::new_object(state, message);
+    case 0x42:
+      return object_ops::init_array(state, message);
+    case 0x43:
+      return object_ops::init_object(state, message);
     case 0x44:
       return apply_unary(state, message, [](const Avm1Data& operand) {
         return string_value(type_name(operand));
@@ -576,6 +585,10 @@ Avm1RunStatus execute_action(const Avm1Stream& stream, const Avm1Action& action,
       return duplicate_top(state, message);
     case 0x4D:
       return swap_top(state, message);
+    case 0x4E:
+      return object_ops::get_member(state, message);
+    case 0x4F:
+      return object_ops::set_member(state, message);
     case 0x50:
       return apply_unary(state, message, [version](const Avm1Data& operand) {
         return number_value(to_number(operand, version) + 1.0);

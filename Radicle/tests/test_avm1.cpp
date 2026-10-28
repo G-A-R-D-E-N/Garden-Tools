@@ -714,10 +714,11 @@ TEST(Avm1Interpreter, ModuloAndIncrementDecrementMatchTheirTable) {
   }
 }
 
-// Invariant: CallFunction, GetMember and Enumerate must stay refused by their names, since the slice has no ActionScript runtime; a stub that silently succeeds would run the Trace after each and trace nothing.
+// Invariant: CallFunction, CallMethod, NewMethod, Enumerate, InstanceOf and Extends must stay refused by their names, since the slice has no functions or prototypes; a stub that silently succeeds would run the Trace after each and trace nothing.
 TEST(Avm1Interpreter, ObjectAndFunctionOpcodesStayRefusedByName) {
   const std::vector<std::pair<std::uint8_t, std::string_view>> refused = {
-      {0x3D, "CallFunction"}, {0x4E, "GetMember"}, {0x46, "Enumerate"}};
+      {0x3D, "CallFunction"}, {0x52, "CallMethod"}, {0x53, "NewMethod"}, {0x46, "Enumerate"},
+      {0x54, "InstanceOf"},   {0x69, "Extends"}};
   for (const auto& [code, name] : refused) {
     SCOPED_TRACE(name);
     const auto stream = decode(cat({rec(code, {}), rec(0x26, {}), Bytes{0x00}}));

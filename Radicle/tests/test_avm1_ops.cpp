@@ -206,6 +206,15 @@ TEST(Avm1Interpreter, TypeOfNamesEachDataKind) {
        cat({push_text("1"), rec(0x44, {}), rec(0x26, {}), Bytes{0x00}}),
        Avm1RunStatus::Ok,
        {"string"}},
+      {"object",
+       cat({push_int(0), push_text("Object"), rec(0x40, {}), rec(0x44, {}), rec(0x26, {}),
+            Bytes{0x00}}),
+       Avm1RunStatus::Ok,
+       {"object"}},
+      {"array",
+       cat({push_int(0), rec(0x42, {}), rec(0x44, {}), rec(0x26, {}), Bytes{0x00}}),
+       Avm1RunStatus::Ok,
+       {"object"}},
   };
   for (const TableRow& row : rows) {
     SCOPED_TRACE(row.name);
