@@ -653,7 +653,7 @@ Avm1RunStatus execute_action(Avm1Run& run, const Avm1Block& block, const Avm1Act
       return Avm1RunStatus::Ok;
     case 0x8E:
     case 0x9B:
-      return function_ops::define_function(block, state, action, next, message);
+      return function_ops::define_function(run, block, action, next);
     case 0x96:
       return push_values(std::get<Avm1Push>(action.payload), state, block, message);
     case 0x99:

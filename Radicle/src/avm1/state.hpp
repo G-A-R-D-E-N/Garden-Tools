@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -45,6 +46,7 @@ struct Avm1Run {
   Avm1Result& result;
   std::size_t max_steps;
   std::size_t depth{0};
+  std::map<std::size_t, std::shared_ptr<const Avm1FunctionBody>> functions;
 };
 
 Avm1RunStatus run_block(Avm1Run& run, const Avm1Block& block);

@@ -18,7 +18,7 @@ namespace {
 
 using text_ops::to_text;
 
-constexpr std::size_t kMaxCallDepth = 256;
+constexpr std::size_t kMaxCallDepth = 64;
 constexpr std::uint16_t kPreloadThis = 0x01;
 constexpr std::uint16_t kPreloadArguments = 0x04;
 constexpr std::uint16_t kPreloadSuper = 0x10;
@@ -229,23 +229,28 @@ Avm1RunStatus define_local2(const Avm1Block& block, Avm1State& state, std::strin
   return Avm1RunStatus::Ok;
 }
 
-Avm1RunStatus define_function(const Avm1Block& block, Avm1State& state, const Avm1Action& action,
-                              std::size_t& next, std::string& message) {
+Avm1RunStatus define_function(Avm1Run& run, const Avm1Block& block, const Avm1Action& action,
+                              std::size_t& next) {
   const auto& header = std::get<Avm1Function>(action.payload);
-  auto body = std::make_shared<Avm1FunctionBody>();
-  body->header = header;
-  body->end_offset = action.offset + action.length + header.body_size;
+  const std::size_t end_offset = action.offset + action.length + header.body_size;
   const auto first = block.actions.begin() + static_cast<std::ptrdiff_t>(next);
   const auto last = std::lower_bound(
-      first, block.actions.end(), body->end_offset,
+      first, block.actions.end(), end_offset,
       [](const Avm1Action& record, std::size_t offset) { return record.offset < offset; });
-  body->actions.assign(first, last);
   next = static_cast<std::size_t>(last - block.actions.begin());
-  Avm1Data value{.kind = Avm1DataKind::Function, .function = std::move(body)};
+  auto& body = run.functions[action.offset];
+  if (body == nullptr) {
+    auto built = std::make_shared<Avm1FunctionBody>();
+    built->header = header;
+    built->end_offset = end_offset;
+    built->actions.assign(first, last);
+    body = std::move(built);
+  }
+  Avm1Data value{.kind = Avm1DataKind::Function, .function = body};
   if (header.name.empty()) {
-    state.stack.push_back(std::move(value));
+    run.state.stack.push_back(std::move(value));
   } else {
-    declare_slot(block, state, header.name) = std::move(value);
+    declare_slot(block, run.state, header.name) = std::move(value);
   }
   return Avm1RunStatus::Ok;
 }

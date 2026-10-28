@@ -78,7 +78,7 @@ Bytes define_v1(std::string_view name, std::initializer_list<std::string_view> p
     append(header, str(param));
   }
   append(header, le16(static_cast<std::uint16_t>(body.size())));
-  return rec(0x9B, header);
+  return cat({rec(0x9B, header), body});
 }
 
 Bytes parameter2(std::uint8_t register_index, std::string_view name) {
@@ -87,8 +87,9 @@ Bytes parameter2(std::uint8_t register_index, std::string_view name) {
 
 Bytes define_v2(std::string_view name, std::uint16_t count, std::uint8_t registers,
                 std::uint16_t flags, const Bytes& params, const Bytes& body) {
-  return rec(0x8E, cat({str(name), le16(count), Bytes{registers}, le16(flags), params,
-                        le16(static_cast<std::uint16_t>(body.size()))}));
+  return cat({rec(0x8E, cat({str(name), le16(count), Bytes{registers}, le16(flags), params,
+                              le16(static_cast<std::uint16_t>(body.size()))})),
+              body});
 }
 
 fo4::avm1::Avm1Stream decode(const Bytes& input) {
@@ -143,18 +144,18 @@ TEST(Avm1Interpreter, DefineFunctionCallsWithArgsAndReturnsItsValue) {
   const auto result = fo4::avm1::execute_actions(stream);
   ASSERT_TRUE(result.ok()) << result.message;
   EXPECT_EQ(result.trace, (std::vector<std::string>{"3"}));
-  EXPECT_EQ(result.steps, 10u);
+  EXPECT_EQ(result.steps, 11u);
   ASSERT_EQ(result.variables.count("sub"), 1u);
   EXPECT_EQ(result.variables.at("sub").kind, Avm1DataKind::Function);
 }
 
-TEST(Avm1Interpreter, RecursiveFactorialReturnsOneHundredTwentyInSeventyOneSteps) {
+TEST(Avm1Interpreter, RecursiveFactorialReturnsOneHundredTwentyInSeventyTwoSteps) {
   const auto stream = decode(factorial_program());
   ASSERT_TRUE(stream.ok()) << stream.message;
   const auto result = fo4::avm1::execute_actions(stream);
   ASSERT_TRUE(result.ok()) << result.message;
   EXPECT_EQ(result.trace, (std::vector<std::string>{"120"}));
-  EXPECT_EQ(result.steps, 71u);
+  EXPECT_EQ(result.steps, 72u);
   const auto limited = fo4::avm1::execute_actions(stream, 70);
   EXPECT_EQ(limited.status, Avm1RunStatus::StepLimit);
   EXPECT_EQ(limited.opcode, 0x26);
@@ -188,7 +189,7 @@ TEST(Avm1Interpreter, DefineFunction2PreloadsThisAndMapsParametersToRegisters) {
   const auto result = fo4::avm1::execute_actions(stream);
   ASSERT_TRUE(result.ok()) << result.message;
   EXPECT_EQ(result.trace, (std::vector<std::string>{"12"}));
-  EXPECT_EQ(result.steps, 20u);
+  EXPECT_EQ(result.steps, 21u);
 }
 
 TEST(Avm1Interpreter, DefineLocalShadowsTheGlobalForOneCall) {
@@ -224,9 +225,27 @@ TEST(Avm1Interpreter, UnboundedRecursionStopsAtTheCallDepthLimit) {
   const auto result = fo4::avm1::execute_actions(stream);
   EXPECT_EQ(result.status, Avm1RunStatus::ResourceLimit);
   EXPECT_EQ(result.opcode, 0x3D);
-  EXPECT_EQ(result.steps, 515u);
-  EXPECT_NE(result.message.find("call depth of 256"), std::string::npos) << result.message;
+  EXPECT_EQ(result.steps, 131u);
+  EXPECT_NE(result.message.find("call depth of 64"), std::string::npos) << result.message;
   EXPECT_TRUE(result.trace.empty());
+}
+
+TEST(Avm1Interpreter, DefineFunctionRunTwiceSkipsItsBodyAndReusesIt) {
+  const Bytes inner = define_v1("inner", {}, cat({push({int_value(9)}), rec(0x3E, {})}));
+  const Bytes outer_body = cat({
+      inner,
+      push({int_value(0), text_value("inner")}), rec(0x3D, {}), push({int_value(1)}),
+      rec(0x0A, {}), rec(0x3E, {}),
+  });
+  const Bytes call_outer =
+      cat({push({int_value(0), text_value("outer")}), rec(0x3D, {}), rec(0x26, {})});
+  const Bytes input =
+      cat({define_v1("outer", {}, outer_body), call_outer, call_outer, Bytes{0x00}});
+  const auto stream = decode(input);
+  ASSERT_TRUE(stream.ok()) << stream.message;
+  const auto result = fo4::avm1::execute_actions(stream);
+  ASSERT_TRUE(result.ok()) << result.message;
+  EXPECT_EQ(result.trace, (std::vector<std::string>{"10", "10"}));
 }
 
 TEST(Avm1Interpreter, FunctionRefusalsAreNamedAndTraceNothing) {
