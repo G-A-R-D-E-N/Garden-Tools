@@ -27,9 +27,15 @@ constexpr std::uint8_t kGotoFrame2 = 0x9F;
 constexpr std::array<std::uint8_t, 10> kUnmodelledFlow{0x20, 0x8A, 0x8B, 0x8D, 0x8E,
                                                        0x8F, 0x94, 0x99, 0x9B, 0x9D};
 
+constexpr std::size_t kMaxHops = 64;
+constexpr std::size_t kEntriesPerTick = 4;
+constexpr std::size_t kEntrySlack = 1024;
+
 struct Cursor {
   std::uint32_t frame{0};
   bool playing{true};
+  std::size_t recorded{0};
+  std::size_t budget{0};
 };
 
 bool has_unmodelled_flow(const std::vector<avm1::Avm1Action>& actions) {
@@ -53,7 +59,7 @@ std::optional<double> number_of(const avm1::Avm1Value& value) {
 }
 
 std::optional<std::uint32_t> frame_number(double value) {
-  if (!(value >= 1.0 && value <= 4294967295.0 && std::floor(value) == value)) {
+  if (!(value >= 1.0 && value <= 65535.0 && std::floor(value) == value)) {
     return std::nullopt;
   }
   return static_cast<std::uint32_t>(value);
@@ -105,20 +111,28 @@ void append_controls(const std::vector<avm1::Avm1Action>& actions, std::vector<F
   }
 }
 
-void enter(Playhead& head, std::uint32_t from, std::uint32_t to, std::uint32_t tick) {
-  const std::uint32_t first = to > from ? from + 1 : to;
+void enter(Playhead& head, Cursor& cursor, std::uint32_t to, std::uint32_t tick) {
+  const std::uint32_t first = to > cursor.frame ? cursor.frame + 1 : to;
   for (std::uint32_t frame = first; frame <= to; ++frame) {
-    head.entries[frame].push_back(tick);
+    std::vector<std::uint32_t>& ticks = head.entries[frame];
+    if (ticks.empty() || ticks.back() != tick) {
+      ticks.push_back(tick);
+      ++cursor.recorded;
+    }
   }
 }
 
 bool land(const FrameControls& controls, std::uint32_t tick, std::uint32_t target, Cursor& cursor,
           Playhead& head) {
   const auto count = static_cast<std::uint32_t>(controls.size());
+  const std::size_t max_hops = std::min(controls.size() + 1, kMaxHops);
   bool moved = false;
-  for (std::size_t hop = 0; hop <= controls.size(); ++hop) {
+  for (std::size_t hop = 0; hop < max_hops; ++hop) {
     if (target != cursor.frame) {
-      enter(head, cursor.frame, target, tick);
+      if (cursor.recorded >= cursor.budget) {
+        return moved;
+      }
+      enter(head, cursor, target, tick);
       cursor.frame = target;
       moved = true;
     }
@@ -185,12 +199,18 @@ FrameControls collect_frame_controls(const std::vector<SwfTag>& tags) {
 }
 
 Playhead simulate_playhead(const FrameControls& controls, std::uint32_t ticks) {
+  if (std::all_of(controls.begin(), controls.end(),
+                  [](const std::vector<FrameControl>& frame) { return frame.empty(); })) {
+    return {};
+  }
   const auto count = static_cast<std::uint32_t>(controls.size());
   Playhead head;
   head.entries.resize(count);
   head.frame_at.reserve(ticks);
   head.entries[0].push_back(0);
   Cursor cursor;
+  cursor.recorded = 1;
+  cursor.budget = kEntriesPerTick * ticks + kEntrySlack;
   land(controls, 0, 0, cursor, head);
   head.frame_at.push_back(cursor.frame);
   for (std::uint32_t tick = 1; tick < ticks; ++tick) {

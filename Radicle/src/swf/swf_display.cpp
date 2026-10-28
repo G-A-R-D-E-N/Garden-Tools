@@ -231,10 +231,18 @@ detail::FrameControls controls_for(const std::vector<SwfTag>& tags, std::size_t 
 }
 
 std::uint32_t displayed_frame(const LocalTimeline& timeline, std::uint32_t age) {
+  if (timeline.playhead.frame_at.empty()) {
+    const auto count = static_cast<std::uint32_t>(timeline.frames.size());
+    return count <= 1 ? 0 : age % count;
+  }
   return timeline.playhead.frame_at[age];
 }
 
 std::uint32_t entry_age(const LocalTimeline& timeline, std::uint32_t age, std::uint32_t frame) {
+  if (timeline.playhead.frame_at.empty()) {
+    const auto count = static_cast<std::uint32_t>(timeline.frames.size());
+    return count <= 1 ? 0 : age - age % count + frame;
+  }
   const auto& entries = timeline.playhead.entries[frame];
   const auto after = std::upper_bound(entries.begin(), entries.end(), age);
   return after == entries.begin() ? 0 : *(after - 1);

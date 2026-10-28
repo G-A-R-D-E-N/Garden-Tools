@@ -385,4 +385,22 @@ TEST(SwfFrameControl, AStopBehindABranchIsNotAppliedToTheClip) {
             (std::vector<std::uint32_t>{0, 1, 2, 0, 1}));
 }
 
+TEST(SwfFrameControl, ThreeFrameGotoCycleOverLongPlaybackKeepsTheModuloRow) {
+  const auto cycle = sprite_tag(9, 3, with_show_frames({
+                                          {{26, place_named(1, 5, "Marker")},
+                                           {12, script({0x81, 0x02, 0x00, 0x01, 0x00, 0x06})}},
+                                          {{12, script({0x81, 0x02, 0x00, 0x02, 0x00, 0x06})}},
+                                          {{12, script({0x81, 0x02, 0x00, 0x00, 0x00, 0x06})}},
+                                      }));
+  std::vector<Frame> root(1200);
+  root[0] = {{39, cycle}, {26, place_named(1, 9, "Art")}};
+  const auto display = display_of(movie_of(1200, with_show_frames(root)));
+  ASSERT_EQ(display.status, SwfTimelineStatus::ok) << display.message;
+  std::vector<std::uint32_t> expected;
+  for (std::uint32_t tick = 0; tick < 1200; ++tick) {
+    expected.push_back(tick % 3);
+  }
+  EXPECT_EQ(frames_of_row(display.timelines[0], "Art/Marker"), expected);
+}
+
 }  // namespace
