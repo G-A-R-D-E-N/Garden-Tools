@@ -324,6 +324,32 @@ struct SwfJpegTables {
   std::size_t size{0};
 };
 
+struct SwfFilter {
+  std::uint8_t id{0};
+  std::uint32_t color{0};
+  std::uint32_t highlight_color{0};
+  std::vector<std::uint32_t> gradient_colors;
+  std::vector<std::uint8_t> gradient_ratios;
+  double blur_x{0.0};
+  double blur_y{0.0};
+  double angle{0.0};
+  double distance{0.0};
+  double strength{0.0};
+  bool inner{false};
+  bool knockout{false};
+  bool composite_source{false};
+  bool on_top{false};
+  std::uint8_t passes{0};
+  std::uint8_t matrix_columns{0};
+  std::uint8_t matrix_rows{0};
+  float divisor{0.0f};
+  float bias{0.0f};
+  std::vector<float> matrix;
+  std::uint32_t default_color{0};
+  bool clamp{false};
+  bool preserve_alpha{false};
+};
+
 struct SwfPlacement {
   std::uint16_t depth{0};
   bool move{false};
@@ -335,7 +361,7 @@ struct SwfPlacement {
   std::optional<std::string> name;
   std::optional<std::uint16_t> clip_depth;
   std::optional<std::string> class_name;
-  std::uint16_t filter_count{0};
+  std::vector<SwfFilter> filters;
   std::optional<std::uint8_t> blend_mode;
   std::optional<std::uint8_t> bitmap_cache;
   std::optional<bool> visible;

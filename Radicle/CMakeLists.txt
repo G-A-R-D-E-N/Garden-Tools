@@ -960,6 +960,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_swf_tags.cpp
     tests/test_swf_plan.cpp
     tests/test_swf_place.cpp
+    tests/test_swf_place_filters.cpp
     tests/test_swf_display.cpp
     tests/test_swf_edit.cpp
     tests/test_swf_edit_text.cpp
