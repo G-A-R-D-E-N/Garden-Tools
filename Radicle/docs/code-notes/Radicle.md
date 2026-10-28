@@ -5432,7 +5432,7 @@ The interpreter could execute synthetic methods but not a real script initialize
 
 **Probe and lenient limits.** `Radicle/include/fo4/avm2/interpreter.hpp:InterpreterLimits::lenient_builtins` is the probe mode: an unbound native returns undefined, an unbound method call on a builtin instance returns undefined, a read or call on a nullish value returns undefined and a non-function call target returns undefined, all where the strict mode reports NotImplemented, CannotCall or NullReference. That is how `Radicle/tests/test_avm2_scripts_real.cpp` reaches the opcodes after the first native call; it walks every `Programs/*.swf` in `Fallout4 - Interface.ba2`, parses each DoABC2 block, links one runtime per movie, runs every script initializer with a 50,000-instruction budget, records link failures, unbound-native stops and other messages as properties, and fails only when a script hits an opcode the interpreter does not implement (the R2 exit criterion). Strict mode keeps the refusal semantics for ordinary use. The new unit tests are in `Radicle/tests/test_avm2_interpreter.cpp`: the initializer receiver is the global object, an unresolved `flash.display::Sprite` becomes a class object, an unbound native refuses strictly and returns undefined leniently, a thrown value is caught by a matching region and the handler returns 9, and a handler whose type does not match the thrown string leaves the exception uncaught.
 
-**Still open for R2/R3.** `getouterscope` and the E4X opcodes remain NotImplemented; `callstatic`/`callmethod` are unused by the corpus but unimplemented; closures capture scopes but not activation locals (the corpus compiler copies captured locals into the activation scope's slots explicitly, so this has not blocked the initializers yet); and the builtin classes are bound in R3 (see the R3 sections below). The probe's data-runner output is the evidence for the opcode criterion; nothing was built locally.
+**Still open for R2/R3.** `getouterscope` in a method with no captured scope (a class method) and the E4X opcodes remain NotImplemented, see `Radicle/src/avm2/interpreter_property.cpp:Interpreter::outer_scope_value`; `callstatic`/`callmethod` are implemented in `Radicle/src/avm2/interpreter_property.cpp:Interpreter::call_indexed` but unused by the corpus, and the verifier still rejects `callmethod` in user bytecode (see the tail section); closures capture scopes but not activation locals (the corpus compiler copies captured locals into the activation scope's slots explicitly, so this has not blocked the initializers yet); and the builtin classes are bound in R3 (see the R3 sections below). The probe's data-runner output is the evidence for the opcode criterion; nothing was built locally.
 
 ## R3 native builtin foundation: natives, boxing and core classes (#807 R3)
 
@@ -7852,3 +7852,55 @@ Test regressions, in `Radicle/tests/test_swf_display.cpp`: `SwfFrameSvg.ASlashIn
 ## Radicle/src/avm1/interpreter.cpp:execute_action (MBCharToAscii 0x36 and MBAsciiToChar 0x37)
 
 MBCharToAscii (0x36) pops one value, converts it with `to_text` at the movie's version, and pushes `Radicle/src/avm1/text_ops.cpp:first_code_point` of the result, so the whole first UTF-8 code point counts at every SWF version and empty text pushes 0. MBAsciiToChar (0x37) pops one value, takes `to_uint32` (truncation toward zero, wrap modulo 2^32, NaN and infinity as 0), keeps the low 16 bits and pushes `Radicle/src/avm1/text_ops.cpp:encode_code_unit` of them, so the result is UTF-8 at every version. The code point read and the 16-bit wrap are from the SWF spec as recalled, unverified; no SWF spec mirror was available on the development machine to check them. Units 0xD800 to 0xDFFF encode as three-byte sequences, which is not valid UTF-8; this is a known gap, not checked against Flash. Regression: a byte read for 0x36 traces 240 on the U+1F600 row instead of 128512, and an unmasked 0x37 encodes 65601 as a malformed sequence instead of "A". Tests: `Radicle/tests/test_avm1_ops.cpp:MultibyteCharOpcodesUseCodePointsAtEveryVersion` and the two underflow rows for 0x36 and 0x37 in `Radicle/tests/test_avm1_ops.cpp:NewOperatorsRefuseAShortStack`.
+
+## Radicle/src/avm2/interpreter_property.cpp:Interpreter::call_indexed
+
+callmethod (0x43) and callstatic (0x44) pop the argument count (second operand) and the receiver, box a primitive receiver, and fail with NullReference ("<mnemonic> needs an object receiver") for null. callmethod reads its first operand as a dispatch id and resolves it over the receiver's instance class and its super chain, through `Radicle/src/avm2/class.cpp:Class::resolve_dispatch_trait`. callstatic needs a class receiver (ObjectKind::Class, else CannotCall "needs a class receiver"), runs the class initializer through initialize_class_value, then reads its first operand as a method_info index and looks it up only among the class's own class traits, through `Radicle/src/avm2/class.cpp:Class::find_own_method_trait`; the super chain is not searched for callstatic. A missing trait is CannotCall "has no method N on this receiver". The method runs through invoke with the receiver as this and no scope override. If the method returns its receiver, the result is replaced with the receiver Value itself, so a returned this is the caller's own handle; this is the intent, not checked against avmplus, whose source was not available on this machine.
+
+## Radicle/src/avm2/interpreter_property.cpp:Interpreter::outer_scope_value
+
+getouterscope (0x67) reads the captured scope list held by Frame::outer_scope (set in `Radicle/src/avm2/interpreter.cpp:Interpreter::invoke`), indexed directly, not through Frame::scopes. Only closures carry a captured scope, because newfunction is the only place it is recorded. A method with no captured scope (a class method, since newclass does not record one) returns NotImplemented "getouterscope needs a closure's captured outer scope; this method has none". Supporting that needs newclass to set captured_scope on every method FunctionObject and invoke's scope logic to change, a restructure outside this change, so it stays refused. An index at or past the captured size is ScopeUnderflow "getouterscope N is outside the M-entry captured outer scope".
+
+## Radicle/src/avm2/interpreter.cpp:Interpreter::invoke
+
+invoke sets `frame.outer_scope = &function.captured_scope()` next to owner_class. The pointer borrows the FunctionObject's vector; the frame is local to invoke and execute_frame returns before invoke does, and the caller holds the FunctionObject for the call, so the pointer is valid for the frame's life.
+
+## Radicle/src/avm2/class.cpp:Class::resolve_dispatch_trait
+
+Walks the class and its super chain and returns the first Method trait whose dispatch_id matches, so a subclass override shadows its base. Used by callmethod in `Radicle/src/avm2/interpreter_property.cpp:Interpreter::call_indexed`. It matches dispatch ids, not method_info indices.
+
+## Radicle/src/avm2/class.cpp:Class::find_own_method_trait
+
+Returns the first Method trait in this class's own class_traits whose method_index matches; it does not walk the super chain or the instance traits. Used by callstatic in `Radicle/src/avm2/interpreter_property.cpp:Interpreter::call_indexed`.
+
+## Radicle/src/abc/abc_verify.cpp:verify_body_opcodes
+
+Conflict, for the lead to decide. Lines 343 to 346 of `verify_body_opcodes` reject callmethod in user bytecode with "callmethod is not permitted in user bytecode". The interpreter does not run the verifier, so the new callmethod case in `Radicle/src/avm2/interpreter_dispatch_b.inc` executes bytecode the verifier would refuse. The brief asked for callmethod to be implemented; whether the verifier policy should change, or callmethod stay refused in user code, is open.
+
+## Radicle/src/avm2/interpreter.cpp:Interpreter::execute_frame
+
+Opcode census from a source scan (not compiled or run). Named opcodes with no case in `interpreter_dispatch_a.inc` or `interpreter_dispatch_b.inc` fall to the default, which returns NotImplemented "opcode X is not implemented yet". Totals: 169 named, 138 dispatched, 31 not dispatched. The 31 are: dxns 0x06, dxnslate 0x07, hasnext 0x1F, pushnamespace 0x31, li8 0x35, li16 0x36, li32 0x37, lf32 0x38, lf64 0x39, si8 0x3A, si16 0x3B, si32 0x3C, sf32 0x3D, sf64 0x3E, sxi1 0x50, sxi8 0x51, sxi16 0x52, getdescendants 0x59, finddef 0x5F, setpropertylate 0x69, deletepropertylate 0x6B, getglobalslot 0x6E, setglobalslot 0x6F, esc_xelem 0x71, esc_xattr 0x72, checkfilter 0x78, coerce_b 0x81, coerce_i 0x83, coerce_d 0x84, coerce_u 0x88, coerce_o 0x89. After this change the only NotImplemented in the dispatch is that default fallback.
+
+## Radicle/tests/test_avm2_interpreter.cpp:CallstaticRunsAClassMethodWithTheClassAsThis
+
+Detects callstatic on the class from newclass failing to find method_info 0 among the class's own traits, or running it with a receiver other than the class object. The test expects the returned value to be the Holder class object, the this that the method returns from getlocal0.
+
+## Radicle/tests/test_avm2_interpreter.cpp:CallmethodDispatchesByDispatchIdOnTheInstance
+
+Detects callmethod on a constructed Holder instance failing to resolve dispatch id 1 through the instance class to the scale trait, or dropping the argument. The method returns its argument, so the expected int 4 is the pushed argument.
+
+## Radicle/tests/test_avm2_interpreter.cpp:CallstaticRefusesANullReceiver
+
+Detects callstatic on a null receiver dereferencing null instead of failing. The expected result is NullReference with "callstatic" in the message.
+
+## Radicle/tests/test_avm2_scope_depth.cpp:GetouterscopeReadsTheScopeCapturedByNewfunction
+
+Detects getouterscope 1 in a closure failing to read the captured scope, or reading the wrong entry. Known limit: the caller's scope stack has the same entry at index 1 (obj{value:7}), so this test alone does not separate the captured scope from the call-site scope.
+
+## Radicle/tests/test_avm2_scope_depth.cpp:GetouterscopeRefusesAnIndexPastTheCapturedScope
+
+Detects an out-of-range getouterscope (index 1 with a one-entry captured scope) returning a value or undefined instead of ScopeUnderflow with "getouterscope" in the message.
+
+## Radicle/tests/test_avm2_scope_depth.cpp:GetouterscopeRefusesAMethodWithoutACapturedScope
+
+Detects getouterscope in a script init method, which has no captured scope, returning a stale or null value instead of NotImplemented with "getouterscope" in the message.

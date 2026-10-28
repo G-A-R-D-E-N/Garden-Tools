@@ -396,6 +396,67 @@ ExecutionResult Interpreter::call_property(Frame& frame, Object& receiver,
                 borrowed_object(receiver), arguments, {}, depth);
 }
 
+ExecutionResult Interpreter::call_indexed(Frame& frame, const abc::AbcInstruction& instruction,
+                                          std::size_t depth) {
+  const std::string name = instruction.mnemonic;
+  const std::uint32_t index = operand_at(instruction, 0);
+  std::vector<Value> arguments;
+  std::string message;
+  InterpreterStatus status = pop_arguments(frame, operand_at(instruction, 1), arguments, message);
+  Value receiver;
+  if (status == InterpreterStatus::Ok) {
+    status = pop(frame, receiver, message);
+  }
+  if (status != InterpreterStatus::Ok) {
+    return fail(status, message);
+  }
+  if (!receiver.is_object()) {
+    receiver = box(receiver);
+  }
+  if (!receiver.is_object()) {
+    return fail(InterpreterStatus::NullReference, name + " needs an object receiver");
+  }
+  const Trait* trait = nullptr;
+  if (instruction.opcode == op::k_callmethod) {
+    const Class* klass = receiver.as_object()->instance_class();
+    trait = klass == nullptr ? nullptr : klass->resolve_dispatch_trait(index);
+  } else {
+    if (receiver.as_object()->kind() != ObjectKind::Class) {
+      return fail(InterpreterStatus::CannotCall, name + " needs a class receiver");
+    }
+    ExecutionResult initialized = initialize_class_value(receiver, depth);
+    if (!initialized.ok()) {
+      return initialized;
+    }
+    const Class* klass = static_cast<const ClassObject&>(*receiver.as_object()).represented_class();
+    trait = klass == nullptr ? nullptr : klass->find_own_method_trait(index);
+  }
+  if (trait == nullptr || trait->function == nullptr) {
+    return fail(InterpreterStatus::CannotCall,
+                name + " has no method " + std::to_string(index) + " on this receiver");
+  }
+  ExecutionResult nested = invoke(*trait->function, receiver, std::move(arguments), {}, depth);
+  if (nested.ok() && nested.value.is_object() && nested.value.as_object() == receiver.as_object()) {
+    nested.value = receiver;
+  }
+  return nested;
+}
+
+ExecutionResult Interpreter::outer_scope_value(const Frame& frame, std::uint32_t index) const {
+  if (frame.outer_scope == nullptr || frame.outer_scope->empty()) {
+    return fail(InterpreterStatus::NotImplemented,
+                "getouterscope needs a closure's captured outer scope; this method has none");
+  }
+  if (index >= frame.outer_scope->size()) {
+    return fail(InterpreterStatus::ScopeUnderflow,
+                "getouterscope " + std::to_string(index) + " is outside the " +
+                    std::to_string(frame.outer_scope->size()) + "-entry captured outer scope");
+  }
+  ExecutionResult result;
+  result.value = borrowed_object(*(*frame.outer_scope)[index]);
+  return result;
+}
+
 ExecutionResult Interpreter::construct(Frame& frame, const ClassObject& class_object,
                                        const std::vector<Value>& arguments, std::size_t depth) {
   (void)frame;

@@ -181,6 +181,7 @@ ExecutionResult Interpreter::invoke(const FunctionObject& function, Value this_v
   frame.method_index = function.method_index();
   frame.this_value = std::move(this_value);
   frame.owner_class = function.owner_class();
+  frame.outer_scope = &function.captured_scope();
   if (abc::decode_code(body->code, frame.instructions, body->exceptions) != abc::AbcStatus::Ok) {
     return fail(InterpreterStatus::InvalidArgument,
                 "method " + function.name() + " does not decode");
