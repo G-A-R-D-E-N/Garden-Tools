@@ -383,4 +383,97 @@ TEST(Avm1Interpreter, MultibyteStringOpcodesStayRefusedByName) {
   }
 }
 
+std::vector<std::string> traced(const Bytes& input, std::uint8_t swf_version) {
+  const auto stream = decode(input);
+  EXPECT_TRUE(stream.ok()) << stream.message;
+  const auto result = fo4::avm1::execute_actions(stream, 1000000, swf_version);
+  EXPECT_EQ(result.status, Avm1RunStatus::Ok) << result.message;
+  return result.trace;
+}
+
+struct VersionRow {
+  const char* name;
+  std::uint8_t version;
+  Bytes input;
+  std::vector<std::string> trace;
+};
+
+// Invariant: from SWF 6 CharToAscii reads the first UTF-8 code point and AsciiToChar encodes a 16-bit unit as UTF-8, so chr(256) is U+0100 and ord of it is 256; SWF 5 and version 0 stay byte-wise, so a version-blind UTF-8 rule would trace 233 on the SWF 5 e-acute row.
+TEST(Avm1Interpreter, SwfSixStringsAreUtf8CodePoints) {
+  const std::vector<VersionRow> rows = {
+      {"chr 256 is U+0100 from SWF 6", 6,
+       cat({push_int(256), rec(0x33, {}), rec(0x26, {}), Bytes{0x00}}), {"\xC4\x80"}},
+      {"chr 256 is one NUL byte on SWF 5", 5,
+       cat({push_int(256), rec(0x33, {}), rec(0x26, {}), Bytes{0x00}}), {std::string(1, '\0')}},
+      {"chr keeps the low 16 bits from SWF 6", 6,
+       cat({push_int(65601), rec(0x33, {}), rec(0x26, {}), Bytes{0x00}}), {"A"}},
+      {"chr keeps the low byte on version 0", 0,
+       cat({push_int(322), rec(0x33, {}), rec(0x26, {}), Bytes{0x00}}), {"B"}},
+      {"ord of U+0100 is 256 from SWF 6", 6,
+       cat({push_text("\xC4\x80"), rec(0x32, {}), rec(0x26, {}), Bytes{0x00}}), {"256"}},
+      {"ord of e-acute is 233 from SWF 6", 6,
+       cat({push_text("\xC3\xA9"), rec(0x32, {}), rec(0x26, {}), Bytes{0x00}}), {"233"}},
+      {"ord of the euro sign is 8364 from SWF 6", 6,
+       cat({push_text("\xE2\x82\xAC"), rec(0x32, {}), rec(0x26, {}), Bytes{0x00}}), {"8364"}},
+      {"ord of e-acute is its lead byte 195 on SWF 5", 5,
+       cat({push_text("\xC3\xA9"), rec(0x32, {}), rec(0x26, {}), Bytes{0x00}}), {"195"}},
+      {"ord of e-acute is its lead byte 195 on version 0", 0,
+       cat({push_text("\xC3\xA9"), rec(0x32, {}), rec(0x26, {}), Bytes{0x00}}), {"195"}},
+      {"an invalid lead byte is its own value from SWF 6", 6,
+       cat({push_text("\xFF"), rec(0x32, {}), rec(0x26, {}), Bytes{0x00}}), {"255"}},
+      {"a truncated sequence is its lead byte from SWF 6", 6,
+       cat({push_text("\xC3"), rec(0x32, {}), rec(0x26, {}), Bytes{0x00}}), {"195"}},
+  };
+  for (const VersionRow& row : rows) {
+    SCOPED_TRACE(row.name);
+    EXPECT_EQ(traced(row.input, row.version), row.trace);
+  }
+}
+
+// Invariant: from SWF 7 ToNumber(null) is NaN, while version 0 and SWF 6 keep null as 0, so a version-blind null of 0 would trace 0 on the SWF 7 row.
+TEST(Avm1Interpreter, SwfSevenMakesNullNaN) {
+  const Bytes null_to_number =
+      cat({rec(0x96, Bytes{0x02}), rec(0x4A, {}), rec(0x26, {}), Bytes{0x00}});
+  const Bytes null_plus_one =
+      cat({rec(0x96, Bytes{0x02}), push_int(1), rec(0x0A, {}), rec(0x26, {}), Bytes{0x00}});
+  const std::vector<VersionRow> rows = {
+      {"version 0 keeps null as 0", 0, null_to_number, {"0"}},
+      {"SWF 6 keeps null as 0", 6, null_to_number, {"0"}},
+      {"SWF 7 makes null NaN", 7, null_to_number, {"NaN"}},
+      {"version 0 adds 1 to null as 1", 0, null_plus_one, {"1"}},
+      {"SWF 7 adds 1 to null as NaN", 7, null_plus_one, {"NaN"}},
+  };
+  for (const VersionRow& row : rows) {
+    SCOPED_TRACE(row.name);
+    EXPECT_EQ(traced(row.input, row.version), row.trace);
+  }
+}
+
+// Invariant: from SWF 5 undefined converts to 0 and from SWF 7 to NaN, and Less, Greater and Equals (0x0E) follow that conversion, so an undefined compared with 1 or 0 flips with the version; a version-blind NaN gives false on the SWF 5 rows.
+TEST(Avm1Interpreter, UndefinedIsZeroBeforeSevenAndComparesFollow) {
+  const Bytes undefined_to_number =
+      cat({rec(0x96, Bytes{0x03}), rec(0x4A, {}), rec(0x26, {}), Bytes{0x00}});
+  const Bytes undefined_less_one =
+      cat({rec(0x96, Bytes{0x03}), push_int(1), rec(0x0F, {}), rec(0x26, {}), Bytes{0x00}});
+  const Bytes one_greater_undefined =
+      cat({push_int(1), rec(0x96, Bytes{0x03}), rec(0x67, {}), rec(0x26, {}), Bytes{0x00}});
+  const Bytes undefined_equals_zero =
+      cat({rec(0x96, Bytes{0x03}), push_int(0), rec(0x0E, {}), rec(0x26, {}), Bytes{0x00}});
+  const std::vector<VersionRow> rows = {
+      {"version 0 makes undefined NaN", 0, undefined_to_number, {"NaN"}},
+      {"SWF 5 makes undefined 0", 5, undefined_to_number, {"0"}},
+      {"SWF 7 makes undefined NaN", 7, undefined_to_number, {"NaN"}},
+      {"SWF 5 has undefined less than 1", 5, undefined_less_one, {"true"}},
+      {"SWF 7 has NaN not less than 1", 7, undefined_less_one, {"false"}},
+      {"SWF 5 has 1 greater than undefined", 5, one_greater_undefined, {"true"}},
+      {"SWF 7 has 1 not greater than NaN", 7, one_greater_undefined, {"false"}},
+      {"SWF 5 has undefined equal to 0", 5, undefined_equals_zero, {"true"}},
+      {"SWF 7 has undefined not equal to 0", 7, undefined_equals_zero, {"false"}},
+  };
+  for (const VersionRow& row : rows) {
+    SCOPED_TRACE(row.name);
+    EXPECT_EQ(traced(row.input, row.version), row.trace);
+  }
+}
+
 }  // namespace
