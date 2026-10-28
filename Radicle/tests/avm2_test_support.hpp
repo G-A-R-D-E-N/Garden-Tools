@@ -93,8 +93,13 @@ class CodeBuilder {
   void divide() { op(0xA3); }
   void modulo() { op(0xA4); }
   void negate() { op(0x90); }
+  void negate_i() { op(0xC4); }
   void increment() { op(0x91); }
   void decrement() { op(0x93); }
+  void inclocal(std::uint32_t index) { op_u30(0x92, index); }
+  void declocal(std::uint32_t index) { op_u30(0x94, index); }
+  void inclocal_i(std::uint32_t index) { op_u30(0xC2, index); }
+  void declocal_i(std::uint32_t index) { op_u30(0xC3, index); }
   void bit_or() { op(0xA9); }
   void bit_and() { op(0xA8); }
   void bitxor() { op(0xAA); }
@@ -107,6 +112,7 @@ class CodeBuilder {
   void lessthan() { op(0xAD); }
   void greaterthan() { op(0xAF); }
   void convert_i() { op(0x73); }
+  void convert_u() { op(0x74); }
   void convert_s() { op(0x70); }
   void convert_b() { op(0x76); }
   void coerce(std::uint32_t multiname) { op_multiname(0x80, multiname); }

@@ -5401,7 +5401,7 @@ The interpreter could execute synthetic methods but not a real script initialize
 
 **Probe and lenient limits.** `Radicle/include/fo4/avm2/interpreter.hpp:InterpreterLimits::lenient_builtins` is the probe mode: an unbound native returns undefined, an unbound method call on a builtin instance returns undefined, a read or call on a nullish value returns undefined and a non-function call target returns undefined, all where the strict mode reports NotImplemented, CannotCall or NullReference. That is how `Radicle/tests/test_avm2_scripts_real.cpp` reaches the opcodes after the first native call; it walks every `Programs/*.swf` in `Fallout4 - Interface.ba2`, parses each DoABC2 block, links one runtime per movie, runs every script initializer with a 50,000-instruction budget, records link failures, unbound-native stops and other messages as properties, and fails only when a script hits an opcode the interpreter does not implement (the R2 exit criterion). Strict mode keeps the refusal semantics for ordinary use. The new unit tests are in `Radicle/tests/test_avm2_interpreter.cpp`: the initializer receiver is the global object, an unresolved `flash.display::Sprite` becomes a class object, an unbound native refuses strictly and returns undefined leniently, a thrown value is caught by a matching region and the handler returns 9, and a handler whose type does not match the thrown string leaves the exception uncaught.
 
-**Still open for R2/R3.** `getouterscope` and the E4X opcodes remain NotImplemented; `callstatic`/`callmethod` are unused by the corpus but unimplemented; closures capture scopes but not activation locals (the corpus compiler copies captured locals into the activation scope's slots explicitly, so this has not blocked the initializers yet); and the real builtin classes are external placeholders until R3 binds Object/Array/String/Number/Math/Error/Vector and the native members behind them. The probe's data-runner output is the evidence for the opcode criterion; nothing was built locally.
+**Still open for R2/R3.** `getouterscope` and the E4X opcodes remain NotImplemented; `callstatic`/`callmethod` are unused by the corpus but unimplemented; closures capture scopes but not activation locals (the corpus compiler copies captured locals into the activation scope's slots explicitly, so this has not blocked the initializers yet); and the builtin classes are bound in R3 (see the R3 sections below). The probe's data-runner output is the evidence for the opcode criterion; nothing was built locally.
 
 ## R3 native builtin foundation: natives, boxing and core classes (#807 R3)
 
@@ -5412,8 +5412,6 @@ R2's placeholder classes are replaced by a real native dispatch path and the fir
 **Runtime semantics.** Constructing or calling a builtin class routes through its native constructor (`Interpreter::construct` and the `call` opcode both dispatch it), so `String(x)`/`int(x)`/`Number(x)` behave as conversions and `new Number(1)` produces a number. `box`/`unbox` wrap primitives in their builtin class instances with the primitive payload in `Object::set_primitive`, and the property/call opcodes box a primitive receiver automatically, which is how `"abc".length`, `"abc".charAt(...)` and `int.toString()` work; a boxed string also answers `length` and numeric character indices directly in `get_property`. Plain objects created by `newobject`, `newactivation` and `newcatch` get the Object builtin class through `prepare_plain_object`, so `toString`/`valueOf`/`hasOwnProperty` resolve on ordinary objects.
 
 **Implemented natives.** Object: constructor, toString, valueOf, hasOwnProperty, isPrototypeOf, propertyIsEnumerable. Function: call, apply, toString. Number: constructor, toString (radix 2-36), toFixed, valueOf. int/uint: constructor, toString (radix), valueOf. Boolean: constructor, toString, valueOf. Math: abs, min, max, floor, ceil, round, sqrt, pow, random, sin, cos, tan, atan2, log, exp. Top level: trace (no-op), isNaN, isFinite, parseInt, parseFloat, String/Number/Boolean/int/uint/Object conversions and getTimer (returns 0 until a host tick source exists). `Radicle/tests/test_avm2_builtins.cpp` exercises Math.abs, Math.PI, Math.max, String(41), int primitive toString through boxing, Boolean(0), isNaN and Object.toString through a hand-built script per case; the runtime test that treated Object as an external placeholder now expects the real builtin.
-
-**Still open for R3.** String methods beyond conversion (charAt, charCodeAt, indexOf, substr/substring/slice, split, toUpperCase/toLowerCase, replace, concat, trim, fromCharCode), Array in full (push/pop/shift/unshift/splice/slice/join/concat/indexOf/reverse/sort/forEach/map and the Array constructor), Error and its subclasses, Vector element typing, and the XML/E4X surface are not implemented yet; a call to one of those still reports the unimplemented native through the probe's lenient policy or refuses in strict mode. The next round continues R3 with String and Array, then Error/Vector, and re-runs the corpus probe to measure how far script initializers now get before the first unbound native.
 
 No C ABI change. Nothing was built locally on this branch; CI is the compile evidence.
 
@@ -5428,8 +5426,6 @@ The native dispatch from the previous round now carries the collection and error
 **Error.** `Runtime::install_builtins` now creates Error plus TypeError, ReferenceError, RangeError, SyntaxError, URIError, SecurityError, ArgumentError, EvalError, DefinitionError, VerifyError and UninitializedError, each with `error_construct` as its native constructor and `error_to_string`. The constructor derives the error name from the class object that is passed as the call's receiver (both `construct` and the class-as-function `call` path pass the class object as `self`), stores the optional message argument, and gives the `ErrorObject` its class and prototype. `get_property` answers `name` and `message` from the `ErrorObject` fields, so `new TypeError("x").name` works, and `toString` produces "Name: message" (or just the name when the message is empty).
 
 **Tests.** `Radicle/tests/test_avm2_builtins.cpp` gained String charAt/toUpperCase/indexOf, String split-then-join, Array push length, join, pop, default sort order, Error message rendering and TypeError subclass naming. All are hand-built scripts executed through the interpreter, so they exercise the same boxing, native dispatch, prototype lookup and array element paths the corpus uses.
-
-**Still open for R3.** Vector element typing and concrete `Vector.<T>` classes, Array's other standard members (insertAt/removeAt, some event-style helpers), the remaining Error subclasses' AS1 signatures, XML/XMLList and the E4X opcodes, and the Date/RegExp/Math extras (round/pow-family are in). The corpus probe remains the measurement for script initializers; the next round adds the remaining R3 members the census manifest names and re-checks the probe, then R4 starts the display list.
 
 No C ABI change. Nothing was built locally on this branch; CI is the compile evidence.
 
@@ -5455,8 +5451,6 @@ The display runtime is a new AVM2 object family, not another native trait table.
 
 **Tests.** `Radicle/tests/test_avm2_display.cpp` exercises the runtime end to end: Sprite `x` write/read through setproperty/getproperty, addChild + numChildren, addChildAt + getChildAt identity, a fresh MovieClip reporting frame 1 of 1, Point construction keeping x/y, Dictionary dynamic entries, a C++-built three-frame timeline that advances and wraps and whose labels resolve, a frame-script method observed on the frame it belongs to (returned value 42), and parent/root/contains on a real container tree.
 
-**Still open for R4.** The SWF bridge: reading PlaceObject2/3 and RemoveObject2 from `fo4::swf::build_display_list`/`SwfMovie` into AVM2 display objects, SymbolClass-linked subclasses for placed characters, installing the root timeline and exchanging the host tick for `advance_frame`, plus the stage size/frame rate properties and the `Loader`/`LoaderInfo` surface that R7 owns. The frame lifecycle enter/exit events land with R5's EventDispatcher. Nothing was built locally; CI is the compile evidence.
-
 ## R4 complete: SWF timeline bridge, PlaceObject playback and the host tick (#807 R4)
 
 The display runtime from the previous commit now reads real SWF timelines. `Radicle/include/fo4/avm2/swf_runtime.hpp` exposes `SwfMovieData` (root and sprite timelines as per-frame PlaceObject/RemoveObject rows, frame labels, symbol-class map, document class, stage metrics), and `Radicle/src/avm2/swf_movie_data.cpp` walks the parsed `fo4::swf::SwfFile` tags: PlaceObject/PlaceObject2/PlaceObject3 become placement rows, RemoveObject/RemoveObject2 become removals, ShowFrame ends a frame, FrameLabel names it, SymbolClass fills the character→class map (id 0 is the root document class), and DefineSprite recurses into its child tags so every sprite character gets its own row timeline. No game data is copied; only the tag structure is interpreted, and the bridge reads the already-parsed optional tag fields rather than re-decoding bytes.
@@ -5467,7 +5461,7 @@ The display runtime from the previous commit now reads real SWF timelines. `Radi
 
 **Tests.** `Radicle/tests/test_avm2_swf_runtime.cpp` builds synthetic `SwfFile` tag trees (root timeline with a two-frame sprite character, labels, removals; optional SymbolClass map) and checks: row/label/sprite/stage extraction, stage construction and first-frame placement, the dt accumulator advancing at frame boundaries, child sprite timelines advancing with the parent, SymbolClass choosing the placed character class, and two independent runs producing identical traces.
 
-**Still open for R4/R5.** `Radicle/src/avm2/swf_runtime.cpp:SwfTimelineClip::apply_frame_state` does not yet apply ratio/blend/filter/visible rows to placed objects, or nested sprite clip-depth masks to the snapshot (R8's snapshot format owns those), symbol classes whose superclass is Sprite rather than MovieClip are treated as timeline clips, and the enterFrame/exitFrame hooks plus the Loader/LoaderInfo surface remain R5/R7. Next is R5: EventDispatcher with the capture/target/bubble phases, KeyboardEvent/MouseEvent/focus, ENTER_FRAME through the frame hooks, Timer/TimerEvent and `getTimer` from host dt. Nothing was built locally; CI is the compile evidence.
+**Still open for R4/R5.** `Radicle/src/avm2/swf_runtime.cpp:SwfTimelineClip::apply_frame_state` does not yet apply ratio/blend/filter/visible rows to placed objects, or nested sprite clip-depth masks to the snapshot (R8's snapshot format owns those), symbol classes whose superclass is Sprite rather than MovieClip are treated as timeline clips, and the enterFrame hooks and the Loader/LoaderInfo surface are covered by the R5 and R7 sections below. Nothing was built locally; CI is the compile evidence.
 
 ## R5: EventDispatcher, frame events, keyboard/mouse input and host-clock timers (#807 R5)
 
@@ -5480,8 +5474,6 @@ Events are now a real part of the runtime. `Radicle/include/fo4/avm2/events.hpp`
 **Host clock and input.** `HostClock` never reads the wall clock: `Interpreter::advance_host_time(dt_ms)` is the only way time moves, `getTimer` returns that accumulated time, and each running Timer accumulates dt, fires `timer` every delay and `timerComplete` when repeatCount is reached. `SwfRuntime::advance` advances the host clock by the same dt it feeds the timeline, and `SwfRuntime::key_event`/`mouse_event` turn host input into KeyboardEvent/MouseEvent dispatches on the root clip so input-driven programs work through the ordinary listener path (mouse hit-testing is still the root target; R8's snapshot/host contract owns precise picking).
 
 **Tests.** `Radicle/tests/test_avm2_events.cpp` builds listener methods in hand-assembled ABC that append a tag to a global string and asserts: capture/target/bubble order "ctb" on a parent/child sprite tree, "ct" for a non-bubbling event, stopPropagation on the target producing "cs" and skipping the bubble, a MovieClip dispatching enterFrame then exitFrame as "ex", a Timer with delay 100/repeat 2 firing twice and completing from `advance_host_time(250)` with `getTimer` at 250, the Keyboard class constant A == 65, and host key input reaching a root-clip keyDown listener while `SwfRuntime::advance` moves the host clock.
-
-**Still open for R5/R7.** Focus events are constructed and modelled but focus traversal (stage.focus assignment, FocusEvent dispatch on change) is not wired; mouse events target the root rather than a hit-tested object; `willTrigger`/weak listeners and listener `this` semantics are the simple AS3 shape; Loader/URLLoader dispatch and the host-call/ExternalInterface bridge remain R7. Next round starts R6 (TextField/TextFormat over the decoded fonts) or R7's loading/storage/sound surface, whichever the remaining census rows point at. Nothing was built locally; CI is the compile evidence.
 
 ## R5 completion: hit testing, mouse targets, focus and willTrigger (#807 R5)
 
@@ -5553,14 +5545,6 @@ trip, script-visible text/textWidth/numLines, and appendText plus getLineText th
 `fonts_en.swf`, asserting fonts, layout fonts and total glyph counts are non-zero and that every layout
 font's advance table matches its glyph count.
 
-**Still open for R6/R7.** The text runs are exposed as a C++ model but not yet carried by the R8
-snapshot; DefineText/DefineEditText characters are not instantiated by the SWF bridge yet (script-created
-TextFields and fonts are), word wrap is not applied (explicit newlines only), non-ASCII strings are laid
-out byte-by-byte because the interpreter's strings are still UTF-8 bytes rather than UTF-16, and the
-rendering side needs the font outline data that the decoded offsets allow but does not yet read. Next
-round continues with instantiating DefineEditText/DefineText characters, the UTF-16 string move, or R7's
-loading/storage/sound/host calls. Nothing was built locally; CI is the compile evidence.
-
 ## R5/R6 follow-up: placed bounds, DefineEditText instances, word wrap, UTF-16 layout (#807 R6)
 
 The R5 limit that placed bridge objects had no size is closed. `Radicle/src/avm2/swf_movie_data.cpp:read_swf_movie_data` builds the A6 character model (`Radicle/src/swf/swf_characters.cpp:build_character_model`) and copies every character that carries drawn bounds into `SwfMovieData::character_bounds` (`SwfCharacterBounds` in `Radicle/include/fo4/avm2/swf_runtime.hpp`). `character_bounds_of` converts the RECT from twips: origin is the RECT's `x_min`/`y_min` and width/height are `x_max - x_min` and `y_max - y_min`, each divided by 20. `Radicle/src/avm2/swf_runtime.cpp:apply_character_definition` copies that onto the new `DisplayObject::origin_x`/`origin_y` (set by `DisplayObject::set_origin`) and `width`/`height`, and runs once when the bridge creates the object, so a script's later width write is not overwritten by a frame re-application. Sprites and buttons have no drawn bounds in the model, so they still hit only through their children or not at all. `Radicle/src/avm2/hit_test.cpp:inside_bounds` and `stage_bounds` now test the local box `[origin, origin + size]`, not `[0, size]`, so a shape whose RECT starts at a negative twip still hits at its drawn edge. `Radicle/src/avm2/native_compat.cpp:display_get_bounds` adds the origin to x/y; scale and rotation are still ignored there as before.
@@ -5603,7 +5587,7 @@ Tests: `Radicle/tests/test_abc_text.cpp` renders the synthetic ABC fixture and c
 
 The done-when for phase 5 is byte-identical dump -> assemble -> serialize over every vanilla block. `Radicle/tests/test_abc_asm.cpp` proves the machinery on the synthetic fixture: dump/assemble/serialize equals the original bytes, the assembled model renders the identical text again, an edited pool value survives assemble + serialize, and malformed version lines and unknown opcodes are refused with a line number. `Radicle/tests/test_abc_asm_real.cpp` (FO4_DATA_DIR gated) runs that loop over every DoABC block in every readable `Fallout4 - Interface.ba2` movie and counts parse failures, assemble failures and serialize mismatches, which must all be zero; CI on the data runner is the evidence for the corpus claim.
 
-Still open in phase 5/6: the assembler does not yet recompute or verify `max_stack`, `local_count` and scope depths (they are preserved from the text and left to the flow verifier), it intern new-strings-by-value references only through explicit added pool lines rather than automatic interning, and the write-side C ABI (phase 6) does not exist yet.
+Still open in phase 5/6: the assembler does not yet recompute or verify `max_stack`, `local_count` and scope depths (they are preserved from the text and left to the flow verifier), it intern new-strings-by-value references only through explicit added pool lines rather than automatic interning, and the write-side C ABI is in place (see the phase 6 section below).
 
 ## Radicle/src/abc/abc_asm_code.cpp:assemble_instruction_text (#806 phase 5, instruction text)
 
@@ -5624,8 +5608,6 @@ The runtime now has the host-facing frame contract. `Radicle/include/fo4/avm2/sn
 Tests: `Radicle/tests/test_avm2_snapshot.cpp` builds the synthetic two-frame movie from the timeline bridge and asserts the flattened paths, names, character ids and composed transform of a shape nested in a sprite; that a placed TextField's runs produce glyph positions and advances (two glyphs at x 0 and 6 for the 12pt fallback layout); that two snapshots of the same tree are equal and hash equal; that two independent runs over the same dt sequence produce identical hash sequences; and that the sound queue drains into exactly one snapshot. That hash-sequence comparison is the deterministic record/replay shape the issue's acceptance needs, and the recorded frame hashes can become the checked-in hashes once the corpus movies run end to end.
 
 Still open for R8: the snapshot carries no shape/bitmap reference yet (only the character id; the shape and bitmap bodies are decoded in `fo4/swf`), filters and blend modes are recorded but not populated by the bridge, colour transforms and ratio are not applied to placed objects, the replay/input-recording driver and the C ABI that hands the snapshot to GardenEngine are both superseded (see `## Runtime C ABI and replay driver (#807 R8)`, which cites `Radicle/include/fo4/avm2/replay.hpp` and `Radicle/include/fo4/c_api_runtime.h`); only the GardenEngine-side swap is still open. Next: attach shape/bitmap ids and colour transforms to the bridge, or start R7's Loader/URLLoader/host-call surface.
-Still open for R8: the snapshot carries no shape/bitmap reference yet (only the character id; the shape and bitmap bodies are decoded in `fo4/swf`), filters and blend modes are recorded but not populated by the bridge, ratio is not applied to placed objects (`Radicle/src/avm2/swf_runtime.cpp:SwfTimelineClip::apply_frame_state`), there is no replay/input-recording driver, and the C ABI that hands the snapshot to GardenEngine (plus the GardenEngine-side swap) is not written. Next: attach shape/bitmap ids to `Radicle/src/avm2/swf_runtime.cpp:SwfTimelineClip::apply_frame_state`, or start R7's Loader/URLLoader/host-call surface.
-
 ## Radicle/src/avm2/swf_runtime.cpp:SwfTimelineClip::apply_frame_state move placements (#807 SWF placement fidelity)
 
 A PlaceObject2/3 with the Move flag changes only the fields it carries. `Radicle/src/swf/swf_placement.cpp:decode_place_object2` sets `SwfPlacement::move` from flag 0x01. `Radicle/src/avm2/swf_movie_data.cpp:placement_row` copies it into `SwfPlacementRow::move`, with `has_character` (a character id is present), `has_matrix` (a matrix is present) and the matrix rotate/skew terms `rotate_skew0`/`rotate_skew1`. Before this, the row had no move or presence flag, so a move row was read as character 0. `apply_frame_state` resolved that to Shape and removed and recreated the object at its depth, which reset the transform and dropped the name and the tweened instance.
@@ -5650,7 +5632,7 @@ The runtime now crosses the host boundary. `Radicle/include/fo4/avm2/host.hpp` d
 
 **Tests.** `Radicle/tests/test_avm2_host.cpp` drives a host with an in-memory asset map and a recording host-call hook: ExternalInterface.call forwards method and stringified arguments and returns the host answer (counters included), available reflects the hook, getDefinitionByName resolves a builtin class, getQualifiedClassName reports the rendered class name, URLLoader.load reads a config through the resolver and exposes it as `data`, and Sound.load + Sound.play over a resolved payload queues exactly one Play event that `SwfRuntime::take_snapshot` drains with a registered sound id.
 
-Still open for R7: SharedObject storage is not exposed yet, the loaded movie's ApplicationDomain separation is not modelled, Scaleform bridge calls use the same host-call hook but have no dedicated surface, DefineSound bodies are registered but not decoded to PCM, and the runtime C ABI that carries the host callbacks from GardenEngine does not exist. Next: SharedObject + AMF data, sound playback state in the snapshot, or the runtime C ABI and replay driver.
+Still open for R7 at this point. Later sections close SharedObject storage (`SharedObject and AMF3 storage`), DefineSound PCM decoding (`DefineSound PCM decode and placed colour transforms`) and the runtime C ABI with the replay driver (`Runtime C ABI and replay driver`). ApplicationDomain separation is partial in the slice below (`ApplicationDomainObject`), and a dedicated Scaleform bridge surface is still only the host-call forwarding in `Radicle/include/fo4/avm2/host.hpp`.
 
 ## Incremental linking and movie script execution
 
@@ -5678,8 +5660,7 @@ writes a global, runs `SwfRuntime::create`, and asserts the movie's script execu
 script, expected global value). The document-class constructor path shares the same code but is not yet
 covered by a synthetic class test, and the real Programs corpus is still the next acceptance gate.
 
-Still open: updated atlases/timelines, SharedObject/AMF, LZMA movie compression, and the replay driver
-plus the runtime C ABI that the R8 acceptance needs.
+Still open: updated atlases/timelines. SharedObject/AMF, LZMA movie compression, the replay driver and the runtime C ABI were closed by the sections below (`SharedObject and AMF3 storage`, `Radicle/src/swf/swf_lzma.cpp:lzma_decode_swf`, `Runtime C ABI and replay driver`).
 
 ## ABC write-side C ABI (phase 6)
 
@@ -5689,7 +5670,7 @@ The C# side gains `SwfFile.AbcText(int abc)`, `SwfFile.AssembleAbc(int abc, stri
 
 Tests: `Radicle/tests/test_c_api_swf_edit.cpp` builds a DoABC2 movie from the synthetic ABC fixture, checks the whole-block text has the version and a body, assembles it back byte-identically, edits the first string pool value, applies it, writes the movie, reopens the written bytes and confirms the edit is present in the new dump. `Radicle/tests/test_c_api_swf_real.cpp` runs the same loop on the first `Fallout4 - Interface.ba2` movie that carries an ABC block when `FO4_DATA_DIR` is set: dump, edit a string-pool value, apply, write bytes, reopen and confirm the marker. `Radicle/bindings/csharp/Radicle.Interop.Tests/SwfAbcWriteTests.cs` covers the same two loops through the bindings (a synthetic movie always, the real Interface movie when `FO4_DATA_DIR` is set), so the phase 6 done-when - dump, edit, assemble, write, re-read and confirm the edit - is checked at both the C ABI and the binding level.
 
-Still open in phase 7: LZMA (ZWS) read/write needs a linked LZMA library, and the remaining art bodies (font outlines, sound PCM) are decoded only as far as #807 needed; AVM1 DoAction decode is gated on a corpus check.
+Still open in phase 7: the remaining art bodies are decoded only as far as #807 needed (font outlines are closed by Phase 8 below and sound PCM by the DefineSound section). LZMA (ZWS) read/write is in-house in `Radicle/src/swf/swf_lzma.cpp`, with no linked library. AVM1 DoAction decode: the corpus evidence is in the Phase 7 corpus evidence section below.
 
 ## SharedObject and AMF3 storage (#807 R7)
 
@@ -5699,7 +5680,7 @@ Still open in phase 7: LZMA (ZWS) read/write needs a linked LZMA library, and th
 
 Tests: `Radicle/tests/test_avm2_shared.cpp` runs a two-runtime round trip against an in-memory storage map: a script calls `getLocal("save")`, writes `data.count = 5`, flushes, and the host bytes decode to an AMF3 object whose `count` is 5; a second runtime with the same storage map reads `getLocal("save").data.count` back as 5, with the storage read/write counters checked. A second test confirms `getLocal("bad/name")` returns null without touching storage.
 
-Still open for R7: ApplicationDomain separation for loaded movies, a dedicated Scaleform bridge surface, DefineSound PCM decoding, and the runtime C ABI plus replay driver that R8's acceptance needs. #806's remaining phase 7 items (LZMA read/write, remaining art bodies, AVM1 DoAction) are unchanged.
+Still open for R7 after this: a dedicated Scaleform bridge surface, which is still only the host-call forwarding in `Radicle/include/fo4/avm2/host.hpp`. ApplicationDomain separation is partial in `ApplicationDomainObject` below, and DefineSound PCM decoding and the runtime C ABI with the replay driver are closed below. #806's remaining phase 7 items are in the Phase 7 notes above.
 
 ## Runtime C ABI and replay driver (#807 R8)
 
@@ -7465,6 +7446,33 @@ Base-import roots are copied into `NativeStrings` and pinned with `fixed` in eac
 
 Made `internal` so `PapyrusCompiler.CompileSource` can wrap a handle the native compiler returned. `PexFile.Use` is `internal` for the same reason, for `PapyrusCompiler.Decompile`.
 
+## Radicle/src/avm2/interpreter_ops.cpp:int_range_result (SWF interp gaps L8)
+
+Generic AVM2 `add`, `subtract`, `multiply`, `negate`, `increment` and `decrement` (the non-`_i` opcodes) compute on doubles and return an int32 or uint32 only when the exact result is in that type's range; otherwise they return a Number. So `int.MAX_VALUE + 1` is the Number 2147483648, not a wrapped int. `uint_range_result` does the same for uint32, so `0u - 1u` is -1. The `_i` opcodes (`add_i`, `subtract_i`, `multiply_i`, `increment_i`, `decrement_i`, `inclocal_i`, `declocal_i`) still wrap to int32 on purpose. Covered by `Radicle/src/avm2/interpreter_ops.cpp:int_range_result` through `Avm2Interpreter.AddOfIntsPromotesToANumberOnOverflow`, `Avm2Interpreter.IncrementOfIntMaxPromotesToANumber`, `Avm2Interpreter.SubtractOfUintsPromotesToANumberBelowZero`, `Avm2Interpreter.AddOfUintsPromotesToANumberAboveUintMax` and `Avm2Interpreter.NegateOfIntMinPromotesToANumber`.
+
+## Radicle/src/avm2/interpreter_dispatch_a.inc:k_inclocal and k_declocal (SWF interp gaps L8)
+
+Generic `inclocal` (0x92) and `declocal` (0x94) were decoded but not dispatched, so `i++` on a Number or uint local returned NotImplemented. They now apply `increment_value` and `decrement_value` to the local, so the int32-range rule above applies. Covered by `Avm2Interpreter.IncrementsAndDecrementsANumberLocal`.
+
+## Radicle/src/avm2/interpreter_dispatch_a.inc:k_negate_i (SWF interp gaps L8)
+
+`negate_i` (0xC4) was decoded but not dispatched. It negates through uint32 so the result wraps to int32, as the `_i` family does. Covered by `Avm2Interpreter.NegatesAnIntWithNegateI`.
+
+## Radicle/src/avm2/interpreter_dispatch_a.inc:k_inclocal_i (inclocal_i and declocal_i wrap)
+
+`Radicle/src/avm2/interpreter_dispatch_a.inc:k_inclocal_i` handles `inclocal_i` (0xC2) and `declocal_i` (0xC3). It adds or subtracts 1 in uint32 and converts the result back to int32, so `INT_MAX` wraps to `INT_MIN` and `INT_MIN` to `INT_MAX` without signed overflow. Covered by `Avm2Interpreter.InclocalIWrapsIntMaxToIntMin` and `Avm2Interpreter.DeclocalIWrapsIntMinToIntMax`.
+
+## Radicle/src/avm2/coercion.cpp:string_to_number (SWF interp gaps L8)
+
+After the optional sign, the text must start with a digit or `.`, or it is NaN. `std::from_chars` otherwise accepts `inf`, `infinity` and a second sign, so `Number("inf")` was Infinity and `Number("--5")` was 5. The `Infinity` literal is still handled before this check. Covered by `Avm2Value.RejectsNonEcmaSignedAndInfinityText`.
+
+## Radicle/src/avm2/builtins.cpp:Runtime::install_builtins (SWF interp gaps L8)
+
+`String.prototype.toLocaleUpperCase` and `toLocaleLowerCase` reuse the `toUpperCase` and `toLowerCase` native ids. They are ASCII-only, as those are. `Object.toLocaleString` and `Array.toLocaleString` are not added: Object's would give `[object Object]` for arrays. Covered by `Avm2Builtins.StringToLocaleUpperCaseRaisesAsciiLetters`.
+
+## Radicle/src/avm2/interpreter.cpp:Interpreter::execute_frame (SWF interp gaps L8, deferred opcodes)
+
+Decoder-valid opcodes still returning NotImplemented, not implemented in L8: `hasnext` (0x1F, needs the key-list code of `hasnext2` factored out first), `pushnamespace` (0x31, needs a namespace Value kind), `getglobalslot` and `setglobalslot` (0x6E/0x6F, legacy), `setpropertylate` and `deletepropertylate` (0x69/0x6B), `finddef` (0x5F), and the `coerce_b/i/d/u/o` names (0x81/0x83/0x84/0x88/0x89, not confirmed against avmplus). E4X (`getdescendants`, `dxns`, `dxnslate`, `esc_xelem`, `esc_xattr`, `checkfilter`) is out of scope. Alchemy memory ops (`li8` through `sf64`, `sxi1` through `sxi16`) are not used by SWF UI code. Pinned avmplus sources were not found at `%TEMP%\abc-ref`, so the semantics above come from the AVM2 overview and not from the reference.
 ## Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION (ABI 78)
 
 ABI 77 to 78 is one bump for `radicle_runtime_open_movie_with_bgs` in `Radicle/include/fo4/c_api_runtime.h`, the only new export. The pin is now `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsSeventyEight`. `Radicle/bindings/csharp/Radicle.Interop/RadicleNative.g.cs` was regenerated, and it changed only `CompiledAbiVersion`, because `c_api_runtime.h` is not in `Radicle/bindings/csharp/tools/generate_interop.py:HEADERS`. The runtime exports are hand-declared, so the new DllImport is `Radicle/bindings/csharp/Radicle.Interop/RuntimeNative.cs:RadicleNative.RuntimeOpenMovieWithBgs`.
@@ -7492,3 +7500,25 @@ Every verb runs `Radicle/src/c_api_swf_verbs.cpp:commit_edit`. It edits a copy o
 The set-placement-depth verb was skipped. The C++ offers only `replace_placement_depth`, a body splice with no collision or mask proof, so `radicle_swf_reassign_instance_depth` is the proven depth edit.
 
 Not built or run locally. CI is the first compile and run.
+
+## Radicle/src/swf/swf_svg.cpp:shape_to_svg (SWF shape to SVG)
+
+Fill rule is `nonzero`. `fill_edges` gives every edge its fill on the left: fill0 edges keep their direction and fill1 edges are reversed. With every region's boundary directed the same way, the winding number is positive inside a filled region and zero outside, so nonzero paints the union of the regions of one fill. Evenodd would cut holes where two regions of the same fill overlap, which the SWF fill model allows.
+
+Edge reversal: `Radicle/src/swf/swf_svg.cpp:reversed` swaps the start and end of an edge. A quadratic keeps its control point, so the reversed curve is the same curve.
+
+Loop chaining: `Radicle/src/swf/swf_svg.cpp:loops_text` joins the edges of one fill into closed loops by exact endpoint match and closes each with `Z`. Separate subpaths would each be closed by the fill with a chord, and those chords do not cancel when a boundary is split at a style change, so the fill would be wrong. A chain that never returns to its start is emitted open. The search is linear per step, so one fill is O(n^2) in its edge count. Upgrade to a start-point index if export time matters on large shapes.
+
+Style state: `Radicle/src/swf/swf_shape.cpp:read_records` sets `has_fill0`, `has_fill1` and `has_line` on each style change from SHAPE flag bits 0x02, 0x04 and 0x08. `Radicle/src/swf/swf_svg.cpp:trace_edges` then applies a flagged index even when it is 0, so an explicit 0 turns that side off for later edges, and leaves an unflagged index unchanged. `Radicle/src/swf/swf_write.cpp:write_style_change` writes a flag for the same condition, so a decoded glyph re-encodes with the original flags. A nonzero index counts as present even without its flag, which keeps hand-built records and the C ABI (`Radicle/src/c_api_swf_art.cpp`, which has no presence fields) writing and tracing as before. The C ABI therefore cannot carry an explicit 0 across the boundary; that needs an ABI change and is not made here.
+
+Twip scaling: `Radicle/src/swf/swf_svg.cpp:pixels` divides twips by 20. `Radicle/src/swf/swf_svg.cpp:number` prints with `%.6f` and trims trailing zeros, so the output is deterministic and every value is exact to 0.05 px. Gradient matrices: scale and skew are 16.16 fixed point (divided by 65536), and the translation is in twips (divided by 20). `Radicle/src/swf/swf_svg.cpp:matrix_text` maps SWF `x' = ScaleX*x + RotateSkew1*y + TranslateX`, `y' = RotateSkew0*x + ScaleY*y + TranslateY` onto SVG `matrix(a b c d e f)` with `a = ScaleX`, `b = RotateSkew0`, `c = RotateSkew1`, `d = ScaleY`. This matches the composition in `Radicle/src/swf/swf_timeline.cpp`.
+
+Gradient extent: `Radicle/src/swf/swf_svg.cpp:gradient_text` uses `kGradientHalfPixels` (819.2 px, which is 16384 twips) for the linear span and the radial radius, in `userSpaceOnUse`. The focal point is `fx = focal / 256 * 819.2` (`focal_text`). Spread: 0 pad, 1 reflect, 2 repeat (`spread_name`). Unverified against the SWF spec; the local SWF reference folder was not present.
+
+Bitmap-fill gap: fill types 0x40 to 0x43 export as the flat placeholder `#808080` (`kPlaceholderColor`). No image is decoded. A stroke whose LineStyle2 fill is a gradient or bitmap also uses the placeholder (`Radicle/src/swf/swf_svg.cpp:stroke_paint`). A solid stroke fill uses its colour.
+
+Caps and joins: `Radicle/src/swf/swf_svg.cpp:cap_name` reads the start cap from bits 15-14 of the LineStyle2 flags (0 round, 1 butt, 2 square). `join_name` reads the join from bits 13-12 (0 round, 1 bevel, 2 miter). The miter limit is 8.8 fixed point. SVG has one linecap, so the end cap (bits 1-0) and NoClose (bit 2) are ignored. A LineStyle1 has flags 0 and so exports round caps and joins. Width 0 (hairline) exports as 1 px in `stroke_attributes`. Unverified against the SWF spec bit order; the fixture in `Radicle/tests/swf_art_fixtures.hpp` (`define_shape_4_payload`) agrees with it.
+
+Paint order: `shape_to_svg` writes every fill path first, in fill-style index order (`fill_paths`), then every stroke path in line-style order (`stroke_paths`). Interpolation mode (linearRGB) is not applied.
+
+Tests: exact-string expectations in `Radicle/tests/test_swf_svg.cpp`, and the real-data well-formedness case `SwfRealData.ExportsEveryShapeToWellFormedSvg` in `Radicle/tests/test_swf_real.cpp`. Not compiled or run on the development machine; CI is the first compile and run.

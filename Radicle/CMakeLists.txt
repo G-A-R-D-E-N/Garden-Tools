@@ -349,6 +349,7 @@ add_library(fo4
   src/swf/swf_glyph.cpp
   src/swf/swf_glyph_edit.cpp
   src/swf/swf_census.cpp
+  src/swf/swf_svg.cpp
   src/pex_analysis/opcodes.cpp
   src/pex_analysis/cfg.cpp
   src/pex_analysis/disasm.cpp
@@ -974,6 +975,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_swf_real.cpp
     tests/test_swf_census.cpp
     tests/test_swf_census_real.cpp
+    tests/test_swf_svg.cpp
     tests/test_abc_real.cpp
     tests/test_hkx_packfile.cpp
     tests/test_hkx_real.cpp

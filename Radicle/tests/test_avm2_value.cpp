@@ -88,6 +88,15 @@ TEST(Avm2Value, ParsesStringNumbers) {
   EXPECT_EQ(fo4::avm2::to_number(Value::null()), 0.0);
 }
 
+// Detects: from_chars accepting inf/infinity or a doubled sign; such text must be NaN.
+TEST(Avm2Value, RejectsNonEcmaSignedAndInfinityText) {
+  EXPECT_TRUE(std::isnan(fo4::avm2::to_number(Value::string("inf"))));
+  EXPECT_TRUE(std::isnan(fo4::avm2::to_number(Value::string("infinity"))));
+  EXPECT_TRUE(std::isnan(fo4::avm2::to_number(Value::string("+-5"))));
+  EXPECT_TRUE(std::isnan(fo4::avm2::to_number(Value::string("--5"))));
+  EXPECT_EQ(fo4::avm2::to_number(Value::string(".5")), 0.5);
+}
+
 TEST(Avm2Value, FormatsNumbersWithoutATrailingZero) {
   EXPECT_EQ(fo4::avm2::to_string(Value::number(0.0)), "0");
   EXPECT_EQ(fo4::avm2::to_string(Value::number(-0.0)), "0");

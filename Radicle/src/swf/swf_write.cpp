@@ -213,9 +213,9 @@ bool write_style_change(BitWriter& writer, const SwfGlyph& glyph, const SwfShape
                         const SwfShapeRecord* style, std::string& message) {
   std::uint32_t flags = move != nullptr ? 0x01u : 0u;
   if (style != nullptr) {
-    flags |= style->fill0 != 0 ? 0x02u : 0u;
-    flags |= style->fill1 != 0 ? 0x04u : 0u;
-    flags |= style->line != 0 ? 0x08u : 0u;
+    flags |= (style->has_fill0 || style->fill0 != 0) ? 0x02u : 0u;
+    flags |= (style->has_fill1 || style->fill1 != 0) ? 0x04u : 0u;
+    flags |= (style->has_line || style->line != 0) ? 0x08u : 0u;
   }
   if (flags == 0) {
     flags = 0x02u;

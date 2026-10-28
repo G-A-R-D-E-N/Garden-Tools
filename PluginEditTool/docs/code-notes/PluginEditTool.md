@@ -36,7 +36,7 @@ The host bridge is picked up by the existing `[RpcExpose]` scan as `hostObjects.
 test stubs. Archive-resolved open and the semantic edit verbs are still deferred.
 ## Radicle/bindings/csharp/Radicle.Interop/SwfEditText.cs:SwfEditTextCodec (edit-text fields)
 
-Tag 37 has no ABI 71 getter, so the managed layer parses and re-encodes the decoded tag payload itself:
+Tag 37 has no C ABI getter, so the managed layer parses and re-encodes the decoded tag payload itself:
 `SwfEditTextCodec.Parse` reads bounds (RECT bits), both flag bytes, font id/class, height, colour, max length,
 layout, variable and initial text, and `Write` reproduces the decoder order and reuses the original id/RECT
 prefix unless the bounds are edited, so a text or colour edit keeps every earlier byte. `SwfFile.EditText` and
@@ -68,7 +68,7 @@ uses the label name field and the current scrubber frame. Removal and sprite-tim
 composition or a native removal verb.
 ## Radicle/bindings/csharp/Radicle.Interop/SwfPlacements.cs:SwfPlacementCodec (depth edit)
 
-Placement tags have no ABI 71 getter, so `Placements()` parses the root and sprite placement payloads
+Placement tags have no C ABI getter, so `Placements()` parses the root and sprite placement payloads
 (PlaceObject 4, PlaceObject2 26, PlaceObject3 70) for depth/character, and `SetDepth` patches the depth bytes in
 place and sends the payload through the tag plan, keeping every other byte. `SwfDocument.SetDepth` and
 `SwfInterop.Placements`/`SetDepth` expose it. `SwfPlacementTests` pins the read, the in-place patch, the undo and
@@ -121,8 +121,7 @@ that `Save()` refuses.
 
 The C plan now carries a removal list (`radicle_swf_tag_removal`, regenerated interop), so `RemoveLabel` verifies the tag
 is a FrameLabel and applies a one-removal plan; undo replays the command list from the original bytes and restores the
-label. The panel's Remove button calls it for the selected label. The removal verb stays at ABI 71 because that surface
-was never pushed before this round.
+label. The panel's Remove button calls it for the selected label. The removal verb is part of the SWF surface added at ABI 71, which was never pushed before this round (history).
 ## FO4RecordEditor.Core/Services/SwfDocumentService.cs:SwfDocument.AddLabel (sprite timelines)
 
 `AddLabel` now takes the timeline id: root uses a plan insertion before the frame's ShowFrame, a sprite timeline finds
@@ -151,10 +150,10 @@ well as the explicit placement list. The web test clicks the fixture row and ass
 The native PET app builds Radicle from the sibling checkout: `PluginEditTool/native/CMakeLists.txt:53` sets
 `RADICLE_DIR` to `../../Radicle`, `:63` pulls it in with `add_subdirectory`, and `:72-73` clear the
 `VERSION`/`SOVERSION` properties so the build emits a plain `libradicle.so` (the ntfs3 volume cannot create the
-version symlinks). That library is the C ABI: `Radicle/CMakeLists.txt:326` defines the shared `radicle_c` target and
-`:345` adds `src/c_api_swf.cpp`, `src/c_api_swf_art.cpp`, `src/c_api_swf_characters.cpp`,
+version symlinks). That library is the C ABI: `Radicle/CMakeLists.txt:458` defines the shared `radicle_c` target and
+`:478` adds `src/c_api_swf.cpp`, `src/c_api_swf_art.cpp`, `src/c_api_swf_characters.cpp`,
 `src/c_api_swf_display.cpp`, `src/c_api_swf_edit.cpp` and `src/c_api_swf_history.cpp`, with the SWF models at
-`:268-270`; `Radicle/include/fo4/c_api.h:16` is `RADICLE_ABI_VERSION 71u`. So the ABI 71 SWF entry points do ship in
+`:332-346`; `Radicle/include/fo4/c_api.h:16` is `RADICLE_ABI_VERSION 78u` (the SWF entry points were added at ABI 71). So the SWF entry points do ship in
 the library when the tree is this one — nothing was missing from the build.
 
 The managed side resolves the library in `Radicle/bindings/csharp/Radicle.Interop/Core.cs`: `:29` installs the
@@ -197,3 +196,13 @@ touched by one call at a time. `Open` runs inside `Run` and takes no lock of its
 ## FO4RecordEditor.Core/Services/SwfDocumentService.cs:SwfDocument.ApplyNativeEdit (ABC instruction and glyph edits)
 
 The native instruction and glyph verbs mutate a handle directly through `radicle_swf_apply_plan`, so running them on `Movie` would skip the history and vanish on the next reopen. `ApplyNativeEdit` runs the verb on a scratch `SwfFile` opened from the history bytes and lands the changed tag payload as one `Replace` plan. A refusal throws before `Apply`, so the revision, the undo stack and the dirty flag stay put. Covered by `SwfDocumentServiceTests.AnAbcInstructionEditIsAHistoryCommandAndUndoRedoFollowIt` and `SwfDocumentServiceTests.ARefusedAbcInstructionLeavesTheHistoryUntouched`.
+
+## FO4RecordEditor/Services/SwfInterop.cs:SwfInterop.AbcBlocks and SwfInterop.Disassemble (ABC read side)
+
+`AbcBlocks` lists every ABC block of the open movie with its class and script names and its method pool, read from `SwfFile.AbcBlocks` (already parsed) and `SwfFile.Methods(abc)`. The method pool index is the index `Disassemble(abc, methodIndex)` expects, so the panel passes `(abc, index)` straight back. An unparsed block reports zero pool methods (`radicle_swf_abc_method_count` returns 0 when `!view->parsed`), so it lists with no methods instead of failing the whole listing. A method with no body is disabled in the panel instead of being sent to `Disassemble`, which would refuse it. Covered by `FO4RecordEditor.Tests/SwfInteropTests.cs:SwfInteropTests.AbcRpcsReturnTheFieldsThePanelReadsAndTheRefusalShape`.
+
+## web/src/SwfPanel.tsx:SwfPanel (ABC scripts view)
+
+The "Scripts (ABC)" section sits at the foot of the right aside. `open` (`web/src/SwfPanel.tsx:SwfPanel.open`) clears the ABC listing, the selected method and `selectedMethodKey` before the host `Open` call, so a refused re-open leaves no stale listing and a late `pickMethod` reply from the previous document is dropped; it then loads `AbcBlocks` after the placement list. `pickMethod` (`web/src/SwfPanel.tsx:SwfPanel.pickMethod`) shows `Disassemble` output in the `instructions` preformatted block. It records the picked method key in `selectedMethodKey` before the await and drops a reply whose key no longer matches, so an out-of-order reply cannot overwrite the listing of the method now selected; a rejected host call goes into the section alert. An `AbcBlocks` refusal goes into the section's own alert rather than the header error bar, and the "No ABC scripts in this SWF." message only shows when the listing succeeds with zero blocks. The view is display-only: no ABC edit verb is wired, and the listing is not refreshed by undo or redo because no panel control edits ABC yet.
+
+Tests: `web/src/SwfPanel.test.tsx` extends the existing `stubBridge` with `AbcBlocks` and `Disassemble` defaults and adds the listing, empty-state, refusal, stale-reply and refused-re-open cases (`web/src/SwfPanel.test.tsx:SwfPanel`).
