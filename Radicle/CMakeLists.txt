@@ -267,6 +267,31 @@ add_library(fo4
   src/papyrus/runtime.cpp
   src/papyrus/scheduler.cpp
   src/papyrus/execute.cpp
+  src/papyrus/decompiler.cpp
+  src/papyrus/lexer.cpp
+  src/papyrus/parser.cpp
+  src/papyrus/parser_statement.cpp
+  src/papyrus/parser_expression.cpp
+  src/papyrus/type.cpp
+  src/papyrus/binding.cpp
+  src/papyrus/resolver.cpp
+  src/papyrus/type_checker.cpp
+  src/papyrus/script_index.cpp
+  src/papyrus/symbols.cpp
+  src/papyrus/declaration_check.cpp
+  src/papyrus/file_walk.cpp
+  src/f4se/binding_validator.cpp
+  src/f4se/cpp_emitter.cpp
+  src/f4se/cpp_scanner.cpp
+  src/f4se/cross_check.cpp
+  src/f4se/emitter.cpp
+  src/f4se/native_oracle.cpp
+  src/f4se/papyrus_header_emitter.cpp
+  src/f4se/plugin_emitter.cpp
+  src/f4se/region_merge.cpp
+  src/f4se/registration_extractor.cpp
+  src/f4se/type_map.cpp
+  src/f4se/version_diff.cpp
   src/swf/swf.cpp
   src/swf/swf_tags.cpp
   src/swf/swf_placement.cpp
@@ -812,6 +837,23 @@ if(RADICLE_BUILD_TESTS)
     tests/test_pex_disasm.cpp
     tests/test_papyrus_source.cpp
     tests/test_papyrus_source_real.cpp
+    tests/test_papyrus_decompiler.cpp
+    tests/test_papyrus_decompiler_real.cpp
+    tests/test_papyrus_lexer.cpp
+    tests/test_papyrus_parser.cpp
+    tests/test_papyrus_parse_real.cpp
+    tests/test_papyrus_resolver.cpp
+    tests/test_papyrus_type_checker.cpp
+    tests/test_papyrus_symbols.cpp
+    tests/test_papyrus_script_index.cpp
+    tests/test_papyrus_declaration_check.cpp
+    tests/test_papyrus_semantic_real.cpp
+    tests/test_f4se_type_map.cpp
+    tests/test_f4se_cross_check.cpp
+    tests/test_f4se_extractor.cpp
+    tests/test_f4se_region_merge.cpp
+    tests/test_f4se_emitter.cpp
+    tests/test_f4se_corpus_real.cpp
     tests/test_abc.cpp
     tests/test_abc_edit.cpp
     tests/test_abc_pool.cpp
