@@ -6,8 +6,10 @@
 #include <fstream>
 #include <mutex>
 #include <random>
+#include <span>
 #include <system_error>
 
+#include <fo4/io/atomic_write.hpp>
 #include <fo4/papyrus/parser.hpp>
 
 namespace fo4::graph {
@@ -212,13 +214,18 @@ GraphCompileResult GraphCompiler::compileToFile(GraphDocument& document,
                                                 const std::filesystem::path& pscPath,
                                                 std::optional<std::filesystem::path> pexPath,
                                                 GraphCompileOptions options) {
-    (void)pexPath;
     auto result = compile(document, std::move(options));
     if (!result.source) return result;
 
     const auto directory = pscPath.parent_path();
     if (!directory.empty()) std::filesystem::create_directories(directory);
     writeTextFile(pscPath, *result.source);
+
+    if (!result.pex) return result;
+    auto target = pexPath.value_or(pscPath);
+    if (!pexPath) target.replace_extension(".pex");
+    const auto bytes = result.pex->toBytes();
+    fo4::io::write_file_atomic(target, std::as_bytes(std::span(bytes)));
     return result;
 }
 

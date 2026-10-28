@@ -7,34 +7,24 @@
 #include <fo4/papyrus/symbols.hpp>
 #include <fo4/papyrus/type_checker.hpp>
 
+#include "papyrus_corpus_roots.hpp"
+
 #include <gtest/gtest.h>
 
 #include <algorithm>
 #include <cstdint>
-#include <cstdlib>
 #include <exception>
 #include <filesystem>
 #include <optional>
-#include <sstream>
 #include <string>
 #include <vector>
+
+namespace helper = fo4::papyrus::test;
 
 namespace {
 
 constexpr std::size_t kVanillaFiles = 7854;
 constexpr std::size_t kVanillaComplete = 7832;
-
-std::vector<std::filesystem::path> corpus_roots(const char* variable) {
-  std::vector<std::filesystem::path> roots;
-  const char* configured = std::getenv(variable);
-  if (configured == nullptr || *configured == '\0') return roots;
-  std::istringstream stream(configured);
-  std::string part;
-  while (std::getline(stream, part, ';')) {
-    if (!part.empty() && std::filesystem::is_directory(part)) roots.emplace_back(part);
-  }
-  return roots;
-}
 
 std::vector<std::filesystem::path> papyrus_files_in(
     const std::vector<std::filesystem::path>& roots) {
@@ -49,7 +39,7 @@ std::vector<std::filesystem::path> papyrus_files_in(
 }
 
 TEST(PapyrusSemanticReal, YieldsSymbolsAcrossTheCorpusWithoutCrashing) {
-  const auto roots = corpus_roots("FO4RE_PSC_CORPUS");
+  const auto roots = helper::rootsFromEnv("FO4RE_PSC_CORPUS");
   if (roots.empty()) GTEST_SKIP() << "FO4RE_PSC_CORPUS is not set; corpus sweep skipped.";
 
   const auto files = papyrus_files_in(roots);
@@ -78,7 +68,7 @@ TEST(PapyrusSemanticReal, YieldsSymbolsAcrossTheCorpusWithoutCrashing) {
 }
 
 TEST(PapyrusSemanticReal, ResolvesAndTypeChecksEveryCompleteCorpusScriptClean) {
-  const auto roots = corpus_roots("FO4RE_PSC_CORPUS");
+  const auto roots = helper::rootsFromEnv("FO4RE_PSC_CORPUS");
   if (roots.empty()) GTEST_SKIP() << "FO4RE_PSC_CORPUS is not set; corpus sweep skipped.";
 
   const auto files = papyrus_files_in(roots);
@@ -113,7 +103,7 @@ TEST(PapyrusSemanticReal, ResolvesAndTypeChecksEveryCompleteCorpusScriptClean) {
 }
 
 TEST(PapyrusSemanticReal, DuplicateDeclarationCheckFlagsNothingInTheVanillaSources) {
-  const auto roots = corpus_roots("FO4RE_PSC_ROOTS");
+  const auto roots = helper::rootsFromEnv("FO4RE_PSC_ROOTS");
   if (roots.empty()) GTEST_SKIP() << "FO4RE_PSC_ROOTS is not set; sweep skipped.";
 
   const auto files = papyrus_files_in(roots);
