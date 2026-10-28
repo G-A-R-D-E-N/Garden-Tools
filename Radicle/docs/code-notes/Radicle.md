@@ -8419,6 +8419,7 @@ When a Throw in a callee is not caught, run_range overwrites result.opcode and r
 ## Radicle/tests/test_avm1.cpp (Low: stale test name in notes)
 
 Radicle.md still cites `Radicle/tests/test_avm1.cpp:ObjectAndFunctionOpcodesStayRefusedByName` at lines 7693, 7937 and 8059. No file under Radicle/tests defines that name now, so those citations point at nothing. Not fixed in this slice.
+
 ## Radicle/src/avm2/interpreter.cpp:Interpreter::execute_frame (AVM2 late ops census)
 
 Census from a source scan (not compiled or run): 169 named opcodes, 168 with a case in `Radicle/src/avm2/interpreter_dispatch_a.inc` through `interpreter_dispatch_e.inc`, and 1 without, `getdescendants` 0x59. This replaces the 12-opcode census above. The 11 added here are dxns 0x06, dxnslate 0x07, pushnamespace 0x31, finddef 0x5F, setpropertylate 0x69, deletepropertylate 0x6B, getglobalslot 0x6E, setglobalslot 0x6F, esc_xelem 0x71, esc_xattr 0x72 and checkfilter 0x78. All 11 new cases are in `Radicle/src/avm2/interpreter_dispatch_e.inc`, which `Radicle/src/avm2/interpreter.cpp:Interpreter::execute_frame` includes.
