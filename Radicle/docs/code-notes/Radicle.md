@@ -7814,3 +7814,7 @@ ABI 84 is 83 plus the one export `radicle_swf_bitmap_png`, which hands `fo4::swf
 ## Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION (ABI 85, SWF frame SVG export)
 
 ABI 85 is 84 plus the one export `radicle_swf_frame_svg` from `Radicle/src/c_api_swf_display.cpp:radicle_swf_frame_svg`. The pin is `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsEightyFive`, and `Radicle/bindings/csharp/Radicle.Interop/RadicleNative.g.cs:CompiledAbiVersion` was regenerated with `generate_interop.py`. The lane was written against 83 and took 84 in parallel with `radicle_swf_bitmap_png`; the merge renumbered it to 85.
+
+## Radicle/tests/test_swf_real.cpp:svg_is_well_formed
+
+`Radicle/tests/test_swf_real.cpp:svg_is_well_formed` rejects an export that contains the text "nan" or "inf", which catches a non-finite number printed into an attribute. Since bitmap fills embed a base64 PNG in `href`, the check runs on a copy with every `base64,` payload erased up to its closing quote, because a real PNG payload contains those three-letter runs by chance and would be reported as a malformed export. Detects a false "exports malformed SVG" failure on the Fallout 4 data runner.

@@ -503,7 +503,12 @@ struct SvgStats {
   std::size_t failures{0};
 };
 
-bool svg_is_well_formed(const std::string& svg) {
+bool svg_is_well_formed(const std::string& markup) {
+  std::string svg = markup;
+  for (auto at = svg.find("base64,"); at != std::string::npos; at = svg.find("base64,", at)) {
+    const auto end = svg.find('"', at);
+    svg.erase(at, end == std::string::npos ? end : end - at);
+  }
   if (svg.find("nan") != std::string::npos || svg.find("inf") != std::string::npos) {
     return false;
   }
