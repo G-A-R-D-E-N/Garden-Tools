@@ -377,6 +377,9 @@ TEST(CApiSwfBitmapPng, RefusesNonBitmapAndUnencodableTagsWithOutputsCleared) {
     EXPECT_EQ(png, nullptr);
     EXPECT_EQ(size, 0u);
   };
+  radicle_swf_tag tag{};
+  ASSERT_EQ(radicle_swf_tag_at(file.get(), 2, &tag), RADICLE_STATUS_OK) << radicle_last_error();
+  EXPECT_EQ(tag.code, 20);
   refuse(file.get(), 0, RADICLE_STATUS_NOT_FOUND);
   refuse(file.get(), 2, RADICLE_STATUS_INVALID_ARGUMENT);
   refuse(file.get(), 99, RADICLE_STATUS_INVALID_ARGUMENT);

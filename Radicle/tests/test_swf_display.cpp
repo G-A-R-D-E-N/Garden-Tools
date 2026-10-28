@@ -642,6 +642,24 @@ TEST(SwfFrameSvg, ClipsOnlyTheRowsInsideTheMaskDepthRange) {
   EXPECT_EQ(svg_of(movie, 0), expected);
 }
 
+TEST(SwfFrameSvg, ASlashInARowNameMisplacesTheClipLevelKnownGap) {
+  const auto movie = movie_of(1, {
+      {32, square_shape(1, 1000, 0xFF0000)},
+      {32, square_shape(2, 600, 0x0000FF)},
+      {26, place_full(1, 1, {}, {}, 2)},
+      {26, place2(0x22, 2, 2, {}, "a/b")},
+      {1, {}},
+  });
+  const std::string expected =
+      kStageOpen +
+      "<clipPath id=\"r0clip\" transform=\"matrix(1 0 0 1 0 0)\">\n" + kRedSquare + "</clipPath>\n"
+      "<g transform=\"matrix(1 0 0 1 0 0)\">\n"
+      "<path d=\"M0 0L30 0L30 30L0 30L0 0Z\" fill=\"#0000ff\" fill-opacity=\"1\" fill-rule=\"nonzero\"/>\n"
+      "</g>\n"
+      "</svg>\n";
+  EXPECT_EQ(svg_of(movie, 0), expected);
+}
+
 TEST(SwfFrameSvg, ClipMaskUsesOnlyFillGeometry) {
   const auto movie = movie_of(1, {
       {32, square_shape(1, 1000, 0xFF0000, true)},
