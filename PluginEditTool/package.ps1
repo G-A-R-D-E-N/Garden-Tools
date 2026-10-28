@@ -61,9 +61,29 @@ $Configure = @(
 )
 if ($Generator -match 'Visual Studio') {
     $Configure += @('-A', 'x64')
+} else {
+    # A single-config generator requires the build type at configure time;
+    # --config Release is otherwise a silent no-op and ships a Debug exe.
+    $Configure += @('-DCMAKE_BUILD_TYPE=Release')
 }
-& cmake @Configure
-if ($LASTEXITCODE -ne 0) { throw 'Native CMake configure failed.' }
+if ($env:ZLIB_SRC) {
+    # The CI runner must reuse its cached pinned zlib instead of cloning GitHub.
+    $Configure += "-DFETCHCONTENT_SOURCE_DIR_FO4IDE_ZLIB=$env:ZLIB_SRC"
+}
+if ($env:CCACHE) {
+    # The release lane sets up ccache, so it must actually reach the compilers.
+    $Configure += @("-DCMAKE_C_COMPILER_LAUNCHER=$env:CCACHE", "-DCMAKE_CXX_COMPILER_LAUNCHER=$env:CCACHE")
+}
+$Configured = $false
+for ($attempt = 1; $attempt -le 3; $attempt++) {
+    & cmake @Configure
+    if ($LASTEXITCODE -eq 0) { $Configured = $true; break }
+    if ($attempt -lt 3) {
+        Write-Warning "CMake configure failed (attempt $attempt); retrying because CI egress is flaky."
+        Start-Sleep -Seconds (15 * $attempt)
+    }
+}
+if (-not $Configured) { throw 'Native CMake configure failed.' }
 
 Step 'Building FO4RecordEditor.exe (Release)'
 cmake --build $NativeBuild --config Release --target fo4ide
