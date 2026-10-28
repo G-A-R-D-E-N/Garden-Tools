@@ -16,6 +16,7 @@ type ErrorReply = { error?: string };
 type PlacementRow = { tagIndex: number; depth: number; character: number | null; insideSprite: boolean };
 type AbcMethodRow = { index: number; name: string; returnType: string; hasBody: boolean };
 type AbcBlockRow = { abc: number; name: string; classes: string[]; scripts: string[]; methods: AbcMethodRow[] };
+type ActionTagRow = { tagIndex: number; code: number; insideSprite: boolean };
 
 type SwfHost = {
   Open(path: string): Promise<string>;
@@ -40,6 +41,9 @@ type SwfHost = {
   AbcBlocks(): Promise<string>;
   Disassemble(abc: number, methodIndex: number): Promise<string>;
   ShapeSvg(characterId: number): Promise<string>;
+  InspectText(): Promise<string>;
+  ActionTags(): Promise<string>;
+  Avm1Disassemble(tagIndex: number): Promise<string>;
 };
 
 function host(): SwfHost | null {
@@ -79,6 +83,12 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
   const labelRequest = useRef(0);
   const [shapeSvg, setShapeSvg] = useState('');
   const shapeRequest = useRef(0);
+  const [inspectText, setInspectText] = useState('');
+  const [inspectError, setInspectError] = useState('');
+  const [actionTags, setActionTags] = useState<ActionTagRow[]>([]);
+  const [avm1, setAvm1] = useState<{ tagIndex: number; text: string } | null>(null);
+  const [avm1Error, setAvm1Error] = useState('');
+  const avm1Request = useRef(0);
 
   const loadCharacters = useCallback(async () => {
     const bridge = host();
@@ -129,6 +139,12 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     selectedMethodKey.current = '';
     shapeRequest.current += 1;
     setShapeSvg('');
+    avm1Request.current += 1;
+    setAvm1(null);
+    setAvm1Error('');
+    setActionTags([]);
+    setInspectText('');
+    setInspectError('');
     try {
       const opened = parse<StateReply>(await bridge.Open(path.trim()));
       if (opened.error) { setError(opened.error); return; }
@@ -143,6 +159,12 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
       const abcReply = parse<{ blocks: AbcBlockRow[] }>(await bridge.AbcBlocks());
       setAbcError(abcReply.error ?? '');
       setAbcBlocks(abcReply.blocks ?? []);
+      const inspect = parse<{ text?: string }>(await bridge.InspectText());
+      setInspectText(inspect.text ?? '');
+      setInspectError(inspect.error ?? '');
+      const actionReply = parse<{ tags?: ActionTagRow[] }>(await bridge.ActionTags());
+      setActionTags(actionReply.tags ?? []);
+      if (actionReply.error) setInspectError(actionReply.error);
     } finally {
       setBusy(false);
     }
@@ -285,6 +307,17 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
       setAbcError(caught instanceof Error ? caught.message : String(caught));
     }
   }, []);
+  const pickActionTag = useCallback(async (item: ActionTagRow) => {
+    const bridge = host();
+    if (!bridge) return;
+    const request = ++avm1Request.current;
+    setAvm1({ tagIndex: item.tagIndex, text: '' });
+    setAvm1Error('');
+    const reply = parse<{ text?: string }>(await bridge.Avm1Disassemble(item.tagIndex));
+    if (request !== avm1Request.current) return;
+    if (reply.error) { setAvm1Error(reply.error); return; }
+    setAvm1({ tagIndex: item.tagIndex, text: reply.text ?? '' });
+  }, []);
   const command = useCallback(async (action: 'undo' | 'redo' | 'save') => {
     const bridge = host();
     if (!bridge) return;
@@ -414,6 +447,33 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
             </div>
           )}          <p>Revision {state.revision} · undo {state.undo} · redo {state.redo}</p>
           {shapeSvg && <img className="swf-shape" alt="Shape preview" src={`data:image/svg+xml;utf8,${encodeURIComponent(shapeSvg)}`} />}
+          <section className="swf-inspect" aria-label="Inspect">
+            <h4>Inspect</h4>
+            {inspectError && <div className="swf-error" role="alert"><AlertTriangle size={14} /> {inspectError}</div>}
+            <pre aria-label="inspect text">{inspectText}</pre>
+            <h5>AVM1 actions</h5>
+            {!inspectError && actionTags.length === 0 && <p>No DoAction or DoInitAction tags in this SWF.</p>}
+            <ul>
+              {actionTags.map(item => (
+                <li key={item.tagIndex}>
+                  <button
+                    type="button"
+                    aria-pressed={avm1?.tagIndex === item.tagIndex}
+                    onClick={() => void pickActionTag(item)}
+                  >
+                    {item.code === 59 ? 'DoInitAction' : 'DoAction'} @{item.tagIndex}{item.insideSprite ? ' in sprite' : ''}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {avm1Error && <div className="swf-error" role="alert"><AlertTriangle size={14} /> {avm1Error}</div>}
+            {avm1 && (
+              <>
+                <h5>Tag {avm1.tagIndex}</h5>
+                <pre aria-label="avm1 disassembly">{avm1.text}</pre>
+              </>
+            )}
+          </section>
           <section className="swf-abc" aria-label="ABC scripts">
             <h4>Scripts (ABC)</h4>
             {abcError && <div className="swf-error" role="alert"><AlertTriangle size={14} /> {abcError}</div>}
