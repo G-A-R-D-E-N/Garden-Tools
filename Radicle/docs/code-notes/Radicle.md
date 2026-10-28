@@ -6428,6 +6428,93 @@ Hand-built `PexFile` values, because the compiler is not lifted yet. Each test p
 
 Gated on `FO4_PEX_CORPUS`. It reads each `.pex`, runs `toSource` and `disassemble`, and fails on an exception or a missing `ScriptName` or listing header. It prints the fallback and unhandled-instruction counts and does not assert them, because no baseline has been measured. PET's 80.2% recompile-fidelity sweep is not here: that needs the compiler.
 
+## include/fo4/papyrus/user_flags.hpp:UserFlagTable
+
+Port of PapyrusUserFlagTable (PET `CodeGenerator.hpp` lines 18-19, dropped): the `Institute_Papyrus_Flags.flg` table that turns written flag names into bit masks. The class lives in `fo4::papyrus` with its methods in `src/papyrus/user_flags.cpp:UserFlagTable`.
+
+## src/papyrus/user_flags.cpp:stripComments
+
+`stripComments`, `splitWhitespace` and `parseByte` are wrapped in an anonymous namespace. In PET they were external free functions in `CodeGenerator.cpp`; anonymous linkage stops a name collision with another translation unit in `fo4::papyrus`.
+
+## src/papyrus/code_generator.cpp:CodeGenerator::generate
+
+PET section banners (`CodeGenerator.cpp` lines 49-50, 216-217, 295-296, 1406-1407) are dropped, replaced by the file split. `generate` is the entry point; `buildObject`, `buildProperty`, `buildFunction`, `buildEvent` and `buildStructOrders` are its helpers in the same file.
+
+## src/papyrus/code_generator.cpp:tryParseInt
+
+`tryParseInt` was file-scope in PET (`CodeGenerator.cpp` lines 1810-1821) and moves into an anonymous namespace, which keeps it private to this translation unit. `hasFlag` was already in PET's anonymous namespace (lines 16-47) and is wrapped the same way here.
+
+## include/fo4/papyrus/code_generator.hpp:CodeGenOptions
+
+Port of PapyrusCodeGenOptions (PET `CodeGenerator.hpp` line 43, dropped).
+
+## include/fo4/papyrus/code_generator.hpp:CodeGenerator
+
+Port of PapyrusCodeGenerator (PET `CodeGenerator.hpp` lines 59-60, dropped): AST plus Resolution to PexFile. It returns nullptr with diagnostics when anything cannot be emitted faithfully. Dropped in-class notes: `generate` is non-const because the Error case reports a diagnostic (PET line 99); `userFlags_` points at a table the generator owns when options carry none, or at the caller's table, for the whole `generate()` call (PET lines 107-108). The `declarationCheck` declaration is not here: it lives in `include/fo4/papyrus/declaration_check.hpp:declarationCheck` (lane 2).
+
+## src/papyrus/codegen_detail.hpp:lower
+
+`lower`, `iequals` and `opcodeFor` were one anonymous namespace in PET's `CodeGenerator.cpp` (lines 16-47). Four translation units need them now (`user_flags.cpp`, `code_generator.cpp`, `body_*.cpp`, `creation_kit_fidelity.cpp`), so they move to the internal `fo4::papyrus::codegen_detail` namespace as inline functions. The header is under `src/papyrus/`, not `include/`, so the helpers stay out of the public surface.
+
+## src/papyrus/body_emitter.hpp:BodyEmitter
+
+`BodyEmitter` is shared by `body_statement.cpp`, `body_expression.cpp` and `body_call.cpp`, and it is a friend of `CodeGenerator`. Its declaration moves to this internal header. Its member bodies are in the three body files.
+
+## src/papyrus/body_statement.cpp:BodyEmitter::emitAssign
+
+PET comment (`CodeGenerator.cpp` line 589, dropped): "StoreOrder: evaluate the stored value before the receiver." The store path evaluates the value before the receiver. Reordering changes the emitted PAP instruction order.
+
+## src/papyrus/body_call.cpp:BodyEmitter::buildArguments
+
+PET comment (`CodeGenerator.cpp` lines 1245-1246, dropped): "Custom-event qualification needs the receiver script: the C# resolves it from the callee member's target type, or the current script." The text is kept as the constraint for this function's argument handling.
+
+## src/papyrus/body_call.cpp:arrayBuiltinArity
+
+Already in an anonymous namespace in PET (`CodeGenerator.cpp` lines 1296-1305). The lift keeps it that way.
+
+## src/papyrus/creation_kit_fidelity.cpp:CreationKitFidelity::normalize
+
+Post-generation pass. The PET header comment (`CreationKitFidelity.hpp` lines 8-12, dropped) is kept here: GotoState string operands are canonicalized to the declared state name when the receiver is this script, and negated literals fold into the assign form. `include/fo4/papyrus/creation_kit_fidelity.hpp:CreationKitFidelity` is the hand-written public declaration with no comment.
+
+## src/papyrus/compile_script.cpp:compileScript
+
+Port of PET `PapyrusCompiler.Compile`. Its header comments (`AnalysisService.hpp` lines 63, 75, 85-87, dropped) are kept here: the options are the switches the compiler honors; the result carries the PEX and diagnostics; the pass order is declaration check, resolve, type check, generate over an already-parsed script, then the Creation Kit fidelity pass on the emitted PEX. The declarations are `include/fo4/papyrus/compile_script.hpp:PapyrusCompileOptions`, `PapyrusCompileResult` and `compileScript`.
+
+## tests/papyrus_pex_comparer.hpp:firstDifference
+
+Port of PET's `PexComparer` (its header comment, `PexComparer.hpp` lines 12-14, dropped): returns the first difference between two `PexObject`s as text, or an empty string when they match. The decompiler round-trip and the CK differential both rely on it. `cmpIequals`, `cmpLower` and `normaliseName` are the case-folding helpers it uses.
+
+## tests/papyrus_codegen_fixture.hpp:operand
+
+PET test comment (`PapyrusCodeGenTests.cpp` line 148, dropped): "Match the oracle's '0.0###' formatting." The fixture prints floats with `%.3g` and appends `.0` when there is no decimal point. This is a different function from `tests/papyrus_pex_comparer.hpp:operand`, which prints `%.6f` for the oracle comparison. The two are intentionally separate.
+
+## tests/papyrus_codegen_fixture.hpp:CodegenFixture::compile
+
+Same pipeline as PET's `Fixture::compile`: hasErrors, declarationCheck, Resolver, TypeChecker, CodeGenerator. It does not call `CreationKitFidelity::normalize`, so the listings the codegen tests assert are the raw generator output, as PET's are. PET's `REQUIRE` and `FAIL` become `std::runtime_error` throws, because `compile` and `compileObject` return values.
+
+## tests/test_papyrus_codegen.cpp:TEST(PapyrusCodegen, DebugLineNumbersRecordedOnePerInstruction)
+
+Port of the 41 PET `PapyrusCodeGenTests` cases. Each test name states the behaviour it pins, which is the regression it catches. One simplification: PET's line-number test stored its result through a `static_cast<const void*>` detour; the port uses a plain `const PexDebugFunction*`, with the same assertion.
+
+## tests/test_papyrus_user_flags.cpp:TEST(PapyrusUserFlagTable, CompositeFlagExpandsToChildrenAndOwnsNoBit)
+
+Port of PET's `PapyrusUserFlagTableTests` (4 cases). The comment test (`CommentsAndAllowedKindsListAreIgnored`) pins that `/* */` and `//` comments and the allowed-kinds block do not add flags.
+
+## tests/test_papyrus_decompiler.cpp:DecompileFixture::roundTrip
+
+Compile, decompile, reparse, recompile. The dropped PET comments are kept here: the round trip is the C# DecompilerSweep oracle's core assertion (PET `PapyrusDecompilerTests.cpp` lines 84-85). The second pass compiles against a copy of every file the first pass saw, because the C# sweep compiles both passes against one index, so a callee script must stay visible (PET lines 101-103). The temp directory prefix is `fo4re-decompile-`, renamed from PET's `fo4ide-decompile-`.
+
+## tests/test_papyrus_decompiler.cpp:TEST(PapyrusDecompiler, BooleanAndComparisonFormsReparseCleanly)
+
+PET comment (lines 283-285, dropped): the `&&` short-circuit decompiles to a jump-threaded `if`, which the C# sweep counts as "differed". So this test only requires that the decompiled source reparses and recompiles without errors.
+
+## tests/test_papyrus_decompiler.cpp:TEST(PapyrusDecompiler, CompositeRoundTripScriptRoundTrips)
+
+PET comment (lines 323-327, dropped): the `&&` decompiles to a jump-threaded `If`, and the zero-init local is hoisted to the top of the function, so the round-trip PEX differs from the original as it does under the C# sweep. Only reparse and recompile are required here.
+
+## tests/test_papyrus_codegen_real.cpp:TEST(PapyrusCodegenReal, CompiledOutputMatchesCreationKitInstructionForInstruction)
+
+Gated on `FO4RE_PEX_CORPUS` (then `FO4_PEX_CORPUS`, as PET reads it). `FO4RE_PSC_ROOTS` adds extra source roots. `FO4RE_PEX_RELEASE=1` compiles without debug-only and beta-only code, for a vanilla corpus. The pass floor is 0.95 identical among compiled pairs (`kMinimumIdenticalFraction`). This is the CK differential. The 1,498-script decompile-fidelity sweep (`DecompilerSweep.cs`, `PluginEditTool/docs/internal/PAPYRUS.md` lines 82-89) is not ported here.
 ## NIF fix (fix_nif)
 
 - Radicle/src/nif/fix_nif.cpp:fix_nif: loads the model, rewrites the tangent frame of every shape, trims shader and texture-set strings, attaches a BSXFlags extra to the root when none is present, serializes, and reads the result back. It throws parse_error when the NIF has no root or the root is not a node, and throws std::runtime_error when the output does not read back as the same shapes (shape count, vertex count, triangle count, no reader warning). Callers write nothing on a throw.
