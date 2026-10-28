@@ -497,6 +497,39 @@ ExecutionResult Interpreter::construct(Frame& frame, const ClassObject& class_ob
   return result;
 }
 
+std::vector<Key>& Interpreter::enumeration_keys(Frame& frame, Object& object) {
+  std::vector<Key>& keys = frame.iterator_keys[&object];
+  if (!keys.empty()) {
+    return keys;
+  }
+  if (object.kind() == ObjectKind::Array) {
+    const auto& array = static_cast<const ArrayObject&>(object);
+    for (std::size_t index = 0; index < array.elements().size(); ++index) {
+      Key key;
+      key.name = std::to_string(index);
+      keys.push_back(std::move(key));
+    }
+    return keys;
+  }
+  for (const auto& entry : object.own_properties()) {
+    keys.push_back(entry.first);
+  }
+  for (const Class* klass = object.instance_class(); klass != nullptr; klass = klass->super) {
+    for (const Trait& trait : klass->instance_traits) {
+      if (!trait.is_slot_like() || !trait.multiname.has_fixed_name()) {
+        continue;
+      }
+      Key key;
+      key.name = trait.multiname.name;
+      if (!trait.multiname.namespaces.empty()) {
+        key.name_space = trait.multiname.namespaces.front();
+      }
+      keys.push_back(std::move(key));
+    }
+  }
+  return keys;
+}
+
 bool Interpreter::is_instance_of(const Value& value, const Value& type) const {
   if (!value.is_object() || !type.is_object() || type.as_object()->kind() != ObjectKind::Class) {
     return false;

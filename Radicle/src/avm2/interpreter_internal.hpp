@@ -38,6 +38,7 @@ namespace op {
   constexpr std::uint8_t k_pushwith = 0x1C;
   constexpr std::uint8_t k_popscope = 0x1D;
   constexpr std::uint8_t k_nextname = 0x1E;
+  constexpr std::uint8_t k_hasnext = 0x1F;
   constexpr std::uint8_t k_pushnull = 0x20;
   constexpr std::uint8_t k_pushundefined = 0x21;
   constexpr std::uint8_t k_nextvalue = 0x23;
@@ -69,6 +70,9 @@ namespace op {
   constexpr std::uint8_t k_callproplex = 0x4C;
   constexpr std::uint8_t k_callsupervoid = 0x4E;
   constexpr std::uint8_t k_callpropvoid = 0x4F;
+  constexpr std::uint8_t k_sxi1 = 0x50;
+  constexpr std::uint8_t k_sxi8 = 0x51;
+  constexpr std::uint8_t k_sxi16 = 0x52;
   constexpr std::uint8_t k_applytype = 0x53;
   constexpr std::uint8_t k_newobject = 0x55;
   constexpr std::uint8_t k_newarray = 0x56;
@@ -96,10 +100,15 @@ namespace op {
   constexpr std::uint8_t k_convert_b = 0x76;
   constexpr std::uint8_t k_convert_o = 0x77;
   constexpr std::uint8_t k_coerce = 0x80;
+  constexpr std::uint8_t k_coerce_b = 0x81;
   constexpr std::uint8_t k_coerce_a = 0x82;
+  constexpr std::uint8_t k_coerce_i = 0x83;
+  constexpr std::uint8_t k_coerce_d = 0x84;
   constexpr std::uint8_t k_coerce_s = 0x85;
   constexpr std::uint8_t k_astype = 0x86;
   constexpr std::uint8_t k_astypelate = 0x87;
+  constexpr std::uint8_t k_coerce_u = 0x88;
+  constexpr std::uint8_t k_coerce_o = 0x89;
   constexpr std::uint8_t k_negate = 0x90;
   constexpr std::uint8_t k_increment = 0x91;
   constexpr std::uint8_t k_inclocal = 0x92;

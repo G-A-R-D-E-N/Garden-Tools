@@ -384,6 +384,22 @@ struct SwfRemoval {
   std::uint16_t depth{0};
 };
 
+struct SwfButtonRecord {
+  bool up{false};
+  bool over{false};
+  bool down{false};
+  bool hit_test{false};
+  std::uint16_t character_id{0};
+  std::uint16_t depth{0};
+  SwfMatrix matrix{};
+  std::optional<SwfColorTransform> color_transform;
+};
+
+struct SwfButton {
+  std::uint16_t character_id{0};
+  std::vector<SwfButtonRecord> records;
+};
+
 /* Invariant: a glyph SHAPE has no style table, so fill style 1 is the implicit text colour. */
 struct SwfGlyph {
   std::uint8_t fill_bits{0};
@@ -556,6 +572,7 @@ struct SwfTag {
   std::optional<SwfPlacement> placement;
   std::optional<SwfRemoval> removal;
   std::optional<SwfMorphShape> morph_shape;
+  std::optional<SwfButton> button;
   std::optional<SwfJpeg> jpeg;
   std::optional<SwfJpegTables> jpeg_tables;
 
