@@ -161,7 +161,7 @@ class Hasher {
   std::uint64_t value() const noexcept { return hash_; }
 
  private:
-  std::uint64_t hash_{1469598103934665603ULL};
+  std::uint64_t hash_{14695981039346656037ULL};
 };
 
 void hash_filter(Hasher& hasher, const swf::SwfFilter& filter) {
