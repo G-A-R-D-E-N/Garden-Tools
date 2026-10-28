@@ -313,10 +313,13 @@ TEST(PapyrusCodegenReal, DecompiledCorpusRecompilesToTheSameProgram) {
     const auto found = helper::enumerateFiles(root, ".psc");
     files.insert(files.end(), found.begin(), found.end());
   }
-  std::sort(files.begin(), files.end(), [](const fs::path& a, const fs::path& b) {
-    return a.native() < b.native();
-  });
-  if (files.size() > kDecompileSampleLimit) files.resize(kDecompileSampleLimit);
+  const auto candidates = files.size();
+  const auto sample = helper::stratifiedSample(files, roots, kDecompileSampleLimit);
+  if (!sample.files.empty()) {
+    std::cout << "SAMPLE candidates=" << candidates << " selected=" << sample.files.size()
+              << " stride=" << sample.stride << " first=" << sample.files.front().generic_string()
+              << " last=" << sample.files.back().generic_string() << '\n';
+  }
 
   fp::PapyrusCompileOptions options;
   options.emitDebugOnlyCode = true;
@@ -330,7 +333,7 @@ TEST(PapyrusCodegenReal, DecompiledCorpusRecompilesToTheSameProgram) {
   std::map<std::string, int> reasons;
   std::vector<std::string> differences;
 
-  for (const auto& path : files) {
+  for (const auto& path : sample.files) {
     const auto name = path.filename().string();
 
     fp::PapyrusCompileResult first;
@@ -382,7 +385,7 @@ TEST(PapyrusCodegenReal, DecompiledCorpusRecompilesToTheSameProgram) {
   }
 
   const double percent = compiled == 0 ? 0.0 : matched * 100.0 / compiled;
-  std::cout << "DECOMPILE files=" << files.size() << " compiled=" << compiled
+  std::cout << "DECOMPILE files=" << sample.files.size() << " compiled=" << compiled
             << " matched=" << matched << " differed=" << differed << " assembly=" << assembly
             << " failed=" << failed << " fidelity=" << std::format("{:.1f}", percent) << "%\n";
 
@@ -396,7 +399,7 @@ TEST(PapyrusCodegenReal, DecompiledCorpusRecompilesToTheSameProgram) {
   for (const auto& difference : differences) std::cout << "  DIFF " << difference << '\n';
 
   SCOPED_TRACE("compiled=" + std::to_string(compiled) + " matched=" + std::to_string(matched));
-  ASSERT_FALSE(files.empty());
+  ASSERT_FALSE(sample.files.empty());
   ASSERT_TRUE(compiled > 0);
   ASSERT_TRUE(static_cast<double>(matched) / static_cast<double>(compiled) >=
               kMinimumDecompileFidelity);

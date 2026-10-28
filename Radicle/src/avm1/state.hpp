@@ -20,6 +20,7 @@ struct Avm1State {
   std::vector<std::string> constants;
   std::map<std::string, Avm1Data> variables;
   std::vector<std::string> trace;
+  Avm1Data thrown;
   std::uint8_t swf_version{0};
 };
 
@@ -39,6 +40,7 @@ struct Avm1Block {
   const std::vector<Avm1Action>& actions;
   std::size_t end_offset;
   Avm1Call* call;
+  std::vector<Avm1Data>* scopes;
 };
 
 struct Avm1Run {
@@ -47,9 +49,15 @@ struct Avm1Run {
   std::size_t max_steps;
   std::size_t depth{0};
   std::map<std::size_t, std::shared_ptr<const Avm1FunctionBody>> functions{};
+  std::size_t regions{0};
+  std::map<const Avm1FunctionBody*, std::shared_ptr<const Avm1FunctionBody>> superclasses{};
 };
 
 Avm1RunStatus run_block(Avm1Run& run, const Avm1Block& block);
+Avm1RunStatus run_range(Avm1Run& run, const Avm1Block& block, std::size_t first, std::size_t last,
+                        std::size_t& resume);
+Avm1RunStatus jump_index(const Avm1Block& block, std::size_t target, std::size_t& index,
+                         std::string& message);
 
 inline Avm1RunStatus pop(Avm1State& state, Avm1Data& out, std::string& message) {
   if (state.stack.empty()) {

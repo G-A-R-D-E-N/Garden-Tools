@@ -714,10 +714,9 @@ TEST(Avm1Interpreter, ModuloAndIncrementDecrementMatchTheirTable) {
   }
 }
 
-// Invariant: Enumerate, InstanceOf and Extends must stay refused by their names, since the slice has no enumeration or prototypes; a stub that silently succeeds would run the Trace after each and trace nothing.
-TEST(Avm1Interpreter, ObjectAndFunctionOpcodesStayRefusedByName) {
-  const std::vector<std::pair<std::uint8_t, std::string_view>> refused = {
-      {0x46, "Enumerate"}, {0x54, "InstanceOf"}, {0x69, "Extends"}};
+// Invariant: ImplementsOp must stay refused by name, since the slice has no interface model; a stub that silently succeeds would run the Trace after it and trace nothing.
+TEST(Avm1Interpreter, ImplementsOpStaysRefusedByName) {
+  const std::vector<std::pair<std::uint8_t, std::string_view>> refused = {{0x2C, "ImplementsOp"}};
   for (const auto& [code, name] : refused) {
     SCOPED_TRACE(name);
     const auto stream = decode(cat({rec(code, {}), rec(0x26, {}), Bytes{0x00}}));

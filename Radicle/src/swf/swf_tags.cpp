@@ -591,6 +591,17 @@ SwfStatus decode_tag_payload(const std::vector<std::byte>& payload, SwfTag& out_
       out_tag.font_texture = texture;
       return SwfStatus::ok;
     }
+    case tag::kDefineScalingGrid: {
+      SwfReader reader(data, 0);
+      SwfScalingGrid grid;
+      std::size_t next = 0;
+      if (!reader.read_u16(grid.character_id) ||
+          !read_rect(data, reader.position(), grid.splitter, next)) {
+        return SwfStatus::malformed_tag;
+      }
+      out_tag.scaling_grid = grid;
+      return SwfStatus::ok;
+    }
     default:
       return SwfStatus::ok;
   }

@@ -46,11 +46,24 @@ Avm1RunStatus place_register(Avm1Call& call, std::size_t index, Avm1Data value,
   return Avm1RunStatus::Ok;
 }
 
+Avm1Data* scope_slot(const Avm1Block& block, const std::string& name) {
+  for (auto scope = block.scopes->rbegin(); scope != block.scopes->rend(); ++scope) {
+    const auto found = scope->object->properties.find(name);
+    if (found != scope->object->properties.end()) {
+      return &found->second;
+    }
+  }
+  return nullptr;
+}
+
 Avm1Data& declare_slot(const Avm1Block& block, Avm1State& state, const std::string& name) {
   return block.call != nullptr ? block.call->locals[name] : state.variables[name];
 }
 
 Avm1Data& assign_slot(const Avm1Block& block, Avm1State& state, const std::string& name) {
+  if (Avm1Data* scoped = scope_slot(block, name)) {
+    return *scoped;
+  }
   if (block.call != nullptr) {
     const auto local = block.call->locals.find(name);
     if (local != block.call->locals.end()) {
@@ -62,6 +75,9 @@ Avm1Data& assign_slot(const Avm1Block& block, Avm1State& state, const std::strin
 
 const Avm1Data* find_slot(const Avm1Block& block, const Avm1State& state,
                           const std::string& name) {
+  if (const Avm1Data* scoped = scope_slot(block, name)) {
+    return scoped;
+  }
   if (block.call != nullptr) {
     const auto local = block.call->locals.find(name);
     if (local != block.call->locals.end()) {
@@ -126,7 +142,8 @@ Avm1RunStatus invoke(Avm1Run& run, const Avm1FunctionBody& body, Avm1Data this_v
     }
   }
   run.depth += 1;
-  const Avm1Block block{body.actions, body.end_offset, &call};
+  std::vector<Avm1Data> scopes;
+  const Avm1Block block{body.actions, body.end_offset, &call, &scopes};
   const Avm1RunStatus status = run_block(run, block);
   run.depth -= 1;
   if (status != Avm1RunStatus::Ok) {
@@ -173,6 +190,7 @@ Avm1RunStatus invoke_method(Avm1Run& run, std::string& message, bool construct) 
     return Avm1RunStatus::Ok;
   }
   Avm1Data instance = object_ops::plain_object();
+  instance.object->constructed_by = target.function;
   if (const Avm1RunStatus status = invoke(run, *target.function, instance, args, result, message);
       status != Avm1RunStatus::Ok) {
     return status;
