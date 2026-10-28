@@ -87,7 +87,7 @@ public class SwfEditingTests
 
         for (var step = 0; step < 4; ++step) history.Undo();
         Assert.Equal(original, history.WriteBytes());
-        Assert.Empty(SwfVerbs.FrameLabelRows(history, 0));
+        Assert.Equal(new[] { "start" }, SwfVerbs.FrameLabelRows(history, 0).Select(row => row.Name));
     }
 
     [Fact]

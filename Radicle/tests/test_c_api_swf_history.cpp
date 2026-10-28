@@ -367,7 +367,7 @@ TEST(CApiSwfVerbs, EditTextAndFrameLabelsUndoAndRedoAsOneHistory) {
         << radicle_last_error();
   }
   EXPECT_EQ(history_bytes(history), movie);
-  EXPECT_EQ(label_rows(history), std::vector<std::string>{});
+  EXPECT_EQ(label_rows(history), std::vector<std::string>{"0	0	start"});
   for (int step = 0; step < 4; ++step) {
     ASSERT_EQ(radicle_swf_history_redo(history.get(), &result), RADICLE_STATUS_OK)
         << radicle_last_error();
