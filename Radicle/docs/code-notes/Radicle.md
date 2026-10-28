@@ -8286,3 +8286,101 @@ A row whose character is a DefineText or DefineText2 with a clip depth opens a m
 - `Radicle/tests/test_swf_svg_text_clip.cpp:SwfFrameSvgTextClip.StaticTextInsideAClipSpriteJoinsTheSpriteMask` detects a text child left out of the sprite clipPath (the blue square would paint unclipped), and a glyph that ignores its child's world transform (it would print at the origin, not at 20 px).
 
 Expected strings were derived by hand. The glyph is a 1000-twip square (50 px, the path of `Radicle/tests/test_swf_svg.cpp:kRedSquare` at its size), at a DefineText height of 1024, so the font scale is 1 and the text matrix is the identity. The blue square is the 600-twip one, `Radicle/tests/test_swf_svg.cpp:kBlueSquare`. The clipPath ids follow the shape-mask convention `r<index>clip`. Nothing was compiled or run on the development machine for this change, so CI must confirm them.
+
+## Radicle/src/avm2/interpreter.cpp:Interpreter::execute_frame (AVM2 late ops census)
+
+Census from a source scan (not compiled or run): 169 named opcodes, 168 with a case in `Radicle/src/avm2/interpreter_dispatch_a.inc` through `interpreter_dispatch_e.inc`, and 1 without, `getdescendants` 0x59. This replaces the 12-opcode census above. The 11 added here are dxns 0x06, dxnslate 0x07, pushnamespace 0x31, finddef 0x5F, setpropertylate 0x69, deletepropertylate 0x6B, getglobalslot 0x6E, setglobalslot 0x6F, esc_xelem 0x71, esc_xattr 0x72 and checkfilter 0x78. The new cases are in `Radicle/src/avm2/interpreter_dispatch_e.inc`, and finddef is a label on the findproperty case in `Radicle/src/avm2/interpreter_dispatch_b.inc`.
+
+getdescendants stays undispatched because this runtime has no XML or XMLList object model (see the R3 status note above), so there is no descendant set to return. It needs that model before a case can be added.
+
+## Radicle/src/avm2/interpreter_dispatch_e.inc:pushnamespace
+
+pushnamespace pushes the namespace URI as a string Value, not a namespace Value kind. The Value variant has no namespace kind and no Namespace builtin exists. The only consumer of a namespace operand, `Radicle/src/avm2/interpreter_property.cpp:Interpreter::pop_runtime_operands`, reads it with to_string and builds a Package namespace, so a string gives the same result there. The cost is that `typeof` and `is Namespace` see a string. Add a namespace kind when a Namespace class is modelled. The public namespace has the empty URI, so it pushes "".
+
+## Radicle/src/avm2/interpreter_dispatch_e.inc:setpropertylate
+
+The late opcodes 0x69 and 0x6B have no constant pool operand, so the name is on the operand stack. The case builds a RuntimeName multiname in the public namespace and resolves the name with `Radicle/src/avm2/interpreter_property.cpp:Interpreter::pop_runtime_operands`. setpropertylate passes above=1 because the value is on top, and deletepropertylate passes above=0. The stack order is object, name, value for set and object, name for delete. There is no getpropertylate opcode: getproperty (0x66) already handles a runtime name through `resolve_runtime_multiname` in `Radicle/src/avm2/interpreter_dispatch_b.inc`.
+
+## Radicle/src/avm2/interpreter_dispatch_e.inc:getglobalslot
+
+getglobalslot and setglobalslot address `frame.scopes.front()`, the object getglobalscope pushes. A read past the end of the slots is undefined, as getslot does. A write grows the slot vector, as setslot does. An empty scope list raises ScopeUnderflow.
+
+## Radicle/src/avm2/interpreter_dispatch_e.inc:dxns
+
+dxns and dxnslate store the URI in `Radicle/include/fo4/avm2/interpreter.hpp:Interpreter` (the Frame field `default_xml_namespace`). Nothing reads it yet, because the default XML namespace only affects E4X, which is not modelled. The effect is storage only. The value is per frame and is not inherited by callees.
+
+## Radicle/src/avm2/interpreter_xml_text.cpp:escape_xml_markup
+
+Element content escapes `&`, `<` and `>`. Attribute values also escape `"` to `&quot;`. This is the set the change brief named, which I did not check against the ECMA-357 text (no reference is available on this machine). ECMA-357 may also replace CR with a character reference in element content, and LF, CR and TAB in attributes. Those characters pass through unchanged here. The input is UTF-8 bytes; the escaped characters are ASCII, so multibyte sequences are never altered.
+
+## Radicle/src/avm2/interpreter_dispatch_e.inc:checkfilter
+
+checkfilter refuses only null and undefined, with a TypeError status. Other values pass and stay on the stack. Because XML is not modelled, a non-XML value that the real opcode refuses passes here.
+
+## Radicle/src/avm2/interpreter_dispatch_b.inc:finddef
+
+finddef takes the findproperty path with create_on_global false, because the flag is `instruction.opcode == op::k_findpropstrict`. It therefore searches the scope chain and pushes the owning scope, or null when no scope holds the name. The real finddef may refuse a missing definition instead. The avmplus reference was not available here, so this is not verified.
+
+## Radicle/src/abc/abc_stack.cpp:stack_effect
+
+The verifier has entries for all 11 added opcodes. For the group from 0x70 to 0x7A and from 0x80 to 0x97 (which includes esc_xelem 0x71, esc_xattr 0x72 and checkfilter 0x78), the case sets only `pushes = 1` and leaves `pops` at 0, the default in `verify_stack`. Those opcodes pop an operand, so the verifier appears to under-count the stack for them and for other unary ops in the group. The interpreter does not run the verifier, so this change does not depend on it. It is not changed here because the fix needs a per-opcode review of the group, and the verifier tests were not run here.
+
+## Radicle/tests/test_avm2_late_ops.cpp:PushnamespaceReturnsTheUriOfTheConstantPoolEntry
+
+Detects pushnamespace returning the wrong constant pool entry, such as an off-by-one index, or the public namespace not being the empty URI. The expected values "flash.display" and "" follow from `Radicle/tests/avm2_test_support.hpp:ScriptBuilder::namespace_of`, where pool index 1 is the public package.
+
+## Radicle/tests/test_avm2_late_ops.cpp:DxnsLeavesTheOperandStackAlone
+
+Detects dxns consuming or pushing a stack value. With 9 under the URI, returnvalue must still return 9.
+
+## Radicle/tests/test_avm2_late_ops.cpp:DxnslatePopsTheUriItIsGiven
+
+Detects dxnslate leaving its operand on the stack. With 9 under the URI, returnvalue must return 9, not the URI string.
+
+## Radicle/tests/test_avm2_late_ops.cpp:SetpropertylateStoresTheValueUnderTheNameFromTheStack
+
+Detects setpropertylate reading the value and the name in the wrong order, or leaving the object behind. If name and value were swapped, getproperty of "k" would not return the int 42 that was pushed last.
+
+## Radicle/tests/test_avm2_late_ops.cpp:SetpropertylateRefusesANullObject
+
+Detects setpropertylate writing through a null object without an error. The expected status is NullReference, with a message starting "cannot write".
+
+## Radicle/tests/test_avm2_late_ops.cpp:DeletepropertylateReturnsTrueForAnExistingKey
+
+Detects deletepropertylate returning a non-boolean or leaving a stray operand. After delete, swap and pop, only the boolean must remain, and it must be true.
+
+## Radicle/tests/test_avm2_late_ops.cpp:DeletepropertylateRemovesTheKeyNamedByTheStack
+
+Detects deletepropertylate reporting success without removing the key, or deleting a different name. After the delete, reading "k" must give undefined.
+
+## Radicle/tests/test_avm2_late_ops.cpp:GetglobalslotReadsTheGlobalObjectNotTheTopScope
+
+Detects getglobalslot reading the top scope object instead of the global object. The object pushed by pushscope has no slots, so reading it would give undefined instead of the int 7.
+
+## Radicle/tests/test_avm2_late_ops.cpp:GetglobalslotPastTheEndIsUndefined
+
+Detects getglobalslot indexing past the slot vector instead of returning undefined for a slot that was never written.
+
+## Radicle/tests/test_avm2_late_ops.cpp:EscXelemEscapesAmpersandAndAngleBracketsButNotQuotes
+
+Detects esc_xelem escaping double quotes in element content, or missing one of the three characters. The expected value is derived by hand from the input a&b<c>d"e.
+
+## Radicle/tests/test_avm2_late_ops.cpp:EscXattrAlsoEscapesDoubleQuotes
+
+Detects esc_xattr leaving a double quote unescaped, which would end an attribute early. The expected value is derived by hand from the same input.
+
+## Radicle/tests/test_avm2_late_ops.cpp:EscapeConvertsANonStringWithToStringFirst
+
+Detects the escape opcodes applying string operations to a raw number or null instead of converting with to_string first. The expected values "42" and "null" are the ToString results of the pushed int and null.
+
+## Radicle/tests/test_avm2_late_ops.cpp:CheckfilterLeavesANonNullValueOnTheStack
+
+Detects checkfilter consuming its operand, or refusing a non-null value. The int 5 must come back from returnvalue.
+
+## Radicle/tests/test_avm2_late_ops.cpp:CheckfilterRefusesNullAndUndefined
+
+Detects checkfilter letting null or undefined through to the filter. Both must give TypeError.
+
+## Radicle/tests/test_avm2_late_ops.cpp:FinddefPushesTheScopeThatHoldsTheName
+
+Detects finddef pushing the global object or null when a pushed scope holds the name. The object built by newobject with the pair "k" and 1 is on the scope stack, so getproperty of "k" on the owner must give the int 1.

@@ -97,7 +97,8 @@
         break;
       }
       case op::k_findpropstrict:
-      case op::k_findproperty: {
+      case op::k_findproperty:
+      case op::k_finddef: {
         const Multiname* multiname = resolve_multiname(*frame.file, multiname_operand(instruction));
         if (multiname == nullptr) {
           return fail(InterpreterStatus::TypeError, "findproperty has an invalid multiname");
