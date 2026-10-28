@@ -215,7 +215,8 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
         if (!nifPath.trim()) { setResult('Pick a NIF to verify.'); setBusy(false); return; }
         out = await nif.Verify(nifPath);
         const r = out.split('\n').find(l => l.startsWith('RESULT:')) ?? '';
-        appendLog(`${/0 failed/.test(out) ? '✓' : '✗'} verify ${baseName(nifPath)} -- ${r.replace('RESULT:', '').trim()}`);
+        const failed = /^RESULT: \d+ checks, (\d+) failed/.exec(r);
+        appendLog(`${failed?.[1] === '0' ? '✓' : '✗'} verify ${baseName(nifPath)} -- ${r.replace('RESULT:', '').trim()}`);
       } else {
         if (!nifPath.trim() || !fixOut.trim()) { setResult('Pick a NIF and an output path.'); setBusy(false); return; }
         out = await nif.Fix(nifPath, fixOut);
@@ -258,7 +259,7 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
           <button className="papyrus-close" onClick={requestClose} title="Close"><X size={16} /></button>
         </div>
 
-        {mode !== 'materials' && unavailable && <div className="papyrus-warn">NIF bridge not available -- run the desktop app (not the browser dev server). niftool.exe is only needed for authoring and the block tree.</div>}
+        {mode !== 'materials' && unavailable && <div className="papyrus-warn">NIF bridge not available -- run the desktop app (not the browser dev server). niftool.exe is only needed for authoring.</div>}
         {mode === 'materials' && matUnavailable && <div className="papyrus-warn">Material bridge not available -- run the desktop app (not the browser dev server).</div>}
 
         <div className={`papyrus-body ${mode === 'edit' || mode === 'materials' ? 'nif-edit-body' : ''}`}>
@@ -463,7 +464,7 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
 function makeBanner(text: string): { kind: 'ok' | 'warn' | 'error'; text: string } {
   const result = text.split('\n').find(l => l.startsWith('RESULT:'));
   if (result) {
-    const failedMatch = text.match(/(\d+)\s+failed/);
+    const failedMatch = result.match(/(\d+)\s+failed/);
     const failed = failedMatch ? failedMatch[1] : null;
     if (failed !== null) return { kind: failed !== '0' ? 'warn' : 'ok', text: result.replace('RESULT:', '').trim() };
     if (/FAILED/i.test(result)) return { kind: 'error', text: result.replace('RESULT:', '').trim() };

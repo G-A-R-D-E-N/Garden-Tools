@@ -64,12 +64,14 @@ Result<std::string> NifService::geometry(const std::filesystem::path& nifPath) c
 
 Result<std::string> NifService::verify(const std::filesystem::path& nifPath) const {
     if (auto valid = requireFile(nifPath, "NIF"); !valid) return std::unexpected(valid.error());
-    return run({"verify", pathArg(nifPath)});
+    if (niftoolResolves(executable_)) return run({"verify", pathArg(nifPath)});
+    return renderVerify(nifPath);
 }
 
 Result<std::string> NifService::tree(const std::filesystem::path& nifPath) const {
     if (auto valid = requireFile(nifPath, "NIF"); !valid) return std::unexpected(valid.error());
-    return run({"tree", pathArg(nifPath)});
+    if (niftoolResolves(executable_)) return run({"tree", pathArg(nifPath)});
+    return renderTree(nifPath);
 }
 
 Result<std::string> NifService::fix(const std::filesystem::path& nifPath,

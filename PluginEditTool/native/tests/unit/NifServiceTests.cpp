@@ -32,6 +32,13 @@ void touch(const std::filesystem::path& path, std::string_view contents = {}) {
     stream << contents;
 }
 
+nlohmann::json treeValue(const nlohmann::json& block, const char* key) {
+    for (const auto& field : block.at("fields")) {
+        if (field.at("key") == key) return field.at("value");
+    }
+    return nullptr;
+}
+
 class FakeRunner final : public fo4ide::process::Runner {
 public:
     fo4ide::process::Request last;
@@ -230,12 +237,8 @@ TEST_CASE("NifService authoring without niftool names the missing tool") {
 
     FakeRunner runner;
     fo4ide::assets::NifService service(runner, std::filesystem::path{});
-    auto verify = service.verify(nif);
     auto fix = service.fix(nif, root / "fixed.nif");
 
-    REQUIRE_FALSE(verify.has_value());
-    CHECK(verify.error().type == "NifToolNotFound");
-    CHECK(verify.error().message.find("niftool not installed; authoring needs it") != std::string::npos);
     REQUIRE_FALSE(fix.has_value());
     CHECK(fix.error().message.find("niftool not installed; authoring needs it") != std::string::npos);
     CHECK(runner.calls == 0);
@@ -278,4 +281,127 @@ TEST_CASE("NifService geometry names the BGSM material of an untextured shape") 
     CHECK(shape.at("bgsmPath") == "Materials\\Clutter\\Thing.BGSM");
     CHECK(shape.at("textures").empty());
     CHECK(runner.calls == 0);
+}
+
+TEST_CASE("NifService tree maps nodes and shape slots onto the editor contract in-process") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto nif = root / "tree.nif";
+    fo4ide::test::writeBytes(nif, fo4ide::test::treeNif("Materials\\Clutter\\Thing.BGSM",
+                                                       {"Textures\\Thing_d.dds", "Textures\\Thing_n.dds"}));
+
+    FakeRunner runner;
+    fo4ide::assets::NifService service(runner, std::filesystem::path{});
+    auto result = service.tree(nif);
+
+    REQUIRE(result.has_value());
+    const auto parsed = nlohmann::json::parse(*result);
+    CHECK(parsed.at("fo4") == true);
+    REQUIRE(parsed.at("blocks").size() == 2);
+    const auto& node = parsed.at("blocks")[0];
+    CHECK(node.at("id") == 0);
+    CHECK(node.at("group") == "Nodes");
+    CHECK(treeValue(node, "name") == "Root");
+    CHECK(treeValue(node, "translation") == nlohmann::json::array({0.5, 0.0, 0.0}));
+    const auto& shape = parsed.at("blocks")[1];
+    CHECK(shape.at("id") == 1);
+    CHECK(shape.at("type") == "BSTriShape");
+    CHECK(shape.at("group") == "Shapes");
+    CHECK(treeValue(shape, "translation") == nlohmann::json::array({0.25, 0.0, 0.0}));
+    CHECK(treeValue(shape, "verts") == 3);
+    CHECK(treeValue(shape, "material") == "Materials\\Clutter\\Thing.BGSM");
+    CHECK(treeValue(shape, "tex0") == "Textures\\Thing_d.dds");
+    CHECK(treeValue(shape, "tex1") == "Textures\\Thing_n.dds");
+    CHECK(treeValue(shape, "tex2") == "");
+    CHECK(runner.calls == 0);
+}
+
+TEST_CASE("NifService maps tree and verify onto niftool when it resolves") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto tool = root / "niftool";
+    const auto nif = root / "sample.nif";
+    touch(tool);
+    touch(nif);
+
+    FakeRunner runner;
+    fo4ide::assets::NifService service(runner, tool);
+    auto tree = service.tree(nif);
+    REQUIRE(tree.has_value());
+    CHECK(runner.last.arguments == std::vector<std::string>{"tree", nif.string()});
+    auto verify = service.verify(nif);
+    REQUIRE(verify.has_value());
+    CHECK(runner.last.arguments == std::vector<std::string>{"verify", nif.string()});
+    CHECK(runner.calls == 2);
+}
+
+TEST_CASE("NifService verify reports a readable FO4 NIF in-process") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto nif = root / "sample.nif";
+    fo4ide::test::writeBytes(nif, fo4ide::test::triangleNif());
+
+    FakeRunner runner;
+    fo4ide::assets::NifService service(runner, std::filesystem::path{});
+    auto result = service.verify(nif);
+
+    REQUIRE(result.has_value());
+    CHECK(result->starts_with("RESULT: 8 checks, 0 failed\n[ok] header parses\n"));
+    CHECK(result->find("[FAIL]") == std::string::npos);
+    CHECK(runner.calls == 0);
+}
+
+TEST_CASE("NifService verify reports a truncated NIF as a failed header check") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto nif = root / "truncated.nif";
+    auto bytes = fo4ide::test::triangleNif();
+    bytes.resize(bytes.size() - 8);
+    fo4ide::test::writeBytes(nif, bytes);
+
+    FakeRunner runner;
+    fo4ide::assets::NifService service(runner, std::filesystem::path{});
+    auto result = service.verify(nif);
+
+    REQUIRE(result.has_value());
+    CHECK(result->starts_with("RESULT: 1 checks, 1 failed\n[FAIL] header parses: "));
+    CHECK(runner.calls == 0);
+}
+
+TEST_CASE("NifService verify flags a drive-letter texture path") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto nif = root / "paths.nif";
+    fo4ide::test::writeBytes(nif, fo4ide::test::treeNif("Materials\\Clutter\\Thing.BGSM",
+                                                       {"C:\\Art\\Thing_d.dds", "Textures\\Thing_n.dds"}));
+
+    FakeRunner runner;
+    fo4ide::assets::NifService service(runner, std::filesystem::path{});
+    auto result = service.verify(nif);
+
+    REQUIRE(result.has_value());
+    CHECK(result->starts_with("RESULT: 8 checks, 1 failed\n"));
+    CHECK(result->find("[FAIL] texture paths are relative: shape 'Tri' (block 1) texture 'C:\\Art\\Thing_d.dds' "
+                       "is a drive-letter path") != std::string::npos);
+}
+
+TEST_CASE("NifService verify flags a child that two nodes both list") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto nif = root / "shared_child.nif";
+    const std::vector<fo4ide::test::FixtureBlock> blocks{
+        {"NiNode", fo4ide::test::nodeBlock(0U, 0.0f, {1U})},
+        {"BSTriShape", fo4ide::test::triangleShapeBlock(0xFFFFFFFFU)},
+        {"NiNode", fo4ide::test::nodeBlock(0U, 0.0f, {1U})},
+    };
+    fo4ide::test::writeBytes(nif, fo4ide::test::nifFile(blocks, {"Tri"}));
+
+    FakeRunner runner;
+    fo4ide::assets::NifService service(runner, std::filesystem::path{});
+    auto result = service.verify(nif);
+
+    REQUIRE(result.has_value());
+    CHECK(result->starts_with("RESULT: 8 checks, 1 failed\n"));
+    CHECK(result->find("[FAIL] each block is listed under one parent only: block 1 is listed under node 2 "
+                       "but its parent is 0") != std::string::npos);
 }

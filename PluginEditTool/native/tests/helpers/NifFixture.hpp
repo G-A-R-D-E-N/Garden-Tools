@@ -24,13 +24,13 @@ inline void putText(std::vector<std::byte>& out, std::string_view text) {
     for (const char ch : text) out.push_back(static_cast<std::byte>(ch));
 }
 
-inline std::vector<std::byte> triangleShapeBlock(std::uint32_t shader) {
+inline std::vector<std::byte> triangleShapeBlock(std::uint32_t shader, float translationX = 0.0f) {
     std::vector<std::byte> out;
     putUint(out, 0, 4);
     putUint(out, 0, 4);
     putUint(out, 0xFFFFFFFFU, 4);
     putUint(out, 0, 4);
-    for (const float value : {0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f}) {
+    for (const float value : {translationX, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f}) {
         putFloat(out, value);
     }
     putUint(out, 0xFFFFFFFFU, 4);
@@ -73,6 +73,31 @@ inline std::vector<std::byte> textureSetBlock(std::uint32_t slots) {
     std::vector<std::byte> out;
     putUint(out, slots, 4);
     for (std::uint32_t i = 0; i < slots; ++i) putUint(out, 0, 4);
+    return out;
+}
+
+inline std::vector<std::byte> texturedSetBlock(const std::vector<std::string>& paths) {
+    std::vector<std::byte> out;
+    putUint(out, paths.size(), 4);
+    for (const auto& path : paths) {
+        putUint(out, path.size(), 4);
+        putText(out, path);
+    }
+    return out;
+}
+
+inline std::vector<std::byte> nodeBlock(std::uint32_t nameIndex, float x, const std::vector<std::uint32_t>& children) {
+    std::vector<std::byte> out;
+    putUint(out, nameIndex, 4);
+    putUint(out, 0, 4);
+    putUint(out, 0xFFFFFFFFU, 4);
+    putUint(out, 0, 4);
+    for (const float value : {x, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f}) {
+        putFloat(out, value);
+    }
+    putUint(out, 0xFFFFFFFFU, 4);
+    putUint(out, children.size(), 4);
+    for (const auto child : children) putUint(out, child, 4);
     return out;
 }
 
@@ -120,6 +145,16 @@ inline std::vector<std::byte> materialNif(const std::string& material) {
         {"BSShaderTextureSet", textureSetBlock(2U)},
     };
     return nifFile(blocks, {"Tri", material});
+}
+
+inline std::vector<std::byte> treeNif(const std::string& material, const std::vector<std::string>& textures) {
+    const std::vector<FixtureBlock> blocks{
+        {"NiNode", nodeBlock(2U, 0.5f, {1U})},
+        {"BSTriShape", triangleShapeBlock(2U, 0.25f)},
+        {"BSLightingShaderProperty", shaderBlock(1U, 3U)},
+        {"BSShaderTextureSet", texturedSetBlock(textures)},
+    };
+    return nifFile(blocks, {"Tri", material, "Root"});
 }
 
 inline void writeBytes(const std::filesystem::path& path, const std::vector<std::byte>& bytes) {

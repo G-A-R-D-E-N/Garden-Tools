@@ -127,6 +127,29 @@ TEST_CASE("NifTarget maps Verify to the native NIF service") {
     CHECK(runner.last.arguments == std::vector<std::string>{"verify", nif.string()});
 }
 
+TEST_CASE("NifTarget Tree returns the error JSON for an unreadable NIF with niftool absent") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto nif = root / "truncated.nif";
+    auto bytes = fo4ide::test::triangleNif();
+    bytes.resize(bytes.size() - 8);
+    fo4ide::test::writeBytes(nif, bytes);
+
+    FakeRunner runner;
+    FakePlatform platform;
+    fo4ide::assets::NifService service(runner, std::filesystem::path{});
+    fo4ide::assets::TextureResolver textures;
+    fo4ide::app::NifTarget target(service, textures, platform);
+
+    auto result = target.invoke("Tree", nlohmann::json::array({nif.string()}));
+    REQUIRE(result.has_value());
+    const auto parsed = nlohmann::json::parse(result->get<std::string>());
+    REQUIRE(parsed.contains("error"));
+    CHECK_FALSE(parsed.at("error").get<std::string>().empty());
+    CHECK_FALSE(parsed.contains("blocks"));
+    CHECK(runner.calls == 0);
+}
+
 TEST_CASE("NifTarget stages browser dropped bytes without the CSharp host") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
@@ -312,26 +335,6 @@ TEST_CASE("CellTarget geometry batch records a worker exception instead of termi
         REQUIRE(entry.contains("error"));
         CHECK(entry.at("error").get<std::string>().find("niftool blew up") != std::string::npos);
     }
-}
-
-TEST_CASE("NifTarget Tree reports a missing niftool as JSON the panel can show") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto nif = root / "sample.nif";
-    touch(nif);
-
-    FakeRunner runner;
-    FakePlatform platform;
-    fo4ide::assets::NifService service(runner, std::filesystem::path{});
-    fo4ide::assets::TextureResolver textures;
-    fo4ide::app::NifTarget target(service, textures, platform);
-
-    auto result = target.invoke("Tree", nlohmann::json::array({nif.string()}));
-    REQUIRE(result.has_value());
-
-    const auto parsed = nlohmann::json::parse(result->get<std::string>());
-    CHECK(parsed.at("error").get<std::string>().find("niftool not installed; authoring needs it") != std::string::npos);
-    CHECK(runner.calls == 0);
 }
 
 TEST_CASE("NifTarget Geo reports a parse failure as JSON the panel can show") {
