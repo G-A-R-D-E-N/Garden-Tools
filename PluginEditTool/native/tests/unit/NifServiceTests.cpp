@@ -331,7 +331,7 @@ TEST_CASE("NifService fix without niftool names the missing tool") {
     auto fix = service.fix(nif, root / "fixed.nif");
 
     REQUIRE_FALSE(fix.has_value());
-    CHECK(fix.error().message.find("niftool not installed; fix and import need it") != std::string::npos);
+    CHECK(fix.error().message.find("niftool not installed; fix needs it") != std::string::npos);
     CHECK(runner.calls == 0);
 }
 
@@ -495,4 +495,60 @@ TEST_CASE("NifService verify flags a child that two nodes both list") {
     CHECK(result->starts_with("RESULT: 8 checks, 1 failed\n"));
     CHECK(result->find("[FAIL] each block is listed under one parent only: block 1 is listed under node 2 "
                        "but its parent is 0") != std::string::npos);
+}
+
+TEST_CASE("NifService imports an OBJ in-process without niftool and the written NIF verifies") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto obj = root / "quad.obj";
+    const auto nif = root / "quad.nif";
+    touch(obj, "o Body\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\nvt 1 0\nvt 1 1\nvt 0 1\nvn 0 0 1\n"
+               "f 1/1/1 2/2/1 3/3/1 4/4/1\n");
+
+    FakeRunner runner;
+    fo4ide::assets::NifService service(runner, std::filesystem::path{});
+    auto result = service.importObj(obj, nif, {
+        .material = "Materials/quad.bgsm",
+        .diffuseTexture = "Textures/quad_d.dds",
+        .normalTexture = "Textures/quad_n.dds",
+    });
+
+    REQUIRE(result.has_value());
+    CHECK(result->starts_with("RESULT: import OK (in-process)\nSaved: " + nif.string() +
+                              "\nRESULT: 8 checks, 0 failed\n"));
+    CHECK(std::filesystem::is_regular_file(nif));
+    CHECK_FALSE(std::filesystem::exists(root / "quad.nif.niftmp"));
+    CHECK(runner.calls == 0);
+}
+
+TEST_CASE("NifService refuses box collision in-process and writes no NIF") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto obj = root / "quad.obj";
+    touch(obj, "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n");
+
+    FakeRunner runner;
+    fo4ide::assets::NifService service(runner, std::filesystem::path{});
+    auto result = service.importObj(obj, root / "quad.nif", {.collisionBox = true});
+
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().message.find("box collision needs niftool") != std::string::npos);
+    CHECK_FALSE(std::filesystem::exists(root / "quad.nif"));
+    CHECK(runner.calls == 0);
+}
+
+TEST_CASE("NifService in-process import rejects an OBJ without faces and writes no NIF") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto obj = root / "points.obj";
+    touch(obj, "v 0 0 0\nv 1 0 0\nv 0 1 0\n");
+
+    FakeRunner runner;
+    fo4ide::assets::NifService service(runner, std::filesystem::path{});
+    auto result = service.importObj(obj, root / "points.nif");
+
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().message.find("OBJ has no faces to import") != std::string::npos);
+    CHECK_FALSE(std::filesystem::exists(root / "points.nif"));
+    CHECK(runner.calls == 0);
 }
