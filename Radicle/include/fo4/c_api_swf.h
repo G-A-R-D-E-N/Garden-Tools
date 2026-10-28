@@ -546,6 +546,9 @@ RADICLE_API radicle_status radicle_swf_character_at(const radicle_swf* swf, size
 /* Must refuse an unknown id with NOT_FOUND; a refused model must fail every character getter. */
 RADICLE_API radicle_status radicle_swf_character_by_id(const radicle_swf* swf, uint16_t character_id,
                                                        radicle_swf_character* out_character);
+/* Must refuse a character that is not a decoded shape with NOT_FOUND. Returns malloc'd UTF-8 SVG text the caller must release with radicle_free_bytes; the buffer is NUL-terminated one byte past *out_size. */
+RADICLE_API radicle_status radicle_swf_shape_svg(const radicle_swf* swf, uint16_t character_id,
+                                                 uint8_t** out_text, size_t* out_size);
 
 typedef struct radicle_swf_history radicle_swf_history;
 

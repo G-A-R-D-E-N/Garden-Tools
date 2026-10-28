@@ -274,6 +274,22 @@ public sealed unsafe partial class SwfFile : IDisposable
         }
     }
 
+    public string ShapeSvg(ushort characterId)
+    {
+        using var use = Use();
+        byte* text = null;
+        nuint size = 0;
+        Call.Check(RadicleNative.SwfShapeSvg(use.Pointer, characterId, &text, &size));
+        try
+        {
+            return System.Text.Encoding.UTF8.GetString(Utf8.Raw((IntPtr)text, size));
+        }
+        finally
+        {
+            if (text != null) RadicleNative.FreeBytes(text);
+        }
+    }
+
     public byte[] AssembleAbc(int abc, string text)
     {
         using var use = Use();
