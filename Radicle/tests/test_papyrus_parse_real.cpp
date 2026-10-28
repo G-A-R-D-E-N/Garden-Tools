@@ -151,7 +151,7 @@ std::string join(const std::vector<std::string>& names) {
 TEST(PapyrusParseReal, ParsesEveryCorpusScriptWithoutCrashing) {
   const std::vector<std::filesystem::path> files = corpus_files();
   if (files.empty()) {
-    GTEST_SKIP() << "no .psc corpus found; set FO4RE_PSC_CORPUS to the corpus roots";
+    GTEST_SKIP() << "no .psc corpus found; set FO4_PSC_CORPUS to the corpus roots";
   }
 
   std::size_t clean = 0;
