@@ -102,8 +102,7 @@ public class SwfDocumentServiceTests
     public void RemovesAFrameLabelAndUndoRestoresIt()
     {
         using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
-        var label = document.Movie.Tags.First(tag => tag.Code == 43 && !tag.InsideSprite);
-        var result = document.RemoveLabel(label.Index);
+        var result = document.RemoveLabel(0, 0);
         Assert.True(result.Changed);
         Assert.DoesNotContain(document.FrameLabels(), item => item.Name == "start");
         document.Undo();
@@ -120,10 +119,25 @@ public class SwfDocumentServiceTests
         Assert.DoesNotContain(document.FrameLabels(), label => label.Name == "spriteMenu");
     }
     [NativeFact]
+    public void FrameLabelRowsListEachTimelineWithItsOwnIndex()
+    {
+        // Constraint: detects label rows that carry a tag index or the root index for a sprite, which would send the next rename or remove to another label.
+        using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
+        var root = document.FrameLabelRows(0);
+        Assert.Single(root);
+        Assert.Equal(0, root[0].LabelIndex);
+        Assert.Equal(0u, root[0].Frame);
+        Assert.Equal("start", root[0].Name);
+        var sprite = document.FrameLabelRows(14);
+        Assert.Single(sprite);
+        Assert.Equal(0, sprite[0].LabelIndex);
+        Assert.Equal("inner", sprite[0].Name);
+    }
+    [NativeFact]
     public void RefusesADuplicateLabelBeforeTouchingTheHistory()
     {
         using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
-        var error = Assert.Throws<InvalidOperationException>(() => document.AddLabel(0, "start"));
+        var error = Assert.Throws<RadicleException>(() => document.AddLabel(0, "start"));
         Assert.Contains("already exists", error.Message);
         Assert.Equal(0ul, document.Revision);
     }
@@ -210,8 +224,7 @@ public class SwfDocumentServiceTests
     public void RenameLabelChangesTheNameThroughTheHistory()
     {
         using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
-        var label = document.Movie.Tags.First(tag => tag.Code == 43 && !tag.InsideSprite);
-        var result = document.RenameLabel(label.Index, "begin");
+        var result = document.RenameLabel(0, 0, "begin");
         Assert.True(result.Changed);
         Assert.Contains(document.FrameLabels(), item => item.Name == "begin");
         document.Undo();
@@ -219,12 +232,12 @@ public class SwfDocumentServiceTests
     }
 
     [NativeFact]
-    public void RenameLabelRefusesANonLabelTag()
+    public void RenameLabelRefusesAnOutOfRangeLabelIndex()
     {
+        // Constraint: detects a label index past the timeline's rows reaching another tag or moving the history.
         using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
-        var placement = document.Placements().First(item => !item.InsideSprite);
-        var error = Assert.Throws<InvalidOperationException>(() => document.RenameLabel(placement.TagIndex, "menu"));
-        Assert.Contains("not a frame label", error.Message);
+        var error = Assert.Throws<RadicleException>(() => document.RenameLabel(0, 5, "menu"));
+        Assert.Contains("out of range", error.Message);
         Assert.Equal(0ul, document.Revision);
     }
 
@@ -268,10 +281,9 @@ public class SwfDocumentServiceTests
         using var directory = new TemporaryDirectory();
         var path = directory.Write("Interface\\Test.swf", original);
         using var document = SwfDocument.OpenFile(path);
-        var label = document.Movie.Tags.First(tag => tag.Code == 43 && !tag.InsideSprite).Index;
-        document.RenameLabel(label, "menu");
+        document.RenameLabel(0, 0, "menu");
         document.Save();
-        document.RenameLabel(label, "other");
+        document.RenameLabel(0, 0, "other");
         document.Save();
         Assert.Equal(original, File.ReadAllBytes(path + ".bak"));
         Assert.Equal(document.WriteBytes(), File.ReadAllBytes(path));

@@ -65,6 +65,8 @@ public sealed class SwfDocument : IDisposable
 
     public IReadOnlyList<SwfFrameLabelRecord> FrameLabels() => Movie.FrameLabels;
 
+    public IReadOnlyList<SwfFrameLabelRow> FrameLabelRows(int timeline) => SwfVerbs.FrameLabelRows(_history, (ushort)timeline);
+
     public IReadOnlyList<SwfFrameInstanceRecord> Frame(int timeline, int frame)
     {
         using var frames = Movie.OpenFrames();
@@ -103,32 +105,13 @@ public sealed class SwfDocument : IDisposable
 
     public SwfEditTextRecord EditText(int tagIndex) => Movie.EditText(tagIndex);
 
-    // Requires a root-timeline frame the movie reaches; a duplicate name on the root timeline is refused.
-    public SwfPlanResultRecord AddLabel(int frame, string name, int timeline = 0)
-    {
-        var payload = LabelPayload(name, timeline, -1);
-        if (timeline == 0)
-        {
-            var showFrames = Movie.Tags.Where(tag => tag.Code == 1 && !tag.InsideSprite).ToArray();
-            if (frame < 0 || frame >= showFrames.Length) throw new ArgumentOutOfRangeException(nameof(frame));
-            return Apply(new SwfPlanSpec().Insert(showFrames[frame].Index, 43, payload));
-        }
-        var sprite = Movie.Tags.FirstOrDefault(tag => tag.Code == 39 && tag.SpriteId == (ushort)timeline);
-        if (sprite == null) throw new InvalidOperationException($"timeline {timeline} is not a DefineSprite in this movie");
-        return InsertSpriteChild(sprite, frame, 43, payload);
-    }
+    // Requires a frame the chosen timeline reaches; Radicle refuses a duplicate name on that timeline.
+    public SwfPlanResultRecord AddLabel(int frame, string name, int timeline = 0) =>
+        Verb(history => SwfVerbs.AddFrameLabel(history, (ushort)timeline, (uint)frame, name));
 
-    // Requires a frame-label tag index; the rename keeps every byte after the name's NUL (the named-anchor flag).
-    public SwfPlanResultRecord RenameLabel(int tagIndex, string name)
-    {
-        if (Movie.Tags[tagIndex].Code != 43) throw new InvalidOperationException("the tag is not a frame label");
-        var label = Movie.FrameLabels.First(item => item.TagIndex == tagIndex);
-        var head = LabelPayload(name, label.InsideSprite ? label.SpriteId : 0, tagIndex);
-        var old = Movie.Payload(tagIndex);
-        var nul = Array.IndexOf(old, (byte)0);
-        if (nul < 0) throw new InvalidOperationException("the frame label has no name terminator");
-        return Apply(new SwfPlanSpec().Replace(tagIndex, head.Concat(old.Skip(nul + 1)).ToArray()));
-    }
+    // Requires a label index from FrameLabelRows on that timeline, not a tag index.
+    public SwfPlanResultRecord RenameLabel(int timeline, int labelIndex, string name) =>
+        Verb(history => SwfVerbs.RenameFrameLabel(history, (ushort)timeline, labelIndex, name));
 
     public IReadOnlyList<SwfPlacementRecord> Placements() => Movie.Placements();
 
@@ -136,13 +119,9 @@ public sealed class SwfDocument : IDisposable
     public SwfPlanResultRecord SetDepth(int tagIndex, ushort depth) => Apply(new SwfPlanSpec().Replace(
         tagIndex, SwfPlacementCodec.WithDepth(Movie.Payload(tagIndex), Movie.Tags[tagIndex].Code, depth)));
 
-    // Constraint: an edit-text write goes through the same plan and history path as every other edit.
-    public SwfPlanResultRecord EditEditText(int tagIndex, SwfEditTextEdit edit)
-    {
-        var record = Movie.EditText(tagIndex);
-        var payload = SwfEditTextCodec.Write(record, Movie.Payload(tagIndex), edit);
-        return Apply(new SwfPlanSpec().Replace(tagIndex, payload));
-    }
+    // Requires a DefineEditText tag index; the verb commits one history command like every other edit.
+    public SwfPlanResultRecord EditEditText(int tagIndex, SwfEditTextEdit edit) =>
+        Verb(history => SwfVerbs.ApplyEditText(history, tagIndex, edit));
 
     public SwfPlacementMatrix PlacementTransform(int tagIndex) => Movie.PlacementMatrix(tagIndex);
 
@@ -173,13 +152,9 @@ public sealed class SwfDocument : IDisposable
         return InsertSpriteChild(sprite, frame, 26, payload);
     }
 
-    // Requires the tag index of a frame label; the removal is one history command and undo restores the tag.
-    public SwfPlanResultRecord RemoveLabel(int tagIndex)
-    {
-        var tag = Movie.Tags[tagIndex];
-        if (tag.Code != 43) throw new InvalidOperationException("the tag is not a frame label");
-        return Apply(new SwfPlanSpec().Remove(tagIndex));
-    }
+    // Requires a label index from FrameLabelRows on that timeline; the removal is one history command and undo restores the tag.
+    public SwfPlanResultRecord RemoveLabel(int timeline, int labelIndex) =>
+        Verb(history => SwfVerbs.RemoveFrameLabel(history, (ushort)timeline, labelIndex));
 
     // Requires an instruction boundary in a method body of the ABC block; the edit lands as one plan over its DoABC tag.
     public SwfPlanResultRecord InsertAbcInstruction(int abc, int body, int offset, string text) =>
@@ -213,6 +188,13 @@ public sealed class SwfDocument : IDisposable
 
     public override string ToString() => Path ?? "<bytes>";
 
+    private SwfPlanResultRecord Verb(Func<SwfEditHistory, SwfPlanResultRecord> verb)
+    {
+        var result = verb(_history);
+        Reopen();
+        return result;
+    }
+
     private void Reopen()
     {
         var bytes = _history.WriteBytes();
@@ -221,16 +203,6 @@ public sealed class SwfDocument : IDisposable
         _current = bytes;
         _movie = next;
         old.Dispose();
-    }
-
-    private byte[] LabelPayload(string name, int timeline, int ownTagIndex)
-    {
-        if (string.IsNullOrWhiteSpace(name) || name.Contains('\0'))
-            throw new ArgumentException("a frame label needs a name without NUL characters", nameof(name));
-        if (Movie.FrameLabels.Any(label => label.TagIndex != ownTagIndex && label.SpriteId == timeline &&
-                                           label.InsideSprite == (timeline != 0) && label.Name == name))
-            throw new InvalidOperationException("a frame label with that name already exists on this timeline");
-        return System.Text.Encoding.UTF8.GetBytes(name).Concat(new byte[] { 0 }).ToArray();
     }
 
     // Requires a reached frame of the sprite; the child tag is spliced in front of that frame's ShowFrame header.

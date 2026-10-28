@@ -8,7 +8,7 @@ function stubBridge(overrides: Record<string, unknown> = {}) {
   const swf = {
     Open: vi.fn(async () => JSON.stringify({ revision: 0, undo: 0, redo: 0, dirty: false })),
     Characters: vi.fn(async () => JSON.stringify({ characters: [{ id: 11, kind: 'EditText', tagIndex: 0, name: '', imported: '' }] })),
-    FrameLabels: vi.fn(async () => JSON.stringify({ labels: [{ name: 'start', tagIndex: 1, spriteId: 0, insideSprite: false }] })),
+    FrameLabels: vi.fn(async () => JSON.stringify({ labels: [{ labelIndex: 0, frame: 0, name: 'start' }] })),
     Frame: vi.fn(async () => JSON.stringify({ rows: [{ depth: 1, character: 11, name: '', x: 10, y: 20, scaleX: 1, scaleY: 1, rotation: 0, instanceId: 7, boundsX: 5, boundsY: 6, boundsWidth: 40, boundsHeight: 30, hasBounds: true, clipDepth: 0 }] })),
     RenameLabel: vi.fn(async () => JSON.stringify({ changed: true, revision: 1, undo: 1, redo: 0, dirty: true })),
     Undo: vi.fn(async () => JSON.stringify({ changed: true, revision: 2, undo: 0, redo: 1, dirty: true })),
@@ -41,12 +41,13 @@ describe('SwfPanel', () => {
     await act(async () => { fireEvent.click(screen.getByText('Open')); });
     await waitFor(() => expect(swf.Characters).toHaveBeenCalled());
     expect(screen.getByText(/EditText #11/)).toBeTruthy();
-    expect(screen.getByText(/root · start/)).toBeTruthy();
+    expect(await screen.findByText(/root · start/)).toBeTruthy();
 
     fireEvent.click(screen.getByText(/root · start/));
     fireEvent.change(screen.getByDisplayValue('start'), { target: { value: 'menu' } });
     await act(async () => { fireEvent.click(screen.getByText('Rename')); });
-    await waitFor(() => expect(swf.RenameLabel).toHaveBeenCalledWith(1, 'menu'));
+    // Constraint: detects a rename sent by tag index instead of the timeline and the per-timeline label index.
+    await waitFor(() => expect(swf.RenameLabel).toHaveBeenCalledWith(0, 0, 'menu'));
 
     await act(async () => { fireEvent.click(screen.getByTitle('Undo')); });
     await waitFor(() => expect(swf.Undo).toHaveBeenCalled());
@@ -170,5 +171,55 @@ describe('SwfPanel', () => {
     expect(await screen.findByText(/was not found/)).toBeTruthy();
     expect(screen.queryByText(/class MenuClass/)).toBeNull();
     expect(screen.getByText('No ABC scripts in this SWF.')).toBeTruthy();
+  });
+
+  it('lists the labels of the selected timeline and renames the one picked from it', async () => {
+    // Constraint: detects the label list staying on the root timeline or a sprite label being renamed with the root's timeline.
+    const swf = stubBridge({
+      FrameLabels: vi.fn(async (timeline: number) => JSON.stringify({
+        labels: timeline === 14 ? [{ labelIndex: 0, frame: 0, name: 'inner' }] : [{ labelIndex: 0, frame: 0, name: 'start' }],
+      })),
+    });
+    render(<SwfPanel onClose={() => {}} />);
+    fireEvent.change(screen.getByPlaceholderText('Interface/Test.swf'), { target: { value: 'Interface/Test.swf' } });
+    await act(async () => { fireEvent.click(screen.getByText('Open')); });
+    expect(await screen.findByText(/root · start/)).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText('Timeline'), { target: { value: '14' } });
+    expect(await screen.findByText(/sprite 14 · inner/)).toBeTruthy();
+    expect(swf.FrameLabels).toHaveBeenLastCalledWith(14);
+
+    fireEvent.click(screen.getByText(/sprite 14 · inner/));
+    fireEvent.change(screen.getByDisplayValue('inner'), { target: { value: 'outer' } });
+    await act(async () => { fireEvent.click(screen.getByText('Rename')); });
+    await waitFor(() => expect(swf.RenameLabel).toHaveBeenCalledWith(14, 0, 'outer'));
+  });
+
+  it('removes the selected label by its timeline and label index', async () => {
+    // Constraint: detects Remove dropping the timeline or sending a tag index, which would delete another label on a sprite timeline.
+    const swf = stubBridge({ FrameLabels: vi.fn(async () => JSON.stringify({ labels: [{ labelIndex: 2, frame: 4, name: 'loop' }] })) });
+    render(<SwfPanel onClose={() => {}} />);
+    fireEvent.change(screen.getByPlaceholderText('Interface/Test.swf'), { target: { value: 'Interface/Test.swf' } });
+    await act(async () => { fireEvent.click(screen.getByText('Open')); });
+    fireEvent.click(await screen.findByText(/root · loop/));
+    await act(async () => { fireEvent.click(screen.getByText('Remove')); });
+    await waitFor(() => expect(swf.RemoveLabel).toHaveBeenCalledWith(0, 2));
+  });
+
+  it('reloads the label list from the history after an undo', async () => {
+    // Invariant: the label list is read again from Radicle after an undo; detects a label that the undo removed staying on screen.
+    const swf = stubBridge({
+      Open: vi.fn(async () => JSON.stringify({ revision: 1, undo: 1, redo: 0, dirty: true })),
+      FrameLabels: vi.fn()
+        .mockResolvedValueOnce(JSON.stringify({ labels: [{ labelIndex: 0, frame: 0, name: 'start' }] }))
+        .mockResolvedValue(JSON.stringify({ labels: [] })),
+    });
+    render(<SwfPanel onClose={() => {}} />);
+    fireEvent.change(screen.getByPlaceholderText('Interface/Test.swf'), { target: { value: 'Interface/Test.swf' } });
+    await act(async () => { fireEvent.click(screen.getByText('Open')); });
+    expect(await screen.findByText(/root · start/)).toBeTruthy();
+    await act(async () => { fireEvent.click(screen.getByTitle('Undo')); });
+    await waitFor(() => expect(screen.queryByText(/root · start/)).toBeNull());
+    expect(swf.FrameLabels).toHaveBeenCalledTimes(2);
   });
 });
