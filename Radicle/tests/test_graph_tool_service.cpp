@@ -262,31 +262,44 @@ TEST(GraphToolService, GraphToolServiceCApiCompileSourceOnlyMatchesTheServiceTex
     std::filesystem::remove_all(output);
 }
 
-TEST(GraphToolService, GraphToolServiceCApiCompileRefusesAnEmptyOutputPathAndClearsTheOutputs) {
-    uint8_t sentinel = 0;
-    uint8_t* bytes = &sentinel;
-    size_t size = 99;
-    const auto status =
-        radicle_graph_compile("Fixture.fograph", "", imports().c_str(), 0, nullptr, 0, &bytes, &size);
+TEST(GraphToolService, GraphToolServiceCApiCompileWithANullOrEmptyOutputPathWritesNothing) {
+    const auto expected = withGraph(goodGraph(), [](const std::string& path) {
+        return GraphToolService::compile(path, nullptr, &imports(), true);
+    });
+    for (const char* output : {static_cast<const char*>(nullptr), ""}) {
+        const auto text = withGraph(goodGraph(), [&](const std::string& path) {
+            uint8_t* bytes = nullptr;
+            size_t size = 0;
+            const auto status = radicle_graph_compile(path.c_str(), output, imports().c_str(), 1,
+                                                      nullptr, 0, &bytes, &size);
+            return takeText(status, bytes, size);
+        });
 
-    EXPECT_EQ(status, RADICLE_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(bytes, nullptr);
-    EXPECT_EQ(size, 0u);
+        EXPECT_EQ(text, expected);
+        EXPECT_TRUE(startsWith(text, "RESULT: OK. Generated source for Fixture."));
+        EXPECT_TRUE(text.find("Wrote ") == std::string::npos);
+    }
+    EXPECT_FALSE(std::filesystem::exists(std::filesystem::current_path() / "Fixture.psc"));
 }
 
 TEST(GraphToolService, GraphToolServiceCApiCompileRefusesAnOutputPathThatEscapesWithDotDot) {
     const std::string root = uniqueRoot("escape");
     const std::string output = (std::filesystem::path(root) / ".." / "escaped").string();
     const auto escaped = std::filesystem::path(root).parent_path() / "escaped";
-    uint8_t* bytes = nullptr;
-    size_t size = 0;
-    const auto status = radicle_graph_compile("Fixture.fograph", output.c_str(), imports().c_str(),
-                                              0, nullptr, 0, &bytes, &size);
+    const auto status = withGraph(goodGraph(), [&](const std::string& path) {
+        uint8_t* bytes = nullptr;
+        size_t size = 0;
+        const auto result = radicle_graph_compile(path.c_str(), output.c_str(), imports().c_str(),
+                                                  0, nullptr, 0, &bytes, &size);
+        EXPECT_EQ(bytes, nullptr);
+        EXPECT_EQ(size, 0u);
+        return result;
+    });
 
     EXPECT_EQ(status, RADICLE_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(bytes, nullptr);
     EXPECT_FALSE(std::filesystem::exists(escaped));
     std::filesystem::remove_all(escaped);
+    std::filesystem::remove_all(root);
 }
 
 TEST(GraphToolService, GraphToolServiceCApiNullRequiredArgumentsAreRefusedWithClearedOutputs) {
@@ -321,6 +334,27 @@ TEST(GraphToolService, GraphToolServiceCApiNullRequiredArgumentsAreRefusedWithCl
 
     EXPECT_EQ(radicle_graph_validate("Fixture.fograph", nullptr, nullptr, 0, nullptr, nullptr),
               RADICLE_STATUS_INVALID_ARGUMENT);
+}
+
+TEST(GraphToolService, GraphToolServiceCApiRefusesANullBaseImportArrayWithANonZeroCount) {
+    uint8_t* bytes = nullptr;
+    size_t size = 0;
+    const auto status = radicle_graph_describe_node("op.add", nullptr, nullptr, 1, &bytes, &size);
+
+    EXPECT_EQ(status, RADICLE_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(bytes, nullptr);
+}
+
+TEST(GraphToolService, GraphToolServiceCApiAZeroOrNegativeLimitGivesTheServiceDefaultOfThirty) {
+    for (const int limit : {0, -1}) {
+        uint8_t* bytes = nullptr;
+        size_t size = 0;
+        const auto status =
+            radicle_graph_palette_search("Get", imports().c_str(), limit, nullptr, 0, &bytes, &size);
+
+        EXPECT_EQ(takeText(status, bytes, size),
+                  GraphToolService::searchPalette("Get", &imports(), 30));
+    }
 }
 
 TEST(GraphToolService, GraphToolServiceCApiRefusesANullBaseImportEntry) {

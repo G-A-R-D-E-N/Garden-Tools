@@ -16,7 +16,7 @@ RADICLE_API radicle_status radicle_graph_validate(const char* graph_path,
                                                   uint8_t** out_text,
                                                   size_t* out_size);
 
-/* Requires radicle_free_bytes; output_path must be non-empty and must not contain a '..' segment. */
+/* Requires radicle_free_bytes; a NULL or empty output_path writes nothing, and a '..' segment is refused as hygiene, not containment. */
 RADICLE_API radicle_status radicle_graph_compile(const char* graph_path,
                                                  const char* output_path,
                                                  const char* imports,

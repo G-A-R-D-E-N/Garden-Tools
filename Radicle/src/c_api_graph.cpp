@@ -35,6 +35,8 @@ radicle_status guarded(Body&& body) {
     return body();
   } catch (const std::bad_alloc& error) {
     return fail_exception(RADICLE_STATUS_OUT_OF_MEMORY, error);
+  } catch (const std::filesystem::filesystem_error& error) {
+    return fail_exception(RADICLE_STATUS_IO_ERROR, error);
   } catch (const std::exception& error) {
     return fail_exception(RADICLE_STATUS_INTERNAL_ERROR, error);
   } catch (...) {
@@ -60,7 +62,7 @@ radicle_status base_roots(const char* const* base_imports,
 
 radicle_status output_folder(const char* output_path, std::filesystem::path& folder) {
   if (output_path == nullptr || output_path[0] == '\0') {
-    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "output_path is required");
+    return RADICLE_STATUS_OK;
   }
   folder = utf8_path(output_path);
   for (const auto& part : folder) {
@@ -137,7 +139,7 @@ radicle_status radicle_graph_compile(const char* graph_path,
     }
     const std::string imports_text = imports ? imports : "";
     return copy_bytes(fo4::graph::GraphToolService::compile(utf8_path(graph_path),
-                                                            &folder,
+                                                            folder.empty() ? nullptr : &folder,
                                                             imports ? &imports_text : nullptr,
                                                             source_only != 0,
                                                             roots),
