@@ -101,8 +101,9 @@ const SwfShape* character_shape(const FrameLookup& lookup, std::uint16_t charact
   return morph ? &*morph : nullptr;
 }
 
-std::string text_paths(const FontIndex& fonts, const SwfText& text) {
-  const SwfTransform text_transform = transform_from_matrix(text.matrix);
+std::string text_paths(const FontIndex& fonts, const SwfText& text,
+                       const SwfTransform& outer = {}) {
+  const SwfTransform text_transform = compose_transform(outer, transform_from_matrix(text.matrix));
   std::string paths;
   const SwfFont* font = nullptr;
   std::uint32_t color = kDefaultTextColor;
@@ -158,7 +159,14 @@ std::string sprite_clip_to_svg(const FrameLookup& lookup, const SvgBitmaps& bitm
     const SwfFrameInstance& row = frame.instances[child];
     std::optional<SwfShape> morph;
     const SwfShape* shape = character_shape(lookup, row.character_id, row.ratio, morph);
-    if (!shape || row.world_visible != sprite.world_visible) {
+    if (row.world_visible != sprite.world_visible) {
+      continue;
+    }
+    if (!shape) {
+      const auto text = lookup.texts.find(row.character_id);
+      if (text != lookup.texts.end()) {
+        paths += text_paths(lookup.fonts, *text->second, row.world_transform);
+      }
       continue;
     }
     const SvgImages images = shape_images(*shape, bitmaps);
@@ -242,16 +250,22 @@ std::string frame_body(const FrameLookup& lookup, const SvgBitmaps& bitmaps,
     std::optional<SwfShape> morph;
     const SwfShape* shape = character_shape(lookup, row.character_id, row.ratio, morph);
     const std::string id = "r" + std::to_string(index);
-    if (row.clip_depth && (row.is_sprite || shape)) {
+    const auto text = lookup.texts.find(row.character_id);
+    const bool has_text = text != lookup.texts.end();
+    if (row.clip_depth && (row.is_sprite || shape || has_text)) {
       masks.push_back(Mask{level, row.depth, *row.clip_depth, id + "clip", false});
       if (row.is_sprite) {
         mask_end = descendants_end(frame, index);
         body += sprite_clip_to_svg(lookup, bitmaps, frame, index);
-      } else {
+      } else if (shape) {
         const SvgImages images = shape_images(*shape, bitmaps);
         body += shape_defs_to_svg(*shape, id + "f", images) + "<clipPath id=\"" + id +
                 "clip\" transform=\"" + transform_text(row.world_transform) + "\">\n" +
                 shape_fill_paths_to_svg(*shape, id + "f", images) + "</clipPath>\n";
+      } else {
+        body += "<clipPath id=\"" + id + "clip\" transform=\"" +
+                transform_text(row.world_transform) + "\">\n" +
+                text_paths(lookup.fonts, *text->second) + "</clipPath>\n";
       }
       continue;
     }
@@ -264,11 +278,7 @@ std::string frame_body(const FrameLookup& lookup, const SvgBitmaps& bitmaps,
       content = shape_group(bitmaps, *shape, id, row.world_transform);
     } else if (button != lookup.buttons.end() && !row.clip_depth) {
       content = button_group(lookup, bitmaps, *button->second, id, row.world_transform);
-    } else {
-      const auto text = lookup.texts.find(row.character_id);
-      if (row.clip_depth || text == lookup.texts.end()) {
-        continue;
-      }
+    } else if (has_text) {
       content = text_group(lookup.fonts, *text->second, row.world_transform);
     }
     if (content.empty()) {
