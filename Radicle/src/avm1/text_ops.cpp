@@ -110,7 +110,7 @@ std::string number_text(double value) {
 }  // namespace
 
 std::uint32_t first_code_point(std::string_view text) {
-  return decode_code_point(text).value;
+  return text.empty() ? 0 : decode_code_point(text).value;
 }
 
 // Invariant: callers mask the unit to 16 bits, so three bytes is the longest form.

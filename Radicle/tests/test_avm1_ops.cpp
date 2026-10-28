@@ -512,7 +512,7 @@ TEST(Avm1Interpreter, StrictEqualsRequiresTheSameTypeAndValue) {
 // Invariant: StrictEquals is unknown from SWF 1 to 5, so it refuses by name at its own offset and traces nothing; a version-blind StrictEquals would trace true on the 1 and 1 row.
 TEST(Avm1Interpreter, StrictEqualsIsRefusedBelowSwfSix) {
   const Bytes input = cat({push_int(1), push_int(1), rec(0x66, {}), rec(0x26, {}), Bytes{0x00}});
-  for (const std::uint8_t version : {1, 5}) {
+  for (const std::uint8_t version : {std::uint8_t{1}, std::uint8_t{5}}) {
     SCOPED_TRACE("SWF " + std::to_string(version));
     const auto stream = decode(input);
     ASSERT_TRUE(stream.ok()) << stream.message;
