@@ -48,6 +48,44 @@ public class RuntimeTests
         return file.ToArray();
     }
 
+    private static byte[] PlacedMovie()
+    {
+        var place = new List<byte> { 0x12, 0x26 };
+        place.AddRange(SwfFixtures.U16(1));
+        place.AddRange(SwfFixtures.U16(20));
+        place.AddRange(SwfFixtures.U16(3));
+        place.AddRange(new byte[] { 8, 1, 0 });
+        var body = new List<byte>();
+        body.AddRange(Rect(0, 400, 0, 200));
+        body.AddRange(SwfFixtures.U16(0x0C00));
+        body.AddRange(SwfFixtures.U16(1));
+        body.AddRange(SwfFixtures.Tag(70, place.ToArray()));
+        body.AddRange(SwfFixtures.Tag(1, Array.Empty<byte>()));
+        body.AddRange(SwfFixtures.Tag(0, Array.Empty<byte>()));
+        var file = new List<byte> { (byte)'F', (byte)'W', (byte)'S', 10 };
+        file.AddRange(BitConverter.GetBytes((uint)(body.Count + 8)));
+        file.AddRange(body);
+        return file.ToArray();
+    }
+
+    [Fact]
+    public void SnapshotEntriesCarryAPlacementsRatioAndCacheFlag()
+    {
+        using var runtime = Runtime.Open();
+        using var movie = runtime.OpenMovie(PlacedMovie());
+        var entries = movie.Snapshot().Entries;
+        Assert.Equal(2, entries.Count);
+        Assert.True(entries[0].Visible);
+        Assert.Equal((ushort)0, entries[0].Ratio);
+        Assert.False(entries[0].CacheAsBitmap);
+        var placed = entries[1];
+        Assert.Equal(20u, placed.CharacterId);
+        Assert.Equal((byte)8, placed.BlendMode);
+        Assert.False(placed.Visible);
+        Assert.Equal((ushort)3, placed.Ratio);
+        Assert.True(placed.CacheAsBitmap);
+    }
+
     [Fact]
     public void AdvancesAndSnapshotsASyntheticMovie()
     {
