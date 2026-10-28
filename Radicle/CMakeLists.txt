@@ -265,6 +265,10 @@ add_library(fo4
   src/papyrus/runtime.cpp
   src/papyrus/scheduler.cpp
   src/papyrus/execute.cpp
+  src/papyrus/lexer.cpp
+  src/papyrus/parser.cpp
+  src/papyrus/parser_statement.cpp
+  src/papyrus/parser_expression.cpp
   src/swf/swf.cpp
   src/swf/swf_tags.cpp
   src/swf/swf_placement.cpp
@@ -810,6 +814,9 @@ if(RADICLE_BUILD_TESTS)
     tests/test_pex_disasm.cpp
     tests/test_papyrus_source.cpp
     tests/test_papyrus_source_real.cpp
+    tests/test_papyrus_lexer.cpp
+    tests/test_papyrus_parser.cpp
+    tests/test_papyrus_parse_real.cpp
     tests/test_abc.cpp
     tests/test_abc_edit.cpp
     tests/test_abc_pool.cpp
