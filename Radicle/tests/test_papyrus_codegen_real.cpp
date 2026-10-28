@@ -1,5 +1,7 @@
 #include <fo4/papyrus/compile_script.hpp>
+#include <fo4/papyrus/decompiler.hpp>
 #include <fo4/papyrus/diagnostic.hpp>
+#include <fo4/papyrus/parser.hpp>
 #include <fo4/papyrus/script_index.hpp>
 #include <fo4/pex/pex.hpp>
 
@@ -8,12 +10,14 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <iterator>
 #include <map>
@@ -33,6 +37,8 @@ namespace helper = fo4::papyrus::test;
 namespace {
 
 constexpr double kMinimumIdenticalFraction = 0.95;
+constexpr double kMinimumDecompileFidelity = 0.802;
+constexpr std::size_t kDecompileSampleLimit = 1500;
 
 struct Pair {
   fs::path pex;
@@ -150,6 +156,15 @@ std::string refusalKey(const fp::PapyrusCompileResult& result) {
   }
   if (!result.sourcesComplete) key += " (incomplete sources)";
   return key;
+}
+
+std::string firstErrorCode(const fp::PapyrusCompileResult& result) {
+  for (const auto& diagnostic : result.diagnostics) {
+    if (diagnostic.severity == fp::Severity::Error) {
+      return std::string(fp::codeString(diagnostic.code));
+    }
+  }
+  return "unknown";
 }
 
 const pex::PexProperty* findProperty(const pex::PexObject& object, const std::string& name) {
@@ -282,4 +297,107 @@ TEST(PapyrusCodegenReal, CompiledOutputMatchesCreationKitInstructionForInstructi
   ASSERT_TRUE(compiled > 0);
   ASSERT_TRUE(static_cast<double>(identical) / static_cast<double>(compiled) >=
               kMinimumIdenticalFraction);
+}
+
+TEST(PapyrusCodegenReal, DecompiledCorpusRecompilesToTheSameProgram) {
+  const auto roots = helper::rootsFromEnv("FO4RE_PSC_ROOTS");
+  if (roots.empty()) {
+    GTEST_SKIP() << "FO4RE_PSC_ROOTS is not set to a directory holding .psc sources";
+  }
+
+  fp::ScriptIndex index;
+  std::vector<fs::path> files;
+  for (const auto& root : roots) {
+    index.addRoot(root);
+    const auto found = helper::enumerateFiles(root, ".psc");
+    files.insert(files.end(), found.begin(), found.end());
+  }
+  std::sort(files.begin(), files.end(), [](const fs::path& a, const fs::path& b) {
+    return a.native() < b.native();
+  });
+  if (files.size() > kDecompileSampleLimit) files.resize(kDecompileSampleLimit);
+
+  fp::PapyrusCompileOptions options;
+  options.emitDebugOnlyCode = true;
+  options.emitBetaOnlyCode = true;
+
+  int compiled = 0;
+  int matched = 0;
+  int differed = 0;
+  int assembly = 0;
+  int failed = 0;
+  std::map<std::string, int> reasons;
+  std::vector<std::string> differences;
+
+  for (const auto& path : files) {
+    const auto name = path.filename().string();
+
+    fp::PapyrusCompileResult first;
+    std::vector<std::uint8_t> bytes;
+    try {
+      const auto* script = index.parseCached(path);
+      if (!script || script->hasErrors()) continue;
+      first = fp::compileScript(index, script, name, options);
+      if (!first.success()) continue;
+      ++compiled;
+      bytes = first.pex->toBytes();
+    } catch (const std::exception&) {
+      continue;
+    }
+    const auto& original = *first.pex;
+
+    try {
+      const auto text = fp::Decompiler::toSource(pex::PexFile::fromBytes(bytes));
+      if (helper::cmpLower(text).find(".code") != std::string::npos) {
+        ++assembly;
+        continue;
+      }
+
+      const auto reparsed = fp::Parser::parse(text, name);
+      if (reparsed.hasErrors()) {
+        ++failed;
+        ++reasons["decompiled source did not parse"];
+        continue;
+      }
+
+      const auto second = fp::compileScript(index, &reparsed, name, options);
+      if (!second.success()) {
+        ++failed;
+        ++reasons["did not recompile: " + firstErrorCode(second)];
+        continue;
+      }
+
+      const auto difference = pexDifference(original, *second.pex);
+      if (difference.empty()) {
+        ++matched;
+      } else {
+        ++differed;
+        if (differences.size() < 20) differences.push_back(name + ": " + difference);
+      }
+    } catch (const std::exception&) {
+      ++failed;
+      ++reasons["decompiler threw"];
+    }
+  }
+
+  const double percent = compiled == 0 ? 0.0 : matched * 100.0 / compiled;
+  std::cout << "DECOMPILE files=" << files.size() << " compiled=" << compiled
+            << " matched=" << matched << " differed=" << differed << " assembly=" << assembly
+            << " failed=" << failed << std::fixed << std::setprecision(1)
+            << " fidelity=" << percent << "%\n";
+
+  std::vector<std::pair<std::string, int>> ranked(reasons.begin(), reasons.end());
+  std::stable_sort(ranked.begin(), ranked.end(),
+                   [](const auto& a, const auto& b) { return a.second > b.second; });
+  for (std::size_t i = 0; i < ranked.size() && i < 15; ++i) {
+    std::cout << "  REASON " << std::setw(5) << ranked[i].second << "  " << ranked[i].first
+              << '\n';
+  }
+  for (const auto& difference : differences) std::cout << "  DIFF " << difference << '\n';
+
+  SCOPED_TRACE("compiled=" + std::to_string(compiled) + " matched=" + std::to_string(matched));
+  ASSERT_FALSE(files.empty());
+  ASSERT_TRUE(compiled > 0);
+  ASSERT_TRUE(static_cast<double>(matched) / static_cast<double>(compiled) >=
+              kMinimumDecompileFidelity);
 }
