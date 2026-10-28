@@ -642,7 +642,8 @@ TEST(SwfFrameSvg, ClipsOnlyTheRowsInsideTheMaskDepthRange) {
   EXPECT_EQ(svg_of(movie, 0), expected);
 }
 
-TEST(SwfFrameSvg, ASlashInARowNameMisplacesTheClipLevelKnownGap) {
+TEST(SwfFrameSvg, ASlashInARowNameKeepsItsClipLevel) {
+  // Detects: a row whose name contains '/' must still sit at its real nesting level, so it stays inside the mask scope (depth 2 at clip depth 2); counting slashes in the path would leave it unclipped.
   const auto movie = movie_of(1, {
       {32, square_shape(1, 1000, 0xFF0000)},
       {32, square_shape(2, 600, 0x0000FF)},
@@ -653,6 +654,29 @@ TEST(SwfFrameSvg, ASlashInARowNameMisplacesTheClipLevelKnownGap) {
   const std::string expected =
       kStageOpen +
       "<clipPath id=\"r0clip\" transform=\"matrix(1 0 0 1 0 0)\">\n" + kRedSquare + "</clipPath>\n"
+      "<g clip-path=\"url(#r0clip)\">\n"
+      "<g transform=\"matrix(1 0 0 1 0 0)\">\n"
+      "<path d=\"M0 0L30 0L30 30L0 30L0 0Z\" fill=\"#0000ff\" fill-opacity=\"1\" fill-rule=\"nonzero\"/>\n"
+      "</g>\n"
+      "</g>\n"
+      "</svg>\n";
+  EXPECT_EQ(svg_of(movie, 0), expected);
+}
+
+TEST(SwfFrameSvg, SkipsAHiddenRowAndTheChildrenOfAHiddenSprite) {
+  // Detects: a PlaceObject3 row with its visible flag cleared paints, or a child of a hidden sprite paints; the visible sibling must still paint.
+  const auto sprite = sprite_tag(9, 1, {{26, place_full(1, 1, {}, {})}, {1, {}}});
+  const auto movie = movie_of(1, {
+      {32, square_shape(1, 1000, 0xFF0000)},
+      {32, square_shape(2, 600, 0x0000FF)},
+      {39, sprite},
+      {70, {std::byte{0x02}, std::byte{0x20}, std::byte{0x01}, std::byte{0x00}, std::byte{0x01}, std::byte{0x00}, std::byte{0x00}}},
+      {26, place_full(2, 2, {}, {})},
+      {70, {std::byte{0x02}, std::byte{0x20}, std::byte{0x03}, std::byte{0x00}, std::byte{0x09}, std::byte{0x00}, std::byte{0x00}}},
+      {1, {}},
+  });
+  const std::string expected =
+      kStageOpen +
       "<g transform=\"matrix(1 0 0 1 0 0)\">\n"
       "<path d=\"M0 0L30 0L30 30L0 30L0 0Z\" fill=\"#0000ff\" fill-opacity=\"1\" fill-rule=\"nonzero\"/>\n"
       "</g>\n"

@@ -18,6 +18,8 @@ struct SwfFrameInstance {
   std::uint32_t timeline_frame{0};
   std::string name;
   std::string path;
+  /* Invariant: 0 on the root timeline, plus one for each enclosing sprite, and never derived from path. */
+  std::uint32_t nesting_level{0};
   SwfTransform transform{};
   SwfTransform world_transform{};
   SwfBounds bounds{};
@@ -25,6 +27,8 @@ struct SwfFrameInstance {
   bool is_sprite{false};
   std::optional<std::uint16_t> clip_depth;
   std::optional<SwfColorTransform> world_color_transform;
+  /* Invariant: false when this row or any sprite above it is hidden by a PlaceObject3 visible flag. */
+  bool world_visible{true};
   /* Invariant: the tag that created the object, top level for a root row and a child index inside its DefineSprite. */
   std::size_t create_tag_index{0};
   /* Invariant: absent until a placement authors a MATRIX, otherwise the address of the one that last authored it. */
@@ -37,7 +41,8 @@ struct SwfFrameInstance {
            timeline_frame == other.timeline_frame && name == other.name && path == other.path &&
            transform == other.transform && world_transform == other.world_transform &&
            bounds == other.bounds && has_bounds == other.has_bounds && is_sprite == other.is_sprite &&
-           clip_depth == other.clip_depth && world_color_transform == other.world_color_transform;
+           nesting_level == other.nesting_level && clip_depth == other.clip_depth &&
+           world_color_transform == other.world_color_transform && world_visible == other.world_visible;
   }
 };
 
