@@ -65,7 +65,7 @@ private:
     void computePostDominators();
     void computeDominators();
 
-    static constexpr std::string_view kExit = "\0exit";
+    static constexpr std::string_view kExit{"\0exit", 5};
 
     std::string entryNodeId_;
     std::map<std::string, std::vector<std::pair<std::string, std::string>>> successors_;
