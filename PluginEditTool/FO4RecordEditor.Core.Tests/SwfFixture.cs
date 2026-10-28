@@ -73,7 +73,20 @@ internal static class SwfFixture
         return stream.ToArray();
     }
 
-    public static byte[] Movie()
+    private static byte[] AbcTag()
+    {
+        var payload = new List<byte>(BitConverter.GetBytes(0u));
+        payload.AddRange(Z("edit"));
+        payload.AddRange(new byte[]
+        {
+            0x10, 0x00, 0x2E, 0x00, 0x00, 0x00, 0x00, 0x02, 0x03, 0x46, 0x6F, 0x6F, 0x00, 0x00, 0x00, 0x01,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x01, 0x00, 0x00, 0x02, 0x26, 0x48,
+            0x00, 0x00,
+        });
+        return Tag(82, payload.ToArray());
+    }
+
+    public static byte[] Movie(bool withAbc = false)
     {
         var editText = new List<byte>();
         editText.AddRange(U16(11));
@@ -107,6 +120,7 @@ internal static class SwfFixture
         tags.AddRange(Tag(26, place.ToArray()));
         tags.AddRange(Tag(1, Array.Empty<byte>()));
         tags.AddRange(Tag(39, sprite.ToArray()));
+        if (withAbc) tags.AddRange(AbcTag());
         tags.AddRange(Tag(0, Array.Empty<byte>()));
 
         var head = new List<byte>();
