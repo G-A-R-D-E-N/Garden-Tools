@@ -143,6 +143,8 @@ add_library(fo4
   src/texture/bcn.cpp
   src/texture/dds.cpp
   src/texture/dds_codec.cpp
+  src/nif/write_edits.cpp
+  src/nif/write_model.cpp
   src/forms/armor.cpp
   src/forms/armor_edit.cpp
   src/forms/cell.cpp
@@ -762,6 +764,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_c_api_swf_glyph.cpp
     tests/test_c_api_swf_real.cpp
     tests/test_dds.cpp
+    tests/test_nif_write.cpp
     tests/test_environment_writeback.cpp
     tests/test_writeback_real.cpp
     tests/test_environment_ref_fields.cpp

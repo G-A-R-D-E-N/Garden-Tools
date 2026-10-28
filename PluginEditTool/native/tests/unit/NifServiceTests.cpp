@@ -32,6 +32,11 @@ void touch(const std::filesystem::path& path, std::string_view contents = {}) {
     stream << contents;
 }
 
+std::string fileBytes(const std::filesystem::path& path) {
+    std::ifstream stream(path, std::ios::binary);
+    return std::string((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
+}
+
 nlohmann::json treeValue(const nlohmann::json& block, const char* key) {
     for (const auto& field : block.at("fields")) {
         if (field.at("key") == key) return field.at("value");
@@ -170,6 +175,92 @@ TEST_CASE("NifService applies edits through a temporary output before replacing 
     CHECK_FALSE(std::filesystem::exists(nif.string() + ".niftmp"));
 }
 
+TEST_CASE("NifService applies name, translation and texture edits in-process without niftool") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto nif = root / "tree.nif";
+    fo4ide::test::writeBytes(nif, fo4ide::test::treeNif("Materials\\Clutter\\Thing.BGSM",
+                                                       {"Textures\\Thing_d.dds", "Textures\\Thing_n.dds"}));
+    const auto before = fileBytes(nif);
+
+    FakeRunner runner;
+    fo4ide::assets::NifService service(runner, std::filesystem::path{});
+    auto result = service.applyEdits(nif, nlohmann::json::array({
+        {{"id", 1}, {"cat", "shape"}, {"key", "name"}, {"value", "Renamed"}},
+        {{"id", 1}, {"cat", "shape"}, {"key", "translation"}, {"value", nlohmann::json::array({0.75, 0.0, 0.0})}},
+        {{"id", 1}, {"cat", "shape"}, {"key", "tex0"}, {"value", "Textures\\Thing_new_d.dds"}},
+    }));
+
+    REQUIRE(result.has_value());
+    CHECK(result->find("set OK") != std::string::npos);
+    CHECK(result->find("\nSaved: " + nif.string()) != std::string::npos);
+    CHECK(runner.calls == 0);
+    CHECK_FALSE(std::filesystem::exists(nif.string() + ".niftmp"));
+    CHECK(fileBytes(nif) != before);
+
+    auto tree = service.tree(nif);
+    REQUIRE(tree.has_value());
+    const auto parsed = nlohmann::json::parse(*tree);
+    const auto& node = parsed.at("blocks")[0];
+    const auto& shape = parsed.at("blocks")[1];
+    CHECK(treeValue(shape, "name") == "Renamed");
+    CHECK(treeValue(shape, "translation") == nlohmann::json::array({0.75, 0.0, 0.0}));
+    CHECK(treeValue(shape, "tex0") == "Textures\\Thing_new_d.dds");
+    CHECK(treeValue(shape, "tex1") == "Textures\\Thing_n.dds");
+    CHECK(treeValue(shape, "material") == "Materials\\Clutter\\Thing.BGSM");
+    CHECK(treeValue(shape, "verts") == 3);
+    CHECK(treeValue(node, "name") == "Root");
+    CHECK(treeValue(node, "translation") == nlohmann::json::array({0.5, 0.0, 0.0}));
+}
+
+TEST_CASE("NifService leaves the NIF byte-identical when an in-process edit key is unsupported") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto nif = root / "tree.nif";
+    fo4ide::test::writeBytes(nif, fo4ide::test::treeNif("Materials\\Clutter\\Thing.BGSM",
+                                                       {"Textures\\Thing_d.dds", "Textures\\Thing_n.dds"}));
+    const auto before = fileBytes(nif);
+
+    FakeRunner runner;
+    fo4ide::assets::NifService service(runner, std::filesystem::path{});
+    auto result = service.applyEdits(nif, nlohmann::json::array({
+        {{"id", 1}, {"cat", "shape"}, {"key", "name"}, {"value", "Renamed"}},
+        {{"id", 2}, {"cat", "shader"}, {"key", "shaderFlags"},
+         {"value", nlohmann::json::array({{{"key", "Specular"}, {"label", "Specular"}, {"on", true}}})}},
+    }));
+
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "NifEditFailed");
+    CHECK(result.error().message.find("'shaderFlags'") != std::string::npos);
+    CHECK(fileBytes(nif) == before);
+    CHECK_FALSE(std::filesystem::exists(nif.string() + ".niftmp"));
+    CHECK(runner.calls == 0);
+}
+
+TEST_CASE("NifService reports a writer-rejected read-only key as NifEditFailed and keeps the NIF") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto nif = root / "tree.nif";
+    fo4ide::test::writeBytes(nif, fo4ide::test::treeNif("Materials\\Clutter\\Thing.BGSM",
+                                                       {"Textures\\Thing_d.dds", "Textures\\Thing_n.dds"}));
+    const auto before = fileBytes(nif);
+
+    FakeRunner runner;
+    fo4ide::assets::NifService service(runner, std::filesystem::path{});
+    auto result = service.applyEdits(nif, nlohmann::json::array({{{"id", 1}, {"cat", "shape"}, {"key", "verts"}, {"value", 9.0}}}));
+
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "NifEditFailed");
+    CHECK(result.error().message.find("'verts' is read-only") != std::string::npos);
+    CHECK(fileBytes(nif) == before);
+    CHECK_FALSE(std::filesystem::exists(nif.string() + ".niftmp"));
+
+    auto negative = service.applyEdits(nif, nlohmann::json::array({{{"id", -1}, {"key", "name"}, {"value", "x"}}}));
+    REQUIRE_FALSE(negative.has_value());
+    CHECK(negative.error().message.find("unsigned block id") != std::string::npos);
+    CHECK(fileBytes(nif) == before);
+}
+
 TEST_CASE("NifService refuses missing inputs before spawning a process") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
@@ -229,7 +320,7 @@ TEST_CASE("NifService geometry reports a truncated NIF as an error") {
     CHECK(runner.calls == 0);
 }
 
-TEST_CASE("NifService authoring without niftool names the missing tool") {
+TEST_CASE("NifService fix without niftool names the missing tool") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto nif = root / "sample.nif";
@@ -240,7 +331,7 @@ TEST_CASE("NifService authoring without niftool names the missing tool") {
     auto fix = service.fix(nif, root / "fixed.nif");
 
     REQUIRE_FALSE(fix.has_value());
-    CHECK(fix.error().message.find("niftool not installed; authoring needs it") != std::string::npos);
+    CHECK(fix.error().message.find("niftool not installed; fix and import need it") != std::string::npos);
     CHECK(runner.calls == 0);
 }
 

@@ -3,8 +3,10 @@
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
+#include <cstdint>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -13,6 +15,7 @@
 
 #include <fo4/error.hpp>
 #include <fo4/nif/nif.hpp>
+#include <fo4/nif/nif_write.hpp>
 
 #include <nlohmann/json.hpp>
 
@@ -198,6 +201,29 @@ std::string verifyReport(const std::vector<VerifyCheck>& checks) {
     return out;
 }
 
+Result<fo4::nif::Edit> toEdit(const nlohmann::json& raw) {
+    if (!raw.is_object() || !raw.contains("id") || !raw.contains("key") || !raw.contains("value")) {
+        return std::unexpected(Error{"NifEditFailed", "NIF edit needs id, key and value"});
+    }
+    const auto& rawId = raw.at("id");
+    const auto& rawKey = raw.at("key");
+    const auto& rawValue = raw.at("value");
+    if (!rawId.is_number_integer() || rawId.get<std::int64_t>() < 0 ||
+        rawId.get<std::int64_t>() > static_cast<std::int64_t>(std::numeric_limits<std::uint32_t>::max()) ||
+        !rawKey.is_string()) {
+        return std::unexpected(Error{"NifEditFailed", "NIF edit needs an unsigned block id and a text key"});
+    }
+    const auto id = static_cast<std::uint32_t>(rawId.get<std::int64_t>());
+    const auto key = rawKey.get<std::string>();
+    if (rawValue.is_string()) return fo4::nif::Edit{id, key, rawValue.get<std::string>()};
+    if (rawValue.is_number()) return fo4::nif::Edit{id, key, rawValue.get<float>()};
+    if (rawValue.is_array() && std::all_of(rawValue.begin(), rawValue.end(), [](const nlohmann::json& item) { return item.is_number(); })) {
+        return fo4::nif::Edit{id, key, rawValue.get<std::vector<float>>()};
+    }
+    return std::unexpected(Error{"NifEditFailed", "key '" + key +
+        "' has a value the in-process NIF writer cannot set (text, numbers and number lists only)"});
+}
+
 }
 
 Result<std::string> renderGeometry(const std::filesystem::path& nifPath) {
@@ -257,6 +283,22 @@ Result<std::string> renderVerify(const std::filesystem::path& nifPath) {
         return verifyReport({VerifyCheck{"header parses", error.parse_message()}});
     } catch (const std::exception& error) {
         return verifyReport({VerifyCheck{"header parses", error.what()}});
+    }
+}
+
+Result<std::vector<std::byte>> applyEditsInProcess(const std::filesystem::path& nifPath, const nlohmann::json& edits) {
+    std::vector<fo4::nif::Edit> converted;
+    for (const auto& raw : edits) {
+        auto edit = toEdit(raw);
+        if (!edit) return std::unexpected(edit.error());
+        converted.push_back(std::move(*edit));
+    }
+    try {
+        return fo4::nif::apply_edits(loadNif(nifPath), converted);
+    } catch (const fo4::parse_error& error) {
+        return std::unexpected(Error{"NifEditFailed", error.parse_message()});
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"NifEditFailed", error.what()});
     }
 }
 

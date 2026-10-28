@@ -206,7 +206,7 @@ Keys follow `PluginEditTool/docs/internal/NIF_TOOLCHAIN.md`: `fo4`, `hasBSX` (a 
 
 ## PluginEditTool/native/src/assets/NifService.cpp:NifService::run — niftool-only authoring message
 
-`fix`, `importObj` and `applyEdits` always reach `run`. `verify`, `tree`, `geometry` and `inspect` reach it only when the configured executable resolves; otherwise they read in-process. An empty executable path now reports `niftool not installed; authoring needs it (set NIFTOOL_PATH or place niftool beside the application)`. A configured path that is missing is named in the error for these operations. Before this change an empty path produced `niftool executable not found: ` with nothing after the colon, which reached the user as garbage text.
+`fix` and `importObj` always reach `run`. `applyEdits` reaches it only when the configured executable resolves; otherwise it saves in-process (see `NifService::applyEdits`). `verify`, `tree`, `geometry` and `inspect` reach `run` only when the configured executable resolves; otherwise they read in-process. An empty executable path now reports `niftool not installed; fix and import need it (set NIFTOOL_PATH or place niftool beside the application)`. A configured path that is missing is named in the error for `fix` and `importObj`. Before this change an empty path produced `niftool executable not found: ` with nothing after the colon, which reached the user as garbage text.
 
 ## PluginEditTool/native/src/assets/NifService.cpp:NifService::geometry — niftool when it resolves, in-process fallback
 
@@ -2600,7 +2600,7 @@ Regression targets: a `latest` or plain-`http` URL, a malformed SHA256, a Locato
 
 ## PluginEditTool/native/src/assets/NifRender.cpp:renderTree, renderVerify — in-process NIF tree and verify
 
-`NifService::tree` and `NifService::verify` (`PluginEditTool/native/src/assets/NifService.cpp:NifService::tree`, `NifService::verify`) run niftool when the configured executable resolves and otherwise call these renderers. `renderTree` emits the `NifTree` contract that `PluginEditTool/web/src/NifEditor.tsx` consumes: a `Nodes` group (name, translation, scale from `Node.local`) and a `Shapes` group (name, translation from `Radicle/src/nif/block_transform.cpp:block_transform`, verts and tris counts, `shaderType` as the shader block's type, `material` as the BSLightingShaderProperty name, `tex0` to `tex7` padded with empty strings). The `cat` values `node` and `shape` are labels only: there is no in-process set path, so they are not niftool's values. Failures return `NifParseFailed`, which `PluginEditTool/native/src/app/ServiceTargets.cpp:serviceJsonText` wraps as `{"error":...}`.
+`NifService::tree` and `NifService::verify` (`PluginEditTool/native/src/assets/NifService.cpp:NifService::tree`, `NifService::verify`) run niftool when the configured executable resolves and otherwise call these renderers. `renderTree` emits the `NifTree` contract that `PluginEditTool/web/src/NifEditor.tsx` consumes: a `Nodes` group (name, translation, scale from `Node.local`) and a `Shapes` group (name, translation from `Radicle/src/nif/block_transform.cpp:block_transform`, verts and tris counts, `shaderType` as the shader block's type, `material` as the BSLightingShaderProperty name, `tex0` to `tex7` padded with empty strings). The `cat` values `node` and `shape` are labels only: `applyEditsInProcess` dispatches on `key` and ignores `cat`, so they are not niftool's values. Failures return `NifParseFailed`, which `PluginEditTool/native/src/app/ServiceTargets.cpp:serviceJsonText` wraps as `{"error":...}`.
 
 Omitted, not guessed: node rotation (not a web field), collision, BSXFlags, alpha property, effect shader, shader flags, emissive, specular, glossiness, opacity and UV offset/scale. The reader (`Radicle/src/nif/shader.cpp:read_shader`) stops at the texture-set reference, and the field offsets after it are unverified. Shader flag bit names are unverified too.
 
@@ -2613,8 +2613,21 @@ Regression targets, by test in `PluginEditTool/native/tests/unit/NifServiceTests
 - `NifService verify reports a truncated NIF as a failed header check`: verify throws instead of reporting.
 - `NifService verify flags a drive-letter texture path`: an absolute path leaks into the editor.
 - `NifService verify flags a child that two nodes both list`: the "listed under one parent only" check silently passes.
-- `NifService authoring without niftool names the missing tool`: this test no longer asserts verify, because verify now runs in-process.
+- `NifService fix without niftool names the missing tool`: fix still needs niftool, so this test pins the missing-tool message for it. Verify runs in-process.
 - `PluginEditTool/native/tests/unit/ServiceTargetsTests.cpp:NifTarget Tree returns the error JSON for an unreadable NIF with niftool absent`: a Tree failure returned as raw text, which the web `JSON.parse` cannot read.
 
 `Radicle/src/nif/block_transform.cpp:block_transform` reads the local transform of an AV-object block (a node or a shape) through `detail::read_av_header`. It is used for shape translation only. Regression targets: a shape translation read from a node's transform or from the wrong block makes the tree panel show the wrong position. `Radicle/tests/test_nif.cpp:BlockTransformReadsTheShapesOwnLocalTransform` checks the shape's own transform, and `PluginEditTool/native/tests/unit/NifServiceTests.cpp:NifService tree maps nodes and shape slots onto the editor contract in-process` checks that the fixture's shape translation reaches the tree.
+
+## PluginEditTool/native/src/assets/NifService.cpp:NifService::applyEdits — in-process save when niftool does not resolve
+
+When `niftoolResolves(executable_)` is false, `NifService::applyEdits` calls `applyEditsInProcess` (`PluginEditTool/native/src/assets/NifRender.cpp:applyEditsInProcess`), writes the returned bytes to `<target>.niftmp` through `commitEditedNif`, and copies that over the target. The niftool branch is unchanged: it runs `niftool set` and requires `set OK`. The in-process success text is `set OK (in-process)\nSaved: <target>`. The web `PluginEditTool/web/src/NifEditor.tsx:doSave` checks `/set OK/`, so both branches satisfy it.
+
+`PluginEditTool/native/src/assets/NifRender.cpp:toEdit` converts `{id, cat, key, value}` to `fo4::nif::Edit`: a text value becomes a string, a JSON number a float, and a list of numbers a float vector. A boolean, a list containing objects (the editor's `shaderFlags`), or null fails with `NifEditFailed` naming the key before anything is written. The writer (`Radicle/src/nif/write_edits.cpp:apply_edit`) throws a `parse_error` for unsupported keys and for the read-only keys `verts`, `tris` and `shaderType`; `applyEditsInProcess` maps that to `NifEditFailed` with the writer's message. The bytes are built in memory first, so a failed edit never creates `<target>.niftmp` and the target stays byte-identical. `commitEditedNif` creates its `Cleanup` only after that point, so an existing `.niftmp` is never removed by a failed conversion.
+
+Regression targets, by test in `PluginEditTool/native/tests/unit/NifServiceTests.cpp`:
+- `NifService applies name, translation and texture edits in-process without niftool`: the save reads back through `renderTree`, so a dropped key, a wrong slot or a wrong block id shows the old value in the editor.
+- `NifService leaves the NIF byte-identical when an in-process edit key is unsupported`: a batch with one bad key must not write its valid edits to disk.
+- `NifService reports a writer-rejected read-only key as NifEditFailed and keeps the NIF`: a writer `parse_error` escaping as a crash instead of a `NifEditFailed` result.
+- `NifService applies edits through a temporary output before replacing target`: the niftool branch still shells out with the `.niftmp` argument.
+- `PluginEditTool/native/tests/unit/ServiceTargetsTests.cpp:NifTarget ApplyEdits takes the editor's JSON string and saves in-process with niftool absent`: the editor sends the edits as a JSON string in argument 1 and `""` for an in-place save in argument 2.
 
