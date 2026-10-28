@@ -3,11 +3,14 @@
 #include "c_api_swf_internal.hpp"
 
 #include "fo4/c_api_swf.h"
+#include "fo4/swf/swf_bitmap_png.hpp"
 #include "fo4/swf/swf_glyph_edit.hpp"
 
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -563,6 +566,30 @@ radicle_status radicle_swf_bitmap_at(const radicle_swf* swf, size_t index,
   out_bitmap->color_table_size = bitmap.color_table_size.value_or(0);
   out_bitmap->data_size = bitmap.data_size;
   return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_swf_bitmap_png(const radicle_swf* swf, size_t index, uint8_t** out_png,
+                                      size_t* out_size) {
+  clear_error();
+  if (out_png) *out_png = nullptr;
+  if (out_size) *out_size = 0;
+  const auto* tag = decoded_tag(swf, index);
+  if (tag == nullptr || out_png == nullptr || out_size == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "swf, out_png, out_size and a tag index are required");
+  }
+  if (!tag->bitmap) {
+    return fail(RADICLE_STATUS_NOT_FOUND, "the tag carries no decoded bitmap");
+  }
+  return guarded("unknown exception while encoding a bitmap", [&] {
+    const auto png = fo4::swf::bitmap_to_png(*tag->bitmap);
+    if (!png) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the bitmap has no PNG export");
+    auto* buffer = static_cast<uint8_t*>(std::malloc(png->size()));
+    if (buffer == nullptr) return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to allocate the PNG bytes");
+    std::memcpy(buffer, png->data(), png->size());
+    *out_png = buffer;
+    *out_size = png->size();
+    return RADICLE_STATUS_OK;
+  });
 }
 
 radicle_status radicle_swf_jpeg_at(const radicle_swf* swf, size_t index,

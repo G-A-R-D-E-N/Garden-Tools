@@ -41,6 +41,7 @@ type SwfHost = {
   AbcBlocks(): Promise<string>;
   Disassemble(abc: number, methodIndex: number): Promise<string>;
   ShapeSvg(characterId: number): Promise<string>;
+  BitmapPng(tagIndex: number): Promise<string>;
   InspectText(): Promise<string>;
   ActionTags(): Promise<string>;
   Avm1Disassemble(tagIndex: number): Promise<string>;
@@ -83,6 +84,7 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
   const labelRequest = useRef(0);
   const [shapeSvg, setShapeSvg] = useState('');
   const shapeRequest = useRef(0);
+  const [bitmapPng, setBitmapPng] = useState('');
   const [inspectText, setInspectText] = useState('');
   const [inspectError, setInspectError] = useState('');
   const [actionTags, setActionTags] = useState<ActionTagRow[]>([]);
@@ -139,6 +141,7 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     selectedMethodKey.current = '';
     shapeRequest.current += 1;
     setShapeSvg('');
+    setBitmapPng('');
     avm1Request.current += 1;
     setAvm1(null);
     setAvm1Error('');
@@ -197,12 +200,21 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     if (!bridge) return;
     const request = ++shapeRequest.current;
     setShapeSvg('');
+    setBitmapPng('');
     if (character.kind === 'Shape') {
       const shape = parse<{ svg?: string; error?: string }>(await bridge.ShapeSvg(character.id));
       if (request !== shapeRequest.current) return;
       if (shape.error) { setError(shape.error); return; }
       setError('');
       setShapeSvg(shape.svg ?? '');
+      return;
+    }
+    if (character.kind === 'Bitmap') {
+      const bitmap = parse<{ png?: string; error?: string }>(await bridge.BitmapPng(character.tagIndex));
+      if (request !== shapeRequest.current) return;
+      if (bitmap.error) { setError(bitmap.error); return; }
+      setError('');
+      setBitmapPng(bitmap.png ?? '');
       return;
     }
     if (character.kind !== 'EditText') return;
@@ -447,6 +459,7 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
             </div>
           )}          <p>Revision {state.revision} · undo {state.undo} · redo {state.redo}</p>
           {shapeSvg && <img className="swf-shape" alt="Shape preview" src={`data:image/svg+xml;utf8,${encodeURIComponent(shapeSvg)}`} />}
+          {bitmapPng && <img className="swf-bitmap" alt="Bitmap preview" src={`data:image/png;base64,${bitmapPng}`} />}
           <section className="swf-inspect" aria-label="Inspect">
             <h4>Inspect</h4>
             {inspectError && <div className="swf-error" role="alert"><AlertTriangle size={14} /> {inspectError}</div>}

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Text;
 
@@ -98,7 +99,19 @@ internal static class SwfFixture
         return Tag(2, payload.ToArray());
     }
 
-    public static byte[] Movie(bool withAbc = false, bool editTextPastSprite = false, bool withShape = false, bool twoFrames = false, bool withAction = false)
+    private static byte[] BitmapTag()
+    {
+        var pixels = new MemoryStream();
+        using (var zlib = new ZLibStream(pixels, CompressionLevel.Optimal, leaveOpen: true)) zlib.Write(new byte[16]);
+        var payload = new List<byte>(U16(20));
+        payload.Add(5);
+        payload.AddRange(U16(2));
+        payload.AddRange(U16(2));
+        payload.AddRange(pixels.ToArray());
+        return Tag(36, payload.ToArray());
+    }
+
+    public static byte[] Movie(bool withAbc = false, bool editTextPastSprite = false, bool withShape = false, bool twoFrames = false, bool withAction = false, bool withBitmap = false)
     {
         var editText = new List<byte>();
         editText.AddRange(U16(11));
@@ -128,6 +141,7 @@ internal static class SwfFixture
 
         var tags = new List<byte>();
         if (withShape) tags.AddRange(ShapeTag());
+        if (withBitmap) tags.AddRange(BitmapTag());
         if (!editTextPastSprite) tags.AddRange(Tag(37, editText.ToArray()));
         tags.AddRange(Tag(43, Z("start")));
         tags.AddRange(Tag(26, place.ToArray()));
