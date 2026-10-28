@@ -45,6 +45,7 @@ namespace {
 constexpr const char* kUnderflow = "the operand stack has too few values";
 constexpr const char* kWhitespace = " \t\r\n";
 constexpr std::size_t kMaxStringBytes = std::size_t{16} * 1024 * 1024;
+constexpr double kUint32Range = 4294967296.0;
 
 struct Avm1State {
   std::vector<Avm1Data> stack;
@@ -153,6 +154,22 @@ std::string to_text(const Avm1Data& data) {
   return "undefined";
 }
 
+std::string type_name(const Avm1Data& data) {
+  switch (data.kind) {
+    case Avm1DataKind::Undefined:
+      return "undefined";
+    case Avm1DataKind::Null:
+      return "null";
+    case Avm1DataKind::Boolean:
+      return "boolean";
+    case Avm1DataKind::Number:
+      return "number";
+    case Avm1DataKind::String:
+      return "string";
+  }
+  return "undefined";
+}
+
 bool to_boolean(const Avm1Data& data) {
   switch (data.kind) {
     case Avm1DataKind::Undefined:
@@ -202,6 +219,19 @@ Avm1Data add_values(const Avm1Data& left, const Avm1Data& right) {
     return string_value(to_text(left) + to_text(right));
   }
   return number_value(to_number(left) + to_number(right));
+}
+
+std::uint32_t to_uint32(const Avm1Data& data) {
+  const double number = to_number(data);
+  if (!std::isfinite(number)) {
+    return 0;
+  }
+  const double modulo = std::fmod(std::trunc(number), kUint32Range);
+  return static_cast<std::uint32_t>(modulo < 0.0 ? modulo + kUint32Range : modulo);
+}
+
+Avm1Data int32_value(std::uint32_t bits) {
+  return number_value(static_cast<double>(static_cast<std::int32_t>(bits)));
 }
 
 std::string opcode_label(std::uint8_t code) {
@@ -429,6 +459,10 @@ Avm1RunStatus execute_action(const Avm1Stream& stream, const Avm1Action& action,
       return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
         return number_value(to_number(left) / to_number(right));
       });
+    case 0x0E:
+      return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
+        return boolean_value(to_number(left) == to_number(right));
+      });
     case 0x0F:
       return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
         return boolean_value(to_number(left) < to_number(right));
@@ -478,9 +512,23 @@ Avm1RunStatus execute_action(const Avm1Stream& stream, const Avm1Action& action,
       return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
         return boolean_value(to_text(left) < to_text(right));
       });
+    case 0x32:
+      return apply_unary(state, message, [](const Avm1Data& operand) {
+        const std::string text = to_text(operand);
+        return number_value(text.empty() ? 0.0 : static_cast<unsigned char>(text.front()));
+      });
+    case 0x33:
+      return apply_unary(state, message, [](const Avm1Data& operand) {
+        const auto byte = static_cast<char>(to_uint32(operand) & 0xFFu);
+        return string_value(std::string(1, byte));
+      });
     case 0x3F:
       return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
         return number_value(std::fmod(to_number(left), to_number(right)));
+      });
+    case 0x44:
+      return apply_unary(state, message, [](const Avm1Data& operand) {
+        return string_value(type_name(operand));
       });
     case 0x47:
       return apply_binary(state, message, add_values);
@@ -511,6 +559,31 @@ Avm1RunStatus execute_action(const Avm1Stream& stream, const Avm1Action& action,
     case 0x51:
       return apply_unary(state, message, [](const Avm1Data& operand) {
         return number_value(to_number(operand) - 1.0);
+      });
+    case 0x60:
+      return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
+        return int32_value(to_uint32(left) & to_uint32(right));
+      });
+    case 0x61:
+      return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
+        return int32_value(to_uint32(left) | to_uint32(right));
+      });
+    case 0x62:
+      return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
+        return int32_value(to_uint32(left) ^ to_uint32(right));
+      });
+    case 0x63:
+      return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
+        return int32_value(to_uint32(left) << (to_uint32(right) & 31u));
+      });
+    case 0x64:
+      return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
+        const auto value = static_cast<std::int32_t>(to_uint32(left));
+        return number_value(static_cast<double>(value >> (to_uint32(right) & 31u)));
+      });
+    case 0x65:
+      return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {
+        return number_value(static_cast<double>(to_uint32(left) >> (to_uint32(right) & 31u)));
       });
     case 0x67:
       return apply_binary(state, message, [](const Avm1Data& left, const Avm1Data& right) {

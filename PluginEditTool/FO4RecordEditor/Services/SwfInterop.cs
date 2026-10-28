@@ -156,6 +156,16 @@ public class SwfInterop
     }));
     public Task<string> Disassemble(int abc, int methodIndex) => Run(() =>
         Json(new { text = Document().Movie.Disassemble(abc, methodIndex) }));
+    public Task<string> InspectText() => Run(() => Json(new { text = Document().InspectText() }));
+    public Task<string> ActionTags() => Run(() => Json(new
+    {
+        tags = Document().Movie.Tags.Where(tag => tag.Code == 12 || tag.Code == 59).Select(tag => new
+        {
+            tagIndex = tag.Index, code = tag.Code, insideSprite = tag.InsideSprite,
+        }).ToArray(),
+    }));
+    public Task<string> Avm1Disassemble(int tagIndex) => Run(() =>
+        Json(new { text = Document().Avm1Disassemble(tagIndex) }));
     public Task<string> ShapeSvg(int characterId) => Run(() =>
     {
         if (characterId < 0 || characterId > ushort.MaxValue)
