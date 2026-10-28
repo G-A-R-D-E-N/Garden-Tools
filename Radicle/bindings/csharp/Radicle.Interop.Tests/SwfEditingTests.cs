@@ -35,6 +35,7 @@ public class SwfEditingTests
         Assert.Equal((ushort)11, instances[0].CharacterId);
         Assert.Equal((ushort)1, instances[0].Depth);
         Assert.Equal(0u, instances[0].TimelineFrame);
+        Assert.Equal(2u, instances[0].CreateTagIndex);
     }
 
     [Fact]

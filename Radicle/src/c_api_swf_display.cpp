@@ -7,9 +7,11 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <new>
 #include <string>
+#include <vector>
 
 using radicle_c_detail::clear_error;
 using radicle_c_detail::fail;
@@ -70,6 +72,32 @@ radicle_swf_bounds to_bounds(const fo4::swf::SwfBounds& value) {
   return out;
 }
 
+// Invariant: after this, every create and transform index of the list is a flat radicle_swf_tag_at index.
+bool to_flat_indices(const fo4::swf::SwfFile& file, fo4::swf::SwfDisplayList& display) {
+  std::map<std::uint16_t, std::vector<std::size_t>> flat_by_timeline;
+  for (auto& timeline : display.timelines) {
+    for (auto& frame : timeline.frames) {
+      for (auto& instance : frame.instances) {
+        auto cached = flat_by_timeline.find(instance.timeline_id);
+        if (cached == flat_by_timeline.end()) {
+          std::vector<std::size_t> positions;
+          if (!radicle_swf_detail::timeline_flat_indices(file, instance.timeline_id, positions)) {
+            return false;
+          }
+          cached = flat_by_timeline.emplace(instance.timeline_id, std::move(positions)).first;
+        }
+        const std::vector<std::size_t>& flat = cached->second;
+        if (instance.create_tag_index >= flat.size()) return false;
+        instance.create_tag_index = flat[instance.create_tag_index];
+        if (!instance.transform_tag_index) continue;
+        if (*instance.transform_tag_index >= flat.size()) return false;
+        instance.transform_tag_index = flat[*instance.transform_tag_index];
+      }
+    }
+  }
+  return true;
+}
+
 }  // namespace
 
 extern "C" {
@@ -87,6 +115,9 @@ radicle_status radicle_swf_frames_open(const radicle_swf* swf, radicle_swf_frame
       return fail(RADICLE_STATUS_PARSE_ERROR,
                   frames->display.message.empty() ? "the display list did not build"
                                                   : frames->display.message.c_str());
+    }
+    if (!to_flat_indices(swf->file, frames->display)) {
+      return fail(RADICLE_STATUS_PARSE_ERROR, "the display list does not address the movie's tags");
     }
     frames->revision = swf->revision;
     frames->built_revision = swf->revision ? swf->revision->revision : 0;
@@ -165,6 +196,9 @@ radicle_status radicle_swf_frames_instance_at(const radicle_swf_frames* frames, 
   instance.bounds = to_bounds(source.bounds);
   instance.name = source.name.c_str();
   instance.path = source.path.c_str();
+  instance.create_tag_index = static_cast<std::uint32_t>(source.create_tag_index);
+  instance.transform_tag_index =
+      source.transform_tag_index ? static_cast<std::uint32_t>(*source.transform_tag_index) : UINT32_MAX;
   *out_instance = instance;
   return RADICLE_STATUS_OK;
 }

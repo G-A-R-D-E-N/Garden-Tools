@@ -1644,6 +1644,8 @@ int main() {
   printf("SwfFramesInstance.Bounds %zu\n", offsetof(radicle_swf_frames_instance, bounds));
   printf("SwfFramesInstance.Name %zu\n", offsetof(radicle_swf_frames_instance, name));
   printf("SwfFramesInstance.Path %zu\n", offsetof(radicle_swf_frames_instance, path));
+  printf("SwfFramesInstance.CreateTagIndex %zu\n", offsetof(radicle_swf_frames_instance, create_tag_index));
+  printf("SwfFramesInstance.TransformTagIndex %zu\n", offsetof(radicle_swf_frames_instance, transform_tag_index));
   printf("SwfTagReplacement %zu\n", sizeof(radicle_swf_tag_replacement));
   printf("SwfTagReplacement.TagIndex %zu\n", offsetof(radicle_swf_tag_replacement, tag_index));
   printf("SwfTagReplacement.Payload %zu\n", offsetof(radicle_swf_tag_replacement, payload));
