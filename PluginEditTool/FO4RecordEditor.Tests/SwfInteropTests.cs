@@ -166,6 +166,39 @@ public sealed class SwfInteropTests
     }
 
     [NativeFact]
+    public async Task BitmapJpegRpcReturnsTheBase64JpegForAJpegBitmapAndTheRefusalForANonBitmap()
+    {
+        // Invariant: BitmapJpeg replies the jpeg field as base64 of the JPEG stream for the tag index the Characters listing gives a JPEG-defined bitmap, and the error shape for an edit-text tag; detects a dropped jpeg field, a jpeg that is not base64 of the JPEG bytes, a JPEG read by character id, or a non-JPEG exporting as jpeg.
+        var root = Path.Combine(Path.GetTempPath(), "fo4re-swf-jpeg-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, "Interface"));
+        File.WriteAllBytes(Path.Combine(root, "Interface", "Test.swf"), SwfFixture.Movie(withJpeg: true));
+        AssetResolver.SetSessionDataRoots(new[] { root });
+        try
+        {
+            var swf = new SwfInterop();
+            Assert.False(Parse(await swf.Open("Interface\\Test.swf")).TryGetProperty("error", out _));
+            var characters = Parse(await swf.Characters()).GetProperty("characters").EnumerateArray().ToArray();
+
+            var jpegBitmap = characters.First(item => item.GetProperty("kind").GetString() == "Bitmap");
+            var reply = Parse(await swf.BitmapJpeg(jpegBitmap.GetProperty("tagIndex").GetInt32()));
+            Assert.False(reply.TryGetProperty("error", out _));
+            var jpeg = reply.GetProperty("jpeg").GetString() ?? string.Empty;
+            Assert.StartsWith("/9j/", jpeg);
+            Assert.Equal(new byte[] { 0xFF, 0xD8, 0xFF, 0xD9 }, Convert.FromBase64String(jpeg));
+
+            var text = characters.First(item => item.GetProperty("kind").GetString() == "EditText");
+            var refusal = Parse(await swf.BitmapJpeg(text.GetProperty("tagIndex").GetInt32()));
+            Assert.False(string.IsNullOrEmpty(refusal.GetProperty("error").GetString()));
+            Assert.False(refusal.TryGetProperty("jpeg", out _));
+        }
+        finally
+        {
+            AssetResolver.SetSessionDataRoots(Array.Empty<string>());
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [NativeFact]
     public async Task FrameSvgRpcReturnsTheRootFrameAndAnEmptyStageBeyondTheTimeline()
     {
         // Invariant: FrameSvg replies the svg field for the root frame and a well-formed empty stage for a frame past the root timeline, and refuses a negative frame; detects a dropped svg field, a frame past the timeline refused as an error, or a negative frame wrapped into the uint range and exporting as svg.

@@ -43,6 +43,7 @@ type SwfHost = {
   ShapeSvg(characterId: number): Promise<string>;
   FrameSvg(frame: number): Promise<string>;
   BitmapPng(tagIndex: number): Promise<string>;
+  BitmapJpeg(tagIndex: number): Promise<string>;
   InspectText(): Promise<string>;
   ActionTags(): Promise<string>;
   Avm1Disassemble(tagIndex: number): Promise<string>;
@@ -85,7 +86,7 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
   const labelRequest = useRef(0);
   const [shapeSvg, setShapeSvg] = useState('');
   const shapeRequest = useRef(0);
-  const [bitmapPng, setBitmapPng] = useState('');
+  const [bitmapSrc, setBitmapSrc] = useState('');
   const [rootFrames, setRootFrames] = useState(0);
   const [previewFrame, setPreviewFrame] = useState(0);
   const [frameSvg, setFrameSvg] = useState('');
@@ -161,7 +162,7 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     selectedMethodKey.current = '';
     shapeRequest.current += 1;
     setShapeSvg('');
-    setBitmapPng('');
+    setBitmapSrc('');
     frameRequest.current += 1;
     setFrameSvg('');
     setPreviewFrame(0);
@@ -229,7 +230,7 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     if (!bridge) return;
     const request = ++shapeRequest.current;
     setShapeSvg('');
-    setBitmapPng('');
+    setBitmapSrc('');
     if (character.kind === 'Shape') {
       const shape = parse<{ svg?: string; error?: string }>(await bridge.ShapeSvg(character.id));
       if (request !== shapeRequest.current) return;
@@ -239,11 +240,20 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
       return;
     }
     if (character.kind === 'Bitmap') {
-      const bitmap = parse<{ png?: string; error?: string }>(await bridge.BitmapPng(character.tagIndex));
+      const bitmap = parse<{ png?: string; error?: string; status?: string }>(await bridge.BitmapPng(character.tagIndex));
       if (request !== shapeRequest.current) return;
+      if (bitmap.status === 'NotFound') {
+        // Invariant: BitmapPng refuses a JPEG-defined bitmap as NotFound, and only that status falls back to BitmapJpeg.
+        const jpeg = parse<{ jpeg?: string; error?: string }>(await bridge.BitmapJpeg(character.tagIndex));
+        if (request !== shapeRequest.current) return;
+        if (jpeg.error) { setError(jpeg.error); return; }
+        setError('');
+        setBitmapSrc(`data:image/jpeg;base64,${jpeg.jpeg ?? ''}`);
+        return;
+      }
       if (bitmap.error) { setError(bitmap.error); return; }
       setError('');
-      setBitmapPng(bitmap.png ?? '');
+      setBitmapSrc(`data:image/png;base64,${bitmap.png ?? ''}`);
       return;
     }
     if (character.kind !== 'EditText') return;
@@ -496,7 +506,7 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
             </div>
           )}          <p>Revision {state.revision} · undo {state.undo} · redo {state.redo}</p>
           {shapeSvg && <img className="swf-shape" alt="Shape preview" src={`data:image/svg+xml;utf8,${encodeURIComponent(shapeSvg)}`} />}
-          {bitmapPng && <img className="swf-bitmap" alt="Bitmap preview" src={`data:image/png;base64,${bitmapPng}`} />}
+          {bitmapSrc && <img className="swf-bitmap" alt="Bitmap preview" src={bitmapSrc} />}
           <section className="swf-frame" aria-label="Frame preview">
             <h4>Frame preview</h4>
             <button type="button" onClick={() => void showFrame(previewFrame - 1)} disabled={previewFrame <= 0}>Prev</button>

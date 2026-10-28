@@ -393,6 +393,65 @@ describe('SwfPanel', () => {
     expect(swf.BitmapPng).toHaveBeenNthCalledWith(2, 5);
   });
 
+  it('falls back to BitmapJpeg when BitmapPng refuses a JPEG-defined bitmap as NotFound and shows the JPEG as an image/jpeg data URL', async () => {
+    // Invariant: only a NotFound from BitmapPng falls back to BitmapJpeg for the same flat tag index, and its jpeg reply is shown as a base64 JPEG data URL; detects a JPEG bitmap left as an error, a fallback keyed by character id, or a JPEG served under the PNG MIME type.
+    const jpeg = '/9j/2Q==';
+    const swf = stubBridge({
+      Characters: vi.fn(async () => JSON.stringify({ characters: [
+        { id: 30, kind: 'Bitmap', tagIndex: 4, name: '', imported: '' },
+      ] })),
+      BitmapPng: vi.fn(async () => JSON.stringify({ error: 'the tag carries no decoded bitmap', status: 'NotFound' })),
+      BitmapJpeg: vi.fn(async () => JSON.stringify({ jpeg })),
+    });
+    render(<SwfPanel onClose={() => {}} />);
+    fireEvent.change(screen.getByPlaceholderText('Interface/Test.swf'), { target: { value: 'Interface/Test.swf' } });
+    await act(async () => { fireEvent.click(screen.getByText('Open')); });
+    fireEvent.click(await screen.findByText(/Bitmap #30/));
+    expect((await screen.findByAltText('Bitmap preview')).getAttribute('src'))
+      .toBe(`data:image/jpeg;base64,${jpeg}`);
+    expect(swf.BitmapPng).toHaveBeenCalledWith(4);
+    expect(swf.BitmapJpeg).toHaveBeenCalledWith(4);
+    expect(screen.queryByText('the tag carries no decoded bitmap')).toBeNull();
+  });
+
+  it('shows a PNG-encodable bitmap from its PNG reply without asking BitmapJpeg', async () => {
+    // Invariant: a bitmap that BitmapPng exports is previewed from that PNG alone; detects a PNG bitmap also fetched as a JPEG, or a JPEG reply replacing the PNG preview.
+    const png = 'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg==';
+    const swf = stubBridge({
+      Characters: vi.fn(async () => JSON.stringify({ characters: [
+        { id: 30, kind: 'Bitmap', tagIndex: 4, name: '', imported: '' },
+      ] })),
+      BitmapPng: vi.fn(async () => JSON.stringify({ png })),
+      BitmapJpeg: vi.fn(async () => JSON.stringify({ jpeg: '/9j/2Q==' })),
+    });
+    render(<SwfPanel onClose={() => {}} />);
+    fireEvent.change(screen.getByPlaceholderText('Interface/Test.swf'), { target: { value: 'Interface/Test.swf' } });
+    await act(async () => { fireEvent.click(screen.getByText('Open')); });
+    fireEvent.click(await screen.findByText(/Bitmap #30/));
+    expect((await screen.findByAltText('Bitmap preview')).getAttribute('src'))
+      .toBe(`data:image/png;base64,${png}`);
+    expect(swf.BitmapJpeg).not.toHaveBeenCalled();
+  });
+
+  it('shows the BitmapJpeg refusal in the error bar when BitmapPng and BitmapJpeg both refuse the bitmap', async () => {
+    // Invariant: when the JPEG fallback is refused too, its message is the one shown and no preview is left; detects the PNG refusal shown in place of the JPEG one, or a refused fallback left as an empty image.
+    const swf = stubBridge({
+      Characters: vi.fn(async () => JSON.stringify({ characters: [
+        { id: 30, kind: 'Bitmap', tagIndex: 4, name: '', imported: '' },
+      ] })),
+      BitmapPng: vi.fn(async () => JSON.stringify({ error: 'the tag carries no decoded bitmap', status: 'NotFound' })),
+      BitmapJpeg: vi.fn(async () => JSON.stringify({ error: 'the tag carries no JPEG without alpha', status: 'NotFound' })),
+    });
+    render(<SwfPanel onClose={() => {}} />);
+    fireEvent.change(screen.getByPlaceholderText('Interface/Test.swf'), { target: { value: 'Interface/Test.swf' } });
+    await act(async () => { fireEvent.click(screen.getByText('Open')); });
+    fireEvent.click(await screen.findByText(/Bitmap #30/));
+    expect(await screen.findByText('the tag carries no JPEG without alpha')).toBeTruthy();
+    expect(screen.queryByText('the tag carries no decoded bitmap')).toBeNull();
+    expect(screen.queryByAltText('Bitmap preview')).toBeNull();
+    expect(swf.BitmapJpeg).toHaveBeenCalledWith(4);
+  });
+
   it('previews a chosen root frame through FrameSvg bounded to the root frame count and sends a refused frame to the error bar', async () => {
     // Invariant: a frame change sends the root frame clamped to 0..frameCount-1 to FrameSvg and renders its svg; a refusal shows its message in the error bar and leaves no frame image; detects a frame sent past the root timeline or below zero, a sprite frame count used for the bound, and a refused frame left on screen as a stale image.
     const swf = stubBridge({
