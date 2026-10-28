@@ -190,8 +190,8 @@ void require_same_shapes(const NifFile& nif, const Bytes& bytes) {
     throw std::runtime_error("internal error: the fixed NIF has a different shape count");
   }
   for (std::size_t i = 0; i < before.size(); ++i) {
-    if (after[i].verts.size() != before[i].verts.size() || after[i].tris.size() != before[i].tris.size() ||
-        !after[i].warning.empty()) {
+    if (after[i].verts.size() != before[i].verts.size() || after[i].tris != before[i].tris ||
+        after[i].warning != before[i].warning) {
       throw std::runtime_error("internal error: the fixed NIF does not read back as the same shapes");
     }
   }
