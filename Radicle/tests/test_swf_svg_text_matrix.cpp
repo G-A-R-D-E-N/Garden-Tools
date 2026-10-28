@@ -4,6 +4,8 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -94,4 +96,60 @@ TEST(SwfFrameSvg, TextRecordOffsetIsScaledByTheTextMatrix) {
       "</g>\n"
       "</svg>\n";
   EXPECT_EQ(tags_frame_svg({square_glyph_font_tag(7, 1024), text_tag}, {row}), expected);
+}
+
+TEST(SwfFrameSvg, NineSliceCutsAPlacedBoxIntoUnscaledCornersAndAStretchedCentre) {
+  fo4::swf::SwfTransform placement;
+  placement.scale_x = 2.5;
+  placement.scale_y = 2.0;
+  placement.translate_x = 100.0;
+  placement.translate_y = 50.0;
+  const auto cells = fo4::swf::nine_slice_regions(
+      fo4::swf::SwfRect{400, 1600, 200, 1800}, fo4::swf::SwfBounds{100, 50, 250, 200}, placement);
+  const std::array<fo4::swf::SwfBounds, 9> sources{
+      fo4::swf::SwfBounds{100, 50, 50, 20},   fo4::swf::SwfBounds{150, 50, 150, 20},
+      fo4::swf::SwfBounds{300, 50, 50, 20},   fo4::swf::SwfBounds{100, 70, 50, 160},
+      fo4::swf::SwfBounds{150, 70, 150, 160}, fo4::swf::SwfBounds{300, 70, 50, 160},
+      fo4::swf::SwfBounds{100, 230, 50, 20},  fo4::swf::SwfBounds{150, 230, 150, 20},
+      fo4::swf::SwfBounds{300, 230, 50, 20}};
+  const std::array<fo4::swf::SwfBounds, 9> destinations{
+      fo4::swf::SwfBounds{100, 50, 20, 10},   fo4::swf::SwfBounds{120, 50, 210, 10},
+      fo4::swf::SwfBounds{330, 50, 20, 10},   fo4::swf::SwfBounds{100, 60, 20, 180},
+      fo4::swf::SwfBounds{120, 60, 210, 180}, fo4::swf::SwfBounds{330, 60, 20, 180},
+      fo4::swf::SwfBounds{100, 240, 20, 10},  fo4::swf::SwfBounds{120, 240, 210, 10},
+      fo4::swf::SwfBounds{330, 240, 20, 10}};
+  for (std::size_t index = 0; index < cells.size(); ++index) {
+    EXPECT_EQ(cells[index].source, sources[index]) << "cell " << index;
+    EXPECT_EQ(cells[index].destination, destinations[index]) << "cell " << index;
+  }
+}
+
+TEST(SwfFrameSvg, NineSliceClampsASplitterThatOverhangsThePlacedBox) {
+  fo4::swf::SwfTransform placement;
+  placement.scale_x = 0.25;
+  const auto cells = fo4::swf::nine_slice_regions(fo4::swf::SwfRect{400, 4000, 200, 1800},
+                                                  fo4::swf::SwfBounds{0, 0, 25, 100}, placement);
+  EXPECT_EQ(cells[0].source, (fo4::swf::SwfBounds{0, 0, 5, 10}));
+  EXPECT_EQ(cells[1].source, (fo4::swf::SwfBounds{5, 0, 20, 10}));
+  EXPECT_EQ(cells[2].source, (fo4::swf::SwfBounds{25, 0, 0, 10}));
+  EXPECT_EQ(cells[0].destination, (fo4::swf::SwfBounds{0, 0, 20, 10}));
+  EXPECT_EQ(cells[1].destination, (fo4::swf::SwfBounds{20, 0, 5, 10}));
+  EXPECT_EQ(cells[2].destination, (fo4::swf::SwfBounds{25, 0, 0, 10}));
+  for (const auto& cell : cells) {
+    EXPECT_GE(cell.source.width, 0.0);
+    EXPECT_GE(cell.source.height, 0.0);
+    EXPECT_GE(cell.destination.width, 0.0);
+    EXPECT_GE(cell.destination.height, 0.0);
+  }
+}
+
+TEST(SwfFrameSvg, NineSliceKeepsTheCentreAtZeroWidthWhenCornersOverlap) {
+  fo4::swf::SwfTransform placement;
+  placement.scale_x = 0.25;
+  const auto cells = fo4::swf::nine_slice_regions(fo4::swf::SwfRect{400, 1600, 200, 1800},
+                                                  fo4::swf::SwfBounds{0, 0, 25, 100}, placement);
+  EXPECT_EQ(cells[0].destination, (fo4::swf::SwfBounds{0, 0, 20, 10}));
+  EXPECT_EQ(cells[1].destination, (fo4::swf::SwfBounds{20, 0, 0, 10}));
+  EXPECT_EQ(cells[2].destination, (fo4::swf::SwfBounds{20, 0, 5, 10}));
+  EXPECT_EQ(cells[1].source, (fo4::swf::SwfBounds{5, 0, 15, 10}));
 }

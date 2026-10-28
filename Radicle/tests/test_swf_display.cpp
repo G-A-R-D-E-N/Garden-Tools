@@ -7,6 +7,7 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -22,22 +23,15 @@ using fo4::swf::SwfDisplayOptions;
 using fo4::swf::SwfDisplayFrame;
 using fo4::swf::SwfFrameInstance;
 using fo4::swf::SwfTimelineStatus;
+using swf_test::matrix_full;
+using swf_test::movie_of;
+using swf_test::place_full;
 using swf_test::SwfBuilder;
+using swf_test::sprite_tag;
+using swf_test::square_shape;
+using swf_test::square_with_fill;
+using swf_test::TagPayload;
 using swf_test::wrap_body;
-
-using TagPayload = std::pair<std::uint16_t, std::vector<std::byte>>;
-
-std::vector<std::byte> movie_of(std::uint16_t frames, const std::vector<TagPayload>& tags) {
-  SwfBuilder builder;
-  builder.rect(0, 11000, 0, 8000, 15);
-  builder.u16(0x0C00);
-  builder.u16(frames);
-  for (const auto& [code, payload] : tags) {
-    builder.tag(code, payload, false);
-  }
-  builder.tag(0);
-  return wrap_body(builder.body, 10, false, false);
-}
 
 std::vector<std::byte> matrix_translate(std::int32_t x, std::int32_t y) {
   SwfBuilder bits;
@@ -88,18 +82,6 @@ std::vector<std::byte> remove2(std::uint16_t depth) {
   return body.body;
 }
 
-std::vector<std::byte> sprite_tag(std::uint16_t id, std::uint16_t frames,
-                                  const std::vector<TagPayload>& children) {
-  SwfBuilder body;
-  body.u16(id);
-  body.u16(frames);
-  for (const auto& [code, payload] : children) {
-    body.tag(code, payload, false);
-  }
-  body.tag(0);
-  return body.body;
-}
-
 std::vector<std::byte> shape_definition() { return swf_art_test::define_shape_3_payload(); }
 
 SwfDisplayList display_of(const std::vector<std::byte>& bytes,
@@ -127,55 +109,6 @@ std::string paths_of(const SwfDisplayFrame& frame) {
   return out;
 }
 
-std::vector<std::byte> place_full(std::uint16_t depth, std::optional<std::uint16_t> character,
-                                  const std::vector<std::byte>& matrix,
-                                  const std::vector<std::byte>& color,
-                                  std::optional<std::uint16_t> clip_depth = std::nullopt) {
-  std::uint32_t flags = 0;
-  if (character) {
-    flags |= 0x02;
-  }
-  if (!matrix.empty()) {
-    flags |= 0x04;
-  }
-  if (!color.empty()) {
-    flags |= 0x08;
-  }
-  if (clip_depth) {
-    flags |= 0x40;
-  }
-  SwfBuilder body;
-  body.u8(flags);
-  body.u16(depth);
-  if (character) {
-    body.u16(*character);
-  }
-  body.bytes(matrix);
-  body.bytes(color);
-  if (clip_depth) {
-    body.u16(*clip_depth);
-  }
-  return body.body;
-}
-
-std::vector<std::byte> matrix_full(std::int32_t scale_x, std::int32_t scale_y, std::int32_t rotate0,
-                                   std::int32_t rotate1, std::int32_t x, std::int32_t y) {
-  SwfBuilder bits;
-  bits.push_bits(1, 1);
-  bits.push_bits(19, 5);
-  bits.push_bits(static_cast<std::uint32_t>(scale_x), 19);
-  bits.push_bits(static_cast<std::uint32_t>(scale_y), 19);
-  bits.push_bits(1, 1);
-  bits.push_bits(19, 5);
-  bits.push_bits(static_cast<std::uint32_t>(rotate0), 19);
-  bits.push_bits(static_cast<std::uint32_t>(rotate1), 19);
-  bits.push_bits(16, 5);
-  bits.push_bits(static_cast<std::uint32_t>(x) & 0xFFFFu, 16);
-  bits.push_bits(static_cast<std::uint32_t>(y) & 0xFFFFu, 16);
-  bits.align();
-  return bits.body;
-}
-
 std::vector<std::byte> color_multiply_add(std::int32_t multiply, std::int32_t add) {
   SwfBuilder bits;
   bits.push_bits(1, 1);
@@ -191,58 +124,6 @@ std::vector<std::byte> color_multiply_add(std::int32_t multiply, std::int32_t ad
   bits.push_bits(0, 10);
   bits.align();
   return bits.body;
-}
-
-std::vector<std::byte> square_with_fill(std::uint16_t id, std::int32_t size,
-                                        const std::vector<std::byte>& fill, bool stroke) {
-  SwfBuilder body;
-  body.u16(id);
-  body.rect(0, size, 0, size, 12);
-  body.u8(1);
-  body.bytes(fill);
-  if (stroke) {
-    body.u8(1);
-    body.u16(20);
-    body.u8(0x00);
-    body.u8(0xFF);
-    body.u8(0x00);
-    body.u8(0xFF);
-  } else {
-    body.u8(0);
-  }
-  body.u8(stroke ? 0x11 : 0x10);
-  body.push_bits(0, 1);
-  body.push_bits(stroke ? 0x0B : 0x03, 5);
-  body.push_bits(12, 5);
-  body.push_bits(0, 12);
-  body.push_bits(0, 12);
-  body.push_bits(1, 1);
-  if (stroke) {
-    body.push_bits(1, 1);
-  }
-  const std::int32_t edges[8] = {size, 0, 0, size, -size, 0, 0, -size};
-  for (std::size_t index = 0; index < 8; index += 2) {
-    body.push_bits(1, 1);
-    body.push_bits(1, 1);
-    body.push_bits(10, 4);
-    body.push_bits(1, 1);
-    body.push_bits(static_cast<std::uint32_t>(edges[index]) & 0xFFFu, 12);
-    body.push_bits(static_cast<std::uint32_t>(edges[index + 1]) & 0xFFFu, 12);
-  }
-  body.push_bits(0, 6);
-  body.align();
-  return body.body;
-}
-
-std::vector<std::byte> square_shape(std::uint16_t id, std::int32_t size, std::uint32_t rgb,
-                                    bool stroke = false) {
-  SwfBuilder fill;
-  fill.u8(0x00);
-  fill.u8((rgb >> 16) & 0xFFu);
-  fill.u8((rgb >> 8) & 0xFFu);
-  fill.u8(rgb & 0xFFu);
-  fill.u8(0xFF);
-  return square_with_fill(id, size, fill.body, stroke);
 }
 
 std::vector<std::byte> bitmap_square_shape(std::uint16_t id, std::int32_t size,
@@ -268,6 +149,65 @@ const std::string kStageOpen =
 
 const std::string kRedSquare =
     "<path d=\"M0 0L50 0L50 50L0 50L0 0Z\" fill=\"#ff0000\" fill-opacity=\"1\" fill-rule=\"nonzero\"/>\n";
+
+std::vector<std::byte> nine_slice_grid(std::uint16_t id) {
+  SwfBuilder body;
+  body.u16(id);
+  body.rect(400, 1600, 200, 1800, 12);
+  return body.body;
+}
+
+std::vector<std::byte> square_grid_movie(bool wrap_in_sprite, bool with_grid,
+                                         const std::vector<std::byte>& matrix) {
+  const std::uint16_t character = wrap_in_sprite ? 2 : 1;
+  std::vector<TagPayload> tags{{32, square_shape(1, 2000, 0xFF0000)}};
+  if (wrap_in_sprite) {
+    tags.push_back({39, sprite_tag(2, 1, {{26, place_full(1, 1, {}, {})}, {1, {}}})});
+  }
+  if (with_grid) {
+    tags.push_back({78, nine_slice_grid(character)});
+  }
+  tags.push_back({26, place_full(1, character, matrix, {})});
+  tags.push_back({1, {}});
+  return movie_of(1, tags);
+}
+
+const std::array<std::string, 9> kNineSliceTransforms{
+    "matrix(0.4 0 0 0.5 60 25)",        "matrix(1.4 0 0 0.5 -90 25)",
+    "matrix(0.4 0 0 0.5 210 25)",       "matrix(0.4 0 0 1.125 60 -18.75)",
+    "matrix(1.4 0 0 1.125 -90 -18.75)", "matrix(0.4 0 0 1.125 210 -18.75)",
+    "matrix(0.4 0 0 0.5 60 125)",       "matrix(1.4 0 0 0.5 -90 125)",
+    "matrix(0.4 0 0 0.5 210 125)"};
+
+const std::array<std::string, 9> kNineSliceClips{
+    "<clipPath id=\"r0s0clip\"><rect x=\"100\" y=\"50\" width=\"50\" height=\"20\"/></clipPath>\n",
+    "<clipPath id=\"r0s1clip\"><rect x=\"150\" y=\"50\" width=\"150\" height=\"20\"/></clipPath>\n",
+    "<clipPath id=\"r0s2clip\"><rect x=\"300\" y=\"50\" width=\"50\" height=\"20\"/></clipPath>\n",
+    "<clipPath id=\"r0s3clip\"><rect x=\"100\" y=\"70\" width=\"50\" height=\"160\"/></clipPath>\n",
+    "<clipPath id=\"r0s4clip\"><rect x=\"150\" y=\"70\" width=\"150\" height=\"160\"/></clipPath>\n",
+    "<clipPath id=\"r0s5clip\"><rect x=\"300\" y=\"70\" width=\"50\" height=\"160\"/></clipPath>\n",
+    "<clipPath id=\"r0s6clip\"><rect x=\"100\" y=\"230\" width=\"50\" height=\"20\"/></clipPath>\n",
+    "<clipPath id=\"r0s7clip\"><rect x=\"150\" y=\"230\" width=\"150\" height=\"20\"/></clipPath>\n",
+    "<clipPath id=\"r0s8clip\"><rect x=\"300\" y=\"230\" width=\"50\" height=\"20\"/></clipPath>\n"};
+
+std::string nine_slice_groups() {
+  std::string groups;
+  for (std::size_t cell = 0; cell < kNineSliceTransforms.size(); ++cell) {
+    groups += "<g transform=\"" + kNineSliceTransforms[cell] +
+              "\">\n<g clip-path=\"url(#r0s" + std::to_string(cell) +
+              "clip)\">\n<use href=\"#r0sg\"/>\n</g>\n</g>\n";
+  }
+  return groups;
+}
+
+std::size_t count_of(const std::string& text, std::string_view needle) {
+  std::size_t count = 0;
+  for (std::size_t at = text.find(needle); at != std::string::npos;
+       at = text.find(needle, at + needle.size())) {
+    ++count;
+  }
+  return count;
+}
 
 }  // namespace
 
@@ -704,6 +644,35 @@ TEST(SwfFrameSvg, FrameOutsideTheRootTimelineDrawsAnEmptyStage) {
       {1, {}},
   });
   EXPECT_EQ(svg_of(movie, 3), kStageOpen + "</svg>\n");
+}
+
+TEST(SwfFrameSvg, ScaledGridShapeEmitsNineClipAndTransformCells) {
+  const auto scaled = matrix_full(163840, 131072, 0, 0, 2000, 1000);
+  const std::string svg = svg_of(square_grid_movie(false, true, scaled), 0);
+  EXPECT_NE(svg.find(nine_slice_groups()), std::string::npos);
+  for (std::size_t cell = 0; cell < kNineSliceClips.size(); ++cell) {
+    EXPECT_NE(svg.find(kNineSliceClips[cell]), std::string::npos) << "cell " << cell;
+  }
+  EXPECT_EQ(count_of(svg, "<path "), 1u);
+}
+
+TEST(SwfFrameSvg, ScaledGridSpriteEmitsTheSameNineCellsAndSkipsItsChildren) {
+  const auto scaled = matrix_full(163840, 131072, 0, 0, 2000, 1000);
+  const std::string svg = svg_of(square_grid_movie(true, true, scaled), 0);
+  EXPECT_NE(svg.find(nine_slice_groups()), std::string::npos);
+  for (std::size_t cell = 0; cell < kNineSliceClips.size(); ++cell) {
+    EXPECT_NE(svg.find(kNineSliceClips[cell]), std::string::npos) << "cell " << cell;
+  }
+  EXPECT_EQ(count_of(svg, "<path "), 1u);
+}
+
+TEST(SwfFrameSvg, UnitOrRotatedGridPlacementDrawsThePlainShape) {
+  const auto unit = matrix_full(65536, 65536, 0, 0, 2000, 1000);
+  const auto rotated = matrix_full(163840, 131072, 16384, 0, 2000, 1000);
+  EXPECT_EQ(svg_of(square_grid_movie(false, true, unit), 0),
+            svg_of(square_grid_movie(false, false, unit), 0));
+  EXPECT_EQ(svg_of(square_grid_movie(false, true, rotated), 0),
+            svg_of(square_grid_movie(false, false, rotated), 0));
 }
 
 TEST(SwfFrameSvg, BitmapFillPatternIsResolvedFromTheMoviesBitmapTags) {
