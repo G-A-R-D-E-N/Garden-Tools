@@ -1,6 +1,6 @@
 # Papyrus real-data gates: data-machine runbook
 
-Verified against `origin/nomad/dev` at 9ee84f058. Every test is in the `fo4_tests` gtest binary (`Radicle/CMakeLists.txt`, target `fo4_tests`). Items marked UNVERIFIED were not found in the repo. Line numbers cited for the parse, semantic and F4SE tests predate the shared-helper refactor and may be off by a few lines.
+Verified against `origin/nomad/dev` at 6add80b69 (re-checked 2026-10-28): every gtest name below exists in `Radicle/tests/`, and the test-definition lines are current. Other in-file line numbers predate the shared-helper refactor and were not re-checked, so treat them as approximate. Every test is in the `fo4_tests` gtest binary (`Radicle/CMakeLists.txt`, target `fo4_tests`). Items marked UNVERIFIED were not found in the repo.
 
 ## Ground rules
 
@@ -9,9 +9,9 @@ Verified against `origin/nomad/dev` at 9ee84f058. Every test is in the `fo4_test
 - A value that names no existing directory yields no roots or no files, and the gate skips. It does not fail. Set-but-bad paths can silently fall back (parse gate to `FO4RE_PSC_CORPUS`, `PapyrusSourceRealTest` to `testdata/papyrus`).
 - None of these gates reads `FO4_DATA_DIR`.
 - The shipped `.pex` are inside `Fallout4 - Misc.ba2`, not loose. The staging method is in the "Building the vanilla corpus" section of `PluginEditTool/docs/internal/PAPYRUS.md`, using `PluginEditTool/tools/build-vanilla-pex-corpus.sh` (a bash script). A Windows staging route is UNVERIFIED.
-- Vanilla `.psc` roots are `<Fallout 4>/Data/Scripts/Source/{User,Base}` (`PAPYRUS.md:518`). Which root set reproduces the documented counts (7,854 files, 18,802 parse corpus, 1,498 decompile sample) is UNVERIFIED.
+- Vanilla `.psc` roots are `<Fallout 4>/Data/Scripts/Source/{User,Base}` (`PAPYRUS.md:543`). Which root set reproduces the documented counts (7,854 files, 18,802 parse corpus, 1,498 decompile sample) is UNVERIFIED.
 - Binary location: CI configures `cmake -S PluginEditTool\native -B build\native -G Ninja -DCMAKE_BUILD_TYPE=Release ... -DRADICLE_BUILD_TESTS=ON` (`.github/workflows/native-ci.yml`, job "Native real-data tests (Windows, MSVC, Fallout 4 data)", step Configure). `PluginEditTool/native/CMakeLists.txt:8` sets `CMAKE_RUNTIME_OUTPUT_DIRECTORY` to `${CMAKE_BINARY_DIR}/bin`, so the binary is expected at `build\native\bin\fo4_tests.exe`. This is derived from the CMake files and was not observed on a built tree.
-- Working directory must be `<repo>\Radicle`. `gtest_discover_tests` sets `WORKING_DIRECTORY` to the Radicle source dir (`Radicle/CMakeLists.txt`, near line 1018), and `FO4_TESTDATA_DIR` is the relative `testdata` (line 1010).
+- Working directory must be `<repo>\Radicle`. `gtest_discover_tests` sets `WORKING_DIRECTORY` to the Radicle source dir (`Radicle/CMakeLists.txt`, line 1023), and `FO4_TESTDATA_DIR` is the relative `testdata` (line 1014).
 - CI sets none of these variables. `native-ci.yml` has no `FO4RE_`, `FO4_PSC`, `FO4_PEX` or `FO4RE_F4SE` reference. Whether the `fo4-data` runner has them in its machine env is UNVERIFIED.
 - CI's `REAL_DATA_TEST_REGEX` (`native-ci.yml:66`) matches every gate below except `PapyrusSourceRealTest.*`, which has `RealTest.` and no `Real.`. Checked by running the regex against each test name.
 - The PR path filter in the real-data job (the `$groups` list) does not exclude any Papyrus gate.
@@ -44,11 +44,11 @@ Add `--gtest_output=xml:<dir>\<gate>.xml` to keep `RecordProperty` values. For a
 - Env: `FO4RE_PSC_CORPUS` (`rootsFromEnv`). Trimmed, non-directories dropped.
 - Pass: complete > 0 and zero problems (parse errors, resolver diagnostics, type-checker diagnostics on complete scripts) (lines 97-112). When the file count is 7,854, complete must equal 7,832 (`kVanillaFiles` and `kVanillaComplete`, lines 24-25, check 107-109).
 - Skip: `FO4RE_PSC_CORPUS is not set; corpus sweep skipped.` (line 82).
-- Companion, same env: `PapyrusSemanticReal.YieldsSymbolsAcrossTheCorpusWithoutCrashing` (line 51), passes when symbols > 0.
+- Companion, same env: `PapyrusSemanticReal.YieldsSymbolsAcrossTheCorpusWithoutCrashing` (line 41), passes when symbols > 0.
 
 ### 3. Duplicate declaration
 
-- Test: `PapyrusSemanticReal.DuplicateDeclarationCheckFlagsNothingInTheVanillaSources` (`test_papyrus_semantic_real.cpp`, line 115).
+- Test: `PapyrusSemanticReal.DuplicateDeclarationCheckFlagsNothingInTheVanillaSources` (`test_papyrus_semantic_real.cpp`, line 105).
 - Env: `FO4RE_PSC_ROOTS`.
 - Pass: parsed > 0 and `declarationCheck` reports nothing on cleanly parsed files (lines 142-146). Unparseable files are counted, not failed.
 - Skip: `FO4RE_PSC_ROOTS is not set; sweep skipped.` (line 117).
@@ -56,23 +56,23 @@ Add `--gtest_output=xml:<dir>\<gate>.xml` to keep `RecordProperty` values. For a
 
 ### 4. CK differential (158 of 161 documented)
 
-- Test: `PapyrusCodegenReal.CompiledOutputMatchesCreationKitInstructionForInstruction` (`Radicle/tests/test_papyrus_codegen_real.cpp`, line 228).
+- Test: `PapyrusCodegenReal.CompiledOutputMatchesCreationKitInstructionForInstruction` (`Radicle/tests/test_papyrus_codegen_real.cpp`, line 229).
 - Env: `FO4RE_PEX_CORPUS`, or `FO4_PEX_CORPUS` when that yields no roots (lines 229-230). Extra script roots: `FO4RE_PSC_ROOTS` (lines 235, 257). `FO4RE_PEX_RELEASE` must be exactly `1` for a vanilla corpus (line 236). It switches the mode printed at lines 239-240 and turns off debug and beta emission (lines 244-245).
 - Pairing: each `.pex` needs a `.psc` under `Source/User` or `Source` (`sourceFor`, lines 91-116). Only Fallout 4 `.pex` count (`isFallout4`, lines 65-78).
-- Pass: compiled > 0 and identical / compiled >= 0.95 (`kMinimumIdenticalFraction`, line 39; checks 297-299).
+- Pass: compiled > 0 and identical / compiled >= 0.95 (`kMinimumIdenticalFraction`, line 40; check at line 300).
 - Skip: `FO4RE_PEX_CORPUS is not set to a directory holding .pex files` (line 232); `FO4RE_PEX_CORPUS holds no .psc/.pex pairs` (line 241).
 - Output: `pairs= compiled= refused= identical=` (lines 287-288), then `REFUSED` and `DIFF` lines.
 - Run: `$env:FO4RE_PEX_CORPUS = '<staged pex root>'`, `$env:FO4RE_PSC_ROOTS = '<psc roots>'`, `$env:FO4RE_PEX_RELEASE = '1'`, then the template with this filter.
-- Documented figure: `PluginEditTool/docs/internal/PAPYRUS.md:86` gives 198 pairs, 161 compiled, 158 identical (98.1%), 37 refused, 3 differing, with `FO4RE_PEX_CORPUS` and `FO4RE_PSC_ROOTS`. The code threshold is 0.95, so 158/161 would pass. The row does not name its test; `PAPYRUS.md:132` names the native PET gate that reads the same variables. Whether this Radicle test reproduces 158/161 is UNVERIFIED.
+- Documented figure: `PluginEditTool/docs/internal/PAPYRUS.md:102` gives 198 pairs, 161 compiled, 158 identical (98.1%), 37 refused, 3 differing, with `FO4RE_PEX_CORPUS` and `FO4RE_PSC_ROOTS`. The code threshold is 0.95, so 158/161 would pass. The row does not name its test; `PAPYRUS.md:148` names the native PET gate that reads the same variables. Whether this Radicle test reproduces 158/161 is UNVERIFIED.
 
 ### 5. Decompile fidelity (>= 0.802)
 
-- Test: `PapyrusCodegenReal.DecompiledCorpusRecompilesToTheSameProgram` (`test_papyrus_codegen_real.cpp`, line 302).
+- Test: `PapyrusCodegenReal.DecompiledCorpusRecompilesToTheSameProgram` (`test_papyrus_codegen_real.cpp`, line 303).
 - Env: `FO4RE_PSC_ROOTS` only. It is both the index roots and the sample source.
-- Sample: the first 1,500 `.psc` by path (`kDecompileSampleLimit`, lines 41, 318).
-- Pass: files non-empty, compiled > 0, and matched / compiled >= 0.802 (`kMinimumDecompileFidelity`, line 40; checks 399-402). The `DECOMPILE files= compiled= matched=` line is printed at line 384.
+- Sample: the first 1,500 `.psc` by path (`kDecompileSampleLimit`, lines 42, 319).
+- Pass: files non-empty, compiled > 0, and matched / compiled >= 0.802 (`kMinimumDecompileFidelity`, line 41; check at line 402). The `DECOMPILE files= compiled= matched=` line is printed at line 384.
 - Skip: `FO4RE_PSC_ROOTS is not set to a directory holding .psc sources` (line 305).
-- Documented figure: `PAPYRUS.md:89` gives 1,202 of 1,498 (80.2%) with `FO4RE_PSC_ROOTS`.
+- Documented figure: `PAPYRUS.md:105` gives 1,202 of 1,498 (80.2%) with `FO4RE_PSC_ROOTS`.
 - Run: `$env:FO4RE_PSC_ROOTS = '<psc roots>'`, then the template with this filter.
 
 ### 6. Decompiler no-throw (not in the brief list; in CI's regex)
@@ -90,7 +90,7 @@ Add `--gtest_output=xml:<dir>\<gate>.xml` to keep `RecordProperty` values. For a
 
 ### 8. F4SE corpus
 
-- Tests in `Radicle/tests/test_f4se_corpus_real.cpp` (filter `F4seCorpusReal.*`): `EveryRegistrationInARealTreeIsRecovered` (line 155), `RecoveredBindingsAreInternallyConsistent` (211), `RecoveredRegistrationsAgreeWithThePapyrusDeclarations` (234), `TheTwoShippedVersionsDifferOnlyInWaysTheDiffCanName` (255).
+- Tests in `Radicle/tests/test_f4se_corpus_real.cpp` (filter `F4seCorpusReal.*`): `EveryRegistrationInARealTreeIsRecovered` (line 132), `RecoveredBindingsAreInternallyConsistent` (188), `RecoveredRegistrationsAgreeWithThePapyrusDeclarations` (211), `TheTwoShippedVersionsDifferOnlyInWaysTheDiffCanName` (232).
 - Env: `FO4RE_F4SE_SRC`, a directory holding F4SE source trees (`rootsFromEnv`, lines 33-44). It needs F4SE sources, not game data. Where those sources sit on the data machine is UNVERIFIED.
 - Pass: per tree natives == present, problems == 0, unmapped == 0, totalPresent > 0, totalRecovered == totalPresent (lines 199-208). Consistency: checked > 0 with field checks (221-231). Agreement: recovered > 0 and no mismatches (250-251). Diff: `newer - older` count equals added minus removed (283-284).
 - Skip: four messages starting `FO4RE_F4SE_SRC is not set` (lines 157, 213, 236, 257). A variable pointing at a bad path shows the same message.
