@@ -595,7 +595,11 @@
       case op::k_convert_d:
       case op::k_convert_b:
       case op::k_convert_s:
-      case op::k_convert_o: {
+      case op::k_convert_o:
+      case op::k_coerce_i:
+      case op::k_coerce_u:
+      case op::k_coerce_d:
+      case op::k_coerce_b: {
         Value value;
         pop_value(value);
         if (status != InterpreterStatus::Ok) {
@@ -603,15 +607,19 @@
         }
         switch (instruction.opcode) {
           case op::k_convert_i:
+          case op::k_coerce_i:
             push_value(Value::int32(to_int32(value)));
             break;
           case op::k_convert_u:
+          case op::k_coerce_u:
             push_value(Value::uint32(to_uint32(value)));
             break;
           case op::k_convert_d:
+          case op::k_coerce_d:
             push_value(Value::number(to_number(value)));
             break;
           case op::k_convert_b:
+          case op::k_coerce_b:
             push_value(Value::boolean(to_boolean(value)));
             break;
           case op::k_convert_s:
