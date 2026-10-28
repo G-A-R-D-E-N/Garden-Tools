@@ -131,6 +131,10 @@ public class SwfInterop
         var result = Document().AddLabel(frame, name, timeline);
         return Snapshot(result.Changed);
     });
+    public Task<string> InsertAbcInstruction(int abc, int body, int offset, string text) => Run(() =>
+        Snapshot(Document().InsertAbcInstruction(abc, body, offset, text).Changed));
+    public Task<string> ReplaceAbcInstruction(int abc, int body, int offset, string text) => Run(() =>
+        Snapshot(Document().ReplaceAbcInstruction(abc, body, offset, text).Changed));
     public Task<string> Undo() => Run(() => { Document().Undo(); return Snapshot(false); });
 
     public Task<string> Redo() => Run(() => { Document().Redo(); return Snapshot(false); });

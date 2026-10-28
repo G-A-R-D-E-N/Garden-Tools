@@ -181,6 +181,19 @@ public sealed class SwfDocument : IDisposable
         return Apply(new SwfPlanSpec().Remove(tagIndex));
     }
 
+    // Requires an instruction boundary in a method body of the ABC block; the edit lands as one plan over its DoABC tag.
+    public SwfPlanResultRecord InsertAbcInstruction(int abc, int body, int offset, string text) =>
+        ApplyNativeEdit(Movie.AbcBlocks[abc].TagIndex, scratch => scratch.InsertAbcInstruction(abc, body, offset, text));
+
+    // Requires the same arguments as the insert; the instruction at offset is replaced in place.
+    public SwfPlanResultRecord ReplaceAbcInstruction(int abc, int body, int offset, string text) =>
+        ApplyNativeEdit(Movie.AbcBlocks[abc].TagIndex, scratch => scratch.ReplaceAbcInstruction(abc, body, offset, text));
+
+    // Requires a DefineFont tag index; the glyph shape lands as one plan over that font tag.
+    public SwfPlanResultRecord ReplaceFontGlyph(int tagIndex, int glyph, byte fillBits, byte lineBits,
+                                                IReadOnlyList<SwfShapeCommandRecord> records) =>
+        ApplyNativeEdit(tagIndex, scratch => scratch.ReplaceFontGlyph(tagIndex, glyph, fillBits, lineBits, records));
+
     // Constraint: the save goes through the existing WriteService asset path, which backs the asset up first.
     public string Save(string? targetPath = null)
     {
@@ -234,5 +247,13 @@ public sealed class SwfDocument : IDisposable
         var next = spritePayload.Take(headerStart).Concat(header).Concat(payload)
             .Concat(spritePayload.Skip(headerStart)).ToArray();
         return Apply(new SwfPlanSpec().Replace(sprite.Index, next));
+    }
+
+    // Requires the native edit to run on a scratch copy, so only the tag it lands as enters the history.
+    private SwfPlanResultRecord ApplyNativeEdit(int tagIndex, Action<SwfFile> edit)
+    {
+        using var scratch = SwfFile.FromBytes(_current);
+        edit(scratch);
+        return Apply(new SwfPlanSpec().Replace(tagIndex, scratch.Payload(tagIndex)));
     }
 }

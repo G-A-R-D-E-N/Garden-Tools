@@ -311,6 +311,68 @@ public sealed unsafe partial class SwfFile : IDisposable
         }
     }
 
+    public void InsertAbcInstruction(int abc, int body, int offset, string text)
+    {
+        using var use = Use();
+        var utf8 = System.Text.Encoding.UTF8.GetBytes(text);
+        unsafe
+        {
+            fixed (byte* input = utf8)
+            {
+                Call.Check(RadicleNative.SwfAbcInsertInstruction(use.Pointer, (nuint)abc, (uint)body, (nuint)offset,
+                                                                 input, (nuint)utf8.Length));
+            }
+        }
+    }
+
+    public void ReplaceAbcInstruction(int abc, int body, int offset, string text)
+    {
+        using var use = Use();
+        var utf8 = System.Text.Encoding.UTF8.GetBytes(text);
+        unsafe
+        {
+            fixed (byte* input = utf8)
+            {
+                Call.Check(RadicleNative.SwfAbcReplaceInstruction(use.Pointer, (nuint)abc, (uint)body, (nuint)offset,
+                                                                  input, (nuint)utf8.Length));
+            }
+        }
+    }
+
+    public void ReplaceFontGlyph(int index, int glyph, byte fillBits, byte lineBits,
+                                 IReadOnlyList<SwfShapeCommandRecord> records)
+    {
+        using var use = Use();
+        var native = new Native.SwfShapeRecord[records.Count];
+        for (var item = 0; item < native.Length; ++item)
+        {
+            var record = records[item];
+            native[item] = new Native.SwfShapeRecord
+            {
+                Kind = ToRecordKind(record.Kind), X = record.X, Y = record.Y, ControlX = record.ControlX,
+                ControlY = record.ControlY, Fill0 = record.Fill0, Fill1 = record.Fill1, Line = record.Line,
+            };
+        }
+        SwfPlanResult result;
+        unsafe
+        {
+            fixed (Native.SwfShapeRecord* input = native)
+            {
+                Call.Check(RadicleNative.SwfFontReplaceGlyph(use.Pointer, (nuint)index, (nuint)glyph, fillBits, lineBits,
+                                                             input, (nuint)native.Length, &result));
+            }
+        }
+    }
+
+    private static SwfRecordKind ToRecordKind(SwfShapeCommandKind kind) => kind switch
+    {
+        SwfShapeCommandKind.Move => SwfRecordKind.Move,
+        SwfShapeCommandKind.StyleChange => SwfRecordKind.StyleChange,
+        SwfShapeCommandKind.StraightEdge => SwfRecordKind.StraightEdge,
+        SwfShapeCommandKind.CurvedEdge => SwfRecordKind.CurvedEdge,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "unknown shape record kind"),
+    };
+
     public byte[] WriteBytes()
     {
         using var use = Use();

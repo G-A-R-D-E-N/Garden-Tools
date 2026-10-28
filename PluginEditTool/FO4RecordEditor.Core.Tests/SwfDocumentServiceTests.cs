@@ -229,6 +229,31 @@ public class SwfDocumentServiceTests
     }
 
     [NativeFact]
+    public void AnAbcInstructionEditIsAHistoryCommandAndUndoRedoFollowIt()
+    {
+        using var document = SwfDocument.OpenBytes(SwfFixture.Movie(withAbc: true));
+        var result = document.InsertAbcInstruction(0, 0, 0, "nop");
+        Assert.True(result.Changed);
+        Assert.Contains("      0 nop\n", document.Movie.AbcText(0));
+        Assert.Equal(1, document.UndoCount);
+        document.Undo();
+        Assert.DoesNotContain("      0 nop\n", document.Movie.AbcText(0));
+        document.Redo();
+        Assert.Contains("      0 nop\n", document.Movie.AbcText(0));
+    }
+
+    [NativeFact]
+    public void ARefusedAbcInstructionLeavesTheHistoryUntouched()
+    {
+        using var document = SwfDocument.OpenBytes(SwfFixture.Movie(withAbc: true));
+        var error = Assert.Throws<RadicleException>(() => document.InsertAbcInstruction(0, 0, 0, "returnvalue"));
+        Assert.Contains("verifier refused", error.Message);
+        Assert.Equal(0ul, document.Revision);
+        Assert.Equal(0, document.UndoCount);
+        Assert.False(document.Dirty);
+    }
+
+    [NativeFact]
     public void SavingAResolvedAssetWithoutATargetRefuses()
     {
         using var document = SwfDocument.OpenResolved("Interface\\Test.swf", _ => SwfFixture.Movie());
