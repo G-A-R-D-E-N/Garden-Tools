@@ -7875,7 +7875,7 @@ Decision: the verifier's rejection of callmethod in user bytecode is unchanged. 
 
 ## Radicle/src/avm2/interpreter.cpp:Interpreter::execute_frame
 
-Opcode census from a source scan (not compiled or run). Named opcodes with no case in `interpreter_dispatch_a.inc`, `interpreter_dispatch_b.inc` or `interpreter_dispatch_c.inc` fall to the default, which returns NotImplemented "opcode X is not implemented yet". Totals: 169 named, 147 dispatched, 22 not dispatched (after the AVM2 more-ops change; the earlier count was 138 and 31). The 22 are: dxns 0x06, dxnslate 0x07, pushnamespace 0x31, li8 0x35, li16 0x36, li32 0x37, lf32 0x38, lf64 0x39, si8 0x3A, si16 0x3B, si32 0x3C, sf32 0x3D, sf64 0x3E, getdescendants 0x59, finddef 0x5F, setpropertylate 0x69, deletepropertylate 0x6B, getglobalslot 0x6E, setglobalslot 0x6F, esc_xelem 0x71, esc_xattr 0x72, checkfilter 0x78. The more-ops change (`Radicle/src/avm2/interpreter.cpp:Interpreter::execute_frame`) dispatched hasnext 0x1F, sxi1 0x50, sxi8 0x51, sxi16 0x52, coerce_b 0x81, coerce_i 0x83, coerce_d 0x84, coerce_u 0x88 and coerce_o 0x89. The li/si/sf memory ops stay undispatched because no ApplicationDomain memory byte array exists. dxns, dxnslate, pushnamespace, finddef, getdescendants and E4X were left out of that change. NotImplemented also comes from `Radicle/src/avm2/interpreter_property.cpp:Interpreter::outer_scope_value`, which returns it for a getouterscope in a method with no captured scope.
+Opcode census from a source scan (not compiled or run). Named opcodes with no case in `interpreter_dispatch_a.inc`, `interpreter_dispatch_b.inc`, `interpreter_dispatch_c.inc` or `interpreter_dispatch_d.inc` (all switch cases of `Radicle/src/avm2/interpreter.cpp:Interpreter::execute_frame`) fall to the default, which returns NotImplemented "opcode X is not implemented yet". Totals (`Radicle/src/avm2/interpreter.cpp:Interpreter::execute_frame`): 169 named, 157 dispatched, 12 not dispatched (after the AVM2 domain-memory change; before it the count was 147 and 22, and before the more-ops change 138 and 31). The 12 are: dxns 0x06, dxnslate 0x07, pushnamespace 0x31, getdescendants 0x59, finddef 0x5F, setpropertylate 0x69, deletepropertylate 0x6B, getglobalslot 0x6E, setglobalslot 0x6F, esc_xelem 0x71, esc_xattr 0x72, checkfilter 0x78. The more-ops change (`Radicle/src/avm2/interpreter.cpp:Interpreter::execute_frame`) dispatched hasnext 0x1F, sxi1 0x50, sxi8 0x51, sxi16 0x52, coerce_b 0x81, coerce_i 0x83, coerce_d 0x84, coerce_u 0x88 and coerce_o 0x89. The domain-memory change (`Radicle/src/avm2/interpreter_memory.cpp:Interpreter::domain_memory_load` and `Interpreter::domain_memory_store`, dispatched from `Radicle/src/avm2/interpreter_dispatch_d.inc`) dispatched li8 0x35, li16 0x36, li32 0x37, lf32 0x38, lf64 0x39, si8 0x3A, si16 0x3B, si32 0x3C, sf32 0x3D and sf64 0x3E, which read and write the current ApplicationDomain's domain memory ByteArray. dxns, dxnslate, pushnamespace, finddef, getdescendants and E4X were left out of that change. NotImplemented also comes from `Radicle/src/avm2/interpreter_property.cpp:Interpreter::outer_scope_value`, which returns it for a getouterscope in a method with no captured scope.
 
 ## Radicle/tests/test_avm2_call_indexed.cpp:CallstaticRunsTheMethodWithTheReceiverAsThis
 
@@ -8120,3 +8120,57 @@ Out of scope: DefineButton rows, dynamic EditText, text used as a mask, and text
 - `Radicle/tests/test_swf_svg.cpp:SwfFrameSvg.StaticTextAppliesItsMatrixAndSkipsFontsWithoutGlyphShapes` detects a DefineText MATRIX that is ignored, which would leave the glyph at `matrix(1 0 0 1 0 0)`, and a font with no glyph shapes that emits an empty group or indexes an empty glyph list.
 
 Expected strings were derived by hand from `Radicle/src/swf/swf_svg.cpp:loops_text` and `Radicle/src/swf/swf_svg.cpp:fill_paths`. Nothing was compiled or run on the development machine for this change, so CI must confirm them.
+
+## Radicle/src/avm2/interpreter_memory.cpp:Interpreter::domain_memory_load
+
+Serves li8, li16, li32, lf32 and lf64 against `runtime_.current_domain()->domain_memory()`. The popped address goes through ToUint32, so a negative address becomes a large index and is refused. Bytes are gathered little-endian into a 64-bit accumulator, byte i at bit 8*i. li8 and li16 zero-extend because the accumulator holds only their width. li32 reads the low 32 bits as int32, so 0xFFFFFFFE reads as -2. lf32 bit-casts the low 32 bits to float and widens to double; lf64 bit-casts all 64 bits. The stack effect (pop 1, push 1) is already declared in `Radicle/src/abc/abc_stack.cpp` for 0x35 to 0x39.
+
+## Radicle/src/avm2/interpreter_memory.cpp:Interpreter::domain_memory_store
+
+Serves si8, si16, si32, sf32 and sf64. `Radicle/src/avm2/interpreter.cpp:Interpreter::execute_frame` pops the address first and the value below it, which matches the AVM2 operand order for si* and sf*. Integer stores take ToInt32 and write only the low width bytes, so si8 never touches the next byte. sf32 narrows to float before its bits are written; sf64 writes the double bits. The stack effect (pop 2, push 0) is declared in `Radicle/src/abc/abc_stack.cpp` for 0x3A to 0x3E.
+
+## Radicle/src/avm2/interpreter_memory.cpp:check_domain_memory
+
+Refusal kinds were chosen here, because the brief named no specific kind: no domain memory gives NullReference, since AS3 domainMemory is null; an access outside the byte array gives InvalidArgument. Both messages start with "domain memory". The bounds check is `index + width > length`, so an access ending exactly at the last byte is accepted and one starting at the length is refused. The index is widened to 64 bits before the width is added, so an address near 4294967295 cannot wrap.
+
+## Radicle/include/fo4/avm2/domain.hpp:ApplicationDomainObject::set_domain_memory
+
+domain_memory is a host-set reference, not an AS3 property. No native getter or setter for ApplicationDomain.domainMemory was added: the brief allowed skipping it, and a native pair needs two native ids, a setter trait that `Radicle/src/avm2/builtins.cpp` has no helper for, and a ByteArray cast in `Radicle/src/avm2/native_net.cpp`. Until one is added, AS3 code reading domainMemory gets undefined and cannot set it. The memory is looked up on `Runtime::current_domain`, so every frame uses the single current domain and not the domain of the loader that loaded its ABC. That is a simplification the lead should confirm.
+
+## Radicle/src/avm2/interpreter.cpp:Interpreter::execute_frame (domain-memory cases)
+
+The cases live in `Radicle/src/avm2/interpreter_dispatch_d.inc` and cover li8 through sf64 (0x35 to 0x3E). The opcode constants are in `Radicle/src/avm2/interpreter_internal.hpp:op`. A short stack refuses with StackUnderflow from the same pop helper every other opcode uses, and the memory helper runs only after the operands are popped.
+
+## Radicle/tests/test_avm2_domain_memory.cpp:SiThirtyTwoThenLiThirtyTwoRoundTripsANegativeInt
+
+Detects si32 writing its bytes in the wrong order, the address and value being popped swapped, or li32 zero-extending a negative int. Hand-derived: -2 is 0xFFFFFFFE, so bytes 4 to 7 are FE FF FF FF, and li32 at 4 reads -2.
+
+## Radicle/tests/test_avm2_domain_memory.cpp:StoresAreLittleEndianSoLiEightReadsTheBytesInOrder
+
+Detects big-endian storage or a li8 or li16 reading the wrong offset. Hand-derived: 0x01020304 stores bytes 04 03 02 01 at offsets 0 to 3, so li8 at 0, 1, 2, 3 gives 4, 3, 2, 1; li16 at 0 gives 0x0304 (772) and at 2 gives 0x0102 (258).
+
+## Radicle/tests/test_avm2_domain_memory.cpp:SiEightAndSiSixteenStoreOnlyTheLowBytesAndLiZeroExtends
+
+Detects si8 writing a second byte, si8 or si16 not masking to the low bits, and li8 or li16 sign-extending. Hand-derived: 0x1FF has low byte 0xFF, so byte 3 stays 0 and li8 at 2 gives 255, not -1. 0x12345 has low half 0x2345, stored as 45 23, so li16 at 0 gives 9029. si16 of -1 stores FF FF, so li16 at 4 gives 65535, not -1.
+
+## Radicle/tests/test_avm2_domain_memory.cpp:SfThirtyTwoNarrowsToFloatAndLfThirtyTwoWidensItBack
+
+Detects sf32 storing double bits, or lf32 reading eight bytes. Hand-derived: 0.1 as float is 13421773 times 2^-27, bits 0x3DCCCCCD, stored as CD CC CC 3D; lf32 reads back 0.100000001490116119384765625 exactly, and the test also asserts that this is not 0.1.
+
+## Radicle/tests/test_avm2_domain_memory.cpp:SfSixtyFourThenLfSixtyFourRoundTripsADouble
+
+Detects sf64 narrowing to float, or lf64 reading four bytes. Hand-derived: 0.1 as double has bits 0x3FB999999999999A, stored as 9A 99 99 99 99 99 B9 3F; lf64 gives 0.1.
+
+## Radicle/tests/test_avm2_domain_memory.cpp:AccessOutsideTheDomainMemoryIsRefused
+
+Detects an off-by-one bounds check (an access starting at the length accepted), a check on the first byte only, and a negative address that wraps. Hand-derived in a 4-byte memory: li8 at 4 is refused; li32 at 1 is refused because 1 + 4 > 4; li32 at 0 is accepted; li8 at -1 is refused because ToUint32(-1) is 4294967295; si32 at 1 is refused.
+
+## Radicle/tests/test_avm2_domain_memory.cpp:AccessWithoutDomainMemoryIsRefused
+
+Detects a null memory pointer being dereferenced, or a refusal with the wrong kind or a message not starting with "domain memory". With no memory set, li8 and si8 both refuse with NullReference.
+
+## Radicle/tests/test_avm2_domain_memory.cpp:MemoryOpcodesRefuseAnEmptyStackWithStackUnderflow
+
+Detects a memory opcode that continues with an undefined operand instead of refusing with StackUnderflow. All ten opcodes run on an empty stack with memory set, so the refusal can only come from the pop.
+
+Nothing was compiled or run on the development machine for these tests, so CI must confirm them.

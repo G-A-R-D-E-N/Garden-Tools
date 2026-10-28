@@ -56,6 +56,16 @@ namespace op {
   constexpr std::uint8_t k_pushdouble = 0x2F;
   constexpr std::uint8_t k_pushscope = 0x30;
   constexpr std::uint8_t k_hasnext2 = 0x32;
+  constexpr std::uint8_t k_li8 = 0x35;
+  constexpr std::uint8_t k_li16 = 0x36;
+  constexpr std::uint8_t k_li32 = 0x37;
+  constexpr std::uint8_t k_lf32 = 0x38;
+  constexpr std::uint8_t k_lf64 = 0x39;
+  constexpr std::uint8_t k_si8 = 0x3A;
+  constexpr std::uint8_t k_si16 = 0x3B;
+  constexpr std::uint8_t k_si32 = 0x3C;
+  constexpr std::uint8_t k_sf32 = 0x3D;
+  constexpr std::uint8_t k_sf64 = 0x3E;
   constexpr std::uint8_t k_newfunction = 0x40;
   constexpr std::uint8_t k_call = 0x41;
   constexpr std::uint8_t k_construct = 0x42;
