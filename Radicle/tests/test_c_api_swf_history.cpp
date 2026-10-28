@@ -7,6 +7,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -491,6 +492,40 @@ TEST(CApiSwfVerbs, EditTextAddressesTheFlatIndexPastADefineSprite) {
             RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_NE(std::string(radicle_last_error()).find("inside a DefineSprite"), std::string::npos)
       << radicle_last_error();
+}
+
+// Invariant: a depth reassign that inserts a RemoveObject2 must keep an unrelated long-header tag between them encoded as it was, not re-encoded short.
+TEST(CApiSwfVerbs, DepthReassignKeepsAnUnrelatedLongHeaderTagInTheMiddle) {
+  swf_test::SwfBuilder body;
+  body.rect(0, 11000, 0, 8000, 15);
+  body.u16(0x0C00);
+  body.u16(1);
+  body.tag(26, place_without_matrix(5, 7), false);
+  body.tag(1);
+  body.tag(43, frame_label("mid"), true);
+  body.tag(26, place_without_matrix(5, 8), false);
+  body.tag(1);
+  body.tag(0);
+  const auto swf = open(swf_test::wrap_body(body.body, 10, false, false));
+  ASSERT_NE(swf, nullptr);
+  const auto history = open_history(swf);
+  ASSERT_NE(history, nullptr);
+
+  std::uint32_t moved_id = 0;
+  radicle_swf_plan_result result{};
+  ASSERT_EQ(radicle_swf_reassign_instance_depth(history.get(), 0, root_instance_id(history, 5), 9,
+                                                &moved_id, &result),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_EQ(result.changed, 1);
+  EXPECT_EQ(moved_id, root_instance_id(history, 9));
+
+  swf_test::SwfBuilder expected;
+  expected.tag(43, frame_label("mid"), true);
+  const auto bytes = history_bytes(history);
+  EXPECT_NE(std::search(bytes.begin(), bytes.end(), expected.body.begin(), expected.body.end()),
+            bytes.end())
+      << "the unrelated long-header frame label was re-encoded";
 }
 
 // Constraint: a refused verb must zero its result and out parameters and leave the revision and undo stack unchanged.

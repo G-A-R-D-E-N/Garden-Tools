@@ -9,10 +9,10 @@
 #include "fo4/swf/swf_text_edit.hpp"
 #include "fo4/swf/swf_timeline.hpp"
 
+#include <charconv>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -35,19 +35,10 @@ bool same_tag(const SwfTag& left, const SwfTag& right) {
   return left.code == right.code && left.payload == right.payload;
 }
 
-// Invariant: the plan maps before onto after by top-level position only.
+// Invariant: the plan maps before onto after by top-level position and keeps every matching tag untouched.
 SwfTagPlan plan_between(const SwfFile& before, const SwfFile& after) {
   const auto& from = before.tags;
   const auto& to = after.tags;
-  SwfTagPlan plan;
-  if (from.size() == to.size()) {
-    for (std::size_t index = 0; index < from.size(); ++index) {
-      if (!same_tag(from[index], to[index])) {
-        plan.replacements.push_back(fo4::swf::SwfTagReplacement{index, to[index].payload});
-      }
-    }
-    return plan;
-  }
   std::size_t prefix = 0;
   while (prefix < from.size() && prefix < to.size() && same_tag(from[prefix], to[prefix])) {
     ++prefix;
@@ -57,16 +48,57 @@ SwfTagPlan plan_between(const SwfFile& before, const SwfFile& after) {
          same_tag(from[from.size() - 1 - suffix], to[to.size() - 1 - suffix])) {
     ++suffix;
   }
-  for (std::size_t index = prefix; index < from.size() - suffix; ++index) {
-    plan.removals.push_back(fo4::swf::SwfTagRemoval{index});
-  }
-  for (std::size_t index = prefix; index < to.size() - suffix; ++index) {
+  const std::size_t from_end = from.size() - suffix;
+  const std::size_t to_end = to.size() - suffix;
+  SwfTagPlan plan;
+  const auto insert = [&](std::size_t before_index, const SwfTag& source) {
     SwfTag inserted;
-    inserted.code = to[index].code;
-    inserted.payload = to[index].payload;
-    plan.insertions.push_back(fo4::swf::SwfTagInsertion{from.size() - suffix, std::move(inserted)});
+    inserted.code = source.code;
+    inserted.payload = source.payload;
+    plan.insertions.push_back(fo4::swf::SwfTagInsertion{before_index, std::move(inserted)});
+  };
+  std::size_t old_index = prefix;
+  std::size_t new_index = prefix;
+  while (old_index < from_end || new_index < to_end) {
+    if (old_index == from_end) {
+      insert(old_index, to[new_index]);
+      ++new_index;
+    } else if (new_index == to_end) {
+      plan.removals.push_back(fo4::swf::SwfTagRemoval{old_index});
+      ++old_index;
+    } else if (same_tag(from[old_index], to[new_index])) {
+      ++old_index;
+      ++new_index;
+    } else if (old_index + 1 < from_end && same_tag(from[old_index + 1], to[new_index])) {
+      plan.removals.push_back(fo4::swf::SwfTagRemoval{old_index});
+      ++old_index;
+    } else if (new_index + 1 < to_end && same_tag(from[old_index], to[new_index + 1])) {
+      insert(old_index, to[new_index]);
+      ++new_index;
+    } else if (from[old_index].code == to[new_index].code) {
+      plan.replacements.push_back(fo4::swf::SwfTagReplacement{old_index, to[new_index].payload});
+      ++old_index;
+      ++new_index;
+    } else {
+      plan.removals.push_back(fo4::swf::SwfTagRemoval{old_index});
+      insert(old_index, to[new_index]);
+      ++old_index;
+      ++new_index;
+    }
   }
   return plan;
+}
+
+bool plan_reproduces(const SwfFile& current, const SwfTagPlan& plan, const SwfFile& candidate) {
+  SwfFile probe = current;
+  fo4::swf::SwfTagPlanResult probe_result;
+  if (!fo4::swf::apply_tag_plan(probe, plan, probe_result) || probe.tags.size() != candidate.tags.size()) {
+    return false;
+  }
+  for (std::size_t index = 0; index < candidate.tags.size(); ++index) {
+    if (!same_tag(probe.tags[index], candidate.tags[index])) return false;
+  }
+  return true;
 }
 
 // Invariant: a refused edit moves neither the file, the revision nor the undo stack.
@@ -77,8 +109,13 @@ radicle_status commit_edit(radicle_swf_history& history, radicle_swf_plan_result
   if (!edit(candidate, message)) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, message.c_str());
   }
+  const SwfTagPlan plan = plan_between(history.history.file(), candidate);
+  if (!plan_reproduces(history.history.file(), plan, candidate)) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                "the tag plan does not reproduce the edited movie, so nothing was changed");
+  }
   const std::uint64_t before = history.history.revision();
-  if (!history.history.apply(plan_between(history.history.file(), candidate), message)) {
+  if (!history.history.apply(plan, message)) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, message.c_str());
   }
   out.changed = history.history.revision() != before ? 1 : 0;
@@ -162,8 +199,9 @@ void value(std::string& out, T number) {
       return;
     }
     char buffer[32];
-    std::snprintf(buffer, sizeof buffer, "%.17g", static_cast<double>(number));
-    out += buffer;
+    const auto written = std::to_chars(buffer, buffer + sizeof buffer, static_cast<double>(number),
+                                       std::chars_format::general, 17);
+    out.append(buffer, written.ptr);
   } else {
     out += std::to_string(number);
   }
@@ -431,7 +469,8 @@ radicle_status radicle_swf_apply_instance_transforms(radicle_swf_history* histor
     out_result->revision = history == nullptr ? 0 : history->history.revision();
   }
   if (history == nullptr || out_result == nullptr || (edit_count != 0 && edits == nullptr)) {
-    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "history, out_result and a non-empty edit array are required");
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                "history and out_result are required, and edits must not be NULL when edit_count is not zero");
   }
   return guarded("unknown exception while applying instance transforms", [&] {
     std::vector<fo4::swf::SwfInstanceTransformEdit> native;

@@ -162,6 +162,14 @@ TEST(Avm1, ConstantPoolReadsItsCountThenItsStrings) {
   expect_round_trip(stream, input);
 }
 
+// Invariant: a ConstantPool count past the bytes left in its record is Truncated at the count, so removing the check (refusal moves to offset 7) fails.
+TEST(Avm1, ConstantPoolCountPastTheRecordIsRefused) {
+  const auto stream = decode(cat({rec(0x88, cat({le16(0xFFFF), str("a")})), Bytes{0x00}}));
+  EXPECT_EQ(stream.status, Avm1Status::Truncated);
+  EXPECT_EQ(stream.offset, 5u);
+  EXPECT_TRUE(stream.actions.empty());
+}
+
 // Invariant: a DefineFunction2 body starts after its header and spans exactly body_size bytes, so later records keep their offsets.
 TEST(Avm1, DefineFunction2BodyStartsAfterItsHeader) {
   const Bytes header = cat({str("f"), le16(1), Bytes{2}, le16(1), Bytes{1}, str("x"), le16(2)});
@@ -182,6 +190,37 @@ TEST(Avm1, DefineFunction2BodyStartsAfterItsHeader) {
   EXPECT_EQ(fn.parameters[0].register_index, 1);
   EXPECT_EQ(fn.parameters[0].name, "x");
   EXPECT_EQ(fn.body_size, 2);
+  expect_round_trip(stream, input);
+}
+
+// Invariant: a function parameter count past the bytes left in its record is Truncated at the count, so removing the check (refusal moves to offset 9 or 13) fails.
+TEST(Avm1, FunctionParameterCountPastTheRecordIsRefused) {
+  const auto v1 = decode(cat({rec(0x9B, cat({str("f"), le16(5), str("x")})), Bytes{0x00}}));
+  EXPECT_EQ(v1.status, Avm1Status::Truncated);
+  EXPECT_EQ(v1.offset, 7u);
+  const Bytes v2_header = cat({str("f"), le16(5), Bytes{0x00}, le16(0), Bytes{0x01}, str("x")});
+  const auto v2 = decode(cat({rec(0x8E, v2_header), Bytes{0x00}}));
+  EXPECT_EQ(v2.status, Avm1Status::Truncated);
+  EXPECT_EQ(v2.offset, 10u);
+}
+
+// Invariant: a DefineFunction2 whose parameter count fits its record decodes every parameter and re-encodes byte-identically, so the count check never refuses a valid function.
+TEST(Avm1, DefineFunction2WithParametersRoundTrips) {
+  const Bytes header =
+      cat({str("h"), le16(2), Bytes{4}, le16(0), Bytes{1}, str("p"), Bytes{2}, str(""), le16(1)});
+  const Bytes input = cat({rec(0x8E, header), Bytes{0x17}, Bytes{0x00}});
+  const auto stream = decode(input);
+  ASSERT_TRUE(stream.ok()) << stream.message;
+  ASSERT_EQ(stream.actions.size(), 3u);
+  EXPECT_EQ(stream.actions[1].offset, 17u);
+  const auto& fn = std::get<fo4::avm1::Avm1Function>(stream.actions[0].payload);
+  EXPECT_EQ(fn.register_count, 4);
+  ASSERT_EQ(fn.parameters.size(), 2u);
+  EXPECT_EQ(fn.parameters[0].register_index, 1);
+  EXPECT_EQ(fn.parameters[0].name, "p");
+  EXPECT_EQ(fn.parameters[1].register_index, 2);
+  EXPECT_EQ(fn.parameters[1].name, "");
+  EXPECT_EQ(fn.body_size, 1);
   expect_round_trip(stream, input);
 }
 
