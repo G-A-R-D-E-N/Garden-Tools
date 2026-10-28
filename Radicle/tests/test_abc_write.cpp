@@ -127,3 +127,79 @@ TEST(AbcWrite, ReadsMetadataItemsAsKeysThenValuesAndRoundTrips) {
   EXPECT_EQ(file.serialize(out), AbcStatus::Ok);
   EXPECT_EQ(out, bytes);
 }
+
+TEST(AbcWrite, RejectsPoolReferencesThatTheParserWouldRefuse) {
+  AbcFile qname_namespace = parse_or_fail(build_abc());
+  qname_namespace.pool.multinames[kMultinameExternalInterface].ns = kNamespaceCount;
+  expect_rejected(qname_namespace, AbcStatus::IndexOutOfRange);
+
+  AbcFile qname_name = parse_or_fail(build_abc());
+  qname_name.pool.multinames[kMultinameCall].name = kStringCount;
+  expect_rejected(qname_name, AbcStatus::IndexOutOfRange);
+
+  AbcFile runtime_name_set = parse_or_fail(build_abc());
+  runtime_name_set.pool.multinames[kMultinameRuntimeName].ns_set = 1;
+  expect_rejected(runtime_name_set, AbcStatus::IndexOutOfRange);
+
+  AbcFile ns_set_member = parse_or_fail(build_abc());
+  ns_set_member.pool.ns_sets.push_back(fo4::abc::AbcNsSet{{kNamespaceCount}});
+  ns_set_member.pool.multinames[kMultinameRuntimeName].ns_set = 1;
+  expect_rejected(ns_set_member, AbcStatus::IndexOutOfRange);
+
+  AbcFile type_name_base = parse_or_fail(build_abc());
+  type_name_base.pool.multinames[kMultinameTypeName].name = kMultinameInner;
+  expect_rejected(type_name_base, AbcStatus::IndexOutOfRange);
+
+  AbcFile type_name_param = parse_or_fail(build_abc());
+  type_name_param.pool.multinames[kMultinameTypeName].params[0] = kMultinameTypeName;
+  expect_rejected(type_name_param, AbcStatus::IndexOutOfRange);
+}
+
+TEST(AbcWrite, RejectsOutOfSpecKindValuesWithoutWritingBytes) {
+  AbcFile namespace_kind = parse_or_fail(build_abc());
+  namespace_kind.pool.namespaces[1].kind = static_cast<fo4::abc::AbcNamespaceKind>(0x09);
+  expect_rejected(namespace_kind, AbcStatus::BadNamespaceKind);
+
+  AbcFile multiname_kind = parse_or_fail(build_abc());
+  multiname_kind.pool.multinames[kMultinameExternalInterface].kind =
+      static_cast<fo4::abc::AbcMultinameKind>(0x08);
+  expect_rejected(multiname_kind, AbcStatus::BadMultinameKind);
+
+  AbcFile trait_value_kind = parse_or_fail(build_abc());
+  trait_value_kind.instances[0].traits[2].value_kind = static_cast<AbcValueKind>(0x09);
+  expect_rejected(trait_value_kind, AbcStatus::BadValueKind);
+
+  AbcFile option_value_kind = parse_or_fail(build_abc());
+  option_value_kind.methods[1].options[0].kind = static_cast<AbcValueKind>(0x09);
+  expect_rejected(option_value_kind, AbcStatus::BadValueKind);
+
+  AbcFile trait_kind = parse_or_fail(build_abc());
+  trait_kind.instances[0].traits[0].kind = static_cast<fo4::abc::AbcTraitKind>(7);
+  expect_rejected(trait_kind, AbcStatus::InconsistentModel);
+}
+
+TEST(AbcWrite, RejectsU30FieldsPastTheMaskedRangeAndKeepsTheLargestValue) {
+  constexpr std::uint32_t kPastU30 = 0x40000000u;
+
+  AbcFile max_stack = parse_or_fail(build_abc());
+  max_stack.bodies[0].max_stack = kPastU30;
+  expect_rejected(max_stack, AbcStatus::InconsistentModel);
+
+  AbcFile slot_id = parse_or_fail(build_abc());
+  slot_id.instances[0].traits[1].slot_id = kPastU30;
+  expect_rejected(slot_id, AbcStatus::InconsistentModel);
+
+  AbcFile namespace_name = parse_or_fail(build_abc());
+  namespace_name.pool.namespaces[1].name = kPastU30;
+  expect_rejected(namespace_name, AbcStatus::InconsistentModel);
+
+  AbcFile exception_to = parse_or_fail(build_abc());
+  exception_to.bodies[2].exceptions[0].to = kPastU30;
+  expect_rejected(exception_to, AbcStatus::InconsistentModel);
+
+  AbcFile largest = parse_or_fail(build_abc());
+  largest.bodies[0].max_stack = 0x3FFFFFFFu;
+  std::vector<std::uint8_t> out;
+  ASSERT_EQ(largest.serialize(out), AbcStatus::Ok);
+  EXPECT_EQ(parse_or_fail(out).bodies[0].max_stack, 0x3FFFFFFFu);
+}
