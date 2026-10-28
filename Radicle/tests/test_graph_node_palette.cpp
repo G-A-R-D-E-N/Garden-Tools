@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <fstream>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -32,7 +33,7 @@ struct PaletteFixture {
 
     const NodeDefinition& definition(const std::string& id) {
         const auto* found = palette.find(id);
-        ASSERT_TRUE(found != nullptr);
+        if (found == nullptr) throw std::runtime_error("unknown node definition " + id);
         return *found;
     }
 };

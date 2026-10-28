@@ -55,7 +55,7 @@ struct GraphBuilder {
     std::string node(NodePalette& palette, std::string_view definitionId,
                      std::vector<std::pair<std::string, std::string>> config = {}) {
         const auto* definition = palette.find(definitionId);
-        ASSERT_TRUE(definition != nullptr);
+        if (definition == nullptr) throw std::runtime_error("unknown node definition " + std::string(definitionId));
         return nodeRaw(definitionId, definition->kind, std::move(config));
     }
 
@@ -75,7 +75,7 @@ struct GraphBuilder {
     GraphBuilder& value(const std::string& nodeId, std::string_view pinId, std::string type,
                         std::string value) {
         const auto* node = document.node(nodeId);
-        ASSERT_TRUE(node != nullptr);
+        if (node == nullptr) throw std::runtime_error("unknown node " + nodeId);
         GraphPinValue pin;
         pin.type = std::move(type);
         pin.value = std::move(value);
