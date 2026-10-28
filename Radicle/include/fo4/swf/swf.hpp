@@ -539,6 +539,11 @@ struct SwfFontTextureInfo {
   std::uint32_t font_count{0};
 };
 
+struct SwfScalingGrid {
+  std::uint16_t character_id{0};
+  SwfRect splitter{};
+};
+
 struct SwfTag {
   std::uint16_t code{0};
   std::uint32_t length{0};
@@ -569,6 +574,7 @@ struct SwfTag {
   std::optional<SwfExporterInfo> exporter_info;
   std::optional<SwfExternalImage> external_image;
   std::optional<SwfFontTextureInfo> font_texture;
+  std::optional<SwfScalingGrid> scaling_grid;
   std::optional<SwfPlacement> placement;
   std::optional<SwfRemoval> removal;
   std::optional<SwfMorphShape> morph_shape;

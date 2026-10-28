@@ -8482,3 +8482,26 @@ Expected strings were derived by hand. The glyph is a 1000-twip square (50 px, t
 ## .github/workflows/native-ci.yml:REAL_DATA_TEST_REGEX
 
 - The Papyrus gates `PapyrusParseReal`, `PapyrusSemanticReal`, `PapyrusCodegenReal` and `PapyrusDecompilerReal` (`Radicle/tests/test_papyrus_parse_real.cpp`, `test_papyrus_semantic_real.cpp`, `test_papyrus_codegen_real.cpp`, `test_papyrus_decompiler_real.cpp`) are selected by the `[A-Za-z0-9_]*Real\.` branch, so the Fallout 4 data job runs them and the normal job excludes them. They read `FO4RE_PSC_*` and `FO4_PSC_CORPUS` rather than `FO4_DATA_DIR`, so the data job sets those from `$env:FO4_DATA_DIR` in its Test step (`.github/workflows/native-ci.yml:REAL_DATA_TEST_REGEX`). Without that, every gate skips and a Papyrus compile or decompile fidelity regression (a parse, resolve or type-check diagnostic on the vanilla scripts, or the decompile round-trip falling below 0.802) goes unnoticed. The PEX gates (`PapyrusDecompilerReal` and the codegen CK-differential test, which read `FO4_PEX_CORPUS`/`FO4RE_PEX_CORPUS`) stay unset and keep skipping (TODO in the Test step) until a staged `.pex` root is available. The gates now fail rather than skip when the roots exist: the semantic gate has zero diagnostic tolerance and the decompile round-trip floor is 0.802 with almost no margin, and the first data-runner run is unverified (`docs/papyrus-real-data-gates.md`). `PapyrusSourceRealTest` is not selected because it falls back to `Radicle/testdata/papyrus` and runs in the normal job.
+
+## Radicle/include/fo4/swf/swf.hpp:SwfScalingGrid (DefineScalingGrid, tag 78)
+
+- `SwfScalingGrid` holds the CharacterId (UI16, little-endian, first in the payload) and the 9-slice splitter as a `SwfRect` in twips, stored in `SwfTag::scaling_grid`. The splitter is the RECT that follows the id, read by the same `read_rect` the edit-text and font decoders use.
+- Frame SVG rendering of the 9-slice is NOT implemented. `Radicle/src/swf/swf_frame_svg.cpp` never reads `SwfTag::scaling_grid`, so a shape or sprite that carries a grid still renders unsplit.
+- No C API export, no `SwfSummary` counter and no C# change. The sibling typed tags `DefineExternalImage`, `FontTextureInfo` and `ExporterInfo` also have no export; adding one would bump `RADICLE_ABI_VERSION`.
+
+## Radicle/src/swf/swf_tags.cpp:decode_tag_payload (kDefineScalingGrid case)
+
+- The case reads a UI16 CharacterId, then calls `read_rect` at the byte offset after it. A short id or a RECT cut inside its bits returns `SwfStatus::malformed_tag`, which leaves `SwfTag::scaling_grid` empty and keeps the raw payload. Trailing bytes after the RECT are ignored, the same as the other typed decoders that read only their prefix.
+
+## Radicle/src/swf/swf_characters.cpp:find_scaling_grid
+
+- Scans the top-level `file.tags` only, like `build_character_model`, and returns a pointer into `file.tags` (valid while the file is unchanged), or nullptr when no grid names the id.
+- A repeated id returns the LAST grid. `build_character_model` refuses a duplicate character definition, but a grid is an attribute, not a definition. The closest sibling for a repeated name is the SymbolClass overwrite in `build_character_model` (`apply_name(..., true)`), where a later tag replaces an earlier one. This is inferred from the stream order and was not checked against Flash Player.
+
+## Radicle/tests/test_swf_characters.cpp:SwfCharacters scaling grid tests
+
+- The hand-packed RECT for `DecodesTheSplitterRectFromHandPackedBits` is the payload `07 00 58 64 70 83 21 90 00`. Bit layout after the 2-byte id: `01011` (nbits 11), `00001100100` (Xmin 100), `01110000100` (Xmax 900), `00011001000` (Ymin 200), `01100100000` (Ymax 800), then 7 zero pad bits. That is 49 data bits plus 7 pad, 56 bits, 7 bytes, and the padding decodes to 0.
+- `DecodesTheSplitterRectFromHandPackedBits` detects a RECT read from byte 0 instead of after the id, an nbits field read at the wrong width, a sign-extension error on a positive value, or a grid that is not stored in `SwfTag::scaling_grid`. The `write_swf` round trip also checks that decoding leaves the raw payload unchanged.
+- `AcceptsTrailingBytesAfterTheSplitterRect` detects a strict-length check that refuses a grid tag with bytes after its RECT (`0xAA 0xBB` appended).
+- `RefusesAScalingGridPayloadCutInsideItsRect` detects a RECT reader that zero-fills missing bits into a grid, or one that reads past the payload. It uses two cuts: an id-only payload, and a 5-byte payload where the RECT needs 7 bytes. Each must give `malformed_tag`, no typed grid, the raw payload kept, and the End tag still parsed.
+- `ScalingGridLookupReturnsTheLastGridForAnId` detects `find_scaling_grid` returning the first of two grids for one id, returning a grid for a different id, or returning a non-null pointer for an id with no grid.
