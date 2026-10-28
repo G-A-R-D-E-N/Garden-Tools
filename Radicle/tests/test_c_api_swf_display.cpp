@@ -11,6 +11,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <memory>
 #include <string>
 #include <utility>
@@ -169,6 +170,55 @@ std::vector<std::byte> png_movie() {
   file.tag(20, swf_art_test::lossless_payload(4, 2, 2, 4, 0, false), false);
   file.tag(0);
   return wrap_body(file.body, 10, false, false);
+}
+
+std::vector<std::byte> jpeg_bytes(std::initializer_list<std::uint8_t> values) {
+  std::vector<std::byte> out;
+  for (const auto value : values) out.push_back(static_cast<std::byte>(value));
+  return out;
+}
+
+std::vector<std::byte> defined_bits(std::uint16_t character, const std::vector<std::byte>& image) {
+  SwfBuilder body;
+  body.u16(character);
+  body.bytes(image);
+  return body.body;
+}
+
+std::vector<std::byte> with_leading_seam(const std::vector<std::byte>& image) {
+  auto out = jpeg_bytes({0xFF, 0xD9, 0xFF, 0xD8});
+  out.insert(out.end(), image.begin(), image.end());
+  return out;
+}
+
+std::vector<std::byte> tables_movie(std::uint16_t code, const std::vector<std::byte>& image) {
+  SwfBuilder file;
+  file.rect(0, 11000, 0, 8000, 15);
+  file.u16(0x0C00);
+  file.u16(1);
+  file.tag(8, jpeg_bytes({0xFF, 0xD8, 0xAA, 0xBB, 0xFF, 0xD9}), false);
+  file.tag(code, defined_bits(7, image), false);
+  file.tag(0);
+  return wrap_body(file.body, 10, false, false);
+}
+
+std::vector<std::uint8_t> as_u8(const std::vector<std::byte>& bytes) {
+  std::vector<std::uint8_t> out;
+  for (const auto byte : bytes) out.push_back(std::to_integer<std::uint8_t>(byte));
+  return out;
+}
+
+std::vector<std::uint8_t> exported_jpeg(const radicle_swf* swf, size_t index) {
+  uint8_t* jpeg = nullptr;
+  size_t size = 0;
+  EXPECT_EQ(radicle_swf_bitmap_jpeg(swf, index, &jpeg, &size), RADICLE_STATUS_OK) << radicle_last_error();
+  std::vector<std::uint8_t> bytes(jpeg, jpeg + size);
+  radicle_free_bytes(jpeg);
+  return bytes;
+}
+
+std::vector<std::uint8_t> hand_spliced_jpeg() {
+  return {0xFF, 0xD8, 0xAA, 0xBB, 0xFF, 0xC0, 0x00, 0x0B, 0x08, 0x00, 0x03, 0x00, 0x02, 0x01, 0x01, 0x11, 0x00, 0xFF, 0xD9};
 }
 
 }  // namespace
@@ -392,4 +442,58 @@ TEST(CApiSwfBitmapPng, RefusesNonBitmapAndUnencodableTagsWithOutputsCleared) {
   png = &sentinel;
   EXPECT_EQ(radicle_swf_bitmap_png(file.get(), 1, &png, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(png, nullptr);
+}
+
+TEST(CApiSwfBitmapJpeg, SplicesTheJpegTablesOntoADefineBitsImage) {
+  const auto file = open(tables_movie(6, swf_art_test::minimal_jpeg(2, 3)));
+  ASSERT_NE(file, nullptr);
+  EXPECT_EQ(exported_jpeg(file.get(), 1), hand_spliced_jpeg());
+}
+
+TEST(CApiSwfBitmapJpeg, DropsAnErroneousLeadingSeamForTagSixAndTagTwentyOne) {
+  const auto spliced = open(tables_movie(6, with_leading_seam(swf_art_test::minimal_jpeg(2, 3))));
+  ASSERT_NE(spliced, nullptr);
+  EXPECT_EQ(exported_jpeg(spliced.get(), 1), hand_spliced_jpeg());
+
+  const auto self_contained =
+      open(swf_art_test::movie_with(21, defined_bits(4, with_leading_seam(swf_art_test::minimal_jpeg(2, 3)))));
+  ASSERT_NE(self_contained, nullptr);
+  EXPECT_EQ(exported_jpeg(self_contained.get(), 0), as_u8(swf_art_test::minimal_jpeg(2, 3)));
+}
+
+TEST(CApiSwfBitmapJpeg, RefusesNonJpegAndAlphaJpegTagsWithOutputsCleared) {
+  const auto png = open(png_movie());
+  const auto alpha = open(swf_art_test::movie_with(35, swf_art_test::jpeg3_payload(swf_art_test::minimal_jpeg(2, 3), 6)));
+  ASSERT_NE(png, nullptr);
+  ASSERT_NE(alpha, nullptr);
+
+  uint8_t sentinel = 0;
+  uint8_t* jpeg = nullptr;
+  size_t size = 0;
+  const auto refuse = [&](const radicle_swf* swf, size_t index, radicle_status status) {
+    jpeg = &sentinel;
+    size = 77;
+    EXPECT_EQ(radicle_swf_bitmap_jpeg(swf, index, &jpeg, &size), status) << radicle_last_error();
+    EXPECT_EQ(jpeg, nullptr);
+    EXPECT_EQ(size, 0u);
+  };
+  refuse(png.get(), 0, RADICLE_STATUS_NOT_FOUND);
+  refuse(png.get(), 1, RADICLE_STATUS_NOT_FOUND);
+  refuse(png.get(), 2, RADICLE_STATUS_NOT_FOUND);
+  refuse(alpha.get(), 0, RADICLE_STATUS_NOT_FOUND);
+  refuse(png.get(), 99, RADICLE_STATUS_INVALID_ARGUMENT);
+  refuse(nullptr, 1, RADICLE_STATUS_INVALID_ARGUMENT);
+}
+
+TEST(CApiSwfBitmapJpeg, RejectsNullArgumentsWithOutputsCleared) {
+  const auto file = open(tables_movie(6, swf_art_test::minimal_jpeg(2, 3)));
+  ASSERT_NE(file, nullptr);
+
+  uint8_t sentinel = 0;
+  uint8_t* jpeg = &sentinel;
+  size_t size = 77;
+  EXPECT_EQ(radicle_swf_bitmap_jpeg(file.get(), 1, nullptr, &size), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(size, 0u);
+  EXPECT_EQ(radicle_swf_bitmap_jpeg(file.get(), 1, &jpeg, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(jpeg, nullptr);
 }
