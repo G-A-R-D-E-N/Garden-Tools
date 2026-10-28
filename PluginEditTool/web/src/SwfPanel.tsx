@@ -86,6 +86,11 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     if (!bridge || !path.trim()) return;
     setBusy(true);
     setError('');
+    setAbcBlocks([]);
+    setAbcError('');
+    setInstructions('');
+    setSelectedMethod(null);
+    selectedMethodKey.current = '';
     try {
       const opened = parse<StateReply>(await bridge.Open(path.trim()));
       if (opened.error) { setError(opened.error); return; }
@@ -101,9 +106,6 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
       const abcReply = parse<{ blocks: AbcBlockRow[] }>(await bridge.AbcBlocks());
       setAbcError(abcReply.error ?? '');
       setAbcBlocks(abcReply.blocks ?? []);
-      setInstructions('');
-      setSelectedMethod(null);
-      selectedMethodKey.current = '';
     } finally {
       setBusy(false);
     }

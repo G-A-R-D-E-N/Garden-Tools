@@ -154,4 +154,21 @@ describe('SwfPanel', () => {
     expect(screen.getByLabelText('instructions').textContent).toBe('second listing');
     expect(screen.getByText(/onUnload : void/).getAttribute('aria-pressed')).toBe('true');
   });
+
+  it('clears the ABC listing when a re-open is refused', async () => {
+    // Constraint: detects a refused re-open leaving the previous document's ABC listing on screen.
+    stubBridge({
+      Open: vi.fn()
+        .mockResolvedValueOnce(JSON.stringify({ revision: 0, undo: 0, redo: 0, dirty: false }))
+        .mockResolvedValue(JSON.stringify({ error: 'Interface/Missing.swf was not found' })),
+    });
+    render(<SwfPanel onClose={() => {}} />);
+    fireEvent.change(screen.getByPlaceholderText('Interface/Test.swf'), { target: { value: 'Interface/Test.swf' } });
+    await act(async () => { fireEvent.click(screen.getByText('Open')); });
+    expect(await screen.findByText(/class MenuClass/)).toBeTruthy();
+    await act(async () => { fireEvent.click(screen.getByText('Open')); });
+    expect(await screen.findByText(/was not found/)).toBeTruthy();
+    expect(screen.queryByText(/class MenuClass/)).toBeNull();
+    expect(screen.getByText('No ABC scripts in this SWF.')).toBeTruthy();
+  });
 });

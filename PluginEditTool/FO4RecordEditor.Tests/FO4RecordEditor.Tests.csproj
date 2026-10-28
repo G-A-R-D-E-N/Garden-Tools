@@ -27,6 +27,7 @@
 
   <ItemGroup>
     <Compile Include="..\FO4RecordEditor.Core.Tests\SwfFixture.cs" Link="SwfFixture.cs" />
+    <Compile Include="..\FO4RecordEditor.Core.Tests\NativeFactAttribute.cs" Link="NativeFactAttribute.cs" />
   </ItemGroup>
 
 </Project>

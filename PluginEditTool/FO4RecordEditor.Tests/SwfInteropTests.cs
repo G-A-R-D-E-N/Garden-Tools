@@ -11,11 +11,10 @@ namespace FO4RecordEditor.Tests;
 
 public sealed class SwfInteropTests
 {
-    [Fact]
+    [NativeFact]
     public async Task AbcRpcsReturnTheFieldsThePanelReadsAndTheRefusalShape()
     {
         // Invariant: the ABC RPC field names the web panel reads must not change; detects a renamed field or a dropped error shape.
-        RequireNativeLibrary();
         var root = Path.Combine(Path.GetTempPath(), "fo4re-swf-rpc-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(Path.Combine(root, "Interface"));
         File.WriteAllBytes(Path.Combine(root, "Interface", "Test.swf"), SwfFixture.Movie(withAbc: true));
@@ -53,11 +52,4 @@ public sealed class SwfInteropTests
     }
 
     private static JsonElement Parse(string json) => JsonDocument.Parse(json).RootElement;
-
-    private static void RequireNativeLibrary()
-    {
-        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("RADICLE_NATIVE_PATH"))
-            && RadicleNative.FindFirstExisting(RadicleNative.CandidatePaths(AppContext.BaseDirectory)) is null)
-            throw Xunit.Sdk.SkipException.ForSkip("The native Radicle library is not deployed next to the test host.");
-    }
 }
