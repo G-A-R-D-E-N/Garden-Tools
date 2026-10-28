@@ -930,6 +930,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_avm2_value.cpp
     tests/test_avm2_object.cpp
     tests/test_avm2_runtime.cpp
+    tests/test_avm2_call_indexed.cpp
     tests/test_avm2_interpreter.cpp
     tests/test_avm2_scope_depth.cpp
     tests/test_avm2_scripts_real.cpp

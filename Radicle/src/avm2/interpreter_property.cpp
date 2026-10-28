@@ -416,36 +416,31 @@ ExecutionResult Interpreter::call_indexed(Frame& frame, const abc::AbcInstructio
   if (!receiver.is_object()) {
     return fail(InterpreterStatus::NullReference, name + " needs an object receiver");
   }
-  const Trait* trait = nullptr;
-  if (instruction.opcode == op::k_callmethod) {
-    const Class* klass = receiver.as_object()->instance_class();
-    trait = klass == nullptr ? nullptr : klass->resolve_dispatch_trait(index);
-  } else {
-    if (receiver.as_object()->kind() != ObjectKind::Class) {
-      return fail(InterpreterStatus::CannotCall, name + " needs a class receiver");
+  if (instruction.opcode == op::k_callstatic) {
+    const std::size_t method_count = frame.file->methods.size();
+    if (index >= method_count) {
+      return fail(InterpreterStatus::MethodIndexOutOfRange,
+                  name + " method index " + std::to_string(index) + " is outside the " +
+                      std::to_string(method_count) + "-entry method table");
     }
-    ExecutionResult initialized = initialize_class_value(receiver, depth);
-    if (!initialized.ok()) {
-      return initialized;
-    }
-    const Class* klass = static_cast<const ClassObject&>(*receiver.as_object()).represented_class();
-    trait = klass == nullptr ? nullptr : klass->find_own_method_trait(index);
+    const auto function =
+        std::make_shared<FunctionObject>(frame.file->method_name(index), frame.file, index);
+    return invoke(*function, receiver, std::move(arguments), {}, depth);
   }
+  const Class* klass = receiver.as_object()->instance_class();
+  const Trait* trait = klass == nullptr ? nullptr : klass->resolve_dispatch_trait(index);
   if (trait == nullptr || trait->function == nullptr) {
     return fail(InterpreterStatus::CannotCall,
                 name + " has no method " + std::to_string(index) + " on this receiver");
   }
-  ExecutionResult nested = invoke(*trait->function, receiver, std::move(arguments), {}, depth);
-  if (nested.ok() && nested.value.is_object() && nested.value.as_object() == receiver.as_object()) {
-    nested.value = receiver;
-  }
-  return nested;
+  return invoke(*trait->function, receiver, std::move(arguments), {}, depth);
 }
 
 ExecutionResult Interpreter::outer_scope_value(const Frame& frame, std::uint32_t index) const {
   if (frame.outer_scope == nullptr || frame.outer_scope->empty()) {
     return fail(InterpreterStatus::NotImplemented,
-                "getouterscope needs a closure's captured outer scope; this method has none");
+                "opcode getouterscope needs a closure's captured outer scope; "
+                "this method has none");
   }
   if (index >= frame.outer_scope->size()) {
     return fail(InterpreterStatus::ScopeUnderflow,

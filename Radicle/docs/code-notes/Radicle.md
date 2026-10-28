@@ -7855,11 +7855,11 @@ MBCharToAscii (0x36) pops one value, converts it with `to_text` at the movie's v
 
 ## Radicle/src/avm2/interpreter_property.cpp:Interpreter::call_indexed
 
-callmethod (0x43) and callstatic (0x44) pop the argument count (second operand) and the receiver, box a primitive receiver, and fail with NullReference ("<mnemonic> needs an object receiver") for null. callmethod reads its first operand as a dispatch id and resolves it over the receiver's instance class and its super chain, through `Radicle/src/avm2/class.cpp:Class::resolve_dispatch_trait`. callstatic needs a class receiver (ObjectKind::Class, else CannotCall "needs a class receiver"), runs the class initializer through initialize_class_value, then reads its first operand as a method_info index and looks it up only among the class's own class traits, through `Radicle/src/avm2/class.cpp:Class::find_own_method_trait`; the super chain is not searched for callstatic. A missing trait is CannotCall "has no method N on this receiver". The method runs through invoke with the receiver as this and no scope override. If the method returns its receiver, the result is replaced with the receiver Value itself, so a returned this is the caller's own handle; this is the intent, not checked against avmplus, whose source was not available on this machine.
+callmethod (0x43) and callstatic (0x44) pop the argument count (second operand) and the receiver, box a primitive receiver, and fail with NullReference ("<mnemonic> needs an object receiver") for null. callmethod reads its first operand as a dispatch id and resolves it over the receiver's instance class and its super chain, through `Radicle/src/avm2/class.cpp:Class::resolve_dispatch_trait`, which never matches id 0. A missing trait is CannotCall "callmethod has no method N on this receiver". callstatic reads its first operand as a method_info index into `frame.file`'s method table and refuses an index past the end with MethodIndexOutOfRange "callstatic method index N is outside the M-entry method table". Otherwise it builds a FunctionObject for that method with no captured scope and runs it through invoke with the receiver as this and no scope override, so the callee sees the global scope only. Any object receiver is accepted; the class is not required. The callstatic operand meaning (method_info index, argc, receiver as this) is recalled from the AVM2 overview, not verified against avmplus, whose source was not available on this machine.
 
 ## Radicle/src/avm2/interpreter_property.cpp:Interpreter::outer_scope_value
 
-getouterscope (0x67) reads the captured scope list held by Frame::outer_scope (set in `Radicle/src/avm2/interpreter.cpp:Interpreter::invoke`), indexed directly, not through Frame::scopes. Only closures carry a captured scope, because newfunction is the only place it is recorded. A method with no captured scope (a class method, since newclass does not record one) returns NotImplemented "getouterscope needs a closure's captured outer scope; this method has none". Supporting that needs newclass to set captured_scope on every method FunctionObject and invoke's scope logic to change, a restructure outside this change, so it stays refused. An index at or past the captured size is ScopeUnderflow "getouterscope N is outside the M-entry captured outer scope".
+getouterscope (0x67) reads the captured scope list held by Frame::outer_scope (set in `Radicle/src/avm2/interpreter.cpp:Interpreter::invoke`), indexed directly, not through Frame::scopes. Only closures carry a captured scope, because newfunction is the only place it is recorded. A method with no captured scope (a class method, since newclass does not record one) returns NotImplemented "getouterscope needs a closure's captured outer scope; this method has none". Supporting that needs newclass to set captured_scope on every method FunctionObject and invoke's scope logic to change, a restructure outside this change, so it stays refused. An index at or past the captured size is ScopeUnderflow "getouterscope N is outside the M-entry captured outer scope". The NotImplemented message starts with "opcode ", so the real-data probe in `Radicle/tests/test_avm2_scripts_real.cpp:RunsEveryProgramsScriptInitializerWithoutUnimplementedOpcode` counts it as an unimplemented opcode; the ScopeUnderflow refusal is not counted.
 
 ## Radicle/src/avm2/interpreter.cpp:Interpreter::invoke
 
@@ -7867,35 +7867,55 @@ invoke sets `frame.outer_scope = &function.captured_scope()` next to owner_class
 
 ## Radicle/src/avm2/class.cpp:Class::resolve_dispatch_trait
 
-Walks the class and its super chain and returns the first Method trait whose dispatch_id matches, so a subclass override shadows its base. Used by callmethod in `Radicle/src/avm2/interpreter_property.cpp:Interpreter::call_indexed`. It matches dispatch ids, not method_info indices.
-
-## Radicle/src/avm2/class.cpp:Class::find_own_method_trait
-
-Returns the first Method trait in this class's own class_traits whose method_index matches; it does not walk the super chain or the instance traits. Used by callstatic in `Radicle/src/avm2/interpreter_property.cpp:Interpreter::call_indexed`.
+Walks the class and its super chain and returns the first Method trait whose dispatch_id matches, so a subclass override shadows its base. Dispatch id 0 never matches: a compiler writes 0 for a method whose id it left for the VM to assign, and this runtime does not assign ids, so 0 names no method. Classes with no file are skipped (builtins and externals), because builtin traits are built with dispatch_id 0 in `Radicle/src/avm2/builtins.cpp`, so matching them would make id 0 resolve to a builtin. Used by callmethod in `Radicle/src/avm2/interpreter_property.cpp:Interpreter::call_indexed`. It matches dispatch ids, not method_info indices.
 
 ## Radicle/src/abc/abc_verify.cpp:verify_body_opcodes
 
-Conflict, for the lead to decide. Lines 343 to 346 of `verify_body_opcodes` reject callmethod in user bytecode with "callmethod is not permitted in user bytecode". The interpreter does not run the verifier, so the new callmethod case in `Radicle/src/avm2/interpreter_dispatch_b.inc` executes bytecode the verifier would refuse. The brief asked for callmethod to be implemented; whether the verifier policy should change, or callmethod stay refused in user code, is open.
+Decision: the verifier's rejection of callmethod in user bytecode is unchanged. Lines 343 to 346 of `verify_body_opcodes` still refuse it with "callmethod is not permitted in user bytecode". The interpreter does not run the verifier, so the callmethod case in `Radicle/src/avm2/interpreter_dispatch_b.inc` executes bytecode the verifier refuses; the verifier is not consulted at run time.
 
 ## Radicle/src/avm2/interpreter.cpp:Interpreter::execute_frame
 
-Opcode census from a source scan (not compiled or run). Named opcodes with no case in `interpreter_dispatch_a.inc` or `interpreter_dispatch_b.inc` fall to the default, which returns NotImplemented "opcode X is not implemented yet". Totals: 169 named, 138 dispatched, 31 not dispatched. The 31 are: dxns 0x06, dxnslate 0x07, hasnext 0x1F, pushnamespace 0x31, li8 0x35, li16 0x36, li32 0x37, lf32 0x38, lf64 0x39, si8 0x3A, si16 0x3B, si32 0x3C, sf32 0x3D, sf64 0x3E, sxi1 0x50, sxi8 0x51, sxi16 0x52, getdescendants 0x59, finddef 0x5F, setpropertylate 0x69, deletepropertylate 0x6B, getglobalslot 0x6E, setglobalslot 0x6F, esc_xelem 0x71, esc_xattr 0x72, checkfilter 0x78, coerce_b 0x81, coerce_i 0x83, coerce_d 0x84, coerce_u 0x88, coerce_o 0x89. After this change the only NotImplemented in the dispatch is that default fallback.
+Opcode census from a source scan (not compiled or run). Named opcodes with no case in `interpreter_dispatch_a.inc` or `interpreter_dispatch_b.inc` fall to the default, which returns NotImplemented "opcode X is not implemented yet". Totals: 169 named, 138 dispatched, 31 not dispatched. The 31 are: dxns 0x06, dxnslate 0x07, hasnext 0x1F, pushnamespace 0x31, li8 0x35, li16 0x36, li32 0x37, lf32 0x38, lf64 0x39, si8 0x3A, si16 0x3B, si32 0x3C, sf32 0x3D, sf64 0x3E, sxi1 0x50, sxi8 0x51, sxi16 0x52, getdescendants 0x59, finddef 0x5F, setpropertylate 0x69, deletepropertylate 0x6B, getglobalslot 0x6E, setglobalslot 0x6F, esc_xelem 0x71, esc_xattr 0x72, checkfilter 0x78, coerce_b 0x81, coerce_i 0x83, coerce_d 0x84, coerce_u 0x88, coerce_o 0x89. NotImplemented also comes from `Radicle/src/avm2/interpreter_property.cpp:Interpreter::outer_scope_value`, which returns it for a getouterscope in a method with no captured scope.
 
-## Radicle/tests/test_avm2_interpreter.cpp:CallstaticRunsAClassMethodWithTheClassAsThis
+## Radicle/tests/test_avm2_call_indexed.cpp:CallstaticRunsTheMethodWithTheReceiverAsThis
 
-Detects callstatic on the class from newclass failing to find method_info 0 among the class's own traits, or running it with a receiver other than the class object. The test expects the returned value to be the Holder class object, the this that the method returns from getlocal0.
+Detects callstatic failing to pass the receiver as this, or resolving the method against the class instead of the instance. The receiver is a Holder instance from construct; the method returns getlocal0, so the expected result is an object whose instance class is Holder, not the class object.
 
-## Radicle/tests/test_avm2_interpreter.cpp:CallmethodDispatchesByDispatchIdOnTheInstance
+## Radicle/tests/test_avm2_call_indexed.cpp:CallstaticRefusesAMethodIndexPastTheMethodTable
 
-Detects callmethod on a constructed Holder instance failing to resolve dispatch id 1 through the instance class to the scale trait, or dropping the argument. The method returns its argument, so the expected int 4 is the pushed argument.
+Detects callstatic reading past the end of the method table, or running a stale method, instead of refusing. Index 7 in a one-method file must give MethodIndexOutOfRange with "callstatic" in the message.
 
-## Radicle/tests/test_avm2_interpreter.cpp:CallstaticRefusesANullReceiver
+## Radicle/tests/test_avm2_call_indexed.cpp:CallstaticRefusesANullReceiver
 
 Detects callstatic on a null receiver dereferencing null instead of failing. The expected result is NullReference with "callstatic" in the message.
 
+## Radicle/tests/test_avm2_call_indexed.cpp:CallmethodDispatchesByDispatchIdOnTheInstance
+
+Detects callmethod on a constructed Holder instance failing to resolve dispatch id 1 through the instance class to the scale trait, or dropping the argument. The method returns its argument, so the expected int 4 is the pushed argument. The helper `run_holder_callmethod` is shared with the refusal tests below.
+
+## Radicle/tests/test_avm2_call_indexed.cpp:CallmethodFindsTheDispatchIdOnTheSuperClass
+
+Detects callmethod resolving only the receiver's own class. Derived has no traits and extends Holder, so dispatch id 1 must reach Holder's scale trait through the super chain and return 4; an own-class-only lookup gives CannotCall.
+
+## Radicle/tests/test_avm2_call_indexed.cpp:CallmethodRefusesDispatchIdZero
+
+Detects dispatch id 0, the compiler's "VM assigns" marker, matching a method whose dispatch_id is also 0. The scale trait is given dispatch id 0 and called with id 0; the expected result is CannotCall with "callmethod" in the message. Without the id-0 refusal it returns 4.
+
+## Radicle/tests/test_avm2_call_indexed.cpp:CallmethodRefusesAnUnknownDispatchId
+
+Detects callmethod with a dispatch id no trait carries (9, where scale has 1) returning a value or undefined instead of CannotCall with "callmethod" in the message.
+
+## Radicle/tests/test_avm2_call_indexed.cpp:CallmethodRefusesANullReceiver
+
+Detects callmethod on a null receiver dereferencing null instead of failing. The expected result is NullReference with "callmethod" in the message.
+
 ## Radicle/tests/test_avm2_scope_depth.cpp:GetouterscopeReadsTheScopeCapturedByNewfunction
 
-Detects getouterscope 1 in a closure failing to read the captured scope, or reading the wrong entry. Known limit: the caller's scope stack has the same entry at index 1 (obj{value:7}), so this test alone does not separate the captured scope from the call-site scope.
+Detects getouterscope 1 in a closure failing to read the captured scope, or reading the wrong entry. The expected value is 7, the captured object at index 1. Index 1 alone does not separate the captured scope from the frame's scope list, because both hold the same object there; `GetouterscopeIgnoresTheScopesPushedInsideTheClosure` is the case that does.
+
+## Radicle/tests/test_avm2_scope_depth.cpp:GetouterscopeIgnoresTheScopesPushedInsideTheClosure
+
+Detects getouterscope reading the frame's scope list instead of the captured scope. The closure pushes a scope of its own, so frame.scopes holds a third entry at index 2, while the captured scope has two entries. getouterscope 2 must refuse with ScopeUnderflow and "getouterscope" in the message.
 
 ## Radicle/tests/test_avm2_scope_depth.cpp:GetouterscopeRefusesAnIndexPastTheCapturedScope
 
@@ -7904,6 +7924,7 @@ Detects an out-of-range getouterscope (index 1 with a one-entry captured scope) 
 ## Radicle/tests/test_avm2_scope_depth.cpp:GetouterscopeRefusesAMethodWithoutACapturedScope
 
 Detects getouterscope in a script init method, which has no captured scope, returning a stale or null value instead of NotImplemented with "getouterscope" in the message.
+
 ## Radicle/src/abc/abc_write.cpp:pool_encodable (pool references, out-of-spec kinds and u30 fields)
 
 `Radicle/src/abc/abc_write.cpp:pool_encodable` runs in `Radicle/src/abc/abc_write.cpp:AbcFile::serialize` after `detail::check_pool_indices` and before any byte is written. It applies the rules `Radicle/src/abc/constant_pool.cpp:parse_multiname_pool` and `parse_ns_set_pool` apply, so a model it accepts parses back. A QName `ns`, a Multiname `ns_set` and an ns_set member are compared with `>=` against their pool size with no index-0 exemption, because the parser does the same. A multiname `name` is checked only for the kinds that write it, and 0 is the "any" sentinel there. A TypeName `name` and each `params` entry must be below the entry's own index. Entries 1 and up are checked, because index 0 of each pool is the reserved slot that is never written. Namespace, multiname and value kinds are tested against the enum values in `Radicle/src/abc/abc_write.cpp:namespace_kind_known`, `multiname_kind_known` and `value_kind_known`, and return `AbcStatus::BadNamespaceKind`, `BadMultinameKind` and `BadValueKind`. Trait value kinds are read only on Slot and Const traits with a non-zero `value_index`, the only traits that write a kind byte. A trait kind above Const was already refused as `AbcStatus::InconsistentModel` by `Radicle/src/abc/abc_write.cpp:traits_encodable`.
