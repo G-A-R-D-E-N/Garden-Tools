@@ -186,6 +186,7 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     if (character.kind !== 'EditText') return;
     const reply = parse<{ id: number; text: string; color: string; x0: number; x1: number; y0: number; y1: number; error?: string }>(
       await bridge.ReadEditText(character.tagIndex));
+    if (request !== shapeRequest.current) return;
     if (reply.error) { setError(reply.error); return; }
     setError('');
     setEditTag(character.tagIndex);

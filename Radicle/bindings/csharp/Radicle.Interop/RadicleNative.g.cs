@@ -4528,6 +4528,9 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_graph_describe_node")]
     public static extern Status GraphDescribeNode([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? node_type, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? imports, IntPtr* base_imports, nuint base_count, byte** out_text, nuint* out_size);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_graph_load_script")]
+    public static extern Status GraphLoadScript([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? script_path, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? imports, IntPtr* base_imports, nuint base_count, byte** out_text, nuint* out_size);
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_line_column_to_offset")]
     public static extern Status PapyrusLineColumnToOffset(byte* text, nuint size, int line, int column, int* out_offset);
 

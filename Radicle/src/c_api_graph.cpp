@@ -1,6 +1,8 @@
 #include "fo4/c_api_graph.h"
 
 #include "c_api_internal.hpp"
+#include "fo4/graph/graph_document.hpp"
+#include "fo4/graph/graph_script_loader.hpp"
 #include "fo4/graph/graph_tool_service.hpp"
 
 #include <cstdlib>
@@ -72,6 +74,23 @@ radicle_status output_folder(const char* output_path, std::filesystem::path& fol
   }
   folder = folder.lexically_normal();
   return RADICLE_STATUS_OK;
+}
+
+std::string load_failure(const fo4::graph::GraphScriptLoadResult& loaded) {
+  if (loaded.failure) {
+    return *loaded.failure;
+  }
+  std::string message;
+  for (const auto& diagnostic : loaded.diagnostics) {
+    if (diagnostic.severity != fo4::graph::GraphSeverity::Error) {
+      continue;
+    }
+    if (!message.empty()) {
+      message += "; ";
+    }
+    message += diagnostic.toString();
+  }
+  return message.empty() ? "the script could not be lifted into a graph" : message;
 }
 
 }  // namespace
@@ -203,6 +222,39 @@ radicle_status radicle_graph_describe_node(const char* node_type,
     return copy_bytes(fo4::graph::GraphToolService::describeNode(
                           node_type, imports ? &imports_text : nullptr, roots),
                       out_text, out_size);
+  });
+}
+
+radicle_status radicle_graph_load_script(const char* script_path,
+                                         const char* imports,
+                                         const char* const* base_imports,
+                                         size_t base_count,
+                                         uint8_t** out_text,
+                                         size_t* out_size) {
+  clear_error();
+  if (!out_text || !out_size) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_text and out_size are required");
+  }
+  *out_text = nullptr;
+  *out_size = 0;
+  if (!script_path) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "script_path is required");
+  }
+
+  return guarded([&] {
+    std::vector<std::filesystem::path> roots;
+    const radicle_status status = base_roots(base_imports, base_count, roots);
+    if (status != RADICLE_STATUS_OK) {
+      return status;
+    }
+    const auto path = utf8_path(script_path);
+    const std::string imports_text = imports ? imports : "";
+    const auto index = fo4::graph::graphIndexFor(&path, imports ? &imports_text : nullptr, roots);
+    const auto loaded = fo4::graph::GraphScriptLoader::load(path, index.roots());
+    if (!loaded.success()) {
+      return fail(RADICLE_STATUS_PARSE_ERROR, load_failure(loaded).c_str());
+    }
+    return copy_bytes(fo4::graph::documentJson::serialize(*loaded.document), out_text, out_size);
   });
 }
 

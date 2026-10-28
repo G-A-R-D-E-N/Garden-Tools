@@ -157,7 +157,11 @@ public class SwfInterop
     public Task<string> Disassemble(int abc, int methodIndex) => Run(() =>
         Json(new { text = Document().Movie.Disassemble(abc, methodIndex) }));
     public Task<string> ShapeSvg(int characterId) => Run(() =>
-        Json(new { svg = Document().Movie.ShapeSvg((ushort)characterId) }));
+    {
+        if (characterId < 0 || characterId > ushort.MaxValue)
+            throw new ArgumentOutOfRangeException(nameof(characterId), "character id must be 0..65535");
+        return Json(new { svg = Document().Movie.ShapeSvg((ushort)characterId) });
+    });
     public Task<string> Undo() => Run(() => { Document().Undo(); return Snapshot(false); });
 
     public Task<string> Redo() => Run(() => { Document().Redo(); return Snapshot(false); });
