@@ -69,10 +69,10 @@ Add `--gtest_output=xml:<dir>\<gate>.xml` to keep `RecordProperty` values. For a
 
 - Test: `PapyrusCodegenReal.DecompiledCorpusRecompilesToTheSameProgram` (`test_papyrus_codegen_real.cpp`, line 303).
 - Env: `FO4RE_PSC_ROOTS` only. It is both the index roots and the sample source.
-- Sample: the first 1,500 `.psc` by path (`kDecompileSampleLimit`, lines 42, 319).
-- Pass: files non-empty, compiled > 0, and matched / compiled >= 0.802 (`kMinimumDecompileFidelity`, line 41; check at line 402). The `DECOMPILE files= compiled= matched=` line is printed at line 384.
-- Skip: `FO4RE_PSC_ROOTS is not set to a directory holding .psc sources` (line 305).
-- Documented figure: `PAPYRUS.md:105` gives 1,202 of 1,498 (80.2%) with `FO4RE_PSC_ROOTS`.
+- Sample: a stratified sample of up to 1,500 `.psc` (`kDecompileSampleLimit`, line 42; `stratifiedSample` in `Radicle/tests/papyrus_corpus_roots.hpp`). Candidates are sorted by lowercase path relative to their root, then every k-th is taken with k = ceil(N / 1,500), so the sample spans the corpus. The `SAMPLE candidates= selected= stride= first= last=` line (line 319) prints what was measured.
+- Pass: files non-empty, compiled > 0, and matched / compiled >= 0.802 (`kMinimumDecompileFidelity`, line 41; check at line 404). The `DECOMPILE files= compiled= matched=` line is printed at line 388.
+- Skip: `FO4RE_PSC_ROOTS is not set to a directory holding .psc sources` (line 306).
+- Documented figure: `PAPYRUS.md:105` gives 1,202 of 1,498 (80.2%) with `FO4RE_PSC_ROOTS`. That figure came from the old first-1,500 prefix, so it is not comparable with the stratified sample. The 0.802 floor is unchanged and needs re-measuring on the data runner.
 - Run: `$env:FO4RE_PSC_ROOTS = '<psc roots>'`, then the template with this filter.
 
 ### 6. Decompiler no-throw (not in the brief list; in CI's regex)

@@ -5,6 +5,7 @@
 #include <fo4/avm1/interpreter.hpp>
 
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -14,6 +15,7 @@ struct Avm1Object {
   bool is_array{false};
   std::vector<std::string> order;
   std::map<std::string, Avm1Data> properties;
+  std::shared_ptr<const Avm1FunctionBody> constructed_by;
 
   ~Avm1Object();
 };
