@@ -203,6 +203,7 @@ std::optional<GraphLifter::Value> GraphLifter::liftMember(const papyrus::MemberE
         const auto target = liftExpression(*member.target, open);
         const auto id = node(builtinDefs::kStructGet, GraphNodeKind::StructGet);
         config(id, "member", member.name);
+        config(id, "type", typeName(member));
         if (target && target->pin) wire(*target->pin, PinRef{id, std::string(pinIds::kTarget)});
         else if (target && target->literal) doc_->node(id)->pinValues[std::string(pinIds::kTarget)] = *target->literal;
         Value value;

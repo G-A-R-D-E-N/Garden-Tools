@@ -320,7 +320,8 @@ Struct Point
 EndStruct
 
 Event OnLoad()
-    Point p = new Point
+    Point p
+    p = new Point
     p.X = 3
     p.Y = p.X + 4
 EndEvent
@@ -336,7 +337,8 @@ Struct Point
 EndStruct
 
 Event OnLoad()
-    Point p = new Point
+    Point p
+    p = new Point
     p.X = 1
     p.X += 2
     p.Y -= p.X
@@ -356,13 +358,27 @@ Int Function Next()
 EndFunction
 
 Event OnLoad()
-    Point p = new Point
+    Point p
+    p = new Point
     p.X += Next()
 EndEvent
 )";
 
-    Env env(true);
-    GraphLifter lifter(env.index);
+    const UniqueRoot guard("refuse-struct");
+    const std::string root = guard.string();
+    std::filesystem::create_directories(root);
+    {
+        std::ofstream out(std::filesystem::path(root) / "Fixture.psc",
+                          std::ios::binary | std::ios::trunc);
+        out << text;
+    }
+
+    ScriptIndex index;
+    index.addRoot(root);
+    index.addRoot(baseStubs());
+    index.addRoot(graphScripts());
+
+    GraphLifter lifter(index);
     const auto lifted = lifter.lift(Parser::parse(text, "Fixture.psc"));
 
     EXPECT_FALSE(lifted.success());
