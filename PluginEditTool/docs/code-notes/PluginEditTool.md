@@ -207,8 +207,7 @@ pins the accepted path, the sibling, the escape and the empty list.
 `SwfEditTextCodec.Parse` and `Write` re-implement the DefineEditText (tag 37) field walk that the C++ side already has in
 `Radicle/include/fo4/swf/swf_text_edit.hpp` (`replace_edit_text`, `apply_edit_text`). The C ABI now exports the edit-text verbs `radicle_swf_edit_text_read` and `radicle_swf_edit_text_apply`
 (`Radicle/include/fo4/c_api_swf_verbs.h`). The PET document's write goes through `SwfVerbs.ApplyEditText`
-(`SwfDocumentService.cs:SwfDocument.EditEditText`), but the binding's `SwfFile.EditEditText` still writes through
-`SwfEditTextCodec.Write`, so `Write` stays until that caller moves to the verb. PET does not call the native read yet:
+(`SwfDocumentService.cs:SwfDocument.EditEditText`). The managed write was removed from `SwfEditText.cs:SwfEditTextCodec` (`Write`) and `SwfEditText.cs:SwfFile.EditEditText`. PET does not call the native read yet:
 `SwfDocument.EditText` reads through the managed `Parse`.
 ## FO4RecordEditor/Services/SwfInterop.cs:SwfInterop.Run (one lock per call)
 
