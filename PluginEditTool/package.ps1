@@ -195,6 +195,33 @@ foreach ($d in $ShippedDocs) {
 }
 '@ | Set-Content (Join-Path $Staging 'mcp.sample.json') -Encoding UTF8
 
+Step 'Writing build metadata'
+$Commit = 'unknown'
+try {
+    $resolved = (& git -C $Root rev-parse HEAD 2>$null)
+    if ($LASTEXITCODE -eq 0 -and $resolved) { $Commit = $resolved.Trim() }
+} catch {
+    $Commit = 'unknown'
+}
+$Abi = 'unknown'
+$AbiHeader = Join-Path $Root '..\Radicle\include\fo4\c_api.h'
+if (Test-Path -LiteralPath $AbiHeader) {
+    $define = Select-String -LiteralPath $AbiHeader -Pattern '^\s*#define\s+RADICLE_ABI_VERSION\s+(\d+)u?\s*$' |
+        Select-Object -First 1
+    if ($define) { $Abi = $define.Matches[0].Groups[1].Value }
+}
+$BuildInfo = @(
+    'product=FO4RecordEditor'
+    "version=$Version"
+    "commit=$Commit"
+    "radicle_abi_version=$Abi"
+    "built_at_utc=$((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))"
+    'runtime=native C++23; no .NET runtime required'
+    'requires=Microsoft Edge WebView2 Runtime (x64); Microsoft Visual C++ 2015-2022 Redistributable (x64)'
+)
+Set-Content -LiteralPath (Join-Path $Staging 'build-info.txt') -Value $BuildInfo -Encoding ascii
+Write-Host "    version=$Version commit=$Commit"
+
 Step 'Zipping'
 if (Test-Path $ZipPath) { Remove-Item $ZipPath -Force }
 Compress-Archive -Path "$Staging\*" -DestinationPath $ZipPath -CompressionLevel Optimal
