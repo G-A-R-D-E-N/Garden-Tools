@@ -280,6 +280,8 @@ add_library(fo4
   src/papyrus/scheduler.cpp
   src/papyrus/execute.cpp
   src/papyrus/decompiler.cpp
+  src/papyrus/decompiler_expr.cpp
+  src/papyrus/decompiler_stmt.cpp
   src/papyrus/lexer.cpp
   src/papyrus/parser.cpp
   src/papyrus/parser_statement.cpp
