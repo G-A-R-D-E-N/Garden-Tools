@@ -129,6 +129,14 @@ std::optional<GraphLifter::Value> GraphLifter::liftExpression(const papyrus::Exp
         return value;
     }
 
+    if (const auto* created = dynamic_cast<const papyrus::NewStructExpression*>(&expression)) {
+        const auto id = node(builtinDefs::kStructNew, GraphNodeKind::StructNew);
+        config(id, "type", created->type.toString());
+        Value value;
+        value.pin = PinRef{id, std::string(pinIds::kReturn)};
+        return value;
+    }
+
     refuse("'" + nodeKindName(expression.nodeKind()) +
                "' is an expression the graph has no node for.",
            expression.span);
@@ -188,6 +196,17 @@ std::optional<GraphLifter::Value> GraphLifter::liftMember(const papyrus::MemberE
         else if (target && target->literal) doc_->node(id)->pinValues[std::string(pinIds::kArray)] = *target->literal;
         Value value;
         value.pin = PinRef{id, std::string(pinIds::kReturn)};
+        return value;
+    }
+
+    if (binding != nullptr && binding->kind == papyrus::BindingKind::StructMember) {
+        const auto target = liftExpression(*member.target, open);
+        const auto id = node(builtinDefs::kStructGet, GraphNodeKind::StructGet);
+        config(id, "member", member.name);
+        if (target && target->pin) wire(*target->pin, PinRef{id, std::string(pinIds::kTarget)});
+        else if (target && target->literal) doc_->node(id)->pinValues[std::string(pinIds::kTarget)] = *target->literal;
+        Value value;
+        value.pin = PinRef{id, std::string(pinIds::kValue)};
         return value;
     }
 

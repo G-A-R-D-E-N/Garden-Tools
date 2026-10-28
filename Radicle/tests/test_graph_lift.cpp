@@ -194,6 +194,20 @@ PexLiftOutcome runOne(const GraphFixture& fixture) {
                : PexLiftOutcome{fixture.name, "InstructionsDiffered", difference};
 }
 
+void expectSurvivesTheGraph(const std::string& text) {
+    const auto original = compileText(text);
+    ASSERT_TRUE(original != nullptr);
+
+    std::string report;
+    const auto rebuilt = throughGraph(text, report);
+    ASSERT_TRUE(rebuilt != nullptr) << report;
+
+    const auto difference =
+        fo4::papyrus::test::firstDifference(original->objects[0], rebuilt->objects[0]);
+    EXPECT_TRUE(difference.empty()) << "difference: " << difference
+                                    << "\nregenerated source:\n" << report;
+}
+
 }
 
 TEST(GraphLift, GraphLiftAFixtureSourceSurvivesATripThroughTheGraph) {
@@ -295,4 +309,67 @@ TEST(GraphLift, GraphLiftPexACompiledBinarySurvivesATripThroughTheGraph) {
     for (const auto& failure : failures) {
         EXPECT_TRUE(failure.stage == "Matched");
     }
+}
+
+TEST(GraphLift, StructNewGetAndSetSurviveATripThroughTheGraph) {
+    expectSurvivesTheGraph(R"(Scriptname Fixture extends ObjectReference
+
+Struct Point
+    Int X
+    Int Y
+EndStruct
+
+Event OnLoad()
+    Point p = new Point
+    p.X = 3
+    p.Y = p.X + 4
+EndEvent
+)");
+}
+
+TEST(GraphLift, StructMemberCompoundAssignmentSurvivesATripThroughTheGraph) {
+    expectSurvivesTheGraph(R"(Scriptname Fixture extends ObjectReference
+
+Struct Point
+    Int X
+    Int Y
+EndStruct
+
+Event OnLoad()
+    Point p = new Point
+    p.X = 1
+    p.X += 2
+    p.Y -= p.X
+EndEvent
+)");
+}
+
+TEST(GraphLift, StructMemberCompoundWithACallIsRefusedRatherThanReordered) {
+    const std::string text = R"(Scriptname Fixture extends ObjectReference
+
+Struct Point
+    Int X
+EndStruct
+
+Int Function Next()
+    Return 1
+EndFunction
+
+Event OnLoad()
+    Point p = new Point
+    p.X += Next()
+EndEvent
+)";
+
+    Env env(true);
+    GraphLifter lifter(env.index);
+    const auto lifted = lifter.lift(Parser::parse(text, "Fixture.psc"));
+
+    EXPECT_FALSE(lifted.success());
+    bool refused = false;
+    for (const auto& diagnostic : lifted.diagnostics) {
+        if (diagnostic.message.find("struct member") != std::string::npos) refused = true;
+    }
+    EXPECT_TRUE(refused);
+    if (!refused) { SCOPED_TRACE((::testing::Message() << describe(lifted.diagnostics)).GetString()); }
 }
