@@ -25,6 +25,24 @@ void expect_rejected(const AbcFile& file, AbcStatus expected) {
   EXPECT_TRUE(out.empty());
 }
 
+void append_type_name(AbcFile& file, std::uint32_t name, const std::vector<std::uint32_t>& params) {
+  fo4::abc::AbcMultiname type_name;
+  type_name.kind = fo4::abc::AbcMultinameKind::TypeName;
+  type_name.name = name;
+  type_name.params = params;
+  file.pool.multinames.push_back(type_name);
+}
+
+AbcFile nested_type_names(std::size_t levels) {
+  AbcFile file = parse_or_fail(build_abc());
+  std::uint32_t inner = kMultinameExternalInterface;
+  for (std::size_t level = 0; level < levels; ++level) {
+    append_type_name(file, kMultinameExternalInterface, {inner});
+    inner = static_cast<std::uint32_t>(file.pool.multinames.size() - 1);
+  }
+  return file;
+}
+
 }
 
 TEST(AbcWrite, RoundTripsTheSyntheticFixtureByteForByte) {
@@ -202,4 +220,27 @@ TEST(AbcWrite, RejectsU30FieldsPastTheMaskedRangeAndKeepsTheLargestValue) {
   std::vector<std::uint8_t> out;
   ASSERT_EQ(largest.serialize(out), AbcStatus::Ok);
   EXPECT_EQ(parse_or_fail(out).bodies[0].max_stack, 0x3FFFFFFFu);
+}
+
+TEST(AbcWrite, TypeNameExpansionCapIsInclusiveAtSixtyFourNodes) {
+  AbcFile at_cap = parse_or_fail(build_abc());
+  append_type_name(at_cap, kMultinameExternalInterface,
+                   std::vector<std::uint32_t>(62, kMultinameExternalInterface));
+  std::vector<std::uint8_t> out;
+  ASSERT_EQ(at_cap.serialize(out), AbcStatus::Ok);
+  EXPECT_EQ(parse_or_fail(out).pool.multinames.size(), at_cap.pool.multinames.size());
+
+  AbcFile past_cap = parse_or_fail(build_abc());
+  append_type_name(past_cap, kMultinameExternalInterface,
+                   std::vector<std::uint32_t>(63, kMultinameExternalInterface));
+  expect_rejected(past_cap, AbcStatus::TypeNameTooLarge);
+}
+
+TEST(AbcWrite, TypeNameExpansionCountsNestedParametersAcrossLevels) {
+  const AbcFile at_cap = nested_type_names(31);
+  std::vector<std::uint8_t> out;
+  ASSERT_EQ(at_cap.serialize(out), AbcStatus::Ok);
+  EXPECT_EQ(parse_or_fail(out).pool.multinames.size(), at_cap.pool.multinames.size());
+
+  expect_rejected(nested_type_names(32), AbcStatus::TypeNameTooLarge);
 }
