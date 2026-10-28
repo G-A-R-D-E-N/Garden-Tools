@@ -44,6 +44,9 @@ void append_node(const DisplayObject& object, std::size_t level, std::size_t dep
   out += " matrix=" + fixed(matrix.a) + " " + fixed(matrix.b) + " " + fixed(matrix.c) + " " +
          fixed(matrix.d) + " " + fixed(matrix.tx) + " " + fixed(matrix.ty);
   out += object.visible() ? " visible=1" : " visible=0";
+  out += " blend=" + std::to_string(object.blend_mode());
+  out += " ratio=" + (object.ratio() ? std::to_string(*object.ratio()) : std::string{"none"});
+  out += " filters=" + std::to_string(object.placed_filters().size());
   out += " alpha=" + fixed(object.alpha());
   out += " children=" + std::to_string(child_count);
   if (object.is_text_field()) {
