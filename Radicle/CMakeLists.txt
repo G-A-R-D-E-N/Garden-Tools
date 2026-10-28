@@ -278,6 +278,13 @@ add_library(fo4
   src/papyrus/symbols.cpp
   src/papyrus/declaration_check.cpp
   src/papyrus/file_walk.cpp
+  src/papyrus/user_flags.cpp
+  src/papyrus/code_generator.cpp
+  src/papyrus/body_statement.cpp
+  src/papyrus/body_expression.cpp
+  src/papyrus/body_call.cpp
+  src/papyrus/creation_kit_fidelity.cpp
+  src/papyrus/compile_script.cpp
   src/f4se/binding_validator.cpp
   src/f4se/cpp_emitter.cpp
   src/f4se/cpp_scanner.cpp
@@ -846,6 +853,9 @@ if(RADICLE_BUILD_TESTS)
     tests/test_papyrus_script_index.cpp
     tests/test_papyrus_declaration_check.cpp
     tests/test_papyrus_semantic_real.cpp
+    tests/test_papyrus_codegen.cpp
+    tests/test_papyrus_codegen_real.cpp
+    tests/test_papyrus_user_flags.cpp
     tests/test_f4se_type_map.cpp
     tests/test_f4se_cross_check.cpp
     tests/test_f4se_extractor.cpp
