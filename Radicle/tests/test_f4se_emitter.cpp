@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -14,6 +15,13 @@
 #include <fo4/f4se/registration_extractor.hpp>
 #include <fo4/f4se/type_map.hpp>
 #include <fo4/f4se/diagnostic.hpp>
+#include <fo4/papyrus/compile_script.hpp>
+#include <fo4/papyrus/parser.hpp>
+#include <fo4/papyrus/script_index.hpp>
+#include <fo4/pex/pex.hpp>
+
+#include "graph_builder.hpp"
+#include "temp_data_dir.hpp"
 
 namespace {
 
@@ -530,4 +538,48 @@ TEST(F4seEmitter, AStructOwnedByNoEmittedScriptIsRefused) {
     const auto result = emitter.emit(orphaned);
     ASSERT_TRUE(result.errors().size() == 1);
     EXPECT_TRUE(result.errors()[0].code == kStructOwnerMismatch);
+}
+
+TEST(F4seEmitter, TheEmittedScriptsCompileToPexWithZeroDiagnostics) {
+    const auto result = emitSample();
+    const std::map<std::string, std::vector<std::string>> natives = {
+        {"SampleActor", {"GetSampleWornItem", "GetTargets"}},
+        {"SampleUtil", {"Describe", "WaitFor"}},
+    };
+
+    const fo4::test::TempDataDir dir;
+    for (const auto& entry : natives) {
+        std::ofstream out{dir.path() / (entry.first + ".psc"), std::ios::binary};
+        out << textOf(result, "Data/Scripts/Source/User/" + entry.first + ".psc");
+    }
+
+    fo4::papyrus::ScriptIndex index;
+    index.addRoot(dir.path());
+    index.addRoot(fo4::graph::test::baseStubs());
+
+    for (const auto& [script, expectedNatives] : natives) {
+        const auto parsed = fo4::papyrus::Parser::parseFile(dir.path() / (script + ".psc"));
+        ASSERT_TRUE(parsed.has_value());
+        const auto compiled = fo4::papyrus::compileScript(
+            index, &*parsed, script + ".psc", fo4::papyrus::PapyrusCompileOptions{});
+        std::string joined;
+        for (const auto& d : compiled.diagnostics) joined += d.toString() + " | ";
+        EXPECT_TRUE(compiled.diagnostics.empty()) << joined;
+        EXPECT_TRUE(compiled.sourcesComplete);
+        ASSERT_TRUE(compiled.success());
+
+        const auto bytes = compiled.pex->toBytes();
+        const auto reread = fo4::pex::PexFile::fromBytes(bytes);
+        EXPECT_TRUE(reread.toBytes() == bytes);
+        ASSERT_EQ(reread.objects.size(), 1u);
+
+        std::vector<std::string> names;
+        for (const auto& state : reread.objects[0].states) {
+            for (const auto& function : state.functions) {
+                if (function.isNative) names.push_back(function.name);
+            }
+        }
+        std::sort(names.begin(), names.end());
+        EXPECT_EQ(names, expectedNatives);
+    }
 }
