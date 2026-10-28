@@ -83,5 +83,32 @@ public sealed class SwfInteropTests
         }
     }
 
+    [NativeFact]
+    public async Task ShapeSvgRpcReturnsTheSvgForAShapeAndTheRefusalForANonShape()
+    {
+        // Invariant: ShapeSvg returns the svg field the panel reads for a shape and the error shape for a non-shape; detects a dropped svg field or a non-shape exporting as svg.
+        var root = Path.Combine(Path.GetTempPath(), "fo4re-swf-shape-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, "Interface"));
+        File.WriteAllBytes(Path.Combine(root, "Interface", "Test.swf"), SwfFixture.Movie(withShape: true));
+        AssetResolver.SetSessionDataRoots(new[] { root });
+        try
+        {
+            var swf = new SwfInterop();
+            Assert.False(Parse(await swf.Open("Interface\\Test.swf")).TryGetProperty("error", out _));
+
+            var svg = Parse(await swf.ShapeSvg(5)).GetProperty("svg").GetString() ?? string.Empty;
+            Assert.StartsWith("<svg", svg);
+
+            var refusal = Parse(await swf.ShapeSvg(11));
+            Assert.False(string.IsNullOrEmpty(refusal.GetProperty("error").GetString()));
+            Assert.False(refusal.TryGetProperty("svg", out _));
+        }
+        finally
+        {
+            AssetResolver.SetSessionDataRoots(Array.Empty<string>());
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static JsonElement Parse(string json) => JsonDocument.Parse(json).RootElement;
 }

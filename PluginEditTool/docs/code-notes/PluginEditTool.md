@@ -37,23 +37,22 @@ The host bridge is picked up by the existing `[RpcExpose]` scan as `hostObjects.
 test stubs. Archive-resolved open and the semantic edit verbs are still deferred.
 ## Radicle/bindings/csharp/Radicle.Interop/SwfEditText.cs:SwfEditTextCodec (edit-text fields)
 
-Tag 37 has no C ABI getter, so the managed layer parses and re-encodes the decoded tag payload itself:
-`SwfEditTextCodec.Parse` reads bounds (RECT bits), both flag bytes, font id/class, height, colour, max length,
-layout, variable and initial text, and `Write` reproduces the decoder order and reuses the original id/RECT
-prefix unless the bounds are edited, so a text or colour edit keeps every earlier byte. `SwfFile.EditText` and
-`SwfFile.EditEditText` expose it and send the rewritten payload through the normal tag plan, so history,
-revision and refusal behaviour are unchanged. Tests in `SwfEditTextTests.cs` pin the full read, the
-prefix-preserving text edit, colour and bounds edits, the no-op plan, and the wrong-tag refusal. This is the
-"compose from tag payloads in PET" path for edit text. The panel's document no longer uses it: `SwfDocumentService.cs:SwfDocument.EditEditText`
-writes through `SwfVerbs.ApplyEditText`, and label add, rename and remove write through the label verbs. The depth and
+`SwfEditText.cs:SwfEditTextCodec.Parse` reads bounds (RECT bits), both flag bytes, font id/class, height, colour, max length,
+layout, variable and initial text from the decoded tag payload, and `SwfEditText.cs:SwfFile.EditText` exposes it. It is read-only:
+`SwfDocumentService.cs:SwfDocument.EditEditText` writes through `SwfVerbs.ApplyEditText`, and label add, rename and remove write through the label verbs.
+Tests in `SwfEditTextTests.cs` pin the full read and the wrong-tag refusal. The depth and
 transform edits still compose payloads in PET (`SwfPlacementCodec.WithDepth`, `SwfPlacementMatrixCodec.Write`).
 ## FO4RecordEditor.Core/Services/SwfDocumentService.cs:SwfDocument.EditEditText (edit-text through the history)
 
 `SwfDocumentService.cs:SwfDocument.EditEditText` calls `SwfVerbs.ApplyEditText` on the document's own history (through
 `Verb`), so the DefineEditText rewrite is owned by Radicle and an edit-text change is one history command with the same
-undo/redo/refusal behaviour. `SwfDocument.EditText` still reads the managed tag-37 record with `SwfEditTextCodec.Parse`;
+undo/redo/refusal behaviour. `SwfDocumentService.cs:SwfDocument.EditText` reads through `SwfVerbs.ReadEditText` on the same
+history, so the read and the write share Radicle's codec; `SwfDocumentServiceTests.EditsAnEditTextPastASpriteAtItsFlatIndex`
+reads the flat index past a DefineSprite before and after the edit.
 `SwfInterop` exposes `ReadEditText`/`EditEditText` for the panel (colour/rect/text are flattened JSON; the colour stays
-`0xAARRGGBB`), and `SwfDocumentServiceTests.EditsEditTextThroughTheSameHistory` pins the edit plus its undo.
+`0xAARRGGBB`). The read reply has no `variable`: the native read does not export it and the panel never read it.
+`SwfDocumentServiceTests.EditsEditTextThroughTheSameHistory` pins the edit plus its undo, and checks `variable` through the
+managed `SwfFile.EditText` oracle.
 ## web/src/SwfPanel.tsx (edit-text properties)
 
 Selecting a character whose kind is EditText calls `ReadEditText` through the host bridge and fills the right-hand
@@ -207,9 +206,8 @@ pins the accepted path, the sibling, the escape and the empty list.
 `SwfEditTextCodec.Parse` and `Write` re-implement the DefineEditText (tag 37) field walk that the C++ side already has in
 `Radicle/include/fo4/swf/swf_text_edit.hpp` (`replace_edit_text`, `apply_edit_text`). The C ABI now exports the edit-text verbs `radicle_swf_edit_text_read` and `radicle_swf_edit_text_apply`
 (`Radicle/include/fo4/c_api_swf_verbs.h`). The PET document's write goes through `SwfVerbs.ApplyEditText`
-(`SwfDocumentService.cs:SwfDocument.EditEditText`), but the binding's `SwfFile.EditEditText` still writes through
-`SwfEditTextCodec.Write`, so `Write` stays until that caller moves to the verb. PET does not call the native read yet:
-`SwfDocument.EditText` reads through the managed `Parse`.
+(`SwfDocumentService.cs:SwfDocument.EditEditText`). The managed write was removed from `SwfEditText.cs:SwfEditTextCodec` (`Write`) and `SwfEditText.cs:SwfFile.EditEditText`. PET's read now goes through
+`SwfVerbs.ReadEditText` (`SwfDocumentService.cs:SwfDocument.EditText`), so `Parse` only backs `SwfFile.EditText`.
 ## FO4RecordEditor/Services/SwfInterop.cs:SwfInterop.Run (one lock per call)
 
 `Run` takes the static `Gate` around every action, so the document reference, its history and the lazy character cache are
@@ -228,3 +226,17 @@ The native instruction and glyph verbs mutate a handle directly through `radicle
 The "Scripts (ABC)" section sits at the foot of the right aside. `open` (`web/src/SwfPanel.tsx:SwfPanel.open`) clears the ABC listing, the selected method and `selectedMethodKey` before the host `Open` call, so a refused re-open leaves no stale listing and a late `pickMethod` reply from the previous document is dropped; it then loads `AbcBlocks` after the placement list. `pickMethod` (`web/src/SwfPanel.tsx:SwfPanel.pickMethod`) shows `Disassemble` output in the `instructions` preformatted block. It records the picked method key in `selectedMethodKey` before the await and drops a reply whose key no longer matches, so an out-of-order reply cannot overwrite the listing of the method now selected; a rejected host call goes into the section alert. An `AbcBlocks` refusal goes into the section's own alert rather than the header error bar, and the "No ABC scripts in this SWF." message only shows when the listing succeeds with zero blocks. The view is display-only: no ABC edit verb is wired, and the listing is not refreshed by undo or redo because no panel control edits ABC yet.
 
 Tests: `web/src/SwfPanel.test.tsx` extends the existing `stubBridge` with `AbcBlocks` and `Disassemble` defaults and adds the listing, empty-state, refusal, stale-reply and refused-re-open cases (`web/src/SwfPanel.test.tsx:SwfPanel`).
+
+## FO4RecordEditor/Services/SwfInterop.cs:SwfInterop.ShapeSvg (shape preview RPC)
+
+`ShapeSvg(characterId)` runs `Document().Movie.ShapeSvg` (the Radicle `radicle_swf_shape_svg` wrapper, `Radicle/bindings/csharp/Radicle.Interop/SwfFile.cs:SwfFile.ShapeSvg`) and replies `{svg}`. An undefined id, a non-shape id or no open document throws, and `Run` turns that into the same `{error, status}` shape every other RPC returns, so there is no separate error path. The SVG content (fills as `<path>`) is pinned by Radicle's `test_c_api_swf_characters.cpp`; the PET side only proves the RPC wiring.
+
+## web/src/SwfPanel.tsx:SwfPanel.pickCharacter (shape preview selection)
+
+Every character pick increments `shapeRequest` and clears `shapeSvg` before it awaits, so picking a non-shape character leaves no preview and sends no `ShapeSvg`. A `ShapeSvg` reply is applied only while its request number is still current, the same request-number guard the ABC view uses with `selectedMethodKey`, so a late reply for an earlier shape cannot replace the one picked last. `SwfPanel.open` also increments the counter, so a reply from the previous document cannot land on a newly opened one. The preview is an `<img>` whose `src` is `data:image/svg+xml;utf8,` plus `encodeURIComponent` of the SVG text; the SVG is never assigned to `innerHTML`, so markup inside it is not parsed into the page.
+
+## FO4RecordEditor.Core.Tests/SwfFixture.cs:SwfFixture.ShapeTag (opt-in shape character)
+
+`SwfFixture.Movie(withShape: true)` adds an empty DefineShape (id 5, no fills, no lines, an end record). It is opt-in so the document-service tests keep their two-character count. The empty shape is enough to prove `ShapeSvg` returns a `<svg` document; a filled-shape path check would duplicate Radicle's own test.
+
+Tests: `FO4RecordEditor.Tests/SwfInteropTests.cs:SwfInteropTests.ShapeSvgRpcReturnsTheSvgForAShapeAndTheRefusalForANonShape` (shape returns `<svg`, EditText returns an error), `web/src/SwfPanel.test.tsx:SwfPanel` (shape selection requests `ShapeSvg` and renders the image, a late reply for an earlier shape is ignored, and a non-shape pick clears the preview).

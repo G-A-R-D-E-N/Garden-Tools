@@ -141,6 +141,35 @@ std::vector<std::byte> sprite_movie() {
   return wrap_body(body.body, 6, false, false);
 }
 
+/* Invariant: flat index 1 is the sprite's placement child and flat index 4 is the root placement after the DefineSprite. */
+std::vector<std::byte> placement_after_sprite_movie() {
+  SwfBuilder sprite;
+  sprite.u16(7);
+  sprite.u16(1);
+  SwfBuilder child;
+  child.u8(0x02);
+  child.u16(1);
+  child.u16(7);
+  sprite.tag(26, child.body, false);
+  sprite.tag(1);
+  sprite.tag(0);
+
+  SwfBuilder place;
+  place.u8(0x02);
+  place.u16(2);
+  place.u16(7);
+
+  SwfBuilder body;
+  body.rect(0, 11000, 0, 8000, 15);
+  body.u16(0x0C00);
+  body.u16(1);
+  body.tag(39, sprite.body, false);
+  body.tag(26, place.body, false);
+  body.tag(1);
+  body.tag(0);
+  return wrap_body(body.body, 6, false, false);
+}
+
 /* Invariant: flat index 0 is a PlaceObject2 whose payload is the one a broken plan replaces. */
 std::vector<std::byte> place_movie() {
   SwfBuilder body;
@@ -389,6 +418,37 @@ TEST(CApiSwfEdit, RejectsAFrameListBuiltBeforeAnEdit) {
   EXPECT_EQ(radicle_swf_frames_instance_count(after.get(), 0, 0, &count), RADICLE_STATUS_OK);
 }
 
+// Constraint: a placement row must carry the flat index radicle_swf_tag_at reports, on the root and on a sprite timeline.
+TEST(CApiSwfVerbs, PlacementListTagIndexIsTheFlatIndexAfterASprite) {
+  auto swf = open(placement_after_sprite_movie());
+  ASSERT_NE(swf, nullptr);
+  radicle_swf_history* raw = nullptr;
+  ASSERT_EQ(radicle_swf_history_create(swf.get(), &raw), RADICLE_STATUS_OK) << radicle_last_error();
+  const HistoryHandle history(raw);
+
+  radicle_swf_tag found{};
+  ASSERT_EQ(radicle_swf_tag_at(swf.get(), 4, &found), RADICLE_STATUS_OK) << radicle_last_error();
+  EXPECT_EQ(found.code, 26);
+  EXPECT_EQ(found.parent, RADICLE_SWF_NO_INDEX);
+  ASSERT_EQ(radicle_swf_tag_at(swf.get(), 1, &found), RADICLE_STATUS_OK) << radicle_last_error();
+  EXPECT_EQ(found.code, 26);
+  EXPECT_EQ(found.parent, 0u);
+
+  std::uint8_t* text = nullptr;
+  std::size_t size = 0;
+  ASSERT_EQ(radicle_swf_placement_list_json(history.get(), 0, &text, &size), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_EQ(std::string(reinterpret_cast<const char*>(text), size),
+            R"([{"tag_index":4,"depth":2,"character_id":7,"matrix":null,"filters":[]}])");
+  radicle_free_bytes(text);
+
+  ASSERT_EQ(radicle_swf_placement_list_json(history.get(), 7, &text, &size), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_EQ(std::string(reinterpret_cast<const char*>(text), size),
+            R"([{"tag_index":1,"depth":1,"character_id":7,"matrix":null,"filters":[]}])");
+  radicle_free_bytes(text);
+}
+
 // Constraint: a sprite timeline must be addressed by its DefineSprite id, never by the root timeline's labels.
 TEST(CApiSwfVerbs, FrameLabelRowsAndPlacementListAddressTheSpriteTimeline) {
   auto swf = open(sprite_movie());
@@ -415,7 +475,7 @@ TEST(CApiSwfVerbs, FrameLabelRowsAndPlacementListAddressTheSpriteTimeline) {
   ASSERT_EQ(radicle_swf_placement_list_json(history.get(), 0, &text, &size), RADICLE_STATUS_OK)
       << radicle_last_error();
   EXPECT_EQ(std::string(reinterpret_cast<const char*>(text), size),
-            R"([{"tag_index":1,"depth":1,"character_id":7,"matrix":null,"filters":[]}])");
+            R"([{"tag_index":4,"depth":1,"character_id":7,"matrix":null,"filters":[]}])");
   radicle_free_bytes(text);
 
   ASSERT_EQ(radicle_swf_placement_list_json(history.get(), 7, &text, &size), RADICLE_STATUS_OK)

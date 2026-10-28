@@ -103,7 +103,7 @@ public sealed class SwfDocument : IDisposable
 
     public byte[] WriteBytes() => _history.WriteBytes();
 
-    public SwfEditTextRecord EditText(int tagIndex) => Movie.EditText(tagIndex);
+    public SwfEditTextStateRecord EditText(int tagIndex) => SwfVerbs.ReadEditText(_history, tagIndex);
 
     // Requires a frame the chosen timeline reaches; Radicle refuses a duplicate name on that timeline.
     public SwfPlanResultRecord AddLabel(int frame, string name, int timeline = 0) =>

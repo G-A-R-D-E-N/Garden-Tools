@@ -100,6 +100,8 @@ void install_views(radicle_swf& swf, swf_views&& views);
 /* Every cached view holds pointers into file.tags, so a mutation must rebuild them before any getter runs. */
 void rebuild_views(radicle_swf& swf);
 
+/* Invariant: the buffer carries a trailing NUL that *out_size does not count; nullptr means malloc failed and *out_size is untouched. */
+std::uint8_t* copy_text(const std::string& text, std::size_t* out_size);
 // Constraint: a flat index from radicle_swf_tag_at must map to the top-level position a plan holds.
 bool top_level_position(const fo4::swf::SwfFile& file, std::size_t flat, std::size_t& out);
 

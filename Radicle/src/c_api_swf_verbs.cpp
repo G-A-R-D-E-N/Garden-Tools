@@ -152,27 +152,29 @@ std::string text_bytes(const radicle_swf_edit_text_fields& fields) {
   return std::string(reinterpret_cast<const char*>(fields.text), fields.text_size);
 }
 
-// Invariant: the buffer carries a trailing NUL that *out_size does not count.
-std::uint8_t* copy_text(const std::string& text, std::size_t* out_size) {
-  auto* buffer = static_cast<std::uint8_t*>(std::malloc(text.size() + 1));
-  if (buffer == nullptr) return nullptr;
-  if (!text.empty()) std::memcpy(buffer, text.data(), text.size());
-  buffer[text.size()] = 0;
-  *out_size = text.size();
-  return buffer;
+std::size_t flat_span(const std::vector<SwfTag>& tags) {
+  std::size_t total = 0;
+  for (const auto& tag : tags) {
+    total += 1 + flat_span(tag.children);
+  }
+  return total;
 }
 
 bool timeline_tags(const SwfFile& file, std::uint16_t timeline_id, const std::vector<SwfTag>*& out,
-                   std::string& message) {
+                   std::size_t& base, std::string& message) {
   if (timeline_id == 0) {
     out = &file.tags;
+    base = 0;
     return true;
   }
+  std::size_t flat = 0;
   for (const auto& tag : file.tags) {
     if (tag.code == fo4::swf::tag::kDefineSprite && tag.sprite_id && *tag.sprite_id == timeline_id) {
       out = &tag.children;
+      base = flat + 1;
       return true;
     }
+    flat += 1 + flat_span(tag.children);
   }
   message = "timeline " + std::to_string(timeline_id) + " is not a DefineSprite in this movie";
   return false;
@@ -263,14 +265,18 @@ void append_filter(std::string& out, const fo4::swf::SwfFilter& filter) {
   out += '}';
 }
 
-std::string placement_json(const std::vector<SwfTag>& tags) {
+// Invariant: tag_index is the flat index radicle_swf_tag_at reports, so base is the flat index of tags[0].
+std::string placement_json(const std::vector<SwfTag>& tags, std::size_t base) {
   std::string out = "[";
+  std::size_t flat = base;
   for (std::size_t index = 0; index < tags.size(); ++index) {
+    const std::size_t row = flat;
+    flat += 1 + flat_span(tags[index].children);
     const auto& placement = tags[index].placement;
     if (!placement) continue;
     comma(out);
     out += '{';
-    field(out, "tag_index", index);
+    field(out, "tag_index", row);
     field(out, "depth", placement->depth);
     member(out, "character_id");
     if (placement->character_id) {
@@ -323,7 +329,7 @@ radicle_status radicle_swf_edit_text_read(const radicle_swf_history* history, si
       return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the tag is not a decoded DefineEditText");
     }
     const auto& text = *tag.edit_text;
-    *out_text = copy_text(text.text, out_text_size);
+    *out_text = radicle_swf_detail::copy_text(text.text, out_text_size);
     if (*out_text == nullptr) {
       return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to allocate the DefineEditText text");
     }
@@ -448,11 +454,12 @@ radicle_status radicle_swf_placement_list_json(const radicle_swf_history* histor
   }
   return guarded("unknown exception while listing placements", [&] {
     const std::vector<SwfTag>* tags = nullptr;
+    std::size_t base = 0;
     std::string message;
-    if (!timeline_tags(history->history.file(), timeline_id, tags, message)) {
+    if (!timeline_tags(history->history.file(), timeline_id, tags, base, message)) {
       return fail(RADICLE_STATUS_INVALID_ARGUMENT, message.c_str());
     }
-    *out_text = copy_text(placement_json(*tags), out_size);
+    *out_text = radicle_swf_detail::copy_text(placement_json(*tags, base), out_size);
     if (*out_text == nullptr) {
       return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to allocate the placement list");
     }
