@@ -126,6 +126,7 @@ class Interpreter {
     std::size_t ip{0};
     std::map<const Object*, std::vector<Key>> iterator_keys;
     Multiname runtime_name;
+    std::string default_xml_namespace;
   };
 
   ExecutionResult execute_frame(Frame& frame, std::size_t depth);

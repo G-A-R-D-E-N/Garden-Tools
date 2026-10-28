@@ -17,6 +17,8 @@ namespace op {
   constexpr std::uint8_t k_throw = 0x03;
   constexpr std::uint8_t k_getsuper = 0x04;
   constexpr std::uint8_t k_setsuper = 0x05;
+  constexpr std::uint8_t k_dxns = 0x06;
+  constexpr std::uint8_t k_dxnslate = 0x07;
   constexpr std::uint8_t k_kill = 0x08;
   constexpr std::uint8_t k_label = 0x09;
   constexpr std::uint8_t k_ifnlt = 0x0C;
@@ -55,6 +57,7 @@ namespace op {
   constexpr std::uint8_t k_pushuint = 0x2E;
   constexpr std::uint8_t k_pushdouble = 0x2F;
   constexpr std::uint8_t k_pushscope = 0x30;
+  constexpr std::uint8_t k_pushnamespace = 0x31;
   constexpr std::uint8_t k_hasnext2 = 0x32;
   constexpr std::uint8_t k_li8 = 0x35;
   constexpr std::uint8_t k_li16 = 0x36;
@@ -91,6 +94,7 @@ namespace op {
   constexpr std::uint8_t k_newcatch = 0x5A;
   constexpr std::uint8_t k_findpropstrict = 0x5D;
   constexpr std::uint8_t k_findproperty = 0x5E;
+  constexpr std::uint8_t k_finddef = 0x5F;
   constexpr std::uint8_t k_getlex = 0x60;
   constexpr std::uint8_t k_setproperty = 0x61;
   constexpr std::uint8_t k_getlocal = 0x62;
@@ -100,15 +104,22 @@ namespace op {
   constexpr std::uint8_t k_getproperty = 0x66;
   constexpr std::uint8_t k_getouterscope = 0x67;
   constexpr std::uint8_t k_initproperty = 0x68;
+  constexpr std::uint8_t k_setpropertylate = 0x69;
   constexpr std::uint8_t k_deleteproperty = 0x6A;
+  constexpr std::uint8_t k_deletepropertylate = 0x6B;
   constexpr std::uint8_t k_getslot = 0x6C;
   constexpr std::uint8_t k_setslot = 0x6D;
+  constexpr std::uint8_t k_getglobalslot = 0x6E;
+  constexpr std::uint8_t k_setglobalslot = 0x6F;
   constexpr std::uint8_t k_convert_s = 0x70;
+  constexpr std::uint8_t k_esc_xelem = 0x71;
+  constexpr std::uint8_t k_esc_xattr = 0x72;
   constexpr std::uint8_t k_convert_i = 0x73;
   constexpr std::uint8_t k_convert_u = 0x74;
   constexpr std::uint8_t k_convert_d = 0x75;
   constexpr std::uint8_t k_convert_b = 0x76;
   constexpr std::uint8_t k_convert_o = 0x77;
+  constexpr std::uint8_t k_checkfilter = 0x78;
   constexpr std::uint8_t k_coerce = 0x80;
   constexpr std::uint8_t k_coerce_b = 0x81;
   constexpr std::uint8_t k_coerce_a = 0x82;
@@ -185,6 +196,7 @@ const abc::AbcDecodedOperand* switch_operand(const abc::AbcInstruction& instruct
 Value borrowed_object(Object& object);
 std::string property_text(const Multiname& multiname);
 bool is_array_index(const std::string& name, std::uint32_t& out_index);
+std::string escape_xml_markup(const std::string& text, bool attribute);
 
 Value numeric_result(double value);
 Value add_values(const Value& left, const Value& right);

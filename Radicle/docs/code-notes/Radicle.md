@@ -8360,6 +8360,100 @@ A row whose character is a DefineText or DefineText2 with a clip depth opens a m
 
 Expected strings were derived by hand. The glyph is a 1000-twip square (50 px, the path of `Radicle/tests/test_swf_svg.cpp:kRedSquare` at its size), at a DefineText height of 1024, so the font scale is 1 and the text matrix is the identity. The blue square is the 600-twip one, `Radicle/tests/test_swf_svg.cpp:kBlueSquare`. The clipPath ids follow the shape-mask convention `r<index>clip`. Nothing was compiled or run on the development machine for this change, so CI must confirm them.
 
+## Radicle/src/avm2/interpreter.cpp:Interpreter::execute_frame (AVM2 late ops census)
+
+Census from a source scan (not compiled or run): 169 named opcodes, 168 with a case in `Radicle/src/avm2/interpreter_dispatch_a.inc` through `interpreter_dispatch_e.inc`, and 1 without, `getdescendants` 0x59. This replaces the 12-opcode census above. The 11 added here are dxns 0x06, dxnslate 0x07, pushnamespace 0x31, finddef 0x5F, setpropertylate 0x69, deletepropertylate 0x6B, getglobalslot 0x6E, setglobalslot 0x6F, esc_xelem 0x71, esc_xattr 0x72 and checkfilter 0x78. All 11 new cases are in `Radicle/src/avm2/interpreter_dispatch_e.inc`, which `Radicle/src/avm2/interpreter.cpp:Interpreter::execute_frame` includes.
+
+getdescendants stays undispatched because this runtime has no XML or XMLList object model (see the R3 status note above), so there is no descendant set to return. It needs that model before a case can be added.
+
+## Radicle/src/avm2/interpreter_dispatch_e.inc:pushnamespace
+
+pushnamespace pushes the namespace URI as a string Value, not a namespace Value kind. The Value variant has no namespace kind and no Namespace builtin exists. The only consumer of a namespace operand, `Radicle/src/avm2/interpreter_property.cpp:Interpreter::pop_runtime_operands`, reads it with to_string and builds a Package namespace, so a string gives the same result there. The cost is that `typeof` and `is Namespace` see a string. Add a namespace kind when a Namespace class is modelled. The public namespace has the empty URI, so it pushes "".
+
+## Radicle/src/avm2/interpreter_dispatch_e.inc:setpropertylate
+
+The late opcodes 0x69 and 0x6B have no constant pool operand, so the name is on the operand stack. The case builds a RuntimeName multiname in the public namespace and resolves the name with `Radicle/src/avm2/interpreter_property.cpp:Interpreter::pop_runtime_operands`. setpropertylate passes above=1 because the value is on top, and deletepropertylate passes above=0. The stack order is object, name, value for set and object, name for delete. There is no getpropertylate opcode: getproperty (0x66) already handles a runtime name through `resolve_runtime_multiname` in `Radicle/src/avm2/interpreter_dispatch_b.inc`.
+
+## Radicle/src/avm2/interpreter_dispatch_e.inc:getglobalslot
+
+getglobalslot and setglobalslot address `frame.scopes.front()`, the object getglobalscope pushes. A read past the end of the slots is undefined, as getslot does. A write grows the slot vector, as setslot does. An empty scope list raises ScopeUnderflow.
+
+## Radicle/src/avm2/interpreter_dispatch_e.inc:dxns
+
+dxns and dxnslate store the URI in `Radicle/include/fo4/avm2/interpreter.hpp:Interpreter` (the Frame field `default_xml_namespace`). Nothing reads it yet, because the default XML namespace only affects E4X, which is not modelled. The effect is storage only. The value is per frame and is not inherited by callees.
+
+## Radicle/src/avm2/interpreter_xml_text.cpp:escape_xml_markup
+
+PROVISIONAL: the escape sets in `Radicle/src/avm2/interpreter_xml_text.cpp:escape_xml_markup` are unverified against ECMA-357, because no reference is available on this machine. The sets are the ones the change brief named: element content escapes `&`, `<` and `>`, and attribute values also escape `"` to `&quot;`. Open questions: whether `>` must also be escaped in attributes (this code escapes it in attributes, as it does in element content), and whether LF, CR and TAB become character references in attributes and CR in element content (this code escapes none of them). Behaviour is not changed by this note. The input is UTF-8 bytes; the escaped characters are ASCII, so multibyte sequences are never altered.
+
+## Radicle/src/avm2/interpreter_dispatch_e.inc:checkfilter
+
+checkfilter refuses only null and undefined, with a TypeError status. Other values pass and stay on the stack. Because XML is not modelled, a non-XML value that the real opcode refuses passes here.
+
+## Radicle/src/avm2/interpreter_dispatch_e.inc:finddef
+
+finddef resolves its operand as a static multiname and calls `Radicle/src/avm2/interpreter_property.cpp:Interpreter::find_scope_binding` with create_on_global false, the same way the getlex case in `Radicle/src/avm2/interpreter_dispatch_b.inc` does. The verifier groups 0x5F with getlex and it has no runtime-multiname operands, so no runtime name is popped. It searches the scope chain and pushes the owning scope, or null when no scope holds the name. PROVISIONAL against avmplus: the scope-chain search and the null on a miss are not verified. The real finddef may search only the domain definitions, and may refuse a missing definition. The avmplus reference was not available here.
+
+## Radicle/tests/test_avm2_late_ops.cpp:PushnamespaceReturnsTheUriOfTheConstantPoolEntry
+
+Detects pushnamespace returning the wrong constant pool entry, such as an off-by-one index, or the public namespace not being the empty URI. The expected values "flash.display" and "" follow from `Radicle/tests/avm2_test_support.hpp:ScriptBuilder::namespace_of`, where pool index 1 is the public package.
+
+## Radicle/tests/test_avm2_late_ops.cpp:DxnsLeavesTheOperandStackAlone
+
+Detects dxns consuming or pushing a stack value. With 9 under the URI, returnvalue must still return 9.
+
+## Radicle/tests/test_avm2_late_ops.cpp:DxnslatePopsTheUriItIsGiven
+
+Detects dxnslate leaving its operand on the stack. With 9 under the URI, returnvalue must return 9, not the URI string.
+
+## Radicle/tests/test_avm2_late_ops.cpp:SetpropertylateStoresTheValueUnderTheNameFromTheStack
+
+Detects setpropertylate reading the value and the name in the wrong order, or leaving the object behind. If name and value were swapped, getproperty of "k" would not return the int 42 that was pushed last.
+
+## Radicle/tests/test_avm2_late_ops.cpp:SetpropertylateRefusesANullObject
+
+Detects setpropertylate writing through a null object without an error. The expected status is NullReference, with a message starting "cannot write".
+
+## Radicle/tests/test_avm2_late_ops.cpp:DeletepropertylatePushesOnlyATrueBoolForAnExistingKey
+
+Checks only the value deletepropertylate pushes. After delete, swap and pop, only the boolean must remain, and it must be true. The test does not check the key afterwards; DeletepropertylateRemovesTheKeyNamedByTheStack does that.
+
+## Radicle/tests/test_avm2_late_ops.cpp:DeletepropertylateRemovesTheKeyNamedByTheStack
+
+Detects deletepropertylate reporting success without removing the key, or deleting a different name. After the delete, reading "k" must give undefined.
+
+## Radicle/tests/test_avm2_late_ops.cpp:GetglobalslotReadsTheGlobalObjectNotTheTopScope
+
+Detects getglobalslot reading the top scope object instead of the global object. The object pushed by pushscope has no slots, so reading it would give undefined instead of the int 7.
+
+## Radicle/tests/test_avm2_late_ops.cpp:GetglobalslotPastTheEndIsUndefined
+
+Detects getglobalslot indexing past the slot vector instead of returning undefined for a slot that was never written.
+
+## Radicle/tests/test_avm2_late_ops.cpp:EscXelemEscapesAmpersandAndAngleBracketsButNotQuotes
+
+Detects esc_xelem escaping double quotes in element content, or missing one of the three characters. The expected value is derived by hand from the input a&b<c>d"e.
+
+## Radicle/tests/test_avm2_late_ops.cpp:EscXattrAlsoEscapesDoubleQuotes
+
+Detects esc_xattr leaving a double quote unescaped, which would end an attribute early. The expected value is derived by hand from the same input.
+
+## Radicle/tests/test_avm2_late_ops.cpp:EscapeConvertsANonStringWithToStringFirst
+
+Detects the escape opcodes applying string operations to a raw number or null instead of converting with to_string first. The expected values "42" and "null" are the ToString results of the pushed int and null.
+
+## Radicle/tests/test_avm2_late_ops.cpp:CheckfilterLeavesANonNullValueOnTheStack
+
+Detects checkfilter consuming its operand, or refusing a non-null value. The int 5 must come back from returnvalue.
+
+## Radicle/tests/test_avm2_late_ops.cpp:CheckfilterRefusesNullAndUndefined
+
+Detects checkfilter letting null or undefined through to the filter. Both must give TypeError.
+
+## Radicle/tests/test_avm2_late_ops.cpp:FinddefPushesTheScopeThatHoldsTheName
+
+Detects finddef pushing the global object or null when a pushed scope holds the name. The object built by newobject with the pair "k" and 1 is on the scope stack, so getproperty of "k" on the owner must give the int 1.
+
 ## Radicle/src/graph/graph_lifter.cpp:GraphLifter::liftAssign
 
 - A compound assignment to a struct member (`s.X += v`) expands to `s.X = s.X + v`. The read is lifted through `liftExpression(*assign.target)`, which gives a `StructGet` for a struct member and the same `VariableGet` as before for an identifier. The target is lifted twice, so its receiver must be call-free; otherwise the lift is refused.
@@ -8528,3 +8622,25 @@ Detects an encoder that writes the wrong Try field after a record is inserted in
 ## Radicle/tests/test_avm1_encode.cpp:UneditedStreamsReencodeToTheirInputBytes
 
 Detects an encoder change that alters bytes of an unedited stream. It checks three inputs with a Jump, a DefineFunction and a Try with a catch, because each one goes through a different branch of the patch pass. Each input must re-encode to the same bytes, with no record or body edits.
+## Radicle/include/fo4/swf/swf.hpp:SwfScalingGrid (DefineScalingGrid, tag 78)
+
+- `SwfScalingGrid` holds the CharacterId (UI16, little-endian, first in the payload) and the 9-slice splitter as a `SwfRect` in twips, stored in `SwfTag::scaling_grid`. The splitter is the RECT that follows the id, read by the same `read_rect` the edit-text and font decoders use.
+- Frame SVG rendering of the 9-slice is NOT implemented. `Radicle/src/swf/swf_frame_svg.cpp` never reads `SwfTag::scaling_grid`, so a shape or sprite that carries a grid still renders unsplit.
+- No C API export, no `SwfSummary` counter and no C# change. The sibling typed tags `DefineExternalImage`, `FontTextureInfo` and `ExporterInfo` also have no export; adding one would bump `RADICLE_ABI_VERSION`.
+
+## Radicle/src/swf/swf_tags.cpp:decode_tag_payload (kDefineScalingGrid case)
+
+- The case reads a UI16 CharacterId, then calls `read_rect` at the byte offset after it. A short id or a RECT cut inside its bits returns `SwfStatus::malformed_tag`, which leaves `SwfTag::scaling_grid` empty and keeps the raw payload. Trailing bytes after the RECT are ignored, the same as the other typed decoders that read only their prefix.
+
+## Radicle/src/swf/swf_characters.cpp:find_scaling_grid
+
+- Scans the top-level `file.tags` only, like `build_character_model`, and returns a pointer into `file.tags` (valid while the file is unchanged), or nullptr when no grid names the id.
+- A repeated id returns the LAST grid. `build_character_model` refuses a duplicate character definition, but a grid is an attribute, not a definition. The closest sibling for a repeated name is the SymbolClass overwrite in `build_character_model` (`apply_name(..., true)`), where a later tag replaces an earlier one. This is inferred from the stream order and was not checked against Flash Player.
+
+## Radicle/tests/test_swf_characters.cpp:SwfCharacters scaling grid tests
+
+- The hand-packed RECT for `DecodesTheSplitterRectFromHandPackedBits` is the payload `07 00 58 64 70 83 21 90 00`. Bit layout after the 2-byte id: `01011` (nbits 11), `00001100100` (Xmin 100), `01110000100` (Xmax 900), `00011001000` (Ymin 200), `01100100000` (Ymax 800), then 7 zero pad bits. That is 49 data bits plus 7 pad, 56 bits, 7 bytes, and the padding decodes to 0.
+- `DecodesTheSplitterRectFromHandPackedBits` detects a RECT read from byte 0 instead of after the id, an nbits field read at the wrong width, a sign-extension error on a positive value, or a grid that is not stored in `SwfTag::scaling_grid`. The `write_swf` round trip also checks that decoding leaves the raw payload unchanged.
+- `AcceptsTrailingBytesAfterTheSplitterRect` detects a strict-length check that refuses a grid tag with bytes after its RECT (`0xAA 0xBB` appended).
+- `RefusesAScalingGridPayloadCutInsideItsRect` detects a RECT reader that zero-fills missing bits into a grid, or one that reads past the payload. It uses two cuts: an id-only payload, and a 5-byte payload where the RECT needs 7 bytes. Each must give `malformed_tag`, no typed grid, the raw payload kept, and the End tag still parsed.
+- `ScalingGridLookupReturnsTheLastGridForAnId` detects `find_scaling_grid` returning the first of two grids for one id, returning a grid for a different id, or returning a non-null pointer for an id with no grid.

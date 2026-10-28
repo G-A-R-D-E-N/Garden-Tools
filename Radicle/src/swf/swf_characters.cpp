@@ -263,4 +263,14 @@ const SwfCharacter* find_character(const SwfCharacterModel& model,
   return found == model.characters.end() ? nullptr : &*found;
 }
 
+const SwfScalingGrid* find_scaling_grid(const SwfFile& file, std::uint16_t character_id) noexcept {
+  const SwfScalingGrid* found = nullptr;
+  for (const SwfTag& tag : file.tags) {
+    if (tag.scaling_grid && tag.scaling_grid->character_id == character_id) {
+      found = &*tag.scaling_grid;
+    }
+  }
+  return found;
+}
+
 }  // namespace fo4::swf
