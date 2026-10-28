@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -125,12 +126,15 @@ using Avm1Payload = std::variant<std::monostate, Avm1Raw, Avm1Byte, Avm1Frame, A
                                  Avm1Text, Avm1GetUrl, Avm1GotoFrame2, Avm1ConstantPool,
                                  Avm1Push, Avm1Branch, Avm1Function, Avm1With, Avm1Try>;
 
+inline constexpr std::size_t kNewRecordOffset = static_cast<std::size_t>(-1);
+
 struct Avm1Action {
-  std::size_t offset{0};
+  std::size_t offset{kNewRecordOffset};
   std::size_t length{0};
   std::uint8_t code{0};
   bool unknown{false};
   Avm1Payload payload;
+  std::array<std::size_t, 3> body_records{};
 };
 
 struct Avm1Stream {
