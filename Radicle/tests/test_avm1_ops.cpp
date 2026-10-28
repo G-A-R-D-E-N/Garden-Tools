@@ -628,4 +628,64 @@ TEST(Avm1Interpreter, UndefinedIsEmptyTextFromSwfOneToSix) {
   }
 }
 
+// Invariant: StrictMode has no stack effect, so it consumes its one-byte flag and leaves the operands alone; 2 - 3 traces -1 with the StrictMode between the pushes and the Subtract, and a StrictMode that popped or pushed would trace a different number.
+TEST(Avm1Interpreter, StrictModeLeavesTheStackAlone) {
+  const Bytes input = cat({push_int(2), push_int(3), rec(0x89, Bytes{0x01}), rec(0x0B, {}),
+                           rec(0x26, {}), Bytes{0x00}});
+  EXPECT_EQ(traced(input, 7), (std::vector<std::string>{"-1"}));
+}
+
+// Invariant: GetTime pushes the injected elapsed milliseconds, so a run given 1234 traces 1234 and a default run traces 0; a wall clock would not trace these exact numbers, and a refusal would trace nothing.
+TEST(Avm1Interpreter, GetTimeTracesTheInjectedElapsedMilliseconds) {
+  const Bytes input = cat({rec(0x34, {}), rec(0x26, {}), Bytes{0x00}});
+  const auto stream = decode(input);
+  ASSERT_TRUE(stream.ok()) << stream.message;
+  const auto injected = fo4::avm1::execute_actions(
+      stream, 1000000, 0, fo4::avm1::Avm1Environment{.elapsed_ms = 1234});
+  ASSERT_TRUE(injected.ok()) << injected.message;
+  EXPECT_EQ(injected.trace, (std::vector<std::string>{"1234"}));
+  EXPECT_EQ(traced(input, 0), (std::vector<std::string>{"0"}));
+}
+
+// Invariant: RandomNumber is a xorshift32 stream from the injected seed 1, so the draws are 270369, then 67634689, then 499951813 (masked to 31 bits), and a bound of 0 answers 0 without advancing the stream, so the last row is 813 and a zero bound that drew would move it off 813.
+TEST(Avm1Interpreter, RandomNumberIsASeededStreamThatSkipsZeroBounds) {
+  const Bytes input = cat({
+      push_int(10), rec(0x30, {}), rec(0x26, {}),
+      push_int(1000), rec(0x30, {}), rec(0x26, {}),
+      push_int(0), rec(0x30, {}), rec(0x26, {}),
+      push_int(1000), rec(0x30, {}), rec(0x26, {}),
+      Bytes{0x00},
+  });
+  const auto stream = decode(input);
+  ASSERT_TRUE(stream.ok()) << stream.message;
+  const auto result = fo4::avm1::execute_actions(
+      stream, 1000000, 0, fo4::avm1::Avm1Environment{.random_seed = 1});
+  ASSERT_TRUE(result.ok()) << result.message;
+  EXPECT_EQ(result.trace, (std::vector<std::string>{"9", "689", "0", "813"}));
+}
+
+// Invariant: RandomNumber clamps a bound past the signed range to 2147483647 before the modulus, so 2^32+10 keeps the first draw 270369, where a bound wrapped to 32 bits would be 10 and trace 9.
+TEST(Avm1Interpreter, RandomNumberClampsItsBoundToTheSignedRange) {
+  const Bytes input = cat({push_double(4294967306.0), rec(0x30, {}), rec(0x26, {}), Bytes{0x00}});
+  const auto stream = decode(input);
+  ASSERT_TRUE(stream.ok()) << stream.message;
+  const auto result = fo4::avm1::execute_actions(
+      stream, 1000000, 0, fo4::avm1::Avm1Environment{.random_seed = 1});
+  ASSERT_TRUE(result.ok()) << result.message;
+  EXPECT_EQ(result.trace, (std::vector<std::string>{"270369"}));
+}
+
+// Invariant: TargetPath pops its operand and answers undefined, since no movie host gives a value a display path, so the 7 is consumed, the undefined traces, and the 5 under it is still there; a TargetPath that left its operand would trace 7 first, and one that kept the stack would trace nothing under the 5.
+TEST(Avm1Interpreter, TargetPathPopsItsOperandAndAnswersUndefined) {
+  const Bytes input = cat({push_int(5), push_int(7), rec(0x45, {}), rec(0x26, {}), rec(0x26, {}),
+                           Bytes{0x00}});
+  EXPECT_EQ(traced(input, 7), (std::vector<std::string>{"undefined", "5"}));
+  const auto stream = decode(cat({rec(0x45, {}), rec(0x26, {}), Bytes{0x00}}));
+  ASSERT_TRUE(stream.ok()) << stream.message;
+  const auto result = fo4::avm1::execute_actions(stream);
+  EXPECT_EQ(result.status, Avm1RunStatus::StackUnderflow) << result.message;
+  EXPECT_EQ(result.opcode, 0x45);
+  EXPECT_TRUE(result.trace.empty());
+}
+
 }  // namespace

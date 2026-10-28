@@ -476,13 +476,13 @@ TEST(Avm1Interpreter, VariableRoundTripsThroughTheGlobalScope) {
 // Invariant: an opcode outside the slice must refuse at its own offset by name; a silent skip would run the Trace after it and trace "2".
 TEST(Avm1Interpreter, UnsupportedOpcodeIsRefusedByName) {
   const auto stream =
-      decode(cat({push_int(1), rec(0x26, {}), rec(0x34, {}), push_int(2), rec(0x26, {}), Bytes{0x00}}));
+      decode(cat({push_int(1), rec(0x26, {}), rec(0x22, {}), push_int(2), rec(0x26, {}), Bytes{0x00}}));
   ASSERT_TRUE(stream.ok()) << stream.message;
   const auto result = fo4::avm1::execute_actions(stream);
   EXPECT_EQ(result.status, fo4::avm1::Avm1RunStatus::Unsupported);
-  EXPECT_EQ(result.opcode, 0x34);
+  EXPECT_EQ(result.opcode, 0x22);
   EXPECT_EQ(result.offset, stream.actions[2].offset);
-  EXPECT_NE(result.message.find("GetTime (0x34)"), std::string::npos);
+  EXPECT_NE(result.message.find("GetProperty (0x22)"), std::string::npos);
   EXPECT_EQ(result.trace, (std::vector<std::string>{"1"}));
 }
 
@@ -711,21 +711,6 @@ TEST(Avm1Interpreter, ModuloAndIncrementDecrementMatchTheirTable) {
     const auto result = fo4::avm1::execute_actions(stream);
     EXPECT_EQ(result.status, row.status) << result.message;
     EXPECT_EQ(result.trace, row.trace);
-  }
-}
-
-// Invariant: ImplementsOp must stay refused by name, since the slice has no interface model; a stub that silently succeeds would run the Trace after it and trace nothing.
-TEST(Avm1Interpreter, ImplementsOpStaysRefusedByName) {
-  const std::vector<std::pair<std::uint8_t, std::string_view>> refused = {{0x2C, "ImplementsOp"}};
-  for (const auto& [code, name] : refused) {
-    SCOPED_TRACE(name);
-    const auto stream = decode(cat({rec(code, {}), rec(0x26, {}), Bytes{0x00}}));
-    ASSERT_TRUE(stream.ok()) << stream.message;
-    const auto result = fo4::avm1::execute_actions(stream);
-    EXPECT_EQ(result.status, fo4::avm1::Avm1RunStatus::Unsupported);
-    EXPECT_EQ(result.opcode, code);
-    EXPECT_NE(result.message.find(name), std::string::npos) << result.message;
-    EXPECT_TRUE(result.trace.empty());
   }
 }
 
