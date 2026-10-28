@@ -21,14 +21,6 @@ using radicle_c_env_detail::guarded;
 
 namespace {
 
-std::size_t subtree_size(const std::vector<fo4::swf::SwfTag>& tags) {
-  std::size_t total = 0;
-  for (const auto& tag : tags) {
-    total += 1 + subtree_size(tag.children);
-  }
-  return total;
-}
-
 bool payload_ok(const uint8_t* payload, size_t size) {
   return (payload != nullptr || size == 0) && size <= std::numeric_limits<std::uint32_t>::max();
 }
@@ -107,6 +99,14 @@ void fill_result(const radicle_swf_history& history, bool changed, radicle_swf_p
 }  // namespace
 
 namespace radicle_swf_detail {
+
+std::size_t subtree_size(const std::vector<fo4::swf::SwfTag>& tags) {
+  std::size_t total = 0;
+  for (const auto& tag : tags) {
+    total += 1 + subtree_size(tag.children);
+  }
+  return total;
+}
 
 bool top_level_position(const fo4::swf::SwfFile& file, std::size_t flat, std::size_t& out) {
   std::size_t start = 0;

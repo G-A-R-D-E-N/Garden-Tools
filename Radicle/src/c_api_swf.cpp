@@ -199,7 +199,7 @@ void fill_call(const fo4::abc::AbcCallSite& site, radicle_swf_call& out) {
 
 namespace radicle_swf_detail {
 
-std::uint8_t* copy_text(const std::string& text, std::size_t* out_size) {
+std::uint8_t* copy_text(std::string_view text, std::size_t* out_size) {
   auto* buffer = static_cast<std::uint8_t*>(std::malloc(text.size() + 1));
   if (buffer == nullptr) return nullptr;
   if (!text.empty()) std::memcpy(buffer, text.data(), text.size());
