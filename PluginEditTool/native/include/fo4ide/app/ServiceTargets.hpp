@@ -84,8 +84,6 @@ public:
                                   const nlohmann::json& args) override;
 
 private:
-    // Resolve + `niftool geo` each unique relative model path (bounded
-    // parallelism), returning the serialized { count, geometry } payload.
     std::string geometryBatch(const std::vector<std::string>& relModelPaths);
 
     PluginBackendTarget records_;

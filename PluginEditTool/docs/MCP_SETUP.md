@@ -184,7 +184,8 @@ These read the winning version of a leveled list, NPC_, FACT or WEAP record and 
 
 | Tool | Arguments | Writes | What it does |
 |---|---|---|---|
-| `nif_inspect`, `nif_verify`, `nif_tree`, `nif_geometry` | `path` | no | Run niftool on a NIF: summary, verification, block tree and geometry. Need niftool. |
+| `nif_inspect`, `nif_geometry` | `path` | no | Read a NIF: summary and geometry. Uses niftool when configured, otherwise reads in-process. No niftool needed. |
+| `nif_verify`, `nif_tree` | `path` | no | Run niftool on a NIF: verification and block tree. Need niftool. |
 | `material_inspect` | `path` | no | Reads a BGSM or BGEM material: `fileName`, `format`, `version` and its named `fields`. |
 | `material_set_fields` | `path`, `fields` [`output`] | disk | Sets named material fields (`fields` maps a name to a text value) and writes the result atomically to `output`, or back to `path` when no output is given. A conditional field such as `EmittanceColor` can be set only when its switch (`EmitEnabled`) is already true in the saved file: set the switch in one call and the field in the next. |
 | `audio_convert_to_xwm` | `source` [`output`, `bitrateBps`] | disk | Converts one audio or video file, or every supported file under a folder, to Fallout 4 XWM. Without `output` each `.xwm` goes next to its source; with a folder source, `output` is a folder that mirrors the layout. Needs xWMAEncode, plus ffmpeg for anything that is not PCM WAV. |
@@ -294,7 +295,8 @@ only feed the Creation Kit compiler route.
   compiler is Bethesda's and is not shipped here), or use `engine="builtin"`.
 - **The built-in engine reports every vanilla type as unknown.** It has no base script sources to
   resolve against. Set `PAPYRUS_BASE_IMPORTS` or pass `imports`, as described above.
-- **The `nif_*` tools say `niftool executable not found`.** niftool is missing from the package, or
+- **The authoring and tree `nif_*` tools say `niftool not installed` or `niftool executable not found`.**
+  niftool is missing from the package, or
   `NIFTOOL_PATH` points somewhere stale. Restart the server after fixing it.
 - **`archive_pack` says `Archive2.exe is not configured`.** Install the Creation Kit or set
   `ARCHIVE2_PATH`.

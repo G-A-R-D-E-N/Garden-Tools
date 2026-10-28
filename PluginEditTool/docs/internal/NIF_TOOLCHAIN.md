@@ -55,6 +55,8 @@ Blender ──OBJ──▶ niftool.exe (C++/nifly) ──▶ FO4 .nif ──▶ 
   (`bhkCollisionObject → bhkRigidBodyT → bhkBoxShape`, Havok scale `0.0142875`, layer OL_STATIC).
 - **Verified:** cube OBJ → NIF, verify 9/9, `--collision box` → inspect `hasCollision:true`.
 
+`inspect` and `geo` use niftool when the configured executable resolves, so their output stays niftool's. When it does not, `NifService` reads the file in-process through Radicle's reader (`NifRender.cpp`) and needs no niftool. That path is shape-local (node transforms are not applied), emits no vertex colors, reads no effect shaders (only `BSLightingShaderProperty` is read), and reports an untextured shape's `.bgsm` material as `bgsmPath`. It has not been checked against niftool on multi-node NIFs, and its inspect values have not been diffed against niftool. `verify`, `tree`, `fix`, import and edits still need niftool.
+
 ### MCP tools (for the AI): in `PluginToolExecutor`
 - `nif_import`, `nif_inspect`, `nif_verify`, `nif_fix` → `NifService.cs` (shell-out). Activate with
   **`/mcp reconnect`** after a C# rebuild.
