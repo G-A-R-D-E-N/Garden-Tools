@@ -65,8 +65,8 @@ void merge_placement(SwfAuthoredFrameObject& object, const SwfPlacement& placeme
   if (placement.clip_depth) {
     object.clip_depth = placement.clip_depth;
   }
-  if (placement.filter_count > 0) {
-    object.filter_count = placement.filter_count;
+  if (!placement.filters.empty()) {
+    object.filter_count = static_cast<std::uint16_t>(placement.filters.size());
   }
   if (placement.blend_mode) {
     object.blend_mode = placement.blend_mode;

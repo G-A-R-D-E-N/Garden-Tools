@@ -281,7 +281,7 @@ TEST(SwfPlacement, PlaceObject3SkipsEveryFilterKindByItsSpecSize) {
   const auto result = fo4::swf::read_swf(bytes);
   ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
   const auto& place = *result.file.tags[0].placement;
-  EXPECT_EQ(place.filter_count, 6);
+  EXPECT_EQ(place.filters.size(), 6u);
   EXPECT_EQ(place.blend_mode, std::optional<std::uint8_t>(9));
 }
 
@@ -290,7 +290,7 @@ TEST(SwfPlacement, PlaceObject3SkipsFilterListAndReadsBlendCacheVisibleAndBackgr
   const auto result = fo4::swf::read_swf(bytes);
   ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
   const auto& place = *result.file.tags[0].placement;
-  EXPECT_EQ(place.filter_count, 2);
+  EXPECT_EQ(place.filters.size(), 2u);
   EXPECT_EQ(place.blend_mode, std::optional<std::uint8_t>(8));
   EXPECT_EQ(place.bitmap_cache, std::optional<std::uint8_t>(1));
   EXPECT_EQ(place.visible, std::optional<bool>(true));
