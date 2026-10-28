@@ -7,8 +7,6 @@ namespace detail {
 
 namespace {
 
-constexpr std::size_t kMaxTypeNameExpansion = 64;
-
 AbcStatus read_count(ByteReader& reader, std::uint32_t& count, std::size_t entry_size) {
   count = reader.u30();
   if (!reader.ok()) {
