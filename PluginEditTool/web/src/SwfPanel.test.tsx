@@ -322,4 +322,33 @@ describe('SwfPanel', () => {
     await waitFor(() => expect(screen.queryByAltText('Shape preview')).toBeNull());
     expect(swf.ShapeSvg).toHaveBeenCalledTimes(2);
   });
+
+  it('drops a stale ReadEditText reply that lands after a newer selection', async () => {
+    // Invariant: a late ReadEditText reply for an edit-text picked earlier must not open its form over the shape picked last; detects an edit-text reply overwriting state after a newer selection.
+    let resolveEditText: (text: string) => void = () => {};
+    const shape = '<svg xmlns="http://www.w3.org/2000/svg" id="shape"></svg>';
+    stubBridge({
+      Characters: vi.fn(async () => JSON.stringify({ characters: [
+        { id: 11, kind: 'EditText', tagIndex: 0, name: '', imported: '' },
+        { id: 21, kind: 'Shape', tagIndex: 1, name: '', imported: '' },
+      ] })),
+      ReadEditText: vi.fn(() => new Promise<string>(resolve => { resolveEditText = resolve; })),
+      ShapeSvg: vi.fn(async () => JSON.stringify({ svg: shape })),
+    });
+    render(<SwfPanel onClose={() => {}} />);
+    fireEvent.change(screen.getByPlaceholderText('Interface/Test.swf'), { target: { value: 'Interface/Test.swf' } });
+    await act(async () => { fireEvent.click(screen.getByText('Open')); });
+    fireEvent.click(await screen.findByText(/EditText #11/));
+    fireEvent.click(screen.getByText(/Shape #21/));
+    expect((await screen.findByAltText('Shape preview')).getAttribute('src'))
+      .toBe(`data:image/svg+xml;utf8,${encodeURIComponent(shape)}`);
+    await act(async () => {
+      resolveEditText(JSON.stringify({ id: 11, text: 'stale', color: 'FF000000', x0: 0, x1: 1, y0: 0, y1: 1 }));
+      await new Promise(done => setTimeout(done, 0));
+    });
+    expect(screen.getByText('Select an edit-text character to edit its fields.')).toBeTruthy();
+    expect(screen.queryByDisplayValue('stale')).toBeNull();
+    expect(screen.getByAltText('Shape preview').getAttribute('src'))
+      .toBe(`data:image/svg+xml;utf8,${encodeURIComponent(shape)}`);
+  });
 });
