@@ -25,4 +25,4 @@ inline bool safeScriptObjectName(std::string_view name) {
     return true;
 }
 
-}
+}  // namespace fo4::papyrus
