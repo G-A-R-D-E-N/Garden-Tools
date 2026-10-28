@@ -1,4 +1,4 @@
-#include <fo4/papyrus/Lexer.hpp>
+#include <fo4/papyrus/lexer.hpp>
 
 #include <algorithm>
 #include <utility>
