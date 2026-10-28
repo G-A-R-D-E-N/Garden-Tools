@@ -258,6 +258,24 @@ public sealed unsafe partial class SwfFile : IDisposable
         }
     }
 
+    public string InspectText(string name)
+    {
+        using var use = Use();
+        byte* text = null;
+        nuint size = 0;
+        Call.Check(RadicleNative.SwfInspectText(use.Pointer, name, &text, &size));
+        return Call.TakeText(text, size);
+    }
+
+    public string Avm1Disassemble(int tagIndex)
+    {
+        using var use = Use();
+        byte* text = null;
+        nuint size = 0;
+        Call.Check(RadicleNative.SwfAvm1Disassemble(use.Pointer, (nuint)tagIndex, &text, &size));
+        return Call.TakeText(text, size);
+    }
+
     public string AbcText(int abc)
     {
         using var use = Use();

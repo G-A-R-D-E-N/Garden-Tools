@@ -277,6 +277,13 @@ RADICLE_API radicle_status radicle_swf_tag_at(const radicle_swf* swf, size_t ind
 RADICLE_API radicle_status radicle_swf_tag_payload(const radicle_swf* swf, size_t index,
                                                    uint8_t** out_bytes, size_t* out_size);
 
+/* Invariant: name must be non-null; *out_text is malloc'd with a trailing NUL, release with radicle_free_bytes. */
+RADICLE_API radicle_status radicle_swf_inspect_text(const radicle_swf* swf, const char* name,
+                                                    uint8_t** out_text, size_t* out_size);
+/* Invariant: index is a flat radicle_swf_tag_at index of a DoAction or DoInitAction tag; *out_text is malloc'd with a trailing NUL, release with radicle_free_bytes. */
+RADICLE_API radicle_status radicle_swf_avm1_disassemble(const radicle_swf* swf, size_t index,
+                                                        uint8_t** out_text, size_t* out_size);
+
 /* SymbolClass, ExportAssets and FrameLabel records; ordering must stay file order. */
 RADICLE_API size_t radicle_swf_symbol_count(const radicle_swf* swf);
 RADICLE_API radicle_status radicle_swf_symbol_at(const radicle_swf* swf, size_t index, radicle_swf_symbol* out_symbol);

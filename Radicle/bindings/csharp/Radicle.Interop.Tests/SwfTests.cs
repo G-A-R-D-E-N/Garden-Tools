@@ -634,4 +634,24 @@ public partial class SwfTests
         swf.Dispose();
         Assert.Throws<ObjectDisposedException>(() => swf.Payload(0));
     }
+
+    [Fact]
+    public void InspectTextRendersTheRootLabelsOfTheMovie()
+    {
+        using var swf = SwfFile.FromBytes(Movie());
+
+        var text = swf.InspectText("movie.swf");
+
+        Assert.StartsWith("## movie.swf\nStage ", text);
+        Assert.Contains("Root frame labels: start\n", text);
+    }
+
+    [Fact]
+    public void RefusesAnAvm1DisassemblyOfANonActionTag()
+    {
+        using var swf = SwfFile.FromBytes(Movie());
+
+        var refused = Assert.Throws<RadicleException>(() => swf.Avm1Disassemble(0));
+        Assert.Equal(Status.InvalidArgument, refused.Status);
+    }
 }
