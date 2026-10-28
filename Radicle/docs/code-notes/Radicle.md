@@ -8105,9 +8105,9 @@ Detects a new opcode that returns a value from an empty stack instead of refusin
 
 `Radicle/src/swf/swf_frame_svg.cpp:text_paths` draws a DefineText or DefineText2 row as glyph paths. Font, colour, height and the x and y position carry from one TEXTRECORD to the next, and a field a record omits keeps its previous value. Each glyph is `shape_fill_paths_to_svg` over its font's glyph records with one solid fill in the record colour. Its transform is `compose_transform(transform_from_matrix(text.matrix), glyph)`, where the glyph scale is height over 1024 for DefineFont and DefineFont2 and over 20480 for DefineFont3. The choice follows `define_font3`, not `units_per_em`, because the decoder only sets `units_per_em` for DefineFont3 when the font has a layout. The x cursor moves by each glyph's advance even when that glyph draws nothing. The whole row sits under its `world_transform` and takes the same colour filter as a shape row (`Radicle/src/swf/swf_frame_svg.cpp:frame_body`).
 
-Draws nothing for: a glyph index outside the font's glyph shapes, a record with no known font, no height yet, a font with no glyph shapes, and a text row that carries a clip depth. A clip-depth text row neither draws nor masks, because `frame_body` only opens masks for shapes and sprites. A record that never sets a colour draws black, which is a guess at Flash's default and is unverified.
+Draws nothing for: a glyph index outside the font's glyph shapes, a record with no known font, no height yet, a font with no glyph shapes, and a text row that carries a clip depth, which is a mask instead (`Radicle/src/swf/swf_frame_svg.cpp:frame_body`, see the static text clips section at the tail). A record that never sets a colour draws black, which is a guess at Flash's default and is unverified.
 
-Out of scope: dynamic EditText (button up-state rows are now drawn, see the button rows section at the tail), text used as a mask, and text inside a clip sprite, because `Radicle/src/swf/swf_frame_svg.cpp:sprite_clip_to_svg` only collects shapes and morphs.
+Out of scope: dynamic EditText (button up-state rows are now drawn, see the button rows section at the tail). Static text used as a mask and static text inside a clip sprite are drawn, see the static text clips section at the tail (`Radicle/src/swf/swf_frame_svg.cpp:frame_body`, `Radicle/src/swf/swf_frame_svg.cpp:sprite_clip_to_svg`).
 
 ## Radicle/include/fo4/swf/swf.hpp:SwfText (text MATRIX exposed)
 
@@ -8141,7 +8141,7 @@ Each tag 34 record carries a CXFORMWITHALPHA. It is read with `read_color_transf
 
 A button row draws every record with the UP flag, sorted by PlaceDepth with `std::stable_sort`, so records at equal depth keep tag order. Each record's transform is `compose_transform(row.world_transform, transform_from_matrix(record.matrix))`. The record's character then goes through `character_group`, the same shape, morph and text path that a plain row uses. Each record gets the id prefix `r<row>u<k>`, which cannot collide with a row id `r<row>`. The record colour transform is ignored. The row's own colour filter still wraps the whole button, as it does for any row. Hit-only and over-only records draw nothing.
 
-Out of scope: a record whose character is a sprite, a button or an edit-text draws nothing, and a button inside a clip sprite is not drawn, because `Radicle/src/swf/swf_frame_svg.cpp:sprite_clip_to_svg` only collects shapes and morphs. A button row that carries a clip depth is also not drawn, which matches the text-row rule. This supersedes the "DefineButton rows" item in the static text note above.
+Out of scope: a record whose character is a sprite, a button or an edit-text draws nothing, and a button inside a clip sprite is not drawn, because `Radicle/src/swf/swf_frame_svg.cpp:sprite_clip_to_svg` only collects shapes, morphs and static text (`Radicle/src/swf/swf_frame_svg.cpp:sprite_clip_to_svg`). A button row that carries a clip depth is also not drawn, which matches the text-row rule. This supersedes the "DefineButton rows" item in the static text note above.
 
 ## Radicle/src/swf/swf_frame_svg.cpp:frame_body (button branch)
 
@@ -8155,3 +8155,20 @@ A non-mask button row takes the `button_group` branch. Otherwise content comes f
 - `Radicle/tests/test_swf_svg_buttons.cpp:SwfFrameSvgButtons.DefineButtonRecordHasNoColourTransformBytes` detects a DefineButton (tag 7) decoder that reads the tag 34 colour transform, which would misplace the record.
 
 Expected strings were derived by hand. The square path is the 1000-twip and 600-twip squares used by `Radicle/tests/test_swf_svg.cpp:kRedSquare` and `kBlueSquare`. Translations are twips divided by 20, as in `Radicle/src/swf/swf_timeline.cpp:transform_from_matrix`. Nothing was compiled or run on the development machine for this change, so CI must confirm them.
+
+## Radicle/src/swf/swf_frame_svg.cpp:frame_body (static text clips)
+
+A row whose character is a DefineText or DefineText2 with a clip depth opens a mask, the same way a shape row does. `Radicle/src/swf/swf_frame_svg.cpp:frame_body` pushes the same `Mask` record and writes `<clipPath id="r<index>clip" transform="matrix(...)">` with the row's world transform as the attribute, and the glyph paths from `Radicle/src/swf/swf_frame_svg.cpp:text_paths` with no outer transform as its content. The glyph paths carry their own text matrix and placement, so the clipPath content matches what the same text would draw. The index is the row's position in the flat frame row list, as for shape masks. A text row with a clip depth paints nothing for itself, and a hidden text row still opens its mask, the same as a hidden shape row. A text mask with no glyph paths gives an empty clipPath, which clips everything out, the same as a stroke-only shape mask. Unverified against Flash for the same reasons as the shape mask.
+
+## Radicle/src/swf/swf_frame_svg.cpp:sprite_clip_to_svg (static text children)
+
+`Radicle/src/swf/swf_frame_svg.cpp:sprite_clip_to_svg` adds a descendant text row's glyph paths to the sprite clipPath, after the same visibility check a shape child gets. The text row's world transform is passed to `Radicle/src/swf/swf_frame_svg.cpp:text_paths` as its outer transform, so each glyph path carries the composition of that transform, the text matrix and the glyph placement. A button child is still left out.
+
+`Radicle/src/swf/swf_frame_svg.cpp:text_paths` takes that outer transform as a third argument, defaulting to the identity, and composes it in front of the text matrix. Callers that pass nothing (`Radicle/src/swf/swf_frame_svg.cpp:text_group` and the text mask branch) get the composition `compose_transform(identity, matrix)`, which equals the matrix bit for bit for every matrix the decoder produces, because `Radicle/src/swf/swf_timeline.cpp:transform_from_matrix` never yields a negative zero. Their output is therefore unchanged.
+
+## Radicle/tests/test_swf_svg_text_clip.cpp:SwfFrameSvgTextClip tests
+
+- `Radicle/tests/test_swf_svg_text_clip.cpp:SwfFrameSvgTextClip.StaticTextMaskClipsTheRowsBelowItAtItsWorldTransform` detects a text row with a clip depth that opens no mask (the blue square would paint unclipped), a clipPath with no glyph paths, and a clipPath that drops the text row's world transform (the glyph at 20 px would print at the origin).
+- `Radicle/tests/test_swf_svg_text_clip.cpp:SwfFrameSvgTextClip.StaticTextInsideAClipSpriteJoinsTheSpriteMask` detects a text child left out of the sprite clipPath (the blue square would paint unclipped), and a glyph that ignores its child's world transform (it would print at the origin, not at 20 px).
+
+Expected strings were derived by hand. The glyph is a 1000-twip square (50 px, the path of `Radicle/tests/test_swf_svg.cpp:kRedSquare` at its size), at a DefineText height of 1024, so the font scale is 1 and the text matrix is the identity. The blue square is the 600-twip one, `Radicle/tests/test_swf_svg.cpp:kBlueSquare`. The clipPath ids follow the shape-mask convention `r<index>clip`. Nothing was compiled or run on the development machine for this change, so CI must confirm them.
