@@ -106,4 +106,51 @@ TEST(CApiSwfCharacters, NamesNothingForANameTableEntryWithNoDefinition) {
   EXPECT_EQ(count, 1u);
 }
 
+// Regression: the SVG export must emit an <svg> document with a <path> for a filled shape, NUL-terminated past *out_size.
+TEST(CApiSwfCharacters, ExportsAFilledShapeAsSvg) {
+  const auto swf = open(swf_character_test::small_movie());
+  ASSERT_NE(swf, nullptr);
+
+  std::uint8_t* text = nullptr;
+  std::size_t size = 0;
+  ASSERT_EQ(radicle_swf_shape_svg(swf.get(), 5, &text, &size), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  ASSERT_NE(text, nullptr);
+  const std::string svg(reinterpret_cast<const char*>(text), size);
+  EXPECT_TRUE(svg.starts_with("<svg")) << svg;
+  EXPECT_NE(svg.find("<path"), std::string::npos) << svg;
+  EXPECT_EQ(text[size], 0);
+  radicle_free_bytes(text);
+}
+
+// Regression: a non-shape id, an undefined id and null arguments must each refuse with every output cleared, never leaving a stale pointer or size.
+TEST(CApiSwfCharacters, RefusesNonShapesAndNullArgumentsWithOutputsCleared) {
+  const auto swf = open(swf_character_test::small_movie());
+  ASSERT_NE(swf, nullptr);
+
+  std::uint8_t sentinel = 0;
+  std::uint8_t* text = &sentinel;
+  std::size_t size = 7;
+  EXPECT_EQ(radicle_swf_shape_svg(swf.get(), 11, &text, &size), RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(text, nullptr);
+  EXPECT_EQ(size, 0u);
+  EXPECT_NE(std::string(radicle_last_error()).find("not a decoded shape"), std::string::npos)
+      << radicle_last_error();
+
+  text = &sentinel;
+  size = 7;
+  EXPECT_EQ(radicle_swf_shape_svg(swf.get(), 99, &text, &size), RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(text, nullptr);
+  EXPECT_EQ(size, 0u);
+
+  size = 7;
+  EXPECT_EQ(radicle_swf_shape_svg(swf.get(), 5, nullptr, &size), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(size, 0u);
+  text = &sentinel;
+  size = 7;
+  EXPECT_EQ(radicle_swf_shape_svg(nullptr, 5, &text, &size), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(text, nullptr);
+  EXPECT_EQ(size, 0u);
+}
+
 }  // namespace
