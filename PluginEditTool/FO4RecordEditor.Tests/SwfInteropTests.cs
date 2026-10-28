@@ -66,6 +66,22 @@ public sealed class SwfInteropTests
         });
     }
 
+    [NativeFact]
+    public async Task PlacementMatrixRpcReportsIdentityScaleForAnAbsentScale()
+    {
+        // Constraint: detects the matrix RPC reporting an absent scale as 0, which the panel sends back on apply and collapses the clip.
+        await WithOpenMovie(SwfFixture.Movie(), async swf =>
+        {
+            Assert.False(Parse(await swf.Open("Interface\\Test.swf")).TryGetProperty("error", out _));
+            var tagIndex = Parse(await swf.Placements()).GetProperty("placements")[0].GetProperty("tagIndex").GetInt32();
+            var matrix = Parse(await swf.PlacementMatrix(tagIndex));
+            Assert.False(matrix.GetProperty("hasScale").GetBoolean());
+            Assert.Equal(0x10000, matrix.GetProperty("scaleX").GetInt32());
+            Assert.Equal(0x10000, matrix.GetProperty("scaleY").GetInt32());
+            Assert.Equal(0, matrix.GetProperty("rotate0").GetInt32());
+        });
+    }
+
     private static async Task WithOpenMovie(byte[] movie, Func<SwfInterop, Task> body)
     {
         var root = Path.Combine(Path.GetTempPath(), "fo4re-swf-rpc-" + Guid.NewGuid().ToString("N"));

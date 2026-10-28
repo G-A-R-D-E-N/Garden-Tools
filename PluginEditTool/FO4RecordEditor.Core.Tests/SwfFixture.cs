@@ -98,7 +98,7 @@ internal static class SwfFixture
         return Tag(2, payload.ToArray());
     }
 
-    public static byte[] Movie(bool withAbc = false, bool editTextPastSprite = false, bool withShape = false, bool withAction = false)
+    public static byte[] Movie(bool withAbc = false, bool editTextPastSprite = false, bool withShape = false, bool twoFrames = false, bool withAction = false)
     {
         var editText = new List<byte>();
         editText.AddRange(U16(11));
@@ -132,6 +132,7 @@ internal static class SwfFixture
         tags.AddRange(Tag(43, Z("start")));
         tags.AddRange(Tag(26, place.ToArray()));
         tags.AddRange(Tag(1, Array.Empty<byte>()));
+        if (twoFrames) tags.AddRange(Tag(1, Array.Empty<byte>()));
         tags.AddRange(Tag(39, sprite.ToArray()));
         if (editTextPastSprite) tags.AddRange(Tag(37, editText.ToArray()));
         if (withAction) tags.AddRange(ActionTag());
@@ -146,7 +147,7 @@ internal static class SwfFixture
         frame.Rect(0, 11000, 0, 8000, 15);
         head.AddRange(frame.ToArray());
         head.AddRange(U16(0x0C00));
-        head.AddRange(U16(1));
+        head.AddRange(U16(twoFrames ? 2 : 1));
         head.AddRange(tags);
         return head.ToArray();
     }
