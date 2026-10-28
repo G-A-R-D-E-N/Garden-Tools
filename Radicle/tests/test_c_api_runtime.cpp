@@ -73,6 +73,26 @@ std::vector<std::byte> sprite_movie() {
   return swf_test::wrap_body(builder.body, 10, false, false);
 }
 
+std::vector<std::byte> styled_placement_movie() {
+  SwfBuilder place;
+  place.u8(0x12);
+  place.u8(0x26);
+  place.u16(1);
+  place.u16(20);
+  place.u16(3);
+  place.u8(8);
+  place.u8(1);
+  place.u8(0);
+  SwfBuilder builder;
+  builder.rect(0, 200, 0, 100, 9);
+  builder.u16(24u * 256u);
+  builder.u16(1);
+  builder.tag(fo4::swf::tag::kPlaceObject3, place.body, false);
+  builder.tag(fo4::swf::tag::kShowFrame);
+  builder.tag(fo4::swf::tag::kEnd);
+  return swf_test::wrap_body(builder.body, 10, false, false);
+}
+
 std::vector<std::byte> external_interface_movie(std::size_t* out_calls) {
   avm2_test::ScriptBuilder script;
   avm2_test::CodeBuilder code;
@@ -354,6 +374,36 @@ TEST(CApiRuntime, AdvancingProducesAStableSnapshotSequence) {
   ASSERT_EQ(radicle_movie_snapshot(movie.get(), &moved_raw), RADICLE_STATUS_OK);
   SnapshotHandle moved(moved_raw);
   EXPECT_NE(radicle_runtime_snapshot_hash(moved.get()), first_hash);
+}
+
+TEST(CApiRuntime, SnapshotEntriesCarryAPlacementsRatioAndCacheFlag) {
+  // Detects: a PlaceObject3 ratio or cache flag that the C entry drops or defaults, so a host draws the wrong morph frame or bitmap cache; the placed values must come through and the root must keep its defaults.
+  radicle_runtime_host host{};
+  radicle_runtime* raw_runtime = nullptr;
+  ASSERT_EQ(radicle_runtime_open(&host, &raw_runtime), RADICLE_STATUS_OK) << radicle_last_error();
+  RuntimeHandle runtime(raw_runtime);
+  const std::vector<std::byte> bytes = styled_placement_movie();
+  MovieHandle movie = open_member_movie(runtime.get(), bytes);
+  ASSERT_NE(movie.get(), nullptr);
+
+  radicle_runtime_snapshot* raw_snapshot = nullptr;
+  ASSERT_EQ(radicle_movie_snapshot(movie.get(), &raw_snapshot), RADICLE_STATUS_OK);
+  SnapshotHandle snapshot(raw_snapshot);
+  ASSERT_EQ(radicle_runtime_snapshot_entry_count(snapshot.get()), 2u);
+
+  radicle_runtime_entry root{};
+  ASSERT_EQ(radicle_runtime_snapshot_entry_at(snapshot.get(), 0, &root), RADICLE_STATUS_OK);
+  EXPECT_EQ(root.visible, std::uint8_t{1});
+  EXPECT_EQ(root.ratio, std::uint16_t{0});
+  EXPECT_EQ(root.cache_as_bitmap, std::uint8_t{0});
+
+  radicle_runtime_entry placed{};
+  ASSERT_EQ(radicle_runtime_snapshot_entry_at(snapshot.get(), 1, &placed), RADICLE_STATUS_OK);
+  EXPECT_EQ(placed.character_id, 20u);
+  EXPECT_EQ(placed.blend_mode, std::uint8_t{8});
+  EXPECT_EQ(placed.visible, std::uint8_t{0});
+  EXPECT_EQ(placed.ratio, std::uint16_t{3});
+  EXPECT_EQ(placed.cache_as_bitmap, std::uint8_t{1});
 }
 
 TEST(CApiRuntime, ReplayIsDeterministicAndForwardsHostCalls) {

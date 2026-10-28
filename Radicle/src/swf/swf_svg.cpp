@@ -370,7 +370,9 @@ std::string path_element(const std::string& data, const std::string& attributes)
 
 std::string fill_paths(const SwfShape& shape, const std::vector<Edge>& edges,
                        const std::string& id_prefix, const SvgImages& images,
-                       bool geometry_only) {
+                       bool geometry_only, const std::string& transform) {
+  const std::string placement =
+      transform.empty() ? std::string() : "transform=\"" + transform + "\" ";
   std::string text;
   for (std::size_t index = 0; index < shape.fill_styles.size(); ++index) {
     const std::string data = loops_text(fill_edges(edges, index + 1));
@@ -381,7 +383,8 @@ std::string fill_paths(const SwfShape& shape, const std::vector<Edge>& edges,
       if (!geometry_only && is_clipped(fill.type) && image != images.end()) {
         text += clipped_bitmap(data, fill, id, image->second);
       } else {
-        text += path_element(data, fill_attributes(fill, id, images) + " fill-rule=\"nonzero\"");
+        text += path_element(data, placement + fill_attributes(fill, id, images) +
+                                       " fill-rule=\"nonzero\"");
       }
     }
   }
@@ -504,12 +507,12 @@ std::string shape_defs_to_svg(const SwfShape& shape, const std::string& id_prefi
 std::string shape_paths_to_svg(const SwfShape& shape, const std::string& id_prefix,
                                const SvgImages& images) {
   const auto edges = trace_edges(shape);
-  return fill_paths(shape, edges, id_prefix, images, false) + stroke_paths(shape, edges);
+  return fill_paths(shape, edges, id_prefix, images, false, "") + stroke_paths(shape, edges);
 }
 
 std::string shape_fill_paths_to_svg(const SwfShape& shape, const std::string& id_prefix,
-                                    const SvgImages& images) {
-  return fill_paths(shape, trace_edges(shape), id_prefix, images, true);
+                                    const SvgImages& images, const std::string& transform) {
+  return fill_paths(shape, trace_edges(shape), id_prefix, images, true, transform);
 }
 
 std::string shape_to_svg(const SwfShape& shape) {

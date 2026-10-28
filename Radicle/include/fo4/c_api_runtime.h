@@ -66,6 +66,8 @@ typedef struct radicle_runtime_entry {
   size_t run_count;
   const radicle_runtime_run* runs; /* must stay valid until the snapshot is destroyed */
   size_t filter_count;
+  uint16_t ratio; /* invariant: 0 when the placement carries no morph ratio */
+  uint8_t cache_as_bitmap;
 } radicle_runtime_entry;
 
 typedef struct radicle_runtime_sound {
