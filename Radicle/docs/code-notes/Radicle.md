@@ -7534,3 +7534,24 @@ Re-encode writes each payload in the layout the decoder reads, and it writes Len
 Unverified in this change: the build, the unit tests, and the runner case. The runner case `Radicle/tests/test_swf_real.cpp:InterfaceGfxAvm1StreamsDecodeAndReencodeByteIdentically` depends on FO4_DATA_DIR and skips without it. Call's zero-length layout and the With, Try, GetURL and GotoFrame2 layouts are unmeasured.
 
 Not built or run locally. CI is the first compile and run.
+## Radicle/src/swf/swf_svg.cpp:shape_to_svg (SWF shape to SVG)
+
+Fill rule is `nonzero`. `fill_edges` gives every edge its fill on the left: fill0 edges keep their direction and fill1 edges are reversed. With every region's boundary directed the same way, the winding number is positive inside a filled region and zero outside, so nonzero paints the union of the regions of one fill. Evenodd would cut holes where two regions of the same fill overlap, which the SWF fill model allows.
+
+Edge reversal: `Radicle/src/swf/swf_svg.cpp:reversed` swaps the start and end of an edge. A quadratic keeps its control point, so the reversed curve is the same curve.
+
+Loop chaining: `Radicle/src/swf/swf_svg.cpp:loops_text` joins the edges of one fill into closed loops by exact endpoint match and closes each with `Z`. Separate subpaths would each be closed by the fill with a chord, and those chords do not cancel when a boundary is split at a style change, so the fill would be wrong. A chain that never returns to its start is emitted open. The search is linear per step, so one fill is O(n^2) in its edge count. Upgrade to a start-point index if export time matters on large shapes.
+
+Style state: `Radicle/src/swf/swf_shape.cpp:read_records` sets `has_fill0`, `has_fill1` and `has_line` on each style change from SHAPE flag bits 0x02, 0x04 and 0x08. `Radicle/src/swf/swf_svg.cpp:trace_edges` then applies a flagged index even when it is 0, so an explicit 0 turns that side off for later edges, and leaves an unflagged index unchanged. `Radicle/src/swf/swf_write.cpp:write_style_change` writes a flag for the same condition, so a decoded glyph re-encodes with the original flags. A nonzero index counts as present even without its flag, which keeps hand-built records and the C ABI (`Radicle/src/c_api_swf_art.cpp`, which has no presence fields) writing and tracing as before. The C ABI therefore cannot carry an explicit 0 across the boundary; that needs an ABI change and is not made here.
+
+Twip scaling: `Radicle/src/swf/swf_svg.cpp:pixels` divides twips by 20. `Radicle/src/swf/swf_svg.cpp:number` prints with `%.6f` and trims trailing zeros, so the output is deterministic and every value is exact to 0.05 px. Gradient matrices: scale and skew are 16.16 fixed point (divided by 65536), and the translation is in twips (divided by 20). `Radicle/src/swf/swf_svg.cpp:matrix_text` maps SWF `x' = ScaleX*x + RotateSkew1*y + TranslateX`, `y' = RotateSkew0*x + ScaleY*y + TranslateY` onto SVG `matrix(a b c d e f)` with `a = ScaleX`, `b = RotateSkew0`, `c = RotateSkew1`, `d = ScaleY`. This matches the composition in `Radicle/src/swf/swf_timeline.cpp`.
+
+Gradient extent: `Radicle/src/swf/swf_svg.cpp:gradient_text` uses `kGradientHalfPixels` (819.2 px, which is 16384 twips) for the linear span and the radial radius, in `userSpaceOnUse`. The focal point is `fx = focal / 256 * 819.2` (`focal_text`). Spread: 0 pad, 1 reflect, 2 repeat (`spread_name`). Unverified against the SWF spec; the local SWF reference folder was not present.
+
+Bitmap-fill gap: fill types 0x40 to 0x43 export as the flat placeholder `#808080` (`kPlaceholderColor`). No image is decoded. A stroke whose LineStyle2 fill is a gradient or bitmap also uses the placeholder (`Radicle/src/swf/swf_svg.cpp:stroke_paint`). A solid stroke fill uses its colour.
+
+Caps and joins: `Radicle/src/swf/swf_svg.cpp:cap_name` reads the start cap from bits 15-14 of the LineStyle2 flags (0 round, 1 butt, 2 square). `join_name` reads the join from bits 13-12 (0 round, 1 bevel, 2 miter). The miter limit is 8.8 fixed point. SVG has one linecap, so the end cap (bits 1-0) and NoClose (bit 2) are ignored. A LineStyle1 has flags 0 and so exports round caps and joins. Width 0 (hairline) exports as 1 px in `stroke_attributes`. Unverified against the SWF spec bit order; the fixture in `Radicle/tests/swf_art_fixtures.hpp` (`define_shape_4_payload`) agrees with it.
+
+Paint order: `shape_to_svg` writes every fill path first, in fill-style index order (`fill_paths`), then every stroke path in line-style order (`stroke_paths`). Interpolation mode (linearRGB) is not applied.
+
+Tests: exact-string expectations in `Radicle/tests/test_swf_svg.cpp`, and the real-data well-formedness case `SwfRealData.ExportsEveryShapeToWellFormedSvg` in `Radicle/tests/test_swf_real.cpp`. Not compiled or run on the development machine; CI is the first compile and run.

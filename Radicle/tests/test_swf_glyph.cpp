@@ -108,6 +108,39 @@ TEST(SwfGlyphTest, EncodesGlyphShapeWithMinimalFieldWidths) {
   EXPECT_EQ(out, kShapeBytes);
 }
 
+TEST(SwfGlyphTest, ExplicitZeroStyleIndexIsWrittenAndReadBackAsPresent) {
+  // Detects: an explicit fill0 = 0 in a style change must be written with its flag bit and read back as present, while an absent fill0 keeps the original bytes.
+  const auto result = fo4::swf::read_swf(
+      define_font_movie(kFontPayload, fo4::swf::tag::kDefineFont));
+  ASSERT_TRUE(result.ok());
+  const SwfShapeRecord& decoded = result.file.tags[0].font->glyphs[0].records[1];
+  EXPECT_FALSE(decoded.has_fill0);
+  EXPECT_TRUE(decoded.has_fill1);
+
+  SwfFont font = *result.file.tags[0].font;
+  font.glyphs[0].records[1].has_fill0 = true;
+  std::vector<std::byte> payload;
+  std::string message;
+  ASSERT_TRUE(fo4::swf::encode_define_font(font, fo4::swf::tag::kDefineFont, payload, message))
+      << message;
+  EXPECT_NE(payload, kFontPayload);
+
+  const auto reread = fo4::swf::read_swf(define_font_movie(payload, fo4::swf::tag::kDefineFont));
+  ASSERT_TRUE(reread.ok()) << fo4::swf::status_name(reread.status);
+  const SwfShapeRecord& style = reread.file.tags[0].font->glyphs[0].records[1];
+  EXPECT_TRUE(style.has_fill0);
+  EXPECT_EQ(style.fill0, 0u);
+  EXPECT_TRUE(style.has_fill1);
+  EXPECT_EQ(style.fill1, 1u);
+  EXPECT_FALSE(style.has_line);
+
+  std::vector<std::byte> again;
+  ASSERT_TRUE(fo4::swf::encode_define_font(*reread.file.tags[0].font, fo4::swf::tag::kDefineFont,
+                                           again, message))
+      << message;
+  EXPECT_EQ(again, payload);
+}
+
 TEST(SwfGlyphTest, ReplacesOneGlyphShapeAndRefusesAnUnknownGlyph) {
   const auto result = fo4::swf::read_swf(
       define_font_movie(kFontPayload, fo4::swf::tag::kDefineFont));
