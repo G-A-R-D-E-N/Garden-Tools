@@ -450,6 +450,49 @@ TEST(CApiSwfVerbs, DepthReassignAndKeyframeUndoAndRedoThroughHistory) {
   EXPECT_EQ(placement_json(history), keyframed);
 }
 
+// Constraint: the edit-text verbs must take the flat index radicle_swf_tag_at reports and refuse a tag inside a DefineSprite. Regression: the verbs indexed the top-level tree with the flat index, so a DefineEditText past a sprite with children was read or written at the wrong position.
+TEST(CApiSwfVerbs, EditTextAddressesTheFlatIndexPastADefineSprite) {
+  const auto swf = open(swf_character_test::movie_of({
+      {39, swf_character_test::sprite_payload(14, 1)},
+      {37, edit_text_with_text()},
+      {1, {}},
+  }));
+  ASSERT_NE(swf, nullptr);
+  const auto history = open_history(swf);
+  ASSERT_NE(history, nullptr);
+
+  radicle_swf_tag tag{};
+  std::size_t flat = 0;
+  while (radicle_swf_tag_at(swf.get(), flat, &tag) == RADICLE_STATUS_OK && tag.code != 37) {
+    ++flat;
+  }
+  ASSERT_EQ(tag.code, 37);
+  ASSERT_GT(flat, 1u);
+
+  const std::string_view bye = "bye";
+  radicle_swf_edit_text_fields fields{};
+  fields.has_text = 1;
+  fields.text = reinterpret_cast<const std::uint8_t*>(bye.data());
+  fields.text_size = bye.size();
+  radicle_swf_plan_result result{};
+  ASSERT_EQ(radicle_swf_edit_text_apply(history.get(), flat, &fields, &result), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_EQ(result.changed, 1);
+
+  radicle_swf_edit_text_info info{};
+  std::uint8_t* text = nullptr;
+  std::size_t text_size = 0;
+  ASSERT_EQ(radicle_swf_edit_text_read(history.get(), flat, &info, &text, &text_size), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_EQ(std::string(reinterpret_cast<const char*>(text), text_size), "bye");
+  radicle_free_bytes(text);
+
+  EXPECT_EQ(radicle_swf_edit_text_read(history.get(), 1, &info, &text, &text_size),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_NE(std::string(radicle_last_error()).find("inside a DefineSprite"), std::string::npos)
+      << radicle_last_error();
+}
+
 // Constraint: a refused verb must zero its result and out parameters and leave the revision and undo stack unchanged.
 TEST(CApiSwfVerbs, RefusedVerbsClearTheirOutputsAndLeaveTheHistoryUntouched) {
   const auto swf = open(swf_character_test::movie_of({

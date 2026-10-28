@@ -44,10 +44,12 @@ public sealed class SwfInteropTests
     [NativeFact]
     public async Task FrameLabelRpcsTakeATimelineAndLabelIndexAndRefuseOutOfRange()
     {
-        // Constraint: detects the label RPCs reverting to tag indices, dropping the timeline, or reporting a refused index as a change.
+        // Constraint: detects the label RPCs reverting to tag indices, dropping the timeline, a timeline index that does not resolve to its DefineSprite character id, or reporting a refused index as a change.
         await WithOpenMovie(SwfFixture.Movie(), async swf =>
         {
             Assert.False(Parse(await swf.Open("Interface\\Test.swf")).TryGetProperty("error", out _));
+            Assert.Equal(14, Parse(await swf.Timeline(1)).GetProperty("characterId").GetInt32());
+            Assert.Equal(0, Parse(await swf.Timeline(0)).GetProperty("characterId").GetInt32());
 
             var labels = Parse(await swf.FrameLabels(0)).GetProperty("labels");
             Assert.Equal(0, labels[0].GetProperty("labelIndex").GetInt32());

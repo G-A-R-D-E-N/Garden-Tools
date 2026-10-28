@@ -29,7 +29,7 @@ public sealed class SwfDocument : IDisposable
 
     public string? Path { get; }
 
-    // Invariant: Movie is reopened from the history bytes after every Apply, Undo and Redo.
+    // Invariant: Movie is reopened from the history bytes after every Apply, Undo, Redo and SwfVerbs call (Verb).
     public SwfFile Movie => _movie;
 
     public ulong Revision => _history.Revision;

@@ -20,7 +20,7 @@ untouched. Nothing was built or run locally; CI is the first compiler.
 
 `SwfInterop` is the host bridge the panel calls through `chrome.webview.hostObjects.swf`: `Open` builds the
 one `SwfDocument`, `Characters`/`FrameLabels`/`Frame` return the read side as JSON (`FrameLabels` is per timeline),
-`RenameLabel`/`RemoveLabel` pass the timeline and label index to the Radicle verbs (`SwfInterop.cs:SwfInterop`),
+`RenameLabel`/`RemoveLabel` pass the timeline's DefineSprite character id and the label index to the Radicle verbs (`SwfInterop.cs:SwfInterop`), and `Timeline` maps a scrubber index to that id (`SwfInterop.cs:SwfInterop.Timeline`),
 `Undo`/`Redo`/`State` drive the history, and `Save` writes
 through the document. Every method returns JSON, and a `RadicleException` comes back as `{ error, status }`
 so the panel can show the Radicle message verbatim next to the field. `SwfPanel` renders the character and
@@ -44,8 +44,9 @@ prefix unless the bounds are edited, so a text or colour edit keeps every earlie
 `SwfFile.EditEditText` expose it and send the rewritten payload through the normal tag plan, so history,
 revision and refusal behaviour are unchanged. Tests in `SwfEditTextTests.cs` pin the full read, the
 prefix-preserving text edit, colour and bounds edits, the no-op plan, and the wrong-tag refusal. This is the
-"compose from tag payloads in PET" path for edit text; the remaining property edits (transform/depth/keyframe,
-label add/remove) still need either the same treatment or new native exports.
+"compose from tag payloads in PET" path for edit text. The panel's document no longer uses it: `SwfDocumentService.cs:SwfDocument.EditEditText`
+writes through `SwfVerbs.ApplyEditText`, and label add, rename and remove write through the label verbs. The depth and
+transform edits still compose payloads in PET (`SwfPlacementCodec.WithDepth`, `SwfPlacementMatrixCodec.Write`).
 ## FO4RecordEditor.Core/Services/SwfDocumentService.cs:SwfDocument.EditEditText (edit-text through the history)
 
 `SwfDocumentService.cs:SwfDocument.EditEditText` calls `SwfVerbs.ApplyEditText` on the document's own history (through
@@ -60,17 +61,22 @@ fields (text, colour, bounds rect); Apply sends `EditEditText` with those values
 back into the header. The field-level refusal banner is the same one all commands use, so a Radicle refusal
 appears next to the panel verbatim. The web test drives open → select edit text → change text → apply and asserts
 the bridge call.
-## web/src/SwfPanel.tsx (frame label list)
+## web/src/SwfPanel.tsx:SwfPanel.loadLabels (frame label list)
 
-The left list shows the selected timeline's frame labels (`FrameLabels(timeline)`, each row carrying its Radicle label
-index). Add, rename and remove send the timeline and label index, and the list reloads from the history after each of
-them, after undo/redo and after save, so a stale index is never sent.
+The left list shows the selected timeline's frame labels. `SwfPanel.loadLabels` asks `Timeline(index)` for the DefineSprite
+character id (0 for root) and then calls `FrameLabels` with that id, because the label verbs take the character id while the
+scrubber and `Frame` take the timeline index. The id is kept as `labelOwner`, and add, rename and remove send it with the
+label index. Each load takes a request number from `labelRequest` and drops a reply that is no longer the newest, so a late
+reply for an earlier timeline cannot overwrite the list on screen. A picked label is kept as `{ ...row, timeline }` and
+survives a reload of the same timeline; a timeline change clears it. Undo, redo, save and each label edit reload the
+characters and the labels from the history (`SwfPanel.refresh`, `SwfPanel.loadCharacters`). Tests in
+`web/src/SwfPanel.test.tsx` pin the index-to-id mapping, the dropped stale reply, the kept selection and the reload after undo.
 ## FO4RecordEditor.Core/Services/SwfDocumentService.cs:SwfDocument.AddLabel (label insertion)
 
 `SwfDocumentService.cs:SwfDocument.AddLabel` calls `SwfVerbs.AddFrameLabel` on the document's history. Radicle resolves
 the timeline (0 for root, a DefineSprite id otherwise), refuses a duplicate name on that timeline and a frame the
 timeline does not reach, and commits one history command that undo removes. `SwfInterop.AddLabel` exposes it, and the
-panel's "Add at frame" button passes the label name field, the scrubber frame and the scrubber timeline.
+panel's "Add at frame" button passes the label name field, the scrubber frame and the timeline's character id held by `web/src/SwfPanel.tsx:SwfPanel.loadLabels`.
 ## Radicle/bindings/csharp/Radicle.Interop/SwfPlacements.cs:SwfPlacementCodec (depth edit)
 
 Placement tags have no C ABI getter, so `Placements()` parses the root and sprite placement payloads
@@ -126,11 +132,11 @@ that `Save()` refuses.
 
 `SwfDocumentService.cs:SwfDocument.RemoveLabel` calls `SwfVerbs.RemoveFrameLabel(timeline, labelIndex)`. The index is the
 row index from `FrameLabelRows` for that timeline, not a tag index, and undo restores the label through the history. The
-panel's Remove button sends the selected row's timeline and label index.
+panel's Remove button sends the timeline's character id held by `web/src/SwfPanel.tsx:SwfPanel.loadLabels` and the selected row's label index.
 ## FO4RecordEditor.Core/Services/SwfDocumentService.cs:SwfDocument.AddLabel (sprite timelines)
 
 `AddLabel` takes the timeline id and the sprite splice happens inside Radicle (`SwfVerbs.AddFrameLabel`), not in PET; the
-service test pins sprite add + undo. The panel passes its current timeline scrubber value.
+service test pins sprite add + undo. The panel passes the DefineSprite character id held by `web/src/SwfPanel.tsx:SwfPanel.loadLabels`, not the scrubber index.
 ## FO4RecordEditor.Core/Services/SwfDocumentService.cs:SwfDocument.RenameLabel and SwfDocument.FrameLabelRows (label rows and rename)
 
 `FrameLabelRows(timeline)` wraps `SwfVerbs.FrameLabelRows` and returns `label_index`, frame and name per timeline;
@@ -198,11 +204,11 @@ pins the accepted path, the sibling, the escape and the empty list.
 ## Radicle/bindings/csharp/Radicle.Interop/SwfEditText.cs:SwfEditTextCodec (duplicate of the C++ edit-text codec)
 
 `SwfEditTextCodec.Parse` and `Write` re-implement the DefineEditText (tag 37) field walk that the C++ side already has in
-`Radicle/include/fo4/swf/swf_text_edit.hpp` (`replace_edit_text`, `apply_edit_text`). The C ABI exports no edit-text verb:
-`Radicle/include/fo4/c_api_swf.h` has no edit-text function (its text verbs are the ABC ones, `radicle_swf_abc_text` and
-`radicle_swf_abc_apply_text`), so the managed codec is the only edit path today and cannot be retired yet. The intended
-consolidation is one native verb that takes the edit and returns the payload; once it exists, `SwfEditTextCodec.Write` and
-`SwfDocument.EditEditText` route through it and the managed walk is deleted, keeping the read only if the ABI lacks a getter.
+`Radicle/include/fo4/swf/swf_text_edit.hpp` (`replace_edit_text`, `apply_edit_text`). The C ABI now exports the edit-text verbs `radicle_swf_edit_text_read` and `radicle_swf_edit_text_apply`
+(`Radicle/include/fo4/c_api_swf_verbs.h`). The PET document's write goes through `SwfVerbs.ApplyEditText`
+(`SwfDocumentService.cs:SwfDocument.EditEditText`), but the binding's `SwfFile.EditEditText` still writes through
+`SwfEditTextCodec.Write`, so `Write` stays until that caller moves to the verb. PET does not call the native read yet:
+`SwfDocument.EditText` reads through the managed `Parse`.
 ## FO4RecordEditor/Services/SwfInterop.cs:SwfInterop.Run (one lock per call)
 
 `Run` takes the static `Gate` around every action, so the document reference, its history and the lazy character cache are

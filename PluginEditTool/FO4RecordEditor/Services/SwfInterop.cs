@@ -69,6 +69,12 @@ public class SwfInterop
         }).ToArray(),
     }));
 
+    public Task<string> Timeline(int index) => Run(() =>
+    {
+        var timeline = Document().Timeline(index);
+        return Json(new { characterId = timeline.CharacterId, frameCount = timeline.FrameCount });
+    });
+
     public Task<string> RenameLabel(int timeline, int labelIndex, string name) => Run(() =>
         Snapshot(Document().RenameLabel(timeline, labelIndex, name).Changed));
 

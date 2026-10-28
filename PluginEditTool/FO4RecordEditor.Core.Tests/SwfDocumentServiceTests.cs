@@ -87,6 +87,18 @@ public class SwfDocumentServiceTests
         Assert.Equal(string.Empty, document.EditText(0).Text);
         Assert.Null(document.EditText(0).Color);
     }
+
+    [NativeFact]
+    public void EditsAnEditTextPastASpriteAtItsFlatIndex()
+    {
+        // Constraint: detects an edit-text write that indexes the top-level tree with a flat index, which lands on a different tag once a DefineSprite with children sits before the DefineEditText.
+        using var document = SwfDocument.OpenBytes(SwfFixture.Movie(editTextPastSprite: true));
+        var index = document.Movie.Tags.Single(tag => tag.Code == 37).Index;
+        var result = document.EditEditText(index, new SwfEditTextEdit(Text: "hello"));
+        Assert.True(result.Changed);
+        Assert.Equal("hello", document.EditText(index).Text);
+    }
+
     [NativeFact]
     public void AddsAFrameLabelThroughAnInsertionPlan()
     {
