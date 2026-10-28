@@ -7505,6 +7505,20 @@ Bytes after the first End record are kept in `Avm1Stream::trailing` and written 
 
 Typed payloads cover the record codes listed in the payload switch of `Radicle/src/avm1/decode.cpp:Decoder::payload`. Those are Frame, GetURL, the one-byte records, ConstantPool, WaitForFrame, the two text records, DefineFunction and DefineFunction2, Try, With, Push, Jump and If, Call (no payload) and GotoFrame2. Every other record of 0x80 or higher, and every unknown code below 0x80, is raw-preserved in `Avm1Raw` or as a byte. A failed decode clears `actions`. The status and offset are still set, so the caller can report the refusal.
 
+## Radicle/src/avm1/decode.cpp:Decoder::body
+
+Each nested body recurses through `block`, `record` and `body`. An unbounded chain of With records, at 5 bytes per level, could overflow a 1 MB stack. `kMaxBodyDepth` is 64, and the 65th nested body is refused with `TooDeep` at the offset where its body would start. `depth_` is incremented around the `block` call and decremented on the way back. Every return path in `block` returns a bool, so the counter is restored on success and on failure. The limit does not depend on the byte count, so it bounds the stack for any input size.
+
+The limit of 64 is a guess. The three shipped GFx movies were not measured for their maximum body depth, so a real file could in principle exceed it. Raise the constant if a real movie is refused.
+
+## Radicle/src/avm1/decode.cpp:Decoder::payload
+
+A ConstantPool count is checked against the bytes left in its record before `resize`. Each string needs at least one NUL byte, so a count larger than the bytes left cannot decode. `Decoder::function_header` does the same for the parameter count, which needs at least one byte per parameter. Without the check, a 65,535-string count allocates a large vector before the first string fails.
+
+## Radicle/src/avm1/disassembly.cpp:quote
+
+Quoted text escapes a quote and a backslash with a backslash. Control bytes below 0x20, and 0x7F, print as `\xNN`. This keeps one listing line on one line, because a raw newline in a Text value would otherwise split it.
+
 ## Radicle/src/avm1/encode.cpp:encode_actions
 
 Re-encode writes each payload in the layout the decoder reads, and it writes Length from the payload size. It does not write a record's offset, and it does not rebuild branch offsets from `Avm1Branch::target`. Each branch keeps the offset it was decoded with.

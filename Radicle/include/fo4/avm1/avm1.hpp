@@ -20,6 +20,7 @@ enum class Avm1Status : std::uint8_t {
   MissingEnd,
   BranchOutOfRange,
   BranchNotRecord,
+  TooDeep,
 };
 
 const char* status_name(Avm1Status status) noexcept;

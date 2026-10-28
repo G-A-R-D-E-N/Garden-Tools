@@ -30,6 +30,8 @@ const char* status_name(Avm1Status status) noexcept {
       return "branch out of range";
     case Avm1Status::BranchNotRecord:
       return "branch target is not a record start";
+    case Avm1Status::TooDeep:
+      return "nested bodies are too deep";
   }
   return "unknown";
 }
@@ -39,6 +41,8 @@ namespace {
 std::uint8_t byte_at(std::span<const std::byte> bytes, std::size_t pos) noexcept {
   return std::to_integer<std::uint8_t>(bytes[pos]);
 }
+
+constexpr std::size_t kMaxBodyDepth = 64;
 
 class Decoder {
 public:
@@ -65,6 +69,7 @@ private:
   std::span<const std::byte> bytes_;
   std::size_t pos_{0};
   std::size_t limit_{0};
+  std::size_t depth_{0};
   Avm1Stream out_;
 };
 
@@ -155,7 +160,14 @@ bool Decoder::body(std::size_t size, std::size_t end) {
     return fail(Avm1Status::LengthPastEnd, pos_,
                 "a body of " + std::to_string(size) + " bytes runs past the end of its block");
   }
-  return block(pos_ + size, false);
+  if (depth_ == kMaxBodyDepth) {
+    return fail(Avm1Status::TooDeep, pos_,
+                "more than " + std::to_string(kMaxBodyDepth) + " levels of body");
+  }
+  depth_ += 1;
+  const bool parsed = block(pos_ + size, false);
+  depth_ -= 1;
+  return parsed;
 }
 
 bool Decoder::payload(Avm1Action& action) {
@@ -192,6 +204,10 @@ bool Decoder::payload(Avm1Action& action) {
       std::uint16_t count = 0;
       if (!read16(count)) {
         return false;
+      }
+      if (count > limit_ - pos_) {
+        return fail(Avm1Status::Truncated, pos_,
+                    "the string count is larger than the bytes left in its record");
       }
       value.strings.resize(count);
       for (std::string& text : value.strings) {
@@ -300,6 +316,10 @@ bool Decoder::function_header(Avm1Function& fn, bool version2) {
   }
   if (version2 && (!read8(fn.register_count) || !read16(fn.flags))) {
     return false;
+  }
+  if (count > limit_ - pos_) {
+    return fail(Avm1Status::Truncated, pos_,
+                "the parameter count is larger than the bytes left in its record");
   }
   fn.parameters.resize(count);
   for (Avm1Parameter& parameter : fn.parameters) {

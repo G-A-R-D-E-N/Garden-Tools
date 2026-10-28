@@ -325,4 +325,33 @@ TEST(Avm1, DisassemblyPrintsOffsetsAndResolvedTargets) {
   EXPECT_EQ(fo4::avm1::disassemble_actions(stream), "0000  Jump -> 0006\n0005  Pop\n0006  End\n");
 }
 
+Bytes nested_withs(std::size_t depth) {
+  Bytes body{0x17};
+  for (std::size_t level = 0; level < depth; ++level) {
+    body = cat({rec(0x94, le16(static_cast<std::uint16_t>(body.size()))), body});
+  }
+  return cat({body, Bytes{0x00}});
+}
+
+// Invariant: With bodies nest at most 64 deep, so a 1,000-level chain is refused at its 65th body and 8 levels still re-encode exactly.
+TEST(Avm1, NestedWithBodiesStopAtSixtyFourLevels) {
+  const Bytes deep = nested_withs(1000);
+  const auto refused = decode(deep);
+  EXPECT_EQ(refused.status, Avm1Status::TooDeep);
+  EXPECT_EQ(refused.offset, 325u);
+  EXPECT_TRUE(refused.actions.empty());
+  const Bytes shallow = nested_withs(8);
+  const auto stream = decode(shallow);
+  ASSERT_TRUE(stream.ok()) << stream.message;
+  EXPECT_EQ(stream.actions.size(), 10u);
+  expect_round_trip(stream, shallow);
+}
+
+// Invariant: a quoted text value with a newline must print as a \x escape, so one listing line never breaks inside its quotes.
+TEST(Avm1, DisassemblyEscapesControlBytesInQuotedText) {
+  const auto stream = decode(cat({rec(0x8B, str("a\nb")), Bytes{0x00}}));
+  ASSERT_TRUE(stream.ok()) << stream.message;
+  EXPECT_NE(fo4::avm1::disassemble_actions(stream).find("\"a\\x0Ab\""), std::string::npos);
+}
+
 }  // namespace

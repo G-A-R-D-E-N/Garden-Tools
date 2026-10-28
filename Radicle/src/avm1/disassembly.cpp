@@ -17,7 +17,19 @@ std::string hex(std::uint64_t value, int digits) {
 }
 
 std::string quote(const std::string& text) {
-  return "\"" + text + "\"";
+  std::string out = "\"";
+  for (const char ch : text) {
+    const auto byte = static_cast<unsigned char>(ch);
+    if (ch == '"' || ch == '\\') {
+      out += '\\';
+      out += ch;
+    } else if (byte < 0x20 || byte == 0x7F) {
+      out += "\\x" + hex(byte, 2);
+    } else {
+      out += ch;
+    }
+  }
+  return out + "\"";
 }
 
 std::string describe_value(const Avm1Value& value) {
