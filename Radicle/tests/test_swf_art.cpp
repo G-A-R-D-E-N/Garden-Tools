@@ -620,7 +620,21 @@ TEST(SwfBitmapPng, ColourMappedRowsAreStridedAndLookedUpInThePalette) {
   EXPECT_EQ(inflate_idat(chunks[1].data, scanlines.size()), scanlines);
 }
 
-TEST(SwfBitmapPng, RefusesFifteenBitRowsAndJpegBlobsWithoutAPng) {
+TEST(SwfBitmapPng, Lossless2ColourMapUnpremultipliesEachPaletteEntry) {
+  const std::vector<std::uint8_t> raw = {64, 100, 32, 128, 3, 170, 85, 170,
+                                         0,  1,   0xEE, 0xEE, 1, 0, 0xEE, 0xEE};
+  const auto result = read_one(36, lossless_raw_payload(3, 2, 2, 1, raw));
+  ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
+  const auto png = fo4::swf::bitmap_to_png(*result.file.tags[0].bitmap);
+  ASSERT_TRUE(png.has_value());
+  const auto chunks = png_chunks(*png);
+  ASSERT_EQ(chunks.size(), 3u);
+  const std::vector<std::uint8_t> scanlines = {0, 128, 199, 64, 128, 4, 255, 128, 170,
+                                               0, 4,   255, 128, 170, 128, 199, 64, 128};
+  EXPECT_EQ(inflate_idat(chunks[1].data, scanlines.size()), scanlines);
+}
+
+TEST(SwfBitmapPng, RefusesBitmapsThatCannotBeEncodedAsPng) {
   const auto rgb15 = read_one(20, lossless_payload(4, 2, 2, 4, 0, false));
   ASSERT_TRUE(rgb15.ok()) << fo4::swf::status_name(rgb15.status);
   ASSERT_TRUE(rgb15.file.tags[0].bitmap.has_value());
@@ -632,6 +646,17 @@ TEST(SwfBitmapPng, RefusesFifteenBitRowsAndJpegBlobsWithoutAPng) {
   ASSERT_TRUE(jpeg_result.ok()) << fo4::swf::status_name(jpeg_result.status);
   EXPECT_FALSE(jpeg_result.file.tags[0].bitmap.has_value());
   EXPECT_TRUE(jpeg_result.file.tags[0].jpeg.has_value());
+  const auto argb = read_one(36, lossless_raw_payload(5, 2, 2, 0, std::vector<std::uint8_t>(16, 0x40)));
+  ASSERT_TRUE(argb.ok()) << fo4::swf::status_name(argb.status);
+  ASSERT_TRUE(argb.file.tags[0].bitmap.has_value());
+  auto resized = *argb.file.tags[0].bitmap;
+  resized.width = 3;
+  EXPECT_FALSE(fo4::swf::bitmap_to_png(resized).has_value());
+  const std::vector<std::uint8_t> out_of_range = {10, 20, 30, 5, 0, 0xEE, 0xEE, 0, 0, 0xEE, 0xEE};
+  const auto index = read_one(20, lossless_raw_payload(3, 2, 2, 0, out_of_range));
+  ASSERT_TRUE(index.ok()) << fo4::swf::status_name(index.status);
+  ASSERT_TRUE(index.file.tags[0].bitmap.has_value());
+  EXPECT_FALSE(fo4::swf::bitmap_to_png(*index.file.tags[0].bitmap).has_value());
 }
 
 TEST(SwfJpeg, DefineBitsJpeg3SplitsTheImageFromTheAlphaPlane) {

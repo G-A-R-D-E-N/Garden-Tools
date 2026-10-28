@@ -314,8 +314,8 @@ struct SwfBitmap {
   std::optional<std::uint8_t> color_table_size;
   std::size_t data_size{0};
   bool has_alpha{false};
-  /* Invariant: the whole inflated stream, with the colour map first when format is 3, then the padded rows. */
-  std::vector<std::byte> pixels;
+  /* Invariant: the zlib stream as the tag carried it, inflated on demand by bitmap_to_png. */
+  std::vector<std::byte> packed;
 };
 
 struct SwfJpeg {

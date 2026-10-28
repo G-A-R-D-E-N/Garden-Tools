@@ -1,4 +1,5 @@
 #include "fo4/swf/swf_bitmap_png.hpp"
+#include "swf_internal.hpp"
 
 #include <zlib.h>
 
@@ -74,11 +75,12 @@ std::optional<std::vector<std::uint8_t>> bitmap_to_png(const SwfBitmap& bitmap) 
     palette_entries = *bitmap.color_table_size + 1u;
   }
   const std::size_t palette_bytes = palette_entries * entry_bytes;
-  if (bitmap.pixels.size() != palette_bytes + row * height) {
+  std::vector<std::byte> pixels;
+  if (!detail::inflate_to(bitmap.packed, palette_bytes + row * height, pixels)) {
     return std::nullopt;
   }
-  const auto at = [&bitmap](std::size_t offset) {
-    return std::to_integer<std::uint8_t>(bitmap.pixels[offset]);
+  const auto at = [&pixels](std::size_t offset) {
+    return std::to_integer<std::uint8_t>(pixels[offset]);
   };
 
   const std::size_t stride = 1 + width * 4;
