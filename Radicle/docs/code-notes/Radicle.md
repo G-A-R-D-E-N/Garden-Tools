@@ -8622,6 +8622,7 @@ Detects an encoder that writes the wrong Try field after a record is inserted in
 ## Radicle/tests/test_avm1_encode.cpp:UneditedStreamsReencodeToTheirInputBytes
 
 Detects an encoder change that alters bytes of an unedited stream. It checks three inputs with a Jump, a DefineFunction and a Try with a catch, because each one goes through a different branch of the patch pass. Each input must re-encode to the same bytes, with no record or body edits.
+
 ## Radicle/include/fo4/swf/swf.hpp:SwfScalingGrid (DefineScalingGrid, tag 78)
 
 - `SwfScalingGrid` holds the CharacterId (UI16, little-endian, first in the payload) and the 9-slice splitter as a `SwfRect` in twips, stored in `SwfTag::scaling_grid`. The splitter is the RECT that follows the id, read by the same `read_rect` the edit-text and font decoders use.
