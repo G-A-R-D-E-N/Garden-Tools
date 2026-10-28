@@ -685,7 +685,7 @@ TEST(SwfFrameSvg, BitmapFillPatternIsResolvedFromTheMoviesBitmapTags) {
       "<g transform=\"matrix(1 0 0 1 0 0)\">\n"
       "<defs>\n"
       "<pattern id=\"r0fbmp1\" patternUnits=\"userSpaceOnUse\" width=\"2\" height=\"2\" "
-      "patternTransform=\"matrix(2 0 0 2 20 0)\">\n"
+      "patternTransform=\"matrix(0.1 0 0 0.1 20 0)\">\n"
       "<image width=\"2\" height=\"2\" href=\"data:image/png;base64," +
       swf_art_test::base64_text(*png) +
       "\"/>\n"

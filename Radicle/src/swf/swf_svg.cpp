@@ -241,6 +241,15 @@ std::string matrix_text(const SwfMatrix& matrix) {
          svg_number(matrix.translate_y / kTwipsPerPixel) + ")";
 }
 
+std::string bitmap_matrix_text(const SwfMatrix& matrix) {
+  return "matrix(" + svg_number(matrix.scale_x / kFixedPointOne / kTwipsPerPixel) + " " +
+         svg_number(matrix.rotate_skew0 / kFixedPointOne / kTwipsPerPixel) + " " +
+         svg_number(matrix.rotate_skew1 / kFixedPointOne / kTwipsPerPixel) + " " +
+         svg_number(matrix.scale_y / kFixedPointOne / kTwipsPerPixel) + " " +
+         svg_number(matrix.translate_x / kTwipsPerPixel) + " " +
+         svg_number(matrix.translate_y / kTwipsPerPixel) + ")";
+}
+
 bool is_bitmap(std::uint8_t type) {
   return type >= 0x40 && type <= 0x43;
 }
@@ -287,7 +296,7 @@ std::optional<std::string> bitmap_pattern(const SwfFillStyle& fill, const std::s
   const char* rendering = is_smoothed(fill.type) ? "" : " image-rendering=\"pixelated\"";
   return "<pattern id=\"" + id + "\" patternUnits=\"userSpaceOnUse\" width=\"" + width +
          "\" height=\"" + height + "\" patternTransform=\"" +
-         matrix_text(fill.matrix.value_or(SwfMatrix{})) + "\">\n<image width=\"" + width +
+         bitmap_matrix_text(fill.matrix.value_or(SwfMatrix{})) + "\">\n<image width=\"" + width +
          "\" height=\"" + height + "\" href=\"data:image/png;base64," + base64_text(*png) +
          "\"" + rendering + "/>\n</pattern>\n";
 }

@@ -244,7 +244,7 @@ TEST(SwfSvg, EmptyShapeExportsZeroViewBoxAndNoPaths) {
 }
 
 TEST(SwfSvg, BitmapFillEmitsARepeatingPatternWithItsPngAndPixelTransform) {
-  // Detects: a repeating bitmap fill must become a pattern whose image is the bitmap's PNG in base64 and whose patternTransform takes the fill matrix with its translation divided by 20 twips per pixel; a missing pattern, a wrong base64 tail or an untranslated matrix changes the expected text.
+  // Detects: a repeating bitmap fill must become a pattern whose image is the bitmap's PNG in base64 and whose patternTransform divides both the linear part and the translation of the fill matrix by 20 twips per pixel; a missing pattern, a wrong base64 tail, a payload that is not a PNG, or a matrix that skips the scale division changes the expected text.
   const auto bitmap = two_by_two_bitmap();
   ASSERT_TRUE(bitmap.ok()) << fo4::swf::status_name(bitmap.status);
   const auto png = fo4::swf::bitmap_to_png(*bitmap.file.tags[0].bitmap);
@@ -257,14 +257,16 @@ TEST(SwfSvg, BitmapFillEmitsARepeatingPatternWithItsPngAndPixelTransform) {
       "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 50 50\" width=\"50\" height=\"50\">\n"
       "<defs>\n"
       "<pattern id=\"fillbmp1\" patternUnits=\"userSpaceOnUse\" width=\"2\" height=\"2\" "
-      "patternTransform=\"matrix(2 0 0 2 20 0)\">\n"
+      "patternTransform=\"matrix(0.1 0 0 0.1 20 0)\">\n"
       "<image width=\"2\" height=\"2\" href=\"data:image/png;base64," +
       swf_art_test::base64_text(*png) +
       "\"/>\n"
       "</pattern>\n"
       "</defs>\n" +
       square_path_fill("fill=\"url(#fillbmp1)\"") + "</svg>\n";
-  EXPECT_EQ(fo4::swf::shape_to_svg(shape, bitmap.file), expected);
+  const std::string svg = fo4::swf::shape_to_svg(shape, bitmap.file);
+  EXPECT_EQ(svg, expected);
+  EXPECT_NE(svg.find("href=\"data:image/png;base64,iVBORw0KGgo"), std::string::npos);
 }
 
 TEST(SwfSvg, NonSmoothedBitmapFillRendersPixelated) {
@@ -281,7 +283,7 @@ TEST(SwfSvg, NonSmoothedBitmapFillRendersPixelated) {
       "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 50 50\" width=\"50\" height=\"50\">\n"
       "<defs>\n"
       "<pattern id=\"fillbmp1\" patternUnits=\"userSpaceOnUse\" width=\"2\" height=\"2\" "
-      "patternTransform=\"matrix(2 0 0 2 0 0)\">\n"
+      "patternTransform=\"matrix(0.1 0 0 0.1 0 0)\">\n"
       "<image width=\"2\" height=\"2\" href=\"data:image/png;base64," +
       swf_art_test::base64_text(*png) +
       "\" image-rendering=\"pixelated\"/>\n"

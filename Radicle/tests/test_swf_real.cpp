@@ -530,16 +530,17 @@ bool svg_is_well_formed(const std::string& svg) {
   return open.empty();
 }
 
-void check_svg_tag(const std::string& name, const fo4::swf::SwfTag& tag, SvgStats& stats) {
+void check_svg_tag(const std::string& name, const fo4::swf::SwfFile& file,
+                   const fo4::swf::SwfTag& tag, SvgStats& stats) {
   if (tag.shape) {
     ++stats.shapes;
-    if (!svg_is_well_formed(fo4::swf::shape_to_svg(*tag.shape))) {
+    if (!svg_is_well_formed(fo4::swf::shape_to_svg(*tag.shape, file))) {
       ++stats.failures;
       ADD_FAILURE() << name << ": shape " << tag.shape->shape_id << " exports malformed SVG";
     }
   }
   for (const auto& child : tag.children) {
-    check_svg_tag(name, child, stats);
+    check_svg_tag(name, file, child, stats);
   }
 }
 
@@ -553,7 +554,7 @@ void check_svg_movie(const std::string& name, std::span<const std::byte> bytes, 
     return;
   }
   for (const auto& tag : result.file.tags) {
-    check_svg_tag(name, tag, stats);
+    check_svg_tag(name, result.file, tag, stats);
   }
 }
 
