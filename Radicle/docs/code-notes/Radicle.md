@@ -7601,6 +7601,35 @@ ABI: `Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION` moves 79 to 80 for this e
 
 Tests: `Radicle/tests/test_c_api_swf_characters.cpp:CApiSwfCharacters.ExportsAFilledShapeAsSvg` (the `<svg` start and a `<path` for the shape 5 fixture, and the trailing NUL) and `CApiSwfCharacters.RefusesNonShapesAndNullArgumentsWithOutputsCleared` (edit text 11, undefined 99 and null arguments, with a non-null sentinel so a missed clear shows). Not compiled or run on the development machine; CI is the first compile and run.
 
+## Radicle/src/avm1/interpreter.cpp:execute_actions
+
+The first AVM1 interpreter slice. It runs the records that `decode_actions` already produced, one record at a time, on a per-call state: an operand stack, the constant pool from the last ConstantPool record, a global variable map and a trace vector. Nothing is shared between calls, and there are no host callbacks or timeline operations. The executed set is End, Pop, PushDuplicate, StackSwap, Push, ConstantPool, Add, Subtract, Multiply, Divide, Add2, Less2, Equals2, And, Or, Not, StringEquals, StringLength, StringAdd, ToInteger, ToNumber, ToString, GetVariable, SetVariable, Trace, Jump and If. Modulo (0x3F), the SWF 4 Equals (0x0E) and Less (0x0F) forms, Push of a register value and every other record are refused with `Avm1RunStatus::Unsupported` and a message that names the opcode, so a missing operation never looks like a successful run. The brief's list did not name Modulo, Equals or Less, so they are refused.
+
+A refused record stops the run at its offset. `Avm1Result::opcode` and `offset` name the refusing record, or the last record that ran when the run succeeds. A stream whose `ok()` is false is refused as InvalidStream before any record runs, because `decode_actions` clears `actions` on failure and an empty list would otherwise return Ok without running anything.
+
+The step limit counts every record that runs, including End. Before a record runs, the count is compared with `max_steps`, and at the limit the run stops with StepLimit, so a run reports exactly `max_steps` steps. The default is 1,000,000. The limit is the only bound on loops, so it also bounds the operand stack, which can grow by at most one value per step.
+
+## Radicle/src/avm1/interpreter.cpp:jump_index
+
+A Jump or If carries `Avm1Branch::target`, the byte offset of its destination record, and `jump_index` finds the record index by lower bound on the record offsets. A target equal to the stream size ends the run as a normal stop. A target that does not match a record start is refused with BadBranch. `decode_actions` already refuses such a target, so BadBranch can only come from a stream built by hand.
+
+## Radicle/src/avm1/interpreter.cpp:number_text
+
+Numbers print with `std::format("{:.15g}")` after special cases for NaN, Infinity and zero, so an integer prints with no decimal point and -0 prints as 0. This follows the 15 significant digits that AS1 and AS2 print. It is not the shortest round-trip form that `Radicle/src/avm2/coercion.cpp:number_to_string` uses, because AS2 and AS3 differ here, and the AVM2 helper stays in its own namespace. The 15-digit form is a choice from memory of AS2 output and has not been checked against the SWF spec mirror.
+
+## Radicle/src/avm1/interpreter.cpp:parse_number
+
+String to number trims the four ASCII whitespace bytes, returns 0 for an empty result, and then accepts whatever `std::strtod` accepts, so "inf", "nan" and hex forms parse. AS2 may refuse some of those, which is a known ceiling. Any text left after the number makes the result NaN.
+
+## Radicle/src/avm1/interpreter.cpp:loose_equal
+
+Equals2 follows the ECMA-262 order: undefined equals null and nothing else, a Boolean compares as its number, and a string compares as a number against a number. Division by zero is IEEE division, so it gives Infinity or NaN, and Less2 with a NaN operand is false rather than undefined. Those three points, the Boolean-as-number rule and the ToBoolean rule for strings (empty is false, any other text is true) come from ECMA-262 and memory of AS2, and have not been checked against the SWF spec v19 mirror, because the mirror is not on this machine and was not downloaded.
+
+## Radicle/include/fo4/avm1/interpreter.hpp:execute_actions
+
+The runtime value `Avm1Data` is separate from the decoded Push record `Avm1Value`, so the decoder's type codes never reach the operand stack. Push Float and Double read the IEEE bit patterns that `Decoder::push_values` already stores in `float_bits` and `double_bits`. Push Constant8 and Constant16 read `Avm1Data` strings from the constant pool, and an index past the pool refuses as ConstantOutOfRange.
+
+Tests: `Radicle/tests/test_avm1.cpp:ArithmeticResultIsTracedInOperandOrder`, `CountedLoopExitsThroughIfAndJump`, `SelfJumpStopsAtTheStepLimit`, `VariableRoundTripsThroughTheGlobalScope` and `UnsupportedOpcodeIsRefusedByName`. The self-jump test has no independent failure mode: without the step check it never returns. Not compiled or run on the development machine; CI is the first compile and run.
 ## Radicle/src/c_api_swf.cpp:radicle_swf_detail::copy_text
 
 `radicle_swf_detail::copy_text` replaces the four file-local copies in `Radicle/src/c_api_swf.cpp`, `Radicle/src/c_api_swf_verbs.cpp`, `Radicle/src/c_api_swf_abc_write.cpp` and `Radicle/src/c_api_swf_characters.cpp`. The copies were identical: malloc of size plus one, nullptr on allocation failure with `*out_size` untouched, empty text copies nothing, trailing NUL not counted in `*out_size`. Callers keep their own out-of-memory messages. `Radicle/src/c_api_swf.cpp:copy_text` takes a `std::string_view`, so `Radicle/src/c_api_swf_abc_write.cpp:radicle_swf_abc_assemble` passes the serialized ABC bytes through a view with no extra copy; its former file-local `copy_bytes` had the same malloc, trailing-NUL and out_size behaviour and was deleted. Not compiled or run on the development machine (`Radicle/src/c_api_swf_abc_write.cpp:radicle_swf_abc_assemble`); CI is the first compile and run.
