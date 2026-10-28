@@ -3,18 +3,22 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <memory>
 #include <stdexcept>
 #include <set>
 #include <string>
+#include <system_error>
 #include <vector>
 
 #include <fo4/graph/graph_compiler.hpp>
 #include <fo4/papyrus/decompiler.hpp>
 #include <fo4/papyrus/parser.hpp>
+#include <fo4/pex/pex.hpp>
 
 #include "graph_fixtures.hpp"
 #include "papyrus_pex_comparer.hpp"
@@ -88,6 +92,14 @@ std::string uniqueRoot(std::string_view tag) {
             std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()))
         .string();
 }
+
+struct RemoveTreeOnExit {
+    std::filesystem::path root;
+    ~RemoveTreeOnExit() {
+        std::error_code error;
+        std::filesystem::remove_all(root, error);
+    }
+};
 
 std::string decompilesAndRecompiles(const GraphCompileResult& first) {
     if (first.pex == nullptr) throw std::runtime_error("reference compile produced no pex");
@@ -284,5 +296,43 @@ TEST(GraphCompiler, GraphCompilerPublishesScriptsUnderOneProcessFolderThatClearS
     EXPECT_TRUE(published >= 2);
 
     GraphCompiler::clearScratch();
+    EXPECT_FALSE(std::filesystem::exists(root));
+}
+
+TEST(GraphCompiler, GraphCompilerCompileToFileWritesPexBesidePscThatRoundTrips) {
+    Env env(true);
+    const auto fixtures = allFixtures(env.palette);
+    ASSERT_TRUE(!fixtures.empty());
+    const std::filesystem::path root = uniqueRoot("compile-to-file");
+    const RemoveTreeOnExit cleanup{root};
+
+    GraphCompiler compiler(env.index, &env.palette);
+    auto document = fixtures.front().build();
+    const auto result = compiler.compileToFile(document, root / "out" / "Fixture.psc");
+    ASSERT_TRUE(result.success());
+    ASSERT_TRUE(std::filesystem::is_regular_file(root / "out" / "Fixture.psc"));
+    const auto pex = root / "out" / "Fixture.pex";
+    ASSERT_TRUE(std::filesystem::is_regular_file(pex));
+
+    std::ifstream in(pex, std::ios::binary);
+    const std::string text((std::istreambuf_iterator<char>(in)),
+                           std::istreambuf_iterator<char>());
+    const std::vector<std::uint8_t> bytes(text.begin(), text.end());
+    const auto reread = fo4::pex::PexFile::fromBytes(bytes);
+    ASSERT_FALSE(reread.objects.empty());
+    EXPECT_EQ(reread.objects[0].name, result.pex->objects[0].name);
+    EXPECT_TRUE(
+        fo4::papyrus::test::firstDifference(result.pex->objects[0], reread.objects[0]).empty());
+}
+
+TEST(GraphCompiler, GraphCompilerCompileToFileWritesNoFileWhenTheGraphFailsValidation) {
+    Env env(true);
+    const std::filesystem::path root = uniqueRoot("compile-to-file-invalid");
+    const RemoveTreeOnExit cleanup{root};
+
+    GraphCompiler compiler(env.index, &env.palette);
+    GraphBuilder builder("");
+    const auto result = compiler.compileToFile(builder.document, root / "out" / "Fixture.psc");
+    EXPECT_FALSE(result.success());
     EXPECT_FALSE(std::filesystem::exists(root));
 }
