@@ -2,6 +2,8 @@
 
 #include <fo4/avm1/interpreter.hpp>
 
+#include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <map>
 #include <string>
@@ -20,6 +22,33 @@ struct Avm1State {
   std::uint8_t swf_version{0};
 };
 
+struct Avm1Call {
+  std::map<std::string, Avm1Data> locals;
+  std::vector<Avm1Data> registers;
+  Avm1Data return_value;
+};
+
+struct Avm1FunctionBody {
+  Avm1Function header;
+  std::vector<Avm1Action> actions;
+  std::size_t end_offset{0};
+};
+
+struct Avm1Block {
+  const std::vector<Avm1Action>& actions;
+  std::size_t end_offset;
+  Avm1Call* call;
+};
+
+struct Avm1Run {
+  Avm1State& state;
+  Avm1Result& result;
+  std::size_t max_steps;
+  std::size_t depth{0};
+};
+
+Avm1RunStatus run_block(Avm1Run& run, const Avm1Block& block);
+
 inline Avm1RunStatus pop(Avm1State& state, Avm1Data& out, std::string& message) {
   if (state.stack.empty()) {
     message = kUnderflow;
@@ -27,6 +56,22 @@ inline Avm1RunStatus pop(Avm1State& state, Avm1Data& out, std::string& message) 
   }
   out = std::move(state.stack.back());
   state.stack.pop_back();
+  return Avm1RunStatus::Ok;
+}
+
+inline Avm1RunStatus pop_count(Avm1State& state, std::size_t slots, std::size_t& count,
+                               std::string& message) {
+  Avm1Data operand;
+  if (const Avm1RunStatus status = pop(state, operand, message); status != Avm1RunStatus::Ok) {
+    return status;
+  }
+  const double limit = static_cast<double>(state.stack.size() / slots);
+  if (operand.kind != Avm1DataKind::Number || !(operand.number >= 0.0 && operand.number <= limit) ||
+      std::floor(operand.number) != operand.number) {
+    message = "the element count is not a whole number the operand stack holds";
+    return Avm1RunStatus::StackUnderflow;
+  }
+  count = static_cast<std::size_t>(operand.number);
   return Avm1RunStatus::Ok;
 }
 

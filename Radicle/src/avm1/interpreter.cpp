@@ -1,5 +1,6 @@
 #include <fo4/avm1/interpreter.hpp>
 
+#include "function_ops.hpp"
 #include "object_ops.hpp"
 #include "state.hpp"
 #include "text_ops.hpp"
@@ -71,6 +72,10 @@ bool is_nullish(const Avm1Data& data) {
   return data.kind == Avm1DataKind::Undefined || data.kind == Avm1DataKind::Null;
 }
 
+bool is_reference(const Avm1Data& data) {
+  return data.kind == Avm1DataKind::Object || data.kind == Avm1DataKind::Function;
+}
+
 double parse_number(const std::string& text) {
   const std::size_t first = text.find_first_not_of(kWhitespace);
   if (first == std::string::npos) {
@@ -105,6 +110,7 @@ double to_number(const Avm1Data& data, std::uint8_t swf_version) {
     case Avm1DataKind::String:
       return parse_number(data.text);
     case Avm1DataKind::Object:
+    case Avm1DataKind::Function:
       return std::numeric_limits<double>::quiet_NaN();
   }
   return std::numeric_limits<double>::quiet_NaN();
@@ -124,6 +130,8 @@ std::string type_name(const Avm1Data& data) {
       return "string";
     case Avm1DataKind::Object:
       return "object";
+    case Avm1DataKind::Function:
+      return "function";
   }
   return "undefined";
 }
@@ -140,6 +148,7 @@ bool to_boolean(const Avm1Data& data) {
     case Avm1DataKind::String:
       return !data.text.empty();
     case Avm1DataKind::Object:
+    case Avm1DataKind::Function:
       return true;
   }
   return false;
@@ -159,6 +168,9 @@ bool loose_equal(const Avm1Data& left, const Avm1Data& right, std::uint8_t swf_v
     if (left.kind == Avm1DataKind::Object) {
       return left.object == right.object;
     }
+    if (left.kind == Avm1DataKind::Function) {
+      return left.function == right.function;
+    }
     return left.text == right.text;
   }
   if (left.kind == Avm1DataKind::Boolean) {
@@ -167,10 +179,10 @@ bool loose_equal(const Avm1Data& left, const Avm1Data& right, std::uint8_t swf_v
   if (right.kind == Avm1DataKind::Boolean) {
     return loose_equal(left, number_value(to_number(right, swf_version)), swf_version);
   }
-  if (left.kind == Avm1DataKind::Object) {
+  if (is_reference(left)) {
     return loose_equal(string_value(to_text(left, swf_version)), right, swf_version);
   }
-  if (right.kind == Avm1DataKind::Object) {
+  if (is_reference(right)) {
     return loose_equal(left, string_value(to_text(right, swf_version)), swf_version);
   }
   return to_number(left, swf_version) == to_number(right, swf_version);
@@ -192,6 +204,8 @@ bool strict_equal(const Avm1Data& left, const Avm1Data& right) {
       return left.text == right.text;
     case Avm1DataKind::Object:
       return left.object == right.object;
+    case Avm1DataKind::Function:
+      return left.function == right.function;
   }
   return false;
 }
@@ -205,7 +219,7 @@ bool less_than(const Avm1Data& left, const Avm1Data& right, std::uint8_t swf_ver
 
 Avm1Data add_values(const Avm1Data& left, const Avm1Data& right, std::uint8_t swf_version) {
   if (left.kind == Avm1DataKind::String || right.kind == Avm1DataKind::String ||
-      left.kind == Avm1DataKind::Object || right.kind == Avm1DataKind::Object) {
+      is_reference(left) || is_reference(right)) {
     return string_value(to_text(left, swf_version) + to_text(right, swf_version));
   }
   return number_value(to_number(left, swf_version) + to_number(right, swf_version));
@@ -286,7 +300,8 @@ Avm1RunStatus apply_unary(Avm1State& state, std::string& message, Transform tran
   return push_result(state, transform(operand), message);
 }
 
-Avm1RunStatus push_values(const Avm1Push& push, Avm1State& state, std::string& message) {
+Avm1RunStatus push_values(const Avm1Push& push, Avm1State& state, const Avm1Block& block,
+                          std::string& message) {
   for (const Avm1Value& value : push.values) {
     switch (value.type) {
       case Avm1ValueType::String:
@@ -302,8 +317,12 @@ Avm1RunStatus push_values(const Avm1Push& push, Avm1State& state, std::string& m
         state.stack.push_back(Avm1Data{});
         break;
       case Avm1ValueType::Register:
-        message = "a Push of a register value is not in this slice";
-        return Avm1RunStatus::Unsupported;
+        if (const Avm1RunStatus status =
+                function_ops::push_register(block, state, value.index, message);
+            status != Avm1RunStatus::Ok) {
+          return status;
+        }
+        break;
       case Avm1ValueType::Boolean:
         state.stack.push_back(boolean_value(value.boolean));
         break;
@@ -324,29 +343,6 @@ Avm1RunStatus push_values(const Avm1Push& push, Avm1State& state, std::string& m
         break;
     }
   }
-  return Avm1RunStatus::Ok;
-}
-
-Avm1RunStatus get_variable(Avm1State& state, std::string& message) {
-  Avm1Data name;
-  if (const Avm1RunStatus status = pop(state, name, message); status != Avm1RunStatus::Ok) {
-    return status;
-  }
-  const auto found = state.variables.find(to_text(name, state.swf_version));
-  state.stack.push_back(found == state.variables.end() ? Avm1Data{} : found->second);
-  return Avm1RunStatus::Ok;
-}
-
-Avm1RunStatus set_variable(Avm1State& state, std::string& message) {
-  Avm1Data value;
-  Avm1Data name;
-  if (const Avm1RunStatus status = pop(state, value, message); status != Avm1RunStatus::Ok) {
-    return status;
-  }
-  if (const Avm1RunStatus status = pop(state, name, message); status != Avm1RunStatus::Ok) {
-    return status;
-  }
-  state.variables[to_text(name, state.swf_version)] = std::move(value);
   return Avm1RunStatus::Ok;
 }
 
@@ -407,20 +403,18 @@ Avm1RunStatus extract_string(Avm1State& state, std::string& message, std::uint8_
   return push_result(state, string_value(source.substr(from, to - from)), message);
 }
 
-Avm1RunStatus jump_index(const Avm1Stream& stream, std::size_t target, std::size_t& index,
+Avm1RunStatus jump_index(const Avm1Block& block, std::size_t target, std::size_t& index,
                          std::string& message) {
   const auto found = std::lower_bound(
-      stream.actions.begin(), stream.actions.end(), target,
+      block.actions.begin(), block.actions.end(), target,
       [](const Avm1Action& action, std::size_t offset) { return action.offset < offset; });
-  if (found == stream.actions.end()) {
-    const Avm1Action& last = stream.actions.back();
-    const std::size_t size = last.offset + last.length + stream.trailing.size();
-    if (target != size) {
+  if (found == block.actions.end()) {
+    if (target != block.end_offset) {
       message = "the branch targets offset " + std::to_string(target) + ", past the " +
-                std::to_string(size) + "-byte stream";
+                std::to_string(block.end_offset) + "-byte end of its block";
       return Avm1RunStatus::BadBranch;
     }
-    index = stream.actions.size();
+    index = block.actions.size();
     return Avm1RunStatus::Ok;
   }
   if (found->offset != target) {
@@ -428,11 +422,11 @@ Avm1RunStatus jump_index(const Avm1Stream& stream, std::size_t target, std::size
         "the branch targets offset " + std::to_string(target) + ", which is not a record start";
     return Avm1RunStatus::BadBranch;
   }
-  index = static_cast<std::size_t>(found - stream.actions.begin());
+  index = static_cast<std::size_t>(found - block.actions.begin());
   return Avm1RunStatus::Ok;
 }
 
-Avm1RunStatus branch_if(const Avm1Stream& stream, const Avm1Action& action, Avm1State& state,
+Avm1RunStatus branch_if(const Avm1Block& block, const Avm1Action& action, Avm1State& state,
                         std::size_t& next, std::string& message) {
   Avm1Data condition;
   if (const Avm1RunStatus status = pop(state, condition, message); status != Avm1RunStatus::Ok) {
@@ -441,15 +435,16 @@ Avm1RunStatus branch_if(const Avm1Stream& stream, const Avm1Action& action, Avm1
   if (!to_boolean(condition)) {
     return Avm1RunStatus::Ok;
   }
-  return jump_index(stream, std::get<Avm1Branch>(action.payload).target, next, message);
+  return jump_index(block, std::get<Avm1Branch>(action.payload).target, next, message);
 }
 
-Avm1RunStatus execute_action(const Avm1Stream& stream, const Avm1Action& action, Avm1State& state,
+Avm1RunStatus execute_action(Avm1Run& run, const Avm1Block& block, const Avm1Action& action,
                              std::size_t& next, std::string& message) {
+  Avm1State& state = run.state;
   const std::uint8_t version = state.swf_version;
   switch (action.code) {
     case 0x00:
-      next = stream.actions.size();
+      next = block.actions.size();
       return Avm1RunStatus::Ok;
     case 0x0A:
       return apply_binary(state, message, [version](const Avm1Data& left, const Avm1Data& right) {
@@ -516,6 +511,12 @@ Avm1RunStatus execute_action(const Avm1Stream& stream, const Avm1Action& action,
       return object_ops::delete_member(state, message);
     case 0x3B:
       return object_ops::delete_variable(state, message);
+    case 0x3C:
+      return function_ops::define_local(block, state, message);
+    case 0x3D:
+      return function_ops::call_function(run, block, message);
+    case 0x3E:
+      return function_ops::return_value(block, state, next, message);
     case 0x17: {
       Avm1Data discarded;
       return pop(state, discarded, message);
@@ -526,9 +527,9 @@ Avm1RunStatus execute_action(const Avm1Stream& stream, const Avm1Action& action,
         return number_value(std::isnan(number) ? 0.0 : std::trunc(number));
       });
     case 0x1C:
-      return get_variable(state, message);
+      return function_ops::get_variable(block, state, message);
     case 0x1D:
-      return set_variable(state, message);
+      return function_ops::set_variable(block, state, message);
     case 0x21:
       return apply_binary(state, message, [version](const Avm1Data& left, const Avm1Data& right) {
         return string_value(to_text(left, version) + to_text(right, version));
@@ -553,6 +554,8 @@ Avm1RunStatus execute_action(const Avm1Stream& stream, const Avm1Action& action,
       });
     case 0x40:
       return object_ops::new_object(state, message);
+    case 0x41:
+      return function_ops::define_local2(block, state, message);
     case 0x42:
       return object_ops::init_array(state, message);
     case 0x43:
@@ -597,6 +600,10 @@ Avm1RunStatus execute_action(const Avm1Stream& stream, const Avm1Action& action,
       return apply_unary(state, message, [version](const Avm1Data& operand) {
         return number_value(to_number(operand, version) - 1.0);
       });
+    case 0x52:
+      return function_ops::call_method(run, message);
+    case 0x53:
+      return function_ops::new_method(run, message);
     case 0x60:
       return apply_binary(state, message, [version](const Avm1Data& left, const Avm1Data& right) {
         return int32_value(to_uint32(left, version) & to_uint32(right, version));
@@ -638,21 +645,68 @@ Avm1RunStatus execute_action(const Avm1Stream& stream, const Avm1Action& action,
       return apply_binary(state, message, [version](const Avm1Data& left, const Avm1Data& right) {
         return boolean_value(to_text(left, version) > to_text(right, version));
       });
+    case 0x87:
+      return function_ops::store_register(block, state, std::get<Avm1Byte>(action.payload).value,
+                                          message);
     case 0x88:
       state.constants = std::get<Avm1ConstantPool>(action.payload).strings;
       return Avm1RunStatus::Ok;
+    case 0x8E:
+    case 0x9B:
+      return function_ops::define_function(block, state, action, next, message);
     case 0x96:
-      return push_values(std::get<Avm1Push>(action.payload), state, message);
+      return push_values(std::get<Avm1Push>(action.payload), state, block, message);
     case 0x99:
-      return jump_index(stream, std::get<Avm1Branch>(action.payload).target, next, message);
+      return jump_index(block, std::get<Avm1Branch>(action.payload).target, next, message);
     case 0x9D:
-      return branch_if(stream, action, state, next, message);
+      return branch_if(block, action, state, next, message);
     default:
       return unsupported(message);
   }
 }
 
 }  // namespace
+
+Avm1RunStatus run_block(Avm1Run& run, const Avm1Block& block) {
+  std::size_t index = 0;
+  while (index < block.actions.size()) {
+    const Avm1Action& action = block.actions[index];
+    if (run.result.steps == run.max_steps) {
+      run.result.opcode = action.code;
+      run.result.offset = action.offset;
+      run.result.status = Avm1RunStatus::StepLimit;
+      run.result.message =
+          "the step limit of " + std::to_string(run.max_steps) + " records was reached";
+      return Avm1RunStatus::StepLimit;
+    }
+    run.result.steps += 1;
+    std::size_t next = index + 1;
+    std::string detail;
+    Avm1RunStatus status = Avm1RunStatus::Ok;
+    try {
+      status = execute_action(run, block, action, next, detail);
+    } catch (const std::bad_alloc&) {
+      status = Avm1RunStatus::ResourceLimit;
+      detail = "the interpreter ran out of memory";
+    } catch (const std::exception& error) {
+      status = Avm1RunStatus::InvalidStream;
+      detail = error.what();
+    }
+    if (status != Avm1RunStatus::Ok) {
+      if (run.result.status == Avm1RunStatus::Ok) {
+        run.result.status = status;
+        run.result.opcode = action.code;
+        run.result.offset = action.offset;
+        run.result.message = opcode_label(action.code) + ": " + detail;
+      }
+      return status;
+    }
+    run.result.opcode = action.code;
+    run.result.offset = action.offset;
+    index = next;
+  }
+  return Avm1RunStatus::Ok;
+}
 
 Avm1Result execute_actions(const Avm1Stream& stream, std::size_t max_steps,
                            std::uint8_t swf_version) {
@@ -664,36 +718,12 @@ Avm1Result execute_actions(const Avm1Stream& stream, std::size_t max_steps,
   }
   Avm1State state;
   state.swf_version = swf_version;
-  std::size_t index = 0;
-  while (index < stream.actions.size()) {
-    const Avm1Action& action = stream.actions[index];
-    result.opcode = action.code;
-    result.offset = action.offset;
-    if (result.steps == max_steps) {
-      result.status = Avm1RunStatus::StepLimit;
-      result.message = "the step limit of " + std::to_string(max_steps) + " records was reached";
-      break;
-    }
-    result.steps += 1;
-    std::size_t next = index + 1;
-    std::string detail;
-    Avm1RunStatus status = Avm1RunStatus::Ok;
-    try {
-      status = execute_action(stream, action, state, next, detail);
-    } catch (const std::bad_alloc&) {
-      status = Avm1RunStatus::ResourceLimit;
-      detail = "the interpreter ran out of memory";
-    } catch (const std::exception& error) {
-      status = Avm1RunStatus::InvalidStream;
-      detail = error.what();
-    }
-    if (status != Avm1RunStatus::Ok) {
-      result.status = status;
-      result.message = opcode_label(action.code) + ": " + detail;
-      break;
-    }
-    index = next;
-  }
+  Avm1Run run{state, result, max_steps};
+  const std::size_t end = stream.actions.empty() ? 0
+                                                 : stream.actions.back().offset +
+                                                       stream.actions.back().length +
+                                                       stream.trailing.size();
+  run_block(run, Avm1Block{stream.actions, end, nullptr});
   result.trace = std::move(state.trace);
   result.variables = std::move(state.variables);
   return result;

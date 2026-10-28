@@ -31,9 +31,11 @@ enum class Avm1DataKind : std::uint8_t {
   Number,
   String,
   Object,
+  Function,
 };
 
 struct Avm1Object;
+struct Avm1FunctionBody;
 
 struct Avm1Data {
   Avm1DataKind kind{Avm1DataKind::Undefined};
@@ -41,6 +43,7 @@ struct Avm1Data {
   double number{0.0};
   std::string text;
   std::shared_ptr<Avm1Object> object;
+  std::shared_ptr<const Avm1FunctionBody> function;
 };
 
 struct Avm1Result {

@@ -20,6 +20,8 @@ struct Avm1Object {
 
 namespace object_ops {
 
+Avm1Data plain_object();
+Avm1Data arguments_object(const std::vector<Avm1Data>& args);
 Avm1RunStatus new_object(Avm1State& state, std::string& message);
 Avm1RunStatus init_array(Avm1State& state, std::string& message);
 Avm1RunStatus init_object(Avm1State& state, std::string& message);
