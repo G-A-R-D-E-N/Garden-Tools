@@ -8360,6 +8360,66 @@ A row whose character is a DefineText or DefineText2 with a clip depth opens a m
 
 Expected strings were derived by hand. The glyph is a 1000-twip square (50 px, the path of `Radicle/tests/test_swf_svg.cpp:kRedSquare` at its size), at a DefineText height of 1024, so the font scale is 1 and the text matrix is the identity. The blue square is the 600-twip one, `Radicle/tests/test_swf_svg.cpp:kBlueSquare`. The clipPath ids follow the shape-mask convention `r<index>clip`. Nothing was compiled or run on the development machine for this change, so CI must confirm them.
 
+## Radicle/src/avm1/control_ops.cpp:execute
+
+Adds the AVM1 control and object opcodes 0x2A Throw, 0x2B CastOp, 0x46 Enumerate, 0x54 InstanceOf, 0x55 Enumerate2, 0x69 Extends, 0x8F Try and 0x94 With. This supersedes the older refusal notes for these opcodes; ImplementsOp 0x2C stays refused by name. GetMember and SetMember on function prototypes stay deferred because there is no prototype model. Any other opcode still returns Unsupported.
+
+## Radicle/src/avm1/control_ops.cpp:try_regions
+
+A Try record (0x8F) carries flags (bit0 catch, bit1 finally, bit2 catch-in-register), try_size, catch_size and finally_size, then a catch name string or a register byte. The record offsets body, catch_at, finally_at and after_at are resolved through jump_index. On Thrown the operand stack is cut back to its depth at the Try. A caught value binds to the catch name in block.call->locals or in the globals, or to a register through function_ops::store_register. A finally runs with the pending throw saved aside. If the finally jumps or returns, that overrides the pending throw. If it does not, the throw is restored and returns Thrown. Known limit: a Return inside a finally with a pending exception can still rethrow when the Try ends the body.
+
+## Radicle/src/avm1/control_ops.cpp:run_with
+
+The With record (0x94) pops its object. A value that is not an object skips the body; this choice was made without a reference trace. An object is pushed onto block.scopes for the body, and scope_slot in function_ops.cpp consults it first for reads and writes. Try and With share one run-wide counter, run.regions, capped at kMaxNesting = 64 in control_ops.cpp. The 65th level returns ResourceLimit with "Try and With nesting reached the limit of 64 levels".
+
+## Radicle/src/avm1/control_ops.cpp:extends
+
+Superclass links live in Avm1Run::superclasses, keyed by the subclass body pointer. InstanceOf and CastOp use the constructed_by body recorded by invoke_method in function_ops.cpp. This is a constructor-body class model, not prototype objects. A link that would create a cycle returns InvalidStream. A non-function operand returns Unsupported.
+
+## Radicle/src/avm1/control_ops.cpp:push_names
+
+Enumerate and Enumerate2 push a null first, then the keys in insertion order, so the most recently added key is on top. Popping yields the keys most recently added first and ends on null. A non-object operand yields only null. Order is verified against Ruffle 0.6.0, not Flash: `E:\GardenEngine\GardenEngine-RE-Work\menu-reference\swf-runtime-01a0efb6\native-experiment\ruffle-0.6.0\core\src\avm1\activation.rs:action_enumerate` (line 1094) and `action_enumerate_2` (line 1111) push `get_keys` in reverse, and `core\src\avm1\object\script_object.rs:get_keys` lists own keys from `core\src\avm1\property_map.rs:PropertyMap::iter`, which yields the most recently added key first. Unverified: Ruffle's end sentinel is `Value::Undefined` (`activation.rs` line 1098), while this slice pushes null, and the Flash sentinel was not checked.
+
+## Radicle/src/avm1/interpreter.cpp:run_range
+
+Each record counts once against max_steps before it runs. Thrown overwrites result.opcode and result.offset but not result.status. The outer execute_actions turns an uncaught Thrown into the status Thrown with the message "the thrown value was not caught". On Ok the index is returned as resume so the enclosing Try or With can continue after its sub-range.
+
+## Radicle/src/avm1/interpreter.cpp:jump_index
+
+Known hole, not fixed: jump_index maps a target offset to an index in the flattened action vector and checks only that the target is a record start. A branch from top-level code into a DefineFunction or DefineFunction2 body is therefore accepted, and those records would run with block.call == nullptr. No test covers this path yet.
+
+## Radicle/src/avm1/function_ops.cpp:invoke
+
+Ceilings: kMaxCallDepth = 64 functions, and the step limit is counted per record in run_range. Each call builds its own scopes vector for With bodies. The construct path in invoke_method sets instance.object->constructed_by before the constructor runs.
+
+## Radicle/src/avm1/control_ops.cpp:cast_op
+
+The operand order is verified against Ruffle 0.6.0, the only oracle on disk: `E:\GardenEngine\GardenEngine-RE-Work\menu-reference\swf-runtime-01a0efb6\native-experiment\ruffle-0.6.0\core\src\avm1\activation.rs:action_cast_op` (line 905) pops the object first (line 906) and the constructor second (line 907), so the object is on top and the constructor is below. `activation.rs:action_instance_of` (line 1610) pops the constructor first, so CastOp and InstanceOf take their operands in opposite order. An earlier version of cast_op took the constructor from the top, the opposite of this oracle. Verified against Ruffle, not against Flash. No C# AVM1 interpreter was found under E:\GardenEngine: the .cs trees searched contain no CastOp or Enumerate2 implementation.
+
+## Radicle/src/avm1/control_ops.cpp:try_regions (Return inside a finally)
+
+Test `Radicle/tests/test_avm1_control.cpp:ReturnInsideAFinallyDropsAPendingThrow` pins that a Return in a finally, after a pending Throw, ends the call with the returned value and drops the throw. The finally run leaves resume at the block end, which is not at[3], so try_regions returns Ok and the pending throw is dropped. The test body keeps a record after the Try. When the Try is the last record of the block, resume equals at[3] and the pending throw is restored, which is the known limit above and is not pinned. Regression detected: a finally that resumed the pending throw would return Thrown and trace nothing from the call.
+
+## Radicle/src/avm1/control_ops.cpp:run_with
+
+Test `Radicle/tests/test_avm1_control.cpp:ThrowThatLeavesAWithPopsItsScope` detects a With whose scope stays on block.scopes when a Throw leaves the With. run_with pops the scope after run_range returns on every status, so a later read of x resolves to the global 10. A leaked scope would read the object's x, which is 1.
+
+## Radicle/tests/test_avm1_control.cpp:NestedTryAndWithStopAtSixtyFourLevels
+
+Decoder::body in `Radicle/src/avm1/decode.cpp` refuses a 65th nested body with TooDeep (kMaxBodyDepth = 64), so 65 static levels never reach the runtime guard in `Radicle/src/avm1/control_ops.cpp:run_try`. The test reaches the guard through recursion instead. Forty static Try levels, each with its body in the finally region, leave run.regions at 40. A function f whose body is a catch Try around a call to f adds one region per call. Call k runs its Try with regions at 40 + (k - 1), so call 25 is refused with "Try and With nesting reached the limit of 64 levels". Only 25 calls are live then, so run.depth stays below kMaxCallDepth = 64 in `Radicle/src/avm1/function_ops.cpp:invoke` and the region budget is the cap that fires. The 64 static levels still run for both Try and With. Regression detected: a Try or With that did not count against the shared run.regions would recurse until the native stack overflows, and the test would see no ResourceLimit.
+
+## Radicle/src/avm1/function_ops.cpp:invoke (Low: scope chain at definition)
+
+A function defined inside a With body gets empty scopes when it is called, because DefineFunction does not capture the scope chain. invoke starts each call from a fresh `std::vector<Avm1Data> scopes`, and a call made inside a With does not pass the caller's scopes either. Flash keeps the definition-time chain, so names that the With object would supply resolve wrongly here. Not fixed in this slice.
+
+## Radicle/src/avm1/interpreter.cpp:run_range (Low: opcode of an uncaught callee throw)
+
+When a Throw in a callee is not caught, run_range overwrites result.opcode and result.offset at each enclosing frame, so the report names the outermost CallFunction or Try rather than the Throw. `Radicle/tests/test_avm1_control.cpp:FinallyRunsBeforeAnUncaughtThrowKeepsGoing` asserts opcode 0x8F, the outer Try, so it pins this Low; a fix must change that assertion. Not fixed in this slice.
+
+## Radicle/tests/test_avm1.cpp (Low: stale test name in notes)
+
+Radicle.md still cites `Radicle/tests/test_avm1.cpp:ObjectAndFunctionOpcodesStayRefusedByName` at lines 7693, 7937 and 8059. No file under Radicle/tests defines that name now, so those citations point at nothing. Not fixed in this slice.
+
 ## Radicle/src/avm2/interpreter.cpp:Interpreter::execute_frame (AVM2 late ops census)
 
 Census from a source scan (not compiled or run): 169 named opcodes, 168 with a case in `Radicle/src/avm2/interpreter_dispatch_a.inc` through `interpreter_dispatch_e.inc`, and 1 without, `getdescendants` 0x59. This replaces the 12-opcode census above. The 11 added here are dxns 0x06, dxnslate 0x07, pushnamespace 0x31, finddef 0x5F, setpropertylate 0x69, deletepropertylate 0x6B, getglobalslot 0x6E, setglobalslot 0x6F, esc_xelem 0x71, esc_xattr 0x72 and checkfilter 0x78. All 11 new cases are in `Radicle/src/avm2/interpreter_dispatch_e.inc`, which `Radicle/src/avm2/interpreter.cpp:Interpreter::execute_frame` includes.
