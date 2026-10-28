@@ -318,6 +318,7 @@ TEST(GraphCompiler, GraphCompilerCompileToFileWritesPexBesidePscThatRoundTrips) 
     const std::string text((std::istreambuf_iterator<char>(in)),
                            std::istreambuf_iterator<char>());
     const std::vector<std::uint8_t> bytes(text.begin(), text.end());
+    EXPECT_EQ(bytes, result.pex->toBytes());
     const auto reread = fo4::pex::PexFile::fromBytes(bytes);
     ASSERT_FALSE(reread.objects.empty());
     EXPECT_EQ(reread.objects[0].name, result.pex->objects[0].name);
@@ -334,5 +335,12 @@ TEST(GraphCompiler, GraphCompilerCompileToFileWritesNoFileWhenTheGraphFailsValid
     GraphBuilder builder("");
     const auto result = compiler.compileToFile(builder.document, root / "out" / "Fixture.psc");
     EXPECT_FALSE(result.success());
+    EXPECT_FALSE(result.source.has_value());
+    const bool refusedWithCode = std::any_of(
+        result.diagnostics.begin(), result.diagnostics.end(),
+        [](const GraphDiagnostic& diagnostic) {
+            return diagnostic.code == codes::kInvalidScriptHeader;
+        });
+    EXPECT_TRUE(refusedWithCode);
     EXPECT_FALSE(std::filesystem::exists(root));
 }

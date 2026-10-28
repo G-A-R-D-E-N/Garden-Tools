@@ -7017,7 +7017,7 @@ PET comment (src/graph/GraphCompiler.cpp lines 48-48, dropped): One scratch fold
 
 ## src/graph/graph_compiler.cpp:GraphCompiler::compileToFile
 
-PET comment (src/graph/GraphCompiler.cpp lines 216-216, dropped): The PexWriter is not ported yet; only the .psc is emitted. The reason is narrower now: `Radicle/include/fo4/pex/pex.hpp:PexFile::toBytes` exists, but this function ignores `pexPath` (the `(void)pexPath` line), so no .pex is written. Wiring the write is a separate change.
+PET comment (src/graph/GraphCompiler.cpp lines 216-216, dropped): The PexWriter is not ported yet; only the .psc is emitted. This is PET's copy only: PET's `PluginEditTool/native/src/graph/GraphCompiler.cpp` still keeps `(void)pexPath` and writes no .pex. The Radicle `src/graph/graph_compiler.cpp:GraphCompiler::compileToFile` writes the .pex through `Radicle/include/fo4/pex/pex.hpp:PexFile::toBytes`, so the PET comment no longer describes Radicle.
 - Regression guard: when compilation yields a pex, the .pex must land beside the .psc (or at `pexPath`) as `PexFile::toBytes` bytes that `PexFile::fromBytes` reads back as the same object, written through `fo4::io::write_file_atomic` so a failed write never leaves a partial file. A graph that fails validation must write neither file. Anchored tests: `Radicle/tests/test_graph_compiler.cpp:GraphCompilerCompileToFileWritesPexBesidePscThatRoundTrips` and `GraphCompilerCompileToFileWritesNoFileWhenTheGraphFailsValidation`.
 
 ## src/graph/graph_compiler.cpp:GraphCompiler::publishForSelfReference
