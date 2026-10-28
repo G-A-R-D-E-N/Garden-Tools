@@ -1,5 +1,7 @@
 #include "fo4/swf/swf.hpp"
 #include "fo4/swf/swf_bitmap_png.hpp"
+#include "fo4/swf/swf_display.hpp"
+#include "fo4/swf/swf_frame_svg.hpp"
 #include "fo4/swf/swf_svg.hpp"
 #include "swf_art_fixtures.hpp"
 
@@ -8,6 +10,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -85,6 +88,50 @@ fo4::swf::SwfReadResult two_by_two_bitmap() {
 
 std::string square_path_fill(const char* fill) {
   return std::string("<path d=\"M0 0L50 0L50 50L0 50L0 0Z\" ") + fill + " fill-rule=\"nonzero\"/>\n";
+}
+
+const std::string kStage =
+    "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 550 400\" width=\"550\" height=\"400\">\n";
+
+const std::string kRedSquare =
+    "<path d=\"M0 0L50 0L50 50L0 50L0 0Z\" fill=\"#ff0000\" fill-opacity=\"1\" fill-rule=\"nonzero\"/>\n";
+
+const std::string kBlueSquare =
+    "<path d=\"M0 0L30 0L30 30L0 30L0 0Z\" fill=\"#0000ff\" fill-opacity=\"1\" fill-rule=\"nonzero\"/>\n";
+
+fo4::swf::SwfShape solid_square(std::uint16_t id, std::int32_t size, std::uint32_t argb) {
+  auto shape = sized_shape(size, size);
+  shape.shape_id = id;
+  shape.fill_styles.push_back(solid_fill(argb));
+  shape.records = {move_to(0, 0), style_change(1, 0, 0), line_by(size, 0), line_by(0, size),
+                   line_by(-size, 0), line_by(0, -size)};
+  return shape;
+}
+
+fo4::swf::SwfFrameInstance frame_row(std::uint16_t depth, std::uint16_t character,
+                                     std::uint32_t level, bool visible = true) {
+  fo4::swf::SwfFrameInstance row;
+  row.depth = depth;
+  row.character_id = character;
+  row.nesting_level = level;
+  row.world_visible = visible;
+  return row;
+}
+
+std::string frame_svg(std::vector<fo4::swf::SwfShape> shapes,
+                      std::vector<fo4::swf::SwfFrameInstance> rows) {
+  fo4::swf::SwfFile file;
+  file.header.frame_size.x_max = 11000;
+  file.header.frame_size.y_max = 8000;
+  for (auto& shape : shapes) {
+    fo4::swf::SwfTag tag;
+    tag.shape = std::move(shape);
+    file.tags.push_back(std::move(tag));
+  }
+  fo4::swf::SwfDisplayList display;
+  display.timelines.emplace_back();
+  display.timelines.front().frames.push_back(fo4::swf::SwfDisplayFrame{0, std::move(rows)});
+  return fo4::swf::frame_to_svg(file, display, 0);
 }
 
 }  // namespace
@@ -369,4 +416,44 @@ TEST(SwfSvg, MissingOrUnencodableBitmapFallsBackToThePlaceholder) {
   ASSERT_TRUE(format4.ok()) << fo4::swf::status_name(format4.status);
   shape.fill_styles[0] = bitmap_fill(0x40, 3, 131072, 400);
   EXPECT_EQ(fo4::swf::shape_to_svg(shape, format4.file), expected);
+}
+
+TEST(SwfFrameSvg, HiddenRowWithAClipDepthStillOpensItsMask) {
+  // Detects: a hidden row with a clip depth opening no mask, or painting its own geometry; the visible row at depth 2 must be clipped by the hidden row's square and the hidden row paints nothing. Flash applying a hidden mask is recalled, not verified against the player.
+  auto mask = frame_row(1, 1, 0, false);
+  mask.clip_depth = 2;
+  const std::string expected =
+      kStage +
+      "<clipPath id=\"r0clip\" transform=\"matrix(1 0 0 1 0 0)\">\n" + kRedSquare + "</clipPath>\n"
+      "<g clip-path=\"url(#r0clip)\">\n"
+      "<g transform=\"matrix(1 0 0 1 0 0)\">\n" + kBlueSquare + "</g>\n"
+      "</g>\n"
+      "</svg>\n";
+  EXPECT_EQ(frame_svg({solid_square(1, 1000, 0xFFFF0000), solid_square(2, 600, 0xFF0000FF)},
+                      {mask, frame_row(2, 2, 0)}),
+            expected);
+}
+
+TEST(SwfFrameSvg, ASpriteMaskClipsWithItsShapeChildrenAndPaintsNothingItself) {
+  // Detects: a sprite row with a clip depth drawing its children unmasked, or a clipPath built from the sprite instead of its shape children; the red child is offset by 20 px, so a clipPath that drops the child transform puts it at the origin.
+  auto mask = frame_row(1, 9, 0);
+  mask.is_sprite = true;
+  mask.clip_depth = 2;
+  auto red_child = frame_row(1, 1, 1);
+  red_child.world_transform.translate_x = 20;
+  const std::string expected =
+      kStage +
+      "<clipPath id=\"r0clip\">\n"
+      "<path d=\"M0 0L50 0L50 50L0 50L0 0Z\" transform=\"matrix(1 0 0 1 20 0)\" fill=\"#ff0000\" "
+      "fill-opacity=\"1\" fill-rule=\"nonzero\"/>\n"
+      "<path d=\"M0 0L30 0L30 30L0 30L0 0Z\" transform=\"matrix(1 0 0 1 0 0)\" fill=\"#0000ff\" "
+      "fill-opacity=\"1\" fill-rule=\"nonzero\"/>\n"
+      "</clipPath>\n"
+      "<g clip-path=\"url(#r0clip)\">\n"
+      "<g transform=\"matrix(1 0 0 1 0 0)\">\n" + kBlueSquare + "</g>\n"
+      "</g>\n"
+      "</svg>\n";
+  EXPECT_EQ(frame_svg({solid_square(1, 1000, 0xFFFF0000), solid_square(2, 600, 0xFF0000FF)},
+                      {mask, red_child, frame_row(2, 2, 1), frame_row(2, 2, 0)}),
+            expected);
 }
