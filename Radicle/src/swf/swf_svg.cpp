@@ -97,14 +97,13 @@ std::vector<Edge> trace_edges(const SwfShape& shape) {
         pen = Point{record.x, record.y};
         break;
       case SwfShapeRecordKind::style_change:
-        // Requires a zero index to mean unchanged: the decoded record cannot tell unset from zero.
-        if (record.fill0 != 0) {
+        if (record.has_fill0 || record.fill0 != 0) {
           fill0 = record.fill0;
         }
-        if (record.fill1 != 0) {
+        if (record.has_fill1 || record.fill1 != 0) {
           fill1 = record.fill1;
         }
-        if (record.line != 0) {
+        if (record.has_line || record.line != 0) {
           line = record.line;
         }
         break;

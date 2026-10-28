@@ -40,6 +40,9 @@ SwfShapeRecord style_change(std::uint16_t fill0, std::uint16_t fill1, std::uint1
   record.fill0 = fill0;
   record.fill1 = fill1;
   record.line = line;
+  record.has_fill0 = true;
+  record.has_fill1 = true;
+  record.has_line = true;
   return record;
 }
 
@@ -69,6 +72,20 @@ TEST(SwfSvg, FilledSquareKeepsSolidColourAndAlpha) {
       "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 50 50\" width=\"50\" height=\"50\">\n"
       "<path d=\"M0 0L50 0L50 50L0 50L0 0Z\" fill=\"#112233\" fill-opacity=\"0.501961\" "
       "fill-rule=\"nonzero\"/>\n"
+      "</svg>\n";
+  EXPECT_EQ(fo4::swf::shape_to_svg(shape), expected);
+}
+
+TEST(SwfSvg, ExplicitZeroFillTurnsTheSideOffForLaterEdges) {
+  // Detects: a style change that writes fill0 = 0 explicitly must turn fill0 off, so edges after it are not filled; treating the zero as unchanged would emit a second filled path.
+  auto shape = sized_shape(3000, 1000);
+  shape.fill_styles.push_back(solid_fill(0xFF112233u));
+  shape.records = {move_to(0, 0), style_change(1, 0, 0), line_by(1000, 0), line_by(0, 1000),
+                   line_by(-1000, 0), line_by(0, -1000), move_to(2000, 0), style_change(0, 0, 0),
+                   line_by(1000, 0), line_by(0, 1000), line_by(-1000, 0), line_by(0, -1000)};
+  const std::string expected =
+      "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 150 50\" width=\"150\" height=\"50\">\n"
+      "<path d=\"M0 0L50 0L50 50L0 50L0 0Z\" fill=\"#112233\" fill-opacity=\"1\" fill-rule=\"nonzero\"/>\n"
       "</svg>\n";
   EXPECT_EQ(fo4::swf::shape_to_svg(shape), expected);
 }
