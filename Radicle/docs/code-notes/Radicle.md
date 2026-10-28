@@ -7464,3 +7464,27 @@ Base-import roots are copied into `NativeStrings` and pinned with `fixed` in eac
 ## Radicle/bindings/csharp/Radicle.Interop/PexFile.cs:PexFile.Snapshot
 
 Made `internal` so `PapyrusCompiler.CompileSource` can wrap a handle the native compiler returned. `PexFile.Use` is `internal` for the same reason, for `PapyrusCompiler.Decompile`.
+
+## Radicle/src/avm2/interpreter_ops.cpp:int_range_result (SWF interp gaps L8)
+
+Generic AVM2 `add`, `subtract`, `multiply`, `negate`, `increment` and `decrement` (the non-`_i` opcodes) compute on doubles and return an int32 or uint32 only when the exact result is in that type's range; otherwise they return a Number. So `int.MAX_VALUE + 1` is the Number 2147483648, not a wrapped int. `uint_range_result` does the same for uint32, so `0u - 1u` is -1. The `_i` opcodes (`add_i`, `subtract_i`, `multiply_i`, `increment_i`, `decrement_i`, `inclocal_i`, `declocal_i`) still wrap to int32 on purpose. Covered by `Avm2Interpreter.AddOfIntsPromotesToANumberOnOverflow` and `Avm2Interpreter.IncrementOfIntMaxPromotesToANumber`.
+
+## Radicle/src/avm2/interpreter_dispatch_a.inc:k_inclocal and k_declocal (SWF interp gaps L8)
+
+Generic `inclocal` (0x92) and `declocal` (0x94) were decoded but not dispatched, so `i++` on a Number or uint local returned NotImplemented. They now apply `increment_value` and `decrement_value` to the local, so the int32-range rule above applies. Covered by `Avm2Interpreter.IncrementsAndDecrementsANumberLocal`.
+
+## Radicle/src/avm2/interpreter_dispatch_a.inc:k_negate_i (SWF interp gaps L8)
+
+`negate_i` (0xC4) was decoded but not dispatched. It negates through uint32 so the result wraps to int32, as the `_i` family does. Covered by `Avm2Interpreter.NegatesAnIntWithNegateI`.
+
+## Radicle/src/avm2/coercion.cpp:string_to_number (SWF interp gaps L8)
+
+After the optional sign, the text must start with a digit or `.`, or it is NaN. `std::from_chars` otherwise accepts `inf`, `infinity` and a second sign, so `Number("inf")` was Infinity and `Number("--5")` was 5. The `Infinity` literal is still handled before this check. Covered by `Avm2Value.RejectsNonEcmaSignedAndInfinityText`.
+
+## Radicle/src/avm2/builtins.cpp:Runtime::install_builtins (SWF interp gaps L8)
+
+`String.prototype.toLocaleUpperCase` and `toLocaleLowerCase` reuse the `toUpperCase` and `toLowerCase` native ids. They are ASCII-only, as those are. `Object.toLocaleString` and `Array.toLocaleString` are not added: Object's would give `[object Object]` for arrays. Covered by `Avm2Builtins.StringToLocaleUpperCaseRaisesAsciiLetters`.
+
+## Radicle/src/avm2/interpreter.cpp:Interpreter::execute_frame (SWF interp gaps L8, deferred opcodes)
+
+Decoder-valid opcodes still returning NotImplemented, not implemented in L8: `hasnext` (0x1F, needs the key-list code of `hasnext2` factored out first), `pushnamespace` (0x31, needs a namespace Value kind), `getglobalslot` and `setglobalslot` (0x6E/0x6F, legacy), `setpropertylate` and `deletepropertylate` (0x69/0x6B), `finddef` (0x5F), and the `coerce_b/i/d/u/o` names (0x81/0x83/0x84/0x88/0x89, not confirmed against avmplus). E4X (`getdescendants`, `dxns`, `dxnslate`, `esc_xelem`, `esc_xattr`, `checkfilter`) is out of scope. Alchemy memory ops (`li8` through `sf64`, `sxi1` through `sxi16`) are not used by SWF UI code. Pinned avmplus sources were not found at `%TEMP%\abc-ref`, so the semantics above come from the AVM2 overview and not from the reference.

@@ -141,6 +141,18 @@
         }
         break;
       }
+      case op::k_inclocal:
+      case op::k_declocal: {
+        const std::uint32_t index = count_operand(instruction);
+        if (index >= frame.locals.size()) {
+          return fail(InterpreterStatus::LocalOutOfRange,
+                      "local " + std::to_string(index) + " is out of range");
+        }
+        frame.locals[index] = instruction.opcode == op::k_inclocal
+                                  ? increment_value(frame.locals[index])
+                                  : decrement_value(frame.locals[index]);
+        break;
+      }
       case op::k_inclocal_i:
       case op::k_declocal_i: {
         const std::uint32_t index = count_operand(instruction);
@@ -384,6 +396,15 @@
         pop_value(value);
         if (status == InterpreterStatus::Ok) {
           push_value(negate_value(value));
+        }
+        break;
+      }
+      case op::k_negate_i: {
+        Value value;
+        pop_value(value);
+        if (status == InterpreterStatus::Ok) {
+          push_value(Value::int32(static_cast<std::int32_t>(
+              0u - static_cast<std::uint32_t>(to_int32(value)))));
         }
         break;
       }

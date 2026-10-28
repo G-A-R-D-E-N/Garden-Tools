@@ -93,8 +93,11 @@ class CodeBuilder {
   void divide() { op(0xA3); }
   void modulo() { op(0xA4); }
   void negate() { op(0x90); }
+  void negate_i() { op(0xC4); }
   void increment() { op(0x91); }
   void decrement() { op(0x93); }
+  void inclocal(std::uint32_t index) { op_u30(0x92, index); }
+  void declocal(std::uint32_t index) { op_u30(0x94, index); }
   void bit_or() { op(0xA9); }
   void bit_and() { op(0xA8); }
   void bitxor() { op(0xAA); }

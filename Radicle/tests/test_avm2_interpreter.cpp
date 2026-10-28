@@ -405,4 +405,85 @@ TEST(Avm2Interpreter, LeavesAnExceptionUncaughtWhenTheHandlerTypeDoesNotMatch) {
   EXPECT_NE(result.message.find("boom"), std::string::npos) << result.message;
 }
 
+// Detects: inclocal/declocal (0x92/0x94) missing; a Number local ++/-- must not be NotImplemented.
+TEST(Avm2Interpreter, IncrementsAndDecrementsANumberLocal) {
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder code;
+  code.pushdouble(script.add_double(2.5));
+  code.setlocal(1);
+  code.inclocal(1);
+  code.declocal(1);
+  code.inclocal(1);
+  code.getlocal(1);
+  code.returnvalue();
+  const std::uint32_t method = script.method("init", code.bytes(), 2);
+  abc::AbcFile file = script.finish(method);
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  Interpreter interpreter(runtime);
+  const ExecutionResult result = interpreter.run_script(0);
+  ASSERT_TRUE(result.ok()) << fo4::avm2::interpreter_status_name(result.status) << ": "
+                           << result.message;
+  EXPECT_EQ(fo4::avm2::to_number(result.value), 3.5);
+}
+
+// Detects: negate_i (0xC4) missing, so negating an int must not return NotImplemented.
+TEST(Avm2Interpreter, NegatesAnIntWithNegateI) {
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder code;
+  code.pushbyte(5);
+  code.negate_i();
+  code.returnvalue();
+  const std::uint32_t method = script.method("init", code.bytes(), 1);
+  abc::AbcFile file = script.finish(method);
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  Interpreter interpreter(runtime);
+  const ExecutionResult result = interpreter.run_script(0);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_int32());
+  EXPECT_EQ(result.value.as_int32(), -5);
+}
+
+// Detects: generic add wrapping int32 overflow; INT_MAX + 1 must yield the Number 2147483648.
+TEST(Avm2Interpreter, AddOfIntsPromotesToANumberOnOverflow) {
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder code;
+  code.pushint(script.add_int(2147483647));
+  code.pushbyte(1);
+  code.add();
+  code.returnvalue();
+  const std::uint32_t method = script.method("init", code.bytes(), 1);
+  abc::AbcFile file = script.finish(method);
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  Interpreter interpreter(runtime);
+  const ExecutionResult result = interpreter.run_script(0);
+  ASSERT_TRUE(result.ok()) << result.message;
+  EXPECT_FALSE(result.value.is_int32());
+  EXPECT_EQ(fo4::avm2::to_number(result.value), 2147483648.0);
+}
+
+// Detects: generic increment wrapping INT_MAX; an overflowing ++ must yield the Number 2147483648.
+TEST(Avm2Interpreter, IncrementOfIntMaxPromotesToANumber) {
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder code;
+  code.pushint(script.add_int(2147483647));
+  code.increment();
+  code.returnvalue();
+  const std::uint32_t method = script.method("init", code.bytes(), 1);
+  abc::AbcFile file = script.finish(method);
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  Interpreter interpreter(runtime);
+  const ExecutionResult result = interpreter.run_script(0);
+  ASSERT_TRUE(result.ok()) << result.message;
+  EXPECT_FALSE(result.value.is_int32());
+  EXPECT_EQ(fo4::avm2::to_number(result.value), 2147483648.0);
+}
+
 }  // namespace

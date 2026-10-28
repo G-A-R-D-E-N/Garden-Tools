@@ -84,7 +84,7 @@ double string_to_number(std::string_view text) noexcept {
     return value;
   }
 
-  if (rest.empty()) {
+  if (rest.empty() || (rest[0] != '.' && (rest[0] < '0' || rest[0] > '9'))) {
     return std::numeric_limits<double>::quiet_NaN();
   }
   double value = 0.0;
