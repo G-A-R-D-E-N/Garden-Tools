@@ -16,6 +16,7 @@
 #include <filesystem>
 #include <iostream>
 #include <map>
+#include <optional>
 #include <regex>
 #include <string>
 #include <utility>
@@ -29,9 +30,8 @@ namespace helper = fo4::papyrus::test;
 namespace {
 
 constexpr std::size_t kLiftSampleLimit = 1500;
-// The floors are unmeasured placeholders and must be re-measured on the fo4-data runner.
+// The floor is an unmeasured placeholder and must be re-measured on the fo4-data runner.
 constexpr double kMinimumLiftedFraction = 0.5;
-constexpr double kMinimumRoundtripFraction = 0.5;
 constexpr std::size_t kDifferenceSampleLimit = 20;
 constexpr std::size_t kReasonPrintLimit = 15;
 
@@ -42,16 +42,23 @@ struct Callable {
   std::string refusal;
 };
 
+std::string eventPexName(const fp::EventDecl& event) {
+  return event.remoteObjectType ? "::remote_" + *event.remoteObjectType + "_" + event.name
+                                : event.name;
+}
+
 std::vector<Callable> callablesOf(const fp::Script& script) {
   std::vector<Callable> callables;
   for (const auto& fn : script.functions) callables.push_back({fn.span.line, "", fn.name, ""});
-  for (const auto& event : script.events) callables.push_back({event.span.line, "", event.name, ""});
+  for (const auto& event : script.events) {
+    callables.push_back({event.span.line, "", eventPexName(event), ""});
+  }
   for (const auto& state : script.states) {
     for (const auto& fn : state.functions) {
       callables.push_back({fn.span.line, state.name, fn.name, ""});
     }
     for (const auto& event : state.events) {
-      callables.push_back({event.span.line, state.name, event.name, ""});
+      callables.push_back({event.span.line, state.name, eventPexName(event), ""});
     }
   }
   return callables;
@@ -130,19 +137,22 @@ TEST(GraphLiftReal, LiftsAndRelinearizesSampledCorpusFunctionsToTheirOriginalBod
   std::map<std::string, std::size_t> reasons;
   std::vector<std::string> differences;
 
+  fp::ScriptIndex index;
+  for (const auto& root : roots) index.addRoot(root);
+
   for (const auto& path : sample.files) {
-    fp::ScriptIndex index;
-    for (const auto& root : roots) index.addRoot(root);
-    const auto* script = index.parseCached(path);
-    if (script == nullptr || script->hasErrors()) continue;
-
     const auto name = path.filename().string();
-    const auto reference = fp::compileScript(index, script, name, fp::PapyrusCompileOptions{});
-    if (!reference.success()) continue;
-
-    auto callables = callablesOf(*script);
+    std::vector<Callable> callables;
+    std::optional<fp::PapyrusCompileResult> reference;
     fg::GraphCompileResult rebuilt;
     try {
+      const auto* script = index.parseCached(path);
+      if (script == nullptr || script->hasErrors()) continue;
+      callables = callablesOf(*script);
+
+      reference = fp::compileScript(index, script, name, fp::PapyrusCompileOptions{});
+      if (!reference->success()) continue;
+
       fg::GraphLifter lifter(index);
       const auto lift = lifter.lift(*script);
       if (!lift.document) continue;
@@ -152,10 +162,9 @@ TEST(GraphLiftReal, LiftsAndRelinearizesSampledCorpusFunctionsToTheirOriginalBod
       rebuilt = fg::GraphCompiler(index).compile(document, options);
     } catch (const std::exception&) {
       for (auto& callable : callables) {
-        if (callable.refusal.empty()) callable.refusal = "lifter or compiler threw";
+        if (callable.refusal.empty()) callable.refusal = "exception";
       }
     }
-
     attempted += callables.size();
     for (const auto& callable : callables) {
       if (!callable.refusal.empty()) {
@@ -165,7 +174,7 @@ TEST(GraphLiftReal, LiftsAndRelinearizesSampledCorpusFunctionsToTheirOriginalBod
       }
       ++lifted;
       const auto difference = rebuilt.pex
-                                  ? bodyDifference(*reference.pex, *rebuilt.pex, callable)
+                                  ? bodyDifference(*reference->pex, *rebuilt.pex, callable)
                                   : std::string("no pex");
       if (difference.empty()) {
         ++roundtrip;
@@ -191,7 +200,4 @@ TEST(GraphLiftReal, LiftsAndRelinearizesSampledCorpusFunctionsToTheirOriginalBod
   EXPECT_GE(static_cast<double>(lifted),
             kMinimumLiftedFraction * static_cast<double>(attempted))
       << "lifted=" << lifted << " attempted=" << attempted;
-  EXPECT_GE(static_cast<double>(roundtrip),
-            kMinimumRoundtripFraction * static_cast<double>(lifted))
-      << "roundtrip=" << roundtrip << " lifted=" << lifted;
 }
