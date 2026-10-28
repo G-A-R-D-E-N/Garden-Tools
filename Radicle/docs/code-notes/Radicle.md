@@ -8044,3 +8044,38 @@ Out of scope: DefineButton rows, dynamic EditText, text used as a mask, and text
 - `Radicle/tests/test_swf_svg.cpp:SwfFrameSvg.StaticTextAppliesItsMatrixAndSkipsFontsWithoutGlyphShapes` detects a DefineText MATRIX that is ignored, which would leave the glyph at `matrix(1 0 0 1 0 0)`, and a font with no glyph shapes that emits an empty group or indexes an empty glyph list.
 
 Expected strings were derived by hand from `Radicle/src/swf/swf_svg.cpp:loops_text` and `Radicle/src/swf/swf_svg.cpp:fill_paths`. Nothing was compiled or run on the development machine for this change, so CI must confirm them.
+
+## Radicle/src/swf/swf_placement.cpp:decode_button_tag (button decode)
+
+`decode_button_tag` fills `SwfTag::button` for DefineButton (tag 7) and DefineButton2 (tag 34). Both start with the button's UI16 character id. Tag 34 then has a reserved byte and a UI16 action offset, which the decoder skips. Both tags then carry BUTTONRECORDs ended by a zero flags byte. Any bytes after that terminator are button actions and are not decoded.
+
+A button whose records do not decode is left undecoded, and the file still loads. This is deliberate: `decode_tag_stream` refuses a whole file on any malformed payload, and `Radicle/tests/swf_character_fixtures.hpp:button_payload` is a 5-byte DefineButton2 with no record terminator that other tests load. Before this decoder existed a button only contributed its leading id, so refusing would have been a regression.
+
+## Radicle/src/swf/swf_placement.cpp:decode_button_records (record layout)
+
+The record state byte holds 0x01 up, 0x02 over, 0x04 down and 0x08 hit test. For tag 34 only, 0x10 means a filter list follows and 0x20 means a blend-mode byte follows. These bit positions come from the SWF file format specification as recalled, not from a file in this environment. The Fallout 4 Interface archive holds 311 SWFs but no DefineButton or DefineButton2 tag in any of them, so no real record was available to check the layout against. CI with a real button is the first real check.
+
+Each tag 34 record carries a CXFORMWITHALPHA. It is read with `read_color_transform` and kept as `SwfButtonRecord::color_transform`. The filter list is read with `decode_filter_list` and discarded, and the blend byte is skipped. The record therefore does not keep filters or blend mode, so a filtered or blended button draws without them. Tag 7 records have no colour transform, and their 0x10 and 0x20 bits are not parsed.
+
+## Radicle/include/fo4/swf/swf.hpp:SwfButton
+
+`SwfButton` and `SwfButtonRecord` are new, and `SwfTag::button` holds the decoded button. `SwfButton::character_id` is the button's own id, the key `Radicle/src/swf/swf_frame_svg.cpp:frame_to_svg` indexes it by. `Radicle/src/swf/swf.cpp:SwfTag::clear_decoded` resets the field along with the other decoded fields.
+
+## Radicle/src/swf/swf_frame_svg.cpp:button_group
+
+A button row draws every record with the UP flag, sorted by PlaceDepth with `std::stable_sort`, so records at equal depth keep tag order. Each record's transform is `compose_transform(row.world_transform, transform_from_matrix(record.matrix))`. The record's character then goes through `character_group`, the same shape, morph and text path that a plain row uses. Each record gets the id prefix `r<row>u<k>`, which cannot collide with a row id `r<row>`. The record colour transform is ignored. The row's own colour filter still wraps the whole button, as it does for any row. Hit-only and over-only records draw nothing.
+
+Out of scope: a record whose character is a sprite, a button or an edit-text draws nothing, and a button inside a clip sprite is not drawn, because `Radicle/src/swf/swf_frame_svg.cpp:sprite_clip_to_svg` only collects shapes and morphs. A button row that carries a clip depth is also not drawn, which matches the text-row rule. This supersedes the "DefineButton rows" item in the static text note above.
+
+## Radicle/src/swf/swf_frame_svg.cpp:frame_body (button branch)
+
+A non-mask button row takes the `button_group` branch. Otherwise content comes from `shape_group`, `button_group` or `text_group`, and empty content skips the row. The old per-branch text-empty check became that single check. `character_shape` replaces `row_shape`, and takes the character id and ratio, so a record can reuse it with no ratio.
+
+## Radicle/tests/test_swf_svg_buttons.cpp:SwfFrameSvgButtons tests
+
+- `Radicle/tests/test_swf_svg_buttons.cpp:SwfFrameSvgButtons.DefineButton2UpRecordDrawsItsShapeAtItsMatrix` detects a button row dropped from the frame, an UP record matrix that is ignored or not composed with the row, and a DefineButton2 record read from the wrong offset because the reserved or action bytes were not skipped.
+- `Radicle/tests/test_swf_svg_buttons.cpp:SwfFrameSvgButtons.HitOnlyRecordDrawsNothing` detects a hit-only record drawn as visible art, which would paint the hit area onto the stage.
+- `Radicle/tests/test_swf_svg_buttons.cpp:SwfFrameSvgButtons.UpRecordsDrawInDepthOrderAndIgnoreTheirColourTransforms` detects records drawn in tag order rather than depth, a record colour transform misread so the second record is lost, and a colour transform applied as a filter.
+- `Radicle/tests/test_swf_svg_buttons.cpp:SwfFrameSvgButtons.DefineButtonRecordHasNoColourTransformBytes` detects a DefineButton (tag 7) decoder that reads the tag 34 colour transform, which would misplace the record.
+
+Expected strings were derived by hand. The square path is the 1000-twip and 600-twip squares used by `Radicle/tests/test_swf_svg.cpp:kRedSquare` and `kBlueSquare`. Translations are twips divided by 20, as in `Radicle/src/swf/swf_timeline.cpp:transform_from_matrix`. Nothing was compiled or run on the development machine for this change, so CI must confirm them.
