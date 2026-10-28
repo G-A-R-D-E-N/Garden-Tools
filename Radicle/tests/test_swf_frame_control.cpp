@@ -385,20 +385,38 @@ TEST(SwfFrameControl, AStopBehindABranchIsNotAppliedToTheClip) {
             (std::vector<std::uint32_t>{0, 1, 2, 0, 1}));
 }
 
-TEST(SwfFrameControl, ThreeFrameGotoCycleOverLongPlaybackKeepsTheModuloRow) {
-  const auto cycle = sprite_tag(9, 3, with_show_frames({
-                                          {{26, place_named(1, 5, "Marker")},
-                                           {12, script({0x81, 0x02, 0x00, 0x01, 0x00, 0x06})}},
-                                          {{12, script({0x81, 0x02, 0x00, 0x02, 0x00, 0x06})}},
-                                          {{12, script({0x81, 0x02, 0x00, 0x00, 0x00, 0x06})}},
-                                      }));
+std::vector<std::uint8_t> goto_then_play(std::uint16_t frame) {
+  return {0x81, 0x02, 0x00, static_cast<std::uint8_t>(frame & 0xFF),
+          static_cast<std::uint8_t>(frame >> 8), 0x06};
+}
+
+std::vector<std::byte> hundred_frame_cycle() {
+  std::vector<Frame> frames(100);
+  for (std::size_t i = 0; i < frames.size(); ++i) {
+    frames[i] = {{12, script(goto_then_play(static_cast<std::uint16_t>((i + 1) % 100)))}};
+  }
+  frames[0].push_back({26, place_named(1, 5, "Marker")});
+  return sprite_tag(9, 100, with_show_frames(frames));
+}
+
+TEST(SwfFrameControl, GotoChainStopsAtTheHopCapWithinOneTick) {
+  std::vector<Frame> root(100);
+  root[0] = {{39, hundred_frame_cycle()}, {26, place_named(1, 9, "Art")}};
+  const auto display = display_of(movie_of(100, with_show_frames(root)));
+  ASSERT_EQ(display.status, SwfTimelineStatus::ok) << display.message;
+  const auto row = frames_of_row(display.timelines[0], "Art/Marker");
+  EXPECT_EQ(std::vector<std::uint32_t>(row.begin(), row.begin() + 4),
+            (std::vector<std::uint32_t>{63, 27, 91, 55}));
+}
+
+TEST(SwfFrameControl, EntryBudgetFreezesALongChainInsteadOfGrowing) {
   std::vector<Frame> root(1200);
-  root[0] = {{39, cycle}, {26, place_named(1, 9, "Art")}};
+  root[0] = {{39, hundred_frame_cycle()}, {26, place_named(1, 9, "Art")}};
   const auto display = display_of(movie_of(1200, with_show_frames(root)));
   ASSERT_EQ(display.status, SwfTimelineStatus::ok) << display.message;
   std::vector<std::uint32_t> expected;
   for (std::uint32_t tick = 0; tick < 1200; ++tick) {
-    expected.push_back(tick % 3);
+    expected.push_back(tick <= 90 ? (63 + 64 * tick) % 100 : 23);
   }
   EXPECT_EQ(frames_of_row(display.timelines[0], "Art/Marker"), expected);
 }

@@ -218,7 +218,6 @@ Playhead simulate_playhead(const FrameControls& controls, std::uint32_t ticks) {
     const bool moved = was_playing && land(controls, tick, (cursor.frame + 1) % count, cursor, head);
     head.frame_at.push_back(cursor.frame);
     if (!moved && cursor.playing == was_playing) {
-      head.frame_at.resize(ticks, cursor.frame);
       break;
     }
   }

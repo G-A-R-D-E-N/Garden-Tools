@@ -235,7 +235,8 @@ std::uint32_t displayed_frame(const LocalTimeline& timeline, std::uint32_t age) 
     const auto count = static_cast<std::uint32_t>(timeline.frames.size());
     return count <= 1 ? 0 : age % count;
   }
-  return timeline.playhead.frame_at[age];
+  const auto& frame_at = timeline.playhead.frame_at;
+  return frame_at[std::min<std::size_t>(age, frame_at.size() - 1)];
 }
 
 std::uint32_t entry_age(const LocalTimeline& timeline, std::uint32_t age, std::uint32_t frame) {
