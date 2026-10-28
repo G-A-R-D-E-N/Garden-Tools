@@ -433,6 +433,8 @@ typedef struct radicle_swf_frames_instance {
   radicle_swf_bounds bounds;              /* must be in world points */
   const char* name;            /* must never be null; "" when the instance is unnamed */
   const char* path;            /* must never be null; instance path from the root, e.g. "Art/Cell" */
+  uint32_t create_tag_index;   /* must be the FLAT pre-order tag index radicle_swf_tag_at reports for the tag that created the instance */
+  uint32_t transform_tag_index; /* must be the FLAT pre-order tag index of the placement that last authored its MATRIX, or UINT32_MAX when none did */
 } radicle_swf_frames_instance;
 
 /* A per-frame display list; every string it hands back must stay valid until radicle_swf_frames_destroy, so

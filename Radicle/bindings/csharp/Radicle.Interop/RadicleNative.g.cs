@@ -2492,6 +2492,8 @@ public unsafe struct SwfFramesInstance
     public SwfBounds Bounds;
     public IntPtr Name;
     public IntPtr Path;
+    public uint CreateTagIndex;
+    public uint TransformTagIndex;
 }
 
 [StructLayout(LayoutKind.Sequential)]
