@@ -64,6 +64,8 @@ public unsafe struct RuntimeEntry
     public nuint RunCount;
     public RuntimeRun* Runs;
     public nuint FilterCount;
+    public ushort Ratio;
+    public byte CacheAsBitmap;
 }
 
 [StructLayout(LayoutKind.Sequential)]
