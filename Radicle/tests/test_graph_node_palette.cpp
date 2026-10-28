@@ -64,9 +64,8 @@ TEST(NodePalette, AnInstanceFunctionGetsASelfPinAndAnArgumentPinPerParameter) {
 
     std::vector<std::string> ids;
     for (const auto* pin : definition.dataInputs()) ids.push_back(pin->id);
-    ASSERT_TRUE(ids == std::vector<std::string>{
-                       std::string(pinIds::kSelf), "arg:akItemToAdd", "arg:aiCount",
-                       "arg:abSilent"});
+    ASSERT_EQ(ids, (std::vector<std::string>{std::string(pinIds::kSelf), "arg:akItemToAdd",
+                                             "arg:aiCount", "arg:abSilent"}));
 
     ASSERT_TRUE(definition.execInputs().size() == 1);
     ASSERT_TRUE(definition.execOutputs().size() == 1);
@@ -231,16 +230,16 @@ TEST(NodePalette, BranchAndWhileHaveTheExecShapeTheLoweringExpects) {
     ASSERT_TRUE(branch != nullptr);
     std::vector<std::string> branchOutputs;
     for (const auto* pin : branch->execOutputs()) branchOutputs.push_back(pin->id);
-    ASSERT_TRUE(branchOutputs == std::vector<std::string>{std::string(pinIds::kThen),
-                                                      std::string(pinIds::kElse)});
+    ASSERT_EQ(branchOutputs, (std::vector<std::string>{std::string(pinIds::kThen),
+                                                       std::string(pinIds::kElse)}));
     ASSERT_TRUE(branch->pin(pinIds::kCondition)->type->typeName == "bool");
 
     const auto* loop = builtinDefinitions::find(builtinDefs::kWhile);
     ASSERT_TRUE(loop != nullptr);
     std::vector<std::string> loopOutputs;
     for (const auto* pin : loop->execOutputs()) loopOutputs.push_back(pin->id);
-    ASSERT_TRUE(loopOutputs == std::vector<std::string>{std::string(pinIds::kBody),
-                                                    std::string(pinIds::kCompleted)});
+    ASSERT_EQ(loopOutputs, (std::vector<std::string>{std::string(pinIds::kBody),
+                                                     std::string(pinIds::kCompleted)}));
 }
 
 TEST(NodePalette, ForEachExposesAnElementAndAnIndex) {
