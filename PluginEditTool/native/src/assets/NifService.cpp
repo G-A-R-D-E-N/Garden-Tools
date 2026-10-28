@@ -15,6 +15,10 @@ std::string pathArg(const std::filesystem::path& path) {
     return path.string();
 }
 
+bool niftoolResolves(const std::filesystem::path& executable) {
+    return !executable.empty() && std::filesystem::is_regular_file(executable);
+}
+
 std::filesystem::path uniqueEditsPath() {
     const auto ticks = std::chrono::steady_clock::now().time_since_epoch().count();
     const auto thread = std::hash<std::thread::id>{}(std::this_thread::get_id());
@@ -48,11 +52,13 @@ Result<void> NifService::requireFile(const std::filesystem::path& path, std::str
 
 Result<std::string> NifService::inspect(const std::filesystem::path& nifPath) const {
     if (auto valid = requireFile(nifPath, "NIF"); !valid) return std::unexpected(valid.error());
+    if (niftoolResolves(executable_)) return run({"inspect", pathArg(nifPath)});
     return renderInspect(nifPath);
 }
 
 Result<std::string> NifService::geometry(const std::filesystem::path& nifPath) const {
     if (auto valid = requireFile(nifPath, "NIF"); !valid) return std::unexpected(valid.error());
+    if (niftoolResolves(executable_)) return run({"geo", pathArg(nifPath)});
     return renderGeometry(nifPath);
 }
 

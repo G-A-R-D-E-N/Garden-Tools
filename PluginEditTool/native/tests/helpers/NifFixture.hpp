@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <fstream>
 #include <initializer_list>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -23,7 +24,7 @@ inline void putText(std::vector<std::byte>& out, std::string_view text) {
     for (const char ch : text) out.push_back(static_cast<std::byte>(ch));
 }
 
-inline std::vector<std::byte> triangleShapeBlock() {
+inline std::vector<std::byte> triangleShapeBlock(std::uint32_t shader) {
     std::vector<std::byte> out;
     putUint(out, 0, 4);
     putUint(out, 0, 4);
@@ -35,7 +36,7 @@ inline std::vector<std::byte> triangleShapeBlock() {
     putUint(out, 0xFFFFFFFFU, 4);
     for (int i = 0; i < 4; ++i) putFloat(out, 0.0f);
     putUint(out, 0xFFFFFFFFU, 4);
-    putUint(out, 0xFFFFFFFFU, 4);
+    putUint(out, shader, 4);
     putUint(out, 0xFFFFFFFFU, 4);
     putUint(out, (std::uint64_t{1} << 54U) | 4U, 8);
     putUint(out, 1, 4);
@@ -52,30 +53,73 @@ inline std::vector<std::byte> triangleShapeBlock() {
     return out;
 }
 
-inline std::vector<std::byte> triangleNif() {
-    const auto shape = triangleShapeBlock();
+struct FixtureBlock {
+    std::string type;
+    std::vector<std::byte> data;
+};
+
+inline std::vector<std::byte> shaderBlock(std::uint32_t nameIndex, std::uint32_t textureSet) {
+    std::vector<std::byte> out;
+    putUint(out, 1, 4);
+    putUint(out, nameIndex, 4);
+    putUint(out, 0, 4);
+    putUint(out, 0xFFFFFFFFU, 4);
+    for (int i = 0; i < 6; ++i) putUint(out, 0, 4);
+    putUint(out, textureSet, 4);
+    return out;
+}
+
+inline std::vector<std::byte> textureSetBlock(std::uint32_t slots) {
+    std::vector<std::byte> out;
+    putUint(out, slots, 4);
+    for (std::uint32_t i = 0; i < slots; ++i) putUint(out, 0, 4);
+    return out;
+}
+
+inline std::vector<std::byte> nifFile(const std::vector<FixtureBlock>& blocks,
+                                      const std::vector<std::string>& strings) {
     std::vector<std::byte> out;
     putText(out, "Gamebryo File Format, Version 20.2.0.7\n");
     putUint(out, 0x14020007U, 4);
     putUint(out, 1, 1);
     putUint(out, 12, 4);
-    putUint(out, 1, 4);
+    putUint(out, blocks.size(), 4);
     putUint(out, 130, 4);
     for (int i = 0; i < 4; ++i) putUint(out, 0, 1);
-    putUint(out, 1, 2);
-    putUint(out, 10, 4);
-    putText(out, "BSTriShape");
-    putUint(out, 0, 2);
-    putUint(out, shape.size(), 4);
-    putUint(out, 1, 4);
+    putUint(out, blocks.size(), 2);
+    for (const auto& block : blocks) {
+        putUint(out, block.type.size(), 4);
+        putText(out, block.type);
+    }
+    for (std::size_t index = 0; index < blocks.size(); ++index) {
+        putUint(out, index, 2);
+        putUint(out, blocks[index].data.size(), 4);
+    }
+    putUint(out, strings.size(), 4);
     putUint(out, 0, 4);
-    putUint(out, 3, 4);
-    putText(out, "Tri");
+    for (const auto& text : strings) {
+        putUint(out, text.size(), 4);
+        putText(out, text);
+    }
     putUint(out, 0, 4);
-    out.insert(out.end(), shape.begin(), shape.end());
+    for (const auto& block : blocks) out.insert(out.end(), block.data.begin(), block.data.end());
     putUint(out, 1, 4);
     putUint(out, 0, 4);
     return out;
+}
+
+inline std::vector<std::byte> triangleNif() {
+    const std::vector<FixtureBlock> blocks{{"BSTriShape", triangleShapeBlock(0xFFFFFFFFU)}};
+    return nifFile(blocks, {"Tri"});
+}
+
+inline std::vector<std::byte> materialNif(const std::string& material) {
+    const std::vector<FixtureBlock> blocks{
+        {"BSTriShape", triangleShapeBlock(1U)},
+        {"BSLightingShaderProperty", shaderBlock(1U, 2U)},
+        {"BSShaderTextureSet", textureSetBlock(2U)},
+    };
+    return nifFile(blocks, {"Tri", material});
 }
 
 inline void writeBytes(const std::filesystem::path& path, const std::vector<std::byte>& bytes) {

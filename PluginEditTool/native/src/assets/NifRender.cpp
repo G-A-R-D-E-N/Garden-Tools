@@ -1,6 +1,7 @@
 #include <fo4ide/assets/NifRender.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <cstddef>
 #include <fstream>
 #include <iterator>
@@ -10,6 +11,7 @@
 #include <string_view>
 #include <vector>
 
+#include <fo4/error.hpp>
 #include <fo4/nif/nif.hpp>
 
 #include <nlohmann/json.hpp>
@@ -24,8 +26,10 @@ fo4::nif::NifFile loadNif(const std::filesystem::path& nifPath) {
     return fo4::nif::read_nif(std::as_bytes(std::span(raw)));
 }
 
-bool isFo4(const fo4::nif::NifFile& nif) {
-    return nif.bs_version() == 130U;
+bool isBgsmPath(std::string path) {
+    std::ranges::transform(path, path.begin(),
+                           [](char ch) { return static_cast<char>(std::tolower(static_cast<unsigned char>(ch))); });
+    return path.ends_with(".bgsm");
 }
 
 bool hasBlockPrefix(const fo4::nif::NifFile& nif, std::string_view prefix) {
@@ -56,7 +60,7 @@ nlohmann::json shapeGeometry(const fo4::nif::NifFile& nif, const fo4::nif::Shape
         out["billboard"] = true;
         out["billboardMode"] = mode;
     }
-    if (!shape.colors.empty()) out["vertexColors"] = shape.colors;
+    if (out["textures"].empty() && isBgsmPath(shape.material)) out["bgsmPath"] = shape.material;
     return out;
 }
 
@@ -77,9 +81,11 @@ nlohmann::json shapeInspect(const fo4::nif::Shape& shape) {
 Result<std::string> renderGeometry(const std::filesystem::path& nifPath) {
     try {
         const auto nif = loadNif(nifPath);
-        nlohmann::json out{{"fo4", isFo4(nif)}, {"shapes", nlohmann::json::array()}};
+        nlohmann::json out{{"fo4", nif.bs_version() == 130U}, {"shapes", nlohmann::json::array()}};
         for (const auto& shape : fo4::nif::read_shapes(nif)) out["shapes"].push_back(shapeGeometry(nif, shape));
         return out.dump();
+    } catch (const fo4::parse_error& error) {
+        return std::unexpected(Error{"NifParseFailed", error.parse_message()});
     } catch (const std::exception& error) {
         return std::unexpected(Error{"NifParseFailed", error.what()});
     }
@@ -89,13 +95,15 @@ Result<std::string> renderInspect(const std::filesystem::path& nifPath) {
     try {
         const auto nif = loadNif(nifPath);
         nlohmann::json out{
-            {"fo4", isFo4(nif)},
+            {"fo4", nif.bs_version() == 130U},
             {"hasBSX", hasBlockPrefix(nif, "BSXFlags")},
             {"hasCollision", hasBlockPrefix(nif, "bhk")},
             {"shapes", nlohmann::json::array()},
         };
         for (const auto& shape : fo4::nif::read_shapes(nif)) out["shapes"].push_back(shapeInspect(shape));
         return out.dump();
+    } catch (const fo4::parse_error& error) {
+        return std::unexpected(Error{"NifParseFailed", error.parse_message()});
     } catch (const std::exception& error) {
         return std::unexpected(Error{"NifParseFailed", error.what()});
     }

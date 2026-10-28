@@ -3,6 +3,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 
@@ -39,6 +40,13 @@ public:
         ++calls;
         last = request;
         return output;
+    }
+};
+
+class ThrowingRunner final : public fo4ide::process::Runner {
+public:
+    fo4ide::Result<fo4ide::process::Output> run(const fo4ide::process::Request&) override {
+        throw std::runtime_error("niftool blew up");
     }
 };
 

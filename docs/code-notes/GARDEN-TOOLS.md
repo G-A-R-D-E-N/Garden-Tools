@@ -182,7 +182,7 @@ Signatures are not globally meaningful, so routing has to be qualified by record
 
 ## PluginEditTool/native/src/app/ServiceTargets.cpp:CellTarget::geometryBatch — processOne
 
-Each unique model path is resolved and handed to `nif_.geometry()` (in-process Radicle reader, no niftool) on a bounded pool of `std::jthread` workers, writing only its own result slot (so `results` needs no lock; only the work index and progress counters are atomic). The batch is a port of C# `NifService.GeoBatch`: case-insensitive dedupe, then bounded parallelism capped at min(cores, 8), returning `{count, geometry}`.
+Each unique model path is resolved and handed to `nif_.geometry()` (niftool `geo` when it resolves, otherwise the in-process Radicle reader) on a bounded pool of `std::jthread` workers, writing only its own result slot (so `results` needs no lock; only the work index and progress counters are atomic). The batch is a port of C# `NifService.GeoBatch`: case-insensitive dedupe, then bounded parallelism capped at min(cores, 8), returning `{count, geometry}`.
 
 The worker pool uses `std::jthread`, not `std::thread`, and the spawn loop is wrapped in `try/catch (std::system_error)`. Constructing a `std::thread` can throw (resource exhaustion); if a later worker's construction threw while earlier workers were already joinable, stack unwinding would destroy those joinable `std::thread` objects and call `std::terminate`. `std::jthread` joins on destruction, so a mid-spawn throw unwinds cleanly; catching the `system_error` lets the workers that did start drain the queue. Because a partial spawn can leave some slots unprocessed (and a total spawn failure all of them), a final single-threaded sweep runs `processOne` on any result slot still null after the pool has joined — guaranteeing every path is resolved exactly once. `processOne` always writes a non-null object, so `is_null()` reliably marks an untouched slot.
 
@@ -190,42 +190,53 @@ The worker pool uses `std::jthread`, not `std::thread`, and the spawn loop is wr
 
 The `NifService::geometry` JSON is embedded as-is when it is a JSON object (mirrors the C# `JRaw` path); otherwise it is surfaced as an error entry. Unlike the C#, the parse is validated (`parse(..., nullptr, false)` + `is_discarded()`) so a malformed but `{`-leading output cannot corrupt the whole batch payload.
 
-## PluginEditTool/native/src/assets/NifRender.cpp:renderGeometry — in-process geo JSON replaces `niftool geo`
+## PluginEditTool/native/src/assets/NifRender.cpp:renderGeometry — in-process geo JSON, used when niftool does not resolve
 
-`renderGeometry` reads the NIF through Radicle's `fo4::nif` reader (`read_nif`, `read_shapes`, `billboard_mode`), so the 3D viewer and the cell geometry batch work with no niftool installed. The output keeps the `NifGeo` shape that `PluginEditTool/web/src/NifViewport.tsx` consumes: `{"fo4": bool, "shapes": [{name, verts, tris, normals, uvs, textures: [{slot, path}], skinned, billboard, billboardMode, vertexColors}]}`. `textures` lists only non-empty slots. `billboard` and `billboardMode` appear only under an `NiBillboardNode` ancestor, and `vertexColors` only when the shape has colours.
+`renderGeometry` reads the NIF through Radicle's `fo4::nif` reader (`read_nif`, `read_shapes`, `billboard_mode`), so the 3D viewer and the cell geometry batch work with no niftool installed. `NifService::geometry` calls it only when niftool does not resolve (`PluginEditTool/native/src/assets/NifService.cpp:NifService::geometry`). The output keeps the `NifGeo` shape that `PluginEditTool/web/src/NifViewport.tsx` consumes: `{"fo4": bool, "shapes": [{name, verts, tris, normals, uvs, textures: [{slot, path}], skinned, billboard, billboardMode, bgsmPath}]}`. `textures` lists only non-empty slots. `billboard` and `billboardMode` appear only under an `NiBillboardNode` ancestor. `bgsmPath` is `Shape::material` when that ends in `.bgsm` (case-insensitive) and the emitted `textures` array is empty, which holds when every texture-set slot is empty.
 
-`verts` are shape-local: node transforms are not applied. Unverified: the niftool `geo` source is not in this tree, so whether it baked node transforms cannot be checked here. Multi-node meshes may place differently from the niftool output.
+`verts` are shape-local: node transforms are not applied. Unverified: the niftool `geo` source is not in this tree, so whether it baked node transforms cannot be checked here. Multi-node meshes may place differently from the niftool output, and this shape-local path has not been checked against niftool on any multi-node NIF.
 
-Not produced, so the viewer uses its basic material: `effect`, `effectShader`, `bgsmPath`. Radicle does not read BSEffectShaderProperty or BGSM paths.
+Not produced: `effect`, `effectShader`, `vertexColors`. Radicle does not read `BSEffectShaderProperty`, and `read_shader` handles only `BSLightingShaderProperty`, so an in-process shape gets no effect shader and the viewer uses its basic material; niftool users keep theirs. `vertexColors` is left out because whether colors tint a shape depends on shader flags this path does not read, so the shape stays untinted. No test covers that absence, since the fixture has no colors. The `bgsmPath` rule assumes the shader Name holds the BGSM path, as `Radicle/docs/NIF.md` says of the C# reader; that has not been checked against a real FO4 NIF.
 
-Any reader exception (`fo4::parse_error` or an out-of-range access) becomes `Error{"NifParseFailed", what()}`. Radicle reads only BS version 130, so other games fail with `only BS version 130 is read`.
+A `fo4::parse_error` becomes `Error{"NifParseFailed", parse_message()}`, so the message has no `plugin parse error at 0x..:` prefix. Any other exception (an out-of-range access) becomes `Error{"NifParseFailed", what()}`. Radicle reads only BS version 130, so other games fail with `only BS version 130 is read`.
 
 ## PluginEditTool/native/src/assets/NifRender.cpp:renderInspect — inspect JSON (best-effort field list)
 
-Keys follow `PluginEditTool/docs/internal/NIF_TOOLCHAIN.md`: `fo4`, `hasBSX` (a `BSXFlags` block exists), `hasCollision` (any `bhk*` block, since collision is not otherwise read), and per-shape `{name, verts, tris, skinned, shader, textures, tangents}` where `verts` and `tris` are counts. The toolchain doc gives only the key list, not value types or niftool's exact output, so inspect output has not been diffed against niftool.
+Keys follow `PluginEditTool/docs/internal/NIF_TOOLCHAIN.md`: `fo4`, `hasBSX` (a `BSXFlags` block exists), `hasCollision` (any `bhk*` block, since collision is not otherwise read), and per-shape `{name, verts, tris, skinned, shader, textures, tangents}` where `verts` and `tris` are counts. The toolchain doc gives only the key list, not value types or niftool's exact output, so inspect output has not been diffed against niftool. It runs only when niftool does not resolve (`NifService::inspect`).
 
 ## PluginEditTool/native/src/assets/NifService.cpp:NifService::run — niftool-only authoring message
 
-Only authoring operations still reach `run`: verify, fix, importObj, applyEdits. An empty executable path now reports `niftool not installed; authoring needs it (set NIFTOOL_PATH or place niftool beside the application)`. A configured path that is missing names that path. Before this change an empty path produced `niftool executable not found: ` with nothing after the colon, which reached the user as garbage text.
+Only authoring and tree reach `run`: verify, tree, fix, importObj, applyEdits. `geometry` and `inspect` reach it only when the configured executable resolves; otherwise they read in-process. An empty executable path now reports `niftool not installed; authoring needs it (set NIFTOOL_PATH or place niftool beside the application)`. A configured path that is missing is named in the error for these operations. Before this change an empty path produced `niftool executable not found: ` with nothing after the colon, which reached the user as garbage text.
 
-## PluginEditTool/native/src/app/ServiceTargets.cpp:NifTarget::invoke — Tree returns a JSON error
+## PluginEditTool/native/src/assets/NifService.cpp:NifService::geometry — niftool when it resolves, in-process fallback
 
-`Tree` returns `{"error": ...}` JSON on failure instead of the `Error: ...` text from `serviceText`, because `NifPanel.loadTree` JSON.parses the result and throws `parsed.error`. Geo and Inspect still use `serviceText`. `NifPanel.loadGeo` has no `error` check, so a corrupt NIF in the viewer still shows "not valid JSON". That is a web follow-up: check `parsed.error` in `loadGeo`.
+`NifService::geometry` and `inspect` run niftool (`geo`, `inspect`) when the configured executable is a regular file, and read in-process otherwise. `niftoolResolves` in `NifService.cpp` makes that choice, so niftool users get the output they got before. A configured path that does not exist also falls back in-process, silently. The alternative is to return `niftool executable not found: <path>` from these two calls, a change to `geometry` and `inspect` only. This is a decision, not a verified result: whether niftool's `inspect` output (text or JSON) matches what the panel expects has not been checked.
 
-## PluginEditTool/native/tests/unit/NifServiceTests.cpp:NifService inspect reads an FO4 NIF in-process without niftool, NifService geometry returns the viewer contract for an FO4 NIF with niftool absent, NifService geometry reports a truncated NIF as an error, NifService authoring without niftool names the missing tool — NIF read and authoring regressions
+## PluginEditTool/native/src/app/ServiceTargets.cpp:NifTarget::invoke — Tree and Geo return JSON errors
 
-- Inspect: regresses if inspect shells out to niftool again, which failed as "not valid JSON" when niftool was absent.
+`Tree` and `Geo` return `{"error": ...}` JSON on failure through `serviceJsonText`, because `NifPanel.loadTree` and `NifPanel.loadGeo` JSON.parse the result and throw `parsed.error`. `Inspect` still uses `serviceText`, so its failure is the `Error: ...` text.
+
+## PluginEditTool/native/tests/unit/NifServiceTests.cpp:NifService maps inspect onto the existing niftool command, NifService geometry maps onto the existing niftool geo command, NifService inspect reads an FO4 NIF in-process without niftool, NifService geometry returns the viewer contract for an FO4 NIF with niftool absent, NifService reads in-process when the configured niftool is missing, NifService geometry reports a truncated NIF as an error, NifService geometry names the BGSM material of an untextured shape, NifService authoring without niftool names the missing tool — NIF read and authoring regressions
+
+- Inspect with niftool configured: regresses if inspect stops running `inspect` through niftool when it resolves. The restored test also checks the arguments and the working directory.
+- Geometry with niftool configured: regresses if geometry stops running `geo` through niftool when it resolves, which the call count checks.
+- Missing niftool: regresses if inspect or geometry fail with the niftool-not-found text instead of falling back in-process. The test uses a configured path that does not exist.
+- Inspect with niftool absent: regresses if inspect shells out to niftool again, which failed as "not valid JSON" when niftool was absent.
 - Geometry contract: regresses if geometry shells out again, or if the `verts`, `tris`, `normals`, `uvs` or `textures` keys that `NifViewport.tsx` reads drift.
-- Truncated NIF: regresses if a reader exception escapes `NifService::geometry` instead of becoming a `NifParseFailed` result. A batch worker that let it escape would call `std::terminate`.
+- Truncated NIF: regresses if a reader exception escapes `NifService::geometry` instead of becoming a `NifParseFailed` result, or if the `plugin parse error at 0x..:` prefix comes back into the message. A batch worker that let it escape would call `std::terminate`.
+- BGSM material: regresses if `bgsmPath` stops being emitted when the texture set holds only empty slots and the material is `.BGSM` in upper case. That covers both the empty-slot rule and the case-insensitive match. `CellViewport` uses `bgsmPath` as a diffuse fallback.
 - Authoring without niftool: regresses to the blank-path `niftool executable not found: ` text for verify and fix.
 
-Fixture: `PluginEditTool/native/tests/helpers/NifFixture.hpp:triangleNif` builds one `BSTriShape` (three verts, one triangle) in the BS version 130 layout that `Radicle/tests/nif_build.hpp` uses. It is generated in the test rather than committed, and the test-local copy avoids the gtest dependency of `nif_build.hpp`.
+Fixtures: `PluginEditTool/native/tests/helpers/NifFixture.hpp:nifFile` writes a BS version 130 file from a block list. `triangleNif` is one `BSTriShape` (three verts, one triangle), and `materialNif` adds a `BSLightingShaderProperty` that names a material and a `BSShaderTextureSet` with two empty slots. Both are generated in the test rather than committed, and the test-local copy avoids the gtest dependency of `nif_build.hpp`.
 
-## PluginEditTool/native/tests/unit/ServiceTargetsTests.cpp:CellTarget geometry batch embeds in-process geometry for a resolved mesh with niftool absent, CellTarget geometry batch isolates a truncated mesh from its neighbours, NifTarget Tree reports a missing niftool as JSON the panel can show — NIF batch and Tree regressions
+## PluginEditTool/native/tests/unit/ServiceTargetsTests.cpp:CellTarget geometry batch embeds the niftool geo JSON for a resolved mesh, CellTarget geometry batch embeds in-process geometry for a resolved mesh with niftool absent, CellTarget geometry batch isolates a truncated mesh from its neighbours, CellTarget geometry batch records a worker exception instead of terminating, NifTarget Tree reports a missing niftool as JSON the panel can show, NifTarget Geo reports a parse failure as JSON the panel can show — NIF batch, Tree and Geo regressions
 
+- Batch with niftool configured: regresses if a resolved mesh stops being handed to niftool `geo`, or its JSON stops being embedded.
 - Batch with niftool absent: regresses if the cell geometry batch depends on the niftool runner again, which left every mesh empty when niftool was missing.
 - Batch isolation: regresses if one truncated mesh drops the whole batch or its neighbour's geometry. The corrupt entry must come back as `{error}`.
+- Worker exception: regresses if a runner exception escapes `processOne`, which would call `std::terminate` and take the native host down.
 - Tree: regresses if `Tree` returns plain `Error: ...` text that `NifPanel.loadTree` JSON.parses, which showed "not valid JSON" instead of the real cause.
+- Geo: regresses if `Geo` returns plain `Error: ...` text that `NifPanel.loadGeo` JSON.parses, or if the parse message picks up the `plugin parse error` prefix.
 
 ## PluginEditTool/web/src/util/cellGrid.ts:parseCellGridCoordinate — Cell Viewer grid integers (#283)
 

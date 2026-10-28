@@ -108,7 +108,8 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
     setBusy(true); setGeoInfo('Loading…');
     try {
       const raw = await nif.Geo(p);
-      const parsed = JSON.parse(raw) as NifGeo;
+      const parsed = JSON.parse(raw) as NifGeo & { error?: string };
+      if (parsed.error) throw new Error(parsed.error);
       if (!parsed.shapes) throw new Error('no shapes');
       setGeo(parsed);
       setGeoPath(p);
@@ -257,7 +258,7 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
           <button className="papyrus-close" onClick={requestClose} title="Close"><X size={16} /></button>
         </div>
 
-        {mode !== 'materials' && unavailable && <div className="papyrus-warn">NIF bridge not available -- run the desktop app (not the browser dev server). niftool.exe must be built.</div>}
+        {mode !== 'materials' && unavailable && <div className="papyrus-warn">NIF bridge not available -- run the desktop app (not the browser dev server). niftool.exe is only needed for authoring and the block tree.</div>}
         {mode === 'materials' && matUnavailable && <div className="papyrus-warn">Material bridge not available -- run the desktop app (not the browser dev server).</div>}
 
         <div className={`papyrus-body ${mode === 'edit' || mode === 'materials' ? 'nif-edit-body' : ''}`}>
@@ -439,7 +440,7 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
               </div>
             )}
             <div className="papyrus-output-head">
-              <span>OUTPUT -- niftool {mode}</span>
+              <span>OUTPUT -- {mode}</span>
               {result && <button className="papyrus-copy" onClick={() => navigator.clipboard.writeText(result)}>Copy</button>}
             </div>
             <pre className="papyrus-output-body nif-output">{result || 'Pick a file and run.'}</pre>
