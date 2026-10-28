@@ -152,14 +152,6 @@ std::string text_bytes(const radicle_swf_edit_text_fields& fields) {
   return std::string(reinterpret_cast<const char*>(fields.text), fields.text_size);
 }
 
-std::size_t flat_span(const std::vector<SwfTag>& tags) {
-  std::size_t total = 0;
-  for (const auto& tag : tags) {
-    total += 1 + flat_span(tag.children);
-  }
-  return total;
-}
-
 bool timeline_tags(const SwfFile& file, std::uint16_t timeline_id, const std::vector<SwfTag>*& out,
                    std::size_t& base, std::string& message) {
   if (timeline_id == 0) {
@@ -174,7 +166,7 @@ bool timeline_tags(const SwfFile& file, std::uint16_t timeline_id, const std::ve
       base = flat + 1;
       return true;
     }
-    flat += 1 + flat_span(tag.children);
+    flat += 1 + radicle_swf_detail::subtree_size(tag.children);
   }
   message = "timeline " + std::to_string(timeline_id) + " is not a DefineSprite in this movie";
   return false;
@@ -271,7 +263,7 @@ std::string placement_json(const std::vector<SwfTag>& tags, std::size_t base) {
   std::size_t flat = base;
   for (std::size_t index = 0; index < tags.size(); ++index) {
     const std::size_t row = flat;
-    flat += 1 + flat_span(tags[index].children);
+    flat += 1 + radicle_swf_detail::subtree_size(tags[index].children);
     const auto& placement = tags[index].placement;
     if (!placement) continue;
     comma(out);

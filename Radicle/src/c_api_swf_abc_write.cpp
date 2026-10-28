@@ -11,7 +11,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <cstdlib>
 #include <cstring>
 #include <span>
 #include <string>
@@ -29,16 +28,6 @@ using InstructionEdit = fo4::abc::AbcEditStatus (*)(fo4::abc::AbcFile&, std::uin
 
 const radicle_swf_detail::abc_view* abc_at(const radicle_swf* swf, std::size_t index) {
   return swf == nullptr || index >= swf->abcs.size() ? nullptr : &swf->abcs[index];
-}
-
-/* A byte buffer must carry the same trailing-NUL invariant as radicle_swf_detail::copy_text. */
-std::uint8_t* copy_bytes(const std::vector<std::uint8_t>& bytes, std::size_t* out_size) {
-  auto* buffer = static_cast<std::uint8_t*>(std::malloc(bytes.size() + 1));
-  if (buffer == nullptr) return nullptr;
-  if (!bytes.empty()) std::memcpy(buffer, bytes.data(), bytes.size());
-  buffer[bytes.size()] = 0;
-  out_size[0] = bytes.size();
-  return buffer;
 }
 
 radicle_status check_block(const radicle_swf* swf, std::size_t abc, const std::uint8_t* text,
@@ -175,7 +164,8 @@ radicle_status radicle_swf_abc_assemble(const radicle_swf* swf, size_t abc, cons
     if (file.serialize(bytes) != fo4::abc::AbcStatus::Ok) {
       return fail(RADICLE_STATUS_PARSE_ERROR, "the assembled model does not serialize");
     }
-    auto* buffer = copy_bytes(bytes, out_size);
+    auto* buffer = radicle_swf_detail::copy_text(
+        std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()), out_size);
     if (buffer == nullptr) return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to allocate the ABC bytes");
     out_bytes[0] = buffer;
     return RADICLE_STATUS_OK;
