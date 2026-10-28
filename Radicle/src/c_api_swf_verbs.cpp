@@ -313,10 +313,12 @@ radicle_status radicle_swf_edit_text_read(const radicle_swf_history* history, si
   }
   return guarded("unknown exception while reading a DefineEditText", [&] {
     const SwfFile& file = history->history.file();
-    if (tag_index >= file.tags.size()) {
-      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the tag index is out of range");
+    std::size_t top_level = 0;
+    if (!radicle_swf_detail::top_level_position(file, tag_index, top_level)) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                  "the tag index is out of range or names a tag inside a DefineSprite");
     }
-    const SwfTag& tag = file.tags[tag_index];
+    const SwfTag& tag = file.tags[top_level];
     if (tag.code != fo4::swf::tag::kDefineEditText || !tag.edit_text) {
       return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the tag is not a decoded DefineEditText");
     }
@@ -350,8 +352,13 @@ radicle_status radicle_swf_edit_text_apply(radicle_swf_history* history, size_t 
     if (fields->has_text) edit.text = text_bytes(*fields);
     if (fields->has_color) edit.color = fields->color;
     if (fields->has_bounds) edit.bounds = from_rect(fields->bounds);
+    std::size_t top_level = 0;
+    if (!radicle_swf_detail::top_level_position(history->history.file(), tag_index, top_level)) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                  "the tag index is out of range or names a tag inside a DefineSprite");
+    }
     return commit_edit(*history, *out_result, [&](SwfFile& file, std::string& message) {
-      return fo4::swf::apply_edit_text(file, tag_index, edit, message);
+      return fo4::swf::apply_edit_text(file, top_level, edit, message);
     });
   });
 }

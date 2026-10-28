@@ -3,7 +3,7 @@ import { AlertTriangle, RotateCcw, RotateCw, Save as SaveIcon } from 'lucide-rea
 import './SwfPanel.css';
 
 type CharacterRow = { id: number; kind: string; tagIndex: number; name: string; imported: string };
-type LabelRow = { name: string; tagIndex: number; spriteId: number; insideSprite: boolean };
+type LabelRow = { name: string; labelIndex: number; frame: number };
 type InstanceRow = {
   depth: number; character: number; name: string; x: number; y: number;
   scaleX: number; scaleY: number; rotation: number; instanceId: number;
@@ -20,15 +20,16 @@ type AbcBlockRow = { abc: number; name: string; classes: string[]; scripts: stri
 type SwfHost = {
   Open(path: string): Promise<string>;
   Characters(): Promise<string>;
-  FrameLabels(): Promise<string>;
+  FrameLabels(timeline: number): Promise<string>;
   Frame(timeline: number, frame: number): Promise<string>;
-  RenameLabel(tagIndex: number, name: string): Promise<string>;
+  Timeline(index: number): Promise<string>;
+  RenameLabel(timeline: number, labelIndex: number, name: string): Promise<string>;
   Undo(): Promise<string>;
   Redo(): Promise<string>;
   State(): Promise<string>;
   Save(): Promise<string>;
   AddLabel(frame: number, name: string, timeline: number): Promise<string>;
-  RemoveLabel(tagIndex: number): Promise<string>;
+  RemoveLabel(timeline: number, labelIndex: number): Promise<string>;
   Placements(): Promise<string>;
   SetDepth(tagIndex: number, depth: number): Promise<string>;
   PlacementMatrix(tagIndex: number): Promise<string>;
@@ -57,7 +58,8 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
   const [instances, setInstances] = useState<InstanceRow[]>([]);
   const [timeline, setTimeline] = useState(0);
   const [frame, setFrame] = useState(0);
-  const [selectedLabel, setSelectedLabel] = useState<LabelRow | null>(null);
+  const [selectedLabel, setSelectedLabel] = useState<(LabelRow & { timeline: number }) | null>(null);
+  const [labelOwner, setLabelOwner] = useState(0);
   const [labelName, setLabelName] = useState('');
   const [state, setState] = useState<StateReply>({ revision: 0, undo: 0, redo: 0, dirty: false });
   const [error, setError] = useState('');
@@ -73,13 +75,44 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
   const [instructions, setInstructions] = useState('');
   const [selectedMethod, setSelectedMethod] = useState<{ key: string; label: string } | null>(null);
   const selectedMethodKey = useRef('');
+  const labelRequest = useRef(0);
+
+  const loadCharacters = useCallback(async () => {
+    const bridge = host();
+    if (!bridge) return;
+    const chars = parse<{ characters: CharacterRow[] }>(await bridge.Characters());
+    setCharacters(chars.characters ?? []);
+  }, []);
+
+  // Constraint: Frame takes the timeline index while the label calls take the DefineSprite character id that Timeline reports.
+  const loadLabels = useCallback(async (nextTimeline: number) => {
+    const bridge = host();
+    if (!bridge) return;
+    const request = ++labelRequest.current;
+    const owner = parse<{ characterId: number }>(await bridge.Timeline(nextTimeline));
+    if (owner.error) { setError(owner.error); return; }
+    const reply = parse<{ labels: LabelRow[] }>(await bridge.FrameLabels(owner.characterId));
+    if (request !== labelRequest.current) return;
+    const rows = reply.labels ?? [];
+    setLabelOwner(owner.characterId);
+    setLabels(rows);
+    setSelectedLabel(current => {
+      if (!current || current.timeline !== nextTimeline) return null;
+      const row = rows.find(item => item.labelIndex === current.labelIndex);
+      return row ? { ...row, timeline: nextTimeline } : null;
+    });
+    if (reply.error) setError(reply.error);
+  }, []);
 
   const refresh = useCallback(async () => {
     const bridge = host();
     if (!bridge) return;
     const nextState = parse<StateReply>(await bridge.State());
     setState(nextState);
-  }, []);
+    setSelectedLabel(null);
+    await loadCharacters();
+    await loadLabels(timeline);
+  }, [timeline, loadCharacters, loadLabels]);
 
   const open = useCallback(async () => {
     const bridge = host();
@@ -95,10 +128,9 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
       const opened = parse<StateReply>(await bridge.Open(path.trim()));
       if (opened.error) { setError(opened.error); return; }
       setState(opened);
-      const chars = parse<{ characters: CharacterRow[] }>(await bridge.Characters());
-      setCharacters(chars.characters ?? []);
-      const labelReply = parse<{ labels: LabelRow[] }>(await bridge.FrameLabels());
-      setLabels(labelReply.labels ?? []);
+      setSelectedLabel(null);
+      await loadCharacters();
+      await loadLabels(timeline);
       const rows = parse<{ rows: InstanceRow[] }>(await bridge.Frame(timeline, frame));
       setInstances(rows.rows ?? []);
       const placementReply = parse<{ placements: PlacementRow[] }>(await bridge.Placements());
@@ -109,28 +141,29 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     } finally {
       setBusy(false);
     }
-  }, [path, timeline, frame]);
+  }, [path, timeline, frame, loadCharacters, loadLabels]);
 
   const pickFrame = useCallback(async (nextTimeline: number, nextFrame: number) => {
     const bridge = host();
     if (!bridge) return;
     setTimeline(nextTimeline);
     setFrame(nextFrame);
+    if (nextTimeline !== timeline) await loadLabels(nextTimeline);
     const rows = parse<{ rows: InstanceRow[] }>(await bridge.Frame(nextTimeline, nextFrame));
     if (rows.error) { setError(rows.error); return; }
     setInstances(rows.rows ?? []);
-  }, []);
+  }, [timeline, loadLabels]);
 
   const renameLabel = useCallback(async () => {
     const bridge = host();
     if (!bridge || !selectedLabel) return;
-    const reply = parse<StateReply>(await bridge.RenameLabel(selectedLabel.tagIndex, labelName));
+    const reply = parse<StateReply>(await bridge.RenameLabel(labelOwner, selectedLabel.labelIndex, labelName));
     if (reply.error) { setError(reply.error); return; }
     setError('');
     setState(reply);
-    const labelsReply = parse<{ labels: LabelRow[] }>(await bridge.FrameLabels());
-    setLabels(labelsReply.labels ?? []);
-  }, [selectedLabel, labelName]);
+    await loadCharacters();
+    await loadLabels(timeline);
+  }, [timeline, labelOwner, selectedLabel, labelName, loadCharacters, loadLabels]);
 
   const pickCharacter = useCallback(async (character: CharacterRow) => {
     if (character.kind !== 'EditText') return;
@@ -156,13 +189,14 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
   const addLabel = useCallback(async () => {
     const bridge = host();
     if (!bridge || !labelName.trim()) return;
-    const reply = parse<StateReply>(await bridge.AddLabel(frame, labelName.trim(), timeline));
+    const reply = parse<StateReply>(await bridge.AddLabel(frame, labelName.trim(), labelOwner));
     if (reply.error) { setError(reply.error); return; }
     setError('');
     setState(reply);
-    const labelsReply = parse<{ labels: LabelRow[] }>(await bridge.FrameLabels());
-    setLabels(labelsReply.labels ?? []);
-  }, [frame, labelName, timeline]);
+    setSelectedLabel(null);
+    await loadCharacters();
+    await loadLabels(timeline);
+  }, [frame, labelName, labelOwner, timeline, loadCharacters, loadLabels]);
   const pickPlacement = useCallback(async (item: PlacementRow) => {
     const bridge = host();
     if (!bridge) return;
@@ -209,14 +243,14 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
   const removeLabel = useCallback(async () => {
     const bridge = host();
     if (!bridge || !selectedLabel) return;
-    const reply = parse<StateReply>(await bridge.RemoveLabel(selectedLabel.tagIndex));
+    const reply = parse<StateReply>(await bridge.RemoveLabel(labelOwner, selectedLabel.labelIndex));
     if (reply.error) { setError(reply.error); return; }
     setError('');
     setState(reply);
     setSelectedLabel(null);
-    const labelsReply = parse<{ labels: LabelRow[] }>(await bridge.FrameLabels());
-    setLabels(labelsReply.labels ?? []);
-  }, [selectedLabel]);
+    await loadCharacters();
+    await loadLabels(timeline);
+  }, [timeline, labelOwner, selectedLabel, loadCharacters, loadLabels]);
   const pickMethod = useCallback(async (block: AbcBlockRow, method: AbcMethodRow) => {
     const bridge = host();
     if (!bridge) return;
@@ -280,12 +314,12 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
               </li>
             ))}
           </ul>
-          <h4>Timelines</h4>
+          <h4>Frame labels</h4>
           <ul>
             {labels.map(label => (
-              <li key={`${label.spriteId}-${label.tagIndex}`}>
-                <button type="button" onClick={() => { setSelectedLabel(label); setLabelName(label.name); }}>
-                  {label.insideSprite ? `sprite ${label.spriteId}` : 'root'} · {label.name}
+              <li key={label.labelIndex}>
+                <button type="button" onClick={() => { setSelectedLabel({ ...label, timeline }); setLabelName(label.name); }}>
+                  {labelOwner === 0 ? 'root' : `sprite ${labelOwner}`} · {label.name}
                 </button>
               </li>
             ))}
