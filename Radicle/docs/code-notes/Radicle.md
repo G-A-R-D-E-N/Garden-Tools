@@ -8618,3 +8618,13 @@ Detects finddef pushing the global object or null when a pushed scope holds the 
 - `AcceptsTrailingBytesAfterTheSplitterRect` detects a strict-length check that refuses a grid tag with bytes after its RECT (`0xAA 0xBB` appended).
 - `RefusesAScalingGridPayloadCutInsideItsRect` detects a RECT reader that zero-fills missing bits into a grid, or one that reads past the payload. It uses two cuts: an id-only payload, and a 5-byte payload where the RECT needs 7 bytes. Each must give `malformed_tag`, no typed grid, the raw payload kept, and the End tag still parsed.
 - `ScalingGridLookupReturnsTheLastGridForAnId` detects `find_scaling_grid` returning the first of two grids for one id, returning a grid for a different id, or returning a non-null pointer for an id with no grid.
+
+## Radicle/tests/test_graph_lift_real.cpp:GraphLiftReal
+
+- Each sampled script gets its own `ScriptIndex`. `GraphCompiler::compile` publishes the regenerated source into a scratch root and calls `index_.addRoot` (`graph_compiler.cpp:publishForSelfReference`), so one shared index would gain a root per script and every lookup would scan them all.
+- `GraphLifter::refuse` (`graph_lifter.cpp:refuse`, `graph_lifter_expr.cpp:refuse`) puts only `Line N: ` in the message and never sets `sourceLine`. `attributeRefusals` therefore assigns each error to the callable with the nearest start line at or before N. A refusal that falls after the last callable of a script, such as a property with Get or Set bodies declared below the functions, is charged to that last callable. A refusal before the first callable is charged to nothing and is not in the histogram.
+- The document is compiled even when some callables were refused, so unrefused callables in the same script can still round trip. A partial document that fails to compile shows up as a missed round trip, not as a refusal.
+- `reasonOf` replaces quoted names with `'X'`, so refusals group by construct instead of by identifier.
+- A callable's vanilla body is found by state name and function name. The default state is named `""` (`code_generator.cpp:emptyState`). `helper::functionDifference` decides identity: flags, return type, parameter count, and every instruction mnemonic and operand.
+- `GraphCompiler::clearScratch` runs after the loop, so scratch roots from this gate do not persist in the process temp folder.
+- The `lifted` and `roundtrip` floors (`kMinimumLiftedFraction`, `kMinimumRoundtripFraction`, both 0.5) are placeholders, not measurements. They must be re-measured on the fo4-data runner before anyone relies on them.

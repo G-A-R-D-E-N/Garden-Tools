@@ -95,6 +95,18 @@ Add `--gtest_output=xml:<dir>\<gate>.xml` to keep `RecordProperty` values. For a
 - Pass: per tree natives == present, problems == 0, unmapped == 0, totalPresent > 0, totalRecovered == totalPresent (lines 199-208). Consistency: checked > 0 with field checks (221-231). Agreement: recovered > 0 and no mismatches (250-251). Diff: `newer - older` count equals added minus removed (283-284).
 - Skip: four messages starting `FO4RE_F4SE_SRC is not set` (lines 157, 213, 236, 257). A variable pointing at a bad path shows the same message.
 
+### 9. Graph lift sweep (sampled, 1,500 files)
+
+- Test: `GraphLiftReal.LiftsAndRelinearizesSampledCorpusFunctionsToTheirOriginalBodies` (`Radicle/tests/test_graph_lift_real.cpp`). Its suite name ends in `Real`, so CI's `REAL_DATA_TEST_REGEX` (`native-ci.yml:66`) selects it with no regex change.
+- Env: `FO4RE_PSC_CORPUS`, falling back to `FO4_PSC_CORPUS` (`rootsFromEnv`). CI sets both to the same `.psc` roots. `FO4_DATA_DIR` is not read.
+- Sample: `stratifiedSample` in `Radicle/tests/papyrus_corpus_roots.hpp`, limit 1,500 (`kLiftSampleLimit`). Scripts that do not parse clean, or whose vanilla compile fails, are not counted.
+- Per callable: every function, event, and state function or event of a sampled script. The graph lifter (`GraphLifter::lift`) refuses by diagnostic, and the test attributes each error to the callable whose start line is the nearest at or before the diagnostic's `Line N:`. A refused callable is counted under its reason. Otherwise `GraphCompiler::compile` (which runs the linearizer) rebuilds the script, and the callable is a round trip when `functionDifference` finds no difference from the vanilla compile.
+- Pass: `attempted > 0`, `lifted >= 0.5 * attempted` (`kMinimumLiftedFraction`), and `roundtrip >= 0.5 * lifted` (`kMinimumRoundtripFraction`). Both floors are unmeasured placeholders and must be re-measured on the data runner. Refusals never fail the gate directly. They only count against the lifted floor.
+- Detects: a lifter change that refuses most of the vanilla corpus (lifted floor), and a linearizer or compiler change that rebuilds a lifted body with different instructions, flags or signature (round-trip floor and the `DIFF` lines).
+- Skip: `FO4RE_PSC_CORPUS is not set to a directory holding .psc sources`.
+- Output: `SAMPLE candidates= selected= stride=`, then `GRAPHLIFT attempted= lifted= roundtrip= refused=`, then up to 15 `REFUSED <count>  <reason>` lines (quoted names replaced by `'X'`) and up to 20 `DIFF` lines.
+- Run: `$env:FO4RE_PSC_CORPUS = '<psc roots>'`, then the template with this filter.
+
 ## What to record
 
 - The gtest summary lines (`[  PASSED  ]`, `[  SKIPPED ]`, `[  FAILED  ]`). Standard gtest output; the vendored gtest version is UNVERIFIED.
