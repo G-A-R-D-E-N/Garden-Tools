@@ -2598,3 +2598,23 @@ A non-empty `-TexconvPath` (or `TEXCONV_PATH`) wins over the pinned texconv, and
 
 Regression targets: a `latest` or plain-`http` URL, a malformed SHA256, a Locator path that drifts from `PluginEditTool/native/src/tools/ToolLocator.cpp` (texconv must stay at `tools/texconv/Texconvx64.exe`, ffmpeg at `tools/audio/ffmpeg.exe`), a `member` that disagrees with the archive type, a package script that stops calling the fetcher, an ffmpeg pin with no `pinNote` (its expiry is then undocumented), and the release lane bundling niftool or reading a texconv variable again. `native-ci.yml` runs it through `unittest discover -s .github/scripts`.
 
+## PluginEditTool/native/src/assets/NifRender.cpp:renderTree, renderVerify — in-process NIF tree and verify
+
+`NifService::tree` and `NifService::verify` (`PluginEditTool/native/src/assets/NifService.cpp:NifService::tree`, `NifService::verify`) run niftool when the configured executable resolves and otherwise call these renderers. `renderTree` emits the `NifTree` contract that `PluginEditTool/web/src/NifEditor.tsx` consumes: a `Nodes` group (name, translation, scale from `Node.local`) and a `Shapes` group (name, translation from `Radicle/src/nif/block_transform.cpp:block_transform`, verts and tris counts, `shaderType` as the shader block's type, `material` as the BSLightingShaderProperty name, `tex0` to `tex7` padded with empty strings). The `cat` values `node` and `shape` are labels only: there is no in-process set path, so they are not niftool's values. Failures return `NifParseFailed`, which `PluginEditTool/native/src/app/ServiceTargets.cpp:serviceJsonText` wraps as `{"error":...}`.
+
+Omitted, not guessed: node rotation (not a web field), collision, BSXFlags, alpha property, effect shader, shader flags, emissive, specular, glossiness, opacity and UV offset/scale. The reader (`Radicle/src/nif/shader.cpp:read_shader`) stops at the texture-set reference, and the field offsets after it are unverified. Shader flag bit names are unverified too.
+
+`renderVerify` returns `RESULT: N checks, M failed` and one `[ok]`/`[FAIL]` line per check. On a good file it runs 9 checks: header parses, node children point back to their parent, shapes parse, shapes have vertices and triangles, normals match the vertex count, UVs match the vertex count, shader and skin reads are clean, skinned shapes have bones, texture paths are relative. "Block count matches" and "child and root references in range" are not checks: `read_nif` already rejects them, so the check would be tautological. Empty texture slots are allowed. An unreadable header is reported as a `[FAIL] header parses` line and not as an error, so the panel's `/0 failed/` parse still sees a verdict.
+
+Regression targets, by test in `PluginEditTool/native/tests/unit/NifServiceTests.cpp`:
+- `NifService tree maps nodes and shape slots onto the editor contract in-process`: a dropped node, a block-id drift, a renamed key or group, or a shifted texture slot makes NifEditor render blank.
+- `NifService maps tree and verify onto niftool when it resolves`: the in-process path bypasses niftool when niftool is configured.
+- `NifService verify reports a readable FO4 NIF in-process`: verify routes to niftool when niftool is absent.
+- `NifService verify reports a truncated NIF as a failed header check`: verify throws instead of reporting.
+- `NifService verify flags a drive-letter texture path`: an absolute path leaks into the editor.
+- `NifService verify flags a child that two nodes both list`: the parent-link check silently passes.
+- `NifService authoring without niftool names the missing tool`: this test no longer asserts verify, because verify now runs in-process.
+- `PluginEditTool/native/tests/unit/ServiceTargetsTests.cpp:NifTarget Tree returns the error JSON for an unreadable NIF with niftool absent`: a Tree failure returned as raw text, which the web `JSON.parse` cannot read.
+
+`Radicle/src/nif/block_transform.cpp:block_transform` reads the local transform of an AV-object block (a node or a shape) through `detail::read_av_header`. It is used for shape translation only.
+

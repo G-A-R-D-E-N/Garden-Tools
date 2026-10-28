@@ -9,5 +9,7 @@ namespace fo4ide::assets {
 
 Result<std::string> renderGeometry(const std::filesystem::path& nifPath);
 Result<std::string> renderInspect(const std::filesystem::path& nifPath);
+Result<std::string> renderTree(const std::filesystem::path& nifPath);
+Result<std::string> renderVerify(const std::filesystem::path& nifPath);
 
 }

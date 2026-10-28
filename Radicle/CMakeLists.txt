@@ -137,6 +137,7 @@ add_library(fo4
   src/binary/cursor.cpp
   src/nif/nif.cpp
   src/nif/geometry.cpp
+  src/nif/block_transform.cpp
   src/nif/shader.cpp
   src/nif/skin.cpp
   src/texture/bcn.cpp
