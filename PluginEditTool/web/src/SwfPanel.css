@@ -14,3 +14,4 @@
 .swf-box { position: absolute; border: 1px dashed #7aa; font-size: 10px; color: #7aa; }
 .swf-abc ul { list-style: none; margin: 0 0 4px; padding-left: 12px; }
 .swf-abc pre { max-height: 240px; overflow: auto; font-size: 11px; }
+.swf-shape { max-width: 100%; }

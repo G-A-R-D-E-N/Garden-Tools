@@ -83,7 +83,7 @@ public class SwfInterop
         var text = Document().EditText(tagIndex);
         return Json(new
         {
-            id = text.CharacterId, text = text.Text, variable = text.Variable,
+            id = text.CharacterId, text = text.Text,
             color = text.Color is null ? "" : text.Color.Value.ToString("X8"),
             x0 = text.Bounds.XMin, x1 = text.Bounds.XMax, y0 = text.Bounds.YMin, y1 = text.Bounds.YMax,
         });
@@ -156,6 +156,8 @@ public class SwfInterop
     }));
     public Task<string> Disassemble(int abc, int methodIndex) => Run(() =>
         Json(new { text = Document().Movie.Disassemble(abc, methodIndex) }));
+    public Task<string> ShapeSvg(int characterId) => Run(() =>
+        Json(new { svg = Document().Movie.ShapeSvg((ushort)characterId) }));
     public Task<string> Undo() => Run(() => { Document().Undo(); return Snapshot(false); });
 
     public Task<string> Redo() => Run(() => { Document().Redo(); return Snapshot(false); });
