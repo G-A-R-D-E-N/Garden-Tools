@@ -150,6 +150,10 @@ class CodeBuilder {
   void returnvoid() { op(0x47); }
   void throw_op() { op(0x03); }
   void callstatic(std::uint32_t method, std::uint32_t count) { op_u30(0x44, method); u30(count); }
+  void callmethod(std::uint32_t dispatch_id, std::uint32_t count) {
+    op_u30(0x43, dispatch_id);
+    u30(count);
+  }
   void getdescendants(std::uint32_t multiname) { op_multiname(0x59, multiname); }
 
   std::vector<std::uint8_t> bytes() {

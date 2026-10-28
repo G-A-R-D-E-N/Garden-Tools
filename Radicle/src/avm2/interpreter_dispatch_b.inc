@@ -533,9 +533,14 @@
         break;
       }
       case op::k_callmethod:
-      case op::k_callstatic:
-        return fail(InterpreterStatus::NotImplemented,
-                    std::string{"opcode "} + instruction.mnemonic + " is not implemented yet");
+      case op::k_callstatic: {
+        ExecutionResult nested = call_indexed(frame, instruction, depth);
+        if (!nested.ok()) {
+          return nested;
+        }
+        push_value(nested.value);
+        break;
+      }
       case op::k_applytype: {
         const std::uint32_t count = count_operand(instruction);
         std::vector<Value> arguments;
@@ -729,6 +734,11 @@
         push_value(Value::object(std::move(catch_scope)));
         break;
       }
-      case op::k_getouterscope:
-        return fail(InterpreterStatus::NotImplemented,
-                    std::string{"opcode "} + instruction.mnemonic + " is not implemented yet");
+      case op::k_getouterscope: {
+        ExecutionResult scope = outer_scope_value(frame, operand_at(instruction, 0));
+        if (!scope.ok()) {
+          return scope;
+        }
+        push_value(scope.value);
+        break;
+      }
