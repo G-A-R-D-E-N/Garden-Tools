@@ -27,10 +27,6 @@ struct Mask {
 
 using ShapeIndex = std::map<std::uint16_t, const SwfShape*>;
 
-std::size_t level_of(const std::string& path) {
-  return static_cast<std::size_t>(std::count(path.begin(), path.end(), '/'));
-}
-
 std::string transform_text(const SwfTransform& transform) {
   return "matrix(" + svg_number(transform.scale_x) + " " + svg_number(transform.rotate_skew0) +
          " " + svg_number(transform.rotate_skew1) + " " + svg_number(transform.scale_y) + " " +
@@ -70,7 +66,7 @@ std::string frame_body(const ShapeIndex& shapes, const SvgBitmaps& bitmaps,
   std::vector<Mask> masks;
   for (std::size_t index = 0; index < frame.instances.size(); ++index) {
     const SwfFrameInstance& row = frame.instances[index];
-    const std::size_t level = level_of(row.path);
+    const std::size_t level = row.nesting_level;
     std::erase_if(masks, [&](const Mask& mask) {
       return level < mask.level || (level == mask.level && row.depth > mask.end);
     });
@@ -78,6 +74,9 @@ std::string frame_body(const ShapeIndex& shapes, const SvgBitmaps& bitmaps,
       if (level == mask.level) {
         mask.inside = row.depth > mask.depth;
       }
+    }
+    if (!row.world_visible) {
+      continue;
     }
     const auto found = shapes.find(row.character_id);
     if (found == shapes.end()) {
