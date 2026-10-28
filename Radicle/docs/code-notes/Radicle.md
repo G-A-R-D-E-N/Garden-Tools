@@ -6436,7 +6436,7 @@ Hand-built `PexFile` values, because the compiler is not lifted yet. Each test p
 
 ## tests/test_papyrus_decompiler_real.cpp:TEST(PapyrusDecompilerReal, EveryCorpusPexDecompilesToSourceAndListingWithoutThrowing)
 
-Gated on `FO4_PEX_CORPUS`. It reads each `.pex`, runs `toSource` and `disassemble`, and fails on an exception or a missing `ScriptName` or listing header. It prints the fallback and unhandled-instruction counts and does not assert them, because no baseline has been measured. PET's 80.2% recompile-fidelity sweep is not here: that needs the compiler.
+Gated on `FO4RE_PEX_CORPUS`, falling back to `FO4_PEX_CORPUS`, both read through `papyrus_corpus_roots.hpp` `rootsFromEnv` as in `test_papyrus_codegen_real.cpp`. It reads each `.pex`, runs `toSource` and `disassemble`, and fails on an exception or a missing `ScriptName` or listing header. It prints the fallback and unhandled-instruction counts and does not assert them, because no baseline has been measured. PET's 80.2% recompile-fidelity sweep is not here: that needs the compiler.
 
 ## include/fo4/papyrus/user_flags.hpp:UserFlagTable
 

@@ -1,13 +1,14 @@
 #include "fo4/papyrus/decompiler.hpp"
 #include "fo4/pex/pex.hpp"
 
+#include "papyrus_corpus_roots.hpp"
+
 #include <gtest/gtest.h>
 
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -16,29 +17,15 @@
 #include <string>
 #include <vector>
 
+namespace helper = fo4::papyrus::test;
+
 namespace {
 
-#ifdef _WIN32
-constexpr char kRootSeparator = ';';
-#else
-constexpr char kRootSeparator = ':';
-#endif
-
-std::vector<std::filesystem::path> collectLoosePex(const std::string& value) {
+std::vector<std::filesystem::path> collectLoosePex(
+    const std::vector<std::filesystem::path>& roots) {
   std::vector<std::filesystem::path> found;
-  std::string current;
-  std::vector<std::string> roots;
-  for (const char ch : value + kRootSeparator) {
-    if (ch != kRootSeparator) {
-      current.push_back(ch);
-      continue;
-    }
-    if (!current.empty()) roots.push_back(current);
-    current.clear();
-  }
-  for (const auto& root : roots) {
+  for (const auto& base : roots) {
     std::error_code error;
-    const std::filesystem::path base(root);
     if (!std::filesystem::is_directory(base, error)) continue;
     for (std::filesystem::recursive_directory_iterator it(base, error), end; it != end; it.increment(error)) {
       if (error) break;
@@ -71,10 +58,15 @@ std::size_t countOccurrences(const std::string& text, const std::string& needle)
 }  // namespace
 
 TEST(PapyrusDecompilerReal, EveryCorpusPexDecompilesToSourceAndListingWithoutThrowing) {
-  const char* roots = std::getenv("FO4_PEX_CORPUS");
-  if (roots == nullptr) GTEST_SKIP() << "set FO4_PEX_CORPUS to one or more directories of .pex files";
+  auto roots = helper::rootsFromEnv("FO4RE_PEX_CORPUS");
+  if (roots.empty()) roots = helper::rootsFromEnv("FO4_PEX_CORPUS");
+  if (roots.empty()) {
+    GTEST_SKIP() << "set FO4RE_PEX_CORPUS to one or more directories of .pex files";
+  }
   const auto files = collectLoosePex(roots);
-  if (files.empty()) GTEST_SKIP() << "no .pex files under " << roots;
+  if (files.empty()) {
+    GTEST_SKIP() << "no .pex files under the FO4RE_PEX_CORPUS roots";
+  }
 
   std::size_t decompiled = 0;
   std::size_t fallbacks = 0;
