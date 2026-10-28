@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -274,6 +275,69 @@ TEST(Avm1Interpreter, DeepObjectChainTearsDownWithoutRecursion) {
   ASSERT_TRUE(result.ok()) << result.message;
   EXPECT_EQ(result.steps, std::size_t{23} * kDepth + 10);
   EXPECT_EQ(result.variables.at("i").number, static_cast<double>(kDepth));
+}
+
+Bytes new_object() { return cat({push_int(0), push_text("Object"), rec(0x40, {})}); }
+
+Bytes get_var(std::string_view name) { return cat({push_text(name), rec(0x1C, {})}); }
+
+Bytes set_var(std::string_view name, const Bytes& value) {
+  return cat({push_text(name), value, rec(0x1D, {})});
+}
+
+Bytes set_member(const Bytes& object, std::string_view name, const Bytes& value) {
+  return cat({object, push_text(name), value, rec(0x4F, {})});
+}
+
+// Invariant: a diamond root A holds B and C, both of which hold the shared child D, and D holds a 2000 object chain; D has two owners until the roots drop, and destroying A releases D and the chain exactly once, while a teardown that moves D out of its first parent or never takes a child leaks or frees early.
+TEST(Avm1Interpreter, DiamondSharedChildTearsDownAfterItsLastParent) {
+  constexpr std::uint32_t kDepth = 2000;
+  const Bytes test =
+      cat({push_text("i"), rec(0x1C, {}), push_int(kDepth - 1), rec(0x48, {}), rec(0x12, {})});
+  const Bytes body = cat({
+      push_int(0), push_text("Object"), rec(0x40, {}), rec(0x4C, {}), push_text("child"),
+      push_text("head"), rec(0x1C, {}), rec(0x4F, {}), push_text("head"), rec(0x4D, {}),
+      rec(0x1D, {}), push_text("i"), push_text("i"), rec(0x1C, {}), rec(0x50, {}), rec(0x1D, {}),
+  });
+  const Bytes exit_if = rec(0x9D, le16(static_cast<std::uint16_t>(body.size() + 5)));
+  const Bytes back_jump = rec(
+      0x99, le16(static_cast<std::uint16_t>(-static_cast<int>(test.size() + body.size() + 10))));
+  const Bytes input = cat({
+      set_var("bottom", new_object()),
+      set_var("head", get_var("bottom")),
+      set_var("i", push_int(0)),
+      test,
+      exit_if,
+      body,
+      back_jump,
+      set_var("d", new_object()),
+      set_member(get_var("d"), "down", get_var("head")),
+      set_var("b", new_object()),
+      set_member(get_var("b"), "x", get_var("d")),
+      set_var("c", new_object()),
+      set_member(get_var("c"), "x", get_var("d")),
+      set_var("root", new_object()),
+      set_member(get_var("root"), "l", get_var("b")),
+      set_member(get_var("root"), "r", get_var("c")),
+      Bytes{0x00},
+  });
+  const auto stream = decode(input);
+  ASSERT_TRUE(stream.ok()) << stream.message;
+  auto result = fo4::avm1::execute_actions(stream);
+  ASSERT_TRUE(result.ok()) << result.message;
+  std::weak_ptr<fo4::avm1::Avm1Object> shared_child = result.variables.at("d").object;
+  std::weak_ptr<fo4::avm1::Avm1Object> top = result.variables.at("head").object;
+  std::weak_ptr<fo4::avm1::Avm1Object> bottom = result.variables.at("bottom").object;
+  for (const char* name : {"d", "head", "bottom", "b", "c"}) {
+    result.variables.erase(name);
+  }
+  EXPECT_EQ(shared_child.use_count(), 2);
+  EXPECT_EQ(top.use_count(), 1);
+  EXPECT_EQ(bottom.use_count(), 1);
+  result.variables.erase("root");
+  EXPECT_TRUE(shared_child.expired());
+  EXPECT_TRUE(top.expired());
+  EXPECT_TRUE(bottom.expired());
 }
 
 }  // namespace

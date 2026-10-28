@@ -8044,3 +8044,16 @@ Out of scope: DefineButton rows, dynamic EditText, text used as a mask, and text
 - `Radicle/tests/test_swf_svg.cpp:SwfFrameSvg.StaticTextAppliesItsMatrixAndSkipsFontsWithoutGlyphShapes` detects a DefineText MATRIX that is ignored, which would leave the glyph at `matrix(1 0 0 1 0 0)`, and a font with no glyph shapes that emits an empty group or indexes an empty glyph list.
 
 Expected strings were derived by hand from `Radicle/src/swf/swf_svg.cpp:loops_text` and `Radicle/src/swf/swf_svg.cpp:fill_paths`. Nothing was compiled or run on the development machine for this change, so CI must confirm them.
+
+## Radicle/tests/test_avm1_objects.cpp:DiamondSharedChildTearsDownAfterItsLastParent
+
+- `Radicle/tests/test_avm1_objects.cpp:DiamondSharedChildTearsDownAfterItsLastParent` builds a diamond: root A holds B and C, and both hold the shared child D, which holds a 2000-object chain. It detects a teardown that moves D out of its first parent while a second parent still holds it, which frees D and strands the chain early, and a teardown that never takes a child, which leaks the chain. Before the roots drop, D has two owners and the chain's top and bottom have one each. After A is released, D, the top and the bottom must all have expired. The guard that keeps this right is the `use_count() == 1` check in `Radicle/src/avm1/object_ops.cpp:Avm1Object::~Avm1Object`. `Avm1Object` is internal, so the test drives the graph through bytecode and reads only `Avm1Result::variables` through weak pointers. It therefore shows that the shared child is released, not a destructor count of exactly one.
+
+## Radicle/tests/test_swf_svg_text_matrix.cpp:TextRecordOffsetIsScaledByTheTextMatrix
+
+- `Radicle/tests/test_swf_svg_text_matrix.cpp:TextRecordOffsetIsScaledByTheTextMatrix` detects a TEXTRECORD x_offset that is placed without the DefineText MATRIX scale, which would emit `matrix(2 0 0 2 10 0)`, and an offset that is dropped, which would emit `matrix(2 0 0 2 0 0)`. Derivation: `Radicle/src/swf/swf_frame_svg.cpp:text_paths` places the record at 200 twips / 20 = 10 px, then `compose_transform(text_transform, placed)` gives translate_x = 2 * 10 + 0 = 20 with scale 2, so the emitted transform is `matrix(2 0 0 2 20 0)`. The brief's expected `matrix(2 0 0 2 40 0)` needs a MATRIX translate of 400 twips or an x_offset of 400. Neither is in the brief's inputs, so the test uses the derived 20.
+
+## Radicle/tests/test_avm2_call_indexed.cpp:callstatic argument order and primitive receiver
+
+- `Radicle/tests/test_avm2_call_indexed.cpp:CallstaticConsumesItsArgumentsInPushOrder` detects an argument pop that reverses the order or drops one argument. `Radicle/src/avm2/interpreter.cpp:Interpreter::pop_arguments` fills the vector from the top of the stack, so the first pushed value is local 1. Pushing 10 then 3 and subtracting gives 7 through `Radicle/src/avm2/interpreter_ops.cpp:subtract_values`; reversed arguments would give -7.
+- `Radicle/tests/test_avm2_call_indexed.cpp:CallstaticBoxesAnIntReceiverAsThis` detects a callstatic that refuses or unboxes a primitive receiver. `Radicle/src/avm2/interpreter_property.cpp:Interpreter::call_indexed` boxes an Int32 receiver with `Interpreter::box` into the builtin `int` class, which `Runtime::link` installs, so the method sees a boxed object holding 5 as `this`. A refusal would end in NullReference.
