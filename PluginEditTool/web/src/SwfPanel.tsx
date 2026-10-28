@@ -134,6 +134,20 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     await loadLabels(timeline);
   }, [timeline, loadCharacters, loadLabels]);
 
+  const showFrame = useCallback(async (requested: number) => {
+    const bridge = host();
+    if (!bridge) return;
+    const next = Math.min(Math.max(0, Math.trunc(requested)), Math.max(0, rootFrames - 1));
+    const request = ++frameRequest.current;
+    setPreviewFrame(next);
+    setFrameSvg('');
+    const reply = parse<{ svg?: string; error?: string }>(await bridge.FrameSvg(next));
+    if (request !== frameRequest.current) return;
+    if (reply.error) { setError(reply.error); return; }
+    setError('');
+    setFrameSvg(reply.svg ?? '');
+  }, [rootFrames]);
+
   const open = useCallback(async () => {
     const bridge = host();
     if (!bridge || !path.trim()) return;
@@ -164,7 +178,9 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
       await loadCharacters();
       await loadLabels(timeline);
       const root = parse<{ frameCount?: number }>(await bridge.Timeline(0));
-      setRootFrames(root.frameCount ?? 0);
+      if (root.error) setError(root.error);
+      const rootCount = root.frameCount ?? 0;
+      setRootFrames(rootCount);
       const rows = parse<{ rows: InstanceRow[] }>(await bridge.Frame(timeline, frame));
       setInstances(rows.rows ?? []);
       const placementReply = parse<{ placements: PlacementRow[] }>(await bridge.Placements());
@@ -178,10 +194,11 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
       const actionReply = parse<{ tags?: ActionTagRow[] }>(await bridge.ActionTags());
       setActionTags(actionReply.tags ?? []);
       if (actionReply.error) setInspectError(actionReply.error);
+      if (rootCount > 0) await showFrame(0);
     } finally {
       setBusy(false);
     }
-  }, [path, timeline, frame, loadCharacters, loadLabels]);
+  }, [path, timeline, frame, loadCharacters, loadLabels, showFrame]);
 
   const pickFrame = useCallback(async (nextTimeline: number, nextFrame: number) => {
     const bridge = host();
@@ -236,20 +253,6 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     setEditTag(character.tagIndex);
     setEditText({ text: reply.text, color: reply.color, x0: reply.x0, x1: reply.x1, y0: reply.y0, y1: reply.y1 });
   }, []);
-
-  const showFrame = useCallback(async (requested: number) => {
-    const bridge = host();
-    if (!bridge) return;
-    const next = Math.min(Math.max(0, Math.trunc(requested)), Math.max(0, rootFrames - 1));
-    const request = ++frameRequest.current;
-    setPreviewFrame(next);
-    setFrameSvg('');
-    const reply = parse<{ svg?: string; error?: string }>(await bridge.FrameSvg(next));
-    if (request !== frameRequest.current) return;
-    if (reply.error) { setError(reply.error); return; }
-    setError('');
-    setFrameSvg(reply.svg ?? '');
-  }, [rootFrames]);
 
   const applyEditText = useCallback(async () => {
     const bridge = host();
@@ -374,6 +377,15 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [command]);
 
+  // Invariant: undo and redo leave revision unchanged, so the document key must include their counts.
+  const docKey = `${state.revision}:${state.undo}:${state.redo}`;
+  const syncedDoc = useRef(docKey);
+  useEffect(() => {
+    if (syncedDoc.current === docKey) return;
+    syncedDoc.current = docKey;
+    if (rootFrames > 0) void showFrame(previewFrame);
+  }, [docKey, rootFrames, previewFrame, showFrame]);
+
   return (
     <div className="swf-panel">
       <header className="swf-head">
@@ -493,7 +505,10 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
               max={Math.max(0, rootFrames - 1)}
               aria-label="Preview frame"
               value={previewFrame}
-              onChange={event => void showFrame(Number(event.target.value))}
+              onChange={event => {
+                const next = Number(event.target.value);
+                if (event.target.value !== '' && Number.isFinite(next)) void showFrame(next);
+              }}
             />
             <button type="button" onClick={() => void showFrame(previewFrame + 1)} disabled={previewFrame >= rootFrames - 1}>Next</button>
             {frameSvg && <img className="swf-frame-image" alt="Frame preview" src={`data:image/svg+xml;utf8,${encodeURIComponent(frameSvg)}`} />}
