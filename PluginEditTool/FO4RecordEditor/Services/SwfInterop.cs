@@ -83,7 +83,7 @@ public class SwfInterop
         var text = Document().EditText(tagIndex);
         return Json(new
         {
-            id = text.CharacterId, text = text.Text, variable = text.Variable,
+            id = text.CharacterId, text = text.Text,
             color = text.Color is null ? "" : text.Color.Value.ToString("X8"),
             x0 = text.Bounds.XMin, x1 = text.Bounds.XMax, y0 = text.Bounds.YMin, y1 = text.Bounds.YMax,
         });
