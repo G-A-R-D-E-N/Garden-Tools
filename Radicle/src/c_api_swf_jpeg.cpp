@@ -58,6 +58,7 @@ radicle_status radicle_swf_bitmap_jpeg(const radicle_swf* swf, size_t index, uin
   }
   return guarded("unknown exception while exporting a JPEG", [&] {
     std::span<const std::byte> image = without_leading_seam(std::span<const std::byte>(tag->payload).subspan(2));
+    if (image.empty()) return fail(RADICLE_STATUS_NOT_FOUND, "the JPEG carries no stream after the erroneous seam");
     const auto* tables = tag->code == fo4::swf::tag::kDefineBits ? nearest_jpeg_tables(swf, index) : nullptr;
     std::vector<std::byte> jpeg;
     if (tables != nullptr && !tables->payload.empty()) {
@@ -67,7 +68,6 @@ radicle_status radicle_swf_bitmap_jpeg(const radicle_swf* swf, size_t index, uin
       jpeg.assign(head.begin(), head.end());
     }
     jpeg.insert(jpeg.end(), image.begin(), image.end());
-    if (jpeg.empty()) return fail(RADICLE_STATUS_NOT_FOUND, "the JPEG carries no stream after the erroneous seam");
     auto* buffer = static_cast<uint8_t*>(std::malloc(jpeg.size()));
     if (buffer == nullptr) return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to allocate the JPEG bytes");
     std::memcpy(buffer, jpeg.data(), jpeg.size());
