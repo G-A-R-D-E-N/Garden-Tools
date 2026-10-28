@@ -48,22 +48,8 @@ struct Edge {
   std::size_t line{0};
 };
 
-std::string number(double value) {
-  char buffer[32];
-  const auto result = std::to_chars(buffer, buffer + sizeof buffer, value,
-                                    std::chars_format::fixed, 6);
-  std::string text(buffer, result.ptr);
-  while (text.back() == '0') {
-    text.pop_back();
-  }
-  if (text.back() == '.') {
-    text.pop_back();
-  }
-  return text;
-}
-
 std::string pixels(std::int64_t twips) {
-  return number(static_cast<double>(twips) / kTwipsPerPixel);
+  return svg_number(static_cast<double>(twips) / kTwipsPerPixel);
 }
 
 std::string point_text(Point point) {
@@ -77,7 +63,7 @@ std::string hex_color(std::uint32_t argb) {
 }
 
 std::string alpha_text(std::uint32_t argb) {
-  return number(static_cast<double>(argb >> 24) / kAlphaOne);
+  return svg_number(static_cast<double>(argb >> 24) / kAlphaOne);
 }
 
 std::string paint(const char* name, std::uint32_t argb) {
@@ -242,12 +228,12 @@ const char* spread_name(std::uint8_t spread) {
 }
 
 std::string matrix_text(const SwfMatrix& matrix) {
-  return "matrix(" + number(matrix.scale_x / kFixedPointOne) + " " +
-         number(matrix.rotate_skew0 / kFixedPointOne) + " " +
-         number(matrix.rotate_skew1 / kFixedPointOne) + " " +
-         number(matrix.scale_y / kFixedPointOne) + " " +
-         number(matrix.translate_x / kTwipsPerPixel) + " " +
-         number(matrix.translate_y / kTwipsPerPixel) + ")";
+  return "matrix(" + svg_number(matrix.scale_x / kFixedPointOne) + " " +
+         svg_number(matrix.rotate_skew0 / kFixedPointOne) + " " +
+         svg_number(matrix.rotate_skew1 / kFixedPointOne) + " " +
+         svg_number(matrix.scale_y / kFixedPointOne) + " " +
+         svg_number(matrix.translate_x / kTwipsPerPixel) + " " +
+         svg_number(matrix.translate_y / kTwipsPerPixel) + ")";
 }
 
 std::string focal_text(const SwfFillStyle& fill) {
@@ -255,22 +241,22 @@ std::string focal_text(const SwfFillStyle& fill) {
     return "";
   }
   const double focal = fill.focal_point.value_or(0) / kFocalPointOne;
-  return " fx=\"" + number(focal * kGradientHalfPixels) + "\"";
+  return " fx=\"" + svg_number(focal * kGradientHalfPixels) + "\"";
 }
 
 std::string stop_text(const SwfGradientStop& stop) {
-  return "<stop offset=\"" + number(stop.ratio / kRatioOne) + "\" stop-color=\"" +
+  return "<stop offset=\"" + svg_number(stop.ratio / kRatioOne) + "\" stop-color=\"" +
          hex_color(stop.color) + "\" stop-opacity=\"" + alpha_text(stop.color) + "\"/>\n";
 }
 
-std::string gradient_text(const SwfFillStyle& fill, std::size_t index) {
+std::string gradient_text(const SwfFillStyle& fill, const std::string& id) {
   const bool linear = fill.type == kLinearFill;
   const std::string tag = linear ? "linearGradient" : "radialGradient";
-  const std::string half = number(kGradientHalfPixels);
+  const std::string half = svg_number(kGradientHalfPixels);
   const std::string geometry =
       linear ? " x1=\"-" + half + "\" y1=\"0\" x2=\"" + half + "\" y2=\"0\""
              : " cx=\"0\" cy=\"0\" r=\"" + half + "\"" + focal_text(fill);
-  std::string text = "<" + tag + " id=\"fill" + std::to_string(index) + "\"" + geometry +
+  std::string text = "<" + tag + " id=\"" + id + "\"" + geometry +
                      " gradientUnits=\"userSpaceOnUse\" gradientTransform=\"" +
                      matrix_text(fill.matrix.value_or(SwfMatrix{})) + "\" spreadMethod=\"" +
                      spread_name(fill.spread) + "\">\n";
@@ -280,22 +266,22 @@ std::string gradient_text(const SwfFillStyle& fill, std::size_t index) {
   return text + "</" + tag + ">\n";
 }
 
-std::string gradient_defs(const std::vector<SwfFillStyle>& fills) {
+std::string gradient_defs(const std::vector<SwfFillStyle>& fills, const std::string& id_prefix) {
   std::string text;
   for (std::size_t index = 0; index < fills.size(); ++index) {
     if (is_gradient(fills[index].type)) {
-      text += gradient_text(fills[index], index + 1);
+      text += gradient_text(fills[index], id_prefix + std::to_string(index + 1));
     }
   }
   return text.empty() ? text : "<defs>\n" + text + "</defs>\n";
 }
 
-std::string fill_attributes(const SwfFillStyle& fill, std::size_t index) {
+std::string fill_attributes(const SwfFillStyle& fill, const std::string& id) {
   if (fill.type == kSolidFill) {
     return paint("fill", fill.color);
   }
   if (is_gradient(fill.type)) {
-    return "fill=\"url(#fill" + std::to_string(index) + ")\"";
+    return "fill=\"url(#" + id + ")\"";
   }
   return std::string("fill=\"") + kPlaceholderColor + "\"";
 }
@@ -304,12 +290,14 @@ std::string path_element(const std::string& data, const std::string& attributes)
   return "<path d=\"" + data + "\" " + attributes + "/>\n";
 }
 
-std::string fill_paths(const SwfShape& shape, const std::vector<Edge>& edges) {
+std::string fill_paths(const SwfShape& shape, const std::vector<Edge>& edges,
+                       const std::string& id_prefix) {
   std::string text;
   for (std::size_t index = 0; index < shape.fill_styles.size(); ++index) {
     const std::string data = loops_text(fill_edges(edges, index + 1));
     if (!data.empty()) {
-      text += path_element(data, fill_attributes(shape.fill_styles[index], index + 1) +
+      text += path_element(data, fill_attributes(shape.fill_styles[index],
+                                                 id_prefix + std::to_string(index + 1)) +
                                      " fill-rule=\"nonzero\"");
     }
   }
@@ -354,11 +342,11 @@ const char* join_name(std::uint16_t flags) {
 
 std::string stroke_attributes(const SwfLineStyle& line) {
   const double width = line.width == 0 ? 1.0 : line.width / kTwipsPerPixel;
-  std::string text = stroke_paint(line) + " fill=\"none\" stroke-width=\"" + number(width) +
+  std::string text = stroke_paint(line) + " fill=\"none\" stroke-width=\"" + svg_number(width) +
                      "\" stroke-linecap=\"" + cap_name(line.flags) + "\" stroke-linejoin=\"" +
                      join_name(line.flags) + "\"";
   if (line.miter_limit && join_style(line.flags) == kMiterJoin) {
-    text += " stroke-miterlimit=\"" + number(*line.miter_limit / kMiterLimitOne) + "\"";
+    text += " stroke-miterlimit=\"" + svg_number(*line.miter_limit / kMiterLimitOne) + "\"";
   }
   return text;
 }
@@ -374,6 +362,22 @@ std::string stroke_paths(const SwfShape& shape, const std::vector<Edge>& edges) 
   return text;
 }
 
+}  // namespace
+
+std::string svg_number(double value) {
+  char buffer[32];
+  const auto result = std::to_chars(buffer, buffer + sizeof buffer, value,
+                                    std::chars_format::fixed, 6);
+  std::string text(buffer, result.ptr);
+  while (text.back() == '0') {
+    text.pop_back();
+  }
+  if (text.back() == '.') {
+    text.pop_back();
+  }
+  return text;
+}
+
 std::string svg_open(const SwfRect& bounds) {
   const std::int64_t width = static_cast<std::int64_t>(bounds.x_max) - bounds.x_min;
   const std::int64_t height = static_cast<std::int64_t>(bounds.y_max) - bounds.y_min;
@@ -382,12 +386,18 @@ std::string svg_open(const SwfRect& bounds) {
          pixels(width) + "\" height=\"" + pixels(height) + "\">\n";
 }
 
-}  // namespace
+std::string shape_defs_to_svg(const SwfShape& shape, const std::string& id_prefix) {
+  return gradient_defs(shape.fill_styles, id_prefix);
+}
+
+std::string shape_paths_to_svg(const SwfShape& shape, const std::string& id_prefix) {
+  const auto edges = trace_edges(shape);
+  return fill_paths(shape, edges, id_prefix) + stroke_paths(shape, edges);
+}
 
 std::string shape_to_svg(const SwfShape& shape) {
-  const auto edges = trace_edges(shape);
-  return svg_open(shape.bounds) + gradient_defs(shape.fill_styles) +
-         fill_paths(shape, edges) + stroke_paths(shape, edges) + "</svg>\n";
+  return svg_open(shape.bounds) + shape_defs_to_svg(shape, "fill") +
+         shape_paths_to_svg(shape, "fill") + "</svg>\n";
 }
 
 }  // namespace fo4::swf

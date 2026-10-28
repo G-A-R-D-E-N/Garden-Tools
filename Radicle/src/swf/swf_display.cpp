@@ -21,6 +21,7 @@ struct Operation {
   std::optional<SwfTransform> transform;
   std::optional<std::string> name;
   std::optional<std::uint16_t> clip_depth;
+  std::optional<SwfColorTransform> color_transform;
 };
 
 struct LocalInstance {
@@ -33,6 +34,7 @@ struct LocalInstance {
   std::string name;
   SwfTransform transform{};
   std::optional<std::uint16_t> clip_depth;
+  std::optional<SwfColorTransform> color_transform;
 };
 
 using LocalState = std::map<std::uint16_t, LocalInstance>;
@@ -90,6 +92,7 @@ bool collect_operations(const std::vector<SwfTag>& tags, std::vector<std::vector
       operation.name = *placement.name;
     }
     operation.clip_depth = placement.clip_depth;
+    operation.color_transform = placement.color_transform;
     current.push_back(std::move(operation));
   }
   if (!current.empty()) {
@@ -135,6 +138,9 @@ bool replay(const std::vector<std::vector<Operation>>& operations, std::uint16_t
         if (operation.clip_depth) {
           target.clip_depth = operation.clip_depth;
         }
+        if (operation.color_transform) {
+          target.color_transform = operation.color_transform;
+        }
         continue;
       }
       LocalInstance instance;
@@ -147,6 +153,7 @@ bool replay(const std::vector<std::vector<Operation>>& operations, std::uint16_t
         instance.name = existing->second.name;
         instance.transform = existing->second.transform;
         instance.clip_depth = existing->second.clip_depth;
+        instance.color_transform = existing->second.color_transform;
         instance.transform_tag_index = existing->second.transform_tag_index;
       }
       if (operation.transform) {
@@ -159,11 +166,31 @@ bool replay(const std::vector<std::vector<Operation>>& operations, std::uint16_t
       if (operation.clip_depth) {
         instance.clip_depth = operation.clip_depth;
       }
+      if (operation.color_transform) {
+        instance.color_transform = operation.color_transform;
+      }
       active[operation.depth] = std::move(instance);
     }
     out.frames.push_back(active);
   }
   return true;
+}
+
+std::optional<SwfColorTransform> compose_color(const std::optional<SwfColorTransform>& parent,
+                                               const std::optional<SwfColorTransform>& child) {
+  if (!parent) {
+    return child;
+  }
+  if (!child) {
+    return parent;
+  }
+  SwfColorTransform out;
+  out.has_alpha = parent->has_alpha || child->has_alpha;
+  for (std::size_t channel = 0; channel < 4; ++channel) {
+    out.multiply[channel] = parent->multiply[channel] * child->multiply[channel] / 256;
+    out.add[channel] = parent->multiply[channel] * child->add[channel] / 256 + parent->add[channel];
+  }
+  return out;
 }
 
 class Expander {
@@ -183,8 +210,8 @@ public:
   const std::string& message() const noexcept { return message_; }
 
   bool expand(const LocalTimeline& timeline, std::uint32_t age, const SwfTransform& parent,
-              std::string_view parent_path, std::string_view parent_key,
-              std::vector<std::uint16_t>& stack, SwfDisplayFrame& out) {
+              const std::optional<SwfColorTransform>& parent_color, std::string_view parent_path,
+              std::string_view parent_key, std::vector<std::uint16_t>& stack, SwfDisplayFrame& out) {
     const std::size_t count = timeline.frames.size();
     const std::uint32_t index = count <= 1 ? 0 : age % static_cast<std::uint32_t>(count);
     const std::uint32_t cycle_start = count <= 1 ? 0 : age - index;
@@ -196,6 +223,8 @@ public:
       ++budget_;
       const LocalInstance& local = entry.second;
       const SwfTransform world = compose_transform(parent, local.transform);
+      const std::optional<SwfColorTransform> world_color =
+          compose_color(parent_color, local.color_transform);
       const std::string segment =
           local.name.empty() ? "#" + std::to_string(local.character_id) : local.name;
       const std::string path = std::string(parent_path) + segment;
@@ -212,6 +241,7 @@ public:
       instance.transform = local.transform;
       instance.world_transform = world;
       instance.clip_depth = local.clip_depth;
+      instance.world_color_transform = world_color;
       instance.create_tag_index = local.create_tag_index;
       instance.transform_tag_index = local.transform_tag_index;
       instance.is_sprite = sprites_.find(local.character_id) != sprites_.end();
@@ -247,7 +277,8 @@ public:
       const std::uint32_t born = cycle_start + local.created_frame;
       const std::uint32_t child_age = age > born ? age - born : 0;
       stack.push_back(local.character_id);
-      const bool ok = expand(child->second, child_age, world, path + "/", key, stack, out);
+      const bool ok =
+          expand(child->second, child_age, world, world_color, path + "/", key, stack, out);
       stack.pop_back();
       if (!ok) {
         return false;
@@ -331,7 +362,8 @@ SwfDisplayList build_display_list(const SwfFile& file, const SwfDisplayOptions& 
     SwfDisplayFrame state;
     state.frame = frame;
     std::vector<std::uint16_t> stack;
-    if (!expander.expand(root, frame, SwfTransform{}, std::string{}, "r", stack, state)) {
+    if (!expander.expand(root, frame, SwfTransform{}, std::nullopt, std::string{}, "r", stack,
+                         state)) {
       out.message = expander.message();
       return out;
     }
@@ -350,8 +382,8 @@ SwfDisplayList build_display_list(const SwfFile& file, const SwfDisplayOptions& 
       SwfDisplayFrame state;
       state.frame = frame;
       std::vector<std::uint16_t> stack{entry.first};
-      if (!expander.expand(entry.second, frame, SwfTransform{}, std::string{}, parent_key,
-                           stack, state)) {
+      if (!expander.expand(entry.second, frame, SwfTransform{}, std::nullopt, std::string{},
+                           parent_key, stack, state)) {
         out.message = expander.message();
         return out;
       }
