@@ -2915,7 +2915,7 @@ public unsafe struct PapyrusCompileOptions
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 83u;
+    public const uint CompiledAbiVersion = 84u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -4215,6 +4215,9 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_shape_svg")]
     public static extern Status SwfShapeSvg(IntPtr swf, ushort character_id, byte** out_text, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_frame_svg")]
+    public static extern Status SwfFrameSvg(IntPtr swf, uint frame, byte** out_svg, nuint* out_size);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_history_create")]
     public static extern Status SwfHistoryCreate(IntPtr swf, IntPtr* out_history);
