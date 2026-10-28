@@ -222,3 +222,17 @@ The native instruction and glyph verbs mutate a handle directly through `radicle
 The "Scripts (ABC)" section sits at the foot of the right aside. `open` (`web/src/SwfPanel.tsx:SwfPanel.open`) clears the ABC listing, the selected method and `selectedMethodKey` before the host `Open` call, so a refused re-open leaves no stale listing and a late `pickMethod` reply from the previous document is dropped; it then loads `AbcBlocks` after the placement list. `pickMethod` (`web/src/SwfPanel.tsx:SwfPanel.pickMethod`) shows `Disassemble` output in the `instructions` preformatted block. It records the picked method key in `selectedMethodKey` before the await and drops a reply whose key no longer matches, so an out-of-order reply cannot overwrite the listing of the method now selected; a rejected host call goes into the section alert. An `AbcBlocks` refusal goes into the section's own alert rather than the header error bar, and the "No ABC scripts in this SWF." message only shows when the listing succeeds with zero blocks. The view is display-only: no ABC edit verb is wired, and the listing is not refreshed by undo or redo because no panel control edits ABC yet.
 
 Tests: `web/src/SwfPanel.test.tsx` extends the existing `stubBridge` with `AbcBlocks` and `Disassemble` defaults and adds the listing, empty-state, refusal, stale-reply and refused-re-open cases (`web/src/SwfPanel.test.tsx:SwfPanel`).
+
+## FO4RecordEditor/Services/SwfInterop.cs:SwfInterop.ShapeSvg (shape preview RPC)
+
+`ShapeSvg(characterId)` runs `Document().Movie.ShapeSvg` (the Radicle `radicle_swf_shape_svg` wrapper, `Radicle/bindings/csharp/Radicle.Interop/SwfFile.cs:SwfFile.ShapeSvg`) and replies `{svg}`. An undefined id, a non-shape id or no open document throws, and `Run` turns that into the same `{error, status}` shape every other RPC returns, so there is no separate error path. The SVG content (fills as `<path>`) is pinned by Radicle's `test_c_api_swf_characters.cpp`; the PET side only proves the RPC wiring.
+
+## web/src/SwfPanel.tsx:SwfPanel.pickCharacter (shape preview selection)
+
+Every character pick increments `shapeRequest` and clears `shapeSvg` before it awaits, so picking a non-shape character leaves no preview and sends no `ShapeSvg`. A `ShapeSvg` reply is applied only while its request number is still current, the same request-number guard the ABC view uses with `selectedMethodKey`, so a late reply for an earlier shape cannot replace the one picked last. `SwfPanel.open` also increments the counter, so a reply from the previous document cannot land on a newly opened one. The preview is an `<img>` whose `src` is `data:image/svg+xml;utf8,` plus `encodeURIComponent` of the SVG text; the SVG is never assigned to `innerHTML`, so markup inside it is not parsed into the page.
+
+## FO4RecordEditor.Core.Tests/SwfFixture.cs:SwfFixture.ShapeTag (opt-in shape character)
+
+`SwfFixture.Movie(withShape: true)` adds an empty DefineShape (id 5, no fills, no lines, an end record). It is opt-in so the document-service tests keep their two-character count. The empty shape is enough to prove `ShapeSvg` returns a `<svg` document; a filled-shape path check would duplicate Radicle's own test.
+
+Tests: `FO4RecordEditor.Tests/SwfInteropTests.cs:SwfInteropTests.ShapeSvgRpcReturnsTheSvgForAShapeAndTheRefusalForANonShape` (shape returns `<svg`, EditText returns an error), `web/src/SwfPanel.test.tsx:SwfPanel` (shape selection requests `ShapeSvg` and renders the image, a late reply for an earlier shape is ignored, and a non-shape pick clears the preview).
