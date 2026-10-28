@@ -8384,6 +8384,7 @@ Detects checkfilter letting null or undefined through to the filter. Both must g
 ## Radicle/tests/test_avm2_late_ops.cpp:FinddefPushesTheScopeThatHoldsTheName
 
 Detects finddef pushing the global object or null when a pushed scope holds the name. The object built by newobject with the pair "k" and 1 is on the scope stack, so getproperty of "k" on the owner must give the int 1.
+
 ## Radicle/src/graph/graph_lifter.cpp:GraphLifter::liftAssign
 
 - A compound assignment to a struct member (`s.X += v`) expands to `s.X = s.X + v`. The read is lifted through `liftExpression(*assign.target)`, which gives a `StructGet` for a struct member and the same `VariableGet` as before for an identifier. The target is lifted twice, so its receiver must be call-free; otherwise the lift is refused.
