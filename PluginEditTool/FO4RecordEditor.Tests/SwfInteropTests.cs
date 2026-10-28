@@ -86,7 +86,7 @@ public sealed class SwfInteropTests
     [NativeFact]
     public async Task ShapeSvgRpcReturnsTheSvgForAShapeAndTheRefusalForANonShape()
     {
-        // Invariant: ShapeSvg returns the svg field the panel reads for a shape and the error shape for a non-shape; detects a dropped svg field or a non-shape exporting as svg.
+        // Invariant: ShapeSvg returns the svg field the panel reads for a shape and the error shape for a non-shape or an out-of-range id; detects a dropped svg field, a non-shape exporting as svg, or an id wrapped into the ushort range and exporting as svg.
         var root = Path.Combine(Path.GetTempPath(), "fo4re-swf-shape-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(Path.Combine(root, "Interface"));
         File.WriteAllBytes(Path.Combine(root, "Interface", "Test.swf"), SwfFixture.Movie(withShape: true));
@@ -102,6 +102,13 @@ public sealed class SwfInteropTests
             var refusal = Parse(await swf.ShapeSvg(11));
             Assert.False(string.IsNullOrEmpty(refusal.GetProperty("error").GetString()));
             Assert.False(refusal.TryGetProperty("svg", out _));
+
+            foreach (var id in new[] { 70000, -1 })
+            {
+                var outOfRange = Parse(await swf.ShapeSvg(id));
+                Assert.Contains("0..65535", outOfRange.GetProperty("error").GetString());
+                Assert.False(outOfRange.TryGetProperty("svg", out _));
+            }
         }
         finally
         {
