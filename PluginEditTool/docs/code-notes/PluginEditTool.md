@@ -193,3 +193,33 @@ consolidation is one native verb that takes the edit and returns the payload; on
 
 `Run` takes the static `Gate` around every action, so the document reference, its history and the lazy character cache are
 touched by one call at a time. `Open` runs inside `Run` and takes no lock of its own.
+
+## PluginEditTool/native/src/app/PapyrusTarget.cpp:PapyrusTarget::invoke (Check, Analyze, SymbolAt and Compile call the Radicle service)
+
+These four RPCs call `fo4::papyrus::AnalysisService` (`Radicle/include/fo4/papyrus/analysis_service.hpp`) with the same arguments
+they passed to PET's copy, `fo4ide::papyrus::AnalysisService`. PET's copy stays in
+`PluginEditTool/native/src/papyrus/AnalysisService.cpp` as the parity oracle until the real-data gates pass. `Decompile` still uses
+PET's `papyrus::Decompiler` and `papyrus::PexFile`, because it is not an analysis call. Result shapes are unchanged: the service
+strings and the analyze and symbol JSON are returned as they were.
+
+## PluginEditTool/native/src/papyrus/AnalysisService.cpp:AnalysisService (lift audit against Radicle)
+
+A line-level comparison of PET's `src/papyrus/*.cpp` against the Radicle files found no PET-only logic. The differences are
+renames and moves: `offsetOf` is `lineColumnToOffset` in Radicle (PET calls it only inside the service and its own tests); the
+case-insensitive `.psc` walk is `fo4::papyrus::enumeratePapyrusFiles` with the same rules (symlinked directories skipped, ignore-case
+sort); PET's `compileFile` is file-local in Radicle; the Radicle parser and code generator are split into several files, with the
+ASCII `lower` and `iequals` helpers in `Radicle/src/papyrus/parser_detail.hpp` and `codegen_detail.hpp`. Only comments and blank
+lines differ otherwise.
+
+## PluginEditTool/native/src/graph/GraphCompiler.cpp:GraphCompiler (compileScript stays on PET)
+
+The graph compile still calls PET's `papyrus::compileScript` with PET's `ScriptIndex` and returns PET's `PexFile`. Radicle's
+`fo4::papyrus::compileScript` has the same pass order but returns Radicle types, so moving it means moving the graph's script index
+and PEX type too. It is left for the graph lift.
+
+## PluginEditTool/native/tests/unit/PapyrusTargetTests.cpp:PapyrusTarget analysis RPCs match the PET oracle on real sources
+
+Regression detected: a rewired answer that drifts from PET's, such as a dropped import root, an offset or path argument passed
+through wrong, a changed JSON key, or a compile whose `.pex` bytes differ. Each section runs one RPC on real sources
+(`GraphScripts/FixtureEventSource.psc`, `BaseStubs/Actor.psc`, and a broken `Bad.psc` written to the temp root) and requires the
+same string PET's `AnalysisService` returns. Compile also requires the written `FixtureEventSource.pex` bytes to match PET's.
