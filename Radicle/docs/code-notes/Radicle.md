@@ -7885,9 +7885,10 @@ When either operand of Add2 (0x47) is an object, the result is text, because ToP
 
 ToNumber of an object is NaN, which is what ECMA-262 gives for the text `[object Object]`, since ToPrimitive then ToNumber of that text is NaN. `to_boolean` reads an object as true, as ECMA-262 does.
 
-## Ceilings of the object slice
+## Radicle/src/avm1/object_ops.cpp:object_ops (ceilings of the object slice)
 
 The object slice has these known gaps, so that none is read as AS2 behavior. Stored values are copied per step, since `Avm1Data` holds its text by value, and there is no byte budget for the properties of a run. A loop that stores a long string under many names can hold many copies up to the step limit; the operand stack has the same exposure through PushDuplicate, see `## Radicle/src/avm1/interpreter.cpp:push_result`. A per-run byte budget is the fix when a real movie needs one. `Radicle/src/avm1/interpreter.cpp:less_than` still compares an object as NaN, where ECMA-262 compares the object's text with a string. A count written as text (a String rather than a Number) refuses in `Radicle/src/avm1/object_ops.cpp:pop_count` rather than being converted.
+
 ## Radicle/include/fo4/c_api_runtime.h:radicle_runtime_entry
 
 ABI 87 appends `ratio` (uint16) and `cache_as_bitmap` (uint8) to `radicle_runtime_entry` after `filter_count`, so every earlier field keeps its offset. On LP64 the struct grows from 176 to 184 bytes: `filter_count` ends at 176, `ratio` sits at 176, `cache_as_bitmap` at 178, and the struct pads to 184. `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsEightySeven` pins the bump, and `Radicle/bindings/csharp/Radicle.Interop/RadicleNative.g.cs:RadicleNative.CompiledAbiVersion` is the regenerated constant. `Radicle/bindings/csharp/tools/generate_interop.py` does not read `fo4/c_api_runtime.h` (its HEADERS list omits it), so `RuntimeEntry` is hand-maintained in `Radicle/bindings/csharp/Radicle.Interop/RuntimeNative.cs` and no layout probe covers it; its layout was checked by hand against the header.
