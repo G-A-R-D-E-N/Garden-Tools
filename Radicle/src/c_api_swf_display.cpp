@@ -100,7 +100,9 @@ bool to_flat_indices(const fo4::swf::SwfFile& file, fo4::swf::SwfDisplayList& di
 }
 
 radicle_status build_checked_display(const fo4::swf::SwfFile& file, fo4::swf::SwfDisplayList& display) {
-  display = fo4::swf::build_display_list(file);
+  fo4::swf::SwfDisplayOptions options;
+  options.apply_frame_control = true;
+  display = fo4::swf::build_display_list(file, options);
   if (display.status != fo4::swf::SwfTimelineStatus::ok) {
     return fail(RADICLE_STATUS_PARSE_ERROR,
                 display.message.empty() ? "the display list did not build" : display.message.c_str());
