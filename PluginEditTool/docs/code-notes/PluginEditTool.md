@@ -306,3 +306,21 @@ Regression: a PNG encoded from a different tag than the one `PluginEditTool/FO4R
 ## PluginEditTool/FO4RecordEditor.Tests/SwfInteropTests.cs:SwfInteropTests.BitmapPngRpcReturnsTheBase64PngForABitmapAndTheRefusalForANonBitmap
 
 Regression: a `png` field dropped or not base64 of the PNG bytes in `PluginEditTool/FO4RecordEditor/Services/SwfInterop.cs:SwfInterop.BitmapPng`, a bitmap exported from the character id instead of the `tagIndex` from `PluginEditTool/FO4RecordEditor/Services/SwfInterop.cs:SwfInterop.Characters`, or an edit-text tag exporting as a PNG instead of replying the error shape.
+
+## PluginEditTool/FO4RecordEditor/Services/SwfInterop.cs:SwfInterop.FrameSvg (root frame preview RPC)
+
+`SwfInterop.FrameSvg(frame)` calls `Document().Movie.FrameSvg` with the frame as a `uint`, which is the Radicle `radicle_swf_frame_svg` wrapper `Radicle/bindings/csharp/Radicle.Interop/SwfFile.cs:SwfFile.FrameSvg`, and replies `{svg}` with the composited root frame, the same shape as `PluginEditTool/FO4RecordEditor/Services/SwfInterop.cs:SwfInterop.ShapeSvg`. A negative frame is refused in `PluginEditTool/FO4RecordEditor/Services/SwfInterop.cs:SwfInterop.FrameSvg` before the cast, since `(uint)` of a negative `int` would read as a huge frame and come back as an empty stage with no error. A frame past the root timeline is not a refusal: Radicle draws an empty, well-formed stage, so `PluginEditTool/FO4RecordEditor/Services/SwfInterop.cs:SwfInterop.FrameSvg` never replies an error for it.
+
+## PluginEditTool/web/src/SwfPanel.tsx:SwfPanel.showFrame (frame preview selection)
+
+`PluginEditTool/web/src/SwfPanel.tsx:SwfPanel.showFrame` clamps the requested frame to `0..rootFrames-1` and sends it to `FrameSvg`. `rootFrames` is stored by `PluginEditTool/web/src/SwfPanel.tsx:SwfPanel.open` from `Timeline(0)`, not on every frame change, because only an Open replaces the document, and `PluginEditTool/FO4RecordEditor.Core/Services/SwfDocumentService.cs:SwfDocument.InsertKeyframe` refuses any frame past the root show-frame count, so no edit grows the root timeline. Every frame request takes the `frameRequest` counter, the same pattern as `shapeRequest` in `PluginEditTool/web/src/SwfPanel.tsx:SwfPanel.pickCharacter`, so a late reply for an earlier frame cannot replace the frame shown last. Every request clears `frameSvg` before it awaits, so a refusal goes to the error bar through `setError` and leaves no image behind.
+
+The image is an `<img alt="Frame preview">` with the `data:image/svg+xml;utf8,` URL that `PluginEditTool/web/src/SwfPanel.tsx:SwfPanel` builds for the shape preview, so the SVG is never injected as markup. `PluginEditTool/web/src/SwfPanel.css` gives `.swf-frame-image` `max-width: 100%`.
+
+## PluginEditTool/web/src/SwfPanel.test.tsx:SwfPanel (frame preview and stale-reply tests)
+
+`PluginEditTool/web/src/SwfPanel.test.tsx:SwfPanel` has three new cases. The frame-preview case asserts `FrameSvg` is not called on Open, is bounded to 0..2 for a three-frame root, is clamped for `9` and `-3`, and that a refused frame shows its message with no image. Regression: a frame sent past the root timeline or below zero, a sprite frame count used as the bound, or a refused frame left on screen as a stale image. The FrameSvg stale case holds the reply for frame 1 until frame 2 has resolved and asserts the frame 2 image survives. Regression: an out-of-order `FrameSvg` reply overwriting the newer frame. The BitmapPng stale case does the same for two bitmap picks on the bitmap branch of `PluginEditTool/web/src/SwfPanel.tsx:SwfPanel.pickCharacter`, which had no stale-guard test before. Regression: an out-of-order `BitmapPng` reply overwriting the newer bitmap preview.
+
+## PluginEditTool/FO4RecordEditor.Tests/SwfInteropTests.cs:SwfInteropTests.FrameSvgRpcReturnsTheRootFrameAndAnEmptyStageBeyondTheTimeline
+
+Regression: a `svg` field dropped from the `PluginEditTool/FO4RecordEditor/Services/SwfInterop.cs:SwfInterop.FrameSvg` reply, a frame past the root timeline surfaced as an error instead of an empty stage, or a negative frame reaching `Radicle/bindings/csharp/Radicle.Interop/SwfFile.cs:SwfFile.FrameSvg` as a wrapped `uint` and exporting as svg. The fixture is `PluginEditTool/FO4RecordEditor.Core.Tests/SwfFixture.cs:SwfFixture.Movie` with `withShape: true`.
