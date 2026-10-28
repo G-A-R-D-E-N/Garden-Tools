@@ -157,4 +157,46 @@ TEST(CApiSwfCharacters, RefusesNonShapesAndNullArgumentsWithOutputsCleared) {
   EXPECT_EQ(text, nullptr);
 }
 
+TEST(CApiSwfCharacters, SymbolCountCountsTheSymbolClassEntriesOnly) {
+  const auto swf = open(swf_character_test::every_kind_movie());
+  ASSERT_NE(swf, nullptr);
+  EXPECT_EQ(radicle_swf_symbol_count(swf.get()), 2u);
+  const auto small = open(swf_character_test::small_movie());
+  ASSERT_NE(small, nullptr);
+  EXPECT_EQ(radicle_swf_symbol_count(small.get()), 1u);
+  EXPECT_EQ(radicle_swf_symbol_count(nullptr), 0u);
+}
+
+TEST(CApiSwfCharacters, ExportCountCountsTheExportAssetsEntriesOnly) {
+  const auto swf = open(swf_character_test::every_kind_movie());
+  ASSERT_NE(swf, nullptr);
+  EXPECT_EQ(radicle_swf_export_count(swf.get()), 1u);
+  const auto small = open(swf_character_test::small_movie());
+  ASSERT_NE(small, nullptr);
+  EXPECT_EQ(radicle_swf_export_count(small.get()), 0u);
+  EXPECT_EQ(radicle_swf_export_count(nullptr), 0u);
+}
+
+TEST(CApiSwfCharacters, ReadsEachGradientStopAndRefusesAnOutOfRangeOne) {
+  const auto swf = open(swf_character_test::small_movie());
+  ASSERT_NE(swf, nullptr);
+
+  radicle_swf_gradient_stop stop{};
+  ASSERT_EQ(radicle_swf_shape_fill_stop_at(swf.get(), 0, 1, 0, &stop), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_EQ(stop.ratio, 0);
+  EXPECT_EQ(stop.color, 0xFFFF0000u);
+  ASSERT_EQ(radicle_swf_shape_fill_stop_at(swf.get(), 0, 1, 1, &stop), RADICLE_STATUS_OK);
+  EXPECT_EQ(stop.ratio, 255);
+  EXPECT_EQ(stop.color, 0x800000FFu);
+
+  stop.ratio = 9;
+  stop.color = 1;
+  EXPECT_EQ(radicle_swf_shape_fill_stop_at(swf.get(), 0, 1, 2, &stop), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(stop.ratio, 0);
+  EXPECT_EQ(stop.color, 0u);
+  EXPECT_EQ(radicle_swf_shape_fill_stop_at(swf.get(), 0, 0, 0, &stop), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_swf_shape_fill_stop_at(nullptr, 0, 1, 0, &stop), RADICLE_STATUS_INVALID_ARGUMENT);
+}
+
 }  // namespace

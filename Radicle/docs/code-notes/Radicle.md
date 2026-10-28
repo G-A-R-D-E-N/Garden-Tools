@@ -8286,3 +8286,37 @@ A row whose character is a DefineText or DefineText2 with a clip depth opens a m
 - `Radicle/tests/test_swf_svg_text_clip.cpp:SwfFrameSvgTextClip.StaticTextInsideAClipSpriteJoinsTheSpriteMask` detects a text child left out of the sprite clipPath (the blue square would paint unclipped), and a glyph that ignores its child's world transform (it would print at the origin, not at 20 px).
 
 Expected strings were derived by hand. The glyph is a 1000-twip square (50 px, the path of `Radicle/tests/test_swf_svg.cpp:kRedSquare` at its size), at a DefineText height of 1024, so the font scale is 1 and the text matrix is the identity. The blue square is the 600-twip one, `Radicle/tests/test_swf_svg.cpp:kBlueSquare`. The clipPath ids follow the shape-mask convention `r<index>clip`. Nothing was compiled or run on the development machine for this change, so CI must confirm them.
+
+## Radicle/src/papyrus/quest_rules.cpp:bindVmadValues
+
+- `Radicle/src/papyrus/quest_rules.cpp:bindShape` binds one shape from its declared type. Scalars keep their old rules. `array` goes to `bindArray` and `struct` goes to `bindStruct`. `variable` and unknown kinds stay unsupported with a reason.
+- `Radicle/src/papyrus/quest_rules.cpp:bindArray` accepts only int, float, bool, string and object elements, and only when `elementCount` equals `elements.size()`. Otherwise the array is refused as not decoded yet. One element that fails to bind refuses the whole array, so no partial array is ever bound. A `Variable[]` shape carries elementType `Variable`, so it is refused as not a bindable scalar type.
+- `Radicle/src/papyrus/quest_rules.cpp:bindStruct` keys members by the folded name, as `Radicle/include/fo4/papyrus/value.hpp:Struct` requires. A repeated member name refuses the struct instead of letting the map drop one. VMAD stores no struct type name, so `Struct::typeName` stays empty.
+- `Radicle/include/fo4/papyrus/quest_rules.hpp:BoundProperty::isBound` now counts `Array` and `Struct`, so `Radicle/src/c_api_papyrus_quest.cpp:radicle_papyrus_bind_vmad_values` hands those values out. The C shape has no element or member fields, so C callers still get array and struct shapes refused. No ABI bump.
+- Regression detected by `Radicle/tests/test_papyrus_quest_rules.cpp:BindsIntAndObjectArraysAndAStructAndRefusesVariables`: a decoded array or struct reported as not decoded yet, a Variable or Variable[] property bound as a default, and a struct member lost to a duplicate name.
+
+## Radicle/tests/test_papyrus_quest_rules.cpp:BindsIntAndObjectArraysAndAStructAndRefusesVariables
+
+- Detects the int array, object array and struct being refused (expected bound=3 unsupported=2, with Counts and Refs holding 3 and 2 elements, Config holding speed=7 and label="go"), and a Variable or Variable[] property being bound instead of refused with a reason. Expected values were derived by hand from `Radicle/src/papyrus/quest_rules.cpp:bindShape`.
+
+## Radicle/tests/test_c_api_papyrus.cpp:CApiPapyrusTest tests
+
+- `Radicle/tests/test_c_api_papyrus.cpp:getPropertyCallback` now records the receiver handle, type and state. It answers only the property Label, with int 11.
+- `Radicle/tests/test_c_api_papyrus.cpp:readLabelOf` builds an object value and runs `Reader.Read`, whose `propget` on Label reaches the get_property callback through `Radicle/src/c_api_papyrus.cpp:readThrough`.
+- `Radicle/tests/test_c_api_papyrus.cpp:CApiPapyrusTest.ValueNoneIsTheNoneKindAndRefusesANullOutput` detects `radicle_papyrus_value_none` returning a non-none kind, or accepting a null out pointer without INVALID_ARGUMENT.
+- `Radicle/tests/test_c_api_papyrus.cpp:CApiPapyrusTest.ObjectHandleReadsTheReceiverInsideAPropertyCallback` detects `radicle_papyrus_object_handle` returning the wrong handle inside the callback, or a non-zero value for a null object.
+- `Radicle/tests/test_c_api_papyrus.cpp:CApiPapyrusTest.ObjectTypeNamesTheReceiverScriptAndNullHasNoType` detects `radicle_papyrus_object_type` naming the wrong script, or returning a non-null pointer for a null object.
+- `Radicle/tests/test_c_api_papyrus.cpp:CApiPapyrusTest.ObjectStateCarriesTheReceiverStateAndNullHasNoState` detects `radicle_papyrus_object_state` returning the wrong state, or a non-null pointer for a null object.
+
+## Radicle/tests/test_c_api_papyrus_runtime.cpp:CApiPapyrusRuntimeTest tests
+
+- `Radicle/tests/test_c_api_papyrus_runtime.cpp:DetachReportsWhetherTheInstanceExisted` detects `radicle_papyrus_runtime_detach` returning 1 for an unknown instance, or 0 for a live one, or crashing on a null runtime (`Radicle/src/papyrus/runtime.cpp:Runtime::detach`).
+- `Radicle/tests/test_c_api_papyrus_runtime.cpp:InstanceStateIsTheAutoStateAndAnUnknownInstanceHasNone` detects `radicle_papyrus_runtime_instance_state` reporting the owning script name instead of the instance state (`Radicle/src/papyrus/runtime.cpp:Runtime::attach` takes the auto state), or a null pointer for an unknown instance (`Runtime::instanceState` answers an empty string).
+- `Radicle/tests/test_c_api_papyrus_runtime.cpp:FailedInitializeReportsItsStatusAsTheFailureText` detects `radicle_papyrus_runtime_failure` returning an empty or stale text after a failed OnInit (`Runtime::initialize` stores `statusName`), and the wrong text for an unknown instance (`no such instance`). The failing OnInit calls an unregistered native, so the status is not Ok; the test does not pin which status, only that the failure text is the status name.
+
+## Radicle/tests/test_c_api_swf_characters.cpp:CApiSwfCharacters tests
+
+- `Radicle/tests/test_c_api_swf_characters.cpp:SymbolCountCountsTheSymbolClassEntriesOnly` detects `radicle_swf_symbol_count` counting ExportAssets entries as symbols. The every-kind fixture has 2 SymbolClass entries and 1 export, so the expected count is 2. The small fixture gives 1.
+- `Radicle/tests/test_c_api_swf_characters.cpp:ExportCountCountsTheExportAssetsEntriesOnly` detects `radicle_swf_export_count` counting SymbolClass entries (expected 1 for the every-kind fixture, 0 for the small one).
+- `Radicle/tests/test_c_api_swf_characters.cpp:ReadsEachGradientStopAndRefusesAnOutOfRangeOne` detects `radicle_swf_shape_fill_stop_at` reading the wrong stop or fill, not clearing the output on refusal, or accepting a solid fill with no stops. Stop colours are 0xAARRGGBB from the define_shape_3 fixture bytes (`Radicle/tests/swf_art_fixtures.hpp:define_shape_3_payload`), matching the 0x800000FF value that `Radicle/tests/test_swf_art.cpp` already pins.
+- Nothing was compiled or run on the development machine for these changes. CI must confirm them.

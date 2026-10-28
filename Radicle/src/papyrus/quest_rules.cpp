@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -106,6 +107,124 @@ std::string requireText(const std::optional<std::string>& value, const char* wha
     return *value;
 }
 
+BoundProperty bindShape(const OwnerId& owner, const VmadValueShape& shape, const std::string& declaredType);
+
+bool isBindableScalar(const std::string& type) {
+    return type == "int" || type == "float" || type == "bool" || type == "string" || type == "object";
+}
+
+BoundProperty bindArray(const OwnerId& owner, const VmadValueShape& shape) {
+    if (!isBindableScalar(lower(shape.elementType))) {
+        return unsupported(owner, shape, BoundKind::Array,
+                           "the array's " + shape.elementType + " elements are not a bindable scalar type");
+    }
+    if (!shape.elementCount.has_value() ||
+        *shape.elementCount != static_cast<std::int32_t>(shape.elements.size())) {
+        return unsupported(owner, shape, BoundKind::Array,
+                           "the array's " + std::to_string(shape.elementCount.value_or(0)) +
+                               " elements are not decoded yet");
+    }
+    auto array = std::make_shared<Array>();
+    array->elementType = declaredValueType(shape.elementType);
+    array->elementTypeName = shape.elementType;
+    for (std::size_t i = 0; i < shape.elements.size(); ++i) {
+        const BoundProperty element = bindShape(owner, shape.elements[i], shape.elementType);
+        if (!element.isBound()) {
+            return unsupported(owner, shape, BoundKind::Array,
+                               "element " + std::to_string(i) + " " + element.reason.value_or(std::string()));
+        }
+        array->elements.push_back(element.value);
+    }
+    BoundProperty property;
+    property.owner = owner;
+    property.name = shape.name;
+    property.kind = BoundKind::Array;
+    property.value = arrayValue(std::move(array));
+    return property;
+}
+
+BoundProperty bindStruct(const OwnerId& owner, const VmadValueShape& shape) {
+    if (!shape.elementCount.has_value() ||
+        *shape.elementCount != static_cast<std::int32_t>(shape.members.size())) {
+        return unsupported(owner, shape, BoundKind::Struct,
+                           "the struct's " + std::to_string(shape.elementCount.value_or(0)) +
+                               " members are not decoded yet");
+    }
+    auto structure = std::make_shared<Struct>();
+    for (const VmadValueShape& member : shape.members) {
+        const BoundProperty bound = bindShape(owner, member, member.type);
+        if (!bound.isBound()) {
+            return unsupported(owner, shape, BoundKind::Struct,
+                               "member " + member.name + " " + bound.reason.value_or(std::string()));
+        }
+        const std::string key = lower(member.name);
+        if (structure->members.contains(key)) {
+            return unsupported(owner, shape, BoundKind::Struct, "the struct repeats member " + member.name);
+        }
+        structure->members.emplace(key, bound.value);
+    }
+    BoundProperty property;
+    property.owner = owner;
+    property.name = shape.name;
+    property.kind = BoundKind::Struct;
+    property.value = structValue(std::move(structure));
+    return property;
+}
+
+BoundProperty bindShape(const OwnerId& owner, const VmadValueShape& shape, const std::string& declaredType) {
+    BoundProperty property;
+    property.owner = owner;
+    property.name = shape.name;
+    const std::string type = lower(declaredType);
+    if (type == "int") {
+        if (shape.integer.has_value()) {
+            property.kind = BoundKind::Int;
+            property.value = integerValue(static_cast<std::int32_t>(*shape.integer));
+        } else {
+            property = unsupported(owner, shape, BoundKind::Int, "an integer property carried no value");
+        }
+    } else if (type == "float") {
+        if (shape.real.has_value()) {
+            property.kind = BoundKind::Float;
+            property.value = floatValue(static_cast<float>(*shape.real));
+        } else {
+            property = unsupported(owner, shape, BoundKind::Float, "a float property carried no value");
+        }
+    } else if (type == "bool") {
+        if (shape.boolean.has_value()) {
+            property.kind = BoundKind::Bool;
+            property.value = boolValue(*shape.boolean);
+        } else {
+            property = unsupported(owner, shape, BoundKind::Bool, "a boolean property carried no value");
+        }
+    } else if (type == "string") {
+        property.kind = BoundKind::String;
+        property.value = stringValue(shape.text.value_or(std::string()));
+    } else if (type == "object" && shape.hasAlias) {
+        property = unsupported(owner, shape, BoundKind::AliasBound,
+                               "the object is bound to a quest alias, and the alias fill order is unproven");
+    } else if (type == "object") {
+        if (shape.object.has_value() && !shape.object->empty()) {
+            property.kind = BoundKind::Object;
+            property.value = objectValue(0, *shape.object, std::string());
+        } else {
+            property = unsupported(owner, shape, BoundKind::Object,
+                                   "an object property carried no reference");
+        }
+    } else if (type == "array") {
+        property = bindArray(owner, shape);
+    } else if (type == "struct") {
+        property = bindStruct(owner, shape);
+    } else if (type == "variable") {
+        property = unsupported(owner, shape, BoundKind::Variable,
+                               "a variable property's runtime type is unknown");
+    } else {
+        property = unsupported(owner, shape, BoundKind::Unknown,
+                               "the value kind " + shape.type + " is not recognised");
+    }
+    return property;
+}
+
 }  // namespace
 
 std::string StageReport::toReport() const {
@@ -178,7 +297,8 @@ StageReport identifyStartupStages(const std::vector<QuestStages>& quests,
 
 bool BoundProperty::isBound() const {
     return kind == BoundKind::Int || kind == BoundKind::Float || kind == BoundKind::Bool ||
-           kind == BoundKind::String || kind == BoundKind::Object;
+           kind == BoundKind::String || kind == BoundKind::Object || kind == BoundKind::Array ||
+           kind == BoundKind::Struct;
 }
 
 std::string VmadBindReport::toReport() const {
@@ -200,60 +320,7 @@ VmadBindReport bindVmadValues(const OwnerId& owner, const std::vector<VmadValueS
                      [](const VmadValueShape& a, const VmadValueShape& b) { return a.name < b.name; });
     VmadBindReport report;
     for (const VmadValueShape& shape : ordered) {
-        BoundProperty property;
-        property.owner = owner;
-        property.name = shape.name;
-        const std::string type = lower(shape.type);
-        if (type == "int") {
-            if (shape.integer.has_value()) {
-                property.kind = BoundKind::Int;
-                property.value = integerValue(static_cast<std::int32_t>(*shape.integer));
-            } else {
-                property = unsupported(owner, shape, BoundKind::Int, "an integer property carried no value");
-            }
-        } else if (type == "float") {
-            if (shape.real.has_value()) {
-                property.kind = BoundKind::Float;
-                property.value = floatValue(static_cast<float>(*shape.real));
-            } else {
-                property = unsupported(owner, shape, BoundKind::Float, "a float property carried no value");
-            }
-        } else if (type == "bool") {
-            if (shape.boolean.has_value()) {
-                property.kind = BoundKind::Bool;
-                property.value = boolValue(*shape.boolean);
-            } else {
-                property = unsupported(owner, shape, BoundKind::Bool, "a boolean property carried no value");
-            }
-        } else if (type == "string") {
-            property.kind = BoundKind::String;
-            property.value = stringValue(shape.text.value_or(std::string()));
-        } else if (type == "object" && shape.hasAlias) {
-            property = unsupported(owner, shape, BoundKind::AliasBound,
-                                   "the object is bound to a quest alias, and the alias fill order is unproven");
-        } else if (type == "object") {
-            if (shape.object.has_value() && !shape.object->empty()) {
-                property.kind = BoundKind::Object;
-                property.value = objectValue(0, *shape.object, std::string());
-            } else {
-                property = unsupported(owner, shape, BoundKind::Object,
-                                       "an object property carried no reference");
-            }
-        } else if (type == "array") {
-            property = unsupported(owner, shape, BoundKind::Array,
-                                   "the array's " + std::to_string(shape.elementCount.value_or(0)) +
-                                       " elements are not decoded yet");
-        } else if (type == "struct") {
-            property = unsupported(owner, shape, BoundKind::Struct,
-                                   "the struct's " + std::to_string(shape.elementCount.value_or(0)) +
-                                       " members are not decoded yet");
-        } else if (type == "variable") {
-            property = unsupported(owner, shape, BoundKind::Variable,
-                                   "a variable property's runtime type is unknown");
-        } else {
-            property = unsupported(owner, shape, BoundKind::Unknown,
-                                   "the value kind " + shape.type + " is not recognised");
-        }
+        BoundProperty property = bindShape(owner, shape, shape.type);
         if (property.isBound()) {
             report.bound += 1;
         } else {
