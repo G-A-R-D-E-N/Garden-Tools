@@ -6332,7 +6332,7 @@ The INNR entry above modelled a nested run that a member of the outer run counts
 
 - `Radicle/include/fo4/papyrus/script_index.hpp:ScriptIndex::parsed_` is keyed by the absolute path string.
 
-- `Radicle/src/papyrus/script_index.cpp:qualifiedNameOf` recomputes the qualified name from the file's on-disk path so the returned names keep their original casing, as the C# does (it keys by `QualifiedNameFor` and exposes the keys as ScriptNames). If no root contains the path it falls back to the lowercased key; the source comment says that should not happen.
+- `Radicle/src/papyrus/script_index.cpp:qualifiedNameOf` recomputes the qualified name from the file's on-disk path so the returned names keep their original casing, as the C# does (it keys by `QualifiedNameFor` and exposes the keys as ScriptNames). If no root contains the path it falls back to the lowercased key; that should not happen.
 
 - `Radicle/src/papyrus/script_index.cpp:ScriptIndex::addRoot` is a manual depth-first walk that mirrors `PapyrusFileWalk`: case-insensitive `.psc` match, and symlinked directories are skipped (the C# checks that `LinkTarget` is null). The `..` check is defensive because `Path.GetRelativePath` never yields `..` for a file under its root. Roots are de-duplicated ignoring case, and the first root to provide a qualified name keeps it.
 
