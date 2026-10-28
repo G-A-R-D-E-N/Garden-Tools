@@ -93,7 +93,7 @@ GraphScriptLoadResult GraphScriptLoader::load(
     for (const auto& root : rootsFor(path, roots)) index.addRoot(root);
 
     GraphLifter lifter(index);
-    const auto lifted = lifter.lift(parsed);
+    auto lifted = lifter.lift(parsed);
 
     GraphScriptLoadResult result;
     if (lifted.success()) result.document = std::move(lifted.document);
