@@ -374,6 +374,10 @@ add_library(fo4
   src/abc/abc_asm_lex.cpp
   src/abc/abc_asm.cpp
   src/abc/abc_asm_code.cpp
+  src/avm1/opcodes.cpp
+  src/avm1/decode.cpp
+  src/avm1/encode.cpp
+  src/avm1/disassembly.cpp
   src/avm2/name.cpp
   src/avm2/value.cpp
   src/avm2/coercion.cpp
@@ -975,6 +979,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_swf_real.cpp
     tests/test_swf_census.cpp
     tests/test_swf_census_real.cpp
+    tests/test_avm1.cpp
+    tests/test_avm1_real.cpp
     tests/test_swf_svg.cpp
     tests/test_abc_real.cpp
     tests/test_hkx_packfile.cpp

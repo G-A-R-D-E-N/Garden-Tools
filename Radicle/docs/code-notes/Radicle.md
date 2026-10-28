@@ -7501,6 +7501,49 @@ The set-placement-depth verb was skipped. The C++ offers only `replace_placement
 
 Not built or run locally. CI is the first compile and run.
 
+## Radicle/src/avm1/decode.cpp:Decoder::record
+
+A record with a code of 0x80 or higher has a u16 Length that covers only the fields in its own header. For DefineFunction (0x9B), DefineFunction2 (0x8E), With (0x94) and Try (0x8F), the body is not inside the Length. The body follows as separate records in the same stream, sized by `body_size`, `try_size`, `catch_size` and `finally_size`. `Decoder::body` checks each body against its block before it decodes it. The probe ran read-only over the three shipped GFx movies (RaceSex_menu.gfx, TutorialMenu.gfx, SafeZone.gfx). The header-only layout parsed all 148 DoAction and DoInitAction payloads (82 and 66). The body-inclusive layout failed 42 of them. The probe did not cover With, Try, GetURL, GotoFrame2 or Call, so their layouts come from the SWF spec, not from measurement.
+
+A record with a code below 0x80 is one byte and has no Length, so `Decoder::record` sets its length to 1 and `unknown` from `action_mnemonic`. An unknown code of 0x80 or higher keeps its declared bytes in `Avm1Raw` (`Decoder::payload` default case) and sets `unknown`. The code table covers every code of 0x80 or higher that has a payload case, so a known opcode is never flagged unknown.
+
+## Radicle/src/avm1/decode.cpp:Decoder::push_values
+
+The Push value widths were checked against the probe, and every value type parsed at the expected width. Double is stored as two little-endian u32 words, high word first, then low word. That word order is the SWF spec reading and has not been checked against a decoded value. A Boolean byte other than 0 or 1 is refused with BadPushValue at the type byte, because the encoder writes only 0 or 1 and an accepted byte would break the exact re-encode.
+
+## Radicle/src/avm1/decode.cpp:Decoder::resolve_branches
+
+A Jump (0x99) or If (0x9D) target is the end of its own record plus the signed offset. A target outside 0 to the stream size is refused with BranchOutOfRange at the branch offset. A target inside a record is refused with BranchNotRecord, because a listing label must name a record start. The stream end is a valid target, and it is the only boundary that is not a record start.
+
+## Radicle/src/avm1/decode.cpp:Decoder::run
+
+Bytes after the first End record are kept in `Avm1Stream::trailing` and written back by `encode_actions`, so the re-encode returns every input byte. The disassembly prints a `trailing N bytes` line for them. Nothing is decoded from the trailing bytes.
+
+## Radicle/include/fo4/avm1/avm1.hpp:decode_actions
+
+Typed payloads cover the record codes listed in the payload switch of `Radicle/src/avm1/decode.cpp:Decoder::payload`. Those are Frame, GetURL, the one-byte records, ConstantPool, WaitForFrame, the two text records, DefineFunction and DefineFunction2, Try, With, Push, Jump and If, Call (no payload) and GotoFrame2. Every other record of 0x80 or higher, and every unknown code below 0x80, is raw-preserved in `Avm1Raw` or as a byte. A failed decode clears `actions`. The status and offset are still set, so the caller can report the refusal.
+
+## Radicle/src/avm1/decode.cpp:Decoder::body
+
+Each nested body recurses through `block`, `record` and `body`. An unbounded chain of With records, at 5 bytes per level, could overflow a 1 MB stack. `kMaxBodyDepth` is 64, and the 65th nested body is refused with `TooDeep` at the offset where its body would start. `depth_` is incremented around the `block` call and decremented on the way back. Every return path in `block` returns a bool, so the counter is restored on success and on failure. The limit does not depend on the byte count, so it bounds the stack for any input size.
+
+The limit of 64 is a guess. The three shipped GFx movies were not measured for their maximum body depth, so a real file could in principle exceed it. Raise the constant if a real movie is refused.
+
+## Radicle/src/avm1/decode.cpp:Decoder::payload
+
+A ConstantPool count is checked against the bytes left in its record before `resize`. Each string needs at least one NUL byte, so a count larger than the bytes left cannot decode. `Decoder::function_header` does the same for the parameter count, which needs at least one byte per parameter. Without the check, a 65,535-string count allocates a large vector before the first string fails.
+
+## Radicle/src/avm1/disassembly.cpp:quote
+
+Quoted text escapes a quote and a backslash with a backslash. Control bytes below 0x20, and 0x7F, print as `\xNN`. This keeps one listing line on one line, because a raw newline in a Text value would otherwise split it.
+
+## Radicle/src/avm1/encode.cpp:encode_actions
+
+Re-encode writes each payload in the layout the decoder reads, and it writes Length from the payload size. It does not write a record's offset, and it does not rebuild branch offsets from `Avm1Branch::target`. Each branch keeps the offset it was decoded with.
+
+Unverified in this change: the build, the unit tests, and the runner case. The runner case `Radicle/tests/test_swf_real.cpp:InterfaceGfxAvm1StreamsDecodeAndReencodeByteIdentically` depends on FO4_DATA_DIR and skips without it. Call's zero-length layout and the With, Try, GetURL and GotoFrame2 layouts are unmeasured.
+
+Not built or run locally. CI is the first compile and run.
 ## Radicle/src/swf/swf_svg.cpp:shape_to_svg (SWF shape to SVG)
 
 Fill rule is `nonzero`. `fill_edges` gives every edge its fill on the left: fill0 edges keep their direction and fill1 edges are reversed. With every region's boundary directed the same way, the winding number is positive inside a filled region and zero outside, so nonzero paints the union of the regions of one fill. Evenodd would cut holes where two regions of the same fill overlap, which the SWF fill model allows.
