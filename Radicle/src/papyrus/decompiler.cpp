@@ -1,55 +1,36 @@
 #include <fo4/papyrus/decompiler.hpp>
 #include <fo4/papyrus/script_names.hpp>
 
-#include <algorithm>
+#include "decompiler_internal.hpp"
+
 #include <cctype>
-#include <functional>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace fo4::papyrus {
 
 using fo4::pex::PexFile;
 using fo4::pex::PexFunction;
-using fo4::pex::PexInstruction;
 using fo4::pex::PexObject;
-using fo4::pex::PexTypedName;
 using fo4::pex::PexValue;
-using fo4::pex::PexValueType;
+using decompiler_detail::BodyState;
+using decompiler_detail::iequals;
+using decompiler_detail::join;
+using decompiler_detail::reconstructStatements;
+using decompiler_detail::startsWith;
+using decompiler_detail::translateInstructions;
 
 namespace {
-
-bool iequals(std::string_view a, std::string_view b) {
-    if (a.size() != b.size()) return false;
-    for (std::size_t i = 0; i < a.size(); ++i) {
-        const auto x = static_cast<unsigned char>(a[i]);
-        const auto y = static_cast<unsigned char>(b[i]);
-        if (std::tolower(x) != std::tolower(y)) return false;
-    }
-    return true;
-}
-
-bool startsWith(std::string_view text, std::string_view prefix) {
-    return text.size() >= prefix.size() && text.substr(0, prefix.size()) == prefix;
-}
 
 std::string cap(std::string s) {
     if (s.empty()) return s;
     s[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(s[0])));
     return s;
-}
-
-std::string join(const std::vector<std::string>& parts, std::string_view sep) {
-    std::string out;
-    for (std::size_t i = 0; i < parts.size(); ++i) {
-        if (i > 0) out += sep;
-        out += parts[i];
-    }
-    return out;
 }
 
 }  // namespace
@@ -247,87 +228,6 @@ void Decompiler::emitFunction(std::ostringstream& sb, const PexObject& obj,
     sb << indent << end << "\n";
 }
 
-namespace {
-
-enum class JKind { JmpF, JmpT, Jmp };
-
-struct JInfo {
-    JKind kind{JKind::Jmp};
-    int target{0};
-    std::string cond;
-    std::string condVar;
-};
-
-struct BodyState {
-    const PexObject* obj{nullptr};
-    const PexFunction* fn{nullptr};
-    std::string indent;
-    bool inlineTemps{true};
-
-    std::unordered_map<std::string, std::string> types;
-    std::unordered_map<std::string, std::string> backing;
-    std::unordered_map<std::string, std::string> temps;
-    std::vector<std::optional<std::string>> stmt;
-    std::vector<std::optional<JInfo>> jumps;
-    std::unordered_map<std::string, int> firstWrite;
-    std::unordered_map<std::string, int> tempDefinition;
-    std::unordered_map<int, std::string> tempExpression;
-    std::vector<int> tempWasRead;
-
-    std::ostringstream out;
-
-    std::string typeOf(const std::string& name) const {
-        const auto it = types.find(name);
-        return it == types.end() ? std::string() : it->second;
-    }
-
-    static bool isTemp(std::string_view n) { return startsWith(n, "::temp"); }
-
-    std::string resolveName(const std::string& n) const {
-        const auto it = backing.find(n);
-        return it == backing.end() ? n : it->second;
-    }
-
-    static std::string san(std::string_view n) {
-        if (startsWith(n, "::")) return "_" + std::string(n.substr(2));
-        return std::string(n);
-    }
-
-    std::string op(const PexValue& v) {
-        if (v.type != PexValueType::Identifier) return v.toString();
-        const std::string& n = v.str;
-        if (iequals(n, "::NoneVar")) return "None";
-        if (inlineTemps && isTemp(n)) {
-            const auto found = temps.find(n);
-            if (found != temps.end()) {
-                const auto def = tempDefinition.find(n);
-                if (def != tempDefinition.end()) tempWasRead.push_back(def->second);
-                return found->second;
-            }
-        }
-        return san(resolveName(n));
-    }
-
-    std::string a(const PexInstruction& ins, std::size_t i) { return op(ins.args[i]); }
-
-    std::string dest(const PexInstruction& ins, std::size_t i) const { return ins.args[i].str; }
-
-    void put(int idx, const std::string& destination, const std::string& expr) {
-        if (!firstWrite.contains(destination)) firstWrite[destination] = idx;
-        if (inlineTemps && isTemp(destination)) {
-            temps[destination] = expr;
-            tempDefinition[destination] = idx;
-            tempExpression[idx] = expr;
-        } else if (iequals(destination, "::NoneVar")) {
-            stmt[idx] = expr;
-        } else {
-            stmt[idx] = san(resolveName(destination)) + " = " + expr;
-        }
-    }
-};
-
-}  // namespace
-
 std::string Decompiler::decompileBody(const PexObject& obj, const PexFunction& fn,
                                       std::string indent, bool inlineTemps) {
     BodyState s;
@@ -345,323 +245,10 @@ std::string Decompiler::decompileBody(const PexObject& obj, const PexFunction& f
         if (pr.isAutoVar() && !pr.autoVarName.empty()) s.backing[pr.autoVarName] = pr.name;
     }
 
-    const auto& instrs = fn.instructions;
-    s.stmt.resize(instrs.size());
-    s.jumps.resize(instrs.size());
-
-    const auto selfDot = [](const std::string& self) {
-        return iequals(self, "self") ? std::string() : self + ".";
-    };
-    const auto elemType = [](const std::string& arrayType) {
-        if (arrayType.size() >= 2 && arrayType.substr(arrayType.size() - 2) == "[]") {
-            return arrayType.substr(0, arrayType.size() - 2);
-        }
-        return arrayType;
-    };
-    const auto args = [&](const PexInstruction& ins) {
-        std::vector<std::string> varargs;
-        for (std::size_t a = static_cast<std::size_t>(ins.fixedArgCount); a < ins.args.size(); ++a) {
-            varargs.push_back(s.op(ins.args[a]));
-        }
-        return join(varargs, ", ");
-    };
-
-    for (std::size_t i = 0; i < instrs.size(); ++i) {
-        const auto& ins = instrs[i];
-        const std::string mnemonic = ins.mnemonic;
-
-        if (mnemonic == "nop") {
-            continue;
-        } else if (mnemonic == "iadd" || mnemonic == "fadd") {
-            s.put(static_cast<int>(i), s.dest(ins, 0), "(" + s.a(ins, 1) + " + " + s.a(ins, 2) + ")");
-        } else if (mnemonic == "isub" || mnemonic == "fsub") {
-            s.put(static_cast<int>(i), s.dest(ins, 0), "(" + s.a(ins, 1) + " - " + s.a(ins, 2) + ")");
-        } else if (mnemonic == "imul" || mnemonic == "fmul") {
-            s.put(static_cast<int>(i), s.dest(ins, 0), "(" + s.a(ins, 1) + " * " + s.a(ins, 2) + ")");
-        } else if (mnemonic == "idiv" || mnemonic == "fdiv") {
-            s.put(static_cast<int>(i), s.dest(ins, 0), "(" + s.a(ins, 1) + " / " + s.a(ins, 2) + ")");
-        } else if (mnemonic == "imod") {
-            s.put(static_cast<int>(i), s.dest(ins, 0), "(" + s.a(ins, 1) + " % " + s.a(ins, 2) + ")");
-        } else if (mnemonic == "ineg" || mnemonic == "fneg") {
-            s.put(static_cast<int>(i), s.dest(ins, 0), "(-" + s.a(ins, 1) + ")");
-        } else if (mnemonic == "not") {
-            s.put(static_cast<int>(i), s.dest(ins, 0), "(!" + s.a(ins, 1) + ")");
-        } else if (mnemonic == "assign") {
-            s.put(static_cast<int>(i), s.dest(ins, 0), s.a(ins, 1));
-        } else if (mnemonic == "cast") {
-            std::string src = s.a(ins, 1);
-            if (src == "None") {
-                s.put(static_cast<int>(i), s.dest(ins, 0), "None");
-                continue;
-            }
-            const std::string dt = s.typeOf(s.dest(ins, 0));
-            if (iequals(dt, "ScriptObject")) {
-                s.put(static_cast<int>(i), s.dest(ins, 0), src);
-                continue;
-            }
-            if (ins.args[1].type == PexValueType::Identifier &&
-                iequals(s.typeOf(ins.args[1].str), dt)) {
-                s.put(static_cast<int>(i), s.dest(ins, 0), src);
-                continue;
-            }
-            s.put(static_cast<int>(i), s.dest(ins, 0),
-                  dt.empty() ? src : "(" + src + " as " + dt + ")");
-        } else if (mnemonic == "cmp_eq") {
-            s.put(static_cast<int>(i), s.dest(ins, 0), "(" + s.a(ins, 1) + " == " + s.a(ins, 2) + ")");
-        } else if (mnemonic == "cmp_lt") {
-            s.put(static_cast<int>(i), s.dest(ins, 0), "(" + s.a(ins, 1) + " < " + s.a(ins, 2) + ")");
-        } else if (mnemonic == "cmp_lte") {
-            s.put(static_cast<int>(i), s.dest(ins, 0), "(" + s.a(ins, 1) + " <= " + s.a(ins, 2) + ")");
-        } else if (mnemonic == "cmp_gt") {
-            s.put(static_cast<int>(i), s.dest(ins, 0), "(" + s.a(ins, 1) + " > " + s.a(ins, 2) + ")");
-        } else if (mnemonic == "cmp_gte") {
-            s.put(static_cast<int>(i), s.dest(ins, 0), "(" + s.a(ins, 1) + " >= " + s.a(ins, 2) + ")");
-        } else if (mnemonic == "strcat") {
-            s.put(static_cast<int>(i), s.dest(ins, 0), "(" + s.a(ins, 1) + " + " + s.a(ins, 2) + ")");
-        } else if (mnemonic == "is") {
-            s.put(static_cast<int>(i), s.dest(ins, 0),
-                  "(" + s.a(ins, 1) + " is " + ins.args[2].str + ")");
-        } else if (mnemonic == "propget") {
-            s.put(static_cast<int>(i), s.dest(ins, 2),
-                  selfDot(s.a(ins, 1)) + ins.args[0].str);
-        } else if (mnemonic == "propset") {
-            s.stmt[i] = selfDot(s.a(ins, 1)) + ins.args[0].str + " = " + s.a(ins, 2);
-        } else if (mnemonic == "array_create") {
-            s.put(static_cast<int>(i), s.dest(ins, 0),
-                  "new " + elemType(s.typeOf(s.dest(ins, 0))) + "[" + s.a(ins, 1) + "]");
-        } else if (mnemonic == "array_length") {
-            s.put(static_cast<int>(i), s.dest(ins, 0), s.a(ins, 1) + ".Length");
-        } else if (mnemonic == "array_getelement") {
-            s.put(static_cast<int>(i), s.dest(ins, 0), s.a(ins, 1) + "[" + s.a(ins, 2) + "]");
-        } else if (mnemonic == "array_setelement") {
-            s.stmt[i] = s.a(ins, 0) + "[" + s.a(ins, 1) + "] = " + s.a(ins, 2);
-        } else if (mnemonic == "array_findelement") {
-            s.put(static_cast<int>(i), s.dest(ins, 1),
-                  s.a(ins, 0) + ".Find(" + s.a(ins, 2) + ", " + s.a(ins, 3) + ")");
-        } else if (mnemonic == "array_rfindelement") {
-            s.put(static_cast<int>(i), s.dest(ins, 1),
-                  s.a(ins, 0) + ".RFind(" + s.a(ins, 2) + ", " + s.a(ins, 3) + ")");
-        } else if (mnemonic == "array_findstruct") {
-            s.put(static_cast<int>(i), s.dest(ins, 1),
-                  s.a(ins, 0) + ".FindStruct(\"" + ins.args[2].str + "\", " + s.a(ins, 3) + ", " +
-                      s.a(ins, 4) + ")");
-        } else if (mnemonic == "array_rfindstruct") {
-            s.put(static_cast<int>(i), s.dest(ins, 1),
-                  s.a(ins, 0) + ".RFindStruct(\"" + ins.args[2].str + "\", " + s.a(ins, 3) + ", " +
-                      s.a(ins, 4) + ")");
-        } else if (mnemonic == "array_add") {
-            s.stmt[i] = s.a(ins, 0) + ".Add(" + s.a(ins, 1) + ", " + s.a(ins, 2) + ")";
-        } else if (mnemonic == "array_insert") {
-            s.stmt[i] = s.a(ins, 0) + ".Insert(" + s.a(ins, 1) + ", " + s.a(ins, 2) + ")";
-        } else if (mnemonic == "array_removelast") {
-            s.stmt[i] = s.a(ins, 0) + ".RemoveLast()";
-        } else if (mnemonic == "array_remove") {
-            s.stmt[i] = s.a(ins, 0) + ".Remove(" + s.a(ins, 1) + ", " + s.a(ins, 2) + ")";
-        } else if (mnemonic == "array_clear") {
-            s.stmt[i] = s.a(ins, 0) + ".Clear()";
-        } else if (mnemonic == "struct_create") {
-            s.put(static_cast<int>(i), s.dest(ins, 0), "new " + s.typeOf(s.dest(ins, 0)));
-        } else if (mnemonic == "struct_get") {
-            s.put(static_cast<int>(i), s.dest(ins, 0), s.a(ins, 1) + "." + ins.args[2].str);
-        } else if (mnemonic == "struct_set") {
-            s.stmt[i] = s.a(ins, 0) + "." + ins.args[1].str + " = " + s.a(ins, 2);
-        } else if (mnemonic == "callmethod") {
-            const std::string method = ins.args[0].str;
-            const std::string self = s.a(ins, 1);
-            const std::string destination = s.dest(ins, 2);
-            s.put(static_cast<int>(i), destination,
-                  selfDot(self) + method + "(" + args(ins) + ")");
-        } else if (mnemonic == "callstatic") {
-            const std::string type = ins.args[0].str;
-            const std::string method = ins.args[1].str;
-            const std::string destination = s.dest(ins, 2);
-            s.put(static_cast<int>(i), destination, type + "." + method + "(" + args(ins) + ")");
-        } else if (mnemonic == "callparent") {
-            const std::string method = ins.args[0].str;
-            const std::string destination = s.dest(ins, 1);
-            s.put(static_cast<int>(i), destination, "Parent." + method + "(" + args(ins) + ")");
-        } else if (mnemonic == "return") {
-            const auto& rv = ins.args[0];
-            const bool none = rv.isNone() ||
-                              (rv.type == PexValueType::Identifier &&
-                               iequals(rv.str, "::NoneVar"));
-            s.stmt[i] = none ? "Return" : "Return " + s.op(rv);
-        } else if (mnemonic == "jmp") {
-            JInfo info;
-            info.kind = JKind::Jmp;
-            info.target = static_cast<int>(i) + ins.args[0].int_;
-            s.jumps[i] = std::move(info);
-        } else if (mnemonic == "jmpt") {
-            JInfo info;
-            info.kind = JKind::JmpT;
-            info.target = static_cast<int>(i) + ins.args[1].int_;
-            info.cond = s.a(ins, 0);
-            info.condVar = ins.args[0].str;
-            s.jumps[i] = std::move(info);
-        } else if (mnemonic == "jmpf") {
-            JInfo info;
-            info.kind = JKind::JmpF;
-            info.target = static_cast<int>(i) + ins.args[1].int_;
-            info.cond = s.a(ins, 0);
-            info.condVar = ins.args[0].str;
-            s.jumps[i] = std::move(info);
-        } else {
-            s.stmt[i] = "; [unhandled " + mnemonic + "]";
-        }
-    }
-
-    for (bool folding = true; folding;) {
-        folding = false;
-        for (std::size_t i = 0; i < instrs.size(); ++i) {
-            const auto& first = s.jumps[i];
-            if (!first || first->condVar.empty() || first->target <= static_cast<int>(i)) continue;
-            if (first->target >= static_cast<int>(instrs.size())) continue;
-            auto& second = s.jumps[static_cast<std::size_t>(first->target)];
-            if (!second || !iequals(second->condVar, first->condVar)) continue;
-
-            bool clear = true;
-            for (int k = static_cast<int>(i) + 1; k < first->target && clear; ++k) {
-                clear = !s.stmt[static_cast<std::size_t>(k)] && !s.jumps[static_cast<std::size_t>(k)];
-            }
-            if (!clear) continue;
-
-            second->cond = first->kind == JKind::JmpT
-                               ? "(" + first->cond + " || " + second->cond + ")"
-                               : "(" + first->cond + " && " + second->cond + ")";
-            s.jumps[i] = std::nullopt;
-            folding = true;
-        }
-    }
-
-    for (const auto& [idx, expression] : s.tempExpression) {
-        if (std::find(s.tempWasRead.begin(), s.tempWasRead.end(), idx) != s.tempWasRead.end()) {
-            continue;
-        }
-        const auto& mnemonic = instrs[static_cast<std::size_t>(idx)].mnemonic;
-        if (mnemonic != "callmethod" && mnemonic != "callstatic" && mnemonic != "callparent") {
-            continue;
-        }
-        s.stmt[static_cast<std::size_t>(idx)] = expression;
-    }
-
-    std::unordered_map<int, std::string> declaredAt;
-    std::vector<int> zeroedByDeclaration;
-    std::vector<PexTypedName> hoisted;
-
-    const auto isZeroFor = [](const std::string& type, const PexValue& value) {
-        if (iequals(type, "bool")) return value.type == PexValueType::Bool && !value.bool_;
-        if (iequals(type, "int")) return value.type == PexValueType::Integer && value.int_ == 0;
-        if (iequals(type, "float")) return value.type == PexValueType::Float && value.float_ == 0.0F;
-        if (iequals(type, "string")) return value.type == PexValueType::String && value.str.empty();
-        return value.isNone();
-    };
-
-    const auto runsUnconditionally = [&](int idx) {
-        for (std::size_t k = 0; k < instrs.size(); ++k) {
-            const auto& j = s.jumps[k];
-            if (!j) continue;
-            if (static_cast<int>(k) < idx && j->target > idx) return false;
-            if (static_cast<int>(k) > idx && j->target <= idx) return false;
-        }
-        return true;
-    };
-
-    std::function<void(int, int, std::string_view)> structure;
-    structure = [&](int start, int end, std::string_view ind) {
-        int i = start;
-        while (i < end) {
-            const auto& j = s.jumps[static_cast<std::size_t>(i)];
-            if (!j) {
-                if (s.stmt[static_cast<std::size_t>(i)] &&
-                    std::find(zeroedByDeclaration.begin(), zeroedByDeclaration.end(), i) ==
-                        zeroedByDeclaration.end()) {
-                    const auto declared = declaredAt.find(i);
-                    if (declared != declaredAt.end()) {
-                        s.out << ind << declared->second << " " << *s.stmt[static_cast<std::size_t>(i)]
-                              << "\n";
-                    } else {
-                        s.out << ind << *s.stmt[static_cast<std::size_t>(i)] << "\n";
-                    }
-                }
-                ++i;
-                continue;
-            }
-            if (j->kind == JKind::JmpF && j->target > i && j->target <= end) {
-                const int target = j->target;
-                const int lastIdx = target - 1;
-                const auto& lastJ = (lastIdx > i) ? s.jumps[static_cast<std::size_t>(lastIdx)]
-                                                  : std::nullopt;
-                if (lastJ && lastJ->kind == JKind::Jmp && lastJ->target <= i) {
-                    s.out << ind << "While (" << j->cond << ")\n";
-                    structure(i + 1, lastIdx, std::string(ind) + "\t");
-                    s.out << ind << "EndWhile\n";
-                    i = target;
-                    continue;
-                }
-                if (lastJ && lastJ->kind == JKind::Jmp && lastJ->target > lastIdx) {
-                    const int elseEnd = std::min(lastJ->target, end);
-                    if (elseEnd <= target) {
-                        s.out << ind << "If (" << j->cond << ")\n";
-                        structure(i + 1, lastIdx, std::string(ind) + "\t");
-                        s.out << ind << "EndIf\n";
-                        i = target;
-                        continue;
-                    }
-                    s.out << ind << "If (" << j->cond << ")\n";
-                    structure(i + 1, lastIdx, std::string(ind) + "\t");
-                    s.out << ind << "Else\n";
-                    structure(target, elseEnd, std::string(ind) + "\t");
-                    s.out << ind << "EndIf\n";
-                    i = elseEnd;
-                    continue;
-                }
-                s.out << ind << "If (" << j->cond << ")\n";
-                structure(i + 1, target, std::string(ind) + "\t");
-                s.out << ind << "EndIf\n";
-                i = target;
-                continue;
-            }
-            if (j->kind == JKind::JmpT && j->target > i && j->target <= end) {
-                s.out << ind << "If (!(" << j->cond << "))\n";
-                structure(i + 1, j->target, std::string(ind) + "\t");
-                s.out << ind << "EndIf\n";
-                i = j->target;
-                continue;
-            }
-            ++i;
-        }
-    };
-
-    for (const auto& l : fn.locals) {
-        if (iequals(l.name, "::NoneVar")) continue;
-        if (iequals(l.type, "None")) continue;
-        if (inlineTemps && BodyState::isTemp(l.name)) continue;
-
-        const auto write = s.firstWrite.find(l.name);
-        if (write != s.firstWrite.end() && write->second >= 0) {
-            const auto at = write->second;
-            if (instrs[static_cast<std::size_t>(at)].mnemonic == "assign" &&
-                isZeroFor(l.type, instrs[static_cast<std::size_t>(at)].args[1])) {
-                zeroedByDeclaration.push_back(at);
-                hoisted.push_back(l);
-                continue;
-            }
-            if (s.stmt[static_cast<std::size_t>(at)] &&
-                startsWith(*s.stmt[static_cast<std::size_t>(at)], BodyState::san(l.name) + " = ") &&
-                runsUnconditionally(at)) {
-                declaredAt[at] = l.type;
-                continue;
-            }
-        }
-
-        hoisted.push_back(l);
-    }
-
-    std::ostringstream body;
-    for (const auto& l : hoisted) body << s.indent << l.type << " " << BodyState::san(l.name) << "\n";
-    structure(0, static_cast<int>(instrs.size()), s.indent);
-    body << s.out.str();
-    return body.str();
+    s.stmt.resize(fn.instructions.size());
+    s.jumps.resize(fn.instructions.size());
+    translateInstructions(s);
+    return reconstructStatements(s);
 }
 
 std::string Decompiler::disassemble(const PexFile& pex) {

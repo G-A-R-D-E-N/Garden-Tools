@@ -3,6 +3,8 @@
 #include <cctype>
 #include <string>
 
+#include <fo4/papyrus/resolver.hpp>
+
 namespace fo4::papyrus {
 
 namespace {
@@ -56,6 +58,10 @@ void visitChildExpressions(const Node* node, const auto& visitor) {
         default:
             break;
     }
+}
+
+std::string describe(const std::optional<Type>& type) {
+    return type ? type->toString() : std::string("nothing");
 }
 
 }
@@ -122,17 +128,49 @@ void TypeChecker::checkOverride(State& state, const FunctionDecl& fn) {
     const Script* script = state.resolution->script;
     if (!script || !script->extends) return;
 
+    const auto declared = [this](const TypeRef& type, const Script* owner) -> std::optional<Type> {
+        const auto resolved = Resolver::resolveTypeName(index_, type.name, owner);
+        if (!resolved) return std::nullopt;
+        return type.isArray ? Type::arrayOf(*resolved) : *resolved;
+    };
+
     const auto chain = index_.baseChain(script);
     for (std::size_t i = 1; i < chain.size(); ++i) {
         const Declaration* parentDecl = ScriptIndex::findMemberOn(chain[i], fn.name);
         const auto* parent = dynamic_cast<const FunctionDecl*>(parentDecl);
         if (!parent) continue;
 
+        const std::string overridden =
+            "'" + fn.name + "' overrides " + chain[i]->name + "." + parent->name;
         if (parent->parameters.size() != fn.parameters.size()) {
             state.report(DiagnosticCode::OverrideMismatch,
-                         "'" + fn.name + "' overrides " + chain[i]->name + "." + parent->name +
-                             ", which takes " + std::to_string(parent->parameters.size()) +
+                         overridden + ", which takes " + std::to_string(parent->parameters.size()) +
                              " parameter(s), not " + std::to_string(fn.parameters.size()) + ".",
+                         fn.nameSpan);
+            return;
+        }
+
+        for (std::size_t p = 0; p < fn.parameters.size(); ++p) {
+            const auto expected = declared(parent->parameters[p].type, chain[i]);
+            const auto actual = declared(fn.parameters[p].type, script);
+            if (expected && actual && *expected != *actual) {
+                state.report(DiagnosticCode::OverrideMismatch,
+                             overridden + ", whose parameter " + std::to_string(p + 1) + " is '" +
+                                 expected->toString() + "', not '" + actual->toString() + "'.",
+                             fn.nameSpan);
+                return;
+            }
+        }
+
+        const auto expectedReturn =
+            parent->returnType ? declared(*parent->returnType, chain[i]) : std::nullopt;
+        const auto actualReturn = fn.returnType ? declared(*fn.returnType, script) : std::nullopt;
+        const bool known =
+            (!parent->returnType || expectedReturn) && (!fn.returnType || actualReturn);
+        if (known && expectedReturn != actualReturn) {
+            state.report(DiagnosticCode::OverrideMismatch,
+                         overridden + ", which returns " + describe(expectedReturn) + ", not " +
+                             describe(actualReturn) + ".",
                          fn.nameSpan);
         }
         return;
