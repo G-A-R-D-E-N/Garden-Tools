@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -383,8 +384,7 @@ TEST(PapyrusCodegenReal, DecompiledCorpusRecompilesToTheSameProgram) {
   const double percent = compiled == 0 ? 0.0 : matched * 100.0 / compiled;
   std::cout << "DECOMPILE files=" << files.size() << " compiled=" << compiled
             << " matched=" << matched << " differed=" << differed << " assembly=" << assembly
-            << " failed=" << failed << std::fixed << std::setprecision(1)
-            << " fidelity=" << percent << "%\n";
+            << " failed=" << failed << " fidelity=" << std::format("{:.1f}", percent) << "%\n";
 
   std::vector<std::pair<std::string, int>> ranked(reasons.begin(), reasons.end());
   std::stable_sort(ranked.begin(), ranked.end(),
