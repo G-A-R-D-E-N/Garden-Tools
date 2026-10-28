@@ -7606,7 +7606,7 @@ Twip scaling: `Radicle/src/swf/swf_svg.cpp:pixels` divides twips by 20. `Radicle
 
 Gradient extent: `Radicle/src/swf/swf_svg.cpp:gradient_text` uses `kGradientHalfPixels` (819.2 px, which is 16384 twips) for the linear span and the radial radius, in `userSpaceOnUse`. The focal point is `fx = focal / 256 * 819.2` (`focal_text`). Spread: 0 pad, 1 reflect, 2 repeat (`spread_name`). Unverified against the SWF spec; the local SWF reference folder was not present.
 
-Bitmap-fill gap: fill types 0x40 to 0x43 export as the flat placeholder `#808080` (`kPlaceholderColor`). No image is decoded. A stroke whose LineStyle2 fill is a gradient or bitmap also uses the placeholder (`Radicle/src/swf/swf_svg.cpp:stroke_paint`). A solid stroke fill uses its colour.
+Placeholder fallback: a bitmap fill (types 0x40 to 0x43) whose bitmap is missing from the file's top level, or that `bitmap_to_png` refuses, exports as the flat placeholder `#808080` (`kPlaceholderColor`) with no pattern (`Radicle/src/swf/swf_svg.cpp:bitmap_pattern`). A stroke whose LineStyle2 fill is a gradient or bitmap also uses the placeholder (`Radicle/src/swf/swf_svg.cpp:stroke_paint`). A solid stroke fill uses its colour.
 
 Caps and joins: `Radicle/src/swf/swf_svg.cpp:cap_name` reads the start cap from bits 15-14 of the LineStyle2 flags (0 round, 1 butt, 2 square). `join_name` reads the join from bits 13-12 (0 round, 1 bevel, 2 miter). The miter limit is 8.8 fixed point. SVG has one linecap, so the end cap (bits 1-0) and NoClose (bit 2) are ignored. A LineStyle1 has flags 0 and so exports round caps and joins. Width 0 (hairline) exports as 1 px in `stroke_attributes`. Unverified against the SWF spec bit order; the fixture in `Radicle/tests/swf_art_fixtures.hpp` (`define_shape_4_payload`) agrees with it.
 
@@ -7744,6 +7744,34 @@ Encodes formats 3 (colour map) and 5 (32-bit ARGB) to an 8-bit RGBA PNG with fil
 
 A JPEG-based DefineBitsJpeg2 tag never produces an `SwfBitmap`, so that refusal is structural: the test asserts the tag has no bitmap and does carry the JPEG. The other refusals go through `Radicle/src/swf/swf_bitmap_png.cpp:bitmap_to_png`: 15-bit (format 4), a width changed after decode so the packed stream no longer inflates to the geometry, and a palette index of 5 against a one-entry colour map. Regression: a JPEG blob reaching the lossless path, a 15-bit row read as ARGB, a short pixel buffer encoded as if complete, and an index read past the colour map.
 
+## Radicle/src/swf/swf_svg.cpp:bitmap_pattern
+
+A bitmap fill (type 0x40 to 0x43) becomes a `<pattern>` whose `<image>` is the referenced bitmap's PNG from `Radicle/src/swf/swf_bitmap_png.cpp:bitmap_to_png` in base64. The pattern is `patternUnits="userSpaceOnUse"` with `width`/`height` equal to the bitmap's pixel size and `patternTransform` from `Radicle/src/swf/swf_svg.cpp:bitmap_matrix_text`. The SWF bitmap fill matrix maps bitmap pixels to twips, so `bitmap_matrix_text` divides the linear part (scale_x, scale_y, skew0, skew1) and the translation by 20 twips per pixel. A scale of 20.0 is one stage pixel per bitmap pixel, and a scale of 2.0 with a 400 twip translation gives `matrix(0.1 0 0 0.1 20 0)`. This convention is from the SWF spec as recalled, unverified against real data. `matrix_text` keeps the gradient convention, where only the translation is divided by 20. Pattern ids are `<prefix>bmp<N>` (`fill_id`), so they never collide with gradient ids `<prefix><N>`.
+
+Smoothing: 0x40 and 0x41 are smoothed and emit nothing extra; 0x42 and 0x43 add `image-rendering="pixelated"` on the `<image>`.
+
+Clipped fills (0x41, 0x43) are not clipped by this export (`Radicle/src/swf/swf_svg.cpp:bitmap_pattern`). SWF 0x41/0x43 mean clipped, but an SVG pattern always tiles across the whole plane, so a clipped fill renders exactly like a repeating one: the bitmap repeats outside its own bounds. Only a clipPath around the fill would stop that. Upgrade path: a `<clipPath>` holding a rect of the bitmap size under the fill matrix, referenced by `clip-path` on the fill path in `shape_fill_paths_to_svg`. Not done in this slice.
+
+Fallback: a missing bitmap id, a bitmap tag that is not in the file's top level, a JPEG bitmap (DefineBits and DefineBitsJPEG tags never produce an `SwfBitmap`), or a format that `bitmap_to_png` refuses (format 4, 15-bit) returns nullopt, so the fill keeps the old `#808080` placeholder and no pattern is emitted.
+
+## Radicle/src/swf/swf_svg.cpp:fill_attributes
+
+`fill_attributes` calls `bitmap_pattern` only to test whether a pattern exists, and `fill_defs` calls it again to emit the pattern. Each bitmap fill therefore encodes its PNG twice per shape emission, and `frame_to_svg` emits defs and paths per instance, so a frame with many instances of one bitmap-filled shape encodes that PNG about twice per instance. Known cost, not measured. Upgrade path: compute the pattern once per fill index and hand the result to both `fill_defs` and `fill_paths`.
+
+## Radicle/src/swf/swf_svg.cpp:index_bitmaps
+
+`index_bitmaps` keys each top-level `SwfTag::bitmap` by its `character_id` and keeps the first tag for a duplicate id, the same first-wins rule `frame_to_svg` uses for shapes. Bitmaps nested inside a sprite's children are not indexed, so a bitmap fill inside a sprite-defined shape falls back to the placeholder when its bitmap lives in a sprite. `Radicle/src/swf/swf_frame_svg.cpp:frame_to_svg` builds the index once per call and passes it to `frame_body`.
+
+`shape_to_svg(shape)` (one argument) is `shape_to_svg(shape, SwfFile{})`, so it prints the placeholder for every bitmap fill and stays byte-identical to the older output. `Radicle/src/c_api_swf_characters.cpp` (`radicle_swf_shape_svg`) now calls the two-argument overload, so a character export shows bitmap fills; the C ABI is unchanged.
+
+## Radicle/tests/test_swf_svg.cpp:SwfSvg.BitmapFillEmitsARepeatingPatternWithItsPngAndPixelTransform
+
+The expected base64 is `Radicle/tests/swf_art_fixtures.hpp:base64_text` applied to the bitmap's `bitmap_to_png` output, not a hardcoded string. The test also asserts the href starts with `data:image/png;base64,iVBORw0KGgo` (the base64 of the PNG signature), a literal vector that fails for a payload that is not a PNG.
+
+## Radicle/tests/test_swf_display.cpp:SwfFrameSvg.BitmapFillPatternIsResolvedFromTheMoviesBitmapTags
+
+Drives the whole movie path (DefineBitsLossless2 tag 36 plus DefineShape3 tag 32 placed by PlaceObject2), so it fails if `frame_to_svg` stops passing the bitmap index down to `frame_body`.
+
 ## Radicle/src/avm1/interpreter.cpp:strict_equal (StrictEquals 0x66)
 
 StrictEquals (0x66) pops two values and pushes true only when both have the same `Avm1DataKind` and the values are equal, with no ToNumber or ToString step. Undefined equals undefined and null equals null, NaN equals nothing because the comparison is a double `==`, and text compares by its bytes. The slice has no object, array or function kind, so the identity case does not arise. Under SWF 1 to 5 `Radicle/src/avm1/interpreter.cpp:execute_action` refuses the opcode through `unsupported`, the same refusal an unknown opcode gets, and the message names StrictEquals. Version 0 runs it: version 0 is unspecified and keeps the old rules, so it is not in the refused range. That choice is not checked against the SWF spec v19 mirror, which is not on this machine. Tests: `Radicle/tests/test_avm1_ops.cpp:StrictEqualsRequiresTheSameTypeAndValue` and `Radicle/tests/test_avm1_ops.cpp:StrictEqualsIsRefusedBelowSwfSix`. Not compiled or run on the development machine; CI is the first compile and run.
@@ -7786,6 +7814,10 @@ ABI 84 is 83 plus the one export `radicle_swf_bitmap_png`, which hands `fo4::swf
 ## Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION (ABI 85, SWF frame SVG export)
 
 ABI 85 is 84 plus the one export `radicle_swf_frame_svg` from `Radicle/src/c_api_swf_display.cpp:radicle_swf_frame_svg`. The pin is `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsEightyFive`, and `Radicle/bindings/csharp/Radicle.Interop/RadicleNative.g.cs:CompiledAbiVersion` was regenerated with `generate_interop.py`. The lane was written against 83 and took 84 in parallel with `radicle_swf_bitmap_png`; the merge renumbered it to 85.
+
+## Radicle/tests/test_swf_real.cpp:svg_is_well_formed
+
+`Radicle/tests/test_swf_real.cpp:svg_is_well_formed` rejects an export that contains the text "nan" or "inf", which catches a non-finite number printed into an attribute. Since bitmap fills embed a base64 PNG in `href`, the check runs on a copy with every `base64,` payload erased up to its closing quote, because a real PNG payload contains those three-letter runs by chance and would be reported as a malformed export. Detects a false "exports malformed SVG" failure on the Fallout 4 data runner.
 
 ## Radicle/src/avm1/text_ops.cpp:unit_count (MBStringLength 0x31 and MBStringExtract 0x35)
 

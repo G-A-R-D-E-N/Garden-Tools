@@ -6,10 +6,12 @@
 #include <gtest/gtest.h>
 #include <zlib.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace swf_art_test {
@@ -66,6 +68,23 @@ inline std::vector<std::byte> zlib_bytes(std::span<const std::uint8_t> raw) {
             Z_OK);
   buffer.resize(static_cast<std::size_t>(packed));
   return buffer;
+}
+
+inline std::string base64_text(std::span<const std::uint8_t> bytes) {
+  constexpr std::string_view alphabet =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  std::string text;
+  for (std::size_t offset = 0; offset < bytes.size(); offset += 3) {
+    const std::size_t left = std::min<std::size_t>(3, bytes.size() - offset);
+    std::uint32_t group = 0;
+    for (std::size_t index = 0; index < 3; ++index) {
+      group = (group << 8) | (index < left ? bytes[offset + index] : 0u);
+    }
+    for (std::size_t index = 0; index < 4; ++index) {
+      text += index <= left ? alphabet[(group >> (18 - 6 * index)) & 0x3Fu] : '=';
+    }
+  }
+  return text;
 }
 
 inline void shape_head(SwfBuilder& body, std::uint16_t id) {

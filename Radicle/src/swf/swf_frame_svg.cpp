@@ -64,8 +64,8 @@ std::string filter_text(const std::string& id, const SwfColorTransform& color,
          "\"/></filter></defs>\n";
 }
 
-std::string frame_body(const ShapeIndex& shapes, const SwfDisplayFrame& frame,
-                       const SwfRect& stage) {
+std::string frame_body(const ShapeIndex& shapes, const SvgBitmaps& bitmaps,
+                       const SwfDisplayFrame& frame, const SwfRect& stage) {
   std::string body;
   std::vector<Mask> masks;
   for (std::size_t index = 0; index < frame.instances.size(); ++index) {
@@ -87,14 +87,14 @@ std::string frame_body(const ShapeIndex& shapes, const SwfDisplayFrame& frame,
     const std::string id = "r" + std::to_string(index);
     if (row.clip_depth) {
       masks.push_back(Mask{level, row.depth, *row.clip_depth, id + "clip", false});
-      body += shape_defs_to_svg(shape, id + "f") + "<clipPath id=\"" + id + "clip\" transform=\"" +
-              transform_text(row.world_transform) + "\">\n" +
-              shape_fill_paths_to_svg(shape, id + "f") + "</clipPath>\n";
+      body += shape_defs_to_svg(shape, id + "f", bitmaps) + "<clipPath id=\"" + id +
+              "clip\" transform=\"" + transform_text(row.world_transform) + "\">\n" +
+              shape_fill_paths_to_svg(shape, id + "f", bitmaps) + "</clipPath>\n";
       continue;
     }
     std::string content = "<g transform=\"" + transform_text(row.world_transform) + "\">\n" +
-                          shape_defs_to_svg(shape, id + "f") +
-                          shape_paths_to_svg(shape, id + "f") + "</g>\n";
+                          shape_defs_to_svg(shape, id + "f", bitmaps) +
+                          shape_paths_to_svg(shape, id + "f", bitmaps) + "</g>\n";
     if (row.world_color_transform) {
       content = filter_text(id + "color", *row.world_color_transform, stage) +
                 "<g filter=\"url(#" + id + "color)\">\n" + content + "</g>\n";
@@ -118,9 +118,11 @@ std::string frame_to_svg(const SwfFile& file, const SwfDisplayList& display, std
       shapes.emplace(tag.shape->shape_id, &*tag.shape);
     }
   }
+  const SvgBitmaps bitmaps = index_bitmaps(file);
   std::string body;
   if (!display.timelines.empty() && frame < display.timelines.front().frames.size()) {
-    body = frame_body(shapes, display.timelines.front().frames[frame], file.header.frame_size);
+    body = frame_body(shapes, bitmaps, display.timelines.front().frames[frame],
+                      file.header.frame_size);
   }
   return svg_open(file.header.frame_size) + body + "</svg>\n";
 }
