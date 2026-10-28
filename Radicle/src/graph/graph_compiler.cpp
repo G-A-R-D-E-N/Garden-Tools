@@ -2,12 +2,23 @@
 
 #include <cctype>
 #include <chrono>
+#include <cstddef>
+#include <exception>
 #include <filesystem>
 #include <fstream>
+#include <ios>
+#include <iterator>
+#include <memory>
 #include <mutex>
+#include <optional>
 #include <random>
 #include <span>
+#include <stdexcept>
+#include <string>
+#include <string_view>
 #include <system_error>
+#include <utility>
+#include <vector>
 
 #include <fo4/io/atomic_write.hpp>
 #include <fo4/papyrus/parser.hpp>
