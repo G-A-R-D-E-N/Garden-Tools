@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -449,7 +450,7 @@ TEST(Avm1Interpreter, SwfSevenMakesNullNaN) {
   }
 }
 
-// Invariant: from SWF 5 undefined converts to 0 and from SWF 7 to NaN, and Less, Greater and Equals (0x0E) follow that conversion, so an undefined compared with 1 or 0 flips with the version; a version-blind NaN gives false on the SWF 5 rows.
+// Invariant: before SWF 7 undefined converts to 0 and from SWF 7 to NaN, and Less, Greater and Equals (0x0E) follow that conversion, so an undefined compared with 1 or 0 flips with the version; a version-blind NaN gives false on the SWF 5 rows.
 TEST(Avm1Interpreter, UndefinedIsZeroBeforeSevenAndComparesFollow) {
   const Bytes undefined_to_number =
       cat({rec(0x96, Bytes{0x03}), rec(0x4A, {}), rec(0x26, {}), Bytes{0x00}});
@@ -462,6 +463,7 @@ TEST(Avm1Interpreter, UndefinedIsZeroBeforeSevenAndComparesFollow) {
   const std::vector<VersionRow> rows = {
       {"version 0 makes undefined NaN", 0, undefined_to_number, {"NaN"}},
       {"SWF 5 makes undefined 0", 5, undefined_to_number, {"0"}},
+      {"SWF 6 makes undefined 0", 6, undefined_to_number, {"0"}},
       {"SWF 7 makes undefined NaN", 7, undefined_to_number, {"NaN"}},
       {"SWF 5 has undefined less than 1", 5, undefined_less_one, {"true"}},
       {"SWF 7 has NaN not less than 1", 7, undefined_less_one, {"false"}},
@@ -469,6 +471,105 @@ TEST(Avm1Interpreter, UndefinedIsZeroBeforeSevenAndComparesFollow) {
       {"SWF 7 has 1 not greater than NaN", 7, one_greater_undefined, {"false"}},
       {"SWF 5 has undefined equal to 0", 5, undefined_equals_zero, {"true"}},
       {"SWF 7 has undefined not equal to 0", 7, undefined_equals_zero, {"false"}},
+  };
+  for (const VersionRow& row : rows) {
+    SCOPED_TRACE(row.name);
+    EXPECT_EQ(traced(row.input, row.version), row.trace);
+  }
+}
+
+// Invariant: StrictEquals compares type before value, so "1" is not 1, null is not undefined, undefined and null each equal themselves, NaN equals nothing and equal text is true; a coercing Equals2 would trace true on the "1" row and on the null and undefined row.
+TEST(Avm1Interpreter, StrictEqualsRequiresTheSameTypeAndValue) {
+  const Bytes null_value = rec(0x96, Bytes{0x02});
+  const Bytes undefined_value = rec(0x96, Bytes{0x03});
+  const Bytes nan_value = push_double(std::numeric_limits<double>::quiet_NaN());
+  const Bytes one_and_text_one =
+      cat({push_int(1), push_text("1"), rec(0x66, {}), rec(0x26, {}), Bytes{0x00}});
+  const Bytes one_and_one =
+      cat({push_int(1), push_int(1), rec(0x66, {}), rec(0x26, {}), Bytes{0x00}});
+  const std::vector<VersionRow> rows = {
+      {"1 is not the text 1 from SWF 6", 6, one_and_text_one, {"false"}},
+      {"1 is not the text 1 on version 0", 0, one_and_text_one, {"false"}},
+      {"null is not undefined", 6,
+       cat({null_value, undefined_value, rec(0x66, {}), rec(0x26, {}), Bytes{0x00}}), {"false"}},
+      {"undefined is undefined", 6,
+       cat({undefined_value, undefined_value, rec(0x66, {}), rec(0x26, {}), Bytes{0x00}}),
+       {"true"}},
+      {"NaN is not NaN", 6,
+       cat({nan_value, nan_value, rec(0x66, {}), rec(0x26, {}), Bytes{0x00}}), {"false"}},
+      {"1 is 1 from SWF 6", 6, one_and_one, {"true"}},
+      {"1 is 1 on version 0", 0, one_and_one, {"true"}},
+      {"equal text is equal", 6,
+       cat({push_text("ab"), push_text("ab"), rec(0x66, {}), rec(0x26, {}), Bytes{0x00}}),
+       {"true"}},
+  };
+  for (const VersionRow& row : rows) {
+    SCOPED_TRACE(row.name);
+    EXPECT_EQ(traced(row.input, row.version), row.trace);
+  }
+}
+
+// Invariant: StrictEquals is unknown from SWF 1 to 5, so it refuses by name at its own offset and traces nothing; a version-blind StrictEquals would trace true on the 1 and 1 row.
+TEST(Avm1Interpreter, StrictEqualsIsRefusedBelowSwfSix) {
+  const Bytes input = cat({push_int(1), push_int(1), rec(0x66, {}), rec(0x26, {}), Bytes{0x00}});
+  for (const std::uint8_t version : {1, 5}) {
+    SCOPED_TRACE("SWF " + std::to_string(version));
+    const auto stream = decode(input);
+    ASSERT_TRUE(stream.ok()) << stream.message;
+    const auto result = fo4::avm1::execute_actions(stream, 1000000, version);
+    EXPECT_EQ(result.status, Avm1RunStatus::Unsupported) << result.message;
+    EXPECT_EQ(result.opcode, 0x66);
+    EXPECT_NE(result.message.find("StrictEquals"), std::string::npos) << result.message;
+    EXPECT_TRUE(result.trace.empty());
+  }
+}
+
+// Invariant: from SWF 6 StringLength and StringExtract count UTF-8 code points, so an e-acute is one unit and extracting one unit gives its two bytes, while SWF 5 and version 0 count bytes and give the lone lead byte; a byte count at SWF 6 would trace 2 on the e-acute row and split the e-acute on the extract row.
+TEST(Avm1Interpreter, StringLengthAndExtractCountCodePointsFromSwfSix) {
+  const Bytes text = push_text("a\xC3\xA9z");
+  const Bytes e_acute_length =
+      cat({push_text("\xC3\xA9"), rec(0x14, {}), rec(0x26, {}), Bytes{0x00}});
+  const Bytes text_length = cat({text, rec(0x14, {}), rec(0x26, {}), Bytes{0x00}});
+  const Bytes extract_index_2_count_1 =
+      cat({text, push_int(2), push_int(1), rec(0x15, {}), rec(0x26, {}), Bytes{0x00}});
+  const Bytes extract_index_3_count_2 =
+      cat({text, push_int(3), push_int(2), rec(0x15, {}), rec(0x26, {}), Bytes{0x00}});
+  const std::vector<VersionRow> rows = {
+      {"e-acute is 2 bytes on SWF 5", 5, e_acute_length, {"2"}},
+      {"e-acute is 1 code point on SWF 6", 6, e_acute_length, {"1"}},
+      {"e-acute is 2 bytes on version 0", 0, e_acute_length, {"2"}},
+      {"a e-acute z is 3 code points on SWF 6", 6, text_length, {"3"}},
+      {"a e-acute z is 4 bytes on SWF 5", 5, text_length, {"4"}},
+      {"SWF 6 extract at 2 for 1 is the e-acute", 6, extract_index_2_count_1, {"\xC3\xA9"}},
+      {"SWF 5 extract at 2 for 1 is the lead byte", 5, extract_index_2_count_1, {"\xC3"}},
+      {"version 0 extract at 2 for 1 is the lead byte", 0, extract_index_2_count_1, {"\xC3"}},
+      {"SWF 6 extract at 3 for 2 is z, clamped by code points", 6, extract_index_3_count_2,
+       {"z"}},
+      {"SWF 5 extract at 3 for 2 is the last two bytes", 5, extract_index_3_count_2, {"\xA9z"}},
+  };
+  for (const VersionRow& row : rows) {
+    SCOPED_TRACE(row.name);
+    EXPECT_EQ(traced(row.input, row.version), row.trace);
+  }
+}
+
+// Invariant: from SWF 1 to 6 undefined converts to the empty text in Add2, StringAdd and StringEquals, while SWF 7 and version 0 keep the word undefined, so undefined plus "x" traces x on SWF 6 and undefinedx on SWF 7; a version-blind "undefined" would trace undefinedx on the SWF 1 and SWF 6 rows.
+TEST(Avm1Interpreter, UndefinedIsEmptyTextFromSwfOneToSix) {
+  const Bytes add2 =
+      cat({rec(0x96, Bytes{0x03}), push_text("x"), rec(0x47, {}), rec(0x26, {}), Bytes{0x00}});
+  const Bytes string_add =
+      cat({rec(0x96, Bytes{0x03}), push_text("x"), rec(0x21, {}), rec(0x26, {}), Bytes{0x00}});
+  const Bytes string_equals =
+      cat({rec(0x96, Bytes{0x03}), push_text(""), rec(0x13, {}), rec(0x26, {}), Bytes{0x00}});
+  const std::vector<VersionRow> rows = {
+      {"SWF 1 makes undefined empty text", 1, add2, {"x"}},
+      {"SWF 6 makes undefined empty text", 6, add2, {"x"}},
+      {"SWF 7 keeps the word undefined", 7, add2, {"undefinedx"}},
+      {"version 0 keeps the word undefined", 0, add2, {"undefinedx"}},
+      {"SWF 6 StringAdd of undefined and x is x", 6, string_add, {"x"}},
+      {"SWF 6 undefined equals the empty text as StringEquals", 6, string_equals, {"true"}},
+      {"SWF 7 undefined does not equal the empty text as StringEquals", 7, string_equals,
+       {"false"}},
   };
   for (const VersionRow& row : rows) {
     SCOPED_TRACE(row.name);

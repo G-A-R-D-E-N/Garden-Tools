@@ -381,6 +381,7 @@ add_library(fo4
   src/avm1/encode.cpp
   src/avm1/disassembly.cpp
   src/avm1/interpreter.cpp
+  src/avm1/text_ops.cpp
   src/avm2/name.cpp
   src/avm2/value.cpp
   src/avm2/coercion.cpp
