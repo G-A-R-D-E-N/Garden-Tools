@@ -105,6 +105,11 @@ public sealed class SwfDocument : IDisposable
 
     public SwfEditTextStateRecord EditText(int tagIndex) => SwfVerbs.ReadEditText(_history, tagIndex);
 
+    public string InspectText() => Movie.InspectText(ToString());
+
+    // Requires a DoAction (12) or DoInitAction (59) flat tag index; Radicle refuses any other tag and the refusal is thrown as its RadicleException.
+    public string Avm1Disassemble(int tagIndex) => Movie.Avm1Disassemble(tagIndex);
+
     // Requires a frame the chosen timeline reaches; Radicle refuses a duplicate name on that timeline.
     public SwfPlanResultRecord AddLabel(int frame, string name, int timeline = 0) =>
         Verb(history => SwfVerbs.AddFrameLabel(history, (ushort)timeline, (uint)frame, name));
