@@ -7587,7 +7587,7 @@ Quoted text escapes a quote and a backslash with a backslash. Control bytes belo
 
 ## Radicle/src/avm1/encode.cpp:encode_actions
 
-Re-encode writes each payload in the layout the decoder reads, and it writes Length from the payload size. It does not write a record's offset, and it does not rebuild branch offsets from `Avm1Branch::target`. Each branch keeps the offset it was decoded with.
+Re-encode writes each payload in the layout the decoder reads, and it writes Length from the payload size. Branch offsets and body sizes are rebuilt from the record list, not copied from the decoded values. A branch names its target record by `Avm1Branch::target`, which matches a record's `Avm1Action::offset`. When no surviving record has that offset, the branch retargets to the first surviving record with a larger offset, which is the next record in the original order. If no such record survives, it retargets to the stream end, which is after the trailing bytes. The rule is `std::map::lower_bound` over record start positions in `encode_actions`, so the fallback is the stream end when no start is found. Details for the emitter, body sizes, and the identity field are in the tail sections of this file.
 
 Unverified in this change: the build, the unit tests, and the runner case. The runner case `Radicle/tests/test_swf_real.cpp:InterfaceGfxAvm1StreamsDecodeAndReencodeByteIdentically` depends on FO4_DATA_DIR and skips without it. Call's zero-length layout and the With, Try, GetURL and GotoFrame2 layouts are unmeasured.
 
@@ -8482,3 +8482,49 @@ Expected strings were derived by hand. The glyph is a 1000-twip square (50 px, t
 ## .github/workflows/native-ci.yml:REAL_DATA_TEST_REGEX
 
 - The Papyrus gates `PapyrusParseReal`, `PapyrusSemanticReal`, `PapyrusCodegenReal` and `PapyrusDecompilerReal` (`Radicle/tests/test_papyrus_parse_real.cpp`, `test_papyrus_semantic_real.cpp`, `test_papyrus_codegen_real.cpp`, `test_papyrus_decompiler_real.cpp`) are selected by the `[A-Za-z0-9_]*Real\.` branch, so the Fallout 4 data job runs them and the normal job excludes them. They read `FO4RE_PSC_*` and `FO4_PSC_CORPUS` rather than `FO4_DATA_DIR`, so the data job sets those from `$env:FO4_DATA_DIR` in its Test step (`.github/workflows/native-ci.yml:REAL_DATA_TEST_REGEX`). Without that, every gate skips and a Papyrus compile or decompile fidelity regression (a parse, resolve or type-check diagnostic on the vanilla scripts, or the decompile round-trip falling below 0.802) goes unnoticed. The PEX gates (`PapyrusDecompilerReal` and the codegen CK-differential test, which read `FO4_PEX_CORPUS`/`FO4RE_PEX_CORPUS`) stay unset and keep skipping (TODO in the Test step) until a staged `.pex` root is available. The gates now fail rather than skip when the roots exist: the semantic gate has zero diagnostic tolerance and the decompile round-trip floor is 0.802 with almost no margin, and the first data-runner run is unverified (`docs/papyrus-real-data-gates.md`). `PapyrusSourceRealTest` is not selected because it falls back to `Radicle/testdata/papyrus` and runs in the normal job.
+
+## Radicle/include/fo4/avm1/avm1.hpp:Avm1Action
+
+`offset` is the record's identity. The decoder sets it to the record's byte offset in the decoded stream, and `Avm1Branch::target` names a record by that value. The interpreter already matches branches the same way. A record a caller creates defaults to `kNewRecordOffset`, which no branch can name, so an inserted record cannot take over a branch meant for the original record at offset 0. A caller that creates a branch sets `target` to the offset of the record it wants.
+
+`body_records` holds the record count of each body in presence order: the DefineFunction or With body, then the Try try body, then the catch body if flag 1 is set, then the finally body if flag 2 is set. Position alone does not tell the encoder which body a record belongs to. A caller that inserts or deletes a record inside a body must change that count, or the body size will be wrong.
+
+## Radicle/src/avm1/decode.cpp:Decoder::record
+
+`record` counts the records that `body` pushes for each body and stores the count in `body_records` of the owning container. This is the body membership the encoder reads back. Nothing else in the decoder changes for the encoder.
+
+## Radicle/src/avm1/encode.cpp:write_range
+
+Records are written in list order. A branch is written with a zero offset and its payload position is saved. A forward branch is written before its target, so the offset is patched after every record start is known. The Length of each record is a placeholder that is patched once its payload is written. Each branch offset is the target position minus the branch end, which is the payload position plus 2. `encode_actions` appends the trailing bytes before the patch pass, so the stream end is the position after them.
+
+## Radicle/src/avm1/encode.cpp:write_body
+
+A DefineFunction, DefineFunction2 or With body is the next `body_records` entries of the owning action, in list order, bounded by the enclosing range. A count that runs past the enclosing range is clamped, so the body takes only the records left. The body size is the 2 bytes at the end of the Function or With payload, and at payload offsets 1, 3 and 5 for a Try. Each size is the encoded byte count of its body, and it is written as 16 bits. A body over 65,535 bytes is written truncated, and so is a branch offset that does not fit in int16. These are the known ceilings of this encoder.
+
+## Radicle/tests/test_avm1_encode.cpp:InsertedRecordBeforeAJumpTargetGrowsTheJumpOffset
+
+Detects an encoder that copies the decoded Jump offset after a record is inserted before the Jump target. The input is `99 02 00 02 00 04 06 07 00`. The Jump is at 0 with offset 2, so its target is 0 + 5 + 2 = 7, the Stop record. A NextFrame (`04`) is inserted at index 3, before Stop. Stop moves to 8, so the new offset is 8 - 5 = 3. The expected output is `99 02 00 03 00 04 06 04 07 00`, which is 10 bytes.
+
+## Radicle/tests/test_avm1_encode.cpp:DeletedRecordInsideAJumpSpanShrinksTheJumpOffset
+
+Detects an encoder that keeps the Jump offset after a record inside the Jump span is deleted. On the same input, Play (`06`, offset 6) is deleted. Stop moves to 6, so the offset is 6 - 5 = 1. The expected output is `99 02 00 01 00 04 07 00`, which is 8 bytes.
+
+## Radicle/tests/test_avm1_encode.cpp:DeletedJumpTargetRetargetsToTheNextSurvivingRecord
+
+Detects an encoder that keeps a stale offset when its target record is deleted. Play and Stop are deleted, so the target at offset 7 has no surviving record. The first surviving record with a larger offset is End at offset 8. End moves to 6, so the offset is 6 - 5 = 1. A stale offset would be 2, which the test does not expect. The expected output is `99 02 00 01 00 04 00`, which is 7 bytes.
+
+## Radicle/tests/test_avm1_encode.cpp:DeletedJumpTargetWithNoSurvivorRetargetsToTheStreamEnd
+
+Detects an encoder that cannot retarget to the stream end when no surviving record follows the deleted target. This case is checked by `Radicle/src/avm1/encode.cpp:encode_actions` through its stream-end fallback. The input is `99 02 00 02 00 06 04 00`. The Jump is at 0 and targets offset 7, the End record. Play (offset 5) and End (offset 7) are deleted, which leaves Jump and NextFrame. Nothing survives at or after offset 7, so the target is the stream end. The stream is 6 bytes long (Jump 5 bytes plus NextFrame 1 byte), so the offset is 6 - 5 = 1. The expected output is `99 02 00 01 00 04`, which is 6 bytes.
+
+## Radicle/tests/test_avm1_encode.cpp:InsertedRecordInsideADefineFunctionBodyGrowsItsBodySize
+
+Detects an encoder that writes the decoded DefineFunction body size after a record is inserted into its body. The input is `9B 05 00 | 00 | 00 00 | 02 00 | 04 06 | 00`. The header is 8 bytes, the payload is 5 bytes, and the body is 2 bytes. A Stop (`07`) is inserted at index 3, and `body_records[0]` becomes 3. The body size becomes 3, so the expected output is `9B 05 00 00 00 00 03 00 04 06 07 00`, which is 12 bytes.
+
+## Radicle/tests/test_avm1_encode.cpp:InsertedRecordInsideACatchBodyGrowsOnlyTheCatchSize
+
+Detects an encoder that writes the wrong Try field after a record is inserted into the catch body. The input is `8F 09 00 | 01 | 01 00 | 01 00 | 00 00 | 65 00 | 04 | 06 | 00`. The payload is 9 bytes, with flags 1, try size 1, catch size 1, finally size 0 and catch name `e`. Stop is inserted into the catch body, and `body_records[1]` becomes 2. The try size stays 1, and the catch size becomes 2. The expected output is `8F 09 00 01 01 00 02 00 00 00 65 00 04 06 07 00`, which is 16 bytes.
+
+## Radicle/tests/test_avm1_encode.cpp:UneditedStreamsReencodeToTheirInputBytes
+
+Detects an encoder change that alters bytes of an unedited stream. It checks three inputs with a Jump, a DefineFunction and a Try with a catch, because each one goes through a different branch of the patch pass. Each input must re-encode to the same bytes, with no record or body edits.

@@ -1,8 +1,11 @@
 #include <fo4/avm1/avm1.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <string>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -11,6 +14,12 @@ namespace fo4::avm1 {
 namespace {
 
 using Bytes = std::vector<std::byte>;
+
+struct Encoding {
+  Bytes out;
+  std::map<std::size_t, std::size_t> starts;
+  std::vector<std::pair<std::size_t, std::size_t>> branches;
+};
 
 void put8(Bytes& out, std::uint8_t value) {
   out.push_back(static_cast<std::byte>(value));
@@ -24,6 +33,11 @@ void put16(Bytes& out, std::uint16_t value) {
 void put32(Bytes& out, std::uint32_t value) {
   put16(out, static_cast<std::uint16_t>(value & 0xFFFFu));
   put16(out, static_cast<std::uint16_t>(value >> 16));
+}
+
+void patch16(Bytes& out, std::size_t at, std::uint16_t value) {
+  out[at] = static_cast<std::byte>(value & 0xFFu);
+  out[at + 1] = static_cast<std::byte>(value >> 8);
 }
 
 void put_string(Bytes& out, const std::string& text) {
@@ -149,26 +163,79 @@ void write_payload(Bytes& out, const Avm1Try& value) {
   }
 }
 
-void write_action(Bytes& out, const Avm1Action& action) {
-  put8(out, action.code);
-  if (action.code < 0x80) {
-    return;
+std::size_t write_range(Encoding& enc, const std::vector<Avm1Action>& actions, std::size_t index,
+                        std::size_t end);
+
+std::size_t write_body(Encoding& enc, const std::vector<Avm1Action>& actions, std::size_t first,
+                       std::size_t end, std::size_t size_at, std::size_t records) {
+  const std::size_t body_end = std::min(end, first + records);
+  const std::size_t body_start = enc.out.size();
+  write_range(enc, actions, first, body_end);
+  patch16(enc.out, size_at, static_cast<std::uint16_t>(enc.out.size() - body_start));
+  return body_end;
+}
+
+std::size_t write_record(Encoding& enc, const std::vector<Avm1Action>& actions, std::size_t index,
+                         std::size_t end) {
+  const Avm1Action& action = actions[index];
+  const std::size_t start = enc.out.size();
+  if (action.offset != kNewRecordOffset) {
+    enc.starts.emplace(action.offset, start);
   }
-  Bytes payload;
-  std::visit([&payload](const auto& value) { write_payload(payload, value); }, action.payload);
-  put16(out, static_cast<std::uint16_t>(payload.size()));
-  out.insert(out.end(), payload.begin(), payload.end());
+  put8(enc.out, action.code);
+  if (action.code < 0x80) {
+    return index + 1;
+  }
+  put16(enc.out, 0);
+  const std::size_t payload = enc.out.size();
+  std::visit([&enc](const auto& value) { write_payload(enc.out, value); }, action.payload);
+  patch16(enc.out, start + 1, static_cast<std::uint16_t>(enc.out.size() - payload));
+  if (const auto* branch = std::get_if<Avm1Branch>(&action.payload)) {
+    enc.branches.emplace_back(payload, branch->target);
+  }
+  const std::size_t next = index + 1;
+  if (std::holds_alternative<Avm1Function>(action.payload) ||
+      std::holds_alternative<Avm1With>(action.payload)) {
+    return write_body(enc, actions, next, end, enc.out.size() - 2, action.body_records[0]);
+  }
+  const auto* try_block = std::get_if<Avm1Try>(&action.payload);
+  if (try_block == nullptr) {
+    return next;
+  }
+  std::size_t body = 0;
+  std::size_t cursor =
+      write_body(enc, actions, next, end, payload + 1, action.body_records[body++]);
+  if ((try_block->flags & 1) != 0) {
+    cursor = write_body(enc, actions, cursor, end, payload + 3, action.body_records[body++]);
+  }
+  if ((try_block->flags & 2) != 0) {
+    cursor = write_body(enc, actions, cursor, end, payload + 5, action.body_records[body++]);
+  }
+  return cursor;
+}
+
+std::size_t write_range(Encoding& enc, const std::vector<Avm1Action>& actions, std::size_t index,
+                        std::size_t end) {
+  while (index < end) {
+    index = write_record(enc, actions, index, end);
+  }
+  return index;
 }
 
 }  // namespace
 
 std::vector<std::byte> encode_actions(const Avm1Stream& stream) {
-  Bytes out;
-  for (const Avm1Action& action : stream.actions) {
-    write_action(out, action);
+  Encoding enc;
+  write_range(enc, stream.actions, 0, stream.actions.size());
+  enc.out.insert(enc.out.end(), stream.trailing.begin(), stream.trailing.end());
+  const std::size_t stream_end = enc.out.size();
+  for (const auto& [at, target] : enc.branches) {
+    const auto found = enc.starts.lower_bound(target);
+    const std::size_t dest = found == enc.starts.end() ? stream_end : found->second;
+    const auto delta = static_cast<std::ptrdiff_t>(dest) - static_cast<std::ptrdiff_t>(at + 2);
+    patch16(enc.out, at, static_cast<std::uint16_t>(static_cast<std::int16_t>(delta)));
   }
-  out.insert(out.end(), stream.trailing.begin(), stream.trailing.end());
-  return out;
+  return enc.out;
 }
 
 }  // namespace fo4::avm1
