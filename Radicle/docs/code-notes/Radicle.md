@@ -6258,3 +6258,39 @@ The INNR entry above modelled a nested run that a member of the outer run counts
 - Radicle/tests/test_nif_write.cpp:NameEditAppendsToStringTable: also checks that the root node, which shared string index 0 with the shape, keeps its old name.
 - Radicle/tests/test_nif_write.cpp:RejectsEditsOnBrokenShapesAndShaders: its shared malformed texture set case is a regression for the copy made before the slots were parsed, which indexed past the file's block table.
 - Radicle/tests/nif_fixture.hpp:build_nif: takes optional export strings, max string length and groups, and nif_fixture::shape_block and nif_fixture::lighting_shader_block take an extra-data count that defaults to 0.
+## include/fo4/papyrus/decompiler.hpp:Decompiler
+
+Lift of PET's `Decompiler` (`PluginEditTool/native/include/fo4ide/papyrus/Decompiler.hpp`). Two changes beyond the namespace: the header names `fo4::pex` types directly instead of going through PET's `Pex.hpp` shim, and `<string_view>` is included. PET's class comment moved here: `Decompiler` ports PapyrusDecompiler, turns a `PexFile` into Papyrus source (`toSource`) or a text listing (`disassemble`), and mirrors the C# oracle's temp inlining, jump folding and local hoisting.
+
+## src/papyrus/decompiler.cpp:Decompiler::toSource
+
+One `ScriptName` block per object: structs, properties, variables, states, functions. Names beginning `::` are skipped in the variable list. Auto properties fold into `Property ... Auto` or `AutoReadOnly`, taking the default and `Const` from the backing variable (matched case-insensitively). Object names pass `safeScriptObjectName` (`include/fo4/papyrus/script_names.hpp:safeScriptObjectName`) or the call throws `std::runtime_error`, so a name with a separator or `..` never reaches a file path built from it.
+
+## src/papyrus/decompiler.cpp:Decompiler::emitFunction
+
+A `::remote_<Type>_<Event>` function is printed as `Event <Type>.<Event>(...)`, using the first parameter's type as the prefix. A `None` function named `On*` or remote is an `Event` and ends with `EndEvent`. A native function prints its header only: no body and no terminator. If the body decompile throws, the function prints `; [decompile failed: ...]` followed by the listing from `Decompiler::asmBody`, so one failing function does not stop the object.
+
+## src/papyrus/decompiler.cpp:Decompiler::decompileBody
+
+The body is decompiled twice. The first pass inlines `::temp` values. The second pass runs only when the first output still contains `::`, so a temp name that inlining could not resolve is printed without inlining. Four defects were fixed in PET and are kept as-is here:
+
+1. Locals hoisting zero-assignment. A local whose first write is an `assign` of its type's zero (`isZeroFor`) is declared at the top of the body, and that assignment is dropped (`zeroedByDeclaration`). A local whose first write is an unconditional statement is declared in place (`declaredAt`, `runsUnconditionally`). Any other local is hoisted.
+2. Dropped unused call results. A call whose `::temp` result is never read (`tempWasRead`) is emitted as a statement by the loop over `tempExpression`, so its side effect is kept.
+3. Short-circuit fold. Two forward jumps on the same condition variable, with nothing between them, fold into one condition before structuring: `(a || b)` when the first is `jmpt`, `(a && b)` when it is `jmpf`. The `If`/`While` structuring then sees one jump.
+4. Compiler-inserted Bool cast. A `cast` whose source already has the destination's type, whose destination is `ScriptObject`, or whose source is `None` is emitted as a plain assignment with no ` as <type>`. The code does not test for Bool; the same-type rule is what covers the Bool casts named in the audit.
+
+## src/papyrus/decompiler.cpp:Decompiler::disassemble
+
+The listing is PET's text format, not `fo4::pex_analysis::disassemble_function`'s format. It prints the header, `.object`, `.state`, `.propertyGet`/`.propertySet`, and one `[index] L<line> mnemonic args` line per instruction (the `L` part is omitted when the line is 0). The two formats are kept separate on purpose.
+
+## include/fo4/papyrus/script_names.hpp:safeScriptObjectName
+
+Rejects an empty name, an empty or `.`/`..` component, control characters, and `/ \ < > " | ? *`. The file is PET's `ScriptNames.hpp` with only the namespace changed, so an identical copy from the front-end lane merges cleanly.
+
+## tests/test_papyrus_decompiler.cpp:TEST(PapyrusDecompiler, ZeroAssignmentToLocalIsHoistedToItsDeclaration)
+
+Hand-built `PexFile` values, because the compiler is not lifted yet. Each test pins exact output and names one regression. The zero-hoist test catches a zero assignment left in the body or a hoisted declaration that is missing. The unused-call test catches a dropped call result. The fold test catches a fold that stops happening, or that folds into the wrong operator. The cast test catches a same-type cast printed with ` as bool`. The remote, native and disassembly tests are ports of PET's `PapyrusDecompilerTests` cases that need no compile. The unsafe-name test catches a missing `safeScriptObjectName` check.
+
+## tests/test_papyrus_decompiler_real.cpp:TEST(PapyrusDecompilerReal, EveryCorpusPexDecompilesToSourceAndListingWithoutThrowing)
+
+Gated on `FO4_PEX_CORPUS`. It reads each `.pex`, runs `toSource` and `disassemble`, and fails on an exception or a missing `ScriptName` or listing header. It prints the fallback and unhandled-instruction counts and does not assert them, because no baseline has been measured. PET's 80.2% recompile-fidelity sweep is not here: that needs the compiler.
