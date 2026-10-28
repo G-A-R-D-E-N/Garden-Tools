@@ -6374,7 +6374,7 @@ The INNR entry above modelled a nested run that a member of the outer run counts
 ## Radicle/src/f4se/emitter.cpp:F4SEEmitter (PET F4SE binding emitter, the F4SE lift)
 
 - What moved and from where. PluginEditTool's native F4SE emit logic is now Radicle's: `Radicle/include/fo4/f4se/binding_model.hpp`, `binding_validator.hpp`, `cpp_emitter.hpp`, `cpp_scanner.hpp`, `cross_check.hpp`, `emitter.hpp`, `native_oracle.hpp`, `papyrus_header_emitter.hpp`, `plugin_emitter.hpp`, `region_merge.hpp`, `registration_extractor.hpp`, `type_map.hpp` and `version_diff.hpp`, with the definitions in the matching `Radicle/src/f4se/*.cpp`. The namespace is `fo4::f4se` and the file names are snake_case. The lift is mechanical: the code changes are the namespace, the include paths, the graph diagnostic dependency and the removal of comment text. Every emitted string (including the `FO4IDE_BODY` markers and the README `git clone` lines) is unchanged from PET's. Radicle includes nothing from PluginEditTool, no C ABI export was added and `RADICLE_ABI_VERSION` is untouched.
-- The graph dependency. PET's `F4SEEmitter`, `BindingValidator` and their diagnostics used `fo4ide::graph::GraphDiagnostic`. The graph is not lifted in this piece, so `Radicle/include/fo4/f4se/diagnostic.hpp:Diagnostic` carries the same fields and `toString` as the graph type, and `Radicle/include/fo4/f4se/diagnostic.hpp:codes` carries only the nine `GRA####` strings the F4SE code uses: `kDuplicateVariableName` GRA0032, `kArgumentCount` GRA0034, `kDuplicateDeclaration` GRA0037, `kDuplicateNativeBinding` GRA0050, `kNativeArityUnsupported` GRA0051, `kUnmappedNativeType` GRA0052, `kInvalidBindingName` GRA0054, `kStructOwnerMismatch` GRA0055 and `kNoModules` GRA0056. The strings stay GRA-coded because they are the user-visible validation codes. When the graph lift lands, `Diagnostic` and `DiagnosticSeverity` become aliases of the graph types and the codes move to the graph's table.
+- The graph dependency. PET's `F4SEEmitter`, `BindingValidator` and their diagnostics used `fo4ide::graph::GraphDiagnostic`. Radicle's F4SE code now reaches the lifted graph types through `Radicle/include/fo4/f4se/diagnostic.hpp:Diagnostic`, `Radicle/include/fo4/f4se/diagnostic.hpp:DiagnosticSeverity`, `Radicle/include/fo4/f4se/diagnostic.hpp:errorDiagnostic` and `Radicle/include/fo4/f4se/diagnostic.hpp:codes`, which alias `fo4::graph::GraphDiagnostic`, `GraphSeverity`, `errorDiagnostic` and `fo4::graph::codes`. The nine F4SE code strings are unchanged: `kDuplicateVariableName` GRA0032, `kArgumentCount` GRA0034, `kDuplicateDeclaration` GRA0037, `kDuplicateNativeBinding` GRA0050, `kNativeArityUnsupported` GRA0051, `kUnmappedNativeType` GRA0052, `kInvalidBindingName` GRA0054, `kStructOwnerMismatch` GRA0055 and `kNoModules` GRA0056. They stay GRA-coded because they are the user-visible validation codes, and they now live in the graph's code table.
 - `Radicle/src/f4se/emitter.cpp:F4SEEmitter::emit` runs validation, then emits every module's `.h`, `.cpp` and `.psc`, the registrations aggregator and the shell files, and finally merges preserved bodies from the previous emit. `F4SEEmitOptions` (`Radicle/include/fo4/f4se/emitter.hpp:F4SEEmitOptions`) carries the previous emit's files for body preservation and the escape hatch that emits even when validation reports errors. `F4SEEmitResult::errors` keeps only `DiagnosticSeverity::Error` items. `F4SEEmitResult::file` is a case-insensitive path lookup, mirroring the C# `File(relativePath)`. `F4SEEmitter::roundTrip` recovers the emitted `.cpp` registrations and cross-checks them against the emitted `.psc` declarations.
 - `Radicle/include/fo4/f4se/binding_model.hpp:F4SETarget` is the two F4SE targets. The original target exports the query entry point and checks the runtime; the next generation target exports the version data instead. `NativeParameter`, `NativeBinding` (with `noWait`, `isLatent`, the C++ base type and function name), `StructMemberBinding`, `StructBinding` (qualified by `ownerScript`), `ModuleBinding` (one emitted module), `MessageSubscription` (a message name to a handler, emitted as a dispatch case) and `PluginBinding` are the model the emitter reads. `PluginBinding::allNatives` and `PluginBinding::allStructs` are flat views over every module. `EmittedFile` is one emitted file's relative path and text.
 - `Radicle/src/f4se/binding_validator.cpp:BindingValidator::validateModules` refuses two modules writing the same script (case-insensitive). `BindingValidator::validateStructs` refuses duplicate struct names, case-sensitive, matching the C# `GroupBy` with `Ordinal`. `BindingValidator::validateNatives` refuses a duplicate (class, function) pair, case-insensitive, and a required parameter after an optional one. `BindingValidator::kMaximumArity` (10) is the template family limit. `Radicle/include/fo4/f4se/binding_validator.hpp:BindingValidator` is the pre-emit validation pass that produces the GRA-coded diagnostics.
@@ -6390,6 +6390,16 @@ The INNR entry above modelled a nested run that a member of the outer run counts
 - `Radicle/src/f4se/region_merge.cpp:skipSpaceTab` splits at a run of spaces and tabs and returns the index past the run, or npos. `Radicle/src/f4se/region_merge.cpp:tryMarker` reads a marker from the head of a line (already trimmed of leading spaces and tabs) and returns false when the line is not a marker. Two marker forms are read: `#pragma region FO4IDE_BODY <name>` and `#pragma endregion FO4IDE_BODY <name>` (the modern form), and `// >>> body: <name>` and `// <<< body: <name>` (the legacy form that older generated files still carry). `Radicle/src/f4se/region_merge.cpp:findMarkers` returns every marker in order of occurrence, mirroring the C# regex walk.
 - `Radicle/src/f4se/version_diff.cpp:VersionDiff` names the added, removed and signature-changed bindings between two recovered surfaces. `Radicle/include/fo4/f4se/version_diff.hpp:SignatureChange` and `F4SEVersionDelta` are its report types.
 - Tests. `Radicle/tests/test_f4se_*.cpp` are the ports of PluginEditTool's `tests/unit/F4SE*Tests.cpp`, Catch2 to gtest, each test named for the behaviour it pins. The emitter suite's `sample` fixture is the same two-module plugin the PET suite uses (one instance module with a struct and a no-wait native, one global module with a latent native, plus one message). The compile-to-pex test is not ported: it needs the papyrus codegen compiler, which is a later piece. The corpus suite `Radicle/tests/test_f4se_corpus_real.cpp` reads `FO4RE_F4SE_SRC` as a `;`-separated list (PET's `:` cannot hold a Windows drive letter) and skips when it is unset or names no usable tree.
+
+## Radicle/include/fo4/f4se/diagnostic.hpp:Diagnostic (F4SE diagnostics alias the graph's)
+
+- `fo4::f4se::Diagnostic`, `DiagnosticSeverity`, `errorDiagnostic` and `codes` are aliases of `fo4::graph::GraphDiagnostic`, `GraphSeverity`, `errorDiagnostic` and `fo4::graph::codes` (`Radicle/include/fo4/graph/graph_diagnostic.hpp`). One diagnostic type and one code table serve the graph and the F4SE emitter, so `codes` is the whole `GRA####` table, not an F4SE subset. The nine F4SE codes keep their values.
+
+## Radicle/CMakeLists.txt:nlohmann_json (JSON for the graph document)
+
+- `Radicle/include/fo4/graph/graph_document.hpp:GraphDocument` includes `<nlohmann/json.hpp>` from a public header, so nlohmann is a real dependency of `fo4`. The pin is nlohmann/json v3.12.0 from the official release asset `json.tar.xz`, with the same URL and SHA256 as PluginEditTool's `PluginEditTool/native/cmake/Dependencies.cmake`. It is fetched only when no `nlohmann_json::nlohmann_json` target exists, so a parent project that already provides it is not fetched twice.
+- `Radicle/CMakeLists.txt:fo4` links `nlohmann_json::nlohmann_json` PUBLIC inside `$<BUILD_INTERFACE:...>`. The build-interface genex is needed because `install(EXPORT radicle-targets)` would otherwise refuse to export `fo4` with a dependency that is in no export set. The consequence is that an installed Radicle does not carry the nlohmann dependency: a consumer of the installed headers must supply nlohmann itself. Installing nlohmann into the export set is not done here.
+- `Radicle/CMakeLists.txt:fo4_tests` links `fo4` PRIVATE and inherits nlohmann's include path through `fo4`'s link interface, so `Radicle/tests/test_graph_document.cpp` needs no extra CMake line.
 
 ## include/fo4/papyrus/decompiler.hpp:Decompiler
 
@@ -6529,3 +6539,819 @@ Gated on `FO4RE_PEX_CORPUS` (then `FO4_PEX_CORPUS`, as PET reads it). `FO4RE_PSC
 - Radicle/src/nif/write_model.hpp:half_bits: IEEE half-float bits of a float. Moved here from import_build.cpp so fix_nif shares the encoding instead of copying it.
 - Radicle/src/nif/write_model.hpp:unit_byte: maps a unit-range float to a byte with (v + 1) * 127.5, clamped to 0..255. Moved here from import_build.cpp for the same reason.
 - Radicle/src/nif/import_obj.cpp:add_tangent_frame: moved out of the anonymous namespace and declared in Radicle/src/nif/import_mesh.hpp, so import and fix compute tangents with one routine. A change to its frame math changes both the import output and the fix output.
+
+## include/fo4/graph/builtin_node_definitions.hpp
+
+PET comment (include/fo4ide/graph/BuiltinNodeDefinitions.hpp lines 12-14, dropped): Port of BuiltinNodeDefinitions: the fixed node catalog (flow, values, operators, literals, array operations) built once and served from a static. Id constants live in the `builtinDefs` namespace in GraphDocument.hpp.
+
+## include/fo4/graph/builtin_node_definitions.hpp:all
+
+PET comment (include/fo4ide/graph/BuiltinNodeDefinitions.hpp lines 17-17, dropped): All builtin definitions, in the C# build order.
+
+## include/fo4/graph/builtin_node_definitions.hpp:find
+
+PET comment (include/fo4ide/graph/BuiltinNodeDefinitions.hpp lines 20-20, dropped): First builtin whose id equals (case-insensitively) `id`; null for unknown.
+
+## include/fo4/graph/builtin_node_definitions.hpp:operatorToken
+
+PET comment (include/fo4ide/graph/BuiltinNodeDefinitions.hpp lines 23-24, dropped): The source token for an "op.*" definition id, or null (mirrors OperatorToken: binary first, then unary).
+
+## include/fo4/graph/builtin_node_definitions.hpp:arrayMemberName
+
+PET comment (include/fo4ide/graph/BuiltinNodeDefinitions.hpp lines 27-27, dropped): The array member name for an "array.*" definition id, or null.
+
+## include/fo4/graph/builtin_node_definitions.hpp:arrayMemberNames
+
+PET comment (include/fo4ide/graph/BuiltinNodeDefinitions.hpp lines 30-30, dropped): The member names of the array operations, in declaration order.
+
+## include/fo4/graph/graph_compiler.hpp:GraphCompileOptions
+
+PET comment (include/fo4ide/graph/GraphCompiler.hpp lines 23-23, dropped): Port of GraphCompileOptions.
+
+## include/fo4/graph/graph_compiler.hpp:GraphCompileResult
+
+PET comment (include/fo4ide/graph/GraphCompiler.hpp lines 31-31, dropped): Port of GraphCompileResult.
+
+## include/fo4/graph/graph_compiler.hpp:GraphCompiler
+
+PET comment (include/fo4ide/graph/GraphCompiler.hpp lines 52-54, dropped): Port of GraphCompiler: validate -> linearize -> write source -> publish the script for self-reference -> compile with the Papyrus compiler, mapping any Papyrus diagnostics back onto graph nodes via the source map.
+
+## include/fo4/graph/graph_compiler.hpp:scratchRoot
+
+PET comment (include/fo4ide/graph/GraphCompiler.hpp lines 61-62, dropped): The temp folder holding this process's published scripts. It is removed when the process ends; clearScratch() removes it now (tests use this to check nothing is left behind).
+
+## include/fo4/graph/graph_compiler.hpp:compileFile
+
+PET comment (include/fo4ide/graph/GraphCompiler.hpp lines 72-72, dropped): Deserializes the graph JSON file and compiles it.
+
+## include/fo4/graph/graph_compiler.hpp:compileToFile
+
+PET comment (include/fo4ide/graph/GraphCompiler.hpp lines 76-77, dropped): Writes the generated .psc (and, once the PexWriter is ported, the .pex) next to pscPath. Port state: `Radicle/include/fo4/pex/pex.hpp:PexFile::toBytes` exists, but `Radicle/src/graph/graph_compiler.cpp:GraphCompiler::compileToFile` takes `pexPath` and does not write a .pex; only the .psc is written. That behaviour is kept.
+
+## include/fo4/graph/graph_compiler.hpp:GraphCompiler
+
+PET comment (include/fo4ide/graph/GraphCompiler.hpp lines 93-93, dropped): Lowercased script name -> scratch root (mirrors OrdinalIgnoreCase keys).
+
+## include/fo4/graph/graph_definite_assignment.hpp
+
+PET comment (include/fo4ide/graph/GraphDefiniteAssignment.hpp lines 14-17, dropped): Port of GraphDefiniteAssignment: a value is "definitely assigned" when every path that reaches the consumer runs the producing node first (the producer dominates the consumer). Sources are traced through pure nodes, so an operator between a call and its use does not hide the call.
+
+## include/fo4/graph/graph_definite_assignment.hpp:Source
+
+PET comment (include/fo4ide/graph/GraphDefiniteAssignment.hpp lines 20-21, dropped): (Producer, report-at pin) pairs feeding the consumer's data inputs, tracing through pure nodes.
+
+## include/fo4/graph/graph_diagnostic.hpp
+
+PET comment (include/fo4ide/graph/GraphDiagnostic.hpp lines 9-9, dropped): Port of GraphSeverity.
+
+## include/fo4/graph/graph_diagnostic.hpp:GraphDiagnostic
+
+PET comment (include/fo4ide/graph/GraphDiagnostic.hpp lines 12-12, dropped): Port of GraphDiagnostic: a validation finding pinned to a node/pin/wire.
+
+## include/fo4/graph/graph_diagnostic.hpp:warningDiagnostic
+
+PET comment (include/fo4ide/graph/GraphDiagnostic.hpp lines 50-50, dropped): Port of GraphDiagnosticCodes: the GRA#### validation codes.
+
+## include/fo4/graph/graph_document.hpp:equalsIgnoreCase
+
+PET comment (include/fo4ide/graph/GraphDocument.hpp lines 18-18, dropped): Case helpers shared by the model and the JSON round-trip.
+
+## include/fo4/graph/graph_document.hpp:PinRef
+
+PET comment (include/fo4ide/graph/GraphDocument.hpp lines 23-23, dropped): Port of PinRef.
+
+## include/fo4/graph/graph_document.hpp:GraphNodeKind
+
+PET comment (include/fo4ide/graph/GraphDocument.hpp lines 34-35, dropped): Port of GraphNodeKind, in the same order as the C# enum so names serialize identically (camelCase).
+
+## include/fo4/graph/graph_document.hpp:graphNodeKindName
+
+PET comment (include/fo4ide/graph/GraphDocument.hpp lines 72-73, dropped): camelCase names, matching the C# StringEnumConverter; unknown names decode as Unknown rather than failing (tolerant read of newer canvases).
+
+## include/fo4/graph/graph_document.hpp:GraphPinValue
+
+PET comment (include/fo4ide/graph/GraphDocument.hpp lines 77-77, dropped): Port of GraphPinValue.
+
+## include/fo4/graph/graph_document.hpp:PinCiLess
+
+PET comment (include/fo4ide/graph/GraphDocument.hpp lines 85-85, dropped): Case-insensitive pin map, matching the C# OrdinalIgnoreCase dictionary.
+
+## include/fo4/graph/graph_document.hpp:GraphNode
+
+PET comment (include/fo4ide/graph/GraphDocument.hpp lines 92-92, dropped): Port of GraphNode.
+
+## include/fo4/graph/graph_document.hpp:GraphWire
+
+PET comment (include/fo4ide/graph/GraphDocument.hpp lines 114-114, dropped): Port of GraphWire.
+
+## include/fo4/graph/graph_document.hpp:GraphVariable
+
+PET comment (include/fo4ide/graph/GraphDocument.hpp lines 123-123, dropped): Port of GraphVariable.
+
+## include/fo4/graph/graph_document.hpp:GraphStruct
+
+PET comment (include/fo4ide/graph/GraphDocument.hpp lines 132-132, dropped): Port of GraphStruct.
+
+## include/fo4/graph/graph_document.hpp:GraphScriptHeader
+
+PET comment (include/fo4ide/graph/GraphDocument.hpp lines 138-138, dropped): Port of GraphScriptHeader.
+
+## include/fo4/graph/graph_document.hpp:GraphScriptHeader
+
+PET comment (include/fo4ide/graph/GraphDocument.hpp lines 148-148, dropped): Port of GraphKind.
+
+## include/fo4/graph/graph_document.hpp:GraphDocument
+
+PET comment (include/fo4ide/graph/GraphDocument.hpp lines 154-154, dropped): Port of GraphDocument.
+
+## include/fo4/graph/graph_document.hpp:node
+
+PET comment (include/fo4ide/graph/GraphDocument.hpp lines 169-169, dropped): First node with the id wins, mirroring the C# GroupBy-then-First lookup.
+
+## include/fo4/graph/graph_document.hpp:GraphDocument
+
+PET comment (include/fo4ide/graph/GraphDocument.hpp lines 184-184, dropped): Port of PinIds: the canonical pin ids plus argument/parameter helpers.
+
+## include/fo4/graph/graph_document.hpp:argumentName
+
+PET comment (include/fo4ide/graph/GraphDocument.hpp lines 220-220, dropped): Port of the BuiltinNodeDefinitions id constants.
+
+## include/fo4/graph/graph_document.hpp:argumentName
+
+PET comment (include/fo4ide/graph/GraphDocument.hpp lines 247-249, dropped): Port of GraphDocumentJson: camelCase serialization with a short "def" key, nulls omitted, unknown fields and node kinds tolerated on read, and a future schema refused with GRA0001.
+
+## include/fo4/graph/graph_document.hpp:deserialize
+
+PET comment (include/fo4ide/graph/GraphDocument.hpp lines 261-261, dropped): Throws std::runtime_error with the diagnostic message on failure.
+
+## include/fo4/graph/graph_exec_flow.hpp:GraphExecFlow
+
+PET comment (include/fo4ide/graph/GraphExecFlow.hpp lines 16-21, dropped): Port of GraphExecFlow: the control-flow graph over exec wires — DFS walk with back-edge detection (reverse-finish order), immediate post-dominators and dominators over the reachable set, the "paths leaving without return" fixed point, and the structured-flow/exec-cycle checks. A "\0exit" sentinel pseudo-node stands in for "leaves the function" in the post-dominator lattice (nullopt in immediatePostDominator means Exit).
+
+## include/fo4/graph/graph_exec_flow.hpp:reachable
+
+PET comment (include/fo4ide/graph/GraphExecFlow.hpp lines 30-30, dropped): Reachable nodes in reverse finish order (the C# Reachable).
+
+## include/fo4/graph/graph_exec_flow.hpp:immediatePostDominator
+
+PET comment (include/fo4ide/graph/GraphExecFlow.hpp lines 37-38, dropped): Node id -> immediate post-dominator; nullopt when the node exits the function (the Exit sentinel maps to nullopt).
+
+## include/fo4/graph/graph_exec_flow.hpp:targetOf
+
+PET comment (include/fo4ide/graph/GraphExecFlow.hpp lines 46-47, dropped): The target of the exec wire leaving `nodeId` through `pinId` (pin ids compared case-insensitively); nullopt when no such successor.
+
+## include/fo4/graph/graph_exec_flow.hpp:immediateDominator
+
+PET comment (include/fo4ide/graph/GraphExecFlow.hpp lines 52-53, dropped): Immediate dominator of every reachable node except the entry (the entry dominates itself).
+
+## include/fo4/graph/graph_exec_flow.hpp:predecessorsOf
+
+PET comment (include/fo4ide/graph/GraphExecFlow.hpp lines 60-60, dropped): Distinct predecessors in insertion order.
+
+## include/fo4/graph/graph_exec_flow.hpp:pathsLeavingWithoutReturn
+
+PET comment (include/fo4ide/graph/GraphExecFlow.hpp lines 63-65, dropped): Port of PathsLeavingWithoutReturn: the nodes whose exits can leave the function without hitting a Return, or the full entry list when the start is unreachable. Empty when every path from `start` returns.
+
+## include/fo4/graph/graph_exec_flow.hpp:checkStructured
+
+PET comment (include/fo4ide/graph/GraphExecFlow.hpp lines 70-71, dropped): Port of CheckStructured: an ExecCycle error for every back edge whose target is not a While/ForEach loop (Papyrus has no goto).
+
+## include/fo4/graph/graph_exec_flow.hpp:checkReachability
+
+PET comment (include/fo4ide/graph/GraphExecFlow.hpp lines 75-76, dropped): Port of CheckReachability: UnreachableExec warnings for exec-touching nodes no flow reaches.
+
+## include/fo4/graph/graph_ir.hpp
+
+PET comment (include/fo4ide/graph/GraphIr.hpp lines 8-9, dropped): Port of GraphIr.cs: the intermediate representation a graph is lowered to before source emission. Pure data records, mirroring the C# positions.
+
+## include/fo4/graph/graph_lifter.hpp:GraphLiftResult
+
+PET comment (include/fo4ide/graph/GraphLifter.hpp lines 16-16, dropped): Port of GraphLiftResult.
+
+## include/fo4/graph/graph_lifter.hpp:GraphLifter
+
+PET comment (include/fo4ide/graph/GraphLifter.hpp lines 30-33, dropped): Port of GraphLifter: turns a parsed Papyrus script back into a GraphDocument (the inverse of the compiler). Nodes are laid out in a pen walk per callable; constructs the graph cannot express are refused with GRA0001 rather than mangled.
+
+## include/fo4/graph/graph_linearizer.hpp:GraphLinearizer
+
+PET comment (include/fo4ide/graph/GraphLinearizer.hpp lines 23-27, dropped): Port of GraphLinearizer: lowers a validated GraphDocument into ir::IrScript (one IrCallable per event/function entry), running the exec-flow and definite-assignment passes per callable, then structural passes over the emitted IR (temporary collapsing). Returns nullptr when any error accumulated.
+
+## include/fo4/graph/graph_linearizer.hpp:GraphLinearizer
+
+PET comment (include/fo4ide/graph/GraphLinearizer.hpp lines 43-43, dropped): case-insensitive
+
+## include/fo4/graph/graph_name_table.hpp:GraphNameTable
+
+PET comment (include/fo4ide/graph/GraphNameTable.hpp lines 11-14, dropped): Port of GraphNameTable: case-insensitive name reservation and allocation for generated locals. Pre-seeded with the Papyrus keywords and the functions/properties/variables of the owner's base chain, so generated names never collide with the script's world.
+
+## include/fo4/graph/graph_name_table.hpp:allocate
+
+PET comment (include/fo4ide/graph/GraphNameTable.hpp lines 22-23, dropped): Allocates `hint` if free, otherwise hint2, hint3, ...; "value" when the hint cleans to nothing.
+
+## include/fo4/graph/graph_script_loader.hpp:GraphScriptLoadResult
+
+PET comment (include/fo4ide/graph/GraphScriptLoader.hpp lines 14-14, dropped): Port of GraphScriptLoader.Result.
+
+## include/fo4/graph/graph_script_loader.hpp:GraphScriptLoader
+
+PET comment (include/fo4ide/graph/GraphScriptLoader.hpp lines 23-25, dropped): Port of GraphScriptLoader: loads a .psc (read as text) or a .pex (decompiled back to source) into a lifted GraphDocument, checking the script against its own folder as well as the given roots.
+
+## include/fo4/graph/graph_tool_service.hpp:GraphToolService
+
+PET comment (include/fo4ide/graph/GraphToolService.hpp lines 11-13, dropped): Port of GraphToolService: the app-facing text surface over the graph pipeline — validate/compile a .fograph file, search and describe the palette, all returning RESULT: text rather than throwing.
+
+## include/fo4/graph/graph_tool_service.hpp:graphIndexFor
+
+PET comment (include/fo4ide/graph/GraphToolService.hpp lines 34-36, dropped): Port of PapyrusScriptIndexRoots: an index over the graph's own folder, the semicolon-separated imports, and the Papyrus base imports (existing directories only, deduplicated).
+
+## include/fo4/graph/graph_type_resolver.hpp:GenericBinding
+
+PET comment (include/fo4ide/graph/GraphTypeResolver.hpp lines 16-17, dropped): Port of GenericBinding: solved generic variables (T) to concrete (typeName, isArray) pairs. First binding wins, mirroring the C#.
+
+## include/fo4/graph/graph_type_resolver.hpp:GraphTypeResolver
+
+PET comment (include/fo4ide/graph/GraphTypeResolver.hpp lines 26-30, dropped): Port of GraphTypeResolver: converts pin type expressions to concrete types (resolving Self against the graph's script name), judges wire compatibility via the Papyrus conversion rules, and solves generics from the wires touching each node. SourcesComplete goes false when a needed script or type name cannot be resolved from the import roots.
+
+## include/fo4/graph/graph_type_resolver.hpp:typeOf
+
+PET comment (include/fo4ide/graph/GraphTypeResolver.hpp lines 40-41, dropped): Port of TypeOf: (typeName, isArray) for a pin type expression. An unsolved generic resolves to empty, like the C#.
+
+## include/fo4/graph/graph_type_resolver.hpp:resolve
+
+PET comment (include/fo4ide/graph/GraphTypeResolver.hpp lines 45-46, dropped): Port of Resolve: primitives by name, then the Papyrus resolver against `relativeTo`; nullopt (and sourcesComplete=false) when unresolvable.
+
+## include/fo4/graph/graph_type_resolver.hpp:solveGenerics
+
+PET comment (include/fo4ide/graph/GraphTypeResolver.hpp lines 55-56, dropped): Port of SolveGenerics: binds generic variables from the data pins' source types, inputs first (then id order), first binding wins.
+
+## include/fo4/graph/graph_validator.hpp:GraphValidation
+
+PET comment (include/fo4ide/graph/GraphValidator.hpp lines 16-17, dropped): Port of GraphValidation: the validator's findings plus the resolved definitions and generic bindings the compiler consumes.
+
+## include/fo4/graph/graph_validator.hpp:GraphValidation
+
+PET comment (include/fo4ide/graph/GraphValidator.hpp lines 20-20, dropped): Node id -> definition, only for nodes that resolved on the palette.
+
+## include/fo4/graph/graph_validator.hpp:GraphValidation
+
+PET comment (include/fo4ide/graph/GraphValidator.hpp lines 22-22, dropped): Node id -> solved generics.
+
+## include/fo4/graph/graph_validator.hpp:GraphValidator
+
+PET comment (include/fo4ide/graph/GraphValidator.hpp lines 42-45, dropped): Port of GraphValidator: header shape, definition resolution, wire shape and type checking, variable/custom-event/state declarations, required inputs and entry presence. The exec-flow / definite-assignment / lowering stages are separate passes (ported in later milestones).
+
+## include/fo4/graph/graph_validator.hpp:entryNameOf
+
+PET comment (include/fo4ide/graph/GraphValidator.hpp lines 52-53, dropped): Port of EntryNameOf: the entry's declared name (function config) or its definition's member name.
+
+## include/fo4/graph/node_definition.hpp
+
+PET comment (include/fo4ide/graph/NodeDefinition.hpp lines 14-18, dropped): Port of NodeDefinition.cs: the pin/type expression model and the immutable NodeDefinition record the palette hands out. Pins are stored once per definition; PinsFor re-derives the type-variant pins from a node's config. Port of PinDirection.
+
+## include/fo4/graph/node_definition.hpp
+
+PET comment (include/fo4ide/graph/NodeDefinition.hpp lines 21-21, dropped): Port of PinKind.
+
+## include/fo4/graph/node_definition.hpp:PinTypeForm
+
+PET comment (include/fo4ide/graph/NodeDefinition.hpp lines 24-24, dropped): Port of PinTypeForm.
+
+## include/fo4/graph/node_definition.hpp:PinTypeExpr
+
+PET comment (include/fo4ide/graph/NodeDefinition.hpp lines 34-34, dropped): Port of PinTypeExpr.
+
+## include/fo4/graph/node_definition.hpp:PinDefinition
+
+PET comment (include/fo4ide/graph/NodeDefinition.hpp lines 74-74, dropped): Port of PinDefinition.
+
+## include/fo4/graph/node_definition.hpp:NodeDefinition
+
+PET comment (include/fo4ide/graph/NodeDefinition.hpp lines 94-94, dropped): Port of NodeDefinition.
+
+## include/fo4/graph/node_definition.hpp:pin
+
+PET comment (include/fo4ide/graph/NodeDefinition.hpp lines 152-152, dropped): First pin whose id equals (case-insensitively) `id`; null for a null id.
+
+## include/fo4/graph/node_definition.hpp:pinsFor
+
+PET comment (include/fo4ide/graph/NodeDefinition.hpp lines 161-163, dropped): Port of PinsFor: re-derives pins whose type comes from the node's config (variable name/type, cast target, new-array element, struct type). Falls back to the static pins when the config is unset.
+
+## include/fo4/graph/node_definition.hpp:NodeDefinition
+
+PET comment (include/fo4ide/graph/NodeDefinition.hpp lines 210-210, dropped): isArray=
+
+## include/fo4/graph/node_definition.hpp:NodeDefinition
+
+PET comment (include/fo4ide/graph/NodeDefinition.hpp lines 262-264, dropped): Port of PinIds: the canonical pin ids plus argument/parameter helpers. (The `pinIds` namespace in GraphDocument.hpp carries the constants; the PinDefinition-side helpers live with the model here.)
+
+## include/fo4/graph/node_palette.hpp:PaletteEntry
+
+PET comment (include/fo4ide/graph/NodePalette.hpp lines 15-15, dropped): Port of PaletteEntry.
+
+## include/fo4/graph/node_palette.hpp:PaletteSearchResult
+
+PET comment (include/fo4ide/graph/NodePalette.hpp lines 27-27, dropped): Port of PaletteSearchResult.
+
+## include/fo4/graph/node_palette.hpp:NodePalette
+
+PET comment (include/fo4ide/graph/NodePalette.hpp lines 35-38, dropped): Port of NodePalette: the node catalog over a ScriptIndex. Builtin definitions are static; per-script definitions (calls, events, remote events, properties) are derived from the index and cached per script name (case-insensitive), mirroring the C# ConcurrentDictionary cache.
+
+## include/fo4/graph/node_palette.hpp:find
+
+PET comment (include/fo4ide/graph/NodePalette.hpp lines 53-54, dropped): First definition matching `definitionId` (builtin, then per-script); null for an unknown id. Case-insensitive, like the C#.
+
+## include/fo4/graph/node_palette.hpp:forScript
+
+PET comment (include/fo4ide/graph/NodePalette.hpp lines 57-58, dropped): All definitions for a script; built once and cached. Empty when the script is not on the index.
+
+## include/fo4/graph/node_palette.hpp:defaultText
+
+PET comment (include/fo4ide/graph/NodePalette.hpp lines 77-77, dropped): Port of DefaultText: the source text of a parameter default expression.
+
+## include/fo4/graph/papyrus_source_writer.hpp:GraphSourceMapEntry
+
+PET comment (include/fo4ide/graph/PapyrusSourceWriter.hpp lines 13-14, dropped): Port of GraphSourceMapEntry: an offset range of the generated source owned by one graph node, with its line, nesting depth and pin.
+
+## include/fo4/graph/papyrus_source_writer.hpp:GraphSourceMap
+
+PET comment (include/fo4ide/graph/PapyrusSourceWriter.hpp lines 28-29, dropped): Port of GraphSourceMap: the generated-source -> node mapping used to map Papyrus diagnostics back onto graph nodes.
+
+## include/fo4/graph/papyrus_source_writer.hpp:find
+
+PET comment (include/fo4ide/graph/PapyrusSourceWriter.hpp lines 36-36, dropped): Deepest entry containing the offset, or nullopt.
+
+## include/fo4/graph/papyrus_source_writer.hpp:findByLine
+
+PET comment (include/fo4ide/graph/PapyrusSourceWriter.hpp lines 46-46, dropped): Deepest entry on the line, or nullopt.
+
+## include/fo4/graph/papyrus_source_writer.hpp:functionAt
+
+PET comment (include/fo4ide/graph/PapyrusSourceWriter.hpp lines 56-57, dropped): Earliest depth-0 entry containing the offset (the owning callable), or nullopt.
+
+## include/fo4/graph/papyrus_source_writer.hpp:PapyrusSourceWriterOptions
+
+PET comment (include/fo4ide/graph/PapyrusSourceWriter.hpp lines 71-71, dropped): Port of PapyrusSourceWriterOptions.
+
+## include/fo4/graph/papyrus_source_writer.hpp:PapyrusSourceWriter
+
+PET comment (include/fo4ide/graph/PapyrusSourceWriter.hpp lines 79-80, dropped): Port of PapyrusSourceWriter: renders an ir::IrScript back to Papyrus source, building the GraphSourceMap as it goes.
+
+## include/fo4/graph/wiki_docs.hpp:WikiParameterDoc
+
+PET comment (include/fo4ide/graph/WikiDocs.hpp lines 11-18, dropped): Port of WikiDocs.cs: the structured doc model behind the node palette's summaries, parameter descriptions and return values. CkWikiDocProvider indexes an offline Creation Kit Wiki HTML mirror (the same files the app-level wiki service reads) and parses pages into this model. The string-based app surface (PET::app::wiki) is a different, coarser renderer; this provider is the palette's oracle. Port of WikiParameterDoc.
+
+## include/fo4/graph/wiki_docs.hpp:WikiFunctionDoc
+
+PET comment (include/fo4ide/graph/WikiDocs.hpp lines 24-24, dropped): Port of WikiFunctionDoc. Parameters is a case-insensitive map.
+
+## include/fo4/graph/wiki_docs.hpp:WikiScriptDoc
+
+PET comment (include/fo4ide/graph/WikiDocs.hpp lines 32-32, dropped): Port of WikiScriptDoc.
+
+## include/fo4/graph/wiki_docs.hpp:WikiDocStats
+
+PET comment (include/fo4ide/graph/WikiDocs.hpp lines 37-37, dropped): Port of WikiDocStats.
+
+## include/fo4/graph/wiki_docs.hpp:WikiDocProvider
+
+PET comment (include/fo4ide/graph/WikiDocs.hpp lines 48-48, dropped): Port of IWikiDocProvider.
+
+## include/fo4/graph/wiki_docs.hpp:NullWikiDocProvider
+
+PET comment (include/fo4ide/graph/WikiDocs.hpp lines 59-59, dropped): Port of NullWikiDocProvider: every lookup is null, stats empty.
+
+## include/fo4/graph/wiki_docs.hpp:CkWikiDocProvider
+
+PET comment (include/fo4ide/graph/WikiDocs.hpp lines 74-76, dropped): Port of CkWikiDocProvider: indexes a wiki mirror root and parses function pages on demand (cached). A null / non-existent root behaves like the null provider: every lookup returns null and stats report unavailable.
+
+## include/fo4/graph/wiki_docs.hpp:buildIndexes
+
+PET comment (include/fo4ide/graph/WikiDocs.hpp lines 87-88, dropped): Indexes: "function|script" (case-insensitive) -> page path, and script name -> page path for *_Script.html pages.
+
+## include/fo4/graph/wiki_docs.hpp:CkWikiDocProvider
+
+PET comment (include/fo4ide/graph/WikiDocs.hpp lines 97-97, dropped): Nullopt entries are cached misses, mirroring the C# GetOrAdd storing null.
+
+## src/graph/builtin_node_definitions.cpp:ArrayMember
+
+PET comment (src/graph/BuiltinNodeDefinitions.cpp lines 45-46, dropped): (Name, Result, Args, Pure); Args mirrors the C# tuple but is unused there too (the pin shape is switched on Name).
+
+## src/graph/builtin_node_definitions.cpp:build
+
+PET comment (src/graph/BuiltinNodeDefinitions.cpp lines 137-137, dropped): optional=
+
+## src/graph/builtin_node_definitions.cpp:build
+
+PET comment (src/graph/BuiltinNodeDefinitions.cpp lines 142-142, dropped): optional=
+
+## src/graph/builtin_node_definitions.cpp:build
+
+PET comment (src/graph/BuiltinNodeDefinitions.cpp lines 157-157, dropped): isPure=
+
+## src/graph/builtin_node_definitions.cpp:build
+
+PET comment (src/graph/BuiltinNodeDefinitions.cpp lines 163-163, dropped): isPure=
+
+## src/graph/builtin_node_definitions.cpp:build
+
+PET comment (src/graph/BuiltinNodeDefinitions.cpp lines 167-167, dropped): isPure=
+
+## src/graph/builtin_node_definitions.cpp:build
+
+PET comment (src/graph/BuiltinNodeDefinitions.cpp lines 171-171, dropped): isPure=
+
+## src/graph/builtin_node_definitions.cpp:build
+
+PET comment (src/graph/BuiltinNodeDefinitions.cpp lines 176-176, dropped): isPure=
+
+## src/graph/builtin_node_definitions.cpp:build
+
+PET comment (src/graph/BuiltinNodeDefinitions.cpp lines 181-181, dropped): isPure=
+
+## src/graph/builtin_node_definitions.cpp:build
+
+PET comment (src/graph/BuiltinNodeDefinitions.cpp lines 187-187, dropped): isPure=
+
+## src/graph/builtin_node_definitions.cpp:build
+
+PET comment (src/graph/BuiltinNodeDefinitions.cpp lines 193-193, dropped): isPure=
+
+## src/graph/builtin_node_definitions.cpp:build
+
+PET comment (src/graph/BuiltinNodeDefinitions.cpp lines 204-204, dropped): isPure=
+
+## src/graph/builtin_node_definitions.cpp:build
+
+PET comment (src/graph/BuiltinNodeDefinitions.cpp lines 220-220, dropped): isPure=
+
+## src/graph/builtin_node_definitions.cpp:build
+
+PET comment (src/graph/BuiltinNodeDefinitions.cpp lines 233-233, dropped): isPure=
+
+## src/graph/builtin_node_definitions.cpp:build
+
+PET comment (src/graph/BuiltinNodeDefinitions.cpp lines 247-247, dropped): isPure=
+
+## src/graph/builtin_node_definitions.cpp:build
+
+PET comment (src/graph/BuiltinNodeDefinitions.cpp lines 259-259, dropped): optional=
+
+## src/graph/builtin_node_definitions.cpp:build
+
+PET comment (src/graph/BuiltinNodeDefinitions.cpp lines 264-264, dropped): optional=
+
+## src/graph/builtin_node_definitions.cpp:build
+
+PET comment (src/graph/BuiltinNodeDefinitions.cpp lines 268-268, dropped): optional=
+
+## src/graph/builtin_node_definitions.cpp:build
+
+PET comment (src/graph/BuiltinNodeDefinitions.cpp lines 271-271, dropped): optional=
+
+## src/graph/graph_compiler.cpp:ScratchBase
+
+PET comment (src/graph/GraphCompiler.cpp lines 48-48, dropped): One scratch folder per process; see the entry `include/fo4/graph/graph_compiler.hpp:scratchRoot` in this file.
+
+## src/graph/graph_compiler.cpp:GraphCompiler::compileToFile
+
+PET comment (src/graph/GraphCompiler.cpp lines 216-216, dropped): The PexWriter is not ported yet; only the .psc is emitted. The reason is narrower now: `Radicle/include/fo4/pex/pex.hpp:PexFile::toBytes` exists, but this function ignores `pexPath` (the `(void)pexPath` line), so no .pex is written. Wiring the write is a separate change.
+
+## src/graph/graph_compiler.cpp:GraphCompiler::publishForSelfReference
+
+PET comment (src/graph/GraphCompiler.cpp lines 257-257, dropped): The C# swallows IOException and UnauthorizedAccessException here.
+
+## src/graph/graph_definite_assignment.cpp:sources
+
+PET comment (src/graph/GraphDefiniteAssignment.cpp lines 30-30, dropped): Collect is a recursive local in the C#; mirror with a lambda.
+
+## src/graph/graph_definite_assignment.cpp:sources
+
+PET comment (src/graph/GraphDefiniteAssignment.cpp lines 57-57, dropped): Distinct like the C# (found.Distinct()).
+
+## src/graph/graph_exec_flow.cpp:pinOf
+
+PET comment (src/graph/GraphExecFlow.cpp lines 22-23, dropped): PinsFor materializes a fresh vector each call, so pins must be returned by value (a pointer into that temporary would dangle).
+
+## src/graph/graph_lifter_detail.hpp:nodeKindName
+
+PET comment (src/graph/GraphLifter.cpp lines 23-24, dropped): The C# refusal messages use GetType().Name; the closest native equivalent is the NodeKind name (e.g. "IfStatement").
+
+## src/graph/graph_lifter.cpp:GraphLifter::lift
+
+PET comment (src/graph/GraphLifter.cpp lines 90-90, dropped): Port of Callables(): top-level functions, events, then each state's.
+
+## src/graph/graph_linearizer_detail.hpp:lit
+
+PET comment (src/graph/GraphLinearizer.cpp lines 23-23, dropped): Factory helpers mirroring the C# `new IrX(...) { ... }` records.
+
+## src/graph/graph_linearizer.cpp:GraphLinearizer::lowerRegion
+
+PET comment (src/graph/GraphLinearizer.cpp lines 336-337, dropped): The Break arm may have allocated the sentinel on the stored copy; read it back (the C# Loop is a reference type).
+
+## src/graph/graph_linearizer.cpp:GraphLinearizer::lowerForEach
+
+PET comment (src/graph/GraphLinearizer.cpp lines 460-461, dropped): The Break arm may have allocated the sentinel on the stored copy; read it back (the C# Loop is a reference type).
+
+## src/graph/graph_linearizer.cpp:GraphLinearizer::lowerSimple
+
+PET comment (src/graph/GraphLinearizer.cpp lines 575-575, dropped): declareOnly=
+
+## src/graph/graph_tool_service.cpp:tryLoad
+
+PET comment (src/graph/GraphToolService.cpp lines 43-44, dropped): Port of TryLoad: reads and deserializes the graph document, or returns the RESULT: FAILED text through `failure`.
+
+## src/graph/graph_tool_service.cpp:describe
+
+PET comment (src/graph/GraphToolService.cpp lines 70-70, dropped): Port of Describe(GraphDiagnostic, GraphDocument).
+
+## src/graph/graph_type_resolver.cpp:GraphTypeResolver::inheritsFrom
+
+PET comment (src/graph/GraphTypeResolver.cpp lines 62-63, dropped): The graph's own script is a special case: its parent chain starts at the declared Extends (which may not be on the index yet).
+
+## src/graph/graph_type_resolver.cpp:GraphTypeResolver::resolve
+
+PET comment (src/graph/GraphTypeResolver.cpp lines 134-134, dropped): Outlives the scope so `element` stays valid through the copy below.
+
+## src/graph/graph_validator.cpp:pinOf
+
+PET comment (src/graph/GraphValidator.cpp lines 23-24, dropped): PinsFor materializes a fresh vector each call, so pins must be returned by value (a pointer into that temporary would dangle).
+
+## src/graph/graph_validator.cpp:GraphValidator::validateEntries
+
+PET comment (src/graph/GraphValidator.cpp lines 436-437, dropped): Duplicate entries: remote events key on owner.entry, otherwise entry name, plus the declared state; case-insensitive.
+
+## src/graph/node_palette.cpp:scriptKey
+
+PET comment (src/graph/NodePalette.cpp lines 29-30, dropped): Case-insensitive key for the per-script cache, mirroring the C# ConcurrentDictionary with OrdinalIgnoreCase.
+
+## src/graph/node_palette.cpp:NodePalette::customEventArgsPin
+
+PET comment (src/graph/NodePalette.cpp lines 519-519, dropped): isArray=
+
+## src/graph/papyrus_source_writer.cpp:PapyrusSourceWriter::writeHeaderComment
+
+PET comment (src/graph/PapyrusSourceWriter.cpp lines 79-79, dropped): The C# writes only a blank line here (the comment text is elided).
+
+## src/graph/papyrus_source_writer.cpp:PapyrusSourceWriter::write
+
+PET comment (src/graph/PapyrusSourceWriter.cpp lines 294-295, dropped): Group state callables by state name, ordinal-ignore-case, preserving first-seen order per state (mirrors GroupBy's iteration order).
+
+## src/graph/wiki_docs.cpp:ciKey
+
+PET comment (src/graph/WikiDocs.cpp lines 34-34, dropped): Case-insensitive key: lowercased.
+
+## src/graph/wiki_docs.cpp:htmlDecode
+
+PET comment (src/graph/WikiDocs.cpp lines 37-38, dropped): Port of System.Net.WebUtility.HtmlDecode for the entities the mirror pages use (same helper as the app-level wiki service).
+
+## src/graph/wiki_docs.cpp:urlDecode
+
+PET comment (src/graph/WikiDocs.cpp lines 80-81, dropped): Port of WebUtility.UrlDecode for the %XX references that appear in page names; '+' is left literal (page names never use it).
+
+## src/graph/wiki_docs.cpp:wildcardMatch
+
+PET comment (src/graph/WikiDocs.cpp lines 103-103, dropped): Wildcard match used by the file walk ('*' only, like Directory.GetFiles).
+
+## src/graph/wiki_docs.cpp:enumerateHtml
+
+PET comment (src/graph/WikiDocs.cpp lines 118-119, dropped): Mirrors PapyrusFileWalk.EnumerateFiles: recursive, symlinked directories skipped, results sorted.
+
+## src/graph/wiki_docs.cpp:readAllText
+
+PET comment (src/graph/WikiDocs.cpp lines 144-145, dropped): Port of the C# ReadAllText: nullopt on I/O failure, an engaged (possibly empty) string otherwise -- an empty page is not a failure.
+
+## src/graph/wiki_docs.cpp:clean
+
+PET comment (src/graph/WikiDocs.cpp lines 152-153, dropped): Port of WikiDocs.Clean: strip tags, decode entities, normalize the non-breaking space, drop carriage returns.
+
+## src/graph/wiki_docs.cpp:firstParagraph
+
+PET comment (src/graph/WikiDocs.cpp lines 162-162, dropped): Port of FirstParagraph: the text of the first <p> block, or null.
+
+## src/graph/wiki_docs.cpp:CkWikiDocProvider::function
+
+PET comment (src/graph/WikiDocs.cpp lines 212-213, dropped): Mirrors the C# GetOrAdd: the result (including null) is cached, so a second lookup does not re-read the file.
+
+## src/graph/wiki_docs.cpp:CkWikiDocProvider::readFunction
+
+PET comment (src/graph/WikiDocs.cpp lines 262-264, dropped): Port of SectionPattern: consuming non-greedy alternation instead of the .NET lookahead, matching the app-level wiki service. The "re" raw delimiter is required: the pattern itself contains a `)"` sequence.
+
+## tests/test_graph_compiler.cpp:compileGraph
+
+PET comment (tests/unit/GraphCompilerTests.cpp lines 56-57, dropped): Port of GraphTestEnvironment.Compile: a fresh index over BaseStubs + GraphScripts per call, with Papyrus errors treated as internal faults.
+
+## tests/test_graph_compiler.cpp:compileGraph
+
+PET comment (tests/unit/GraphCompilerTests.cpp lines 59-59, dropped): withGraphScripts=
+
+## tests/test_graph_compiler.cpp:compileReference
+
+PET comment (tests/unit/GraphCompilerTests.cpp lines 67-68, dropped): Port of CompileReference: writes the fixture's hand-written source into a fresh temp root and compiles it against the standard roots.
+
+## tests/test_graph_compiler.cpp:decompilesAndRecompiles
+
+PET comment (tests/unit/GraphCompilerTests.cpp lines 94-96, dropped): Port of Oracle1's DecompilesAndRecompiles helper: decompile the generated PEX to source, reparse, and recompile against a fresh index that also sees the decompiled file. Returns the failure reason, or empty on success.
+
+## tests/test_graph_compiler.cpp:TEST(GraphCompiler, GraphCompilerEveryFixtureGraphCompilesClean)
+
+PET comment (tests/unit/GraphCompilerTests.cpp lines 132-132, dropped): withGraphScripts=
+
+## tests/test_graph_compiler.cpp:TEST(GraphCompiler, GraphCompilerGeneratedSourceAlwaysReparsesClean)
+
+PET comment (tests/unit/GraphCompilerTests.cpp lines 145-145, dropped): withGraphScripts=
+
+## tests/test_graph_compiler.cpp:TEST(GraphCompiler, GraphCompilerOracle1TheCompiledObjectDecompilesToSourceThatRecompiles)
+
+PET comment (tests/unit/GraphCompilerTests.cpp lines 157-157, dropped): withGraphScripts=
+
+## tests/test_graph_compiler.cpp:TEST(GraphCompiler, GraphCompilerOracle2TheGraphProducesWhatAPersonWouldHaveWritten)
+
+PET comment (tests/unit/GraphCompilerTests.cpp lines 208-208, dropped): withGraphScripts=
+
+## tests/test_graph_compiler.cpp:TEST(GraphCompiler, GraphCompilerOracle3TheGeneratedScriptHasTheSameShapeAsTheReference)
+
+PET comment (tests/unit/GraphCompilerTests.cpp lines 234-234, dropped): withGraphScripts=
+
+## tests/test_graph_compiler.cpp:TEST(GraphCompiler, GraphCompilerPublishesScriptsUnderOneProcessFolderThatClearScratchRemoves)
+
+PET comment (tests/unit/GraphCompilerTests.cpp lines 275-275, dropped): withGraphScripts=
+
+## tests/test_graph_flow.cpp:definitionsOf
+
+PET comment (tests/unit/GraphFlowTests.cpp lines 20-21, dropped): Resolves the definitions the passes consume, exactly like the linearizer does (from the validation result).
+
+## tests/test_graph_flow.cpp:findByCode
+
+PET comment (tests/unit/GraphFlowTests.cpp lines 28-28, dropped): Finds the first diagnostic with `code`; null when absent.
+
+## tests/test_graph_flow.cpp:TEST(GraphFlow, ABackEdgeIntoAWhileLoopIsStructuredNotACycle)
+
+PET comment (tests/unit/GraphFlowTests.cpp lines 69-70, dropped): The C# loop-condition shape: the entry feeds the loop directly and the body closes back into it, so the back edge targets the loop header.
+
+## tests/test_graph_flow.cpp:TEST(GraphFlow, AnExecNodeNothingReachesIsFlagged)
+
+PET comment (tests/unit/GraphFlowTests.cpp lines 158-159, dropped): A wired pair that no flow reaches: touching is non-empty, so the reachability check must flag the first one.
+
+## tests/test_graph_lift.cpp:UniqueRoot
+
+PET comment (tests/unit/GraphLiftTests.cpp lines 27-27, dropped): A unique temp root that is removed (with its tag folder, when empty) when the test body ends.
+
+## tests/test_graph_lift.cpp:compileText
+
+PET comment (tests/unit/GraphLiftTests.cpp lines 65-66, dropped): Port of CompileText: writes the source into a fresh temp root and compiles against BaseStubs + GraphScripts.
+
+## tests/test_graph_lift.cpp:throughGraph
+
+PET comment (tests/unit/GraphLiftTests.cpp lines 86-88, dropped): Port of ThroughGraph: lift the source into a document and compile that; returns the compiled PEX (or null) plus a human report of any refusal or compile failure.
+
+## tests/test_graph_lift.cpp:PexLiftOutcome
+
+PET comment (tests/unit/GraphLiftTests.cpp lines 130-131, dropped): Port of GraphLiftPexRoundTripTests.RunOne: original PEX -> decompile -> reparse -> lift -> compile, comparing the rebuilt PEX to the original.
+
+## tests/test_graph_lift.cpp:TEST(GraphLift, GraphLiftAFixtureSourceSurvivesATripThroughTheGraph)
+
+PET comment (tests/unit/GraphLiftTests.cpp lines 208-208, dropped): withGraphScripts=
+
+## tests/test_graph_lift.cpp:TEST(GraphLift, GraphLiftASourceThatDoesNotParseIsRefusedWithoutADocument)
+
+PET comment (tests/unit/GraphLiftTests.cpp lines 272-272, dropped): withGraphScripts=
+
+## tests/test_graph_lift.cpp:TEST(GraphLift, GraphLiftPexACompiledBinarySurvivesATripThroughTheGraph)
+
+PET comment (tests/unit/GraphLiftTests.cpp lines 281-281, dropped): withGraphScripts=
+
+## tests/test_graph_lift.cpp:TEST(GraphLift, GraphLiftPexACompiledBinarySurvivesATripThroughTheGraph)
+
+PET comment (tests/unit/GraphLiftTests.cpp lines 302-302, dropped): The C# pins this to its measured value (28/28); a regression fails here.
+
+## tests/test_graph_tool_service.cpp:imports
+
+PET comment (tests/unit/GraphToolServiceTests.cpp lines 24-24, dropped): Static so `&imports()` is a stable pointer to pass to the service.
+
+## tests/test_graph_tool_service.cpp:imports
+
+PET comment (tests/unit/GraphToolServiceTests.cpp lines 30-30, dropped): Port of WithGraph: serializes the document to a temp .fograph and runs work.
+
+## tests/test_graph_tool_service.cpp:goodGraph
+
+PET comment (tests/unit/GraphToolServiceTests.cpp lines 45-45, dropped): Port of GoodGraph: OnActivate -> Debug.Notification("opened").
+
+## tests/test_graph_tool_service.cpp:brokenGraph
+
+PET comment (tests/unit/GraphToolServiceTests.cpp lines 56-56, dropped): Port of BrokenGraph: OnLoad -> Utility.Wait with no arguments.
+
+## tests/test_graph_tool_service.cpp:TEST(GraphToolService, GraphToolServiceCompilingSourceOnlyReturnsTheGeneratedScript)
+
+PET comment (tests/unit/GraphToolServiceTests.cpp lines 118-118, dropped): sourceOnly=
+
+## tests/test_graph_tool_service.cpp:TEST(GraphToolService, GraphToolServiceCompilingWithAnOutputFolderWritesBothFiles)
+
+PET comment (tests/unit/GraphToolServiceTests.cpp lines 131-131, dropped): sourceOnly=
+
+## tests/test_graph_tool_service.cpp:TEST(GraphToolService, GraphToolServiceAFailedCompileShowsTheGeneratedSourceItCouldNotUse)
+
+PET comment (tests/unit/GraphToolServiceTests.cpp lines 150-150, dropped): sourceOnly=
+
+## tests/test_graph_tool_service.cpp:TEST(GraphToolService, GraphToolServiceSearchingThePaletteReturnsDefinitionIdsAndATrueTotal)
+
+PET comment (tests/unit/GraphToolServiceTests.cpp lines 159-159, dropped): limit=
+
+## tests/test_graph_tool_service.cpp:TEST(GraphToolService, GraphToolServiceACappedSearchSaysHowMuchItIsHiding)
+
+PET comment (tests/unit/GraphToolServiceTests.cpp lines 166-166, dropped): limit=
+
+## tests/test_graph_validator.cpp:GraphBuilder
+
+PET comment (tests/unit/GraphValidatorTests.cpp lines 22-23, dropped): Port of GraphBuilder: the minimal document builder the C# negative tests use. Node ids are n1..nN, wire ids w1..wN, mirroring the sequence counter.
+
+## tests/test_graph_validator.cpp:GraphBuilder
+
+PET comment (tests/unit/GraphValidatorTests.cpp lines 56-57, dropped): Port of Node(palette, definitionId, config): resolves the definition through the palette and stamps the node kind from it.
+
+## tests/test_graph_validator.cpp:GraphBuilder
+
+PET comment (tests/unit/GraphValidatorTests.cpp lines 65-66, dropped): Port of Node(definitionId, kind, config): for intentionally missing definitions (the UnknownNodeDefinition test).
+
+## tests/test_graph_validator.cpp:Env
+
+PET comment (tests/unit/GraphValidatorTests.cpp lines 104-105, dropped): Port of GraphTestEnvironment: index over the BaseStubs tree only (the validator cases never need the round-trip GraphScripts fixtures).
+
+## tests/test_graph_validator.cpp:refused
+
+PET comment (tests/unit/GraphValidatorTests.cpp lines 128-128, dropped): Return a copy: the validation result dies with this frame.
+
+## tests/test_graph_node_palette.cpp:baseStubs
+
+PET comment (tests/unit/NodePaletteTests.cpp lines 21-22, dropped): The BaseStubs fixture tree lives next to the test sources: native/tests/fixtures/BaseStubs.
+
+## tests/test_graph_node_palette.cpp:TEST(NodePalette, AnArrayReturnTypeIsKeptAsAnArray)
+
+PET comment (tests/unit/NodePaletteTests.cpp lines 111-112, dropped): The C# asserts with BeEquivalentTo (case-insensitive); the source spells the Var[] parameter lowercase.
+
+## tests/test_graph_node_palette.cpp:TEST(NodePalette, SearchFindsAMemberByNameAndReportsTheTrueTotal)
+
+PET comment (tests/unit/NodePaletteTests.cpp lines 269-269, dropped): limit=
+
+## tests/test_graph_node_palette.cpp:TEST(NodePalette, SearchCapsResultsButStillReportsHowManyWereHidden)
+
+PET comment (tests/unit/NodePaletteTests.cpp lines 278-278, dropped): limit=
+
+## tests/test_graph_node_palette.cpp:TEST(NodePalette, AnExactMatchRanksAboveALongerOneThatMerelyContainsIt)
+
+PET comment (tests/unit/NodePaletteTests.cpp lines 287-287, dropped): limit=
+
+## tests/test_graph_node_palette.cpp:TEST(NodePalette, SearchCanBeFilteredToOneScript)
+
+PET comment (tests/unit/NodePaletteTests.cpp lines 295-295, dropped): limit=
+
+## tests/test_graph_node_palette.cpp:TEST(NodePalette, SearchResultsCarryNoPins)
+
+PET comment (tests/unit/NodePaletteTests.cpp lines 306-306, dropped): limit=
+
+## tests/test_graph_node_palette.cpp:TEST(NodePalette, AWikiMirrorIndexesFunctionPagesAndParsesTheirSections)
+
+PET comment (tests/unit/NodePaletteTests.cpp lines 423-424, dropped): PagesIndexed counts function pages only, mirroring the C# Stats (WikiDocStats(_byFunction.Count, ...)).
+
+## tests/test_graph_node_palette.cpp:TEST(NodePalette, AWikiMirrorIndexesFunctionPagesAndParsesTheirSections)
+
+PET comment (tests/unit/NodePaletteTests.cpp lines 436-437, dropped): The C# keeps the full described text (the Default: clause stays in the description) and records the default separately.
+
+## tests/graph_builder.hpp:fixtureRoot
+
+PET comment (tests/helpers/GraphBuilder.hpp lines 17-18, dropped): The BaseStubs and GraphScripts fixture trees live next to the test sources: native/tests/fixtures/BaseStubs and .../GraphScripts.
+
+## tests/graph_builder.hpp:GraphBuilder
+
+PET comment (tests/helpers/GraphBuilder.hpp lines 26-27, dropped): Port of the C# GraphBuilder: the minimal document builder the graph tests use. Node ids are n1..nN, wire ids w1..wN, mirroring the sequence counter.
+
+## tests/graph_builder.hpp:node
+
+PET comment (tests/helpers/GraphBuilder.hpp lines 60-61, dropped): Port of Node(palette, definitionId, config): resolves the definition through the palette and stamps the node kind from it.
+
+## tests/graph_builder.hpp:nodeRaw
+
+PET comment (tests/helpers/GraphBuilder.hpp lines 69-70, dropped): Port of Node(definitionId, kind, config): for intentionally missing definitions (the UnknownNodeDefinition test).
+
+## tests/graph_builder.hpp:Env
+
+PET comment (tests/helpers/GraphBuilder.hpp lines 108-109, dropped): Port of GraphTestEnvironment: index over the BaseStubs tree (the graph tests that compile against scripts use GraphScripts too).
+
+## tests/graph_fixtures.hpp:GraphFixture
+
+PET comment (tests/helpers/GraphFixtures.hpp lines 11-12, dropped): Port of the C# GraphFixture record: building the fixture produces a fresh GraphDocument (each fixture closes over its own builder, like the C#).
+
+## tests/graph_fixtures.hpp:allFixtures
+
+PET comment (tests/helpers/GraphFixtures.hpp lines 19-21, dropped): Port of GraphFixtures.Build(): the 28 round-trip fixtures. Each builds a GraphDocument through the shared GraphBuilder and carries the hand-written reference source the compiler should reproduce.
+
+## tests/graph_fixtures.hpp:allFixtures
+
+PET comment (tests/helpers/GraphFixtures.hpp lines 262-262, dropped): isProperty=
+
+## tests/graph_fixtures.hpp:allFixtures
+
+PET comment (tests/helpers/GraphFixtures.hpp lines 467-467, dropped): The C# fixture replaces the builder header (no extends).
+
+## tests/graph_fixtures.hpp:allFixtures
+
+PET comment (tests/helpers/GraphFixtures.hpp lines 643-643, dropped): isProperty=

@@ -14,6 +14,17 @@ if(NOT TARGET ZLIB::ZLIB)
   find_package(ZLIB REQUIRED)
 endif()
 
+if(NOT TARGET nlohmann_json::nlohmann_json)
+  include(FetchContent)
+  FetchContent_Declare(
+    nlohmann_json
+    URL https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz
+    URL_HASH SHA256=42f6e95cad6ec532fd372391373363b62a14af6d771056dbfc86160e6dfff7aa
+    INACTIVITY_TIMEOUT 60
+  )
+  FetchContent_MakeAvailable(nlohmann_json)
+endif()
+
 option(FO4_ENABLE_ASAN "Enable AddressSanitizer" OFF)
 option(FO4_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" OFF)
 option(RADICLE_BUILD_TOOLS "Build Radicle command-line tools" ${PROJECT_IS_TOP_LEVEL})
@@ -300,6 +311,23 @@ add_library(fo4
   src/f4se/registration_extractor.cpp
   src/f4se/type_map.cpp
   src/f4se/version_diff.cpp
+  src/graph/builtin_node_definitions.cpp
+  src/graph/graph_compiler.cpp
+  src/graph/graph_definite_assignment.cpp
+  src/graph/graph_document.cpp
+  src/graph/graph_exec_flow.cpp
+  src/graph/graph_lifter.cpp
+  src/graph/graph_lifter_expr.cpp
+  src/graph/graph_linearizer.cpp
+  src/graph/graph_linearizer_expr.cpp
+  src/graph/graph_name_table.cpp
+  src/graph/graph_script_loader.cpp
+  src/graph/graph_tool_service.cpp
+  src/graph/graph_type_resolver.cpp
+  src/graph/graph_validator.cpp
+  src/graph/node_palette.cpp
+  src/graph/papyrus_source_writer.cpp
+  src/graph/wiki_docs.cpp
   src/swf/swf.cpp
   src/swf/swf_tags.cpp
   src/swf/swf_placement.cpp
@@ -422,6 +450,7 @@ target_include_directories(fo4
 )
 
 target_link_libraries(fo4 PRIVATE ZLIB::ZLIB)
+target_link_libraries(fo4 PUBLIC $<BUILD_INTERFACE:nlohmann_json::nlohmann_json>)
 fo4_apply_warnings(fo4)
 fo4_apply_sanitizers(fo4)
 
@@ -865,6 +894,14 @@ if(RADICLE_BUILD_TESTS)
     tests/test_f4se_region_merge.cpp
     tests/test_f4se_emitter.cpp
     tests/test_f4se_corpus_real.cpp
+    tests/test_graph_compiler.cpp
+    tests/test_graph_document.cpp
+    tests/test_graph_flow.cpp
+    tests/test_graph_lift.cpp
+    tests/test_graph_node_palette.cpp
+    tests/test_graph_script_loader.cpp
+    tests/test_graph_tool_service.cpp
+    tests/test_graph_validator.cpp
     tests/test_abc.cpp
     tests/test_abc_edit.cpp
     tests/test_abc_pool.cpp
