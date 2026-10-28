@@ -14,6 +14,8 @@ type StateReply = { changed?: boolean; revision: number; undo: number; redo: num
 type ErrorReply = { error?: string };
 
 type PlacementRow = { tagIndex: number; depth: number; character: number | null; insideSprite: boolean };
+type AbcMethodRow = { index: number; name: string; returnType: string; hasBody: boolean };
+type AbcBlockRow = { abc: number; name: string; classes: string[]; scripts: string[]; methods: AbcMethodRow[] };
 
 type SwfHost = {
   Open(path: string): Promise<string>;
@@ -34,6 +36,8 @@ type SwfHost = {
   InsertKeyframe(tagIndex: number, frame: number): Promise<string>;
   ReadEditText(tagIndex: number): Promise<string>;
   EditEditText(tagIndex: number, text: string, colorHex: string, x0: number, x1: number, y0: number, y1: number): Promise<string>;
+  AbcBlocks(): Promise<string>;
+  Disassemble(abc: number, methodIndex: number): Promise<string>;
 };
 
 function host(): SwfHost | null {
@@ -64,6 +68,9 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
   const [placementDepth, setPlacementDepth] = useState(0);
   const [matrix, setMatrix] = useState({ x: 0, y: 0, scaleX: 0, scaleY: 0, rotate0: 0, rotate1: 0 });
   const [editText, setEditText] = useState({ text: '', color: '', x0: 0, x1: 0, y0: 0, y1: 0 });
+  const [abcBlocks, setAbcBlocks] = useState<AbcBlockRow[]>([]);
+  const [abcError, setAbcError] = useState('');
+  const [instructions, setInstructions] = useState('');
 
   const refresh = useCallback(async () => {
     const bridge = host();
@@ -89,6 +96,10 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
       setInstances(rows.rows ?? []);
       const placementReply = parse<{ placements: PlacementRow[] }>(await bridge.Placements());
       setPlacements(placementReply.placements ?? []);
+      const abcReply = parse<{ blocks: AbcBlockRow[] }>(await bridge.AbcBlocks());
+      setAbcError(abcReply.error ?? '');
+      setAbcBlocks(abcReply.blocks ?? []);
+      setInstructions('');
     } finally {
       setBusy(false);
     }
@@ -200,6 +211,14 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     const labelsReply = parse<{ labels: LabelRow[] }>(await bridge.FrameLabels());
     setLabels(labelsReply.labels ?? []);
   }, [selectedLabel]);
+  const pickMethod = useCallback(async (block: AbcBlockRow, method: AbcMethodRow) => {
+    const bridge = host();
+    if (!bridge) return;
+    const reply = parse<{ text: string }>(await bridge.Disassemble(block.abc, method.index));
+    if (reply.error) { setAbcError(reply.error); setInstructions(''); return; }
+    setAbcError('');
+    setInstructions(reply.text);
+  }, []);
   const command = useCallback(async (action: 'undo' | 'redo' | 'save') => {
     const bridge = host();
     if (!bridge) return;
@@ -329,6 +348,30 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
             </div>
           )}          <p>Revision {state.revision} · undo {state.undo} · redo {state.redo}</p>
           <p>Shape rendering is not part of this round; the table above is the display list.</p>
+          <section className="swf-abc" aria-label="ABC scripts">
+            <h4>Scripts (ABC)</h4>
+            {abcError && <div className="swf-error" role="alert"><AlertTriangle size={14} /> {abcError}</div>}
+            {!abcError && abcBlocks.length === 0 && <p>No ABC scripts in this SWF.</p>}
+            <ul>
+              {abcBlocks.map(block => (
+                <li key={block.abc}>
+                  <strong>{block.name}</strong>
+                  <ul>
+                    {block.classes.map((name, index) => <li key={`class-${index}`}>class {name}</li>)}
+                    {block.scripts.map((name, index) => <li key={`script-${index}`}>script {name}</li>)}
+                    {block.methods.map(method => (
+                      <li key={method.index}>
+                        <button type="button" disabled={!method.hasBody} onClick={() => void pickMethod(block, method)}>
+                          {method.name || `method ${method.index}`} : {method.returnType}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ul>
+            <pre aria-label="instructions">{instructions}</pre>
+          </section>
         </aside>
       </div>
     </div>

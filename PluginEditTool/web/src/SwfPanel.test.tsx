@@ -24,6 +24,8 @@ function stubBridge(overrides: Record<string, unknown> = {}) {
     InsertKeyframe: vi.fn(async () => JSON.stringify({ changed: true, revision: 8, undo: 6, redo: 0, dirty: true })),
     ReadEditText: vi.fn(async () => JSON.stringify({ id: 11, text: 'hello', color: 'FF112233', x0: 0, x1: 400, y0: 0, y1: 200 })),
     EditEditText: vi.fn(async () => JSON.stringify({ changed: true, revision: 4, undo: 2, redo: 0, dirty: true })),
+    AbcBlocks: vi.fn(async () => JSON.stringify({ blocks: [{ abc: 0, name: 'Interface', classes: ['MenuClass'], scripts: ['Menu'], methods: [{ index: 0, name: 'onLoad', returnType: 'void', hasBody: true }] }] })),
+    Disassemble: vi.fn(async () => JSON.stringify({ text: '      0 getlocal0\n      1 returnvoid\n' })),
     ...overrides,
   };
   vi.stubGlobal('chrome', { webview: { hostObjects: { swf } } });
@@ -93,5 +95,37 @@ describe('SwfPanel', () => {
     await act(async () => { fireEvent.click(screen.getByText('Apply transform')); });
     await waitFor(() => expect(swf.SetTransform).toHaveBeenCalledWith(2, 0, 0, 0, 0, 0, 0));
     expect(screen.getByTestId('swf-box-7')).toBeTruthy();
+  });
+
+  it('lists ABC classes and methods and shows the selected method instructions', async () => {
+    // Constraint: detects the ABC listing or the Disassemble call being dropped from the panel.
+    const swf = stubBridge();
+    render(<SwfPanel onClose={() => {}} />);
+    fireEvent.change(screen.getByPlaceholderText('Interface/Test.swf'), { target: { value: 'Interface/Test.swf' } });
+    await act(async () => { fireEvent.click(screen.getByText('Open')); });
+    expect(await screen.findByText(/class MenuClass/)).toBeTruthy();
+    expect(screen.getByText(/script Menu/)).toBeTruthy();
+    await act(async () => { fireEvent.click(screen.getByText(/onLoad : void/)); });
+    await waitFor(() => expect(swf.Disassemble).toHaveBeenCalledWith(0, 0));
+    await waitFor(() => expect(screen.getByLabelText('instructions').textContent).toContain('returnvoid'));
+  });
+
+  it('shows the empty state when the SWF has no ABC blocks', async () => {
+    // Constraint: detects a SWF without DoABC tags rendering a blank or stale ABC list instead of the empty message.
+    stubBridge({ AbcBlocks: vi.fn(async () => JSON.stringify({ blocks: [] })) });
+    render(<SwfPanel onClose={() => {}} />);
+    fireEvent.change(screen.getByPlaceholderText('Interface/Test.swf'), { target: { value: 'Interface/Test.swf' } });
+    await act(async () => { fireEvent.click(screen.getByText('Open')); });
+    expect(await screen.findByText('No ABC scripts in this SWF.')).toBeTruthy();
+  });
+
+  it('shows an ABC listing refusal instead of the empty state', async () => {
+    // Constraint: detects an ABC refusal from Radicle being swallowed or shown as "no ABC scripts".
+    stubBridge({ AbcBlocks: vi.fn(async () => JSON.stringify({ error: 'ABC block 0 is malformed' })) });
+    render(<SwfPanel onClose={() => {}} />);
+    fireEvent.change(screen.getByPlaceholderText('Interface/Test.swf'), { target: { value: 'Interface/Test.swf' } });
+    await act(async () => { fireEvent.click(screen.getByText('Open')); });
+    expect(await screen.findByText(/ABC block 0 is malformed/)).toBeTruthy();
+    expect(screen.queryByText('No ABC scripts in this SWF.')).toBeNull();
   });
 });
