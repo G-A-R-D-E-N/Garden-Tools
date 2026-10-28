@@ -44,7 +44,8 @@ constexpr std::array<FloatField, 10> k_float_fields{{
 }};
 
 [[noreturn]] void fail(const NifFile& nif, std::uint32_t block, const std::string& message) {
-  throw parse_error(nif.blocks()[block].offset, "edit on block " + std::to_string(block) + ": " + message);
+  const auto offset = block < nif.blocks().size() ? nif.blocks()[block].offset : std::size_t{0};
+  throw parse_error(offset, "edit on block " + std::to_string(block) + ": " + message);
 }
 
 bool is_shape_type(std::string_view type) {
@@ -103,7 +104,19 @@ void set_name(const NifFile& nif, Model& model, std::uint32_t block, std::size_t
   write_detail::write_int(model.blocks[block], offset, write_detail::intern_string(model, text));
 }
 
-std::uint32_t shader_block(const NifFile& nif, const Model& model, std::uint32_t block) {
+std::size_t shader_users(const Model& model, std::uint32_t shader) {
+  std::size_t users = 0;
+  for (std::uint32_t block = 0; block < model.blocks.size(); ++block) {
+    const auto& bytes = model.blocks[block];
+    if (!is_shape_type(write_detail::block_type(model, block)) || bytes.size() < 8) continue;
+    const auto ref_at = 92 + 4 * static_cast<std::size_t>(write_detail::read_int<std::uint32_t>(bytes, 4));
+    if (ref_at + 4 > bytes.size()) continue;
+    if (write_detail::read_int<std::int32_t>(bytes, ref_at) == static_cast<std::int32_t>(shader)) ++users;
+  }
+  return users;
+}
+
+std::uint32_t shader_block(const NifFile& nif, Model& model, std::uint32_t block) {
   const auto type = write_detail::block_type(model, block);
   if (type == k_shader_type) return block;
   if (!is_shape_type(type)) fail(nif, block, "key needs a shape or shader block");
@@ -114,7 +127,16 @@ std::uint32_t shader_block(const NifFile& nif, const Model& model, std::uint32_t
       write_detail::block_type(model, static_cast<std::uint32_t>(ref)) != k_shader_type) {
     fail(nif, block, "shape has no BSLightingShaderProperty");
   }
-  return static_cast<std::uint32_t>(ref);
+  auto shader = static_cast<std::uint32_t>(ref);
+  if (shader_users(model, shader) > 1) {
+    const Bytes copy = model.blocks[shader];
+    const auto type_index = model.block_type_index[shader];
+    model.blocks.push_back(copy);
+    model.block_type_index.push_back(type_index);
+    shader = static_cast<std::uint32_t>(model.blocks.size() - 1);
+    write_detail::write_int(model.blocks[block], ref_at, static_cast<std::int32_t>(shader));
+  }
+  return shader;
 }
 
 void apply_name(const NifFile& nif, Model& model, const Edit& edit) {
@@ -187,17 +209,16 @@ void apply_texture(const NifFile& nif, Model& model, const Edit& edit, std::size
   if (write_detail::block_type(model, texture_set) != k_texture_set_type) {
     fail(nif, shader, "shader's texture set reference is not a BSShaderTextureSet");
   }
+  auto slots = texture_slots(nif, model, texture_set);
+  if (slot >= slots.size()) slots.resize(slot + 1);
+  slots[slot] = text;
   if (texture_set_users(model, texture_set) > 1) {
-    const Bytes copy = model.blocks[texture_set];
     const auto type_index = model.block_type_index[texture_set];
-    model.blocks.push_back(copy);
+    model.blocks.emplace_back();
     model.block_type_index.push_back(type_index);
     texture_set = static_cast<std::uint32_t>(model.blocks.size() - 1);
     write_detail::write_int(model.blocks[shader], ref_at, static_cast<std::int32_t>(texture_set));
   }
-  auto slots = texture_slots(nif, model, texture_set);
-  if (slot >= slots.size()) slots.resize(slot + 1);
-  slots[slot] = text;
   model.blocks[texture_set] = texture_set_bytes(slots);
 }
 

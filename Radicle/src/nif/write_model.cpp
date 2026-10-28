@@ -1,6 +1,7 @@
 #include "write_model.hpp"
 
 #include "fo4/binary/cursor.hpp"
+#include "fo4/error.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -28,6 +29,7 @@ std::string read_sized_string(binary::Cursor& cursor) {
 Model load_model(const NifFile& nif) {
   const std::span<const std::byte> all{nif.bytes()};
   const auto header_length = static_cast<std::size_t>(std::find(all.begin(), all.end(), std::byte{'\n'}) - all.begin());
+  if (header_length == all.size()) throw parse_error(0, "NIF has no header line");
   Model model;
   model.banner.assign(reinterpret_cast<const char*>(all.data()), header_length);
   binary::Cursor cursor(all.subspan(header_length + 1), header_length + 1);

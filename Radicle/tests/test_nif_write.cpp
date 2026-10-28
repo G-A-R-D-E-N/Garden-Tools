@@ -68,6 +68,32 @@ std::vector<std::byte> shared_texture_set_nif() {
   });
 }
 
+std::vector<std::byte> shared_shader_nif() {
+  const fo4::nif::Transform shape_xf{{1.0f, 2.0f, 3.0f}, {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f}, 1.0f};
+  const std::vector<nif_fixture::Block> blocks{
+      nif_fixture::node_block("NiNode", -1, Transform{}, {1, 2}),
+      nif_fixture::shape_block("BSTriShape", -1, shape_xf, 0, 44, -1, 3, -1, {}, {}),
+      nif_fixture::shape_block("BSTriShape", -1, shape_xf, 0, 44, -1, 3, -1, {}, {}),
+      nif_fixture::lighting_shader_block(1, 0, 4, 0, 0),
+      nif_fixture::texture_set_block({"a.dds", "b.dds"}),
+  };
+  return nif_fixture::build_nif({"materials\\old.bgsm"}, blocks, {0});
+}
+
+std::vector<std::byte> block_copy(std::span<const std::byte> file, const NifFile& nif, std::uint32_t block) {
+  const auto bytes = block_bytes(file, nif, block);
+  return {bytes.begin(), bytes.end()};
+}
+
+void expect_changes_within(std::span<const std::byte> before, std::span<const std::byte> after, std::size_t lo,
+                           std::size_t hi) {
+  ASSERT_EQ(before.size(), after.size());
+  for (std::size_t i = 0; i < before.size(); ++i) {
+    EXPECT_TRUE(before[i] == after[i] || (i >= lo && i < hi))
+        << "byte " << i << " changed outside [" << lo << ", " << hi << ")";
+  }
+}
+
 Block node_with_two_extras() {
   Writer w;
   w.i32(-1);
@@ -107,6 +133,33 @@ TEST(NifWrite, NameEditAppendsToStringTable) {
   const auto out = read_nif(apply_edits(nif, edits));
   EXPECT_EQ(out.strings().size(), nif.strings().size() + 1);
   EXPECT_EQ(read_shapes(out).at(0).name, "a_much_longer_shape_name");
+  const auto root = static_cast<std::size_t>(out.node_for_block(k_root));
+  EXPECT_EQ(out.nodes().at(root).name, "shape");
+}
+
+TEST(NifWrite, NameEditReusesAnExistingStringIndex) {
+  // regression: a name already in the string table must reuse its index, not append a duplicate entry
+  const auto bytes = nif_fixture::full_nif();
+  const auto nif = read_nif(bytes);
+  const std::vector<Edit> edits{Edit{k_shape, "name", as_text("RootBone")}};
+  const auto out = read_nif(apply_edits(nif, edits));
+  EXPECT_EQ(out.strings().size(), nif.strings().size());
+  EXPECT_EQ(read_shapes(out).at(0).name, "RootBone");
+}
+
+TEST(NifWrite, ZeroEditRoundTripKeepsExportStringsGroupsAndMaxLength) {
+  // regression: export strings, max string length and the group table must be re-encoded as read, or a zero-edit save changes bytes
+  const std::vector<nif_fixture::Block> blocks{
+      nif_fixture::node_block("NiNode", 0, Transform{}, {1}),
+      nif_fixture::shape_block("BSTriShape", 3, Transform{}, 0, 44, -1, 2, -1, {}, {}),
+      nif_fixture::lighting_shader_block(1, 1, 3, 0, 0),
+      nif_fixture::texture_set_block({"textures\\a_d.dds", ""}),
+  };
+  const auto bytes = nif_fixture::build_nif({"Root", "materials\\a.bgsm", "a_longer_shape_name", "Tri"}, blocks, {0},
+                                            {"Author", "Process", "", "Export info"}, 19, {7, 9});
+  const auto nif = read_nif(bytes);
+  EXPECT_EQ(write_nif(nif), bytes);
+  EXPECT_EQ(apply_edits(nif, std::vector<Edit>{}), bytes);
 }
 
 TEST(NifWrite, NodeEditsFollowTheExtraDataCount) {
@@ -217,6 +270,63 @@ TEST(NifWrite, SharedTextureSetIsCopiedBeforeEdit) {
   EXPECT_EQ(read_shader(out, 2).texture_set_ref, 3);
 }
 
+TEST(NifWrite, EditsFollowTheExtraDataCountOnShapeAndShader) {
+  // regression: shape and shader fields must move with their extra-data count, or the edit lands on neighbouring bytes
+  const fo4::nif::Transform shape_xf{{7.0f, 8.0f, 9.0f}, {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f}, 1.0f};
+  const auto bytes = nif_with_root({
+      nif_fixture::shape_block("BSTriShape", -1, shape_xf, 0, 44, -1, 2, -1, {}, {}, 2),
+      nif_fixture::lighting_shader_block(1, -1, 3, 0, 0, 2),
+      nif_fixture::texture_set_block({"a.dds", "b.dds"}),
+  });
+  const auto nif = read_nif(bytes);
+  const std::vector<Edit> edits{
+      Edit{1, "translation", numbers({4.0f, 5.0f, 6.0f})},
+      Edit{1, "glossiness", as_number(0.5f)},
+      Edit{1, "tex0", as_text("new.dds")},
+  };
+  const auto out_bytes = apply_edits(nif, edits);
+  const auto out = read_nif(out_bytes);
+  const auto xf = block_transform(out, 1);
+  EXPECT_FLOAT_EQ(xf.t[0], 4.0f);
+  EXPECT_FLOAT_EQ(xf.t[1], 5.0f);
+  EXPECT_FLOAT_EQ(xf.t[2], 6.0f);
+  EXPECT_EQ(read_shader(out, 2).textures, (std::vector<std::string>{"new.dds", "b.dds"}));
+  EXPECT_FLOAT_EQ(float_at(block_bytes(out_bytes, out, 2), 84), 0.5f);
+  expect_changes_within(block_bytes(bytes, nif, 1), block_bytes(out_bytes, out, 1), 24, 36);
+  expect_changes_within(block_bytes(bytes, nif, 2), block_bytes(out_bytes, out, 2), 84, 88);
+}
+
+TEST(NifWrite, SharedShaderIsCopiedBeforeAShapeEdit) {
+  // regression: a translation, float, texture or material edit on one shape must not change the other shape that shares its shader
+  const auto bytes = shared_shader_nif();
+  const auto nif = read_nif(bytes);
+  const std::vector<Edit> edits{
+      Edit{1, "translation", numbers({4.0f, 5.0f, 6.0f})},
+      Edit{1, "glossiness", as_number(0.5f)},
+      Edit{1, "tex0", as_text("new.dds")},
+      Edit{1, "material", as_text("materials\\new.bgsm")},
+  };
+  const auto out_bytes = apply_edits(nif, edits);
+  const auto out = read_nif(out_bytes);
+  const auto shapes = read_shapes(out);
+  ASSERT_EQ(shapes.size(), 2U);
+  const auto& edited = shapes.at(0);
+  const auto& untouched = shapes.at(1);
+  EXPECT_NE(edited.shader_ref, 3);
+  EXPECT_EQ(untouched.shader_ref, 3);
+  EXPECT_EQ(untouched.material, "materials\\old.bgsm");
+  EXPECT_EQ(read_shader(out, 3).textures, (std::vector<std::string>{"a.dds", "b.dds"}));
+  EXPECT_EQ(read_shader(out, 3).texture_set_ref, 4);
+  EXPECT_FLOAT_EQ(block_transform(out, 2).t[0], 1.0f);
+  EXPECT_FLOAT_EQ(block_transform(out, 1).t[0], 4.0f);
+  EXPECT_EQ(block_copy(out_bytes, out, 3), block_copy(bytes, nif, 3));
+  EXPECT_EQ(block_copy(out_bytes, out, 4), block_copy(bytes, nif, 4));
+  const auto edited_shader = static_cast<std::uint32_t>(edited.shader_ref);
+  EXPECT_EQ(read_shader(out, edited_shader).name, "materials\\new.bgsm");
+  EXPECT_EQ(read_shader(out, edited_shader).textures, (std::vector<std::string>{"new.dds", "b.dds"}));
+  EXPECT_FLOAT_EQ(float_at(block_bytes(out_bytes, out, edited_shader), 76), 0.5f);
+}
+
 TEST(NifWrite, RejectsUnsupportedAndMalformedEditsWithoutOutput) {
   // regression: an unsupported, read-only or mistyped edit must throw parse_error, never return partially edited bytes
   const auto bytes = nif_fixture::full_nif();
@@ -253,4 +363,7 @@ TEST(NifWrite, RejectsEditsOnBrokenShapesAndShaders) {
   expect_rejected(read_nif(trailing_set), Edit{1, "tex0", as_text("x.dds")});
   const auto short_shader = nif_with_root({shader, nif_fixture::texture_set_block({"a.dds"})});
   expect_rejected(read_nif(short_shader), Edit{1, "glossiness", as_number(0.5f)});
+  const auto trailing_shared = nif_with_root({nif_fixture::lighting_shader_block(1, -1, 3, 0, 0),
+                                              nif_fixture::lighting_shader_block(1, -1, 3, 0, 0), trailing});
+  expect_rejected(read_nif(trailing_shared), Edit{1, "tex0", as_text("x.dds")});
 }
