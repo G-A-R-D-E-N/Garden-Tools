@@ -305,6 +305,7 @@ struct SwfMorphShape {
 };
 
 std::vector<SwfShapeRecord> interpolate_morph_commands(const SwfMorphShape& morph, double ratio);
+std::optional<SwfShape> interpolate_morph_shape(const SwfMorphShape& morph, double ratio);
 
 struct SwfBitmap {
   std::uint16_t character_id{0};
