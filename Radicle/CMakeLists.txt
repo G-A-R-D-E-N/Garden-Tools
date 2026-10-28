@@ -992,6 +992,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_avm1_objects.cpp
     tests/test_avm1_real.cpp
     tests/test_swf_svg.cpp
+    tests/test_swf_svg_buttons.cpp
     tests/test_abc_real.cpp
     tests/test_hkx_packfile.cpp
     tests/test_hkx_real.cpp

@@ -363,6 +363,59 @@ SwfStatus decode_remove_object(std::span<const std::byte> data, SwfTag& out_tag)
   return SwfStatus::ok;
 }
 
+bool decode_button_records(std::span<const std::byte> data, std::size_t position, bool with_colour,
+                           std::vector<SwfButtonRecord>& records) {
+  for (;;) {
+    SwfReader reader(data, position);
+    std::uint8_t flags = 0;
+    if (!reader.read_u8(flags)) {
+      return false;
+    }
+    if (flags == 0) {
+      return true;
+    }
+    SwfButtonRecord record;
+    record.up = (flags & 0x01u) != 0;
+    record.over = (flags & 0x02u) != 0;
+    record.down = (flags & 0x04u) != 0;
+    record.hit_test = (flags & 0x08u) != 0;
+    if (!reader.read_u16(record.character_id) || !reader.read_u16(record.depth)) {
+      return false;
+    }
+    BitReader matrix_bits(data, reader.position() * 8);
+    if (!read_matrix(matrix_bits, record.matrix)) {
+      return false;
+    }
+    position = matrix_bits.byte_position();
+    if (with_colour) {
+      BitReader colour_bits(data, position * 8);
+      SwfColorTransform colour;
+      if (!read_color_transform(colour_bits, true, colour)) {
+        return false;
+      }
+      record.color_transform = colour;
+      position = colour_bits.byte_position();
+      if ((flags & 0x10u) != 0) {
+        SwfReader filter_reader(data, position);
+        std::vector<SwfFilter> filters;
+        if (!decode_filter_list(filter_reader, filters)) {
+          return false;
+        }
+        position = filter_reader.position();
+      }
+      if ((flags & 0x20u) != 0) {
+        SwfReader blend_reader(data, position);
+        std::uint8_t blend = 0;
+        if (!blend_reader.read_u8(blend)) {
+          return false;
+        }
+        position = blend_reader.position();
+      }
+    }
+    records.push_back(record);
+  }
+}
+
 }  // namespace
 
 SwfStatus decode_placement_tag(std::span<const std::byte> data, SwfTag& out_tag) {
@@ -380,6 +433,20 @@ SwfStatus decode_placement_tag(std::span<const std::byte> data, SwfTag& out_tag)
     out_tag.placement = std::move(place);
   }
   return status;
+}
+
+SwfStatus decode_button_tag(std::span<const std::byte> data, SwfTag& out_tag) {
+  const bool with_colour = out_tag.code == tag::kDefineButton2;
+  SwfReader reader(data, 0);
+  SwfButton button;
+  // Invariant: a button whose records do not decode stays undecoded and never refuses the file.
+  if (!reader.read_u16(button.character_id) || (with_colour && !reader.skip(3))) {
+    return SwfStatus::ok;
+  }
+  if (decode_button_records(data, reader.position(), with_colour, button.records)) {
+    out_tag.button = std::move(button);
+  }
+  return SwfStatus::ok;
 }
 
 }  // namespace fo4::swf::detail

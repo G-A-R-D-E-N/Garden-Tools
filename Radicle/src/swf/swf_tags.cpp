@@ -438,6 +438,9 @@ SwfStatus decode_tag_payload(const std::vector<std::byte>& payload, SwfTag& out_
     case tag::kRemoveObject:
     case tag::kRemoveObject2:
       return decode_placement_tag(data, out_tag);
+    case tag::kDefineButton:
+    case tag::kDefineButton2:
+      return decode_button_tag(data, out_tag);
     case tag::kDefineShape:
     case tag::kDefineShape2:
     case tag::kDefineShape3:

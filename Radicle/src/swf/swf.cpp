@@ -349,6 +349,7 @@ void SwfTag::clear_decoded() {
   placement.reset();
   removal.reset();
   morph_shape.reset();
+  button.reset();
   jpeg.reset();
   jpeg_tables.reset();
 }
