@@ -155,6 +155,8 @@ std::vector<std::byte> red_square_movie() {
   body.tag(1);
   body.tag(0);
   return wrap_body(body.body, 10, false, false);
+}
+
 std::vector<std::byte> png_movie() {
   const std::vector<std::uint8_t> argb = {255, 10, 20, 30, 128, 64, 100, 32,
                                           0,   0,  0,  0,  170, 3,  170, 85};
@@ -336,6 +338,8 @@ TEST(CApiSwfFrameSvg, RefusesNullArgumentsWithOutputsCleared) {
   text = &sentinel;
   EXPECT_EQ(radicle_swf_frame_svg(swf.get(), 0, &text, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(text, nullptr);
+}
+
 // Invariant: the exported PNG is the byte stream bitmap_to_png encodes for the same tag, never a second encoder's output.
 TEST(CApiSwfBitmapPng, ExportsTheCppEncoderBytesForALossless2Bitmap) {
   const auto movie = png_movie();

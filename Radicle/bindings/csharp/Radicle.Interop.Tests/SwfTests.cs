@@ -725,6 +725,9 @@ public partial class SwfTests
         file.AddRange(BitConverter.GetBytes((uint)(body.Count + 8)));
         file.AddRange(body);
         return file.ToArray();
+    }
+
+    [Fact]
     public void ExportsTheLossless2BitmapAsPngAndRefusesANonBitmapTag()
     {
         using var swf = SwfFile.FromBytes(ArtMovie());
