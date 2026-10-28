@@ -225,7 +225,6 @@ TEST(Avm2Interpreter, ReportsAnUnimplementedOpcodeWithItsName) {
   avm2_test::ScriptBuilder script;
   const std::uint32_t helper = script.multiname("helper");
   avm2_test::CodeBuilder code;
-  code.callstatic(0, 0);
   code.getdescendants(helper);
   code.returnvoid();
   const std::uint32_t method = script.method("init", code.bytes(), 1);
@@ -236,7 +235,7 @@ TEST(Avm2Interpreter, ReportsAnUnimplementedOpcodeWithItsName) {
   Interpreter interpreter(runtime);
   const ExecutionResult result = interpreter.run_script(0);
   EXPECT_EQ(result.status, InterpreterStatus::NotImplemented);
-  EXPECT_NE(result.message.find("callstatic"), std::string::npos) << result.message;
+  EXPECT_NE(result.message.find("getdescendants"), std::string::npos) << result.message;
 }
 
 TEST(Avm2Interpreter, EnforcesTheInstructionBudget) {
