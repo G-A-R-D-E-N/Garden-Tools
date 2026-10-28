@@ -159,10 +159,10 @@ public class SwfDocumentServiceTests
     [NativeFact]
     public void InsertsAPlacementKeyframeAndUndoesIt()
     {
-        using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
+        using var document = SwfDocument.OpenBytes(SwfFixture.Movie(twoFrames: true));
         var placement = document.Placements().First(item => !item.InsideSprite);
         var before = document.Movie.Tags.Count(tag => tag.Code == 26);
-        var result = document.InsertKeyframe(placement.TagIndex, 0);
+        var result = document.InsertKeyframe(placement.TagIndex, 1);
         Assert.True(result.Changed);
         Assert.Equal(before + 1, document.Movie.Tags.Count(tag => tag.Code == 26));
         var inserted = document.Movie.Tags.Where(tag => tag.Code == 26 && !tag.InsideSprite).Last();
@@ -172,6 +172,16 @@ public class SwfDocumentServiceTests
         Assert.Null(parsed.CharacterId);
         document.Undo();
         Assert.Equal(before, document.Movie.Tags.Count(tag => tag.Code == 26));
+    }
+
+    [NativeFact]
+    public void RefusesAKeyframeOnTheFrameThatAlreadySourcesTheTransform()
+    {
+        // Constraint: detects a root keyframe that duplicates the explicit transform source on the frame that already sets it, which the native verb refuses.
+        using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
+        var placement = document.Placements().First(item => !item.InsideSprite);
+        Assert.Throws<RadicleException>(() => document.InsertKeyframe(placement.TagIndex, 0));
+        Assert.Equal(0ul, document.Revision);
     }
 
     [NativeFact]
@@ -233,6 +243,46 @@ public class SwfDocumentServiceTests
         document.Undo();
         Assert.Equal(0, document.PlacementTransform(placement.TagIndex).TranslateX);
         Assert.False(document.Dirty);
+    }
+
+    [NativeFact]
+    public void ARootTransformEditRoundTripsOneTwipThroughThePointUnit()
+    {
+        // Constraint: detects a transform edit that passes twips where the native verb takes points, which reads back as 20 twips for a 1 twip edit.
+        using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
+        var placement = document.Placements().First(item => !item.InsideSprite);
+        var result = document.SetPlacementTransform(placement.TagIndex, new SwfPlacementTransformEdit(TranslateX: 1));
+        Assert.True(result.Changed);
+        var matrix = document.PlacementTransform(placement.TagIndex);
+        Assert.Equal(1, matrix.TranslateX);
+        Assert.Equal(0, matrix.TranslateY);
+        Assert.Equal((ushort)1, document.Placements().First(item => !item.InsideSprite).Depth);
+    }
+
+    [NativeFact]
+    public void SetDepthOnARootPlacementMovesItsInstanceAndUndoRestoresIt()
+    {
+        // Constraint: detects a root depth edit that patches the tag bytes without moving the instance on the frame, so the frame row keeps the old depth.
+        using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
+        var placement = document.Placements().First(item => !item.InsideSprite);
+        var result = document.SetDepth(placement.TagIndex, 5);
+        Assert.True(result.Changed);
+        Assert.Equal((ushort)5, document.Placements().First(item => !item.InsideSprite).Depth);
+        Assert.Equal((ushort)5, document.Frame(0, 0).Single().Depth);
+        document.Undo();
+        Assert.Equal((ushort)1, document.Frame(0, 0).Single().Depth);
+    }
+
+    [NativeFact]
+    public void SetDepthOnASpriteChildStaysOnThePatchPathAndLeavesTheRootAlone()
+    {
+        // Constraint: detects a sprite-internal depth edit routed to the root-only native verb, which would refuse it or move a root instance.
+        using var document = SwfDocument.OpenBytes(SwfFixture.Movie());
+        var child = document.Placements().Single(item => item.InsideSprite);
+        document.SetDepth(child.TagIndex, 7);
+        var placements = document.Placements();
+        Assert.Equal((ushort)7, placements.Single(item => item.InsideSprite).Depth);
+        Assert.Equal((ushort)1, placements.Single(item => !item.InsideSprite).Depth);
     }
 
     [NativeFact]

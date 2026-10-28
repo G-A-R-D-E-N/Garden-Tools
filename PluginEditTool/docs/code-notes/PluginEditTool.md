@@ -81,7 +81,8 @@ panel's "Add at frame" button passes the label name field, the scrubber frame an
 
 Placement tags have no C ABI getter, so `Placements()` parses the root and sprite placement payloads
 (PlaceObject 4, PlaceObject2 26, PlaceObject3 70) for depth/character, and `SetDepth` patches the depth bytes in
-place and sends the payload through the tag plan, keeping every other byte. `SwfDocument.SetDepth` and
+place for a sprite child and sends the payload through the tag plan, keeping every other byte; a root placement goes
+through the native depth verb (`PluginEditTool/FO4RecordEditor.Core/Services/SwfDocumentService.cs:SwfDocument.SetDepth`, see the tail section). `SwfDocument.SetDepth` and
 `SwfInterop.Placements`/`SetDepth` expose it. `SwfPlacementTests` pins the read, the in-place patch, the undo and
 the wrong-tag refusal. Transform/keyframe composition is the next placement step.
 ## web/src/SwfPanel.tsx (placement depth properties)
@@ -110,10 +111,11 @@ relative stage with the depth label. This is the round's rendering substitute: n
 bounds. The web test asserts the box test id exists for the fixture instance.
 ## FO4RecordEditor.Core/Services/SwfDocumentService.cs:SwfDocument.InsertKeyframe (keyframe at frame)
 
-For a PlaceObject2 placement, `InsertKeyframe` copies its payload, forces the Move flag, clears the character bit and drops
-the two character-id bytes that followed the depth, then inserts the copy before the requested frame's root ShowFrame
-through the plan, so it is one history command that undo removes. A non-PlaceObject2 tag is refused.
-`SwfInterop.InsertKeyframe` and the panel's "Keyframe at frame" button (scrubber frame) use it.
+For a sprite-child PlaceObject2 placement, `PluginEditTool/FO4RecordEditor.Core/Services/SwfDocumentService.cs:SwfDocument.InsertKeyframe`
+copies its payload, forces the Move flag, clears the character bit and drops the two character-id bytes that followed the
+depth, then splices the copy into the sprite frame through the plan, so it is one history command that undo removes. A
+non-PlaceObject2 tag is refused. Root placements use the native keyframe verb instead (the root keyframe section at the end
+of this file). `SwfInterop.InsertKeyframe` and the panel's "Keyframe at frame" button (scrubber frame) use it.
 ## FO4RecordEditor.Core/Services/SwfDocumentService.cs:SwfDocument.InsertKeyframe (sprite timelines)
 
 For a placement inside a DefineSprite, `InsertKeyframe` finds the sprite frame's ShowFrame child, splices a new
@@ -240,3 +242,15 @@ Every character pick increments `shapeRequest` and clears `shapeSvg` before it a
 `SwfFixture.Movie(withShape: true)` adds an empty DefineShape (id 5, no fills, no lines, an end record). It is opt-in so the document-service tests keep their two-character count. The empty shape is enough to prove `ShapeSvg` returns a `<svg` document; a filled-shape path check would duplicate Radicle's own test.
 
 Tests: `FO4RecordEditor.Tests/SwfInteropTests.cs:SwfInteropTests.ShapeSvgRpcReturnsTheSvgForAShapeAndTheRefusalForANonShape` (shape returns `<svg`, EditText returns an error, ids 70000 and -1 are refused with `0..65535` and no svg), `web/src/SwfPanel.test.tsx:SwfPanel` (shape selection requests `ShapeSvg` and renders the image, a late reply for an earlier shape is ignored, a non-shape pick clears the preview, and a late `ReadEditText` reply after a newer shape selection opens no edit form).
+
+## PluginEditTool/FO4RecordEditor.Core/Services/SwfDocumentService.cs:SwfDocument.SetDepth (root placements)
+
+A root placement moves through `Radicle/bindings/csharp/Radicle.Interop/SwfVerbs.cs:SwfVerbs.ReassignInstanceDepth`, not the in-place patch. `SwfDocument.RootInstance` finds the root-timeline frame row whose `CreateTagIndex` (flat `radicle_swf_tag_at` index, `Radicle/bindings/csharp/Radicle.Interop/SwfEditing.cs:SwfFrameInstanceRecord`) equals the tag, and refuses when the matching rows name more than one instance. The native verb rewrites the depth of the creating placement and of every move row at that depth, and inserts a RemoveObject2 at the lifetime's terminator when one exists. Tags from the terminator on shift by one (`Radicle/src/swf/swf_depth.cpp:reassign_instance_depth`), so the panel refetches the placement list after an edit, which it already does. Refusals the in-place patch allowed now refuse: an occupied destination, a destination inside a mask range, and a destination equal to the source. The verb returns the moved instance id; `SwfInterop.SetDepth` does not expose it, so its reply is unchanged. A move row (a placement with no character) creates no instance, so `SetDepth` on it refuses with "no root-timeline instance is addressed by that placement".
+
+## PluginEditTool/FO4RecordEditor.Core/Services/SwfDocumentService.cs:SwfDocument.SetPlacementTransform (root placements)
+
+A root placement's transform goes through `SwfVerbs.ApplyInstanceTransforms` on the row whose `TransformTagIndex` equals the tag. The native verb takes points and unit-one scale, so `SwfDocument.ToVerbTransform` divides MATRIX twips by 20 and 16.16 fixed point by 65536, and an absent scale or rotate is the identity. One twip therefore reaches the verb as 0.05 points and is rounded back to 1 twip in `Radicle/src/swf/swf_edit.cpp:matrix_from_transform`. A placement with no authored MATRIX has no transform row, so it refuses where the codec used to add one. Sprite children keep `SwfPlacementMatrixCodec.Write`.
+
+## PluginEditTool/FO4RecordEditor.Core/Services/SwfDocumentService.cs:SwfDocument.InsertKeyframe (root placements)
+
+A root keyframe goes through `SwfVerbs.InsertInstanceTransformKeyframe` with no transform, so the native verb copies the instance's authored transform at that frame. It rebuilds the tag as flags 0x05, the depth and a MATRIX, so name, ratio and colour transform are not copied and carry over from the earlier tags. The verb refuses a frame that already sources the transform explicitly, which includes the frame where the placement was created, and a frame where the instance is not live. The root keyframe test therefore inserts on frame 1 of a two-frame fixture.

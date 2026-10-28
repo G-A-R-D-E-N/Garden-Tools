@@ -115,9 +115,14 @@ public sealed class SwfDocument : IDisposable
 
     public IReadOnlyList<SwfPlacementRecord> Placements() => Movie.Placements();
 
-    // Requires a placement tag index; the depth change is one history command.
-    public SwfPlanResultRecord SetDepth(int tagIndex, ushort depth) => Apply(new SwfPlanSpec().Replace(
-        tagIndex, SwfPlacementCodec.WithDepth(Movie.Payload(tagIndex), Movie.Tags[tagIndex].Code, depth)));
+    // Requires a placement tag index; a root placement moves its creating instance through the native depth verb.
+    public SwfPlanResultRecord SetDepth(int tagIndex, ushort depth)
+    {
+        if (Movie.Tags[tagIndex].InsideSprite) return Apply(new SwfPlanSpec().Replace(
+            tagIndex, SwfPlacementCodec.WithDepth(Movie.Payload(tagIndex), Movie.Tags[tagIndex].Code, depth)));
+        var (rootFrame, instanceId) = RootInstance(row => row.CreateTagIndex == tagIndex);
+        return Verb(history => SwfVerbs.ReassignInstanceDepth(history, rootFrame, instanceId, depth, out _));
+    }
 
     // Requires a DefineEditText tag index; the verb commits one history command like every other edit.
     public SwfPlanResultRecord EditEditText(int tagIndex, SwfEditTextEdit edit) =>
@@ -125,10 +130,18 @@ public sealed class SwfDocument : IDisposable
 
     public SwfPlacementMatrix PlacementTransform(int tagIndex) => Movie.PlacementMatrix(tagIndex);
 
-    // Requires a placement tag index; the transform edit keeps the depth and every other placement byte.
+    // Requires a placement tag index; a root placement's transform source is edited through the native transform verb.
     public SwfPlanResultRecord SetPlacementTransform(int tagIndex, SwfPlacementTransformEdit edit)
     {
-        var payload = SwfPlacementMatrixCodec.Write(Movie.PlacementMatrix(tagIndex), Movie.Tags[tagIndex].Code,
+        var tag = Movie.Tags[tagIndex];
+        if (!tag.InsideSprite)
+        {
+            var (rootFrame, instanceId) = RootInstance(row => row.TransformTagIndex == tagIndex);
+            var transform = ToVerbTransform(Movie.PlacementMatrix(tagIndex), edit);
+            return Verb(history => SwfVerbs.ApplyInstanceTransforms(history, rootFrame,
+                new[] { new SwfInstanceTransformEdit(instanceId, transform) }));
+        }
+        var payload = SwfPlacementMatrixCodec.Write(Movie.PlacementMatrix(tagIndex), tag.Code,
             Movie.Payload(tagIndex), edit);
         return Apply(new SwfPlanSpec().Replace(tagIndex, payload));
     }
@@ -138,15 +151,17 @@ public sealed class SwfDocument : IDisposable
     {
         var tag = Movie.Tags[tagIndex];
         if (tag.Code != 26) throw new InvalidOperationException("only a PlaceObject2 placement can carry a keyframe this round");
+        if (!tag.InsideSprite)
+        {
+            var showFrames = Movie.Tags.Count(item => item.Code == 1 && !item.InsideSprite);
+            if (frame < 0 || frame >= showFrames) throw new ArgumentOutOfRangeException(nameof(frame));
+            var (rootFrame, instanceId) = RootInstance(row => row.TimelineFrame == frame &&
+                (row.CreateTagIndex == tagIndex || row.TransformTagIndex == tagIndex));
+            return Verb(history => SwfVerbs.InsertInstanceTransformKeyframe(history, rootFrame, instanceId));
+        }
         var payload = Movie.Payload(tagIndex);
         if ((payload[0] & 0x02) != 0) payload = payload.Take(3).Concat(payload.Skip(5)).ToArray();
         payload[0] = (byte)((payload[0] & ~0x02) | 0x01);
-        if (!tag.InsideSprite)
-        {
-            var showFrames = Movie.Tags.Where(item => item.Code == 1 && !item.InsideSprite).ToArray();
-            if (frame < 0 || frame >= showFrames.Length) throw new ArgumentOutOfRangeException(nameof(frame));
-            return Apply(new SwfPlanSpec().Insert(showFrames[frame].Index, 26, payload));
-        }
         var sprite = Movie.Tags[tag.Parent];
         if (sprite.Code != 39) throw new InvalidOperationException("the placement parent is not a DefineSprite");
         return InsertSpriteChild(sprite, frame, 26, payload);
@@ -193,6 +208,31 @@ public sealed class SwfDocument : IDisposable
         var result = verb(_history);
         Reopen();
         return result;
+    }
+
+    // Requires the matching rows to name exactly one instance; two instances behind one placement refuse instead of guessing.
+    private (uint Frame, uint InstanceId) RootInstance(Func<SwfFrameInstanceRecord, bool> addresses)
+    {
+        using var frames = Movie.OpenFrames();
+        var rows = Enumerable.Range(0, frames.TimelineAt(0).FrameCount)
+            .SelectMany(frame => frames.Instances(0, frame))
+            .Where(row => row.TimelineId == 0 && addresses(row))
+            .ToArray();
+        if (rows.Length == 0) throw new InvalidOperationException("no root-timeline instance is addressed by that placement");
+        var instances = rows.Select(row => row.InstanceId).Distinct().ToArray();
+        if (instances.Length != 1) throw new InvalidOperationException("the placement addresses more than one instance; refusing to guess");
+        return (rows[0].TimelineFrame, instances[0]);
+    }
+
+    // Requires MATRIX fixed-point fields as unit-one doubles and twips as points, the units the native verbs take.
+    private static SwfTransformRecord ToVerbTransform(SwfPlacementMatrix matrix, SwfPlacementTransformEdit edit)
+    {
+        var scaleX = edit.ScaleX ?? (matrix.HasScale ? matrix.ScaleX : 0x10000);
+        var scaleY = edit.ScaleY ?? (matrix.HasScale ? matrix.ScaleY : 0x10000);
+        var rotate0 = edit.Rotate0 ?? (matrix.HasRotate ? matrix.Rotate0 : 0);
+        var rotate1 = edit.Rotate1 ?? (matrix.HasRotate ? matrix.Rotate1 : 0);
+        return new SwfTransformRecord(scaleX / 65536.0, rotate0 / 65536.0, rotate1 / 65536.0, scaleY / 65536.0,
+            (edit.TranslateX ?? matrix.TranslateX) / 20.0, (edit.TranslateY ?? matrix.TranslateY) / 20.0);
     }
 
     private void Reopen()
