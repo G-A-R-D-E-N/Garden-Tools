@@ -1,5 +1,6 @@
 #include "fo4/c_api.h"
 #include "fo4/c_api_swf.h"
+#include "fo4/c_api_swf_verbs.h"
 #include "abc_test_support.hpp"
 #include "swf_art_fixtures.hpp"
 #include "swf_movie_builder.hpp"
@@ -33,6 +34,12 @@ struct FramesDeleter {
 
 using SwfHandle = std::unique_ptr<radicle_swf, SwfDeleter>;
 using FramesHandle = std::unique_ptr<radicle_swf_frames, FramesDeleter>;
+
+struct HistoryDeleter {
+  void operator()(radicle_swf_history* history) const { radicle_swf_history_destroy(history); }
+};
+
+using HistoryHandle = std::unique_ptr<radicle_swf_history, HistoryDeleter>;
 
 SwfHandle open(const std::vector<std::byte>& bytes) {
   radicle_swf* raw = nullptr;
@@ -380,6 +387,111 @@ TEST(CApiSwfEdit, RejectsAFrameListBuiltBeforeAnEdit) {
   EXPECT_EQ(radicle_swf_frames_instance_count(frames.get(), 0, 0, &count),
             RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_swf_frames_instance_count(after.get(), 0, 0, &count), RADICLE_STATUS_OK);
+}
+
+// Constraint: a sprite timeline must be addressed by its DefineSprite id, never by the root timeline's labels.
+TEST(CApiSwfVerbs, FrameLabelRowsAndPlacementListAddressTheSpriteTimeline) {
+  auto swf = open(sprite_movie());
+  ASSERT_NE(swf, nullptr);
+  radicle_swf_history* raw = nullptr;
+  ASSERT_EQ(radicle_swf_history_create(swf.get(), &raw), RADICLE_STATUS_OK) << radicle_last_error();
+  const HistoryHandle history(raw);
+
+  char** rows = nullptr;
+  std::size_t count = 0;
+  ASSERT_EQ(radicle_swf_frame_label_rows(history.get(), 7, &rows, &count), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  ASSERT_EQ(count, 1u);
+  EXPECT_STREQ(rows[0], "0\t0\tinner");
+  radicle_free_string_array(rows, count);
+
+  ASSERT_EQ(radicle_swf_frame_label_rows(history.get(), 0, &rows, &count), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_EQ(count, 0u);
+  radicle_free_string_array(rows, count);
+
+  std::uint8_t* text = nullptr;
+  std::size_t size = 0;
+  ASSERT_EQ(radicle_swf_placement_list_json(history.get(), 0, &text, &size), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_EQ(std::string(reinterpret_cast<const char*>(text), size),
+            R"([{"tag_index":1,"depth":1,"character_id":7,"matrix":null,"filters":[]}])");
+  radicle_free_bytes(text);
+
+  ASSERT_EQ(radicle_swf_placement_list_json(history.get(), 7, &text, &size), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_EQ(std::string(reinterpret_cast<const char*>(text), size), "[]");
+  radicle_free_bytes(text);
+
+  rows = nullptr;
+  count = 5;
+  EXPECT_EQ(radicle_swf_frame_label_rows(history.get(), 9, &rows, &count),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(rows, nullptr);
+  EXPECT_EQ(count, 0u);
+  EXPECT_STRNE(radicle_last_error(), "");
+}
+
+// Constraint: every verb given a NULL history or NULL required output must zero its outputs before it refuses.
+TEST(CApiSwfVerbs, NullHistoryClearsEveryOutputOfTheSwfVerbs) {
+  radicle_swf_plan_result result{};
+  result.changed = 9;
+  result.revision = 9;
+  EXPECT_EQ(radicle_swf_frame_label_add(nullptr, 0, 0, "x", &result), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(result.changed, 0);
+  EXPECT_EQ(result.revision, 0u);
+  result.changed = 9;
+  EXPECT_EQ(radicle_swf_frame_label_rename(nullptr, 0, 0, "x", &result), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(result.changed, 0);
+  result.changed = 9;
+  EXPECT_EQ(radicle_swf_frame_label_remove(nullptr, 0, 0, &result), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(result.changed, 0);
+
+  const radicle_swf_instance_transform edit{1, {}};
+  result.changed = 9;
+  EXPECT_EQ(radicle_swf_apply_instance_transforms(nullptr, 0, &edit, 1, &result),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(result.changed, 0);
+  EXPECT_EQ(result.revision, 0u);
+
+  std::uint32_t instance = 77;
+  result.changed = 9;
+  EXPECT_EQ(radicle_swf_reassign_instance_depth(nullptr, 0, 1, 2, &instance, &result),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(instance, 0u);
+  EXPECT_EQ(result.changed, 0);
+  result.changed = 9;
+  EXPECT_EQ(radicle_swf_insert_instance_transform_keyframe(nullptr, 0, 1, nullptr, &result),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(result.changed, 0);
+
+  const radicle_swf_edit_text_fields fields{};
+  result.changed = 9;
+  EXPECT_EQ(radicle_swf_edit_text_apply(nullptr, 0, &fields, &result), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(result.changed, 0);
+  EXPECT_EQ(result.revision, 0u);
+
+  std::uint8_t byte = 0;
+  radicle_swf_edit_text_info info{};
+  info.character_id = 9;
+  std::uint8_t* text = &byte;
+  std::size_t size = 7;
+  EXPECT_EQ(radicle_swf_edit_text_read(nullptr, 0, &info, &text, &size), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(info.character_id, 0);
+  EXPECT_EQ(text, nullptr);
+  EXPECT_EQ(size, 0u);
+
+  text = &byte;
+  size = 7;
+  EXPECT_EQ(radicle_swf_placement_list_json(nullptr, 0, &text, &size), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(text, nullptr);
+  EXPECT_EQ(size, 0u);
+
+  char** rows = reinterpret_cast<char**>(&byte);
+  size = 7;
+  EXPECT_EQ(radicle_swf_frame_label_rows(nullptr, 0, &rows, &size), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(rows, nullptr);
+  EXPECT_EQ(size, 0u);
 }
 
 namespace {

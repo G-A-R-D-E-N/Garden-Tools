@@ -26,6 +26,7 @@
 #include "fo4/c_api_dds.h"
 #include "fo4/c_api_terrain.h"
 #include "fo4/c_api_swf.h"
+#include "fo4/c_api_swf_verbs.h"
 #include "fo4/c_api_pex_analysis.h"
 #include "fo4/c_api_script_set.h"
 #include "fo4/c_api_papyrus.h"
@@ -1681,6 +1682,22 @@ int main() {
   printf("SwfCharacter.Name %zu\n", offsetof(radicle_swf_character, name));
   printf("SwfCharacter.ImportedFrom %zu\n", offsetof(radicle_swf_character, imported_from));
   printf("SwfCharacter.ImportedName %zu\n", offsetof(radicle_swf_character, imported_name));
+  printf("SwfEditTextInfo %zu\n", sizeof(radicle_swf_edit_text_info));
+  printf("SwfEditTextInfo.CharacterId %zu\n", offsetof(radicle_swf_edit_text_info, character_id));
+  printf("SwfEditTextInfo.Bounds %zu\n", offsetof(radicle_swf_edit_text_info, bounds));
+  printf("SwfEditTextInfo.HasColor %zu\n", offsetof(radicle_swf_edit_text_info, has_color));
+  printf("SwfEditTextInfo.Color %zu\n", offsetof(radicle_swf_edit_text_info, color));
+  printf("SwfEditTextFields %zu\n", sizeof(radicle_swf_edit_text_fields));
+  printf("SwfEditTextFields.HasText %zu\n", offsetof(radicle_swf_edit_text_fields, has_text));
+  printf("SwfEditTextFields.Text %zu\n", offsetof(radicle_swf_edit_text_fields, text));
+  printf("SwfEditTextFields.TextSize %zu\n", offsetof(radicle_swf_edit_text_fields, text_size));
+  printf("SwfEditTextFields.HasColor %zu\n", offsetof(radicle_swf_edit_text_fields, has_color));
+  printf("SwfEditTextFields.Color %zu\n", offsetof(radicle_swf_edit_text_fields, color));
+  printf("SwfEditTextFields.HasBounds %zu\n", offsetof(radicle_swf_edit_text_fields, has_bounds));
+  printf("SwfEditTextFields.Bounds %zu\n", offsetof(radicle_swf_edit_text_fields, bounds));
+  printf("SwfInstanceTransform %zu\n", sizeof(radicle_swf_instance_transform));
+  printf("SwfInstanceTransform.InstanceId %zu\n", offsetof(radicle_swf_instance_transform, instance_id));
+  printf("SwfInstanceTransform.Transform %zu\n", offsetof(radicle_swf_instance_transform, transform));
   printf("PexCallSite %zu\n", sizeof(radicle_pex_call_site));
   printf("PexCallSite.CallerFile %zu\n", offsetof(radicle_pex_call_site, caller_file));
   printf("PexCallSite.CallerObject %zu\n", offsetof(radicle_pex_call_site, caller_object));

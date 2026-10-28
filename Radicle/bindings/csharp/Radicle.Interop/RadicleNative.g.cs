@@ -2560,6 +2560,34 @@ public unsafe struct SwfCharacter
     public IntPtr ImportedName;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfEditTextInfo
+{
+    public ushort CharacterId;
+    public SwfRect Bounds;
+    public byte HasColor;
+    public uint Color;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfEditTextFields
+{
+    public byte HasText;
+    public IntPtr Text;
+    public nuint TextSize;
+    public byte HasColor;
+    public uint Color;
+    public byte HasBounds;
+    public SwfRect Bounds;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfInstanceTransform
+{
+    public uint InstanceId;
+    public SwfTransform Transform;
+}
+
 public enum PexOperandRole : int
 {
     None = 0,
@@ -2885,7 +2913,7 @@ public unsafe struct PapyrusCompileOptions
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 78u;
+    public const uint CompiledAbiVersion = 79u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -4203,6 +4231,36 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_history_write_bytes")]
     public static extern Status SwfHistoryWriteBytes(IntPtr history, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_edit_text_read")]
+    public static extern Status SwfEditTextRead(IntPtr history, nuint tag_index, SwfEditTextInfo* out_info, byte** out_text, nuint* out_text_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_edit_text_apply")]
+    public static extern Status SwfEditTextApply(IntPtr history, nuint tag_index, SwfEditTextFields* fields, SwfPlanResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_frame_label_rows")]
+    public static extern Status SwfFrameLabelRows(IntPtr history, ushort timeline_id, IntPtr** out_rows, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_frame_label_add")]
+    public static extern Status SwfFrameLabelAdd(IntPtr history, ushort timeline_id, uint frame, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, SwfPlanResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_frame_label_rename")]
+    public static extern Status SwfFrameLabelRename(IntPtr history, ushort timeline_id, nuint label_index, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, SwfPlanResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_frame_label_remove")]
+    public static extern Status SwfFrameLabelRemove(IntPtr history, ushort timeline_id, nuint label_index, SwfPlanResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_placement_list_json")]
+    public static extern Status SwfPlacementListJson(IntPtr history, ushort timeline_id, byte** out_text, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_apply_instance_transforms")]
+    public static extern Status SwfApplyInstanceTransforms(IntPtr history, uint root_frame, SwfInstanceTransform* edits, nuint edit_count, SwfPlanResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_reassign_instance_depth")]
+    public static extern Status SwfReassignInstanceDepth(IntPtr history, uint root_frame, uint instance_id, ushort destination_depth, uint* out_instance_id, SwfPlanResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_insert_instance_transform_keyframe")]
+    public static extern Status SwfInsertInstanceTransformKeyframe(IntPtr history, uint root_frame, uint instance_id, SwfTransform* transform, SwfPlanResult* out_result);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_call_operand_role")]
     public static extern PexOperandRole PexCallOperandRole(byte opcode, nuint index);
