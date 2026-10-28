@@ -24,8 +24,13 @@ constexpr std::uint8_t kStop = 0x07;
 constexpr std::uint8_t kGotoFrame = 0x81;
 constexpr std::uint8_t kGotoFrame2 = 0x9F;
 
-constexpr std::array<std::uint8_t, 9> kUnmodelledFlow{0x8A, 0x8B, 0x8D, 0x8E, 0x8F,
-                                                      0x94, 0x99, 0x9B, 0x9D};
+constexpr std::array<std::uint8_t, 10> kUnmodelledFlow{0x20, 0x8A, 0x8B, 0x8D, 0x8E,
+                                                       0x8F, 0x94, 0x99, 0x9B, 0x9D};
+
+struct Cursor {
+  std::uint32_t frame{0};
+  bool playing{true};
+};
 
 bool has_unmodelled_flow(const std::vector<avm1::Avm1Action>& actions) {
   return std::any_of(actions.begin(), actions.end(), [](const avm1::Avm1Action& action) {
@@ -47,8 +52,8 @@ std::optional<double> number_of(const avm1::Avm1Value& value) {
   }
 }
 
-std::optional<std::uint32_t> frame_index(double value) {
-  if (!(value >= 0.0 && value <= 65535.0 && std::floor(value) == value)) {
+std::optional<std::uint32_t> frame_number(double value) {
+  if (!(value >= 1.0 && value <= 4294967295.0 && std::floor(value) == value)) {
     return std::nullopt;
   }
   return static_cast<std::uint32_t>(value);
@@ -73,7 +78,7 @@ void append_controls(const std::vector<avm1::Avm1Action>& actions, std::vector<F
       case kGotoFrame:
         if (const auto* jump = std::get_if<avm1::Avm1Frame>(&action.payload)) {
           out.push_back({FrameControlKind::go_to, jump->frame});
-          out.push_back({FrameControlKind::play, 0});
+          out.push_back({FrameControlKind::stop, 0});
         }
         break;
       case kGotoFrame2: {
@@ -85,11 +90,11 @@ void append_controls(const std::vector<avm1::Avm1Action>& actions, std::vector<F
           break;
         }
         const auto number = number_of(push->values.back());
-        const auto frame = number ? frame_index(*number) : std::nullopt;
+        const auto frame = number ? frame_number(*number) : std::nullopt;
         if (!frame) {
           break;
         }
-        out.push_back({FrameControlKind::go_to, *frame});
+        out.push_back({FrameControlKind::go_to, *frame - 1});
         out.push_back({(jump->flags & 1) != 0 ? FrameControlKind::play : FrameControlKind::stop, 0});
         break;
       }
@@ -100,43 +105,55 @@ void append_controls(const std::vector<avm1::Avm1Action>& actions, std::vector<F
   }
 }
 
-void land(const FrameControls& controls, std::uint32_t tick, std::uint32_t target, Playhead& head,
-          bool& playing) {
+void enter(Playhead& head, std::uint32_t from, std::uint32_t to, std::uint32_t tick) {
+  const std::uint32_t first = to > from ? from + 1 : to;
+  for (std::uint32_t frame = first; frame <= to; ++frame) {
+    head.entries[frame].push_back(tick);
+  }
+}
+
+bool land(const FrameControls& controls, std::uint32_t tick, std::uint32_t target, Cursor& cursor,
+          Playhead& head) {
   const auto count = static_cast<std::uint32_t>(controls.size());
+  bool moved = false;
   for (std::size_t hop = 0; hop <= controls.size(); ++hop) {
-    if (target != head.frame) {
-      head.frame = target;
-      head.entered[target] = tick;
+    if (target != cursor.frame) {
+      enter(head, cursor.frame, target, tick);
+      cursor.frame = target;
+      moved = true;
     }
     std::optional<std::uint32_t> jump;
-    for (const FrameControl& control : controls[head.frame]) {
+    for (const FrameControl& control : controls[cursor.frame]) {
       switch (control.kind) {
         case FrameControlKind::stop:
-          playing = false;
+          cursor.playing = false;
           break;
         case FrameControlKind::play:
-          playing = true;
+          cursor.playing = true;
           break;
         case FrameControlKind::go_to:
-          if (control.frame < count) {
-            jump = control.frame;
-          }
+          jump = std::min(control.frame, count - 1);
           break;
         case FrameControlKind::next:
-          jump = (head.frame + 1) % count;
-          playing = false;
+          if (cursor.frame + 1 < count) {
+            jump = cursor.frame + 1;
+            cursor.playing = false;
+          }
           break;
         case FrameControlKind::previous:
-          jump = (head.frame + count - 1) % count;
-          playing = false;
+          if (cursor.frame > 0) {
+            jump = cursor.frame - 1;
+            cursor.playing = false;
+          }
           break;
       }
     }
     if (!jump) {
-      return;
+      return moved;
     }
     target = *jump;
   }
+  return moved;
 }
 
 }  // namespace
@@ -164,22 +181,25 @@ FrameControls collect_frame_controls(const std::vector<SwfTag>& tags) {
   if (frames.empty()) {
     frames.emplace_back();
   }
-  if (std::all_of(frames.begin(), frames.end(),
-                  [](const std::vector<FrameControl>& frame) { return frame.empty(); })) {
-    return {};
-  }
   return frames;
 }
 
-Playhead simulate_playhead(const FrameControls& controls, std::uint32_t age) {
-  Playhead head;
-  head.entered.assign(controls.size(), 0);
-  bool playing = true;
-  land(controls, 0, 0, head, playing);
+Playhead simulate_playhead(const FrameControls& controls, std::uint32_t ticks) {
   const auto count = static_cast<std::uint32_t>(controls.size());
-  for (std::uint32_t tick = 1; tick <= age; ++tick) {
-    if (playing) {
-      land(controls, tick, (head.frame + 1) % count, head, playing);
+  Playhead head;
+  head.entries.resize(count);
+  head.frame_at.reserve(ticks);
+  head.entries[0].push_back(0);
+  Cursor cursor;
+  land(controls, 0, 0, cursor, head);
+  head.frame_at.push_back(cursor.frame);
+  for (std::uint32_t tick = 1; tick < ticks; ++tick) {
+    const bool was_playing = cursor.playing;
+    const bool moved = was_playing && land(controls, tick, (cursor.frame + 1) % count, cursor, head);
+    head.frame_at.push_back(cursor.frame);
+    if (!moved && cursor.playing == was_playing) {
+      head.frame_at.resize(ticks, cursor.frame);
+      break;
     }
   }
   return head;

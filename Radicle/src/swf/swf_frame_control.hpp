@@ -17,12 +17,12 @@ struct FrameControl {
 using FrameControls = std::vector<std::vector<FrameControl>>;
 
 struct Playhead {
-  std::uint32_t frame{0};
-  std::vector<std::uint32_t> entered;
+  std::vector<std::uint32_t> frame_at;
+  std::vector<std::vector<std::uint32_t>> entries;
 };
 
 FrameControls collect_frame_controls(const std::vector<SwfTag>& tags);
 
-Playhead simulate_playhead(const FrameControls& controls, std::uint32_t age);
+Playhead simulate_playhead(const FrameControls& controls, std::uint32_t ticks);
 
 }  // namespace fo4::swf::detail

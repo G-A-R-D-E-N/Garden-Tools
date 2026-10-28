@@ -79,10 +79,21 @@ std::vector<std::byte> script(std::vector<std::uint8_t> records) {
   return out;
 }
 
-SwfDisplayList display_of(const std::vector<std::byte>& bytes) {
+std::vector<std::uint8_t> goto_frame2(std::uint8_t number, std::uint8_t flags) {
+  return {0x96, 0x05, 0x00, 0x07, number, 0x00, 0x00, 0x00, 0x9F, 0x01, 0x00, flags};
+}
+
+fo4::swf::SwfDisplayOptions controlled_options() {
+  fo4::swf::SwfDisplayOptions options;
+  options.apply_frame_control = true;
+  return options;
+}
+
+SwfDisplayList display_of(const std::vector<std::byte>& bytes,
+                          const fo4::swf::SwfDisplayOptions& options = controlled_options()) {
   const auto result = fo4::swf::read_swf(bytes);
   EXPECT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
-  return fo4::swf::build_display_list(result.file);
+  return fo4::swf::build_display_list(result.file, options);
 }
 
 std::vector<std::uint32_t> frames_of_row(const SwfDisplayTimeline& timeline, std::string_view path) {
@@ -126,11 +137,33 @@ TEST(SwfFrameControl, GotoFrameJumpsBackAndKeepsPlaying) {
   const auto display = display_of(clip_movie({
       {{26, place_named(1, 5, "Cell")}},
       {},
-      {{12, script({0x81, 0x02, 0x00, 0x00, 0x00})}},
+      {{12, script({0x81, 0x02, 0x00, 0x00, 0x00, 0x06})}},
   }));
   ASSERT_EQ(display.status, SwfTimelineStatus::ok) << display.message;
   EXPECT_EQ(frames_of_row(display.timelines[0], "Art/Cell"),
             (std::vector<std::uint32_t>{0, 1, 0, 1, 0}));
+}
+
+TEST(SwfFrameControl, BareGotoFrameStopsAtItsTarget) {
+  const auto display = display_of(clip_movie({
+      {{26, place_named(1, 5, "Cell")}},
+      {},
+      {{12, script({0x81, 0x02, 0x00, 0x00, 0x00})}},
+  }));
+  ASSERT_EQ(display.status, SwfTimelineStatus::ok) << display.message;
+  EXPECT_EQ(frames_of_row(display.timelines[0], "Art/Cell"),
+            (std::vector<std::uint32_t>{0, 1, 0, 0, 0}));
+}
+
+TEST(SwfFrameControl, GotoLoopEndsAtTheHopCap) {
+  const auto display = display_of(clip_movie({
+      {{26, place_named(1, 5, "Cell")}},
+      {{12, script({0x81, 0x02, 0x00, 0x02, 0x00, 0x06})}},
+      {{12, script({0x81, 0x02, 0x00, 0x01, 0x00, 0x06})}},
+  }));
+  ASSERT_EQ(display.status, SwfTimelineStatus::ok) << display.message;
+  EXPECT_EQ(frames_of_row(display.timelines[0], "Art/Cell"),
+            (std::vector<std::uint32_t>{0, 2, 0, 2, 0}));
 }
 
 TEST(SwfFrameControl, StopThenPlayOnTheSameFrameResumesThePlayhead) {
@@ -145,29 +178,43 @@ TEST(SwfFrameControl, StopThenPlayOnTheSameFrameResumesThePlayhead) {
 }
 
 TEST(SwfFrameControl, GotoFrame2TakesItsFrameFromThePrecedingPush) {
-  const std::vector<std::uint8_t> push_two{0x96, 0x05, 0x00, 0x07, 0x02, 0x00, 0x00, 0x00};
-  auto stop_records = push_two;
-  stop_records.insert(stop_records.end(), {0x9F, 0x01, 0x00, 0x00});
-  auto play_records = push_two;
-  play_records.insert(play_records.end(), {0x9F, 0x01, 0x00, 0x01});
-
   const auto stopped = display_of(clip_movie({
       {{26, place_named(1, 5, "Cell")}},
-      {{12, script(stop_records)}},
+      {{12, script(goto_frame2(2, 0))}},
       {},
   }));
   ASSERT_EQ(stopped.status, SwfTimelineStatus::ok) << stopped.message;
   EXPECT_EQ(frames_of_row(stopped.timelines[0], "Art/Cell"),
-            (std::vector<std::uint32_t>{0, 2, 2, 2, 2}));
+            (std::vector<std::uint32_t>{0, 1, 1, 1, 1}));
 
   const auto playing = display_of(clip_movie({
       {{26, place_named(1, 5, "Cell")}},
-      {{12, script(play_records)}},
+      {{12, script(goto_frame2(3, 1))}},
       {},
   }));
   ASSERT_EQ(playing.status, SwfTimelineStatus::ok) << playing.message;
   EXPECT_EQ(frames_of_row(playing.timelines[0], "Art/Cell"),
             (std::vector<std::uint32_t>{0, 2, 0, 2, 0}));
+}
+
+TEST(SwfFrameControl, GotoFrame2ZeroIsNoOpAndAboveTheLastFrameClamps) {
+  const auto zero = display_of(clip_movie({
+      {{26, place_named(1, 5, "Cell")}},
+      {{12, script(goto_frame2(0, 0))}},
+      {},
+  }));
+  ASSERT_EQ(zero.status, SwfTimelineStatus::ok) << zero.message;
+  EXPECT_EQ(frames_of_row(zero.timelines[0], "Art/Cell"),
+            (std::vector<std::uint32_t>{0, 1, 2, 0, 1}));
+
+  const auto clamped = display_of(clip_movie({
+      {{26, place_named(1, 5, "Cell")}},
+      {{12, script(goto_frame2(9, 0))}},
+      {},
+  }));
+  ASSERT_EQ(clamped.status, SwfTimelineStatus::ok) << clamped.message;
+  EXPECT_EQ(frames_of_row(clamped.timelines[0], "Art/Cell"),
+            (std::vector<std::uint32_t>{0, 2, 2, 2, 2}));
 }
 
 TEST(SwfFrameControl, NextAndPreviousFrameStepOnceAndStop) {
@@ -190,17 +237,105 @@ TEST(SwfFrameControl, NextAndPreviousFrameStepOnceAndStop) {
             (std::vector<std::uint32_t>{0, 1, 1, 1, 1}));
 }
 
-TEST(SwfFrameControl, StopOnTheRootTimelineHoldsTheRootFrame) {
+TEST(SwfFrameControl, NextAndPreviousAtTheEndsAreNoOps) {
+  const auto display = display_of(clip_movie({
+      {{26, place_named(1, 5, "Cell")}, {12, script({0x05})}},
+      {},
+      {{12, script({0x04})}},
+  }));
+  ASSERT_EQ(display.status, SwfTimelineStatus::ok) << display.message;
+  EXPECT_EQ(frames_of_row(display.timelines[0], "Art/Cell"),
+            (std::vector<std::uint32_t>{0, 1, 2, 0, 1}));
+}
+
+TEST(SwfFrameControl, AStopAfterSetTarget2IsNotAppliedToTheClip) {
+  const auto display = display_of(clip_movie({
+      {{26, place_named(1, 5, "Cell")}},
+      {{12, script({0x20, 0x07})}},
+      {},
+  }));
+  ASSERT_EQ(display.status, SwfTimelineStatus::ok) << display.message;
+  EXPECT_EQ(frames_of_row(display.timelines[0], "Art/Cell"),
+            (std::vector<std::uint32_t>{0, 1, 2, 0, 1}));
+}
+
+TEST(SwfFrameControl, ChildCreatedAfterAStopAgesFromItsFrameEntry) {
+  const auto leaf = sprite_tag(8, 2, with_show_frames({
+                                         {{26, place_named(1, 5, "Leaf")}},
+                                         {},
+                                     }));
+  const auto clip = sprite_tag(9, 3, with_show_frames({
+                                         {},
+                                         {{26, place_named(1, 8, "Cell")}, {12, script({0x07})}},
+                                         {},
+                                     }));
   const auto display = display_of(movie_of(5, with_show_frames({
-                                                  {{26, place_named(1, 5, "Marker")}},
-                                                  {{12, script({0x07})}},
+                                                  {{39, leaf}, {39, clip},
+                                                   {26, place_named(1, 9, "Art")}},
+                                                  {},
                                                   {},
                                                   {},
                                                   {},
                                               })));
   ASSERT_EQ(display.status, SwfTimelineStatus::ok) << display.message;
+  EXPECT_EQ(frames_of_row(display.timelines[0], "Art/Cell"),
+            (std::vector<std::uint32_t>{kMissing, 1, 1, 1, 1}));
+  EXPECT_EQ(frames_of_row(display.timelines[0], "Art/Cell/Leaf"),
+            (std::vector<std::uint32_t>{kMissing, 0, 1, 0, 1}));
+}
+
+TEST(SwfFrameControl, SkippedFrameChildAgesFromTheLandingTick) {
+  const auto leaf = sprite_tag(8, 2, with_show_frames({
+                                         {{26, place_named(1, 5, "Leaf")}},
+                                         {},
+                                     }));
+  const auto clip = sprite_tag(9, 4, with_show_frames({
+                                         {},
+                                         {{12, script({0x81, 0x02, 0x00, 0x03, 0x00, 0x07})}},
+                                         {{26, place_named(1, 8, "Cell")}},
+                                         {},
+                                     }));
+  const auto display = display_of(movie_of(5, with_show_frames({
+                                                  {{39, leaf}, {39, clip},
+                                                   {26, place_named(1, 9, "Art")}},
+                                                  {},
+                                                  {},
+                                                  {},
+                                                  {},
+                                              })));
+  ASSERT_EQ(display.status, SwfTimelineStatus::ok) << display.message;
+  EXPECT_EQ(frames_of_row(display.timelines[0], "Art/Cell"),
+            (std::vector<std::uint32_t>{kMissing, 3, 3, 3, 3}));
+  EXPECT_EQ(frames_of_row(display.timelines[0], "Art/Cell/Leaf"),
+            (std::vector<std::uint32_t>{kMissing, 0, 1, 0, 1}));
+}
+
+std::vector<std::byte> root_stop_movie() {
+  return movie_of(5, with_show_frames({
+                         {{26, place_named(1, 5, "Marker")}},
+                         {{12, script({0x07})}},
+                         {},
+                         {{26, place_named(2, 6, "Late")}},
+                         {},
+                     }));
+}
+
+TEST(SwfFrameControl, StopOnTheRootTimelineHoldsTheRootFrame) {
+  const auto display = display_of(root_stop_movie());
+  ASSERT_EQ(display.status, SwfTimelineStatus::ok) << display.message;
   EXPECT_EQ(frames_of_row(display.timelines[0], "Marker"),
             (std::vector<std::uint32_t>{0, 1, 1, 1, 1}));
+  EXPECT_EQ(frames_of_row(display.timelines[0], "Late"),
+            (std::vector<std::uint32_t>{kMissing, kMissing, kMissing, kMissing, kMissing}));
+}
+
+TEST(SwfFrameControl, ByDefaultTheRootTimelineKeepsItsAuthoredFrames) {
+  const auto display = display_of(root_stop_movie(), fo4::swf::SwfDisplayOptions{});
+  ASSERT_EQ(display.status, SwfTimelineStatus::ok) << display.message;
+  EXPECT_EQ(frames_of_row(display.timelines[0], "Marker"),
+            (std::vector<std::uint32_t>{0, 1, 2, 3, 4}));
+  EXPECT_EQ(frames_of_row(display.timelines[0], "Late"),
+            (std::vector<std::uint32_t>{kMissing, kMissing, kMissing, 3, 4}));
 }
 
 TEST(SwfFrameControl, StoppedClipKeepsItsNestedClipPlaying) {

@@ -50,7 +50,7 @@ struct LocalTimeline {
   bool is_sprite{false};
   std::size_t sprite_tag_index{0};
   std::vector<LocalState> frames;
-  detail::FrameControls controls;
+  detail::Playhead playhead;
 };
 
 bool collect_operations(const std::vector<SwfTag>& tags, std::vector<std::vector<Operation>>& frames,
@@ -225,20 +225,19 @@ std::optional<SwfColorTransform> compose_color(const std::optional<SwfColorTrans
   return out;
 }
 
+detail::FrameControls controls_for(const std::vector<SwfTag>& tags, std::size_t frames,
+                                   bool apply) {
+  return apply ? detail::collect_frame_controls(tags) : detail::FrameControls(frames);
+}
+
 std::uint32_t displayed_frame(const LocalTimeline& timeline, std::uint32_t age) {
-  if (!timeline.controls.empty()) {
-    return detail::simulate_playhead(timeline.controls, age).frame;
-  }
-  const auto count = static_cast<std::uint32_t>(timeline.frames.size());
-  return count <= 1 ? 0 : age % count;
+  return timeline.playhead.frame_at[age];
 }
 
 std::uint32_t entry_age(const LocalTimeline& timeline, std::uint32_t age, std::uint32_t frame) {
-  if (!timeline.controls.empty()) {
-    return detail::simulate_playhead(timeline.controls, age).entered[frame];
-  }
-  const auto count = static_cast<std::uint32_t>(timeline.frames.size());
-  return count <= 1 ? frame : age - age % count + frame;
+  const auto& entries = timeline.playhead.entries[frame];
+  const auto after = std::upper_bound(entries.begin(), entries.end(), age);
+  return after == entries.begin() ? 0 : *(after - 1);
 }
 
 class Expander {
@@ -379,12 +378,14 @@ SwfDisplayList build_display_list(const SwfFile& file, const SwfDisplayOptions& 
     if (!collect_operations(tag.children, frames, out.message)) {
       return out;
     }
+    detail::FrameControls controls =
+        controls_for(tag.children, frames.size(), options.apply_frame_control);
     if (!sprite_operations.emplace(*tag.sprite_id, std::move(frames)).second) {
       out.message = "duplicate sprite definition";
       return out;
     }
     sprite_tag_indices.emplace(*tag.sprite_id, tag_index);
-    sprite_controls.emplace(*tag.sprite_id, detail::collect_frame_controls(tag.children));
+    sprite_controls.emplace(*tag.sprite_id, std::move(controls));
   }
 
   std::vector<std::vector<Operation>> root_operations;
@@ -395,7 +396,12 @@ SwfDisplayList build_display_list(const SwfFile& file, const SwfDisplayOptions& 
   if (!replay(root_operations, 0, root, out.message)) {
     return out;
   }
-  root.controls = detail::collect_frame_controls(file.tags);
+  std::uint32_t ticks = static_cast<std::uint32_t>(root.frames.size());
+  for (const auto& entry : sprite_operations) {
+    ticks = std::max(ticks, static_cast<std::uint32_t>(entry.second.size()));
+  }
+  root.playhead = detail::simulate_playhead(
+      controls_for(file.tags, root.frames.size(), options.apply_frame_control), ticks);
   std::map<std::uint16_t, LocalTimeline> sprites;
   for (const auto& entry : sprite_operations) {
     LocalTimeline timeline;
@@ -403,7 +409,7 @@ SwfDisplayList build_display_list(const SwfFile& file, const SwfDisplayOptions& 
       return out;
     }
     timeline.is_sprite = true;
-    timeline.controls = std::move(sprite_controls.at(entry.first));
+    timeline.playhead = detail::simulate_playhead(sprite_controls.at(entry.first), ticks);
     timeline.sprite_tag_index = sprite_tag_indices.at(entry.first);
     sprites.emplace(entry.first, std::move(timeline));
   }
