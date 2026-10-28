@@ -337,26 +337,6 @@ TEST_CASE("CellTarget geometry batch records a worker exception instead of termi
     }
 }
 
-TEST_CASE("NifTarget Tree reports a missing niftool as JSON the panel can show") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto nif = root / "sample.nif";
-    touch(nif);
-
-    FakeRunner runner;
-    FakePlatform platform;
-    fo4ide::assets::NifService service(runner, std::filesystem::path{});
-    fo4ide::assets::TextureResolver textures;
-    fo4ide::app::NifTarget target(service, textures, platform);
-
-    auto result = target.invoke("Tree", nlohmann::json::array({nif.string()}));
-    REQUIRE(result.has_value());
-
-    const auto parsed = nlohmann::json::parse(result->get<std::string>());
-    CHECK(parsed.at("error").get<std::string>().find("niftool not installed; authoring needs it") != std::string::npos);
-    CHECK(runner.calls == 0);
-}
-
 TEST_CASE("NifTarget Geo reports a parse failure as JSON the panel can show") {
     const auto root = tempRoot();
     Cleanup cleanup{root};

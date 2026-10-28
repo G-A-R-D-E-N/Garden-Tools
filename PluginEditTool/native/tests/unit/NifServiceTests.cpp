@@ -307,6 +307,7 @@ TEST_CASE("NifService tree maps nodes and shape slots onto the editor contract i
     CHECK(shape.at("id") == 1);
     CHECK(shape.at("type") == "BSTriShape");
     CHECK(shape.at("group") == "Shapes");
+    CHECK(treeValue(shape, "translation") == nlohmann::json::array({0.25, 0.0, 0.0}));
     CHECK(treeValue(shape, "verts") == 3);
     CHECK(treeValue(shape, "material") == "Materials\\Clutter\\Thing.BGSM");
     CHECK(treeValue(shape, "tex0") == "Textures\\Thing_d.dds");
@@ -345,7 +346,7 @@ TEST_CASE("NifService verify reports a readable FO4 NIF in-process") {
     auto result = service.verify(nif);
 
     REQUIRE(result.has_value());
-    CHECK(result->starts_with("RESULT: 9 checks, 0 failed\n[ok] header parses\n"));
+    CHECK(result->starts_with("RESULT: 8 checks, 0 failed\n[ok] header parses\n"));
     CHECK(result->find("[FAIL]") == std::string::npos);
     CHECK(runner.calls == 0);
 }
@@ -379,7 +380,7 @@ TEST_CASE("NifService verify flags a drive-letter texture path") {
     auto result = service.verify(nif);
 
     REQUIRE(result.has_value());
-    CHECK(result->starts_with("RESULT: 9 checks, 1 failed\n"));
+    CHECK(result->starts_with("RESULT: 8 checks, 1 failed\n"));
     CHECK(result->find("[FAIL] texture paths are relative: shape 'Tri' (block 1) texture 'C:\\Art\\Thing_d.dds' "
                        "is a drive-letter path") != std::string::npos);
 }
@@ -400,7 +401,7 @@ TEST_CASE("NifService verify flags a child that two nodes both list") {
     auto result = service.verify(nif);
 
     REQUIRE(result.has_value());
-    CHECK(result->starts_with("RESULT: 9 checks, 1 failed\n"));
-    CHECK(result->find("[FAIL] node children point back to their parent: block 1 is listed under node 2 "
+    CHECK(result->starts_with("RESULT: 8 checks, 1 failed\n"));
+    CHECK(result->find("[FAIL] each block is listed under one parent only: block 1 is listed under node 2 "
                        "but its parent is 0") != std::string::npos);
 }

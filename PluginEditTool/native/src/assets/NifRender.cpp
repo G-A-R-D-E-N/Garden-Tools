@@ -150,7 +150,7 @@ std::vector<VerifyCheck> verifyChecks(const fo4::nif::NifFile& nif) {
                    " but its parent is " + std::to_string(nif.parent(child));
         }
     }
-    checks.push_back({"node children point back to their parent", link});
+    checks.push_back({"each block is listed under one parent only", link});
 
     std::vector<fo4::nif::Shape> shapes;
     try {
@@ -178,10 +178,6 @@ std::vector<VerifyCheck> verifyChecks(const fo4::nif::NifFile& nif) {
     }));
     checks.push_back(shapeCheck("shader and skin reads are clean", shapes, [](const fo4::nif::Shape& shape) -> std::string {
         if (!shape.warning.empty()) return "reported: " + shape.warning;
-        return {};
-    }));
-    checks.push_back(shapeCheck("skinned shapes have bones", shapes, [](const fo4::nif::Shape& shape) -> std::string {
-        if (shape.skin_ref >= 0 && shape.bones.empty()) return "is skinned but its skin lists no bones";
         return {};
     }));
     checks.push_back(shapeCheck("texture paths are relative", shapes, [](const fo4::nif::Shape& shape) -> std::string {

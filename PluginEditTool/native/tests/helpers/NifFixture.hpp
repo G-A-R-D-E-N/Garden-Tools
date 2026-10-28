@@ -24,13 +24,13 @@ inline void putText(std::vector<std::byte>& out, std::string_view text) {
     for (const char ch : text) out.push_back(static_cast<std::byte>(ch));
 }
 
-inline std::vector<std::byte> triangleShapeBlock(std::uint32_t shader) {
+inline std::vector<std::byte> triangleShapeBlock(std::uint32_t shader, float translationX = 0.0f) {
     std::vector<std::byte> out;
     putUint(out, 0, 4);
     putUint(out, 0, 4);
     putUint(out, 0xFFFFFFFFU, 4);
     putUint(out, 0, 4);
-    for (const float value : {0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f}) {
+    for (const float value : {translationX, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f}) {
         putFloat(out, value);
     }
     putUint(out, 0xFFFFFFFFU, 4);
@@ -150,7 +150,7 @@ inline std::vector<std::byte> materialNif(const std::string& material) {
 inline std::vector<std::byte> treeNif(const std::string& material, const std::vector<std::string>& textures) {
     const std::vector<FixtureBlock> blocks{
         {"NiNode", nodeBlock(2U, 0.5f, {1U})},
-        {"BSTriShape", triangleShapeBlock(2U)},
+        {"BSTriShape", triangleShapeBlock(2U, 0.25f)},
         {"BSLightingShaderProperty", shaderBlock(1U, 3U)},
         {"BSShaderTextureSet", texturedSetBlock(textures)},
     };
