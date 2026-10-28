@@ -102,5 +102,7 @@ void rebuild_views(radicle_swf& swf);
 
 /* Invariant: the buffer carries a trailing NUL that *out_size does not count; nullptr means malloc failed and *out_size is untouched. */
 std::uint8_t* copy_text(const std::string& text, std::size_t* out_size);
+// Constraint: a flat index from radicle_swf_tag_at must map to the top-level position a plan holds.
+bool top_level_position(const fo4::swf::SwfFile& file, std::size_t flat, std::size_t& out);
 
 }  // namespace radicle_swf_detail
