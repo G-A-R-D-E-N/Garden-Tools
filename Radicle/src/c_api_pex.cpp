@@ -1,9 +1,12 @@
 #include "fo4/c_api_pex.h"
 
 #include "c_api_internal.hpp"
+#include "c_api_pex_internal.hpp"
 #include "fo4/pex/pex.hpp"
+#include "fo4/pex_analysis/opcodes.hpp"
 #include "fo4/pex_analysis/script_set.hpp"
 
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
@@ -14,12 +17,8 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
-
-struct radicle_pex {
-  fo4::pex::PexFile value;
-  std::unordered_map<std::string, size_t> strings;
-};
 
 namespace {
 
@@ -451,6 +450,30 @@ void radicle_pex_free_object_code(radicle_pex_object_code* code) {
   *code = radicle_pex_object_code{};
 }
 
+radicle_status radicle_pex_opcode_name(uint8_t opcode, uint8_t** out_bytes, size_t* out_size) {
+  clear_error();
+  if (!out_bytes || !out_size) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_bytes and out_size are required");
+  }
+  *out_bytes = nullptr;
+  *out_size = 0;
+  if (opcode > static_cast<uint8_t>(fo4::pex_analysis::PexOp::ArrayClear)) {
+    char message[64];
+    std::snprintf(message, sizeof(message), "opcode %u is outside the 0..46 name table",
+                  static_cast<unsigned>(opcode));
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, message);
+  }
+  try {
+    return copy_bytes(fo4::pex_analysis::pex_op_name(opcode), out_bytes, out_size);
+  } catch (const std::bad_alloc& error) {
+    return fail_exception(RADICLE_STATUS_OUT_OF_MEMORY, error);
+  } catch (const std::exception& error) {
+    return fail_exception(RADICLE_STATUS_INTERNAL_ERROR, error);
+  } catch (...) {
+    return fail(RADICLE_STATUS_INTERNAL_ERROR, "unknown exception while reading an opcode name");
+  }
+}
+
 radicle_status radicle_script_normalize_name(const uint8_t* bytes,
                                              size_t size,
                                              uint8_t** out_bytes,
@@ -493,8 +516,14 @@ radicle_status radicle_script_resolve(const radicle_script_candidate* candidates
           (!item.container && item.container_size != 0)) {
         return fail(RADICLE_STATUS_INVALID_ARGUMENT, "script candidate needs a known kind and non-null strings");
       }
-      input.push_back({bytes_text(item.name, item.name_size), static_cast<fo4::pex_analysis::ScriptSourceKind>(item.kind),
-                       bytes_text(item.container, item.container_size), item.load_index, item.size});
+      // Invariant: a caller-built candidate has an empty path and location.
+      fo4::pex_analysis::ScriptCandidate candidate;
+      candidate.name = bytes_text(item.name, item.name_size);
+      candidate.kind = static_cast<fo4::pex_analysis::ScriptSourceKind>(item.kind);
+      candidate.container = bytes_text(item.container, item.container_size);
+      candidate.load_index = item.load_index;
+      candidate.size = item.size;
+      input.push_back(std::move(candidate));
     }
     const auto winners = fo4::pex_analysis::resolve_script_set(input);
     if (winners.empty()) {

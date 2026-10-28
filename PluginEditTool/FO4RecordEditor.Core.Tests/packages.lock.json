@@ -321,6 +321,7 @@
         "dependencies": {
           "Mutagen.Bethesda.Fallout4": "[1.0.0, )",
           "Newtonsoft.Json": "[13.0.3, )",
+          "Radicle.Interop": "[1.0.0, )",
           "System.Drawing.Common": "[9.0.0, )"
         }
       },
@@ -352,6 +353,9 @@
         "dependencies": {
           "Noggog.CSharpExt": "[4.2.0, )"
         }
+      },
+      "radicle.interop": {
+        "type": "Project"
       }
     }
   }

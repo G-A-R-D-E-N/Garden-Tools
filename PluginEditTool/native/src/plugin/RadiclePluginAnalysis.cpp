@@ -25,11 +25,6 @@ using support::editorId;
 
 namespace {
 
-std::string stringArgument(const nlohmann::json& args, std::size_t index) {
-    if (!args.is_array() || index >= args.size() || !args[index].is_string()) return {};
-    return args[index].get<std::string>();
-}
-
 std::size_t sizeArgument(const nlohmann::json& args,
                          std::size_t index,
                          std::size_t fallback,
@@ -55,7 +50,7 @@ std::optional<WorklistKind> worklistKind(std::string_view text) {
 }
 
 Result<fo4::FormKey> formKeyArgument(const nlohmann::json& args) {
-    const auto text = stringArgument(args, 0);
+    const auto text = support::stringArgument(args, 0);
     if (text.empty()) {
         return std::unexpected(Error{"FormKeyMissing", "FormKey is empty"});
     }
@@ -249,9 +244,9 @@ Result<nlohmann::json> RadiclePluginBackend::getHistory(const nlohmann::json& ar
 
 Result<nlohmann::json> RadiclePluginBackend::getPluginWorklist(
     const nlohmann::json& arguments) const {
-    const auto pluginName = stringArgument(arguments, 0);
-    const auto kindText = stringArgument(arguments, 1);
-    auto signatureText = stringArgument(arguments, 2);
+    const auto pluginName = support::stringArgument(arguments, 0);
+    const auto kindText = support::stringArgument(arguments, 1);
+    auto signatureText = support::stringArgument(arguments, 2);
     std::transform(signatureText.begin(), signatureText.end(), signatureText.begin(),
                    [](unsigned char ch) { return static_cast<char>(std::toupper(ch)); });
     const auto limit = sizeArgument(arguments, 3, 200, 5000);

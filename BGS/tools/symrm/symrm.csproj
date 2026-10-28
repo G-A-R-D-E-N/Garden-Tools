@@ -12,6 +12,11 @@
     <Compile Include="CliEntry.cs" />
     <Compile Include="SymrmHelp.cs" />
     <Compile Include="Program.cs" />
+    <Compile Include="MapperCli.cs" />
+    <Compile Include="RagdollCli.cs" />
+    <Compile Include="PackOrderCli.cs" />
+    <Compile Include="MotionCli.cs" />
+    <Compile Include="SkeletonCli.cs" />
     <Compile Include="Tests.cs" />
     <Compile Include="Png.cs" />
     <Compile Include="GameDefaults.cs" />

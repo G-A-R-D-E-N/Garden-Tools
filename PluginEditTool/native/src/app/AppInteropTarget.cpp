@@ -6,13 +6,10 @@
 #include <string>
 #include <utility>
 
+#include "ServiceTargetSupport.hpp"
+
 namespace fo4ide::app {
 namespace {
-
-std::string stringArgument(const nlohmann::json& args, std::size_t index) {
-    if (!args.is_array() || index >= args.size() || !args[index].is_string()) return {};
-    return args[index].get<std::string>();
-}
 
 bool boolArgument(const nlohmann::json& args, std::size_t index) {
     if (!args.is_array() || index >= args.size() || !args[index].is_boolean()) return false;
@@ -91,7 +88,7 @@ Result<nlohmann::json> AppInteropTarget::browseForMo2Folder() {
 }
 
 Result<nlohmann::json> AppInteropTarget::openMo2Profile(const nlohmann::json& args) {
-    const auto instance = std::filesystem::path(stringArgument(args, 0));
+    const auto instance = std::filesystem::path(support::stringArgument(args, 0));
     if (instance.empty()) return std::unexpected(Error{"Mo2InstanceMissing", "MO2 instance path is empty"});
     auto loaded = loadProfile(instance, boolArgument(args, 1));
     if (!loaded) return std::unexpected(loaded.error());

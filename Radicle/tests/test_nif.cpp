@@ -219,6 +219,15 @@ TEST(NifNodes, ComposesNestedRotatedScaledChainWithoutRoot) {
   for (std::size_t i = 0; i < 9; ++i) EXPECT_NEAR(world.r[i], expected_r[i], 1e-5) << "r" << i;
 }
 
+TEST(NifNodes, BlockTransformReadsTheShapesOwnLocalTransform) {
+  const auto nif = fo4::nif::read_nif(chain_file());
+  const auto local = fo4::nif::block_transform(nif, 3);
+  EXPECT_NEAR(local.t[0], 7.0f, 1e-5);
+  EXPECT_NEAR(local.t[1], 8.0f, 1e-5);
+  EXPECT_NEAR(local.t[2], 9.0f, 1e-5);
+  EXPECT_NEAR(local.s, 1.0f, 1e-5);
+}
+
 TEST(NifNodes, BillboardParentReportsMode) {
   const auto nif = fo4::nif::read_nif(build_nif(
       {"node"},
