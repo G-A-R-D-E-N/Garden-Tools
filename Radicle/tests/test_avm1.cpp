@@ -10,6 +10,7 @@
 #include <limits>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -577,6 +578,145 @@ TEST(Avm1Interpreter, OperatorsConstantsAndRefusalsMatchTheTable) {
     const auto result = fo4::avm1::execute_actions(stream);
     EXPECT_EQ(result.status, row.status) << result.message;
     EXPECT_EQ(result.trace, row.trace);
+  }
+}
+
+// Invariant: Less compares numbers, Less2 and StringLess compare text, and Greater with a number and text compares as numbers; a wrong coercion flips one of these rows, and Greater with undefined must be false rather than the negation of Less2.
+TEST(Avm1Interpreter, ComparisonOpcodesUseTheirOwnCoercion) {
+  using fo4::avm1::Avm1RunStatus;
+  const std::vector<TableRow> rows = {
+      {"Less compares numbers, so 10 is not less than 9",
+       cat({push_text("10"), push_text("9"), rec(0x0F, {}), rec(0x26, {}), Bytes{0x00}}),
+       Avm1RunStatus::Ok,
+       {"false"}},
+      {"Less2 compares two texts as text, so 10 is less than 9",
+       cat({push_text("10"), push_text("9"), rec(0x48, {}), rec(0x26, {}), Bytes{0x00}}),
+       Avm1RunStatus::Ok,
+       {"true"}},
+      {"StringLess compares texts, so 10 is less than 9",
+       cat({push_text("10"), push_text("9"), rec(0x29, {}), rec(0x26, {}), Bytes{0x00}}),
+       Avm1RunStatus::Ok,
+       {"true"}},
+      {"StringGreater compares texts, so 10 is not greater than 9",
+       cat({push_text("10"), push_text("9"), rec(0x68, {}), rec(0x26, {}), Bytes{0x00}}),
+       Avm1RunStatus::Ok,
+       {"false"}},
+      {"Greater with a number and a text compares as numbers",
+       cat({push_int(10), push_text("9"), rec(0x67, {}), rec(0x26, {}), Bytes{0x00}}),
+       Avm1RunStatus::Ok,
+       {"true"}},
+      {"Greater with undefined is false",
+       cat({rec(0x96, Bytes{0x03}), push_int(1), rec(0x67, {}), rec(0x26, {}), Bytes{0x00}}),
+       Avm1RunStatus::Ok,
+       {"false"}},
+  };
+  for (const TableRow& row : rows) {
+    SCOPED_TRACE(row.name);
+    const auto stream = decode(row.input);
+    ASSERT_TRUE(stream.ok()) << stream.message;
+    const auto result = fo4::avm1::execute_actions(stream);
+    EXPECT_EQ(result.status, row.status) << result.message;
+    EXPECT_EQ(result.trace, row.trace);
+  }
+}
+
+// Invariant: StringExtract reads the string, then the index, then the count from the top, and clamps both to the text, so "hello" at index 1 with count 3 traces "ell"; a swapped pair would trace "l".
+TEST(Avm1Interpreter, SubstringReadsIndexThenCountAndClamps) {
+  using fo4::avm1::Avm1RunStatus;
+  const std::vector<TableRow> rows = {
+      {"index 1 and count 3 take three characters",
+       cat({push_text("hello"), push_int(1), push_int(3), rec(0x15, {}), rec(0x26, {}),
+            Bytes{0x00}}),
+       Avm1RunStatus::Ok,
+       {"ell"}},
+      {"a count past the end stops at the end",
+       cat({push_text("hello"), push_int(3), push_int(10), rec(0x15, {}), rec(0x26, {}),
+            Bytes{0x00}}),
+       Avm1RunStatus::Ok,
+       {"lo"}},
+      {"an index past the end is empty",
+       cat({push_text("hello"), push_int(9), push_int(2), rec(0x15, {}), rec(0x26, {}),
+            Bytes{0x00}}),
+       Avm1RunStatus::Ok,
+       {""}},
+      {"a negative count is empty",
+       cat({push_text("hello"), push_int(1), push_int(static_cast<std::uint32_t>(-4)),
+            rec(0x15, {}), rec(0x26, {}), Bytes{0x00}}),
+       Avm1RunStatus::Ok,
+       {""}},
+      {"StringExtract with two values is a stack underflow",
+       cat({push_text("hello"), push_int(1), rec(0x15, {}), Bytes{0x00}}),
+       Avm1RunStatus::StackUnderflow,
+       {}},
+  };
+  for (const TableRow& row : rows) {
+    SCOPED_TRACE(row.name);
+    const auto stream = decode(row.input);
+    ASSERT_TRUE(stream.ok()) << stream.message;
+    const auto result = fo4::avm1::execute_actions(stream);
+    EXPECT_EQ(result.status, row.status) << result.message;
+    EXPECT_EQ(result.trace, row.trace);
+  }
+}
+
+// Invariant: Modulo keeps the dividend's sign like fmod, so -7 % 3 traces -1 and not the floored 2; a zero divisor traces NaN as Divide does; Increment converts text first and Decrement steps a number.
+TEST(Avm1Interpreter, ModuloAndIncrementDecrementMatchTheirTable) {
+  using fo4::avm1::Avm1RunStatus;
+  const std::vector<TableRow> rows = {
+      {"-7 % 3 keeps the dividend's sign",
+       cat({push_int(static_cast<std::uint32_t>(-7)), push_int(3), rec(0x3F, {}), rec(0x26, {}),
+            Bytes{0x00}}),
+       Avm1RunStatus::Ok,
+       {"-1"}},
+      {"7 % -3 keeps the dividend's sign",
+       cat({push_int(7), push_int(static_cast<std::uint32_t>(-3)), rec(0x3F, {}), rec(0x26, {}),
+            Bytes{0x00}}),
+       Avm1RunStatus::Ok,
+       {"1"}},
+      {"5.5 % 2 is 1.5",
+       cat({push_double(5.5), push_int(2), rec(0x3F, {}), rec(0x26, {}), Bytes{0x00}}),
+       Avm1RunStatus::Ok,
+       {"1.5"}},
+      {"a zero divisor is NaN",
+       cat({push_int(4), push_int(0), rec(0x3F, {}), rec(0x26, {}), Bytes{0x00}}),
+       Avm1RunStatus::Ok,
+       {"NaN"}},
+      {"Increment converts text to a number first",
+       cat({push_text("4"), rec(0x50, {}), rec(0x26, {}), Bytes{0x00}}),
+       Avm1RunStatus::Ok,
+       {"5"}},
+      {"Decrement steps a number down by one",
+       cat({push_int(10), rec(0x51, {}), rec(0x26, {}), Bytes{0x00}}),
+       Avm1RunStatus::Ok,
+       {"9"}},
+      {"Increment of undefined is NaN",
+       cat({rec(0x96, Bytes{0x03}), rec(0x50, {}), rec(0x26, {}), Bytes{0x00}}),
+       Avm1RunStatus::Ok,
+       {"NaN"}},
+  };
+  for (const TableRow& row : rows) {
+    SCOPED_TRACE(row.name);
+    const auto stream = decode(row.input);
+    ASSERT_TRUE(stream.ok()) << stream.message;
+    const auto result = fo4::avm1::execute_actions(stream);
+    EXPECT_EQ(result.status, row.status) << result.message;
+    EXPECT_EQ(result.trace, row.trace);
+  }
+}
+
+// Invariant: CallFunction, GetMember, Enumerate and the SWF 4 Equals must stay refused by their names, since the slice has no ActionScript runtime; a stub that silently succeeds would run the Trace after each and trace nothing.
+TEST(Avm1Interpreter, ObjectAndFunctionOpcodesStayRefusedByName) {
+  const std::vector<std::pair<std::uint8_t, std::string_view>> refused = {
+      {0x3D, "CallFunction"}, {0x4E, "GetMember"}, {0x46, "Enumerate"}, {0x0E, "Equals"}};
+  for (const auto& [code, name] : refused) {
+    SCOPED_TRACE(name);
+    const auto stream = decode(cat({rec(code, {}), rec(0x26, {}), Bytes{0x00}}));
+    ASSERT_TRUE(stream.ok()) << stream.message;
+    const auto result = fo4::avm1::execute_actions(stream);
+    EXPECT_EQ(result.status, fo4::avm1::Avm1RunStatus::Unsupported);
+    EXPECT_EQ(result.opcode, code);
+    EXPECT_NE(result.message.find(name), std::string::npos) << result.message;
+    EXPECT_TRUE(result.trace.empty());
   }
 }
 
