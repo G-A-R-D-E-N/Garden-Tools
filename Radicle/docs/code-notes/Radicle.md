@@ -6443,7 +6443,7 @@ A `::remote_<Type>_<Event>` function is printed as `Event <Type>.<Event>(...)`, 
 
 ## src/papyrus/decompiler.cpp:Decompiler::decompileBody
 
-The body is decompiled twice. The first pass inlines `::temp` values. The second pass runs only when the first output still contains `::`, so a temp name that inlining could not resolve is printed without inlining. Four defects were fixed in PET and are kept as-is here:
+The body is decompiled twice, by `Decompiler::emitFunction`. `decompileBody` sets up `BodyState`, then runs `src/papyrus/decompiler_expr.cpp:translateInstructions` and returns `src/papyrus/decompiler_stmt.cpp:reconstructStatements`. The first pass inlines `::temp` values. The second pass runs only when the first output still contains `::`, so a temp name that inlining could not resolve is printed without inlining. Four defects were fixed in PET and are kept as-is here. Defects 1 to 3 are in `src/papyrus/decompiler_stmt.cpp:reconstructStatements`; defect 4 is in `src/papyrus/decompiler_expr.cpp:translateInstructions`:
 
 1. Locals hoisting zero-assignment. A local whose first write is an `assign` of its type's zero (`isZeroFor`) is declared at the top of the body, and that assignment is dropped (`zeroedByDeclaration`). A local whose first write is an unconditional statement is declared in place (`declaredAt`, `runsUnconditionally`). Any other local is hoisted.
 2. Dropped unused call results. A call whose `::temp` result is never read (`tempWasRead`) is emitted as a statement by the loop over `tempExpression`, so its side effect is kept.
@@ -8739,3 +8739,8 @@ Detects an encoder change that alters bytes of an unedited stream. It checks thr
 - `AcceptsTrailingBytesAfterTheSplitterRect` detects a strict-length check that refuses a grid tag with bytes after its RECT (`0xAA 0xBB` appended).
 - `RefusesAScalingGridPayloadCutInsideItsRect` detects a RECT reader that zero-fills missing bits into a grid, or one that reads past the payload. It uses two cuts: an id-only payload, and a 5-byte payload where the RECT needs 7 bytes. Each must give `malformed_tag`, no typed grid, the raw payload kept, and the End tag still parsed.
 - `ScalingGridLookupReturnsTheLastGridForAnId` detects `find_scaling_grid` returning the first of two grids for one id, returning a grid for a different id, or returning a non-null pointer for an id with no grid.
+
+## src/papyrus/decompiler_internal.hpp:BodyState
+
+- Split of `decompiler.cpp` (727 lines, too close to the 750 cap) by responsibility. `decompiler.cpp` keeps `toSource`, `emitFunction`, `disassemble` and the `decompileBody` setup. `decompiler_expr.cpp:translateInstructions` turns each instruction into a `BodyState::put` or a statement. `decompiler_stmt.cpp:reconstructStatements` runs jump folding, the temp-call pass, local hoisting and `If`/`While`/`Else` structuring. The header holds the state those passes share: `BodyState`, `JKind`, `JInfo`, and the `iequals`, `startsWith` and `join` helpers.
+- `BodyState::put` is the single write path. With inlining on, a `::temp` destination goes to `temps` and `tempExpression`; `::NoneVar` becomes a bare statement; anything else becomes `name = expr`. The move changed no logic, names or output. The decompiler tests are the check that it stayed that way.
