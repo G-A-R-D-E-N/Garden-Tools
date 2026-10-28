@@ -247,7 +247,7 @@ column, then `PATH` for programs.
 
 | Helper | Used by | Environment variable | `settings.json` key | Location |
 |---|---|---|---|---|
-| niftool | `nif_*` | `NIFTOOL_PATH` | `NiftoolPath` | `tools\niftool\niftool.exe` beside the exe |
+| niftool | NIF import and fix | `NIFTOOL_PATH` | `NiftoolPath` | `tools\niftool\niftool.exe` beside the exe |
 | Creation Kit Wiki mirror (a folder) | `papyrus_function_lookup`, `papyrus_script_info` | `CK_WIKI_PATH` | `CkWikiPath` | `tools\ckwiki\fallout4` |
 | `xWMAEncode.exe` | `audio_convert_to_xwm`, `audio_convert_from_xwm` | `XWMAENCODE_PATH` | `XwmaEncodePath` | `tools\audio\` |
 | ffmpeg | `audio_convert_to_xwm` (input that is not PCM WAV), `audio_convert_from_xwm` (output other than WAV) | `FFMPEG_PATH` | `FfmpegPath` | `tools\audio\` |
@@ -295,9 +295,9 @@ only feed the Creation Kit compiler route.
   compiler is Bethesda's and is not shipped here), or use `engine="builtin"`.
 - **The built-in engine reports every vanilla type as unknown.** It has no base script sources to
   resolve against. Set `PAPYRUS_BASE_IMPORTS` or pass `imports`, as described above.
-- **The authoring `nif_*` tools (import, fix, edits) say `niftool not installed` or `niftool executable not found`.**
-  niftool is missing from the package, or
-  `NIFTOOL_PATH` points somewhere stale. Restart the server after fixing it.
+- **NIF import and fix say `niftool not installed` or `niftool executable not found`.** Only import and fix
+  need niftool; inspect, geometry, verify, tree and saving NIF edits run in-process. niftool is missing from
+  the package, or `NIFTOOL_PATH` points somewhere stale. Restart the server after fixing it.
 - **`archive_pack` says `Archive2.exe is not configured`.** Install the Creation Kit or set
   `ARCHIVE2_PATH`.
 - **An audio tool answers `Error: set ..._PATH or place ... in tools/audio`.** A helper program is

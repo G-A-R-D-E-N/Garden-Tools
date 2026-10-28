@@ -150,6 +150,30 @@ TEST_CASE("NifTarget Tree returns the error JSON for an unreadable NIF with nift
     CHECK(runner.calls == 0);
 }
 
+TEST_CASE("NifTarget ApplyEdits takes the editor's JSON string and saves in-process with niftool absent") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto nif = root / "tree.nif";
+    fo4ide::test::writeBytes(nif, fo4ide::test::treeNif("Materials\\Clutter\\Thing.BGSM",
+                                                       {"Textures\\Thing_d.dds", "Textures\\Thing_n.dds"}));
+    const auto edits = nlohmann::json::array({{{"id", 1}, {"cat", "shape"}, {"key", "name"}, {"value", "Renamed"}}});
+
+    FakeRunner runner;
+    FakePlatform platform;
+    fo4ide::assets::NifService service(runner, std::filesystem::path{});
+    fo4ide::assets::TextureResolver textures;
+    fo4ide::app::NifTarget target(service, textures, platform);
+
+    auto saved = target.invoke("ApplyEdits", nlohmann::json::array({nif.string(), edits.dump(), ""}));
+    REQUIRE(saved.has_value());
+    CHECK(saved->get<std::string>().find("set OK") != std::string::npos);
+    CHECK(runner.calls == 0);
+
+    auto tree = target.invoke("Tree", nlohmann::json::array({nif.string()}));
+    REQUIRE(tree.has_value());
+    CHECK(tree->get<std::string>().find("\"Renamed\"") != std::string::npos);
+}
+
 TEST_CASE("NifTarget stages browser dropped bytes without the CSharp host") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
