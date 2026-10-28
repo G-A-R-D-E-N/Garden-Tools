@@ -1,6 +1,6 @@
 # SWF and ABC real-data gates: data-machine runbook
 
-Verified against `origin/nomad/dev` at 1896d4752 (the base this worktree was created from). Every test is in the `fo4_tests` gtest binary (`Radicle/CMakeLists.txt:546`, `add_executable(fo4_tests`; sources at lines 915, 934, 948, 970-973). Nothing was built or run on the machine that wrote this file. Items marked UNVERIFIED were not found in the repo or were not observed.
+Verified against `origin/nomad/dev` at 6add80b69. On 2026-10-28 the test names, the gtest definition lines and the file anchors in the Radicle code notes and CMake were re-checked. Other in-body line numbers were not, so treat them as approximate. Every test is in the `fo4_tests` gtest binary (`Radicle/CMakeLists.txt:547`, `add_executable(fo4_tests`; test sources at lines 918 to 976). Nothing was built or run on the machine that wrote this file. Items marked UNVERIFIED were not found in the repo or were not observed.
 
 The Papyrus gates are in `docs/papyrus-real-data-gates.md`. The ground rules there (skip is not pass, `;` separator on Windows, the binary path) apply here too, with the differences below.
 
@@ -8,7 +8,7 @@ The Papyrus gates are in `docs/papyrus-real-data-gates.md`. The ground rules the
 
 - Every gate here reads `FO4_DATA_DIR`, the Fallout 4 `Data` folder itself. The only other variable is the optional `FO4_GAME_BUILD` override (see the build bullet below). Repo examples use `D:\SteamLibrary\steamapps\common\Fallout 4\Data` (`docs/code-notes/BGS.md:562`). Unset means `GTEST_SKIP`. A set value with no `Fallout4 - Interface.ba2` in it also skips, through the `std::filesystem::exists(archive_path)` check in each test. Gate 1 skips only when it finds neither loose movies nor the archive. Every SKIPPED line needs a note.
 - No Papyrus variable is read. `FO4RE_*` and `FO4_PSC*` do not apply.
-- The census manifest path is compile-time, not env: `FO4_TESTDATA_DIR="testdata"` (`Radicle/CMakeLists.txt:1010`). It is relative, so the working directory must be `<repo>\Radicle`. `gtest_discover_tests` sets that (`Radicle/CMakeLists.txt:1019`), and the manual template sets it too.
+- The census manifest path is compile-time, not env: `FO4_TESTDATA_DIR="testdata"` (`Radicle/CMakeLists.txt:1014`). It is relative, so the working directory must be `<repo>\Radicle`. `gtest_discover_tests` sets that (`Radicle/CMakeLists.txt:1023`), and the manual template sets it too.
 - The game build comes from the file version of `<FO4_DATA_DIR>\..\Fallout4.exe` (`Radicle/tests/real_data_build.cpp:82-92`), unless `FO4_GAME_BUILD` is set and non-empty. That override replaces the exe probe (`real_data_build.cpp:83-85`), and `game_build` then records the override value, not the exe's. A wrong override changes which branch runs: gate 3 row-checks only when the build is 1.10.163.0 or 1.10.984.0, and gate 5 requires zero LZMA only when the build is AE 1.11.240.0. 1.10.163.0 is OG, 1.10.980 or 1.10.984 is NG, and 1.11.x is AE (`real_data_build.cpp:76-78`). `exact_counts_known` is true only for AE 1.11.240.0 (`real_data_build.cpp:95-96`). Each test records the build as the `game_build` property.
 - Archives: the gates read `Fallout4 - Interface.ba2`, through `fo4::archive::read_ba2_general_file` or, in gates 7 and 8, through the C ABI (`radicle_ba2_open`). Gate 1 also reads the three DLC main archives. Loose `Interface\*.swf|.gfx` files are used first where a test reads them.
 - CI: the real-data job `native-windows-real-data` (`.github/workflows/native-ci.yml:492`, runner label `fo4-data`) reads `FO4_DATA_DIR` from the runner environment. The workflow does not set it. `vars.FO4_DATA_DIR_LINUX` is for the Linux job only (lines 136, 164).
@@ -50,7 +50,7 @@ Add `--gtest_output=xml:<dir>\<gate>.xml` to keep `RecordProperty` values. Each 
 - Pass: `movies > 0`; `lzma_movies == 0`; `do_action_tags == 82` (lines 658-660). The count walks every `DefineSprite` child recursively (`count_do_action`, lines 643-653).
 - Proves: the Interface archive has 82 AVM1 `DoAction` tags and no ZWS movie.
 - Caveat: `82` is an unconditional literal (line 660). No build check guards it, unlike gates 3 and 5. A movie that fails `read_swf` is skipped silently (lines 640-642), so a parse failure is caught only by gate 1.
-- Unverified: whether 1.10.163.0 or 1.10.984.0 also gives 82. `Radicle/docs/code-notes/Radicle.md:5731` says the earlier 1.10.984 zero count was not reproduced, and no OG or NG scan is recorded. On a build where the count differs, this gate fails. It does not skip.
+- Unverified: whether 1.10.163.0 or 1.10.984.0 also gives 82. `Radicle/docs/code-notes/Radicle.md:5727` says the earlier 1.10.984 zero count was not reproduced, and no OG or NG scan is recorded. On a build where the count differs, this gate fails. It does not skip.
 
 ### 3. Program census against the committed manifest
 
@@ -91,20 +91,20 @@ Add `--gtest_output=xml:<dir>\<gate>.xml` to keep `RecordProperty` values. Each 
 
 - Test: `CApiRuntimeReal.ReplaysTheSevenProgramsDeterministically` (`Radicle/tests/test_c_api_runtime_real.cpp:383`).
 - Env: `FO4_DATA_DIR`. Archive only. The seven movies are found by basename, case-insensitively (lines 400-412). A missing movie is a failure, not a skip.
-- What it drives: `fo4::avm2::SwfRuntime::create` with `options.bgs_host = true` (lines 340-343), not the C ABI. `Radicle/docs/code-notes/Radicle.md:6202` gives the reason. It runs 180 frames at 1/24 s with the fixed input log in `program_inputs` (lines 238-266): 40 mouse moves, a click, Enter, Space and a second click. Frames are run through `fo4::avm2::replay` (`Radicle/src/avm2/replay.cpp`).
+- What it drives: `fo4::avm2::SwfRuntime::create` with `options.bgs_host = true` (lines 340-343), not the C ABI. `Radicle/docs/code-notes/Radicle.md:6199` gives the reason. It runs 180 frames at 1/24 s with the fixed input log in `program_inputs` (lines 238-266): 40 mouse moves, a click, Enter, Space and a second click. Frames are run through `fo4::avm2::replay` (`Radicle/src/avm2/replay.cpp`).
 - Pass, per program: two runs, both with `init` on, each reach 180 frames; the movie is still `playing` and the frame hashes are not all equal (lines 296-305); for AtomicCommand, Grognak, PipFall, RedMenace and ZetaInvaders, at least one `bgs.` call reaches the host (`expects_bgs`, lines 414-417, 435-437); the two runs' frame-hash vectors and host-log hashes are equal (lines 457-458). Then `check_pins` runs (lines 463, 369-379), which does nothing while the pins are zero.
 - Pass, control: AtomicCommand and PipFall, run with `init` off, must differ from their `init` runs in both frame hashes and host-log hash (lines 471-481).
 - Pass, total: `ran == 7` and `mismatches == 0` (lines 483-485).
 - Proves: all seven Programs open, run a fixed input log for 180 frames without a script error, and produce identical frame hashes and host logs across two runs in one process. The `init` path changes what is drawn and logged.
 - Does NOT prove: that the output matches the game. `kPinned` is all zero (`test_c_api_runtime_real.cpp:232-236`), so `check_pins` compares nothing (lines 372-377). This test proves two runs agree, not what they produce.
-- Other unverified points: the `SetPlatform(0.0, false)` and `InitProgram()` argument types are guesses (`Radicle/docs/code-notes/Radicle.md:6205`). Whether `Interpreter` errors inside `replay` reach this test is unverified (`Radicle.md:6214`); the frame count and `playing()` are what is checked.
+- Other unverified points: the `SetPlatform(0.0, false)` and `InitProgram()` argument types are unconfirmed (the calls are at `Radicle/tests/test_c_api_runtime_real.cpp:287`). Whether `Interpreter` errors inside `replay` reach this test is unverified (`Radicle.md:6210`); the frame count and `playing()` are what is checked.
 
 #### Filling the pins
 
 - Source 1 (stderr): for every program that completes both runs, the test prints `R8_HASH <program> <snapshot> <hostlog> <bgs_calls>` (`test_c_api_runtime_real.cpp:455-456`).
 - Source 2 (XML): the `program_<name>` property holds `ran snapshot=<n> hostlog=<n> bgs_calls=<n> asset_misses=<n>` (lines 464-468).
 - Map: `<snapshot>` goes to `snapshot_hash`, which is compared with `run.hashes.back()` (line 373). `<hostlog>` goes to `host_log_hash` (line 376).
-- Source of the values: a data-runner log only, after the bridge fix on branch `nomad/gt-swf-placement-move` has landed. A pin taken before that fix pins the wrong behaviour. In this checkout the branch is at 1896d4752 with 0 commits beyond `origin/nomad/dev`, so the fix is not in any commit I could see. Its worktree is `E:/Projects/Forgejo/GT-wt/swf-placement-move`.
+- Source of the values: a data-runner log only, taken after the bridge fix has landed. That fix is `4d2c104b2` (`fix(radicle): keep timeline objects across move placements in the SWF runtime bridge`), merged to `origin/nomad/dev` through PR #914 (merge `562bfac72`). A pin taken before that fix pins the wrong behaviour.
 
 ### 8. Same file as gate 7, single-movie C ABI replay
 
