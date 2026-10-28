@@ -258,8 +258,9 @@ column, then `PATH` for programs.
 
 `<Fallout 4>` is the install folder from the `Fallout4Path` setting, `FALLOUT4_PATH`, the registry or
 a Steam library. `PapyrusCompiler.exe` and `Archive2.exe` come with the Creation Kit and are not
-shipped in the package. The package bundles niftool, the Creation Kit Wiki mirror and the audio tools
-only if they were available when it was built; a missing one disables just the tools in its row.
+shipped in the package. The package always includes texconv and ffmpeg. niftool is not included;
+supply `NIFTOOL_PATH`. The Creation Kit Wiki mirror and the xWMAEncode and BmlFuz tools are included
+only if they were available at build time; a missing one disables just the tools in its row.
 niftool is looked up once at startup, so restart the server after installing it.
 
 The built-in Papyrus engine (`compile_papyrus` with `builtin`, or with `auto` when there is no

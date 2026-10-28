@@ -24,9 +24,30 @@ Nothing publishes automatically: `.github/workflows/release.yml` is a build-only
 4. Artifacts are retained 30 days; download and unzip them from the run before then.
 
 `PluginEditTool/package.ps1` is the authority for what the zip contains: `FO4RecordEditor.exe`,
-`web/dist`, `tools/*` when the optional tool paths resolve, `README.md`, `LICENSE`,
+`web/dist`, `tools/*` (see below), `README.md`, `LICENSE`,
 `THIRD_PARTY_NOTICES.md`, `docs/MCP_SETUP.md`, `mcp.sample.json` and `build-info.txt`. The zip carries
 its own copy of `build-info.txt`; `release-metadata` is the separate artifact written by the workflow.
+
+## What the zip contains
+
+- Always: the editor, its web UI, README, LICENSE, THIRD_PARTY_NOTICES, the MCP setup guide,
+  a sample MCP config and build info.
+- Bundled by default. These two are downloaded at pinned versions and checked against a SHA256
+  before they go into the zip. The versions live in `PluginEditTool/tools/bundled-tools.json`:
+  - texconv (Microsoft DirectXTex, MIT): `tools\texconv\`
+  - ffmpeg (BtbN static build of FFmpeg, LGPL-3.0 or later): `tools\audio\ffmpeg.exe`
+  - Each one's license sits next to it as `LICENSE-<tool>.txt`. A tool supplied through an override
+    path is not covered by this and gets no license file.
+  - The ffmpeg pin is an autobuild that BtbN prunes; see `pinNote` in `bundled-tools.json`.
+- Bundled from the owner's folders, when set: xWMAEncode.exe, BmlFuzEncode.exe and BmlFuzDecode.exe
+  (`FO4IDE_AUDIO_TOOLS_DIR`), and the offline Creation Kit wiki (`FO4IDE_CK_WIKI_PATH`). If a
+  variable is unset, that item is left out and the build prints a warning.
+- Not in the zip, found on the user's machine: Archive2.exe and PapyrusCompiler.exe come with the
+  Fallout 4 Creation Kit and are detected from the Fallout 4 install.
+- Not in the zip: niftool. NIF authoring edits (writing NIF files) need it.
+
+Pinned versions only: a download never follows a "latest" link. To update a tool, change its URL,
+SHA256 and license URL together in `bundled-tools.json`.
 
 ## Publish (owner-approved, after reviewing the artifacts)
 
@@ -66,6 +87,7 @@ separate Radicle DLL unless the owner reopens #838.
   the same zip; the CI lane is the reproducible one and does not depend on one machine's tools.
 - Tag source: a `nomad/dev` commit is the only option that does not need `main`.
 - Tag naming: `fo4ide-v*` / `radicle-v*` (precedent: `bgs-v*`).
-- Optional external tools (niftool, texconv, CK wiki mirror, audio tools): bundle them by
-  setting the `FO4IDE_NIFTOOL_PATH`, `FO4IDE_TEXCONV_PATH`, `FO4IDE_CK_WIKI_PATH` and
-  `FO4IDE_AUDIO_TOOLS_DIR` repository variables; unset means the zip ships without them.
+- Optional external tools: texconv and ffmpeg are always bundled from their pins. niftool is
+  not bundled by the release lane. The CK wiki mirror and the xWMAEncode/BmlFuz tools come from the
+  `FO4IDE_CK_WIKI_PATH` and `FO4IDE_AUDIO_TOOLS_DIR` repository variables; unset means the zip
+  ships without them.

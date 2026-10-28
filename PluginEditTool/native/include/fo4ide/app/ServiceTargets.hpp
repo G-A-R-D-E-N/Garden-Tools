@@ -128,7 +128,7 @@ private:
 // method returns a JSON string (or an "Error: ..." string), never throwing.
 class GraphTarget final : public rpc::Target {
 public:
-    explicit GraphTarget(platform::Services& platform);
+    GraphTarget(platform::Services& platform, tools::Locator& locator);
     ~GraphTarget() override;
 
     Result<nlohmann::json> invoke(std::string_view method,
@@ -138,6 +138,7 @@ private:
     graph::GraphCompiler& compiler();
 
     platform::Services& platform_;
+    tools::Locator& locator_;
     std::mutex mutex_;
     std::unique_ptr<papyrus::ScriptIndex> index_;
     std::unique_ptr<graph::GraphCompiler> compiler_;

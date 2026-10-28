@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
@@ -418,7 +419,9 @@ TEST_CASE("CellTarget delegates record queries to the plugin backend facet") {
 
 TEST_CASE("GraphTarget serves the core palette with builtins") {
     FakePlatform platform;
-    fo4ide::app::GraphTarget target(platform);
+    fo4ide::settings::SharedSettings shared;
+    fo4ide::tools::Locator locator(shared, "FO4IDE-native");
+    fo4ide::app::GraphTarget target(platform, locator);
 
     auto result = target.invoke("GetCorePalette", nlohmann::json::array());
     REQUIRE(result.has_value());
@@ -439,7 +442,9 @@ TEST_CASE("GraphTarget serves the core palette with builtins") {
 
 TEST_CASE("GraphTarget describes a known builtin and rejects an unknown one") {
     FakePlatform platform;
-    fo4ide::app::GraphTarget target(platform);
+    fo4ide::settings::SharedSettings shared;
+    fo4ide::tools::Locator locator(shared, "FO4IDE-native");
+    fo4ide::app::GraphTarget target(platform, locator);
 
     auto palette = target.invoke("GetCorePalette", nlohmann::json::array());
     REQUIRE(palette.has_value());
@@ -461,7 +466,9 @@ TEST_CASE("GraphTarget describes a known builtin and rejects an unknown one") {
 
 TEST_CASE("GraphTarget searches the palette and reports a total") {
     FakePlatform platform;
-    fo4ide::app::GraphTarget target(platform);
+    fo4ide::settings::SharedSettings shared;
+    fo4ide::tools::Locator locator(shared, "FO4IDE-native");
+    fo4ide::app::GraphTarget target(platform, locator);
 
     auto result =
         target.invoke("SearchPalette", nlohmann::json::array({"any", "", "", 0}));
@@ -473,7 +480,9 @@ TEST_CASE("GraphTarget searches the palette and reports a total") {
 
 TEST_CASE("GraphTarget validates documents and reports malformed input") {
     FakePlatform platform;
-    fo4ide::app::GraphTarget target(platform);
+    fo4ide::settings::SharedSettings shared;
+    fo4ide::tools::Locator locator(shared, "FO4IDE-native");
+    fo4ide::app::GraphTarget target(platform, locator);
 
     auto malformed =
         target.invoke("ValidateGraph", nlohmann::json::array({"this is not a document"}));
@@ -490,9 +499,46 @@ TEST_CASE("GraphTarget validates documents and reports malformed input") {
     CHECK(validJson.at("diagnostics").is_array());
 }
 
+TEST_CASE("GraphTarget resolves Extends and palette scripts from Settings base imports without the env var") {
+    using namespace fo4ide::graph;
+    using namespace fo4ide::graph::test;
+
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    fo4ide::settings::Settings settings;
+    settings.fallout4Path = root / "Fallout 4";
+    settings.papyrusBaseImports = baseStubs();
+    fo4ide::settings::SharedSettings shared(settings);
+    fo4ide::tools::Locator locator(shared, "FO4IDE-native");
+    FakePlatform platform;
+    fo4ide::app::GraphTarget target(platform, locator);
+
+    Env env;
+    GraphBuilder graph("Fixture", "ObjectReference");
+    graph.node(env.palette, "event:ObjectReference.OnActivate");
+    const auto document = documentJson::serialize(graph.document);
+
+    auto validation = target.invoke("ValidateGraph", nlohmann::json::array({document}));
+    REQUIRE(validation.has_value());
+    const auto diagnostics =
+        nlohmann::json::parse(validation->get<std::string>()).at("diagnostics");
+    for (const auto& diagnostic : diagnostics) {
+        CHECK(diagnostic.at("code").get<std::string>() != "GRA0031");
+    }
+
+    auto palette = target.invoke("GetCorePalette", nlohmann::json::array());
+    REQUIRE(palette.has_value());
+    const auto scripts = nlohmann::json::parse(palette->get<std::string>())
+                             .at("scripts")
+                             .get<std::vector<std::string>>();
+    CHECK(std::find(scripts.begin(), scripts.end(), "ObjectReference") != scripts.end());
+}
+
 TEST_CASE("GraphTarget rejects an unknown method") {
     FakePlatform platform;
-    fo4ide::app::GraphTarget target(platform);
+    fo4ide::settings::SharedSettings shared;
+    fo4ide::tools::Locator locator(shared, "FO4IDE-native");
+    fo4ide::app::GraphTarget target(platform, locator);
 
     auto result = target.invoke("Nonexistent", nlohmann::json::array());
     CHECK_FALSE(result.has_value());
@@ -502,7 +548,9 @@ TEST_CASE("GraphTarget SaveGraph reports malformed documents") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     FakePlatform platform;
-    fo4ide::app::GraphTarget target(platform);
+    fo4ide::settings::SharedSettings shared;
+    fo4ide::tools::Locator locator(shared, "FO4IDE-native");
+    fo4ide::app::GraphTarget target(platform, locator);
 
     const auto path = (root / "broken.fograph").string();
     auto result =
@@ -535,7 +583,9 @@ TEST_CASE("GraphTarget CompileToPex errors instead of reporting a write that fai
     const auto document = documentJson::serialize(graph.document);
 
     FakePlatform platform;
-    fo4ide::app::GraphTarget target(platform);
+    fo4ide::settings::SharedSettings shared;
+    fo4ide::tools::Locator locator(shared, "FO4IDE-native");
+    fo4ide::app::GraphTarget target(platform, locator);
     const auto result =
         target.invoke("CompileToPex", nlohmann::json::array({document, root.string()}));
 
@@ -553,7 +603,9 @@ TEST_CASE("GraphTarget CompileToPex errors instead of reporting a write that fai
 
 TEST_CASE("GraphTarget serializes concurrent RPC access to its compiler cache") {
     FakePlatform platform;
-    fo4ide::app::GraphTarget target(platform);
+    fo4ide::settings::SharedSettings shared;
+    fo4ide::tools::Locator locator(shared, "FO4IDE-native");
+    fo4ide::app::GraphTarget target(platform, locator);
 
     std::atomic<bool> threw{false};
     {
