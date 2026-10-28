@@ -11,6 +11,14 @@ namespace fo4::swf {
 // Requires a file whose bitmap tags outlive the map.
 using SvgBitmaps = std::map<std::uint16_t, const SwfBitmap*>;
 
+struct SvgImage {
+  std::string width;
+  std::string height;
+  std::string png_base64;
+};
+
+using SvgImages = std::map<std::uint16_t, SvgImage>;
+
 // Requires a decoded shape; the output is one complete <svg> document with a trailing newline.
 std::string shape_to_svg(const SwfShape& shape);
 
@@ -26,16 +34,19 @@ std::string svg_open(const SwfRect& bounds);
 // Requires file to outlive the returned map.
 SvgBitmaps index_bitmaps(const SwfFile& file);
 
-// Requires a decoded shape and an id_prefix unique within the document.
+// Requires a decoded shape and the bitmaps of the file it came from.
+SvgImages shape_images(const SwfShape& shape, const SvgBitmaps& bitmaps);
+
+// Requires a decoded shape, an id_prefix unique within the document, and its shape_images.
 std::string shape_defs_to_svg(const SwfShape& shape, const std::string& id_prefix,
-                              const SvgBitmaps& bitmaps);
+                              const SvgImages& images);
 
 // Requires a decoded shape; the output has no <svg> wrapper.
 std::string shape_paths_to_svg(const SwfShape& shape, const std::string& id_prefix,
-                               const SvgBitmaps& bitmaps);
+                               const SvgImages& images);
 
 // Requires a decoded shape and an id_prefix unique within the document; no stroke paths.
 std::string shape_fill_paths_to_svg(const SwfShape& shape, const std::string& id_prefix,
-                                    const SvgBitmaps& bitmaps);
+                                    const SvgImages& images);
 
 }  // namespace fo4::swf

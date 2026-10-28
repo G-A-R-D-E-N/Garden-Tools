@@ -293,6 +293,66 @@ TEST(SwfSvg, NonSmoothedBitmapFillRendersPixelated) {
   EXPECT_EQ(fo4::swf::shape_to_svg(shape, bitmap.file), expected);
 }
 
+TEST(SwfSvg, ClippedBitmapFillDrawsItsImageOnceInsideItsPath) {
+  // Detects: a clipped bitmap fill (0x41) must draw its image once under a clipPath made from the fill's own path; a <pattern> would tile the bitmap across the plane, and an image without the clip would paint outside the path.
+  const auto bitmap = two_by_two_bitmap();
+  ASSERT_TRUE(bitmap.ok()) << fo4::swf::status_name(bitmap.status);
+  const auto png = fo4::swf::bitmap_to_png(*bitmap.file.tags[0].bitmap);
+  ASSERT_TRUE(png.has_value());
+  auto shape = sized_shape(1000, 1000);
+  shape.fill_styles.push_back(bitmap_fill(0x41, 3, 131072, 400));
+  shape.records = {move_to(0, 0), style_change(1, 0, 0), line_by(1000, 0), line_by(0, 1000),
+                   line_by(-1000, 0), line_by(0, -1000)};
+  const std::string expected =
+      "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 50 50\" width=\"50\" height=\"50\">\n"
+      "<clipPath id=\"fillbmp1clip\"><path d=\"M0 0L50 0L50 50L0 50L0 0Z\"/></clipPath>\n"
+      "<g clip-path=\"url(#fillbmp1clip)\">\n"
+      "<image transform=\"matrix(0.1 0 0 0.1 20 0)\" width=\"2\" height=\"2\" "
+      "href=\"data:image/png;base64," +
+      swf_art_test::base64_text(*png) +
+      "\"/>\n"
+      "</g>\n"
+      "</svg>\n";
+  EXPECT_EQ(fo4::swf::shape_to_svg(shape, bitmap.file), expected);
+}
+
+TEST(SwfSvg, ClippedNonSmoothedBitmapFillRendersPixelatedImageInItsPath) {
+  // Detects: a clipped non-smoothed bitmap fill (0x43) must keep image-rendering="pixelated" on its single image, since 0x43 is the only clipped type with hard-edged pixels.
+  const auto bitmap = two_by_two_bitmap();
+  ASSERT_TRUE(bitmap.ok()) << fo4::swf::status_name(bitmap.status);
+  const auto png = fo4::swf::bitmap_to_png(*bitmap.file.tags[0].bitmap);
+  ASSERT_TRUE(png.has_value());
+  auto shape = sized_shape(1000, 1000);
+  shape.fill_styles.push_back(bitmap_fill(0x43, 3, 131072, 0));
+  shape.records = {move_to(0, 0), style_change(1, 0, 0), line_by(1000, 0), line_by(0, 1000),
+                   line_by(-1000, 0), line_by(0, -1000)};
+  const std::string expected =
+      "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 50 50\" width=\"50\" height=\"50\">\n"
+      "<clipPath id=\"fillbmp1clip\"><path d=\"M0 0L50 0L50 50L0 50L0 0Z\"/></clipPath>\n"
+      "<g clip-path=\"url(#fillbmp1clip)\">\n"
+      "<image transform=\"matrix(0.1 0 0 0.1 0 0)\" width=\"2\" height=\"2\" "
+      "href=\"data:image/png;base64," +
+      swf_art_test::base64_text(*png) +
+      "\" image-rendering=\"pixelated\"/>\n"
+      "</g>\n"
+      "</svg>\n";
+  EXPECT_EQ(fo4::swf::shape_to_svg(shape, bitmap.file), expected);
+}
+
+TEST(SwfSvg, ClippedBitmapFillStaysPlainGeometryInsideAMaskClipPath) {
+  // Detects: a mask's clipPath is built from shape_fill_paths_to_svg, which must keep a clipped bitmap fill as a plain path; a clip group with an <image> is not a valid clipPath child, so the mask would clip everything out.
+  const auto bitmap = two_by_two_bitmap();
+  ASSERT_TRUE(bitmap.ok()) << fo4::swf::status_name(bitmap.status);
+  auto shape = sized_shape(1000, 1000);
+  shape.fill_styles.push_back(bitmap_fill(0x41, 3, 131072, 400));
+  shape.records = {move_to(0, 0), style_change(1, 0, 0), line_by(1000, 0), line_by(0, 1000),
+                   line_by(-1000, 0), line_by(0, -1000)};
+  const auto bitmaps = fo4::swf::index_bitmaps(bitmap.file);
+  const auto images = fo4::swf::shape_images(shape, bitmaps);
+  EXPECT_EQ(fo4::swf::shape_fill_paths_to_svg(shape, "fill", images),
+            square_path_fill("fill=\"#808080\""));
+}
+
 TEST(SwfSvg, MissingOrUnencodableBitmapFallsBackToThePlaceholder) {
   // Detects: a bitmap fill whose id is absent from the file, or whose bitmap bitmap_to_png refuses, must keep the grey placeholder with no pattern; a url to a pattern that was never emitted would leave the path unpainted, and a crash would fail the whole export.
   auto shape = sized_shape(1000, 1000);
