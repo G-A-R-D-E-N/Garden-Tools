@@ -8174,6 +8174,7 @@ Detects a null memory pointer being dereferenced, or a refusal with the wrong ki
 Detects a memory opcode that continues with an undefined operand instead of refusing with StackUnderflow. All ten opcodes run on an empty stack with memory set, so the refusal can only come from the pop.
 
 Nothing was compiled or run on the development machine for these tests, so CI must confirm them.
+
 ## Radicle/tests/test_avm1_objects.cpp:DiamondSharedChildTearsDownAfterItsLastParent
 
 - `Radicle/tests/test_avm1_objects.cpp:DiamondSharedChildTearsDownAfterItsLastParent` builds a diamond: root A holds B and C, and both hold the shared child D, which holds a 2000-object chain. It detects a teardown that never takes a child, which leaks the chain, and a refcount error that keeps D alive after its last parent; it cannot observe a teardown that descends into D early, since D expires either way. Before the roots drop, D has two owners and the chain's top and bottom have one each. After A is released, D, the top and the bottom must all have expired. The guard that keeps this right is the `use_count() == 1` check in `Radicle/src/avm1/object_ops.cpp:Avm1Object::~Avm1Object`. `Avm1Object` is internal, so the test drives the graph through bytecode and reads only `Avm1Result::variables` through weak pointers. It therefore shows that the shared child is released, not a destructor count of exactly one.
