@@ -2512,3 +2512,20 @@ Ceiling: the reader honours `mod_directory` and `profiles_directory`, which are 
 - The workflow-level `concurrency.group` still interpolates `version`. It is evaluated before any step runs, so the validation step cannot guard it; the value only names the queue.
 - Both checkouts set `persist-credentials: false`, so the job token is not left in `.git/config` for later steps.
 
+## PluginEditTool/native/src/app/GraphTarget.cpp:GraphTarget::compiler — Blueprint base roots come from the Locator
+
+- The Blueprint index used to take its roots from `papyrus::papyrusBaseImports()`, which read only `PAPYRUS_BASE_IMPORTS`. A user who set Settings > Papyrus Base Imports (`settings.json` `PapyrusBaseImports`) got `GRA0031` ("not on the import roots") for any `Extends` base and an empty palette script list, because `GraphValidator` resolves the extends target through that index.
+- `GraphTarget` now takes the app's `tools::Locator` (constructed in `apps/fo4ide/main.cpp`) and `compiler()` builds the index from `Locator::papyrusBaseImports()`, which already includes the env var, Settings, the app `tools/papyrus` folders and the Fallout 4 `Data/Scripts/Source` folders. The cache key is built from the same list, so a settings change rebuilds the compiler on the next call.
+- The same list reaches `GraphTarget::invoke` `LoadScript` through `GraphScriptLoader::load`, and the Papyrus panel reaches `AnalysisService::check`, `symbolAtJson` and `compile` through `PapyrusTarget::invoke`. `GraphToolService` (`graphIndexFor` and its four statics) now takes the list as a parameter and has no env read of its own.
+- Regression covered by `PluginEditTool/native/tests/unit/ServiceTargetsTests.cpp:GraphTarget resolves Extends and palette scripts from Settings base imports without the env var` (no `GRA0031` for `Extends ObjectReference`, and `ObjectReference` is listed in `GetCorePalette` scripts, with only Settings set) and `PluginEditTool/native/tests/unit/PapyrusTargetTests.cpp:PapyrusTarget Check resolves Extends from Settings base imports without the env var` (the Papyrus panel no longer reports "not on the roots" for a script extending `ObjectReference`).
+
+## PluginEditTool/native/src/papyrus/AnalysisService.cpp:AnalysisService::check — base import roots are a parameter
+
+- `AnalysisService::check`, `definition`, `symbolAtJson`, `buildIndex` and `compile` take the base import roots as a `std::vector<std::filesystem::path>`. The defaulted ones (`check`, `definition`, `symbolAtJson`, `compile`) default to empty so the existing unit tests keep their call shape; `buildIndex` has no default. Every production caller passes `Locator::papyrusBaseImports()`. A new caller that omits the argument gets no base scripts, so add it explicitly.
+- The free `papyrus::papyrusBaseImports()` (env-only) is removed from `AnalysisService.hpp` and `.cpp`. The env var is still read, through `Locator::papyrusBaseImports()`.
+
+## PluginEditTool/native/src/papyrus/CompileScript.cpp:compileScript — compile pipeline moved out of AnalysisService.cpp
+
+- `compileScript` and its only helper `hasError` moved verbatim from `AnalysisService.cpp` into this file so `AnalysisService.cpp` stays under the 750-line guard (it was 785 lines before this change). `compileScript` is still declared in `AnalysisService.hpp`, so no new declaration is needed.
+- The pipeline is declaration check, then resolve, then type check, then code generation with the Creation Kit fidelity pass. The early returns set `sourcesComplete` to `false` when the script has parse or declaration errors and to the resolver's `baseChainComplete` otherwise, so an incomplete base chain is reported as incomplete and not as clean.
+

@@ -145,7 +145,7 @@ fo4ide_add_test(fo4ide_test_app_interop_rollback unit/AppInteropRollbackTests.cp
 # ccache's base_dir rewrites __FILE__ to a build-relative path, which no
 # longer resolves from the directory ctest runs the tests in.
 foreach(fixture_test
-        fo4ide_test_graph fo4ide_test_papyrus fo4ide_test_corpus fo4ide_test_service_targets)
+        fo4ide_test_graph fo4ide_test_papyrus fo4ide_test_corpus fo4ide_test_service_targets fo4ide_test_papyrus_target)
     target_compile_definitions(
         ${fixture_test}
         PRIVATE FO4IDE_TEST_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures"
