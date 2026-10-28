@@ -37,15 +37,10 @@ The host bridge is picked up by the existing `[RpcExpose]` scan as `hostObjects.
 test stubs. Archive-resolved open and the semantic edit verbs are still deferred.
 ## Radicle/bindings/csharp/Radicle.Interop/SwfEditText.cs:SwfEditTextCodec (edit-text fields)
 
-Tag 37 has no C ABI getter, so the managed layer parses and re-encodes the decoded tag payload itself:
-`SwfEditTextCodec.Parse` reads bounds (RECT bits), both flag bytes, font id/class, height, colour, max length,
-layout, variable and initial text, and `Write` reproduces the decoder order and reuses the original id/RECT
-prefix unless the bounds are edited, so a text or colour edit keeps every earlier byte. `SwfFile.EditText` and
-`SwfFile.EditEditText` expose it and send the rewritten payload through the normal tag plan, so history,
-revision and refusal behaviour are unchanged. Tests in `SwfEditTextTests.cs` pin the full read, the
-prefix-preserving text edit, colour and bounds edits, the no-op plan, and the wrong-tag refusal. This is the
-"compose from tag payloads in PET" path for edit text. The panel's document no longer uses it: `SwfDocumentService.cs:SwfDocument.EditEditText`
-writes through `SwfVerbs.ApplyEditText`, and label add, rename and remove write through the label verbs. The depth and
+`SwfEditText.cs:SwfEditTextCodec.Parse` reads bounds (RECT bits), both flag bytes, font id/class, height, colour, max length,
+layout, variable and initial text from the decoded tag payload, and `SwfEditText.cs:SwfFile.EditText` exposes it. It is read-only:
+`SwfDocumentService.cs:SwfDocument.EditEditText` writes through `SwfVerbs.ApplyEditText`, and label add, rename and remove write through the label verbs.
+Tests in `SwfEditTextTests.cs` pin the full read and the wrong-tag refusal. The depth and
 transform edits still compose payloads in PET (`SwfPlacementCodec.WithDepth`, `SwfPlacementMatrixCodec.Write`).
 ## FO4RecordEditor.Core/Services/SwfDocumentService.cs:SwfDocument.EditEditText (edit-text through the history)
 
