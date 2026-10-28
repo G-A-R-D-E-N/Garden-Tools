@@ -211,7 +211,6 @@ TEST(CApiSwfReal, ReadsEveryInterfaceMovieThroughTheArchiveAndTheBytesPathAlike)
 
 namespace {
 
-/* Invariant: pool index 0 is empty, so the edit must target the first non-empty string. */
 std::size_t closing_quote(const std::string& text, std::size_t open) {
   std::size_t at = open + 1;
   while (at < text.size()) {
@@ -225,6 +224,7 @@ std::size_t closing_quote(const std::string& text, std::size_t open) {
   return std::string::npos;
 }
 
+/* Invariant: pool index 0 is empty, so the edit must target the first non-empty string. */
 std::string edit_first_string(std::string text, std::string_view marker) {
   std::size_t line = text.find("  string ");
   while (line != std::string::npos) {
