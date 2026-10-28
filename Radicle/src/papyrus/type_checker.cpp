@@ -60,31 +60,6 @@ void visitChildExpressions(const Node* node, const auto& visitor) {
     }
 }
 
-bool blockAlwaysReturns(const std::vector<StatementPtr>& body);
-
-bool statementAlwaysReturns(const Statement* statement) {
-    switch (statement->nodeKind()) {
-        case NodeKind::ReturnStatement:
-            return true;
-        case NodeKind::IfStatement: {
-            const auto* iff = static_cast<const IfStatement*>(statement);
-            for (const auto& branch : iff->branches) {
-                if (!blockAlwaysReturns(branch.body)) return false;
-            }
-            return blockAlwaysReturns(iff->elseBody);
-        }
-        default:
-            return false;
-    }
-}
-
-bool blockAlwaysReturns(const std::vector<StatementPtr>& body) {
-    for (const auto& statement : body) {
-        if (statementAlwaysReturns(statement.get())) return true;
-    }
-    return false;
-}
-
 std::string describe(const std::optional<Type>& type) {
     return type ? type->toString() : std::string("nothing");
 }
@@ -146,12 +121,6 @@ void TypeChecker::checkCallable(State& state, const CallableDecl& callable) {
     }
 
     checkStatements(state, callable.body);
-    if (fn && fn->returnType && !callable.isNative && !blockAlwaysReturns(callable.body)) {
-        state.report(DiagnosticCode::MissingReturn,
-                     "'" + fn->name + "' returns " + fn->returnType->toString() +
-                         ", but a path can reach its end without a Return.",
-                     fn->nameSpan);
-    }
     state.returnType = std::nullopt;
 }
 

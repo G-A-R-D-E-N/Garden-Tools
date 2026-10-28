@@ -64,7 +64,6 @@ enum class DiagnosticCode {
     InvalidCast,
     OverrideMismatch,
     ParameterOrder,
-    MissingReturn,
     CannotEmit,
     UnknownCallTarget,
     NonConstantInitializer,
@@ -96,7 +95,6 @@ constexpr std::string_view codeString(DiagnosticCode code) {
         case DiagnosticCode::InvalidCast: return "PAP0043";
         case DiagnosticCode::OverrideMismatch: return "PAP0044";
         case DiagnosticCode::ParameterOrder: return "PAP0045";
-        case DiagnosticCode::MissingReturn: return "PAP0046";
         case DiagnosticCode::CannotEmit: return "PAP0050";
         case DiagnosticCode::UnknownCallTarget: return "PAP0051";
         case DiagnosticCode::NonConstantInitializer: return "PAP0052";

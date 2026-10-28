@@ -145,43 +145,12 @@ TEST(PapyrusTypeChecker, ABareReturnIsAlwaysFine) {
     EXPECT_TRUE(f.check("A").empty());
 }
 
-TEST(PapyrusTypeChecker, ANonVoidFunctionWhoseElseIfBranchFallsThroughIsRejected) {
+TEST(PapyrusTypeChecker, ANonVoidFunctionMayFallOffItsEndBecauseTheCreationKitCompilesIt) {
     Fixture f;
     f.write("A",
-            "\nScriptName A\nint Function Pick(bool b, bool c)\n    If b\n        Return 1\n"
-            "    ElseIf c\n        int x = 2\n    Else\n        Return 3\n    EndIf\nEndFunction");
-
-    const auto diagnostics = f.check("A");
-    ASSERT_TRUE(diagnostics.size() == 1);
-    EXPECT_TRUE(diagnostics[0].code == DiagnosticCode::MissingReturn);
-    EXPECT_TRUE(diagnostics[0].message.find("'Pick' returns int") != std::string::npos);
-}
-
-TEST(PapyrusTypeChecker, ANonVoidFunctionWhoseEveryBranchReturnsIsFine) {
-    Fixture f;
-    f.write("A",
-            "\nScriptName A\nint Function Pick(bool b, bool c)\n    If b\n        Return 1\n"
-            "    ElseIf c\n        Return 2\n    Else\n        Return 3\n    EndIf\nEndFunction");
-
-    EXPECT_TRUE(f.check("A").empty());
-}
-
-TEST(PapyrusTypeChecker, ANonVoidFunctionWithAnIfWithoutAnElseIsRejected) {
-    Fixture f;
-    f.write("A",
-            "\nScriptName A\nint Function Pick(bool b)\n    If b\n        Return 1\n    EndIf\n"
-            "EndFunction");
-
-    const auto diagnostics = f.check("A");
-    ASSERT_TRUE(diagnostics.size() == 1);
-    EXPECT_TRUE(diagnostics[0].code == DiagnosticCode::MissingReturn);
-}
-
-TEST(PapyrusTypeChecker, EventsVoidFunctionsAndNativeFunctionsMayEndWithoutAReturn) {
-    Fixture f;
-    f.write("A",
-            "\nScriptName A\nint Function Ask() native\nFunction Nothing()\n    int x = 1\n"
-            "EndFunction\nEvent OnInit()\n    int x = 1\nEndEvent");
+            "\nScriptName A\nint Function Fall()\n    int x = 1\nEndFunction\n"
+            "int Function Pick(bool b, bool c)\n    If b\n        Return 1\n    ElseIf c\n"
+            "        Return 2\n    EndIf\nEndFunction");
 
     EXPECT_TRUE(f.check("A").empty());
 }
