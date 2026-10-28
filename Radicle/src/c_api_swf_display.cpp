@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <new>
 #include <string>
@@ -73,11 +74,19 @@ radicle_swf_bounds to_bounds(const fo4::swf::SwfBounds& value) {
 
 // Invariant: after this, every create and transform index of the list is a flat radicle_swf_tag_at index.
 bool to_flat_indices(const fo4::swf::SwfFile& file, fo4::swf::SwfDisplayList& display) {
-  std::vector<std::size_t> flat;
+  std::map<std::uint16_t, std::vector<std::size_t>> flat_by_timeline;
   for (auto& timeline : display.timelines) {
-    if (!radicle_swf_detail::timeline_flat_indices(file, timeline.character_id, flat)) return false;
     for (auto& frame : timeline.frames) {
       for (auto& instance : frame.instances) {
+        auto cached = flat_by_timeline.find(instance.timeline_id);
+        if (cached == flat_by_timeline.end()) {
+          std::vector<std::size_t> positions;
+          if (!radicle_swf_detail::timeline_flat_indices(file, instance.timeline_id, positions)) {
+            return false;
+          }
+          cached = flat_by_timeline.emplace(instance.timeline_id, std::move(positions)).first;
+        }
+        const std::vector<std::size_t>& flat = cached->second;
         if (instance.create_tag_index >= flat.size()) return false;
         instance.create_tag_index = flat[instance.create_tag_index];
         if (!instance.transform_tag_index) continue;
