@@ -117,6 +117,11 @@ RADICLE_API void radicle_runtime_close(radicle_runtime* runtime);
 RADICLE_API radicle_status radicle_runtime_open_movie(radicle_runtime* runtime,
                                                       const uint8_t* bytes, size_t size,
                                                       radicle_movie** out_movie);
+/* A nonzero bgs_host must install the BGSCodeObj host functions; zero must leave them absent, as radicle_runtime_open_movie does. Every refusal must leave *out_movie NULL. */
+RADICLE_API radicle_status radicle_runtime_open_movie_with_bgs(radicle_runtime* runtime,
+                                                               const uint8_t* bytes, size_t size,
+                                                               int bgs_host,
+                                                               radicle_movie** out_movie);
 RADICLE_API radicle_status radicle_runtime_open_movie_from_ba2(radicle_runtime* runtime,
                                                                const radicle_ba2* ba2,
                                                                const char* path,

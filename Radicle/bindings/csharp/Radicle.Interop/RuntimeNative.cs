@@ -126,6 +126,10 @@ public static unsafe partial class RadicleNative
     public static extern Status RuntimeOpenMovie(IntPtr runtime, byte* bytes, nuint size,
                                                  IntPtr* outMovie);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_runtime_open_movie_with_bgs")]
+    public static extern Status RuntimeOpenMovieWithBgs(IntPtr runtime, byte* bytes, nuint size,
+                                                        int bgsHost, IntPtr* outMovie);
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_runtime_open_movie_from_ba2", CharSet = CharSet.Ansi)]
     public static extern Status RuntimeOpenMovieFromBa2(IntPtr runtime, IntPtr ba2,
                                                         [MarshalAs(UnmanagedType.LPUTF8Str)] string path,

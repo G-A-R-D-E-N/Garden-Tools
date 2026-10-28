@@ -7492,3 +7492,20 @@ After the optional sign, the text must start with a digit or `.`, or it is NaN. 
 ## Radicle/src/avm2/interpreter.cpp:Interpreter::execute_frame (SWF interp gaps L8, deferred opcodes)
 
 Decoder-valid opcodes still returning NotImplemented, not implemented in L8: `hasnext` (0x1F, needs the key-list code of `hasnext2` factored out first), `pushnamespace` (0x31, needs a namespace Value kind), `getglobalslot` and `setglobalslot` (0x6E/0x6F, legacy), `setpropertylate` and `deletepropertylate` (0x69/0x6B), `finddef` (0x5F), and the `coerce_b/i/d/u/o` names (0x81/0x83/0x84/0x88/0x89, not confirmed against avmplus). E4X (`getdescendants`, `dxns`, `dxnslate`, `esc_xelem`, `esc_xattr`, `checkfilter`) is out of scope. Alchemy memory ops (`li8` through `sf64`, `sxi1` through `sxi16`) are not used by SWF UI code. Pinned avmplus sources were not found at `%TEMP%\abc-ref`, so the semantics above come from the AVM2 overview and not from the reference.
+## Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION (ABI 78)
+
+ABI 77 to 78 is one bump for `radicle_runtime_open_movie_with_bgs` in `Radicle/include/fo4/c_api_runtime.h`, the only new export. The pin is now `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsSeventyEight`. `Radicle/bindings/csharp/Radicle.Interop/RadicleNative.g.cs` was regenerated, and it changed only `CompiledAbiVersion`, because `c_api_runtime.h` is not in `Radicle/bindings/csharp/tools/generate_interop.py:HEADERS`. The runtime exports are hand-declared, so the new DllImport is `Radicle/bindings/csharp/Radicle.Interop/RuntimeNative.cs:RadicleNative.RuntimeOpenMovieWithBgs`.
+
+## Radicle/src/c_api_runtime.cpp:radicle_runtime_open_movie_with_bgs
+
+This is the options-taking C open that the "Fake BGS host and acceptance harness (#807 R8 L4)" section names as the follow-up. Before it, the C ABI opened every movie with `SwfRuntimeOptions` at its defaults, so `Radicle/include/fo4/avm2/swf_runtime.hpp:SwfRuntimeOptions` `bgs_host` could only be set from C++, and a C host got a `BGSCodeObj` with no functions. The new export passes `bgs_host != 0` into `open_movie_bytes`, which sets `options.bgs_host` before `SwfRuntime::create`. `radicle_runtime_open_movie` now delegates to it with 0, so existing callers see no change.
+
+Every refusal clears `*out_movie` before any check: a NULL runtime or out_movie, NULL or unparsable bytes, and a failed create. `open_movie_bytes` writes `*out_movie` only after the movie exists. The flag is a plain `int`, the same style as `source_only` in `radicle_graph_compile`; the export never refuses a flag value.
+
+A movie whose root has no `BGSCodeObj` opens with the bridge on and no functions installed. `Radicle/src/avm2/native_bgs.cpp:install_bgs_code_object` returns without error in that case, which matches the no-op for GJ_Defrag and TurretHack in the BGSCodeObj host call table section. The export does not refuse it.
+
+`radicle_runtime_open_movie_from_ba2` still opens with the bridge off. A C host that needs the bridge on an archived movie calls `radicle_ba2_extract` and then this export.
+
+Tests, both in `Radicle/tests/test_c_api_runtime.cpp`: `BgsOpenInstallsTheCodeObjectFunctionsOnlyWhenRequested` runs a root `Play` method that applies `BGSCodeObj.playSound`. With the flag off the host sees no call. With it on the host sees `bgs.playSound`. This catches an open that drops the flag or ignores it. `BgsOpenClearsItsMovieOutputOnEveryRefusal` starts from a non-NULL sentinel in `out_movie` and checks that a NULL runtime, a NULL `out_movie` (no crash), NULL bytes and unparsable bytes each leave it NULL. This catches a refusal that keeps a stale handle.
+
+Not built or run locally. CI is the first compile and run.
