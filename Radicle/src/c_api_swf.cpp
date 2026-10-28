@@ -5,7 +5,9 @@
 #include "c_api_swf_internal.hpp"
 #include "fo4/abc/opcodes.hpp"
 #include "fo4/abc/summary.hpp"
+#include "fo4/avm1/avm1.hpp"
 #include "fo4/swf/swf.hpp"
+#include "fo4/swf/swf_timeline.hpp"
 
 #include <cstddef>
 #include <cstdlib>
@@ -629,6 +631,47 @@ radicle_status radicle_swf_abc_method_disassemble(const radicle_swf* swf, size_t
     if (status != fo4::abc::AbcStatus::Ok) return fail(RADICLE_STATUS_PARSE_ERROR, "the method body did not decode");
     auto* buffer = radicle_swf_detail::copy_text(text, out_size);
     if (buffer == nullptr) return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to allocate the listing");
+    *out_text = buffer;
+    return RADICLE_STATUS_OK;
+  });
+}
+
+radicle_status radicle_swf_inspect_text(const radicle_swf* swf, const char* name, uint8_t** out_text,
+                                        size_t* out_size) {
+  clear_error();
+  if (out_text) *out_text = nullptr;
+  if (out_size) *out_size = 0;
+  if (swf == nullptr || name == nullptr || out_text == nullptr || out_size == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "swf, name, out_text and out_size are required");
+  }
+  return guarded("unknown exception while inspecting a movie", [&] {
+    const std::string text = fo4::swf::inspect_swf(swf->file, name);
+    auto* buffer = radicle_swf_detail::copy_text(text, out_size);
+    if (buffer == nullptr) return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to allocate the inspection");
+    *out_text = buffer;
+    return RADICLE_STATUS_OK;
+  });
+}
+
+radicle_status radicle_swf_avm1_disassemble(const radicle_swf* swf, size_t index, uint8_t** out_text,
+                                            size_t* out_size) {
+  clear_error();
+  if (out_text) *out_text = nullptr;
+  if (out_size) *out_size = 0;
+  if (swf == nullptr || out_text == nullptr || out_size == nullptr || index >= swf->tags.size()) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "swf, out_text, out_size and a tag index are required");
+  }
+  const fo4::swf::SwfTag& tag = *swf->tags[index].tag;
+  if (tag.code != fo4::swf::tag::kDoAction && tag.code != fo4::swf::tag::kDoInitAction) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the tag is not a DoAction or DoInitAction");
+  }
+  if (!tag.action) return fail(RADICLE_STATUS_PARSE_ERROR, "the action tag did not decode");
+  return guarded("unknown exception while disassembling AVM1 actions", [&] {
+    const auto bytes = std::span<const std::byte>(tag.payload).subspan(tag.action->offset, tag.action->size);
+    const auto stream = fo4::avm1::decode_actions(bytes);
+    if (!stream.ok()) return fail(RADICLE_STATUS_PARSE_ERROR, stream.message.c_str());
+    auto* buffer = radicle_swf_detail::copy_text(fo4::avm1::disassemble_actions(stream), out_size);
+    if (buffer == nullptr) return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to allocate the AVM1 listing");
     *out_text = buffer;
     return RADICLE_STATUS_OK;
   });

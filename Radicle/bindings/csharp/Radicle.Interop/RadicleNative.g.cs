@@ -2492,6 +2492,8 @@ public unsafe struct SwfFramesInstance
     public SwfBounds Bounds;
     public IntPtr Name;
     public IntPtr Path;
+    public uint CreateTagIndex;
+    public uint TransformTagIndex;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -2913,7 +2915,7 @@ public unsafe struct PapyrusCompileOptions
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 81u;
+    public const uint CompiledAbiVersion = 83u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -4018,6 +4020,12 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_tag_payload")]
     public static extern Status SwfTagPayload(IntPtr swf, nuint index, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_inspect_text")]
+    public static extern Status SwfInspectText(IntPtr swf, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, byte** out_text, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_avm1_disassemble")]
+    public static extern Status SwfAvm1Disassemble(IntPtr swf, nuint index, byte** out_text, nuint* out_size);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_symbol_count")]
     public static extern nuint SwfSymbolCount(IntPtr swf);

@@ -277,6 +277,13 @@ RADICLE_API radicle_status radicle_swf_tag_at(const radicle_swf* swf, size_t ind
 RADICLE_API radicle_status radicle_swf_tag_payload(const radicle_swf* swf, size_t index,
                                                    uint8_t** out_bytes, size_t* out_size);
 
+/* Invariant: name must be non-null; *out_text is malloc'd with a trailing NUL, release with radicle_free_bytes. */
+RADICLE_API radicle_status radicle_swf_inspect_text(const radicle_swf* swf, const char* name,
+                                                    uint8_t** out_text, size_t* out_size);
+/* Invariant: index is a flat radicle_swf_tag_at index of a DoAction or DoInitAction tag; *out_text is malloc'd with a trailing NUL, release with radicle_free_bytes. */
+RADICLE_API radicle_status radicle_swf_avm1_disassemble(const radicle_swf* swf, size_t index,
+                                                        uint8_t** out_text, size_t* out_size);
+
 /* SymbolClass, ExportAssets and FrameLabel records; ordering must stay file order. */
 RADICLE_API size_t radicle_swf_symbol_count(const radicle_swf* swf);
 RADICLE_API radicle_status radicle_swf_symbol_at(const radicle_swf* swf, size_t index, radicle_swf_symbol* out_symbol);
@@ -426,6 +433,8 @@ typedef struct radicle_swf_frames_instance {
   radicle_swf_bounds bounds;              /* must be in world points */
   const char* name;            /* must never be null; "" when the instance is unnamed */
   const char* path;            /* must never be null; instance path from the root, e.g. "Art/Cell" */
+  uint32_t create_tag_index;   /* must be the FLAT pre-order tag index radicle_swf_tag_at reports for the tag that created the instance */
+  uint32_t transform_tag_index; /* must be the FLAT pre-order tag index of the placement that last authored its MATRIX, or UINT32_MAX when none did */
 } radicle_swf_frames_instance;
 
 /* A per-frame display list; every string it hands back must stay valid until radicle_swf_frames_destroy, so

@@ -827,6 +827,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_nif_corpus.cpp
     tests/test_c_api_nif.cpp
     tests/test_c_api_swf.cpp
+    tests/test_c_api_swf_text.cpp
     tests/test_c_api_swf_morph.cpp
     tests/test_c_api_swf_display.cpp
     tests/test_c_api_swf_characters.cpp
