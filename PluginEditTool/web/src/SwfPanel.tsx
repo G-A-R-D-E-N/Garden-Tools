@@ -41,6 +41,7 @@ type SwfHost = {
   AbcBlocks(): Promise<string>;
   Disassemble(abc: number, methodIndex: number): Promise<string>;
   ShapeSvg(characterId: number): Promise<string>;
+  FrameSvg(frame: number): Promise<string>;
   BitmapPng(tagIndex: number): Promise<string>;
   InspectText(): Promise<string>;
   ActionTags(): Promise<string>;
@@ -85,6 +86,10 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
   const [shapeSvg, setShapeSvg] = useState('');
   const shapeRequest = useRef(0);
   const [bitmapPng, setBitmapPng] = useState('');
+  const [rootFrames, setRootFrames] = useState(0);
+  const [previewFrame, setPreviewFrame] = useState(0);
+  const [frameSvg, setFrameSvg] = useState('');
+  const frameRequest = useRef(0);
   const [inspectText, setInspectText] = useState('');
   const [inspectError, setInspectError] = useState('');
   const [actionTags, setActionTags] = useState<ActionTagRow[]>([]);
@@ -142,6 +147,9 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     shapeRequest.current += 1;
     setShapeSvg('');
     setBitmapPng('');
+    frameRequest.current += 1;
+    setFrameSvg('');
+    setPreviewFrame(0);
     avm1Request.current += 1;
     setAvm1(null);
     setAvm1Error('');
@@ -155,6 +163,8 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
       setSelectedLabel(null);
       await loadCharacters();
       await loadLabels(timeline);
+      const root = parse<{ frameCount?: number }>(await bridge.Timeline(0));
+      setRootFrames(root.frameCount ?? 0);
       const rows = parse<{ rows: InstanceRow[] }>(await bridge.Frame(timeline, frame));
       setInstances(rows.rows ?? []);
       const placementReply = parse<{ placements: PlacementRow[] }>(await bridge.Placements());
@@ -226,6 +236,20 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     setEditTag(character.tagIndex);
     setEditText({ text: reply.text, color: reply.color, x0: reply.x0, x1: reply.x1, y0: reply.y0, y1: reply.y1 });
   }, []);
+
+  const showFrame = useCallback(async (requested: number) => {
+    const bridge = host();
+    if (!bridge) return;
+    const next = Math.min(Math.max(0, Math.trunc(requested)), Math.max(0, rootFrames - 1));
+    const request = ++frameRequest.current;
+    setPreviewFrame(next);
+    setFrameSvg('');
+    const reply = parse<{ svg?: string; error?: string }>(await bridge.FrameSvg(next));
+    if (request !== frameRequest.current) return;
+    if (reply.error) { setError(reply.error); return; }
+    setError('');
+    setFrameSvg(reply.svg ?? '');
+  }, [rootFrames]);
 
   const applyEditText = useCallback(async () => {
     const bridge = host();
@@ -460,6 +484,20 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
           )}          <p>Revision {state.revision} · undo {state.undo} · redo {state.redo}</p>
           {shapeSvg && <img className="swf-shape" alt="Shape preview" src={`data:image/svg+xml;utf8,${encodeURIComponent(shapeSvg)}`} />}
           {bitmapPng && <img className="swf-bitmap" alt="Bitmap preview" src={`data:image/png;base64,${bitmapPng}`} />}
+          <section className="swf-frame" aria-label="Frame preview">
+            <h4>Frame preview</h4>
+            <button type="button" onClick={() => void showFrame(previewFrame - 1)} disabled={previewFrame <= 0}>Prev</button>
+            <input
+              type="number"
+              min={0}
+              max={Math.max(0, rootFrames - 1)}
+              aria-label="Preview frame"
+              value={previewFrame}
+              onChange={event => void showFrame(Number(event.target.value))}
+            />
+            <button type="button" onClick={() => void showFrame(previewFrame + 1)} disabled={previewFrame >= rootFrames - 1}>Next</button>
+            {frameSvg && <img className="swf-frame-image" alt="Frame preview" src={`data:image/svg+xml;utf8,${encodeURIComponent(frameSvg)}`} />}
+          </section>
           <section className="swf-inspect" aria-label="Inspect">
             <h4>Inspect</h4>
             {inspectError && <div className="swf-error" role="alert"><AlertTriangle size={14} /> {inspectError}</div>}
