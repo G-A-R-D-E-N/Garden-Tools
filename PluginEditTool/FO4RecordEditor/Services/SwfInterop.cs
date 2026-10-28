@@ -180,6 +180,8 @@ public class SwfInterop
     });
     public Task<string> BitmapPng(int tagIndex) => Run(() =>
         Json(new { png = Convert.ToBase64String(Document().Movie.BitmapPng(tagIndex)) }));
+    public Task<string> BitmapJpeg(int tagIndex) => Run(() =>
+        Json(new { jpeg = Convert.ToBase64String(Document().Movie.BitmapJpeg(tagIndex)) }));
     public Task<string> Undo() => Run(() => { Document().Undo(); return Snapshot(false); });
 
     public Task<string> Redo() => Run(() => { Document().Redo(); return Snapshot(false); });
