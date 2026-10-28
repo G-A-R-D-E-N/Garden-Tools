@@ -196,6 +196,22 @@ std::vector<NodeDefinition> build() {
                         dataIn(pinIds::kValue, "Value", PinTypeExpr::elementOfGeneric()),
                         execOut(pinIds::kThen, "")}));
 
+    all.push_back(make(std::string(builtinDefs::kStructNew), GraphNodeKind::StructNew, "New Struct",
+                       "Struct", {dataOut(pinIds::kReturn, "Struct", PinTypeExpr::any())},
+                       std::nullopt, true));
+
+    all.push_back(make(std::string(builtinDefs::kStructGet), GraphNodeKind::StructGet, "Get Member",
+                       "Struct",
+                       {dataIn(pinIds::kTarget, "Struct", PinTypeExpr::any()),
+                        dataOut(pinIds::kValue, "Value", PinTypeExpr::any())},
+                       std::nullopt, true));
+
+    all.push_back(make(std::string(builtinDefs::kStructSet), GraphNodeKind::StructSet, "Set Member",
+                       "Struct",
+                       {execIn(), dataIn(pinIds::kTarget, "Struct", PinTypeExpr::any()),
+                        dataIn(pinIds::kValue, "Value", PinTypeExpr::any()),
+                        execOut(pinIds::kThen, "")}));
+
     all.push_back(make(std::string(builtinDefs::kVariableGet), GraphNodeKind::VariableGet,
                        "Get Variable", "Variables",
                        {dataOut(pinIds::kValue, "Value", PinTypeExpr::any())},
