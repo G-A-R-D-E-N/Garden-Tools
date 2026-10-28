@@ -1,0 +1,55 @@
+#pragma once
+
+#include <fo4/avm1/avm1.hpp>
+
+#include <cstddef>
+#include <cstdint>
+#include <map>
+#include <string>
+#include <vector>
+
+namespace fo4::avm1 {
+
+enum class Avm1RunStatus : std::uint8_t {
+  Ok = 0,
+  InvalidStream,
+  Unsupported,
+  StackUnderflow,
+  ConstantOutOfRange,
+  BadBranch,
+  StepLimit,
+};
+
+const char* run_status_name(Avm1RunStatus status) noexcept;
+
+enum class Avm1DataKind : std::uint8_t {
+  Undefined = 0,
+  Null,
+  Boolean,
+  Number,
+  String,
+};
+
+struct Avm1Data {
+  Avm1DataKind kind{Avm1DataKind::Undefined};
+  bool boolean{false};
+  double number{0.0};
+  std::string text;
+};
+
+struct Avm1Result {
+  Avm1RunStatus status{Avm1RunStatus::Ok};
+  std::string message;
+  std::uint8_t opcode{0};
+  std::size_t offset{0};
+  std::size_t steps{0};
+  std::vector<std::string> trace;
+  std::map<std::string, Avm1Data> variables;
+
+  bool ok() const noexcept { return status == Avm1RunStatus::Ok; }
+};
+
+/* Requires a stream from decode_actions; a stream that did not decode is refused before any record. */
+Avm1Result execute_actions(const Avm1Stream& stream, std::size_t max_steps = 1000000);
+
+}  // namespace fo4::avm1
