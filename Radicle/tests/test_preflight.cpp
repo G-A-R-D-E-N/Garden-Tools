@@ -313,6 +313,24 @@ TEST(AuthoringPreflight, CellPlacementAcceptsInteriorAndExteriorCellBlocks) {
       cell_under_parent_chain("CELL", {fo4::GroupType::cell_children});
   EXPECT_TRUE(has_issue(fo4::schema::preflight_authoring_record(cell_children, key),
                         "record_placement_invalid"));
+
+  const auto persistent_children =
+      cell_under_parent_chain("CELL", {fo4::GroupType::cell_persistent_children});
+  EXPECT_TRUE(has_issue(fo4::schema::preflight_authoring_record(persistent_children, key),
+                        "record_placement_invalid"));
+
+  const auto temporary_children =
+      cell_under_parent_chain("CELL", {fo4::GroupType::cell_temporary_children});
+  EXPECT_TRUE(has_issue(fo4::schema::preflight_authoring_record(temporary_children, key),
+                        "record_placement_invalid"));
+
+  fo4::Plugin mislabeled_top;
+  mislabeled_top.key = fo4::PluginKey::from_filename("Patch.esp");
+  auto wrong_top = top_group("WRLD");
+  wrong_top.children.emplace_back(authored_record("CELL", 0x800, {"EDID", "DATA"}));
+  mislabeled_top.groups.push_back(std::move(wrong_top));
+  EXPECT_TRUE(has_issue(fo4::schema::preflight_authoring_record(mislabeled_top, key),
+                        "record_placement_invalid"));
 }
 
 fo4::Plugin refr_in_cell(fo4::Record record,

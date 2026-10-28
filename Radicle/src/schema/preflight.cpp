@@ -433,14 +433,14 @@ std::vector<PreflightIssue> preflight_authoring_record(
   }
 
   // Constraint: a CELL is a direct child of its matching top-level GRUP, a world children GRUP, or an interior/exterior cell block GRUP.
-  const bool cell_block =
+  const bool cell_parent_ok =
       location.parent_group_type == static_cast<std::int32_t>(GroupType::world_children) ||
       location.parent_group_type == static_cast<std::int32_t>(GroupType::interior_cell_block) ||
       location.parent_group_type == static_cast<std::int32_t>(GroupType::interior_cell_subblock) ||
       location.parent_group_type == static_cast<std::int32_t>(GroupType::exterior_cell_block) ||
       location.parent_group_type == static_cast<std::int32_t>(GroupType::exterior_cell_subblock);
   if (constraint->placement == RecordPlacement::cell_block &&
-      !((location.direct_top_level && location.top_label_matches) || cell_block)) {
+      !((location.direct_top_level && location.top_label_matches) || cell_parent_ok)) {
     issues.push_back(authoring_issue(
         record_key,
         location.record->header.signature.to_string(),

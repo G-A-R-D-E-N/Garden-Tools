@@ -1,5 +1,6 @@
 [CmdletBinding()]
 param(
+    [ValidatePattern('^[0-9A-Za-z][0-9A-Za-z._-]*\z')]
     [string] $Version = (Get-Date -Format 'yyyy.MM.dd'),
     [string] $NiftoolPath = $env:NIFTOOL_PATH,
     [string] $TexconvPath = $env:TEXCONV_PATH,
@@ -210,6 +211,10 @@ if (Test-Path -LiteralPath $AbiHeader) {
         Select-Object -First 1
     if ($define) { $Abi = $define.Matches[0].Groups[1].Value }
 }
+if ($env:GITHUB_ACTIONS) {
+    if ($Commit -notmatch '^[0-9a-f]{40}$') { throw "CI build metadata: commit '$Commit' is not a 40-character hex SHA." }
+    if ($Abi -notmatch '^[0-9]+$') { throw "CI build metadata: RADICLE_ABI_VERSION '$Abi' is not numeric." }
+}
 $BuildInfo = @(
     'product=FO4RecordEditor'
     "version=$Version"
@@ -224,7 +229,23 @@ Write-Host "    version=$Version commit=$Commit"
 
 Step 'Zipping'
 if (Test-Path $ZipPath) { Remove-Item $ZipPath -Force }
-Compress-Archive -Path "$Staging\*" -DestinationPath $ZipPath -CompressionLevel Optimal
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$stagePrefix = (Get-Item -LiteralPath $Staging).FullName.TrimEnd('\') + '\'
+$archive = [System.IO.Compression.ZipFile]::Open($ZipPath, [System.IO.Compression.ZipArchiveMode]::Create)
+try {
+    Get-ChildItem -LiteralPath $Staging -Recurse -File -Force | ForEach-Object {
+        $entry = $_.FullName.Substring($stagePrefix.Length).Replace('\', '/')
+        [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+            $archive, $_.FullName, $entry, [System.IO.Compression.CompressionLevel]::Optimal)
+    }
+} catch {
+    $archive.Dispose()
+    Remove-Item -LiteralPath $ZipPath -Force
+    throw
+} finally {
+    $archive.Dispose()
+}
 
 $sizeMb = [math]::Round((Get-Item $ZipPath).Length / 1MB, 1)
 Write-Host "`n============================================================" -ForegroundColor Green

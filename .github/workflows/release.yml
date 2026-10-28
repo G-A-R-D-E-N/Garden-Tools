@@ -43,16 +43,32 @@ jobs:
     name: FO4IDE package (Windows)
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 120
+    env:
+      RELEASE_VERSION: ${{ github.event.inputs.version }}
+      RELEASE_REF: ${{ github.event.inputs.ref }}
     defaults:
       run:
         shell: cmd
     steps:
+      - name: Validate release inputs
+        shell: powershell
+        run: |
+          if ($env:RELEASE_VERSION -notmatch '^[0-9A-Za-z][0-9A-Za-z._-]*\z') {
+            Write-Output '::error::version must start with a letter or digit and contain only letters, digits, dot, underscore or hyphen'
+            exit 1
+          }
+          if ($env:RELEASE_REF -notmatch '^[0-9A-Za-z][0-9A-Za-z._/-]*\z' -or $env:RELEASE_REF.Contains('..')) {
+            Write-Output '::error::ref must start with a letter or digit, contain only letters, digits, dot, underscore, slash or hyphen, and have no .. sequence'
+            exit 1
+          }
+
       # Full URL gives this workflow its own action cache; the shared
       # actions/checkout cache races with native-ci's Windows job (shallow.lock).
       - name: Check out the requested ref
         uses: https://code.forgejo.org/actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event.inputs.ref }}
+          persist-credentials: false
 
       # package.ps1 invokes cmake and a native compiler; the Windows runners keep
       # them off the default PATH, and this is the step every native Windows cmake
@@ -96,8 +112,8 @@ jobs:
           $env:CK_WIKI_PATH = '${{ vars.FO4IDE_CK_WIKI_PATH }}'
           $env:FO4IDE_AUDIO_TOOLS_DIR = '${{ vars.FO4IDE_AUDIO_TOOLS_DIR }}'
           $env:FO4IDE_CMAKE_GENERATOR = 'Ninja'
-          & .\PluginEditTool\package.ps1 -Version '${{ github.event.inputs.version }}' -SkipWeb
-          $zip = 'PluginEditTool\dist\FO4RecordEditor-${{ github.event.inputs.version }}.zip'
+          & .\PluginEditTool\package.ps1 -Version $env:RELEASE_VERSION -SkipWeb
+          $zip = 'PluginEditTool\dist\FO4RecordEditor-' + $env:RELEASE_VERSION + '.zip'
           if (-not (Test-Path -LiteralPath $zip -PathType Leaf)) {
             Write-Output "::error::package.ps1 did not produce $zip"
             exit 1
@@ -120,8 +136,8 @@ jobs:
             exit 1
           }
           $metadata = @(
-            "version=${{ github.event.inputs.version }}"
-            "ref=${{ github.event.inputs.ref }}"
+            "version=$env:RELEASE_VERSION"
+            "ref=$env:RELEASE_REF"
             "commit=$commit"
             "radicle_abi_version=$abi"
             "runner=$env:RUNNER_NAME"
@@ -155,20 +171,35 @@ jobs:
     name: Radicle source snapshot (Linux)
     runs-on: [self-hosted, Linux, X64, garden]
     timeout-minutes: 30
+    env:
+      RELEASE_VERSION: ${{ github.event.inputs.version }}
+      RELEASE_REF: ${{ github.event.inputs.ref }}
     defaults:
       run:
         shell: bash
     steps:
+      - name: Validate release inputs
+        run: |
+          if [[ ! "$RELEASE_VERSION" =~ ^[0-9A-Za-z][0-9A-Za-z._-]*$ ]]; then
+            echo "::error::version must start with a letter or digit and contain only letters, digits, dot, underscore or hyphen"
+            exit 1
+          fi
+          if [[ ! "$RELEASE_REF" =~ ^[0-9A-Za-z][0-9A-Za-z._/-]*$ || "$RELEASE_REF" == *..* ]]; then
+            echo "::error::ref must start with a letter or digit, contain only letters, digits, dot, underscore, slash or hyphen, and have no .. sequence"
+            exit 1
+          fi
+
       - name: Check out the requested ref
         uses: https://code.forgejo.org/actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event.inputs.ref }}
+          persist-credentials: false
 
       - name: Build Radicle source snapshot
         run: |
-          git archive --format=zip --prefix=Radicle-${{ github.event.inputs.version }}/ \
-            -o radicle-${{ github.event.inputs.version }}-source.zip HEAD Radicle
-          test -f radicle-${{ github.event.inputs.version }}-source.zip
+          git archive --format=zip --prefix="Radicle-$RELEASE_VERSION/" \
+            -o "radicle-$RELEASE_VERSION-source.zip" HEAD Radicle
+          test -f "radicle-$RELEASE_VERSION-source.zip"
 
       # python3 is already required on this runner by native-ci, so the ABI line
       # is parsed the same way native-ci parses files inline.
@@ -181,8 +212,8 @@ jobs:
           fi
           commit="$(git rev-parse HEAD)"
           {
-            echo "version=${{ github.event.inputs.version }}"
-            echo "ref=${{ github.event.inputs.ref }}"
+            echo "version=$RELEASE_VERSION"
+            echo "ref=$RELEASE_REF"
             echo "commit=$commit"
             echo "radicle_abi_version=$abi"
           } > radicle-source-info.txt
