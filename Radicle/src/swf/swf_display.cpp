@@ -1,5 +1,7 @@
 #include "fo4/swf/swf_display.hpp"
 
+#include "swf_frame_control.hpp"
+
 #include <algorithm>
 #include <map>
 #include <optional>
@@ -48,6 +50,7 @@ struct LocalTimeline {
   bool is_sprite{false};
   std::size_t sprite_tag_index{0};
   std::vector<LocalState> frames;
+  detail::FrameControls controls;
 };
 
 bool collect_operations(const std::vector<SwfTag>& tags, std::vector<std::vector<Operation>>& frames,
@@ -222,6 +225,22 @@ std::optional<SwfColorTransform> compose_color(const std::optional<SwfColorTrans
   return out;
 }
 
+std::uint32_t displayed_frame(const LocalTimeline& timeline, std::uint32_t age) {
+  if (!timeline.controls.empty()) {
+    return detail::simulate_playhead(timeline.controls, age).frame;
+  }
+  const auto count = static_cast<std::uint32_t>(timeline.frames.size());
+  return count <= 1 ? 0 : age % count;
+}
+
+std::uint32_t entry_age(const LocalTimeline& timeline, std::uint32_t age, std::uint32_t frame) {
+  if (!timeline.controls.empty()) {
+    return detail::simulate_playhead(timeline.controls, age).entered[frame];
+  }
+  const auto count = static_cast<std::uint32_t>(timeline.frames.size());
+  return count <= 1 ? frame : age - age % count + frame;
+}
+
 class Expander {
 public:
   Expander(const std::map<std::uint16_t, LocalTimeline>& sprites,
@@ -242,9 +261,7 @@ public:
               const std::optional<SwfColorTransform>& parent_color, bool parent_visible,
               std::uint32_t level, std::string_view parent_path, std::string_view parent_key,
               std::vector<std::uint16_t>& stack, SwfDisplayFrame& out) {
-    const std::size_t count = timeline.frames.size();
-    const std::uint32_t index = count <= 1 ? 0 : age % static_cast<std::uint32_t>(count);
-    const std::uint32_t cycle_start = count <= 1 ? 0 : age - index;
+    const std::uint32_t index = displayed_frame(timeline, age);
     for (const auto& entry : timeline.frames[index]) {
       if (budget_ >= options_.max_instances) {
         message_ = "the display list exceeds its instance budget";
@@ -308,7 +325,7 @@ public:
       if (std::find(stack.begin(), stack.end(), local.character_id) != stack.end()) {
         continue;
       }
-      const std::uint32_t born = cycle_start + local.created_frame;
+      const std::uint32_t born = entry_age(timeline, age, local.created_frame);
       const std::uint32_t child_age = age > born ? age - born : 0;
       stack.push_back(local.character_id);
       const bool ok = expand(child->second, child_age, world, world_color, world_visible, level + 1,
@@ -349,6 +366,7 @@ SwfDisplayList build_display_list(const SwfFile& file, const SwfDisplayOptions& 
   std::map<std::uint16_t, SwfRect> shape_bounds;
   std::map<std::uint16_t, std::vector<std::vector<Operation>>> sprite_operations;
   std::map<std::uint16_t, std::size_t> sprite_tag_indices;
+  std::map<std::uint16_t, detail::FrameControls> sprite_controls;
   for (std::size_t tag_index = 0; tag_index < file.tags.size(); ++tag_index) {
     const SwfTag& tag = file.tags[tag_index];
     if (tag.shape) {
@@ -366,6 +384,7 @@ SwfDisplayList build_display_list(const SwfFile& file, const SwfDisplayOptions& 
       return out;
     }
     sprite_tag_indices.emplace(*tag.sprite_id, tag_index);
+    sprite_controls.emplace(*tag.sprite_id, detail::collect_frame_controls(tag.children));
   }
 
   std::vector<std::vector<Operation>> root_operations;
@@ -376,6 +395,7 @@ SwfDisplayList build_display_list(const SwfFile& file, const SwfDisplayOptions& 
   if (!replay(root_operations, 0, root, out.message)) {
     return out;
   }
+  root.controls = detail::collect_frame_controls(file.tags);
   std::map<std::uint16_t, LocalTimeline> sprites;
   for (const auto& entry : sprite_operations) {
     LocalTimeline timeline;
@@ -383,6 +403,7 @@ SwfDisplayList build_display_list(const SwfFile& file, const SwfDisplayOptions& 
       return out;
     }
     timeline.is_sprite = true;
+    timeline.controls = std::move(sprite_controls.at(entry.first));
     timeline.sprite_tag_index = sprite_tag_indices.at(entry.first);
     sprites.emplace(entry.first, std::move(timeline));
   }
