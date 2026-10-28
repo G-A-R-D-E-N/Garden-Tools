@@ -6,10 +6,10 @@ The Papyrus gates are in `docs/papyrus-real-data-gates.md`. The ground rules the
 
 ## Ground rules
 
-- Every gate here reads one variable: `FO4_DATA_DIR`, the Fallout 4 `Data` folder itself. Repo examples use `D:\SteamLibrary\steamapps\common\Fallout 4\Data` (`docs/code-notes/BGS.md:562`). Unset means `GTEST_SKIP`. A set value with no `Fallout4 - Interface.ba2` in it also skips, through the `std::filesystem::exists(archive_path)` check in each test. Gate 1 skips only when it finds neither loose movies nor the archive. Every SKIPPED line needs a note.
+- Every gate here reads `FO4_DATA_DIR`, the Fallout 4 `Data` folder itself. The only other variable is the optional `FO4_GAME_BUILD` override (see the build bullet below). Repo examples use `D:\SteamLibrary\steamapps\common\Fallout 4\Data` (`docs/code-notes/BGS.md:562`). Unset means `GTEST_SKIP`. A set value with no `Fallout4 - Interface.ba2` in it also skips, through the `std::filesystem::exists(archive_path)` check in each test. Gate 1 skips only when it finds neither loose movies nor the archive. Every SKIPPED line needs a note.
 - No Papyrus variable is read. `FO4RE_*` and `FO4_PSC*` do not apply.
 - The census manifest path is compile-time, not env: `FO4_TESTDATA_DIR="testdata"` (`Radicle/CMakeLists.txt:1010`). It is relative, so the working directory must be `<repo>\Radicle`. `gtest_discover_tests` sets that (`Radicle/CMakeLists.txt:1019`), and the manual template sets it too.
-- The game build comes from the file version of `<FO4_DATA_DIR>\..\Fallout4.exe` (`Radicle/tests/real_data_build.cpp:82-92`). 1.10.163.0 is OG, 1.10.980 or 1.10.984 is NG, and 1.11.x is AE (`real_data_build.cpp:76-78`). `exact_counts_known` is true only for AE 1.11.240.0 (`real_data_build.cpp:95-96`). Each test records the build as the `game_build` property.
+- The game build comes from the file version of `<FO4_DATA_DIR>\..\Fallout4.exe` (`Radicle/tests/real_data_build.cpp:82-92`), unless `FO4_GAME_BUILD` is set and non-empty. That override replaces the exe probe (`real_data_build.cpp:83-85`), and `game_build` then records the override value, not the exe's. A wrong override changes which branch runs: gate 3 row-checks only when the build is 1.10.163.0 or 1.10.984.0, and gate 5 requires zero LZMA only when the build is AE 1.11.240.0. 1.10.163.0 is OG, 1.10.980 or 1.10.984 is NG, and 1.11.x is AE (`real_data_build.cpp:76-78`). `exact_counts_known` is true only for AE 1.11.240.0 (`real_data_build.cpp:95-96`). Each test records the build as the `game_build` property.
 - Archives: the gates read `Fallout4 - Interface.ba2`, through `fo4::archive::read_ba2_general_file` or, in gates 7 and 8, through the C ABI (`radicle_ba2_open`). Gate 1 also reads the three DLC main archives. Loose `Interface\*.swf|.gfx` files are used first where a test reads them.
 - CI: the real-data job `native-windows-real-data` (`.github/workflows/native-ci.yml:492`, runner label `fo4-data`) reads `FO4_DATA_DIR` from the runner environment. The workflow does not set it. `vars.FO4_DATA_DIR_LINUX` is for the Linux job only (lines 136, 164).
 - CI's `REAL_DATA_TEST_REGEX` (`native-ci.yml:66`) matches all eight tests below. Checked by running the regex with `grep -E` against each test name.
@@ -61,7 +61,7 @@ Add `--gtest_output=xml:<dir>\<gate>.xml` to keep `RecordProperty` values. Each 
 - Pass, row check: only when the detected build is in `k_verified`, which is 1.10.163.0 or 1.10.984.0 (lines 170-171). The census text must equal the manifest byte for byte after its `# game_build` line is rewritten to the detected build (`with_game_build`, lines 179-183).
 - Caveat: on any other build, including AE 1.11.240.0, the test records `manifest_build_unverified` and returns (lines 174-178). It passes without comparing a row.
 - Proves: on OG or NG, Radicle's census equals the committed manifest. `Radicle/docs/code-notes/Radicle.md:5356-5358` says the manifest was produced by a scratch Python reader, not by Radicle's code, so this is agreement between two readers, not a check against the game.
-- Build-label discrepancy, not resolved: the manifest header says `1.10.984.0`. The brief also cited `1.11.240.0` at `Radicle.md:~501`. No `1.11.240.0` appears on line 501 of `Radicle/docs/code-notes/Radicle.md`. The only SWF-census-area mention of `1.11.240.0` is `Radicle.md:5727`, for the DoAction evidence. Which build the census header should name is UNVERIFIED.
+- Build label: the manifest header is `1.10.984.0` (`program_census.txt:3`). `k_verified` is `{1.10.163.0, 1.10.984.0}` (`test_swf_census_real.cpp:171`). Every other build, including AE 1.11.240.0, is not row-checked.
 
 ### 4. Embedded fonts
 
@@ -106,7 +106,7 @@ Add `--gtest_output=xml:<dir>\<gate>.xml` to keep `RecordProperty` values. Each 
 - Map: `<snapshot>` goes to `snapshot_hash`, which is compared with `run.hashes.back()` (line 373). `<hostlog>` goes to `host_log_hash` (line 376).
 - Source of the values: a data-runner log only, after the bridge fix on branch `nomad/gt-swf-placement-move` has landed. A pin taken before that fix pins the wrong behaviour. In this checkout the branch is at 1896d4752 with 0 commits beyond `origin/nomad/dev`, so the fix is not in any commit I could see. Its worktree is `E:/Projects/Forgejo/GT-wt/swf-placement-move`.
 
-### 8. Same file, not in the brief list: single-movie C ABI replay
+### 8. Same file as gate 7, single-movie C ABI replay
 
 - Test: `CApiRuntimeReal.RunsAProgramMovieDeterministically` (`test_c_api_runtime_real.cpp:130`). It matches the CI regex.
 - Env: `FO4_DATA_DIR`. Archive only.
@@ -131,8 +131,6 @@ Add `--gtest_output=xml:<dir>\<gate>.xml` to keep `RecordProperty` values. Each 
 - Whether the `fo4-data` runner has `FO4_DATA_DIR` set and which Fallout 4 build it has. The workflow reads the build in its "Print Fallout 4 build" step, but no value is in the repo.
 - The exact `fo4_tests.exe` location (derived from CMake, not built here).
 - The gtest summary and `GTEST_SKIP` output format for the vendored gtest version.
-- Whether 82 DoAction tags, 675 ABC blocks or the other AE counts hold on OG 1.10.163.0 or NG 1.10.984.0.
-- The census header build: `1.10.984.0` on line 3 of `program_census.txt` against the `1.11.240.0` the brief cites at `Radicle.md:~501`. The citation was not found on that line. Not resolved here.
-- Whether the seven-program pins can be filled before the bridge fix lands. They cannot be trusted until it does.
+- Whether 82 DoAction tags, 675 ABC blocks or the other AE counts hold on OG 1.10.163.0 or NG 1.10.984.0.- Whether the seven-program pins can be filled before the bridge fix lands. They cannot be trusted until it does.
 - The `SetPlatform` and `InitProgram` argument types (gate 7).
 - Whether Radicle's census equals the manifest on a data runner. The row check runs only there and was not run here.
