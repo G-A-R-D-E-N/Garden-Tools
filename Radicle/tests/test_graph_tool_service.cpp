@@ -4,7 +4,9 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <vector>
 
+#include <fo4/c_api_graph.h>
 #include <fo4/graph/graph_tool_service.hpp>
 #include <fo4/graph/node_palette.hpp>
 
@@ -61,6 +63,13 @@ GraphDocument brokenGraph() {
 
 bool startsWith(const std::string& text, const std::string& prefix) {
     return text.size() >= prefix.size() && text.substr(0, prefix.size()) == prefix;
+}
+
+std::string takeText(radicle_status status, uint8_t* bytes, size_t size) {
+    EXPECT_EQ(status, RADICLE_STATUS_OK);
+    std::string text = bytes ? std::string(reinterpret_cast<const char*>(bytes), size) : std::string();
+    radicle_free_bytes(bytes);
+    return text;
 }
 
 }
@@ -187,4 +196,170 @@ TEST(GraphToolService, GraphToolServiceAnUnknownNodeTypeIsAMessageRatherThanAnEx
 
     EXPECT_TRUE(startsWith(text, "RESULT: FAILED"));
     EXPECT_TRUE(text.find("No node type") != std::string::npos);
+}
+
+TEST(GraphToolService, GraphToolServiceCApiValidateReturnsTheServiceTextForAGoodGraph) {
+    const auto text = withGraph(goodGraph(), [](const std::string& path) {
+        uint8_t* bytes = nullptr;
+        size_t size = 0;
+        const auto status =
+            radicle_graph_validate(path.c_str(), imports().c_str(), nullptr, 0, &bytes, &size);
+        return takeText(status, bytes, size);
+    });
+    const auto expected = withGraph(goodGraph(), [](const std::string& path) {
+        return GraphToolService::validate(path, &imports());
+    });
+
+    EXPECT_EQ(text, expected);
+    EXPECT_TRUE(startsWith(text, "RESULT: OK"));
+}
+
+TEST(GraphToolService, GraphToolServiceCApiValidateMatchesTheServiceForABrokenGraphWithBaseImports) {
+    const char* const bases[] = {imports().c_str()};
+    const std::vector<std::filesystem::path> roots{imports()};
+    const auto text = withGraph(brokenGraph(), [&](const std::string& path) {
+        uint8_t* bytes = nullptr;
+        size_t size = 0;
+        const auto status = radicle_graph_validate(path.c_str(), nullptr, bases, 1, &bytes, &size);
+        return takeText(status, bytes, size);
+    });
+    const auto expected = withGraph(brokenGraph(), [&](const std::string& path) {
+        return GraphToolService::validate(path, nullptr, roots);
+    });
+
+    EXPECT_EQ(text, expected);
+    EXPECT_TRUE(startsWith(text, "RESULT: 1 error"));
+    EXPECT_TRUE(text.find(std::string(codes::kMissingRequiredInput)) != std::string::npos);
+}
+
+TEST(GraphToolService, GraphToolServiceCApiAMissingGraphIsTextWithOkStatusNotAnErrorStatus) {
+    uint8_t* bytes = nullptr;
+    size_t size = 0;
+    const auto status = radicle_graph_validate("/no/such/graph.fograph", imports().c_str(), nullptr,
+                                               0, &bytes, &size);
+    const auto text = takeText(status, bytes, size);
+
+    EXPECT_EQ(text, GraphToolService::validate("/no/such/graph.fograph", &imports()));
+    EXPECT_TRUE(startsWith(text, "RESULT: FAILED"));
+}
+
+TEST(GraphToolService, GraphToolServiceCApiCompileSourceOnlyMatchesTheServiceText) {
+    const std::string output = uniqueRoot("cout");
+    const auto outputPath = std::filesystem::path(output);
+    const auto text = withGraph(goodGraph(), [&](const std::string& path) {
+        uint8_t* bytes = nullptr;
+        size_t size = 0;
+        const auto status = radicle_graph_compile(path.c_str(), output.c_str(), imports().c_str(),
+                                                  1, nullptr, 0, &bytes, &size);
+        return takeText(status, bytes, size);
+    });
+    const auto expected = withGraph(goodGraph(), [&](const std::string& path) {
+        return GraphToolService::compile(path, &outputPath, &imports(), true);
+    });
+
+    EXPECT_EQ(text, expected);
+    EXPECT_TRUE(startsWith(text, "RESULT: OK. Generated source for Fixture."));
+    std::filesystem::remove_all(output);
+}
+
+TEST(GraphToolService, GraphToolServiceCApiCompileRefusesAnEmptyOutputPathAndClearsTheOutputs) {
+    uint8_t sentinel = 0;
+    uint8_t* bytes = &sentinel;
+    size_t size = 99;
+    const auto status =
+        radicle_graph_compile("Fixture.fograph", "", imports().c_str(), 0, nullptr, 0, &bytes, &size);
+
+    EXPECT_EQ(status, RADICLE_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(bytes, nullptr);
+    EXPECT_EQ(size, 0u);
+}
+
+TEST(GraphToolService, GraphToolServiceCApiCompileRefusesAnOutputPathThatEscapesWithDotDot) {
+    const std::string root = uniqueRoot("escape");
+    const std::string output = (std::filesystem::path(root) / ".." / "escaped").string();
+    const auto escaped = std::filesystem::path(root).parent_path() / "escaped";
+    uint8_t* bytes = nullptr;
+    size_t size = 0;
+    const auto status = radicle_graph_compile("Fixture.fograph", output.c_str(), imports().c_str(),
+                                              0, nullptr, 0, &bytes, &size);
+
+    EXPECT_EQ(status, RADICLE_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(bytes, nullptr);
+    EXPECT_FALSE(std::filesystem::exists(escaped));
+    std::filesystem::remove_all(escaped);
+}
+
+TEST(GraphToolService, GraphToolServiceCApiNullRequiredArgumentsAreRefusedWithClearedOutputs) {
+    uint8_t sentinel = 0;
+    uint8_t* bytes = &sentinel;
+    size_t size = 99;
+    auto status = radicle_graph_validate(nullptr, nullptr, nullptr, 0, &bytes, &size);
+    EXPECT_EQ(status, RADICLE_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(bytes, nullptr);
+    EXPECT_EQ(size, 0u);
+
+    bytes = &sentinel;
+    size = 99;
+    status = radicle_graph_compile(nullptr, "out", nullptr, 0, nullptr, 0, &bytes, &size);
+    EXPECT_EQ(status, RADICLE_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(bytes, nullptr);
+    EXPECT_EQ(size, 0u);
+
+    bytes = &sentinel;
+    size = 99;
+    status = radicle_graph_palette_search(nullptr, nullptr, 5, nullptr, 0, &bytes, &size);
+    EXPECT_EQ(status, RADICLE_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(bytes, nullptr);
+    EXPECT_EQ(size, 0u);
+
+    bytes = &sentinel;
+    size = 99;
+    status = radicle_graph_describe_node(nullptr, nullptr, nullptr, 0, &bytes, &size);
+    EXPECT_EQ(status, RADICLE_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(bytes, nullptr);
+    EXPECT_EQ(size, 0u);
+
+    EXPECT_EQ(radicle_graph_validate("Fixture.fograph", nullptr, nullptr, 0, nullptr, nullptr),
+              RADICLE_STATUS_INVALID_ARGUMENT);
+}
+
+TEST(GraphToolService, GraphToolServiceCApiRefusesANullBaseImportEntry) {
+    const char* const bases[] = {nullptr};
+    uint8_t* bytes = nullptr;
+    size_t size = 0;
+    const auto status =
+        radicle_graph_describe_node("op.add", nullptr, bases, 1, &bytes, &size);
+
+    EXPECT_EQ(status, RADICLE_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(bytes, nullptr);
+}
+
+TEST(GraphToolService, GraphToolServiceCApiPaletteSearchMatchesTheServiceIncludingTheLimit) {
+    uint8_t* bytes = nullptr;
+    size_t size = 0;
+    const auto status =
+        radicle_graph_palette_search("Get", imports().c_str(), 2, nullptr, 0, &bytes, &size);
+    const auto text = takeText(status, bytes, size);
+
+    EXPECT_EQ(text, GraphToolService::searchPalette("Get", &imports(), 2));
+    EXPECT_TRUE(text.find("more not shown") != std::string::npos);
+}
+
+TEST(GraphToolService, GraphToolServiceCApiDescribeNodeMatchesTheServiceForKnownAndUnknownTypes) {
+    uint8_t* bytes = nullptr;
+    size_t size = 0;
+    auto status = radicle_graph_describe_node("call:ObjectReference.AddItem", imports().c_str(),
+                                              nullptr, 0, &bytes, &size);
+    const auto known = takeText(status, bytes, size);
+
+    bytes = nullptr;
+    size = 0;
+    status = radicle_graph_describe_node("call:NoSuchScript.NoSuchThing", imports().c_str(),
+                                         nullptr, 0, &bytes, &size);
+    const auto unknown = takeText(status, bytes, size);
+
+    EXPECT_EQ(known, GraphToolService::describeNode("call:ObjectReference.AddItem", &imports()));
+    EXPECT_TRUE(known.find("arg:akItemToAdd") != std::string::npos);
+    EXPECT_EQ(unknown, GraphToolService::describeNode("call:NoSuchScript.NoSuchThing", &imports()));
+    EXPECT_TRUE(startsWith(unknown, "RESULT: FAILED"));
 }
