@@ -258,6 +258,18 @@ bool is_smoothed(std::uint8_t type) {
   return type == 0x40 || type == 0x41;
 }
 
+bool is_tiled(std::uint8_t type) {
+  return type == 0x40 || type == 0x42;
+}
+
+bool is_clipped(std::uint8_t type) {
+  return type == 0x41 || type == 0x43;
+}
+
+const char* rendering_attribute(std::uint8_t type) {
+  return is_smoothed(type) ? "" : " image-rendering=\"pixelated\"";
+}
+
 std::string base64_text(const std::vector<std::uint8_t>& bytes) {
   std::string text;
   for (std::size_t offset = 0; offset < bytes.size(); offset += 3) {
@@ -277,28 +289,24 @@ std::string fill_id(const SwfFillStyle& fill, const std::string& id_prefix, std:
   return id_prefix + (is_bitmap(fill.type) ? "bmp" : "") + std::to_string(index + 1);
 }
 
-std::optional<std::string> bitmap_pattern(const SwfFillStyle& fill, const std::string& id,
-                                          const SvgBitmaps& bitmaps) {
-  if (!is_bitmap(fill.type)) {
-    return std::nullopt;
-  }
-  const auto found = bitmaps.find(fill.bitmap_id);
-  if (found == bitmaps.end()) {
-    return std::nullopt;
-  }
-  const SwfBitmap& bitmap = *found->second;
-  const auto png = bitmap_to_png(bitmap);
-  if (!png) {
-    return std::nullopt;
-  }
-  const std::string width = svg_number(bitmap.width);
-  const std::string height = svg_number(bitmap.height);
-  const char* rendering = is_smoothed(fill.type) ? "" : " image-rendering=\"pixelated\"";
-  return "<pattern id=\"" + id + "\" patternUnits=\"userSpaceOnUse\" width=\"" + width +
-         "\" height=\"" + height + "\" patternTransform=\"" +
-         bitmap_matrix_text(fill.matrix.value_or(SwfMatrix{})) + "\">\n<image width=\"" + width +
-         "\" height=\"" + height + "\" href=\"data:image/png;base64," + base64_text(*png) +
-         "\"" + rendering + "/>\n</pattern>\n";
+std::string bitmap_pattern(const SwfFillStyle& fill, const std::string& id,
+                           const SvgImage& image) {
+  return "<pattern id=\"" + id + "\" patternUnits=\"userSpaceOnUse\" width=\"" + image.width +
+         "\" height=\"" + image.height + "\" patternTransform=\"" +
+         bitmap_matrix_text(fill.matrix.value_or(SwfMatrix{})) + "\">\n<image width=\"" +
+         image.width + "\" height=\"" + image.height + "\" href=\"data:image/png;base64," +
+         image.png_base64 + "\"" + rendering_attribute(fill.type) + "/>\n</pattern>\n";
+}
+
+std::string clipped_bitmap(const std::string& data, const SwfFillStyle& fill,
+                           const std::string& id, const SvgImage& image) {
+  const std::string clip = id + "clip";
+  const std::string matrix = bitmap_matrix_text(fill.matrix.value_or(SwfMatrix{}));
+  return "<clipPath id=\"" + clip + "\"><path d=\"" + data +
+         "\"/></clipPath>\n<g clip-path=\"url(#" + clip + ")\">\n<image transform=\"" + matrix +
+         "\" width=\"" + image.width + "\" height=\"" + image.height +
+         "\" href=\"data:image/png;base64," + image.png_base64 + "\"" +
+         rendering_attribute(fill.type) + "/>\n</g>\n";
 }
 
 std::string focal_text(const SwfFillStyle& fill) {
@@ -332,25 +340,25 @@ std::string gradient_text(const SwfFillStyle& fill, const std::string& id) {
 }
 
 std::string fill_defs(const std::vector<SwfFillStyle>& fills, const std::string& id_prefix,
-                      const SvgBitmaps& bitmaps) {
+                      const SvgImages& images) {
   std::string text;
   for (std::size_t index = 0; index < fills.size(); ++index) {
     const std::string id = fill_id(fills[index], id_prefix, index);
     if (is_gradient(fills[index].type)) {
       text += gradient_text(fills[index], id);
-    } else if (const auto pattern = bitmap_pattern(fills[index], id, bitmaps)) {
-      text += *pattern;
+    } else if (is_tiled(fills[index].type) && images.contains(fills[index].bitmap_id)) {
+      text += bitmap_pattern(fills[index], id, images.at(fills[index].bitmap_id));
     }
   }
   return text.empty() ? text : "<defs>\n" + text + "</defs>\n";
 }
 
 std::string fill_attributes(const SwfFillStyle& fill, const std::string& id,
-                            const SvgBitmaps& bitmaps) {
+                            const SvgImages& images) {
   if (fill.type == kSolidFill) {
     return paint("fill", fill.color);
   }
-  if (is_gradient(fill.type) || bitmap_pattern(fill, id, bitmaps).has_value()) {
+  if (is_gradient(fill.type) || (is_tiled(fill.type) && images.contains(fill.bitmap_id))) {
     return "fill=\"url(#" + id + ")\"";
   }
   return std::string("fill=\"") + kPlaceholderColor + "\"";
@@ -361,14 +369,20 @@ std::string path_element(const std::string& data, const std::string& attributes)
 }
 
 std::string fill_paths(const SwfShape& shape, const std::vector<Edge>& edges,
-                       const std::string& id_prefix, const SvgBitmaps& bitmaps) {
+                       const std::string& id_prefix, const SvgImages& images,
+                       bool geometry_only) {
   std::string text;
   for (std::size_t index = 0; index < shape.fill_styles.size(); ++index) {
     const std::string data = loops_text(fill_edges(edges, index + 1));
     if (!data.empty()) {
       const SwfFillStyle& fill = shape.fill_styles[index];
-      text += path_element(data, fill_attributes(fill, fill_id(fill, id_prefix, index), bitmaps) +
-                                     " fill-rule=\"nonzero\"");
+      const std::string id = fill_id(fill, id_prefix, index);
+      const auto image = images.find(fill.bitmap_id);
+      if (!geometry_only && is_clipped(fill.type) && image != images.end()) {
+        text += clipped_bitmap(data, fill, id, image->second);
+      } else {
+        text += path_element(data, fill_attributes(fill, id, images) + " fill-rule=\"nonzero\"");
+      }
     }
   }
   return text;
@@ -466,20 +480,36 @@ SvgBitmaps index_bitmaps(const SwfFile& file) {
   return bitmaps;
 }
 
+SvgImages shape_images(const SwfShape& shape, const SvgBitmaps& bitmaps) {
+  SvgImages images;
+  for (const SwfFillStyle& fill : shape.fill_styles) {
+    const auto found = bitmaps.find(fill.bitmap_id);
+    if (!is_bitmap(fill.type) || images.contains(fill.bitmap_id) || found == bitmaps.end()) {
+      continue;
+    }
+    const SwfBitmap& bitmap = *found->second;
+    if (const auto png = bitmap_to_png(bitmap)) {
+      images.emplace(fill.bitmap_id, SvgImage{svg_number(bitmap.width),
+                                              svg_number(bitmap.height), base64_text(*png)});
+    }
+  }
+  return images;
+}
+
 std::string shape_defs_to_svg(const SwfShape& shape, const std::string& id_prefix,
-                              const SvgBitmaps& bitmaps) {
-  return fill_defs(shape.fill_styles, id_prefix, bitmaps);
+                              const SvgImages& images) {
+  return fill_defs(shape.fill_styles, id_prefix, images);
 }
 
 std::string shape_paths_to_svg(const SwfShape& shape, const std::string& id_prefix,
-                               const SvgBitmaps& bitmaps) {
+                               const SvgImages& images) {
   const auto edges = trace_edges(shape);
-  return fill_paths(shape, edges, id_prefix, bitmaps) + stroke_paths(shape, edges);
+  return fill_paths(shape, edges, id_prefix, images, false) + stroke_paths(shape, edges);
 }
 
 std::string shape_fill_paths_to_svg(const SwfShape& shape, const std::string& id_prefix,
-                                    const SvgBitmaps& bitmaps) {
-  return fill_paths(shape, trace_edges(shape), id_prefix, bitmaps);
+                                    const SvgImages& images) {
+  return fill_paths(shape, trace_edges(shape), id_prefix, images, true);
 }
 
 std::string shape_to_svg(const SwfShape& shape) {
@@ -488,8 +518,9 @@ std::string shape_to_svg(const SwfShape& shape) {
 
 std::string shape_to_svg(const SwfShape& shape, const SwfFile& file) {
   const SvgBitmaps bitmaps = index_bitmaps(file);
-  return svg_open(shape.bounds) + shape_defs_to_svg(shape, "fill", bitmaps) +
-         shape_paths_to_svg(shape, "fill", bitmaps) + "</svg>\n";
+  const SvgImages images = shape_images(shape, bitmaps);
+  return svg_open(shape.bounds) + shape_defs_to_svg(shape, "fill", images) +
+         shape_paths_to_svg(shape, "fill", images) + "</svg>\n";
 }
 
 }  // namespace fo4::swf

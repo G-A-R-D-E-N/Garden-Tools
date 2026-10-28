@@ -84,17 +84,18 @@ std::string frame_body(const ShapeIndex& shapes, const SvgBitmaps& bitmaps,
       continue;
     }
     const SwfShape& shape = *found->second;
+    const SvgImages images = shape_images(shape, bitmaps);
     const std::string id = "r" + std::to_string(index);
     if (row.clip_depth) {
       masks.push_back(Mask{level, row.depth, *row.clip_depth, id + "clip", false});
-      body += shape_defs_to_svg(shape, id + "f", bitmaps) + "<clipPath id=\"" + id +
+      body += shape_defs_to_svg(shape, id + "f", images) + "<clipPath id=\"" + id +
               "clip\" transform=\"" + transform_text(row.world_transform) + "\">\n" +
-              shape_fill_paths_to_svg(shape, id + "f", bitmaps) + "</clipPath>\n";
+              shape_fill_paths_to_svg(shape, id + "f", images) + "</clipPath>\n";
       continue;
     }
     std::string content = "<g transform=\"" + transform_text(row.world_transform) + "\">\n" +
-                          shape_defs_to_svg(shape, id + "f", bitmaps) +
-                          shape_paths_to_svg(shape, id + "f", bitmaps) + "</g>\n";
+                          shape_defs_to_svg(shape, id + "f", images) +
+                          shape_paths_to_svg(shape, id + "f", images) + "</g>\n";
     if (row.world_color_transform) {
       content = filter_text(id + "color", *row.world_color_transform, stage) +
                 "<g filter=\"url(#" + id + "color)\">\n" + content + "</g>\n";
