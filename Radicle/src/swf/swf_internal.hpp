@@ -137,6 +137,8 @@ SwfStatus decode_tag_payload(const std::vector<std::byte>& payload, SwfTag& out_
 
 SwfStatus decode_placement_tag(std::span<const std::byte> data, SwfTag& out_tag);
 
+SwfStatus decode_button_tag(std::span<const std::byte> data, SwfTag& out_tag);
+
 SwfStatus decode_shape_tag(std::span<const std::byte> data, SwfTag& out_tag);
 
 SwfStatus decode_bitmap_tag(std::span<const std::byte> data, SwfTag& out_tag);

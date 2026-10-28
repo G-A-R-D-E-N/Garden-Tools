@@ -5222,7 +5222,7 @@ Tests: `Radicle/tests/test_swf_art.cpp` is a suite of its own because `Radicle/t
 
 `Radicle/src/swf/swf_frame_svg.cpp:frame_to_svg` draws one root frame of a `SwfDisplayList` in row order, which is the paint order: `Radicle/src/swf/swf_display.cpp:build_display_list` keeps depth ascending at each level and places a sprite's expanded children straight after the sprite row, so the renderer does not recurse and does not sort. `Radicle/src/swf/swf_frame_svg.cpp:frame_body` looks each row's character up in the file's shape tags, then in its morph tags (see the morph rows section at the tail), and draws only decoded shapes, at `SwfFrameInstance::world_transform`. That transform's translate is already in pixels (`Radicle/src/swf/swf_timeline.cpp:transform_from_matrix` divides by 20), so `Radicle/src/swf/swf_frame_svg.cpp:transform_text` prints it without a second division. The viewBox is the stage rect `file.header.frame_size` through `Radicle/src/swf/swf_svg.cpp:svg_open`. Bitmap fills keep the flat placeholder from `Radicle/src/swf/swf_svg.cpp:shape_paths_to_svg`.
 
-Skipped, each on purpose: text, button, video and bitmap rows are not shapes and draw nothing; a sprite row with a clip depth is a mask, see the hidden and sprite mask section at the tail. A morph row with a non-solid style is not drawn, as `Radicle/src/swf/swf_frame_svg.cpp:row_shape` gets nullptr from `Radicle/src/swf/swf_morph.cpp:interpolate_morph_shape`; see the morph rows section at the tail.
+Skipped, each on purpose: text and button rows are drawn by later sections at the tail; video and bitmap rows are not shapes and draw nothing; a sprite row with a clip depth is a mask, see the hidden and sprite mask section at the tail. A morph row with a non-solid style is not drawn, as `Radicle/src/swf/swf_frame_svg.cpp:character_shape` (formerly row_shape) gets nullptr from `Radicle/src/swf/swf_morph.cpp:interpolate_morph_shape`; see the morph rows section at the tail.
 
 Former gaps, now closed in `Radicle/src/swf/swf_frame_svg.cpp:frame_body`: a hidden row that carries a clip depth opens its mask and paints nothing (Flash applying a hidden mask is recalled, unverified against Flash), and a sprite row with a clip depth masks its descendant shape rows (see the tail section).
 
@@ -7875,7 +7875,7 @@ Decision: the verifier's rejection of callmethod in user bytecode is unchanged. 
 
 ## Radicle/src/avm2/interpreter.cpp:Interpreter::execute_frame
 
-Opcode census from a source scan (not compiled or run). Named opcodes with no case in `interpreter_dispatch_a.inc` or `interpreter_dispatch_b.inc` fall to the default, which returns NotImplemented "opcode X is not implemented yet". Totals: 169 named, 138 dispatched, 31 not dispatched. The 31 are: dxns 0x06, dxnslate 0x07, hasnext 0x1F, pushnamespace 0x31, li8 0x35, li16 0x36, li32 0x37, lf32 0x38, lf64 0x39, si8 0x3A, si16 0x3B, si32 0x3C, sf32 0x3D, sf64 0x3E, sxi1 0x50, sxi8 0x51, sxi16 0x52, getdescendants 0x59, finddef 0x5F, setpropertylate 0x69, deletepropertylate 0x6B, getglobalslot 0x6E, setglobalslot 0x6F, esc_xelem 0x71, esc_xattr 0x72, checkfilter 0x78, coerce_b 0x81, coerce_i 0x83, coerce_d 0x84, coerce_u 0x88, coerce_o 0x89. NotImplemented also comes from `Radicle/src/avm2/interpreter_property.cpp:Interpreter::outer_scope_value`, which returns it for a getouterscope in a method with no captured scope.
+Opcode census from a source scan (not compiled or run). Named opcodes with no case in `interpreter_dispatch_a.inc`, `interpreter_dispatch_b.inc` or `interpreter_dispatch_c.inc` fall to the default, which returns NotImplemented "opcode X is not implemented yet". Totals: 169 named, 147 dispatched, 22 not dispatched (after the AVM2 more-ops change; the earlier count was 138 and 31). The 22 are: dxns 0x06, dxnslate 0x07, pushnamespace 0x31, li8 0x35, li16 0x36, li32 0x37, lf32 0x38, lf64 0x39, si8 0x3A, si16 0x3B, si32 0x3C, sf32 0x3D, sf64 0x3E, getdescendants 0x59, finddef 0x5F, setpropertylate 0x69, deletepropertylate 0x6B, getglobalslot 0x6E, setglobalslot 0x6F, esc_xelem 0x71, esc_xattr 0x72, checkfilter 0x78. The more-ops change (`Radicle/src/avm2/interpreter.cpp:Interpreter::execute_frame`) dispatched hasnext 0x1F, sxi1 0x50, sxi8 0x51, sxi16 0x52, coerce_b 0x81, coerce_i 0x83, coerce_d 0x84, coerce_u 0x88 and coerce_o 0x89. The li/si/sf memory ops stay undispatched because no ApplicationDomain memory byte array exists. dxns, dxnslate, pushnamespace, finddef, getdescendants and E4X were left out of that change. NotImplemented also comes from `Radicle/src/avm2/interpreter_property.cpp:Interpreter::outer_scope_value`, which returns it for a getouterscope in a method with no captured scope.
 
 ## Radicle/tests/test_avm2_call_indexed.cpp:CallstaticRunsTheMethodWithTheReceiverAsThis
 
@@ -8003,7 +8003,7 @@ The two frame tests sit in `Radicle/tests/test_swf_svg.cpp`, not `Radicle/tests/
 
 `Radicle/src/swf/swf_display.cpp:replay` carries a placement's ratio the way it carries `clip_depth`: a MOVE with no ratio keeps the depth's previous ratio, a fresh placement takes its own, and `Radicle/src/swf/swf_display.cpp:Expander::expand` copies it into `Radicle/include/fo4/swf/swf_display.hpp:SwfFrameInstance` as `ratio`, which stays absent for a row no placement gave one. `SwfFrameInstance::operator==` compares it. The C ABI is unchanged: `Radicle/src/c_api_swf_display.cpp:radicle_swf_frames_instance_at` copies named fields only, so a C caller of the row query sees no ratio, while `Radicle/src/c_api_swf_display.cpp:radicle_swf_frame_svg` now draws the morph rows.
 
-`Radicle/src/swf/swf_frame_svg.cpp:row_shape` resolves a row's character in the shape tags first and then in the morph tags. For a morph it calls `Radicle/src/swf/swf_morph.cpp:interpolate_morph_shape` with `ratio / 65535`, an absent ratio being 0, and the returned `SwfShape` lives in the frame loop. `frame_body` and `sprite_clip_to_svg` then call the same `shape_defs_to_svg`, `shape_paths_to_svg` and `shape_fill_paths_to_svg` as a shape row, at the row's world transform, so visible, clip depth and sprite-mask handling are the shape rules unchanged.
+`Radicle/src/swf/swf_frame_svg.cpp:character_shape` (formerly row_shape) resolves a row's character in the shape tags first and then in the morph tags. For a morph it calls `Radicle/src/swf/swf_morph.cpp:interpolate_morph_shape` with `ratio / 65535`, an absent ratio being 0, and the returned `SwfShape` lives in the frame loop. `frame_body` and `sprite_clip_to_svg` then call the same `shape_defs_to_svg`, `shape_paths_to_svg` and `shape_fill_paths_to_svg` as a shape row, at the row's world transform, so visible, clip depth and sprite-mask handling are the shape rules unchanged.
 
 `Radicle/src/swf/swf_morph.cpp:interpolate_morph_shape` builds that shape. Its records are `Radicle/src/swf/swf_morph.cpp:interpolate_morph_commands` unchanged, so the geometry rounding is the one that function already has. Each solid fill blends its start and end ARGB colour one byte at a time in `Radicle/src/swf/swf_morph.cpp:blend_color`, using `blend_twips`, which rounds halves away from zero. Each line blends its width and colour the same way, keeps the start flags, and gets a miter limit only when both ends carry one. `Radicle/src/swf/swf_morph.cpp:blend_rect` blends the bounds so a caller of the public function gets a usable viewBox; the frame path does not read them.
 
@@ -8071,13 +8071,89 @@ This section supersedes the statements that CallFunction, CallMethod, NewMethod 
 - `Radicle/tests/test_avm1_functions.cpp:FunctionRefusalsAreNamedAndTraceNothing` detects an unsupported path that runs silently, such as a CallFunction of a missing name that yields undefined without a refusal, a refusal that loses its name, a register outside a function read as a value, a preload past the declared register count writing out of bounds (InvalidStream is required), and a preloaded _root that runs. Its first row detects a top-level Return that is refused instead of ending the list.
 
 Not compiled or run on the development machine for this change. The test file, the function model and these notes need CI to confirm the expected strings, step counts and status values.
+## Radicle/src/avm2/interpreter_dispatch_c.inc:execute_frame
+
+hasnext (0x1F) pops the index, then the object, and pushes the next 1-based key index (index + 1) while keys remain, else 0. A non-object pushes 0. Its keys come from `Radicle/src/avm2/interpreter_property.cpp:Interpreter::enumeration_keys`, so hasnext, hasnext2, nextname and nextvalue read one list. sxi1 keeps only the low bit as -1 or 0. sxi8 and sxi16 sign-extend the low byte or low half of ToInt32. coerce_o pushes null for undefined and passes every other value through. The coerce_o and sxi semantics are recalled from the AVM2 overview, not verified against Flash. The verifier stack effects in `Radicle/src/abc/abc_stack.cpp:stack_effect` were already right for these opcodes (0x1F pops 2 and pushes 1; 0x50-0x52, 0x81-0x86 and 0x88-0x89 pop 1 and push 1), so the verifier is unchanged.
+
+## Radicle/src/avm2/interpreter_dispatch_a.inc:execute_frame
+
+coerce_i, coerce_u, coerce_d and coerce_b share the convert_* branch and its to_int32, to_uint32, to_number and to_boolean conversions. The coerce-to-type behaviour for null and undefined (coerce_d of undefined is NaN and of null is 0; coerce_i and coerce_u give 0; coerce_b gives false) is recalled from the AVM2 overview, not verified. The convert_* opcodes were already dispatched, so no convert case was missing.
+
+## Radicle/src/avm2/interpreter_property.cpp:Interpreter::enumeration_keys
+
+Builds the key list for an object once per frame, keyed by object pointer in `Frame::iterator_keys`, and rebuilds only when that list is empty. Arrays enumerate index strings. Other objects enumerate own properties, which come from an unordered map so the order is hash order and not insertion order, then slot-like instance traits. This helper exists so hasnext and hasnext2 cannot disagree about the key list that nextname and nextvalue read. Known caveat, not changed here: the cache is never invalidated, so a second enumeration of the same object in the same frame reuses the first list and misses properties added between the two loops. This was already true for hasnext2.
+
+## Radicle/src/avm2/interpreter_dispatch_b.inc:execute_frame
+
+hasnext2 now calls `Radicle/src/avm2/interpreter_property.cpp:Interpreter::enumeration_keys` instead of building the key list inline. Behaviour is unchanged. The test Hasnext2LoopAgreesWithNextnameAndNextvalue in `Radicle/tests/test_avm2_more_ops.cpp` covers it.
+
+## Radicle/tests/test_avm2_more_ops.cpp:SxiOneSignExtendsTheLowBit
+
+Detects sxi1 (0x50) missing, or sign-extending as a mask that gives 1 or 0 instead of -1 or 0. Hand-derived: int 3 has low bit 1, so -1; int 2 has low bit 0, so 0.
+
+## Radicle/tests/test_avm2_more_ops.cpp:SxiEightSignExtendsTheLowByte
+
+Detects sxi8 (0x51) missing, or zero-extending the low byte. Hand-derived: 0x1FF has low byte 0xFF, so -1; 0x180 has low byte 0x80, so -128 (zero-extension would give 128); 0x7F gives 127.
+
+## Radicle/tests/test_avm2_more_ops.cpp:SxiSixteenSignExtendsTheLowHalf
+
+Detects sxi16 (0x52) missing, or zero-extending the low half. Hand-derived: 0x18000 has low half 0x8000, so -32768 (zero-extension would give 32768); 0x12345 has low half 0x2345, so 9029 (0x2345).
+
+## Radicle/tests/test_avm2_more_ops.cpp:CoerceBMakesANonZeroIntABoolean
+
+Detects coerce_b (0x81) missing, or returning the int 7 unchanged instead of the Boolean true.
+
+## Radicle/tests/test_avm2_more_ops.cpp:CoerceITruncatesADoubleToAnInt
+
+Detects coerce_i (0x83) missing, or rounding 3.9 to 4 instead of truncating to 3.
+
+## Radicle/tests/test_avm2_more_ops.cpp:CoerceDMakesAnIntANumber
+
+Detects coerce_d (0x84) missing, or leaving the int 7 as an int instead of a Number.
+
+## Radicle/tests/test_avm2_more_ops.cpp:CoerceUWrapsANegativeIntToAUint
+
+Detects coerce_u (0x88) missing, or keeping int -1 instead of the uint 4294967295 (2^32 - 1).
+
+## Radicle/tests/test_avm2_more_ops.cpp:CoerceOTurnsUndefinedIntoNullAndKeepsOtherValues
+
+Detects coerce_o (0x89) missing, or leaving undefined in place instead of null. The second run checks that the int 5 passes through unchanged.
+
+## Radicle/tests/test_avm2_more_ops.cpp:HasnextReturnsOneBasedIndexThenZeroAtTheEnd
+
+Detects hasnext (0x1F) missing, or returning a 0-based index, which would make the first key read as index 0 and end the loop. Hand-derived: hasnext(obj, 0) is 1 and hasnext(obj, 1) is 0 for a one-property object, so 1 * 10 + 0 = 10.
+
+## Radicle/tests/test_avm2_more_ops.cpp:HasnextOnANonObjectEnumeratesNothing
+
+Detects hasnext enumerating a non-object, which would read keys from a number. The expected result is 0.
+
+## Radicle/tests/test_avm2_more_ops.cpp:HasnextRefusesAShortStackWithStackUnderflow
+
+Detects hasnext reading a missing object as undefined on a one-item stack, instead of refusing with StackUnderflow. This is the only refusal path of hasnext; no wrong-type refusal exists because hasnext returns 0 for a non-object.
+
+## Radicle/tests/test_avm2_more_ops.cpp:HasnextLoopAgreesWithNextnameAndNextvalue
+
+Detects hasnext, nextname or nextvalue disagreeing on the 1-based key index, so the loop reads no key or the wrong one. Hand-derived: a one-property object {value: 7} gives "" + "value" + 7 = "value7".
+
+## Radicle/tests/test_avm2_more_ops.cpp:Hasnext2LoopAgreesWithNextnameAndNextvalue
+
+Detects the shared key helper changing hasnext2's register loop, so it reads a different key than nextname and nextvalue. Hand-derived result "value7", the same as the hasnext loop.
+
+## Radicle/tests/test_avm2_more_ops.cpp:HasnextLoopVisitsEveryKeyOfAnObject
+
+Detects a hasnext loop that stops after the first key of a two-key object. The check does not depend on key order, since the sum and the count are symmetric. Hand-derived: values 1 and 2 plus 100 per key give 1 + 100 + 2 + 100 = 203.
+
+## Radicle/tests/test_avm2_more_ops.cpp:NewOpcodesRefuseAnEmptyStackWithStackUnderflow
+
+Detects a new opcode that returns a value from an empty stack instead of refusing with StackUnderflow. Covers sxi1, sxi8, sxi16, coerce_b, coerce_i, coerce_d, coerce_u, coerce_o and hasnext. Before this change these opcodes returned NotImplemented.
+
 ## Radicle/src/swf/swf_frame_svg.cpp:text_paths (static text rows)
 
 `Radicle/src/swf/swf_frame_svg.cpp:text_paths` draws a DefineText or DefineText2 row as glyph paths. Font, colour, height and the x and y position carry from one TEXTRECORD to the next, and a field a record omits keeps its previous value. Each glyph is `shape_fill_paths_to_svg` over its font's glyph records with one solid fill in the record colour. Its transform is `compose_transform(transform_from_matrix(text.matrix), glyph)`, where the glyph scale is height over 1024 for DefineFont and DefineFont2 and over 20480 for DefineFont3. The choice follows `define_font3`, not `units_per_em`, because the decoder only sets `units_per_em` for DefineFont3 when the font has a layout. The x cursor moves by each glyph's advance even when that glyph draws nothing. The whole row sits under its `world_transform` and takes the same colour filter as a shape row (`Radicle/src/swf/swf_frame_svg.cpp:frame_body`).
 
 Draws nothing for: a glyph index outside the font's glyph shapes, a record with no known font, no height yet, a font with no glyph shapes, and a text row that carries a clip depth. A clip-depth text row neither draws nor masks, because `frame_body` only opens masks for shapes and sprites. A record that never sets a colour draws black, which is a guess at Flash's default and is unverified.
 
-Out of scope: DefineButton rows, dynamic EditText, text used as a mask, and text inside a clip sprite, because `Radicle/src/swf/swf_frame_svg.cpp:sprite_clip_to_svg` only collects shapes and morphs.
+Out of scope: dynamic EditText (button up-state rows are now drawn, see the button rows section at the tail), text used as a mask, and text inside a clip sprite, because `Radicle/src/swf/swf_frame_svg.cpp:sprite_clip_to_svg` only collects shapes and morphs.
 
 ## Radicle/include/fo4/swf/swf.hpp:SwfText (text MATRIX exposed)
 
@@ -8090,3 +8166,38 @@ Out of scope: DefineButton rows, dynamic EditText, text used as a mask, and text
 - `Radicle/tests/test_swf_svg.cpp:SwfFrameSvg.StaticTextAppliesItsMatrixAndSkipsFontsWithoutGlyphShapes` detects a DefineText MATRIX that is ignored, which would leave the glyph at `matrix(1 0 0 1 0 0)`, and a font with no glyph shapes that emits an empty group or indexes an empty glyph list.
 
 Expected strings were derived by hand from `Radicle/src/swf/swf_svg.cpp:loops_text` and `Radicle/src/swf/swf_svg.cpp:fill_paths`. Nothing was compiled or run on the development machine for this change, so CI must confirm them.
+
+## Radicle/src/swf/swf_placement.cpp:decode_button_tag (button decode)
+
+`decode_button_tag` fills `SwfTag::button` for DefineButton (tag 7) and DefineButton2 (tag 34). Both start with the button's UI16 character id. Tag 34 then has a reserved byte and a UI16 action offset, which the decoder skips. Both tags then carry BUTTONRECORDs ended by a zero flags byte. Any bytes after that terminator are button actions and are not decoded.
+
+A button whose records do not decode is left undecoded, and the file still loads. This is deliberate: `decode_tag_stream` refuses a whole file on any malformed payload, and `Radicle/tests/swf_character_fixtures.hpp:button_payload` is a 5-byte DefineButton2 with no record terminator that other tests load. Before this decoder existed a button only contributed its leading id, so refusing would have been a regression.
+
+## Radicle/src/swf/swf_placement.cpp:decode_button_records (record layout)
+
+The record state byte holds 0x01 up, 0x02 over, 0x04 down and 0x08 hit test. For tag 34 only, 0x10 means a filter list follows and 0x20 means a blend-mode byte follows. These bit positions come from the SWF file format specification as recalled, not from a file in this environment. The Fallout 4 Interface archive holds 311 SWFs but no DefineButton or DefineButton2 tag in any of them, so no real record was available to check the layout against. CI with a real button is the first real check.
+
+Each tag 34 record carries a CXFORMWITHALPHA. It is read with `read_color_transform` and kept as `SwfButtonRecord::color_transform`. The filter list is read with `decode_filter_list` and discarded, and the blend byte is skipped. The record therefore does not keep filters or blend mode, so a filtered or blended button draws without them. Tag 7 records have no colour transform, and their 0x10 and 0x20 bits are not parsed.
+
+## Radicle/include/fo4/swf/swf.hpp:SwfButton
+
+`SwfButton` and `SwfButtonRecord` are new, and `SwfTag::button` holds the decoded button. `SwfButton::character_id` is the button's own id, the key `Radicle/src/swf/swf_frame_svg.cpp:frame_to_svg` indexes it by. `Radicle/src/swf/swf.cpp:SwfTag::clear_decoded` resets the field along with the other decoded fields.
+
+## Radicle/src/swf/swf_frame_svg.cpp:button_group
+
+A button row draws every record with the UP flag, sorted by PlaceDepth with `std::stable_sort`, so records at equal depth keep tag order. Each record's transform is `compose_transform(row.world_transform, transform_from_matrix(record.matrix))`. The record's character then goes through `character_group`, the same shape, morph and text path that a plain row uses. Each record gets the id prefix `r<row>u<k>`, which cannot collide with a row id `r<row>`. The record colour transform is ignored. The row's own colour filter still wraps the whole button, as it does for any row. Hit-only and over-only records draw nothing.
+
+Out of scope: a record whose character is a sprite, a button or an edit-text draws nothing, and a button inside a clip sprite is not drawn, because `Radicle/src/swf/swf_frame_svg.cpp:sprite_clip_to_svg` only collects shapes and morphs. A button row that carries a clip depth is also not drawn, which matches the text-row rule. This supersedes the "DefineButton rows" item in the static text note above.
+
+## Radicle/src/swf/swf_frame_svg.cpp:frame_body (button branch)
+
+A non-mask button row takes the `button_group` branch. Otherwise content comes from `shape_group`, `button_group` or `text_group`, and empty content skips the row. The old per-branch text-empty check became that single check. `character_shape` replaces `row_shape`, and takes the character id and ratio, so a record can reuse it with no ratio.
+
+## Radicle/tests/test_swf_svg_buttons.cpp:SwfFrameSvgButtons tests
+
+- `Radicle/tests/test_swf_svg_buttons.cpp:SwfFrameSvgButtons.DefineButton2UpRecordDrawsItsShapeAtItsMatrix` detects a button row dropped from the frame, an UP record matrix that is ignored or not composed with the row, and a DefineButton2 record read from the wrong offset because the reserved or action bytes were not skipped.
+- `Radicle/tests/test_swf_svg_buttons.cpp:SwfFrameSvgButtons.HitOnlyRecordDrawsNothing` detects a hit-only record drawn as visible art, which would paint the hit area onto the stage.
+- `Radicle/tests/test_swf_svg_buttons.cpp:SwfFrameSvgButtons.UpRecordsDrawInDepthOrderAndIgnoreTheirColourTransforms` detects records drawn in tag order rather than depth, a record colour transform misread so the second record is lost, and a colour transform applied as a filter.
+- `Radicle/tests/test_swf_svg_buttons.cpp:SwfFrameSvgButtons.DefineButtonRecordHasNoColourTransformBytes` detects a DefineButton (tag 7) decoder that reads the tag 34 colour transform, which would misplace the record.
+
+Expected strings were derived by hand. The square path is the 1000-twip and 600-twip squares used by `Radicle/tests/test_swf_svg.cpp:kRedSquare` and `kBlueSquare`. Translations are twips divided by 20, as in `Radicle/src/swf/swf_timeline.cpp:transform_from_matrix`. Nothing was compiled or run on the development machine for this change, so CI must confirm them.
