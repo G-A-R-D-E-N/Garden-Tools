@@ -8,6 +8,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <utility>
 #include <vector>
 
 namespace fo4::papyrus::test {
@@ -78,6 +79,44 @@ inline std::vector<std::filesystem::path> enumerateFiles(const std::filesystem::
     }
     std::sort(files.begin(), files.end());
     return files;
+}
+
+struct StratifiedSample {
+    std::size_t stride{1};
+    std::vector<std::filesystem::path> files;
+};
+
+inline std::string sampleSortKey(const std::filesystem::path& file,
+                                 const std::vector<std::filesystem::path>& roots) {
+    const auto normal = file.lexically_normal();
+    auto relative = normal;
+    for (const auto& root : roots) {
+        const auto candidate = normal.lexically_relative(root.lexically_normal());
+        if (!candidate.empty() && candidate.begin()->string() != "..") {
+            relative = candidate;
+            break;
+        }
+    }
+    auto key = relative.generic_string();
+    for (auto& ch : key) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    return key;
+}
+
+inline StratifiedSample stratifiedSample(const std::vector<std::filesystem::path>& files,
+                                         const std::vector<std::filesystem::path>& roots,
+                                         std::size_t limit) {
+    std::vector<std::pair<std::string, std::filesystem::path>> keyed;
+    keyed.reserve(files.size());
+    for (const auto& file : files) keyed.emplace_back(sampleSortKey(file, roots), file);
+    std::sort(keyed.begin(), keyed.end());
+
+    const auto total = keyed.size();
+    StratifiedSample sample;
+    if (limit != 0 && total > limit) sample.stride = (total + limit - 1) / limit;
+    for (std::size_t i = 0; i < total; i += sample.stride) {
+        sample.files.push_back(keyed[i].second);
+    }
+    return sample;
 }
 
 }  // namespace fo4::papyrus::test
