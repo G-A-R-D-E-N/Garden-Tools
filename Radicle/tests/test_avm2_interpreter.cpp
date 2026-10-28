@@ -10,6 +10,7 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
@@ -484,6 +485,111 @@ TEST(Avm2Interpreter, IncrementOfIntMaxPromotesToANumber) {
   ASSERT_TRUE(result.ok()) << result.message;
   EXPECT_FALSE(result.value.is_int32());
   EXPECT_EQ(fo4::avm2::to_number(result.value), 2147483648.0);
+}
+
+// Detects: generic subtract of two uints wrapping to 4294967295; 0u - 1u must yield the Number -1.
+TEST(Avm2Interpreter, SubtractOfUintsPromotesToANumberBelowZero) {
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder code;
+  code.pushbyte(0);
+  code.convert_u();
+  code.pushbyte(1);
+  code.convert_u();
+  code.subtract();
+  code.returnvalue();
+  const std::uint32_t method = script.method("init", code.bytes(), 1);
+  abc::AbcFile file = script.finish(method);
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  Interpreter interpreter(runtime);
+  const ExecutionResult result = interpreter.run_script(0);
+  ASSERT_TRUE(result.ok()) << result.message;
+  EXPECT_FALSE(result.value.is_uint32());
+  EXPECT_EQ(fo4::avm2::to_number(result.value), -1.0);
+}
+
+// Detects: generic uint add wrapping past UINT_MAX; UINT_MAX + 1 must yield the Number 4294967296.
+TEST(Avm2Interpreter, AddOfUintsPromotesToANumberAboveUintMax) {
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder code;
+  code.pushint(script.add_int(-1));
+  code.convert_u();
+  code.pushbyte(1);
+  code.convert_u();
+  code.add();
+  code.returnvalue();
+  const std::uint32_t method = script.method("init", code.bytes(), 1);
+  abc::AbcFile file = script.finish(method);
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  Interpreter interpreter(runtime);
+  const ExecutionResult result = interpreter.run_script(0);
+  ASSERT_TRUE(result.ok()) << result.message;
+  EXPECT_FALSE(result.value.is_uint32());
+  EXPECT_EQ(fo4::avm2::to_number(result.value), 4294967296.0);
+}
+
+// Detects: generic negate of INT_MIN wrapping to INT_MIN; the result must be the Number 2147483648.
+TEST(Avm2Interpreter, NegateOfIntMinPromotesToANumber) {
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder code;
+  code.pushint(script.add_int(std::numeric_limits<std::int32_t>::min()));
+  code.negate();
+  code.returnvalue();
+  const std::uint32_t method = script.method("init", code.bytes(), 1);
+  abc::AbcFile file = script.finish(method);
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  Interpreter interpreter(runtime);
+  const ExecutionResult result = interpreter.run_script(0);
+  ASSERT_TRUE(result.ok()) << result.message;
+  EXPECT_FALSE(result.value.is_int32());
+  EXPECT_EQ(fo4::avm2::to_number(result.value), 2147483648.0);
+}
+
+// Detects: inclocal_i signed INT_MAX + 1 overflow; the int32 local must wrap to INT_MIN.
+TEST(Avm2Interpreter, InclocalIWrapsIntMaxToIntMin) {
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder code;
+  code.pushint(script.add_int(std::numeric_limits<std::int32_t>::max()));
+  code.setlocal(1);
+  code.inclocal_i(1);
+  code.getlocal(1);
+  code.returnvalue();
+  const std::uint32_t method = script.method("init", code.bytes(), 2);
+  abc::AbcFile file = script.finish(method);
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  Interpreter interpreter(runtime);
+  const ExecutionResult result = interpreter.run_script(0);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_int32());
+  EXPECT_EQ(result.value.as_int32(), std::numeric_limits<std::int32_t>::min());
+}
+
+// Detects: declocal_i signed INT_MIN - 1 overflow; the int32 local must wrap to INT_MAX.
+TEST(Avm2Interpreter, DeclocalIWrapsIntMinToIntMax) {
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder code;
+  code.pushint(script.add_int(std::numeric_limits<std::int32_t>::min()));
+  code.setlocal(1);
+  code.declocal_i(1);
+  code.getlocal(1);
+  code.returnvalue();
+  const std::uint32_t method = script.method("init", code.bytes(), 2);
+  abc::AbcFile file = script.finish(method);
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  Interpreter interpreter(runtime);
+  const ExecutionResult result = interpreter.run_script(0);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_int32());
+  EXPECT_EQ(result.value.as_int32(), std::numeric_limits<std::int32_t>::max());
 }
 
 }  // namespace

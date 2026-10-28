@@ -160,10 +160,9 @@
           return fail(InterpreterStatus::LocalOutOfRange,
                       "local " + std::to_string(index) + " is out of range");
         }
-        frame.locals[index] =
-            Value::int32(to_int32(frame.locals[index]) + (instruction.opcode == op::k_inclocal_i
-                                                              ? 1
-                                                              : -1));
+        const std::uint32_t local = static_cast<std::uint32_t>(to_int32(frame.locals[index]));
+        frame.locals[index] = Value::int32(static_cast<std::int32_t>(
+            instruction.opcode == op::k_inclocal_i ? local + 1u : local - 1u));
         break;
       }
       case op::k_getglobalscope:

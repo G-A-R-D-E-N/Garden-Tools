@@ -7467,7 +7467,7 @@ Made `internal` so `PapyrusCompiler.CompileSource` can wrap a handle the native 
 
 ## Radicle/src/avm2/interpreter_ops.cpp:int_range_result (SWF interp gaps L8)
 
-Generic AVM2 `add`, `subtract`, `multiply`, `negate`, `increment` and `decrement` (the non-`_i` opcodes) compute on doubles and return an int32 or uint32 only when the exact result is in that type's range; otherwise they return a Number. So `int.MAX_VALUE + 1` is the Number 2147483648, not a wrapped int. `uint_range_result` does the same for uint32, so `0u - 1u` is -1. The `_i` opcodes (`add_i`, `subtract_i`, `multiply_i`, `increment_i`, `decrement_i`, `inclocal_i`, `declocal_i`) still wrap to int32 on purpose. Covered by `Avm2Interpreter.AddOfIntsPromotesToANumberOnOverflow` and `Avm2Interpreter.IncrementOfIntMaxPromotesToANumber`.
+Generic AVM2 `add`, `subtract`, `multiply`, `negate`, `increment` and `decrement` (the non-`_i` opcodes) compute on doubles and return an int32 or uint32 only when the exact result is in that type's range; otherwise they return a Number. So `int.MAX_VALUE + 1` is the Number 2147483648, not a wrapped int. `uint_range_result` does the same for uint32, so `0u - 1u` is -1. The `_i` opcodes (`add_i`, `subtract_i`, `multiply_i`, `increment_i`, `decrement_i`, `inclocal_i`, `declocal_i`) still wrap to int32 on purpose. Covered by `Radicle/src/avm2/interpreter_ops.cpp:int_range_result` through `Avm2Interpreter.AddOfIntsPromotesToANumberOnOverflow`, `Avm2Interpreter.IncrementOfIntMaxPromotesToANumber`, `Avm2Interpreter.SubtractOfUintsPromotesToANumberBelowZero`, `Avm2Interpreter.AddOfUintsPromotesToANumberAboveUintMax` and `Avm2Interpreter.NegateOfIntMinPromotesToANumber`.
 
 ## Radicle/src/avm2/interpreter_dispatch_a.inc:k_inclocal and k_declocal (SWF interp gaps L8)
 
@@ -7476,6 +7476,10 @@ Generic `inclocal` (0x92) and `declocal` (0x94) were decoded but not dispatched,
 ## Radicle/src/avm2/interpreter_dispatch_a.inc:k_negate_i (SWF interp gaps L8)
 
 `negate_i` (0xC4) was decoded but not dispatched. It negates through uint32 so the result wraps to int32, as the `_i` family does. Covered by `Avm2Interpreter.NegatesAnIntWithNegateI`.
+
+## Radicle/src/avm2/interpreter_dispatch_a.inc:k_inclocal_i (inclocal_i and declocal_i wrap)
+
+`Radicle/src/avm2/interpreter_dispatch_a.inc:k_inclocal_i` handles `inclocal_i` (0xC2) and `declocal_i` (0xC3). It adds or subtracts 1 in uint32 and converts the result back to int32, so `INT_MAX` wraps to `INT_MIN` and `INT_MIN` to `INT_MAX` without signed overflow. Covered by `Avm2Interpreter.InclocalIWrapsIntMaxToIntMin` and `Avm2Interpreter.DeclocalIWrapsIntMinToIntMax`.
 
 ## Radicle/src/avm2/coercion.cpp:string_to_number (SWF interp gaps L8)
 
