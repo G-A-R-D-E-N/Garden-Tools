@@ -68,7 +68,8 @@ character id (0 for root) and then calls `FrameLabels` with that id, because the
 scrubber and `Frame` take the timeline index. The id is kept as `labelOwner`, and add, rename and remove send it with the
 label index. Each load takes a request number from `labelRequest` and drops a reply that is no longer the newest, so a late
 reply for an earlier timeline cannot overwrite the list on screen. A picked label is kept as `{ ...row, timeline }` and
-survives a reload of the same timeline; a timeline change clears it. Undo, redo, save and each label edit reload the
+survives a reload of the same timeline after a rename only; a timeline change, Add, Remove, Undo, Redo and Save clear it
+(`web/src/SwfPanel.tsx:SwfPanel.refresh` clears it before reloading). Undo, redo, save and each label edit reload the
 characters and the labels from the history (`SwfPanel.refresh`, `SwfPanel.loadCharacters`). Tests in
 `web/src/SwfPanel.test.tsx` pin the index-to-id mapping, the dropped stale reply, the kept selection and the reload after undo.
 ## FO4RecordEditor.Core/Services/SwfDocumentService.cs:SwfDocument.AddLabel (label insertion)

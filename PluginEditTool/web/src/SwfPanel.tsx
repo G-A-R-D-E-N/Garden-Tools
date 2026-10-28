@@ -109,6 +109,7 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     if (!bridge) return;
     const nextState = parse<StateReply>(await bridge.State());
     setState(nextState);
+    setSelectedLabel(null);
     await loadCharacters();
     await loadLabels(timeline);
   }, [timeline, loadCharacters, loadLabels]);
@@ -192,6 +193,7 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     if (reply.error) { setError(reply.error); return; }
     setError('');
     setState(reply);
+    setSelectedLabel(null);
     await loadCharacters();
     await loadLabels(timeline);
   }, [frame, labelName, labelOwner, timeline, loadCharacters, loadLabels]);
@@ -245,6 +247,7 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     if (reply.error) { setError(reply.error); return; }
     setError('');
     setState(reply);
+    setSelectedLabel(null);
     await loadCharacters();
     await loadLabels(timeline);
   }, [timeline, labelOwner, selectedLabel, loadCharacters, loadLabels]);
@@ -316,7 +319,7 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
             {labels.map(label => (
               <li key={label.labelIndex}>
                 <button type="button" onClick={() => { setSelectedLabel({ ...label, timeline }); setLabelName(label.name); }}>
-                  {timeline === 0 ? 'root' : `sprite ${timeline}`} · {label.name}
+                  {labelOwner === 0 ? 'root' : `sprite ${labelOwner}`} · {label.name}
                 </button>
               </li>
             ))}

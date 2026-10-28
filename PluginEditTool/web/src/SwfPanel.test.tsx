@@ -190,12 +190,12 @@ describe('SwfPanel', () => {
     expect(await screen.findByText(/root · start/)).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText('Timeline'), { target: { value: '1' } });
-    expect(await screen.findByText(/sprite 1 · inner/)).toBeTruthy();
+    expect(await screen.findByText(/sprite 14 · inner/)).toBeTruthy();
     expect(swf.Timeline).toHaveBeenCalledWith(1);
     expect(swf.FrameLabels).toHaveBeenLastCalledWith(14);
     expect(swf.Frame).toHaveBeenLastCalledWith(1, 0);
 
-    fireEvent.click(screen.getByText(/sprite 1 · inner/));
+    fireEvent.click(screen.getByText(/sprite 14 · inner/));
     fireEvent.change(screen.getByDisplayValue('inner'), { target: { value: 'outer' } });
     await act(async () => { fireEvent.click(screen.getByText('Rename')); });
     await waitFor(() => expect(swf.RenameLabel).toHaveBeenCalledWith(14, 0, 'outer'));
@@ -238,6 +238,25 @@ describe('SwfPanel', () => {
     await waitFor(() => expect(swf.FrameLabels).toHaveBeenCalledTimes(2));
     await act(async () => { fireEvent.click(screen.getByText('Remove')); });
     await waitFor(() => expect(swf.RemoveLabel).toHaveBeenCalledWith(0, 0));
+  });
+
+  it('clears the label selection after Remove so the label that moves into its index is not acted on', async () => {
+    // Invariant: a label removal clears the selection, so Rename and Remove stay disabled rather than acting on the label that moved into the picked index; detects a selection kept by label index across a removal.
+    const swf = stubBridge({
+      FrameLabels: vi.fn()
+        .mockResolvedValueOnce(JSON.stringify({ labels: [{ labelIndex: 0, frame: 0, name: 'start' }, { labelIndex: 1, frame: 2, name: 'a' }] }))
+        .mockResolvedValue(JSON.stringify({ labels: [{ labelIndex: 0, frame: 2, name: 'a' }] })),
+    });
+    render(<SwfPanel onClose={() => {}} />);
+    fireEvent.change(screen.getByPlaceholderText('Interface/Test.swf'), { target: { value: 'Interface/Test.swf' } });
+    await act(async () => { fireEvent.click(screen.getByText('Open')); });
+    fireEvent.click(await screen.findByText(/root · start/));
+    await act(async () => { fireEvent.click(screen.getByText('Remove')); });
+    await waitFor(() => expect(swf.RemoveLabel).toHaveBeenCalledWith(0, 0));
+    await waitFor(() => expect(screen.queryByText(/root · start/)).toBeNull());
+    expect(screen.getByText(/root · a/)).toBeTruthy();
+    expect((screen.getByText('Remove') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByText('Rename') as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('removes the selected label by its timeline and label index', async () => {
