@@ -9180,3 +9180,26 @@ Hand-built: a DefineFunction with body_records 2, followed by NextFrame and Play
 ## Radicle/src/swf/swf_sound.cpp:decode_sound_stream_head
 
 `Radicle/src/swf/swf_sound.cpp:decode_sound_stream_head` keeps the top nibble of the playback byte as `reserved` and does not refuse it, although Ruffle validates it as a format. The stream byte's compression nibble is refused as `unknown_compression` when outside Ruffle's set. When compression is 2 (MP3), a missing i16 latency returns `truncated`. Ruffle instead defaults the latency to 0, but `Radicle/src/swf/swf_tags.cpp:decode_tag_payload` refuses the same payload, so this decoder matches the module.
+## Radicle/src/avm1/encode.cpp:encode_actions_checked
+
+When the decode that built the stream did not end Ok, `status` takes `stream.status` and the call returns no bytes. `Radicle/src/avm1/decode.cpp:Decoder::run` clears `actions` on failure, so the layout walk of such a stream sees no records and reports Ok. Before this change the failed stream came back as an empty Ok result. The layout status is still used when the decode was Ok. `validate_actions` in `Radicle/src/avm1/encode.cpp` has the same gap and still reports Ok for a stream whose decode failed. It is not changed here. Test: `Radicle/tests/test_avm1_encode.cpp:EncodeCheckedRefusesAStreamWhoseDecodeFailed`.
+
+## Radicle/tests/test_avm1_encode.cpp:EncodeCheckedRefusesAStreamWhoseDecodeFailed
+
+Input `04 07` has no End record, so `Radicle/src/avm1/decode.cpp:Decoder::block` fails with MissingEnd and `Decoder::run` clears the list. Expected: empty bytes and status MissingEnd. Detects `encode_actions_checked` writing the cleared stream as an empty Ok result, which is what it returned before the stream status check.
+
+## Radicle/tests/test_avm1_encode.cpp:InsertedRecordAppendsToTheEndOfANonEmptyTryBody
+
+`kFunctionOfTry` with `insert_action_into_body` at container 1 (the Try), slot 0 (the try body), index 3. The try body covers indices [2, 3), so index 3 is one past its last record and must be accepted. Derived by hand from `Radicle/src/avm1/edit.cpp:insert_action_into_body`: the Function body goes from 3 to 4 records, so its size goes from 14 (`0E 00`) to 15 (`0F 00`). The try body goes from 1 to 2 records, so try_size goes from `01 00` to `02 00`. The Stop record lands between NextFrame and Play, and the catch body stays `06`. Expected 24 bytes: `9B 05 00 00 00 00 0F 00 | 8F 09 00 01 02 00 01 00 00 00 65 00 | 04 07 | 06 | 00`. Detects an insert rule that refuses an index equal to first + count, which is an off-by-one that accepts only strictly inside a body. It also detects a record added to the catch body, which would give `04 | 06 07`.
+
+## Radicle/tests/test_avm1_encode.cpp:InsertIntoABodyRefusesAnIndexOutsideItsSlot
+
+`Radicle/src/avm1/edit.cpp:insert_action_into_body` is called with `kFunctionOfTry`, slot 1 (the catch body) of container 1. The catch body starts after the one try-body record, at index 3, so index 2 is inside the try body and outside slot 1. Expected false, 5 actions, and bytes equal to `kFunctionOfTry`. Detects a body start that ignores the earlier slot counts, which would start the catch body at index 2 and accept the insert.
+
+## Radicle/tests/test_avm1_encode.cpp:InsertIntoABodyRefusesASlotPastTheBodyCount
+
+Slot 2 of the Try is past its body_count of 2, since flags `01` give a try body and a catch body only. Index 4 is the one position the range check would accept for slot 2 without the slot guard: body_start is 4 and `body_records[2]` is 0, so the range [4, 4] includes 4. Expected false and no change. Detects a missing slot guard in `Radicle/src/avm1/edit.cpp:insert_action_into_body`.
+
+## Radicle/tests/test_avm1_encode.cpp:InsertIntoABodyRefusesARecordThatIsNotAContainer
+
+`Radicle/src/avm1/edit.cpp:insert_action_into_body` is called on NextFrame at container 2. NextFrame has no body, so its body_count is 0 and every slot is out of range. Index 3 is the position the range check would accept without the guard: body_start is 3 and the count is 0. Expected false and no change. Detects a missing container check that writes into the hidden `body_records` of a plain record.

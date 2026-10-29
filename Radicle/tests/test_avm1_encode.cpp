@@ -145,6 +145,16 @@ TEST(Avm1Encode, EncodeCheckedReturnsNoBytesForARecordOrBodyOver65535) {
   EXPECT_EQ(status, Avm1Status::SizeTooLarge);
 }
 
+// Invariant: a stream whose decode failed must report that status, not an empty Ok encode.
+TEST(Avm1Encode, EncodeCheckedRefusesAStreamWhoseDecodeFailed) {
+  const Bytes input{0x04, 0x07};
+  auto stream = decode(input);
+  ASSERT_EQ(stream.status, Avm1Status::MissingEnd);
+  Avm1Status status = Avm1Status::Ok;
+  EXPECT_TRUE(encode_checked(stream, status).empty());
+  EXPECT_EQ(status, Avm1Status::MissingEnd);
+}
+
 TEST(Avm1Encode, InsertedRecordIntoAnEmptyFunctionBodyGrowsItsBodySize) {
   const Bytes input{0x9B, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
   auto stream = decode(input);
@@ -162,6 +172,44 @@ TEST(Avm1Encode, InsertedRecordIntoAFinallyOnlyTryFillsTheFinallyBody) {
   ASSERT_TRUE(fo4::avm1::insert_action_into_body(stream.actions, 0, 1, 1, single(0x07)));
   EXPECT_EQ(encode(stream), (Bytes{0x8F, 0x08, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
                                    0x00, 0x07, 0x00}));
+}
+
+// Invariant: insert_action_into_body must accept the index one past a non-empty body's last record.
+TEST(Avm1Encode, InsertedRecordAppendsToTheEndOfANonEmptyTryBody) {
+  auto stream = decode(kFunctionOfTry);
+  ASSERT_TRUE(stream.ok()) << stream.message;
+  ASSERT_EQ(stream.actions[1].body_records[0], 1u);
+  ASSERT_TRUE(fo4::avm1::insert_action_into_body(stream.actions, 1, 0, 3, single(0x07)));
+  EXPECT_EQ(encode(stream), (Bytes{0x9B, 0x05, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x00, 0x8F, 0x09,
+                                   0x00, 0x01, 0x02, 0x00, 0x01, 0x00, 0x00, 0x00, 0x65, 0x00,
+                                   0x04, 0x07, 0x06, 0x00}));
+}
+
+// Invariant: insert_action_into_body must refuse an index outside the chosen slot's body.
+TEST(Avm1Encode, InsertIntoABodyRefusesAnIndexOutsideItsSlot) {
+  auto stream = decode(kFunctionOfTry);
+  ASSERT_TRUE(stream.ok()) << stream.message;
+  EXPECT_FALSE(fo4::avm1::insert_action_into_body(stream.actions, 1, 1, 2, single(0x07)));
+  EXPECT_EQ(stream.actions.size(), 5u);
+  EXPECT_EQ(encode(stream), kFunctionOfTry);
+}
+
+// Invariant: insert_action_into_body must refuse a slot at or past the container's body_count.
+TEST(Avm1Encode, InsertIntoABodyRefusesASlotPastTheBodyCount) {
+  auto stream = decode(kFunctionOfTry);
+  ASSERT_TRUE(stream.ok()) << stream.message;
+  EXPECT_FALSE(fo4::avm1::insert_action_into_body(stream.actions, 1, 2, 4, single(0x07)));
+  EXPECT_EQ(stream.actions.size(), 5u);
+  EXPECT_EQ(encode(stream), kFunctionOfTry);
+}
+
+// Invariant: insert_action_into_body must refuse a container_index whose record has no body.
+TEST(Avm1Encode, InsertIntoABodyRefusesARecordThatIsNotAContainer) {
+  auto stream = decode(kFunctionOfTry);
+  ASSERT_TRUE(stream.ok()) << stream.message;
+  EXPECT_FALSE(fo4::avm1::insert_action_into_body(stream.actions, 2, 0, 3, single(0x07)));
+  EXPECT_EQ(stream.actions.size(), 5u);
+  EXPECT_EQ(encode(stream), kFunctionOfTry);
 }
 
 TEST(Avm1Encode, AppendAtTheListEndStaysOutsideABodyThatEndsThere) {
