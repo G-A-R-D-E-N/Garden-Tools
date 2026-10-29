@@ -20,6 +20,10 @@
 #include <unordered_map>
 #include <vector>
 
+struct radicle_assets {
+  fo4::archive::AssetResolver value;
+};
+
 struct radicle_env {
   fo4::env::Environment value;
   std::vector<std::string> paths;

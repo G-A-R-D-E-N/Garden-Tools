@@ -32,6 +32,15 @@ bool SwfReader::read_u8(std::uint8_t& out) noexcept {
   return true;
 }
 
+bool SwfReader::read_s16(std::int16_t& out) noexcept {
+  std::uint16_t value = 0;
+  if (!read_u16(value)) {
+    return false;
+  }
+  out = static_cast<std::int16_t>(value);
+  return true;
+}
+
 bool SwfReader::read_u16(std::uint16_t& out) noexcept {
   if (remaining() < 2) {
     return false;
@@ -201,6 +210,76 @@ bool decode_symbol_list(std::span<const std::byte> payload, std::vector<SwfSymbo
 
 }  // namespace
 
+bool decode_edit_text(std::span<const std::byte> data, SwfEditText& out) {
+  SwfReader head(data, 0);
+  if (!head.read_u16(out.character_id)) {
+    return false;
+  }
+  std::size_t position = 0;
+  if (!read_rect(data, 2, out.bounds, position)) {
+    return false;
+  }
+  SwfReader reader(data, position);
+  if (!reader.read_u8(out.flags1) || !reader.read_u8(out.flags2)) {
+    return false;
+  }
+  if ((out.flags1 & 0x01u) != 0) {
+    std::uint16_t font_id = 0;
+    if (!reader.read_u16(font_id)) {
+      return false;
+    }
+    out.font_id = font_id;
+  }
+  if ((out.flags2 & 0x80u) != 0 && !reader.read_zstring(out.font_class)) {
+    return false;
+  }
+  if ((out.flags1 & 0x01u) != 0 || (out.flags2 & 0x80u) != 0) {
+    std::uint16_t height = 0;
+    if (!reader.read_u16(height)) {
+      return false;
+    }
+    out.font_height_twips = height;
+  }
+  if ((out.flags1 & 0x04u) != 0) {
+    std::uint8_t red = 0;
+    std::uint8_t green = 0;
+    std::uint8_t blue = 0;
+    std::uint8_t alpha = 0;
+    if (!reader.read_u8(red) || !reader.read_u8(green) || !reader.read_u8(blue) ||
+        !reader.read_u8(alpha)) {
+      return false;
+    }
+    out.color = (static_cast<std::uint32_t>(alpha) << 24) |
+                (static_cast<std::uint32_t>(red) << 16) |
+                (static_cast<std::uint32_t>(green) << 8) | static_cast<std::uint32_t>(blue);
+  }
+  if ((out.flags1 & 0x02u) != 0) {
+    std::uint16_t max_length = 0;
+    if (!reader.read_u16(max_length)) {
+      return false;
+    }
+    out.max_length = max_length;
+  }
+  if ((out.flags2 & 0x20u) != 0) {
+    SwfEditTextLayout layout;
+    std::uint16_t leading = 0;
+    if (!reader.read_u8(layout.align) || !reader.read_u16(layout.left_margin) ||
+        !reader.read_u16(layout.right_margin) || !reader.read_u16(layout.indent) ||
+        !reader.read_u16(leading)) {
+      return false;
+    }
+    layout.leading = static_cast<std::int16_t>(leading);
+    out.layout = layout;
+  }
+  if (!reader.read_zstring(out.variable)) {
+    return false;
+  }
+  if ((out.flags1 & 0x80u) != 0 && !reader.read_zstring(out.text)) {
+    return false;
+  }
+  return true;
+}
+
 SwfStatus decode_tag_payload(const std::vector<std::byte>& payload, SwfTag& out_tag,
                              unsigned depth, std::size_t& tags_left) {
   const std::span<const std::byte> data(payload);
@@ -273,6 +352,27 @@ SwfStatus decode_tag_payload(const std::vector<std::byte>& payload, SwfTag& out_
       }
       return nested == SwfStatus::ok ? SwfStatus::ok : SwfStatus::malformed_tag;
     }
+    case tag::kImportAssets:
+    case tag::kImportAssets2: {
+      SwfReader reader(data, 0);
+      SwfImportAssets imports;
+      imports.version = out_tag.code == tag::kImportAssets2 ? 2 : 1;
+      if (!reader.read_zstring(imports.source_movie)) {
+        return SwfStatus::malformed_tag;
+      }
+      if (imports.version == 2) {
+        std::uint8_t reserved = 0;
+        std::uint8_t reserved_again = 0;
+        if (!reader.read_u8(reserved) || !reader.read_u8(reserved_again)) {
+          return SwfStatus::malformed_tag;
+        }
+      }
+      if (!decode_symbol_list(data.subspan(reader.position()), imports.symbols)) {
+        return SwfStatus::malformed_tag;
+      }
+      out_tag.imports = std::move(imports);
+      return SwfStatus::ok;
+    }
     case tag::kSymbolClass:
     case tag::kExportAssets: {
       std::vector<SwfSymbol> symbols;
@@ -338,6 +438,9 @@ SwfStatus decode_tag_payload(const std::vector<std::byte>& payload, SwfTag& out_
     case tag::kRemoveObject:
     case tag::kRemoveObject2:
       return decode_placement_tag(data, out_tag);
+    case tag::kDefineButton:
+    case tag::kDefineButton2:
+      return decode_button_tag(data, out_tag);
     case tag::kDefineShape:
     case tag::kDefineShape2:
     case tag::kDefineShape3:
@@ -346,12 +449,29 @@ SwfStatus decode_tag_payload(const std::vector<std::byte>& payload, SwfTag& out_
     case tag::kDefineBitsLossless:
     case tag::kDefineBitsLossless2:
       return decode_bitmap_tag(data, out_tag);
+    case tag::kDefineBits:
+    case tag::kJpegTables:
+    case tag::kDefineBitsJpeg2:
+    case tag::kDefineBitsJpeg3:
+    case tag::kDefineBitsJpeg4:
+      return decode_jpeg_tag(data, out_tag);
+    case tag::kDefineMorphShape:
+    case tag::kDefineMorphShape2:
+      return decode_morph_tag(data, out_tag);
     case tag::kDefineFont:
     case tag::kDefineFont2:
     case tag::kDefineFont3:
     case tag::kDefineText:
     case tag::kDefineText2:
       return decode_text_tag(data, out_tag);
+    case tag::kDefineEditText: {
+      SwfEditText edit;
+      if (!decode_edit_text(data, edit)) {
+        return SwfStatus::malformed_tag;
+      }
+      out_tag.edit_text = std::move(edit);
+      return SwfStatus::ok;
+    }
     case tag::kDefineSound: {
       SwfReader reader(data, 0);
       SwfSound sound;
@@ -366,6 +486,34 @@ SwfStatus decode_tag_payload(const std::vector<std::byte>& payload, SwfTag& out_
       sound.stereo = (flags & 0x01u) != 0;
       sound.data_size = reader.remaining();
       out_tag.sound = sound;
+      return SwfStatus::ok;
+    }
+    case tag::kSoundStreamHead:
+    case tag::kSoundStreamHead2: {
+      SwfReader reader(data, 0);
+      SwfSoundStreamHead head;
+      std::uint8_t playback = 0;
+      std::uint8_t stream = 0;
+      if (!reader.read_u8(playback) || !reader.read_u8(stream) ||
+          !reader.read_u16(head.sample_count)) {
+        return SwfStatus::malformed_tag;
+      }
+      head.reserved = static_cast<std::uint8_t>(playback >> 4);
+      head.playback_rate = static_cast<std::uint8_t>((playback >> 2) & 0x03u);
+      head.playback_16bit = (playback & 0x02u) != 0;
+      head.playback_stereo = (playback & 0x01u) != 0;
+      head.compression = static_cast<std::uint8_t>(stream >> 4);
+      head.rate = static_cast<std::uint8_t>((stream >> 2) & 0x03u);
+      head.sample_16bit = (stream & 0x02u) != 0;
+      head.stereo = (stream & 0x01u) != 0;
+      if (head.compression == 2) {
+        std::int16_t latency = 0;
+        if (!reader.read_s16(latency)) {
+          return SwfStatus::malformed_tag;
+        }
+        head.latency_seek = latency;
+      }
+      out_tag.sound_stream_head = head;
       return SwfStatus::ok;
     }
     case tag::kExporterInfo: {
@@ -441,6 +589,17 @@ SwfStatus decode_tag_payload(const std::vector<std::byte>& payload, SwfTag& out_
       texture.texture_glyph_count = texture_glyphs;
       texture.font_count = fonts;
       out_tag.font_texture = texture;
+      return SwfStatus::ok;
+    }
+    case tag::kDefineScalingGrid: {
+      SwfReader reader(data, 0);
+      SwfScalingGrid grid;
+      std::size_t next = 0;
+      if (!reader.read_u16(grid.character_id) ||
+          !read_rect(data, reader.position(), grid.splitter, next)) {
+        return SwfStatus::malformed_tag;
+      }
+      out_tag.scaling_grid = grid;
       return SwfStatus::ok;
     }
     default:

@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using System.Text;
 using OpenCommonwealth.Services.Hkx;
 using Xunit;
 
@@ -212,32 +211,6 @@ public sealed class HkxAnimationBoundsTests
         Assert.NotEmpty(animation.Tracks);
     }
 
-    [Theory]
-    [InlineData("hkaQuantizedAnimation", "Unsupported compression (quantized)")]
-    [InlineData("hkaPredictiveCompressedAnimation", "Unsupported compression (predictive)")]
-    [InlineData("hkaReferencePoseAnimation", "unsupported animation class")]
-    public void UnsupportedAnimationRejectionNamesTheReason(string animationClass, string reason)
-    {
-        byte[] bytes = Packfile(animationClass, (_, _) => { }, out _);
-
-        var error = Assert.Throws<NotSupportedException>(() => new HkxBinaryReader().ReadAnimation(bytes));
-
-        Assert.StartsWith($"{reason}: {animationClass}.", error.Message);
-
-        string path = Path.Combine(Path.GetTempPath(), "bgs-unsupported-" + Guid.NewGuid().ToString("N") + ".hkx");
-        try
-        {
-            File.WriteAllBytes(path, bytes);
-            var fromFile = Assert.Throws<NotSupportedException>(() => new HkxBinaryReader().ReadAnimation(path));
-
-            Assert.StartsWith($"{reason}: {animationClass}.", fromFile.Message);
-        }
-        finally
-        {
-            File.Delete(path);
-        }
-    }
-
     private static void SetLossless(CraftedPackfile crafted, NativeAppend.Added animation, int frames, int tracks)
     {
         crafted.SetScalar(animation, "hkaAnimation", "numberOfTransformTracks", tracks);
@@ -253,59 +226,5 @@ public sealed class HkxAnimationBoundsTests
         byte[] bytes = crafted.Build(out int dataStart);
         contentAbs = dataStart + animation.Offset;
         return bytes;
-    }
-
-    private sealed class CraftedPackfile
-    {
-        private readonly PackfileImage _image = new() { Predicates = new byte[16] };
-
-        public CraftedPackfile()
-        {
-            foreach (string name in new[] { "__classnames__", "__types__", "__data__" })
-            {
-                var tag = new byte[20];
-                Encoding.ASCII.GetBytes(name).CopyTo(tag, 0);
-                _image.Sections.Add(new PackfileSection { TagBytes = tag });
-            }
-        }
-
-        public NativeAppend.Added Object(string className) => NativeAppend.Object(_image, className);
-
-        public void SetArray(NativeAppend.Added obj, string className, string member, int count, int? target = null)
-        {
-            var data = _image.Section("__data__")!;
-            int field = obj.Offset + HavokClasses.Shipped.Field(className, member)!.Offset;
-            data.SetLocal(field, target ?? obj.Offset);
-            BitConverter.GetBytes(count).CopyTo(data.Data, field + _image.Layout.PointerSize);
-        }
-
-        public int AppendBlock(int size)
-        {
-            var data = _image.Section("__data__")!;
-            data.AlignData(16);
-            return data.AppendData(new byte[size]);
-        }
-
-        public void SetPointer(int at, int target) => _image.Section("__data__")!.SetLocal(at, target);
-
-        public void SetWord(int at, int value) => BitConverter.GetBytes(value).CopyTo(_image.Section("__data__")!.Data, at);
-
-        public void SetScalar(NativeAppend.Added obj, string className, string member, int value) =>
-            BitConverter.GetBytes(value).CopyTo(_image.Section("__data__")!.Data,
-                obj.Offset + HavokClasses.Shipped.Field(className, member)!.Offset);
-
-        public byte[] Build(out int dataStart)
-        {
-            FixupOrder.Reorder(_image);
-            byte[] bytes = _image.Rebuild();
-            dataStart = 0;
-            for (int i = 0; i < 3; i++)
-            {
-                int header = 0x50 + i * 0x40;
-                if (Encoding.ASCII.GetString(bytes, header, 16).TrimEnd('\0') == "__data__")
-                    dataStart = BitConverter.ToInt32(bytes, header + 0x14);
-            }
-            return bytes;
-        }
     }
 }

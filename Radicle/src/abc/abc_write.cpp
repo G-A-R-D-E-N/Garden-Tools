@@ -221,9 +221,69 @@ void put_body(Bytes& out, const AbcMethodBody& body) {
   put_traits(out, body.traits);
 }
 
+bool fits_u30(std::uint32_t value) { return value <= 0x3FFFFFFFu; }
+
+bool past_end(std::uint32_t index, std::size_t limit) {
+  return static_cast<std::size_t>(index) >= limit;
+}
+
+bool namespace_kind_known(AbcNamespaceKind kind) {
+  switch (kind) {
+    case AbcNamespaceKind::Private:
+    case AbcNamespaceKind::Namespace:
+    case AbcNamespaceKind::Package:
+    case AbcNamespaceKind::PackageInternal:
+    case AbcNamespaceKind::Protected:
+    case AbcNamespaceKind::Explicit:
+    case AbcNamespaceKind::StaticProtected:
+      return true;
+  }
+  return false;
+}
+
+bool multiname_kind_known(AbcMultinameKind kind) {
+  switch (kind) {
+    case AbcMultinameKind::QName:
+    case AbcMultinameKind::QNameA:
+    case AbcMultinameKind::RTQName:
+    case AbcMultinameKind::RTQNameA:
+    case AbcMultinameKind::RTQNameL:
+    case AbcMultinameKind::RTQNameLA:
+    case AbcMultinameKind::Multiname:
+    case AbcMultinameKind::MultinameA:
+    case AbcMultinameKind::MultinameL:
+    case AbcMultinameKind::MultinameLA:
+    case AbcMultinameKind::TypeName:
+      return true;
+  }
+  return false;
+}
+
+bool value_kind_known(AbcValueKind kind) {
+  switch (kind) {
+    case AbcValueKind::Undefined:
+    case AbcValueKind::Utf8:
+    case AbcValueKind::Int:
+    case AbcValueKind::UInt:
+    case AbcValueKind::PrivateNs:
+    case AbcValueKind::Double:
+    case AbcValueKind::Namespace:
+    case AbcValueKind::False:
+    case AbcValueKind::True:
+    case AbcValueKind::Null:
+    case AbcValueKind::PackageNamespace:
+    case AbcValueKind::PackageInternalNs:
+    case AbcValueKind::ProtectedNamespace:
+    case AbcValueKind::ExplicitNamespace:
+    case AbcValueKind::StaticProtectedNs:
+      return true;
+  }
+  return false;
+}
+
 bool methods_encodable(const std::vector<AbcMethodInfo>& methods) {
   for (const AbcMethodInfo& method : methods) {
-    if (method.param_types.size() != method.param_count) {
+    if (!fits_u30(method.param_count) || method.param_types.size() != method.param_count) {
       return false;
     }
     if (method.has_optional() ? method.options.size() > method.param_count
@@ -241,7 +301,7 @@ bool methods_encodable(const std::vector<AbcMethodInfo>& methods) {
 bool traits_encodable(const std::vector<AbcTrait>& traits) {
   for (const AbcTrait& trait : traits) {
     if (static_cast<std::uint8_t>(trait.kind) > static_cast<std::uint8_t>(AbcTraitKind::Const) ||
-        trait.attrs > 0x0F) {
+        trait.attrs > 0x0F || !fits_u30(trait.slot_id) || !fits_u30(trait.disp_id)) {
       return false;
     }
     if (!trait.has_metadata() && !trait.metadata.empty()) {
@@ -254,6 +314,11 @@ bool traits_encodable(const std::vector<AbcTrait>& traits) {
 bool model_encodable(const AbcFile& file) {
   if (file.classes.size() != file.instances.size() || !methods_encodable(file.methods)) {
     return false;
+  }
+  for (const AbcNamespace& name_space : file.pool.namespaces) {
+    if (!fits_u30(name_space.name)) {
+      return false;
+    }
   }
   for (const AbcInstanceInfo& instance : file.instances) {
     if (!instance.has_protected_ns() && instance.protected_ns != 0) {
@@ -274,11 +339,137 @@ bool model_encodable(const AbcFile& file) {
     }
   }
   for (const AbcMethodBody& body : file.bodies) {
-    if (!traits_encodable(body.traits)) {
+    if (!traits_encodable(body.traits) || !fits_u30(body.max_stack) ||
+        !fits_u30(body.local_count) || !fits_u30(body.init_scope_depth) ||
+        !fits_u30(body.max_scope_depth)) {
+      return false;
+    }
+    for (const AbcException& exception : body.exceptions) {
+      if (!fits_u30(exception.from) || !fits_u30(exception.to) || !fits_u30(exception.target)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+bool multiname_refs_past_end(const AbcConstantPool& pool, std::size_t index,
+                             const AbcMultiname& multiname) {
+  const bool name_past_end =
+      multiname.name != 0 && past_end(multiname.name, pool.strings.size());
+  switch (multiname.kind) {
+    case AbcMultinameKind::QName:
+    case AbcMultinameKind::QNameA:
+      return past_end(multiname.ns, pool.namespaces.size()) || name_past_end;
+    case AbcMultinameKind::RTQName:
+    case AbcMultinameKind::RTQNameA:
+      return name_past_end;
+    case AbcMultinameKind::RTQNameL:
+    case AbcMultinameKind::RTQNameLA:
+      return false;
+    case AbcMultinameKind::Multiname:
+    case AbcMultinameKind::MultinameA:
+      return name_past_end || past_end(multiname.ns_set, pool.ns_sets.size());
+    case AbcMultinameKind::MultinameL:
+    case AbcMultinameKind::MultinameLA:
+      return past_end(multiname.ns_set, pool.ns_sets.size());
+    case AbcMultinameKind::TypeName:
+      if (past_end(multiname.name, index)) {
+        return true;
+      }
+      for (const std::uint32_t param : multiname.params) {
+        if (past_end(param, index)) {
+          return true;
+        }
+      }
+      return false;
+  }
+  return false;
+}
+
+bool traits_values_known(const std::vector<AbcTrait>& traits) {
+  for (const AbcTrait& trait : traits) {
+    const bool has_value = trait.kind == AbcTraitKind::Slot || trait.kind == AbcTraitKind::Const;
+    if (has_value && trait.value_index != 0 && !value_kind_known(trait.value_kind)) {
       return false;
     }
   }
   return true;
+}
+
+bool type_name_expansion_too_large(const AbcConstantPool& pool) {
+  std::vector<std::size_t> expansion(pool.multinames.size(), 1);
+  for (std::size_t i = 1; i < pool.multinames.size(); ++i) {
+    const AbcMultiname& multiname = pool.multinames[i];
+    if (multiname.kind != AbcMultinameKind::TypeName) {
+      continue;
+    }
+    std::size_t nodes = 1 + expansion[multiname.name];
+    for (const std::uint32_t param : multiname.params) {
+      nodes += expansion[param];
+    }
+    if (nodes > detail::kMaxTypeNameExpansion) {
+      return true;
+    }
+    expansion[i] = nodes;
+  }
+  return false;
+}
+
+AbcStatus pool_encodable(const AbcFile& file) {
+  const AbcConstantPool& pool = file.pool;
+  for (std::size_t i = 1; i < pool.namespaces.size(); ++i) {
+    if (!namespace_kind_known(pool.namespaces[i].kind)) {
+      return AbcStatus::BadNamespaceKind;
+    }
+  }
+  for (std::size_t i = 1; i < pool.ns_sets.size(); ++i) {
+    for (const std::uint32_t ns : pool.ns_sets[i].namespaces) {
+      if (past_end(ns, pool.namespaces.size())) {
+        return AbcStatus::IndexOutOfRange;
+      }
+    }
+  }
+  for (std::size_t i = 1; i < pool.multinames.size(); ++i) {
+    const AbcMultiname& multiname = pool.multinames[i];
+    if (!multiname_kind_known(multiname.kind)) {
+      return AbcStatus::BadMultinameKind;
+    }
+    if (multiname_refs_past_end(pool, i, multiname)) {
+      return AbcStatus::IndexOutOfRange;
+    }
+  }
+  if (type_name_expansion_too_large(pool)) {
+    return AbcStatus::TypeNameTooLarge;
+  }
+  for (const AbcMethodInfo& method : file.methods) {
+    for (const AbcOptionalValue& option : method.options) {
+      if (!value_kind_known(option.kind)) {
+        return AbcStatus::BadValueKind;
+      }
+    }
+  }
+  for (const AbcInstanceInfo& instance : file.instances) {
+    if (!traits_values_known(instance.traits)) {
+      return AbcStatus::BadValueKind;
+    }
+  }
+  for (const AbcClassInfo& klass : file.classes) {
+    if (!traits_values_known(klass.traits)) {
+      return AbcStatus::BadValueKind;
+    }
+  }
+  for (const AbcScriptInfo& script : file.scripts) {
+    if (!traits_values_known(script.traits)) {
+      return AbcStatus::BadValueKind;
+    }
+  }
+  for (const AbcMethodBody& body : file.bodies) {
+    if (!traits_values_known(body.traits)) {
+      return AbcStatus::BadValueKind;
+    }
+  }
+  return AbcStatus::Ok;
 }
 
 }
@@ -291,6 +482,10 @@ AbcStatus AbcFile::serialize(std::vector<std::uint8_t>& out) const {
   const AbcStatus index_status = detail::check_pool_indices(*this);
   if (index_status != AbcStatus::Ok) {
     return index_status;
+  }
+  const AbcStatus pool_status = pool_encodable(*this);
+  if (pool_status != AbcStatus::Ok) {
+    return pool_status;
   }
   put_u16(out, minor_version);
   put_u16(out, major_version);

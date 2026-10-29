@@ -143,10 +143,10 @@ public sealed class AuditRegressionTests
     [Fact]
     public void FolderExtractionRejectsParentTraversalOnEveryPlatform()
     {
-        using var root = new TempDirectory("bgs-ba2-parent");
+        using var root = new TestArchives.TempDirectory("bgs-ba2-parent");
         string archive = Path.Combine(root.Path, "parent.ba2");
         string output = Path.Combine(root.Path, "out");
-        WriteBa2(archive, "../outside/escape.hkx", new byte[] { 1, 2, 3 });
+        TestArchives.WriteBa2(archive, "../outside/escape.hkx", new byte[] { 1, 2, 3 });
 
         Assert.Throws<InvalidDataException>(() =>
             Ba2.ExtractMatching(archive, "", output, ".hkx", _ => { }, keepFolders: true));
@@ -156,9 +156,9 @@ public sealed class AuditRegressionTests
     [Fact]
     public void DriveQualifiedArchiveNamesAreRejectedOnEveryPlatform()
     {
-        using var root = new TempDirectory("bgs-ba2-drive");
+        using var root = new TestArchives.TempDirectory("bgs-ba2-drive");
         string archive = Path.Combine(root.Path, "drive.ba2");
-        WriteBa2(archive, "C:\\escape.hkx", new byte[] { 1, 2, 3 });
+        TestArchives.WriteBa2(archive, "C:\\escape.hkx", new byte[] { 1, 2, 3 });
 
         var error = Assert.Throws<InvalidDataException>(() => Ba2.Open(archive));
         Assert.Contains("rooted archive path", error.Message, StringComparison.Ordinal);
@@ -167,9 +167,9 @@ public sealed class AuditRegressionTests
     [Fact]
     public void ArchiveNamesWithColonAreRejectedBeforeExtraction()
     {
-        using var root = new TempDirectory("bgs-ba2-colon");
+        using var root = new TestArchives.TempDirectory("bgs-ba2-colon");
         string archive = Path.Combine(root.Path, "colon.ba2");
-        WriteBa2(archive, "a.hkx:stream", new byte[] { 1, 2, 3 });
+        TestArchives.WriteBa2(archive, "a.hkx:stream", new byte[] { 1, 2, 3 });
 
         var error = Assert.Throws<InvalidDataException>(() => Ba2.Open(archive));
         Assert.Contains("path with a colon", error.Message, StringComparison.Ordinal);
@@ -178,10 +178,10 @@ public sealed class AuditRegressionTests
     [Fact]
     public void FlatExtractionKeepsNestedNamesInsideTheOutputDirectory()
     {
-        using var root = new TempDirectory("bgs-ba2-flat");
+        using var root = new TestArchives.TempDirectory("bgs-ba2-flat");
         string archive = Path.Combine(root.Path, "flat.ba2");
         string output = Path.Combine(root.Path, "out");
-        WriteBa2(archive, "folder/sub/file.hkx", new byte[] { 1, 2, 3 });
+        TestArchives.WriteBa2(archive, "folder/sub/file.hkx", new byte[] { 1, 2, 3 });
 
         int written = Ba2.ExtractMatching(
             archive, "", output, ".hkx", _ => { }, keepFolders: false);
@@ -194,7 +194,7 @@ public sealed class AuditRegressionTests
     [Fact]
     public void CheckedReplacementKeepsThePreviousVersionAsBackup()
     {
-        using var root = new TempDirectory("bgs-checked-replace");
+        using var root = new TestArchives.TempDirectory("bgs-checked-replace");
         string path = Path.Combine(root.Path, "graph.hkx");
         byte[] original = { 1, 2, 3, 4 };
         byte[] replacement = { 5, 6, 7, 8 };
@@ -210,7 +210,7 @@ public sealed class AuditRegressionTests
     [Fact]
     public void CheckedReplacementRestoresAnInterveningExternalEdit()
     {
-        using var root = new TempDirectory("bgs-checked-race");
+        using var root = new TestArchives.TempDirectory("bgs-checked-race");
         string path = Path.Combine(root.Path, "graph.hkx");
         byte[] original = { 1, 2, 3, 4 };
         byte[] replacement = { 5, 6, 7, 8 };
@@ -234,7 +234,7 @@ public sealed class AuditRegressionTests
     [Fact]
     public void ReadHkxDoesNotTouchSaveSidecars()
     {
-        using var root = new TempDirectory("bgs-read-sidecars");
+        using var root = new TestArchives.TempDirectory("bgs-read-sidecars");
         string path = Path.Combine(root.Path, "graph.hkx");
         byte[] current = { 5, 6, 7, 8 };
         File.WriteAllBytes(path, current);
@@ -257,7 +257,7 @@ public sealed class AuditRegressionTests
     [Fact]
     public void RecoveryRotatesOnceAndPromotesOnlyTheNewestMatchingStaleSidecar()
     {
-        using var root = new TempDirectory("bgs-recovery-chain");
+        using var root = new TestArchives.TempDirectory("bgs-recovery-chain");
         string path = Path.Combine(root.Path, "graph.hkx");
         byte[] current = { 5, 6, 7, 8 };
         File.WriteAllBytes(path, current);
@@ -287,7 +287,7 @@ public sealed class AuditRegressionTests
     [Fact]
     public void RecoverySweepsOnlyStaleWritingArtifacts()
     {
-        using var root = new TempDirectory("bgs-recovery-writing");
+        using var root = new TestArchives.TempDirectory("bgs-recovery-writing");
         string path = Path.Combine(root.Path, "graph.hkx");
         File.WriteAllBytes(path, new byte[] { 5, 6, 7, 8 });
         string stale = path + "." + Id("stale") + ".writing";
@@ -305,7 +305,7 @@ public sealed class AuditRegressionTests
     [Fact]
     public void RecoveryLeavesFreshPreviousArtifactsAlone()
     {
-        using var root = new TempDirectory("bgs-recovery-fresh");
+        using var root = new TestArchives.TempDirectory("bgs-recovery-fresh");
         string path = Path.Combine(root.Path, "graph.hkx");
         byte[] current = { 5, 6, 7, 8 };
         File.WriteAllBytes(path, current);
@@ -345,50 +345,8 @@ public sealed class AuditRegressionTests
         return bytes;
     }
 
-    private static void WriteBa2(string path, string entryName, byte[] payload)
-    {
-        byte[] name = Encoding.UTF8.GetBytes(entryName);
-        const int headerBytes = 24;
-        const int recordBytes = 36;
-        ulong nameTable = headerBytes + recordBytes;
-        ulong dataOffset = nameTable + 2u + (uint)name.Length;
-
-        using var stream = File.Create(path);
-        using var writer = new BinaryWriter(stream);
-        writer.Write(Encoding.ASCII.GetBytes("BTDX"));
-        writer.Write((uint)1);
-        writer.Write(Encoding.ASCII.GetBytes("GNRL"));
-        writer.Write((uint)1);
-        writer.Write(nameTable);
-        writer.Write((uint)0);
-        writer.Write((uint)0);
-        writer.Write((uint)0);
-        writer.Write((uint)0x00100100);
-        writer.Write(dataOffset);
-        writer.Write((uint)0);
-        writer.Write((uint)payload.Length);
-        writer.Write(0xBAADF00Du);
-        writer.Write((ushort)name.Length);
-        writer.Write(name);
-        writer.Write(payload);
-    }
-
     private static void MakeStale(string path, int minutes = 20) =>
         File.SetLastWriteTimeUtc(path, DateTime.UtcNow - TimeSpan.FromMinutes(minutes));
-
-    private sealed class TempDirectory : IDisposable
-    {
-        public TempDirectory(string prefix) =>
-            Path = Directory.CreateTempSubdirectory(prefix).FullName;
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            try { Directory.Delete(Path, recursive: true); }
-            catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
-        }
-    }
 
     [Fact]
     public void AParentCycleIsRefusedInsteadOfRecursingForever()

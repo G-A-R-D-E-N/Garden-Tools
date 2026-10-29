@@ -149,6 +149,12 @@ struct SwfSymbol {
   std::string name;
 };
 
+struct SwfImportAssets {
+  std::string source_movie;
+  std::uint8_t version{1};
+  std::vector<SwfSymbol> symbols;
+};
+
 struct SwfAbc {
   std::uint32_t flags{0};
   std::string name;
@@ -212,6 +218,27 @@ struct SwfLineStyle {
   std::optional<SwfFillStyle> fill;
 };
 
+enum class SwfShapeRecordKind : std::uint8_t {
+  move = 0,
+  style_change = 1,
+  straight_edge = 2,
+  curved_edge = 3,
+};
+
+struct SwfShapeRecord {
+  SwfShapeRecordKind kind{SwfShapeRecordKind::move};
+  std::int32_t x{0};
+  std::int32_t y{0};
+  std::int32_t control_x{0};
+  std::int32_t control_y{0};
+  std::uint16_t fill0{0};
+  std::uint16_t fill1{0};
+  std::uint16_t line{0};
+  bool has_fill0{false};
+  bool has_fill1{false};
+  bool has_line{false};
+};
+
 struct SwfShape {
   std::uint16_t shape_id{0};
   SwfRect bounds{};
@@ -220,9 +247,42 @@ struct SwfShape {
   std::uint8_t flags{0};
   std::vector<SwfFillStyle> fill_styles;
   std::vector<SwfLineStyle> line_styles;
+  std::vector<SwfShapeRecord> records;
   std::uint32_t edge_count{0};
   std::uint32_t curved_edge_count{0};
   std::uint32_t style_change_count{0};
+};
+
+struct SwfMorphGradientStop {
+  std::uint8_t start_ratio{0};
+  std::uint8_t end_ratio{0};
+  std::uint32_t start_color{0};
+  std::uint32_t end_color{0};
+};
+
+struct SwfMorphFillStyle {
+  std::uint8_t type{0};
+  std::uint32_t start_color{0};
+  std::uint32_t end_color{0};
+  std::optional<SwfMatrix> start_matrix;
+  std::optional<SwfMatrix> end_matrix;
+  std::uint8_t spread{0};
+  std::uint8_t interpolation{0};
+  std::vector<SwfMorphGradientStop> stops;
+  std::optional<std::int16_t> start_focal_point;
+  std::optional<std::int16_t> end_focal_point;
+  std::uint16_t bitmap_id{0};
+};
+
+struct SwfMorphLineStyle {
+  std::uint16_t start_width{0};
+  std::uint16_t end_width{0};
+  std::uint16_t flags{0};
+  std::optional<std::uint16_t> start_miter_limit;
+  std::optional<std::uint16_t> end_miter_limit;
+  std::optional<SwfMorphFillStyle> fill;
+  std::uint32_t start_color{0};
+  std::uint32_t end_color{0};
 };
 
 struct SwfMorphShape {
@@ -234,11 +294,18 @@ struct SwfMorphShape {
   SwfRect start_edge_bounds{};
   SwfRect end_edge_bounds{};
   std::uint8_t flags{0};
+  std::vector<SwfMorphFillStyle> fill_styles;
+  std::vector<SwfMorphLineStyle> line_styles;
+  std::vector<SwfShapeRecord> start_records;
+  std::vector<SwfShapeRecord> end_records;
   std::uint32_t fill_style_count{0};
   std::uint32_t line_style_count{0};
   std::uint32_t start_edge_count{0};
   std::uint32_t end_edge_count{0};
 };
+
+std::vector<SwfShapeRecord> interpolate_morph_commands(const SwfMorphShape& morph, double ratio);
+std::optional<SwfShape> interpolate_morph_shape(const SwfMorphShape& morph, double ratio);
 
 struct SwfBitmap {
   std::uint16_t character_id{0};
@@ -247,6 +314,9 @@ struct SwfBitmap {
   std::uint16_t height{0};
   std::optional<std::uint8_t> color_table_size;
   std::size_t data_size{0};
+  bool has_alpha{false};
+  /* Invariant: the zlib stream as the tag carried it, inflated on demand by bitmap_to_png. */
+  std::vector<std::byte> packed;
 };
 
 struct SwfJpeg {
@@ -261,6 +331,34 @@ struct SwfJpegTables {
   std::size_t size{0};
 };
 
+struct SwfFilter {
+  std::uint8_t id{0};
+  std::uint32_t color{0};
+  std::uint32_t highlight_color{0};
+  std::vector<std::uint32_t> gradient_colors;
+  std::vector<std::uint8_t> gradient_ratios;
+  double blur_x{0.0};
+  double blur_y{0.0};
+  double angle{0.0};
+  double distance{0.0};
+  double strength{0.0};
+  bool inner{false};
+  bool knockout{false};
+  bool composite_source{false};
+  bool on_top{false};
+  std::uint8_t passes{0};
+  std::uint8_t matrix_columns{0};
+  std::uint8_t matrix_rows{0};
+  float divisor{0.0f};
+  float bias{0.0f};
+  std::vector<float> matrix;
+  std::uint32_t default_color{0};
+  bool clamp{false};
+  bool preserve_alpha{false};
+
+  bool operator==(const SwfFilter&) const = default;
+};
+
 struct SwfPlacement {
   std::uint16_t depth{0};
   bool move{false};
@@ -272,7 +370,9 @@ struct SwfPlacement {
   std::optional<std::string> name;
   std::optional<std::uint16_t> clip_depth;
   std::optional<std::string> class_name;
-  std::uint16_t filter_count{0};
+  std::vector<SwfFilter> filters;
+  /* Invariant: set exactly when the PlaceObject3 filter flag is present, so an empty list clears filters and an absent flag keeps them. */
+  bool has_filter_list{false};
   std::optional<std::uint8_t> blend_mode;
   std::optional<std::uint8_t> bitmap_cache;
   std::optional<bool> visible;
@@ -284,6 +384,35 @@ struct SwfRemoval {
   std::uint16_t depth{0};
 };
 
+struct SwfButtonRecord {
+  bool up{false};
+  bool over{false};
+  bool down{false};
+  bool hit_test{false};
+  std::uint16_t character_id{0};
+  std::uint16_t depth{0};
+  SwfMatrix matrix{};
+  std::optional<SwfColorTransform> color_transform;
+};
+
+struct SwfButton {
+  std::uint16_t character_id{0};
+  std::vector<SwfButtonRecord> records;
+};
+
+/* Invariant: a glyph SHAPE has no style table, so fill style 1 is the implicit text colour. */
+struct SwfGlyph {
+  std::uint8_t fill_bits{0};
+  std::uint8_t line_bits{0};
+  std::vector<SwfShapeRecord> records;
+};
+
+struct SwfKerning {
+  std::uint16_t code1{0};
+  std::uint16_t code2{0};
+  std::int16_t adjustment{0};
+};
+
 struct SwfFont {
   std::uint16_t font_id{0};
   std::uint32_t glyph_count{0};
@@ -292,13 +421,68 @@ struct SwfFont {
   std::string name;
   bool wide_offsets{false};
   bool wide_codes{false};
+  bool define_font3{false};
+  bool has_layout{false};
+  std::vector<std::uint32_t> glyph_offsets;
+  std::vector<SwfGlyph> glyphs;
+  std::vector<std::uint16_t> glyph_codes;
+  /* Invariant: advances are em fractions (glyph advance / units per em). */
+  std::vector<double> advances;
+  std::vector<SwfRect> glyph_bounds;
+  std::vector<SwfKerning> kerning;
+  std::uint32_t units_per_em{1024};
+  std::uint16_t ascent{0};
+  std::uint16_t descent{0};
+  std::int16_t leading{0};
+};
+
+struct SwfTextGlyph {
+  std::uint32_t glyph_index{0};
+  std::int32_t advance{0};
+};
+
+struct SwfTextRecord {
+  std::optional<std::uint16_t> font_id;
+  /* Invariant: colour is 0xAARRGGBB; DefineText RGB records store alpha 0xFF. */
+  std::optional<std::uint32_t> color;
+  std::optional<std::int16_t> x_offset;
+  std::optional<std::int16_t> y_offset;
+  std::optional<std::uint16_t> height;
+  std::vector<SwfTextGlyph> glyphs;
 };
 
 struct SwfText {
   std::uint16_t character_id{0};
   SwfRect bounds{};
+  /* Invariant: the DefineText MATRIX after the bounds, applied to glyph space before placement. */
+  SwfMatrix matrix{};
   std::size_t record_count{0};
   std::size_t glyph_count{0};
+  std::vector<SwfTextRecord> records;
+};
+
+struct SwfEditTextLayout {
+  std::uint8_t align{0};
+  std::uint16_t left_margin{0};
+  std::uint16_t right_margin{0};
+  std::uint16_t indent{0};
+  std::int16_t leading{0};
+};
+
+struct SwfEditText {
+  std::uint16_t character_id{0};
+  SwfRect bounds{};
+  std::uint8_t flags1{0};
+  std::uint8_t flags2{0};
+  std::optional<std::uint16_t> font_id;
+  std::string font_class;
+  std::optional<std::uint16_t> font_height_twips;
+  std::optional<std::uint32_t> color;
+  std::optional<std::uint16_t> max_length;
+  /* Invariant: present exactly when flags2 carries the layout bit; the leading is signed 1/20 px. */
+  std::optional<SwfEditTextLayout> layout;
+  std::string variable;
+  std::string text;
 };
 
 struct SwfSound {
@@ -309,6 +493,20 @@ struct SwfSound {
   bool stereo{false};
   std::uint32_t sample_count{0};
   std::size_t data_size{0};
+};
+
+struct SwfSoundStreamHead {
+  std::uint8_t reserved{0};
+  std::uint8_t playback_rate{0};
+  bool playback_16bit{false};
+  bool playback_stereo{false};
+  std::uint8_t compression{0};
+  std::uint8_t rate{0};
+  bool sample_16bit{false};
+  bool stereo{false};
+  std::uint16_t sample_count{0};
+  /* Invariant: latency_seek is present exactly when compression is 2 (MP3). */
+  std::optional<std::int16_t> latency_seek;
 };
 
 struct SwfExporterInfo {
@@ -341,6 +539,11 @@ struct SwfFontTextureInfo {
   std::uint32_t font_count{0};
 };
 
+struct SwfScalingGrid {
+  std::uint16_t character_id{0};
+  SwfRect splitter{};
+};
+
 struct SwfTag {
   std::uint16_t code{0};
   std::uint32_t length{0};
@@ -357,6 +560,7 @@ struct SwfTag {
   std::optional<std::uint16_t> sprite_frame_count;
   std::optional<std::vector<SwfSymbol>> symbols;
   std::optional<std::vector<SwfSymbol>> exports;
+  std::optional<SwfImportAssets> imports;
   std::optional<SwfAbc> abc;
   std::optional<SwfAction> action;
   std::optional<SwfBinaryData> binary_data;
@@ -364,13 +568,17 @@ struct SwfTag {
   std::optional<SwfBitmap> bitmap;
   std::optional<SwfFont> font;
   std::optional<SwfText> text;
+  std::optional<SwfEditText> edit_text;
   std::optional<SwfSound> sound;
+  std::optional<SwfSoundStreamHead> sound_stream_head;
   std::optional<SwfExporterInfo> exporter_info;
   std::optional<SwfExternalImage> external_image;
   std::optional<SwfFontTextureInfo> font_texture;
+  std::optional<SwfScalingGrid> scaling_grid;
   std::optional<SwfPlacement> placement;
   std::optional<SwfRemoval> removal;
   std::optional<SwfMorphShape> morph_shape;
+  std::optional<SwfButton> button;
   std::optional<SwfJpeg> jpeg;
   std::optional<SwfJpegTables> jpeg_tables;
 
@@ -384,6 +592,33 @@ struct SwfFile {
   std::vector<std::byte> source_body;
   std::vector<std::byte> source_compressed_body;
   bool source_compressed_body_known{false};
+};
+
+struct SwfTagReplacement {
+  std::size_t tag_index{0};
+  std::vector<std::byte> payload;
+};
+
+struct SwfTagInsertion {
+  std::size_t before_tag_index{0};
+  SwfTag tag;
+};
+
+/* Constraint: a removal index names a tag in the plan stream and must never name the End tag. */
+struct SwfTagRemoval {
+  std::size_t tag_index{0};
+};
+
+struct SwfTagPlan {
+  std::vector<SwfTagReplacement> replacements;
+  std::vector<SwfTagInsertion> insertions;
+  std::vector<SwfTagRemoval> removals;
+};
+
+struct SwfTagPlanResult {
+  std::vector<std::size_t> inserted_tag_indices;
+  /* Invariant: a plan whose bodies all match the bytes in force must report false and move nothing. */
+  bool changed{false};
 };
 
 struct SwfReadResult {
@@ -435,7 +670,19 @@ SwfReadResult read_swf(std::span<const std::byte> bytes, std::size_t max_tags);
 std::vector<std::byte> write_swf(const SwfFile& file);
 std::vector<std::byte> write_swf(const SwfFile& file, SwfCompression compression);
 
+std::vector<std::byte> encode_define_sound(const SwfSound& sound, std::span<const std::byte> data);
+std::vector<std::byte> encode_sound_stream_head(const SwfSoundStreamHead& head);
+
+/* Requires every field to fit its SHAPE bit width (fill and line indices, edge deltas up to 17 bits). */
+bool encode_glyph_shape(const SwfGlyph& glyph, std::vector<std::byte>& out, std::string& message);
+
+/* Requires one glyph shape, advance, code and bounds per glyph; the offsets are recomputed from the layout. */
+bool encode_define_font(const SwfFont& font, std::uint16_t code, std::vector<std::byte>& out,
+                        std::string& message);
+
 bool replace_tag_payload(SwfFile& file, std::size_t tag_index, std::span<const std::byte> payload);
+
+bool apply_tag_plan(SwfFile& file, const SwfTagPlan& plan, SwfTagPlanResult& out);
 
 std::span<const std::byte> abc_payload(const SwfTag& tag) noexcept;
 std::vector<SwfAbcBlock> abc_blocks(const SwfFile& file);

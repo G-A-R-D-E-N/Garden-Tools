@@ -14,11 +14,6 @@
 namespace fo4ide::app {
 namespace {
 
-std::string stringArgument(const nlohmann::json& args, std::size_t index) {
-    if (!args.is_array() || index >= args.size() || !args[index].is_string()) return {};
-    return args[index].get<std::string>();
-}
-
 nlohmann::json pathResult(Result<std::filesystem::path> result) {
     if (!result) return std::string{};
     return result->string();
@@ -39,30 +34,30 @@ MaterialTarget::MaterialTarget(material::MaterialService& service, platform::Ser
 Result<nlohmann::json> MaterialTarget::invoke(std::string_view method,
                                                const nlohmann::json& args) {
     if (method == "BrowseForFile") {
-        return pathResult(platform_.pickFile({stringArgument(args, 0), stringArgument(args, 1), {}}));
+        return pathResult(platform_.pickFile({support::stringArgument(args, 0), support::stringArgument(args, 1), {}}));
     }
     if (method == "Inspect") {
-        auto inspected = service_.inspect(stringArgument(args, 0));
+        auto inspected = service_.inspect(support::stringArgument(args, 0));
         if (!inspected) return nlohmann::json{{"error", "Error: " + inspected.error().message}}.dump();
         return inspected->dump();
     }
     if (method == "SetFields") {
         try {
-            const auto fieldsJson = nlohmann::json::parse(stringArgument(args, 1));
+            const auto fieldsJson = nlohmann::json::parse(support::stringArgument(args, 1));
             if (!fieldsJson.is_object()) return nlohmann::json("Error: fields must be a JSON object");
             std::map<std::string, std::string, std::less<>> fields;
             for (auto it = fieldsJson.begin(); it != fieldsJson.end(); ++it) {
                 if (!it.value().is_string()) return nlohmann::json("Error: material field values must be strings");
                 fields.emplace(it.key(), it.value().get<std::string>());
             }
-            auto result = service_.setFields(stringArgument(args, 0), fields, stringArgument(args, 2));
+            auto result = service_.setFields(support::stringArgument(args, 0), fields, support::stringArgument(args, 2));
             return nlohmann::json(result ? *result : "Error: " + result.error().message);
         } catch (const std::exception& ex) {
             return nlohmann::json("Error: " + std::string(ex.what()));
         }
     }
     if (method == "OpenFolder") {
-        auto opened = platform_.openFolder(stringArgument(args, 0));
+        auto opened = platform_.openFolder(support::stringArgument(args, 0));
         return nlohmann::json(opened ? std::string{} : "Error: " + opened.error().message);
     }
     if (method == "StageDroppedFile") return stageDroppedFile(args);
@@ -71,9 +66,9 @@ Result<nlohmann::json> MaterialTarget::invoke(std::string_view method,
 
 Result<nlohmann::json> MaterialTarget::stageDroppedFile(const nlohmann::json& args) const {
     try {
-        auto name = std::filesystem::path(stringArgument(args, 0)).filename();
+        auto name = std::filesystem::path(support::stringArgument(args, 0)).filename();
         if (name.empty()) name = "dropped.bgsm";
-        auto decoded = support::decodeBase64(stringArgument(args, 1));
+        auto decoded = support::decodeBase64(support::stringArgument(args, 1));
         if (!decoded) return nlohmann::json("ERR:" + decoded.error().message);
 
         const auto directory = uniqueStageDirectory();

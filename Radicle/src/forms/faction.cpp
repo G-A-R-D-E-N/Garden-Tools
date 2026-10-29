@@ -330,7 +330,8 @@ FormKey create_faction(Plugin& plugin,
   if ((flags & ~k_defined_flags) != 0) {
     throw FactionError("FACT flags may use only defined bits 0x00000001 through 0x00010000");
   }
-  if (full_name.has_value() && plugin.header.tes4_flags.is_localized()) {
+  const bool has_full_name = full_name.has_value() && !full_name->empty();
+  if (has_full_name && plugin.header.tes4_flags.is_localized()) {
     throw FactionError(
         "FACT full name creation in localized plugins is disabled until string-table authoring is implemented");
   }
@@ -341,7 +342,7 @@ FormKey create_faction(Plugin& plugin,
   if (editor_id.has_value()) {
     subrecords.push_back(Subrecord{sig_edid, zstring(stored_editor_id(*editor_id)), false});
   }
-  if (full_name.has_value()) {
+  if (has_full_name) {
     subrecords.push_back(
         Subrecord{k_full, zstring(stored_inline_text(*full_name, "FACT full name")), false});
   }

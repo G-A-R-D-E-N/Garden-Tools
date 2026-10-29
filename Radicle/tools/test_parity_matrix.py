@@ -20,6 +20,16 @@ class TierOf(unittest.TestCase):
         self.assertEqual(parity_matrix.tier_of(0, 0, 0, False, [], 0, False), "L0")
 
 
+class TierSummary(unittest.TestCase):
+    def test_tier_summary_breaks_out_authoring_only_rows(self):
+        self.assertEqual(parity_matrix.tier_summary({"L0": 2, "L4": 3}, [], []),
+                         "L0 2, L1 0, L2 0, L3 0, L4 3")
+        line = parity_matrix.tier_summary({"L4": 3}, ["DEBR", "NAVM"], ["NAVM"])
+        self.assertIn("2 L4 rows have an authoring constraint and no scalar, string or FormLink field rows: "
+                      "DEBR, NAVM", line)
+        self.assertIn("FormLink list rows are also present on NAVM", line)
+
+
 class MixedRecordSignatures(unittest.TestCase):
     def test_mixed_record_signatures_reads_quotes_sig_names_and_constants(self):
         text = ('constexpr auto k_weap = Signature::from_string("WEAP"); if (x == k_weap) {} '

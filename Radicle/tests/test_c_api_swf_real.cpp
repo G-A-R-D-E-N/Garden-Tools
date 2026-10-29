@@ -208,3 +208,106 @@ TEST(CApiSwfReal, ReadsEveryInterfaceMovieThroughTheArchiveAndTheBytesPathAlike)
   if (unparsed_blocks != 0) RecordProperty("unparsed_abc_movies", unparsed_paths);
   RecordProperty("dump_hash", std::to_string(aggregate));
 }
+
+namespace {
+
+std::size_t closing_quote(const std::string& text, std::size_t open) {
+  std::size_t at = open + 1;
+  while (at < text.size()) {
+    if (text[at] == '\\') {
+      at += 2;
+      continue;
+    }
+    if (text[at] == '"') return at;
+    ++at;
+  }
+  return std::string::npos;
+}
+
+/* Invariant: pool index 0 is empty, so the edit must target the first non-empty string. */
+std::string edit_first_string(std::string text, std::string_view marker) {
+  std::size_t line = text.find("  string ");
+  while (line != std::string::npos) {
+    const std::size_t open = text.find('"', line);
+    if (open == std::string::npos) return {};
+    const std::size_t close = closing_quote(text, open);
+    if (close == std::string::npos) return {};
+    if (close > open + 1) {
+      text.insert(close, std::string{marker});
+      return text;
+    }
+    line = text.find("  string ", close + 1);
+  }
+  return {};
+}
+
+}  // namespace
+
+TEST(CApiSwfAbcWriteReal, DumpsEditsAssemblesAndWritesARealInterfaceBlock) {
+  const char* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) {
+    GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
+  }
+  record_game_build(detect_game_build(dir));
+  const auto archive_path = std::filesystem::path(dir) / "Fallout4 - Interface.ba2";
+  if (!std::filesystem::exists(archive_path)) {
+    GTEST_SKIP() << "no Fallout4 - Interface.ba2 in FO4_DATA_DIR";
+  }
+  radicle_ba2* raw_archive = nullptr;
+  ASSERT_EQ(radicle_ba2_open(archive_path.string().c_str(), &raw_archive), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  const ArchiveHandle archive(raw_archive);
+  radicle_ba2_info info{};
+  ASSERT_EQ(radicle_ba2_get_info(archive.get(), &info), RADICLE_STATUS_OK);
+
+  for (std::size_t index = 0; index < info.entry_count; ++index) {
+    radicle_ba2_entry_info entry{};
+    if (radicle_ba2_get_entry(archive.get(), index, &entry) != RADICLE_STATUS_OK || entry.path == nullptr) {
+      continue;
+    }
+    const std::string_view path{entry.path};
+    if (path.size() < 4 || path.substr(path.size() - 4) != ".swf") continue;
+    radicle_swf* raw = nullptr;
+    if (radicle_swf_open_ba2(archive.get(), entry.path, &raw) != RADICLE_STATUS_OK) continue;
+    SwfHandle swf(raw);
+    const std::size_t abc_count = radicle_swf_abc_count(swf.get());
+    if (abc_count == 0) continue;
+
+    std::uint8_t* text_raw = nullptr;
+    std::size_t text_size = 0;
+    ASSERT_EQ(radicle_swf_abc_text(swf.get(), 0, &text_raw, &text_size), RADICLE_STATUS_OK)
+        << radicle_last_error();
+    const std::string text(reinterpret_cast<const char*>(text_raw), text_size);
+    radicle_free_bytes(text_raw);
+    ASSERT_NE(text.find("abc "), std::string::npos);
+
+    const std::string edited = edit_first_string(text, "RadicleRealEdit");
+    ASSERT_FALSE(edited.empty());
+    ASSERT_EQ(radicle_swf_abc_apply_text(swf.get(), 0,
+                                         reinterpret_cast<const std::uint8_t*>(edited.data()),
+                                         edited.size()),
+              RADICLE_STATUS_OK)
+        << radicle_last_error();
+
+    std::uint8_t* bytes_raw = nullptr;
+    std::size_t bytes_size = 0;
+    ASSERT_EQ(radicle_swf_write_bytes(swf.get(), &bytes_raw, &bytes_size), RADICLE_STATUS_OK)
+        << radicle_last_error();
+    const std::vector<std::uint8_t> bytes(bytes_raw, bytes_raw + bytes_size);
+    radicle_free_bytes(bytes_raw);
+
+    radicle_swf* raw_reopened = nullptr;
+    ASSERT_EQ(radicle_swf_open_bytes(bytes.data(), bytes.size(), &raw_reopened), RADICLE_STATUS_OK)
+        << radicle_last_error();
+    const SwfHandle reopened(raw_reopened);
+    std::uint8_t* after_raw = nullptr;
+    std::size_t after_size = 0;
+    ASSERT_EQ(radicle_swf_abc_text(reopened.get(), 0, &after_raw, &after_size), RADICLE_STATUS_OK)
+        << radicle_last_error();
+    const std::string after(reinterpret_cast<const char*>(after_raw), after_size);
+    radicle_free_bytes(after_raw);
+    EXPECT_NE(after.find("RadicleRealEdit"), std::string::npos);
+    return;
+  }
+  GTEST_SKIP() << "no Interface movie with an ABC block";
+}
