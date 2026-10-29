@@ -1,14 +1,19 @@
 #include "fo4/swf/swf.hpp"
+#include "fo4/swf/swf_bitmap_edit.hpp"
+#include "fo4/swf/swf_bitmap_png.hpp"
 #include "fo4/swf/swf_display.hpp"
 #include "fo4/swf/swf_edit.hpp"
+#include "swf_art_fixtures.hpp"
 #include "swf_movie_builder.hpp"
 
 #include <gtest/gtest.h>
+#include <zlib.h>
 
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -23,6 +28,12 @@ using fo4::swf::SwfInstanceTransformEdit;
 using fo4::swf::SwfMatrix;
 using fo4::swf::SwfTransform;
 using fo4::swf::SwfTransformEditResult;
+using fo4::swf::SwfBitmapEditStatus;
+using fo4::swf::replace_bitmap_lossless;
+using swf_art_test::define_shape_3_payload;
+using swf_art_test::lossless_raw_payload;
+using swf_art_test::minimal_jpeg;
+using swf_art_test::png_chunks;
 using swf_test::SwfBuilder;
 using swf_test::wrap_body;
 
@@ -185,6 +196,32 @@ SwfTransform transform_of(std::int32_t scale_x, std::int32_t scale_y, std::int32
   transform.translate_x = static_cast<double>(translate_x) / 20.0;
   transform.translate_y = static_cast<double>(translate_y) / 20.0;
   return transform;
+}
+
+std::vector<std::uint8_t> rgba_2x2() {
+  return {10, 20, 30, 255, 200, 100, 1, 128, 0, 0, 0, 0, 255, 128, 0, 128};
+}
+
+std::vector<std::uint8_t> zeros(std::size_t count) {
+  return std::vector<std::uint8_t>(count, 0);
+}
+
+std::vector<std::uint8_t> head_of(const std::vector<std::byte>& payload, std::size_t count) {
+  std::vector<std::uint8_t> out;
+  for (std::size_t at = 0; at < count && at < payload.size(); ++at) {
+    out.push_back(static_cast<std::uint8_t>(payload[at]));
+  }
+  return out;
+}
+
+std::vector<std::uint8_t> inflated(std::span<const std::byte> packed, std::size_t size) {
+  std::vector<std::uint8_t> raw(size);
+  uLongf length = static_cast<uLongf>(size);
+  EXPECT_EQ(uncompress(raw.data(), &length, reinterpret_cast<const Bytef*>(packed.data()),
+                       static_cast<uLong>(packed.size())),
+            Z_OK);
+  raw.resize(length);
+  return raw;
 }
 
 }  // namespace
@@ -578,4 +615,110 @@ TEST(SwfEditTransform, RewritesAPlaceObjectThreeMatrixAndKeepsTheBlendMode) {
   EXPECT_EQ(*placement.blend_mode, 7);
   ASSERT_TRUE(placement.name.has_value());
   EXPECT_EQ(*placement.name, "Hat");
+}
+
+TEST(SwfEditBitmap, ReplacesALosslessCharacterAndItsPngKeepsThePremultiplyRounding) {
+  auto file = open(movie_of({{20, lossless_raw_payload(5, 2, 2, 0, zeros(16))}, {1, {}}}));
+  const auto pixels = rgba_2x2();
+  ASSERT_EQ(replace_bitmap_lossless(file, 3, 2, 2, pixels, true), SwfBitmapEditStatus::ok);
+
+  const auto reread = open(fo4::swf::write_swf(file));
+  ASSERT_EQ(reread.tags.size(), 3u);
+  ASSERT_TRUE(reread.tags[0].bitmap.has_value());
+  EXPECT_EQ(reread.tags[0].code, 36);
+  EXPECT_TRUE(reread.tags[0].bitmap->has_alpha);
+  EXPECT_EQ(head_of(reread.tags[0].payload, 7), (std::vector<std::uint8_t>{3, 0, 5, 2, 0, 2, 0}));
+  EXPECT_EQ(inflated(reread.tags[0].bitmap->packed, 16),
+            (std::vector<std::uint8_t>{255, 10, 20, 30, 128, 100, 50, 1, 0, 0, 0, 0, 128, 128, 64, 0}));
+
+  const auto png = fo4::swf::bitmap_to_png(*reread.tags[0].bitmap);
+  ASSERT_TRUE(png.has_value());
+  const auto chunks = png_chunks(*png);
+  ASSERT_EQ(chunks.size(), 3u);
+  EXPECT_EQ(inflated(std::as_bytes(chunks[1].data), 18),
+            (std::vector<std::uint8_t>{0, 10, 20, 30, 255, 199, 100, 2, 128, 0, 0, 0, 0, 0, 255, 128, 0, 128}));
+}
+
+TEST(SwfEditBitmap, SwitchesToTagTwentyAndDropsTheAlphaChannelWhenHasAlphaIsFalse) {
+  auto file = open(movie_of({{36, lossless_raw_payload(5, 2, 2, 0, zeros(16))}, {1, {}}}));
+  const auto pixels = rgba_2x2();
+  ASSERT_EQ(replace_bitmap_lossless(file, 3, 2, 2, pixels, false), SwfBitmapEditStatus::ok);
+
+  const auto reread = open(fo4::swf::write_swf(file));
+  ASSERT_EQ(reread.tags.size(), 3u);
+  ASSERT_TRUE(reread.tags[0].bitmap.has_value());
+  EXPECT_EQ(reread.tags[0].code, 20);
+  EXPECT_FALSE(reread.tags[0].bitmap->has_alpha);
+  EXPECT_EQ(head_of(reread.tags[0].payload, 7), (std::vector<std::uint8_t>{3, 0, 5, 2, 0, 2, 0}));
+  EXPECT_EQ(inflated(reread.tags[0].bitmap->packed, 16),
+            (std::vector<std::uint8_t>{0, 10, 20, 30, 0, 200, 100, 1, 0, 0, 0, 0, 0, 255, 128, 0}));
+
+  const auto png = fo4::swf::bitmap_to_png(*reread.tags[0].bitmap);
+  ASSERT_TRUE(png.has_value());
+  const auto chunks = png_chunks(*png);
+  ASSERT_EQ(chunks.size(), 3u);
+  EXPECT_EQ(inflated(std::as_bytes(chunks[1].data), 18),
+            (std::vector<std::uint8_t>{0, 10, 20, 30, 255, 200, 100, 1, 255, 0, 0, 0, 0, 255, 255, 128, 0, 255}));
+}
+
+TEST(SwfEditBitmap, KeepsTheCharacterIdAndEveryOtherTagUnchanged) {
+  auto second_shape = define_shape_3_payload();
+  second_shape[0] = std::byte{6};
+  const auto source = movie_of({{32, define_shape_3_payload()},
+                                {20, lossless_raw_payload(5, 2, 2, 0, zeros(16))},
+                                {32, second_shape},
+                                {1, {}}});
+  auto file = open(source);
+  const auto pixels = rgba_2x2();
+  ASSERT_EQ(replace_bitmap_lossless(file, 3, 2, 2, pixels, true), SwfBitmapEditStatus::ok);
+
+  const auto before = open(source);
+  const auto after = open(fo4::swf::write_swf(file));
+  ASSERT_EQ(after.tags.size(), before.tags.size());
+  for (std::size_t index = 0; index < before.tags.size(); ++index) {
+    if (index == 1) {
+      EXPECT_EQ(after.tags[index].code, 36);
+      ASSERT_TRUE(after.tags[index].bitmap.has_value());
+      EXPECT_EQ(after.tags[index].bitmap->character_id, 3);
+      continue;
+    }
+    EXPECT_EQ(after.tags[index].code, before.tags[index].code) << "tag " << index;
+    EXPECT_EQ(after.tags[index].payload, before.tags[index].payload) << "tag " << index;
+  }
+}
+
+TEST(SwfEditBitmap, RefusesAnUnknownOrNonLosslessCharacterAndLeavesTheFileUntouched) {
+  SwfBuilder jpeg;
+  jpeg.u16(8);
+  jpeg.bytes(minimal_jpeg(2, 2));
+  auto file = open(movie_of({{32, define_shape_3_payload()},
+                             {21, jpeg.body},
+                             {20, lossless_raw_payload(5, 2, 2, 0, zeros(16))},
+                             {1, {}}}));
+  const auto before = fo4::swf::write_swf(file);
+  const auto pixels = rgba_2x2();
+  EXPECT_EQ(replace_bitmap_lossless(file, 9, 2, 2, pixels, true),
+            SwfBitmapEditStatus::unknown_character);
+  EXPECT_EQ(replace_bitmap_lossless(file, 5, 2, 2, pixels, true),
+            SwfBitmapEditStatus::not_a_lossless_bitmap);
+  EXPECT_EQ(replace_bitmap_lossless(file, 8, 2, 2, pixels, true),
+            SwfBitmapEditStatus::not_a_lossless_bitmap);
+  EXPECT_EQ(fo4::swf::write_swf(file), before);
+}
+
+TEST(SwfEditBitmap, RefusesZeroOrOversizedDimensionsAndAPixelBufferOfTheWrongSize) {
+  auto file = open(movie_of({{20, lossless_raw_payload(5, 2, 2, 0, zeros(16))}, {1, {}}}));
+  const auto before = fo4::swf::write_swf(file);
+  const std::vector<std::uint8_t> none;
+  EXPECT_EQ(replace_bitmap_lossless(file, 3, 0, 2, none, true),
+            SwfBitmapEditStatus::bad_dimensions);
+  EXPECT_EQ(replace_bitmap_lossless(file, 3, 2, 0, none, true),
+            SwfBitmapEditStatus::bad_dimensions);
+  EXPECT_EQ(replace_bitmap_lossless(file, 3, 4097, 4096, none, true),
+            SwfBitmapEditStatus::bad_dimensions);
+  EXPECT_EQ(replace_bitmap_lossless(file, 3, 2, 2, zeros(15), true),
+            SwfBitmapEditStatus::pixel_size_mismatch);
+  EXPECT_EQ(replace_bitmap_lossless(file, 3, 2, 2, zeros(17), false),
+            SwfBitmapEditStatus::pixel_size_mismatch);
+  EXPECT_EQ(fo4::swf::write_swf(file), before);
 }

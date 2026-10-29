@@ -85,6 +85,7 @@ void Decoder::run() {
   if (block(bytes_.size(), true)) {
     const auto rest = bytes_.subspan(pos_);
     out_.trailing.assign(rest.begin(), rest.end());
+    out_.original_end = bytes_.size();
     resolve_branches();
   }
   if (!out_.ok()) {

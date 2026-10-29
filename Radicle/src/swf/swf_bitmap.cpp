@@ -12,8 +12,6 @@ namespace fo4::swf::detail {
 
 namespace {
 
-constexpr std::size_t kMaxBitmapBytes = 64u * 1024u * 1024u;
-
 constexpr std::size_t kMaxAlphaBytes = 64u * 1024u * 1024u;
 
 struct JpegSize {
