@@ -126,17 +126,6 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     if (reply.error) setError(reply.error);
   }, []);
 
-  const refresh = useCallback(async () => {
-    const bridge = host();
-    if (!bridge) return;
-    const nextState = parse<StateReply>(await bridge.State());
-    setState(nextState);
-    await applyRevision(nextState.revision);
-    setSelectedLabel(null);
-    await loadCharacters();
-    await loadLabels(timeline);
-  }, [timeline, loadCharacters, loadLabels, applyRevision]);
-
   const showFrame = useCallback(async (requested: number) => {
     const bridge = host();
     if (!bridge) return;
@@ -162,6 +151,17 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     previewRevision.current = revision;
     await redrawPreview();
   }, [redrawPreview]);
+
+  const refresh = useCallback(async () => {
+    const bridge = host();
+    if (!bridge) return;
+    const nextState = parse<StateReply>(await bridge.State());
+    setState(nextState);
+    await applyRevision(nextState.revision);
+    setSelectedLabel(null);
+    await loadCharacters();
+    await loadLabels(timeline);
+  }, [timeline, loadCharacters, loadLabels, applyRevision]);
 
   const open = useCallback(async () => {
     const bridge = host();
