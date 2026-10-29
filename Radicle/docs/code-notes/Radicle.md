@@ -9157,7 +9157,7 @@ Bytecode is hand-derived. `u30(65535)` is `FF FF 03` and `u30(65536)` is `80 80 
 
 - `UnsupportedOpcodeIsRefusedByName` used GetProperty 0x22, which is a timeline op now. It uses CloneSprite 0x24 (`Radicle/src/avm1/opcodes.cpp:action_mnemonic` name table; no `case 0x24` in `Radicle/src/avm1/interpreter.cpp:execute_action`). No other `test_avm1*.cpp` test refuses 0x22, 0x23, 0x04, 0x05, 0x06, 0x07, 0x81 or 0x8C.
 
-## Radicle/tests/test_avm1_control.cpp:Avm1Timeline
+## Radicle/tests/test_avm1_timeline.cpp:Avm1Timeline
 
 Bytes are hand-derived from `rec` in this file: one code byte, a u16 length for codes 0x80 and up, then the payload. Push values are `00` string, `06` double, `07` int32.
 
@@ -9260,31 +9260,31 @@ A value that is a number, or a string that `text_ops::parse_number` reads in ful
 
 The 0x9F case reads the payload that `Radicle/src/avm1/decode.cpp:Decoder::payload` built. The decoder reads the flags byte and then a u16 scene bias only when flags bit value 2 is set, which matches Ruffle's `swf/src/avm1/read.rs:read_goto_frame_2`, so decoding is unchanged. The play flag is bit value 1 (`flags & 1`), the bit Ruffle reads as `set_playing`. Without a host the case is not reached and the opcode falls to `control_ops::execute`, which still refuses it by name.
 
-## Radicle/tests/test_avm1_control.cpp:run_goto_frame_2
+## Radicle/tests/test_avm1_timeline.cpp:run_goto_frame_2
 
-`Radicle/tests/test_avm1_control.cpp:run_goto_frame_2` is the helper for the GotoFrame2 tests. It pushes the sentinel 7 and then the target, runs the opcode with the given flags record, and checks that the run is ok and that the trace is `7`. A GotoFrame2 that leaves its operand on the stack shows the target's text in the trace instead of 7, so every case also checks the pop through `result.trace`.
+`Radicle/tests/test_avm1_timeline.cpp:run_goto_frame_2` is the helper for the GotoFrame2 tests. It pushes the sentinel 7 and then the target, runs the opcode with the given flags record, and checks that the run is ok and that the trace is `7`. A GotoFrame2 that leaves its operand on the stack shows the target's text in the trace instead of 7, so every case also checks the pop through `result.trace`.
 
-## Radicle/tests/test_avm1_control.cpp:GotoFrame2NumericWithPlayPlaysBeforeTheGoto
+## Radicle/tests/test_avm1_timeline.cpp:GotoFrame2NumericWithPlayPlaysBeforeTheGoto
 
-`Radicle/tests/test_avm1_control.cpp:GotoFrame2NumericWithPlayPlaysBeforeTheGoto` runs numeric 5 with flags `01`, which gives `play`, then `goto 5`. Detects a GotoFrame2 that calls stop for the play bit, or that calls goto before play, which the call order would show.
+`Radicle/tests/test_avm1_timeline.cpp:GotoFrame2NumericWithPlayPlaysBeforeTheGoto` runs numeric 5 with flags `01`, which gives `play`, then `goto 5`. Detects a GotoFrame2 that calls stop for the play bit, or that calls goto before play, which the call order would show.
 
-## Radicle/tests/test_avm1_control.cpp:GotoFrame2NumericWithoutPlayStopsAndAddsSceneBias
+## Radicle/tests/test_avm1_timeline.cpp:GotoFrame2NumericWithoutPlayStopsAndAddsSceneBias
 
-`Radicle/tests/test_avm1_control.cpp:GotoFrame2NumericWithoutPlayStopsAndAddsSceneBias` runs numeric 5 with flags `02 02 00` (the bias bit set and a u16 bias of 2), which gives `stop`, then `goto 7`. Detects a GotoFrame2 that ignores the scene bias field, which would go to 5, and one that plays when the play bit is clear.
+`Radicle/tests/test_avm1_timeline.cpp:GotoFrame2NumericWithoutPlayStopsAndAddsSceneBias` runs numeric 5 with flags `02 02 00` (the bias bit set and a u16 bias of 2), which gives `stop`, then `goto 7`. Detects a GotoFrame2 that ignores the scene bias field, which would go to 5, and one that plays when the play bit is clear.
 
-## Radicle/tests/test_avm1_control.cpp:GotoFrame2LabelJumpsToItsFrame
+## Radicle/tests/test_avm1_timeline.cpp:GotoFrame2LabelJumpsToItsFrame
 
-`Radicle/tests/test_avm1_control.cpp:GotoFrame2LabelJumpsToItsFrame` runs text `intro`, with the host label map holding `intro` at frame 3, and flags `01`, which gives `label intro`, `play`, `goto 3`. Detects a label operand that is parsed as a number (giving frame 0 and no jump), or a label that jumps without a `frame_for_label` lookup.
+`Radicle/tests/test_avm1_timeline.cpp:GotoFrame2LabelJumpsToItsFrame` runs text `intro`, with the host label map holding `intro` at frame 3, and flags `01`, which gives `label intro`, `play`, `goto 3`. Detects a label operand that is parsed as a number (giving frame 0 and no jump), or a label that jumps without a `frame_for_label` lookup.
 
-## Radicle/tests/test_avm1_control.cpp:GotoFrame2UnknownLabelIsANoOp
+## Radicle/tests/test_avm1_timeline.cpp:GotoFrame2UnknownLabelIsANoOp
 
-`Radicle/tests/test_avm1_control.cpp:GotoFrame2UnknownLabelIsANoOp` runs text `missing`, which gives only `label missing`. Detects an unknown label that calls goto 0 or plays and stops the timeline, which would change the playback state of a movie whose label is absent.
+`Radicle/tests/test_avm1_timeline.cpp:GotoFrame2UnknownLabelIsANoOp` runs text `missing`, which gives only `label missing`. Detects an unknown label that calls goto 0 or plays and stops the timeline, which would change the playback state of a movie whose label is absent.
 
-## Radicle/tests/test_avm1_control.cpp:GotoFrame2ResolvesOnlyTheLabelAfterATargetPath
+## Radicle/tests/test_avm1_timeline.cpp:GotoFrame2ResolvesOnlyTheLabelAfterATargetPath
 
-`Radicle/tests/test_avm1_control.cpp:GotoFrame2ResolvesOnlyTheLabelAfterATargetPath` runs text `clip:intro` with the label map holding `intro` at 3, which gives `label intro`, `play`, `goto 3`, with no lookup of `clip:intro`. Detects a path-prefixed label that is searched whole, which misses the label and leaves the timeline where it was.
+`Radicle/tests/test_avm1_timeline.cpp:GotoFrame2ResolvesOnlyTheLabelAfterATargetPath` runs text `clip:intro` with the label map holding `intro` at 3, which gives `label intro`, `play`, `goto 3`, with no lookup of `clip:intro`. Detects a path-prefixed label that is searched whole, which misses the label and leaves the timeline where it was.
 
-## Radicle/tests/test_avm1_control.cpp:TimelineOpcodesAreRefusedByNameWithoutAHost
+## Radicle/tests/test_avm1_timeline.cpp:TimelineOpcodesAreRefusedByNameWithoutAHost
 
 The table gains a GotoFrame2 row, `rec(0x9F, {0x01})` expecting `GotoFrame2 (0x9F)`. Detects a GotoFrame2 that runs with no host, or that refuses under the wrong name, since `Radicle/src/avm1/interpreter.cpp` formats the refusal as the name plus the opcode.
 
@@ -9327,3 +9327,10 @@ Input `81 01 00 00` is a GotoFrame record declaring 1 byte of payload, but its f
 ## Radicle/tests/test_avm1_encode.cpp:ValidateReportsBranchUnresolvedAfterTheTargetIsErased
 
 The branch in `kJumpOverPlayAndStop` targets offset 7, the Stop record at index 3. Erasing index 3 leaves the End record at new offset 7, but no surviving record has original offset 7, and 7 is not the original end 9. Expected BranchUnresolved. Detects a status check that returns the decode status for an edited stream and skips the layout branch check.
+## Radicle/tests/test_avm1_timeline.cpp:GotoFrame2NumericZeroIsANoOp
+
+`Radicle/tests/test_avm1_timeline.cpp:GotoFrame2NumericZeroIsANoOp` runs numeric 0 with flags `01`. `Radicle/src/avm1/timeline_ops.cpp:goto_frame_2` reads the frame as 0, adds the scene bias of 0, and returns before any play, stop or goto, so the host sees no calls. Detects a GotoFrame2 that plays or stops for a zero frame, or that sends goto 0 to the host.
+
+## Radicle/tests/test_avm1_timeline.cpp:GotoFrame2LabelWithoutPlayStopsAndAddsSceneBias
+
+`Radicle/tests/test_avm1_timeline.cpp:GotoFrame2LabelWithoutPlayStopsAndAddsSceneBias` runs text `intro`, with the label map holding `intro` at frame 3, and flags `02 02 00`, which set the scene bias bit and the play bit clear, with a u16 bias of 2. `Radicle/src/avm1/timeline_ops.cpp:goto_frame_2` looks the label up first, then adds the bias, giving frame 5. The clear play bit calls stop, so the calls are `label intro`, `stop`, `goto 5`. Detects a label jump that skips the scene bias, which would go to 3, and one that plays when the play bit is clear.
