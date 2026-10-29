@@ -186,7 +186,6 @@ void check_links(const Plugin& plugin,
   const auto context = plugin_form_id_context(plugin);
   const auto detailed = collect_form_links_detailed(plugin);
   for (const auto& key : detailed.unsupported_vmad_records) {
-    if (sink.full()) return;
     CheckFinding unsupported;
     unsupported.code = CheckCode::unsupported_vmad_property;
     unsupported.severity = CheckSeverity::warning;
@@ -198,7 +197,6 @@ void check_links(const Plugin& plugin,
     sink.add(std::move(unsupported));
   }
   for (const auto& hit : detailed.links) {
-    if (sink.full()) return;
     if (hit.raw.is_null() || hit.raw.is_none()) continue;
 
     // Requires: an index past the master table never names a plugin.
@@ -238,6 +236,7 @@ void check_links(const Plugin& plugin,
       if (effective.value() < k_first_non_hardcoded_id) {
         target = winners.find(FormKey{game_master, LocalFormId{effective.local_24()}});
         if (target == winners.end()) continue;
+        finding.target = target->first;
       }
     }
     if (target == winners.end()) {
@@ -326,7 +325,6 @@ void check_conditions(const Plugin& plugin, FindingSink& sink) {
 
 void check_preflight(const Plugin& plugin, FindingSink& sink) {
   for (auto& issue : schema::preflight_plugin(plugin)) {
-    if (sink.full()) return;
     CheckFinding finding;
     finding.code = CheckCode::schema_preflight;
     finding.severity = issue.severity == schema::PreflightSeverity::error ? CheckSeverity::error
@@ -416,7 +414,6 @@ void check_injected_records(std::span<const Plugin* const> load_order,
   for (const auto* plugin : load_order) {
     if (plugin == nullptr) continue;
     for (const auto* record : collect_records(*plugin)) {
-      if (sink.full()) return;
       const auto& key = record->form_key;
       const bool first = claimed.insert(key).second;
       if (key.owner() == plugin->key) continue;

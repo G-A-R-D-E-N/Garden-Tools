@@ -447,7 +447,7 @@ TEST(Vmad, TrailingBytesFailClosedForMasterRemap) {
   expect_master_remap_refused(plugin_with_vmad_record("ACTI", 0x03000800, vmad));
 }
 
-TEST(Vmad, PartialParseFailureAfterDiscoveredFormIdRefusesWholeRemap) {
+TEST(Vmad, PartialParseFailureKeepsDiscoveredLinksButRefusesRemap) {
   fo4::test::ByteWriter vmad;
   vmad.u16(5);
   vmad.u16(2);
@@ -469,9 +469,11 @@ TEST(Vmad, PartialParseFailureAfterDiscoveredFormIdRefusesWholeRemap) {
   vmad.raw(std::string_view{"x"});
 
   const auto bytes = plugin_with_vmad_record("ACTI", 0x03000800, vmad);
-  EXPECT_TRUE(vmad_hits(fo4::read_plugin(bytes, "Patch.esp"),
-                        fo4::FormKey::parse("000800:Patch.esp"))
-                  .empty());
+  const auto plugin =
+      fo4::read_plugin(bytes, "Patch.esp");
+  const auto hits = vmad_hits(plugin, fo4::FormKey::parse("000800:Patch.esp"));
+  ASSERT_EQ(hits.size(), 1u);
+  EXPECT_EQ(hits[0].key, fo4::FormKey::parse("00009A:RadiationOverhaul.esp"));
   expect_master_remap_refused(bytes);
 }
 
