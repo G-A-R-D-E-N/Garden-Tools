@@ -63,7 +63,8 @@ ExecutionResult Interpreter::prepare_class(Class& klass, std::size_t depth) {
 ExecutionResult Interpreter::read_property(Object& object, const Multiname& multiname,
                                            std::size_t depth) {
   Frame frame;
-  if (Object* global = runtime_.global_object()) {
+  const std::shared_ptr<Object>& global = runtime_.global_object_shared();
+  if (global != nullptr) {
     frame.scopes.push_back(global);
   }
   return get_property(frame, object, multiname, depth);
@@ -72,7 +73,8 @@ ExecutionResult Interpreter::read_property(Object& object, const Multiname& mult
 ExecutionResult Interpreter::write_property(Object& object, const Multiname& multiname,
                                             const Value& value, std::size_t depth) {
   Frame frame;
-  if (Object* global = runtime_.global_object()) {
+  const std::shared_ptr<Object>& global = runtime_.global_object_shared();
+  if (global != nullptr) {
     frame.scopes.push_back(global);
   }
   return set_property(frame, object, multiname, value, false, depth);

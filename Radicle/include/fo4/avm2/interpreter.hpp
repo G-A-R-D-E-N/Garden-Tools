@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -119,8 +120,8 @@ class Interpreter {
     std::vector<std::uint32_t> instruction_offsets;
     std::vector<Value> locals;
     std::vector<Value> stack;
-    std::vector<Object*> scopes;
-    const std::vector<Object*>* outer_scope{nullptr};
+    std::vector<std::shared_ptr<Object>> scopes;
+    const std::vector<std::shared_ptr<Object>>* outer_scope{nullptr};
     Value this_value;
     Class* owner_class{nullptr};
     std::size_t entry_scope_count{0};
@@ -135,7 +136,8 @@ class Interpreter {
                                std::size_t depth);
   ExecutionResult outer_scope_value(const Frame& frame, std::uint32_t index) const;
   ExecutionResult invoke(const FunctionObject& function, Value this_value,
-                         std::vector<Value> arguments, const std::vector<Object*>& scopes,
+                         std::vector<Value> arguments,
+                         const std::vector<std::shared_ptr<Object>>& scopes,
                          std::size_t depth);
   ExecutionResult fail(InterpreterStatus status, std::string message) const;
 
