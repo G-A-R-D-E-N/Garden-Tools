@@ -191,12 +191,21 @@ TEST(VmadWriterOfficial, AddsAScriptToAVanillaActiAndQuestOverrideAndRereads) {
     EXPECT_TRUE(std::any_of(scripts.scripts.begin(), scripts.scripts.end(),
                             [&](const fo4::VmadScript& script) { return script.name == target.script; }));
     EXPECT_EQ(after->subrecords.size(), target.before.size() + (target.needs_vmad ? 1 : 0));
+    std::vector<const fo4::Subrecord*> kept;
+    for (const auto& sub : target.before) {
+      if (sub.signature.to_string() != "VMAD") kept.push_back(&sub);
+    }
+    std::size_t after_kept = 0;
+    for (const auto& sub : after->subrecords) {
+      if (sub.signature.to_string() != "VMAD") ++after_kept;
+    }
+    EXPECT_EQ(after_kept, kept.size());
     std::size_t other = 0;
     for (const auto& sub : after->subrecords) {
       if (sub.signature.to_string() == "VMAD") continue;
-      ASSERT_LT(other, target.before.size());
-      EXPECT_EQ(sub.signature, target.before[other].signature);
-      EXPECT_EQ(sub.data, target.before[other].data);
+      ASSERT_LT(other, kept.size());
+      EXPECT_EQ(sub.signature, kept[other]->signature);
+      EXPECT_EQ(sub.data, kept[other]->data);
       ++other;
     }
   }
