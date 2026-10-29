@@ -4,12 +4,15 @@
 
 #include <zlib.h>
 
+#include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <new>
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace fo4::swf {
 
@@ -329,6 +332,7 @@ void SwfTag::clear_decoded() {
   sprite_frame_count.reset();
   symbols.reset();
   exports.reset();
+  imports.reset();
   abc.reset();
   action.reset();
   binary_data.reset();
@@ -336,10 +340,19 @@ void SwfTag::clear_decoded() {
   bitmap.reset();
   font.reset();
   text.reset();
+  edit_text.reset();
   sound.reset();
+  sound_stream_head.reset();
   exporter_info.reset();
   external_image.reset();
   font_texture.reset();
+  scaling_grid.reset();
+  placement.reset();
+  removal.reset();
+  morph_shape.reset();
+  button.reset();
+  jpeg.reset();
+  jpeg_tables.reset();
 }
 
 SwfReadResult read_swf(std::span<const std::byte> bytes) {
@@ -371,16 +384,34 @@ SwfReadResult read_swf(std::span<const std::byte> bytes, std::size_t max_tags) {
   header.version = byte_at(bytes, 3);
   header.file_length = read_u32_at(bytes, 4);
 
-  if (header.compression == SwfCompression::lzma) {
-    result.status = SwfStatus::unsupported_compression;
-    result.message = "LZMA (ZWS) SWF compression is not supported";
-    return result;
-  }
-
   std::vector<std::byte> body;
   std::vector<std::byte> extra;
   std::size_t source_length = 0;
-  if (header.compression == SwfCompression::zlib) {
+  if (header.compression == SwfCompression::lzma) {
+    const auto declared =
+        header.file_length > 8 ? static_cast<std::size_t>(header.file_length) - 8 : std::size_t{0};
+    if (declared > detail::kMaxBodyBytes) {
+      result.status = SwfStatus::decompress_failed;
+      result.message = "decompressed SWF body exceeds the size cap";
+      return result;
+    }
+    bool decoded = false;
+    try {
+      decoded = bytes.size() >= 12 && detail::lzma_decode_swf(bytes.subspan(12), declared, body);
+    } catch (const std::bad_alloc&) {
+      result.status = SwfStatus::out_of_memory;
+      result.message = "SWF body ran out of memory while decompressing";
+      return result;
+    }
+    if (!decoded) {
+      result.status = SwfStatus::decompress_failed;
+      result.message = "LZMA failed to decompress the SWF body";
+      return result;
+    }
+    source_length = body.size();
+    result.file.source_compressed_body.assign(bytes.begin() + 8, bytes.end());
+    result.file.source_compressed_body_known = true;
+  } else if (header.compression == SwfCompression::zlib) {
     try {
       if (!inflate_body(bytes.subspan(8), body, result.message)) {
         result.status = SwfStatus::decompress_failed;
@@ -512,6 +543,126 @@ bool replace_tag_payload(SwfFile& file, std::size_t tag_index, std::span<const s
   target.clear_decoded();
   std::size_t tags_left = detail::kMaxTags;
   detail::decode_tag_payload(target.payload, target, 0, tags_left);
+  return true;
+}
+
+bool apply_tag_plan(SwfFile& file, const SwfTagPlan& plan, SwfTagPlanResult& out) {
+  const std::size_t count = file.tags.size();
+  const bool has_end = count > 0 && file.tags.back().code == tag::kEnd;
+  const std::size_t insert_limit = has_end ? count - 1 : count;
+
+  std::vector<std::size_t> replaced_indices;
+  for (const auto& replacement : plan.replacements) {
+    if (replacement.tag_index >= count ||
+        (has_end && replacement.tag_index == count - 1) ||
+        replacement.payload.size() > std::numeric_limits<std::uint32_t>::max() ||
+        std::find(replaced_indices.begin(), replaced_indices.end(), replacement.tag_index) !=
+            replaced_indices.end()) {
+      return false;
+    }
+    replaced_indices.push_back(replacement.tag_index);
+  }
+
+  std::vector<std::size_t> removed_indices;
+  for (const auto& removal : plan.removals) {
+    if (removal.tag_index >= count || (has_end && removal.tag_index == count - 1) ||
+        std::find(removed_indices.begin(), removed_indices.end(), removal.tag_index) !=
+            removed_indices.end() ||
+        std::find(replaced_indices.begin(), replaced_indices.end(), removal.tag_index) !=
+            replaced_indices.end()) {
+      return false;
+    }
+    removed_indices.push_back(removal.tag_index);
+  }
+
+  for (const auto& insertion : plan.insertions) {
+    if (insertion.before_tag_index > insert_limit || insertion.tag.code > 0x03FFu ||
+        insertion.tag.code == tag::kEnd ||
+        insertion.tag.payload.size() > std::numeric_limits<std::uint32_t>::max()) {
+      return false;
+    }
+  }
+
+  if (count - plan.removals.size() + plan.insertions.size() > detail::kMaxTags) {
+    return false;
+  }
+
+  bool changed = !plan.insertions.empty() || !plan.removals.empty();
+  for (const auto& replacement : plan.replacements) {
+    if (file.tags[replacement.tag_index].payload != replacement.payload) {
+      changed = true;
+      break;
+    }
+  }
+  if (!changed) {
+    out = {};
+    return true;
+  }
+
+  std::vector<SwfTag> next_tags = file.tags;
+  for (const auto& replacement : plan.replacements) {
+    SwfTag& target = next_tags[replacement.tag_index];
+    target.payload = replacement.payload;
+    target.length = static_cast<std::uint32_t>(target.payload.size());
+    target.clear_decoded();
+    std::size_t tags_left = detail::kMaxTags;
+    if (detail::decode_tag_payload(target.payload, target, 0, tags_left) != SwfStatus::ok) {
+      return false;
+    }
+  }
+
+  struct PendingInsert {
+    std::size_t plan_index;
+    const SwfTag* tag;
+  };
+  std::vector<std::vector<PendingInsert>> inserts_at(count + 1);
+  for (std::size_t index = 0; index < plan.insertions.size(); ++index) {
+    inserts_at[plan.insertions[index].before_tag_index].push_back(
+        PendingInsert{index, &plan.insertions[index].tag});
+  }
+
+  std::vector<SwfTag> next;
+  next.reserve(count - plan.removals.size() + plan.insertions.size());
+  std::vector<std::size_t> inserted_tag_indices(plan.insertions.size(), 0);
+  bool failed = false;
+  const auto append_inserts = [&](std::size_t position) {
+    for (const PendingInsert& entry : inserts_at[position]) {
+      SwfTag inserted = *entry.tag;
+      inserted.length = static_cast<std::uint32_t>(inserted.payload.size());
+      inserted.offset = 0;
+      inserted.long_header = false;
+      inserted.children.clear();
+      inserted.clear_decoded();
+      std::size_t tags_left = detail::kMaxTags;
+      if (detail::decode_tag_payload(inserted.payload, inserted, 0, tags_left) != SwfStatus::ok) {
+        failed = true;
+        return;
+      }
+      inserted_tag_indices[entry.plan_index] = next.size();
+      next.push_back(std::move(inserted));
+    }
+  };
+  for (std::size_t index = 0; index < count && !failed; ++index) {
+    append_inserts(index);
+    if (failed) {
+      break;
+    }
+    if (std::find(removed_indices.begin(), removed_indices.end(), index) !=
+        removed_indices.end()) {
+      continue;
+    }
+    next.push_back(std::move(next_tags[index]));
+  }
+  if (!failed) {
+    append_inserts(count);
+  }
+  if (failed) {
+    return false;
+  }
+
+  file.tags = std::move(next);
+  out.inserted_tag_indices = std::move(inserted_tag_indices);
+  out.changed = true;
   return true;
 }
 

@@ -22,7 +22,23 @@ def is_count(value, minimum):
 
 
 def valid_signature(value):
-    return isinstance(value, str) and len(value) == 4 and all(0x20 <= ord(ch) <= 0x7E for ch in value)
+    return isinstance(value, str) and len(value) == 4 and all(ord(ch) <= 0xFF for ch in value)
+
+
+def printable_signature(value):
+    return all(0x20 <= ord(ch) <= 0x7E for ch in value)
+
+
+def cpp_string(value: str) -> str:
+    # Invariant: JSON escaping is only valid for the ASCII field metadata.
+    return json.dumps(value, ensure_ascii=True)
+
+
+def cpp_signature(value):
+    if printable_signature(value):
+        return f"Signature::from_string({json.dumps(value, ensure_ascii=True)})"
+    packed = sum(ord(ch) << (8 * index) for index, ch in enumerate(value))
+    return f"Signature::from_bytes(0x{packed:08X}u)"
 
 
 def parse_when(when, path, own_subrecord):

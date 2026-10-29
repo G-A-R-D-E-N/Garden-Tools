@@ -8,8 +8,10 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import field_address_codegen  # noqa: E402
 import formlink_schema_codegen  # noqa: E402
 import schema_codegen  # noqa: E402
+import schema_output  # noqa: E402
 
 BS = chr(92)
 
@@ -397,7 +399,9 @@ class SchemaCodegenTests(unittest.TestCase):
             self.link(link(offset=6, stride=8))
         with self.assertRaisesRegex(ValueError, "when.equals"):
             self.link(link(when={"offset": 0, "storage": "u8", "equals": []}))
-        rendered = formlink_schema_codegen.render(*self.link(link(stride=8, array_offset=4)))
+        rendered, shards = formlink_schema_codegen.render(
+            *self.link(link(stride=8, array_offset=4)))
+        self.assertEqual(shards, {})
         self.assertIn("FieldAddress{false, 8, 4, FieldDiscriminator{}}", rendered)
         self.assertEqual(rows, [])
 
@@ -406,7 +410,9 @@ class SchemaCodegenTests(unittest.TestCase):
             self.link(link(), link(path="TEST" + BS + "OtherLink", offset=2))
 
     def test_formlink_payload_sizes(self):
-        rendered = formlink_schema_codegen.render(*self.link(link(payload_sizes=[16, 32], stride=4)))
+        rendered, shards = formlink_schema_codegen.render(
+            *self.link(link(payload_sizes=[16, 32], stride=4)))
+        self.assertEqual(shards, {})
         self.assertIn("{{16, 32}}", rendered)
         for sizes in ([], [4, 8, 12], [True], [0], [3], [0x100000000], [4, 4], "4"):
             with self.subTest(sizes=sizes), self.assertRaisesRegex(ValueError, "payload_sizes"):
@@ -546,6 +552,68 @@ class SchemaCodegenTests(unittest.TestCase):
         self.assertIn('Signature::from_string("DATA"), Signature{}, 8},', schema_codegen.render(fields, arrays))
         self.rejects("counted_array signatures must be four printable ASCII", counted(count_subrecord=""), count_row())
 
+
+
+class ControlByteSignatureTests(unittest.TestCase):
+    def load_schema(self, *fields):
+        with tempfile.TemporaryDirectory() as directory:
+            return schema_codegen.load_schema(write_schema(directory, fields))
+
+    def test_printable_signatures_render_as_string_literals(self):
+        self.assertEqual(field_address_codegen.cpp_signature("DATA"),
+                         'Signature::from_string("DATA")')
+
+    def test_control_byte_signatures_render_as_packed_bytes(self):
+        self.assertEqual(field_address_codegen.cpp_signature(chr(0) + "IAD"),
+                         "Signature::from_bytes(0x44414900u)")
+        self.assertEqual(field_address_codegen.cpp_signature(chr(0x10) + "IAD"),
+                         "Signature::from_bytes(0x44414910u)")
+
+    def test_counted_array_rows_accept_a_control_byte_signature(self):
+        fields, arrays, _groups = self.load_schema(
+            counted(subrecord=chr(0) + "IAD", count_subrecord=None,
+                    members=[member("Time", 0), member("Value", 4)]))
+        text = schema_codegen.render(fields, arrays)
+        self.assertIn("Signature::from_bytes(0x44414900u)", text)
+        self.assertEqual([field["subrecord"] for field in fields], [chr(0) + "IAD"] * 2)
+
+    def test_signature_length_and_byte_range_still_bind(self):
+        for value in ("DAT", "DATAA", "", chr(0x100) + "IAD"):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(ValueError, "counted_array signatures"):
+                    self.load_schema(counted(count_subrecord=None, subrecord=value))
+
+
+class ShardedScalarTableTests(unittest.TestCase):
+    def test_rows_are_split_at_record_boundaries_under_the_budget(self):
+        rows = [("A", f"a{index}") for index in range(4)] + [("B", f"b{index}") for index in range(4)]
+        shards = schema_output.shard_rows(rows, budget=4)
+        self.assertEqual([[line for _key, line in shard] for shard in shards],
+                         [[f"a{index}" for index in range(4)], [f"b{index}" for index in range(4)]])
+        self.assertEqual([line for _key, line in schema_output.shard_rows(rows, budget=100)[0]],
+                         [line for _key, line in rows])
+
+    def test_repository_table_is_sharded_below_the_source_line_limit(self):
+        schema = Path(__file__).resolve().parent.parent / "schema" / "fallout4" / "fields.json"
+        fields, arrays, groups = schema_codegen.load_schema(schema)
+        inline = schema_codegen.render(fields, arrays, groups).split("\n")
+        start = inline.index("constexpr ScalarFieldDescriptor k_scalar_fields[] = {")
+        end = inline.index("};", start)
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "generated_scalar_fields.inc"
+            files = schema_output.render_output(fields, arrays, groups, output)
+            for path, text in files.items():
+                self.assertLessEqual(len(text.split("\n")) - 1, 750, path.name)
+            shards = sorted(path for path in files if path != output)
+            self.assertGreater(len(shards), 1)
+            header = files[output].split("\n")
+            for path in shards:
+                self.assertIn(f'#include "{path.name}"', header)
+            rows = []
+            for path in shards:
+                body = files[path].split("\n")[3:-1]
+                rows.extend(body)
+            self.assertEqual(rows, inline[start + 1:end])
 
 
 if __name__ == "__main__":

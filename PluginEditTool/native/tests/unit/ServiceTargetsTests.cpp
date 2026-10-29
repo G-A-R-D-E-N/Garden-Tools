@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
@@ -16,6 +17,7 @@
 #include <fo4ide/plugin/IPluginBackend.hpp>
 
 #include "../helpers/GraphBuilder.hpp"
+#include "../helpers/NifFixture.hpp"
 #include "../helpers/ServiceTargetFakes.hpp"
 
 using namespace fo4ide::app::test;
@@ -125,6 +127,53 @@ TEST_CASE("NifTarget maps Verify to the native NIF service") {
     CHECK(runner.last.arguments == std::vector<std::string>{"verify", nif.string()});
 }
 
+TEST_CASE("NifTarget Tree returns the error JSON for an unreadable NIF with niftool absent") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto nif = root / "truncated.nif";
+    auto bytes = fo4ide::test::triangleNif();
+    bytes.resize(bytes.size() - 8);
+    fo4ide::test::writeBytes(nif, bytes);
+
+    FakeRunner runner;
+    FakePlatform platform;
+    fo4ide::assets::NifService service(runner, std::filesystem::path{});
+    fo4ide::assets::TextureResolver textures;
+    fo4ide::app::NifTarget target(service, textures, platform);
+
+    auto result = target.invoke("Tree", nlohmann::json::array({nif.string()}));
+    REQUIRE(result.has_value());
+    const auto parsed = nlohmann::json::parse(result->get<std::string>());
+    REQUIRE(parsed.contains("error"));
+    CHECK_FALSE(parsed.at("error").get<std::string>().empty());
+    CHECK_FALSE(parsed.contains("blocks"));
+    CHECK(runner.calls == 0);
+}
+
+TEST_CASE("NifTarget ApplyEdits takes the editor's JSON string and saves in-process with niftool absent") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto nif = root / "tree.nif";
+    fo4ide::test::writeBytes(nif, fo4ide::test::treeNif("Materials\\Clutter\\Thing.BGSM",
+                                                       {"Textures\\Thing_d.dds", "Textures\\Thing_n.dds"}));
+    const auto edits = nlohmann::json::array({{{"id", 1}, {"cat", "shape"}, {"key", "name"}, {"value", "Renamed"}}});
+
+    FakeRunner runner;
+    FakePlatform platform;
+    fo4ide::assets::NifService service(runner, std::filesystem::path{});
+    fo4ide::assets::TextureResolver textures;
+    fo4ide::app::NifTarget target(service, textures, platform);
+
+    auto saved = target.invoke("ApplyEdits", nlohmann::json::array({nif.string(), edits.dump(), ""}));
+    REQUIRE(saved.has_value());
+    CHECK(saved->get<std::string>().find("set OK") != std::string::npos);
+    CHECK(runner.calls == 0);
+
+    auto tree = target.invoke("Tree", nlohmann::json::array({nif.string()}));
+    REQUIRE(tree.has_value());
+    CHECK(tree->get<std::string>().find("\"Renamed\"") != std::string::npos);
+}
+
 TEST_CASE("NifTarget stages browser dropped bytes without the CSharp host") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
@@ -223,7 +272,62 @@ TEST_CASE("CellTarget geometry batch embeds the niftool geo JSON for a resolved 
     CHECK(parsed.at("count") == 1);
     CHECK(parsed.at("geometry").at("meshes/clutter/thing.nif").at("vertices") == 3);
     REQUIRE_FALSE(runner.last.arguments.empty());
-    CHECK(runner.last.arguments.front() == "geo");  // resolved mesh handed to `niftool geo`
+    CHECK(runner.last.arguments.front() == "geo");
+}
+
+TEST_CASE("CellTarget geometry batch embeds in-process geometry for a resolved mesh with niftool absent") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto mesh = root / "meshes" / "clutter" / "thing.nif";
+    fo4ide::test::writeBytes(mesh, fo4ide::test::triangleNif());
+
+    FakeRunner runner;
+    fo4ide::assets::NifService service(runner, std::filesystem::path{});
+    fo4ide::assets::TextureResolver textures;
+    textures.setSessionRoots({root});
+    fo4ide::plugin::NullPluginBackend backend;
+    fo4ide::app::CellTarget target(backend, service, textures);
+
+    auto result = target.invoke(
+        "GetGeometryBatch",
+        nlohmann::json::array({R"(["meshes/clutter/thing.nif"])"}));
+    REQUIRE(result.has_value());
+
+    const auto parsed = nlohmann::json::parse(result->get<std::string>());
+    CHECK(parsed.at("count") == 1);
+    const auto& shapes = parsed.at("geometry").at("meshes/clutter/thing.nif").at("shapes");
+    REQUIRE(shapes.size() == 1);
+    CHECK(shapes[0].at("verts").size() == 9);
+    CHECK(runner.calls == 0);
+}
+
+TEST_CASE("CellTarget geometry batch isolates a truncated mesh from its neighbours") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto good = root / "meshes" / "a.nif";
+    const auto broken = root / "meshes" / "b.nif";
+    fo4ide::test::writeBytes(good, fo4ide::test::triangleNif());
+    auto truncated = fo4ide::test::triangleNif();
+    truncated.resize(truncated.size() - 8);
+    fo4ide::test::writeBytes(broken, truncated);
+
+    FakeRunner runner;
+    fo4ide::assets::NifService service(runner, std::filesystem::path{});
+    fo4ide::assets::TextureResolver textures;
+    textures.setSessionRoots({root});
+    fo4ide::plugin::NullPluginBackend backend;
+    fo4ide::app::CellTarget target(backend, service, textures);
+
+    auto result = target.invoke(
+        "GetGeometryBatch",
+        nlohmann::json::array({R"(["meshes/a.nif","meshes/b.nif"])"}));
+    REQUIRE(result.has_value());
+
+    const auto parsed = nlohmann::json::parse(result->get<std::string>());
+    CHECK(parsed.at("count") == 2);
+    CHECK(parsed.at("geometry").at("meshes/a.nif").contains("shapes"));
+    REQUIRE(parsed.at("geometry").at("meshes/b.nif").contains("error"));
+    CHECK(runner.calls == 0);
 }
 
 TEST_CASE("CellTarget geometry batch records a worker exception instead of terminating") {
@@ -255,6 +359,26 @@ TEST_CASE("CellTarget geometry batch records a worker exception instead of termi
         REQUIRE(entry.contains("error"));
         CHECK(entry.at("error").get<std::string>().find("niftool blew up") != std::string::npos);
     }
+}
+
+TEST_CASE("NifTarget Geo reports a parse failure as JSON the panel can show") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto nif = root / "sample.nif";
+    touch(nif);
+
+    FakeRunner runner;
+    FakePlatform platform;
+    fo4ide::assets::NifService service(runner, std::filesystem::path{});
+    fo4ide::assets::TextureResolver textures;
+    fo4ide::app::NifTarget target(service, textures, platform);
+
+    auto result = target.invoke("Geo", nlohmann::json::array({nif.string()}));
+    REQUIRE(result.has_value());
+
+    const auto parsed = nlohmann::json::parse(result->get<std::string>());
+    CHECK(parsed.at("error") == "NIF header line is missing or longer than 1024 bytes");
+    CHECK(runner.calls == 0);
 }
 
 TEST_CASE("CellTarget GetTexture returns empty when the model cannot be resolved") {
@@ -322,7 +446,9 @@ TEST_CASE("CellTarget delegates record queries to the plugin backend facet") {
 
 TEST_CASE("GraphTarget serves the core palette with builtins") {
     FakePlatform platform;
-    fo4ide::app::GraphTarget target(platform);
+    fo4ide::settings::SharedSettings shared;
+    fo4ide::tools::Locator locator(shared, "FO4IDE-native");
+    fo4ide::app::GraphTarget target(platform, locator);
 
     auto result = target.invoke("GetCorePalette", nlohmann::json::array());
     REQUIRE(result.has_value());
@@ -343,7 +469,9 @@ TEST_CASE("GraphTarget serves the core palette with builtins") {
 
 TEST_CASE("GraphTarget describes a known builtin and rejects an unknown one") {
     FakePlatform platform;
-    fo4ide::app::GraphTarget target(platform);
+    fo4ide::settings::SharedSettings shared;
+    fo4ide::tools::Locator locator(shared, "FO4IDE-native");
+    fo4ide::app::GraphTarget target(platform, locator);
 
     auto palette = target.invoke("GetCorePalette", nlohmann::json::array());
     REQUIRE(palette.has_value());
@@ -365,7 +493,9 @@ TEST_CASE("GraphTarget describes a known builtin and rejects an unknown one") {
 
 TEST_CASE("GraphTarget searches the palette and reports a total") {
     FakePlatform platform;
-    fo4ide::app::GraphTarget target(platform);
+    fo4ide::settings::SharedSettings shared;
+    fo4ide::tools::Locator locator(shared, "FO4IDE-native");
+    fo4ide::app::GraphTarget target(platform, locator);
 
     auto result =
         target.invoke("SearchPalette", nlohmann::json::array({"any", "", "", 0}));
@@ -377,7 +507,9 @@ TEST_CASE("GraphTarget searches the palette and reports a total") {
 
 TEST_CASE("GraphTarget validates documents and reports malformed input") {
     FakePlatform platform;
-    fo4ide::app::GraphTarget target(platform);
+    fo4ide::settings::SharedSettings shared;
+    fo4ide::tools::Locator locator(shared, "FO4IDE-native");
+    fo4ide::app::GraphTarget target(platform, locator);
 
     auto malformed =
         target.invoke("ValidateGraph", nlohmann::json::array({"this is not a document"}));
@@ -394,9 +526,46 @@ TEST_CASE("GraphTarget validates documents and reports malformed input") {
     CHECK(validJson.at("diagnostics").is_array());
 }
 
+TEST_CASE("GraphTarget resolves Extends and palette scripts from Settings base imports without the env var") {
+    using namespace fo4ide::graph;
+    using namespace fo4ide::graph::test;
+
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    fo4ide::settings::Settings settings;
+    settings.fallout4Path = root / "Fallout 4";
+    settings.papyrusBaseImports = baseStubs();
+    fo4ide::settings::SharedSettings shared(settings);
+    fo4ide::tools::Locator locator(shared, "FO4IDE-native");
+    FakePlatform platform;
+    fo4ide::app::GraphTarget target(platform, locator);
+
+    Env env;
+    GraphBuilder graph("Fixture", "ObjectReference");
+    graph.node(env.palette, "event:ObjectReference.OnActivate");
+    const auto document = documentJson::serialize(graph.document);
+
+    auto validation = target.invoke("ValidateGraph", nlohmann::json::array({document}));
+    REQUIRE(validation.has_value());
+    const auto diagnostics =
+        nlohmann::json::parse(validation->get<std::string>()).at("diagnostics");
+    for (const auto& diagnostic : diagnostics) {
+        CHECK(diagnostic.at("code").get<std::string>() != "GRA0031");
+    }
+
+    auto palette = target.invoke("GetCorePalette", nlohmann::json::array());
+    REQUIRE(palette.has_value());
+    const auto scripts = nlohmann::json::parse(palette->get<std::string>())
+                             .at("scripts")
+                             .get<std::vector<std::string>>();
+    CHECK(std::find(scripts.begin(), scripts.end(), "ObjectReference") != scripts.end());
+}
+
 TEST_CASE("GraphTarget rejects an unknown method") {
     FakePlatform platform;
-    fo4ide::app::GraphTarget target(platform);
+    fo4ide::settings::SharedSettings shared;
+    fo4ide::tools::Locator locator(shared, "FO4IDE-native");
+    fo4ide::app::GraphTarget target(platform, locator);
 
     auto result = target.invoke("Nonexistent", nlohmann::json::array());
     CHECK_FALSE(result.has_value());
@@ -406,7 +575,9 @@ TEST_CASE("GraphTarget SaveGraph reports malformed documents") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     FakePlatform platform;
-    fo4ide::app::GraphTarget target(platform);
+    fo4ide::settings::SharedSettings shared;
+    fo4ide::tools::Locator locator(shared, "FO4IDE-native");
+    fo4ide::app::GraphTarget target(platform, locator);
 
     const auto path = (root / "broken.fograph").string();
     auto result =
@@ -439,7 +610,9 @@ TEST_CASE("GraphTarget CompileToPex errors instead of reporting a write that fai
     const auto document = documentJson::serialize(graph.document);
 
     FakePlatform platform;
-    fo4ide::app::GraphTarget target(platform);
+    fo4ide::settings::SharedSettings shared;
+    fo4ide::tools::Locator locator(shared, "FO4IDE-native");
+    fo4ide::app::GraphTarget target(platform, locator);
     const auto result =
         target.invoke("CompileToPex", nlohmann::json::array({document, root.string()}));
 
@@ -457,7 +630,9 @@ TEST_CASE("GraphTarget CompileToPex errors instead of reporting a write that fai
 
 TEST_CASE("GraphTarget serializes concurrent RPC access to its compiler cache") {
     FakePlatform platform;
-    fo4ide::app::GraphTarget target(platform);
+    fo4ide::settings::SharedSettings shared;
+    fo4ide::tools::Locator locator(shared, "FO4IDE-native");
+    fo4ide::app::GraphTarget target(platform, locator);
 
     std::atomic<bool> threw{false};
     {

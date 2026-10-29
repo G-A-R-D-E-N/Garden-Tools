@@ -356,6 +356,9 @@ Ba2TextureArchive read_ba2_texture_file(const std::filesystem::path& path) {
 std::vector<std::byte> extract_ba2_texture_entry(const Ba2TextureEntry& entry) {
   std::size_t total = 0;
   for (const auto& chunk : entry.chunks) {
+    if (chunk.compressed) {
+      detail::require_zlib_expansion_bound(chunk.data.size(), chunk.decompressed_size);
+    }
     if (chunk.decompressed_size > std::numeric_limits<std::size_t>::max() - total) {
       throw Ba2Error("BA2 entry is too large to extract");
     }

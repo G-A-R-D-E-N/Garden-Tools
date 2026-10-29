@@ -37,9 +37,9 @@ Derived from the repository by `Radicle/tools/parity_matrix.py`; 147 signatures 
 
 Columns: xEdit line is the registration line in the pinned definitions. Rows, authoring, keyword list and FormLink counts come from `schema/fallout4/fields.json`. Typed module lists the `TYPED_MODULES` files that name the signature. Mixed remap means the signature is named in `src/schema/form_link_mixed.cpp` or `src/schema/form_link_records.cpp`. Real-data tests count registered `tests/*_real.cpp` files that name it. `-` means none.
 
-Tier: L4 has field rows, FormLink fields or authoring constraints; L2 has a typed module, no rows or lists; L3 has FormLink list rows only; L1 has a keyword list only; L0 has none of these. Remap evidence (the Mixed remap column and the form_links.cpp record checks) does not affect the tier. L5 (dedicated PET route) is not derived.
+Tier: L4 has field rows, FormLink fields or authoring constraints; L2 has a typed module, no rows or lists; L3 has FormLink list rows only; L1 has a keyword list only; L0 has none of these. A record with an authoring constraint but no scalar, string or FormLink field rows is still L4, and the tier counts break those out. Remap evidence (the Mixed remap column and the form_links.cpp record checks) does not affect the tier. L5 (dedicated PET route) is not derived.
 
-Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
+Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144 (11 L4 rows have an authoring constraint and no scalar, string or FormLink field rows: DEBR, DFOB, DMGT, DOBJ, EYES, FLST, NAVM, OTFT, OVIS, PLYR, STAG; FormLink list rows are also present on DFOB, FLST, OTFT).
 
 ### Per-signature coverage
 
@@ -65,7 +65,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | BOOK | 5891 | 30 | 5 | 10 | - | 3 | yes | yes | - | yes | 1 | L4 |
 | BPTD | 7693 | - | - | - | - | 1 | - | - | - | yes | - | L0 |
 | CAMS | 7880 | 23 | 1 | 2 | - | - | yes | - | - | - | 1 | L4 |
-| CELL | 5953 | 34 | 1 | 13 | 2 | 1 | - | - | forms/cell, environment/world | yes | 1 | L4 |
+| CELL | 5953 | 34 | 1 | 13 | 2 | 1 | yes | - | forms/cell, environment/world | yes | 1 | L4 |
 | CLAS | 6102 | 2 | 1 | 1 | - | 2 | yes | - | - | - | 1 | L4 |
 | CLFM | 9572 | 2 | - | - | - | 1 | yes | - | - | - | 1 | L4 |
 | CLMT | 6115 | 14 | 3 | 2 | - | - | yes | - | environment/base_records | - | 2 | L4 |
@@ -104,7 +104,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | HDPT | 7006 | 10 | 2 | 4 | 1 | 1 | yes | - | - | - | 1 | L4 |
 | IDLE | 9646 | 5 | 3 | 2 | - | - | yes | - | environment/behavior | - | 2 | L4 |
 | IDLM | 7098 | 17 | 1 | 3 | - | - | yes | yes | - | yes | 1 | L4 |
-| IMAD | 7466 | 142 | - | - | - | - | yes | - | - | - | 1 | L4 |
+| IMAD | 7466 | 184 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | IMGS | 7393 | 36 | 1 | - | - | - | yes | - | - | - | 3 | L4 |
 | INFO | 9672 | 14 | 7 | 13 | - | 2 | yes | - | forms/info_copy, environment/dialogue | - | 2 | L4 |
 | INGR | 9788 | 29 | 5 | 9 | - | 1 | yes | yes | - | - | 1 | L4 |
@@ -158,7 +158,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | PMIS | 5951 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
 | PROJ | 7115 | 40 | 4 | 15 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
 | QUST | 10684 | 6 | 4 | 3 | 1 | 3 | yes | - | forms/quest_alias_edit, forms/quest_aliases_decode, forms/quest_objectives, forms/quest_stages | - | 7 | L4 |
-| RACE | 11054 | 112 | 14 | 42 | 9 | 5 | yes | yes | forms/race, forms/race_body | yes | 1 | L4 |
+| RACE | 11054 | 113 | 14 | 42 | 9 | 5 | yes | yes | forms/race, forms/race_body | yes | 1 | L4 |
 | REFR | 11347 | 52 | - | 25 | 1 | - | yes | - | forms/placed_reference, forms/placed_reference_edit | yes | 1 | L4 |
 | REGN | 11870 | 12 | 1 | 7 | - | 1 | yes | - | - | yes | - | L4 |
 | RELA | 8848 | 2 | - | 3 | - | - | yes | - | - | - | 1 | L4 |
@@ -258,7 +258,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | HDPT | 7 | - | 2 | 1 | 2 | u32, u8 | 2 | 7 | - | existing_only |
 | IDLE | 5 | - | - | - | 3 | u16, u8 | - | - | - | existing_only |
 | IDLM | 16 | - | - | 1 | 1 | f32, i16, u32, u8 | - | 7 | - | existing_only |
-| IMAD | 138 | - | 3 | 1 | - | f32, u32, u8 | - | 78 | - | existing_only |
+| IMAD | 180 | - | 3 | 1 | - | f32, u32, u8 | - | 120 | - | existing_only |
 | IMGS | 35 | - | 1 | - | 1 | f32, u16 | - | - | - | existing_only |
 | INFO | 14 | - | - | - | 7 | i32, u16, u32, u8 | 15 | - | - | existing_only |
 | INGR | 25 | 1 | - | 3 | 5 | f32, i16, i32, u32, u8 | 12 | 9 | - | existing_only |
@@ -311,7 +311,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | PMIS | 11 | 1 | 1 | 2 | - | f32, i32, u32, u8 | 2 | - | - | existing_only |
 | PROJ | 37 | 1 | - | 2 | 4 | f32, i16, i32, u16, u32, u8 | 12 | 9 | - | existing_only |
 | QUST | 3 | - | 2 | 1 | 4 | f32, u16, u32, u8 | - | - | - | existing_only |
-| RACE | 100 | - | 9 | 3 | 14 | f32, i16, i32, u16, u32, u8 | 82 | 3 | - | existing_only |
+| RACE | 101 | - | 9 | 3 | 14 | f32, i16, i32, u16, u32, u8 | 82 | 3 | - | existing_only |
 | REFR | 43 | 1 | 5 | 3 | - | f32, i32, u32, u8 | 14 | 13 | - | existing_only |
 | REGN | 9 | - | 2 | 1 | 1 | f32, u32, u8 | 7 | 8 | - | existing_only |
 | RELA | - | - | 1 | 1 | - | u8 | - | - | - | existing_only |

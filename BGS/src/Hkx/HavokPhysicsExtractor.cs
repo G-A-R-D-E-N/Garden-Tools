@@ -18,79 +18,223 @@ public static class HavokPhysicsExtractor
 {
     public const string RagdollDataClass = "hknpRagdollData";
     public const string CapsuleShapeClass = "hknpCapsuleShape";
-    public const string MapperClass = "hkaSkeletonMapper";
 
-    public static HavokRagdollModel? TryExtract(byte[]? hkx)
+    public static HavokRagdollModel? TryExtract(byte[]? hkx) => TryExtract(hkx, out _);
+
+    public static HavokRagdollModel? TryExtract(byte[]? hkx, out PhysicsLoadReport report)
     {
-        if (hkx == null || hkx.Length == 0) return null;
+        var facts = new Facts();
+        byte[] bytes = hkx ?? Array.Empty<byte>();
+
+        string? problem = PhysicsLoadClassifier.ContainerProblem(bytes, out int? version, out int? pointer);
+        facts.FileVersion = version;
+        facts.PointerSize = pointer;
 
         PackfileImage image;
         PackfileObjects objects;
         try
         {
-            image = PackfileImage.Read(hkx);
+            image = PackfileImage.Read(bytes);
             objects = new PackfileObjects(image);
         }
-        catch (Exception)
+        catch (Exception error)
         {
+            report = Failure(facts, problem, "container", error.Message);
             return null;
         }
 
+        facts.FileVersion = image.FileVersion;
+        facts.PointerSize = objects.PointerWidth;
+        foreach (var group in objects.Instances.GroupBy(instance => instance.ClassName))
+            facts.ClassCounts[group.Key] = group.Count();
+
         string xml;
         try { xml = NativeXml.From(objects, image); }
-        catch (Exception) { return null; }
+        catch (Exception error)
+        {
+            report = Failure(facts, problem, "byte-backed XML", error.Message);
+            return null;
+        }
 
-        var graph = BehaviourGraphModel.Parse(xml);
+        BehaviourGraphModel graph;
+        try { graph = BehaviourGraphModel.Parse(xml); }
+        catch (Exception error)
+        {
+            report = Failure(facts, problem, "model", error.Message);
+            return null;
+        }
+
         var ragdoll = graph.Objects.FirstOrDefault(o => o.Class == RagdollDataClass);
-        if (ragdoll == null) return null;
+        if (ragdoll == null)
+        {
+            report = Finish(facts, problem, usable: false);
+            return null;
+        }
 
         var model = new HavokRagdollModel();
 
-        foreach (var instance in objects.Instances.Where(i => i.ClassName == CapsuleShapeClass))
-            if (Shape(objects, instance) is { } shape)
-                model.Shapes.Add(shape);
-
-        ragdoll.StructLists.TryGetValue("motionCinfos", out var motions);
-
-        if (ragdoll.StructLists.TryGetValue("bodyCinfos", out var cinfos))
-            for (int i = 0; i < cinfos.Count; i++)
-                if (Body(graph, i, cinfos[i], motions) is { } body)
-                    model.Bodies.Add(body);
-
-        if (ragdoll.StructLists.TryGetValue("constraintCinfos", out var constraints))
-            for (int i = 0; i < constraints.Count; i++)
-                if (Constraint(objects, graph, i, constraints[i]) is { } constraint)
-                    model.Constraints.Add(constraint);
-
-        if (ragdoll.Lists.TryGetValue("boneToBodyMap", out var map))
-            for (int bone = 0; bone < map.Count; bone++)
-                if (int.TryParse(map[bone], NumberStyles.Integer, CultureInfo.InvariantCulture, out int body))
-                    model.BoneBindings.Add(new HavokRagdollBoneBinding(bone, body));
-
-        if (ragdoll.Scalars.TryGetValue("skeleton", out var skeletonReference) &&
-            RefId(skeletonReference) is { } skeletonId && skeletonId >= 0)
+        try
         {
-            int index = skeletonId - NativeGraphModel.FirstId;
-            if (index >= 0 && index < objects.Instances.Count &&
-                objects.Instances[index].ClassName == "hkaSkeleton" &&
-                SkeletonMapperReader.ReadSkeleton(objects, objects.Instances[index]) is { } skeleton)
-                model.Skeleton = skeleton;
+            foreach (var instance in objects.Instances.Where(i => i.ClassName == CapsuleShapeClass))
+                if (Shape(objects, instance) is { } shape)
+                    model.Shapes.Add(shape);
+            facts.ShapeCount = model.Shapes.Count;
 
-            if (model.Skeleton != null)
+            ragdoll.StructLists.TryGetValue("motionCinfos", out var motions);
+
+            if (ragdoll.StructLists.TryGetValue("bodyCinfos", out var cinfos))
             {
-                var mapper = SkeletonMapperReader.Read(objects).FirstOrDefault(candidate =>
-                    candidate.SkeletonBObjectId == skeletonId &&
-                    candidate.MappingType == 0 &&
-                    candidate.SimpleMappings.Count > 0);
-                if (mapper != null)
+                facts.BodyCount = cinfos.Count;
+                for (int i = 0; i < cinfos.Count; i++)
                 {
-                    model.Mappings.AddRange(mapper.SimpleMappings);
-                    model.AnimationSkeleton = mapper.SkeletonA;
+                    if (Body(graph, i, cinfos[i], motions) is not { } body)
+                    {
+                        facts.SkippedBodies++;
+                        continue;
+                    }
+
+                    model.Bodies.Add(body);
+                    string shapeClass = ShapeClassOf(objects, cinfos[i]);
+                    if (shapeClass == CapsuleShapeClass) continue;
+
+                    string label = shapeClass.Length > 0 ? shapeClass : "(no shape reference)";
+                    facts.UnsupportedShapeBodies++;
+                    facts.UnsupportedShapeClasses[label] =
+                        facts.UnsupportedShapeClasses.TryGetValue(label, out int seen) ? seen + 1 : 1;
                 }
             }
+            facts.UsableBodies = model.Bodies.Count;
+
+            if (ragdoll.StructLists.TryGetValue("constraintCinfos", out var constraints))
+                for (int i = 0; i < constraints.Count; i++)
+                {
+                    if (Constraint(objects, graph, i, constraints[i]) is { } constraint)
+                        model.Constraints.Add(constraint);
+                    else
+                        facts.SkippedConstraints++;
+                }
+            facts.ConstraintCount = model.Constraints.Count;
+
+            if (ragdoll.Lists.TryGetValue("boneToBodyMap", out var map))
+                for (int bone = 0; bone < map.Count; bone++)
+                    if (int.TryParse(map[bone], NumberStyles.Integer, CultureInfo.InvariantCulture, out int body))
+                        model.BoneBindings.Add(new HavokRagdollBoneBinding(bone, body));
+
+            if (ragdoll.Scalars.TryGetValue("skeleton", out var skeletonReference) &&
+                RefId(skeletonReference) is { } skeletonId && skeletonId >= 0)
+            {
+                int index = skeletonId - NativeGraphModel.FirstId;
+                if (index >= 0 && index < objects.Instances.Count &&
+                    objects.Instances[index].ClassName == "hkaSkeleton" &&
+                    SkeletonMapperReader.ReadSkeleton(objects, objects.Instances[index]) is { } skeleton)
+                    model.Skeleton = skeleton;
+
+                if (model.Skeleton != null)
+                {
+                    var mapper = SkeletonMapperReader.Read(objects).FirstOrDefault(candidate =>
+                        candidate.SkeletonBObjectId == skeletonId &&
+                        candidate.MappingType == 0 &&
+                        candidate.SimpleMappings.Count > 0);
+                    if (mapper != null)
+                    {
+                        model.Mappings.AddRange(mapper.SimpleMappings);
+                        model.AnimationSkeleton = mapper.SkeletonA;
+                    }
+                }
+            }
+            facts.Mappings = model.Mappings.Count;
+        }
+        catch (Exception error)
+        {
+            report = Failure(facts, problem, "ragdoll", error.Message);
+            return null;
         }
 
-        return model;
+        bool usable = model.Bodies.Count > 0;
+        bool unusual = problem is { Length: > 0 };
+        report = Finish(facts, problem, usable);
+        return unusual && !usable ? null : model;
+    }
+
+    private static PhysicsLoadReport Finish(Facts facts, string? containerProblem, bool usable)
+    {
+        if (containerProblem is { Length: > 0 } && !usable)
+            return PhysicsLoadClassifier.Classify(facts.Container(containerProblem).Build());
+
+        facts.Notice(containerProblem);
+        return PhysicsLoadClassifier.Classify(facts.Build());
+    }
+
+    private static PhysicsLoadReport Failure(Facts facts, string? containerProblem, string stage, string? message) =>
+        containerProblem is { Length: > 0 }
+            ? PhysicsLoadClassifier.Classify(facts.Container(containerProblem).Build())
+            : PhysicsLoadClassifier.Classify(facts.Parse(stage, message).Build());
+
+    private static string ShapeClassOf(PackfileObjects objects, IReadOnlyDictionary<string, string> cinfo)
+    {
+        if (!cinfo.TryGetValue("shape", out var reference)) return "";
+
+        int index = RefId(reference) - NativeGraphModel.FirstId;
+        return index >= 0 && index < objects.Instances.Count ? objects.Instances[index].ClassName : "";
+    }
+
+    private sealed class Facts
+    {
+        public string? ContainerProblem { get; private set; }
+        public string? ContainerNotice { get; private set; }
+        public string? ParseStage { get; private set; }
+        public string? ParseMessage { get; private set; }
+        public int? FileVersion { get; set; }
+        public int? PointerSize { get; set; }
+        public Dictionary<string, int> ClassCounts { get; } = new(StringComparer.Ordinal);
+        public Dictionary<string, int> UnsupportedShapeClasses { get; } = new(StringComparer.Ordinal);
+        public int BodyCount { get; set; }
+        public int UsableBodies { get; set; }
+        public int SkippedBodies { get; set; }
+        public int SkippedConstraints { get; set; }
+        public int UnsupportedShapeBodies { get; set; }
+        public int Mappings { get; set; }
+        public int ShapeCount { get; set; }
+        public int ConstraintCount { get; set; }
+
+        public Facts Container(string problem)
+        {
+            ContainerProblem = problem;
+            return this;
+        }
+
+        public Facts Notice(string? notice)
+        {
+            ContainerNotice = notice;
+            return this;
+        }
+
+        public Facts Parse(string stage, string? message)
+        {
+            ParseStage = stage;
+            ParseMessage = message;
+            return this;
+        }
+
+        public PhysicsLoadFacts Build() => new()
+        {
+            ContainerProblem = ContainerProblem,
+            ContainerNotice = ContainerNotice,
+            ParseStage = ParseStage,
+            ParseMessage = ParseMessage,
+            FileVersion = FileVersion,
+            PointerSize = PointerSize,
+            ClassCounts = ClassCounts,
+            BodyCount = BodyCount,
+            UsableBodies = UsableBodies,
+            SkippedBodies = SkippedBodies,
+            SkippedConstraints = SkippedConstraints,
+            UnsupportedShapeBodies = UnsupportedShapeBodies,
+            UnsupportedShapeClasses = UnsupportedShapeClasses,
+            Mappings = Mappings,
+            ShapeCount = ShapeCount,
+            ConstraintCount = ConstraintCount,
+        };
     }
 
     private static int? MemberAt(PackfileObjects objects, PackfileObjects.Instance instance, string member)

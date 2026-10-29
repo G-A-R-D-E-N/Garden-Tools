@@ -324,6 +324,14 @@ TEST(PexAnalysis, DisassemblyBailsOnTailJumpThatDoesNotReachTheEnd) {
 }
 
 TEST(PexAnalysis, DisassemblyFallsBackPastTheNestingCapWithoutRecursing) {
+  const auto atCap = fo4::pex_analysis::disassemble_function(deepNestingFunction(64));
+  ASSERT_EQ(atCap.status, fo4::pex_analysis::PexAnalysisStatus::Ok);
+  EXPECT_TRUE(atCap.structured);
+  EXPECT_NE(atCap.text.find("if ("), std::string::npos);
+  const auto pastCap = fo4::pex_analysis::disassemble_function(deepNestingFunction(65));
+  ASSERT_EQ(pastCap.status, fo4::pex_analysis::PexAnalysisStatus::Ok);
+  EXPECT_FALSE(pastCap.structured);
+  EXPECT_EQ(pastCap.text.find("if ("), std::string::npos);
   constexpr std::size_t kDepth = 50000;
   const auto result = fo4::pex_analysis::disassemble_function(deepNestingFunction(kDepth));
   ASSERT_EQ(result.status, fo4::pex_analysis::PexAnalysisStatus::Ok);

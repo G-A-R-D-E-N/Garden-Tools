@@ -112,19 +112,6 @@ AccessList operand_accesses(std::uint8_t op) {
   }
 }
 
-std::size_t call_result_operand(std::uint8_t op) {
-  switch (static_cast<PexOp>(op)) {
-    case PexOp::CallMethod:
-      return 2;
-    case PexOp::CallParent:
-      return 1;
-    case PexOp::CallStatic:
-      return 2;
-    default:
-      return kNoIndex;
-  }
-}
-
 struct DeclaredName {
   std::string name;
   std::string type;
@@ -220,15 +207,14 @@ void collect_accesses(const fo4::pex::PexFunction& function, const PexFunctionRe
   for (std::size_t i = 0; i < function.instructions.size(); ++i) {
     const auto& instruction = function.instructions[i];
     if (pex_is_call(instruction.opCode)) {
-      const auto result = call_result_operand(instruction.opCode);
-      if (instruction.opCode == static_cast<std::uint8_t>(PexOp::CallMethod) &&
-          instruction.args.size() > 1) {
-        const auto& expression = instruction.args[1];
-        if (expression.type == fo4::pex::PexValueType::Identifier) {
-          const auto* match = find_declared(declared, expression.str);
-          if (match != nullptr) {
-            record_access(out, ref, i, *match, PexAccessKind::Read);
-          }
+      const std::size_t result = pex_call_operand_index(instruction.opCode, PexOperandRole::Result);
+      const std::size_t receiver =
+          pex_call_operand_index(instruction.opCode, PexOperandRole::Receiver);
+      if (instruction.args.size() > receiver &&
+          instruction.args[receiver].type == fo4::pex::PexValueType::Identifier) {
+        const auto* match = find_declared(declared, instruction.args[receiver].str);
+        if (match != nullptr) {
+          record_access(out, ref, i, *match, PexAccessKind::Read);
         }
       }
       for (auto a = result; a < instruction.args.size(); ++a) {
@@ -353,39 +339,41 @@ PexCallGraph build_call_graph(std::span<const fo4::pex::PexFile* const> files) {
     for (std::size_t o = 0; o < file->objects.size(); ++o) {
       const auto& object = file->objects[o];
       const auto declared = declared_names(object);
-      for (std::size_t s = 0; s < object.states.size(); ++s) {
-        const auto& state = object.states[s];
-        for (std::size_t k = 0; k < state.functions.size(); ++k) {
-          const auto& function = state.functions[k];
-          const auto caller = make_ref(f, o, object, state, s, function, k);
-          collect_accesses(function, caller, declared, script.accesses);
-          for (std::size_t i = 0; i < function.instructions.size(); ++i) {
-            const auto& instruction = function.instructions[i];
-            if (!pex_is_call(instruction.opCode)) continue;
+      const auto collect_calls = [&](const fo4::pex::PexFunction& function,
+                                     const PexFunctionRef& caller) {
+        for (std::size_t i = 0; i < function.instructions.size(); ++i) {
+          const auto& instruction = function.instructions[i];
+          if (!pex_is_call(instruction.opCode)) continue;
 
-            PexCallSite site;
-            site.caller = caller;
-            site.instructionIndex = i;
-            site.kind = instruction.opCode == static_cast<std::uint8_t>(PexOp::CallMethod)
-                            ? PexCallKind::Method
-                            : (instruction.opCode ==
-                                       static_cast<std::uint8_t>(PexOp::CallParent)
-                                   ? PexCallKind::Parent
-                                   : PexCallKind::Static);
+          PexCallSite site;
+          site.caller = caller;
+          site.instructionIndex = i;
+          site.kind = instruction.opCode == static_cast<std::uint8_t>(PexOp::CallMethod)
+                          ? PexCallKind::Method
+                          : (instruction.opCode ==
+                                     static_cast<std::uint8_t>(PexOp::CallParent)
+                                 ? PexCallKind::Parent
+                                 : PexCallKind::Static);
 
-            std::string targetObject;
-            std::size_t nameOperand = 0;
-            if (site.kind == PexCallKind::Static) {
-              if (!instruction.args.empty() &&
-                  instruction.args[0].type == fo4::pex::PexValueType::Identifier) {
-                targetObject = instruction.args[0].str;
-              }
-              nameOperand = 1;
-            } else if (site.kind == PexCallKind::Parent) {
-              targetObject = object.parentClassName;
-            } else if (instruction.args.size() > 1 &&
-                       instruction.args[1].type == fo4::pex::PexValueType::Identifier) {
-              const auto& expression = instruction.args[1];
+          // Invariant: every call operand position comes from the role table, never an index here.
+          const std::size_t nameOperand =
+              pex_call_operand_index(instruction.opCode, PexOperandRole::FunctionName);
+          std::string targetObject;
+          if (site.kind == PexCallKind::Static) {
+            const std::size_t scriptOperand =
+                pex_call_operand_index(instruction.opCode, PexOperandRole::OwningScript);
+            if (instruction.args.size() > scriptOperand &&
+                instruction.args[scriptOperand].type == fo4::pex::PexValueType::Identifier) {
+              targetObject = instruction.args[scriptOperand].str;
+            }
+          } else if (site.kind == PexCallKind::Parent) {
+            targetObject = object.parentClassName;
+          } else {
+            const std::size_t receiverOperand =
+                pex_call_operand_index(instruction.opCode, PexOperandRole::Receiver);
+            if (instruction.args.size() > receiverOperand &&
+                instruction.args[receiverOperand].type == fo4::pex::PexValueType::Identifier) {
+              const auto& expression = instruction.args[receiverOperand];
               if (pex_name_equal(expression.str, "self")) {
                 targetObject = object.name;
                 site.selfTarget = true;
@@ -394,52 +382,64 @@ PexCallGraph build_call_graph(std::span<const fo4::pex::PexFile* const> files) {
                 if (targetObject.empty()) targetObject = expression.str;
               }
             }
-            if (instruction.args.size() > nameOperand &&
-                instruction.args[nameOperand].type == fo4::pex::PexValueType::Identifier) {
-              site.functionName = instruction.args[nameOperand].str;
-            }
-            site.objectName = targetObject;
-
-            if (!targetObject.empty() && !site.functionName.empty()) {
-              for (std::size_t g = 0; g < files.size() && !site.resolved; ++g) {
-                if (files[g] == nullptr) continue;
-                std::size_t targetObjectIndex = kNoIndex;
-                if (!pex_find_object(*files[g], targetObject, &targetObjectIndex)) continue;
-                const auto& target = files[g]->objects[targetObjectIndex];
-                std::size_t stateIndex = kNoIndex;
-                std::size_t functionIndex = kNoIndex;
-                if (!pex_find_function(target, site.functionName, &stateIndex, &functionIndex)) {
-                  continue;
-                }
-                const auto& targetState = target.states[stateIndex];
-                const auto& targetFunction = targetState.functions[functionIndex];
-                site.target = make_ref(g, targetObjectIndex, target, targetState, stateIndex,
-                                       targetFunction, functionIndex);
-                site.resolved = true;
-                site.nativeTarget = targetFunction.isNative;
-              }
-            }
-            if (site.resolved) {
-              if (site.nativeTarget) ++graph.nativeCalls;
-            } else {
-              ++graph.unresolvedCalls;
-            }
-            script.calls.push_back(site);
-            graph.calls.push_back(site);
           }
+          if (instruction.args.size() > nameOperand &&
+              instruction.args[nameOperand].type == fo4::pex::PexValueType::Identifier) {
+            site.functionName = instruction.args[nameOperand].str;
+          }
+          site.objectName = targetObject;
+
+          if (!targetObject.empty() && !site.functionName.empty()) {
+            for (std::size_t g = 0; g < files.size() && !site.resolved; ++g) {
+              if (files[g] == nullptr) continue;
+              std::size_t targetObjectIndex = kNoIndex;
+              if (!pex_find_object(*files[g], targetObject, &targetObjectIndex)) continue;
+              const auto& target = files[g]->objects[targetObjectIndex];
+              std::size_t stateIndex = kNoIndex;
+              std::size_t functionIndex = kNoIndex;
+              if (!pex_find_function(target, site.functionName, &stateIndex, &functionIndex)) {
+                continue;
+              }
+              const auto& targetState = target.states[stateIndex];
+              const auto& targetFunction = targetState.functions[functionIndex];
+              site.target = make_ref(g, targetObjectIndex, target, targetState, stateIndex,
+                                     targetFunction, functionIndex);
+              site.resolved = true;
+              site.nativeTarget = targetFunction.isNative;
+            }
+          }
+          if (site.resolved) {
+            if (site.nativeTarget) ++graph.nativeCalls;
+          } else {
+            ++graph.unresolvedCalls;
+          }
+          script.calls.push_back(site);
+          graph.calls.push_back(site);
+        }
+      };
+      for (std::size_t s = 0; s < object.states.size(); ++s) {
+        const auto& state = object.states[s];
+        for (std::size_t k = 0; k < state.functions.size(); ++k) {
+          const auto& function = state.functions[k];
+          const auto caller = make_ref(f, o, object, state, s, function, k);
+          collect_accesses(function, caller, declared, script.accesses);
+          collect_calls(function, caller);
         }
       }
+      // Invariant: property handlers hold call sites too, so they are scanned like state functions.
       for (std::size_t p = 0; p < object.properties.size(); ++p) {
         const auto& property = object.properties[p];
         if (property.readHandler) {
           const auto ref =
               make_handler_ref(f, o, object, property, p, PexFunctionSlot::PropertyRead);
           collect_accesses(*property.readHandler, ref, declared, script.accesses);
+          collect_calls(*property.readHandler, ref);
         }
         if (property.writeHandler) {
           const auto ref =
               make_handler_ref(f, o, object, property, p, PexFunctionSlot::PropertyWrite);
           collect_accesses(*property.writeHandler, ref, declared, script.accesses);
+          collect_calls(*property.writeHandler, ref);
         }
       }
     }

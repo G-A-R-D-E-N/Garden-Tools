@@ -59,10 +59,10 @@ public partial class MainWindow : Window
         return null;
     }
 
-    public void Open(string path)
+    public bool Open(string path)
     {
         _pathField.Text = path;
-        Load();
+        return Load();
     }
 
     private static string? RememberSetting(string key, string value, string action)
@@ -95,29 +95,39 @@ public partial class MainWindow : Window
             return $"{name} is not a Fallout 4 hk_2014.1.0-r1 packfile.";
         return null;
     }
-    private void Load()
+    private bool Load()
+    {
+        try { return LoadDocument(); }
+        finally { ReleaseScopedGameData(); }
+    }
+
+    private bool LoadDocument()
     {
         string path = (_pathField.Text ?? "").Trim().Trim('"');
-        if (path.Length == 0) { SetSummary("Enter the path to a .hkx file.", Ux.MutedBrush); return; }
+        string? virtualPathHint = _pendingVirtualPathHint;
+        _pendingVirtualPathHint = null;
+        string? dataFolderHint = _pendingSourceFolder.Length > 0 ? _pendingSourceFolder : null;
+        _pendingSourceFolder = "";
+        if (path.Length == 0) { SetSummary("Enter the path to a .hkx file.", Ux.MutedBrush); return false; }
         if (!File.Exists(path))
         {
             string full = Path.GetFullPath(path);
             SetSummary(full == path ? "Not found: " + path
                                     : $"Not found: {path}, which from here means {full}", Ux.BadBrush);
             if (_hkxPath.Length > 0) _pathField.Text = _hkxPath;
-            return;
+            return false;
         }
         if (RefuseReason(path) is { } reason)
         {
             SetSummary(reason, Ux.BadBrush);
             if (_hkxPath.Length > 0) _pathField.Text = _hkxPath;
-            return;
+            return false;
         }
 
         if (!ConfirmDiscard("open this file"))
         {
             if (_hkxPath.Length > 0) _pathField.Text = _hkxPath;
-            return;
+            return false;
         }
 
         DocumentSourceStamp sourceStamp;
@@ -129,7 +139,7 @@ public partial class MainWindow : Window
         {
             SetSummary("Could not read the file consistently enough to open it: " + e.Message.Split('\n')[0],
                        Ux.BadBrush);
-            return;
+            return false;
         }
 
         _documentStamp++;
@@ -167,6 +177,7 @@ public partial class MainWindow : Window
             _classWarning = "";
             _animation.Clear();
             _animationData = null;
+            ResetGeometry();
             _animationSummary.Text = "";
             RememberRecent(path);
             RefreshRecents();
@@ -178,12 +189,13 @@ public partial class MainWindow : Window
             BuildClipList(new BehaviourGraphModel());
             RefreshPasteSlots();
             RefreshTemplates();
-            return;
+            return true;
         }
 
-        TryLoadRagdoll(path);
+        TryLoadRagdoll(path, virtualPathHint);
 
-        bool isAnimation = BuildAnimation(path);
+        bool isAnimation = BuildAnimation(path, virtualPathHint, dataFolderHint);
+        if (isAnimation) NoteAnimationRagdoll();
 
         var root = HkxBehaviorParser.ParseBehavior(path);
         if (root == null)
@@ -204,11 +216,12 @@ public partial class MainWindow : Window
 
             if (_animationData != null)
             {
-                LoadPose(path, Path.GetFileName(path));
+                LoadPose(path, Path.GetFileName(path), virtualPathHint, dataFolderHint);
                 FindMeshForFile();
-                AppendRagdollSourceNote();
+                AppendPhysicsNotes();
             }
-            return;
+            RefreshSaveAnimationState();
+            return true;
         }
 
         if (!isAnimation)
@@ -217,6 +230,7 @@ public partial class MainWindow : Window
             _animationSummary.Foreground = Ux.MutedBrush;
             _animation.Clear();
             _animationData = null;
+            ResetGeometry();
         }
 
         _hkxPath = path;
@@ -268,16 +282,29 @@ public partial class MainWindow : Window
 
         if (_animationData != null)
         {
-            LoadPose(path, Path.GetFileName(path));
-            AppendRagdollSourceNote();
+            LoadPose(path, Path.GetFileName(path), virtualPathHint, dataFolderHint);
+            AppendPhysicsNotes();
         }
+        RefreshSaveAnimationState();
         if (settingsWarning != null) SetStatus(settingsWarning, Ux.WarnBrush);
+        return true;
     }
 
-    private void AppendRagdollSourceNote()
+    private void AppendPhysicsNotes()
     {
-        if (_ragdollSourceNote == null) return;
-        SetPlaybackSummary(_summaryBaseText + "  |  " + _ragdollSourceNote, Ux.MetaBrush);
+        var parts = new List<string>();
+        if (_ragdollSourceNote is { Length: > 0 } source &&
+            !_summaryBaseText.Contains(source, StringComparison.Ordinal))
+            parts.Add(source);
+        if (_physicsReportNote is { Length: > 0 } note &&
+            !_summaryBaseText.Contains(note, StringComparison.Ordinal))
+            parts.Add(note);
+        if (parts.Count == 0) return;
+
+        IBrush brush = _physicsReportNote is { Length: > 0 } && _ragdollSourceNote == null
+            ? PhysicsReportBrush()
+            : Ux.MetaBrush;
+        SetPlaybackSummary(_summaryBaseText + "  |  " + string.Join("  |  ", parts), brush);
     }
 
     private static int? NonEightByteLayout(string path)

@@ -137,8 +137,10 @@ public sealed class AnimationSaveTransactionTests
     {
         using var scope = new AnimationScope(spline: true);
         byte[] source = File.ReadAllBytes(scope.Path);
-        Assert.Throws<NotSupportedException>(() => NativeAnimation.Recompress(
+        var error = Assert.Throws<NotSupportedException>(() => NativeAnimation.Recompress(
             source, scope.Animation, new SplineEncoder.Options { RotationFormat = format }));
+
+        Assert.Equal(AnimationCompression.DescribeSplineEncodingForWrite(format), error.Message);
     }
 
     [Theory]
@@ -156,7 +158,8 @@ public sealed class AnimationSaveTransactionTests
         Assert.True(at >= 0, "the recompressed file does not hold the encoded blob");
         data.CopyTo(written, at);
 
-        Assert.Throws<NotSupportedException>(() => new HkxBinaryReader().ParseHkx(written));
+        var error = Assert.Throws<NotSupportedException>(() => new HkxBinaryReader().ParseHkx(written));
+        Assert.Equal(AnimationCompression.DescribeSplineEncoding(format), error.Message);
         Assert.Throws<NotSupportedException>(() => SplineEncoder.Decode(
             data, blob.BlockOffsets, 1, scope.Animation.NumFrames, blob.MaskAndQuantizationSize,
             blob.MaxFramesPerBlock, new HkxAnimationData()));

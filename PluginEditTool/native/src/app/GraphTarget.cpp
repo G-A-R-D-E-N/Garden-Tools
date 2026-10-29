@@ -4,7 +4,6 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
-#include <system_error>
 #include <utility>
 
 #include <fo4ide/graph/GraphCompiler.hpp>
@@ -40,15 +39,6 @@ void writeFileBytes(const std::filesystem::path& path, const std::vector<std::ui
     stream.write(reinterpret_cast<const char*>(bytes.data()),
                  static_cast<std::streamsize>(bytes.size()));
     if (!stream) throw std::runtime_error("Could not write '" + path.string() + "'.");
-}
-
-std::vector<std::filesystem::path> graphScriptRoots() {
-    std::vector<std::filesystem::path> roots;
-    std::error_code errorCode;
-    for (const auto& root : papyrus::papyrusBaseImports()) {
-        if (std::filesystem::is_directory(root, errorCode)) roots.push_back(root);
-    }
-    return roots;
 }
 
 nlohmann::json describeNodeDefinition(const graph::NodeDefinition& definition) {
@@ -113,18 +103,21 @@ std::vector<graph::GraphDiagnostic> singleDiagnostic(
 
 }  // namespace
 
-GraphTarget::GraphTarget(platform::Services& platform) : platform_(platform) {}
+GraphTarget::GraphTarget(platform::Services& platform, tools::Locator& locator)
+    : platform_(platform), locator_(locator) {}
 
 GraphTarget::~GraphTarget() = default;
 
 graph::GraphCompiler& GraphTarget::compiler() {
+    const auto roots = locator_.papyrusBaseImports();
     std::string key;
-    for (const auto& root : graphScriptRoots()) {
+    for (const auto& root : roots) {
         key += root.string();
         key.push_back('|');
     }
     if (!compiler_ || key != rootsKey_) {
-        index_ = std::make_unique<papyrus::ScriptIndex>(graph::graphIndexFor(nullptr, nullptr));
+        index_ = std::make_unique<papyrus::ScriptIndex>(
+            graph::graphIndexFor(nullptr, nullptr, roots));
         compiler_ = std::make_unique<graph::GraphCompiler>(*index_);
         rootsKey_ = std::move(key);
     }
@@ -268,8 +261,8 @@ Result<nlohmann::json> GraphTarget::invoke(std::string_view method, const nlohma
             return nlohmann::json(text);
         }
         if (method == "LoadScript") {
-            const auto result =
-                graph::GraphScriptLoader::load(stringArgument(args, 0), graphScriptRoots());
+            const auto result = graph::GraphScriptLoader::load(stringArgument(args, 0),
+                                                               locator_.papyrusBaseImports());
             if (result.failure) return nlohmann::json("Error: " + *result.failure);
             nlohmann::json diagnostics = nlohmann::json::array();
             for (const auto& diagnostic : result.diagnostics) {
