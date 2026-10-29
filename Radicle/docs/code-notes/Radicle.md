@@ -8720,7 +8720,7 @@ Detects an encoder change that alters bytes of an unedited stream. It checks thr
 ## Radicle/include/fo4/swf/swf.hpp:SwfScalingGrid (DefineScalingGrid, tag 78)
 
 - `SwfScalingGrid` holds the CharacterId (UI16, little-endian, first in the payload) and the 9-slice splitter as a `SwfRect` in twips, stored in `SwfTag::scaling_grid`. The splitter is the RECT that follows the id, read by the same `read_rect` the edit-text and font decoders use.
-- Frame SVG rendering of the 9-slice is NOT implemented. `Radicle/src/swf/swf_frame_svg.cpp` never reads `SwfTag::scaling_grid`, so a shape or sprite that carries a grid still renders unsplit.
+- The frame SVG renderer reads the grid through `FrameLookup::grids`, filled from `SwfTag::scaling_grid` in `frame_to_svg`. `Radicle/src/swf/swf_frame_svg.cpp:nine_slice_cells` slices a placed shape or sprite against it when its placement scale is not identity.
 - No C API export, no `SwfSummary` counter and no C# change. The sibling typed tags `DefineExternalImage`, `FontTextureInfo` and `ExporterInfo` also have no export; adding one would bump `RADICLE_ABI_VERSION`.
 
 ## Radicle/src/swf/swf_tags.cpp:decode_tag_payload (kDefineScalingGrid case)
@@ -8739,6 +8739,51 @@ Detects an encoder change that alters bytes of an unedited stream. It checks thr
 - `AcceptsTrailingBytesAfterTheSplitterRect` detects a strict-length check that refuses a grid tag with bytes after its RECT (`0xAA 0xBB` appended).
 - `RefusesAScalingGridPayloadCutInsideItsRect` detects a RECT reader that zero-fills missing bits into a grid, or one that reads past the payload. It uses two cuts: an id-only payload, and a 5-byte payload where the RECT needs 7 bytes. Each must give `malformed_tag`, no typed grid, the raw payload kept, and the End tag still parsed.
 - `ScalingGridLookupReturnsTheLastGridForAnId` detects `find_scaling_grid` returning the first of two grids for one id, returning a grid for a different id, or returning a non-null pointer for an id with no grid.
+
+## Radicle/src/swf/swf_frame_svg.cpp:nine_slice_regions
+
+- Each axis is cut independently. The splitter edges are mapped through the placement (`scale * twips / 20 + translate`) and clamped into the placed box. The fixed corner width is the local distance from the box edge to the splitter edge, so it is divided by the placement scale. The destination is therefore the unscaled corner size, and the centre takes whatever length is left.
+- The destination right cut is clamped so it never falls before the left cut. Without that clamp, overlapping corners give a negative-width centre, which would invert its stretch.
+- Scale must be positive and the placement must have no rotation or skew, because the axis split divides by scale. `frame_body` checks this through `nine_slice_cells`.
+- `NineSliceClampsASplitterThatOverhangsThePlacedBox` detects a splitter edge past the placed box producing a source or destination cell with negative width.
+- `NineSliceKeepsTheCentreAtZeroWidthWhenCornersOverlap` detects overlapping fixed corners producing a negative centre width.
+- `NineSliceCutsAPlacedBoxIntoUnscaledCornersAndAStretchedCentre` detects the cut lines being taken on the wrong axis, or the corners being scaled with the placement (their destination would then differ from the source). Hand-derived numbers: placed box x 100..350, y 50..250 (scale 2.5 and 2, translate 100 and 50), splitter x 400..1600 and y 200..1800 twips, giving source x cuts 100, 150, 300, 350 and y cuts 50, 70, 230, 250, and destination x cuts 100, 120, 330, 350 and y cuts 50, 60, 240, 250.
+
+## Radicle/src/swf/swf_frame_svg.cpp:nine_slice_cells
+
+- Eligible rows are a DefineShape with a grid and bounds, or a DefineSprite with a grid. Morph characters are not sliced. Rotation or skew, a non-positive scale, or a scale of exactly (1, 1) keep the plain path. A negative scale is a flip; it falls back to plain and does not slice. This is a known ceiling, not a checked Flash behaviour.
+- The grid comes from `FrameLookup::grids`, filled in `frame_to_svg` with `insert_or_assign`, so the last grid for an id wins as in `find_scaling_grid`.
+- The placed box for a shape is its frame-instance bounds. A sprite has no bounds in the file, so its box is the union of its visible descendant shape bounds in the current frame (`sprite_bounds`). Ceiling: Flash uses the symbol's bounds, so a sprite whose content changes between frames can get different corners here. Upgrade path: take the union over every frame of the sprite's timeline.
+- The placement scale comes from `row.world_transform`, the concatenated scale of every ancestor sprite. A grid child inside a scaled parent sprite is therefore sliced against the combined scale. Ceiling: this is unverified against Flash or Scaleform, which may slice against the child's own placement scale only. Upgrade path: confirm against a reference movie before relying on nested grids.
+
+## Radicle/src/swf/swf_frame_svg.cpp:sprite_content and sprite_bounds
+
+- Mask rows (`clip_depth` set) are skipped by both `sprite_content` and `sprite_bounds`, so a mask is neither painted nor counted in the sprite's box. `ScaledGridSpriteEmitsTheSameNineCellsAndSkipsItsChildren` detects a mask painted as a second `<path `, or a mask that widens the box and moves the clip rects.
+
+## Radicle/src/swf/swf_frame_svg.cpp:nine_slice_group
+
+- Output per cell is `<g transform=stretch><g clip-path=cell clip><use href=content>`. The content is rendered once in `<defs>` as `<g id="<row>sg">`, and each cell clips it to its pre-stretch source rect. The clip rect and the stretch both live in the content's coordinate space, which is the placed space. The stretch maps source to destination, so `stretch_transform` gives `scale = destination / source` and `translate = destination.origin - scale * source.origin`.
+- A zero-width source cell (a splitter at the box edge) uses scale 1. Its clip is empty, so the transform does not matter, and this avoids a division by zero.
+- Ids are `<row>s<cell>` for each clip and `<row>sg` for the content group. The content group is shared, which avoids duplicate element ids. The renderer already uses `href` on `<pattern>` images, so `use href` matches the existing output style.
+
+## Radicle/src/swf/swf_frame_svg.cpp:frame_body
+
+- A sliced sprite draws its visible descendants through `sprite_content`, and sets `mask_end` past them so the child rows are not drawn a second time. Ceiling, `swf_frame_svg.cpp:sprite_content`: masks, button children, and child colour transforms are not drawn, the same limits as `swf_frame_svg.cpp:sprite_clip_to_svg`.
+- The colour filter and the mask wrappers still apply around the sliced content, because they run after the content is built.
+
+## Radicle/tests/test_swf_display.cpp:SwfFrameSvg nine-slice render tests
+
+- `ScaledGridShapeEmitsNineClipAndTransformCells` detects a shape with a grid rendered plain instead of as nine cells, or any cell whose transform or clip differs from the hand-derived values. Hand-derived values for the placement scale 2.5 and 2, translate 100 and 50 px, and a 100 x 100 px square with splitter 20..80 by 10..90 px: cell transforms `matrix(0.4 0 0 0.5 60 25)`, `matrix(1.4 0 0 0.5 -90 25)`, `matrix(0.4 0 0 0.5 210 25)`, and so on for the other rows. Each cell's clip rect is its source rect, for example `x=100 y=50 width=50 height=20`. It also checks there is exactly one `<path ` so the content is not drawn twice.
+- `ScaledGridSpriteEmitsTheSameNineCellsAndSkipsItsChildren` detects a sprite with a grid drawn plainly, or drawn sliced and also drawn child by child. The second case shows up as two `<path ` elements. The expected cells match the shape case, because the sprite box is the same as the shape box.
+- `UnitOrRotatedGridPlacementDrawsThePlainShape` detects a grid applied to a unit-scale or rotated placement, which would change the plain output. It compares the output with and without the grid tag for both placements.
+
+## Radicle/tests/test_swf_svg_text_matrix.cpp:SwfFrameSvg nine-slice geometry tests
+
+- The three `NineSlice*` geometry tests in this file are the unit tests for `nine_slice_regions`. Their regressions are described in the `nine_slice_regions` section above. They sit in this file because it is the only SVG frame test file with room under the 750-line limit.
+
+## Radicle/tests/swf_movie_builder.hpp:movie_of
+
+- `movie_of`, `TagPayload`, `sprite_tag`, `place_full`, `matrix_full`, `square_with_fill`, and `square_shape` moved here from `test_swf_display.cpp` so the nine-slice render tests can build movies without copying them. `test_swf_display.cpp` was at 741 lines, over the 750 limit once the new tests were added. The bodies are unchanged; the only edit is `inline`.
 
 ## Radicle/src/avm1/misc_ops.cpp:random_number and next_random
 

@@ -3,6 +3,7 @@
 #include "fo4/swf/swf_svg.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <map>
@@ -43,6 +44,12 @@ struct FrameLookup {
   TextIndex texts;
   FontIndex fonts;
   ButtonIndex buttons;
+  std::map<std::uint16_t, SwfRect> grids;
+};
+
+struct NineSliceAxis {
+  std::array<double, 4> source;
+  std::array<double, 4> destination;
 };
 
 std::string transform_text(const SwfTransform& transform) {
@@ -228,6 +235,115 @@ std::string button_group(const FrameLookup& lookup, const SvgBitmaps& bitmaps,
   return content;
 }
 
+NineSliceAxis nine_slice_axis(double low, double high, double scale, double offset,
+                              double grid_low, double grid_high) {
+  const double first = std::clamp(scale * grid_low + offset, low, high);
+  const double second = std::clamp(scale * grid_high + offset, first, high);
+  const double fixed_first = std::min(low + (first - low) / scale, high);
+  const double fixed_second = std::clamp(high - (high - second) / scale, fixed_first, high);
+  return {{low, first, second, high}, {low, fixed_first, fixed_second, high}};
+}
+
+SwfBounds cell_box(const std::array<double, 4>& x, const std::array<double, 4>& y,
+                   std::size_t column, std::size_t row) {
+  return {x[column], y[row], x[column + 1] - x[column], y[row + 1] - y[row]};
+}
+
+SwfTransform stretch_transform(const SwfBounds& source, const SwfBounds& destination) {
+  SwfTransform stretch;
+  stretch.scale_x = source.width > 0.0 ? destination.width / source.width : 1.0;
+  stretch.scale_y = source.height > 0.0 ? destination.height / source.height : 1.0;
+  stretch.translate_x = destination.x - stretch.scale_x * source.x;
+  stretch.translate_y = destination.y - stretch.scale_y * source.y;
+  return stretch;
+}
+
+std::string nine_slice_group(const std::array<NineSliceCell, 9>& cells, const std::string& id,
+                             const std::string& content) {
+  std::string clips;
+  std::string groups;
+  for (std::size_t index = 0; index < cells.size(); ++index) {
+    const NineSliceCell& cell = cells[index];
+    const std::string cell_id = id + "s" + std::to_string(index);
+    clips += "<clipPath id=\"" + cell_id + "clip\"><rect x=\"" + svg_number(cell.source.x) +
+             "\" y=\"" + svg_number(cell.source.y) + "\" width=\"" +
+             svg_number(cell.source.width) + "\" height=\"" + svg_number(cell.source.height) +
+             "\"/></clipPath>\n";
+    groups += "<g transform=\"" +
+              transform_text(stretch_transform(cell.source, cell.destination)) +
+              "\">\n<g clip-path=\"url(#" + cell_id + "clip)\">\n<use href=\"#" + id +
+              "sg\"/>\n</g>\n</g>\n";
+  }
+  return "<defs>\n<g id=\"" + id + "sg\">\n" + content + "</g>\n" + clips + "</defs>\n" + groups;
+}
+
+std::optional<SwfBounds> sprite_bounds(const SwfDisplayFrame& frame, std::size_t index) {
+  const std::size_t end = descendants_end(frame, index);
+  std::optional<SwfBounds> box;
+  for (std::size_t child = index + 1; child < end; ++child) {
+    const SwfFrameInstance& row = frame.instances[child];
+    if (!row.has_bounds || !row.world_visible || row.clip_depth) {
+      continue;
+    }
+    if (!box) {
+      box = row.bounds;
+      continue;
+    }
+    const double x = std::min(box->x, row.bounds.x);
+    const double y = std::min(box->y, row.bounds.y);
+    const double right = std::max(box->x + box->width, row.bounds.x + row.bounds.width);
+    const double bottom = std::max(box->y + box->height, row.bounds.y + row.bounds.height);
+    box = SwfBounds{x, y, right - x, bottom - y};
+  }
+  return box;
+}
+
+std::optional<std::array<NineSliceCell, 9>> nine_slice_cells(const FrameLookup& lookup,
+                                                             const SwfDisplayFrame& frame,
+                                                             std::size_t index) {
+  const SwfFrameInstance& row = frame.instances[index];
+  const SwfTransform& placement = row.world_transform;
+  const auto grid = lookup.grids.find(row.character_id);
+  if (grid == lookup.grids.end() || placement.rotate_skew0 != 0.0 ||
+      placement.rotate_skew1 != 0.0 || placement.scale_x <= 0.0 || placement.scale_y <= 0.0 ||
+      (placement.scale_x == 1.0 && placement.scale_y == 1.0)) {
+    return std::nullopt;
+  }
+  std::optional<SwfBounds> placed;
+  if (row.is_sprite) {
+    placed = sprite_bounds(frame, index);
+  } else if (lookup.shapes.count(row.character_id) != 0 && row.has_bounds) {
+    placed = row.bounds;
+  }
+  if (!placed || placed->width <= 0.0 || placed->height <= 0.0) {
+    return std::nullopt;
+  }
+  return nine_slice_regions(grid->second, *placed, placement);
+}
+
+std::string sprite_content(const FrameLookup& lookup, const SvgBitmaps& bitmaps,
+                           const SwfDisplayFrame& frame, std::size_t index, const std::string& id) {
+  std::string content;
+  const std::size_t end = descendants_end(frame, index);
+  for (std::size_t child = index + 1; child < end; ++child) {
+    const SwfFrameInstance& row = frame.instances[child];
+    if (!row.world_visible || row.clip_depth) {
+      continue;
+    }
+    std::optional<SwfShape> morph;
+    const std::string child_id = id + "c" + std::to_string(child);
+    if (const SwfShape* shape = character_shape(lookup, row.character_id, row.ratio, morph)) {
+      content += shape_group(bitmaps, *shape, child_id, row.world_transform);
+      continue;
+    }
+    const auto text = lookup.texts.find(row.character_id);
+    if (text != lookup.texts.end()) {
+      content += text_group(lookup.fonts, *text->second, row.world_transform);
+    }
+  }
+  return content;
+}
+
 std::string frame_body(const FrameLookup& lookup, const SvgBitmaps& bitmaps,
                        const SwfDisplayFrame& frame, const SwfRect& stage) {
   std::string body;
@@ -281,6 +397,14 @@ std::string frame_body(const FrameLookup& lookup, const SvgBitmaps& bitmaps,
     } else if (has_text) {
       content = text_group(lookup.fonts, *text->second, row.world_transform);
     }
+    const auto cells = nine_slice_cells(lookup, frame, index);
+    if (cells && row.is_sprite) {
+      mask_end = descendants_end(frame, index);
+      content = sprite_content(lookup, bitmaps, frame, index, id);
+    }
+    if (cells && !content.empty()) {
+      content = nine_slice_group(*cells, id, content);
+    }
     if (content.empty()) {
       continue;
     }
@@ -300,6 +424,25 @@ std::string frame_body(const FrameLookup& lookup, const SvgBitmaps& bitmaps,
 
 }  // namespace
 
+std::array<NineSliceCell, 9> nine_slice_regions(const SwfRect& splitter, const SwfBounds& placed,
+                                                const SwfTransform& placement) {
+  const NineSliceAxis x =
+      nine_slice_axis(placed.x, placed.x + placed.width, placement.scale_x, placement.translate_x,
+                      splitter.x_min / kTwipsPerPixel, splitter.x_max / kTwipsPerPixel);
+  const NineSliceAxis y =
+      nine_slice_axis(placed.y, placed.y + placed.height, placement.scale_y, placement.translate_y,
+                      splitter.y_min / kTwipsPerPixel, splitter.y_max / kTwipsPerPixel);
+  std::array<NineSliceCell, 9> cells{};
+  for (std::size_t row = 0; row < 3; ++row) {
+    for (std::size_t column = 0; column < 3; ++column) {
+      NineSliceCell& cell = cells[row * 3 + column];
+      cell.source = cell_box(x.source, y.source, column, row);
+      cell.destination = cell_box(x.destination, y.destination, column, row);
+    }
+  }
+  return cells;
+}
+
 std::string frame_to_svg(const SwfFile& file, const SwfDisplayList& display, std::uint32_t frame) {
   FrameLookup lookup;
   for (const SwfTag& tag : file.tags) {
@@ -317,6 +460,9 @@ std::string frame_to_svg(const SwfFile& file, const SwfDisplayList& display, std
     }
     if (tag.button) {
       lookup.buttons.emplace(tag.button->character_id, &*tag.button);
+    }
+    if (tag.scaling_grid) {
+      lookup.grids.insert_or_assign(tag.scaling_grid->character_id, tag.scaling_grid->splitter);
     }
   }
   const SvgBitmaps bitmaps = index_bitmaps(file);
