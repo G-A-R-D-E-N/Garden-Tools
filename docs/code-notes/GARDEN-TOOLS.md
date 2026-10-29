@@ -2467,6 +2467,7 @@ Regression: `PluginEditTool/native/tests/unit/RadiclePluginItmNestedTests.cpp` (
 
 - `GraphCompiler::publishForSelfReference` writes the generated `.psc` into a scratch folder so the graph can refer to its own script. It used to create `<temp>/fo4re-graph-scratch/<random>` for every script and compiler instance and never removed it. Tests compile thousands of graphs, so one CI machine collected over 620,000 files there, which with the other test folders used up all 1,048,576 file slots (inodes) of the 32 GB tmpfs `/tmp` and failed every Linux job with "No space left on device" while the disk was nearly empty.
 - Now each process owns one folder `<temp>/fo4re-graph-scratch/p-<random>` (`ScratchBase::root`, `GraphScratch.Root`). The per-script folders live inside it. It is deleted when the process ends (`ScratchBase` destructor, `AppDomain.ProcessExit`) and can be removed on demand (`GraphCompiler::clearScratch`, `GraphScratch.Clear`).
+- `GraphCompiler.hpp:scratchRoot` names the process folder that holds published scripts. `GraphCompiler::clearScratch` removes it now; the scratch-folder test calls it to check that nothing is left behind.
 - A process that crashes cannot clean up, so the next process that creates its folder sweeps sibling folders whose last write is more than 24 hours old (`sweepOld`, `SweepOld`). A folder newer than that is kept because another live process may own it.
 - Each process's sweep examines at most 64 entries (`ScratchBase::sweepOld`, `GraphScratch.SweepOld`). An unbounded sweep of the leaked backlog made the first graph test processes on the Windows MSVC CI job hit the 10 s CTest timeout (run 3443, the GraphCompiler Oracle1/2/3 tests), so the backlog now drains a little each run.
 - When a script was already published in a compiler and its folder was swept or cleared since, the next publish recreates the folder (`create_directories` / `Directory.CreateDirectory`) before writing, so the self-reference is not silently dropped.
@@ -2646,3 +2647,8 @@ Regression targets, by test in `PluginEditTool/native/tests/unit/NifServiceTests
 - `NifService applies edits through a temporary output before replacing target`: the niftool branch still shells out with the `.niftmp` argument.
 - `PluginEditTool/native/tests/unit/ServiceTargetsTests.cpp:NifTarget ApplyEdits takes the editor's JSON string and saves in-process with niftool absent`: the editor sends the edits as a JSON string in argument 1 and `""` for an in-place save in argument 2.
 
+## PluginEditTool/native/tests/helpers/TempRoot.hpp:TempRoot — graph and decompiler tests remove their temp roots
+
+- The graph and decompiler tests used to make `<temp>/<parent>/<timestamp>` folders (`uniqueRoot` in GraphLiftTests, GraphCompilerTests, GraphToolServiceTests and GraphScriptLoaderTests, and the `PapyrusDecompilerTests` `Fixture`) and never remove them. The lift tests alone left 38,000 folders per tag on the CI machine.
+- `TempRoot` (namespace `fo4ide_test`) creates its folder in the constructor. The destructor removes that folder and then the parent when the parent is empty, ignoring errors. The parent name is passed in full (for example `"fo4ide-lift-text"`), so temp paths are unchanged.
+- The temp root is used only inside the scope that owns it, so the lifetime is safe. Removal now also runs when a `REQUIRE` fails.
