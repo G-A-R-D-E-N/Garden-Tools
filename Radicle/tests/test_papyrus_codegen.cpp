@@ -207,6 +207,57 @@ TEST(PapyrusCodegen, OrShortCircuitsOnTrue) {
   EXPECT_EQ(lines[1], "jmpt T 2");
 }
 
+TEST(PapyrusCodegen, ShortCircuitIntoOperandVariableStagesThroughTemp) {
+  CodegenFixture f;
+  f.writeWithScriptObject();
+  f.write("Alias",
+          "Scriptname Alias\nFunction Go(bool abLeft, bool abRight)\n    abLeft = abRight && abLeft\n"
+          "EndFunction\nFunction GoOr(bool abLeft, bool abRight)\n    abLeft = abRight || abLeft\n"
+          "EndFunction\nFunction Keep(bool abLeft, bool abRight)\n    bool bOut = abLeft && abRight\n"
+          "EndFunction\n");
+  const auto obj = f.compileObject("Alias");
+
+  EXPECT_EQ(listing(function(obj, "Go")),
+            (std::vector<std::string>{"cast T abRight", "jmpf T 2", "cast T abLeft",
+                                      "assign abLeft T"}));
+  EXPECT_EQ(listing(function(obj, "GoOr")),
+            (std::vector<std::string>{"cast T abRight", "jmpt T 2", "cast T abLeft",
+                                      "assign abLeft T"}));
+  EXPECT_EQ(listing(function(obj, "Keep")),
+            (std::vector<std::string>{"cast bOut abLeft", "jmpf bOut 2", "cast bOut abRight"}));
+}
+
+TEST(PapyrusCodegen, ShortCircuitIntoAutoPropertyStagesThroughBackingVariable) {
+  CodegenFixture f;
+  f.writeWithScriptObject();
+  f.write("AutoAlias",
+          "Scriptname AutoAlias\nBool Property bFlag Auto\nFunction Go(bool abOther)\n"
+          "    bFlag = abOther && bFlag\nEndFunction\nFunction GoSelf(bool abOther)\n"
+          "    bFlag = abOther && self.bFlag\nEndFunction\n");
+  const auto obj = f.compileObject("AutoAlias");
+
+  EXPECT_EQ(listing(function(obj, "Go")),
+            (std::vector<std::string>{"cast T abOther", "jmpf T 2", "cast T ::bFlag_var",
+                                      "assign ::bFlag_var T"}));
+  EXPECT_EQ(listing(function(obj, "GoSelf")),
+            (std::vector<std::string>{"cast T abOther", "jmpf T 3", "assign T ::bFlag_var",
+                                      "cast T T", "assign ::bFlag_var T"}));
+}
+
+TEST(PapyrusCodegen, FindStructConvertsSearchValueToMemberType) {
+  CodegenFixture f;
+  f.writeWithScriptObject();
+  f.write("Finder",
+          "Scriptname Finder\nStruct Point\n    float fX = 0.0\nEndStruct\nFunction Go()\n"
+          "    Point[] pts = new Point[2]\n    int i = pts.FindStruct(\"fX\", 2)\n"
+          "    int j = pts.RFindStruct(\"fX\", 2)\nEndFunction\n");
+  const auto obj = f.compileObject("Finder");
+
+  EXPECT_EQ(listing(function(obj, "Go")),
+            (std::vector<std::string>{"array_create pts 2", "array_findstruct pts i \"fX\" 2.0 0",
+                                      "array_rfindstruct pts j \"fX\" 2.0 -1"}));
+}
+
 TEST(PapyrusCodegen, InequalityIsEqualityFollowedByNot) {
   CodegenFixture f;
   f.writeWithScriptObject();

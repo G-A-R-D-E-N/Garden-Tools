@@ -376,4 +376,28 @@ TEST(Avm1Encode, ValidateRejectsANestedBodyThatRunsPastItsParentRange) {
   EXPECT_EQ(fo4::avm1::validate_actions(stream), Avm1Status::BodyRecordsPastEnd);
 }
 
+// Invariant: validate_actions must return the decode status of a failed decode, not Ok.
+TEST(Avm1Encode, ValidateReturnsTheDecodeStatusForAFailedDecode) {
+  const Bytes input{0x81, 0x01, 0x00, 0x00};
+  const auto stream = decode(input);
+  ASSERT_EQ(stream.status, Avm1Status::Truncated);
+  EXPECT_EQ(fo4::avm1::validate_actions(stream), Avm1Status::Truncated);
+}
+
+// Invariant: validate_actions must keep returning Ok for a valid decoded stream.
+TEST(Avm1Encode, ValidateReturnsOkForAValidDecodedStream) {
+  const auto stream = decode(kJumpOverPlayAndStop);
+  ASSERT_TRUE(stream.ok()) << stream.message;
+  EXPECT_EQ(fo4::avm1::validate_actions(stream), Avm1Status::Ok);
+}
+
+// Invariant: validate_actions must report BranchUnresolved after an erased branch target.
+TEST(Avm1Encode, ValidateReportsBranchUnresolvedAfterTheTargetIsErased) {
+  auto stream = decode(kJumpOverPlayAndStop);
+  ASSERT_TRUE(stream.ok()) << stream.message;
+  ASSERT_EQ(std::get<Avm1Branch>(stream.actions[0].payload).target, 7u);
+  ASSERT_TRUE(fo4::avm1::erase_action(stream.actions, 3));
+  EXPECT_EQ(fo4::avm1::validate_actions(stream), Avm1Status::BranchUnresolved);
+}
+
 }  // namespace

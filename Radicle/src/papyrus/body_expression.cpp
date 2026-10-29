@@ -405,12 +405,83 @@ bool BodyEmitter::inherits(const std::string& child, const std::string& ancestor
     return false;
 }
 
+bool BodyEmitter::readsName(const Node* expression, const std::string& destination) {
+    if (!expression) return false;
+    switch (expression->nodeKind()) {
+        case NodeKind::IdentifierExpression: {
+            const auto* idNode = static_cast<const IdentifierExpression*>(expression);
+            const Binding* binding = gen_.resolution_->bindingFor(idNode);
+            if (!binding) return false;
+            const bool namedStorage =
+                binding->kind == BindingKind::Local || binding->kind == BindingKind::Parameter ||
+                binding->kind == BindingKind::ScriptVariable ||
+                (binding->kind == BindingKind::Property && isAutoBackingProperty(*binding));
+            if (!namedStorage) return false;
+            const auto storage = storageFor(*idNode);
+            return storage && storage->name == destination;
+        }
+
+        case NodeKind::MemberExpression: {
+            const auto* member = static_cast<const MemberExpression*>(expression);
+            const Binding* binding = gen_.resolution_->bindingFor(member);
+            if (binding && binding->kind == BindingKind::Property &&
+                isOwnBackingProperty(*member, *binding) &&
+                CodeGenerator::backingVarName(binding->name) == destination) {
+                return true;
+            }
+            return readsName(member->target.get(), destination);
+        }
+
+        case NodeKind::IndexExpression: {
+            const auto* index = static_cast<const IndexExpression*>(expression);
+            return readsName(index->target.get(), destination) ||
+                   readsName(index->index.get(), destination);
+        }
+
+        case NodeKind::CallExpression: {
+            const auto* call = static_cast<const CallExpression*>(expression);
+            if (readsName(call->callee.get(), destination)) return true;
+            for (const auto& argument : call->arguments) {
+                if (readsName(argument.value.get(), destination)) return true;
+            }
+            return false;
+        }
+
+        case NodeKind::UnaryExpression:
+            return readsName(static_cast<const UnaryExpression*>(expression)->operand.get(),
+                             destination);
+
+        case NodeKind::BinaryExpression: {
+            const auto* binary = static_cast<const BinaryExpression*>(expression);
+            return readsName(binary->left.get(), destination) ||
+                   readsName(binary->right.get(), destination);
+        }
+
+        case NodeKind::CastExpression:
+            return readsName(static_cast<const CastExpression*>(expression)->operand.get(),
+                             destination);
+
+        case NodeKind::TypeCheckExpression:
+            return readsName(static_cast<const TypeCheckExpression*>(expression)->operand.get(),
+                             destination);
+
+        case NodeKind::NewArrayExpression:
+            return readsName(static_cast<const NewArrayExpression*>(expression)->size.get(),
+                             destination);
+
+        default:
+            return false;
+    }
+}
+
 void BodyEmitter::emitShortCircuit(const BinaryExpression& binary, const std::string& destination) {
-    add("cast", {id(destination), value(binary.left.get())});
-    const int skip =
-        add(binary.op == TokenKind::And ? "jmpf" : "jmpt", {id(destination), intValue(0)});
-    add("cast", {id(destination), value(binary.right.get())});
+    const bool aliased = readsName(binary.right.get(), destination);
+    const auto slot = aliased ? allocTemp(gen_.typeOf(&binary)) : destination;
+    add("cast", {id(slot), value(binary.left.get())});
+    const int skip = add(binary.op == TokenKind::And ? "jmpf" : "jmpt", {id(slot), intValue(0)});
+    add("cast", {id(slot), value(binary.right.get())});
     patchJump(skip, here());
+    if (aliased) add("assign", {id(destination), id(slot)});
 }
 
 }  // namespace fo4::papyrus

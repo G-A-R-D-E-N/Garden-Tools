@@ -28,6 +28,8 @@ struct SwfFrameInstance {
   std::optional<std::uint16_t> clip_depth;
   std::optional<std::uint16_t> ratio;
   std::optional<SwfColorTransform> world_color_transform;
+  std::vector<SwfFilter> filters;
+  std::optional<std::uint8_t> blend_mode;
   /* Invariant: false when this row or any sprite above it is hidden by a PlaceObject3 visible flag. */
   bool world_visible{true};
   /* Invariant: the tag that created the object, top level for a root row and a child index inside its DefineSprite. */
@@ -44,7 +46,8 @@ struct SwfFrameInstance {
            bounds == other.bounds && has_bounds == other.has_bounds && is_sprite == other.is_sprite &&
            nesting_level == other.nesting_level && clip_depth == other.clip_depth &&
            ratio == other.ratio && world_color_transform == other.world_color_transform &&
-           world_visible == other.world_visible;
+           world_visible == other.world_visible && filters == other.filters &&
+           blend_mode == other.blend_mode;
   }
 };
 
