@@ -62,14 +62,18 @@ std::string shadow_body(const SwfFilter& filter, double dx, double dy) {
           "\" result=\"b\"/><feFlood flood-color=\"" + rgb_text(filter.color) +
           "\" flood-opacity=\"" + opacity_text(filter.color, filter.strength) +
           "\" result=\"f\"/><feComposite in=\"f\" in2=\"b\" operator=\"in\" result=\"s\"/>";
+  std::string last = "s";
   if (filter.inner) {
     body += "<feComposite in=\"s\" in2=\"SourceAlpha\" operator=\"in\" result=\"i\"/>";
+    last = "i";
+  } else if (filter.knockout) {
+    body += "<feComposite in=\"s\" in2=\"SourceAlpha\" operator=\"out\" result=\"k\"/>";
+    last = "k";
   }
-  const std::string shadow =
-      std::string("<feMergeNode in=\"") + (filter.inner ? "i" : "s") + "\"/>";
+  const std::string shadow = "<feMergeNode in=\"" + last + "\"/>";
   const std::string source = "<feMergeNode in=\"SourceGraphic\"/>";
   std::string nodes = shadow;
-  if (!filter.knockout) {
+  if (filter.composite_source && !filter.knockout) {
     nodes = filter.inner ? source + shadow : shadow + source;
   }
   return body + "<feMerge>" + nodes + "</feMerge>";

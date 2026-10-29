@@ -144,6 +144,7 @@ fo4::swf::SwfFilter filter_of(std::uint8_t id, std::uint32_t argb, double blur_x
   filter.blur_x = blur_x;
   filter.blur_y = blur_y;
   filter.strength = strength;
+  filter.composite_source = true;
   return filter;
 }
 
@@ -172,7 +173,7 @@ SwfBuilder drop_shadow_placement() {
   place.u32(0);
   place.u32(0x000A0000);
   place.u16(0x0100);
-  place.u8(0);
+  place.u8(0x20);
   return place;
 }
 
@@ -258,8 +259,24 @@ TEST(SwfSvgFilters, KnockoutDropShadowMergesOnlyTheShadow) {
   auto shadow = filter_of(0, 0x80FF0000u, 8, 4);
   shadow.knockout = true;
   const std::string defs = fo4::swf::filter_defs({shadow}, "r0", stage_rect()).defs;
-  EXPECT_TRUE(defs.ends_with("<feMerge><feMergeNode in=\"s\"/></feMerge></filter></defs>\n"));
+  EXPECT_TRUE(defs.ends_with(
+      "<feComposite in=\"s\" in2=\"SourceAlpha\" operator=\"out\" result=\"k\"/>"
+      "<feMerge><feMergeNode in=\"k\"/></feMerge></filter></defs>\n"));
   EXPECT_EQ(defs.find("SourceGraphic"), std::string::npos);
+}
+
+TEST(SwfSvgFilters, ClearCompositeSourceDropsTheSourceFromTheMerge) {
+  auto shadow = filter_of(0, 0x80FF0000u, 8, 4);
+  shadow.composite_source = false;
+  auto glow = filter_of(2, 0xFF00FF00u, 2, 2);
+  glow.inner = true;
+  glow.composite_source = false;
+  const std::string shadow_defs = fo4::swf::filter_defs({shadow}, "r0", stage_rect()).defs;
+  const std::string glow_defs = fo4::swf::filter_defs({glow}, "r0", stage_rect()).defs;
+  EXPECT_TRUE(shadow_defs.ends_with(
+      "<feMerge><feMergeNode in=\"s\"/></feMerge></filter></defs>\n"));
+  EXPECT_TRUE(glow_defs.ends_with(
+      "<feMerge><feMergeNode in=\"i\"/></feMerge></filter></defs>\n"));
 }
 
 TEST(SwfSvgFilters, InnerGlowClipsItsShadowToTheSourceAndKeepsTheSource) {

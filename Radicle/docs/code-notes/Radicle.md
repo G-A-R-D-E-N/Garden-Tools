@@ -9053,10 +9053,21 @@ Bytecode is hand-derived. `u30(65535)` is `FF FF 03` and `u30(65536)` is `80 80 
 - Angle is radians. `read_fixed16` stores the raw value unchanged, and Ruffle's AVM2 conversion (`ruffle-0.6.0/core/src/avm2/filters.rs`, `Fixed16::from_f64(angle.to_radians())`) confirms the file stores radians. The offset is dx = distance * cos(angle) and dy = distance * sin(angle), with y pointing down. Not checked in a Flash Player.
 - Blur width becomes stdDeviation as blur / 2 per axis, x first.
 - DropShadow and Glow: flood-opacity = min(1, alpha * strength), where alpha = colour alpha / 255. The decoded colour is 0xAARRGGBB (`read_rgba` in `Radicle/src/swf/swf_placement.cpp`).
-- Inner: the source alpha is inverted with a `feComponentTransfer` table of `1 0`, then offset, blurred, flooded and clipped back to the source alpha. The merge puts SourceGraphic under the inner shadow. Knockout removes SourceGraphic from the merge.
+- Inner: the source alpha is inverted with a `feComponentTransfer` table of `1 0`, then offset, blurred, flooded and clipped back to the source alpha. Outer knockout and inner knockout merge their shadow node only; see `Radicle/src/swf/swf_svg_filters.cpp:shadow_body` for the merge rules.
 - Glow has no angle or distance in the file, so it is the shadow with a zero offset.
 - Not rendered: `passes` (a single gaussian stands in for the multi-pass blur), bevel, gradient glow, gradient bevel and convolution.
 - ColorMatrix: the 20 values are row-major. The offset column (5th, 10th, 15th, 20th) is divided by 255 to match the unit range of the colour-transform offsets in `Radicle/src/swf/swf_frame_svg.cpp:color_matrix_text`. Not checked in a Flash Player.
+
+## Radicle/src/swf/swf_svg_filters.cpp:shadow_body
+
+- The merge follows the flags on the filter, read from the SWF flags byte in `Radicle/src/swf/swf_placement.cpp:read_filter_flags`. Outer knockout merges `k`, which is the shadow with the source alpha cut out (`feComposite operator="out"`), and drops SourceGraphic. Inner knockout merges `i` alone. Knockout ignores composite_source.
+- composite_source (bit 0x20) is the inverse of Flash's hideObject. When it is clear and there is no knockout, the merge is the shadow alone (`s` outer, `i` inner), with no SourceGraphic. Ruffle maps it the same way (`ruffle-0.6.0/core/src/avm2/filters.rs`, COMPOSITE_SOURCE set when `!hide_object`). Its glow shader (`ruffle-0.6.0/render/wgpu/shaders/filter/glow.wgsl`) also drops the source in that case.
+- Strength multiplies the flood alpha before the blur, in `opacity_text`, so a blurred shadow peaks below the flat alpha. Ruffle's glow shader applies strength after the blur (`saturate(blur * strength)`), so the edge profile differs here. Not matched, and not checked in a Flash Player.
+
+## Radicle/src/swf/swf_svg_filters.cpp:deviation_text
+
+- Blur is one gaussian with stdDeviation = blur / 2 per axis. The factor 2 is a calibration to the quality 3 spread, not measured against Flash.
+- `passes`, the quality field of the filter flags, is not honoured. Ruffle loops over `num_passes()` in `ruffle-0.6.0/render/wgpu/src/filters/blur.rs`, so quality 0 and other values draw differently here.
 
 ## Radicle/src/swf/swf_svg_filters.cpp:blend_mode_style
 
@@ -9074,14 +9085,17 @@ Bytecode is hand-derived. `u30(65535)` is `FF FF 03` and `u30(65536)` is `80 80 
 
 - Filters and blend mode carry the same move rule as the colour transform. A PlaceObject3 with the filter flag replaces the list, and an empty list clears it. A move without the flag keeps the previous list. Blend mode keeps its previous value when absent.
 
-## Radicle/src/swf/swf_frame_svg.cpp:frame_body
+## Radicle/src/swf/swf_frame_svg.cpp:frame_body (filters)
 
 - The filter and blend wrap runs after the colour-transform wrap and before the clip-mask wrap. A mask therefore clips the filtered output.
+- The colour transform is applied inside the filter. Its group is the content the filter wraps, so the filter sees transformed colours. The Flash order is not checked.
+- mix-blend-mode has no stage backdrop here. A blend group composites only with the siblings painted before it in its parent. A mask wraps it in a clip-path group, which is isolated, so under a mask the blend sees only the masked content and not the stage. Not checked in a Flash Player.
 
 ## Radicle/tests/test_swf_svg_buttons.cpp:SwfSvgFilters
 
 - `DropShadowShiftsByAngleAndHalvesBlurIntoStdDeviation`: a regression that reads the angle as degrees, swaps dx and dy, skips the halving of blur, or writes stdDeviation y-first. The fixtures are angle pi/4 with blur 8 by 4, which gives dx = dy = 7.071068 and stdDeviation "4 2".
-- `KnockoutDropShadowMergesOnlyTheShadow`: a regression that ignores the knockout flag and keeps SourceGraphic in the merge.
+- `KnockoutDropShadowMergesOnlyTheShadow` (`Radicle/src/swf/swf_svg_filters.cpp:shadow_body`): a regression that ignores the knockout flag and keeps SourceGraphic in the merge, or merges the uncut shadow `s` so the source area is not cut out. The expected tail is the `k` node from the out-composite.
+- `ClearCompositeSourceDropsTheSourceFromTheMerge` (`Radicle/src/swf/swf_svg_filters.cpp:shadow_body`): a regression that keeps SourceGraphic when composite_source is clear (Flash hideObject), for a drop shadow or an inner glow.
 - `InnerGlowClipsItsShadowToTheSourceAndKeepsTheSource`: a regression that drops the inner flag, so the shadow is drawn outside the shape or the source is lost.
 - `BlurHalvesEachAxisInOrder`: a regression that leaves stdDeviation unhalved or puts the axes in the wrong order. The fixture is blur 6 by 2, which must give "3 1".
 - `ColorMatrixKeepsTwentyValuesAndScalesOffsetsToUnit`: a regression that drops a value or leaves an offset at 51 instead of 0.2.
