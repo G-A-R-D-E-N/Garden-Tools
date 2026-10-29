@@ -324,7 +324,7 @@ public sealed unsafe class PluginFile : IDisposable
 
     public int AddVmadScript(FormKey record, int index, string scriptName, byte flags = 0)
     {
-        ArgumentNullException.ThrowIfNull(scriptName);
+        ArgumentException.ThrowIfNullOrEmpty(scriptName);
         if (scriptName.Contains('\0')) throw new ArgumentException("VMAD script name cannot hold an embedded NUL through this API.", nameof(scriptName));
         var at = Index(index);
         using var use = Use();
