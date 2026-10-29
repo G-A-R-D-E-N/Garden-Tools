@@ -104,6 +104,7 @@ struct Shape {
 
 std::vector<Shape> read_shapes(const NifFile& nif);
 Transform shape_to_global(const NifFile& nif, std::uint32_t block);
+Transform block_transform(const NifFile& nif, std::uint32_t block);
 std::int32_t billboard_mode(const NifFile& nif, std::uint32_t block);
 
 std::int32_t shape_parent_node(const NifFile& nif, std::uint32_t block);

@@ -82,9 +82,14 @@ internal static class WorkspaceSmoke
                 .Single(bar => bar.TemplatedParent == scroll && bar.Orientation == Avalonia.Layout.Orientation.Horizontal);
             var presenter = scroll.GetVisualDescendants().OfType<Avalonia.Controls.Presenters.ScrollContentPresenter>()
                 .Single(content => content.TemplatedParent == scroll);
-            double contentBottom = presenter.TranslatePoint(new Point(0, presenter.Bounds.Height), scroll)!.Value.Y;
-            double scrollbarTop = horizontalBar.TranslatePoint(default, scroll)!.Value.Y;
-            CheckTrue($"{header} scrollbar has its own space below toolbar controls", contentBottom <= scrollbarTop + 0.5);
+            CheckTrue($"{header} workspace toolbar scrolls sideways only when it overflows",
+                scroll.HorizontalScrollBarVisibility == Avalonia.Controls.Primitives.ScrollBarVisibility.Auto);
+            if (horizontalBar.IsVisible)
+            {
+                double contentBottom = presenter.TranslatePoint(new Point(0, presenter.Bounds.Height), scroll)!.Value.Y;
+                double scrollbarTop = horizontalBar.TranslatePoint(default, scroll)!.Value.Y;
+                CheckTrue($"{header} scrollbar has its own space below toolbar controls", contentBottom <= scrollbarTop + 0.5);
+            }
             CheckTrue($"{header} toolbar starts at its first command", scroll.Offset.X == 0);
             CheckTrue($"{header} ribbon leaves room for the editor", toolbar.Bounds.Height < 160 && tabs.Bounds.Height > 300);
             if (scroll.Extent.Width > scroll.Viewport.Width)
@@ -165,7 +170,7 @@ internal static class WorkspaceSmoke
                 Grid.GetRow(child) == 4 && child.Child is StackPanel));
 
         Smoke.SelectTab(window, "Playback");
-        foreach (string section in new[] { "PLAYBACK CONTROLS", "VIEWPORT OVERLAYS", "SCENE TOOLS", "TIMELINE" })
+        foreach (string section in new[] { "TRANSPORT", "TIMELINE", "TOOL", "OVERLAYS" })
             CheckTrue($"Playback has the {section.ToLowerInvariant()} section",
                 Smoke.Find<TextBlock>(window).Any(text => text.Text == section));
         Smoke.Click(Smoke.Find<Button>(window).Single(button => button.Content?.ToString() == "Play"));
@@ -173,7 +178,7 @@ internal static class WorkspaceSmoke
             window.PlaybackSummary.StartsWith("Nothing loaded to play", StringComparison.Ordinal));
 
         Smoke.SelectTab(window, "Animation");
-        foreach (string section in new[] { "FRAME NAVIGATION", "FIND A FRAME", "EDIT SELECTED FRAME" })
+        foreach (string section in new[] { "FRAME NAVIGATION", "TOOL", "EDIT FRAME" })
             CheckTrue($"Animation has the {section.ToLowerInvariant()} section",
                 Smoke.Find<TextBlock>(window).Any(text => text.Text == section));
 

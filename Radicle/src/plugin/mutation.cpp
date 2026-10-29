@@ -102,9 +102,7 @@ bool erase_record(Group& group, const FormKey& record_key, std::set<FormKey>& re
     if (record.form_key != record_key) continue;
     removed.insert(record.form_key);
     auto stop = i + 1;
-    const auto* child = owned_child_group(group, i);
-    if (child == nullptr && record.header.signature == sig_qust) child = quest_child_group(group, i);
-    if (child != nullptr && child->header.label_as_u32() == record.header.form_id.value()) {
+    if (const auto* child = record_child_group(group, i); child != nullptr) {
       visit_group_records(*child, [&](const Record& inner) { removed.insert(inner.form_key); });
       stop = i + 2;
     }

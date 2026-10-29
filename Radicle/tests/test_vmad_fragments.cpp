@@ -321,6 +321,86 @@ TEST(VmadFragments, SceneUnsupportedFragmentPropertyReportsInsteadOfThrowing) {
   EXPECT_FALSE(extras.fully_consumed);
 }
 
+TEST(VmadFragments, SceneExtrasWithTruncatedOrMissingPhaseListReportUnsupported) {
+  auto truncated_tail =
+      scene_tail(0x03, {{7, "Fragment_0"}, {8, "Fragment_1"}}, {{1, 2, 0, "Phase_2"}});
+  truncated_tail.resize(truncated_tail.size() - 3);
+  auto truncated =
+      read_plugin(fixture::plugin_bytes(vmad_bytes(truncated_tail), "SCEN"), "Vmad.esp");
+  const auto cut = read_scene_extras(truncated);
+  EXPECT_TRUE(cut.unsupported);
+  EXPECT_NE(cut.unsupported_reason.find("truncated"), std::string::npos);
+  EXPECT_TRUE(cut.phases.empty());
+  EXPECT_FALSE(cut.fully_consumed);
+
+  auto countless = read_plugin(
+      fixture::plugin_bytes(vmad_bytes(flagged_tail(0x01, {{7, "F0"}})), "SCEN"), "Vmad.esp");
+  const auto missing = read_scene_extras(countless);
+  EXPECT_TRUE(missing.unsupported);
+  EXPECT_NE(missing.unsupported_reason.find("truncated"), std::string::npos);
+  EXPECT_FALSE(missing.fully_consumed);
+}
+
+TEST(VmadFragments, SceneExtrasWithTrailingBytesDecodeButAreNotFullyConsumed) {
+  auto tail = scene_tail(0x03, {{7, "Fragment_0"}, {8, "Fragment_1"}}, {{1, 2, 0, "Phase_2"}});
+  tail.push_back(std::byte{0x2A});
+  auto plugin = read_plugin(fixture::plugin_bytes(vmad_bytes(tail), "SCEN"), "Vmad.esp");
+  const auto extras = read_scene_extras(plugin);
+  EXPECT_FALSE(extras.unsupported);
+  EXPECT_FALSE(extras.fully_consumed);
+  ASSERT_EQ(extras.phases.size(), 1u);
+  EXPECT_EQ(extras.phases[0].function, "Phase_2");
+}
+
+TEST(VmadFragments, ScenePhaseListReadsObjectPropertiesInFormatOne) {
+  ByteWriter tail;
+  tail.u8(3);
+  tail.u8(0x00);
+  fixture::name(tail, "PF_Test");
+  tail.u8(0);
+  tail.u16(1);
+  fixture::name(tail, "Target");
+  tail.u8(1);
+  tail.u8(1);
+  tail.u32(0x801);
+  tail.u16(0xFFFF);
+  tail.u16(0);
+  tail.u16(1);
+  tail.u8(1);
+  tail.u32(2);
+  tail.u8(0);
+  fixture::name(tail, "PF_Test");
+  fixture::name(tail, "Phase_2");
+  auto data = fixture::payload(1);
+  data.insert(data.end(), tail.bytes.begin(), tail.bytes.end());
+  auto plugin = read_plugin(fixture::plugin_bytes(data, "SCEN"), "Vmad.esp");
+  const auto extras = read_scene_extras(plugin);
+  EXPECT_FALSE(extras.unsupported);
+  EXPECT_TRUE(extras.fully_consumed);
+  ASSERT_EQ(extras.phases.size(), 1u);
+  EXPECT_EQ(extras.phases[0].function, "Phase_2");
+}
+
+TEST(VmadFragments, ZeroPhaseSceneGainsItsFirstPhaseFragment) {
+  const std::vector<Entry> entries{{7, "Fragment_0"}, {8, "Fragment_1"}};
+  auto plugin = read_plugin(
+      fixture::plugin_bytes(vmad_bytes(scene_tail(0x03, entries, {})), "SCEN"), "Vmad.esp");
+  const auto empty = read_scene_extras(plugin);
+  EXPECT_TRUE(empty.fully_consumed);
+  EXPECT_TRUE(empty.phases.empty());
+
+  ASSERT_EQ(add_scene_vmad_phase_fragment(plugin, fixture::key(), 2, 1, "PF_Test", "Phase_2"),
+            VmadStructureMutationStatus::updated);
+  const auto added = saved_vmad(plugin);
+  EXPECT_TRUE(vmad_coverage(added, sig_scen).complete());
+  EXPECT_EQ(vmad_coverage(added, sig_scen).fragment_count, 3u);
+  EXPECT_EQ(added, vmad_bytes(scene_tail(0x03, entries, {{1, 2, 0, "Phase_2"}})));
+
+  ASSERT_EQ(remove_scene_vmad_phase_fragment(plugin, fixture::key(), 2, 1),
+            VmadStructureMutationStatus::updated);
+  EXPECT_EQ(saved_vmad(plugin), vmad_bytes(scene_tail(0x03, entries, {})));
+}
+
 TEST(VmadFragments, CreatedScenePhaseFragmentLandsInPhaseOrderAndRefusalsHold) {
   const std::vector<PhaseEntry> phases{{1, 2, 0xFF, "Phase_2"}, {2, 5, 0xFF, "Phase_5"}};
   auto plugin = read_plugin(

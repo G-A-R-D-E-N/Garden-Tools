@@ -34,8 +34,10 @@ class FakeRunner final : public fo4ide::process::Runner {
 public:
     fo4ide::process::Request last;
     fo4ide::process::Output output{true, false, 0, "native nif result", {}};
+    int calls = 0;
 
     fo4ide::Result<fo4ide::process::Output> run(const fo4ide::process::Request& request) override {
+        ++calls;
         last = request;
         return output;
     }
