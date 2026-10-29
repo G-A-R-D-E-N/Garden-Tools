@@ -14,7 +14,11 @@
 
 namespace {
 
+using swf_test::matrix_full;
+using swf_test::place_full;
+using swf_test::sprite_tag;
 using swf_test::SwfBuilder;
+using swf_test::TagPayload;
 using swf_test::wrap_body;
 
 const std::string kStage =
@@ -177,13 +181,28 @@ SwfBuilder drop_shadow_placement() {
   return place;
 }
 
-SwfBuilder blend_placement(std::uint8_t mode) {
+SwfBuilder blend_placement(std::uint8_t mode, std::uint16_t character = 1,
+                           std::uint16_t depth = 1) {
   SwfBuilder place;
   place.u8(0x02);
   place.u8(0x02);
-  place.u16(1);
-  place.u16(1);
+  place.u16(depth);
+  place.u16(character);
   place.u8(mode);
+  return place;
+}
+
+SwfBuilder blur_placement(std::uint16_t character) {
+  SwfBuilder place;
+  place.u8(0x02);
+  place.u8(0x01);
+  place.u16(1);
+  place.u16(character);
+  place.u8(1);
+  place.u8(1);
+  place.u32(0x00080000);
+  place.u32(0x00040000);
+  place.u8(0x08);
   return place;
 }
 
@@ -209,6 +228,32 @@ void placed_square_svg(std::uint16_t code, const SwfBuilder& place, std::string&
   const auto display = fo4::swf::build_display_list(result.file);
   ASSERT_EQ(display.status, fo4::swf::SwfTimelineStatus::ok);
   svg = fo4::swf::frame_to_svg(result.file, display, 0);
+}
+
+void sprite_movie_svg(const std::vector<TagPayload>& root_tags, std::string& svg) {
+  SwfBuilder file;
+  file.rect(0, 11000, 0, 8000, 15);
+  file.u16(0x0C00);
+  file.u16(1);
+  file.tag(2, square_shape(1, 1000, 0xFF0000u), false);
+  file.tag(2, square_shape(2, 600, 0x0000FFu), false);
+  for (const auto& [code, payload] : root_tags) {
+    file.tag(code, payload, false);
+  }
+  file.tag(1);
+  file.tag(0);
+  const auto result = fo4::swf::read_swf(wrap_body(file.body, 10, false, false));
+  ASSERT_TRUE(result.ok());
+  const auto display = fo4::swf::build_display_list(result.file);
+  ASSERT_EQ(display.status, fo4::swf::SwfTimelineStatus::ok);
+  svg = fo4::swf::frame_to_svg(result.file, display, 0);
+}
+
+std::vector<TagPayload> red_and_blue_children() {
+  const auto blue_at_20 = matrix_full(65536, 65536, 0, 0, 400, 0);
+  return {{fo4::swf::tag::kPlaceObject2, place_full(1, 1, {}, {})},
+          {fo4::swf::tag::kPlaceObject2, place_full(2, 2, blue_at_20, {})},
+          {fo4::swf::tag::kShowFrame, {}}};
 }
 
 }  // namespace
@@ -374,5 +419,73 @@ TEST(SwfFrameSvgFilters, PlacedBlendModeWrapsTheGroupInItsStyle) {
   EXPECT_EQ(svg,
             kStage + "<g style=\"mix-blend-mode:multiply\">\n"
                      "<g transform=\"matrix(1 0 0 1 0 0)\">\n" + kRedSquare + "</g>\n" +
+                "</g>\n</svg>\n");
+}
+
+TEST(SwfFrameSvgFilters, SpriteBlurWrapsBothFlattenedChildrenInOneFilteredGroup) {
+  // Invariant: a blur placed on a sprite wraps every flattened child in one filter group, where a dropped sprite row leaves the children unfiltered.
+  std::string svg;
+  sprite_movie_svg({{fo4::swf::tag::kDefineSprite, sprite_tag(3, 1, red_and_blue_children())},
+                    {fo4::swf::tag::kPlaceObject3, blur_placement(3).body}},
+                   svg);
+  EXPECT_EQ(svg,
+            kStage + "<defs>" + filter_open("r0fl0") +
+                "<feGaussianBlur in=\"SourceGraphic\" stdDeviation=\"4 2\"/></filter></defs>\n"
+                "<g filter=\"url(#r0fl0)\">\n"
+                "<g transform=\"matrix(1 0 0 1 0 0)\">\n" + kRedSquare + "</g>\n"
+                "<g transform=\"matrix(1 0 0 1 20 0)\">\n" + kBlueSquare + "</g>\n" +
+                "</g>\n</svg>\n");
+}
+
+TEST(SwfFrameSvgFilters, NestedSpriteInsideFilteredSpriteClosesEachGroupAtItsOwnEnd) {
+  // Invariant: an inner sprite's blend group closes at its own last child, before the outer sibling that follows it, and the outer filter closes after the last row, where a wrap closed at the wrong index moves the boundary.
+  std::string svg;
+  const auto blue_at_20 = matrix_full(65536, 65536, 0, 0, 400, 0);
+  const auto red_at_down_20 = matrix_full(65536, 65536, 0, 0, 0, 400);
+  const std::vector<TagPayload> inner = {
+      {fo4::swf::tag::kPlaceObject2, place_full(2, 2, blue_at_20, {})},
+      {fo4::swf::tag::kShowFrame, {}}};
+  const std::vector<TagPayload> outer = {
+      {fo4::swf::tag::kPlaceObject2, place_full(1, 1, {}, {})},
+      {fo4::swf::tag::kPlaceObject3, blend_placement(3, 4, 2).body},
+      {fo4::swf::tag::kPlaceObject2, place_full(3, 1, red_at_down_20, {})},
+      {fo4::swf::tag::kShowFrame, {}}};
+  sprite_movie_svg({{fo4::swf::tag::kDefineSprite, sprite_tag(3, 1, outer)},
+                    {fo4::swf::tag::kDefineSprite, sprite_tag(4, 1, inner)},
+                    {fo4::swf::tag::kPlaceObject3, blur_placement(3).body}},
+                   svg);
+  EXPECT_EQ(svg,
+            kStage + "<defs>" + filter_open("r0fl0") +
+                "<feGaussianBlur in=\"SourceGraphic\" stdDeviation=\"4 2\"/></filter></defs>\n"
+                "<g filter=\"url(#r0fl0)\">\n"
+                "<g transform=\"matrix(1 0 0 1 0 0)\">\n" + kRedSquare + "</g>\n"
+                "<g style=\"mix-blend-mode:multiply\">\n"
+                "<g transform=\"matrix(1 0 0 1 20 0)\">\n" + kBlueSquare + "</g>\n" + "</g>\n" +
+                "<g transform=\"matrix(1 0 0 1 0 20)\">\n" + kRedSquare + "</g>\n" +
+                "</g>\n</svg>\n");
+}
+
+TEST(SwfFrameSvgFilters, UnfilteredSpriteAddsNoWrapperAroundItsChildren) {
+  // Invariant: a sprite with no filter and no blend emits only its flattened children, where an extra wrapper would change every movie that places a plain sprite.
+  std::string svg;
+  sprite_movie_svg({{fo4::swf::tag::kDefineSprite, sprite_tag(3, 1, red_and_blue_children())},
+                    {fo4::swf::tag::kPlaceObject2, place_full(1, 3, {}, {})}},
+                   svg);
+  EXPECT_EQ(svg,
+            kStage + "<g transform=\"matrix(1 0 0 1 0 0)\">\n" + kRedSquare + "</g>\n" +
+                "<g transform=\"matrix(1 0 0 1 20 0)\">\n" + kBlueSquare + "</g>\n" +
+                "</svg>\n");
+}
+
+TEST(SwfFrameSvgFilters, BlendModeOnSpriteWrapsItsFlattenedChildrenInOneStyleGroup) {
+  // Invariant: a blend mode on a sprite reaches its flattened children through one style group, where the sprite row itself emits nothing and so would drop the blend.
+  std::string svg;
+  sprite_movie_svg({{fo4::swf::tag::kDefineSprite, sprite_tag(3, 1, red_and_blue_children())},
+                    {fo4::swf::tag::kPlaceObject3, blend_placement(3, 3).body}},
+                   svg);
+  EXPECT_EQ(svg,
+            kStage + "<g style=\"mix-blend-mode:multiply\">\n"
+                     "<g transform=\"matrix(1 0 0 1 0 0)\">\n" + kRedSquare + "</g>\n"
+                     "<g transform=\"matrix(1 0 0 1 20 0)\">\n" + kBlueSquare + "</g>\n" +
                 "</g>\n</svg>\n");
 }
