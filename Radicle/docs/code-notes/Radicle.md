@@ -8720,7 +8720,7 @@ Detects an encoder change that alters bytes of an unedited stream. It checks thr
 ## Radicle/include/fo4/swf/swf.hpp:SwfScalingGrid (DefineScalingGrid, tag 78)
 
 - `SwfScalingGrid` holds the CharacterId (UI16, little-endian, first in the payload) and the 9-slice splitter as a `SwfRect` in twips, stored in `SwfTag::scaling_grid`. The splitter is the RECT that follows the id, read by the same `read_rect` the edit-text and font decoders use.
-- Frame SVG rendering of the 9-slice is NOT implemented. `Radicle/src/swf/swf_frame_svg.cpp` never reads `SwfTag::scaling_grid`, so a shape or sprite that carries a grid still renders unsplit.
+- The frame SVG renderer reads the grid through `FrameLookup::grids`, filled from `SwfTag::scaling_grid` in `frame_to_svg`. `Radicle/src/swf/swf_frame_svg.cpp:nine_slice_cells` slices a placed shape or sprite against it when its placement scale is not identity.
 - No C API export, no `SwfSummary` counter and no C# change. The sibling typed tags `DefineExternalImage`, `FontTextureInfo` and `ExporterInfo` also have no export; adding one would bump `RADICLE_ABI_VERSION`.
 
 ## Radicle/src/swf/swf_tags.cpp:decode_tag_payload (kDefineScalingGrid case)
@@ -8754,6 +8754,11 @@ Detects an encoder change that alters bytes of an unedited stream. It checks thr
 - Eligible rows are a DefineShape with a grid and bounds, or a DefineSprite with a grid. Morph characters are not sliced. Rotation or skew, a non-positive scale, or a scale of exactly (1, 1) keep the plain path. A negative scale is a flip; it falls back to plain and does not slice. This is a known ceiling, not a checked Flash behaviour.
 - The grid comes from `FrameLookup::grids`, filled in `frame_to_svg` with `insert_or_assign`, so the last grid for an id wins as in `find_scaling_grid`.
 - The placed box for a shape is its frame-instance bounds. A sprite has no bounds in the file, so its box is the union of its visible descendant shape bounds in the current frame (`sprite_bounds`). Ceiling: Flash uses the symbol's bounds, so a sprite whose content changes between frames can get different corners here. Upgrade path: take the union over every frame of the sprite's timeline.
+- The placement scale comes from `row.world_transform`, the concatenated scale of every ancestor sprite. A grid child inside a scaled parent sprite is therefore sliced against the combined scale. Ceiling: this is unverified against Flash or Scaleform, which may slice against the child's own placement scale only. Upgrade path: confirm against a reference movie before relying on nested grids.
+
+## Radicle/src/swf/swf_frame_svg.cpp:sprite_content and sprite_bounds
+
+- Mask rows (`clip_depth` set) are skipped by both `sprite_content` and `sprite_bounds`, so a mask is neither painted nor counted in the sprite's box. `ScaledGridSpriteEmitsTheSameNineCellsAndSkipsItsChildren` detects a mask painted as a second `<path `, or a mask that widens the box and moves the clip rects.
 
 ## Radicle/src/swf/swf_frame_svg.cpp:nine_slice_group
 

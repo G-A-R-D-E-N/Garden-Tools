@@ -282,7 +282,7 @@ std::optional<SwfBounds> sprite_bounds(const SwfDisplayFrame& frame, std::size_t
   std::optional<SwfBounds> box;
   for (std::size_t child = index + 1; child < end; ++child) {
     const SwfFrameInstance& row = frame.instances[child];
-    if (!row.has_bounds || !row.world_visible) {
+    if (!row.has_bounds || !row.world_visible || row.clip_depth) {
       continue;
     }
     if (!box) {
@@ -327,7 +327,7 @@ std::string sprite_content(const FrameLookup& lookup, const SvgBitmaps& bitmaps,
   const std::size_t end = descendants_end(frame, index);
   for (std::size_t child = index + 1; child < end; ++child) {
     const SwfFrameInstance& row = frame.instances[child];
-    if (!row.world_visible) {
+    if (!row.world_visible || row.clip_depth) {
       continue;
     }
     std::optional<SwfShape> morph;

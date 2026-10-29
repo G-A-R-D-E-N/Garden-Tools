@@ -162,7 +162,11 @@ std::vector<std::byte> square_grid_movie(bool wrap_in_sprite, bool with_grid,
   const std::uint16_t character = wrap_in_sprite ? 2 : 1;
   std::vector<TagPayload> tags{{32, square_shape(1, 2000, 0xFF0000)}};
   if (wrap_in_sprite) {
-    tags.push_back({39, sprite_tag(2, 1, {{26, place_full(1, 1, {}, {})}, {1, {}}})});
+    tags.push_back({39, sprite_tag(2, 1,
+                                   {{26, place_full(1, 1, {}, {})},
+                                    {26, place_full(2, 1, matrix_full(65536, 65536, 0, 0, 20000, 0),
+                                                    {}, 3)},
+                                    {1, {}}})});
   }
   if (with_grid) {
     tags.push_back({78, nine_slice_grid(character)});
