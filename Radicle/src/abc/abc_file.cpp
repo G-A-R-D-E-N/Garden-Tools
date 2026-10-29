@@ -417,7 +417,7 @@ AbcStatus check_pool_indices(const AbcFile& file) {
     }
   }
   for (const AbcMethodInfo& method : file.methods) {
-    if (optional_past_end(method.name, strings) || past_end(method.return_type, multinames)) {
+    if (optional_past_end(method.name, strings) || optional_past_end(method.return_type, multinames)) {
       return AbcStatus::IndexOutOfRange;
     }
     for (const std::uint32_t param : method.param_types) {

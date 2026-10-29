@@ -33,10 +33,10 @@ public static class NativeAnimation
             $"{From} written out as {Frames} frame(s) of {Tracks} track(s), {Grew} bytes larger";
     }
 
-    public static Result Interleave(string hkxPath, HkxAnimationData decoded) =>
-        Interleave(InputFilePolicy.ReadHkx(hkxPath), decoded);
+    public static Result Interleave(string hkxPath, HkxAnimationData decoded, Timeline? cut = null) =>
+        Interleave(InputFilePolicy.ReadHkx(hkxPath), decoded, cut);
 
-    public static Result Interleave(byte[] hkx, HkxAnimationData decoded)
+    public static Result Interleave(byte[] hkx, HkxAnimationData decoded, Timeline? cut = null)
     {
         ArgumentNullException.ThrowIfNull(hkx);
         ArgumentNullException.ThrowIfNull(decoded);
@@ -78,11 +78,14 @@ public static class NativeAnimation
                     $"A track decoded to a different number of frames than the {frames} this " +
                     "animation declares, so it was not written out.");
 
-        float duration = BitConverter.ToSingle(data.Data, at + Duration);
+        float duration = cut?.Duration ?? BitConverter.ToSingle(data.Data, at + Duration);
         var annotations = objects.ArrayAt(at + AnnotationTracks);
         int self = image.Sections.IndexOf(data);
         var motion = data.Globals().FirstOrDefault(g => g.Source == at + ExtractedMotion);
         bool hasMotion = data.Globals().Any(g => g.Source == at + ExtractedMotion);
+        bool replacingMotion = cut?.Motion is { Any: true } && hasMotion &&
+                               motion.Section == self &&
+                               objects.Instances.Any(i => i.Offset == motion.Destination);
 
         var added = NativeAppend.Object(image, InterleavedClass);
 
@@ -99,7 +102,13 @@ public static class NativeAnimation
             int copied = CopyStructRun(image, data, annotations.At, annotations.Count, "hkaAnnotationTrack");
             data.SetLocal(made + AnnotationTracks, copied);
             Array.Copy(data.Data, at + AnnotationTracks + 8, data.Data, made + AnnotationTracks + 8, 8);
+
+            if (cut != null && copied >= 0)
+                RebaseAnnotations(data, copied, annotations.Count, cut);
         }
+
+        if (replacingMotion)
+            RewriteReferenceFrame(data, motion.Destination, cut!.Motion!);
 
         if (hasMotion) data.SetGlobal(made + ExtractedMotion, motion.Section, motion.Destination);
 
@@ -155,13 +164,37 @@ public static class NativeAnimation
     private const int MotionSize = 96;
 
     public sealed record Timeline(float Duration, float FromTime, float ToTime, float Scale,
-                                  RootMotion.Motion? Motion)
+                                  RootMotion.Motion? Motion, float Slack)
     {
+        public static Timeline Identity(HkxAnimationData animation) =>
+            new(animation.Duration, 0f, animation.Duration, 1f, null, SlackFor(animation, 1f));
+
         public static Timeline Of(AnimationEdit.Trimmed trimmed) =>
-            new(trimmed.Animation.Duration, trimmed.FromTime, trimmed.ToTime, 1f, trimmed.Motion);
+            new(trimmed.Animation.Duration, trimmed.FromTime, trimmed.ToTime, 1f, trimmed.Motion,
+                SlackFor(trimmed.Animation, 1f));
 
         public static Timeline Of(AnimationEdit.Retimed retimed, float was) =>
-            new(retimed.Animation.Duration, 0f, was, retimed.Scale, retimed.Motion);
+            new(retimed.Animation.Duration, 0f, was, retimed.Scale, retimed.Motion,
+                SlackFor(retimed.Animation, retimed.Scale));
+
+        public Timeline Then(AnimationEdit.Trimmed cut) =>
+            Recomposed(cut.Animation.Duration, FromTime + cut.FromTime / Scale,
+                       FromTime + cut.ToTime / Scale, Scale, cut.Motion, cut.Animation);
+
+        public Timeline Then(AnimationEdit.Retimed made) =>
+            Recomposed(made.Animation.Duration, FromTime, ToTime, Scale * made.Scale, made.Motion,
+                       made.Animation);
+
+        public Timeline Then(AnimationEdit.Looped looped) =>
+            Recomposed(looped.Animation.Duration, FromTime, ToTime, Scale, looped.Motion,
+                       looped.Animation);
+
+        private static float SlackFor(HkxAnimationData animation, float scale) =>
+            scale > 0 ? AnimationEdit.FrameDuration(animation) / (2 * scale) : 0f;
+
+        private Timeline Recomposed(float duration, float from, float to, float scale,
+                                    RootMotion.Motion? motion, HkxAnimationData animation) =>
+            new(duration, from, to, scale, motion, SlackFor(animation, scale));
 
         public override string ToString() =>
             $"{FromTime:F3}s to {ToTime:F3}s at {Scale:F3} times, as a {Duration:F3}s clip, " +
@@ -232,7 +265,7 @@ public static class NativeAnimation
 
         int replacedId = objects.IndexOf(source) + NativeGraphModel.FirstId;
 
-        bool replacingMotion = cut?.Motion is not null && hasMotion &&
+        bool replacingMotion = cut?.Motion is { Any: true } && hasMotion &&
                                motion.Section == self &&
                                objects.Instances.Any(i => i.Offset == motion.Destination);
         int replacedMotionId = replacingMotion
@@ -355,7 +388,7 @@ public static class NativeAnimation
             for (int n = 0; n < held; n++)
             {
                 float when = BitConverter.ToSingle(data.Data, notes + n * noteStride);
-                if (when < cut.FromTime - Slack || when > cut.ToTime + Slack) continue;
+                if (when < cut.FromTime - cut.Slack || when > cut.ToTime + cut.Slack) continue;
                 kept.Add((Math.Clamp((when - cut.FromTime) * cut.Scale, 0, cut.Duration),
                           Destination(notes + n * noteStride + 8)));
             }
@@ -382,8 +415,6 @@ public static class NativeAnimation
         data.SetLocals(locals.Where(l => l.Source >= 0));
     }
 
-    private const float Slack = 1f / 60f;
-
     private static int WriteReferenceFrame(PackfileImage image, PackfileSection data, int from,
                                            RootMotion.Motion motion)
     {
@@ -394,30 +425,37 @@ public static class NativeAnimation
 
         BitConverter.GetBytes(0).CopyTo(data.Data, made + MotionSamples + 8);
         BitConverter.GetBytes(0x80000000u).CopyTo(data.Data, made + MotionSamples + 12);
+        RewriteReferenceFrame(data, made, motion);
+        return made;
+    }
 
-        BitConverter.GetBytes(motion.Duration).CopyTo(data.Data, made + MotionDuration);
+    private static void RewriteReferenceFrame(PackfileSection data, int at, RootMotion.Motion motion)
+    {
+        BitConverter.GetBytes(motion.Duration).CopyTo(data.Data, at + MotionDuration);
 
-        if (motion.Samples.Count > 0)
+        if (motion.Samples.Count == 0)
         {
-            data.AlignData(NativeAppend.Alignment);
-            var run = new byte[motion.Samples.Count * 16];
-
-            for (int i = 0; i < motion.Samples.Count; i++)
-            {
-                var sample = motion.Samples[i];
-                Write(run, i * 16, sample.Position);
-
-                BitConverter.GetBytes(sample.TurnRadians).CopyTo(run, i * 16 + 12);
-            }
-
-            int landed = data.AppendData(run);
-            data.SetLocal(made + MotionSamples, landed);
-            BitConverter.GetBytes(motion.Samples.Count).CopyTo(data.Data, made + MotionSamples + 8);
-            BitConverter.GetBytes(0x80000000u | (uint)motion.Samples.Count)
-                        .CopyTo(data.Data, made + MotionSamples + 12);
+            BitConverter.GetBytes(0).CopyTo(data.Data, at + MotionSamples + 8);
+            BitConverter.GetBytes(0x80000000u).CopyTo(data.Data, at + MotionSamples + 12);
+            return;
         }
 
-        return made;
+        data.AlignData(NativeAppend.Alignment);
+        var run = new byte[motion.Samples.Count * 16];
+
+        for (int i = 0; i < motion.Samples.Count; i++)
+        {
+            var sample = motion.Samples[i];
+            Write(run, i * 16, sample.Position);
+
+            BitConverter.GetBytes(sample.TurnRadians).CopyTo(run, i * 16 + 12);
+        }
+
+        int landed = data.AppendData(run);
+        data.SetLocal(at + MotionSamples, landed);
+        BitConverter.GetBytes(motion.Samples.Count).CopyTo(data.Data, at + MotionSamples + 8);
+        BitConverter.GetBytes(0x80000000u | (uint)motion.Samples.Count)
+                    .CopyTo(data.Data, at + MotionSamples + 12);
     }
 
     private static void WriteUintArray(PackfileSection data, int field, int[] values)

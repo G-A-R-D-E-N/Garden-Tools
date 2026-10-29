@@ -100,6 +100,11 @@ nlohmann::json serviceText(Result<std::string> result) {
     return std::move(*result);
 }
 
+nlohmann::json serviceJsonText(Result<std::string> result) {
+    if (!result) return nlohmann::json{{"error", result.error().message}}.dump();
+    return std::move(*result);
+}
+
 }
 
 SettingsTarget::SettingsTarget(settings::Store& store,
@@ -230,9 +235,9 @@ Result<nlohmann::json> NifTarget::invoke(std::string_view method,
         return pathResult(platform_.pickSavePath({stringArgument(args, 0), filter, {}}));
     }
     if (method == "Inspect") return serviceText(service_.inspect(stringArgument(args, 0)));
-    if (method == "Geo") return serviceText(service_.geometry(stringArgument(args, 0)));
+    if (method == "Geo") return serviceJsonText(service_.geometry(stringArgument(args, 0)));
     if (method == "Verify") return serviceText(service_.verify(stringArgument(args, 0)));
-    if (method == "Tree") return serviceText(service_.tree(stringArgument(args, 0)));
+    if (method == "Tree") return serviceJsonText(service_.tree(stringArgument(args, 0)));
     if (method == "Fix") {
         return serviceText(service_.fix(stringArgument(args, 0), stringArgument(args, 1)));
     }
@@ -340,9 +345,6 @@ Result<nlohmann::json> CellTarget::invoke(std::string_view method,
     return records_.invoke(method, args);
 }
 
-// Faithful port of C# NifService.GeoBatch: case-insensitive dedupe, bounded
-// parallelism (min(cores, 8)), each mesh resolved then run through `niftool
-// geo`, its JSON object embedded as-is or replaced with an { error } entry.
 std::string CellTarget::geometryBatch(const std::vector<std::string>& relModelPaths) {
     std::vector<std::string> unique;
     std::vector<std::pair<std::string, std::size_t>> requested;

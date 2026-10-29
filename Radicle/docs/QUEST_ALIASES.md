@@ -179,8 +179,10 @@ Type variants, a kept `CIS1` would rebind its string to the next `CTDA`, and a
 kept `COED` would rebind its owner and rank to the next `CNTO`. The Fill Type
 union is checked against the new kind as well as the existing one, so a kind
 change from a location alias carrying `ALCC` to a reference creation that
-writes a fill drops the `ALCC` instead of leaving two Fill Type variants
-behind.
+writes a fill drops the `ALCC` instead of keeping it beside the fill. Kept
+beside it, the decoder would refuse the alias: a Find Matching Reference fill
+built from `ALNA`/`ALNT` or `ALFE`/`ALFD` reports mixed Match Type selectors,
+and any other fill reports multiple Fill Type variants.
 
 A kind change that writes no fill refuses the preserved Fill Type members
 instead of carrying them over. `ALFA`, `ALEQ`, `ALEA`, `ALFE`, `ALFD` and the

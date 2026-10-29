@@ -272,8 +272,11 @@ void check_conditions(const Plugin& plugin, FindingSink& sink) {
       if (sub.data.size() < k_ctda_run_on + 4) continue;
       const auto run_on = read_payload<std::uint32_t>(sub, k_ctda_run_on);
       if (schema::condition_run_on(run_on) == nullptr) {
+        const auto run_ons = schema::condition_run_ons();
         add(*record, k_ctda_run_on,
-            "CTDA Run On " + std::to_string(run_on) + " is not a known Run On value");
+            "CTDA Run On " + std::to_string(run_on) + " is not a known Run On value (" +
+                std::to_string(run_ons.front().value) + "-" + std::to_string(run_ons.back().value) +
+                ")");
       }
     }
   }

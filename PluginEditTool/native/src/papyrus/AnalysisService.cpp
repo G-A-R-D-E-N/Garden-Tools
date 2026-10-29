@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <cstdlib>
 #include <cstdint>
 #include <fstream>
 #include <optional>
@@ -110,13 +109,6 @@ void writeBytes(const std::filesystem::path& path, const std::vector<std::uint8_
               static_cast<std::streamsize>(bytes.size()));
 }
 
-bool hasError(const std::vector<Diagnostic>& diagnostics) {
-    for (const auto& d : diagnostics) {
-        if (d.severity == Severity::Error) return true;
-    }
-    return false;
-}
-
 std::string padRight(std::string text, int width) {
     if (static_cast<int>(text.size()) < width) text.append(width - text.size(), ' ');
     return text;
@@ -176,77 +168,6 @@ void resolveSources(const std::string& source, std::vector<std::filesystem::path
 
 }  // namespace
 
-// Port of PapyrusCompiler.Compile: declaration check -> resolve -> type check
-// -> generate over an already-parsed script, with the Creation Kit fidelity
-// pass applied to the emitted PEX.
-PapyrusCompileResult compileScript(ScriptIndex& index, const Script* script,
-                                   const std::string& sourceFileName,
-                                   const PapyrusCompileOptions& options) {
-    std::vector<Diagnostic> diagnostics = script->diagnostics;
-    if (script->hasErrors()) {
-        PapyrusCompileResult result;
-        result.script = script;
-        result.diagnostics = std::move(diagnostics);
-        result.sourcesComplete = false;
-        return result;
-    }
-
-    const auto declarationProblems = declarationCheck(*script);
-    diagnostics.insert(diagnostics.end(), declarationProblems.begin(), declarationProblems.end());
-    if (hasError(diagnostics)) {
-        PapyrusCompileResult result;
-        result.script = script;
-        result.diagnostics = std::move(diagnostics);
-        result.sourcesComplete = false;
-        return result;
-    }
-
-    const auto resolution = Resolver(index).resolve(script);
-    diagnostics.insert(diagnostics.end(), resolution.diagnostics.begin(),
-                       resolution.diagnostics.end());
-
-    TypeChecker checker(index);
-    const auto checked = checker.check(resolution);
-    diagnostics.insert(diagnostics.end(), checked.begin(), checked.end());
-
-    if (hasError(diagnostics)) {
-        PapyrusCompileResult result;
-        result.script = script;
-        result.diagnostics = std::move(diagnostics);
-        result.sourcesComplete = resolution.baseChainComplete;
-        return result;
-    }
-
-    const auto flagFile =
-        options.flagFile ? *options.flagFile : UserFlagTable::findFlagFile(index.roots());
-    std::optional<UserFlagTable> ownedTable;
-    CodeGenOptions codegenOptions;
-    codegenOptions.sourceFileName = sourceFileName;
-    codegenOptions.userName = options.userName;
-    codegenOptions.computerName = options.computerName;
-    codegenOptions.compilationTime = options.compilationTime;
-    codegenOptions.emitDebugInfo = options.emitDebugInfo;
-    codegenOptions.emitDebugOnlyCode = options.emitDebugOnlyCode;
-    codegenOptions.emitBetaOnlyCode = options.emitBetaOnlyCode;
-    if (flagFile) {
-        ownedTable = UserFlagTable::fromFileOrDefault(*flagFile);
-        codegenOptions.userFlags = &*ownedTable;
-    }
-
-    std::vector<Diagnostic> codegenDiagnostics;
-    CodeGenerator generator(index);
-    auto* pex = generator.generate(*script, resolution, codegenOptions, codegenDiagnostics);
-    if (pex) CreationKitFidelity::normalize(*pex, index);
-    diagnostics.insert(diagnostics.end(), codegenDiagnostics.begin(), codegenDiagnostics.end());
-
-    PapyrusCompileResult result;
-    result.script = script;
-    result.pex.reset(pex);
-    result.diagnostics = std::move(diagnostics);
-    result.sourcesComplete = resolution.baseChainComplete;
-    return result;
-}
-
 // Port of PapyrusCompiler.CompileFile: parse -> compileScript, with import
 // roots registered first.
 CompileResult compileFile(ScriptIndex& index, const std::filesystem::path& path,
@@ -265,29 +186,6 @@ CompileResult compileFile(ScriptIndex& index, const std::filesystem::path& path,
     }
 
     return compileScript(index, script, fullPath(path), options);
-}
-
-std::vector<std::filesystem::path> papyrusBaseImports() {
-    // The C# also probes app-relative tools/papyrus folders, the Fallout 4
-    // install and hard-coded E:\ paths; those are machine conveniences and
-    // are not replicated. The environment variable is the portable core.
-    std::vector<std::filesystem::path> roots;
-    if (const char* env = std::getenv("PAPYRUS_BASE_IMPORTS")) {
-        std::error_code error;
-        for (const auto& part : splitSemicolons(env)) {
-            const auto cleaned = stripQuotes(part);
-            if (cleaned.empty() || !std::filesystem::is_directory(cleaned, error)) continue;
-            bool seen = false;
-            for (const auto& existing : roots) {
-                if (iequals(existing.string(), cleaned)) {
-                    seen = true;
-                    break;
-                }
-            }
-            if (!seen) roots.emplace_back(cleaned);
-        }
-    }
-    return roots;
 }
 
 std::vector<std::filesystem::path> enumeratePapyrusFiles(const std::filesystem::path& root) {
@@ -313,7 +211,8 @@ int AnalysisService::offsetOf(std::string_view text, int line, int column) {
 }
 
 std::string AnalysisService::check(const std::string& source, bool all, bool semantic,
-                                   const std::string* imports) {
+                                   const std::string* imports,
+                                   const std::vector<std::filesystem::path>& baseImports) {
     (void)all;  // accepted for API parity; unused in the C# oracle too.
     if (isWhitespace(source)) return "No source given.";
 
@@ -338,7 +237,7 @@ std::string AnalysisService::check(const std::string& source, bool all, bool sem
                 if (!cleaned.empty()) index->addRoot(cleaned);
             }
         }
-        for (const auto& root : papyrusBaseImports()) index->addRoot(root);
+        for (const auto& root : baseImports) index->addRoot(root);
         resolver.emplace(*index);
         checker.emplace(*index);
     }
@@ -482,7 +381,8 @@ std::string AnalysisService::outline(const std::string& source) {
 }
 
 std::string AnalysisService::definition(const std::string& source, int line, int column,
-                                        const std::string* imports) {
+                                        const std::string* imports,
+                                        const std::vector<std::filesystem::path>& baseImports) {
     if (isWhitespace(source)) return "No source given.";
     if (!std::filesystem::exists(source)) return "Not found: '" + source + "'.";
 
@@ -499,7 +399,7 @@ std::string AnalysisService::definition(const std::string& source, int line, int
                ") is outside '" + std::filesystem::path(source).filename().string() + "'.";
     }
 
-    auto index = buildIndex(source, imports);
+    auto index = buildIndex(source, imports, baseImports);
     const Script* script = index.parseCached(source);
     std::optional<Script> parsedLocal;
     if (!script) {
@@ -583,7 +483,8 @@ std::string AnalysisService::analyzeJson(const std::string& text, const std::str
 }
 
 std::string AnalysisService::symbolAtJson(const std::string& text, const std::string* filePath,
-                                          int offset, const std::string* imports) {
+                                          int offset, const std::string* imports,
+                                          const std::vector<std::filesystem::path>& baseImports) {
     Script script;
     try {
         script = Parser::parse(text,
@@ -592,8 +493,9 @@ std::string AnalysisService::symbolAtJson(const std::string& text, const std::st
         return nlohmann::json{{"error", ex.what()}}.dump();
     }
 
-    auto index = filePath && !isWhitespace(*filePath) ? buildIndex(*filePath, imports)
-                                                      : ScriptIndex();
+    auto index = filePath && !isWhitespace(*filePath)
+                     ? buildIndex(*filePath, imports, baseImports)
+                     : ScriptIndex();
 
     const auto symbol = Symbols::findDefinition(index, script, offset);
     if (!symbol) return nlohmann::json{{"resolved", false}}.dump();
@@ -623,7 +525,8 @@ std::string AnalysisService::symbolAtJson(const std::string& text, const std::st
     return payload.dump();
 }
 
-ScriptIndex AnalysisService::buildIndex(const std::string& sourceFile, const std::string* imports) {
+ScriptIndex AnalysisService::buildIndex(const std::string& sourceFile, const std::string* imports,
+                                        const std::vector<std::filesystem::path>& baseImports) {
     ScriptIndex index;
     const auto folder = std::filesystem::path(fullPath(sourceFile)).parent_path();
     if (!folder.empty()) index.addRoot(folder);
@@ -633,7 +536,7 @@ ScriptIndex AnalysisService::buildIndex(const std::string& sourceFile, const std
             if (!cleaned.empty()) index.addRoot(cleaned);
         }
     }
-    for (const auto& root : papyrusBaseImports()) index.addRoot(root);
+    for (const auto& root : baseImports) index.addRoot(root);
     return index;
 }
 
@@ -660,7 +563,8 @@ std::vector<std::filesystem::path> AnalysisService::naturalRootsFor(
 
 std::string AnalysisService::compile(const std::string& source, const std::string* output,
                                      const std::string* imports, bool release, bool debugInfo,
-                                     const std::string* flagFile) {
+                                     const std::string* flagFile,
+                                     const std::vector<std::filesystem::path>& baseImports) {
     if (isWhitespace(source)) return "No source given.";
 
     auto trimmed = stripQuotes(source);
@@ -694,7 +598,7 @@ std::string AnalysisService::compile(const std::string& source, const std::strin
         }
     }
     int baseRoots = 0;
-    for (const auto& root : papyrusBaseImports()) {
+    for (const auto& root : baseImports) {
         index.addRoot(root);
         ++baseRoots;
     }

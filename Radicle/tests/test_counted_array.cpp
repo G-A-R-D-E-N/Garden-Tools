@@ -1,5 +1,6 @@
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "fo4/plugin/subrecord_authoring.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/field_address.hpp"
 #include "fo4/schema/scalar.hpp"
@@ -202,6 +203,14 @@ TEST(CountedArray, CountSubrecordCannotBeWrittenAsAPlainScalar) {
   const auto count = fo4::schema::scalar_field_descriptor("REFR\\WaterCurrentVelocityCount").value();
   EXPECT_THROW(fo4::set_record_scalar(plugin, record_key(), count, "5"), fo4::schema::ScalarError);
   EXPECT_EQ(fo4::test::original_bytes(plugin), original);
+}
+
+TEST(CountedArray, CountSubrecordCannotBeRemovedAloneFromItsArray) {
+  auto plugin = fo4::read_plugin(make_plugin(3, 48), "Patch.esp");
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_EQ(fo4::remove_record_subrecord(plugin, record_key(), k_xwcn, 0),
+            fo4::SubrecordRemoveStatus::not_authorable);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
 }
 
 TEST(CountedArray, MissingCountOrPayloadSubrecordIsRefusedWithoutMutation) {

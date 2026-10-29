@@ -137,6 +137,19 @@ inline std::optional<std::string> optionalEditorIdField(const nlohmann::json& ob
     return editorId;
 }
 
+// Constraint: these records create from generated defaults alone; payload adds only the editor ID.
+inline bool generatedLayoutCreationSupported(std::string_view signature) {
+    return signature == "QUST" || signature == "GLOB" || signature == "SPEL" ||
+           signature == "MGEF" || signature == "FLST" || signature == "MESG";
+}
+
+// Constraint: `editorId` is the payload key for every typed creator; `editor_id` is an accepted alias.
+inline const nlohmann::json* editorIdPayloadField(const nlohmann::json& payload) {
+    auto found = payload.find("editorId");
+    if (found == payload.end()) found = payload.find("editor_id");
+    return found == payload.end() ? nullptr : &*found;
+}
+
 inline std::optional<Error> parseFormKeyField(const nlohmann::json& object,
                                               const char* key,
                                               fo4::FormKey& value) {

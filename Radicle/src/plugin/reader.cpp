@@ -1,6 +1,7 @@
 #include "fo4/plugin/reader.hpp"
 
 #include "fo4/binary/cursor.hpp"
+#include "fo4/binary/zlib_bound.hpp"
 #include "fo4/io/path_text.hpp"
 #include "fo4/plugin/visit.hpp"
 
@@ -16,8 +17,6 @@
 namespace fo4 {
 namespace {
 
-constexpr std::uint64_t k_zlib_max_expansion = 1032;
-constexpr std::uint64_t k_inflate_slack_bytes = 64;
 constexpr std::uint64_t k_max_record_uncompressed_bytes = std::uint64_t{1} << 30;
 constexpr std::size_t k_max_group_depth = 16;
 
@@ -27,8 +26,8 @@ std::vector<std::byte> inflate_record_payload(std::span<const std::byte> compres
   if (uncompressed_size == 0) {
     return {};
   }
-  if (uncompressed_size > static_cast<std::uint64_t>(compressed.size()) * k_zlib_max_expansion +
-                              k_inflate_slack_bytes) {
+  if (uncompressed_size > static_cast<std::uint64_t>(compressed.size()) * binary::k_zlib_max_expansion +
+                              binary::k_zlib_slack_bytes) {
     throw parse_error(offset, "compressed record uncompressed size exceeds zlib expansion bound");
   }
   if (uncompressed_size > k_max_record_uncompressed_bytes) {

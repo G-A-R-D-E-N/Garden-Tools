@@ -1,3 +1,4 @@
+#include "RadiclePluginSupport.hpp"
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
 #include <algorithm>
@@ -13,11 +14,6 @@
 
 namespace fo4ide::plugin {
 namespace {
-
-std::string stringArgument(const nlohmann::json& args, std::size_t index) {
-    if (!args.is_array() || index >= args.size() || !args[index].is_string()) return {};
-    return args[index].get<std::string>();
-}
 
 std::string trim(std::string value) {
     while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front()))) {
@@ -46,8 +42,8 @@ std::vector<std::string> splitCsv(std::string_view csv) {
 }
 
 Result<nlohmann::json> RadiclePluginBackend::addMasters(const nlohmann::json& arguments) {
-    const auto pluginName = stringArgument(arguments, 0);
-    const auto csv = stringArgument(arguments, 1);
+    const auto pluginName = support::stringArgument(arguments, 0);
+    const auto csv = support::stringArgument(arguments, 1);
     if (pluginName.empty()) {
         return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
     }
