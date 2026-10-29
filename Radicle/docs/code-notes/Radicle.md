@@ -8956,6 +8956,7 @@ Detects a replace that accepts an unknown id, or one that overwrites a shape or 
 ## Radicle/tests/test_swf_edit.cpp:RefusesZeroOrOversizedDimensionsAndAPixelBufferOfTheWrongSize
 
 Detects a zero width or height that reaches zlib, an oversized geometry that allocates past the cap, or a buffer that is short or long for the declared size. Zero width and zero height, and 4097 by 4096 with an empty buffer, return `bad_dimensions`. A 15-byte or 17-byte buffer for 2 by 2 returns `pixel_size_mismatch`. The file bytes are unchanged.
+
 ## Radicle/include/fo4/avm2/object.hpp:kMaxSlotIndex
 
 - The cap on every slot index that can grow an `Object` slot vector: the `setslot` and `setglobalslot` operands, and ABC slot and const trait ids (checked at link time, see `Radicle/src/avm2/runtime.cpp:Runtime::build_traits`). The largest accepted index is 65535, so a slot vector holds at most 65536 entries.
