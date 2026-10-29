@@ -517,6 +517,42 @@ RADICLE_API radicle_status radicle_swf_font_replace_glyph(radicle_swf* swf, size
                                                           const radicle_swf_shape_record* records,
                                                           size_t record_count,
                                                           radicle_swf_plan_result* out_result);
+typedef struct radicle_swf_sound {
+  uint16_t sound_id;
+  uint8_t format;
+  uint8_t rate;
+  uint8_t sample_16bit;
+  uint8_t stereo;
+  uint32_t sample_count;
+  size_t data_size;
+} radicle_swf_sound;
+typedef struct radicle_swf_start_sound {
+  uint16_t sound_id;
+  uint8_t sync_stop;
+  uint8_t sync_no_multiple;
+  uint8_t has_in_point;
+  uint32_t in_point;
+  uint8_t has_out_point;
+  uint32_t out_point;
+  uint8_t has_loop_count;
+  uint16_t loop_count;
+  size_t envelope_count;
+} radicle_swf_start_sound;
+/* The tag index must be one radicle_swf_tag_at accepts and name a decoded DefineSound. */
+RADICLE_API radicle_status radicle_swf_sound_at(const radicle_swf* swf, size_t index,
+                                                radicle_swf_sound* out_sound);
+/* The tag index must be one radicle_swf_tag_at accepts and name a decoded StartSound; a StartSound2 is refused. */
+RADICLE_API radicle_status radicle_swf_start_sound_at(const radicle_swf* swf, size_t index,
+                                                      radicle_swf_start_sound* out_start);
+/* Requires header to name a DefineSound; the revision advances only when the bytes changed. */
+RADICLE_API radicle_status radicle_swf_replace_sound_data(radicle_swf* swf,
+                                                          const radicle_swf_sound* header,
+                                                          const uint8_t* data, size_t size,
+                                                          radicle_swf_plan_result* out_result);
+/* Requires index to name a StartSound and new_sound_id to name a DefineSound; the revision advances only when the id changed. */
+RADICLE_API radicle_status radicle_swf_retarget_start_sound(radicle_swf* swf, size_t index,
+                                                            uint16_t new_sound_id,
+                                                            radicle_swf_plan_result* out_result);
 /* The revision must start at 0, advance only for a plan that changed the movie, and never move for a refusal. */
 RADICLE_API uint64_t radicle_swf_revision(const radicle_swf* swf);
 /* Returns malloc'd bytes the caller must release with radicle_free_bytes; an unedited handle must
