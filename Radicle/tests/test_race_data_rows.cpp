@@ -342,6 +342,8 @@ TEST(RaceDataRows, SpellCountRowReadsAndWritesTheSpctSubrecord) {
   EXPECT_FALSE(count.scalar.embedded);
   EXPECT_EQ(count.scalar.offset, 0u);
   EXPECT_EQ(count.scalar.storage, fo4::schema::ScalarStorage::u32);
+  // Invariant: a whole-payload integer scalar leaves payload_size 0; its width is the storage width.
+  EXPECT_EQ(count.scalar.payload_size, 0u);
   EXPECT_EQ(count.scalar.min_form_version, 0);
 
   auto plugin = fo4::read_plugin(race_plugin(131, race_data(200), u32_bytes(2)), "Legacy.esp");

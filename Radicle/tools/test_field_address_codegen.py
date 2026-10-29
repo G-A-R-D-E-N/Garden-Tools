@@ -433,7 +433,9 @@ class SchemaCodegenTests(unittest.TestCase):
             self.link(link(offset=6, stride=8))
         with self.assertRaisesRegex(ValueError, "when.equals"):
             self.link(link(when={"offset": 0, "storage": "u8", "equals": []}))
-        rendered = formlink_schema_codegen.render(*self.link(link(stride=8, array_offset=4)))
+        rendered, shards = formlink_schema_codegen.render(
+            *self.link(link(stride=8, array_offset=4)))
+        self.assertEqual(shards, {})
         self.assertIn("FieldAddress{false, 8, 4, FieldDiscriminator{}}", rendered)
         self.assertEqual(rows, [])
 
@@ -442,7 +444,9 @@ class SchemaCodegenTests(unittest.TestCase):
             self.link(link(), link(path="TEST" + BS + "OtherLink", offset=2))
 
     def test_formlink_payload_sizes(self):
-        rendered = formlink_schema_codegen.render(*self.link(link(payload_sizes=[16, 32], stride=4)))
+        rendered, shards = formlink_schema_codegen.render(
+            *self.link(link(payload_sizes=[16, 32], stride=4)))
+        self.assertEqual(shards, {})
         self.assertIn("{{16, 32}}", rendered)
         for sizes in ([], [4, 8, 12], [True], [0], [3], [0x100000000], [4, 4], "4"):
             with self.subTest(sizes=sizes), self.assertRaisesRegex(ValueError, "payload_sizes"):

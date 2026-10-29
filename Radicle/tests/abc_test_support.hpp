@@ -374,10 +374,10 @@ inline void put_instance_traits(std::vector<std::uint8_t>& out,
 
 inline void put_body(std::vector<std::uint8_t>& out, std::uint32_t method,
               const std::vector<std::uint8_t>& code, bool with_exception,
-              AbcBadIndex bad = AbcBadIndex::None) {
+              AbcBadIndex bad = AbcBadIndex::None, std::uint32_t local_count = 1) {
   put_u30(out, method);
   put_u30(out, 4);
-  put_u30(out, 1);
+  put_u30(out, local_count);
   put_u30(out, 0);
   put_u30(out, 1);
   put_u30(out, static_cast<std::uint32_t>(code.size()));
@@ -388,7 +388,7 @@ inline void put_body(std::vector<std::uint8_t>& out, std::uint32_t method,
     put_u30(out, static_cast<std::uint32_t>(code.size()));
     put_u30(out, 0);
     put_u30(out, bad_or(bad, AbcBadIndex::ExceptionType, kMultinameTest));
-    put_u30(out, bad_or(bad, AbcBadIndex::ExceptionVarName, kStringHelper));
+    put_u30(out, bad_or(bad, AbcBadIndex::ExceptionVarName, kMultinameHelper));
   }
   put_u30(out, 0);
 }
@@ -437,7 +437,8 @@ inline std::vector<std::uint8_t> build_abc(const std::vector<std::uint8_t>& cons
   }
   put_u30(out, 3);
   put_body(out, bad_or(bad, AbcBadIndex::BodyMethod, 0), constructor_code, false, bad);
-  put_body(out, 1, listener_code, false, bad);
+  // Constraint: the listener method takes a parameter, so its body needs two locals.
+  put_body(out, 1, listener_code, false, bad, 2);
   put_body(out, 2, tiny_helper_code(), true, bad);
   return out;
 }

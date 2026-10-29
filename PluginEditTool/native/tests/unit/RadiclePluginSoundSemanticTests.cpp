@@ -134,7 +134,8 @@ TEST_CASE("Sound semantic grids list a wrong-size descriptor link and miscounted
     payload(entries, sound::k_set, "XCNT") = sound::words({0, 0, 0, 0, 0});
     Fixture fixture{entries};
     for (const auto& [signature, id, field] : {std::tuple{"SOUN", sound::k_marker, "SOUN\\SoundDescriptor"},
-            std::tuple{"FSTS", sound::k_set, "FSTS\\Footsteps"}}) {
+            std::tuple{"FSTS", sound::k_set, "FSTS\\Footsteps"},
+            std::tuple{"FSTS", sound::k_set, "FSTS\\WalkingFootsteps"}}) {
         CAPTURE(signature);
         const auto result = fixture.grid(signature);
         REQUIRE(result.has_value());

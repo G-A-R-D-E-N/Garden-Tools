@@ -37,6 +37,23 @@ public static class ToolPaths
 
     public static void Invalidate() => _settings = null;
 
+    public static string RequireDataOrProjectPath(string path) => RequireUnderRoots(path,
+        new[] { Settings.DataFolder, Settings.Fallout4Path, Settings.Mo2InstancePath, Settings.OutputFolder });
+
+    public static string RequireUnderRoots(string path, IEnumerable<string> roots)
+    {
+        var full = Path.GetFullPath(path);
+        if (roots.Any(root => !string.IsNullOrWhiteSpace(root) && IsUnder(full, root))) return full;
+        throw new UnauthorizedAccessException("the path is outside the configured Data and project folders");
+    }
+
+    private static bool IsUnder(string full, string root)
+    {
+        var directory = Path.GetFullPath(root);
+        if (!Path.EndsInDirectorySeparator(directory)) directory += Path.DirectorySeparatorChar;
+        return full.StartsWith(directory, StringComparison.OrdinalIgnoreCase);
+    }
+
 
 
 

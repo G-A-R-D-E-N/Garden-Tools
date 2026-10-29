@@ -1,5 +1,6 @@
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "fo4/plugin/subrecord_authoring.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/formlink_lists.hpp"
 #include "fo4/schema/scalar.hpp"
@@ -45,6 +46,7 @@ struct LinkRow {
   std::uint32_t payload_size;
   std::string_view target;
   std::string_view denied_target;
+  bool nullable;
 };
 
 constexpr std::uint16_t k_lod_payload = 16;
@@ -93,19 +95,19 @@ constexpr ScalarRow k_string_rows[] = {
 };
 
 constexpr LinkRow k_link_rows[] = {
-    {"CELL\\LightingTemplate", "LTMP", 0, 4, "LGTM", "WTHR"},
-    {"CELL\\Water", "XCWT", 0, 4, "WATR", "LGTM"},
-    {"CELL\\Location", "XLCN", 0, 4, "LCTN", "CELL"},
-    {"CELL\\EncounterZone", "XEZN", 0, 4, "ECZN", "LVLI"},
-    {"CELL\\ImageSpace", "XCIM", 0, 4, "IMGS", "WATR"},
-    {"CELL\\AcousticSpace", "XCAS", 0, 4, "ASPC", "IMGS"},
-    {"CELL\\MusicType", "XCMO", 0, 4, "MUSC", "ASPC"},
-    {"CELL\\SkyWeatherRegion", "XCCM", 0, 4, "REGN", "MUSC"},
-    {"CELL\\GodRays", "XGDR", 0, 4, "GDRY", "REGN"},
-    {"CELL\\LockList", "XILL", 0, 4, "FLST", "WATR"},
-    {"CELL\\Owner", "XOWN", 0, k_owner_payload, "FACT", "WATR"},
-    {"CELL\\ExteriorLodWorldspace", "XILW", 0, k_lod_payload, "WRLD", "CELL"},
-    {"CELL\\InPreVisFileOf", "RVIS", 0, 4, "CELL", "WRLD"},
+    {"CELL\\LightingTemplate", "LTMP", 0, 4, "LGTM", "WTHR", true},
+    {"CELL\\Water", "XCWT", 0, 4, "WATR", "LGTM", false},
+    {"CELL\\Location", "XLCN", 0, 4, "LCTN", "CELL", false},
+    {"CELL\\EncounterZone", "XEZN", 0, 4, "ECZN", "LVLI", false},
+    {"CELL\\ImageSpace", "XCIM", 0, 4, "IMGS", "WATR", false},
+    {"CELL\\AcousticSpace", "XCAS", 0, 4, "ASPC", "IMGS", false},
+    {"CELL\\MusicType", "XCMO", 0, 4, "MUSC", "ASPC", false},
+    {"CELL\\SkyWeatherRegion", "XCCM", 0, 4, "REGN", "MUSC", false},
+    {"CELL\\GodRays", "XGDR", 0, 4, "GDRY", "REGN", false},
+    {"CELL\\LockList", "XILL", 0, 4, "FLST", "WATR", false},
+    {"CELL\\Owner", "XOWN", 0, k_owner_payload, "FACT", "WATR", false},
+    {"CELL\\ExteriorLodWorldspace", "XILW", 0, k_lod_payload, "WRLD", "CELL", false},
+    {"CELL\\InPreVisFileOf", "RVIS", 0, 4, "CELL", "WRLD", false},
 };
 
 constexpr std::uint32_t raw_id(std::uint32_t local_id) { return 0x02000000u | local_id; }
@@ -382,6 +384,7 @@ TEST(CellRows, LinkRowsNameTheirSubrecordsOffsetsPayloadsAndTargets) {
     EXPECT_EQ(field->subrecord, fo4::Signature::from_string(row.subrecord));
     EXPECT_EQ(field->offset, row.offset);
     EXPECT_EQ(field->payload_sizes[0], row.payload_size);
+    EXPECT_EQ(field->nullable, row.nullable);
     EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(
         *field, fo4::Signature::from_string(row.target)));
     EXPECT_FALSE(fo4::schema::formlink_field_target_allowed(
@@ -399,6 +402,47 @@ TEST(CellRows, LinkRowsNameTheirSubrecordsOffsetsPayloadsAndTargets) {
       fo4::Signature::from_string("CELL"), "CELL\\Owner");
   ASSERT_TRUE(owner.has_value());
   EXPECT_FALSE(owner->nullable);
+}
+
+TEST(CellRows, LinkWritesRefuseNullExceptOnTheLightingTemplate) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto key = "000C10:Patch.esp";
+  const auto record = fo4::FormKey::parse(key);
+  const auto water = fo4::schema::formlink_field_descriptor(fo4::Signature::from_string("CELL"),
+                                                           "CELL\\Water");
+  const auto light = fo4::schema::formlink_field_descriptor(fo4::Signature::from_string("CELL"),
+                                                            "CELL\\LightingTemplate");
+  ASSERT_TRUE(water.has_value());
+  ASSERT_TRUE(light.has_value());
+
+  EXPECT_THROW(fo4::set_record_formlink_field(plugin, record, *water, fo4::FormKey{}),
+               fo4::schema::FormLinkFieldError);
+  EXPECT_EQ(sub_bytes(plugin, key, "XCWT"), u32_bytes(0x00000A21));
+
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, record, *light, fo4::FormKey{}),
+            fo4::FormLinkFieldMutationStatus::updated);
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(sub_bytes(reread, key, "XCWT"), u32_bytes(0x00000A21));
+  EXPECT_EQ(sub_bytes(reread, key, "LTMP"), u32_bytes(0));
+
+  auto cleared = plugin;
+  EXPECT_EQ(fo4::remove_record_subrecord(cleared, record, fo4::Signature::from_string("XCWT"), 0),
+            fo4::SubrecordRemoveStatus::removed);
+  EXPECT_TRUE(sub_bytes(cleared, key, "XCWT").empty());
+  EXPECT_TRUE(sub_bytes(fo4::read_plugin(fo4::write_plugin(cleared), "Patch.esp"), key, "XCWT").empty());
+
+  EXPECT_EQ(fo4::create_record(cleared, fo4::Signature::from_string("CELL"), "NewCell").status,
+            fo4::RecordCreateStatus::not_authorable);
+}
+
+TEST(CellRows, WaterCurrentCountIsRemovedOnlyWithItsArray) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto key = "000C10:Patch.esp";
+  const auto record = fo4::FormKey::parse(key);
+  EXPECT_EQ(fo4::remove_record_subrecord(plugin, record, fo4::Signature::from_string("XWCN"), 0),
+            fo4::SubrecordRemoveStatus::not_authorable);
+  EXPECT_EQ(sub_bytes(plugin, key, "XWCN"), u32_bytes(2));
+  EXPECT_EQ(sub_bytes(plugin, key, "XWCU"), currents_bytes());
 }
 
 TEST(CellRows, RegionsAndPreVisReferenceListsArePackedAndAppendable) {

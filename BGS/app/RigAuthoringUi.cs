@@ -32,11 +32,11 @@ public sealed partial class RigAuthoringWindow : Window
     private SkinDocument? _skin;
     private readonly ComboBox _rigs = new() { MinWidth = 180 };
     private readonly ComboBox _bones = new() { MinWidth = 230 };
-    private readonly TextBox _boneName = Ux.Field("bone name", 230);
+    private readonly TextBox _boneName = Ux.Field("bone name", 230, "BoneName");
     private readonly TextBox _parent = Ux.Field("parent index", 90);
-    private readonly TextBox _translation = Ux.Field("X Y Z", 230);
-    private readonly TextBox _rotation = Ux.Field("X Y Z W", 230);
-    private readonly TextBox _scale = Ux.Field("X Y Z", 230);
+    private readonly TextBox _translation = Ux.Field("X Y Z", 230, "BoneTranslation");
+    private readonly TextBox _rotation = Ux.Field("X Y Z W", 230, "BoneRotation");
+    private readonly TextBox _scale = Ux.Field("X Y Z", 230, "BoneScale");
     private readonly CheckBox _lockedTranslation = new() { Content = "Lock translation" };
     private readonly SkeletonView _preview = new();
     private bool _closeApproved;
@@ -169,13 +169,31 @@ public sealed partial class RigAuthoringWindow : Window
             });
             string? path = files.FirstOrDefault()?.TryGetLocalPath();
             if (path == null) return;
-            bool dirty = skeleton ? _skeleton?.Dirty == true : _skin?.Dirty == true;
-            if (dirty)
+            bool targetDirty = skeleton ? _skeleton?.Dirty == true : _skin?.Dirty == true;
+            bool ragdollDirty = _ragdoll?.Dirty == true;
+            if (targetDirty || ragdollDirty)
             {
                 var choice = await new DiscardDialog("open another asset").ShowDialog<DiscardChoice>(this);
                 if (choice == DiscardChoice.Cancel) return;
-                if (choice == DiscardChoice.Save) { if (skeleton) _skeleton!.Save(); else _skin!.Save(); }
-                else { if (skeleton) _skeleton = null; else _skin = null; }
+
+                if (choice == DiscardChoice.Save)
+                {
+                    if (targetDirty)
+                    {
+                        if (skeleton) _skeleton!.Save(); else _skin!.Save();
+                    }
+
+                    if (ragdollDirty) _ragdoll!.Save();
+                }
+                else
+                {
+                    if (targetDirty)
+                    {
+                        if (skeleton) _skeleton = null; else _skin = null;
+                    }
+
+                    if (ragdollDirty) RevertRagdollValues();
+                }
             }
             if (skeleton) OpenSkeleton(path); else OpenSkin(path);
         }
@@ -197,7 +215,7 @@ public sealed partial class RigAuthoringWindow : Window
         _ = DecideClose(true);
     }
 
-    private bool Dirty => _skeleton?.Dirty == true || _skin?.Dirty == true;
+    private bool Dirty => _skeleton?.Dirty == true || _skin?.Dirty == true || _ragdoll?.Dirty == true;
 
     private async Task DecideClose(bool owner)
     {
@@ -207,7 +225,7 @@ public sealed partial class RigAuthoringWindow : Window
         {
             var choice = await new DiscardDialog("close with unsaved rig edits").ShowDialog<DiscardChoice>(this);
             if (choice == DiscardChoice.Cancel) return;
-            if (choice == DiscardChoice.Save) { _skeleton?.Save(); _skin?.Save(); }
+            if (choice == DiscardChoice.Save) { _skeleton?.Save(); _skin?.Save(); _ragdoll?.Save(); }
             _closeApproved = true;
             if (owner) _owner.Close(); else Close();
         }

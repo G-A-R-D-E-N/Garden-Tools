@@ -10,6 +10,7 @@
 #include <fo4ide/app/ServiceTargets.hpp>
 #include <fo4ide/papyrus/AnalysisService.hpp>
 
+#include "../helpers/GraphBuilder.hpp"
 #include "../helpers/ServiceTargetFakes.hpp"
 #include "../../src/app/PapyrusStaging.hpp"
 
@@ -349,6 +350,25 @@ TEST_CASE("PapyrusTarget Check reports clean and broken scripts") {
     auto syntaxOnly = target.invoke("Check", nlohmann::json::array({bad.string(), false, ""}));
     REQUIRE(syntaxOnly.has_value());
     CHECK(syntaxOnly->get<std::string>().find("Syntax only") != std::string::npos);
+}
+
+TEST_CASE("PapyrusTarget Check resolves Extends from Settings base imports without the env var") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto script = root / "Greeter.psc";
+    touch(script, "Scriptname Greeter extends ObjectReference\n");
+
+    FakeRunner runner;
+    FakePlatform platform;
+    fo4ide::settings::Settings settings;
+    settings.fallout4Path = root / "Fallout 4";
+    settings.papyrusBaseImports = fo4ide::graph::test::baseStubs();
+    PapyrusTargetFixture fixture(runner, platform, settings, root / "host");
+    auto& target = fixture.target;
+
+    auto result = target.invoke("Check", nlohmann::json::array({script.string(), true, ""}));
+    REQUIRE(result.has_value());
+    CHECK(result->get<std::string>().find("not on the roots") == std::string::npos);
 }
 
 TEST_CASE("PapyrusTarget SymbolAt returns the symbol JSON contract") {

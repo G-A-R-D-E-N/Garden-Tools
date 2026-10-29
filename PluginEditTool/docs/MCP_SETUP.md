@@ -122,8 +122,9 @@ six hex digits, a colon and the plugin that owns the record.
 
 #### create_record payloads
 
-`type` is the signature and `payload` is an object. These twelve types have a verified layout. A payload
+`type` is the signature and `payload` is an object. These eighteen types have a verified layout. A payload
 that does not fit is rejected with `InvalidRecordCreationPayload`, and the message names the field.
+`editorId` may be written `editor_id`.
 
 | Type | Required fields | Optional fields |
 |---|---|---|
@@ -135,6 +136,8 @@ that does not fit is rejected with `InvalidRecordCreationPayload`, and the messa
 | `LVLI`, `LVLN` | none | `editorId`; `chanceNone`, `maxCount` and `flags` (each 0..255, `flags` uses only 0x01, 0x02 and 0x04). Creates an empty list; entries are added afterwards. A local entry must reference a record of a type the list accepts; references into other plugins are not type-checked. |
 | `FACT` | none | `editorId`, `fullName` (inline text; refused in localized plugins), `flags` (u32, bits 0x00000001 through 0x00010000). Creates a faction with no relations or ranks. |
 | `RACE` | `description`, `maleHeight`, `femaleHeight` | `editorId`, `fullName`, `flags`, `flags2`, `size`, `accelerationRate`, `decelerationRate`, `injuredHealthPct` |
+| `QUST`, `SPEL`, `MGEF`, `FLST`, `MESG` | `editorId` (non-empty; `editor_id` accepted) | none. Builds the schema's required subrecords from their registered defaults: `QUST` takes a zeroed `DNAM`, `MESG` an empty `DESC` plus `INAM` and `DNAM`, `MGEF` a zeroed `DATA`, `SPEL` `OBND`, `DESC` and `SPIT`, and `FLST` carries only its `EDID`. Nothing else is set at creation. |
+| `GLOB` | `editorId` (non-empty), `type` (`short`, `long`, `float` or `boolean`) | none. The type is the required `FNAM` byte the schema has no default for; `FLTV` is created as a zero `f32`. |
 | `PROJ`, `EXPL`, `HAZD` | none | `editorId`, `name`, `bounds` (six integers), and the type's own numbers and form-key links, for example `speed`, `range` and `explosionType` on `PROJ`; `force`, `damage` and `innerRadius` on `EXPL`; `radius`, `lifetime` and `spell` on `HAZD` |
 
 Any other signature is refused (`RecordCreationRequiresSchema`) unless the payload contains
@@ -187,7 +190,8 @@ These read the winning version of a leveled list, NPC_, FACT or WEAP record and 
 
 | Tool | Arguments | Writes | What it does |
 |---|---|---|---|
-| `nif_inspect`, `nif_verify`, `nif_tree`, `nif_geometry` | `path` | no | Run niftool on a NIF: summary, verification, block tree and geometry. Need niftool. |
+| `nif_inspect`, `nif_geometry` | `path` | no | Read a NIF: summary and geometry. Uses niftool when configured, otherwise reads in-process. No niftool needed. |
+| `nif_verify`, `nif_tree` | `path` | no | Verification and block tree. Uses niftool when configured, otherwise reads in-process. No niftool needed. |
 | `material_inspect` | `path` | no | Reads a BGSM or BGEM material: `fileName`, `format`, `version` and its named `fields`. |
 | `material_set_fields` | `path`, `fields` [`output`] | disk | Sets named material fields (`fields` maps a name to a text value) and writes the result atomically to `output`, or back to `path` when no output is given. A conditional field such as `EmittanceColor` can be set only when its switch (`EmitEnabled`) is already true in the saved file: set the switch in one call and the field in the next. |
 | `audio_convert_to_xwm` | `source` [`output`, `bitrateBps`] | disk | Converts one audio or video file, or every supported file under a folder, to Fallout 4 XWM. Without `output` each `.xwm` goes next to its source; with a folder source, `output` is a folder that mirrors the layout. Needs xWMAEncode, plus ffmpeg for anything that is not PCM WAV. |
@@ -249,7 +253,7 @@ column, then `PATH` for programs.
 
 | Helper | Used by | Environment variable | `settings.json` key | Location |
 |---|---|---|---|---|
-| niftool | `nif_*` | `NIFTOOL_PATH` | `NiftoolPath` | `tools\niftool\niftool.exe` beside the exe |
+| niftool | NIF import with box collision | `NIFTOOL_PATH` | `NiftoolPath` | `tools\niftool\niftool.exe` beside the exe |
 | Creation Kit Wiki mirror (a folder) | `papyrus_function_lookup`, `papyrus_script_info` | `CK_WIKI_PATH` | `CkWikiPath` | `tools\ckwiki\fallout4` |
 | `xWMAEncode.exe` | `audio_convert_to_xwm`, `audio_convert_from_xwm` | `XWMAENCODE_PATH` | `XwmaEncodePath` | `tools\audio\` |
 | ffmpeg | `audio_convert_to_xwm` (input that is not PCM WAV), `audio_convert_from_xwm` (output other than WAV) | `FFMPEG_PATH` | `FfmpegPath` | `tools\audio\` |
@@ -260,8 +264,9 @@ column, then `PATH` for programs.
 
 `<Fallout 4>` is the install folder from the `Fallout4Path` setting, `FALLOUT4_PATH`, the registry or
 a Steam library. `PapyrusCompiler.exe` and `Archive2.exe` come with the Creation Kit and are not
-shipped in the package. The package bundles niftool, the Creation Kit Wiki mirror and the audio tools
-only if they were available when it was built; a missing one disables just the tools in its row.
+shipped in the package. The package always includes texconv and ffmpeg. niftool is not included;
+supply `NIFTOOL_PATH`. The Creation Kit Wiki mirror and the xWMAEncode and BmlFuz tools are included
+only if they were available at build time; a missing one disables just the tools in its row.
 niftool is looked up once at startup, so restart the server after installing it.
 
 The built-in Papyrus engine (`compile_papyrus` with `builtin`, or with `auto` when there is no
@@ -296,8 +301,9 @@ only feed the Creation Kit compiler route.
   compiler is Bethesda's and is not shipped here), or use `engine="builtin"`.
 - **The built-in engine reports every vanilla type as unknown.** It has no base script sources to
   resolve against. Set `PAPYRUS_BASE_IMPORTS` or pass `imports`, as described above.
-- **The `nif_*` tools say `niftool executable not found`.** niftool is missing from the package, or
-  `NIFTOOL_PATH` points somewhere stale. Restart the server after fixing it.
+- **NIF import with box collision says `box collision needs niftool`, or a NIF command says `niftool executable not found`.** Only box-collision import
+  needs niftool; fix, import, inspect, geometry, verify, tree and saving NIF edits run in-process. Fix repairs tangents, adds a missing BSX flag and trims texture and material name whitespace; it does not change shader or BSX flags, and it leaves the tangents of shapes without normal, tangent and UV attributes alone. niftool is missing from
+  the package, or `NIFTOOL_PATH` points somewhere stale. Restart the server after fixing it.
 - **`archive_pack` says `Archive2.exe is not configured`.** Install the Creation Kit or set
   `ARCHIVE2_PATH`.
 - **An audio tool answers `Error: set ..._PATH or place ... in tools/audio`.** A helper program is

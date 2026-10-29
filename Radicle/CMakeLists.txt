@@ -14,6 +14,17 @@ if(NOT TARGET ZLIB::ZLIB)
   find_package(ZLIB REQUIRED)
 endif()
 
+if(NOT TARGET nlohmann_json::nlohmann_json)
+  include(FetchContent)
+  FetchContent_Declare(
+    nlohmann_json
+    URL https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz
+    URL_HASH SHA256=42f6e95cad6ec532fd372391373363b62a14af6d771056dbfc86160e6dfff7aa
+    INACTIVITY_TIMEOUT 60
+  )
+  FetchContent_MakeAvailable(nlohmann_json)
+endif()
+
 option(FO4_ENABLE_ASAN "Enable AddressSanitizer" OFF)
 option(FO4_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" OFF)
 option(RADICLE_BUILD_TOOLS "Build Radicle command-line tools" ${PROJECT_IS_TOP_LEVEL})
@@ -137,11 +148,17 @@ add_library(fo4
   src/binary/cursor.cpp
   src/nif/nif.cpp
   src/nif/geometry.cpp
+  src/nif/block_transform.cpp
   src/nif/shader.cpp
   src/nif/skin.cpp
   src/texture/bcn.cpp
   src/texture/dds.cpp
   src/texture/dds_codec.cpp
+  src/nif/write_edits.cpp
+  src/nif/write_model.cpp
+  src/nif/import_obj.cpp
+  src/nif/import_build.cpp
+  src/nif/fix_nif.cpp
   src/forms/armor.cpp
   src/forms/armor_edit.cpp
   src/forms/cell.cpp
@@ -254,14 +271,101 @@ add_library(fo4
   src/papyrus/host.cpp
   src/papyrus/array_ops.cpp
   src/papyrus/interpreter.cpp
+  src/papyrus/execution.cpp
+  src/papyrus/struct_ops.cpp
+  src/papyrus/owner.cpp
+  src/papyrus/registration.cpp
+  src/papyrus/sha256.cpp
+  src/papyrus/save_state.cpp
+  src/papyrus/quest_rules.cpp
+  src/papyrus/runtime.cpp
+  src/papyrus/scheduler.cpp
   src/papyrus/execute.cpp
+  src/papyrus/decompiler.cpp
+  src/papyrus/decompiler_expr.cpp
+  src/papyrus/decompiler_stmt.cpp
+  src/papyrus/lexer.cpp
+  src/papyrus/parser.cpp
+  src/papyrus/parser_statement.cpp
+  src/papyrus/parser_expression.cpp
+  src/papyrus/type.cpp
+  src/papyrus/binding.cpp
+  src/papyrus/resolver.cpp
+  src/papyrus/type_checker.cpp
+  src/papyrus/script_index.cpp
+  src/papyrus/symbols.cpp
+  src/papyrus/declaration_check.cpp
+  src/papyrus/file_walk.cpp
+  src/papyrus/user_flags.cpp
+  src/papyrus/code_generator.cpp
+  src/papyrus/body_statement.cpp
+  src/papyrus/body_expression.cpp
+  src/papyrus/body_call.cpp
+  src/papyrus/creation_kit_fidelity.cpp
+  src/papyrus/compile_script.cpp
+  src/papyrus/analysis_service.cpp
+  src/f4se/binding_validator.cpp
+  src/f4se/cpp_emitter.cpp
+  src/f4se/cpp_scanner.cpp
+  src/f4se/cross_check.cpp
+  src/f4se/emitter.cpp
+  src/f4se/native_oracle.cpp
+  src/f4se/papyrus_header_emitter.cpp
+  src/f4se/plugin_emitter.cpp
+  src/f4se/region_merge.cpp
+  src/f4se/registration_extractor.cpp
+  src/f4se/type_map.cpp
+  src/f4se/version_diff.cpp
+  src/graph/builtin_node_definitions.cpp
+  src/graph/graph_compiler.cpp
+  src/graph/graph_definite_assignment.cpp
+  src/graph/graph_document.cpp
+  src/graph/graph_exec_flow.cpp
+  src/graph/graph_lifter.cpp
+  src/graph/graph_lifter_expr.cpp
+  src/graph/graph_linearizer.cpp
+  src/graph/graph_linearizer_expr.cpp
+  src/graph/graph_name_table.cpp
+  src/graph/graph_script_loader.cpp
+  src/graph/graph_tool_service.cpp
+  src/graph/graph_type_resolver.cpp
+  src/graph/graph_validator.cpp
+  src/graph/node_palette.cpp
+  src/graph/papyrus_source_writer.cpp
+  src/graph/wiki_docs.cpp
   src/swf/swf.cpp
   src/swf/swf_tags.cpp
+  src/swf/swf_placement.cpp
+  src/swf/swf_shape.cpp
+  src/swf/swf_morph.cpp
+  src/swf/swf_bitmap.cpp
+  src/swf/swf_bitmap_png.cpp
+  src/swf/swf_text.cpp
+  src/swf/swf_timeline.cpp
+  src/swf/swf_display.cpp
+  src/swf/swf_frame_control.cpp
+  src/swf/swf_edit.cpp
+  src/swf/swf_depth.cpp
+  src/swf/swf_keyframe.cpp
+  src/swf/swf_characters.cpp
+  src/swf/swf_history.cpp
+  src/swf/swf_text_edit.cpp
   src/swf/swf_write.cpp
+  src/swf/swf_lzma.cpp
+  src/swf/swf_glyph.cpp
+  src/swf/swf_glyph_edit.cpp
+  src/swf/swf_bitmap_edit.cpp
+  src/swf/swf_sound.cpp
+  src/swf/swf_sound_edit.cpp
+  src/swf/swf_census.cpp
+  src/swf/swf_svg.cpp
+  src/swf/swf_frame_svg.cpp
+  src/swf/swf_svg_filters.cpp
   src/pex_analysis/opcodes.cpp
   src/pex_analysis/cfg.cpp
   src/pex_analysis/disasm.cpp
   src/pex_analysis/callgraph.cpp
+  src/pex_analysis/parent_chain.cpp
   src/pex_analysis/summary.cpp
   src/pex_analysis/fragments.cpp
   src/pex_analysis/script_set.cpp
@@ -271,7 +375,71 @@ add_library(fo4
   src/abc/constant_pool.cpp
   src/abc/opcodes.cpp
   src/abc/disassembly.cpp
+  src/abc/edit.cpp
   src/abc/summary.cpp
+  src/abc/abc_flow.cpp
+  src/abc/abc_stack.cpp
+  src/abc/abc_verify.cpp
+  src/abc/abc_text.cpp
+  src/abc/abc_text_body.cpp
+  src/abc/abc_asm_lex.cpp
+  src/abc/abc_asm.cpp
+  src/abc/abc_asm_code.cpp
+  src/avm1/opcodes.cpp
+  src/avm1/decode.cpp
+  src/avm1/encode.cpp
+  src/avm1/edit.cpp
+  src/avm1/disassembly.cpp
+  src/avm1/control_ops.cpp
+  src/avm1/function_ops.cpp
+  src/avm1/interpreter.cpp
+  src/avm1/misc_ops.cpp
+  src/avm1/object_ops.cpp
+  src/avm1/text_ops.cpp
+  src/avm1/timeline_ops.cpp
+  src/avm2/name.cpp
+  src/avm2/value.cpp
+  src/avm2/coercion.cpp
+  src/avm2/object.cpp
+  src/avm2/class.cpp
+  src/avm2/runtime.cpp
+  src/avm2/runtime_link.cpp
+  src/avm2/domain.cpp
+  src/avm2/interpreter.cpp
+  src/avm2/interpreter_ops.cpp
+  src/avm2/interpreter_property.cpp
+  src/avm2/interpreter_memory.cpp
+  src/avm2/interpreter_xml_text.cpp
+  src/avm2/interpreter_support.cpp
+  src/avm2/builtins.cpp
+  src/avm2/native_object.cpp
+  src/avm2/native_primitive.cpp
+  src/avm2/native_math.cpp
+  src/avm2/native_top.cpp
+  src/avm2/native_string.cpp
+  src/avm2/native_array.cpp
+  src/avm2/native_error.cpp
+  src/avm2/display.cpp
+  src/avm2/native_display.cpp
+  src/avm2/swf_movie_data.cpp
+  src/avm2/swf_runtime.cpp
+  src/avm2/snapshot.cpp
+  src/avm2/display_snapshot.cpp
+  src/avm2/hit_test.cpp
+  src/avm2/amf.cpp
+  src/avm2/replay.cpp
+  src/avm2/native_shared.cpp
+  src/avm2/native_bgs.cpp
+  src/avm2/native_compat.cpp
+  src/avm2/sound_decode.cpp
+  src/avm2/events.cpp
+  src/avm2/native_events.cpp
+  src/avm2/text.cpp
+  src/avm2/utf16.cpp
+  src/avm2/native_text.cpp
+  src/avm2/native_net.cpp
+  src/avm2/native_system.cpp
+  src/avm2/native_bytearray.cpp
   src/hkx/layout.cpp
   src/hkx/packfile.cpp
   src/hkx/skeleton.cpp
@@ -309,10 +477,11 @@ target_include_directories(fo4
 )
 
 target_link_libraries(fo4 PRIVATE ZLIB::ZLIB)
+target_link_libraries(fo4 PUBLIC $<BUILD_INTERFACE:nlohmann_json::nlohmann_json>)
 fo4_apply_warnings(fo4)
 fo4_apply_sanitizers(fo4)
 
-add_library(radicle_c SHARED src/c_api.cpp src/c_api_env.cpp src/c_api_navmesh.cpp src/c_api_vegetation.cpp src/c_api_world.cpp src/c_api_placed.cpp src/c_api_terrain.cpp src/c_api_strings.cpp src/c_api_archive.cpp src/c_api_writeback.cpp src/c_api_fields.cpp src/c_api_ref_fields.cpp src/c_api_base_records.cpp src/c_api_sound.cpp src/c_api_materials.cpp src/c_api_check.cpp src/c_api_maintenance.cpp src/c_api_pex.cpp src/c_api_material_file.cpp src/c_api_seq.cpp src/c_api_quest.cpp src/c_api_quest_structure.cpp src/c_api_loadorder.cpp)
+add_library(radicle_c SHARED src/c_api.cpp src/c_api_env.cpp src/c_api_navmesh.cpp src/c_api_vegetation.cpp src/c_api_world.cpp src/c_api_placed.cpp src/c_api_terrain.cpp src/c_api_strings.cpp src/c_api_archive.cpp src/c_api_writeback.cpp src/c_api_fields.cpp src/c_api_ref_fields.cpp src/c_api_base_records.cpp src/c_api_sound.cpp src/c_api_materials.cpp src/c_api_check.cpp src/c_api_maintenance.cpp src/c_api_pex.cpp src/c_api_material_file.cpp src/c_api_seq.cpp src/c_api_quest.cpp src/c_api_quest_structure.cpp src/c_api_loadorder.cpp src/c_api_papyrus_source.cpp)
 target_compile_definitions(radicle_c PRIVATE RADICLE_C_BUILD)
 target_link_libraries(radicle_c PRIVATE fo4)
 set_target_properties(radicle_c PROPERTIES
@@ -326,11 +495,13 @@ target_sources(radicle_c PRIVATE src/c_api_records.cpp src/c_api_authoring.cpp s
 target_sources(radicle_c PRIVATE src/c_api_dialogue.cpp)
 target_sources(radicle_c PRIVATE src/c_api_armor.cpp src/c_api_eyes.cpp src/c_api_faction.cpp src/c_api_components.cpp src/c_api_cell.cpp)
 target_sources(radicle_c PRIVATE src/c_api_patch.cpp)
-target_sources(radicle_c PRIVATE src/c_api_conflict.cpp)
+target_sources(radicle_c PRIVATE src/c_api_conflict.cpp src/c_api_graph.cpp)
+target_sources(radicle_c PRIVATE src/c_api_pex_analysis.cpp src/c_api_vmad_read.cpp src/c_api_script_set.cpp src/c_api_papyrus.cpp src/c_api_papyrus_runtime.cpp src/c_api_papyrus_save.cpp src/c_api_papyrus_quest.cpp src/c_api_papyrus_compiler.cpp src/c_api_papyrus_analysis.cpp)
 target_sources(fo4 PRIVATE src/patch/delta_patch.cpp)
 target_sources(fo4 PRIVATE src/patch/list_merge.cpp)
 target_sources(fo4 PRIVATE src/papyrus_source/lexer.cpp src/papyrus_source/parser.cpp src/papyrus_source/parser_decl.cpp src/papyrus_source/parser_expr.cpp src/papyrus_source/parser_stmt.cpp src/papyrus_source/summary.cpp)
 target_sources(radicle_c PRIVATE src/c_api_nif.cpp src/c_api_dds.cpp)
+target_sources(radicle_c PRIVATE src/c_api_swf.cpp src/c_api_swf_art.cpp src/c_api_swf_characters.cpp src/c_api_swf_display.cpp src/c_api_swf_edit.cpp src/c_api_swf_history.cpp src/c_api_swf_verbs.cpp src/c_api_swf_abc_write.cpp src/c_api_swf_jpeg.cpp src/c_api_swf_sound.cpp src/c_api_runtime.cpp)
 
 if(RADICLE_INSTALL)
   include(GNUInstallDirs)
@@ -618,6 +789,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_vmad.cpp
     tests/test_vmad_unsupported.cpp
     tests/test_vmad_array_elements.cpp
+    tests/test_c_api_vmad_read.cpp
     tests/test_vmad_structure.cpp
     tests/test_vmad_quest_fragments.cpp
     tests/test_vmad_fragments.cpp
@@ -643,6 +815,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_esl_compaction.cpp
     tests/test_c_api_maintenance.cpp
     tests/test_c_api_pex.cpp
+    tests/test_c_api_papyrus_source.cpp
     tests/test_c_api_seq.cpp
     tests/test_c_api_quest.cpp
     tests/test_ba2.cpp
@@ -681,7 +854,19 @@ if(RADICLE_BUILD_TESTS)
     tests/test_nif_nodes.cpp
     tests/test_nif_corpus.cpp
     tests/test_c_api_nif.cpp
+    tests/test_c_api_swf.cpp
+    tests/test_c_api_swf_text.cpp
+    tests/test_c_api_swf_morph.cpp
+    tests/test_c_api_swf_display.cpp
+    tests/test_c_api_swf_characters.cpp
+    tests/test_c_api_swf_history.cpp
+    tests/test_c_api_swf_edit.cpp
+    tests/test_c_api_swf_abc_sprite.cpp
+    tests/test_c_api_swf_glyph.cpp
+    tests/test_c_api_swf_sound.cpp
+    tests/test_c_api_swf_real.cpp
     tests/test_dds.cpp
+    tests/test_nif_write.cpp
     tests/test_environment_writeback.cpp
     tests/test_writeback_real.cpp
     tests/test_environment_ref_fields.cpp
@@ -712,21 +897,140 @@ if(RADICLE_BUILD_TESTS)
     tests/test_pex_corpus.cpp
     tests/test_pex_oracle.cpp
     tests/test_papyrus_vm.cpp
+    tests/test_papyrus_structs.cpp
+    tests/test_papyrus_runtime.cpp
+    tests/test_papyrus_save_state.cpp
+    tests/test_papyrus_quest_rules.cpp
+    tests/test_c_api_papyrus.cpp
+    tests/test_c_api_papyrus_save_quest.cpp
+    tests/test_c_api_papyrus_runtime.cpp
+    tests/test_c_api_script_set.cpp
     tests/test_pex_analysis.cpp
+    tests/test_pex_analysis_c_api.cpp
+    tests/test_pex_analysis_real.cpp
     tests/test_script_set.cpp
     tests/test_script_set_real.cpp
     tests/test_pex_disasm.cpp
     tests/test_papyrus_source.cpp
     tests/test_papyrus_source_real.cpp
+    tests/test_papyrus_decompiler.cpp
+    tests/test_papyrus_decompiler_real.cpp
+    tests/test_papyrus_lexer.cpp
+    tests/test_papyrus_parser.cpp
+    tests/test_papyrus_parse_real.cpp
+    tests/test_papyrus_resolver.cpp
+    tests/test_papyrus_type_checker.cpp
+    tests/test_papyrus_symbols.cpp
+    tests/test_papyrus_script_index.cpp
+    tests/test_papyrus_declaration_check.cpp
+    tests/test_papyrus_semantic_real.cpp
+    tests/test_papyrus_codegen.cpp
+    tests/test_papyrus_codegen_corners.cpp
+    tests/test_papyrus_codegen_real.cpp
+    tests/test_papyrus_user_flags.cpp
+    tests/test_papyrus_analysis_service.cpp
+    tests/test_c_api_papyrus_analysis.cpp
+    tests/test_f4se_type_map.cpp
+    tests/test_f4se_cross_check.cpp
+    tests/test_f4se_extractor.cpp
+    tests/test_f4se_region_merge.cpp
+    tests/test_f4se_emitter.cpp
+    tests/test_f4se_corpus_real.cpp
+    tests/test_graph_compiler.cpp
+    tests/test_graph_document.cpp
+    tests/test_graph_flow.cpp
+    tests/test_graph_lift.cpp
+    tests/test_graph_lift_real.cpp
+    tests/test_graph_node_palette.cpp
+    tests/test_graph_script_loader.cpp
+    tests/test_graph_tool_service.cpp
+    tests/test_graph_validator.cpp
     tests/test_abc.cpp
+    tests/test_abc_edit.cpp
     tests/test_abc_pool.cpp
     tests/test_abc_write.cpp
     tests/test_abc_summary.cpp
+    tests/test_abc_flow.cpp
+    tests/test_abc_verify.cpp
+    tests/test_abc_text.cpp
+    tests/test_abc_text_real.cpp
+    tests/test_abc_asm.cpp
+    tests/test_abc_asm_real.cpp
+    tests/test_abc_pushshort.cpp
+    tests/test_avm2_value.cpp
+    tests/test_avm2_object.cpp
+    tests/test_avm2_runtime.cpp
+    tests/test_avm2_call_indexed.cpp
+    tests/test_avm2_interpreter.cpp
+    tests/test_avm2_scope_depth.cpp
+    tests/test_avm2_scripts_real.cpp
+    tests/test_avm2_builtins.cpp
+    tests/test_avm2_runtime_names.cpp
+    tests/test_avm2_display.cpp
+    tests/test_avm2_swf_runtime.cpp
+    tests/test_avm2_snapshot.cpp
+    tests/test_avm2_host.cpp
+    tests/test_avm2_bgs_bridge.cpp
+    tests/test_avm2_domain.cpp
+    tests/test_avm2_script.cpp
+    tests/test_avm2_shared.cpp
+    tests/test_c_api_runtime.cpp
+    tests/test_c_api_runtime_real.cpp
+    tests/test_avm2_compat.cpp
+    tests/test_avm2_sound_decode.cpp
+    tests/test_avm2_display_api.cpp
+    tests/test_avm2_display_snapshot.cpp
+    tests/test_avm2_document_class.cpp
+    tests/test_avm2_events.cpp
+    tests/test_avm2_focus_events.cpp
+    tests/test_avm2_text.cpp
+    tests/test_avm2_string_utf16.cpp
+    tests/test_avm2_static_text.cpp
+    tests/test_avm2_system_classes.cpp
+    tests/test_avm2_bytearray.cpp
+    tests/test_avm2_more_ops.cpp
+    tests/test_avm2_domain_memory.cpp
+    tests/test_avm2_late_ops.cpp
+    tests/test_swf_fonts.cpp
+    tests/test_swf_fonts_real.cpp
     tests/test_material_file.cpp
     tests/test_material_file_real.cpp
     tests/test_swf.cpp
+    tests/test_swf_doabc_round_trip.cpp
+    tests/test_swf_glyph.cpp
+    tests/test_swf_text_glyph.cpp
+    tests/test_swf_lzma.cpp
+    tests/test_swf_sound.cpp
     tests/test_swf_tags.cpp
+    tests/test_swf_plan.cpp
+    tests/test_swf_place.cpp
+    tests/test_swf_place_filters.cpp
+    tests/test_swf_display.cpp
+    tests/test_swf_frame_control.cpp
+    tests/test_swf_edit.cpp
+    tests/test_swf_edit_text.cpp
+    tests/test_swf_label_edit.cpp
+    tests/test_swf_history.cpp
+    tests/test_swf_depth.cpp
+    tests/test_swf_keyframe.cpp
+    tests/test_swf_characters.cpp
+    tests/test_swf_art.cpp
+    tests/test_swf_morph_tween.cpp
     tests/test_swf_real.cpp
+    tests/test_swf_census.cpp
+    tests/test_swf_census_real.cpp
+    tests/test_avm1.cpp
+    tests/test_avm1_encode.cpp
+    tests/test_avm1_ops.cpp
+    tests/test_avm1_objects.cpp
+    tests/test_avm1_functions.cpp
+    tests/test_avm1_control.cpp
+    tests/test_avm1_timeline.cpp
+    tests/test_avm1_real.cpp
+    tests/test_swf_svg.cpp
+    tests/test_swf_svg_text_matrix.cpp
+    tests/test_swf_svg_buttons.cpp
+    tests/test_swf_svg_text_clip.cpp
     tests/test_abc_real.cpp
     tests/test_hkx_packfile.cpp
     tests/test_hkx_real.cpp

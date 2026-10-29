@@ -1,7 +1,13 @@
+using System.Collections.Generic;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
+using Avalonia.Controls.Presenters;
+using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 
 namespace BehaviourStudio.App;
 
@@ -29,6 +35,11 @@ public static class Ux
     public static readonly Color Warn = Color.Parse("#E0A030");
     public static readonly Color Good = Color.Parse("#3FB950");
 
+    public static readonly Color OffSurface = Color.Parse("#2B2B2B");
+    public static readonly Color OffEdge = Color.Parse("#3A3A3A");
+    public static readonly Color OffEdgeStrong = Color.Parse("#6A6A6A");
+    public static readonly Color OffText = Color.Parse("#9AA0A6");
+
     public static readonly Color RouteColour = Color.Parse("#58D0C0");
 
     public static readonly Color Wildcard = Color.Parse("#F778BA");
@@ -48,31 +59,57 @@ public static class Ux
     public static readonly IBrush AccentBrush = new SolidColorBrush(Accent);
     public static readonly IBrush BadBrush = new SolidColorBrush(Bad);
     public static readonly IBrush WarnBrush = new SolidColorBrush(Warn);
+    public static readonly IBrush OffSurfaceBrush = new SolidColorBrush(OffSurface);
+    public static readonly IBrush OffEdgeBrush = new SolidColorBrush(OffEdge);
+    public static readonly IBrush OffEdgeStrongBrush = new SolidColorBrush(OffEdgeStrong);
+    public static readonly IBrush OffTextBrush = new SolidColorBrush(OffText);
 
-    public static TextBox Field(string watermark = "", double minWidth = 0) => new()
+    public static TextBox Field(string watermark = "", double minWidth = 0, string name = "")
     {
-        Watermark = watermark,
-        MinWidth = minWidth,
-        MinHeight = ControlHeight,
-        Background = CardBrush,
-        Foreground = TitleBrush,
-        BorderBrush = BorderBrush,
-        BorderThickness = new Thickness(1),
-        CornerRadius = new CornerRadius(Radius),
-        Padding = new Thickness(8, 5),
-        FontSize = FontBody,
-        VerticalContentAlignment = VerticalAlignment.Center,
-    };
+        var box = new TextBox
+        {
+            Watermark = watermark,
+            MinWidth = minWidth,
+            MinHeight = ControlHeight,
+            Background = CardBrush,
+            Foreground = TitleBrush,
+            BorderBrush = BorderBrush,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(Radius),
+            Padding = new Thickness(8, 5),
+            FontSize = FontBody,
+            VerticalContentAlignment = VerticalAlignment.Center,
+        };
+        return Named(box, name.Length > 0 ? name : watermark);
+    }
 
-    public static Button Primary(string text) => Style(new Button { Content = text }, AccentBrush, Brushes.White);
-
-    public static Button Secondary(string text) => Style(new Button { Content = text }, CardBrush, MetaBrush);
-
-    private static Button Style(Button button, IBrush background, IBrush foreground)
+    public static T Named<T>(T control, string name) where T : Control
     {
-        button.Background = background;
-        button.Foreground = foreground;
-        button.BorderBrush = BorderBrush;
+        if (name.Length > 0) AutomationProperties.SetName(control, name);
+        return control;
+    }
+
+    public static Control Labelled(Control field, string label)
+    {
+        var caption = Label(label);
+        caption.Margin = new Thickness(0, 0, 6, 0);
+        AutomationProperties.SetLabeledBy(field, caption);
+        if (AutomationProperties.GetName(field) is not { Length: > 0 }) Named(field, label);
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        row.Children.Add(caption);
+        row.Children.Add(field);
+        return row;
+    }
+
+    public static string ToolPanelName(string tool) => tool + " tool panel";
+
+    public static Button Primary(string text) => Style(new Button { Content = text }, "primary");
+
+    public static Button Secondary(string text) => Style(new Button { Content = text }, "secondary");
+
+    private static Button Style(Button button, string cls)
+    {
+        button.Classes.Add(cls);
         button.BorderThickness = new Thickness(1);
         button.CornerRadius = new CornerRadius(Radius);
         button.Padding = new Thickness(12, 5);
@@ -82,6 +119,113 @@ public static class Ux
         button.HorizontalContentAlignment = HorizontalAlignment.Center;
         button.VerticalAlignment = VerticalAlignment.Center;
         return button;
+    }
+
+    public static ComboBox Combo(string name = "", double minWidth = 150)
+    {
+        var combo = new ComboBox
+        {
+            MinWidth = minWidth,
+            MinHeight = ControlHeight,
+            Background = CardBrush,
+            BorderBrush = BorderBrush,
+            Foreground = TitleBrush,
+            FontSize = FontMeta,
+            VerticalContentAlignment = VerticalAlignment.Center,
+        };
+        return Named(combo, name);
+    }
+
+    public static void Install(Application application)
+    {
+        application.Styles.Add(new Avalonia.Themes.Fluent.FluentTheme());
+        foreach (var style in AppStyles()) application.Styles.Add(style);
+    }
+
+    public static IEnumerable<IStyle> AppStyles() => new IStyle[]
+    {
+        ButtonSkin("primary", AccentBrush, Brushes.White),
+        ButtonSkin("secondary", CardBrush, MetaBrush),
+        OffButton(),
+        OffButtonSkin(),
+        OffToggle(),
+        OffToggleBox(),
+        DropDownItem(),
+    };
+
+    private static Style ButtonSkin(string cls, IBrush background, IBrush foreground)
+    {
+        var style = new Style(selector => selector.OfType<Button>().Class(cls));
+        style.Setters.Add(new Setter(TemplatedControl.BackgroundProperty, background));
+        style.Setters.Add(new Setter(TemplatedControl.ForegroundProperty, foreground));
+        style.Setters.Add(new Setter(TemplatedControl.BorderBrushProperty, BorderBrush));
+        return style;
+    }
+
+    private static Style OffButton()
+    {
+        var style = new Style(selector => selector.OfType<Button>().Class(":disabled"));
+        style.Setters.Add(new Setter(TemplatedControl.BackgroundProperty, OffSurfaceBrush));
+        style.Setters.Add(new Setter(TemplatedControl.ForegroundProperty, OffTextBrush));
+        style.Setters.Add(new Setter(TemplatedControl.BorderBrushProperty, OffEdgeBrush));
+        return style;
+    }
+
+    private static Style OffButtonSkin()
+    {
+        var style = new Style(selector => selector.OfType<Button>().Class(":disabled")
+            .Descendant().OfType<ContentPresenter>());
+        style.Setters.Add(new Setter(ContentPresenter.BackgroundProperty, OffSurfaceBrush));
+        style.Setters.Add(new Setter(ContentPresenter.BorderBrushProperty, OffEdgeBrush));
+        style.Setters.Add(new Setter(TextElement.ForegroundProperty, OffTextBrush));
+        return style;
+    }
+
+    private static Style OffToggle()
+    {
+        var style = new Style(selector => selector.OfType<CheckBox>().Class(":disabled")
+            .Descendant().OfType<ContentPresenter>());
+        style.Setters.Add(new Setter(TextElement.ForegroundProperty, OffTextBrush));
+        return style;
+    }
+
+    private static Style OffToggleBox()
+    {
+        var style = new Style(selector => selector.OfType<CheckBox>().Class(":disabled")
+            .Descendant().OfType<Border>());
+        style.Setters.Add(new Setter(Avalonia.Controls.Border.BorderBrushProperty, OffEdgeStrongBrush));
+        return style;
+    }
+
+    private static Style DropDownItem()
+    {
+        var style = new Style(selector => selector.OfType<ComboBoxItem>());
+        style.Setters.Add(new Setter(TemplatedControl.ForegroundProperty, TitleBrush));
+        return style;
+    }
+
+    public static TextBlock RowTitle(string text)
+    {
+        var title = SectionTitle(text);
+        title.VerticalAlignment = VerticalAlignment.Center;
+        return title;
+    }
+
+    public static Border Panel(string name, params Control[] rows)
+    {
+        var body = new StackPanel { Spacing = 6 };
+        foreach (var row in rows) body.Children.Add(row);
+        var panel = new Border
+        {
+            Background = CardBrush,
+            BorderBrush = BorderBrush,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(Radius),
+            Padding = new Thickness(10, 6),
+            VerticalAlignment = VerticalAlignment.Top,
+            Child = body,
+        };
+        return Named(panel, name);
     }
 
     public static TextBlock SectionTitle(string text) => new()
@@ -98,7 +242,7 @@ public static class Ux
         var body = new StackPanel { Spacing = Space };
         body.Children.Add(SectionTitle(title));
         foreach (var row in rows) body.Children.Add(row);
-        return new Border
+        var group = new Border
         {
             Background = CardBrush,
             BorderBrush = BorderBrush,
@@ -108,6 +252,7 @@ public static class Ux
             VerticalAlignment = VerticalAlignment.Top,
             Child = body,
         };
+        return Named(group, title);
     }
 
     public static WrapPanel Wrap(params Control[] controls)

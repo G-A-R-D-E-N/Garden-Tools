@@ -362,7 +362,7 @@ TEST(NpcLinkRows, EmptyListsAnchorAfterTheWholeAttackRun) {
     std::uint32_t target;
   };
   const auto bytes = make_anchor_plugin(
-      {"ACBS", "RNAM", "DEST", "DSTD", "DSTF", "ATKD", "ATKE", "ATKW", "ATKS", "ATKT"});
+      {"ACBS", "RNAM", "DEST", "DSTD", "DSTF", "ATKD", "ATKE", "ATKW", "ATKS", "ATKT", "HCLF"});
   for (const auto& row : {Row{"NPC_\\Packages", "PKID", 0x00000D00u},
                           Row{"NPC_\\HeadParts", "PNAM", 0x00000D01u},
                           Row{"NPC_\\AttachParentSlots", "APPR", 0x00000D02u}}) {
@@ -378,7 +378,7 @@ TEST(NpcLinkRows, EmptyListsAnchorAfterTheWholeAttackRun) {
 }
 
 TEST(NpcLinkRows, EmptyAttachParentSlotsAnchorsAfterTheDestructibleRun) {
-  auto plugin = fo4::read_plugin(make_anchor_plugin({"ACBS", "RNAM", "DEST", "DSTD", "DSTF"}), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_anchor_plugin({"ACBS", "RNAM", "DEST", "DSTD", "DSTF", "HCLF"}), "Patch.esp");
   EXPECT_EQ(fo4::schema::insert_record_formlink_list_element(
                 plugin, npc_key(), list("NPC_\\AttachParentSlots"), 0, key(0x00000D02u)),
             fo4::schema::FormLinkListMutationStatus::updated);
