@@ -1,5 +1,6 @@
 #include "fo4/graph/check_errors.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "fo4/schema/condition_functions.hpp"
 #include "plugin_bytes.hpp"
 
 #include <gtest/gtest.h>
@@ -7,6 +8,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <iterator>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -19,7 +21,8 @@ constexpr std::uint16_t k_get_seconds_passed = 12;
 constexpr std::uint16_t k_get_in_faction = 71;
 constexpr std::uint16_t k_get_event_data = 576;
 constexpr std::uint32_t k_run_on_reference = 2;
-constexpr std::uint32_t k_run_on_my_killer = 10;
+
+std::uint32_t run_on_max() { return fo4::schema::condition_run_ons().back().value; }
 
 struct Condition {
   std::uint16_t function{0};
@@ -162,14 +165,19 @@ TEST(CheckErrorsConditions, ReferenceRunOnChecksReferenceSignatures) {
 
 TEST(CheckErrorsConditions, RunOnAboveMyKillerIsInvalid) {
   Condition bad = condition(k_get_seconds_passed);
-  bad.run_on = k_run_on_my_killer + 1;
+  bad.run_on = run_on_max() + 1;
   const auto invalid = of_code(findings_for({bad}), fo4::CheckCode::invalid_condition);
   ASSERT_EQ(invalid.size(), 1u);
   EXPECT_EQ(invalid[0].severity, fo4::CheckSeverity::error);
   EXPECT_EQ(invalid[0].offset, 20u);
+  EXPECT_EQ(invalid[0].message,
+            "CTDA Run On " + std::to_string(run_on_max() + 1) +
+                " is not a known Run On value (" +
+                std::to_string(fo4::schema::condition_run_ons().front().value) + "-" +
+                std::to_string(run_on_max()) + ")");
 
   Condition last = condition(k_get_seconds_passed);
-  last.run_on = k_run_on_my_killer;
+  last.run_on = run_on_max();
   EXPECT_TRUE(of_code(findings_for({last}), fo4::CheckCode::invalid_condition).empty());
 }
 

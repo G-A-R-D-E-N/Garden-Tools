@@ -92,6 +92,12 @@ internal sealed class Mo2ScanData : IDisposable
         }
     }
 
+    public static GameData OpenScanData(string folder)
+    {
+        if (TryOpen(folder, out Mo2ScanData? instance, out _) && instance != null) return instance.Data;
+        return GameData.Discover(folder);
+    }
+
     public IReadOnlyList<string> ModHkxPaths(string folderName, Action<string>? onArchive = null)
     {
         string needle = "/" + folderName.Trim('/', '\\') + "/";

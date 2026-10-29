@@ -1,0 +1,229 @@
+name: release
+
+# Build-only. It never creates tags or releases; see docs/RELEASES.md for the owner-approved publish step.
+#
+# The repository had no release process (only `bgs-v*` tags) and `main` is
+# untouched (PR #848 stays unmerged), so a release is built from a `nomad/dev`
+# commit. `permissions: contents: read` is the hard guarantee that this workflow
+# cannot create a tag or a release even if a step is later edited: publishing is
+# a separate, explicit, owner-approved action documented in docs/RELEASES.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version, e.g. 0.1.0-alpha.1
+        type: string
+        required: true
+        default: 0.1.0-alpha.1
+      ref:
+        description: Commit, tag or branch to build from
+        type: string
+        required: true
+        default: nomad/dev
+
+permissions:
+  contents: read
+
+# A release build is never cancelled by a newer dispatch: the artifacts are the
+# whole point, so runs queue per version instead.
+concurrency:
+  group: release-${{ github.event.inputs.version }}
+  cancel-in-progress: false
+
+# The self-hosted runners share one 12-thread host; cap each build the way
+# native-ci does (cmake reads this when --parallel is absent).
+env:
+  CMAKE_BUILD_PARALLEL_LEVEL: "4"
+
+jobs:
+  # FO4IDE statically links Radicle (PluginEditTool/native builds it as a
+  # subproject), so this single Windows build produces the whole editor package.
+  fo4ide-package:
+    name: FO4IDE package (Windows)
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 120
+    env:
+      RELEASE_VERSION: ${{ github.event.inputs.version }}
+      RELEASE_REF: ${{ github.event.inputs.ref }}
+    defaults:
+      run:
+        shell: cmd
+    steps:
+      - name: Validate release inputs
+        shell: powershell
+        run: |
+          if ($env:RELEASE_VERSION -notmatch '^[0-9A-Za-z][0-9A-Za-z._-]*\z') {
+            Write-Output '::error::version must start with a letter or digit and contain only letters, digits, dot, underscore or hyphen'
+            exit 1
+          }
+          if ($env:RELEASE_REF -notmatch '^[0-9A-Za-z][0-9A-Za-z._/-]*\z' -or $env:RELEASE_REF.Contains('..')) {
+            Write-Output '::error::ref must start with a letter or digit, contain only letters, digits, dot, underscore, slash or hyphen, and have no .. sequence'
+            exit 1
+          }
+
+      # Full URL gives this workflow its own action cache; the shared
+      # actions/checkout cache races with native-ci's Windows job (shallow.lock).
+      - name: Check out the requested ref
+        uses: https://code.forgejo.org/actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.inputs.ref }}
+          persist-credentials: false
+
+      # package.ps1 invokes cmake and a native compiler; the Windows runners keep
+      # them off the default PATH, and this is the step every native Windows cmake
+      # job in this repository runs first.
+      - name: Set up MSVC, Ninja and ccache
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .github/scripts/setup-msvc-ccache.ps1
+
+      # The build must reuse the runner's cached pinned zlib instead of cloning it
+      # from GitHub; this script writes ZLIB_SRC for package.ps1.
+      - name: Pinned zlib source (cached)
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .github/scripts/pinned-zlib-windows.ps1
+
+      - name: Set up Node 22
+        uses: https://github.com/actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: PluginEditTool/web/package-lock.json
+
+      - name: Install web dependencies
+        working-directory: PluginEditTool/web
+        run: npm ci
+
+      - name: Build web UI
+        working-directory: PluginEditTool/web
+        run: npm run build
+
+      # -SkipWeb: web/dist was built in the previous step.
+      - name: Package FO4RecordEditor
+        shell: powershell
+        run: |
+          $env:CK_WIKI_PATH = '${{ vars.FO4IDE_CK_WIKI_PATH }}'
+          $env:FO4IDE_AUDIO_TOOLS_DIR = '${{ vars.FO4IDE_AUDIO_TOOLS_DIR }}'
+          $env:FO4IDE_CMAKE_GENERATOR = 'Ninja'
+          & .\PluginEditTool\package.ps1 -Version $env:RELEASE_VERSION -SkipWeb
+          $zip = 'PluginEditTool\dist\FO4RecordEditor-' + $env:RELEASE_VERSION + '.zip'
+          if (-not (Test-Path -LiteralPath $zip -PathType Leaf)) {
+            Write-Output "::error::package.ps1 did not produce $zip"
+            exit 1
+          }
+
+      - name: Write release metadata
+        shell: powershell
+        run: |
+          $header = 'Radicle/include/fo4/c_api.h'
+          $define = Select-String -LiteralPath $header -Pattern '^\s*#define\s+RADICLE_ABI_VERSION\s+(\d+)u?\s*$' |
+            Select-Object -First 1
+          if (-not $define) {
+            Write-Output "::error::could not parse RADICLE_ABI_VERSION from $header"
+            exit 1
+          }
+          $abi = $define.Matches[0].Groups[1].Value
+          $commit = (git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or -not $commit) {
+            Write-Output '::error::could not resolve the built commit'
+            exit 1
+          }
+          $metadata = @(
+            "version=$env:RELEASE_VERSION"
+            "ref=$env:RELEASE_REF"
+            "commit=$commit"
+            "radicle_abi_version=$abi"
+            "runner=$env:RUNNER_NAME"
+            "built_at_utc=$((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))"
+          )
+          Set-Content -Path release-metadata.txt -Value $metadata -Encoding ascii
+          Write-Output "RADICLE_ABI_VERSION=$abi at $commit"
+
+      - name: Upload FO4RecordEditor package
+        uses: https://code.forgejo.org/forgejo/upload-artifact@cb8afe72b42edc798abfb8fcb556cf660d894245 # v5
+        with:
+          name: FO4RecordEditor-${{ github.event.inputs.version }}-windows-x64
+          path: PluginEditTool/dist/FO4RecordEditor-${{ github.event.inputs.version }}.zip
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload release metadata
+        uses: https://code.forgejo.org/forgejo/upload-artifact@cb8afe72b42edc798abfb8fcb556cf660d894245 # v5
+        with:
+          name: release-metadata
+          path: release-metadata.txt
+          if-no-files-found: error
+          retention-days: 30
+
+  # Optional source snapshot the owner can attach to a Radicle release. It is not
+  # independently buildable: Radicle/CMakeLists.txt checks the committed hkx
+  # layout table against ../BGS/src/Hkx/*.json, which is outside the exported
+  # subtree, so the supported consumer path stays pinning the commit/tag in a
+  # full clone.
+  radicle-source:
+    name: Radicle source snapshot (Linux)
+    runs-on: [self-hosted, Linux, X64, garden]
+    timeout-minutes: 30
+    env:
+      RELEASE_VERSION: ${{ github.event.inputs.version }}
+      RELEASE_REF: ${{ github.event.inputs.ref }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Validate release inputs
+        run: |
+          if [[ ! "$RELEASE_VERSION" =~ ^[0-9A-Za-z][0-9A-Za-z._-]*$ ]]; then
+            echo "::error::version must start with a letter or digit and contain only letters, digits, dot, underscore or hyphen"
+            exit 1
+          fi
+          if [[ ! "$RELEASE_REF" =~ ^[0-9A-Za-z][0-9A-Za-z._/-]*$ || "$RELEASE_REF" == *..* ]]; then
+            echo "::error::ref must start with a letter or digit, contain only letters, digits, dot, underscore, slash or hyphen, and have no .. sequence"
+            exit 1
+          fi
+
+      - name: Check out the requested ref
+        uses: https://code.forgejo.org/actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.inputs.ref }}
+          persist-credentials: false
+
+      - name: Build Radicle source snapshot
+        run: |
+          git archive --format=zip --prefix="Radicle-$RELEASE_VERSION/" \
+            -o "radicle-$RELEASE_VERSION-source.zip" HEAD Radicle
+          test -f "radicle-$RELEASE_VERSION-source.zip"
+
+      # python3 is already required on this runner by native-ci, so the ABI line
+      # is parsed the same way native-ci parses files inline.
+      - name: Write source info
+        run: |
+          abi="$(python3 -c 'import pathlib, re; text = pathlib.Path("Radicle/include/fo4/c_api.h").read_text(encoding="utf-8"); match = re.search(r"^[ \t]*#define[ \t]+RADICLE_ABI_VERSION[ \t]+([0-9]+)", text, re.MULTILINE); print(match.group(1) if match else "")')"
+          if [ -z "$abi" ]; then
+            echo "::error::could not parse RADICLE_ABI_VERSION from Radicle/include/fo4/c_api.h"
+            exit 1
+          fi
+          commit="$(git rev-parse HEAD)"
+          {
+            echo "version=$RELEASE_VERSION"
+            echo "ref=$RELEASE_REF"
+            echo "commit=$commit"
+            echo "radicle_abi_version=$abi"
+          } > radicle-source-info.txt
+          cat radicle-source-info.txt
+
+      - name: Upload Radicle source snapshot
+        uses: https://code.forgejo.org/forgejo/upload-artifact@cb8afe72b42edc798abfb8fcb556cf660d894245 # v5
+        with:
+          name: radicle-${{ github.event.inputs.version }}-source
+          path: radicle-${{ github.event.inputs.version }}-source.zip
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload source info
+        uses: https://code.forgejo.org/forgejo/upload-artifact@cb8afe72b42edc798abfb8fcb556cf660d894245 # v5
+        with:
+          name: radicle-source-info
+          path: radicle-source-info.txt
+          if-no-files-found: error
+          retention-days: 30

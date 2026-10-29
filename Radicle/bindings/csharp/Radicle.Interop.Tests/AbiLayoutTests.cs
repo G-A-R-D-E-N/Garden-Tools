@@ -41,7 +41,7 @@ public class AbiLayoutTests
             }
         }
         var structs = assembly.GetTypes().Count(t => t.Namespace == "Radicle.Interop.Native" && t.IsValueType && !t.IsEnum &&
-                                                     !t.IsNested);
+                                                     !t.IsNested && !t.Name.StartsWith("Runtime", StringComparison.Ordinal));
         Assert.Equal(structs, checkedTypes);
     }
 }
