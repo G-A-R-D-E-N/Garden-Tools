@@ -8362,7 +8362,7 @@ Expected strings were derived by hand. The glyph is a 1000-twip square (50 px, t
 
 ## Radicle/src/avm1/control_ops.cpp:execute
 
-Adds the AVM1 control and object opcodes 0x2A Throw, 0x2B CastOp, 0x46 Enumerate, 0x54 InstanceOf, 0x55 Enumerate2, 0x69 Extends, 0x8F Try and 0x94 With. This supersedes the older refusal notes for these opcodes; ImplementsOp 0x2C stays refused by name. GetMember and SetMember on function prototypes stay deferred because there is no prototype model. Any other opcode still returns Unsupported.
+Adds the AVM1 control and object opcodes 0x2A Throw, 0x2B CastOp, 0x46 Enumerate, 0x54 InstanceOf, 0x55 Enumerate2, 0x69 Extends, 0x8F Try and 0x94 With. This supersedes the older refusal notes for these opcodes; ImplementsOp 0x2C is implemented later by `Radicle/src/avm1/control_ops.cpp:implements_op`. GetMember and SetMember on function prototypes stay deferred because there is no prototype model. Any other opcode still returns Unsupported.
 
 ## Radicle/src/avm1/control_ops.cpp:try_regions
 
@@ -8739,6 +8739,49 @@ Detects an encoder change that alters bytes of an unedited stream. It checks thr
 - `AcceptsTrailingBytesAfterTheSplitterRect` detects a strict-length check that refuses a grid tag with bytes after its RECT (`0xAA 0xBB` appended).
 - `RefusesAScalingGridPayloadCutInsideItsRect` detects a RECT reader that zero-fills missing bits into a grid, or one that reads past the payload. It uses two cuts: an id-only payload, and a 5-byte payload where the RECT needs 7 bytes. Each must give `malformed_tag`, no typed grid, the raw payload kept, and the End tag still parsed.
 - `ScalingGridLookupReturnsTheLastGridForAnId` detects `find_scaling_grid` returning the first of two grids for one id, returning a grid for a different id, or returning a non-null pointer for an id with no grid.
+
+## Radicle/src/avm1/misc_ops.cpp:random_number and next_random
+
+- RandomNumber is a xorshift32 (shifts 13, 17, 5) over `Avm1State::random_state`, seeded from `Avm1Environment::random_seed`. The output is masked to 31 bits, as Ruffle masks its AVM RNG with `K_RANDOM_PURE_MAX` (`ruffle-0.6.0/core/src/avm_rng.rs`, the `a_num & K_RANDOM_PURE_MAX` line). The exact sequence is ours, not Flash's: Ruffle's generator is seeded from the clock (`avm_rng.rs` `get_seed`), so no Flash sequence can be reproduced. Only the range `[0, bound)` is claimed to match Ruffle. Unverified against real Flash output.
+- The bound follows `ruffle-0.6.0/core/src/avm1/activation.rs:action_random_number` (lines 1898-1908): `coerce_to_f64 as i32` saturates, so a bound of 1 or more is truncated and clamped to 2147483647, and a bound below 1 (or NaN) answers 0 without advancing the stream. Ruffle draws only when the bound is positive; this does the same.
+- Seed 1 gives draws 270369, 67634689, 499951813 in `misc_ops.cpp:random_number` (hand-derived step by step: 0x42021, 0x04080601, 0x1DCCA8C5 after masking). The first two also agree with the xorshift32 sequence as I recall it, which is not verified against a source here. `Radicle/tests/test_avm1_ops.cpp:RandomNumberIsASeededStreamThatSkipsZeroBounds` detects a zero bound that advances the stream, and `RandomNumberClampsItsBoundToTheSignedRange` detects a bound wrapped to 32 bits.
+
+## Radicle/src/avm1/misc_ops.cpp:get_time
+
+- GetTime pushes `Avm1State::elapsed_ms`, which the caller injects. Ruffle's `activation.rs:action_get_time` (lines 1223-1238) reads a wall clock since start and adds a `time_offset` that advances on busy loops (the `times_get_time_called` heuristic). Neither is replicated here, since a wall clock makes the interpreter non-deterministic and the heuristic is not needed for pure runtime tests. Deviation: a movie that busy-waits on GetTime will see a frozen clock. Unverified against real Flash timing.
+- `Radicle/tests/test_avm1_ops.cpp:GetTimeTracesTheInjectedElapsedMilliseconds` detects GetTime refusing or reading a clock instead of the injected value.
+
+## Radicle/src/avm1/misc_ops.cpp:target_path
+
+- Ruffle's `activation.rs:action_target_path` (lines 2194-2206) answers the dot path only for a display object and undefined for everything else. This interpreter has no display objects, so the op always answers undefined after popping its operand. That matches Ruffle for every non-display value. Deviation: a real movie clip would answer its path. Add a host hook when a display list exists.
+- `Radicle/tests/test_avm1_ops.cpp:TargetPathPopsItsOperandAndAnswersUndefined` detects a TargetPath that keeps its operand on the stack, or one that returns a text for a number.
+
+## Radicle/src/avm1/misc_ops.cpp:execute
+
+- Opcode 0x89 (StrictMode) is a no-op that leaves the stack alone and ignores its one-byte flag. Ruffle 0.6.0 has no StrictMode action: `swf/src/avm1/opcode.rs` has no 0x89 entry, so the reader makes it `Action::Unknown`, and `ruffle-0.6.0/core/src/avm1/activation.rs:action_unknown` (lines 2434-2440) logs an error and continues with no stack effect. The no-op therefore matches Ruffle's effective behavior. Unverified: what Flash's strict mode changes, which Ruffle does not model.
+- Dispatch: the interpreter's default arm now calls `misc_ops::execute`, which passes unknown codes on to `control_ops::execute`, whose default arm still refuses by name. This keeps `interpreter.cpp` under the 750-line limit.
+- `Radicle/tests/test_avm1_ops.cpp:StrictModeLeavesTheStackAlone` detects a StrictMode that pops or pushes.
+
+## Radicle/src/avm1/control_ops.cpp:implements_op
+
+- ImplementsOp pops the constructor, then the count, then up to `count` interface values, following `ruffle-0.6.0/core/src/avm1/activation.rs:action_implements_op` (lines 1559-1607). The count is converted with `ToInt32` (`text_ops::to_uint32` then a signed cast). Objects count as 0, as in Ruffle's `coerce_to_i32` for primitives only. A negative count wraps to a huge size and the clamp takes the whole stack, the same as Ruffle's `as usize` cast.
+- The list is stored only when the count is above 0, the constructor is a function, and the SWF version is 0 or at least 7. Ruffle checks `swf_version() >= 7` at `activation.rs:action_implements_op` line 1599 and calls `set_interfaces`, which uses `get_or_insert` in `ruffle-0.6.0/core/src/avm1/object/script_object.rs:set_interfaces` (lines 879-886), so the first list a class gets is kept and later calls do nothing. Version 0 counts as current, matching this file's other version rules.
+- Deviations: a non-function interface value is skipped, where Ruffle reads its prototype. A non-function constructor is skipped, where Ruffle would set the prototype of an object. A missing constructor or count refuses with StackUnderflow, where Ruffle's `pop` answers undefined and continues. Unverified against real Flash for the underflow case.
+- `Radicle/tests/test_avm1_control.cpp:ImplementsOpIsSwfSevenOnlyAndKeepsTheFirstList` detects an op that applies before SWF 7, a last-wins list, or a count of 0 that records something. `ImplementsOpClampsItsCountAndRefusesAShortStack` detects an unclamped count and a missing refusal.
+
+## Radicle/src/avm1/control_ops.cpp:reaches
+
+- Replaces `derives_from`. It walks each class's superclass link and its implemented-interface list, as Ruffle's `ruffle-0.6.0/core/src/avm1/object.rs:is_instance_of` (lines 325-352) walks the prototype chain and each prototype's interface tree. A visited set makes an interface loop end the walk. Ruffle's own comment (object.rs lines 330-331) says a recursive chain hangs Flash, and Ruffle does not guard it.
+- `Extends` uses the same walk for its cycle check, so `Extends` now also refuses a base whose interfaces reach the subclass. This is a behavior change, but only for code that implements an interface and then extends the class that implements it.
+- `Radicle/tests/test_avm1_control.cpp:ImplementsOpFollowsInterfaceListsAndStopsOnACycle` detects a one-level check (no interface chain) and an unbounded walk on an interface loop. `ImplementsOpLetsAnInstanceReachTheInterfaceThroughItsSuperclass` detects an op that never records its list.
+
+## Radicle/src/avm1/text_ops.cpp:to_number
+
+- `to_number` and `to_uint32` (with `parse_number`) moved here unchanged from `Radicle/src/avm1/interpreter.cpp`, so `misc_ops.cpp` and `control_ops.cpp` can convert operands the way the interpreter does. The body is the same, and the `swf_version` rules are the same.
+
+## Radicle/src/avm1/interpreter.cpp:execute_actions
+
+- `execute_actions` takes an `Avm1Environment` (`Radicle/include/fo4/avm1/interpreter.hpp`) with the RNG seed and the elapsed milliseconds for GetTime. In `Radicle/include/fo4/avm1/interpreter.hpp:Avm1Environment` the default seed `0x2545F491` is an arbitrary nonzero constant. The seed must be nonzero, since a zero xorshift state stays zero. Existing callers that pass only the step limit and SWF version keep their behavior.
 
 ## Radicle/tests/test_graph_lift_real.cpp:GraphLiftReal
 

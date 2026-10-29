@@ -4,12 +4,16 @@
 #include <cstdint>
 #include <cstdlib>
 #include <format>
+#include <limits>
 #include <string>
 #include <string_view>
 
 namespace fo4::avm1::text_ops {
 
 namespace {
+
+constexpr const char* kWhitespace = " \t\r\n";
+constexpr double kUint32Range = 4294967296.0;
 
 struct Decoded {
   std::uint32_t value;
@@ -107,6 +111,20 @@ std::string number_text(double value) {
   return out;
 }
 
+double parse_number(const std::string& text) {
+  const std::size_t first = text.find_first_not_of(kWhitespace);
+  if (first == std::string::npos) {
+    return 0.0;
+  }
+  const std::string trimmed = text.substr(first, text.find_last_not_of(kWhitespace) - first + 1);
+  char* end = nullptr;
+  const double value = std::strtod(trimmed.c_str(), &end);
+  if (end == trimmed.c_str() || *end != '\0') {
+    return std::numeric_limits<double>::quiet_NaN();
+  }
+  return value;
+}
+
 }  // namespace
 
 std::uint32_t first_code_point(std::string_view text) {
@@ -144,6 +162,41 @@ std::string to_text(const Avm1Data& data, std::uint8_t swf_version) {
       return "[type Function]";
   }
   return "undefined";
+}
+
+// Invariant: swf_version 0 keeps the unspecified rules, where null is 0 and undefined is NaN.
+double to_number(const Avm1Data& data, std::uint8_t swf_version) {
+  switch (data.kind) {
+    case Avm1DataKind::Undefined:
+      if (swf_version == 0 || swf_version >= 7) {
+        return std::numeric_limits<double>::quiet_NaN();
+      }
+      return 0.0;
+    case Avm1DataKind::Null:
+      if (swf_version >= 7) {
+        return std::numeric_limits<double>::quiet_NaN();
+      }
+      return 0.0;
+    case Avm1DataKind::Boolean:
+      return data.boolean ? 1.0 : 0.0;
+    case Avm1DataKind::Number:
+      return data.number;
+    case Avm1DataKind::String:
+      return parse_number(data.text);
+    case Avm1DataKind::Object:
+    case Avm1DataKind::Function:
+      return std::numeric_limits<double>::quiet_NaN();
+  }
+  return std::numeric_limits<double>::quiet_NaN();
+}
+
+std::uint32_t to_uint32(const Avm1Data& data, std::uint8_t swf_version) {
+  const double number = to_number(data, swf_version);
+  if (!std::isfinite(number)) {
+    return 0;
+  }
+  const double modulo = std::fmod(std::trunc(number), kUint32Range);
+  return static_cast<std::uint32_t>(modulo < 0.0 ? modulo + kUint32Range : modulo);
 }
 
 std::size_t unit_count(std::string_view text, std::uint8_t swf_version) {

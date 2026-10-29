@@ -417,4 +417,109 @@ TEST(Avm1Control, ExtendsRefusesACycleAndANonFunction) {
   EXPECT_EQ(execute_program(rows[2].first).status, Avm1RunStatus::Unsupported);
 }
 
+Bytes variable(std::string_view name) { return cat({push({text_value(name)}), rec(0x1C, {})}); }
+
+Bytes trace_instance_of(std::string_view constructor) {
+  return cat({variable("i"), variable(constructor), rec(0x54, {}), rec(0x26, {})});
+}
+
+Bytes implements_op(std::string_view constructor, std::uint32_t count,
+                    const std::vector<std::string_view>& interfaces) {
+  Bytes out;
+  for (const std::string_view name : interfaces) {
+    append(out, variable(name));
+  }
+  append(out, push({int_value(count)}));
+  append(out, variable(constructor));
+  append(out, rec(0x2C, {}));
+  return out;
+}
+
+// Invariant: ImplementsOp records its interfaces on the constructor, so an instance answers InstanceOf for an interface its superclass implements; before the op and for a plain object the same test answers false, so a stub that never records the list traces true nowhere and fails the second row.
+TEST(Avm1Control, ImplementsOpLetsAnInstanceReachTheInterfaceThroughItsSuperclass) {
+  const Bytes input = cat({
+      define_v1("I", Bytes{}),
+      instance_prelude(),
+      trace_instance_of("I"),
+      implements_op("A", 1, {"I"}),
+      trace_instance_of("I"),
+      push({int_value(0)}), rec(0x43, {}), variable("I"), rec(0x54, {}), rec(0x26, {}),
+      Bytes{0x00},
+  });
+  const auto result = execute_program(input);
+  ASSERT_TRUE(result.ok()) << result.message;
+  EXPECT_EQ(result.trace, (std::vector<std::string>{"false", "true", "false"}));
+}
+
+// Invariant: ImplementsOp does nothing before SWF 7, keeps the first list a class was given, and a count of 0 records nothing; a version-blind op or a last-wins list would trace true on the rows that expect false.
+TEST(Avm1Control, ImplementsOpIsSwfSevenOnlyAndKeepsTheFirstList) {
+  struct Row {
+    const char* name;
+    std::uint8_t version;
+    Bytes input;
+    std::vector<std::string> trace;
+  };
+  const Bytes defs = cat({define_v1("I", Bytes{}), define_v1("J", Bytes{})});
+  const std::vector<Row> rows = {
+      {"SWF 6 ignores ImplementsOp", 6,
+       cat({defs, instance_prelude(), implements_op("A", 1, {"I"}), trace_instance_of("I"),
+            Bytes{0x00}}),
+       {"false"}},
+      {"SWF 7 records the list", 7,
+       cat({defs, instance_prelude(), implements_op("A", 1, {"I"}), trace_instance_of("I"),
+            Bytes{0x00}}),
+       {"true"}},
+      {"the first list is kept", 7,
+       cat({defs, instance_prelude(), implements_op("A", 1, {"I"}), implements_op("A", 1, {"J"}),
+            trace_instance_of("J"), trace_instance_of("I"), Bytes{0x00}}),
+       {"false", "true"}},
+      {"a count of 0 records nothing", 7,
+       cat({defs, instance_prelude(), implements_op("A", 0, {}), trace_instance_of("I"),
+            Bytes{0x00}}),
+       {"false"}},
+  };
+  for (const Row& row : rows) {
+    SCOPED_TRACE(row.name);
+    const auto stream = decode(row.input);
+    ASSERT_TRUE(stream.ok()) << stream.message;
+    const auto result = fo4::avm1::execute_actions(stream, 1000000, row.version);
+    ASSERT_TRUE(result.ok()) << result.message;
+    EXPECT_EQ(result.trace, row.trace);
+  }
+}
+
+// Invariant: an interface counts through its own list, so A implementing K and K implementing I makes an instance of B an I, and an interface that loops back through K still ends the run with the later InstanceOf answering false; a one-level check traces false on the first row and an unbounded walk never returns.
+TEST(Avm1Control, ImplementsOpFollowsInterfaceListsAndStopsOnACycle) {
+  const Bytes input = cat({
+      define_v1("I", Bytes{}),
+      define_v1("J", Bytes{}),
+      define_v1("K", Bytes{}),
+      instance_prelude(),
+      implements_op("K", 1, {"I"}),
+      implements_op("A", 1, {"K"}),
+      trace_instance_of("I"),
+      implements_op("I", 1, {"K"}),
+      trace_instance_of("J"),
+      Bytes{0x00},
+  });
+  const auto result = execute_program(input);
+  ASSERT_TRUE(result.ok()) << result.message;
+  EXPECT_EQ(result.trace, (std::vector<std::string>{"true", "false"}));
+}
+
+// Invariant: ImplementsOp clamps its count to the operands left, so a count of 5 over one interface records that one, and a constructor with no count left refuses with StackUnderflow at its own offset; an unclamped count would underflow the first row, and a missing refusal would read past an empty stack.
+TEST(Avm1Control, ImplementsOpClampsItsCountAndRefusesAShortStack) {
+  const Bytes defs = define_v1("I", Bytes{});
+  const auto clamped = execute_program(
+      cat({defs, instance_prelude(), implements_op("A", 5, {"I"}), trace_instance_of("I"),
+           Bytes{0x00}}));
+  ASSERT_TRUE(clamped.ok()) << clamped.message;
+  EXPECT_EQ(clamped.trace, (std::vector<std::string>{"true"}));
+  const auto short_stack =
+      execute_program(cat({defs, instance_prelude(), variable("A"), rec(0x2C, {}), Bytes{0x00}}));
+  EXPECT_EQ(short_stack.status, Avm1RunStatus::StackUnderflow) << short_stack.message;
+  EXPECT_EQ(short_stack.opcode, 0x2C);
+  EXPECT_TRUE(short_stack.trace.empty());
+}
+
 }  // namespace
