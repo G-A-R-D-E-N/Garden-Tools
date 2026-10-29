@@ -9091,6 +9091,7 @@ Bytecode is hand-derived. `u30(65535)` is `FF FF 03` and `u30(65536)` is `80 80 
 - `PlacedShapeWithDropShadowWrapsItsGroupInTheShadowFilter`: a regression that loses the filter list between `read_swf`, `build_display_list` and `frame_to_svg`.
 - `PlainPlacementIsByteIdenticalToTheUnfilteredGroup`: a regression that emits an empty `<defs>` or a wrapper group for a placement with no filter or blend.
 - `PlacedBlendModeWrapsTheGroupInItsStyle`: a regression that drops the blend mode in the display replay.
+
 ## Radicle/include/fo4/avm1/interpreter.hpp:Avm1TimelineHost
 
 - The host is abstract and injected through `Avm1Environment::timeline`. It is non-owning; the caller keeps it alive for the run. With no host, every timeline opcode is refused by name (see `Radicle/src/avm1/timeline_ops.cpp:execute`).
