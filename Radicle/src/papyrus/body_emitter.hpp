@@ -87,6 +87,7 @@ private:
     Type commonComparisonType(const Type& left, const Type& right);
     bool inherits(const std::string& child, const std::string& ancestor);
     void emitShortCircuit(const BinaryExpression& binary, const std::string& destination);
+    bool readsName(const Node* expression, const std::string& destination);
 
     void emitCall(const CallExpression& call, const std::string& destination);
     void emit(const std::string& mnemonic, const std::vector<fo4::pex::PexValue>& parts);

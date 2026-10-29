@@ -9011,3 +9011,20 @@ Bytecode is hand-derived. `u30(65535)` is `FF FF 03` and `u30(65536)` is `80 80 
 ## Radicle/src/avm2/interpreter.cpp:Interpreter::invoke
 
 - Known gap, verified by reading: a native function with no body and no native id returns `NotImplemented` with `native function <name> is not bound`, unless `limits_.lenient_builtins` is set. `Radicle/src/avm2/interpreter_property.cpp:Interpreter::outer_scope_value` returns `NotImplemented` for `getouterscope` when the frame has no captured scope.
+
+## Radicle/src/papyrus/body_expression.cpp:BodyEmitter::emitShortCircuit
+
+- Bug, fixed: when the destination is a named variable that the right operand reads, the first `cast` overwrote it before the right operand was read. `abLeft = abRight && abLeft` emitted `cast abLeft abLeft` on the right path, so the result was true where it must be false. The aliased case now evaluates into a fresh temp, skips with `jmpf`/`jmpt` on that temp, and copies it to the destination with `assign` after the jump target. `||` takes the same path with `jmpt`.
+- The non-aliased output is unchanged (`cast dest left`, `jmpf dest N`, `cast dest right`). `Radicle/tests/test_papyrus_codegen.cpp:ShortCircuitIntoOperandVariableStagesThroughTemp` pins it with the `Keep` function.
+- Known gap, verified by reading: `readsName` looks only at names in the right operand. If that operand calls a function that reads a script variable which is also the destination, the destination already holds the left value when the call runs. No test covers this and no corpus case was checked.
+
+## Radicle/src/papyrus/body_expression.cpp:BodyEmitter::readsName
+
+- Walks the expression tree and reports whether any identifier resolves to the destination's storage name. Only `Local`, `Parameter` and `ScriptVariable` bindings are passed to `storageFor`, because its default branch reports `CannotEmit` and a function name in a call callee would trigger that.
+
+## Radicle/src/papyrus/body_call.cpp:BodyEmitter::emitArrayBuiltin
+
+- Bug, fixed: `findstruct` and `rfindstruct` emitted the search value with `value()`. An Int literal stayed `Integer` while the struct member was `Float`, and `Radicle/src/papyrus/struct_ops.cpp:Interpreter::findStructInArray` returns `TypeMismatch` on that, so the search failed without a message. The `memberType` lambda takes the member's declared type from the element struct (the `Owner:Struct` type name is split at its last `:`), and `valueAs` converts the value to it.
+- If the member name is not a string literal, or the struct cannot be found, `memberType` returns Error and `valueAs` falls back to `value()`, which is the old output.
+- Known gap: a member name held in a variable keeps the old unconverted search value. Unverified whether real scripts do this.
+- `Radicle/tests/test_papyrus_codegen.cpp:FindStructConvertsSearchValueToMemberType` pins the Float conversion for `FindStruct` and `RFindStruct`.
