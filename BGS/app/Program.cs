@@ -10,7 +10,7 @@ namespace BehaviourStudio.App;
 
 public class App : Application
 {
-    public override void Initialize() => Styles.Add(new FluentTheme());
+    public override void Initialize() => Ux.Install(this);
 
     public static MainWindow CreateMainWindow()
     {
@@ -50,6 +50,10 @@ public class App : Application
 
 public static class Program
 {
+    internal const string RenderingPreferenceVariable = "BGS_RENDERING";
+
+    internal static readonly string[] DefaultRenderingModes = { "AngleEgl", "Wgl", "Software" };
+
     [STAThread]
     public static int Main(string[] args)
     {
@@ -58,6 +62,8 @@ public static class Program
         if (args.Contains("--scan-archives")) return ModlistScan.Run(args);
         if (args.Contains("--scan-modlist")) return ModlistScan.ScanModlist(args);
         if (args.Contains("--scan-clips")) return ModlistScan.ScanClips(args);
+        if (args.Contains("--scan-skeleton-physics")) return ModlistScan.ScanSkeletonPhysics(args);
+        if (args.Contains("--scan-index")) return IndexScan.Run(args);
         if (args.Contains("--extract")) return ModlistScan.Extract(args);
         if (args.Contains("--headless")) return Headless.Run(args);
 
@@ -65,9 +71,41 @@ public static class Program
         return 0;
     }
 
-    public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>()
-        .UsePlatformDetect()
-        .LogToTrace();
+    public static AppBuilder BuildAvaloniaApp()
+    {
+        var builder = AppBuilder.Configure<App>().UsePlatformDetect();
+        if (OperatingSystem.IsWindows())
+        {
+            string[] order = RenderingModeOrderFor(Environment.GetEnvironmentVariable(RenderingPreferenceVariable));
+            builder = builder.With(new Win32PlatformOptions
+            {
+                RenderingMode = order.Select(ToRenderingMode).ToArray(),
+            });
+        }
+        return builder.LogToTrace();
+    }
+
+    internal static string[] RenderingModeOrderFor(string? preference)
+    {
+        string wanted = (preference ?? "").Trim();
+        int at = Array.FindIndex(DefaultRenderingModes,
+                                 mode => mode.Equals(wanted, StringComparison.OrdinalIgnoreCase));
+        if (at <= 0) return DefaultRenderingModes;
+
+        var order = new string[DefaultRenderingModes.Length];
+        order[0] = DefaultRenderingModes[at];
+        int next = 1;
+        for (int i = 0; i < DefaultRenderingModes.Length; i++)
+            if (i != at) order[next++] = DefaultRenderingModes[i];
+        return order;
+    }
+
+    private static Win32RenderingMode ToRenderingMode(string name) => name switch
+    {
+        "AngleEgl" => Win32RenderingMode.AngleEgl,
+        "Wgl" => Win32RenderingMode.Wgl,
+        _ => Win32RenderingMode.Software,
+    };
 
     private static int ProbeHavok(string[] args)
     {

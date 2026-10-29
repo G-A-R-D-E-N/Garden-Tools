@@ -103,13 +103,15 @@ public partial class MainWindow : Window
     private readonly TextBlock _animationSummary =
         new() { Foreground = Ux.MetaBrush, FontSize = 12, TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock _framePage = new() { Foreground = Ux.MetaBrush, FontSize = 12 };
-    private readonly TextBox _boneFilter = Ux.Field("bone", 150);
-    private readonly TextBox _fraction = Ux.Field("0.0 to 1.0", 110);
-    private readonly TextBlock _fractionAnswer = new() { Foreground = Ux.MetaBrush, FontSize = 12 };
-    private readonly TextBox _framePosition = Ux.Field("x, y, z", 170);
-    private readonly TextBox _frameRotation = Ux.Field("x, y, z, w", 210);
-    private readonly TextBox _frameScale = Ux.Field("x, y, z", 150);
-    private readonly TextBlock _frameEditAnswer = new() { Foreground = Ux.MetaBrush, FontSize = 12 };
+    private readonly TextBox _boneFilter = Ux.Field("bone", 150, "Bone or track name");
+    private readonly TextBox _fraction = Ux.Field("0.0 to 1.0", 110, "Time fraction");
+    private readonly TextBlock _fractionAnswer =
+        new() { Foreground = Ux.MetaBrush, FontSize = 12, TextWrapping = TextWrapping.Wrap };
+    private readonly TextBox _framePosition = Ux.Field("x, y, z", 170, "Frame position");
+    private readonly TextBox _frameRotation = Ux.Field("x, y, z, w", 210, "Frame rotation");
+    private readonly TextBox _frameScale = Ux.Field("x, y, z", 150, "Frame scale");
+    private readonly TextBlock _frameEditAnswer =
+        new() { Foreground = Ux.MetaBrush, FontSize = 12, TextWrapping = TextWrapping.Wrap };
     private HkxAnimationData? _animationData;
     private HkxSkeleton? _animationSkeleton;
     private int _frameStart;
@@ -117,7 +119,17 @@ public partial class MainWindow : Window
 
     private int _editTrack = -1, _editFrame = -1;
 
-    private bool _animationEdited;
+    private bool _animationEditedField;
+
+    private bool _animationEdited
+    {
+        get => _animationEditedField;
+        set
+        {
+            _animationEditedField = value;
+            RefreshSaveAnimationState();
+        }
+    }
 
     private readonly TextBox _symbolName = Ux.Field("name", 170);
     private readonly TextBox _symbolValue = Ux.Field("value, for a variable", 130);
@@ -152,8 +164,18 @@ public partial class MainWindow : Window
     private RootMotion.Motion _poseMotion = new();
     private bool _followTravel;
     private HavokRagdollModel? _ragdoll;
+    private string _poseRefusal = "";
+    private string _pendingSourceFolder = "";
     private string? _ragdollSourceName;
     private string? _ragdollSourceNote;
+    private string? _ragdollSiblingName;
+
+    private PhysicsLoadReport? _ragdollReport;
+    private string _ragdollReportPath = "";
+    private string? _physicsReportNote;
+    private readonly Button _copyDiagnosticsButton = Ux.Secondary("Copy diagnostics");
+    private readonly HashSet<CheckBox> _overlayChosenByUser = new();
+    private bool _overlayDefaultsApplying;
     private readonly CheckBox _bodiesToggle = new()
     {
         Content = "Bodies",
@@ -205,6 +227,18 @@ public partial class MainWindow : Window
     private readonly List<(NifShape Shape, SkinnedMesh.Binding Binding, List<(int From, int To)> Edges)>
         _meshShapes = new();
     private string _meshPath = "";
+    private readonly List<int[]> _meshTriangles = new();
+    private Viewport3D? _viewport;
+    private MeshGeometry? _viewportMesh;
+    private int _viewportMeshVersion;
+    private string _meshMode = MeshModeShaded;
+    private double _meshSkinMilliseconds;
+    private readonly List<MeshPart> _meshParts = new();
+    private readonly List<SkinnedMesh.SkinScratch> _meshSkins = new();
+    private (System.Numerics.Vector3 A, System.Numerics.Vector3 B)[] _meshSegments =
+        Array.Empty<(System.Numerics.Vector3, System.Numerics.Vector3)>();
+    private int _meshSegmentCount;
+    private readonly System.Diagnostics.Stopwatch _meshSkinClock = new();
 
     private readonly TextBox _projectSearchText =
         Ux.Field("name, class, event, variable, animation or field", 360);
@@ -394,6 +428,7 @@ public partial class MainWindow : Window
         _tabs.Items.Add(Tab("Project search", BuildProjectSearchTab()));
         _tabs.Items.Add(Tab("Animation", BuildAnimationTab()));
         _tabs.Items.Add(Tab("Playback", BuildPlaybackTab()));
+        _tabs.Items.Add(Tab("Animations", BuildAnimationIndexTab()));
         _tabs.Items.Add(Tab("Compare", BuildDiffTab()));
 
         _bridgeSave.IsEnabled = false;

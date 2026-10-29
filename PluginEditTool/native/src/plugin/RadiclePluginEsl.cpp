@@ -9,18 +9,10 @@
 #include <fo4/plugin/mutation.hpp>
 
 namespace fo4ide::plugin {
-namespace {
-
-std::string stringArgument(const nlohmann::json& args, std::size_t index) {
-    if (!args.is_array() || index >= args.size() || !args[index].is_string()) return {};
-    return args[index].get<std::string>();
-}
-
-}
 
 Result<nlohmann::json> RadiclePluginBackend::checkEslEligibility(
     const nlohmann::json& arguments) const {
-    const auto name = stringArgument(arguments, 0);
+    const auto name = support::stringArgument(arguments, 0);
     if (name.empty()) {
         return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
     }

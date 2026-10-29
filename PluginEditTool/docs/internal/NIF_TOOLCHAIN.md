@@ -17,7 +17,7 @@ Blender ──OBJ──▶ niftool.exe (C++/nifly) ──▶ FO4 .nif ──▶ 
                      ▲   │                                     (existing record tools)
                      │   └─ geo JSON / verify / inspect / fix
    FO4RecordEditor (C#/WPF + React WebView2)
-     • MCP tools  nif_import/nif_inspect/nif_verify/nif_fix   → NifService  → niftool.exe
+     • MCP tools  nif_inspect/nif_verify/nif_tree/nif_geometry → NifService (fo4ide, McpTools.cpp)
      • GUI panel  View / Import / Inspect / Verify / Fix       → NifInterop  → NifService/TextureService
      • 3D viewport (three.js) with DDS textures via Texconv
 ```
@@ -50,13 +50,16 @@ Blender ──OBJ──▶ niftool.exe (C++/nifly) ──▶ FO4 .nif ──▶ 
   hasBSX, hasCollision.
 - `geo <nif>`: full flat vert/tri/normal/uv arrays + per-shape texture paths (feeds the 3D viewer).
 - `verify <nif>`: `RESULT: N checks, M failed` + `[ok]/[FAIL]` per check.
-- `fix <in> <out>`: recompute tangents, add missing BSX, trim texture paths, fix shader/BSX flags.
+- `fix <in> <out>`: recompute tangents, add missing BSX, trim texture paths, fix shader/BSX flags. The niftool source is not in this repository, so its exact behaviour is unverified; the in-process fix below is the documented behaviour, not a copy of niftool.
 - Hand-written OBJ parser (dedup by v/vt/vn, fan triangulation), box-collision wiring
   (`bhkCollisionObject → bhkRigidBodyT → bhkBoxShape`, Havok scale `0.0142875`, layer OL_STATIC).
 - **Verified:** cube OBJ → NIF, verify 9/9, `--collision box` → inspect `hasCollision:true`.
 
-### MCP tools (for the AI): in `PluginToolExecutor`
-- `nif_import`, `nif_inspect`, `nif_verify`, `nif_fix` → `NifService.cs` (shell-out). Activate with
+`inspect`, `geo`, `verify` and `tree` use niftool when the configured executable resolves, so their output stays niftool's. When it does not, `NifService` reads the file in-process through Radicle's reader (`NifRender.cpp`) and needs no niftool. That path is shape-local for `inspect` and `geo` (node transforms are not applied), emits no vertex colors, reads no effect shaders (only `BSLightingShaderProperty` is read), and reports an untextured shape's `.bgsm` material as `bgsmPath`. It has not been checked against niftool on multi-node NIFs, and its inspect values have not been diffed against niftool. The in-process `tree` lists nodes and shapes only (no collision, BSX, alpha, effect-shader or shader-flag groups, which the reader cannot decode yet), and the in-process `verify` runs its own check list. `fix` runs in-process when niftool does not resolve (`NifService::fix` → `fixInProcess` → Radicle's `fo4::nif::fix_nif`). It recomputes every shape's tangent and bitangent from its positions, UVs and normals (the normals are kept), adds a `BSXFlags` extra with value 0 to the root when the root has none, and trims leading and trailing whitespace from texture slots and `BSLightingShaderProperty` material names. It writes through a `.niftmp` and reports the in-process verify. It refuses with `NifFixFailed` and leaves the output untouched when the input does not read, the root is not a node, or the result does not read back with the same shape vertex and index counts and no reader warnings. It does not do the shader and BSX flag fixes (the NIF layout in `Radicle/docs/NIF.md` pins no rule for them), and it leaves the tangents of a shape that has no normal, tangent and UV attributes as they are. Import runs in-process when niftool does not resolve (`NifService::importObj` through Radicle's `fo4::nif::import_obj`): it writes the NIF through a temporary file, reports the in-process verify, and refuses `--collision box` (needs niftool). Saving edits runs in-process through Radicle's NIF writer (`NifService::applyEdits`, `applyEditsInProcess`) and needs no niftool. The writer sets only text, number and number-list keys (`name`, `material`, `tex0`..`tex7`, `translation`, `scale`, and the shader floats); a boolean or flag-list value, or a key it does not write, fails with `NifEditFailed` naming the key and leaves the file byte-identical. The in-process tree emits no shader-flag or alpha fields, so the editor sends none of them without niftool.
+
+### MCP tools (for the AI)
+- fo4ide (`McpTools.cpp`): `nif_inspect`, `nif_verify`, `nif_tree`, `nif_geometry` → `NifService` (in-process when niftool does not resolve). There is no `nif_import` or `nif_fix` tool here.
+- Legacy C# app (`PluginToolExecutor.cs`): `nif_import`, `nif_inspect`, `nif_verify`, `nif_fix` → `NifService.cs` (shell-out). Activate with
   **`/mcp reconnect`** after a C# rebuild.
 
 ### Editable block tree: **Edit** mode
