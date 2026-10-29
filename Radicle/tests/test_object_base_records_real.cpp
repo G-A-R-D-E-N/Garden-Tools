@@ -1,8 +1,10 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "fo4/schema/formlink_lists.hpp"
+#include "fo4/schema/localized_fields.hpp"
 #include "fo4/schema/record_constraints.hpp"
 #include "fo4/schema/scalar.hpp"
+#include "authoring_order.hpp"
 #include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
@@ -12,7 +14,6 @@
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
-#include <span>
 #include <string>
 #include <string_view>
 
@@ -26,14 +27,6 @@ std::size_t count_subrecords(const fo4::Record& record, fo4::Signature signature
   return static_cast<std::size_t>(std::count_if(
       record.subrecords.begin(), record.subrecords.end(),
       [&](const fo4::Subrecord& sub) { return sub.signature == signature; }));
-}
-
-std::size_t authored_index(std::span<const fo4::schema::SubrecordAuthoringConstraint> rules,
-                           fo4::Signature signature) {
-  for (std::size_t index = 0; index < rules.size(); ++index) {
-    if (rules[index].signature == signature) return index;
-  }
-  return rules.size();
 }
 
 TEST_P(ObjectBaseRecordsReal, RowsDecodeAndAuthoringLimitsHold) {
@@ -59,7 +52,6 @@ TEST_P(ObjectBaseRecordsReal, RowsDecodeAndAuthoringLimitsHold) {
       if (record.header.signature != signature) return;
       ++total;
       const auto key = record.form_key.to_string();
-      std::size_t last_index = 0;
       for (const auto& sub : record.subrecords) {
         for (const auto& field : scalars) {
           if (sub.signature != field.scalar.subrecord) continue;
@@ -71,7 +63,16 @@ TEST_P(ObjectBaseRecordsReal, RowsDecodeAndAuthoringLimitsHold) {
           }
           try {
             const auto bytes = fo4::schema::scalar_field_bytes(sub.data, field.scalar);
-            if (!bytes.empty()) static_cast<void>(fo4::schema::decode_scalar(bytes, field.scalar));
+            if (bytes.empty()) continue;
+            if (field.scalar.storage == fo4::schema::ScalarStorage::zstring &&
+                !field.scalar.embedded &&
+                (field.scalar.localized ||
+                 fo4::schema::is_localized_field(signature, sub.signature))) {
+              static_cast<void>(
+                  fo4::schema::read_localized_string(plugin, signature, sub.signature, sub));
+              continue;
+            }
+            static_cast<void>(fo4::schema::decode_scalar(bytes, field.scalar));
           } catch (const std::exception& error) {
             ADD_FAILURE() << GetParam() << ' ' << key << ' ' << field.path << ": "
                           << error.what();
@@ -85,12 +86,12 @@ TEST_P(ObjectBaseRecordsReal, RowsDecodeAndAuthoringLimitsHold) {
                           << sub.signature.to_string() << " is " << sub.data.size() << " bytes";
           }
         }
-        const auto index = authored_index(rules, sub.signature);
-        if (index < rules.size()) {
-          EXPECT_GE(index, last_index) << GetParam() << ' ' << key << ' ' << signature_text << ' '
-                                       << sub.signature.to_string() << " is out of authoring order";
-          last_index = std::max(last_index, index);
-        }
+      }
+      const auto violation = fo4::test::authoring_order_violation(record, rules);
+      if (violation.has_value()) {
+        ADD_FAILURE() << GetParam() << ' ' << key << ' ' << signature_text << ' '
+                      << violation->subrecord.to_string() << " is out of authoring order: index "
+                      << violation->index << " follows " << violation->last_index;
       }
       for (const auto& rule : rules) {
         const auto count = count_subrecords(record, rule.signature);

@@ -5,7 +5,9 @@
 
 #include <gtest/gtest.h>
 
+#include <cstddef>
 #include <cstdint>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -235,4 +237,25 @@ TEST(MasterMetadata, RemovingLastMasterOfFullPluginAllowsLowOwnIds) {
 
   EXPECT_TRUE(plugin.header.masters.empty());
   EXPECT_NE(fo4::find_record(plugin, fo4::FormKey::parse("000001:Patch.esp")), nullptr);
+}
+
+TEST(MasterMetadata, MasterListStopsAtTheLastFullSlotBeforeTheRuntimeMarkers) {
+  auto plugin = fo4::make_empty_plugin("Patch.esp");
+
+  std::vector<fo4::MasterDescriptor> at_limit;
+  at_limit.reserve(fo4::k_max_plugin_masters);
+  for (std::size_t index = 0; index < fo4::k_max_plugin_masters; ++index) {
+    at_limit.push_back({fo4::PluginKey::from_filename("Master" + std::to_string(index) + ".esp"),
+                        fo4::PluginKind::full});
+  }
+  plugin = fo4::remap_plugin_masters(plugin, at_limit);
+  ASSERT_EQ(plugin.header.masters.size(), fo4::k_max_plugin_masters);
+  EXPECT_EQ(plugin.header.masters.back().key.filename(), "Master252.esp");
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(reread.header.masters.size(), fo4::k_max_plugin_masters);
+
+  at_limit.push_back(
+      {fo4::PluginKey::from_filename("Overflow.esp"), fo4::PluginKind::full});
+  EXPECT_THROW(fo4::remap_plugin_masters(plugin, at_limit), fo4::FormIdError);
 }

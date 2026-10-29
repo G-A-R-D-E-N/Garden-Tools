@@ -16,6 +16,8 @@ namespace {
 
 constexpr auto k_cell = Signature::from_string("CELL");
 constexpr auto k_refr = Signature::from_string("REFR");
+constexpr auto k_achr = Signature::from_string("ACHR");
+constexpr auto k_npc = Signature::from_string("NPC_");
 constexpr auto k_name = Signature::from_string("NAME");
 constexpr auto k_data = Signature::from_string("DATA");
 constexpr auto k_xclc = Signature::from_string("XCLC");
@@ -81,14 +83,22 @@ FormKey create_placed_reference(Plugin& plugin, const PlacedReferenceCreation& c
     throw PlacedReferenceError(
         "placed reference CELL must be owned by this plugin; copy the cell as an override first");
   }
+  if (creation.kind == PlacedReferenceKind::variant) {
+    throw PlacedReferenceError("placed reference variants cannot be created yet");
+  }
+  const bool npc = creation.kind == PlacedReferenceKind::npc;
   const auto* cell_record = find_record(next, creation.cell);
   if (cell_record == nullptr || cell_record->header.signature != k_cell) {
     throw PlacedReferenceError("placed reference CELL is not a CELL record in this plugin");
   }
   require_decodable(*cell_record);
   if (creation.base.owner() == next.key) {
-    if (find_record(next, creation.base) == nullptr) {
+    const auto* base_record = find_record(next, creation.base);
+    if (base_record == nullptr) {
       throw PlacedReferenceError("placed reference base is not a record in this plugin");
+    }
+    if (npc && base_record->header.signature != k_npc) {
+      throw PlacedReferenceError("placed NPC base is not an NPC_ record");
     }
   } else if (!detail::has_master(next, creation.base.owner())) {
     throw PlacedReferenceError("placed reference base must come from this plugin or one of its masters");
@@ -121,7 +131,7 @@ FormKey create_placed_reference(Plugin& plugin, const PlacedReferenceCreation& c
   if (creation.initially_disabled) flags |= RecordFlags::initially_disabled;
 
   Record record;
-  record.header.signature = k_refr;
+  record.header.signature = npc ? k_achr : k_refr;
   record.header.form_id = encode_plugin_form_id(key, plugin_form_id_context(next));
   record.header.form_version = next.header.form_version;
   record.header.flags = RecordFlags{flags};

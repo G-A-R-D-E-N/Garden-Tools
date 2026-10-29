@@ -410,3 +410,78 @@ TEST(PlacedReferenceCreate, RefusesNonFiniteTransform) {
                fo4::forms::PlacedReferenceError);
   EXPECT_EQ(fo4::write_plugin(plugin), before);
 }
+
+TEST(PlacedReferenceCreate, CreatesPlacedActorInInteriorCellAndRoundTrips) {
+  auto plugin = fo4::read_plugin(plugin_with_worldspace(), "Cells.esp");
+  const auto base = fo4::create_local_record(plugin, fo4::Signature::from_string("NPC_"));
+  ASSERT_EQ(base, fo4::FormKey::parse("000900:Cells.esp"));
+  const auto cell = fo4::forms::create_interior_cell(plugin, "ActorCell");
+  const auto actor = fo4::forms::create_placed_reference(
+      plugin,
+      fo4::forms::PlacedReferenceCreation{
+          .cell = cell,
+          .base = base,
+          .transform = {.x = 10.0f, .y = 20.0f, .z = 30.0f, .rx = 0.5f, .ry = 0.0f, .rz = 1.5f},
+          .persistent = true,
+          .kind = fo4::forms::PlacedReferenceKind::npc,
+      });
+  EXPECT_EQ(actor, fo4::FormKey::parse("000902:Cells.esp"));
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Cells.esp");
+  const auto* subblock = find_group(reread, fo4::GroupType::interior_cell_subblock, 0u);
+  ASSERT_NE(subblock, nullptr);
+  ASSERT_EQ(subblock->children.size(), 2u);
+  const auto* cell_children = std::get_if<fo4::Group>(&subblock->children[1]);
+  ASSERT_NE(cell_children, nullptr);
+  ASSERT_EQ(cell_children->children.size(), 1u);
+  const auto* bucket = std::get_if<fo4::Group>(&cell_children->children[0]);
+  ASSERT_NE(bucket, nullptr);
+  EXPECT_EQ(bucket->header.group_type,
+            static_cast<std::int32_t>(fo4::GroupType::cell_persistent_children));
+  ASSERT_EQ(bucket->children.size(), 1u);
+  const auto* record = std::get_if<fo4::Record>(&bucket->children[0]);
+  ASSERT_NE(record, nullptr);
+  EXPECT_EQ(record->header.signature, fo4::Signature::from_string("ACHR"));
+  EXPECT_EQ(record->form_key, actor);
+  EXPECT_TRUE(record->header.flags.is_persistent());
+
+  const auto* name = subrecord_named(*record, "NAME");
+  ASSERT_NE(name, nullptr);
+  ASSERT_EQ(name->data.size(), 4u);
+  EXPECT_EQ(read_u32(name->data, 0), 0x00000900u);
+
+  const auto* data = subrecord_named(*record, "DATA");
+  ASSERT_NE(data, nullptr);
+  ASSERT_EQ(data->data.size(), 24u);
+  EXPECT_FLOAT_EQ(read_f32(data->data, 0), 10.0f);
+  EXPECT_FLOAT_EQ(read_f32(data->data, 8), 30.0f);
+
+  const auto refs = fo4::forms::placed_references_for_cell(reread, cell);
+  ASSERT_EQ(refs.size(), 1u);
+  EXPECT_EQ(refs[0].kind, fo4::forms::PlacedReferenceKind::npc);
+  ASSERT_TRUE(refs[0].base.has_value());
+  EXPECT_EQ(*refs[0].base, base);
+  EXPECT_FLOAT_EQ(refs[0].transform.z, 30.0f);
+}
+
+TEST(PlacedReferenceCreate, RefusesVariantKindAndNonNpcBaseWithoutMutation) {
+  auto plugin = fo4::read_plugin(plugin_with_worldspace(), "Cells.esp");
+  const auto actor_base = fo4::create_local_record(plugin, fo4::Signature::from_string("NPC_"));
+  const auto object_base = fo4::create_local_record(plugin, fo4::Signature::from_string("MISC"));
+  const auto cell = fo4::forms::create_interior_cell(plugin, "Refusing");
+  const auto before = fo4::write_plugin(plugin);
+
+  const auto variant_refusal = placed_reference_refusal(
+      plugin,
+      fo4::forms::PlacedReferenceCreation{
+          .cell = cell, .base = actor_base, .kind = fo4::forms::PlacedReferenceKind::variant});
+  EXPECT_NE(variant_refusal.find("variants cannot be created yet"), std::string::npos);
+
+  const auto base_refusal = placed_reference_refusal(
+      plugin,
+      fo4::forms::PlacedReferenceCreation{
+          .cell = cell, .base = object_base, .kind = fo4::forms::PlacedReferenceKind::npc});
+  EXPECT_NE(base_refusal.find("not an NPC_ record"), std::string::npos);
+
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}

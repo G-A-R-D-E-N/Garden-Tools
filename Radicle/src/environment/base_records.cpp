@@ -2,6 +2,7 @@
 
 #include "record_reader.hpp"
 #include "fo4/forms/weather.hpp"
+#include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
 
 #include <algorithm>
@@ -22,6 +23,54 @@ constexpr std::size_t k_distant_lod_slot = 260;
 constexpr std::size_t k_water_visual_required_size = 188;
 constexpr std::size_t k_water_silt_end = 200;
 constexpr std::size_t k_water_visual_full_size = 201;
+constexpr std::size_t k_weather_transition_offset = 3;
+
+Record* find_record_to_edit(Plugin& plugin, const FormKey& key, const char (&type)[5]) {
+  Record* record = nullptr;
+  visit_records(plugin, [&](Record& candidate) {
+    if (candidate.form_key == key) {
+      if (record != nullptr) throw WorldDecodeError(std::string("duplicate ") + type + " record key");
+      record = &candidate;
+    }
+  });
+  if (record == nullptr) return nullptr;
+  require_decodable(*record);
+  if (record->header.signature != sig(type)) throw WorldDecodeError(std::string("expected a ") + type + " record");
+  return record;
+}
+
+Subrecord& required_subrecord(Record& record, const char (&type)[5]) {
+  Subrecord* slot = nullptr;
+  for (auto& sub : record.subrecords) {
+    if (sub.signature != sig(type)) continue;
+    if (slot != nullptr) throw WorldDecodeError(std::string(type) + " is duplicated");
+    slot = &sub;
+  }
+  if (slot == nullptr) throw WorldDecodeError(std::string(type) + " is missing");
+  return *slot;
+}
+
+void mark_edited(Plugin& plugin, Record& record) {
+  record.original_range.clear();
+  record.decompressed_payload.clear();
+  record.header.data_size = 0;
+  record.uncompressed_size = 0;
+  plugin.original_range.clear();
+}
+
+std::uint32_t encode_link(const FormKey& key, const PluginFormIdContext& context) {
+  try {
+    return encode_plugin_form_id(key, context).value();
+  } catch (const FormIdError& error) {
+    throw WorldDecodeError(std::string("link encode failed: ") + error.what());
+  }
+}
+
+void append_u32(std::vector<std::byte>& out, std::uint32_t value) {
+  std::array<std::byte, 4> bytes{};
+  std::memcpy(bytes.data(), &value, 4);
+  out.insert(out.end(), bytes.begin(), bytes.end());
+}
 
 std::optional<std::string_view> text(const Reader& reader, Signature signature) {
   const auto* sub = reader.unique(signature);
@@ -124,33 +173,48 @@ ClimateData decode_climate(const Environment& env, const RecordRef& ref) {
 }
 
 bool set_climate_timing(Plugin& plugin, const FormKey& key, const ClimateTiming& timing) {
-  Record* record = nullptr;
-  visit_records(plugin, [&](Record& candidate) {
-    if (candidate.form_key == key) {
-      if (record != nullptr) throw WorldDecodeError("duplicate climate record key");
-      record = &candidate;
-    }
-  });
+  auto* record = find_record_to_edit(plugin, key, "CLMT");
   if (record == nullptr) return false;
-  require_decodable(*record);
-  if (record->header.signature != sig("CLMT")) throw WorldDecodeError("expected a CLMT record");
-  Subrecord* slot = nullptr;
-  for (auto& sub : record->subrecords) {
-    if (sub.signature != sig("TNAM")) continue;
-    if (slot != nullptr) throw WorldDecodeError("CLMT contains duplicate TNAM");
-    slot = &sub;
-  }
-  if (slot == nullptr || slot->data.size() != 6) throw WorldDecodeError("CLMT requires a six-byte TNAM");
+  auto& slot = required_subrecord(*record, "TNAM");
+  if (slot.data.size() != 6) throw WorldDecodeError("CLMT requires a six-byte TNAM");
   const std::array bytes{std::byte{timing.sunrise_begin}, std::byte{timing.sunrise_end},
                          std::byte{timing.sunset_begin}, std::byte{timing.sunset_end},
                          std::byte{timing.volatility}, std::byte{timing.moons_phase_length}};
-  if (std::equal(bytes.begin(), bytes.end(), slot->data.begin())) return true;
-  std::copy(bytes.begin(), bytes.end(), slot->data.begin());
-  record->original_range.clear();
-  record->decompressed_payload.clear();
-  record->header.data_size = 0;
-  record->uncompressed_size = 0;
-  plugin.original_range.clear();
+  if (std::equal(bytes.begin(), bytes.end(), slot.data.begin())) return true;
+  std::copy(bytes.begin(), bytes.end(), slot.data.begin());
+  mark_edited(plugin, *record);
+  return true;
+}
+
+bool set_climate_weathers(Plugin& plugin, const FormKey& key, std::span<const ClimateWeather> weathers) {
+  auto* record = find_record_to_edit(plugin, key, "CLMT");
+  if (record == nullptr) return false;
+  const auto context = plugin_form_id_context(plugin);
+  std::vector<std::byte> bytes;
+  bytes.reserve(weathers.size() * 12);
+  for (const auto& entry : weathers) {
+    append_u32(bytes, encode_link(entry.weather, context));
+    append_u32(bytes, static_cast<std::uint32_t>(entry.chance));
+    append_u32(bytes, encode_link(entry.global, context));
+  }
+  const bool present = std::any_of(record->subrecords.begin(), record->subrecords.end(),
+                                   [](const Subrecord& sub) { return sub.signature == sig("WLST"); });
+  if (!present) {
+    if (bytes.empty()) return true;
+    Subrecord list;
+    list.signature = sig("WLST");
+    list.data = std::move(bytes);
+    const auto at = std::find_if(record->subrecords.begin(), record->subrecords.end(),
+                                 [](const Subrecord& sub) { return sub.signature != sig("EDID"); });
+    record->subrecords.insert(at, std::move(list));
+    mark_edited(plugin, *record);
+    return true;
+  }
+  auto& list = required_subrecord(*record, "WLST");
+  if (list.data.size() % 12 != 0) throw WorldDecodeError("CLMT WLST must be a multiple of 12 bytes");
+  if (bytes == list.data) return true;
+  list.data = std::move(bytes);
+  mark_edited(plugin, *record);
   return true;
 }
 
@@ -183,6 +247,58 @@ WeatherData decode_weather(const Environment& env, const RecordRef& ref) {
     }
   }
   return out;
+}
+
+bool set_weather_colors(Plugin& plugin, const FormKey& key, WeatherColorGroup group, std::span<const ByteColor> times) {
+  auto* record = find_record_to_edit(plugin, key, "WTHR");
+  if (record == nullptr) return false;
+  const auto version = record->header.form_version;
+  auto& nam0 = required_subrecord(*record, "NAM0");
+  if (nam0.data.size() != forms::weather_nam0_size(version)) throw WorldDecodeError("NAM0 does not match its form version");
+  const auto index = static_cast<std::size_t>(group);
+  if (index >= forms::weather_color_groups(version)) throw WorldDecodeError("weather color group is not stored at this form version");
+  const auto slots = forms::weather_time_slots(version);
+  if (times.size() != slots) throw WorldDecodeError("NAM0 colour group needs one colour per time slot");
+  bool changed = false;
+  for (std::size_t time = 0; time < slots; ++time) {
+    auto* out = nam0.data.data() + (index * slots + time) * 4;
+    const std::array bytes{std::byte{times[time].red}, std::byte{times[time].green}, std::byte{times[time].blue}};
+    if (std::equal(bytes.begin(), bytes.end(), out)) continue;
+    std::copy(bytes.begin(), bytes.end(), out);
+    changed = true;
+  }
+  if (changed) mark_edited(plugin, *record);
+  return true;
+}
+
+bool set_weather_fog(Plugin& plugin, const FormKey& key, std::span<const float> distances) {
+  auto* record = find_record_to_edit(plugin, key, "WTHR");
+  if (record == nullptr) return false;
+  auto& fnam = required_subrecord(*record, "FNAM");
+  const auto size = forms::weather_fnam_size(record->header.form_version);
+  if (fnam.data.size() != size || distances.size() * 4 != size) {
+    throw WorldDecodeError("FNAM needs one float per stored fog distance");
+  }
+  std::vector<std::byte> bytes(size);
+  std::memcpy(bytes.data(), distances.data(), size);
+  if (bytes == fnam.data) return true;
+  fnam.data = std::move(bytes);
+  mark_edited(plugin, *record);
+  return true;
+}
+
+bool set_weather_transition(Plugin& plugin, const FormKey& key, std::uint8_t transition_delta) {
+  auto* record = find_record_to_edit(plugin, key, "WTHR");
+  if (record == nullptr) return false;
+  auto& data = required_subrecord(*record, "DATA");
+  if (data.data.size() != forms::weather_data_size(record->header.form_version)) {
+    throw WorldDecodeError("DATA does not match its form version");
+  }
+  auto& slot = data.data[k_weather_transition_offset];
+  if (slot == std::byte{transition_delta}) return true;
+  slot = std::byte{transition_delta};
+  mark_edited(plugin, *record);
+  return true;
 }
 
 std::vector<StaticCollectionPart> decode_static_collection(const Environment& env, const RecordRef& ref) {

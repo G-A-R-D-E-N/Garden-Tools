@@ -13,14 +13,10 @@ public sealed class RagdollFrameRegressionTests
     private const string Skeleton =
         "Meshes/Actors/Character/CharacterAssets/skeleton.hkx";
 
-    private static string Fixture(string relative) =>
-        Path.Combine(AppContext.BaseDirectory, "fixtures/vanilla",
-                     relative.Replace('/', Path.DirectorySeparatorChar));
-
     [Fact]
     public void StaticDropStartsFromTheMeasuredBodyFramesAlreadyOnScreen()
     {
-        string path = Fixture(Skeleton);
+        string path = TestFixtures.Path(Skeleton);
         var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(path));
         Assert.NotNull(model);
 
@@ -49,7 +45,7 @@ public sealed class RagdollFrameRegressionTests
     [Fact]
     public void EngineeringFitUsesDisplayedMappedBodyFrames()
     {
-        string path = Fixture(Skeleton);
+        string path = TestFixtures.Path(Skeleton);
         var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(path));
         Assert.NotNull(model);
         var skeleton = new HkxBinaryReader().ReadSkeleton(path);

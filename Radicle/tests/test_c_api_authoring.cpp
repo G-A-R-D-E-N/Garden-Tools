@@ -19,7 +19,9 @@ namespace {
 
 struct Plugin {
   radicle_plugin* handle{nullptr};
-  Plugin() { EXPECT_EQ(radicle_plugin_create("Authoring.esp", &handle), RADICLE_STATUS_OK); }
+  explicit Plugin(const char* filename = "Authoring.esp") {
+    EXPECT_EQ(radicle_plugin_create(filename, &handle), RADICLE_STATUS_OK);
+  }
   ~Plugin() { radicle_plugin_destroy(handle); }
   Plugin(const Plugin&) = delete;
   Plugin& operator=(const Plugin&) = delete;
@@ -166,7 +168,7 @@ TEST(CApiAuthoring, CreateRecordRefusalsLeaveThePluginUntouched) {
   Plugin plugin;
   radicle_form_key key{"x", 9};
 
-  EXPECT_EQ(radicle_plugin_create_record(plugin.handle, "MISC", "A", &key), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_create_record(plugin.handle, "XXXX", "A", &key), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(key.plugin, nullptr);
   EXPECT_EQ(radicle_plugin_create_record(plugin.handle, "EYES", "A", &key), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_plugin_create_record(plugin.handle, "ARMO", "\xE4\xB8\xAD", &key),
@@ -249,4 +251,33 @@ TEST(CApiAuthoring, UnknownOrderRemovalIsRefusedAsInvalidArgumentWithoutChanging
   radicle_plugin_destroy(handle);
   std::error_code error;
   std::filesystem::remove_all(root, error);
+}
+
+TEST(CApiAuthoring, CopiesARecordAsAnOverrideThroughTheExport) {
+  Plugin source{"Source.esp"};
+  Plugin target{"Target.esp"};
+  const auto key = make_armor(source);
+  ASSERT_NE(key.plugin, nullptr);
+
+  radicle_record_copy_status status = RADICLE_RECORD_COPY_ALREADY_EXISTS;
+  EXPECT_EQ(radicle_plugin_copy_record_override(target.handle, source.handle, key, 0, &status),
+            RADICLE_STATUS_OK);
+  EXPECT_EQ(status, RADICLE_RECORD_COPY_INSERTED);
+  EXPECT_EQ(order(target.snapshot(), 0x800), (std::vector<std::string>{"EDID", "DATA"}));
+
+  EXPECT_EQ(radicle_plugin_copy_record_override(target.handle, source.handle, key, 0, &status),
+            RADICLE_STATUS_OK);
+  EXPECT_EQ(status, RADICLE_RECORD_COPY_ALREADY_EXISTS);
+  EXPECT_EQ(radicle_plugin_copy_record_override(target.handle, source.handle, key, 1, &status),
+            RADICLE_STATUS_OK);
+  EXPECT_EQ(status, RADICLE_RECORD_COPY_REPLACED);
+
+  const radicle_form_key missing{key.plugin, 0x8FF};
+  EXPECT_EQ(radicle_plugin_copy_record_override(target.handle, source.handle, missing, 0, &status),
+            RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(radicle_plugin_copy_record_override(nullptr, source.handle, key, 0, &status),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_copy_record_override(target.handle, source.handle, key, 0, nullptr),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(order(target.snapshot(), 0x800), (std::vector<std::string>{"EDID", "DATA"}));
 }

@@ -38,42 +38,47 @@ public class ProcessRunnerTests
         _out.WriteLine($"elapsed={sw.Elapsed.TotalSeconds:0.0}s stdout={r.StdOut.Length} stderr={r.StdErr.Length}");
 
         r.Started.Should().BeTrue();
-        r.TimedOut.Should().BeFalse("draining both streams concurrently must let the child finish");
-        r.StdOut.Should().Contain("STDOUT-MARKER");
-        r.StdErr.Length.Should().BeGreaterThan(100_000, "the whole stderr flood must be captured, not truncated");
+        AssertFloodIsDrained(r);
     }
 
     [Fact]
     public async Task ChildFloodingStderr_DoesNotDeadlock_Async()
     {
-        var r = await ProcessRunner.RunAsync(ChattyOnStderr(), TimeSpan.FromSeconds(60));
-
-        r.TimedOut.Should().BeFalse();
-        r.StdOut.Should().Contain("STDOUT-MARKER");
-        r.StdErr.Length.Should().BeGreaterThan(100_000);
+        AssertFloodIsDrained(await ProcessRunner.RunAsync(ChattyOnStderr(), TimeSpan.FromSeconds(60)));
     }
 
     [Fact]
     public void HangingChild_IsKilledAtTheTimeout()
     {
         var sw = Stopwatch.StartNew();
-        var r = ProcessRunner.Run(PowerShell("Start-Sleep -Seconds 120"), TimeSpan.FromSeconds(3));
+        var r = ProcessRunner.Run(PowerShell("Start-Sleep -Seconds 120"), TimeSpan.FromSeconds(1));
         sw.Stop();
         _out.WriteLine($"elapsed={sw.Elapsed.TotalSeconds:0.0}s timedOut={r.TimedOut}");
 
-        r.TimedOut.Should().BeTrue();
-        sw.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(45), "the timeout must actually fire");
+        AssertKilledAtTheTimeout(r, sw.Elapsed);
     }
 
     [Fact]
     public async Task HangingChild_IsKilledAtTheTimeout_Async()
     {
         var sw = Stopwatch.StartNew();
-        var r = await ProcessRunner.RunAsync(PowerShell("Start-Sleep -Seconds 120"), TimeSpan.FromSeconds(3));
+        var r = await ProcessRunner.RunAsync(PowerShell("Start-Sleep -Seconds 120"), TimeSpan.FromSeconds(1));
         sw.Stop();
 
+        AssertKilledAtTheTimeout(r, sw.Elapsed);
+    }
+
+    private static void AssertFloodIsDrained(ProcessResult r)
+    {
+        r.TimedOut.Should().BeFalse("draining both streams concurrently must let the child finish");
+        r.StdOut.Should().Contain("STDOUT-MARKER");
+        r.StdErr.Length.Should().BeGreaterThan(100_000, "the whole stderr flood must be captured, not truncated");
+    }
+
+    private static void AssertKilledAtTheTimeout(ProcessResult r, TimeSpan elapsed)
+    {
         r.TimedOut.Should().BeTrue();
-        sw.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(45));
+        elapsed.Should().BeLessThan(TimeSpan.FromSeconds(45), "the timeout must actually fire");
     }
 
     [Fact]

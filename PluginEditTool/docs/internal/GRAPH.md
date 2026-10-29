@@ -106,7 +106,7 @@ dotnet test FO4RecordEditor.Core.Tests/FO4RecordEditor.Core.Tests.csproj
 | Generated instructions vs hand-written Papyrus | `PexComparer`, 28 fixtures | **28 / 28 identical** |
 | Compiled object decompiles and recompiles | 28 fixtures | **28 / 28** |
 | Source through the graph and back | `GraphLiftRoundTripTests`, 28 fixtures | **28 / 28 instruction-identical** |
-| A compiled `.pex` through the graph and back | `GraphLiftPexRoundTripTests`, 28 fixtures | **28 / 28 instruction-identical** |
+| A compiled `.pex` through the graph and back | `GraphLiftRoundTripTests`, 28 fixtures | **28 / 28 instruction-identical** |
 | Decompiler fidelity on the real corpus | `FO4RE_PSC_ROOTS`, 1,498 scripts | **1,202 matched, 80.2%** |
 | Corpus lifting into a graph | `FO4RE_PSC_ROOTS`, 1,500 scripts | **1,414 lifted, 94.3%** |
 | Negative matrix | 19 invalid graphs | **19 / 19 correct code and node id** |

@@ -31,7 +31,7 @@ public sealed class EditorShell : Grid
         (Home, new[] { "Bridge" }),
         (Graph, new[] { "Graph" }),
         (Inspect, new[] { "Tree", "Symbols" }),
-        (Animation, new[] { "Animation", "Playback" }),
+        (Animation, new[] { "Animation", "Playback", "Animations" }),
         (Project, new[] { "Project search", "Chain", "Compare" }),
     };
 
@@ -51,7 +51,7 @@ public sealed class EditorShell : Grid
     private readonly ScrollViewer _toolbarScroll = new()
     {
         AllowAutoHide = false,
-        HorizontalScrollBarVisibility = ScrollBarVisibility.Visible,
+        HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
         VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
     };
     private readonly StackPanel _tools = new()

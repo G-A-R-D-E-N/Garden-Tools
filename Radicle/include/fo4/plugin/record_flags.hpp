@@ -1,5 +1,6 @@
 #pragma once
 
+#include "fo4/environment/environment.hpp"
 #include "fo4/flags.hpp"
 #include "fo4/plugin/container.hpp"
 
@@ -11,7 +12,7 @@ enum class RecordFlagStatus {
   record_missing,
   header_record,
   deleted_bit,
-  exterior_relocation_unsupported,
+  target_cell_missing,
 };
 
 enum class MarkDeletedStatus {
@@ -29,12 +30,16 @@ enum class UndeleteStatus {
   header_record,
   not_a_reference,
   incomplete_reference,
+  injected_record,
 };
 
 RecordFlagStatus set_record_flags(Plugin& plugin, const FormKey& record_key, RecordFlags::value_type flags);
 
 MarkDeletedStatus mark_override_deleted(Plugin& plugin, const FormKey& record_key);
 
-UndeleteStatus undelete_and_disable_reference(Plugin& plugin, const FormKey& record_key);
+// load_order must hold the record's owner plugin, or the record reads as injected_record.
+UndeleteStatus undelete_and_disable_reference(Plugin& plugin,
+                                             const env::Environment& load_order,
+                                             const FormKey& record_key);
 
 }  // namespace fo4

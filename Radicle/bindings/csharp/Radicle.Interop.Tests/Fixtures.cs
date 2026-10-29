@@ -81,45 +81,6 @@ internal static class PluginWriter
     }
 }
 
-internal static class Ba2Writer
-{
-    public static byte[] General(params (string Path, byte[] Data)[] files)
-    {
-        const int header = 24, entry = 16 + 20;
-        var dataOffset = header + entry * files.Length;
-        using var stream = new MemoryStream();
-        using var w = new BinaryWriter(stream);
-        var nameTable = dataOffset + files.Sum(f => f.Data.Length);
-        w.Write(Encoding.ASCII.GetBytes("BTDX"));
-        w.Write(1u);
-        w.Write(Encoding.ASCII.GetBytes("GNRL"));
-        w.Write((uint)files.Length);
-        w.Write((ulong)nameTable);
-        var offset = (ulong)dataOffset;
-        foreach (var (path, data) in files)
-        {
-            w.Write(0u);
-            w.Write(Encoding.ASCII.GetBytes(Path.GetExtension(path).TrimStart('.').PadRight(4, '\0')[..4]));
-            w.Write(0u);
-            w.Write((byte)0);
-            w.Write((byte)1);
-            w.Write((ushort)0x10);
-            w.Write(offset);
-            w.Write(0u);
-            w.Write((uint)data.Length);
-            w.Write(0xBAADF00Du);
-            offset += (ulong)data.Length;
-        }
-        foreach (var (_, data) in files) w.Write(data);
-        foreach (var (path, _) in files)
-        {
-            w.Write((ushort)path.Length);
-            w.Write(Encoding.ASCII.GetBytes(path));
-        }
-        return stream.ToArray();
-    }
-}
-
 internal static class StringsWriter
 {
     /// <summary>A .STRINGS table: count, data size, (id, offset) rows, NUL-terminated text.</summary>

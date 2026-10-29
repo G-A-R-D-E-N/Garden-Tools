@@ -49,6 +49,10 @@ constexpr auto k_missing = fo4::ScalarMutationStatus::subrecord_missing;
 constexpr auto k_link_updated = fo4::FormLinkFieldMutationStatus::updated;
 constexpr auto k_link_missing = fo4::FormLinkFieldMutationStatus::subrecord_missing;
 
+Bytes fixture_payload(std::uint32_t id, const char* name) {
+  return payloads(read(build(fixture(), true)), key(id), name).at(0);
+}
+
 }
 
 TEST(ClimateWeatherAuthoring, ClimateScalarsStridedChanceAndStringsWriteOnlyTheirBytes) {
@@ -504,4 +508,161 @@ TEST(ClimateWeatherReader, FourLayerCloudColorsDecodeOnlyBeforeFormVersion35) {
     if (name == "JNAM") { data = filled(1024, 0); }
   }
   EXPECT_THROW(fo4::forms::decode_weather(read(build(mismatched, true)), key(k_wthr_old)), fo4::forms::WeatherError);
+}
+
+TEST(ClimateWeatherAuthoring, SetClimateWeathersRewritesOnlyWlstAndRefusesUnlistedOwners) {
+  auto plugin = read(build(fixture(), true));
+  const auto before = snapshot(plugin);
+  const std::vector<fo4::env::ClimateWeather> weathers{{key(k_wthr_old), -3, key(k_glob)}, {key(k_wthr), 7, {}}};
+  const std::vector<fo4::env::ClimateWeather> foreign{{fo4::FormKey{fo4::PluginKey::from_filename("Other.esp"), fo4::LocalFormId{0x12}}, 1, {}}};
+  EXPECT_FALSE(fo4::env::set_climate_weathers(plugin, key(0x999), weathers));
+  EXPECT_THROW(fo4::env::set_climate_weathers(plugin, key(k_wthr), weathers), fo4::env::WorldDecodeError);
+  EXPECT_THROW(fo4::env::set_climate_weathers(plugin, key(k_clmt), foreign), fo4::env::WorldDecodeError);
+  EXPECT_TRUE(snapshot(plugin) == before);
+  EXPECT_TRUE(fo4::env::set_climate_weathers(plugin, key(k_clmt), weathers));
+
+  const auto reloaded = reload(plugin);
+  EXPECT_EQ(payloads(reloaded, key(k_clmt), "WLST").at(0),
+            words({k_local | k_wthr_old, 0xFFFFFFFDu, k_local | k_glob, k_local | k_wthr, 7u, 0u}));
+  EXPECT_EQ(payloads(reloaded, key(k_clmt), "TNAM").at(0), fixture_payload(k_clmt, "TNAM"));
+  EXPECT_EQ(payloads(reloaded, key(k_clmt), "FNAM").at(0), fixture_payload(k_clmt, "FNAM"));
+  EXPECT_EQ(payloads(reloaded, key(k_clmt), "MODT").at(0), fixture_payload(k_clmt, "MODT"));
+  const auto after = snapshot(reloaded);
+  for (const auto& [record, bytes] : before) {
+    if (record != key(k_clmt)) { EXPECT_EQ(after.at(record), bytes) << record.to_string(); }
+  }
+  const auto env = fo4::env::Environment::from_plugins({reloaded});
+  const auto climate = fo4::env::decode_climate(env, *env.winner(key(k_clmt)));
+  ASSERT_EQ(climate.weathers.size(), 2u);
+  EXPECT_EQ(climate.weathers[0].weather, key(k_wthr_old));
+  EXPECT_EQ(climate.weathers[0].chance, -3);
+  EXPECT_EQ(climate.weathers[0].global, key(k_glob));
+  EXPECT_EQ(climate.weathers[1].weather, key(k_wthr));
+  EXPECT_EQ(climate.weathers[1].chance, 7);
+  EXPECT_TRUE(climate.weathers[1].global.owner().empty());
+}
+
+TEST(ClimateWeatherAuthoring, SetClimateWeathersAddsAnAbsentWlstAfterEdidAndRefusesOddWlst) {
+  auto plugin = read(build(fixture(), true));
+  const auto before = snapshot(plugin);
+  EXPECT_TRUE(fo4::env::set_climate_weathers(plugin, key(k_clmt_bare), {}));
+  EXPECT_TRUE(snapshot(plugin) == before);
+  const std::vector<fo4::env::ClimateWeather> weathers{{key(k_wthr), 7, {}}};
+  EXPECT_TRUE(fo4::env::set_climate_weathers(plugin, key(k_clmt_bare), weathers));
+
+  const auto reloaded = reload(plugin);
+  EXPECT_EQ(order(reloaded, k_clmt_bare), (Order{"EDID", "WLST", "TNAM"}));
+  EXPECT_EQ(payloads(reloaded, key(k_clmt_bare), "WLST").at(0), words({k_local | k_wthr, 7u, 0u}));
+  EXPECT_EQ(payloads(reloaded, key(k_clmt_bare), "TNAM").at(0), fixture_payload(k_clmt_bare, "TNAM"));
+  const auto env = fo4::env::Environment::from_plugins({reloaded});
+  const auto climate = fo4::env::decode_climate(env, *env.winner(key(k_clmt_bare)));
+  ASSERT_EQ(climate.weathers.size(), 1u);
+  EXPECT_EQ(climate.weathers[0].weather, key(k_wthr));
+  EXPECT_EQ(climate.weathers[0].chance, 7);
+
+  auto entries = fixture();
+  entries[0].subs[1].second.push_back(std::byte{0});
+  auto odd = read(build(entries, true));
+  const auto odd_before = snapshot(odd);
+  EXPECT_THROW(fo4::env::set_climate_weathers(odd, key(k_clmt), weathers), fo4::env::WorldDecodeError);
+  EXPECT_TRUE(snapshot(odd) == odd_before);
+}
+
+TEST(ClimateWeatherAuthoring, SetWeatherColorsWritesOneGroupsRgbAndKeepsTheUnusedByte) {
+  auto entries = fixture();
+  for (auto& [name, data] : entries[2].subs) {
+    if (name == "NAM0") { data = filled(608, 0xA5); }
+  }
+  for (auto& [name, data] : entries[3].subs) {
+    if (name == "NAM0") { data = filled(272, 0xA5); }
+  }
+  auto plugin = read(build(entries, true));
+  const auto before = snapshot(plugin);
+  const std::vector<fo4::env::ByteColor> times{{1, 2, 3}, {4, 5, 6}, {7, 8, 9}, {10, 11, 12},
+                                               {13, 14, 15}, {16, 17, 18}, {19, 20, 21}, {22, 23, 24}};
+  const auto group = fo4::env::WeatherColorGroup::sun_glare;
+  const auto legacy_times = std::span<const fo4::env::ByteColor>(times).first(4);
+  EXPECT_THROW(fo4::env::set_weather_colors(plugin, key(k_wthr), group, legacy_times), fo4::env::WorldDecodeError);
+  EXPECT_THROW(fo4::env::set_weather_colors(plugin, key(k_wthr_old), fo4::env::WeatherColorGroup::fog_far_high, legacy_times),
+               fo4::env::WorldDecodeError);
+  EXPECT_TRUE(fo4::env::set_weather_colors(plugin, key(k_wthr), group, times));
+  EXPECT_TRUE(fo4::env::set_weather_colors(plugin, key(k_wthr_old), group, legacy_times));
+
+  const auto reloaded = reload(plugin);
+  const auto g = static_cast<std::size_t>(group);
+  Bytes modern = filled(608, 0xA5);
+  for (std::size_t time = 0; time < 8; ++time) {
+    const auto at = (g * 8 + time) * 4;
+    modern[at] = std::byte{times[time].red};
+    modern[at + 1] = std::byte{times[time].green};
+    modern[at + 2] = std::byte{times[time].blue};
+  }
+  Bytes legacy = filled(272, 0xA5);
+  for (std::size_t time = 0; time < 4; ++time) {
+    const auto at = (g * 4 + time) * 4;
+    legacy[at] = std::byte{times[time].red};
+    legacy[at + 1] = std::byte{times[time].green};
+    legacy[at + 2] = std::byte{times[time].blue};
+  }
+  EXPECT_EQ(payloads(reloaded, key(k_wthr), "NAM0").at(0), modern);
+  EXPECT_EQ(payloads(reloaded, key(k_wthr_old), "NAM0").at(0), legacy);
+  const auto after = snapshot(reloaded);
+  for (const auto& [record, bytes] : before) {
+    if (record != key(k_wthr) && record != key(k_wthr_old)) { EXPECT_EQ(after.at(record), bytes) << record.to_string(); }
+  }
+  const auto env = fo4::env::Environment::from_plugins({reloaded});
+  const auto color = fo4::env::decode_weather(env, *env.winner(key(k_wthr))).colors->color(group, fo4::env::k_weather_day);
+  ASSERT_TRUE(color.has_value());
+  EXPECT_EQ(color->red, 4);
+  EXPECT_EQ(color->green, 5);
+  EXPECT_EQ(color->blue, 6);
+}
+
+TEST(ClimateWeatherAuthoring, SetWeatherFogRewritesFnamAndRefusesAWrongDistanceCount) {
+  auto plugin = read(build(fixture(), true));
+  const auto before = snapshot(plugin);
+  std::vector<float> fog(18);
+  for (std::size_t i = 0; i < fog.size(); ++i) { fog[i] = static_cast<float>(i + 1); }
+  const std::vector<float> legacy_fog(fog.begin(), fog.begin() + 8);
+  EXPECT_THROW(fo4::env::set_weather_fog(plugin, key(k_wthr), legacy_fog), fo4::env::WorldDecodeError);
+  EXPECT_THROW(fo4::env::set_weather_fog(plugin, key(k_wthr_old), fog), fo4::env::WorldDecodeError);
+  EXPECT_TRUE(snapshot(plugin) == before);
+  EXPECT_TRUE(fo4::env::set_weather_fog(plugin, key(k_wthr), fog));
+  EXPECT_TRUE(fo4::env::set_weather_fog(plugin, key(k_wthr_old), legacy_fog));
+
+  const auto reloaded = reload(plugin);
+  EXPECT_EQ(payloads(reloaded, key(k_wthr), "NAM0").at(0), fixture_payload(k_wthr, "NAM0"));
+  EXPECT_EQ(payloads(reloaded, key(k_wthr), "DATA").at(0), fixture_payload(k_wthr, "DATA"));
+  const auto after = snapshot(reloaded);
+  for (const auto& [record, bytes] : before) {
+    if (record != key(k_wthr) && record != key(k_wthr_old)) { EXPECT_EQ(after.at(record), bytes) << record.to_string(); }
+  }
+  const auto env = fo4::env::Environment::from_plugins({reloaded});
+  EXPECT_EQ(fo4::env::decode_weather(env, *env.winner(key(k_wthr))).fog_distances, fog);
+  EXPECT_EQ(fo4::env::decode_weather(env, *env.winner(key(k_wthr_old))).fog_distances, legacy_fog);
+}
+
+TEST(ClimateWeatherAuthoring, SetWeatherTransitionWritesOnlyTheDeltaByte) {
+  auto plugin = read(build(fixture(), true));
+  const auto before = snapshot(plugin);
+  EXPECT_TRUE(fo4::env::set_weather_transition(plugin, key(k_wthr), 200));
+  EXPECT_TRUE(fo4::env::set_weather_transition(plugin, key(k_wthr_old), 9));
+  EXPECT_FALSE(fo4::env::set_weather_transition(plugin, key(0x999), 9));
+
+  const auto reloaded = reload(plugin);
+  auto expected = fixture_payload(k_wthr, "DATA");
+  expected[3] = std::byte{200};
+  EXPECT_EQ(payloads(reloaded, key(k_wthr), "DATA").at(0), expected);
+  auto expected_old = fixture_payload(k_wthr_old, "DATA");
+  expected_old[3] = std::byte{9};
+  EXPECT_EQ(payloads(reloaded, key(k_wthr_old), "DATA").at(0), expected_old);
+  EXPECT_EQ(payloads(reloaded, key(k_wthr), "FNAM").at(0), fixture_payload(k_wthr, "FNAM"));
+  const auto after = snapshot(reloaded);
+  for (const auto& [record, bytes] : before) {
+    if (record != key(k_wthr) && record != key(k_wthr_old)) { EXPECT_EQ(after.at(record), bytes) << record.to_string(); }
+  }
+  const auto env = fo4::env::Environment::from_plugins({reloaded});
+  const auto parameters = fo4::env::decode_weather(env, *env.winner(key(k_wthr))).parameters;
+  ASSERT_TRUE(parameters.has_value());
+  EXPECT_EQ(parameters->transition_delta, 200);
 }

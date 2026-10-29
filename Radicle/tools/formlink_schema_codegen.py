@@ -53,6 +53,55 @@ def parse_formlink_field_targets(row, path: str, union_targets):
     return parse_targets(row.get("targets"), path)
 
 
+SEGMENT_KEYS = ("counter_payload_size", "segment_counters", "segment_index")
+
+
+def parse_list_counter(row, path: str):
+    counter = row.get("counter", "")
+    if not isinstance(counter, str) or (counter and not valid_signature(counter)):
+        raise ValueError(f"FormLink list counter is invalid: {path!r}")
+    return counter
+
+
+def parse_list_segment(row, path: str, storage: str, counter: str):
+    present = [key for key in SEGMENT_KEYS if key in row]
+    if not present:
+        return None
+    if len(present) != len(SEGMENT_KEYS):
+        raise ValueError(f"FormLink list segment keys must be declared together: {path!r}")
+    if storage != "packed_array":
+        raise ValueError(f"FormLink list segments require packed_array storage: {path!r}")
+    if not counter:
+        raise ValueError(f"FormLink list segments require a counter subrecord: {path!r}")
+    payload_size = row["counter_payload_size"]
+    counters = row["segment_counters"]
+    index = row["segment_index"]
+    if type(payload_size) is not int or payload_size <= 0 or payload_size % 4 != 0 or payload_size > 0xFFFFFFFF:
+        raise ValueError(f"FormLink list counter_payload_size must be a positive multiple of four: {path!r}")
+    if not isinstance(counters, list) or not counters:
+        raise ValueError(f"FormLink list segment_counters must be a non-empty array: {path!r}")
+    if any(type(offset) is not int or offset < 0 or offset + 4 > payload_size for offset in counters):
+        raise ValueError(f"FormLink list segment_counters must fit the counter payload: {path!r}")
+    if len(set(counters)) != len(counters):
+        raise ValueError(f"FormLink list segment_counters contains duplicate offsets: {path!r}")
+    if type(index) is not int or not 0 <= index < len(counters):
+        raise ValueError(f"FormLink list segment_index must index segment_counters: {path!r}")
+    return {"payload_size": payload_size, "counters": list(counters), "index": index}
+
+
+def parse_list_counter_offset(row, path: str, counter: str, segment):
+    offset = row.get("counter_offset")
+    if offset is None:
+        return 0
+    if type(offset) is not int or offset < 0 or offset > 0xFFFFFFFF:
+        raise ValueError(f"FormLink list counter_offset must be a non-negative integer: {path!r}")
+    if not counter:
+        raise ValueError(f"FormLink list counter_offset requires a counter subrecord: {path!r}")
+    if segment is not None:
+        raise ValueError(f"FormLink list counter_offset cannot be combined with segments: {path!r}")
+    return offset
+
+
 def load_lists(schema_path: Path):
     document = json.loads(schema_path.read_text(encoding="utf-8"))
     if document.get("version") != 1:
@@ -67,7 +116,8 @@ def load_lists(schema_path: Path):
     fields = []
     nested_lists = []
     seen_paths = set()
-    seen_record_subrecords = set()
+    seen_record_subrecords = {}
+    segment_bodies = {}
     seen_field_aliases = set()
     seen_nested_paths = set()
     for record in records:
@@ -109,16 +159,39 @@ def load_lists(schema_path: Path):
                     raise ValueError(
                         f"duplicate FormLink list field_alias for {record_signature}.{field_alias}")
                 seen_field_aliases.add(alias_key)
-            key = (record_signature, subrecord)
-            if key in seen_record_subrecords:
-                raise ValueError(
-                    f"duplicate FormLink list subrecord mapping for {record_signature}.{subrecord}")
-            seen_record_subrecords.add(key)
             parsed_targets, wildcard_target = parse_targets_or_wildcard(row.get("targets"), path)
             if not isinstance(nullable, bool):
                 raise ValueError(f"FormLink list nullable must be boolean: {path!r}")
             if mutation not in MUTATIONS:
                 raise ValueError(f"unsupported FormLink list mutation policy: {mutation!r}")
+            storage = row.get("storage", "per_subrecord")
+            if storage not in ("per_subrecord", "packed_array"):
+                raise ValueError(f"unsupported FormLink list storage: {storage!r}")
+            counter = parse_list_counter(row, path)
+            element_tail = row.get("element_tail", "")
+            if not isinstance(element_tail, str) or (element_tail and not valid_signature(element_tail)):
+                raise ValueError(f"FormLink list element_tail is invalid: {path!r}")
+            if element_tail and storage != "per_subrecord":
+                raise ValueError(f"FormLink list element_tail requires per_subrecord storage: {path!r}")
+            segment = parse_list_segment(row, path, storage, counter)
+            counter_offset = parse_list_counter_offset(row, path, counter, segment)
+            key = (record_signature, subrecord)
+            previous = seen_record_subrecords.get(key)
+            if previous is not None and (segment is None or previous[1] is False):
+                raise ValueError(
+                    f"duplicate FormLink list subrecord mapping for {record_signature}.{subrecord}")
+            seen_record_subrecords[key] = (path, segment is not None)
+            if segment is not None:
+                body = (segment["payload_size"], tuple(segment["counters"]))
+                if segment_bodies.setdefault((record_signature, counter), body) != body:
+                    raise ValueError(
+                        f"FormLink list segments of {record_signature}.{counter} must share one "
+                        f"counter layout: {path!r}")
+            explicit_anchor = row.get("anchor_predecessors")
+            if explicit_anchor is not None and (
+                    not isinstance(explicit_anchor, list)
+                    or not all(isinstance(value, str) and valid_signature(value) for value in explicit_anchor)):
+                raise ValueError(f"FormLink list anchor_predecessors must be signatures: {path!r}")
 
             lists.append({
                 "record": record_signature,
@@ -126,13 +199,17 @@ def load_lists(schema_path: Path):
                 "label": label,
                 "field_alias": field_alias,
                 "subrecord": subrecord,
-                "storage": "per_subrecord",
-                "counter": "",
+                "storage": storage,
+                "counter": counter,
+                "counter_offset": counter_offset,
+                "element_tail": element_tail,
+                "segment": segment,
                 "targets": parsed_targets,
                 "nullable": nullable,
                 "can_insert": mutation in ("existing_neighbors", "appendable"),
                 "wildcard_target": wildcard_target,
                 "append_when_empty": mutation == "appendable",
+                "explicit_anchor": explicit_anchor,
             })
 
         field_rows = record.get("formlink_fields", [])
@@ -174,6 +251,14 @@ def load_lists(schema_path: Path):
                     raise ValueError(f"FormLink payload_sizes must contain fitting positive integers: {path!r}")
                 if len(set(payload_sizes)) != len(payload_sizes):
                     raise ValueError(f"FormLink payload_sizes contains duplicate sizes: {path!r}")
+            min_form_version = row.get("min_form_version", 0)
+            if "min_form_version" in row and (type(min_form_version) is not int or not 0 < min_form_version <= 0xFFFF):
+                raise ValueError(f"FormLink min_form_version must be a 16-bit positive integer: {path!r}")
+            max_form_version = row.get("max_form_version", 0)
+            if "max_form_version" in row and (type(max_form_version) is not int or not 0 < max_form_version <= 0xFFFF):
+                raise ValueError(f"FormLink max_form_version must be a 16-bit positive integer: {path!r}")
+            if max_form_version and max_form_version <= min_form_version:
+                raise ValueError(f"FormLink max_form_version must exceed min_form_version: {path!r}")
             fields.append({
                 "record": record_signature,
                 "path": path,
@@ -183,6 +268,8 @@ def load_lists(schema_path: Path):
                 "nullable": nullable,
                 "address": parse_address(row, path, subrecord, True, 4),
                 "payload_sizes": payload_sizes,
+                "max_form_version": max_form_version,
+                "min_form_version": min_form_version,
                 "targets": parse_formlink_field_targets(row, path, union_targets),
             })
 
@@ -251,6 +338,10 @@ def load_lists(schema_path: Path):
         record_groups.setdefault(item["record"], []).append(item)
     for group in record_groups.values():
         for position, item in enumerate(group):
+            if item["explicit_anchor"] is not None:
+                item["anchor_predecessors"] = list(item["explicit_anchor"])
+                item["anchor_successors"] = []
+                continue
             item["anchor_predecessors"] = [
                 group[j]["subrecord"] for j in range(position - 1, -1, -1)
             ]
@@ -282,7 +373,7 @@ def load_lists(schema_path: Path):
         subrecord_key = (rec, "KWDA")
         if subrecord_key in seen_record_subrecords:
             raise ValueError(f"keyword subrecord mapping collides for {rec}.KWDA")
-        seen_record_subrecords.add(subrecord_key)
+        seen_record_subrecords[subrecord_key] = (path, False)
         anchors = {}
         for side in ("predecessors", "successors"):
             values = entry.get(side, [])
@@ -300,6 +391,9 @@ def load_lists(schema_path: Path):
             "subrecord": "KWDA",
             "storage": "packed_array",
             "counter": "KSIZ",
+            "counter_offset": 0,
+            "element_tail": "",
+            "segment": None,
             "targets": ["KYWD"],
             "nullable": False,
             "can_insert": True,
@@ -309,9 +403,14 @@ def load_lists(schema_path: Path):
             "anchor_successors": anchors["successors"],
         })
 
-    scalar_entries = [dict(field, width=WIDTHS.get(field["storage"], 0)) for field in load_fields(schema_path)]
+    scalar_entries = [dict(field, width=WIDTHS.get(field["storage"], 0))
+                      for field in load_fields(schema_path)
+                      if field["address"]["segment"] is None]
     entries = [dict(field, width=4, embedded=True) for field in fields]
     for row in lists + nested_lists:
+        # Constraint: a segmented list has no static slot range, so it is not overlap-checked.
+        if row.get("segment") is not None:
+            continue
         packed = row.get("storage") == "packed_array"
         entries.append({
             "record": row["record"],
@@ -355,67 +454,148 @@ def load_target_unions(document):
     return unions
 
 
-def render(lists, nested_lists, fields, unions) -> str:
-    lines = [
-        "// Generated by Radicle/tools/formlink_schema_codegen.py from schema/fallout4/fields.json.",
-        "// Do not hand-edit; update the JSON source and regenerate.",
-        "inline constexpr Signature k_generated_formlink_list_targets[] = {",
-    ]
-    target_start = 0
+GENERATED_HEADER = (
+    "// Generated by Radicle/tools/formlink_schema_codegen.py from schema/fallout4/fields.json.",
+    "// Do not hand-edit; update the JSON source and regenerate.",
+)
+
+# Constraint: shards are included in order inside one array so every index stays an offset.
+SHARD_ENTRY_LIMIT = 600
+SHARD_LINE_LIMIT = 750
+
+
+def signature_entry(record: str, target: str):
+    return record, f"  Signature::from_string({cpp_string(target)}),"
+
+
+def chunk_entries(entries):
+    groups = []
+    for record, text in entries:
+        if not groups or groups[-1][0] != record:
+            groups.append((record, [text]))
+        else:
+            groups[-1][1].append(text)
+    chunks = []
+    current = []
+    count = 0
+    for group in groups:
+        if current and count + len(group[1]) > SHARD_ENTRY_LIMIT:
+            chunks.append(current)
+            current = []
+            count = 0
+        current.append(group)
+        count += len(group[1])
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+def render_shard(name: str, index: int, total: int, chunk) -> str:
+    first = chunk[0][0]
+    last = chunk[-1][0]
+    rows = sum(len(group_rows) for _record, group_rows in chunk)
+    text = list(GENERATED_HEADER)
+    text.append(f"// Shard {index + 1} of {total} of {name}: records {first} to {last}, {rows} entries.")
+    text.extend(row for _record, group_rows in chunk for row in group_rows)
+    if len(text) > SHARD_LINE_LIMIT:
+        raise ValueError(f"generated FormLink schema shard exceeds {SHARD_LINE_LIMIT} lines: {name}")
+    return "\n".join(text) + "\n"
+
+
+def shard_files(output: Path):
+    return sorted(output.parent.glob(f"{output.stem}_*_shard[0-9][0-9].inc"))
+
+
+def render(lists, nested_lists, fields, unions, stem: str = "generated_formlink_lists"):
+    shards = {}
+    lines = list(GENERATED_HEADER)
+
+    def emit_array(declaration: str, name: str, entries, placeholder=None) -> None:
+        lines.append(f"inline constexpr {declaration} {name}[] = {{")
+        if len(entries) > SHARD_ENTRY_LIMIT:
+            chunks = chunk_entries(entries)
+            for index, chunk in enumerate(chunks):
+                shard = f"{stem}_{name.removeprefix('k_generated_')}_shard{index:02d}.inc"
+                shards[shard] = render_shard(name, index, len(chunks), chunk)
+                lines.append(f'#include "{shard}"')
+        elif not entries:
+            if placeholder is not None:
+                lines.append(f"  {placeholder}")
+        else:
+            lines.extend(text for _record, text in entries)
+        lines.append("};")
+        lines.append("")
+
+    list_target_entries = []
     descriptors = []
-    nested_descriptors = []
+    target_start = 0
     for row in lists:
         for target in row["targets"]:
-            lines.append(f"  Signature::from_string({cpp_string(target)}),")
+            list_target_entries.append(signature_entry(row["record"], target))
         descriptors.append((row, target_start, len(row["targets"])))
         target_start += len(row["targets"])
+    nested_descriptors = []
     for row in nested_lists:
         for target in row["targets"]:
-            lines.append(f"  Signature::from_string({cpp_string(target)}),")
+            list_target_entries.append(signature_entry(row["record"], target))
         nested_descriptors.append((row, target_start, len(row["targets"])))
         target_start += len(row["targets"])
+    emit_array("Signature", "k_generated_formlink_list_targets", list_target_entries)
 
-    lines.append("};")
-    lines.append("")
-
-    lines.append("inline constexpr Signature k_generated_formlink_field_targets[] = {")
+    field_target_entries = []
     field_descriptors = []
     field_target_start = 0
     for row in fields:
         for target in row["targets"]:
-            lines.append(f"  Signature::from_string({cpp_string(target)}),")
+            field_target_entries.append(signature_entry(row["record"], target))
         field_descriptors.append((row, field_target_start, len(row["targets"])))
         field_target_start += len(row["targets"])
-    if field_target_start == 0:
-        lines.append("  Signature{},")
-    lines.append("};")
-    lines.append("")
+    emit_array("Signature", "k_generated_formlink_field_targets", field_target_entries, "Signature{},")
 
     # Sibling anchors used to position the first element of an otherwise-empty
     # flat list: each descriptor's preceding siblings (nearest first) followed by
     # its following siblings (nearest first).
-    lines.append("inline constexpr Signature k_generated_formlink_list_anchors[] = {")
-    anchor_start = 0
+    # Constraint: an empty constexpr array is ill-formed under -Wpedantic -Werror.
+    anchor_entries = []
     anchor_meta = []
+    anchor_start = 0
     for row, _first_target, _target_count in descriptors:
         predecessors = row.get("anchor_predecessors", [])
         successors = row.get("anchor_successors", [])
         for signature in predecessors:
-            lines.append(f"  Signature::from_string({cpp_string(signature)}),")
+            anchor_entries.append(signature_entry(row["record"], signature))
         for signature in successors:
-            lines.append(f"  Signature::from_string({cpp_string(signature)}),")
+            anchor_entries.append(signature_entry(row["record"], signature))
         anchor_meta.append((anchor_start, len(predecessors), len(successors)))
         anchor_start += len(predecessors) + len(successors)
-    if anchor_start == 0:
-        # A zero-length constexpr array is ill-formed under -Wpedantic -Werror;
-        # keep a never-indexed placeholder when no list declares a sibling.
-        lines.append("  Signature{},")
-    lines.append("};")
-    lines.append("")
+    emit_array("Signature", "k_generated_formlink_list_anchors", anchor_entries, "Signature{},")
+
+    # Counter byte offset in body order of the segment lists sharing one counter subrecord.
+    segment_entries = []
+    segment_start = 0
+    segment_meta = []
+    segment_bodies = {}
+    for row, _first_target, _target_count in descriptors:
+        segment = row.get("segment")
+        if segment is None:
+            segment_meta.append((0, 0, 0))
+            continue
+        body = (row["record"], row["counter"], tuple(segment["counters"]))
+        if body not in segment_bodies:
+            segment_bodies[body] = (segment_start, len(segment["counters"]))
+            for offset in segment["counters"]:
+                segment_entries.append((row["record"], f"  {offset},"))
+            segment_start += len(segment["counters"])
+        first_segment, segment_count = segment_bodies[body]
+        segment_meta.append((segment["index"], first_segment, segment_count))
+    emit_array("std::uint32_t", "k_generated_packed_segment_counters", segment_entries,
+               "std::uint32_t{},")
 
     lines.append("inline constexpr FormLinkListDescriptor k_generated_formlink_lists[] = {")
-    for (row, first_target, target_count), (first_anchor, predecessor_count, successor_count) in zip(
-            descriptors, anchor_meta):
+    for (row, first_target, target_count), (first_anchor, predecessor_count, successor_count), (
+            segment_index, first_segment, segment_count) in zip(
+            descriptors, anchor_meta, segment_meta):
+        segment = row.get("segment")
         lines.append(
             "  {" +
             f"Signature::from_string({cpp_string(row['record'])}), " +
@@ -430,7 +610,12 @@ def render(lists, nested_lists, fields, unions) -> str:
             ("true" if row["wildcard_target"] else "false") + ", " +
             ("true" if row["append_when_empty"] else "false") + ", " +
             f"{first_target}, {target_count}, " +
-            f"{first_anchor}, {predecessor_count}, {successor_count}" +
+            f"{first_anchor}, {predecessor_count}, {successor_count}, " +
+            f"{segment_index}, {first_segment}, {segment_count}, " +
+            f"{segment['payload_size'] if segment else 0}, " +
+            f"{row['counter_offset']}, " +
+            (f"Signature::from_string({cpp_string(row['element_tail'])})"
+                if row["element_tail"] else "Signature{}") +
             "},"
         )
     lines.append("};")
@@ -452,9 +637,9 @@ def render(lists, nested_lists, fields, unions) -> str:
         )
     lines.append("};")
     lines.append("")
-    lines.append("inline constexpr FormLinkFieldDescriptor k_generated_formlink_fields[] = {")
+    formlink_field_entries = []
     for row, first_target, target_count in field_descriptors:
-        lines.append(
+        formlink_field_entries.append((row["record"],
             "  {" +
             f"Signature::from_string({cpp_string(row['record'])}), " +
             f"{cpp_string(row['path'])}, {cpp_string(row['label'])}, " +
@@ -463,19 +648,18 @@ def render(lists, nested_lists, fields, unions) -> str:
             ("true" if row["nullable"] else "false") + ", " +
             f"{first_target}, {target_count}, " +
             render_address(row["address"]) +
-            (", {{" + ", ".join(map(str, row["payload_sizes"])) + "}}" if row["payload_sizes"] else "") +
-            "},"
-        )
-    lines.append("};")
-    lines.append("")
+            (", {{" + ", ".join(map(str, row["payload_sizes"])) + "}}"
+             if row["payload_sizes"] or row["max_form_version"] or row["min_form_version"] else "") +
+            (f", {row['max_form_version']}" if row["max_form_version"] or row["min_form_version"] else "") +
+            (f", {row['min_form_version']}" if row["min_form_version"] else "") +
+            "},"))
+    emit_array("FormLinkFieldDescriptor", "k_generated_formlink_fields", formlink_field_entries)
     for union in unions:
         if union["name"] == "sigBaseObjects":
-            lines.append("inline constexpr Signature k_generated_sig_base_objects[] = {")
-            for target in union["targets"]:
-                lines.append(f"  Signature::from_string({cpp_string(target)}),")
-            lines.append("};")
-            lines.append("")
-    return "\n".join(lines) + "\n"
+            emit_array("Signature", "k_generated_sig_base_objects",
+                       [("", f"  Signature::from_string({cpp_string(target)}),")
+                        for target in union["targets"]])
+    return "\n".join(lines) + "\n", shards
 
 
 def main() -> int:
@@ -486,15 +670,29 @@ def main() -> int:
     args = parser.parse_args()
 
     lists, nested_lists, fields, unions = load_lists(args.schema)
-    expected = render(lists, nested_lists, fields, unions)
-    if args.check:
-        if not args.output.exists() or args.output.read_text(encoding="utf-8") != expected:
-            print(f"generated FormLink list schema is stale: {args.output}")
-            return 1
-        return 0
+    parent, shards = render(lists, nested_lists, fields, unions, args.output.stem)
+    expected = {args.output: parent}
+    for name, text in shards.items():
+        expected[args.output.with_name(name)] = text
+    orphans = [path for path in shard_files(args.output) if path not in expected]
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(expected, encoding="utf-8")
+    if args.check:
+        ok = True
+        for path, text in expected.items():
+            if not path.exists() or path.read_text(encoding="utf-8") != text:
+                print(f"generated FormLink list schema is stale: {path}")
+                ok = False
+        for path in orphans:
+            print(f"generated FormLink list schema has an orphan shard: {path}")
+            ok = False
+        return 0 if ok else 1
+
+    for path, text in expected.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8", newline="\n") as handle:
+            handle.write(text)
+    for path in orphans:
+        path.unlink()
     return 0
 
 

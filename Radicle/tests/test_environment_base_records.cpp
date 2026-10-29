@@ -153,6 +153,11 @@ std::vector<std::byte> lgtm_data() {
   out.u32(0x000C0B0A);
   for (float v : {0.9f, 100.0f, 200.0f}) out.f32(v);
   out.u32(0xFFFFFFFF);
+  for (float v : {300.0f, 400.0f}) out.f32(v);
+  out.u32(0x00332211);
+  out.u32(0x00664455);
+  for (float v : {2.0f, 3.0f, 4.0f, 5.0f, 6.0f}) out.f32(v);
+  for (float v : {500.0f, 600.0f}) out.f32(v);
   return out.bytes;
 }
 
@@ -288,6 +293,13 @@ TEST_F(BaseRecordsTest, DecodesSkyRecords) {
   EXPECT_EQ(lgtm.lighting->fog_far_color->red, 0x0A);
   EXPECT_EQ(lgtm.lighting->light_fade_end, std::optional<float>{200.0f});
   EXPECT_FALSE(lgtm.lighting->inherits.has_value());
+  EXPECT_EQ(lgtm.lighting->near_height_mid, std::optional<float>{300.0f});
+  EXPECT_EQ(lgtm.lighting->near_height_range, std::optional<float>{400.0f});
+  ASSERT_TRUE(lgtm.lighting->fog_color_high_far.has_value());
+  EXPECT_EQ(lgtm.lighting->fog_color_high_far->blue, 0x66);
+  EXPECT_EQ(lgtm.lighting->high_density_scale, std::optional<float>{2.0f});
+  EXPECT_EQ(lgtm.lighting->fog_high_far_scale, std::optional<float>{6.0f});
+  EXPECT_EQ(lgtm.lighting->far_height_range, std::optional<float>{600.0f});
   EXPECT_EQ(lgtm.god_rays, key(0x852));
 
   const auto climate = fo4::env::decode_climate(env, *env.winner(key(0x840)));

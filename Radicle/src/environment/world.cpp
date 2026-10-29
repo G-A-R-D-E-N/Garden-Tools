@@ -34,6 +34,21 @@ constexpr Signature k_xcwt{'X', 'C', 'W', 'T'};
 constexpr Signature k_xcim{'X', 'C', 'I', 'M'};
 constexpr Signature k_xezn{'X', 'E', 'Z', 'N'};
 constexpr Signature k_xlcn{'X', 'L', 'C', 'N'};
+constexpr Signature k_visi{'V', 'I', 'S', 'I'};
+constexpr Signature k_pcmb{'P', 'C', 'M', 'B'};
+constexpr Signature k_xclr{'X', 'C', 'L', 'R'};
+constexpr Signature k_xpri{'X', 'P', 'R', 'I'};
+constexpr Signature k_xcas{'X', 'C', 'A', 'S'};
+constexpr Signature k_xcmo{'X', 'C', 'M', 'O'};
+constexpr Signature k_xccm{'X', 'C', 'C', 'M'};
+constexpr Signature k_xgdr{'X', 'G', 'D', 'R'};
+constexpr Signature k_xill{'X', 'I', 'L', 'L'};
+constexpr Signature k_xown{'X', 'O', 'W', 'N'};
+constexpr Signature k_xrnk{'X', 'R', 'N', 'K'};
+constexpr Signature k_xilw{'X', 'I', 'L', 'W'};
+constexpr Signature k_xwcn{'X', 'W', 'C', 'N'};
+constexpr Signature k_xwcu{'X', 'W', 'C', 'U'};
+constexpr Signature k_xwem{'X', 'W', 'E', 'M'};
 
 // xEdit wbAmbientColors: six directional colors, plus specular and fresnel power from form version 30.
 constexpr std::uint16_t k_ambient_specular_form_version = 30;
@@ -69,7 +84,68 @@ std::optional<CellLighting> decode_lighting(const Reader& reader, Signature sign
   if (size >= tail + 12) lighting.light_fade_begin = Reader::f32(*xcll, tail + 8);
   if (size >= tail + 16) lighting.light_fade_end = Reader::f32(*xcll, tail + 12);
   if (has_inherits && size >= tail + 20) lighting.inherits = Reader::u32(*xcll, tail + 16);
+  if (size >= tail + 24) lighting.near_height_mid = Reader::f32(*xcll, tail + 20);
+  if (size >= tail + 28) lighting.near_height_range = Reader::f32(*xcll, tail + 24);
+  if (size >= tail + 32) lighting.fog_color_high_near = Reader::color(*xcll, tail + 28);
+  if (size >= tail + 36) lighting.fog_color_high_far = Reader::color(*xcll, tail + 32);
+  if (size >= tail + 40) lighting.high_density_scale = Reader::f32(*xcll, tail + 36);
+  if (size >= tail + 44) lighting.fog_near_scale = Reader::f32(*xcll, tail + 40);
+  if (size >= tail + 48) lighting.fog_far_scale = Reader::f32(*xcll, tail + 44);
+  if (size >= tail + 52) lighting.fog_high_near_scale = Reader::f32(*xcll, tail + 48);
+  if (size >= tail + 56) lighting.fog_high_far_scale = Reader::f32(*xcll, tail + 52);
+  if (size >= tail + 60) lighting.far_height_mid = Reader::f32(*xcll, tail + 56);
+  if (size >= tail + 64) lighting.far_height_range = Reader::f32(*xcll, tail + 60);
   return lighting;
+}
+
+std::vector<FormKey> link_list(const Reader& reader, Signature signature) {
+  std::vector<FormKey> links;
+  const auto* subrecord = reader.unique(signature);
+  if (subrecord == nullptr) return links;
+  if (subrecord->data.size() % 4 != 0) reader.fail(signature, "must be a multiple of 4 bytes");
+  for (std::size_t offset = 0; offset < subrecord->data.size(); offset += 4) {
+    links.push_back(reader.link_at(*subrecord, offset));
+  }
+  return links;
+}
+
+std::optional<std::string_view> stored_string(const Reader& reader, Signature signature) {
+  const auto* subrecord = reader.unique(signature);
+  if (subrecord == nullptr) return std::nullopt;
+  const auto value = zstring_view(*subrecord);
+  if (!value) reader.fail(signature, "is not a single NUL-terminated string");
+  return *value;
+}
+
+void decode_cell_extras(const Reader& reader, CellData& data) {
+  if (const auto* visi = reader.sized(k_visi, 2)) data.previs_timestamp = Reader::u16(*visi, 0);
+  if (const auto* pcmb = reader.sized(k_pcmb, 2)) data.precombined_timestamp = Reader::u16(*pcmb, 0);
+  data.regions = link_list(reader, k_xclr);
+  data.previs_references = link_list(reader, k_xpri);
+  data.acoustic_space = reader.link(k_xcas);
+  data.music_type = reader.link(k_xcmo);
+  data.sky_weather_region = reader.link(k_xccm);
+  data.god_rays = reader.link(k_xgdr);
+  data.lock_list = reader.link(k_xill);
+  if (const auto* xown = reader.sized(k_xown, 12)) {
+    data.owner = reader.link_at(*xown, 0);
+  }
+  if (const auto* xrnk = reader.sized(k_xrnk, 4)) data.owner_rank = Reader::i32(*xrnk, 0);
+  if (const auto* xilw = reader.sized(k_xilw, 16)) {
+    data.exterior_lod = ExteriorLod{
+        reader.link_at(*xilw, 0),
+        {Reader::f32(*xilw, 4), Reader::f32(*xilw, 8), Reader::f32(*xilw, 12)}};
+  }
+  if (const auto* xwcn = reader.sized(k_xwcn, 4)) data.water_current_count = Reader::u32(*xwcn, 0);
+  if (const auto* xwcu = reader.unique(k_xwcu)) {
+    if (xwcu->data.size() % 16 != 0) reader.fail(k_xwcu, "must be a multiple of 16 bytes");
+    for (std::size_t offset = 0; offset < xwcu->data.size(); offset += 16) {
+      data.water_currents.push_back(WaterCurrent{
+          {Reader::f32(*xwcu, offset), Reader::f32(*xwcu, offset + 4), Reader::f32(*xwcu, offset + 8)},
+          Reader::f32(*xwcu, offset + 12)});
+    }
+  }
+  data.water_environment_map = stored_string(reader, k_xwem);
 }
 
 }  // namespace
@@ -130,6 +206,7 @@ CellData decode_cell(const Environment& env, const RecordRef& ref) {
   data.location = reader.link(k_xlcn);
   data.worldspace = env.world_of(ref);
   data.water = reader.link(k_xcwt);
+  decode_cell_extras(reader, data);
   return data;
 }
 

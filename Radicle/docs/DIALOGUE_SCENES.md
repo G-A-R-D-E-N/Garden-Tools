@@ -101,14 +101,21 @@ fields remain editable. Preflight takes the owning plugin's localized flag expli
 | SCEN PNAM, TNAM links | `ParentQuest` | typed `SCEN\ParentQuest` (QUST), `SCEN\TemplateScene` (SCEN) | refused | refused | refused | yes |
 | SCEN VNAM, CNAM, ACTV, NNAM, XNAM | raw | `SCEN\DeathBehavior`, `CombatBehavior`, `PlayerDialogueBehavior`, `ObserveCombatBehavior`, `CameraDistanceOverride`, `DialogueDistanceOverride`, `Notes`, `Index` | refused in practice (`unknown_order`: every official scene has groups) | yes | refused | none |
 | SCEN KSIZ/KWDA keywords | raw | FormLink list ops | refused (coupled) | refused (coupled) | refused | yes |
-| SCEN phases | `Phases` | typed `SCEN\Phase\EditorWidth`, `Flags`, `QuestStageOnStart`/`OnCompletion` by phase index; NAM0 OPAQUE | refused | refused | refused | none |
-| SCEN actors | `Actors` | typed `SCEN\Actor\Alias`, `Flags`, `BehaviorFlags` by actor index | refused | refused | refused | none |
-| SCEN action headers | `Actions` | typed `SCEN\Action\ActorAlias`, `Index`, `Flags`, `StartPhase`, `EndPhase` (u32) by action index; ANAM type and NAM0 OPAQUE | refused | refused | refused | none |
+| SCEN phases | `Phases` | typed `SCEN\Phase\EditorWidth`, `Flags`, `QuestStageOnStart`/`OnCompletion` and the NAM0 name (`set_scene_phase_name`) by phase index | `insert_scene_phase`: two HNAM markers around NAM0, two NEXT, WNAM 350. No FNAM or SCQS (xEdit gives neither a native default) | yes (`remove_scene_phase`, the phase's own `[open, close]` span) | refused | none |
+| SCEN actors | `Actors` | typed `SCEN\Actor\Alias`, `Flags`, `BehaviorFlags` by actor index | `insert_scene_actor`: ALID -1, LNAM 0, DNAM 26 (the xEdit defaults) | yes (`remove_scene_actor`, the ALID/LNAM/DNAM triplet) | refused | none |
+| SCEN action headers | `Actions` | typed `SCEN\Action\ActorAlias`, `Index`, `Flags`, `StartPhase`, `EndPhase` (u32) and the NAM0 name (`set_scene_action_name`) by action index | `insert_scene_action`: ANAM type then ALID -1 and the empty ANAM close, with no payload (xEdit drops the type-specific payload when the type changes) | yes (`remove_scene_action`, the action's own `[open, close]` span including its payload) | refused | none |
+| SCEN action payload members | opaque payload views | typed `SCEN\Action\LoopingMax`/`LoopingMin`/`CameraFovOnPlayerCamera`/`CameraRateOfChange`/`EmotionType`/`EmotionValue`/`TimerMax`/`TimerMin`/`DialogueTargetActor` and the link members `Topic`, `DialogueSubtype`, `AnimArchType`, `AudioOutputOverride`, `PlayerPositive`/`PlayerNegative`/`PlayerNeutral`/`PlayerQuestionResponse`, `PlayerPositive`/`PlayerNegative`/`PlayerNeutral`/`PlayerQuestionDialogueSubtype`, `NpcPositive`/`NpcNegative`/`NpcNeutral`/`NpcQuestionResponse`, `NpcPositive`/`NpcNegative`/`NpcNeutral`/`NpcQuestionDialogueSubtype`, `StartSceneTopic`, `PlaySound`, by action index and only for the stored ANAM type | refused: the members xEdit stores as lists (package `PNAM`, `HTID`/`DTID` headtracking, `LCEP` start scenes) and timer `SCQS`, whose stored width is unresolved | refused (edit only) | `set_scene_action_formlink`, the index-free `set_scene_formlink` throws for these paths | the action's opened payload, per action type |
 | SCEN action payloads, conditions | opaque payload views, condition code | OPAQUE | refused | refused | refused | existing |
 | SCEN records | n/a | n/a | n/a | n/a | refused: official scenes live only under quest children groups | n/a |
 
 All official DIAL, INFO and SCEN follow the authoring order and placement (0 violators). Field list, defaults
 provenance and refusal reasons are in `docs/code-notes/radicle-dialogue-writer.md`.
+
+Action payload members are addressed by action index and only for the type stored in the action's opening ANAM,
+so the same signature can belong to different members in different action types: `SCEN\Action\TimerMax` is the
+timer action's payload SNAM, while `SCEN\Action\StartPhase` is the header SNAM of any action. A member the
+stored type does not carry reports `subrecord_missing`, and a member that another action type also uses under
+another name (`SCEN\Action\AnimArchType` against a package action's `PNAM`) is refused the same way.
 
 ## GardenEngine consumer probe
 

@@ -103,7 +103,7 @@ public class BehaviorTests
             ("PNAM", U32(1)), ("POBA", Array.Empty<byte>()) }))));
         PackageProcedureTree tree;
         using (var env = RadicleEnvironment.Load(new[] { path })) tree = env.PackageProcedure(env.Winner(new FormKey("Behavior.esm", 0x800))!.Value);
-        Assert.True(tree.Decoded); Assert.Equal((nuint)1, tree.RegionBegin); Assert.Equal((nuint)19, tree.RegionEnd); Assert.Equal((byte)7, tree.Marker);
+        Assert.True(tree.Decoded); Assert.Equal((nuint)1, tree.RegionBegin); Assert.Equal((nuint)19, tree.RegionEnd); Assert.Equal((byte)7, tree.NextInputId);
         Assert.Equal(2, tree.Inputs.Count); Assert.Equal("Int", tree.Inputs[0].TypeName); Assert.Equal((nuint)1, tree.Inputs[0].SubrecordBegin);
         Assert.Equal((nuint)3, tree.Inputs[0].SubrecordEnd); Assert.Equal((byte)0, tree.Inputs[0].Index);
         Assert.Equal("Bool", tree.Inputs[1].TypeName); Assert.Equal((byte)1, tree.Inputs[1].Index);
@@ -124,7 +124,7 @@ public class BehaviorTests
             ("PKCU", U32(0, 0, 9)), ("ANAM", Z("Procedure")), ("CITC", U32(0)), ("PNAM", Z("Dance")), ("POBA", Array.Empty<byte>()) }))));
         PackageProcedureTree tree;
         using (var env = RadicleEnvironment.Load(new[] { path })) tree = env.PackageProcedure(env.Winner(new FormKey("Behavior.esm", 0x800))!.Value);
-        Assert.False(tree.Decoded); Assert.Empty(tree.Inputs); Assert.Empty(tree.Nodes); Assert.Null(tree.Marker);
+        Assert.False(tree.Decoded); Assert.Empty(tree.Inputs); Assert.Empty(tree.Nodes); Assert.Null(tree.NextInputId);
         Assert.Equal((nuint)1, tree.RegionBegin); Assert.Equal((nuint)4, tree.RegionEnd);
     }
 }

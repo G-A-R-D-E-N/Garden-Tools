@@ -129,15 +129,12 @@ describe('ScalarEditor', () => {
     expect(onCommit).not.toHaveBeenCalled();
   });
 
-  it('cancels a flag edit on Escape once', () => {
-    render(<ScalarEditor presentation={flags} value="3" onValue={onValue} onCommit={onCommit} onCancel={onCancel} />);
-    fireEvent.keyDown(screen.getByLabelText('Special Combat'), { key: 'Escape' });
-    expect(onCancel).toHaveBeenCalledOnce();
-  });
-
-  it('cancels an enum edit on Escape once', () => {
-    render(<ScalarEditor presentation={crimeArrest} value="1" onValue={onValue} onCommit={onCommit} onCancel={onCancel} />);
-    fireEvent.keyDown(screen.getByDisplayValue('True'), { key: 'Escape' });
+  it.each([
+    ['flag', flags, '3', () => screen.getByLabelText('Special Combat')],
+    ['enum', crimeArrest, '1', () => screen.getByDisplayValue('True')],
+  ])('cancels a %s edit on Escape once', (_kind, presentation, value, target) => {
+    render(<ScalarEditor presentation={presentation} value={value} onValue={onValue} onCommit={onCommit} onCancel={onCancel} />);
+    fireEvent.keyDown(target(), { key: 'Escape' });
     expect(onCancel).toHaveBeenCalledOnce();
   });
 

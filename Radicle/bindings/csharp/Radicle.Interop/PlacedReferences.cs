@@ -51,7 +51,7 @@ public sealed record PlacedReference(
     MapMarker? MapMarker, Teleport? Teleport, Primitive? Primitive, Spline? Spline, IReadOnlyList<Portal> Portals,
     RoomPortal? RoomPortal, Room? Room, IReadOnlyList<FormKey?> LinkedRooms, IReadOnlyList<Patrol> Patrols,
     int? Count, int? LevelModifier, bool HasScripts, short ScriptVersion, short ScriptObjectFormat,
-    bool ScriptsUnsupported, IReadOnlyList<Script> Scripts);
+    bool ScriptsUnsupported, IReadOnlyList<Script> Scripts, FormKey? Emittance = null);
 
 public sealed unsafe partial class RadicleEnvironment
 {
@@ -150,6 +150,7 @@ public sealed unsafe partial class RadicleEnvironment
             r->IgnoredBySandbox != 0, r->OpenByDefault != 0, marker, teleport, primitive, spline, portals, roomPortal,
             room, Keys(r->LinkedRooms, r->LinkedRoomCount), patrols, r->HasCount != 0 ? r->Count : null,
             r->HasLevelModifier != 0 ? r->LevelModifier : null, r->HasScripts != 0, r->ScriptVersion,
-            r->ScriptObjectFormat, r->ScriptsUnsupported != 0, scripts);
+            r->ScriptObjectFormat, r->ScriptsUnsupported != 0, scripts,
+            r->HasEmittance != 0 ? FormKey.FromNative(r->Emittance) : null);
     }
 }

@@ -97,6 +97,9 @@ public:
   // Paths are lowest priority first; any unreadable, duplicate or self-conflicting plugin fails the load.
   static Environment load(std::span<const std::filesystem::path> ordered_paths);
 
+  // In-memory load order: plugins must be lowest priority first, same validation as load().
+  static Environment from_plugins(std::vector<Plugin> ordered_plugins);
+
   const std::vector<PluginInfo>& plugins() const noexcept { return plugins_; }
   const Plugin& plugin(std::size_t index) const { return loaded_.at(index); }
   std::optional<std::size_t> find_plugin(std::string_view filename) const;

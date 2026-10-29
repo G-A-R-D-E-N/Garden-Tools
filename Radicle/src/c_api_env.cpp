@@ -17,6 +17,47 @@ namespace {
 using namespace radicle_c_detail;
 using namespace radicle_c_env_detail;
 
+const fo4::ConflictGraph& reference_graph(const radicle_env& env) {
+  std::call_once(env.graph_once, [&] {
+    std::vector<const fo4::Plugin*> plugins;
+    for (size_t i = 0; i < env.value.plugins().size(); ++i) plugins.push_back(&env.value.plugin(i));
+    env.graph = fo4::ConflictGraph::build(plugins);
+  });
+  return *env.graph;
+}
+
+template <class Hit>
+radicle_status copy_reference_hits(const radicle_env& env,
+                                   const std::vector<Hit>& hits,
+                                   fo4::FormKey Hit::*key,
+                                   radicle_reference_hit** out_hits,
+                                   size_t* out_count) {
+  *out_hits = nullptr;
+  *out_count = 0;
+  if (hits.empty()) return RADICLE_STATUS_OK;
+  std::vector<radicle_reference_hit> mapped;
+  mapped.reserve(hits.size());
+  for (const auto& hit : hits) {
+    radicle_reference_hit out{};
+    out.record = to_c_key(env, hit.*key);
+    out.plugin_index = hit.load_order;
+    const auto signature = hit.subrecord.view();
+    std::memcpy(out.subrecord, signature.data(), 4);
+    out.subrecord[4] = '\0';
+    out.offset = hit.offset;
+    mapped.push_back(out);
+  }
+  auto* array = static_cast<radicle_reference_hit*>(
+      std::malloc(mapped.size() * sizeof(radicle_reference_hit)));
+  if (array == nullptr) {
+    return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to allocate reference hit array");
+  }
+  std::memcpy(array, mapped.data(), mapped.size() * sizeof(radicle_reference_hit));
+  *out_hits = array;
+  *out_count = mapped.size();
+  return RADICLE_STATUS_OK;
+}
+
 }  // namespace
 
 extern "C" {
@@ -205,6 +246,47 @@ radicle_status radicle_env_winners_of(const radicle_env* env,
 void radicle_free_record_array(const radicle_record** records) {
   clear_error();
   std::free(static_cast<void*>(records));
+}
+
+radicle_status radicle_env_referenced_by(const radicle_env* env,
+                                         radicle_form_key key,
+                                         radicle_reference_hit** out_hits,
+                                         size_t* out_count) {
+  clear_error();
+  if (env == nullptr || out_hits == nullptr || out_count == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env, out_hits and out_count are required");
+  }
+  *out_hits = nullptr;
+  *out_count = 0;
+  return guarded("unknown exception while listing references", [&] {
+    const auto form_key = to_form_key(key);
+    if (!form_key) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "invalid FormKey");
+    return copy_reference_hits(*env, reference_graph(*env).referenced_by(*form_key),
+                               &fo4::ReferencedByHit::source, out_hits, out_count);
+  });
+}
+
+radicle_status radicle_env_references_from(const radicle_env* env,
+                                           radicle_form_key key,
+                                           radicle_reference_hit** out_hits,
+                                           size_t* out_count) {
+  clear_error();
+  if (env == nullptr || out_hits == nullptr || out_count == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env, out_hits and out_count are required");
+  }
+  *out_hits = nullptr;
+  *out_count = 0;
+  return guarded("unknown exception while listing outgoing references", [&] {
+    const auto form_key = to_form_key(key);
+    if (!form_key) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "invalid FormKey");
+    return copy_reference_hits(*env, reference_graph(*env).references_from(*form_key),
+                               &fo4::OutgoingReferenceHit::target, out_hits, out_count);
+  });
+}
+
+void radicle_free_reference_hits(radicle_reference_hit* hits) {
+  clear_error();
+  std::free(static_cast<void*>(hits));
 }
 
 radicle_status radicle_record_get_info(const radicle_env* env,

@@ -376,7 +376,8 @@ TEST(ScalarEmbedded, SignatureOnlyLookupSkipsEmbeddedFields) {
   EXPECT_FALSE(fo4::schema::scalar_descriptor(fo4::Signature::from_string("XHLT")).has_value());
   EXPECT_FALSE(fo4::schema::scalar_descriptor(fo4::Signature::from_string("XSCL")).has_value());
   // A signature only one whole-payload row names still resolves.
-  EXPECT_TRUE(fo4::schema::scalar_descriptor(fo4::Signature::from_string("COCT")).has_value());
+  EXPECT_FALSE(fo4::schema::scalar_descriptor(fo4::Signature::from_string("COCT")).has_value());
+  EXPECT_TRUE(fo4::schema::scalar_descriptor(fo4::Signature::from_string("IDLC")).has_value());
 }
 
 TEST(ScalarEmbedded, ReadsWeaponDnamAtMeasuredOffsetsAndTreatsAShortPayloadAsAbsent) {

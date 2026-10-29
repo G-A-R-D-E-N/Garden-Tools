@@ -92,6 +92,12 @@ internal sealed class Mo2ScanData : IDisposable
         }
     }
 
+    public static GameData OpenScanData(string folder)
+    {
+        if (TryOpen(folder, out Mo2ScanData? instance, out _) && instance != null) return instance.Data;
+        return GameData.Discover(folder);
+    }
+
     public IReadOnlyList<string> ModHkxPaths(string folderName, Action<string>? onArchive = null)
     {
         string needle = "/" + folderName.Trim('/', '\\') + "/";
@@ -179,8 +185,8 @@ internal sealed class Mo2ScanData : IDisposable
         string? selected = ReadIniValue(instance, "selected_profile");
         if (!string.IsNullOrWhiteSpace(selected))
         {
-            string selectedList = Path.Combine(instance, "profiles", selected, "modlist.txt");
-            if (!File.Exists(selectedList))
+            string? selectedList = GameData.ModlistPath(instance, selected);
+            if (selectedList == null)
             {
                 error = $"selected MO2 profile '{selected}' has no modlist.txt";
                 return false;
@@ -190,15 +196,15 @@ internal sealed class Mo2ScanData : IDisposable
             return true;
         }
 
-        string rootList = Path.Combine(instance, "modlist.txt");
-        if (File.Exists(rootList))
+        string? rootList = GameData.ModlistPath(instance, null);
+        if (rootList != null)
         {
             modlist = rootList;
             return true;
         }
 
-        string defaultList = Path.Combine(instance, "profiles", "Default", "modlist.txt");
-        if (File.Exists(defaultList))
+        string? defaultList = GameData.ModlistPath(instance, "Default");
+        if (defaultList != null)
         {
             profile = "Default";
             modlist = defaultList;

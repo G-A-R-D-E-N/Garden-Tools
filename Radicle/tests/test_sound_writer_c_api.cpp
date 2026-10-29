@@ -50,7 +50,7 @@ TEST_F(SoundWriterCApi, FieldLinkAuthoringAndCreateStatusesMapAndSurviveReload) 
   EXPECT_EQ(radicle_plugin_set_record_scalar_at(plugin, weapon, "SNDR\\FrequencyShift", 0, "1"), RADICLE_STATUS_NOT_FOUND);
   EXPECT_EQ(radicle_plugin_set_record_scalar_at(plugin, nokind, "SNDR\\StaticAttenuation", 0, "250"), RADICLE_STATUS_OK);
   EXPECT_EQ(radicle_plugin_set_record_scalar_at(plugin, marker, "SNDR\\Priority", 0, "1"), RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(radicle_plugin_set_record_scalar_at(plugin, standard, "SNDR\\DescriptorType", 0, "1"), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_set_record_scalar_at(plugin, standard, "SNDR\\DescriptorType", 0, "519001098"), RADICLE_STATUS_OK);
   EXPECT_EQ(radicle_plugin_set_record_scalar_at(plugin, rkey(0x999), "SNDR\\Priority", 0, "1"), RADICLE_STATUS_NOT_FOUND);
   EXPECT_EQ(radicle_plugin_set_record_scalar_at(plugin, weapon, "SNDR\\RateOfFireRpm", 1, "1000"), RADICLE_STATUS_OK);
   EXPECT_EQ(radicle_plugin_set_record_scalar_at(plugin, weapon, "SNDR\\RateOfFireRpm", 2, "1000"), RADICLE_STATUS_NOT_FOUND);

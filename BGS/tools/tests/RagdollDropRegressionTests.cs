@@ -14,10 +14,6 @@ public sealed class RagdollDropRegressionTests
     private const string Skeleton =
         "Meshes/Actors/Character/CharacterAssets/skeleton.hkx";
 
-    private static string Fixture(string relative) =>
-        Path.Combine(AppContext.BaseDirectory, "fixtures/vanilla",
-                     relative.Replace('/', Path.DirectorySeparatorChar));
-
     [Fact]
     public void GroundedMappedPoseStillReleasesAndSettles()
     {
@@ -236,7 +232,7 @@ public sealed class RagdollDropRegressionTests
 
     private static (HavokRagdollModel Model, AnimationPose.Pose Pose) LoadReference()
     {
-        string path = Fixture(Skeleton);
+        string path = TestFixtures.Path(Skeleton);
         var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(path));
         Assert.NotNull(model);
         var skeleton = new HkxBinaryReader().ReadSkeleton(path);

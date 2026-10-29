@@ -1,15 +1,19 @@
 #include "c_api_env_internal.hpp"
 #include "fo4/archive/assets.hpp"
+#include "fo4/archive/ba2.hpp"
+#include "fo4/archive/ba2_hash.hpp"
 #include "fo4/environment/strings.hpp"
 
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
-struct radicle_assets {
-  fo4::archive::AssetResolver value;
+struct radicle_asset_list {
+  std::vector<fo4::archive::AssetListing> items;
 };
 
 namespace {
@@ -46,6 +50,15 @@ bool valid_list(const char* const* values, size_t count) {
     if (values[i] == nullptr) return false;
   }
   return true;
+}
+
+bool valid_ba2_write_path(const char* path) {
+  const std::string_view text(path);
+  if (text.empty() || text.back() == '/' || text.back() == '\\') return false;
+  if (fo4::archive::normalize_ba2_name(text) == ".") return false;
+  const auto stored = fo4::text::utf8_to_windows1252(text);
+  return stored && !stored->empty() &&
+         stored->size() < fo4::archive::k_max_ba2_path_length;
 }
 
 }  // namespace
@@ -131,6 +144,64 @@ radicle_status radicle_ba2_extract(const radicle_ba2* ba2, size_t index, uint8_t
                  [&] { return copy_bytes(to_reader(ba2)->extract(index), out_bytes, out_size); });
 }
 
+radicle_status radicle_ba2_write_general(const radicle_ba2_file* files,
+                                         size_t file_count,
+                                         uint32_t version,
+                                         int32_t compress,
+                                         uint8_t** out_bytes,
+                                         size_t* out_size) {
+  clear_error();
+  if ((files == nullptr && file_count != 0) || out_bytes == nullptr || out_size == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "files, out_bytes and out_size are required");
+  }
+  *out_bytes = nullptr;
+  *out_size = 0;
+  if (!fo4::archive::is_supported_ba2_general_version(version)) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                (std::string("unsupported BA2 general version ") + std::to_string(version) +
+                 "; supported GNRL versions are 1, 7 and 8").c_str());
+  }
+  if constexpr (sizeof(size_t) > sizeof(std::uint32_t)) {
+    if (file_count > std::numeric_limits<std::uint32_t>::max()) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "too many BA2 entries for the 32-bit file count");
+    }
+  }
+  for (size_t i = 0; i < file_count; ++i) {
+    if (files[i].path == nullptr || (files[i].data == nullptr && files[i].size != 0)) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "every file needs a path and data");
+    }
+    if (!valid_ba2_write_path(files[i].path)) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                  "every file needs a Windows-1252 path shorter than 260 bytes that does not end "
+                  "in a separator and is not '.'");
+    }
+    if constexpr (sizeof(size_t) > sizeof(std::uint32_t)) {
+      if (files[i].size > std::numeric_limits<std::uint32_t>::max()) {
+        return fail(RADICLE_STATUS_INVALID_ARGUMENT, "file data exceeds the 32-bit chunk size field");
+      }
+    }
+  }
+  return guarded("unknown exception while writing BA2", [&] {
+    fo4::archive::Ba2GeneralArchive archive;
+    archive.version = version;
+    archive.entries.reserve(file_count);
+    for (size_t i = 0; i < file_count; ++i) {
+      fo4::archive::Ba2GeneralEntry entry;
+      entry.path = files[i].path;
+      const auto stored_path = fo4::text::utf8_to_windows1252(entry.path);
+      const auto hashes = fo4::archive::compute_ba2_hashes(stored_path ? *stored_path : entry.path);
+      entry.name_hash = hashes.name;
+      entry.extension_hash = hashes.extension;
+      entry.directory_hash = hashes.directory;
+      const std::span<const std::byte> data(reinterpret_cast<const std::byte*>(files[i].data), files[i].size);
+      entry.chunks.push_back(compress != 0 ? fo4::archive::make_compressed_ba2_chunk(data)
+                                           : fo4::archive::make_stored_ba2_chunk(data));
+      archive.entries.push_back(std::move(entry));
+    }
+    return copy_bytes(fo4::archive::write_ba2_general(archive), out_bytes, out_size);
+  });
+}
+
 radicle_status radicle_archive_load_order(const char* data_dir,
                                           const char* const* ini_archives,
                                           size_t ini_count,
@@ -176,6 +247,27 @@ radicle_status radicle_assets_open(const char* data_dir,
   });
 }
 
+radicle_status radicle_assets_open_roots(const char* const* root_paths,
+                                         size_t root_count,
+                                         const char* const* archive_paths,
+                                         size_t archive_count,
+                                         radicle_assets** out_assets) {
+  clear_error();
+  if (!valid_list(root_paths, root_count) || !valid_list(archive_paths, archive_count) || out_assets == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "non-NULL root paths, archive paths and out_assets are required");
+  }
+  *out_assets = nullptr;
+  return guarded("unknown exception while opening assets", [&] {
+    std::vector<std::filesystem::path> roots;
+    for (size_t i = 0; i < root_count; ++i) roots.push_back(utf8_path(root_paths[i]));
+    std::vector<std::filesystem::path> archives;
+    for (size_t i = 0; i < archive_count; ++i) archives.push_back(utf8_path(archive_paths[i]));
+    auto assets = std::make_unique<radicle_assets>(radicle_assets{fo4::archive::AssetResolver::open_roots(roots, archives)});
+    *out_assets = assets.release();
+    return RADICLE_STATUS_OK;
+  });
+}
+
 void radicle_assets_destroy(radicle_assets* assets) {
   clear_error();
   delete assets;
@@ -184,6 +276,11 @@ void radicle_assets_destroy(radicle_assets* assets) {
 size_t radicle_assets_archive_count(const radicle_assets* assets) {
   clear_error();
   return assets == nullptr ? 0 : assets->value.archives().size();
+}
+
+size_t radicle_assets_root_count(const radicle_assets* assets) {
+  clear_error();
+  return assets == nullptr ? 0 : assets->value.roots().size();
 }
 
 radicle_status radicle_assets_get_archive(const radicle_assets* assets, size_t index, const radicle_ba2** out_ba2) {
@@ -211,6 +308,42 @@ radicle_status radicle_assets_locate(const radicle_assets* assets, const char* p
     *out_location = to_c_location(*location);
     return RADICLE_STATUS_OK;
   });
+}
+
+radicle_status radicle_assets_list(const radicle_assets* assets,
+                                   const char* prefix,
+                                   const char* extension,
+                                   int32_t include_shadowed,
+                                   radicle_asset_list** out_list) {
+  clear_error();
+  if (assets == nullptr || out_list == nullptr) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "assets and out_list are required");
+  *out_list = nullptr;
+  return guarded("unknown exception while listing assets", [&] {
+    auto list = std::make_unique<radicle_asset_list>();
+    list->items = assets->value.list(prefix == nullptr ? "" : prefix, extension == nullptr ? "" : extension,
+                                     include_shadowed != 0);
+    *out_list = list.release();
+    return RADICLE_STATUS_OK;
+  });
+}
+
+size_t radicle_asset_list_count(const radicle_asset_list* list) {
+  clear_error();
+  return list == nullptr ? 0 : list->items.size();
+}
+
+radicle_status radicle_asset_list_get(const radicle_asset_list* list, size_t index, radicle_asset_list_entry* out_entry) {
+  clear_error();
+  if (list == nullptr || out_entry == nullptr) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "list and out_entry are required");
+  if (index >= list->items.size()) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "list index is out of range");
+  const auto& item = list->items[index];
+  *out_entry = {item.path.c_str(), to_c_location(item.location), item.size, item.shadowed ? 1 : 0};
+  return RADICLE_STATUS_OK;
+}
+
+void radicle_asset_list_destroy(radicle_asset_list* list) {
+  clear_error();
+  delete list;
 }
 
 radicle_status radicle_assets_read(const radicle_assets* assets,

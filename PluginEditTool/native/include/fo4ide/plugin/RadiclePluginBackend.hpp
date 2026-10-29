@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -59,6 +60,7 @@ public:
     Result<nlohmann::json> copyAsWrapper(const nlohmann::json& arguments) override;
     Result<nlohmann::json> compactToEsl(const nlohmann::json& arguments) override;
     Result<nlohmann::json> renumberPluginFormIds(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> injectFormsIntoMaster(const nlohmann::json& arguments) override;
     Result<nlohmann::json> deepCopyAsOverride(const nlohmann::json& arguments) override;
     Result<nlohmann::json> changeReferencingRecords(const nlohmann::json& arguments) override;
     Result<nlohmann::json> revertOverrides(const nlohmann::json& arguments) override;
@@ -201,6 +203,8 @@ private:
     Result<nlohmann::json> removeElement(const nlohmann::json& arguments) override;
     Result<nlohmann::json> moveElement(const nlohmann::json& arguments) override;
     Result<nlohmann::json> clearElement(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> copyElementToSelected(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> removeElementFromSelected(const nlohmann::json& arguments) override;
 
     Result<nlohmann::json> copyAsOverride(const nlohmann::json& arguments);
     Result<nlohmann::json> copyAsOverrideLocked(const nlohmann::json& arguments, bool initiallyDisabled);
@@ -239,12 +243,39 @@ private:
     Result<nlohmann::json> getConditionFunctions() const;
     Result<nlohmann::json> getConditionRunOnTypes() const;
 
+    struct SkippedStringArchive {
+        std::string path;
+        std::string reason;
+    };
     Result<nlohmann::json> listStringTables(const nlohmann::json& arguments) const;
     Result<nlohmann::json> getStrings(const nlohmann::json& arguments) const;
     Result<nlohmann::json> lookupString(const nlohmann::json& arguments) const;
-    Result<std::vector<fo4::env::PluginStringTable>> readStringTables(const LoadedPlugin& loaded,
-                                                                     std::string_view language) const;
-    std::shared_ptr<const fo4::archive::AssetResolver> stringAssets(const LoadedPlugin& loaded) const;
+    Result<nlohmann::json> setString(const nlohmann::json& arguments);
+    Result<nlohmann::json> addString(const nlohmann::json& arguments);
+    Result<nlohmann::json> removeString(const nlohmann::json& arguments);
+    Result<nlohmann::json> importStrings(const nlohmann::json& arguments);
+    Result<nlohmann::json> exportStrings(const nlohmann::json& arguments) const;
+    Result<nlohmann::json> saveStringTables(const nlohmann::json& arguments);
+    Result<nlohmann::json> discardStringEdits(const nlohmann::json& arguments);
+    Result<std::vector<fo4::env::PluginStringTable>> readStringTables(
+        const LoadedPlugin& loaded,
+        std::string_view language,
+        std::vector<SkippedStringArchive>* skipped = nullptr) const;
+    std::shared_ptr<const fo4::archive::AssetResolver> stringAssets(
+        const LoadedPlugin& loaded,
+        std::vector<SkippedStringArchive>* skipped) const;
+    void overlayStagedStringTables(const LoadedPlugin& loaded,
+                                   std::string_view language,
+                                   std::vector<fo4::env::PluginStringTable>& tables) const;
+    void stageStringTable(std::string_view plugin,
+                          std::string_view language,
+                          fo4::env::StringSource source,
+                          fo4::localization::LocalizedStringTable table);
+    void discardStagedStringTables(std::string_view plugin);
+    bool hasStagedStringTables(std::string_view plugin) const;
+    bool stringTablePending(std::string_view plugin,
+                            std::string_view language,
+                            fo4::env::StringSource source) const;
 
     LoadedPlugin* findPlugin(std::string_view name);
     const LoadedPlugin* findPlugin(std::string_view name) const;
@@ -277,6 +308,10 @@ private:
     mutable std::mutex stringAssetsMutex_;
     mutable std::vector<StringArchiveStamp> stringArchives_;
     mutable std::shared_ptr<const fo4::archive::AssetResolver> stringAssets_;
+    mutable std::vector<SkippedStringArchive> stringSkipped_;
+    using StagedStringKey = std::tuple<std::string, std::string, fo4::env::StringSource>;
+    mutable std::mutex stagedStringsMutex_;
+    std::map<StagedStringKey, fo4::localization::LocalizedStringTable> stagedStrings_;
     std::filesystem::path trustedNewPluginRoot_;
     std::vector<std::filesystem::path> trustedSaveRoots_;
 };

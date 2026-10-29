@@ -185,6 +185,13 @@ Result<nlohmann::json> RadiclePluginBackend::invoke(std::string_view operation,
     if (operation == "strings.ListStringTables") return listStringTables(arguments);
     if (operation == "strings.GetStrings") return getStrings(arguments);
     if (operation == "strings.LookupString") return lookupString(arguments);
+    if (operation == "strings.SetString") return setString(arguments);
+    if (operation == "strings.AddString") return addString(arguments);
+    if (operation == "strings.RemoveString") return removeString(arguments);
+    if (operation == "strings.ImportStrings") return importStrings(arguments);
+    if (operation == "strings.ExportStrings") return exportStrings(arguments);
+    if (operation == "strings.SaveStringTables") return saveStringTables(arguments);
+    if (operation == "strings.DiscardStringEdits") return discardStringEdits(arguments);
     if (operation == "appInterop.GetPlugins") return getPlugins();
     if (operation == "appInterop.GetChildren") return getChildren(arguments);
     if (operation == "appInterop.OpenRecord") return openRecord(arguments);
@@ -239,7 +246,7 @@ Result<nlohmann::json> RadiclePluginBackend::invoke(std::string_view operation,
 std::string RadiclePluginBackend::dirtyPluginListLocked() const {
     std::string pendingList;
     for (const auto& item : plugins_) {
-        if (!item.dirty) continue;
+        if (!item.dirty && !hasStagedStringTables(item.name)) continue;
         if (!pendingList.empty()) pendingList += ", ";
         pendingList += item.name;
     }
@@ -361,6 +368,10 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
             });
         }
         plugins_ = std::move(loaded);
+        {
+            std::scoped_lock staged(stagedStringsMutex_);
+            stagedStrings_.clear();
+        }
         trustedSaveRoots_ = std::move(roots);
         rebuildGraphLocked();
     }
@@ -383,7 +394,7 @@ Result<nlohmann::json> RadiclePluginBackend::getPlugins() const {
             {"IsRecordNode", false},
             {"HasChildren", !loaded.plugin.groups.empty()},
             {"FilePath", loaded.path.string()},
-            {"Pending", loaded.dirty}
+            {"Pending", loaded.dirty || hasStagedStringTables(loaded.name)}
         });
     }
     return nlohmann::json(rows.dump());
@@ -501,7 +512,7 @@ Result<nlohmann::json> RadiclePluginBackend::openPlugin(const nlohmann::json& ar
                         (existing == nullptr ? name : existing->path.string())
                 });
             }
-            if (existing->dirty) {
+            if (existing->dirty || hasStagedStringTables(existing->name)) {
                 return std::unexpected(Error{
                     "PluginHasPendingChanges",
                     "Plugin has pending changes; save or discard them before reopening: " + name
@@ -608,6 +619,10 @@ Result<nlohmann::json> RadiclePluginBackend::discardPlugin(const nlohmann::json&
     auto* loaded = findPlugin(name);
     if (!loaded) return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + name});
     if (!loaded->dirty) {
+        if (hasStagedStringTables(loaded->name)) {
+            CommitScope commit;
+            discardStagedStringTables(loaded->name);
+        }
         return nlohmann::json{{"ok", true}, {"plugin", name}, {"pending", false}}.dump();
     }
     if (!loaded->originalPlugin.has_value()) {
@@ -620,6 +635,7 @@ Result<nlohmann::json> RadiclePluginBackend::discardPlugin(const nlohmann::json&
     loaded->plugin = *loaded->originalPlugin;
     loaded->originalPlugin.reset();
     loaded->stagedLocalization.reset();
+    discardStagedStringTables(loaded->name);
     loaded->dirty = false;
     rebuildGraphLocked();
     return nlohmann::json{{"ok", true}, {"plugin", name}, {"pending", false}}.dump();

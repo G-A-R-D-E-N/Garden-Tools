@@ -55,7 +55,7 @@ TEST_P(BehaviorWriterReal, EveryOfficialRecordHasOrderedKnownSectionsAndValidWri
       }
     }
     if (record.header.signature == sig("PACK")) {
-      const auto idle_slots = fo4::behavior_field_candidates(record, sig("INAM"));
+      const auto idle_slots = fo4::behavior_field_candidates(record, sig("INAM"), false);
       ASSERT_TRUE(idle_slots); EXPECT_EQ(idle_slots->size(), 3u);
       const std::vector<std::string> prefix{"EDID","VMAD","PKDT","PSDT","IDLF","IDLC","IDLT","IDLA","IDLB","CNAM","QNAM","PKCU"};
       std::size_t last = 0;

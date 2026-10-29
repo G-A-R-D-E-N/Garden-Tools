@@ -213,6 +213,25 @@ public partial class MainWindow : Window
     public int AnimationFrameCount => _animationData?.NumFrames ?? 0;
     public int AnimationTrackCount => _animationData?.Tracks.Count ?? 0;
     public int AnimationAnnotationCount => _animationData?.Annotations.Count ?? 0;
+    public double AnimationDuration => _animationData?.Duration ?? 0;
+    public float AnimationFrameDuration => _animationData?.FrameDuration ?? 0;
+    public string AnimationSummary => _animationSummary.Text ?? "";
+    public string GeometryAnswer => _geometryAnswer.Text ?? "";
+    public bool AnimationHasTimeline => _animationTimeline != null;
+    public void TypeTrimStart(string text) => _trimStart.Text = text;
+    public void TypeTrimEnd(string text) => _trimEnd.Text = text;
+    public void PreviewTrimForTest() => PreviewTrim();
+    public void ApplyTrimForTest() => ApplyTrim();
+    public void TypeRetimeSpeed(string text) => _retimeSpeed.Text = text;
+    public void TypeRetimeDuration(string text) => _retimeDuration.Text = text;
+    public void PreviewRetimeForTest() => PreviewRetime();
+    public void ApplyRetimeForTest() => ApplyRetime();
+    public void TypeLoopBlend(string text) => _loopBlend.Text = text;
+    public string RetimeSpeedText => _retimeSpeed.Text ?? "";
+    public string RetimeDurationText => _retimeDuration.Text ?? "";
+    public string LoopBlendText => _loopBlend.Text ?? "";
+    public void PreviewLoopForTest() => PreviewLoop();
+    public void ApplyLoopForTest() => ApplyLoop();
     public HkGrid SymbolGrid => _symbols;
     public string FractionAnswer => _fractionAnswer.Text ?? "";
     public int AimedFrame => _aimedFrame;
@@ -426,6 +445,7 @@ public partial class MainWindow : Window
     }
 
     public void PressSaveAnimation() => SaveAnimation();
+    public bool SaveAnimationForTest() => SaveAnimation();
 
     public bool SaveCurrentForTest() => SaveCurrent();
 

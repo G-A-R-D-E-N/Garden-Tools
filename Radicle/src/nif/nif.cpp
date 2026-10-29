@@ -213,15 +213,46 @@ NifFile read_nif(std::span<const std::byte> bytes) {
 
   nif.children_.resize(blocks_count);
   nif.parents_.assign(blocks_count, -1);
+  nif.node_of_block_.assign(blocks_count, -1);
   for (std::size_t i = 0; i < blocks_count; ++i) {
-    if (!is_node_type(nif.blocks_[i].type)) continue;
+    const auto& type = nif.blocks_[i].type;
+    if (!is_node_type(type)) continue;
     auto block = detail::block_cursor(nif, static_cast<std::uint32_t>(i));
-    detail::read_av_header(block, nif);
+    const auto header = detail::read_av_header(block, nif);
     block.read_i32();
     nif.children_[i] = read_children(block, blocks_count);
     for (const auto child : nif.children_[i]) {
       if (nif.parents_[child] < 0) nif.parents_[child] = static_cast<std::int32_t>(i);
     }
+    Node node;
+    node.block = static_cast<std::uint32_t>(i);
+    node.type = type;
+    node.name = header.name;
+    node.children = nif.children_[i];
+    node.local = header.transform;
+    nif.node_of_block_[i] = static_cast<std::int32_t>(nif.nodes_.size());
+    nif.nodes_.push_back(std::move(node));
+  }
+  std::vector<std::uint8_t> walk_state(blocks_count, 0);
+  std::vector<std::size_t> path;
+  for (std::size_t start = 0; start < blocks_count; ++start) {
+    path.clear();
+    std::size_t current = start;
+    while (walk_state[current] == 0) {
+      walk_state[current] = 1;
+      path.push_back(current);
+      const auto parent = nif.parents_[current];
+      if (parent < 0) break;
+      current = static_cast<std::size_t>(parent);
+      if (walk_state[current] == 1) {
+        throw parse_error(nif.blocks_[start].offset, "node parent chain contains a cycle");
+      }
+    }
+    for (const auto visited : path) walk_state[visited] = 2;
+  }
+  for (auto& node : nif.nodes_) {
+    const auto parent = nif.parents_[node.block];
+    if (parent >= 0) node.parent = nif.node_of_block_[static_cast<std::size_t>(parent)];
   }
   return nif;
 }
@@ -239,6 +270,17 @@ Transform shape_to_global(const NifFile& nif, std::uint32_t block) {
     current = static_cast<std::uint32_t>(parent);
   }
   throw parse_error(nif.blocks().at(block).offset, "parent chain contains a cycle");
+}
+
+std::int32_t shape_parent_node(const NifFile& nif, std::uint32_t block) {
+  std::int32_t current = nif.parent(block);
+  for (std::size_t steps = 0; current >= 0; ++steps) {
+    if (steps > nif.blocks().size()) throw parse_error(nif.blocks().at(block).offset, "parent chain contains a cycle");
+    const auto index = nif.node_for_block(static_cast<std::uint32_t>(current));
+    if (index >= 0) return index;
+    current = nif.parent(static_cast<std::uint32_t>(current));
+  }
+  return -1;
 }
 
 std::int32_t billboard_mode(const NifFile& nif, std::uint32_t block) {

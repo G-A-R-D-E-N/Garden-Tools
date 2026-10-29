@@ -41,6 +41,20 @@ bool owns_citc_list(Signature record, Signature after) {
   return false;
 }
 
+constexpr Signature k_optional_citc_records[] = {
+    Signature::from_string("ACTI"),
+    Signature::from_string("FACT"),
+    Signature::from_string("FURN"),
+    Signature::from_string("MUST"),
+};
+
+bool drops_empty_citc(Signature record) {
+  for (const auto owner : k_optional_citc_records) {
+    if (owner == record) return true;
+  }
+  return false;
+}
+
 // Offsets into the CTDA payload (after the 4-byte subrecord header). These
 // match Radicle's existing CTDA remap table in form_links.cpp and Mutagen's
 // Condition layout (see Condition.xml + the overlay field offsets).
@@ -272,16 +286,19 @@ CtdaScopeWrite write_ctda_conditions_in(Record& record,
   }
 
   const bool has_citc = citc < first;
+  const bool drops_citc =
+      has_citc && conditions.empty() && drops_empty_citc(record.header.signature);
+  const std::size_t removed_from = drops_citc ? citc : first;
   record.subrecords.erase(
-      record.subrecords.begin() + static_cast<std::ptrdiff_t>(first),
+      record.subrecords.begin() + static_cast<std::ptrdiff_t>(removed_from),
       record.subrecords.begin() + static_cast<std::ptrdiff_t>(last + 1));
 
   record.subrecords.insert(
-      record.subrecords.begin() + static_cast<std::ptrdiff_t>(first),
+      record.subrecords.begin() + static_cast<std::ptrdiff_t>(removed_from),
       std::make_move_iterator(replacement.begin()),
       std::make_move_iterator(replacement.end()));
 
-  if (has_citc) {
+  if (has_citc && !drops_citc) {
     std::uint32_t count = static_cast<std::uint32_t>(conditions.size());
     std::memcpy(record.subrecords[first - 1].data.data(), &count, sizeof(count));
   }

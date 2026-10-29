@@ -50,6 +50,12 @@ struct GroupHeader {
            (static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(label[2])) << 16) |
            (static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(label[3])) << 24);
   }
+
+  void set_label_as_u32(std::uint32_t value) {
+    for (std::size_t index = 0; index < label.size(); ++index) {
+      label[index] = std::byte{static_cast<std::uint8_t>(value >> (8 * index))};
+    }
+  }
 };
 
 struct SubrecordHeader {

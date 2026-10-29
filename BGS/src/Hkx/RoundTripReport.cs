@@ -112,8 +112,11 @@ public sealed class RoundTripReport
                     RoundTripLossKind.UnsupportedAnimation,
                     null,
                     "",
-                    $"animation class {animation.AnimationClass} is not decoded; only " +
-                    $"{HkxAnimationData.SupportedAnimationClasses} are supported"));
+                    AnimationCompression.Describe(animation.AnimationClass)));
+        }
+        catch (NotSupportedException error)
+        {
+            report.Add(new RoundTripLoss(RoundTripLossKind.UnsupportedAnimation, null, "", error.Message));
         }
         catch (Exception error) when (IsFormatFailure(error))
         {

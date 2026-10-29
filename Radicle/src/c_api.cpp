@@ -252,6 +252,83 @@ radicle_status radicle_plugin_remap_masters(radicle_plugin* plugin,
   }
 }
 
+radicle_status radicle_plugin_set_author(radicle_plugin* plugin, const char* author) {
+  clear_error();
+  if (!plugin || !author) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin and author are required");
+  }
+
+  try {
+    plugin->value = fo4::set_plugin_author(plugin->value, author);
+    return RADICLE_STATUS_OK;
+  } catch (const std::bad_alloc& error) {
+    return fail_exception(RADICLE_STATUS_OUT_OF_MEMORY, error);
+  } catch (const std::invalid_argument& error) {
+    return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
+  } catch (const std::exception& error) {
+    return fail_exception(RADICLE_STATUS_INTERNAL_ERROR, error);
+  } catch (...) {
+    return fail(RADICLE_STATUS_INTERNAL_ERROR, "unknown exception while setting author");
+  }
+}
+
+radicle_status radicle_plugin_set_description(radicle_plugin* plugin, const char* description) {
+  clear_error();
+  if (!plugin || !description) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin and description are required");
+  }
+
+  try {
+    plugin->value = fo4::set_plugin_description(plugin->value, description);
+    return RADICLE_STATUS_OK;
+  } catch (const std::bad_alloc& error) {
+    return fail_exception(RADICLE_STATUS_OUT_OF_MEMORY, error);
+  } catch (const std::invalid_argument& error) {
+    return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
+  } catch (const std::exception& error) {
+    return fail_exception(RADICLE_STATUS_INTERNAL_ERROR, error);
+  } catch (...) {
+    return fail(RADICLE_STATUS_INTERNAL_ERROR, "unknown exception while setting description");
+  }
+}
+
+radicle_status radicle_plugin_set_master_flag(radicle_plugin* plugin, int32_t master) {
+  clear_error();
+  if (!plugin) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin is required");
+  }
+
+  try {
+    plugin->value = fo4::set_plugin_master_flag(plugin->value, master != 0);
+    return RADICLE_STATUS_OK;
+  } catch (const std::bad_alloc& error) {
+    return fail_exception(RADICLE_STATUS_OUT_OF_MEMORY, error);
+  } catch (const std::exception& error) {
+    return fail_exception(RADICLE_STATUS_INTERNAL_ERROR, error);
+  } catch (...) {
+    return fail(RADICLE_STATUS_INTERNAL_ERROR, "unknown exception while setting the master flag");
+  }
+}
+
+radicle_status radicle_plugin_set_localized_flag(radicle_plugin* plugin, int32_t localized) {
+  clear_error();
+  if (!plugin) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin is required");
+  }
+
+  try {
+    plugin->value = fo4::set_plugin_localized_flag(plugin->value, localized != 0);
+    return RADICLE_STATUS_OK;
+  } catch (const std::bad_alloc& error) {
+    return fail_exception(RADICLE_STATUS_OUT_OF_MEMORY, error);
+  } catch (const std::exception& error) {
+    return fail_exception(RADICLE_STATUS_INTERNAL_ERROR, error);
+  } catch (...) {
+    return fail(RADICLE_STATUS_INTERNAL_ERROR,
+                "unknown exception while setting the localized flag");
+  }
+}
+
 radicle_status radicle_plugin_collect_form_keys(const radicle_plugin* plugin,
                                                  char*** out_strings,
                                                  size_t* out_count) {

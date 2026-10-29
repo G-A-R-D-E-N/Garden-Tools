@@ -142,18 +142,21 @@ TEST(ExtensionLightKinds, OwnerEqualToEslSourceIsLightMaster) {
   EXPECT_EQ(source_master->kind, fo4::PluginKind::light);
 }
 
-TEST(ExtensionLightKinds, DirtyEslWithoutMasterFlagRebuildsOnam) {
-  auto plugin = fo4::read_plugin(header_bytes({"Base.esm"}), "Patch.esl");
-  ASSERT_FALSE(plugin.header.tes4_flags.is_master());
+TEST(ExtensionLightKinds, DirtyEslAndEsmWithoutMasterFlagRebuildOnam) {
+  for (const auto* name : {"Patch.esl", "Patch.esm"}) {
+    SCOPED_TRACE(name);
+    auto plugin = fo4::read_plugin(header_bytes({"Base.esm"}), name);
+    ASSERT_FALSE(plugin.header.tes4_flags.is_master());
 
-  auto dialogue = top_group("DIAL");
-  dialogue.children.emplace_back(record("DIAL", 0x00000222u));
-  plugin.groups.push_back(std::move(dialogue));
-  plugin.original_range.clear();
+    auto dialogue = top_group("DIAL");
+    dialogue.children.emplace_back(record("DIAL", 0x00000222u));
+    plugin.groups.push_back(std::move(dialogue));
+    plugin.original_range.clear();
 
-  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esl");
-  ASSERT_EQ(reread.header.overrides.size(), 1u);
-  EXPECT_EQ(reread.header.overrides[0], fo4::RawFormId{0x00000222u});
+    const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), name);
+    ASSERT_EQ(reread.header.overrides.size(), 1u);
+    EXPECT_EQ(reread.header.overrides[0], fo4::RawFormId{0x00000222u});
+  }
 }
 
 TEST(ExtensionLightKinds, EsmExtensionWithoutMasterFlagIsMaster) {
@@ -162,20 +165,6 @@ TEST(ExtensionLightKinds, EsmExtensionWithoutMasterFlagIsMaster) {
   EXPECT_EQ(fo4::classify_plugin_kind(fo4::RecordFlags{}, fo4::PluginKey::from_filename("Patch.esm")),
             fo4::PluginKind::full);
   EXPECT_FALSE(fo4::is_master_plugin(fo4::RecordFlags{}, fo4::PluginKey::from_filename("Patch.esp")));
-}
-
-TEST(ExtensionLightKinds, DirtyEsmWithoutMasterFlagRebuildsOnam) {
-  auto plugin = fo4::read_plugin(header_bytes({"Base.esm"}), "Patch.esm");
-  ASSERT_FALSE(plugin.header.tes4_flags.is_master());
-
-  auto dialogue = top_group("DIAL");
-  dialogue.children.emplace_back(record("DIAL", 0x00000222u));
-  plugin.groups.push_back(std::move(dialogue));
-  plugin.original_range.clear();
-
-  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esm");
-  ASSERT_EQ(reread.header.overrides.size(), 1u);
-  EXPECT_EQ(reread.header.overrides[0], fo4::RawFormId{0x00000222u});
 }
 
 TEST(ExtensionLightKinds, EslExtensionWithoutFlagRejectsRemovingLastMasterWithLowIds) {

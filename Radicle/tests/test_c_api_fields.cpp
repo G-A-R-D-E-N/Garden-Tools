@@ -217,6 +217,8 @@ TEST_F(CApiFields, FieldCountReportsOccurrencesAndMapsStatuses) {
   EXPECT_EQ(count, 1u);
   EXPECT_EQ(radicle_plugin_record_field_count(plugin_, key(k_refr), "REFR\\Scale", &count), RADICLE_STATUS_OK);
   EXPECT_EQ(count, 0u);
+  EXPECT_EQ(radicle_plugin_record_field_count(plugin_, key(k_race), "RACE\\MalePresets", &count), RADICLE_STATUS_OK);
+  EXPECT_EQ(count, 1u);
 
   EXPECT_EQ(radicle_plugin_record_field_count(plugin_, key(0x999), "REFR\\Scale", &count), RADICLE_STATUS_NOT_FOUND);
   EXPECT_EQ(count, 0u);

@@ -17,6 +17,7 @@ using fo4::archive::Ba2Hashes;
 using fo4::archive::Ba2TextureArchive;
 using fo4::archive::Ba2TextureChunk;
 using fo4::archive::Ba2TextureEntry;
+using fo4::archive::Ba2TextureInfo;
 
 std::vector<std::byte> bytes_of(std::string_view text) {
   std::vector<std::byte> out;
@@ -44,9 +45,7 @@ TEST(Ba2Hash, Crc32MatchesKnownValues) {
   EXPECT_EQ(fo4::archive::ba2_crc32(bytes_of("leather")), 0xB465C424u);
   EXPECT_EQ(fo4::archive::ba2_crc32(bytes_of("test")), 0xF93BA110u);
   EXPECT_EQ(fo4::archive::ba2_crc32(bytes_of("textures\\armor")), 0x055583E3u);
-}
 
-TEST(Ba2Hash, ComputeMatchesAuthoringTool) {
   const auto hashes = fo4::archive::compute_ba2_hashes("Textures\\Armor\\Leather.dds");
   EXPECT_EQ(hashes.name, 0xB465C424u);
   EXPECT_EQ(hashes.directory, 0x055583E3u);
@@ -164,119 +163,58 @@ TEST(Ba2Texture, ExtractConcatenatesNonTextureChunks) {
   EXPECT_EQ(extracted.back(), static_cast<std::byte>(0x11));
 }
 
-TEST(Ba2Texture, ExtractRebuildsDdsHeaderFromDx10Metadata) {
+struct DdsHeaderCase {
+  const char* name;
+  const char* path;
+  Ba2TextureInfo texture;
+  std::size_t header_size;
+  std::vector<std::pair<std::size_t, std::uint32_t>> fields;
+};
+
+class Ba2TextureDdsHeader : public testing::TestWithParam<DdsHeaderCase> {};
+
+TEST_P(Ba2TextureDdsHeader, RebuildsHeaderFromTextureInfo) {
+  const auto& param = GetParam();
+  SCOPED_TRACE(param.name);
   Ba2TextureEntry entry;
-  entry.path = "textures\\x.dds";
-  entry.texture = {4, 4, 1, 98, 0, 8};
+  entry.path = param.path;
+  entry.texture = param.texture;
   const auto payload = repeated(8, 0x5A);
   entry.chunks.push_back(fo4::archive::make_stored_ba2_texture_chunk(payload));
 
   const auto extracted = fo4::archive::extract_ba2_texture_entry(entry);
-  ASSERT_EQ(extracted.size(), 148u + payload.size());
-  EXPECT_EQ(read_u32(extracted, 0), 0x20534444u);
-  EXPECT_EQ(read_u32(extracted, 4), 124u);
-  EXPECT_EQ(read_u32(extracted, 12), 4u);
-  EXPECT_EQ(read_u32(extracted, 16), 4u);
-  EXPECT_EQ(read_u32(extracted, 28), 1u);
-  EXPECT_EQ(read_u32(extracted, 84), 0x30315844u);
-  EXPECT_EQ(read_u32(extracted, 128), 98u);
-  EXPECT_EQ(std::vector<std::byte>(extracted.begin() + 148, extracted.end()), payload);
+  ASSERT_EQ(extracted.size(), param.header_size + payload.size());
+  for (const auto& [offset, value] : param.fields) {
+    EXPECT_EQ(read_u32(extracted, offset), value);
+  }
+  EXPECT_EQ(std::vector<std::byte>(extracted.begin() + static_cast<std::ptrdiff_t>(param.header_size),
+                                   extracted.end()),
+            payload);
 }
 
-TEST(Ba2Texture, ExtractUsesXEditLinearSizeForBc7NonMultipleOf4) {
-  Ba2TextureEntry entry;
-  entry.path = "textures\\x.dds";
-  entry.texture = {10, 6, 1, 98, 0, 8};
-  entry.chunks.push_back(fo4::archive::make_stored_ba2_texture_chunk(repeated(8, 0x5A)));
-
-  const auto extracted = fo4::archive::extract_ba2_texture_entry(entry);
-  ASSERT_EQ(extracted.size(), 148u + 8u);
-  EXPECT_EQ(read_u32(extracted, 8), 0xA1007u);
-  EXPECT_EQ(read_u32(extracted, 20), 60u);
-}
-
-TEST(Ba2Texture, ExtractUsesXEditHalfAreaForBc1Srgb) {
-  Ba2TextureEntry entry;
-  entry.path = "textures\\x.dds";
-  entry.texture = {10, 6, 1, 72, 0, 8};
-  entry.chunks.push_back(fo4::archive::make_stored_ba2_texture_chunk(repeated(8, 0x5A)));
-
-  const auto extracted = fo4::archive::extract_ba2_texture_entry(entry);
-  ASSERT_EQ(extracted.size(), 148u + 8u);
-  EXPECT_EQ(read_u32(extracted, 8), 0xA1007u);
-  EXPECT_EQ(read_u32(extracted, 20), 30u);
-}
-
-TEST(Ba2Texture, ExtractUsesBitsPerPixelForUnlistedDx10Format) {
-  Ba2TextureEntry entry;
-  entry.path = "textures\\x.dds";
-  entry.texture = {10, 6, 1, 10, 0, 8};
-  entry.chunks.push_back(fo4::archive::make_stored_ba2_texture_chunk(repeated(8, 0x5A)));
-
-  const auto extracted = fo4::archive::extract_ba2_texture_entry(entry);
-  ASSERT_EQ(extracted.size(), 148u + 8u);
-  EXPECT_EQ(read_u32(extracted, 8), 0x2100Fu);
-  EXPECT_EQ(read_u32(extracted, 20), 48u);
-  EXPECT_EQ(read_u32(extracted, 128), 10u);
-}
-
-TEST(Ba2Texture, ExtractWritesClassicDdsHeaderForBc1) {
-  Ba2TextureEntry entry;
-  entry.path = "textures\\x.dds";
-  entry.texture = {4, 8, 1, 71, 0, 8};
-  const auto payload = repeated(8, 0x5A);
-  entry.chunks.push_back(fo4::archive::make_stored_ba2_texture_chunk(payload));
-
-  const auto extracted = fo4::archive::extract_ba2_texture_entry(entry);
-  ASSERT_EQ(extracted.size(), 128u + payload.size());
-  EXPECT_EQ(read_u32(extracted, 8), 0xA1007u);
-  EXPECT_EQ(read_u32(extracted, 20), 16u);
-  EXPECT_EQ(read_u32(extracted, 76), 32u);
-  EXPECT_EQ(read_u32(extracted, 80), 0x4u);
-  EXPECT_EQ(read_u32(extracted, 84), 0x31545844u);
-  EXPECT_EQ(read_u32(extracted, 108), 0x1000u);
-  EXPECT_EQ(std::vector<std::byte>(extracted.begin() + 128, extracted.end()), payload);
-}
-
-TEST(Ba2Texture, ExtractWritesDxt5FourCcForBc3) {
-  Ba2TextureEntry entry;
-  entry.path = "textures\\x.dds";
-  entry.texture = {4, 8, 1, 77, 0, 8};
-  entry.chunks.push_back(fo4::archive::make_stored_ba2_texture_chunk(repeated(8, 0x5A)));
-
-  const auto extracted = fo4::archive::extract_ba2_texture_entry(entry);
-  ASSERT_EQ(extracted.size(), 128u + 8u);
-  EXPECT_EQ(read_u32(extracted, 20), 32u);
-  EXPECT_EQ(read_u32(extracted, 84), 0x35545844u);
-}
-
-TEST(Ba2Texture, ExtractWritesBgraPixelMasksForUncompressedDx9) {
-  Ba2TextureEntry entry;
-  entry.path = "textures\\x.dds";
-  entry.texture = {4, 8, 1, 87, 0, 8};
-  entry.chunks.push_back(fo4::archive::make_stored_ba2_texture_chunk(repeated(8, 0x5A)));
-
-  const auto extracted = fo4::archive::extract_ba2_texture_entry(entry);
-  ASSERT_EQ(extracted.size(), 128u + 8u);
-  EXPECT_EQ(read_u32(extracted, 8), 0x2100Fu);
-  EXPECT_EQ(read_u32(extracted, 20), 32u);
-  EXPECT_EQ(read_u32(extracted, 80), 0x41u);
-  EXPECT_EQ(read_u32(extracted, 88), 32u);
-  EXPECT_EQ(read_u32(extracted, 92), 0xFF0000u);
-  EXPECT_EQ(read_u32(extracted, 104), 0xFF000000u);
-}
-
-TEST(Ba2Texture, ExtractMarksSingleMipDx9CubemapWithComplex) {
-  Ba2TextureEntry entry;
-  entry.path = "textures\\sky.dds";
-  entry.texture = {4, 4, 1, 71, 0x1, 8};
-  entry.chunks.push_back(fo4::archive::make_stored_ba2_texture_chunk(repeated(8, 0x5A)));
-
-  const auto extracted = fo4::archive::extract_ba2_texture_entry(entry);
-  ASSERT_EQ(extracted.size(), 128u + 8u);
-  EXPECT_EQ(read_u32(extracted, 108), 0x1008u);
-  EXPECT_EQ(read_u32(extracted, 112), 0xFE00u);
-}
+INSTANTIATE_TEST_SUITE_P(
+    Formats, Ba2TextureDdsHeader,
+    testing::Values(
+        DdsHeaderCase{"Dx10Metadata", "textures\\x.dds", {4, 4, 1, 98, 0, 8}, 148,
+                      {{0, 0x20534444u}, {4, 124u}, {12, 4u}, {16, 4u}, {28, 1u}, {84, 0x30315844u},
+                       {128, 98u}}},
+        DdsHeaderCase{"Bc7LinearSizeNonMultipleOf4", "textures\\x.dds", {10, 6, 1, 98, 0, 8}, 148,
+                      {{8, 0xA1007u}, {20, 60u}}},
+        DdsHeaderCase{"Bc1SrgbHalfArea", "textures\\x.dds", {10, 6, 1, 72, 0, 8}, 148,
+                      {{8, 0xA1007u}, {20, 30u}}},
+        DdsHeaderCase{"UnlistedDx10BitsPerPixel", "textures\\x.dds", {10, 6, 1, 10, 0, 8}, 148,
+                      {{8, 0x2100Fu}, {20, 48u}, {128, 10u}}},
+        DdsHeaderCase{"ClassicBc1", "textures\\x.dds", {4, 8, 1, 71, 0, 8}, 128,
+                      {{8, 0xA1007u}, {20, 16u}, {76, 32u}, {80, 0x4u}, {84, 0x31545844u},
+                       {108, 0x1000u}}},
+        DdsHeaderCase{"Dxt5FourCcForBc3", "textures\\x.dds", {4, 8, 1, 77, 0, 8}, 128,
+                      {{20, 32u}, {84, 0x35545844u}}},
+        DdsHeaderCase{"BgraPixelMasksDx9", "textures\\x.dds", {4, 8, 1, 87, 0, 8}, 128,
+                      {{8, 0x2100Fu}, {20, 32u}, {80, 0x41u}, {88, 32u}, {92, 0xFF0000u},
+                       {104, 0xFF000000u}}},
+        DdsHeaderCase{"SingleMipDx9CubemapComplex", "textures\\sky.dds", {4, 4, 1, 71, 0x1, 8}, 128,
+                      {{108, 0x1008u}, {112, 0xFE00u}}}),
+    [](const testing::TestParamInfo<DdsHeaderCase>& info) { return std::string(info.param.name); });
 
 TEST(Ba2Texture, ExtractLeavesAlreadyCompleteDdsPayloadAlone) {
   Ba2TextureEntry entry;
@@ -385,4 +323,20 @@ TEST(Ba2Texture, RejectsBadSentinel) {
   serialized[70] = std::byte{0x00};
   serialized[71] = std::byte{0x00};
   EXPECT_THROW(fo4::archive::read_ba2_texture(serialized), Ba2Error);
+}
+
+TEST(Ba2Texture, ExtractRejectsCompressedChunkBeyondZlibBound) {
+  Ba2TextureEntry entry;
+  entry.path = "textures\\x.dds";
+  Ba2TextureChunk chunk;
+  chunk.data = repeated(8, 0);
+  chunk.decompressed_size = 1u << 30;
+  chunk.compressed = true;
+  entry.chunks.push_back(std::move(chunk));
+  try {
+    static_cast<void>(fo4::archive::extract_ba2_texture_entry(entry));
+    FAIL() << "expected 1 GiB claim from 8 packed bytes to fail";
+  } catch (const Ba2Error& error) {
+    EXPECT_NE(std::string(error.what()).find("expansion bound"), std::string::npos);
+  }
 }

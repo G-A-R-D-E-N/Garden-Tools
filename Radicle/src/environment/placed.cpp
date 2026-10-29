@@ -155,6 +155,8 @@ private:
       data_.layer = single_link(sub, data_.layer);
     } else if (s == sig("XEZN")) {
       data_.encounter_zone = single_link(sub, data_.encounter_zone);
+    } else if (s == sig("XEMI")) {
+      data_.emittance = single_link(sub, data_.emittance);
     } else if (s == sig("XLRL")) {
       data_.location_reference = single_link(sub, data_.location_reference);
     } else if (s == sig("XATR")) {

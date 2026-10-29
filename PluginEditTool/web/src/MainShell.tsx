@@ -5,6 +5,7 @@ import {
   Link2, Archive as ArchiveIcon, Music, Boxes, Table2, Workflow, Languages,
 } from 'lucide-react';
 import PapyrusPanel from './PapyrusPanel';
+import SwfPanel from './SwfPanel';
 import NifPanel from './NifPanel';
 import MastersPanel from './MastersPanel';
 import ArchivePanel from './ArchivePanel';
@@ -45,6 +46,7 @@ import FavouritesList from './Shell/FavouritesList';
 import { useRecordOpening } from './Shell/useRecordOpening';
 import { useEnvironment } from './Shell/useEnvironment';
 import { useCompareSelected, useConflictBatch } from './Shell/useConflictBatch';
+import CompareView from './Shell/CompareView';
 import { modeOf, selectRow, type ConflictSelection, type SelectMode } from './Shell/conflictSelection';
 import type { SearchHit } from './backend';
 import type { RecordTab } from './RecordView';
@@ -61,6 +63,7 @@ export default function MainShell() {
   useEffect(() => { localStorage.setItem('treeMode', treeMode); }, [treeMode]);
   const [showSettings, setShowSettings] = useState(false);
   const [showPapyrus, setShowPapyrus] = useState(false);
+  const [showSwf, setShowSwf] = useState(false);
   const [showNif, setShowNif] = useState(false);
   const [showMasters, setShowMasters] = useState(false);
   const [showArchive, setShowArchive] = useState(false);
@@ -288,7 +291,7 @@ export default function MainShell() {
   const [recSel, setRecSel] = useState<ConflictSelection>({});
   const [recAnchor, setRecAnchor] = useState<string | null>(null);
   const [recHits, setRecHits] = useState<Record<string, SearchHit>>({});
-  const { comparing: recComparing, compare: compareRecords } = useCompareSelected();
+  const { comparing: recComparing, view: compareView, compare: compareRecords, closeView: closeCompareView } = useCompareSelected();
   const visibleHits = searchResults ?? [];
   const visibleKeys = new Set(visibleHits.map(hitKey));
   const loadedSet = loadOrderSummary?.Plugins ? new Set(loadOrderSummary.Plugins) : null;
@@ -383,6 +386,8 @@ export default function MainShell() {
           </button>
           <button className={`activity-btn ${showPapyrus ? 'active' : ''}`} onClick={() => setShowPapyrus(true)} title="Papyrus (compile / decompile)">
             <ScrollText size={22} strokeWidth={1.5} />
+          </button>          <button className={`activity-btn ${showSwf ? 'active' : ''}`} onClick={() => setShowSwf(true)} title="Interface (SWF)">
+            <Boxes size={22} strokeWidth={1.5} />
           </button>
           <button className={`activity-btn ${showNif ? 'active' : ''}`} onClick={() => setShowNif(true)} title="NIF (author / inspect / verify / fix)">
             <Box size={22} strokeWidth={1.5} />
@@ -506,9 +511,9 @@ export default function MainShell() {
                       </button>
                       <button
                         className="sidebar-action-btn"
-                        disabled={conflictBusy || recComparing || recDupes || recPicked.length !== 2}
-                        title={recDupes ? 'Both selections are the same record; open it to see every plugin\'s version' : recPicked.length === 2 ? 'Open the two selected records in record tabs' : 'Select exactly two records to compare'}
-                        onClick={() => compareRecords(recPicked.map(h => ({ formKey: h.FormKey, plugin: h.Plugin })), openByFormKey)}
+                        disabled={conflictBusy || recComparing || recDupes || recPicked.length < 2}
+                        title={recDupes ? 'Both selections are the same record; open it to see every plugin\'s version' : recPicked.length >= 2 ? 'Show the selected records side by side' : 'Select at least two records to compare'}
+                        onClick={() => compareRecords(recPicked.map(h => ({ formKey: h.FormKey, plugin: h.Plugin }))).catch(err => setErrorStr(errorMessage(err) ?? JSON.stringify(err)))}
                       >
                         Compare selected
                       </button>
@@ -607,6 +612,7 @@ export default function MainShell() {
             </div>
 
             <div className={`editor-content ${openRecord && !recordLoading ? 'has-record' : ''}`}>
+              {compareView && <CompareView view={compareView} onClose={closeCompareView} />}
               {recordLoading ? (
                 <div className="welcome-screen glass-panel">
                   <Database size={48} color="var(--border-color)" />
@@ -623,6 +629,8 @@ export default function MainShell() {
                   highlightField={aiHighlightField}
                   highlightSeq={aiHighlightSeq}
                   onPluginsChanged={() => { void refreshPlugins(); }}
+                  selectedRecords={recPicked.map(h => ({ plugin: h.Plugin, formKey: h.FormKey }))}
+                  setErrorStr={setErrorStr}
                 />
               ) : (
                 <div className="welcome-screen glass-panel">
@@ -698,6 +706,7 @@ export default function MainShell() {
 
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
       {showPapyrus && <PapyrusPanel onClose={() => setShowPapyrus(false)} />}
+      {showSwf && <SwfPanel onClose={() => setShowSwf(false)} />}
       {showNif && <NifPanel onClose={() => setShowNif(false)} />}
       {showMasters && <MastersPanel onClose={() => setShowMasters(false)} />}
       {showArchive && <ArchivePanel onClose={() => setShowArchive(false)} />}

@@ -13,7 +13,8 @@ def cpp_string(value: str) -> str:
     return json.dumps(value, ensure_ascii=True)
 
 
-SCOPE_KINDS = {"effect", "alias", "package_branch", "quest_target", "perk_effect_tab"}
+SCOPE_KINDS = {"effect", "alias", "package_branch", "quest_target", "perk_effect_tab",
+               "message_button", "terminal_body_text", "terminal_menu_item"}
 
 
 def valid_token(value: str) -> bool:

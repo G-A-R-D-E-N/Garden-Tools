@@ -1,10 +1,13 @@
 #pragma once
 
+#include "fo4/signature.hpp"
+
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <span>
 #include <stdexcept>
+#include <string_view>
 #include <vector>
 
 namespace fo4::localization {
@@ -41,5 +44,32 @@ void write_string_table_file(const LocalizedStringTable& table,
 
 const LocalizedStringEntry* find_string(const LocalizedStringTable& table,
                                         std::uint32_t id) noexcept;
+
+std::uint32_t next_string_id(const LocalizedStringTable& table) noexcept;
+std::uint32_t add_string(LocalizedStringTable& table, std::string_view text);
+void insert_string(LocalizedStringTable& table, std::uint32_t id, std::string_view text);
+bool set_string(LocalizedStringTable& table, std::uint32_t id, std::string_view text);
+bool remove_string(LocalizedStringTable& table, std::uint32_t id);
+
+StringTableKind string_table_kind(Signature record, Signature subrecord) noexcept;
+std::string_view string_table_extension(StringTableKind kind) noexcept;
+std::filesystem::path string_table_path(std::string_view plugin_file_name,
+                                        StringTableKind kind,
+                                        std::string_view language);
+
+struct LocalizationTables {
+  LocalizedStringTable strings{StringTableKind::strings, {}};
+  LocalizedStringTable dlstrings{StringTableKind::dlstrings, {}};
+  LocalizedStringTable ilstrings{StringTableKind::ilstrings, {}};
+};
+
+LocalizedStringTable& table_for(LocalizationTables& tables, StringTableKind kind) noexcept;
+const LocalizedStringTable& table_for(const LocalizationTables& tables,
+                                      StringTableKind kind) noexcept;
+
+void write_localization_tables(const LocalizationTables& tables,
+                               std::string_view plugin_file_name,
+                               std::string_view language,
+                               const std::filesystem::path& data_dir);
 
 }  // namespace fo4::localization

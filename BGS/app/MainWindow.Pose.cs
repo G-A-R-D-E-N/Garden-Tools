@@ -59,30 +59,64 @@ public partial class MainWindow : Window
             await browser.ShowDialog(this);
             if (browser.Chosen is not { } entry) return;
 
-            try
+            OpenArchiveEntry(archivePath, archive, entry);
+        }
+    }
+
+    internal bool OpenArchiveForTest(string archivePath, string entryName)
+    {
+        OpenCommonwealth.Services.Archive.Ba2 archive;
+        try { archive = OpenCommonwealth.Services.Archive.Ba2.Open(archivePath); }
+        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            SetStatus("That archive could not be read: " + e.Message, Ux.BadBrush);
+            return false;
+        }
+
+        using (archive)
+        {
+            OpenCommonwealth.Services.Archive.Ba2.Entry? entry = archive.Entries.FirstOrDefault(
+                candidate => candidate.Name.Equals(entryName, StringComparison.OrdinalIgnoreCase));
+            if (entry == null)
             {
-
-                string folder = Path.Combine(Path.GetTempPath(), "BehaviourGraphStudio",
-                                             TempDirKey(archivePath));
-                Directory.CreateDirectory(folder);
-
-                string copy = Path.Combine(folder, entry.Name.Replace('/', '_'));
-                File.WriteAllBytes(copy, archive.Read(entry));
-
-                _pathField.Text = copy;
-                Load();
-
-                _readOnly = true;
-                _readOnlyWhy = $"{entry.FileName} came out of {Path.GetFileName(archivePath)}, and " +
-                               "nothing here writes back into an archive. Save a copy somewhere of " +
-                               "your own and open that to edit it.";
-                SetStatus($"Opened {entry.Name} from {Path.GetFileName(archivePath)}, read only. " +
-                          $"The copy is at {copy}", Ux.MetaBrush);
+                SetStatus($"{entryName} is not inside {Path.GetFileName(archivePath)}.", Ux.BadBrush);
+                return false;
             }
-            catch (Exception e)
-            {
-                SetStatus($"Could not open {entry.FileName} from the archive: " + e.Message, Ux.BadBrush);
-            }
+
+            OpenArchiveEntry(archivePath, archive, entry);
+            return true;
+        }
+    }
+
+    private void OpenArchiveEntry(string archivePath, OpenCommonwealth.Services.Archive.Ba2 archive,
+                                  OpenCommonwealth.Services.Archive.Ba2.Entry entry)
+    {
+        try
+        {
+
+            string folder = Path.Combine(Path.GetTempPath(), "BehaviourGraphStudio",
+                                         TempDirKey(archivePath));
+            Directory.CreateDirectory(folder);
+
+            string copy = Path.Combine(folder, entry.Name.Replace('/', '_'));
+            File.WriteAllBytes(copy, archive.Read(entry));
+
+            _pendingVirtualPathHint = entry.Name;
+            _pendingSourceFolder = Path.GetDirectoryName(Path.GetFullPath(archivePath)) ?? "";
+            _pathField.Text = copy;
+            if (!Load()) return;
+
+            _readOnly = true;
+            _readOnlyWhy = $"{entry.FileName} came out of {Path.GetFileName(archivePath)}, and " +
+                           "nothing here writes back into an archive. Save a copy somewhere of " +
+                           "your own and open that to edit it.";
+            RefreshSaveAnimationState();
+            SetStatus($"Opened {entry.Name} from {Path.GetFileName(archivePath)}, read only. " +
+                      $"The copy is at {copy}", Ux.MetaBrush);
+        }
+        catch (Exception e)
+        {
+            SetStatus($"Could not open {entry.FileName} from the archive: " + e.Message, Ux.BadBrush);
         }
     }
 
@@ -115,13 +149,19 @@ public partial class MainWindow : Window
         }
 
         ClearMesh();
+        int approximated = 0;
         try
         {
             var nif = NifFile.Read(path);
             foreach (var shape in NifGeometry.Shapes(nif))
             {
+                approximated += ApproximateHelperBoneInterim(shape, skeleton);
                 var binding = SkinnedMesh.Bind(shape, skeleton);
                 _meshShapes.Add((shape, binding, SkinnedMesh.Edges(shape)));
+                int[] indices = shape.Indices.ToArray();
+                _meshTriangles.Add(indices);
+                _meshParts.Add(new MeshPart { Indices = indices });
+                _meshSkins.Add(new SkinnedMesh.SkinScratch());
             }
         }
         catch (Exception ex)
@@ -154,57 +194,109 @@ public partial class MainWindow : Window
             report += $"   {missing.Count} bone{(missing.Count == 1 ? "" : "s")} did not match this " +
                       $"skeleton: {string.Join(", ", missing.Take(6))}" +
                       (missing.Count > 6 ? ", and more" : "") +
-                      ". Vertices weighted only to those stay at their rest position.";
+                      ". Those bones keep their whole weight, so a vertex weighted only to them follows " +
+                      "this frame's placement of the bones that did match.";
+        if (approximated > 0)
+            report += $"   {approximated} helper bone{(approximated == 1 ? "" : "s")} approximated by " +
+                      "their parent bone.";
 
         SetPlaybackSummary(settingsWarning ?? report,
                            settingsWarning == null && missing.Count == 0 ? Ux.MetaBrush : Ux.WarnBrush);
+        QuietOverlaysForMesh();
         ShowFrame(_playback.Frame, stop: false);
         _skeleton.Frame();
         return true;
     }
 
+    internal static int ApproximateHelperBoneInterim(NifShape shape, HkxSkeleton skeleton)
+    {
+        var known = new HashSet<string>(skeleton.BoneNames, StringComparer.OrdinalIgnoreCase);
+        int approximated = 0;
+        for (int i = 0; i < shape.BoneNames.Count; i++)
+        {
+            string name = shape.BoneNames[i];
+            string resolved = SkinnedMesh.ResolveSkinBoneName(name, known.Contains);
+            if (resolved == name) continue;
+
+            shape.BoneNames[i] = resolved;
+            approximated++;
+        }
+
+        return approximated;
+    }
     private void ClearMesh()
     {
         _meshShapes.Clear();
+        _meshTriangles.Clear();
+        _meshParts.Clear();
+        _meshSkins.Clear();
+        _meshSegmentCount = 0;
         _meshPath = "";
         _skeleton.ShowMesh(null);
+        SetViewportMesh(null);
     }
 
     private void UpdateMesh(AnimationPose.Pose pose, HkxSkeleton skeleton)
     {
-        if (_meshShapes.Count == 0) { _skeleton.ShowMesh(null); return; }
-
-        int total = _meshShapes.Sum(m => m.Edges.Count);
-        var segments = new (System.Numerics.Vector3, System.Numerics.Vector3)[total];
-
-        int at = 0;
-        foreach (var (shape, binding, edges) in _meshShapes)
+        if (_meshShapes.Count == 0)
         {
-            var posed = SkinnedMesh.Pose(shape, binding, pose, skeleton);
-            foreach (var (from, to) in edges)
-                segments[at++] = (posed[from], posed[to]);
+            _skeleton.ShowMesh(null);
+            SetViewportMesh(null);
+            return;
         }
 
-        _skeleton.ShowMesh(segments);
+        _meshSkinClock.Restart();
+        int segmentAt = 0;
+
+        for (int i = 0; i < _meshShapes.Count; i++)
+        {
+            var (shape, binding, edges) = _meshShapes[i];
+            var part = _meshParts[i];
+            part.Positions = SkinnedMesh.Pose(shape, binding, pose, skeleton, part.Positions, _meshSkins[i]);
+
+            if (segmentAt + edges.Count > _meshSegments.Length)
+                Array.Resize(ref _meshSegments, Math.Max(64, (segmentAt + edges.Count) * 2));
+
+            foreach (var (from, to) in edges)
+                _meshSegments[segmentAt++] = (part.Positions[from], part.Positions[to]);
+        }
+
+        _meshSegmentCount = segmentAt;
+        _meshSkinMilliseconds = _meshSkinClock.Elapsed.TotalMilliseconds;
+        _skeleton.ShowMesh(_meshSegments, _meshSegmentCount);
+        UpdateViewportGeometry();
     }
 
     private void ClearPose()
     {
         Stop();
         _poseAnimation = null;
+        _poseSkeleton = null;
         _poseSource = "";
+        _poseRefusal = "";
         _playback.Clear();
+        UpdateTransportState();
 
         _ragdoll = null;
         _ragdollSourceName = null;
         _ragdollSourceNote = null;
+        _ragdollSiblingName = null;
+        ClearPhysicsReport();
 
-        foreach (var toggle in new[]
-                 { _bodiesToggle, _constraintsToggle, _bindingsToggle,
-                   _physicsSkeletonToggle, _framesToggle, _engineerToggle })
+        _overlayDefaultsApplying = true;
+        try
         {
-            toggle.IsChecked = false;
-            toggle.IsEnabled = false;
+            foreach (var toggle in new[]
+                     { _bodiesToggle, _constraintsToggle, _bindingsToggle,
+                       _physicsSkeletonToggle, _framesToggle, _engineerToggle })
+            {
+                toggle.IsChecked = false;
+                toggle.IsEnabled = false;
+            }
+        }
+        finally
+        {
+            _overlayDefaultsApplying = false;
         }
         _dropButton.IsEnabled = false;
 
@@ -311,7 +403,7 @@ public partial class MainWindow : Window
     {
         if (_poseAnimation == null || !_playback.CanPlay)
         {
-            SetPlaybackSummary("Nothing loaded to play. Select a clip, or press From selected node.", Ux.MutedBrush);
+            SetPlaybackSummary(PoseRefusal(), Ux.MutedBrush);
             return;
         }
 
@@ -341,7 +433,12 @@ public partial class MainWindow : Window
         _clock = null;
         _playback.Stop();
         _playButton.Content = "Play";
+        UpdateTransportState();
     }
+
+    internal string PoseRefusal() => _poseRefusal.Length > 0
+        ? _poseRefusal + "  There is nothing posable to play or step."
+        : "Nothing loaded to play. Select a clip, or press From selected node.";
 
     private void ShowFrame(int frame, bool stop)
     {
@@ -414,6 +511,16 @@ public partial class MainWindow : Window
 
     public void ScrubTo(int frame) => ShowFrame(frame, stop: true);
     public void LoadPoseFrom(string animationPath) => LoadPose(animationPath, Path.GetFileName(animationPath));
+    public bool PoseAnimationLoaded => _poseAnimation != null;
+    public string PoseSourceForTest => _poseSource;
+
+    public HkxSkeleton? PoseSkeletonForTest => _poseSkeleton;
+    public string PoseRefusalForTest => _poseRefusal;
+    public bool TransportEnabledForTest => _playButton.IsEnabled;
+    public bool PlayButtonEnabledForTest => _playButton.IsEnabled;
+    public bool StepButtonsEnabledForTest => _forwardFrameButton.IsEnabled;
+    public void PlayForTest() => TogglePlay();
+    public void StepForwardForTest() => ShowFrame(_playback.Frame + 1, stop: true);
     public AnimationPose.Pose? PoseNow =>
         _poseSkeleton == null ? null : AnimationPose.At(_poseSkeleton, _poseAnimation, _playback.Frame);
 

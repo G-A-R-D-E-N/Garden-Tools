@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <chrono>
+#include <cstddef>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -20,7 +21,8 @@ struct Fixture {
     std::filesystem::path path = root / "W0.esp";
     fo4ide::plugin::RadiclePluginBackend backend;
 
-    explicit Fixture(bool malformed = false, std::string_view signature = "RACE") {
+    explicit Fixture(bool malformed = false, std::string_view signature = "RACE",
+                     bool withMovementNames = false) {
         fo4::test::ByteWriter out;
         const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
         fo4::test::ByteWriter hedr;
@@ -37,6 +39,11 @@ struct Fixture {
                 ? std::string_view{"bad", 3} : std::string_view{"second\0", 7});
             if (malformed) {
                 fo4::test::write_subrecord(out, "NAME", std::string_view{"third\0", 6});
+            }
+            if (withMovementNames) {
+                fo4::test::write_subrecord(out, "MTNM", std::string_view{"WALK"});
+                fo4::test::write_subrecord(out, "MTNM", std::string_view{"RUN1"});
+                fo4::test::write_subrecord(out, "MTNM", std::string_view{"SWIM"});
             }
         }
         if (signature == "PROJ") {
@@ -303,4 +310,62 @@ TEST_CASE("W0 override comparison aligns a missing repeated occurrence", "[w0]")
         }
     }
     CHECK(found);
+}
+
+TEST_CASE("W0 fixed-width movement names write through the string setter", "[w0]") {
+    Fixture fixture{false, "RACE", true};
+    const auto before = fixture.grid();
+    const auto second = column(before, "RACE\\MovementTypeNames[1]");
+    CHECK(before.at("rows")[0].at("cells")[second] == "RUN1");
+    CHECK(before.at("rows")[0].at("editable")[second] == true);
+
+    REQUIRE(fixture.backend.setFieldValue(nlohmann::json::array({
+        "W0.esp", "000800:W0.esp", "RACE\\MovementTypeNames[1]", "FLY1"
+    })).has_value());
+
+    for (const std::string width : {"FLY", "FLY11"}) {
+        const auto refused = fixture.backend.setFieldValue(nlohmann::json::array({
+            "W0.esp", "000800:W0.esp", "RACE\\MovementTypeNames[1]", width
+        }));
+        REQUIRE_FALSE(refused.has_value());
+        CHECK(refused.error().type == "ScalarFieldWriteFailed");
+    }
+
+    const auto after = fixture.grid();
+    CHECK(after.at("rows")[0].at("cells")[column(after, "RACE\\MovementTypeNames[0]")] == "WALK");
+    CHECK(after.at("rows")[0].at("cells")[column(after, "RACE\\MovementTypeNames[1]")] == "FLY1");
+    CHECK(after.at("rows")[0].at("cells")[column(after, "RACE\\MovementTypeNames[2]")] == "SWIM");
+
+    REQUIRE(fixture.backend.invokeBackend("SavePlugin",
+        nlohmann::json::array({"W0.esp"})).has_value());
+    const auto plugin = fo4::read_plugin_file(fixture.path);
+    const auto* record = fo4::find_record(plugin, fo4::FormKey::parse("000800:W0.esp"));
+    REQUIRE(record != nullptr);
+    std::vector<std::string> stored;
+    for (const auto& subrecord : record->subrecords) {
+        if (subrecord.signature.to_string() == "MTNM") {
+            stored.emplace_back(reinterpret_cast<const char*>(subrecord.data.data()),
+                                subrecord.data.size());
+        }
+    }
+    CHECK(stored == std::vector<std::string>{"WALK", "FLY1", "SWIM"});
+}
+
+TEST_CASE("W0 fixed-width movement names round-trip Windows-1252 text", "[w0]") {
+    Fixture fixture{false, "RACE", true};
+    const std::string cafe = "Caf\xc3\xa9";
+    REQUIRE(fixture.backend.setFieldValue(nlohmann::json::array({
+        "W0.esp", "000800:W0.esp", "RACE\\MovementTypeNames[1]", cafe
+    })).has_value());
+
+    const auto grid = fixture.grid();
+    CHECK(grid.at("rows")[0].at("cells")[column(grid, "RACE\\MovementTypeNames[1]")] == cafe);
+
+    REQUIRE(fixture.backend.invokeBackend("SavePlugin",
+        nlohmann::json::array({"W0.esp"})).has_value());
+    const auto plugin = fo4::read_plugin_file(fixture.path);
+    const auto* record = fo4::find_record(plugin, fo4::FormKey::parse("000800:W0.esp"));
+    REQUIRE(record != nullptr);
+    CHECK(record->subrecords[3].data == std::vector<std::byte>{
+        std::byte{'C'}, std::byte{'a'}, std::byte{'f'}, std::byte{0xE9}});
 }

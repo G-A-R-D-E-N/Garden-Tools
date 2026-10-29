@@ -12,6 +12,7 @@ namespace Radicle.Interop.Tests;
 public class ClimateWeatherAuthoringTests
 {
     private const string Plugin = "Sky.esm";
+    private const byte SunGlare = 15;
 
     private static Radicle.Interop.FormKey K(uint id) => new(Plugin, id);
 
@@ -192,5 +193,116 @@ public class ClimateWeatherAuthoringTests
         var created = env.Climate(env.Winner(K(0x800))!.Value);
         Assert.Equal(new[] { new ClimateWeather(null, 100, null) }, created.Weathers);
         Assert.Equal(new ClimateTiming(30, 0, 0, 0, 0, 3), created.Timing);
+    }
+
+    [Fact]
+    public void SetClimateWeathersRoundTripsEveryEntryThroughWlst()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.Write(Plugin, Source());
+        using var plugin = PluginFile.Read(path);
+
+        var weathers = new[] { new ClimateWeather(WthrOld, -3, Glob), new ClimateWeather(Wthr, 7, null) };
+        Assert.True(plugin.SetClimateWeathers(Clmt, weathers));
+        var edited = plugin.ToBytes();
+        plugin.Write(path);
+
+        using var env = RadicleEnvironment.Load(new[] { path });
+        var climate = env.Climate(env.Winner(Clmt)!.Value);
+        Assert.Equal(weathers, climate.Weathers);
+        using var reloaded = PluginFile.Read(path);
+        Assert.Equal(edited, reloaded.ToBytes());
+    }
+
+    [Fact]
+    public void SetClimateWeathersEmptyListClearsWlstInsteadOfRefusingTheNullPointer()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.Write(Plugin, Source());
+        using var plugin = PluginFile.Read(path);
+
+        Assert.True(plugin.SetClimateWeathers(Clmt, Array.Empty<ClimateWeather>()));
+        var edited = plugin.ToBytes();
+        plugin.Write(path);
+
+        using var env = RadicleEnvironment.Load(new[] { path });
+        Assert.Empty(env.Climate(env.Winner(Clmt)!.Value).Weathers);
+        using var reloaded = PluginFile.Read(path);
+        Assert.Equal(edited, reloaded.ToBytes());
+    }
+
+    [Fact]
+    public void SetWeatherColorsWritesOneGroupAtTheFormVersionTimeStride()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.Write(Plugin, Source());
+        using var plugin = PluginFile.Read(path);
+
+        var modern = Enumerable.Range(1, 8).Select(t => new ByteColor((byte)t, (byte)(t * 2), (byte)(t * 3))).ToArray();
+        var legacy = Enumerable.Range(1, 4).Select(t => new ByteColor((byte)(t + 100), (byte)t, 9)).ToArray();
+        Assert.True(plugin.SetWeatherColors(Wthr, SunGlare, modern));
+        Assert.True(plugin.SetWeatherColors(WthrOld, SunGlare, legacy));
+        var edited = plugin.ToBytes();
+        plugin.Write(path);
+
+        using var env = RadicleEnvironment.Load(new[] { path });
+        var weather = env.Weather(env.Winner(Wthr)!.Value);
+        for (var time = 0; time < modern.Length; time++) Assert.Equal(modern[time], weather.Color(SunGlare, time));
+        Assert.Equal(new ByteColor(0, 0, 0), weather.Color(SunGlare + 1, 7));
+        var legacyWeather = env.Weather(env.Winner(WthrOld)!.Value);
+        for (var time = 0; time < legacy.Length; time++) Assert.Equal(legacy[time], legacyWeather.Color(SunGlare, time));
+        Assert.Equal(new ByteColor(0, 0, 0), legacyWeather.Color(SunGlare + 1, 0));
+        using var reloaded = PluginFile.Read(path);
+        Assert.Equal(edited, reloaded.ToBytes());
+    }
+
+    [Fact]
+    public void SetWeatherFogWritesEveryDistanceToFnamAtTheModernCount()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.Write(Plugin, Source());
+        using var plugin = PluginFile.Read(path);
+
+        var fog = Enumerable.Range(1, 18).Select(i => i * 0.5f).ToArray();
+        Assert.True(plugin.SetWeatherFog(Wthr, fog));
+        var edited = plugin.ToBytes();
+        plugin.Write(path);
+
+        using var env = RadicleEnvironment.Load(new[] { path });
+        Assert.Equal(fog, env.Weather(env.Winner(Wthr)!.Value).FogDistances);
+        using var reloaded = PluginFile.Read(path);
+        Assert.Equal(edited, reloaded.ToBytes());
+    }
+
+    [Fact]
+    public void SetWeatherFogRefusesADistanceCountThatMissesFnamAndKeepsTheBytes()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.Write(Plugin, Source());
+        using var plugin = PluginFile.Read(path);
+        var before = plugin.ToBytes();
+
+        Assert.Equal(Status.ParseError, Refusal(() => plugin.SetWeatherFog(Wthr, new float[8])));
+        Assert.Equal(before, plugin.ToBytes());
+    }
+
+    [Fact]
+    public void SetWeatherTransitionWritesOnlyTheTransitionByteOfData()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.Write(Plugin, Source());
+        using var plugin = PluginFile.Read(path);
+
+        Assert.True(plugin.SetWeatherTransition(Wthr, 200));
+        var edited = plugin.ToBytes();
+        plugin.Write(path);
+
+        using var env = RadicleEnvironment.Load(new[] { path });
+        var parameters = env.Weather(env.Winner(Wthr)!.Value).Parameters!;
+        Assert.Equal((byte)200, parameters.TransitionDelta);
+        Assert.Equal((byte)0, parameters.WindSpeed);
+        Assert.Equal((byte)0, parameters.SunGlare);
+        using var reloaded = PluginFile.Read(path);
+        Assert.Equal(edited, reloaded.ToBytes());
     }
 }

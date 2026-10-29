@@ -8,9 +8,11 @@
 #include <iterator>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
 #include <fo4/flags.hpp>
 #include <fo4/plugin/reader.hpp>
@@ -219,13 +221,19 @@ std::string refuseAndCheckUnchanged(const std::vector<std::byte>& bytes,
 
 }  // namespace
 
-TEST_CASE("Native CompactToEsl refuses an out-of-range DIAL with INFO children and leaves the file unchanged") {
-    const auto message = refuseAndCheckUnchanged(
-        childGroupPlugin("DIAL", 0x5000u, "INFO", 0x801u, fo4::GroupType::topic_children),
-        "1 DIAL with child groups",
-        "ParentGroupRelabelUnsupported");
-    CHECK(message == "Cannot renumber 005000:Patch.esp: it has child groups labelled with its "
-                     "form ID; parent GRUP label rewriting is not supported yet.");
+TEST_CASE("Native CompactToEsl refuses an out-of-range parent with child groups and leaves the file unchanged") {
+    const std::vector<std::tuple<std::vector<std::byte>, std::string, std::string>> rows = {
+        {childGroupPlugin("DIAL", 0x5000u, "INFO", 0x801u, fo4::GroupType::topic_children),
+         "1 DIAL with child groups",
+         "Cannot renumber 005000:Patch.esp: it has child groups labelled with its form ID; "
+         "parent GRUP label rewriting is not supported yet."},
+        {childGroupPlugin("WRLD", 0x1234u, "CELL", 0x800u, fo4::GroupType::world_children),
+         "1 WRLD with child groups",
+         ""},
+    };
+    const auto& [bytes, summary, expected] = rows[GENERATE(std::size_t{0}, std::size_t{1})];
+    const auto message = refuseAndCheckUnchanged(bytes, summary, "ParentGroupRelabelUnsupported");
+    if (!expected.empty()) CHECK(message == expected);
 }
 
 TEST_CASE("Native ESL eligibility and CompactToEsl refuse an out-of-range REFR nested in CELL children") {
@@ -387,13 +395,6 @@ TEST_CASE("Native SetLight lowers an out-of-range HEDR next ID to one past the h
     CHECK(nlohmann::json::parse(created->get<std::string>()).at("formKey") == "000802:Patch.esp");
 }
 
-TEST_CASE("Native CompactToEsl refuses an out-of-range WRLD with world children and leaves the file unchanged") {
-    refuseAndCheckUnchanged(
-        childGroupPlugin("WRLD", 0x1234u, "CELL", 0x800u, fo4::GroupType::world_children),
-        "1 WRLD with child groups",
-        "ParentGroupRelabelUnsupported");
-}
-
 TEST_CASE("Native RenumberRecord to the same key reports unchanged for a DIAL with child groups") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
@@ -424,39 +425,26 @@ TEST_CASE("Native RenumberRecord onto an occupied key reports RecordFormIdExists
     CHECK(result.error().type == "RecordFormIdExists");
 }
 
-TEST_CASE("Native RenumberRecord refuses a WRLD with world children and leaves the file unchanged") {
+TEST_CASE("Native RenumberRecord refuses a parent with child groups and leaves the file unchanged") {
+    const std::vector<std::tuple<std::vector<std::byte>, std::string, std::string>> rows = {
+        {childGroupPlugin("WRLD", 0x1234u, "CELL", 0x800u, fo4::GroupType::world_children), "001234:Patch.esp", ""},
+        {childGroupPlugin("DIAL", 0x5000u, "INFO", 0x801u, fo4::GroupType::topic_children), "005000:Patch.esp", "005000:Patch.esp"},
+    };
+    const auto& [bytes, oldKey, fragment] = rows[GENERATE(std::size_t{0}, std::size_t{1})];
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto path = root / "Patch.esp";
-    writeBytes(path, childGroupPlugin("WRLD", 0x1234u, "CELL", 0x800u, fo4::GroupType::world_children));
+    writeBytes(path, bytes);
     const auto before = readFile(path);
 
     fo4ide::plugin::RadiclePluginBackend backend;
     loadBackend(backend, path);
     const auto result = backend.invokeBackend(
         "RenumberRecord",
-        nlohmann::json::array({"Patch.esp", "001234:Patch.esp", "000950:Patch.esp"}));
+        nlohmann::json::array({"Patch.esp", oldKey, "000950:Patch.esp"}));
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().type == "ParentGroupRelabelUnsupported");
-    savePatch(backend);
-    CHECK(readFile(path) == before);
-}
-
-TEST_CASE("Native RenumberRecord refuses a DIAL with child groups and leaves the file unchanged") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto path = root / "Patch.esp";
-    writeBytes(path, childGroupPlugin("DIAL", 0x5000u, "INFO", 0x801u, fo4::GroupType::topic_children));
-    const auto before = readFile(path);
-
-    fo4ide::plugin::RadiclePluginBackend backend;
-    loadBackend(backend, path);
-    const auto result = backend.invokeBackend(
-        "RenumberRecord",
-        nlohmann::json::array({"Patch.esp", "005000:Patch.esp", "000950:Patch.esp"}));
-    REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().type == "ParentGroupRelabelUnsupported");
-    CHECK(result.error().message.find("005000:Patch.esp") != std::string::npos);
+    if (!fragment.empty()) CHECK(result.error().message.find(fragment) != std::string::npos);
     savePatch(backend);
     CHECK(readFile(path) == before);
 }

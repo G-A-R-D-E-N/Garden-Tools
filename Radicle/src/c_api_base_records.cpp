@@ -27,6 +27,11 @@ struct CollectionHolder {
   std::vector<radicle_static_part> parts;
 };
 
+std::optional<fo4::FormKey> optional_link(radicle_form_key key) {
+  if (key.plugin == nullptr && key.local_id == 0) return fo4::FormKey{};
+  return to_form_key(key);
+}
+
 
 radicle_status require(const radicle_env* env, const radicle_record* record, const void* out) {
   if (env == nullptr || record == nullptr || out == nullptr) {
@@ -197,6 +202,77 @@ radicle_status radicle_plugin_set_climate_timing(radicle_plugin* plugin,
                                         timing->sunset_begin, timing->sunset_end,
                                         timing->volatility, timing->moons_phase_length};
     return fo4::env::set_climate_timing(plugin->value, *form_key, value)
+               ? RADICLE_STATUS_OK : RADICLE_STATUS_NOT_FOUND;
+  });
+}
+
+radicle_status radicle_plugin_set_climate_weathers(radicle_plugin* plugin,
+                                                   radicle_form_key key,
+                                                   const radicle_climate_weather* weathers,
+                                                   size_t weather_count) {
+  clear_error();
+  if (plugin == nullptr || (weathers == nullptr && weather_count != 0)) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin and weathers are required");
+  }
+  return guarded("unknown exception while editing CLMT weathers", [&] {
+    const auto form_key = to_form_key(key);
+    if (!form_key) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "a valid climate key is required");
+    std::vector<fo4::env::ClimateWeather> values;
+    for (size_t i = 0; i < weather_count; ++i) {
+      const auto weather = optional_link(weathers[i].weather);
+      const auto global = optional_link(weathers[i].global);
+      if (!weather || !global) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "weather links must be null or valid");
+      values.push_back({*weather, weathers[i].chance, *global});
+    }
+    return fo4::env::set_climate_weathers(plugin->value, *form_key, values)
+               ? RADICLE_STATUS_OK : RADICLE_STATUS_NOT_FOUND;
+  });
+}
+
+radicle_status radicle_plugin_set_weather_colors(radicle_plugin* plugin,
+                                                 radicle_form_key key,
+                                                 uint8_t group,
+                                                 const radicle_byte_color* times,
+                                                 size_t time_count) {
+  clear_error();
+  if (plugin == nullptr || (times == nullptr && time_count != 0)) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin and times are required");
+  }
+  return guarded("unknown exception while editing WTHR colors", [&] {
+    const auto form_key = to_form_key(key);
+    if (!form_key) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "a valid weather key is required");
+    std::vector<fo4::env::ByteColor> values;
+    for (size_t i = 0; i < time_count; ++i) values.push_back({times[i].red, times[i].green, times[i].blue});
+    return fo4::env::set_weather_colors(plugin->value, *form_key, static_cast<fo4::env::WeatherColorGroup>(group), values)
+               ? RADICLE_STATUS_OK : RADICLE_STATUS_NOT_FOUND;
+  });
+}
+
+radicle_status radicle_plugin_set_weather_fog(radicle_plugin* plugin,
+                                              radicle_form_key key,
+                                              const float* distances,
+                                              size_t distance_count) {
+  clear_error();
+  if (plugin == nullptr || (distances == nullptr && distance_count != 0)) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin and distances are required");
+  }
+  return guarded("unknown exception while editing WTHR fog", [&] {
+    const auto form_key = to_form_key(key);
+    if (!form_key) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "a valid weather key is required");
+    return fo4::env::set_weather_fog(plugin->value, *form_key, std::span<const float>(distances, distance_count))
+               ? RADICLE_STATUS_OK : RADICLE_STATUS_NOT_FOUND;
+  });
+}
+
+radicle_status radicle_plugin_set_weather_transition(radicle_plugin* plugin,
+                                                     radicle_form_key key,
+                                                     uint8_t transition_delta) {
+  clear_error();
+  if (plugin == nullptr) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin is required");
+  return guarded("unknown exception while editing WTHR transition", [&] {
+    const auto form_key = to_form_key(key);
+    if (!form_key) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "a valid weather key is required");
+    return fo4::env::set_weather_transition(plugin->value, *form_key, transition_delta)
                ? RADICLE_STATUS_OK : RADICLE_STATUS_NOT_FOUND;
   });
 }

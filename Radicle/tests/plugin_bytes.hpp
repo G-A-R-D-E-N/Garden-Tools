@@ -1,6 +1,7 @@
 #pragma once
 
 #include "fo4/plugin/container.hpp"
+#include "fo4/plugin/visit.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -8,6 +9,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace fo4::test {
@@ -21,6 +23,32 @@ inline std::vector<std::byte> record_original_bytes(const fo4::Plugin& plugin,
                                                      const fo4::Record& record) {
   const auto bytes = fo4::record_original_bytes(plugin, record);
   return {bytes.begin(), bytes.end()};
+}
+
+struct RecordState {
+  std::vector<std::pair<fo4::Signature, std::vector<std::byte>>> subrecords{};
+  fo4::RecordFlags flags{};
+  bool original_bytes{false};
+
+  bool operator==(const RecordState&) const = default;
+};
+
+struct PluginState {
+  bool original_bytes{false};
+  std::vector<RecordState> records{};
+
+  bool operator==(const PluginState&) const = default;
+};
+
+inline PluginState plugin_state(const fo4::Plugin& plugin) {
+  PluginState state{.original_bytes = !plugin.original_range.empty()};
+  fo4::visit_records(plugin, [&state](const fo4::Record& record) {
+    RecordState captured{.flags = record.header.flags,
+                         .original_bytes = !record.original_range.empty()};
+    for (const auto& sub : record.subrecords) captured.subrecords.emplace_back(sub.signature, sub.data);
+    state.records.push_back(std::move(captured));
+  });
+  return state;
 }
 
 class ByteWriter {

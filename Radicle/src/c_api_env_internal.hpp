@@ -5,6 +5,7 @@
 #include "fo4/archive/assets.hpp"
 #include "fo4/environment/environment.hpp"
 #include "fo4/environment/world.hpp"
+#include "fo4/graph/conflict_graph.hpp"
 #include "fo4/text/encoding.hpp"
 
 #include <cstdlib>
@@ -19,11 +20,17 @@
 #include <unordered_map>
 #include <vector>
 
+struct radicle_assets {
+  fo4::archive::AssetResolver value;
+};
+
 struct radicle_env {
   fo4::env::Environment value;
   std::vector<std::string> paths;
   mutable std::mutex text_mutex;
   mutable std::unordered_map<const char*, std::string> text;
+  mutable std::once_flag graph_once;
+  mutable std::optional<fo4::ConflictGraph> graph;
 };
 
 namespace radicle_c_env_detail {
@@ -155,6 +162,34 @@ inline radicle_cell_lighting to_c_lighting(const fo4::env::CellLighting& in) {
     out.light_fade_end = *in.light_fade_end;
   }
   set_optional(in.inherits, out.has_inherits, out.inherits);
+  return out;
+}
+
+inline radicle_cell_lighting_tail to_c_lighting_tail(const fo4::env::CellLighting& in) {
+  radicle_cell_lighting_tail out{};
+  if (in.near_height_mid && in.near_height_range) {
+    out.has_near_height = 1;
+    out.near_height_mid = *in.near_height_mid;
+    out.near_height_range = *in.near_height_range;
+  }
+  if (in.fog_color_high_near && in.fog_color_high_far) {
+    out.has_high_fog_colors = 1;
+    out.fog_color_high_near = to_c_color(*in.fog_color_high_near);
+    out.fog_color_high_far = to_c_color(*in.fog_color_high_far);
+  }
+  set_optional(in.high_density_scale, out.has_high_density_scale, out.high_density_scale);
+  if (in.fog_near_scale) {
+    out.has_fog_scales = 1;
+    out.fog_near_scale = *in.fog_near_scale;
+    if (in.fog_far_scale) out.fog_far_scale = *in.fog_far_scale;
+    if (in.fog_high_near_scale) out.fog_high_near_scale = *in.fog_high_near_scale;
+    if (in.fog_high_far_scale) out.fog_high_far_scale = *in.fog_high_far_scale;
+  }
+  if (in.far_height_mid && in.far_height_range) {
+    out.has_far_height = 1;
+    out.far_height_mid = *in.far_height_mid;
+    out.far_height_range = *in.far_height_range;
+  }
   return out;
 }
 

@@ -16,3 +16,5 @@ findings.md
 progress.md
 
 docs/re-private/*.json
+__pycache__/
+*.pyc

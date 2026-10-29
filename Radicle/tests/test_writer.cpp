@@ -1,4 +1,5 @@
 #include "fo4/plugin/reader.hpp"
+#include "fo4/plugin/visit.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "plugin_bytes.hpp"
 
@@ -15,17 +16,15 @@ std::filesystem::path testdata(const char* name) {
 
 }  // namespace
 
-TEST(Writer, UnmodifiedHeatherIsByteIdentical) {
-  const auto path = testdata("FW_HeatherSurvivalPatch.esp");
-  const auto plugin = fo4::read_plugin_file(path);
-  const auto written = fo4::write_plugin(plugin);
-  EXPECT_EQ(written, fo4::test::original_bytes(plugin));
-}
-
-TEST(Writer, UnmodifiedSlowTimeIsByteIdentical) {
-  const auto path = testdata("SlowTime.esp");
-  const auto plugin = fo4::read_plugin_file(path);
-  EXPECT_EQ(fo4::write_plugin(plugin), fo4::test::original_bytes(plugin));
+TEST(Writer, UnmodifiedFixturesAreByteIdentical) {
+  for (const char* name : {"FW_HeatherSurvivalPatch.esp", "SlowTime.esp"}) {
+    SCOPED_TRACE(name);
+    auto plugin = fo4::read_plugin_file(testdata(name));
+    const auto expected = fo4::test::original_bytes(plugin);
+    plugin.original_range.clear();
+    fo4::visit_records(plugin, [](auto& record) { record.original_range.clear(); });
+    EXPECT_EQ(fo4::write_plugin(plugin), expected);
+  }
 }
 
 TEST(Writer, RebuildsCompressedAndXxxxRecords) {

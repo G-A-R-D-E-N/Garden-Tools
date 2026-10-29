@@ -49,6 +49,8 @@ export interface Backend {
   RemoveElement(plugin: string, record: string, path: string): Promise<string>;
   MoveElement(plugin: string, record: string, path: string, delta: number): Promise<string>;
   ClearElement(plugin: string, record: string, path: string): Promise<string>;
+  CopyElementToSelected(sourcePlugin: string, sourceFormKey: string, elementPath: string, targetsJson: string): Promise<string>;
+  RemoveElementFromSelected(elementPath: string, targetsJson: string): Promise<string>;
   GetConditions(plugin: string, record: string): Promise<string>;
   GetConditionsAt(plugin: string, record: string, path: string): Promise<string>;
   SetConditionsAt(plugin: string, record: string, path: string, conditionsJson: string): Promise<string>;
@@ -62,6 +64,7 @@ export interface Backend {
   CreateMergedPatch(plugins: string, patchPlugin: string, apply: boolean): Promise<string>;
   AddMasters(plugin: string, mastersCsv: string): Promise<string>;
   RenumberPluginFormIds(plugin: string, start: string, apply: boolean): Promise<string>;
+  InjectFormsIntoMaster(plugin: string, master: string, start: string, apply: boolean): Promise<string>;
   CreateSeqFile(plugin: string, outputDir: string): Promise<string>;
   CheckCircularLeveledLists(plugin: string): Promise<string>;
   DeepCopyAsOverride(sourcePlugin: string, id: string, patchPlugin: string, apply: boolean, overwrite: boolean, maxRecords?: number, allowLosing?: boolean): Promise<string>;
@@ -200,6 +203,8 @@ export interface ConflictFieldRow {
 export interface RefByEntry { Plugin: string; FormKey: string; EditorID: string; Type: string; }
 export interface RecordProblem { Code?: string; Detail?: string; Severity: string; Description: string; }
 export interface SearchHit { FormKey: string; EditorID: string; Type: string; Plugin: string; }
+
+export interface BulkTarget { plugin: string; formKey: string }
 
 export interface ElementActions {
   canCreate?: boolean;
@@ -399,16 +404,25 @@ export interface MastersHost {
   SavePlugin(plugin: string): Promise<string>;
 }
 
-export interface StringTableInfo { kind: string; path: string; count: number; }
+export interface StringTableInfo { kind: string; path: string; count: number; source: string; pending?: boolean; }
+export interface SkippedStringArchive { path: string; reason: string; }
+export interface StringTablesResult { tables: StringTableInfo[]; skippedArchives: SkippedStringArchive[]; }
 export interface StringRow { id: number; text: string; }
-export interface StringsPage { total: number; offset: number; limit: number; rows: StringRow[]; }
-export interface StringLookupRow { kind: string; id: number; text: string; }
+export interface StringsPage { total: number; offset: number; limit: number; rows: StringRow[]; pending?: boolean; }
+export interface StringLookupRow { kind: string; id: number; text: string; pending?: boolean; }
 
 export interface StringsHost {
   ListStringTables(plugin: string, language: string): Promise<string>;
   GetStrings(plugin: string, language: string, table: string, filter: string,
              offset: number, limit: number): Promise<string>;
   LookupString(plugin: string, language: string, id: number): Promise<string>;
+  SetString(plugin: string, language: string, table: string, id: number, text: string): Promise<string>;
+  AddString(plugin: string, language: string, table: string, text: string): Promise<string>;
+  RemoveString(plugin: string, language: string, table: string, id: number): Promise<string>;
+  ImportStrings(plugin: string, language: string, table: string, json: string, mode: string): Promise<string>;
+  ExportStrings(plugin: string, language: string, table: string): Promise<string>;
+  SaveStringTables(plugin: string, language: string): Promise<string>;
+  DiscardStringEdits(plugin: string, language: string): Promise<string>;
 }
 
 

@@ -1,6 +1,8 @@
 #include "c_api_env_internal.hpp"
+#include "fo4/c_api_terrain.h"
 #include "fo4/environment/terrain.hpp"
 
+#include <algorithm>
 #include <memory>
 #include <vector>
 
@@ -13,6 +15,12 @@ struct LandscapeHolder {
   radicle_landscape view{};
   fo4::env::LandscapeData data;
   std::vector<radicle_land_layer> layers;
+};
+
+struct LandBlendHolder {
+  radicle_land_blend view{};
+  fo4::env::LandVertexWeights blend;
+  std::vector<radicle_land_blend_layer> layers;
 };
 
 const uint8_t* bytes_or_null(std::span<const std::byte> bytes) {
@@ -137,6 +145,64 @@ radicle_status radicle_env_landscape_texture_diffuse(const radicle_env* env,
     *out_path = stored_text(*env, *path);
     return RADICLE_STATUS_OK;
   });
+}
+
+radicle_status radicle_landscape_heights(const radicle_env* env,
+                                         const radicle_record* record,
+                                         radicle_land_heights* out_heights) {
+  clear_error();
+  if (env == nullptr || record == nullptr || out_heights == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env, record and out_heights are required");
+  }
+  if (!belongs_to_env(env, to_ref(record))) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
+  }
+  *out_heights = radicle_land_heights{};
+  return guarded("unknown exception while decoding LAND heights", [&] {
+    const auto land = fo4::env::decode_landscape(env->value, *to_ref(record));
+    radicle_land_heights out{};
+    if (const auto grid = fo4::env::decode_land_heights(land)) {
+      out.has_heights = 1;
+      out.base = grid->base;
+      std::copy(grid->heights.begin(), grid->heights.end(), out.heights);
+    }
+    *out_heights = out;
+    return RADICLE_STATUS_OK;
+  });
+}
+
+radicle_status radicle_landscape_blend(const radicle_env* env,
+                                       const radicle_record* record,
+                                       radicle_land_blend** out_blend) {
+  clear_error();
+  if (env == nullptr || record == nullptr || out_blend == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env, record and out_blend are required");
+  }
+  if (!belongs_to_env(env, to_ref(record))) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
+  }
+  *out_blend = nullptr;
+  return guarded("unknown exception while blending LAND layers", [&] {
+    auto holder = std::make_unique<LandBlendHolder>();
+    holder->blend = fo4::env::blend_cell_weights(fo4::env::decode_landscape(env->value, *to_ref(record)));
+    for (std::size_t quadrant = 0; quadrant < 4; ++quadrant) {
+      holder->view.base[quadrant] = to_c_key(*env, holder->blend.base[quadrant]);
+    }
+    for (const auto& [texture, weights] : holder->blend.layers) {
+      holder->layers.push_back({to_c_key(*env, texture), weights.data()});
+    }
+    holder->view.layers = holder->layers.empty() ? nullptr : holder->layers.data();
+    holder->view.layer_count = holder->layers.size();
+    holder->view.internal = holder.get();
+    *out_blend = &holder.release()->view;
+    return RADICLE_STATUS_OK;
+  });
+}
+
+void radicle_landscape_blend_free(radicle_land_blend* blend) {
+  clear_error();
+  if (blend == nullptr) return;
+  delete static_cast<LandBlendHolder*>(blend->internal);
 }
 
 }  // extern "C"

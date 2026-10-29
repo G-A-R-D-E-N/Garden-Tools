@@ -11,6 +11,7 @@ public partial class HkxBinaryReader
 
     private struct SectionInfo
     {
+        public int Index;
         public int DataStart;
         public int LocalFixupAbs;
         public int GlobalFixupAbs;
@@ -19,7 +20,9 @@ public partial class HkxBinaryReader
         public int End;
     }
 
-    internal HkxAnimationData ParseHkx(byte[] data)
+    internal HkxAnimationData ParseHkx(byte[] data) => ParseHkx(data, false);
+
+    internal HkxAnimationData ParseHkx(byte[] data, bool strictSkeleton)
     {
         InputFilePolicy.EnsureHkx(data.LongLength);
         if (data.Length < 64)
@@ -49,6 +52,7 @@ public partial class HkxBinaryReader
             int end   = ReadI32(data, b + 0x2C);
             sections[name] = new SectionInfo
             {
+                Index          = i,
                 DataStart      = ds,
                 LocalFixupAbs  = ds + lf,
                 GlobalFixupAbs = ds + gf,
@@ -91,14 +95,18 @@ public partial class HkxBinaryReader
         HkxSkeleton? bestSkel = null;
         foreach (int skelRelOff in skelOffsets)
         {
-            var parsed = ParseSkeleton(data, dataAbs, skelRelOff, dataSec.End, fixups);
-            if (parsed != null)
+            HkxSkeleton? parsed;
+            try
             {
-                if (bestSkel == null || parsed.BoneNames.Count > bestSkel.BoneNames.Count)
-                {
-                    bestSkel = parsed;
-                }
+                parsed = ParseSkeleton(data, dataAbs, skelRelOff, dataSec, fixups);
             }
+            catch (InvalidDataException) when (!strictSkeleton)
+            {
+                continue;
+            }
+
+            if (parsed != null && (bestSkel == null || parsed.BoneNames.Count > bestSkel.BoneNames.Count))
+                bestSkel = parsed;
         }
 
         if (bestSkel != null)
@@ -183,17 +191,21 @@ public partial class HkxBinaryReader
         return map;
     }
 
-    private static Dictionary<int, int> ParseGlobalFixups(byte[] data, SectionInfo sec)
+    private static Dictionary<int, int> ParseGlobalFixups(byte[] data, SectionInfo sec) =>
+        ParseGlobalFixupsWithSections(data, sec)
+            .ToDictionary(entry => entry.Key, entry => entry.Value.Destination);
+
+    private static Dictionary<int, (int Section, int Destination)> ParseGlobalFixupsWithSections(
+        byte[] data, SectionInfo sec)
     {
-        var map = new Dictionary<int, int>();
+        var map = new Dictionary<int, (int Section, int Destination)>();
         int pos = sec.GlobalFixupAbs;
         int end = sec.VirtualFixupAbs;
         while (pos + 12 <= end && pos + 12 <= data.Length)
         {
             int src = ReadI32(data, pos);
-            int dst = ReadI32(data, pos + 8);
             if (src == unchecked((int)0xFFFFFFFF)) { pos += 12; continue; }
-            map[src] = dst;
+            map[src] = (ReadI32(data, pos + 4), ReadI32(data, pos + 8));
             pos += 12;
         }
         return map;

@@ -19,6 +19,9 @@ enum class ConditionScopeKind {
   package_branch,
   quest_target,
   perk_effect_tab,
+  message_button,
+  terminal_body_text,
+  terminal_menu_item,
 };
 
 struct ConditionScopeDescriptor {

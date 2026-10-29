@@ -274,13 +274,6 @@ void replace_master_subrecords(Record& tes4, const std::vector<MasterReference>&
   tes4.original_range.clear();
 }
 
-void set_group_label_u32(GroupHeader& header, std::uint32_t value) {
-  header.label[0] = std::byte{static_cast<std::uint8_t>(value)};
-  header.label[1] = std::byte{static_cast<std::uint8_t>(value >> 8)};
-  header.label[2] = std::byte{static_cast<std::uint8_t>(value >> 16)};
-  header.label[3] = std::byte{static_cast<std::uint8_t>(value >> 24)};
-}
-
 void remap_group_form_id_labels(Plugin& plugin,
                                 const PluginFormIdContext& old_context,
                                 const PluginFormIdContext& new_context) {
@@ -291,8 +284,7 @@ void remap_group_form_id_labels(Plugin& plugin,
       throw FormIdError("FormID-bearing GRUP has a null label during master remap");
     }
     const auto key = resolve_plugin_form_id(raw, old_context);
-    const auto encoded = encode_plugin_form_id(key, new_context);
-    set_group_label_u32(group.header, encoded.value());
+    group.header.set_label_as_u32(encode_plugin_form_id(key, new_context).value());
   });
 }
 
@@ -374,7 +366,12 @@ void write_plugin_file(const Plugin& plugin, const std::filesystem::path& path) 
   io::write_file_atomic(path, write_plugin(plugin, path));
 }
 
-Plugin remap_plugin_masters(Plugin plugin, std::vector<MasterDescriptor> new_masters) {
+Plugin remap_plugin_masters(Plugin plugin, std::vector<MasterDescriptor> new_masters,
+                            FormLinkTypeLookup type_lookup) {
+  if (new_masters.size() > k_max_plugin_masters) {
+    throw FormIdError("a plugin can carry at most " + std::to_string(k_max_plugin_masters) +
+                      " masters, " + std::to_string(new_masters.size()) + " were requested");
+  }
   assign_record_form_keys(plugin);
   std::vector<const Record*> undecodable;
   for (const auto* record : collect_records(plugin)) {
@@ -431,7 +428,8 @@ Plugin remap_plugin_masters(Plugin plugin, std::vector<MasterDescriptor> new_mas
   });
 
   remap_group_form_id_labels(plugin, old_context, new_context);
-  remap_form_links(plugin, old_context, new_context);
+  if (!type_lookup) type_lookup = plugin_type_lookup(plugin);
+  remap_form_links(plugin, old_context, new_context, type_lookup);
   const auto kinds = [&] {
     std::vector<PluginKind> stored;
     stored.reserve(plugin.header.masters.size());
@@ -458,7 +456,8 @@ Plugin remap_plugin_masters(Plugin plugin, std::vector<PluginKey> new_masters) {
   return remap_plugin_masters(std::move(plugin), std::move(descriptors));
 }
 
-Plugin sort_plugin_masters(Plugin plugin, std::span<const PluginKey> load_order) {
+Plugin sort_plugin_masters(Plugin plugin, std::span<const PluginKey> load_order,
+                           FormLinkTypeLookup type_lookup) {
   std::vector<std::pair<std::size_t, MasterDescriptor>> ranked;
   ranked.reserve(plugin.header.masters.size());
   for (const auto& master : plugin.header.masters) {
@@ -476,7 +475,7 @@ Plugin sort_plugin_masters(Plugin plugin, std::span<const PluginKey> load_order)
   std::vector<MasterDescriptor> masters;
   masters.reserve(ranked.size());
   for (auto& [rank, master] : ranked) masters.push_back(std::move(master));
-  return remap_plugin_masters(std::move(plugin), std::move(masters));
+  return remap_plugin_masters(std::move(plugin), std::move(masters), std::move(type_lookup));
 }
 
 Plugin make_empty_plugin(std::string_view filename) {

@@ -1,7 +1,10 @@
+using System;
 using System.IO;
 using System.Linq;
 using Radicle.Interop.Native;
 using Xunit;
+using static Radicle.Interop.Tests.Bytes;
+using static Radicle.Interop.Tests.PluginWriter;
 
 namespace Radicle.Interop.Tests;
 
@@ -70,5 +73,49 @@ public class WritebackTests : IClassFixture<WorldFixture>
 
         using var reread = PluginFile.Read(output);
         Assert.Equal(File.ReadAllBytes(output), reread.ToBytes());
+    }
+
+    [Fact]
+    public void MovesAPlacedReferenceWithinItsCellAndRefusesAMissingTargetCell()
+    {
+        using var env = RadicleEnvironment.Load(new[] { _world.Master });
+        using var plugin = PluginFile.Create("Moves.esp");
+        Assert.Equal(PlacedCopyStatus.Inserted, plugin.CopyPlacedOverride(env, env.Winner(M(0x803))!.Value));
+
+        Assert.Equal(PlacedMoveStatus.Moved, plugin.MoveTransform(M(0x803), new Vector3(5000, 9000, 30), new Vector3(0, 0, 0)));
+        var error = Assert.Throws<RadicleException>(() => plugin.MoveTransform(M(0x803), new Vector3(0, 0, 0), new Vector3(0, 0, 0)));
+        Assert.Equal(Status.NotFound, error.Status);
+    }
+
+    private static byte[] Ctda(RadicleCondition c) =>
+        new[] { c.FlagsByte, (byte)0, (byte)0, (byte)0 }.Concat(U32(c.ComparisonRaw)).Concat(BitConverter.GetBytes(c.Function))
+            .Concat(BitConverter.GetBytes(c.Unknown2)).Concat(BitConverter.GetBytes(c.Param1)).Concat(BitConverter.GetBytes(c.Param2))
+            .Concat(U32(c.RunOn, c.Reference)).Concat(BitConverter.GetBytes(c.Unknown3)).ToArray();
+
+    [Fact]
+    public void ReadsAndReplacesARecordConditionList()
+    {
+        using var temp = new TempDirectory();
+        var first = new RadicleCondition(0x20, 0x3F800000u, 1, 0, 0x800, 0, 0, 0, -1, "Hello", null);
+        var second = new RadicleCondition(0x01, 0u, 0x10, 0, -1, 3, 0, 0x800, -1, null, null);
+        var source = temp.Write("Conditions.esp", Build(0, Array.Empty<string>(),
+            Top("PERK", new Rec("PERK", 0x800, new[] { ("EDID", Z("Perk")), ("CTDA", Ctda(first)), ("CIS1", Z("Hello")), ("CTDA", Ctda(second)) }))));
+        var key = new FormKey("Conditions.esp", 0x800);
+        using (var env = RadicleEnvironment.Load(new[] { source }))
+        {
+            Assert.Equal<RadicleCondition>(new[] { first, second }, env.Conditions(env.Winner(key)!.Value));
+        }
+
+        using (var plugin = PluginFile.Read(source))
+        {
+            Assert.Equal(ConditionWriteStatus.Unchanged, plugin.SetConditions(key, null, new[] { first, second }));
+            Assert.Equal(ConditionWriteStatus.Updated, plugin.SetConditions(key, null, new[] { second, first }));
+            Assert.Equal(ConditionWriteStatus.Unchanged, plugin.SetConditions(key, null, new[] { second, first }));
+            Directory.CreateDirectory(Path.Combine(temp.Path, "out"));
+            var output = Path.Combine(temp.Path, "out", "Conditions.esp");
+            plugin.Write(output);
+            using var reloaded = RadicleEnvironment.Load(new[] { output });
+            Assert.Equal<RadicleCondition>(new[] { second, first }, reloaded.Conditions(reloaded.Winner(key)!.Value));
+        }
     }
 }

@@ -26,32 +26,16 @@ beforeEach(() => { vi.clearAllMocks(); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('Settings API key labels', () => {
-  it('shows the Anthropic key as configured when the flag is true', async () => {
-    stubSettings({ AiProvider: 'anthropic', hasAnthropicApiKey: true });
+  it.each([
+    ['anthropic', 'hasAnthropicApiKey', true, /configured/, /not set/],
+    ['anthropic', 'hasAnthropicApiKey', false, /not set/, /configured/],
+    ['gemini', 'hasGeminiApiKey', true, /configured/, /not set/],
+    ['gemini', 'hasGeminiApiKey', false, /not set/, /configured/],
+  ])('labels the %s key from %s=%s', async (provider, flag, value, shown, hidden) => {
+    stubSettings({ AiProvider: provider, [flag]: value });
     render(<SettingsModal onClose={() => {}} />);
-    expect(await screen.findByText(/configured/)).toBeTruthy();
-    expect(screen.queryByText(/not set/)).toBeNull();
-  });
-
-  it('shows the Anthropic key as not set when the flag is false', async () => {
-    stubSettings({ AiProvider: 'anthropic', hasAnthropicApiKey: false });
-    render(<SettingsModal onClose={() => {}} />);
-    expect(await screen.findByText(/not set/)).toBeTruthy();
-    expect(screen.queryByText(/configured/)).toBeNull();
-  });
-
-  it('shows the Gemini key as configured when the flag is true', async () => {
-    stubSettings({ AiProvider: 'gemini', hasGeminiApiKey: true });
-    render(<SettingsModal onClose={() => {}} />);
-    expect(await screen.findByText(/configured/)).toBeTruthy();
-    expect(screen.queryByText(/not set/)).toBeNull();
-  });
-
-  it('shows the Gemini key as not set when the flag is false', async () => {
-    stubSettings({ AiProvider: 'gemini', hasGeminiApiKey: false });
-    render(<SettingsModal onClose={() => {}} />);
-    expect(await screen.findByText(/not set/)).toBeTruthy();
-    expect(screen.queryByText(/configured/)).toBeNull();
+    expect(await screen.findByText(shown)).toBeTruthy();
+    expect(screen.queryByText(hidden)).toBeNull();
   });
 });
 

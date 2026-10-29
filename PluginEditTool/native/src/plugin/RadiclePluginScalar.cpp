@@ -1,3 +1,4 @@
+#include "RadiclePluginSupport.hpp"
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 #include "RadiclePluginFields.hpp"
 
@@ -17,11 +18,6 @@
 namespace fo4ide::plugin {
 namespace {
 
-std::string stringArgument(const nlohmann::json& args, std::size_t index) {
-    if (!args.is_array() || index >= args.size() || !args[index].is_string()) return {};
-    return args[index].get<std::string>();
-}
-
 bool isNullFormLink(std::string_view value) {
     if (value.empty() || value.size() != 4) return value.empty();
     return std::tolower(static_cast<unsigned char>(value[0])) == 'n' &&
@@ -30,11 +26,15 @@ bool isNullFormLink(std::string_view value) {
            std::tolower(static_cast<unsigned char>(value[3])) == 'l';
 }
 
+bool isTypedLvspSetting(std::string_view path) {
+    return path == "LVSP\\ChanceNone" || path == "LVSP\\MaxCount" || path == "LVSP\\Flags";
+}
+
 }
 
 Result<nlohmann::json> RadiclePluginBackend::setFieldValue(
     const nlohmann::json& arguments) {
-    const auto fieldPath = stringArgument(arguments, 2);
+    const auto fieldPath = support::stringArgument(arguments, 2);
     if (fo4::schema::indexed_formlink_list_path(fieldPath).has_value() ||
         fo4::schema::indexed_nested_formlink_list_path(fieldPath).has_value()) {
         return setFormLinkListField(arguments);
@@ -49,13 +49,13 @@ Result<nlohmann::json> RadiclePluginBackend::setFieldValue(
     }
 
     const auto field = fo4::schema::scalar_field_descriptor(address ? address->path : fieldPath);
-    if (!field.has_value()) {
+    if (!field.has_value() || isTypedLvspSetting(fieldPath)) {
         return setField(arguments);
     }
 
-    const auto pluginName = stringArgument(arguments, 0);
-    const auto formKeyText = stringArgument(arguments, 1);
-    const auto value = stringArgument(arguments, 3);
+    const auto pluginName = support::stringArgument(arguments, 0);
+    const auto formKeyText = support::stringArgument(arguments, 1);
+    const auto value = support::stringArgument(arguments, 3);
     if (pluginName.empty()) {
         return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
     }
@@ -110,7 +110,8 @@ Result<nlohmann::json> RadiclePluginBackend::setFieldValue(
     try {
         auto mutated = loaded->plugin;
         fo4::ScalarMutationStatus status;
-        if (field->scalar.storage == fo4::schema::ScalarStorage::zstring) {
+        if (field->scalar.storage == fo4::schema::ScalarStorage::zstring ||
+            field->scalar.storage == fo4::schema::ScalarStorage::fixed_string) {
             const auto stored = fo4::text::utf8_to_windows1252(value);
             if (!stored) {
                 return std::unexpected(Error{"ScalarFieldWriteFailed",
@@ -133,6 +134,11 @@ Result<nlohmann::json> RadiclePluginBackend::setFieldValue(
                         field->scalar.subrecord.to_string() +
                         " subrecord; Radicle will not guess a missing subrecord insertion position"
                 });
+            case fo4::ScalarMutationStatus::next_alias_id_too_low:
+                return std::unexpected(Error{
+                    "ScalarFieldWriteFailed",
+                    "QUST Next Alias ID must stay above every existing alias ID"
+                });
             case fo4::ScalarMutationStatus::updated:
             case fo4::ScalarMutationStatus::unchanged:
                 break;
@@ -153,7 +159,7 @@ Result<nlohmann::json> RadiclePluginBackend::setFieldValue(
 
 Result<nlohmann::json> RadiclePluginBackend::setFormLinkField(
     const nlohmann::json& arguments) {
-    const auto fieldPath = stringArgument(arguments, 2);
+    const auto fieldPath = support::stringArgument(arguments, 2);
     const auto address = semanticFieldAddress(fieldPath);
     const auto field = fo4::schema::formlink_field_descriptor(address ? address->path : fieldPath);
     if (!field.has_value()) return setField(arguments);
@@ -164,8 +170,8 @@ Result<nlohmann::json> RadiclePluginBackend::setFormLinkField(
         });
     }
 
-    const auto pluginName = stringArgument(arguments, 0);
-    const auto formKeyText = stringArgument(arguments, 1);
+    const auto pluginName = support::stringArgument(arguments, 0);
+    const auto formKeyText = support::stringArgument(arguments, 1);
     const auto value = arguments[3].get<std::string>();
     if (pluginName.empty()) {
         return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});

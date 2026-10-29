@@ -13,6 +13,7 @@
 #include "fo4/forms/quest.hpp"
 #include "fo4/graph/check_errors.hpp"
 #include "fo4/graph/conflict_graph.hpp"
+#include "fo4/graph/conflict_kind.hpp"
 #include "fo4/graph/plugin_diff.hpp"
 #include "fo4/graph/reachability.hpp"
 #include "fo4/headers.hpp"

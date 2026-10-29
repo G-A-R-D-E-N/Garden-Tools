@@ -1,3 +1,5 @@
+#include "fo4/environment/environment.hpp"
+#include "fo4/environment/placed.hpp"
 #include "fo4/forms/placed_reference.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
@@ -107,6 +109,23 @@ TEST_P(PlacedVariantsReal, EveryTrackedRecordDecodesAndMeetsAuthoringMinimums) {
     EXPECT_GT(totals["ADDN"], 0);
     EXPECT_GT(totals["PGRE"], 0);
     EXPECT_GT(totals["PHZD"], 0);
+  }
+}
+
+TEST(PlacedXemiReal, XemiReferencesMatchCensusInDlcRobotAndWorkshop03) {
+  for (const auto& [name, expected] : {std::pair{"DLCRobot.esm", 482}, std::pair{"DLCworkshop03.esm", 207}}) {
+    bool skip = false;
+    const auto path = official(name, skip);
+    if (skip) { GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data"; }
+    record_game_build(detect_game_build(path.parent_path()));
+    const std::filesystem::path paths[] = {path};
+    const auto env = fo4::env::Environment::load(paths);
+    int with_emittance = 0;
+    for (const auto* ref : env.plugin_records(0)) {
+      if (ref->record->header.signature != fo4::Signature::from_string("REFR")) continue;
+      if (fo4::env::decode_placed_reference(env, *ref).emittance) ++with_emittance;
+    }
+    EXPECT_EQ(with_emittance, expected) << name;
   }
 }
 

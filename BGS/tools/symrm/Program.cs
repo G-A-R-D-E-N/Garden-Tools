@@ -9,7 +9,7 @@ using OpenCommonwealth.Services.Hkx;
 
 namespace BehaviourStudio.Tools;
 
-public static class Program
+public static partial class Program
 {
     private static string _root = "";
 
@@ -28,6 +28,8 @@ public static class Program
             case "frames": return Frames(argv);
             case "scale": return Scale(argv);
             case "skeleton": return Skeleton(argv);
+            case "mapper": return Mapper(argv);
+            case "ragdoll": return Ragdoll(argv);
             case "rig": return Rig(argv);
             case "extract": return Extract(argv);
             case "ba2": return Ba2Browse(argv);
@@ -376,6 +378,9 @@ public static class Program
     {
         if (argv.Length < 2) { Usage(); return 1; }
 
+        bool strict = Array.IndexOf(argv, "--strict") >= 0;
+        bool digest = Array.IndexOf(argv, "--digest") >= 0;
+
         string target = Path.GetFullPath(argv[1]);
         if (Directory.Exists(target))
         {
@@ -384,7 +389,7 @@ public static class Program
                                                         StringComparison.OrdinalIgnoreCase))
                                  .OrderBy(f => f).ToList();
 
-            int read = 0, empty = 0, unsupported = 0, threw = 0;
+            int read = 0, empty = 0, unsupported = 0, refused = 0, threw = 0;
             var classes = new Dictionary<string, int>();
             var reasons = new Dictionary<string, int>();
 
@@ -392,16 +397,22 @@ public static class Program
             {
                 try
                 {
-                    var a = new HkxBinaryReader().ReadAnimation(file);
+                    if (!new HkxBinaryReader().TryReadAnimation(file, out var a))
+                    {
+                        unsupported++;
+                        classes[a.AnimationClass] = classes.GetValueOrDefault(a.AnimationClass) + 1;
+                        continue;
+                    }
+
                     bool any = a.Tracks.Any(t => t.Rotations.Count > 0 || t.Translations.Count > 0 || t.Scales.Count > 0);
                     if (a.NumFrames <= 0 || !any) { empty++; Console.WriteLine($"  empty  {Short(file, target)}  {a.GetSummary()}"); }
                     else read++;
                 }
                 catch (NotSupportedException ex)
                 {
-                    unsupported++;
-                    string cls = ex.Message.Split('.')[0].Replace("unsupported animation class: ", "");
-                    classes[cls] = classes.GetValueOrDefault(cls) + 1;
+                    refused++;
+                    string why = ex.Message;
+                    reasons[why] = reasons.GetValueOrDefault(why) + 1;
                 }
                 catch (Exception ex)
                 {
@@ -412,15 +423,35 @@ public static class Program
             }
 
             Console.WriteLine($"\n{files.Count} animations: {read} decoded, {unsupported} in a class this reader " +
-                              $"does not decode, {empty} decoded to nothing, {threw} threw");
-            foreach (var kv in classes.OrderByDescending(k => k.Value)) Console.WriteLine($"  {kv.Value,5}  {kv.Key}");
+                              $"does not decode, {refused} in a spline sub-format this reader does not decode, " +
+                              $"{empty} decoded to nothing, {threw} threw");
+            foreach (var kv in classes.OrderByDescending(k => k.Value))
+                Console.WriteLine($"  {kv.Value,5}  {kv.Key}: {AnimationCompression.Describe(kv.Key)}");
             foreach (var kv in reasons.OrderByDescending(k => k.Value)) Console.WriteLine($"  {kv.Value,5}  {kv.Key}");
-            return threw == 0 && empty == 0 ? 0 : 1;
+            bool nothingDecoded = read == 0 && unsupported == 0 && refused == 0;
+            bool failedRun = threw > 0 || empty > 0 || nothingDecoded ||
+                             (strict && (unsupported > 0 || refused > 0));
+            return failedRun ? 1 : 0;
         }
 
-        if (argv.Length > 2 && argv[2] == "--digest")
+        if (digest)
         {
-            var a = new HkxBinaryReader().ReadAnimation(target);
+            HkxAnimationData a;
+            try
+            {
+                a = new HkxBinaryReader().ReadAnimation(target);
+            }
+            catch (NotSupportedException ex)
+            {
+                Console.WriteLine($"{Path.GetFileName(target)}: {ex.Message}");
+                return strict ? 1 : 0;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"{Path.GetFileName(target)}: {ex.Message.Split('\n')[0]}");
+                return 1;
+            }
+
             double sum = 0;
             foreach (var tr in a.Tracks)
             {
@@ -441,6 +472,12 @@ public static class Program
         {
             Console.WriteLine($"{Path.GetFileName(target)}");
             Console.WriteLine("  " + ex.Message);
+            return strict ? 1 : 0;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"{Path.GetFileName(target)}");
+            Console.WriteLine("  " + ex.Message.Split('\n')[0]);
             return 1;
         }
 
@@ -595,6 +632,8 @@ public static class Program
     private static int Scale(string[] argv)
     {
         if (argv.Length < 2) { Usage(); return 1; }
+
+        bool strict = Array.IndexOf(argv, "--strict") >= 0;
         string target = Path.GetFullPath(argv[1]);
 
         var files = Directory.Exists(target)
@@ -604,15 +643,41 @@ public static class Program
                        .OrderBy(f => f).ToList()
             : new List<string> { target };
 
-        int read = 0, withScale = 0, degenerate = 0;
+        string root = Directory.Exists(target) ? target : Path.GetDirectoryName(target)!;
+        int read = 0, withScale = 0, degenerate = 0, unsupported = 0, refused = 0, failed = 0;
         var byClass = new Dictionary<string, int>();
         var scaledByClass = new Dictionary<string, int>();
+        var unsupportedByClass = new Dictionary<string, int>();
+        var refusals = new Dictionary<string, int>();
+        var failures = new Dictionary<string, int>();
 
         foreach (string file in files)
         {
             HkxAnimationData a;
-            try { a = new HkxBinaryReader().ReadAnimation(file); }
-            catch { continue; }
+            try
+            {
+                if (!new HkxBinaryReader().TryReadAnimation(file, out a))
+                {
+                    unsupported++;
+                    unsupportedByClass[a.AnimationClass] = unsupportedByClass.GetValueOrDefault(a.AnimationClass) + 1;
+                    Console.WriteLine($"  unsupported  {Short(file, root),-64} {a.AnimationClass}");
+                    continue;
+                }
+            }
+            catch (NotSupportedException error)
+            {
+                refused++;
+                refusals[error.Message] = refusals.GetValueOrDefault(error.Message) + 1;
+                Console.WriteLine($"  unsupported  {Short(file, root),-64} {error.Message}");
+                continue;
+            }
+            catch (Exception error)
+            {
+                failed++;
+                string why = error.Message.Split('\n')[0];
+                failures[why] = failures.GetValueOrDefault(why) + 1;
+                continue;
+            }
             read++;
             byClass[a.AnimationClass] = byClass.GetValueOrDefault(a.AnimationClass) + 1;
 
@@ -640,16 +705,26 @@ public static class Program
             scaledByClass[a.AnimationClass] = scaledByClass.GetValueOrDefault(a.AnimationClass) + 1;
             if (zeroFrames > 0) degenerate++;
 
-            Console.WriteLine($"  {Short(file, Directory.Exists(target) ? target : Path.GetDirectoryName(target)!),-64} " +
+            Console.WriteLine($"  {Short(file, root),-64} " +
                               $"{a.AnimationClass,-34} {oddTracks}/{a.Tracks.Count} tracks  " +
                               $"range {lo:F4}..{hi:F4}" + (zeroFrames > 0 ? $"  ZERO x{zeroFrames}" : ""));
         }
 
         Console.WriteLine($"\n{read} animations read, {withScale} carry a scale that is not the identity, " +
-                          $"{degenerate} of those contain a zero");
+                          $"{degenerate} of those contain a zero, {unsupported} in a class this reader does not " +
+                          $"decode, {refused} in a spline sub-format this reader does not decode, {failed} could " +
+                          "not be read");
         foreach (var kv in byClass.OrderByDescending(k => k.Value))
             Console.WriteLine($"  {kv.Value,6} {kv.Key}, {scaledByClass.GetValueOrDefault(kv.Key)} of them scaled");
-        return 0;
+        foreach (var kv in unsupportedByClass.OrderByDescending(k => k.Value))
+            Console.WriteLine($"  {kv.Value,6} {kv.Key}: {AnimationCompression.Describe(kv.Key)}");
+        foreach (var kv in refusals.OrderByDescending(k => k.Value))
+            Console.WriteLine($"  {kv.Value,6} {kv.Key}");
+        foreach (var kv in failures.OrderByDescending(k => k.Value))
+            Console.WriteLine($"  {kv.Value,6} {kv.Key}");
+        bool nothingDecoded = read == 0 && unsupported == 0 && refused == 0;
+        bool failedRun = failed > 0 || nothingDecoded || (strict && (unsupported > 0 || refused > 0));
+        return failedRun ? 1 : 0;
     }
 
     private static string Short(string file, string root) =>
@@ -712,60 +787,6 @@ public static class Program
             xml[start..], $"name=\"{which}\".*?name=\"value\">(-?\\d+)<",
             System.Text.RegularExpressions.RegexOptions.Singleline);
         return m.Success ? m.Groups[1].Value : "absent";
-    }
-
-    private static int Motion(string[] argv)
-    {
-        if (argv.Length < 2) { Usage(); return 1; }
-
-        string target = Path.GetFullPath(argv[1]);
-
-        if (Directory.Exists(target))
-        {
-            var files = Directory.GetFiles(target, "*.hkx", SearchOption.AllDirectories);
-            int carrying = 0, still = 0, failed = 0;
-            float furthest = 0;
-            string furthestName = "";
-
-            foreach (string file in files)
-            {
-                try
-                {
-                    var read = RootMotion.Read(file);
-                    if (!read.Any) { still++; continue; }
-
-                    carrying++;
-                    if (read.Travel.Length() > furthest)
-                    {
-                        furthest = read.Travel.Length();
-                        furthestName = Path.GetFileName(file);
-                    }
-                }
-                catch { failed++; }
-            }
-
-            Console.WriteLine($"{files.Length} files: {carrying} carry root motion, {still} stay on " +
-                              $"the spot, {failed} could not be read");
-            if (carrying > 0)
-                Console.WriteLine($"furthest travelled: {furthestName} at {furthest:F1} units");
-            return failed == files.Length ? 1 : 0;
-        }
-
-        var motion = RootMotion.Read(target);
-        Console.WriteLine($"{Path.GetFileName(target)}: {motion}");
-        if (!motion.Any) return 0;
-
-        Console.WriteLine($"up {motion.Up.X:F0} {motion.Up.Y:F0} {motion.Up.Z:F0}, " +
-                          $"forward {motion.Forward.X:F0} {motion.Forward.Y:F0} {motion.Forward.Z:F0}");
-
-        for (int i = 0; i < motion.Samples.Count; i += Math.Max(1, motion.Samples.Count / 8))
-            Console.WriteLine($"  sample {i,3}  {motion.Samples[i]}");
-
-        Console.WriteLine($"  sample {motion.Samples.Count - 1,3}  {motion.Samples[^1]}");
-
-        var half = RootMotion.At(motion, 0.5f);
-        Console.WriteLine($"halfway through: {half}");
-        return 0;
     }
 
     private static int Ba2Browse(string[] argv)
@@ -1507,74 +1528,6 @@ public static class Program
             if (int.TryParse(name[1..], out int id)) found[id] = cls;
         }
         return found;
-    }
-
-    private static int Walk(string[] argv)
-    {
-        if (argv.Length < 2) { Usage(); return 1; }
-
-        string target = Path.GetFullPath(argv[1]);
-        var files = Directory.Exists(target)
-            ? Directory.GetFiles(target, "*.hkx", SearchOption.AllDirectories)
-                       .OrderBy(f => f, StringComparer.Ordinal).ToList()
-            : new List<string> { target };
-
-        int clean = 0, bad = 0, entries = 0, virtuals = 0;
-
-        foreach (string file in files)
-        {
-            PackfileImage image;
-            try { image = PackfileImage.Read(file); }
-            catch (Exception e)
-            {
-                Console.WriteLine($"  {Path.GetFileName(file)}: skipped, {e.Message.Split('\n')[0]}");
-                continue;
-            }
-
-            var data = image.Section("__data__");
-            if (data == null) continue;
-
-            var objects = new PackfileObjects(image);
-            var types = HavokClassTypes.Shipped;
-            if (objects.Instances.Any(i => !types.Knows(i.ClassName))) continue;
-
-            bool ok = true;
-
-            var offsets = data.Virtuals().Select(v => v.Source).ToList();
-            virtuals += offsets.Count;
-            for (int at = 1; at < offsets.Count; at++)
-                if (offsets[at] <= offsets[at - 1])
-                {
-                    ok = false;
-                    Console.WriteLine($"{Path.GetFileName(file)}: the virtual table is not in file " +
-                                      $"order, entry {at} at 0x{offsets[at]:x} follows " +
-                                      $"0x{offsets[at - 1]:x}");
-                    break;
-                }
-
-            foreach (bool global in new[] { true, false })
-            {
-                var actual = global ? data.Globals().Select(g => g.Source).ToList()
-                                    : data.Locals().Select(l => l.Source).ToList();
-                var predicted = FixupOrder.Sources(objects, types, data, global);
-                entries += actual.Count;
-
-                if (predicted.SequenceEqual(actual)) continue;
-
-                ok = false;
-                int at = predicted.Zip(actual).TakeWhile(p => p.First == p.Second).Count();
-                Console.WriteLine($"{Path.GetFileName(file)}: the {(global ? "global" : "local")} " +
-                                  $"table is not in that order, {predicted.Count} predicted against " +
-                                  $"{actual.Count}, first differing at {at}");
-            }
-
-            if (ok) clean++; else bad++;
-        }
-
-        Console.WriteLine($"\n{clean} file(s) with both tables in the predicted order, {bad} not, " +
-                          $"{entries} entr(ies) checked, {virtuals} object(s) whose virtual entries " +
-                          "run in file order");
-        return bad == 0 ? 0 : 1;
     }
 
     private static bool Same(SymbolIndexFixup.Usage a, SymbolIndexFixup.Usage b) =>
@@ -6968,7 +6921,7 @@ public static class Program
         var skeleton = new HkxBinaryReader().ReadSkeleton(Path.GetFullPath(argv[1]));
         if (!new HkxBinaryReader().TryReadAnimation(Path.GetFullPath(argv[2]), out var animation))
         {
-            Console.WriteLine($"{Path.GetFileName(argv[2])}: {animation.AnimationClass} is not decoded");
+            Console.WriteLine($"{Path.GetFileName(argv[2])}: {AnimationCompression.Describe(animation.AnimationClass)}");
             return 1;
         }
 
@@ -7271,121 +7224,6 @@ public static class Program
     }
 
     private const float DriftLimit = 0.5f;
-
-    private static int Skeleton(string[] argv)
-    {
-        if (argv.Length < 2) { Usage(); return 1; }
-
-        var skeleton = new HkxBinaryReader().ReadSkeleton(Path.GetFullPath(argv[1]));
-        Console.WriteLine($"{skeleton.Name}: {skeleton.BoneNames.Count} bones, " +
-                          $"{skeleton.ParentIndices.Count} parent indices, {skeleton.ReferencePose.Count} poses");
-
-        var rest = AnimationPose.ReferencePose(skeleton);
-
-        string wanted = argv.Length > 2 ? argv[2] : "Hand";
-        int leaf = skeleton.BoneNames.FindIndex(n => n.Contains(wanted, StringComparison.OrdinalIgnoreCase));
-        if (leaf < 0) { Console.WriteLine($"no bone matching '{wanted}'"); return 1; }
-
-        var chain = new List<int>();
-        for (int i = leaf; i >= 0; i = skeleton.ParentIndices[i]) chain.Insert(0, i);
-
-        Console.WriteLine($"\nchain to {skeleton.BoneNames[leaf]}, {chain.Count} bones");
-        Console.WriteLine($"  {"bone",-28} {"stored translation",-34} {"composed world position",-34}");
-        foreach (int i in chain)
-        {
-            var t = skeleton.ReferencePose[i].Translation;
-            var w = rest.Bones[i].Position;
-            Console.WriteLine($"  {skeleton.BoneNames[i],-28} " +
-                              $"{t.X,10:F3}{t.Y,11:F3}{t.Z,11:F3}   " +
-                              $"{w.X,10:F3}{w.Y,11:F3}{w.Z,11:F3}");
-        }
-        return 0;
-    }
-
-    private static int Rig(string[] argv)
-    {
-        if (argv.Length < 2) { Usage(); return 1; }
-
-        string target = Path.GetFullPath(argv[1]);
-        if (!Directory.Exists(target))
-            return RigOne(target, argv.Length > 2 ? argv[2] : null, verbose: true) ? 0 : 1;
-
-        var files = Directory.EnumerateFiles(target, "*.hkx", SearchOption.AllDirectories)
-                             .Where(f => f.Contains($"{Path.DirectorySeparatorChar}CharacterAssets{Path.DirectorySeparatorChar}",
-                                                    StringComparison.OrdinalIgnoreCase))
-                             .OrderBy(f => f).ToList();
-
-        int ok = 0, failed = 0, noSkeleton = 0, multiRootChild = 0, multiRoot = 0;
-        var forks = new List<string>();
-
-        foreach (string file in files)
-        {
-            try
-            {
-                if (!RigOne(file, null, verbose: false)) { failed++; Console.WriteLine($"  MISMATCH  {Short(file, target)}"); continue; }
-                ok++;
-
-                var skeleton = new HkxBinaryReader().ReadSkeleton(file);
-                var counts = SkeletonJson.ChildCounts(skeleton);
-                int roots = skeleton.ParentIndices.Count(p => p < 0);
-                if (roots > 1) multiRoot++;
-
-                for (int i = 0; i < counts.Count; i++)
-                {
-                    if (skeleton.ParentIndices[i] >= 0 || counts[i] <= 1) continue;
-                    multiRootChild++;
-                    if (forks.Count < 8)
-                        forks.Add($"{Short(file, target)}  root '{skeleton.BoneNames[i]}' has {counts[i]} children");
-                    break;
-                }
-            }
-            catch (Exception ex)
-            {
-                if (ex.Message.Contains("No skeleton", StringComparison.Ordinal)) noSkeleton++;
-                else { failed++; Console.WriteLine($"  THREW  {Short(file, target)}: {ex.Message.Split('\n')[0]}"); }
-            }
-        }
-
-        Console.WriteLine($"\n{files.Count} files under CharacterAssets: {ok} emitted and read back identical, " +
-                          $"{failed} failed, {noSkeleton} hold no skeleton");
-        Console.WriteLine($"{multiRoot} with more than one root bone, {multiRootChild} whose root has more than one child");
-        foreach (string f in forks) Console.WriteLine($"  {f}");
-        return failed == 0 ? 0 : 1;
-    }
-
-    private static bool RigOne(string path, string? outPath, bool verbose)
-    {
-        var skeleton = new HkxBinaryReader().ReadSkeleton(path);
-        string json = SkeletonJson.Write(skeleton, path);
-        var back = SkeletonJson.Read(json);
-
-        bool names = skeleton.BoneNames.SequenceEqual(back.BoneNames);
-        bool parents = skeleton.ParentIndices.Take(skeleton.BoneNames.Count)
-                               .SequenceEqual(back.ParentIndices);
-        bool count = skeleton.BoneNames.Count == back.BoneNames.Count;
-
-        if (outPath != null) File.WriteAllText(outPath, json);
-
-        if (verbose)
-        {
-            var counts = SkeletonJson.ChildCounts(skeleton);
-            Console.WriteLine($"{Path.GetFileName(path)}  '{skeleton.Name}'");
-            Console.WriteLine($"  bone count   read {skeleton.BoneNames.Count,4}   json {back.BoneNames.Count,4}   {(count ? "same" : "DIFFERENT")}");
-            Console.WriteLine($"  names        {(names ? "identical, in order" : "DIFFERENT")}");
-            Console.WriteLine($"  parents      {(parents ? "identical, in order" : "DIFFERENT")}");
-            Console.WriteLine($"  roots        {skeleton.ParentIndices.Count(p => p < 0)}");
-
-            for (int i = 0; i < counts.Count; i++)
-                if (skeleton.ParentIndices[i] < 0)
-                    Console.WriteLine($"  root '{skeleton.BoneNames[i]}' has {counts[i]} children");
-
-            int forks = counts.Count(c => c > 1);
-            Console.WriteLine($"  {forks} bones have more than one child, most is {(counts.Count > 0 ? counts.Max() : 0)}");
-            if (outPath != null) Console.WriteLine($"  written to {outPath}");
-        }
-
-        return names && parents && count;
-    }
 
     private static string Work(string name)
     {

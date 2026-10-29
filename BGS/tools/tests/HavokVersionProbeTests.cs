@@ -6,30 +6,19 @@ namespace BehaviourStudio.Tests;
 
 public sealed class HavokVersionProbeTests
 {
-    [Fact]
-    public void ReadsFo4VersionFromTheFirst96Bytes()
+    [Theory]
+    [InlineData("hk_2014.1.0-r1", 24)]
+    [InlineData("hk_2018.2.0-r1", 41)]
+    public void ReadsVersionTokenAtItsOffset(string version, int offset)
     {
         byte[] header = new byte[HavokVersionProbe.HeaderBytes];
-        Encoding.ASCII.GetBytes("hk_2014.1.0-r1").CopyTo(header, 24);
+        Encoding.ASCII.GetBytes(version).CopyTo(header, offset);
 
         var result = HavokVersionProbe.Read(header);
 
         Assert.NotNull(result);
-        Assert.Equal("hk_2014.1.0-r1", result!.Version);
-        Assert.Equal(24, result.Offset);
-    }
-
-    [Fact]
-    public void Reads2018VersionWithoutAssumingAContainerLayout()
-    {
-        byte[] header = new byte[HavokVersionProbe.HeaderBytes];
-        Encoding.ASCII.GetBytes("hk_2018.2.0-r1").CopyTo(header, 41);
-
-        var result = HavokVersionProbe.Read(header);
-
-        Assert.NotNull(result);
-        Assert.Equal("hk_2018.2.0-r1", result!.Version);
-        Assert.Equal(41, result.Offset);
+        Assert.Equal(version, result!.Version);
+        Assert.Equal(offset, result.Offset);
     }
 
     [Fact]

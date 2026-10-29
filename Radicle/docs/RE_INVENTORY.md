@@ -168,7 +168,7 @@ TESFile record/chunk parser was named (`tesfilecontainer.cpp`) but the actual `N
 
 ### BA2
 
-No dedicated BA2 v7/v8 layout write-up was found in ReverseEngineering findings. CK init opens `Fallout4 - Voices1.ba2`. PluginEditTool already has `Ba2Version7Tests` / `Ba2NextGenDecompressionTests` as a later oracle. `speculative` for this repo until that work is inventoried in a BA2 pass. Radicle now implements v7/v8 GNRL and DX10 and has measured their on-disk field widths on installed archives (`docs/BA2.md`); that is a file-format measurement, not RE evidence, so the RE status above is unchanged.
+No dedicated BA2 v7/v8 layout write-up was found in ReverseEngineering findings. CK init opens `Fallout4 - Voices1.ba2`. PluginEditTool already has `Ba2NextGenDecompressionTests` (including its version 7 cases) as a later oracle. `speculative` for this repo until that work is inventoried in a BA2 pass. Radicle now implements v7/v8 GNRL and DX10 and has measured their on-disk field widths on installed archives (`docs/BA2.md`); that is a file-format measurement, not RE evidence, so the RE status above is unchanged.
 
 ### Packed-exe caveat
 
@@ -272,7 +272,7 @@ Mutagen already has FO4 fixtures we should copy later, not invent:
 - `ObjectModificationNoData.esp`, `SubgraphOutOfOrder.esp`
 - xEdit `TES5Edit-dev-4.1.6/Core/Hardcoded/Fallout4.esp`
 
-FO4IDE BA2 tests (`Ba2Version7Tests`, `Ba2NextGenDecompressionTests`) are the BA2 oracle. This RE tree has `BSResource::Archive2::BSALoader` (`0x1b740c0`) but no GNRL/DX10 header dump.
+FO4IDE BA2 tests (`Ba2NextGenDecompressionTests`, including its version 7 cases) are the BA2 oracle. This RE tree has `BSResource::Archive2::BSALoader` (`0x1b740c0`) but no GNRL/DX10 header dump.
 
 ### Highest-value next decompiles
 

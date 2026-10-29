@@ -30,11 +30,21 @@ public readonly record struct ByteColor(byte Red, byte Green, byte Blue);
 public sealed record Lighting(ByteColor Ambient, ByteColor Directional, ByteColor FogNearColor, float FogNear,
                               float FogFar, int DirectionalRotationXy, int DirectionalRotationZ, float DirectionalFade,
                               float FogClipDistance, float FogPower, ByteColor? FogFarColor, float? FogMax,
-                              (float Begin, float End)? LightFade, uint? Inherits);
+                              (float Begin, float End)? LightFade, uint? Inherits,
+                              (float Mid, float Range)? NearHeight = null,
+                              (ByteColor Near, ByteColor Far)? HighFogColors = null, float? HighDensityScale = null,
+                              (float Near, float Far, float HighNear, float HighFar)? FogScales = null,
+                              (float Mid, float Range)? FarHeight = null);
 
 public sealed record CellInfo(ushort? Flags, (int X, int Y)? Grid, byte? LandFlags, Lighting? Lighting,
                               FormKey? LightingTemplate, float? WaterHeight, FormKey? ImageSpace,
-                              FormKey? EncounterZone, FormKey? Location, FormKey? Worldspace, FormKey? Water = null);
+                              FormKey? EncounterZone, FormKey? Location, FormKey? Worldspace, FormKey? Water = null,
+                              ushort? PrevisTimestamp = null, ushort? PrecombinedTimestamp = null,
+                              FormKey? AcousticSpace = null, FormKey? MusicType = null,
+                              FormKey? SkyWeatherRegion = null, FormKey? GodRays = null, FormKey? LockList = null,
+                              FormKey? Owner = null, int? OwnerRank = null,
+                              (FormKey? Worldspace, float X, float Y, float Z)? ExteriorLod = null,
+                              uint? WaterCurrentCount = null, string? WaterEnvironmentMap = null);
 
 public sealed record TextureSetInfo(IReadOnlyList<string?> Textures, string? Material, ushort? Flags,
                                     IReadOnlyList<float> Decal);
@@ -43,6 +53,12 @@ public sealed record LandLayer(bool IsBase, FormKey? Texture, byte Quadrant, ush
 
 public sealed record Landscape(uint? Flags, float? HeightOffset, byte[]? Heights, byte[]? Normals, byte[]? Colors,
                                IReadOnlyList<LandLayer> Layers);
+
+public sealed record LandHeightGrid(float Base, float[] Heights);
+
+public sealed record LandBlendLayer(FormKey? Texture, float[] Weights);
+
+public sealed record LandBlend(IReadOnlyList<FormKey?> Base, IReadOnlyList<LandBlendLayer> Layers);
 
 public sealed record LightInfo(int Time, uint Radius, ByteColor Color, uint Flags, float FalloffExponent, float Fov,
                                float NearClip, float FlickerPeriod, float FlickerIntensityAmplitude,
@@ -257,10 +273,59 @@ public sealed unsafe partial class RadicleEnvironment : IDisposable
         Native.CellInfo c;
         Call.Check(RadicleNative.CellGetInfo(use.Pointer, record.Handle, &c));
         return new CellInfo(c.HasFlags != 0 ? c.Flags : null, c.HasGrid != 0 ? (c.GridX, c.GridY) : null,
-                            c.HasLandFlags != 0 ? c.LandFlags : null, c.HasLighting != 0 ? ToLighting(c.Lighting) : null,
+                            c.HasLandFlags != 0 ? c.LandFlags : null,
+                            c.HasLighting != 0 ? ToLighting(c.Lighting, c.LightingTail) : null,
                             FormKey.FromNative(c.LightingTemplate), c.HasWaterHeight != 0 ? c.WaterHeight : null,
                             FormKey.FromNative(c.ImageSpace), FormKey.FromNative(c.EncounterZone),
-                            FormKey.FromNative(c.Location), FormKey.FromNative(c.Worldspace), FormKey.FromNative(c.Water));
+                            FormKey.FromNative(c.Location), FormKey.FromNative(c.Worldspace),
+                            FormKey.FromNative(c.Water),
+                            c.HasPrevisTimestamp != 0 ? c.PrevisTimestamp : null,
+                            c.HasPrecombinedTimestamp != 0 ? c.PrecombinedTimestamp : null,
+                            FormKey.FromNative(c.AcousticSpace), FormKey.FromNative(c.MusicType),
+                            FormKey.FromNative(c.SkyWeatherRegion), FormKey.FromNative(c.GodRays),
+                            FormKey.FromNative(c.LockList), FormKey.FromNative(c.Owner),
+                            c.HasOwnerRank != 0 ? c.OwnerRank : null,
+                            c.HasExteriorLod != 0
+                                ? (FormKey.FromNative(c.ExteriorLodWorldspace), c.ExteriorLodOffset[0],
+                                   c.ExteriorLodOffset[1], c.ExteriorLodOffset[2])
+                                : null,
+                            c.HasWaterCurrentCount != 0 ? c.WaterCurrentCount : null,
+                            Utf8.Read(c.WaterEnvironmentMap));
+    }
+
+    public IReadOnlyList<FormKey?> CellRegions(Record record)
+    {
+        using var use = Use(record);
+        Native.FormKey* items;
+        nuint count;
+        Call.Check(RadicleNative.CellGetRegions(use.Pointer, record.Handle, &items, &count));
+        try { return Call.Copy<Native.FormKey>((IntPtr)items, count).Select(FormKey.FromNative).ToArray(); }
+        finally { RadicleNative.FreeFormKeys(items); }
+    }
+
+    public IReadOnlyList<FormKey?> CellPrevisReferences(Record record)
+    {
+        using var use = Use(record);
+        Native.FormKey* items;
+        nuint count;
+        Call.Check(RadicleNative.CellGetPrevisReferences(use.Pointer, record.Handle, &items, &count));
+        try { return Call.Copy<Native.FormKey>((IntPtr)items, count).Select(FormKey.FromNative).ToArray(); }
+        finally { RadicleNative.FreeFormKeys(items); }
+    }
+
+    public IReadOnlyList<(float X, float Y, float Z, float Unnamed)> CellWaterCurrents(Record record)
+    {
+        using var use = Use(record);
+        Native.WaterCurrent* items;
+        nuint count;
+        Call.Check(RadicleNative.CellGetWaterCurrents(use.Pointer, record.Handle, &items, &count));
+        try
+        {
+            return Call.Copy<Native.WaterCurrent>((IntPtr)items, count)
+                .Select(current => (current.Velocity[0], current.Velocity[1], current.Velocity[2], current.Unnamed))
+                .ToArray();
+        }
+        finally { RadicleNative.FreeWaterCurrents(items); }
     }
 
     public Record? WorldspaceTopCell(FormKey worldspace)
@@ -335,6 +400,37 @@ public sealed unsafe partial class RadicleEnvironment : IDisposable
         finally
         {
             RadicleNative.LandscapeFree(land);
+        }
+    }
+
+    public LandHeightGrid? LandscapeHeights(Record record)
+    {
+        using var use = Use(record);
+        Native.LandHeights heights;
+        Call.Check(RadicleNative.LandscapeHeights(use.Pointer, record.Handle, &heights));
+        return heights.HasHeights == 0 ? null : new LandHeightGrid(heights.Base, new ReadOnlySpan<float>(heights.Heights, 1089).ToArray());
+    }
+
+    public LandBlend LandscapeBlend(Record record)
+    {
+        using var use = Use(record);
+        Native.LandBlend* blend;
+        Call.Check(RadicleNative.LandscapeBlend(use.Pointer, record.Handle, &blend));
+        try
+        {
+            var layers = new List<LandBlendLayer>();
+            var native = (Native.LandBlendLayer*)blend->Layers;
+            for (var i = 0; i < (int)blend->LayerCount; ++i)
+            {
+                layers.Add(new LandBlendLayer(FormKey.FromNative(native[i].Texture),
+                                              new ReadOnlySpan<float>((float*)native[i].Weights, 1089).ToArray()));
+            }
+            return new LandBlend(new[] { FormKey.FromNative(blend->Base0), FormKey.FromNative(blend->Base1),
+                                         FormKey.FromNative(blend->Base2), FormKey.FromNative(blend->Base3) }, layers);
+        }
+        finally
+        {
+            RadicleNative.LandscapeBlendFree(blend);
         }
     }
 
@@ -518,11 +614,24 @@ public sealed unsafe partial class RadicleEnvironment : IDisposable
 
     internal static ByteColor ToColor(Native.ByteColor color) => new(color.Red, color.Green, color.Blue);
 
-    internal static Lighting ToLighting(CellLighting l) =>
-        new(ToColor(l.Ambient), ToColor(l.Directional), ToColor(l.FogNearColor), l.FogNear, l.FogFar,
-            l.DirectionalRotationXy, l.DirectionalRotationZ, l.DirectionalFade, l.FogClipDistance, l.FogPower,
-            l.HasFogFarColor != 0 ? ToColor(l.FogFarColor) : null, l.HasFogMax != 0 ? l.FogMax : null,
-            l.HasLightFade != 0 ? (l.LightFadeBegin, l.LightFadeEnd) : null, l.HasInherits != 0 ? l.Inherits : null);
+    internal static Lighting ToLighting(CellLighting l, CellLightingTail? tail = null)
+    {
+        var t = tail.GetValueOrDefault();
+        return new(ToColor(l.Ambient), ToColor(l.Directional), ToColor(l.FogNearColor), l.FogNear, l.FogFar,
+                   l.DirectionalRotationXy, l.DirectionalRotationZ, l.DirectionalFade, l.FogClipDistance, l.FogPower,
+                   l.HasFogFarColor != 0 ? ToColor(l.FogFarColor) : null, l.HasFogMax != 0 ? l.FogMax : null,
+                   l.HasLightFade != 0 ? (l.LightFadeBegin, l.LightFadeEnd) : null,
+                   l.HasInherits != 0 ? l.Inherits : null,
+                   tail.HasValue && t.HasNearHeight != 0 ? (t.NearHeightMid, t.NearHeightRange) : null,
+                   tail.HasValue && t.HasHighFogColors != 0
+                       ? (ToColor(t.FogColorHighNear), ToColor(t.FogColorHighFar))
+                       : null,
+                   tail.HasValue && t.HasHighDensityScale != 0 ? t.HighDensityScale : null,
+                   tail.HasValue && t.HasFogScales != 0
+                       ? (t.FogNearScale, t.FogFarScale, t.FogHighNearScale, t.FogHighFarScale)
+                       : null,
+                   tail.HasValue && t.HasFarHeight != 0 ? (t.FarHeightMid, t.FarHeightRange) : null);
+    }
 
     internal static string Signature(byte* text) => System.Text.Encoding.ASCII.GetString(text, 4);
 

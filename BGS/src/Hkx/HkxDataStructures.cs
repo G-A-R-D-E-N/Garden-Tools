@@ -32,8 +32,26 @@ public class HkxSkeleton
     public List<int> ParentIndices { get; set; } = new();
     public List<HkxBonePose> ReferencePose { get; set; } = new();
     public List<bool> LockTranslation { get; set; } = new();
-    public List<string> FloatSlots { get; set; } = new();
+    public List<string?> FloatSlots { get; set; } = new();
     public List<float> ReferenceFloats { get; set; } = new();
+    public List<HkxSkeletonLocalFrame> LocalFrames { get; set; } = new();
+    public List<HkxSkeletonPartition> Partitions { get; set; } = new();
+}
+
+public class HkxSkeletonLocalFrame
+{
+    public int BoneIndex { get; set; }
+
+    public bool HasFrame { get; set; }
+
+    public int FrameOffset { get; set; } = -1;
+}
+
+public class HkxSkeletonPartition
+{
+    public string? Name { get; set; }
+    public int StartBoneIndex { get; set; }
+    public int NumBones { get; set; }
 }
 
 public class HkxTrackData
@@ -91,8 +109,6 @@ public class HkxAnimationData
         "hkaLosslessCompressedAnimation",
         "hkaInterleavedUncompressedAnimation",
     };
-
-    public static string SupportedAnimationClasses => string.Join(" and ", DecodedAnimationClasses);
 
     public bool HasUnsupportedAnimation =>
         AnimationClass.Length > 0 && Array.IndexOf(DecodedAnimationClasses, AnimationClass) < 0;

@@ -302,6 +302,28 @@ public class SkeletonMapperAuthorTests
         }));
     }
 
+    [Fact]
+    public void VanillaSkeletonMapperIsAvailableThroughReusableCoreReader()
+    {
+        var objects = new PackfileObjects(PackfileImage.Read(
+            TestFixtures.Path("Meshes/Actors/Character/CharacterAssets/skeleton.hkx")));
+        var mapper = Assert.Single(
+            SkeletonMapperReader.Read(objects),
+            candidate => candidate.SkeletonA.BoneNames.Count == 95 && candidate.SkeletonB.BoneNames.Count == 18);
+
+        Assert.Equal(0, mapper.MappingType);
+        Assert.Equal(95, mapper.SkeletonA.BoneNames.Count);
+        Assert.Equal(18, mapper.SkeletonB.BoneNames.Count);
+        Assert.Equal(18, mapper.SimpleMappings.Count);
+        Assert.NotEqual(mapper.SkeletonAObjectId, mapper.SkeletonBObjectId);
+
+        foreach (var row in mapper.SimpleMappings)
+        {
+            Assert.InRange(row.BoneA, 0, mapper.SkeletonA.BoneNames.Count - 1);
+            Assert.InRange(row.BoneB, 0, mapper.SkeletonB.BoneNames.Count - 1);
+        }
+    }
+
     private static HavokRagdollSkeleton Rig(string name, int bones)
     {
         var skeleton = new HavokRagdollSkeleton { Name = name };
@@ -352,7 +374,8 @@ public class SkeletonMapperAuthorTests
 
     private static (HavokSkeletonMapper Forward, HavokSkeletonMapper Reverse) Vanilla()
     {
-        var objects = new PackfileObjects(PackfileImage.Read(FixturePath()));
+        var objects = new PackfileObjects(PackfileImage.Read(
+            TestFixtures.Path("Meshes/Actors/Character/CharacterAssets/skeleton.hkx")));
         var mappers = SkeletonMapperReader.Read(objects);
         Assert.Equal(2, mappers.Count);
 
@@ -360,8 +383,4 @@ public class SkeletonMapperAuthorTests
         var reverse = Assert.Single(mappers, mapper => mapper.SkeletonB.BoneNames.Count == 95);
         return (forward, reverse);
     }
-
-    private static string FixturePath() =>
-        Path.Combine(AppContext.BaseDirectory, "fixtures", "vanilla", "Meshes", "Actors", "Character",
-                     "CharacterAssets", "skeleton.hkx");
 }

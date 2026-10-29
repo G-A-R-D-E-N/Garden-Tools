@@ -9,6 +9,7 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "real_data_build.hpp"
+#include "real_sample_plugin.hpp"
 
 #include <gtest/gtest.h>
 
@@ -105,25 +106,21 @@ TEST(QuestAuthoringRealData, RewritingUnchangedStagesAndObjectivesIsByteExact) {
     if (!std::filesystem::exists(path)) continue;
     ++files;
 
-    const auto original = fo4::read_plugin_file(path);
+    const auto reduced = fo4::test::make_sample(fo4::read_plugin_file(path), [](const fo4::Record& record) {
+      return record.header.signature == k_qust;
+    }, 0);
     std::vector<fo4::FormKey> keys;
-    for (const auto* record : fo4::collect_records(original)) {
+    for (const auto* record : fo4::collect_records(reduced)) {
       if (record->header.signature == k_qust) keys.push_back(record->form_key);
     }
 
-    // write_quest_stages follows the repo's transactional pattern and copies the
-    // whole plugin per call, so round-tripping all 1,336 quests would mean
-    // 1,336 copies of a 330 MB parse. Sample instead -- the shapes repeat.
-    constexpr std::size_t k_per_file = 40;
-    const auto stride = keys.size() > k_per_file ? keys.size() / k_per_file : 1;
-    for (std::size_t at = 0; at < keys.size(); at += stride) {
-      const auto& key = keys[at];
+    for (const auto& key : keys) {
       ++quests;
-      const auto* before_record = fo4::find_record(original, key);
+      const auto* before_record = fo4::find_record(reduced, key);
       ASSERT_NE(before_record, nullptr);
       const auto before = snapshot(*before_record);
 
-      auto working = original;
+      auto working = reduced;
       try {
         const auto stages = fo4::forms::decode_quest_stages(working, key);
         fo4::forms::write_quest_stages(working, key, stages);
@@ -146,5 +143,5 @@ TEST(QuestAuthoringRealData, RewritingUnchangedStagesAndObjectivesIsByteExact) {
   if (files == 0) GTEST_SKIP() << "no official masters found under " << dir;
   for (std::size_t i = 0; i < failures.size() && i < 20; ++i) ADD_FAILURE() << failures[i];
   EXPECT_TRUE(failures.empty()) << failures.size() << " quest(s) did not round-trip";
-  EXPECT_GT(quests, 100u);
+  EXPECT_GT(quests, 1000u);
 }

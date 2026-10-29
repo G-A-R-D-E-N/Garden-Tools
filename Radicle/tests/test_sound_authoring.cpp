@@ -18,6 +18,7 @@ constexpr auto k_updated = fo4::ScalarMutationStatus::updated;
 constexpr auto k_missing = fo4::ScalarMutationStatus::subrecord_missing;
 constexpr auto k_link_updated = fo4::FormLinkFieldMutationStatus::updated;
 constexpr auto k_link_missing = fo4::FormLinkFieldMutationStatus::subrecord_missing;
+constexpr auto k_list_updated = fo4::schema::FormLinkListMutationStatus::updated;
 
 bool scalar_refused(fo4::Plugin& plugin, std::uint32_t id, const char* path, std::size_t index, const char* value) {
   return refused(plugin, [&] { scalar(plugin, id, path, index, value); });
@@ -249,10 +250,10 @@ TEST(SoundAuthoring, MarkerMusicAndFootstepFieldsWriteOnlyTheirBytes) {
   EXPECT_TRUE(scalar_refused(plugin, k_music, "MUSC\\Priority", 0, "65536"));
   EXPECT_EQ(payloads(plugin, k_music, "PNAM").at(0), raw({60, 0, 0xF4, 0x01}));
   EXPECT_EQ(count(plugin, k_music, "MUSC\\Tracks"), 2u);
-  EXPECT_EQ(link(plugin, k_music, "MUSC\\Tracks", 1, key(k_must)), k_link_updated);
-  EXPECT_EQ(link(plugin, k_music, "MUSC\\Tracks", 0, fo4::FormKey{}), k_link_updated);
-  EXPECT_EQ(link(plugin, k_music, "MUSC\\Tracks", 2, key(k_must)), k_link_missing);
-  EXPECT_TRUE(link_refused(plugin, k_music, "MUSC\\Tracks", 0, key(k_misc)));
+  EXPECT_EQ(list_link(plugin, k_music, "MUSC\\Tracks", 1, key(k_must)), k_list_updated);
+  EXPECT_EQ(list_link(plugin, k_music, "MUSC\\Tracks", 0, fo4::FormKey{}), k_list_updated);
+  EXPECT_EQ(list_link(plugin, k_music, "MUSC\\Tracks", 2, key(k_must)), fo4::schema::FormLinkListMutationStatus::index_out_of_range);
+  EXPECT_EQ(list_link(plugin, k_music, "MUSC\\Tracks", 0, key(k_misc)), fo4::schema::FormLinkListMutationStatus::target_type_mismatch);
   EXPECT_EQ(payloads(plugin, k_music, "TNAM").at(0), words({0, k_must}));
 
   EXPECT_EQ(link(plugin, k_step, "FSTP\\ImpactDataSet", 0, fo4::FormKey{}), k_link_updated);

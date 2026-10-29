@@ -144,6 +144,7 @@ std::vector<Rec> fixture_records() {
         {"XAPD", bytes({1})},
         {"XAPR", concat({words({0x90A}), floats({1.5f})})},
         {"XEZN", words({0x90B})},
+        {"XEMI", words({0x917})},
         {"XLRL", words({0x90C})},
         {"XLRT", words({0x90D, 0x90E})},
         {"XIS2", {}},
@@ -182,6 +183,7 @@ std::vector<Rec> fixture_records() {
       {"SCOL", 0x806, {{"MODL", zstring("Scol\\Combined.nif")}}},
       {"STAT", 0x807, {{"MODL", zstring(std::string_view{"Rock.nif\0junk", 13})}}},
       {"REFR", 0x808, {{"NAME", words({0x900})}, {"XTEL", words({1, 2})}}},
+      {"REFR", 0x809, {{"NAME", words({0x900})}, {"DATA", floats({0, 0, 0, 0, 0, 0})}}},
   };
 }
 
@@ -224,6 +226,7 @@ TEST_F(PlacedEnvironmentTest, DecodesObjectReferenceFields) {
   EXPECT_EQ(d.scale, 2.0f);
   EXPECT_EQ(d.layer, key(0x909));
   EXPECT_EQ(d.encounter_zone, key(0x90B));
+  EXPECT_EQ(d.emittance, key(0x917));
   EXPECT_EQ(d.location_reference, key(0x90C));
   ASSERT_EQ(d.location_ref_types.size(), 2u);
   EXPECT_EQ(d.location_ref_types[1], key(0x90E));
@@ -306,6 +309,12 @@ TEST_F(PlacedEnvironmentTest, DecodesObjectReferenceFields) {
   original.reset();
   EXPECT_EQ(copy.scripts->scripts[0].name, "DoorScript");
   EXPECT_EQ(copy.scripts->scripts[0].properties[0].name, d.scripts->scripts[0].properties[0].name);
+}
+
+TEST_F(PlacedEnvironmentTest, EmittanceStaysEmptyForAReferenceWithoutXemi) {
+  const std::vector<std::filesystem::path> paths{path_};
+  const auto env = fo4::env::Environment::load(paths);
+  EXPECT_FALSE(fo4::env::decode_placed_reference(env, *env.winner(key(0x809))).emittance.has_value());
 }
 
 TEST_F(PlacedEnvironmentTest, DecodesActorAndTrapReferences) {
@@ -437,6 +446,9 @@ TEST_F(PlacedEnvironmentTest, CApiDecodesPlacedReferences) {
   EXPECT_EQ(ref->position[0], 100.0f);
   EXPECT_EQ(ref->has_scale, 1);
   EXPECT_EQ(ref->location_ref_type_count, 2u);
+  EXPECT_EQ(ref->has_emittance, 1);
+  EXPECT_STREQ(ref->emittance.plugin, "Placed.esp");
+  EXPECT_EQ(ref->emittance.local_id, 0x917u);
   EXPECT_EQ(ref->linked_ref_count, 2u);
   EXPECT_EQ(ref->linked_refs[1].keyword.local_id, 0x913u);
   EXPECT_EQ(ref->linked_refs[1].reference.plugin, nullptr);

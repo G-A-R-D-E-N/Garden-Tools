@@ -50,6 +50,11 @@ Subs subs_of(const fo4::Plugin& plugin, const fo4::FormKey& key) {
   return out;
 }
 
+Subs without(Subs subs, const char* name) {
+  subs.erase(std::remove_if(subs.begin(), subs.end(), [&](const auto& sub) { return sub.first == name; }), subs.end());
+  return subs;
+}
+
 std::map<fo4::FormKey, Bytes> snapshot(const fo4::Plugin& plugin) {
   std::map<fo4::FormKey, Bytes> out;
   fo4::visit_records(plugin, [&](const fo4::Record& record) {
@@ -286,6 +291,62 @@ TEST_P(ClimateWeatherReal, LinksAndOptionalSubrecordsEditOfficialRecordsAndKeepE
   RecordProperty("link_edits", edits);
   RecordProperty("subrecords_added", added);
   RecordProperty("records_edited", static_cast<int>(targets.size()));
+}
+
+TEST(ClimateWeatherEditReal, Fallout4ClimateAndWeatherEditsReDecodeAfterWriteAndReload) {
+  bool skip = false;
+  const auto path = official("Fallout4.esm", skip);
+  if (skip) GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data";
+  record_game_build(detect_game_build(path.parent_path()));
+  auto plugin = fo4::read_plugin_file(path);
+  std::optional<fo4::FormKey> climate;
+  std::optional<fo4::FormKey> weather;
+  std::size_t fnam_count = 0;
+  std::size_t time_slots = 0;
+  fo4::visit_records(plugin, [&](const fo4::Record& record) {
+    const auto type = record.header.signature;
+    if (!climate && type == sig("CLMT")) { climate = record.form_key; }
+    if (!weather && type == sig("WTHR")) {
+      weather = record.form_key;
+      fnam_count = fo4::forms::weather_fnam_size(record.header.form_version) / 4;
+      time_slots = fo4::forms::weather_time_slots(record.header.form_version);
+    }
+  });
+  ASSERT_TRUE(climate && weather);
+
+  const auto climate_before = subs_of(plugin, *climate);
+  const auto weather_before = subs_of(plugin, *weather);
+  const std::vector<fo4::env::ClimateWeather> weathers{{*weather, 42, {}}};
+  const std::vector<fo4::env::ByteColor> colours(time_slots, fo4::env::ByteColor{9, 8, 7});
+  const std::vector<float> fog(fnam_count, 3.5f);
+  ASSERT_TRUE(fo4::env::set_climate_weathers(plugin, *climate, weathers));
+  ASSERT_TRUE(fo4::env::set_weather_colors(plugin, *weather, fo4::env::WeatherColorGroup::sun_glare, colours));
+  ASSERT_TRUE(fo4::env::set_weather_fog(plugin, *weather, fog));
+  ASSERT_TRUE(fo4::env::set_weather_transition(plugin, *weather, 77));
+
+  auto reread = fo4::read_plugin(fo4::write_plugin(plugin), path);
+  fo4::assign_record_form_keys(reread);
+  EXPECT_EQ(without(subs_of(reread, *climate), "WLST"), without(climate_before, "WLST"));
+  EXPECT_EQ(without(without(without(subs_of(reread, *weather), "NAM0"), "FNAM"), "DATA"),
+            without(without(without(weather_before, "NAM0"), "FNAM"), "DATA"));
+
+  const auto env = fo4::env::Environment::from_plugins(std::vector<fo4::Plugin>{std::move(reread)});
+  const auto* climate_ref = env.winner(*climate);
+  const auto* weather_ref = env.winner(*weather);
+  ASSERT_NE(climate_ref, nullptr);
+  ASSERT_NE(weather_ref, nullptr);
+  const auto decoded_climate = fo4::env::decode_climate(env, *climate_ref);
+  ASSERT_EQ(decoded_climate.weathers.size(), 1u);
+  EXPECT_EQ(decoded_climate.weathers[0].weather, *weather);
+  EXPECT_EQ(decoded_climate.weathers[0].chance, 42);
+  const auto decoded = fo4::env::decode_weather(env, *weather_ref);
+  ASSERT_TRUE(decoded.colors.has_value());
+  const auto color = decoded.colors->color(fo4::env::WeatherColorGroup::sun_glare, fo4::env::k_weather_day);
+  ASSERT_TRUE(color.has_value());
+  EXPECT_EQ(color->red, 9);
+  EXPECT_EQ(decoded.fog_distances, fog);
+  ASSERT_TRUE(decoded.parameters.has_value());
+  EXPECT_EQ(decoded.parameters->transition_delta, 77);
 }
 
 INSTANTIATE_TEST_SUITE_P(OfficialMasters, ClimateWeatherReal,

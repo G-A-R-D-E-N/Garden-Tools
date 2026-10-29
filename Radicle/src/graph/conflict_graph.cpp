@@ -97,4 +97,12 @@ std::vector<FormKey> ConflictGraph::conflicts() const {
   return out;
 }
 
+std::vector<FormKey> ConflictGraph::all_keys() const {
+  std::vector<FormKey> out;
+  for (const auto& entry : records_) {
+    out.push_back(entry.first);
+  }
+  return out;
+}
+
 }  // namespace fo4

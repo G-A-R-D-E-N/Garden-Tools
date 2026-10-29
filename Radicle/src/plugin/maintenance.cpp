@@ -1,6 +1,7 @@
 #include "fo4/plugin/maintenance.hpp"
 
 #include "child_groups.hpp"
+#include "record_edit.hpp"
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/placement.hpp"
 #include "fo4/plugin/reader.hpp"
@@ -8,6 +9,7 @@
 #include "fo4/schema/form_link_mixed.hpp"
 #include "fo4/schema/form_links.hpp"
 
+#include <algorithm>
 #include <exception>
 #include <map>
 #include <optional>
@@ -15,9 +17,12 @@
 #include <string_view>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace fo4 {
 namespace {
+
+using detail::require_plugin_decodable;
 
 constexpr Signature k_sig_navm = Signature::from_string("NAVM");
 
@@ -67,7 +72,8 @@ std::optional<Record> remapped_into(const Record& record,
                                     const PluginFormIdContext& target) {
   auto normalized = record;
   try {
-    remap_record_form_links(normalized, plugin_form_id_context(source), target, &source);
+    remap_record_form_links(normalized, plugin_form_id_context(source), target,
+                            plugin_type_lookup(source));
   } catch (const std::exception&) {
     return std::nullopt;
   }
@@ -155,13 +161,16 @@ std::size_t remove_from(Group& group, const std::set<FormKey>& keys) {
   std::size_t removed = 0;
   std::vector<GroupChild> kept;
   kept.reserve(group.children.size());
-  for (auto& child : group.children) {
+  for (std::size_t i = 0; i < group.children.size(); ++i) {
+    auto& child = group.children[i];
     if (auto* sub = std::get_if<Group>(&child)) {
       const auto count = remove_from(*sub, keys);
       removed += count;
       if (count != 0 && sub->children.empty()) continue;
     } else if (keys.contains(std::get<Record>(child).form_key)) {
       ++removed;
+      const auto* owned = record_child_group(group, i);
+      if (owned != nullptr && owned->children.empty()) ++i;
       continue;
     }
     kept.push_back(std::move(child));
@@ -226,6 +235,112 @@ EslEligibility esl_eligibility(const Plugin& plugin) {
     if (local < first || local > k_light_local_mask) ++out.out_of_range;
   }
   return out;
+}
+
+EslSlotRange esl_slot_range(const Plugin& plugin) {
+  const auto first =
+      allows_hardcoded_range(plugin) ? k_first_light_local_id : k_first_full_local_id;
+  return EslSlotRange{first, k_light_local_mask,
+                      static_cast<std::size_t>(k_light_local_mask) + 1u - first};
+}
+
+EslCompactionResult compact_to_esl(Plugin& plugin) {
+  EslCompactionResult result;
+  require_plugin_decodable(plugin, "compact a plugin into the light range");
+  assign_record_form_keys(plugin);
+
+  const auto range = esl_slot_range(plugin);
+  std::set<std::uint32_t> occupied;
+  std::set<FormKey> top_level;
+  for (const auto& group : plugin.groups) {
+    if (group.header.group_type != static_cast<std::int32_t>(GroupType::top)) continue;
+    for (const auto& child : group.children) {
+      if (const auto* record = std::get_if<Record>(&child)) top_level.insert(record->form_key);
+    }
+  }
+
+  struct Move {
+    FormKey key;
+    Signature signature{};
+  };
+  std::vector<Move> moves;
+  std::size_t native_records = 0;
+  for (const auto* record : collect_records(plugin)) {
+    if (record->header.signature == sig_tes4 || record->form_key.owner() != plugin.key) continue;
+    ++native_records;
+    const auto local = record->form_key.local().value();
+    if (local >= range.first && local <= range.last) {
+      occupied.insert(local);
+      continue;
+    }
+    if (!top_level.contains(record->form_key)) {
+      result.blockers.push_back({record->form_key, record->header.signature, true});
+      continue;
+    }
+    moves.push_back({record->form_key, record->header.signature});
+  }
+
+  if (!result.blockers.empty()) {
+    result.status = EslCompactionStatus::blocked_nested_records;
+    return result;
+  }
+
+  if (moves.empty()) {
+    const auto lowered = lowered_light_next_form_id(plugin);
+    if (lowered) {
+      auto next = plugin;
+      set_hedr_next_form_id(next, *lowered);
+      plugin = std::move(next);
+      result.next_form_id = *lowered;
+    } else {
+      result.next_form_id = plugin.header.next_form_id;
+    }
+    result.status = EslCompactionStatus::already_compatible;
+    return result;
+  }
+
+  if (native_records > range.capacity) {
+    result.status = EslCompactionStatus::capacity_exceeded;
+    return result;
+  }
+
+  std::sort(moves.begin(), moves.end(), [](const Move& left, const Move& right) {
+    return left.key.local().value() < right.key.local().value();
+  });
+
+  auto next = plugin;
+  const auto original_flags = next.header.tes4_flags;
+  next.header.tes4_flags = RecordFlags{original_flags.value() | RecordFlags::small_file};
+  next.tes4.header.flags = next.header.tes4_flags;
+
+  std::uint32_t candidate = range.first;
+  std::size_t remapped = 0;
+  for (const auto& move : moves) {
+    while (candidate <= range.last && occupied.contains(candidate)) ++candidate;
+    if (candidate > range.last) {
+      result.status = EslCompactionStatus::capacity_exceeded;
+      return result;
+    }
+    if (renumber_local_record(next, move.key, LocalFormId{candidate}) !=
+        RecordRenumberStatus::renumbered) {
+      result.blockers.push_back({move.key, move.signature, false});
+      result.status = EslCompactionStatus::rekey_failed;
+      return result;
+    }
+    occupied.insert(candidate);
+    ++candidate;
+    ++remapped;
+  }
+  while (candidate <= range.last && occupied.contains(candidate)) ++candidate;
+
+  next.header.tes4_flags = original_flags;
+  next.tes4.header.flags = original_flags;
+  set_hedr_next_form_id(next, candidate);
+  plugin = std::move(next);
+  result.status = EslCompactionStatus::compacted;
+  result.remapped = remapped;
+  result.next_form_id = candidate;
+  return result;
 }
 
 }  // namespace fo4

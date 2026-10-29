@@ -169,14 +169,10 @@ void expect_sentinel_value(const T& value) {
 
 }  // namespace
 
-TEST(CApi, RejectsInvalidArgumentsWithoutThrowing) {
+TEST(CApi, NegativeSurfaceRejectsNullAndInvalidInput) {
   radicle_plugin* plugin = nullptr;
   EXPECT_EQ(radicle_plugin_read_file(nullptr, &plugin), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_NE(std::string(radicle_last_error()).find("required"), std::string::npos);
-}
-
-TEST(CApi, NegativeSurfaceRejectsNullAndInvalidInput) {
-  radicle_plugin* plugin = nullptr;
 
   // Null path string.
   EXPECT_EQ(radicle_plugin_read_file("/definitely/not/a/plugin.esp", nullptr),

@@ -8,6 +8,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <cstring>
@@ -140,7 +141,7 @@ std::vector<std::byte> make_master() {
                                                                                            {{"NAME", words({0x810})},
                                                                                             {"DATA", floats({5, 5, 5, 0, 0, 0})}})})})})})}),
                       top("WRLD", {rec("WRLD", 0x800),
-                                   grp(0x800, 1, {grp(0, 4, {grp(0, 5, {rec("CELL", 0x801, {{"XCLC", words({0, 0, 0})}}),
+                                   grp(0x800, 1, {grp(0, 4, {grp(0, 5, {rec("CELL", 0x804, {{"XCLC", words({1, 0, 0})}}), grp(0x804, 6, {grp(0x804, 9, {rec("REFR", 0x805, {{"NAME", words({0x810})}, {"DATA", floats({0, 0, 0, 0, 0, 0})}})})}), rec("CELL", 0x801, {{"XCLC", words({0, 0, 0})}}),
                                                                          grp(0x801, 6, {grp(0x801, 9, {
                                                                                             rich_ref(0x802, 0x810, 0x803, 0x811, 0x812),
                                                                                             rec("REFR", 0x803, {{"NAME", words({0x810})},
@@ -228,6 +229,22 @@ std::uint32_t raw_u32(const fo4::Record& record, std::string_view signature, std
   }
   ADD_FAILURE() << "missing " << signature;
   return 0;
+}
+
+radicle_env* load_env(const std::vector<std::filesystem::path>& paths) {
+  std::vector<std::string> utf8;
+  for (const auto& path : paths) utf8.push_back(path.string());
+  std::vector<const char*> raw;
+  for (const auto& path : utf8) raw.push_back(path.c_str());
+  radicle_env* env = nullptr;
+  return radicle_env_load(raw.data(), raw.size(), &env) == RADICLE_STATUS_OK ? env : nullptr;
+}
+
+void copy_master_reference(radicle_plugin* patch, const radicle_env* env, std::uint32_t local) {
+  const radicle_record* record = nullptr;
+  ASSERT_EQ(radicle_env_winner(env, {"Master.esm", local}, &record), RADICLE_STATUS_OK);
+  radicle_placed_copy_status status{};
+  ASSERT_EQ(radicle_plugin_copy_placed_ref_override(patch, env, record, 0, &status), RADICLE_STATUS_OK);
 }
 
 }  // namespace
@@ -453,5 +470,134 @@ TEST_F(WritebackTest, CApiWritesOverridesThatReloadIntoTheEnvironment) {
   EXPECT_STREQ(placed->activate_parents[0].reference.plugin, "DLC.esm");
   EXPECT_EQ(placed->activate_parents[0].reference.local_id, 0x842u);
   radicle_placed_ref_free(placed);
+  radicle_env_destroy(env);
+}
+
+TEST_F(WritebackTest, CApiMoveWithinACellReportsMoved) {
+  auto* env = load_env(paths_);
+  ASSERT_NE(env, nullptr);
+  radicle_plugin* patch = nullptr;
+  ASSERT_EQ(radicle_plugin_create("Patch.esp", &patch), RADICLE_STATUS_OK);
+  copy_master_reference(patch, env, 0x802);
+
+  const float position[3] = {4000.0f, 4095.0f, 30.0f};
+  const float rotation[3] = {0.0f, 0.0f, 1.0f};
+  radicle_placed_move_status status = RADICLE_PLACED_MOVE_RELOCATED;
+  ASSERT_EQ(radicle_plugin_move_placed_ref(patch, {"Master.esm", 0x802}, position, rotation, &status),
+            RADICLE_STATUS_OK);
+  EXPECT_EQ(status, RADICLE_PLACED_MOVE_MOVED);
+
+  const auto patch_path = root_ / "Patch.esp";
+  ASSERT_EQ(radicle_plugin_write_file(patch, patch_path.string().c_str()), RADICLE_STATUS_OK);
+  radicle_plugin_destroy(patch);
+  radicle_env_destroy(env);
+
+  auto with_patch = paths_;
+  with_patch.push_back(patch_path);
+  const auto reloaded = fo4::env::Environment::load(with_patch);
+  EXPECT_EQ(fo4::env::decode_placed_reference(reloaded, *reloaded.winner(key("Master.esm", 0x802))).position,
+            (fo4::env::Vec3{4000, 4095, 30}));
+}
+
+TEST_F(WritebackTest, CApiMoveAcrossCellsReportsRelocated) {
+  auto* env = load_env(paths_);
+  ASSERT_NE(env, nullptr);
+  radicle_plugin* patch = nullptr;
+  ASSERT_EQ(radicle_plugin_create("Patch.esp", &patch), RADICLE_STATUS_OK);
+  copy_master_reference(patch, env, 0x802);
+  copy_master_reference(patch, env, 0x805);
+
+  const float position[3] = {4106.0f, 20.0f, 30.0f};
+  const float rotation[3] = {0.0f, 0.0f, 1.0f};
+  radicle_placed_move_status status = RADICLE_PLACED_MOVE_MOVED;
+  ASSERT_EQ(radicle_plugin_move_placed_ref(patch, {"Master.esm", 0x802}, position, rotation, &status),
+            RADICLE_STATUS_OK);
+  EXPECT_EQ(status, RADICLE_PLACED_MOVE_RELOCATED);
+
+  const auto patch_path = root_ / "Patch.esp";
+  ASSERT_EQ(radicle_plugin_write_file(patch, patch_path.string().c_str()), RADICLE_STATUS_OK);
+  radicle_plugin_destroy(patch);
+  radicle_env_destroy(env);
+
+  auto with_patch = paths_;
+  with_patch.push_back(patch_path);
+  const auto reloaded = fo4::env::Environment::load(with_patch);
+  const auto children = reloaded.cell_children(key("Master.esm", 0x804));
+  EXPECT_TRUE(std::any_of(children.begin(), children.end(), [](const auto& child) {
+    return child.ref->record->form_key == key("Master.esm", 0x802);
+  }));
+  EXPECT_EQ(fo4::env::decode_placed_reference(reloaded, *reloaded.winner(key("Master.esm", 0x802))).position,
+            (fo4::env::Vec3{4106, 20, 30}));
+}
+
+TEST_F(WritebackTest, CApiMoveReportsAMissingReferenceAsNotFound) {
+  radicle_plugin* patch = nullptr;
+  ASSERT_EQ(radicle_plugin_create("Patch.esp", &patch), RADICLE_STATUS_OK);
+
+  const float position[3] = {4000.0f, 4095.0f, 30.0f};
+  const float rotation[3] = {0.0f, 0.0f, 0.0f};
+  radicle_placed_move_status status = RADICLE_PLACED_MOVE_RELOCATED;
+  EXPECT_EQ(radicle_plugin_move_placed_ref(patch, {"Master.esm", 0x803}, position, rotation, &status),
+            RADICLE_STATUS_NOT_FOUND);
+  EXPECT_STREQ(radicle_last_error(), "plugin has no such record");
+  EXPECT_EQ(status, RADICLE_PLACED_MOVE_RELOCATED);
+  radicle_plugin_destroy(patch);
+}
+
+TEST_F(WritebackTest, CApiMoveWithoutATargetCellFailsAndKeepsTheRecord) {
+  auto* env = load_env(paths_);
+  ASSERT_NE(env, nullptr);
+  radicle_plugin* patch = nullptr;
+  ASSERT_EQ(radicle_plugin_create("Patch.esp", &patch), RADICLE_STATUS_OK);
+  copy_master_reference(patch, env, 0x802);
+
+  const float position[3] = {12298.0f, 20.0f, 30.0f};
+  const float rotation[3] = {0.0f, 0.0f, 0.0f};
+  radicle_placed_move_status status = RADICLE_PLACED_MOVE_RELOCATED;
+  EXPECT_EQ(radicle_plugin_move_placed_ref(patch, {"Master.esm", 0x802}, position, rotation, &status),
+            RADICLE_STATUS_NOT_FOUND);
+  EXPECT_STREQ(radicle_last_error(), "plugin has no exterior CELL at the new position; create it first");
+  EXPECT_EQ(status, RADICLE_PLACED_MOVE_RELOCATED);
+
+  const auto patch_path = root_ / "Patch.esp";
+  ASSERT_EQ(radicle_plugin_write_file(patch, patch_path.string().c_str()), RADICLE_STATUS_OK);
+  radicle_plugin_destroy(patch);
+  radicle_env_destroy(env);
+
+  auto with_patch = paths_;
+  with_patch.push_back(patch_path);
+  const auto reloaded = fo4::env::Environment::load(with_patch);
+  EXPECT_EQ(fo4::env::decode_placed_reference(reloaded, *reloaded.winner(key("Master.esm", 0x802))).position,
+            (fo4::env::Vec3{1, 2, 3}));
+}
+
+TEST_F(WritebackTest, CApiMoveRejectsNullArguments) {
+  radicle_plugin* patch = nullptr;
+  ASSERT_EQ(radicle_plugin_create("Patch.esp", &patch), RADICLE_STATUS_OK);
+
+  const float position[3] = {4000.0f, 4095.0f, 30.0f};
+  const float rotation[3] = {0.0f, 0.0f, 0.0f};
+  radicle_placed_move_status status = RADICLE_PLACED_MOVE_MOVED;
+  EXPECT_EQ(radicle_plugin_move_placed_ref(nullptr, {"Master.esm", 0x802}, position, rotation, &status),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_move_placed_ref(patch, {"Master.esm", 0x802}, nullptr, rotation, &status),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_move_placed_ref(patch, {"Master.esm", 0x802}, position, nullptr, &status),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  radicle_plugin_destroy(patch);
+}
+
+TEST_F(WritebackTest, CApiMoveAcceptsANullOutStatus) {
+  auto* env = load_env(paths_);
+  ASSERT_NE(env, nullptr);
+  radicle_plugin* patch = nullptr;
+  ASSERT_EQ(radicle_plugin_create("Patch.esp", &patch), RADICLE_STATUS_OK);
+  copy_master_reference(patch, env, 0x802);
+
+  const float position[3] = {4000.0f, 4095.0f, 30.0f};
+  const float rotation[3] = {0.0f, 0.0f, 0.0f};
+  EXPECT_EQ(radicle_plugin_move_placed_ref(patch, {"Master.esm", 0x802}, position, rotation, nullptr),
+            RADICLE_STATUS_OK);
+  radicle_plugin_destroy(patch);
   radicle_env_destroy(env);
 }

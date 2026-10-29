@@ -224,24 +224,6 @@ TEST(MagicLocationSynthetic, EditsOneRowPerRecordAndRereads) {
   }
 }
 
-TEST(MagicLocationSynthetic, FixtureRecordsMeetTheirAuthoringMinimums) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
-  for (const auto& item : k_items) {
-    const auto signature = fo4::Signature::from_string(item.signature);
-    const auto constraint = fo4::schema::record_authoring_constraint(signature);
-    ASSERT_TRUE(constraint.has_value()) << item.signature;
-    const auto* record = fo4::find_record(plugin, fo4::FormKey::parse(item.key));
-    ASSERT_NE(record, nullptr);
-    for (const auto& rule : fo4::schema::authoring_subrecords(*constraint)) {
-      const auto count = static_cast<std::size_t>(std::count_if(
-          record->subrecords.begin(), record->subrecords.end(),
-          [&](const fo4::Subrecord& sub) { return sub.signature == rule.signature; }));
-      EXPECT_GE(count, static_cast<std::size_t>(rule.minimum)) << item.signature << ' ' << rule.signature.to_string();
-      EXPECT_LE(count, static_cast<std::size_t>(rule.maximum)) << item.signature << ' ' << rule.signature.to_string();
-    }
-  }
-}
-
 TEST(MagicLocationSynthetic, FixtureRecordsPassAuthoringPreflight) {
   const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   for (const auto& item : k_items) {

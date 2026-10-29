@@ -33,8 +33,7 @@ public class GraphScratchTests
     [Fact]
     public void A_scratch_folder_left_by_a_crashed_run_is_swept_and_a_recent_one_is_kept()
     {
-        GraphScratch.Clear();
-        var parent = Path.Combine(Path.GetTempPath(), "fo4re-graph-scratch");
+        var parent = Path.Combine(Path.GetTempPath(), "fo4re-graph-sweep-test-" + Guid.NewGuid().ToString("N"));
         var old = Path.Combine(parent, "crashed-" + Guid.NewGuid().ToString("N"));
         var recent = Path.Combine(parent, "other-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(old);
@@ -43,14 +42,37 @@ public class GraphScratchTests
         Directory.SetLastWriteTimeUtc(old, DateTime.UtcNow.AddDays(-2));
         try
         {
-            _ = GraphScratch.Root;
+            GraphScratch.SweepOld(parent);
             Directory.Exists(old).Should().BeFalse();
             Directory.Exists(recent).Should().BeTrue();
         }
         finally
         {
-            GraphScratch.Clear();
-            if (Directory.Exists(recent)) Directory.Delete(recent, true);
+            Directory.Delete(parent, true);
+        }
+    }
+
+    [Fact]
+    public void A_sweep_examines_at_most_64_entries_so_a_large_backlog_drains_gradually()
+    {
+        var parent = Path.Combine(Path.GetTempPath(), "fo4re-graph-sweep-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(parent);
+        try
+        {
+            for (var i = 0; i < 65; i++)
+            {
+                var directory = Path.Combine(parent, "backlog-" + i);
+                Directory.CreateDirectory(directory);
+                Directory.SetLastWriteTimeUtc(directory, DateTime.UtcNow.AddDays(-2));
+            }
+
+            GraphScratch.SweepOld(parent);
+
+            Directory.GetDirectories(parent).Length.Should().Be(1);
+        }
+        finally
+        {
+            Directory.Delete(parent, true);
         }
     }
 

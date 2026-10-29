@@ -7,6 +7,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -249,4 +251,86 @@ TEST(CApiLoadOrder, AssembleSurfacesTheFailedFlagWithStatusOk) {
   const auto finding_rows = take_strings(findings, finding_count);
   ASSERT_EQ(finding_rows.size(), 1u);
   EXPECT_EQ(finding_rows[0].rfind("hoist_cycle\t", 0), 0u);
+}
+
+namespace {
+
+void write_bytes(const std::filesystem::path& file, const std::string& text) {
+  std::filesystem::create_directories(file.parent_path());
+  std::ofstream out{file, std::ios::binary};
+  out << text;
+}
+
+}  // namespace
+
+TEST(CApiLoadOrder, Mo2ProfileRowsRootsAndPluginPathsFollowTheInstance) {
+  TempDataDir root;
+  write_bytes(root.path() / "ModOrganizer.ini", "selected_profile=Test\nbase_directory=%BASE_DIR%\n");
+  write_bytes(root.path() / "profiles" / "Test" / "modlist.txt", "+Mod\n-Off\n");
+  write_bytes(root.path() / "profiles" / "Test" / "plugins.txt", "*Ex.esp\n");
+  write_bytes(root.path() / "mods" / "Mod" / "Ex.esp", "");
+  const auto instance = root.path().string();
+
+  char** mod_rows = nullptr;
+  std::size_t mod_count = 0;
+  char** plugin_rows = nullptr;
+  std::size_t plugin_count = 0;
+  ASSERT_EQ(radicle_mo2_profile_read(instance.c_str(), nullptr, &mod_rows, &mod_count, &plugin_rows, &plugin_count),
+            RADICLE_STATUS_OK);
+  EXPECT_EQ(take_strings(mod_rows, mod_count), (std::vector<std::string>{"Mod\t1\t0", "Off\t0\t0"}));
+  EXPECT_EQ(take_strings(plugin_rows, plugin_count), (std::vector<std::string>{"Ex.esp\t1\t1"}));
+
+  char** roots = nullptr;
+  std::size_t root_count = 0;
+  ASSERT_EQ(radicle_mo2_asset_roots(instance.c_str(), "Test", &roots, &root_count), RADICLE_STATUS_OK);
+  EXPECT_EQ(take_strings(roots, root_count),
+            (std::vector<std::string>{(root.path() / "mods" / "Mod").string(), (root.path() / "overwrite").string()}));
+
+  char** paths = nullptr;
+  std::size_t path_count = 0;
+  ASSERT_EQ(radicle_mo2_plugin_paths(instance.c_str(), "Test", &paths, &path_count), RADICLE_STATUS_OK);
+  EXPECT_EQ(take_strings(paths, path_count),
+            (std::vector<std::string>{"ex.esp\t" + (root.path() / "mods" / "Mod" / "Ex.esp").string()}));
+
+  char* sentinel = nullptr;
+  char** empty_rows = &sentinel;
+  std::size_t empty_count = 9;
+  char** empty_plugins = &sentinel;
+  std::size_t empty_plugin_count = 9;
+  EXPECT_EQ(radicle_mo2_profile_read(instance.c_str(), "", &empty_rows, &empty_count, &empty_plugins, &empty_plugin_count),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(empty_rows, nullptr);
+  EXPECT_EQ(empty_count, 0u);
+  EXPECT_EQ(empty_plugins, nullptr);
+  EXPECT_EQ(empty_plugin_count, 0u);
+
+  empty_rows = &sentinel;
+  empty_count = 9;
+  EXPECT_EQ(radicle_mo2_asset_roots(instance.c_str(), "", &empty_rows, &empty_count), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(empty_rows, nullptr);
+  EXPECT_EQ(empty_count, 0u);
+
+  empty_rows = &sentinel;
+  empty_count = 9;
+  EXPECT_EQ(radicle_mo2_plugin_paths(instance.c_str(), "", &empty_rows, &empty_count), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(empty_rows, nullptr);
+  EXPECT_EQ(empty_count, 0u);
+}
+
+TEST(CApiLoadOrder, Mo2MissingPluginsTxtIsIoErrorWithClearedOutputs) {
+  TempDataDir root;
+  write_bytes(root.path() / "ModOrganizer.ini", "selected_profile=Test\n");
+  const auto instance = root.path().string();
+
+  char* sentinel = nullptr;
+  char** mod_rows = &sentinel;
+  std::size_t mod_count = 9;
+  char** plugin_rows = &sentinel;
+  std::size_t plugin_count = 9;
+  EXPECT_EQ(radicle_mo2_profile_read(instance.c_str(), nullptr, &mod_rows, &mod_count, &plugin_rows, &plugin_count),
+            RADICLE_STATUS_IO_ERROR);
+  EXPECT_EQ(mod_rows, nullptr);
+  EXPECT_EQ(mod_count, 0u);
+  EXPECT_EQ(plugin_rows, nullptr);
+  EXPECT_EQ(plugin_count, 0u);
 }

@@ -7,11 +7,14 @@
 #include "fo4/schema/record_constraints.hpp"
 #include "fo4/schema/scalar.hpp"
 
+#include <charconv>
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
 #include <optional>
 #include <string>
+#include <string_view>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -114,6 +117,60 @@ bool first_nested_terminator_descriptor(std::size_t descriptor_index) {
   return true;
 }
 
+std::optional<std::int64_t> stored_integer(std::string_view decoded) noexcept {
+  std::int64_t value = 0;
+  const auto* begin = decoded.data();
+  const auto* end = begin + decoded.size();
+  const auto parsed = std::from_chars(begin, end, value);
+  if (parsed.ec != std::errc{} || parsed.ptr != end) return std::nullopt;
+  return value;
+}
+
+std::string unnamed_bit_list(std::uint64_t unknown) {
+  std::string out;
+  for (int bit = 0; bit < 64; ++bit) {
+    if ((unknown & (std::uint64_t{1} << bit)) == 0) continue;
+    if (!out.empty()) out += ", ";
+    out += "<Unknown: " + std::to_string(bit) + ">";
+  }
+  return out;
+}
+
+void value_membership_issues(const Record& record,
+                             const ScalarFieldDescriptor& field,
+                             std::string_view decoded,
+                             std::vector<PreflightIssue>& issues) {
+  if (field.scalar.names.empty()) return;
+  const auto stored = stored_integer(decoded);
+  if (!stored.has_value()) return;
+
+  if (field.scalar.presentation == ScalarPresentation::enumeration) {
+    if (scalar_value_name(field.scalar, *stored).has_value()) return;
+    issues.push_back(issue_for(
+        record,
+        field,
+        "scalar_enum_value_unnamed",
+        std::string(field.scalar.field_name) + " value " + std::to_string(*stored) +
+            " has no name in the generated enumeration (<Unknown: " +
+            std::to_string(*stored) + ">)",
+        PreflightSeverity::warning));
+    return;
+  }
+  if (field.scalar.presentation != ScalarPresentation::flags) return;
+
+  std::uint64_t declared = 0;
+  for (const auto& name : field.scalar.names) declared |= static_cast<std::uint64_t>(name.value);
+  const auto unknown = static_cast<std::uint64_t>(*stored) & ~declared;
+  if (unknown == 0) return;
+  issues.push_back(issue_for(
+      record,
+      field,
+      "scalar_flag_bits_unnamed",
+      std::string(field.scalar.field_name) + " sets bits the generated flag row does not name: " +
+          unnamed_bit_list(unknown),
+      PreflightSeverity::warning));
+}
+
 constexpr int k_climate_full_day_units = 144;
 
 void climate_sun_window_issues(const Record& record, std::vector<PreflightIssue>& issues) {
@@ -186,7 +243,7 @@ std::vector<PreflightIssue> preflight_record(const Record& record, bool localize
     for (const auto& slot : resolved.slots) {
       if (!slot.valid) continue;
       if (localized && field.scalar.storage == ScalarStorage::zstring && record.subrecords[slot.subrecord].data.size() == 4 &&
-          is_localized_field(field.record, field.scalar.subrecord)) {
+          (field.scalar.localized || is_localized_field(field.record, field.scalar.subrecord))) {
         continue;
       }
       std::string decoded;
@@ -213,6 +270,8 @@ std::vector<PreflightIssue> preflight_record(const Record& record, bool localize
             error.what(),
             PreflightSeverity::warning));
       }
+
+      value_membership_issues(record, field, decoded, issues);
     }
   }
 
@@ -352,9 +411,12 @@ std::vector<PreflightIssue> preflight_authoring_record(
       : constraint->placement == RecordPlacement::topic_children ? static_cast<std::int32_t>(GroupType::topic_children)
                                                                  : -1;
   const bool cell_reference = constraint->placement == RecordPlacement::cell_reference_children;
+  // Invariant: only REFR may sit in a visible-distant children group.
   const bool cell_reference_parent =
       location.parent_group_type == static_cast<std::int32_t>(GroupType::cell_persistent_children) ||
-      location.parent_group_type == static_cast<std::int32_t>(GroupType::cell_temporary_children);
+      location.parent_group_type == static_cast<std::int32_t>(GroupType::cell_temporary_children) ||
+      (location.parent_group_type == static_cast<std::int32_t>(GroupType::cell_visible_distant_children) &&
+       location.record->header.signature == Signature::from_string("REFR"));
   if ((required_parent >= 0 && location.parent_group_type != required_parent) ||
       (cell_reference && !cell_reference_parent)) {
     issues.push_back(authoring_issue(
@@ -366,8 +428,24 @@ std::vector<PreflightIssue> preflight_authoring_record(
             : constraint->placement == RecordPlacement::quest_children
             ? "record must be a direct child of a quest children GRUP"
             : cell_reference
-            ? "record must be a direct child of a cell persistent or temporary children GRUP"
+            ? "record must be a direct child of a cell persistent, temporary or visible-distant children GRUP"
             : "record must be a direct child of a topic children GRUP"));
+  }
+
+  // Constraint: a CELL is a direct child of its matching top-level GRUP, a world children GRUP, or an interior/exterior cell block GRUP.
+  const bool cell_parent_ok =
+      location.parent_group_type == static_cast<std::int32_t>(GroupType::world_children) ||
+      location.parent_group_type == static_cast<std::int32_t>(GroupType::interior_cell_block) ||
+      location.parent_group_type == static_cast<std::int32_t>(GroupType::interior_cell_subblock) ||
+      location.parent_group_type == static_cast<std::int32_t>(GroupType::exterior_cell_block) ||
+      location.parent_group_type == static_cast<std::int32_t>(GroupType::exterior_cell_subblock);
+  if (constraint->placement == RecordPlacement::cell_block &&
+      !((location.direct_top_level && location.top_label_matches) || cell_parent_ok)) {
+    issues.push_back(authoring_issue(
+        record_key,
+        location.record->header.signature.to_string(),
+        "record_placement_invalid",
+        "record must be a direct child of a top-level CELL GRUP, a world children GRUP, or an interior/exterior cell block GRUP"));
   }
 
   const auto rules = authoring_subrecords(*constraint);
@@ -418,6 +496,16 @@ std::vector<PreflightIssue> preflight_authoring_record(
           "authored record contains too many " + rule.signature.to_string() +
               " subrecords"));
     }
+  }
+
+  const auto unpaired = mismatched_subrecord_pair(location.record->header.signature, rules, counts);
+  if (unpaired.has_value()) {
+    issues.push_back(authoring_issue(
+        record_key,
+        location.record->header.signature.to_string() + "\\" + unpaired->subrecord.to_string(),
+        "subrecord_count_mismatch",
+        "authored record has a different number of " + unpaired->subrecord.to_string() +
+            " and " + unpaired->partner.to_string() + " subrecords"));
   }
 
   auto scalar_issues = preflight_record(*location.record, plugin.header.tes4_flags.is_localized());

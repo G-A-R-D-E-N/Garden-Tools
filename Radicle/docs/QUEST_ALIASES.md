@@ -159,9 +159,64 @@ implemented and tested:
 - Alias VMAD extras bind Papyrus to alias IDs (FO4 object format 2 only: unused u16, alias i16, QUST FormID) and stage fragments (`Stage` u16 = QUST INDX). Format 1 alias objects fail closed on rewrite. `StageIndex` i32 is preserved; it is not treated as a QSDT count. INDX remap is identity or a unique stage-body match, never array position. Duplicate, trailing, unsupported, or unmappable bindings fail closed with disk unchanged.
 
 Unknown members inside an existing reference/location alias are preserved in
-original order. Semantic replacement intentionally emits only the fields that
-Radicle has explicitly modeled; callers must not use replacement as a generic
-round-trip for an alias carrying unmodeled semantics they intend to preserve.
+original order by decode, and `replace_quest_alias` keeps them (see
+Replacement below).
+
+## Replacement
+
+`replace_quest_alias` rewrites only the members the creation sets. Every other
+member of the existing alias is kept and spliced back into the alias at the
+position the xEdit member order gives it, so `ALED` stays last. Replacement
+never targets a collection alias; only a kind change to one can produce an
+`ALCS`/`ALMI` run. The Alias ID must stay the same. An empty creation field (`name`, `force_into_alias`, the fill, `conditions`, `items`, the other extras) keeps the existing member: there is no in-place clear. To remove a member, rebuild the alias with `remove_quest_alias` followed by `add_quest_alias`.
+
+A member is written when the creation emits it, or when it belongs to a run the
+creation writes: the Fill Type union of the alias kind, the `CTDA`/`CIS1`/`CIS2`
+condition run, or the `COCT`/`CNTO`/`COED` item run. A run goes as a unit
+because a leftover member rebinds to the new run instead of staying put: a kept
+`ALEA` beside a written `ALFE`/`ALFD` would make the alias decode as two Fill
+Type variants, a kept `CIS1` would rebind its string to the next `CTDA`, and a
+kept `COED` would rebind its owner and rank to the next `CNTO`. The Fill Type
+union is checked against the new kind as well as the existing one, so a kind
+change from a location alias carrying `ALCC` to a reference creation that
+writes a fill drops the `ALCC` instead of keeping it beside the fill. Kept
+beside it, the decoder would refuse the alias: a Find Matching Reference fill
+built from `ALNA`/`ALNT` or `ALFE`/`ALFD` reports mixed Match Type selectors,
+and any other fill reports multiple Fill Type variants.
+
+A kind change that writes no fill refuses the preserved Fill Type members
+instead of carrying them over. `ALFA`, `ALEQ`, `ALEA`, `ALFE`, `ALFD` and the
+location `ALCC` are Fill Type members of one kind that also have a position in
+the other kind's member order, so a preserved one silently becomes a Fill Type
+the caller did not ask for: a location alias's `ALCC` is Closest To Alias but a
+reference Find Matching Closest fill, and a reference `ALEA` (External Alias
+Reference) or `ALFE`/`ALFD` (Find Matching From Event) is a location External
+Alias or Find Matching Location fill. The replacement throws `QuestError`
+before the clone is committed when the kind changed, the creation writes no
+fill, and a member that would be preserved is a Fill Type member of either
+kind. `ALFR` and `ALFL` were already refused, because neither has a position in
+the other kind's member order.
+
+The order is the xEdit FO4 alias definition
+(`Core/wbDefinitionsFO4.pas:10808-10889` reference alias, `:10898-10924`
+location alias, at pin `93cc0bc5`): `ALST`/`ALLS`, `ALID`, `FNAM`, `ALFI`, the
+Fill Type union, `CTDA`/`CIS1`/`CIS2`, the reference alias extras in their
+WriteRecordTypes order, then `ALED`. A location alias places `ALCC` after its
+condition run; a reference alias places it inside Find Matching Reference,
+before the conditions.
+
+Replacement throws `QuestError`, leaving the plugin unchanged, when a member
+that has to be preserved has no position in that order (an `ALFL` inside a
+reference alias, say), when the preserved members are themselves out of
+order, when a kind change that writes no fill would carry over a Fill Type
+member of either kind, or when the spliced alias does not decode. Order is
+compared by run rather than by single signature: `CIS1` and `CIS2` rank with
+the `CTDA` head of their condition run and `COED` ranks with the `CNTO` it
+belongs to, so a canonical `CTDA`, `CIS1`, `CTDA` condition run and a `COCT`,
+`CNTO`, `COED`, `CNTO`, `COED` item list are in order. A replacement that
+changes the alias kind rewrites the alias frame for the new kind (`ALST`/`ALLS`,
+or `ALCS`/`ALMI` when the new creation is a collection, plus `ALID`, `FNAM`,
+`ALFI`, `ALED`) and preserves everything else under the new kind's order. On a kind change the existing `ALID` and `ALFI` are dropped when the creation leaves `name` or `force_into_alias` unset; a same-kind replacement keeps them. There is no drop opt-in for members the new kind's order does not allow: a kind change refuses them. A reference alias carrying `VTCK` replaced by a location creation throws `QuestError` (`Radicle/src/forms/quest_alias_edit.cpp:merge_alias_members`) and leaves the plugin unchanged. To change such an alias's kind, the caller must rebuild it with `remove_quest_alias` followed by `add_quest_alias`.
 
 ## Mutation safety
 
