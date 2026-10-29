@@ -165,6 +165,8 @@ TEST(CheckErrorsGroup1, HardcodedPlayerRefIsTypeCheckedAgainstTheGameMaster) {
   const auto wrong = of_code(findings, fo4::CheckCode::wrong_target_type);
   ASSERT_EQ(wrong.size(), 1u);
   EXPECT_EQ(wrong[0].target, fo4::FormKey::parse("000014:Fallout4.esm"));
+  EXPECT_TRUE(wrong[0].message.starts_with("XLKR target 000014:Fallout4.esm is PLYR, expected one of "))
+      << wrong[0].message;
   EXPECT_EQ(wrong[0].record, fo4::FormKey::parse("000801:Mod.esp"));
   EXPECT_TRUE(of_code(findings, fo4::CheckCode::unresolved_link).empty());
 }
@@ -182,7 +184,7 @@ TEST(CheckErrorsGroup1, UnsupportedVmadPropertyKeepsEarlierLinksAndReports) {
   vmad.u8(1);
   vmad.u16(0);
   vmad.u16(0xFFFF);
-  vmad.u32(0x00000800);
+  vmad.u32(0x00000900);
   wstring(vmad, "Anything");
   vmad.u8(6);
   vmad.u8(1);
@@ -202,7 +204,9 @@ TEST(CheckErrorsGroup1, UnsupportedVmadPropertyKeepsEarlierLinksAndReports) {
   ASSERT_EQ(unsupported.size(), 1u);
   EXPECT_EQ(unsupported[0].severity, fo4::CheckSeverity::warning);
   EXPECT_EQ(unsupported[0].record, fo4::FormKey::parse("000801:Scripted.esp"));
-  EXPECT_TRUE(of_code(findings, fo4::CheckCode::unresolved_link).empty());
+  const auto unresolved = of_code(findings, fo4::CheckCode::unresolved_link);
+  ASSERT_EQ(unresolved.size(), 1u);
+  EXPECT_EQ(unresolved[0].target, fo4::FormKey::parse("000900:Scripted.esp"));
 }
 
 TEST(CheckErrorsGroup1, LimitTruncationFlagAndCycleSurvival) {

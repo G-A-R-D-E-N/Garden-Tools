@@ -226,18 +226,12 @@ void check_links(const Plugin& plugin,
     const auto slot = owner == records.end()
                           ? std::nullopt
                           : slot_targets(*owner->second, hit.subrecord, hit.subrecord_ordinal, hit.offset);
-    // Requires: xEdit resolves ObjectID < $800 in the game master (masterless files null the file ID first).
+    // Requires: xEdit resolves ObjectID < $800 in the game master.
     auto target = winners.find(hit.key);
-    if (target == winners.end()) {
-      auto effective = hit.raw;
-      if (effective.local_24() < k_first_non_hardcoded_id && context.masters.empty()) {
-        effective = RawFormId{effective.local_24()};
-      }
-      if (effective.value() < k_first_non_hardcoded_id) {
-        target = winners.find(FormKey{game_master, LocalFormId{effective.local_24()}});
-        if (target == winners.end()) continue;
-        finding.target = target->first;
-      }
+    if (target == winners.end() && hit.raw.value() < k_first_non_hardcoded_id) {
+      target = winners.find(FormKey{game_master, LocalFormId{hit.raw.local_24()}});
+      if (target == winners.end()) continue;
+      finding.target = target->first;
     }
     if (target == winners.end()) {
       if (hit.subrecord == k_sig_snam && owner != records.end() &&
@@ -265,7 +259,7 @@ void check_links(const Plugin& plugin,
     if (target->second.deleted) {
       finding.code = CheckCode::deleted_target;
       finding.severity = CheckSeverity::warning;
-      finding.message = hit.subrecord.to_string() + " target " + hit.key.to_string() +
+      finding.message = hit.subrecord.to_string() + " target " + finding.target.to_string() +
                         " is deleted in its winning version";
       sink.add(finding);
     }
@@ -282,7 +276,7 @@ void check_links(const Plugin& plugin,
     }
     finding.code = CheckCode::wrong_target_type;
     finding.severity = CheckSeverity::error;
-    finding.message = hit.subrecord.to_string() + " target " + hit.key.to_string() + " is " +
+    finding.message = hit.subrecord.to_string() + " target " + finding.target.to_string() + " is " +
                       target->second.signature.to_string() + ", expected one of " +
                       join_signatures(slot->targets);
     sink.add(std::move(finding));
@@ -369,6 +363,8 @@ std::optional<FormKey> stored_form_link(const Record& record, Signature subrecor
     std::memcpy(&value, sub.data.data(), sizeof(value));
     const RawFormId raw{value};
     if (raw.is_null()) return std::nullopt;
+    // Requires: a link past the master table is reported by check_links (invalid_master_index), not resolved here.
+    if (!raw.is_none() && raw.index_byte() > context.masters.size()) return std::nullopt;
     return resolved_or_empty(raw, context);
   }
   return std::nullopt;

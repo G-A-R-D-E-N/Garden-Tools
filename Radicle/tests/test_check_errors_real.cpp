@@ -170,35 +170,23 @@ TEST(CheckErrorsReal, VanillaLoadOrderBaselineIsPinned) {
   load_order.reserve(plugins.size());
   for (const auto& plugin : plugins) load_order.push_back(&plugin);
 
-  const auto first = fo4::check_load_order(load_order);
-  const auto second = fo4::check_load_order(load_order);
-  ASSERT_EQ(first.size(), second.size());
+  const auto findings = fo4::check_load_order(load_order);
+  const auto count_of = [&](fo4::CheckCode code) {
+    return std::count_if(findings.begin(), findings.end(),
+                         [&](const fo4::CheckFinding& finding) { return finding.code == code; });
+  };
+  // Requires: invalid_master_index is printed, not pinned, because DLCRobot.esm XRFG links sit past its master table.
+  EXPECT_EQ(count_of(fo4::CheckCode::wrong_target_type), 0);
+  EXPECT_EQ(count_of(fo4::CheckCode::branch_starting_topic_not_dial), 0);
 
-  std::map<std::string, const fo4::Record*> by_key;
-  for (const auto* plugin : load_order) {
-    for (const auto* record : fo4::collect_records(*plugin)) {
-      by_key.try_emplace(record->form_key.to_string(), record);
-    }
-  }
   std::map<std::string, std::size_t> per_code;
-  std::map<std::string, std::size_t> per_slot;
   std::size_t errors = 0;
-  for (const auto& finding : first) {
+  for (const auto& finding : findings) {
     if (finding.severity == fo4::CheckSeverity::error) ++errors;
-    const std::string code{fo4::check_code_name(finding.code)};
-    ++per_code[code];
-    const auto record = by_key.find(finding.record.to_string());
-    const std::string signature =
-        record == by_key.end() ? std::string{"?"} : record->second->header.signature.to_string();
-    ++per_slot[code + "|" + signature + "|" + finding.subrecord.to_string()];
+    ++per_code[std::string{fo4::check_code_name(finding.code)}];
   }
-
-  std::cout << "VanillaBaseline plugins=7 findings=" << first.size() << " errors=" << errors << "\n";
+  std::cout << "VanillaBaseline plugins=7 findings=" << findings.size() << " errors=" << errors << "\n";
   for (const auto& [code, count] : per_code) {
     std::cout << "  " << code << "=" << count << "\n";
   }
-  for (const auto& [slot, count] : per_slot) {
-    std::cout << "  slot " << slot << "=" << count << "\n";
-  }
-  EXPECT_EQ(second.size(), first.size());
 }

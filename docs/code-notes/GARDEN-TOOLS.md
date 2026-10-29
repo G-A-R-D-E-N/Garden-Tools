@@ -1497,7 +1497,7 @@ ITM detection now calls `Radicle/src/plugin/maintenance.cpp:fo4::find_identical_
 
 ## PluginEditTool/native/src/plugin/RadiclePluginCheck.cpp:RadiclePluginBackend::checkForErrors
 
-Whole-plugin "Check for Errors" (#359) over every loaded plugin in load order, through `fo4::check_load_order`. Rows are capped at 500 by default and 100000 at most. `GetProblems` (`RadiclePluginAnalysis.cpp`) stays the per-record view.
+Whole-plugin "Check for Errors" (#359) over every loaded plugin in load order, through `fo4::check_load_order`. The limit (`CheckOptions::limit`) is 500 by default and 100000 at most; a truncated run returns the limit plus one `results_truncated` marker row, so "rows capped at 500" means 501 rows (`Radicle/src/graph/check_errors.cpp:FindingSink::add`). `GetProblems` (`RadiclePluginAnalysis.cpp`) stays the per-record view.
 
 ## PluginEditTool/native/src/plugin/RadiclePluginCheck.cpp:RadiclePluginBackend::lootCleaningReport
 
