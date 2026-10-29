@@ -489,6 +489,22 @@ TEST(AuthoringPreflight, PreExistingCountMismatchToleratesUnrelatedAdds) {
                         "leveled_list_count_mismatch"));
   EXPECT_EQ(fo4::add_record_subrecord(plugin, key, fo4::Signature::from_string("LLCT")),
             fo4::SubrecordAddStatus::not_authorable);
+  auto lvsp = authored_record("LVSP", 0x802, {});
+  lvsp.subrecords.push_back(sized_subrecord("OBND", 12, 0));
+  lvsp.subrecords.push_back(sized_subrecord("LVLD", 1, 0));
+  lvsp.subrecords.push_back(sized_subrecord("LVLM", 1, 0));
+  lvsp.subrecords.push_back(sized_subrecord("LVLF", 1, 0));
+  lvsp.subrecords.push_back(sized_subrecord("LLCT", 1, 2));
+  lvsp.subrecords.push_back(leveled_entry(0x800));
+  auto lvsp_plugin = plugin_with_top_record(std::move(lvsp));
+  const auto lvsp_key = fo4::FormKey::parse("000802:Patch.esp");
+  EXPECT_TRUE(has_issue(fo4::schema::preflight_record(*fo4::find_record(lvsp_plugin, lvsp_key)),
+                        "leveled_list_count_mismatch"));
+  // Requires: LVSP LLCT keeps its minimum-1 creation default, so the add stays already_present.
+  EXPECT_EQ(fo4::add_record_subrecord(lvsp_plugin, lvsp_key, fo4::Signature::from_string("LLCT")),
+            fo4::SubrecordAddStatus::already_present);
+  EXPECT_TRUE(has_issue(fo4::schema::preflight_record(*fo4::find_record(lvsp_plugin, lvsp_key)),
+                        "leveled_list_count_mismatch"));
 }
 
 TEST(AuthoringPreflight, PairCountsWorsenOnlyWhenAnEditMovesThemApart) {
