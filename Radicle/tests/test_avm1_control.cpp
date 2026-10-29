@@ -607,6 +607,50 @@ TEST(Avm1Timeline, GoToLabelJumpsToAKnownLabelAndIgnoresAnUnknownOne) {
             (std::vector<std::string>{"label intro", "goto 3", "label missing"}));
 }
 
+void run_goto_frame_2(RecordingTimeline& timeline, const Bytes& target, const Bytes& flags) {
+  const auto result = execute_with_timeline(
+      cat({push({int_value(7), target}), rec(0x9F, flags), rec(0x26, {}), Bytes{0x00}}), timeline);
+  EXPECT_TRUE(result.ok()) << result.message;
+  EXPECT_EQ(result.trace, (std::vector<std::string>{"7"}));
+}
+
+// Invariant: GotoFrame2 with the play bit pops a numeric frame and calls play before the goto.
+TEST(Avm1Timeline, GotoFrame2NumericWithPlayPlaysBeforeTheGoto) {
+  RecordingTimeline timeline;
+  run_goto_frame_2(timeline, int_value(5), {0x01});
+  EXPECT_EQ(timeline.calls, (std::vector<std::string>{"play", "goto 5"}));
+}
+
+// Invariant: GotoFrame2 without the play bit stops, and its scene bias adds to a numeric frame.
+TEST(Avm1Timeline, GotoFrame2NumericWithoutPlayStopsAndAddsSceneBias) {
+  RecordingTimeline timeline;
+  run_goto_frame_2(timeline, int_value(5), {0x02, 0x02, 0x00});
+  EXPECT_EQ(timeline.calls, (std::vector<std::string>{"stop", "goto 7"}));
+}
+
+// Invariant: GotoFrame2 jumps to a label the host knows, calling play before the goto.
+TEST(Avm1Timeline, GotoFrame2LabelJumpsToItsFrame) {
+  RecordingTimeline timeline;
+  timeline.labels["intro"] = 3;
+  run_goto_frame_2(timeline, text_value("intro"), {0x01});
+  EXPECT_EQ(timeline.calls, (std::vector<std::string>{"label intro", "play", "goto 3"}));
+}
+
+// Invariant: GotoFrame2 with a label the host does not know calls no play, stop or goto.
+TEST(Avm1Timeline, GotoFrame2UnknownLabelIsANoOp) {
+  RecordingTimeline timeline;
+  run_goto_frame_2(timeline, text_value("missing"), {0x01});
+  EXPECT_EQ(timeline.calls, (std::vector<std::string>{"label missing"}));
+}
+
+// Invariant: GotoFrame2 drops a target path before its colon and resolves only the label after it.
+TEST(Avm1Timeline, GotoFrame2ResolvesOnlyTheLabelAfterATargetPath) {
+  RecordingTimeline timeline;
+  timeline.labels["intro"] = 3;
+  run_goto_frame_2(timeline, text_value("clip:intro"), {0x01});
+  EXPECT_EQ(timeline.calls, (std::vector<std::string>{"label intro", "play", "goto 3"}));
+}
+
 struct PropertyRow {
   const char* name;
   Bytes index;
@@ -681,6 +725,7 @@ TEST(Avm1Timeline, TimelineOpcodesAreRefusedByNameWithoutAHost) {
       {rec(0x07, {}), "Stop (0x07)"},
       {rec(0x81, le16(1)), "GotoFrame (0x81)"},
       {rec(0x8C, str("intro")), "GoToLabel (0x8C)"},
+      {rec(0x9F, {0x01}), "GotoFrame2 (0x9F)"},
       {rec(0x22, {}), "GetProperty (0x22)"},
       {rec(0x23, {}), "SetProperty (0x23)"},
   };
