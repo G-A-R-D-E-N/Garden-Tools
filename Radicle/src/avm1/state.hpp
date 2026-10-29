@@ -24,6 +24,7 @@ struct Avm1State {
   std::uint8_t swf_version{0};
   std::uint32_t random_state{0};
   std::uint32_t elapsed_ms{0};
+  Avm1TimelineHost* timeline{nullptr};
 };
 
 struct Avm1Call {

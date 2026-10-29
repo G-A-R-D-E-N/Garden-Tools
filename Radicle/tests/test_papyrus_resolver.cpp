@@ -592,3 +592,32 @@ TEST(PapyrusResolver, ACompleteScriptWithAGenuineTypoIsReported) {
     ASSERT_TRUE(r.diagnostics.size() == 1);
     EXPECT_TRUE(r.diagnostics[0].code == DiagnosticCode::UnresolvedName);
 }
+
+// Invariant: a two-script extends cycle terminates the base chain and leaves the resolution marked incomplete.
+TEST(PapyrusResolver, ACyclicExtendsPairStopsAndMarksTheChainIncomplete) {
+    Fixture f;
+    f.write("A", "\nScriptName A extends B\nFunction Go()\nEndFunction");
+    f.write("B", "\nScriptName B extends A\nFunction Go()\nEndFunction");
+    const auto r = f.resolve("A");
+
+    EXPECT_FALSE(r.baseChainComplete);
+}
+
+// Invariant: a script extending itself terminates the base chain at itself and is marked incomplete.
+TEST(PapyrusResolver, AScriptThatExtendsItselfStopsAndMarksTheChainIncomplete) {
+    Fixture f;
+    f.write("A", "\nScriptName A extends A\nFunction Go()\nEndFunction");
+    const auto r = f.resolve("A");
+
+    EXPECT_FALSE(r.baseChainComplete);
+}
+
+// Invariant: a missing parent two levels up marks the chain incomplete, not only a missing direct parent.
+TEST(PapyrusResolver, AMissingParentTwoLevelsUpMarksTheChainIncomplete) {
+    Fixture f;
+    f.write("B", "\nScriptName B extends SomethingNotOnDisk\nFunction Poke()\nEndFunction");
+    f.write("A", "\nScriptName A extends B\nFunction Go()\n    Poke()\nEndFunction");
+    const auto r = f.resolve("A");
+
+    EXPECT_FALSE(r.baseChainComplete);
+}

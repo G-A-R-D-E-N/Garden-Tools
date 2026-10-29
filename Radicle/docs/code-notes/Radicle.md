@@ -8684,6 +8684,8 @@ Detects an encoder that keeps a stale offset when its target record is deleted. 
 
 ## Radicle/tests/test_avm1_encode.cpp:DeletedJumpTargetWithNoSurvivorRetargetsToTheStreamEnd
 
+Also pins `validate_actions` to BranchUnresolved. Before the recorded end (`Avm1Stream::original_end`) validate returned Ok by accident: the derived end was 7, the end of the surviving NextFrame, which equalled the start of the erased End. With the recorded end of 8, the target 7 names the erased End record, so it is reported as BranchUnresolved, the same status as `Radicle/tests/test_avm1_encode.cpp:DeletedJumpTargetRetargetsToTheNextSurvivingRecord`. Detects a validate that accepts a branch whose named End record was erased.
+
 Detects an encoder that cannot retarget to the stream end when no surviving record follows the deleted target. This case is checked by `Radicle/src/avm1/encode.cpp:encode_actions` through its stream-end fallback. The input is `99 02 00 02 00 06 04 00`. The Jump is at 0 and targets offset 7, the End record. Play (offset 5) and End (offset 7) are deleted, which leaves Jump and NextFrame. Nothing survives at or after offset 7, so the target is the stream end. The stream is 6 bytes long (Jump 5 bytes plus NextFrame 1 byte), so the offset is 6 - 5 = 1. The expected output is `99 02 00 01 00 04`, which is 6 bytes.
 
 ## Radicle/tests/test_avm1_encode.cpp:InsertedRecordInsideADefineFunctionBodyGrowsItsBodySize
@@ -8720,7 +8722,7 @@ Detects an encoder change that alters bytes of an unedited stream. It checks thr
 ## Radicle/include/fo4/swf/swf.hpp:SwfScalingGrid (DefineScalingGrid, tag 78)
 
 - `SwfScalingGrid` holds the CharacterId (UI16, little-endian, first in the payload) and the 9-slice splitter as a `SwfRect` in twips, stored in `SwfTag::scaling_grid`. The splitter is the RECT that follows the id, read by the same `read_rect` the edit-text and font decoders use.
-- Frame SVG rendering of the 9-slice is NOT implemented. `Radicle/src/swf/swf_frame_svg.cpp` never reads `SwfTag::scaling_grid`, so a shape or sprite that carries a grid still renders unsplit.
+- The frame SVG renderer reads the grid through `FrameLookup::grids`, filled from `SwfTag::scaling_grid` in `frame_to_svg`. `Radicle/src/swf/swf_frame_svg.cpp:nine_slice_cells` slices a placed shape or sprite against it when its placement scale is not identity.
 - No C API export, no `SwfSummary` counter and no C# change. The sibling typed tags `DefineExternalImage`, `FontTextureInfo` and `ExporterInfo` also have no export; adding one would bump `RADICLE_ABI_VERSION`.
 
 ## Radicle/src/swf/swf_tags.cpp:decode_tag_payload (kDefineScalingGrid case)
@@ -8739,6 +8741,51 @@ Detects an encoder change that alters bytes of an unedited stream. It checks thr
 - `AcceptsTrailingBytesAfterTheSplitterRect` detects a strict-length check that refuses a grid tag with bytes after its RECT (`0xAA 0xBB` appended).
 - `RefusesAScalingGridPayloadCutInsideItsRect` detects a RECT reader that zero-fills missing bits into a grid, or one that reads past the payload. It uses two cuts: an id-only payload, and a 5-byte payload where the RECT needs 7 bytes. Each must give `malformed_tag`, no typed grid, the raw payload kept, and the End tag still parsed.
 - `ScalingGridLookupReturnsTheLastGridForAnId` detects `find_scaling_grid` returning the first of two grids for one id, returning a grid for a different id, or returning a non-null pointer for an id with no grid.
+
+## Radicle/src/swf/swf_frame_svg.cpp:nine_slice_regions
+
+- Each axis is cut independently. The splitter edges are mapped through the placement (`scale * twips / 20 + translate`) and clamped into the placed box. The fixed corner width is the local distance from the box edge to the splitter edge, so it is divided by the placement scale. The destination is therefore the unscaled corner size, and the centre takes whatever length is left.
+- The destination right cut is clamped so it never falls before the left cut. Without that clamp, overlapping corners give a negative-width centre, which would invert its stretch.
+- Scale must be positive and the placement must have no rotation or skew, because the axis split divides by scale. `frame_body` checks this through `nine_slice_cells`.
+- `NineSliceClampsASplitterThatOverhangsThePlacedBox` detects a splitter edge past the placed box producing a source or destination cell with negative width.
+- `NineSliceKeepsTheCentreAtZeroWidthWhenCornersOverlap` detects overlapping fixed corners producing a negative centre width.
+- `NineSliceCutsAPlacedBoxIntoUnscaledCornersAndAStretchedCentre` detects the cut lines being taken on the wrong axis, or the corners being scaled with the placement (their destination would then differ from the source). Hand-derived numbers: placed box x 100..350, y 50..250 (scale 2.5 and 2, translate 100 and 50), splitter x 400..1600 and y 200..1800 twips, giving source x cuts 100, 150, 300, 350 and y cuts 50, 70, 230, 250, and destination x cuts 100, 120, 330, 350 and y cuts 50, 60, 240, 250.
+
+## Radicle/src/swf/swf_frame_svg.cpp:nine_slice_cells
+
+- Eligible rows are a DefineShape with a grid and bounds, or a DefineSprite with a grid. Morph characters are not sliced. Rotation or skew, a non-positive scale, or a scale of exactly (1, 1) keep the plain path. A negative scale is a flip; it falls back to plain and does not slice. This is a known ceiling, not a checked Flash behaviour.
+- The grid comes from `FrameLookup::grids`, filled in `frame_to_svg` with `insert_or_assign`, so the last grid for an id wins as in `find_scaling_grid`.
+- The placed box for a shape is its frame-instance bounds. A sprite has no bounds in the file, so its box is the union of its visible descendant shape bounds in the current frame (`sprite_bounds`). Ceiling: Flash uses the symbol's bounds, so a sprite whose content changes between frames can get different corners here. Upgrade path: take the union over every frame of the sprite's timeline.
+- The placement scale comes from `row.world_transform`, the concatenated scale of every ancestor sprite. A grid child inside a scaled parent sprite is therefore sliced against the combined scale. Ceiling: this is unverified against Flash or Scaleform, which may slice against the child's own placement scale only. Upgrade path: confirm against a reference movie before relying on nested grids.
+
+## Radicle/src/swf/swf_frame_svg.cpp:sprite_content and sprite_bounds
+
+- Mask rows (`clip_depth` set) are skipped by both `sprite_content` and `sprite_bounds`, so a mask is neither painted nor counted in the sprite's box. `ScaledGridSpriteEmitsTheSameNineCellsAndSkipsItsChildren` detects a mask painted as a second `<path `, or a mask that widens the box and moves the clip rects.
+
+## Radicle/src/swf/swf_frame_svg.cpp:nine_slice_group
+
+- Output per cell is `<g transform=stretch><g clip-path=cell clip><use href=content>`. The content is rendered once in `<defs>` as `<g id="<row>sg">`, and each cell clips it to its pre-stretch source rect. The clip rect and the stretch both live in the content's coordinate space, which is the placed space. The stretch maps source to destination, so `stretch_transform` gives `scale = destination / source` and `translate = destination.origin - scale * source.origin`.
+- A zero-width source cell (a splitter at the box edge) uses scale 1. Its clip is empty, so the transform does not matter, and this avoids a division by zero.
+- Ids are `<row>s<cell>` for each clip and `<row>sg` for the content group. The content group is shared, which avoids duplicate element ids. The renderer already uses `href` on `<pattern>` images, so `use href` matches the existing output style.
+
+## Radicle/src/swf/swf_frame_svg.cpp:frame_body
+
+- A sliced sprite draws its visible descendants through `sprite_content`, and sets `mask_end` past them so the child rows are not drawn a second time. Ceiling, `swf_frame_svg.cpp:sprite_content`: masks, button children, and child colour transforms are not drawn, the same limits as `swf_frame_svg.cpp:sprite_clip_to_svg`.
+- The colour filter and the mask wrappers still apply around the sliced content, because they run after the content is built.
+
+## Radicle/tests/test_swf_display.cpp:SwfFrameSvg nine-slice render tests
+
+- `ScaledGridShapeEmitsNineClipAndTransformCells` detects a shape with a grid rendered plain instead of as nine cells, or any cell whose transform or clip differs from the hand-derived values. Hand-derived values for the placement scale 2.5 and 2, translate 100 and 50 px, and a 100 x 100 px square with splitter 20..80 by 10..90 px: cell transforms `matrix(0.4 0 0 0.5 60 25)`, `matrix(1.4 0 0 0.5 -90 25)`, `matrix(0.4 0 0 0.5 210 25)`, and so on for the other rows. Each cell's clip rect is its source rect, for example `x=100 y=50 width=50 height=20`. It also checks there is exactly one `<path ` so the content is not drawn twice.
+- `ScaledGridSpriteEmitsTheSameNineCellsAndSkipsItsChildren` detects a sprite with a grid drawn plainly, or drawn sliced and also drawn child by child. The second case shows up as two `<path ` elements. The expected cells match the shape case, because the sprite box is the same as the shape box.
+- `UnitOrRotatedGridPlacementDrawsThePlainShape` detects a grid applied to a unit-scale or rotated placement, which would change the plain output. It compares the output with and without the grid tag for both placements.
+
+## Radicle/tests/test_swf_svg_text_matrix.cpp:SwfFrameSvg nine-slice geometry tests
+
+- The three `NineSlice*` geometry tests in this file are the unit tests for `nine_slice_regions`. Their regressions are described in the `nine_slice_regions` section above. They sit in this file because it is the only SVG frame test file with room under the 750-line limit.
+
+## Radicle/tests/swf_movie_builder.hpp:movie_of
+
+- `movie_of`, `TagPayload`, `sprite_tag`, `place_full`, `matrix_full`, `square_with_fill`, and `square_shape` moved here from `test_swf_display.cpp` so the nine-slice render tests can build movies without copying them. `test_swf_display.cpp` was at 741 lines, over the 750 limit once the new tests were added. The bodies are unchanged; the only edit is `inline`.
 
 ## Radicle/src/avm1/misc_ops.cpp:random_number and next_random
 
@@ -8875,6 +8922,75 @@ Detects a validator that checks only the top-level list end and not the parent b
 - Split of `decompiler.cpp` (727 lines, too close to the 750 cap) by responsibility. `decompiler.cpp` keeps `toSource`, `emitFunction`, `disassemble` and the `decompileBody` setup. `decompiler_expr.cpp:translateInstructions` turns each instruction into a `BodyState::put` or a statement. `decompiler_stmt.cpp:reconstructStatements` runs jump folding, the temp-call pass, local hoisting and `If`/`While`/`Else` structuring. The header holds the state those passes share: `BodyState`, `JKind`, `JInfo`, and the `iequals`, `startsWith` and `join` helpers.
 - `BodyState::put` is the single write path. With inlining on, a `::temp` destination goes to `temps` and `tempExpression`; `::NoneVar` becomes a bare statement; anything else becomes `name = expr`. The move changed no logic, names or output. The decompiler tests are the check that it stayed that way.
 
+## tests/test_papyrus_codegen_corners.cpp:PapyrusCodegen
+
+- New file, not an append to `test_papyrus_codegen.cpp`, because the 13 codegen cases would have pushed that file past the 750-line cap. It is registered in `Radicle/CMakeLists.txt` next to it.
+- The expected listings were derived by hand from `body_statement.cpp:emitIf`, `emitWhile`, `emitStatement`, `body_expression.cpp:valueAs`, `emitComparison`, `code_generator.cpp:constantOrDefault`, `constantGetter` and `qualifyCustomEvent`, and `body_call.cpp:emitArrayBuiltin`. Each jump offset is the instruction index difference, as in `BodyEmitter::patchJump`.
+- `ElseIfChainJumpsFromEachBranchToTheEndOfTheChain` pins `elseif` as a chain in `emitIf`, not nested `else` blocks.
+- `TemporariesFreedByOneStatementAreReusedByTheNext` relies on `BodyEmitter::releaseTemps` returning temps to `freeTemps_` at the end of each statement, so `::temp` locals are counted, not compared by name.
+- `CustomEventNameArgumentIsQualifiedByTheDeclaringScript` expects `sender_Ready`: `CodeGenerator::qualifyCustomEvent` lowercases the declaring script name and appends `_` plus the event name. Whether the Creation Kit uses that exact string is not verified here.
+- `StatesKeepSourceOrderAfterTheEmptyStateAndOnlyOneIsAuto` covers `CodeGenerator::buildObject` ordering: the empty state first, then states in source order.
+- Not covered: Papyrus has no `For` loop, so the brief's For item has no code path. `FindStructAndInsertUseTheirOpcodesAndDefaultStart` uses a float literal as the search value on purpose, because an int literal reaches the VM unconverted (see the `body_call.cpp:emitArrayBuiltin` note below).
+
+## src/papyrus/body_expression.cpp:emitShortCircuit (defect, no test)
+
+- Defect: a short-circuit assignment whose right operand names its own destination reads the overwritten value. The destination is written by the `cast` on line 409 before the right operand is emitted on line 412, so `value(binary.right)` returns the new value. Input: `Function Go(bool abLeft, bool abRight)` with body `abLeft = abRight && abLeft`. Emitted: `cast abLeft abRight`, `jmpf abLeft 2`, `cast abLeft abLeft`. With `abRight` true and `abLeft` false, the result is true, but `&&` requires false. `||` has the same shape.
+- No test pins the wrong output, and the fix was not made. The fix is to evaluate the right operand into a temp when the destination equals a name read in the right operand.
+
+## src/papyrus/body_call.cpp:emitArrayBuiltin (defect, no test)
+
+- Defect: `FindStruct` and `RFindStruct` pass the search value through `value(arguments[1])` (line 264 for `FindStruct`), with no conversion to the element's member type. `xs.FindStruct("fX", 2)` on a `float fX` member therefore emits an `Integer` operand. `struct_ops.cpp:159` then refuses the search as `TypeMismatch` because the member is `Float`. Input: `Struct Point` with `float fX`, then `int at = pts.FindStruct("fX", 2)`. The expected emission is `2.0`.
+- The fix is to convert the value to the member's declared type, which requires reading the element struct in codegen. Not done here.
+
+## src/papyrus/resolver.cpp:Resolver::resolve (gap, tests added)
+
+- `ScriptIndex::baseChain` (`script_index.cpp:baseChain`) stops on a repeated name, so a cycle terminates. Its caller marks the resolution incomplete on line 46 (`last->extends`), which is the path the cycle tests pin. No diagnostic is raised for a cycle anywhere in `src/papyrus`, so a cyclic `extends` compiles silently. That is a gap; the tests assert only termination and `baseChainComplete == false`.
+
+## src/papyrus/declaration_check.cpp:declarationCheck (gap, not pinned)
+
+- Duplicate detection runs per kind: functions and events, variables, properties, structs, states and custom events. A variable and a function with the same name are not reported. Whether the Creation Kit rejects that was not verified, so no test pins it either way.
+
+## src/papyrus/type_checker.cpp:TypeChecker (gap, not pinned)
+
+- No check runs on comparison operators, so `int == string` compiles with no diagnostic and the int is cast to string. Not pinned by any test.
+
+## Radicle/src/swf/swf_bitmap_edit.cpp:replace_bitmap_lossless
+
+- File-level in-place edit, like `apply_edit_text`. The character is looked up through `build_character_model` and `find_character`, so the refusals match the character table the rest of the SWF code reads: `unknown_character` for no row, `not_a_lossless_bitmap` for any row whose tag is not 20 or 36 (a shape, or a DefineBitsJpeg2 that also has kind `bitmap`), `malformed_file` when the model refuses. Dimensions are checked before the pixel count, so a zero or oversized size reports `bad_dimensions` even with an empty buffer.
+- The tag code cannot change through `replace_tag_payload` (it only swaps the payload). Every call therefore goes through `apply_tag_plan` as one removal at `character->tag_index` plus one insertion at the same index. The insertion has the new code (36 when `has_alpha`, else 20) and keeps its position, so the other tags are written back unchanged. `swf_bitmap_edit.cpp:replace_bitmap_lossless` maps both zlib failure and an `apply_tag_plan` refusal (the re-decoded payload does not decode) to `encode_failed`.
+- Pixel format is always 5 (24-bit RGB for tag 20, 32-bit ARGB for tag 36). Writing format 3 or 4 would need palette quantisation, and format 5 is the one layout both tags share. Stored bytes are `[alpha|0, R, G, B]` per pixel, row-major, with no row padding because each pixel is 4 bytes.
+- The tag 20 path discards the input alpha: the stored first byte is the reserved 0 and the decoder reads that pixel as opaque. The tag 36 path premultiplies (see `argb_bytes`).
+- Deflate calls `compress2` at `Z_BEST_COMPRESSION` directly, as `swf_bitmap_png.cpp:bitmap_to_png` does. The existing `swf_write.cpp:deflate_body` is in an anonymous namespace and throws on zlib failure, so it was not reused. Stored deflate blocks were not needed because zlib is linked.
+
+## Radicle/src/swf/swf_bitmap_edit.cpp:argb_bytes
+
+- The encoder is the inverse of `swf_bitmap_png.cpp:straight`. The decoder computes `nearbyint(stored * 255 / alpha)`, clamped to 255. The encoder stores `nearbyint(channel * alpha / 255)`, which never exceeds `alpha`. Rounding is therefore exact at alpha 0 and 255, and off by at most one level otherwise. Example: alpha 128 and channel 200 store 100 and decode to 199; channel 1 stores 1 and decodes to 2.
+- Alpha 0 stores RGB 0. The decoder's `straight` passes a stored channel through at alpha 0, so storing the input RGB would decode unchanged. It would also add colour under premultiplied compositing, because the RGB of a fully transparent premultiplied pixel is meant to be 0. The choice means an alpha-0 pixel with non-zero RGB decodes as `(0,0,0,0)`. That is a deliberate deviation from a literal "exact inverse".
+
+## Radicle/src/swf/swf_internal.hpp:kMaxBitmapBytes
+
+- Moved from `swf_bitmap.cpp` so `swf_bitmap.cpp:decode_bitmap_tag` and `swf_bitmap_edit.cpp:replace_bitmap_lossless` share the same 64 MiB cap. The 4097 by 4096 case is 67125248 bytes, which is over the 67108864-byte cap, so it is refused. The exact 4096 by 4096 case is the cap and is allowed.
+
+## Radicle/tests/test_swf_edit.cpp:ReplacesALosslessCharacterAndItsPngKeepsThePremultiplyRounding
+
+Detects an encoder that writes the wrong premultiply rounding, a wrong tag code, or a wrong header. The input is a 2 by 2 tag 20 bitmap, which is replaced with `rgba_2x2` and `has_alpha` true. The stored ARGB is `255,10,20,30 / 128,100,50,1 / 0,0,0,0 / 128,128,64,0`, derived from `round(c * a / 255)`. The header is `03 00 05 02 00 02 00`. The PNG decodes to `10,20,30,255 / 199,100,2,128 / 0,0,0,0 / 255,128,0,128`. The 200 at alpha 128 decodes to 199 and the 1 decodes to 2, which is the decoder's own rounding.
+
+## Radicle/tests/test_swf_edit.cpp:SwitchesToTagTwentyAndDropsTheAlphaChannelWhenHasAlphaIsFalse
+
+Detects a tag 36 rewrite that keeps code 36 when `has_alpha` is false, or an encoder that premultiplies or keeps alpha when it should drop it. The input is a tag 36 2 by 2 bitmap. The output is tag 20 with `has_alpha` false. The stored bytes are `00,10,20,30 / 00,200,100,1 / 00,00,00,00 / 00,255,128,00`, and the PNG alpha is 255 for every pixel, so the 128 and 0 inputs are not kept.
+
+## Radicle/tests/test_swf_edit.cpp:KeepsTheCharacterIdAndEveryOtherTagUnchanged
+
+Detects a replace that shifts tags, drops or re-numbers the character id, or rewrites a neighbouring tag. In test_swf_edit.cpp:KeepsTheCharacterIdAndEveryOtherTagUnchanged the movie is shape (32, id 5), bitmap (20, id 3), shape (32, id 6, so no id repeats), ShowFrame, End. After the replace, tag count and every non-bitmap tag's code and payload match the original, and the bitmap is still id 3 with code 36.
+
+## Radicle/tests/test_swf_edit.cpp:RefusesAnUnknownOrNonLosslessCharacterAndLeavesTheFileUntouched
+
+Detects a replace that accepts an unknown id, or one that overwrites a shape or a JPEG character with a lossless tag. The file holds shape id 5, DefineBitsJpeg2 id 8 and lossless id 3. Ids 9, 5 and 8 must return `unknown_character`, `not_a_lossless_bitmap` and `not_a_lossless_bitmap`. The `write_swf` bytes before and after must match.
+
+## Radicle/tests/test_swf_edit.cpp:RefusesZeroOrOversizedDimensionsAndAPixelBufferOfTheWrongSize
+
+Detects a zero width or height that reaches zlib, an oversized geometry that allocates past the cap, or a buffer that is short or long for the declared size. Zero width and zero height, and 4097 by 4096 with an empty buffer, return `bad_dimensions`. A 15-byte or 17-byte buffer for 2 by 2 returns `pixel_size_mismatch`. The file bytes are unchanged.
+
 ## Radicle/include/fo4/avm2/object.hpp:kMaxSlotIndex
 
 - The cap on every slot index that can grow an `Object` slot vector: the `setslot` and `setglobalslot` operands, and ABC slot and const trait ids (checked at link time, see `Radicle/src/avm2/runtime.cpp:Runtime::build_traits`). The largest accepted index is 65535, so a slot vector holds at most 65536 entries.
@@ -8975,3 +9091,121 @@ Bytecode is hand-derived. `u30(65535)` is `FF FF 03` and `u30(65536)` is `80 80 
 - `PlacedShapeWithDropShadowWrapsItsGroupInTheShadowFilter`: a regression that loses the filter list between `read_swf`, `build_display_list` and `frame_to_svg`.
 - `PlainPlacementIsByteIdenticalToTheUnfilteredGroup`: a regression that emits an empty `<defs>` or a wrapper group for a placement with no filter or blend.
 - `PlacedBlendModeWrapsTheGroupInItsStyle`: a regression that drops the blend mode in the display replay.
+## Radicle/include/fo4/avm1/interpreter.hpp:Avm1TimelineHost
+
+- The host is abstract and injected through `Avm1Environment::timeline`. It is non-owning; the caller keeps it alive for the run. With no host, every timeline opcode is refused by name (see `Radicle/src/avm1/timeline_ops.cpp:execute`).
+- Frame numbers are 1-based in `goto_frame`, `current_frame`, `total_frames` and `frame_for_label`, matching Ruffle's `MovieClip::goto_frame` and `frame_label_to_number` in `core/src/display_object/movie_clip.rs`.
+- `goto_frame` also stops playback. Ruffle's `action_goto_frame` and `action_goto_label` in `core/src/avm1/activation.rs` both call `goto_frame(frame, true)`. Play is the separate `play()` call.
+- `get_property` returns an `Avm1Data`, not a number, because `_name` (index 13) is a string in Ruffle (`core/src/avm1/object/stage_object.rs` `name`).
+- `set_property` receives the value unconverted. Ruffle coerces numeric properties per property (`action_property_coerce` in `stage_object.rs`), so the host does that coercion. The op does not coerce, so `_name` keeps its string.
+
+## Radicle/src/avm1/timeline_ops.cpp:execute
+
+- Dispatch order is `interpreter.cpp:execute_action` default, then `misc_ops.cpp:execute` default, then `timeline_ops.cpp:execute`, then `control_ops.cpp:execute`, which refuses unknown codes.
+- With no host (`Avm1State::timeline` null), `execute` calls `control_ops::execute` for every code. That refusal is the same `Unsupported` as before the host existed, so the run reports `NextFrame (0x04): this opcode is not in the AVM1 interpreter slice`.
+- GotoFrame 0x81 reads the wire frame as 0-based and passes `frame + 1` to the host. Ruffle's `action_goto_frame` does `action.frame + 1` and comments that the stack frame is 0-based. The brief expected 1-based wire frames; Ruffle contradicts that. Ruffle's swf crate `swf/src/avm1/read.rs:read_goto_frame` reads a plain u16. The Flash spec text was not available locally, so the 0-based claim rests on Ruffle.
+- GotoFrame has no Play flag. `decode.cpp:Decoder::payload` reads only the u16 for 0x81. The flag belongs to GotoFrame2 (0x9F), which has no case here, so the op always stops.
+- GoToLabel 0x8C passes `Avm1Text::text` as-is. Ruffle lowercases ASCII for AVM1 label lookup (`movie_clip.rs:frame_label_to_number`). The op does not fold case, so the host must match ASCII case-insensitively. An unknown label makes no `goto_frame` call and the run continues, as Ruffle warns and continues.
+- NextFrame 0x04 and PreviousFrame 0x05 follow Ruffle's `movie_clip.rs:next_frame` and `prev_frame`. NextFrame gotos current+1 only when current is below total. PreviousFrame gotos current-1 only when current is above 1. The op calls `current_frame`, then `total_frames` for NextFrame, then at most one `goto_frame`.
+- Play 0x06 and Stop 0x07 each make one host call and touch no stack.
+
+## Radicle/src/avm1/timeline_ops.cpp:standard_property
+
+- Index mapping follows the `stage_object.rs` PROPERTIES order: 0 `_x`, 1 `_y`, 2 `_xscale`, 3 `_yscale`, 4 `_currentframe`, 5 `_totalframes`, 6 `_alpha`, 7 `_visible`, 8 `_width`, 9 `_height`, 10 `_rotation`, 11 `_target`, 12 `_framesloaded`, 13 `_name`.
+- Index conversion follows Ruffle's `activation.rs:action_get_property`: the operand goes through `coerce_to_f64`, non-finite or <= -1 is invalid, and `as usize` truncates. The op uses `number > -1 && number < 14`, which also rejects NaN, then `static_cast<int>`. So -0.5 maps to 0, as Ruffle does.
+- Indices 11 and 12 are outside this slice. GetProperty pushes undefined without a host call. Ruffle returns those properties, so this is a deviation.
+- Indices 14 to 21 (_droptarget, _url, _highquality, _focusrect, _soundbuftime, _quality, _xmouse, _ymouse) are also outside this slice. GetProperty pushes undefined for them and SetProperty drops the write, without a host call. Ruffle's `stage_object.rs` PROPERTIES table lists them.
+- Indices 4 and 5 are read-only. SetProperty never calls the host for them. Ruffle's `DisplayProperty` has no setter for them (`stage_object.rs` PROPERTIES, `None` setter).
+- GetProperty pops the index (top) and then the target path, and ignores the path, because the host is one clip. Ruffle resolves the path (`resolve_target_display_object`). Target paths are a deviation.
+- Stack effects: GetProperty pops 2 and pushes 1. SetProperty pops 3 (value on top, then index, then path) and pushes 0.
+
+## Radicle/src/avm1/timeline_ops.cpp:get_property
+
+- Pushes the host's `Avm1Data` for the mapped index, or undefined for an unmapped one. It pushes straight onto the stack, so it skips the string-limit check that `interpreter.cpp:push_result` makes. The host's `_name` string is the only string that can reach this path, and it is host-sized, so the skip is accepted.
+
+## Radicle/src/avm1/misc_ops.cpp:execute
+
+- The default branch now calls `timeline_ops::execute`, not `control_ops::execute`, so the chain is misc, timeline, control.
+
+## Radicle/src/avm1/interpreter.cpp:execute_actions
+
+- `state.timeline = environment.timeline;` copies the non-owning host pointer into `Avm1State` (`Radicle/src/avm1/state.hpp:Avm1State`) so the timeline ops can see it.
+
+## Radicle/tests/test_avm1.cpp:Avm1Interpreter
+
+- `UnsupportedOpcodeIsRefusedByName` used GetProperty 0x22, which is a timeline op now. It uses CloneSprite 0x24 (`Radicle/src/avm1/opcodes.cpp:action_mnemonic` name table; no `case 0x24` in `Radicle/src/avm1/interpreter.cpp:execute_action`). No other `test_avm1*.cpp` test refuses 0x22, 0x23, 0x04, 0x05, 0x06, 0x07, 0x81 or 0x8C.
+
+## Radicle/tests/test_avm1_control.cpp:Avm1Timeline
+
+Bytes are hand-derived from `rec` in this file: one code byte, a u16 length for codes 0x80 and up, then the payload. Push values are `00` string, `06` double, `07` int32.
+
+- `GotoFramePlayAndStopCallTheHostOnceWithoutStackEffects`: `96 05 00 07 05 00 00 00` pushes 5, `81 02 00 04 00` GotoFrame with wire 4, `06` Play, `07` Stop, `26` Trace, `00` End. Host calls: `goto 5`, `play`, `stop`. Trace: `5`. Regression: a 1-based read of wire 4 calls `goto 4`, and a Play or Stop that popped the 5 would leave the trace with nothing to print.
+- `NextAndPreviousFrameStayInsideTheTimeline`: `04 04 04 05 05 05 00` with the host at frame 1 of 3. Calls: `current, total, goto 2, current, total, goto 3, current, total, current, goto 2, current, goto 1, current`. Regression: NextFrame with no total bound at frame 3 calls `goto 4`, and PreviousFrame with no `> 1` bound calls `goto 0`.
+- `GoToLabelJumpsToAKnownLabelAndIgnoresAnUnknownOne`: `8C 06 00 69 6E 74 72 6F 00` for "intro" and `8C 08 00 6D 69 73 73 69 6E 67 00` for "missing". Host knows intro at frame 3. Calls: `label intro, goto 3, label missing`. Trace: none, status Ok. Regression: an unknown label refuses and ends the run, or the op calls `goto` for it.
+- `GetPropertyMapsItsIndexAndPushesOneValue`: one Push record with three values, the sentinel int 7 (`07 07 00 00 00`), the string "clip" (`00 63 6C 69 70 00`) and the index. Index rows: int 2 (`07 02 00 00 00`), string "13" (`00 31 33 00`), double 3.9 (`06 33 33 0F 40 33 33 33 33`, high word then low word, each little-endian), int 11, string "abc" (NaN), and int -1 (`07 FF FF FF FF`). The host returns `10 * index`. Expected traces: `20`, `130`, `30`, `undefined`, `undefined`, `undefined`, each followed by `7`. Regression: an index shifted by one, a string index not converted (undefined), a double not truncated, an index 11 forwarded to the host, or a target path left on the stack, which would trace `clip` before the 7.
+- `SetPropertyPassesWritableIndicesAndSkipsReadOnlyOnes`: sentinel 7, then one Push of "clip", index 0, value 42 and `23`; then indices 4, 5 and 11 each with value 9 and `23`; then index 13 with the string "hero" and `23`; then Trace. Calls: `set 0`, `set 13`. Last value is the string "hero". Trace: `7`. A second run with index 0 and value 42 gives `set 0` and number 42. Regression: writing _currentframe reaches the host (`set 4` appears), a value coerced to number would break `_name`, or the operands are not all popped, leaving "hero" on top of the trace.
+- `TimelineOpcodesAreRefusedByNameWithoutAHost`: sentinel 7, then each of `04`, `05`, `06`, `07`, `81 02 00 01 00`, `8C` "intro", `22`, `23`, then Trace and End, with no host. Each row must refuse as Unsupported at the timeline opcode with its name, and trace nothing. Regression: a silent no-op lets the Trace print the 7 and the status becomes Ok.
+
+## Radicle/include/fo4/avm1/avm1.hpp:Avm1Stream
+
+`original_end` is the source offset just past the stream's last byte. `Decoder::run` sets it to the input size, so erasing the End record no longer moves the end that branches target. It defaults to `kNewRecordOffset`, which means no recorded end: `layout` then derives the end from the surviving records plus `trailing`, as before. It is the last member, so `Avm1Stream stream;` and existing uses still compile. A hand-built stream keeps the derived end unless the caller sets it.
+
+## Radicle/src/avm1/decode.cpp:Decoder::run
+
+After the trailing bytes are copied, `run` sets `out_.original_end = bytes_.size()` and then resolves branches. For an unedited stream the derived end (last record end plus trailing bytes) equals `bytes_.size()`, so unedited streams validate as before.
+
+## Radicle/src/avm1/encode.cpp:layout
+
+This replaces the derived end in the earlier `layout` note for decoded streams. `original_end` is `stream.original_end` when it is not `kNewRecordOffset`, otherwise the largest surviving record end plus the trailing bytes. A target equal to that end is resolvable and encodes to the stream end. A target that names an erased record start is still BranchUnresolved, because it names no surviving record.
+
+## Radicle/src/avm1/encode.cpp:encode_actions_checked
+
+Runs the same `layout` walk as `encode_actions` and `validate_actions`. If `Encoding::status` is not Ok it sets `status` and returns an empty vector, so a caller cannot write the truncated bytes. If the status is Ok it returns the bytes `encode_actions` would return. `encode_actions` keeps its signature and its silent truncation, because existing callers depend on it. The status can be any layout status: SizeTooLarge (a record payload or body over 65535 bytes), BranchDeltaOutOfRange, BranchUnresolved or BodyRecordsPastEnd.
+
+## Radicle/include/fo4/avm1/avm1.hpp:Avm1Branch
+
+Decision: `Avm1Branch::target` is the only branch input the encoder reads, and `offset` is not honoured on encode. The interpreter also decides control flow from `target`, in `Radicle/src/avm1/interpreter.cpp:branch_if` and `Radicle/src/avm1/interpreter.cpp:execute_action`. Honouring an edited `offset` would make the written bytes run to a different record than the interpreter runs. The struct has no flag saying which field a caller edited, so one field must win. `target` names a record and stays valid across insert and erase, while `offset` is a relative delta that goes stale when records move. A stale or edited `offset` is overwritten with the delta from the layout. Pinned by `Radicle/tests/test_avm1_encode.cpp:BranchOffsetFieldIsIgnoredAndTheTargetDecidesTheDelta`.
+
+## Radicle/src/avm1/edit.cpp:insert_action_into_body
+
+Inserts `action` at `index` into body `slot` of the container at `container_index`. The body starts at `container_index + 1` plus the counts of the earlier slots. The index is accepted from the body start through the body end inclusive, so an empty body accepts its start index and a body accepts one past its last record. `insert_action` cannot grow an empty body, because its rule is strictly inside the body. The container's count for `slot` goes up by one. Owners before `container_index` whose body covers it grow, because the new record is inside the container and so inside them even at their end. Containers between `container_index` and `index` grow only when their body covers `index`, as `insert_action` does. An index outside the body, or past the list end, returns false and changes nothing.
+
+## Radicle/src/avm1/edit.cpp:resize_enclosing
+
+Takes `from`, the first owner index to consider, and walks the owners from there up to `index`. `insert_action` and `erase_action` pass 0. `insert_action_into_body` passes 0 for the container's own owners and `container_index + 1` for the owners nested between the container and the new record, so the container is counted once and its own slot count is changed directly.
+
+## Radicle/tests/test_avm1_encode.cpp:BranchToAnErasedEndRecordStillTargetsTheStreamEnd
+
+In `Radicle/tests/test_avm1_encode.cpp:BranchToAnErasedEndRecordStillTargetsTheStreamEnd`, input `99 02 00 02 00 04 00`. The Jump at 0 targets 7, the stream end past the End record (at 6), and the recorded end is 7. End is erased, which leaves Jump (0 to 5) and NextFrame (5 to 6). The stream is 6 bytes, so the delta is 6 - 5 = 1. Expected `99 02 00 01 00 04`, and validate is Ok. Detects a branch to the stream end reported as BranchUnresolved after the End record is erased, which the derived end of 6 caused.
+
+## Radicle/tests/test_avm1_encode.cpp:BranchOffsetFieldIsIgnoredAndTheTargetDecidesTheDelta
+
+Input `kJumpOverPlayAndStop` (`99 02 00 02 00 04 06 07 00`) with the Jump's `offset` set to 100. The target is unchanged, so the delta stays 2 and the output is the input bytes, with validate Ok. Detects an encoder that writes the edited offset (`99 02 00 64 00 ...`).
+
+## Radicle/tests/test_avm1_encode.cpp:EncodeCheckedReturnsTheBytesOfAValidStream
+
+`kJumpOverPlayAndStop` encodes through `encode_actions_checked` to the same 9 bytes with status Ok. The status starts at TooDeep so an unset status is caught. Detects a checked entry that returns empty bytes or leaves the status unset on success.
+
+## Radicle/tests/test_avm1_encode.cpp:EncodeCheckedReturnsNoBytesForABranchDeltaOutOfRange
+
+Input `99 02 00 02 00 04 00` with a 40000-byte Raw record inserted at index 1. The records are Jump 5 bytes, Raw 40003, NextFrame 1 and End 1, which is 40010 bytes. The Jump delta is 40010 - 5 = 40005, which does not fit int16. The checked entry returns no bytes and BranchDeltaOutOfRange. `encode_actions` still returns 40010 bytes with the delta truncated, and the test pins that size. Detects a checked entry that returns the truncated bytes, or an `encode_actions` that changes.
+
+## Radicle/tests/test_avm1_encode.cpp:EncodeCheckedReturnsNoBytesForARecordOrBodyOver65535
+
+A record with a 70000-byte payload gives SizeTooLarge with no bytes. A DefineFunction whose body holds two 40000-byte Raw records has a body of 2 x 40003 = 80006 bytes, which is also SizeTooLarge with no bytes. Detects a checked entry that returns a 16-bit length or body size truncated from the real one.
+
+## Radicle/tests/test_avm1_encode.cpp:InsertedRecordIntoAnEmptyFunctionBodyGrowsItsBodySize
+
+Input `9B 05 00 00 00 00 00 00 00` (nine bytes): a DefineFunction with an empty body, then End. `insert_action_into_body(actions, 0, 0, 1, Stop)` accepts index 1, the body start with count 0. Expected `9B 05 00 00 00 00 01 00 07 00`: body size 1, the Stop record inside the body, then End. Detects an insert that leaves the body empty (`9B 05 00 00 00 00 00 00 07 00`), or places the record after the Function as `insert_action` at index 1 does.
+
+## Radicle/tests/test_avm1_encode.cpp:InsertedRecordIntoAFinallyOnlyTryFillsTheFinallyBody
+
+Input `8F 08 00 | 02 | 00 00 | 00 00 | 00 00 | 00 | 00` (twelve bytes). Flags 2 give a try body and a finally body, both empty. Slot 1 is the finally body, starting at index 1, so the insert at index 1 goes into it. Expected `8F 08 00 02 00 00 00 00 01 00 00 07 00`: the finally size 1 at payload offset 5, the Stop record, then End. Detects a finally-only Try that puts the record in the try body, which leaves the try size at 1 and the finally size at 0.
+
+## Radicle/tests/test_avm1_encode.cpp:AppendAtTheListEndStaysOutsideABodyThatEndsThere
+
+Hand-built: a DefineFunction with body_records 2, followed by NextFrame and Play, so its body is indices [1, 3) and the list size is 3. `insert_action` at index 3 must not grow the body. Expected `9B 05 00 00 00 00 02 00 04 06 07` (eleven bytes), with the Function body size still 2. Detects an insert rule that uses `index <= first + count`, which grows the body to 3 and writes `03 00`.
+
+## Radicle/tests/test_avm1_encode.cpp:ErasedRecordInsideNestedBodiesShrinksEveryEnclosingBody
+
+`kFunctionOfTry` with the NextFrame at index 2 erased. NextFrame is a non-container inside the Try try body, which is inside the DefineFunction body. The Function count goes from 3 to 2, so its body size goes from 14 (`0E 00`) to 13 (`0D 00`). The try body goes from 1 to 0 and the catch body stays at 1. Expected `9B 05 00 00 00 00 0D 00 | 8F 09 00 01 00 00 01 00 00 00 65 00 | 06 | 00`, 22 bytes. Detects an erase that shrinks only the innermost body and leaves the DefineFunction size at 14.

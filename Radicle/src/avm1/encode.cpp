@@ -249,7 +249,9 @@ Encoding layout(const Avm1Stream& stream) {
   write_range(enc, stream.actions, 0, stream.actions.size());
   enc.out.insert(enc.out.end(), stream.trailing.begin(), stream.trailing.end());
   const std::size_t stream_end = enc.out.size();
-  const std::size_t original_end = enc.source_end + stream.trailing.size();
+  const std::size_t original_end = stream.original_end != kNewRecordOffset
+                                       ? stream.original_end
+                                       : enc.source_end + stream.trailing.size();
   for (const auto& [at, target] : enc.branches) {
     const auto found = enc.starts.lower_bound(target);
     const std::size_t dest = found == enc.starts.end() ? stream_end : found->second;
@@ -270,6 +272,15 @@ Encoding layout(const Avm1Stream& stream) {
 
 std::vector<std::byte> encode_actions(const Avm1Stream& stream) {
   return layout(stream).out;
+}
+
+std::vector<std::byte> encode_actions_checked(const Avm1Stream& stream, Avm1Status& status) {
+  Encoding enc = layout(stream);
+  status = enc.status;
+  if (status != Avm1Status::Ok) {
+    return {};
+  }
+  return std::move(enc.out);
 }
 
 Avm1Status validate_actions(const Avm1Stream& stream) {
