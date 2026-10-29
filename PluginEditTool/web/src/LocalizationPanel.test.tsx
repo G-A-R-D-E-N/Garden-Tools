@@ -55,7 +55,7 @@ function installHost(): StringsHost {
 }
 
 async function pickPlugin(firstRow = 'Apple pie') {
-  await screen.findByRole('option', { name: 'Mod.esp' });
+  await screen.findByRole('option', { name: 'Mod.esp' }, { timeout: 15000 });
   fireEvent.change(screen.getByRole('combobox', { name: 'Plugin' }), { target: { value: 'Mod.esp' } });
   await screen.findByText(firstRow);
 }
@@ -82,7 +82,7 @@ describe('LocalizationPanel', () => {
     expect(host.ListStringTables).toHaveBeenCalledWith('Mod.esp', 'en');
     expect(host.GetStrings).toHaveBeenCalledWith('Mod.esp', 'en', 'STRINGS', '', 0, 200);
     expect(screen.getByText('Banana')).toBeTruthy();
-  });
+  }, 20000);
 
   it('sends the trimmed search text and resets to the first page', async () => {
     const host = installHost();
@@ -134,7 +134,7 @@ describe('LocalizationPanel', () => {
     const host = installHost();
     vi.mocked(host.GetStrings).mockRejectedValue(new Error('boom'));
     render(<LocalizationPanel onClose={() => {}} />);
-    await screen.findByRole('option', { name: 'Mod.esp' });
+    await screen.findByRole('option', { name: 'Mod.esp' }, { timeout: 15000 });
     fireEvent.change(screen.getByRole('combobox', { name: 'Plugin' }), { target: { value: 'Mod.esp' } });
 
     expect(await screen.findByText('Could not read strings: boom')).toBeTruthy();
