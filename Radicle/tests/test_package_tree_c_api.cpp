@@ -1,3 +1,4 @@
+#include "fo4/environment/package_procedure.hpp"
 #include "fo4/c_api_behavior.h"
 #include "fo4/plugin/reader.hpp"
 #include "package_tree_fixture.hpp"
