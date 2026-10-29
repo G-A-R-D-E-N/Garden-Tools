@@ -36,6 +36,8 @@ struct HkxRemoteFixup {
 
 struct HkxSection {
   std::string tag;
+  // Requires the section start: alignment rounds against the file offset, not the section data.
+  std::size_t file_offset{0};
   std::vector<std::byte> data;
   std::vector<HkxLocalFixup> local_fixups;
   std::vector<HkxRemoteFixup> global_fixups;

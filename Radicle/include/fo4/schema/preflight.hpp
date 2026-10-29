@@ -3,6 +3,7 @@
 #include "fo4/plugin/container.hpp"
 
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace fo4::schema {
@@ -26,6 +27,9 @@ struct PreflightIssue {
 // constraints are warnings so inspection remains lossless and non-destructive.
 std::vector<PreflightIssue> preflight_record(const Record& record, bool localized = false);
 std::vector<PreflightIssue> preflight_plugin(const Plugin& plugin);
+
+// Invariant: these four codes are the record-list coupling codes shared by the authoring gate and tests.
+bool is_record_list_invariant(std::string_view code);
 
 // Validates a newly authored record against the generated creation contract:
 // supported containment, required/cardinality rules, and relative ordering of
