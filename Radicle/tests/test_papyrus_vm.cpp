@@ -695,7 +695,7 @@ TEST(PapyrusVm, UnknownIdentifierAndArgumentCountAreRejected) {
   EXPECT_EQ(arity.status, Status::ArgumentCountMismatch);
 }
 
-TEST(PapyrusVm, StructOpcodesReportUnsupportedAndUnknownOpcodesAreRejected) {
+TEST(PapyrusVm, StructCreateRefusesAnUntypedDestinationAndUnknownOpcodesAreRejected) {
   TestHost host;
   const PexFunction structs = method("Structs", "None", {}, {}, {ins("struct_create", {id("::temp0")})});
   const PexFunction unknown = method("Unknown", "None", {}, {}, {[] {
@@ -715,7 +715,7 @@ TEST(PapyrusVm, StructOpcodesReportUnsupportedAndUnknownOpcodesAreRejected) {
   swapped.mnemonic = "isub";
   const PexFunction mismatch = method("Mismatch", "None", {}, {typed("::temp0", "Int")}, {swapped});
   host.addScript(script("Script", "", {}, {state("", {structs, unknown, shortArgs, mismatch})}));
-  EXPECT_EQ(runScript(host, "Script", "Structs").status, Status::UnsupportedOpcode);
+  EXPECT_EQ(runScript(host, "Script", "Structs").status, Status::UnknownIdentifier);
   EXPECT_EQ(runScript(host, "Script", "Unknown").status, Status::UnknownOpcode);
   EXPECT_EQ(runScript(host, "Script", "Short").status, Status::StackUnderflow);
   EXPECT_EQ(runScript(host, "Script", "Mismatch").status, Status::UnknownOpcode);

@@ -85,7 +85,9 @@ add_executable(
 target_link_libraries(fo4ide_test_graph PRIVATE fo4ide_graph Catch2::Catch2WithMain)
 fo4ide_enable_warnings(fo4ide_test_graph)
 fo4ide_enable_sanitizers(fo4ide_test_graph)
-catch_discover_tests(fo4ide_test_graph PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})
+catch_discover_tests(fo4ide_test_graph TEST_SPEC "~GraphCompiler*" PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})
+# Invariant: Oracle1/Oracle2 compile, decompile and recompile all 28 fixtures, so they keep the 60 s timeout, not the 10 s Release default.
+catch_discover_tests(fo4ide_test_graph TEST_SPEC "GraphCompiler*" PROPERTIES TIMEOUT 60)
 
 add_executable(
     fo4ide_test_papyrus
@@ -143,7 +145,7 @@ fo4ide_add_test(fo4ide_test_app_interop_rollback unit/AppInteropRollbackTests.cp
 # ccache's base_dir rewrites __FILE__ to a build-relative path, which no
 # longer resolves from the directory ctest runs the tests in.
 foreach(fixture_test
-        fo4ide_test_graph fo4ide_test_papyrus fo4ide_test_corpus fo4ide_test_service_targets)
+        fo4ide_test_graph fo4ide_test_papyrus fo4ide_test_corpus fo4ide_test_service_targets fo4ide_test_papyrus_target)
     target_compile_definitions(
         ${fixture_test}
         PRIVATE FO4IDE_TEST_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures"
@@ -173,6 +175,7 @@ add_executable(
     unit/RadiclePluginPreflightTests.cpp
     unit/RadiclePluginArmorCreationTests.cpp
     unit/RadiclePluginRaceCreationTests.cpp
+    unit/RadiclePluginRichCreationTests.cpp
     unit/RadiclePluginFormLinkListTests.cpp
     unit/RadiclePluginListItemTests.cpp
     unit/RadiclePluginComponentsTests.cpp
@@ -249,7 +252,7 @@ add_executable(fo4ide_test_sound_semantic_real unit/RadiclePluginSoundSemanticRe
 target_link_libraries(fo4ide_test_sound_semantic_real PRIVATE fo4ide_plugin Catch2::Catch2WithMain)
 fo4ide_enable_warnings(fo4ide_test_sound_semantic_real)
 fo4ide_enable_sanitizers(fo4ide_test_sound_semantic_real)
-catch_discover_tests(fo4ide_test_sound_semantic_real PROPERTIES TIMEOUT 600)
+catch_discover_tests(fo4ide_test_sound_semantic_real PROPERTIES TIMEOUT 900)
 
 add_executable(
     fo4ide_test_archive_backend

@@ -89,7 +89,7 @@ Cover data (RE-012, partly answered): the cover edge word has fields 2 to 6. Fie
 
 Edits preserve array sizes. Triangle vertex indices must fit the existing vertex array; the unknown traversal byte and complete raw flags word must remain identical. Vertex and height values must be finite. Door references must be non-null, use an existing master, and resolve to REFR when local. These are stored-data edits; no derived navigation rebuild is implied.
 
-`RADICLE_ABI_VERSION` is 54, pinned by `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsFiftyFour`; it was 45 when this section was written. Current validation and exact-head CI counts belong in the PR description. `tests/test_navmesh_real.cpp:expect_geometry` and `expect_info` check native/C value agreement, including opaque bytes and resolved keys. Untouched body records are byte-identical; TES4 checks allow the existing serializer's regenerated ONAM metadata and size markers.
+`RADICLE_ABI_VERSION` (`Radicle/include/fo4/c_api.h`) is pinned by `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsSeventyNine`; it was 45 when this section was written. Current validation and exact-head CI counts belong in the PR description. `tests/test_navmesh_real.cpp:expect_geometry` and `expect_info` check native/C value agreement, including opaque bytes and resolved keys. Untouched body records are byte-identical; TES4 checks allow the existing serializer's regenerated ONAM metadata and size markers.
 
 The earlier GardenEngine audit at `10ea81f1590b06dad962ff86721c0a55f00ef173`
 found vocabulary entries without a NAVM/NAVI geometry consumer. That audit

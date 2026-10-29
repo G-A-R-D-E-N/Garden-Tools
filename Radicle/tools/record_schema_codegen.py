@@ -4,7 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
-PLACEMENTS = {"top_level", "quest_children", "topic_children", "cell_children", "cell_reference_children"}
+PLACEMENTS = {"top_level", "quest_children", "topic_children", "cell_children", "cell_block", "cell_reference_children"}
 
 
 def valid_signature(value: str) -> bool:

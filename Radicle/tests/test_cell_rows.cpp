@@ -435,6 +435,16 @@ TEST(CellRows, LinkWritesRefuseNullExceptOnTheLightingTemplate) {
             fo4::RecordCreateStatus::not_authorable);
 }
 
+TEST(CellRows, WaterCurrentCountIsRemovedOnlyWithItsArray) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto key = "000C10:Patch.esp";
+  const auto record = fo4::FormKey::parse(key);
+  EXPECT_EQ(fo4::remove_record_subrecord(plugin, record, fo4::Signature::from_string("XWCN"), 0),
+            fo4::SubrecordRemoveStatus::not_authorable);
+  EXPECT_EQ(sub_bytes(plugin, key, "XWCN"), u32_bytes(2));
+  EXPECT_EQ(sub_bytes(plugin, key, "XWCU"), currents_bytes());
+}
+
 TEST(CellRows, RegionsAndPreVisReferenceListsArePackedAndAppendable) {
   const auto list = fo4::schema::formlink_list_descriptor(fo4::Signature::from_string("CELL"),
                                                           "CELL\\Regions");

@@ -239,7 +239,7 @@ class StructuredRenderer {
       }
 
       const auto& successors = current.successors;
-      if (stop != 0 && block == stop - 1) {
+      if (block == stop - 1) {
         if (successors.size() > 1) {
           bailed_ = true;
           return kNoIndex;

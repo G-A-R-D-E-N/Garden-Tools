@@ -22,6 +22,14 @@ Status readIndex(const Value& index, std::int32_t& out) {
 
 Status coerceElement(const Array& array, const Value& value, Value& out) {
     if (value.type == ValueType::Array && value.array != nullptr) return Status::TypeMismatch;
+    if (value.type == ValueType::Struct && value.structure != nullptr) {
+        if (sameName(array.elementTypeName, "Var") ||
+            sameName(array.elementTypeName, value.structure->typeName)) {
+            out = value;
+            return Status::Ok;
+        }
+        return Status::TypeMismatch;
+    }
     if (array.elementType == ValueType::None || isNoneLike(value)) {
         out = value;
         return Status::Ok;

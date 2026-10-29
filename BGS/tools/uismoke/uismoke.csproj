@@ -8,10 +8,12 @@
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <AssemblyName>uismoke</AssemblyName>
     <StartupObject>BehaviourStudio.UiSmoke.LifecycleSmoke</StartupObject>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="*.cs" />
     <Compile Include="../../app/*.cs" />
+    <Compile Include="../tests/TestArchives.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.1.2" />
@@ -19,6 +21,7 @@
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.2" />
     <PackageReference Include="Avalonia.Headless" Version="12.1.2" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.10.0" />
+    <PackageReference Include="Silk.NET.OpenGL" Version="2.23.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/BehaviourGraph.Core.csproj" />
@@ -29,5 +32,7 @@
     <None Include="../../tools/symrm/samples/TurretMountedSkeleton.hkx" Link="samples/TurretMountedSkeleton.hkx" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../tools/symrm/samples/TurretIdleWeapReady.hkx" Link="samples/TurretIdleWeapReady.hkx" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../tools/symrm/samples/Meshes/Actors/Turret/CharacterAssets/TurretMounted.nif" Link="samples/Meshes/Actors/Turret/CharacterAssets/TurretMounted.nif" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Genuine 19 frame clip with annotations and root motion, used by the trim, retime and loop smoke. -->
+    <None Include="../../tools/tests/fixtures/vanilla/Meshes/Actors/RadRoach/Animations/TurnLeft90.hkx" Link="fixtures/RadRoachTurnLeft90.hkx" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

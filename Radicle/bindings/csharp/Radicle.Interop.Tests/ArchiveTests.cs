@@ -78,6 +78,25 @@ public class ArchiveTests
     }
 
     [Fact]
+    public void WriterRefusesNullFileListAndPathWithArgumentExceptions()
+    {
+        Assert.Throws<ArgumentNullException>(() => Ba2Writer.General(null!));
+        var files = new (string Path, byte[] Data)[] { (null!, Encoding.ASCII.GetBytes("x")) };
+        Assert.Throws<ArgumentException>(() => Ba2Writer.General(files, 1, false));
+    }
+
+    [Fact]
+    public void WriterWritesHeaderOnlyArchiveForNoFiles()
+    {
+        using var temp = new TempDirectory();
+        var bytes = Ba2Writer.General(Array.Empty<(string Path, byte[] Data)>(), 1, false);
+        Assert.Equal(new byte[] { 0x42, 0x54, 0x44, 0x58, 1, 0, 0, 0, 0x47, 0x4E, 0x52, 0x4C, 0, 0, 0, 0, 0x18, 0, 0, 0, 0, 0, 0, 0 }, bytes);
+        using var archive = Ba2Archive.Open(temp.Write("Data/Empty.ba2", bytes));
+        Assert.Equal(1u, archive.Version);
+        Assert.Equal(0, archive.Count);
+    }
+
+    [Fact]
     public void OpenRootsLayersLooseRootsHighToLowOverArchives()
     {
         using var temp = new TempDirectory();
