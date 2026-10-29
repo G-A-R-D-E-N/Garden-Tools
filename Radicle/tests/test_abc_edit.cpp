@@ -5,6 +5,7 @@
 
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -22,6 +23,35 @@ fo4::abc::AbcFile fixture_file() {
   fo4::abc::AbcFile file;
   EXPECT_EQ(fo4::abc::AbcFile::parse(fo4::test::build_abc(), file), fo4::abc::AbcStatus::Ok);
   return file;
+}
+
+fo4::abc::AbcFile round_trip(const fo4::abc::AbcFile& file) {
+  std::vector<std::uint8_t> bytes;
+  EXPECT_EQ(file.serialize(bytes), fo4::abc::AbcStatus::Ok);
+  fo4::abc::AbcFile reparsed;
+  EXPECT_EQ(fo4::abc::AbcFile::parse(bytes, reparsed), fo4::abc::AbcStatus::Ok);
+  return reparsed;
+}
+
+fo4::abc::AbcFlowStatus verify_body(const fo4::abc::AbcFile& file, std::uint32_t body) {
+  fo4::abc::AbcMethodFlow flow;
+  fo4::abc::AbcFlowIssue issue;
+  return fo4::abc::verify_method_flow(file, body, flow, issue);
+}
+
+fo4::abc::AbcNamespace package_ns(std::uint32_t name) {
+  fo4::abc::AbcNamespace value;
+  value.kind = fo4::abc::AbcNamespaceKind::Package;
+  value.name = name;
+  return value;
+}
+
+fo4::abc::AbcMultiname qname(std::uint32_t ns, std::uint32_t name) {
+  fo4::abc::AbcMultiname value;
+  value.kind = fo4::abc::AbcMultinameKind::QName;
+  value.ns = ns;
+  value.name = name;
+  return value;
 }
 
 void set_body(fo4::abc::AbcFile& file, const std::vector<std::uint8_t>& code,
@@ -305,4 +335,149 @@ TEST(AbcEdit, ReplaceRestoresTheBodyWhenTheVerifierRefuses) {
   EXPECT_NE(message.find("verifier refused"), std::string::npos) << message;
   EXPECT_EQ(code_of(file), before);
   EXPECT_EQ(file.bodies[0].max_stack, 4u);
+}
+
+TEST(AbcEdit, InterningAStringReusesAnIdenticalEntryAndAppendsANewOne) {
+  // Invariant: an identical string keeps its existing index, so a fixture name never gains a duplicate slot.
+  auto file = fixture_file();
+  set_body(file, {0x47});
+  EXPECT_EQ(fo4::abc::intern_string(file, "call"), 3u);
+  EXPECT_EQ(fo4::abc::intern_string(file, "brand new"), 15u);
+  EXPECT_EQ(fo4::abc::intern_string(file, "brand new"), 15u);
+  ASSERT_EQ(file.pool.strings.size(), 16u);
+  const auto reparsed = round_trip(file);
+  ASSERT_EQ(reparsed.pool.strings.size(), 16u);
+  EXPECT_EQ(reparsed.pool.strings[15], "brand new");
+  EXPECT_EQ(verify_body(reparsed, 0), fo4::abc::AbcFlowStatus::Ok);
+}
+
+TEST(AbcEdit, InterningNumbersNamespacesAndMultinamesReusesIdenticalEntries) {
+  // Invariant: -0.0 is not merged into the 0.0 default, and a repeated namespace or multiname keeps its index.
+  auto file = fixture_file();
+  set_body(file, {0x47});
+  std::uint32_t index = 99;
+  std::string message;
+  EXPECT_EQ(fo4::abc::intern_int(file, 7), 1u);
+  EXPECT_EQ(fo4::abc::intern_int(file, -3), 2u);
+  EXPECT_EQ(fo4::abc::intern_uint(file, 9), 1u);
+  EXPECT_EQ(fo4::abc::intern_double(file, 1.5), 1u);
+  EXPECT_EQ(fo4::abc::intern_double(file, -0.0), 2u);
+  EXPECT_EQ(fo4::abc::intern_namespace(file, package_ns(6), index, message), AbcEditStatus::Ok);
+  EXPECT_EQ(index, 1u);
+  EXPECT_EQ(fo4::abc::intern_namespace(file, package_ns(9), index, message), AbcEditStatus::Ok);
+  EXPECT_EQ(index, 3u);
+  EXPECT_EQ(fo4::abc::intern_multiname(file, qname(1, 2), index, message), AbcEditStatus::Ok);
+  EXPECT_EQ(index, 1u);
+  EXPECT_EQ(fo4::abc::intern_multiname(file, qname(2, 2), index, message), AbcEditStatus::Ok);
+  EXPECT_EQ(index, 15u);
+  EXPECT_EQ(file.pool.ints.size(), 3u);
+  EXPECT_EQ(file.pool.doubles.size(), 3u);
+
+  const auto reparsed = round_trip(file);
+  ASSERT_EQ(reparsed.pool.ints.size(), 3u);
+  EXPECT_EQ(reparsed.pool.ints[2], -3);
+  ASSERT_EQ(reparsed.pool.doubles.size(), 3u);
+  EXPECT_TRUE(std::signbit(reparsed.pool.doubles[2]));
+  ASSERT_EQ(reparsed.pool.namespaces.size(), 4u);
+  EXPECT_EQ(reparsed.pool.namespaces[3].name, 9u);
+  ASSERT_EQ(reparsed.pool.multinames.size(), 16u);
+  EXPECT_EQ(reparsed.pool.multinames[15].ns, 2u);
+  EXPECT_EQ(reparsed.pool.multinames[15].name, 2u);
+  EXPECT_EQ(verify_body(reparsed, 0), fo4::abc::AbcFlowStatus::Ok);
+}
+
+TEST(AbcEdit, RefusesANamespaceOrMultinameNamingAnIndexOutsideItsPool) {
+  // Invariant: an entry naming a string or namespace past its table is refused before any append.
+  auto file = fixture_file();
+  set_body(file, {0x47});
+  const auto before_multinames = file.pool.multinames.size();
+  const auto before_namespaces = file.pool.namespaces.size();
+  const auto before_strings = file.pool.strings.size();
+  std::uint32_t index = 7;
+  std::string message;
+  EXPECT_EQ(fo4::abc::intern_multiname(file, qname(1, 99), index, message),
+            AbcEditStatus::PoolEntryOutOfRange);
+  EXPECT_EQ(index, 0u);
+  EXPECT_EQ(fo4::abc::intern_multiname(file, qname(3, 2), index, message),
+            AbcEditStatus::PoolEntryOutOfRange);
+  EXPECT_EQ(fo4::abc::intern_namespace(file, package_ns(15), index, message),
+            AbcEditStatus::PoolEntryOutOfRange);
+  EXPECT_NE(message.find("outside its pool"), std::string::npos) << message;
+  EXPECT_EQ(file.pool.multinames.size(), before_multinames);
+  EXPECT_EQ(file.pool.namespaces.size(), before_namespaces);
+  EXPECT_EQ(file.pool.strings.size(), before_strings);
+}
+
+TEST(AbcEdit, ReplacingTheBodyCodeRaisesMaxScopeDepthToTheMeasuredDepth) {
+  // Invariant: a replaced body gets max_scope_depth from measurement, not a refusal against the stale limit.
+  auto file = fixture_file();
+  set_body(file, {0x47});
+  file.bodies[0].max_scope_depth = 0;
+  std::string message;
+  const std::vector<std::uint8_t> code = {0x20, 0x30, 0x20, 0x30, 0x47};
+  ASSERT_EQ(fo4::abc::replace_body_code(file, 0, code, message), AbcEditStatus::Ok) << message;
+  EXPECT_EQ(code_of(file), code);
+  EXPECT_EQ(file.bodies[0].max_scope_depth, 2u);
+  EXPECT_EQ(file.bodies[0].max_stack, 4u);
+  EXPECT_EQ(file.bodies[0].local_count, 1u);
+  const auto reparsed = round_trip(file);
+  ASSERT_EQ(reparsed.bodies.size(), 3u);
+  EXPECT_EQ(reparsed.bodies[0].max_scope_depth, 2u);
+  EXPECT_EQ(verify_body(reparsed, 0), fo4::abc::AbcFlowStatus::Ok);
+}
+
+TEST(AbcEdit, ReplacingTheBodyCodeRefusesUnverifiedCodeAndKeepsTheBody) {
+  // Invariant: replacement code that fails verification restores the body byte for byte.
+  auto file = fixture_file();
+  set_body(file, {0x47});
+  const auto before = code_of(file);
+  const auto max_scope_depth = file.bodies[0].max_scope_depth;
+  std::string message;
+  const std::vector<std::uint8_t> code = {0x48};
+  EXPECT_EQ(fo4::abc::replace_body_code(file, 0, code, message), AbcEditStatus::VerifierRefused);
+  EXPECT_NE(message.find("verifier refused"), std::string::npos) << message;
+  EXPECT_EQ(code_of(file), before);
+  EXPECT_EQ(file.bodies[0].max_stack, 4u);
+  EXPECT_EQ(file.bodies[0].max_scope_depth, max_scope_depth);
+}
+
+TEST(AbcEdit, AddingAMethodAppendsItsInfoAndBodyAndReturnsTheNewIndex) {
+  // Invariant: the appended body names the appended method and verifies at that index after a round trip.
+  auto file = fixture_file();
+  fo4::abc::AbcMethodInfo method;
+  method.return_type = fo4::test::kMultinameVoid;
+  const std::vector<std::uint8_t> code = {0x47};
+  std::uint32_t index = 99;
+  std::string message;
+  ASSERT_EQ(fo4::abc::add_method(file, method, code, index, message), AbcEditStatus::Ok)
+      << message;
+  EXPECT_EQ(index, 3u);
+  ASSERT_EQ(file.methods.size(), 4u);
+  ASSERT_EQ(file.bodies.size(), 4u);
+  EXPECT_EQ(file.bodies[3].method, 3u);
+  EXPECT_EQ(file.bodies[3].local_count, 1u);
+  EXPECT_EQ(file.bodies[3].max_stack, 0u);
+  EXPECT_EQ(file.bodies[3].max_scope_depth, 0u);
+  EXPECT_EQ(file.bodies[3].code, code);
+  const auto reparsed = round_trip(file);
+  ASSERT_EQ(reparsed.methods.size(), 4u);
+  ASSERT_NE(reparsed.body_for(3), nullptr);
+  EXPECT_EQ(reparsed.body_for(3)->code, code);
+  EXPECT_EQ(verify_body(reparsed, 3), fo4::abc::AbcFlowStatus::Ok);
+}
+
+TEST(AbcEdit, AddingAMethodRefusesUnverifiedCodeAndLeavesTheFileUnchanged) {
+  // Invariant: a method whose body fails verification is removed again, keeping the fixture table counts.
+  auto file = fixture_file();
+  fo4::abc::AbcMethodInfo method;
+  method.return_type = fo4::test::kMultinameVoid;
+  const std::vector<std::uint8_t> code = {0x48};
+  std::uint32_t index = 99;
+  std::string message;
+  EXPECT_EQ(fo4::abc::add_method(file, method, code, index, message),
+            AbcEditStatus::VerifierRefused);
+  EXPECT_NE(message.find("verifier refused"), std::string::npos) << message;
+  EXPECT_EQ(index, 0u);
+  EXPECT_EQ(file.methods.size(), 3u);
+  EXPECT_EQ(file.bodies.size(), 3u);
 }

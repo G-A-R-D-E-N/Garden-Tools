@@ -1012,6 +1012,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_avm1_objects.cpp
     tests/test_avm1_functions.cpp
     tests/test_avm1_control.cpp
+    tests/test_avm1_timeline.cpp
     tests/test_avm1_real.cpp
     tests/test_swf_svg.cpp
     tests/test_swf_svg_text_matrix.cpp

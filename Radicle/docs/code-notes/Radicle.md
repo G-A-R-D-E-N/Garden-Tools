@@ -9157,7 +9157,7 @@ Bytecode is hand-derived. `u30(65535)` is `FF FF 03` and `u30(65536)` is `80 80 
 
 - `UnsupportedOpcodeIsRefusedByName` used GetProperty 0x22, which is a timeline op now. It uses CloneSprite 0x24 (`Radicle/src/avm1/opcodes.cpp:action_mnemonic` name table; no `case 0x24` in `Radicle/src/avm1/interpreter.cpp:execute_action`). No other `test_avm1*.cpp` test refuses 0x22, 0x23, 0x04, 0x05, 0x06, 0x07, 0x81 or 0x8C.
 
-## Radicle/tests/test_avm1_control.cpp:Avm1Timeline
+## Radicle/tests/test_avm1_timeline.cpp:Avm1Timeline
 
 Bytes are hand-derived from `rec` in this file: one code byte, a u16 length for codes 0x80 and up, then the payload. Push values are `00` string, `06` double, `07` int32.
 
@@ -9260,31 +9260,31 @@ A value that is a number, or a string that `text_ops::parse_number` reads in ful
 
 The 0x9F case reads the payload that `Radicle/src/avm1/decode.cpp:Decoder::payload` built. The decoder reads the flags byte and then a u16 scene bias only when flags bit value 2 is set, which matches Ruffle's `swf/src/avm1/read.rs:read_goto_frame_2`, so decoding is unchanged. The play flag is bit value 1 (`flags & 1`), the bit Ruffle reads as `set_playing`. Without a host the case is not reached and the opcode falls to `control_ops::execute`, which still refuses it by name.
 
-## Radicle/tests/test_avm1_control.cpp:run_goto_frame_2
+## Radicle/tests/test_avm1_timeline.cpp:run_goto_frame_2
 
-`Radicle/tests/test_avm1_control.cpp:run_goto_frame_2` is the helper for the GotoFrame2 tests. It pushes the sentinel 7 and then the target, runs the opcode with the given flags record, and checks that the run is ok and that the trace is `7`. A GotoFrame2 that leaves its operand on the stack shows the target's text in the trace instead of 7, so every case also checks the pop through `result.trace`.
+`Radicle/tests/test_avm1_timeline.cpp:run_goto_frame_2` is the helper for the GotoFrame2 tests. It pushes the sentinel 7 and then the target, runs the opcode with the given flags record, and checks that the run is ok and that the trace is `7`. A GotoFrame2 that leaves its operand on the stack shows the target's text in the trace instead of 7, so every case also checks the pop through `result.trace`.
 
-## Radicle/tests/test_avm1_control.cpp:GotoFrame2NumericWithPlayPlaysBeforeTheGoto
+## Radicle/tests/test_avm1_timeline.cpp:GotoFrame2NumericWithPlayPlaysBeforeTheGoto
 
-`Radicle/tests/test_avm1_control.cpp:GotoFrame2NumericWithPlayPlaysBeforeTheGoto` runs numeric 5 with flags `01`, which gives `play`, then `goto 5`. Detects a GotoFrame2 that calls stop for the play bit, or that calls goto before play, which the call order would show.
+`Radicle/tests/test_avm1_timeline.cpp:GotoFrame2NumericWithPlayPlaysBeforeTheGoto` runs numeric 5 with flags `01`, which gives `play`, then `goto 5`. Detects a GotoFrame2 that calls stop for the play bit, or that calls goto before play, which the call order would show.
 
-## Radicle/tests/test_avm1_control.cpp:GotoFrame2NumericWithoutPlayStopsAndAddsSceneBias
+## Radicle/tests/test_avm1_timeline.cpp:GotoFrame2NumericWithoutPlayStopsAndAddsSceneBias
 
-`Radicle/tests/test_avm1_control.cpp:GotoFrame2NumericWithoutPlayStopsAndAddsSceneBias` runs numeric 5 with flags `02 02 00` (the bias bit set and a u16 bias of 2), which gives `stop`, then `goto 7`. Detects a GotoFrame2 that ignores the scene bias field, which would go to 5, and one that plays when the play bit is clear.
+`Radicle/tests/test_avm1_timeline.cpp:GotoFrame2NumericWithoutPlayStopsAndAddsSceneBias` runs numeric 5 with flags `02 02 00` (the bias bit set and a u16 bias of 2), which gives `stop`, then `goto 7`. Detects a GotoFrame2 that ignores the scene bias field, which would go to 5, and one that plays when the play bit is clear.
 
-## Radicle/tests/test_avm1_control.cpp:GotoFrame2LabelJumpsToItsFrame
+## Radicle/tests/test_avm1_timeline.cpp:GotoFrame2LabelJumpsToItsFrame
 
-`Radicle/tests/test_avm1_control.cpp:GotoFrame2LabelJumpsToItsFrame` runs text `intro`, with the host label map holding `intro` at frame 3, and flags `01`, which gives `label intro`, `play`, `goto 3`. Detects a label operand that is parsed as a number (giving frame 0 and no jump), or a label that jumps without a `frame_for_label` lookup.
+`Radicle/tests/test_avm1_timeline.cpp:GotoFrame2LabelJumpsToItsFrame` runs text `intro`, with the host label map holding `intro` at frame 3, and flags `01`, which gives `label intro`, `play`, `goto 3`. Detects a label operand that is parsed as a number (giving frame 0 and no jump), or a label that jumps without a `frame_for_label` lookup.
 
-## Radicle/tests/test_avm1_control.cpp:GotoFrame2UnknownLabelIsANoOp
+## Radicle/tests/test_avm1_timeline.cpp:GotoFrame2UnknownLabelIsANoOp
 
-`Radicle/tests/test_avm1_control.cpp:GotoFrame2UnknownLabelIsANoOp` runs text `missing`, which gives only `label missing`. Detects an unknown label that calls goto 0 or plays and stops the timeline, which would change the playback state of a movie whose label is absent.
+`Radicle/tests/test_avm1_timeline.cpp:GotoFrame2UnknownLabelIsANoOp` runs text `missing`, which gives only `label missing`. Detects an unknown label that calls goto 0 or plays and stops the timeline, which would change the playback state of a movie whose label is absent.
 
-## Radicle/tests/test_avm1_control.cpp:GotoFrame2ResolvesOnlyTheLabelAfterATargetPath
+## Radicle/tests/test_avm1_timeline.cpp:GotoFrame2ResolvesOnlyTheLabelAfterATargetPath
 
-`Radicle/tests/test_avm1_control.cpp:GotoFrame2ResolvesOnlyTheLabelAfterATargetPath` runs text `clip:intro` with the label map holding `intro` at 3, which gives `label intro`, `play`, `goto 3`, with no lookup of `clip:intro`. Detects a path-prefixed label that is searched whole, which misses the label and leaves the timeline where it was.
+`Radicle/tests/test_avm1_timeline.cpp:GotoFrame2ResolvesOnlyTheLabelAfterATargetPath` runs text `clip:intro` with the label map holding `intro` at 3, which gives `label intro`, `play`, `goto 3`, with no lookup of `clip:intro`. Detects a path-prefixed label that is searched whole, which misses the label and leaves the timeline where it was.
 
-## Radicle/tests/test_avm1_control.cpp:TimelineOpcodesAreRefusedByNameWithoutAHost
+## Radicle/tests/test_avm1_timeline.cpp:TimelineOpcodesAreRefusedByNameWithoutAHost
 
 The table gains a GotoFrame2 row, `rec(0x9F, {0x01})` expecting `GotoFrame2 (0x9F)`. Detects a GotoFrame2 that runs with no host, or that refuses under the wrong name, since `Radicle/src/avm1/interpreter.cpp` formats the refusal as the name plus the opcode.
 
@@ -9325,3 +9325,74 @@ The rate is refused above 3 because `Radicle/src/swf/swf_write.cpp:sound_format_
 `Radicle/src/swf/swf_sound_edit.cpp:retarget_start_sound` takes a top-level tag index into `file.tags`, the same index `apply_tag_plan` uses. It refuses an index past the tag list as `unknown_tag` and any other code as `not_a_start_sound`, so a StartSound2 (code 89) is refused, since it names a class instead of an id. `Radicle/src/swf/swf_sound.cpp:decode_start_sound` validates the SOUNDINFO before the write, so a truncated StartSound is `malformed_tag`.
 
 `Radicle/src/swf/swf_sound_edit.cpp:retarget_start_sound` builds the new payload as the new u16 id followed by the old payload from byte 2 onward, so the SOUNDINFO bytes are copied and not re-encoded. A new id with no sound character, or one that names a non-sound character, is `unknown_sound`, the same status the replace path uses for a missing id.
+## Radicle/src/abc/edit.cpp:intern_int, Radicle/src/abc/edit.cpp:intern_uint, Radicle/src/abc/edit.cpp:intern_double, Radicle/src/abc/edit.cpp:intern_string, Radicle/src/abc/edit.cpp:intern_entry
+
+`Radicle/src/abc/edit.cpp:intern_entry` is the one linear scan behind the four value interners. Index 0 of every pool vector is the implicit default that the writer never emits (`Radicle/src/abc/abc_write.cpp:put_constant_pool` starts each table at 1), so the scan starts at 0 and a request equal to the default returns 0, which is the AVM2 meaning of that index. An empty vector receives its default first, so the appended entry lands at the index the writer will count. Appending never moves an existing index, so every other pool reference in the file stays valid after an intern.
+
+## Radicle/src/abc/edit.cpp:same_double
+
+`Radicle/src/abc/edit.cpp:same_double` compares the 64-bit patterns instead of using `==`. Under `==`, -0.0 would merge into the 0.0 default at index 0 and a NaN would never match itself, so two entries the writer encodes differently would be aliased. `Radicle/tests/test_abc_edit.cpp:InterningNumbersNamespacesAndMultinamesReusesIdenticalEntries` pins -0.0 to its own index.
+
+## Radicle/src/abc/edit.cpp:multiname_fits, Radicle/src/abc/edit.cpp:intern_namespace, Radicle/src/abc/edit.cpp:intern_multiname
+
+`Radicle/src/abc/edit.cpp:multiname_fits` and `Radicle/src/abc/edit.cpp:intern_namespace` check the index rules that `Radicle/src/abc/constant_pool.cpp:parse_multiname_pool` enforces at parse time: namespace and ns-set indices must lie below their tables, names below the string table with index 0 allowed, and a TypeName's name and params below the multiname table. `Radicle/src/abc/abc_write.cpp:AbcFile::serialize` also rechecks pool entries (`pool_encodable`), so these checks give an early, precise refusal. Known gap: the TypeName expansion cap of 64 is not mirrored here, so such an entry passes interning and is refused later by `AbcFile::serialize` with TypeNameTooLarge (`add_method` reports EncodeFailed and rolls back); the oversized entry stays in the in-memory pool until then. A refusal returns `AbcEditStatus::PoolEntryOutOfRange` before anything is appended.
+
+## Radicle/src/abc/edit.cpp:replace_body_code
+
+`Radicle/src/abc/edit.cpp:replace_body_code` swaps `AbcMethodBody::code` for the given bytes and hands the rest to `Radicle/src/abc/edit.cpp:verify_and_commit`, so decode, flow and limit checks are the same ones every other edit runs. `init_scope_depth` is kept: it is the scope depth the body starts with (`Radicle/src/abc/abc_stack.cpp:verify_scope` starts from it), a property of the method's environment that no instruction sequence can measure. `max_stack`, `local_count` and `max_scope_depth` are measured and never lowered, following the rule in the `refresh_body_limits` section above.
+
+## Radicle/src/abc/edit.cpp:add_method
+
+`Radicle/src/abc/edit.cpp:add_method` appends the method info and a body that names it, so the new body's method index is the old `file.methods.size()`. The starting `local_count` is `1 + param_count`, plus one when `needs_arguments` or `needs_rest` is set, which is the minimum `Radicle/src/abc/abc_verify.cpp:verify_method_context` accepts. `init_scope_depth`, `max_scope_depth` and `max_stack` start at 0 and `verify_and_commit` measures the rest. After verification it runs the writer (`Radicle/src/abc/abc_write.cpp:AbcFile::serialize`), which is the only check that catches a parameter-type list whose length differs from `param_count`. Any refusal pops the method and the body again, so the file is unchanged. The writer pass serializes the whole file once per call; that is acceptable for an edit that adds a method and is the cost to revisit if it is ever called in a loop.
+
+## Radicle/src/abc/edit.cpp:verify_and_commit
+
+`Radicle/src/abc/edit.cpp:verify_and_commit` now handles `max_scope_depth` the way it handles `max_stack`: the value is raised to `kVerifierStackCeiling` while the flow runs, then set to the larger of the declared value and `flow.observed_max_scope_depth`, which `Radicle/src/abc/abc_stack.cpp:verify_scope` measures as an absolute depth. This changes insert, delete and replace as well as refresh: a rewrite that pushes past the declared scope limit used to be refused with `AbcFlowStatus::ScopeLimitExceeded` and is now accepted with the limit raised. No edit test pinned the old refusal. The constant `kVerifierStackCeiling` now bounds both limits.
+
+## Radicle/src/avm1/encode.cpp:validate_actions
+
+When the decode that built the stream did not end Ok, `validate_actions` returns `stream.status`. `Radicle/src/avm1/decode.cpp:Decoder::run` clears `actions` on failure, so `layout` alone walked an empty list and reported Ok. The same rule as `encode_actions_checked` now applies here, and the layout status is still used for a stream whose decode was Ok. The earlier `encode_actions_checked` note above says this function was left unchanged; that is no longer true. The callers are the tests in `Radicle/tests/test_avm1_encode.cpp`. The C ABI `radicle_swf_avm1_disassemble` in `Radicle/src/c_api_swf.cpp` uses `decode_actions` and `disassemble_actions`, so it does not call this function.
+
+## Radicle/tests/test_avm1_encode.cpp:ValidateReturnsTheDecodeStatusForAFailedDecode
+
+Input `81 01 00 00` is a GotoFrame record declaring 1 byte of payload, but its frame field needs 2. `Decoder::read16` fails with Truncated at offset 3, and `Decoder::run` clears the list. Expected Truncated. Detects `validate_actions` reading the cleared list and reporting Ok for a stream whose body was cut short.
+
+## Radicle/tests/test_avm1_encode.cpp:ValidateReturnsOkForAValidDecodedStream
+
+`kJumpOverPlayAndStop` decodes Ok and has no edits, so `validate_actions` must return Ok. Detects a decode-status check that refuses a valid stream, for example one that compares against the wrong status.
+
+## Radicle/tests/test_avm1_encode.cpp:ValidateReportsBranchUnresolvedAfterTheTargetIsErased
+
+The branch in `kJumpOverPlayAndStop` targets offset 7, the Stop record at index 3. Erasing index 3 leaves the End record at new offset 7, but no surviving record has original offset 7, and 7 is not the original end 9. Expected BranchUnresolved. Detects a status check that returns the decode status for an edited stream and skips the layout branch check.
+
+## Radicle/tests/test_avm1_timeline.cpp:GotoFrame2NumericZeroIsANoOp
+
+`Radicle/tests/test_avm1_timeline.cpp:GotoFrame2NumericZeroIsANoOp` runs numeric 0 with flags `01`. `Radicle/src/avm1/timeline_ops.cpp:goto_frame_2` reads the frame as 0, adds the scene bias of 0, and returns before any play, stop or goto, so the host sees no calls. Detects a GotoFrame2 that plays or stops for a zero frame, or that sends goto 0 to the host.
+
+## Radicle/tests/test_avm1_timeline.cpp:GotoFrame2LabelWithoutPlayStopsAndAddsSceneBias
+
+`Radicle/tests/test_avm1_timeline.cpp:GotoFrame2LabelWithoutPlayStopsAndAddsSceneBias` runs text `intro`, with the label map holding `intro` at frame 3, and flags `02 02 00`, which set the scene bias bit and the play bit clear, with a u16 bias of 2. `Radicle/src/avm1/timeline_ops.cpp:goto_frame_2` looks the label up first, then adds the bias, giving frame 5. The clear play bit calls stop, so the calls are `label intro`, `stop`, `goto 5`. Detects a label jump that skips the scene bias, which would go to 3, and one that plays when the play bit is clear.
+
+## Radicle/include/fo4/avm1/interpreter.hpp:Avm1TimelineHost
+
+`Radicle/include/fo4/avm1/interpreter.hpp:Avm1TimelineHost` gains `set_target(const std::string& path)` as a pure virtual, like its other methods, since none of them has a default. The only implementer in the tree is `Radicle/tests/test_avm1_timeline.cpp:RecordingTimeline`. An empty path is the reset to the original clip, which matches Ruffle 0.6.0 `set_target` in `core/src/avm1/activation.rs`: an empty target resolves to the base clip. Ruffle clears the target when a non-empty path does not resolve, so GetVariable falls back to root and Play and Stop fail silently. The host contract has no such state yet, so a host decides that case itself.
+
+## Radicle/src/avm1/timeline_ops.cpp:set_target_2
+
+`Radicle/src/avm1/timeline_ops.cpp:set_target_2` pops one value and passes `text_ops::to_text` of it to the host. Ruffle 0.6.0 `action_set_target_2` in `core/src/avm1/activation.rs` does not coerce everything to a string. For undefined it resets the target on SWF 7 and later and targets the base clip on SWF 6 and earlier. `Radicle/src/avm1/text_ops.cpp:to_text` returns `undefined` for undefined on SWF 7 and later, so this sends the path `undefined` where Ruffle resets. This follows the brief's string coercion; a fix needs a no-target state in the host contract first.
+
+## Radicle/src/avm1/timeline_ops.cpp:execute
+
+`Radicle/src/avm1/timeline_ops.cpp:execute` routes `0x20` and `0x8B` to the host only when one is attached, like the other timeline opcodes. With no host both fall through to `Radicle/src/avm1/control_ops.cpp:execute`, which refuses them as Unsupported. `Radicle/src/avm1/interpreter.cpp:opcode_label` then names them from `Radicle/src/avm1/opcodes.cpp:action_mnemonic` as `SetTarget2 (0x20)` and `SetTarget (0x8B)`.
+
+## Radicle/tests/test_avm1_timeline.cpp:SetTargetPassesItsPathAndAnEmptyPathResets
+
+`Radicle/tests/test_avm1_timeline.cpp:SetTargetPassesItsPathAndAnEmptyPathResets` pushes 7, runs SetTarget with `mc` and then with an empty string, and traces the top. `Radicle/src/avm1/timeline_ops.cpp:execute` passes the `Avm1Text` operand of `0x8B` to the host and leaves the stack alone, so the calls are `target mc` and `target ` with a trailing space, and the trace is `7`. Detects a SetTarget that pops or pushes a stack value, one that sends an empty path for a non-empty operand, and one that drops the reset call.
+
+## Radicle/tests/test_avm1_timeline.cpp:SetTarget2PopsItsOperandAndCoercesItToAString
+
+`Radicle/tests/test_avm1_timeline.cpp:SetTarget2PopsItsOperandAndCoercesItToAString` pushes 7 and then one operand, which is the text `mc`, the integer 5, or the empty text. `Radicle/src/avm1/timeline_ops.cpp:set_target_2` pops that operand and sends its text form, so the calls are `target mc`, `target 5` and `target `, and the trace is `7` each time. Detects a SetTarget2 that pops the 7 instead of the operand, one that sends a number as a raw double, and one that leaves its operand on the stack.
+
+## Radicle/tests/test_avm1_timeline.cpp:TimelineOpcodesAreRefusedByNameWithoutAHost
+
+`Radicle/tests/test_avm1_timeline.cpp:TimelineOpcodesAreRefusedByNameWithoutAHost` gains rows for `SetTarget2 (0x20)` and `SetTarget (0x8B)`, each run with no host. `Radicle/src/avm1/timeline_ops.cpp:execute` falls through to the control refusal, so the status is Unsupported, the opcode is the row's first byte, and the message names the opcode. Detects a SetTarget or SetTarget2 that runs silently without a host, or one refused under a neighbouring opcode's name.
