@@ -9311,6 +9311,7 @@ Slot 2 of the Try is past its body_count of 2, since flags `01` give a try body 
 ## Radicle/tests/test_avm1_encode.cpp:InsertIntoABodyRefusesARecordThatIsNotAContainer
 
 `Radicle/src/avm1/edit.cpp:insert_action_into_body` is called on NextFrame at container 2. NextFrame has no body, so its body_count is 0 and every slot is out of range. Index 3 is the position the range check would accept without the guard: body_start is 3 and the count is 0. Expected false and no change. Detects a missing container check that writes into the hidden `body_records` of a plain record.
+
 ## Radicle/src/abc/edit.cpp:intern_int, Radicle/src/abc/edit.cpp:intern_uint, Radicle/src/abc/edit.cpp:intern_double, Radicle/src/abc/edit.cpp:intern_string, Radicle/src/abc/edit.cpp:intern_entry
 
 `Radicle/src/abc/edit.cpp:intern_entry` is the one linear scan behind the four value interners. Index 0 of every pool vector is the implicit default that the writer never emits (`Radicle/src/abc/abc_write.cpp:put_constant_pool` starts each table at 1), so the scan starts at 0 and a request equal to the default returns 0, which is the AVM2 meaning of that index. An empty vector receives its default first, so the appended entry lands at the index the writer will count. Appending never moves an existing index, so every other pool reference in the file stays valid after an intern.
