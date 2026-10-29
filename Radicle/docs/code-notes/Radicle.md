@@ -8953,6 +8953,7 @@ Detects a validator that checks only the top-level list end and not the parent b
 ## src/papyrus/type_checker.cpp:TypeChecker (gap, not pinned)
 
 - No check runs on comparison operators, so `int == string` compiles with no diagnostic and the int is cast to string. Not pinned by any test.
+
 ## Radicle/src/swf/swf_bitmap_edit.cpp:replace_bitmap_lossless
 
 - File-level in-place edit, like `apply_edit_text`. The character is looked up through `build_character_model` and `find_character`, so the refusals match the character table the rest of the SWF code reads: `unknown_character` for no row, `not_a_lossless_bitmap` for any row whose tag is not 20 or 36 (a shape, or a DefineBitsJpeg2 that also has kind `bitmap`), `malformed_file` when the model refuses. Dimensions are checked before the pixel count, so a zero or oversized size reports `bad_dimensions` even with an empty buffer.
