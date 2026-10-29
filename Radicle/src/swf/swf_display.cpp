@@ -25,6 +25,8 @@ struct Operation {
   std::optional<std::uint16_t> clip_depth;
   std::optional<std::uint16_t> ratio;
   std::optional<SwfColorTransform> color_transform;
+  std::optional<std::vector<SwfFilter>> filters;
+  std::optional<std::uint8_t> blend_mode;
   std::optional<bool> visible;
 };
 
@@ -40,6 +42,8 @@ struct LocalInstance {
   std::optional<std::uint16_t> clip_depth;
   std::optional<std::uint16_t> ratio;
   std::optional<SwfColorTransform> color_transform;
+  std::vector<SwfFilter> filters;
+  std::optional<std::uint8_t> blend_mode;
   bool visible{true};
 };
 
@@ -101,6 +105,10 @@ bool collect_operations(const std::vector<SwfTag>& tags, std::vector<std::vector
     operation.clip_depth = placement.clip_depth;
     operation.ratio = placement.ratio;
     operation.color_transform = placement.color_transform;
+    if (placement.has_filter_list) {
+      operation.filters = placement.filters;
+    }
+    operation.blend_mode = placement.blend_mode;
     operation.visible = placement.visible;
     current.push_back(std::move(operation));
   }
@@ -153,6 +161,12 @@ bool replay(const std::vector<std::vector<Operation>>& operations, std::uint16_t
         if (operation.color_transform) {
           target.color_transform = operation.color_transform;
         }
+        if (operation.filters) {
+          target.filters = *operation.filters;
+        }
+        if (operation.blend_mode) {
+          target.blend_mode = operation.blend_mode;
+        }
         if (operation.visible) {
           target.visible = *operation.visible;
         }
@@ -170,6 +184,8 @@ bool replay(const std::vector<std::vector<Operation>>& operations, std::uint16_t
         instance.clip_depth = existing->second.clip_depth;
         instance.ratio = existing->second.ratio;
         instance.color_transform = existing->second.color_transform;
+        instance.filters = existing->second.filters;
+        instance.blend_mode = existing->second.blend_mode;
         instance.transform_tag_index = existing->second.transform_tag_index;
         instance.visible = existing->second.visible;
       }
@@ -188,6 +204,12 @@ bool replay(const std::vector<std::vector<Operation>>& operations, std::uint16_t
       }
       if (operation.color_transform) {
         instance.color_transform = operation.color_transform;
+      }
+      if (operation.filters) {
+        instance.filters = *operation.filters;
+      }
+      if (operation.blend_mode) {
+        instance.blend_mode = operation.blend_mode;
       }
       if (operation.visible) {
         instance.visible = *operation.visible;
@@ -300,6 +322,8 @@ public:
       instance.clip_depth = local.clip_depth;
       instance.ratio = local.ratio;
       instance.world_color_transform = world_color;
+      instance.filters = local.filters;
+      instance.blend_mode = local.blend_mode;
       instance.world_visible = world_visible;
       instance.create_tag_index = local.create_tag_index;
       instance.transform_tag_index = local.transform_tag_index;

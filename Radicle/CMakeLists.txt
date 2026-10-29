@@ -357,6 +357,7 @@ add_library(fo4
   src/swf/swf_census.cpp
   src/swf/swf_svg.cpp
   src/swf/swf_frame_svg.cpp
+  src/swf/swf_svg_filters.cpp
   src/pex_analysis/opcodes.cpp
   src/pex_analysis/cfg.cpp
   src/pex_analysis/disasm.cpp

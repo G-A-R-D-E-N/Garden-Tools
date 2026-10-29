@@ -9036,6 +9036,66 @@ Bytecode is hand-derived. `u30(65535)` is `FF FF 03` and `u30(65536)` is `80 80 
 
 - Known gap, verified by reading: a native function with no body and no native id returns `NotImplemented` with `native function <name> is not bound`, unless `limits_.lenient_builtins` is set. `Radicle/src/avm2/interpreter_property.cpp:Interpreter::outer_scope_value` returns `NotImplemented` for `getouterscope` when the frame has no captured scope.
 
+## Radicle/src/swf/swf_svg_filters.cpp:filter_defs
+
+- SWF filter ids: 0 DropShadow, 1 Blur, 2 Glow, 3 Bevel, 4 GradientGlow, 5 Convolution, 6 ColorMatrix, 7 GradientBevel, as in `Radicle/src/swf/swf_placement.cpp:read_filter`. Ids 3, 4, 5 and 7 are listed in `skipped` and not drawn.
+- Each drawn filter gets its own `<filter id="<id>fl<index>">`, where index is its position in the input list. A skipped entry still takes its index, so the ids of later filters do not move.
+- Angle is radians. `read_fixed16` stores the raw value unchanged, and Ruffle's AVM2 conversion (`ruffle-0.6.0/core/src/avm2/filters.rs`, `Fixed16::from_f64(angle.to_radians())`) confirms the file stores radians. The offset is dx = distance * cos(angle) and dy = distance * sin(angle), with y pointing down. Not checked in a Flash Player.
+- Blur width becomes stdDeviation as blur / 2 per axis, x first.
+- DropShadow and Glow: flood-opacity = min(1, alpha * strength), where alpha = colour alpha / 255. The decoded colour is 0xAARRGGBB (`read_rgba` in `Radicle/src/swf/swf_placement.cpp`).
+- Inner: the source alpha is inverted with a `feComponentTransfer` table of `1 0`, then offset, blurred, flooded and clipped back to the source alpha. Outer knockout and inner knockout merge their shadow node only; see `Radicle/src/swf/swf_svg_filters.cpp:shadow_body` for the merge rules.
+- Glow has no angle or distance in the file, so it is the shadow with a zero offset.
+- Not rendered: `passes` (a single gaussian stands in for the multi-pass blur), bevel, gradient glow, gradient bevel and convolution.
+- ColorMatrix: the 20 values are row-major. The offset column (5th, 10th, 15th, 20th) is divided by 255 to match the unit range of the colour-transform offsets in `Radicle/src/swf/swf_frame_svg.cpp:color_matrix_text`. Not checked in a Flash Player.
+
+## Radicle/src/swf/swf_svg_filters.cpp:shadow_body
+
+- The merge follows the flags on the filter, read from the SWF flags byte in `Radicle/src/swf/swf_placement.cpp:read_filter_flags`. Outer knockout merges `k`, which is the shadow with the source alpha cut out (`feComposite operator="out"`), and drops SourceGraphic. Inner knockout merges `i` alone. Knockout ignores composite_source.
+- composite_source (bit 0x20) is the inverse of Flash's hideObject. When it is clear and there is no knockout, the merge is the shadow alone (`s` outer, `i` inner), with no SourceGraphic. Ruffle maps it the same way (`ruffle-0.6.0/core/src/avm2/filters.rs`, COMPOSITE_SOURCE set when `!hide_object`). Its glow shader (`ruffle-0.6.0/render/wgpu/shaders/filter/glow.wgsl`) also drops the source in that case.
+- Strength multiplies the flood alpha before the blur, in `opacity_text`, so a blurred shadow peaks below the flat alpha. Ruffle's glow shader applies strength after the blur (`saturate(blur * strength)`), so the edge profile differs here. Not matched, and not checked in a Flash Player.
+
+## Radicle/src/swf/swf_svg_filters.cpp:deviation_text
+
+- Blur is one gaussian with stdDeviation = blur / 2 per axis. The factor 2 is a calibration to the quality 3 spread, not measured against Flash.
+- `passes`, the quality field of the filter flags, is not honoured. Ruffle loops over `num_passes()` in `ruffle-0.6.0/render/wgpu/src/filters/blur.rs`, so quality 0 and other values draw differently here.
+
+## Radicle/src/swf/swf_svg_filters.cpp:blend_mode_style
+
+- SWF BlendMode numbering is 0 Normal, 1 Normal, 2 Layer, 3 Multiply, 4 Screen, 5 Lighten, 6 Darken, 7 Difference, 8 Add, 9 Subtract, 10 Invert, 11 Alpha, 12 Erase, 13 Overlay, 14 HardLight. It matches the name table in `Radicle/src/avm2/display.cpp:blend_mode_name`.
+- Normal returns empty because it needs no declaration. Layer returns empty because it is an isolation flag that this renderer does not draw.
+- Add maps to `plus-lighter`, which is CSS Compositing Level 2 and not supported by every browser. Subtract, Invert, Alpha and Erase have no CSS equivalent and return empty.
+
+## Radicle/src/swf/swf_svg_filters.cpp:filtered_group
+
+- Filters apply in list order, so the first filter is the innermost group and the blend group is outermost. An empty filter list with Normal blend returns the content unchanged, which keeps movies without filters byte-identical.
+- Sprite rows are not wrapped. A sprite's children are flattened into the frame list, so a filter or blend on a sprite row has no group to attach to. Shape, button and text rows are wrapped.
+- `frame_to_svg` has no output for `skipped`, so unsupported filters are dropped without a report. Callers that need the list use `filter_defs` directly.
+
+## Radicle/src/swf/swf_display.cpp:replay
+
+- Filters and blend mode carry the same move rule as the colour transform. A PlaceObject3 with the filter flag replaces the list, and an empty list clears it. A move without the flag keeps the previous list. Blend mode keeps its previous value when absent.
+
+## Radicle/src/swf/swf_frame_svg.cpp:frame_body (filters)
+
+- The filter and blend wrap runs after the colour-transform wrap and before the clip-mask wrap. A mask therefore clips the filtered output.
+- The colour transform is applied inside the filter. Its group is the content the filter wraps, so the filter sees transformed colours. The Flash order is not checked.
+- mix-blend-mode has no stage backdrop here. A blend group composites only with the siblings painted before it in its parent. A mask wraps it in a clip-path group, which is isolated, so under a mask the blend sees only the masked content and not the stage. Not checked in a Flash Player.
+
+## Radicle/tests/test_swf_svg_buttons.cpp:SwfSvgFilters
+
+- `DropShadowShiftsByAngleAndHalvesBlurIntoStdDeviation`: a regression that reads the angle as degrees, swaps dx and dy, skips the halving of blur, or writes stdDeviation y-first. The fixtures are angle pi/4 with blur 8 by 4, which gives dx = dy = 7.071068 and stdDeviation "4 2".
+- `KnockoutDropShadowMergesOnlyTheShadow` (`Radicle/src/swf/swf_svg_filters.cpp:shadow_body`): a regression that ignores the knockout flag and keeps SourceGraphic in the merge, or merges the uncut shadow `s` so the source area is not cut out. The expected tail is the `k` node from the out-composite.
+- `ClearCompositeSourceDropsTheSourceFromTheMerge` (`Radicle/src/swf/swf_svg_filters.cpp:shadow_body`): a regression that keeps SourceGraphic when composite_source is clear (Flash hideObject), for a drop shadow or an inner glow.
+- `InnerGlowClipsItsShadowToTheSourceAndKeepsTheSource`: a regression that drops the inner flag, so the shadow is drawn outside the shape or the source is lost.
+- `BlurHalvesEachAxisInOrder`: a regression that leaves stdDeviation unhalved or puts the axes in the wrong order. The fixture is blur 6 by 2, which must give "3 1".
+- `ColorMatrixKeepsTwentyValuesAndScalesOffsetsToUnit`: a regression that drops a value or leaves an offset at 51 instead of 0.2.
+- `UnsupportedFiltersAreSkippedAndKeepTheirIndexedIds`: a regression that draws bevel, convolution or gradient filters as blank output, or renumbers later ids after a skip.
+- `BlendModeTableMapsCssValuesAndRefusesTheRest`: a regression with an off-by-one in the SWF numbering (for example Overlay and HardLight swapped), or one that emits a CSS value for Erase or Subtract.
+- `FilteredGroupNestsFiltersInListOrderUnderTheBlendGroup`: a regression that applies filters in reverse order or puts the blend group inside the filter groups.
+- `PlacedShapeWithDropShadowWrapsItsGroupInTheShadowFilter`: a regression that loses the filter list between `read_swf`, `build_display_list` and `frame_to_svg`.
+- `PlainPlacementIsByteIdenticalToTheUnfilteredGroup`: a regression that emits an empty `<defs>` or a wrapper group for a placement with no filter or blend.
+- `PlacedBlendModeWrapsTheGroupInItsStyle`: a regression that drops the blend mode in the display replay.
+
 ## Radicle/src/papyrus/body_expression.cpp:BodyEmitter::emitShortCircuit
 
 - Bug, fixed: when the destination is a named variable that the right operand reads, the first `cast` overwrote it before the right operand was read. `abLeft = abRight && abLeft` emitted `cast abLeft abLeft` on the right path, so the result was true where it must be false. The aliased case now evaluates into a fresh temp, skips with `jmpf`/`jmpt` on that temp, and copies it to the destination with `assign` after the jump target. `||` takes the same path with `jmpt`.
