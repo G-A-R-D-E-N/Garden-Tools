@@ -2942,7 +2942,7 @@ public unsafe struct PapyrusCompileOptions
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 88u;
+    public const uint CompiledAbiVersion = 89u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -4020,6 +4020,36 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_shape_bone_transform")]
     public static extern Status NifShapeBoneTransform(IntPtr nif, nuint index, nuint bone, float* out_center, float* out_radius, float* out_rotation, float* out_translation, float* out_scale);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_collision_count")]
+    public static extern Status NifCollisionCount(IntPtr nif, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_collision_block")]
+    public static extern Status NifCollisionBlock(IntPtr nif, nuint index, uint* out_block);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_collision_type")]
+    public static extern Status NifCollisionType(IntPtr nif, nuint index, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_collision_bytes")]
+    public static extern Status NifCollisionBytes(IntPtr nif, nuint index, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_collision_owner_block")]
+    public static extern Status NifCollisionOwnerBlock(IntPtr nif, nuint index, int* out_block);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_collision_flags")]
+    public static extern Status NifCollisionFlags(IntPtr nif, nuint index, ushort* out_flags);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_collision_system_ref")]
+    public static extern Status NifCollisionSystemRef(IntPtr nif, nuint index, int* out_block);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_collision_body_id")]
+    public static extern Status NifCollisionBodyId(IntPtr nif, nuint index, uint* out_body_id);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_collision_target_block")]
+    public static extern Status NifCollisionTargetBlock(IntPtr nif, nuint index, int* out_block);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_collision_target_node")]
+    public static extern Status NifCollisionTargetNode(IntPtr nif, nuint index, int* out_node);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_free_floats")]
     public static extern void FreeFloats(float* values);

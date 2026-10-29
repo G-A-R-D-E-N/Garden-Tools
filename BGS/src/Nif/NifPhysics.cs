@@ -8,12 +8,12 @@ public sealed record NifEmbeddedPhysics(
 
 public static class NifPhysics
 {
-    private const string RagdollBlock = "bhkRagdollSystem";
+    private static readonly string[] PhysicsBlocks = { "bhkPhysicsSystem", "bhkRagdollSystem" };
 
     public static IReadOnlyList<NifEmbeddedPhysics> Read(NifFile nif)
     {
         List<NifEmbeddedPhysics> answer = new();
-        foreach (var block in nif.BlocksOfType(RagdollBlock))
+        foreach (var block in nif.BlocksOfType(PhysicsBlocks))
         {
             int at = nif.BlockStart[block];
             int end = at + nif.BlockSize[block];

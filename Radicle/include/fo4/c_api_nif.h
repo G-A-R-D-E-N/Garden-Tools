@@ -123,6 +123,35 @@ RADICLE_API radicle_status radicle_nif_shape_bone_transform(const radicle_nif* n
                                                             float* out_translation,
                                                             float* out_scale);
 
+RADICLE_API radicle_status radicle_nif_collision_count(const radicle_nif* nif, size_t* out_count);
+RADICLE_API radicle_status radicle_nif_collision_block(const radicle_nif* nif, size_t index, uint32_t* out_block);
+RADICLE_API radicle_status radicle_nif_collision_type(const radicle_nif* nif,
+                                                      size_t index,
+                                                      uint8_t** out_bytes,
+                                                      size_t* out_size);
+RADICLE_API radicle_status radicle_nif_collision_bytes(const radicle_nif* nif,
+                                                       size_t index,
+                                                       uint8_t** out_bytes,
+                                                       size_t* out_size);
+RADICLE_API radicle_status radicle_nif_collision_owner_block(const radicle_nif* nif,
+                                                             size_t index,
+                                                             int32_t* out_block);
+RADICLE_API radicle_status radicle_nif_collision_flags(const radicle_nif* nif,
+                                                       size_t index,
+                                                       uint16_t* out_flags);
+RADICLE_API radicle_status radicle_nif_collision_system_ref(const radicle_nif* nif,
+                                                            size_t index,
+                                                            int32_t* out_block);
+RADICLE_API radicle_status radicle_nif_collision_body_id(const radicle_nif* nif,
+                                                         size_t index,
+                                                         uint32_t* out_body_id);
+RADICLE_API radicle_status radicle_nif_collision_target_block(const radicle_nif* nif,
+                                                              size_t index,
+                                                              int32_t* out_block);
+RADICLE_API radicle_status radicle_nif_collision_target_node(const radicle_nif* nif,
+                                                             size_t index,
+                                                             int32_t* out_node);
+
 RADICLE_API void radicle_free_floats(float* values);
 RADICLE_API void radicle_free_triangles(uint16_t* values);
 RADICLE_API void radicle_free_node_refs(uint32_t* values);

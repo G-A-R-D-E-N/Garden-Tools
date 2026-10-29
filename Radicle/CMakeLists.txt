@@ -151,6 +151,7 @@ add_library(fo4
   src/nif/block_transform.cpp
   src/nif/shader.cpp
   src/nif/skin.cpp
+  src/nif/collision.cpp
   src/texture/bcn.cpp
   src/texture/dds.cpp
   src/texture/dds_codec.cpp
@@ -849,7 +850,10 @@ if(RADICLE_BUILD_TESTS)
     tests/test_nif.cpp
     tests/test_nif_nodes.cpp
     tests/test_nif_corpus.cpp
+    tests/test_nif_collision.cpp
+    tests/test_nif_collision_real.cpp
     tests/test_c_api_nif.cpp
+    tests/test_c_api_nif_collision.cpp
     tests/test_c_api_swf.cpp
     tests/test_c_api_swf_text.cpp
     tests/test_c_api_swf_morph.cpp
