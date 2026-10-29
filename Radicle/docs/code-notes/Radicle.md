@@ -8750,6 +8750,7 @@ Detects an encoder change that alters bytes of an unedited stream. It checks thr
 - A script that throws in the parse, compile, or lift path marks its callables as refused with reason `exception`. A throw before `callablesOf` runs counts no callables.
 - `GraphCompiler::clearScratch` runs after the loop, so scratch roots from this gate do not persist in the process temp folder.
 - The only assertion is the `lifted` floor (`test_graph_lift_real.cpp:kMinimumLiftedFraction`, 0.5). It is a placeholder, not a measurement, and must be re-measured on the fo4-data runner. The `roundtrip` count is printed in the `GRAPHLIFT` line and is not asserted until it is measured there.
+
 ## Radicle/src/avm1/encode.cpp:layout
 
 `layout` is the one walk that `encode_actions` and `validate_actions` both use. It writes the records, appends the trailing bytes, patches every branch, and keeps the first problem in `Encoding::status`. `encode_actions` returns only the bytes, so its output is unchanged and it still truncates silently. The delta check runs on the same destination that is written, after the layout is complete. A target is resolvable when it is the offset of a surviving record or when it equals the original end of the records plus the trailing bytes. Any other target is reported as BranchUnresolved, while the encoder still retargets it to the next surviving record or to the stream end.
