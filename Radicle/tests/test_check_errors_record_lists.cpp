@@ -218,7 +218,7 @@ TEST(CheckErrorsRecordLists, StaleLeveledListCountIsAnError) {
                                   fo4::CheckCode::schema_preflight, "leveled_list_count_mismatch");
   ASSERT_EQ(findings.size(), 1u);
   EXPECT_EQ(findings[0].record, fo4::FormKey::parse("000801:Stale.esp"));
-  EXPECT_EQ(findings[0].message, "LVLI LLCT declares 2 but holds 1 LVLO entries");
+  EXPECT_EQ(findings[0].message, "LVLI\\LLCT: LVLI LLCT declares 2 but holds 1 LVLO entries");
   EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::error);
 }
 
@@ -229,7 +229,7 @@ TEST(CheckErrorsRecordLists, MissingLeveledListCountIsAnError) {
                                   fo4::CheckCode::schema_preflight, "leveled_list_count_mismatch");
   ASSERT_EQ(findings.size(), 1u);
   EXPECT_EQ(findings[0].record, fo4::FormKey::parse("000801:NoCount.esp"));
-  EXPECT_EQ(findings[0].message, "LVLI holds 1 LVLO entries but has no LLCT subrecord");
+  EXPECT_EQ(findings[0].message, "LVLI\\LLCT: LVLI holds 1 LVLO entries but has no LLCT subrecord");
   EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::error);
 }
 
@@ -252,7 +252,7 @@ TEST(CheckErrorsRecordLists, DuplicateLeveledListCountIsAnError) {
   ASSERT_EQ(findings.size(), 1u);
   EXPECT_EQ(findings[0].record, fo4::FormKey::parse("000801:DupCount.esp"));
   EXPECT_EQ(findings[0].message,
-            "LVLI holds 2 LLCT subrecords but the decoder requires exactly one");
+            "LVLI\\LLCT: LVLI holds 2 LLCT subrecords but the decoder requires exactly one");
   EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::error);
 }
 
@@ -263,12 +263,49 @@ TEST(CheckErrorsRecordLists, BareLeveledListWithMatchingCountIsValid) {
                   .empty());
 }
 
-TEST(CheckErrorsRecordLists, MultiCounterKeywordListsAreOutOfScope) {
+fo4::Plugin misc_with_split_keywords(const char* name) {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  write_empty_record(out, "KYWD", 0x000800);
+  write_empty_record(out, "KYWD", 0x000801);
+  const auto group = fo4::test::begin_group(out, "MISC", 0);
+  const auto record = fo4::test::begin_record(out, "MISC", 0, 0x000802);
+  fo4::test::ByteWriter ksiz;
+  ksiz.u32(2);
+  fo4::test::write_subrecord(out, "KSIZ", ksiz.bytes);
+  fo4::test::ByteWriter first;
+  first.u32(0x000800);
+  fo4::test::write_subrecord(out, "KWDA", first.bytes);
+  fo4::test::ByteWriter second;
+  second.u32(0x000801);
+  fo4::test::write_subrecord(out, "KWDA", second.bytes);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return fo4::read_plugin(out.bytes, name);
+}
+
+TEST(CheckErrorsRecordLists, MultiCounterKeywordListsAreAnError) {
   const auto plugin = misc_with_duplicate_counts("MultiCount.esp");
   const std::vector<const fo4::Plugin*> load_order{&plugin};
-  EXPECT_TRUE(of_detail(fo4::check_load_order(load_order), fo4::CheckCode::schema_preflight,
-                        "keyword_count_mismatch")
-                  .empty());
+  const auto findings = of_detail(fo4::check_load_order(load_order),
+                                  fo4::CheckCode::schema_preflight, "keyword_count_mismatch");
+  ASSERT_EQ(findings.size(), 1u);
+  EXPECT_EQ(findings[0].record, fo4::FormKey::parse("000802:MultiCount.esp"));
+  EXPECT_EQ(findings[0].message,
+            "MISC\\KSIZ: MISC holds 2 KSIZ subrecords but the schema allows a single counter");
+  EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::error);
+}
+
+TEST(CheckErrorsRecordLists, SplitKeywordArraysAreAnError) {
+  const auto plugin = misc_with_split_keywords("Split.esp");
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  const auto findings = of_detail(fo4::check_load_order(load_order),
+                                  fo4::CheckCode::schema_preflight, "keyword_count_mismatch");
+  ASSERT_EQ(findings.size(), 1u);
+  EXPECT_EQ(findings[0].record, fo4::FormKey::parse("000802:Split.esp"));
+  EXPECT_EQ(findings[0].message,
+            "MISC\\KWDA: MISC holds 2 KWDA subrecords but the schema allows a single packed array");
+  EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::error);
 }
 
 TEST(CheckErrorsRecordLists, NullLeveledListEntryIsAnError) {
@@ -278,7 +315,7 @@ TEST(CheckErrorsRecordLists, NullLeveledListEntryIsAnError) {
                                   fo4::CheckCode::schema_preflight, "leveled_list_null_entry");
   ASSERT_EQ(findings.size(), 1u);
   EXPECT_EQ(findings[0].record, fo4::FormKey::parse("000801:NullEntry.esp"));
-  EXPECT_EQ(findings[0].message, "LVLI LVLO entry 0 names no item");
+  EXPECT_EQ(findings[0].message, "LVLI\\LVLO[0]: LVLI LVLO entry 0 names no item");
   EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::error);
 }
 
@@ -289,7 +326,7 @@ TEST(CheckErrorsRecordLists, DuplicateFormListEntryIsAWarning) {
                                   fo4::CheckCode::schema_preflight, "duplicate_formlink_list_entry");
   ASSERT_EQ(findings.size(), 1u);
   EXPECT_EQ(findings[0].record, fo4::FormKey::parse("000801:Dup.esp"));
-  EXPECT_EQ(findings[0].message, "FLST repeats LNAM entry 00000800, which the game counts twice");
+  EXPECT_EQ(findings[0].message, "FLST\\LNAM[1]: FLST repeats LNAM entry 00000800, which the game counts twice");
   EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::warning);
 
   const auto clean = form_list_plugin("Clean.esp", {0x000800});
@@ -306,7 +343,7 @@ TEST(CheckErrorsRecordLists, KeywordCountMismatchIsAnError) {
                                   fo4::CheckCode::schema_preflight, "keyword_count_mismatch");
   ASSERT_EQ(findings.size(), 1u);
   EXPECT_EQ(findings[0].record, fo4::FormKey::parse("000802:Stale.esp"));
-  EXPECT_EQ(findings[0].message, "MISC KSIZ declares 1 but holds 2 KWDA entries");
+  EXPECT_EQ(findings[0].message, "MISC\\KSIZ: MISC KSIZ declares 1 but holds 2 KWDA entries");
   EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::error);
 }
 
@@ -317,7 +354,7 @@ TEST(CheckErrorsRecordLists, MissingKeywordCountIsAnError) {
                                   fo4::CheckCode::schema_preflight, "keyword_count_mismatch");
   ASSERT_EQ(findings.size(), 1u);
   EXPECT_EQ(findings[0].record, fo4::FormKey::parse("000802:NoCount.esp"));
-  EXPECT_EQ(findings[0].message, "MISC holds 1 KWDA entries but has no KSIZ subrecord");
+  EXPECT_EQ(findings[0].message, "MISC\\KSIZ: MISC holds 1 KWDA entries but has no KSIZ subrecord");
   EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::error);
 }
 

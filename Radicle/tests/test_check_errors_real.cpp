@@ -6,9 +6,11 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
+#include <iostream>
 #include <map>
 #include <sstream>
 #include <string>
@@ -114,9 +116,27 @@ TEST(CheckErrorsReal, FullLoadOrderDiagnosticRunIsDeterministic) {
   for (const auto& finding : first) {
     if (finding.severity == fo4::CheckSeverity::error) ++errors;
   }
-  std::size_t counted = 0;
-  for (const auto& [code, count] : per_code) counted += count;
-  EXPECT_EQ(counted, rows.size());
+  // Invariant: the new record-list checks must not fire on the official masters.
+  // Requires: Creation Club files are excluded as third-party files may carry real defects.
+  const std::array<std::string_view, 4> must_be_absent{
+      "leveled_list_count_mismatch",
+      "leveled_list_null_entry",
+      "duplicate_formlink_list_entry",
+      "keyword_count_mismatch",
+  };
+  const auto official_end =
+      names.begin() + static_cast<std::ptrdiff_t>(official_count);
+  std::vector<std::string> unexpected;
+  for (const auto& finding : first) {
+    if (finding.code != fo4::CheckCode::schema_preflight) continue;
+    if (std::find(must_be_absent.begin(), must_be_absent.end(), finding.detail) ==
+        must_be_absent.end())
+      continue;
+    if (std::find(names.begin(), official_end, finding.plugin.filename()) == official_end) continue;
+    unexpected.push_back(canonical_row(finding));
+  }
+  for (const auto& row : unexpected) ADD_FAILURE() << row;
+  EXPECT_TRUE(unexpected.empty());
 
   std::cout << "CheckErrorsReal plugins=" << names.size() << " findings=" << rows.size()
             << " errors=" << errors << " manifest=" << hex_u64(hash) << "\n";

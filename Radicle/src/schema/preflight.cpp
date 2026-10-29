@@ -303,24 +303,41 @@ void keyword_count_issues(const Record& record, std::vector<PreflightIssue>& iss
     if (list.storage != schema::FormLinkListStorage::packed_array) continue;
     if (list.counter == Signature{}) continue;
     if (list.segment_count != 0 || list.counter_payload_size != 0) continue;
-    bool saw_count = false;
-    bool multi_count = false;
+    std::size_t counters = 0;
+    std::size_t parts = 0;
     std::uint32_t declared = 0;
     std::size_t bytes = 0;
     for (const auto& subrecord : record.subrecords) {
       if (subrecord.signature == list.counter) {
-        if (saw_count) multi_count = true;
-        saw_count = true;
+        ++counters;
         if (subrecord.data.size() >= 4) declared = little_endian_u32(subrecord.data, 0);
       } else if (subrecord.signature == list.subrecord) {
+        ++parts;
         bytes += subrecord.data.size();
       }
     }
-    // Requires: multi-counter records need per-alias comparison (QUST alias pairs carry their own KSIZ), so a record-wide sum is out of scope here.
-    // Requires: a malformed packed array is invalid_formlink_list_storage domain (the generic packed loop covers it).
-    if (multi_count || bytes % 4 != 0) continue;
-    const std::size_t entries = bytes / 4;
     const std::string prefix = record.header.signature.to_string();
+    // Requires: a malformed packed array is invalid_formlink_list_storage domain (the generic packed loop covers it).
+    if (bytes % 4 != 0) continue;
+    // Invariant: one packed list has one counter and one packed array.
+    if (counters > 1) {
+      issues.push_back(field_issue(
+          record, prefix + "\\" + list.counter.to_string(), "keyword_count_mismatch",
+          prefix + " holds " + std::to_string(counters) + " " + list.counter.to_string() +
+              " subrecords but the schema allows a single counter",
+          PreflightSeverity::error));
+      continue;
+    }
+    if (parts > 1) {
+      issues.push_back(field_issue(
+          record, prefix + "\\" + list.subrecord.to_string(), "keyword_count_mismatch",
+          prefix + " holds " + std::to_string(parts) + " " + list.subrecord.to_string() +
+              " subrecords but the schema allows a single packed array",
+          PreflightSeverity::error));
+      continue;
+    }
+    const std::size_t entries = bytes / 4;
+    const bool saw_count = counters == 1;
     if (!saw_count && entries > 0) {
       issues.push_back(field_issue(
           record, prefix + "\\" + list.counter.to_string(), "keyword_count_mismatch",
