@@ -9172,6 +9172,46 @@ Hand-built: a DefineFunction with body_records 2, followed by NextFrame and Play
 
 `kFunctionOfTry` with the NextFrame at index 2 erased. NextFrame is a non-container inside the Try try body, which is inside the DefineFunction body. The Function count goes from 3 to 2, so its body size goes from 14 (`0E 00`) to 13 (`0D 00`). The try body goes from 1 to 0 and the catch body stays at 1. Expected `9B 05 00 00 00 00 0D 00 | 8F 09 00 01 00 00 01 00 00 00 65 00 | 06 | 00`, 22 bytes. Detects an erase that shrinks only the innermost body and leaves the DefineFunction size at 14.
 
+## Radicle/src/avm1/timeline_ops.cpp:goto_frame_2
+
+`Radicle/src/avm1/timeline_ops.cpp:goto_frame_2` follows Ruffle 0.6.0 `core/src/avm1/activation.rs:action_goto_frame_2`, which passes the popped value and the scene offset to `core/src/avm1/globals/movie_clip.rs:goto_frame`. Unlike the 0-based GotoFrame operand (0x81, which adds 1 in `Radicle/src/avm1/timeline_ops.cpp:execute`), the GotoFrame2 operand is already 1-based, so it reaches `goto_frame` unchanged. A `:` anywhere in the operand's text drops everything through the first colon. Ruffle resolves that prefix as a variable path against the clip; this host has one timeline, so the prefix is popped and ignored and only the label after it is searched. That is a deliberate deviation.
+
+A value that is a number, or a string that `text_ops::parse_number` reads in full, is a frame. Its ToUint32 from `text_ops::to_uint32`, read as a signed 32-bit integer, matches Ruffle's `core/src/ecma_conversions.rs:f64_to_wrapping_i32`. Everything else is a label and goes to `Avm1TimelineHost::frame_for_label`. Ruffle searches labels the same way for a non-numeric string, and `core/src/avm1/globals/movie_clip.rs:goto_frame` adds the scene offset to labels as well as to numeric frames, so `goto_frame_2` adds the bias to both.
+
+`Radicle/src/avm1/timeline_ops.cpp:goto_frame_2` makes a frame of zero or less a no-op with no host call, as Ruffle's `if frame > 0`. Otherwise play (flags bit value 1) or stop is called before `goto_frame`, in the order Ruffle's `goto_frame` uses, so an unknown label calls neither. Deviations: Ruffle truncates the final frame to u16 (`frame as u16`), and this code passes the full uint32. Ruffle's string route uses Rust's f64 parse, while `text_ops::parse_number` trims whitespace and uses `strtod`; an empty string is 0 here, a no-op, where Ruffle looks up the label "".
+
+## Radicle/src/avm1/timeline_ops.cpp:execute
+
+The 0x9F case reads the payload that `Radicle/src/avm1/decode.cpp:Decoder::payload` built. The decoder reads the flags byte and then a u16 scene bias only when flags bit value 2 is set, which matches Ruffle's `swf/src/avm1/read.rs:read_goto_frame_2`, so decoding is unchanged. The play flag is bit value 1 (`flags & 1`), the bit Ruffle reads as `set_playing`. Without a host the case is not reached and the opcode falls to `control_ops::execute`, which still refuses it by name.
+
+## Radicle/tests/test_avm1_control.cpp:run_goto_frame_2
+
+`Radicle/tests/test_avm1_control.cpp:run_goto_frame_2` is the helper for the GotoFrame2 tests. It pushes the sentinel 7 and then the target, runs the opcode with the given flags record, and checks that the run is ok and that the trace is `7`. A GotoFrame2 that leaves its operand on the stack shows the target's text in the trace instead of 7, so every case also checks the pop through `result.trace`.
+
+## Radicle/tests/test_avm1_control.cpp:GotoFrame2NumericWithPlayPlaysBeforeTheGoto
+
+`Radicle/tests/test_avm1_control.cpp:GotoFrame2NumericWithPlayPlaysBeforeTheGoto` runs numeric 5 with flags `01`, which gives `play`, then `goto 5`. Detects a GotoFrame2 that calls stop for the play bit, or that calls goto before play, which the call order would show.
+
+## Radicle/tests/test_avm1_control.cpp:GotoFrame2NumericWithoutPlayStopsAndAddsSceneBias
+
+`Radicle/tests/test_avm1_control.cpp:GotoFrame2NumericWithoutPlayStopsAndAddsSceneBias` runs numeric 5 with flags `02 02 00` (the bias bit set and a u16 bias of 2), which gives `stop`, then `goto 7`. Detects a GotoFrame2 that ignores the scene bias field, which would go to 5, and one that plays when the play bit is clear.
+
+## Radicle/tests/test_avm1_control.cpp:GotoFrame2LabelJumpsToItsFrame
+
+`Radicle/tests/test_avm1_control.cpp:GotoFrame2LabelJumpsToItsFrame` runs text `intro`, with the host label map holding `intro` at frame 3, and flags `01`, which gives `label intro`, `play`, `goto 3`. Detects a label operand that is parsed as a number (giving frame 0 and no jump), or a label that jumps without a `frame_for_label` lookup.
+
+## Radicle/tests/test_avm1_control.cpp:GotoFrame2UnknownLabelIsANoOp
+
+`Radicle/tests/test_avm1_control.cpp:GotoFrame2UnknownLabelIsANoOp` runs text `missing`, which gives only `label missing`. Detects an unknown label that calls goto 0 or plays and stops the timeline, which would change the playback state of a movie whose label is absent.
+
+## Radicle/tests/test_avm1_control.cpp:GotoFrame2ResolvesOnlyTheLabelAfterATargetPath
+
+`Radicle/tests/test_avm1_control.cpp:GotoFrame2ResolvesOnlyTheLabelAfterATargetPath` runs text `clip:intro` with the label map holding `intro` at 3, which gives `label intro`, `play`, `goto 3`, with no lookup of `clip:intro`. Detects a path-prefixed label that is searched whole, which misses the label and leaves the timeline where it was.
+
+## Radicle/tests/test_avm1_control.cpp:TimelineOpcodesAreRefusedByNameWithoutAHost
+
+The table gains a GotoFrame2 row, `rec(0x9F, {0x01})` expecting `GotoFrame2 (0x9F)`. Detects a GotoFrame2 that runs with no host, or that refuses under the wrong name, since `Radicle/src/avm1/interpreter.cpp` formats the refusal as the name plus the opcode.
+
 ## Radicle/src/avm1/encode.cpp:encode_actions_checked
 
 When the decode that built the stream did not end Ok, `status` takes `stream.status` and the call returns no bytes. `Radicle/src/avm1/decode.cpp:Decoder::run` clears `actions` on failure, so the layout walk of such a stream sees no records and reports Ok. Before this change the failed stream came back as an empty Ok result. The layout status is still used when the decode was Ok. `validate_actions` in `Radicle/src/avm1/encode.cpp` has the same gap and still reports Ok for a stream whose decode failed. It is not changed here. Test: `Radicle/tests/test_avm1_encode.cpp:EncodeCheckedRefusesAStreamWhoseDecodeFailed`.
