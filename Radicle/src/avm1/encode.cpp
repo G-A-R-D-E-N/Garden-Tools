@@ -15,11 +15,21 @@ namespace {
 
 using Bytes = std::vector<std::byte>;
 
+constexpr std::size_t kFieldMax = 0xFFFFu;
+
 struct Encoding {
   Bytes out;
   std::map<std::size_t, std::size_t> starts;
   std::vector<std::pair<std::size_t, std::size_t>> branches;
+  std::size_t source_end{0};
+  Avm1Status status{Avm1Status::Ok};
 };
+
+void note(Encoding& enc, Avm1Status status) {
+  if (enc.status == Avm1Status::Ok) {
+    enc.status = status;
+  }
+}
 
 void put8(Bytes& out, std::uint8_t value) {
   out.push_back(static_cast<std::byte>(value));
@@ -168,10 +178,17 @@ std::size_t write_range(Encoding& enc, const std::vector<Avm1Action>& actions, s
 
 std::size_t write_body(Encoding& enc, const std::vector<Avm1Action>& actions, std::size_t first,
                        std::size_t end, std::size_t size_at, std::size_t records) {
+  if (records > end - first) {
+    note(enc, Avm1Status::BodyRecordsPastEnd);
+  }
   const std::size_t body_end = std::min(end, first + records);
   const std::size_t body_start = enc.out.size();
   write_range(enc, actions, first, body_end);
-  patch16(enc.out, size_at, static_cast<std::uint16_t>(enc.out.size() - body_start));
+  const std::size_t size = enc.out.size() - body_start;
+  if (size > kFieldMax) {
+    note(enc, Avm1Status::SizeTooLarge);
+  }
+  patch16(enc.out, size_at, static_cast<std::uint16_t>(size));
   return body_end;
 }
 
@@ -181,6 +198,7 @@ std::size_t write_record(Encoding& enc, const std::vector<Avm1Action>& actions, 
   const std::size_t start = enc.out.size();
   if (action.offset != kNewRecordOffset) {
     enc.starts.emplace(action.offset, start);
+    enc.source_end = std::max(enc.source_end, action.offset + action.length);
   }
   put8(enc.out, action.code);
   if (action.code < 0x80) {
@@ -189,7 +207,11 @@ std::size_t write_record(Encoding& enc, const std::vector<Avm1Action>& actions, 
   put16(enc.out, 0);
   const std::size_t payload = enc.out.size();
   std::visit([&enc](const auto& value) { write_payload(enc.out, value); }, action.payload);
-  patch16(enc.out, start + 1, static_cast<std::uint16_t>(enc.out.size() - payload));
+  const std::size_t length = enc.out.size() - payload;
+  if (length > kFieldMax) {
+    note(enc, Avm1Status::SizeTooLarge);
+  }
+  patch16(enc.out, start + 1, static_cast<std::uint16_t>(length));
   if (const auto* branch = std::get_if<Avm1Branch>(&action.payload)) {
     enc.branches.emplace_back(payload, branch->target);
   }
@@ -222,20 +244,36 @@ std::size_t write_range(Encoding& enc, const std::vector<Avm1Action>& actions, s
   return index;
 }
 
-}  // namespace
-
-std::vector<std::byte> encode_actions(const Avm1Stream& stream) {
+Encoding layout(const Avm1Stream& stream) {
   Encoding enc;
   write_range(enc, stream.actions, 0, stream.actions.size());
   enc.out.insert(enc.out.end(), stream.trailing.begin(), stream.trailing.end());
   const std::size_t stream_end = enc.out.size();
+  const std::size_t original_end = enc.source_end + stream.trailing.size();
   for (const auto& [at, target] : enc.branches) {
     const auto found = enc.starts.lower_bound(target);
     const std::size_t dest = found == enc.starts.end() ? stream_end : found->second;
     const auto delta = static_cast<std::ptrdiff_t>(dest) - static_cast<std::ptrdiff_t>(at + 2);
-    patch16(enc.out, at, static_cast<std::uint16_t>(static_cast<std::int16_t>(delta)));
+    const auto narrow = static_cast<std::int16_t>(delta);
+    if (narrow != delta) {
+      note(enc, Avm1Status::BranchDeltaOutOfRange);
+    }
+    if (enc.starts.count(target) == 0 && target != original_end) {
+      note(enc, Avm1Status::BranchUnresolved);
+    }
+    patch16(enc.out, at, static_cast<std::uint16_t>(narrow));
   }
-  return enc.out;
+  return enc;
+}
+
+}  // namespace
+
+std::vector<std::byte> encode_actions(const Avm1Stream& stream) {
+  return layout(stream).out;
+}
+
+Avm1Status validate_actions(const Avm1Stream& stream) {
+  return layout(stream).status;
 }
 
 }  // namespace fo4::avm1

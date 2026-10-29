@@ -382,6 +382,7 @@ add_library(fo4
   src/avm1/opcodes.cpp
   src/avm1/decode.cpp
   src/avm1/encode.cpp
+  src/avm1/edit.cpp
   src/avm1/disassembly.cpp
   src/avm1/control_ops.cpp
   src/avm1/function_ops.cpp
@@ -920,6 +921,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_graph_document.cpp
     tests/test_graph_flow.cpp
     tests/test_graph_lift.cpp
+    tests/test_graph_lift_real.cpp
     tests/test_graph_node_palette.cpp
     tests/test_graph_script_loader.cpp
     tests/test_graph_tool_service.cpp

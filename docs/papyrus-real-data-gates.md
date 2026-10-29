@@ -12,7 +12,7 @@ Verified against `origin/nomad/dev` at 6add80b69 (re-checked 2026-10-28): every 
 - Vanilla `.psc` roots are `<Fallout 4>/Data/Scripts/Source/{User,Base}` (`PAPYRUS.md:543`). Which root set reproduces the documented counts (7,854 files, 18,802 parse corpus, 1,498 decompile sample) is UNVERIFIED.
 - Binary location: CI configures `cmake -S PluginEditTool\native -B build\native -G Ninja -DCMAKE_BUILD_TYPE=Release ... -DRADICLE_BUILD_TESTS=ON` (`.github/workflows/native-ci.yml`, job "Native real-data tests (Windows, MSVC, Fallout 4 data)", step Configure). `PluginEditTool/native/CMakeLists.txt:8` sets `CMAKE_RUNTIME_OUTPUT_DIRECTORY` to `${CMAKE_BINARY_DIR}/bin`, so the binary is expected at `build\native\bin\fo4_tests.exe`. This is derived from the CMake files and was not observed on a built tree.
 - Working directory must be `<repo>\Radicle`. `gtest_discover_tests` sets `WORKING_DIRECTORY` to the Radicle source dir (`Radicle/CMakeLists.txt`, line 1023), and `FO4_TESTDATA_DIR` is the relative `testdata` (line 1014).
-- CI sets none of these variables. `native-ci.yml` has no `FO4RE_`, `FO4_PSC`, `FO4_PEX` or `FO4RE_F4SE` reference. Whether the `fo4-data` runner has them in its machine env is UNVERIFIED.
+- CI's real-data Test step sets `FO4_PSC_CORPUS`, `FO4RE_PSC_CORPUS` and `FO4RE_PSC_ROOTS` to the vanilla `Scripts\Source\User` and `Scripts\Source\Base` roots (`native-ci.yml:660-662`). It sets no `FO4RE_PEX_*`, `FO4_PEX_*` or `FO4RE_F4SE_SRC` variable; the PEX gates need a staged `.pex` root and are a TODO at `native-ci.yml:663`. Whether the `fo4-data` runner's machine env sets anything else is UNVERIFIED.
 - CI's `REAL_DATA_TEST_REGEX` (`native-ci.yml:66`) matches every gate below except `PapyrusSourceRealTest.*`, which has `RealTest.` and no `Real.`. Checked by running the regex against each test name.
 - The PR path filter in the real-data job (the `$groups` list) does not exclude any Papyrus gate.
 
@@ -94,6 +94,21 @@ Add `--gtest_output=xml:<dir>\<gate>.xml` to keep `RecordProperty` values. For a
 - Env: `FO4RE_F4SE_SRC`, a directory holding F4SE source trees (`rootsFromEnv`, lines 33-44). It needs F4SE sources, not game data. Where those sources sit on the data machine is UNVERIFIED.
 - Pass: per tree natives == present, problems == 0, unmapped == 0, totalPresent > 0, totalRecovered == totalPresent (lines 199-208). Consistency: checked > 0 with field checks (221-231). Agreement: recovered > 0 and no mismatches (250-251). Diff: `newer - older` count equals added minus removed (283-284).
 - Skip: four messages starting `FO4RE_F4SE_SRC is not set` (lines 157, 213, 236, 257). A variable pointing at a bad path shows the same message.
+
+### 9. Graph lift sweep (sampled, 1,500 files)
+
+- Test: `GraphLiftReal.LiftsAndRelinearizesSampledCorpusFunctionsToTheirOriginalBodies` (`Radicle/tests/test_graph_lift_real.cpp`). Its suite name ends in `Real`, so CI's `REAL_DATA_TEST_REGEX` (`native-ci.yml:66`) selects it with no regex change.
+- Env: `FO4RE_PSC_CORPUS`, falling back to `FO4_PSC_CORPUS` (`rootsFromEnv`). CI sets both to the same `.psc` roots. `FO4_DATA_DIR` is not read.
+- Sample: `stratifiedSample` in `Radicle/tests/papyrus_corpus_roots.hpp`, limit 1,500 (`kLiftSampleLimit`). Scripts that do not parse clean, or whose vanilla compile fails, are not counted.
+- Per callable: every function, event, and state function or event of a sampled script. The graph lifter (`GraphLifter::lift`) refuses by diagnostic, and the test attributes each error to the callable whose start line is the nearest at or before the diagnostic's `Line N:`. A refused callable is counted under its reason. Otherwise `GraphCompiler::compile` (which runs the linearizer) rebuilds the script, and the callable is a round trip when `functionDifference` finds no difference from the vanilla compile.
+- Pass: `attempted > 0` and `lifted >= 0.5 * attempted` (`kMinimumLiftedFraction`). The floor is an unmeasured placeholder and must be re-measured on the data runner. Refusals never fail the gate directly. They only count against the lifted floor.
+- Round trip is reported, not asserted: `roundtrip=` in the `GRAPHLIFT` line and the `DIFF` lines. It stays log-only until it is measured on the data runner.
+- Detects: a lifter change that refuses most of the vanilla corpus (lifted floor). A linearizer or compiler change that rebuilds a lifted body with different instructions, flags or signature shows as a lower `roundtrip=` count and as `DIFF` lines, but does not fail the gate yet.
+- Skip: `FO4RE_PSC_CORPUS is not set to a directory holding .psc sources`.
+- Remote events are compared under their pex name `::remote_<Type>_<Name>` (`buildEvent`, `code_generator.cpp`), so they round-trip under the same key.
+- Refusal reasons: a lifter message, or `exception` for a callable of a script that threw before its lift finished. Scripts that throw before any callable is known count nothing.
+- Output: `SAMPLE candidates= selected= stride=`, then `GRAPHLIFT attempted= lifted= roundtrip= refused=`, then up to 15 `REFUSED <count>  <reason>` lines (quoted names replaced by `'X'`) and up to 20 `DIFF` lines.
+- Run: `$env:FO4RE_PSC_CORPUS = '<psc roots>'`, then the template with this filter.
 
 ## What to record
 
