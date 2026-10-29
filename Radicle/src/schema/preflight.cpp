@@ -233,6 +233,7 @@ void leveled_list_entry_issues(const Record& record, std::vector<PreflightIssue>
   for (const auto& subrecord : record.subrecords) {
     if (subrecord.signature != lvlo) continue;
     // Invariant: an LVLO entry must name an item (offset 4 holds the Form-ID, which must be non-null).
+    // Malformed LVLO storage is decoder-domain (decode_lvlo requires exactly 12 bytes); the entry still counts toward LLCT coupling.
     if (subrecord.data.size() >= 8 && little_endian_u32(subrecord.data, 4) == 0) {
       issues.push_back(field_issue(record, prefix + "\\LVLO[" + std::to_string(entries) + "]",
                                    "leveled_list_null_entry",
@@ -242,12 +243,24 @@ void leveled_list_entry_issues(const Record& record, std::vector<PreflightIssue>
     ++entries;
   }
   bool saw_count = false;
+  std::size_t llct_count = 0;
   std::uint8_t declared = 0;
   for (const auto& subrecord : record.subrecords) {
     if (subrecord.signature != Signature::from_string("LLCT")) continue;
     saw_count = true;
+    ++llct_count;
     if (!subrecord.data.empty()) declared = std::to_integer<std::uint8_t>(subrecord.data[0]);
   }
+  // Requires: the edit path requires exactly one LLCT (decode_leveled_list require_once), so a duplicate counter is itself an error.
+  if (llct_count > 1) {
+    issues.push_back(field_issue(
+        record, prefix + "\\LLCT", "leveled_list_count_mismatch",
+        prefix + " holds " + std::to_string(llct_count) +
+            " LLCT subrecords but the decoder requires exactly one",
+        PreflightSeverity::error));
+    return;
+  }
+  // Descope: file format requires no OBND/LVLD/LVLF presence since authoring minimum:1 rows carry defaults that fill omission (vanilla proof in notes).
   if (!saw_count && entries > 0) {
     issues.push_back(field_issue(record, prefix + "\\LLCT", "leveled_list_count_mismatch",
                                  prefix + " holds " + std::to_string(entries) +
@@ -270,8 +283,10 @@ void form_list_duplicate_issues(const Record& record, std::vector<PreflightIssue
   for (const auto& subrecord : record.subrecords) {
     if (subrecord.signature != Signature::from_string("LNAM")) continue;
     const std::size_t index = ordinal++;
+    // Requires: non-4-byte LNAM storage is invalid_formlink_list_storage domain (the generic per-subrecord loop covers it).
     if (subrecord.data.size() != 4) continue;
     const auto key = little_endian_u32(subrecord.data, 0);
+    // Invariant: null LNAM is an empty slot in a wildcard-target list, unlike LVLO null which decode_lvlo refuses.
     if (key == 0 || seen.insert(key).second) continue;
     issues.push_back(field_issue(record, "FLST\\LNAM[" + std::to_string(index) + "]",
                                  "duplicate_formlink_list_entry",
@@ -301,6 +316,8 @@ void keyword_count_issues(const Record& record, std::vector<PreflightIssue>& iss
         bytes += subrecord.data.size();
       }
     }
+    // Requires: multi-counter records need per-alias comparison (QUST alias pairs carry their own KSIZ), so a record-wide sum is out of scope here.
+    // Requires: a malformed packed array is invalid_formlink_list_storage domain (the generic packed loop covers it).
     if (multi_count || bytes % 4 != 0) continue;
     const std::size_t entries = bytes / 4;
     const std::string prefix = record.header.signature.to_string();

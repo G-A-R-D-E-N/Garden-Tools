@@ -134,6 +134,43 @@ fo4::Plugin misc_with_keyword_count(const char* name, bool with_count, std::uint
   return fo4::read_plugin(out.bytes, name);
 }
 
+fo4::Plugin leveled_list_with_duplicate_count(const char* name) {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  write_empty_record(out, "KYWD", 0x000800);
+  const auto group = fo4::test::begin_group(out, "LVLI", 0);
+  const auto record = fo4::test::begin_record(out, "LVLI", 0, 0x000801);
+  write_llct(out, 1);
+  write_llct(out, 1);
+  write_lvlo(out, 0x000800);
+  write_lvlo(out, 0x000800);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return fo4::read_plugin(out.bytes, name);
+}
+
+fo4::Plugin misc_with_duplicate_counts(const char* name) {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  write_empty_record(out, "KYWD", 0x000800);
+  write_empty_record(out, "KYWD", 0x000801);
+  const auto group = fo4::test::begin_group(out, "MISC", 0);
+  const auto record = fo4::test::begin_record(out, "MISC", 0, 0x000802);
+  fo4::test::ByteWriter first;
+  first.u32(1);
+  fo4::test::write_subrecord(out, "KSIZ", first.bytes);
+  fo4::test::ByteWriter second;
+  second.u32(1);
+  fo4::test::write_subrecord(out, "KSIZ", second.bytes);
+  fo4::test::ByteWriter kwda;
+  kwda.u32(0x000800);
+  kwda.u32(0x000801);
+  fo4::test::write_subrecord(out, "KWDA", kwda.bytes);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return fo4::read_plugin(out.bytes, name);
+}
+
 fo4::Plugin leveled_list_with_global(const char* name, std::uint32_t form_id, std::uint32_t global) {
   fo4::test::ByteWriter out;
   write_header(out, {});
@@ -204,6 +241,33 @@ TEST(CheckErrorsRecordLists, MatchingLeveledListCountIsValid) {
                   .empty());
   EXPECT_TRUE(of_detail(fo4::check_load_order(load_order), fo4::CheckCode::schema_preflight,
                         "leveled_list_null_entry")
+                  .empty());
+}
+
+TEST(CheckErrorsRecordLists, DuplicateLeveledListCountIsAnError) {
+  const auto plugin = leveled_list_with_duplicate_count("DupCount.esp");
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  const auto findings = of_detail(fo4::check_load_order(load_order),
+                                  fo4::CheckCode::schema_preflight, "leveled_list_count_mismatch");
+  ASSERT_EQ(findings.size(), 1u);
+  EXPECT_EQ(findings[0].record, fo4::FormKey::parse("000801:DupCount.esp"));
+  EXPECT_EQ(findings[0].message,
+            "LVLI holds 2 LLCT subrecords but the decoder requires exactly one");
+  EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::error);
+}
+
+TEST(CheckErrorsRecordLists, BareLeveledListWithMatchingCountIsValid) {
+  const auto plugin = leveled_list_plugin("Bare.esp", 0x000801, true, 1, {0x000800});
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  EXPECT_TRUE(of_code(fo4::check_load_order(load_order), fo4::CheckCode::schema_preflight)
+                  .empty());
+}
+
+TEST(CheckErrorsRecordLists, MultiCounterKeywordListsAreOutOfScope) {
+  const auto plugin = misc_with_duplicate_counts("MultiCount.esp");
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  EXPECT_TRUE(of_detail(fo4::check_load_order(load_order), fo4::CheckCode::schema_preflight,
+                        "keyword_count_mismatch")
                   .empty());
 }
 
