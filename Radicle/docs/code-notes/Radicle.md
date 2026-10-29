@@ -8684,6 +8684,8 @@ Detects an encoder that keeps a stale offset when its target record is deleted. 
 
 ## Radicle/tests/test_avm1_encode.cpp:DeletedJumpTargetWithNoSurvivorRetargetsToTheStreamEnd
 
+Also pins `validate_actions` to BranchUnresolved. Before the recorded end (`Avm1Stream::original_end`) validate returned Ok by accident: the derived end was 7, the end of the surviving NextFrame, which equalled the start of the erased End. With the recorded end of 8, the target 7 names the erased End record, so it is reported as BranchUnresolved, the same status as `Radicle/tests/test_avm1_encode.cpp:DeletedJumpTargetRetargetsToTheNextSurvivingRecord`. Detects a validate that accepts a branch whose named End record was erased.
+
 Detects an encoder that cannot retarget to the stream end when no surviving record follows the deleted target. This case is checked by `Radicle/src/avm1/encode.cpp:encode_actions` through its stream-end fallback. The input is `99 02 00 02 00 06 04 00`. The Jump is at 0 and targets offset 7, the End record. Play (offset 5) and End (offset 7) are deleted, which leaves Jump and NextFrame. Nothing survives at or after offset 7, so the target is the stream end. The stream is 6 bytes long (Jump 5 bytes plus NextFrame 1 byte), so the offset is 6 - 5 = 1. The expected output is `99 02 00 01 00 04`, which is 6 bytes.
 
 ## Radicle/tests/test_avm1_encode.cpp:InsertedRecordInsideADefineFunctionBodyGrowsItsBodySize
@@ -9011,3 +9013,67 @@ Bytecode is hand-derived. `u30(65535)` is `FF FF 03` and `u30(65536)` is `80 80 
 ## Radicle/src/avm2/interpreter.cpp:Interpreter::invoke
 
 - Known gap, verified by reading: a native function with no body and no native id returns `NotImplemented` with `native function <name> is not bound`, unless `limits_.lenient_builtins` is set. `Radicle/src/avm2/interpreter_property.cpp:Interpreter::outer_scope_value` returns `NotImplemented` for `getouterscope` when the frame has no captured scope.
+
+## Radicle/include/fo4/avm1/avm1.hpp:Avm1Stream
+
+`original_end` is the source offset just past the stream's last byte. `Decoder::run` sets it to the input size, so erasing the End record no longer moves the end that branches target. It defaults to `kNewRecordOffset`, which means no recorded end: `layout` then derives the end from the surviving records plus `trailing`, as before. It is the last member, so `Avm1Stream stream;` and existing uses still compile. A hand-built stream keeps the derived end unless the caller sets it.
+
+## Radicle/src/avm1/decode.cpp:Decoder::run
+
+After the trailing bytes are copied, `run` sets `out_.original_end = bytes_.size()` and then resolves branches. For an unedited stream the derived end (last record end plus trailing bytes) equals `bytes_.size()`, so unedited streams validate as before.
+
+## Radicle/src/avm1/encode.cpp:layout
+
+This replaces the derived end in the earlier `layout` note for decoded streams. `original_end` is `stream.original_end` when it is not `kNewRecordOffset`, otherwise the largest surviving record end plus the trailing bytes. A target equal to that end is resolvable and encodes to the stream end. A target that names an erased record start is still BranchUnresolved, because it names no surviving record.
+
+## Radicle/src/avm1/encode.cpp:encode_actions_checked
+
+Runs the same `layout` walk as `encode_actions` and `validate_actions`. If `Encoding::status` is not Ok it sets `status` and returns an empty vector, so a caller cannot write the truncated bytes. If the status is Ok it returns the bytes `encode_actions` would return. `encode_actions` keeps its signature and its silent truncation, because existing callers depend on it. The status can be any layout status: SizeTooLarge (a record payload or body over 65535 bytes), BranchDeltaOutOfRange, BranchUnresolved or BodyRecordsPastEnd.
+
+## Radicle/include/fo4/avm1/avm1.hpp:Avm1Branch
+
+Decision: `Avm1Branch::target` is the only branch input the encoder reads, and `offset` is not honoured on encode. The interpreter also decides control flow from `target`, in `Radicle/src/avm1/interpreter.cpp:branch_if` and `Radicle/src/avm1/interpreter.cpp:execute_action`. Honouring an edited `offset` would make the written bytes run to a different record than the interpreter runs. The struct has no flag saying which field a caller edited, so one field must win. `target` names a record and stays valid across insert and erase, while `offset` is a relative delta that goes stale when records move. A stale or edited `offset` is overwritten with the delta from the layout. Pinned by `Radicle/tests/test_avm1_encode.cpp:BranchOffsetFieldIsIgnoredAndTheTargetDecidesTheDelta`.
+
+## Radicle/src/avm1/edit.cpp:insert_action_into_body
+
+Inserts `action` at `index` into body `slot` of the container at `container_index`. The body starts at `container_index + 1` plus the counts of the earlier slots. The index is accepted from the body start through the body end inclusive, so an empty body accepts its start index and a body accepts one past its last record. `insert_action` cannot grow an empty body, because its rule is strictly inside the body. The container's count for `slot` goes up by one. Owners before `container_index` whose body covers it grow, because the new record is inside the container and so inside them even at their end. Containers between `container_index` and `index` grow only when their body covers `index`, as `insert_action` does. An index outside the body, or past the list end, returns false and changes nothing.
+
+## Radicle/src/avm1/edit.cpp:resize_enclosing
+
+Takes `from`, the first owner index to consider, and walks the owners from there up to `index`. `insert_action` and `erase_action` pass 0. `insert_action_into_body` passes 0 for the container's own owners and `container_index + 1` for the owners nested between the container and the new record, so the container is counted once and its own slot count is changed directly.
+
+## Radicle/tests/test_avm1_encode.cpp:BranchToAnErasedEndRecordStillTargetsTheStreamEnd
+
+In `Radicle/tests/test_avm1_encode.cpp:BranchToAnErasedEndRecordStillTargetsTheStreamEnd`, input `99 02 00 02 00 04 00`. The Jump at 0 targets 7, the stream end past the End record (at 6), and the recorded end is 7. End is erased, which leaves Jump (0 to 5) and NextFrame (5 to 6). The stream is 6 bytes, so the delta is 6 - 5 = 1. Expected `99 02 00 01 00 04`, and validate is Ok. Detects a branch to the stream end reported as BranchUnresolved after the End record is erased, which the derived end of 6 caused.
+
+## Radicle/tests/test_avm1_encode.cpp:BranchOffsetFieldIsIgnoredAndTheTargetDecidesTheDelta
+
+Input `kJumpOverPlayAndStop` (`99 02 00 02 00 04 06 07 00`) with the Jump's `offset` set to 100. The target is unchanged, so the delta stays 2 and the output is the input bytes, with validate Ok. Detects an encoder that writes the edited offset (`99 02 00 64 00 ...`).
+
+## Radicle/tests/test_avm1_encode.cpp:EncodeCheckedReturnsTheBytesOfAValidStream
+
+`kJumpOverPlayAndStop` encodes through `encode_actions_checked` to the same 9 bytes with status Ok. The status starts at TooDeep so an unset status is caught. Detects a checked entry that returns empty bytes or leaves the status unset on success.
+
+## Radicle/tests/test_avm1_encode.cpp:EncodeCheckedReturnsNoBytesForABranchDeltaOutOfRange
+
+Input `99 02 00 02 00 04 00` with a 40000-byte Raw record inserted at index 1. The records are Jump 5 bytes, Raw 40003, NextFrame 1 and End 1, which is 40010 bytes. The Jump delta is 40010 - 5 = 40005, which does not fit int16. The checked entry returns no bytes and BranchDeltaOutOfRange. `encode_actions` still returns 40010 bytes with the delta truncated, and the test pins that size. Detects a checked entry that returns the truncated bytes, or an `encode_actions` that changes.
+
+## Radicle/tests/test_avm1_encode.cpp:EncodeCheckedReturnsNoBytesForARecordOrBodyOver65535
+
+A record with a 70000-byte payload gives SizeTooLarge with no bytes. A DefineFunction whose body holds two 40000-byte Raw records has a body of 2 x 40003 = 80006 bytes, which is also SizeTooLarge with no bytes. Detects a checked entry that returns a 16-bit length or body size truncated from the real one.
+
+## Radicle/tests/test_avm1_encode.cpp:InsertedRecordIntoAnEmptyFunctionBodyGrowsItsBodySize
+
+Input `9B 05 00 00 00 00 00 00 00` (nine bytes): a DefineFunction with an empty body, then End. `insert_action_into_body(actions, 0, 0, 1, Stop)` accepts index 1, the body start with count 0. Expected `9B 05 00 00 00 00 01 00 07 00`: body size 1, the Stop record inside the body, then End. Detects an insert that leaves the body empty (`9B 05 00 00 00 00 00 00 07 00`), or places the record after the Function as `insert_action` at index 1 does.
+
+## Radicle/tests/test_avm1_encode.cpp:InsertedRecordIntoAFinallyOnlyTryFillsTheFinallyBody
+
+Input `8F 08 00 | 02 | 00 00 | 00 00 | 00 00 | 00 | 00` (twelve bytes). Flags 2 give a try body and a finally body, both empty. Slot 1 is the finally body, starting at index 1, so the insert at index 1 goes into it. Expected `8F 08 00 02 00 00 00 00 01 00 00 07 00`: the finally size 1 at payload offset 5, the Stop record, then End. Detects a finally-only Try that puts the record in the try body, which leaves the try size at 1 and the finally size at 0.
+
+## Radicle/tests/test_avm1_encode.cpp:AppendAtTheListEndStaysOutsideABodyThatEndsThere
+
+Hand-built: a DefineFunction with body_records 2, followed by NextFrame and Play, so its body is indices [1, 3) and the list size is 3. `insert_action` at index 3 must not grow the body. Expected `9B 05 00 00 00 00 02 00 04 06 07` (eleven bytes), with the Function body size still 2. Detects an insert rule that uses `index <= first + count`, which grows the body to 3 and writes `03 00`.
+
+## Radicle/tests/test_avm1_encode.cpp:ErasedRecordInsideNestedBodiesShrinksEveryEnclosingBody
+
+`kFunctionOfTry` with the NextFrame at index 2 erased. NextFrame is a non-container inside the Try try body, which is inside the DefineFunction body. The Function count goes from 3 to 2, so its body size goes from 14 (`0E 00`) to 13 (`0D 00`). The try body goes from 1 to 0 and the catch body stays at 1. Expected `9B 05 00 00 00 00 0D 00 | 8F 09 00 01 00 00 01 00 00 00 65 00 | 06 | 00`, 22 bytes. Detects an erase that shrinks only the innermost body and leaves the DefineFunction size at 14.
