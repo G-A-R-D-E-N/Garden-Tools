@@ -31,7 +31,10 @@ void append_u32(std::vector<std::uint8_t>& out, std::uint32_t value) {
 void append_chunk(std::vector<std::uint8_t>& out, std::string_view type,
                   std::span<const std::uint8_t> payload) {
   auto crc = crc32(0L, reinterpret_cast<const Bytef*>(type.data()), static_cast<uInt>(type.size()));
-  crc = crc32(crc, payload.data(), static_cast<uInt>(payload.size()));
+  // Must skip an empty payload: crc32(crc, NULL, 0) returns 0, dropping the type bytes.
+  if (!payload.empty()) {
+    crc = crc32(crc, payload.data(), static_cast<uInt>(payload.size()));
+  }
   append_u32(out, static_cast<std::uint32_t>(payload.size()));
   out.insert(out.end(), type.begin(), type.end());
   out.insert(out.end(), payload.begin(), payload.end());
