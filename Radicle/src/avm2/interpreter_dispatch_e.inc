@@ -100,6 +100,11 @@
         if (frame.scopes.empty()) {
           return fail(InterpreterStatus::ScopeUnderflow, "no global scope");
         }
+        if (slot > kMaxSlotIndex) {
+          return fail(InterpreterStatus::ResourceLimit,
+                      "setglobalslot index " + std::to_string(slot) + " exceeds the slot limit " +
+                          std::to_string(kMaxSlotIndex));
+        }
         Object& global = *frame.scopes.front();
         if (slot >= global.slots().size()) {
           global.resize_slots(slot + 1);

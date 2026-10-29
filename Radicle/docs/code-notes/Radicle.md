@@ -8744,3 +8744,58 @@ Detects an encoder change that alters bytes of an unedited stream. It checks thr
 
 - Split of `decompiler.cpp` (727 lines, too close to the 750 cap) by responsibility. `decompiler.cpp` keeps `toSource`, `emitFunction`, `disassemble` and the `decompileBody` setup. `decompiler_expr.cpp:translateInstructions` turns each instruction into a `BodyState::put` or a statement. `decompiler_stmt.cpp:reconstructStatements` runs jump folding, the temp-call pass, local hoisting and `If`/`While`/`Else` structuring. The header holds the state those passes share: `BodyState`, `JKind`, `JInfo`, and the `iequals`, `startsWith` and `join` helpers.
 - `BodyState::put` is the single write path. With inlining on, a `::temp` destination goes to `temps` and `tempExpression`; `::NoneVar` becomes a bare statement; anything else becomes `name = expr`. The move changed no logic, names or output. The decompiler tests are the check that it stayed that way.
+
+## Radicle/include/fo4/avm2/object.hpp:kMaxSlotIndex
+
+- The cap on every slot index that can grow an `Object` slot vector: the `setslot` and `setglobalslot` operands, and ABC slot and const trait ids (checked at link time, see `Radicle/src/avm2/runtime.cpp:Runtime::build_traits`). The largest accepted index is 65535, so a slot vector holds at most 65536 entries.
+- The operands are u30 values, so a hostile operand can reach 0x3FFFFFFF. Without the cap, one `setslot` on an empty object resizes its vector to that index.
+- The value 65535 is a chosen bound, not measured against real SWF slot counts. No corpus scan was run. Raising it is a change to this constant plus the messages pinned in `Radicle/tests/test_avm2_late_ops.cpp:Avm2LateOps`.
+
+## Radicle/src/avm2/interpreter_dispatch_b.inc:k_setslot
+
+- The index check runs after the object check and before `resize_slots`. An index above `kMaxSlotIndex` returns `InterpreterStatus::ResourceLimit` with `setslot index N exceeds the slot limit 65535`. The object is not resized and the run stops at that instruction. In-cap indexes behave as before.
+- The super-property slot write (`k_setsuper`, same file) also grows a vector, but its index is `trait->slot_id` from a linked trait. `Radicle/src/avm2/runtime.cpp:Runtime::build_traits` caps that id, so this path needs no check of its own.
+
+## Radicle/src/avm2/interpreter_dispatch_e.inc:k_setglobalslot
+
+- Same cap as `setslot`, placed after the global-scope check and before `global.resize_slots`. The message names `setglobalslot`. The global object is `frame.scopes.front()`.
+
+## Radicle/src/avm2/interpreter_dispatch_b.inc:k_getslot
+
+- A read never grows a vector. An index past `slots().size()` returns undefined, with no cap check. `Radicle/src/avm2/interpreter_dispatch_e.inc:k_getglobalslot` does the same. Both were verified by reading the code; the tests in `Radicle/tests/test_avm2_late_ops.cpp:Avm2LateOps` pin them.
+
+## Radicle/src/avm2/runtime.cpp:Runtime::build_traits
+
+- The `build_trait` lambda is the only place an ABC slot or const trait id enters the runtime. A `slot_id` above `kMaxSlotIndex` returns `RuntimeStatus::InvalidTrait`, so `Runtime::link` fails. `Radicle/src/avm2/runtime_link.cpp:Runtime::link_added_file` reaches the same check through `build_traits`.
+- The cap is applied at link time, not at growth time, because `Class::apply_slot_defaults` (`Radicle/src/avm2/class.cpp`) and `Interpreter::make_instance` (`Radicle/src/avm2/interpreter_support.cpp`) return no status. The cap bounds `compute_slot_count` and `compute_class_slot_count`, so every class instance and class object resize is bounded too.
+- Gap: this refusal uses `InvalidTrait`, because `RuntimeStatus` has no resource-limit value. The message is the generic `a trait does not resolve`, the same one an unresolved trait gets. The test does not depend on that message.
+
+## Radicle/include/fo4/avm2/interpreter.hpp:InterpreterStatus
+
+- `ResourceLimit` is appended after `ScopeDepthExceeded`, so the existing values keep their numbers. The brief named an existing AVM2 `ResourceLimit`, but none existed. AVM1 has `Avm1RunStatus::ResourceLimit`, which is a different type. No C API header or C# binding mentions the AVM2 status, so the new value needs no ABI change.
+- `Radicle/src/avm2/interpreter.cpp:interpreter_status_name` maps it to `resource limit exceeded`.
+
+## Radicle/tests/test_avm2_late_ops.cpp:Avm2LateOps
+
+Bytecode is hand-derived. `u30(65535)` is `FF FF 03` and `u30(65536)` is `80 80 04`.
+
+- `SetslotAtTheSlotLimitGrowsTheObjectAndReadsBack`: `55 00` newobject 0, `2A` dup, `24 07` pushbyte 7, `6D FF FF 03` setslot 65535, `6C FF FF 03` getslot 65535, `48` returnvalue. Result 7, 14 bytes. Regression: an off-by-one refusal at the cap (`>` written as `>=`) or a cap set below 65535 fails the ok check. The read-back shows the write reached slot 65535.
+- `SetslotPastTheSlotLimitIsRefusedWithAResourceLimit`: `55 00` newobject 0, `24 01` pushbyte 1, `6D 80 80 04` setslot 65536, `47` returnvoid. Status `ResourceLimit` with the exact message, 9 bytes. Regression: a setslot with no cap grows the vector to 65537 entries and returns ok, or the refusal leaves a different status or message.
+- `SetglobalslotAtTheSlotLimitGrowsTheGlobalObjectAndReadsBack`: `24 07` pushbyte 7, `6F FF FF 03` setglobalslot 65535, `6E FF FF 03` getglobalslot 65535, `48` returnvalue. Result 7, 11 bytes. Regression: the global-slot cap rejects the in-cap write, or the write lands in a different slot.
+- `SetglobalslotPastTheSlotLimitIsRefusedWithAResourceLimit`: `24 01` pushbyte 1, `6F 80 80 04` setglobalslot 65536, `47` returnvoid. Status `ResourceLimit` with the exact message, 7 bytes. Regression: setglobalslot skips the cap, so the global object's slot vector grows without bound.
+- `GetslotAtTheSlotLimitOnAnEmptyObjectIsUndefined`: `55 00` newobject 0, `6C FF FF 03` getslot 65535, `48` returnvalue. Result undefined, 7 bytes. Regression: getslot grows the vector to read an in-cap index past its size, or it errors where it should return undefined.
+
+## Radicle/tests/test_avm2_runtime.cpp:Avm2Runtime
+
+- `LinkRefusesASlotTraitPastTheSlotLimit` rewrites the `Const` trait with slot id 2 in the fixture class `Test` to 65536. `Runtime::link` must return `RuntimeStatus::InvalidTrait`. Regression: an ABC class with a huge slot id links, and every instance then allocates that many slots.
+- `LinkAcceptsASlotTraitAtTheSlotLimit` sets the same trait to 65535. Link succeeds, `slot_count` is 65536, and `find_slot_trait(kMaxSlotIndex)` finds the trait. Regression: the link check is off by one or refuses in-cap ids, which would break classes that legitimately use the top slot.
+
+## Radicle/src/avm2/interpreter.cpp:Interpreter::execute_frame
+
+- Gap, verified by reading: `getdescendants` (0x59) has no case in any `interpreter_dispatch_*.inc`. It reaches the switch `default:`, which returns `NotImplemented` with `opcode <mnemonic> is not implemented yet`. No test here covers it.
+- Gap, verified by reading: E4X has no XML or XMLList class in `Radicle/src/avm2`. The only E4X-adjacent ops are `k_esc_xelem` and `k_esc_xattr` in `Radicle/src/avm2/interpreter_dispatch_e.inc`, which escape strings through `escape_xml_markup`. `k_dxns` and `k_dxnslate` only set `frame.default_xml_namespace`.
+- Not verified: the full list of opcodes that reach `default:`. Only `getdescendants` was checked.
+
+## Radicle/src/avm2/interpreter.cpp:Interpreter::invoke
+
+- Known gap, verified by reading: a native function with no body and no native id returns `NotImplemented` with `native function <name> is not bound`, unless `limits_.lenient_builtins` is set. `Radicle/src/avm2/interpreter_property.cpp:Interpreter::outer_scope_value` returns `NotImplemented` for `getouterscope` when the frame has no captured scope.
