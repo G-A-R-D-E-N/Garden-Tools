@@ -160,20 +160,29 @@ std::string blend_mode_style(std::uint8_t blend_mode) {
   }
 }
 
+FilterWrap filtered_wrap(const std::vector<SwfFilter>& filters,
+                         std::optional<std::uint8_t> blend_mode, const std::string& id,
+                         const SwfRect& stage) {
+  const SvgFilterDefs defs = filter_defs(filters, id, stage);
+  FilterWrap wrap;
+  const std::string style = blend_mode ? blend_mode_style(*blend_mode) : std::string{};
+  if (!style.empty()) {
+    wrap.open = "<g style=\"" + style + "\">\n";
+    wrap.close = "</g>\n";
+  }
+  wrap.open += defs.defs;
+  for (auto filter = defs.ids.rbegin(); filter != defs.ids.rend(); ++filter) {
+    wrap.open += "<g filter=\"url(#" + *filter + ")\">\n";
+    wrap.close += "</g>\n";
+  }
+  return wrap;
+}
+
 std::string filtered_group(const std::vector<SwfFilter>& filters,
                            std::optional<std::uint8_t> blend_mode, const std::string& id,
                            const SwfRect& stage, const std::string& content) {
-  const SvgFilterDefs defs = filter_defs(filters, id, stage);
-  std::string out = content;
-  for (const std::string& filter_id : defs.ids) {
-    out = "<g filter=\"url(#" + filter_id + ")\">\n" + out + "</g>\n";
-  }
-  out = defs.defs + out;
-  const std::string style = blend_mode ? blend_mode_style(*blend_mode) : std::string{};
-  if (!style.empty()) {
-    out = "<g style=\"" + style + "\">\n" + out + "</g>\n";
-  }
-  return out;
+  const FilterWrap wrap = filtered_wrap(filters, blend_mode, id, stage);
+  return wrap.open + content + wrap.close;
 }
 
 }  // namespace fo4::swf

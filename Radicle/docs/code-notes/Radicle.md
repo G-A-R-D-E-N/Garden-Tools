@@ -9068,7 +9068,7 @@ Bytecode is hand-derived. `u30(65535)` is `FF FF 03` and `u30(65536)` is `80 80 
 ## Radicle/src/swf/swf_svg_filters.cpp:filtered_group
 
 - Filters apply in list order, so the first filter is the innermost group and the blend group is outermost. An empty filter list with Normal blend returns the content unchanged, which keeps movies without filters byte-identical.
-- Sprite rows are not wrapped. A sprite's children are flattened into the frame list, so a filter or blend on a sprite row has no group to attach to. Shape, button and text rows are wrapped.
+- Sprite rows are wrapped by `Radicle/src/swf/swf_frame_svg.cpp:frame_body`, which opens one `filtered_wrap` group before the sprite's first flattened child and closes it at the sprite's last descendant row. Shape, button and text rows use `filtered_group`.
 - `frame_to_svg` has no output for `skipped`, so unsupported filters are dropped without a report. Callers that need the list use `filter_defs` directly.
 
 ## Radicle/src/swf/swf_display.cpp:replay
@@ -9311,3 +9311,19 @@ Slot 2 of the Try is past its body_count of 2, since flags `01` give a try body 
 ## Radicle/tests/test_avm1_encode.cpp:InsertIntoABodyRefusesARecordThatIsNotAContainer
 
 `Radicle/src/avm1/edit.cpp:insert_action_into_body` is called on NextFrame at container 2. NextFrame has no body, so its body_count is 0 and every slot is out of range. Index 3 is the position the range check would accept without the guard: body_start is 3 and the count is 0. Expected false and no change. Detects a missing container check that writes into the hidden `body_records` of a plain record.
+
+## Radicle/src/swf/swf_frame_svg.cpp:frame_body (sprite filters and blend)
+
+- A sprite row has no content of its own. Its children follow it in the flat list and are drawn as their own rows, so `Radicle/src/swf/swf_frame_svg.cpp:frame_body` opens the sprite's `Radicle/src/swf/swf_svg_filters.cpp:filtered_wrap` output before the first child and pushes an `OpenFilterWrap` whose end is `Radicle/src/swf/swf_frame_svg.cpp:descendants_end`. The existing `nesting_level` invariant on `Radicle/include/fo4/swf/swf_display.hpp:SwfFrameInstance` makes that end the first row after the sprite's subtree, so no new marker field is needed.
+- A sprite with no filter and Normal blend opens and closes an empty string, so a plain sprite's output does not change. The nine-slice path (`cells` set) keeps its earlier route through `filtered_group`, and clip sprites return before this branch.
+- Nested sprites stack. Each inner end is at or before its outer end, so the wraps close in last-in first-out order. `Radicle/src/swf/swf_frame_svg.cpp:close_filter_wraps` runs at the top of every row and once after the loop, so a sprite that ends on the last row still closes.
+- Ceilings, not checked in a Flash Player: a filtered sprite inside a clip scope filters its already-clipped children, not the union of them; a sprite's colour transform is still not applied, because `frame_body` attaches `world_color_transform` only to rows with their own content; a filtered sprite with no visible children emits its filter defs in an empty group.
+
+## Radicle/src/swf/swf_frame_svg.cpp:close_filter_wraps
+
+- Closes every open wrap whose end is at or before the given row index, innermost first. The caller passes the row count after the loop so trailing sprites close.
+
+## Radicle/src/swf/swf_svg_filters.cpp:filtered_wrap
+
+- Splits `Radicle/src/swf/swf_svg_filters.cpp:filtered_group` into an open string and a close string. The open order is style group, then `filter_defs` output, then one `<g filter>` per drawn filter with the last filter outermost. Every close is the same `</g>` line, so only the count matters.
+- `Radicle/src/swf/swf_svg_filters.cpp:filtered_group` is now `filtered_wrap` with the content in between. Its output matches the previous nesting byte for byte, which `FilteredGroupNestsFiltersInListOrderUnderTheBlendGroup` checks.
