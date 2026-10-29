@@ -168,7 +168,8 @@ TEST(CApiVmadWriter, StructureExportsAddScriptsAndEveryPropertyType) {
   std::size_t at = 0;
   for (const auto type : types) {
     size_t added = 99;
-    EXPECT_EQ(radicle_plugin_add_vmad_property(plugin, key, 0, at, "Property", type, 0, &added),
+    const auto name = "Property" + std::to_string(at);
+    EXPECT_EQ(radicle_plugin_add_vmad_property(plugin, key, 0, at, name.c_str(), type, 0, &added),
               RADICLE_STATUS_OK) << static_cast<int>(type);
     EXPECT_EQ(added, at);
     ++at;

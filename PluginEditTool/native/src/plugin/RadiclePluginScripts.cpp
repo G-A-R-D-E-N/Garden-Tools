@@ -14,8 +14,9 @@ namespace fo4ide::plugin {
 
 namespace {
 
-constexpr const char* k_invalid_script_name = "Script name is empty or is not valid UTF-8";
-constexpr const char* k_invalid_property_name = "Script property name is empty or is not valid UTF-8";
+constexpr const char* k_invalid_script_name = "Script name is empty, contains a NUL byte or is not valid UTF-8";
+constexpr const char* k_invalid_property_name =
+    "Script property name is empty, contains a NUL byte or is not valid UTF-8";
 
 std::string vmadFailure(fo4::VmadStructureMutationStatus status, const std::string& what) {
     switch (status) {
@@ -47,11 +48,17 @@ std::optional<std::uint8_t> byteArgument(const nlohmann::json& args, std::size_t
 std::optional<std::size_t> sizeArgument(const nlohmann::json& args, std::size_t index) {
     const auto value = support::argumentAt(args, index);
     if (value.is_null() || value.is_discarded()) return std::nullopt;
-    return static_cast<std::size_t>(support::integerValue<std::uint32_t>(value).value_or(0));
+    return support::integerValue<std::uint32_t>(value);
+}
+
+template <class T>
+bool invalidArgument(const nlohmann::json& args, std::size_t index) {
+    const auto value = support::argumentAt(args, index);
+    return !value.is_null() && !value.is_discarded() && !support::integerValue<T>(value).has_value();
 }
 
 bool invalidName(const std::string& name) {
-    return name.empty() || !fo4::text::is_valid_utf8(name);
+    return name.empty() || name.find('\0') != std::string::npos || !fo4::text::is_valid_utf8(name);
 }
 
 std::optional<fo4::VmadProperty> propertyForType(std::string name, std::uint8_t type,
@@ -128,6 +135,12 @@ Result<nlohmann::json> RadiclePluginBackend::addScript(const nlohmann::json& arg
     if (pluginName.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
     if (formKeyText.empty()) return std::unexpected(Error{"FormKeyMissing", "Record FormKey is empty"});
     if (invalidName(scriptName)) return std::unexpected(Error{"InvalidScriptName", k_invalid_script_name});
+    if (invalidArgument<std::uint8_t>(arguments, 3)) {
+        return std::unexpected(Error{"ScriptFlagsInvalid", "Script flags must be an integer from 0 to 255"});
+    }
+    if (invalidArgument<std::uint32_t>(arguments, 4)) {
+        return std::unexpected(Error{"ScriptIndexInvalid", "Script index must be an integer from 0 to 4294967295"});
+    }
 
     fo4::FormKey key;
     try {
@@ -187,6 +200,9 @@ Result<nlohmann::json> RadiclePluginBackend::removeScript(const nlohmann::json& 
     const auto scriptIndex = sizeArgument(arguments, 2);
     if (pluginName.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
     if (formKeyText.empty()) return std::unexpected(Error{"FormKeyMissing", "Record FormKey is empty"});
+    if (invalidArgument<std::uint32_t>(arguments, 2)) {
+        return std::unexpected(Error{"ScriptIndexInvalid", "Script index must be an integer from 0 to 4294967295"});
+    }
     if (!scriptIndex) return std::unexpected(Error{"ScriptIndexMissing", "Script index is required"});
 
     fo4::FormKey key;
@@ -237,11 +253,23 @@ Result<nlohmann::json> RadiclePluginBackend::addScriptProperty(const nlohmann::j
     const auto requestedIndex = sizeArgument(arguments, 6);
     if (pluginName.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
     if (formKeyText.empty()) return std::unexpected(Error{"FormKeyMissing", "Record FormKey is empty"});
+    if (invalidArgument<std::uint32_t>(arguments, 2)) {
+        return std::unexpected(Error{"ScriptIndexInvalid", "Script index must be an integer from 0 to 4294967295"});
+    }
     if (!scriptIndex) return std::unexpected(Error{"ScriptIndexMissing", "Script index is required"});
     if (invalidName(propertyName)) {
         return std::unexpected(Error{"InvalidPropertyName", k_invalid_property_name});
     }
+    if (invalidArgument<std::uint8_t>(arguments, 4)) {
+        return std::unexpected(Error{"PropertyTypeInvalid", "Property type must be an integer from 0 to 255"});
+    }
     if (!type) return std::unexpected(Error{"PropertyTypeMissing", "Property type is required"});
+    if (invalidArgument<std::uint8_t>(arguments, 5)) {
+        return std::unexpected(Error{"PropertyFlagsInvalid", "Property flags must be an integer from 0 to 255"});
+    }
+    if (invalidArgument<std::uint32_t>(arguments, 6)) {
+        return std::unexpected(Error{"PropertyIndexInvalid", "Property index must be an integer from 0 to 4294967295"});
+    }
     const auto property = propertyForType(propertyName, *type, flags);
     if (!property) {
         return std::unexpected(Error{"PropertyTypeUnsupported",
@@ -311,7 +339,13 @@ Result<nlohmann::json> RadiclePluginBackend::removeScriptProperty(const nlohmann
     const auto propertyIndex = sizeArgument(arguments, 3);
     if (pluginName.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
     if (formKeyText.empty()) return std::unexpected(Error{"FormKeyMissing", "Record FormKey is empty"});
+    if (invalidArgument<std::uint32_t>(arguments, 2)) {
+        return std::unexpected(Error{"ScriptIndexInvalid", "Script index must be an integer from 0 to 4294967295"});
+    }
     if (!scriptIndex) return std::unexpected(Error{"ScriptIndexMissing", "Script index is required"});
+    if (invalidArgument<std::uint32_t>(arguments, 3)) {
+        return std::unexpected(Error{"PropertyIndexInvalid", "Property index must be an integer from 0 to 4294967295"});
+    }
     if (!propertyIndex) return std::unexpected(Error{"PropertyIndexMissing", "Property index is required"});
 
     fo4::FormKey key;

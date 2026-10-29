@@ -191,17 +191,20 @@ TEST_CASE("Native script refusals leave the plugin untouched and report a named 
     const auto patchPath = root / "Patch.esp";
     scriptEditWriteBytes(basePath, scriptEditBase());
     scriptEditWriteBytes(patchPath, scriptEditPatch());
-    const auto before = scriptEditReadBytes(patchPath);
-
     fo4ide::plugin::RadiclePluginBackend backend;
     scriptEditLoad(backend, basePath, patchPath);
     const std::string bare = "000800:Patch.esp";
+    const std::string withVmad = "000801:Patch.esp";
+    REQUIRE(backend.addScript(nlohmann::json::array({"Patch.esp", withVmad, "PF_Third", 0, nullptr})).has_value());
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto before = scriptEditReadBytes(patchPath);
 
     const auto refusals = [&](const nlohmann::json& args, const char* type,
                               const std::function<fo4ide::Result<nlohmann::json>(const nlohmann::json&)>& edit) {
         const auto result = edit(args);
         REQUIRE_FALSE(result.has_value());
         CHECK(result.error().type == type);
+        CHECK_FALSE(scriptEditPending(backend, 1));
     };
     refusals(nlohmann::json::array({"Patch.esp", bare, ""}), "InvalidScriptName",
              [&](const nlohmann::json& args) { return backend.addScript(args); });
@@ -218,6 +221,20 @@ TEST_CASE("Native script refusals leave the plugin untouched and report a named 
              [&](const nlohmann::json& args) { return backend.removeScript(args); });
     refusals(nlohmann::json::array({"Patch.esp", bare, 0, 0}), "PropertyWriteFailed",
              [&](const nlohmann::json& args) { return backend.removeScriptProperty(args); });
+    refusals(nlohmann::json::array({"Patch.esp", withVmad, -1}), "ScriptIndexInvalid",
+             [&](const nlohmann::json& args) { return backend.removeScript(args); });
+    refusals(nlohmann::json::array({"Patch.esp", withVmad, 4294967296}), "ScriptIndexInvalid",
+             [&](const nlohmann::json& args) { return backend.removeScript(args); });
+    refusals(nlohmann::json::array({"Patch.esp", withVmad, "PF_Fourth", 0, -1}), "ScriptIndexInvalid",
+             [&](const nlohmann::json& args) { return backend.addScript(args); });
+    refusals(nlohmann::json::array({"Patch.esp", withVmad, "PF_Fourth", 256}), "ScriptFlagsInvalid",
+             [&](const nlohmann::json& args) { return backend.addScript(args); });
+    refusals(nlohmann::json::array({"Patch.esp", withVmad, std::string("PF_Bad\0Name", 11), 0}), "InvalidScriptName",
+             [&](const nlohmann::json& args) { return backend.addScript(args); });
+    refusals(nlohmann::json::array({"Patch.esp", withVmad, 0, "Count", 300, 0, nullptr}), "PropertyTypeInvalid",
+             [&](const nlohmann::json& args) { return backend.addScriptProperty(args); });
+    refusals(nlohmann::json::array({"Patch.esp", withVmad, 0, "Count", 3, 256, nullptr}), "PropertyFlagsInvalid",
+             [&](const nlohmann::json& args) { return backend.addScriptProperty(args); });
 
     CHECK_FALSE(scriptEditPending(backend, 1));
     CHECK(scriptEditReadBytes(patchPath) == before);

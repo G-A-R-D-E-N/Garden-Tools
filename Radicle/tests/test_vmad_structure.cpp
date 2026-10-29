@@ -490,3 +490,22 @@ TEST(VmadStructure, DuplicateScriptNameIsRefusedCaseInsensitively) {
   EXPECT_EQ(scripts.scripts[0].name, "Script");
   EXPECT_EQ(scripts.scripts[1].name, "Other");
 }
+
+TEST(VmadStructure, DuplicatePropertyNameIsRefusedCaseInsensitively) {
+  auto plugin = read_plugin(fixture::plugin_bytes(), "Vmad.esp");
+  const auto before = write_plugin(plugin);
+  EXPECT_EQ(add_vmad_property(plugin, fixture::key(), 0, 12, property("2VALUE", 3)),
+            VmadStructureMutationStatus::already_present);
+  EXPECT_EQ(add_vmad_property(plugin, fixture::key(), 0, 0, property("emptystruct", 7)),
+            VmadStructureMutationStatus::already_present);
+  EXPECT_EQ(write_plugin(plugin), before);
+  VmadProperty unique = property("Unique", 3);
+  unique.integer = 0;
+  EXPECT_EQ(add_vmad_property(plugin, fixture::key(), 0, 12, unique),
+            VmadStructureMutationStatus::updated);
+  const auto reparsed = read_plugin(write_plugin(plugin), "Vmad.esp");
+  const auto scripts = read_vmad_scripts(fixture::subrecord(reparsed).data);
+  ASSERT_EQ(scripts.scripts.size(), 1u);
+  ASSERT_EQ(scripts.scripts[0].properties.size(), 13u);
+  EXPECT_EQ(scripts.scripts[0].properties[12].name, "Unique");
+}
