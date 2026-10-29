@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, RotateCcw, RotateCw, Save as SaveIcon } from 'lucide-react';
 import './SwfPanel.css';
 
@@ -91,7 +91,7 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
   const [previewFrame, setPreviewFrame] = useState(0);
   const [frameSvg, setFrameSvg] = useState('');
   const frameRequest = useRef(0);
-  const syncedDoc = useRef('');
+  const previewRevision = useRef<number | undefined>(undefined);
   const [inspectText, setInspectText] = useState('');
   const [inspectError, setInspectError] = useState('');
   const [actionTags, setActionTags] = useState<ActionTagRow[]>([]);
@@ -126,16 +126,6 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     if (reply.error) setError(reply.error);
   }, []);
 
-  const refresh = useCallback(async () => {
-    const bridge = host();
-    if (!bridge) return;
-    const nextState = parse<StateReply>(await bridge.State());
-    setState(nextState);
-    setSelectedLabel(null);
-    await loadCharacters();
-    await loadLabels(timeline);
-  }, [timeline, loadCharacters, loadLabels]);
-
   const showFrame = useCallback(async (requested: number) => {
     const bridge = host();
     if (!bridge) return;
@@ -149,6 +139,29 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     setError('');
     setFrameSvg(reply.svg ?? '');
   }, [rootFrames]);
+
+  // Requires a document-change handler: showFrame sets state, which the lint forbids inside an effect.
+  const redrawPreview = useCallback(async () => {
+    if (rootFrames > 0) await showFrame(previewFrame);
+  }, [rootFrames, previewFrame, showFrame]);
+
+  // Invariant: every edit, undo and redo bumps revision, so a changed revision alone triggers the preview redraw.
+  const applyRevision = useCallback(async (revision: number | undefined) => {
+    if (previewRevision.current === revision) return;
+    previewRevision.current = revision;
+    await redrawPreview();
+  }, [redrawPreview]);
+
+  const refresh = useCallback(async () => {
+    const bridge = host();
+    if (!bridge) return;
+    const nextState = parse<StateReply>(await bridge.State());
+    setState(nextState);
+    await applyRevision(nextState.revision);
+    setSelectedLabel(null);
+    await loadCharacters();
+    await loadLabels(timeline);
+  }, [timeline, loadCharacters, loadLabels, applyRevision]);
 
   const open = useCallback(async () => {
     const bridge = host();
@@ -176,7 +189,7 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
       const opened = parse<StateReply>(await bridge.Open(path.trim()));
       if (opened.error) { setError(opened.error); return; }
       setState(opened);
-      syncedDoc.current = `${opened.revision}`;
+      previewRevision.current = opened.revision;
       setSelectedLabel(null);
       await loadCharacters();
       await loadLabels(timeline);
@@ -221,9 +234,10 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     if (reply.error) { setError(reply.error); return; }
     setError('');
     setState(reply);
+    await applyRevision(reply.revision);
     await loadCharacters();
     await loadLabels(timeline);
-  }, [timeline, labelOwner, selectedLabel, labelName, loadCharacters, loadLabels]);
+  }, [timeline, labelOwner, selectedLabel, labelName, loadCharacters, loadLabels, applyRevision]);
 
   const pickCharacter = useCallback(async (character: CharacterRow) => {
     const bridge = host();
@@ -274,7 +288,8 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     if (reply.error) { setError(reply.error); return; }
     setError('');
     setState(reply);
-  }, [editTag, editText]);
+    await applyRevision(reply.revision);
+  }, [editTag, editText, applyRevision]);
   const addLabel = useCallback(async () => {
     const bridge = host();
     if (!bridge || !labelName.trim()) return;
@@ -282,10 +297,11 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     if (reply.error) { setError(reply.error); return; }
     setError('');
     setState(reply);
+    await applyRevision(reply.revision);
     setSelectedLabel(null);
     await loadCharacters();
     await loadLabels(timeline);
-  }, [frame, labelName, labelOwner, timeline, loadCharacters, loadLabels]);
+  }, [frame, labelName, labelOwner, timeline, loadCharacters, loadLabels, applyRevision]);
   const pickPlacement = useCallback(async (item: PlacementRow) => {
     const bridge = host();
     if (!bridge) return;
@@ -305,7 +321,8 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     if (reply.error) { setError(reply.error); return; }
     setError('');
     setState(reply);
-  }, [placementTag, matrix]);
+    await applyRevision(reply.revision);
+  }, [placementTag, matrix, applyRevision]);
   const insertKeyframe = useCallback(async () => {
     const bridge = host();
     if (!bridge || placementTag === null) return;
@@ -313,7 +330,8 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     if (reply.error) { setError(reply.error); return; }
     setError('');
     setState(reply);
-  }, [placementTag, frame]);
+    await applyRevision(reply.revision);
+  }, [placementTag, frame, applyRevision]);
   const pickInstance = useCallback((row: InstanceRow) => {
     const match = placements.find(item => item.depth === row.depth &&
       (item.character === row.character || row.character === 0));
@@ -326,9 +344,10 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     if (reply.error) { setError(reply.error); return; }
     setError('');
     setState(reply);
+    await applyRevision(reply.revision);
     const placementReply = parse<{ placements: PlacementRow[] }>(await bridge.Placements());
     setPlacements(placementReply.placements ?? []);
-  }, [placementTag, placementDepth]);
+  }, [placementTag, placementDepth, applyRevision]);
   const removeLabel = useCallback(async () => {
     const bridge = host();
     if (!bridge || !selectedLabel) return;
@@ -336,10 +355,11 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     if (reply.error) { setError(reply.error); return; }
     setError('');
     setState(reply);
+    await applyRevision(reply.revision);
     setSelectedLabel(null);
     await loadCharacters();
     await loadLabels(timeline);
-  }, [timeline, labelOwner, selectedLabel, loadCharacters, loadLabels]);
+  }, [timeline, labelOwner, selectedLabel, loadCharacters, loadLabels, applyRevision]);
   const pickMethod = useCallback(async (block: AbcBlockRow, method: AbcMethodRow) => {
     const bridge = host();
     if (!bridge) return;
@@ -389,15 +409,6 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [command]);
 
-  // Invariant: every edit, undo and redo bumps revision, so it alone keys the preview redraw.
-  const docKey = `${state.revision}`;
-  // Requires the event wrapper: showFrame sets state, which the lint forbids directly inside an effect.
-  const syncFramePreview = useEffectEvent((frame: number) => { void showFrame(frame); });
-  useEffect(() => {
-    if (syncedDoc.current === docKey) return;
-    syncedDoc.current = docKey;
-    if (rootFrames > 0) syncFramePreview(previewFrame);
-  }, [docKey, rootFrames, previewFrame]);
 
   return (
     <div className="swf-panel">
