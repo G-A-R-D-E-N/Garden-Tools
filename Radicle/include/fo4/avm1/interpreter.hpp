@@ -60,7 +60,7 @@ struct Avm1Result {
   bool ok() const noexcept { return status == Avm1RunStatus::Ok; }
 };
 
-/* Requires 1-based frame numbers in goto_frame, current_frame, total_frames and frame_for_label. */
+/* Requires 1-based frame numbers; frame_for_label must match labels ASCII case-insensitively. */
 struct Avm1TimelineHost {
   virtual ~Avm1TimelineHost() = default;
   virtual void goto_frame(std::uint32_t frame) = 0;

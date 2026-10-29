@@ -8998,6 +8998,7 @@ Bytecode is hand-derived. `u30(65535)` is `FF FF 03` and `u30(65536)` is `80 80 
 - Index mapping follows the `stage_object.rs` PROPERTIES order: 0 `_x`, 1 `_y`, 2 `_xscale`, 3 `_yscale`, 4 `_currentframe`, 5 `_totalframes`, 6 `_alpha`, 7 `_visible`, 8 `_width`, 9 `_height`, 10 `_rotation`, 11 `_target`, 12 `_framesloaded`, 13 `_name`.
 - Index conversion follows Ruffle's `activation.rs:action_get_property`: the operand goes through `coerce_to_f64`, non-finite or <= -1 is invalid, and `as usize` truncates. The op uses `number > -1 && number < 14`, which also rejects NaN, then `static_cast<int>`. So -0.5 maps to 0, as Ruffle does.
 - Indices 11 and 12 are outside this slice. GetProperty pushes undefined without a host call. Ruffle returns those properties, so this is a deviation.
+- Indices 14 to 21 (_droptarget, _url, _highquality, _focusrect, _soundbuftime, _quality, _xmouse, _ymouse) are also outside this slice. GetProperty pushes undefined for them and SetProperty drops the write, without a host call. Ruffle's `stage_object.rs` PROPERTIES table lists them.
 - Indices 4 and 5 are read-only. SetProperty never calls the host for them. Ruffle's `DisplayProperty` has no setter for them (`stage_object.rs` PROPERTIES, `None` setter).
 - GetProperty pops the index (top) and then the target path, and ignores the path, because the host is one clip. Ruffle resolves the path (`resolve_target_display_object`). Target paths are a deviation.
 - Stack effects: GetProperty pops 2 and pushes 1. SetProperty pops 3 (value on top, then index, then path) and pushes 0.

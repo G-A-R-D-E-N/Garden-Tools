@@ -574,7 +574,7 @@ fo4::avm1::Avm1Result execute_with_timeline(const Bytes& input, RecordingTimelin
 TEST(Avm1Timeline, GotoFramePlayAndStopCallTheHostOnceWithoutStackEffects) {
   RecordingTimeline timeline;
   const auto result = execute_with_timeline(
-      cat({int_value(5), rec(0x81, le16(4)), rec(0x06, {}), rec(0x07, {}), rec(0x26, {}),
+      cat({push({int_value(5)}), rec(0x81, le16(4)), rec(0x06, {}), rec(0x07, {}), rec(0x26, {}),
            Bytes{0x00}}),
       timeline);
   ASSERT_TRUE(result.ok()) << result.message;
