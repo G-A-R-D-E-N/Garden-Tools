@@ -920,6 +920,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_graph_document.cpp
     tests/test_graph_flow.cpp
     tests/test_graph_lift.cpp
+    tests/test_graph_lift_real.cpp
     tests/test_graph_node_palette.cpp
     tests/test_graph_script_loader.cpp
     tests/test_graph_tool_service.cpp
