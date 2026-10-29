@@ -790,6 +790,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_check_errors.cpp
     tests/test_check_errors_conditions.cpp
     tests/test_check_errors_record_lists.cpp
+    tests/test_check_errors_real.cpp
     tests/test_check_dialogue.cpp
     tests/test_remap_non_formid_slots.cpp
     tests/test_struct_payload_remap.cpp
