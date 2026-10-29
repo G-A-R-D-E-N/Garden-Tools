@@ -209,7 +209,7 @@ TEST(CheckErrorsGroup1, LimitTruncationFlagAndCycleSurvival) {
   fo4::test::ByteWriter out;
   write_header(out, {});
   const auto group = fo4::test::begin_group(out, "LVLI", 0);
-  for (const auto [form_id, entry] : {std::pair{0x810u, 0x811u}, {0x811u, 0x810u}}) {
+  for (const auto& [form_id, entry] : {std::pair{0x810u, 0x811u}, {0x811u, 0x810u}}) {
     const auto record = fo4::test::begin_record(out, "LVLI", 0, form_id);
     fo4::test::ByteWriter lvlo;
     lvlo.u16(1);
