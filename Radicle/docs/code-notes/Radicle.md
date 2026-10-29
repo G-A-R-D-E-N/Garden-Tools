@@ -9361,6 +9361,14 @@ The rate is refused above 3 because `Radicle/src/swf/swf_write.cpp:sound_format_
 
 `Radicle/src/swf/swf_sound_edit.cpp:retarget_start_sound` builds the new payload as the new u16 id followed by the old payload from byte 2 onward, so the SOUNDINFO bytes are copied and not re-encoded. A new id with no sound character, or one that names a non-sound character, is `unknown_sound`, the same status the replace path uses for a missing id.
 
+## Radicle/src/c_api_swf_sound.cpp:radicle_swf_sound_at
+
+`Radicle/src/c_api_swf_sound.cpp:radicle_swf_sound_at` reads the decoded `SwfSound` from `Radicle/src/c_api_swf_art.cpp:decoded_tag`, so a tag without a DefineSound body is `NOT_FOUND` and a null handle or out pointer is `INVALID_ARGUMENT`. The data bytes stay behind `radicle_swf_tag_payload`, as the bitmap getters do, so the header carries only `data_size`.
+
+## Radicle/src/c_api_swf_sound.cpp:radicle_swf_replace_sound_data
+
+`Radicle/src/c_api_swf_sound.cpp:finish_edit` maps `SwfSoundEditStatus::unknown_tag` and `unknown_sound` to `NOT_FOUND` and every other refusal to `INVALID_ARGUMENT`, leaving the file untouched as `Radicle/src/swf/swf_sound_edit.cpp:replace_sound_data` guarantees. On ok it rebuilds the views with `Radicle/src/c_api_swf_internal.hpp:rebuild_views` and bumps the revision, mirroring `Radicle/src/c_api_swf_edit.cpp:apply`. Covered by `Radicle/tests/test_c_api_swf_sound.cpp:RefusesABadRetargetAndLeavesTheBytesUntouched`.
+
 ## Radicle/src/abc/edit.cpp:intern_int, Radicle/src/abc/edit.cpp:intern_uint, Radicle/src/abc/edit.cpp:intern_double, Radicle/src/abc/edit.cpp:intern_string, Radicle/src/abc/edit.cpp:intern_entry
 
 `Radicle/src/abc/edit.cpp:intern_entry` is the one linear scan behind the four value interners. Index 0 of every pool vector is the implicit default that the writer never emits (`Radicle/src/abc/abc_write.cpp:put_constant_pool` starts each table at 1), so the scan starts at 0 and a request equal to the default returns 0, which is the AVM2 meaning of that index. An empty vector receives its default first, so the appended entry lands at the index the writer will count. Appending never moves an existing index, so every other pool reference in the file stays valid after an intern.

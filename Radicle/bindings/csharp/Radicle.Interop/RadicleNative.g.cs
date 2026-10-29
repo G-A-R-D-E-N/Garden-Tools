@@ -2546,6 +2546,33 @@ public unsafe struct SwfGlyph
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfSound
+{
+    public ushort SoundId;
+    public byte Format;
+    public byte Rate;
+    public byte Sample16Bit;
+    public byte Stereo;
+    public uint SampleCount;
+    public nuint DataSize;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfStartSound
+{
+    public ushort SoundId;
+    public byte SyncStop;
+    public byte SyncNoMultiple;
+    public byte HasInPoint;
+    public uint InPoint;
+    public byte HasOutPoint;
+    public uint OutPoint;
+    public byte HasLoopCount;
+    public ushort LoopCount;
+    public nuint EnvelopeCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct SwfCharacter
 {
     public ushort CharacterId;
@@ -4203,6 +4230,18 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_font_replace_glyph")]
     public static extern Status SwfFontReplaceGlyph(IntPtr swf, nuint index, nuint glyph, byte fill_bits, byte line_bits, SwfShapeRecord* records, nuint record_count, SwfPlanResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_sound_at")]
+    public static extern Status SwfSoundAt(IntPtr swf, nuint index, SwfSound* out_sound);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_start_sound_at")]
+    public static extern Status SwfStartSoundAt(IntPtr swf, nuint index, SwfStartSound* out_start);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_replace_sound_data")]
+    public static extern Status SwfReplaceSoundData(IntPtr swf, SwfSound* header, byte* data, nuint size, SwfPlanResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_retarget_start_sound")]
+    public static extern Status SwfRetargetStartSound(IntPtr swf, nuint index, ushort new_sound_id, SwfPlanResult* out_result);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_revision")]
     public static extern ulong SwfRevision(IntPtr swf);
