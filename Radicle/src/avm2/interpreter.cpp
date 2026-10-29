@@ -156,7 +156,8 @@ InterpreterStatus Interpreter::jump_to_offset(Frame& frame, std::int32_t offset,
 
 ExecutionResult Interpreter::invoke(const FunctionObject& function, Value this_value,
                                     std::vector<Value> arguments,
-                                    const std::vector<Object*>& scopes, std::size_t depth) {
+                                    const std::vector<std::shared_ptr<Object>>& scopes,
+                                    std::size_t depth) {
   if (!runtime_.linked()) {
     return fail(InterpreterStatus::NotLinked, "the runtime is not linked");
   }
@@ -206,7 +207,7 @@ ExecutionResult Interpreter::invoke(const FunctionObject& function, Value this_v
     if (!function.captured_scope().empty()) {
       frame.scopes = function.captured_scope();
     } else {
-      Object* global = runtime_.global_object();
+      const std::shared_ptr<Object>& global = runtime_.global_object_shared();
       if (global != nullptr) {
         frame.scopes.push_back(global);
       }
@@ -215,10 +216,10 @@ ExecutionResult Interpreter::invoke(const FunctionObject& function, Value this_v
     frame.scopes = scopes;
   }
   if (frame.owner_class != nullptr && frame.owner_class->class_object != nullptr) {
-    if (frame.scopes.empty() || frame.scopes.front() != runtime_.global_object()) {
-      frame.scopes.insert(frame.scopes.begin(), runtime_.global_object());
+    if (frame.scopes.empty() || frame.scopes.front().get() != runtime_.global_object()) {
+      frame.scopes.insert(frame.scopes.begin(), runtime_.global_object_shared());
     }
-    frame.scopes.push_back(frame.owner_class->class_object.get());
+    frame.scopes.push_back(frame.owner_class->class_object);
   }
   frame.entry_scope_count = frame.scopes.size();
   ++frames_;

@@ -306,7 +306,7 @@ InterpreterStatus Interpreter::find_scope_binding(Frame& frame, const Multiname&
   found = false;
   for (auto current = frame.scopes.rbegin(); current != frame.scopes.rend(); ++current) {
     if (*current != nullptr && (*current)->has_property(multiname)) {
-      owner = *current;
+      owner = current->get();
       found = true;
       return InterpreterStatus::Ok;
     }
@@ -325,7 +325,7 @@ InterpreterStatus Interpreter::find_scope_binding(Frame& frame, const Multiname&
     }
   }
   if (create_on_global && !frame.scopes.empty() && multiname.has_fixed_name()) {
-    Object* global = frame.scopes.front();
+    Object* global = frame.scopes.front().get();
     if (global != nullptr && global->is_dynamic()) {
       Property& property = global->define_own_property(primary_key(multiname));
       property.kind = PropertyKind::Value;
@@ -446,6 +446,10 @@ ExecutionResult Interpreter::outer_scope_value(const Frame& frame, std::uint32_t
     return fail(InterpreterStatus::ScopeUnderflow,
                 "getouterscope " + std::to_string(index) + " is outside the " +
                     std::to_string(frame.outer_scope->size()) + "-entry captured outer scope");
+  }
+  if ((*frame.outer_scope)[index] == nullptr) {
+    return fail(InterpreterStatus::ScopeUnderflow,
+                "getouterscope " + std::to_string(index) + " is a null scope");
   }
   ExecutionResult result;
   result.value = borrowed_object(*(*frame.outer_scope)[index]);

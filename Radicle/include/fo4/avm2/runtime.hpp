@@ -75,6 +75,7 @@ class Runtime {
   const std::vector<Class*>& classes() const noexcept { return classes_; }
   const std::vector<ScriptEntry>& scripts() const noexcept { return scripts_; }
   Object* global_object() const noexcept { return global_object_.get(); }
+  const std::shared_ptr<Object>& global_object_shared() const noexcept { return global_object_; }
   FontRegistry& fonts() noexcept { return *fonts_; }
   const FontRegistry& fonts() const noexcept { return *fonts_; }
   const std::shared_ptr<FontRegistry>& font_registry() const noexcept { return fonts_; }

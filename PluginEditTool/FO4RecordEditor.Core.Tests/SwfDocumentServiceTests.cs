@@ -385,7 +385,7 @@ public class SwfDocumentServiceTests
         var action = document.Movie.Tags.First(tag => tag.Code == 12);
         Assert.Equal("0000  Play\n0001  Stop\n0002  Trace\n0003  End\n", document.Avm1Disassemble(action.Index));
         var refusal = Assert.Throws<RadicleException>(() => document.Avm1Disassemble(document.Movie.Tags.First(tag => tag.Code == 43).Index));
-        Assert.Equal(Status.InvalidArgument, refusal.Status);
+        Assert.Equal(Radicle.Interop.Native.Status.InvalidArgument, refusal.Status);
         Assert.Equal(0ul, document.Revision);
     }
 

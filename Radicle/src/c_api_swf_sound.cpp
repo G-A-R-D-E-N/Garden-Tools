@@ -33,6 +33,8 @@ radicle_status finish_edit(radicle_swf& swf, fo4::swf::SwfSoundEditStatus status
       break;
     case fo4::swf::SwfSoundEditStatus::unknown_tag:
     case fo4::swf::SwfSoundEditStatus::unknown_sound:
+    // Requires NOT_FOUND when the index names no StartSound, so a bad retarget is observable only as a status.
+    case fo4::swf::SwfSoundEditStatus::not_a_start_sound:
       return fail(RADICLE_STATUS_NOT_FOUND, "the sound id or tag index names nothing");
     default:
       return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the sound edit was refused");
