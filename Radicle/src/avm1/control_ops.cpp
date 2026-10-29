@@ -2,11 +2,17 @@
 
 #include "function_ops.hpp"
 #include "object_ops.hpp"
+#include "text_ops.hpp"
 
+#include <algorithm>
 #include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <set>
 #include <string>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace fo4::avm1::control_ops {
 
@@ -20,20 +26,38 @@ Avm1RunStatus nesting_limit(std::string& message) {
   return Avm1RunStatus::ResourceLimit;
 }
 
-bool derives_from(const Avm1Run& run, const Avm1FunctionBody* cls, const Avm1FunctionBody* base) {
-  while (cls != nullptr) {
-    if (cls == base) {
+bool reaches(const Avm1Run& run, const Avm1FunctionBody* from, const Avm1FunctionBody* target) {
+  std::vector<const Avm1FunctionBody*> pending{from};
+  std::set<const Avm1FunctionBody*> seen;
+  while (!pending.empty()) {
+    const Avm1FunctionBody* current = pending.back();
+    pending.pop_back();
+    if (current == nullptr) {
+      continue;
+    }
+    if (current == target) {
       return true;
     }
-    const auto found = run.superclasses.find(cls);
-    cls = found == run.superclasses.end() ? nullptr : found->second.get();
+    if (!seen.insert(current).second) {
+      continue;
+    }
+    const auto parent = run.superclasses.find(current);
+    if (parent != run.superclasses.end()) {
+      pending.push_back(parent->second.get());
+    }
+    const auto listed = run.implements.find(current);
+    if (listed != run.implements.end()) {
+      for (const auto& implemented : listed->second) {
+        pending.push_back(implemented.get());
+      }
+    }
   }
   return false;
 }
 
 bool instance_of(const Avm1Run& run, const Avm1Data& value, const Avm1Data& constructor) {
   return value.kind == Avm1DataKind::Object && constructor.kind == Avm1DataKind::Function &&
-         derives_from(run, value.object->constructed_by.get(), constructor.function.get());
+         reaches(run, value.object->constructed_by.get(), constructor.function.get());
 }
 
 Avm1RunStatus pop_pair(Avm1State& state, Avm1Data& below, Avm1Data& top, std::string& message) {
@@ -102,6 +126,37 @@ Avm1RunStatus cast_op(Avm1Run& run, std::string& message) {
   return Avm1RunStatus::Ok;
 }
 
+Avm1RunStatus implements_op(Avm1Run& run, std::string& message) {
+  Avm1State& state = run.state;
+  Avm1Data constructor;
+  if (const Avm1RunStatus status = pop(state, constructor, message); status != Avm1RunStatus::Ok) {
+    return status;
+  }
+  Avm1Data count;
+  if (const Avm1RunStatus status = pop(state, count, message); status != Avm1RunStatus::Ok) {
+    return status;
+  }
+  const auto wanted = static_cast<std::size_t>(
+      static_cast<std::int32_t>(text_ops::to_uint32(count, state.swf_version)));
+  const std::size_t listed = std::min(wanted, state.stack.size());
+  std::vector<std::shared_ptr<const Avm1FunctionBody>> interfaces;
+  for (std::size_t index = 0; index < listed; ++index) {
+    Avm1Data value;
+    if (const Avm1RunStatus status = pop(state, value, message); status != Avm1RunStatus::Ok) {
+      return status;
+    }
+    if (value.kind == Avm1DataKind::Function) {
+      interfaces.push_back(value.function);
+    }
+  }
+  const bool versioned = state.swf_version == 0 || state.swf_version >= 7;
+  if (listed > 0 && versioned && constructor.kind == Avm1DataKind::Function) {
+    // Invariant: the first ImplementsOp on a class wins, as Ruffle's set_interfaces does.
+    run.implements.try_emplace(constructor.function.get(), std::move(interfaces));
+  }
+  return Avm1RunStatus::Ok;
+}
+
 Avm1RunStatus extends(Avm1Run& run, std::string& message) {
   Avm1Data sub;
   Avm1Data base;
@@ -113,7 +168,7 @@ Avm1RunStatus extends(Avm1Run& run, std::string& message) {
     message = "Extends of a value that is not a function is not in this slice";
     return Avm1RunStatus::Unsupported;
   }
-  if (derives_from(run, base.function.get(), sub.function.get())) {
+  if (reaches(run, base.function.get(), sub.function.get())) {
     message = "a class cannot extend itself, directly or through its superclasses";
     return Avm1RunStatus::InvalidStream;
   }
@@ -254,6 +309,8 @@ Avm1RunStatus execute(Avm1Run& run, const Avm1Block& block, const Avm1Action& ac
       return throw_value(run.state, message);
     case 0x2B:
       return cast_op(run, message);
+    case 0x2C:
+      return implements_op(run, message);
     case 0x46:
       return enumerate_variable(block, run.state, message);
     case 0x54:

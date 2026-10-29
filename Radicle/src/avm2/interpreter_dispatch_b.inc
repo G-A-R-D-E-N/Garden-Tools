@@ -154,6 +154,11 @@
         if (!object.is_object()) {
           return fail(InterpreterStatus::NullReference, "setslot needs an object");
         }
+        if (slot > kMaxSlotIndex) {
+          return fail(InterpreterStatus::ResourceLimit,
+                      "setslot index " + std::to_string(slot) + " exceeds the slot limit " +
+                          std::to_string(kMaxSlotIndex));
+        }
         Object& target = *object.as_object();
         if (slot >= target.slots().size()) {
           target.resize_slots(slot + 1);

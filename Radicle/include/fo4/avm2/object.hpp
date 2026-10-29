@@ -13,6 +13,8 @@
 
 namespace fo4::avm2 {
 
+inline constexpr std::uint32_t kMaxSlotIndex = 65535;
+
 struct Class;
 class FunctionObject;
 struct Trait;

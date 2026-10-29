@@ -1,4 +1,5 @@
 #include <fo4/avm2/interpreter.hpp>
+#include <fo4/avm2/object.hpp>
 #include <fo4/avm2/runtime.hpp>
 #include <fo4/avm2/value.hpp>
 
@@ -16,6 +17,7 @@ namespace abc = fo4::abc;
 using fo4::avm2::ExecutionResult;
 using fo4::avm2::Interpreter;
 using fo4::avm2::InterpreterStatus;
+using fo4::avm2::kMaxSlotIndex;
 using fo4::avm2::Runtime;
 
 constexpr std::uint8_t kDxns = 0x06;
@@ -181,6 +183,68 @@ TEST(Avm2LateOps, GetglobalslotPastTheEndIsUndefined) {
   avm2_test::ScriptBuilder script;
   avm2_test::CodeBuilder code;
   code.op_u30(kGetglobalslot, 40);
+  code.returnvalue();
+  const ExecutionResult result = run_code(script, code);
+  ASSERT_TRUE(result.ok()) << result.message;
+  EXPECT_TRUE(result.value.is_undefined());
+}
+
+TEST(Avm2LateOps, SetslotAtTheSlotLimitGrowsTheObjectAndReadsBack) {
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder code;
+  code.newobject(0);
+  code.dup();
+  code.pushbyte(7);
+  code.setslot(kMaxSlotIndex);
+  code.getslot(kMaxSlotIndex);
+  code.returnvalue();
+  const ExecutionResult result = run_code(script, code);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_int32());
+  EXPECT_EQ(result.value.as_int32(), 7);
+}
+
+TEST(Avm2LateOps, SetslotPastTheSlotLimitIsRefusedWithAResourceLimit) {
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder code;
+  code.newobject(0);
+  code.pushbyte(1);
+  code.setslot(kMaxSlotIndex + 1);
+  code.returnvoid();
+  const ExecutionResult result = run_code(script, code);
+  EXPECT_EQ(result.status, InterpreterStatus::ResourceLimit);
+  EXPECT_EQ(result.message, "setslot index 65536 exceeds the slot limit 65535");
+}
+
+TEST(Avm2LateOps, SetglobalslotAtTheSlotLimitGrowsTheGlobalObjectAndReadsBack) {
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder code;
+  code.pushbyte(7);
+  code.op_u30(kSetglobalslot, kMaxSlotIndex);
+  code.op_u30(kGetglobalslot, kMaxSlotIndex);
+  code.returnvalue();
+  const ExecutionResult result = run_code(script, code);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_int32());
+  EXPECT_EQ(result.value.as_int32(), 7);
+}
+
+TEST(Avm2LateOps, SetglobalslotPastTheSlotLimitIsRefusedWithAResourceLimit) {
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder code;
+  code.pushbyte(1);
+  code.op_u30(kSetglobalslot, kMaxSlotIndex + 1);
+  code.returnvoid();
+  const ExecutionResult result = run_code(script, code);
+  EXPECT_EQ(result.status, InterpreterStatus::ResourceLimit);
+  EXPECT_EQ(result.message, "setglobalslot index 65536 exceeds the slot limit 65535");
+}
+
+TEST(Avm2LateOps, GetslotAtTheSlotLimitOnAnEmptyObjectIsUndefined) {
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder code;
+  code.newobject(0);
+  code.getslot(kMaxSlotIndex);
   code.returnvalue();
   const ExecutionResult result = run_code(script, code);
   ASSERT_TRUE(result.ok()) << result.message;

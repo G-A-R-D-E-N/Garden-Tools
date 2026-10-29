@@ -22,6 +22,8 @@ struct Avm1State {
   std::vector<std::string> trace;
   Avm1Data thrown;
   std::uint8_t swf_version{0};
+  std::uint32_t random_state{0};
+  std::uint32_t elapsed_ms{0};
 };
 
 struct Avm1Call {
@@ -51,6 +53,8 @@ struct Avm1Run {
   std::map<std::size_t, std::shared_ptr<const Avm1FunctionBody>> functions{};
   std::size_t regions{0};
   std::map<const Avm1FunctionBody*, std::shared_ptr<const Avm1FunctionBody>> superclasses{};
+  std::map<const Avm1FunctionBody*, std::vector<std::shared_ptr<const Avm1FunctionBody>>>
+      implements{};
 };
 
 Avm1RunStatus run_block(Avm1Run& run, const Avm1Block& block);
