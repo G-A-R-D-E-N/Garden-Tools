@@ -354,6 +354,7 @@ add_library(fo4
   src/swf/swf_glyph_edit.cpp
   src/swf/swf_bitmap_edit.cpp
   src/swf/swf_sound.cpp
+  src/swf/swf_sound_edit.cpp
   src/swf/swf_census.cpp
   src/swf/swf_svg.cpp
   src/swf/swf_frame_svg.cpp
