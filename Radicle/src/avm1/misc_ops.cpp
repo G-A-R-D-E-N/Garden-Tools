@@ -1,7 +1,7 @@
 #include "misc_ops.hpp"
 
-#include "control_ops.hpp"
 #include "text_ops.hpp"
+#include "timeline_ops.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -72,7 +72,7 @@ Avm1RunStatus execute(Avm1Run& run, const Avm1Block& block, const Avm1Action& ac
     case 0x89:
       return Avm1RunStatus::Ok;
     default:
-      return control_ops::execute(run, block, action, next, message);
+      return timeline_ops::execute(run, block, action, next, message);
   }
 }
 

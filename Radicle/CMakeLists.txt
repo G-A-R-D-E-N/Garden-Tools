@@ -390,6 +390,7 @@ add_library(fo4
   src/avm1/misc_ops.cpp
   src/avm1/object_ops.cpp
   src/avm1/text_ops.cpp
+  src/avm1/timeline_ops.cpp
   src/avm2/name.cpp
   src/avm2/value.cpp
   src/avm2/coercion.cpp
