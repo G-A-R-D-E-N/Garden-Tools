@@ -8362,7 +8362,7 @@ Expected strings were derived by hand. The glyph is a 1000-twip square (50 px, t
 
 ## Radicle/src/avm1/control_ops.cpp:execute
 
-Adds the AVM1 control and object opcodes 0x2A Throw, 0x2B CastOp, 0x46 Enumerate, 0x54 InstanceOf, 0x55 Enumerate2, 0x69 Extends, 0x8F Try and 0x94 With. This supersedes the older refusal notes for these opcodes; ImplementsOp 0x2C stays refused by name. GetMember and SetMember on function prototypes stay deferred because there is no prototype model. Any other opcode still returns Unsupported.
+Adds the AVM1 control and object opcodes 0x2A Throw, 0x2B CastOp, 0x46 Enumerate, 0x54 InstanceOf, 0x55 Enumerate2, 0x69 Extends, 0x8F Try and 0x94 With. This supersedes the older refusal notes for these opcodes; ImplementsOp 0x2C is implemented later by `Radicle/src/avm1/control_ops.cpp:implements_op`. GetMember and SetMember on function prototypes stay deferred because there is no prototype model. Any other opcode still returns Unsupported.
 
 ## Radicle/src/avm1/control_ops.cpp:try_regions
 
@@ -8784,8 +8784,192 @@ Detects an encoder change that alters bytes of an unedited stream. It checks thr
 ## Radicle/tests/swf_movie_builder.hpp:movie_of
 
 - `movie_of`, `TagPayload`, `sprite_tag`, `place_full`, `matrix_full`, `square_with_fill`, and `square_shape` moved here from `test_swf_display.cpp` so the nine-slice render tests can build movies without copying them. `test_swf_display.cpp` was at 741 lines, over the 750 limit once the new tests were added. The bodies are unchanged; the only edit is `inline`.
+## Radicle/src/avm1/misc_ops.cpp:random_number and next_random
+
+- RandomNumber is a xorshift32 (shifts 13, 17, 5) over `Avm1State::random_state`, seeded from `Avm1Environment::random_seed`. The output is masked to 31 bits, as Ruffle masks its AVM RNG with `K_RANDOM_PURE_MAX` (`ruffle-0.6.0/core/src/avm_rng.rs`, the `a_num & K_RANDOM_PURE_MAX` line). The exact sequence is ours, not Flash's: Ruffle's generator is seeded from the clock (`avm_rng.rs` `get_seed`), so no Flash sequence can be reproduced. Only the range `[0, bound)` is claimed to match Ruffle. Unverified against real Flash output.
+- The bound follows `ruffle-0.6.0/core/src/avm1/activation.rs:action_random_number` (lines 1898-1908): `coerce_to_f64 as i32` saturates, so a bound of 1 or more is truncated and clamped to 2147483647, and a bound below 1 (or NaN) answers 0 without advancing the stream. Ruffle draws only when the bound is positive; this does the same.
+- Seed 1 gives draws 270369, 67634689, 499951813 in `misc_ops.cpp:random_number` (hand-derived step by step: 0x42021, 0x04080601, 0x1DCCA8C5 after masking). The first two also agree with the xorshift32 sequence as I recall it, which is not verified against a source here. `Radicle/tests/test_avm1_ops.cpp:RandomNumberIsASeededStreamThatSkipsZeroBounds` detects a zero bound that advances the stream, and `RandomNumberClampsItsBoundToTheSignedRange` detects a bound wrapped to 32 bits.
+
+## Radicle/src/avm1/misc_ops.cpp:get_time
+
+- GetTime pushes `Avm1State::elapsed_ms`, which the caller injects. Ruffle's `activation.rs:action_get_time` (lines 1223-1238) reads a wall clock since start and adds a `time_offset` that advances on busy loops (the `times_get_time_called` heuristic). Neither is replicated here, since a wall clock makes the interpreter non-deterministic and the heuristic is not needed for pure runtime tests. Deviation: a movie that busy-waits on GetTime will see a frozen clock. Unverified against real Flash timing.
+- `Radicle/tests/test_avm1_ops.cpp:GetTimeTracesTheInjectedElapsedMilliseconds` detects GetTime refusing or reading a clock instead of the injected value.
+
+## Radicle/src/avm1/misc_ops.cpp:target_path
+
+- Ruffle's `activation.rs:action_target_path` (lines 2194-2206) answers the dot path only for a display object and undefined for everything else. This interpreter has no display objects, so the op always answers undefined after popping its operand. That matches Ruffle for every non-display value. Deviation: a real movie clip would answer its path. Add a host hook when a display list exists.
+- `Radicle/tests/test_avm1_ops.cpp:TargetPathPopsItsOperandAndAnswersUndefined` detects a TargetPath that keeps its operand on the stack, or one that returns a text for a number.
+
+## Radicle/src/avm1/misc_ops.cpp:execute
+
+- Opcode 0x89 (StrictMode) is a no-op that leaves the stack alone and ignores its one-byte flag. Ruffle 0.6.0 has no StrictMode action: `swf/src/avm1/opcode.rs` has no 0x89 entry, so the reader makes it `Action::Unknown`, and `ruffle-0.6.0/core/src/avm1/activation.rs:action_unknown` (lines 2434-2440) logs an error and continues with no stack effect. The no-op therefore matches Ruffle's effective behavior. Unverified: what Flash's strict mode changes, which Ruffle does not model.
+- Dispatch: the interpreter's default arm now calls `misc_ops::execute`, which passes unknown codes on to `control_ops::execute`, whose default arm still refuses by name. This keeps `interpreter.cpp` under the 750-line limit.
+- `Radicle/tests/test_avm1_ops.cpp:StrictModeLeavesTheStackAlone` detects a StrictMode that pops or pushes.
+
+## Radicle/src/avm1/control_ops.cpp:implements_op
+
+- ImplementsOp pops the constructor, then the count, then up to `count` interface values, following `ruffle-0.6.0/core/src/avm1/activation.rs:action_implements_op` (lines 1559-1607). The count is converted with `ToInt32` (`text_ops::to_uint32` then a signed cast). Objects count as 0, as in Ruffle's `coerce_to_i32` for primitives only. A negative count wraps to a huge size and the clamp takes the whole stack, the same as Ruffle's `as usize` cast.
+- The list is stored only when the count is above 0, the constructor is a function, and the SWF version is 0 or at least 7. Ruffle checks `swf_version() >= 7` at `activation.rs:action_implements_op` line 1599 and calls `set_interfaces`, which uses `get_or_insert` in `ruffle-0.6.0/core/src/avm1/object/script_object.rs:set_interfaces` (lines 879-886), so the first list a class gets is kept and later calls do nothing. Version 0 counts as current, matching this file's other version rules.
+- Deviations: a non-function interface value is skipped, where Ruffle reads its prototype. A non-function constructor is skipped, where Ruffle would set the prototype of an object. A missing constructor or count refuses with StackUnderflow, where Ruffle's `pop` answers undefined and continues. Unverified against real Flash for the underflow case.
+- `Radicle/tests/test_avm1_control.cpp:ImplementsOpIsSwfSevenOnlyAndKeepsTheFirstList` detects an op that applies before SWF 7, a last-wins list, or a count of 0 that records something. `ImplementsOpClampsItsCountAndRefusesAShortStack` detects an unclamped count and a missing refusal.
+
+## Radicle/src/avm1/control_ops.cpp:reaches
+
+- Replaces `derives_from`. It walks each class's superclass link and its implemented-interface list, as Ruffle's `ruffle-0.6.0/core/src/avm1/object.rs:is_instance_of` (lines 325-352) walks the prototype chain and each prototype's interface tree. A visited set makes an interface loop end the walk. Ruffle's own comment (object.rs lines 330-331) says a recursive chain hangs Flash, and Ruffle does not guard it.
+- `Extends` uses the same walk for its cycle check, so `Extends` now also refuses a base whose interfaces reach the subclass. This is a behavior change, but only for code that implements an interface and then extends the class that implements it.
+- `Radicle/tests/test_avm1_control.cpp:ImplementsOpFollowsInterfaceListsAndStopsOnACycle` detects a one-level check (no interface chain) and an unbounded walk on an interface loop. `ImplementsOpLetsAnInstanceReachTheInterfaceThroughItsSuperclass` detects an op that never records its list.
+
+## Radicle/src/avm1/text_ops.cpp:to_number
+
+- `to_number` and `to_uint32` (with `parse_number`) moved here unchanged from `Radicle/src/avm1/interpreter.cpp`, so `misc_ops.cpp` and `control_ops.cpp` can convert operands the way the interpreter does. The body is the same, and the `swf_version` rules are the same.
+
+## Radicle/src/avm1/interpreter.cpp:execute_actions
+
+- `execute_actions` takes an `Avm1Environment` (`Radicle/include/fo4/avm1/interpreter.hpp`) with the RNG seed and the elapsed milliseconds for GetTime. In `Radicle/include/fo4/avm1/interpreter.hpp:Avm1Environment` the default seed `0x2545F491` is an arbitrary nonzero constant. The seed must be nonzero, since a zero xorshift state stays zero. Existing callers that pass only the step limit and SWF version keep their behavior.
+
+## Radicle/tests/test_graph_lift_real.cpp:GraphLiftReal
+
+- One `ScriptIndex` serves the whole sweep, as `test_papyrus_codegen_real.cpp` does. `GraphCompiler::compile` publishes each regenerated script into a scratch root and calls `index_.addRoot` (`graph_compiler.cpp:publishForSelfReference`). `addRoot` scans only that new root, and name lookups go through the hash maps `byQualifiedName_` and `byBaseName_` (`script_index.cpp:findFile`), where the first root to define a name wins. The vanilla script therefore keeps resolving to its own file, and a scratch copy never shadows it.
+- `GraphLifter::refuse` (`graph_lifter.cpp:refuse`, `graph_lifter_expr.cpp:refuse`) puts only `Line N: ` in the message and never sets `sourceLine`. `attributeRefusals` therefore assigns each error to the callable with the nearest start line at or before N. A refusal that falls after the last callable of a script, such as a property with Get or Set bodies declared below the functions, is charged to that last callable. A refusal before the first callable is charged to nothing and is not in the histogram.
+- The document is compiled even when some callables were refused, so unrefused callables in the same script can still round trip. A partial document that fails to compile shows up as a missed round trip, not as a refusal.
+- `reasonOf` replaces quoted names with `'X'`, so refusals group by construct instead of by identifier.
+- A callable's vanilla body is found by state name and function name. The default state is named `""` (`code_generator.cpp:emptyState`). A remote event is named `::remote_<Type>_<Name>` in the pex (`code_generator.cpp:buildEvent`), so `eventPexName` uses that name as the lookup key. `helper::functionDifference` decides identity: flags, return type, parameter count, and every instruction mnemonic and operand.
+- A script that throws in the parse, compile, or lift path marks its callables as refused with reason `exception`. A throw before `callablesOf` runs counts no callables.
+- `GraphCompiler::clearScratch` runs after the loop, so scratch roots from this gate do not persist in the process temp folder.
+- The only assertion is the `lifted` floor (`test_graph_lift_real.cpp:kMinimumLiftedFraction`, 0.5). It is a placeholder, not a measurement, and must be re-measured on the fo4-data runner. The `roundtrip` count is printed in the `GRAPHLIFT` line and is not asserted until it is measured there.
+
+## Radicle/src/avm1/encode.cpp:layout
+
+`layout` is the one walk that `encode_actions` and `validate_actions` both use. It writes the records, appends the trailing bytes, patches every branch, and keeps the first problem in `Encoding::status`. `encode_actions` returns only the bytes, so its output is unchanged and it still truncates silently. The delta check runs on the same destination that is written, after the layout is complete. A target is resolvable when it is the offset of a surviving record or when it equals the original end of the records plus the trailing bytes. Any other target is reported as BranchUnresolved, while the encoder still retargets it to the next surviving record or to the stream end.
+
+## Radicle/src/avm1/encode.cpp:validate_actions
+
+Returns the first problem found by `layout`. BodyRecordsPastEnd means a body count runs past its enclosing range: the list end for a top-level container, or the parent body for a nested one. SizeTooLarge means a record payload or a body is over 65535 bytes. BranchDeltaOutOfRange means a branch offset does not fit in int16 after layout. BranchUnresolved means a target names no surviving record. The check takes the whole `Avm1Stream` rather than only the action vector, because the delta to the stream end depends on the trailing bytes. A stream from `decode_actions` that has not been edited returns Ok. The test `DeletedJumpTargetRetargetsToTheNextSurvivingRecord` asserts BranchUnresolved after a target is erased.
+
+## Radicle/src/avm1/encode.cpp:write_body
+
+The new check reports BodyRecordsPastEnd when `first + records` is past `end`. For a nested body, `end` is the parent body end after clamping, so an overflow past the parent is caught by the same test as an overflow past the list. The body size is compared with 65535 before it is written as 16 bits, and the write itself is still truncated, as before.
+
+## Radicle/src/avm1/encode.cpp:write_record
+
+`starts.emplace` keeps the first record with a given offset in list order, so a branch lands on the first record that carries its target offset. A record with kNewRecordOffset is never indexed, so it cannot be a branch target and cannot take an offset from another record. `source_end` is the largest offset plus length over records that have an offset. The record length is also checked against 65535 before the 16-bit length is patched.
+
+## Radicle/include/fo4/avm1/avm1.hpp:Avm1Branch
+
+`Avm1Branch::target` is the only input the encoder reads. `Avm1Branch::offset` is ignored on encode, and the offset written is recomputed from the layout. A branch keeps aiming at the record that had its target offset, even when records are inserted before it.
+
+## Radicle/src/avm1/edit.cpp:insert_action
+
+An index past the list end returns false and changes nothing. The new record belongs to every container that is before `index` and whose body covers `index`, which means `start <= index < start + count` for one of its bodies. Each such body count goes up by one, and the enclosing containers are updated before the vector is changed. Bodies are half-open, so an insert at the first index of a body goes into that body, and an insert at the first index after a body is outside it. When a Try has a catch body, the boundary between try and catch goes into the catch body. The new record's own `body_records` is taken as given. Records that the caller wraps are already inside the same enclosing bodies, so the caller only has to make the wrapped count match.
+
+## Radicle/src/avm1/edit.cpp:erase_action
+
+An index at or past the list end returns false and changes nothing. Erasing a container also erases its body records, because `record_span` is one record plus the counts of its present bodies. Every container before `index` whose body covers `index` loses that span. The erased range is clamped to the list end, and a count that is smaller than the span is clamped at zero.
+
+## Radicle/tests/test_avm1_encode.cpp:InsertedRecordInsideANestedTryGrowsEveryEnclosingBody
+
+Detects an insert that grows only the innermost body and leaves the DefineFunction body size stale. The input is `9B 05 00 00 00 00 0E 00 | 8F 09 00 01 01 00 01 00 00 00 65 00 | 04 | 06 | 00`, which is 23 bytes. Stop (`07`) is inserted at index 2, which is the start of the try body. The Function count goes from 3 to 4 and its body size from 14 to 15, which is `0F 00`. The try size goes from 1 to 2, and the catch size stays 1. The expected output is `9B 05 00 00 00 00 0F 00 8F 09 00 01 02 00 01 00 00 00 65 00 07 04 06 00`, which is 24 bytes.
+
+## Radicle/tests/test_avm1_encode.cpp:ErasedContainerRecordTakesItsBodyRecordsWithIt
+
+Detects an erase that removes only the Try header and leaves its try and catch records behind, or that leaves the Function count at 3. Erasing index 1 removes the Try, NextFrame and Play records, which is 3 records. The Function count goes from 3 to 0, and its body size becomes 0. The expected output is `9B 05 00 00 00 00 00 00 00`, which is 9 bytes.
+
+## Radicle/tests/test_avm1_encode.cpp:InsertedRecordInsideACatchByRegisterTryGrowsOnlyTheCatchBody
+
+Detects an encoder that writes a catch name where flag 4 selects a register byte, or an insert that changes the try size when it should change only the catch size. The input is `8F 08 00 05 01 00 01 00 00 00 02 04 06 00`, which is 14 bytes. The Try has flags 5, so the catch body is present and the catch is by register 2. Stop is inserted at index 2, which is the start of the catch body. The catch size goes from 1 to 2, and the try size stays 1. The expected output is `8F 08 00 05 01 00 02 00 00 00 02 04 07 06 00`, which is 15 bytes.
+
+## Radicle/tests/test_avm1_encode.cpp:InsertedRecordInsideAWithBodyGrowsTheWithBodySize
+
+Detects an insert that updates only DefineFunction bodies and skips the With body. The input is `94 02 00 01 00 04 00`, which is 7 bytes, with a With body of 1 byte holding NextFrame. Stop is inserted at index 1, which is the start of the body. The body size goes from 1 to 2. The expected output is `94 02 00 02 00 07 04 00`, which is 8 bytes.
+
+## Radicle/tests/test_avm1_encode.cpp:JumpIntoAFunctionBodyFollowsTheBodyAfterAnInsert
+
+Detects an encoder that keeps the old jump delta when a body grows between the jump and its target. The input is `99 02 00 09 00 | 9B 05 00 00 00 00 02 00 | 04 06 | 00`, which is 16 bytes. The Jump is at 0, its target is 14 (the Play inside the function body), and the stream has 5 bytes before the function body. Stop is inserted at index 3, before Play. Play moves to offset 15 in the output, so the delta is 15 - 5 = 10, which is `0A 00`. The function body size goes from 2 to 3, which is `03 00`. The expected output is `99 02 00 0A 00 9B 05 00 00 00 00 03 00 04 07 06 00`, which is 17 bytes.
+
+## Radicle/tests/test_avm1_encode.cpp:BranchToTheOriginalStreamEndFollowsTheEndAfterAnInsert
+
+Detects an encoder that resolves a target past the last record to the last record start instead of the stream end. The input is `99 02 00 02 00 04 00`, which is 7 bytes, and the Jump targets 7, which is the end of the bytes. Stop is inserted at index 1. The output stream is 8 bytes, so the delta is 8 - 5 = 3, which is `03 00`. The expected output is `99 02 00 03 00 07 04 00`, which is 8 bytes.
+
+## Radicle/tests/test_avm1_encode.cpp:NewRecordBeforeABranchToOffsetZeroLeavesTheBranchOnTheOffsetZeroRecord
+
+Detects an encoder that lets a new record take the target offset 0, or that resolves the branch to the first record in the list. The input is `99 02 00 FB FF 04 00`, which is 7 bytes, and the Jump at offset 0 targets 0 with a delta of -5. Stop with no offset is inserted at index 0. The Jump moves to encoded offset 1, and its branch end is 6, so the delta is 1 - 6 = -5, which is `FB FF`. If the Stop took offset 0, the delta would be -6 (`FA FF`). The expected output is `07 99 02 00 FB FF 04 00`, which is 8 bytes.
+
+## Radicle/tests/test_avm1_encode.cpp:EraseAndInsertRefuseAnIndexPastTheList
+
+Detects an insert or erase at an index past the list end that changes the vector size or writes past its end. The input is the 5-record Jump stream. An insert at size + 1 and an erase at size both return false, and the size is unchanged.
+
+## Radicle/tests/test_avm1_encode.cpp:ValidateRejectsABodyLargerThan65535Bytes
+
+Detects a silent 16-bit truncation of a body size. The stream is a DefineFunction with two Raw records of 40000 bytes each, which is 2 times 40003 = 80006 bytes of body. Each record is under 65535, so only the body is over. Without the check, the body size would be written as 80006 - 65536 = 14470. The expected result is SizeTooLarge.
+
+## Radicle/tests/test_avm1_encode.cpp:ValidateRejectsABranchDeltaThatDoesNotFitInt16
+
+Detects a branch offset that is silently truncated to int16. The input is the 7-byte jump-to-end stream, and a 40000-byte Raw record is inserted at index 1. The Jump is at 0, the Raw is at 5 with 40003 bytes, and the stream end moves to 40010. The delta is 40010 - 5 = 40005, which is outside int16. The expected result is BranchDeltaOutOfRange.
+
+## Radicle/tests/test_avm1_encode.cpp:ValidateRejectsABodyRecordCountPastTheList
+
+Detects a body count past the list end that the encoder clamps silently. The input is the 11-byte DefineFunction stream, which has 3 records after it. Its body count is set to 4, so the body needs more records than the list has. The expected result is BodyRecordsPastEnd.
+
+## Radicle/tests/test_avm1_encode.cpp:ValidateRejectsANestedBodyThatRunsPastItsParentRange
+
+Detects a validator that checks only the top-level list end and not the parent body. The input is the 23-byte nested Function and Try stream. The Try's try body count is set to 2, so the try body covers indices 2 and 3, and the Function body ends at 4. The catch body then starts at 4 and needs 1 record, which runs past the Function body. The expected result is BodyRecordsPastEnd.
 
 ## src/papyrus/decompiler_internal.hpp:BodyState
 
 - Split of `decompiler.cpp` (727 lines, too close to the 750 cap) by responsibility. `decompiler.cpp` keeps `toSource`, `emitFunction`, `disassemble` and the `decompileBody` setup. `decompiler_expr.cpp:translateInstructions` turns each instruction into a `BodyState::put` or a statement. `decompiler_stmt.cpp:reconstructStatements` runs jump folding, the temp-call pass, local hoisting and `If`/`While`/`Else` structuring. The header holds the state those passes share: `BodyState`, `JKind`, `JInfo`, and the `iequals`, `startsWith` and `join` helpers.
 - `BodyState::put` is the single write path. With inlining on, a `::temp` destination goes to `temps` and `tempExpression`; `::NoneVar` becomes a bare statement; anything else becomes `name = expr`. The move changed no logic, names or output. The decompiler tests are the check that it stayed that way.
+
+## Radicle/include/fo4/avm2/object.hpp:kMaxSlotIndex
+
+- The cap on every slot index that can grow an `Object` slot vector: the `setslot` and `setglobalslot` operands, and ABC slot and const trait ids (checked at link time, see `Radicle/src/avm2/runtime.cpp:Runtime::build_traits`). The largest accepted index is 65535, so a slot vector holds at most 65536 entries.
+- The operands are u30 values, so a hostile operand can reach 0x3FFFFFFF. Without the cap, one `setslot` on an empty object resizes its vector to that index.
+- The value 65535 is a chosen bound, not measured against real SWF slot counts. No corpus scan was run. Raising it is a change to this constant plus the messages pinned in `Radicle/tests/test_avm2_late_ops.cpp:Avm2LateOps`.
+
+## Radicle/src/avm2/interpreter_dispatch_b.inc:k_setslot
+
+- The index check runs after the object check and before `resize_slots`. An index above `kMaxSlotIndex` returns `InterpreterStatus::ResourceLimit` with `setslot index N exceeds the slot limit 65535`. The object is not resized and the run stops at that instruction. In-cap indexes behave as before.
+- The super-property slot write (`k_setsuper`, same file) also grows a vector, but its index is `trait->slot_id` from a linked trait. `Radicle/src/avm2/runtime.cpp:Runtime::build_traits` caps that id, so this path needs no check of its own.
+
+## Radicle/src/avm2/interpreter_dispatch_e.inc:k_setglobalslot
+
+- Same cap as `setslot`, placed after the global-scope check and before `global.resize_slots`. The message names `setglobalslot`. The global object is `frame.scopes.front()`.
+
+## Radicle/src/avm2/interpreter_dispatch_b.inc:k_getslot
+
+- A read never grows a vector. An index past `slots().size()` returns undefined, with no cap check. `Radicle/src/avm2/interpreter_dispatch_e.inc:k_getglobalslot` does the same. Both were verified by reading the code; the tests in `Radicle/tests/test_avm2_late_ops.cpp:Avm2LateOps` pin them.
+
+## Radicle/src/avm2/runtime.cpp:Runtime::build_traits
+
+- The `build_trait` lambda is the only place an ABC slot or const trait id enters the runtime. A `slot_id` above `kMaxSlotIndex` returns `RuntimeStatus::InvalidTrait`, so `Runtime::link` fails. `Radicle/src/avm2/runtime_link.cpp:Runtime::link_added_file` reaches the same check through `build_traits`.
+- The cap is applied at link time, not at growth time, because `Class::apply_slot_defaults` (`Radicle/src/avm2/class.cpp`) and `Interpreter::make_instance` (`Radicle/src/avm2/interpreter_support.cpp`) return no status. The cap bounds `compute_slot_count` and `compute_class_slot_count`, so every class instance and class object resize is bounded too.
+- Gap: this refusal uses `InvalidTrait`, because `RuntimeStatus` has no resource-limit value. The message is the generic `a trait does not resolve`, the same one an unresolved trait gets. The test does not depend on that message.
+
+## Radicle/include/fo4/avm2/interpreter.hpp:InterpreterStatus
+
+- `ResourceLimit` is appended after `ScopeDepthExceeded`, so the existing values keep their numbers. The brief named an existing AVM2 `ResourceLimit`, but none existed. AVM1 has `Avm1RunStatus::ResourceLimit`, which is a different type. No C API header or C# binding mentions the AVM2 status, so the new value needs no ABI change.
+- `Radicle/src/avm2/interpreter.cpp:interpreter_status_name` maps it to `resource limit exceeded`.
+
+## Radicle/tests/test_avm2_late_ops.cpp:Avm2LateOps
+
+Bytecode is hand-derived. `u30(65535)` is `FF FF 03` and `u30(65536)` is `80 80 04`.
+
+- `SetslotAtTheSlotLimitGrowsTheObjectAndReadsBack`: `55 00` newobject 0, `2A` dup, `24 07` pushbyte 7, `6D FF FF 03` setslot 65535, `6C FF FF 03` getslot 65535, `48` returnvalue. Result 7, 14 bytes. Regression: an off-by-one refusal at the cap (`>` written as `>=`) or a cap set below 65535 fails the ok check. The read-back shows the write reached slot 65535.
+- `SetslotPastTheSlotLimitIsRefusedWithAResourceLimit`: `55 00` newobject 0, `24 01` pushbyte 1, `6D 80 80 04` setslot 65536, `47` returnvoid. Status `ResourceLimit` with the exact message, 9 bytes. Regression: a setslot with no cap grows the vector to 65537 entries and returns ok, or the refusal leaves a different status or message.
+- `SetglobalslotAtTheSlotLimitGrowsTheGlobalObjectAndReadsBack`: `24 07` pushbyte 7, `6F FF FF 03` setglobalslot 65535, `6E FF FF 03` getglobalslot 65535, `48` returnvalue. Result 7, 11 bytes. Regression: the global-slot cap rejects the in-cap write, or the write lands in a different slot.
+- `SetglobalslotPastTheSlotLimitIsRefusedWithAResourceLimit`: `24 01` pushbyte 1, `6F 80 80 04` setglobalslot 65536, `47` returnvoid. Status `ResourceLimit` with the exact message, 7 bytes. Regression: setglobalslot skips the cap, so the global object's slot vector grows without bound.
+- `GetslotAtTheSlotLimitOnAnEmptyObjectIsUndefined`: `55 00` newobject 0, `6C FF FF 03` getslot 65535, `48` returnvalue. Result undefined, 7 bytes. Regression: getslot grows the vector to read an in-cap index past its size, or it errors where it should return undefined.
+
+## Radicle/tests/test_avm2_runtime.cpp:Avm2Runtime
+
+- `LinkRefusesASlotTraitPastTheSlotLimit` rewrites the `Const` trait with slot id 2 in the fixture class `Test` to 65536. `Runtime::link` must return `RuntimeStatus::InvalidTrait`. Regression: an ABC class with a huge slot id links, and every instance then allocates that many slots.
+- `LinkAcceptsASlotTraitAtTheSlotLimit` sets the same trait to 65535. Link succeeds, `slot_count` is 65536, and `find_slot_trait(kMaxSlotIndex)` finds the trait. Regression: the link check is off by one or refuses in-cap ids, which would break classes that legitimately use the top slot.
+
+## Radicle/src/avm2/interpreter.cpp:Interpreter::execute_frame
+
+- Gap, verified by reading: `getdescendants` (0x59) has no case in any `interpreter_dispatch_*.inc`. It reaches the switch `default:`, which returns `NotImplemented` with `opcode <mnemonic> is not implemented yet`. No test here covers it.
+- Gap, verified by reading: E4X has no XML or XMLList class in `Radicle/src/avm2`. The only E4X-adjacent ops are `k_esc_xelem` and `k_esc_xattr` in `Radicle/src/avm2/interpreter_dispatch_e.inc`, which escape strings through `escape_xml_markup`. `k_dxns` and `k_dxnslate` only set `frame.default_xml_namespace`.
+- Not verified: the full list of opcodes that reach `default:`. Only `getdescendants` was checked.
+
+## Radicle/src/avm2/interpreter.cpp:Interpreter::invoke
+
+- Known gap, verified by reading: a native function with no body and no native id returns `NotImplemented` with `native function <name> is not bound`, unless `limits_.lenient_builtins` is set. `Radicle/src/avm2/interpreter_property.cpp:Interpreter::outer_scope_value` returns `NotImplemented` for `getouterscope` when the frame has no captured scope.

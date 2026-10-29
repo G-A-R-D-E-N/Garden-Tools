@@ -2,6 +2,7 @@
 
 #include "control_ops.hpp"
 #include "function_ops.hpp"
+#include "misc_ops.hpp"
 #include "object_ops.hpp"
 #include "state.hpp"
 #include "text_ops.hpp"
@@ -51,13 +52,13 @@ namespace {
 using text_ops::encode_code_unit;
 using text_ops::first_code_point;
 using text_ops::kCodePointVersion;
+using text_ops::to_number;
 using text_ops::to_text;
+using text_ops::to_uint32;
 using text_ops::unit_count;
 using text_ops::unit_offset;
 
-constexpr const char* kWhitespace = " \t\r\n";
 constexpr std::size_t kMaxStringBytes = std::size_t{16} * 1024 * 1024;
-constexpr double kUint32Range = 4294967296.0;
 
 Avm1Data number_value(double number) {
   return Avm1Data{.kind = Avm1DataKind::Number, .number = number};
@@ -77,46 +78,6 @@ bool is_nullish(const Avm1Data& data) {
 
 bool is_reference(const Avm1Data& data) {
   return data.kind == Avm1DataKind::Object || data.kind == Avm1DataKind::Function;
-}
-
-double parse_number(const std::string& text) {
-  const std::size_t first = text.find_first_not_of(kWhitespace);
-  if (first == std::string::npos) {
-    return 0.0;
-  }
-  const std::string trimmed = text.substr(first, text.find_last_not_of(kWhitespace) - first + 1);
-  char* end = nullptr;
-  const double value = std::strtod(trimmed.c_str(), &end);
-  if (end == trimmed.c_str() || *end != '\0') {
-    return std::numeric_limits<double>::quiet_NaN();
-  }
-  return value;
-}
-
-// Invariant: swf_version 0 keeps the unspecified rules, where null is 0 and undefined is NaN.
-double to_number(const Avm1Data& data, std::uint8_t swf_version) {
-  switch (data.kind) {
-    case Avm1DataKind::Undefined:
-      if (swf_version == 0 || swf_version >= 7) {
-        return std::numeric_limits<double>::quiet_NaN();
-      }
-      return 0.0;
-    case Avm1DataKind::Null:
-      if (swf_version >= 7) {
-        return std::numeric_limits<double>::quiet_NaN();
-      }
-      return 0.0;
-    case Avm1DataKind::Boolean:
-      return data.boolean ? 1.0 : 0.0;
-    case Avm1DataKind::Number:
-      return data.number;
-    case Avm1DataKind::String:
-      return parse_number(data.text);
-    case Avm1DataKind::Object:
-    case Avm1DataKind::Function:
-      return std::numeric_limits<double>::quiet_NaN();
-  }
-  return std::numeric_limits<double>::quiet_NaN();
 }
 
 std::string type_name(const Avm1Data& data) {
@@ -226,15 +187,6 @@ Avm1Data add_values(const Avm1Data& left, const Avm1Data& right, std::uint8_t sw
     return string_value(to_text(left, swf_version) + to_text(right, swf_version));
   }
   return number_value(to_number(left, swf_version) + to_number(right, swf_version));
-}
-
-std::uint32_t to_uint32(const Avm1Data& data, std::uint8_t swf_version) {
-  const double number = to_number(data, swf_version);
-  if (!std::isfinite(number)) {
-    return 0;
-  }
-  const double modulo = std::fmod(std::trunc(number), kUint32Range);
-  return static_cast<std::uint32_t>(modulo < 0.0 ? modulo + kUint32Range : modulo);
 }
 
 Avm1Data int32_value(std::uint32_t bits) {
@@ -641,7 +593,7 @@ Avm1RunStatus execute_action(Avm1Run& run, const Avm1Block& block, const Avm1Act
     case 0x9D:
       return branch_if(block, action, state, next, message);
     default:
-      return control_ops::execute(run, block, action, next, message);
+      return misc_ops::execute(run, block, action, next, message);
   }
 }
 
@@ -721,7 +673,7 @@ Avm1RunStatus run_block(Avm1Run& run, const Avm1Block& block) {
 }
 
 Avm1Result execute_actions(const Avm1Stream& stream, std::size_t max_steps,
-                           std::uint8_t swf_version) {
+                           std::uint8_t swf_version, const Avm1Environment& environment) {
   Avm1Result result;
   if (!stream.ok()) {
     result.status = Avm1RunStatus::InvalidStream;
@@ -730,6 +682,8 @@ Avm1Result execute_actions(const Avm1Stream& stream, std::size_t max_steps,
   }
   Avm1State state;
   state.swf_version = swf_version;
+  state.random_state = environment.random_seed;
+  state.elapsed_ms = environment.elapsed_ms;
   Avm1Run run{state, result, max_steps};
   const std::size_t end = stream.actions.empty() ? 0
                                                  : stream.actions.back().offset +
