@@ -59,8 +59,15 @@ struct Avm1Result {
   bool ok() const noexcept { return status == Avm1RunStatus::Ok; }
 };
 
+struct Avm1Environment {
+  std::uint32_t random_seed{0x2545F491u};
+  std::uint32_t elapsed_ms{0};
+};
+
 /* Requires a stream from decode_actions; a stream that did not decode is refused before any record. */
+/* Requires environment.random_seed to be nonzero, since a zero xorshift state stays zero. */
 Avm1Result execute_actions(const Avm1Stream& stream, std::size_t max_steps = 1000000,
-                           std::uint8_t swf_version = 0);
+                           std::uint8_t swf_version = 0,
+                           const Avm1Environment& environment = {});
 
 }  // namespace fo4::avm1

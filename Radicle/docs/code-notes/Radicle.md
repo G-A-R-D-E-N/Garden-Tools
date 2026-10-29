@@ -8362,7 +8362,7 @@ Expected strings were derived by hand. The glyph is a 1000-twip square (50 px, t
 
 ## Radicle/src/avm1/control_ops.cpp:execute
 
-Adds the AVM1 control and object opcodes 0x2A Throw, 0x2B CastOp, 0x46 Enumerate, 0x54 InstanceOf, 0x55 Enumerate2, 0x69 Extends, 0x8F Try and 0x94 With. This supersedes the older refusal notes for these opcodes; ImplementsOp 0x2C stays refused by name. GetMember and SetMember on function prototypes stay deferred because there is no prototype model. Any other opcode still returns Unsupported.
+Adds the AVM1 control and object opcodes 0x2A Throw, 0x2B CastOp, 0x46 Enumerate, 0x54 InstanceOf, 0x55 Enumerate2, 0x69 Extends, 0x8F Try and 0x94 With. This supersedes the older refusal notes for these opcodes; ImplementsOp 0x2C is implemented later by `Radicle/src/avm1/control_ops.cpp:implements_op`. GetMember and SetMember on function prototypes stay deferred because there is no prototype model. Any other opcode still returns Unsupported.
 
 ## Radicle/src/avm1/control_ops.cpp:try_regions
 
@@ -8720,7 +8720,7 @@ Detects an encoder change that alters bytes of an unedited stream. It checks thr
 ## Radicle/include/fo4/swf/swf.hpp:SwfScalingGrid (DefineScalingGrid, tag 78)
 
 - `SwfScalingGrid` holds the CharacterId (UI16, little-endian, first in the payload) and the 9-slice splitter as a `SwfRect` in twips, stored in `SwfTag::scaling_grid`. The splitter is the RECT that follows the id, read by the same `read_rect` the edit-text and font decoders use.
-- Frame SVG rendering of the 9-slice is NOT implemented. `Radicle/src/swf/swf_frame_svg.cpp` never reads `SwfTag::scaling_grid`, so a shape or sprite that carries a grid still renders unsplit.
+- The frame SVG renderer reads the grid through `FrameLookup::grids`, filled from `SwfTag::scaling_grid` in `frame_to_svg`. `Radicle/src/swf/swf_frame_svg.cpp:nine_slice_cells` slices a placed shape or sprite against it when its placement scale is not identity.
 - No C API export, no `SwfSummary` counter and no C# change. The sibling typed tags `DefineExternalImage`, `FontTextureInfo` and `ExporterInfo` also have no export; adding one would bump `RADICLE_ABI_VERSION`.
 
 ## Radicle/src/swf/swf_tags.cpp:decode_tag_payload (kDefineScalingGrid case)
@@ -8739,6 +8739,94 @@ Detects an encoder change that alters bytes of an unedited stream. It checks thr
 - `AcceptsTrailingBytesAfterTheSplitterRect` detects a strict-length check that refuses a grid tag with bytes after its RECT (`0xAA 0xBB` appended).
 - `RefusesAScalingGridPayloadCutInsideItsRect` detects a RECT reader that zero-fills missing bits into a grid, or one that reads past the payload. It uses two cuts: an id-only payload, and a 5-byte payload where the RECT needs 7 bytes. Each must give `malformed_tag`, no typed grid, the raw payload kept, and the End tag still parsed.
 - `ScalingGridLookupReturnsTheLastGridForAnId` detects `find_scaling_grid` returning the first of two grids for one id, returning a grid for a different id, or returning a non-null pointer for an id with no grid.
+
+## Radicle/src/swf/swf_frame_svg.cpp:nine_slice_regions
+
+- Each axis is cut independently. The splitter edges are mapped through the placement (`scale * twips / 20 + translate`) and clamped into the placed box. The fixed corner width is the local distance from the box edge to the splitter edge, so it is divided by the placement scale. The destination is therefore the unscaled corner size, and the centre takes whatever length is left.
+- The destination right cut is clamped so it never falls before the left cut. Without that clamp, overlapping corners give a negative-width centre, which would invert its stretch.
+- Scale must be positive and the placement must have no rotation or skew, because the axis split divides by scale. `frame_body` checks this through `nine_slice_cells`.
+- `NineSliceClampsASplitterThatOverhangsThePlacedBox` detects a splitter edge past the placed box producing a source or destination cell with negative width.
+- `NineSliceKeepsTheCentreAtZeroWidthWhenCornersOverlap` detects overlapping fixed corners producing a negative centre width.
+- `NineSliceCutsAPlacedBoxIntoUnscaledCornersAndAStretchedCentre` detects the cut lines being taken on the wrong axis, or the corners being scaled with the placement (their destination would then differ from the source). Hand-derived numbers: placed box x 100..350, y 50..250 (scale 2.5 and 2, translate 100 and 50), splitter x 400..1600 and y 200..1800 twips, giving source x cuts 100, 150, 300, 350 and y cuts 50, 70, 230, 250, and destination x cuts 100, 120, 330, 350 and y cuts 50, 60, 240, 250.
+
+## Radicle/src/swf/swf_frame_svg.cpp:nine_slice_cells
+
+- Eligible rows are a DefineShape with a grid and bounds, or a DefineSprite with a grid. Morph characters are not sliced. Rotation or skew, a non-positive scale, or a scale of exactly (1, 1) keep the plain path. A negative scale is a flip; it falls back to plain and does not slice. This is a known ceiling, not a checked Flash behaviour.
+- The grid comes from `FrameLookup::grids`, filled in `frame_to_svg` with `insert_or_assign`, so the last grid for an id wins as in `find_scaling_grid`.
+- The placed box for a shape is its frame-instance bounds. A sprite has no bounds in the file, so its box is the union of its visible descendant shape bounds in the current frame (`sprite_bounds`). Ceiling: Flash uses the symbol's bounds, so a sprite whose content changes between frames can get different corners here. Upgrade path: take the union over every frame of the sprite's timeline.
+- The placement scale comes from `row.world_transform`, the concatenated scale of every ancestor sprite. A grid child inside a scaled parent sprite is therefore sliced against the combined scale. Ceiling: this is unverified against Flash or Scaleform, which may slice against the child's own placement scale only. Upgrade path: confirm against a reference movie before relying on nested grids.
+
+## Radicle/src/swf/swf_frame_svg.cpp:sprite_content and sprite_bounds
+
+- Mask rows (`clip_depth` set) are skipped by both `sprite_content` and `sprite_bounds`, so a mask is neither painted nor counted in the sprite's box. `ScaledGridSpriteEmitsTheSameNineCellsAndSkipsItsChildren` detects a mask painted as a second `<path `, or a mask that widens the box and moves the clip rects.
+
+## Radicle/src/swf/swf_frame_svg.cpp:nine_slice_group
+
+- Output per cell is `<g transform=stretch><g clip-path=cell clip><use href=content>`. The content is rendered once in `<defs>` as `<g id="<row>sg">`, and each cell clips it to its pre-stretch source rect. The clip rect and the stretch both live in the content's coordinate space, which is the placed space. The stretch maps source to destination, so `stretch_transform` gives `scale = destination / source` and `translate = destination.origin - scale * source.origin`.
+- A zero-width source cell (a splitter at the box edge) uses scale 1. Its clip is empty, so the transform does not matter, and this avoids a division by zero.
+- Ids are `<row>s<cell>` for each clip and `<row>sg` for the content group. The content group is shared, which avoids duplicate element ids. The renderer already uses `href` on `<pattern>` images, so `use href` matches the existing output style.
+
+## Radicle/src/swf/swf_frame_svg.cpp:frame_body
+
+- A sliced sprite draws its visible descendants through `sprite_content`, and sets `mask_end` past them so the child rows are not drawn a second time. Ceiling, `swf_frame_svg.cpp:sprite_content`: masks, button children, and child colour transforms are not drawn, the same limits as `swf_frame_svg.cpp:sprite_clip_to_svg`.
+- The colour filter and the mask wrappers still apply around the sliced content, because they run after the content is built.
+
+## Radicle/tests/test_swf_display.cpp:SwfFrameSvg nine-slice render tests
+
+- `ScaledGridShapeEmitsNineClipAndTransformCells` detects a shape with a grid rendered plain instead of as nine cells, or any cell whose transform or clip differs from the hand-derived values. Hand-derived values for the placement scale 2.5 and 2, translate 100 and 50 px, and a 100 x 100 px square with splitter 20..80 by 10..90 px: cell transforms `matrix(0.4 0 0 0.5 60 25)`, `matrix(1.4 0 0 0.5 -90 25)`, `matrix(0.4 0 0 0.5 210 25)`, and so on for the other rows. Each cell's clip rect is its source rect, for example `x=100 y=50 width=50 height=20`. It also checks there is exactly one `<path ` so the content is not drawn twice.
+- `ScaledGridSpriteEmitsTheSameNineCellsAndSkipsItsChildren` detects a sprite with a grid drawn plainly, or drawn sliced and also drawn child by child. The second case shows up as two `<path ` elements. The expected cells match the shape case, because the sprite box is the same as the shape box.
+- `UnitOrRotatedGridPlacementDrawsThePlainShape` detects a grid applied to a unit-scale or rotated placement, which would change the plain output. It compares the output with and without the grid tag for both placements.
+
+## Radicle/tests/test_swf_svg_text_matrix.cpp:SwfFrameSvg nine-slice geometry tests
+
+- The three `NineSlice*` geometry tests in this file are the unit tests for `nine_slice_regions`. Their regressions are described in the `nine_slice_regions` section above. They sit in this file because it is the only SVG frame test file with room under the 750-line limit.
+
+## Radicle/tests/swf_movie_builder.hpp:movie_of
+
+- `movie_of`, `TagPayload`, `sprite_tag`, `place_full`, `matrix_full`, `square_with_fill`, and `square_shape` moved here from `test_swf_display.cpp` so the nine-slice render tests can build movies without copying them. `test_swf_display.cpp` was at 741 lines, over the 750 limit once the new tests were added. The bodies are unchanged; the only edit is `inline`.
+
+## Radicle/src/avm1/misc_ops.cpp:random_number and next_random
+
+- RandomNumber is a xorshift32 (shifts 13, 17, 5) over `Avm1State::random_state`, seeded from `Avm1Environment::random_seed`. The output is masked to 31 bits, as Ruffle masks its AVM RNG with `K_RANDOM_PURE_MAX` (`ruffle-0.6.0/core/src/avm_rng.rs`, the `a_num & K_RANDOM_PURE_MAX` line). The exact sequence is ours, not Flash's: Ruffle's generator is seeded from the clock (`avm_rng.rs` `get_seed`), so no Flash sequence can be reproduced. Only the range `[0, bound)` is claimed to match Ruffle. Unverified against real Flash output.
+- The bound follows `ruffle-0.6.0/core/src/avm1/activation.rs:action_random_number` (lines 1898-1908): `coerce_to_f64 as i32` saturates, so a bound of 1 or more is truncated and clamped to 2147483647, and a bound below 1 (or NaN) answers 0 without advancing the stream. Ruffle draws only when the bound is positive; this does the same.
+- Seed 1 gives draws 270369, 67634689, 499951813 in `misc_ops.cpp:random_number` (hand-derived step by step: 0x42021, 0x04080601, 0x1DCCA8C5 after masking). The first two also agree with the xorshift32 sequence as I recall it, which is not verified against a source here. `Radicle/tests/test_avm1_ops.cpp:RandomNumberIsASeededStreamThatSkipsZeroBounds` detects a zero bound that advances the stream, and `RandomNumberClampsItsBoundToTheSignedRange` detects a bound wrapped to 32 bits.
+
+## Radicle/src/avm1/misc_ops.cpp:get_time
+
+- GetTime pushes `Avm1State::elapsed_ms`, which the caller injects. Ruffle's `activation.rs:action_get_time` (lines 1223-1238) reads a wall clock since start and adds a `time_offset` that advances on busy loops (the `times_get_time_called` heuristic). Neither is replicated here, since a wall clock makes the interpreter non-deterministic and the heuristic is not needed for pure runtime tests. Deviation: a movie that busy-waits on GetTime will see a frozen clock. Unverified against real Flash timing.
+- `Radicle/tests/test_avm1_ops.cpp:GetTimeTracesTheInjectedElapsedMilliseconds` detects GetTime refusing or reading a clock instead of the injected value.
+
+## Radicle/src/avm1/misc_ops.cpp:target_path
+
+- Ruffle's `activation.rs:action_target_path` (lines 2194-2206) answers the dot path only for a display object and undefined for everything else. This interpreter has no display objects, so the op always answers undefined after popping its operand. That matches Ruffle for every non-display value. Deviation: a real movie clip would answer its path. Add a host hook when a display list exists.
+- `Radicle/tests/test_avm1_ops.cpp:TargetPathPopsItsOperandAndAnswersUndefined` detects a TargetPath that keeps its operand on the stack, or one that returns a text for a number.
+
+## Radicle/src/avm1/misc_ops.cpp:execute
+
+- Opcode 0x89 (StrictMode) is a no-op that leaves the stack alone and ignores its one-byte flag. Ruffle 0.6.0 has no StrictMode action: `swf/src/avm1/opcode.rs` has no 0x89 entry, so the reader makes it `Action::Unknown`, and `ruffle-0.6.0/core/src/avm1/activation.rs:action_unknown` (lines 2434-2440) logs an error and continues with no stack effect. The no-op therefore matches Ruffle's effective behavior. Unverified: what Flash's strict mode changes, which Ruffle does not model.
+- Dispatch: the interpreter's default arm now calls `misc_ops::execute`, which passes unknown codes on to `control_ops::execute`, whose default arm still refuses by name. This keeps `interpreter.cpp` under the 750-line limit.
+- `Radicle/tests/test_avm1_ops.cpp:StrictModeLeavesTheStackAlone` detects a StrictMode that pops or pushes.
+
+## Radicle/src/avm1/control_ops.cpp:implements_op
+
+- ImplementsOp pops the constructor, then the count, then up to `count` interface values, following `ruffle-0.6.0/core/src/avm1/activation.rs:action_implements_op` (lines 1559-1607). The count is converted with `ToInt32` (`text_ops::to_uint32` then a signed cast). Objects count as 0, as in Ruffle's `coerce_to_i32` for primitives only. A negative count wraps to a huge size and the clamp takes the whole stack, the same as Ruffle's `as usize` cast.
+- The list is stored only when the count is above 0, the constructor is a function, and the SWF version is 0 or at least 7. Ruffle checks `swf_version() >= 7` at `activation.rs:action_implements_op` line 1599 and calls `set_interfaces`, which uses `get_or_insert` in `ruffle-0.6.0/core/src/avm1/object/script_object.rs:set_interfaces` (lines 879-886), so the first list a class gets is kept and later calls do nothing. Version 0 counts as current, matching this file's other version rules.
+- Deviations: a non-function interface value is skipped, where Ruffle reads its prototype. A non-function constructor is skipped, where Ruffle would set the prototype of an object. A missing constructor or count refuses with StackUnderflow, where Ruffle's `pop` answers undefined and continues. Unverified against real Flash for the underflow case.
+- `Radicle/tests/test_avm1_control.cpp:ImplementsOpIsSwfSevenOnlyAndKeepsTheFirstList` detects an op that applies before SWF 7, a last-wins list, or a count of 0 that records something. `ImplementsOpClampsItsCountAndRefusesAShortStack` detects an unclamped count and a missing refusal.
+
+## Radicle/src/avm1/control_ops.cpp:reaches
+
+- Replaces `derives_from`. It walks each class's superclass link and its implemented-interface list, as Ruffle's `ruffle-0.6.0/core/src/avm1/object.rs:is_instance_of` (lines 325-352) walks the prototype chain and each prototype's interface tree. A visited set makes an interface loop end the walk. Ruffle's own comment (object.rs lines 330-331) says a recursive chain hangs Flash, and Ruffle does not guard it.
+- `Extends` uses the same walk for its cycle check, so `Extends` now also refuses a base whose interfaces reach the subclass. This is a behavior change, but only for code that implements an interface and then extends the class that implements it.
+- `Radicle/tests/test_avm1_control.cpp:ImplementsOpFollowsInterfaceListsAndStopsOnACycle` detects a one-level check (no interface chain) and an unbounded walk on an interface loop. `ImplementsOpLetsAnInstanceReachTheInterfaceThroughItsSuperclass` detects an op that never records its list.
+
+## Radicle/src/avm1/text_ops.cpp:to_number
+
+- `to_number` and `to_uint32` (with `parse_number`) moved here unchanged from `Radicle/src/avm1/interpreter.cpp`, so `misc_ops.cpp` and `control_ops.cpp` can convert operands the way the interpreter does. The body is the same, and the `swf_version` rules are the same.
+
+## Radicle/src/avm1/interpreter.cpp:execute_actions
+
+- `execute_actions` takes an `Avm1Environment` (`Radicle/include/fo4/avm1/interpreter.hpp`) with the RNG seed and the elapsed milliseconds for GetTime. In `Radicle/include/fo4/avm1/interpreter.hpp:Avm1Environment` the default seed `0x2545F491` is an arbitrary nonzero constant. The seed must be nonzero, since a zero xorshift state stays zero. Existing callers that pass only the step limit and SWF version keep their behavior.
 
 ## Radicle/tests/test_graph_lift_real.cpp:GraphLiftReal
 
@@ -8868,3 +8956,57 @@ Detects a replace that accepts an unknown id, or one that overwrites a shape or 
 ## Radicle/tests/test_swf_edit.cpp:RefusesZeroOrOversizedDimensionsAndAPixelBufferOfTheWrongSize
 
 Detects a zero width or height that reaches zlib, an oversized geometry that allocates past the cap, or a buffer that is short or long for the declared size. Zero width and zero height, and 4097 by 4096 with an empty buffer, return `bad_dimensions`. A 15-byte or 17-byte buffer for 2 by 2 returns `pixel_size_mismatch`. The file bytes are unchanged.
+## Radicle/include/fo4/avm2/object.hpp:kMaxSlotIndex
+
+- The cap on every slot index that can grow an `Object` slot vector: the `setslot` and `setglobalslot` operands, and ABC slot and const trait ids (checked at link time, see `Radicle/src/avm2/runtime.cpp:Runtime::build_traits`). The largest accepted index is 65535, so a slot vector holds at most 65536 entries.
+- The operands are u30 values, so a hostile operand can reach 0x3FFFFFFF. Without the cap, one `setslot` on an empty object resizes its vector to that index.
+- The value 65535 is a chosen bound, not measured against real SWF slot counts. No corpus scan was run. Raising it is a change to this constant plus the messages pinned in `Radicle/tests/test_avm2_late_ops.cpp:Avm2LateOps`.
+
+## Radicle/src/avm2/interpreter_dispatch_b.inc:k_setslot
+
+- The index check runs after the object check and before `resize_slots`. An index above `kMaxSlotIndex` returns `InterpreterStatus::ResourceLimit` with `setslot index N exceeds the slot limit 65535`. The object is not resized and the run stops at that instruction. In-cap indexes behave as before.
+- The super-property slot write (`k_setsuper`, same file) also grows a vector, but its index is `trait->slot_id` from a linked trait. `Radicle/src/avm2/runtime.cpp:Runtime::build_traits` caps that id, so this path needs no check of its own.
+
+## Radicle/src/avm2/interpreter_dispatch_e.inc:k_setglobalslot
+
+- Same cap as `setslot`, placed after the global-scope check and before `global.resize_slots`. The message names `setglobalslot`. The global object is `frame.scopes.front()`.
+
+## Radicle/src/avm2/interpreter_dispatch_b.inc:k_getslot
+
+- A read never grows a vector. An index past `slots().size()` returns undefined, with no cap check. `Radicle/src/avm2/interpreter_dispatch_e.inc:k_getglobalslot` does the same. Both were verified by reading the code; the tests in `Radicle/tests/test_avm2_late_ops.cpp:Avm2LateOps` pin them.
+
+## Radicle/src/avm2/runtime.cpp:Runtime::build_traits
+
+- The `build_trait` lambda is the only place an ABC slot or const trait id enters the runtime. A `slot_id` above `kMaxSlotIndex` returns `RuntimeStatus::InvalidTrait`, so `Runtime::link` fails. `Radicle/src/avm2/runtime_link.cpp:Runtime::link_added_file` reaches the same check through `build_traits`.
+- The cap is applied at link time, not at growth time, because `Class::apply_slot_defaults` (`Radicle/src/avm2/class.cpp`) and `Interpreter::make_instance` (`Radicle/src/avm2/interpreter_support.cpp`) return no status. The cap bounds `compute_slot_count` and `compute_class_slot_count`, so every class instance and class object resize is bounded too.
+- Gap: this refusal uses `InvalidTrait`, because `RuntimeStatus` has no resource-limit value. The message is the generic `a trait does not resolve`, the same one an unresolved trait gets. The test does not depend on that message.
+
+## Radicle/include/fo4/avm2/interpreter.hpp:InterpreterStatus
+
+- `ResourceLimit` is appended after `ScopeDepthExceeded`, so the existing values keep their numbers. The brief named an existing AVM2 `ResourceLimit`, but none existed. AVM1 has `Avm1RunStatus::ResourceLimit`, which is a different type. No C API header or C# binding mentions the AVM2 status, so the new value needs no ABI change.
+- `Radicle/src/avm2/interpreter.cpp:interpreter_status_name` maps it to `resource limit exceeded`.
+
+## Radicle/tests/test_avm2_late_ops.cpp:Avm2LateOps
+
+Bytecode is hand-derived. `u30(65535)` is `FF FF 03` and `u30(65536)` is `80 80 04`.
+
+- `SetslotAtTheSlotLimitGrowsTheObjectAndReadsBack`: `55 00` newobject 0, `2A` dup, `24 07` pushbyte 7, `6D FF FF 03` setslot 65535, `6C FF FF 03` getslot 65535, `48` returnvalue. Result 7, 14 bytes. Regression: an off-by-one refusal at the cap (`>` written as `>=`) or a cap set below 65535 fails the ok check. The read-back shows the write reached slot 65535.
+- `SetslotPastTheSlotLimitIsRefusedWithAResourceLimit`: `55 00` newobject 0, `24 01` pushbyte 1, `6D 80 80 04` setslot 65536, `47` returnvoid. Status `ResourceLimit` with the exact message, 9 bytes. Regression: a setslot with no cap grows the vector to 65537 entries and returns ok, or the refusal leaves a different status or message.
+- `SetglobalslotAtTheSlotLimitGrowsTheGlobalObjectAndReadsBack`: `24 07` pushbyte 7, `6F FF FF 03` setglobalslot 65535, `6E FF FF 03` getglobalslot 65535, `48` returnvalue. Result 7, 11 bytes. Regression: the global-slot cap rejects the in-cap write, or the write lands in a different slot.
+- `SetglobalslotPastTheSlotLimitIsRefusedWithAResourceLimit`: `24 01` pushbyte 1, `6F 80 80 04` setglobalslot 65536, `47` returnvoid. Status `ResourceLimit` with the exact message, 7 bytes. Regression: setglobalslot skips the cap, so the global object's slot vector grows without bound.
+- `GetslotAtTheSlotLimitOnAnEmptyObjectIsUndefined`: `55 00` newobject 0, `6C FF FF 03` getslot 65535, `48` returnvalue. Result undefined, 7 bytes. Regression: getslot grows the vector to read an in-cap index past its size, or it errors where it should return undefined.
+
+## Radicle/tests/test_avm2_runtime.cpp:Avm2Runtime
+
+- `LinkRefusesASlotTraitPastTheSlotLimit` rewrites the `Const` trait with slot id 2 in the fixture class `Test` to 65536. `Runtime::link` must return `RuntimeStatus::InvalidTrait`. Regression: an ABC class with a huge slot id links, and every instance then allocates that many slots.
+- `LinkAcceptsASlotTraitAtTheSlotLimit` sets the same trait to 65535. Link succeeds, `slot_count` is 65536, and `find_slot_trait(kMaxSlotIndex)` finds the trait. Regression: the link check is off by one or refuses in-cap ids, which would break classes that legitimately use the top slot.
+
+## Radicle/src/avm2/interpreter.cpp:Interpreter::execute_frame
+
+- Gap, verified by reading: `getdescendants` (0x59) has no case in any `interpreter_dispatch_*.inc`. It reaches the switch `default:`, which returns `NotImplemented` with `opcode <mnemonic> is not implemented yet`. No test here covers it.
+- Gap, verified by reading: E4X has no XML or XMLList class in `Radicle/src/avm2`. The only E4X-adjacent ops are `k_esc_xelem` and `k_esc_xattr` in `Radicle/src/avm2/interpreter_dispatch_e.inc`, which escape strings through `escape_xml_markup`. `k_dxns` and `k_dxnslate` only set `frame.default_xml_namespace`.
+- Not verified: the full list of opcodes that reach `default:`. Only `getdescendants` was checked.
+
+## Radicle/src/avm2/interpreter.cpp:Interpreter::invoke
+
+- Known gap, verified by reading: a native function with no body and no native id returns `NotImplemented` with `native function <name> is not bound`, unless `limits_.lenient_builtins` is set. `Radicle/src/avm2/interpreter_property.cpp:Interpreter::outer_scope_value` returns `NotImplemented` for `getouterscope` when the frame has no captured scope.
