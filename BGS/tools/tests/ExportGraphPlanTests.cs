@@ -635,4 +635,55 @@ public sealed class ExportGraphPlanTests
         Assert.Equal(1, plan.GapCount("generator-reference-unresolved"));
         Assert.Contains(plan.Warnings, warning => warning.Contains("'998'", StringComparison.Ordinal));
     }
+
+    // Regression: a generator chain far deeper than the depth cap must stop as a gap, not overflow the stack and kill the run.
+    [Fact]
+    public void ADeepGeneratorChainStopsAtTheDepthLimitAsAGap()
+    {
+        const int Depth = 5000;
+        int leaf = 100 + 2 * Depth;
+
+        var xml = new StringBuilder();
+        xml.Append("<hkpackfile classversion=\"11\" contentsversion=\"hk_2014.1.0-r1\"><hksection name=\"__data__\">");
+        xml.Append("<hkobject class=\"hkbBehaviorGraph\" name=\"#91\" signature=\"0x0\">")
+           .Append("<hkparam name=\"name\">DeepGraph</hkparam>")
+           .Append("<hkparam name=\"rootGenerator\">#92</hkparam></hkobject>");
+        xml.Append("<hkobject class=\"hkbStateMachine\" name=\"#92\" signature=\"0x0\">")
+           .Append("<hkparam name=\"name\">Root</hkparam>")
+           .Append("<hkparam name=\"states\" numelements=\"1\">#93</hkparam></hkobject>");
+        xml.Append("<hkobject class=\"hkbStateMachineStateInfo\" name=\"#93\" signature=\"0x0\">")
+           .Append("<hkparam name=\"name\">Deep</hkparam>")
+           .Append("<hkparam name=\"stateId\">0</hkparam>")
+           .Append("<hkparam name=\"generator\">#100</hkparam></hkobject>");
+
+        for (int level = 0; level < Depth; level++)
+        {
+            int blend = 100 + 2 * level;
+            int child = blend + 1;
+            int next = level + 1 < Depth ? blend + 2 : leaf;
+
+            xml.Append($"<hkobject class=\"hkbBlenderGenerator\" name=\"#{blend}\" signature=\"0x0\">")
+               .Append($"<hkparam name=\"name\">Blend{level}</hkparam>")
+               .Append($"<hkparam name=\"children\" numelements=\"1\">#{child}</hkparam></hkobject>");
+            xml.Append($"<hkobject class=\"hkbBlenderGeneratorChild\" name=\"#{child}\" signature=\"0x0\">")
+               .Append("<hkparam name=\"weight\">1.0</hkparam>")
+               .Append($"<hkparam name=\"generator\">#{next}</hkparam></hkobject>");
+        }
+
+        xml.Append($"<hkobject class=\"hkbClipGenerator\" name=\"#{leaf}\" signature=\"0x0\">")
+           .Append("<hkparam name=\"name\">Leaf</hkparam>")
+           .Append("<hkparam name=\"animationName\">Leaf.hkx</hkparam></hkobject>");
+        xml.Append("</hksection></hkpackfile>");
+
+        var plan = GraphPlan.Build(BehaviourGraphModel.Parse(xml.ToString()));
+
+        var node = Assert.Single(Assert.Single(plan.Machines).States).Generator!;
+        while (node.Children.Count == 1) node = node.Children[0];
+        Assert.Equal(PlanNodeKind.Shared, node.Kind);
+        Assert.Equal("plan depth limit reached", node.Detail);
+        Assert.Equal(1, plan.GapCount("plan-depth-limit"));
+
+        var document = JsonNode.Parse(GraphExport.Json(plan, "deep.hkx"))!.AsObject();
+        Assert.Contains("plan-depth-limit", document["gaps"]!.ToJsonString(), StringComparison.Ordinal);
+    }
 }

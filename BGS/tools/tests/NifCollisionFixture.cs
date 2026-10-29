@@ -17,7 +17,11 @@ internal static class NifCollisionFixture
 
     public static CollisionSample BuildWithFreeListHole() => Build("hknpCompoundShape", true);
 
-    private static CollisionSample Build(string compoundClass, bool freeListHole)
+    public static CollisionSample BuildWithMeshSectionField(string member, uint value) =>
+        Build("hknpCompoundShape", false, member, value);
+
+    private static CollisionSample Build(string compoundClass, bool freeListHole,
+                                         string? sectionMember = null, uint sectionValue = 0)
     {
         var file = new CollisionPackfile();
 
@@ -63,7 +67,7 @@ internal static class NifCollisionFixture
         int mesh = file.AddObject("hknpCompressedMeshShape");
         int data = file.AddObject("hknpCompressedMeshShapeData");
         file.Point(mesh + CollisionPackfile.Member("hknpCompressedMeshShape", "data"), data);
-        Mesh(file, data);
+        Mesh(file, data, sectionMember, sectionValue);
 
         int materials = file.Array(system + CollisionPackfile.Member("hknpPhysicsSystemData", "materials"),
                                    new byte[2 * CollisionPackfile.Size("hknpMaterial")], 2);
@@ -137,7 +141,7 @@ internal static class NifCollisionFixture
         file.F32(at + 48, translateX);
     }
 
-    private static void Mesh(CollisionPackfile file, int data)
+    private static void Mesh(CollisionPackfile file, int data, string? sectionMember, uint sectionValue)
     {
         const string treeClass = "hknpCompressedMeshShapeTree";
         int tree = data + CollisionPackfile.Member("hknpCompressedMeshShapeData", "meshTree");
@@ -173,6 +177,9 @@ internal static class NifCollisionFixture
         file.U32(sections + CollisionPackfile.Member(sectionClass, "primitives"), 0);
         file.U8(sections + CollisionPackfile.Member(sectionClass, "numPackedVertices"), 3);
         file.U8(sections + CollisionPackfile.Member(sectionClass, "numSharedIndices"), 1);
+
+        if (sectionMember != null)
+            file.U32(sections + CollisionPackfile.Member(sectionClass, sectionMember), sectionValue);
     }
 
     public static uint Packed32(int x, int y, int z) =>

@@ -77,6 +77,9 @@ public sealed class GraphPlan
 
     private const int MaximumResolvedNodes = 200_000;
 
+    // Constraint: each level costs at most three stack frames, so the depth cap must stay far below the default thread stack.
+    private const int MaximumResolveDepth = 256;
+
     private readonly Dictionary<string, int> _machinesById = new(StringComparer.Ordinal);
     private int _resolvedNodes;
     private int _missingChildWarnings;
@@ -191,6 +194,24 @@ public sealed class GraphPlan
         // Invariant: a machine already in machines[] keeps its index past the budget, so truncation cannot orphan it.
         if (generator.Class == "hkbStateMachine" && _machinesById.TryGetValue(generator.Id, out int written))
             return MachineReference(generator, written);
+
+        // Constraint: path holds exactly the ancestors on the stack, so its count is the recursion depth.
+        if (path.Count > MaximumResolveDepth)
+        {
+            if (GapCount("plan-depth-limit") == 0 && Warnings.Count < MaximumWarnings)
+                Warnings.Add($"plan depth limit of {MaximumResolveDepth} reached; " +
+                             "deeper generator branches are shared stubs");
+
+            NoteGap("plan-depth-limit", "generator nesting deeper than the plan depth limit, carried as a shared stub");
+
+            return new PlanNode
+            {
+                Kind = PlanNodeKind.Shared,
+                Class = generator.Class,
+                Name = generator.Str("name"),
+                Detail = "plan depth limit reached",
+            };
+        }
 
         if (++_resolvedNodes > MaximumResolvedNodes)
         {

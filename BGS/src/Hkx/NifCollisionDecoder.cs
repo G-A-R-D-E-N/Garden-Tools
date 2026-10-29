@@ -16,6 +16,7 @@ public static class NifCollisionDecoder
 
     private const int MaxBodies = 4096;
     private const int MaxShapes = 8192;
+    private const int MaxInstances = 1 << 16;
     private const int MaxDepth = 8;
     private const int MaxSections = 1024;
     private const int MaxVertices = 1 << 20;
@@ -226,6 +227,7 @@ public static class NifCollisionDecoder
         private readonly PackfileObjects _objects;
         private readonly NifCollisionModel _model;
         private readonly Dictionary<int, int> _byOffset = new();
+        private int _instances;
 
         public ShapeReader(PackfileObjects objects, NifCollisionModel model)
         {
@@ -353,6 +355,8 @@ public static class NifCollisionDecoder
 
             for (int i = 0; i < array.Count && i < MaxShapes; i++)
             {
+                if (_instances >= MaxInstances) { NoteOnce($"instances capped at {MaxInstances}"); return; }
+
                 int at = array.At + i * instanceLayout.Size;
                 var child = _objects.ReadRefAt(at + shapeAt, out _);
                 if (child == null)
@@ -364,6 +368,7 @@ public static class NifCollisionDecoder
                 var transform = _objects.ReadFloatsAt(at + (instanceLayout.OffsetOf("transform") ?? 0), 16);
                 var scale = instanceLayout.OffsetOf("scale") is int sc ? _objects.ReadFloatsAt(at + sc, 4) : null;
 
+                _instances++;
                 shape.Instances.Add(new NifCollisionInstance
                 {
                     Shape = IndexOf(child, depth + 1),
@@ -435,6 +440,13 @@ public static class NifCollisionDecoder
             int baseVertex = shape.VertexCount;
             if (packed == null || parms == null || firstPacked < 0 || firstShared < 0) return true;
 
+            // Constraint: the packed range is checked in long arithmetic, so an int wrap cannot land inside the array.
+            if ((long)firstPacked + packedCount > packed.Count)
+            {
+                NoteOnce($"section {index} packed vertex range not decoded");
+                return true;
+            }
+
             for (int i = 0; i < packedCount; i++)
             {
                 if (shape.VertexCount >= MaxVertices) { NoteOnce($"vertices capped at {MaxVertices}"); return false; }
@@ -448,6 +460,7 @@ public static class NifCollisionDecoder
             {
                 if (shape.VertexCount >= MaxVertices) { NoteOnce($"vertices capped at {MaxVertices}"); return false; }
                 if (sharedIndex == null || shared == null) break;
+                if ((long)firstShared + i >= sharedIndex.Count) break;
 
                 int slot = sharedIndex.At + (firstShared + i) * 2;
                 if (_objects.ReadNarrowAt(slot, 2) is not { } sharedIdx) break;

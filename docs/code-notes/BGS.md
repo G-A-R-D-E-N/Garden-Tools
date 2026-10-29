@@ -1508,3 +1508,19 @@ What these tests do not establish: that any of it compiles or passes (nothing wa
 ## BGS/tools/symrm/MapperCli.cs:MapperOne - overwriting the source keeps a backup
 
 When `--out` names the file that was read, `MapperOne` writes with `FileSafety.ReplaceChecked` and the hash of the bytes that were read, the same as `BGS/tools/symrm/RagdollCli.cs:RagdollOne`. That keeps the previous version as `<name>.bak` and refuses the write if the file changed on disk after it was read. Before, `FileSafety.Replace` overwrote the source with no backup and no changed-on-disk check. Regression test: `BGS/tools/tests/MapperCliTests.cs:MapperCliTests.OverwritingTheSourceWithForceKeepsTheOriginalAsABackup`.
+
+## `tools/export/GraphPlan.cs:GraphPlan.ResolveOnce` — plan depth limit (deep chains overflowed the stack)
+
+`Resolve` and `ResolveOnce` recurse through blenders, pass-throughs, selectors and state machines, and the only bound was the 200k node budget, which counts nodes and not depth. A chain of a few thousand nested generators overflowed the thread stack. A stack overflow cannot be caught, so it killed the whole batch, although `ExportRunner.ExportOne` promises that one failure never stops the run. `MaximumResolveDepth` (256) now caps that recursion. The depth is `path.Count`, because `path` holds exactly the ancestors on the stack. Past the cap a generator becomes a `Shared` stub with detail `plan depth limit reached`, counted under the gap `plan-depth-limit`, with one warning per plan. A machine that was already written still comes back as a reference past the cap, the same as with the budget. Regression test: `BGS/tools/tests/ExportGraphPlanTests.cs:ExportGraphPlanTests.ADeepGeneratorChainStopsAtTheDepthLimitAsAGap`, a 5000-level chain that must complete and report the gap.
+
+## `tools/export/GraphExport.cs:GraphExport.Node` — bounded by the plan, not capped here
+
+`Node` recurses through `PlanNode.Children`. Only `GraphPlan.Resolve`, `WrappedNode` and `SelectorNode` build those children, and each level is one `Resolve` call, so the depth cap in `GraphPlan.ResolveOnce` bounds this recursion too. A second cap here could never fire. The chain test in `BGS/tools/tests/ExportGraphPlanTests.cs` runs `GraphExport.Json` over the capped plan, which exercises this recursion on the deepest tree the plan can hold.
+
+## `src/Hkx/NifCollisionDecoder.cs:ShapeReader.Section` — section index validation
+
+`Section` read `firstPackedVertex` and `sharedVertices` as `int` and computed `firstPacked + i` and `(firstShared + i) * 2` in `int`. A field of 2^30 wrapped `* 4` to 0, so the decoder read the first packed vertices as if they were this section's own. The packed range is now checked against `packed.Count` in `long` arithmetic before any read. A range that does not fit refuses the section with the note `section N packed vertex range not decoded`, the same way an unvalidated primitive range is refused. Each shared slot is checked against `sharedIndex.Count` in `long` before it is read, and a slot past the end stops the shared loop, as a failed read already does. Regression test: `BGS/tools/tests/NifCollisionDecoderTests.cs:NifCollisionDecoderTests.RefusesSectionIndexesWhoseSlotArithmeticWraps`, which sets each field to 2^30 in the synthetic mesh from `BGS/tools/tests/NifCollisionFixture.cs:NifCollisionFixture.BuildWithMeshSectionField`.
+
+## `src/Hkx/NifCollisionDecoder.cs:ShapeReader.Compound` — total instance cap
+
+The 8192-instance limit applied to each compound, not to the decode. Up to 8192 compounds of 8192 instances each, about 67 million records with their transform and scale arrays, were allowed. `ShapeReader` now counts instances across one decode and stops at `MaxInstances` (65536), recording `instances capped at 65536` in `NifCollisionModel.Notes`. Like the other caps, that note is part of the manifest hash, so a capped decode cannot collide with an uncapped one.

@@ -33,6 +33,18 @@ public sealed class ExportRecoveryTests
         Assert.Equal(2, Program.Run(new[] { "--out", output, input }, TextWriter.Null, TextWriter.Null));
     }
 
+    // Regression: an --out whose value is another option must be a usage error, not a directory named after that option.
+    [Fact]
+    public void AnOptionCannotBeConsumedAsTheOutValue()
+    {
+        string directory = ExportTestSupport.Temp("option-as-value");
+        string input = Path.Combine(directory, "absent.hkx");
+        var error = new StringWriter();
+
+        Assert.Equal(1, Program.Run(new[] { "--out", "--batch", input }, TextWriter.Null, error));
+        Assert.Contains("--out needs a directory", error.ToString(), StringComparison.Ordinal);
+    }
+
     // Invariant: one document kind failing must not stop the other kinds the same file carries.
     [Fact]
     public void ANonInputFailureInOneKindStillRunsTheNextKind()

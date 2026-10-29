@@ -93,7 +93,7 @@ public static class SchemaDocument
                 new Field("events", "string[]", "hkbBehaviorGraphStringData event names"),
                 new Field("variables", "string[]", "hkbBehaviorGraphStringData variable names"),
                 new Field("gaps", "array", "what the plan could not carry, with the count of each kind"),
-                new Field("gaps[].key", "string", "gap identifier: blend-branch-not-wired, blend-weight-ignored, generator-unmapped, generator-reference-unresolved (a state generator, blend child or selector child that did not resolve) or plan-node-budget"),
+                new Field("gaps[].key", "string", "gap identifier: blend-branch-not-wired, blend-weight-ignored, generator-unmapped, generator-reference-unresolved (a state generator, blend child or selector child that did not resolve), plan-node-budget or plan-depth-limit"),
                 new Field("gaps[].count", "integer", "how many times this gap was met"),
                 new Field("gaps[].explanation", "string", "what the gap means for a consumer"),
                 new Field("unmappedGenerators", "array", "generator classes that fell back to a placeholder, sorted by class"),

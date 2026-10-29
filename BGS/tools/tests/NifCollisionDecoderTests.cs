@@ -123,6 +123,19 @@ public sealed class NifCollisionDecoderTests
         Assert.Contains("note compound free-list holes skipped", model.Describe());
     }
 
+    // Regression: a section index of 2^30 wraps the int slot arithmetic onto valid entries, so the section must be refused.
+    [Theory]
+    [InlineData("firstPackedVertex", 0)]
+    [InlineData("sharedVertices", 3)]
+    public void RefusesSectionIndexesWhoseSlotArithmeticWraps(string member, int expectedVertices)
+    {
+        var model = Decode(NifCollisionFixture.BuildWithMeshSectionField(member, 1u << 30).Bytes);
+
+        var mesh = model.Shapes[3];
+        Assert.Equal(NifCollisionShapeKind.CompressedMesh, mesh.Kind);
+        Assert.Equal(expectedVertices, mesh.VertexCount);
+    }
+
     // Regression: the manifest must stay byte-stable across runs so corpus hashes compare.
     [Fact]
     public void DescribesTheSameBytesTheSameWay()

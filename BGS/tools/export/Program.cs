@@ -62,7 +62,7 @@ public static class Program
                     return 0;
 
                 case "--out":
-                    if (++i >= args.Length)
+                    if (++i >= args.Length || args[i].StartsWith("--", StringComparison.Ordinal))
                     {
                         error.WriteLine("--out needs a directory");
                         return 1;
