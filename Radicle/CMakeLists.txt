@@ -382,6 +382,7 @@ add_library(fo4
   src/avm1/opcodes.cpp
   src/avm1/decode.cpp
   src/avm1/encode.cpp
+  src/avm1/edit.cpp
   src/avm1/disassembly.cpp
   src/avm1/control_ops.cpp
   src/avm1/function_ops.cpp
