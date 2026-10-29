@@ -8782,6 +8782,7 @@ Detects an encoder change that alters bytes of an unedited stream. It checks thr
 ## Radicle/src/avm1/interpreter.cpp:execute_actions
 
 - `execute_actions` takes an `Avm1Environment` (`Radicle/include/fo4/avm1/interpreter.hpp`) with the RNG seed and the elapsed milliseconds for GetTime. In `Radicle/include/fo4/avm1/interpreter.hpp:Avm1Environment` the default seed `0x2545F491` is an arbitrary nonzero constant. The seed must be nonzero, since a zero xorshift state stays zero. Existing callers that pass only the step limit and SWF version keep their behavior.
+
 ## Radicle/tests/test_graph_lift_real.cpp:GraphLiftReal
 
 - One `ScriptIndex` serves the whole sweep, as `test_papyrus_codegen_real.cpp` does. `GraphCompiler::compile` publishes each regenerated script into a scratch root and calls `index_.addRoot` (`graph_compiler.cpp:publishForSelfReference`). `addRoot` scans only that new root, and name lookups go through the hash maps `byQualifiedName_` and `byBaseName_` (`script_index.cpp:findFile`), where the first root to define a name wins. The vanilla script therefore keeps resolving to its own file, and a scratch copy never shadows it.
