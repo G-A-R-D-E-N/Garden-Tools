@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -16,10 +15,12 @@
 
 #include "../helpers/GraphFixtures.hpp"
 #include "../helpers/PexComparer.hpp"
+#include "../helpers/TempRoot.hpp"
 
 using namespace fo4ide::graph;
 using namespace fo4ide::graph::test;
 using namespace fo4ide::papyrus;
+using fo4ide_test::TempRoot;
 
 namespace {
 
@@ -85,12 +86,6 @@ std::unique_ptr<PexFile> compileReference(const GraphFixture& fixture,
     return compileScript(index, &parsed, "Fixture.psc", options).pex;
 }
 
-std::string uniqueRoot(std::string_view tag) {
-    return (std::filesystem::temp_directory_path() / ("fo4ide-graph-" + std::string(tag)) /
-            std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()))
-        .string();
-}
-
 // Port of Oracle1's DecompilesAndRecompiles helper: decompile the generated
 // PEX to source, reparse, and recompile against a fresh index that also sees
 // the decompiled file. Returns the failure reason, or empty on success.
@@ -106,22 +101,18 @@ std::string decompilesAndRecompiles(const GraphCompileResult& first) {
     const auto reparsed = Parser::parse(body, "Fixture.psc");
     if (reparsed.hasErrors()) return "decompiled source should parse";
 
-    const std::string root = uniqueRoot("roundtrip");
-    const auto guard = std::filesystem::path(root);
-    std::error_code error;
-    std::filesystem::create_directories(guard, error);
+    const TempRoot guard("fo4ide-graph-roundtrip");
     {
-        std::ofstream out(guard / "Fixture.psc", std::ios::binary | std::ios::trunc);
+        std::ofstream out(guard.path() / "Fixture.psc", std::ios::binary | std::ios::trunc);
         out << body;
     }
 
     ScriptIndex index;
-    index.addRoot(guard);
+    index.addRoot(guard.path());
     index.addRoot(baseStubs());
     index.addRoot(graphScripts());
 
     const auto second = compileScript(index, &reparsed, "Fixture.psc", PapyrusCompileOptions{});
-    std::filesystem::remove_all(guard, error);
     if (!second.success()) return "recompiling the decompiled source should succeed";
     return "";
 }
@@ -212,10 +203,8 @@ TEST_CASE("GraphCompiler Oracle2 the graph produces what a person would have wri
         const auto generated = compileGraph(fixture);
         REQUIRE(generated.success());
 
-        const std::string root = uniqueRoot("reference");
-        auto reference = compileReference(fixture, root);
-        std::error_code error;
-        std::filesystem::remove_all(root, error);
+        const TempRoot root("fo4ide-graph-reference");
+        auto reference = compileReference(fixture, root.path());
         REQUIRE(reference != nullptr);
 
         const auto difference =
