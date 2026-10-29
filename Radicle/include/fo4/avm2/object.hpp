@@ -13,6 +13,8 @@
 
 namespace fo4::avm2 {
 
+inline constexpr std::uint32_t kMaxSlotIndex = 65535;
+
 struct Class;
 class FunctionObject;
 struct Trait;
@@ -162,8 +164,10 @@ class FunctionObject : public Object {
   Class* owner_class() const noexcept { return owner_class_; }
   void set_owner_class(Class* owner_class) noexcept { owner_class_ = owner_class; }
 
-  const std::vector<Object*>& captured_scope() const noexcept { return captured_scope_; }
-  std::vector<Object*>& captured_scope() noexcept { return captured_scope_; }
+  const std::vector<std::shared_ptr<Object>>& captured_scope() const noexcept {
+    return captured_scope_;
+  }
+  std::vector<std::shared_ptr<Object>>& captured_scope() noexcept { return captured_scope_; }
 
  private:
   std::string name_;
@@ -171,7 +175,7 @@ class FunctionObject : public Object {
   std::uint32_t method_index_{kNoMethod};
   std::uint32_t native_id_{kNoNative};
   Class* owner_class_{nullptr};
-  std::vector<Object*> captured_scope_;
+  std::vector<std::shared_ptr<Object>> captured_scope_;
 };
 
 class ClassObject : public Object {

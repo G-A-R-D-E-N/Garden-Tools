@@ -6,9 +6,12 @@
 #include <gtest/gtest.h>
 #include <zlib.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <span>
+#include <string>
+#include <string_view>
 #include <vector>
 
 namespace swf_art_test {
@@ -65,6 +68,23 @@ inline std::vector<std::byte> zlib_bytes(std::span<const std::uint8_t> raw) {
             Z_OK);
   buffer.resize(static_cast<std::size_t>(packed));
   return buffer;
+}
+
+inline std::string base64_text(std::span<const std::uint8_t> bytes) {
+  constexpr std::string_view alphabet =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  std::string text;
+  for (std::size_t offset = 0; offset < bytes.size(); offset += 3) {
+    const std::size_t left = std::min<std::size_t>(3, bytes.size() - offset);
+    std::uint32_t group = 0;
+    for (std::size_t index = 0; index < 3; ++index) {
+      group = (group << 8) | (index < left ? bytes[offset + index] : 0u);
+    }
+    for (std::size_t index = 0; index < 4; ++index) {
+      text += index <= left ? alphabet[(group >> (18 - 6 * index)) & 0x3Fu] : '=';
+    }
+  }
+  return text;
 }
 
 inline void shape_head(SwfBuilder& body, std::uint16_t id) {
@@ -520,6 +540,48 @@ inline std::vector<std::byte> lossless_payload(std::uint16_t format, std::uint16
   }
   body.bytes(zlib_bytes(raw));
   return body.body;
+}
+
+inline std::vector<std::byte> lossless_raw_payload(std::uint16_t format, std::uint16_t width,
+                                                   std::uint16_t height, std::uint8_t table_size,
+                                                   std::span<const std::uint8_t> raw) {
+  SwfBuilder body;
+  body.u16(3);
+  body.u8(format);
+  body.u16(width);
+  body.u16(height);
+  if (format == 3) {
+    body.u8(table_size);
+  }
+  body.bytes(zlib_bytes(raw));
+  return body.body;
+}
+
+struct PngChunk {
+  std::string type;
+  std::span<const std::uint8_t> data;
+  std::uint32_t stored_crc{0};
+  std::uint32_t computed_crc{0};
+};
+
+inline std::uint32_t png_u32(std::span<const std::uint8_t> bytes, std::size_t at) {
+  return (std::uint32_t{bytes[at]} << 24) | (std::uint32_t{bytes[at + 1]} << 16) |
+         (std::uint32_t{bytes[at + 2]} << 8) | std::uint32_t{bytes[at + 3]};
+}
+
+inline std::vector<PngChunk> png_chunks(std::span<const std::uint8_t> png) {
+  std::vector<PngChunk> chunks;
+  std::size_t at = 8;
+  while (at + 12 <= png.size() && at + 12 + png_u32(png, at) <= png.size()) {
+    const auto length = png_u32(png, at);
+    const auto data = png.subspan(at + 8, length);
+    auto crc = crc32(0L, png.data() + at + 4, 4);
+    crc = crc32(crc, data.data(), static_cast<uInt>(data.size()));
+    chunks.push_back({std::string(png.begin() + at + 4, png.begin() + at + 8), data,
+                      png_u32(png, at + 8 + length), static_cast<std::uint32_t>(crc)});
+    at += 12 + length;
+  }
+  return chunks;
 }
 
 // A JPEG marker length must be big-endian; every SWF field around it is little-endian.

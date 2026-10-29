@@ -142,7 +142,7 @@ public static class PapyrusDiagnosticCodes
 
 
     public const string DuplicateDeclaration = "PAP0020";
-
+    public const string InheritanceCycle = "PAP0021";
 
 
     public const string UnresolvedName = "PAP0030";

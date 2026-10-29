@@ -3,9 +3,12 @@
 #include "c_api_swf_internal.hpp"
 
 #include "fo4/c_api_swf.h"
+#include "fo4/swf/swf_svg.hpp"
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <string>
 
 using radicle_c_detail::clear_error;
@@ -132,6 +135,36 @@ radicle_status radicle_swf_character_by_id(const radicle_swf* swf, uint16_t char
       return fail(RADICLE_STATUS_NOT_FOUND, text.c_str());
     }
     fill_character(*swf, *found, *out_character);
+    return RADICLE_STATUS_OK;
+  });
+}
+
+radicle_status radicle_swf_shape_svg(const radicle_swf* swf, uint16_t character_id, uint8_t** out_text,
+                                     size_t* out_size) {
+  clear_error();
+  if (out_text) *out_text = nullptr;
+  if (out_size) *out_size = 0;
+  if (swf == nullptr || out_text == nullptr || out_size == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "swf, out_text and out_size are required");
+  }
+  return guarded("unknown exception while exporting a shape", [&] {
+    const fo4::swf::SwfCharacterModel* model = nullptr;
+    const auto status = require_model(swf, &model);
+    if (status != RADICLE_STATUS_OK) {
+      return status;
+    }
+    const fo4::swf::SwfCharacter* found = fo4::swf::find_character(*model, character_id);
+    if (found == nullptr || found->kind != fo4::swf::SwfCharacterKind::shape ||
+        !swf->file.tags[found->tag_index].shape) {
+      const std::string text = "character id " + std::to_string(character_id) + " is not a decoded shape";
+      return fail(RADICLE_STATUS_NOT_FOUND, text.c_str());
+    }
+    const std::string svg =
+        fo4::swf::shape_to_svg(*swf->file.tags[found->tag_index].shape, swf->file);
+    *out_text = radicle_swf_detail::copy_text(svg, out_size);
+    if (*out_text == nullptr) {
+      return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to allocate the SVG text");
+    }
     return RADICLE_STATUS_OK;
   });
 }

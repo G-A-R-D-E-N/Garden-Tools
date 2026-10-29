@@ -64,15 +64,17 @@ struct StageTree {
 
 const char* const kExpectedText =
     "class=flash.display::Stage depth=0 id=0 bounds=0 0 0 0 matrix=10000 0 0 10000 0 0 "
-    "visible=1 alpha=10000 children=3\n"
+    "visible=1 blend=0 ratio=none filters=0 alpha=10000 children=3\n"
     "  class=flash.display::Sprite depth=0 id=7 bounds=0 0 300000 400000 "
-    "matrix=10000 0 0 10000 100000 200000 visible=1 alpha=5000 children=0\n"
+    "matrix=10000 0 0 10000 100000 200000 visible=1 blend=0 ratio=none filters=0 alpha=5000 "
+    "children=0\n"
     "  class=flash.text::TextField depth=1 id=9 bounds=0 0 0 0 matrix=10000 0 0 10000 50000 0 "
-    "visible=0 alpha=10000 children=0 text=8:Hi there\n"
+    "visible=0 blend=0 ratio=none filters=0 alpha=10000 children=0 text=8:Hi there\n"
     "  class=flash.display::Sprite depth=2 id=0 bounds=0 0 0 0 matrix=20000 0 0 10000 0 0 "
-    "visible=1 alpha=10000 children=1\n"
+    "visible=1 blend=0 ratio=none filters=0 alpha=10000 children=1\n"
     "    class=flash.display::Sprite depth=0 id=3 bounds=0 0 0 0 "
-    "matrix=20000 0 0 10000 60000 0 visible=1 alpha=10000 children=0\n";
+    "matrix=20000 0 0 10000 60000 0 visible=1 blend=0 ratio=none filters=0 alpha=10000 "
+    "children=0\n";
 
 TEST(Avm2DisplaySnapshot, TextListsEachNodeWithItsComposedMatrixAndTextFieldText) {
   StageTree tree;
@@ -89,6 +91,22 @@ TEST(Avm2DisplaySnapshot, AChangedAlphaChangesTheHash) {
   const std::uint64_t before = display_snapshot_hash(*tree.root);
   tree.sprite->set_alpha(1.0);
   EXPECT_NE(display_snapshot_hash(*tree.root), before);
+}
+
+TEST(Avm2DisplaySnapshot, AChangedBlendVisibleOrRatioChangesTheHash) {
+  // Detects: a blend, visibility or ratio change that the display text omits; the hash must change with each one.
+  StageTree tree;
+  const std::uint64_t before = display_snapshot_hash(*tree.root);
+  tree.sprite->set_blend_mode(3);
+  const std::uint64_t blended = display_snapshot_hash(*tree.root);
+  EXPECT_NE(blended, before);
+  tree.sprite->set_visible(false);
+  const std::uint64_t hidden = display_snapshot_hash(*tree.root);
+  EXPECT_NE(hidden, blended);
+  tree.sprite->set_ratio(std::uint16_t{100});
+  EXPECT_NE(display_snapshot_hash(*tree.root), hidden);
+  EXPECT_NE(display_snapshot_text(*tree.root).find(" blend=3 ratio=100 filters=0 "),
+            std::string::npos);
 }
 
 TEST(Avm2DisplaySnapshot, NonFiniteAndOutOfRangeValuesPrintAsWords) {

@@ -46,6 +46,7 @@ public readonly record struct SwfTransformRecord(
 
 public readonly record struct SwfBoundsRecord(double X, double Y, double Width, double Height);
 
+// Constraint: both indices must be flat radicle_swf_tag_at indices, and TransformTagIndex must be uint.MaxValue when no placement authored the MATRIX.
 public sealed record SwfFrameInstanceRecord(
     uint InstanceId,
     uint TimelineFrame,
@@ -59,7 +60,9 @@ public sealed record SwfFrameInstanceRecord(
     SwfTransformRecord Transform,
     SwfTransformRecord WorldTransform,
     SwfBoundsRecord Bounds,
-    string? Name);
+    string? Name,
+    uint CreateTagIndex,
+    uint TransformTagIndex);
 
 public sealed record SwfPlanResultRecord(bool Changed, ulong Revision);
 
@@ -160,7 +163,7 @@ public sealed class SwfFrameSet : IDisposable
                 raw.IsSprite != 0, raw.HasBounds != 0, raw.HasClipDepth != 0,
                 Transform(raw.Transform), Transform(raw.WorldTransform),
                 new SwfBoundsRecord(raw.Bounds.X, raw.Bounds.Y, raw.Bounds.Width, raw.Bounds.Height),
-                Utf8.Read(raw.Name));
+                Utf8.Read(raw.Name), raw.CreateTagIndex, raw.TransformTagIndex);
         }
         return instances;
     }
@@ -186,6 +189,8 @@ public sealed class SwfEditHistory : IDisposable
     }
 
     private HandleUse Use() => new(_handle, nameof(SwfEditHistory));
+
+    internal HandleUse UseForVerbs() => Use();
 
     public ulong Revision
     {

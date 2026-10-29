@@ -154,6 +154,11 @@
         if (!object.is_object()) {
           return fail(InterpreterStatus::NullReference, "setslot needs an object");
         }
+        if (slot > kMaxSlotIndex) {
+          return fail(InterpreterStatus::ResourceLimit,
+                      "setslot index " + std::to_string(slot) + " exceeds the slot limit " +
+                          std::to_string(kMaxSlotIndex));
+        }
         Object& target = *object.as_object();
         if (slot >= target.slots().size()) {
           target.resize_slots(slot + 1);
@@ -533,9 +538,14 @@
         break;
       }
       case op::k_callmethod:
-      case op::k_callstatic:
-        return fail(InterpreterStatus::NotImplemented,
-                    std::string{"opcode "} + instruction.mnemonic + " is not implemented yet");
+      case op::k_callstatic: {
+        ExecutionResult nested = call_indexed(frame, instruction, depth);
+        if (!nested.ok()) {
+          return nested;
+        }
+        push_value(nested.value);
+        break;
+      }
       case op::k_applytype: {
         const std::uint32_t count = count_operand(instruction);
         std::vector<Value> arguments;
@@ -588,36 +598,7 @@
           push_value(Value::boolean(false));
           break;
         }
-        std::vector<Key>& keys = frame.iterator_keys[object.as_object().get()];
-        if (keys.empty()) {
-          if (object.as_object()->kind() == ObjectKind::Array) {
-            const auto& array = static_cast<const ArrayObject&>(*object.as_object());
-            for (std::size_t index = 0; index < array.elements().size(); ++index) {
-              Key key;
-              key.name = std::to_string(index);
-              keys.push_back(std::move(key));
-            }
-          } else {
-            for (const auto& entry : object.as_object()->own_properties()) {
-              keys.push_back(entry.first);
-            }
-            for (const Class* klass =
-                     object.as_object()->instance_class();
-                 klass != nullptr; klass = klass->super) {
-              for (const Trait& trait : klass->instance_traits) {
-                if (!trait.is_slot_like() || !trait.multiname.has_fixed_name()) {
-                  continue;
-                }
-                Key key;
-                key.name = trait.multiname.name;
-                if (!trait.multiname.namespaces.empty()) {
-                  key.name_space = trait.multiname.namespaces.front();
-                }
-                keys.push_back(std::move(key));
-              }
-            }
-          }
-        }
+        const std::vector<Key>& keys = enumeration_keys(frame, *object.as_object());
         const std::uint32_t cursor = to_uint32(frame.locals[index_register]);
         if (cursor < keys.size()) {
           frame.locals[object_register] = object;
@@ -729,6 +710,11 @@
         push_value(Value::object(std::move(catch_scope)));
         break;
       }
-      case op::k_getouterscope:
-        return fail(InterpreterStatus::NotImplemented,
-                    std::string{"opcode "} + instruction.mnemonic + " is not implemented yet");
+      case op::k_getouterscope: {
+        ExecutionResult scope = outer_scope_value(frame, operand_at(instruction, 0));
+        if (!scope.ok()) {
+          return scope;
+        }
+        push_value(scope.value);
+        break;
+      }

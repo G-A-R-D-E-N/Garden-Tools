@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -225,6 +226,57 @@ TEST(Avm2Snapshot, ColorOffsetsOutsideTheIntRangeClampToIt) {
   EXPECT_EQ(color.green_offset, std::numeric_limits<std::int32_t>::min());
   EXPECT_EQ(color.blue_offset, 0);
   EXPECT_EQ(color.alpha_offset, 12);
+}
+
+TEST(Avm2Snapshot, HiddenPlacementStaysInTheSnapshotFlagged) {
+  // Detects: a visible=false placement that the snapshot drops or reports as visible; the host must still receive it flagged.
+  Harness harness;
+  fo4::swf::SwfFile file = build_movie();
+  fo4::swf::SwfTag hidden = place_tag(3, 6, 1.0, 1.0, "hidden");
+  hidden.placement->visible = false;
+  hidden.placement->blend_mode = std::uint8_t{8};
+  hidden.placement->ratio = std::uint16_t{3};
+  file.tags.insert(file.tags.begin() + 2, hidden);
+  const std::shared_ptr<SwfRuntime> movie =
+      SwfRuntime::create(harness.runtime, harness.interpreter, file);
+  ASSERT_NE(movie, nullptr);
+  const FrameSnapshot snapshot = movie->take_snapshot();
+  const fo4::avm2::SnapshotEntry* entry = nullptr;
+  for (const auto& candidate : snapshot.entries) {
+    if (candidate.name == "hidden") {
+      entry = &candidate;
+    }
+  }
+  ASSERT_NE(entry, nullptr);
+  EXPECT_FALSE(entry->visible);
+  EXPECT_EQ(entry->blend_mode, std::uint8_t{8});
+  EXPECT_EQ(entry->ratio, std::optional<std::uint16_t>{3});
+}
+
+TEST(Avm2Snapshot, PlacedRatioFiltersAndCacheChangeTheSnapshotHash) {
+  // Detects: a placed ratio, filter list or cacheAsBitmap flag that the snapshot hash skips; the hash must change with each one.
+  Harness harness;
+  const fo4::swf::SwfFile file = build_movie();
+  const std::shared_ptr<SwfRuntime> movie =
+      SwfRuntime::create(harness.runtime, harness.interpreter, file);
+  ASSERT_NE(movie, nullptr);
+  const std::shared_ptr<DisplayObject> loader = movie->root()->child_at(0);
+  ASSERT_NE(loader, nullptr);
+  const std::uint64_t before = fo4::avm2::snapshot_hash(movie->snapshot());
+  loader->set_ratio(std::uint16_t{7});
+  const std::uint64_t with_ratio = fo4::avm2::snapshot_hash(movie->snapshot());
+  EXPECT_NE(with_ratio, before);
+  fo4::swf::SwfFilter shadow;
+  shadow.blur_x = 2.0;
+  loader->set_placed_filters({shadow});
+  const std::uint64_t with_filter = fo4::avm2::snapshot_hash(movie->snapshot());
+  EXPECT_NE(with_filter, with_ratio);
+  shadow.blur_x = 3.0;
+  loader->set_placed_filters({shadow});
+  const std::uint64_t with_blur = fo4::avm2::snapshot_hash(movie->snapshot());
+  EXPECT_NE(with_blur, with_filter);
+  loader->set_cache_as_bitmap(true);
+  EXPECT_NE(fo4::avm2::snapshot_hash(movie->snapshot()), with_blur);
 }
 
 }  // namespace

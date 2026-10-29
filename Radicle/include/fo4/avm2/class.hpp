@@ -90,6 +90,7 @@ struct Class {
   const Trait* find_own_class_trait(const Multiname& multiname) const;
   const Trait* resolve_instance_trait(const Multiname& multiname) const;
   const Trait* resolve_class_trait(const Multiname& multiname) const;
+  const Trait* resolve_dispatch_trait(std::uint32_t dispatch_id) const;
 
   const Trait* find_slot_trait(std::uint32_t slot_id) const;
 

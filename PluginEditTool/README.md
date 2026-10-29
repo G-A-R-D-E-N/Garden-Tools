@@ -143,11 +143,13 @@ Both scripts build C++ with CMake and do not invoke `dotnet`.
 
 `publish.bat [deploy-folder]` also copies the build into that folder (for example an MO2 tools
 folder); the folder can come from `FO4IDE_DEPLOY_DIR` instead, and with neither it only builds.
-`package.ps1` bundles optional helper programs from locations you pass as parameters or environment
-variables: `-NiftoolPath` (`NIFTOOL_PATH`), `-TexconvPath` (`TEXCONV_PATH`), `-CkWikiPath`
-(`CK_WIKI_PATH`), `-AudioToolsDir` (`FO4IDE_AUDIO_TOOLS_DIR`) and, with `-IncludeBaseScripts`,
-`-BaseScriptsPath` (`FO4IDE_BASE_SCRIPTS_DIR`). Any that is unset is skipped with a warning, and the
-package still works without it.
+`package.ps1` bundles helper programs. texconv and ffmpeg are always included: when `-TexconvPath`
+(`TEXCONV_PATH`) is unset, or `-AudioToolsDir` (`FO4IDE_AUDIO_TOOLS_DIR`) has no `ffmpeg.exe`, the
+build downloads the pinned version listed in `tools/bundled-tools.json` and checks its SHA256. An
+override that is not a file stops the build. The other helpers come from `-NiftoolPath`
+(`NIFTOOL_PATH`), `-CkWikiPath` (`CK_WIKI_PATH`), the rest of `-AudioToolsDir`, and, with
+`-IncludeBaseScripts`, `-BaseScriptsPath` (`FO4IDE_BASE_SCRIPTS_DIR`). Any of those that is unset is
+skipped with a warning, and the package still works without it.
 
 A direct native build is also available:
 

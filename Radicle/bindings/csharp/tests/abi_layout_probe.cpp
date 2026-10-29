@@ -26,6 +26,7 @@
 #include "fo4/c_api_dds.h"
 #include "fo4/c_api_terrain.h"
 #include "fo4/c_api_swf.h"
+#include "fo4/c_api_swf_verbs.h"
 #include "fo4/c_api_pex_analysis.h"
 #include "fo4/c_api_script_set.h"
 #include "fo4/c_api_papyrus.h"
@@ -33,6 +34,9 @@
 #include "fo4/c_api_papyrus_save.h"
 #include "fo4/c_api_papyrus_quest.h"
 #include "fo4/c_api_papyrus_source.h"
+#include "fo4/c_api_papyrus_compiler.h"
+#include "fo4/c_api_graph.h"
+#include "fo4/c_api_papyrus_analysis.h"
 #include <cstddef>
 #include <cstdio>
 
@@ -1640,6 +1644,8 @@ int main() {
   printf("SwfFramesInstance.Bounds %zu\n", offsetof(radicle_swf_frames_instance, bounds));
   printf("SwfFramesInstance.Name %zu\n", offsetof(radicle_swf_frames_instance, name));
   printf("SwfFramesInstance.Path %zu\n", offsetof(radicle_swf_frames_instance, path));
+  printf("SwfFramesInstance.CreateTagIndex %zu\n", offsetof(radicle_swf_frames_instance, create_tag_index));
+  printf("SwfFramesInstance.TransformTagIndex %zu\n", offsetof(radicle_swf_frames_instance, transform_tag_index));
   printf("SwfTagReplacement %zu\n", sizeof(radicle_swf_tag_replacement));
   printf("SwfTagReplacement.TagIndex %zu\n", offsetof(radicle_swf_tag_replacement, tag_index));
   printf("SwfTagReplacement.Payload %zu\n", offsetof(radicle_swf_tag_replacement, payload));
@@ -1665,6 +1671,25 @@ int main() {
   printf("SwfGlyph.FillBits %zu\n", offsetof(radicle_swf_glyph, fill_bits));
   printf("SwfGlyph.LineBits %zu\n", offsetof(radicle_swf_glyph, line_bits));
   printf("SwfGlyph.RecordCount %zu\n", offsetof(radicle_swf_glyph, record_count));
+  printf("SwfSound %zu\n", sizeof(radicle_swf_sound));
+  printf("SwfSound.SoundId %zu\n", offsetof(radicle_swf_sound, sound_id));
+  printf("SwfSound.Format %zu\n", offsetof(radicle_swf_sound, format));
+  printf("SwfSound.Rate %zu\n", offsetof(radicle_swf_sound, rate));
+  printf("SwfSound.Sample16bit %zu\n", offsetof(radicle_swf_sound, sample_16bit));
+  printf("SwfSound.Stereo %zu\n", offsetof(radicle_swf_sound, stereo));
+  printf("SwfSound.SampleCount %zu\n", offsetof(radicle_swf_sound, sample_count));
+  printf("SwfSound.DataSize %zu\n", offsetof(radicle_swf_sound, data_size));
+  printf("SwfStartSound %zu\n", sizeof(radicle_swf_start_sound));
+  printf("SwfStartSound.SoundId %zu\n", offsetof(radicle_swf_start_sound, sound_id));
+  printf("SwfStartSound.SyncStop %zu\n", offsetof(radicle_swf_start_sound, sync_stop));
+  printf("SwfStartSound.SyncNoMultiple %zu\n", offsetof(radicle_swf_start_sound, sync_no_multiple));
+  printf("SwfStartSound.HasInPoint %zu\n", offsetof(radicle_swf_start_sound, has_in_point));
+  printf("SwfStartSound.InPoint %zu\n", offsetof(radicle_swf_start_sound, in_point));
+  printf("SwfStartSound.HasOutPoint %zu\n", offsetof(radicle_swf_start_sound, has_out_point));
+  printf("SwfStartSound.OutPoint %zu\n", offsetof(radicle_swf_start_sound, out_point));
+  printf("SwfStartSound.HasLoopCount %zu\n", offsetof(radicle_swf_start_sound, has_loop_count));
+  printf("SwfStartSound.LoopCount %zu\n", offsetof(radicle_swf_start_sound, loop_count));
+  printf("SwfStartSound.EnvelopeCount %zu\n", offsetof(radicle_swf_start_sound, envelope_count));
   printf("SwfCharacter %zu\n", sizeof(radicle_swf_character));
   printf("SwfCharacter.CharacterId %zu\n", offsetof(radicle_swf_character, character_id));
   printf("SwfCharacter.Kind %zu\n", offsetof(radicle_swf_character, kind));
@@ -1678,6 +1703,22 @@ int main() {
   printf("SwfCharacter.Name %zu\n", offsetof(radicle_swf_character, name));
   printf("SwfCharacter.ImportedFrom %zu\n", offsetof(radicle_swf_character, imported_from));
   printf("SwfCharacter.ImportedName %zu\n", offsetof(radicle_swf_character, imported_name));
+  printf("SwfEditTextInfo %zu\n", sizeof(radicle_swf_edit_text_info));
+  printf("SwfEditTextInfo.CharacterId %zu\n", offsetof(radicle_swf_edit_text_info, character_id));
+  printf("SwfEditTextInfo.Bounds %zu\n", offsetof(radicle_swf_edit_text_info, bounds));
+  printf("SwfEditTextInfo.HasColor %zu\n", offsetof(radicle_swf_edit_text_info, has_color));
+  printf("SwfEditTextInfo.Color %zu\n", offsetof(radicle_swf_edit_text_info, color));
+  printf("SwfEditTextFields %zu\n", sizeof(radicle_swf_edit_text_fields));
+  printf("SwfEditTextFields.HasText %zu\n", offsetof(radicle_swf_edit_text_fields, has_text));
+  printf("SwfEditTextFields.Text %zu\n", offsetof(radicle_swf_edit_text_fields, text));
+  printf("SwfEditTextFields.TextSize %zu\n", offsetof(radicle_swf_edit_text_fields, text_size));
+  printf("SwfEditTextFields.HasColor %zu\n", offsetof(radicle_swf_edit_text_fields, has_color));
+  printf("SwfEditTextFields.Color %zu\n", offsetof(radicle_swf_edit_text_fields, color));
+  printf("SwfEditTextFields.HasBounds %zu\n", offsetof(radicle_swf_edit_text_fields, has_bounds));
+  printf("SwfEditTextFields.Bounds %zu\n", offsetof(radicle_swf_edit_text_fields, bounds));
+  printf("SwfInstanceTransform %zu\n", sizeof(radicle_swf_instance_transform));
+  printf("SwfInstanceTransform.InstanceId %zu\n", offsetof(radicle_swf_instance_transform, instance_id));
+  printf("SwfInstanceTransform.Transform %zu\n", offsetof(radicle_swf_instance_transform, transform));
   printf("PexCallSite %zu\n", sizeof(radicle_pex_call_site));
   printf("PexCallSite.CallerFile %zu\n", offsetof(radicle_pex_call_site, caller_file));
   printf("PexCallSite.CallerObject %zu\n", offsetof(radicle_pex_call_site, caller_object));
@@ -1813,5 +1854,9 @@ int main() {
   printf("PapyrusAliasReport.Open %zu\n", offsetof(radicle_papyrus_alias_report, open));
   printf("PapyrusAliasReport.Report %zu\n", offsetof(radicle_papyrus_alias_report, report));
   printf("PapyrusAliasReport.Digest %zu\n", offsetof(radicle_papyrus_alias_report, digest));
+  printf("PapyrusCompileOptions %zu\n", sizeof(radicle_papyrus_compile_options));
+  printf("PapyrusCompileOptions.Release %zu\n", offsetof(radicle_papyrus_compile_options, release));
+  printf("PapyrusCompileOptions.NoDebugInfo %zu\n", offsetof(radicle_papyrus_compile_options, no_debug_info));
+  printf("PapyrusCompileOptions.Imports %zu\n", offsetof(radicle_papyrus_compile_options, imports));
   return 0;
 }

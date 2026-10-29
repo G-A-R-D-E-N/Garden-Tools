@@ -184,7 +184,8 @@ These read the winning version of a leveled list, NPC_, FACT or WEAP record and 
 
 | Tool | Arguments | Writes | What it does |
 |---|---|---|---|
-| `nif_inspect`, `nif_verify`, `nif_tree`, `nif_geometry` | `path` | no | Run niftool on a NIF: summary, verification, block tree and geometry. Need niftool. |
+| `nif_inspect`, `nif_geometry` | `path` | no | Read a NIF: summary and geometry. Uses niftool when configured, otherwise reads in-process. No niftool needed. |
+| `nif_verify`, `nif_tree` | `path` | no | Verification and block tree. Uses niftool when configured, otherwise reads in-process. No niftool needed. |
 | `material_inspect` | `path` | no | Reads a BGSM or BGEM material: `fileName`, `format`, `version` and its named `fields`. |
 | `material_set_fields` | `path`, `fields` [`output`] | disk | Sets named material fields (`fields` maps a name to a text value) and writes the result atomically to `output`, or back to `path` when no output is given. A conditional field such as `EmittanceColor` can be set only when its switch (`EmitEnabled`) is already true in the saved file: set the switch in one call and the field in the next. |
 | `audio_convert_to_xwm` | `source` [`output`, `bitrateBps`] | disk | Converts one audio or video file, or every supported file under a folder, to Fallout 4 XWM. Without `output` each `.xwm` goes next to its source; with a folder source, `output` is a folder that mirrors the layout. Needs xWMAEncode, plus ffmpeg for anything that is not PCM WAV. |
@@ -246,7 +247,7 @@ column, then `PATH` for programs.
 
 | Helper | Used by | Environment variable | `settings.json` key | Location |
 |---|---|---|---|---|
-| niftool | `nif_*` | `NIFTOOL_PATH` | `NiftoolPath` | `tools\niftool\niftool.exe` beside the exe |
+| niftool | NIF import with box collision | `NIFTOOL_PATH` | `NiftoolPath` | `tools\niftool\niftool.exe` beside the exe |
 | Creation Kit Wiki mirror (a folder) | `papyrus_function_lookup`, `papyrus_script_info` | `CK_WIKI_PATH` | `CkWikiPath` | `tools\ckwiki\fallout4` |
 | `xWMAEncode.exe` | `audio_convert_to_xwm`, `audio_convert_from_xwm` | `XWMAENCODE_PATH` | `XwmaEncodePath` | `tools\audio\` |
 | ffmpeg | `audio_convert_to_xwm` (input that is not PCM WAV), `audio_convert_from_xwm` (output other than WAV) | `FFMPEG_PATH` | `FfmpegPath` | `tools\audio\` |
@@ -257,8 +258,9 @@ column, then `PATH` for programs.
 
 `<Fallout 4>` is the install folder from the `Fallout4Path` setting, `FALLOUT4_PATH`, the registry or
 a Steam library. `PapyrusCompiler.exe` and `Archive2.exe` come with the Creation Kit and are not
-shipped in the package. The package bundles niftool, the Creation Kit Wiki mirror and the audio tools
-only if they were available when it was built; a missing one disables just the tools in its row.
+shipped in the package. The package always includes texconv and ffmpeg. niftool is not included;
+supply `NIFTOOL_PATH`. The Creation Kit Wiki mirror and the xWMAEncode and BmlFuz tools are included
+only if they were available at build time; a missing one disables just the tools in its row.
 niftool is looked up once at startup, so restart the server after installing it.
 
 The built-in Papyrus engine (`compile_papyrus` with `builtin`, or with `auto` when there is no
@@ -293,8 +295,9 @@ only feed the Creation Kit compiler route.
   compiler is Bethesda's and is not shipped here), or use `engine="builtin"`.
 - **The built-in engine reports every vanilla type as unknown.** It has no base script sources to
   resolve against. Set `PAPYRUS_BASE_IMPORTS` or pass `imports`, as described above.
-- **The `nif_*` tools say `niftool executable not found`.** niftool is missing from the package, or
-  `NIFTOOL_PATH` points somewhere stale. Restart the server after fixing it.
+- **NIF import with box collision says `box collision needs niftool`, or a NIF command says `niftool executable not found`.** Only box-collision import
+  needs niftool; fix, import, inspect, geometry, verify, tree and saving NIF edits run in-process. Fix repairs tangents, adds a missing BSX flag and trims texture and material name whitespace; it does not change shader or BSX flags, and it leaves the tangents of shapes without normal, tangent and UV attributes alone. niftool is missing from
+  the package, or `NIFTOOL_PATH` points somewhere stale. Restart the server after fixing it.
 - **`archive_pack` says `Archive2.exe is not configured`.** Install the Creation Kit or set
   `ARCHIVE2_PATH`.
 - **An audio tool answers `Error: set ..._PATH or place ... in tools/audio`.** A helper program is

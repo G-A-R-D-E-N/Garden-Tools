@@ -39,9 +39,12 @@ class MaxFormVersionTests(unittest.TestCase):
                              scalar(min_form_version=minimum, max_form_version=maximum))
 
     def test_formlink_max_form_version_bounds_a_row(self):
-        rendered = formlink_schema_codegen.render(*self.link(link(payload_sizes=[8], stride=8, max_form_version=152)))
+        rendered, shards = formlink_schema_codegen.render(
+            *self.link(link(payload_sizes=[8], stride=8, max_form_version=152)))
+        self.assertEqual(shards, {})
         self.assertIn("{{8}}, 152}", rendered)
-        self.assertIn("{{}}, 152}", formlink_schema_codegen.render(*self.link(link(max_form_version=152))))
+        bare, _shards = formlink_schema_codegen.render(*self.link(link(max_form_version=152)))
+        self.assertIn("{{}}, 152}", bare)
         for value in (0, -1, 65536, True, "152"):
             with self.subTest(value=value), self.assertRaisesRegex(ValueError, "max_form_version"):
                 self.link(link(max_form_version=value))

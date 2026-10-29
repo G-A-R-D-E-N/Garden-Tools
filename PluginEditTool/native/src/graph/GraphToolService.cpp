@@ -7,7 +7,6 @@
 
 #include <fo4ide/graph/GraphCompiler.hpp>
 #include <fo4ide/graph/GraphDiagnostic.hpp>
-#include <fo4ide/papyrus/AnalysisService.hpp>
 
 namespace fo4ide::graph {
 
@@ -97,7 +96,8 @@ std::string describe(const GraphDiagnostic& diagnostic, const GraphDocument& doc
 }  // namespace
 
 papyrus::ScriptIndex graphIndexFor(const std::filesystem::path* graphPath,
-                                   const std::string* imports) {
+                                   const std::string* imports,
+                                   const std::vector<std::filesystem::path>& baseImports) {
     std::vector<std::filesystem::path> roots;
 
     if (graphPath != nullptr && !graphPath->empty()) {
@@ -117,7 +117,7 @@ papyrus::ScriptIndex graphIndexFor(const std::filesystem::path* graphPath,
         if (!current.empty()) roots.push_back(std::filesystem::path(current));
     }
 
-    for (const auto& root : papyrus::papyrusBaseImports()) roots.push_back(root);
+    for (const auto& root : baseImports) roots.push_back(root);
 
     papyrus::ScriptIndex index;
     std::error_code errorCode;
@@ -136,12 +136,13 @@ papyrus::ScriptIndex graphIndexFor(const std::filesystem::path* graphPath,
 }
 
 std::string GraphToolService::validate(const std::filesystem::path& graphPath,
-                                       const std::string* imports) {
+                                       const std::string* imports,
+                                       const std::vector<std::filesystem::path>& baseImports) {
     std::optional<GraphDocument> document;
     std::optional<std::string> failure;
     if (!tryLoad(graphPath, document, failure)) return *failure;
 
-    auto index = graphIndexFor(&graphPath, imports);
+    auto index = graphIndexFor(&graphPath, imports, baseImports);
     NodePalette palette(index);
     GraphCompiler compiler(index, &palette);
     const auto validation = compiler.validate(*document);
@@ -169,12 +170,13 @@ std::string GraphToolService::validate(const std::filesystem::path& graphPath,
 
 std::string GraphToolService::compile(const std::filesystem::path& graphPath,
                                       const std::filesystem::path* output,
-                                      const std::string* imports, bool sourceOnly) {
+                                      const std::string* imports, bool sourceOnly,
+                                      const std::vector<std::filesystem::path>& baseImports) {
     std::optional<GraphDocument> document;
     std::optional<std::string> failure;
     if (!tryLoad(graphPath, document, failure)) return *failure;
 
-    auto index = graphIndexFor(&graphPath, imports);
+    auto index = graphIndexFor(&graphPath, imports, baseImports);
     NodePalette palette(index);
     GraphCompiler compiler(index, &palette);
     GraphCompileOptions options;
@@ -232,8 +234,9 @@ std::string GraphToolService::compile(const std::filesystem::path& graphPath,
 }
 
 std::string GraphToolService::searchPalette(const std::string& query,
-                                            const std::string* imports, int limit) {
-    auto index = graphIndexFor(nullptr, imports);
+                                            const std::string* imports, int limit,
+                                            const std::vector<std::filesystem::path>& baseImports) {
+    auto index = graphIndexFor(nullptr, imports, baseImports);
     NodePalette palette(index);
     const auto result = palette.search(query, limit <= 0 ? 30 : limit);
 
@@ -254,8 +257,9 @@ std::string GraphToolService::searchPalette(const std::string& query,
 }
 
 std::string GraphToolService::describeNode(const std::string& nodeType,
-                                           const std::string* imports) {
-    auto index = graphIndexFor(nullptr, imports);
+                                           const std::string* imports,
+                                           const std::vector<std::filesystem::path>& baseImports) {
+    auto index = graphIndexFor(nullptr, imports, baseImports);
     NodePalette palette(index);
     const auto* definition = palette.find(nodeType);
     if (definition == nullptr) {

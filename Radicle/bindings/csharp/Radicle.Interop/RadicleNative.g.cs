@@ -2492,6 +2492,8 @@ public unsafe struct SwfFramesInstance
     public SwfBounds Bounds;
     public IntPtr Name;
     public IntPtr Path;
+    public uint CreateTagIndex;
+    public uint TransformTagIndex;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -2544,6 +2546,33 @@ public unsafe struct SwfGlyph
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfSound
+{
+    public ushort SoundId;
+    public byte Format;
+    public byte Rate;
+    public byte Sample16bit;
+    public byte Stereo;
+    public uint SampleCount;
+    public nuint DataSize;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfStartSound
+{
+    public ushort SoundId;
+    public byte SyncStop;
+    public byte SyncNoMultiple;
+    public byte HasInPoint;
+    public uint InPoint;
+    public byte HasOutPoint;
+    public uint OutPoint;
+    public byte HasLoopCount;
+    public ushort LoopCount;
+    public nuint EnvelopeCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct SwfCharacter
 {
     public ushort CharacterId;
@@ -2558,6 +2587,34 @@ public unsafe struct SwfCharacter
     public IntPtr Name;
     public IntPtr ImportedFrom;
     public IntPtr ImportedName;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfEditTextInfo
+{
+    public ushort CharacterId;
+    public SwfRect Bounds;
+    public byte HasColor;
+    public uint Color;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfEditTextFields
+{
+    public byte HasText;
+    public IntPtr Text;
+    public nuint TextSize;
+    public byte HasColor;
+    public uint Color;
+    public byte HasBounds;
+    public SwfRect Bounds;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SwfInstanceTransform
+{
+    public uint InstanceId;
+    public SwfTransform Transform;
 }
 
 public enum PexOperandRole : int
@@ -2874,10 +2931,18 @@ public unsafe struct PapyrusAliasReport
     public IntPtr Digest;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PapyrusCompileOptions
+{
+    public int Release;
+    public int NoDebugInfo;
+    public IntPtr Imports;
+}
+
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 76u;
+    public const uint CompiledAbiVersion = 87u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -3983,6 +4048,12 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_tag_payload")]
     public static extern Status SwfTagPayload(IntPtr swf, nuint index, byte** out_bytes, nuint* out_size);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_inspect_text")]
+    public static extern Status SwfInspectText(IntPtr swf, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, byte** out_text, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_avm1_disassemble")]
+    public static extern Status SwfAvm1Disassemble(IntPtr swf, nuint index, byte** out_text, nuint* out_size);
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_symbol_count")]
     public static extern nuint SwfSymbolCount(IntPtr swf);
 
@@ -4060,6 +4131,12 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_jpeg_tables_at")]
     public static extern Status SwfJpegTablesAt(IntPtr swf, nuint index, SwfJpegTablesInfo* out_tables);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_bitmap_png")]
+    public static extern Status SwfBitmapPng(IntPtr swf, nuint index, byte** out_png, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_bitmap_jpeg")]
+    public static extern Status SwfBitmapJpeg(IntPtr swf, nuint index, byte** out_jpeg, nuint* out_size);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_abc_count")]
     public static extern nuint SwfAbcCount(IntPtr swf);
@@ -4154,6 +4231,18 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_font_replace_glyph")]
     public static extern Status SwfFontReplaceGlyph(IntPtr swf, nuint index, nuint glyph, byte fill_bits, byte line_bits, SwfShapeRecord* records, nuint record_count, SwfPlanResult* out_result);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_sound_at")]
+    public static extern Status SwfSoundAt(IntPtr swf, nuint index, SwfSound* out_sound);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_start_sound_at")]
+    public static extern Status SwfStartSoundAt(IntPtr swf, nuint index, SwfStartSound* out_start);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_replace_sound_data")]
+    public static extern Status SwfReplaceSoundData(IntPtr swf, SwfSound* header, byte* data, nuint size, SwfPlanResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_retarget_start_sound")]
+    public static extern Status SwfRetargetStartSound(IntPtr swf, nuint index, ushort new_sound_id, SwfPlanResult* out_result);
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_revision")]
     public static extern ulong SwfRevision(IntPtr swf);
 
@@ -4168,6 +4257,12 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_character_by_id")]
     public static extern Status SwfCharacterById(IntPtr swf, ushort character_id, SwfCharacter* out_character);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_shape_svg")]
+    public static extern Status SwfShapeSvg(IntPtr swf, ushort character_id, byte** out_text, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_frame_svg")]
+    public static extern Status SwfFrameSvg(IntPtr swf, uint frame, byte** out_svg, nuint* out_size);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_history_create")]
     public static extern Status SwfHistoryCreate(IntPtr swf, IntPtr* out_history);
@@ -4195,6 +4290,36 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_history_write_bytes")]
     public static extern Status SwfHistoryWriteBytes(IntPtr history, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_edit_text_read")]
+    public static extern Status SwfEditTextRead(IntPtr history, nuint tag_index, SwfEditTextInfo* out_info, byte** out_text, nuint* out_text_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_edit_text_apply")]
+    public static extern Status SwfEditTextApply(IntPtr history, nuint tag_index, SwfEditTextFields* fields, SwfPlanResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_frame_label_rows")]
+    public static extern Status SwfFrameLabelRows(IntPtr history, ushort timeline_id, IntPtr** out_rows, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_frame_label_add")]
+    public static extern Status SwfFrameLabelAdd(IntPtr history, ushort timeline_id, uint frame, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, SwfPlanResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_frame_label_rename")]
+    public static extern Status SwfFrameLabelRename(IntPtr history, ushort timeline_id, nuint label_index, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, SwfPlanResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_frame_label_remove")]
+    public static extern Status SwfFrameLabelRemove(IntPtr history, ushort timeline_id, nuint label_index, SwfPlanResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_placement_list_json")]
+    public static extern Status SwfPlacementListJson(IntPtr history, ushort timeline_id, byte** out_text, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_apply_instance_transforms")]
+    public static extern Status SwfApplyInstanceTransforms(IntPtr history, uint root_frame, SwfInstanceTransform* edits, nuint edit_count, SwfPlanResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_reassign_instance_depth")]
+    public static extern Status SwfReassignInstanceDepth(IntPtr history, uint root_frame, uint instance_id, ushort destination_depth, uint* out_instance_id, SwfPlanResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_insert_instance_transform_keyframe")]
+    public static extern Status SwfInsertInstanceTransformKeyframe(IntPtr history, uint root_frame, uint instance_id, SwfTransform* transform, SwfPlanResult* out_result);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_call_operand_role")]
     public static extern PexOperandRole PexCallOperandRole(byte opcode, nuint index);
@@ -4438,5 +4563,50 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_source_summary")]
     public static extern Status PapyrusSourceSummary(byte* source, nuint size, IntPtr** out_rows, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_compile_source")]
+    public static extern Status PapyrusCompileSource(byte* source, nuint size, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? file_name, PapyrusCompileOptions options, IntPtr* out_pex, IntPtr** diag_rows, nuint* diag_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_decompile")]
+    public static extern Status PapyrusDecompile(IntPtr pex, int assembly, byte** out_text, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_graph_validate")]
+    public static extern Status GraphValidate([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? graph_path, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? imports, IntPtr* base_imports, nuint base_count, byte** out_text, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_graph_compile")]
+    public static extern Status GraphCompile([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? graph_path, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? output_path, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? imports, int source_only, IntPtr* base_imports, nuint base_count, byte** out_text, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_graph_palette_search")]
+    public static extern Status GraphPaletteSearch([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? query, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? imports, int limit, IntPtr* base_imports, nuint base_count, byte** out_text, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_graph_describe_node")]
+    public static extern Status GraphDescribeNode([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? node_type, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? imports, IntPtr* base_imports, nuint base_count, byte** out_text, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_graph_load_script")]
+    public static extern Status GraphLoadScript([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? script_path, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? imports, IntPtr* base_imports, nuint base_count, byte** out_text, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_line_column_to_offset")]
+    public static extern Status PapyrusLineColumnToOffset(byte* text, nuint size, int line, int column, int* out_offset);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_check")]
+    public static extern Status PapyrusCheck([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? source, int semantic, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? imports, IntPtr* base_imports, nuint base_count, byte** out_text, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_outline")]
+    public static extern Status PapyrusOutline([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? source, byte** out_text, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_definition")]
+    public static extern Status PapyrusDefinition([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? source, int line, int column, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? imports, IntPtr* base_imports, nuint base_count, byte** out_text, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_analyze_json")]
+    public static extern Status PapyrusAnalyzeJson(byte* text, nuint size, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? file_path, byte** out_text, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_symbol_at_json")]
+    public static extern Status PapyrusSymbolAtJson(byte* text, nuint size, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? file_path, int offset, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? imports, IntPtr* base_imports, nuint base_count, byte** out_text, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_compile_path")]
+    public static extern Status PapyrusCompilePath([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? source, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? output_path, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? imports, int release, int no_debug_info, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? flag_file, IntPtr* base_imports, nuint base_count, byte** out_text, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_natural_roots")]
+    public static extern Status PapyrusNaturalRoots([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? folder, IntPtr** out_roots, nuint* out_count);
 
 }

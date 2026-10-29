@@ -63,6 +63,9 @@ struct VmadValueShape {
     std::optional<std::int64_t> integer;
     std::optional<bool> boolean;
     std::optional<std::string> object;
+    std::string elementType;
+    std::vector<VmadValueShape> elements;
+    std::vector<VmadValueShape> members;
 };
 
 enum class BoundKind : std::uint8_t {
