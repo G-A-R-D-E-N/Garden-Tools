@@ -9331,6 +9331,7 @@ This parent walk has its own hop limit (`guard`, 64), so a cyclic `extends` cann
 ## Radicle/include/fo4/papyrus/diagnostic.hpp:DiagnosticCode
 
 `DiagnosticCode::InheritanceCycle` maps to PAP0021, the first unused code after PAP0020 in the declaration range. The C# mirror `PluginEditTool/FO4RecordEditor.Core/Services/Papyrus/PapyrusDiagnostic.cs` does not carry PAP0021 yet, so the header's parity comment is not met until it does.
+
 ## Radicle/src/avm1/encode.cpp:validate_actions
 
 When the decode that built the stream did not end Ok, `validate_actions` returns `stream.status`. `Radicle/src/avm1/decode.cpp:Decoder::run` clears `actions` on failure, so `layout` alone walked an empty list and reported Ok. The same rule as `encode_actions_checked` now applies here, and the layout status is still used for a stream whose decode was Ok. The earlier `encode_actions_checked` note above says this function was left unchanged; that is no longer true. The callers are the tests in `Radicle/tests/test_avm1_encode.cpp`. The C ABI `radicle_swf_avm1_disassemble` in `Radicle/src/c_api_swf.cpp` uses `decode_actions` and `disassemble_actions`, so it does not call this function.
