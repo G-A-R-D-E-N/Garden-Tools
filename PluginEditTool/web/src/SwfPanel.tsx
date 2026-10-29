@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 import { AlertTriangle, RotateCcw, RotateCw, Save as SaveIcon } from 'lucide-react';
 import './SwfPanel.css';
 
@@ -391,11 +391,13 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
 
   // Invariant: every edit, undo and redo bumps revision, so it alone keys the preview redraw.
   const docKey = `${state.revision}`;
+  // Requires the event wrapper: showFrame sets state, which the lint forbids directly inside an effect.
+  const syncFramePreview = useEffectEvent((frame: number) => { void showFrame(frame); });
   useEffect(() => {
     if (syncedDoc.current === docKey) return;
     syncedDoc.current = docKey;
-    if (rootFrames > 0) void showFrame(previewFrame);
-  }, [docKey, rootFrames, previewFrame, showFrame]);
+    if (rootFrames > 0) syncFramePreview(previewFrame);
+  }, [docKey, rootFrames, previewFrame]);
 
   return (
     <div className="swf-panel">
