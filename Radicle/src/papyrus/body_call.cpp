@@ -248,6 +248,24 @@ void BodyEmitter::emitArrayBuiltin(const CallExpression& call, const Binding& bi
         return at < arguments.size() ? valueAs(arguments[at], type) : intValue(fallback);
     };
 
+    const auto memberType = [&]() -> Type {
+        const auto* name = dynamic_cast<const LiteralExpression*>(arguments[0]);
+        const auto split = element.name.find_last_of(':');
+        if (!name || name->kind != LiteralKind::String || element.kind != TypeKind::Struct ||
+            split == std::string::npos) {
+            return Type::error();
+        }
+        const Script* owner = gen_.index_.resolve(element.name.substr(0, split));
+        if (!owner) return Type::error();
+        for (const auto& structDecl : owner->structs) {
+            if (!iequals(structDecl.name, element.name.substr(split + 1))) continue;
+            for (const auto& field : structDecl.members) {
+                if (iequals(field.name, name->text)) return gen_.foreignType(field.type, owner);
+            }
+        }
+        return Type::error();
+    };
+
     const auto key = lower(binding.name);
     if (key == "find") {
         add("array_findelement",
@@ -261,13 +279,13 @@ void BodyEmitter::emitArrayBuiltin(const CallExpression& call, const Binding& bi
     }
     if (key == "findstruct") {
         add("array_findstruct",
-            {array, id(destination), value(arguments[0]), value(arguments[1]),
+            {array, id(destination), value(arguments[0]), valueAs(arguments[1], memberType()),
              argumentAt(2, Type::int_(), 0)});
         return;
     }
     if (key == "rfindstruct") {
         add("array_rfindstruct",
-            {array, id(destination), value(arguments[0]), value(arguments[1]),
+            {array, id(destination), value(arguments[0]), valueAs(arguments[1], memberType()),
              argumentAt(2, Type::int_(), -1)});
         return;
     }
