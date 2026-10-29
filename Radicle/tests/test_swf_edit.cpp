@@ -662,9 +662,11 @@ TEST(SwfEditBitmap, SwitchesToTagTwentyAndDropsTheAlphaChannelWhenHasAlphaIsFals
 }
 
 TEST(SwfEditBitmap, KeepsTheCharacterIdAndEveryOtherTagUnchanged) {
+  auto second_shape = define_shape_3_payload();
+  second_shape[0] = std::byte{6};
   const auto source = movie_of({{32, define_shape_3_payload()},
                                 {20, lossless_raw_payload(5, 2, 2, 0, zeros(16))},
-                                {32, define_shape_3_payload()},
+                                {32, second_shape},
                                 {1, {}}});
   auto file = open(source);
   const auto pixels = rgba_2x2();

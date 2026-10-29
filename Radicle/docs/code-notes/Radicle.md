@@ -8947,7 +8947,7 @@ Detects a tag 36 rewrite that keeps code 36 when `has_alpha` is false, or an enc
 
 ## Radicle/tests/test_swf_edit.cpp:KeepsTheCharacterIdAndEveryOtherTagUnchanged
 
-Detects a replace that shifts tags, drops or re-numbers the character id, or rewrites a neighbouring tag. The movie is shape (32), bitmap (20, id 3), shape (32), ShowFrame, End. After the replace, tag count and every non-bitmap tag's code and payload match the original, and the bitmap is still id 3 with code 36.
+Detects a replace that shifts tags, drops or re-numbers the character id, or rewrites a neighbouring tag. In test_swf_edit.cpp:KeepsTheCharacterIdAndEveryOtherTagUnchanged the movie is shape (32, id 5), bitmap (20, id 3), shape (32, id 6, so no id repeats), ShowFrame, End. After the replace, tag count and every non-bitmap tag's code and payload match the original, and the bitmap is still id 3 with code 36.
 
 ## Radicle/tests/test_swf_edit.cpp:RefusesAnUnknownOrNonLosslessCharacterAndLeavesTheFileUntouched
 

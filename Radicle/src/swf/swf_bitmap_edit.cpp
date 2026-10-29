@@ -75,10 +75,12 @@ SwfBitmapEditStatus replace_bitmap_lossless(SwfFile& file, std::uint16_t charact
   if (code != tag::kDefineBitsLossless && code != tag::kDefineBitsLossless2) {
     return SwfBitmapEditStatus::not_a_lossless_bitmap;
   }
-  const std::size_t pixel_bytes = static_cast<std::size_t>(width) * height * kBytesPerPixel;
-  if (width == 0 || height == 0 || pixel_bytes > detail::kMaxBitmapBytes) {
+  if (width == 0 || height == 0 ||
+      static_cast<std::size_t>(height) >
+          detail::kMaxBitmapBytes / (static_cast<std::size_t>(width) * kBytesPerPixel)) {
     return SwfBitmapEditStatus::bad_dimensions;
   }
+  const std::size_t pixel_bytes = static_cast<std::size_t>(width) * height * kBytesPerPixel;
   if (rgba.size() != pixel_bytes) {
     return SwfBitmapEditStatus::pixel_size_mismatch;
   }
