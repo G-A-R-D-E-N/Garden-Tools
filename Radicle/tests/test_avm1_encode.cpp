@@ -31,6 +31,14 @@ Bytes encode(const Avm1Stream& stream) {
   return out;
 }
 
+Bytes encode_checked(const Avm1Stream& stream, Avm1Status& status) {
+  Bytes out;
+  for (const std::byte value : fo4::avm1::encode_actions_checked(stream, status)) {
+    out.push_back(std::to_integer<std::uint8_t>(value));
+  }
+  return out;
+}
+
 Avm1Action single(std::uint8_t code) {
   Avm1Action action;
   action.code = code;
@@ -79,6 +87,103 @@ TEST(Avm1Encode, DeletedJumpTargetWithNoSurvivorRetargetsToTheStreamEnd) {
   stream.actions.erase(stream.actions.begin() + 1);
   stream.actions.erase(stream.actions.begin() + 2);
   EXPECT_EQ(encode(stream), (Bytes{0x99, 0x02, 0x00, 0x01, 0x00, 0x04}));
+  EXPECT_EQ(fo4::avm1::validate_actions(stream), Avm1Status::BranchUnresolved);
+}
+
+TEST(Avm1Encode, BranchToAnErasedEndRecordStillTargetsTheStreamEnd) {
+  const Bytes input{0x99, 0x02, 0x00, 0x02, 0x00, 0x04, 0x00};
+  auto stream = decode(input);
+  ASSERT_TRUE(stream.ok()) << stream.message;
+  ASSERT_EQ(stream.original_end, 7u);
+  ASSERT_TRUE(fo4::avm1::erase_action(stream.actions, 2));
+  EXPECT_EQ(fo4::avm1::validate_actions(stream), Avm1Status::Ok);
+  EXPECT_EQ(encode(stream), (Bytes{0x99, 0x02, 0x00, 0x01, 0x00, 0x04}));
+}
+
+TEST(Avm1Encode, BranchOffsetFieldIsIgnoredAndTheTargetDecidesTheDelta) {
+  auto stream = decode(kJumpOverPlayAndStop);
+  ASSERT_TRUE(stream.ok()) << stream.message;
+  std::get<Avm1Branch>(stream.actions[0].payload).offset = 100;
+  EXPECT_EQ(encode(stream), kJumpOverPlayAndStop);
+  EXPECT_EQ(fo4::avm1::validate_actions(stream), Avm1Status::Ok);
+}
+
+TEST(Avm1Encode, EncodeCheckedReturnsTheBytesOfAValidStream) {
+  const auto stream = decode(kJumpOverPlayAndStop);
+  ASSERT_TRUE(stream.ok()) << stream.message;
+  Avm1Status status = Avm1Status::TooDeep;
+  EXPECT_EQ(encode_checked(stream, status), kJumpOverPlayAndStop);
+  EXPECT_EQ(status, Avm1Status::Ok);
+}
+
+TEST(Avm1Encode, EncodeCheckedReturnsNoBytesForABranchDeltaOutOfRange) {
+  const Bytes input{0x99, 0x02, 0x00, 0x02, 0x00, 0x04, 0x00};
+  auto stream = decode(input);
+  ASSERT_TRUE(stream.ok()) << stream.message;
+  ASSERT_TRUE(fo4::avm1::insert_action(stream.actions, 1, raw_record(40000)));
+  Avm1Status status = Avm1Status::Ok;
+  EXPECT_TRUE(encode_checked(stream, status).empty());
+  EXPECT_EQ(status, Avm1Status::BranchDeltaOutOfRange);
+  EXPECT_EQ(encode(stream).size(), 40010u);
+}
+
+TEST(Avm1Encode, EncodeCheckedReturnsNoBytesForARecordOrBodyOver65535) {
+  Avm1Status status = Avm1Status::Ok;
+  Avm1Stream record_stream;
+  record_stream.actions = {raw_record(70000)};
+  EXPECT_TRUE(encode_checked(record_stream, status).empty());
+  EXPECT_EQ(status, Avm1Status::SizeTooLarge);
+
+  Avm1Action function;
+  function.code = 0x9B;
+  function.payload = fo4::avm1::Avm1Function{};
+  function.body_records[0] = 2;
+  Avm1Stream body_stream;
+  body_stream.actions = {function, raw_record(40000), raw_record(40000)};
+  status = Avm1Status::Ok;
+  EXPECT_TRUE(encode_checked(body_stream, status).empty());
+  EXPECT_EQ(status, Avm1Status::SizeTooLarge);
+}
+
+TEST(Avm1Encode, InsertedRecordIntoAnEmptyFunctionBodyGrowsItsBodySize) {
+  const Bytes input{0x9B, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+  auto stream = decode(input);
+  ASSERT_TRUE(stream.ok()) << stream.message;
+  ASSERT_EQ(stream.actions[0].body_records[0], 0u);
+  ASSERT_TRUE(fo4::avm1::insert_action_into_body(stream.actions, 0, 0, 1, single(0x07)));
+  EXPECT_EQ(encode(stream), (Bytes{0x9B, 0x05, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x07, 0x00}));
+}
+
+TEST(Avm1Encode, InsertedRecordIntoAFinallyOnlyTryFillsTheFinallyBody) {
+  const Bytes input{0x8F, 0x08, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+  auto stream = decode(input);
+  ASSERT_TRUE(stream.ok()) << stream.message;
+  ASSERT_EQ(stream.actions[0].body_records[1], 0u);
+  ASSERT_TRUE(fo4::avm1::insert_action_into_body(stream.actions, 0, 1, 1, single(0x07)));
+  EXPECT_EQ(encode(stream), (Bytes{0x8F, 0x08, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
+                                   0x00, 0x07, 0x00}));
+}
+
+TEST(Avm1Encode, AppendAtTheListEndStaysOutsideABodyThatEndsThere) {
+  Avm1Action function;
+  function.code = 0x9B;
+  function.payload = fo4::avm1::Avm1Function{};
+  function.body_records[0] = 2;
+  Avm1Stream stream;
+  stream.actions = {function, single(0x04), single(0x06)};
+  ASSERT_TRUE(fo4::avm1::insert_action(stream.actions, 3, single(0x07)));
+  EXPECT_EQ(stream.actions[0].body_records[0], 2u);
+  EXPECT_EQ(encode(stream), (Bytes{0x9B, 0x05, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x04, 0x06,
+                                   0x07}));
+}
+
+TEST(Avm1Encode, ErasedRecordInsideNestedBodiesShrinksEveryEnclosingBody) {
+  auto stream = decode(kFunctionOfTry);
+  ASSERT_TRUE(stream.ok()) << stream.message;
+  ASSERT_TRUE(fo4::avm1::erase_action(stream.actions, 2));
+  EXPECT_EQ(encode(stream), (Bytes{0x9B, 0x05, 0x00, 0x00, 0x00, 0x00, 0x0D, 0x00, 0x8F, 0x09,
+                                   0x00, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x65, 0x00,
+                                   0x06, 0x00}));
 }
 
 TEST(Avm1Encode, InsertedRecordInsideADefineFunctionBodyGrowsItsBodySize) {

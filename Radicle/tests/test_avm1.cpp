@@ -476,13 +476,13 @@ TEST(Avm1Interpreter, VariableRoundTripsThroughTheGlobalScope) {
 // Invariant: an opcode outside the slice must refuse at its own offset by name; a silent skip would run the Trace after it and trace "2".
 TEST(Avm1Interpreter, UnsupportedOpcodeIsRefusedByName) {
   const auto stream =
-      decode(cat({push_int(1), rec(0x26, {}), rec(0x22, {}), push_int(2), rec(0x26, {}), Bytes{0x00}}));
+      decode(cat({push_int(1), rec(0x26, {}), rec(0x24, {}), push_int(2), rec(0x26, {}), Bytes{0x00}}));
   ASSERT_TRUE(stream.ok()) << stream.message;
   const auto result = fo4::avm1::execute_actions(stream);
   EXPECT_EQ(result.status, fo4::avm1::Avm1RunStatus::Unsupported);
-  EXPECT_EQ(result.opcode, 0x22);
+  EXPECT_EQ(result.opcode, 0x24);
   EXPECT_EQ(result.offset, stream.actions[2].offset);
-  EXPECT_NE(result.message.find("GetProperty (0x22)"), std::string::npos);
+  EXPECT_NE(result.message.find("CloneSprite (0x24)"), std::string::npos);
   EXPECT_EQ(result.trace, (std::vector<std::string>{"1"}));
 }
 

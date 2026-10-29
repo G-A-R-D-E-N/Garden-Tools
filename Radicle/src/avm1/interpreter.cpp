@@ -684,6 +684,7 @@ Avm1Result execute_actions(const Avm1Stream& stream, std::size_t max_steps,
   state.swf_version = swf_version;
   state.random_state = environment.random_seed;
   state.elapsed_ms = environment.elapsed_ms;
+  state.timeline = environment.timeline;
   Avm1Run run{state, result, max_steps};
   const std::size_t end = stream.actions.empty() ? 0
                                                  : stream.actions.back().offset +

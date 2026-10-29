@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -59,9 +60,23 @@ struct Avm1Result {
   bool ok() const noexcept { return status == Avm1RunStatus::Ok; }
 };
 
+/* Requires 1-based frame numbers; frame_for_label must match labels ASCII case-insensitively. */
+struct Avm1TimelineHost {
+  virtual ~Avm1TimelineHost() = default;
+  virtual void goto_frame(std::uint32_t frame) = 0;
+  virtual void play() = 0;
+  virtual void stop() = 0;
+  virtual std::uint32_t current_frame() = 0;
+  virtual std::uint32_t total_frames() = 0;
+  virtual std::optional<std::uint32_t> frame_for_label(const std::string& label) = 0;
+  virtual Avm1Data get_property(std::uint8_t index) = 0;
+  virtual void set_property(std::uint8_t index, const Avm1Data& value) = 0;
+};
+
 struct Avm1Environment {
   std::uint32_t random_seed{0x2545F491u};
   std::uint32_t elapsed_ms{0};
+  Avm1TimelineHost* timeline{nullptr};
 };
 
 /* Requires a stream from decode_actions; a stream that did not decode is refused before any record. */

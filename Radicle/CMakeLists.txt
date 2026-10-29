@@ -391,6 +391,7 @@ add_library(fo4
   src/avm1/misc_ops.cpp
   src/avm1/object_ops.cpp
   src/avm1/text_ops.cpp
+  src/avm1/timeline_ops.cpp
   src/avm2/name.cpp
   src/avm2/value.cpp
   src/avm2/coercion.cpp
@@ -908,6 +909,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_papyrus_declaration_check.cpp
     tests/test_papyrus_semantic_real.cpp
     tests/test_papyrus_codegen.cpp
+    tests/test_papyrus_codegen_corners.cpp
     tests/test_papyrus_codegen_real.cpp
     tests/test_papyrus_user_flags.cpp
     tests/test_papyrus_analysis_service.cpp
