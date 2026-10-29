@@ -31,6 +31,9 @@ function stubBridge(overrides: Record<string, unknown> = {}) {
     ActionTags: vi.fn(async () => JSON.stringify({ tags: [{ tagIndex: 9, code: 12, insideSprite: false }] })),
     Avm1Disassemble: vi.fn(async () => JSON.stringify({ text: '0000  Play\n0001  End\n' })),
     FrameSvg: vi.fn(async () => JSON.stringify({ svg: '<svg></svg>' })),
+    ShapeSvg: vi.fn(async () => JSON.stringify({ svg: '<svg></svg>' })),
+    BitmapPng: vi.fn(async () => JSON.stringify({ png: '' })),
+    BitmapJpeg: vi.fn(async () => JSON.stringify({ jpeg: '' })),
     ...overrides,
   };
   vi.stubGlobal('chrome', { webview: { hostObjects: { swf } } });
