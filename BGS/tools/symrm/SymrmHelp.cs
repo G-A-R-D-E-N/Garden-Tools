@@ -28,11 +28,11 @@ public static class SymrmHelp
         C("events", "events <xml-file-or-dir>",
           "Audit event declarations and their roles in unpacked behaviour XML.", "none",
           "symrm events ./xml"),
-        C("frames", "frames <animation.hkx-or-dir> [track-count | --digest]",
+        C("frames", "frames <animation.hkx-or-dir> [track-count] [--digest] [--strict]",
           "Inspect decoded animation frame/track data or print a compact digest.",
-          "--digest", "symrm frames Idle.hkx --digest"),
-        C("scale", "scale <animation.hkx-or-dir>",
-          "Inspect decoded animation scale channels.", "none",
+          "--digest; --strict", "symrm frames Idle.hkx --digest"),
+        C("scale", "scale <animation.hkx-or-dir> [--strict]",
+          "Inspect decoded animation scale channels.", "--strict",
           "symrm scale ./Animations"),
         C("skeleton", "skeleton <skeleton.hkx> [bone-filter]",
           "Print skeleton bones and reference transforms, following a matching bone chain.", "none",
@@ -40,6 +40,29 @@ public static class SymrmHelp
         C("rig", "rig <skeleton.hkx-or-dir> [output.json]",
           "Audit rig/skeleton data; a single file can also emit its JSON representation.", "none",
           "symrm rig skeleton.hkx skeleton.json"),
+        C("mapper", "mapper <skeleton.hkx> [--recompute] [--out <file>] [--force] [--data <Data folder>]",
+          "Read a file's skeleton mappers, rebuild them through the writer, and optionally recompute every " +
+          "simple row; --data sweeps a whole Data folder instead of one file.",
+          "--recompute; --out <file>; --force; --data <folder>",
+          "symrm mapper skeleton.hkx --recompute --out recomputed.hkx"),
+        C("ragdoll", "ragdoll <skeleton.hkx> [--set <field>:<index>=<values>] [--set ragdoll=<i>] [--out <file>] " +
+                     "[--force] [--allow-shared-material] [--allow-shared-shape] [--data <Data folder>]",
+          "Read a file's hknpRagdollData ragdolls, edit masses, centres of mass, material friction and " +
+          "restitution, a constraint's twist, cone, plane limits and friction, and a capsule's endpoints and " +
+          "radius while its direction stays the same, re-deriving its vertices, planes and mass properties in " +
+          "place, and rebuild the file through the value writer; --data sweeps a whole Data folder instead of " +
+          "one file.",
+          "--set <edit> (repeatable, ragdoll=<i> first selects a ragdoll when the file holds more than one); " +
+          "--set mass:<body>=<mass>; --set com:<body>=<x,y,z>; --set material:<material>=<friction> or " +
+          "<dynamic>,<static>; --set restitution:<material>=<value>; --set limit:<constraint>=<min,max>; " +
+          "--set cone:<constraint>=<max radians>; --set plane:<constraint>=<min,max>; --set " +
+          "friction:<constraint>=<value>; --set capsule:<shape>=<ax,ay,az,bx,by,bz>; --set " +
+          "radius:<shape>=<radius>; --out <file>; --force; --allow-shared-material (a material that more than " +
+          "one body names); --allow-shared-shape (a capsule shape that more than one body names, or whose mass " +
+          "properties another capsule shape shares); --data <folder>",
+          "symrm ragdoll skeleton.hkx --set mass:0=5 --set limit:0=-0.25,0.25 --set material:0=0.5,0.4 " +
+          "--out edited.hkx"),
+
         C("extract", "extract <archive.ba2> <filter> <output-dir> [extension] [--tree]",
           "Extract matching archive entries, optionally preserving their directory tree.",
           "--tree", "symrm extract Fallout4.ba2 behavior ./out .hkx --tree"),

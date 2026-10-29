@@ -224,6 +224,9 @@ Ba2GeneralArchive read_ba2_general_file(const std::filesystem::path& path) {
 std::vector<std::byte> extract_ba2_general_entry(const Ba2GeneralEntry& entry) {
   std::size_t total = 0;
   for (const auto& chunk : entry.chunks) {
+    if (chunk.compressed) {
+      detail::require_zlib_expansion_bound(chunk.data.size(), chunk.decompressed_size);
+    }
     if (chunk.decompressed_size > std::numeric_limits<std::size_t>::max() - total) {
       throw Ba2Error("BA2 entry is too large to extract");
     }
@@ -325,9 +328,6 @@ std::vector<std::byte> write_ba2_general(const Ba2GeneralArchive& archive) {
   std::size_t total_chunks = 0;
   for (std::size_t index = 0; index < archive.entries.size(); ++index) {
     const auto& entry = archive.entries[index];
-    if (std::ranges::any_of(entry.path, [](char ch) { return static_cast<unsigned char>(ch) >= 0x80; })) {
-      throw Ba2Error("BA2 entry path has a byte >= 0x80; the engine name hash is undefined for it");
-    }
     if (entry.chunks.size() > std::numeric_limits<std::uint8_t>::max()) {
       throw Ba2Error("BA2 GNRL entry has more than 255 chunks: " + entry.path);
     }

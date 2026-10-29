@@ -238,7 +238,7 @@ TEST_F(TextBoundaryTest, ArchiveNamesAreWindows1252) {
 
   const auto full = fo4::archive::read_ba2_general(bytes);
   EXPECT_EQ(full.entries.at(0).path, utf8);
-  EXPECT_THROW(fo4::archive::write_ba2_general(full), fo4::archive::Ba2Error);
+  EXPECT_EQ(fo4::archive::write_ba2_general(full), bytes);
   ASSERT_NE(fo4::archive::find_ba2_general_entry(full, utf8), nullptr);
 
   const std::vector<std::filesystem::path> archives{path};

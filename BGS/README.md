@@ -44,8 +44,11 @@ Files opened from a `.ba2` are read-only copies. Copy one to a folder you contro
 BGS is conservative about unsupported formats and edits. Areas that are not fully reduced or
 validated are read-only, refused, or clearly marked in the application:
 
-- Skeleton-mapper serialization/write-back and chain-mapper authoring are not complete. Shipped
-  Fallout 4 files do contain chain and unmapped-bone data; automatic bone pairing is not proven.
+- Skeleton-mapper write-back covers the simple row form: `symrm mapper` reads a shipped
+  `hkaSkeletonMapper`, recomputes and measures its rows against the reference, and writes them back
+  through the verified save path (`--out` for a copy, `--force` for an in-place overwrite). Chain
+  authoring is not supported: shipped Fallout 4 mappers do contain chain and unmapped-bone data, and
+  automatic bone pairing is not proven.
 - Reciprocal mapper generation is a construction tool based on the measured human fixture. It does
   not claim that every shipped mapper pair is symmetrical.
 - Ragdoll and physics tools are primarily inspection and engineering previews. Drop/Recover is a
@@ -67,10 +70,14 @@ gate a build in CI:
 ```bash
 BehaviourGraphStudio.exe --scan-archives "D:\Mods\MyAnimationMod"
 BehaviourGraphStudio.exe --scan-clips  "C:\MO2\Instances\Fallout 4"
+BehaviourGraphStudio.exe --scan-skeleton-physics "D:\SteamLibrary\steamapps\common\Fallout 4\Data"
 ```
 
 `--scan-archives` finds corrupt behaviour files, `--scan-modlist` finds missing declared
-animations, and `--scan-clips` finds clips whose animation is absent from the merged load order.
+animations, `--scan-clips` finds clips whose animation is absent from the merged load order, and
+`--scan-skeleton-physics` censuses the physics every `skeleton*.hkx` (loose or inside a `.ba2`)
+actually carries — including skeletons that have no ragdoll at all, which it reports as
+`SKELETON ONLY` without failing the scan.
 These are static findings rather than a reproduction of the game's runtime load path. Each mode
 returns an exit code (`0`/`1`/`2`) and takes `--json` for a
 machine-readable report. See the [Headless scanning guide](guide/scan/README.md).

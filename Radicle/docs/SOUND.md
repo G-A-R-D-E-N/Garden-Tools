@@ -55,8 +55,7 @@ The remaining runtime questions are tracked in
 The native environment read functions are in `environment/sound.hpp`; the
 separate `c_api_sound.h` exposes owned descriptor/music/footstep-set arrays and
 fixed marker/footstep views, and `radicle_sound_resolve_files` returns an owned file list released by `radicle_sound_file_list_free`. The generator reads that header and C# copies the
-arrays before releasing their holders. The current ABI is 45;
-re-bump it if another ABI PR lands first.
+arrays before releasing their holders. The ABI is `RADICLE_ABI_VERSION` in `Radicle/include/fo4/c_api.h`.
 
 `test_sound_real.cpp` visits every sound-record version through both native
 and C ABI getters, checks native/C value agreement for all exposed fields, then compares untouched serialization with the original

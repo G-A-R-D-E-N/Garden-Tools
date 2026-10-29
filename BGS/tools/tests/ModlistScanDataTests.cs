@@ -34,7 +34,7 @@ public sealed class ModlistScanDataTests
     [Fact]
     public void ExplicitMissingSelectedProfileFailsClosed()
     {
-        using var root = new TempDirectory("bgs-mo2-profile");
+        using var root = new TestArchives.TempDirectory("bgs-mo2-profile");
         Directory.CreateDirectory(Path.Combine(root.Path, "mods"));
         Directory.CreateDirectory(Path.Combine(root.Path, "profiles", "Other"));
         File.WriteAllText(Path.Combine(root.Path, "profiles", "Other", "modlist.txt"), "+Example\n");
@@ -98,7 +98,7 @@ public sealed class ModlistScanDataTests
 
     private sealed class Mo2Fixture : IDisposable
     {
-        private readonly TempDirectory _root = new("bgs-mo2-scan");
+        private readonly TestArchives.TempDirectory _root = new("bgs-mo2-scan");
 
         public string Instance => Path.Combine(_root.Path, "instance");
         public string GameRoot => Path.Combine(_root.Path, "game");
@@ -132,19 +132,5 @@ public sealed class ModlistScanDataTests
         }
 
         public void Dispose() => _root.Dispose();
-    }
-
-    private sealed class TempDirectory : IDisposable
-    {
-        public TempDirectory(string prefix) =>
-            Path = Directory.CreateTempSubdirectory(prefix).FullName;
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            try { Directory.Delete(Path, recursive: true); }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
-        }
     }
 }

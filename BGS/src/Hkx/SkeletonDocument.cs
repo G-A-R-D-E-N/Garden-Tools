@@ -173,8 +173,36 @@ public sealed class SkeletonDocument
         if (floats != null) model.ReferenceFloats.AddRange(Numbers(floats.Value));
         var slots = element.Elements("hkparam").FirstOrDefault(e => (string?)e.Attribute("name") == "floatSlots");
         if (slots != null) model.FloatSlots.AddRange(slots.Elements("hkcstring").Select(e => e.Value));
+        var partitions = element.Elements("hkparam").FirstOrDefault(e => (string?)e.Attribute("name") == "partitions");
+        if (partitions != null)
+            foreach (XElement partition in partitions.Elements("hkobject"))
+                model.Partitions.Add(new HkxSkeletonPartition
+                {
+                    Name = Optional(partition, "name")?.Value ?? "",
+                    StartBoneIndex = ReadInt(partition, "startBoneIndex", -1),
+                    NumBones = ReadInt(partition, "numBones", 0),
+                });
+        var frames = element.Elements("hkparam").FirstOrDefault(e => (string?)e.Attribute("name") == "localFrames");
+        if (frames != null)
+            foreach (XElement frame in frames.Elements("hkobject"))
+            {
+                string reference = Optional(frame, "localFrame")?.Value ?? "";
+                model.LocalFrames.Add(new HkxSkeletonLocalFrame
+                {
+                    BoneIndex = ReadInt(frame, "boneIndex", -1),
+                    HasFrame = reference.Length > 0 && reference != "null",
+                    FrameOffset = -1,
+                });
+            }
         var errors = SkeletonValidator.Check(model).Where(f => f.Level == SkeletonValidator.Level.Error).ToArray();
         if (errors.Length > 0) throw new InvalidDataException(errors[0].ToString());
         return model;
     }
+
+    private static XElement? Optional(XElement element, string name) => element.Elements("hkparam")
+        .FirstOrDefault(e => (string?)e.Attribute("name") == name);
+
+    private static int ReadInt(XElement element, string name, int fallback) =>
+        int.TryParse(Optional(element, name)?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture,
+            out int value) ? value : fallback;
 }

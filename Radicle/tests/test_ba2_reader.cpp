@@ -6,6 +6,7 @@
 #include "fo4/io/atomic_write.hpp"
 #include "fo4/localization/strings.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "ba2_fixture.hpp"
 #include "plugin_bytes.hpp"
 
 #include <gtest/gtest.h>
@@ -22,6 +23,11 @@
 
 namespace {
 
+using ba2_fixture::Ba2ReaderTest;
+using ba2_fixture::bytes_of;
+using ba2_fixture::general;
+using ba2_fixture::text_of;
+
 using fo4::archive::Ba2Error;
 using fo4::archive::Ba2GeneralArchive;
 using fo4::archive::Ba2GeneralEntry;
@@ -29,62 +35,18 @@ using fo4::archive::Ba2Reader;
 using fo4::archive::Ba2TextureArchive;
 using fo4::archive::Ba2TextureEntry;
 
-std::vector<std::byte> bytes_of(std::string_view text) {
-  std::vector<std::byte> out;
-  for (const char ch : text) out.push_back(std::byte{static_cast<std::uint8_t>(ch)});
-  return out;
+// Constraint: weakly_canonical must resolve a junction as well as a directory symlink.
+bool create_directory_alias(const std::filesystem::path& target, const std::filesystem::path& link) {
+  std::error_code ec;
+  std::filesystem::create_directory_symlink(target, link, ec);
+  if (!ec) return true;
+#if defined(_WIN32)
+  const auto command = "cmd /c mklink /J \"" + link.string() + "\" \"" + target.string() + "\" > NUL";
+  return std::system(command.c_str()) == 0;
+#else
+  return false;
+#endif
 }
-
-std::string text_of(const std::vector<std::byte>& bytes) {
-  return std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size());
-}
-
-Ba2GeneralEntry general(std::string path, std::string_view payload, bool compressed = false) {
-  Ba2GeneralEntry entry;
-  const auto hashes = fo4::archive::compute_ba2_hashes(path);
-  entry.name_hash = hashes.name;
-  entry.extension_hash = hashes.extension;
-  entry.directory_hash = hashes.directory;
-  entry.path = std::move(path);
-  entry.chunks.push_back(compressed ? fo4::archive::make_compressed_ba2_chunk(bytes_of(payload))
-                                    : fo4::archive::make_stored_ba2_chunk(bytes_of(payload)));
-  return entry;
-}
-
-class Ba2ReaderTest : public ::testing::Test {
-protected:
-  void SetUp() override {
-    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
-    root_ = std::filesystem::temp_directory_path() / ("radicle_ba2_reader_" + std::to_string(id));
-    std::filesystem::create_directories(root_ / "Data");
-  }
-
-  void TearDown() override {
-    std::error_code ec;
-    std::filesystem::remove_all(root_, ec);
-  }
-
-  std::filesystem::path data() const { return root_ / "Data"; }
-
-  std::filesystem::path write_general(std::string_view name, std::vector<Ba2GeneralEntry> entries,
-                                      bool named = true) {
-    Ba2GeneralArchive archive;
-    archive.has_string_table = named;
-    archive.entries = std::move(entries);
-    const auto path = data() / std::string(name);
-    fo4::archive::write_ba2_general_file(archive, path);
-    return path;
-  }
-
-  std::filesystem::path write_file(const std::filesystem::path& path, const std::vector<std::byte>& bytes) {
-    std::filesystem::create_directories(path.parent_path());
-    std::ofstream stream(path, std::ios::binary | std::ios::trunc);
-    stream.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
-    return path;
-  }
-
-  std::filesystem::path root_;
-};
 
 }  // namespace
 
@@ -245,9 +207,11 @@ TEST_F(Ba2ReaderTest, ListingReturnsTheSameWinnersAsLocateAndKeepsShadowedCopies
                                             general("Meshes\\a.hkx", "x"), general("Textures\\t.nif", "t")});
   const auto high = write_general("High.ba2", {general("meshes\\shared.nif", "high"), general("meshes\\over.nif", "archived")});
   const auto unnamed = write_general("Unnamed.ba2", {general("meshes\\lowonly.nif", "h")}, false);
+  const auto odd = write_general("Odd.ba2", {general("Meshes\\\\Rain.nif", "rain"),
+                                            general("Data\\Meshes\\Hail.nif", "hail")});
   write_file(data() / "MESHES" / "Over.NIF", bytes_of("loose"));
   write_file(data() / "Data" / "Meshes" / "Nested.nif", bytes_of("nested"));
-  const std::vector<std::filesystem::path> archives{low, high, unnamed};
+  const std::vector<std::filesystem::path> archives{low, high, unnamed, odd};
   const auto assets = fo4::archive::AssetResolver::open(data(), archives);
 
   const auto winners = assets.list("Data\\Meshes", ".NIF", false);
@@ -282,6 +246,17 @@ TEST_F(Ba2ReaderTest, ListingReturnsTheSameWinnersAsLocateAndKeepsShadowedCopies
   EXPECT_EQ(assets.list("", ".hkx", false).size(), 1u);
   EXPECT_EQ(assets.list("mesh", ".nif", false).size(), 0u);
   EXPECT_THROW(static_cast<void>(assets.list("meshes/../x", "", false)), fo4::archive::AssetPathError);
+
+  EXPECT_FALSE(assets.locate("meshes/rain.nif").has_value());
+  EXPECT_FALSE(assets.locate("meshes/hail.nif").has_value());
+  for (const auto& item : all) EXPECT_TRUE(assets.locate(item.path).has_value()) << item.path;
+
+  write_file(data() / "meshes" / "foonif", bytes_of("suffix"));
+  const auto bare = assets.list("", "nif", false);
+  EXPECT_EQ(bare.size(), assets.list("", ".nif", false).size());
+  EXPECT_EQ(std::count_if(bare.begin(), bare.end(),
+                          [](const auto& item) { return item.path == "meshes/foonif"; }),
+            0);
 }
 
 TEST_F(Ba2ReaderTest, RejectsDriveAndStreamPaths) {
@@ -291,6 +266,31 @@ TEST_F(Ba2ReaderTest, RejectsDriveAndStreamPaths) {
     EXPECT_THROW(static_cast<void>(assets.locate(path)), fo4::archive::AssetPathError);
     EXPECT_THROW(static_cast<void>(assets.locate_in_archives(path)), fo4::archive::AssetPathError);
   }
+}
+
+TEST_F(Ba2ReaderTest, ExtensionFilterMatchesMultiDotSuffixesOnADotBoundary) {
+  write_file(data() / "meshes" / "pack.tar.gz", bytes_of("pack"));
+  write_file(data() / "meshes" / "pack.gz", bytes_of("gz"));
+  write_file(data() / "meshes" / "xtar.gz", bytes_of("xtar"));
+  write_file(data() / "meshes" / "foonif", bytes_of("suffix"));
+  write_file(data() / ".gz", bytes_of("top"));
+  const auto assets = fo4::archive::AssetResolver::open(data(), {});
+
+  const auto tarballs = assets.list("meshes", ".tar.gz", false);
+  ASSERT_EQ(tarballs.size(), 1u);
+  EXPECT_EQ(tarballs[0].path, "meshes/pack.tar.gz");
+  EXPECT_EQ(tarballs[0].size, 4u);
+
+  // Constraint: the caller may omit the leading dot, but the match must still start on one.
+  const auto bare = assets.list("meshes", "tar.gz", false);
+  ASSERT_EQ(bare.size(), 1u);
+  EXPECT_EQ(bare[0].path, "meshes/pack.tar.gz");
+
+  // Constraint: a one-dot filter must still name the last dot component.
+  EXPECT_EQ(assets.list("meshes", ".gz", false).size(), 3u);
+  EXPECT_EQ(assets.list("", ".gz", false).size(), 4u);
+  EXPECT_EQ(assets.list("meshes", ".nif", false).size(), 0u);
+  EXPECT_EQ(assets.list("meshes", "gzip", false).size(), 0u);
 }
 
 TEST_F(Ba2ReaderTest, StringTablesFallBackToArchives) {
@@ -406,15 +406,32 @@ TEST_F(Ba2ReaderTest, RepeatedLooseRootIsKeptOnceAtItsFirstPosition) {
 
 TEST_F(Ba2ReaderTest, LooseWalkTerminatesOnDirectorySymlinkBackToItsParent) {
   write_file(data() / "meshes" / "x.nif", bytes_of("x"));
-  try {
-    std::filesystem::create_directory_symlink(data() / "meshes", data() / "meshes" / "up");
-  } catch (const std::filesystem::filesystem_error& error) {
-    GTEST_SKIP() << "directory symlinks need a privilege this session lacks: " << error.what();
+  if (!create_directory_alias(data() / "meshes", data() / "meshes" / "up")) {
+    GTEST_SKIP() << "directory symlinks and junctions are both unavailable in this session";
   }
   const auto assets = fo4::archive::AssetResolver::open(data(), {});
   const auto all = assets.list("", ".nif", true);
-  EXPECT_EQ(std::count_if(all.begin(), all.end(), [](const auto& item) { return item.path == "meshes/x.nif"; }), 1);
+  ASSERT_EQ(all.size(), 1u);
+  EXPECT_EQ(all[0].path, "meshes/x.nif");
   EXPECT_EQ(text_of(assets.read(*assets.locate("meshes/x.nif"))), "x");
+}
+
+TEST_F(Ba2ReaderTest, LooseWalkListsASymlinkedSiblingUnderBothKeys) {
+  write_file(data() / "meshes" / "x.nif", bytes_of("x"));
+  if (!create_directory_alias(data() / "meshes", data() / "a_link")) {
+    GTEST_SKIP() << "directory symlinks and junctions are both unavailable in this session";
+  }
+  const auto assets = fo4::archive::AssetResolver::open(data(), {});
+  const auto all = assets.list("", ".nif", true);
+  std::vector<std::string> keys;
+  for (const auto& item : all) keys.push_back(item.path);
+  EXPECT_EQ(keys, (std::vector<std::string>{"a_link/x.nif", "meshes/x.nif"}));
+  for (const auto& key : {"a_link/x.nif", "meshes/x.nif"}) {
+    SCOPED_TRACE(key);
+    const auto located = assets.locate(key);
+    ASSERT_TRUE(located.has_value());
+    EXPECT_EQ(text_of(assets.read(*located)), "x");
+  }
 }
 
 TEST_F(Ba2ReaderTest, LooseWalkLeavesTheDataFolderOutOfTheTree) {
@@ -426,40 +443,6 @@ TEST_F(Ba2ReaderTest, LooseWalkLeavesTheDataFolderOutOfTheTree) {
   EXPECT_EQ(all[0].path, "meshes/x.nif");
   EXPECT_FALSE(all[0].shadowed);
   EXPECT_EQ(all[0].location.loose_path, data() / "meshes" / "x.nif");
-}
-
-TEST_F(Ba2ReaderTest, CApiWritesGeneralArchivesThatMatchTheNativeWriterAndReadBack) {
-  const std::string big(4096, 'm');
-  const radicle_ba2_file files[] = {
-      {"Meshes\\Gun.nif", reinterpret_cast<const uint8_t*>("gun"), 3},
-      {"Materials\\Gun.bgsm", reinterpret_cast<const uint8_t*>(big.data()), big.size()},
-      {"Empty.txt", nullptr, 0}};
-  uint8_t* bytes = nullptr;
-  size_t size = 0;
-  ASSERT_EQ(radicle_ba2_write_general(files, 3, 1, 1, &bytes, &size), RADICLE_STATUS_OK);
-  const std::vector<std::byte> written(reinterpret_cast<const std::byte*>(bytes),
-                                       reinterpret_cast<const std::byte*>(bytes) + size);
-  radicle_free_bytes(bytes);
-
-  Ba2GeneralArchive expected;
-  expected.entries = {general("Meshes\\Gun.nif", "gun", true), general("Materials\\Gun.bgsm", big, true),
-                      general("Empty.txt", "", true)};
-  EXPECT_EQ(written, fo4::archive::write_ba2_general(expected));
-
-  const auto path = write_file(data() / "Written.ba2", written);
-  const auto reader = Ba2Reader::open(path);
-  ASSERT_EQ(reader.entries().size(), 3u);
-  EXPECT_EQ(text_of(reader.extract(*reader.find("meshes/gun.nif"))), "gun");
-  EXPECT_EQ(reader.extract(*reader.find("materials/gun.bgsm")).size(), 4096u);
-  EXPECT_EQ(reader.entries()[1].name_hash, fo4::archive::compute_ba2_hashes("Materials\\Gun.bgsm").name);
-
-  ASSERT_EQ(radicle_ba2_write_general(files, 3, 8, 0, &bytes, &size), RADICLE_STATUS_OK);
-  radicle_free_bytes(bytes);
-  EXPECT_EQ(radicle_ba2_write_general(files, 3, 5, 0, &bytes, &size), RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(bytes, nullptr);
-  const radicle_ba2_file no_path[] = {{nullptr, nullptr, 0}};
-  EXPECT_EQ(radicle_ba2_write_general(no_path, 1, 1, 0, &bytes, &size), RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(radicle_ba2_write_general(nullptr, 1, 1, 0, &bytes, &size), RADICLE_STATUS_INVALID_ARGUMENT);
 }
 
 TEST_F(Ba2ReaderTest, CApiReadsArchivesAndAssets) {
@@ -539,151 +522,4 @@ TEST_F(Ba2ReaderTest, CApiReadsArchivesAndAssets) {
   radicle_asset_list_destroy(list);
   radicle_asset_list_destroy(nullptr);
   radicle_assets_destroy(assets);
-}
-
-TEST_F(Ba2ReaderTest, CApiWritesTheCppGeneralBytesAndReadsThemBack) {
-  const std::string mesh = "high";
-  const std::string material(4096, 'm');
-  const radicle_ba2_file files[] = {
-      {"Meshes\\Shared.nif", reinterpret_cast<const uint8_t*>(mesh.data()), mesh.size()},
-      {"Materials\\Gun.bgsm", reinterpret_cast<const uint8_t*>(material.data()), material.size()}};
-
-  Ba2GeneralArchive expected;
-  expected.entries = {general("Meshes\\Shared.nif", mesh), general("Materials\\Gun.bgsm", material)};
-
-  uint8_t* out = nullptr;
-  size_t size = 0;
-  ASSERT_EQ(radicle_ba2_write_general(files, 2, 1, 0, &out, &size), RADICLE_STATUS_OK);
-  const auto* begin = reinterpret_cast<const std::byte*>(out);
-  const std::vector<std::byte> written(begin, begin + size);
-  radicle_free_bytes(out);
-  EXPECT_EQ(written, fo4::archive::write_ba2_general(expected));
-
-  const auto path = write_file(data() / "Abi - Main.ba2", written);
-  radicle_ba2* ba2 = nullptr;
-  ASSERT_EQ(radicle_ba2_open(path.string().c_str(), &ba2), RADICLE_STATUS_OK);
-  radicle_ba2_info info{};
-  ASSERT_EQ(radicle_ba2_get_info(ba2, &info), RADICLE_STATUS_OK);
-  EXPECT_EQ(info.kind, RADICLE_BA2_GENERAL);
-  EXPECT_EQ(info.version, 1u);
-  EXPECT_EQ(info.has_name_table, 1);
-  EXPECT_EQ(info.entry_count, 2u);
-  radicle_ba2_entry_info entry{};
-  ASSERT_EQ(radicle_ba2_get_entry(ba2, 1, &entry), RADICLE_STATUS_OK);
-  EXPECT_STREQ(entry.path, "Materials\\Gun.bgsm");
-  EXPECT_EQ(entry.unpacked_size, 4096u);
-  EXPECT_EQ(entry.name_hash, 0xB5DA1C49u);
-  EXPECT_EQ(entry.extension_hash, 0x6D736762u);
-  EXPECT_EQ(entry.directory_hash, 0x7D1E021Bu);
-  size_t index = 9;
-  ASSERT_EQ(radicle_ba2_find(ba2, "materials/GUN.bgsm", &index), RADICLE_STATUS_OK);
-  EXPECT_EQ(index, 1u);
-  ASSERT_EQ(radicle_ba2_extract(ba2, 0, &out, &size), RADICLE_STATUS_OK);
-  EXPECT_EQ(std::string(reinterpret_cast<const char*>(out), size), mesh);
-  radicle_free_bytes(out);
-  radicle_ba2_close(ba2);
-
-  ASSERT_EQ(radicle_ba2_write_general(files, 2, 1, 1, &out, &size), RADICLE_STATUS_OK);
-  const auto* packed_begin = reinterpret_cast<const std::byte*>(out);
-  const std::vector<std::byte> packed(packed_begin, packed_begin + size);
-  radicle_free_bytes(out);
-  Ba2GeneralArchive packed_expected;
-  packed_expected.entries = {general("Meshes\\Shared.nif", mesh, true), general("Materials\\Gun.bgsm", material, true)};
-  EXPECT_EQ(packed, fo4::archive::write_ba2_general(packed_expected));
-  EXPECT_LT(packed.size(), written.size());
-
-  const auto packed_path = write_file(data() / "Abi - Packed.ba2", packed);
-  ASSERT_EQ(radicle_ba2_open(packed_path.string().c_str(), &ba2), RADICLE_STATUS_OK);
-  ASSERT_EQ(radicle_ba2_extract(ba2, 1, &out, &size), RADICLE_STATUS_OK);
-  EXPECT_EQ(std::string(reinterpret_cast<const char*>(out), size), material);
-  radicle_free_bytes(out);
-  radicle_ba2_close(ba2);
-}
-
-TEST_F(Ba2ReaderTest, CApiWriteRefusesNonAsciiNamesSoUnverifiedHashesAreNeverWritten) {
-  const std::string payload = "x";
-  const auto* bytes = reinterpret_cast<const uint8_t*>(payload.data());
-  const radicle_ba2_file stem[] = {{"Meshes\\Caf\xC3\xA9.nif", bytes, 1}};
-  const radicle_ba2_file directory[] = {{"Caf\xC3\xA9\\A.nif", bytes, 1}};
-  const radicle_ba2_file extension[] = {{"Meshes\\A.n\xC3\xA9", bytes, 1}};
-  const radicle_ba2_file ascii[] = {{"Meshes\\Cafe.nif", bytes, 1}};
-
-  uint8_t sentinel = 0;
-  uint8_t* out = nullptr;
-  size_t size = 0;
-  const auto refused = [&](const radicle_ba2_file* files) {
-    out = &sentinel;
-    size = 7;
-    EXPECT_EQ(radicle_ba2_write_general(files, 1, 1, 0, &out, &size), RADICLE_STATUS_INVALID_ARGUMENT);
-    EXPECT_NE(std::string(radicle_last_error()).find("0x80"), std::string::npos);
-    EXPECT_EQ(out, nullptr);
-    EXPECT_EQ(size, 0u);
-  };
-  refused(stem);
-  refused(directory);
-  refused(extension);
-
-  ASSERT_EQ(radicle_ba2_write_general(ascii, 1, 1, 0, &out, &size), RADICLE_STATUS_OK);
-  radicle_free_bytes(out);
-}
-
-TEST_F(Ba2ReaderTest, CApiWriteRefusesBadEntriesAndClearsOutputs) {
-  const std::string payload = "x";
-  const auto* bytes = reinterpret_cast<const uint8_t*>(payload.data());
-  const std::string longest(259, 'a');
-  const std::string too_long(260, 'a');
-  const radicle_ba2_file longest_ok[] = {{longest.c_str(), bytes, 1}};
-  const radicle_ba2_file null_path[] = {{nullptr, bytes, 1}};
-  const radicle_ba2_file empty_path[] = {{"", bytes, 1}};
-  const radicle_ba2_file too_long_path[] = {{too_long.c_str(), bytes, 1}};
-  const radicle_ba2_file null_bytes[] = {{"Meshes\\A.nif", nullptr, 1}};
-  const radicle_ba2_file duplicate[] = {{"Meshes\\A.nif", bytes, 1}, {"meshes/a.NIF", bytes, 1}};
-  const radicle_ba2_file unmappable[] = {{"Meshes\\\xE4\xB8\xAD.nif", bytes, 1}};
-  const radicle_ba2_file backslash[] = {{"\\", bytes, 1}};
-  const radicle_ba2_file slashes[] = {{"///", bytes, 1}};
-  const radicle_ba2_file trailing_separator[] = {{"Meshes\\", bytes, 1}};
-
-  uint8_t sentinel = 0;
-  uint8_t* out = nullptr;
-  size_t size = 0;
-  const auto refused = [&](const radicle_ba2_file* files, size_t count) {
-    out = &sentinel;
-    size = 7;
-    EXPECT_EQ(radicle_ba2_write_general(files, count, 1, 0, &out, &size), RADICLE_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(out, nullptr);
-    EXPECT_EQ(size, 0u);
-  };
-  refused(null_path, 1);
-  refused(empty_path, 1);
-  refused(too_long_path, 1);
-  refused(null_bytes, 1);
-  refused(duplicate, 2);
-  refused(unmappable, 1);
-  refused(backslash, 1);
-  refused(slashes, 1);
-  refused(trailing_separator, 1);
-  refused(nullptr, 1);
-  out = &sentinel;
-  size = 7;
-  EXPECT_EQ(radicle_ba2_write_general(longest_ok, 1, 2, 0, &out, &size), RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(out, nullptr);
-  EXPECT_EQ(size, 0u);
-  size = 7;
-  EXPECT_EQ(radicle_ba2_write_general(longest_ok, 1, 1, 0, nullptr, &size), RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(size, 0u);
-
-  ASSERT_EQ(radicle_ba2_write_general(longest_ok, 1, 1, 0, &out, &size), RADICLE_STATUS_OK);
-  EXPECT_GT(size, 0u);
-  radicle_free_bytes(out);
-}
-
-TEST_F(Ba2ReaderTest, CApiWriteEmptyFileListMatchesTheCppEmptyArchive) {
-  uint8_t* out = nullptr;
-  size_t size = 0;
-  ASSERT_EQ(radicle_ba2_write_general(nullptr, 0, 1, 0, &out, &size), RADICLE_STATUS_OK);
-  const auto* begin = reinterpret_cast<const std::byte*>(out);
-  const std::vector<std::byte> written(begin, begin + size);
-  radicle_free_bytes(out);
-  const Ba2GeneralArchive empty{};
-  EXPECT_EQ(written, fo4::archive::write_ba2_general(empty));
 }

@@ -34,10 +34,7 @@ public partial class HkxBinaryReader
         var parsed = ParseHkx(data);
 
         if (parsed.HasUnsupportedAnimation)
-            throw new NotSupportedException(
-                $"{parsed.UnsupportedReason}: {parsed.AnimationClass}. " +
-                $"Only {HkxAnimationData.SupportedAnimationClasses} are decoded, so no frame data was read from " +
-                Path.GetFileName(filepath));
+            throw Unsupported(parsed);
 
         return parsed;
     }
@@ -47,13 +44,13 @@ public partial class HkxBinaryReader
         var parsed = ParseHkx(data);
 
         if (parsed.HasUnsupportedAnimation)
-            throw new NotSupportedException(
-                $"{parsed.UnsupportedReason}: {parsed.AnimationClass}. " +
-                $"Only {HkxAnimationData.SupportedAnimationClasses} are decoded, so no frame data was read from " +
-                "this archive entry.");
+            throw Unsupported(parsed);
 
         return parsed;
     }
+
+    private static UnsupportedAnimationException Unsupported(HkxAnimationData parsed) =>
+        new(parsed.AnimationClass, AnimationCompression.Describe(parsed.AnimationClass));
 
     public bool TryReadAnimation(string filepath, out HkxAnimationData data)
     {
@@ -70,14 +67,14 @@ public partial class HkxBinaryReader
     public HkxSkeleton ReadSkeleton(string filepath)
     {
         byte[] data = InputFilePolicy.ReadHkx(filepath);
-        var anim = ParseHkx(data);
+        var anim = ParseHkx(data, true);
         if (anim.Skeleton != null) return anim.Skeleton;
         throw new InvalidDataException($"No skeleton (hkaSkeleton) found in: {filepath}");
     }
 
     public HkxSkeleton ReadSkeleton(byte[] data)
     {
-        var anim = ParseHkx(data);
+        var anim = ParseHkx(data, true);
         if (anim.Skeleton != null) return anim.Skeleton;
         throw new InvalidDataException("No skeleton (hkaSkeleton) found in this archive entry");
     }

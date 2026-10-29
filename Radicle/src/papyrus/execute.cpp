@@ -243,10 +243,24 @@ Status Interpreter::execute(const pex::PexInstruction& instruction, Frame& frame
         return storeResult(frame, instruction.args[1], found);
     }
 
-    if (std::strcmp(op, "struct_create") == 0 || std::strcmp(op, "struct_get") == 0 ||
-        std::strcmp(op, "struct_set") == 0 || std::strcmp(op, "array_findstruct") == 0 ||
+    if (std::strcmp(op, "struct_create") == 0) {
+        const std::string declared = declaredOperandType(frame, instruction.args[0]);
+        Value created;
+        const Status status = makeStruct(frame.object, declared, created);
+        if (status != Status::Ok) return status;
+        return storeResult(frame, instruction.args[0], created);
+    }
+    if (std::strcmp(op, "struct_get") == 0) {
+        if (instruction.args[2].type != pex::PexValueType::String) return Status::TypeMismatch;
+        return structGet(frame, instruction.args[0], instruction.args[1], instruction.args[2].str);
+    }
+    if (std::strcmp(op, "struct_set") == 0) {
+        if (instruction.args[1].type != pex::PexValueType::String) return Status::TypeMismatch;
+        return structSet(frame, instruction.args[0], instruction.args[1].str, instruction.args[2]);
+    }
+    if (std::strcmp(op, "array_findstruct") == 0 ||
         std::strcmp(op, "array_rfindstruct") == 0) {
-        return Status::UnsupportedOpcode;
+        return findStructInArray(frame, instruction, std::strcmp(op, "array_rfindstruct") == 0);
     }
 
     if (std::strcmp(op, "is") == 0) {
