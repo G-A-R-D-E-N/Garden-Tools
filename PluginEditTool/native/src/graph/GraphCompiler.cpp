@@ -78,8 +78,9 @@ private:
         std::size_t examined = 0;
         for (std::filesystem::directory_iterator it(parent, error), end;
              !error && it != end && examined < 64; it.increment(error)) {
-            ++examined;
             std::error_code entryError;
+            if (!it->is_directory(entryError)) continue;
+            ++examined;
             if (std::filesystem::last_write_time(it->path(), entryError) < cutoff && !entryError) {
                 std::filesystem::remove_all(it->path(), entryError);
             }
