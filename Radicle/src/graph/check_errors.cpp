@@ -572,7 +572,7 @@ std::vector<CheckFinding> check_load_order(std::span<const Plugin* const> load_o
                                            const CheckOptions& options,
                                            CheckRunSummary* summary) {
   const auto winners = winning_records(load_order);
-  FindingSink sink{options.limit, {}};
+  FindingSink sink{options.limit, {}, false, {}};
   const auto game_master = PluginKey::from_filename(k_game_master);
 
   // Requires: leveled-list cycles report before per-record findings so a limit cannot starve them.
