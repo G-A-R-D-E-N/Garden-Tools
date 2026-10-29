@@ -365,6 +365,12 @@ void keyword_count_issues(const Record& record, std::vector<PreflightIssue>& iss
 
 }  // namespace
 
+// Invariant: the authoring gate and the real-data test share this owner for the four record-list codes.
+bool is_record_list_invariant(std::string_view code) {
+  return code == "leveled_list_count_mismatch" || code == "leveled_list_null_entry" ||
+         code == "duplicate_formlink_list_entry" || code == "keyword_count_mismatch";
+}
+
 std::vector<PreflightIssue> preflight_record(const Record& record, bool localized) {
   std::vector<PreflightIssue> issues;
 

@@ -1,12 +1,12 @@
 #include "fo4/graph/check_errors.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "fo4/schema/preflight.hpp"
 #include "real_data_build.hpp"
 #include "real_data_plugins.hpp"
 
 #include <gtest/gtest.h>
 
 #include <algorithm>
-#include <array>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
@@ -118,20 +118,12 @@ TEST(CheckErrorsReal, FullLoadOrderDiagnosticRunIsDeterministic) {
   }
   // Invariant: the new record-list checks must not fire on the official masters.
   // Requires: Creation Club files are excluded as third-party files may carry real defects.
-  const std::array<std::string_view, 4> must_be_absent{
-      "leveled_list_count_mismatch",
-      "leveled_list_null_entry",
-      "duplicate_formlink_list_entry",
-      "keyword_count_mismatch",
-  };
   const auto official_end =
       names.begin() + static_cast<std::ptrdiff_t>(official_count);
   std::vector<std::string> unexpected;
   for (const auto& finding : first) {
     if (finding.code != fo4::CheckCode::schema_preflight) continue;
-    if (std::find(must_be_absent.begin(), must_be_absent.end(), finding.detail) ==
-        must_be_absent.end())
-      continue;
+    if (!fo4::schema::is_record_list_invariant(finding.detail)) continue;
     if (std::find(names.begin(), official_end, finding.plugin.filename()) == official_end) continue;
     unexpected.push_back(canonical_row(finding));
   }
