@@ -181,11 +181,12 @@ SwfBuilder drop_shadow_placement() {
   return place;
 }
 
-SwfBuilder blend_placement(std::uint8_t mode, std::uint16_t character = 1) {
+SwfBuilder blend_placement(std::uint8_t mode, std::uint16_t character = 1,
+                           std::uint16_t depth = 1) {
   SwfBuilder place;
   place.u8(0x02);
   place.u8(0x02);
-  place.u16(1);
+  place.u16(depth);
   place.u16(character);
   place.u8(mode);
   return place;
@@ -446,7 +447,7 @@ TEST(SwfFrameSvgFilters, NestedSpriteInsideFilteredSpriteClosesEachGroupAtItsOwn
       {fo4::swf::tag::kShowFrame, {}}};
   const std::vector<TagPayload> outer = {
       {fo4::swf::tag::kPlaceObject2, place_full(1, 1, {}, {})},
-      {fo4::swf::tag::kPlaceObject3, blend_placement(3, 4).body},
+      {fo4::swf::tag::kPlaceObject3, blend_placement(3, 4, 2).body},
       {fo4::swf::tag::kPlaceObject2, place_full(3, 1, red_at_down_20, {})},
       {fo4::swf::tag::kShowFrame, {}}};
   sprite_movie_svg({{fo4::swf::tag::kDefineSprite, sprite_tag(3, 1, outer)},
