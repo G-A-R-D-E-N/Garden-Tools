@@ -8922,6 +8922,38 @@ Detects a validator that checks only the top-level list end and not the parent b
 - Split of `decompiler.cpp` (727 lines, too close to the 750 cap) by responsibility. `decompiler.cpp` keeps `toSource`, `emitFunction`, `disassemble` and the `decompileBody` setup. `decompiler_expr.cpp:translateInstructions` turns each instruction into a `BodyState::put` or a statement. `decompiler_stmt.cpp:reconstructStatements` runs jump folding, the temp-call pass, local hoisting and `If`/`While`/`Else` structuring. The header holds the state those passes share: `BodyState`, `JKind`, `JInfo`, and the `iequals`, `startsWith` and `join` helpers.
 - `BodyState::put` is the single write path. With inlining on, a `::temp` destination goes to `temps` and `tempExpression`; `::NoneVar` becomes a bare statement; anything else becomes `name = expr`. The move changed no logic, names or output. The decompiler tests are the check that it stayed that way.
 
+## tests/test_papyrus_codegen_corners.cpp:PapyrusCodegen
+
+- New file, not an append to `test_papyrus_codegen.cpp`, because the 13 codegen cases would have pushed that file past the 750-line cap. It is registered in `Radicle/CMakeLists.txt` next to it.
+- The expected listings were derived by hand from `body_statement.cpp:emitIf`, `emitWhile`, `emitStatement`, `body_expression.cpp:valueAs`, `emitComparison`, `code_generator.cpp:constantOrDefault`, `constantGetter` and `qualifyCustomEvent`, and `body_call.cpp:emitArrayBuiltin`. Each jump offset is the instruction index difference, as in `BodyEmitter::patchJump`.
+- `ElseIfChainJumpsFromEachBranchToTheEndOfTheChain` pins `elseif` as a chain in `emitIf`, not nested `else` blocks.
+- `TemporariesFreedByOneStatementAreReusedByTheNext` relies on `BodyEmitter::releaseTemps` returning temps to `freeTemps_` at the end of each statement, so `::temp` locals are counted, not compared by name.
+- `CustomEventNameArgumentIsQualifiedByTheDeclaringScript` expects `sender_Ready`: `CodeGenerator::qualifyCustomEvent` lowercases the declaring script name and appends `_` plus the event name. Whether the Creation Kit uses that exact string is not verified here.
+- `StatesKeepSourceOrderAfterTheEmptyStateAndOnlyOneIsAuto` covers `CodeGenerator::buildObject` ordering: the empty state first, then states in source order.
+- Not covered: Papyrus has no `For` loop, so the brief's For item has no code path. `FindStructAndInsertUseTheirOpcodesAndDefaultStart` uses a float literal as the search value on purpose, because an int literal reaches the VM unconverted (see the `body_call.cpp:emitArrayBuiltin` note below).
+
+## src/papyrus/body_expression.cpp:emitShortCircuit (defect, no test)
+
+- Defect: a short-circuit assignment whose right operand names its own destination reads the overwritten value. The destination is written by the `cast` on line 409 before the right operand is emitted on line 412, so `value(binary.right)` returns the new value. Input: `Function Go(bool abLeft, bool abRight)` with body `abLeft = abRight && abLeft`. Emitted: `cast abLeft abRight`, `jmpf abLeft 2`, `cast abLeft abLeft`. With `abRight` true and `abLeft` false, the result is true, but `&&` requires false. `||` has the same shape.
+- No test pins the wrong output, and the fix was not made. The fix is to evaluate the right operand into a temp when the destination equals a name read in the right operand.
+
+## src/papyrus/body_call.cpp:emitArrayBuiltin (defect, no test)
+
+- Defect: `FindStruct` and `RFindStruct` pass the search value through `value(arguments[1])` (line 264 for `FindStruct`), with no conversion to the element's member type. `xs.FindStruct("fX", 2)` on a `float fX` member therefore emits an `Integer` operand. `struct_ops.cpp:159` then refuses the search as `TypeMismatch` because the member is `Float`. Input: `Struct Point` with `float fX`, then `int at = pts.FindStruct("fX", 2)`. The expected emission is `2.0`.
+- The fix is to convert the value to the member's declared type, which requires reading the element struct in codegen. Not done here.
+
+## src/papyrus/resolver.cpp:Resolver::resolve (gap, tests added)
+
+- `ScriptIndex::baseChain` (`script_index.cpp:baseChain`) stops on a repeated name, so a cycle terminates. Its caller marks the resolution incomplete on line 46 (`last->extends`), which is the path the cycle tests pin. No diagnostic is raised for a cycle anywhere in `src/papyrus`, so a cyclic `extends` compiles silently. That is a gap; the tests assert only termination and `baseChainComplete == false`.
+
+## src/papyrus/declaration_check.cpp:declarationCheck (gap, not pinned)
+
+- Duplicate detection runs per kind: functions and events, variables, properties, structs, states and custom events. A variable and a function with the same name are not reported. Whether the Creation Kit rejects that was not verified, so no test pins it either way.
+
+## src/papyrus/type_checker.cpp:TypeChecker (gap, not pinned)
+
+- No check runs on comparison operators, so `int == string` compiles with no diagnostic and the int is cast to string. Not pinned by any test.
+
 ## Radicle/src/swf/swf_bitmap_edit.cpp:replace_bitmap_lossless
 
 - File-level in-place edit, like `apply_edit_text`. The character is looked up through `build_character_model` and `find_character`, so the refusals match the character table the rest of the SWF code reads: `unknown_character` for no row, `not_a_lossless_bitmap` for any row whose tag is not 20 or 36 (a shape, or a DefineBitsJpeg2 that also has kind `bitmap`), `malformed_file` when the model refuses. Dimensions are checked before the pixel count, so a zero or oversized size reports `bad_dimensions` even with an empty buffer.
@@ -9013,6 +9045,61 @@ Bytecode is hand-derived. `u30(65535)` is `FF FF 03` and `u30(65536)` is `80 80 
 ## Radicle/src/avm2/interpreter.cpp:Interpreter::invoke
 
 - Known gap, verified by reading: a native function with no body and no native id returns `NotImplemented` with `native function <name> is not bound`, unless `limits_.lenient_builtins` is set. `Radicle/src/avm2/interpreter_property.cpp:Interpreter::outer_scope_value` returns `NotImplemented` for `getouterscope` when the frame has no captured scope.
+
+## Radicle/include/fo4/avm1/interpreter.hpp:Avm1TimelineHost
+
+- The host is abstract and injected through `Avm1Environment::timeline`. It is non-owning; the caller keeps it alive for the run. With no host, every timeline opcode is refused by name (see `Radicle/src/avm1/timeline_ops.cpp:execute`).
+- Frame numbers are 1-based in `goto_frame`, `current_frame`, `total_frames` and `frame_for_label`, matching Ruffle's `MovieClip::goto_frame` and `frame_label_to_number` in `core/src/display_object/movie_clip.rs`.
+- `goto_frame` also stops playback. Ruffle's `action_goto_frame` and `action_goto_label` in `core/src/avm1/activation.rs` both call `goto_frame(frame, true)`. Play is the separate `play()` call.
+- `get_property` returns an `Avm1Data`, not a number, because `_name` (index 13) is a string in Ruffle (`core/src/avm1/object/stage_object.rs` `name`).
+- `set_property` receives the value unconverted. Ruffle coerces numeric properties per property (`action_property_coerce` in `stage_object.rs`), so the host does that coercion. The op does not coerce, so `_name` keeps its string.
+
+## Radicle/src/avm1/timeline_ops.cpp:execute
+
+- Dispatch order is `interpreter.cpp:execute_action` default, then `misc_ops.cpp:execute` default, then `timeline_ops.cpp:execute`, then `control_ops.cpp:execute`, which refuses unknown codes.
+- With no host (`Avm1State::timeline` null), `execute` calls `control_ops::execute` for every code. That refusal is the same `Unsupported` as before the host existed, so the run reports `NextFrame (0x04): this opcode is not in the AVM1 interpreter slice`.
+- GotoFrame 0x81 reads the wire frame as 0-based and passes `frame + 1` to the host. Ruffle's `action_goto_frame` does `action.frame + 1` and comments that the stack frame is 0-based. The brief expected 1-based wire frames; Ruffle contradicts that. Ruffle's swf crate `swf/src/avm1/read.rs:read_goto_frame` reads a plain u16. The Flash spec text was not available locally, so the 0-based claim rests on Ruffle.
+- GotoFrame has no Play flag. `decode.cpp:Decoder::payload` reads only the u16 for 0x81. The flag belongs to GotoFrame2 (0x9F), which has no case here, so the op always stops.
+- GoToLabel 0x8C passes `Avm1Text::text` as-is. Ruffle lowercases ASCII for AVM1 label lookup (`movie_clip.rs:frame_label_to_number`). The op does not fold case, so the host must match ASCII case-insensitively. An unknown label makes no `goto_frame` call and the run continues, as Ruffle warns and continues.
+- NextFrame 0x04 and PreviousFrame 0x05 follow Ruffle's `movie_clip.rs:next_frame` and `prev_frame`. NextFrame gotos current+1 only when current is below total. PreviousFrame gotos current-1 only when current is above 1. The op calls `current_frame`, then `total_frames` for NextFrame, then at most one `goto_frame`.
+- Play 0x06 and Stop 0x07 each make one host call and touch no stack.
+
+## Radicle/src/avm1/timeline_ops.cpp:standard_property
+
+- Index mapping follows the `stage_object.rs` PROPERTIES order: 0 `_x`, 1 `_y`, 2 `_xscale`, 3 `_yscale`, 4 `_currentframe`, 5 `_totalframes`, 6 `_alpha`, 7 `_visible`, 8 `_width`, 9 `_height`, 10 `_rotation`, 11 `_target`, 12 `_framesloaded`, 13 `_name`.
+- Index conversion follows Ruffle's `activation.rs:action_get_property`: the operand goes through `coerce_to_f64`, non-finite or <= -1 is invalid, and `as usize` truncates. The op uses `number > -1 && number < 14`, which also rejects NaN, then `static_cast<int>`. So -0.5 maps to 0, as Ruffle does.
+- Indices 11 and 12 are outside this slice. GetProperty pushes undefined without a host call. Ruffle returns those properties, so this is a deviation.
+- Indices 14 to 21 (_droptarget, _url, _highquality, _focusrect, _soundbuftime, _quality, _xmouse, _ymouse) are also outside this slice. GetProperty pushes undefined for them and SetProperty drops the write, without a host call. Ruffle's `stage_object.rs` PROPERTIES table lists them.
+- Indices 4 and 5 are read-only. SetProperty never calls the host for them. Ruffle's `DisplayProperty` has no setter for them (`stage_object.rs` PROPERTIES, `None` setter).
+- GetProperty pops the index (top) and then the target path, and ignores the path, because the host is one clip. Ruffle resolves the path (`resolve_target_display_object`). Target paths are a deviation.
+- Stack effects: GetProperty pops 2 and pushes 1. SetProperty pops 3 (value on top, then index, then path) and pushes 0.
+
+## Radicle/src/avm1/timeline_ops.cpp:get_property
+
+- Pushes the host's `Avm1Data` for the mapped index, or undefined for an unmapped one. It pushes straight onto the stack, so it skips the string-limit check that `interpreter.cpp:push_result` makes. The host's `_name` string is the only string that can reach this path, and it is host-sized, so the skip is accepted.
+
+## Radicle/src/avm1/misc_ops.cpp:execute
+
+- The default branch now calls `timeline_ops::execute`, not `control_ops::execute`, so the chain is misc, timeline, control.
+
+## Radicle/src/avm1/interpreter.cpp:execute_actions
+
+- `state.timeline = environment.timeline;` copies the non-owning host pointer into `Avm1State` (`Radicle/src/avm1/state.hpp:Avm1State`) so the timeline ops can see it.
+
+## Radicle/tests/test_avm1.cpp:Avm1Interpreter
+
+- `UnsupportedOpcodeIsRefusedByName` used GetProperty 0x22, which is a timeline op now. It uses CloneSprite 0x24 (`Radicle/src/avm1/opcodes.cpp:action_mnemonic` name table; no `case 0x24` in `Radicle/src/avm1/interpreter.cpp:execute_action`). No other `test_avm1*.cpp` test refuses 0x22, 0x23, 0x04, 0x05, 0x06, 0x07, 0x81 or 0x8C.
+
+## Radicle/tests/test_avm1_control.cpp:Avm1Timeline
+
+Bytes are hand-derived from `rec` in this file: one code byte, a u16 length for codes 0x80 and up, then the payload. Push values are `00` string, `06` double, `07` int32.
+
+- `GotoFramePlayAndStopCallTheHostOnceWithoutStackEffects`: `96 05 00 07 05 00 00 00` pushes 5, `81 02 00 04 00` GotoFrame with wire 4, `06` Play, `07` Stop, `26` Trace, `00` End. Host calls: `goto 5`, `play`, `stop`. Trace: `5`. Regression: a 1-based read of wire 4 calls `goto 4`, and a Play or Stop that popped the 5 would leave the trace with nothing to print.
+- `NextAndPreviousFrameStayInsideTheTimeline`: `04 04 04 05 05 05 00` with the host at frame 1 of 3. Calls: `current, total, goto 2, current, total, goto 3, current, total, current, goto 2, current, goto 1, current`. Regression: NextFrame with no total bound at frame 3 calls `goto 4`, and PreviousFrame with no `> 1` bound calls `goto 0`.
+- `GoToLabelJumpsToAKnownLabelAndIgnoresAnUnknownOne`: `8C 06 00 69 6E 74 72 6F 00` for "intro" and `8C 08 00 6D 69 73 73 69 6E 67 00` for "missing". Host knows intro at frame 3. Calls: `label intro, goto 3, label missing`. Trace: none, status Ok. Regression: an unknown label refuses and ends the run, or the op calls `goto` for it.
+- `GetPropertyMapsItsIndexAndPushesOneValue`: one Push record with three values, the sentinel int 7 (`07 07 00 00 00`), the string "clip" (`00 63 6C 69 70 00`) and the index. Index rows: int 2 (`07 02 00 00 00`), string "13" (`00 31 33 00`), double 3.9 (`06 33 33 0F 40 33 33 33 33`, high word then low word, each little-endian), int 11, string "abc" (NaN), and int -1 (`07 FF FF FF FF`). The host returns `10 * index`. Expected traces: `20`, `130`, `30`, `undefined`, `undefined`, `undefined`, each followed by `7`. Regression: an index shifted by one, a string index not converted (undefined), a double not truncated, an index 11 forwarded to the host, or a target path left on the stack, which would trace `clip` before the 7.
+- `SetPropertyPassesWritableIndicesAndSkipsReadOnlyOnes`: sentinel 7, then one Push of "clip", index 0, value 42 and `23`; then indices 4, 5 and 11 each with value 9 and `23`; then index 13 with the string "hero" and `23`; then Trace. Calls: `set 0`, `set 13`. Last value is the string "hero". Trace: `7`. A second run with index 0 and value 42 gives `set 0` and number 42. Regression: writing _currentframe reaches the host (`set 4` appears), a value coerced to number would break `_name`, or the operands are not all popped, leaving "hero" on top of the trace.
+- `TimelineOpcodesAreRefusedByNameWithoutAHost`: sentinel 7, then each of `04`, `05`, `06`, `07`, `81 02 00 01 00`, `8C` "intro", `22`, `23`, then Trace and End, with no host. Each row must refuse as Unsupported at the timeline opcode with its name, and trace nothing. Regression: a silent no-op lets the Trace print the 7 and the status becomes Ok.
 
 ## Radicle/include/fo4/avm1/avm1.hpp:Avm1Stream
 

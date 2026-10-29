@@ -344,3 +344,40 @@ TEST(PapyrusTypeChecker, AVarAcceptsAnythingAndIsAcceptedAnywhere) {
 
     EXPECT_TRUE(f.check("A").empty());
 }
+
+// Invariant: an explicit float-to-int cast is accepted, so a regression in isExplicit cannot silently reject it.
+TEST(PapyrusTypeChecker, AnExplicitFloatToIntCastIsAccepted) {
+    Fixture f;
+    f.writeWithHierarchy("\n    float f = 1.5\n    int n = f as int");
+
+    EXPECT_TRUE(f.check("A").empty());
+}
+
+// Invariant: an int cast to an object type is refused as InvalidCast, not treated as a downcast of a number.
+TEST(PapyrusTypeChecker, CastingAnIntToAnObjectIsRefused) {
+    Fixture f;
+    f.writeWithHierarchy("\n    int n = 1\n    Actor a = n as Actor");
+
+    const auto diagnostics = f.check("A");
+    ASSERT_TRUE(diagnostics.size() == 1);
+    EXPECT_TRUE(diagnostics[0].code == DiagnosticCode::InvalidCast);
+}
+
+// Invariant: a cast between two object types with no inheritance between them is refused as InvalidCast.
+TEST(PapyrusTypeChecker, CastingBetweenUnrelatedObjectsIsRefused) {
+    Fixture f;
+    f.writeWithHierarchy("\n    Actor a = None\n    Weapon w = a as Weapon");
+    f.write("Weapon", "ScriptName Weapon extends Form");
+
+    const auto diagnostics = f.check("A");
+    ASSERT_TRUE(diagnostics.size() == 1);
+    EXPECT_TRUE(diagnostics[0].code == DiagnosticCode::InvalidCast);
+}
+
+// Invariant: an int may be cast to a string explicitly, so as-string on a number is not refused.
+TEST(PapyrusTypeChecker, AnIntCastToAStringIsAccepted) {
+    Fixture f;
+    f.writeWithHierarchy("\n    int n = 1\n    string s = n as string");
+
+    EXPECT_TRUE(f.check("A").empty());
+}
