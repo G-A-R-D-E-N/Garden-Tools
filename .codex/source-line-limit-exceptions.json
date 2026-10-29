@@ -1,7 +1,0 @@
-{
-  "files": {
-    "Radicle/include/fo4/schema/generated_formlink_lists.inc": {
-      "reason": "Generated data table, not hand-written code: Radicle/tools/formlink_schema_codegen.py emits it from Radicle/schema/fallout4/fields.json, which the schema generators rewrite on every row batch, so the 750-line source limit cannot be met while the schema keeps growing. The file is a flat table of FormLink rows plus their target signatures, and splitting it means changing the generator's output layout and every include site. That split is tracked as a follow-up. The reader that grants this exemption is C:/Users/Ricky/.codex/hooks/check-source-line-limit.mjs:114-145 (hasException; it reads this file at :125). Until the split lands, edits to this file are generator output and are checked by the generator's --check mode rather than by review; the checked-in blob is LF and the generator writes with newline=\"\\n\"."
-    }
-  }
-}

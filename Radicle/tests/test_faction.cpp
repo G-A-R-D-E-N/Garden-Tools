@@ -403,6 +403,21 @@ TEST(FactionCreation, RefusesUndefinedFlagsAndLocalizedFullName) {
       fo4::forms::create_faction(localized, std::nullopt, std::nullopt, 0u)));
 }
 
+TEST(FactionCreation, EmptyFullNameWritesNoFullSubrecordAndIsNotLocalizedRefused) {
+  auto plugin = fo4::read_plugin(make_faction_plugin(0), "Patch.esp");
+  const auto key = fo4::forms::create_faction(plugin, std::string_view{"NoNameFaction"},
+                                              std::string_view{}, 0u);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto* record = fo4::find_record(reread, key);
+  ASSERT_NE(record, nullptr);
+  EXPECT_EQ(signature_names(*record), (std::vector<std::string>{"EDID", "DATA", "CRVA", "VENV"}));
+
+  auto localized = fo4::read_plugin(make_faction_plugin(0x80), "Patch.esp");
+  EXPECT_NO_THROW(static_cast<void>(
+      fo4::forms::create_faction(localized, std::nullopt, std::string_view{}, 0u)));
+}
+
 TEST(FactionCreation, RefusesEmbeddedNulInEditorIdOrFullName) {
   auto plugin = fo4::read_plugin(make_faction_plugin(0), "Patch.esp");
   EXPECT_THROW(static_cast<void>(fo4::forms::create_faction(

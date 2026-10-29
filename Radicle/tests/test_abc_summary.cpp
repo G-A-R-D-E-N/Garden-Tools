@@ -399,6 +399,34 @@ TEST(Abc, PlainAstypeInsideExternalInterfaceArgumentStaysOneSlot) {
   EXPECT_EQ(site.arguments[1].kind, AbcArgumentKind::Unknown);
 }
 
+TEST(Abc, AsTypeLateOfLiteralInsideExternalInterfaceArgumentLeavesItUnknown) {
+  std::vector<std::uint8_t> code;
+  put_u8(code, 0x60);
+  put_u30(code, kMultinameExternalInterface);
+  put_u8(code, 0x2C);
+  put_u30(code, kStringFoo);
+  put_u8(code, 0x2C);
+  put_u30(code, kStringClick);
+  put_u8(code, 0x60);
+  put_u30(code, kMultinameObject);
+  put_u8(code, 0x87);
+  put_u8(code, 0x4F);
+  put_u30(code, kMultinameCall);
+  put_u30(code, 2);
+  put_u8(code, 0x47);
+  AbcFile file;
+  ASSERT_EQ(AbcFile::parse(build_abc(code, tiny_listener_code()), file), AbcStatus::Ok);
+  AbcSummary summary;
+  ASSERT_EQ(fo4::abc::summarize(file, summary), AbcStatus::Ok);
+  ASSERT_EQ(summary.classes.size(), 1u);
+  const AbcCallSite& site = only_call(summary.classes[0].methods[0].calls);
+  EXPECT_EQ(site.receiver, "flash.external::ExternalInterface");
+  ASSERT_EQ(site.arguments.size(), 2u);
+  EXPECT_EQ(site.arguments[0].kind, AbcArgumentKind::Literal);
+  EXPECT_EQ(site.arguments[0].value, "Foo");
+  EXPECT_EQ(site.arguments[1].kind, AbcArgumentKind::Unknown);
+}
+
 TEST(Abc, RuntimeNameLookupInsideExternalInterfaceArgumentKeepsReceiver) {
   std::vector<std::uint8_t> code;
   put_u8(code, 0x60);

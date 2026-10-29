@@ -87,6 +87,7 @@ export default function NifEditor(
   const [edits, setEdits] = useState<Record<string, unknown>>({});
   const [collapsed, setCollapsed] = useState<Record<number, boolean>>({});
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   const orig = useMemo(() => {
     const m: Record<string, unknown> = {};
@@ -142,11 +143,17 @@ export default function NifEditor(
     try {
       const payload = JSON.stringify(buildEdits());
       const res = await nif.ApplyEdits(nifPath, payload, outNif);
-      appendLog(`${/set OK/.test(res) ? '✓' : '✗'} saved ${dirtyCount} change(s)${saveAs ? ' (as new file)' : ''}`);
-      if (/set OK/.test(res)) setEdits({});
-      onSaved(res);
+      const ok = /set OK/.test(res);
+      appendLog(ok ? `✓ saved ${dirtyCount} change(s)${saveAs ? ' (as new file)' : ''}` : `✗ save failed -- ${res}`);
+      setSaveError(ok ? '' : res);
+      if (ok) {
+        setEdits({});
+        onSaved(res);
+      }
     } catch (e) {
-      appendLog('✗ save failed -- ' + (e instanceof Error ? e.message : String(e)));
+      const msg = e instanceof Error ? e.message : String(e);
+      appendLog('✗ save failed -- ' + msg);
+      setSaveError(msg);
     } finally { setSaving(false); }
   };
 
@@ -197,6 +204,7 @@ export default function NifEditor(
         <span className={`nif-dirty-count ${dirtyCount ? 'on' : ''}`}>
           {dirtyCount ? `${dirtyCount} unsaved change${dirtyCount > 1 ? 's' : ''}` : 'No changes'}
         </span>
+        {saveError && <span className="papyrus-warn" title={saveError}>{`Save failed -- ${saveError.split('\n')[0]}`}</span>}
         <div className="nif-editor-actions">
           <span className="nif-dirty-count" title={nifPath}>Save target: {nifPath.split(/[\\/]/).pop()}</span>
           <button className="sidebar-action-btn" disabled={!dirtyCount || saving} onClick={() => setEdits({})} title="Discard all changes">

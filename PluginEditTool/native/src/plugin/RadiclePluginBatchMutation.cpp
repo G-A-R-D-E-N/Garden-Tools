@@ -1,5 +1,7 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
+#include "RadiclePluginSupport.hpp"
+
 #include <exception>
 #include <set>
 #include <string>
@@ -14,23 +16,12 @@
 namespace fo4ide::plugin {
 namespace {
 
-std::string stringArgument(const nlohmann::json& args, std::size_t index) {
-    if (!args.is_array() || index >= args.size() || !args[index].is_string()) return {};
-    return args[index].get<std::string>();
-}
-
 bool stringFieldIfPresent(const nlohmann::json& object, const char* key, std::string& value) {
     value.clear();
     const auto field = object.find(key);
     if (field == object.end()) return true;
     if (!field->is_string()) return false;
     value = field->get<std::string>();
-    return true;
-}
-
-bool boolArgument(const nlohmann::json& args, std::size_t index, bool& value) {
-    if (!args.is_array() || index >= args.size() || !args[index].is_boolean()) return false;
-    value = args[index].get<bool>();
     return true;
 }
 
@@ -52,8 +43,8 @@ struct BatchItem {
 
 Result<nlohmann::json> RadiclePluginBackend::copyAsOverrideMany(
     const nlohmann::json& arguments) {
-    const auto itemsText = stringArgument(arguments, 0);
-    const auto targetName = stringArgument(arguments, 1);
+    const auto itemsText = support::stringArgument(arguments, 0);
+    const auto targetName = support::stringArgument(arguments, 1);
     bool overwrite = false;
 
     if (itemsText.empty()) {
@@ -62,7 +53,7 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverrideMany(
     if (targetName.empty()) {
         return std::unexpected(Error{"TargetPluginMissing", "Target plugin name is empty"});
     }
-    if (!boolArgument(arguments, 2, overwrite)) {
+    if (!support::tryBoolArgument(arguments, 2, overwrite)) {
         return std::unexpected(Error{"InvalidOverwriteFlag", "Overwrite flag must be boolean"});
     }
     bool allowLosing = false;

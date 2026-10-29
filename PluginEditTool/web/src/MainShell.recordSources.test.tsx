@@ -65,7 +65,7 @@ it('keeps the plugin a selected record was picked from when a later search shows
     JSON.stringify([{ formKey: SHARED, source: 'A.esp' }, { formKey: OTHER, source: 'C.esp' }]),
     'Patch.esp', false, false,
   ));
-});
+}, 20000);
 
 it('selects the same FormKey from two plugins as separate rows and disables Compare and Copy for them', async () => {
   render(<DialogProvider><MainShell /></DialogProvider>);

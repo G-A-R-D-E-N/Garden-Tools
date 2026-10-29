@@ -35,11 +35,6 @@ constexpr auto k_txst = fo4::Signature::from_string("TXST");
 constexpr auto k_tx00 = fo4::Signature::from_string("TX00");
 constexpr auto k_full = fo4::Signature::from_string("FULL");
 
-std::string stringArgument(const nlohmann::json& args, std::size_t index) {
-    if (!args.is_array() || index >= args.size() || !args[index].is_string()) return {};
-    return args[index].get<std::string>();
-}
-
 std::optional<int> intArgument(const nlohmann::json& args, std::size_t index) {
     if (!args.is_array() || index >= args.size()) return std::nullopt;
     return core::jsonInt(args[index]);
@@ -281,7 +276,7 @@ nlohmann::json placedReferencesJson(const Plugins& plugins, const fo4::FormKey& 
 
 Result<nlohmann::json> RadiclePluginBackend::getPlacedReferences(
     const nlohmann::json& arguments) const {
-    const auto cellId = stringArgument(arguments, 0);
+    const auto cellId = support::stringArgument(arguments, 0);
     if (cellId.empty()) {
         return std::unexpected(Error{"CellMissing", "Cell FormKey or EditorID is empty"});
     }
@@ -300,7 +295,7 @@ Result<nlohmann::json> RadiclePluginBackend::getPlacedReferences(
 
 Result<nlohmann::json> RadiclePluginBackend::getPlacedReferencesAtGrid(
     const nlohmann::json& arguments) const {
-    const auto worldId = stringArgument(arguments, 0);
+    const auto worldId = support::stringArgument(arguments, 0);
     const auto x = intArgument(arguments, 1);
     const auto y = intArgument(arguments, 2);
     if (worldId.empty() || !x.has_value() || !y.has_value()) {
@@ -337,8 +332,8 @@ Result<nlohmann::json> RadiclePluginBackend::getPlacedReferencesAtGrid(
 
 Result<nlohmann::json> RadiclePluginBackend::setPlacedReferenceTransform(
     const nlohmann::json& arguments) {
-    const auto formKeyText = stringArgument(arguments, 0);
-    const auto patchName = stringArgument(arguments, 1);
+    const auto formKeyText = support::stringArgument(arguments, 0);
+    const auto patchName = support::stringArgument(arguments, 1);
     const auto x = floatArgument(arguments, 2);
     const auto y = floatArgument(arguments, 3);
     const auto z = floatArgument(arguments, 4);
@@ -435,9 +430,9 @@ Result<nlohmann::json> RadiclePluginBackend::setPlacedReferenceTransform(
 }
 
 Result<nlohmann::json> RadiclePluginBackend::createPlacedObject(const nlohmann::json& arguments) {
-    const auto pluginName = stringArgument(arguments, 0);
-    const auto cellText = stringArgument(arguments, 1);
-    const auto baseText = stringArgument(arguments, 2);
+    const auto pluginName = support::stringArgument(arguments, 0);
+    const auto cellText = support::stringArgument(arguments, 1);
+    const auto baseText = support::stringArgument(arguments, 2);
     const auto x = floatArgument(arguments, 3);
     const auto y = floatArgument(arguments, 4);
     const auto z = floatArgument(arguments, 5);
@@ -498,8 +493,8 @@ Result<nlohmann::json> RadiclePluginBackend::createPlacedObject(const nlohmann::
 }
 
 Result<nlohmann::json> RadiclePluginBackend::createInteriorCell(const nlohmann::json& arguments) {
-    const auto pluginName = stringArgument(arguments, 0);
-    const auto editorId = stringArgument(arguments, 1);
+    const auto pluginName = support::stringArgument(arguments, 0);
+    const auto editorId = support::stringArgument(arguments, 1);
     if (pluginName.empty() || editorId.empty()) {
         return std::unexpected(Error{
             "InteriorCellArgumentsMissing",

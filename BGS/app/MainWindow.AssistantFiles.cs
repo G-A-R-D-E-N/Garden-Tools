@@ -21,7 +21,10 @@ public partial class MainWindow
                 {
                     case "skeleton": rig.OpenSkeleton(path); break;
                     case "skin": rig.OpenSkin(path); break;
-                    case "ragdoll": rig.OpenPhysics(path); break;
+                    case "ragdoll":
+                        if (!rig.OpenPhysics(path, out var ragdollReport))
+                            throw new InvalidOperationException(ragdollReport.Summary);
+                        break;
                     default: throw new ArgumentException("Use skeleton, skin or ragdoll in the rig editor.");
                 }
                 return;
