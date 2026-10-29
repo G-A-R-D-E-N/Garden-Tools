@@ -227,6 +227,23 @@ TEST(PapyrusCodegen, ShortCircuitIntoOperandVariableStagesThroughTemp) {
             (std::vector<std::string>{"cast bOut abLeft", "jmpf bOut 2", "cast bOut abRight"}));
 }
 
+TEST(PapyrusCodegen, ShortCircuitIntoAutoPropertyStagesThroughBackingVariable) {
+  CodegenFixture f;
+  f.writeWithScriptObject();
+  f.write("AutoAlias",
+          "Scriptname AutoAlias\nBool Property bFlag Auto\nFunction Go(bool abOther)\n"
+          "    bFlag = abOther && bFlag\nEndFunction\nFunction GoSelf(bool abOther)\n"
+          "    bFlag = abOther && self.bFlag\nEndFunction\n");
+  const auto obj = f.compileObject("AutoAlias");
+
+  EXPECT_EQ(listing(function(obj, "Go")),
+            (std::vector<std::string>{"cast T abOther", "jmpf T 2", "cast T ::bFlag_var",
+                                      "assign ::bFlag_var T"}));
+  EXPECT_EQ(listing(function(obj, "GoSelf")),
+            (std::vector<std::string>{"cast T abOther", "jmpf T 3", "assign T ::bFlag_var",
+                                      "cast T T", "assign ::bFlag_var T"}));
+}
+
 TEST(PapyrusCodegen, FindStructConvertsSearchValueToMemberType) {
   CodegenFixture f;
   f.writeWithScriptObject();

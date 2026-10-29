@@ -411,18 +411,26 @@ bool BodyEmitter::readsName(const Node* expression, const std::string& destinati
         case NodeKind::IdentifierExpression: {
             const auto* idNode = static_cast<const IdentifierExpression*>(expression);
             const Binding* binding = gen_.resolution_->bindingFor(idNode);
-            if (!binding || (binding->kind != BindingKind::Local &&
-                             binding->kind != BindingKind::Parameter &&
-                             binding->kind != BindingKind::ScriptVariable)) {
-                return false;
-            }
+            if (!binding) return false;
+            const bool namedStorage =
+                binding->kind == BindingKind::Local || binding->kind == BindingKind::Parameter ||
+                binding->kind == BindingKind::ScriptVariable ||
+                (binding->kind == BindingKind::Property && isAutoBackingProperty(*binding));
+            if (!namedStorage) return false;
             const auto storage = storageFor(*idNode);
             return storage && storage->name == destination;
         }
 
-        case NodeKind::MemberExpression:
-            return readsName(static_cast<const MemberExpression*>(expression)->target.get(),
-                             destination);
+        case NodeKind::MemberExpression: {
+            const auto* member = static_cast<const MemberExpression*>(expression);
+            const Binding* binding = gen_.resolution_->bindingFor(member);
+            if (binding && binding->kind == BindingKind::Property &&
+                isOwnBackingProperty(*member, *binding) &&
+                CodeGenerator::backingVarName(binding->name) == destination) {
+                return true;
+            }
+            return readsName(member->target.get(), destination);
+        }
 
         case NodeKind::IndexExpression: {
             const auto* index = static_cast<const IndexExpression*>(expression);

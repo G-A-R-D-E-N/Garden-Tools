@@ -259,8 +259,8 @@ void BodyEmitter::emitArrayBuiltin(const CallExpression& call, const Binding& bi
         if (!owner) return Type::error();
         for (const auto& structDecl : owner->structs) {
             if (!iequals(structDecl.name, element.name.substr(split + 1))) continue;
-            for (const auto& member : structDecl.members) {
-                if (iequals(member.name, name->text)) return gen_.foreignType(member.type, owner);
+            for (const auto& field : structDecl.members) {
+                if (iequals(field.name, name->text)) return gen_.foreignType(field.type, owner);
             }
         }
         return Type::error();
