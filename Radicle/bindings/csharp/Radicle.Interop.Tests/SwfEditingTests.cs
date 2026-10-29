@@ -35,6 +35,7 @@ public class SwfEditingTests
         Assert.Equal((ushort)11, instances[0].CharacterId);
         Assert.Equal((ushort)1, instances[0].Depth);
         Assert.Equal(0u, instances[0].TimelineFrame);
+        Assert.Equal(2u, instances[0].CreateTagIndex);
     }
 
     [Fact]
@@ -65,6 +66,29 @@ public class SwfEditingTests
         history.Redo();
         Assert.Equal(edited, history.WriteBytes());
         Assert.Equal(0, history.RedoCount);
+    }
+
+    [Fact]
+    public void VerbsEditTextAndFrameLabelsUndoThroughTheHistory()
+    {
+        var original = SwfFixtures.Movie();
+        using var movie = SwfFile.FromBytes(original);
+        using var history = movie.OpenHistory();
+
+        var applied = SwfVerbs.ApplyEditText(history, 0, new SwfEditTextEdit(Bounds: new SwfRectRecord(0, 800, 0, 400)));
+        Assert.True(applied.Changed);
+        Assert.Equal(800, SwfVerbs.ReadEditText(history, 0).Bounds.XMax);
+        Assert.Equal(new[] { "start" }, SwfVerbs.FrameLabelRows(history, 0).Select(row => row.Name));
+
+        SwfVerbs.AddFrameLabel(history, 0, 0, "mid");
+        SwfVerbs.RenameFrameLabel(history, 0, 1, "late");
+        SwfVerbs.RemoveFrameLabel(history, 0, 0);
+        Assert.Equal(new[] { "late" }, SwfVerbs.FrameLabelRows(history, 0).Select(row => row.Name));
+        Assert.Equal(4, history.UndoCount);
+
+        for (var step = 0; step < 4; ++step) history.Undo();
+        Assert.Equal(original, history.WriteBytes());
+        Assert.Equal(new[] { "start" }, SwfVerbs.FrameLabelRows(history, 0).Select(row => row.Name));
     }
 
     [Fact]

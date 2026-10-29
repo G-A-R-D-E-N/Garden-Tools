@@ -3,12 +3,13 @@
 #include <fo4/papyrus_source/parser.hpp>
 #include <fo4/papyrus_source/summary.hpp>
 
+#include "papyrus_corpus_roots.hpp"
+
 #include <gtest/gtest.h>
 
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -16,22 +17,12 @@
 #include <system_error>
 #include <vector>
 
+namespace helper = fo4::papyrus::test;
+
 namespace {
 
 std::vector<std::filesystem::path> corpus_roots() {
-  std::vector<std::filesystem::path> roots;
-  const char* configured = std::getenv("FO4_PSC_CORPUS");
-  if (configured != nullptr && *configured != '\0') {
-    const std::string text(configured);
-    std::size_t start = 0;
-    for (;;) {
-      const std::size_t end = text.find(';', start);
-      const std::string part = end == std::string::npos ? text.substr(start) : text.substr(start, end - start);
-      if (!part.empty()) roots.emplace_back(part);
-      if (end == std::string::npos) break;
-      start = end + 1;
-    }
-  }
+  auto roots = helper::rootsFromEnv("FO4_PSC_CORPUS");
   if (roots.empty()) roots.emplace_back(std::filesystem::path(FO4_TESTDATA_DIR) / "papyrus");
   return roots;
 }

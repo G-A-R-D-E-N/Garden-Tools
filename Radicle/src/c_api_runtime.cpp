@@ -137,13 +137,15 @@ bool read_movie_file(const std::uint8_t* bytes, size_t size,
 }
 
 radicle_status open_movie_bytes(radicle_runtime& owner, const std::uint8_t* bytes, size_t size,
-                                radicle_movie** out_movie) {
+                                bool bgs_host, radicle_movie** out_movie) {
   std::shared_ptr<fo4::swf::SwfFile> file;
   if (!read_movie_file(bytes, size, file)) {
     return fail(RADICLE_STATUS_PARSE_ERROR, "the movie bytes do not parse");
   }
+  fo4::avm2::SwfRuntimeOptions options;
+  options.bgs_host = bgs_host;
   std::shared_ptr<fo4::avm2::SwfRuntime> movie =
-      fo4::avm2::SwfRuntime::create(owner.runtime, owner.interpreter, *file);
+      fo4::avm2::SwfRuntime::create(owner.runtime, owner.interpreter, *file, options);
   if (movie == nullptr) {
     return fail(RADICLE_STATUS_PARSE_ERROR,
                 "the movie could not be created; a required class or script is missing");
@@ -214,6 +216,8 @@ void fill_entry(const fo4::avm2::SnapshotEntry& source, radicle_runtime_entry& o
   out.colour[7] = static_cast<double>(source.color.alpha_offset);
   out.run_count = source.runs.size();
   out.filter_count = source.filter_count;
+  out.ratio = source.ratio.value_or(0);
+  out.cache_as_bitmap = source.cache_as_bitmap ? 1 : 0;
 }
 
 std::optional<fo4::avm2::Value> call_argument(const radicle_call_arg& argument) {
@@ -263,13 +267,20 @@ void radicle_runtime_close(radicle_runtime* runtime) { delete runtime; }
 
 radicle_status radicle_runtime_open_movie(radicle_runtime* runtime, const uint8_t* bytes,
                                           size_t size, radicle_movie** out_movie) {
+  return radicle_runtime_open_movie_with_bgs(runtime, bytes, size, 0, out_movie);
+}
+
+radicle_status radicle_runtime_open_movie_with_bgs(radicle_runtime* runtime, const uint8_t* bytes,
+                                                   size_t size, int bgs_host,
+                                                   radicle_movie** out_movie) {
   clear_error();
   if (out_movie) *out_movie = nullptr;
   if (runtime == nullptr || out_movie == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "runtime and out_movie are required");
   }
-  return guarded("unknown exception while opening a movie",
-                 [&] { return open_movie_bytes(*runtime, bytes, size, out_movie); });
+  return guarded("unknown exception while opening a movie", [&] {
+    return open_movie_bytes(*runtime, bytes, size, bgs_host != 0, out_movie);
+  });
 }
 
 radicle_status radicle_runtime_open_movie_from_ba2(radicle_runtime* runtime, const radicle_ba2* ba2,
@@ -289,7 +300,7 @@ radicle_status radicle_runtime_open_movie_from_ba2(radicle_runtime* runtime, con
     if (extracted != RADICLE_STATUS_OK) {
       return fail(RADICLE_STATUS_PARSE_ERROR, "the archive entry could not be extracted");
     }
-    const radicle_status result = open_movie_bytes(*runtime, bytes, size, out_movie);
+    const radicle_status result = open_movie_bytes(*runtime, bytes, size, false, out_movie);
     radicle_free_bytes(bytes);
     return result;
   });

@@ -96,6 +96,9 @@ SnapshotEntry make_entry(const DisplayObject& object, const std::string& path,
   entry.color.blue_offset = color_offset(object.color_add()[2]);
   entry.color.alpha_offset = color_offset(object.color_add()[3]);
   entry.filter_count = object.filters().size();
+  entry.ratio = object.ratio();
+  entry.cache_as_bitmap = object.cache_as_bitmap();
+  entry.placed_filters = object.placed_filters();
   if (object.is_text_field()) {
     const auto& text_field = static_cast<const TextFieldObject&>(object);
     for (const TextRun& run : text_field.runs()) {
@@ -158,8 +161,43 @@ class Hasher {
   std::uint64_t value() const noexcept { return hash_; }
 
  private:
-  std::uint64_t hash_{1469598103934665603ULL};
+  std::uint64_t hash_{14695981039346656037ULL};
 };
+
+void hash_filter(Hasher& hasher, const swf::SwfFilter& filter) {
+  hasher.u8(filter.id);
+  hasher.u32(filter.color);
+  hasher.u32(filter.highlight_color);
+  hasher.u32(static_cast<std::uint32_t>(filter.gradient_colors.size()));
+  for (const std::uint32_t color : filter.gradient_colors) {
+    hasher.u32(color);
+  }
+  hasher.u32(static_cast<std::uint32_t>(filter.gradient_ratios.size()));
+  for (const std::uint8_t ratio : filter.gradient_ratios) {
+    hasher.u8(ratio);
+  }
+  hasher.f64(filter.blur_x);
+  hasher.f64(filter.blur_y);
+  hasher.f64(filter.angle);
+  hasher.f64(filter.distance);
+  hasher.f64(filter.strength);
+  hasher.u8(filter.inner ? 1 : 0);
+  hasher.u8(filter.knockout ? 1 : 0);
+  hasher.u8(filter.composite_source ? 1 : 0);
+  hasher.u8(filter.on_top ? 1 : 0);
+  hasher.u8(filter.passes);
+  hasher.u8(filter.matrix_columns);
+  hasher.u8(filter.matrix_rows);
+  hasher.f64(filter.divisor);
+  hasher.f64(filter.bias);
+  hasher.u32(static_cast<std::uint32_t>(filter.matrix.size()));
+  for (const float value : filter.matrix) {
+    hasher.f64(value);
+  }
+  hasher.u32(filter.default_color);
+  hasher.u8(filter.clamp ? 1 : 0);
+  hasher.u8(filter.preserve_alpha ? 1 : 0);
+}
 
 }  // namespace
 
@@ -196,6 +234,13 @@ std::uint64_t snapshot_hash(const FrameSnapshot& snapshot) {
     hasher.i32(entry.color.blue_offset);
     hasher.i32(entry.color.alpha_offset);
     hasher.u32(static_cast<std::uint32_t>(entry.filter_count));
+    hasher.u8(entry.ratio.has_value() ? 1 : 0);
+    hasher.u16(entry.ratio.value_or(0));
+    hasher.u8(entry.cache_as_bitmap ? 1 : 0);
+    hasher.u32(static_cast<std::uint32_t>(entry.placed_filters.size()));
+    for (const swf::SwfFilter& filter : entry.placed_filters) {
+      hash_filter(hasher, filter);
+    }
     hasher.u32(static_cast<std::uint32_t>(entry.runs.size()));
     for (const SnapshotTextRun& run : entry.runs) {
       hasher.u16(run.font_id);

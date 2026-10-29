@@ -17,36 +17,63 @@ namespace fo4::abc::detail::text {
 
 namespace {
 
+/* Invariant: only an instruction start or the code size is a labelable offset. */
+std::vector<std::size_t> code_boundaries(const std::vector<AbcInstruction>& instructions,
+                                         std::size_t code_size) {
+  std::vector<std::size_t> out;
+  out.reserve(instructions.size() + 1);
+  for (const AbcInstruction& instruction : instructions) {
+    out.push_back(instruction.offset);
+  }
+  out.push_back(code_size);
+  std::sort(out.begin(), out.end());
+  out.erase(std::unique(out.begin(), out.end()), out.end());
+  return out;
+}
+
 void collect_label_offsets(const std::vector<AbcInstruction>& instructions,
-                           const std::vector<AbcException>& exceptions, std::vector<std::size_t>& out) {
+                           const std::vector<AbcException>& exceptions,
+                           const std::vector<std::size_t>& boundaries,
+                           std::vector<std::size_t>& out) {
   out.clear();
+  const auto take = [&boundaries, &out](std::int64_t target) {
+    if (target < 0) {
+      return;
+    }
+    const auto offset = static_cast<std::size_t>(target);
+    if (std::binary_search(boundaries.begin(), boundaries.end(), offset)) {
+      out.push_back(offset);
+    }
+  };
   for (const AbcInstruction& instruction : instructions) {
     for (const AbcDecodedOperand& operand : instruction.operands) {
       if (operand.role == AbcOperandRole::Offset) {
-        out.push_back(static_cast<std::size_t>(operand.target));
+        take(operand.target);
       } else if (operand.role == AbcOperandRole::Switch) {
-        out.push_back(static_cast<std::size_t>(operand.target));
+        take(operand.target);
         for (const std::int32_t target : operand.case_targets) {
-          out.push_back(static_cast<std::size_t>(target));
+          take(target);
         }
       }
     }
   }
   for (const AbcException& exception : exceptions) {
-    out.push_back(exception.from);
-    out.push_back(exception.to);
-    out.push_back(exception.target);
+    take(exception.from);
+    take(exception.to);
+    take(exception.target);
   }
   std::sort(out.begin(), out.end());
   out.erase(std::unique(out.begin(), out.end()), out.end());
 }
 
-std::string label_for(const std::map<std::size_t, std::string>& labels, std::size_t offset) {
-  const auto found = labels.find(offset);
-  if (found == labels.end()) {
-    return "L" + std::to_string(offset);
+std::string target_ref(const std::map<std::size_t, std::string>& labels, std::int64_t offset) {
+  if (offset >= 0) {
+    const auto found = labels.find(static_cast<std::size_t>(offset));
+    if (found != labels.end()) {
+      return found->second;
+    }
   }
-  return found->second;
+  return "=" + std::to_string(offset);
 }
 
 std::string render_operand(const AbcFile& file, const AbcDecodedOperand& operand,
@@ -78,11 +105,11 @@ std::string render_operand(const AbcFile& file, const AbcDecodedOperand& operand
       }
       return std::to_string(operand.immediate);
     case AbcOperandRole::Offset:
-      return "-> " + label_for(labels, static_cast<std::size_t>(operand.target));
+      return "-> " + target_ref(labels, operand.target);
     case AbcOperandRole::Switch: {
-      std::string out = "switch " + label_for(labels, static_cast<std::size_t>(operand.target));
+      std::string out = "switch " + target_ref(labels, operand.target);
       for (const std::int32_t target : operand.case_targets) {
-        out += " " + label_for(labels, static_cast<std::size_t>(target));
+        out += " " + target_ref(labels, target);
       }
       return out;
     }
@@ -103,8 +130,9 @@ std::string render_body(const AbcFile& file, const AbcMethodBody& body, std::siz
 
   std::vector<AbcInstruction> instructions;
   const AbcStatus status = decode_code(body.code, instructions, body.exceptions);
+  const std::vector<std::size_t> boundaries = code_boundaries(instructions, body.code.size());
   std::vector<std::size_t> offsets;
-  collect_label_offsets(instructions, body.exceptions, offsets);
+  collect_label_offsets(instructions, body.exceptions, boundaries, offsets);
   std::map<std::size_t, std::string> labels;
   for (std::size_t label_index = 0; label_index < offsets.size(); ++label_index) {
     labels[offsets[label_index]] = "L" + std::to_string(label_index);
@@ -138,9 +166,8 @@ std::string render_body(const AbcFile& file, const AbcMethodBody& body, std::siz
 
   out += "    exceptions " + std::to_string(body.exceptions.size()) + "\n";
   for (const AbcException& exception : body.exceptions) {
-    out += "      exception " + label_for(labels, exception.from) + " " +
-           label_for(labels, exception.to) + " " +
-           label_for(labels, exception.target);
+    out += "      exception " + target_ref(labels, exception.from) + " " +
+           target_ref(labels, exception.to) + " " + target_ref(labels, exception.target);
     out += " type " + multiname_ref(file, exception.exc_type);
     out += " var " + string_ref(file, exception.var_name) + "\n";
   }

@@ -234,6 +234,9 @@ struct SwfShapeRecord {
   std::uint16_t fill0{0};
   std::uint16_t fill1{0};
   std::uint16_t line{0};
+  bool has_fill0{false};
+  bool has_fill1{false};
+  bool has_line{false};
 };
 
 struct SwfShape {
@@ -302,6 +305,7 @@ struct SwfMorphShape {
 };
 
 std::vector<SwfShapeRecord> interpolate_morph_commands(const SwfMorphShape& morph, double ratio);
+std::optional<SwfShape> interpolate_morph_shape(const SwfMorphShape& morph, double ratio);
 
 struct SwfBitmap {
   std::uint16_t character_id{0};
@@ -310,6 +314,9 @@ struct SwfBitmap {
   std::uint16_t height{0};
   std::optional<std::uint8_t> color_table_size;
   std::size_t data_size{0};
+  bool has_alpha{false};
+  /* Invariant: the zlib stream as the tag carried it, inflated on demand by bitmap_to_png. */
+  std::vector<std::byte> packed;
 };
 
 struct SwfJpeg {
@@ -324,6 +331,34 @@ struct SwfJpegTables {
   std::size_t size{0};
 };
 
+struct SwfFilter {
+  std::uint8_t id{0};
+  std::uint32_t color{0};
+  std::uint32_t highlight_color{0};
+  std::vector<std::uint32_t> gradient_colors;
+  std::vector<std::uint8_t> gradient_ratios;
+  double blur_x{0.0};
+  double blur_y{0.0};
+  double angle{0.0};
+  double distance{0.0};
+  double strength{0.0};
+  bool inner{false};
+  bool knockout{false};
+  bool composite_source{false};
+  bool on_top{false};
+  std::uint8_t passes{0};
+  std::uint8_t matrix_columns{0};
+  std::uint8_t matrix_rows{0};
+  float divisor{0.0f};
+  float bias{0.0f};
+  std::vector<float> matrix;
+  std::uint32_t default_color{0};
+  bool clamp{false};
+  bool preserve_alpha{false};
+
+  bool operator==(const SwfFilter&) const = default;
+};
+
 struct SwfPlacement {
   std::uint16_t depth{0};
   bool move{false};
@@ -335,7 +370,9 @@ struct SwfPlacement {
   std::optional<std::string> name;
   std::optional<std::uint16_t> clip_depth;
   std::optional<std::string> class_name;
-  std::uint16_t filter_count{0};
+  std::vector<SwfFilter> filters;
+  /* Invariant: set exactly when the PlaceObject3 filter flag is present, so an empty list clears filters and an absent flag keeps them. */
+  bool has_filter_list{false};
   std::optional<std::uint8_t> blend_mode;
   std::optional<std::uint8_t> bitmap_cache;
   std::optional<bool> visible;
@@ -345,6 +382,22 @@ struct SwfPlacement {
 struct SwfRemoval {
   std::optional<std::uint16_t> character_id;
   std::uint16_t depth{0};
+};
+
+struct SwfButtonRecord {
+  bool up{false};
+  bool over{false};
+  bool down{false};
+  bool hit_test{false};
+  std::uint16_t character_id{0};
+  std::uint16_t depth{0};
+  SwfMatrix matrix{};
+  std::optional<SwfColorTransform> color_transform;
+};
+
+struct SwfButton {
+  std::uint16_t character_id{0};
+  std::vector<SwfButtonRecord> records;
 };
 
 /* Invariant: a glyph SHAPE has no style table, so fill style 1 is the implicit text colour. */
@@ -401,6 +454,8 @@ struct SwfTextRecord {
 struct SwfText {
   std::uint16_t character_id{0};
   SwfRect bounds{};
+  /* Invariant: the DefineText MATRIX after the bounds, applied to glyph space before placement. */
+  SwfMatrix matrix{};
   std::size_t record_count{0};
   std::size_t glyph_count{0};
   std::vector<SwfTextRecord> records;
@@ -484,6 +539,11 @@ struct SwfFontTextureInfo {
   std::uint32_t font_count{0};
 };
 
+struct SwfScalingGrid {
+  std::uint16_t character_id{0};
+  SwfRect splitter{};
+};
+
 struct SwfTag {
   std::uint16_t code{0};
   std::uint32_t length{0};
@@ -514,9 +574,11 @@ struct SwfTag {
   std::optional<SwfExporterInfo> exporter_info;
   std::optional<SwfExternalImage> external_image;
   std::optional<SwfFontTextureInfo> font_texture;
+  std::optional<SwfScalingGrid> scaling_grid;
   std::optional<SwfPlacement> placement;
   std::optional<SwfRemoval> removal;
   std::optional<SwfMorphShape> morph_shape;
+  std::optional<SwfButton> button;
   std::optional<SwfJpeg> jpeg;
   std::optional<SwfJpegTables> jpeg_tables;
 

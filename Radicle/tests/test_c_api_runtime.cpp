@@ -73,6 +73,26 @@ std::vector<std::byte> sprite_movie() {
   return swf_test::wrap_body(builder.body, 10, false, false);
 }
 
+std::vector<std::byte> styled_placement_movie() {
+  SwfBuilder place;
+  place.u8(0x12);
+  place.u8(0x26);
+  place.u16(1);
+  place.u16(20);
+  place.u16(3);
+  place.u8(8);
+  place.u8(1);
+  place.u8(0);
+  SwfBuilder builder;
+  builder.rect(0, 200, 0, 100, 9);
+  builder.u16(24u * 256u);
+  builder.u16(1);
+  builder.tag(fo4::swf::tag::kPlaceObject3, place.body, false);
+  builder.tag(fo4::swf::tag::kShowFrame);
+  builder.tag(fo4::swf::tag::kEnd);
+  return swf_test::wrap_body(builder.body, 10, false, false);
+}
+
 std::vector<std::byte> external_interface_movie(std::size_t* out_calls) {
   avm2_test::ScriptBuilder script;
   avm2_test::CodeBuilder code;
@@ -214,19 +234,18 @@ abc::AbcFile member_root_file() {
   return file;
 }
 
-std::vector<std::byte> member_root_movie() {
-  abc::AbcFile file = member_root_file();
+std::vector<std::byte> root_class_movie(abc::AbcFile file, const std::string& root_name) {
   std::vector<std::uint8_t> abc_bytes;
   EXPECT_EQ(file.serialize(abc_bytes), abc::AbcStatus::Ok);
   SwfBuilder abc_payload;
   abc_payload.u32(0);
-  abc_payload.text("members");
+  abc_payload.text(root_name);
   abc_payload.bytes(std::span<const std::byte>(reinterpret_cast<const std::byte*>(abc_bytes.data()),
                                                abc_bytes.size()));
   SwfBuilder symbols;
   symbols.u16(1);
   symbols.u16(0);
-  symbols.text("MemberRoot");
+  symbols.text(root_name);
   SwfBuilder builder;
   builder.rect(0, 200, 0, 100, 9);
   builder.u16(24u * 256u);
@@ -236,6 +255,83 @@ std::vector<std::byte> member_root_movie() {
   builder.tag(fo4::swf::tag::kShowFrame);
   builder.tag(fo4::swf::tag::kEnd);
   return swf_test::wrap_body(builder.body, 10, false, false);
+}
+
+std::vector<std::byte> member_root_movie() {
+  return root_class_movie(member_root_file(), "MemberRoot");
+}
+
+abc::AbcFile bgs_root_file() {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t root = script.multiname("BgsRoot");
+  const std::uint32_t movie_clip = script.multiname("MovieClip", "flash.display");
+  const std::uint32_t code_object = script.multiname("BGSCodeObj");
+  const std::uint32_t play_sound = script.multiname("playSound");
+  const std::uint32_t apply = script.multiname("apply");
+  const std::uint32_t play_name = script.multiname("Play");
+  const std::uint32_t argument = script.string_of("x");
+  avm2_test::CodeBuilder constructor;
+  constructor.getlocal0();
+  constructor.pushscope();
+  constructor.getlocal0();
+  constructor.newobject(0);
+  constructor.initproperty(code_object);
+  constructor.returnvoid();
+  const std::uint32_t constructor_method = script.method("BgsRoot", constructor.bytes(), 1);
+  avm2_test::CodeBuilder play;
+  play.getlocal0();
+  play.getproperty(code_object);
+  play.getproperty(play_sound);
+  play.pushnull();
+  play.pushstring(argument);
+  play.newarray(1);
+  play.callproperty(apply, 2);
+  play.returnvalue();
+  const std::uint32_t play_method = script.method("Play", play.bytes(), 1);
+  const std::uint32_t class_init = script.method("cinit", {0x47}, 1);
+  const std::uint32_t script_init = script.method("init", {0x47}, 1);
+  abc::AbcFile file = script.finish(script_init);
+
+  abc::AbcInstanceInfo instance;
+  instance.name = root;
+  instance.super_index = movie_clip;
+  instance.iinit = constructor_method;
+  instance.traits = {method_trait(play_name, play_method)};
+  file.instances.push_back(instance);
+  abc::AbcClassInfo klass;
+  klass.cinit = class_init;
+  file.classes.push_back(klass);
+  abc::AbcTrait class_trait;
+  class_trait.name = root;
+  class_trait.kind = abc::AbcTraitKind::Class;
+  class_trait.class_index = 0;
+  file.scripts.front().traits.push_back(class_trait);
+  return file;
+}
+
+std::vector<std::byte> bgs_root_movie() { return root_class_movie(bgs_root_file(), "BgsRoot"); }
+
+radicle_status play_through_bgs(int bgs_host, Host& calls) {
+  radicle_runtime_host host{};
+  host.user = &calls;
+  host.host_call = host_call;
+  radicle_runtime* raw_runtime = nullptr;
+  EXPECT_EQ(radicle_runtime_open(&host, &raw_runtime), RADICLE_STATUS_OK) << radicle_last_error();
+  RuntimeHandle runtime(raw_runtime);
+  const std::vector<std::byte> bytes = bgs_root_movie();
+  radicle_movie* raw_movie = nullptr;
+  EXPECT_EQ(radicle_runtime_open_movie_with_bgs(
+                runtime.get(), reinterpret_cast<const std::uint8_t*>(bytes.data()), bytes.size(),
+                bgs_host, &raw_movie),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  MovieHandle movie(raw_movie);
+  uint8_t* out_text = nullptr;
+  size_t out_size = 0;
+  const radicle_status called =
+      radicle_movie_call(movie.get(), "Play", nullptr, 0, &out_text, &out_size);
+  radicle_free_bytes(out_text);
+  return called;
 }
 
 MovieHandle open_member_movie(radicle_runtime* runtime, const std::vector<std::byte>& bytes) {
@@ -278,6 +374,36 @@ TEST(CApiRuntime, AdvancingProducesAStableSnapshotSequence) {
   ASSERT_EQ(radicle_movie_snapshot(movie.get(), &moved_raw), RADICLE_STATUS_OK);
   SnapshotHandle moved(moved_raw);
   EXPECT_NE(radicle_runtime_snapshot_hash(moved.get()), first_hash);
+}
+
+TEST(CApiRuntime, SnapshotEntriesCarryAPlacementsRatioAndCacheFlag) {
+  // Detects: a PlaceObject3 ratio or cache flag that the C entry drops or defaults, so a host draws the wrong morph frame or bitmap cache; the placed values must come through and the root must keep its defaults.
+  radicle_runtime_host host{};
+  radicle_runtime* raw_runtime = nullptr;
+  ASSERT_EQ(radicle_runtime_open(&host, &raw_runtime), RADICLE_STATUS_OK) << radicle_last_error();
+  RuntimeHandle runtime(raw_runtime);
+  const std::vector<std::byte> bytes = styled_placement_movie();
+  MovieHandle movie = open_member_movie(runtime.get(), bytes);
+  ASSERT_NE(movie.get(), nullptr);
+
+  radicle_runtime_snapshot* raw_snapshot = nullptr;
+  ASSERT_EQ(radicle_movie_snapshot(movie.get(), &raw_snapshot), RADICLE_STATUS_OK);
+  SnapshotHandle snapshot(raw_snapshot);
+  ASSERT_EQ(radicle_runtime_snapshot_entry_count(snapshot.get()), 2u);
+
+  radicle_runtime_entry root{};
+  ASSERT_EQ(radicle_runtime_snapshot_entry_at(snapshot.get(), 0, &root), RADICLE_STATUS_OK);
+  EXPECT_EQ(root.visible, std::uint8_t{1});
+  EXPECT_EQ(root.ratio, std::uint16_t{0});
+  EXPECT_EQ(root.cache_as_bitmap, std::uint8_t{0});
+
+  radicle_runtime_entry placed{};
+  ASSERT_EQ(radicle_runtime_snapshot_entry_at(snapshot.get(), 1, &placed), RADICLE_STATUS_OK);
+  EXPECT_EQ(placed.character_id, 20u);
+  EXPECT_EQ(placed.blend_mode, std::uint8_t{8});
+  EXPECT_EQ(placed.visible, std::uint8_t{0});
+  EXPECT_EQ(placed.ratio, std::uint16_t{3});
+  EXPECT_EQ(placed.cache_as_bitmap, std::uint8_t{1});
 }
 
 TEST(CApiRuntime, ReplayIsDeterministicAndForwardsHostCalls) {
@@ -396,4 +522,47 @@ TEST(CApiRuntime, MovieCallFailsCleanlyForAbsentOrNonMethodMembers) {
             RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_movie_call(movie.get(), nullptr, nullptr, 0, &out_text, &out_size),
             RADICLE_STATUS_INVALID_ARGUMENT);
+}
+
+// Must reach the host only when bgs_host is set; detects an open that drops the flag or ignores it.
+TEST(CApiRuntime, BgsOpenInstallsTheCodeObjectFunctionsOnlyWhenRequested) {
+  Host off_host;
+  play_through_bgs(0, off_host);
+  EXPECT_EQ(off_host.calls, 0u);
+
+  Host on_host;
+  EXPECT_EQ(play_through_bgs(1, on_host), RADICLE_STATUS_OK) << radicle_last_error();
+  EXPECT_EQ(on_host.methods, std::vector<std::string>{"bgs.playSound"});
+}
+
+// Must leave *out_movie NULL on every refusal; detects a refusal that keeps a stale handle.
+TEST(CApiRuntime, BgsOpenClearsItsMovieOutputOnEveryRefusal) {
+  radicle_runtime_host host{};
+  radicle_runtime* raw_runtime = nullptr;
+  ASSERT_EQ(radicle_runtime_open(&host, &raw_runtime), RADICLE_STATUS_OK) << radicle_last_error();
+  RuntimeHandle runtime(raw_runtime);
+  const std::vector<std::byte> bytes = bgs_root_movie();
+  const auto* data = reinterpret_cast<const std::uint8_t*>(bytes.data());
+  const std::vector<std::uint8_t> garbage(16, 0xFF);
+  radicle_movie* const sentinel = reinterpret_cast<radicle_movie*>(&host);
+  radicle_movie* out = sentinel;
+
+  EXPECT_EQ(radicle_runtime_open_movie_with_bgs(nullptr, data, bytes.size(), 1, &out),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(out, nullptr);
+
+  out = sentinel;
+  EXPECT_EQ(radicle_runtime_open_movie_with_bgs(runtime.get(), data, bytes.size(), 1, nullptr),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+
+  out = sentinel;
+  EXPECT_EQ(radicle_runtime_open_movie_with_bgs(runtime.get(), nullptr, 0, 1, &out),
+            RADICLE_STATUS_PARSE_ERROR);
+  EXPECT_EQ(out, nullptr);
+
+  out = sentinel;
+  EXPECT_EQ(radicle_runtime_open_movie_with_bgs(runtime.get(), garbage.data(), garbage.size(), 1,
+                                                &out),
+            RADICLE_STATUS_PARSE_ERROR);
+  EXPECT_EQ(out, nullptr);
 }

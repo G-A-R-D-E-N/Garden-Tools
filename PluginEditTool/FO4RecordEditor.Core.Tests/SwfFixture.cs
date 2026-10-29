@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Text;
 
@@ -73,7 +74,51 @@ internal static class SwfFixture
         return stream.ToArray();
     }
 
-    public static byte[] Movie()
+    private static byte[] AbcTag()
+    {
+        var payload = new List<byte>(BitConverter.GetBytes(0u));
+        payload.AddRange(Z("edit"));
+        payload.AddRange(new byte[]
+        {
+            0x10, 0x00, 0x2E, 0x00, 0x00, 0x00, 0x00, 0x02, 0x03, 0x46, 0x6F, 0x6F, 0x00, 0x00, 0x00, 0x01,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x01, 0x00, 0x00, 0x02, 0x26, 0x48,
+            0x00, 0x00,
+        });
+        return Tag(82, payload.ToArray());
+    }
+
+    private static byte[] ActionTag() => Tag(12, new byte[] { 0x06, 0x07, 0x26, 0x00 });
+
+    private static byte[] ShapeTag()
+    {
+        var bounds = new Bits();
+        bounds.Rect(0, 1000, 0, 1000, 15);
+        var payload = new List<byte>(U16(5));
+        payload.AddRange(bounds.ToArray());
+        payload.AddRange(new byte[] { 0x00, 0x00, 0x00, 0x00 });
+        return Tag(2, payload.ToArray());
+    }
+
+    private static byte[] BitmapTag()
+    {
+        var pixels = new MemoryStream();
+        using (var zlib = new ZLibStream(pixels, CompressionLevel.Optimal, leaveOpen: true)) zlib.Write(new byte[16]);
+        var payload = new List<byte>(U16(20));
+        payload.Add(5);
+        payload.AddRange(U16(2));
+        payload.AddRange(U16(2));
+        payload.AddRange(pixels.ToArray());
+        return Tag(36, payload.ToArray());
+    }
+
+    private static byte[] JpegTag()
+    {
+        var payload = new List<byte>(U16(23));
+        payload.AddRange(new byte[] { 0xFF, 0xD8, 0xFF, 0xD9 });
+        return Tag(21, payload.ToArray());
+    }
+
+    public static byte[] Movie(bool withAbc = false, bool editTextPastSprite = false, bool withShape = false, bool twoFrames = false, bool withAction = false, bool withBitmap = false, bool withJpeg = false)
     {
         var editText = new List<byte>();
         editText.AddRange(U16(11));
@@ -102,11 +147,18 @@ internal static class SwfFixture
         sprite.AddRange(Tag(0, Array.Empty<byte>()));
 
         var tags = new List<byte>();
-        tags.AddRange(Tag(37, editText.ToArray()));
+        if (withShape) tags.AddRange(ShapeTag());
+        if (withBitmap) tags.AddRange(BitmapTag());
+        if (withJpeg) tags.AddRange(JpegTag());
+        if (!editTextPastSprite) tags.AddRange(Tag(37, editText.ToArray()));
         tags.AddRange(Tag(43, Z("start")));
         tags.AddRange(Tag(26, place.ToArray()));
         tags.AddRange(Tag(1, Array.Empty<byte>()));
+        if (twoFrames) tags.AddRange(Tag(1, Array.Empty<byte>()));
         tags.AddRange(Tag(39, sprite.ToArray()));
+        if (editTextPastSprite) tags.AddRange(Tag(37, editText.ToArray()));
+        if (withAction) tags.AddRange(ActionTag());
+        if (withAbc) tags.AddRange(AbcTag());
         tags.AddRange(Tag(0, Array.Empty<byte>()));
 
         var head = new List<byte>();
@@ -117,7 +169,7 @@ internal static class SwfFixture
         frame.Rect(0, 11000, 0, 8000, 15);
         head.AddRange(frame.ToArray());
         head.AddRange(U16(0x0C00));
-        head.AddRange(U16(1));
+        head.AddRange(U16(twoFrames ? 2 : 1));
         head.AddRange(tags);
         return head.ToArray();
     }

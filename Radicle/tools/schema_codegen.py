@@ -8,7 +8,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from field_address_codegen import (cpp_signature, is_count, parse_address, parse_segment,  # noqa: E402
-                                   reject_overlaps, render_address)
+                                   cpp_string, reject_overlaps, render_address)
+from subrecord_group_render import render_subrecord_groups  # noqa: E402
 
 STORAGES = {"u8", "u16", "u32", "i32", "f32", "i8", "i16"}
 KINDS = {"scalar", "string"}
@@ -39,12 +40,6 @@ INTEGER_BOUNDS = {
     "u32": (0, 0xFFFFFFFF),
     "i32": (-0x80000000, 0x7FFFFFFF),
 }
-
-
-def cpp_string(value: str) -> str:
-    # JSON string escaping is valid for the ASCII field metadata currently
-    # accepted here and avoids hand-written backslash/quote escaping bugs.
-    return json.dumps(value, ensure_ascii=True)
 
 
 def cpp_number(value) -> str:
@@ -281,11 +276,14 @@ def parse_subrecord_group(field, record_signature: str):
         if not isinstance(run, dict) or set(run) != GROUP_RUN_KEYS:
             raise ValueError(f"subrecord_group run keys must be exactly {sorted(GROUP_RUN_KEYS)}: {path!r}")
         count_member = run.get("count_member", "")
-        if not isinstance(count_member, str) or not valid_signature(count_member):
-            raise ValueError(f"subrecord_group run count_member must be four printable ASCII characters: {path!r}")
-        holder = next((member for member in parsed if member["subrecord"] == count_member), None)
-        if holder is None or holder["payload_size"] != WIDTHS["u32"] or holder["repeatable"]:
-            raise ValueError(f"subrecord_group run count_member must be a four-byte non-repeatable member: {path!r}")
+        if not isinstance(count_member, str) or (count_member and not valid_signature(count_member)):
+            raise ValueError("subrecord_group run count_member must be four printable ASCII characters "
+                             f"or empty for an uncounted run: {path!r}")
+        if count_member:
+            holder = next((member for member in parsed if member["subrecord"] == count_member), None)
+            if holder is None or holder["payload_size"] != WIDTHS["u32"] or holder["repeatable"]:
+                raise ValueError(
+                    f"subrecord_group run count_member must be a four-byte non-repeatable member: {path!r}")
         run_members = run.get("members")
         if not isinstance(run_members, list) or not run_members:
             raise ValueError(f"subrecord_group run members must be a non-empty array: {path!r}")
@@ -580,74 +578,6 @@ def load_schema(schema_path: Path):
 
 def names_key(field):
     return tuple((entry["value"], entry["name"]) for entry in field["names"])
-
-
-def render_group_members(members, lines, defaults):
-    specs = []
-    for member in members:
-        spec = (f"{cpp_signature(member['subrecord'])}, "
-                f"{'true' if member['required'] else 'false'}, "
-                f"{'true' if member['repeatable'] else 'false'}, {member['payload_size']}, ")
-        if member["default"] is not None:
-            name = f"k_subrecord_group_default_{defaults[0]}"
-            defaults[0] += 1
-            body = ", ".join(f"0x{byte:02X}" for byte in member["default"])
-            lines.append(f"constexpr std::uint8_t {name}[] = {{{body}}};")
-            spec += f"std::span<const std::uint8_t>({name})"
-        else:
-            spec += "std::span<const std::uint8_t>{}"
-        spec += f", {'true' if member['localized'] else 'false'}"
-        spec += f", {'true' if member['skippable'] else 'false'}"
-        spec += f", {'true' if member['leading'] else 'false'}"
-        specs.append("{" + spec + "},")
-    return specs
-
-
-def render_subrecord_groups(groups):
-    lines = []
-    entries = []
-    defaults = [0]
-    for index, group in enumerate(groups):
-        members = render_group_members(group["members"], lines, defaults)
-        if group["successors"]:
-            body = ", ".join(f"Signature::from_string({cpp_string(signature)})" for signature in group["successors"])
-            lines.append(f"constexpr Signature k_subrecord_group_successors_{index}[] = {{{body}}};")
-            successors = f"std::span<const Signature>(k_subrecord_group_successors_{index})"
-        else:
-            successors = "std::span<const Signature>{}"
-        lines.append(f"constexpr SubrecordGroupMemberDescriptor k_subrecord_group_members_{index}[] = {{")
-        lines.extend(members)
-        lines.append("};")
-        if group["run"] is None:
-            run = "SubrecordGroupRunDescriptor{}"
-        else:
-            run_members = render_group_members(group["run"]["members"], lines, defaults)
-            lines.append(f"constexpr SubrecordGroupMemberDescriptor k_subrecord_group_run_members_{index}[] = {{")
-            lines.extend(run_members)
-            lines.append("};")
-            run = ("SubrecordGroupRunDescriptor{Signature::from_string(" +
-                   cpp_string(group["run"]["count_member"]) + "), " +
-                   f"std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_run_members_{index})" +
-                   "}")
-        entries.append(
-            "{" +
-            f"Signature::from_string({cpp_string(group['record'])}), " +
-            f"{cpp_string(group['path'])}, " +
-            f"{cpp_string(group['label'])}, " +
-            (f"Signature::from_string({cpp_string(group['count_subrecord'])})"
-             if group["count_subrecord"] else "Signature{}") + ", " +
-            f"std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_{index}), " +
-            successors + ", " +
-            run + ", " +
-            ('true' if group["requires_existing_count"] else 'false') +
-            "},")
-    if groups:
-        lines.append(f"constexpr std::array<SubrecordGroupDescriptor, {len(groups)}> k_subrecord_groups{{{{")
-        lines.extend(entries)
-        lines.append("}};")
-    else:
-        lines.append("constexpr std::array<SubrecordGroupDescriptor, 0> k_subrecord_groups{};")
-    return lines
 
 
 def render(fields, arrays=(), groups=()) -> str:

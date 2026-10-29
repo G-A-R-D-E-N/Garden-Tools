@@ -400,6 +400,9 @@ bool read_records(std::span<const std::byte> data, std::size_t start, unsigned v
       record.fill0 = static_cast<std::uint16_t>(fill0);
       record.fill1 = static_cast<std::uint16_t>(fill1);
       record.line = static_cast<std::uint16_t>(line);
+      record.has_fill0 = (flags & 0x02u) != 0;
+      record.has_fill1 = (flags & 0x04u) != 0;
+      record.has_line = (flags & 0x08u) != 0;
       push_record(records, record);
     }
     ++counts.style_changes;

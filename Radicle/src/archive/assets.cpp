@@ -63,7 +63,8 @@ std::optional<std::filesystem::path> child(const std::filesystem::path& dir, std
 }
 
 void walk_loose(const std::filesystem::path& dir, const std::filesystem::path& root, int depth,
-                std::vector<std::pair<std::string, std::filesystem::path>>& out) {
+                std::vector<std::pair<std::string, std::filesystem::path>>& out,
+                std::set<std::string>& ancestors) {
   constexpr int k_max_depth = 64;
   std::error_code ec;
   std::vector<std::filesystem::path> children;
@@ -75,7 +76,12 @@ void walk_loose(const std::filesystem::path& dir, const std::filesystem::path& r
   for (const auto& path : children) {
     std::error_code entry_ec;
     if (std::filesystem::is_directory(path, entry_ec)) {
-      if (depth < k_max_depth) walk_loose(path, root, depth + 1, out);
+      // Constraint: only the ancestor chain is deduped, and a sibling link must list its own keys.
+      const auto key = root_key(path);
+      if (depth < k_max_depth && ancestors.insert(key).second) {
+        walk_loose(path, root, depth + 1, out, ancestors);
+        ancestors.erase(key);
+      }
       continue;
     }
     if (!std::filesystem::is_regular_file(path, entry_ec)) continue;
@@ -193,19 +199,25 @@ std::optional<AssetLocation> AssetResolver::locate_in_archives(std::string_view 
 std::vector<AssetListing> AssetResolver::list(std::string_view prefix, std::string_view extension,
                                               bool include_shadowed) const {
   const auto wanted_prefix = prefix.empty() ? std::string() : normalize_asset_path(prefix);
-  const auto wanted_extension = lower(extension);
+  auto wanted_extension = lower(extension);
+  if (!wanted_extension.empty() && wanted_extension.front() != '.') {
+    wanted_extension.insert(wanted_extension.begin(), '.');
+  }
   const auto wanted = [&](const std::string& path) {
     if (!wanted_prefix.empty() && path != wanted_prefix &&
         !(path.size() > wanted_prefix.size() && path.starts_with(wanted_prefix) && path[wanted_prefix.size()] == '/')) {
       return false;
     }
-    return wanted_extension.empty() || path.ends_with(wanted_extension);
+    if (wanted_extension.empty()) return true;
+    // Constraint: the filter must match as a whole suffix starting on a dot.
+    return path.ends_with(wanted_extension);
   };
   std::vector<AssetListing> found;
   std::set<std::string> keys;
   for (const auto& root : roots_) {
     std::vector<std::pair<std::string, std::filesystem::path>> loose;
-    walk_loose(root, root, 0, loose);
+    std::set<std::string> ancestors{root_key(root)};
+    walk_loose(root, root, 0, loose, ancestors);
     for (auto& [key, path] : loose) {
       if (!wanted(key)) continue;
       std::error_code ec;
@@ -227,6 +239,8 @@ std::vector<AssetListing> AssetResolver::list(std::string_view prefix, std::stri
         continue;
       }
       if (!wanted(key)) continue;
+      const auto resolved = archives_[i].find(key);
+      if (!resolved || *resolved != e) continue;
       keys.insert(key);
       per_archive[i].push_back({std::move(key), {AssetOrigin::archive, {}, i, e}, entries[e].unpacked_size(), false});
     }

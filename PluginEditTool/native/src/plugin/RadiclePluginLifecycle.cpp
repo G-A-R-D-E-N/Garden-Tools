@@ -39,11 +39,11 @@ Result<fo4::FormKey> createRichSchemaRecordLocked(fo4::Plugin& mutated,
         }
         static constexpr std::uint8_t codes[] = {115, 108, 102, 98};  // Short, Long, Float, Boolean
         const auto name = type->get_ref<const std::string&>();
-        const int index = name == "short" || name == "s"       ? 0
-                          : name == "long" || name == "l"      ? 1
-                          : name == "float" || name == "f"     ? 2
-                          : name == "boolean" || name == "b"   ? 3
-                                                               : -1;
+        const int index = name == "short"   ? 0
+                          : name == "long"    ? 1
+                          : name == "float"   ? 2
+                          : name == "boolean" ? 3
+                                              : -1;
         const std::uint8_t* data = index < 0 ? nullptr : &codes[static_cast<std::size_t>(index)];
         if (data == nullptr) {
             return std::unexpected(Error{
@@ -120,16 +120,13 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
     }
     const bool schemaCreation = payload != nullptr && payload->contains("schema") &&
         payload->at("schema").is_boolean() && payload->at("schema").get<bool>();
-    const bool generatedLayoutCreation = schemaCreation;
-    if (!generatedLayoutCreation && signatureText != "ARMA" && signatureText != "ARMO" &&
+    if (!schemaCreation && !generatedLayoutCreationSupported(signatureText) &&
+        signatureText != "ARMA" && signatureText != "ARMO" &&
         signatureText != "CELL" && signatureText != "EXPL" &&
         signatureText != "EYES" && signatureText != "FACT" &&
         signatureText != "HAZD" && signatureText != "LVLI" &&
         signatureText != "LVLN" && signatureText != "LVSP" &&
-        signatureText != "PROJ" && signatureText != "RACE" &&
-        signatureText != "QUST" && signatureText != "GLOB" &&
-        signatureText != "SPEL" && signatureText != "MGEF" &&
-        signatureText != "FLST" && signatureText != "MESG") {
+        signatureText != "PROJ" && signatureText != "RACE") {
         return std::unexpected(Error{
             "RecordCreationRequiresSchema",
             "Raw record creation is disabled until the schema pre-flight layer defines required fields and insertion order for " +
@@ -157,7 +154,7 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
         auto mutated = loaded->plugin;
         fo4::FormKey key;
 
-        if (generatedLayoutCreation) {
+        if (schemaCreation) {
             const auto* editor = editorIdPayloadField(*payload);
             if (editor != nullptr && !editor->is_string()) {
                 return std::unexpected(Error{"InvalidRecordCreationPayload", "Schema editorId must be a string"});

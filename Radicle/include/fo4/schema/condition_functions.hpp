@@ -44,4 +44,6 @@ const ConditionFunction* condition_function_by_name(std::string_view name);
 
 const ConditionRunOn* condition_run_on(std::uint32_t value);
 
+std::span<const ConditionRunOn> condition_run_ons();
+
 }  // namespace fo4::schema

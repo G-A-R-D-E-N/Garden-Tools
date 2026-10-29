@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -38,6 +39,7 @@ enum class InterpreterStatus : std::uint8_t {
   MethodIndexOutOfRange,
   ClassIndexOutOfRange,
   ScopeDepthExceeded,
+  ResourceLimit,
 };
 
 const char* interpreter_status_name(InterpreterStatus status) noexcept;
@@ -118,18 +120,24 @@ class Interpreter {
     std::vector<std::uint32_t> instruction_offsets;
     std::vector<Value> locals;
     std::vector<Value> stack;
-    std::vector<Object*> scopes;
+    std::vector<std::shared_ptr<Object>> scopes;
+    const std::vector<std::shared_ptr<Object>>* outer_scope{nullptr};
     Value this_value;
     Class* owner_class{nullptr};
     std::size_t entry_scope_count{0};
     std::size_t ip{0};
     std::map<const Object*, std::vector<Key>> iterator_keys;
     Multiname runtime_name;
+    std::string default_xml_namespace;
   };
 
   ExecutionResult execute_frame(Frame& frame, std::size_t depth);
+  ExecutionResult call_indexed(Frame& frame, const abc::AbcInstruction& instruction,
+                               std::size_t depth);
+  ExecutionResult outer_scope_value(const Frame& frame, std::uint32_t index) const;
   ExecutionResult invoke(const FunctionObject& function, Value this_value,
-                         std::vector<Value> arguments, const std::vector<Object*>& scopes,
+                         std::vector<Value> arguments,
+                         const std::vector<std::shared_ptr<Object>>& scopes,
                          std::size_t depth);
   ExecutionResult fail(InterpreterStatus status, std::string message) const;
 
@@ -166,10 +174,15 @@ class Interpreter {
   ExecutionResult ensure_class_initialized(Class& klass, std::size_t depth);
   ExecutionResult initialize_class_value(const Value& value, std::size_t depth);
   bool is_instance_of(const Value& value, const Value& type) const;
+  std::vector<Key>& enumeration_keys(Frame& frame, Object& object);
   InterpreterStatus coerce_value(const Multiname& multiname, Value& value,
                                  std::string& message);
   InterpreterStatus array_property(Object& object, const Multiname& multiname, bool write,
                                    Value& value, bool& handled, std::string& message);
+  InterpreterStatus domain_memory_load(std::uint8_t opcode, const Value& address, Value& value,
+                                       std::string& message);
+  InterpreterStatus domain_memory_store(std::uint8_t opcode, const Value& address,
+                                        const Value& value, std::string& message);
 
   Runtime& runtime_;
   InterpreterLimits limits_;

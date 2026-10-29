@@ -1,10 +1,13 @@
 #include "fo4/swf/swf.hpp"
+#include "fo4/swf/swf_bitmap_png.hpp"
 #include "fo4/swf/swf_display.hpp"
+#include "fo4/swf/swf_frame_svg.hpp"
 #include "swf_art_fixtures.hpp"
 #include "swf_movie_builder.hpp"
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -20,22 +23,15 @@ using fo4::swf::SwfDisplayOptions;
 using fo4::swf::SwfDisplayFrame;
 using fo4::swf::SwfFrameInstance;
 using fo4::swf::SwfTimelineStatus;
+using swf_test::matrix_full;
+using swf_test::movie_of;
+using swf_test::place_full;
 using swf_test::SwfBuilder;
+using swf_test::sprite_tag;
+using swf_test::square_shape;
+using swf_test::square_with_fill;
+using swf_test::TagPayload;
 using swf_test::wrap_body;
-
-using TagPayload = std::pair<std::uint16_t, std::vector<std::byte>>;
-
-std::vector<std::byte> movie_of(std::uint16_t frames, const std::vector<TagPayload>& tags) {
-  SwfBuilder builder;
-  builder.rect(0, 11000, 0, 8000, 15);
-  builder.u16(0x0C00);
-  builder.u16(frames);
-  for (const auto& [code, payload] : tags) {
-    builder.tag(code, payload, false);
-  }
-  builder.tag(0);
-  return wrap_body(builder.body, 10, false, false);
-}
 
 std::vector<std::byte> matrix_translate(std::int32_t x, std::int32_t y) {
   SwfBuilder bits;
@@ -86,18 +82,6 @@ std::vector<std::byte> remove2(std::uint16_t depth) {
   return body.body;
 }
 
-std::vector<std::byte> sprite_tag(std::uint16_t id, std::uint16_t frames,
-                                  const std::vector<TagPayload>& children) {
-  SwfBuilder body;
-  body.u16(id);
-  body.u16(frames);
-  for (const auto& [code, payload] : children) {
-    body.tag(code, payload, false);
-  }
-  body.tag(0);
-  return body.body;
-}
-
 std::vector<std::byte> shape_definition() { return swf_art_test::define_shape_3_payload(); }
 
 SwfDisplayList display_of(const std::vector<std::byte>& bytes,
@@ -123,6 +107,110 @@ std::string paths_of(const SwfDisplayFrame& frame) {
     out += instance.path;
   }
   return out;
+}
+
+std::vector<std::byte> color_multiply_add(std::int32_t multiply, std::int32_t add) {
+  SwfBuilder bits;
+  bits.push_bits(1, 1);
+  bits.push_bits(1, 1);
+  bits.push_bits(10, 4);
+  bits.push_bits(static_cast<std::uint32_t>(multiply) & 0x3FFu, 10);
+  bits.push_bits(256, 10);
+  bits.push_bits(256, 10);
+  bits.push_bits(256, 10);
+  bits.push_bits(static_cast<std::uint32_t>(add) & 0x3FFu, 10);
+  bits.push_bits(0, 10);
+  bits.push_bits(0, 10);
+  bits.push_bits(0, 10);
+  bits.align();
+  return bits.body;
+}
+
+std::vector<std::byte> bitmap_square_shape(std::uint16_t id, std::int32_t size,
+                                           std::uint16_t bitmap_id, std::int32_t scale,
+                                           std::int32_t translate_x) {
+  SwfBuilder fill;
+  fill.u8(0x40);
+  fill.u16(bitmap_id);
+  fill.bytes(matrix_scale_translate(scale, translate_x, 0));
+  return square_with_fill(id, size, fill.body, false);
+}
+
+std::string svg_of(const std::vector<std::byte>& bytes, std::uint32_t frame) {
+  const auto result = fo4::swf::read_swf(bytes);
+  EXPECT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
+  const auto display = fo4::swf::build_display_list(result.file);
+  EXPECT_EQ(display.status, SwfTimelineStatus::ok) << display.message;
+  return fo4::swf::frame_to_svg(result.file, display, frame);
+}
+
+const std::string kStageOpen =
+    "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 550 400\" width=\"550\" height=\"400\">\n";
+
+const std::string kRedSquare =
+    "<path d=\"M0 0L50 0L50 50L0 50L0 0Z\" fill=\"#ff0000\" fill-opacity=\"1\" fill-rule=\"nonzero\"/>\n";
+
+std::vector<std::byte> nine_slice_grid(std::uint16_t id) {
+  SwfBuilder body;
+  body.u16(id);
+  body.rect(400, 1600, 200, 1800, 12);
+  return body.body;
+}
+
+std::vector<std::byte> square_grid_movie(bool wrap_in_sprite, bool with_grid,
+                                         const std::vector<std::byte>& matrix) {
+  const std::uint16_t character = wrap_in_sprite ? 2 : 1;
+  std::vector<TagPayload> tags{{32, square_shape(1, 2000, 0xFF0000)}};
+  if (wrap_in_sprite) {
+    tags.push_back({39, sprite_tag(2, 1,
+                                   {{26, place_full(1, 1, {}, {})},
+                                    {26, place_full(2, 1, matrix_full(65536, 65536, 0, 0, 20000, 0),
+                                                    {}, 3)},
+                                    {1, {}}})});
+  }
+  if (with_grid) {
+    tags.push_back({78, nine_slice_grid(character)});
+  }
+  tags.push_back({26, place_full(1, character, matrix, {})});
+  tags.push_back({1, {}});
+  return movie_of(1, tags);
+}
+
+const std::array<std::string, 9> kNineSliceTransforms{
+    "matrix(0.4 0 0 0.5 60 25)",        "matrix(1.4 0 0 0.5 -90 25)",
+    "matrix(0.4 0 0 0.5 210 25)",       "matrix(0.4 0 0 1.125 60 -18.75)",
+    "matrix(1.4 0 0 1.125 -90 -18.75)", "matrix(0.4 0 0 1.125 210 -18.75)",
+    "matrix(0.4 0 0 0.5 60 125)",       "matrix(1.4 0 0 0.5 -90 125)",
+    "matrix(0.4 0 0 0.5 210 125)"};
+
+const std::array<std::string, 9> kNineSliceClips{
+    "<clipPath id=\"r0s0clip\"><rect x=\"100\" y=\"50\" width=\"50\" height=\"20\"/></clipPath>\n",
+    "<clipPath id=\"r0s1clip\"><rect x=\"150\" y=\"50\" width=\"150\" height=\"20\"/></clipPath>\n",
+    "<clipPath id=\"r0s2clip\"><rect x=\"300\" y=\"50\" width=\"50\" height=\"20\"/></clipPath>\n",
+    "<clipPath id=\"r0s3clip\"><rect x=\"100\" y=\"70\" width=\"50\" height=\"160\"/></clipPath>\n",
+    "<clipPath id=\"r0s4clip\"><rect x=\"150\" y=\"70\" width=\"150\" height=\"160\"/></clipPath>\n",
+    "<clipPath id=\"r0s5clip\"><rect x=\"300\" y=\"70\" width=\"50\" height=\"160\"/></clipPath>\n",
+    "<clipPath id=\"r0s6clip\"><rect x=\"100\" y=\"230\" width=\"50\" height=\"20\"/></clipPath>\n",
+    "<clipPath id=\"r0s7clip\"><rect x=\"150\" y=\"230\" width=\"150\" height=\"20\"/></clipPath>\n",
+    "<clipPath id=\"r0s8clip\"><rect x=\"300\" y=\"230\" width=\"50\" height=\"20\"/></clipPath>\n"};
+
+std::string nine_slice_groups() {
+  std::string groups;
+  for (std::size_t cell = 0; cell < kNineSliceTransforms.size(); ++cell) {
+    groups += "<g transform=\"" + kNineSliceTransforms[cell] +
+              "\">\n<g clip-path=\"url(#r0s" + std::to_string(cell) +
+              "clip)\">\n<use href=\"#r0sg\"/>\n</g>\n</g>\n";
+  }
+  return groups;
+}
+
+std::size_t count_of(const std::string& text, std::string_view needle) {
+  std::size_t count = 0;
+  for (std::size_t at = text.find(needle); at != std::string::npos;
+       at = text.find(needle, at + needle.size())) {
+    ++count;
+  }
+  return count;
 }
 
 }  // namespace
@@ -402,4 +490,224 @@ TEST(SwfDisplay, RejectsWorkPastTheInstanceBudget) {
   EXPECT_EQ(display.status, SwfTimelineStatus::malformed);
   EXPECT_NE(display.message.find("budget"), std::string::npos);
   EXPECT_TRUE(display.timelines.empty());
+}
+
+TEST(SwfFrameSvg, PaintsShapesInDepthOrderWithTwipsScaledMatrices) {
+  const auto movie = movie_of(1, {
+      {32, square_shape(1, 1000, 0xFF0000)},
+      {32, square_shape(2, 600, 0x0000FF)},
+      {26, place_full(2, 2, matrix_full(32768, 131072, 16384, -16384, 400, 600), {})},
+      {26, place_full(1, 1, matrix_full(65536, 65536, 0, 0, 2000, 0), {})},
+      {1, {}},
+  });
+  const std::string expected =
+      kStageOpen +
+      "<g transform=\"matrix(1 0 0 1 100 0)\">\n" + kRedSquare + "</g>\n" +
+      "<g transform=\"matrix(0.5 0.25 -0.25 2 20 30)\">\n"
+      "<path d=\"M0 0L30 0L30 30L0 30L0 0Z\" fill=\"#0000ff\" fill-opacity=\"1\" fill-rule=\"nonzero\"/>\n"
+      "</g>\n"
+      "</svg>\n";
+  EXPECT_EQ(svg_of(movie, 0), expected);
+}
+
+TEST(SwfFrameSvg, PlacesASpriteChildAtItsParentsOffset) {
+  const auto sprite = sprite_tag(9, 1, {
+      {26, place_full(1, 1, matrix_full(65536, 65536, 0, 0, 800, 0), {})},
+      {1, {}},
+  });
+  const auto movie = movie_of(1, {
+      {32, square_shape(1, 1000, 0xFF0000)},
+      {39, sprite},
+      {26, place_full(1, 9, matrix_full(65536, 65536, 0, 0, 400, 0), {})},
+      {1, {}},
+  });
+  const std::string expected =
+      kStageOpen +
+      "<g transform=\"matrix(1 0 0 1 60 0)\">\n" + kRedSquare + "</g>\n"
+      "</svg>\n";
+  EXPECT_EQ(svg_of(movie, 0), expected);
+}
+
+TEST(SwfFrameSvg, AppliesAPlacementColourTransformAsAColorMatrix) {
+  const auto movie = movie_of(1, {
+      {32, square_shape(1, 1000, 0xFF0000)},
+      {26, place_full(1, 1, {}, color_multiply_add(128, 51))},
+      {1, {}},
+  });
+  const std::string expected =
+      kStageOpen +
+      "<defs><filter id=\"r0color\" filterUnits=\"userSpaceOnUse\" x=\"0\" y=\"0\" width=\"550\" "
+      "height=\"400\" color-interpolation-filters=\"sRGB\">"
+      "<feColorMatrix type=\"matrix\" values=\"0.5 0 0 0 0.2 0 1 0 0 0 0 0 1 0 0 0 0 0 1 0\"/>"
+      "</filter></defs>\n"
+      "<g filter=\"url(#r0color)\">\n"
+      "<g transform=\"matrix(1 0 0 1 0 0)\">\n" + kRedSquare + "</g>\n"
+      "</g>\n"
+      "</svg>\n";
+  EXPECT_EQ(svg_of(movie, 0), expected);
+}
+
+TEST(SwfFrameSvg, InheritsTheSpriteColourTransformIntoItsChildren) {
+  const auto sprite = sprite_tag(9, 1, {
+      {26, place_full(1, 1, {}, {})},
+      {1, {}},
+  });
+  const auto movie = movie_of(1, {
+      {32, square_shape(1, 1000, 0xFF0000)},
+      {39, sprite},
+      {26, place_full(1, 9, {}, color_multiply_add(128, 51))},
+      {1, {}},
+  });
+  const std::string svg = svg_of(movie, 0);
+  EXPECT_NE(svg.find("values=\"0.5 0 0 0 0.2 0 1 0 0 0 0 0 1 0 0 0 0 0 1 0\""), std::string::npos);
+  EXPECT_NE(svg.find("<g filter=\"url(#r1color)\">\n<g transform=\"matrix(1 0 0 1 0 0)\">\n" + kRedSquare),
+            std::string::npos);
+}
+
+TEST(SwfFrameSvg, ClipsOnlyTheRowsInsideTheMaskDepthRange) {
+  const auto movie = movie_of(1, {
+      {32, square_shape(1, 1000, 0xFF0000)},
+      {32, square_shape(2, 600, 0x0000FF)},
+      {26, place_full(1, 1, {}, {}, 2)},
+      {26, place_full(2, 2, {}, {})},
+      {26, place_full(3, 1, {}, {})},
+      {1, {}},
+  });
+  const std::string expected =
+      kStageOpen +
+      "<clipPath id=\"r0clip\" transform=\"matrix(1 0 0 1 0 0)\">\n" + kRedSquare + "</clipPath>\n"
+      "<g clip-path=\"url(#r0clip)\">\n"
+      "<g transform=\"matrix(1 0 0 1 0 0)\">\n"
+      "<path d=\"M0 0L30 0L30 30L0 30L0 0Z\" fill=\"#0000ff\" fill-opacity=\"1\" fill-rule=\"nonzero\"/>\n"
+      "</g>\n"
+      "</g>\n"
+      "<g transform=\"matrix(1 0 0 1 0 0)\">\n" + kRedSquare + "</g>\n"
+      "</svg>\n";
+  EXPECT_EQ(svg_of(movie, 0), expected);
+}
+
+TEST(SwfFrameSvg, ASlashInARowNameKeepsItsClipLevel) {
+  // Detects: a row whose name contains '/' must still sit at its real nesting level, so it stays inside the mask scope (depth 2 at clip depth 2); counting slashes in the path would leave it unclipped.
+  const auto movie = movie_of(1, {
+      {32, square_shape(1, 1000, 0xFF0000)},
+      {32, square_shape(2, 600, 0x0000FF)},
+      {26, place_full(1, 1, {}, {}, 2)},
+      {26, place2(0x22, 2, 2, {}, "a/b")},
+      {1, {}},
+  });
+  const std::string expected =
+      kStageOpen +
+      "<clipPath id=\"r0clip\" transform=\"matrix(1 0 0 1 0 0)\">\n" + kRedSquare + "</clipPath>\n"
+      "<g clip-path=\"url(#r0clip)\">\n"
+      "<g transform=\"matrix(1 0 0 1 0 0)\">\n"
+      "<path d=\"M0 0L30 0L30 30L0 30L0 0Z\" fill=\"#0000ff\" fill-opacity=\"1\" fill-rule=\"nonzero\"/>\n"
+      "</g>\n"
+      "</g>\n"
+      "</svg>\n";
+  EXPECT_EQ(svg_of(movie, 0), expected);
+}
+
+TEST(SwfFrameSvg, SkipsAHiddenRowAndTheChildrenOfAHiddenSprite) {
+  // Detects: a PlaceObject3 row with its visible flag cleared paints, or a child of a hidden sprite paints; the visible sibling must still paint.
+  const auto sprite = sprite_tag(9, 1, {{26, place_full(1, 1, {}, {})}, {1, {}}});
+  const auto movie = movie_of(1, {
+      {32, square_shape(1, 1000, 0xFF0000)},
+      {32, square_shape(2, 600, 0x0000FF)},
+      {39, sprite},
+      {70, {std::byte{0x02}, std::byte{0x20}, std::byte{0x01}, std::byte{0x00}, std::byte{0x01}, std::byte{0x00}, std::byte{0x00}}},
+      {26, place_full(2, 2, {}, {})},
+      {70, {std::byte{0x02}, std::byte{0x20}, std::byte{0x03}, std::byte{0x00}, std::byte{0x09}, std::byte{0x00}, std::byte{0x00}}},
+      {1, {}},
+  });
+  const std::string expected =
+      kStageOpen +
+      "<g transform=\"matrix(1 0 0 1 0 0)\">\n"
+      "<path d=\"M0 0L30 0L30 30L0 30L0 0Z\" fill=\"#0000ff\" fill-opacity=\"1\" fill-rule=\"nonzero\"/>\n"
+      "</g>\n"
+      "</svg>\n";
+  EXPECT_EQ(svg_of(movie, 0), expected);
+}
+
+TEST(SwfFrameSvg, ClipMaskUsesOnlyFillGeometry) {
+  const auto movie = movie_of(1, {
+      {32, square_shape(1, 1000, 0xFF0000, true)},
+      {26, place_full(1, 1, {}, {}, 2)},
+      {1, {}},
+  });
+  const std::string expected =
+      kStageOpen +
+      "<clipPath id=\"r0clip\" transform=\"matrix(1 0 0 1 0 0)\">\n" + kRedSquare + "</clipPath>\n"
+      "</svg>\n";
+  EXPECT_EQ(svg_of(movie, 0), expected);
+}
+
+TEST(SwfFrameSvg, FrameOutsideTheRootTimelineDrawsAnEmptyStage) {
+  const auto movie = movie_of(1, {
+      {32, square_shape(1, 1000, 0xFF0000)},
+      {26, place_full(1, 1, {}, {})},
+      {1, {}},
+  });
+  EXPECT_EQ(svg_of(movie, 3), kStageOpen + "</svg>\n");
+}
+
+TEST(SwfFrameSvg, ScaledGridShapeEmitsNineClipAndTransformCells) {
+  const auto scaled = matrix_full(163840, 131072, 0, 0, 2000, 1000);
+  const std::string svg = svg_of(square_grid_movie(false, true, scaled), 0);
+  EXPECT_NE(svg.find(nine_slice_groups()), std::string::npos);
+  for (std::size_t cell = 0; cell < kNineSliceClips.size(); ++cell) {
+    EXPECT_NE(svg.find(kNineSliceClips[cell]), std::string::npos) << "cell " << cell;
+  }
+  EXPECT_EQ(count_of(svg, "<path "), 1u);
+}
+
+TEST(SwfFrameSvg, ScaledGridSpriteEmitsTheSameNineCellsAndSkipsItsChildren) {
+  const auto scaled = matrix_full(163840, 131072, 0, 0, 2000, 1000);
+  const std::string svg = svg_of(square_grid_movie(true, true, scaled), 0);
+  EXPECT_NE(svg.find(nine_slice_groups()), std::string::npos);
+  for (std::size_t cell = 0; cell < kNineSliceClips.size(); ++cell) {
+    EXPECT_NE(svg.find(kNineSliceClips[cell]), std::string::npos) << "cell " << cell;
+  }
+  EXPECT_EQ(count_of(svg, "<path "), 1u);
+}
+
+TEST(SwfFrameSvg, UnitOrRotatedGridPlacementDrawsThePlainShape) {
+  const auto unit = matrix_full(65536, 65536, 0, 0, 2000, 1000);
+  const auto rotated = matrix_full(163840, 131072, 16384, 0, 2000, 1000);
+  EXPECT_EQ(svg_of(square_grid_movie(false, true, unit), 0),
+            svg_of(square_grid_movie(false, false, unit), 0));
+  EXPECT_EQ(svg_of(square_grid_movie(false, true, rotated), 0),
+            svg_of(square_grid_movie(false, false, rotated), 0));
+}
+
+TEST(SwfFrameSvg, BitmapFillPatternIsResolvedFromTheMoviesBitmapTags) {
+  // Detects: a placed shape's bitmap fill must resolve its bitmap through the movie's bitmap tags and emit the PNG pattern with the fill matrix scaled to pixels; a frame that drops the bitmap index draws the grey placeholder instead.
+  const std::vector<std::uint8_t> raw = {255, 255, 0, 0, 255, 0, 255, 0,
+                                         255, 0,   0, 255, 255, 255, 255, 255};
+  const auto bitmap =
+      swf_art_test::read_one(36, swf_art_test::lossless_raw_payload(5, 2, 2, 0, raw));
+  ASSERT_TRUE(bitmap.ok()) << fo4::swf::status_name(bitmap.status);
+  ASSERT_TRUE(bitmap.file.tags[0].bitmap.has_value());
+  const auto png = fo4::swf::bitmap_to_png(*bitmap.file.tags[0].bitmap);
+  ASSERT_TRUE(png.has_value());
+  const auto movie = movie_of(1, {
+      {36, swf_art_test::lossless_raw_payload(5, 2, 2, 0, raw)},
+      {32, bitmap_square_shape(1, 1000, 3, 131072, 400)},
+      {26, place_full(1, 1, {}, {})},
+      {1, {}},
+  });
+  const std::string expected =
+      kStageOpen +
+      "<g transform=\"matrix(1 0 0 1 0 0)\">\n"
+      "<defs>\n"
+      "<pattern id=\"r0fbmp1\" patternUnits=\"userSpaceOnUse\" width=\"2\" height=\"2\" "
+      "patternTransform=\"matrix(0.1 0 0 0.1 20 0)\">\n"
+      "<image width=\"2\" height=\"2\" href=\"data:image/png;base64," +
+      swf_art_test::base64_text(*png) +
+      "\"/>\n"
+      "</pattern>\n"
+      "</defs>\n"
+      "<path d=\"M0 0L50 0L50 50L0 50L0 0Z\" fill=\"url(#r0fbmp1)\" fill-rule=\"nonzero\"/>\n"
+      "</g>\n"
+      "</svg>\n";
+  EXPECT_EQ(svg_of(movie, 0), expected);
 }

@@ -249,8 +249,7 @@ SwfStatus decode_text_tag(std::span<const std::byte> data, SwfTag& out_tag) {
         return SwfStatus::malformed_tag;
       }
       BitReader matrix_bits(data, bounds_next * 8);
-      SwfMatrix matrix;
-      if (!read_matrix(matrix_bits, matrix)) {
+      if (!read_matrix(matrix_bits, text.matrix)) {
         return SwfStatus::malformed_tag;
       }
       SwfReader after_matrix(data, matrix_bits.byte_position());
