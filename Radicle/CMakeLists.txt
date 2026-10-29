@@ -441,6 +441,9 @@ add_library(fo4
   src/hkx/layout.cpp
   src/hkx/packfile.cpp
   src/hkx/skeleton.cpp
+  src/hkx/animation.cpp
+  src/hkx/animation_binding.cpp
+  src/hkx/animation_spline.cpp
   src/material/material_file.cpp
   src/seq/seq.cpp
   src/quest/runtime.cpp
@@ -1022,6 +1025,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_swf_svg_text_clip.cpp
     tests/test_abc_real.cpp
     tests/test_hkx_packfile.cpp
+    tests/test_hkx_animation.cpp
+    tests/test_hkx_binding.cpp
     tests/test_hkx_real.cpp
     tests/test_c_api_material_file.cpp
     tests/test_seq.cpp
