@@ -61,6 +61,7 @@ struct Avm1Result {
 };
 
 /* Requires 1-based frame numbers; frame_for_label must match labels ASCII case-insensitively. */
+/* Requires an empty set_target path to reset the target to the original clip. */
 struct Avm1TimelineHost {
   virtual ~Avm1TimelineHost() = default;
   virtual void goto_frame(std::uint32_t frame) = 0;
@@ -71,6 +72,7 @@ struct Avm1TimelineHost {
   virtual std::optional<std::uint32_t> frame_for_label(const std::string& label) = 0;
   virtual Avm1Data get_property(std::uint8_t index) = 0;
   virtual void set_property(std::uint8_t index, const Avm1Data& value) = 0;
+  virtual void set_target(const std::string& path) = 0;
 };
 
 struct Avm1Environment {

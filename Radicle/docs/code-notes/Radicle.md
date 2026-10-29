@@ -9359,3 +9359,27 @@ The branch in `kJumpOverPlayAndStop` targets offset 7, the Stop record at index 
 ## Radicle/tests/test_avm1_timeline.cpp:GotoFrame2LabelWithoutPlayStopsAndAddsSceneBias
 
 `Radicle/tests/test_avm1_timeline.cpp:GotoFrame2LabelWithoutPlayStopsAndAddsSceneBias` runs text `intro`, with the label map holding `intro` at frame 3, and flags `02 02 00`, which set the scene bias bit and the play bit clear, with a u16 bias of 2. `Radicle/src/avm1/timeline_ops.cpp:goto_frame_2` looks the label up first, then adds the bias, giving frame 5. The clear play bit calls stop, so the calls are `label intro`, `stop`, `goto 5`. Detects a label jump that skips the scene bias, which would go to 3, and one that plays when the play bit is clear.
+
+## Radicle/include/fo4/avm1/interpreter.hpp:Avm1TimelineHost
+
+`Radicle/include/fo4/avm1/interpreter.hpp:Avm1TimelineHost` gains `set_target(const std::string& path)` as a pure virtual, like its other methods, since none of them has a default. The only implementer in the tree is `Radicle/tests/test_avm1_timeline.cpp:RecordingTimeline`. An empty path is the reset to the original clip, which matches Ruffle 0.6.0 `set_target` in `core/src/avm1/activation.rs`: an empty target resolves to the base clip. Ruffle clears the target when a non-empty path does not resolve, so GetVariable falls back to root and Play and Stop fail silently. The host contract has no such state yet, so a host decides that case itself.
+
+## Radicle/src/avm1/timeline_ops.cpp:set_target_2
+
+`Radicle/src/avm1/timeline_ops.cpp:set_target_2` pops one value and passes `text_ops::to_text` of it to the host. Ruffle 0.6.0 `action_set_target_2` in `core/src/avm1/activation.rs` does not coerce everything to a string. For undefined it resets the target on SWF 7 and later and targets the base clip on SWF 6 and earlier. `Radicle/src/avm1/text_ops.cpp:to_text` returns `undefined` for undefined on SWF 7 and later, so this sends the path `undefined` where Ruffle resets. This follows the brief's string coercion; a fix needs a no-target state in the host contract first.
+
+## Radicle/src/avm1/timeline_ops.cpp:execute
+
+`Radicle/src/avm1/timeline_ops.cpp:execute` routes `0x20` and `0x8B` to the host only when one is attached, like the other timeline opcodes. With no host both fall through to `Radicle/src/avm1/control_ops.cpp:execute`, which refuses them as Unsupported. `Radicle/src/avm1/interpreter.cpp:opcode_label` then names them from `Radicle/src/avm1/opcodes.cpp:action_mnemonic` as `SetTarget2 (0x20)` and `SetTarget (0x8B)`.
+
+## Radicle/tests/test_avm1_timeline.cpp:SetTargetPassesItsPathAndAnEmptyPathResets
+
+`Radicle/tests/test_avm1_timeline.cpp:SetTargetPassesItsPathAndAnEmptyPathResets` pushes 7, runs SetTarget with `mc` and then with an empty string, and traces the top. `Radicle/src/avm1/timeline_ops.cpp:execute` passes the `Avm1Text` operand of `0x8B` to the host and leaves the stack alone, so the calls are `target mc` and `target ` with a trailing space, and the trace is `7`. Detects a SetTarget that pops or pushes a stack value, one that sends an empty path for a non-empty operand, and one that drops the reset call.
+
+## Radicle/tests/test_avm1_timeline.cpp:SetTarget2PopsItsOperandAndCoercesItToAString
+
+`Radicle/tests/test_avm1_timeline.cpp:SetTarget2PopsItsOperandAndCoercesItToAString` pushes 7 and then one operand, which is the text `mc`, the integer 5, or the empty text. `Radicle/src/avm1/timeline_ops.cpp:set_target_2` pops that operand and sends its text form, so the calls are `target mc`, `target 5` and `target `, and the trace is `7` each time. Detects a SetTarget2 that pops the 7 instead of the operand, one that sends a number as a raw double, and one that leaves its operand on the stack.
+
+## Radicle/tests/test_avm1_timeline.cpp:TimelineOpcodesAreRefusedByNameWithoutAHost
+
+`Radicle/tests/test_avm1_timeline.cpp:TimelineOpcodesAreRefusedByNameWithoutAHost` gains rows for `SetTarget2 (0x20)` and `SetTarget (0x8B)`, each run with no host. `Radicle/src/avm1/timeline_ops.cpp:execute` falls through to the control refusal, so the status is Unsupported, the opcode is the row's first byte, and the message names the opcode. Detects a SetTarget or SetTarget2 that runs silently without a host, or one refused under a neighbouring opcode's name.
