@@ -9204,6 +9204,7 @@ The 0x9F case reads the payload that `Radicle/src/avm1/decode.cpp:Decoder::paylo
 ## Radicle/tests/test_avm1_control.cpp:TimelineOpcodesAreRefusedByNameWithoutAHost
 
 The table gains a GotoFrame2 row, `rec(0x9F, {0x01})` expecting `GotoFrame2 (0x9F)`. Detects a GotoFrame2 that runs with no host, or that refuses under the wrong name, since `Radicle/src/avm1/interpreter.cpp` formats the refusal as the name plus the opcode.
+
 ## Radicle/src/avm1/encode.cpp:encode_actions_checked
 
 When the decode that built the stream did not end Ok, `status` takes `stream.status` and the call returns no bytes. `Radicle/src/avm1/decode.cpp:Decoder::run` clears `actions` on failure, so the layout walk of such a stream sees no records and reports Ok. Before this change the failed stream came back as an empty Ok result. The layout status is still used when the decode was Ok. `validate_actions` in `Radicle/src/avm1/encode.cpp` has the same gap and still reports Ok for a stream whose decode failed. It is not changed here. Test: `Radicle/tests/test_avm1_encode.cpp:EncodeCheckedRefusesAStreamWhoseDecodeFailed`.
