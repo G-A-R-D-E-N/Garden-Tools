@@ -9062,6 +9062,7 @@ Bytecode is hand-derived. `u30(65535)` is `FF FF 03` and `u30(65536)` is `80 80 
 - If the member name is not a string literal, or the struct cannot be found, `memberType` returns Error and `valueAs` falls back to `value()`, which is the old output.
 - Known gap: a member name held in a variable keeps the old unconverted search value. Unverified whether real scripts do this.
 - `Radicle/tests/test_papyrus_codegen.cpp:FindStructConvertsSearchValueToMemberType` pins the Float conversion for `FindStruct` and `RFindStruct`.
+
 ## Radicle/include/fo4/avm1/interpreter.hpp:Avm1TimelineHost
 
 - The host is abstract and injected through `Avm1Environment::timeline`. It is non-owning; the caller keeps it alive for the run. With no host, every timeline opcode is refused by name (see `Radicle/src/avm1/timeline_ops.cpp:execute`).
