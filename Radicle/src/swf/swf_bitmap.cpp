@@ -5,13 +5,12 @@
 #include <cstddef>
 #include <cstdint>
 #include <span>
+#include <utility>
 #include <vector>
 
 namespace fo4::swf::detail {
 
 namespace {
-
-constexpr std::size_t kMaxBitmapBytes = 64u * 1024u * 1024u;
 
 constexpr std::size_t kMaxAlphaBytes = 64u * 1024u * 1024u;
 
@@ -73,18 +72,6 @@ JpegSize scan_jpeg_size(std::span<const std::byte> data) {
   return size;
 }
 
-bool inflate_to(std::span<const std::byte> input, std::size_t expected) {
-  if (expected > kMaxBitmapBytes) {
-    return false;
-  }
-  std::vector<std::byte> unpacked(expected == 0 ? 1 : expected);
-  uLongf length = static_cast<uLongf>(unpacked.size());
-  const auto code = uncompress(reinterpret_cast<Bytef*>(unpacked.data()), &length,
-                               reinterpret_cast<const Bytef*>(input.data()),
-                               static_cast<uLong>(input.size()));
-  return code == Z_OK && static_cast<std::size_t>(length) == expected;
-}
-
 bool inflate_fully(std::span<const std::byte> input, std::size_t limit, std::size_t& produced) {
   if (input.empty()) {
     return false;
@@ -133,6 +120,19 @@ bool inflate_alpha(std::span<const std::byte> input, JpegSize size) {
 
 }  // namespace
 
+bool inflate_to(std::span<const std::byte> input, std::size_t expected,
+                std::vector<std::byte>& unpacked) {
+  if (expected > kMaxBitmapBytes) {
+    return false;
+  }
+  unpacked.assign(expected == 0 ? 1 : expected, std::byte{0});
+  uLongf length = static_cast<uLongf>(unpacked.size());
+  const auto code = uncompress(reinterpret_cast<Bytef*>(unpacked.data()), &length,
+                               reinterpret_cast<const Bytef*>(input.data()),
+                               static_cast<uLong>(input.size()));
+  return code == Z_OK && static_cast<std::size_t>(length) == expected;
+}
+
 SwfStatus decode_bitmap_tag(std::span<const std::byte> data, SwfTag& out_tag) {
   Cursor cursor{data, 0};
   SwfBitmap bitmap;
@@ -173,11 +173,14 @@ SwfStatus decode_bitmap_tag(std::span<const std::byte> data, SwfTag& out_tag) {
     return SwfStatus::malformed_tag;
   }
   const auto packed = data.subspan(cursor.position);
-  if (packed.empty() || !inflate_to(packed, expected)) {
+  std::vector<std::byte> unpacked;
+  if (packed.empty() || !inflate_to(packed, expected, unpacked)) {
     return SwfStatus::malformed_tag;
   }
+  bitmap.packed.assign(packed.begin(), packed.end());
   bitmap.data_size = packed.size();
-  out_tag.bitmap = bitmap;
+  bitmap.has_alpha = out_tag.code == tag::kDefineBitsLossless2;
+  out_tag.bitmap = std::move(bitmap);
   return SwfStatus::ok;
 }
 

@@ -50,9 +50,10 @@ class Cursor {
 
 AbcStatus parse_trait(Cursor& cursor, AbcTrait& out);
 
-/* The body parser must parse one body block with its code/exception/trait lines. */
+/* The body parser must parse one body block with its code/exception/trait lines and its first line. */
 AbcStatus parse_body(AbcFile& file, std::size_t body_index,
-                     const std::vector<std::string>& block, std::string& error);
+                     const std::vector<std::string>& block, std::size_t first_line,
+                     std::string& error);
 
 AbcStatus parse_instruction_text(std::string_view text, std::vector<std::uint8_t>& out,
                                  std::string& error);

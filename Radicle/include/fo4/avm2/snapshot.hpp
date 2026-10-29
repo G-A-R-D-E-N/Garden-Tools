@@ -2,9 +2,11 @@
 
 #include <fo4/avm2/display.hpp>
 #include <fo4/avm2/sound.hpp>
+#include <fo4/swf/swf.hpp>
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -75,6 +77,9 @@ struct SnapshotEntry {
   SnapshotColorTransform color;
   std::vector<SnapshotTextRun> runs;
   std::size_t filter_count{0};
+  std::optional<std::uint16_t> ratio;
+  bool cache_as_bitmap{false};
+  std::vector<swf::SwfFilter> placed_filters;
 
   bool operator==(const SnapshotEntry&) const = default;
 };

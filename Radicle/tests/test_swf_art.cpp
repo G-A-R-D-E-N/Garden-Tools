@@ -1,6 +1,9 @@
 #include "swf_art_fixtures.hpp"
 
+#include "fo4/swf/swf_bitmap_png.hpp"
+
 #include <gtest/gtest.h>
+#include <zlib.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -565,6 +568,95 @@ TEST(SwfBitmap, LosslessRejectsGeometryBeyondTheByteCap) {
   body.bytes(zlib_bytes(std::vector<std::uint8_t>(8, 0x7F)));
   const auto result = read_one(20, body.body);
   EXPECT_EQ(result.status, SwfStatus::malformed_tag);
+}
+
+std::vector<std::uint8_t> inflate_idat(std::span<const std::uint8_t> stream, std::size_t size) {
+  std::vector<std::uint8_t> raw(size);
+  uLongf length = static_cast<uLongf>(size);
+  EXPECT_EQ(uncompress(raw.data(), &length, stream.data(), static_cast<uLong>(stream.size())), Z_OK);
+  raw.resize(length);
+  return raw;
+}
+
+TEST(SwfBitmapPng, Lossless2UnpremultipliesAlphaIntoAnRgbaPng) {
+  const std::vector<std::uint8_t> raw = {255, 10, 20, 30, 128, 64, 100, 32,
+                                         0,   0,  0,  0,  170, 3,  170, 85};
+  const auto result = read_one(36, lossless_raw_payload(5, 2, 2, 0, raw));
+  ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
+  const auto png = fo4::swf::bitmap_to_png(*result.file.tags[0].bitmap);
+  ASSERT_TRUE(png.has_value());
+  const std::vector<std::uint8_t> signature = {137, 80, 78, 71, 13, 10, 26, 10};
+  EXPECT_EQ(std::vector<std::uint8_t>(png->begin(), png->begin() + 8), signature);
+  const auto chunks = png_chunks(*png);
+  ASSERT_EQ(chunks.size(), 3u);
+  EXPECT_EQ(chunks[0].type, "IHDR");
+  EXPECT_EQ(chunks[1].type, "IDAT");
+  EXPECT_EQ(chunks[2].type, "IEND");
+  for (const auto& chunk : chunks) {
+    EXPECT_EQ(chunk.stored_crc, chunk.computed_crc) << chunk.type;
+  }
+  ASSERT_EQ(chunks[0].data.size(), 13u);
+  EXPECT_EQ(png_u32(chunks[0].data, 0), 2u);
+  EXPECT_EQ(png_u32(chunks[0].data, 4), 2u);
+  EXPECT_EQ(chunks[0].data[8], 8u);
+  EXPECT_EQ(chunks[0].data[9], 6u);
+  EXPECT_EQ(chunks[2].stored_crc, 0xAE426082u);
+  const std::vector<std::uint8_t> scanlines = {0, 10, 20, 30, 255, 128, 199, 64, 128,
+                                               0, 0,  0,  0,   0,   4,   255, 128, 170};
+  EXPECT_EQ(inflate_idat(chunks[1].data, scanlines.size()), scanlines);
+}
+
+TEST(SwfBitmapPng, ColourMappedRowsAreStridedAndLookedUpInThePalette) {
+  const std::vector<std::uint8_t> raw = {10, 20, 30, 200, 100, 50, 0, 1, 0, 0, 1, 1, 0, 0};
+  const auto result = read_one(20, lossless_raw_payload(3, 3, 2, 1, raw));
+  ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
+  const auto png = fo4::swf::bitmap_to_png(*result.file.tags[0].bitmap);
+  ASSERT_TRUE(png.has_value());
+  const auto chunks = png_chunks(*png);
+  ASSERT_EQ(chunks.size(), 3u);
+  const std::vector<std::uint8_t> scanlines = {0,  10, 20, 30, 255, 200, 100, 50, 255,
+                                               10, 20, 30, 255, 0,   200, 100, 50, 255,
+                                               200, 100, 50, 255, 10, 20, 30, 255};
+  EXPECT_EQ(inflate_idat(chunks[1].data, scanlines.size()), scanlines);
+}
+
+TEST(SwfBitmapPng, Lossless2ColourMapUnpremultipliesEachPaletteEntry) {
+  const std::vector<std::uint8_t> raw = {64, 100, 32, 128, 3, 170, 85, 170,
+                                         0,  1,   0xEE, 0xEE, 1, 0, 0xEE, 0xEE};
+  const auto result = read_one(36, lossless_raw_payload(3, 2, 2, 1, raw));
+  ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
+  const auto png = fo4::swf::bitmap_to_png(*result.file.tags[0].bitmap);
+  ASSERT_TRUE(png.has_value());
+  const auto chunks = png_chunks(*png);
+  ASSERT_EQ(chunks.size(), 3u);
+  const std::vector<std::uint8_t> scanlines = {0, 128, 199, 64, 128, 4, 255, 128, 170,
+                                               0, 4,   255, 128, 170, 128, 199, 64, 128};
+  EXPECT_EQ(inflate_idat(chunks[1].data, scanlines.size()), scanlines);
+}
+
+TEST(SwfBitmapPng, RefusesBitmapsThatCannotBeEncodedAsPng) {
+  const auto rgb15 = read_one(20, lossless_payload(4, 2, 2, 4, 0, false));
+  ASSERT_TRUE(rgb15.ok()) << fo4::swf::status_name(rgb15.status);
+  ASSERT_TRUE(rgb15.file.tags[0].bitmap.has_value());
+  EXPECT_FALSE(fo4::swf::bitmap_to_png(*rgb15.file.tags[0].bitmap).has_value());
+  SwfBuilder jpeg;
+  jpeg.u16(4);
+  jpeg.bytes(minimal_jpeg(2, 3));
+  const auto jpeg_result = read_one(21, jpeg.body);
+  ASSERT_TRUE(jpeg_result.ok()) << fo4::swf::status_name(jpeg_result.status);
+  EXPECT_FALSE(jpeg_result.file.tags[0].bitmap.has_value());
+  EXPECT_TRUE(jpeg_result.file.tags[0].jpeg.has_value());
+  const auto argb = read_one(36, lossless_raw_payload(5, 2, 2, 0, std::vector<std::uint8_t>(16, 0x40)));
+  ASSERT_TRUE(argb.ok()) << fo4::swf::status_name(argb.status);
+  ASSERT_TRUE(argb.file.tags[0].bitmap.has_value());
+  auto resized = *argb.file.tags[0].bitmap;
+  resized.width = 3;
+  EXPECT_FALSE(fo4::swf::bitmap_to_png(resized).has_value());
+  const std::vector<std::uint8_t> out_of_range = {10, 20, 30, 5, 0, 0xEE, 0xEE, 0, 0, 0xEE, 0xEE};
+  const auto index = read_one(20, lossless_raw_payload(3, 2, 2, 0, out_of_range));
+  ASSERT_TRUE(index.ok()) << fo4::swf::status_name(index.status);
+  ASSERT_TRUE(index.file.tags[0].bitmap.has_value());
+  EXPECT_FALSE(fo4::swf::bitmap_to_png(*index.file.tags[0].bitmap).has_value());
 }
 
 TEST(SwfJpeg, DefineBitsJpeg3SplitsTheImageFromTheAlphaPlane) {

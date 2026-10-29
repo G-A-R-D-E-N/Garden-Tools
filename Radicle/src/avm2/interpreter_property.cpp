@@ -306,7 +306,7 @@ InterpreterStatus Interpreter::find_scope_binding(Frame& frame, const Multiname&
   found = false;
   for (auto current = frame.scopes.rbegin(); current != frame.scopes.rend(); ++current) {
     if (*current != nullptr && (*current)->has_property(multiname)) {
-      owner = *current;
+      owner = current->get();
       found = true;
       return InterpreterStatus::Ok;
     }
@@ -325,7 +325,7 @@ InterpreterStatus Interpreter::find_scope_binding(Frame& frame, const Multiname&
     }
   }
   if (create_on_global && !frame.scopes.empty() && multiname.has_fixed_name()) {
-    Object* global = frame.scopes.front();
+    Object* global = frame.scopes.front().get();
     if (global != nullptr && global->is_dynamic()) {
       Property& property = global->define_own_property(primary_key(multiname));
       property.kind = PropertyKind::Value;
@@ -396,6 +396,66 @@ ExecutionResult Interpreter::call_property(Frame& frame, Object& receiver,
                 borrowed_object(receiver), arguments, {}, depth);
 }
 
+ExecutionResult Interpreter::call_indexed(Frame& frame, const abc::AbcInstruction& instruction,
+                                          std::size_t depth) {
+  const std::string name = instruction.mnemonic;
+  const std::uint32_t index = operand_at(instruction, 0);
+  std::vector<Value> arguments;
+  std::string message;
+  InterpreterStatus status = pop_arguments(frame, operand_at(instruction, 1), arguments, message);
+  Value receiver;
+  if (status == InterpreterStatus::Ok) {
+    status = pop(frame, receiver, message);
+  }
+  if (status != InterpreterStatus::Ok) {
+    return fail(status, message);
+  }
+  if (!receiver.is_object()) {
+    receiver = box(receiver);
+  }
+  if (!receiver.is_object()) {
+    return fail(InterpreterStatus::NullReference, name + " needs an object receiver");
+  }
+  if (instruction.opcode == op::k_callstatic) {
+    const std::size_t method_count = frame.file->methods.size();
+    if (index >= method_count) {
+      return fail(InterpreterStatus::MethodIndexOutOfRange,
+                  name + " method index " + std::to_string(index) + " is outside the " +
+                      std::to_string(method_count) + "-entry method table");
+    }
+    const auto function =
+        std::make_shared<FunctionObject>(frame.file->method_name(index), frame.file, index);
+    return invoke(*function, receiver, std::move(arguments), {}, depth);
+  }
+  const Class* klass = receiver.as_object()->instance_class();
+  const Trait* trait = klass == nullptr ? nullptr : klass->resolve_dispatch_trait(index);
+  if (trait == nullptr || trait->function == nullptr) {
+    return fail(InterpreterStatus::CannotCall,
+                name + " has no method " + std::to_string(index) + " on this receiver");
+  }
+  return invoke(*trait->function, receiver, std::move(arguments), {}, depth);
+}
+
+ExecutionResult Interpreter::outer_scope_value(const Frame& frame, std::uint32_t index) const {
+  if (frame.outer_scope == nullptr || frame.outer_scope->empty()) {
+    return fail(InterpreterStatus::NotImplemented,
+                "opcode getouterscope needs a closure's captured outer scope; "
+                "this method has none");
+  }
+  if (index >= frame.outer_scope->size()) {
+    return fail(InterpreterStatus::ScopeUnderflow,
+                "getouterscope " + std::to_string(index) + " is outside the " +
+                    std::to_string(frame.outer_scope->size()) + "-entry captured outer scope");
+  }
+  if ((*frame.outer_scope)[index] == nullptr) {
+    return fail(InterpreterStatus::ScopeUnderflow,
+                "getouterscope " + std::to_string(index) + " is a null scope");
+  }
+  ExecutionResult result;
+  result.value = borrowed_object(*(*frame.outer_scope)[index]);
+  return result;
+}
+
 ExecutionResult Interpreter::construct(Frame& frame, const ClassObject& class_object,
                                        const std::vector<Value>& arguments, std::size_t depth) {
   (void)frame;
@@ -439,6 +499,39 @@ ExecutionResult Interpreter::construct(Frame& frame, const ClassObject& class_ob
   ExecutionResult result;
   result.value = Value::object(std::move(instance));
   return result;
+}
+
+std::vector<Key>& Interpreter::enumeration_keys(Frame& frame, Object& object) {
+  std::vector<Key>& keys = frame.iterator_keys[&object];
+  if (!keys.empty()) {
+    return keys;
+  }
+  if (object.kind() == ObjectKind::Array) {
+    const auto& array = static_cast<const ArrayObject&>(object);
+    for (std::size_t index = 0; index < array.elements().size(); ++index) {
+      Key key;
+      key.name = std::to_string(index);
+      keys.push_back(std::move(key));
+    }
+    return keys;
+  }
+  for (const auto& entry : object.own_properties()) {
+    keys.push_back(entry.first);
+  }
+  for (const Class* klass = object.instance_class(); klass != nullptr; klass = klass->super) {
+    for (const Trait& trait : klass->instance_traits) {
+      if (!trait.is_slot_like() || !trait.multiname.has_fixed_name()) {
+        continue;
+      }
+      Key key;
+      key.name = trait.multiname.name;
+      if (!trait.multiname.namespaces.empty()) {
+        key.name_space = trait.multiname.namespaces.front();
+      }
+      keys.push_back(std::move(key));
+    }
+  }
+  return keys;
 }
 
 bool Interpreter::is_instance_of(const Value& value, const Value& type) const {

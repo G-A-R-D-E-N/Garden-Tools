@@ -281,7 +281,7 @@ TEST(SwfPlacement, PlaceObject3SkipsEveryFilterKindByItsSpecSize) {
   const auto result = fo4::swf::read_swf(bytes);
   ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
   const auto& place = *result.file.tags[0].placement;
-  EXPECT_EQ(place.filter_count, 6);
+  EXPECT_EQ(place.filters.size(), 6u);
   EXPECT_EQ(place.blend_mode, std::optional<std::uint8_t>(9));
 }
 
@@ -290,7 +290,7 @@ TEST(SwfPlacement, PlaceObject3SkipsFilterListAndReadsBlendCacheVisibleAndBackgr
   const auto result = fo4::swf::read_swf(bytes);
   ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
   const auto& place = *result.file.tags[0].placement;
-  EXPECT_EQ(place.filter_count, 2);
+  EXPECT_EQ(place.filters.size(), 2u);
   EXPECT_EQ(place.blend_mode, std::optional<std::uint8_t>(8));
   EXPECT_EQ(place.bitmap_cache, std::optional<std::uint8_t>(1));
   EXPECT_EQ(place.visible, std::optional<bool>(true));
@@ -310,6 +310,21 @@ TEST(SwfPlacement, PlaceObject3VisibleFlagAloneDoesNotConsumeABackgroundColor) {
   const auto& place = *result.file.tags[0].placement;
   EXPECT_EQ(place.visible, std::optional<bool>(false));
   EXPECT_FALSE(place.background_color.has_value());
+}
+
+TEST(SwfPlacement, PlaceObject3FilterFlagSetsHasFilterListEvenWhenListIsEmpty) {
+  // Regression: decode_place_object2 never set has_filter_list from flags3 bit 0x01, so an empty filter list read as no list. Invariant: has_filter_list follows that bit alone.
+  for (const bool flagged : {true, false}) {
+    SwfBuilder builder;
+    builder.u8(0x00);
+    builder.u8(flagged ? 0x01 : 0x00);
+    builder.u16(4);
+    if (flagged) builder.u8(0);
+    const auto result = fo4::swf::read_swf(movie_of({{70, builder.body}}));
+    ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
+    EXPECT_EQ(result.file.tags[0].placement->has_filter_list, flagged);
+    EXPECT_TRUE(result.file.tags[0].placement->filters.empty());
+  }
 }
 
 TEST(SwfPlacement, RemoveObjectAndRemoveObject2DecodeDepthWithAndWithoutCharacter) {

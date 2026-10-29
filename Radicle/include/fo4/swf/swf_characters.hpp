@@ -54,4 +54,7 @@ bool build_character_model(const SwfFile& file, SwfCharacterModel& out, std::str
 const SwfCharacter* find_character(const SwfCharacterModel& model,
                                    std::uint16_t character_id) noexcept;
 
+// Requires decoded top-level tags; a repeated id returns the last grid.
+const SwfScalingGrid* find_scaling_grid(const SwfFile& file, std::uint16_t character_id) noexcept;
+
 }  // namespace fo4::swf

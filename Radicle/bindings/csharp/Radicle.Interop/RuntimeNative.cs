@@ -64,6 +64,8 @@ public unsafe struct RuntimeEntry
     public nuint RunCount;
     public RuntimeRun* Runs;
     public nuint FilterCount;
+    public ushort Ratio;
+    public byte CacheAsBitmap;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -125,6 +127,10 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_runtime_open_movie")]
     public static extern Status RuntimeOpenMovie(IntPtr runtime, byte* bytes, nuint size,
                                                  IntPtr* outMovie);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_runtime_open_movie_with_bgs")]
+    public static extern Status RuntimeOpenMovieWithBgs(IntPtr runtime, byte* bytes, nuint size,
+                                                        int bgsHost, IntPtr* outMovie);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_runtime_open_movie_from_ba2", CharSet = CharSet.Ansi)]
     public static extern Status RuntimeOpenMovieFromBa2(IntPtr runtime, IntPtr ba2,

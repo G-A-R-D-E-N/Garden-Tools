@@ -346,9 +346,11 @@ void SwfTag::clear_decoded() {
   exporter_info.reset();
   external_image.reset();
   font_texture.reset();
+  scaling_grid.reset();
   placement.reset();
   removal.reset();
   morph_shape.reset();
+  button.reset();
   jpeg.reset();
   jpeg_tables.reset();
 }

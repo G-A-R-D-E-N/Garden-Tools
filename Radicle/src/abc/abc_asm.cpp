@@ -26,6 +26,7 @@ struct Assembler {
   std::vector<std::string> group;
   std::string group_kind;
   std::vector<std::string> body_lines;
+  std::size_t body_line{0};
 
   bool fail(std::string_view message) {
     if (error.empty()) {
@@ -433,9 +434,10 @@ struct Assembler {
     if (header.size() < 2 || header[0] != "body" || !parse_u32(header[1], index)) {
       return fail("body header is malformed");
     }
-    const AbcStatus status = parse_body(file, index, body_lines, error);
+    const AbcStatus status = parse_body(file, index, body_lines, body_line, error);
     body_lines.clear();
     if (status != AbcStatus::Ok) {
+      line = body_line;
       if (error.empty()) {
         return fail("body is malformed");
       }
@@ -618,6 +620,7 @@ AbcStatus assemble_abc_text(std::string_view text, AbcFile& out, AbcTextError* e
             break;
           }
         }
+        assembler.body_line = line_number;
         assembler.body_lines.push_back(line);
         continue;
       }
@@ -693,6 +696,7 @@ AbcStatus assemble_abc_text(std::string_view text, AbcFile& out, AbcTextError* e
           if (!assembler.body_lines.empty()) {
             ok = assembler.flush_body();
           }
+          assembler.body_line = line_number;
           assembler.body_lines.push_back(line);
         } else {
           assembler.body_lines.push_back(line);

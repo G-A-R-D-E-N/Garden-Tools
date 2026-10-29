@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <initializer_list>
 #include <string>
 #include <vector>
 
@@ -13,6 +14,7 @@ namespace {
 using fo4::swf::SwfCharacter;
 using fo4::swf::SwfCharacterKind;
 using fo4::swf::SwfCharacterModel;
+using swf_test::SwfBuilder;
 using swf_character_test::TagPayload;
 using swf_character_test::every_kind_movie;
 using swf_character_test::movie_of;
@@ -31,6 +33,14 @@ SwfCharacterModel read_model(const std::vector<std::byte>& bytes, fo4::swf::SwfF
 
 const SwfCharacter* find(const SwfCharacterModel& model, std::uint16_t id) {
   return fo4::swf::find_character(model, id);
+}
+
+std::vector<std::byte> grid_bytes(std::initializer_list<std::uint8_t> values) {
+  std::vector<std::byte> out;
+  for (const auto value : values) {
+    out.push_back(static_cast<std::byte>(value));
+  }
+  return out;
 }
 
 TEST(SwfCharacters, CollectsEveryCharacterKindFromOneMovie) {
@@ -180,6 +190,65 @@ TEST(SwfCharacters, RefusesACharacterTagWithoutItsLeadingId) {
   std::string message;
   EXPECT_FALSE(fo4::swf::build_character_model(result.file, model, message));
   EXPECT_NE(message.find("character id"), std::string::npos) << message;
+}
+
+TEST(SwfCharacters, DecodesTheSplitterRectFromHandPackedBits) {
+  const auto bytes =
+      movie_of({{78, grid_bytes({0x07, 0x00, 0x58, 0x64, 0x70, 0x83, 0x21, 0x90, 0x00})}});
+  const auto result = fo4::swf::read_swf(bytes);
+  ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
+  ASSERT_TRUE(result.file.tags[0].scaling_grid.has_value());
+  EXPECT_EQ(result.file.tags[0].scaling_grid->character_id, 7);
+  EXPECT_EQ(result.file.tags[0].scaling_grid->splitter,
+            (fo4::swf::SwfRect{100, 900, 200, 800, 11}));
+  EXPECT_EQ(fo4::swf::write_swf(result.file), bytes);
+}
+
+TEST(SwfCharacters, AcceptsTrailingBytesAfterTheSplitterRect) {
+  const auto result = fo4::swf::read_swf(movie_of(
+      {{78, grid_bytes({0x07, 0x00, 0x58, 0x64, 0x70, 0x83, 0x21, 0x90, 0x00, 0xAA, 0xBB})}}));
+  ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
+  ASSERT_TRUE(result.file.tags[0].scaling_grid.has_value());
+  EXPECT_EQ(result.file.tags[0].scaling_grid->splitter,
+            (fo4::swf::SwfRect{100, 900, 200, 800, 11}));
+}
+
+TEST(SwfCharacters, RefusesAScalingGridPayloadCutInsideItsRect) {
+  const std::vector<std::vector<std::byte>> cuts{
+      grid_bytes({0x07, 0x00}),
+      grid_bytes({0x07, 0x00, 0x58, 0x64, 0x70}),
+  };
+  for (const auto& cut : cuts) {
+    const auto result = fo4::swf::read_swf(movie_of({{78, cut}}));
+    EXPECT_EQ(result.status, fo4::swf::SwfStatus::malformed_tag);
+    ASSERT_EQ(result.file.tags.size(), 2u);
+    EXPECT_FALSE(result.file.tags[0].scaling_grid.has_value());
+    EXPECT_EQ(result.file.tags[0].payload, cut);
+    EXPECT_EQ(fo4::swf::find_scaling_grid(result.file, 7), nullptr);
+  }
+}
+
+TEST(SwfCharacters, ScalingGridLookupReturnsTheLastGridForAnId) {
+  SwfBuilder first;
+  first.u16(7);
+  first.rect(0, 100, 0, 100, 9);
+  SwfBuilder other;
+  other.u16(8);
+  other.rect(0, 50, 0, 50, 7);
+  SwfBuilder second;
+  second.u16(7);
+  second.rect(10, 200, 20, 300, 11);
+  const auto result =
+      fo4::swf::read_swf(movie_of({{78, first.body}, {78, other.body}, {78, second.body}}));
+  ASSERT_TRUE(result.ok()) << fo4::swf::status_name(result.status);
+
+  const auto* seven = fo4::swf::find_scaling_grid(result.file, 7);
+  ASSERT_NE(seven, nullptr);
+  EXPECT_EQ(seven->splitter, (fo4::swf::SwfRect{10, 200, 20, 300, 11}));
+  const auto* eight = fo4::swf::find_scaling_grid(result.file, 8);
+  ASSERT_NE(eight, nullptr);
+  EXPECT_EQ(eight->splitter, (fo4::swf::SwfRect{0, 50, 0, 50, 7}));
+  EXPECT_EQ(fo4::swf::find_scaling_grid(result.file, 9), nullptr);
 }
 
 }  // namespace

@@ -14,6 +14,8 @@ inline constexpr unsigned kMaxTagDepth = 64;
 
 inline constexpr std::size_t kMaxBodyBytes = 256u * 1024u * 1024u;
 
+inline constexpr std::size_t kMaxBitmapBytes = 64u * 1024u * 1024u;
+
 inline constexpr std::size_t kMaxTags = 1u << 18;
 
 class SwfReader {
@@ -137,9 +139,14 @@ SwfStatus decode_tag_payload(const std::vector<std::byte>& payload, SwfTag& out_
 
 SwfStatus decode_placement_tag(std::span<const std::byte> data, SwfTag& out_tag);
 
+SwfStatus decode_button_tag(std::span<const std::byte> data, SwfTag& out_tag);
+
 SwfStatus decode_shape_tag(std::span<const std::byte> data, SwfTag& out_tag);
 
 SwfStatus decode_bitmap_tag(std::span<const std::byte> data, SwfTag& out_tag);
+
+bool inflate_to(std::span<const std::byte> input, std::size_t expected,
+                std::vector<std::byte>& unpacked);
 
 SwfStatus decode_morph_tag(std::span<const std::byte> data, SwfTag& out_tag);
 

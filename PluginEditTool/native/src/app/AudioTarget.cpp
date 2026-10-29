@@ -14,11 +14,6 @@
 namespace fo4ide::app {
 namespace {
 
-std::string stringArgument(const nlohmann::json& args, std::size_t index) {
-    if (!args.is_array() || index >= args.size() || !args[index].is_string()) return {};
-    return args[index].get<std::string>();
-}
-
 bool boolArgument(const nlohmann::json& args, std::size_t index) {
     return args.is_array() && index < args.size() && args[index].is_boolean() && args[index].get<bool>();
 }
@@ -52,30 +47,37 @@ AudioTarget::AudioTarget(audio::AudioService& service, platform::Services& platf
 Result<nlohmann::json> AudioTarget::invoke(std::string_view method,
                                             const nlohmann::json& args) {
     if (method == "BrowseForFile") {
-        return pathResult(platform_.pickFile({stringArgument(args, 0), stringArgument(args, 1), {}}));
+        return pathResult(platform_.pickFile({support::stringArgument(args, 0), support::stringArgument(args, 1), {}}));
     }
     if (method == "BrowseForFolder") {
-        return pathResult(platform_.pickFolder({stringArgument(args, 0), {}, {}}));
+        return pathResult(platform_.pickFolder({support::stringArgument(args, 0), {}, {}}));
     }
     if (method == "BrowseForSave") {
-        return pathResult(platform_.pickSavePath({stringArgument(args, 0), stringArgument(args, 1), {}}));
+        return pathResult(platform_.pickSavePath({support::stringArgument(args, 0), support::stringArgument(args, 1), {}}));
     }
     if (method == "ConvertToXwm") {
         const auto bitrate = intArgument(args, 2);
         return serviceText(service_.convertToXwm(
-            stringArgument(args, 0), stringArgument(args, 1), bitrate > 0 ? std::optional<int>(bitrate) : std::nullopt));
+            support::stringArgument(args, 0), support::stringArgument(args, 1),
+            bitrate > 0 ? std::optional<int>(bitrate) : std::nullopt));
     }
     if (method == "ConvertFromXwm") {
-        return serviceText(service_.convertFromXwm(stringArgument(args, 0), stringArgument(args, 1), stringArgument(args, 2)));
+        return serviceText(service_.convertFromXwm(
+            support::stringArgument(args, 0), support::stringArgument(args, 1),
+            support::stringArgument(args, 2)));
     }
     if (method == "MakeFuz") {
-        return serviceText(service_.makeFuz(stringArgument(args, 0), stringArgument(args, 1), stringArgument(args, 2), boolArgument(args, 3)));
+        return serviceText(service_.makeFuz(
+            support::stringArgument(args, 0), support::stringArgument(args, 1),
+            support::stringArgument(args, 2), boolArgument(args, 3)));
     }
     if (method == "ExtractFuz") {
-        return serviceText(service_.extractFuz(stringArgument(args, 0), stringArgument(args, 1), stringArgument(args, 2), boolArgument(args, 3)));
+        return serviceText(service_.extractFuz(
+            support::stringArgument(args, 0), support::stringArgument(args, 1),
+            support::stringArgument(args, 2), boolArgument(args, 3)));
     }
     if (method == "OpenFolder") {
-        auto opened = platform_.openFolder(stringArgument(args, 0));
+        auto opened = platform_.openFolder(support::stringArgument(args, 0));
         return nlohmann::json(opened ? std::string{} : "Error: " + opened.error().message);
     }
     if (method == "StageDroppedFile") return stageDroppedFile(args);
@@ -84,9 +86,9 @@ Result<nlohmann::json> AudioTarget::invoke(std::string_view method,
 
 Result<nlohmann::json> AudioTarget::stageDroppedFile(const nlohmann::json& args) const {
     try {
-        auto name = std::filesystem::path(stringArgument(args, 0)).filename();
+        auto name = std::filesystem::path(support::stringArgument(args, 0)).filename();
         if (name.empty()) name = "dropped.audio";
-        auto decoded = support::decodeBase64(stringArgument(args, 1));
+        auto decoded = support::decodeBase64(support::stringArgument(args, 1));
         if (!decoded) return nlohmann::json("ERR:" + decoded.error().message);
 
         const auto directory = uniqueStageDirectory();

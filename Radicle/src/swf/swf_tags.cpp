@@ -438,6 +438,9 @@ SwfStatus decode_tag_payload(const std::vector<std::byte>& payload, SwfTag& out_
     case tag::kRemoveObject:
     case tag::kRemoveObject2:
       return decode_placement_tag(data, out_tag);
+    case tag::kDefineButton:
+    case tag::kDefineButton2:
+      return decode_button_tag(data, out_tag);
     case tag::kDefineShape:
     case tag::kDefineShape2:
     case tag::kDefineShape3:
@@ -586,6 +589,17 @@ SwfStatus decode_tag_payload(const std::vector<std::byte>& payload, SwfTag& out_
       texture.texture_glyph_count = texture_glyphs;
       texture.font_count = fonts;
       out_tag.font_texture = texture;
+      return SwfStatus::ok;
+    }
+    case tag::kDefineScalingGrid: {
+      SwfReader reader(data, 0);
+      SwfScalingGrid grid;
+      std::size_t next = 0;
+      if (!reader.read_u16(grid.character_id) ||
+          !read_rect(data, reader.position(), grid.splitter, next)) {
+        return SwfStatus::malformed_tag;
+      }
+      out_tag.scaling_grid = grid;
       return SwfStatus::ok;
     }
     default:

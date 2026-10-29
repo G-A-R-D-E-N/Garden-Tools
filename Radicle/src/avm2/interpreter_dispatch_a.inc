@@ -141,6 +141,18 @@
         }
         break;
       }
+      case op::k_inclocal:
+      case op::k_declocal: {
+        const std::uint32_t index = count_operand(instruction);
+        if (index >= frame.locals.size()) {
+          return fail(InterpreterStatus::LocalOutOfRange,
+                      "local " + std::to_string(index) + " is out of range");
+        }
+        frame.locals[index] = instruction.opcode == op::k_inclocal
+                                  ? increment_value(frame.locals[index])
+                                  : decrement_value(frame.locals[index]);
+        break;
+      }
       case op::k_inclocal_i:
       case op::k_declocal_i: {
         const std::uint32_t index = count_operand(instruction);
@@ -148,21 +160,20 @@
           return fail(InterpreterStatus::LocalOutOfRange,
                       "local " + std::to_string(index) + " is out of range");
         }
-        frame.locals[index] =
-            Value::int32(to_int32(frame.locals[index]) + (instruction.opcode == op::k_inclocal_i
-                                                              ? 1
-                                                              : -1));
+        const std::uint32_t local = static_cast<std::uint32_t>(to_int32(frame.locals[index]));
+        frame.locals[index] = Value::int32(static_cast<std::int32_t>(
+            instruction.opcode == op::k_inclocal_i ? local + 1u : local - 1u));
         break;
       }
       case op::k_getglobalscope:
-        if (frame.scopes.empty()) {
+        if (frame.scopes.empty() || frame.scopes.front() == nullptr) {
           return fail(InterpreterStatus::ScopeUnderflow, "no global scope");
         }
         push_value(borrowed_object(*frame.scopes.front()));
         break;
       case op::k_getscopeobject: {
         const std::uint32_t index = count_operand(instruction);
-        if (index >= frame.scopes.size()) {
+        if (index >= frame.scopes.size() || frame.scopes[index] == nullptr) {
           return fail(InterpreterStatus::ScopeUnderflow, "scope " + std::to_string(index) +
                                                              " is out of range");
         }
@@ -183,7 +194,8 @@
                         "scope depth would exceed max_scope_depth " +
                             std::to_string(frame.body->max_scope_depth));
           }
-          frame.scopes.push_back(value.as_object().get());
+          // Must keep shared ownership: the scope must outlive the popped stack value and any closure capturing it.
+          frame.scopes.push_back(value.as_object());
         }
         break;
       }
@@ -387,6 +399,15 @@
         }
         break;
       }
+      case op::k_negate_i: {
+        Value value;
+        pop_value(value);
+        if (status == InterpreterStatus::Ok) {
+          push_value(Value::int32(static_cast<std::int32_t>(
+              0u - static_cast<std::uint32_t>(to_int32(value)))));
+        }
+        break;
+      }
       case op::k_increment:
       case op::k_decrement: {
         Value value;
@@ -575,7 +596,11 @@
       case op::k_convert_d:
       case op::k_convert_b:
       case op::k_convert_s:
-      case op::k_convert_o: {
+      case op::k_convert_o:
+      case op::k_coerce_i:
+      case op::k_coerce_u:
+      case op::k_coerce_d:
+      case op::k_coerce_b: {
         Value value;
         pop_value(value);
         if (status != InterpreterStatus::Ok) {
@@ -583,15 +608,19 @@
         }
         switch (instruction.opcode) {
           case op::k_convert_i:
+          case op::k_coerce_i:
             push_value(Value::int32(to_int32(value)));
             break;
           case op::k_convert_u:
+          case op::k_coerce_u:
             push_value(Value::uint32(to_uint32(value)));
             break;
           case op::k_convert_d:
+          case op::k_coerce_d:
             push_value(Value::number(to_number(value)));
             break;
           case op::k_convert_b:
+          case op::k_coerce_b:
             push_value(Value::boolean(to_boolean(value)));
             break;
           case op::k_convert_s:

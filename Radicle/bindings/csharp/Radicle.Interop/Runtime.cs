@@ -31,7 +31,9 @@ public sealed record RuntimeSnapshotEntry(
     double[] Matrix,
     double[] Colour,
     IReadOnlyList<RuntimeTextRun> Runs,
-    int FilterCount);
+    int FilterCount,
+    ushort Ratio,
+    bool CacheAsBitmap);
 
 public readonly record struct RuntimeSoundEvent(byte Kind, ushort SoundId, double Volume, uint Loops);
 
@@ -132,7 +134,7 @@ public sealed unsafe class RuntimeMovie : IDisposable
                     native.BlendMode, native.Visible != 0, native.Alpha,
                     Marshal.PtrToStringUTF8(native.Path) ?? string.Empty,
                     Marshal.PtrToStringUTF8(native.Name) ?? string.Empty, matrix, colour, runs,
-                    (int)native.FilterCount));
+                    (int)native.FilterCount, native.Ratio, native.CacheAsBitmap != 0));
             }
             var soundCount = (int)RadicleNative.SnapshotSoundCount(snapshot);
             var sounds = new List<RuntimeSoundEvent>(soundCount);

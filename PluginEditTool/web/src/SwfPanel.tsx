@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, RotateCcw, RotateCw, Save as SaveIcon } from 'lucide-react';
 import './SwfPanel.css';
 
 type CharacterRow = { id: number; kind: string; tagIndex: number; name: string; imported: string };
-type LabelRow = { name: string; tagIndex: number; spriteId: number; insideSprite: boolean };
+type LabelRow = { name: string; labelIndex: number; frame: number };
 type InstanceRow = {
   depth: number; character: number; name: string; x: number; y: number;
   scaleX: number; scaleY: number; rotation: number; instanceId: number;
@@ -14,19 +14,23 @@ type StateReply = { changed?: boolean; revision: number; undo: number; redo: num
 type ErrorReply = { error?: string };
 
 type PlacementRow = { tagIndex: number; depth: number; character: number | null; insideSprite: boolean };
+type AbcMethodRow = { index: number; name: string; returnType: string; hasBody: boolean };
+type AbcBlockRow = { abc: number; name: string; classes: string[]; scripts: string[]; methods: AbcMethodRow[] };
+type ActionTagRow = { tagIndex: number; code: number; insideSprite: boolean };
 
 type SwfHost = {
   Open(path: string): Promise<string>;
   Characters(): Promise<string>;
-  FrameLabels(): Promise<string>;
+  FrameLabels(timeline: number): Promise<string>;
   Frame(timeline: number, frame: number): Promise<string>;
-  RenameLabel(tagIndex: number, name: string): Promise<string>;
+  Timeline(index: number): Promise<string>;
+  RenameLabel(timeline: number, labelIndex: number, name: string): Promise<string>;
   Undo(): Promise<string>;
   Redo(): Promise<string>;
   State(): Promise<string>;
   Save(): Promise<string>;
   AddLabel(frame: number, name: string, timeline: number): Promise<string>;
-  RemoveLabel(tagIndex: number): Promise<string>;
+  RemoveLabel(timeline: number, labelIndex: number): Promise<string>;
   Placements(): Promise<string>;
   SetDepth(tagIndex: number, depth: number): Promise<string>;
   PlacementMatrix(tagIndex: number): Promise<string>;
@@ -34,6 +38,15 @@ type SwfHost = {
   InsertKeyframe(tagIndex: number, frame: number): Promise<string>;
   ReadEditText(tagIndex: number): Promise<string>;
   EditEditText(tagIndex: number, text: string, colorHex: string, x0: number, x1: number, y0: number, y1: number): Promise<string>;
+  AbcBlocks(): Promise<string>;
+  Disassemble(abc: number, methodIndex: number): Promise<string>;
+  ShapeSvg(characterId: number): Promise<string>;
+  FrameSvg(frame: number): Promise<string>;
+  BitmapPng(tagIndex: number): Promise<string>;
+  BitmapJpeg(tagIndex: number): Promise<string>;
+  InspectText(): Promise<string>;
+  ActionTags(): Promise<string>;
+  Avm1Disassemble(tagIndex: number): Promise<string>;
 };
 
 function host(): SwfHost | null {
@@ -53,7 +66,8 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
   const [instances, setInstances] = useState<InstanceRow[]>([]);
   const [timeline, setTimeline] = useState(0);
   const [frame, setFrame] = useState(0);
-  const [selectedLabel, setSelectedLabel] = useState<LabelRow | null>(null);
+  const [selectedLabel, setSelectedLabel] = useState<(LabelRow & { timeline: number }) | null>(null);
+  const [labelOwner, setLabelOwner] = useState(0);
   const [labelName, setLabelName] = useState('');
   const [state, setState] = useState<StateReply>({ revision: 0, undo: 0, redo: 0, dirty: false });
   const [error, setError] = useState('');
@@ -64,63 +78,202 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
   const [placementDepth, setPlacementDepth] = useState(0);
   const [matrix, setMatrix] = useState({ x: 0, y: 0, scaleX: 0, scaleY: 0, rotate0: 0, rotate1: 0 });
   const [editText, setEditText] = useState({ text: '', color: '', x0: 0, x1: 0, y0: 0, y1: 0 });
+  const [abcBlocks, setAbcBlocks] = useState<AbcBlockRow[]>([]);
+  const [abcError, setAbcError] = useState('');
+  const [instructions, setInstructions] = useState('');
+  const [selectedMethod, setSelectedMethod] = useState<{ key: string; label: string } | null>(null);
+  const selectedMethodKey = useRef('');
+  const labelRequest = useRef(0);
+  const [shapeSvg, setShapeSvg] = useState('');
+  const shapeRequest = useRef(0);
+  const [bitmapSrc, setBitmapSrc] = useState('');
+  const [rootFrames, setRootFrames] = useState(0);
+  const [previewFrame, setPreviewFrame] = useState(0);
+  const [frameSvg, setFrameSvg] = useState('');
+  const frameRequest = useRef(0);
+  const previewRevision = useRef<number | undefined>(undefined);
+  const [inspectText, setInspectText] = useState('');
+  const [inspectError, setInspectError] = useState('');
+  const [actionTags, setActionTags] = useState<ActionTagRow[]>([]);
+  const [avm1, setAvm1] = useState<{ tagIndex: number; text: string } | null>(null);
+  const [avm1Error, setAvm1Error] = useState('');
+  const avm1Request = useRef(0);
+
+  const loadCharacters = useCallback(async () => {
+    const bridge = host();
+    if (!bridge) return;
+    const chars = parse<{ characters: CharacterRow[] }>(await bridge.Characters());
+    setCharacters(chars.characters ?? []);
+  }, []);
+
+  // Constraint: Frame takes the timeline index while the label calls take the DefineSprite character id that Timeline reports.
+  const loadLabels = useCallback(async (nextTimeline: number) => {
+    const bridge = host();
+    if (!bridge) return;
+    const request = ++labelRequest.current;
+    const owner = parse<{ characterId: number }>(await bridge.Timeline(nextTimeline));
+    if (owner.error) { setError(owner.error); return; }
+    const reply = parse<{ labels: LabelRow[] }>(await bridge.FrameLabels(owner.characterId));
+    if (request !== labelRequest.current) return;
+    const rows = reply.labels ?? [];
+    setLabelOwner(owner.characterId);
+    setLabels(rows);
+    setSelectedLabel(current => {
+      if (!current || current.timeline !== nextTimeline) return null;
+      const row = rows.find(item => item.labelIndex === current.labelIndex);
+      return row ? { ...row, timeline: nextTimeline } : null;
+    });
+    if (reply.error) setError(reply.error);
+  }, []);
+
+  const showFrame = useCallback(async (requested: number) => {
+    const bridge = host();
+    if (!bridge) return;
+    const next = Math.min(Math.max(0, Math.trunc(requested)), Math.max(0, rootFrames - 1));
+    const request = ++frameRequest.current;
+    setPreviewFrame(next);
+    setFrameSvg('');
+    const reply = parse<{ svg?: string; error?: string }>(await bridge.FrameSvg(next));
+    if (request !== frameRequest.current) return;
+    if (reply.error) { setError(reply.error); return; }
+    setError('');
+    setFrameSvg(reply.svg ?? '');
+  }, [rootFrames]);
+
+  // Requires a document-change handler: showFrame sets state, which the lint forbids inside an effect.
+  const redrawPreview = useCallback(async () => {
+    if (rootFrames > 0) await showFrame(previewFrame);
+  }, [rootFrames, previewFrame, showFrame]);
+
+  // Invariant: every edit, undo and redo bumps revision, so a changed revision alone triggers the preview redraw.
+  const applyRevision = useCallback(async (revision: number | undefined) => {
+    if (previewRevision.current === revision) return;
+    previewRevision.current = revision;
+    await redrawPreview();
+  }, [redrawPreview]);
 
   const refresh = useCallback(async () => {
     const bridge = host();
     if (!bridge) return;
     const nextState = parse<StateReply>(await bridge.State());
     setState(nextState);
-  }, []);
+    await applyRevision(nextState.revision);
+    setSelectedLabel(null);
+    await loadCharacters();
+    await loadLabels(timeline);
+  }, [timeline, loadCharacters, loadLabels, applyRevision]);
 
   const open = useCallback(async () => {
     const bridge = host();
     if (!bridge || !path.trim()) return;
     setBusy(true);
     setError('');
+    setAbcBlocks([]);
+    setAbcError('');
+    setInstructions('');
+    setSelectedMethod(null);
+    selectedMethodKey.current = '';
+    shapeRequest.current += 1;
+    setShapeSvg('');
+    setBitmapSrc('');
+    frameRequest.current += 1;
+    setFrameSvg('');
+    setPreviewFrame(0);
+    avm1Request.current += 1;
+    setAvm1(null);
+    setAvm1Error('');
+    setActionTags([]);
+    setInspectText('');
+    setInspectError('');
     try {
       const opened = parse<StateReply>(await bridge.Open(path.trim()));
       if (opened.error) { setError(opened.error); return; }
       setState(opened);
-      const chars = parse<{ characters: CharacterRow[] }>(await bridge.Characters());
-      setCharacters(chars.characters ?? []);
-      const labelReply = parse<{ labels: LabelRow[] }>(await bridge.FrameLabels());
-      setLabels(labelReply.labels ?? []);
+      previewRevision.current = opened.revision;
+      setSelectedLabel(null);
+      await loadCharacters();
+      await loadLabels(timeline);
+      const root = parse<{ frameCount?: number }>(await bridge.Timeline(0));
+      if (root.error) setError(root.error);
+      const rootCount = root.frameCount ?? 0;
+      setRootFrames(rootCount);
       const rows = parse<{ rows: InstanceRow[] }>(await bridge.Frame(timeline, frame));
       setInstances(rows.rows ?? []);
       const placementReply = parse<{ placements: PlacementRow[] }>(await bridge.Placements());
       setPlacements(placementReply.placements ?? []);
+      const abcReply = parse<{ blocks: AbcBlockRow[] }>(await bridge.AbcBlocks());
+      setAbcError(abcReply.error ?? '');
+      setAbcBlocks(abcReply.blocks ?? []);
+      const inspect = parse<{ text?: string }>(await bridge.InspectText());
+      setInspectText(inspect.text ?? '');
+      setInspectError(inspect.error ?? '');
+      const actionReply = parse<{ tags?: ActionTagRow[] }>(await bridge.ActionTags());
+      setActionTags(actionReply.tags ?? []);
+      if (actionReply.error) setInspectError(actionReply.error);
+      if (rootCount > 0) await showFrame(0);
     } finally {
       setBusy(false);
     }
-  }, [path, timeline, frame]);
+  }, [path, timeline, frame, loadCharacters, loadLabels, showFrame]);
 
   const pickFrame = useCallback(async (nextTimeline: number, nextFrame: number) => {
     const bridge = host();
     if (!bridge) return;
     setTimeline(nextTimeline);
     setFrame(nextFrame);
+    if (nextTimeline !== timeline) await loadLabels(nextTimeline);
     const rows = parse<{ rows: InstanceRow[] }>(await bridge.Frame(nextTimeline, nextFrame));
     if (rows.error) { setError(rows.error); return; }
     setInstances(rows.rows ?? []);
-  }, []);
+  }, [timeline, loadLabels]);
 
   const renameLabel = useCallback(async () => {
     const bridge = host();
     if (!bridge || !selectedLabel) return;
-    const reply = parse<StateReply>(await bridge.RenameLabel(selectedLabel.tagIndex, labelName));
+    const reply = parse<StateReply>(await bridge.RenameLabel(labelOwner, selectedLabel.labelIndex, labelName));
     if (reply.error) { setError(reply.error); return; }
     setError('');
     setState(reply);
-    const labelsReply = parse<{ labels: LabelRow[] }>(await bridge.FrameLabels());
-    setLabels(labelsReply.labels ?? []);
-  }, [selectedLabel, labelName]);
+    await applyRevision(reply.revision);
+    await loadCharacters();
+    await loadLabels(timeline);
+  }, [timeline, labelOwner, selectedLabel, labelName, loadCharacters, loadLabels, applyRevision]);
 
   const pickCharacter = useCallback(async (character: CharacterRow) => {
-    if (character.kind !== 'EditText') return;
     const bridge = host();
     if (!bridge) return;
+    const request = ++shapeRequest.current;
+    setShapeSvg('');
+    setBitmapSrc('');
+    if (character.kind === 'Shape') {
+      const shape = parse<{ svg?: string; error?: string }>(await bridge.ShapeSvg(character.id));
+      if (request !== shapeRequest.current) return;
+      if (shape.error) { setError(shape.error); return; }
+      setError('');
+      setShapeSvg(shape.svg ?? '');
+      return;
+    }
+    if (character.kind === 'Bitmap') {
+      const bitmap = parse<{ png?: string; error?: string; status?: string }>(await bridge.BitmapPng(character.tagIndex));
+      if (request !== shapeRequest.current) return;
+      if (bitmap.status === 'NotFound') {
+        // Invariant: BitmapPng refuses a JPEG-defined bitmap as NotFound, and only that status falls back to BitmapJpeg.
+        const jpeg = parse<{ jpeg?: string; error?: string }>(await bridge.BitmapJpeg(character.tagIndex));
+        if (request !== shapeRequest.current) return;
+        if (jpeg.error) { setError(jpeg.error); return; }
+        setError('');
+        setBitmapSrc(`data:image/jpeg;base64,${jpeg.jpeg ?? ''}`);
+        return;
+      }
+      if (bitmap.error) { setError(bitmap.error); return; }
+      setError('');
+      setBitmapSrc(`data:image/png;base64,${bitmap.png ?? ''}`);
+      return;
+    }
+    if (character.kind !== 'EditText') return;
     const reply = parse<{ id: number; text: string; color: string; x0: number; x1: number; y0: number; y1: number; error?: string }>(
       await bridge.ReadEditText(character.tagIndex));
+    if (request !== shapeRequest.current) return;
     if (reply.error) { setError(reply.error); return; }
     setError('');
     setEditTag(character.tagIndex);
@@ -135,17 +288,20 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     if (reply.error) { setError(reply.error); return; }
     setError('');
     setState(reply);
-  }, [editTag, editText]);
+    await applyRevision(reply.revision);
+  }, [editTag, editText, applyRevision]);
   const addLabel = useCallback(async () => {
     const bridge = host();
     if (!bridge || !labelName.trim()) return;
-    const reply = parse<StateReply>(await bridge.AddLabel(frame, labelName.trim(), timeline));
+    const reply = parse<StateReply>(await bridge.AddLabel(frame, labelName.trim(), labelOwner));
     if (reply.error) { setError(reply.error); return; }
     setError('');
     setState(reply);
-    const labelsReply = parse<{ labels: LabelRow[] }>(await bridge.FrameLabels());
-    setLabels(labelsReply.labels ?? []);
-  }, [frame, labelName, timeline]);
+    await applyRevision(reply.revision);
+    setSelectedLabel(null);
+    await loadCharacters();
+    await loadLabels(timeline);
+  }, [frame, labelName, labelOwner, timeline, loadCharacters, loadLabels, applyRevision]);
   const pickPlacement = useCallback(async (item: PlacementRow) => {
     const bridge = host();
     if (!bridge) return;
@@ -165,7 +321,8 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     if (reply.error) { setError(reply.error); return; }
     setError('');
     setState(reply);
-  }, [placementTag, matrix]);
+    await applyRevision(reply.revision);
+  }, [placementTag, matrix, applyRevision]);
   const insertKeyframe = useCallback(async () => {
     const bridge = host();
     if (!bridge || placementTag === null) return;
@@ -173,7 +330,8 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     if (reply.error) { setError(reply.error); return; }
     setError('');
     setState(reply);
-  }, [placementTag, frame]);
+    await applyRevision(reply.revision);
+  }, [placementTag, frame, applyRevision]);
   const pickInstance = useCallback((row: InstanceRow) => {
     const match = placements.find(item => item.depth === row.depth &&
       (item.character === row.character || row.character === 0));
@@ -186,20 +344,51 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     if (reply.error) { setError(reply.error); return; }
     setError('');
     setState(reply);
+    await applyRevision(reply.revision);
     const placementReply = parse<{ placements: PlacementRow[] }>(await bridge.Placements());
     setPlacements(placementReply.placements ?? []);
-  }, [placementTag, placementDepth]);
+  }, [placementTag, placementDepth, applyRevision]);
   const removeLabel = useCallback(async () => {
     const bridge = host();
     if (!bridge || !selectedLabel) return;
-    const reply = parse<StateReply>(await bridge.RemoveLabel(selectedLabel.tagIndex));
+    const reply = parse<StateReply>(await bridge.RemoveLabel(labelOwner, selectedLabel.labelIndex));
     if (reply.error) { setError(reply.error); return; }
     setError('');
     setState(reply);
+    await applyRevision(reply.revision);
     setSelectedLabel(null);
-    const labelsReply = parse<{ labels: LabelRow[] }>(await bridge.FrameLabels());
-    setLabels(labelsReply.labels ?? []);
-  }, [selectedLabel]);
+    await loadCharacters();
+    await loadLabels(timeline);
+  }, [timeline, labelOwner, selectedLabel, loadCharacters, loadLabels, applyRevision]);
+  const pickMethod = useCallback(async (block: AbcBlockRow, method: AbcMethodRow) => {
+    const bridge = host();
+    if (!bridge) return;
+    const key = `${block.abc}:${method.index}`;
+    selectedMethodKey.current = key;
+    setSelectedMethod({ key, label: method.name || `method ${method.index}` });
+    setInstructions('');
+    try {
+      const reply = parse<{ text: string }>(await bridge.Disassemble(block.abc, method.index));
+      if (selectedMethodKey.current !== key) return;
+      if (reply.error) { setAbcError(reply.error); setInstructions(''); return; }
+      setAbcError('');
+      setInstructions(reply.text);
+    } catch (caught) {
+      if (selectedMethodKey.current !== key) return;
+      setAbcError(caught instanceof Error ? caught.message : String(caught));
+    }
+  }, []);
+  const pickActionTag = useCallback(async (item: ActionTagRow) => {
+    const bridge = host();
+    if (!bridge) return;
+    const request = ++avm1Request.current;
+    setAvm1({ tagIndex: item.tagIndex, text: '' });
+    setAvm1Error('');
+    const reply = parse<{ text?: string }>(await bridge.Avm1Disassemble(item.tagIndex));
+    if (request !== avm1Request.current) return;
+    if (reply.error) { setAvm1Error(reply.error); return; }
+    setAvm1({ tagIndex: item.tagIndex, text: reply.text ?? '' });
+  }, []);
   const command = useCallback(async (action: 'undo' | 'redo' | 'save') => {
     const bridge = host();
     if (!bridge) return;
@@ -219,6 +408,7 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [command]);
+
 
   return (
     <div className="swf-panel">
@@ -245,12 +435,12 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
               </li>
             ))}
           </ul>
-          <h4>Timelines</h4>
+          <h4>Frame labels</h4>
           <ul>
             {labels.map(label => (
-              <li key={`${label.spriteId}-${label.tagIndex}`}>
-                <button type="button" onClick={() => { setSelectedLabel(label); setLabelName(label.name); }}>
-                  {label.insideSprite ? `sprite ${label.spriteId}` : 'root'} · {label.name}
+              <li key={label.labelIndex}>
+                <button type="button" onClick={() => { setSelectedLabel({ ...label, timeline }); setLabelName(label.name); }}>
+                  {labelOwner === 0 ? 'root' : `sprite ${labelOwner}`} · {label.name}
                 </button>
               </li>
             ))}
@@ -328,7 +518,82 @@ export default function SwfPanel({ onClose }: { onClose: () => void }) {
               <button type="button" onClick={() => void applyTransform()}>Apply transform</button>
             </div>
           )}          <p>Revision {state.revision} · undo {state.undo} · redo {state.redo}</p>
-          <p>Shape rendering is not part of this round; the table above is the display list.</p>
+          {shapeSvg && <img className="swf-shape" alt="Shape preview" src={`data:image/svg+xml;utf8,${encodeURIComponent(shapeSvg)}`} />}
+          {bitmapSrc && <img className="swf-bitmap" alt="Bitmap preview" src={bitmapSrc} />}
+          <section className="swf-frame" aria-label="Frame preview">
+            <h4>Frame preview</h4>
+            <button type="button" onClick={() => void showFrame(previewFrame - 1)} disabled={previewFrame <= 0}>Prev</button>
+            <input
+              type="number"
+              min={0}
+              max={Math.max(0, rootFrames - 1)}
+              aria-label="Preview frame"
+              value={previewFrame}
+              onChange={event => {
+                const next = Number(event.target.value);
+                if (event.target.value !== '' && Number.isFinite(next)) void showFrame(next);
+              }}
+            />
+            <button type="button" onClick={() => void showFrame(previewFrame + 1)} disabled={previewFrame >= rootFrames - 1}>Next</button>
+            {frameSvg && <img className="swf-frame-image" alt="Frame preview" src={`data:image/svg+xml;utf8,${encodeURIComponent(frameSvg)}`} />}
+          </section>
+          <section className="swf-inspect" aria-label="Inspect">
+            <h4>Inspect</h4>
+            {inspectError && <div className="swf-error" role="alert"><AlertTriangle size={14} /> {inspectError}</div>}
+            <pre aria-label="inspect text">{inspectText}</pre>
+            <h5>AVM1 actions</h5>
+            {!inspectError && actionTags.length === 0 && <p>No DoAction or DoInitAction tags in this SWF.</p>}
+            <ul>
+              {actionTags.map(item => (
+                <li key={item.tagIndex}>
+                  <button
+                    type="button"
+                    aria-pressed={avm1?.tagIndex === item.tagIndex}
+                    onClick={() => void pickActionTag(item)}
+                  >
+                    {item.code === 59 ? 'DoInitAction' : 'DoAction'} @{item.tagIndex}{item.insideSprite ? ' in sprite' : ''}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {avm1Error && <div className="swf-error" role="alert"><AlertTriangle size={14} /> {avm1Error}</div>}
+            {avm1 && (
+              <>
+                <h5>Tag {avm1.tagIndex}</h5>
+                <pre aria-label="avm1 disassembly">{avm1.text}</pre>
+              </>
+            )}
+          </section>
+          <section className="swf-abc" aria-label="ABC scripts">
+            <h4>Scripts (ABC)</h4>
+            {abcError && <div className="swf-error" role="alert"><AlertTriangle size={14} /> {abcError}</div>}
+            {!abcError && abcBlocks.length === 0 && <p>No ABC scripts in this SWF.</p>}
+            <ul>
+              {abcBlocks.map(block => (
+                <li key={block.abc}>
+                  <strong>{block.name || `ABC block ${block.abc}`}</strong>
+                  <ul>
+                    {block.classes.map((name, index) => <li key={`class-${index}`}>class {name}</li>)}
+                    {block.scripts.map((name, index) => <li key={`script-${index}`}>script {name}</li>)}
+                    {block.methods.map(method => (
+                      <li key={method.index}>
+                        <button
+                          type="button"
+                          disabled={!method.hasBody}
+                          aria-pressed={selectedMethod?.key === `${block.abc}:${method.index}`}
+                          onClick={() => void pickMethod(block, method)}
+                        >
+                          {method.name || `method ${method.index}`} : {method.returnType}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ul>
+            {selectedMethod && <h5>{selectedMethod.label}</h5>}
+            <pre aria-label="instructions">{instructions}</pre>
+          </section>
         </aside>
       </div>
     </div>
