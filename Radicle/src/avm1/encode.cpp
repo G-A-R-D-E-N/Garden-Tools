@@ -276,7 +276,7 @@ std::vector<std::byte> encode_actions(const Avm1Stream& stream) {
 
 std::vector<std::byte> encode_actions_checked(const Avm1Stream& stream, Avm1Status& status) {
   Encoding enc = layout(stream);
-  status = enc.status;
+  status = stream.status != Avm1Status::Ok ? stream.status : enc.status;
   if (status != Avm1Status::Ok) {
     return {};
   }
