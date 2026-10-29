@@ -1,5 +1,6 @@
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -36,6 +37,11 @@ std::filesystem::path buildPex(const std::filesystem::path& sourceFile,
     const auto result = fo4ide::papyrus::AnalysisService::compile(sourceFile.string(), &out);
     REQUIRE(result.find("RESULT: 1 succeeded") != std::string::npos);
     return outDir / "Greeter.pex";
+}
+
+std::string readBytes(const std::filesystem::path& path) {
+    std::ifstream stream(path, std::ios::binary);
+    return std::string((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
 }
 
 }
@@ -496,4 +502,72 @@ TEST_CASE("PapyrusTarget StageDroppedFile mirrors the NIF staging contract") {
     CHECK(contents == "Scriptname X.");
     std::error_code ec;
     std::filesystem::remove_all(path.parent_path(), ec);
+}
+
+TEST_CASE("PapyrusTarget analysis RPCs match the PET oracle on real sources") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    FakeRunner runner;
+    FakePlatform platform;
+    fo4ide::settings::Settings settings;
+    settings.papyrusBaseImports = fo4ide::graph::test::baseStubs();
+    PapyrusTargetFixture fixture(runner, platform, settings, root / "host");
+    auto& target = fixture.target;
+    const auto imports = fixture.locator.papyrusBaseImports();
+
+    const auto event = fo4ide::graph::test::graphScripts() / "FixtureEventSource.psc";
+    const auto actor = fo4ide::graph::test::baseStubs() / "Actor.psc";
+    const auto bad = root / "Bad.psc";
+    touch(bad, "Scriptname Bad\nFunction Broken(\nEndFunction\n");
+
+    SECTION("Check") {
+        for (const auto& file : {event, actor, bad}) {
+            const auto path = file.string();
+            const auto oracle =
+                fo4ide::papyrus::AnalysisService::check(path, true, true, nullptr, imports);
+            auto result = target.invoke("Check", nlohmann::json::array({path, true, ""}));
+            REQUIRE(result.has_value());
+            CHECK(result->get<std::string>() == oracle);
+        }
+    }
+
+    SECTION("Analyze") {
+        for (const auto& file : {event, actor, bad}) {
+            const auto path = file.string();
+            const auto text = readBytes(file);
+            const auto oracle = fo4ide::papyrus::AnalysisService::analyzeJson(text, &path);
+            auto result = target.invoke("Analyze", nlohmann::json::array({text, path}));
+            REQUIRE(result.has_value());
+            CHECK(result->get<std::string>() == oracle);
+        }
+    }
+
+    SECTION("SymbolAt") {
+        const auto path = event.string();
+        const auto text = readBytes(event);
+        const auto offset = static_cast<int>(text.find("RaiseIt"));
+        const auto oracle =
+            fo4ide::papyrus::AnalysisService::symbolAtJson(text, &path, offset, nullptr, imports);
+        auto result = target.invoke("SymbolAt", nlohmann::json::array({text, path, offset, ""}));
+        REQUIRE(result.has_value());
+        CHECK(result->get<std::string>() == oracle);
+    }
+
+    SECTION("Compile") {
+        const auto path = event.string();
+        const auto out = (root / "compiled").string();
+        const auto pex = std::filesystem::path(out) / "FixtureEventSource.pex";
+        const auto oracle =
+            fo4ide::papyrus::AnalysisService::compile(path, &out, nullptr, false, true, nullptr, imports);
+        REQUIRE(oracle.find("RESULT: 1 succeeded") != std::string::npos);
+        const auto oracleBytes = readBytes(pex);
+        REQUIRE(!oracleBytes.empty());
+        std::filesystem::remove(pex);
+
+        auto result = target.invoke(
+            "Compile", nlohmann::json::array({path, out, "", "", false, false, false, "", "builtin"}));
+        REQUIRE(result.has_value());
+        CHECK(result->get<std::string>() == oracle);
+        CHECK(readBytes(pex) == oracleBytes);
+    }
 }
