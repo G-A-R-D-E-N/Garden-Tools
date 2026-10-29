@@ -51,6 +51,7 @@ struct UnclaimedLinkPayload {
 struct FormLinkCollection {
   std::vector<FormLinkHit> links;
   std::size_t records_with_incomplete_vmad{0};
+  std::vector<FormKey> unsupported_vmad_records;
   std::vector<UnclaimedLinkPayload> unclaimed_link_payloads;
 };
 

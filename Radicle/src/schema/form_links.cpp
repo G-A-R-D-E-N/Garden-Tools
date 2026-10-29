@@ -641,16 +641,19 @@ FormLinkCollection collect_form_links_detailed(const Plugin& plugin) {
   FormLinkCollection result;
   auto& hits = result.links;
   bool current_record_incomplete = false;
+  bool current_record_unsupported = false;
   const auto context = plugin_form_id_context(plugin);
   const auto type_lookup = plugin_type_lookup(plugin);
   visit_records(plugin, [&](const Record& record) {
     current_record_incomplete = false;
+    current_record_unsupported = false;
     std::map<std::uint32_t, std::size_t> ordinals;
     const auto schema_offsets = schema::schema_formlink_offsets(record);
     for (const auto& sub : record.subrecords) {
-      if (sub.signature == sig_vmad &&
-          !vmad_coverage(sub.data, record.header.signature).complete()) {
-        current_record_incomplete = true;
+      if (sub.signature == sig_vmad) {
+        const auto coverage = vmad_coverage(sub.data, record.header.signature);
+        if (!coverage.complete()) current_record_incomplete = true;
+        if (coverage.unsupported) current_record_unsupported = true;
       }
       const auto ordinal = ordinals[sub.signature.packed()]++;
       const bool claimed = visit_formlink_offsets(
@@ -680,6 +683,9 @@ FormLinkCollection collect_form_links_detailed(const Plugin& plugin) {
     }
     if (current_record_incomplete) {
       ++result.records_with_incomplete_vmad;
+    }
+    if (current_record_unsupported) {
+      result.unsupported_vmad_records.push_back(record.form_key);
     }
   });
   return result;

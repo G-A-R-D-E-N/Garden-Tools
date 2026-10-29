@@ -1,3 +1,5 @@
+#include "fo4/plugin/reader.hpp"
+#include "fo4/plugin/subrecord_authoring.hpp"
 #include "fo4/schema/preflight.hpp"
 #include "fo4/schema/record_constraints.hpp"
 #include "fo4/schema/scalar.hpp"
@@ -6,6 +8,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -100,6 +103,31 @@ bool has_issue(const std::vector<fo4::schema::PreflightIssue>& issues,
     if (issue.code == code) return true;
   }
   return false;
+}
+
+fo4::Subrecord sized_subrecord(std::string_view signature, std::size_t size, std::uint8_t fill) {
+  fo4::Subrecord subrecord;
+  subrecord.signature = fo4::Signature::from_string(signature);
+  subrecord.data.assign(size, std::byte{fill});
+  return subrecord;
+}
+
+fo4::Subrecord leveled_entry(std::uint32_t target) {
+  fo4::Subrecord subrecord;
+  subrecord.signature = fo4::Signature::from_string("LVLO");
+  subrecord.data.assign(12, std::byte{0});
+  subrecord.data[0] = std::byte{1};
+  std::memcpy(subrecord.data.data() + 4, &target, sizeof(target));
+  subrecord.data[8] = std::byte{1};
+  return subrecord;
+}
+
+std::vector<std::string> record_order(const fo4::Plugin& plugin, const fo4::FormKey& key) {
+  const auto* record = fo4::find_record(plugin, key);
+  if (record == nullptr) return {};
+  std::vector<std::string> out;
+  for (const auto& subrecord : record->subrecords) out.push_back(subrecord.signature.to_string());
+  return out;
 }
 
 }
@@ -416,7 +444,7 @@ TEST(AuthoringPreflight, VisibleDistantChildrenAcceptReferencesOnly) {
 TEST(AuthoringPreflight, GeneratedLvspCreationShapePassesWithoutOptionalFields) {
   auto record = authored_record("LVSP", 0x800, {"OBND", "LVLD", "LVLM", "LVLF", "LLCT"});
   record.subrecords.front().data.resize(12);
-  for (std::size_t i = 1; i <= 3; ++i) record.subrecords[i].data.resize(1);
+  for (std::size_t i = 1; i <= 4; ++i) record.subrecords[i].data.resize(1);
   auto plugin = plugin_with_top_record(record);
   const auto key = fo4::FormKey::parse("000800:Patch.esp");
   EXPECT_TRUE(fo4::schema::preflight_authoring_record(plugin, key).empty());
@@ -425,6 +453,58 @@ TEST(AuthoringPreflight, GeneratedLvspCreationShapePassesWithoutOptionalFields) 
       fo4::schema::record_authoring_constraint(fo4::Signature::from_string("LVSP"));
   ASSERT_TRUE(constraint.has_value());
   EXPECT_EQ(fo4::schema::authoring_subrecords(*constraint).size(), 7u);
+}
+
+TEST(AuthoringPreflight, PreExistingCountMismatchToleratesUnrelatedAdds) {
+  auto clean = authored_record("LVLI", 0x800, {});
+  clean.subrecords.push_back(sized_subrecord("OBND", 12, 0));
+  clean.subrecords.push_back(sized_subrecord("LVLD", 1, 0));
+  clean.subrecords.push_back(sized_subrecord("LVLF", 1, 0));
+  clean.subrecords.push_back(sized_subrecord("LLCT", 1, 1));
+  clean.subrecords.push_back(leveled_entry(0x800));
+  auto clean_plugin = plugin_with_top_record(std::move(clean));
+  const auto clean_key = fo4::FormKey::parse("000800:Patch.esp");
+  EXPECT_FALSE(has_issue(fo4::schema::preflight_record(*fo4::find_record(clean_plugin, clean_key)),
+                         "leveled_list_count_mismatch"));
+  EXPECT_EQ(fo4::add_record_subrecord(clean_plugin, clean_key, fo4::Signature::from_string("LVLM")),
+            fo4::SubrecordAddStatus::added);
+  // Requires: coupled counters stay non-editable, so introducing a duplicate LLCT is refused.
+  EXPECT_EQ(fo4::add_record_subrecord(clean_plugin, clean_key, fo4::Signature::from_string("LLCT")),
+            fo4::SubrecordAddStatus::not_authorable);
+  auto record = authored_record("LVLI", 0x801, {});
+  record.subrecords.push_back(sized_subrecord("OBND", 12, 0));
+  record.subrecords.push_back(sized_subrecord("LVLD", 1, 0));
+  record.subrecords.push_back(sized_subrecord("LVLF", 1, 0));
+  record.subrecords.push_back(sized_subrecord("LLCT", 1, 2));
+  record.subrecords.push_back(leveled_entry(0x800));
+  auto plugin = plugin_with_top_record(std::move(record));
+  const auto key = fo4::FormKey::parse("000801:Patch.esp");
+  EXPECT_TRUE(has_issue(fo4::schema::preflight_record(*fo4::find_record(plugin, key)),
+                        "leveled_list_count_mismatch"));
+  EXPECT_EQ(fo4::add_record_subrecord(plugin, key, fo4::Signature::from_string("LVLM")),
+            fo4::SubrecordAddStatus::added);
+  EXPECT_EQ(record_order(plugin, key),
+            (std::vector<std::string>{"OBND", "LVLD", "LVLM", "LVLF", "LLCT", "LVLO"}));
+  EXPECT_TRUE(has_issue(fo4::schema::preflight_record(*fo4::find_record(plugin, key)),
+                        "leveled_list_count_mismatch"));
+  EXPECT_EQ(fo4::add_record_subrecord(plugin, key, fo4::Signature::from_string("LLCT")),
+            fo4::SubrecordAddStatus::not_authorable);
+  auto lvsp = authored_record("LVSP", 0x802, {});
+  lvsp.subrecords.push_back(sized_subrecord("OBND", 12, 0));
+  lvsp.subrecords.push_back(sized_subrecord("LVLD", 1, 0));
+  lvsp.subrecords.push_back(sized_subrecord("LVLM", 1, 0));
+  lvsp.subrecords.push_back(sized_subrecord("LVLF", 1, 0));
+  lvsp.subrecords.push_back(sized_subrecord("LLCT", 1, 2));
+  lvsp.subrecords.push_back(leveled_entry(0x800));
+  auto lvsp_plugin = plugin_with_top_record(std::move(lvsp));
+  const auto lvsp_key = fo4::FormKey::parse("000802:Patch.esp");
+  EXPECT_TRUE(has_issue(fo4::schema::preflight_record(*fo4::find_record(lvsp_plugin, lvsp_key)),
+                        "leveled_list_count_mismatch"));
+  // Requires: LVSP LLCT keeps its minimum-1 creation default, so the add stays already_present.
+  EXPECT_EQ(fo4::add_record_subrecord(lvsp_plugin, lvsp_key, fo4::Signature::from_string("LLCT")),
+            fo4::SubrecordAddStatus::already_present);
+  EXPECT_TRUE(has_issue(fo4::schema::preflight_record(*fo4::find_record(lvsp_plugin, lvsp_key)),
+                        "leveled_list_count_mismatch"));
 }
 
 TEST(AuthoringPreflight, PairCountsWorsenOnlyWhenAnEditMovesThemApart) {

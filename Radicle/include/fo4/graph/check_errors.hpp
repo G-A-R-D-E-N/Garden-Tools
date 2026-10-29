@@ -28,6 +28,8 @@ enum class CheckCode {
   internal_form_id_mismatch,
   invalid_condition,
   injected_record,
+  unsupported_vmad_property,
+  results_truncated,
 };
 
 enum class CheckSeverity {
@@ -52,6 +54,10 @@ struct CheckOptions {
   std::size_t limit{0};
 };
 
+struct CheckRunSummary {
+  bool truncated{false};
+};
+
 std::string_view check_code_name(CheckCode code) noexcept;
 std::string_view check_severity_name(CheckSeverity severity) noexcept;
 
@@ -59,6 +65,7 @@ std::vector<std::vector<FormKey>> find_leveled_list_cycles(
     std::span<const Plugin* const> load_order);
 
 std::vector<CheckFinding> check_load_order(std::span<const Plugin* const> load_order,
-                                           const CheckOptions& options = {});
+                                           const CheckOptions& options = {},
+                                           CheckRunSummary* summary = nullptr);
 
 }  // namespace fo4
