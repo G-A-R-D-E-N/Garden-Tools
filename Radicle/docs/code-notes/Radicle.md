@@ -9312,6 +9312,25 @@ Slot 2 of the Try is past its body_count of 2, since flags `01` give a try body 
 
 `Radicle/src/avm1/edit.cpp:insert_action_into_body` is called on NextFrame at container 2. NextFrame has no body, so its body_count is 0 and every slot is out of range. Index 3 is the position the range check would accept without the guard: body_start is 3 and the count is 0. Expected false and no change. Detects a missing container check that writes into the hidden `body_records` of a plain record.
 
+## Radicle/src/papyrus/resolver.cpp:Resolver::resolve
+
+A cyclic or self-referencing `extends` is reported as `InheritanceCycle` (PAP0021), anchored at `Script::extendsSpan`. `Resolver::resolve` checks the last entry of the chain from `ScriptIndex::baseChain`: if that script's `extends` still resolves, the walk stopped only because the parent name is already in the chain, so the cycle is real. The message spells the path from the script back to the repeated name (`A -> B -> A`, or `A -> B -> C -> B` when the script only reaches a cycle further up). The diagnostic is emitted from `Resolver::resolve` and not from the lookup helpers, so lookups that walk the cyclic chain do not repeat it. The base chain stays incomplete, so `TypeChecker::check` is skipped as before. Detects a cycle that is silently accepted, or one reported once per name lookup.
+
+## Radicle/src/papyrus/script_index.cpp:ScriptIndex::baseChain
+
+Every parent walk terminates. `ScriptIndex::baseChain` records each written `extends` key in a `seen` set and stops at the first repeat, so the walk is bounded by the number of distinct names. It was already cycle-safe and is unchanged; `Resolver::resolve` derives the cycle from its result instead of walking the chain a second time.
+
+## Radicle/src/graph/graph_lifter.cpp:GraphLifter::declaringScriptOf
+
+This parent walk has its own hop limit (`guard`, 64), so a cyclic `extends` cannot hang the lift. It is unchanged. The cycle itself is reported by `Resolver::resolve`.
+
+## Radicle/src/papyrus/type_checker.cpp:TypeChecker::comparable
+
+`TypeChecker::checkExpression` passes every comparison operator (`==`, `!=`, `<`, `>`, `<=`, `>=`) to `TypeChecker::checkComparable`, which reports a TypeMismatch only when `TypeChecker::comparable` returns false. Refused: an object against Int or Float, and two object types whose complete base chains are unrelated. Accepted: an object against Bool in either order (vanilla FollowersScript.psc does `Actor == false`), an object against String, a String against Int, Float or Bool, any pair of Bool, Int and Float (Int and Float promote; Bool with a number is accepted because Papyrus conditions treat a bool as an int; not verified against the Creation Kit), two Strings, None against anything (the Creation Kit's None rules were not checked, so None is not refused), any Var, Array, Struct or Error operand, and two objects when either side's ancestry is not fully on disk or one inherits the other. Detects a rule that refuses a legal comparison such as `Form == Actor`, `Actor == false` or `Actor == None`, or one that lets `actor == 0` through.
+
+## Radicle/include/fo4/papyrus/diagnostic.hpp:DiagnosticCode
+
+`DiagnosticCode::InheritanceCycle` maps to PAP0021, the first unused code after PAP0020 in the declaration range. The C# mirror `PluginEditTool/FO4RecordEditor.Core/Services/Papyrus/PapyrusDiagnostic.cs:PapyrusDiagnosticCodes` carries the same `InheritanceCycle` PAP0021 constant, so the header parity holds.
 ## Radicle/src/swf/swf_frame_svg.cpp:frame_body (sprite filters and blend)
 
 - A sprite row has no content of its own. Its children follow it in the flat list and are drawn as their own rows, so `Radicle/src/swf/swf_frame_svg.cpp:frame_body` opens the sprite's `Radicle/src/swf/swf_svg_filters.cpp:filtered_wrap` output before the first child and pushes an `OpenFilterWrap` whose end is `Radicle/src/swf/swf_frame_svg.cpp:descendants_end`. The existing `nesting_level` invariant on `Radicle/include/fo4/swf/swf_display.hpp:SwfFrameInstance` makes that end the first row after the sprite's subtree, so no new marker field is needed.
@@ -9327,6 +9346,7 @@ Slot 2 of the Try is past its body_count of 2, since flags `01` give a try body 
 
 - Splits `Radicle/src/swf/swf_svg_filters.cpp:filtered_group` into an open string and a close string. The open order is style group, then `filter_defs` output, then one `<g filter>` per drawn filter with the last filter outermost. Every close is the same `</g>` line, so only the count matters.
 - `Radicle/src/swf/swf_svg_filters.cpp:filtered_group` is now `filtered_wrap` with the content in between. Its output matches the previous nesting byte for byte, which `FilteredGroupNestsFiltersInListOrderUnderTheBlendGroup` checks.
+
 ## Radicle/src/swf/swf_sound_edit.cpp:replace_sound_data
 
 `Radicle/src/swf/swf_sound_edit.cpp:replace_sound_data` finds the id through `Radicle/src/swf/swf_characters.cpp:build_character_model` and `find_character`, as `Radicle/src/swf/swf_bitmap_edit.cpp:replace_bitmap_lossless` does. A missing id is `unknown_sound`, and an id whose character tag is not code 14 is `not_a_define_sound`. In `Radicle/src/swf/swf_sound_edit.cpp:replace_sound_data`, after the id lookup the checks run before anything is written, in this order: the data cap, then the rate, then the format. The data cap is `kMaxSoundDataBytes`, 64 MiB (the same cap as `Radicle/src/swf/swf_internal.hpp:kMaxBitmapBytes`), about 380 seconds of 44.1 kHz 16-bit stereo PCM.

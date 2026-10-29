@@ -43,7 +43,18 @@ Resolution Resolver::resolve(const Script* script) const {
 
     if (script->extends && ctx.chain.size() < 2) ctx.baseChainComplete = false;
     const auto& last = ctx.chain.back();
-    if (last->extends) ctx.baseChainComplete = false;
+    if (last->extends) {
+        ctx.baseChainComplete = false;
+        if (const Script* loop = index_.resolve(*last->extends)) {
+            std::string path;
+            for (const Script* level : ctx.chain) path += level->name + " -> ";
+            ctx.diagnostics.push_back(Diagnostic{
+                DiagnosticCode::InheritanceCycle, Severity::Error,
+                "Inheritance cycle: " + path + loop->name +
+                    ". A script cannot extend itself, directly or through its parents.",
+                script->extendsSpan, script->filePath});
+        }
+    }
 
     for (const auto& import : script->imports) {
         const Script* imported = index_.resolve(import.name);
