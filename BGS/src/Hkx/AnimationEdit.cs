@@ -236,6 +236,105 @@ public static class AnimationEdit
                            happened, resampled, positionError, rotationError);
     }
 
+    public sealed record Looped(HkxAnimationData Animation, RootMotion.Motion? Motion, int BlendFrames,
+                                float WorstPosition, float WorstTurn)
+    {
+        public override string ToString() =>
+            (BlendFrames <= 1
+                ? "the last frame now matches the first, so the seam holds that pose for one frame"
+                : $"the last {BlendFrames} frames now ease into the first, so the seam holds that " +
+                  "pose for one frame") +
+            $", moving {WorstPosition:F4} unit(s) and {WorstTurn:F5} radian(s), and the root motion " +
+            "was left as it is";
+    }
+
+    public static Looped Loop(HkxAnimationData animation, RootMotion.Motion? motion, int blendFrames)
+    {
+        if (animation.NumFrames < 2 || animation.Tracks.Count == 0)
+            throw new InvalidOperationException(
+                "This animation decoded to fewer than two frames, so there was nothing to loop.");
+
+        if (blendFrames < 1)
+            throw new InvalidOperationException(
+                "A loop has to move at least one frame, because the last frame is the one that runs " +
+                "back into the first.");
+
+        if (blendFrames > animation.NumFrames - 1)
+            throw new InvalidOperationException(
+                $"Blending the last {blendFrames} frames would reach the first of the " +
+                $"{animation.NumFrames} frames this clip has, which is the frame they are matched to, " +
+                "so it was not looped.");
+
+        foreach (var track in animation.Tracks)
+            if (track.Translations.Count < animation.NumFrames ||
+                track.Rotations.Count < animation.NumFrames ||
+                track.Scales.Count < animation.NumFrames)
+                throw new InvalidOperationException(
+                    $"A track decoded to fewer frames than the {animation.NumFrames} this animation " +
+                    "declares, so it was not looped.");
+
+        var made = new HkxAnimationData
+        {
+            Duration = animation.Duration,
+            NumFrames = animation.NumFrames,
+            NumTracks = animation.NumTracks,
+            MaxFramesPerBlock = animation.MaxFramesPerBlock,
+            FrameDuration = animation.FrameDuration,
+            BlockDuration = animation.BlockDuration,
+            BoneNames = animation.BoneNames.ToList(),
+            TrackToBoneIndices = animation.TrackToBoneIndices.ToList(),
+            OriginalSkeletonName = animation.OriginalSkeletonName,
+            BlendHint = animation.BlendHint,
+            AnimationClass = animation.AnimationClass,
+            Skeleton = animation.Skeleton,
+        };
+
+        int first = animation.NumFrames - blendFrames;
+        float worstPosition = 0, worstTurn = 0;
+
+        foreach (var track in animation.Tracks)
+        {
+            var built = new HkxTrackData { RotationAnimated = track.RotationAnimated };
+            for (int axis = 0; axis < 3; axis++)
+            {
+                built.TranslationAnimated[axis] = track.TranslationAnimated[axis];
+                built.ScaleAnimated[axis] = track.ScaleAnimated[axis];
+            }
+
+            built.Translations.AddRange(track.Translations);
+            built.Rotations.AddRange(track.Rotations);
+            built.Scales.AddRange(track.Scales);
+
+            var anchorPosition = track.Translations[0];
+            var anchorRotation = track.Rotations[0];
+            var anchorScale = track.Scales[0];
+
+            for (int k = 0; k < blendFrames; k++)
+            {
+                int index = first + k;
+                float at = (float)(k + 1) / blendFrames;
+
+                var moved = Vector3.Lerp(built.Translations[index], anchorPosition, at);
+                worstPosition = MathF.Max(worstPosition, (moved - built.Translations[index]).Length());
+                built.Translations[index] = moved;
+
+                var turned = Quaternion.Normalize(
+                    Quaternion.Slerp(built.Rotations[index], anchorRotation, at));
+                worstTurn = MathF.Max(worstTurn, SplineQuat.AngleBetween(turned, built.Rotations[index]));
+                built.Rotations[index] = turned;
+
+                built.Scales[index] = Vector3.Lerp(built.Scales[index], anchorScale, at);
+            }
+
+            made.Tracks.Add(built);
+        }
+
+        foreach (var note in animation.Annotations)
+            made.Annotations.Add(new HkxAnnotation { Time = note.Time, Text = note.Text });
+
+        return new Looped(made, motion, blendFrames, worstPosition, worstTurn);
+    }
+
     public static Vector3 Between(IReadOnlyList<Vector3> frames, float at)
     {
         if (frames.Count == 0) return Vector3.Zero;

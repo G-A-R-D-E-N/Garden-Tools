@@ -18,6 +18,9 @@ internal static class InputFilePolicy
     internal static void EnsureNif(long length, string name = "NIF input") =>
         Ensure(length, MaximumNifBytes, "NIF", name);
 
+    internal static string? RefusalIfTooLarge(long length, long maximum, string name) =>
+        Refusal(length, maximum, "HKX", name);
+
     private static byte[] Read(string path, long maximum, string kind)
     {
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
@@ -46,15 +49,19 @@ internal static class InputFilePolicy
 
     private static void Ensure(long length, long maximum, string kind, string name)
     {
+        if (Refusal(length, maximum, kind, name) is { } refusal) throw new InvalidDataException(refusal);
+    }
+
+    private static string? Refusal(long length, long maximum, string kind, string name)
+    {
         if (length < 0)
-            throw new InvalidDataException($"{name}: {kind} input has a negative length.");
+            return $"{name}: {kind} input has a negative length.";
         if (length > maximum)
-            throw new InvalidDataException(
-                $"{name}: {kind} input is {MiB(length):N1} MiB; the supported maximum is " +
-                $"{MiB(maximum):N0} MiB.");
+            return $"{name}: {kind} input is {MiB(length):N1} MiB; the supported maximum is " +
+                   $"{MiB(maximum):N0} MiB.";
         if (length > int.MaxValue)
-            throw new InvalidDataException(
-                $"{name}: {kind} input is too large for an in-memory byte array.");
+            return $"{name}: {kind} input is too large for an in-memory byte array.";
+        return null;
     }
 
     private static double MiB(long bytes) => bytes / (1024d * 1024d);

@@ -1,5 +1,6 @@
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "fo4/plugin/subrecord_authoring.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/formlink_lists.hpp"
 #include "fo4/schema/scalar.hpp"
@@ -423,6 +424,25 @@ TEST(CellRows, LinkWritesRefuseNullExceptOnTheLightingTemplate) {
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   EXPECT_EQ(sub_bytes(reread, key, "XCWT"), u32_bytes(0x00000A21));
   EXPECT_EQ(sub_bytes(reread, key, "LTMP"), u32_bytes(0));
+
+  auto cleared = plugin;
+  EXPECT_EQ(fo4::remove_record_subrecord(cleared, record, fo4::Signature::from_string("XCWT"), 0),
+            fo4::SubrecordRemoveStatus::removed);
+  EXPECT_TRUE(sub_bytes(cleared, key, "XCWT").empty());
+  EXPECT_TRUE(sub_bytes(fo4::read_plugin(fo4::write_plugin(cleared), "Patch.esp"), key, "XCWT").empty());
+
+  EXPECT_EQ(fo4::create_record(cleared, fo4::Signature::from_string("CELL"), "NewCell").status,
+            fo4::RecordCreateStatus::not_authorable);
+}
+
+TEST(CellRows, WaterCurrentCountIsRemovedOnlyWithItsArray) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto key = "000C10:Patch.esp";
+  const auto record = fo4::FormKey::parse(key);
+  EXPECT_EQ(fo4::remove_record_subrecord(plugin, record, fo4::Signature::from_string("XWCN"), 0),
+            fo4::SubrecordRemoveStatus::not_authorable);
+  EXPECT_EQ(sub_bytes(plugin, key, "XWCN"), u32_bytes(2));
+  EXPECT_EQ(sub_bytes(plugin, key, "XWCU"), currents_bytes());
 }
 
 TEST(CellRows, RegionsAndPreVisReferenceListsArePackedAndAppendable) {

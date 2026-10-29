@@ -148,6 +148,19 @@ describe('NIF editor keeps edits with the file they belong to (GT-080)', () => {
     expect(screen.getByTitle(A)).toBeTruthy();
   });
 
+  it('keeps the edit and shows the ApplyEdits error when a save fails', async () => {
+    localStorage.setItem('nif.mode', 'edit');
+    render(<NifPanel onClose={() => {}} />);
+    await loadNif(A);
+    editField('Alpha', 'Alpha edited');
+    applyEdits.mockResolvedValueOnce('Error: file is locked');
+    save();
+    await screen.findByText('Save failed -- Error: file is locked');
+    expect(screen.getByText('1 unsaved change')).toBeTruthy();
+    expect(screen.getByDisplayValue('Alpha edited')).toBeTruthy();
+    expect(tree).toHaveBeenCalledTimes(1);
+  });
+
   it('drops the previous material edits when another material is loaded', async () => {
     localStorage.setItem('nif.mode', 'materials');
     render(<NifPanel onClose={() => {}} />);

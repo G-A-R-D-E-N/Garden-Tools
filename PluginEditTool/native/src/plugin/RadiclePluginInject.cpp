@@ -6,8 +6,6 @@
 #include <charconv>
 #include <cstddef>
 #include <cstdint>
-#include <iomanip>
-#include <sstream>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -16,27 +14,12 @@
 #include <fo4/plugin/reader.hpp>
 
 namespace fo4ide::plugin {
-namespace {
-
-bool injectApplyArgument(const nlohmann::json& args, std::size_t index) {
-    return args.is_array() && index < args.size() && args[index].is_boolean() &&
-           args[index].get<bool>();
-}
-
-std::string localHex(std::uint32_t value) {
-    std::ostringstream out;
-    out << std::uppercase << std::hex << std::setw(6) << std::setfill('0') << value;
-    return out.str();
-}
-
-}  // namespace
-
 Result<nlohmann::json> RadiclePluginBackend::injectFormsIntoMaster(
     const nlohmann::json& arguments) {
     const auto pluginName = support::stringArgument(arguments, 0);
     const auto masterName = support::stringArgument(arguments, 1);
     auto startText = support::stringArgument(arguments, 2);
-    const bool apply = injectApplyArgument(arguments, 3);
+    const bool apply = support::boolArgument(arguments, 3);
 
     if (pluginName.empty() || masterName.empty() || startText.empty()) {
         return std::unexpected(Error{
@@ -96,8 +79,8 @@ Result<nlohmann::json> RadiclePluginBackend::injectFormsIntoMaster(
     if (start < lowest || end64 > highest) {
         return std::unexpected(Error{
             "InjectRangeInvalid",
-            "Requested range " + localHex(start) + "-" +
-                localHex(static_cast<std::uint32_t>(std::min<std::uint64_t>(end64, 0xFFFFFFu))) +
+            "Requested range " + support::localHex(start) + "-" +
+                support::localHex(static_cast<std::uint32_t>(std::min<std::uint64_t>(end64, 0xFFFFFFu))) +
                 " is outside the range of " + masterName
         });
     }
@@ -132,8 +115,8 @@ Result<nlohmann::json> RadiclePluginBackend::injectFormsIntoMaster(
         return nlohmann::json(
             "DRY RUN: would inject " + std::to_string(mappings.size()) + " of " +
             std::to_string(nativeKeys.size()) + " record(s) of " + pluginName + " into " +
-            masterName + " at " + localHex(start) + "-" +
-            localHex(static_cast<std::uint32_t>(end64)) +
+            masterName + " at " + support::localHex(start) + "-" +
+            support::localHex(static_cast<std::uint32_t>(end64)) +
             ", repointing every supported in-plugin reference. Re-run with apply=true.");
     }
 
@@ -156,8 +139,8 @@ Result<nlohmann::json> RadiclePluginBackend::injectFormsIntoMaster(
         stagePluginMutationLocked(*loaded, std::move(mutated));
         return nlohmann::json(
             "Injected " + std::to_string(changed) + " record(s) from " + pluginName + " into " +
-            masterName + " at " + localHex(start) + "-" +
-            localHex(static_cast<std::uint32_t>(end64)) +
+            masterName + " at " + support::localHex(start) + "-" +
+            support::localHex(static_cast<std::uint32_t>(end64)) +
             ". References from other plugins to the old ids now dangle until patched. SavePlugin to persist.");
     } catch (const std::exception& error) {
         return std::unexpected(Error{"InjectPluginFailed", error.what()});

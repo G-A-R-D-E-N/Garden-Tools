@@ -91,7 +91,7 @@ bool registerPluginTools(fo4ide::mcp::Registry& registry,
              {{"path", "string"}})) return false;
     if (!add("create_plugin", "Create an empty ESP in the trusted MO2 overwrite folder; later edits require save_plugin", "backend", "CreatePlugin",
              {{"plugin", "string"}})) return false;
-    if (!add("create_record", "Create a typed record in memory. Supported types: ARMA, ARMO, CELL, EXPL, EYES, FACT, HAZD, LVLI, LVLN, LVSP, PROJ, RACE. Payload fields are validated by the native backend", "backend", "CreateRecord",
+    if (!add("create_record", "Create a typed record in memory. Supported types: ARMA, ARMO, CELL, EXPL, EYES, FACT, FLST, GLOB, HAZD, LVLI, LVLN, LVSP, MESG, MGEF, PROJ, QUST, RACE, SPEL. Payload fields are validated by the native backend. FLST, GLOB, MESG, MGEF, QUST and SPEL take an editorId and build every required subrecord from the schema defaults", "backend", "CreateRecord",
              {{"plugin", "string"}, {"type", "string"}, {"payload", "object"}})) return false;
     if (!add("create_placed_object",
              "Create a placed reference (REFR) over a base object in a CELL this plugin owns and return its formKey. cell and baseObject are FormKeys. The CELL must be owned by this plugin. In an exterior CELL the reference must be non-persistent and positioned inside the CELL's grid. persistent defaults to true (persistent list), false puts it in the temporary list. initially_disabled defaults to false. Rotations are in radians and default to 0",
@@ -256,13 +256,13 @@ bool registerNativeMcpTools(fo4ide::mcp::Registry& registry,
     const auto nifPathSchema = objectSchema(
         {{"path", {{"type", "string"}, {"description", "Path to the NIF file"}}}},
         nlohmann::json::array({"path"}));
-    if (!add({"nif_inspect", "Inspect a NIF through the native niftool wrapper", nifPathSchema},
+    if (!add({"nif_inspect", "Inspect a NIF: niftool when configured, else read in-process", nifPathSchema},
              "nif", "Inspect", {"path"})) return false;
-    if (!add({"nif_verify", "Verify a NIF through the native niftool wrapper", nifPathSchema},
+    if (!add({"nif_verify", "Verify a NIF: niftool when configured, else read in-process", nifPathSchema},
              "nif", "Verify", {"path"})) return false;
-    if (!add({"nif_tree", "Return the NIF block tree through the native niftool wrapper", nifPathSchema},
+    if (!add({"nif_tree", "Return the NIF block tree: niftool when configured, else read in-process", nifPathSchema},
              "nif", "Tree", {"path"})) return false;
-    if (!add({"nif_geometry", "Return geometry data through the native niftool wrapper", nifPathSchema},
+    if (!add({"nif_geometry", "Return geometry data: niftool when configured, else read in-process", nifPathSchema},
              "nif", "Geo", {"path"})) return false;
 
     if (!add({

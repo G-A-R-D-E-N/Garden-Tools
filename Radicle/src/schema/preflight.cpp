@@ -411,9 +411,12 @@ std::vector<PreflightIssue> preflight_authoring_record(
       : constraint->placement == RecordPlacement::topic_children ? static_cast<std::int32_t>(GroupType::topic_children)
                                                                  : -1;
   const bool cell_reference = constraint->placement == RecordPlacement::cell_reference_children;
+  // Invariant: only REFR may sit in a visible-distant children group.
   const bool cell_reference_parent =
       location.parent_group_type == static_cast<std::int32_t>(GroupType::cell_persistent_children) ||
-      location.parent_group_type == static_cast<std::int32_t>(GroupType::cell_temporary_children);
+      location.parent_group_type == static_cast<std::int32_t>(GroupType::cell_temporary_children) ||
+      (location.parent_group_type == static_cast<std::int32_t>(GroupType::cell_visible_distant_children) &&
+       location.record->header.signature == Signature::from_string("REFR"));
   if ((required_parent >= 0 && location.parent_group_type != required_parent) ||
       (cell_reference && !cell_reference_parent)) {
     issues.push_back(authoring_issue(
@@ -425,8 +428,24 @@ std::vector<PreflightIssue> preflight_authoring_record(
             : constraint->placement == RecordPlacement::quest_children
             ? "record must be a direct child of a quest children GRUP"
             : cell_reference
-            ? "record must be a direct child of a cell persistent or temporary children GRUP"
+            ? "record must be a direct child of a cell persistent, temporary or visible-distant children GRUP"
             : "record must be a direct child of a topic children GRUP"));
+  }
+
+  // Constraint: a CELL is a direct child of its matching top-level GRUP, a world children GRUP, or an interior/exterior cell block GRUP.
+  const bool cell_parent_ok =
+      location.parent_group_type == static_cast<std::int32_t>(GroupType::world_children) ||
+      location.parent_group_type == static_cast<std::int32_t>(GroupType::interior_cell_block) ||
+      location.parent_group_type == static_cast<std::int32_t>(GroupType::interior_cell_subblock) ||
+      location.parent_group_type == static_cast<std::int32_t>(GroupType::exterior_cell_block) ||
+      location.parent_group_type == static_cast<std::int32_t>(GroupType::exterior_cell_subblock);
+  if (constraint->placement == RecordPlacement::cell_block &&
+      !((location.direct_top_level && location.top_label_matches) || cell_parent_ok)) {
+    issues.push_back(authoring_issue(
+        record_key,
+        location.record->header.signature.to_string(),
+        "record_placement_invalid",
+        "record must be a direct child of a top-level CELL GRUP, a world children GRUP, or an interior/exterior cell block GRUP"));
   }
 
   const auto rules = authoring_subrecords(*constraint);

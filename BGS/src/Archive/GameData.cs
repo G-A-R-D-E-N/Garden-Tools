@@ -6,16 +6,6 @@ using Radicle.Interop;
 
 namespace OpenCommonwealth.Services.Archive;
 
-/// <summary>
-/// The game's data tree as the engine sees it: a folder holding loose files plus every .ba2
-/// archive under it, consulted in load order. Loose files win over archives, and within the
-/// archives the ordering rule is that the later-loaded archive wins; for existence checks any hit is enough.
-///
-/// A project chain declares animation paths relative to its root, which is normally a folder
-/// somewhere inside the data tree (for Fallout 4's vanilla character: Data\Meshes\Actors\
-/// Character). The same path inside an archive appears with that data-relative prefix, so an
-/// animation that is not loose can still exist inside e.g. "Fallout4 - Animations.ba2".
-/// </summary>
 public sealed partial class GameData : IDisposable
 {
     public string DataFolder { get; }
@@ -41,9 +31,11 @@ public sealed partial class GameData : IDisposable
     public sealed record WeaponTypeSet(string Type, IReadOnlyList<string> Prefixes);
 
     private readonly Dictionary<string, Ba2> _opened = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, HashSet<string>> _names = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, ArchiveIndex> _indexes = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string?> _indexFailures = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, string>? _modLooseIndex;
     private List<WeaponTypeSet>? _weaponSets;
+    private bool _disposed;
 
     private GameData(string dataFolder, List<string> archivePaths, string? pluginsPath, List<string> modRoots)
     {
@@ -169,15 +161,6 @@ public sealed partial class GameData : IDisposable
         }
     }
 
-    public static string? ModlistPath(string modsFolder, string? profile)
-    {
-        string mods = Path.GetFullPath(modsFolder);
-        string list = profile != null
-            ? Path.Combine(mods, "profiles", profile, "modlist.txt")
-            : Path.Combine(mods, "modlist.txt");
-        return File.Exists(list) ? list : null;
-    }
-
     /// <summary>
     /// True when the animation is loose under the project root, or an archive entry matches it.
     /// The declared extension does not matter (.hkt resolves to .hkx, as the game treats them
@@ -231,14 +214,8 @@ public sealed partial class GameData : IDisposable
 
         var (archive, entry) = FindEntry(projectRoot, declared);
         if (entry == null) return null;
-        try { return new AnimationRead(archive.Read(entry), Path.GetFileName(archive.Path), entry.Name); }
-        catch (Exception e) when (IsSkippableArchiveFailure(e)) { return null; }
-    }
-
-    private string? DataRelativePath(string fullPath)
-    {
-        if (!IsUnder(fullPath, DataFolder)) return null;
-        return Path.GetRelativePath(DataFolder, fullPath);
+        byte[]? packed = ReadEntry(archive.Path, entry.Name);
+        return packed == null ? null : new AnimationRead(packed, Path.GetFileName(archive.Path), entry.Name);
     }
 
     private Dictionary<string, string> ModLooseIndex()
@@ -314,39 +291,6 @@ public sealed partial class GameData : IDisposable
         return current;
     }
 
-    public static bool IsSkeletonPath(string name)
-    {
-        string flat = "/" + name.Replace('\\', '/').Trim('/');
-        return flat.EndsWith(".hkx", StringComparison.OrdinalIgnoreCase) &&
-               flat.Contains("/CharacterAssets/", StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
-    /// The first .hkx under the character's CharacterAssets folder in the archives, given an
-    /// animation entry name like "Meshes/Actors/Turret/Animations/...". Returns its bytes, or
-    /// null when no packed skeleton exists there. The rig is usually the loose chain skeleton,
-    /// so this is the fallback for fully packed actors.
-    /// </summary>
-    public byte[]? SkeletonBytes(string animationEntryName)
-    {
-        string flat = animationEntryName.Replace('\\', '/');
-        int anims = flat.LastIndexOf("/Animations/", StringComparison.Ordinal);
-        if (anims < 0) return null;
-        string assets = flat[..anims] + "/CharacterAssets/";
-
-        foreach (string archive in ArchivePaths)
-        {
-            foreach (var entry in Entries(archive))
-            {
-                if (!entry.Name.StartsWith(assets, StringComparison.OrdinalIgnoreCase)) continue;
-                if (!IsSkeletonPath(entry.Name)) continue;
-                try { return Open(archive).Read(entry); }
-                catch (Exception e) when (IsSkippableArchiveFailure(e)) { return null; }
-            }
-        }
-        return null;
-    }
-
     private (Ba2 Archive, Ba2.Entry? Entry) FindEntry(string projectRoot, string declared)
     {
         string key = Normalize(declared);
@@ -360,7 +304,7 @@ public sealed partial class GameData : IDisposable
             string absolute = Path.GetFullPath(Path.Combine(projectRoot,
                 declared.Replace('\\', Path.DirectorySeparatorChar)
                         .Replace('/', Path.DirectorySeparatorChar)));
-            if (IsUnder(absolute, DataFolder))
+            if (IsInsideRoot(DataFolder, absolute))
             {
                 string rel = Path.GetRelativePath(DataFolder, absolute)
                                .Replace('\\', '/').ToLowerInvariant();
@@ -374,22 +318,25 @@ public sealed partial class GameData : IDisposable
 
         foreach (string archive in ArchivePaths)
         {
-            var names = Names(archive);
-            if (prefixed != null && !names.Contains(prefixed)) continue;
-            if (prefixed == null && !names.Any(n => n.EndsWith("/" + key, StringComparison.Ordinal))) continue;
+            if (!TryIndex(archive, out ArchiveIndex index, out _)) continue;
 
-            foreach (var entry in Entries(archive))
+            int at;
+            if (prefixed != null)
             {
-                string normalized = Normalize(entry.Name);
-                if (prefixed != null)
-                {
-                    if (normalized == prefixed) return (Open(archive), entry);
-                }
-                else if (normalized.EndsWith("/" + key, StringComparison.Ordinal))
-                {
-                    return (Open(archive), entry);
-                }
+                if (!index.Normalized.TryGetValue(prefixed, out at)) continue;
             }
+            else
+            {
+                string suffix = "/" + key;
+                int best = int.MaxValue;
+                foreach (var pair in index.Normalized)
+                    if (pair.Value < best && pair.Key.EndsWith(suffix, StringComparison.Ordinal)) best = pair.Value;
+                if (best == int.MaxValue) continue;
+                at = best;
+            }
+
+            Ba2 found = Open(archive);
+            return (found, found.Entries[at]);
         }
         return (null!, null);
     }
@@ -507,30 +454,96 @@ public sealed partial class GameData : IDisposable
         return string.Join('/', stack);
     }
 
-    private HashSet<string> Names(string archivePath)
+    private sealed class ArchiveIndex
     {
-        if (_names.TryGetValue(archivePath, out var names)) return names;
+        internal Dictionary<string, int> Exact { get; } = new(StringComparer.OrdinalIgnoreCase);
+        internal Dictionary<string, int> Normalized { get; } = new(StringComparer.Ordinal);
+    }
 
-        names = new HashSet<string>(StringComparer.Ordinal);
+    internal static string ExactName(string name) => name.Replace('\\', '/').TrimStart('/');
+
+    private bool TryIndex(string archivePath, out ArchiveIndex index, out string? warning)
+    {
+        index = null!;
+        warning = null;
+        if (_indexes.TryGetValue(archivePath, out ArchiveIndex? known))
+        {
+            index = known;
+            return true;
+        }
+        if (_indexFailures.TryGetValue(archivePath, out string? failed))
+        {
+            warning = failed;
+            return false;
+        }
+        if (!TryArchiveEntries(archivePath, out IReadOnlyList<Ba2.Entry> entries, out warning))
+        {
+            _indexFailures[archivePath] = warning;
+            return false;
+        }
+
+        index = new ArchiveIndex();
+        for (int i = 0; i < entries.Count; i++)
+        {
+            index.Exact.TryAdd(entries[i].Name, i);
+            index.Normalized.TryAdd(Normalize(entries[i].Name), i);
+        }
+        _indexes[archivePath] = index;
+        return true;
+    }
+
+    private bool TryReadAt(string archivePath, int at, out byte[] bytes, out string? warning)
+    {
+        bytes = Array.Empty<byte>();
+        warning = null;
         try
         {
-            var archive = Open(archivePath);
-            foreach (var entry in archive.Entries) names.Add(Normalize(entry.Name));
+            Ba2 archive = Open(archivePath);
+            if (at < 0 || at >= archive.Entries.Count)
+            {
+                warning = ArchiveWarning(archivePath,
+                                         $"the cached entry index {at} is not in this archive");
+                return false;
+            }
+
+            Ba2.Entry entry = archive.Entries[at];
+            if (entry.Unpacked > ReadLimitBytes)
+            {
+                warning = InputFilePolicy.RefusalIfTooLarge(entry.Unpacked, ReadLimitBytes, entry.Name);
+                return false;
+            }
+
+            bytes = archive.Read(entry);
+            warning = InputFilePolicy.RefusalIfTooLarge(bytes.LongLength, ReadLimitBytes, entry.Name);
+            if (warning == null) return true;
+
+            bytes = Array.Empty<byte>();
+            return false;
         }
         catch (Exception e) when (IsSkippableArchiveFailure(e))
         {
-            // a texture (DX10) archive or an unreadable file simply holds no animations
+            warning = ArchiveWarning(archivePath, e);
+            return false;
         }
-        _names[archivePath] = names;
-        return names;
     }
+
+    private IEnumerable<string> Names(string archivePath) =>
+        TryIndex(archivePath, out ArchiveIndex index, out _)
+            ? index.Normalized.Keys
+            : Array.Empty<string>();
 
     private Ba2 Open(string archivePath)
     {
+        EnsureAlive();
         if (_opened.TryGetValue(archivePath, out var archive)) return archive;
         archive = Ba2.Open(archivePath);
         _opened[archivePath] = archive;
         return archive;
+    }
+
+    private void EnsureAlive()
+    {
+        if (_disposed) throw new ObjectDisposedException(nameof(GameData));
     }
 
     public bool TryArchiveEntries(string archivePath, out IReadOnlyList<Ba2.Entry> entries, out string? warning)
@@ -548,18 +561,9 @@ public sealed partial class GameData : IDisposable
         }
         catch (Exception e) when (IsSkippableArchiveFailure(e))
         {
-            warning = $"{Path.GetFileName(archivePath)}: {e.Message.Split('\n')[0].Trim()}";
+            warning = ArchiveWarning(archivePath, e);
             return false;
         }
-    }
-
-    private static bool IsUnder(string path, string root)
-    {
-        if (path.Length < root.Length) return false;
-        if (string.Equals(path, root, StringComparison.OrdinalIgnoreCase)) return true;
-        if (!path.StartsWith(root, StringComparison.OrdinalIgnoreCase)) return false;
-        return path[root.Length] == Path.DirectorySeparatorChar ||
-               path[root.Length] == Path.AltDirectorySeparatorChar;
     }
 
     private static List<string> OrderByPlugins(List<string> archives, string pluginsPath)
@@ -698,7 +702,12 @@ public sealed partial class GameData : IDisposable
 
     public void Dispose()
     {
+        if (_disposed) return;
+        _disposed = true;
         foreach (var archive in _opened.Values) archive.Dispose();
         _opened.Clear();
+        _indexes.Clear();
+        _indexFailures.Clear();
+        _modLooseIndex = null;
     }
 }

@@ -32,6 +32,15 @@ bool SwfReader::read_u8(std::uint8_t& out) noexcept {
   return true;
 }
 
+bool SwfReader::read_s16(std::int16_t& out) noexcept {
+  std::uint16_t value = 0;
+  if (!read_u16(value)) {
+    return false;
+  }
+  out = static_cast<std::int16_t>(value);
+  return true;
+}
+
 bool SwfReader::read_u16(std::uint16_t& out) noexcept {
   if (remaining() < 2) {
     return false;
@@ -147,6 +156,37 @@ bool BitReader::read_signed(unsigned count, std::int32_t& out) noexcept {
   return true;
 }
 
+bool read_matrix(BitReader& bits, SwfMatrix& out) noexcept {
+  SwfMatrix matrix;
+  std::uint32_t flag = 0;
+  std::uint32_t nbits = 0;
+  if (!bits.read_unsigned(1, flag)) {
+    return false;
+  }
+  if (flag != 0) {
+    if (!bits.read_unsigned(5, nbits) || !bits.read_signed(nbits, matrix.scale_x) ||
+        !bits.read_signed(nbits, matrix.scale_y)) {
+      return false;
+    }
+  }
+  if (!bits.read_unsigned(1, flag)) {
+    return false;
+  }
+  if (flag != 0) {
+    if (!bits.read_unsigned(5, nbits) || !bits.read_signed(nbits, matrix.rotate_skew0) ||
+        !bits.read_signed(nbits, matrix.rotate_skew1)) {
+      return false;
+    }
+  }
+  if (!bits.read_unsigned(5, nbits) || !bits.read_signed(nbits, matrix.translate_x) ||
+      !bits.read_signed(nbits, matrix.translate_y)) {
+    return false;
+  }
+  bits.align();
+  out = matrix;
+  return true;
+}
+
 namespace {
 
 bool decode_symbol_list(std::span<const std::byte> payload, std::vector<SwfSymbol>& out) {
@@ -168,91 +208,77 @@ bool decode_symbol_list(std::span<const std::byte> payload, std::vector<SwfSymbo
   return true;
 }
 
-bool read_matrix_at(std::span<const std::byte> data, std::size_t offset,
-                    std::size_t& next) noexcept {
-  BitReader bits(data, offset * 8);
-  std::uint32_t flag = 0;
-  std::uint32_t nbits = 0;
-  std::int32_t value = 0;
-  if (!bits.read_unsigned(1, flag)) {
+}  // namespace
+
+bool decode_edit_text(std::span<const std::byte> data, SwfEditText& out) {
+  SwfReader head(data, 0);
+  if (!head.read_u16(out.character_id)) {
     return false;
   }
-  if (flag != 0) {
-    if (!bits.read_unsigned(5, nbits) || !bits.read_signed(nbits, value) ||
-        !bits.read_signed(nbits, value)) {
+  std::size_t position = 0;
+  if (!read_rect(data, 2, out.bounds, position)) {
+    return false;
+  }
+  SwfReader reader(data, position);
+  if (!reader.read_u8(out.flags1) || !reader.read_u8(out.flags2)) {
+    return false;
+  }
+  if ((out.flags1 & 0x01u) != 0) {
+    std::uint16_t font_id = 0;
+    if (!reader.read_u16(font_id)) {
       return false;
     }
+    out.font_id = font_id;
   }
-  if (!bits.read_unsigned(1, flag)) {
+  if ((out.flags2 & 0x80u) != 0 && !reader.read_zstring(out.font_class)) {
     return false;
   }
-  if (flag != 0) {
-    if (!bits.read_unsigned(5, nbits) || !bits.read_signed(nbits, value) ||
-        !bits.read_signed(nbits, value)) {
+  if ((out.flags1 & 0x01u) != 0 || (out.flags2 & 0x80u) != 0) {
+    std::uint16_t height = 0;
+    if (!reader.read_u16(height)) {
       return false;
     }
+    out.font_height_twips = height;
   }
-  if (!bits.read_unsigned(5, nbits) || !bits.read_signed(nbits, value) ||
-      !bits.read_signed(nbits, value)) {
+  if ((out.flags1 & 0x04u) != 0) {
+    std::uint8_t red = 0;
+    std::uint8_t green = 0;
+    std::uint8_t blue = 0;
+    std::uint8_t alpha = 0;
+    if (!reader.read_u8(red) || !reader.read_u8(green) || !reader.read_u8(blue) ||
+        !reader.read_u8(alpha)) {
+      return false;
+    }
+    out.color = (static_cast<std::uint32_t>(alpha) << 24) |
+                (static_cast<std::uint32_t>(red) << 16) |
+                (static_cast<std::uint32_t>(green) << 8) | static_cast<std::uint32_t>(blue);
+  }
+  if ((out.flags1 & 0x02u) != 0) {
+    std::uint16_t max_length = 0;
+    if (!reader.read_u16(max_length)) {
+      return false;
+    }
+    out.max_length = max_length;
+  }
+  if ((out.flags2 & 0x20u) != 0) {
+    SwfEditTextLayout layout;
+    std::uint16_t leading = 0;
+    if (!reader.read_u8(layout.align) || !reader.read_u16(layout.left_margin) ||
+        !reader.read_u16(layout.right_margin) || !reader.read_u16(layout.indent) ||
+        !reader.read_u16(leading)) {
+      return false;
+    }
+    layout.leading = static_cast<std::int16_t>(leading);
+    out.layout = layout;
+  }
+  if (!reader.read_zstring(out.variable)) {
     return false;
   }
-  next = bits.byte_position();
+  if ((out.flags1 & 0x80u) != 0 && !reader.read_zstring(out.text)) {
+    return false;
+  }
   return true;
 }
-
-bool decode_text_records(std::span<const std::byte> data, std::size_t offset, bool rgba,
-                         unsigned glyph_bits, unsigned advance_bits, SwfText& out) noexcept {
-  std::size_t position = offset;
-  std::size_t records = 0;
-  std::size_t glyphs = 0;
-  while (position < data.size()) {
-    const auto flags = byte_at(data, position);
-    ++position;
-    if (flags == 0) {
-      out.record_count = records;
-      out.glyph_count = glyphs;
-      return true;
-    }
-    if ((flags & 0x80u) == 0) {
-      return false;
-    }
-    const bool has_font = (flags & 0x08u) != 0;
-    const bool has_color = (flags & 0x04u) != 0;
-    const bool has_y_offset = (flags & 0x02u) != 0;
-    const bool has_x_offset = (flags & 0x01u) != 0;
-    std::size_t needed = has_font ? 4u : 0u;
-    if (has_color) {
-      needed += rgba ? 4u : 3u;
-    }
-    if (has_x_offset) {
-      needed += 2u;
-    }
-    if (has_y_offset) {
-      needed += 2u;
-    }
-    if (data.size() - position < needed + 1u) {
-      return false;
-    }
-    position += needed;
-    const auto count = static_cast<std::size_t>(byte_at(data, position));
-    ++position;
-    BitReader bits(data, position * 8);
-    for (std::size_t index = 0; index < count; ++index) {
-      std::uint32_t glyph_index = 0;
-      std::int32_t advance = 0;
-      if (!bits.read_unsigned(glyph_bits, glyph_index) ||
-          !bits.read_signed(advance_bits, advance)) {
-        return false;
-      }
-    }
-    position = bits.byte_position();
-    glyphs += count;
-    ++records;
-  }
-  return false;
-}
-
-}  // namespace
 
 SwfStatus decode_tag_payload(const std::vector<std::byte>& payload, SwfTag& out_tag,
                              unsigned depth, std::size_t& tags_left) {
@@ -326,6 +352,27 @@ SwfStatus decode_tag_payload(const std::vector<std::byte>& payload, SwfTag& out_
       }
       return nested == SwfStatus::ok ? SwfStatus::ok : SwfStatus::malformed_tag;
     }
+    case tag::kImportAssets:
+    case tag::kImportAssets2: {
+      SwfReader reader(data, 0);
+      SwfImportAssets imports;
+      imports.version = out_tag.code == tag::kImportAssets2 ? 2 : 1;
+      if (!reader.read_zstring(imports.source_movie)) {
+        return SwfStatus::malformed_tag;
+      }
+      if (imports.version == 2) {
+        std::uint8_t reserved = 0;
+        std::uint8_t reserved_again = 0;
+        if (!reader.read_u8(reserved) || !reader.read_u8(reserved_again)) {
+          return SwfStatus::malformed_tag;
+        }
+      }
+      if (!decode_symbol_list(data.subspan(reader.position()), imports.symbols)) {
+        return SwfStatus::malformed_tag;
+      }
+      out_tag.imports = std::move(imports);
+      return SwfStatus::ok;
+    }
     case tag::kSymbolClass:
     case tag::kExportAssets: {
       std::vector<SwfSymbol> symbols;
@@ -385,110 +432,44 @@ SwfStatus decode_tag_payload(const std::vector<std::byte>& payload, SwfTag& out_
       out_tag.binary_data = binary;
       return SwfStatus::ok;
     }
+    case tag::kPlaceObject:
+    case tag::kPlaceObject2:
+    case tag::kPlaceObject3:
+    case tag::kRemoveObject:
+    case tag::kRemoveObject2:
+      return decode_placement_tag(data, out_tag);
+    case tag::kDefineButton:
+    case tag::kDefineButton2:
+      return decode_button_tag(data, out_tag);
     case tag::kDefineShape:
     case tag::kDefineShape2:
     case tag::kDefineShape3:
-    case tag::kDefineShape4: {
-      SwfReader reader(data, 0);
-      SwfShape shape;
-      std::size_t next = 0;
-      if (!reader.read_u16(shape.shape_id) ||
-          !read_rect(data, reader.position(), shape.bounds, next)) {
-        return SwfStatus::malformed_tag;
-      }
-      if (out_tag.code == tag::kDefineShape4) {
-        std::size_t edge_next = 0;
-        if (!read_rect(data, next, shape.edge_bounds, edge_next) || edge_next >= payload.size()) {
-          return SwfStatus::malformed_tag;
-        }
-        shape.flags = byte_at(data, edge_next);
-        shape.has_edge_bounds = true;
-      }
-      out_tag.shape = shape;
-      return SwfStatus::ok;
-    }
+    case tag::kDefineShape4:
+      return decode_shape_tag(data, out_tag);
     case tag::kDefineBitsLossless:
-    case tag::kDefineBitsLossless2: {
-      SwfReader reader(data, 0);
-      SwfBitmap bitmap;
-      if (!reader.read_u16(bitmap.character_id) || !reader.read_u8(bitmap.format) ||
-          !reader.read_u16(bitmap.width) || !reader.read_u16(bitmap.height)) {
-        return SwfStatus::malformed_tag;
-      }
-      if (bitmap.format == 3) {
-        std::uint8_t table_size = 0;
-        if (!reader.read_u8(table_size)) {
-          return SwfStatus::malformed_tag;
-        }
-        bitmap.color_table_size = table_size;
-      }
-      out_tag.bitmap = bitmap;
-      return SwfStatus::ok;
-    }
-    case tag::kDefineFont: {
-      SwfReader reader(data, 0);
-      SwfFont font;
-      std::uint16_t first_offset = 0;
-      if (!reader.read_u16(font.font_id) || !reader.read_u16(first_offset) ||
-          (first_offset % 2u) != 0) {
-        return SwfStatus::malformed_tag;
-      }
-      font.glyph_count = static_cast<std::uint32_t>(first_offset / 2u);
-      if (reader.remaining() < static_cast<std::size_t>(font.glyph_count) * 2u) {
-        return SwfStatus::malformed_tag;
-      }
-      out_tag.font = font;
-      return SwfStatus::ok;
-    }
+    case tag::kDefineBitsLossless2:
+      return decode_bitmap_tag(data, out_tag);
+    case tag::kDefineBits:
+    case tag::kJpegTables:
+    case tag::kDefineBitsJpeg2:
+    case tag::kDefineBitsJpeg3:
+    case tag::kDefineBitsJpeg4:
+      return decode_jpeg_tag(data, out_tag);
+    case tag::kDefineMorphShape:
+    case tag::kDefineMorphShape2:
+      return decode_morph_tag(data, out_tag);
+    case tag::kDefineFont:
     case tag::kDefineFont2:
-    case tag::kDefineFont3: {
-      SwfReader reader(data, 0);
-      SwfFont font;
-      std::uint8_t name_length = 0;
-      std::uint16_t glyph_count = 0;
-      if (!reader.read_u16(font.font_id) || !reader.read_u8(font.flags) ||
-          !reader.read_u8(font.language) || !reader.read_u8(name_length) ||
-          reader.remaining() < static_cast<std::size_t>(name_length)) {
-        return SwfStatus::malformed_tag;
-      }
-      if (name_length != 0) {
-        font.name.assign(reinterpret_cast<const char*>(data.data() + reader.position()),
-                         name_length);
-        reader.skip(name_length);
-      }
-      if (!reader.read_u16(glyph_count)) {
-        return SwfStatus::malformed_tag;
-      }
-      font.glyph_count = glyph_count;
-      font.wide_offsets = (font.flags & 0x08u) != 0;
-      font.wide_codes = (font.flags & 0x04u) != 0;
-      const auto entry = font.wide_offsets ? std::size_t{4} : std::size_t{2};
-      if (reader.remaining() < static_cast<std::size_t>(glyph_count) * entry + entry) {
-        return SwfStatus::malformed_tag;
-      }
-      out_tag.font = font;
-      return SwfStatus::ok;
-    }
+    case tag::kDefineFont3:
     case tag::kDefineText:
-    case tag::kDefineText2: {
-      SwfReader reader(data, 0);
-      SwfText text;
-      std::size_t bounds_next = 0;
-      std::size_t matrix_next = 0;
-      std::uint8_t glyph_bits = 0;
-      std::uint8_t advance_bits = 0;
-      if (!reader.read_u16(text.character_id) ||
-          !read_rect(data, reader.position(), text.bounds, bounds_next) ||
-          !read_matrix_at(data, bounds_next, matrix_next)) {
+    case tag::kDefineText2:
+      return decode_text_tag(data, out_tag);
+    case tag::kDefineEditText: {
+      SwfEditText edit;
+      if (!decode_edit_text(data, edit)) {
         return SwfStatus::malformed_tag;
       }
-      SwfReader after_matrix(data, matrix_next);
-      if (!after_matrix.read_u8(glyph_bits) || !after_matrix.read_u8(advance_bits) ||
-          !decode_text_records(data, after_matrix.position(),
-                               out_tag.code == tag::kDefineText2, glyph_bits, advance_bits, text)) {
-        return SwfStatus::malformed_tag;
-      }
-      out_tag.text = text;
+      out_tag.edit_text = std::move(edit);
       return SwfStatus::ok;
     }
     case tag::kDefineSound: {
@@ -505,6 +486,34 @@ SwfStatus decode_tag_payload(const std::vector<std::byte>& payload, SwfTag& out_
       sound.stereo = (flags & 0x01u) != 0;
       sound.data_size = reader.remaining();
       out_tag.sound = sound;
+      return SwfStatus::ok;
+    }
+    case tag::kSoundStreamHead:
+    case tag::kSoundStreamHead2: {
+      SwfReader reader(data, 0);
+      SwfSoundStreamHead head;
+      std::uint8_t playback = 0;
+      std::uint8_t stream = 0;
+      if (!reader.read_u8(playback) || !reader.read_u8(stream) ||
+          !reader.read_u16(head.sample_count)) {
+        return SwfStatus::malformed_tag;
+      }
+      head.reserved = static_cast<std::uint8_t>(playback >> 4);
+      head.playback_rate = static_cast<std::uint8_t>((playback >> 2) & 0x03u);
+      head.playback_16bit = (playback & 0x02u) != 0;
+      head.playback_stereo = (playback & 0x01u) != 0;
+      head.compression = static_cast<std::uint8_t>(stream >> 4);
+      head.rate = static_cast<std::uint8_t>((stream >> 2) & 0x03u);
+      head.sample_16bit = (stream & 0x02u) != 0;
+      head.stereo = (stream & 0x01u) != 0;
+      if (head.compression == 2) {
+        std::int16_t latency = 0;
+        if (!reader.read_s16(latency)) {
+          return SwfStatus::malformed_tag;
+        }
+        head.latency_seek = latency;
+      }
+      out_tag.sound_stream_head = head;
       return SwfStatus::ok;
     }
     case tag::kExporterInfo: {
@@ -580,6 +589,17 @@ SwfStatus decode_tag_payload(const std::vector<std::byte>& payload, SwfTag& out_
       texture.texture_glyph_count = texture_glyphs;
       texture.font_count = fonts;
       out_tag.font_texture = texture;
+      return SwfStatus::ok;
+    }
+    case tag::kDefineScalingGrid: {
+      SwfReader reader(data, 0);
+      SwfScalingGrid grid;
+      std::size_t next = 0;
+      if (!reader.read_u16(grid.character_id) ||
+          !read_rect(data, reader.position(), grid.splitter, next)) {
+        return SwfStatus::malformed_tag;
+      }
+      out_tag.scaling_grid = grid;
       return SwfStatus::ok;
     }
     default:

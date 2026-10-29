@@ -305,6 +305,35 @@ TEST_CASE("Native PROJ creation refuses a loaded FormKey of the wrong type witho
         fo4::FormKey::parse("000801:Patch.esp")) == nullptr);
 }
 
+TEST_CASE("Native PROJ empty editorId is refused as ProjExplHazdCreateFailed without writing") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, pluginWithRecord("EXPL"));
+    const auto before = readBytes(path);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+
+    const auto created = backend.invokeBackend(
+        "CreateRecord",
+        nlohmann::json::array({
+            "Patch.esp",
+            "PROJ",
+            nlohmann::json{
+                {"editorId", ""},
+                {"explosionType", "000800:Patch.esp"}
+            }
+        }));
+    REQUIRE_FALSE(created.has_value());
+    CHECK(created.error().type == "ProjExplHazdCreateFailed");
+    CHECK(created.error().message.find("editor ID is empty") != std::string::npos);
+    CHECK(readBytes(path) == before);
+    CHECK(fo4::find_record(
+        fo4::read_plugin_file(path),
+        fo4::FormKey::parse("000801:Patch.esp")) == nullptr);
+}
+
 TEST_CASE("Native CreateRecord adds a loaded master exactly once and remaps the slot") {
     const auto root = tempRoot();
     Cleanup cleanup{root};

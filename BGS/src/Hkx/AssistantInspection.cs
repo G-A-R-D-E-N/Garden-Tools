@@ -261,7 +261,7 @@ public sealed class AssistantInspection
             {
                 result = WithStatus(result, "partial", "unsupported_hkx",
                     animation.AnimationClass.Length == 0 ? "file has no supported animation" :
-                    $"animation class {Display(animation.AnimationClass)} is not decoded");
+                    AnimationCompression.Describe(animation.AnimationClass));
             }
             cancellationToken.ThrowIfCancellationRequested();
             return result;
@@ -274,9 +274,11 @@ public sealed class AssistantInspection
         {
             return Failure<AnimationInspection>("unreadable_file", "animation could not be read", path, annotationWarning, boneWarning);
         }
-        catch (NotSupportedException)
+        catch (NotSupportedException error)
         {
-            return Failure<AnimationInspection>("unsupported_hkx", "animation format is not supported", path, annotationWarning, boneWarning);
+            return Failure<AnimationInspection>("unsupported_hkx",
+                string.IsNullOrWhiteSpace(error.Message) ? "animation format is not supported" : Display(error.Message),
+                path, annotationWarning, boneWarning);
         }
         catch (Exception)
         {
@@ -406,10 +408,10 @@ public sealed class AssistantInspection
             message = "file could not be read";
             return false;
         }
-        catch (NotSupportedException)
+        catch (NotSupportedException error)
         {
             code = "unsupported_hkx";
-            message = "file format is not supported";
+            message = string.IsNullOrWhiteSpace(error.Message) ? "file format is not supported" : Display(error.Message);
             return false;
         }
         catch (Exception)
