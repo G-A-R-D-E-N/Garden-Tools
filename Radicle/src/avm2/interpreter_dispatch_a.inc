@@ -166,14 +166,14 @@
         break;
       }
       case op::k_getglobalscope:
-        if (frame.scopes.empty()) {
+        if (frame.scopes.empty() || frame.scopes.front() == nullptr) {
           return fail(InterpreterStatus::ScopeUnderflow, "no global scope");
         }
         push_value(borrowed_object(*frame.scopes.front()));
         break;
       case op::k_getscopeobject: {
         const std::uint32_t index = count_operand(instruction);
-        if (index >= frame.scopes.size()) {
+        if (index >= frame.scopes.size() || frame.scopes[index] == nullptr) {
           return fail(InterpreterStatus::ScopeUnderflow, "scope " + std::to_string(index) +
                                                              " is out of range");
         }
@@ -194,7 +194,8 @@
                         "scope depth would exceed max_scope_depth " +
                             std::to_string(frame.body->max_scope_depth));
           }
-          frame.scopes.push_back(value.as_object().get());
+          // Must keep shared ownership: the scope must outlive the popped stack value and any closure capturing it.
+          frame.scopes.push_back(value.as_object());
         }
         break;
       }

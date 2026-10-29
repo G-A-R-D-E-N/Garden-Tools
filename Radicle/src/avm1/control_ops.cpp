@@ -217,6 +217,8 @@ Avm1RunStatus try_regions(Avm1Run& run, const Avm1Block& block, const Avm1Action
       } else {
         (block.call != nullptr ? block.call->locals[header.catch_name]
                                : state.variables[header.catch_name]) = std::move(caught);
+        // Must mark the throw handled: status is still Thrown here, and the catch body runs only on Ok.
+        status = Avm1RunStatus::Ok;
       }
       if (status == Avm1RunStatus::Ok) {
         status = run_range(run, block, at[1], at[2], resume);

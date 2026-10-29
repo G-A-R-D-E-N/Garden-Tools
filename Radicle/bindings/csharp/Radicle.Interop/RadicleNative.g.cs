@@ -2551,7 +2551,7 @@ public unsafe struct SwfSound
     public ushort SoundId;
     public byte Format;
     public byte Rate;
-    public byte Sample16Bit;
+    public byte Sample16bit;
     public byte Stereo;
     public uint SampleCount;
     public nuint DataSize;
