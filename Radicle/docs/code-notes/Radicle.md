@@ -8784,6 +8784,7 @@ Detects an encoder change that alters bytes of an unedited stream. It checks thr
 ## Radicle/tests/swf_movie_builder.hpp:movie_of
 
 - `movie_of`, `TagPayload`, `sprite_tag`, `place_full`, `matrix_full`, `square_with_fill`, and `square_shape` moved here from `test_swf_display.cpp` so the nine-slice render tests can build movies without copying them. `test_swf_display.cpp` was at 741 lines, over the 750 limit once the new tests were added. The bodies are unchanged; the only edit is `inline`.
+
 ## Radicle/src/avm1/misc_ops.cpp:random_number and next_random
 
 - RandomNumber is a xorshift32 (shifts 13, 17, 5) over `Avm1State::random_state`, seeded from `Avm1Environment::random_seed`. The output is masked to 31 bits, as Ruffle masks its AVM RNG with `K_RANDOM_PURE_MAX` (`ruffle-0.6.0/core/src/avm_rng.rs`, the `a_num & K_RANDOM_PURE_MAX` line). The exact sequence is ours, not Flash's: Ruffle's generator is seeded from the clock (`avm_rng.rs` `get_seed`), so no Flash sequence can be reproduced. Only the range `[0, bound)` is claimed to match Ruffle. Unverified against real Flash output.
