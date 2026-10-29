@@ -1,6 +1,7 @@
 #include "fo4/swf/swf_frame_svg.hpp"
 
 #include "fo4/swf/swf_svg.hpp"
+#include "fo4/swf/swf_svg_filters.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -288,6 +289,7 @@ std::string frame_body(const FrameLookup& lookup, const SvgBitmaps& bitmaps,
       content = filter_text(id + "color", *row.world_color_transform, stage) +
                 "<g filter=\"url(#" + id + "color)\">\n" + content + "</g>\n";
     }
+    content = filtered_group(row.filters, row.blend_mode, id, stage, content);
     for (const Mask& mask : masks) {
       if (mask.inside) {
         content = "<g clip-path=\"url(#" + mask.id + ")\">\n" + content + "</g>\n";
