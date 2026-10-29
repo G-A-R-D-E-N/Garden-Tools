@@ -8922,6 +8922,38 @@ Detects a validator that checks only the top-level list end and not the parent b
 - Split of `decompiler.cpp` (727 lines, too close to the 750 cap) by responsibility. `decompiler.cpp` keeps `toSource`, `emitFunction`, `disassemble` and the `decompileBody` setup. `decompiler_expr.cpp:translateInstructions` turns each instruction into a `BodyState::put` or a statement. `decompiler_stmt.cpp:reconstructStatements` runs jump folding, the temp-call pass, local hoisting and `If`/`While`/`Else` structuring. The header holds the state those passes share: `BodyState`, `JKind`, `JInfo`, and the `iequals`, `startsWith` and `join` helpers.
 - `BodyState::put` is the single write path. With inlining on, a `::temp` destination goes to `temps` and `tempExpression`; `::NoneVar` becomes a bare statement; anything else becomes `name = expr`. The move changed no logic, names or output. The decompiler tests are the check that it stayed that way.
 
+## tests/test_papyrus_codegen_corners.cpp:PapyrusCodegen
+
+- New file, not an append to `test_papyrus_codegen.cpp`, because the 13 codegen cases would have pushed that file past the 750-line cap. It is registered in `Radicle/CMakeLists.txt` next to it.
+- The expected listings were derived by hand from `body_statement.cpp:emitIf`, `emitWhile`, `emitStatement`, `body_expression.cpp:valueAs`, `emitComparison`, `code_generator.cpp:constantOrDefault`, `constantGetter` and `qualifyCustomEvent`, and `body_call.cpp:emitArrayBuiltin`. Each jump offset is the instruction index difference, as in `BodyEmitter::patchJump`.
+- `ElseIfChainJumpsFromEachBranchToTheEndOfTheChain` pins `elseif` as a chain in `emitIf`, not nested `else` blocks.
+- `TemporariesFreedByOneStatementAreReusedByTheNext` relies on `BodyEmitter::releaseTemps` returning temps to `freeTemps_` at the end of each statement, so `::temp` locals are counted, not compared by name.
+- `CustomEventNameArgumentIsQualifiedByTheDeclaringScript` expects `sender_Ready`: `CodeGenerator::qualifyCustomEvent` lowercases the declaring script name and appends `_` plus the event name. Whether the Creation Kit uses that exact string is not verified here.
+- `StatesKeepSourceOrderAfterTheEmptyStateAndOnlyOneIsAuto` covers `CodeGenerator::buildObject` ordering: the empty state first, then states in source order.
+- Not covered: Papyrus has no `For` loop, so the brief's For item has no code path. `FindStructAndInsertUseTheirOpcodesAndDefaultStart` uses a float literal as the search value on purpose, because an int literal reaches the VM unconverted (see the `body_call.cpp:emitArrayBuiltin` note below).
+
+## src/papyrus/body_expression.cpp:emitShortCircuit (defect, no test)
+
+- Defect: a short-circuit assignment whose right operand names its own destination reads the overwritten value. The destination is written by the `cast` on line 409 before the right operand is emitted on line 412, so `value(binary.right)` returns the new value. Input: `Function Go(bool abLeft, bool abRight)` with body `abLeft = abRight && abLeft`. Emitted: `cast abLeft abRight`, `jmpf abLeft 2`, `cast abLeft abLeft`. With `abRight` true and `abLeft` false, the result is true, but `&&` requires false. `||` has the same shape.
+- No test pins the wrong output, and the fix was not made. The fix is to evaluate the right operand into a temp when the destination equals a name read in the right operand.
+
+## src/papyrus/body_call.cpp:emitArrayBuiltin (defect, no test)
+
+- Defect: `FindStruct` and `RFindStruct` pass the search value through `value(arguments[1])` (line 264 for `FindStruct`), with no conversion to the element's member type. `xs.FindStruct("fX", 2)` on a `float fX` member therefore emits an `Integer` operand. `struct_ops.cpp:159` then refuses the search as `TypeMismatch` because the member is `Float`. Input: `Struct Point` with `float fX`, then `int at = pts.FindStruct("fX", 2)`. The expected emission is `2.0`.
+- The fix is to convert the value to the member's declared type, which requires reading the element struct in codegen. Not done here.
+
+## src/papyrus/resolver.cpp:Resolver::resolve (gap, tests added)
+
+- `ScriptIndex::baseChain` (`script_index.cpp:baseChain`) stops on a repeated name, so a cycle terminates. Its caller marks the resolution incomplete on line 46 (`last->extends`), which is the path the cycle tests pin. No diagnostic is raised for a cycle anywhere in `src/papyrus`, so a cyclic `extends` compiles silently. That is a gap; the tests assert only termination and `baseChainComplete == false`.
+
+## src/papyrus/declaration_check.cpp:declarationCheck (gap, not pinned)
+
+- Duplicate detection runs per kind: functions and events, variables, properties, structs, states and custom events. A variable and a function with the same name are not reported. Whether the Creation Kit rejects that was not verified, so no test pins it either way.
+
+## src/papyrus/type_checker.cpp:TypeChecker (gap, not pinned)
+
+- No check runs on comparison operators, so `int == string` compiles with no diagnostic and the int is cast to string. Not pinned by any test.
+
 ## Radicle/src/swf/swf_bitmap_edit.cpp:replace_bitmap_lossless
 
 - File-level in-place edit, like `apply_edit_text`. The character is looked up through `build_character_model` and `find_character`, so the refusals match the character table the rest of the SWF code reads: `unknown_character` for no row, `not_a_lossless_bitmap` for any row whose tag is not 20 or 36 (a shape, or a DefineBitsJpeg2 that also has kind `bitmap`), `malformed_file` when the model refuses. Dimensions are checked before the pixel count, so a zero or oversized size reports `bad_dimensions` even with an empty buffer.

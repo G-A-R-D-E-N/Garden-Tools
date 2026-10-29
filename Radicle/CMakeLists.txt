@@ -908,6 +908,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_papyrus_declaration_check.cpp
     tests/test_papyrus_semantic_real.cpp
     tests/test_papyrus_codegen.cpp
+    tests/test_papyrus_codegen_corners.cpp
     tests/test_papyrus_codegen_real.cpp
     tests/test_papyrus_user_flags.cpp
     tests/test_papyrus_analysis_service.cpp
