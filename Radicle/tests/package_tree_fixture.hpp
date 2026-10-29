@@ -103,7 +103,7 @@ inline std::vector<std::byte> plugin() {
   prcb(out, 2);
   leaf_without_payload(out, "Activate");
   leaf_without_payload(out, "Wander");
-  write_subrecord(out, "POBA", {});
+  write_subrecord(out, "POBA", std::string_view{});
   end_record(out, nested);
 
   const auto undetermined = begin_record(out, "PACK", 0, 0x801);
@@ -113,7 +113,7 @@ inline std::vector<std::byte> plugin() {
   prcb(out, 2);
   leaf_without_payload(out, "Activate");
   leaf_with_unknown_payload(out, "Wait");
-  write_subrecord(out, "POBA", {});
+  write_subrecord(out, "POBA", std::string_view{});
   end_record(out, undetermined);
 
   const auto shared = begin_record(out, "PACK", 0, 0x804);
@@ -128,7 +128,7 @@ inline std::vector<std::byte> plugin() {
   prcb(out, 2);
   leaf(out, "Activate", {1});
   leaf(out, "Wander", {3, 1});
-  write_subrecord(out, "POBA", {});
+  write_subrecord(out, "POBA", std::string_view{});
   end_record(out, shared);
 
   const auto exclusive = begin_record(out, "PACK", 0, 0x805);
@@ -143,7 +143,7 @@ inline std::vector<std::byte> plugin() {
   prcb(out, 2);
   leaf(out, "Activate", {7});
   leaf(out, "Wander", {9});
-  write_subrecord(out, "POBA", {});
+  write_subrecord(out, "POBA", std::string_view{});
   end_record(out, exclusive);
 
   const auto cross_referenced = begin_record(out, "PACK", 0, 0x806);
@@ -157,7 +157,7 @@ inline std::vector<std::byte> plugin() {
   prcb(out, 2);
   leaf(out, "Activate", {7});
   leaf(out, "Wander", {5});
-  write_subrecord(out, "POBA", {});
+  write_subrecord(out, "POBA", std::string_view{});
   end_record(out, cross_referenced);
 
   const auto templated = begin_record(out, "PACK", 0, 0x807);
@@ -166,7 +166,7 @@ inline std::vector<std::byte> plugin() {
   write_subrecord(out, "CITC", d(0));
   prcb(out, 1);
   leaf_without_payload(out, "Activate");
-  write_subrecord(out, "POBA", {});
+  write_subrecord(out, "POBA", std::string_view{});
   end_record(out, templated);
 
   const auto duplicate_ids = begin_record(out, "PACK", 0, 0x808);
@@ -179,7 +179,7 @@ inline std::vector<std::byte> plugin() {
   write_subrecord(out, "CITC", d(0));
   prcb(out, 1);
   leaf(out, "Activate", {1});
-  write_subrecord(out, "POBA", {});
+  write_subrecord(out, "POBA", std::string_view{});
   end_record(out, duplicate_ids);
 
   const auto undecodable = begin_record(out, "PACK", 0, 0x803);
@@ -188,7 +188,7 @@ inline std::vector<std::byte> plugin() {
   write_subrecord(out, "CITC", d(0));
   prcb(out, 2);
   leaf_without_payload(out, "Activate");
-  write_subrecord(out, "POBA", {});
+  write_subrecord(out, "POBA", std::string_view{});
   end_record(out, undecodable);
 
   end_group(out, pack);
