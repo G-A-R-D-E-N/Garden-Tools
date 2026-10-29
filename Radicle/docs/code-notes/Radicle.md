@@ -9180,6 +9180,7 @@ Hand-built: a DefineFunction with body_records 2, followed by NextFrame and Play
 ## Radicle/src/swf/swf_sound.cpp:decode_sound_stream_head
 
 `Radicle/src/swf/swf_sound.cpp:decode_sound_stream_head` keeps the top nibble of the playback byte as `reserved` and does not refuse it, although Ruffle validates it as a format. The stream byte's compression nibble is refused as `unknown_compression` when outside Ruffle's set. When compression is 2 (MP3), a missing i16 latency returns `truncated`. Ruffle instead defaults the latency to 0, but `Radicle/src/swf/swf_tags.cpp:decode_tag_payload` refuses the same payload, so this decoder matches the module.
+
 ## Radicle/src/avm1/encode.cpp:encode_actions_checked
 
 When the decode that built the stream did not end Ok, `status` takes `stream.status` and the call returns no bytes. `Radicle/src/avm1/decode.cpp:Decoder::run` clears `actions` on failure, so the layout walk of such a stream sees no records and reports Ok. Before this change the failed stream came back as an empty Ok result. The layout status is still used when the decode was Ok. `validate_actions` in `Radicle/src/avm1/encode.cpp` has the same gap and still reports Ok for a stream whose decode failed. It is not changed here. Test: `Radicle/tests/test_avm1_encode.cpp:EncodeCheckedRefusesAStreamWhoseDecodeFailed`.
