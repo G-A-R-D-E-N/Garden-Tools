@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <iterator>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -200,6 +201,86 @@ void climate_sun_window_issues(const Record& record, std::vector<PreflightIssue>
   }
 }
 
+std::uint32_t little_endian_u32(const std::vector<std::byte>& data, std::size_t offset) {
+  std::uint32_t value = 0;
+  for (std::size_t i = 0; i < 4; ++i) {
+    value |= static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(data[offset + i]))
+             << (8 * i);
+  }
+  return value;
+}
+
+std::string hex_byte_string(std::uint32_t value) {
+  std::string out("00000000");
+  constexpr char digits[] = "0123456789ABCDEF";
+  for (int index = 7; index >= 0; --index) {
+    out[static_cast<std::size_t>(index)] = digits[value & 0xFu];
+    value >>= 4;
+  }
+  return out;
+}
+
+// Invariant: LLCT must equal the LVLO entry count (decode_leveled_list requires the coupling).
+void leveled_list_entry_issues(const Record& record, std::vector<PreflightIssue>& issues) {
+  const auto signature = record.header.signature;
+  if (signature != Signature::from_string("LVLI") &&
+      signature != Signature::from_string("LVLN") && signature != Signature::from_string("LVSP")) {
+    return;
+  }
+  const std::string prefix = signature.to_string();
+  const auto lvlo = Signature::from_string("LVLO");
+  std::size_t entries = 0;
+  for (const auto& subrecord : record.subrecords) {
+    if (subrecord.signature != lvlo) continue;
+    // Invariant: an LVLO entry must name an item (offset 4 holds the Form-ID, which must be non-null).
+    if (subrecord.data.size() >= 8 && little_endian_u32(subrecord.data, 4) == 0) {
+      issues.push_back(field_issue(record, prefix + "\\LVLO[" + std::to_string(entries) + "]",
+                                   "leveled_list_null_entry",
+                                   prefix + " LVLO entry " + std::to_string(entries) + " names no item",
+                                   PreflightSeverity::error));
+    }
+    ++entries;
+  }
+  bool saw_count = false;
+  std::uint8_t declared = 0;
+  for (const auto& subrecord : record.subrecords) {
+    if (subrecord.signature != Signature::from_string("LLCT")) continue;
+    saw_count = true;
+    if (!subrecord.data.empty()) declared = std::to_integer<std::uint8_t>(subrecord.data[0]);
+  }
+  if (!saw_count && entries > 0) {
+    issues.push_back(field_issue(record, prefix + "\\LLCT", "leveled_list_count_mismatch",
+                                 prefix + " holds " + std::to_string(entries) +
+                                     " LVLO entries but has no LLCT subrecord",
+                                 PreflightSeverity::error));
+  } else if (saw_count && declared != entries) {
+    issues.push_back(field_issue(
+        record, prefix + "\\LLCT", "leveled_list_count_mismatch",
+        prefix + " LLCT declares " + std::to_string(declared) + " but holds " +
+            std::to_string(entries) + " LVLO entries",
+        PreflightSeverity::error));
+  }
+}
+
+// Invariant: one FLST must not repeat the same LNAM key (a repeated key double-counts the entry).
+void form_list_duplicate_issues(const Record& record, std::vector<PreflightIssue>& issues) {
+  if (record.header.signature != Signature::from_string("FLST")) return;
+  std::set<std::uint32_t> seen;
+  std::size_t ordinal = 0;
+  for (const auto& subrecord : record.subrecords) {
+    if (subrecord.signature != Signature::from_string("LNAM")) continue;
+    const std::size_t index = ordinal++;
+    if (subrecord.data.size() != 4) continue;
+    const auto key = little_endian_u32(subrecord.data, 0);
+    if (key == 0 || seen.insert(key).second) continue;
+    issues.push_back(field_issue(record, "FLST\\LNAM[" + std::to_string(index) + "]",
+                                 "duplicate_formlink_list_entry",
+                                 "FLST repeats LNAM entry " + hex_byte_string(key) +
+                                     ", which the game counts twice",
+                                 PreflightSeverity::warning));
+  }
+}
+
 }  // namespace
 
 std::vector<PreflightIssue> preflight_record(const Record& record, bool localized) {
@@ -357,6 +438,8 @@ std::vector<PreflightIssue> preflight_record(const Record& record, bool localize
     }
   }
 
+  leveled_list_entry_issues(record, issues);
+  form_list_duplicate_issues(record, issues);
   climate_sun_window_issues(record, issues);
   return issues;
 }
