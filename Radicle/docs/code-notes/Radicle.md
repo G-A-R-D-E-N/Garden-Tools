@@ -8831,3 +8831,40 @@ Detects a validator that checks only the top-level list end and not the parent b
 
 - Split of `decompiler.cpp` (727 lines, too close to the 750 cap) by responsibility. `decompiler.cpp` keeps `toSource`, `emitFunction`, `disassemble` and the `decompileBody` setup. `decompiler_expr.cpp:translateInstructions` turns each instruction into a `BodyState::put` or a statement. `decompiler_stmt.cpp:reconstructStatements` runs jump folding, the temp-call pass, local hoisting and `If`/`While`/`Else` structuring. The header holds the state those passes share: `BodyState`, `JKind`, `JInfo`, and the `iequals`, `startsWith` and `join` helpers.
 - `BodyState::put` is the single write path. With inlining on, a `::temp` destination goes to `temps` and `tempExpression`; `::NoneVar` becomes a bare statement; anything else becomes `name = expr`. The move changed no logic, names or output. The decompiler tests are the check that it stayed that way.
+
+## Radicle/src/swf/swf_bitmap_edit.cpp:replace_bitmap_lossless
+
+- File-level in-place edit, like `apply_edit_text`. The character is looked up through `build_character_model` and `find_character`, so the refusals match the character table the rest of the SWF code reads: `unknown_character` for no row, `not_a_lossless_bitmap` for any row whose tag is not 20 or 36 (a shape, or a DefineBitsJpeg2 that also has kind `bitmap`), `malformed_file` when the model refuses. Dimensions are checked before the pixel count, so a zero or oversized size reports `bad_dimensions` even with an empty buffer.
+- The tag code cannot change through `replace_tag_payload` (it only swaps the payload). Every call therefore goes through `apply_tag_plan` as one removal at `character->tag_index` plus one insertion at the same index. The insertion has the new code (36 when `has_alpha`, else 20) and keeps its position, so the other tags are written back unchanged. `swf_bitmap_edit.cpp:replace_bitmap_lossless` maps both zlib failure and an `apply_tag_plan` refusal (the re-decoded payload does not decode) to `encode_failed`.
+- Pixel format is always 5 (24-bit RGB for tag 20, 32-bit ARGB for tag 36). Writing format 3 or 4 would need palette quantisation, and format 5 is the one layout both tags share. Stored bytes are `[alpha|0, R, G, B]` per pixel, row-major, with no row padding because each pixel is 4 bytes.
+- The tag 20 path discards the input alpha: the stored first byte is the reserved 0 and the decoder reads that pixel as opaque. The tag 36 path premultiplies (see `argb_bytes`).
+- Deflate calls `compress2` at `Z_BEST_COMPRESSION` directly, as `swf_bitmap_png.cpp:bitmap_to_png` does. The existing `swf_write.cpp:deflate_body` is in an anonymous namespace and throws on zlib failure, so it was not reused. Stored deflate blocks were not needed because zlib is linked.
+
+## Radicle/src/swf/swf_bitmap_edit.cpp:argb_bytes
+
+- The encoder is the inverse of `swf_bitmap_png.cpp:straight`. The decoder computes `nearbyint(stored * 255 / alpha)`, clamped to 255. The encoder stores `nearbyint(channel * alpha / 255)`, which never exceeds `alpha`. Rounding is therefore exact at alpha 0 and 255, and off by at most one level otherwise. Example: alpha 128 and channel 200 store 100 and decode to 199; channel 1 stores 1 and decodes to 2.
+- Alpha 0 stores RGB 0. The decoder's `straight` passes a stored channel through at alpha 0, so storing the input RGB would decode unchanged. It would also add colour under premultiplied compositing, because the RGB of a fully transparent premultiplied pixel is meant to be 0. The choice means an alpha-0 pixel with non-zero RGB decodes as `(0,0,0,0)`. That is a deliberate deviation from a literal "exact inverse".
+
+## Radicle/src/swf/swf_internal.hpp:kMaxBitmapBytes
+
+- Moved from `swf_bitmap.cpp` so `swf_bitmap.cpp:decode_bitmap_tag` and `swf_bitmap_edit.cpp:replace_bitmap_lossless` share the same 64 MiB cap. The 4097 by 4096 case is 67125248 bytes, which is over the 67108864-byte cap, so it is refused. The exact 4096 by 4096 case is the cap and is allowed.
+
+## Radicle/tests/test_swf_edit.cpp:ReplacesALosslessCharacterAndItsPngKeepsThePremultiplyRounding
+
+Detects an encoder that writes the wrong premultiply rounding, a wrong tag code, or a wrong header. The input is a 2 by 2 tag 20 bitmap, which is replaced with `rgba_2x2` and `has_alpha` true. The stored ARGB is `255,10,20,30 / 128,100,50,1 / 0,0,0,0 / 128,128,64,0`, derived from `round(c * a / 255)`. The header is `03 00 05 02 00 02 00`. The PNG decodes to `10,20,30,255 / 199,100,2,128 / 0,0,0,0 / 255,128,0,128`. The 200 at alpha 128 decodes to 199 and the 1 decodes to 2, which is the decoder's own rounding.
+
+## Radicle/tests/test_swf_edit.cpp:SwitchesToTagTwentyAndDropsTheAlphaChannelWhenHasAlphaIsFalse
+
+Detects a tag 36 rewrite that keeps code 36 when `has_alpha` is false, or an encoder that premultiplies or keeps alpha when it should drop it. The input is a tag 36 2 by 2 bitmap. The output is tag 20 with `has_alpha` false. The stored bytes are `00,10,20,30 / 00,200,100,1 / 00,00,00,00 / 00,255,128,00`, and the PNG alpha is 255 for every pixel, so the 128 and 0 inputs are not kept.
+
+## Radicle/tests/test_swf_edit.cpp:KeepsTheCharacterIdAndEveryOtherTagUnchanged
+
+Detects a replace that shifts tags, drops or re-numbers the character id, or rewrites a neighbouring tag. The movie is shape (32), bitmap (20, id 3), shape (32), ShowFrame, End. After the replace, tag count and every non-bitmap tag's code and payload match the original, and the bitmap is still id 3 with code 36.
+
+## Radicle/tests/test_swf_edit.cpp:RefusesAnUnknownOrNonLosslessCharacterAndLeavesTheFileUntouched
+
+Detects a replace that accepts an unknown id, or one that overwrites a shape or a JPEG character with a lossless tag. The file holds shape id 5, DefineBitsJpeg2 id 8 and lossless id 3. Ids 9, 5 and 8 must return `unknown_character`, `not_a_lossless_bitmap` and `not_a_lossless_bitmap`. The `write_swf` bytes before and after must match.
+
+## Radicle/tests/test_swf_edit.cpp:RefusesZeroOrOversizedDimensionsAndAPixelBufferOfTheWrongSize
+
+Detects a zero width or height that reaches zlib, an oversized geometry that allocates past the cap, or a buffer that is short or long for the declared size. Zero width and zero height, and 4097 by 4096 with an empty buffer, return `bad_dimensions`. A 15-byte or 17-byte buffer for 2 by 2 returns `pixel_size_mismatch`. The file bytes are unchanged.
