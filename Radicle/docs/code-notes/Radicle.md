@@ -9327,6 +9327,7 @@ Input `81 01 00 00` is a GotoFrame record declaring 1 byte of payload, but its f
 ## Radicle/tests/test_avm1_encode.cpp:ValidateReportsBranchUnresolvedAfterTheTargetIsErased
 
 The branch in `kJumpOverPlayAndStop` targets offset 7, the Stop record at index 3. Erasing index 3 leaves the End record at new offset 7, but no surviving record has original offset 7, and 7 is not the original end 9. Expected BranchUnresolved. Detects a status check that returns the decode status for an edited stream and skips the layout branch check.
+
 ## Radicle/tests/test_avm1_timeline.cpp:GotoFrame2NumericZeroIsANoOp
 
 `Radicle/tests/test_avm1_timeline.cpp:GotoFrame2NumericZeroIsANoOp` runs numeric 0 with flags `01`. `Radicle/src/avm1/timeline_ops.cpp:goto_frame_2` reads the frame as 0, adds the scene bias of 0, and returns before any play, stop or goto, so the host sees no calls. Detects a GotoFrame2 that plays or stops for a zero frame, or that sends goto 0 to the host.
