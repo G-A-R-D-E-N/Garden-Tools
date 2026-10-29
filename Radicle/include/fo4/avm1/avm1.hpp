@@ -22,6 +22,10 @@ enum class Avm1Status : std::uint8_t {
   BranchOutOfRange,
   BranchNotRecord,
   TooDeep,
+  BodyRecordsPastEnd,
+  SizeTooLarge,
+  BranchUnresolved,
+  BranchDeltaOutOfRange,
 };
 
 const char* status_name(Avm1Status status) noexcept;
@@ -151,6 +155,12 @@ Avm1Stream decode_actions(std::span<const std::byte> bytes);
 
 /* Requires a stream from decode_actions, which keeps every record and the bytes after End. */
 std::vector<std::byte> encode_actions(const Avm1Stream& stream);
+
+Avm1Status validate_actions(const Avm1Stream& stream);
+
+bool insert_action(std::vector<Avm1Action>& actions, std::size_t index, Avm1Action action);
+
+bool erase_action(std::vector<Avm1Action>& actions, std::size_t index);
 
 std::string disassemble_actions(const Avm1Stream& stream);
 

@@ -8740,6 +8740,82 @@ Detects an encoder change that alters bytes of an unedited stream. It checks thr
 - `RefusesAScalingGridPayloadCutInsideItsRect` detects a RECT reader that zero-fills missing bits into a grid, or one that reads past the payload. It uses two cuts: an id-only payload, and a 5-byte payload where the RECT needs 7 bytes. Each must give `malformed_tag`, no typed grid, the raw payload kept, and the End tag still parsed.
 - `ScalingGridLookupReturnsTheLastGridForAnId` detects `find_scaling_grid` returning the first of two grids for one id, returning a grid for a different id, or returning a non-null pointer for an id with no grid.
 
+## Radicle/src/avm1/encode.cpp:layout
+
+`layout` is the one walk that `encode_actions` and `validate_actions` both use. It writes the records, appends the trailing bytes, patches every branch, and keeps the first problem in `Encoding::status`. `encode_actions` returns only the bytes, so its output is unchanged and it still truncates silently. The delta check runs on the same destination that is written, after the layout is complete. A target is resolvable when it is the offset of a surviving record or when it equals the original end of the records plus the trailing bytes. Any other target is reported as BranchUnresolved, while the encoder still retargets it to the next surviving record or to the stream end.
+
+## Radicle/src/avm1/encode.cpp:validate_actions
+
+Returns the first problem found by `layout`. BodyRecordsPastEnd means a body count runs past its enclosing range: the list end for a top-level container, or the parent body for a nested one. SizeTooLarge means a record payload or a body is over 65535 bytes. BranchDeltaOutOfRange means a branch offset does not fit in int16 after layout. BranchUnresolved means a target names no surviving record. The check takes the whole `Avm1Stream` rather than only the action vector, because the delta to the stream end depends on the trailing bytes. A stream from `decode_actions` that has not been edited returns Ok. The test `DeletedJumpTargetRetargetsToTheNextSurvivingRecord` asserts BranchUnresolved after a target is erased.
+
+## Radicle/src/avm1/encode.cpp:write_body
+
+The new check reports BodyRecordsPastEnd when `first + records` is past `end`. For a nested body, `end` is the parent body end after clamping, so an overflow past the parent is caught by the same test as an overflow past the list. The body size is compared with 65535 before it is written as 16 bits, and the write itself is still truncated, as before.
+
+## Radicle/src/avm1/encode.cpp:write_record
+
+`starts.emplace` keeps the first record with a given offset in list order, so a branch lands on the first record that carries its target offset. A record with kNewRecordOffset is never indexed, so it cannot be a branch target and cannot take an offset from another record. `source_end` is the largest offset plus length over records that have an offset. The record length is also checked against 65535 before the 16-bit length is patched.
+
+## Radicle/include/fo4/avm1/avm1.hpp:Avm1Branch
+
+`Avm1Branch::target` is the only input the encoder reads. `Avm1Branch::offset` is ignored on encode, and the offset written is recomputed from the layout. A branch keeps aiming at the record that had its target offset, even when records are inserted before it.
+
+## Radicle/src/avm1/edit.cpp:insert_action
+
+An index past the list end returns false and changes nothing. The new record belongs to every container that is before `index` and whose body covers `index`, which means `start <= index < start + count` for one of its bodies. Each such body count goes up by one, and the enclosing containers are updated before the vector is changed. Bodies are half-open, so an insert at the first index of a body goes into that body, and an insert at the first index after a body is outside it. When a Try has a catch body, the boundary between try and catch goes into the catch body. The new record's own `body_records` is taken as given. Records that the caller wraps are already inside the same enclosing bodies, so the caller only has to make the wrapped count match.
+
+## Radicle/src/avm1/edit.cpp:erase_action
+
+An index at or past the list end returns false and changes nothing. Erasing a container also erases its body records, because `record_span` is one record plus the counts of its present bodies. Every container before `index` whose body covers `index` loses that span. The erased range is clamped to the list end, and a count that is smaller than the span is clamped at zero.
+
+## Radicle/tests/test_avm1_encode.cpp:InsertedRecordInsideANestedTryGrowsEveryEnclosingBody
+
+Detects an insert that grows only the innermost body and leaves the DefineFunction body size stale. The input is `9B 05 00 00 00 00 0E 00 | 8F 09 00 01 01 00 01 00 00 00 65 00 | 04 | 06 | 00`, which is 23 bytes. Stop (`07`) is inserted at index 2, which is the start of the try body. The Function count goes from 3 to 4 and its body size from 14 to 15, which is `0F 00`. The try size goes from 1 to 2, and the catch size stays 1. The expected output is `9B 05 00 00 00 00 0F 00 8F 09 00 01 02 00 01 00 00 00 65 00 07 04 06 00`, which is 24 bytes.
+
+## Radicle/tests/test_avm1_encode.cpp:ErasedContainerRecordTakesItsBodyRecordsWithIt
+
+Detects an erase that removes only the Try header and leaves its try and catch records behind, or that leaves the Function count at 3. Erasing index 1 removes the Try, NextFrame and Play records, which is 3 records. The Function count goes from 3 to 0, and its body size becomes 0. The expected output is `9B 05 00 00 00 00 00 00 00`, which is 9 bytes.
+
+## Radicle/tests/test_avm1_encode.cpp:InsertedRecordInsideACatchByRegisterTryGrowsOnlyTheCatchBody
+
+Detects an encoder that writes a catch name where flag 4 selects a register byte, or an insert that changes the try size when it should change only the catch size. The input is `8F 08 00 05 01 00 01 00 00 00 02 04 06 00`, which is 14 bytes. The Try has flags 5, so the catch body is present and the catch is by register 2. Stop is inserted at index 2, which is the start of the catch body. The catch size goes from 1 to 2, and the try size stays 1. The expected output is `8F 08 00 05 01 00 02 00 00 00 02 04 07 06 00`, which is 15 bytes.
+
+## Radicle/tests/test_avm1_encode.cpp:InsertedRecordInsideAWithBodyGrowsTheWithBodySize
+
+Detects an insert that updates only DefineFunction bodies and skips the With body. The input is `94 02 00 01 00 04 00`, which is 7 bytes, with a With body of 1 byte holding NextFrame. Stop is inserted at index 1, which is the start of the body. The body size goes from 1 to 2. The expected output is `94 02 00 02 00 07 04 00`, which is 8 bytes.
+
+## Radicle/tests/test_avm1_encode.cpp:JumpIntoAFunctionBodyFollowsTheBodyAfterAnInsert
+
+Detects an encoder that keeps the old jump delta when a body grows between the jump and its target. The input is `99 02 00 09 00 | 9B 05 00 00 00 00 02 00 | 04 06 | 00`, which is 16 bytes. The Jump is at 0, its target is 14 (the Play inside the function body), and the stream has 5 bytes before the function body. Stop is inserted at index 3, before Play. Play moves to offset 15 in the output, so the delta is 15 - 5 = 10, which is `0A 00`. The function body size goes from 2 to 3, which is `03 00`. The expected output is `99 02 00 0A 00 9B 05 00 00 00 00 03 00 04 07 06 00`, which is 17 bytes.
+
+## Radicle/tests/test_avm1_encode.cpp:BranchToTheOriginalStreamEndFollowsTheEndAfterAnInsert
+
+Detects an encoder that resolves a target past the last record to the last record start instead of the stream end. The input is `99 02 00 02 00 04 00`, which is 7 bytes, and the Jump targets 7, which is the end of the bytes. Stop is inserted at index 1. The output stream is 8 bytes, so the delta is 8 - 5 = 3, which is `03 00`. The expected output is `99 02 00 03 00 07 04 00`, which is 8 bytes.
+
+## Radicle/tests/test_avm1_encode.cpp:NewRecordBeforeABranchToOffsetZeroLeavesTheBranchOnTheOffsetZeroRecord
+
+Detects an encoder that lets a new record take the target offset 0, or that resolves the branch to the first record in the list. The input is `99 02 00 FB FF 04 00`, which is 7 bytes, and the Jump at offset 0 targets 0 with a delta of -5. Stop with no offset is inserted at index 0. The Jump moves to encoded offset 1, and its branch end is 6, so the delta is 1 - 6 = -5, which is `FB FF`. If the Stop took offset 0, the delta would be -6 (`FA FF`). The expected output is `07 99 02 00 FB FF 04 00`, which is 8 bytes.
+
+## Radicle/tests/test_avm1_encode.cpp:EraseAndInsertRefuseAnIndexPastTheList
+
+Detects an insert or erase at an index past the list end that changes the vector size or writes past its end. The input is the 5-record Jump stream. An insert at size + 1 and an erase at size both return false, and the size is unchanged.
+
+## Radicle/tests/test_avm1_encode.cpp:ValidateRejectsABodyLargerThan65535Bytes
+
+Detects a silent 16-bit truncation of a body size. The stream is a DefineFunction with two Raw records of 40000 bytes each, which is 2 times 40003 = 80006 bytes of body. Each record is under 65535, so only the body is over. Without the check, the body size would be written as 80006 - 65536 = 14470. The expected result is SizeTooLarge.
+
+## Radicle/tests/test_avm1_encode.cpp:ValidateRejectsABranchDeltaThatDoesNotFitInt16
+
+Detects a branch offset that is silently truncated to int16. The input is the 7-byte jump-to-end stream, and a 40000-byte Raw record is inserted at index 1. The Jump is at 0, the Raw is at 5 with 40003 bytes, and the stream end moves to 40010. The delta is 40010 - 5 = 40005, which is outside int16. The expected result is BranchDeltaOutOfRange.
+
+## Radicle/tests/test_avm1_encode.cpp:ValidateRejectsABodyRecordCountPastTheList
+
+Detects a body count past the list end that the encoder clamps silently. The input is the 11-byte DefineFunction stream, which has 3 records after it. Its body count is set to 4, so the body needs more records than the list has. The expected result is BodyRecordsPastEnd.
+
+## Radicle/tests/test_avm1_encode.cpp:ValidateRejectsANestedBodyThatRunsPastItsParentRange
+
+Detects a validator that checks only the top-level list end and not the parent body. The input is the 23-byte nested Function and Try stream. The Try's try body count is set to 2, so the try body covers indices 2 and 3, and the Function body ends at 4. The catch body then starts at 4 and needs 1 record, which runs past the Function body. The expected result is BodyRecordsPastEnd.
+
 ## src/papyrus/decompiler_internal.hpp:BodyState
 
 - Split of `decompiler.cpp` (727 lines, too close to the 750 cap) by responsibility. `decompiler.cpp` keeps `toSource`, `emitFunction`, `disassemble` and the `decompileBody` setup. `decompiler_expr.cpp:translateInstructions` turns each instruction into a `BodyState::put` or a statement. `decompiler_stmt.cpp:reconstructStatements` runs jump folding, the temp-call pass, local hoisting and `If`/`While`/`Else` structuring. The header holds the state those passes share: `BodyState`, `JKind`, `JInfo`, and the `iequals`, `startsWith` and `join` helpers.

@@ -32,6 +32,14 @@ const char* status_name(Avm1Status status) noexcept {
       return "branch target is not a record start";
     case Avm1Status::TooDeep:
       return "nested bodies are too deep";
+    case Avm1Status::BodyRecordsPastEnd:
+      return "body records run past the enclosing range";
+    case Avm1Status::SizeTooLarge:
+      return "a record or body is over 65535 bytes";
+    case Avm1Status::BranchUnresolved:
+      return "branch target does not name a record";
+    case Avm1Status::BranchDeltaOutOfRange:
+      return "branch offset does not fit in 16 bits";
   }
   return "unknown";
 }
