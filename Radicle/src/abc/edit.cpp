@@ -6,8 +6,10 @@
 #include "abc_internal.hpp"
 
 #include <algorithm>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <span>
 #include <string>
 #include <vector>
@@ -129,6 +131,7 @@ AbcEditStatus verify_and_commit(AbcFile& file, std::uint32_t body_index,
   body.local_count = std::max(original.local_count, detail::required_local_count(code));
   const std::uint32_t original_max_stack = body.max_stack;
   body.max_stack = std::max(original.max_stack, detail::kVerifierStackCeiling);
+  body.max_scope_depth = std::max(original.max_scope_depth, detail::kVerifierStackCeiling);
   AbcMethodFlow flow;
   AbcFlowIssue issue;
   const AbcFlowStatus status = verify_method_flow(file, body_index, flow, issue);
@@ -142,6 +145,7 @@ AbcEditStatus verify_and_commit(AbcFile& file, std::uint32_t body_index,
     return AbcEditStatus::VerifierRefused;
   }
   body.max_stack = std::max(original_max_stack, flow.observed_max_stack);
+  body.max_scope_depth = std::max(original.max_scope_depth, flow.observed_max_scope_depth);
   return AbcEditStatus::Ok;
 }
 
@@ -169,6 +173,62 @@ AbcEditStatus decode_inserted(std::span<const std::uint8_t> instruction, AbcInst
   return AbcEditStatus::Ok;
 }
 
+// Invariant: index 0 is the implicit default entry, so an empty table must gain it before the first append.
+template <typename T, typename Same = std::equal_to<>>
+std::uint32_t intern_entry(std::vector<T>& entries, const T& value, Same same = Same{}) {
+  if (entries.empty()) {
+    entries.emplace_back();
+  }
+  for (std::size_t index = 0; index < entries.size(); ++index) {
+    if (same(entries[index], value)) {
+      return static_cast<std::uint32_t>(index);
+    }
+  }
+  entries.push_back(value);
+  return static_cast<std::uint32_t>(entries.size() - 1);
+}
+
+bool same_double(double a, double b) {
+  return std::bit_cast<std::uint64_t>(a) == std::bit_cast<std::uint64_t>(b);
+}
+
+bool same_namespace(const AbcNamespace& a, const AbcNamespace& b) {
+  return a.kind == b.kind && a.name == b.name;
+}
+
+bool same_multiname(const AbcMultiname& a, const AbcMultiname& b) {
+  return a.kind == b.kind && a.name == b.name && a.ns == b.ns && a.ns_set == b.ns_set &&
+         a.params == b.params;
+}
+
+bool name_fits(std::uint32_t index, std::size_t limit) { return index == 0 || index < limit; }
+
+bool multiname_fits(const AbcConstantPool& pool, const AbcMultiname& value) {
+  const std::size_t multinames = pool.multinames.size();
+  switch (value.kind) {
+    case AbcMultinameKind::QName:
+    case AbcMultinameKind::QNameA:
+      return value.ns < pool.namespaces.size() && name_fits(value.name, pool.strings.size());
+    case AbcMultinameKind::RTQName:
+    case AbcMultinameKind::RTQNameA:
+      return name_fits(value.name, pool.strings.size());
+    case AbcMultinameKind::RTQNameL:
+    case AbcMultinameKind::RTQNameLA:
+      return true;
+    case AbcMultinameKind::Multiname:
+    case AbcMultinameKind::MultinameA:
+      return value.ns_set < pool.ns_sets.size() && name_fits(value.name, pool.strings.size());
+    case AbcMultinameKind::MultinameL:
+    case AbcMultinameKind::MultinameLA:
+      return value.ns_set < pool.ns_sets.size();
+    case AbcMultinameKind::TypeName:
+      return value.name < multinames &&
+             std::all_of(value.params.begin(), value.params.end(),
+                         [multinames](std::uint32_t param) { return param < multinames; });
+  }
+  return false;
+}
+
 }  // namespace
 
 const char* edit_status_name(AbcEditStatus status) noexcept {
@@ -193,6 +253,8 @@ const char* edit_status_name(AbcEditStatus status) noexcept {
       return "the edited code does not encode";
     case AbcEditStatus::VerifierRefused:
       return "the verifier refused the edit";
+    case AbcEditStatus::PoolEntryOutOfRange:
+      return "a pool entry names an index outside its pool";
   }
   return "unknown edit status";
 }
@@ -359,6 +421,90 @@ AbcEditStatus refresh_body_limits(AbcFile& file, std::uint32_t body_index, std::
   }
   const AbcMethodBody original = file.bodies[body_index];
   return verify_and_commit(file, body_index, original, message);
+}
+
+std::uint32_t intern_int(AbcFile& file, std::int32_t value) {
+  return intern_entry(file.pool.ints, value);
+}
+
+std::uint32_t intern_uint(AbcFile& file, std::uint32_t value) {
+  return intern_entry(file.pool.uints, value);
+}
+
+std::uint32_t intern_double(AbcFile& file, double value) {
+  return intern_entry(file.pool.doubles, value, same_double);
+}
+
+std::uint32_t intern_string(AbcFile& file, const std::string& value) {
+  return intern_entry(file.pool.strings, value);
+}
+
+AbcEditStatus intern_namespace(AbcFile& file, const AbcNamespace& value, std::uint32_t& index,
+                               std::string& message) {
+  message.clear();
+  index = 0;
+  if (!name_fits(value.name, file.pool.strings.size())) {
+    message = "the namespace names a string outside its pool";
+    return AbcEditStatus::PoolEntryOutOfRange;
+  }
+  index = intern_entry(file.pool.namespaces, value, same_namespace);
+  return AbcEditStatus::Ok;
+}
+
+AbcEditStatus intern_multiname(AbcFile& file, const AbcMultiname& value, std::uint32_t& index,
+                               std::string& message) {
+  message.clear();
+  index = 0;
+  if (!multiname_fits(file.pool, value)) {
+    message = "the multiname names an index outside its pool";
+    return AbcEditStatus::PoolEntryOutOfRange;
+  }
+  index = intern_entry(file.pool.multinames, value, same_multiname);
+  return AbcEditStatus::Ok;
+}
+
+AbcEditStatus replace_body_code(AbcFile& file, std::uint32_t body_index,
+                                std::span<const std::uint8_t> code, std::string& message) {
+  message.clear();
+  if (body_index >= file.bodies.size()) {
+    message = "no such method body";
+    return AbcEditStatus::NoSuchBody;
+  }
+  AbcMethodBody& body = file.bodies[body_index];
+  const AbcMethodBody original = body;
+  body.code.assign(code.begin(), code.end());
+  return verify_and_commit(file, body_index, original, message);
+}
+
+AbcEditStatus add_method(AbcFile& file, const AbcMethodInfo& method,
+                         std::span<const std::uint8_t> code, std::uint32_t& method_index,
+                         std::string& message) {
+  message.clear();
+  method_index = 0;
+  AbcMethodBody body;
+  body.method = static_cast<std::uint32_t>(file.methods.size());
+  body.local_count =
+      1 + method.param_count + ((method.needs_arguments() || method.needs_rest()) ? 1u : 0u);
+  body.code.assign(code.begin(), code.end());
+  file.methods.push_back(method);
+  file.bodies.push_back(body);
+  const auto body_index = static_cast<std::uint32_t>(file.bodies.size() - 1);
+  AbcEditStatus status = verify_and_commit(file, body_index, body, message);
+  if (status == AbcEditStatus::Ok) {
+    std::vector<std::uint8_t> encoded;
+    const AbcStatus written = file.serialize(encoded);
+    if (written != AbcStatus::Ok) {
+      message = std::string("the new method does not encode: ") + status_name(written);
+      status = AbcEditStatus::EncodeFailed;
+    }
+  }
+  if (status != AbcEditStatus::Ok) {
+    file.bodies.pop_back();
+    file.methods.pop_back();
+    return status;
+  }
+  method_index = body.method;
+  return AbcEditStatus::Ok;
 }
 
 }  // namespace fo4::abc

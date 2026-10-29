@@ -9312,6 +9312,30 @@ Slot 2 of the Try is past its body_count of 2, since flags `01` give a try body 
 
 `Radicle/src/avm1/edit.cpp:insert_action_into_body` is called on NextFrame at container 2. NextFrame has no body, so its body_count is 0 and every slot is out of range. Index 3 is the position the range check would accept without the guard: body_start is 3 and the count is 0. Expected false and no change. Detects a missing container check that writes into the hidden `body_records` of a plain record.
 
+## Radicle/src/abc/edit.cpp:intern_int, Radicle/src/abc/edit.cpp:intern_uint, Radicle/src/abc/edit.cpp:intern_double, Radicle/src/abc/edit.cpp:intern_string, Radicle/src/abc/edit.cpp:intern_entry
+
+`Radicle/src/abc/edit.cpp:intern_entry` is the one linear scan behind the four value interners. Index 0 of every pool vector is the implicit default that the writer never emits (`Radicle/src/abc/abc_write.cpp:put_constant_pool` starts each table at 1), so the scan starts at 0 and a request equal to the default returns 0, which is the AVM2 meaning of that index. An empty vector receives its default first, so the appended entry lands at the index the writer will count. Appending never moves an existing index, so every other pool reference in the file stays valid after an intern.
+
+## Radicle/src/abc/edit.cpp:same_double
+
+`Radicle/src/abc/edit.cpp:same_double` compares the 64-bit patterns instead of using `==`. Under `==`, -0.0 would merge into the 0.0 default at index 0 and a NaN would never match itself, so two entries the writer encodes differently would be aliased. `Radicle/tests/test_abc_edit.cpp:InterningNumbersNamespacesAndMultinamesReusesIdenticalEntries` pins -0.0 to its own index.
+
+## Radicle/src/abc/edit.cpp:multiname_fits, Radicle/src/abc/edit.cpp:intern_namespace, Radicle/src/abc/edit.cpp:intern_multiname
+
+`Radicle/src/abc/edit.cpp:multiname_fits` and `Radicle/src/abc/edit.cpp:intern_namespace` check the index rules that `Radicle/src/abc/constant_pool.cpp:parse_multiname_pool` enforces at parse time: namespace and ns-set indices must lie below their tables, names below the string table with index 0 allowed, and a TypeName's name and params below the multiname table. `Radicle/src/abc/abc_write.cpp:AbcFile::serialize` also rechecks pool entries (`pool_encodable`), so these checks give an early, precise refusal. Known gap: the TypeName expansion cap of 64 is not mirrored here, so such an entry passes interning and is refused later by `AbcFile::serialize` with TypeNameTooLarge (`add_method` reports EncodeFailed and rolls back); the oversized entry stays in the in-memory pool until then. A refusal returns `AbcEditStatus::PoolEntryOutOfRange` before anything is appended.
+
+## Radicle/src/abc/edit.cpp:replace_body_code
+
+`Radicle/src/abc/edit.cpp:replace_body_code` swaps `AbcMethodBody::code` for the given bytes and hands the rest to `Radicle/src/abc/edit.cpp:verify_and_commit`, so decode, flow and limit checks are the same ones every other edit runs. `init_scope_depth` is kept: it is the scope depth the body starts with (`Radicle/src/abc/abc_stack.cpp:verify_scope` starts from it), a property of the method's environment that no instruction sequence can measure. `max_stack`, `local_count` and `max_scope_depth` are measured and never lowered, following the rule in the `refresh_body_limits` section above.
+
+## Radicle/src/abc/edit.cpp:add_method
+
+`Radicle/src/abc/edit.cpp:add_method` appends the method info and a body that names it, so the new body's method index is the old `file.methods.size()`. The starting `local_count` is `1 + param_count`, plus one when `needs_arguments` or `needs_rest` is set, which is the minimum `Radicle/src/abc/abc_verify.cpp:verify_method_context` accepts. `init_scope_depth`, `max_scope_depth` and `max_stack` start at 0 and `verify_and_commit` measures the rest. After verification it runs the writer (`Radicle/src/abc/abc_write.cpp:AbcFile::serialize`), which is the only check that catches a parameter-type list whose length differs from `param_count`. Any refusal pops the method and the body again, so the file is unchanged. The writer pass serializes the whole file once per call; that is acceptable for an edit that adds a method and is the cost to revisit if it is ever called in a loop.
+
+## Radicle/src/abc/edit.cpp:verify_and_commit
+
+`Radicle/src/abc/edit.cpp:verify_and_commit` now handles `max_scope_depth` the way it handles `max_stack`: the value is raised to `kVerifierStackCeiling` while the flow runs, then set to the larger of the declared value and `flow.observed_max_scope_depth`, which `Radicle/src/abc/abc_stack.cpp:verify_scope` measures as an absolute depth. This changes insert, delete and replace as well as refresh: a rewrite that pushes past the declared scope limit used to be refused with `AbcFlowStatus::ScopeLimitExceeded` and is now accepted with the limit raised. No edit test pinned the old refusal. The constant `kVerifierStackCeiling` now bounds both limits.
+
 ## Radicle/src/avm1/encode.cpp:validate_actions
 
 When the decode that built the stream did not end Ok, `validate_actions` returns `stream.status`. `Radicle/src/avm1/decode.cpp:Decoder::run` clears `actions` on failure, so `layout` alone walked an empty list and reported Ok. The same rule as `encode_actions_checked` now applies here, and the layout status is still used for a stream whose decode was Ok. The earlier `encode_actions_checked` note above says this function was left unchanged; that is no longer true. The callers are the tests in `Radicle/tests/test_avm1_encode.cpp`. The C ABI `radicle_swf_avm1_disassemble` in `Radicle/src/c_api_swf.cpp` uses `decode_actions` and `disassemble_actions`, so it does not call this function.
