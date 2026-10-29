@@ -9322,7 +9322,7 @@ Slot 2 of the Try is past its body_count of 2, since flags `01` give a try body 
 
 ## Radicle/src/abc/edit.cpp:multiname_fits, Radicle/src/abc/edit.cpp:intern_namespace, Radicle/src/abc/edit.cpp:intern_multiname
 
-`Radicle/src/abc/edit.cpp:multiname_fits` and `Radicle/src/abc/edit.cpp:intern_namespace` check the index rules that `Radicle/src/abc/constant_pool.cpp:parse_multiname_pool` enforces at parse time: namespace and ns-set indices must lie below their tables, names below the string table with index 0 allowed, and a TypeName's name and params below the multiname table. `Radicle/src/abc/abc_write.cpp:AbcFile::serialize` does not recheck pool entries, so without these checks a bad entry would be written and fail to parse. Known gap: the TypeName expansion cap (`kMaxTypeNameExpansion` in `Radicle/src/abc/constant_pool.cpp`) is not mirrored, so a TypeName nested deeply enough to exceed it passes here and fails the parser. A refusal returns `AbcEditStatus::PoolEntryOutOfRange` before anything is appended.
+`Radicle/src/abc/edit.cpp:multiname_fits` and `Radicle/src/abc/edit.cpp:intern_namespace` check the index rules that `Radicle/src/abc/constant_pool.cpp:parse_multiname_pool` enforces at parse time: namespace and ns-set indices must lie below their tables, names below the string table with index 0 allowed, and a TypeName's name and params below the multiname table. `Radicle/src/abc/abc_write.cpp:AbcFile::serialize` also rechecks pool entries (`pool_encodable`), so these checks give an early, precise refusal. Known gap: the TypeName expansion cap of 64 is not mirrored here, so such an entry passes interning and is refused later by `AbcFile::serialize` with TypeNameTooLarge (`add_method` reports EncodeFailed and rolls back); the oversized entry stays in the in-memory pool until then. A refusal returns `AbcEditStatus::PoolEntryOutOfRange` before anything is appended.
 
 ## Radicle/src/abc/edit.cpp:replace_body_code
 
@@ -9334,7 +9334,7 @@ Slot 2 of the Try is past its body_count of 2, since flags `01` give a try body 
 
 ## Radicle/src/abc/edit.cpp:verify_and_commit
 
-`Radicle/src/abc/edit.cpp:verify_and_commit` now handles `max_scope_depth` the way it handles `max_stack`: the value is raised to `kVerifierDepthCeiling` while the flow runs, then set to the larger of the declared value and `flow.observed_max_scope_depth`, which `Radicle/src/abc/abc_stack.cpp:verify_scope` measures as an absolute depth. This changes insert, delete and replace as well as refresh: a rewrite that pushes past the declared scope limit used to be refused with `AbcFlowStatus::ScopeLimitExceeded` and is now accepted with the limit raised. No edit test pinned the old refusal. The constant `kVerifierStackCeiling` was renamed to `kVerifierDepthCeiling` because it now bounds both limits.
+`Radicle/src/abc/edit.cpp:verify_and_commit` now handles `max_scope_depth` the way it handles `max_stack`: the value is raised to `kVerifierStackCeiling` while the flow runs, then set to the larger of the declared value and `flow.observed_max_scope_depth`, which `Radicle/src/abc/abc_stack.cpp:verify_scope` measures as an absolute depth. This changes insert, delete and replace as well as refresh: a rewrite that pushes past the declared scope limit used to be refused with `AbcFlowStatus::ScopeLimitExceeded` and is now accepted with the limit raised. No edit test pinned the old refusal. The constant `kVerifierStackCeiling` now bounds both limits.
 
 ## Radicle/src/avm1/encode.cpp:validate_actions
 
