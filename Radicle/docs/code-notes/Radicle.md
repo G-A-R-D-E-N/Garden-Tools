@@ -8951,6 +8951,7 @@ Detects a validator that checks only the top-level list end and not the parent b
 ## src/papyrus/type_checker.cpp:TypeChecker (gap, not pinned)
 
 - No check runs on comparison operators, so `int == string` compiles with no diagnostic and the int is cast to string. Not pinned by any test.
+
 ## Radicle/include/fo4/avm2/object.hpp:kMaxSlotIndex
 
 - The cap on every slot index that can grow an `Object` slot vector: the `setslot` and `setglobalslot` operands, and ABC slot and const trait ids (checked at link time, see `Radicle/src/avm2/runtime.cpp:Runtime::build_traits`). The largest accepted index is 65535, so a slot vector holds at most 65536 entries.
