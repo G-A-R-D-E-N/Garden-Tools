@@ -157,10 +157,12 @@ TEST(VmadWriterOfficial, AddsAScriptToAVanillaActiAndQuestOverrideAndRereads) {
   ASSERT_NE(quest, nullptr);
   struct Target {
     const fo4::Record* record;
+    std::vector<fo4::Subrecord> before;
     const char* script;
     bool needs_vmad;
   };
-  const Target targets[] = {{acti, "RadicleCAbiActi", true}, {quest, "RadicleCAbiQuest", false}};
+  const Target targets[] = {{acti, acti->subrecords, "RadicleCAbiActi", true},
+                            {quest, quest->subrecords, "RadicleCAbiQuest", false}};
   for (const auto& target : targets) {
     const auto key = target.record->form_key;
     std::size_t index = 0;
@@ -188,13 +190,13 @@ TEST(VmadWriterOfficial, AddsAScriptToAVanillaActiAndQuestOverrideAndRereads) {
     const auto scripts = fo4::read_vmad_scripts(vmad->data);
     EXPECT_TRUE(std::any_of(scripts.scripts.begin(), scripts.scripts.end(),
                             [&](const fo4::VmadScript& script) { return script.name == target.script; }));
-    EXPECT_EQ(after->subrecords.size(), target.record->subrecords.size() + (target.needs_vmad ? 1 : 0));
+    EXPECT_EQ(after->subrecords.size(), target.before.size() + (target.needs_vmad ? 1 : 0));
     std::size_t other = 0;
     for (const auto& sub : after->subrecords) {
       if (sub.signature.to_string() == "VMAD") continue;
-      ASSERT_LT(other, target.record->subrecords.size());
-      EXPECT_EQ(sub.signature, target.record->subrecords[other].signature);
-      EXPECT_EQ(sub.data, target.record->subrecords[other].data);
+      ASSERT_LT(other, target.before.size());
+      EXPECT_EQ(sub.signature, target.before[other].signature);
+      EXPECT_EQ(sub.data, target.before[other].data);
       ++other;
     }
   }
