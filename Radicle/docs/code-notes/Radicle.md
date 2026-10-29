@@ -9095,6 +9095,7 @@ Bytecode is hand-derived. `u30(65535)` is `FF FF 03` and `u30(65536)` is `80 80 
 - `PlacedShapeWithDropShadowWrapsItsGroupInTheShadowFilter`: a regression that loses the filter list between `read_swf`, `build_display_list` and `frame_to_svg`.
 - `PlainPlacementIsByteIdenticalToTheUnfilteredGroup`: a regression that emits an empty `<defs>` or a wrapper group for a placement with no filter or blend.
 - `PlacedBlendModeWrapsTheGroupInItsStyle`: a regression that drops the blend mode in the display replay.
+
 ## Radicle/src/papyrus/body_expression.cpp:BodyEmitter::emitShortCircuit
 
 - Bug, fixed: when the destination is a named variable that the right operand reads, the first `cast` overwrote it before the right operand was read. `abLeft = abRight && abLeft` emitted `cast abLeft abLeft` on the right path, so the result was true where it must be false. The aliased case now evaluates into a fresh temp, skips with `jmpf`/`jmpt` on that temp, and copies it to the destination with `assign` after the jump target. `||` takes the same path with `jmpt`.
