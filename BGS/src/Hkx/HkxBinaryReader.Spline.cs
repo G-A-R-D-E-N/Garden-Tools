@@ -298,8 +298,7 @@ public partial class HkxBinaryReader
             1 => Read40BitQuat(data, ref off),
             2 => Read48BitQuat(data, ref off),
             5 => ReadUncompressedQuat(data, ref off),
-            _ => throw new NotSupportedException(
-                $"spline rotation quantization {fmt} is not decoded (only 0, 1, 2 and 5 are), so the animation was not read"),
+            _ => throw SplineQuat.Unsupported(fmt),
         };
     }
 

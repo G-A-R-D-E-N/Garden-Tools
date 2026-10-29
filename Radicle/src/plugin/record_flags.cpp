@@ -31,7 +31,6 @@ constexpr RecordFlags::value_type k_kept_bits = RecordFlags::compressed | Record
 constexpr std::string_view k_player_key = "000014:Fallout4.esm";
 constexpr float k_undelete_z = -30000.0f;
 
-using detail::MutableLocation;
 using detail::erase_if_empty;
 using detail::find_mutable_location;
 
@@ -88,20 +87,6 @@ bool cell_is_interior(const Plugin& plugin, std::uint32_t label) {
   if (cell == nullptr || cell->header.signature != k_cell) return false;
   require_decodable(*cell);
   return detail::is_interior_cell(*cell);
-}
-
-void move_to_bucket(MutableLocation& located, GroupType bucket_type, const PluginFormIdContext& context) {
-  auto& old_bucket = *located.path.back();
-  auto& cell_children = *located.path[located.path.size() - 2];
-  const auto old_header = old_bucket.header;
-  auto moved = std::move(std::get<Record>(old_bucket.children[located.index]));
-  old_bucket.children.erase(old_bucket.children.begin() + static_cast<std::ptrdiff_t>(located.index));
-
-  GroupHeader wanted = old_header;
-  wanted.group_type = static_cast<std::int32_t>(bucket_type);
-  forms::detail::ensure_reference_bucket(cell_children, wanted, context, context)
-      ->children.emplace_back(std::move(moved));
-  erase_if_empty(cell_children, old_header);
 }
 
 RecordFlagStatus relocate_reference(Plugin& plugin,
@@ -170,7 +155,9 @@ RecordFlagStatus relocate_reference(Plugin& plugin,
   detail::mark_record_modified(next, record);
   record.header.flags = RecordFlags{flags};
   if (destination == source) {
-    if (!has_type(bucket.header, target)) move_to_bucket(*located, target, context);
+    if (!has_type(bucket.header, target)) {
+      forms::detail::move_reference_to_bucket(*located, target, context);
+    }
     plugin = std::move(next);
     return RecordFlagStatus::changed;
   }

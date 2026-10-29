@@ -6,13 +6,11 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
-
-struct radicle_assets {
-  fo4::archive::AssetResolver value;
-};
 
 struct radicle_asset_list {
   std::vector<fo4::archive::AssetListing> items;
@@ -52,6 +50,15 @@ bool valid_list(const char* const* values, size_t count) {
     if (values[i] == nullptr) return false;
   }
   return true;
+}
+
+bool valid_ba2_write_path(const char* path) {
+  const std::string_view text(path);
+  if (text.empty() || text.back() == '/' || text.back() == '\\') return false;
+  if (fo4::archive::normalize_ba2_name(text) == ".") return false;
+  const auto stored = fo4::text::utf8_to_windows1252(text);
+  return stored && !stored->empty() &&
+         stored->size() < fo4::archive::k_max_ba2_path_length;
 }
 
 }  // namespace
@@ -149,9 +156,29 @@ radicle_status radicle_ba2_write_general(const radicle_ba2_file* files,
   }
   *out_bytes = nullptr;
   *out_size = 0;
+  if (!fo4::archive::is_supported_ba2_general_version(version)) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                (std::string("unsupported BA2 general version ") + std::to_string(version) +
+                 "; supported GNRL versions are 1, 7 and 8").c_str());
+  }
+  if constexpr (sizeof(size_t) > sizeof(std::uint32_t)) {
+    if (file_count > std::numeric_limits<std::uint32_t>::max()) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "too many BA2 entries for the 32-bit file count");
+    }
+  }
   for (size_t i = 0; i < file_count; ++i) {
     if (files[i].path == nullptr || (files[i].data == nullptr && files[i].size != 0)) {
       return fail(RADICLE_STATUS_INVALID_ARGUMENT, "every file needs a path and data");
+    }
+    if (!valid_ba2_write_path(files[i].path)) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                  "every file needs a Windows-1252 path shorter than 260 bytes that does not end "
+                  "in a separator and is not '.'");
+    }
+    if constexpr (sizeof(size_t) > sizeof(std::uint32_t)) {
+      if (files[i].size > std::numeric_limits<std::uint32_t>::max()) {
+        return fail(RADICLE_STATUS_INVALID_ARGUMENT, "file data exceeds the 32-bit chunk size field");
+      }
     }
   }
   return guarded("unknown exception while writing BA2", [&] {
@@ -161,7 +188,8 @@ radicle_status radicle_ba2_write_general(const radicle_ba2_file* files,
     for (size_t i = 0; i < file_count; ++i) {
       fo4::archive::Ba2GeneralEntry entry;
       entry.path = files[i].path;
-      const auto hashes = fo4::archive::compute_ba2_hashes(entry.path);
+      const auto stored_path = fo4::text::utf8_to_windows1252(entry.path);
+      const auto hashes = fo4::archive::compute_ba2_hashes(stored_path ? *stored_path : entry.path);
       entry.name_hash = hashes.name;
       entry.extension_hash = hashes.extension;
       entry.directory_hash = hashes.directory;
@@ -248,6 +276,11 @@ void radicle_assets_destroy(radicle_assets* assets) {
 size_t radicle_assets_archive_count(const radicle_assets* assets) {
   clear_error();
   return assets == nullptr ? 0 : assets->value.archives().size();
+}
+
+size_t radicle_assets_root_count(const radicle_assets* assets) {
+  clear_error();
+  return assets == nullptr ? 0 : assets->value.roots().size();
 }
 
 radicle_status radicle_assets_get_archive(const radicle_assets* assets, size_t index, const radicle_ba2** out_ba2) {

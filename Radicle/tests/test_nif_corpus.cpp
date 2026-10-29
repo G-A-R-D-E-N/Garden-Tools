@@ -1,6 +1,7 @@
 #include "fo4/archive/assets.hpp"
 #include "fo4/error.hpp"
 #include "fo4/nif/nif.hpp"
+#include "fo4/nif/nif_write.hpp"
 #include "real_data_build.hpp"
 #include "real_data_plugins.hpp"
 
@@ -245,4 +246,31 @@ TEST(NifCorpus, ReadsEveryVanillaNifAndHandlesGeometryTypes) {
   EXPECT_GT(counts.nodes, 0U);
   EXPECT_GT(counts.shapes_with_node_parent, 0U);
   EXPECT_EQ(counts.shapes_with_warnings, 0U);
+}
+
+// regression: a vanilla NIF that the writer re-encodes differently must fail here, so zero-edit saves stay byte-identical
+TEST(NifCorpus, WriteRoundTripsEveryVanillaNifByteForByte) {
+  const char* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder with its Fallout4 - *.ba2 archives";
+  record_game_build(detect_game_build(dir));
+  const auto archives = fo4::archive::archive_load_order(dir, {}, installed_master_and_cc_plugins(dir));
+  if (archives.empty()) GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder with its Fallout4 - *.ba2 archives";
+
+  const auto assets = fo4::archive::AssetResolver::open({}, archives);
+  std::size_t nif_count = 0;
+  for (const auto& reader : assets.archives()) {
+    if (reader.kind() != fo4::archive::Ba2Kind::general) continue;
+    for (std::size_t i = 0; i < reader.entries().size(); ++i) {
+      const auto& path = reader.entries()[i].path;
+      if (!has_extension(path, ".nif")) continue;
+      ++nif_count;
+      const auto bytes = reader.extract(i);
+      try {
+        EXPECT_EQ(fo4::nif::write_nif(fo4::nif::read_nif(bytes)), bytes) << path;
+      } catch (const fo4::parse_error& error) {
+        ADD_FAILURE() << path << ": " << error.what();
+      }
+    }
+  }
+  EXPECT_GT(nif_count, 0U);
 }

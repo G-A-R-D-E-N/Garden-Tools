@@ -13,13 +13,10 @@
 #include <system_error>
 #include <utility>
 
+#include "ServiceTargetSupport.hpp"
+
 namespace fo4ide::app {
 namespace {
-
-std::string stringArgument(const nlohmann::json& args, std::size_t index) {
-    if (!args.is_array() || index >= args.size() || !args[index].is_string()) return {};
-    return args[index].get<std::string>();
-}
 
 int intArgument(const nlohmann::json& args, std::size_t index, int fallback) {
     if (!args.is_array() || index >= args.size()) return fallback;
@@ -75,7 +72,7 @@ struct EnsuredWriteTarget {
 Result<EnsuredWriteTarget> ensureWriteTarget(plugin::IPluginBackend& backend,
                                               const nlohmann::json& args,
                                               std::size_t index) {
-    auto targetName = normalizeTargetPluginName(stringArgument(args, index));
+    auto targetName = normalizeTargetPluginName(support::stringArgument(args, index));
     if (targetName.empty()) {
         return std::unexpected(Error{
             "TargetPluginMissing",
@@ -185,9 +182,9 @@ Result<std::string> resolveFormKey(plugin::IPluginBackend& backend,
 
 Result<nlohmann::json> legacyRenumberFormId(plugin::IPluginBackend& backend,
                                              const nlohmann::json& args) {
-    const auto pluginName = stringArgument(args, 0);
-    const auto recordId = stringArgument(args, 1);
-    auto hex = trim(stringArgument(args, 2));
+    const auto pluginName = support::stringArgument(args, 0);
+    const auto recordId = support::stringArgument(args, 1);
+    auto hex = trim(support::stringArgument(args, 2));
     if (pluginName.empty() || recordId.empty() || hex.empty()) {
         return std::unexpected(Error{
             "RenumberArgumentsMissing",
@@ -219,7 +216,7 @@ Result<nlohmann::json> legacyRenumberFormId(plugin::IPluginBackend& backend,
 
 Result<nlohmann::json> resolveFormKeyLabels(plugin::IPluginBackend& backend,
                                              const nlohmann::json& args) {
-    const auto csv = stringArgument(args, 0);
+    const auto csv = support::stringArgument(args, 0);
     nlohmann::json labels = nlohmann::json::object();
     std::size_t begin = 0;
     while (begin <= csv.size()) {
@@ -246,8 +243,8 @@ Result<nlohmann::json> resolveFormKeyLabels(plugin::IPluginBackend& backend,
 
 Result<nlohmann::json> legacyRecordTree(plugin::IPluginBackend& backend,
                                          const nlohmann::json& args) {
-    const auto pluginName = stringArgument(args, 0);
-    const auto recordId = stringArgument(args, 1);
+    const auto pluginName = support::stringArgument(args, 0);
+    const auto recordId = support::stringArgument(args, 1);
     if (pluginName.empty() || recordId.empty()) return nlohmann::json("[]");
 
     auto formKey = resolveFormKey(backend, pluginName, recordId);
@@ -310,7 +307,7 @@ Result<nlohmann::json> legacySearchRecordType(plugin::IPluginBackend& backend,
                                                const nlohmann::json& args,
                                                std::string_view signature,
                                                int defaultLimit) {
-    const auto query = stringArgument(args, 0);
+    const auto query = support::stringArgument(args, 0);
     const auto requestedLimit = intArgument(args, 1, defaultLimit);
     const auto limit = requestedLimit <= 0 ? defaultLimit : requestedLimit;
     auto hits = parseStringResult(
@@ -332,7 +329,7 @@ Result<nlohmann::json> legacySearchRecordType(plugin::IPluginBackend& backend,
 }
 
 bool isRootConditionsPath(const nlohmann::json& args, std::size_t index) {
-    const auto path = trim(stringArgument(args, index));
+    const auto path = trim(support::stringArgument(args, index));
     return path.empty() || lower(path) == "conditions";
 }
 
@@ -345,7 +342,7 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
                                                     const nlohmann::json& args) {
     if (targetNamespace_ == "backend") {
         if (method == "SavePatch") {
-            const auto pluginName = stringArgument(args, 0);
+            const auto pluginName = support::stringArgument(args, 0);
             return backend_.invokeBackend(
                 "SavePlugin", nlohmann::json::array({pluginName, std::string{}}));
         }
@@ -358,8 +355,8 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
             auto ensured = ensureWriteTarget(backend_, args, 2);
             if (!ensured) return std::unexpected(ensured.error());
             auto copyArgs = nlohmann::json::array({
-                stringArgument(args, 1),
-                stringArgument(args, 0),
+                support::stringArgument(args, 1),
+                support::stringArgument(args, 0),
                 ensured->name,
                 false
             });
@@ -397,14 +394,14 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
             if (isRootConditionsPath(args, 2)) {
                 return backend_.invokeBackend(
                     "GetConditions",
-                    nlohmann::json::array({stringArgument(args, 0), stringArgument(args, 1)}));
+                    nlohmann::json::array({support::stringArgument(args, 0), support::stringArgument(args, 1)}));
             }
             return backend_.invokeBackend(
                 "GetConditionsAtPath",
                 nlohmann::json::array({
-                    stringArgument(args, 0),
-                    stringArgument(args, 1),
-                    stringArgument(args, 2)
+                    support::stringArgument(args, 0),
+                    support::stringArgument(args, 1),
+                    support::stringArgument(args, 2)
                 }));
         }
         if (method == "SetConditionsAt") {
@@ -412,18 +409,18 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
                 return backend_.invokeBackend(
                     "SetConditions",
                     nlohmann::json::array({
-                        stringArgument(args, 0),
-                        stringArgument(args, 1),
-                        stringArgument(args, 3)
+                        support::stringArgument(args, 0),
+                        support::stringArgument(args, 1),
+                        support::stringArgument(args, 3)
                     }));
             }
             return backend_.invokeBackend(
                 "SetConditionsAtPath",
                 nlohmann::json::array({
-                    stringArgument(args, 0),
-                    stringArgument(args, 1),
-                    stringArgument(args, 2),
-                    stringArgument(args, 3)
+                    support::stringArgument(args, 0),
+                    support::stringArgument(args, 1),
+                    support::stringArgument(args, 2),
+                    support::stringArgument(args, 3)
                 }));
         }
         if (method == "DescribeElement") return backend_.describeElement(args);
@@ -440,7 +437,7 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "RenumberPluginFormIds") return backend_.renumberPluginFormIds(args);
         if (method == "InjectFormsIntoMaster") return backend_.injectFormsIntoMaster(args);
         if (method == "DeepCopyAsOverride") {
-            const auto normalizedName = normalizeTargetPluginName(stringArgument(args, 2));
+            const auto normalizedName = normalizeTargetPluginName(support::stringArgument(args, 2));
             auto normalizedArgs = withTargetName(args, 2, normalizedName);
             if (!boolArgument(args, 3)) return backend_.deepCopyAsOverride(normalizedArgs);
             auto ensured = ensureWriteTarget(backend_, normalizedArgs, 2);
@@ -450,7 +447,7 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
                 backend_, *ensured, backend_.deepCopyAsOverride(normalizedArgs), "Deep-copied ");
         }
         if (method == "ChangeReferencingRecords") {
-            const auto normalizedName = normalizeTargetPluginName(stringArgument(args, 2));
+            const auto normalizedName = normalizeTargetPluginName(support::stringArgument(args, 2));
             auto normalizedArgs = withTargetName(args, 2, normalizedName);
             if (!boolArgument(args, 3)) return backend_.changeReferencingRecords(normalizedArgs);
             auto ensured = ensureWriteTarget(backend_, normalizedArgs, 2);

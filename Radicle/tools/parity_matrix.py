@@ -131,6 +131,15 @@ def tier_of(scalar, string, formlink, authoring, modules, lists, keyword):
     return "L0"
 
 
+def tier_summary(tiers, authoring_only, listed):
+    summary = ", ".join(f"{tier} {tiers.get(tier, 0)}" for tier in ["L0", "L1", "L2", "L3", "L4"])
+    if not authoring_only:
+        return summary
+    extra = f"; FormLink list rows are also present on {', '.join(listed)}" if listed else ""
+    return (f"{summary} ({len(authoring_only)} L4 rows have an authoring constraint and no scalar, string "
+            f"or FormLink field rows: {', '.join(authoring_only)}{extra})")
+
+
 def scalar_rows(record_signature, rows):
     expanded = []
     for row in rows:
@@ -166,6 +175,8 @@ def render():
 
     main_rows = []
     tiers = {}
+    authoring_only = []
+    authoring_only_lists = []
     for sig in sorted(sigs):
         record = records.get(sig, {})
         rows = scalar_rows(sig, record.get("fields", []))
@@ -180,6 +191,10 @@ def render():
         real = sum(f'"{sig}"' in text for text in real_texts)
         tier = tier_of(scalar, string, formlink, authoring, typed, lists, keyword)
         tiers[tier] = tiers.get(tier, 0) + 1
+        if tier == "L4" and authoring and not scalar and not string and not formlink:
+            authoring_only.append(sig)
+            if lists:
+                authoring_only_lists.append(sig)
         main_rows.append(
             f"| {sig} | {sigs[sig]} | {cell(scalar)} | {cell(string)} | {cell(formlink)} | {cell(lists)} | "
             f"{cell(localized)} | {'yes' if authoring else '-'} | {'yes' if keyword else '-'} | "
@@ -205,7 +220,7 @@ def render():
             f"{cell(repeated)} | {cell(stride)} | {cell(when)} | {insertion} |"
         )
 
-    tier_line = ", ".join(f"{tier} {tiers.get(tier, 0)}" for tier in ["L0", "L1", "L2", "L3", "L4"])
+    tier_line = tier_summary(tiers, authoring_only, authoring_only_lists)
     lines = [
         BEGIN,
         "",
@@ -213,7 +228,7 @@ def render():
         "",
         "Columns: xEdit line is the registration line in the pinned definitions. Rows, authoring, keyword list and FormLink counts come from `schema/fallout4/fields.json`. Scalar rows counts only rows whose kind is `scalar` and String rows only `string`, while the generated `k_scalar_fields` table and `schema::scalar_fields()` carry both, so a record's row-table size is Scalar rows plus String rows - a record with one string row reports one less in the Scalar column than `scalar_fields()` returns for it. Typed module lists the `TYPED_MODULES` files that name the signature. Mixed remap means the signature is named in `src/schema/form_link_mixed.cpp` or `src/schema/form_link_records.cpp`. Real-data tests count registered `tests/*_real.cpp` files that name it. `-` means none.",
         "",
-        "Tier: L4 has field rows, FormLink fields or authoring constraints; L2 has a typed module, no rows or lists; L3 has FormLink list rows only; L1 has a keyword list only; L0 has none of these. Remap evidence (the Mixed remap column and the form_links.cpp record checks) does not affect the tier. L5 (dedicated PET route) is not derived.",
+        "Tier: L4 has field rows, FormLink fields or authoring constraints; L2 has a typed module, no rows or lists; L3 has FormLink list rows only; L1 has a keyword list only; L0 has none of these. A record with an authoring constraint but no scalar, string or FormLink field rows is still L4, and the tier counts break those out. Remap evidence (the Mixed remap column and the form_links.cpp record checks) does not affect the tier. L5 (dedicated PET route) is not derived.",
         "",
         f"Tier counts: {tier_line}.",
         "",

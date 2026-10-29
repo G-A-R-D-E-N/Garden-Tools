@@ -1,0 +1,455 @@
+#include "c_api_env_internal.hpp"
+#include "c_api_internal.hpp"
+#include "c_api_papyrus_internal.hpp"
+#include "c_api_papyrus_runtime_internal.hpp"
+#include "c_api_pex_internal.hpp"
+#include "fo4/c_api_papyrus_runtime.h"
+#include "fo4/papyrus/runtime.hpp"
+
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
+#include <memory>
+#include <new>
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
+
+using fo4::papyrus::ClockSource;
+using fo4::papyrus::InstanceId;
+using fo4::papyrus::Lifecycle;
+using fo4::papyrus::NativeRegistration;
+using fo4::papyrus::NativeTargetKind;
+using fo4::papyrus::OnInitArrivalPolicy;
+using fo4::papyrus::OwnerId;
+using fo4::papyrus::OwnerKind;
+using fo4::papyrus::OverrideOutcome;
+using fo4::papyrus::OverrideResult;
+using fo4::papyrus::RegistrationKind;
+using fo4::papyrus::Runtime;
+using fo4::papyrus::ScriptRegistration;
+using fo4::papyrus::Status;
+using fo4::papyrus::Value;
+
+
+namespace {
+
+using radicle_c_papyrus_detail::make_value;
+using radicle_c_papyrus_detail::to_c_status;
+
+std::optional<OwnerId> ownerFrom(radicle_papyrus_owner_kind kind, const char* base, const char* discriminator) {
+  if (base == nullptr) return std::nullopt;
+  const std::string baseKey(base);
+  const std::string disc = discriminator == nullptr ? std::string() : std::string(discriminator);
+  switch (kind) {
+    case RADICLE_PAPYRUS_OWNER_FORM:
+      return OwnerId::forForm(baseKey);
+    case RADICLE_PAPYRUS_OWNER_PLACED_REFERENCE:
+      if (disc.empty()) return std::nullopt;
+      return OwnerId::forPlacedReference(baseKey, disc);
+    case RADICLE_PAPYRUS_OWNER_DYNAMIC_REFERENCE:
+      if (disc.empty()) return std::nullopt;
+      return OwnerId::forDynamicReference(baseKey, disc);
+    case RADICLE_PAPYRUS_OWNER_QUEST_ALIAS:
+      return OwnerId::forQuestAlias(baseKey, static_cast<std::int32_t>(std::strtol(disc.c_str(), nullptr, 10)));
+    case RADICLE_PAPYRUS_OWNER_RUNTIME_INSTANCE:
+      return OwnerId::forRuntimeInstance(baseKey, std::strtoll(disc.c_str(), nullptr, 10));
+  }
+  return std::nullopt;
+}
+
+NativeTargetKind nativeKindFrom(radicle_papyrus_native_kind kind) {
+  switch (kind) {
+    case RADICLE_PAPYRUS_NATIVE_SCRIPT_INSTANCE:
+      return NativeTargetKind::ScriptInstance;
+    case RADICLE_PAPYRUS_NATIVE_ENGINE_OBJECT:
+      return NativeTargetKind::EngineObject;
+    case RADICLE_PAPYRUS_NATIVE_STATIC:
+      break;
+  }
+  return NativeTargetKind::Static;
+}
+
+}  // namespace
+
+extern "C" {
+
+radicle_status radicle_papyrus_runtime_create(const radicle_papyrus_runtime_callbacks* callbacks,
+                                              radicle_papyrus_runtime** out_runtime) {
+  radicle_c_detail::clear_error();
+  if (out_runtime == nullptr) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_runtime is required");
+  }
+  *out_runtime = nullptr;
+  return radicle_c_env_detail::guarded("unknown exception while creating the Papyrus runtime", [&] {
+    auto runtime = std::make_unique<radicle_papyrus_runtime>();
+    if (callbacks != nullptr) runtime->callbacks = *callbacks;
+    radicle_papyrus_runtime* raw = runtime.get();
+    raw->runtime.setGate([raw](std::string_view key) {
+      if (raw->callbacks.gate == nullptr) return true;
+      const std::string text(key);
+      return raw->callbacks.gate(raw->callbacks.user, text.c_str()) != 0;
+    });
+    *out_runtime = runtime.release();
+    return RADICLE_STATUS_OK;
+  });
+}
+
+void radicle_papyrus_runtime_destroy(radicle_papyrus_runtime* runtime) {
+  radicle_c_detail::clear_error();
+  delete runtime;
+}
+
+radicle_status radicle_papyrus_runtime_add_pex(radicle_papyrus_runtime* runtime, const radicle_pex* pex) {
+  radicle_c_detail::clear_error();
+  if (runtime == nullptr || pex == nullptr) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "runtime and pex are required");
+  }
+  return radicle_c_env_detail::guarded("unknown exception while adding a pex file", [&] {
+    runtime->pex_files.push_back(pex);
+    for (const fo4::pex::PexObject& object : pex->value.objects) runtime->runtime.addScript(&object);
+    return RADICLE_STATUS_OK;
+  });
+}
+
+radicle_status radicle_papyrus_runtime_attach(radicle_papyrus_runtime* runtime, const char* script,
+                                              radicle_papyrus_owner_kind owner_kind,
+                                              const char* base_form_key, const char* discriminator,
+                                              uint64_t* out_instance) {
+  radicle_c_detail::clear_error();
+  if (out_instance != nullptr) *out_instance = 0;
+  if (runtime == nullptr || script == nullptr || out_instance == nullptr) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                                  "runtime, script and out_instance are required");
+  }
+  const std::optional<OwnerId> owner = ownerFrom(owner_kind, base_form_key, discriminator);
+  if (!owner.has_value()) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "the owner is not valid");
+  }
+  return radicle_c_env_detail::guarded("unknown exception while attaching a script", [&] {
+    const auto instance = runtime->runtime.attach(script, *owner);
+    if (!instance.has_value()) {
+      return radicle_c_detail::fail(RADICLE_STATUS_NOT_FOUND, "no loaded pex defines that script");
+    }
+    *out_instance = *instance;
+    return RADICLE_STATUS_OK;
+  });
+}
+
+int32_t radicle_papyrus_runtime_detach(radicle_papyrus_runtime* runtime, uint64_t instance) {
+  radicle_c_detail::clear_error();
+  if (runtime == nullptr) return 0;
+  return runtime->runtime.detach(instance) ? 1 : 0;
+}
+
+radicle_papyrus_lifecycle radicle_papyrus_runtime_lifecycle(const radicle_papyrus_runtime* runtime,
+                                                            uint64_t instance) {
+  radicle_c_detail::clear_error();
+  if (runtime == nullptr) return RADICLE_PAPYRUS_LIFECYCLE_FAILED;
+  switch (runtime->runtime.lifecycle(instance)) {
+    case Lifecycle::NotInitialized:
+      return RADICLE_PAPYRUS_LIFECYCLE_NOT_INITIALIZED;
+    case Lifecycle::Initializing:
+      return RADICLE_PAPYRUS_LIFECYCLE_INITIALIZING;
+    case Lifecycle::Ready:
+      return RADICLE_PAPYRUS_LIFECYCLE_READY;
+    case Lifecycle::Failed:
+      return RADICLE_PAPYRUS_LIFECYCLE_FAILED;
+  }
+  return RADICLE_PAPYRUS_LIFECYCLE_FAILED;
+}
+
+const char* radicle_papyrus_runtime_failure(const radicle_papyrus_runtime* runtime, uint64_t instance) {
+  radicle_c_detail::clear_error();
+  if (runtime == nullptr) return nullptr;
+  return runtime->runtime.failure(instance).c_str();
+}
+
+const char* radicle_papyrus_runtime_instance_state(const radicle_papyrus_runtime* runtime,
+                                                   uint64_t instance) {
+  radicle_c_detail::clear_error();
+  if (runtime == nullptr) return nullptr;
+  return runtime->runtime.instanceState(instance).c_str();
+}
+
+radicle_status radicle_papyrus_runtime_initialize(radicle_papyrus_runtime* runtime, uint64_t instance,
+                                                  radicle_papyrus_status* out_status) {
+  radicle_c_detail::clear_error();
+  if (out_status != nullptr) *out_status = RADICLE_PAPYRUS_STATUS_OK;
+  if (runtime == nullptr || out_status == nullptr) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "runtime and out_status are required");
+  }
+  return radicle_c_env_detail::guarded("unknown exception while initializing a script", [&] {
+    *out_status = to_c_status(runtime->runtime.initialize(instance));
+    return RADICLE_STATUS_OK;
+  });
+}
+
+radicle_status radicle_papyrus_runtime_send_event(radicle_papyrus_runtime* runtime, uint64_t instance,
+                                                  const char* function,
+                                                  const radicle_papyrus_value* const* args,
+                                                  size_t arg_count,
+                                                  radicle_papyrus_status* out_status) {
+  radicle_c_detail::clear_error();
+  if (out_status != nullptr) *out_status = RADICLE_PAPYRUS_STATUS_OK;
+  if (runtime == nullptr || function == nullptr || out_status == nullptr ||
+      (args == nullptr && arg_count != 0)) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                                  "runtime, function, out_status and args are required");
+  }
+  return radicle_c_env_detail::guarded("unknown exception while sending a script event", [&] {
+    std::vector<Value> values;
+    values.reserve(arg_count);
+    for (size_t i = 0; i < arg_count; ++i) {
+      if (args[i] == nullptr) {
+        return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "argument handles must not be null");
+      }
+      values.push_back(args[i]->value);
+    }
+    *out_status = to_c_status(runtime->runtime.sendEvent(instance, function, std::move(values)));
+    return RADICLE_STATUS_OK;
+  });
+}
+
+radicle_status radicle_papyrus_runtime_step(radicle_papyrus_runtime* runtime, int32_t budget,
+                                            radicle_papyrus_step_result* out_result) {
+  radicle_c_detail::clear_error();
+  if (out_result != nullptr) *out_result = {};
+  if (runtime == nullptr || out_result == nullptr) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "runtime and out_result are required");
+  }
+  return radicle_c_env_detail::guarded("unknown exception while stepping the scheduler", [&] {
+    const fo4::papyrus::SchedulerStepResult result = runtime->runtime.runStep(budget);
+    out_result->spent = result.spent;
+    out_result->completed = result.completed;
+    out_result->parked = result.parked;
+    out_result->paused = result.paused;
+    out_result->refused = result.refused;
+    out_result->dropped = result.dropped;
+    out_result->waiting = result.waiting;
+    return RADICLE_STATUS_OK;
+  });
+}
+
+radicle_status radicle_papyrus_runtime_complete_latent(radicle_papyrus_runtime* runtime, uint64_t token,
+                                                       const radicle_papyrus_value* value,
+                                                       int32_t* out_accepted) {
+  radicle_c_detail::clear_error();
+  if (out_accepted != nullptr) *out_accepted = 0;
+  if (runtime == nullptr || value == nullptr || out_accepted == nullptr) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                                  "runtime, value and out_accepted are required");
+  }
+  return radicle_c_env_detail::guarded("unknown exception while completing a latent call", [&] {
+    *out_accepted = runtime->runtime.completeLatent(token, value->value) ? 1 : 0;
+    return RADICLE_STATUS_OK;
+  });
+}
+
+radicle_status radicle_papyrus_runtime_register_native(radicle_papyrus_runtime* runtime, const char* script,
+                                                       const char* function,
+                                                       radicle_papyrus_native_kind kind,
+                                                       const char* required_script, int32_t latent) {
+  radicle_c_detail::clear_error();
+  if (runtime == nullptr || script == nullptr || function == nullptr) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "runtime, script and function are required");
+  }
+  return radicle_c_env_detail::guarded("unknown exception while registering a native", [&] {
+    NativeRegistration registration;
+    registration.kind = nativeKindFrom(kind);
+    registration.requiredScript = required_script == nullptr ? std::string() : std::string(required_script);
+    radicle_papyrus_runtime* raw = runtime;
+    if (latent != 0) {
+      registration.latent = true;
+      registration.begin = [raw, script = std::string(script), function = std::string(function)](
+                                const std::vector<Value>& args, Status& status) -> std::uint64_t {
+        if (raw->callbacks.begin_latent == nullptr) {
+          status = Status::FunctionNotFound;
+          return 0;
+        }
+        std::vector<radicle_papyrus_value> values;
+        values.reserve(args.size());
+        for (const Value& argument : args) values.push_back(radicle_papyrus_value{argument});
+        std::vector<const radicle_papyrus_value*> pointers;
+        pointers.reserve(values.size());
+        for (const radicle_papyrus_value& value : values) pointers.push_back(&value);
+        const std::int64_t token = raw->callbacks.begin_latent(raw->callbacks.user, script.c_str(),
+                                                              function.c_str(), pointers.data(),
+                                                              pointers.size());
+        return token > 0 ? static_cast<std::uint64_t>(token) : 0;
+      };
+    }
+    registration.body = [raw, script = std::string(script), function = std::string(function)](
+                            const Value&, const std::vector<Value>& args, Value& out, Status& status) {
+      if (raw->callbacks.call_native == nullptr) {
+        status = Status::FunctionNotFound;
+        return false;
+      }
+      std::vector<radicle_papyrus_value> values;
+      values.reserve(args.size());
+      for (const Value& argument : args) values.push_back(radicle_papyrus_value{argument});
+      std::vector<const radicle_papyrus_value*> pointers;
+      pointers.reserve(values.size());
+      for (const radicle_papyrus_value& value : values) pointers.push_back(&value);
+      radicle_papyrus_value* produced = nullptr;
+      const int32_t handled = raw->callbacks.call_native(raw->callbacks.user, script.c_str(),
+                                                         function.c_str(), pointers.data(),
+                                                         pointers.size(), &produced);
+      if (handled == 0) {
+        status = Status::FunctionNotFound;
+        return false;
+      }
+      out = produced == nullptr ? fo4::papyrus::noneValue() : produced->value;
+      delete produced;
+      return true;
+    };
+    raw->runtime.registerNative(script, function, std::move(registration));
+    return RADICLE_STATUS_OK;
+  });
+}
+
+radicle_status radicle_papyrus_runtime_register_override(radicle_papyrus_runtime* runtime,
+                                                         const char* script, const char* function,
+                                                         int32_t parameter_count) {
+  radicle_c_detail::clear_error();
+  if (runtime == nullptr || script == nullptr || function == nullptr) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "runtime, script and function are required");
+  }
+  return radicle_c_env_detail::guarded("unknown exception while registering an override", [&] {
+    radicle_papyrus_runtime* raw = runtime;
+    raw->runtime.registerOverride(
+        script, function, parameter_count,
+        [raw](const Value& self, const std::string& name, const std::vector<Value>& args) {
+          if (raw->callbacks.override_function == nullptr) return OverrideResult::notRegistered();
+          std::vector<radicle_papyrus_value> values;
+          values.reserve(args.size());
+          for (const Value& argument : args) values.push_back(radicle_papyrus_value{argument});
+          std::vector<const radicle_papyrus_value*> pointers;
+          pointers.reserve(values.size());
+          for (const radicle_papyrus_value& value : values) pointers.push_back(&value);
+          int32_t outcome = RADICLE_PAPYRUS_OVERRIDE_NOT_REGISTERED;
+          radicle_papyrus_value* produced = nullptr;
+          const std::uint64_t instance = self.type == fo4::papyrus::ValueType::Object && self.object != nullptr
+                                             ? self.object->handle
+                                             : 0;
+          raw->callbacks.override_function(raw->callbacks.user, instance, name.c_str(), pointers.data(),
+                                           pointers.size(), &outcome, &produced);
+          OverrideResult result;
+          switch (outcome) {
+            case RADICLE_PAPYRUS_OVERRIDE_HANDLED:
+              result = OverrideResult::handled(produced == nullptr ? fo4::papyrus::noneValue()
+                                                                   : produced->value);
+              break;
+            case RADICLE_PAPYRUS_OVERRIDE_DECLINED:
+              result = OverrideResult::declined();
+              break;
+            case RADICLE_PAPYRUS_OVERRIDE_REFUSED:
+              result = OverrideResult::refused("the override refused the call");
+              break;
+            default:
+              result = OverrideResult::notRegistered();
+              break;
+          }
+          delete produced;
+          return result;
+        });
+    return RADICLE_STATUS_OK;
+  });
+}
+
+radicle_status radicle_papyrus_runtime_get_variable(const radicle_papyrus_runtime* runtime,
+                                                    uint64_t instance, const char* name,
+                                                    radicle_papyrus_value** out_value) {
+  radicle_c_detail::clear_error();
+  if (out_value != nullptr) *out_value = nullptr;
+  if (runtime == nullptr || name == nullptr || out_value == nullptr) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                                  "runtime, name and out_value are required");
+  }
+  const std::optional<Value> value = runtime->runtime.instanceVariable(instance, name);
+  if (!value.has_value()) return radicle_c_detail::fail(RADICLE_STATUS_NOT_FOUND, "the variable is not set");
+  return make_value(*value, out_value);
+}
+
+radicle_status radicle_papyrus_runtime_set_variable(radicle_papyrus_runtime* runtime, uint64_t instance,
+                                                    const char* name,
+                                                    const radicle_papyrus_value* value) {
+  radicle_c_detail::clear_error();
+  if (runtime == nullptr || name == nullptr || value == nullptr) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "runtime, name and value are required");
+  }
+  if (!runtime->runtime.setInstanceVariable(instance, name, value->value)) {
+    return radicle_c_detail::fail(RADICLE_STATUS_NOT_FOUND, "the instance does not exist");
+  }
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_papyrus_runtime_register_custom_event(radicle_papyrus_runtime* runtime,
+                                                             uint64_t instance, const char* event_name,
+                                                             int64_t* out_handle) {
+  radicle_c_detail::clear_error();
+  if (out_handle != nullptr) *out_handle = 0;
+  if (runtime == nullptr || event_name == nullptr || out_handle == nullptr) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                                  "runtime, event_name and out_handle are required");
+  }
+  const std::optional<OwnerId> owner = runtime->runtime.instanceOwner(instance);
+  if (!owner.has_value()) return radicle_c_detail::fail(RADICLE_STATUS_NOT_FOUND, "the instance does not exist");
+  return radicle_c_env_detail::guarded("unknown exception while registering a custom event", [&] {
+    const auto* entry = runtime->runtime.registrations().registerRegistration(
+        *owner, ScriptRegistration::forCustomEvent(event_name));
+    *out_handle = entry->handle;
+    return RADICLE_STATUS_OK;
+  });
+}
+
+radicle_status radicle_papyrus_runtime_register_timer(radicle_papyrus_runtime* runtime, uint64_t instance,
+                                                      double interval_seconds, int32_t repeats,
+                                                      radicle_papyrus_clock clock, int64_t* out_handle) {
+  radicle_c_detail::clear_error();
+  if (out_handle != nullptr) *out_handle = 0;
+  if (runtime == nullptr || out_handle == nullptr) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "runtime and out_handle are required");
+  }
+  const std::optional<OwnerId> owner = runtime->runtime.instanceOwner(instance);
+  if (!owner.has_value()) return radicle_c_detail::fail(RADICLE_STATUS_NOT_FOUND, "the instance does not exist");
+  return radicle_c_env_detail::guarded("unknown exception while registering a timer", [&] {
+    const auto* entry = runtime->runtime.registrations().registerRegistration(
+        *owner, ScriptRegistration::forTimer(interval_seconds, repeats != 0,
+                                             clock == RADICLE_PAPYRUS_CLOCK_GAME_TIME ? ClockSource::GameTime
+                                                                                     : ClockSource::RealTime));
+    *out_handle = entry->handle;
+    return RADICLE_STATUS_OK;
+  });
+}
+
+radicle_status radicle_papyrus_runtime_unregister(radicle_papyrus_runtime* runtime, int64_t handle,
+                                                  int32_t* out_removed) {
+  radicle_c_detail::clear_error();
+  if (out_removed != nullptr) *out_removed = 0;
+  if (runtime == nullptr || out_removed == nullptr) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT, "runtime and out_removed are required");
+  }
+  *out_removed = runtime->runtime.registrations().unregister(handle) ? 1 : 0;
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_papyrus_runtime_advance_clock(radicle_papyrus_runtime* runtime, const char* owner,
+                                                     double delta_seconds, radicle_papyrus_clock clock,
+                                                     int32_t* out_fired) {
+  radicle_c_detail::clear_error();
+  if (out_fired != nullptr) *out_fired = 0;
+  if (runtime == nullptr || owner == nullptr || out_fired == nullptr) {
+    return radicle_c_detail::fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                                  "runtime, owner and out_fired are required");
+  }
+  return radicle_c_env_detail::guarded("unknown exception while advancing the clock", [&] {
+    *out_fired = runtime->runtime.registrations().advance(
+        owner, delta_seconds,
+        clock == RADICLE_PAPYRUS_CLOCK_GAME_TIME ? ClockSource::GameTime : ClockSource::RealTime);
+    return RADICLE_STATUS_OK;
+  });
+}
+
+}  // extern "C"
