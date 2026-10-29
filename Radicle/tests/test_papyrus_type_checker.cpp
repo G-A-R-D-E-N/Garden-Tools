@@ -382,16 +382,34 @@ TEST(PapyrusTypeChecker, AnIntCastToAStringIsAccepted) {
     EXPECT_TRUE(f.check("A").empty());
 }
 
-// Invariant: every comparison operator refuses an int against a string, not only equality.
-TEST(PapyrusTypeChecker, EveryComparisonOperatorRefusesAnIntAgainstAString) {
+// Invariant: an int compared with a string is accepted under all six operators, so string mixes are not over-refused.
+TEST(PapyrusTypeChecker, EveryComparisonOperatorAcceptsAnIntAgainstAString) {
     Fixture f;
     f.writeWithHierarchy(
         "\n    int x = 0\n    bool a = x == \"x\"\n    bool b = x != \"x\"\n    bool c = x < \"x\"\n"
         "    bool d = x > \"x\"\n    bool e = x <= \"x\"\n    bool g = x >= \"x\"");
 
+    EXPECT_TRUE(f.check("A").empty());
+}
+
+// Invariant: an object compared with an int is refused under every comparison operator.
+TEST(PapyrusTypeChecker, EveryComparisonOperatorRefusesAnObjectAgainstAnInt) {
+    Fixture f;
+    f.writeWithHierarchy(
+        "\n    Actor a = None\n    int x = 0\n    bool b = a == x\n    bool c = a != x\n"
+        "    bool d = a < x\n    bool e = a > x\n    bool g = a <= x\n    bool h = a >= x");
+
     const auto diagnostics = f.check("A");
     ASSERT_TRUE(diagnostics.size() == 6);
     for (const auto& d : diagnostics) EXPECT_TRUE(d.code == DiagnosticCode::TypeMismatch);
+}
+
+// Invariant: an object may be compared with a bool in either operand order, as vanilla scripts do with false.
+TEST(PapyrusTypeChecker, AnObjectMayBeComparedWithABoolInEitherOrder) {
+    Fixture f;
+    f.writeWithHierarchy("\n    Actor a = None\n    bool b = a == false\n    bool c = false == a");
+
+    EXPECT_TRUE(f.check("A").empty());
 }
 
 // Invariant: two unrelated script object types cannot be compared, so a sibling compare is refused.

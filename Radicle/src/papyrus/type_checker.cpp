@@ -438,26 +438,28 @@ void TypeChecker::checkComparable(State& state, const Type& left, const Type& ri
 }
 
 bool TypeChecker::comparable(const Type& left, const Type& right) {
-    const auto numeric = [](TypeKind kind) {
-        return kind == TypeKind::Bool || kind == TypeKind::Int || kind == TypeKind::Float;
-    };
-    const auto known = [&](TypeKind kind) {
-        return numeric(kind) || kind == TypeKind::String || kind == TypeKind::Object;
+    const auto known = [](TypeKind kind) {
+        return kind == TypeKind::Bool || kind == TypeKind::Int || kind == TypeKind::Float ||
+               kind == TypeKind::String || kind == TypeKind::Object;
     };
     if (!known(left.kind) || !known(right.kind)) return true;
-    if (numeric(left.kind) && numeric(right.kind)) return true;
-    if (left.kind != TypeKind::Object || right.kind != TypeKind::Object) {
-        return left.kind == right.kind;
+
+    if (left.kind == TypeKind::Object && right.kind == TypeKind::Object) {
+        const auto ancestryUnknown = [this](const std::string& name) {
+            const Script* script = index_.resolve(name);
+            if (!script) return true;
+            const auto chain = index_.baseChain(script);
+            return chain.back()->extends.has_value();
+        };
+        return ancestryUnknown(left.name) || ancestryUnknown(right.name) ||
+               inherits(left.name, right.name) || inherits(right.name, left.name);
     }
 
-    const auto ancestryUnknown = [this](const std::string& name) {
-        const Script* script = index_.resolve(name);
-        if (!script) return true;
-        const auto chain = index_.baseChain(script);
-        return chain.back()->extends.has_value();
-    };
-    return ancestryUnknown(left.name) || ancestryUnknown(right.name) ||
-           inherits(left.name, right.name) || inherits(right.name, left.name);
+    if (left.kind == TypeKind::Object || right.kind == TypeKind::Object) {
+        const TypeKind other = left.kind == TypeKind::Object ? right.kind : left.kind;
+        return other != TypeKind::Int && other != TypeKind::Float;
+    }
+    return true;
 }
 
 bool TypeChecker::inherits(const std::string& child, const std::string& ancestor) {
