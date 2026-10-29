@@ -444,7 +444,7 @@ TEST(AuthoringPreflight, VisibleDistantChildrenAcceptReferencesOnly) {
 TEST(AuthoringPreflight, GeneratedLvspCreationShapePassesWithoutOptionalFields) {
   auto record = authored_record("LVSP", 0x800, {"OBND", "LVLD", "LVLM", "LVLF", "LLCT"});
   record.subrecords.front().data.resize(12);
-  for (std::size_t i = 1; i <= 3; ++i) record.subrecords[i].data.resize(1);
+  for (std::size_t i = 1; i <= 4; ++i) record.subrecords[i].data.resize(1);
   auto plugin = plugin_with_top_record(record);
   const auto key = fo4::FormKey::parse("000800:Patch.esp");
   EXPECT_TRUE(fo4::schema::preflight_authoring_record(plugin, key).empty());
