@@ -381,3 +381,69 @@ TEST(PapyrusTypeChecker, AnIntCastToAStringIsAccepted) {
 
     EXPECT_TRUE(f.check("A").empty());
 }
+
+// Invariant: every comparison operator refuses an int against a string, not only equality.
+TEST(PapyrusTypeChecker, EveryComparisonOperatorRefusesAnIntAgainstAString) {
+    Fixture f;
+    f.writeWithHierarchy(
+        "\n    int x = 0\n    bool a = x == \"x\"\n    bool b = x != \"x\"\n    bool c = x < \"x\"\n"
+        "    bool d = x > \"x\"\n    bool e = x <= \"x\"\n    bool g = x >= \"x\"");
+
+    const auto diagnostics = f.check("A");
+    ASSERT_TRUE(diagnostics.size() == 6);
+    for (const auto& d : diagnostics) EXPECT_TRUE(d.code == DiagnosticCode::TypeMismatch);
+}
+
+// Invariant: two unrelated script object types cannot be compared, so a sibling compare is refused.
+TEST(PapyrusTypeChecker, UnrelatedObjectTypesCannotBeCompared) {
+    Fixture f;
+    f.writeWithHierarchy("\n    Actor a = None\n    Weapon w = None\n    bool same = a == w");
+    f.write("Weapon", "ScriptName Weapon extends Form");
+
+    const auto diagnostics = f.check("A");
+    ASSERT_TRUE(diagnostics.size() == 1);
+    EXPECT_TRUE(diagnostics[0].code == DiagnosticCode::TypeMismatch);
+}
+
+// Invariant: int and float operands compare without a diagnostic, so numeric promotion is not over-refused.
+TEST(PapyrusTypeChecker, IntAndFloatOperandsMayBeCompared) {
+    Fixture f;
+    f.writeWithHierarchy("\n    int i = 1\n    float f = 1.0\n    bool a = i == f\n    bool b = f < i");
+
+    EXPECT_TRUE(f.check("A").empty());
+}
+
+// Invariant: same-typed string, int and bool operands compare without a diagnostic.
+TEST(PapyrusTypeChecker, SameTypedOperandsMayBeCompared) {
+    Fixture f;
+    f.writeWithHierarchy(
+        "\n    string s = \"\"\n    int i = 1\n    bool p = true\n    bool a = s == \"\"\n"
+        "    bool b = i != 2\n    bool c = p == true");
+
+    EXPECT_TRUE(f.check("A").empty());
+}
+
+// Invariant: None compared with an object is accepted in either operand order.
+TEST(PapyrusTypeChecker, NoneMayBeComparedWithAnObjectInEitherOrder) {
+    Fixture f;
+    f.writeWithHierarchy("\n    Actor a = None\n    bool b = a == None\n    bool c = None != a");
+
+    EXPECT_TRUE(f.check("A").empty());
+}
+
+// Invariant: an object compared with its base or its child is accepted in either direction.
+TEST(PapyrusTypeChecker, ObjectsRelatedByInheritanceMayBeComparedInEitherDirection) {
+    Fixture f;
+    f.writeWithHierarchy("\n    Form f = None\n    Actor a = None\n    bool b = f == a\n    bool c = a != f");
+
+    EXPECT_TRUE(f.check("A").empty());
+}
+
+// Invariant: an object whose ancestry is not fully on disk is not refused, because the index cannot prove it unrelated.
+TEST(PapyrusTypeChecker, AnObjectWhoseAncestryIsNotOnDiskIsNotRefused) {
+    Fixture f;
+    f.writeWithHierarchy("\n    Form f = None\n    Actor a = None\n    bool b = f == a");
+    f.write("Actor", "ScriptName Actor extends NotOnDisk");
+
+    EXPECT_TRUE(f.check("A").empty());
+}

@@ -56,6 +56,7 @@ enum class DiagnosticCode {
     StructNeedsMember,
     TooManyErrors,
     DuplicateDeclaration,
+    InheritanceCycle,
     UnresolvedName,
     UnknownMember,
     TypeMismatch,
@@ -87,6 +88,7 @@ constexpr std::string_view codeString(DiagnosticCode code) {
         case DiagnosticCode::StructNeedsMember: return "PAP0018";
         case DiagnosticCode::TooManyErrors: return "PAP0019";
         case DiagnosticCode::DuplicateDeclaration: return "PAP0020";
+        case DiagnosticCode::InheritanceCycle: return "PAP0021";
         case DiagnosticCode::UnresolvedName: return "PAP0030";
         case DiagnosticCode::UnknownMember: return "PAP0031";
         case DiagnosticCode::TypeMismatch: return "PAP0040";

@@ -621,3 +621,51 @@ TEST(PapyrusResolver, AMissingParentTwoLevelsUpMarksTheChainIncomplete) {
 
     EXPECT_FALSE(r.baseChainComplete);
 }
+
+// Invariant: a mutual extends cycle yields exactly one InheritanceCycle diagnostic, even when lookups walk the cyclic chain.
+TEST(PapyrusResolver, AMutualExtendsCycleIsReportedOnceWithItsPath) {
+    Fixture f;
+    f.write("A", "\nScriptName A extends B\nFunction Go()\n    Poke()\nEndFunction");
+    f.write("B", "\nScriptName B extends A\nFunction Poke()\nEndFunction");
+    const auto r = f.resolve("A");
+
+    ASSERT_TRUE(r.diagnostics.size() == 1);
+    EXPECT_TRUE(r.diagnostics[0].code == DiagnosticCode::InheritanceCycle);
+    EXPECT_TRUE(r.diagnostics[0].message.find("A -> B -> A") != std::string::npos);
+}
+
+// Invariant: a script that extends itself is reported as the one-step cycle A -> A.
+TEST(PapyrusResolver, ASelfExtendingScriptIsReportedAsOneStepCycle) {
+    Fixture f;
+    f.write("A", "\nScriptName A extends A\nFunction Go()\nEndFunction");
+    const auto r = f.resolve("A");
+
+    ASSERT_TRUE(r.diagnostics.size() == 1);
+    EXPECT_TRUE(r.diagnostics[0].code == DiagnosticCode::InheritanceCycle);
+    EXPECT_TRUE(r.diagnostics[0].message.find("A -> A") != std::string::npos);
+}
+
+// Invariant: a script that inherits from a cycle further up reports that cycle's path and the walk still terminates.
+TEST(PapyrusResolver, ACycleReachedThroughAParentIsReportedWithItsPath) {
+    Fixture f;
+    f.write("A", "\nScriptName A extends B\nFunction Go()\nEndFunction");
+    f.write("B", "\nScriptName B extends C\nFunction Poke()\nEndFunction");
+    f.write("C", "\nScriptName C extends B\nFunction Prod()\nEndFunction");
+    const auto r = f.resolve("A");
+
+    ASSERT_TRUE(r.diagnostics.size() == 1);
+    EXPECT_TRUE(r.diagnostics[0].code == DiagnosticCode::InheritanceCycle);
+    EXPECT_TRUE(r.diagnostics[0].message.find("A -> B -> C -> B") != std::string::npos);
+}
+
+// Invariant: an acyclic three-level chain is not reported as a cycle and its resolution stays complete.
+TEST(PapyrusResolver, AnAcyclicThreeLevelChainIsNotReportedAsACycle) {
+    Fixture f;
+    f.write("A", "\nScriptName A extends B\nFunction Go()\n    Poke()\nEndFunction");
+    f.write("B", "\nScriptName B extends C\nFunction Poke()\nEndFunction");
+    f.write("C", "\nScriptName C\nFunction Prod()\nEndFunction");
+    const auto r = f.resolve("A");
+
+    EXPECT_TRUE(r.baseChainComplete);
+    EXPECT_TRUE(r.diagnostics.empty());
+}

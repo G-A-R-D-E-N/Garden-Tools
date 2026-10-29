@@ -9251,3 +9251,23 @@ Slot 2 of the Try is past its body_count of 2, since flags `01` give a try body 
 ## Radicle/tests/test_avm1_encode.cpp:InsertIntoABodyRefusesARecordThatIsNotAContainer
 
 `Radicle/src/avm1/edit.cpp:insert_action_into_body` is called on NextFrame at container 2. NextFrame has no body, so its body_count is 0 and every slot is out of range. Index 3 is the position the range check would accept without the guard: body_start is 3 and the count is 0. Expected false and no change. Detects a missing container check that writes into the hidden `body_records` of a plain record.
+
+## Radicle/src/papyrus/resolver.cpp:Resolver::resolve
+
+A cyclic or self-referencing `extends` is reported as `InheritanceCycle` (PAP0021), anchored at `Script::extendsSpan`. `Resolver::resolve` checks the last entry of the chain from `ScriptIndex::baseChain`: if that script's `extends` still resolves, the walk stopped only because the parent name is already in the chain, so the cycle is real. The message spells the path from the script back to the repeated name (`A -> B -> A`, or `A -> B -> C -> B` when the script only reaches a cycle further up). The diagnostic is emitted from `Resolver::resolve` and not from the lookup helpers, so lookups that walk the cyclic chain do not repeat it. The base chain stays incomplete, so `TypeChecker::check` is skipped as before. Detects a cycle that is silently accepted, or one reported once per name lookup.
+
+## Radicle/src/papyrus/script_index.cpp:ScriptIndex::baseChain
+
+Every parent walk terminates. `ScriptIndex::baseChain` records each written `extends` key in a `seen` set and stops at the first repeat, so the walk is bounded by the number of distinct names. It was already cycle-safe and is unchanged; `Resolver::resolve` derives the cycle from its result instead of walking the chain a second time.
+
+## Radicle/src/graph/graph_lifter.cpp:GraphLifter::declaringScriptOf
+
+This parent walk has its own hop limit (`guard`, 64), so a cyclic `extends` cannot hang the lift. It is unchanged. The cycle itself is reported by `Resolver::resolve`.
+
+## Radicle/src/papyrus/type_checker.cpp:TypeChecker::comparable
+
+`TypeChecker::checkExpression` passes every comparison operator (`==`, `!=`, `<`, `>`, `<=`, `>=`) to `TypeChecker::checkComparable`, which reports a TypeMismatch only when `TypeChecker::comparable` returns false. Refused: String against a number or a bool, an object against a number, a string or a bool, and two object types whose complete base chains are unrelated. Accepted: any pair of Bool, Int and Float (Int and Float promote; Bool with a number is accepted because Papyrus conditions treat a bool as an int; not verified against the Creation Kit), two Strings, None against anything (the Creation Kit's None rules were not checked, so None is not refused), any Var, Array, Struct or Error operand, and two objects when either side's ancestry is not fully on disk or one inherits the other. Detects a rule that refuses a legal comparison such as `Form == Actor` or `Actor == None`, or one that lets `aiX == "x"` through.
+
+## Radicle/include/fo4/papyrus/diagnostic.hpp:DiagnosticCode
+
+`DiagnosticCode::InheritanceCycle` maps to PAP0021, the first unused code after PAP0020 in the declaration range. The C# mirror `PluginEditTool/FO4RecordEditor.Core/Services/Papyrus/PapyrusDiagnostic.cs` does not carry PAP0021 yet, so the header's parity comment is not met until it does.
