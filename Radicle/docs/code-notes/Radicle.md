@@ -8932,16 +8932,6 @@ Detects a validator that checks only the top-level list end and not the parent b
 - `StatesKeepSourceOrderAfterTheEmptyStateAndOnlyOneIsAuto` covers `CodeGenerator::buildObject` ordering: the empty state first, then states in source order.
 - Not covered: Papyrus has no `For` loop, so the brief's For item has no code path. `FindStructAndInsertUseTheirOpcodesAndDefaultStart` uses a float literal as the search value on purpose, because an int literal reaches the VM unconverted (see the `body_call.cpp:emitArrayBuiltin` note below).
 
-## src/papyrus/body_expression.cpp:emitShortCircuit (defect, no test)
-
-- Defect: a short-circuit assignment whose right operand names its own destination reads the overwritten value. The destination is written by the `cast` on line 409 before the right operand is emitted on line 412, so `value(binary.right)` returns the new value. Input: `Function Go(bool abLeft, bool abRight)` with body `abLeft = abRight && abLeft`. Emitted: `cast abLeft abRight`, `jmpf abLeft 2`, `cast abLeft abLeft`. With `abRight` true and `abLeft` false, the result is true, but `&&` requires false. `||` has the same shape.
-- No test pins the wrong output, and the fix was not made. The fix is to evaluate the right operand into a temp when the destination equals a name read in the right operand.
-
-## src/papyrus/body_call.cpp:emitArrayBuiltin (defect, no test)
-
-- Defect: `FindStruct` and `RFindStruct` pass the search value through `value(arguments[1])` (line 264 for `FindStruct`), with no conversion to the element's member type. `xs.FindStruct("fX", 2)` on a `float fX` member therefore emits an `Integer` operand. `struct_ops.cpp:159` then refuses the search as `TypeMismatch` because the member is `Float`. Input: `Struct Point` with `float fX`, then `int at = pts.FindStruct("fX", 2)`. The expected emission is `2.0`.
-- The fix is to convert the value to the member's declared type, which requires reading the element struct in codegen. Not done here.
-
 ## src/papyrus/resolver.cpp:Resolver::resolve (gap, tests added)
 
 - `ScriptIndex::baseChain` (`script_index.cpp:baseChain`) stops on a repeated name, so a cycle terminates. Its caller marks the resolution incomplete on line 46 (`last->extends`), which is the path the cycle tests pin. No diagnostic is raised for a cycle anywhere in `src/papyrus`, so a cyclic `extends` compiles silently. That is a gap; the tests assert only termination and `baseChainComplete == false`.
@@ -9045,6 +9035,23 @@ Bytecode is hand-derived. `u30(65535)` is `FF FF 03` and `u30(65536)` is `80 80 
 ## Radicle/src/avm2/interpreter.cpp:Interpreter::invoke
 
 - Known gap, verified by reading: a native function with no body and no native id returns `NotImplemented` with `native function <name> is not bound`, unless `limits_.lenient_builtins` is set. `Radicle/src/avm2/interpreter_property.cpp:Interpreter::outer_scope_value` returns `NotImplemented` for `getouterscope` when the frame has no captured scope.
+
+## Radicle/src/papyrus/body_expression.cpp:BodyEmitter::emitShortCircuit
+
+- Bug, fixed: when the destination is a named variable that the right operand reads, the first `cast` overwrote it before the right operand was read. `abLeft = abRight && abLeft` emitted `cast abLeft abLeft` on the right path, so the result was true where it must be false. The aliased case now evaluates into a fresh temp, skips with `jmpf`/`jmpt` on that temp, and copies it to the destination with `assign` after the jump target. `||` takes the same path with `jmpt`.
+- The non-aliased output is unchanged (`cast dest left`, `jmpf dest N`, `cast dest right`). `Radicle/tests/test_papyrus_codegen.cpp:ShortCircuitIntoOperandVariableStagesThroughTemp` pins it with the `Keep` function.
+- Known gap, verified by reading: `readsName` looks only at names in the right operand. If that operand calls a function that reads a script variable which is also the destination, the destination already holds the left value when the call runs. No test covers this and no corpus case was checked.
+
+## Radicle/src/papyrus/body_expression.cpp:BodyEmitter::readsName
+
+- Walks the expression tree and reports whether any identifier resolves to the destination's storage name. Only `Local`, `Parameter`, `ScriptVariable` and auto `Property` bindings are passed to `storageFor`, because its default branch reports `CannotEmit` and a function name in a call callee would trigger that. An auto property resolves to its `::<name>_var` backing variable, so `bFlag = x && bFlag` is aliased. A `self.<auto prop>` member read is aliased too, because `Radicle/src/papyrus/body_expression.cpp:BodyEmitter::emitMemberRead` reads the backing variable directly.
+
+## Radicle/src/papyrus/body_call.cpp:BodyEmitter::emitArrayBuiltin
+
+- Bug, fixed: `findstruct` and `rfindstruct` emitted the search value with `value()`. An Int literal stayed `Integer` while the struct member was `Float`, and `Radicle/src/papyrus/struct_ops.cpp:Interpreter::findStructInArray` returns `TypeMismatch` on that, so the search failed without a message. The `memberType` lambda takes the member's declared type from the element struct (the `Owner:Struct` type name is split at its last `:`), and `valueAs` converts the value to it.
+- If the member name is not a string literal, or the struct cannot be found, `memberType` returns Error and `valueAs` falls back to `value()`, which is the old output.
+- Known gap: a member name held in a variable keeps the old unconverted search value. Unverified whether real scripts do this.
+- `Radicle/tests/test_papyrus_codegen.cpp:FindStructConvertsSearchValueToMemberType` pins the Float conversion for `FindStruct` and `RFindStruct`.
 
 ## Radicle/include/fo4/avm1/interpreter.hpp:Avm1TimelineHost
 
@@ -9180,6 +9187,45 @@ Hand-built: a DefineFunction with body_records 2, followed by NextFrame and Play
 ## Radicle/src/swf/swf_sound.cpp:decode_sound_stream_head
 
 `Radicle/src/swf/swf_sound.cpp:decode_sound_stream_head` keeps the top nibble of the playback byte as `reserved` and does not refuse it, although Ruffle validates it as a format. The stream byte's compression nibble is refused as `unknown_compression` when outside Ruffle's set. When compression is 2 (MP3), a missing i16 latency returns `truncated`. Ruffle instead defaults the latency to 0, but `Radicle/src/swf/swf_tags.cpp:decode_tag_payload` refuses the same payload, so this decoder matches the module.
+## Radicle/src/avm1/timeline_ops.cpp:goto_frame_2
+
+`Radicle/src/avm1/timeline_ops.cpp:goto_frame_2` follows Ruffle 0.6.0 `core/src/avm1/activation.rs:action_goto_frame_2`, which passes the popped value and the scene offset to `core/src/avm1/globals/movie_clip.rs:goto_frame`. Unlike the 0-based GotoFrame operand (0x81, which adds 1 in `Radicle/src/avm1/timeline_ops.cpp:execute`), the GotoFrame2 operand is already 1-based, so it reaches `goto_frame` unchanged. A `:` anywhere in the operand's text drops everything through the first colon. Ruffle resolves that prefix as a variable path against the clip; this host has one timeline, so the prefix is popped and ignored and only the label after it is searched. That is a deliberate deviation.
+
+A value that is a number, or a string that `text_ops::parse_number` reads in full, is a frame. Its ToUint32 from `text_ops::to_uint32`, read as a signed 32-bit integer, matches Ruffle's `core/src/ecma_conversions.rs:f64_to_wrapping_i32`. Everything else is a label and goes to `Avm1TimelineHost::frame_for_label`. Ruffle searches labels the same way for a non-numeric string, and `core/src/avm1/globals/movie_clip.rs:goto_frame` adds the scene offset to labels as well as to numeric frames, so `goto_frame_2` adds the bias to both.
+
+`Radicle/src/avm1/timeline_ops.cpp:goto_frame_2` makes a frame of zero or less a no-op with no host call, as Ruffle's `if frame > 0`. Otherwise play (flags bit value 1) or stop is called before `goto_frame`, in the order Ruffle's `goto_frame` uses, so an unknown label calls neither. Deviations: Ruffle truncates the final frame to u16 (`frame as u16`), and this code passes the full uint32. Ruffle's string route uses Rust's f64 parse, while `text_ops::parse_number` trims whitespace and uses `strtod`; an empty string is 0 here, a no-op, where Ruffle looks up the label "".
+
+## Radicle/src/avm1/timeline_ops.cpp:execute
+
+The 0x9F case reads the payload that `Radicle/src/avm1/decode.cpp:Decoder::payload` built. The decoder reads the flags byte and then a u16 scene bias only when flags bit value 2 is set, which matches Ruffle's `swf/src/avm1/read.rs:read_goto_frame_2`, so decoding is unchanged. The play flag is bit value 1 (`flags & 1`), the bit Ruffle reads as `set_playing`. Without a host the case is not reached and the opcode falls to `control_ops::execute`, which still refuses it by name.
+
+## Radicle/tests/test_avm1_control.cpp:run_goto_frame_2
+
+`Radicle/tests/test_avm1_control.cpp:run_goto_frame_2` is the helper for the GotoFrame2 tests. It pushes the sentinel 7 and then the target, runs the opcode with the given flags record, and checks that the run is ok and that the trace is `7`. A GotoFrame2 that leaves its operand on the stack shows the target's text in the trace instead of 7, so every case also checks the pop through `result.trace`.
+
+## Radicle/tests/test_avm1_control.cpp:GotoFrame2NumericWithPlayPlaysBeforeTheGoto
+
+`Radicle/tests/test_avm1_control.cpp:GotoFrame2NumericWithPlayPlaysBeforeTheGoto` runs numeric 5 with flags `01`, which gives `play`, then `goto 5`. Detects a GotoFrame2 that calls stop for the play bit, or that calls goto before play, which the call order would show.
+
+## Radicle/tests/test_avm1_control.cpp:GotoFrame2NumericWithoutPlayStopsAndAddsSceneBias
+
+`Radicle/tests/test_avm1_control.cpp:GotoFrame2NumericWithoutPlayStopsAndAddsSceneBias` runs numeric 5 with flags `02 02 00` (the bias bit set and a u16 bias of 2), which gives `stop`, then `goto 7`. Detects a GotoFrame2 that ignores the scene bias field, which would go to 5, and one that plays when the play bit is clear.
+
+## Radicle/tests/test_avm1_control.cpp:GotoFrame2LabelJumpsToItsFrame
+
+`Radicle/tests/test_avm1_control.cpp:GotoFrame2LabelJumpsToItsFrame` runs text `intro`, with the host label map holding `intro` at frame 3, and flags `01`, which gives `label intro`, `play`, `goto 3`. Detects a label operand that is parsed as a number (giving frame 0 and no jump), or a label that jumps without a `frame_for_label` lookup.
+
+## Radicle/tests/test_avm1_control.cpp:GotoFrame2UnknownLabelIsANoOp
+
+`Radicle/tests/test_avm1_control.cpp:GotoFrame2UnknownLabelIsANoOp` runs text `missing`, which gives only `label missing`. Detects an unknown label that calls goto 0 or plays and stops the timeline, which would change the playback state of a movie whose label is absent.
+
+## Radicle/tests/test_avm1_control.cpp:GotoFrame2ResolvesOnlyTheLabelAfterATargetPath
+
+`Radicle/tests/test_avm1_control.cpp:GotoFrame2ResolvesOnlyTheLabelAfterATargetPath` runs text `clip:intro` with the label map holding `intro` at 3, which gives `label intro`, `play`, `goto 3`, with no lookup of `clip:intro`. Detects a path-prefixed label that is searched whole, which misses the label and leaves the timeline where it was.
+
+## Radicle/tests/test_avm1_control.cpp:TimelineOpcodesAreRefusedByNameWithoutAHost
+
+The table gains a GotoFrame2 row, `rec(0x9F, {0x01})` expecting `GotoFrame2 (0x9F)`. Detects a GotoFrame2 that runs with no host, or that refuses under the wrong name, since `Radicle/src/avm1/interpreter.cpp` formats the refusal as the name plus the opcode.
 
 ## Radicle/src/avm1/encode.cpp:encode_actions_checked
 

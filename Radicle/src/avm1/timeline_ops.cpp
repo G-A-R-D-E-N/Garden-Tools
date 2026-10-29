@@ -3,6 +3,7 @@
 #include "control_ops.hpp"
 #include "text_ops.hpp"
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -49,6 +50,36 @@ Avm1RunStatus go_to_label(Avm1TimelineHost& host, const std::string& label) {
   if (const auto frame = host.frame_for_label(label)) {
     host.goto_frame(*frame);
   }
+  return Avm1RunStatus::Ok;
+}
+
+Avm1RunStatus goto_frame_2(Avm1TimelineHost& host, Avm1State& state, const Avm1GotoFrame2& action,
+                           std::string& message) {
+  Avm1Data target;
+  if (const Avm1RunStatus status = pop(state, target, message); status != Avm1RunStatus::Ok) {
+    return status;
+  }
+  std::string text = text_ops::to_text(target, state.swf_version);
+  if (const std::size_t colon = text.find(':'); colon != std::string::npos) {
+    text.erase(0, colon + 1);
+  }
+  const Avm1Data plain{.kind = Avm1DataKind::String, .text = text};
+  const std::int64_t bias = action.scene_bias.value_or(0);
+  std::int64_t frame = 0;
+  if (!std::isnan(text_ops::to_number(plain, state.swf_version))) {
+    frame = static_cast<std::int32_t>(text_ops::to_uint32(plain, state.swf_version)) + bias;
+  } else if (const auto label = host.frame_for_label(text)) {
+    frame = static_cast<std::int64_t>(*label) + bias;
+  }
+  if (frame <= 0) {
+    return Avm1RunStatus::Ok;
+  }
+  if ((action.flags & 1u) != 0) {
+    host.play();
+  } else {
+    host.stop();
+  }
+  host.goto_frame(static_cast<std::uint32_t>(frame));
   return Avm1RunStatus::Ok;
 }
 
@@ -114,6 +145,8 @@ Avm1RunStatus execute(Avm1Run& run, const Avm1Block& block, const Avm1Action& ac
       return Avm1RunStatus::Ok;
     case 0x8C:
       return go_to_label(*host, std::get<Avm1Text>(action.payload).text);
+    case 0x9F:
+      return goto_frame_2(*host, run.state, std::get<Avm1GotoFrame2>(action.payload), message);
     default:
       return control_ops::execute(run, block, action, next, message);
   }
