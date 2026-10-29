@@ -9327,6 +9327,19 @@ Slot 2 of the Try is past its body_count of 2, since flags `01` give a try body 
 
 - Splits `Radicle/src/swf/swf_svg_filters.cpp:filtered_group` into an open string and a close string. The open order is style group, then `filter_defs` output, then one `<g filter>` per drawn filter with the last filter outermost. Every close is the same `</g>` line, so only the count matters.
 - `Radicle/src/swf/swf_svg_filters.cpp:filtered_group` is now `filtered_wrap` with the content in between. Its output matches the previous nesting byte for byte, which `FilteredGroupNestsFiltersInListOrderUnderTheBlendGroup` checks.
+## Radicle/src/swf/swf_sound_edit.cpp:replace_sound_data
+
+`Radicle/src/swf/swf_sound_edit.cpp:replace_sound_data` finds the id through `Radicle/src/swf/swf_characters.cpp:build_character_model` and `find_character`, as `Radicle/src/swf/swf_bitmap_edit.cpp:replace_bitmap_lossless` does. A missing id is `unknown_sound`, and an id whose character tag is not code 14 is `not_a_define_sound`. In `Radicle/src/swf/swf_sound_edit.cpp:replace_sound_data`, after the id lookup the checks run before anything is written, in this order: the data cap, then the rate, then the format. The data cap is `kMaxSoundDataBytes`, 64 MiB (the same cap as `Radicle/src/swf/swf_internal.hpp:kMaxBitmapBytes`), about 380 seconds of 44.1 kHz 16-bit stereo PCM.
+
+The rate is refused above 3 because `Radicle/src/swf/swf_write.cpp:sound_format_byte` masks the two rate bits silently. The payload is built by `Radicle/include/fo4/swf/swf.hpp:encode_define_sound` and read back with `Radicle/src/swf/swf_sound.cpp:decode_define_sound`. The format check then rejects both the reserved codes 9 and 12 to 15, which the decoder refuses, and any format above 15, which the 4-bit field would truncate; the decoded format differs from the requested one in that case. Both return `unknown_compression`.
+
+`Radicle/src/swf/swf_sound_edit.cpp:replace_sound_data` writes a single replacement at the character's tag index through `apply_tag_plan`. The tag code stays 14, so no removal and insertion pair is needed as in the bitmap path, and every other tag keeps its bytes.
+
+## Radicle/src/swf/swf_sound_edit.cpp:retarget_start_sound
+
+`Radicle/src/swf/swf_sound_edit.cpp:retarget_start_sound` takes a top-level tag index into `file.tags`, the same index `apply_tag_plan` uses. It refuses an index past the tag list as `unknown_tag` and any other code as `not_a_start_sound`, so a StartSound2 (code 89) is refused, since it names a class instead of an id. `Radicle/src/swf/swf_sound.cpp:decode_start_sound` validates the SOUNDINFO before the write, so a truncated StartSound is `malformed_tag`.
+
+`Radicle/src/swf/swf_sound_edit.cpp:retarget_start_sound` builds the new payload as the new u16 id followed by the old payload from byte 2 onward, so the SOUNDINFO bytes are copied and not re-encoded. A new id with no sound character, or one that names a non-sound character, is `unknown_sound`, the same status the replace path uses for a missing id.
 
 ## Radicle/src/abc/edit.cpp:intern_int, Radicle/src/abc/edit.cpp:intern_uint, Radicle/src/abc/edit.cpp:intern_double, Radicle/src/abc/edit.cpp:intern_string, Radicle/src/abc/edit.cpp:intern_entry
 
