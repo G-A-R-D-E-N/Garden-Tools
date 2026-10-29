@@ -117,6 +117,7 @@ struct RecordingTimeline : fo4::avm1::Avm1TimelineHost {
     calls.push_back("set " + std::to_string(index));
     last_value = value;
   }
+  void set_target(const std::string& path) override { calls.push_back("target " + path); }
 };
 
 fo4::avm1::Avm1Result execute_with_timeline(const Bytes& input, RecordingTimeline& timeline) {
@@ -282,6 +283,36 @@ TEST(Avm1Timeline, SetPropertyPassesWritableIndicesAndSkipsReadOnlyOnes) {
   EXPECT_EQ(numeric.last_value.number, 42.0);
 }
 
+// Invariant: SetTarget passes its string operand to the host, an empty operand is the reset call, and the stack is untouched.
+TEST(Avm1Timeline, SetTargetPassesItsPathAndAnEmptyPathResets) {
+  RecordingTimeline timeline;
+  const auto result = execute_with_timeline(
+      cat({push({int_value(7)}), rec(0x8B, str("mc")), rec(0x8B, str("")), rec(0x26, {}),
+           Bytes{0x00}}),
+      timeline);
+  ASSERT_TRUE(result.ok()) << result.message;
+  EXPECT_EQ(timeline.calls, (std::vector<std::string>{"target mc", "target "}));
+  EXPECT_EQ(result.trace, (std::vector<std::string>{"7"}));
+}
+
+// Invariant: SetTarget2 pops one operand and passes it to the host as a string, a number as its text form.
+TEST(Avm1Timeline, SetTarget2PopsItsOperandAndCoercesItToAString) {
+  const std::vector<std::pair<Bytes, std::string>> rows = {
+      {text_value("mc"), "target mc"},
+      {int_value(5), "target 5"},
+      {text_value(""), "target "},
+  };
+  for (const auto& [value, call] : rows) {
+    SCOPED_TRACE(call);
+    RecordingTimeline timeline;
+    const auto result = execute_with_timeline(
+        cat({push({int_value(7), value}), rec(0x20, {}), rec(0x26, {}), Bytes{0x00}}), timeline);
+    ASSERT_TRUE(result.ok()) << result.message;
+    EXPECT_EQ(timeline.calls, (std::vector<std::string>{call}));
+    EXPECT_EQ(result.trace, (std::vector<std::string>{"7"}));
+  }
+}
+
 struct Refusal {
   Bytes input;
   std::string name;
@@ -299,6 +330,8 @@ TEST(Avm1Timeline, TimelineOpcodesAreRefusedByNameWithoutAHost) {
       {rec(0x9F, {0x01}), "GotoFrame2 (0x9F)"},
       {rec(0x22, {}), "GetProperty (0x22)"},
       {rec(0x23, {}), "SetProperty (0x23)"},
+      {rec(0x20, {}), "SetTarget2 (0x20)"},
+      {rec(0x8B, str("mc")), "SetTarget (0x8B)"},
   };
   for (const Refusal& row : rows) {
     SCOPED_TRACE(row.name);
