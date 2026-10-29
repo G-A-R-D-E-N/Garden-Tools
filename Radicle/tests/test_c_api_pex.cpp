@@ -1,6 +1,7 @@
 #include "fo4/c_api.h"
 #include "fo4/c_api_pex.h"
 #include "fo4/pex/pex.hpp"
+#include "fo4/pex_analysis/opcodes.hpp"
 
 #include <gtest/gtest.h>
 
@@ -11,6 +12,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -595,6 +597,60 @@ TEST(CApiPex, ScriptResolveRejectsAnUnknownSourceKind) {
   EXPECT_EQ(radicle_script_resolve(&candidate, 1, &winners, &count), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(winners, nullptr);
   EXPECT_EQ(count, 0u);
+}
+
+TEST(CApiPex, OpcodeNameMatchesTheTableForEveryTableEntry) {
+  constexpr std::size_t kOpcodeCount = std::size(PexFile::kOpCodes);
+  ASSERT_EQ(kOpcodeCount, static_cast<std::size_t>(47));
+  for (std::size_t index = 0; index < kOpcodeCount; ++index) {
+    const auto opcode = static_cast<std::uint8_t>(index);
+    uint8_t* bytes = nullptr;
+    size_t size = 0;
+    ASSERT_EQ(radicle_pex_opcode_name(opcode, &bytes, &size), RADICLE_STATUS_OK)
+        << "opcode " << static_cast<int>(opcode);
+    ASSERT_NE(bytes, nullptr);
+    EXPECT_EQ(std::string(reinterpret_cast<const char*>(bytes), size),
+              fo4::pex_analysis::pex_op_name(opcode))
+        << "opcode " << static_cast<int>(opcode);
+    radicle_free_bytes(bytes);
+  }
+}
+
+namespace {
+
+std::string opcode_name(std::uint8_t opcode) {
+  uint8_t* bytes = nullptr;
+  size_t size = 0;
+  if (radicle_pex_opcode_name(opcode, &bytes, &size) != RADICLE_STATUS_OK) return std::string();
+  std::string name(reinterpret_cast<const char*>(bytes), size);
+  radicle_free_bytes(bytes);
+  return name;
+}
+
+}  // namespace
+
+TEST(CApiPex, OpcodeNamePinsTheFirstAndLastTableEntries) {
+  EXPECT_EQ(opcode_name(0), "nop");
+  EXPECT_EQ(opcode_name(46), "array_clear");
+}
+
+TEST(CApiPex, OpcodeNameRefusesAByteOutsideTheTable) {
+  uint8_t* bytes = reinterpret_cast<uint8_t*>(1);
+  size_t size = 9;
+  EXPECT_EQ(radicle_pex_opcode_name(47, &bytes, &size), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(bytes, nullptr);
+  EXPECT_EQ(size, 0u);
+  EXPECT_STREQ(radicle_last_error(), "opcode 47 is outside the 0..46 name table");
+
+  EXPECT_EQ(radicle_pex_opcode_name(255, &bytes, &size), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(bytes, nullptr);
+  EXPECT_EQ(size, 0u);
+  EXPECT_STREQ(radicle_last_error(), "opcode 255 is outside the 0..46 name table");
+}
+
+TEST(CApiPex, OpcodeNameRequiresItsOutputParameters) {
+  EXPECT_EQ(radicle_pex_opcode_name(0, nullptr, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_STREQ(radicle_last_error(), "out_bytes and out_size are required");
 }
 
 TEST(CApiPex, ScriptNormalizeNameReturnsTheLibraryKey) {

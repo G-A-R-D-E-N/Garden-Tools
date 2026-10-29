@@ -19,23 +19,6 @@ constexpr auto k_wrld = Signature::from_string("WRLD");
 using fo4::detail::erase_if_empty;
 using fo4::detail::find_mutable_location;
 using fo4::detail::is_interior_cell;
-using fo4::detail::MutableLocation;
-
-void move_to_bucket(MutableLocation& located,
-                    GroupType bucket_type,
-                    const PluginFormIdContext& context) {
-  auto& bucket = *located.path.back();
-  auto& cell_children = *located.path[located.path.size() - 2];
-  const auto bucket_header = bucket.header;
-  auto moved = std::move(std::get<Record>(bucket.children[located.index]));
-  bucket.children.erase(bucket.children.begin() + static_cast<std::ptrdiff_t>(located.index));
-
-  auto wanted = bucket_header;
-  wanted.group_type = static_cast<std::int32_t>(bucket_type);
-  detail::ensure_reference_bucket(cell_children, wanted, context, context)
-      ->children.emplace_back(std::move(moved));
-  erase_if_empty(cell_children, bucket_header);
-}
 
 }  // namespace
 
@@ -89,7 +72,7 @@ PlacedReferenceMoveStatus move_placed_reference(Plugin& plugin,
   }
   if (is_interior_cell(*cell)) {
     if (bucket_matches) return commit(PlacedReferenceMoveStatus::moved);
-    move_to_bucket(*located, wanted_bucket, context);
+    detail::move_reference_to_bucket(*located, wanted_bucket, context);
     return commit(PlacedReferenceMoveStatus::moved);
   }
 
@@ -122,7 +105,7 @@ PlacedReferenceMoveStatus move_placed_reference(Plugin& plugin,
   }
 
   if (target_key == cell_key) {
-    if (!bucket_matches) move_to_bucket(*located, wanted_bucket, context);
+    if (!bucket_matches) detail::move_reference_to_bucket(*located, wanted_bucket, context);
     return commit(PlacedReferenceMoveStatus::moved);
   }
   if (bucket_type == GroupType::cell_visible_distant_children) {

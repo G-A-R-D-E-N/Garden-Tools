@@ -15,6 +15,8 @@ enum class RecordPlacement {
   quest_children,
   topic_children,
   cell_children,
+  // Constraint: a CELL is a direct child of its matching top-level GRUP, a world children GRUP, or an interior/exterior cell block GRUP.
+  cell_block,
   cell_reference_children,
 };
 

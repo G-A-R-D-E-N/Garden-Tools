@@ -1,16 +1,27 @@
 #pragma once
 
 #include "fo4/archive/ba2.hpp"
+#include "fo4/binary/zlib_bound.hpp"
 #include "fo4/io/path_text.hpp"
 #include "fo4/text/encoding.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <string>
 #include <vector>
 
 namespace fo4::archive::detail {
+
+inline void require_zlib_expansion_bound(std::size_t packed_size, std::uint32_t unpacked_size) {
+  if (unpacked_size > static_cast<std::uint64_t>(packed_size) * binary::k_zlib_max_expansion +
+                          binary::k_zlib_slack_bytes) {
+    throw Ba2Error("BA2 compressed chunk declares " + std::to_string(unpacked_size) +
+                   " bytes from " + std::to_string(packed_size) +
+                   " packed bytes; exceeds zlib expansion bound");
+  }
+}
 
 inline std::vector<std::byte> read_file_bytes(const std::filesystem::path& path) {
   const auto name = io::utf8(path);

@@ -7,10 +7,7 @@ using OpenCommonwealth.Services.Hkx;
 
 namespace BehaviourStudio.App;
 
-/// <summary>
-/// Headless load-order scanners for behaviour/animation defects.
-/// </summary>
-public static class ModlistScan
+public static partial class ModlistScan
 {
     public static int Extract(string[] args)
     {

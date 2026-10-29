@@ -67,7 +67,7 @@ public class ArchiveTests
         Assert.Equal(new[] { "Meshes\\Gun.nif", "Materials\\Gun.bgsm" }, archive.Entries.Select(e => e.Path));
         Assert.All(archive.Entries, e => Assert.NotEqual(0u, e.NameHash));
         Assert.Equal(big, archive.Extract(archive.Find("materials/gun.bgsm")!.Value));
-        Assert.Equal(Status.ParseError, Assert.Throws<RadicleException>(() => Ba2Writer.General(files, version: 5, compress: false)).Status);
+        Assert.Equal(Status.InvalidArgument, Assert.Throws<RadicleException>(() => Ba2Writer.General(files, version: 5, compress: false)).Status);
     }
 
     [Fact]
@@ -75,6 +75,25 @@ public class ArchiveTests
     {
         var files = new (string Path, byte[] Data)[] { ("Meshes\\Gun.nif", null!) };
         Assert.Throws<ArgumentException>(() => Ba2Writer.General(files, 1, false));
+    }
+
+    [Fact]
+    public void WriterRefusesNullFileListAndPathWithArgumentExceptions()
+    {
+        Assert.Throws<ArgumentNullException>(() => Ba2Writer.General(null!));
+        var files = new (string Path, byte[] Data)[] { (null!, Encoding.ASCII.GetBytes("x")) };
+        Assert.Throws<ArgumentException>(() => Ba2Writer.General(files, 1, false));
+    }
+
+    [Fact]
+    public void WriterWritesHeaderOnlyArchiveForNoFiles()
+    {
+        using var temp = new TempDirectory();
+        var bytes = Ba2Writer.General(Array.Empty<(string Path, byte[] Data)>(), 1, false);
+        Assert.Equal(new byte[] { 0x42, 0x54, 0x44, 0x58, 1, 0, 0, 0, 0x47, 0x4E, 0x52, 0x4C, 0, 0, 0, 0, 0x18, 0, 0, 0, 0, 0, 0, 0 }, bytes);
+        using var archive = Ba2Archive.Open(temp.Write("Data/Empty.ba2", bytes));
+        Assert.Equal(1u, archive.Version);
+        Assert.Equal(0, archive.Count);
     }
 
     [Fact]

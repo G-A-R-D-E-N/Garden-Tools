@@ -1,15 +1,24 @@
 # The Papyrus subsystem
 
 Everything the tool owns for reading, understanding and writing Papyrus, with no Creation Kit
-involved. The shipped implementation is native C++ in `PluginEditTool/native/src/papyrus/` (headers in
-`native/include/fo4ide/papyrus/`). The `.pex` model, reader and writer live in Radicle
-(`Radicle/include/fo4/pex/pex.hpp`, `Radicle/src/pex/pex.cpp`) and the UI and MCP surface is
-`native/src/app/PapyrusTarget.cpp`. It builds and tests on Linux and Windows.
+involved. The implementation of record is Radicle. `fo4::papyrus` (`Radicle/include/fo4/papyrus/`,
+`Radicle/src/papyrus/`) owns compile, decompile, the resolver, the type checker, the script index,
+symbols and the code generator. `fo4::f4se` covers the F4SE binding recovery and `fo4::graph` the graph
+document. Radicle exposes them through `Radicle/include/fo4/c_api_papyrus*.h`, `c_api_script_set.h` and
+`c_api_graph.h`. The `.pex` model, reader and writer are `Radicle/include/fo4/pex/pex.hpp` and
+`Radicle/src/pex/pex.cpp`.
 
-The C# files named below (`FO4RecordEditor.Core/Services/Papyrus/`, about 6,500 lines) are the
-original implementation that the native code was ported from. They stay in the tree as the oracle
-until native parity is complete, and the figures in this record were measured on them. "The layers"
-gives the native file for each one.
+The tool still runs PET's own copies, `PluginEditTool/native/src/papyrus/` (headers in
+`native/include/fo4ide/papyrus/`) and `PluginEditTool/native/src/graph/`. Those are `fo4ide::papyrus` and
+`fo4ide::graph`, and they stay the parity oracle until the real-data gates in
+`docs/papyrus-real-data-gates.md` pass on the data machine. The PET side that calls Radicle instead is
+PR #921, which is held. It is not on `origin/nomad/dev`: PET's Papyrus RPCs still reach the native copies.
+The UI and MCP surface is `native/src/app/PapyrusTarget.cpp`. It builds and tests on Linux and Windows.
+
+The C# files named below (`FO4RecordEditor.Core/Services/Papyrus/`, 22 files, 9,645 lines by `wc -l`)
+are the original implementation that the native code was ported from. They are legacy and stay in the
+tree. The figures in this record were measured on them. "The layers" gives the Radicle owner and the
+PET native copy for each one.
 
 This is the engineering record for issue #78. The issue thread is the decision history; this is the
 current state.
@@ -31,28 +40,35 @@ Read top to bottom; each consumes the one above.
 Native paths are under `native/src/papyrus/` and `native/include/fo4ide/papyrus/` unless they
 start with `Radicle/` or `native/`.
 
-| C# file | What it is | Native | State (C#) |
-|---|---|---|---|
-| `PapyrusToken.cs`, `PapyrusLexer.cs` | Tokens. 45 keywords, case-insensitive. | `Token.hpp`, `Lexer.cpp` | done |
-| `PapyrusParser.cs`, `PapyrusAst.cs` | Hand-written recursive descent over 56 BNF productions. | `Parser.cpp`, `Ast.hpp` | done |
-| `PapyrusScriptIndex.cs` | Script name to file, namespace colons as folder separators, roots in priority order, first match wins. Parse cache keyed on size + mtime. | `ScriptIndex.cpp` | done |
-| `PapyrusFileWalk.cs` | The recursive directory walk everything else uses. | `enumeratePapyrusFiles` in `AnalysisService.cpp` | done |
-| `PapyrusType.cs` | The type model and `PapyrusConversions`, the cast rules. | `Type.cpp` (`isImplicit`, `isExplicit`) | done |
-| `PapyrusBinding.cs` | What a name turned out to be; `PapyrusResolution`, the per-script result. | `Binding.cpp` (`Resolution`) | done |
-| `PapyrusResolver.cs` | Binds every name, types every expression. | `Resolver.cpp` | done |
-| `PapyrusTypeChecker.cs` | Judges what the resolver resolved. | `TypeChecker.cpp` | done |
-| `PapyrusUserFlags.cs` | `Institute_Papyrus_Flags.flg`, parsed or built in. Flag name to bit. | `UserFlagTable` in `CodeGenerator.cpp` | done |
-| `PapyrusCodeGenerator.cs` | Resolved AST to `List<PexInstruction>` and a whole `PexObject`. | `CodeGenerator.cpp` | done |
-| `PapyrusCompiler.cs` | The one entry point: parse, resolve, check, generate, write. | `compileFile`, `compileScript` in `AnalysisService.cpp` | done |
-| `PexFile.cs` | `.pex` object model and reader. 47 opcodes including the FO4 additions. | `Radicle/include/fo4/pex/pex.hpp`, `Radicle/src/pex/pex.cpp` | done |
-| `PexStringTable.cs` | Rebuilds the string table for a file that was generated rather than read. | `PexFile::rebuildStringTable` in `Radicle/src/pex/pex.cpp` | done |
-| `PexWriter.cs` | `.pex` writer. | `Radicle/src/pex/pex.cpp` | done |
-| `PapyrusDecompiler.cs` | `.pex` to `.psc`. | `Decompiler.cpp` | done |
-| `PapyrusSymbols.cs`, `PapyrusAnalysisService.cs` | Outline, hover, go-to-definition for the panel and the MCP tools. | `Symbols.cpp`, `AnalysisService.cpp`; the RPC and MCP surface is `native/src/app/PapyrusTarget.cpp` | done |
-| `PapyrusDeclarationCheck.cs` | Duplicate declarations (`PAP0020`), checked before name resolution. | `declarationCheck` in `CodeGenerator.cpp` | done |
-| `PapyrusCreationKitFidelity.cs` | Post-generation touches that make the `.pex` match the Creation Kit where the compiler is free to choose. | `CreationKitFidelity.cpp` | done |
+| C# file (legacy) | What it is | Radicle owner | PET native copy | State |
+|---|---|---|---|---|
+| `PapyrusToken.cs`, `PapyrusLexer.cs` | Tokens. 45 keywords, case-insensitive. | `Radicle/src/papyrus/lexer.cpp` | `Token.hpp`, `Lexer.cpp` | done |
+| `PapyrusParser.cs`, `PapyrusAst.cs` | Hand-written recursive descent over 56 BNF productions. | `parser.cpp`, `parser_expression.cpp`, `parser_statement.cpp`, `Radicle/include/fo4/papyrus/ast.hpp` | `Parser.cpp`, `Ast.hpp` | done |
+| `PapyrusScriptIndex.cs` | Script name to file, namespace colons as folder separators, roots in priority order, first match wins. Parse cache keyed on size + mtime. | `script_index.cpp` (`Radicle/include/fo4/papyrus/script_index.hpp`) | `ScriptIndex.cpp` | done |
+| `PapyrusFileWalk.cs` | The recursive directory walk everything else uses. | `file_walk.cpp` | `enumeratePapyrusFiles` in `AnalysisService.cpp` | done |
+| `PapyrusType.cs` | The type model and `PapyrusConversions`, the cast rules. | `type.cpp` | `Type.cpp` (`isImplicit`, `isExplicit`) | done |
+| `PapyrusBinding.cs` | What a name turned out to be; `PapyrusResolution`, the per-script result. | `binding.cpp` | `Binding.cpp` (`Resolution`) | done |
+| `PapyrusResolver.cs` | Binds every name, types every expression. | `resolver.cpp` | `Resolver.cpp` | done |
+| `PapyrusTypeChecker.cs` | Judges what the resolver resolved. | `type_checker.cpp` | `TypeChecker.cpp` | done |
+| `PapyrusUserFlags.cs` | `Institute_Papyrus_Flags.flg`, parsed or built in. Flag name to bit. | `user_flags.cpp` | `UserFlagTable` in `CodeGenerator.cpp` | done |
+| `PapyrusCodeGenerator.cs` | Resolved AST to `List<PexInstruction>` and a whole `PexObject`. | `code_generator.cpp`, `body_*.cpp` | `CodeGenerator.cpp` | done |
+| `PapyrusCompiler.cs` | The one entry point: parse, resolve, check, generate, write. | `compile_script.cpp`; the exports are `radicle_papyrus_compile_source` (`Radicle/include/fo4/c_api_papyrus_compiler.h`) and `radicle_papyrus_compile_path` (`Radicle/include/fo4/c_api_papyrus_analysis.h`) | `compileFile`, `compileScript` in `AnalysisService.cpp` | done |
+| `PexFile.cs` | `.pex` object model and reader. 47 opcodes including the FO4 additions. | `Radicle/include/fo4/pex/pex.hpp`, `Radicle/src/pex/pex.cpp` | `Pex.hpp`, a thin alias of `fo4::pex` (no PET copy) | done |
+| `PexStringTable.cs` | Rebuilds the string table for a file that was generated rather than read. | `PexFile::rebuildStringTable` in `Radicle/src/pex/pex.cpp` | none, uses Radicle's | done |
+| `PexWriter.cs` | `.pex` writer. | `Radicle/src/pex/pex.cpp` | none, uses Radicle's | done |
+| `PapyrusDecompiler.cs` | `.pex` to `.psc`. | `decompiler.cpp`, export `radicle_papyrus_decompile` | `Decompiler.cpp` | done |
+| `PapyrusSymbols.cs`, `PapyrusAnalysisService.cs` | Outline, hover, go-to-definition for the panel and the MCP tools. | `symbols.cpp`, `analysis_service.cpp`; exports `radicle_papyrus_outline`, `radicle_papyrus_definition`, `radicle_papyrus_analyze_json` | `Symbols.cpp`, `AnalysisService.cpp`; the RPC and MCP surface is `native/src/app/PapyrusTarget.cpp` | done |
+| `PapyrusDeclarationCheck.cs` | Duplicate declarations (`PAP0020`), checked before name resolution. | `declaration_check.cpp` | `declarationCheck` in `CodeGenerator.cpp` | done |
+| `PapyrusCreationKitFidelity.cs` | Post-generation touches that make the `.pex` match the Creation Kit where the compiler is free to choose. | `creation_kit_fidelity.cpp` | `CreationKitFidelity.cpp` | done |
 
-Other C# names used in the prose below map to the native code as follows. `PapyrusCompiler.CompileFile`
+The Radicle owner is in `Radicle/src/papyrus/` unless a path is given. The PET native copy is in
+`PluginEditTool/native/src/papyrus/` (headers in `native/include/fo4ide/papyrus/`). The PET copy stays the
+oracle until the gates pass, and the Radicle column is the one that owns the code.
+
+The `State` column is the C# state when it was measured. The status of the PET rewire (PR #921, held) is in
+the intro.
+
+Other C# names used in the prose below map to the PET native code as follows. `PapyrusCompiler.CompileFile`
 is `compileFile`. `PapyrusResolution.BaseChainComplete` is `Resolution::baseChainComplete`
 (`Binding.hpp`). `PapyrusCodeGenOptions.EmitDebugOnlyCode` is `CodeGenOptions::emitDebugOnlyCode`.
 `PapyrusAnalysisService.NaturalRootsFor` is `AnalysisService::naturalRootsFor` and `.ResolveSources` is
@@ -137,6 +153,12 @@ round-trip gate, `Radicle/tests/test_pex_corpus.cpp`, reads `FO4_PEX_CORPUS` (an
 instead of `FO4RE_PEX_CORPUS`. The original C# suite, `FO4RecordEditor.Core.Tests`,
 runs on Linux; `FO4RecordEditor.Tests` targets `net9.0-windows` through its WPF reference and its host
 does not start there.
+
+The Radicle real-data gates for this subsystem are `PapyrusParseReal`, `PapyrusSemanticReal`,
+`PapyrusCodegenReal`, `PapyrusDecompilerReal` and `F4seCorpusReal` in `Radicle/tests/`. They run in the
+`fo4_tests` binary on the data machine, and each one is listed with its variables in
+`docs/papyrus-real-data-gates.md`. They are the gates that must pass before PET's native copies can be
+retired.
 
 ### Building the vanilla corpus, and the flag that decides what it means
 
@@ -495,7 +517,11 @@ for those and "clean" must never quietly mean "could not tell".
 `-op` when the built-in engine is selected, since neither applies to it.
 
 Both routes go through `AnalysisService` (`native/src/papyrus/AnalysisService.cpp`), reached from
-`native/src/app/PapyrusTarget.cpp`, so the Linux and Windows builds get all of it. In the C# server it
+`native/src/app/PapyrusTarget.cpp`, so the Linux and Windows builds get all of it. Radicle has the same
+service as `fo4::papyrus::analysis_service` (`Radicle/src/papyrus/analysis_service.cpp`), reached through
+`radicle_papyrus_analyze_json` and the compile exports in `Radicle/include/fo4/c_api_papyrus*.h`. PET's
+call sites move from the native service to that one in PR #921, which is held, so until it merges the
+`PapyrusTarget.cpp` route is the one that runs. In the C# server it
 was `PapyrusAnalysisService` in Core, which is why `FO4RecordEditor.Server` got it too.
 
 ### The one honest caveat
@@ -551,7 +577,8 @@ evidence that it refuses nothing real, and the 33-file stub tree cannot supply t
 Known gaps in the layers that are built, stated rather than hidden:
 
 - Array built-in argument **types** are unchecked (nothing declares them in any `.psc`). Their
-  **counts** are checked, but only at the back end, in `PapyrusCodeGenerator.ArrayBuiltinArity`, so
+  **counts** are checked, but only at the back end, in `arrayBuiltinArity()` (Radicle:
+  `Radicle/src/papyrus/body_call.cpp:198`; PET: `CodeGenerator.cpp`), so
   `papyrus_check` will not catch a miscounted one -- `compile_papyrus` will.
 - Override checking compares parameter **count**, not parameter types or return type.
 - No definite-assignment and no all-paths-return analysis.
@@ -596,8 +623,8 @@ native code too, under the names mapped in "The layers".
 - **Array built-ins are the one call shape with no arity check above the back end.** They are
   declared in no `.psc`, which is exactly why the type checker leaves their arguments unchecked, so
   `xs.Add()` parses, resolves, type-checks and reaches codegen. Reading operand zero of an empty
-  argument list is a crash, not a refusal: the counts live in
-  `PapyrusCodeGenerator.ArrayBuiltinArity` and anything outside them is reported.
+  argument list is a crash, not a refusal: the counts live in `arrayBuiltinArity()`
+  (`Radicle/src/papyrus/body_call.cpp:198`) and anything outside them is reported.
 - **Fallout 4 auto-detection could never work on Linux.** `ToolPaths.Fallout4Root`'s Steam probe
   joined its relative paths with backslashes, which are ordinary filename characters off Windows, so
   it looked for one file literally named `SteamLibrary\steamapps\common\Fallout 4` in each mount

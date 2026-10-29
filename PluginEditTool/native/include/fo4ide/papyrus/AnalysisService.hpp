@@ -27,35 +27,33 @@ public:
     static int offsetOf(std::string_view text, int line, int column);
 
     static std::string check(const std::string& source, bool all = true, bool semantic = true,
-                             const std::string* imports = nullptr);
+                             const std::string* imports = nullptr,
+                             const std::vector<std::filesystem::path>& baseImports = {});
 
     static std::string outline(const std::string& source);
 
     static std::string definition(const std::string& source, int line, int column,
-                                  const std::string* imports = nullptr);
+                                  const std::string* imports = nullptr,
+                                  const std::vector<std::filesystem::path>& baseImports = {});
 
     static std::string analyzeJson(const std::string& text,
                                    const std::string* filePath = nullptr);
 
     static std::string symbolAtJson(const std::string& text, const std::string* filePath,
-                                    int offset, const std::string* imports = nullptr);
+                                    int offset, const std::string* imports = nullptr,
+                                    const std::vector<std::filesystem::path>& baseImports = {});
 
-    static ScriptIndex buildIndex(const std::string& sourceFile, const std::string* imports);
+    static ScriptIndex buildIndex(const std::string& sourceFile, const std::string* imports,
+                                  const std::vector<std::filesystem::path>& baseImports);
 
     static std::vector<std::filesystem::path> naturalRootsFor(
         const std::filesystem::path& folder);
 
     static std::string compile(const std::string& source, const std::string* output = nullptr,
                                const std::string* imports = nullptr, bool release = false,
-                               bool debugInfo = true, const std::string* flagFile = nullptr);
+                               bool debugInfo = true, const std::string* flagFile = nullptr,
+                               const std::vector<std::filesystem::path>& baseImports = {});
 };
-
-// Roots the C# ToolPaths.PapyrusBaseImports() would add: the semicolon
-// separated PAPYRUS_BASE_IMPORTS environment variable (trimmed, quote-stripped,
-// deduplicated, existing directories only). The C# also probes app-relative and
-// hard-coded Windows locations; those are machine conveniences and are not
-// replicated.
-std::vector<std::filesystem::path> papyrusBaseImports();
 
 // Case-insensitive *.psc walk mirroring PapyrusFileWalk: iterative, skips
 // symlinked directories, tolerates inaccessible subtrees.

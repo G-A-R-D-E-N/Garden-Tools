@@ -60,7 +60,7 @@ public sealed partial class PexFile : IDisposable
         return Snapshot(handle);
     }
 
-    private HandleUse Use() => new(_handle, nameof(PexFile));
+    internal HandleUse Use() => new(_handle, nameof(PexFile));
 
     public unsafe byte[] ToBytes()
     {
@@ -73,7 +73,7 @@ public sealed partial class PexFile : IDisposable
 
     public void Dispose() => _handle.Dispose();
 
-    private static unsafe PexFile Snapshot(IntPtr handle)
+    internal static unsafe PexFile Snapshot(IntPtr handle)
     {
         try
         {

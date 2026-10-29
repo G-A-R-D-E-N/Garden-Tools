@@ -234,6 +234,29 @@ const std::array<AbcOpcodeInfo, 256>& opcode_table() {
   return table;
 }
 
+void put_u8(std::vector<std::uint8_t>& out, std::uint32_t value) {
+  out.push_back(static_cast<std::uint8_t>(value & 0xFFu));
+}
+
+void put_u32(std::vector<std::uint8_t>& out, std::uint32_t value) {
+  while (value >= 0x80u) {
+    put_u8(out, (value & 0x7Fu) | 0x80u);
+    value >>= 7;
+  }
+  put_u8(out, value);
+}
+
+void put_u30(std::vector<std::uint8_t>& out, std::uint32_t value) {
+  put_u32(out, value & 0x3FFFFFFFu);
+}
+
+void put_s24(std::vector<std::uint8_t>& out, std::int32_t value) {
+  const std::uint32_t raw = static_cast<std::uint32_t>(value) & 0xFFFFFFu;
+  put_u8(out, raw & 0xFFu);
+  put_u8(out, (raw >> 8) & 0xFFu);
+  put_u8(out, (raw >> 16) & 0xFFu);
+}
+
 bool in_code_range(std::int64_t target, std::size_t size) {
   return target >= 0 && target <= static_cast<std::int64_t>(size);
 }
@@ -323,9 +346,11 @@ AbcStatus decode_code(const std::uint8_t* code, std::size_t size,
       operand.role = operand_spec.role;
       switch (operand_spec.encoding) {
         case Enc::U30:
-          operand.value = reader.u30();
           if (operand_spec.role == Role::Immediate) {
+            operand.value = reader.u32();
             operand.immediate = static_cast<std::int16_t>(operand.value);
+          } else {
+            operand.value = reader.u30();
           }
           break;
         case Enc::S24:
@@ -412,6 +437,62 @@ AbcStatus decode_code(const std::vector<std::uint8_t>& code,
                       std::vector<AbcInstruction>& out,
                       std::span<const AbcException> exceptions) {
   return decode_code(code.empty() ? nullptr : code.data(), code.size(), out, exceptions);
+}
+
+AbcStatus encode_code(const std::vector<AbcInstruction>& code, std::vector<std::uint8_t>& out) {
+  out.clear();
+  for (const AbcInstruction& instruction : code) {
+    const AbcOpcodeInfo* info = opcode_info(instruction.opcode);
+    if (info == nullptr) {
+      return AbcStatus::BadOpcode;
+    }
+    if (instruction.operands.size() != info->operand_count) {
+      return AbcStatus::InconsistentModel;
+    }
+    const std::size_t start = out.size();
+    out.push_back(instruction.opcode);
+    const std::int64_t next = static_cast<std::int64_t>(instruction.offset) +
+                              static_cast<std::int64_t>(instruction.length);
+    const std::int64_t here = static_cast<std::int64_t>(instruction.offset);
+    for (std::size_t index = 0; index < info->operand_count; ++index) {
+      const AbcOperandSpec& spec = info->operands[index];
+      const AbcDecodedOperand& operand = instruction.operands[index];
+      switch (spec.encoding) {
+        case AbcOperandEncoding::U30:
+          if (spec.role == AbcOperandRole::Immediate) {
+            put_u32(out, operand.value);
+          } else {
+            put_u30(out, operand.value);
+          }
+          break;
+        case AbcOperandEncoding::S24:
+          put_s24(out, static_cast<std::int32_t>(static_cast<std::int64_t>(operand.target) - next));
+          break;
+        case AbcOperandEncoding::S8:
+          put_u8(out, static_cast<std::uint32_t>(operand.immediate) & 0xFFu);
+          break;
+        case AbcOperandEncoding::U8:
+          put_u8(out, operand.value & 0xFFu);
+          break;
+        case AbcOperandEncoding::Switch: {
+          put_s24(out, static_cast<std::int32_t>(static_cast<std::int64_t>(operand.target) - here));
+          const std::size_t cases =
+              operand.case_targets.empty() ? 0 : operand.case_targets.size() - 1;
+          put_u30(out, static_cast<std::uint32_t>(cases));
+          for (const std::int32_t target : operand.case_targets) {
+            put_s24(out, static_cast<std::int32_t>(static_cast<std::int64_t>(target) - here));
+          }
+          break;
+        }
+        case AbcOperandEncoding::None:
+          break;
+      }
+    }
+    if (out.size() - start != instruction.length) {
+      return AbcStatus::InconsistentModel;
+    }
+  }
+  return AbcStatus::Ok;
 }
 
 AbcStatus validate_operand_pools(const AbcFile& file,
