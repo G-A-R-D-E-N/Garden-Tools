@@ -9007,7 +9007,7 @@ Takes `from`, the first owner index to consider, and walks the owners from there
 
 ## Radicle/tests/test_avm1_encode.cpp:BranchToAnErasedEndRecordStillTargetsTheStreamEnd
 
-Input `99 02 00 02 00 04 00`. The Jump at 0 targets 7, the End record, and the recorded end is 7. End is erased, which leaves Jump (0 to 5) and NextFrame (5 to 6). The stream is 6 bytes, so the delta is 6 - 5 = 1. Expected `99 02 00 01 00 04`, and validate is Ok. Detects a branch to the stream end reported as BranchUnresolved after the End record is erased, which the derived end of 6 caused.
+In `Radicle/tests/test_avm1_encode.cpp:BranchToAnErasedEndRecordStillTargetsTheStreamEnd`, input `99 02 00 02 00 04 00`. The Jump at 0 targets 7, the stream end past the End record (at 6), and the recorded end is 7. End is erased, which leaves Jump (0 to 5) and NextFrame (5 to 6). The stream is 6 bytes, so the delta is 6 - 5 = 1. Expected `99 02 00 01 00 04`, and validate is Ok. Detects a branch to the stream end reported as BranchUnresolved after the End record is erased, which the derived end of 6 caused.
 
 ## Radicle/tests/test_avm1_encode.cpp:BranchOffsetFieldIsIgnoredAndTheTargetDecidesTheDelta
 
