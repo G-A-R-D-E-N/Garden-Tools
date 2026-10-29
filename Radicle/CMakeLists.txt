@@ -836,6 +836,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_environment_terrain_real.cpp
     tests/test_environment_strings.cpp
     tests/test_ba2_reader.cpp
+    tests/test_ba2_write.cpp
     tests/test_ba2_long_names.cpp
     tests/test_ba2_real.cpp
     tests/test_ba2_versions_real.cpp
