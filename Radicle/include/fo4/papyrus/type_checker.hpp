@@ -39,6 +39,8 @@ private:
     Type parameterType(const Parameter& parameter, const Script* owner);
     void checkAssignable(State& state, const Type& target, const Type& value, const Span& span,
                          std::string_view what);
+    void checkComparable(State& state, const Type& left, const Type& right, const Span& span);
+    bool comparable(const Type& left, const Type& right);
     bool inherits(const std::string& child, const std::string& ancestor);
 
     ScriptIndex& index_;

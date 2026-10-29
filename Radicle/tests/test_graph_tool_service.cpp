@@ -1,10 +1,13 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <string>
 #include <vector>
+
+#include <nlohmann/json.hpp>
 
 #include <fo4/c_api_graph.h>
 #include <fo4/graph/graph_tool_service.hpp>
@@ -396,4 +399,34 @@ TEST(GraphToolService, GraphToolServiceCApiDescribeNodeMatchesTheServiceForKnown
     EXPECT_TRUE(known.find("arg:akItemToAdd") != std::string::npos);
     EXPECT_EQ(unknown, GraphToolService::describeNode("call:NoSuchScript.NoSuchThing", &imports()));
     EXPECT_TRUE(startsWith(unknown, "RESULT: FAILED"));
+}
+
+TEST(GraphToolService, GraphToolServiceCApiLoadScriptNamesTheEventAndFunctionNodesOfAPsc) {
+    const std::string directory = uniqueRoot("load");
+    std::filesystem::create_directories(directory);
+    const auto path = std::filesystem::path(directory) / "Fixture.psc";
+    {
+        std::ofstream out(path, std::ios::binary | std::ios::trunc);
+        out << "Scriptname Fixture extends ObjectReference\n\n"
+               "Event OnLoad()\n    Disable(false)\nEndEvent\n\n"
+               "Function Fire()\n    Disable(false)\nEndFunction\n";
+    }
+    uint8_t* bytes = nullptr;
+    size_t size = 0;
+    const auto status = radicle_graph_load_script(path.string().c_str(), imports().c_str(), nullptr,
+                                                  0, &bytes, &size);
+    const auto text = takeText(status, bytes, size);
+    std::filesystem::remove_all(directory);
+
+    const auto json = nlohmann::json::parse(text);
+    std::vector<std::string> defs;
+    std::vector<std::string> functions;
+    for (const auto& node : json["nodes"]) {
+        defs.push_back(node["def"].get<std::string>());
+        if (node["def"] == "function.entry") {
+            functions.push_back(node["config"]["name"].get<std::string>());
+        }
+    }
+    EXPECT_NE(std::find(defs.begin(), defs.end(), "event:ObjectReference.OnLoad"), defs.end());
+    EXPECT_EQ(functions, std::vector<std::string>{"Fire"});
 }

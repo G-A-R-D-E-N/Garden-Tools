@@ -497,6 +497,9 @@ RuntimeStatus Runtime::build_traits() {
       switch (out.kind) {
         case TraitKind::Slot:
         case TraitKind::Const:
+          if (source.slot_id > kMaxSlotIndex) {
+            return RuntimeStatus::InvalidTrait;
+          }
           out.slot_id = source.slot_id;
           out.type_multiname_index = source.type_name;
           out.type_name = file.multiname_at(source.type_name);

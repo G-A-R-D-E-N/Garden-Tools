@@ -29,7 +29,7 @@ public sealed class SwfDocument : IDisposable
 
     public string? Path { get; }
 
-    // Invariant: Movie is reopened from the history bytes after every Apply, Undo and Redo.
+    // Invariant: Movie is reopened from the history bytes after every Apply, Undo, Redo and SwfVerbs call (Verb).
     public SwfFile Movie => _movie;
 
     public ulong Revision => _history.Revision;
@@ -64,6 +64,8 @@ public sealed class SwfDocument : IDisposable
     public IReadOnlyList<SwfCharacterRecord> Characters() => Movie.Characters();
 
     public IReadOnlyList<SwfFrameLabelRecord> FrameLabels() => Movie.FrameLabels;
+
+    public IReadOnlyList<SwfFrameLabelRow> FrameLabelRows(int timeline) => SwfVerbs.FrameLabelRows(_history, (ushort)timeline);
 
     public IReadOnlyList<SwfFrameInstanceRecord> Frame(int timeline, int frame)
     {
@@ -101,55 +103,51 @@ public sealed class SwfDocument : IDisposable
 
     public byte[] WriteBytes() => _history.WriteBytes();
 
-    public SwfEditTextRecord EditText(int tagIndex) => Movie.EditText(tagIndex);
+    public SwfEditTextStateRecord EditText(int tagIndex) => SwfVerbs.ReadEditText(_history, tagIndex);
 
-    // Requires a root-timeline frame the movie reaches; a duplicate name on the root timeline is refused.
-    public SwfPlanResultRecord AddLabel(int frame, string name, int timeline = 0)
-    {
-        var payload = LabelPayload(name, timeline, -1);
-        if (timeline == 0)
-        {
-            var showFrames = Movie.Tags.Where(tag => tag.Code == 1 && !tag.InsideSprite).ToArray();
-            if (frame < 0 || frame >= showFrames.Length) throw new ArgumentOutOfRangeException(nameof(frame));
-            return Apply(new SwfPlanSpec().Insert(showFrames[frame].Index, 43, payload));
-        }
-        var sprite = Movie.Tags.FirstOrDefault(tag => tag.Code == 39 && tag.SpriteId == (ushort)timeline);
-        if (sprite == null) throw new InvalidOperationException($"timeline {timeline} is not a DefineSprite in this movie");
-        return InsertSpriteChild(sprite, frame, 43, payload);
-    }
+    public string InspectText() => Movie.InspectText(ToString());
 
-    // Requires a frame-label tag index; the rename keeps every byte after the name's NUL (the named-anchor flag).
-    public SwfPlanResultRecord RenameLabel(int tagIndex, string name)
-    {
-        if (Movie.Tags[tagIndex].Code != 43) throw new InvalidOperationException("the tag is not a frame label");
-        var label = Movie.FrameLabels.First(item => item.TagIndex == tagIndex);
-        var head = LabelPayload(name, label.InsideSprite ? label.SpriteId : 0, tagIndex);
-        var old = Movie.Payload(tagIndex);
-        var nul = Array.IndexOf(old, (byte)0);
-        if (nul < 0) throw new InvalidOperationException("the frame label has no name terminator");
-        return Apply(new SwfPlanSpec().Replace(tagIndex, head.Concat(old.Skip(nul + 1)).ToArray()));
-    }
+    // Requires a DoAction (12) or DoInitAction (59) flat tag index; Radicle refuses any other tag and the refusal is thrown as its RadicleException.
+    public string Avm1Disassemble(int tagIndex) => Movie.Avm1Disassemble(tagIndex);
+
+    // Requires a frame the chosen timeline reaches; Radicle refuses a duplicate name on that timeline.
+    public SwfPlanResultRecord AddLabel(int frame, string name, int timeline = 0) =>
+        Verb(history => SwfVerbs.AddFrameLabel(history, (ushort)timeline, (uint)frame, name));
+
+    // Requires a label index from FrameLabelRows on that timeline, not a tag index.
+    public SwfPlanResultRecord RenameLabel(int timeline, int labelIndex, string name) =>
+        Verb(history => SwfVerbs.RenameFrameLabel(history, (ushort)timeline, labelIndex, name));
 
     public IReadOnlyList<SwfPlacementRecord> Placements() => Movie.Placements();
 
-    // Requires a placement tag index; the depth change is one history command.
-    public SwfPlanResultRecord SetDepth(int tagIndex, ushort depth) => Apply(new SwfPlanSpec().Replace(
-        tagIndex, SwfPlacementCodec.WithDepth(Movie.Payload(tagIndex), Movie.Tags[tagIndex].Code, depth)));
-
-    // Constraint: an edit-text write goes through the same plan and history path as every other edit.
-    public SwfPlanResultRecord EditEditText(int tagIndex, SwfEditTextEdit edit)
+    // Requires a placement tag index; a root placement moves its creating instance through the native depth verb.
+    public SwfPlanResultRecord SetDepth(int tagIndex, ushort depth)
     {
-        var record = Movie.EditText(tagIndex);
-        var payload = SwfEditTextCodec.Write(record, Movie.Payload(tagIndex), edit);
-        return Apply(new SwfPlanSpec().Replace(tagIndex, payload));
+        if (Movie.Tags[tagIndex].InsideSprite) return Apply(new SwfPlanSpec().Replace(
+            tagIndex, SwfPlacementCodec.WithDepth(Movie.Payload(tagIndex), Movie.Tags[tagIndex].Code, depth)));
+        var (rootFrame, instanceId) = RootInstance(RootRows(row => row.CreateTagIndex == tagIndex));
+        return Verb(history => SwfVerbs.ReassignInstanceDepth(history, rootFrame, instanceId, depth, out _));
     }
+
+    // Requires a DefineEditText tag index; the verb commits one history command like every other edit.
+    public SwfPlanResultRecord EditEditText(int tagIndex, SwfEditTextEdit edit) =>
+        Verb(history => SwfVerbs.ApplyEditText(history, tagIndex, edit));
 
     public SwfPlacementMatrix PlacementTransform(int tagIndex) => Movie.PlacementMatrix(tagIndex);
 
-    // Requires a placement tag index; the transform edit keeps the depth and every other placement byte.
+    // Requires a placement tag index; a root transform source with a row is edited natively, and any other placement takes the managed write.
     public SwfPlanResultRecord SetPlacementTransform(int tagIndex, SwfPlacementTransformEdit edit)
     {
-        var payload = SwfPlacementMatrixCodec.Write(Movie.PlacementMatrix(tagIndex), Movie.Tags[tagIndex].Code,
+        var tag = Movie.Tags[tagIndex];
+        var rows = tag.InsideSprite ? Array.Empty<SwfFrameInstanceRecord>() : RootRows(row => row.TransformTagIndex == tagIndex);
+        if (rows.Length > 0)
+        {
+            var transform = ToVerbTransform(Movie.PlacementMatrix(tagIndex), edit);
+            var root = rows[0];
+            return Verb(history => SwfVerbs.ApplyInstanceTransforms(history, root.TimelineFrame,
+                new[] { new SwfInstanceTransformEdit(root.InstanceId, transform) }));
+        }
+        var payload = SwfPlacementMatrixCodec.Write(Movie.PlacementMatrix(tagIndex), tag.Code,
             Movie.Payload(tagIndex), edit);
         return Apply(new SwfPlanSpec().Replace(tagIndex, payload));
     }
@@ -159,27 +157,38 @@ public sealed class SwfDocument : IDisposable
     {
         var tag = Movie.Tags[tagIndex];
         if (tag.Code != 26) throw new InvalidOperationException("only a PlaceObject2 placement can carry a keyframe this round");
+        if (!tag.InsideSprite)
+        {
+            var showFrames = Movie.Tags.Count(item => item.Code == 1 && !item.InsideSprite);
+            if (frame < 0 || frame >= showFrames) throw new ArgumentOutOfRangeException(nameof(frame));
+            var (rootFrame, instanceId) = RootInstance(RootRows(
+                row => row.CreateTagIndex == tagIndex || row.TransformTagIndex == tagIndex, frame));
+            return Verb(history => SwfVerbs.InsertInstanceTransformKeyframe(history, rootFrame, instanceId));
+        }
         var payload = Movie.Payload(tagIndex);
         if ((payload[0] & 0x02) != 0) payload = payload.Take(3).Concat(payload.Skip(5)).ToArray();
         payload[0] = (byte)((payload[0] & ~0x02) | 0x01);
-        if (!tag.InsideSprite)
-        {
-            var showFrames = Movie.Tags.Where(item => item.Code == 1 && !item.InsideSprite).ToArray();
-            if (frame < 0 || frame >= showFrames.Length) throw new ArgumentOutOfRangeException(nameof(frame));
-            return Apply(new SwfPlanSpec().Insert(showFrames[frame].Index, 26, payload));
-        }
         var sprite = Movie.Tags[tag.Parent];
         if (sprite.Code != 39) throw new InvalidOperationException("the placement parent is not a DefineSprite");
         return InsertSpriteChild(sprite, frame, 26, payload);
     }
 
-    // Requires the tag index of a frame label; the removal is one history command and undo restores the tag.
-    public SwfPlanResultRecord RemoveLabel(int tagIndex)
-    {
-        var tag = Movie.Tags[tagIndex];
-        if (tag.Code != 43) throw new InvalidOperationException("the tag is not a frame label");
-        return Apply(new SwfPlanSpec().Remove(tagIndex));
-    }
+    // Requires a label index from FrameLabelRows on that timeline; the removal is one history command and undo restores the tag.
+    public SwfPlanResultRecord RemoveLabel(int timeline, int labelIndex) =>
+        Verb(history => SwfVerbs.RemoveFrameLabel(history, (ushort)timeline, labelIndex));
+
+    // Requires an instruction boundary in a method body of the ABC block; the edit lands as one plan over its DoABC tag.
+    public SwfPlanResultRecord InsertAbcInstruction(int abc, int body, int offset, string text) =>
+        ApplyNativeEdit(Movie.AbcBlocks[abc].TagIndex, scratch => scratch.InsertAbcInstruction(abc, body, offset, text));
+
+    // Requires the same arguments as the insert; the instruction at offset is replaced in place.
+    public SwfPlanResultRecord ReplaceAbcInstruction(int abc, int body, int offset, string text) =>
+        ApplyNativeEdit(Movie.AbcBlocks[abc].TagIndex, scratch => scratch.ReplaceAbcInstruction(abc, body, offset, text));
+
+    // Requires a DefineFont tag index; the glyph shape lands as one plan over that font tag.
+    public SwfPlanResultRecord ReplaceFontGlyph(int tagIndex, int glyph, byte fillBits, byte lineBits,
+                                                IReadOnlyList<SwfShapeCommandRecord> records) =>
+        ApplyNativeEdit(tagIndex, scratch => scratch.ReplaceFontGlyph(tagIndex, glyph, fillBits, lineBits, records));
 
     // Constraint: the save goes through the existing WriteService asset path, which backs the asset up first.
     public string Save(string? targetPath = null)
@@ -200,6 +209,46 @@ public sealed class SwfDocument : IDisposable
 
     public override string ToString() => Path ?? "<bytes>";
 
+    private SwfPlanResultRecord Verb(Func<SwfEditHistory, SwfPlanResultRecord> verb)
+    {
+        var result = verb(_history);
+        Reopen();
+        return result;
+    }
+
+    // Requires the rows of the first frame that names the placement, or of frame when one is given; later frames are not read.
+    private SwfFrameInstanceRecord[] RootRows(Func<SwfFrameInstanceRecord, bool> addresses, int? frame = null)
+    {
+        using var frames = Movie.OpenFrames();
+        var candidates = frame is { } index ? new[] { index } : Enumerable.Range(0, frames.TimelineAt(0).FrameCount).ToArray();
+        foreach (var candidate in candidates)
+        {
+            var rows = frames.Instances(0, candidate).Where(row => row.TimelineId == 0 && addresses(row)).ToArray();
+            if (rows.Length > 0) return rows;
+        }
+        return Array.Empty<SwfFrameInstanceRecord>();
+    }
+
+    // Requires one instance among the rows; two instances on one frame refuse instead of guessing.
+    private static (uint Frame, uint InstanceId) RootInstance(SwfFrameInstanceRecord[] rows)
+    {
+        if (rows.Length == 0) throw new InvalidOperationException("no root-timeline instance is addressed by that placement");
+        var instances = rows.Select(row => row.InstanceId).Distinct().ToArray();
+        if (instances.Length != 1) throw new InvalidOperationException("the placement addresses more than one instance; refusing to guess");
+        return (rows[0].TimelineFrame, instances[0]);
+    }
+
+    // Requires MATRIX fixed-point fields as unit-one doubles and twips as points, the units the native verbs take.
+    private static SwfTransformRecord ToVerbTransform(SwfPlacementMatrix matrix, SwfPlacementTransformEdit edit)
+    {
+        var scaleX = edit.ScaleX ?? (matrix.HasScale ? matrix.ScaleX : 0x10000);
+        var scaleY = edit.ScaleY ?? (matrix.HasScale ? matrix.ScaleY : 0x10000);
+        var rotate0 = edit.Rotate0 ?? (matrix.HasRotate ? matrix.Rotate0 : 0);
+        var rotate1 = edit.Rotate1 ?? (matrix.HasRotate ? matrix.Rotate1 : 0);
+        return new SwfTransformRecord(scaleX / 65536.0, rotate0 / 65536.0, rotate1 / 65536.0, scaleY / 65536.0,
+            (edit.TranslateX ?? matrix.TranslateX) / 20.0, (edit.TranslateY ?? matrix.TranslateY) / 20.0);
+    }
+
     private void Reopen()
     {
         var bytes = _history.WriteBytes();
@@ -208,16 +257,6 @@ public sealed class SwfDocument : IDisposable
         _current = bytes;
         _movie = next;
         old.Dispose();
-    }
-
-    private byte[] LabelPayload(string name, int timeline, int ownTagIndex)
-    {
-        if (string.IsNullOrWhiteSpace(name) || name.Contains('\0'))
-            throw new ArgumentException("a frame label needs a name without NUL characters", nameof(name));
-        if (Movie.FrameLabels.Any(label => label.TagIndex != ownTagIndex && label.SpriteId == timeline &&
-                                           label.InsideSprite == (timeline != 0) && label.Name == name))
-            throw new InvalidOperationException("a frame label with that name already exists on this timeline");
-        return System.Text.Encoding.UTF8.GetBytes(name).Concat(new byte[] { 0 }).ToArray();
     }
 
     // Requires a reached frame of the sprite; the child tag is spliced in front of that frame's ShowFrame header.
@@ -234,5 +273,13 @@ public sealed class SwfDocument : IDisposable
         var next = spritePayload.Take(headerStart).Concat(header).Concat(payload)
             .Concat(spritePayload.Skip(headerStart)).ToArray();
         return Apply(new SwfPlanSpec().Replace(sprite.Index, next));
+    }
+
+    // Requires the native edit to run on a scratch copy, so only the tag it lands as enters the history.
+    private SwfPlanResultRecord ApplyNativeEdit(int tagIndex, Action<SwfFile> edit)
+    {
+        using var scratch = SwfFile.FromBytes(_current);
+        edit(scratch);
+        return Apply(new SwfPlanSpec().Replace(tagIndex, scratch.Payload(tagIndex)));
     }
 }

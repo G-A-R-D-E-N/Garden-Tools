@@ -656,6 +656,11 @@ jobs:
         if: steps.fo4.outputs.has_data == 'true'
         shell: powershell
         run: |
+          $pscRoots = @((Join-Path $env:FO4_DATA_DIR 'Scripts\Source\User'), (Join-Path $env:FO4_DATA_DIR 'Scripts\Source\Base')) -join ';'
+          $env:FO4_PSC_CORPUS = $pscRoots
+          $env:FO4RE_PSC_CORPUS = $pscRoots
+          $env:FO4RE_PSC_ROOTS = $pscRoots
+          # TODO(papyrus-gates): PEX gates (FO4RE_PEX_CORPUS, FO4_PEX_CORPUS, FO4RE_PEX_RELEASE=1) need a staged vanilla .pex root; no Windows staging route is verified, see docs/papyrus-real-data-gates.md.
           $ctestArgs = @('--test-dir', 'build\native', '--output-on-failure', '--parallel', '4', '--no-tests=error', '-R', $env:REAL_DATA_TEST_REGEX)
           if ($env:CTEST_EXCLUDE_REGEX) { $ctestArgs += @('-E', $env:CTEST_EXCLUDE_REGEX) }
           ctest @ctestArgs

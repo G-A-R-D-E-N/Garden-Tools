@@ -19,39 +19,7 @@ using radicle_c_detail::clear_error;
 using radicle_c_detail::fail;
 using radicle_c_env_detail::guarded;
 
-struct radicle_swf_history {
-  fo4::swf::SwfEditHistory history;
-};
-
 namespace {
-
-std::size_t subtree_size(const std::vector<fo4::swf::SwfTag>& tags) {
-  std::size_t total = 0;
-  for (const auto& tag : tags) {
-    total += 1 + subtree_size(tag.children);
-  }
-  return total;
-}
-
-// Constraint: a flat index from radicle_swf_tag_at must map to the top-level position a plan holds.
-void build_flat_map(const std::vector<fo4::swf::SwfTag>& tags, std::size_t& flat,
-                    std::vector<std::size_t>& out) {
-  for (const auto& tag : tags) {
-    out.push_back(flat);
-    flat += 1 + subtree_size(tag.children);
-  }
-}
-
-bool top_level_positions(const std::vector<std::size_t>& flat_map, std::size_t flat,
-                         std::size_t& out) {
-  for (std::size_t index = 0; index < flat_map.size(); ++index) {
-    if (flat_map[index] == flat) {
-      out = index;
-      return true;
-    }
-  }
-  return false;
-}
 
 bool payload_ok(const uint8_t* payload, size_t size) {
   return (payload != nullptr || size == 0) && size <= std::numeric_limits<std::uint32_t>::max();
@@ -77,14 +45,11 @@ radicle_status translate(const fo4::swf::SwfFile& file, const radicle_swf_tag_pl
   if (plan.removal_count != 0 && plan.removals == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the plan carries no removal array");
   }
-  std::vector<std::size_t> flat_map;
-  std::size_t flat = 0;
-  build_flat_map(file.tags, flat, flat_map);
   out = {};
   for (std::size_t index = 0; index < plan.replacement_count; ++index) {
     const auto& entry = plan.replacements[index];
     std::size_t position = 0;
-    if (!top_level_positions(flat_map, entry.tag_index, position)) {
+    if (!radicle_swf_detail::top_level_position(file, entry.tag_index, position)) {
       return fail(RADICLE_STATUS_INVALID_ARGUMENT,
                   "a plan index must address a top-level tag; replace the DefineSprite tag instead");
     }
@@ -98,7 +63,7 @@ radicle_status translate(const fo4::swf::SwfFile& file, const radicle_swf_tag_pl
   for (std::size_t index = 0; index < plan.insertion_count; ++index) {
     const auto& entry = plan.insertions[index];
     std::size_t position = 0;
-    if (!top_level_positions(flat_map, entry.before_tag_index, position)) {
+    if (!radicle_swf_detail::top_level_position(file, entry.before_tag_index, position)) {
       return fail(RADICLE_STATUS_INVALID_ARGUMENT,
                   "a plan insertion index must address a top-level tag; replace the DefineSprite tag instead");
     }
@@ -117,7 +82,7 @@ radicle_status translate(const fo4::swf::SwfFile& file, const radicle_swf_tag_pl
   }
   for (std::size_t index = 0; index < plan.removal_count; ++index) {
     std::size_t position = 0;
-    if (!top_level_positions(flat_map, plan.removals[index].tag_index, position)) {
+    if (!radicle_swf_detail::top_level_position(file, plan.removals[index].tag_index, position)) {
       return fail(RADICLE_STATUS_INVALID_ARGUMENT,
                   "a plan removal index must address a top-level tag; remove the DefineSprite tag instead");
     }
@@ -132,6 +97,55 @@ void fill_result(const radicle_swf_history& history, bool changed, radicle_swf_p
 }
 
 }  // namespace
+
+namespace radicle_swf_detail {
+
+std::size_t subtree_size(const std::vector<fo4::swf::SwfTag>& tags) {
+  std::size_t total = 0;
+  for (const auto& tag : tags) {
+    total += 1 + subtree_size(tag.children);
+  }
+  return total;
+}
+
+bool top_level_position(const fo4::swf::SwfFile& file, std::size_t flat, std::size_t& out) {
+  std::size_t start = 0;
+  for (std::size_t index = 0; index < file.tags.size(); ++index) {
+    if (start == flat) {
+      out = index;
+      return true;
+    }
+    start += 1 + subtree_size(file.tags[index].children);
+  }
+  return false;
+}
+
+bool timeline_flat_indices(const fo4::swf::SwfFile& file, std::uint16_t timeline_id,
+                           std::vector<std::size_t>& out) {
+  out.clear();
+  const std::vector<fo4::swf::SwfTag>* tags = &file.tags;
+  std::size_t flat = 0;
+  if (timeline_id != 0) {
+    const fo4::swf::SwfTag* sprite = nullptr;
+    for (const auto& tag : file.tags) {
+      if (tag.code == fo4::swf::tag::kDefineSprite && tag.sprite_id && *tag.sprite_id == timeline_id) {
+        sprite = &tag;
+        break;
+      }
+      flat += 1 + subtree_size(tag.children);
+    }
+    if (sprite == nullptr) return false;
+    tags = &sprite->children;
+    flat += 1;
+  }
+  for (const auto& tag : *tags) {
+    out.push_back(flat);
+    flat += 1 + subtree_size(tag.children);
+  }
+  return true;
+}
+
+}  // namespace radicle_swf_detail
 
 extern "C" {
 

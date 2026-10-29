@@ -48,11 +48,11 @@ public class SwfInterop
         }).ToArray(),
     }));
 
-    public Task<string> FrameLabels() => Run(() => Json(new
+    public Task<string> FrameLabels(int timeline) => Run(() => Json(new
     {
-        labels = Document().FrameLabels().Select(l => new
+        labels = Document().FrameLabelRows(timeline).Select(l => new
         {
-            name = l.Name, tagIndex = l.TagIndex, spriteId = l.SpriteId, insideSprite = l.InsideSprite,
+            labelIndex = l.LabelIndex, frame = l.Frame, name = l.Name,
         }).ToArray(),
     }));
 
@@ -69,15 +69,21 @@ public class SwfInterop
         }).ToArray(),
     }));
 
-    public Task<string> RenameLabel(int tagIndex, string name) => Run(() =>
-        Snapshot(Document().RenameLabel(tagIndex, name).Changed));
+    public Task<string> Timeline(int index) => Run(() =>
+    {
+        var timeline = Document().Timeline(index);
+        return Json(new { characterId = timeline.CharacterId, frameCount = timeline.FrameCount });
+    });
+
+    public Task<string> RenameLabel(int timeline, int labelIndex, string name) => Run(() =>
+        Snapshot(Document().RenameLabel(timeline, labelIndex, name).Changed));
 
     public Task<string> ReadEditText(int tagIndex) => Run(() =>
     {
         var text = Document().EditText(tagIndex);
         return Json(new
         {
-            id = text.CharacterId, text = text.Text, variable = text.Variable,
+            id = text.CharacterId, text = text.Text,
             color = text.Color is null ? "" : text.Color.Value.ToString("X8"),
             x0 = text.Bounds.XMin, x1 = text.Bounds.XMax, y0 = text.Bounds.YMin, y1 = text.Bounds.YMax,
         });
@@ -109,7 +115,8 @@ public class SwfInterop
         var matrix = Document().PlacementTransform(tagIndex);
         return Json(new
         {
-            hasScale = matrix.HasScale, scaleX = matrix.ScaleX, scaleY = matrix.ScaleY,
+            hasScale = matrix.HasScale, scaleX = matrix.HasScale ? matrix.ScaleX : 0x10000,
+            scaleY = matrix.HasScale ? matrix.ScaleY : 0x10000,
             hasRotate = matrix.HasRotate, rotate0 = matrix.Rotate0, rotate1 = matrix.Rotate1,
             x = matrix.TranslateX, y = matrix.TranslateY,
         });
@@ -124,13 +131,57 @@ public class SwfInterop
         });
     public Task<string> InsertKeyframe(int tagIndex, int frame) => Run(() =>
         Snapshot(Document().InsertKeyframe(tagIndex, frame).Changed));
-    public Task<string> RemoveLabel(int tagIndex) => Run(() =>
-        Snapshot(Document().RemoveLabel(tagIndex).Changed));
+    public Task<string> RemoveLabel(int timeline, int labelIndex) => Run(() =>
+        Snapshot(Document().RemoveLabel(timeline, labelIndex).Changed));
     public Task<string> AddLabel(int frame, string name, int timeline) => Run(() =>
     {
         var result = Document().AddLabel(frame, name, timeline);
         return Snapshot(result.Changed);
     });
+    public Task<string> InsertAbcInstruction(int abc, int body, int offset, string text) => Run(() =>
+        Snapshot(Document().InsertAbcInstruction(abc, body, offset, text).Changed));
+    public Task<string> ReplaceAbcInstruction(int abc, int body, int offset, string text) => Run(() =>
+        Snapshot(Document().ReplaceAbcInstruction(abc, body, offset, text).Changed));
+    public Task<string> AbcBlocks() => Run(() => Json(new
+    {
+        blocks = Document().Movie.AbcBlocks.Select((block, abc) => new
+        {
+            abc, name = block.Name,
+            classes = block.Classes.Select(klass => klass.Name).ToArray(),
+            scripts = block.Scripts.Select(script => script.Name).ToArray(),
+            methods = Document().Movie.Methods(abc).Select((method, index) => new
+            {
+                index, name = method.Name, returnType = method.ReturnType, hasBody = method.HasBody,
+            }).ToArray(),
+        }).ToArray(),
+    }));
+    public Task<string> Disassemble(int abc, int methodIndex) => Run(() =>
+        Json(new { text = Document().Movie.Disassemble(abc, methodIndex) }));
+    public Task<string> InspectText() => Run(() => Json(new { text = Document().InspectText() }));
+    public Task<string> ActionTags() => Run(() => Json(new
+    {
+        tags = Document().Movie.Tags.Where(tag => tag.Code == 12 || tag.Code == 59).Select(tag => new
+        {
+            tagIndex = tag.Index, code = tag.Code, insideSprite = tag.InsideSprite,
+        }).ToArray(),
+    }));
+    public Task<string> Avm1Disassemble(int tagIndex) => Run(() =>
+        Json(new { text = Document().Avm1Disassemble(tagIndex) }));
+    public Task<string> ShapeSvg(int characterId) => Run(() =>
+    {
+        if (characterId < 0 || characterId > ushort.MaxValue)
+            throw new ArgumentOutOfRangeException(nameof(characterId), "character id must be 0..65535");
+        return Json(new { svg = Document().Movie.ShapeSvg((ushort)characterId) });
+    });
+    public Task<string> FrameSvg(int frame) => Run(() =>
+    {
+        if (frame < 0) throw new ArgumentOutOfRangeException(nameof(frame), "frame must be 0 or more");
+        return Json(new { svg = Document().Movie.FrameSvg((uint)frame) });
+    });
+    public Task<string> BitmapPng(int tagIndex) => Run(() =>
+        Json(new { png = Convert.ToBase64String(Document().Movie.BitmapPng(tagIndex)) }));
+    public Task<string> BitmapJpeg(int tagIndex) => Run(() =>
+        Json(new { jpeg = Convert.ToBase64String(Document().Movie.BitmapJpeg(tagIndex)) }));
     public Task<string> Undo() => Run(() => { Document().Undo(); return Snapshot(false); });
 
     public Task<string> Redo() => Run(() => { Document().Redo(); return Snapshot(false); });

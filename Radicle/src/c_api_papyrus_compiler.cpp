@@ -145,11 +145,11 @@ radicle_status radicle_papyrus_decompile(const radicle_pex* pex,
                                          uint8_t** out_text,
                                          size_t* out_size) {
   clear_error();
+  if (out_text) *out_text = nullptr;
+  if (out_size) *out_size = 0;
   if (!pex || !out_text || !out_size) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "pex, out_text and out_size are required");
   }
-  *out_text = nullptr;
-  *out_size = 0;
   try {
     const std::string text = assembly != 0 ? fo4::papyrus::Decompiler::disassemble(pex->value)
                                            : fo4::papyrus::Decompiler::toSource(pex->value);

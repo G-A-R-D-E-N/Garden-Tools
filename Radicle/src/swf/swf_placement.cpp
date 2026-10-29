@@ -1,10 +1,12 @@
 #include "swf_internal.hpp"
 
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <span>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace fo4::swf::detail {
 
@@ -40,58 +42,165 @@ bool read_color_transform(BitReader& bits, bool alpha, SwfColorTransform& out) n
   return true;
 }
 
-bool skip_filter_list(SwfReader& reader, std::uint16_t& count) {
-  std::uint8_t filters = 0;
-  if (!reader.read_u8(filters)) {
+bool read_rgba(SwfReader& reader, std::uint32_t& out) {
+  std::uint8_t red = 0;
+  std::uint8_t green = 0;
+  std::uint8_t blue = 0;
+  std::uint8_t alpha = 0;
+  if (!reader.read_u8(red) || !reader.read_u8(green) || !reader.read_u8(blue) ||
+      !reader.read_u8(alpha)) {
     return false;
   }
-  count = filters;
-  for (std::uint8_t index = 0; index < filters; ++index) {
-    std::uint8_t id = 0;
-    if (!reader.read_u8(id)) {
+  out = (static_cast<std::uint32_t>(alpha) << 24) | (static_cast<std::uint32_t>(red) << 16) |
+        (static_cast<std::uint32_t>(green) << 8) | static_cast<std::uint32_t>(blue);
+  return true;
+}
+
+bool read_fixed16(SwfReader& reader, double& out) {
+  std::uint32_t raw = 0;
+  if (!reader.read_u32(raw)) {
+    return false;
+  }
+  out = static_cast<std::int32_t>(raw) / 65536.0;
+  return true;
+}
+
+bool read_fixed8(SwfReader& reader, double& out) {
+  std::int16_t raw = 0;
+  if (!reader.read_s16(raw)) {
+    return false;
+  }
+  out = raw / 256.0;
+  return true;
+}
+
+bool read_float(SwfReader& reader, float& out) {
+  std::uint32_t raw = 0;
+  if (!reader.read_u32(raw)) {
+    return false;
+  }
+  out = std::bit_cast<float>(raw);
+  return true;
+}
+
+bool read_floats(SwfReader& reader, std::size_t count, std::vector<float>& out) {
+  float value = 0.0f;
+  for (std::size_t index = 0; index < count; ++index) {
+    if (!read_float(reader, value)) {
       return false;
     }
-    std::size_t body = 0;
-    switch (id) {
-      case 0:
-        body = 23;
-        break;
-      case 1:
-        body = 9;
-        break;
-      case 2:
-        body = 15;
-        break;
-      case 3:
-        body = 27;
-        break;
-      case 4:
-      case 7: {
-        std::uint8_t colors = 0;
-        if (!reader.read_u8(colors)) {
-          return false;
-        }
-        body = std::size_t{5} * colors + 19u;
-        break;
-      }
-      case 5: {
-        std::uint8_t columns = 0;
-        std::uint8_t rows = 0;
-        if (!reader.read_u8(columns) || !reader.read_u8(rows)) {
-          return false;
-        }
-        body = 13u + std::size_t{4} * columns * rows;
-        break;
-      }
-      case 6:
-        body = 80;
-        break;
-      default:
+    out.push_back(value);
+  }
+  return true;
+}
+
+bool read_blur(SwfReader& reader, SwfFilter& filter) {
+  return read_fixed16(reader, filter.blur_x) && read_fixed16(reader, filter.blur_y);
+}
+
+bool read_filter_flags(SwfReader& reader, SwfFilter& filter, bool has_on_top) {
+  std::uint8_t flags = 0;
+  if (!reader.read_u8(flags)) {
+    return false;
+  }
+  filter.inner = (flags & 0x80u) != 0;
+  filter.knockout = (flags & 0x40u) != 0;
+  filter.composite_source = (flags & 0x20u) != 0;
+  filter.on_top = has_on_top && (flags & 0x10u) != 0;
+  filter.passes = static_cast<std::uint8_t>(flags & (has_on_top ? 0x0Fu : 0x1Fu));
+  return true;
+}
+
+bool read_gradient(SwfReader& reader, SwfFilter& filter) {
+  std::uint8_t stops = 0;
+  if (!reader.read_u8(stops)) {
+    return false;
+  }
+  for (std::uint8_t index = 0; index < stops; ++index) {
+    std::uint32_t color = 0;
+    if (!read_rgba(reader, color)) {
+      return false;
+    }
+    filter.gradient_colors.push_back(color);
+  }
+  for (std::uint8_t index = 0; index < stops; ++index) {
+    std::uint8_t ratio = 0;
+    if (!reader.read_u8(ratio)) {
+      return false;
+    }
+    filter.gradient_ratios.push_back(ratio);
+  }
+  return read_blur(reader, filter) && read_fixed16(reader, filter.angle) &&
+         read_fixed16(reader, filter.distance) && read_fixed8(reader, filter.strength) &&
+         read_filter_flags(reader, filter, true);
+}
+
+bool read_convolution(SwfReader& reader, SwfFilter& filter) {
+  if (!reader.read_u8(filter.matrix_columns) || !reader.read_u8(filter.matrix_rows) ||
+      !read_float(reader, filter.divisor) || !read_float(reader, filter.bias)) {
+    return false;
+  }
+  const std::size_t cells = std::size_t{filter.matrix_columns} * filter.matrix_rows;
+  if (!read_floats(reader, cells, filter.matrix)) {
+    return false;
+  }
+  std::uint8_t flags = 0;
+  if (!read_rgba(reader, filter.default_color) || !reader.read_u8(flags)) {
+    return false;
+  }
+  filter.clamp = (flags & 0x02u) != 0;
+  filter.preserve_alpha = (flags & 0x01u) != 0;
+  return true;
+}
+
+bool read_filter(SwfReader& reader, SwfFilter& filter) {
+  if (!reader.read_u8(filter.id)) {
+    return false;
+  }
+  switch (filter.id) {
+    case 0:
+      return read_rgba(reader, filter.color) && read_blur(reader, filter) &&
+             read_fixed16(reader, filter.angle) && read_fixed16(reader, filter.distance) &&
+             read_fixed8(reader, filter.strength) && read_filter_flags(reader, filter, false);
+    case 1: {
+      std::uint8_t flags = 0;
+      if (!read_blur(reader, filter) || !reader.read_u8(flags)) {
         return false;
+      }
+      filter.passes = static_cast<std::uint8_t>(flags >> 3);
+      return true;
     }
-    if (!reader.skip(body)) {
+    case 2:
+      return read_rgba(reader, filter.color) && read_blur(reader, filter) &&
+             read_fixed8(reader, filter.strength) && read_filter_flags(reader, filter, false);
+    case 3:
+      return read_rgba(reader, filter.color) && read_rgba(reader, filter.highlight_color) &&
+             read_blur(reader, filter) && read_fixed16(reader, filter.angle) &&
+             read_fixed16(reader, filter.distance) && read_fixed8(reader, filter.strength) &&
+             read_filter_flags(reader, filter, true);
+    case 4:
+    case 7:
+      return read_gradient(reader, filter);
+    case 5:
+      return read_convolution(reader, filter);
+    case 6:
+      return read_floats(reader, 20, filter.matrix);
+    default:
+      return false;
+  }
+}
+
+bool decode_filter_list(SwfReader& reader, std::vector<SwfFilter>& filters) {
+  std::uint8_t count = 0;
+  if (!reader.read_u8(count)) {
+    return false;
+  }
+  for (std::uint8_t index = 0; index < count; ++index) {
+    SwfFilter filter;
+    if (!read_filter(reader, filter)) {
       return false;
     }
+    filters.push_back(std::move(filter));
   }
   return true;
 }
@@ -202,7 +311,8 @@ SwfStatus decode_place_object2(std::span<const std::byte> data, bool version3,
   if (!version3) {
     return SwfStatus::ok;
   }
-  if (has_filters && !skip_filter_list(reader, place.filter_count)) {
+  place.has_filter_list = has_filters;
+  if (has_filters && !decode_filter_list(reader, place.filters)) {
     return SwfStatus::malformed_tag;
   }
   if (has_blend) {
@@ -227,18 +337,11 @@ SwfStatus decode_place_object2(std::span<const std::byte> data, bool version3,
     place.visible = visible != 0;
   }
   if (has_opaque_background) {
-    std::uint8_t red = 0;
-    std::uint8_t green = 0;
-    std::uint8_t blue = 0;
-    std::uint8_t alpha = 0;
-    if (!reader.read_u8(red) || !reader.read_u8(green) || !reader.read_u8(blue) ||
-        !reader.read_u8(alpha)) {
+    std::uint32_t color = 0;
+    if (!read_rgba(reader, color)) {
       return SwfStatus::malformed_tag;
     }
-    place.background_color = (static_cast<std::uint32_t>(alpha) << 24) |
-                             (static_cast<std::uint32_t>(red) << 16) |
-                             (static_cast<std::uint32_t>(green) << 8) |
-                             static_cast<std::uint32_t>(blue);
+    place.background_color = color;
   }
   return SwfStatus::ok;
 }
@@ -260,6 +363,59 @@ SwfStatus decode_remove_object(std::span<const std::byte> data, SwfTag& out_tag)
   return SwfStatus::ok;
 }
 
+bool decode_button_records(std::span<const std::byte> data, std::size_t position, bool with_colour,
+                           std::vector<SwfButtonRecord>& records) {
+  for (;;) {
+    SwfReader reader(data, position);
+    std::uint8_t flags = 0;
+    if (!reader.read_u8(flags)) {
+      return false;
+    }
+    if (flags == 0) {
+      return true;
+    }
+    SwfButtonRecord record;
+    record.up = (flags & 0x01u) != 0;
+    record.over = (flags & 0x02u) != 0;
+    record.down = (flags & 0x04u) != 0;
+    record.hit_test = (flags & 0x08u) != 0;
+    if (!reader.read_u16(record.character_id) || !reader.read_u16(record.depth)) {
+      return false;
+    }
+    BitReader matrix_bits(data, reader.position() * 8);
+    if (!read_matrix(matrix_bits, record.matrix)) {
+      return false;
+    }
+    position = matrix_bits.byte_position();
+    if (with_colour) {
+      BitReader colour_bits(data, position * 8);
+      SwfColorTransform colour;
+      if (!read_color_transform(colour_bits, true, colour)) {
+        return false;
+      }
+      record.color_transform = colour;
+      position = colour_bits.byte_position();
+      if ((flags & 0x10u) != 0) {
+        SwfReader filter_reader(data, position);
+        std::vector<SwfFilter> filters;
+        if (!decode_filter_list(filter_reader, filters)) {
+          return false;
+        }
+        position = filter_reader.position();
+      }
+      if ((flags & 0x20u) != 0) {
+        SwfReader blend_reader(data, position);
+        std::uint8_t blend = 0;
+        if (!blend_reader.read_u8(blend)) {
+          return false;
+        }
+        position = blend_reader.position();
+      }
+    }
+    records.push_back(record);
+  }
+}
+
 }  // namespace
 
 SwfStatus decode_placement_tag(std::span<const std::byte> data, SwfTag& out_tag) {
@@ -277,6 +433,20 @@ SwfStatus decode_placement_tag(std::span<const std::byte> data, SwfTag& out_tag)
     out_tag.placement = std::move(place);
   }
   return status;
+}
+
+SwfStatus decode_button_tag(std::span<const std::byte> data, SwfTag& out_tag) {
+  const bool with_colour = out_tag.code == tag::kDefineButton2;
+  SwfReader reader(data, 0);
+  SwfButton button;
+  // Invariant: a button whose records do not decode stays undecoded and never refuses the file.
+  if (!reader.read_u16(button.character_id) || (with_colour && !reader.skip(3))) {
+    return SwfStatus::ok;
+  }
+  if (decode_button_records(data, reader.position(), with_colour, button.records)) {
+    out_tag.button = std::move(button);
+  }
+  return SwfStatus::ok;
 }
 
 }  // namespace fo4::swf::detail

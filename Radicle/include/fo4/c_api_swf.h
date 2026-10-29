@@ -277,6 +277,13 @@ RADICLE_API radicle_status radicle_swf_tag_at(const radicle_swf* swf, size_t ind
 RADICLE_API radicle_status radicle_swf_tag_payload(const radicle_swf* swf, size_t index,
                                                    uint8_t** out_bytes, size_t* out_size);
 
+/* Invariant: name must be non-null; *out_text is malloc'd with a trailing NUL, release with radicle_free_bytes. */
+RADICLE_API radicle_status radicle_swf_inspect_text(const radicle_swf* swf, const char* name,
+                                                    uint8_t** out_text, size_t* out_size);
+/* Invariant: index is a flat radicle_swf_tag_at index of a DoAction or DoInitAction tag; *out_text is malloc'd with a trailing NUL, release with radicle_free_bytes. */
+RADICLE_API radicle_status radicle_swf_avm1_disassemble(const radicle_swf* swf, size_t index,
+                                                        uint8_t** out_text, size_t* out_size);
+
 /* SymbolClass, ExportAssets and FrameLabel records; ordering must stay file order. */
 RADICLE_API size_t radicle_swf_symbol_count(const radicle_swf* swf);
 RADICLE_API radicle_status radicle_swf_symbol_at(const radicle_swf* swf, size_t index, radicle_swf_symbol* out_symbol);
@@ -332,6 +339,12 @@ RADICLE_API radicle_status radicle_swf_jpeg_at(const radicle_swf* swf, size_t in
                                                radicle_swf_jpeg_info* out_jpeg);
 RADICLE_API radicle_status radicle_swf_jpeg_tables_at(const radicle_swf* swf, size_t index,
                                                       radicle_swf_jpeg_tables_info* out_tables);
+/* Invariant: index is a flat radicle_swf_tag_at index of a tag with a decoded bitmap that has a PNG export; *out_png is malloc'd, release with radicle_free_bytes. */
+RADICLE_API radicle_status radicle_swf_bitmap_png(const radicle_swf* swf, size_t index,
+                                                  uint8_t** out_png, size_t* out_size);
+/* Invariant: index is a flat radicle_swf_tag_at index of a DefineBits or DefineBitsJPEG2 tag; *out_jpeg is malloc'd, release with radicle_free_bytes. */
+RADICLE_API radicle_status radicle_swf_bitmap_jpeg(const radicle_swf* swf, size_t index,
+                                                   uint8_t** out_jpeg, size_t* out_size);
 
 /* ABC blocks; indexes must address what radicle_swf_abc_count reports. */
 RADICLE_API size_t radicle_swf_abc_count(const radicle_swf* swf);
@@ -426,6 +439,8 @@ typedef struct radicle_swf_frames_instance {
   radicle_swf_bounds bounds;              /* must be in world points */
   const char* name;            /* must never be null; "" when the instance is unnamed */
   const char* path;            /* must never be null; instance path from the root, e.g. "Art/Cell" */
+  uint32_t create_tag_index;   /* must be the FLAT pre-order tag index radicle_swf_tag_at reports for the tag that created the instance */
+  uint32_t transform_tag_index; /* must be the FLAT pre-order tag index of the placement that last authored its MATRIX, or UINT32_MAX when none did */
 } radicle_swf_frames_instance;
 
 /* A per-frame display list; every string it hands back must stay valid until radicle_swf_frames_destroy, so
@@ -502,6 +517,42 @@ RADICLE_API radicle_status radicle_swf_font_replace_glyph(radicle_swf* swf, size
                                                           const radicle_swf_shape_record* records,
                                                           size_t record_count,
                                                           radicle_swf_plan_result* out_result);
+typedef struct radicle_swf_sound {
+  uint16_t sound_id;
+  uint8_t format;
+  uint8_t rate;
+  uint8_t sample_16bit;
+  uint8_t stereo;
+  uint32_t sample_count;
+  size_t data_size;
+} radicle_swf_sound;
+typedef struct radicle_swf_start_sound {
+  uint16_t sound_id;
+  uint8_t sync_stop;
+  uint8_t sync_no_multiple;
+  uint8_t has_in_point;
+  uint32_t in_point;
+  uint8_t has_out_point;
+  uint32_t out_point;
+  uint8_t has_loop_count;
+  uint16_t loop_count;
+  size_t envelope_count;
+} radicle_swf_start_sound;
+/* The tag index must be one radicle_swf_tag_at accepts and name a decoded DefineSound. */
+RADICLE_API radicle_status radicle_swf_sound_at(const radicle_swf* swf, size_t index,
+                                                radicle_swf_sound* out_sound);
+/* The tag index must be one radicle_swf_tag_at accepts and name a decoded StartSound; a StartSound2 is refused. */
+RADICLE_API radicle_status radicle_swf_start_sound_at(const radicle_swf* swf, size_t index,
+                                                      radicle_swf_start_sound* out_start);
+/* Requires header to name a DefineSound; the revision advances only when the bytes changed. */
+RADICLE_API radicle_status radicle_swf_replace_sound_data(radicle_swf* swf,
+                                                          const radicle_swf_sound* header,
+                                                          const uint8_t* data, size_t size,
+                                                          radicle_swf_plan_result* out_result);
+/* Requires index to name a StartSound and new_sound_id to name a DefineSound; the revision advances only when the id changed. */
+RADICLE_API radicle_status radicle_swf_retarget_start_sound(radicle_swf* swf, size_t index,
+                                                            uint16_t new_sound_id,
+                                                            radicle_swf_plan_result* out_result);
 /* The revision must start at 0, advance only for a plan that changed the movie, and never move for a refusal. */
 RADICLE_API uint64_t radicle_swf_revision(const radicle_swf* swf);
 /* Returns malloc'd bytes the caller must release with radicle_free_bytes; an unedited handle must
@@ -546,6 +597,12 @@ RADICLE_API radicle_status radicle_swf_character_at(const radicle_swf* swf, size
 /* Must refuse an unknown id with NOT_FOUND; a refused model must fail every character getter. */
 RADICLE_API radicle_status radicle_swf_character_by_id(const radicle_swf* swf, uint16_t character_id,
                                                        radicle_swf_character* out_character);
+/* Must refuse a character that is not a decoded shape with NOT_FOUND. Returns malloc'd UTF-8 SVG text the caller must release with radicle_free_bytes; the buffer is NUL-terminated one byte past *out_size. */
+RADICLE_API radicle_status radicle_swf_shape_svg(const radicle_swf* swf, uint16_t character_id,
+                                                 uint8_t** out_text, size_t* out_size);
+/* Must build the display list as radicle_swf_frames_open does and fail with PARSE_ERROR when it does not build. A frame past the root timeline is an empty stage, not a refusal. Returns malloc'd UTF-8 SVG text the caller must release with radicle_free_bytes; the buffer is NUL-terminated one byte past *out_size. */
+RADICLE_API radicle_status radicle_swf_frame_svg(const radicle_swf* swf, uint32_t frame,
+                                                 uint8_t** out_svg, size_t* out_size);
 
 typedef struct radicle_swf_history radicle_swf_history;
 

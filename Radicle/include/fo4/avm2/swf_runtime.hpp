@@ -43,6 +43,16 @@ struct SwfPlacementRow {
   bool has_color_transform{false};
   double color_multiply[4]{1.0, 1.0, 1.0, 1.0};
   double color_add[4]{0.0, 0.0, 0.0, 0.0};
+  bool has_ratio{false};
+  std::uint16_t ratio{0};
+  bool has_blend_mode{false};
+  std::uint8_t blend_mode{0};
+  bool has_visible{false};
+  bool visible{true};
+  bool has_bitmap_cache{false};
+  bool bitmap_cache{false};
+  bool has_filters{false};
+  std::vector<swf::SwfFilter> filters;
 };
 
 /* Invariant: frames[i] must hold the rows that run when frame i+1 becomes current. */

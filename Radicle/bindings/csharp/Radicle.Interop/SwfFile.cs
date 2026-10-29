@@ -258,12 +258,94 @@ public sealed unsafe partial class SwfFile : IDisposable
         }
     }
 
+    public string InspectText(string name)
+    {
+        using var use = Use();
+        byte* text = null;
+        nuint size = 0;
+        Call.Check(RadicleNative.SwfInspectText(use.Pointer, name, &text, &size));
+        return Call.TakeText(text, size);
+    }
+
+    public string Avm1Disassemble(int tagIndex)
+    {
+        using var use = Use();
+        byte* text = null;
+        nuint size = 0;
+        Call.Check(RadicleNative.SwfAvm1Disassemble(use.Pointer, (nuint)tagIndex, &text, &size));
+        return Call.TakeText(text, size);
+    }
+
+    public byte[] BitmapPng(int flatTagIndex)
+    {
+        using var use = Use();
+        byte* bytes = null;
+        nuint size = 0;
+        Call.Check(RadicleNative.SwfBitmapPng(use.Pointer, (nuint)flatTagIndex, &bytes, &size));
+        try
+        {
+            return Utf8.Raw((IntPtr)bytes, size);
+        }
+        finally
+        {
+            if (bytes != null) RadicleNative.FreeBytes(bytes);
+        }
+    }
+
+    public byte[] BitmapJpeg(int flatTagIndex)
+    {
+        using var use = Use();
+        byte* bytes = null;
+        nuint size = 0;
+        Call.Check(RadicleNative.SwfBitmapJpeg(use.Pointer, (nuint)flatTagIndex, &bytes, &size));
+        try
+        {
+            return Utf8.Raw((IntPtr)bytes, size);
+        }
+        finally
+        {
+            if (bytes != null) RadicleNative.FreeBytes(bytes);
+        }
+    }
+
     public string AbcText(int abc)
     {
         using var use = Use();
         byte* text = null;
         nuint size = 0;
         Call.Check(RadicleNative.SwfAbcText(use.Pointer, (nuint)abc, &text, &size));
+        try
+        {
+            return System.Text.Encoding.UTF8.GetString(Utf8.Raw((IntPtr)text, size));
+        }
+        finally
+        {
+            if (text != null) RadicleNative.FreeBytes(text);
+        }
+    }
+
+    public string ShapeSvg(ushort characterId)
+    {
+        using var use = Use();
+        byte* text = null;
+        nuint size = 0;
+        Call.Check(RadicleNative.SwfShapeSvg(use.Pointer, characterId, &text, &size));
+        try
+        {
+            return System.Text.Encoding.UTF8.GetString(Utf8.Raw((IntPtr)text, size));
+        }
+        finally
+        {
+            if (text != null) RadicleNative.FreeBytes(text);
+        }
+    }
+
+    public string FrameSvg(uint frame)
+    {
+        using var use = Use();
+        byte* text = null;
+        nuint size = 0;
+        Call.Check(RadicleNative.SwfFrameSvg(use.Pointer, frame, &text, &size));
         try
         {
             return System.Text.Encoding.UTF8.GetString(Utf8.Raw((IntPtr)text, size));
@@ -310,6 +392,68 @@ public sealed unsafe partial class SwfFile : IDisposable
             }
         }
     }
+
+    public void InsertAbcInstruction(int abc, int body, int offset, string text)
+    {
+        using var use = Use();
+        var utf8 = System.Text.Encoding.UTF8.GetBytes(text);
+        unsafe
+        {
+            fixed (byte* input = utf8)
+            {
+                Call.Check(RadicleNative.SwfAbcInsertInstruction(use.Pointer, (nuint)abc, (uint)body, (nuint)offset,
+                                                                 input, (nuint)utf8.Length));
+            }
+        }
+    }
+
+    public void ReplaceAbcInstruction(int abc, int body, int offset, string text)
+    {
+        using var use = Use();
+        var utf8 = System.Text.Encoding.UTF8.GetBytes(text);
+        unsafe
+        {
+            fixed (byte* input = utf8)
+            {
+                Call.Check(RadicleNative.SwfAbcReplaceInstruction(use.Pointer, (nuint)abc, (uint)body, (nuint)offset,
+                                                                  input, (nuint)utf8.Length));
+            }
+        }
+    }
+
+    public void ReplaceFontGlyph(int index, int glyph, byte fillBits, byte lineBits,
+                                 IReadOnlyList<SwfShapeCommandRecord> records)
+    {
+        using var use = Use();
+        var native = new Native.SwfShapeRecord[records.Count];
+        for (var item = 0; item < native.Length; ++item)
+        {
+            var record = records[item];
+            native[item] = new Native.SwfShapeRecord
+            {
+                Kind = ToRecordKind(record.Kind), X = record.X, Y = record.Y, ControlX = record.ControlX,
+                ControlY = record.ControlY, Fill0 = record.Fill0, Fill1 = record.Fill1, Line = record.Line,
+            };
+        }
+        SwfPlanResult result;
+        unsafe
+        {
+            fixed (Native.SwfShapeRecord* input = native)
+            {
+                Call.Check(RadicleNative.SwfFontReplaceGlyph(use.Pointer, (nuint)index, (nuint)glyph, fillBits, lineBits,
+                                                             input, (nuint)native.Length, &result));
+            }
+        }
+    }
+
+    private static SwfRecordKind ToRecordKind(SwfShapeCommandKind kind) => kind switch
+    {
+        SwfShapeCommandKind.Move => SwfRecordKind.Move,
+        SwfShapeCommandKind.StyleChange => SwfRecordKind.StyleChange,
+        SwfShapeCommandKind.StraightEdge => SwfRecordKind.StraightEdge,
+        SwfShapeCommandKind.CurvedEdge => SwfRecordKind.CurvedEdge,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "unknown shape record kind"),
+    };
 
     public byte[] WriteBytes()
     {

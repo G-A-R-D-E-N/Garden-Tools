@@ -20,6 +20,7 @@ namespace abc = fo4::abc;
 using fo4::abc::AbcFile;
 using fo4::abc::AbcStatus;
 using fo4::avm2::Class;
+using fo4::avm2::kMaxSlotIndex;
 using fo4::avm2::LookupKind;
 using fo4::avm2::Multiname;
 using fo4::avm2::MultinameKind;
@@ -141,6 +142,39 @@ TEST(Avm2Runtime, LinksAClassWithBuiltinSuperAndExternalInterface) {
   EXPECT_EQ(test_class->prototype_object->prototype(), test_class->super->prototype_object);
   EXPECT_EQ(test_class->class_object->prototype(), test_class->super->class_object);
   EXPECT_EQ(test_class->class_object->represented_class(), test_class);
+}
+
+TEST(Avm2Runtime, LinkRefusesASlotTraitPastTheSlotLimit) {
+  AbcFile file = build_parsed_abc();
+  for (auto& instance : file.instances) {
+    for (auto& trait : instance.traits) {
+      if (trait.slot_id == 2) {
+        trait.slot_id = kMaxSlotIndex + 1;
+      }
+    }
+  }
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  EXPECT_EQ(runtime.link().status, RuntimeStatus::InvalidTrait);
+}
+
+TEST(Avm2Runtime, LinkAcceptsASlotTraitAtTheSlotLimit) {
+  AbcFile file = build_parsed_abc();
+  for (auto& instance : file.instances) {
+    for (auto& trait : instance.traits) {
+      if (trait.slot_id == 2) {
+        trait.slot_id = kMaxSlotIndex;
+      }
+    }
+  }
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  const fo4::avm2::RuntimeLoad load = runtime.link();
+  ASSERT_TRUE(load.ok()) << fo4::avm2::runtime_status_name(load.status) << " " << load.message;
+  const Class* test_class = runtime.find_class("Test");
+  ASSERT_NE(test_class, nullptr);
+  EXPECT_EQ(test_class->slot_count, std::size_t{kMaxSlotIndex} + 1);
+  EXPECT_NE(test_class->find_slot_trait(kMaxSlotIndex), nullptr);
 }
 
 TEST(Avm2Runtime, AppliesSlotDefaultsAndReadsClassTraits) {

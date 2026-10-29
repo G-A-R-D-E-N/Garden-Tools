@@ -65,6 +65,13 @@ public partial class SwfTests
         return file.ToArray();
     }
 
+    private static byte[] MethodBodyAbc() => new byte[]
+    {
+        0x10, 0x00, 0x2E, 0x00, 0x00, 0x00, 0x00, 0x02, 0x03, 0x46, 0x6F, 0x6F, 0x00, 0x00, 0x00, 0x01,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x01, 0x00, 0x00, 0x02, 0x26, 0x48,
+        0x00, 0x00,
+    };
+
     private static string EditFirstString(string text, string marker)
     {
         var from = 0;
@@ -122,5 +129,49 @@ public partial class SwfTests
             Assert.Contains("CSharpRealEdit", reopened.AbcText(0));
             return;
         }
+    }
+
+    [Fact]
+    public void InsertsAnInstructionIntoAMethodBodyAndWritesItBack()
+    {
+        using var swf = SwfFile.FromBytes(AbcMovie(MethodBodyAbc()));
+        swf.InsertAbcInstruction(0, 0, 0, "nop");
+        Assert.Contains("      0 nop\n", swf.AbcText(0));
+
+        using var reopened = SwfFile.FromBytes(swf.WriteBytes());
+        Assert.Contains("      0 nop\n", reopened.AbcText(0));
+    }
+
+    [Fact]
+    public void ReplacesAnInstructionWithoutAddingOne()
+    {
+        using var swf = SwfFile.FromBytes(AbcMovie(MethodBodyAbc()));
+        swf.ReplaceAbcInstruction(0, 0, 0, "pushfalse");
+        var text = swf.AbcText(0);
+        Assert.Contains("      0 pushfalse\n", text);
+        Assert.Contains("      1 returnvalue\n", text);
+        Assert.DoesNotContain("pushtrue", text);
+    }
+
+    [Fact]
+    public void RefusesABadInstructionEditAndLeavesTheBytesUnchanged()
+    {
+        using var swf = SwfFile.FromBytes(AbcMovie(MethodBodyAbc()));
+        var before = swf.WriteBytes();
+
+        var verifier = Assert.Throws<RadicleException>(() => swf.InsertAbcInstruction(0, 0, 0, "returnvalue"));
+        Assert.Contains("verifier refused", verifier.Message);
+        var missing = Assert.Throws<RadicleException>(() => swf.ReplaceAbcInstruction(0, 1, 0, "nop"));
+        Assert.Contains("no such method body", missing.Message);
+        Assert.Equal(before, swf.WriteBytes());
+    }
+
+    [Fact]
+    public void RefusesAGlyphReplaceOnATagThatIsNotAFont()
+    {
+        using var swf = SwfFile.FromBytes(AbcMovie(MethodBodyAbc()));
+        var before = swf.WriteBytes();
+        Assert.Throws<RadicleException>(() => swf.ReplaceFontGlyph(0, 0, 0, 0, Array.Empty<SwfShapeCommandRecord>()));
+        Assert.Equal(before, swf.WriteBytes());
     }
 }

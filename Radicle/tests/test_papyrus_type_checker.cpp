@@ -145,6 +145,16 @@ TEST(PapyrusTypeChecker, ABareReturnIsAlwaysFine) {
     EXPECT_TRUE(f.check("A").empty());
 }
 
+TEST(PapyrusTypeChecker, ANonVoidFunctionMayFallOffItsEndBecauseTheCreationKitCompilesIt) {
+    Fixture f;
+    f.write("A",
+            "\nScriptName A\nint Function Fall()\n    int x = 1\nEndFunction\n"
+            "int Function Pick(bool b, bool c)\n    If b\n        Return 1\n    ElseIf c\n"
+            "        Return 2\n    EndIf\nEndFunction");
+
+    EXPECT_TRUE(f.check("A").empty());
+}
+
 namespace {
 
 constexpr std::string_view kCallee =
@@ -254,6 +264,53 @@ TEST(PapyrusTypeChecker, AMatchingOverrideIsFine) {
     EXPECT_TRUE(f.check("Child").empty());
 }
 
+TEST(PapyrusTypeChecker, AnOverrideWithADifferentParameterTypeIsRejected) {
+    Fixture f;
+    f.write("Base", "\nScriptName Base\nFunction Go(int a)\nEndFunction");
+    f.write("Child", "\nScriptName Child extends Base\nFunction Go(float a)\nEndFunction");
+
+    const auto diagnostics = f.check("Child");
+    ASSERT_TRUE(diagnostics.size() == 1);
+    EXPECT_TRUE(diagnostics[0].code == DiagnosticCode::OverrideMismatch);
+    EXPECT_TRUE(diagnostics[0].message.find("whose parameter 1 is 'int', not 'float'") !=
+                std::string::npos);
+}
+
+TEST(PapyrusTypeChecker, AnOverrideWithADifferentReturnTypeIsRejected) {
+    Fixture f;
+    f.write("Base", "\nScriptName Base\nint Function Go()\n    return 1\nEndFunction");
+    f.write("Child", "\nScriptName Child extends Base\nstring Function Go()\n"
+                     "    return \"text\"\nEndFunction");
+
+    const auto diagnostics = f.check("Child");
+    ASSERT_TRUE(diagnostics.size() == 1);
+    EXPECT_TRUE(diagnostics[0].code == DiagnosticCode::OverrideMismatch);
+    EXPECT_TRUE(diagnostics[0].message.find("which returns int, not string") != std::string::npos);
+}
+
+TEST(PapyrusTypeChecker, AnOverrideWithTheSameParameterAndReturnTypesIsFine) {
+    Fixture f;
+    f.write("Base", "\nScriptName Base\nint Function Go(int a)\n    return a\nEndFunction");
+    f.write("Child", "\nScriptName Child extends Base\nint Function Go(int a)\n"
+                     "    return a\nEndFunction");
+
+    EXPECT_TRUE(f.check("Child").empty());
+}
+
+TEST(PapyrusTypeChecker, AnOverrideMayNotNarrowAParameterToAChildObject) {
+    Fixture f;
+    f.write("Form", "\nScriptName Form");
+    f.write("Actor", "\nScriptName Actor extends Form");
+    f.write("Base", "\nScriptName Base\nFunction Take(Form akForm)\nEndFunction");
+    f.write("Child", "\nScriptName Child extends Base\nFunction Take(Actor akForm)\nEndFunction");
+
+    const auto diagnostics = f.check("Child");
+    ASSERT_TRUE(diagnostics.size() == 1);
+    EXPECT_TRUE(diagnostics[0].code == DiagnosticCode::OverrideMismatch);
+    EXPECT_TRUE(diagnostics[0].message.find("whose parameter 1 is 'Form', not 'Actor'") !=
+                std::string::npos);
+}
+
 TEST(PapyrusTypeChecker, ARequiredParameterAfterAnOptionalOneIsRejected) {
     Fixture f;
     f.write("A", "\nScriptName A\nFunction Go(int a = 1, int b)\nEndFunction");
@@ -284,6 +341,127 @@ TEST(PapyrusTypeChecker, ACallDoesNotBindToASameNamedLocal) {
 TEST(PapyrusTypeChecker, AVarAcceptsAnythingAndIsAcceptedAnywhere) {
     Fixture f;
     f.writeWithHierarchy("\n    var slot = 1\n    slot = \"text\"\n    int n = 0\n    n = slot as int");
+
+    EXPECT_TRUE(f.check("A").empty());
+}
+
+// Invariant: an explicit float-to-int cast is accepted, so a regression in isExplicit cannot silently reject it.
+TEST(PapyrusTypeChecker, AnExplicitFloatToIntCastIsAccepted) {
+    Fixture f;
+    f.writeWithHierarchy("\n    float f = 1.5\n    int n = f as int");
+
+    EXPECT_TRUE(f.check("A").empty());
+}
+
+// Invariant: an int cast to an object type is refused as InvalidCast, not treated as a downcast of a number.
+TEST(PapyrusTypeChecker, CastingAnIntToAnObjectIsRefused) {
+    Fixture f;
+    f.writeWithHierarchy("\n    int n = 1\n    Actor a = n as Actor");
+
+    const auto diagnostics = f.check("A");
+    ASSERT_TRUE(diagnostics.size() == 1);
+    EXPECT_TRUE(diagnostics[0].code == DiagnosticCode::InvalidCast);
+}
+
+// Invariant: a cast between two object types with no inheritance between them is refused as InvalidCast.
+TEST(PapyrusTypeChecker, CastingBetweenUnrelatedObjectsIsRefused) {
+    Fixture f;
+    f.writeWithHierarchy("\n    Actor a = None\n    Weapon w = a as Weapon");
+    f.write("Weapon", "ScriptName Weapon extends Form");
+
+    const auto diagnostics = f.check("A");
+    ASSERT_TRUE(diagnostics.size() == 1);
+    EXPECT_TRUE(diagnostics[0].code == DiagnosticCode::InvalidCast);
+}
+
+// Invariant: an int may be cast to a string explicitly, so as-string on a number is not refused.
+TEST(PapyrusTypeChecker, AnIntCastToAStringIsAccepted) {
+    Fixture f;
+    f.writeWithHierarchy("\n    int n = 1\n    string s = n as string");
+
+    EXPECT_TRUE(f.check("A").empty());
+}
+
+// Invariant: an int compared with a string is accepted under all six operators, so string mixes are not over-refused.
+TEST(PapyrusTypeChecker, EveryComparisonOperatorAcceptsAnIntAgainstAString) {
+    Fixture f;
+    f.writeWithHierarchy(
+        "\n    int x = 0\n    bool a = x == \"x\"\n    bool b = x != \"x\"\n    bool c = x < \"x\"\n"
+        "    bool d = x > \"x\"\n    bool e = x <= \"x\"\n    bool g = x >= \"x\"");
+
+    EXPECT_TRUE(f.check("A").empty());
+}
+
+// Invariant: an object compared with an int is refused under every comparison operator.
+TEST(PapyrusTypeChecker, EveryComparisonOperatorRefusesAnObjectAgainstAnInt) {
+    Fixture f;
+    f.writeWithHierarchy(
+        "\n    Actor a = None\n    int x = 0\n    bool b = a == x\n    bool c = a != x\n"
+        "    bool d = a < x\n    bool e = a > x\n    bool g = a <= x\n    bool h = a >= x");
+
+    const auto diagnostics = f.check("A");
+    ASSERT_TRUE(diagnostics.size() == 6);
+    for (const auto& d : diagnostics) EXPECT_TRUE(d.code == DiagnosticCode::TypeMismatch);
+}
+
+// Invariant: an object may be compared with a bool in either operand order, as vanilla scripts do with false.
+TEST(PapyrusTypeChecker, AnObjectMayBeComparedWithABoolInEitherOrder) {
+    Fixture f;
+    f.writeWithHierarchy("\n    Actor a = None\n    bool b = a == false\n    bool c = false == a");
+
+    EXPECT_TRUE(f.check("A").empty());
+}
+
+// Invariant: two unrelated script object types cannot be compared, so a sibling compare is refused.
+TEST(PapyrusTypeChecker, UnrelatedObjectTypesCannotBeCompared) {
+    Fixture f;
+    f.writeWithHierarchy("\n    Actor a = None\n    Weapon w = None\n    bool same = a == w");
+    f.write("Weapon", "ScriptName Weapon extends Form");
+
+    const auto diagnostics = f.check("A");
+    ASSERT_TRUE(diagnostics.size() == 1);
+    EXPECT_TRUE(diagnostics[0].code == DiagnosticCode::TypeMismatch);
+}
+
+// Invariant: int and float operands compare without a diagnostic, so numeric promotion is not over-refused.
+TEST(PapyrusTypeChecker, IntAndFloatOperandsMayBeCompared) {
+    Fixture f;
+    f.writeWithHierarchy("\n    int i = 1\n    float f = 1.0\n    bool a = i == f\n    bool b = f < i");
+
+    EXPECT_TRUE(f.check("A").empty());
+}
+
+// Invariant: same-typed string, int and bool operands compare without a diagnostic.
+TEST(PapyrusTypeChecker, SameTypedOperandsMayBeCompared) {
+    Fixture f;
+    f.writeWithHierarchy(
+        "\n    string s = \"\"\n    int i = 1\n    bool p = true\n    bool a = s == \"\"\n"
+        "    bool b = i != 2\n    bool c = p == true");
+
+    EXPECT_TRUE(f.check("A").empty());
+}
+
+// Invariant: None compared with an object is accepted in either operand order.
+TEST(PapyrusTypeChecker, NoneMayBeComparedWithAnObjectInEitherOrder) {
+    Fixture f;
+    f.writeWithHierarchy("\n    Actor a = None\n    bool b = a == None\n    bool c = None != a");
+
+    EXPECT_TRUE(f.check("A").empty());
+}
+
+// Invariant: an object compared with its base or its child is accepted in either direction.
+TEST(PapyrusTypeChecker, ObjectsRelatedByInheritanceMayBeComparedInEitherDirection) {
+    Fixture f;
+    f.writeWithHierarchy("\n    Form f = None\n    Actor a = None\n    bool b = f == a\n    bool c = a != f");
+
+    EXPECT_TRUE(f.check("A").empty());
+}
+
+// Invariant: an object whose ancestry is not fully on disk is not refused, because the index cannot prove it unrelated.
+TEST(PapyrusTypeChecker, AnObjectWhoseAncestryIsNotOnDiskIsNotRefused) {
+    Fixture f;
+    f.writeWithHierarchy("\n    Form f = None\n    Actor a = None\n    bool b = f == a");
+    f.write("Actor", "ScriptName Actor extends NotOnDisk");
 
     EXPECT_TRUE(f.check("A").empty());
 }

@@ -2,6 +2,7 @@
 #include "fo4/abc/abc.hpp"
 #include "fo4/abc/abc_asm.hpp"
 #include "fo4/abc/abc_text.hpp"
+#include "fo4/abc/flow.hpp"
 #include "fo4/abc/opcodes.hpp"
 
 #include <gtest/gtest.h>
@@ -43,6 +44,16 @@ bool branch_free_text(const fo4::abc::AbcInstruction& instruction, std::string& 
     }
   }
   return true;
+}
+
+void rewrite_header_field(std::string& text, const std::string& header, const std::string& keyword,
+                          const std::string& value) {
+  const std::size_t header_at = text.find(header);
+  ASSERT_NE(header_at, std::string::npos) << header;
+  const std::size_t start = text.find(" " + keyword + " ", header_at);
+  ASSERT_NE(start, std::string::npos) << keyword;
+  const std::size_t end = text.find(' ', start + keyword.size() + 2);
+  text.replace(start, end - start, value.empty() ? std::string{} : " " + keyword + " " + value);
 }
 
 }  // namespace
@@ -230,4 +241,52 @@ TEST(AbcAsm, DeadBranchTargetsRenderAsAbsoluteOffsetsAndRoundTripByteForByte) {
         << after;
     EXPECT_FALSE(error.message.empty()) << after;
   }
+}
+
+TEST(AbcAsm, ComputesAnOmittedMaxStackFromTheVerifierAndKeepsTheExplicitLocalCount) {
+  std::string text = fo4::abc::render_abc_text(parse_or_fail(fo4::test::build_abc()));
+  rewrite_header_field(text, "body 0 method ", "maxstack", "");
+  AbcFile assembled;
+  fo4::abc::AbcTextError error;
+  ASSERT_EQ(fo4::abc::assemble_abc_text(text, assembled, &error), AbcStatus::Ok)
+      << error.message << " at line " << error.line;
+  ASSERT_FALSE(assembled.bodies.empty());
+  EXPECT_EQ(assembled.bodies[0].max_stack, 2u);
+  EXPECT_EQ(assembled.bodies[0].local_count, 1u);
+  fo4::abc::AbcMethodFlow flow;
+  fo4::abc::AbcFlowIssue issue;
+  EXPECT_EQ(fo4::abc::verify_method_flow(assembled, 0, flow, issue), fo4::abc::AbcFlowStatus::Ok)
+      << issue.message;
+  EXPECT_TRUE(flow.verified);
+}
+
+TEST(AbcAsm, ComputesAnOmittedLocalCountFromTheParameterCountAndMaxStackFromTheCode) {
+  std::string text = fo4::abc::render_abc_text(parse_or_fail(fo4::test::build_abc()));
+  rewrite_header_field(text, "body 1 method ", "maxstack", "");
+  rewrite_header_field(text, "body 1 method ", "local_count", "");
+  AbcFile assembled;
+  fo4::abc::AbcTextError error;
+  ASSERT_EQ(fo4::abc::assemble_abc_text(text, assembled, &error), AbcStatus::Ok)
+      << error.message << " at line " << error.line;
+  ASSERT_GT(assembled.bodies.size(), 1u);
+  EXPECT_EQ(assembled.bodies[1].local_count, 2u);
+  EXPECT_EQ(assembled.bodies[1].max_stack, 3u);
+  fo4::abc::AbcMethodFlow flow;
+  fo4::abc::AbcFlowIssue issue;
+  EXPECT_EQ(fo4::abc::verify_method_flow(assembled, 1, flow, issue), fo4::abc::AbcFlowStatus::Ok)
+      << issue.message;
+  EXPECT_TRUE(flow.verified);
+}
+
+TEST(AbcAsm, KeepsAnExplicitMaxStackWhenOnlyLocalCountIsOmitted) {
+  std::string text = fo4::abc::render_abc_text(parse_or_fail(fo4::test::build_abc()));
+  rewrite_header_field(text, "body 1 method ", "maxstack", "10");
+  rewrite_header_field(text, "body 1 method ", "local_count", "");
+  AbcFile assembled;
+  fo4::abc::AbcTextError error;
+  ASSERT_EQ(fo4::abc::assemble_abc_text(text, assembled, &error), AbcStatus::Ok)
+      << error.message << " at line " << error.line;
+  ASSERT_GT(assembled.bodies.size(), 1u);
+  EXPECT_EQ(assembled.bodies[1].max_stack, 10u);
+  EXPECT_EQ(assembled.bodies[1].local_count, 2u);
 }

@@ -280,6 +280,8 @@ add_library(fo4
   src/papyrus/scheduler.cpp
   src/papyrus/execute.cpp
   src/papyrus/decompiler.cpp
+  src/papyrus/decompiler_expr.cpp
+  src/papyrus/decompiler_stmt.cpp
   src/papyrus/lexer.cpp
   src/papyrus/parser.cpp
   src/papyrus/parser_statement.cpp
@@ -335,9 +337,11 @@ add_library(fo4
   src/swf/swf_shape.cpp
   src/swf/swf_morph.cpp
   src/swf/swf_bitmap.cpp
+  src/swf/swf_bitmap_png.cpp
   src/swf/swf_text.cpp
   src/swf/swf_timeline.cpp
   src/swf/swf_display.cpp
+  src/swf/swf_frame_control.cpp
   src/swf/swf_edit.cpp
   src/swf/swf_depth.cpp
   src/swf/swf_keyframe.cpp
@@ -348,7 +352,13 @@ add_library(fo4
   src/swf/swf_lzma.cpp
   src/swf/swf_glyph.cpp
   src/swf/swf_glyph_edit.cpp
+  src/swf/swf_bitmap_edit.cpp
+  src/swf/swf_sound.cpp
+  src/swf/swf_sound_edit.cpp
   src/swf/swf_census.cpp
+  src/swf/swf_svg.cpp
+  src/swf/swf_frame_svg.cpp
+  src/swf/swf_svg_filters.cpp
   src/pex_analysis/opcodes.cpp
   src/pex_analysis/cfg.cpp
   src/pex_analysis/disasm.cpp
@@ -373,6 +383,18 @@ add_library(fo4
   src/abc/abc_asm_lex.cpp
   src/abc/abc_asm.cpp
   src/abc/abc_asm_code.cpp
+  src/avm1/opcodes.cpp
+  src/avm1/decode.cpp
+  src/avm1/encode.cpp
+  src/avm1/edit.cpp
+  src/avm1/disassembly.cpp
+  src/avm1/control_ops.cpp
+  src/avm1/function_ops.cpp
+  src/avm1/interpreter.cpp
+  src/avm1/misc_ops.cpp
+  src/avm1/object_ops.cpp
+  src/avm1/text_ops.cpp
+  src/avm1/timeline_ops.cpp
   src/avm2/name.cpp
   src/avm2/value.cpp
   src/avm2/coercion.cpp
@@ -384,6 +406,8 @@ add_library(fo4
   src/avm2/interpreter.cpp
   src/avm2/interpreter_ops.cpp
   src/avm2/interpreter_property.cpp
+  src/avm2/interpreter_memory.cpp
+  src/avm2/interpreter_xml_text.cpp
   src/avm2/interpreter_support.cpp
   src/avm2/builtins.cpp
   src/avm2/native_object.cpp
@@ -475,7 +499,7 @@ target_sources(fo4 PRIVATE src/patch/delta_patch.cpp)
 target_sources(fo4 PRIVATE src/patch/list_merge.cpp)
 target_sources(fo4 PRIVATE src/papyrus_source/lexer.cpp src/papyrus_source/parser.cpp src/papyrus_source/parser_decl.cpp src/papyrus_source/parser_expr.cpp src/papyrus_source/parser_stmt.cpp src/papyrus_source/summary.cpp)
 target_sources(radicle_c PRIVATE src/c_api_nif.cpp src/c_api_dds.cpp)
-target_sources(radicle_c PRIVATE src/c_api_swf.cpp src/c_api_swf_art.cpp src/c_api_swf_characters.cpp src/c_api_swf_display.cpp src/c_api_swf_edit.cpp src/c_api_swf_history.cpp src/c_api_swf_abc_write.cpp src/c_api_runtime.cpp)
+target_sources(radicle_c PRIVATE src/c_api_swf.cpp src/c_api_swf_art.cpp src/c_api_swf_characters.cpp src/c_api_swf_display.cpp src/c_api_swf_edit.cpp src/c_api_swf_history.cpp src/c_api_swf_verbs.cpp src/c_api_swf_abc_write.cpp src/c_api_swf_jpeg.cpp src/c_api_swf_sound.cpp src/c_api_runtime.cpp)
 
 if(RADICLE_INSTALL)
   include(GNUInstallDirs)
@@ -820,6 +844,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_nif_corpus.cpp
     tests/test_c_api_nif.cpp
     tests/test_c_api_swf.cpp
+    tests/test_c_api_swf_text.cpp
     tests/test_c_api_swf_morph.cpp
     tests/test_c_api_swf_display.cpp
     tests/test_c_api_swf_characters.cpp
@@ -827,6 +852,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_c_api_swf_edit.cpp
     tests/test_c_api_swf_abc_sprite.cpp
     tests/test_c_api_swf_glyph.cpp
+    tests/test_c_api_swf_sound.cpp
     tests/test_c_api_swf_real.cpp
     tests/test_dds.cpp
     tests/test_nif_write.cpp
@@ -887,6 +913,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_papyrus_declaration_check.cpp
     tests/test_papyrus_semantic_real.cpp
     tests/test_papyrus_codegen.cpp
+    tests/test_papyrus_codegen_corners.cpp
     tests/test_papyrus_codegen_real.cpp
     tests/test_papyrus_user_flags.cpp
     tests/test_papyrus_analysis_service.cpp
@@ -901,6 +928,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_graph_document.cpp
     tests/test_graph_flow.cpp
     tests/test_graph_lift.cpp
+    tests/test_graph_lift_real.cpp
     tests/test_graph_node_palette.cpp
     tests/test_graph_script_loader.cpp
     tests/test_graph_tool_service.cpp
@@ -920,6 +948,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_avm2_value.cpp
     tests/test_avm2_object.cpp
     tests/test_avm2_runtime.cpp
+    tests/test_avm2_call_indexed.cpp
     tests/test_avm2_interpreter.cpp
     tests/test_avm2_scope_depth.cpp
     tests/test_avm2_scripts_real.cpp
@@ -947,6 +976,9 @@ if(RADICLE_BUILD_TESTS)
     tests/test_avm2_static_text.cpp
     tests/test_avm2_system_classes.cpp
     tests/test_avm2_bytearray.cpp
+    tests/test_avm2_more_ops.cpp
+    tests/test_avm2_domain_memory.cpp
+    tests/test_avm2_late_ops.cpp
     tests/test_swf_fonts.cpp
     tests/test_swf_fonts_real.cpp
     tests/test_material_file.cpp
@@ -960,7 +992,9 @@ if(RADICLE_BUILD_TESTS)
     tests/test_swf_tags.cpp
     tests/test_swf_plan.cpp
     tests/test_swf_place.cpp
+    tests/test_swf_place_filters.cpp
     tests/test_swf_display.cpp
+    tests/test_swf_frame_control.cpp
     tests/test_swf_edit.cpp
     tests/test_swf_edit_text.cpp
     tests/test_swf_label_edit.cpp
@@ -973,6 +1007,18 @@ if(RADICLE_BUILD_TESTS)
     tests/test_swf_real.cpp
     tests/test_swf_census.cpp
     tests/test_swf_census_real.cpp
+    tests/test_avm1.cpp
+    tests/test_avm1_encode.cpp
+    tests/test_avm1_ops.cpp
+    tests/test_avm1_objects.cpp
+    tests/test_avm1_functions.cpp
+    tests/test_avm1_control.cpp
+    tests/test_avm1_timeline.cpp
+    tests/test_avm1_real.cpp
+    tests/test_swf_svg.cpp
+    tests/test_swf_svg_text_matrix.cpp
+    tests/test_swf_svg_buttons.cpp
+    tests/test_swf_svg_text_clip.cpp
     tests/test_abc_real.cpp
     tests/test_hkx_packfile.cpp
     tests/test_hkx_real.cpp
