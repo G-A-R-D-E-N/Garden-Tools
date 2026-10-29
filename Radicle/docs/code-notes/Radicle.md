@@ -9164,3 +9164,19 @@ Hand-built: a DefineFunction with body_records 2, followed by NextFrame and Play
 ## Radicle/tests/test_avm1_encode.cpp:ErasedRecordInsideNestedBodiesShrinksEveryEnclosingBody
 
 `kFunctionOfTry` with the NextFrame at index 2 erased. NextFrame is a non-container inside the Try try body, which is inside the DefineFunction body. The Function count goes from 3 to 2, so its body size goes from 14 (`0E 00`) to 13 (`0D 00`). The try body goes from 1 to 0 and the catch body stays at 1. Expected `9B 05 00 00 00 00 0D 00 | 8F 09 00 01 00 00 01 00 00 00 65 00 | 06 | 00`, 22 bytes. Detects an erase that shrinks only the innermost body and leaves the DefineFunction size at 14.
+
+## Radicle/src/swf/swf_sound.cpp:decode_start_sound
+
+`Radicle/src/swf/swf_sound.cpp:decode_start_sound` reads the u16 sound id, then `Radicle/src/swf/swf_sound.cpp:read_sound_info`. The SOUNDINFO flags byte is decoded as bit 5 SyncStop, bit 4 SyncNoMultiple, bit 3 envelope (u8 point count, then u32 position, u16 left, u16 right per point), bit 2 loops (u16), bit 1 out point (u32) and bit 0 in point (u32). Bits 6 and 7 are reserved and ignored, and trailing bytes after the SOUNDINFO are not checked. Any short read returns `SwfSoundStatus::truncated` and leaves `out` empty. The field order and widths match Ruffle 0.6.0 `swf/src/read.rs` (`read_start_sound_1`, `read_sound_info`). Ruffle stores the sync bits as a 2-bit event enum, which this decoder keeps as two booleans.
+
+## Radicle/src/swf/swf_sound.cpp:decode_start_sound2
+
+`Radicle/src/swf/swf_sound.cpp:decode_start_sound2` reads the class name with `SwfReader::read_zstring`, so a missing zero terminator inside the payload is `truncated`, not a read to the end. It then reads the same SOUNDINFO as `decode_start_sound`. Ruffle reads the same name with `read_str` and then `read_sound_info` in its `StartSound2` arm.
+
+## Radicle/src/swf/swf_sound.cpp:decode_define_sound
+
+`Radicle/src/swf/swf_sound.cpp:decode_define_sound` reads the 7-byte header: u16 id, a flags byte (format in the high nibble, rate in bits 3-2, 16-bit in bit 1, stereo in bit 0) and a u32 sample count. `data` is the view of every byte after the header and is never decoded, so the caller owns no copy. A format nibble outside the set Ruffle's `AudioCompression` accepts (0-8, 10, 11) returns `SwfSoundStatus::unknown_compression`. The module's existing DefineSound path in `Radicle/src/swf/swf_tags.cpp:decode_tag_payload` does not refuse those codes. The MP3 SeekSamples prefix is not parsed here, and Ruffle does not parse it either, so it stays inside `data`. I did not verify that prefix against the SWF specification text.
+
+## Radicle/src/swf/swf_sound.cpp:decode_sound_stream_head
+
+`Radicle/src/swf/swf_sound.cpp:decode_sound_stream_head` keeps the top nibble of the playback byte as `reserved` and does not refuse it, although Ruffle validates it as a format. The stream byte's compression nibble is refused as `unknown_compression` when outside Ruffle's set. When compression is 2 (MP3), a missing i16 latency returns `truncated`. Ruffle instead defaults the latency to 0, but `Radicle/src/swf/swf_tags.cpp:decode_tag_payload` refuses the same payload, so this decoder matches the module.
