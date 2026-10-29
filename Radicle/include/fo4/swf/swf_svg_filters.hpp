@@ -22,6 +22,16 @@ SvgFilterDefs filter_defs(const std::vector<SwfFilter>& filters, const std::stri
 // Requires a SWF blend mode value; returns an empty string when no CSS mix-blend-mode declaration applies.
 std::string blend_mode_style(std::uint8_t blend_mode);
 
+struct FilterWrap {
+  std::string open;
+  std::string close;
+};
+
+// Requires the id that filter_defs was given for this content; open and close are empty when it has no filter or blend.
+FilterWrap filtered_wrap(const std::vector<SwfFilter>& filters,
+                         std::optional<std::uint8_t> blend_mode, const std::string& id,
+                         const SwfRect& stage);
+
 // Requires the id that filter_defs was given for this content; returns content unchanged when it has no filter or blend.
 std::string filtered_group(const std::vector<SwfFilter>& filters,
                            std::optional<std::uint8_t> blend_mode, const std::string& id,

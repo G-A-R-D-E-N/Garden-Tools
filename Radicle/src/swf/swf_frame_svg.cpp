@@ -33,6 +33,11 @@ struct Mask {
   bool inside{false};
 };
 
+struct OpenFilterWrap {
+  std::size_t end{0};
+  std::string close;
+};
+
 using ShapeIndex = std::map<std::uint16_t, const SwfShape*>;
 using MorphIndex = std::map<std::uint16_t, const SwfMorphShape*>;
 using TextIndex = std::map<std::uint16_t, const SwfText*>;
@@ -345,12 +350,22 @@ std::string sprite_content(const FrameLookup& lookup, const SvgBitmaps& bitmaps,
   return content;
 }
 
+void close_filter_wraps(std::vector<OpenFilterWrap>& wraps, std::size_t index,
+                        std::string& body) {
+  while (!wraps.empty() && wraps.back().end <= index) {
+    body += wraps.back().close;
+    wraps.pop_back();
+  }
+}
+
 std::string frame_body(const FrameLookup& lookup, const SvgBitmaps& bitmaps,
                        const SwfDisplayFrame& frame, const SwfRect& stage) {
   std::string body;
   std::vector<Mask> masks;
+  std::vector<OpenFilterWrap> wraps;
   std::size_t mask_end = 0;
   for (std::size_t index = 0; index < frame.instances.size(); ++index) {
+    close_filter_wraps(wraps, index, body);
     if (index < mask_end) {
       continue;
     }
@@ -403,6 +418,12 @@ std::string frame_body(const FrameLookup& lookup, const SvgBitmaps& bitmaps,
       mask_end = descendants_end(frame, index);
       content = sprite_content(lookup, bitmaps, frame, index, id);
     }
+    if (row.is_sprite && !cells) {
+      const FilterWrap wrap = filtered_wrap(row.filters, row.blend_mode, id, stage);
+      body += wrap.open;
+      wraps.push_back(OpenFilterWrap{descendants_end(frame, index), wrap.close});
+      continue;
+    }
     if (cells && !content.empty()) {
       content = nine_slice_group(*cells, id, content);
     }
@@ -421,6 +442,7 @@ std::string frame_body(const FrameLookup& lookup, const SvgBitmaps& bitmaps,
     }
     body += content;
   }
+  close_filter_wraps(wraps, frame.instances.size(), body);
   return body;
 }
 

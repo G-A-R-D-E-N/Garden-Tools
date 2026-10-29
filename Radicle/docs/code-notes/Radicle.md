@@ -9068,7 +9068,7 @@ Bytecode is hand-derived. `u30(65535)` is `FF FF 03` and `u30(65536)` is `80 80 
 ## Radicle/src/swf/swf_svg_filters.cpp:filtered_group
 
 - Filters apply in list order, so the first filter is the innermost group and the blend group is outermost. An empty filter list with Normal blend returns the content unchanged, which keeps movies without filters byte-identical.
-- Sprite rows are not wrapped. A sprite's children are flattened into the frame list, so a filter or blend on a sprite row has no group to attach to. Shape, button and text rows are wrapped.
+- Sprite rows are wrapped by `Radicle/src/swf/swf_frame_svg.cpp:frame_body`, which opens one `filtered_wrap` group before the sprite's first flattened child and closes it at the sprite's last descendant row. Shape, button and text rows use `filtered_group`.
 - `frame_to_svg` has no output for `skipped`, so unsupported filters are dropped without a report. Callers that need the list use `filter_defs` directly.
 
 ## Radicle/src/swf/swf_display.cpp:replay
@@ -9331,6 +9331,21 @@ This parent walk has its own hop limit (`guard`, 64), so a cyclic `extends` cann
 ## Radicle/include/fo4/papyrus/diagnostic.hpp:DiagnosticCode
 
 `DiagnosticCode::InheritanceCycle` maps to PAP0021, the first unused code after PAP0020 in the declaration range. The C# mirror `PluginEditTool/FO4RecordEditor.Core/Services/Papyrus/PapyrusDiagnostic.cs` does not carry PAP0021 yet, so the header's parity comment is not met until it does.
+## Radicle/src/swf/swf_frame_svg.cpp:frame_body (sprite filters and blend)
+
+- A sprite row has no content of its own. Its children follow it in the flat list and are drawn as their own rows, so `Radicle/src/swf/swf_frame_svg.cpp:frame_body` opens the sprite's `Radicle/src/swf/swf_svg_filters.cpp:filtered_wrap` output before the first child and pushes an `OpenFilterWrap` whose end is `Radicle/src/swf/swf_frame_svg.cpp:descendants_end`. The existing `nesting_level` invariant on `Radicle/include/fo4/swf/swf_display.hpp:SwfFrameInstance` makes that end the first row after the sprite's subtree, so no new marker field is needed.
+- A sprite with no filter and Normal blend opens and closes an empty string, so a plain sprite's output does not change. The nine-slice path (`cells` set) keeps its earlier route through `filtered_group`, and clip sprites return before this branch.
+- Nested sprites stack. Each inner end is at or before its outer end, so the wraps close in last-in first-out order. `Radicle/src/swf/swf_frame_svg.cpp:close_filter_wraps` runs at the top of every row and once after the loop, so a sprite that ends on the last row still closes.
+- Ceilings, not checked in a Flash Player: a filtered sprite inside a clip scope filters its already-clipped children, not the union of them; a sprite's colour transform is still not applied, because `frame_body` attaches `world_color_transform` only to rows with their own content; a filtered sprite with no visible children emits its filter defs in an empty group.
+
+## Radicle/src/swf/swf_frame_svg.cpp:close_filter_wraps
+
+- Closes every open wrap whose end is at or before the given row index, innermost first. The caller passes the row count after the loop so trailing sprites close.
+
+## Radicle/src/swf/swf_svg_filters.cpp:filtered_wrap
+
+- Splits `Radicle/src/swf/swf_svg_filters.cpp:filtered_group` into an open string and a close string. The open order is style group, then `filter_defs` output, then one `<g filter>` per drawn filter with the last filter outermost. Every close is the same `</g>` line, so only the count matters.
+- `Radicle/src/swf/swf_svg_filters.cpp:filtered_group` is now `filtered_wrap` with the content in between. Its output matches the previous nesting byte for byte, which `FilteredGroupNestsFiltersInListOrderUnderTheBlendGroup` checks.
 ## Radicle/src/swf/swf_sound_edit.cpp:replace_sound_data
 
 `Radicle/src/swf/swf_sound_edit.cpp:replace_sound_data` finds the id through `Radicle/src/swf/swf_characters.cpp:build_character_model` and `find_character`, as `Radicle/src/swf/swf_bitmap_edit.cpp:replace_bitmap_lossless` does. A missing id is `unknown_sound`, and an id whose character tag is not code 14 is `not_a_define_sound`. In `Radicle/src/swf/swf_sound_edit.cpp:replace_sound_data`, after the id lookup the checks run before anything is written, in this order: the data cap, then the rate, then the format. The data cap is `kMaxSoundDataBytes`, 64 MiB (the same cap as `Radicle/src/swf/swf_internal.hpp:kMaxBitmapBytes`), about 380 seconds of 44.1 kHz 16-bit stereo PCM.
