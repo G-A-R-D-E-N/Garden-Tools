@@ -64,3 +64,18 @@ TEST(PapyrusDeclarationCheck, TwoHandlersForOneRemoteTypeAndEventAreReported) {
   ASSERT_EQ(problems.size(), 1u);
   EXPECT_NE(problems[0].message.find("'Actor.OnActivate'"), std::string::npos);
 }
+
+// Invariant: a repeated variable name and a repeated property name are each reported under their own kind.
+TEST(PapyrusDeclarationCheck, RepeatedVariableAndRepeatedPropertyAreEachReportedByKind) {
+  const auto problems = duplicates_in(
+      "ScriptName Dup\n"
+      "int mCount\n"
+      "int mCount\n"
+      "int Property Score Auto\n"
+      "int Property Score Auto\n");
+  ASSERT_EQ(problems.size(), 2u);
+  EXPECT_NE(problems[0].message.find("is already declared as a variable in this script"),
+            std::string::npos);
+  EXPECT_NE(problems[1].message.find("is already declared as a property in this script"),
+            std::string::npos);
+}
