@@ -8932,16 +8932,6 @@ Detects a validator that checks only the top-level list end and not the parent b
 - `StatesKeepSourceOrderAfterTheEmptyStateAndOnlyOneIsAuto` covers `CodeGenerator::buildObject` ordering: the empty state first, then states in source order.
 - Not covered: Papyrus has no `For` loop, so the brief's For item has no code path. `FindStructAndInsertUseTheirOpcodesAndDefaultStart` uses a float literal as the search value on purpose, because an int literal reaches the VM unconverted (see the `body_call.cpp:emitArrayBuiltin` note below).
 
-## src/papyrus/body_expression.cpp:emitShortCircuit (defect, no test)
-
-- Defect: a short-circuit assignment whose right operand names its own destination reads the overwritten value. The destination is written by the `cast` on line 409 before the right operand is emitted on line 412, so `value(binary.right)` returns the new value. Input: `Function Go(bool abLeft, bool abRight)` with body `abLeft = abRight && abLeft`. Emitted: `cast abLeft abRight`, `jmpf abLeft 2`, `cast abLeft abLeft`. With `abRight` true and `abLeft` false, the result is true, but `&&` requires false. `||` has the same shape.
-- No test pins the wrong output, and the fix was not made. The fix is to evaluate the right operand into a temp when the destination equals a name read in the right operand.
-
-## src/papyrus/body_call.cpp:emitArrayBuiltin (defect, no test)
-
-- Defect: `FindStruct` and `RFindStruct` pass the search value through `value(arguments[1])` (line 264 for `FindStruct`), with no conversion to the element's member type. `xs.FindStruct("fX", 2)` on a `float fX` member therefore emits an `Integer` operand. `struct_ops.cpp:159` then refuses the search as `TypeMismatch` because the member is `Float`. Input: `Struct Point` with `float fX`, then `int at = pts.FindStruct("fX", 2)`. The expected emission is `2.0`.
-- The fix is to convert the value to the member's declared type, which requires reading the element struct in codegen. Not done here.
-
 ## src/papyrus/resolver.cpp:Resolver::resolve (gap, tests added)
 
 - `ScriptIndex::baseChain` (`script_index.cpp:baseChain`) stops on a repeated name, so a cycle terminates. Its caller marks the resolution incomplete on line 46 (`last->extends`), which is the path the cycle tests pin. No diagnostic is raised for a cycle anywhere in `src/papyrus`, so a cyclic `extends` compiles silently. That is a gap; the tests assert only termination and `baseChainComplete == false`.
@@ -9045,6 +9035,23 @@ Bytecode is hand-derived. `u30(65535)` is `FF FF 03` and `u30(65536)` is `80 80 
 ## Radicle/src/avm2/interpreter.cpp:Interpreter::invoke
 
 - Known gap, verified by reading: a native function with no body and no native id returns `NotImplemented` with `native function <name> is not bound`, unless `limits_.lenient_builtins` is set. `Radicle/src/avm2/interpreter_property.cpp:Interpreter::outer_scope_value` returns `NotImplemented` for `getouterscope` when the frame has no captured scope.
+
+## Radicle/src/papyrus/body_expression.cpp:BodyEmitter::emitShortCircuit
+
+- Bug, fixed: when the destination is a named variable that the right operand reads, the first `cast` overwrote it before the right operand was read. `abLeft = abRight && abLeft` emitted `cast abLeft abLeft` on the right path, so the result was true where it must be false. The aliased case now evaluates into a fresh temp, skips with `jmpf`/`jmpt` on that temp, and copies it to the destination with `assign` after the jump target. `||` takes the same path with `jmpt`.
+- The non-aliased output is unchanged (`cast dest left`, `jmpf dest N`, `cast dest right`). `Radicle/tests/test_papyrus_codegen.cpp:ShortCircuitIntoOperandVariableStagesThroughTemp` pins it with the `Keep` function.
+- Known gap, verified by reading: `readsName` looks only at names in the right operand. If that operand calls a function that reads a script variable which is also the destination, the destination already holds the left value when the call runs. No test covers this and no corpus case was checked.
+
+## Radicle/src/papyrus/body_expression.cpp:BodyEmitter::readsName
+
+- Walks the expression tree and reports whether any identifier resolves to the destination's storage name. Only `Local`, `Parameter`, `ScriptVariable` and auto `Property` bindings are passed to `storageFor`, because its default branch reports `CannotEmit` and a function name in a call callee would trigger that. An auto property resolves to its `::<name>_var` backing variable, so `bFlag = x && bFlag` is aliased. A `self.<auto prop>` member read is aliased too, because `Radicle/src/papyrus/body_expression.cpp:BodyEmitter::emitMemberRead` reads the backing variable directly.
+
+## Radicle/src/papyrus/body_call.cpp:BodyEmitter::emitArrayBuiltin
+
+- Bug, fixed: `findstruct` and `rfindstruct` emitted the search value with `value()`. An Int literal stayed `Integer` while the struct member was `Float`, and `Radicle/src/papyrus/struct_ops.cpp:Interpreter::findStructInArray` returns `TypeMismatch` on that, so the search failed without a message. The `memberType` lambda takes the member's declared type from the element struct (the `Owner:Struct` type name is split at its last `:`), and `valueAs` converts the value to it.
+- If the member name is not a string literal, or the struct cannot be found, `memberType` returns Error and `valueAs` falls back to `value()`, which is the old output.
+- Known gap: a member name held in a variable keeps the old unconverted search value. Unverified whether real scripts do this.
+- `Radicle/tests/test_papyrus_codegen.cpp:FindStructConvertsSearchValueToMemberType` pins the Float conversion for `FindStruct` and `RFindStruct`.
 
 ## Radicle/include/fo4/avm1/interpreter.hpp:Avm1TimelineHost
 
