@@ -553,12 +553,26 @@ WTHR reuses FormID signatures for floats (VNAM/WNAM), bitfields (NAM1), opaque L
 
 Whole-load-order "Check for Errors" (#359, xEdit parity). Findings come only from slots Radicle can already prove: `collect_form_links` hits, the generated FormLink field/list target tables, `schema::preflight_plugin`, and the leveled-list graph. Unknown subrecords are never scanned, so a clean result means "no proven problem", not "no problem".
 
-- `invalid_master_index` (warning): `FormLinkHit::key` is empty because resolution failed. A raw index past the MAST table is not an error by itself: `resolve_plugin_link` (source:src/formid.cpp) maps it to the owning plugin, as the game does, and official masters ship such links (#365, `DLCRobot.esm` REFR `XRFG`). Those links are checked like any other link, so they are only reported when the owning plugin has no such record (`unresolved_link`).
+- `invalid_master_index` (warning): a raw index above the plugin's master count is reported and not checked further (`check_links`). The game resolves such a link to the owning plugin (`resolve_plugin_link`, source:src/formid.cpp), and official masters ship them (#365, `DLCRobot.esm` REFR `XRFG`), so a vanilla run reports those links.
 - `0xFFFFFFFF` is xEdit's None (`TwbFormID.IsNone`): `collect_form_links` leaves its key empty and the checker skips it like a null link.
-- Engine-hardcoded forms: a missing target owned by `Fallout4.esm` (named explicitly, not the first plugin in the load order) with an object ID below `0x800` is skipped, matching xEdit `wbInterface.pas:TwbFormID.IsHardcoded` (re-read at pin 93cc0bc5, `:22206-22209`, `_FormID < $800`). The game creates those forms itself (for example `000014`, `000007`), so `Fallout4.esm` has no records for them.
 - `unresolved_link` / `deleted_target`: checked against the winning version of every record in the load order (last plugin wins), not against the referencing plugin's own masters. An unresolved link is an error only when `slot_targets` proves the slot (a generated field or list descriptor). Slots found only through the signature-union table (`formid_subrecords.inc`) are reported as warnings, because xEdit declares some of them mixed (TERM `RNAM`/`WNAM`, INNR `WNAM`, MGEF `DNAM`, ...) and their scalar values do not resolve. With that rule vanilla `Fallout4.esm` has no error-level findings (`CheckErrors.VanillaMasterHasNoErrorFindings`).
 - `wrong_target_type`: only when `slot_targets` matches a generated field (record + subrecord + offset) or a non-nested list (per-subrecord at offset 0, packed arrays at 4-byte steps, as `formlink_lists.cpp:packed_element_count`). Wildcard lists and nested lists are skipped. `CheckFinding::offset` is `FormLinkHit::offset` (`fo4/schema/form_links.hpp`), the byte offset inside the subrecord.
 - `CheckOptions::plugins` limits which plugins' records are checked; the winner index still covers the whole load order.
+
+Leveled-list cycles are appended before any per-record finding, so a finding limit cannot starve them. `CheckRunSummary` (the `summary` argument) has no production caller yet: the C ABI (`src/c_api_check.cpp`) and PET's `PluginEditTool/native/src/plugin/RadiclePluginCheck.cpp` pass only `CheckOptions`, so the `results_truncated` row is the only truncation signal they see. The limit and marker row are covered by `Radicle/src/graph/check_errors.cpp:FindingSink::add`.
+
+## Radicle/src/graph/check_errors.cpp:check_links
+
+Per `FormLinkHit`, in order:
+
+1. Null links and None (`0xFFFFFFFF`) are skipped. An index above the plugin's master count stops here with `invalid_master_index` (see `check_load_order`).
+2. The hit is looked up by its resolved key. When that misses and the raw value is below `0x800` (index 0 and a local ID under `0x800`), the lookup is retried as `Fallout4.esm:<local ID>`. This matches xEdit `wbInterface.pas:TwbFormID.IsHardcoded` (re-read at pin 93cc0bc5, `:22206-22209`, `_FormID < $800`). The game creates those forms itself (for example `000014` PLYR, `000007`), so a key such as `Other.esm:000014` misses and is retargeted. The retargeted key is type-checked like any other link. If `Fallout4.esm` has no record there, the link is skipped. Index 0 already names the plugin itself when it has no masters, so no masterless case is needed.
+3. `deleted_target` and `wrong_target_type` name `finding.target`, the resolved key after step 2, not the hit's own key. Before this a retargeted link read `target 000014:Other.esm is PLYR` while the finding pointed at `000014:Fallout4.esm`. Covered by `CheckErrorsGroup1.HardcodedPlayerRefIsTypeCheckedAgainstTheGameMaster`.
+4. A DLBR `SNAM` that is missing or does not target a DIAL is not reported here. `check_dialogue_links` owns that finding, so a starting topic yields one finding. A deleted DLBR `SNAM` target still gets `deleted_target` here.
+
+## Radicle/src/graph/check_errors.cpp:FindingSink::add
+
+Keeps at most `CheckOptions::limit` findings (0 means no limit). Once full, each further finding sets `truncated` and keeps the first dropped finding's plugin for the marker. `check_load_order` appends one `results_truncated` row after its loop, outside the limit, so a truncated run returns limit + 1 rows: `limit` findings plus the marker. PET's default limit is 500 with a cap of 100000 (`RadiclePluginCheck.cpp`), so a truncated Check for Errors shows 501 rows. `CheckRunSummary::truncated` mirrors the same flag.
 
 ## Radicle/src/graph/check_errors.cpp:check_preflight
 
@@ -1566,11 +1580,11 @@ The record is EDID (optional), FULL (optional), DATA (u32 flags), CRVA (20 bytes
 
 ## Radicle/src/graph/check_errors.cpp:info_topics
 
-An INFO's DIAL topic is the label of its nearest enclosing topic-children group (GRUP type 7). Records outside such a group map to no topic. The map covers only the plugin being checked. A label that is null or uses index 0xFF maps to an empty key, which resolves to no loaded DIAL. A label whose master index is past the plugin's master table maps to no topic, so no finding is raised for it. No xEdit validation proves the group-to-DIAL mapping: `Core/wbDefinitionsFO4.pas:1017-1025` is inside `wbConditionQuestOverlay`, a display callback for a condition's quest.
+An INFO's DIAL topic is the label of its nearest enclosing topic-children group (GRUP type 7). Records outside such a group map to no topic. The map covers only the plugin being checked. A label that is null or uses index 0xFF maps to an empty key, which resolves to no loaded DIAL. A label whose master index is past the plugin's master table is folded to the plugin itself (`resolve_plugin_link`, anchored at `Radicle/src/graph/check_errors.cpp:resolved_or_empty`), so it maps to that key and a missing DIAL there is reported as `topic_children_not_dial`. No xEdit validation proves the group-to-DIAL mapping: `Core/wbDefinitionsFO4.pas:1017-1025` is inside `wbConditionQuestOverlay`, a display callback for a condition's quest.
 
 ## Radicle/src/graph/check_errors.cpp:check_dialogue_links
 
-Dialogue stored-link checks. Each rule reads only stored subrecords. A stored form ID whose master index is past the plugin's master table is skipped, so neither rule below fires for it.
+Dialogue stored-link checks. Each rule reads only stored subrecords. A stored form ID whose master index is past the plugin's master table is skipped, so neither rule below fires for it. `Radicle/src/graph/check_errors.cpp:stored_form_link` returns no link for it, so a DLBR `SNAM` past the table yields only the `invalid_master_index` finding from `check_links`; the folded key is never named. A null `SNAM` still reports (`Radicle/src/graph/check_errors.cpp:has_null_snam`). A None (`0xFFFFFFFF`) `SNAM` is not skipped and reports as not a loaded DIAL with an empty target.
 
 - `branch_starting_topic_not_dial` (error): DLBR `SNAM` (Starting Topic) must target a loaded DIAL, including a missing target. Cites `Core/wbDefinitionsFO4.pas:8792` (`wbFormIDCk(SNAM, 'Starting Topic', [DIAL]).SetRequired`). DLBR has no record row in the generated schema, so the slot is unproven. The generic `check_links` pass does see the `SNAM`, because `formid_subrecords.inc` lists it and a 4-byte payload is remapped as a form ID. For a missing target that pass is skipped (see `check_links` below), so this rule is the only finding.
 - `deleted_target` (warning): a DLBR `SNAM` whose loaded winner is deleted. This comes only from the generic `check_links` `deleted_target` check, which already covers the DLBR SNAM link; `check_dialogue_links` adds no second warning for it.

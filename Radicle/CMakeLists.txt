@@ -792,6 +792,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_deep_copy.cpp
     tests/test_check_errors.cpp
     tests/test_check_errors_conditions.cpp
+    tests/test_check_errors_group1.cpp
     tests/test_check_errors_record_lists.cpp
     tests/test_check_errors_real.cpp
     tests/test_check_dialogue.cpp
