@@ -117,6 +117,15 @@ Avm1RunStatus set_property(Avm1TimelineHost& host, Avm1State& state, std::string
   return Avm1RunStatus::Ok;
 }
 
+Avm1RunStatus set_target_2(Avm1TimelineHost& host, Avm1State& state, std::string& message) {
+  Avm1Data target;
+  if (const Avm1RunStatus status = pop(state, target, message); status != Avm1RunStatus::Ok) {
+    return status;
+  }
+  host.set_target(text_ops::to_text(target, state.swf_version));
+  return Avm1RunStatus::Ok;
+}
+
 }  // namespace
 
 Avm1RunStatus execute(Avm1Run& run, const Avm1Block& block, const Avm1Action& action,
@@ -136,12 +145,17 @@ Avm1RunStatus execute(Avm1Run& run, const Avm1Block& block, const Avm1Action& ac
     case 0x07:
       host->stop();
       return Avm1RunStatus::Ok;
+    case 0x20:
+      return set_target_2(*host, run.state, message);
     case 0x22:
       return get_property(*host, run.state, message);
     case 0x23:
       return set_property(*host, run.state, message);
     case 0x81:
       host->goto_frame(static_cast<std::uint32_t>(std::get<Avm1Frame>(action.payload).frame) + 1u);
+      return Avm1RunStatus::Ok;
+    case 0x8B:
+      host->set_target(std::get<Avm1Text>(action.payload).text);
       return Avm1RunStatus::Ok;
     case 0x8C:
       return go_to_label(*host, std::get<Avm1Text>(action.payload).text);
