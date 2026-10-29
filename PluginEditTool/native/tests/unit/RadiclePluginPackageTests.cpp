@@ -87,7 +87,7 @@ std::vector<std::byte> packPlugin() {
     fo4::test::write_subrecord(out, "PNAM", std::vector<std::byte>{std::byte{'A'}, std::byte{'c'}, std::byte{'t'},
                                                                    std::byte{'i'}, std::byte{'v'}, std::byte{'a'},
                                                                    std::byte{'t'}, std::byte{'e'}, std::byte{0}});
-    fo4::test::write_subrecord(out, "POBA", {});
+    fo4::test::write_subrecord(out, "POBA", std::string_view{});
     fo4::test::end_record(out, record);
     fo4::test::end_group(out, group);
     return out.bytes;
