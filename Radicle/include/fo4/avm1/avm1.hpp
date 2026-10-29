@@ -147,6 +147,7 @@ struct Avm1Stream {
   std::string message;
   std::vector<Avm1Action> actions;
   std::vector<std::byte> trailing;
+  std::size_t original_end{kNewRecordOffset};
 
   bool ok() const noexcept { return status == Avm1Status::Ok; }
 };
@@ -156,9 +157,14 @@ Avm1Stream decode_actions(std::span<const std::byte> bytes);
 /* Requires a stream from decode_actions, which keeps every record and the bytes after End. */
 std::vector<std::byte> encode_actions(const Avm1Stream& stream);
 
+std::vector<std::byte> encode_actions_checked(const Avm1Stream& stream, Avm1Status& status);
+
 Avm1Status validate_actions(const Avm1Stream& stream);
 
 bool insert_action(std::vector<Avm1Action>& actions, std::size_t index, Avm1Action action);
+
+bool insert_action_into_body(std::vector<Avm1Action>& actions, std::size_t container_index,
+                             std::size_t slot, std::size_t index, Avm1Action action);
 
 bool erase_action(std::vector<Avm1Action>& actions, std::size_t index);
 
