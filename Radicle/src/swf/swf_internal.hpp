@@ -14,6 +14,8 @@ inline constexpr unsigned kMaxTagDepth = 64;
 
 inline constexpr std::size_t kMaxBodyBytes = 256u * 1024u * 1024u;
 
+inline constexpr std::size_t kMaxBitmapBytes = 64u * 1024u * 1024u;
+
 inline constexpr std::size_t kMaxTags = 1u << 18;
 
 class SwfReader {
