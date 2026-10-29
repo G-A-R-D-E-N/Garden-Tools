@@ -2,11 +2,13 @@
 
 #include "c_api_env_internal.hpp"
 #include "c_api_internal.hpp"
+#include "c_api_swf_internal.hpp"
 #include "fo4/abc/opcodes.hpp"
 #include "fo4/abc/summary.hpp"
+#include "fo4/avm1/avm1.hpp"
 #include "fo4/swf/swf.hpp"
+#include "fo4/swf/swf_timeline.hpp"
 
-#include <algorithm>
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
@@ -24,42 +26,8 @@ using radicle_c_detail::fail_exception;
 using radicle_c_detail::utf8_path;
 using radicle_c_env_detail::guarded;
 
-namespace {
-
-struct tag_view {
-  const fo4::swf::SwfTag* tag{nullptr};
-  std::size_t parent{RADICLE_SWF_NO_INDEX};
-  std::uint16_t sprite_id{0};
-  bool inside_sprite{false};
-};
-
-struct abc_view {
-  fo4::abc::AbcFile file;
-  fo4::abc::AbcSummary summary;
-  std::vector<std::string> method_names;     // invariant: parallel to file.methods
-  std::vector<std::string> method_return_types;
-  std::string name;
-  std::uint32_t flags{0};
-  std::size_t tag_index{0};
-  std::size_t payload_size{0};
-  bool parsed{false};
-};
-
-}  // namespace
-
-struct radicle_swf {
-  fo4::swf::SwfFile file;
-  fo4::swf::SwfSummary summary;
-  bool declared_length_matches{true};
-  std::vector<tag_view> tags;
-  std::vector<fo4::swf::SwfSymbol> symbols;
-  std::vector<fo4::swf::SwfSymbol> exports;
-  std::vector<std::string> frame_labels;
-  std::vector<std::size_t> frame_label_tags;
-  std::vector<std::uint16_t> frame_label_sprites;
-  std::vector<std::uint8_t> frame_label_inside_sprite;
-  std::vector<abc_view> abcs;
-};
+using radicle_swf_detail::abc_view;
+using radicle_swf_detail::tag_view;
 
 namespace {
 
@@ -69,8 +37,6 @@ radicle_status map_swf_status(fo4::swf::SwfStatus status, const std::string& mes
       return RADICLE_STATUS_OK;
     case fo4::swf::SwfStatus::empty_input:
       return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the movie bytes are empty");
-    case fo4::swf::SwfStatus::unsupported_compression:
-      return fail(RADICLE_STATUS_PARSE_ERROR, "LZMA (ZWS) movies are not supported yet");
     case fo4::swf::SwfStatus::out_of_memory:
       return fail(RADICLE_STATUS_OUT_OF_MEMORY, message.empty() ? "out of memory while reading the movie" : message.c_str());
     default:
@@ -89,74 +55,55 @@ std::string null_terminated_string(std::span<const std::byte> payload) {
   return text;
 }
 
-// Requires a DoABC payload of u32 flags, a NUL-terminated name, then ABC bytes; a broken header yields an empty span.
-std::span<const std::byte> split_do_abc(std::span<const std::byte> payload, abc_view& view) {
-  if (payload.size() < 4) return {};
-  const auto rest = payload.subspan(4);
-  const auto nul = std::find(rest.begin(), rest.end(), std::byte{0});
-  if (nul == rest.end()) return {};
-  std::uint32_t flags = 0;
-  for (std::size_t byte = 0; byte < 4; ++byte) {
-    flags |= std::to_integer<std::uint32_t>(payload[byte]) << (8 * byte);
-  }
-  const auto length = static_cast<std::size_t>(nul - rest.begin());
-  view.flags = flags;
-  view.name.assign(reinterpret_cast<const char*>(rest.data()), length);
-  return rest.subspan(length + 1);
-}
-
 void flatten_tags(const fo4::swf::SwfTag& tag,
                   std::size_t parent,
                   std::uint16_t sprite_id,
                   bool inside_sprite,
-                  radicle_swf& swf) {
-  const auto index = swf.tags.size();
+                  radicle_swf_detail::swf_views& views) {
+  const auto index = views.tags.size();
   // A DefineSprite tag must report the id its children carry, not only its parent's.
   const auto own_sprite = tag.sprite_id.has_value() ? *tag.sprite_id : sprite_id;
-  swf.tags.push_back(tag_view{&tag, parent, own_sprite, inside_sprite});
+  views.tags.push_back(tag_view{&tag, parent, own_sprite, inside_sprite});
   const auto child_sprite = own_sprite;
   const auto child_inside = tag.sprite_id.has_value() ? true : inside_sprite;
   for (const auto& child : tag.children) {
-    flatten_tags(child, index, child_sprite, child_inside, swf);
+    flatten_tags(child, index, child_sprite, child_inside, views);
   }
 }
 
-void collect_records(radicle_swf& swf) {
-  for (std::size_t index = 0; index < swf.tags.size(); ++index) {
-    const auto& view = swf.tags[index];
+void collect_records(radicle_swf_detail::swf_views& views) {
+  for (std::size_t index = 0; index < views.tags.size(); ++index) {
+    const auto& view = views.tags[index];
     const auto& tag = *view.tag;
     if (tag.symbols) {
-      swf.symbols.insert(swf.symbols.end(), tag.symbols->begin(), tag.symbols->end());
+      views.symbols.insert(views.symbols.end(), tag.symbols->begin(), tag.symbols->end());
     }
     if (tag.exports) {
-      swf.exports.insert(swf.exports.end(), tag.exports->begin(), tag.exports->end());
+      views.exports.insert(views.exports.end(), tag.exports->begin(), tag.exports->end());
     }
     if (tag.code == fo4::swf::tag::kFrameLabel) {
-      swf.frame_labels.push_back(null_terminated_string(tag.payload));
-      swf.frame_label_tags.push_back(index);
-      swf.frame_label_sprites.push_back(view.sprite_id);
-      swf.frame_label_inside_sprite.push_back(view.inside_sprite ? 1 : 0);
+      views.frame_labels.push_back(null_terminated_string(tag.payload));
+      views.frame_label_tags.push_back(index);
+      views.frame_label_sprites.push_back(view.sprite_id);
+      views.frame_label_inside_sprite.push_back(view.inside_sprite ? 1 : 0);
     }
   }
 }
 
-void build_abc_views(radicle_swf& swf) {
+void build_abc_views(const fo4::swf::SwfFile& file, radicle_swf_detail::swf_views& views) {
   // abc_blocks indexes root tags, so each block must report the flat index radicle_swf_tag_at takes.
   std::vector<std::size_t> root_flat_index;
-  for (std::size_t index = 0; index < swf.tags.size(); ++index) {
-    if (swf.tags[index].parent == RADICLE_SWF_NO_INDEX) root_flat_index.push_back(index);
+  for (std::size_t index = 0; index < views.tags.size(); ++index) {
+    if (views.tags[index].parent == RADICLE_SWF_NO_INDEX) root_flat_index.push_back(index);
   }
-  for (const auto& block : fo4::swf::abc_blocks(swf.file)) {
-    auto payload = block.payload;
+  for (const auto& block : fo4::swf::abc_blocks(file)) {
+    const auto payload = block.payload;
     const auto flat_index =
         block.tag_index < root_flat_index.size() ? root_flat_index[block.tag_index] : block.tag_index;
     abc_view view;
     view.name = block.name;
     view.flags = block.flags;
     view.tag_index = flat_index;
-    if (swf.tags[flat_index].tag->code == fo4::swf::tag::kDoAbc) {
-      payload = split_do_abc(payload, view);
-    }
     view.payload_size = payload.size();
     const auto status = fo4::abc::AbcFile::parse(
         reinterpret_cast<const std::uint8_t*>(payload.data()), payload.size(), view.file);
@@ -169,7 +116,7 @@ void build_abc_views(radicle_swf& swf) {
         view.method_return_types.push_back(view.file.multiname_at(view.file.methods[index].return_type));
       }
     }
-    swf.abcs.push_back(std::move(view));
+    views.abcs.push_back(std::move(view));
   }
 }
 
@@ -181,12 +128,7 @@ radicle_status open_from_bytes(const std::uint8_t* bytes, std::size_t size, radi
   auto swf = std::make_unique<radicle_swf>();
   swf->file = std::move(result.file);
   swf->declared_length_matches = result.declared_length_matches;
-  swf->summary = fo4::swf::summarize(swf->file);
-  for (const auto& tag : swf->file.tags) {
-    flatten_tags(tag, RADICLE_SWF_NO_INDEX, 0, false, *swf);
-  }
-  collect_records(*swf);
-  build_abc_views(*swf);
+  radicle_swf_detail::rebuild_views(*swf);
   *out_swf = swf.release();
   return RADICLE_STATUS_OK;
 }
@@ -255,8 +197,11 @@ void fill_call(const fo4::abc::AbcCallSite& site, radicle_swf_call& out) {
   out.is_event_registration = fo4::abc::is_event_registration(site) ? 1 : 0;
 }
 
-std::uint8_t* copy_text(const std::string& text, std::size_t* out_size) {
-  // invariant: the buffer carries a trailing NUL that *out_size does not count.
+}  // namespace
+
+namespace radicle_swf_detail {
+
+std::uint8_t* copy_text(std::string_view text, std::size_t* out_size) {
   auto* buffer = static_cast<std::uint8_t*>(std::malloc(text.size() + 1));
   if (buffer == nullptr) return nullptr;
   if (!text.empty()) std::memcpy(buffer, text.data(), text.size());
@@ -265,7 +210,39 @@ std::uint8_t* copy_text(const std::string& text, std::size_t* out_size) {
   return buffer;
 }
 
-}  // namespace
+// Invariant: every cached view must be built here before any getter runs, and a throw must leave the handle intact.
+void build_views(const fo4::swf::SwfFile& file, swf_views& out) {
+  out = {};
+  out.summary = fo4::swf::summarize(file);
+  for (const auto& tag : file.tags) {
+    flatten_tags(tag, RADICLE_SWF_NO_INDEX, 0, false, out);
+  }
+  collect_records(out);
+  build_abc_views(file, out);
+}
+
+// Invariant: the install must move, never copy, so every tag_view keeps pointing at the same tags.
+void install_views(radicle_swf& swf, swf_views&& views) {
+  swf.summary = std::move(views.summary);
+  swf.tags = std::move(views.tags);
+  swf.symbols = std::move(views.symbols);
+  swf.exports = std::move(views.exports);
+  swf.frame_labels = std::move(views.frame_labels);
+  swf.frame_label_tags = std::move(views.frame_label_tags);
+  swf.frame_label_sprites = std::move(views.frame_label_sprites);
+  swf.frame_label_inside_sprite = std::move(views.frame_label_inside_sprite);
+  swf.abcs = std::move(views.abcs);
+  swf.morph_frames.clear();
+  swf.characters = {};
+}
+
+void rebuild_views(radicle_swf& swf) {
+  swf_views views;
+  build_views(swf.file, views);
+  install_views(swf, std::move(views));
+}
+
+}  // namespace radicle_swf_detail
 
 extern "C" {
 
@@ -652,8 +629,49 @@ radicle_status radicle_swf_abc_method_disassemble(const radicle_swf* swf, size_t
     std::string text;
     const auto status = fo4::abc::disassemble(view->file, body->code, text, body->exceptions);
     if (status != fo4::abc::AbcStatus::Ok) return fail(RADICLE_STATUS_PARSE_ERROR, "the method body did not decode");
-    auto* buffer = copy_text(text, out_size);
+    auto* buffer = radicle_swf_detail::copy_text(text, out_size);
     if (buffer == nullptr) return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to allocate the listing");
+    *out_text = buffer;
+    return RADICLE_STATUS_OK;
+  });
+}
+
+radicle_status radicle_swf_inspect_text(const radicle_swf* swf, const char* name, uint8_t** out_text,
+                                        size_t* out_size) {
+  clear_error();
+  if (out_text) *out_text = nullptr;
+  if (out_size) *out_size = 0;
+  if (swf == nullptr || name == nullptr || out_text == nullptr || out_size == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "swf, name, out_text and out_size are required");
+  }
+  return guarded("unknown exception while inspecting a movie", [&] {
+    const std::string text = fo4::swf::inspect_swf(swf->file, name);
+    auto* buffer = radicle_swf_detail::copy_text(text, out_size);
+    if (buffer == nullptr) return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to allocate the inspection");
+    *out_text = buffer;
+    return RADICLE_STATUS_OK;
+  });
+}
+
+radicle_status radicle_swf_avm1_disassemble(const radicle_swf* swf, size_t index, uint8_t** out_text,
+                                            size_t* out_size) {
+  clear_error();
+  if (out_text) *out_text = nullptr;
+  if (out_size) *out_size = 0;
+  if (swf == nullptr || out_text == nullptr || out_size == nullptr || index >= swf->tags.size()) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "swf, out_text, out_size and a tag index are required");
+  }
+  const fo4::swf::SwfTag& tag = *swf->tags[index].tag;
+  if (tag.code != fo4::swf::tag::kDoAction && tag.code != fo4::swf::tag::kDoInitAction) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the tag is not a DoAction or DoInitAction");
+  }
+  if (!tag.action) return fail(RADICLE_STATUS_PARSE_ERROR, "the action tag did not decode");
+  return guarded("unknown exception while disassembling AVM1 actions", [&] {
+    const auto bytes = std::span<const std::byte>(tag.payload).subspan(tag.action->offset, tag.action->size);
+    const auto stream = fo4::avm1::decode_actions(bytes);
+    if (!stream.ok()) return fail(RADICLE_STATUS_PARSE_ERROR, stream.message.c_str());
+    auto* buffer = radicle_swf_detail::copy_text(fo4::avm1::disassemble_actions(stream), out_size);
+    if (buffer == nullptr) return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to allocate the AVM1 listing");
     *out_text = buffer;
     return RADICLE_STATUS_OK;
   });

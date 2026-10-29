@@ -3,6 +3,7 @@
 #include "fo4/error.hpp"
 #include "fo4/nif/nif.hpp"
 
+#include <array>
 #include <bit>
 #include <cstddef>
 #include <cstdint>
@@ -66,7 +67,10 @@ struct Block {
 };
 
 inline std::vector<std::byte> build_nif(const std::vector<std::string>& strings, const std::vector<Block>& blocks,
-                                        const std::vector<std::int32_t>& roots) {
+                                        const std::vector<std::int32_t>& roots,
+                                        const std::array<std::string, 4>& exports = {},
+                                        std::uint32_t max_string_length = 0,
+                                        const std::vector<std::uint32_t>& groups = {}) {
   std::vector<std::string> types;
   std::vector<std::uint16_t> indices;
   for (const auto& block : blocks) {
@@ -82,15 +86,16 @@ inline std::vector<std::byte> build_nif(const std::vector<std::string>& strings,
   w.u32(12);
   w.u32(static_cast<std::uint32_t>(blocks.size()));
   w.u32(130);
-  for (int i = 0; i < 4; ++i) w.short_string("");
+  for (const auto& text : exports) w.short_string(text);
   w.u16(static_cast<std::uint16_t>(types.size()));
   for (const auto& type : types) w.sized(type);
   for (const auto index : indices) w.u16(index);
   for (const auto& block : blocks) w.u32(static_cast<std::uint32_t>(block.data.size()));
   w.u32(static_cast<std::uint32_t>(strings.size()));
-  w.u32(0);
+  w.u32(max_string_length);
   for (const auto& value : strings) w.sized(value);
-  w.u32(0);
+  w.u32(static_cast<std::uint32_t>(groups.size()));
+  for (const auto group : groups) w.u32(group);
   for (const auto& block : blocks) w.append(block.data);
   w.u32(static_cast<std::uint32_t>(roots.size()));
   for (const auto root : roots) w.i32(root);
@@ -138,10 +143,12 @@ inline std::vector<std::byte> encode_vertex(const Vertex& vertex) {
 
 inline Block shape_block(std::string type, std::int32_t name, const fo4::nif::Transform& xf, std::uint32_t flags,
                          std::size_t stride, std::int32_t skin, std::int32_t shader, std::int32_t alpha,
-                         const std::vector<std::byte>& vertices, const std::vector<std::uint16_t>& tris) {
+                         const std::vector<std::byte>& vertices, const std::vector<std::uint16_t>& tris,
+                         std::uint32_t extras = 0) {
   Writer w;
   w.i32(name);
-  w.u32(0);
+  w.u32(extras);
+  for (std::uint32_t i = 0; i < extras; ++i) w.i32(-1);
   w.i32(-1);
   w.u32(0);
   w.transform(xf);
@@ -167,11 +174,12 @@ inline Block texture_set_block(const std::vector<std::string>& textures) {
 }
 
 inline Block lighting_shader_block(std::uint32_t shader_type, std::int32_t name, std::int32_t texture_set,
-                                   std::uint32_t flags1, std::uint32_t flags2) {
+                                   std::uint32_t flags1, std::uint32_t flags2, std::uint32_t extras = 0) {
   Writer w;
   w.u32(shader_type);
   w.i32(name);
-  w.u32(0);
+  w.u32(extras);
+  for (std::uint32_t i = 0; i < extras; ++i) w.i32(-1);
   w.i32(-1);
   w.u32(flags1);
   w.u32(flags2);

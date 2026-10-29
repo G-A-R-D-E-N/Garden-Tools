@@ -208,6 +208,49 @@ std::vector<std::byte> item_run_quest() {
   return out.bytes;
 }
 
+std::vector<std::byte> reference_extras_quest() {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(1);
+  hedr.u32(0x900);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+
+  const auto group = fo4::test::begin_group(out, "QUST", 0);
+  const auto quest = fo4::test::begin_record(out, "QUST", 0, 0x00000800, 131);
+  write_u32_subrecord(out, "ANAM", 2);
+  write_u32_subrecord(out, "ALST", 1);
+  fo4::test::write_subrecord(out, "ALID", std::string_view{"Ref\0", 4});
+  write_u32_subrecord(out, "FNAM", 0);
+  write_u32_subrecord(out, "KSIZ", 1);
+  write_u32_subrecord(out, "KWDA", 0x111);
+  write_u32_subrecord(out, "SPOR", 0x222);
+  write_u32_subrecord(out, "OCOR", 0x333);
+  write_u32_subrecord(out, "GWOR", 0x444);
+  write_u32_subrecord(out, "ECOR", 0x555);
+  fo4::test::ByteWriter alla;
+  alla.u32(0x666);
+  alla.i32(4);
+  fo4::test::write_subrecord(out, "ALLA", alla.bytes);
+  write_u32_subrecord(out, "ALPC", 0x777);
+  write_u32_subrecord(out, "VTCK", 0x888);
+  fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
+  fo4::test::end_record(out, quest);
+  fo4::test::end_group(out, group);
+  return out.bytes;
+}
+
+std::vector<std::byte> payload_of(const fo4::forms::QuestAlias& alias,
+                                  std::string_view signature) {
+  const auto sig = fo4::Signature::from_string(signature);
+  for (const auto& member : alias.subrecords) {
+    if (member.signature == sig) return member.data;
+  }
+  return {};
+}
+
 const fo4::FormKey k_quest = fo4::FormKey::parse("000800:Quest.esp");
 
 }
@@ -419,4 +462,49 @@ TEST(QuestAliasReplacementPreservation, KeepsAnItemRunWithCoedInOrderOnARename) 
   EXPECT_EQ(alias.items[1].count, 3);
   EXPECT_TRUE(alias.items[0].extra.has_value());
   EXPECT_TRUE(alias.items[1].extra.has_value());
+}
+
+TEST(QuestAliasReplacementPreservation, KeepsReferenceExtrasInOrderOnARename) {
+  auto plugin = fo4::read_plugin(reference_extras_quest(), "Quest.esp");
+  const auto initial = fo4::forms::decode_quest_aliases(plugin, k_quest);
+  ASSERT_EQ(initial.aliases.size(), 1u);
+  const auto& before = initial.aliases[0];
+
+  auto renamed = reference_alias(1);
+  renamed.name = std::string_view{"Renamed"};
+  fo4::forms::replace_quest_alias(plugin, k_quest, 1, renamed);
+
+  const auto bytes = fo4::write_plugin(plugin);
+  const auto reread = fo4::read_plugin(bytes, "Quest.esp");
+  EXPECT_EQ(fo4::write_plugin(reread), bytes);
+  const auto decoded = fo4::forms::decode_quest_aliases(reread, k_quest);
+  ASSERT_EQ(decoded.aliases.size(), 1u);
+  const auto& after = decoded.aliases[0];
+  std::vector<std::string> names;
+  for (const auto& member : after.subrecords) {
+    names.push_back(member.signature.to_string());
+  }
+  EXPECT_EQ(names, (std::vector<std::string>{"ALST", "ALID", "FNAM", "KSIZ", "KWDA",
+                                             "SPOR", "OCOR", "GWOR", "ECOR", "ALLA",
+                                             "ALPC", "VTCK", "ALED"}));
+  for (const auto* signature : {"KSIZ", "KWDA", "SPOR", "OCOR", "GWOR", "ECOR", "ALLA",
+                                "ALPC", "VTCK"}) {
+    EXPECT_EQ(payload_of(after, signature), payload_of(before, signature)) << signature;
+  }
+  EXPECT_EQ(after.keywords, before.keywords);
+  EXPECT_EQ(after.spectator_override, before.spectator_override);
+  EXPECT_EQ(after.combat_override, before.combat_override);
+  EXPECT_EQ(after.packages, before.packages);
+  EXPECT_EQ(after.voice_types, before.voice_types);
+}
+
+TEST(QuestAliasReplacementPreservation, RefusesAKindChangeToACollectionWithResidualMembers) {
+  auto plugin = fo4::read_plugin(reference_extras_quest(), "Quest.esp");
+  const auto before = fo4::write_plugin(plugin);
+
+  auto collection = collection_entries({{2, std::uint8_t{1}}});
+  collection.id = 1;
+  EXPECT_THROW(fo4::forms::replace_quest_alias(plugin, k_quest, 1, collection),
+               fo4::forms::QuestError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
 }

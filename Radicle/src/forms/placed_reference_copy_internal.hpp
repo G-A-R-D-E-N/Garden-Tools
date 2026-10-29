@@ -12,6 +12,10 @@
 #include <string_view>
 #include <vector>
 
+namespace fo4::detail {
+struct MutableLocation;
+}
+
 namespace fo4::forms::detail {
 
 struct RecordLocation {
@@ -43,6 +47,10 @@ Group* ensure_reference_bucket(Group& cell_children,
                                const GroupHeader& source_header,
                                const PluginFormIdContext& source_context,
                                const PluginFormIdContext& destination_context);
+
+void move_reference_to_bucket(fo4::detail::MutableLocation& located,
+                              GroupType bucket_type,
+                              const PluginFormIdContext& context);
 
 PluginKind owner_kind(const Plugin& source, const PluginKey& owner);
 

@@ -29,6 +29,9 @@ public sealed unsafe class Ba2Archive : IDisposable
 
     internal HandleUse Use() => new(_handle, nameof(Ba2Archive));
 
+    // The runtime C ABI stays valid only while the archive is open, so this handle must not outlive it.
+    internal IntPtr NativeHandle => _handle.DangerousGetHandle();
+
     private HandleUse OwnerUse() => _owner is null ? default : _owner.Use();
 
     public static Ba2Archive Open(string path)

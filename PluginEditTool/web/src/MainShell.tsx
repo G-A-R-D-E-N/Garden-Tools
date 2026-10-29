@@ -5,6 +5,7 @@ import {
   Link2, Archive as ArchiveIcon, Music, Boxes, Table2, Workflow, Languages,
 } from 'lucide-react';
 import PapyrusPanel from './PapyrusPanel';
+import SwfPanel from './SwfPanel';
 import NifPanel from './NifPanel';
 import MastersPanel from './MastersPanel';
 import ArchivePanel from './ArchivePanel';
@@ -62,6 +63,7 @@ export default function MainShell() {
   useEffect(() => { localStorage.setItem('treeMode', treeMode); }, [treeMode]);
   const [showSettings, setShowSettings] = useState(false);
   const [showPapyrus, setShowPapyrus] = useState(false);
+  const [showSwf, setShowSwf] = useState(false);
   const [showNif, setShowNif] = useState(false);
   const [showMasters, setShowMasters] = useState(false);
   const [showArchive, setShowArchive] = useState(false);
@@ -384,6 +386,8 @@ export default function MainShell() {
           </button>
           <button className={`activity-btn ${showPapyrus ? 'active' : ''}`} onClick={() => setShowPapyrus(true)} title="Papyrus (compile / decompile)">
             <ScrollText size={22} strokeWidth={1.5} />
+          </button>          <button className={`activity-btn ${showSwf ? 'active' : ''}`} onClick={() => setShowSwf(true)} title="Interface (SWF)">
+            <Boxes size={22} strokeWidth={1.5} />
           </button>
           <button className={`activity-btn ${showNif ? 'active' : ''}`} onClick={() => setShowNif(true)} title="NIF (author / inspect / verify / fix)">
             <Box size={22} strokeWidth={1.5} />
@@ -702,6 +706,7 @@ export default function MainShell() {
 
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
       {showPapyrus && <PapyrusPanel onClose={() => setShowPapyrus(false)} />}
+      {showSwf && <SwfPanel onClose={() => setShowSwf(false)} />}
       {showNif && <NifPanel onClose={() => setShowNif(false)} />}
       {showMasters && <MastersPanel onClose={() => setShowMasters(false)} />}
       {showArchive && <ArchivePanel onClose={() => setShowArchive(false)} />}

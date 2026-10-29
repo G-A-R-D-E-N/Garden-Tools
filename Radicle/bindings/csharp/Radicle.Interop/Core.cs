@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -134,6 +135,8 @@ internal sealed class NativeStrings : IDisposable
         _owned.Add(pointer);
         return pointer;
     }
+
+    public IntPtr[] AddAll(IEnumerable<string>? texts) => (texts ?? Array.Empty<string>()).Select(Add).ToArray();
 
     public Native.FormKey Key(FormKey? key) =>
         key is { } value ? new Native.FormKey { Plugin = Add(value.Plugin), LocalId = value.LocalId } : default;
@@ -282,6 +285,8 @@ internal static unsafe class Call
         if (bytes != null) RadicleNative.FreeBytes(bytes);
         return result;
     }
+
+    public static string TakeText(byte* text, nuint size) => Encoding.UTF8.GetString(TakeBytes(text, size));
 
     public static float[] TakeFloats(float* values, nuint count)
     {

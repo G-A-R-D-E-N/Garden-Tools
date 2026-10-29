@@ -11,7 +11,7 @@ public sealed class SaveRecoveryRegressionTests
     [Fact]
     public void ConcurrentRecoveryDoesNotConsumeALivePreviousSidecar()
     {
-        using var root = new TempDirectory("bgs-live-sidecar");
+        using var root = new TestArchives.TempDirectory("bgs-live-sidecar");
         string path = Path.Combine(root.Path, "graph.hkx");
         byte[] original = { 1, 2, 3, 4 };
         byte[] replacement = { 5, 6, 7, 8 };
@@ -42,7 +42,7 @@ public sealed class SaveRecoveryRegressionTests
     [Fact]
     public void RecoveryRestoresTheNewestStalePreviousWhenTheTargetIsMissing()
     {
-        using var root = new TempDirectory("bgs-missing-target");
+        using var root = new TestArchives.TempDirectory("bgs-missing-target");
         string path = Path.Combine(root.Path, "graph.hkx");
         string older = path + "." + new string('a', 64) + "." + new string('3', 32) + ".previous";
         string newer = path + "." + new string('b', 64) + "." + new string('2', 32) + ".previous";
@@ -61,7 +61,7 @@ public sealed class SaveRecoveryRegressionTests
     [Fact]
     public void ABackupThatCannotBeRotatedDoesNotFailAnAlreadyWrittenSave()
     {
-        using var root = new TempDirectory("bgs-rotation-failure");
+        using var root = new TestArchives.TempDirectory("bgs-rotation-failure");
         string path = Path.Combine(root.Path, "graph.hkx");
         byte[] original = { 1, 2, 3, 4 };
         byte[] replacement = { 5, 6, 7, 8 };
@@ -82,7 +82,7 @@ public sealed class SaveRecoveryRegressionTests
     [Fact]
     public void RecoveryLeavesSiblingsThatAreNotGeneratedArtifactsAlone()
     {
-        using var root = new TempDirectory("bgs-foreign-siblings");
+        using var root = new TestArchives.TempDirectory("bgs-foreign-siblings");
         string path = Path.Combine(root.Path, "graph.hkx");
         File.WriteAllBytes(path, new byte[] { 1, 2, 3, 4 });
 
@@ -110,7 +110,7 @@ public sealed class SaveRecoveryRegressionTests
     [Fact]
     public void RecoveryLeavesAForeignSiblingWhenTheTargetIsMissing()
     {
-        using var root = new TempDirectory("bgs-foreign-missing-target");
+        using var root = new TestArchives.TempDirectory("bgs-foreign-missing-target");
         string path = Path.Combine(root.Path, "graph.hkx");
         string foreign = path + ".manual.previous";
         File.WriteAllBytes(foreign, new byte[] { 42 });
@@ -125,7 +125,7 @@ public sealed class SaveRecoveryRegressionTests
     [Fact]
     public void SavingAFileWhoseTargetVanishedRecoversItFirst()
     {
-        using var root = new TempDirectory("bgs-missing-target-save");
+        using var root = new TestArchives.TempDirectory("bgs-missing-target-save");
         string path = Path.Combine(root.Path, "graph.hkx");
         string previous = path + "." + new string('c', 64) + "." + new string('d', 32) + ".previous";
         byte[] abandoned = { 1, 2, 3, 4 };
@@ -136,19 +136,5 @@ public sealed class SaveRecoveryRegressionTests
 
         Assert.False(result.Committed);
         Assert.Equal(abandoned, File.ReadAllBytes(path));
-    }
-
-    private sealed class TempDirectory : IDisposable
-    {
-        public TempDirectory(string prefix) =>
-            Path = Directory.CreateTempSubdirectory(prefix).FullName;
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            try { Directory.Delete(Path, recursive: true); }
-            catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
-        }
     }
 }
