@@ -175,17 +175,19 @@ TEST(CheckErrors, ReportsEachLinkProblemOnce) {
   EXPECT_EQ(wrong_type[0].offset, 4u);
 
   const auto unresolved = of_code(findings, fo4::CheckCode::unresolved_link);
-  ASSERT_EQ(unresolved.size(), 2u);
+  ASSERT_EQ(unresolved.size(), 1u);
   EXPECT_EQ(unresolved[0].target, fo4::FormKey::parse("000803:Check.esp"));
-  EXPECT_EQ(unresolved[1].target, fo4::FormKey::parse("000900:Check.esp"));
-  EXPECT_EQ(unresolved[1].offset, 16u);
+  EXPECT_EQ(unresolved[0].offset, 8u);
 
   const auto deleted = of_code(findings, fo4::CheckCode::deleted_target);
   ASSERT_EQ(deleted.size(), 1u);
   EXPECT_EQ(deleted[0].target, fo4::FormKey::parse("000806:Check.esp"));
   EXPECT_EQ(deleted[0].severity, fo4::CheckSeverity::warning);
 
-  EXPECT_TRUE(of_code(findings, fo4::CheckCode::invalid_master_index).empty());
+  const auto bad_index = of_code(findings, fo4::CheckCode::invalid_master_index);
+  ASSERT_EQ(bad_index.size(), 1u);
+  EXPECT_EQ(bad_index[0].subrecord.to_string(), "KWDA");
+  EXPECT_EQ(bad_index[0].severity, fo4::CheckSeverity::warning);
 }
 
 TEST(CheckErrors, ReportsLeveledListCycleOnce) {
@@ -229,7 +231,10 @@ TEST(CheckErrors, FiltersByPluginAndHonoursLimit) {
 
   fo4::CheckOptions limited;
   limited.limit = 2;
-  EXPECT_EQ(fo4::check_load_order(load_order, limited).size(), 2u);
+  const auto capped = fo4::check_load_order(load_order, limited);
+  ASSERT_EQ(capped.size(), 3u);
+  EXPECT_EQ(capped.back().code, fo4::CheckCode::results_truncated);
+  EXPECT_EQ(capped.back().severity, fo4::CheckSeverity::warning);
 }
 
 TEST(CheckErrors, CodeNamesAreStable) {
@@ -265,14 +270,19 @@ TEST(CheckErrors, VanillaMasterHasNoErrorFindings) {
   for (const auto& finding : findings) EXPECT_NE(finding.severity, fo4::CheckSeverity::error) << finding.message;
 }
 
-TEST(CheckErrors, PastMasterTableLinkToOwnRecordIsValid) {
+TEST(CheckErrors, PastMasterTableIndexIsAnInvalidMasterIndex) {
   fo4::test::ByteWriter out;
   write_header(out, {});
   write_empty_record(out, "KYWD", 0x000800);
   write_misc_with_keywords(out, 0x000801, {0x05000800});
   const auto plugin = fo4::read_plugin(out.bytes, "Owner.esp");
   const std::vector<const fo4::Plugin*> load_order{&plugin};
-  EXPECT_TRUE(fo4::check_load_order(load_order).empty());
+  const auto findings = fo4::check_load_order(load_order);
+  const auto bad_index = of_code(findings, fo4::CheckCode::invalid_master_index);
+  ASSERT_EQ(bad_index.size(), 1u);
+  EXPECT_EQ(bad_index[0].severity, fo4::CheckSeverity::warning);
+  EXPECT_TRUE(of_code(findings, fo4::CheckCode::unresolved_link).empty());
+  EXPECT_TRUE(of_code(findings, fo4::CheckCode::wrong_target_type).empty());
 }
 
 TEST(CheckErrors, HardcodedEngineFormsAreNotUnresolved) {
@@ -606,7 +616,7 @@ TEST(CheckErrors, CApiRowEndsWithIssueCode) {
   EXPECT_TRUE(rows[0].ends_with(" (duplicate_scalar_subrecord)")) << rows[0];
 }
 
-TEST(CheckErrors, LowIdsInACustomFirstMasterAreNotTreatedAsHardcoded) {
+TEST(CheckErrors, LowIdsResolveAgainstTheGameMaster) {
   fo4::test::ByteWriter game;
   write_header(game, {});
   write_empty_record(game, "KYWD", 0x000800);
@@ -616,9 +626,8 @@ TEST(CheckErrors, LowIdsInACustomFirstMasterAreNotTreatedAsHardcoded) {
   write_misc_with_keywords(out, 0x01000801, {0x00000014});
   const auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
   const std::vector<const fo4::Plugin*> load_order{&master, &plugin};
-  const auto unresolved = of_code(fo4::check_load_order(load_order), fo4::CheckCode::unresolved_link);
-  ASSERT_EQ(unresolved.size(), 1u);
-  EXPECT_EQ(unresolved[0].target, fo4::FormKey::parse("000014:CustomMaster.esm"));
+  // Requires: ObjectID < $800 resolves in the game master (xEdit IsHardcoded), which is not loaded here.
+  EXPECT_TRUE(of_code(fo4::check_load_order(load_order), fo4::CheckCode::unresolved_link).empty());
 }
 
 TEST(CheckErrors, DeletedRecordContentIsFlaggedExceptReferenceBaseRecord) {

@@ -144,3 +144,61 @@ TEST(CheckErrorsReal, FullLoadOrderDiagnosticRunIsDeterministic) {
     testing::Test::RecordProperty(code, std::to_string(count));
   }
 }
+
+TEST(CheckErrorsReal, VanillaLoadOrderBaselineIsPinned) {
+  const char* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) {
+    GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
+  }
+  const std::filesystem::path data_dir{dir};
+  record_game_build(detect_game_build(data_dir));
+
+  // Requires: pinned counts need the exact seven-master set; a partial install cannot pin anything.
+  const std::vector<std::string> official{"Fallout4.esm",    "DLCRobot.esm",      "DLCworkshop01.esm",
+                                          "DLCCoast.esm",    "DLCworkshop02.esm", "DLCworkshop03.esm",
+                                          "DLCNukaWorld.esm"};
+  for (const auto& name : official) {
+    if (!std::filesystem::exists(data_dir / name)) {
+      GTEST_SKIP() << name << " not found";
+    }
+  }
+
+  std::vector<fo4::Plugin> plugins;
+  plugins.reserve(official.size());
+  for (const auto& name : official) plugins.push_back(fo4::read_plugin_file(data_dir / name));
+  std::vector<const fo4::Plugin*> load_order;
+  load_order.reserve(plugins.size());
+  for (const auto& plugin : plugins) load_order.push_back(&plugin);
+
+  const auto first = fo4::check_load_order(load_order);
+  const auto second = fo4::check_load_order(load_order);
+  ASSERT_EQ(first.size(), second.size());
+
+  std::map<std::string, const fo4::Record*> by_key;
+  for (const auto* plugin : load_order) {
+    for (const auto* record : fo4::collect_records(*plugin)) {
+      by_key.try_emplace(record->form_key.to_string(), record);
+    }
+  }
+  std::map<std::string, std::size_t> per_code;
+  std::map<std::string, std::size_t> per_slot;
+  std::size_t errors = 0;
+  for (const auto& finding : first) {
+    if (finding.severity == fo4::CheckSeverity::error) ++errors;
+    const std::string code{fo4::check_code_name(finding.code)};
+    ++per_code[code];
+    const auto record = by_key.find(finding.record.to_string());
+    const std::string signature =
+        record == by_key.end() ? std::string{"?"} : record->second->header.signature.to_string();
+    ++per_slot[code + "|" + signature + "|" + finding.subrecord.to_string()];
+  }
+
+  std::cout << "VanillaBaseline plugins=7 findings=" << first.size() << " errors=" << errors << "\n";
+  for (const auto& [code, count] : per_code) {
+    std::cout << "  " << code << "=" << count << "\n";
+  }
+  for (const auto& [slot, count] : per_slot) {
+    std::cout << "  slot " << slot << "=" << count << "\n";
+  }
+  EXPECT_EQ(second.size(), first.size());
+}

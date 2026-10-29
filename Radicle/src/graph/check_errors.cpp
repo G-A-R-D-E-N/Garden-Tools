@@ -39,6 +39,7 @@ constexpr Signature k_sig_xrfg = Signature::from_string("XRFG");
 constexpr Signature k_sig_xmsp = Signature::from_string("XMSP");
 constexpr Signature k_sig_xlcn = Signature::from_string("XLCN");
 constexpr Signature k_sig_xlkr = Signature::from_string("XLKR");
+constexpr Signature k_sig_vmad = Signature::from_string("VMAD");
 
 struct GameMasterLinkExemption {
   Signature record;
@@ -160,10 +161,17 @@ std::string join_signatures(std::span<const Signature> signatures) {
 struct FindingSink {
   std::size_t limit{0};
   std::vector<CheckFinding> findings;
+  bool truncated{false};
+  PluginKey truncated_plugin;
 
   [[nodiscard]] bool full() const noexcept { return limit != 0 && findings.size() >= limit; }
   void add(CheckFinding finding) {
-    if (!full()) findings.push_back(std::move(finding));
+    if (full()) {
+      truncated = true;
+      if (truncated_plugin.filename().empty()) truncated_plugin = finding.plugin;
+      return;
+    }
+    findings.push_back(std::move(finding));
   }
 };
 
@@ -175,9 +183,39 @@ void check_links(const Plugin& plugin,
                  const std::map<FormKey, WinnerInfo>& winners,
                  const PluginKey& game_master,
                  FindingSink& sink) {
-  for (const auto& hit : collect_form_links(plugin)) {
+  const auto context = plugin_form_id_context(plugin);
+  const auto detailed = collect_form_links_detailed(plugin);
+  for (const auto& key : detailed.unsupported_vmad_records) {
+    if (sink.full()) return;
+    CheckFinding unsupported;
+    unsupported.code = CheckCode::unsupported_vmad_property;
+    unsupported.severity = CheckSeverity::warning;
+    unsupported.plugin = plugin.key;
+    unsupported.record = key;
+    unsupported.subrecord = k_sig_vmad;
+    unsupported.message =
+        "VMAD holds properties Radicle cannot parse; links after them are unchecked";
+    sink.add(std::move(unsupported));
+  }
+  for (const auto& hit : detailed.links) {
     if (sink.full()) return;
     if (hit.raw.is_null() || hit.raw.is_none()) continue;
+
+    // Requires: an index past the master table never names a plugin.
+    if (hit.raw.index_byte() > context.masters.size()) {
+      CheckFinding finding;
+      finding.code = CheckCode::invalid_master_index;
+      finding.severity = CheckSeverity::warning;
+      finding.plugin = plugin.key;
+      finding.record = hit.record;
+      finding.subrecord = hit.subrecord;
+      finding.offset = hit.offset;
+      finding.message = hit.subrecord.to_string() + " holds master index " +
+                        std::to_string(hit.raw.index_byte()) + " which is outside " +
+                        std::string{plugin.key.filename()} + "'s master table";
+      sink.add(std::move(finding));
+      continue;
+    }
 
     CheckFinding finding;
     finding.plugin = plugin.key;
@@ -186,22 +224,21 @@ void check_links(const Plugin& plugin,
     finding.offset = hit.offset;
     finding.target = hit.key;
 
-    if (hit.key.owner().filename().empty()) {
-      finding.code = CheckCode::invalid_master_index;
-      finding.severity = CheckSeverity::warning;
-      finding.message = hit.subrecord.to_string() + " holds a form ID that does not resolve to any plugin";
-      sink.add(std::move(finding));
-      continue;
-    }
-
     const auto owner = records.find(hit.record);
     const auto slot = owner == records.end()
                           ? std::nullopt
                           : slot_targets(*owner->second, hit.subrecord, hit.subrecord_ordinal, hit.offset);
-    const auto target = winners.find(hit.key);
-    if (target == winners.end() && hit.key.owner() == game_master &&
-        hit.key.local().value() < k_first_non_hardcoded_id) {
-      continue;
+    // Requires: xEdit resolves ObjectID < $800 in the game master (masterless files null the file ID first).
+    auto target = winners.find(hit.key);
+    if (target == winners.end()) {
+      auto effective = hit.raw;
+      if (effective.local_24() < k_first_non_hardcoded_id && context.masters.empty()) {
+        effective = RawFormId{effective.local_24()};
+      }
+      if (effective.value() < k_first_non_hardcoded_id) {
+        target = winners.find(FormKey{game_master, LocalFormId{effective.local_24()}});
+        if (target == winners.end()) continue;
+      }
     }
     if (target == winners.end()) {
       if (hit.subrecord == k_sig_snam && owner != records.end() &&
@@ -234,6 +271,11 @@ void check_links(const Plugin& plugin,
       sink.add(finding);
     }
 
+    // Requires: DLBR SNAM type errors belong to check_dialogue_links (one finding, like missing).
+    if (hit.subrecord == k_sig_snam && owner != records.end() &&
+        owner->second->header.signature == k_sig_dlbr && target->second.signature != k_sig_dial) {
+      continue;
+    }
     if (!slot || slot->wildcard || slot->targets.empty()) continue;
     if (std::find(slot->targets.begin(), slot->targets.end(), target->second.signature) !=
         slot->targets.end()) {
@@ -302,10 +344,22 @@ using InfoTopics = std::map<FormKey, std::optional<FormKey>>;
 std::optional<FormKey> resolved_or_empty(RawFormId raw, const PluginFormIdContext& context) {
   if (raw.is_null() || raw.is_created()) return FormKey{};
   try {
-    return resolve_plugin_form_id(raw, context);
+    // Requires: out-of-range labels fold to the current plugin (resolve_plugin_link) so they are checked.
+    return resolve_plugin_link(raw, context);
   } catch (const FormIdError&) {
     return std::nullopt;
   }
+}
+
+bool has_null_snam(const Record& record) {
+  for (const auto& sub : record.subrecords) {
+    if (sub.signature != k_sig_snam) continue;
+    if (sub.data.size() != 4) return false;
+    std::uint32_t value = 0;
+    std::memcpy(&value, sub.data.data(), sizeof(value));
+    return RawFormId{value}.is_null();
+  }
+  return false;
 }
 
 std::optional<FormKey> stored_form_link(const Record& record, Signature subrecord,
@@ -409,7 +463,11 @@ void check_dialogue_links(const Plugin& plugin,
   for (const auto* record : collect_first_records(plugin)) {
     if (record->header.signature == k_sig_dlbr) {
       const auto start = stored_form_link(*record, k_sig_snam, context);
-      if (start && !is_loaded(*start, k_sig_dial)) {
+      // Requires: DLBR SNAM is required (xEdit SetRequired); a null link must report.
+      if (!start && has_null_snam(*record)) {
+        add(*record, CheckCode::branch_starting_topic_not_dial, CheckSeverity::error, k_sig_snam,
+            FormKey{}, "SNAM is null but a branch starting topic is required");
+      } else if (start && !is_loaded(*start, k_sig_dial)) {
         add(*record, CheckCode::branch_starting_topic_not_dial, CheckSeverity::error, k_sig_snam,
             *start, "SNAM target " + start->to_string() + " is not a loaded DIAL");
       }
@@ -444,6 +502,8 @@ std::string_view check_code_name(CheckCode code) noexcept {
     case CheckCode::internal_form_id_mismatch: return "internal_form_id_mismatch";
     case CheckCode::invalid_condition: return "invalid_condition";
     case CheckCode::injected_record: return "injected_record";
+    case CheckCode::unsupported_vmad_property: return "unsupported_vmad_property";
+    case CheckCode::results_truncated: return "results_truncated";
   }
   return "unknown";
 }
@@ -509,26 +569,13 @@ std::vector<std::vector<FormKey>> find_leveled_list_cycles(
 }
 
 std::vector<CheckFinding> check_load_order(std::span<const Plugin* const> load_order,
-                                           const CheckOptions& options) {
+                                           const CheckOptions& options,
+                                           CheckRunSummary* summary) {
   const auto winners = winning_records(load_order);
   FindingSink sink{options.limit, {}};
   const auto game_master = PluginKey::from_filename(k_game_master);
 
-  for (const auto* plugin : load_order) {
-    if (plugin == nullptr || !plugin_selected(options, plugin->key)) continue;
-    std::map<FormKey, const Record*> records;
-    for (const auto* record : collect_records(*plugin)) {
-      records.try_emplace(record->form_key, record);
-    }
-    check_links(*plugin, records, winners, game_master, sink);
-    check_dialogue_links(*plugin, winners, sink);
-    check_preflight(*plugin, sink);
-    for (auto& finding : check_record_levels(*plugin)) sink.add(std::move(finding));
-    check_conditions(*plugin, sink);
-  }
-
-  check_injected_records(load_order, options, sink);
-
+  // Requires: leveled-list cycles report before per-record findings so a limit cannot starve them.
   for (const auto& cycle : find_leveled_list_cycles(load_order)) {
     const auto member = std::find_if(cycle.begin(), cycle.end(), [&](const FormKey& key) {
       const auto it = winners.find(key);
@@ -548,6 +595,32 @@ std::vector<CheckFinding> check_load_order(std::span<const Plugin* const> load_o
     finding.message = "leveled list cycle: " + chain;
     sink.add(std::move(finding));
   }
+
+  for (const auto* plugin : load_order) {
+    if (plugin == nullptr || !plugin_selected(options, plugin->key)) continue;
+    std::map<FormKey, const Record*> records;
+    for (const auto* record : collect_records(*plugin)) {
+      records.try_emplace(record->form_key, record);
+    }
+    check_links(*plugin, records, winners, game_master, sink);
+    check_dialogue_links(*plugin, winners, sink);
+    check_preflight(*plugin, sink);
+    for (auto& finding : check_record_levels(*plugin)) sink.add(std::move(finding));
+    check_conditions(*plugin, sink);
+  }
+
+  check_injected_records(load_order, options, sink);
+
+  if (sink.truncated) {
+    CheckFinding finding;
+    finding.code = CheckCode::results_truncated;
+    finding.severity = CheckSeverity::warning;
+    finding.plugin = sink.truncated_plugin;
+    finding.message =
+        "finding limit " + std::to_string(options.limit) + " reached; results truncated";
+    sink.findings.push_back(std::move(finding));
+  }
+  if (summary != nullptr) summary->truncated = sink.truncated;
 
   return std::move(sink.findings);
 }

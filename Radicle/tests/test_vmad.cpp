@@ -587,3 +587,32 @@ TEST(Vmad, NestedStructPropertyFailsClosedInTheWalker) {
   EXPECT_EQ(collection.records_with_incomplete_vmad, 1u);
   EXPECT_TRUE(vmad_hits(plugin, fo4::FormKey::parse("000800:Patch.esp")).empty());
 }
+
+TEST(Vmad, SupportedLinksBeforeAnUnsupportedPropertyAreKept) {
+  fo4::test::ByteWriter vmad;
+  vmad.u16(5);
+  vmad.u16(2);
+  vmad.u16(1);
+  wstring(vmad, "DemoScript");
+  vmad.u8(0);
+  vmad.u16(2);
+  wstring(vmad, "Target");
+  vmad.u8(1);
+  vmad.u8(1);
+  object_v2(vmad, 0x0200009A);
+  wstring(vmad, "Anything");
+  vmad.u8(6);
+  vmad.u8(1);
+  vmad.u32(1);
+
+  const auto plugin = fo4::read_plugin(
+      plugin_with_vmad_record("ACTI", 0x03000800, vmad), "Patch.esp");
+  const auto key = fo4::FormKey::parse("000800:Patch.esp");
+  const auto collection = fo4::collect_form_links_detailed(plugin);
+  EXPECT_EQ(collection.records_with_incomplete_vmad, 1u);
+  ASSERT_EQ(collection.unsupported_vmad_records.size(), 1u);
+  EXPECT_EQ(collection.unsupported_vmad_records[0], key);
+  const auto hits = vmad_hits(plugin, key);
+  ASSERT_EQ(hits.size(), 1u);
+  EXPECT_EQ(hits[0].key, fo4::FormKey::parse("00009A:RadiationOverhaul.esp"));
+}
