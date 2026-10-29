@@ -113,6 +113,55 @@ std::vector<fo4::CheckFinding> of_code(const std::vector<fo4::CheckFinding>& fin
   return out;
 }
 
+fo4::Plugin misc_with_keyword_count(const char* name, bool with_count, std::uint32_t declared,
+                                     std::initializer_list<std::uint32_t> keywords) {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  write_empty_record(out, "KYWD", 0x000800);
+  write_empty_record(out, "KYWD", 0x000801);
+  const auto group = fo4::test::begin_group(out, "MISC", 0);
+  const auto record = fo4::test::begin_record(out, "MISC", 0, 0x000802);
+  if (with_count) {
+    fo4::test::ByteWriter ksiz;
+    ksiz.u32(declared);
+    fo4::test::write_subrecord(out, "KSIZ", ksiz.bytes);
+  }
+  fo4::test::ByteWriter kwda;
+  for (const auto keyword : keywords) kwda.u32(keyword);
+  fo4::test::write_subrecord(out, "KWDA", kwda.bytes);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return fo4::read_plugin(out.bytes, name);
+}
+
+fo4::Plugin leveled_list_with_global(const char* name, std::uint32_t form_id, std::uint32_t global) {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  write_empty_record(out, "KYWD", 0x000800);
+  const auto group = fo4::test::begin_group(out, "LVLI", 0);
+  const auto record = fo4::test::begin_record(out, "LVLI", 0, form_id);
+  fo4::test::ByteWriter lvlg;
+  lvlg.u32(global);
+  fo4::test::write_subrecord(out, "LVLG", lvlg.bytes);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return fo4::read_plugin(out.bytes, name);
+}
+
+fo4::Plugin cell_with_region(const char* name, std::uint32_t region) {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  write_empty_record(out, "KYWD", 0x000800);
+  const auto group = fo4::test::begin_group(out, "CELL", 0);
+  const auto record = fo4::test::begin_record(out, "CELL", 0, 0x000801);
+  fo4::test::ByteWriter xclr;
+  xclr.u32(region);
+  fo4::test::write_subrecord(out, "XCLR", xclr.bytes);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return fo4::read_plugin(out.bytes, name);
+}
+
 std::vector<fo4::CheckFinding> of_detail(const std::vector<fo4::CheckFinding>& findings,
                                          fo4::CheckCode code, std::string_view detail) {
   std::vector<fo4::CheckFinding> out;
@@ -184,6 +233,62 @@ TEST(CheckErrorsRecordLists, DuplicateFormListEntryIsAWarning) {
   EXPECT_TRUE(of_detail(fo4::check_load_order(clean_order), fo4::CheckCode::schema_preflight,
                         "duplicate_formlink_list_entry")
                   .empty());
+}
+
+TEST(CheckErrorsRecordLists, KeywordCountMismatchIsAnError) {
+  const auto plugin = misc_with_keyword_count("Stale.esp", true, 1, {0x000800, 0x000801});
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  const auto findings = of_detail(fo4::check_load_order(load_order),
+                                  fo4::CheckCode::schema_preflight, "keyword_count_mismatch");
+  ASSERT_EQ(findings.size(), 1u);
+  EXPECT_EQ(findings[0].record, fo4::FormKey::parse("000802:Stale.esp"));
+  EXPECT_EQ(findings[0].message, "MISC KSIZ declares 1 but holds 2 KWDA entries");
+  EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::error);
+}
+
+TEST(CheckErrorsRecordLists, MissingKeywordCountIsAnError) {
+  const auto plugin = misc_with_keyword_count("NoCount.esp", false, 0, {0x000800});
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  const auto findings = of_detail(fo4::check_load_order(load_order),
+                                  fo4::CheckCode::schema_preflight, "keyword_count_mismatch");
+  ASSERT_EQ(findings.size(), 1u);
+  EXPECT_EQ(findings[0].record, fo4::FormKey::parse("000802:NoCount.esp"));
+  EXPECT_EQ(findings[0].message, "MISC holds 1 KWDA entries but has no KSIZ subrecord");
+  EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::error);
+}
+
+TEST(CheckErrorsRecordLists, MatchingKeywordCountIsValid) {
+  const auto plugin = misc_with_keyword_count("Clean.esp", true, 2, {0x000800, 0x000801});
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  EXPECT_TRUE(of_detail(fo4::check_load_order(load_order), fo4::CheckCode::schema_preflight,
+                        "keyword_count_mismatch")
+                  .empty());
+}
+
+TEST(CheckErrorsRecordLists, UseGlobalOfTheWrongTypeIsReported) {
+  const auto plugin = leveled_list_with_global("BadGlobal.esp", 0x000801, 0x000800);
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  const auto findings = of_code(fo4::check_load_order(load_order), fo4::CheckCode::wrong_target_type);
+  ASSERT_EQ(findings.size(), 1u);
+  EXPECT_EQ(findings[0].record, fo4::FormKey::parse("000801:BadGlobal.esp"));
+  EXPECT_EQ(findings[0].target, fo4::FormKey::parse("000800:BadGlobal.esp"));
+  EXPECT_EQ(findings[0].subrecord.to_string(), "LVLG");
+  EXPECT_EQ(findings[0].message,
+            "LVLG target 000800:BadGlobal.esp is KYWD, expected one of GLOB");
+  EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::error);
+}
+
+TEST(CheckErrorsRecordLists, CellRegionOfTheWrongTypeIsReported) {
+  const auto plugin = cell_with_region("BadRegion.esp", 0x000800);
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  const auto findings = of_code(fo4::check_load_order(load_order), fo4::CheckCode::wrong_target_type);
+  ASSERT_EQ(findings.size(), 1u);
+  EXPECT_EQ(findings[0].record, fo4::FormKey::parse("000801:BadRegion.esp"));
+  EXPECT_EQ(findings[0].target, fo4::FormKey::parse("000800:BadRegion.esp"));
+  EXPECT_EQ(findings[0].subrecord.to_string(), "XCLR");
+  EXPECT_EQ(findings[0].message,
+            "XCLR target 000800:BadRegion.esp is KYWD, expected one of REGN");
+  EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::error);
 }
 
 TEST(CheckErrorsRecordLists, OutfitItemOfTheWrongTypeIsAlreadyReported) {

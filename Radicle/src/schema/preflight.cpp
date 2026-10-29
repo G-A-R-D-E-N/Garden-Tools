@@ -281,6 +281,46 @@ void form_list_duplicate_issues(const Record& record, std::vector<PreflightIssue
   }
 }
 
+// Invariant: a KSIZ counter must equal its packed KWDA entry count (quest aliases pair their own counts).
+void keyword_count_issues(const Record& record, std::vector<PreflightIssue>& issues) {
+  for (const auto& list : schema::k_generated_formlink_lists) {
+    if (list.record != record.header.signature) continue;
+    if (list.storage != schema::FormLinkListStorage::packed_array) continue;
+    if (list.counter == Signature{}) continue;
+    if (list.segment_count != 0 || list.counter_payload_size != 0) continue;
+    bool saw_count = false;
+    bool multi_count = false;
+    std::uint32_t declared = 0;
+    std::size_t bytes = 0;
+    for (const auto& subrecord : record.subrecords) {
+      if (subrecord.signature == list.counter) {
+        if (saw_count) multi_count = true;
+        saw_count = true;
+        if (subrecord.data.size() >= 4) declared = little_endian_u32(subrecord.data, 0);
+      } else if (subrecord.signature == list.subrecord) {
+        bytes += subrecord.data.size();
+      }
+    }
+    if (multi_count || bytes % 4 != 0) continue;
+    const std::size_t entries = bytes / 4;
+    const std::string prefix = record.header.signature.to_string();
+    if (!saw_count && entries > 0) {
+      issues.push_back(field_issue(
+          record, prefix + "\\" + list.counter.to_string(), "keyword_count_mismatch",
+          prefix + " holds " + std::to_string(entries) + " " + list.subrecord.to_string() +
+              " entries but has no " + list.counter.to_string() + " subrecord",
+          PreflightSeverity::error));
+    } else if (saw_count && declared != entries) {
+      issues.push_back(field_issue(
+          record, prefix + "\\" + list.counter.to_string(), "keyword_count_mismatch",
+          prefix + " " + list.counter.to_string() + " declares " + std::to_string(declared) +
+              " but holds " + std::to_string(entries) + " " + list.subrecord.to_string() +
+              " entries",
+          PreflightSeverity::error));
+    }
+  }
+}
+
 }  // namespace
 
 std::vector<PreflightIssue> preflight_record(const Record& record, bool localized) {
@@ -440,6 +480,7 @@ std::vector<PreflightIssue> preflight_record(const Record& record, bool localize
 
   leveled_list_entry_issues(record, issues);
   form_list_duplicate_issues(record, issues);
+  keyword_count_issues(record, issues);
   climate_sun_window_issues(record, issues);
   return issues;
 }
