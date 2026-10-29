@@ -9327,6 +9327,7 @@ Slot 2 of the Try is past its body_count of 2, since flags `01` give a try body 
 
 - Splits `Radicle/src/swf/swf_svg_filters.cpp:filtered_group` into an open string and a close string. The open order is style group, then `filter_defs` output, then one `<g filter>` per drawn filter with the last filter outermost. Every close is the same `</g>` line, so only the count matters.
 - `Radicle/src/swf/swf_svg_filters.cpp:filtered_group` is now `filtered_wrap` with the content in between. Its output matches the previous nesting byte for byte, which `FilteredGroupNestsFiltersInListOrderUnderTheBlendGroup` checks.
+
 ## Radicle/src/abc/edit.cpp:intern_int, Radicle/src/abc/edit.cpp:intern_uint, Radicle/src/abc/edit.cpp:intern_double, Radicle/src/abc/edit.cpp:intern_string, Radicle/src/abc/edit.cpp:intern_entry
 
 `Radicle/src/abc/edit.cpp:intern_entry` is the one linear scan behind the four value interners. Index 0 of every pool vector is the implicit default that the writer never emits (`Radicle/src/abc/abc_write.cpp:put_constant_pool` starts each table at 1), so the scan starts at 0 and a request equal to the default returns 0, which is the AVM2 meaning of that index. An empty vector receives its default first, so the appended entry lands at the index the writer will count. Appending never moves an existing index, so every other pool reference in the file stays valid after an intern.
