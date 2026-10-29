@@ -284,7 +284,7 @@ std::vector<std::byte> encode_actions_checked(const Avm1Stream& stream, Avm1Stat
 }
 
 Avm1Status validate_actions(const Avm1Stream& stream) {
-  return layout(stream).status;
+  return stream.status != Avm1Status::Ok ? stream.status : layout(stream).status;
 }
 
 }  // namespace fo4::avm1

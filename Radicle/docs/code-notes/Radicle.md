@@ -9036,6 +9036,66 @@ Bytecode is hand-derived. `u30(65535)` is `FF FF 03` and `u30(65536)` is `80 80 
 
 - Known gap, verified by reading: a native function with no body and no native id returns `NotImplemented` with `native function <name> is not bound`, unless `limits_.lenient_builtins` is set. `Radicle/src/avm2/interpreter_property.cpp:Interpreter::outer_scope_value` returns `NotImplemented` for `getouterscope` when the frame has no captured scope.
 
+## Radicle/src/swf/swf_svg_filters.cpp:filter_defs
+
+- SWF filter ids: 0 DropShadow, 1 Blur, 2 Glow, 3 Bevel, 4 GradientGlow, 5 Convolution, 6 ColorMatrix, 7 GradientBevel, as in `Radicle/src/swf/swf_placement.cpp:read_filter`. Ids 3, 4, 5 and 7 are listed in `skipped` and not drawn.
+- Each drawn filter gets its own `<filter id="<id>fl<index>">`, where index is its position in the input list. A skipped entry still takes its index, so the ids of later filters do not move.
+- Angle is radians. `read_fixed16` stores the raw value unchanged, and Ruffle's AVM2 conversion (`ruffle-0.6.0/core/src/avm2/filters.rs`, `Fixed16::from_f64(angle.to_radians())`) confirms the file stores radians. The offset is dx = distance * cos(angle) and dy = distance * sin(angle), with y pointing down. Not checked in a Flash Player.
+- Blur width becomes stdDeviation as blur / 2 per axis, x first.
+- DropShadow and Glow: flood-opacity = min(1, alpha * strength), where alpha = colour alpha / 255. The decoded colour is 0xAARRGGBB (`read_rgba` in `Radicle/src/swf/swf_placement.cpp`).
+- Inner: the source alpha is inverted with a `feComponentTransfer` table of `1 0`, then offset, blurred, flooded and clipped back to the source alpha. Outer knockout and inner knockout merge their shadow node only; see `Radicle/src/swf/swf_svg_filters.cpp:shadow_body` for the merge rules.
+- Glow has no angle or distance in the file, so it is the shadow with a zero offset.
+- Not rendered: `passes` (a single gaussian stands in for the multi-pass blur), bevel, gradient glow, gradient bevel and convolution.
+- ColorMatrix: the 20 values are row-major. The offset column (5th, 10th, 15th, 20th) is divided by 255 to match the unit range of the colour-transform offsets in `Radicle/src/swf/swf_frame_svg.cpp:color_matrix_text`. Not checked in a Flash Player.
+
+## Radicle/src/swf/swf_svg_filters.cpp:shadow_body
+
+- The merge follows the flags on the filter, read from the SWF flags byte in `Radicle/src/swf/swf_placement.cpp:read_filter_flags`. Outer knockout merges `k`, which is the shadow with the source alpha cut out (`feComposite operator="out"`), and drops SourceGraphic. Inner knockout merges `i` alone. Knockout ignores composite_source.
+- composite_source (bit 0x20) is the inverse of Flash's hideObject. When it is clear and there is no knockout, the merge is the shadow alone (`s` outer, `i` inner), with no SourceGraphic. Ruffle maps it the same way (`ruffle-0.6.0/core/src/avm2/filters.rs`, COMPOSITE_SOURCE set when `!hide_object`). Its glow shader (`ruffle-0.6.0/render/wgpu/shaders/filter/glow.wgsl`) also drops the source in that case.
+- Strength multiplies the flood alpha before the blur, in `opacity_text`, so a blurred shadow peaks below the flat alpha. Ruffle's glow shader applies strength after the blur (`saturate(blur * strength)`), so the edge profile differs here. Not matched, and not checked in a Flash Player.
+
+## Radicle/src/swf/swf_svg_filters.cpp:deviation_text
+
+- Blur is one gaussian with stdDeviation = blur / 2 per axis. The factor 2 is a calibration to the quality 3 spread, not measured against Flash.
+- `passes`, the quality field of the filter flags, is not honoured. Ruffle loops over `num_passes()` in `ruffle-0.6.0/render/wgpu/src/filters/blur.rs`, so quality 0 and other values draw differently here.
+
+## Radicle/src/swf/swf_svg_filters.cpp:blend_mode_style
+
+- SWF BlendMode numbering is 0 Normal, 1 Normal, 2 Layer, 3 Multiply, 4 Screen, 5 Lighten, 6 Darken, 7 Difference, 8 Add, 9 Subtract, 10 Invert, 11 Alpha, 12 Erase, 13 Overlay, 14 HardLight. It matches the name table in `Radicle/src/avm2/display.cpp:blend_mode_name`.
+- Normal returns empty because it needs no declaration. Layer returns empty because it is an isolation flag that this renderer does not draw.
+- Add maps to `plus-lighter`, which is CSS Compositing Level 2 and not supported by every browser. Subtract, Invert, Alpha and Erase have no CSS equivalent and return empty.
+
+## Radicle/src/swf/swf_svg_filters.cpp:filtered_group
+
+- Filters apply in list order, so the first filter is the innermost group and the blend group is outermost. An empty filter list with Normal blend returns the content unchanged, which keeps movies without filters byte-identical.
+- Sprite rows are not wrapped. A sprite's children are flattened into the frame list, so a filter or blend on a sprite row has no group to attach to. Shape, button and text rows are wrapped.
+- `frame_to_svg` has no output for `skipped`, so unsupported filters are dropped without a report. Callers that need the list use `filter_defs` directly.
+
+## Radicle/src/swf/swf_display.cpp:replay
+
+- Filters and blend mode carry the same move rule as the colour transform. A PlaceObject3 with the filter flag replaces the list, and an empty list clears it. A move without the flag keeps the previous list. Blend mode keeps its previous value when absent.
+
+## Radicle/src/swf/swf_frame_svg.cpp:frame_body (filters)
+
+- The filter and blend wrap runs after the colour-transform wrap and before the clip-mask wrap. A mask therefore clips the filtered output.
+- The colour transform is applied inside the filter. Its group is the content the filter wraps, so the filter sees transformed colours. The Flash order is not checked.
+- mix-blend-mode has no stage backdrop here. A blend group composites only with the siblings painted before it in its parent. A mask wraps it in a clip-path group, which is isolated, so under a mask the blend sees only the masked content and not the stage. Not checked in a Flash Player.
+
+## Radicle/tests/test_swf_svg_buttons.cpp:SwfSvgFilters
+
+- `DropShadowShiftsByAngleAndHalvesBlurIntoStdDeviation`: a regression that reads the angle as degrees, swaps dx and dy, skips the halving of blur, or writes stdDeviation y-first. The fixtures are angle pi/4 with blur 8 by 4, which gives dx = dy = 7.071068 and stdDeviation "4 2".
+- `KnockoutDropShadowMergesOnlyTheShadow` (`Radicle/src/swf/swf_svg_filters.cpp:shadow_body`): a regression that ignores the knockout flag and keeps SourceGraphic in the merge, or merges the uncut shadow `s` so the source area is not cut out. The expected tail is the `k` node from the out-composite.
+- `ClearCompositeSourceDropsTheSourceFromTheMerge` (`Radicle/src/swf/swf_svg_filters.cpp:shadow_body`): a regression that keeps SourceGraphic when composite_source is clear (Flash hideObject), for a drop shadow or an inner glow.
+- `InnerGlowClipsItsShadowToTheSourceAndKeepsTheSource`: a regression that drops the inner flag, so the shadow is drawn outside the shape or the source is lost.
+- `BlurHalvesEachAxisInOrder`: a regression that leaves stdDeviation unhalved or puts the axes in the wrong order. The fixture is blur 6 by 2, which must give "3 1".
+- `ColorMatrixKeepsTwentyValuesAndScalesOffsetsToUnit`: a regression that drops a value or leaves an offset at 51 instead of 0.2.
+- `UnsupportedFiltersAreSkippedAndKeepTheirIndexedIds`: a regression that draws bevel, convolution or gradient filters as blank output, or renumbers later ids after a skip.
+- `BlendModeTableMapsCssValuesAndRefusesTheRest`: a regression with an off-by-one in the SWF numbering (for example Overlay and HardLight swapped), or one that emits a CSS value for Erase or Subtract.
+- `FilteredGroupNestsFiltersInListOrderUnderTheBlendGroup`: a regression that applies filters in reverse order or puts the blend group inside the filter groups.
+- `PlacedShapeWithDropShadowWrapsItsGroupInTheShadowFilter`: a regression that loses the filter list between `read_swf`, `build_display_list` and `frame_to_svg`.
+- `PlainPlacementIsByteIdenticalToTheUnfilteredGroup`: a regression that emits an empty `<defs>` or a wrapper group for a placement with no filter or blend.
+- `PlacedBlendModeWrapsTheGroupInItsStyle`: a regression that drops the blend mode in the display replay.
+
 ## Radicle/src/papyrus/body_expression.cpp:BodyEmitter::emitShortCircuit
 
 - Bug, fixed: when the destination is a named variable that the right operand reads, the first `cast` overwrote it before the right operand was read. `abLeft = abRight && abLeft` emitted `cast abLeft abLeft` on the right path, so the result was true where it must be false. The aliased case now evaluates into a fresh temp, skips with `jmpf`/`jmpt` on that temp, and copies it to the destination with `assign` after the jump target. `||` takes the same path with `jmpt`.
@@ -9097,7 +9157,7 @@ Bytecode is hand-derived. `u30(65535)` is `FF FF 03` and `u30(65536)` is `80 80 
 
 - `UnsupportedOpcodeIsRefusedByName` used GetProperty 0x22, which is a timeline op now. It uses CloneSprite 0x24 (`Radicle/src/avm1/opcodes.cpp:action_mnemonic` name table; no `case 0x24` in `Radicle/src/avm1/interpreter.cpp:execute_action`). No other `test_avm1*.cpp` test refuses 0x22, 0x23, 0x04, 0x05, 0x06, 0x07, 0x81 or 0x8C.
 
-## Radicle/tests/test_avm1_control.cpp:Avm1Timeline
+## Radicle/tests/test_avm1_timeline.cpp:Avm1Timeline
 
 Bytes are hand-derived from `rec` in this file: one code byte, a u16 length for codes 0x80 and up, then the payload. Push values are `00` string, `06` double, `07` int32.
 
@@ -9200,31 +9260,31 @@ A value that is a number, or a string that `text_ops::parse_number` reads in ful
 
 The 0x9F case reads the payload that `Radicle/src/avm1/decode.cpp:Decoder::payload` built. The decoder reads the flags byte and then a u16 scene bias only when flags bit value 2 is set, which matches Ruffle's `swf/src/avm1/read.rs:read_goto_frame_2`, so decoding is unchanged. The play flag is bit value 1 (`flags & 1`), the bit Ruffle reads as `set_playing`. Without a host the case is not reached and the opcode falls to `control_ops::execute`, which still refuses it by name.
 
-## Radicle/tests/test_avm1_control.cpp:run_goto_frame_2
+## Radicle/tests/test_avm1_timeline.cpp:run_goto_frame_2
 
-`Radicle/tests/test_avm1_control.cpp:run_goto_frame_2` is the helper for the GotoFrame2 tests. It pushes the sentinel 7 and then the target, runs the opcode with the given flags record, and checks that the run is ok and that the trace is `7`. A GotoFrame2 that leaves its operand on the stack shows the target's text in the trace instead of 7, so every case also checks the pop through `result.trace`.
+`Radicle/tests/test_avm1_timeline.cpp:run_goto_frame_2` is the helper for the GotoFrame2 tests. It pushes the sentinel 7 and then the target, runs the opcode with the given flags record, and checks that the run is ok and that the trace is `7`. A GotoFrame2 that leaves its operand on the stack shows the target's text in the trace instead of 7, so every case also checks the pop through `result.trace`.
 
-## Radicle/tests/test_avm1_control.cpp:GotoFrame2NumericWithPlayPlaysBeforeTheGoto
+## Radicle/tests/test_avm1_timeline.cpp:GotoFrame2NumericWithPlayPlaysBeforeTheGoto
 
-`Radicle/tests/test_avm1_control.cpp:GotoFrame2NumericWithPlayPlaysBeforeTheGoto` runs numeric 5 with flags `01`, which gives `play`, then `goto 5`. Detects a GotoFrame2 that calls stop for the play bit, or that calls goto before play, which the call order would show.
+`Radicle/tests/test_avm1_timeline.cpp:GotoFrame2NumericWithPlayPlaysBeforeTheGoto` runs numeric 5 with flags `01`, which gives `play`, then `goto 5`. Detects a GotoFrame2 that calls stop for the play bit, or that calls goto before play, which the call order would show.
 
-## Radicle/tests/test_avm1_control.cpp:GotoFrame2NumericWithoutPlayStopsAndAddsSceneBias
+## Radicle/tests/test_avm1_timeline.cpp:GotoFrame2NumericWithoutPlayStopsAndAddsSceneBias
 
-`Radicle/tests/test_avm1_control.cpp:GotoFrame2NumericWithoutPlayStopsAndAddsSceneBias` runs numeric 5 with flags `02 02 00` (the bias bit set and a u16 bias of 2), which gives `stop`, then `goto 7`. Detects a GotoFrame2 that ignores the scene bias field, which would go to 5, and one that plays when the play bit is clear.
+`Radicle/tests/test_avm1_timeline.cpp:GotoFrame2NumericWithoutPlayStopsAndAddsSceneBias` runs numeric 5 with flags `02 02 00` (the bias bit set and a u16 bias of 2), which gives `stop`, then `goto 7`. Detects a GotoFrame2 that ignores the scene bias field, which would go to 5, and one that plays when the play bit is clear.
 
-## Radicle/tests/test_avm1_control.cpp:GotoFrame2LabelJumpsToItsFrame
+## Radicle/tests/test_avm1_timeline.cpp:GotoFrame2LabelJumpsToItsFrame
 
-`Radicle/tests/test_avm1_control.cpp:GotoFrame2LabelJumpsToItsFrame` runs text `intro`, with the host label map holding `intro` at frame 3, and flags `01`, which gives `label intro`, `play`, `goto 3`. Detects a label operand that is parsed as a number (giving frame 0 and no jump), or a label that jumps without a `frame_for_label` lookup.
+`Radicle/tests/test_avm1_timeline.cpp:GotoFrame2LabelJumpsToItsFrame` runs text `intro`, with the host label map holding `intro` at frame 3, and flags `01`, which gives `label intro`, `play`, `goto 3`. Detects a label operand that is parsed as a number (giving frame 0 and no jump), or a label that jumps without a `frame_for_label` lookup.
 
-## Radicle/tests/test_avm1_control.cpp:GotoFrame2UnknownLabelIsANoOp
+## Radicle/tests/test_avm1_timeline.cpp:GotoFrame2UnknownLabelIsANoOp
 
-`Radicle/tests/test_avm1_control.cpp:GotoFrame2UnknownLabelIsANoOp` runs text `missing`, which gives only `label missing`. Detects an unknown label that calls goto 0 or plays and stops the timeline, which would change the playback state of a movie whose label is absent.
+`Radicle/tests/test_avm1_timeline.cpp:GotoFrame2UnknownLabelIsANoOp` runs text `missing`, which gives only `label missing`. Detects an unknown label that calls goto 0 or plays and stops the timeline, which would change the playback state of a movie whose label is absent.
 
-## Radicle/tests/test_avm1_control.cpp:GotoFrame2ResolvesOnlyTheLabelAfterATargetPath
+## Radicle/tests/test_avm1_timeline.cpp:GotoFrame2ResolvesOnlyTheLabelAfterATargetPath
 
-`Radicle/tests/test_avm1_control.cpp:GotoFrame2ResolvesOnlyTheLabelAfterATargetPath` runs text `clip:intro` with the label map holding `intro` at 3, which gives `label intro`, `play`, `goto 3`, with no lookup of `clip:intro`. Detects a path-prefixed label that is searched whole, which misses the label and leaves the timeline where it was.
+`Radicle/tests/test_avm1_timeline.cpp:GotoFrame2ResolvesOnlyTheLabelAfterATargetPath` runs text `clip:intro` with the label map holding `intro` at 3, which gives `label intro`, `play`, `goto 3`, with no lookup of `clip:intro`. Detects a path-prefixed label that is searched whole, which misses the label and leaves the timeline where it was.
 
-## Radicle/tests/test_avm1_control.cpp:TimelineOpcodesAreRefusedByNameWithoutAHost
+## Radicle/tests/test_avm1_timeline.cpp:TimelineOpcodesAreRefusedByNameWithoutAHost
 
 The table gains a GotoFrame2 row, `rec(0x9F, {0x01})` expecting `GotoFrame2 (0x9F)`. Detects a GotoFrame2 that runs with no host, or that refuses under the wrong name, since `Radicle/src/avm1/interpreter.cpp` formats the refusal as the name plus the opcode.
 
@@ -9271,3 +9331,26 @@ This parent walk has its own hop limit (`guard`, 64), so a cyclic `extends` cann
 ## Radicle/include/fo4/papyrus/diagnostic.hpp:DiagnosticCode
 
 `DiagnosticCode::InheritanceCycle` maps to PAP0021, the first unused code after PAP0020 in the declaration range. The C# mirror `PluginEditTool/FO4RecordEditor.Core/Services/Papyrus/PapyrusDiagnostic.cs` does not carry PAP0021 yet, so the header's parity comment is not met until it does.
+## Radicle/src/avm1/encode.cpp:validate_actions
+
+When the decode that built the stream did not end Ok, `validate_actions` returns `stream.status`. `Radicle/src/avm1/decode.cpp:Decoder::run` clears `actions` on failure, so `layout` alone walked an empty list and reported Ok. The same rule as `encode_actions_checked` now applies here, and the layout status is still used for a stream whose decode was Ok. The earlier `encode_actions_checked` note above says this function was left unchanged; that is no longer true. The callers are the tests in `Radicle/tests/test_avm1_encode.cpp`. The C ABI `radicle_swf_avm1_disassemble` in `Radicle/src/c_api_swf.cpp` uses `decode_actions` and `disassemble_actions`, so it does not call this function.
+
+## Radicle/tests/test_avm1_encode.cpp:ValidateReturnsTheDecodeStatusForAFailedDecode
+
+Input `81 01 00 00` is a GotoFrame record declaring 1 byte of payload, but its frame field needs 2. `Decoder::read16` fails with Truncated at offset 3, and `Decoder::run` clears the list. Expected Truncated. Detects `validate_actions` reading the cleared list and reporting Ok for a stream whose body was cut short.
+
+## Radicle/tests/test_avm1_encode.cpp:ValidateReturnsOkForAValidDecodedStream
+
+`kJumpOverPlayAndStop` decodes Ok and has no edits, so `validate_actions` must return Ok. Detects a decode-status check that refuses a valid stream, for example one that compares against the wrong status.
+
+## Radicle/tests/test_avm1_encode.cpp:ValidateReportsBranchUnresolvedAfterTheTargetIsErased
+
+The branch in `kJumpOverPlayAndStop` targets offset 7, the Stop record at index 3. Erasing index 3 leaves the End record at new offset 7, but no surviving record has original offset 7, and 7 is not the original end 9. Expected BranchUnresolved. Detects a status check that returns the decode status for an edited stream and skips the layout branch check.
+
+## Radicle/tests/test_avm1_timeline.cpp:GotoFrame2NumericZeroIsANoOp
+
+`Radicle/tests/test_avm1_timeline.cpp:GotoFrame2NumericZeroIsANoOp` runs numeric 0 with flags `01`. `Radicle/src/avm1/timeline_ops.cpp:goto_frame_2` reads the frame as 0, adds the scene bias of 0, and returns before any play, stop or goto, so the host sees no calls. Detects a GotoFrame2 that plays or stops for a zero frame, or that sends goto 0 to the host.
+
+## Radicle/tests/test_avm1_timeline.cpp:GotoFrame2LabelWithoutPlayStopsAndAddsSceneBias
+
+`Radicle/tests/test_avm1_timeline.cpp:GotoFrame2LabelWithoutPlayStopsAndAddsSceneBias` runs text `intro`, with the label map holding `intro` at frame 3, and flags `02 02 00`, which set the scene bias bit and the play bit clear, with a u16 bias of 2. `Radicle/src/avm1/timeline_ops.cpp:goto_frame_2` looks the label up first, then adds the bias, giving frame 5. The clear play bit calls stop, so the calls are `label intro`, `stop`, `goto 5`. Detects a label jump that skips the scene bias, which would go to 3, and one that plays when the play bit is clear.
