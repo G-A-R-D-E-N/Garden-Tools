@@ -1,5 +1,6 @@
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using BehaviourStudio.Tools.Export;
 using OpenCommonwealth.Services.Hkx;
@@ -636,7 +637,6 @@ public sealed class ExportGraphPlanTests
         Assert.Contains(plan.Warnings, warning => warning.Contains("'998'", StringComparison.Ordinal));
     }
 
-    // Regression: a generator chain far deeper than the depth cap must stop as a gap, not overflow the stack and kill the run.
     [Fact]
     public void ADeepGeneratorChainStopsAtTheDepthLimitAsAGap()
     {
@@ -683,7 +683,7 @@ public sealed class ExportGraphPlanTests
         Assert.Equal("plan depth limit reached", node.Detail);
         Assert.Equal(1, plan.GapCount("plan-depth-limit"));
 
-        var document = JsonNode.Parse(GraphExport.Json(plan, "deep.hkx"))!.AsObject();
+        var document = JsonNode.Parse(GraphExport.Json(plan, "deep.hkx"), null, new JsonDocumentOptions { MaxDepth = 1024 })!.AsObject();
         Assert.Contains("plan-depth-limit", document["gaps"]!.ToJsonString(), StringComparison.Ordinal);
     }
 }

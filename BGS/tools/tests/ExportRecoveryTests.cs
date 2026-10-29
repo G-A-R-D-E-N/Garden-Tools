@@ -33,7 +33,6 @@ public sealed class ExportRecoveryTests
         Assert.Equal(2, Program.Run(new[] { "--out", output, input }, TextWriter.Null, TextWriter.Null));
     }
 
-    // Regression: an --out whose value is another option must be a usage error, not a directory named after that option.
     [Fact]
     public void AnOptionCannotBeConsumedAsTheOutValue()
     {
