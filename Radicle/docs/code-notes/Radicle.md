@@ -9187,6 +9187,7 @@ Hand-built: a DefineFunction with body_records 2, followed by NextFrame and Play
 ## Radicle/src/swf/swf_sound.cpp:decode_sound_stream_head
 
 `Radicle/src/swf/swf_sound.cpp:decode_sound_stream_head` keeps the top nibble of the playback byte as `reserved` and does not refuse it, although Ruffle validates it as a format. The stream byte's compression nibble is refused as `unknown_compression` when outside Ruffle's set. When compression is 2 (MP3), a missing i16 latency returns `truncated`. Ruffle instead defaults the latency to 0, but `Radicle/src/swf/swf_tags.cpp:decode_tag_payload` refuses the same payload, so this decoder matches the module.
+
 ## Radicle/src/avm1/timeline_ops.cpp:goto_frame_2
 
 `Radicle/src/avm1/timeline_ops.cpp:goto_frame_2` follows Ruffle 0.6.0 `core/src/avm1/activation.rs:action_goto_frame_2`, which passes the popped value and the scene offset to `core/src/avm1/globals/movie_clip.rs:goto_frame`. Unlike the 0-based GotoFrame operand (0x81, which adds 1 in `Radicle/src/avm1/timeline_ops.cpp:execute`), the GotoFrame2 operand is already 1-based, so it reaches `goto_frame` unchanged. A `:` anywhere in the operand's text drops everything through the first colon. Ruffle resolves that prefix as a variable path against the clip; this host has one timeline, so the prefix is popped and ignored and only the label after it is searched. That is a deliberate deviation.
