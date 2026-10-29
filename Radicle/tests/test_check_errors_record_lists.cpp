@@ -149,6 +149,19 @@ fo4::Plugin leveled_list_with_duplicate_count(const char* name) {
   return fo4::read_plugin(out.bytes, name);
 }
 
+fo4::Plugin leveled_list_with_raw_llct(const char* name, std::vector<std::byte> payload) {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  write_empty_record(out, "KYWD", 0x000800);
+  const auto group = fo4::test::begin_group(out, "LVLI", 0);
+  const auto record = fo4::test::begin_record(out, "LVLI", 0, 0x000801);
+  fo4::test::write_subrecord(out, "LLCT", payload);
+  write_lvlo(out, 0x000800);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return fo4::read_plugin(out.bytes, name);
+}
+
 fo4::Plugin misc_with_duplicate_counts(const char* name) {
   fo4::test::ByteWriter out;
   write_header(out, {});
@@ -256,6 +269,31 @@ TEST(CheckErrorsRecordLists, DuplicateLeveledListCountIsAnError) {
   EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::error);
 }
 
+TEST(CheckErrorsRecordLists, EmptyLeveledListCountIsAnError) {
+  const auto plugin = leveled_list_with_raw_llct("EmptyCount.esp", {});
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  const auto findings = of_detail(fo4::check_load_order(load_order),
+                                  fo4::CheckCode::schema_preflight, "leveled_list_count_mismatch");
+  ASSERT_EQ(findings.size(), 1u);
+  EXPECT_EQ(findings[0].record, fo4::FormKey::parse("000801:EmptyCount.esp"));
+  EXPECT_EQ(findings[0].message,
+            "LVLI\\LLCT: LVLI LLCT holds 0 bytes but the decoder requires exactly one");
+  EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::error);
+}
+
+TEST(CheckErrorsRecordLists, OversizedLeveledListCountIsAnError) {
+  const auto plugin = leveled_list_with_raw_llct(
+      "WideCount.esp", {std::byte{1}, std::byte{0}});
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  const auto findings = of_detail(fo4::check_load_order(load_order),
+                                  fo4::CheckCode::schema_preflight, "leveled_list_count_mismatch");
+  ASSERT_EQ(findings.size(), 1u);
+  EXPECT_EQ(findings[0].record, fo4::FormKey::parse("000801:WideCount.esp"));
+  EXPECT_EQ(findings[0].message,
+            "LVLI\\LLCT: LVLI LLCT holds 2 bytes but the decoder requires exactly one");
+  EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::error);
+}
+
 TEST(CheckErrorsRecordLists, BareLeveledListWithMatchingCountIsValid) {
   const auto plugin = leveled_list_plugin("Bare.esp", 0x000801, true, 1, {0x000800});
   const std::vector<const fo4::Plugin*> load_order{&plugin};
@@ -326,7 +364,7 @@ TEST(CheckErrorsRecordLists, DuplicateFormListEntryIsAWarning) {
                                   fo4::CheckCode::schema_preflight, "duplicate_formlink_list_entry");
   ASSERT_EQ(findings.size(), 1u);
   EXPECT_EQ(findings[0].record, fo4::FormKey::parse("000801:Dup.esp"));
-  EXPECT_EQ(findings[0].message, "FLST\\LNAM[1]: FLST repeats LNAM entry 00000800, which the game counts twice");
+  EXPECT_EQ(findings[0].message, "FLST\\LNAM[1]: FLST repeats LNAM entry 00000800");
   EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::warning);
 
   const auto clean = form_list_plugin("Clean.esp", {0x000800});

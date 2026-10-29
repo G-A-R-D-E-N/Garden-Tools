@@ -232,8 +232,7 @@ void leveled_list_entry_issues(const Record& record, std::vector<PreflightIssue>
   std::size_t entries = 0;
   for (const auto& subrecord : record.subrecords) {
     if (subrecord.signature != lvlo) continue;
-    // Invariant: an LVLO entry must name an item (offset 4 holds the Form-ID, which must be non-null).
-    // Malformed LVLO storage is decoder-domain (decode_lvlo requires exactly 12 bytes); the entry still counts toward LLCT coupling.
+    // Invariant: offset 4 of LVLO holds the target Form-ID.
     if (subrecord.data.size() >= 8 && little_endian_u32(subrecord.data, 4) == 0) {
       issues.push_back(field_issue(record, prefix + "\\LVLO[" + std::to_string(entries) + "]",
                                    "leveled_list_null_entry",
@@ -244,14 +243,24 @@ void leveled_list_entry_issues(const Record& record, std::vector<PreflightIssue>
   }
   bool saw_count = false;
   std::size_t llct_count = 0;
+  std::size_t llct_size = 0;
   std::uint8_t declared = 0;
   for (const auto& subrecord : record.subrecords) {
     if (subrecord.signature != Signature::from_string("LLCT")) continue;
     saw_count = true;
     ++llct_count;
+    if (llct_count == 1) llct_size = subrecord.data.size();
     if (!subrecord.data.empty()) declared = std::to_integer<std::uint8_t>(subrecord.data[0]);
   }
-  // Requires: the edit path requires exactly one LLCT (decode_leveled_list require_once), so a duplicate counter is itself an error.
+  // Requires: exactly one single-byte LLCT (decode_leveled_list require_once/read_single_byte).
+  if (llct_count == 1 && llct_size != 1) {
+    issues.push_back(field_issue(
+        record, prefix + "\\LLCT", "leveled_list_count_mismatch",
+        prefix + " LLCT holds " + std::to_string(llct_size) +
+            " bytes but the decoder requires exactly one",
+        PreflightSeverity::error));
+    return;
+  }
   if (llct_count > 1) {
     issues.push_back(field_issue(
         record, prefix + "\\LLCT", "leveled_list_count_mismatch",
@@ -260,7 +269,7 @@ void leveled_list_entry_issues(const Record& record, std::vector<PreflightIssue>
         PreflightSeverity::error));
     return;
   }
-  // Descope: file format requires no OBND/LVLD/LVLF presence since authoring minimum:1 rows carry defaults that fill omission (vanilla proof in notes).
+  // Invariant: OBND/LVLD/LVLF omission is allowed (defaults fill it; proof in notes).
   if (!saw_count && entries > 0) {
     issues.push_back(field_issue(record, prefix + "\\LLCT", "leveled_list_count_mismatch",
                                  prefix + " holds " + std::to_string(entries) +
@@ -275,7 +284,7 @@ void leveled_list_entry_issues(const Record& record, std::vector<PreflightIssue>
   }
 }
 
-// Invariant: one FLST must not repeat the same LNAM key (a repeated key double-counts the entry).
+// Invariant: one FLST must not repeat the same LNAM key.
 void form_list_duplicate_issues(const Record& record, std::vector<PreflightIssue>& issues) {
   if (record.header.signature != Signature::from_string("FLST")) return;
   std::set<std::uint32_t> seen;
@@ -283,20 +292,19 @@ void form_list_duplicate_issues(const Record& record, std::vector<PreflightIssue
   for (const auto& subrecord : record.subrecords) {
     if (subrecord.signature != Signature::from_string("LNAM")) continue;
     const std::size_t index = ordinal++;
-    // Requires: non-4-byte LNAM storage is invalid_formlink_list_storage domain (the generic per-subrecord loop covers it).
+    // Requires: non-4-byte LNAM storage belongs to invalid_formlink_list_storage.
     if (subrecord.data.size() != 4) continue;
     const auto key = little_endian_u32(subrecord.data, 0);
-    // Invariant: null LNAM is an empty slot in a wildcard-target list, unlike LVLO null which decode_lvlo refuses.
+    // Invariant: null LNAM is an empty slot (wildcard-target list).
     if (key == 0 || seen.insert(key).second) continue;
     issues.push_back(field_issue(record, "FLST\\LNAM[" + std::to_string(index) + "]",
                                  "duplicate_formlink_list_entry",
-                                 "FLST repeats LNAM entry " + hex_byte_string(key) +
-                                     ", which the game counts twice",
+                                 "FLST repeats LNAM entry " + hex_byte_string(key),
                                  PreflightSeverity::warning));
   }
 }
 
-// Invariant: a KSIZ counter must equal its packed KWDA entry count (quest aliases pair their own counts).
+// Invariant: a KSIZ counter must equal its packed KWDA entry count.
 void keyword_count_issues(const Record& record, std::vector<PreflightIssue>& issues) {
   for (const auto& list : schema::k_generated_formlink_lists) {
     if (list.record != record.header.signature) continue;
@@ -317,7 +325,7 @@ void keyword_count_issues(const Record& record, std::vector<PreflightIssue>& iss
       }
     }
     const std::string prefix = record.header.signature.to_string();
-    // Requires: a malformed packed array is invalid_formlink_list_storage domain (the generic packed loop covers it).
+    // Requires: a malformed packed array belongs to invalid_formlink_list_storage.
     if (bytes % 4 != 0) continue;
     // Invariant: one packed list has one counter and one packed array.
     if (counters > 1) {
