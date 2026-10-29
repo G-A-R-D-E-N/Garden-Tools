@@ -9251,3 +9251,19 @@ Slot 2 of the Try is past its body_count of 2, since flags `01` give a try body 
 ## Radicle/tests/test_avm1_encode.cpp:InsertIntoABodyRefusesARecordThatIsNotAContainer
 
 `Radicle/src/avm1/edit.cpp:insert_action_into_body` is called on NextFrame at container 2. NextFrame has no body, so its body_count is 0 and every slot is out of range. Index 3 is the position the range check would accept without the guard: body_start is 3 and the count is 0. Expected false and no change. Detects a missing container check that writes into the hidden `body_records` of a plain record.
+
+## Radicle/src/avm1/encode.cpp:validate_actions
+
+When the decode that built the stream did not end Ok, `validate_actions` returns `stream.status`. `Radicle/src/avm1/decode.cpp:Decoder::run` clears `actions` on failure, so `layout` alone walked an empty list and reported Ok. The same rule as `encode_actions_checked` now applies here, and the layout status is still used for a stream whose decode was Ok. The earlier `encode_actions_checked` note above says this function was left unchanged; that is no longer true. The callers are the tests in `Radicle/tests/test_avm1_encode.cpp`. The C ABI `radicle_swf_avm1_disassemble` in `Radicle/src/c_api_swf.cpp` uses `decode_actions` and `disassemble_actions`, so it does not call this function.
+
+## Radicle/tests/test_avm1_encode.cpp:ValidateReturnsTheDecodeStatusForAFailedDecode
+
+Input `81 01 00 00` is a GotoFrame record declaring 1 byte of payload, but its frame field needs 2. `Decoder::read16` fails with Truncated at offset 3, and `Decoder::run` clears the list. Expected Truncated. Detects `validate_actions` reading the cleared list and reporting Ok for a stream whose body was cut short.
+
+## Radicle/tests/test_avm1_encode.cpp:ValidateReturnsOkForAValidDecodedStream
+
+`kJumpOverPlayAndStop` decodes Ok and has no edits, so `validate_actions` must return Ok. Detects a decode-status check that refuses a valid stream, for example one that compares against the wrong status.
+
+## Radicle/tests/test_avm1_encode.cpp:ValidateReportsBranchUnresolvedAfterTheTargetIsErased
+
+The branch in `kJumpOverPlayAndStop` targets offset 7, the Stop record at index 3. Erasing index 3 leaves the End record at new offset 7, but no surviving record has original offset 7, and 7 is not the original end 9. Expected BranchUnresolved. Detects a status check that returns the decode status for an edited stream and skips the layout branch check.
