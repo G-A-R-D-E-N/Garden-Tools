@@ -36,7 +36,7 @@ SwfHandle open(const std::vector<std::byte>& bytes) {
 }
 
 std::vector<std::byte> sound_movie() {
-  return swf_test::movie_of(1, {{14, bytes_of({0x07, 0x00, 0x0F, 0x01, 0x00, 0x00, 0x00, 0xAA})},
+  return swf_test::movie_of(1, {{14, bytes_of({0x07, 0x00, 0x07, 0x01, 0x00, 0x00, 0x00, 0xAA})},
                                  {15, bytes_of({0x07, 0x00, 0x00})}});
 }
 
