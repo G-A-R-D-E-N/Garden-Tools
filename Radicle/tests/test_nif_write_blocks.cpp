@@ -81,13 +81,13 @@ TEST(NifWriteBlocks, LightingFlagsAreSetFromReadSideNames) {
   // Invariant: a flag rename on either side would set a different bit than the reader reports
   const auto nif = read_nif(lighting_nif(nif_build::LightingFields{}));
   const std::vector<Edit> edits{
-      Edit{k_shape, "shaderFlags", names({"Specular", "TwoSided", "Refraction_Writes_Depth"})}};
+      Edit{k_shape, "shaderFlags", names({"Specular", "Double_Sided", "Refraction_Writes_Depth"})}};
   const auto out = read_nif(apply_edits(nif, edits));
   const auto flags = fo4::nif::read_lighting_shader(out, 2).flags;
   EXPECT_EQ(flags.word1, 0x1U);
   EXPECT_EQ(flags.word2, 0x80000010U);
   EXPECT_EQ(fo4::nif::shader_flag_names(flags),
-            (std::vector<std::string>{"Specular", "TwoSided", "Refraction_Writes_Depth"}));
+            (std::vector<std::string>{"Specular", "Double_Sided", "Refraction_Writes_Depth"}));
   EXPECT_FLOAT_EQ(fo4::nif::read_lighting_shader(out, 2).smoothness,
                   nif_build::LightingFields{}.smoothness);
   expect_rejected(nif, Edit{k_shape, "shaderFlags", names({"NoSuchFlag"})});
@@ -235,7 +235,7 @@ TEST(NifWriteBlocks, JsonEditsCarryFlagNamesAndRejectUnusableValues) {
   // Invariant: the editor's JSON path must reach the same flag-name edit the C++ API accepts
   const auto nif = read_nif(lighting_nif(nif_build::LightingFields{}));
   const auto out =
-      fo4::nif::apply_edits_json(nif, R"([{"id":1,"key":"shaderFlags","value":["Specular","TwoSided"]}])");
+      fo4::nif::apply_edits_json(nif, R"([{"id":1,"key":"shaderFlags","value":["Specular","Double_Sided"]}])");
   const auto flags = fo4::nif::read_lighting_shader(read_nif(out), 2).flags;
   EXPECT_EQ(flags.word1, 0x1U);
   EXPECT_EQ(flags.word2, 0x10U);
