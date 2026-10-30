@@ -60,7 +60,7 @@ Add `--gtest_output=xml:<dir>\<gate>.xml` to keep `RecordProperty` values. For a
 - Env: `FO4RE_PEX_CORPUS`, or `FO4_PEX_CORPUS` when that yields no roots (lines 229-230). Extra script roots: `FO4RE_PSC_ROOTS` (lines 235, 257). `FO4RE_PEX_RELEASE` must be exactly `1` for a vanilla corpus (line 236). It switches the mode printed at lines 239-240 and turns off debug and beta emission (lines 244-245).
 - Pairing: each `.pex` needs a `.psc` under `Source/User` or `Source` (`sourceFor`, lines 91-116). Only Fallout 4 `.pex` count (`isFallout4`, lines 65-78).
 - Pass: compiled > 0 and identical / compiled >= 0.95 (`kMinimumIdenticalFraction`, line 40; check at line 300).
-- Skip: `FO4RE_PEX_CORPUS is not set to a directory holding .pex files` (line 232); `FO4RE_PEX_CORPUS holds no .psc/.pex pairs` (line 241).
+- Skip: `FO4RE_PEX_CORPUS is not set to a directory holding .pex files` (line 232); `FO4RE_PEX_CORPUS holds no .psc/.pex pairs` (line 241). With `FO4RE_PEX_REQUIRE=1` both are failures, not skips.
 - Output: `pairs= compiled= refused= identical=` (lines 287-288), then `REFUSED` and `DIFF` lines.
 - Run: `$env:FO4RE_PEX_CORPUS = '<staged pex root>'`, `$env:FO4RE_PSC_ROOTS = '<psc roots>'`, `$env:FO4RE_PEX_RELEASE = '1'`, then the template with this filter.
 - Documented figure: `PluginEditTool/docs/internal/PAPYRUS.md:102` gives 198 pairs, 161 compiled, 158 identical (98.1%), 37 refused, 3 differing, with `FO4RE_PEX_CORPUS` and `FO4RE_PSC_ROOTS`. The code threshold is 0.95, so 158/161 would pass. The row does not name its test; `PAPYRUS.md:148` names the native PET gate that reads the same variables. Whether this Radicle test reproduces 158/161 is UNVERIFIED.
@@ -78,9 +78,10 @@ Add `--gtest_output=xml:<dir>\<gate>.xml` to keep `RecordProperty` values. For a
 ### 6. Decompiler no-throw (not in the brief list; in CI's regex)
 
 - Test: `PapyrusDecompilerReal.EveryCorpusPexDecompilesToSourceAndListingWithoutThrowing` (`Radicle/tests/test_papyrus_decompiler_real.cpp`).
-- Env: `FO4_PEX_CORPUS` only.
+- Env: `FO4RE_PEX_CORPUS`, falling back to `FO4_PEX_CORPUS` when that yields no roots.
 - Pass: no exception, and each output has the `ScriptName ` and `; Disassembly of ` headers. Fallback and unhandled counts are printed (`[decompiler]` line), not failed.
-- Skip: unset, `set FO4_PEX_CORPUS to one or more directories of .pex files`; no files, `no .pex files under <roots>`.
+- Skip: no roots, `set FO4RE_PEX_CORPUS to one or more directories of .pex files`; no files, `no .pex files under the FO4RE_PEX_CORPUS roots`. With `FO4RE_PEX_REQUIRE=1` both are failures, not skips.
+- Run: CI stages the root with `ba2pex` ("CI staging route" below); locally, `$env:FO4RE_PEX_CORPUS = '<staged pex root>'`, then the template with this filter.
 
 ### 7. Graph round-trip fixtures (28): not a data gate
 

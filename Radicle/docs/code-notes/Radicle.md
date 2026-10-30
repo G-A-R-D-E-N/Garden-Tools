@@ -9987,11 +9987,7 @@ Follow-up to the #31 items 1-2 notes above, closing the review gaps without new 
 
 ## Radicle/tools/parity/main.cpp:extract_ba2_pex
 
-The PEX gates skip unless `FO4RE_PEX_CORPUS`, `FO4_PEX_CORPUS` or `FO4RE_PEX_RELEASE` name a staged vanilla `.pex` root, and the shipped `.pex` are inside `Fallout4 - Misc.ba2`. `radicle_parity_dump` already opened archives for its `ba2` and `ba2x` modes, so staging became a third mode there instead of a new tool or a C# dependency: `ba2pex <archive.ba2> <out-dir>` extracts every `.pex` entry through `archive::Ba2Reader`, keeps each entry's relative path and its letter case, and writes nothing else.
-
-Entry names come from the archive's own name table and are not trusted: `is_relative_inside` rejects absolute paths, drive letters and `..` components, so an archive cannot make the tool write outside `<out-dir>`. The mode exits non-zero for a missing archive (`no archive at`), an archive with no `.pex` (`no .pex entries in`) and such a path (`refusing BA2 entry path`); the CI step turns any non-zero exit into a failed job.
-
-Whether the staged corpus is usable is decided by the tests rather than by the workflow; see `papyrus_corpus_roots.hpp:skipOrFailPexCorpus`. There is no Linux staging step yet, because `test_papyrus_codegen_real.cpp:sourceFor` resolves a source by exact path and case-sensitive pairing has not been measured.
+The PEX gates need a staged vanilla `.pex` root, and the shipped `.pex` live inside `Fallout4 - Misc.ba2`. `radicle_parity_dump` already opened archives for its `ba2` and `ba2x` modes, so staging became the `ba2pex <archive.ba2> <out-dir>` mode instead of a new tool: it writes every `.pex` entry through `archive::Ba2Reader` under its archive-relative path, keeping each name's case, and nothing else. Entry names come from the archive's name table and are not trusted: `is_relative_inside` refuses absolute paths, drive letters and `..` components. A missing archive, an archive with no `.pex` and such a path all exit non-zero, and the CI step turns any non-zero exit into a failed job. Whether the staged corpus is usable is the tests' call (`papyrus_corpus_roots.hpp:skipOrFailPexCorpus`). There is no Linux staging step yet, because `test_papyrus_codegen_real.cpp:sourceFor` resolves a source by exact path and case-sensitive pairing has not been measured.
 
 ## Radicle/tests/papyrus_corpus_roots.hpp:skipOrFailPexCorpus
 
