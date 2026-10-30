@@ -18,7 +18,6 @@ public sealed class AppSettings
     public string DataFolder { get; set; } = "";
     public string Mo2InstancePath { get; set; } = "";
     public string Fallout4Path { get; set; } = "";
-    public string NiftoolPath { get; set; } = "";
     public string TexconvPath { get; set; } = "";
     public string PapyrusCompilerPath { get; set; } = "";
     public string PapyrusBaseImports { get; set; } = "";

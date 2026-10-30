@@ -175,15 +175,6 @@ public static class ToolPaths
     }
 
 
-    public static string? Niftool() => FirstFile(
-        Env("NIFTOOL_PATH"),
-        Settings.NiftoolPath,
-        App("tools", "niftool", "niftool.exe"),
-        App("niftool", "niftool.exe"),
-        WhichOnPath("niftool.exe"),
-        @"E:\F4SE OG\Tools\PluginEditTool\tools\niftool\build\windows\x64\release\niftool.exe");
-
-
     public static string? Texconv() => FirstFile(
         Env("TEXCONV_PATH"),
         Settings.TexconvPath,
@@ -332,7 +323,6 @@ public static class ToolPaths
 
     public static string Describe(string tool) => tool switch
     {
-        "niftool" => "set NIFTOOL_PATH, or put niftool.exe in tools\\niftool\\ next to the exe",
         "texconv" => "set TEXCONV_PATH, or put Texconvx64.exe in tools\\texconv\\ next to the exe",
         "papyrus" => "install the Creation Kit, or set PAPYRUS_COMPILER_PATH / papyrusCompilerPath in settings.json",
         "archive2" => "install the Creation Kit, or set ARCHIVE2_PATH / archive2Path in settings.json",

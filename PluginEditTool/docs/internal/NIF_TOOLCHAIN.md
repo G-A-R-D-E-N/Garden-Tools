@@ -68,18 +68,24 @@ unknown or read-only key is a parse error and the file is left byte-identical.
 ## Limits
 
 - **Box collision import is not implemented.** `import` refuses it with `box collision is not
-  supported yet (needs the HKX writer, #814)`. Reading and editing existing collision works.
+  supported yet (needs the HKX writer, #1048)`. Reading and editing existing collision works.
 - **No structural edits:** blocks cannot be added or removed yet (new shapes, deleting collision,
   adding a `NiAlphaProperty` to a shape that has none).
 - **Alpha blend and test functions are read-only;** the whole `flags` word can be set.
 - Fragment and water shader properties are stored as references and not decoded.
 - JSON stays out of Radicle: it returns structs and the host formats them.
 
-## Remaining legacy C# NIF code
+## The legacy C# host has no NIF backend
 
-`FO4RecordEditor/Services/NifService.cs`, `Services/Ai/PluginToolExecutor.cs` and `Services/ToolPaths.cs`
-still look for an external NIF program and shell out to it. The native host does not use that path; the
-legacy MCP `nif_*` tools do until they are moved onto the native host.
+`FO4RecordEditor.Core/Services/NifService.cs` keeps its public verbs (`Import`, `Inspect`, `Geo`,
+`GeoBatch`, `Verify`, `Fix`, `Tree`, `ApplyEdits`) so that `NifInterop`, `CellInterop` and
+`PluginToolExecutor` are unchanged, but none of them runs a program or reads a NIF. After its argument
+and file checks each verb returns one sentence: `NIF tools are in FO4IDE. This host has no NIF backend,
+so NIF work is not available here.` `GeoBatch` keeps its `{count, geometry}` shape and still moves
+`GeoBatchDone` toward `GeoBatchTotal`, so a progress poll finishes.
+
+The MCP `nif_*` tools therefore answer with that message on this host. The native host is the one with a
+NIF backend; moving those tools onto it is a separate change.
 
 ## File map
 
