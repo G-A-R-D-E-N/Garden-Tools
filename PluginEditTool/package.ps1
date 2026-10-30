@@ -2,6 +2,7 @@
 param(
     [ValidatePattern('^[0-9A-Za-z][0-9A-Za-z._-]*\z')]
     [string] $Version = (Get-Date -Format 'yyyy.MM.dd'),
+    [string] $BuildDir = $env:FO4IDE_BUILD_DIR,
     [string] $NiftoolPath = $env:NIFTOOL_PATH,
     [string] $TexconvPath = $env:TEXCONV_PATH,
     [string] $CkWikiPath = $env:CK_WIKI_PATH,
@@ -18,7 +19,10 @@ Set-StrictMode -Version Latest
 
 $Root        = $PSScriptRoot
 $NativeDir   = Join-Path $Root 'native'
-$NativeBuild = Join-Path $NativeDir 'build\package-win-x64'
+# -BuildDir stages an existing configured build (CI builds once with Ninja and
+# runs this script against that tree). Without it the script configures and
+# builds its own Visual Studio tree, which is what a release machine does.
+$NativeBuild = if ($BuildDir) { (Resolve-Path -LiteralPath $BuildDir).Path } else { Join-Path $NativeDir 'build\package-win-x64' }
 $WebDir      = Join-Path $Root 'web'
 $Staging     = Join-Path $Root "dist\FO4RecordEditor-$Version"
 $ZipPath     = Join-Path $Root "dist\FO4RecordEditor-$Version.zip"
@@ -49,46 +53,53 @@ if (-not (Test-Path $WebDist)) {
 }
 
 Step 'Configuring the native C++ host'
-$Generator = if ($env:FO4IDE_CMAKE_GENERATOR) { $env:FO4IDE_CMAKE_GENERATOR } else { 'Visual Studio 17 2022' }
-$Configure = @(
-    '-S', $NativeDir,
-    '-B', $NativeBuild,
-    '-G', $Generator,
-    '-DFO4IDE_BUILD_TESTS=OFF',
-    '-DFO4IDE_BUILD_HTTP=ON',
-    # Force the pinned static fallback so release packages never depend on an
-    # arbitrary developer-machine zlib DLL.
-    '-DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON'
-)
-if ($Generator -match 'Visual Studio') {
-    $Configure += @('-A', 'x64')
+if ($BuildDir) {
+    Warn "Staging from the existing build in $NativeBuild (-BuildDir); no configure or build."
 } else {
-    # A single-config generator requires the build type at configure time;
-    # --config Release is otherwise a silent no-op and ships a Debug exe.
-    $Configure += @('-DCMAKE_BUILD_TYPE=Release')
-}
-if ($env:ZLIB_SRC) {
-    # The CI runner must reuse its cached pinned zlib instead of cloning GitHub.
-    $Configure += "-DFETCHCONTENT_SOURCE_DIR_FO4IDE_ZLIB=$env:ZLIB_SRC"
-}
-if ($env:CCACHE) {
-    # The release lane sets up ccache, so it must actually reach the compilers.
-    $Configure += @("-DCMAKE_C_COMPILER_LAUNCHER=$env:CCACHE", "-DCMAKE_CXX_COMPILER_LAUNCHER=$env:CCACHE")
-}
-$Configured = $false
-for ($attempt = 1; $attempt -le 3; $attempt++) {
-    & cmake @Configure
-    if ($LASTEXITCODE -eq 0) { $Configured = $true; break }
-    if ($attempt -lt 3) {
-        Write-Warning "CMake configure failed (attempt $attempt); retrying because CI egress is flaky."
-        Start-Sleep -Seconds (15 * $attempt)
+    $Generator = if ($env:FO4IDE_CMAKE_GENERATOR) { $env:FO4IDE_CMAKE_GENERATOR } else { 'Visual Studio 17 2022' }
+    $Configure = @(
+        '-S', $NativeDir,
+        '-B', $NativeBuild,
+        '-G', $Generator,
+        '-DFO4IDE_BUILD_TESTS=OFF',
+        '-DFO4IDE_BUILD_HTTP=ON',
+        # Radicle is the editor's backend: build one radicle.dll that carries the
+        # C++ API and the C ABI, and link the editor against it.
+        '-DRADICLE_SHARED=ON',
+        # Force the pinned static fallback so release packages never depend on an
+        # arbitrary developer-machine zlib DLL.
+        '-DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON'
+    )
+    if ($Generator -match 'Visual Studio') {
+        $Configure += @('-A', 'x64')
+    } else {
+        # A single-config generator requires the build type at configure time;
+        # --config Release is otherwise a silent no-op and ships a Debug exe.
+        $Configure += @('-DCMAKE_BUILD_TYPE=Release')
     }
-}
-if (-not $Configured) { throw 'Native CMake configure failed.' }
+    if ($env:ZLIB_SRC) {
+        # The CI runner must reuse its cached pinned zlib instead of cloning GitHub.
+        $Configure += "-DFETCHCONTENT_SOURCE_DIR_FO4IDE_ZLIB=$env:ZLIB_SRC"
+    }
+    if ($env:CCACHE) {
+        # The release lane sets up ccache, so it must actually reach the compilers.
+        $Configure += @("-DCMAKE_C_COMPILER_LAUNCHER=$env:CCACHE", "-DCMAKE_CXX_COMPILER_LAUNCHER=$env:CCACHE")
+    }
+    $Configured = $false
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        & cmake @Configure
+        if ($LASTEXITCODE -eq 0) { $Configured = $true; break }
+        if ($attempt -lt 3) {
+            Write-Warning "CMake configure failed (attempt $attempt); retrying because CI egress is flaky."
+            Start-Sleep -Seconds (15 * $attempt)
+        }
+    }
+    if (-not $Configured) { throw 'Native CMake configure failed.' }
 
-Step 'Building FO4RecordEditor.exe (Release)'
-cmake --build $NativeBuild --config Release --target fo4ide
-if ($LASTEXITCODE -ne 0) { throw 'Native C++ build failed. Scroll up for the compiler error.' }
+    Step 'Building FO4RecordEditor.exe (Release)'
+    cmake --build $NativeBuild --config Release --target fo4ide
+    if ($LASTEXITCODE -ne 0) { throw 'Native C++ build failed. Scroll up for the compiler error.' }
+}
 
 $NativeExe = Get-ChildItem $NativeBuild -Filter 'FO4RecordEditor.exe' -Recurse -File |
     Sort-Object LastWriteTime -Descending |
@@ -97,10 +108,41 @@ if ($null -eq $NativeExe) {
     throw "Native build completed but FO4RecordEditor.exe was not found under $NativeBuild"
 }
 
+Step 'Locating the Radicle backend library'
+# The editor links against radicle.dll (Radicle is its backend), so the linker
+# puts the DLL next to the executable it loaded. Look there first, then fall
+# back to a search so a changed output directory cannot break packaging.
+$RadicleDll = Join-Path (Split-Path $NativeExe.FullName) 'radicle.dll'
+if (-not (Test-Path $RadicleDll)) {
+    $RadicleDll = Get-ChildItem $NativeBuild -Filter 'radicle.dll' -Recurse -File |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1 -ExpandProperty FullName
+}
+if (-not $RadicleDll -or -not (Test-Path $RadicleDll)) {
+    throw "The editor was built against a shared Radicle but radicle.dll was not found under $NativeBuild"
+}
+
 Step 'Staging the package'
 if (Test-Path $Staging) { Remove-Item $Staging -Recurse -Force }
 New-Item -ItemType Directory -Path $Staging -Force | Out-Null
 Copy-Item $NativeExe.FullName (Join-Path $Staging 'FO4RecordEditor.exe') -Force
+Copy-Item $RadicleDll (Join-Path $Staging 'radicle.dll') -Force
+
+$SdkInclude = Join-Path $Staging 'sdk\include\fo4'
+New-Item -ItemType Directory -Path $SdkInclude -Force | Out-Null
+Copy-Item (Join-Path $Root '..\Radicle\include\fo4\c_api*.h') $SdkInclude -Force
+if ((Get-ChildItem $SdkInclude -Filter '*.h' -File).Count -eq 0) {
+    throw "The Radicle C ABI headers were not found under $Root\..\Radicle\include\fo4"
+}
+$RadicleLib = Get-ChildItem $NativeBuild -Filter 'radicle.lib' -Recurse -File |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 1 -ExpandProperty FullName
+if ($RadicleLib) {
+    $SdkLib = New-Item -ItemType Directory -Path (Join-Path $Staging 'sdk\lib') -Force
+    Copy-Item $RadicleLib $SdkLib -Force
+} else {
+    Warn 'radicle.lib was not found; C++ consumers will need it from a local build.'
+}
 
 $WebStage = Join-Path $Staging 'web\dist'
 New-Item -ItemType Directory -Path $WebStage -Force | Out-Null

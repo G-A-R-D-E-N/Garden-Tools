@@ -31,6 +31,7 @@ option(RADICLE_BUILD_TOOLS "Build Radicle command-line tools" ${PROJECT_IS_TOP_L
 option(RADICLE_BUILD_TESTS "Build Radicle tests" ${PROJECT_IS_TOP_LEVEL})
 option(RADICLE_INSTALL "Generate Radicle install/export rules" ${PROJECT_IS_TOP_LEVEL})
 option(RADICLE_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ${PROJECT_IS_TOP_LEVEL})
+option(RADICLE_SHARED "Build Radicle as one shared library that also carries the C ABI" OFF)
 
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 add_custom_target(radicle_schema_check ALL
@@ -133,7 +134,17 @@ function(fo4_apply_sanitizers target)
   endif()
 endfunction()
 
-add_library(fo4
+# RADICLE_SHARED builds one radicle.dll with the C++ API and the C ABI. Without
+# it, BUILD_SHARED_LIBS still decides, as it did before the option existed.
+if(RADICLE_SHARED)
+  set(FO4_LIBRARY_KIND SHARED)
+elseif(BUILD_SHARED_LIBS)
+  set(FO4_LIBRARY_KIND SHARED)
+else()
+  set(FO4_LIBRARY_KIND STATIC)
+endif()
+
+add_library(fo4 ${FO4_LIBRARY_KIND}
   src/plugin_key.cpp
   src/text/encoding.cpp
   src/loadorder/plugin_list.cpp
@@ -151,6 +162,7 @@ add_library(fo4
   src/nif/block_transform.cpp
   src/nif/shader.cpp
   src/nif/skin.cpp
+  src/nif/collision.cpp
   src/texture/bcn.cpp
   src/texture/dds.cpp
   src/texture/dds_codec.cpp
@@ -441,6 +453,9 @@ add_library(fo4
   src/hkx/layout.cpp
   src/hkx/packfile.cpp
   src/hkx/skeleton.cpp
+  src/hkx/animation.cpp
+  src/hkx/animation_binding.cpp
+  src/hkx/animation_spline.cpp
   src/material/material_file.cpp
   src/seq/seq.cpp
   src/quest/runtime.cpp
@@ -479,31 +494,70 @@ target_link_libraries(fo4 PUBLIC $<BUILD_INTERFACE:nlohmann_json::nlohmann_json>
 fo4_apply_warnings(fo4)
 fo4_apply_sanitizers(fo4)
 
-add_library(radicle_c SHARED src/c_api.cpp src/c_api_env.cpp src/c_api_navmesh.cpp src/c_api_vegetation.cpp src/c_api_world.cpp src/c_api_placed.cpp src/c_api_terrain.cpp src/c_api_strings.cpp src/c_api_archive.cpp src/c_api_writeback.cpp src/c_api_fields.cpp src/c_api_ref_fields.cpp src/c_api_base_records.cpp src/c_api_sound.cpp src/c_api_materials.cpp src/c_api_check.cpp src/c_api_maintenance.cpp src/c_api_pex.cpp src/c_api_material_file.cpp src/c_api_seq.cpp src/c_api_quest.cpp src/c_api_quest_structure.cpp src/c_api_loadorder.cpp src/c_api_papyrus_source.cpp)
-target_compile_definitions(radicle_c PRIVATE RADICLE_C_BUILD)
-target_link_libraries(radicle_c PRIVATE fo4)
-set_target_properties(radicle_c PROPERTIES
-  OUTPUT_NAME radicle
-  VERSION ${PROJECT_VERSION}
-  SOVERSION ${PROJECT_VERSION_MAJOR})
-fo4_apply_warnings(radicle_c)
-fo4_apply_sanitizers(radicle_c)
-target_sources(radicle_c PRIVATE src/c_api_version.cpp)
-target_sources(radicle_c PRIVATE src/c_api_records.cpp src/c_api_authoring.cpp src/c_api_vmad.cpp src/c_api_behavior.cpp src/c_api_conditions.cpp)
-target_sources(radicle_c PRIVATE src/c_api_dialogue.cpp)
-target_sources(radicle_c PRIVATE src/c_api_armor.cpp src/c_api_eyes.cpp src/c_api_faction.cpp src/c_api_components.cpp src/c_api_cell.cpp)
-target_sources(radicle_c PRIVATE src/c_api_patch.cpp)
-target_sources(radicle_c PRIVATE src/c_api_conflict.cpp src/c_api_graph.cpp)
-target_sources(radicle_c PRIVATE src/c_api_pex_analysis.cpp src/c_api_vmad_read.cpp src/c_api_script_set.cpp src/c_api_papyrus.cpp src/c_api_papyrus_runtime.cpp src/c_api_papyrus_save.cpp src/c_api_papyrus_quest.cpp src/c_api_papyrus_compiler.cpp src/c_api_papyrus_analysis.cpp)
+set(RADICLE_C_SOURCES
+  src/c_api.cpp src/c_api_env.cpp src/c_api_navmesh.cpp src/c_api_vegetation.cpp
+  src/c_api_world.cpp src/c_api_placed.cpp src/c_api_terrain.cpp src/c_api_strings.cpp
+  src/c_api_archive.cpp src/c_api_writeback.cpp src/c_api_fields.cpp src/c_api_ref_fields.cpp
+  src/c_api_base_records.cpp src/c_api_sound.cpp src/c_api_materials.cpp src/c_api_check.cpp
+  src/c_api_maintenance.cpp src/c_api_pex.cpp src/c_api_material_file.cpp src/c_api_seq.cpp
+  src/c_api_quest.cpp src/c_api_quest_structure.cpp src/c_api_loadorder.cpp
+  src/c_api_version.cpp
+  src/c_api_records.cpp src/c_api_authoring.cpp src/c_api_vmad.cpp src/c_api_behavior.cpp
+  src/c_api_conditions.cpp
+  src/c_api_dialogue.cpp
+  src/c_api_armor.cpp src/c_api_eyes.cpp src/c_api_faction.cpp src/c_api_components.cpp
+  src/c_api_cell.cpp
+  src/c_api_patch.cpp
+  src/c_api_conflict.cpp
+  src/c_api_nif.cpp src/c_api_dds.cpp
+  src/c_api_graph.cpp src/c_api_papyrus_source.cpp
+  src/c_api_pex_analysis.cpp src/c_api_vmad_read.cpp src/c_api_script_set.cpp src/c_api_papyrus.cpp
+  src/c_api_papyrus_runtime.cpp src/c_api_papyrus_save.cpp src/c_api_papyrus_quest.cpp
+  src/c_api_papyrus_compiler.cpp src/c_api_papyrus_analysis.cpp
+  src/c_api_swf.cpp src/c_api_swf_art.cpp src/c_api_swf_characters.cpp src/c_api_swf_display.cpp
+  src/c_api_swf_edit.cpp src/c_api_swf_history.cpp src/c_api_swf_verbs.cpp src/c_api_swf_abc_write.cpp
+  src/c_api_swf_jpeg.cpp src/c_api_swf_sound.cpp src/c_api_runtime.cpp
+)
+
+if(RADICLE_SHARED)
+  # One library carries the C++ API and the C ABI, so the editor and the C#
+  # bindings load the same radicle.dll. The C ABI keeps its explicit dllexport;
+  # the C++ symbols the editor links against are exported from a generated
+  # module definition file.
+  target_compile_definitions(fo4 PRIVATE RADICLE_C_BUILD)
+  target_sources(fo4 PRIVATE ${RADICLE_C_SOURCES})
+  set_target_properties(fo4 PROPERTIES
+    OUTPUT_NAME radicle
+    WINDOWS_EXPORT_ALL_SYMBOLS ON)
+  # Stamp the PE image version. SOVERSION stays empty: on the Linux path it only
+  # adds the libradicle.so -> libradicle.so.0 symlink step, which some checkout
+  # volumes cannot create.
+  if(WIN32)
+    set_target_properties(fo4 PROPERTIES VERSION ${PROJECT_VERSION})
+  endif()
+else()
+  add_library(radicle_c SHARED ${RADICLE_C_SOURCES})
+  target_compile_definitions(radicle_c PRIVATE RADICLE_C_BUILD)
+  target_link_libraries(radicle_c PRIVATE fo4)
+  set_target_properties(radicle_c PROPERTIES
+    OUTPUT_NAME radicle
+    VERSION ${PROJECT_VERSION}
+    SOVERSION ${PROJECT_VERSION_MAJOR})
+  fo4_apply_warnings(radicle_c)
+  fo4_apply_sanitizers(radicle_c)
+endif()
+
 target_sources(fo4 PRIVATE src/patch/delta_patch.cpp)
 target_sources(fo4 PRIVATE src/patch/list_merge.cpp)
 target_sources(fo4 PRIVATE src/papyrus_source/lexer.cpp src/papyrus_source/parser.cpp src/papyrus_source/parser_decl.cpp src/papyrus_source/parser_expr.cpp src/papyrus_source/parser_stmt.cpp src/papyrus_source/summary.cpp)
-target_sources(radicle_c PRIVATE src/c_api_nif.cpp src/c_api_dds.cpp)
-target_sources(radicle_c PRIVATE src/c_api_swf.cpp src/c_api_swf_art.cpp src/c_api_swf_characters.cpp src/c_api_swf_display.cpp src/c_api_swf_edit.cpp src/c_api_swf_history.cpp src/c_api_swf_verbs.cpp src/c_api_swf_abc_write.cpp src/c_api_swf_jpeg.cpp src/c_api_swf_sound.cpp src/c_api_runtime.cpp)
 
 if(RADICLE_INSTALL)
   include(GNUInstallDirs)
-  install(TARGETS fo4 radicle_c
+  set(RADICLE_INSTALL_TARGETS fo4)
+  if(TARGET radicle_c)
+    list(APPEND RADICLE_INSTALL_TARGETS radicle_c)
+  endif()
+  install(TARGETS ${RADICLE_INSTALL_TARGETS}
     EXPORT radicle-targets
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -549,7 +603,10 @@ if(RADICLE_BUILD_TOOLS)
   fo4_apply_warnings(radicle_parity_dump)
   add_executable(radicle_parity_writeback tools/parity/writeback.cpp)
   target_include_directories(radicle_parity_writeback PRIVATE tools)
-  target_link_libraries(radicle_parity_writeback PRIVATE fo4 radicle_c)
+  target_link_libraries(radicle_parity_writeback PRIVATE fo4)
+  if(TARGET radicle_c)
+    target_link_libraries(radicle_parity_writeback PRIVATE radicle_c)
+  endif()
   fo4_apply_warnings(radicle_parity_writeback)
 endif()
 
@@ -795,6 +852,9 @@ if(RADICLE_BUILD_TESTS)
     tests/test_deep_copy.cpp
     tests/test_check_errors.cpp
     tests/test_check_errors_conditions.cpp
+    tests/test_check_errors_group1.cpp
+    tests/test_check_errors_record_lists.cpp
+    tests/test_check_errors_real.cpp
     tests/test_check_dialogue.cpp
     tests/test_remap_non_formid_slots.cpp
     tests/test_struct_payload_remap.cpp
@@ -842,13 +902,17 @@ if(RADICLE_BUILD_TESTS)
     tests/test_environment_terrain_real.cpp
     tests/test_environment_strings.cpp
     tests/test_ba2_reader.cpp
+    tests/test_ba2_write.cpp
     tests/test_ba2_long_names.cpp
     tests/test_ba2_real.cpp
     tests/test_ba2_versions_real.cpp
     tests/test_nif.cpp
     tests/test_nif_nodes.cpp
     tests/test_nif_corpus.cpp
+    tests/test_nif_collision.cpp
+    tests/test_nif_collision_real.cpp
     tests/test_c_api_nif.cpp
+    tests/test_c_api_nif_collision.cpp
     tests/test_c_api_swf.cpp
     tests/test_c_api_swf_text.cpp
     tests/test_c_api_swf_morph.cpp
@@ -1027,6 +1091,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_swf_svg_text_clip.cpp
     tests/test_abc_real.cpp
     tests/test_hkx_packfile.cpp
+    tests/test_hkx_animation.cpp
+    tests/test_hkx_binding.cpp
     tests/test_hkx_real.cpp
     tests/test_c_api_material_file.cpp
     tests/test_seq.cpp
@@ -1062,7 +1128,10 @@ if(RADICLE_BUILD_TESTS)
     tests/test_real_data_build.cpp
   )
   target_include_directories(fo4_tests PRIVATE tests tools)
-  target_link_libraries(fo4_tests PRIVATE fo4 radicle_c GTest::gtest_main ZLIB::ZLIB)
+  target_link_libraries(fo4_tests PRIVATE fo4 GTest::gtest_main ZLIB::ZLIB)
+  if(TARGET radicle_c)
+    target_link_libraries(fo4_tests PRIVATE radicle_c)
+  endif()
   target_compile_definitions(fo4_tests PRIVATE
     FO4_TESTDATA_DIR="testdata"
     _CRT_SECURE_NO_WARNINGS
@@ -1153,10 +1222,16 @@ if(RADICLE_BUILD_TESTS)
   option(RADICLE_CSHARP_TESTS "Run the C# binding tests with the .NET 8 SDK and checked-in package feed" OFF)
   if(RADICLE_CSHARP_TESTS)
     find_program(DOTNET_EXECUTABLE dotnet REQUIRED)
+    # A shared Radicle build has no radicle_c target; the C ABI lives in fo4 then.
+    if(TARGET radicle_c)
+      set(RADICLE_C_LIBRARY_TARGET radicle_c)
+    else()
+      set(RADICLE_C_LIBRARY_TARGET fo4)
+    endif()
     add_test(NAME radicle_csharp_bindings
              COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/bindings/csharp/tools/run_managed_tests.py
                      --dotnet ${DOTNET_EXECUTABLE})
     set_tests_properties(radicle_csharp_bindings PROPERTIES
-      ENVIRONMENT "RADICLE_NATIVE_PATH=$<TARGET_FILE:radicle_c>;RADICLE_ABI_PROBE=$<TARGET_FILE:radicle_abi_layout_probe>;RADICLE_ABI_STUB=$<TARGET_FILE:radicle_abi_stub>;RADICLE_ABI_STUB_V1=$<TARGET_FILE:radicle_abi_stub_v1>")
+      ENVIRONMENT "RADICLE_NATIVE_PATH=$<TARGET_FILE:${RADICLE_C_LIBRARY_TARGET}>;RADICLE_ABI_PROBE=$<TARGET_FILE:radicle_abi_layout_probe>;RADICLE_ABI_STUB=$<TARGET_FILE:radicle_abi_stub>;RADICLE_ABI_STUB_V1=$<TARGET_FILE:radicle_abi_stub_v1>")
   endif()
 endif()

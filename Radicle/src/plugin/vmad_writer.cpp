@@ -3,6 +3,7 @@
 #include "record_edit.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstddef>
 #include <cstring>
@@ -353,6 +354,15 @@ bool vmad_authorable(Signature signature) {
   return std::find(std::begin(records), std::end(records), text) != std::end(records);
 }
 
+// Constraint: Papyrus script identifiers compare case-insensitively, so a second entry for one script is refused.
+bool same_name(std::string_view left, std::string_view right) {
+  return left.size() == right.size() &&
+         std::equal(left.begin(), left.end(), right.begin(), [](char a, char b) {
+           return std::tolower(static_cast<unsigned char>(a)) ==
+                  std::tolower(static_cast<unsigned char>(b));
+         });
+}
+
 void append_quest_fragment(std::vector<std::byte>& out, const QuestVmadFragment& fragment) {
   append_u16(out, fragment.stage);
   append_u16(out, fragment.unknown);
@@ -493,8 +503,12 @@ VmadStructureMutationStatus add_vmad_script(Plugin& plugin, const FormKey& recor
   VmadEdit edit;
   const auto lookup = load_vmad(plugin, record_key, edit);
   if (lookup != VmadLookup::ok) return absent_status(lookup);
+  if (name.empty()) throw schema::ScalarError("VMAD script name is required");
   if (index > edit.scripts.scripts.size()) {
     return VmadStructureMutationStatus::index_out_of_range;
+  }
+  for (const auto& script : edit.scripts.scripts) {
+    if (same_name(script.name, name)) return VmadStructureMutationStatus::already_present;
   }
   if (edit.scripts.scripts.size() >= std::numeric_limits<std::uint16_t>::max()) {
     throw schema::ScalarError("the VMAD script list is full");
@@ -538,6 +552,9 @@ VmadStructureMutationStatus add_vmad_property(Plugin& plugin, const FormKey& rec
   }
   const auto& target = edit.scripts.scripts[script];
   if (index > target.properties.size()) return VmadStructureMutationStatus::index_out_of_range;
+  for (const auto& existing : target.properties) {
+    if (same_name(existing.name, property.name)) return VmadStructureMutationStatus::already_present;
+  }
   if (target.properties.size() >= std::numeric_limits<std::uint16_t>::max()) {
     throw schema::ScalarError("the VMAD property list is full");
   }

@@ -152,10 +152,14 @@ TEST(CheckDialogue, BranchStartingTopicThatIsDeletedIsWarned) {
   EXPECT_EQ(deleted[0].severity, fo4::CheckSeverity::warning);
 }
 
-TEST(CheckDialogue, MasterIndexPastTheMasterTableIsSkipped) {
+TEST(CheckDialogue, MasterIndexPastTheMasterTableIsReported) {
   auto plugin = make_bad_master_index_plugin();
   const std::vector<const fo4::Plugin*> load_order{&plugin};
   const auto findings = fo4::check_load_order(load_order);
   EXPECT_TRUE(of_code(findings, fo4::CheckCode::branch_starting_topic_not_dial).empty());
-  EXPECT_TRUE(of_code(findings, fo4::CheckCode::topic_children_not_dial).empty());
+  const auto children = of_code(findings, fo4::CheckCode::topic_children_not_dial);
+  ASSERT_EQ(children.size(), 1u);
+  const auto bad_index = of_code(findings, fo4::CheckCode::invalid_master_index);
+  ASSERT_EQ(bad_index.size(), 1u);
+  EXPECT_EQ(bad_index[0].subrecord.to_string(), "SNAM");
 }

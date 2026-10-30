@@ -14,10 +14,12 @@
 
 #include "../helpers/GraphBuilder.hpp"
 #include "../helpers/PexComparer.hpp"
+#include "../helpers/TempRoot.hpp"
 
 using namespace fo4ide::graph;
 using namespace fo4ide::graph::test;
 using namespace fo4ide::papyrus;
+using fo4ide_test::TempRoot;
 
 namespace {
 
@@ -27,12 +29,6 @@ Event OnLoad()
     Disable(false)
 EndEvent
 )";
-
-std::string uniqueRoot(std::string_view tag) {
-    return (std::filesystem::temp_directory_path() / ("fo4ide-loader-" + std::string(tag)) /
-            std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()))
-        .string();
-}
 
 std::string describe(const std::vector<GraphDiagnostic>& diagnostics) {
     std::string out;
@@ -61,9 +57,8 @@ void writeFile(const std::filesystem::path& path, const std::vector<std::uint8_t
 }  // namespace
 
 TEST_CASE("GraphScriptLoader a source script becomes a graph") {
-    const std::string directory = uniqueRoot("psc");
-    std::filesystem::create_directories(directory);
-    const auto path = std::filesystem::path(directory) / "Fixture.psc";
+    const TempRoot guard("fo4ide-loader-psc");
+    const auto path = guard.path() / "Fixture.psc";
     writeFile(path, kSource);
 
     const auto result = GraphScriptLoader::load(path, roots());
@@ -72,19 +67,16 @@ TEST_CASE("GraphScriptLoader a source script becomes a graph") {
     CHECK(result.success());
     if (!result.success()) INFO(describe(result.diagnostics));
     if (result.document) CHECK_FALSE(result.document->nodes.empty());
-
-    std::filesystem::remove_all(directory);
 }
 
 TEST_CASE("GraphScriptLoader a compiled script becomes the same graph as its source") {
-    const std::string directory = uniqueRoot("pex");
-    std::filesystem::create_directories(directory);
-    const auto sourcePath = std::filesystem::path(directory) / "Fixture.psc";
+    const TempRoot guard("fo4ide-loader-pex");
+    const auto sourcePath = guard.path() / "Fixture.psc";
     writeFile(sourcePath, kSource);
 
     auto index = [&] {
         ScriptIndex built;
-        built.addRoot(directory);
+        built.addRoot(guard.path());
         built.addRoot(baseStubs());
         built.addRoot(graphScripts());
         return built;
@@ -93,7 +85,7 @@ TEST_CASE("GraphScriptLoader a compiled script becomes the same graph as its sou
     auto original = compileScript(index, &parsed, "Fixture.psc", PapyrusCompileOptions{});
     REQUIRE(original.pex != nullptr);
 
-    const auto pexPath = std::filesystem::path(directory) / "Fixture.pex";
+    const auto pexPath = guard.path() / "Fixture.pex";
     writeFile(pexPath, original.pex->toBytes());
 
     std::filesystem::remove(sourcePath);
@@ -120,14 +112,11 @@ TEST_CASE("GraphScriptLoader a compiled script becomes the same graph as its sou
                                                rebuilt.pex->objects[0]);
     INFO("difference: " << difference);
     CHECK(difference.empty());
-
-    std::filesystem::remove_all(directory);
 }
 
 TEST_CASE("GraphScriptLoader a script that refuses to lift comes back with the reason and no document") {
-    const std::string directory = uniqueRoot("refuse");
-    std::filesystem::create_directories(directory);
-    const auto path = std::filesystem::path(directory) / "Fixture.psc";
+    const TempRoot guard("fo4ide-loader-refuse");
+    const auto path = guard.path() / "Fixture.psc";
     writeFile(path, R"(Scriptname Fixture extends ObjectReference
 
 Event OnLoad()
@@ -143,14 +132,11 @@ EndEvent
     CHECK_FALSE(result.success());
     CHECK_FALSE(result.document.has_value());
     CHECK_FALSE(result.diagnostics.empty());
-
-    std::filesystem::remove_all(directory);
 }
 
 TEST_CASE("GraphScriptLoader a script is checked against its own folder") {
-    const std::string directory = uniqueRoot("roots");
-    std::filesystem::create_directories(directory);
-    const auto path = std::filesystem::path(directory) / "Fixture.psc";
+    const TempRoot guard("fo4ide-loader-roots");
+    const auto path = guard.path() / "Fixture.psc";
     writeFile(path, R"(Scriptname Fixture extends ObjectReference
 
 Event OnLoad()
@@ -163,16 +149,13 @@ EndEvent
     CHECK_FALSE(result.failure.has_value());
     CHECK(result.success());
     if (!result.success()) INFO(describe(result.diagnostics));
-
-    std::filesystem::remove_all(directory);
 }
 
 TEST_CASE("GraphScriptLoader a lifted property read validates against the pin the getter declares") {
-    const std::string directory = uniqueRoot("prop");
-    std::filesystem::create_directories(directory);
-    writeFile(std::filesystem::path(directory) / "Holder.psc",
+    const TempRoot guard("fo4ide-loader-prop");
+    writeFile(guard.path() / "Holder.psc",
               "Scriptname Holder extends ObjectReference\nint Property Count Auto\n");
-    const auto path = std::filesystem::path(directory) / "Reader.psc";
+    const auto path = guard.path() / "Reader.psc";
     writeFile(path, R"(Scriptname Reader extends ObjectReference
 
 Event OnLoad()
@@ -181,7 +164,7 @@ Event OnLoad()
 EndEvent
 )");
 
-    std::vector<std::filesystem::path> loadRoots{directory, baseStubs(), graphScripts()};
+    std::vector<std::filesystem::path> loadRoots{guard.path(), baseStubs(), graphScripts()};
     const auto result = GraphScriptLoader::load(path, loadRoots);
 
     CHECK_FALSE(result.failure.has_value());
@@ -203,14 +186,11 @@ EndEvent
     }
     INFO(describe(validation.diagnostics));
     CHECK(errors.empty());
-
-    std::filesystem::remove_all(directory);
 }
 
 TEST_CASE("GraphScriptLoader a file that is not a script is refused by name") {
-    const std::string directory = uniqueRoot("other");
-    std::filesystem::create_directories(directory);
-    const auto path = std::filesystem::path(directory) / "Fixture.fograph";
+    const TempRoot guard("fo4ide-loader-other");
+    const auto path = guard.path() / "Fixture.fograph";
     writeFile(path, "{}");
 
     const auto result = GraphScriptLoader::load(path, roots());
@@ -218,8 +198,6 @@ TEST_CASE("GraphScriptLoader a file that is not a script is refused by name") {
     REQUIRE(result.failure.has_value());
     CHECK(result.failure->find("Fixture.fograph") != std::string::npos);
     CHECK_FALSE(result.success());
-
-    std::filesystem::remove_all(directory);
 }
 
 TEST_CASE("GraphScriptLoader a missing file is refused rather than thrown") {

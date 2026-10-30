@@ -191,6 +191,22 @@ public:
         return recordTypedCall("EditFactionEntries", args);
     }
 
+    fo4ide::Result<nlohmann::json> addScript(const nlohmann::json& args) override {
+        return recordTypedCall("AddScript", args);
+    }
+
+    fo4ide::Result<nlohmann::json> removeScript(const nlohmann::json& args) override {
+        return recordTypedCall("RemoveScript", args);
+    }
+
+    fo4ide::Result<nlohmann::json> addScriptProperty(const nlohmann::json& args) override {
+        return recordTypedCall("AddScriptProperty", args);
+    }
+
+    fo4ide::Result<nlohmann::json> removeScriptProperty(const nlohmann::json& args) override {
+        return recordTypedCall("RemoveScriptProperty", args);
+    }
+
     fo4ide::Result<nlohmann::json> getWeaponDamageTypes(const nlohmann::json& args) const override {
         return recordTypedCall("GetWeaponDamageTypes", args);
     }
@@ -639,7 +655,8 @@ TEST_CASE("PluginBackendTarget routes the typed record methods and the strings n
     const auto args = nlohmann::json::array({"Patch.esp", "000800:Patch.esp"});
     const std::vector<std::string> methods{
         "SetLeveledListSettings", "EditLeveledListEntry", "GetNpc", "EditNpcEntries", "GetFaction",
-        "EditFactionEntries", "GetWeaponDamageTypes", "CreatePlacedObject", "CreateInteriorCell"};
+        "EditFactionEntries", "GetWeaponDamageTypes", "CreatePlacedObject", "CreateInteriorCell",
+        "AddScript", "RemoveScript", "AddScriptProperty", "RemoveScriptProperty"};
     for (const auto& method : methods) {
         const auto result = target.invoke(method, args);
         REQUIRE(result.has_value());
@@ -668,6 +685,10 @@ TEST_CASE("IPluginBackend defaults report distinct unavailable errors for the ty
     unavailable(base.copyAsWrapper(args), "CopyAsWrapperUnavailable");
     unavailable(base.createPlacedObject(args), "CellBackendUnavailable");
     unavailable(base.createInteriorCell(args), "CellBackendUnavailable");
+    unavailable(base.addScript(args), "ScriptBackendUnavailable");
+    unavailable(base.removeScript(args), "ScriptBackendUnavailable");
+    unavailable(base.addScriptProperty(args), "ScriptBackendUnavailable");
+    unavailable(base.removeScriptProperty(args), "ScriptBackendUnavailable");
     unavailable(base.getLeveledList(args), "LeveledListBackendUnavailable");
     unavailable(base.setLeveledListSettings(args), "LeveledListBackendUnavailable");
     unavailable(base.editLeveledListEntry(args), "LeveledListBackendUnavailable");
