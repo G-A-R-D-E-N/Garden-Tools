@@ -61,13 +61,13 @@ std::vector<TreeField> node_fields(const Node& node) {
   return fields;
 }
 
-// Invariant: the attribute list is the VertexDesc flag order, so a reader can tell a missing UV0 from a missing normal.
+// Invariant: positions head the list because the descriptor's sizes start with them, then the VertexDesc flag order.
 void append_vertex_desc_fields(std::vector<TreeField>& fields, const VertexDesc& desc) {
-  std::string attributes;
-  for (std::size_t index = 0; index < k_vertex_attribute_count; ++index) {
+  std::string attributes = vertex_attribute_name(VertexAttribute::Position);
+  for (std::size_t index = 1; index < k_vertex_attribute_count; ++index) {
     const auto attribute = static_cast<VertexAttribute>(index);
     if (!desc.has(attribute)) continue;
-    if (!attributes.empty()) attributes += ", ";
+    attributes += ", ";
     attributes += vertex_attribute_name(attribute);
   }
   fields.push_back(readonly_field("vertexSize", "Vertex size", std::to_string(desc.size_bytes()) + " bytes"));

@@ -277,7 +277,7 @@ TEST(NifTree, AlphaBlockCarriesItsFlagsAndDecodedFields) {
 }
 
 TEST(NifTree, CollisionAndExtraBlocksKeepTheirOwnFields) {
-  const auto nif = fo4::nif::read_nif(full_file(0x1U));
+  const auto nif = fo4::nif::read_nif(full_file(fo4::nif::k_bsx_editor_marker_bit));
   const auto tree = fo4::nif::describe_nif(nif);
   const auto& object = tree.blocks.at(6);
   EXPECT_EQ(text_of(object, "target"), "block 1");
