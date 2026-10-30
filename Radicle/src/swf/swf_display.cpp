@@ -399,6 +399,8 @@ SwfDisplayList build_display_list(const SwfFile& file, const SwfDisplayOptions& 
   std::map<std::uint16_t, std::vector<std::vector<Operation>>> sprite_operations;
   std::map<std::uint16_t, std::size_t> sprite_tag_indices;
   std::map<std::uint16_t, detail::FrameControls> sprite_controls;
+  const std::map<std::uint16_t, detail::InitActionStreams> init_actions =
+      detail::collect_init_actions(file.tags);
   for (std::size_t tag_index = 0; tag_index < file.tags.size(); ++tag_index) {
     const SwfTag& tag = file.tags[tag_index];
     if (tag.shape) {
@@ -411,8 +413,15 @@ SwfDisplayList build_display_list(const SwfFile& file, const SwfDisplayOptions& 
     if (!collect_operations(tag.children, frames, out.message)) {
       return out;
     }
+    // A sprite must run its init actions once, before its first frame, when control applies.
+    const auto found_init = init_actions.find(*tag.sprite_id);
+    static const detail::InitActionStreams kNoInit;
     detail::FrameControls controls =
-        controls_for(tag.children, frames.size(), options.apply_frame_control);
+        !options.apply_frame_control
+            ? detail::FrameControls(frames.size())
+            : detail::collect_frame_controls(
+                  tag.children, found_init == init_actions.end() ? kNoInit
+                                                                 : found_init->second);
     if (!sprite_operations.emplace(*tag.sprite_id, std::move(frames)).second) {
       out.message = "duplicate sprite definition";
       return out;
