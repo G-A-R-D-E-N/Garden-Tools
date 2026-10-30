@@ -10030,7 +10030,7 @@ Every edited field is written where the matching reader reports it: `apply_light
 
 ## Radicle/src/nif/edit_json.cpp:read_edit
 
-The JSON the editor sends is parsed here, not in the host: `read_edit` accepts text, one number, a list of numbers or a list of flag names, and anything else (including a block id out of range) is a `parse_error`. `Radicle/src/nif/write_edits_shader.cpp:flag_mask` resolves each flag name with `shader_flag_name`, so a name that no longer exists is a refused edit rather than a cleared bit, and a raw mask cannot be expressed - an editor round trip cannot set a bit the reader has no name for.
+The JSON the editor sends is parsed here, not in the host: `read_edit` accepts text, one number, a list of numbers or a list of flag names, and anything else (including a block id out of range) is a `parse_error`. A whole number is refused when an `f32` cannot hold it exactly (`4294967295` is such a value, because the nearest float is `4294967296`), so a body id or any other whole-number key is never written as a different number than the one the editor sent; JSON floats such as `0.1` are unaffected, since only integers are compared. The tests are the `parse_error` cases in `Radicle/tests/test_nif_write_blocks.cpp:JsonEditsCarryFlagNamesAndRejectUnusableValues`. `Radicle/src/nif/write_edits_shader.cpp:flag_mask` resolves each flag name with `shader_flag_name`, so a name that no longer exists is a refused edit rather than a cleared bit, and a raw mask cannot be expressed - an editor round trip cannot set a bit the reader has no name for.
 
 ## Radicle/src/nif/write_edits.cpp:apply_collision_edit
 

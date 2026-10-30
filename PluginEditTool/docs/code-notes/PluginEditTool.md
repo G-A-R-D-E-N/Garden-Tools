@@ -390,3 +390,5 @@ The service reads the NIF, calls `fo4::nif::apply_edits_json` and commits with `
 ## PluginEditTool/native/src/assets/NifService.cpp:fix
 
 `fix` and `importObj` also run in process only. `fixInProcess` maps a `fo4::parse_error` to `NifFixFailed` and leaves the output untouched, and `importInProcess` reports the in-process verify, so a failed save never replaces the previous file.
+
+The messages a refused edit carries are the reader's: a negative block id says `NIF edit block id -1 is out of range` from `Radicle/src/nif/edit_json.cpp:read_edit`, and a read-only key says `edit on block 1: key 'verts' is read-only` from `Radicle/src/nif/write_edits.cpp:fail`. `PluginEditTool/native/tests/unit/NifServiceTests.cpp` asserts those strings, so the writer's wording is what the editor's error bar shows. Regression: a PET-side wording kept in the test after the conversion moved to Radicle, which is what failed CI on the first push.

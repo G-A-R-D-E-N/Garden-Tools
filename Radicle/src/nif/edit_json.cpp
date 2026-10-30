@@ -58,6 +58,13 @@ Edit read_edit(const nlohmann::json& raw) {
     edit.value = raw_value.get<std::string>();
   } else if (raw_value.is_number()) {
     edit.value = raw_value.get<float>();
+    if (raw_value.is_number_integer()) {
+      const auto whole = raw_value.get<std::int64_t>();
+      if (static_cast<double>(std::get<float>(edit.value)) != static_cast<double>(whole)) {
+        throw parse_error(0, "key '" + edit.key + "' value " + std::to_string(whole) +
+            " cannot be stored exactly; NIF edit values are 32-bit floats");
+      }
+    }
   } else if (raw_value.is_array() && all_numbers(raw_value)) {
     edit.value = raw_value.get<std::vector<float>>();
   } else if (raw_value.is_array() && all_strings(raw_value)) {

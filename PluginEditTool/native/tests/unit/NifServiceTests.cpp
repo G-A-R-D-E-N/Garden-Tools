@@ -207,7 +207,7 @@ TEST_CASE("NifService reports a writer-rejected read-only key as NifEditFailed a
 
     auto negative = service.applyEdits(nif, nlohmann::json::array({{{"id", -1}, {"key", "name"}, {"value", "x"}}}));
     REQUIRE_FALSE(negative.has_value());
-    CHECK(negative.error().message.find("unsigned block id") != std::string::npos);
+    CHECK(negative.error().message.find("block id -1 is out of range") != std::string::npos);
     CHECK(fileBytes(nif) == before);
 }
 

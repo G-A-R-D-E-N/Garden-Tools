@@ -166,7 +166,7 @@ TEST(NifWriteBlocks, EffectShaderTextureGrowthKeepsLaterSlotsCorrect) {
   EXPECT_EQ(shader.textures[2], "");
   EXPECT_FLOAT_EQ(shader.falloff_stop_opacity, 0.9f);
   EXPECT_FLOAT_EQ(shader.base_color[3], 0.25f);
-  EXPECT_EQ(block_bytes(out_bytes, out, 2).size(), block_bytes(bytes, nif, 2).size() + 21U);
+  EXPECT_EQ(block_bytes(out_bytes, out, 2).size(), block_bytes(bytes, nif, 2).size() + 23U);
   expect_rejected(nif, Edit{k_shape, "flags", as_number(1.0f)});
 }
 
@@ -212,22 +212,23 @@ TEST(NifWriteBlocks, CollisionObjectFlagsAndBodyIdRoundTripAndKeepTheBlob) {
                 physics_system_block()},
       {k_root});
   const auto nif = read_nif(bytes);
+  // Constraint: an Edit value is an f32, so 0xFFFF0000 is the largest body id that keeps every bit it sets.
   const std::vector<Edit> edits{
       Edit{1, "flags", as_number(2052.0f)},
-      Edit{1, "bodyId", as_number(4294967295.0f)},
+      Edit{1, "bodyId", as_number(4294901760.0f)},
   };
   const auto out_bytes = apply_edits(nif, edits);
   const auto out = read_nif(out_bytes);
   const auto object = fo4::nif::read_collision_object(out, 1);
   EXPECT_EQ(object.flags, 0x0804U);
-  EXPECT_EQ(object.body_id, 4294967295U);
+  EXPECT_EQ(object.body_id, 0xFFFF0000U);
   EXPECT_EQ(object.system, 2);
   EXPECT_EQ(object.target, -1);
   EXPECT_TRUE(same_bytes(block_bytes(out_bytes, out, 2), block_bytes(bytes, nif, 2)));
   const auto blobs = fo4::nif::read_collision_blobs(out);
   ASSERT_EQ(blobs.size(), 1U);
   EXPECT_EQ(blobs[0].flags, 0x0804U);
-  EXPECT_EQ(blobs[0].body_id, 4294967295U);
+  EXPECT_EQ(blobs[0].body_id, 0xFFFF0000U);
   // Invariant: every named collision flag bit survives a save and reparse as its own bit.
   const std::uint16_t named[] = {0x4U, 0x8U, 0x20U, 0x40U, 0x80U, 0x400U, 0x800U};
   std::uint16_t combined = 0;
@@ -254,4 +255,8 @@ TEST(NifWriteBlocks, JsonEditsCarryFlagNamesAndRejectUnusableValues) {
   EXPECT_THROW(fo4::nif::read_edits_json("{\"id\":1}"), fo4::parse_error);
   EXPECT_THROW(fo4::nif::read_edits_json("not json"), fo4::parse_error);
   EXPECT_THROW(fo4::nif::read_edits_json("[{\"id\":-1,\"key\":\"name\",\"value\":\"x\"}]"), fo4::parse_error);
+  // Invariant: a whole number an f32 cannot hold is refused, never rounded into a different id.
+  EXPECT_THROW(fo4::nif::read_edits_json("[{\"id\":1,\"key\":\"bodyId\",\"value\":4294967295}]"),
+               fo4::parse_error);
+  EXPECT_NO_THROW(fo4::nif::read_edits_json("[{\"id\":1,\"key\":\"bodyId\",\"value\":16777216}]"));
 }
