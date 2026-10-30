@@ -175,6 +175,8 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/texture/dds.cpp
   src/texture/dds_codec.cpp
   src/nif/write_edits.cpp
+  src/nif/write_edits_shader.cpp
+  src/nif/edit_json.cpp
   src/nif/write_model.cpp
   src/nif/import_obj.cpp
   src/nif/import_build.cpp
@@ -941,6 +943,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_c_api_swf_real.cpp
     tests/test_dds.cpp
     tests/test_nif_write.cpp
+    tests/test_nif_write_blocks.cpp
     tests/test_environment_writeback.cpp
     tests/test_writeback_real.cpp
     tests/test_environment_ref_fields.cpp

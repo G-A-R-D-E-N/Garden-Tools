@@ -754,3 +754,38 @@ The fifteen NiNode-derived types in `src/nif/nif.cpp:k_node_types` are NiNode, B
 `read_nif` refuses a file whose parent links form a loop, including a node that lists itself as its own child, with the parse_error `node parent chain contains a cycle`. The check walks each block's parent chain once with a three-state marker, so it is linear in the block count and never recurses; a 10,000-deep acyclic chain reads (`NifNodes.ReadsAVeryDeepAcyclicChain`). The managed `NifNode.WorldMatrix` composes its ancestors in a loop capped at the node count rather than by recursion, so a deep tree cannot overflow the stack and a loop that reached it anyway would throw instead of hanging.
 
 A skinned shape whose skin instance lists no bones keeps its geometry, but its per-vertex weights and bone indices are dropped and the shape warning says `the skin lists no bones, so its weights were dropped`: indices with nothing to index are never handed to a consumer. Eight vanilla skinned shapes have no resolvable bone list.
+
+## Edit writer
+
+`include/fo4/nif/nif_write.hpp` edits a NIF through `apply_edits` (C++) or
+`apply_edits_json` (the editor's path, `src/nif/edit_json.cpp`). `write_nif` with no
+edits returns the input bytes unchanged, so a save that changes nothing changes nothing
+(`tests/test_nif_write.cpp:ZeroEditRoundTripIsByteIdentical`).
+
+Every edited field is written where the matching reader reports it: the writer calls
+`read_lighting_shader`, `read_effect_shader`, `read_alpha`, `read_bsx_flags` and
+`read_collision_object` and writes through their recorded offsets, so a field cannot
+drift between the two sides. A shared `BSLightingShaderProperty`, `BSShaderTextureSet` or
+`NiAlphaProperty` is copied before the edit and the owner's reference is repointed
+(`src/nif/write_edits.cpp:shader_block`, `:shape_texture_set`, `:alpha_block`).
+
+Shader flags are edited by name (`edit_json.cpp:read_edit`), so an unknown name is a
+parse_error instead of a silently cleared bit. `bhkNPCollisionObject` exposes only its
+flags and Body ID; the `bhkPhysicsSystem` payload is never rewritten
+(`tests/test_nif_write_blocks.cpp:CollisionObjectFlagsAndBodyIdRoundTripAndKeepTheBlob`).
+
+Its parity items extend the list above:
+
+36. `NiAlphaProperty` source blend, destination blend and test function stay read-only.
+    `nif.xml:NiAlphaProperty` stores them as bits of one flags word, and `commonlibf4`
+    names the values, but no allowed source pins the engine's write path for them, so the
+    writer changes them only through the whole `flags` word.
+37. `smoothness` is the FO4 name; the writer also accepts `glossiness`, the older name the
+    editor already sends, and both land on the same float. Whether the engine renames the
+    field for BS 130 is nif.xml's business, not a second offset.
+38. Below stream version 0x45 a shader flags edit naming a bit above 31 is refused rather
+    than truncated, because the block has no second word to hold it.
+39. `BSEffectShaderProperty` environment, normal and env-mask paths are refused below BS
+    130, where `src/nif/shader_effect.cpp` does not read them.
+40. A box collision import still fails with `box collision is not supported yet (needs the
+    HKX writer, #814)`; the Havok headers are for that work, not for this writer.

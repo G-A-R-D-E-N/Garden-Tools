@@ -1,60 +1,38 @@
 #include <fo4ide/assets/NifService.hpp>
 
 #include <fo4/error.hpp>
+#include <fo4/io/atomic_write.hpp>
 #include <fo4/nif/nif.hpp>
 #include <fo4/nif/nif_fix.hpp>
 #include <fo4/nif/nif_import.hpp>
+#include <fo4/nif/nif_write.hpp>
 #include <fo4ide/assets/NifRender.hpp>
 
-#include <chrono>
+#include <exception>
 #include <fstream>
-#include <functional>
 #include <iterator>
 #include <span>
-#include <thread>
-#include <utility>
+#include <string>
+#include <vector>
 
 namespace fo4ide::assets {
 namespace {
 
-std::string pathArg(const std::filesystem::path& path) {
-    return path.string();
+std::vector<char> readFile(const std::filesystem::path& path) {
+    std::ifstream stream(path, std::ios::binary);
+    return std::vector<char>((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
 }
 
-bool niftoolResolves(const std::filesystem::path& executable) {
-    return !executable.empty() && std::filesystem::is_regular_file(executable);
+fo4::nif::NifFile readNif(const std::filesystem::path& path) {
+    const auto raw = readFile(path);
+    return fo4::nif::read_nif(std::as_bytes(std::span(raw)));
 }
 
-std::filesystem::path uniqueEditsPath() {
-    const auto ticks = std::chrono::steady_clock::now().time_since_epoch().count();
-    const auto thread = std::hash<std::thread::id>{}(std::this_thread::get_id());
-    return std::filesystem::temp_directory_path() /
-        ("fo4ide_nif_edits_" + std::to_string(ticks) + "_" + std::to_string(thread) + ".json");
-}
-
-class Cleanup {
-public:
-    explicit Cleanup(std::filesystem::path path) : path_(std::move(path)) {}
-    ~Cleanup() {
-        std::error_code ec;
-        if (!path_.empty()) std::filesystem::remove(path_, ec);
-    }
-private:
-    std::filesystem::path path_;
-};
-
-Result<void> commitEditedNif(const std::vector<std::byte>& bytes, const std::filesystem::path& writeTemp,
-                             const std::filesystem::path& target) {
-    Cleanup outputCleanup(writeTemp);
+Result<void> writeNif(const std::vector<std::byte>& bytes, const std::filesystem::path& target) {
     try {
-        std::ofstream stream(writeTemp, std::ios::binary | std::ios::trunc);
-        if (!stream) return std::unexpected(Error{"NifEditFailed", "Could not create output NIF: " + pathArg(writeTemp)});
-        stream.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
-        stream.close();
-        if (!stream) return std::unexpected(Error{"NifEditFailed", "Could not write output NIF: " + pathArg(writeTemp)});
-        std::filesystem::rename(writeTemp, target);
-    } catch (const std::exception& ex) {
-        return std::unexpected(Error{"NifEditFailed", ex.what()});
+        fo4::io::write_file_atomic(target, bytes);
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"NifEditFailed", error.what()});
     }
     return {};
 }
@@ -62,7 +40,7 @@ Result<void> commitEditedNif(const std::vector<std::byte>& bytes, const std::fil
 Result<std::string> importInProcess(const std::filesystem::path& objPath, const std::filesystem::path& outputPath,
                                     const NifImportOptions& options) {
     std::ifstream stream(objPath, std::ios::binary);
-    if (!stream) return std::unexpected(Error{"FileNotFound", "Could not open OBJ: " + pathArg(objPath)});
+    if (!stream) return std::unexpected(Error{"FileNotFound", "Could not open OBJ: " + objPath.string()});
     const std::string text((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
     const fo4::nif::ImportOptions nifOptions{options.material, options.diffuseTexture, options.normalTexture,
                                              options.collisionBox, options.fromBlender};
@@ -72,42 +50,34 @@ Result<std::string> importInProcess(const std::filesystem::path& objPath, const 
     } catch (const std::exception& ex) {
         return std::unexpected(Error{"NifImportFailed", ex.what()});
     }
-    auto writeTemp = outputPath;
-    writeTemp += ".niftmp";
-    if (auto committed = commitEditedNif(bytes, writeTemp, outputPath); !committed) {
+    if (auto committed = writeNif(bytes, outputPath); !committed) {
         return std::unexpected(committed.error());
     }
     const auto verify = renderVerify(outputPath);
-    return "RESULT: import OK (in-process)\nSaved: " + pathArg(outputPath) + "\n" +
+    return "RESULT: import OK (in-process)\nSaved: " + outputPath.string() + "\n" +
         (verify ? *verify : verify.error().message);
 }
 
 Result<std::string> fixInProcess(const std::filesystem::path& nifPath, const std::filesystem::path& outputPath) {
-    std::ifstream stream(nifPath, std::ios::binary);
-    if (!stream) return std::unexpected(Error{"FileNotFound", "Could not open NIF: " + pathArg(nifPath)});
-    const std::vector<char> raw((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
     std::vector<std::byte> bytes;
     try {
-        bytes = fo4::nif::fix_nif(fo4::nif::read_nif(std::as_bytes(std::span(raw))));
+        bytes = fo4::nif::fix_nif(readNif(nifPath));
     } catch (const fo4::parse_error& error) {
         return std::unexpected(Error{"NifFixFailed", error.parse_message()});
     } catch (const std::exception& ex) {
         return std::unexpected(Error{"NifFixFailed", ex.what()});
     }
-    auto writeTemp = outputPath;
-    writeTemp += ".niftmp";
-    if (auto committed = commitEditedNif(bytes, writeTemp, outputPath); !committed) {
+    if (auto committed = writeNif(bytes, outputPath); !committed) {
         return std::unexpected(committed.error());
     }
     const auto verify = renderVerify(outputPath);
-    return "RESULT: fix OK (in-process)\nSaved: " + pathArg(outputPath) + "\n" +
+    return "RESULT: fix OK (in-process)\nSaved: " + outputPath.string() + "\n" +
         (verify ? *verify : verify.error().message);
 }
 
-}
+}  // namespace
 
-NifService::NifService(process::Runner& runner, std::filesystem::path executable)
-    : runner_(runner), executable_(std::move(executable)) {}
+NifService::NifService(process::Runner&, std::filesystem::path) {}
 
 Result<void> NifService::requireFile(const std::filesystem::path& path, std::string_view label) const {
     if (path.empty()) return std::unexpected(Error{"InvalidPath", std::string(label) + " path is empty"});
@@ -141,8 +111,7 @@ Result<std::string> NifService::fix(const std::filesystem::path& nifPath,
                                     const std::filesystem::path& outputPath) const {
     if (auto valid = requireFile(nifPath, "NIF"); !valid) return std::unexpected(valid.error());
     if (outputPath.empty()) return std::unexpected(Error{"InvalidPath", "Output NIF path is empty"});
-    if (!niftoolResolves(executable_)) return fixInProcess(nifPath, outputPath);
-    return run({"fix", pathArg(nifPath), pathArg(outputPath)});
+    return fixInProcess(nifPath, outputPath);
 }
 
 Result<std::string> NifService::importObj(const std::filesystem::path& objPath,
@@ -150,27 +119,7 @@ Result<std::string> NifService::importObj(const std::filesystem::path& objPath,
                                           const NifImportOptions& options) const {
     if (auto valid = requireFile(objPath, "OBJ"); !valid) return std::unexpected(valid.error());
     if (outputPath.empty()) return std::unexpected(Error{"InvalidPath", "Output NIF path is empty"});
-    if (!niftoolResolves(executable_)) return importInProcess(objPath, outputPath, options);
-
-    std::vector<std::string> arguments{"import", pathArg(objPath), pathArg(outputPath)};
-    if (!options.material.empty()) {
-        arguments.emplace_back("--material");
-        arguments.push_back(options.material);
-    }
-    if (!options.diffuseTexture.empty()) {
-        arguments.emplace_back("--tex-diffuse");
-        arguments.push_back(options.diffuseTexture);
-    }
-    if (!options.normalTexture.empty()) {
-        arguments.emplace_back("--tex-normal");
-        arguments.push_back(options.normalTexture);
-    }
-    if (options.collisionBox) {
-        arguments.emplace_back("--collision");
-        arguments.emplace_back("box");
-    }
-    if (options.fromBlender) arguments.emplace_back("--from-blender");
-    return run(std::move(arguments));
+    return importInProcess(objPath, outputPath, options);
 }
 
 Result<std::string> NifService::applyEdits(const std::filesystem::path& nifPath,
@@ -180,77 +129,18 @@ Result<std::string> NifService::applyEdits(const std::filesystem::path& nifPath,
     if (edits.empty()) return std::unexpected(Error{"NoEdits", "No NIF edits to apply"});
 
     const auto target = outputPath.empty() ? nifPath : outputPath;
-    auto writeTemp = target;
-    writeTemp += ".niftmp";
-    if (!niftoolResolves(executable_)) {
-        auto bytes = applyEditsInProcess(nifPath, edits);
-        if (!bytes) return std::unexpected(bytes.error());
-        if (auto committed = commitEditedNif(*bytes, writeTemp, target); !committed) {
-            return std::unexpected(committed.error());
-        }
-        return "set OK (in-process)\nSaved: " + pathArg(target);
-    }
-    const auto editsPath = uniqueEditsPath();
-    Cleanup editsCleanup(editsPath);
-    Cleanup outputCleanup(writeTemp);
-
+    std::vector<std::byte> bytes;
     try {
-        std::ofstream stream(editsPath, std::ios::binary | std::ios::trunc);
-        if (!stream) return std::unexpected(Error{"NifEditFailed", "Could not create temporary edits file"});
-        stream << edits.dump();
-        stream.close();
-        if (!stream) return std::unexpected(Error{"NifEditFailed", "Could not write temporary edits file"});
+        bytes = fo4::nif::apply_edits_json(readNif(nifPath), edits.dump());
+    } catch (const fo4::parse_error& error) {
+        return std::unexpected(Error{"NifEditFailed", error.parse_message()});
     } catch (const std::exception& ex) {
         return std::unexpected(Error{"NifEditFailed", ex.what()});
     }
-
-    auto result = run({"set", pathArg(nifPath), pathArg(writeTemp), pathArg(editsPath)});
-    if (!result) return result;
-    if (result->find("set OK") == std::string::npos) {
-        return std::unexpected(Error{"NifEditFailed", *result});
+    if (auto committed = writeNif(bytes, target); !committed) {
+        return std::unexpected(committed.error());
     }
-    if (!std::filesystem::is_regular_file(writeTemp)) {
-        return std::unexpected(Error{"NifEditFailed", "niftool reported success but did not create the output file"});
-    }
-
-    try {
-        std::filesystem::rename(writeTemp, target);
-    } catch (const std::exception& ex) {
-        return std::unexpected(Error{"NifEditFailed", ex.what()});
-    }
-
-    return *result + "\nSaved: " + target.string();
-}
-
-Result<std::string> NifService::run(std::vector<std::string> arguments) const {
-    if (executable_.empty()) {
-        return std::unexpected(Error{"NifToolNotFound",
-            "niftool not installed (set NIFTOOL_PATH or place niftool beside the application)"});
-    }
-    if (!std::filesystem::is_regular_file(executable_)) {
-        return std::unexpected(Error{"NifToolNotFound", "niftool executable not found: " + executable_.string()});
-    }
-
-    process::Request request;
-    request.executable = executable_;
-    request.arguments = std::move(arguments);
-    request.workingDirectory = executable_.parent_path();
-    request.timeout = std::chrono::seconds(120);
-
-    auto output = runner_.run(request);
-    if (!output) return std::unexpected(output.error());
-    if (!output->started) return std::unexpected(Error{"NifToolStartFailed", "Failed to start niftool"});
-    if (output->timedOut) return std::unexpected(Error{"NifToolTimeout", "niftool timed out after 120 seconds"});
-
-    auto combined = output->combined();
-    if (combined.empty()) {
-        combined = "niftool exited " + std::to_string(output->exitCode) + " with no output.";
-    }
-    return combined;
-}
-
-const std::filesystem::path& NifService::executable() const noexcept {
-    return executable_;
+    return "set OK (in-process)\nSaved: " + target.string();
 }
 
 }

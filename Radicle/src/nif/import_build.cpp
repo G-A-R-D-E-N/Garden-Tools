@@ -151,7 +151,7 @@ Bytes bsx_block(std::int32_t name) {
 
 std::vector<std::byte> import_obj(std::string_view obj_text, const ImportOptions& options) {
   if (options.box_collision) {
-    throw std::runtime_error("box collision needs niftool; the in-process import writes no collision");
+    throw std::runtime_error("box collision is not supported yet (needs the HKX writer, #814)");
   }
   const auto mesh = import_detail::read_obj(obj_text, options.from_blender);
   if (mesh.positions.size() > k_max_vertices) {

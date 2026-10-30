@@ -382,3 +382,11 @@ The preview's number input in `PluginEditTool/web/src/SwfPanel.tsx:SwfPanel` ign
 Regression: a fixture shader that ends early makes the tree show `readError` instead of `materialClass` and `envMapScale`, and makes a `tex0` edit fail with `NifEditFailed` because the writer needs the reader's texture-set offset.
 
 `materialClass` is displayed as `Envmap`, the name `Radicle/src/nif/describe.cpp:lighting_type_name` reports from the `BSShaderMaterial::Feature` ids, not the older `Environment Map` wording PET used to build itself. PET formats the value; the name belongs to Radicle.
+
+## PluginEditTool/native/src/assets/NifService.cpp:applyEdits
+
+The service reads the NIF, calls `fo4::nif::apply_edits_json` and commits with `fo4::io::write_file_atomic`; there is no temporary `.niftmp` file and no tool process. `NifRender.cpp:applyEditsInProcess` is the only adaptor left, and it holds no edit logic: the JSON-to-`Edit` conversion and its validation live in `Radicle/src/nif/edit_json.cpp:read_edit`.
+
+## PluginEditTool/native/src/assets/NifService.cpp:fix
+
+`fix` and `importObj` also run in process only. `fixInProcess` maps a `fo4::parse_error` to `NifFixFailed` and leaves the output untouched, and `importInProcess` reports the in-process verify, so a failed save never replaces the previous file.

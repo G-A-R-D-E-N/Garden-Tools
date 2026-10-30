@@ -102,56 +102,26 @@ TEST_CASE("NifService ignores a configured niftool for inspect, geometry, verify
     CHECK(runner.calls == 0);
 }
 
-TEST_CASE("NifService preserves import option ordering") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto tool = root / "niftool";
-    const auto obj = root / "mesh.obj";
-    touch(tool);
-    touch(obj);
-
-    FakeRunner runner;
-    fo4ide::assets::NifService service(runner, tool);
-    auto result = service.importObj(obj, root / "mesh.nif", {
-        .material = "Materials/test.bgsm",
-        .diffuseTexture = "Textures/test_d.dds",
-        .normalTexture = "Textures/test_n.dds",
-        .collisionBox = true,
-        .fromBlender = true,
-    });
-
-    REQUIRE(result.has_value());
-    CHECK(runner.last.arguments == std::vector<std::string>{
-        "import", obj.string(), (root / "mesh.nif").string(),
-        "--material", "Materials/test.bgsm",
-        "--tex-diffuse", "Textures/test_d.dds",
-        "--tex-normal", "Textures/test_n.dds",
-        "--collision", "box", "--from-blender"
-    });
-}
-
-TEST_CASE("NifService applies edits through a temporary output before replacing target") {
+TEST_CASE("NifService applies edits over the target in place when a niftool is configured") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto tool = root / "niftool";
     const auto nif = root / "sample.nif";
     touch(tool);
-    touch(nif, "original nif");
+    fo4ide::test::writeBytes(nif, fo4ide::test::treeNif("Materials\\Clutter\\Thing.BGSM", {}));
 
     FakeRunner runner;
     fo4ide::assets::NifService service(runner, tool);
-    auto result = service.applyEdits(nif, nlohmann::json::array({{{"id", 1}, {"key", "name"}, {"value", "changed"}}}));
+    auto result = service.applyEdits(nif, nlohmann::json::array({{
+        {"id", 1}, {"key", "name"}, {"value", "changed"}}}));
 
     REQUIRE(result.has_value());
-    REQUIRE(runner.last.arguments.size() == 4);
-    CHECK(runner.last.arguments[0] == "set");
-    CHECK(runner.last.arguments[1] == nif.string());
-    CHECK(runner.last.arguments[2] == nif.string() + ".niftmp");
-
-    std::ifstream stream(nif, std::ios::binary);
-    const std::string contents((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
-    CHECK(contents == "rewritten nif");
+    CHECK(*result == "set OK (in-process)\nSaved: " + nif.string());
+    CHECK(runner.calls == 0);
     CHECK_FALSE(std::filesystem::exists(nif.string() + ".niftmp"));
+    auto tree = service.tree(nif);
+    REQUIRE(tree.has_value());
+    CHECK(treeValue(nlohmann::json::parse(*tree).at("blocks")[1], "name") == "changed");
 }
 
 TEST_CASE("NifService applies name, translation and texture edits in-process without niftool") {
@@ -346,25 +316,24 @@ TEST_CASE("NifService fix without niftool refuses an unreadable NIF and writes n
     CHECK(runner.calls == 0);
 }
 
-TEST_CASE("NifService fix maps onto the niftool fix command when niftool resolves") {
+TEST_CASE("NifService fix ignores a configured niftool and repairs in-process") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto tool = root / "niftool";
     const auto nif = root / "sample.nif";
     const auto fixed = root / "fixed.nif";
     touch(tool);
-    touch(nif, "original nif");
+    fo4ide::test::writeBytes(nif, fo4ide::test::treeNif("Materials\\Clutter\\Thing.BGSM", {}));
 
     FakeRunner runner;
     fo4ide::assets::NifService service(runner, tool);
     auto fix = service.fix(nif, fixed);
 
     REQUIRE(fix.has_value());
-    CHECK(runner.calls == 1);
-    REQUIRE(runner.last.arguments.size() == 3);
-    CHECK(runner.last.arguments[0] == "fix");
-    CHECK(runner.last.arguments[1] == nif.string());
-    CHECK(runner.last.arguments[2] == fixed.string());
+    CHECK(fix->starts_with("RESULT: fix OK (in-process)\nSaved: " + fixed.string() +
+                           "\nRESULT: 9 checks, 0 failed\n"));
+    CHECK(std::filesystem::is_regular_file(fixed));
+    CHECK(runner.calls == 0);
 }
 
 TEST_CASE("NifService reads in-process when the configured niftool is missing") {
@@ -556,7 +525,8 @@ TEST_CASE("NifService refuses box collision in-process and writes no NIF") {
     auto result = service.importObj(obj, root / "quad.nif", options);
 
     REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().message.find("box collision needs niftool") != std::string::npos);
+    CHECK(result.error().message.find("box collision is not supported yet (needs the HKX writer, #814)") !=
+          std::string::npos);
     CHECK_FALSE(std::filesystem::exists(root / "quad.nif"));
     CHECK(runner.calls == 0);
 }

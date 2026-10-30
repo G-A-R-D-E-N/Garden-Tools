@@ -22,7 +22,8 @@ struct NifImportOptions {
 
 class NifService {
 public:
-    NifService(process::Runner& runner, std::filesystem::path executable);
+    // Requires in-process execution: the configured tool path and runner are unused.
+    NifService(process::Runner&, std::filesystem::path);
 
     Result<std::string> inspect(const std::filesystem::path& nifPath) const;
     Result<std::string> geometry(const std::filesystem::path& nifPath) const;
@@ -37,14 +38,8 @@ public:
                                    const nlohmann::json& edits,
                                    const std::filesystem::path& outputPath = {}) const;
 
-    const std::filesystem::path& executable() const noexcept;
-
 private:
-    Result<std::string> run(std::vector<std::string> arguments) const;
     Result<void> requireFile(const std::filesystem::path& path, std::string_view label) const;
-
-    process::Runner& runner_;
-    std::filesystem::path executable_;
 };
 
 }

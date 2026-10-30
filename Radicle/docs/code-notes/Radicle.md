@@ -10017,3 +10017,21 @@ The check names and their order are the contract a caller prints, so they are li
 ## Radicle/src/nif/tree_shader.cpp:lighting_shader_fields
 
 The per-type tails are emitted only for the type that stores them, so the editor never shows an `envMapScale` on a `Parallax occ` material that has no such float; the same `has_env_map`, `has_skin_tint` and friends decide, which is why the fields and the bytes cannot drift apart. `materialClass` is read-only because `BSShaderMaterial::Feature` is what the id means, not something a modder picks. The blend and test names on an alpha property are read-only for the same reason - a wrong value there is a wrong word, not a wrong choice - while the flags word, the two enables and the threshold stay editable so the writer can change them by read-modify-write.
+
+## Radicle/include/fo4/nif/nif_write.hpp:apply_edits
+
+The edit writer lives in `Radicle/src/nif/write_edits.cpp` (dispatch, node, shape, alpha, BSX, collision object, texture set), `Radicle/src/nif/write_edits_shader.cpp` (lighting and effect fields) and `Radicle/src/nif/edit_json.cpp` (the editor's payload). `write_nif` with no edits returns the input bytes unchanged, so a save that changes nothing changes nothing (`Radicle/tests/test_nif_write.cpp:ZeroEditRoundTripIsByteIdentical`).
+
+Every edited field is written where the matching reader reports it: `apply_lighting_edit` starts from `read_lighting_shader` and writes through `LightingFieldOffsets`, and the effect and alpha paths do the same through `EffectFieldOffsets` and `AlphaProperty::flags_at`/`threshold_at`. A field the reader gates on a version can therefore only be written when the reader found it; otherwise the writer fails with `key '<key>' is not stored by this block` instead of writing into the next field. `apply_edits` reloads the file between edits, so each edit sees the byte layout the previous one produced - which matters for sized strings, where an effect shader's source path changes block length and the later slots move with it (`Radicle/tests/test_nif_write_blocks.cpp:EffectShaderTextureGrowthKeepsLaterSlotsCorrect`).
+
+## Radicle/src/nif/write_edits.cpp:shader_block
+
+`shader_block`, `shape_texture_set` and `alpha_block` count the users of a block first and duplicate it when the edited shape is not the only one; without that, editing one shape's material silently renames a second shape's. The copy is taken into a local before either vector grows, because `push_back` from an element of the same vector is undefined once it reallocates.
+
+## Radicle/src/nif/edit_json.cpp:read_edit
+
+The JSON the editor sends is parsed here, not in the host: `read_edit` accepts text, one number, a list of numbers or a list of flag names, and anything else (including a block id out of range) is a `parse_error`. `Radicle/src/nif/write_edits_shader.cpp:flag_mask` resolves each flag name with `shader_flag_name`, so a name that no longer exists is a refused edit rather than a cleared bit, and a raw mask cannot be expressed - an editor round trip cannot set a bit the reader has no name for.
+
+## Radicle/src/nif/write_edits.cpp:apply_collision_edit
+
+Only `flags` (u16 at 4) and `bodyId` (u32 at 10) are writable; `target` and `system` are read-only references and the `bhkPhysicsSystem` block is never rebuilt, so the Havok packfile a mod shipped survives the edit byte for byte (`Radicle/tests/test_nif_write_blocks.cpp:CollisionObjectFlagsAndBodyIdRoundTripAndKeepTheBlob`). `smoothness` is the FO4 name and `glossiness` is accepted as its older alias, both landing on the same float, because the editor already sends the older key.
