@@ -101,7 +101,10 @@ nlohmann::json serviceText(Result<std::string> result) {
 }
 
 nlohmann::json serviceJsonText(Result<std::string> result) {
-    if (!result) return nlohmann::json{{"error", result.error().message}}.dump();
+    if (!result) {
+        return nlohmann::json{{"error", result.error().message}}
+            .dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
+    }
     return std::move(*result);
 }
 
@@ -311,7 +314,7 @@ Result<nlohmann::json> CellTarget::invoke(std::string_view method,
             if (!parsed.is_array()) {
                 return nlohmann::json(nlohmann::json{
                     {"error", "Error: GetGeometryBatch expects a JSON array of model paths."}}
-                                          .dump());
+                                          .dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
             }
             std::vector<std::string> paths;
             for (const auto& entry : parsed) {
@@ -320,7 +323,8 @@ Result<nlohmann::json> CellTarget::invoke(std::string_view method,
             return nlohmann::json(geometryBatch(paths));
         } catch (const std::exception& ex) {
             return nlohmann::json(
-                nlohmann::json{{"error", "Error: " + std::string(ex.what())}}.dump());
+                nlohmann::json{{"error", "Error: " + std::string(ex.what())}}
+                    .dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
         }
     }
     if (method == "GetGeometryBatchProgress") {
@@ -434,7 +438,7 @@ std::string CellTarget::geometryBatch(const std::vector<std::string>& relModelPa
     nlohmann::json payload;
     payload["count"] = total;
     payload["geometry"] = std::move(geometryMap);
-    return payload.dump();
+    return payload.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
 }
 
 }
