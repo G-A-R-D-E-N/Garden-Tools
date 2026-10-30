@@ -135,11 +135,6 @@ std::vector<TreeField> collision_system_fields(const NifFile& nif, std::uint32_t
   return fields;
 }
 
-std::string prefixed_name(const NifFile& nif, std::uint32_t block) {
-  auto cursor = detail::block_cursor(nif, block);
-  return detail::read_string_ref(cursor, nif);
-}
-
 std::vector<TreeField> skin_instance_fields(const NifFile& nif, std::uint32_t block) {
   auto cursor = detail::block_cursor(nif, block);
   const auto name = detail::read_string_ref(cursor, nif);
