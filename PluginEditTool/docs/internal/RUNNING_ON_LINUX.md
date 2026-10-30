@@ -108,11 +108,11 @@ Papyrus engine are all native. These helper programs are Windows executables:
 - `PapyrusCompiler.exe` (the Creation Kit compiler; the built-in engine does not need it)
 - `Archive2.exe` (`archive_pack`)
 - `xWMAEncode.exe`, `BmlFuzEncode.exe`, `BmlFuzDecode.exe` (audio and FUZ tools)
-- `niftool.exe` and `Texconvx64.exe`, if you only have the Windows builds
+- `Texconvx64.exe`, if you only have the Windows build
 
 The program runs any helper whose file name ends in `.exe` through `wine` (the call fails if wine is missing). Set
 `FO4RE_WINE` to name a different wine binary, or to an empty value to turn that off. `ffmpeg` is used
-natively from `PATH`, and `niftool` and `texconv` are also looked up on `PATH` without the `.exe`.
+natively from `PATH`, and `texconv` is also looked up on `PATH` without the `.exe`.
 Where each helper is looked for is listed in [../MCP_SETUP.md](../MCP_SETUP.md). How the Windows
 tools cope with Linux paths under Wine has not been checked.
 

@@ -8,7 +8,6 @@
 #include <nlohmann/json.hpp>
 
 #include <fo4ide/core/Result.hpp>
-#include <fo4ide/process/ProcessRunner.hpp>
 
 namespace fo4ide::assets {
 
@@ -22,8 +21,7 @@ struct NifImportOptions {
 
 class NifService {
 public:
-    // Requires in-process execution: the configured tool path and runner are unused.
-    NifService(process::Runner&, std::filesystem::path);
+    NifService() = default;
 
     Result<std::string> inspect(const std::filesystem::path& nifPath) const;
     Result<std::string> geometry(const std::filesystem::path& nifPath) const;

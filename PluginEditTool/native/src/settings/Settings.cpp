@@ -74,7 +74,6 @@ void from_json(const nlohmann::json& json, Settings& settings) {
     settings.texconvPath = readPath(json, "TexconvPath");
     settings.papyrusCompilerPath = readPath(json, "PapyrusCompilerPath");
     settings.papyrusBaseImports = readPath(json, "PapyrusBaseImports");
-    settings.nifToolPath = readPath(json, "NiftoolPath");
     settings.ffmpegPath = readPath(json, "FfmpegPath");
     settings.xwmaEncodePath = readPath(json, "XwmaEncodePath");
     settings.archive2Path = readPath(json, "Archive2Path");
@@ -86,7 +85,6 @@ void from_json(const nlohmann::json& json, Settings& settings) {
     applyEnv(settings.texconvPath, "TEXCONV_PATH");
     applyEnv(settings.papyrusCompilerPath, "PAPYRUS_COMPILER_PATH");
     applyEnv(settings.papyrusBaseImports, "PAPYRUS_BASE_IMPORTS");
-    applyEnv(settings.nifToolPath, "NIFTOOL_PATH");
     applyEnv(settings.ffmpegPath, "FFMPEG_PATH");
     applyEnv(settings.xwmaEncodePath, "XWMAENCODE_PATH");
     applyEnv(settings.archive2Path, "ARCHIVE2_PATH");
@@ -110,7 +108,6 @@ void to_json(nlohmann::json& json, const Settings& settings) {
     json["TexconvPath"] = settings.texconvPath.string();
     json["PapyrusCompilerPath"] = settings.papyrusCompilerPath.string();
     json["PapyrusBaseImports"] = settings.papyrusBaseImports.string();
-    json["NiftoolPath"] = settings.nifToolPath.string();
     json["FfmpegPath"] = settings.ffmpegPath.string();
     json["XwmaEncodePath"] = settings.xwmaEncodePath.string();
     json["Archive2Path"] = settings.archive2Path.string();

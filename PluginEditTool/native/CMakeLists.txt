@@ -23,7 +23,7 @@ include(CompilerWarnings)
 include(Sanitizers)
 include(Utf8CodePage)
 
-# The cell geometry batch runs niftool over many meshes on a bounded worker
+# The cell geometry batch reads many meshes through Radicle on a bounded worker
 # pool, so the app library uses std::thread (needs pthreads on POSIX).
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)

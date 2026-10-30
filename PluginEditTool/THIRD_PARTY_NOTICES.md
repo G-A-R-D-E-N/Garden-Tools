@@ -3,8 +3,8 @@
 FO4RecordEditor is distributed under the **GNU General Public License v3.0** (see [LICENSE](LICENSE)).
 
 It has to be. The editor is built directly against **Mutagen** (GPL-3.0) to read and write plugin
-binaries, and can call **niftool**, which embeds **nifly** (GPL-3.0). The release zip does not include
-niftool. GPL-3.0 is a copyleft license: a
+binaries, and Radicle's NIF reader carries code copied from **G-A-R-D-E-N/commonlibf4** (GPL-3.0-or-later,
+see below). GPL-3.0 is a copyleft license: a
 program that links GPL-3.0 code and is then distributed to anyone else must itself be distributed
 under GPL-3.0, with its source made available to the people who receive it. That applies whether it
 is published publicly or handed to one person privately.
@@ -18,25 +18,7 @@ that obligation is satisfied; there is no separate location to also track.
 | Component | License | Used for |
 |---|---|---|
 | [Mutagen](https://github.com/Mutagen-Modding/Mutagen) | GPL-3.0 | Reading and writing `.esp`/`.esm`/`.esl` records. Vendored in-repo under `Mutagen/`. **Patched** -- see below. |
-| [nifly](https://github.com/ousnius/nifly) (inside `niftool`) | GPL-3.0 | NIF parsing and repair, behind the `nif_*` tools. |
-
-### Patch carried against nifly
-
-One functional change, in the vendored checkout at `Tools/FO4AnimForge/extern/nifly` (commit
-`b05bb5b`), which `niftool` builds against:
-
-**`BSPackedGeomData::Sync` overran the block for the SHARED combined-geometry variant.** It read
-`numVertices` vertices and `triCountLod*` triangles after `vertexDesc` unconditionally. That is right
-for `BSPackedCombinedGeomDataExtra`, which embeds its geometry, and wrong for
-`BSPackedCombinedSharedGeomDataExtra`, where the geometry lives in the sibling shape block -- which is
-what "shared" means. The block ends after `vertexDesc`.
-
-The overrun desyncs the rest of the file, so the error surfaces later and elsewhere: a garbage string
-or block index in whichever block follows. Every real Fallout 4 precombined mesh
-(`Meshes\PreCombined\*_OC.NIF`) hit it.
-
-Verified against real vanilla data: across 166 such blocks in 8 real precombines, the on-disk block
-size matches the no-embedded-geometry layout exactly, zero mismatches.
+| [G-A-R-D-E-N/commonlibf4](https://github.com/G-A-R-D-E-N/commonlibf4) | GPL-3.0-or-later, with the Fallout 4 modding exceptions | Shader-property flags and material ids, `NiAlphaProperty` accessors, BSX flags and the BSGraphics vertex-descriptor bit helpers, copied into Radicle's NIF reader at commit `22b0dbd` and adapted to its namespaces and style. |
 | [bcdec.h](https://github.com/iOrange/bcdec) | MIT / Unlicense (dual) | BC1-BC7 block decoding, ported to C# as `Services/Textures/BcnDecoder.cs`. |
 | [texconv](https://github.com/microsoft/DirectXTex) (DirectXTex) | MIT | DDS conversion fallback, for the few formats `BcnDecoder` does not handle. Shipped as `tools\texconv\Texconvx64.exe` (DirectXTex `may2026`) when the build fetches its pin. |
 | [WPF-UI](https://github.com/lepoco/wpfui) | MIT | The desktop UI theme and controls. |
@@ -143,8 +125,8 @@ modding community, originally packaged for reuse as a Nexus "Modder's Resource":
 ## Audio tools (`tools\audio\`)
 
 Three third-party executables back the `audio_*` tools, all run as **separate processes** the editor
-shells out to (like niftool and texconv) -- none of them are linked into `FO4RecordEditor.dll`, so
-none of the "combined work" complexity that applies to Mutagen/nifly above applies here.
+shells out to (like texconv) -- none of them are linked into `FO4RecordEditor.dll`, so none of the
+"combined work" complexity that applies to Mutagen above applies here.
 
 - **ffmpeg** -- `tools\audio\ffmpeg.exe` is a static Windows build from
   [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds) (the `win64-lgpl` variant, which
@@ -181,5 +163,4 @@ install; it is not redistributable and is not included.
 xEdit is not bundled either. The editor does not use it or need it.
 
 `Archive2.exe` and `PapyrusCompiler.exe` are Bethesda's and come with the Creation Kit. The editor
-detects them in your Fallout 4 install and does not ship them. niftool is not in the release zip;
-NIF authoring that needs it requires a copy you supply (`NIFTOOL_PATH`).
+detects them in your Fallout 4 install and does not ship them.

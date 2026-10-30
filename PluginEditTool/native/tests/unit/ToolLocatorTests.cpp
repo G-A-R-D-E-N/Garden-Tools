@@ -31,34 +31,30 @@ void touch(const std::filesystem::path& path) {
 
 }
 
-TEST_CASE("Tool locator prefers explicit NIF setting") {
+TEST_CASE("Tool locator prefers explicit texconv setting") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
-    const auto configured = root / "configured" / "niftool";
+    const auto configured = root / "configured" / "Texconv.exe";
     touch(configured);
 
     fo4ide::settings::Settings settings;
-    settings.nifToolPath = configured;
+    settings.texconvPath = configured;
     fo4ide::settings::SharedSettings shared(settings);
     fo4ide::tools::Locator locator(shared, root / "FO4IDE-native");
 
-    CHECK(locator.resolve(fo4ide::tools::Tool::NifTool) == configured);
+    CHECK(locator.resolve(fo4ide::tools::Tool::Texconv) == configured);
 }
 
 TEST_CASE("Tool locator discovers application-local tools") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
-#if defined(_WIN32)
-    const auto nif = root / "tools" / "niftool" / "niftool.exe";
-#else
-    const auto nif = root / "tools" / "niftool" / "niftool";
-#endif
-    touch(nif);
+    const auto texconv = root / "tools" / "texconv" / "Texconvx64.exe";
+    touch(texconv);
 
     fo4ide::settings::Settings settings;
     fo4ide::settings::SharedSettings shared(settings);
     fo4ide::tools::Locator locator(shared, root / "FO4IDE-native");
-    CHECK(locator.resolve(fo4ide::tools::Tool::NifTool) == nif);
+    CHECK(locator.resolve(fo4ide::tools::Tool::Texconv) == texconv);
 }
 
 TEST_CASE("Tool locator uses configured Fallout 4 root") {

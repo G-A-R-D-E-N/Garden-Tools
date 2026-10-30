@@ -66,7 +66,6 @@ std::string toolPathError(const nlohmann::json& payload) {
         {"XwmaEncodePath", {"xWMAEncode.exe"}, false},
         {"Archive2Path", {"Archive2.exe"}, false},
         {"ClaudeCodePath", {}, true},
-        {"NiftoolPath", {}, false},
         {"FfmpegPath", {}, false},
     };
     for (const auto& rule : rules) {
@@ -153,7 +152,6 @@ Result<nlohmann::json> SettingsTarget::saveSettings(const nlohmann::json& args) 
             updatePath(payload, "TexconvPath", current.texconvPath);
             updatePath(payload, "PapyrusCompilerPath", current.papyrusCompilerPath);
             updatePath(payload, "PapyrusBaseImports", current.papyrusBaseImports);
-            updatePath(payload, "NiftoolPath", current.nifToolPath);
             updatePath(payload, "FfmpegPath", current.ffmpegPath);
             updatePath(payload, "XwmaEncodePath", current.xwmaEncodePath);
             updatePath(payload, "Archive2Path", current.archive2Path);

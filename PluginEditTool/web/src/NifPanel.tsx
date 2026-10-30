@@ -259,7 +259,7 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
           <button className="papyrus-close" onClick={requestClose} title="Close"><X size={16} /></button>
         </div>
 
-        {mode !== 'materials' && unavailable && <div className="papyrus-warn">NIF bridge not available -- run the desktop app (not the browser dev server). niftool.exe is only needed for import with box collision.</div>}
+        {mode !== 'materials' && unavailable && <div className="papyrus-warn">NIF bridge not available -- run the desktop app (not the browser dev server).</div>}
         {mode === 'materials' && matUnavailable && <div className="papyrus-warn">Material bridge not available -- run the desktop app (not the browser dev server).</div>}
 
         <div className={`papyrus-body ${mode === 'edit' || mode === 'materials' ? 'nif-edit-body' : ''}`}>

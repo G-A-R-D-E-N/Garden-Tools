@@ -6,7 +6,7 @@ const baseSettings = {
   AiProvider: 'anthropic', hasAnthropicApiKey: false, Model: 'claude-sonnet-4-6',
   hasGeminiApiKey: false, GeminiModel: 'gemini-2.0-flash', ClaudeCodePath: '', OllamaUrl: '',
   OllamaModel: '', OutputFolder: '', DataFolder: '', CkWikiPath: '', TexconvPath: '',
-  PapyrusCompilerPath: '', PapyrusBaseImports: '', NiftoolPath: '', FfmpegPath: '',
+  PapyrusCompilerPath: '', PapyrusBaseImports: '', FfmpegPath: '',
   XwmaEncodePath: '', Archive2Path: '',
 };
 const saveSettings = vi.fn<(payload: string) => Promise<string>>(async () => 'Saved');

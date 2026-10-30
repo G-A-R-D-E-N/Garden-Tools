@@ -43,13 +43,6 @@ public:
     }
 };
 
-class ThrowingRunner final : public fo4ide::process::Runner {
-public:
-    fo4ide::Result<fo4ide::process::Output> run(const fo4ide::process::Request&) override {
-        throw std::runtime_error("niftool blew up");
-    }
-};
-
 class FakePlatform final : public fo4ide::platform::Services {
 public:
     std::filesystem::path fileSelection;

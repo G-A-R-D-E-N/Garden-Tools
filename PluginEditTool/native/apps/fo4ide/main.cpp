@@ -99,9 +99,8 @@ std::vector<std::filesystem::path> textureRootsForSettings(
 class AppTarget final : public fo4ide::rpc::Target {
 public:
     AppTarget(fo4ide::plugin::IPluginBackend& plugins,
-              fo4ide::archive::ArchiveService& archives,
-              std::filesystem::path nifTool)
-        : plugins_(plugins), archives_(archives), nifTool_(std::move(nifTool)) {}
+              fo4ide::archive::ArchiveService& archives)
+        : plugins_(plugins), archives_(archives) {}
 
     fo4ide::Result<nlohmann::json> invoke(std::string_view method,
                                            const nlohmann::json&) override {
@@ -114,7 +113,6 @@ public:
                 {"pluginRead", capabilities.readPlugins},
                 {"pluginWrite", capabilities.writePlugins},
                 {"archiveReadBackend", archives_.readBackendAvailable()},
-                {"nifTool", !nifTool_.empty()},
                 {"materialCodec", true},
                 {"audioTools", true},
                 {"embeddedWindow", fo4ide::platform::NativeWindow::available()}
@@ -126,7 +124,6 @@ public:
 private:
     fo4ide::plugin::IPluginBackend& plugins_;
     fo4ide::archive::ArchiveService& archives_;
-    std::filesystem::path nifTool_;
 };
 
 class RefreshingSettingsTarget final : public fo4ide::rpc::Target {
@@ -232,8 +229,7 @@ int main(int argc, char** argv) {
     fo4ide::process::ReprocRunner processRunner;
     fo4ide::platform::NativeServices platformServices(processRunner);
     fo4ide::tools::Locator toolLocator(currentSettings, argv[0]);
-    const auto nifTool = toolLocator.resolve(fo4ide::tools::Tool::NifTool);
-    fo4ide::assets::NifService nifService(processRunner, nifTool);
+    fo4ide::assets::NifService nifService;
     fo4ide::audio::AudioService audioService(processRunner, toolLocator);
     fo4ide::material::MaterialService materialService;
     fo4ide::archive::RadicleArchiveBackend archiveBackend;
@@ -251,7 +247,7 @@ int main(int argc, char** argv) {
     auto refreshingAppInteropTarget = std::make_shared<RefreshingAppInteropTarget>(
         appInteropTarget, currentSettings, textureResolver);
 
-    if (!registerTarget(rpc, "app", std::make_shared<AppTarget>(plugins, archiveService, nifTool), log) ||
+    if (        !registerTarget(rpc, "app", std::make_shared<AppTarget>(plugins, archiveService), log) ||
         !registerTarget(rpc, "appInterop", refreshingAppInteropTarget, log) ||
         !registerTarget(rpc, "settings", std::make_shared<RefreshingSettingsTarget>(settingsStore, currentSettings, platformServices, processRunner, textureResolver), log) ||
         !registerTarget(rpc, "nif", std::make_shared<fo4ide::app::NifTarget>(nifService, textureResolver, platformServices), log) ||

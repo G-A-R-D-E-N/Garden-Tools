@@ -9,7 +9,6 @@
 namespace fo4ide::tools {
 
 enum class Tool {
-    NifTool,
     Texconv,
     PapyrusCompiler,
     Archive2,

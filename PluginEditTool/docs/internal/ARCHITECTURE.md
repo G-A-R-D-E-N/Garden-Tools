@@ -253,7 +253,7 @@ Windows, and builds/tests the PluginEditTool native host on Linux.
 
 ## Release paths
 
-- `package.ps1`: Windows C++ release zip. Helper programs are bundled from the `-NiftoolPath`,
+- `package.ps1`: Windows C++ release zip. Helper programs are bundled from the `-TexconvPath`,
   `-TexconvPath`, `-CkWikiPath`, `-AudioToolsDir` and `-BaseScriptsPath` parameters or their
   environment variables; an unset one is skipped with a warning.
 - `publish.bat [deploy-folder]`: Windows local build/deploy loop for MO2 testing. The folder can also

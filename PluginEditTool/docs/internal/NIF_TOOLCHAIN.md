@@ -1,169 +1,103 @@
-# NIF Toolchain: author / repair / verify / **view** FO4 NIFs (kill NifSkope)
+# NIF toolchain: author / repair / verify / **view** FO4 NIFs (kill NifSkope)
 
 Self-contained Fallout 4 NIF authoring built into the FO4RecordEditor toolchain. Take a
-Blender-exported OBJ → a game-ready FO4 NIF (shader, textures, tangents, BSX, collision), **see it
-in a live 3D viewport with its DDS textures**, verify it, and wire it onto a record's `Model`, with
-no NifSkope and no Creation Kit.
+Blender-exported OBJ → a game-ready FO4 NIF (shader, textures, tangents, BSX), **see it in a live 3D
+viewport with its DDS textures**, verify it, edit it, and wire it onto a record's `Model`, with no
+NifSkope, no Creation Kit and no external NIF program.
 
-The engine is `niftool.exe`; it and the app live in this repository (`tools/niftool/`,
-`FO4RecordEditor/`). This page documents the whole NIF toolchain.
+The engine is Radicle, the repository's own C++ library (`Radicle/src/nif`, ABI in
+`Radicle/include/fo4/c_api_nif.h`). The native host (`PluginEditTool/native`) calls it in process and
+formats its results as JSON. There is no external NIF executable to install or bundle.
 
 ---
 
 ## Architecture
 
 ```
-Blender ──OBJ──▶ niftool.exe (C++/nifly) ──▶ FO4 .nif ──▶ record Model.File (set_field) ──▶ game
-                     ▲   │                                     (existing record tools)
-                     │   └─ geo JSON / verify / inspect / fix
+Blender ──OBJ──▶ fo4::nif::import_obj (Radicle) ──▶ FO4 .nif ──▶ record Model.File ──▶ game
+                        ▲
+                        │  read_nif / read_shapes / read_lighting_shader / read_alpha /
+                        │  read_collision_blobs / describe_nif / verify_nif / fix_nif /
+                        │  apply_edits (and apply_edits_json for the editor's payload)
+                        │
    FO4RecordEditor (C#/WPF + React WebView2)
-     • MCP tools  nif_inspect/nif_verify/nif_tree/nif_geometry → NifService (fo4ide, McpTools.cpp)
-     • GUI panel  View / Import / Inspect / Verify / Fix       → NifInterop  → NifService/TextureService
-     • 3D viewport (three.js) with DDS textures via Texconv
+     • native host  NifService (PluginEditTool/native) → Radicle, JSON out
+     • MCP tools    nif_inspect / nif_verify / nif_tree / nif_geometry  → NifService
+     • GUI panel    View / Edit / Import / Inspect / Verify / Fix       → NifInterop → NifService
+     • 3D viewport  (three.js) with DDS textures via Texconv
 ```
 
-- **Engine = our own `niftool.exe`** (C++, xmake/MSVC) linking the ONE complete nifly copy at
-  `Tools\FO4AnimForge\extern\nifly`. Shelled out from C# (the `PapyrusService` pattern) for crash
-  isolation, the "repair broken NIFs" path feeds malformed files to native code. **Not** P/Invoke of
-  the external `NiflyDLL.dll` (self-containment + crash safety). Collision recipe ported from
-  pynifly's `NiflyWrapper.cpp` (raw nifly has no collision helpers).
-- **Record tie-in already solved:** `set_field` maps `Model`/`nif`/`Model.File` onto any
-  STAT/WEAP/MISC/ARMO, no Creation Kit.
+Radicle reads files, never game memory, and holds every NIF fact the project relies on; see
+`Radicle/docs/NIF.md` for the sources each layout fact is pinned to. `PluginEditTool/native` keeps
+only argument parsing, the service surface and JSON.
 
-> **Planned replacement.** The nifly-based engine is **temporary**: embedding nifly makes
-> the whole binary GPL-3.0, which is why the tool ships as an external exe rather than in-process.
-> We will eventually write our own NIF implementation. The drop-in surface is the CLI contract
-> (`NifService` → `niftool <cmd>` with JSON on stdout) and the `ToolPaths` resolution order, a
-> replacement binary needs only to implement the same commands, not touch the C# side. Until then,
-> a release built without `niftool.exe` simply has dead `nif_*` tools (package.ps1 warns and
-> continues).
+## Verbs
 
----
+| Verb | Radicle entry point | Notes |
+|---|---|---|
+| `inspect` | `inspect_nif` | FO4 flag, per-shape name/verts/tris/skinned/shader/textures/tangents, BSX and collision presence |
+| `geometry` | `geometry_nif` | flat vert/tri/normal/uv arrays, texture slots, billboard mode; feeds the viewport |
+| `tree` | `describe_nif` | every block, grouped, with shader flags, per-material tail fields, alpha, BSX flags and the decoded vertex descriptor |
+| `verify` | `verify_nif` | the eight check names plus the vertex-descriptor/stride check |
+| `fix` | `fix_nif` | recomputes tangents and bitangents, adds a missing BSXFlags, trims texture and material whitespace; idempotent |
+| `import` | `import_obj` | OBJ → `BSTriShape` + shader + texture set + BSX, with normals and tangents; `--from-blender` restores Z-up |
+| `set` | `apply_edits` / `apply_edits_json` | `{id,key,value}` edits; text, numbers, number lists and shader-flag name lists |
 
-## Implemented
+Edits write each field where the matching reader reports it, copy a shared shader, texture set or
+alpha property before changing it, and pass a `bhkPhysicsSystem` packfile through untouched. An
+unknown or read-only key is a parse error and the file is left byte-identical.
 
-### Engine: `niftool.exe`
-- `import <obj> <nif>`: OBJ → FO4 `BSTriShape` + `BSLightingShaderProperty` + texture slots +
-  computed normals/tangents + `BSXFlags` + optional `--collision box`. Options: `--material`,
-  `--tex-diffuse`, `--tex-normal`, `--collision box`, `--from-blender` (Y-up→Z-up). Auto-verifies.
-- `inspect <nif>`: JSON: FO4?, per-shape {name, verts, tris, skinned, shader, textures, tangents},
-  hasBSX, hasCollision.
-- `geo <nif>`: full flat vert/tri/normal/uv arrays + per-shape texture paths (feeds the 3D viewer).
-- `verify <nif>`: `RESULT: N checks, M failed` + `[ok]/[FAIL]` per check.
-- `fix <in> <out>`: recompute tangents, add missing BSX, trim texture paths, fix shader/BSX flags. The niftool source is not in this repository, so its exact behaviour is unverified; the in-process fix below is the documented behaviour, not a copy of niftool.
-- Hand-written OBJ parser (dedup by v/vt/vn, fan triangulation), box-collision wiring
-  (`bhkCollisionObject → bhkRigidBodyT → bhkBoxShape`, Havok scale `0.0142875`, layer OL_STATIC).
-- **Verified:** cube OBJ → NIF, verify 9/9, `--collision box` → inspect `hasCollision:true`.
+## What is implemented
 
-`inspect`, `geo`, `verify` and `tree` use niftool when the configured executable resolves, so their output stays niftool's. When it does not, `NifService` reads the file in-process through Radicle's reader (`NifRender.cpp`) and needs no niftool. That path is shape-local for `inspect` and `geo` (node transforms are not applied), emits no vertex colors, reads no effect shaders (only `BSLightingShaderProperty` is read), and reports an untextured shape's `.bgsm` material as `bgsmPath`. It has not been checked against niftool on multi-node NIFs, and its inspect values have not been diffed against niftool. The in-process `tree` lists nodes and shapes only (no collision, BSX, alpha, effect-shader or shader-flag groups, which the reader cannot decode yet), and the in-process `verify` runs its own check list. `fix` runs in-process when niftool does not resolve (`NifService::fix` → `fixInProcess` → Radicle's `fo4::nif::fix_nif`). It recomputes every shape's tangent and bitangent from its positions, UVs and normals (the normals are kept), adds a `BSXFlags` extra with value 0 to the root when the root has none, and trims leading and trailing whitespace from texture slots and `BSLightingShaderProperty` material names. It writes through a `.niftmp` and reports the in-process verify. It refuses with `NifFixFailed` and leaves the output untouched when the input does not read, the root is not a node, or the result does not read back with the same shape vertex and index counts and no reader warnings. It does not do the shader and BSX flag fixes (the NIF layout in `Radicle/docs/NIF.md` pins no rule for them), and it leaves the tangents of a shape that has no normal, tangent and UV attributes as they are. Import runs in-process when niftool does not resolve (`NifService::importObj` through Radicle's `fo4::nif::import_obj`): it writes the NIF through a temporary file, reports the in-process verify, and refuses `--collision box` (needs niftool). Saving edits runs in-process through Radicle's NIF writer (`NifService::applyEdits`, `applyEditsInProcess`) and needs no niftool. The writer sets only text, number and number-list keys (`name`, `material`, `tex0`..`tex7`, `translation`, `scale`, and the shader floats); a boolean or flag-list value, or a key it does not write, fails with `NifEditFailed` naming the key and leaves the file byte-identical. The in-process tree emits no shader-flag or alpha fields, so the editor sends none of them without niftool.
+- **Read:** the four tri-shape types, vertex attributes, skin weights and bones, `BSLightingShaderProperty`
+  with its 64 flags and every per-material tail, `BSEffectShaderProperty`, `NiAlphaProperty`,
+  `BSXFlags`, `bhkNPCollisionObject` and its system payloads.
+- **Write:** AV name and transform, shape name/material/textures, shader fields and flags by name,
+  effect-shader fields and texture paths, alpha flags and threshold, BSX flags and the editor marker,
+  and the collision object's flags and Body ID.
+- **Verify:** header parses; each block is listed under one parent only; shapes parse; shapes have
+  vertices and triangles; normals match the vertex count; UVs match the vertex count; shader and skin
+  reads are clean; texture paths are relative; the vertex descriptor matches the stored data.
+- **Edit mode:** `NifEditor.tsx` renders the block tree with typed inputs, a shader-flag grid, alpha
+  fields and per-field revert; a save reloads the viewport.
 
-### MCP tools (for the AI)
-- fo4ide (`McpTools.cpp`): `nif_inspect`, `nif_verify`, `nif_tree`, `nif_geometry` → `NifService` (in-process when niftool does not resolve). There is no `nif_import` or `nif_fix` tool here.
-- Legacy C# app (`PluginToolExecutor.cs`): `nif_import`, `nif_inspect`, `nif_verify`, `nif_fix` → `NifService.cs` (shell-out). Activate with
-  **`/mcp reconnect`** after a C# rebuild.
+## Limits
 
-### Editable block tree: **Edit** mode
-The step toward real NifSkope parity: a *curated, user-friendly* property editor (not a raw block dump).
-- **Engine:** `niftool tree <nif>` dumps a grouped JSON tree: **Nodes** (name, transform), **Shapes**
-  (name, transform, material `.bgsm`, emissive/specular color, glossiness, opacity, UV offset/scale,
-  all 8 texture slots), **Collision** (box), **Extra** (BSXFlags). `niftool set <in> <out> <edits.json>`
-  applies a JSON array of `{id,cat,key,value}` edits and saves. Each field carries a stable address
-  (block id + key). **Smoke-tested:** rename + opacity + emissive color + normal-slot + node-translation
-  + BSX all round-tripped and re-verified.
-- **Phase 2:** the shape cards also carry a curated **Shader Flags** checkbox grid (17
-  common SLSF1/2 bits, Specular, Cast/Receive Shadows, Environment Map, Decal, Double-Sided,
-  Z-Buffer, Glow Map, Tree Anim, …, only curated bits are touched, others preserved);
-  **Alpha property** (Alpha Blend / Alpha Test / Threshold, *creates a `NiAlphaProperty` on save if
-  the shape has none*); **effect-shader** (`BSEffectShaderProperty`) fields (base/emittance color,
-  base-color scale, env-map scale, falloff opacity, soft-falloff depth, source/greyscale/normal
-  textures); and a **Collision** group (rigid-body layer, box half-extents, radius, Havok material).
-  All round-trip-tested. Flags work on lighting *and* effect shaders.
-- **C#:** `NifService.Tree()` / `NifService.ApplyEdits()` (saves to a sibling `.niftmp` then swaps over
-  the target, so a failed save can't corrupt the original; blank out-path = save in place). Bridged by
-  `NifInterop.Tree` / `NifInterop.ApplyEdits`.
-- **UI:** `NifEditor.tsx`: grouped collapsible cards; one input per field type (text, number, toggle
-  switch, vec2/3, **color swatch**, texture path + Browse); changed fields highlighted with per-field
-  revert; sticky footer with a live unsaved-change count and **Save / Save As… / Revert**. Edit mode is
-  a **two-pane** layout: editor on the left, the live 3D textured viewport on the right; a save reloads
-  both. Fields route shader/material/texture edits through the shape so everything for a mesh is in one
-  place.
+- **Box collision import is not implemented.** `import` refuses it with `box collision is not
+  supported yet (needs the HKX writer, #814)`. Reading and editing existing collision works.
+- **No structural edits:** blocks cannot be added or removed yet (new shapes, deleting collision,
+  adding a `NiAlphaProperty` to a shape that has none).
+- **Alpha blend and test functions are read-only;** the whole `flags` word can be set.
+- Fragment and water shader properties are stored as references and not decoded.
+- JSON stays out of Radicle: it returns structs and the host formats them.
 
-### GUI panel: activity-rail **Box** icon (under Papyrus)
-- React `NifPanel.tsx`, modes **View / Edit / Import / Inspect / Verify / Fix**, drag-drop, native pickers.
-  Bridged by WebView2 host object `NifInterop.cs` (registered `"nif"`).
-- **3D viewport (View mode):** live three.js WebGL canvas: rotate/zoom/pan like NifSkope, Z-up,
-  grid + colored axes, auto-frame, **Wireframe** toggle. GPU canvas inside WebView2 (NOT
-  headless-Chrome, no render-lag).
-- **DDS textures:** **Textured** toggle loads diffuse (slot 0) + normal (slot 1). `TextureService.cs`
-  resolves the game-relative DDS (user **Texture folder** override, else the NIF's `Data\`
-  ancestors, else **inside BA2 archives**), converts DDS→PNG with the toolchain's **Texconv.exe**
-  (DirectXTex, handles BC1/3/5/7 the browser's DDSLoader cannot), caches by path+mtime, returns a
-  PNG data URL.
-- **BA2-packed textures:** loose miss → search FO4 `.ba2` archives via Mutagen's
-  `Ba2Reader`. Tiered + session-cached: cheap scan of the NIF-local / user-root `Data\` folders
-  first, then the big scan of the configured `DataFolder` + `Mo2InstancePath\mods` tree (read from
-  `%AppData%\FO4RecordEditor\settings.json`). Each archive's `.dds` file table is indexed once
-  (innerPath→archive, first/most-local wins); a hit is extracted to a temp `.dds` for Texconv.
-  Mutagen's `GetBytes()` reconstructs a valid DDS header (incl. BC5/ATI2).
-- **BC5 normal-map Z reconstruction:** `ConvertToPng` detects BC5 by DDS header
-  (ATI2 FourCC, or DX10 header dxgiFormat 83/84) and adds Texconv `-reconstructz` so the blue
-  channel is rebuilt (`Z=√(1−x²−y²)`), gated to BC5 only, with a fallback to plain conversion if an
-  older Texconv rejects the flag. PNG cache key salted `|v2` so pre-fix PNGs aren't reused.
+## Remaining legacy C# NIF code
 
----
-
-## Roadmap
-
-1. **In-game proof** (user): OBJ → import (collision, from-blender) → verify → `set_field` a STAT's
-   `Model` → load in game, confirm it renders + collides. This is the last unproven link.
-2. **Normal-map green-channel convention**, FO4 normals are DirectX-style (Y-down); three.js
-   `normalMap` is OpenGL-style (Y-up). Now that Z is reconstructed, set `material.normalScale.y = -1`
-   (or flip G) in `NifViewport.tsx` if normals still light inverted. (Noticed while doing BC5-Z; not
-   yet verified in the viewport.)
-3. **glTF importer**, richer than OBJ (multiple materials, proper normals/UV sets). Own parser.
-4. **Convex / mesh collision + MOPP**, box only today. Port `bhkConvexVerticesShape` /
-   `bhkMoppBvTreeShape` (needs precomputed MOPP) from the pynifly recipe.
-5. **Phase-2 MCP tools**, `nif_set_shader`, `nif_set_material`, `nif_set_collision`, `nif_set_skin`,
-   `nif_diff` (vs a known-good reference), `nif_view` (headless render for the AI to *see*).
-6. **Skinned mesh support in the viewport** (armor/equippables), currently static shading only.
-7. **Editable-tree phase 3**, remaining structural/less-common bits: **add / remove blocks**
-   (new shape, delete collision, add/remove BSX), full alpha src/dst **blend-function** dropdowns,
-   NiNode rotation (only translation/scale today), and convex/mesh collision editing. All extend
-   `niftool tree`/`set` + `NifEditor.tsx` the same way.
-
-**Implemented:** BA2-packed texture resolution, BC5 normal-map Z
-reconstruction (both `TextureService.cs`), the **editable block tree / Edit mode** (`niftool
-tree`+`set`, `NifService.Tree`/`ApplyEdits`, `NifEditor.tsx`), and **Edit phase 2**, shader-flag grid,
-alpha property (create-on-save), effect-shader fields, and collision editing. See the DONE section.
-
----
+`FO4RecordEditor/Services/NifService.cs`, `Services/Ai/PluginToolExecutor.cs` and `Services/ToolPaths.cs`
+still look for an external NIF program and shell out to it. The native host does not use that path; the
+legacy MCP `nif_*` tools do until they are moved onto the native host.
 
 ## File map
 
 | File | Role |
 |---|---|
-| `tools/niftool/src/main.cpp` | the C++ CLI (import/geo/inspect/verify/fix + **tree/set** + OBJ parser + box collision) |
-| `tools/niftool/xmake.lua` | build; `includes("../../../FO4AnimForge/extern/nifly")` |
-| `…\FO4RecordEditor\Services\NifService.cs` | shells out to niftool.exe, returns stdout |
-| `…\FO4RecordEditor\Services\TextureService.cs` | DDS resolve (loose **+ BA2 archive index**) + Texconv DDS→PNG (**BC5 `-reconstructz`**) + cache |
+| `Radicle/src/nif/*.cpp` | the reader, describe/verify/tree, fix, import and edit writer |
+| `Radicle/include/fo4/c_api_nif.h` | C ABI for the reader and its describes |
+| `Radicle/include/fo4/nif/nif_write.hpp` | `write_nif`, `apply_edits`, `apply_edits_json` |
+| `PluginEditTool/native/src/assets/NifService.cpp` | the in-process service surface used by the RPC, MCP and the panel |
+| `PluginEditTool/native/src/assets/NifRender.cpp` | JSON for inspect, geometry, tree and verify |
+| `…\FO4RecordEditor\Services\TextureService.cs` | DDS resolve (loose + BA2) + Texconv DDS→PNG (BC5 `-reconstructz`) + cache |
 | `…\FO4RecordEditor\Services\NifInterop.cs` | WebView2 host object (`"nif"`) for the GUI |
-| `…\FO4RecordEditor\Services\Ai\PluginToolExecutor.cs` | MCP `nif_*` specs + dispatch |
-| `…\FO4RecordEditor\MainWindow.xaml.cs` | registers the `nif` host object |
 | `…\web\src\NifPanel.tsx` | the panel (modes, forms, texture-root field) |
 | `…\web\src\NifViewport.tsx` | three.js viewport + texture application |
-| `…\web\src\NifEditor.tsx` | **Edit-mode property editor** (grouped cards, typed inputs, dirty tracking, Save) |
-| `…\web\src\backend.ts` | `NifHost` interface (**+ Tree/ApplyEdits**) + `getNif()` |
-
-Reused, not owned: nifly (the NIF library the engine is built on; GPL-3.0, which is why
-niftool ships as a separate exe) and Texconv.exe for DDS conversion.
-
----
+| `…\web\src\NifEditor.tsx` | Edit-mode property editor (grouped cards, typed inputs, dirty tracking, Save) |
+| `…\web\src\backend.ts` | `NifHost` interface + `getNif()` |
 
 ## Rebuild / run
 
 ```powershell
-# 1) engine (C++), from tools/niftool/ : MUST be PowerShell, not Git Bash
-xmake f -p windows -a x64 -m release -y ; xmake -y     # -> build\windows\x64\release\niftool.exe
+# 1) Radicle (C++), from Radicle\ : the NIF core the host links
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release ; cmake --build build
 
 # 2) web frontend, from FO4RecordEditor\web\  (needed after any .tsx / backend.ts change)
 npm run build                                          # tsc -b && vite build -> web\dist
@@ -173,6 +107,4 @@ dotnet build "…\FO4RecordEditor\FO4RecordEditor\FO4RecordEditor.csproj" -c Rel
 # then run bin\Release\net9.0-windows\FO4RecordEditor.exe ; for the MCP tools: /mcp reconnect
 ```
 
-Gotchas: build niftool from **PowerShell** (Git Bash picks MinGW and fails on `half`). Texconv needs
-**backslash** paths (forward slashes give `ERROR_INVALID_NAME 0x8007007B`). niftool bundles nifly
-(GPL-3.0).
+Gotcha: Texconv needs **backslash** paths (forward slashes give `ERROR_INVALID_NAME 0x8007007B`).

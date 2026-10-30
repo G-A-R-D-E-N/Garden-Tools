@@ -107,7 +107,8 @@ TEST_CASE("SettingsTarget routes Claude version checks through ProcessRunner") {
     CHECK(runner.last.timeout == std::chrono::seconds(30));
 }
 
-TEST_CASE("NifTarget Tree returns the error JSON for an unreadable NIF with niftool absent") {
+
+TEST_CASE("NifTarget Tree returns the error JSON for an unreadable NIF") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto nif = root / "truncated.nif";
@@ -115,9 +116,8 @@ TEST_CASE("NifTarget Tree returns the error JSON for an unreadable NIF with nift
     bytes.resize(bytes.size() - 8);
     fo4ide::test::writeBytes(nif, bytes);
 
-    FakeRunner runner;
     FakePlatform platform;
-    fo4ide::assets::NifService service(runner, std::filesystem::path{});
+    fo4ide::assets::NifService service;
     fo4ide::assets::TextureResolver textures;
     fo4ide::app::NifTarget target(service, textures, platform);
 
@@ -127,10 +127,9 @@ TEST_CASE("NifTarget Tree returns the error JSON for an unreadable NIF with nift
     REQUIRE(parsed.contains("error"));
     CHECK_FALSE(parsed.at("error").get<std::string>().empty());
     CHECK_FALSE(parsed.contains("blocks"));
-    CHECK(runner.calls == 0);
 }
 
-TEST_CASE("NifTarget ApplyEdits takes the editor's JSON string and saves in-process with niftool absent") {
+TEST_CASE("NifTarget ApplyEdits takes the editor's JSON string and saves in-process") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto nif = root / "tree.nif";
@@ -138,16 +137,14 @@ TEST_CASE("NifTarget ApplyEdits takes the editor's JSON string and saves in-proc
                                                        {"Textures\\Thing_d.dds", "Textures\\Thing_n.dds"}));
     const auto edits = nlohmann::json::array({{{"id", 1}, {"cat", "shape"}, {"key", "name"}, {"value", "Renamed"}}});
 
-    FakeRunner runner;
     FakePlatform platform;
-    fo4ide::assets::NifService service(runner, std::filesystem::path{});
+    fo4ide::assets::NifService service;
     fo4ide::assets::TextureResolver textures;
     fo4ide::app::NifTarget target(service, textures, platform);
 
     auto saved = target.invoke("ApplyEdits", nlohmann::json::array({nif.string(), edits.dump(), ""}));
     REQUIRE(saved.has_value());
     CHECK(saved->get<std::string>().find("set OK") != std::string::npos);
-    CHECK(runner.calls == 0);
 
     auto tree = target.invoke("Tree", nlohmann::json::array({nif.string()}));
     REQUIRE(tree.has_value());
@@ -157,12 +154,9 @@ TEST_CASE("NifTarget ApplyEdits takes the editor's JSON string and saves in-proc
 TEST_CASE("NifTarget stages browser dropped bytes without the CSharp host") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
-    const auto tool = root / "niftool";
-    touch(tool);
 
-    FakeRunner runner;
     FakePlatform platform;
-    fo4ide::assets::NifService service(runner, tool);
+    fo4ide::assets::NifService service;
     fo4ide::assets::TextureResolver textures;
     fo4ide::app::NifTarget target(service, textures, platform);
 
@@ -200,8 +194,7 @@ public:
 }  // namespace
 
 TEST_CASE("CellTarget geometry batch reports not-found meshes and dedupes case-insensitively") {
-    FakeRunner runner;
-    fo4ide::assets::NifService service(runner, std::filesystem::path("niftool"));
+    fo4ide::assets::NifService service;
     fo4ide::assets::TextureResolver textures;  // no roots -> nothing resolves
     fo4ide::plugin::NullPluginBackend backend;
     fo4ide::app::CellTarget target(backend, service, textures);
@@ -227,14 +220,14 @@ TEST_CASE("CellTarget geometry batch reports not-found meshes and dedupes case-i
     CHECK(progress.at("total") == 2);
 }
 
-TEST_CASE("CellTarget geometry batch embeds in-process geometry for a resolved mesh with niftool absent") {
+
+TEST_CASE("CellTarget geometry batch embeds in-process geometry for a resolved mesh") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto mesh = root / "meshes" / "clutter" / "thing.nif";
     fo4ide::test::writeBytes(mesh, fo4ide::test::triangleNif());
 
-    FakeRunner runner;
-    fo4ide::assets::NifService service(runner, std::filesystem::path{});
+    fo4ide::assets::NifService service;
     fo4ide::assets::TextureResolver textures;
     textures.setSessionRoots({root});
     fo4ide::plugin::NullPluginBackend backend;
@@ -250,7 +243,6 @@ TEST_CASE("CellTarget geometry batch embeds in-process geometry for a resolved m
     const auto& shapes = parsed.at("geometry").at("meshes/clutter/thing.nif").at("shapes");
     REQUIRE(shapes.size() == 1);
     CHECK(shapes[0].at("verts").size() == 9);
-    CHECK(runner.calls == 0);
 }
 
 TEST_CASE("CellTarget geometry batch isolates a truncated mesh from its neighbours") {
@@ -263,8 +255,7 @@ TEST_CASE("CellTarget geometry batch isolates a truncated mesh from its neighbou
     truncated.resize(truncated.size() - 8);
     fo4ide::test::writeBytes(broken, truncated);
 
-    FakeRunner runner;
-    fo4ide::assets::NifService service(runner, std::filesystem::path{});
+    fo4ide::assets::NifService service;
     fo4ide::assets::TextureResolver textures;
     textures.setSessionRoots({root});
     fo4ide::plugin::NullPluginBackend backend;
@@ -279,8 +270,8 @@ TEST_CASE("CellTarget geometry batch isolates a truncated mesh from its neighbou
     CHECK(parsed.at("count") == 2);
     CHECK(parsed.at("geometry").at("meshes/a.nif").contains("shapes"));
     REQUIRE(parsed.at("geometry").at("meshes/b.nif").contains("error"));
-    CHECK(runner.calls == 0);
 }
+
 
 TEST_CASE("NifTarget Geo reports a parse failure as JSON the panel can show") {
     const auto root = tempRoot();
@@ -288,9 +279,8 @@ TEST_CASE("NifTarget Geo reports a parse failure as JSON the panel can show") {
     const auto nif = root / "sample.nif";
     touch(nif);
 
-    FakeRunner runner;
     FakePlatform platform;
-    fo4ide::assets::NifService service(runner, std::filesystem::path{});
+    fo4ide::assets::NifService service;
     fo4ide::assets::TextureResolver textures;
     fo4ide::app::NifTarget target(service, textures, platform);
 
@@ -299,12 +289,11 @@ TEST_CASE("NifTarget Geo reports a parse failure as JSON the panel can show") {
 
     const auto parsed = nlohmann::json::parse(result->get<std::string>());
     CHECK(parsed.at("error") == "NIF header line is missing or longer than 1024 bytes");
-    CHECK(runner.calls == 0);
 }
 
 TEST_CASE("CellTarget GetTexture returns empty when the model cannot be resolved") {
     FakeRunner runner;
-    fo4ide::assets::NifService service(runner, std::filesystem::path("niftool"));
+    fo4ide::assets::NifService service;
     fo4ide::assets::TextureResolver textures;
     fo4ide::plugin::NullPluginBackend backend;
     fo4ide::app::CellTarget target(backend, service, textures);
@@ -323,7 +312,7 @@ TEST_CASE("CellTarget GetTexture stays empty when a resolved model has no usable
     touch(mesh);
 
     FakeRunner runner;
-    fo4ide::assets::NifService service(runner, std::filesystem::path("niftool"));
+    fo4ide::assets::NifService service;
     fo4ide::assets::TextureResolver textures;
     textures.setSessionRoots({root});
     fo4ide::plugin::NullPluginBackend backend;
@@ -338,7 +327,7 @@ TEST_CASE("CellTarget GetTexture stays empty when a resolved model has no usable
 
 TEST_CASE("CellTarget GetGeometryBatch rejects a valid non-array payload") {
     FakeRunner runner;
-    fo4ide::assets::NifService service(runner, std::filesystem::path("niftool"));
+    fo4ide::assets::NifService service;
     fo4ide::assets::TextureResolver textures;
     fo4ide::plugin::NullPluginBackend backend;
     fo4ide::app::CellTarget target(backend, service, textures);
@@ -354,7 +343,7 @@ TEST_CASE("CellTarget GetGeometryBatch rejects a valid non-array payload") {
 
 TEST_CASE("CellTarget delegates record queries to the plugin backend facet") {
     FakeRunner runner;
-    fo4ide::assets::NifService service(runner, std::filesystem::path("niftool"));
+    fo4ide::assets::NifService service;
     fo4ide::assets::TextureResolver textures;
     CapturingCellBackend backend;
     fo4ide::app::CellTarget target(backend, service, textures);

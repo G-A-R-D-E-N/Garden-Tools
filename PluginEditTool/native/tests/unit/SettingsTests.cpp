@@ -44,7 +44,6 @@ TEST_CASE("Settings preserve existing PascalCase keys and unknown values") {
         stream << R"({
   "Model": "claude-3-5-sonnet-20241022",
   "DataFolder": "/game/Data",
-  "NiftoolPath": "/tools/niftool",
   "ReadLargePluginsIntoMemory": true,
   "FutureSetting": {"keep": true}
 })";

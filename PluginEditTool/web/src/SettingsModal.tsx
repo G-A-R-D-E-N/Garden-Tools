@@ -19,7 +19,6 @@ interface Settings {
   TexconvPath: string;
   PapyrusCompilerPath: string;
   PapyrusBaseImports: string;
-  NiftoolPath: string;
   FfmpegPath: string;
   XwmaEncodePath: string;
   Archive2Path: string;
@@ -256,14 +255,6 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                 <div className="settings-input-row">
                   <input value={s.CkWikiPath} onChange={e => set('CkWikiPath', e.target.value)} placeholder="…\Creation Kit Wiki\fallout4" />
                   <button className="settings-btn" onClick={() => browse('CkWikiPath', 'Select the offline Creation Kit Wiki mirror folder')}>Browse</button>
-                </div>
-              </label>
-
-              <label className="settings-field">
-                <span>Niftool Path <em>(blank = bundled copy next to the exe)</em></span>
-                <div className="settings-input-row">
-                  <input value={s.NiftoolPath} onChange={e => set('NiftoolPath', e.target.value)} placeholder="…\niftool.exe" />
-                  <button className="settings-btn" onClick={() => browseFile('NiftoolPath', 'Select niftool.exe', 'niftool|niftool.exe|Executables|*.exe')}>Browse</button>
                 </div>
               </label>
 

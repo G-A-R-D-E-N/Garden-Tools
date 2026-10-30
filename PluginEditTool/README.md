@@ -105,7 +105,7 @@ analysis, PEX generation/decompilation, and graph integration.
 
 Settings live in `%APPDATA%\FO4RecordEditor\settings.json` on Windows and the normal XDG config
 location on Linux. Paths are optional and can be configured from the UI. Tool-specific environment
-variables include `NIFTOOL_PATH`, `TEXCONV_PATH`, `PAPYRUS_COMPILER_PATH`,
+variables include `TEXCONV_PATH`, `PAPYRUS_COMPILER_PATH`,
 `PAPYRUS_BASE_IMPORTS`, `CK_WIKI_PATH`, `FFMPEG_PATH`, `XWMAENCODE_PATH`, and `ARCHIVE2_PATH`.
 
 The built-in Papyrus compiler does not require `PapyrusCompiler.exe`, but compiling scripts that
@@ -170,8 +170,8 @@ folder); the folder can come from `FO4IDE_DEPLOY_DIR` instead, and with neither 
 `package.ps1` bundles helper programs. texconv and ffmpeg are always included: when `-TexconvPath`
 (`TEXCONV_PATH`) is unset, or `-AudioToolsDir` (`FO4IDE_AUDIO_TOOLS_DIR`) has no `ffmpeg.exe`, the
 build downloads the pinned version listed in `tools/bundled-tools.json` and checks its SHA256. An
-override that is not a file stops the build. The other helpers come from `-NiftoolPath`
-(`NIFTOOL_PATH`), `-CkWikiPath` (`CK_WIKI_PATH`), the rest of `-AudioToolsDir`, and, with
+override that is not a file stops the build. The other helpers come from `-CkWikiPath`
+(`CK_WIKI_PATH`), the rest of `-AudioToolsDir`, and, with
 `-IncludeBaseScripts`, `-BaseScriptsPath` (`FO4IDE_BASE_SCRIPTS_DIR`). Any of those that is unset is
 skipped with a warning, and the package still works without it.
 

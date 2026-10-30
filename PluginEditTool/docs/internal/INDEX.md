@@ -43,7 +43,7 @@ documented here:
 | [SPRIGGIT.md](SPRIGGIT.md) | serialize/deserialize CLI, packages, the compile gotcha + bypass, ESL corruption warning |
 | [MUTAGEN.md](MUTAGEN.md) | Historical: the C# generator API (load Fallout4.esm, validate FormKeys, create records). FO4RecordEditor no longer builds against Mutagen |
 | [JSON_RECORD_FORMAT.md](JSON_RECORD_FORMAT.md) | Spriggit's per-record JSON layout, naming convention, header/RecordData |
-| [NIF_TOOLCHAIN.md](NIF_TOOLCHAIN.md) | `niftool.exe` + `nif_*` MCP tools + GUI panel with a textured 3D viewport (author/repair/verify/view FO4 NIFs, no NifSkope) |
+| [NIF_TOOLCHAIN.md](NIF_TOOLCHAIN.md) | Radicle's NIF reader and writer behind the `nif_*` MCP tools and the GUI panel with a textured 3D viewport (author/repair/verify/view FO4 NIFs, no NifSkope) |
 | [SCRIPTS.md](SCRIPTS.md) | Helper scripts in the tool folder |
 | [MO2_SETUP.md](MO2_SETUP.md) | Loading an MO2 modlist. ⚠ Contains an unresolved contradiction with the shipped README about running *through* MO2 — read the banner |
 
@@ -68,7 +68,6 @@ Related, outside this folder (outer workspace, not part of this repository):
 | Spriggit (CLI) | `Tools\PluginEditTool\tools\Spriggit\Spriggit.CLI\bin\Release\net9.0\Spriggit.CLI.exe` | serialize/deserialize plugins |
 | Spriggit (UI) | `Tools\PluginEditTool\tools\Spriggit\Spriggit.UI\bin\Release\net9.0\Spriggit.exe` | visual workflow, link manager |
 | Translation exe cache | `%LOCALAPPDATA%\Temp\Spriggit\Translations\<pkg>\<ver>\<pkg>.exe` | per-game serializer (the compile bypass) |
-| niftool | `Tools\PluginEditTool\tools\niftool\` | our C++ NIF engine — see [NIF_TOOLCHAIN.md](NIF_TOOLCHAIN.md) |
 | mastersort | `Tools\PluginEditTool\tools\mastersort\` | master-order utility |
 
 Papyrus compile/decompile is **built into FO4RecordEditor** (`compile_papyrus` / `decompile_papyrus`)

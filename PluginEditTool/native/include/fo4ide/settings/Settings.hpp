@@ -28,7 +28,6 @@ struct Settings {
     std::filesystem::path texconvPath;
     std::filesystem::path papyrusCompilerPath;
     std::filesystem::path papyrusBaseImports;
-    std::filesystem::path nifToolPath;
     std::filesystem::path ffmpegPath;
     std::filesystem::path xwmaEncodePath;
     std::filesystem::path archive2Path;

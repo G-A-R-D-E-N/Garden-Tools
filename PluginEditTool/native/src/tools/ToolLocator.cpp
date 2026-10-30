@@ -188,16 +188,6 @@ std::filesystem::path Locator::resolve(Tool tool) const {
     const auto current = settings_.snapshot();
     const auto root = fallout4Root();
     switch (tool) {
-        case Tool::NifTool:
-#if defined(_WIN32)
-            return firstFile({environmentPath("NIFTOOL_PATH"), current.nifToolPath,
-                              appPath({"tools", "niftool", "niftool.exe"}),
-                              appPath({"niftool", "niftool.exe"}), onPath({"niftool.exe"})});
-#else
-            return firstFile({environmentPath("NIFTOOL_PATH"), current.nifToolPath,
-                              appPath({"tools", "niftool", "niftool"}),
-                              appPath({"niftool", "niftool"}), onPath({"niftool", "niftool.exe"})});
-#endif
         case Tool::Texconv:
             return firstFile({environmentPath("TEXCONV_PATH"), current.texconvPath,
                               appPath({"tools", "texconv", "Texconvx64.exe"}),
@@ -278,7 +268,6 @@ std::vector<std::filesystem::path> Locator::papyrusBaseImports() const {
 
 std::string_view Locator::describe(Tool tool) const noexcept {
     switch (tool) {
-        case Tool::NifTool: return "set NIFTOOL_PATH or place niftool beside the application";
         case Tool::Texconv: return "set TEXCONV_PATH or place Texconv in tools/texconv";
         case Tool::PapyrusCompiler: return "install the Creation Kit or set PAPYRUS_COMPILER_PATH";
         case Tool::Archive2: return "install the Creation Kit or set ARCHIVE2_PATH";

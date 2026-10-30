@@ -32,7 +32,7 @@ The end-user documentation is `../MCP_SETUP.md`, plus `README.md`, `LICENSE` and
 | [PAPYRUS.md](PAPYRUS.md) | The Papyrus subsystem, end to end: lexer, parser, script index, resolver, type checker, code generator, `.pex` reader/writer, and the two engines behind `compile_papyrus`. What is measured, the language rules the wiki gets wrong, and why the differential test compares instructions rather than bytes. |
 | [MUTAGEN.md](MUTAGEN.md) | Notes on the Mutagen record library. |
 | [MUTAGEN_FORK_COMPARISON.md](MUTAGEN_FORK_COMPARISON.md) | What the vendored fork changes against upstream, and why those patches are load-bearing. |
-| [NIF_TOOLCHAIN.md](NIF_TOOLCHAIN.md) | The `niftool` C++ CLI, the NIF panel, and what is and is not implemented. |
+| [NIF_TOOLCHAIN.md](NIF_TOOLCHAIN.md) | Radicle's in-process NIF engine, the NIF panel, and what is and is not implemented. |
 | [JSON_RECORD_FORMAT.md](JSON_RECORD_FORMAT.md) | The record JSON shape the tools read and write. |
 | [UI_REDESIGN_TASKS.md](UI_REDESIGN_TASKS.md) | The xEdit-style UI redesign backlog. Still largely unbuilt. |
 | [PROJECT_BOARD.md](PROJECT_BOARD.md) | GitHub issue tracking snapshot. |

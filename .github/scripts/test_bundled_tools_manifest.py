@@ -35,12 +35,12 @@ class BundledToolsManifestTest(unittest.TestCase):
             literal = ", ".join(f'"{part}"' for part in tool["file"].split("/"))
             self.assertIn(f"appPath({{{literal}}})", locator, tool["file"])
 
-    def test_package_fetches_pinned_tools_and_release_lane_does_not_bundle_niftool(self):
+    def test_package_fetches_pinned_tools_and_release_lane_does_not_bundle_them(self):
         package = (PLUGIN / "package.ps1").read_text(encoding="utf-8")
         self.assertIn("-Id texconv", package)
         self.assertIn("-Id ffmpeg", package)
         workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
-        self.assertIsNone(re.search(r"FO4IDE_NIFTOOL_PATH|FO4IDE_TEXCONV_PATH", workflow))
+        self.assertIsNone(re.search(r"FO4IDE_TEXCONV_PATH", workflow))
 
 
 if __name__ == "__main__":

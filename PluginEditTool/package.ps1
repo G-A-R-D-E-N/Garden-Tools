@@ -3,7 +3,6 @@ param(
     [ValidatePattern('^[0-9A-Za-z][0-9A-Za-z._-]*\z')]
     [string] $Version = (Get-Date -Format 'yyyy.MM.dd'),
     [string] $BuildDir = $env:FO4IDE_BUILD_DIR,
-    [string] $NiftoolPath = $env:NIFTOOL_PATH,
     [string] $TexconvPath = $env:TEXCONV_PATH,
     [string] $CkWikiPath = $env:CK_WIKI_PATH,
     [string] $AudioToolsDir = $env:FO4IDE_AUDIO_TOOLS_DIR,
@@ -149,14 +148,6 @@ New-Item -ItemType Directory -Path $WebStage -Force | Out-Null
 Copy-Item (Join-Path $WebDist '*') $WebStage -Recurse -Force
 
 Step 'Bundling optional external tools'
-if ($NiftoolPath -and (Test-Path -LiteralPath $NiftoolPath -PathType Leaf)) {
-    $dest = Join-Path $Staging 'tools\niftool'
-    New-Item -ItemType Directory -Path $dest -Force | Out-Null
-    Copy-Item -LiteralPath $NiftoolPath (Join-Path $dest 'niftool.exe') -Force
-    Write-Host "    niftool ($NiftoolPath)"
-} else {
-    Warn "niftool not bundled: -NiftoolPath / NIFTOOL_PATH is unset or not a file ('$NiftoolPath'); the nif_* external-tool operations will be unavailable."
-}
 
 if ($TexconvPath) {
     if (-not (Test-Path -LiteralPath $TexconvPath -PathType Leaf)) { throw "TexconvPath is set but is not a file: '$TexconvPath'" }

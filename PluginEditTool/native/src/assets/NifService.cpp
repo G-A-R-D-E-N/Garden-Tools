@@ -77,8 +77,6 @@ Result<std::string> fixInProcess(const std::filesystem::path& nifPath, const std
 
 }  // namespace
 
-NifService::NifService(process::Runner&, std::filesystem::path) {}
-
 Result<void> NifService::requireFile(const std::filesystem::path& path, std::string_view label) const {
     if (path.empty()) return std::unexpected(Error{"InvalidPath", std::string(label) + " path is empty"});
     if (!std::filesystem::is_regular_file(path)) {

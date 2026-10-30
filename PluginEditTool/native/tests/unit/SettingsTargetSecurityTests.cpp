@@ -341,8 +341,8 @@ TEST_CASE("SaveSettings refuses a bare ClaudeCodePath that is not on PATH and sa
 TEST_CASE("A Locator on shared settings sees a save made through SettingsTarget") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
-    const auto nif = root / "tools" / "niftool.exe";
-    touch(nif);
+    const auto texconv = root / "tools" / "Texconv.exe";
+    touch(texconv);
     fo4ide::settings::Store store(root / "settings.json");
     fo4ide::settings::SharedSettings shared;
     FakeRunner runner;
@@ -350,19 +350,17 @@ TEST_CASE("A Locator on shared settings sees a save made through SettingsTarget"
 
     fo4ide::app::SettingsTarget target(store, shared, platform, runner);
     fo4ide::tools::Locator locator(shared, root / "FO4IDE-native");
-    CHECK(locator.resolve(fo4ide::tools::Tool::NifTool) != nif);
+    CHECK(locator.resolve(fo4ide::tools::Tool::Texconv) != texconv);
 
-    auto result = saveSettingsJson(target, nlohmann::json{{"NiftoolPath", nif.string()}});
+    auto result = saveSettingsJson(target, nlohmann::json{{"TexconvPath", texconv.string()}});
     REQUIRE(result.has_value());
     CHECK(*result == "Settings saved.");
-    CHECK(locator.resolve(fo4ide::tools::Tool::NifTool) == nif);
+    CHECK(locator.resolve(fo4ide::tools::Tool::Texconv) == texconv);
 }
 
 TEST_CASE("Concurrent saves and locator resolves never expose a torn settings value") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
-    const auto nif = root / "tools" / "niftool.exe";
-    touch(nif);
     fo4ide::settings::Store store(root / "settings.json");
     fo4ide::settings::SharedSettings shared;
     FakeRunner runner;
@@ -386,7 +384,7 @@ TEST_CASE("Concurrent saves and locator resolves never expose a torn settings va
         for (int i = 0; i < 200; ++i) {
             const auto model = shared.snapshot().model;
             if (!model.empty() && model != first && model != second) torn = true;
-            static_cast<void>(locator.resolve(fo4ide::tools::Tool::NifTool));
+            static_cast<void>(locator.resolve(fo4ide::tools::Tool::Texconv));
         }
     });
     saver.join();
