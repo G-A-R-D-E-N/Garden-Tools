@@ -43,6 +43,12 @@ SubrecordGroupMutationStatus remove_scene_phase(Plugin& plugin,
                                                 const FormKey& scene,
                                                 std::size_t index);
 
+// Constraint: moves the phase to the given index and rewrites every phase reference that must follow it.
+SubrecordGroupMutationStatus move_scene_phase(Plugin& plugin,
+                                              const FormKey& scene,
+                                              std::size_t from,
+                                              std::size_t to);
+
 ScalarMutationStatus set_scene_phase_name(Plugin& plugin,
                                           const FormKey& scene,
                                           std::size_t index,
@@ -64,6 +70,12 @@ SubrecordGroupMutationStatus insert_scene_action(Plugin& plugin,
 SubrecordGroupMutationStatus remove_scene_action(Plugin& plugin,
                                                  const FormKey& scene,
                                                  std::size_t index);
+
+// Constraint: moves the action to the given index and renumbers every action index that must follow it.
+SubrecordGroupMutationStatus move_scene_action(Plugin& plugin,
+                                               const FormKey& scene,
+                                               std::size_t from,
+                                               std::size_t to);
 
 ScalarMutationStatus set_scene_action_name(Plugin& plugin,
                                            const FormKey& scene,

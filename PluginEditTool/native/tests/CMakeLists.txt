@@ -194,6 +194,7 @@ add_executable(
     unit/RadiclePluginTypedRecordsTests.cpp
     unit/RadiclePluginTypedEntryEditTests.cpp
     unit/RadiclePluginSoundTests.cpp
+    unit/RadiclePluginScriptTests.cpp
     unit/RadiclePluginEyesTests.cpp
     unit/RadiclePluginEyesGridTests.cpp
     unit/RadiclePluginLvspTests.cpp

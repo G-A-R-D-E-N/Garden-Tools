@@ -75,4 +75,28 @@ public class GraphScratchTests
             Directory.Delete(parent, true);
         }
     }
+
+    [Fact]
+    public void A_sweep_examines_at_most_64_entries_so_a_large_backlog_drains_gradually()
+    {
+        var parent = Path.Combine(Path.GetTempPath(), "fo4re-graph-sweep-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(parent);
+        try
+        {
+            for (var i = 0; i < 65; i++)
+            {
+                var directory = Path.Combine(parent, "backlog-" + i);
+                Directory.CreateDirectory(directory);
+                Directory.SetLastWriteTimeUtc(directory, DateTime.UtcNow.AddDays(-2));
+            }
+
+            GraphScratch.SweepOld(parent);
+
+            Directory.GetDirectories(parent).Length.Should().Be(1);
+        }
+        finally
+        {
+            Directory.Delete(parent, true);
+        }
+    }
 }

@@ -47,7 +47,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144 (11 L4 rows have an authoring constr
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- | --- | ---: | --- |
 | AACT | 6970 | 5 | 1 | 1 | - | 1 | yes | - | - | - | 1 | L4 |
 | ACHR | 4483 | 37 | 1 | 21 | 1 | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
-| ACTI | 5611 | 29 | 3 | 14 | - | 2 | yes | yes | environment/base_records | yes | 2 | L4 |
+| ACTI | 5611 | 29 | 3 | 14 | - | 2 | yes | yes | environment/base_records | yes | 3 | L4 |
 | ADDN | 7796 | 16 | 1 | 3 | - | - | yes | - | - | - | 1 | L4 |
 | AECH | 12206 | 12 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | ALCH | 5691 | 29 | 5 | 11 | - | 3 | yes | yes | - | yes | 2 | L4 |
@@ -586,16 +586,16 @@ I is deliberately weaker than complete acceptance: generated offsets and setters
 
 ## Open parser PR audit
 
-Snapshot: 2026-10-05. Columns apply to the new named fields, not unrelated metadata or existing generic capabilities.
+Snapshot: 2026-10-05. Columns apply to the new named fields, not unrelated metadata or existing generic capabilities. The #396, #398, #404, #427 and #428 gap cells were refreshed on 2026-10-25 after their writer tranches landed; the other rows keep the 2026-10-05 snapshot.
 
 | PR / issue | Stored-format tranche | READ | WRITE / ADD / REMOVE / CREATE gap | REMAP / VALIDATE / OPAQUE boundary |
 | --- | --- | --- | --- | --- |
-| #396 / #341 | WATR visual data; effective cell/world selection | Partial C++/C/C# | WATR visual mutation and creation absent; derived effective selection is not a stored field to write | Existing raw links; unknown visual layouts preserved; runtime selection evidence separate |
-| #398 / #343 | CLMT timing and moon byte; WTHR DATA | Partial C++/C/C# | CLMT timing edit/write/reparse first; WTHR MNAM already writable; other fields remain follow-ups | WLST/WTHR known links remap; raw bytes retained; weather execution separate |
+| #396 / #341 | WATR visual data; effective cell/world selection | Partial C++/C/C# | Visual fields, strings, links and optional subrecords write in place and WATR is created from proven defaults (`tests/test_water_authoring.cpp`, `tests/test_water_real.cpp`); derived effective selection is not a stored field to write | Existing raw links; unknown visual layouts preserved; runtime selection evidence separate |
+| #398 / #343 | CLMT timing and moon byte; WTHR DATA | Partial C++/C/C# | CLMT timing edit/write/reparse delivered, WTHR MNAM already writable and the fixed DATA fields write in place (`tests/test_climate_weather_authoring.cpp`); other fields remain follow-ups | WLST/WTHR known links remap; raw bytes retained; weather execution separate |
 | #400 / #340 | SNDR variants, SOUN, MUSC, FSTP/FSTS | Partial C++/C/C# | Variant-aware existing edits, file/link add/remove and valid creation absent | Discriminator-specific references must be proved; playback is separate |
 | #402 / #339 | NAVM geometry and NAVI maps | Partial C++/C/C# | Geometry/container mutation and valid grouped creation absent | Existing form ID grammar only; opaque NVPP/island/cover data cannot be reconstructed by guessing |
-| #404 / #342 | GRAS DATA, TREE CNAM, FLOR seasons/links, LTEX grass | Partial C++/C/C# | Existing value edits first, then proven optional insertion/deletion and creation | FLOR keywords exist separately; numeric bytes cannot be remapped as links; placement algorithms separate |
-| #406 / #344 | DIAL, INFO responses, SCEN phases/actions | Partial C++/C/C# | Response/action editing and container add/remove/create absent | INFO copy-as-new and SCEN keyword editing already exist; action/VMAD ownership remains scoped |
+| #404 / #342 | GRAS DATA, TREE CNAM, FLOR seasons/links, LTEX grass | Partial C++/C/C# | Delivered by the #428 writer tranche: value edits, optional insertion/deletion, PFIG/SNAM link writes, LTEX GNAM list edits and GRAS/TREE/FLOR/LTEX creation (`tests/test_vegetation_authoring.cpp`, `tests/test_vegetation_real.cpp`) | FLOR keywords exist separately; numeric bytes cannot be remapped as links; placement algorithms separate |
+| #406 / #344 | DIAL, INFO responses, SCEN phases/actions | Partial C++/C/C# | INFO response groups add and remove as one unit with their in-place field edits (`tests/test_dialogue_writer.cpp`); SCEN phase and action insert, removal and reorder keep the action indices, phase start/end references and VMAD phase fragments consistent (`tests/test_scene_phase_edit.cpp`, `tests/test_scene_actor_action_edit.cpp`, `tests/test_vmad_fragments.cpp`); container add/remove/create beyond those groups stays refused | INFO copy-as-new exists; scene action payload lists stay opaque |
 | #408 / #345 | PACK headers/schedule/locations/targets, CSTY, IDLE | Partial C++/C/C# | Existing fixed data edits first; procedure/input/tree mutation and creation unproven | Discriminators distinguish IDs from numeric values; preserve opaque procedure streams |
 | #409 / #15 | VMAD variable evidence | Known properties and empty type 16 | Type 6 / nonempty 16 mutation/remap remains refused; variable authoring absent | Empty type 16 remaps surrounding object references; strict traversal required; no unsafe runtime error recovery |
 | #410 / #28 | Context-driven runtime light IDs | Context API | No stored-format writer prerequisite | Runtime table construction is separate from on-disk MAST ordinals |
@@ -606,8 +606,8 @@ Snapshot: 2026-10-05. Columns apply to the new named fields, not unrelated metad
 | #419 / #422 | CI workflow / runner tooling | Infrastructure | No semantic editing promotion | #384 managed execution still required; audit shared CI changes independently |
 | #424 / #287 | Operation matrix | Documentation | Main baseline and branch capabilities stay separate; full field/helper expansion pending | No new format or runtime acceptance |
 | #426 / #384 | Required managed CI | Infrastructure | Native/C ABI/managed checks required; no field promotion | Verified both runners and clean Windows teardown at its head; adopted into feature branches (ledger below); not yet adopted: #392, #419 |
-| #427 / #425 | Existing CLMT timing edits | Partial C++/C/C# | Existing WRITE tested; TNAM ADD/REMOVE and CLMT CREATE absent | See bounded writer ledger below; no runtime weather reproduction |
-| #428 / #342 | Existing GRAS/TREE/FLOR fixed fields | Partial C++/C/C# | Existing WRITE tested; ADD/REMOVE/CREATE, PFIG/SNAM link writes and LTEX GNAM list edits absent | See vegetation writer ledger below |
+| #427 / #425 | Existing CLMT timing edits | Partial C++/C/C# | Existing WRITE tested; TNAM ADD/REMOVE delivered (`tests/test_climate_weather_authoring.cpp`), CLMT CREATE from proven defaults delivered, and WLST entries add and remove (`tests/test_clmt_weather_entries.cpp`) | See bounded writer ledger below; no runtime weather reproduction |
+| #428 / #342 | Existing GRAS/TREE/FLOR fixed fields | Partial C++/C/C# | Existing WRITE tested; ADD/REMOVE/CREATE, PFIG/SNAM link writes and LTEX GNAM list edits delivered (`tests/test_vegetation_authoring.cpp`, `tests/test_vegetation_real.cpp`) | See vegetation writer ledger below |
 
 ### Managed CI adoption ledger
 

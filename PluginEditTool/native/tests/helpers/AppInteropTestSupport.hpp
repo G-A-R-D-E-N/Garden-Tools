@@ -1,10 +1,12 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <optional>
+#include <random>
 #include <string>
 #include <utility>
 #include <vector>
@@ -17,8 +19,11 @@
 namespace app_interop_test {
 
 inline std::filesystem::path tempRoot() {
+    static std::atomic<unsigned> counter{0};
     const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
-    return std::filesystem::temp_directory_path() / ("fo4ide_appinterop_test_" + std::to_string(id));
+    const auto salt = std::random_device{}();
+    return std::filesystem::temp_directory_path() /
+           ("fo4ide_appinterop_test_" + std::to_string(id) + "_" + std::to_string(salt) + "_" + std::to_string(counter++));
 }
 
 struct Cleanup {
