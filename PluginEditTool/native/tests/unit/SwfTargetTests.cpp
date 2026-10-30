@@ -179,9 +179,9 @@ TEST_CASE("SwfTarget renames a label with undo and redo tracking state") {
 
     const auto renamed =
         replyJson(target.invoke("RenameLabel", nlohmann::json::array({0, 0, "menu"})));
-    CHECK(renameed.value("changed", false) == true);
-    CHECK(renameed.value("undo", 0) == 1);
-    CHECK(renameed.value("dirty", false) == true);
+    CHECK(renamed.value("changed", false) == true);
+    CHECK(renamed.value("undo", 0) == 1);
+    CHECK(renamed.value("dirty", false) == true);
 
     const auto labels = replyJson(target.invoke("FrameLabels", nlohmann::json::array({0})));
     REQUIRE(labels.contains("labels"));
