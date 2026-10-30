@@ -438,7 +438,7 @@ TEST_CASE("NifService tree maps nodes and shape slots onto the editor contract i
     const auto& shader = parsed.at("blocks")[2];
     CHECK(shader.at("type") == "BSLightingShaderProperty");
     CHECK(shader.at("cat") == "shader");
-    CHECK(treeValue(shader, "materialClass") == "Environment Map");
+    CHECK(treeValue(shader, "materialClass") == "Envmap");
     CHECK(treeValue(shader, "envMapScale") == 1.0);
     const auto& textureSet = parsed.at("blocks")[3];
     CHECK(textureSet.at("cat") == "texture");

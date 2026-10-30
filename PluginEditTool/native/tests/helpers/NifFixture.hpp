@@ -58,14 +58,34 @@ struct FixtureBlock {
     std::vector<std::byte> data;
 };
 
+// Requires every field read_lighting_shader consumes at BS 130; a shorter block reports a read error and refuses edits.
 inline std::vector<std::byte> shaderBlock(std::uint32_t nameIndex, std::uint32_t textureSet) {
     std::vector<std::byte> out;
     putUint(out, 1, 4);
     putUint(out, nameIndex, 4);
     putUint(out, 0, 4);
     putUint(out, 0xFFFFFFFFU, 4);
-    for (int i = 0; i < 6; ++i) putUint(out, 0, 4);
+    putUint(out, 0, 4);
+    putUint(out, 0, 4);
+    putFloat(out, 0.0f);
+    putFloat(out, 0.0f);
+    putFloat(out, 1.0f);
+    putFloat(out, 1.0f);
     putUint(out, textureSet, 4);
+    for (int i = 0; i < 3; ++i) putFloat(out, 0.0f);
+    putFloat(out, 1.0f);
+    putUint(out, 0xFFFFFFFFU, 4);
+    putUint(out, 0, 4);
+    putFloat(out, 1.0f);
+    putFloat(out, 0.0f);
+    putFloat(out, 0.5f);
+    for (int i = 0; i < 3; ++i) putFloat(out, 0.0f);
+    putFloat(out, 0.0f);
+    putFloat(out, 0.0f);
+    putFloat(out, 1.0f);
+    putFloat(out, 1.0f);
+    putFloat(out, 1.0f);
+    for (int i = 0; i < 6; ++i) putFloat(out, 1.0f);
     putFloat(out, 1.0f);
     putUint(out, 0, 2);
     return out;
