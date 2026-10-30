@@ -9,17 +9,21 @@
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace helper = fo4::papyrus::test;
 
 namespace {
+
+constexpr std::size_t kMinimumVanillaFiles = 150;
 
 std::vector<std::filesystem::path> collectLoosePex(
     const std::vector<std::filesystem::path>& roots) {
@@ -68,6 +72,13 @@ TEST(PapyrusDecompilerReal, EveryCorpusPexDecompilesToSourceAndListingWithoutThr
   if (files.empty()) {
     helper::skipOrFailPexCorpus("no .pex files under the FO4RE_PEX_CORPUS roots");
     return;
+  }
+  const char* release = std::getenv("FO4RE_PEX_RELEASE");
+  if (release != nullptr && std::string_view(release) == "1") {
+    // A thin vanilla corpus must fail here too: a few files cannot stand in for the archive.
+    const auto floor = helper::corpusFloor("FO4RE_PEX_MIN_PAIRS", kMinimumVanillaFiles);
+    ASSERT_GE(files.size(), floor) << "staged corpus holds " << files.size()
+                                   << " .pex files, below the " << floor << " floor";
   }
 
   std::size_t decompiled = 0;

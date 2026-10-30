@@ -40,6 +40,7 @@ namespace {
 constexpr double kMinimumIdenticalFraction = 0.95;
 constexpr double kMinimumDecompileFidelity = 0.802;
 constexpr std::size_t kDecompileSampleLimit = 1500;
+constexpr std::size_t kMinimumVanillaPairs = 150;
 
 struct Pair {
   fs::path pex;
@@ -234,9 +235,9 @@ TEST(PapyrusCodegenReal, CompiledOutputMatchesCreationKitInstructionForInstructi
     return;
   }
 
-  // Must branch on whether the variable is set: a set-but-unusable path must not fall back to User.
+  // Must test the variable itself: a set-but-empty value must not fall back to User imports.
   auto extra = helper::rootsFromEnv("FO4RE_PEX_IMPORT_ROOTS");
-  if (envValue("FO4RE_PEX_IMPORT_ROOTS").empty()) {
+  if (std::getenv("FO4RE_PEX_IMPORT_ROOTS") == nullptr) {
     extra = helper::rootsFromEnv("FO4RE_PSC_ROOTS");
   }
   const auto release = envValue("FO4RE_PEX_RELEASE") == "1";
@@ -247,6 +248,12 @@ TEST(PapyrusCodegenReal, CompiledOutputMatchesCreationKitInstructionForInstructi
   if (pairs.empty()) {
     helper::skipOrFailPexCorpus("FO4RE_PEX_CORPUS holds no .psc/.pex pairs");
     return;
+  }
+  if (release) {
+    // A thin vanilla corpus must fail the gate: a handful of pairs clears 0.95 by luck.
+    const auto floor = helper::corpusFloor("FO4RE_PEX_MIN_PAIRS", kMinimumVanillaPairs);
+    ASSERT_GE(pairs.size(), floor) << "staged corpus holds " << pairs.size()
+                                   << " .psc/.pex pairs, below the " << floor << " floor";
   }
 
   fp::PapyrusCompileOptions options;

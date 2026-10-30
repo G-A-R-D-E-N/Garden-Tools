@@ -803,6 +803,13 @@ jobs:
             Write-Output "::error::$base holds no .psc sources; the staged .pex cannot be paired"
             exit 1
           }
+          # A thin corpus passes the gates by luck, so staging must fail below the floor the tests use.
+          $pexFloor = 150
+          if ($env:FO4RE_PEX_MIN_PAIRS) { $pexFloor = [int]$env:FO4RE_PEX_MIN_PAIRS }
+          if ($pex -lt $pexFloor) {
+            Write-Output "::error::$scripts holds $pex .pex files, below the $pexFloor floor; the corpus is too thin to gate"
+            exit 1
+          }
           Write-Output "staged corpus: $pex .pex, $psc .psc under $scripts"
           [IO.File]::AppendAllText($env:GITHUB_ENV, "FO4RE_PEX_CORPUS=$scripts`n")
           [IO.File]::AppendAllText($env:GITHUB_ENV, "FO4RE_PEX_RELEASE=1`n")

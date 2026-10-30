@@ -50,6 +50,16 @@ inline void skipOrFailPexCorpus(const char* message) {
     FAIL() << message;
 }
 
+// A thin staged corpus must fail the PEX gates; the caller's default sits well under 198 pairs.
+inline std::size_t corpusFloor(const char* variable, std::size_t fallback) {
+    const char* raw = std::getenv(variable);
+    if (!raw || !*raw) return fallback;
+    char* end = nullptr;
+    const auto value = std::strtoul(raw, &end, 10);
+    if (end == raw || value == 0) return fallback;
+    return static_cast<std::size_t>(value);
+}
+
 inline std::vector<std::filesystem::path> rootsFromEnv(const char* variable) {
     std::vector<std::filesystem::path> roots;
     const char* raw = std::getenv(variable);

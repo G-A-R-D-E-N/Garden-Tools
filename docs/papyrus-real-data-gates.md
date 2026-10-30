@@ -60,7 +60,7 @@ Add `--gtest_output=xml:<dir>\<gate>.xml` to keep `RecordProperty` values. For a
 - Env: `FO4RE_PEX_CORPUS`, or `FO4_PEX_CORPUS` when that yields no roots. Extra import roots: `FO4RE_PEX_IMPORT_ROOTS`, falling back to `FO4RE_PSC_ROOTS` only when the variable is unset, so a local run that sets only the latter behaves as it did; a variable set to a path with no existing directory contributes no roots instead of falling back, because falling back would import `Source\User` again. `FO4RE_PEX_RELEASE` must be exactly `1` for a vanilla corpus. It switches the printed mode and turns off debug and beta emission.
 - Why its own variable: gates 3 and 5 need `Source\User` in `FO4RE_PSC_ROOTS`, because they sweep the whole source tree, and imports that resolved to an edited `User` script here would compile the vanilla `.psc` against different code and report the difference as a DIFF.
 - Pairing: each `.pex` needs a `.psc` under `Source/User` or `Source` (`sourceFor`). Only Fallout 4 `.pex` count (`isFallout4`).
-- Pass: compiled > 0 and identical / compiled >= 0.95 (`kMinimumIdenticalFraction`).
+- Pass: compiled > 0 and identical / compiled >= 0.95 (`kMinimumIdenticalFraction`). With `FO4RE_PEX_RELEASE=1` it also requires at least `FO4RE_PEX_MIN_PAIRS` pairs (default 150, `kMinimumVanillaPairs`), because a handful of pairs clears 0.95 by luck. The floor is off for an ad-hoc debug corpus, which is not compiled with `FO4RE_PEX_RELEASE=1`.
 - Skip: `FO4RE_PEX_CORPUS is not set to a directory holding .pex files`; `FO4RE_PEX_CORPUS holds no .psc/.pex pairs`. With `FO4RE_PEX_REQUIRE=1` both are failures, not skips.
 - Output: `pairs= compiled= refused= identical=`, then `REFUSED` and `DIFF` lines.
 - Index reuse: one `ScriptIndex` serves every pair that lists the same roots, because the index keeps no per-compile state. A fresh index per pair would re-walk the whole source tree about 7,800 times.
@@ -81,7 +81,7 @@ Add `--gtest_output=xml:<dir>\<gate>.xml` to keep `RecordProperty` values. For a
 
 - Test: `PapyrusDecompilerReal.EveryCorpusPexDecompilesToSourceAndListingWithoutThrowing` (`Radicle/tests/test_papyrus_decompiler_real.cpp`).
 - Env: `FO4RE_PEX_CORPUS`, falling back to `FO4_PEX_CORPUS` when that yields no roots.
-- Pass: no exception, and each output has the `ScriptName ` and `; Disassembly of ` headers. Fallback and unhandled counts are printed (`[decompiler]` line), not failed.
+- Pass: no exception, and each output has the `ScriptName ` and `; Disassembly of ` headers. Fallback and unhandled counts are printed (`[decompiler]` line), not failed. With `FO4RE_PEX_RELEASE=1` it also requires at least `FO4RE_PEX_MIN_PAIRS` `.pex` files (default 150, `kMinimumVanillaFiles`), the same floor gate 4 applies to its pairs; a corpus thin enough to fail that floor cannot satisfy this one either.
 - Skip: no roots, `set FO4RE_PEX_CORPUS to one or more directories of .pex files`; no files, `no .pex files under the FO4RE_PEX_CORPUS roots`. With `FO4RE_PEX_REQUIRE=1` both are failures, not skips.
 - Run: CI stages the root with `ba2pex` ("CI staging route" below); locally, `$env:FO4RE_PEX_CORPUS = '<staged pex root>'`, then the template with this filter.
 
@@ -131,6 +131,8 @@ Add `--gtest_output=xml:<dir>\<gate>.xml` to keep `RecordProperty` values. For a
 `ba2pex <archive.ba2> <out-dir>` extracts every `.pex` entry with Radicle's own BA2 reader, keeping the archive's relative path, and writes nothing else. It exits non-zero when the archive is missing, when the archive holds no `.pex`, or when an entry path would resolve outside `<out-dir>`. The step removes a stale staging directory before extracting, so a failed run cannot be covered by an earlier one.
 
 The archive names its entries `scripts\<name>.pex`, so the corpus root is `$env:RUNNER_TEMP\vanilla-pex\scripts`: a `.pex` at `<root>\<relative>.pex` pairs with the source at `<root>\Source\User\<relative>.psc` or `<root>\Source\<relative>.psc` (`test_papyrus_codegen_real.cpp:sourceFor`). The step copies `Scripts\Source\Base` into `<root>\Source` and nothing else, because `User` is where F4SE and mods keep edited vanilla scripts and `sourceFor` prefers it; staging `User` would report those edits as DIFFs. It fails when `Scripts\Source\Base` is missing or holds no `.psc`, which is a staging error rather than a data verdict.
+
+It also fails when it staged fewer than `FO4RE_PEX_MIN_PAIRS` `.pex` files (default 150, the floor gates 4 and 6 apply), so a thin or truncated archive is a staging error instead of a gate that passes on a few files.
 
 The step exports `FO4RE_PEX_CORPUS` (one root), `FO4RE_PEX_RELEASE=1` and `FO4RE_PEX_REQUIRE=1`, and only prints the `.pex`/`.psc` counts. It must leave `FO4_PEX_CORPUS` unset: that variable makes `PexCorpus.EveryDataDirArchivePexRoundTripsByteIdentically`, which round-trips every DLC and Creation Club `.pex` from the archives, skip for the whole job. The judgement lives in the tests: with `FO4RE_PEX_REQUIRE=1`, `papyrus_corpus_roots.hpp:skipOrFailPexCorpus` fails the PEX gates when the roots are unset, hold no `.pex`, or hold no `.psc`/`.pex` pairs, where an unset variable would skip them again.
 
