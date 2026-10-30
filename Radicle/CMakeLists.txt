@@ -272,6 +272,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/environment/navmesh.cpp
   src/environment/behavior.cpp
   src/environment/package_procedure.cpp
+  src/environment/package_procedure_tree.cpp
   src/environment/dialogue.cpp
   src/environment/scene_layout.cpp
   src/environment/base_records.cpp
@@ -784,6 +785,9 @@ if(RADICLE_BUILD_TESTS)
     tests/test_condition_scopes_real.cpp
     tests/test_condition_functions.cpp
     tests/test_package_targets.cpp
+    tests/test_package_tree.cpp
+    tests/test_package_tree_c_api.cpp
+    tests/test_package_tree_real.cpp
     tests/test_perk_entrypoints.cpp
     tests/test_perk_rows.cpp
     tests/test_vegetation.cpp

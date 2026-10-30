@@ -151,6 +151,10 @@ bool registerPluginTools(fo4ide::mcp::Registry& registry,
              {{"plugin", "string"}, {"form_key", "string"}, {"target", "string", true}})) return false;
     if (!add("create_sound", "Create a SOUN sound marker or an FSTS footstep set with proved defaults in memory; signature must be SOUN or FSTS. Call save_plugin to persist", "backend", "CreateSound",
              {{"plugin", "string"}, {"signature", "string"}, {"editor_id", "string"}})) return false;
+    if (!add("add_package_procedure", "Add a leaf procedure node under a PACK procedure-tree branch in memory. parent_index addresses the decoded tree node; the result names the new node index. Procedures that need data inputs get default Bool inputs created first. A templated package that needs them, and a removal that would orphan an input, are refused. Call save_plugin to persist", "backend", "AddPackageProcedure",
+             {{"plugin", "string"}, {"form_key", "string"}, {"parent_index", "integer"}, {"procedure", "string"}})) return false;
+    if (!add("remove_package_procedure", "Remove one leaf procedure node from a PACK procedure tree in memory, recomputing the branch counts. Call save_plugin to persist", "backend", "RemovePackageProcedure",
+             {{"plugin", "string"}, {"form_key", "string"}, {"node_index", "integer"}})) return false;
     if (!add("add_script", "Add a script to a record in memory, creating an empty VMAD when the record has none. script is the Papyrus script name; flags is the optional script flags byte and index the optional script-list position; the result names the new index. Call save_plugin to persist", "backend", "AddScript",
              {{"plugin", "string"}, {"form_key", "string"}, {"script", "string"}, {"flags", "integer", true}, {"index", "integer", true}})) return false;
     if (!add("remove_script", "Remove one script and its properties from a record's VMAD in memory by script index. Call save_plugin to persist", "backend", "RemoveScript",

@@ -196,6 +196,11 @@ RADICLE_API radicle_status radicle_package_input_add(radicle_plugin* plugin, rad
 RADICLE_API radicle_status radicle_package_input_set(radicle_plugin* plugin, radicle_form_key key, uint8_t id,
                                                      const radicle_package_input_value* value);
 RADICLE_API radicle_status radicle_package_input_remove(radicle_plugin* plugin, radicle_form_key key, uint8_t id);
+RADICLE_API radicle_status radicle_package_procedure_add(radicle_plugin* plugin, radicle_form_key key,
+                                                          size_t parent_index, const char* procedure,
+                                                          size_t* out_node_index);
+RADICLE_API radicle_status radicle_package_procedure_remove(radicle_plugin* plugin, radicle_form_key key,
+                                                            size_t node_index);
 RADICLE_API const char* radicle_package_location_type_name(int32_t type);
 RADICLE_API const char* radicle_package_target_type_name(int32_t type);
 
