@@ -2653,3 +2653,19 @@ Regression targets, by test in `PluginEditTool/native/tests/unit/NifServiceTests
 - The graph and decompiler tests used to make `<temp>/<parent>/<timestamp>` folders (`uniqueRoot` in GraphLiftTests, GraphCompilerTests, GraphToolServiceTests and GraphScriptLoaderTests, and the `PapyrusDecompilerTests` `Fixture`) and never remove them. The lift tests alone left 38,000 folders per tag on the CI machine.
 - `TempRoot` (namespace `fo4ide_test`) creates its folder in the constructor. The destructor removes that folder and then the parent when the parent is empty, ignoring errors. The parent name is passed in full (for example `"fo4ide-lift-text"`), so temp paths are unchanged.
 - The temp root is used only inside the scope that owns it, so the lifetime is safe. Removal now also runs when a `REQUIRE` fails.
+
+## .github/scripts/check_abi_version_collision.py:claim_conflicts — one ABI number per surface
+
+`Radicle/bindings/csharp/Radicle.Interop/Core.cs:VerifyAbi` compares `radicle_abi_version()` with `RadicleNative.CompiledAbiVersion` for equality, so one number has to name one surface. Two open pull requests claiming 93 on the 92 base with different exports pass that guard and then fail on an export the library does not carry: on 2026-10-30 `nomad/602-capi-remaining` (#1033) and `nomad/nif-shader-alpha` (#1041) were both at 93, and only a reader noticed. `.github/workflows/abi-version.yml` now runs this check on every pull request that touches `Radicle/include/fo4/**`, the C# bindings or the ABI pin, on the self-hosted Linux runner like the other workflows.
+
+Three rules, each with the case behind it:
+
+- `.github/scripts/check_abi_version_collision.py:local_problems`, rule 1: a pull request that edits a `Radicle/include/fo4/c_api*.h` header has to move the number off the base branch's. It compares `HEAD` with the fetched base as two trees, so it needs neither the merge base nor a deep checkout, and the shallow `git fetch --depth=1` the script does itself is enough.
+- `.github/scripts/check_abi_version_collision.py:claim_conflicts`, rule 2: two unrelated stacks may not claim the same number. Pull requests stacked on one another inherit the number by design — the four NIF branches all carried 95 while #1038 held 94 — so a chain joined by "this base is that head" counts as one claim. The join accepts either the branch names or the head shas, because the API need not return `base.ref`.
+- `.github/scripts/check_abi_version_collision.py:local_problems`, rule 3: a number below the base's is a stale branch merging after a newer bump, which has to be rebased and renumbered.
+
+Deliberately not enforced: a pull request that leaves the base number alone and touches no ABI header is the normal case (#1039 and #1040 stayed at 92), and two pull requests that both never bumped do not collide on the base number.
+
+The cross-pull-request half needs `GITHUB_TOKEN`, `GITHUB_API_URL` and `GITHUB_REPOSITORY`. When the runner supplies fewer than three, or the open list cannot be read, `.github/scripts/check_abi_version_collision.py:main` exits 2 instead of passing, because a gate that cannot run must not look green. The one gap no per-pull-request check can close: a green run is not re-evaluated when a different pull request later moves onto the same number, so the branch that merges second is the one to re-check.
+
+Tests: `.github/scripts/test_check_abi_version_collision.py` pins each rule, including the #1033/#1041 pair, a four-deep stack alone, a stack plus an unrelated claim, and both no-bump cases. The suite is picked up by the existing `unittest discover -s .github/scripts` step in `.github/workflows/native-ci.yml`, so no new CI step was added for it.

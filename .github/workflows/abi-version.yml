@@ -1,0 +1,39 @@
+name: abi-version
+
+# Fails a pull request whose RADICLE_ABI_VERSION is also claimed by another open pull
+# request or by its base branch. Radicle/bindings/csharp/Radicle.Interop/Core.cs:VerifyAbi
+# compares the number for equality, so two different surfaces under one number pass the
+# guard and then fail on an export the library does not have. #1033 and #1041 both
+# declared 93 on the same 92 base that way and only a reader noticed.
+# Self-hosted only, like the other workflows here: both orgs are over the Free Actions
+# minutes allowance and hosted jobs fail silently once it is exhausted (GHRUNNER#24).
+# Path-scoped to the C ABI, so a pull request that cannot move the number costs nothing.
+
+on:
+  pull_request:
+    paths:
+      - "Radicle/include/fo4/**"
+      - "Radicle/bindings/csharp/**"
+      - "Radicle/tests/test_c_api_quest.cpp"
+      - ".github/scripts/check_abi_version_collision.py"
+      - ".github/workflows/abi-version.yml"
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  unique:
+    name: ABI number is unique
+    runs-on: [self-hosted, Linux, X64, garden]
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Check the ABI number
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_BASE_REF: ${{ github.base_ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: python3 -I .github/scripts/check_abi_version_collision.py
