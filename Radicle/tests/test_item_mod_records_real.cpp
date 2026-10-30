@@ -35,7 +35,7 @@ TEST_P(ItemModRecordsReal, RowsDecodeAndAuthoringLimitsHold) {
   record_game_build(detect_game_build(directory));
   const auto path = std::filesystem::path(directory) / GetParam();
   ASSERT_TRUE(std::filesystem::is_regular_file(path));
-  const auto plugin = fo4::read_plugin_file(path);
+  auto plugin = fo4::read_plugin_file(path);
 
   std::size_t total = 0;
   for (const auto signature_text : k_signatures) {

@@ -169,7 +169,7 @@ TEST(Maintenance, OverrideIdenticalToMasterIsItmWhileALaterOverrideStillHoldsThe
 }
 
 TEST(Maintenance, CountsDeletedRecordsAndNavmeshes) {
-  const auto plugin = make_plugin(
+  auto plugin = make_plugin(
       "Dirty.esp", {}, {{"REFR", 0x000800, std::string_view{"A\0", 2}, 0, fo4::RecordFlags::deleted},
                         {"NAVM", 0x000801, std::string_view{"B\0", 2}, 0, fo4::RecordFlags::deleted},
                         {"MISC", 0x000802, std::string_view{"C\0", 2}}});
@@ -180,7 +180,7 @@ TEST(Maintenance, CountsDeletedRecordsAndNavmeshes) {
 }
 
 TEST(Maintenance, EslEligibilityCountsNativeRecordsOutsideTheLightRange) {
-  const auto plugin = make_plugin("Mod.esp", {"Base.esm"},
+  auto plugin = make_plugin("Mod.esp", {"Base.esm"},
                                   {{"KYWD", 0x00000800, std::string_view{"Override\0", 9}},
                                    {"MISC", 0x01000900, std::string_view{"Small\0", 6}},
                                    {"MISC", 0x01001000, std::string_view{"Large\0", 6}}});

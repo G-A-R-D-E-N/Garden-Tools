@@ -123,7 +123,7 @@ TEST(RealPluginPreservation, UnmodifiedFallout4MasterIsByteIdentical) {
 TEST(RealPlugin, ReadsHeatherSurvivalPatch) {
   const auto path = testdata("FW_HeatherSurvivalPatch.esp");
   ASSERT_TRUE(std::filesystem::exists(path)) << path;
-  const auto plugin = fo4::read_plugin_file(path);
+  auto plugin = fo4::read_plugin_file(path);
 
   EXPECT_EQ(plugin.tes4.header.signature, fo4::sig_tes4);
   EXPECT_EQ(plugin.tes4.header.form_version, 131);

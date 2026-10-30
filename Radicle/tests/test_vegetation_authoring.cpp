@@ -302,7 +302,7 @@ TEST_F(VegetationAuthoring, FloraCannotBeCreatedInALocalizedPlugin) {
 }
 
 TEST_F(VegetationAuthoring, LinkSurfacesAreVisibleToTheRemapAndCheckScan) {
-  const auto plugin = read(build(fixture(), true));
+  auto plugin = read(build(fixture(), true));
   std::vector<std::string> seen;
   for (const auto& hit : fo4::collect_form_links(plugin)) {
     const auto record = hit.record.local().value();

@@ -83,7 +83,7 @@ fo4::forms::QuestAliasCreation base_reference() {
 }
 
 TEST(QuestAliasFormLinks, EmitsRemainingMembersInMutagenOrder) {
-  const auto plugin = fo4::read_plugin(plugin_with_master(), "Patch.esp");
+  auto plugin = fo4::read_plugin(plugin_with_master(), "Patch.esp");
   auto creation = base_reference();
   creation.keywords = {fo4::FormKey::parse("000111:Master.esm")};
   creation.spectator_override = fo4::FormKey::parse("000122:Master.esm");
@@ -115,7 +115,7 @@ TEST(QuestAliasFormLinks, EmitsRemainingMembersInMutagenOrder) {
 }
 
 TEST(QuestAliasFormLinks, EncodesSpecificMasterReferenceWithPluginMasterIndex) {
-  const auto plugin = fo4::read_plugin(plugin_with_master(), "Patch.esp");
+  auto plugin = fo4::read_plugin(plugin_with_master(), "Patch.esp");
   auto creation = base_reference();
   creation.fill = fo4::forms::QuestSpecificReferenceFill{
       fo4::FormKey::parse("000123:Master.esm")};
@@ -133,7 +133,7 @@ TEST(QuestAliasFormLinks, EncodesSpecificMasterReferenceWithPluginMasterIndex) {
 }
 
 TEST(QuestAliasFormLinks, EncodesUniqueActorOwnedByCurrentPlugin) {
-  const auto plugin = fo4::read_plugin(plugin_with_master(), "Patch.esp");
+  auto plugin = fo4::read_plugin(plugin_with_master(), "Patch.esp");
   auto creation = base_reference();
   creation.fill = fo4::forms::QuestUniqueActorFill{
       fo4::FormKey::parse("000456:Patch.esp")};
@@ -149,7 +149,7 @@ TEST(QuestAliasFormLinks, EncodesUniqueActorOwnedByCurrentPlugin) {
 }
 
 TEST(QuestAliasFormLinks, EncodesLocationAliasReferenceAndExternalAlias) {
-  const auto plugin = fo4::read_plugin(plugin_with_master(), "Patch.esp");
+  auto plugin = fo4::read_plugin(plugin_with_master(), "Patch.esp");
 
   auto location_creation = base_reference();
   location_creation.fill = fo4::forms::QuestLocationAliasReferenceFill{
@@ -185,7 +185,7 @@ TEST(QuestAliasFormLinks, EncodesLocationAliasReferenceAndExternalAlias) {
 }
 
 TEST(QuestAliasFormLinks, SupportsNullableSpecificAndExternalQuestFields) {
-  const auto plugin = fo4::read_plugin(plugin_with_master(), "Patch.esp");
+  auto plugin = fo4::read_plugin(plugin_with_master(), "Patch.esp");
 
   auto specific_creation = base_reference();
   specific_creation.fill = fo4::forms::QuestSpecificReferenceFill{std::nullopt};
@@ -214,7 +214,7 @@ TEST(QuestAliasFormLinks, RefusesFormLinkFillWithoutPluginContextOrMaster) {
       static_cast<void>(fo4::forms::encode_quest_alias(creation)),
       fo4::forms::QuestError);
 
-  const auto plugin = fo4::read_plugin(plugin_with_master(), "Patch.esp");
+  auto plugin = fo4::read_plugin(plugin_with_master(), "Patch.esp");
   creation.fill = fo4::forms::QuestUniqueActorFill{
       fo4::FormKey::parse("000456:Missing.esm")};
   EXPECT_THROW(

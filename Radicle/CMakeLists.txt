@@ -638,6 +638,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_undecodable_record.cpp
     tests/test_undecodable_edit.cpp
     tests/test_real_plugin.cpp
+    tests/test_row_roundtrip_real.cpp
     tests/test_actor_value_perk_real.cpp
     tests/test_formkey_load.cpp
     tests/test_master_kinds.cpp
@@ -680,6 +681,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_wp9_cobj_rows.cpp
     tests/test_wp9_race_weap_rows.cpp
     tests/test_race_data_rows.cpp
+    tests/test_race_tint_rows.cpp
+    tests/test_race_tint_real.cpp
     tests/test_race_data_links.cpp
     tests/test_race_link_rows.cpp
     tests/test_wp9_scol.cpp
@@ -708,6 +711,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_exterior_cell_grid_real.cpp
     tests/test_exterior_cell_creation.cpp
     tests/test_interior_cell_create.cpp
+    tests/test_placed_data_rows.cpp
     tests/test_placed_reference.cpp
     tests/test_placed_reference_copy.cpp
     tests/test_copy_as_new.cpp
@@ -741,6 +745,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_delta_patch.cpp
     tests/test_list_merge.cpp
     tests/test_climate_weather_authoring.cpp
+    tests/test_clmt_weather_entries.cpp
+    tests/test_clmt_weather_real.cpp
     tests/test_climate_weather_c_api.cpp
     tests/test_climate_weather_real.cpp
     tests/test_quest_authoring_real.cpp
@@ -1112,6 +1118,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_npc_furn_attach_slots.cpp
     tools/env_bench/env_bench.cpp
     tests/test_fsts_rows.cpp
+    tests/test_info_response_bytes.cpp
+    tests/test_subrecord_group_members.cpp
     tests/test_mswp_rows.cpp
     tests/test_sopm_onam_rows.cpp
     tests/test_stat_lod_rows.cpp

@@ -8,10 +8,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from field_address_codegen import (cpp_signature, is_count, parse_address, parse_segment,  # noqa: E402
-                                   cpp_string, reject_overlaps, render_address)
+                                   cpp_string, printable_signature, reject_bytes_row, reject_overlaps,
+                                   render_address)
 from subrecord_group_render import render_subrecord_groups  # noqa: E402
 
-STORAGES = {"u8", "u16", "u32", "i32", "f32", "i8", "i16"}
+STORAGES = {"u8", "u16", "u32", "i32", "f32", "i8", "i16", "bytes"}
 KINDS = {"scalar", "string"}
 STRING_FORBIDDEN = {"storage", "presentation", "minimum", "maximum", "stride", "array_offset", "names"}
 PRESENTATIONS = {"identity", "percent_0_100", "enum", "flags"}
@@ -31,7 +32,7 @@ GROUP_RUN_KEYS = {"count_member", "members"}
 GROUP_ROW_FORBIDDEN = {"subrecord", "repeated", "stride", "array_offset", "when", "payload_size", "minimum_payload_size"}
 GROUP_LINK_KEYS = {"path", "label", "offset", "nullable", "insertion", "target_union", "targets"}
 HEX_DIGITS = "0123456789abcdefABCDEF"
-WIDTHS = {"u8": 1, "u16": 2, "u32": 4, "i32": 4, "f32": 4, "i8": 1, "i16": 2}
+WIDTHS = {"u8": 1, "u16": 2, "u32": 4, "i32": 4, "f32": 4, "i8": 1, "i16": 2, "bytes": 0}
 INTEGER_BOUNDS = {
     "i8": (-0x80, 0x7F),
     "i16": (-0x8000, 0x7FFF),
@@ -123,7 +124,7 @@ def parse_counted_array(field, record_signature: str):
     signatures = (subrecord, count_subrecord) if "count_subrecord" in field else (subrecord,)
     for signature in signatures:
         if not isinstance(signature, str) or not valid_signature(signature):
-            raise ValueError(f"counted_array signatures must be four printable ASCII characters: {signature!r}: {path!r}")
+            raise ValueError(f"counted_array signatures must be four bytes: {signature!r}: {path!r}")
     if count_subrecord == subrecord:
         raise ValueError(f"counted_array count_subrecord must differ from its subrecord: {path!r}")
     stride = field.get("stride")
@@ -175,7 +176,7 @@ def parse_group_members(members, path: str, reserved: set):
             raise ValueError(f"subrecord_group member keys must be a subset of {sorted(GROUP_MEMBER_KEYS)}: {path!r}")
         signature = member.get("subrecord", "")
         if not isinstance(signature, str) or not valid_signature(signature):
-            raise ValueError(f"subrecord_group member signature must be four printable ASCII characters: {signature!r}: {path!r}")
+            raise ValueError(f"subrecord_group member signature must be four bytes: {signature!r}: {path!r}")
         if signature in signatures or signature in reserved:
             raise ValueError(f"subrecord_group member {signature} is repeated or is the count subrecord: {path!r}")
         signatures.add(signature)
@@ -252,7 +253,7 @@ def parse_subrecord_group(field, record_signature: str):
     if not isinstance(label, str) or not label or any(ord(ch) < 0x20 for ch in label):
         raise ValueError(f"subrecord_group label is invalid: {label!r}")
     count_subrecord = field.get("count_subrecord", "")
-    if not isinstance(count_subrecord, str) or (count_subrecord and not valid_signature(count_subrecord)):
+    if not isinstance(count_subrecord, str) or (count_subrecord and not printable_signature(count_subrecord)):
         raise ValueError(f"subrecord_group count_subrecord must be four printable ASCII characters: {path!r}")
     if field.get("insertion") not in INSERTIONS:
         raise ValueError(f"unsupported insertion policy until record ordering exists: {field.get('insertion')!r}")
@@ -264,9 +265,9 @@ def parse_subrecord_group(field, record_signature: str):
         raise ValueError(f"subrecord_group members must be a non-empty array: {path!r}")
     successors = field.get("successors", [])
     if (not isinstance(successors, list)
-            or not all(isinstance(entry, str) and valid_signature(entry) for entry in successors)
+            or not all(isinstance(entry, str) and printable_signature(entry) for entry in successors)
             or len(set(successors)) != len(successors)):
-        raise ValueError(f"subrecord_group successors must be distinct four-character signatures: {path!r}")
+        raise ValueError(f"subrecord_group successors must be distinct four printable ASCII signatures: {path!r}")
 
     parsed, rows, links, signatures = parse_group_members(
         members, path, {count_subrecord} if count_subrecord else set())
@@ -276,7 +277,7 @@ def parse_subrecord_group(field, record_signature: str):
         if not isinstance(run, dict) or set(run) != GROUP_RUN_KEYS:
             raise ValueError(f"subrecord_group run keys must be exactly {sorted(GROUP_RUN_KEYS)}: {path!r}")
         count_member = run.get("count_member", "")
-        if not isinstance(count_member, str) or (count_member and not valid_signature(count_member)):
+        if not isinstance(count_member, str) or (count_member and not printable_signature(count_member)):
             raise ValueError("subrecord_group run count_member must be four printable ASCII characters "
                              f"or empty for an uncounted run: {path!r}")
         if count_member:
@@ -336,7 +337,7 @@ def load_schema(schema_path: Path):
         if not isinstance(record, dict):
             raise ValueError("schema record entries must be objects")
         record_signature = record.get("signature", "")
-        if not isinstance(record_signature, str) or not valid_signature(record_signature):
+        if not isinstance(record_signature, str) or not printable_signature(record_signature):
             raise ValueError(f"record signature must be four printable ASCII characters: {record_signature!r}")
 
         record_fields = record.get("fields")
@@ -393,7 +394,7 @@ def load_schema(schema_path: Path):
 
             subrecord = field.get("subrecord", "")
             if not isinstance(subrecord, str) or not valid_signature(subrecord):
-                raise ValueError(f"subrecord signature must be four printable ASCII characters: {subrecord!r}")
+                raise ValueError(f"subrecord signature must be four bytes: {subrecord!r}")
             offset = field.get("offset")
             embedded = offset is not None
             if embedded:
@@ -411,6 +412,9 @@ def load_schema(schema_path: Path):
             insertion = field.get("insertion")
             if storage not in STORAGES and not is_string:
                 raise ValueError(f"unsupported scalar storage: {storage!r}")
+
+            if storage == "bytes":
+                reject_bytes_row(field, path, embedded, presentation)
 
             address = parse_address(field, path, subrecord, embedded, WIDTHS.get(storage, 0))
             if presentation not in PRESENTATIONS:
@@ -458,7 +462,7 @@ def load_schema(schema_path: Path):
                 if max_form_version <= min_form_version:
                     raise ValueError(f"max_form_version must exceed min_form_version: {path!r}")
 
-            if is_string:
+            if is_string or storage == "bytes":
                 minimum = maximum = 0.0
             else:
                 minimum = numeric(field.get("minimum"), "minimum", path)

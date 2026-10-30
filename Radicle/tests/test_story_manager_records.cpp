@@ -173,7 +173,7 @@ std::vector<Bytes> payloads(const fo4::Plugin& plugin, std::uint32_t local, std:
 }  // namespace
 
 TEST(StoryManagerRecordsSynthetic, EveryNewRowReadsItsSubrecordOnFixtureRecords) {
-  const auto plugin = load();
+  auto plugin = load();
   for (const auto& row : k_rows) {
     const auto signature = fo4::Signature::from_string(row.signature);
     EXPECT_TRUE(fo4::schema::record_authoring_constraint(signature).has_value()) << row.signature;

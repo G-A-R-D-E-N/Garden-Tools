@@ -192,7 +192,7 @@ TEST(WP9CobjRows, CategoryListIsPackedKeywordsWithoutCounter) {
 }
 
 TEST(WP9CobjRows, IntvScalarsReadTheCountAndGatePriorityOnPayloadSize) {
-  const auto plugin = fo4::read_plugin(make_plugin().bytes, "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin().bytes, "Patch.esp");
   EXPECT_EQ(scalar_bytes(plugin, "000A01:Patch.esp", "COBJ\\CreatedObjectCount"), u16_bytes(5));
   EXPECT_EQ(scalar_bytes(plugin, "000A01:Patch.esp", "COBJ\\Priority"), u16_bytes(0x0102));
   EXPECT_EQ(scalar_bytes(plugin, "000A02:Patch.esp", "COBJ\\CreatedObjectCount"), u16_bytes(3));

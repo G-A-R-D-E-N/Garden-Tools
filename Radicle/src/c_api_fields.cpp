@@ -52,6 +52,28 @@ radicle_status map_list_status(fo4::schema::FormLinkListMutationStatus status) {
   return fail(RADICLE_STATUS_INTERNAL_ERROR, "unknown list mutation status");
 }
 
+radicle_status map_group_status(fo4::SubrecordGroupMutationStatus status) {
+  using Status = fo4::SubrecordGroupMutationStatus;
+  switch (status) {
+    case Status::updated:
+    case Status::unchanged:
+      return RADICLE_STATUS_OK;
+    case Status::record_missing:
+      return fail(RADICLE_STATUS_NOT_FOUND, "plugin has no such record");
+    case Status::index_out_of_range:
+      return fail(RADICLE_STATUS_NOT_FOUND, "subrecord group index is out of range");
+    case Status::subrecord_missing:
+      return fail(RADICLE_STATUS_NOT_FOUND, "record has no such subrecord group");
+  }
+  return fail(RADICLE_STATUS_INTERNAL_ERROR, "unknown subrecord group mutation status");
+}
+
+std::optional<fo4::schema::SubrecordGroupDescriptor> group_descriptor(const char* path) {
+  const std::string_view text{path};
+  if (text.size() < 6 || text[4] != '\\') return std::nullopt;
+  return fo4::schema::subrecord_group_descriptor(fo4::Signature::from_string(text.substr(0, 4)), text);
+}
+
 std::optional<fo4::schema::FormLinkListDescriptor> list_descriptor(const char* path) {
   const std::string_view text{path};
   if (text.size() < 6 || text[4] != '\\') return std::nullopt;
@@ -297,6 +319,32 @@ radicle_status radicle_plugin_formlink_list_clear(radicle_plugin* plugin,
     try {
       return map_list_status(fo4::schema::clear_record_formlink_list(plugin->value, *form_key, *list));
     } catch (const fo4::schema::FormLinkListError& error) {
+      return bad_argument(error);
+    }
+  });
+}
+
+radicle_status radicle_plugin_subrecord_group_member_set(radicle_plugin* plugin,
+                                                         radicle_form_key key,
+                                                         const char* group_path,
+                                                         size_t index,
+                                                         const char* member,
+                                                         int32_t present) {
+  clear_error();
+  return guarded("unknown exception while setting a subrecord group member", [&] {
+    const auto form_key = to_form_key(key);
+    const std::string_view member_text{member == nullptr ? std::string_view{} : std::string_view{member}};
+    if (plugin == nullptr || !form_key || group_path == nullptr || member_text.size() != 4) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                  "plugin, a valid record key, group path and a four-byte member signature are required");
+    }
+    const auto group = group_descriptor(group_path);
+    if (!group) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "unknown subrecord group path");
+    try {
+      return map_group_status(fo4::set_record_subrecord_group_member(
+          plugin->value, *form_key, *group, index,
+          fo4::Signature::from_string(member_text), present != 0));
+    } catch (const fo4::schema::SubrecordGroupError& error) {
       return bad_argument(error);
     }
   });

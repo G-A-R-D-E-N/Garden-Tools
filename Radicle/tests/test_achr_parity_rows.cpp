@@ -137,7 +137,7 @@ float f32_of(std::span<const std::byte> bytes) {
 }  // namespace
 
 TEST(AchrParityRows, ParentActivateOnlyAndCommentsDecodeFromTheirOwnSubrecords) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto& full = actor(plugin, 0x810u);
 
   const auto parent_flag = fo4::schema::scalar_field_descriptor(k_achr, "ACHR\\ParentActivateOnly");
@@ -168,7 +168,7 @@ TEST(AchrParityRows, ParentActivateOnlyAndCommentsDecodeFromTheirOwnSubrecords) 
 }
 
 TEST(AchrParityRows, ActivateParentLinkAndDelayShareEachEightByteEntry) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto& full = actor(plugin, 0x810u);
 
   const auto link = fo4::schema::formlink_field_descriptor(k_achr, "ACHR\\ActivateParent");
@@ -199,7 +199,7 @@ TEST(AchrParityRows, ActivateParentLinkAndDelayShareEachEightByteEntry) {
 }
 
 TEST(AchrParityRows, LinkedReferenceKeywordAndReferenceShareEachEightByteEntry) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto& full = actor(plugin, 0x810u);
 
   const auto keyword = fo4::schema::formlink_field_descriptor(k_achr, "ACHR\\LinkedReferenceKeyword");
@@ -227,7 +227,7 @@ TEST(AchrParityRows, LinkedReferenceKeywordAndReferenceShareEachEightByteEntry) 
 }
 
 TEST(AchrParityRows, FourByteLinkedReferenceKeepsTheKeywordSlot) {
-  const auto plugin = fo4::read_plugin(make_plugin(8, 4), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(8, 4), "Patch.esp");
   const auto& full = actor(plugin, 0x810u);
 
   EXPECT_EQ(link_at(full, "ACHR\\LinkedReferenceKeyword", 0), 0x00000A50u);

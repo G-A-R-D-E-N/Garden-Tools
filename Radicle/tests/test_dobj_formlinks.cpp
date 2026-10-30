@@ -201,7 +201,7 @@ TEST(FormLink, DobjDnamCollectionPreservesDocumentOrder) {
   append_record(out, "DOBJ", 0x03000800,
                 {words({0x02000042, 0x02000042, 0x50535757, 0x00000099})});
   append_record(out, "INFO", 0x03000801, {words({0x02000043})});
-  const auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
   const auto links = fo4::collect_form_links(plugin);
   ASSERT_EQ(links.size(), 4);
   const char* records[] = {"000799:Patch.esp", "000800:Patch.esp",

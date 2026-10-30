@@ -63,7 +63,7 @@ TEST(Compression, BadZlibChecksumLoadsUndecodable) {
   fo4::test::write_subrecord(inner, "EDID", std::string_view{"Checksum\0", 9});
   auto stream = fo4::test::zlib_compress(inner.bytes);
   stream.back() ^= std::byte{1};
-  const auto plugin = fo4::read_plugin(compressed_plugin(
+  auto plugin = fo4::read_plugin(compressed_plugin(
       stream, static_cast<std::uint32_t>(inner.size())));
   const auto* record = fo4::find_record(plugin, fo4::RawFormId{0x00000801});
   ASSERT_NE(record, nullptr);
@@ -75,7 +75,7 @@ TEST(Compression, ShortInflatedOutputLoadsAtProducedLength) {
   fo4::test::write_subrecord(inner, "EDID", std::string_view{"Short\0", 6});
   const auto stream = fo4::test::zlib_compress(inner.bytes);
   const auto declared = static_cast<std::uint32_t>(inner.size() + 16);
-  const auto plugin = fo4::read_plugin(compressed_plugin(stream, declared));
+  auto plugin = fo4::read_plugin(compressed_plugin(stream, declared));
   const auto* record = fo4::find_record(plugin, fo4::RawFormId{0x00000801});
   ASSERT_NE(record, nullptr);
   EXPECT_FALSE(record->undecodable);
@@ -164,7 +164,7 @@ TEST(Compression, InflatesCompressedRecordAndKeepsOriginalBytes) {
   fo4::test::end_record(out, rec);
   fo4::test::end_group(out, grup);
 
-  const auto plugin = fo4::read_plugin(out.bytes);
+  auto plugin = fo4::read_plugin(out.bytes);
   const auto* record = fo4::find_record(plugin, fo4::RawFormId{0x01000801});
   ASSERT_NE(record, nullptr);
   EXPECT_TRUE(record->compressed);
@@ -185,7 +185,7 @@ TEST(Compression, CorruptCompressedPayloadLoadsUndecodable) {
   fo4::test::end_record(out, rec);
   fo4::test::end_group(out, grup);
 
-  const auto plugin = fo4::read_plugin(out.bytes);
+  auto plugin = fo4::read_plugin(out.bytes);
   const auto* record = fo4::find_record(plugin, fo4::RawFormId{0x01000801});
   ASSERT_NE(record, nullptr);
   EXPECT_TRUE(record->undecodable);
@@ -209,7 +209,7 @@ TEST(Compression, OversizedDeclaredSizeLoadsUndecodable) {
   fo4::test::end_record(out, rec);
   fo4::test::end_group(out, grup);
 
-  const auto plugin = fo4::read_plugin(out.bytes);
+  auto plugin = fo4::read_plugin(out.bytes);
   const auto* record = fo4::find_record(plugin, fo4::RawFormId{0x01000801});
   ASSERT_NE(record, nullptr);
   EXPECT_TRUE(record->undecodable);

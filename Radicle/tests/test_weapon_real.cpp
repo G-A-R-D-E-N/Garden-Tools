@@ -26,7 +26,7 @@ TEST_P(WeaponReal, EveryWeaponDecodesWithoutFailure) {
   record_game_build(detect_game_build(directory));
   const auto path = std::filesystem::path(directory) / GetParam();
   ASSERT_TRUE(std::filesystem::is_regular_file(path));
-  const auto plugin = fo4::read_plugin_file(path);
+  auto plugin = fo4::read_plugin_file(path);
   const auto weap = fo4::Signature::from_string("WEAP");
   const auto fields = fo4::schema::scalar_fields(weap);
 

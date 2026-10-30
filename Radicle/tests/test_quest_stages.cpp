@@ -73,7 +73,7 @@ const fo4::FormKey quest_key() { return fo4::FormKey::parse("000800:Quests.esp")
 }  // namespace
 
 TEST(QuestStages, DecodesStagesEntriesAndEdgeShapes) {
-  const auto plugin = fo4::read_plugin(make_quest_plugin(0x80), "Quests.esp");
+  auto plugin = fo4::read_plugin(make_quest_plugin(0x80), "Quests.esp");
   const auto decoded = fo4::forms::decode_quest_stages(plugin, quest_key());
 
   ASSERT_EQ(decoded.stages.size(), 2u);
@@ -107,7 +107,7 @@ TEST(QuestStages, DecodesStagesEntriesAndEdgeShapes) {
 
 // The alias array reuses INDX; the walk must stop at ANAM.
 TEST(QuestStages, StopsAtTheAliasArray) {
-  const auto plugin = fo4::read_plugin(make_quest_plugin(0x80), "Quests.esp");
+  auto plugin = fo4::read_plugin(make_quest_plugin(0x80), "Quests.esp");
   const auto decoded = fo4::forms::decode_quest_stages(plugin, quest_key());
   for (const auto& stage : decoded.stages) {
     EXPECT_NE(stage.index, 99u) << "read an alias-array INDX as a stage";
@@ -131,7 +131,7 @@ TEST(QuestStages, NonLocalizedPluginKeepsInlineLogText) {
   fo4::test::end_record(out, rec);
   fo4::test::end_group(out, grup);
 
-  const auto plugin = fo4::read_plugin(out.bytes, "Quests.esp");
+  auto plugin = fo4::read_plugin(out.bytes, "Quests.esp");
   const auto decoded = fo4::forms::decode_quest_stages(plugin, quest_key());
   ASSERT_EQ(decoded.stages.size(), 1u);
   ASSERT_EQ(decoded.stages[0].log_entries.size(), 1u);
@@ -192,7 +192,7 @@ TEST(QuestStages, RejectsMalformedMarkers) {
   fo4::test::end_record(out, rec);
   fo4::test::end_group(out, grup);
 
-  const auto plugin = fo4::read_plugin(out.bytes, "Quests.esp");
+  auto plugin = fo4::read_plugin(out.bytes, "Quests.esp");
   EXPECT_THROW(static_cast<void>(fo4::forms::decode_quest_stages(plugin, quest_key())),
                fo4::forms::QuestError);
 }

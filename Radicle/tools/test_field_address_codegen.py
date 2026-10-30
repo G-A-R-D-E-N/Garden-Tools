@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Validation tests for the field addressing keys and the enum and flags names of schema_codegen.py and formlink_schema_codegen.py."""
 
+import contextlib
+import io
 import json
 import sys
 import tempfile
@@ -136,6 +138,33 @@ class SchemaCodegenTests(unittest.TestCase):
         self.rejects("minimum_payload_size", scalar(payload_size=8, minimum_payload_size=12))
         self.rejects("minimum_payload_size requires an embedded field", string(minimum_payload_size=12))
 
+    def test_bytes_storage_covers_the_whole_payload_and_renders_as_hex(self):
+        field = self.load(scalar(storage="bytes", offset=None, minimum=None, maximum=None))[0]
+        self.assertEqual(field["storage"], "bytes")
+        self.assertFalse(field["embedded"])
+        self.assertIn("ScalarStorage::bytes", schema_codegen.render([field]))
+
+    def test_bytes_storage_rejects_a_slot_a_presentation_and_names(self):
+        self.rejects("bytes storage must cover the whole payload",
+                     scalar(storage="bytes", offset=4))
+        self.rejects("bytes storage requires identity presentation",
+                     scalar(storage="bytes", offset=None, minimum=None, maximum=None,
+                            presentation="enum", names=[enum_entry(1, "One")]))
+        self.rejects("bytes storage does not accept names",
+                     scalar(storage="bytes", offset=None, minimum=None, maximum=None,
+                            names=[enum_entry(1, "One")]))
+
+    def test_bytes_row_defaults_must_be_even_hex_and_are_not_applied(self):
+        self.rejects("bytes row default must be hexadecimal",
+                     scalar(storage="bytes", offset=None, minimum=None, maximum=None,
+                            default="0g"))
+        self.rejects("bytes row default must be an even-length hex string",
+                     scalar(storage="bytes", offset=None, minimum=None, maximum=None,
+                            default="abc"))
+        self.rejects("bytes row default is not applied by any insertion policy",
+                     scalar(storage="bytes", offset=None, minimum=None, maximum=None,
+                            default="abcd"))
+
     def test_min_form_version_gates_a_row_and_rejects_bad_values(self):
         field = self.load(scalar(min_form_version=97))[0]
         self.assertEqual(field["min_form_version"], 97)
@@ -157,8 +186,12 @@ class SchemaCodegenTests(unittest.TestCase):
         self.rejects("smaller than the field end", scalar(payload_size=7))
         self.rejects("positive integer", scalar(payload_size=0))
 
-    def test_repeated_and_stride_are_exclusive(self):
-        self.rejects("mutually exclusive", scalar(repeated=True, stride=8))
+    def test_repeated_strided_rows_take_every_matching_subrecord(self):
+        field = self.load(scalar(repeated=True, stride=8))[0]
+        self.assertTrue(field["address"]["repeated"])
+        self.assertEqual(field["address"]["stride"], 8)
+        self.assertIn("FieldAddress{true, 8, 0, FieldDiscriminator{}}", schema_codegen.render([field]))
+        self.rejects("stride requires an offset", scalar(repeated=True, offset=None, stride=8))
         self.assertTrue(self.load(scalar(offset=None, repeated=True))[0]["address"]["repeated"])
 
     def test_stride_rules(self):
@@ -393,8 +426,9 @@ class SchemaCodegenTests(unittest.TestCase):
     def test_formlink_fields_share_the_rules(self):
         rows, _nested, fields, _unions = self.link(link(repeated=True))[0:4]
         self.assertTrue(fields[0]["address"]["repeated"])
-        with self.assertRaisesRegex(ValueError, "mutually exclusive"):
-            self.link(link(repeated=True, stride=8))
+        strided = self.link(link(repeated=True, stride=8))[2][0]
+        self.assertTrue(strided["address"]["repeated"])
+        self.assertEqual(strided["address"]["stride"], 8)
         with self.assertRaisesRegex(ValueError, "inside one stride element"):
             self.link(link(offset=6, stride=8))
         with self.assertRaisesRegex(ValueError, "when.equals"):
@@ -550,7 +584,7 @@ class SchemaCodegenTests(unittest.TestCase):
         fields, arrays, _groups = self.load_schema(counted(count_subrecord=None), other)
         self.assertEqual([array["count_subrecord"] for array in arrays], ["", ""])
         self.assertIn('Signature::from_string("DATA"), Signature{}, 8},', schema_codegen.render(fields, arrays))
-        self.rejects("counted_array signatures must be four printable ASCII", counted(count_subrecord=""), count_row())
+        self.rejects("counted_array signatures must be four bytes", counted(count_subrecord=""), count_row())
 
 
 
@@ -583,6 +617,18 @@ class ControlByteSignatureTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "counted_array signatures"):
                     self.load_schema(counted(count_subrecord=None, subrecord=value))
 
+    def test_group_successors_still_require_printable_signatures(self):
+        group = {"kind": "subrecord_group", "path": "TEST" + BS + "Group", "label": "Group",
+                 "insertion": "existing_only", "successors": [chr(0) + "IAD"],
+                 "members": [{"subrecord": "DATA", "required": True, "payload_size": 4}]}
+        with self.assertRaisesRegex(ValueError, "successors must be distinct four printable ASCII"):
+            self.load_schema(group)
+
+    def test_when_subrecord_still_requires_printable_signatures(self):
+        when = {"subrecord": chr(0) + "IAD", "offset": 0, "storage": "u8", "equals": [0]}
+        with self.assertRaisesRegex(ValueError, "when.subrecord must be four printable ASCII"):
+            self.load_schema(scalar(when=when))
+
 
 class ShardedScalarTableTests(unittest.TestCase):
     def test_rows_are_split_at_record_boundaries_under_the_budget(self):
@@ -614,6 +660,28 @@ class ShardedScalarTableTests(unittest.TestCase):
                 body = files[path].split("\n")[3:-1]
                 rows.extend(body)
             self.assertEqual(rows, inline[start + 1:end])
+
+    def test_emit_checks_writes_and_removes_stale_shards(self):
+        schema = Path(__file__).resolve().parent.parent / "schema" / "fallout4" / "fields.json"
+        fields, arrays, groups = schema_codegen.load_schema(schema)
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "generated_scalar_fields.inc"
+
+            def checked():
+                with contextlib.redirect_stdout(io.StringIO()):
+                    return schema_output.emit(fields, arrays, groups, output, check=True)
+
+            self.assertEqual(checked(), 1)
+            self.assertEqual(schema_output.emit(fields, arrays, groups, output, check=False), 0)
+            self.assertEqual(checked(), 0)
+            orphan = output.parent / "generated_scalar_fields_9.inc"
+            orphan.write_text("// stale\n", encoding="utf-8")
+            self.assertEqual(checked(), 1)
+            schema_output.emit(fields, arrays, groups, output, check=False)
+            self.assertFalse(orphan.exists())
+            shard = sorted(output.parent.glob("generated_scalar_fields_[0-9]*.inc"))[0]
+            shard.write_text(shard.read_text(encoding="utf-8") + "// drift\n", encoding="utf-8")
+            self.assertEqual(checked(), 1)
 
 
 if __name__ == "__main__":

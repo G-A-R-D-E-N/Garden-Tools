@@ -166,7 +166,7 @@ std::vector<std::string> signature_names(const fo4::Record& record) {
 }  // namespace
 
 TEST(FactionSynthetic, DecodesRelationsInFileOrder) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto relations = fo4::forms::decode_faction_relations(plugin, key());
   ASSERT_EQ(relations.size(), 2u);
   EXPECT_EQ(relations[0].faction, fo4::FormKey::parse("000123:MagicMaster.esp"));
@@ -178,7 +178,7 @@ TEST(FactionSynthetic, DecodesRelationsInFileOrder) {
 }
 
 TEST(FactionSynthetic, DecodesRanksWithTitlesAndRawInsignia) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto ranks = fo4::forms::decode_faction_ranks(plugin, key());
   ASSERT_EQ(ranks.size(), 3u);
   EXPECT_EQ(ranks[0].number, 0u);
@@ -302,7 +302,7 @@ TEST(FactionSynthetic, RejectsRankTitleWithEmbeddedNul) {
 }
 
 TEST(FactionSynthetic, DecodeRejectsOnDiskReactionAboveThree) {
-  const auto plugin = fo4::read_plugin(make_plugin({.first_reaction = 4}), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin({.first_reaction = 4}), "Patch.esp");
   EXPECT_THROW(fo4::forms::decode_faction_relations(plugin, key()), fo4::forms::FactionError);
 }
 
@@ -327,7 +327,7 @@ TEST(FactionSynthetic, RejectsMalformedRelationWithoutTouchingPlugin) {
 }
 
 TEST(FactionSynthetic, RejectsRankMemberOutsideItsGroup) {
-  const auto plugin = fo4::read_plugin(make_plugin({.titles_before_rank = true}), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin({.titles_before_rank = true}), "Patch.esp");
   EXPECT_THROW(fo4::forms::decode_faction_ranks(plugin, key()), fo4::forms::FactionError);
 }
 

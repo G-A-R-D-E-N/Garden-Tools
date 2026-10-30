@@ -401,6 +401,97 @@ SubrecordGroupMutationStatus insert_record_subrecord_group(Plugin& plugin,
   return SubrecordGroupMutationStatus::updated;
 }
 
+SubrecordGroupMutationStatus set_record_subrecord_group_member(
+    Plugin& plugin,
+    const FormKey& record_key,
+    const schema::SubrecordGroupDescriptor& group,
+    std::size_t index,
+    Signature member_signature,
+    bool present) {
+  assign_record_form_keys(plugin);
+  auto* target = find_mutable_record(plugin, record_key);
+  if (target == nullptr) return SubrecordGroupMutationStatus::record_missing;
+  require_subrecord_group_record(*target, group);
+  if (!group.run.members.empty()) {
+    throw schema::SubrecordGroupError(std::string(group.path) +
+                                      " has nested runs and no member-level authoring");
+  }
+
+  std::optional<std::size_t> member_index;
+  for (std::size_t m = 0; m < group.members.size(); ++m) {
+    if (group.members[m].subrecord == member_signature) member_index = m;
+  }
+  if (!member_index.has_value()) {
+    throw schema::SubrecordGroupError(std::string(group.path) + " has no " +
+                                      member_signature.to_string() + " member");
+  }
+  const auto& descriptor = group.members[*member_index];
+  if (descriptor.required) {
+    throw schema::SubrecordGroupError(std::string(group.path) + " member " +
+                                      member_signature.to_string() + " is required");
+  }
+
+  const auto spans = group_spans(*target, group);
+  if (index >= spans.size()) return SubrecordGroupMutationStatus::index_out_of_range;
+  const auto span = spans[index];
+  std::optional<std::size_t> existing;
+  std::size_t occurrences = 0;
+  for (std::size_t position = span.first; position < span.end; ++position) {
+    if (target->subrecords[position].signature != member_signature) continue;
+    existing = position;
+    ++occurrences;
+  }
+
+  if (!present) {
+    if (!existing.has_value()) return SubrecordGroupMutationStatus::unchanged;
+    // Constraint: a clear names one member, so a member that repeats inside the element refuses instead of dropping an arbitrary copy.
+    if (occurrences > 1) {
+      throw schema::SubrecordGroupError(std::string(group.path) + " member " +
+                                        member_signature.to_string() + " appears " +
+                                        std::to_string(occurrences) +
+                                        " times and cannot be cleared as one");
+    }
+    target->subrecords.erase(target->subrecords.begin() +
+                             static_cast<std::ptrdiff_t>(*existing));
+    mark_record_modified(plugin, *target);
+    return SubrecordGroupMutationStatus::updated;
+  }
+  if (existing.has_value()) return SubrecordGroupMutationStatus::unchanged;
+
+  if (descriptor.localized && plugin.header.tes4_flags.is_localized()) {
+    throw schema::SubrecordGroupError(std::string(group.path) + " member " +
+                                      member_signature.to_string() +
+                                      " cannot be inserted into a localized plugin");
+  }
+  // Invariant: a member sits at its declaration position, so it goes before the first present member declared after it.
+  std::size_t insertion = span.end;
+  for (std::size_t position = span.first; position < span.end; ++position) {
+    std::optional<std::size_t> at;
+    for (std::size_t m = 0; m < group.members.size(); ++m) {
+      if (group.members[m].subrecord == target->subrecords[position].signature) at = m;
+    }
+    if (at.has_value() && *at > *member_index) {
+      insertion = position;
+      break;
+    }
+  }
+
+  Subrecord created;
+  created.signature = member_signature;
+  if (descriptor.default_payload.empty()) {
+    created.data.assign(descriptor.payload_size, std::byte{0});
+  } else {
+    created.data.reserve(descriptor.default_payload.size());
+    for (const auto byte : descriptor.default_payload) {
+      created.data.push_back(std::byte{byte});
+    }
+  }
+  target->subrecords.insert(target->subrecords.begin() + static_cast<std::ptrdiff_t>(insertion),
+                            std::move(created));
+  mark_record_modified(plugin, *target);
+  return SubrecordGroupMutationStatus::updated;
+}
+
 SubrecordGroupMutationStatus remove_record_subrecord_group(Plugin& plugin,
                                                            const FormKey& record_key,
                                                            const schema::SubrecordGroupDescriptor& group,

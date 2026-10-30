@@ -63,7 +63,7 @@ def main() -> int:
             return 1
         return 0
 
-    with open(args.output, "w", encoding="utf-8") as handle:
+    with open(args.output, "w", encoding="utf-8", newline="\n") as handle:
         handle.write(rendered)
     return 0
 

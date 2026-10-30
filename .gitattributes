@@ -1,3 +1,4 @@
+Radicle/include/fo4/schema/generated_*.inc text eol=lf
 docs/code-notes/*.md merge=union
 Radicle/docs/code-notes/*.md merge=union
 *.md text eol=lf

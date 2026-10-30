@@ -51,6 +51,7 @@ enum class CountedArrayMutationStatus {
 
 enum class SubrecordGroupMutationStatus {
   updated,
+  unchanged,
   record_missing,
   index_out_of_range,
   subrecord_missing,
@@ -270,6 +271,15 @@ SubrecordGroupMutationStatus remove_record_subrecord_group(Plugin& plugin,
                                                            const FormKey& record_key,
                                                            const schema::SubrecordGroupDescriptor& group,
                                                            std::size_t index);
+
+// Constraint: sets or clears one optional group member; a required member and a group with nested runs must be refused.
+SubrecordGroupMutationStatus set_record_subrecord_group_member(
+    Plugin& plugin,
+    const FormKey& record_key,
+    const schema::SubrecordGroupDescriptor& group,
+    std::size_t index,
+    Signature member,
+    bool present);
 
 SubrecordGroupMutationStatus insert_record_subrecord_group_run(Plugin& plugin,
                                                                const FormKey& record_key,

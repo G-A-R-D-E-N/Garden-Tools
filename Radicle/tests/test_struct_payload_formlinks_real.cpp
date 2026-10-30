@@ -100,7 +100,7 @@ TEST(StructPayloadFormLinksRealData, EverySlotResolvesToItsDocumentedType) {
   // Fallout4.esm target.
   std::map<std::string, std::string> kinds;
   for (const auto& path : present) {
-    const auto plugin = fo4::read_plugin_file(path);
+    auto plugin = fo4::read_plugin_file(path);
     for (const auto* record : fo4::collect_records(plugin)) {
       kinds[record->form_key.to_string()] = record->header.signature.to_string();
     }
@@ -111,7 +111,7 @@ TEST(StructPayloadFormLinksRealData, EverySlotResolvesToItsDocumentedType) {
 
   // Pass two: the links themselves, again one file at a time.
   for (const auto& path : present) {
-    const auto plugin = fo4::read_plugin_file(path);
+    auto plugin = fo4::read_plugin_file(path);
     for (const auto& hit : fo4::collect_form_links(plugin)) {
       // A zero slot is an absent link, not a target. Its FormKey is empty,
       // which would otherwise collide with the TES4 record's empty key.

@@ -262,7 +262,7 @@ TEST(FormLink, IpdsPnamCollectionPreservesTraversalOrder) {
   append_ipds_record(out, 0x03000800, {pnam0.bytes, pnam1.bytes});
   append_refr_record(out, 0x03000802, 0x00000043);
 
-  const auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
   const auto links = fo4::collect_form_links(plugin);
   ASSERT_EQ(links.size(), 6);
 

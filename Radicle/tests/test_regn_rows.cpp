@@ -257,7 +257,7 @@ TEST(RegnRows, DeclaresColorsDataEntryFieldsAndLinks) {
 }
 
 TEST(RegnRows, ReadsColorsDataEntriesAndLinks) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto key = "000D10:Patch.esp";
 
   EXPECT_EQ(field_bytes(plugin, key, "REGN\\MapColorRed"), u8_bytes(0x11));
@@ -278,7 +278,7 @@ TEST(RegnRows, ReadsColorsDataEntriesAndLinks) {
 }
 
 TEST(RegnRows, CountsRepeatedDataEntries) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto key = fo4::FormKey::parse("000D10:Patch.esp");
   const auto type = scalar_row("REGN\\RegionDataType");
   const auto color = scalar_row("REGN\\MapColorRed");

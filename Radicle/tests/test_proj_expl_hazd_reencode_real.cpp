@@ -48,7 +48,7 @@ TEST(ProjExplHazdReencodeRealData, ReproducesEveryShippedPayloadByteForByte) {
     const auto path = std::filesystem::path{dir} / name;
     if (!std::filesystem::exists(path)) continue;
     ++files;
-    const auto plugin = fo4::read_plugin_file(path);
+    auto plugin = fo4::read_plugin_file(path);
 
     for (const auto* record : fo4::collect_records(plugin)) {
       const auto signature = record->header.signature.to_string();

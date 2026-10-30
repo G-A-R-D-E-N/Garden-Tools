@@ -147,7 +147,7 @@ TEST(SoundSubrecords, CreateUsesProvenDefaultsAndRefusesUnprovableRecords) {
 }
 
 TEST(SoundSubrecords, FormLinkScanVisitsExactlyTheLinkSlots) {
-  const auto plugin = read(build(fixture()));
+  auto plugin = read(build(fixture()));
   std::set<std::tuple<std::uint32_t, std::string, std::size_t, std::size_t>> hits;
   for (const auto& hit : fo4::collect_form_links(plugin)) {
     const auto id = hit.record.local().value();

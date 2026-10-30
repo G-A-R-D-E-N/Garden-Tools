@@ -293,7 +293,7 @@ TEST_P(VegetationReal, EveryOfficialRecordIsListedAndOrderedInTheAuthoringSchema
   record_game_build(detect_game_build(dir));
   const auto path = std::filesystem::path{dir} / GetParam();
   if (!std::filesystem::exists(path)) { GTEST_SKIP() << "missing official master: " << path; }
-  const auto plugin = fo4::read_plugin_file(path);
+  auto plugin = fo4::read_plugin_file(path);
   std::map<std::string, int> totals;
   std::vector<std::string> violators;
   fo4::visit_records(plugin, [&](const fo4::Record& record) {

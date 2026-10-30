@@ -359,7 +359,7 @@ TEST(WRLDRows, StringAndLinkRowsNameTheirSubrecordsAndTargets) {
 }
 
 TEST(WRLDRows, ReadsWorldSubrecordsThroughTheRows) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto key = "000C01:Patch.esp";
   EXPECT_EQ(scalar_bytes(plugin, key, "WRLD\\Flags"), Bytes{std::byte{0x41}});
   EXPECT_EQ(scalar_bytes(plugin, key, "WRLD\\ParentFlags"),
@@ -412,7 +412,7 @@ TEST(WRLDRows, WritesScalarFlagStringAndLinkThenRereads) {
 }
 
 TEST(WRLDRows, ReadsMaxHeightAndLevelRows) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto key = "000C01:Patch.esp";
   EXPECT_EQ(scalar_bytes(plugin, key, "WRLD\\MaxHeightMinX"),
             (Bytes{std::byte{0xFE}, std::byte{0xFF}}));
@@ -466,7 +466,7 @@ TEST(WRLDRows, WritesLevelAndMaxHeightWithoutTouchingTheCellDataBlob) {
 }
 
 TEST(WRLDRows, PreflightAcceptsTwoWlevSubrecordsAndLeavesTheCellDataBlobAlone) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto* record = fo4::find_record(plugin, fo4::FormKey::parse("000C01:Patch.esp"));
   ASSERT_NE(record, nullptr);
   for (const auto& issue : fo4::schema::preflight_record(*record)) {
@@ -495,7 +495,7 @@ TEST(WRLDRows, PreflightAcceptsTwoWlevSubrecordsAndLeavesTheCellDataBlobAlone) {
 }
 
 TEST(WRLDRows, PreflightAllowsTheSixByteLevelBlobBesideTheRowAndCountsTheRows) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   for (const auto& issue : fo4::schema::preflight_authoring_record(
            plugin, fo4::FormKey::parse("000C01:Patch.esp"))) {
     EXPECT_NE(issue.code, "invalid_scalar_storage") << issue.path;
@@ -635,7 +635,7 @@ TEST(WRLDRows, CreatesAWorldspaceFromTheAuthoringDefaults) {
 }
 
 TEST(WRLDRows, AuthoringPreflightReportsMissingNamaAndTheOutOfOrderTail) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto issues =
       fo4::schema::preflight_authoring_record(plugin, fo4::FormKey::parse("000C01:Patch.esp"));
   bool missing_nama = false;

@@ -65,6 +65,15 @@ constexpr ScalarRow k_scalar_rows[] = {
     {"ACHR\\ReflectionType", "XPWR", 4, u32, true, 8},
     {"ACHR\\ActivateParentDelay", "XAPR", 4, f32, true, 8},
     {"ACHR\\WaterCurrentVelocityCount", "XWCN", 0, u32, false, 0},
+    {"ACHR\\PositionX", "DATA", 0, f32, true, 24},
+    {"ACHR\\PositionY", "DATA", 4, f32, true, 24},
+    {"ACHR\\PositionZ", "DATA", 8, f32, true, 24},
+    {"ACHR\\RotationX", "DATA", 12, f32, true, 24},
+    {"ACHR\\RotationY", "DATA", 16, f32, true, 24},
+    {"ACHR\\RotationZ", "DATA", 20, f32, true, 24},
+    {"ACHR\\BipedRotationX", "XRGB", 0, f32, true, 12},
+    {"ACHR\\BipedRotationY", "XRGB", 4, f32, true, 12},
+    {"ACHR\\BipedRotationZ", "XRGB", 8, f32, true, 12},
 };
 
 constexpr LinkRow k_link_rows[] = {
@@ -305,7 +314,7 @@ Bytes sub_bytes(const fo4::Plugin& plugin, std::uint32_t local, std::string_view
 }  // namespace
 
 TEST(AchrRows, ScalarRowsHaveXEditOffsetsStorageAndPayloadGates) {
-  EXPECT_EQ(fo4::schema::scalar_fields(k_achr).size(), 29u);
+  EXPECT_EQ(fo4::schema::scalar_fields(k_achr).size(), 38u);
   for (const auto& row : k_scalar_rows) {
     SCOPED_TRACE(row.path);
     const auto field = fo4::schema::scalar_field_descriptor(k_achr, row.path);
@@ -384,7 +393,7 @@ TEST(AchrRows, LinkRowsNameTheirSubrecordsOffsetsAndTargets) {
 }
 
 TEST(AchrRows, ReadsScalarsAndLinksFromThePlugin) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto& full = actor(plugin, 0x810u);
 
   const auto radius = scalar_bytes(full, "ACHR\\Radius");
@@ -648,7 +657,7 @@ TEST(AchrRows, StridedRagdollRowsAddressEachBoneAndGateTheStride) {
 }
 
 TEST(AchrRows, ShortLockPayloadReadsAsAbsentAndDropsTheKeyLinkOffset) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto& full = actor(plugin, 0x810u);
   const auto& short_lock = actor(plugin, 0x811u);
   EXPECT_EQ(short_lock.subrecords.size(), 27u);

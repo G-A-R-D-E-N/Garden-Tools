@@ -47,7 +47,7 @@ fo4::Plugin plugin_with_three_masters() {
 }  // namespace
 
 TEST(MasterUsage, CountsOverridesAndLinksPerMaster) {
-  const auto plugin = plugin_with_three_masters();
+  auto plugin = plugin_with_three_masters();
   const auto usage = fo4::scan_master_usage(plugin);
   ASSERT_EQ(usage.references.size(), 3u);
   EXPECT_EQ(usage.references[0], 1u);
@@ -57,7 +57,7 @@ TEST(MasterUsage, CountsOverridesAndLinksPerMaster) {
 }
 
 TEST(MasterUsage, DroppingUnusedMasterKeepsEveryLink) {
-  const auto plugin = plugin_with_three_masters();
+  auto plugin = plugin_with_three_masters();
   const auto kept = fo4::used_masters(plugin, fo4::scan_master_usage(plugin));
   ASSERT_EQ(kept.size(), 2u);
   EXPECT_EQ(kept[0].key.filename(), "Fallout4.esm");

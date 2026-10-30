@@ -620,7 +620,7 @@ jobs:
     name: Native real-data tests (Windows, MSVC, Fallout 4 data)
     if: github.event.inputs.lane != 'radicle-cross'
     runs-on: [fo4-data]
-    timeout-minutes: 90
+    timeout-minutes: 180
     defaults:
       run:
         shell: cmd

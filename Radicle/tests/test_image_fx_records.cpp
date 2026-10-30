@@ -202,7 +202,7 @@ constexpr std::pair<std::uint32_t, std::string_view> k_records[] = {
 }  // namespace
 
 TEST(ImageFxSynthetic, EveryNewRowReadsItsFixturePayload) {
-  const auto plugin = load();
+  auto plugin = load();
   std::size_t decoded = 0;
   for (const auto& [local, signature] : k_records) {
     const auto record = fo4::Signature::from_string(signature);

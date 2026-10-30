@@ -279,7 +279,7 @@ std::string row_string(const fo4::Plugin& plugin,
 }  // namespace
 
 TEST(MaterialImpactSynthetic, EveryScalarRowDecodesOnTheFixture) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   for (const auto& item : k_items) {
     const auto signature = fo4::Signature::from_string(item.signature);
     const auto* record = fo4::find_record(plugin, fo4::FormKey::parse(item.key));
@@ -433,7 +433,7 @@ TEST(MaterialImpactSynthetic, EditsOneRowPerRecordAndRereads) {
 }
 
 TEST(MaterialImpactSynthetic, FixtureRecordsMeetTheirAuthoringMinimums) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   for (const auto& item : k_items) {
     const auto signature = fo4::Signature::from_string(item.signature);
     const auto constraint = fo4::schema::record_authoring_constraint(signature);
@@ -469,7 +469,7 @@ TEST(MaterialImpactSynthetic, LensSpriteGroupRowsFollowTheCountSubrecord) {
   ASSERT_TRUE(member.has_value());
   EXPECT_EQ(member->path, group.path);
 
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto spans =
       fo4::subrecord_group_spans(plugin, fo4::FormKey::parse("000806:Patch.esp"), group);
   ASSERT_TRUE(spans.has_value());
@@ -617,7 +617,7 @@ TEST(MaterialImpactSynthetic, LensSpriteStringsAddressOneSpriteAtATime) {
 }
 
 TEST(MaterialImpactSynthetic, SpriteStringRowsSkipTheRecordLevelDnam) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto key = fo4::FormKey::parse("000806:Patch.esp");
   const auto* record = fo4::find_record(plugin, key);
   ASSERT_NE(record, nullptr);

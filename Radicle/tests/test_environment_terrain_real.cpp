@@ -34,7 +34,7 @@ TEST(TerrainLandReal, CommonwealthCellsDecodeWithinInvariants) {
   if (!std::filesystem::exists(master)) GTEST_SKIP() << "no Fallout4.esm under " << dir;
   const std::vector<std::filesystem::path> paths{master};
   const auto env = fo4::env::Environment::load(paths);
-  const auto plugin = fo4::PluginKey::from_filename("Fallout4.esm");
+  auto plugin = fo4::PluginKey::from_filename("Fallout4.esm");
 
   std::size_t decoded = 0;
   for (const std::uint32_t local : {0x00F540u, 0x00F53Fu, 0x00F53Eu}) {

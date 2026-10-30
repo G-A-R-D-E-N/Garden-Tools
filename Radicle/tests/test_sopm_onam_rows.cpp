@@ -99,7 +99,7 @@ TEST(SopmOnamRows, ChannelsAreStridedU8Rows) {
 }
 
 TEST(SopmOnamRows, ReadsOneSlotPerChannel) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto record = fo4::FormKey::parse(k_key);
 
   EXPECT_EQ(fo4::record_field_count(plugin, record, row("SOPM\\FrontLeft")),
@@ -137,7 +137,7 @@ TEST(SopmOnamRows, RefusesANonU8SetterOnAChannelRow) {
 }
 
 TEST(SopmOnamRows, AuthoringCoversOnamBetweenVnamAndAttn) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   for (const auto& issue : fo4::schema::preflight_authoring_record(plugin, fo4::FormKey::parse(k_key))) {
     EXPECT_NE(issue.severity, fo4::schema::PreflightSeverity::error) << issue.path << ": " << issue.message;
   }

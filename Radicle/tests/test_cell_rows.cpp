@@ -481,7 +481,7 @@ TEST(CellRows, RegionsAndPreVisReferenceListsArePackedAndAppendable) {
 }
 
 TEST(CellRows, ReadsScalarsLinksAndRegionsFromThePlugin) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto key = "000C10:Patch.esp";
 
   EXPECT_EQ(sub_bytes(plugin, key, "DATA"), u16_bytes(0x0002));
@@ -560,7 +560,7 @@ TEST(CellRows, ReadsScalarsLinksAndRegionsFromThePlugin) {
 }
 
 TEST(CellRows, ShortPayloadsHideRowsInsteadOfReportingThem) {
-  const auto plugin = fo4::read_plugin(make_short_payload_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_short_payload_plugin(), "Patch.esp");
   const auto key = "000C20:Patch.esp";
 
   EXPECT_EQ(scalar_bytes(plugin, key, "CELL\\Flags"), u16_bytes(0x0002));

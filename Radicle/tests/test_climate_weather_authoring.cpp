@@ -408,7 +408,7 @@ TEST(ClimateWeatherReader, CloudSpeedsAreUnsignedBytesWithTheirStoredBias) {
 }
 
 TEST(ClimateWeatherReader, NullSkyStaticsAndShortAmbientColorsDecode) {
-  const auto plugin = read(build(fixture(), true));
+  auto plugin = read(build(fixture(), true));
   const auto modern = fo4::forms::decode_weather(plugin, key(k_wthr));
   ASSERT_EQ(modern.tnam.size(), 2u);
   EXPECT_EQ(modern.tnam[0], key(k_stat));
@@ -492,7 +492,7 @@ TEST(ClimateWeatherReader, FourLayerCloudColorsDecodeOnlyBeforeFormVersion35) {
       if (name == "PNAM") { data = filled(64, 1); }
       if (name == "NAM0") { data = filled(version < 35 ? 208 : 224, 0); }
     }
-    const auto plugin = read(build(entries, true));
+    auto plugin = read(build(entries, true));
     if (version < 35) {
       const auto model = fo4::forms::decode_weather(plugin, key(k_wthr_old));
       EXPECT_EQ(model.cloud_colors.size(), 16u);

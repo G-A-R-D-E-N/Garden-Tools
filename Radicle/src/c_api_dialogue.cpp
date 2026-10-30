@@ -283,13 +283,17 @@ radicle_status radicle_plugin_insert_scene_phase(radicle_plugin* plugin,
   return guarded("unknown exception while inserting a scene phase", [&] {
     try {
       switch (fo4::insert_scene_phase(plugin->value, *form_key, index, name)) {
+        case fo4::SubrecordGroupMutationStatus::updated:
+        case fo4::SubrecordGroupMutationStatus::unchanged:
+          return RADICLE_STATUS_OK;
         case fo4::SubrecordGroupMutationStatus::record_missing:
           return fail(RADICLE_STATUS_NOT_FOUND, "plugin has no such record");
         case fo4::SubrecordGroupMutationStatus::index_out_of_range:
           return fail(RADICLE_STATUS_INVALID_ARGUMENT, "scene has fewer phases than the requested index");
-        default:
-          return RADICLE_STATUS_OK;
+        case fo4::SubrecordGroupMutationStatus::subrecord_missing:
+          return fail(RADICLE_STATUS_INTERNAL_ERROR, "scene edit reported a missing subrecord");
       }
+      return fail(RADICLE_STATUS_INTERNAL_ERROR, "unknown scene mutation status");
     } catch (const fo4::schema::ScalarError& error) {
       return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
     }
@@ -307,13 +311,17 @@ radicle_status radicle_plugin_remove_scene_phase(radicle_plugin* plugin,
   return guarded("unknown exception while removing a scene phase", [&] {
     try {
       switch (fo4::remove_scene_phase(plugin->value, *form_key, index)) {
+        case fo4::SubrecordGroupMutationStatus::updated:
+        case fo4::SubrecordGroupMutationStatus::unchanged:
+          return RADICLE_STATUS_OK;
         case fo4::SubrecordGroupMutationStatus::record_missing:
           return fail(RADICLE_STATUS_NOT_FOUND, "plugin has no such record");
         case fo4::SubrecordGroupMutationStatus::index_out_of_range:
           return fail(RADICLE_STATUS_INVALID_ARGUMENT, "scene has no phase at that index");
-        default:
-          return RADICLE_STATUS_OK;
+        case fo4::SubrecordGroupMutationStatus::subrecord_missing:
+          return fail(RADICLE_STATUS_INTERNAL_ERROR, "scene edit reported a missing subrecord");
       }
+      return fail(RADICLE_STATUS_INTERNAL_ERROR, "unknown scene mutation status");
     } catch (const fo4::schema::ScalarError& error) {
       return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
     }
@@ -356,13 +364,17 @@ radicle_status radicle_plugin_insert_scene_actor(radicle_plugin* plugin,
   return guarded("unknown exception while inserting a scene actor", [&] {
     try {
       switch (fo4::insert_scene_actor(plugin->value, *form_key, index)) {
+        case fo4::SubrecordGroupMutationStatus::updated:
+        case fo4::SubrecordGroupMutationStatus::unchanged:
+          return RADICLE_STATUS_OK;
         case fo4::SubrecordGroupMutationStatus::record_missing:
           return fail(RADICLE_STATUS_NOT_FOUND, "plugin has no such record");
         case fo4::SubrecordGroupMutationStatus::index_out_of_range:
           return fail(RADICLE_STATUS_INVALID_ARGUMENT, "scene has fewer actors than the requested index");
-        default:
-          return RADICLE_STATUS_OK;
+        case fo4::SubrecordGroupMutationStatus::subrecord_missing:
+          return fail(RADICLE_STATUS_INTERNAL_ERROR, "scene edit reported a missing subrecord");
       }
+      return fail(RADICLE_STATUS_INTERNAL_ERROR, "unknown scene mutation status");
     } catch (const fo4::schema::ScalarError& error) {
       return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
     }
@@ -380,13 +392,17 @@ radicle_status radicle_plugin_remove_scene_actor(radicle_plugin* plugin,
   return guarded("unknown exception while removing a scene actor", [&] {
     try {
       switch (fo4::remove_scene_actor(plugin->value, *form_key, index)) {
+        case fo4::SubrecordGroupMutationStatus::updated:
+        case fo4::SubrecordGroupMutationStatus::unchanged:
+          return RADICLE_STATUS_OK;
         case fo4::SubrecordGroupMutationStatus::record_missing:
           return fail(RADICLE_STATUS_NOT_FOUND, "plugin has no such record");
         case fo4::SubrecordGroupMutationStatus::index_out_of_range:
           return fail(RADICLE_STATUS_INVALID_ARGUMENT, "scene has no actor at that index");
-        default:
-          return RADICLE_STATUS_OK;
+        case fo4::SubrecordGroupMutationStatus::subrecord_missing:
+          return fail(RADICLE_STATUS_INTERNAL_ERROR, "scene edit reported a missing subrecord");
       }
+      return fail(RADICLE_STATUS_INTERNAL_ERROR, "unknown scene mutation status");
     } catch (const fo4::schema::ScalarError& error) {
       return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
     }
@@ -405,13 +421,17 @@ radicle_status radicle_plugin_insert_scene_action(radicle_plugin* plugin,
   return guarded("unknown exception while inserting a scene action", [&] {
     try {
       switch (fo4::insert_scene_action(plugin->value, *form_key, index, type)) {
+        case fo4::SubrecordGroupMutationStatus::updated:
+        case fo4::SubrecordGroupMutationStatus::unchanged:
+          return RADICLE_STATUS_OK;
         case fo4::SubrecordGroupMutationStatus::record_missing:
           return fail(RADICLE_STATUS_NOT_FOUND, "plugin has no such record");
         case fo4::SubrecordGroupMutationStatus::index_out_of_range:
           return fail(RADICLE_STATUS_INVALID_ARGUMENT, "scene has fewer actions than the requested index");
-        default:
-          return RADICLE_STATUS_OK;
+        case fo4::SubrecordGroupMutationStatus::subrecord_missing:
+          return fail(RADICLE_STATUS_INTERNAL_ERROR, "scene edit reported a missing subrecord");
       }
+      return fail(RADICLE_STATUS_INTERNAL_ERROR, "unknown scene mutation status");
     } catch (const fo4::schema::ScalarError& error) {
       return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
     }
@@ -429,13 +449,17 @@ radicle_status radicle_plugin_remove_scene_action(radicle_plugin* plugin,
   return guarded("unknown exception while removing a scene action", [&] {
     try {
       switch (fo4::remove_scene_action(plugin->value, *form_key, index)) {
+        case fo4::SubrecordGroupMutationStatus::updated:
+        case fo4::SubrecordGroupMutationStatus::unchanged:
+          return RADICLE_STATUS_OK;
         case fo4::SubrecordGroupMutationStatus::record_missing:
           return fail(RADICLE_STATUS_NOT_FOUND, "plugin has no such record");
         case fo4::SubrecordGroupMutationStatus::index_out_of_range:
           return fail(RADICLE_STATUS_INVALID_ARGUMENT, "scene has no action at that index");
-        default:
-          return RADICLE_STATUS_OK;
+        case fo4::SubrecordGroupMutationStatus::subrecord_missing:
+          return fail(RADICLE_STATUS_INTERNAL_ERROR, "scene edit reported a missing subrecord");
       }
+      return fail(RADICLE_STATUS_INTERNAL_ERROR, "unknown scene mutation status");
     } catch (const fo4::schema::ScalarError& error) {
       return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
     }

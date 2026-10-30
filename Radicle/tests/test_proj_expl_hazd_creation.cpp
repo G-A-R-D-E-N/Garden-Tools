@@ -360,7 +360,7 @@ TEST(ProjExplHazdCreation, DecodesTruncatedExplosionDataAsAPrefix) {
   fo4::test::end_record(out, record);
   fo4::test::end_group(out, group);
 
-  const auto plugin = fo4::read_plugin(out.bytes, "Legacy.esp");
+  auto plugin = fo4::read_plugin(out.bytes, "Legacy.esp");
   const auto decoded =
       fo4::forms::decode_explosion(plugin, fo4::FormKey::parse("000800:Legacy.esp"));
   EXPECT_EQ(decoded.force, 500.0F);

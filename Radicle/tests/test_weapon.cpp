@@ -112,7 +112,7 @@ fo4::ScalarMutationStatus scalar(fo4::Plugin& plugin, std::uint32_t local, std::
 }  // namespace
 
 TEST(WeaponDamageTypes, ReadsEightByteEntriesBeforeFormVersion152) {
-  const auto plugin = weapon_plugin(131, words({0x801, 50, 0x802, 7}));
+  auto plugin = weapon_plugin(131, words({0x801, 50, 0x802, 7}));
   const auto types = fo4::forms::decode_weapon_damage_types(plugin, plugin_key(0x800));
   ASSERT_EQ(types.size(), 2u);
   EXPECT_EQ(types[0].type, plugin_key(0x801));
@@ -123,7 +123,7 @@ TEST(WeaponDamageTypes, ReadsEightByteEntriesBeforeFormVersion152) {
 }
 
 TEST(WeaponDamageTypes, ReadsTwelveByteEntriesFromFormVersion152) {
-  const auto plugin = weapon_plugin(152, words({0x801, 50, 0x803, 0x802, 7, 0}));
+  auto plugin = weapon_plugin(152, words({0x801, 50, 0x803, 0x802, 7, 0}));
   const auto types = fo4::forms::decode_weapon_damage_types(plugin, plugin_key(0x800));
   ASSERT_EQ(types.size(), 2u);
   EXPECT_EQ(types[0].curve_table, plugin_key(0x803));
@@ -133,30 +133,30 @@ TEST(WeaponDamageTypes, ReadsTwelveByteEntriesFromFormVersion152) {
 }
 
 TEST(WeaponDamageTypes, FailsClosedOnAPayloadThatIsNotWholeEntries) {
-  const auto plugin = weapon_plugin(131, std::vector<std::byte>(10, std::byte{0}));
+  auto plugin = weapon_plugin(131, std::vector<std::byte>(10, std::byte{0}));
   EXPECT_THROW(static_cast<void>(fo4::forms::decode_weapon_damage_types(plugin, plugin_key(0x800))),
                fo4::forms::WeaponError);
 }
 
 TEST(WeaponDamageTypes, AnAbsentDamaSubrecordIsAnEmptyList) {
-  const auto plugin = weapon_plugin(131, {});
+  auto plugin = weapon_plugin(131, {});
   EXPECT_TRUE(fo4::forms::decode_weapon_damage_types(plugin, plugin_key(0x800)).empty());
 }
 
 TEST(WeaponDamageTypes, RejectsAKeyWithNoWeaponRecord) {
-  const auto plugin = weapon_plugin(131, words({0x801, 50}));
+  auto plugin = weapon_plugin(131, words({0x801, 50}));
   EXPECT_THROW(static_cast<void>(fo4::forms::decode_weapon_damage_types(plugin, plugin_key(0x999))),
                fo4::forms::WeaponError);
 }
 
 TEST(WeaponDamageTypes, RejectsTwoDamaSubrecords) {
-  const auto plugin = weapon_plugin(131, words({0x801, 50}), "WEAP", 2);
+  auto plugin = weapon_plugin(131, words({0x801, 50}), "WEAP", 2);
   EXPECT_THROW(static_cast<void>(fo4::forms::decode_weapon_damage_types(plugin, plugin_key(0x800))),
                fo4::forms::WeaponError);
 }
 
 TEST(WeaponDamageTypes, Version151StillReadsEightByteEntries) {
-  const auto plugin = weapon_plugin(151, words({0x801, 50, 0x802, 7}));
+  auto plugin = weapon_plugin(151, words({0x801, 50, 0x802, 7}));
   const auto types = fo4::forms::decode_weapon_damage_types(plugin, plugin_key(0x800));
   ASSERT_EQ(types.size(), 2u);
   EXPECT_EQ(types[1].amount, 7u);
@@ -165,7 +165,7 @@ TEST(WeaponDamageTypes, Version151StillReadsEightByteEntries) {
 }
 
 TEST(WeaponDamageTypes, RejectsAKeyThatIsNotAWeapon) {
-  const auto plugin = weapon_plugin(131, words({0x801, 50}), "MISC");
+  auto plugin = weapon_plugin(131, words({0x801, 50}), "MISC");
   EXPECT_THROW(static_cast<void>(fo4::forms::decode_weapon_damage_types(plugin, plugin_key(0x800))),
                fo4::forms::WeaponError);
 }

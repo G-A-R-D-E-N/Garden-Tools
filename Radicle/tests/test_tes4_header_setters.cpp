@@ -163,7 +163,7 @@ TEST(Tes4Header, InsertsCnamBeforeSnamBeforeMast) {
 }
 
 TEST(Tes4Header, RejectsEmbeddedNulAndUnrepresentableText) {
-  const auto plugin = fo4::read_plugin(make_tes4(0, false), "Header.esp");
+  auto plugin = fo4::read_plugin(make_tes4(0, false), "Header.esp");
   const std::string_view with_nul{"Ab\0Cd", 5};
   const std::string_view unrepresentable{"\xE7\x8C\xAB"};
   EXPECT_THROW(static_cast<void>(fo4::set_plugin_author(plugin, with_nul)), std::invalid_argument);

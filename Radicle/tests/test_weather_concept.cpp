@@ -705,7 +705,7 @@ TEST(WeatherConcept, CorpusDecodeSweepWhenPresent) {
   const auto fallout_weather_key = fo4::FormKey::parse("0000015E:Fallout4.esm");
   bool fallout_weather_checked = false;
   for (const auto& path : files) {
-    const auto plugin = fo4::read_plugin_file(path);
+    auto plugin = fo4::read_plugin_file(path);
     for (const auto* record : fo4::collect_records(plugin)) {
       if (record->header.signature != fo4::Signature::from_string("WTHR")) continue;
       ++seen;

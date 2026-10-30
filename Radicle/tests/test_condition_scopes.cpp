@@ -261,7 +261,7 @@ TEST(ConditionScopes, RejectsUnknownRecordsAndMalformedPaths) {
 }
 
 TEST(ConditionScopes, ReadsScopedConditionsPerEffect) {
-  const auto plugin = make_spell({{0x00000801, {1, 2}}, {0x00000802, {5}}, {0x00000803, {}}});
+  auto plugin = make_spell({{0x00000801, {1, 2}}, {0x00000802, {5}}, {0x00000803, {}}});
   const auto* record = spell_record(plugin);
   ASSERT_NE(record, nullptr);
   const auto descriptor = spel_descriptor();

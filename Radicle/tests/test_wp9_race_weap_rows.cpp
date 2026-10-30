@@ -511,7 +511,7 @@ TEST(WP9RaceWeapRows, OnlyTheFirstMorphGroupSlidersRowIsAddressed) {
               {"MPGS", u32_words({7u, 9u, 11u})},
               {"MPGN", u32_bytes(2)},
               {"MPGS", u32_words({20u, 21u, 22u})}});
-  const auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
   const auto* record = fo4::find_record(plugin, fo4::FormKey::parse("000A05:Patch.esp"));
   ASSERT_NE(record, nullptr);
 
