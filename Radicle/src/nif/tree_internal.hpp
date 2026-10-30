@@ -44,7 +44,7 @@ inline std::string block_ref_text(std::int32_t ref) {
   return ref < 0 ? std::string("none") : "block " + std::to_string(ref);
 }
 
-// Invariant: the keys these return are the keys the writer accepts for the same block.
+// Invariant: an editable field's key is the key apply_edits accepts, and a read-only field's key is the one it refuses by name.
 std::vector<TreeField> lighting_shader_fields(const NifFile& nif, std::uint32_t block);
 std::vector<TreeField> effect_shader_fields(const NifFile& nif, std::uint32_t block);
 std::vector<TreeField> alpha_property_fields(const NifFile& nif, std::uint32_t block);

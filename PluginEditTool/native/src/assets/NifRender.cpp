@@ -29,6 +29,11 @@ fo4::nif::NifFile loadNif(const std::filesystem::path& nifPath) {
     return fo4::nif::read_nif(std::as_bytes(std::span(raw)));
 }
 
+// Constraint: a NIF string is raw bytes, so invalid UTF-8 must be replaced rather than thrown from dump().
+std::string dumpJson(const nlohmann::json& value) {
+    return value.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
+}
+
 nlohmann::json textureRefs(const std::vector<fo4::nif::TextureSlot>& slots) {
     auto refs = nlohmann::json::array();
     for (const auto& slot : slots) refs.push_back({{"slot", slot.slot}, {"path", slot.path}});
@@ -108,7 +113,7 @@ Result<std::string> renderGeometry(const std::filesystem::path& nifPath) {
             if (entry["textures"].empty() && fo4::nif::is_bgsm_path(shape.material)) entry["bgsmPath"] = shape.material;
             out["shapes"].push_back(std::move(entry));
         }
-        return out.dump();
+        return dumpJson(out);
     } catch (const fo4::parse_error& error) {
         return std::unexpected(Error{"NifParseFailed", error.parse_message()});
     } catch (const std::exception& error) {
@@ -136,7 +141,7 @@ Result<std::string> renderInspect(const std::filesystem::path& nifPath) {
                 {"tangents", shape.tangents},
             });
         }
-        return out.dump();
+        return dumpJson(out);
     } catch (const fo4::parse_error& error) {
         return std::unexpected(Error{"NifParseFailed", error.parse_message()});
     } catch (const std::exception& error) {
@@ -163,7 +168,7 @@ Result<std::string> renderTree(const std::filesystem::path& nifPath) {
             {"file", nifPath.filename().string()},
             {"blocks", std::move(blocks)},
         };
-        return out.dump();
+        return dumpJson(out);
     } catch (const fo4::parse_error& error) {
         return std::unexpected(Error{"NifParseFailed", error.parse_message()});
     } catch (const std::exception& error) {

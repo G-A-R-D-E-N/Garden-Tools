@@ -516,7 +516,7 @@ Numbers do not move: an item that has since been settled says so and stays for t
    Any type-specific trailing fields are not read.
 7. `BSSubIndexTriShape` and `BSMeshLODTriShape`: `NifShape.cs:Shapes` reads them
    with the `BSTriShape` layout. Per-type trailing fields are not read.
-8. `shader_ref` is settled:   `nif.xml:BSTriShape` lists Bounding Sphere, Skin,
+8. `shader_ref` is settled: `nif.xml:BSTriShape` lists Bounding Sphere, Skin,
    Shader Property and Alpha Property in that order, and the 16 bytes are the bounding
    sphere. `alpha_ref` points at a `NiAlphaProperty`, which `read_alpha` reads and the
    shape reports as its alpha fields.

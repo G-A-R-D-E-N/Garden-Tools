@@ -96,6 +96,10 @@ std::vector<TreeField> shape_fields(const NifFile& nif, std::uint32_t block) {
   fields.push_back(readonly_field("skin", "Skin", block_ref_text(shape.skin_ref)));
   append_vertex_desc_fields(fields, read_vertex_desc(nif, block));
   if (shape.alpha_ref >= 0) {
+    // Invariant: an unset or absent alpha reference is "none"; a set one past the block list is a read fault, not a crash.
+    if (static_cast<std::size_t>(shape.alpha_ref) >= nif.blocks().size()) {
+      throw parse_error(nif.blocks().at(block).offset, "alpha property reference is out of range");
+    }
     const auto alpha = read_alpha(nif, static_cast<std::uint32_t>(shape.alpha_ref));
     fields.push_back(bool_field("alphaBlend", "Alpha blend", alpha.blend_enabled));
     fields.push_back(bool_field("alphaTest", "Alpha test", alpha.test_enabled));
@@ -137,11 +141,11 @@ std::vector<TreeField> collision_system_fields(const NifFile& nif, std::uint32_t
 
 std::vector<TreeField> skin_instance_fields(const NifFile& nif, std::uint32_t block) {
   auto cursor = detail::block_cursor(nif, block);
-  const auto name = detail::read_string_ref(cursor, nif);
+  // Offset: Skeleton Root Ptr is an i32 block reference, so it is skipped rather than read as a name.
+  cursor.read_i32();
   const auto data = cursor.read_i32();
   const auto bone_count = cursor.read_u32();
   std::vector<TreeField> fields;
-  fields.push_back(text_field("name", "Name", name));
   fields.push_back(readonly_field("skinData", "Bone data", block_ref_text(data)));
   fields.push_back(readonly_field("bones", "Bones", std::to_string(bone_count)));
   return fields;
