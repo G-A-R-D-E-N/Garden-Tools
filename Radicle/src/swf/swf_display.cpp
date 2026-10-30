@@ -413,7 +413,7 @@ SwfDisplayList build_display_list(const SwfFile& file, const SwfDisplayOptions& 
     if (!collect_operations(tag.children, frames, out.message)) {
       return out;
     }
-    // A sprite must run its init actions once, before its first frame, when control applies.
+    // A sprite must run its init actions with its first frame, when control applies.
     const auto found_init = init_actions.find(*tag.sprite_id);
     static const detail::InitActionStreams kNoInit;
     detail::FrameControls controls =
