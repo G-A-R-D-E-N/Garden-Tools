@@ -1,5 +1,7 @@
 #pragma once
 
+#include <gtest/gtest.h>
+
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
@@ -39,6 +41,13 @@ inline bool endsWithIgnoreCase(std::string_view value, std::string_view suffix) 
         }
     }
     return true;
+}
+
+// A staged .pex corpus must be present when FO4RE_PEX_REQUIRE=1; a skip would look green.
+inline void skipOrFailPexCorpus(const char* message) {
+    const char* require = std::getenv("FO4RE_PEX_REQUIRE");
+    if (require == nullptr || std::string_view(require) != "1") GTEST_SKIP() << message;
+    FAIL() << message;
 }
 
 inline std::vector<std::filesystem::path> rootsFromEnv(const char* variable) {

@@ -230,7 +230,8 @@ TEST(PapyrusCodegenReal, CompiledOutputMatchesCreationKitInstructionForInstructi
   auto pexRoots = helper::rootsFromEnv("FO4RE_PEX_CORPUS");
   if (pexRoots.empty()) pexRoots = helper::rootsFromEnv("FO4_PEX_CORPUS");
   if (pexRoots.empty()) {
-    GTEST_SKIP() << "FO4RE_PEX_CORPUS is not set to a directory holding .pex files";
+    helper::skipOrFailPexCorpus("FO4RE_PEX_CORPUS is not set to a directory holding .pex files");
+    return;
   }
 
   const auto extra = helper::rootsFromEnv("FO4RE_PSC_ROOTS");
@@ -239,7 +240,10 @@ TEST(PapyrusCodegenReal, CompiledOutputMatchesCreationKitInstructionForInstructi
 
   std::cout << "mode=" << (release ? "release" : "debug")
             << " (set FO4RE_PEX_RELEASE=1 for a vanilla corpus)\n";
-  if (pairs.empty()) GTEST_SKIP() << "FO4RE_PEX_CORPUS holds no .psc/.pex pairs";
+  if (pairs.empty()) {
+    helper::skipOrFailPexCorpus("FO4RE_PEX_CORPUS holds no .psc/.pex pairs");
+    return;
+  }
 
   fp::PapyrusCompileOptions options;
   options.emitDebugOnlyCode = !release;

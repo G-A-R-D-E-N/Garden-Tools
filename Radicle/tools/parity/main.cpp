@@ -200,10 +200,56 @@ void dump_names(const Environment& env, const std::filesystem::path& out, const 
   write(out, "signatures.tsv", std::move(signatures));
 }
 
-std::string archive_entry_path(std::string_view path) {
-  std::string out = lower(path);
+std::string archive_entry_path(std::string_view path, bool lowercase = true) {
+  std::string out = lowercase ? lower(path) : std::string(path);
   std::replace(out.begin(), out.end(), '\\', '/');
   return out;
+}
+
+// Entry paths come from the archive: they must stay inside the output directory.
+bool is_relative_inside(std::string_view path) {
+  if (path.empty() || path.front() == '/') return false;
+  if (path.find(':') != std::string_view::npos) return false;
+  for (std::size_t start = 0; start <= path.size();) {
+    const auto end = path.find('/', start);
+    const auto part = path.substr(start, end == std::string_view::npos ? path.size() - start : end - start);
+    if (part == "..") return false;
+    if (end == std::string_view::npos) break;
+    start = end + 1;
+  }
+  return true;
+}
+
+int extract_ba2_pex(const std::filesystem::path& archive, const std::filesystem::path& out) {
+  std::error_code error;
+  if (!std::filesystem::is_regular_file(archive, error)) {
+    throw std::runtime_error("no archive at " + utf8(archive));
+  }
+  const auto reader = fo4::archive::Ba2Reader::open(archive);
+  std::filesystem::create_directories(out);
+  std::size_t extracted = 0;
+  for (std::size_t index = 0; index < reader.entries().size(); ++index) {
+    // Must keep the entry's case: the gates pair <root>/Source/<name>.psc by exact name.
+    const auto relative = archive_entry_path(reader.entries()[index].path, false);
+    if (!relative.ends_with(".pex")) continue;
+    if (!is_relative_inside(relative)) {
+      throw std::runtime_error("refusing BA2 entry path outside the output directory: " + relative);
+    }
+    const auto bytes = reader.extract(index);
+    const auto target = out / std::filesystem::path(relative);
+    std::filesystem::create_directories(target.parent_path(), error);
+    std::ofstream stream(target, std::ios::binary | std::ios::trunc);
+    stream.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+    stream.close();
+    if (!stream) throw std::runtime_error("cannot write " + utf8(target));
+    ++extracted;
+  }
+  if (extracted == 0) {
+    throw std::runtime_error("no .pex entries in " + utf8(archive) + "; the corpus would be empty");
+  }
+  std::cout << "ba2pex archive=" << utf8(archive) << " out=" << utf8(out)
+            << " extracted=" << extracted << '\n';
+  return 0;
 }
 
 int dump_ba2(const std::filesystem::path& list, const std::filesystem::path& out, std::uint64_t max_bytes) {
@@ -291,13 +337,18 @@ int dump_papyrus(const Environment& env, const std::filesystem::path& out) {
 
 int usage() {
   std::cerr << "usage: radicle_parity_dump <versions|cells|world|papyrus> <order.tsv> <out-dir> | names <order.tsv> <out-dir> <data-dir> | "
-               "ba2 <archives.txt> <out-dir> [max-mb] | ba2x <archive.ba2> <entry> <out-file>\n";
+               "ba2 <archives.txt> <out-dir> [max-mb] | ba2x <archive.ba2> <entry> <out-file> | "
+               "ba2pex <archive.ba2> <out-dir>\n";
   return 2;
 }
 
 int run(const radicle_parity::Args& args) {
   if (args.size() != 4 && args.size() != 5) return usage();
   const auto mode = utf8(args[1]);
+  if (mode == "ba2pex") {
+    if (args.size() != 4) return usage();
+    return extract_ba2_pex(args[2], args[3]);
+  }
   if (mode == "ba2x") {
     if (args.size() != 5) return usage();
     const auto reader = fo4::archive::Ba2Reader::open(args[2]);

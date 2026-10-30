@@ -61,11 +61,13 @@ TEST(PapyrusDecompilerReal, EveryCorpusPexDecompilesToSourceAndListingWithoutThr
   auto roots = helper::rootsFromEnv("FO4RE_PEX_CORPUS");
   if (roots.empty()) roots = helper::rootsFromEnv("FO4_PEX_CORPUS");
   if (roots.empty()) {
-    GTEST_SKIP() << "set FO4RE_PEX_CORPUS to one or more directories of .pex files";
+    helper::skipOrFailPexCorpus("set FO4RE_PEX_CORPUS to one or more directories of .pex files");
+    return;
   }
   const auto files = collectLoosePex(roots);
   if (files.empty()) {
-    GTEST_SKIP() << "no .pex files under the FO4RE_PEX_CORPUS roots";
+    helper::skipOrFailPexCorpus("no .pex files under the FO4RE_PEX_CORPUS roots");
+    return;
   }
 
   std::size_t decompiled = 0;

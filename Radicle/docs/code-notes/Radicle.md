@@ -9984,3 +9984,15 @@ Follow-up to the #31 items 1-2 notes above, closing the review gaps without new 
 ## Radicle/tests/test_check_errors_record_lists.cpp:CheckErrorsRecordLists
 
 `CheckErrorsRecordLists` stays separate from `ListPreflight` in `Radicle/tests/test_preflight.cpp` (588 lines) by scope, not by accident: it pins `check_load_order` integration (finding message, detail, severity, record) while `ListPreflight` pins `preflight_record` units, and merging its 444 lines into `test_preflight.cpp` would breach the 750-line hook. It stays under 750 lines and is listed in `Radicle/CMakeLists.txt`, satisfying AGENTS.md rules 3-4.
+
+## Radicle/tools/parity/main.cpp:extract_ba2_pex
+
+The PEX gates skip unless `FO4RE_PEX_CORPUS`, `FO4_PEX_CORPUS` or `FO4RE_PEX_RELEASE` name a staged vanilla `.pex` root, and the shipped `.pex` are inside `Fallout4 - Misc.ba2`. `radicle_parity_dump` already opened archives for its `ba2` and `ba2x` modes, so staging became a third mode there instead of a new tool or a C# dependency: `ba2pex <archive.ba2> <out-dir>` extracts every `.pex` entry through `archive::Ba2Reader`, keeps each entry's relative path and its letter case, and writes nothing else.
+
+Entry names come from the archive's own name table and are not trusted: `is_relative_inside` rejects absolute paths, drive letters and `..` components, so an archive cannot make the tool write outside `<out-dir>`. The mode exits non-zero for a missing archive (`no archive at`), an archive with no `.pex` (`no .pex entries in`) and such a path (`refusing BA2 entry path`); the CI step turns any non-zero exit into a failed job.
+
+Whether the staged corpus is usable is decided by the tests rather than by the workflow; see `papyrus_corpus_roots.hpp:skipOrFailPexCorpus`. There is no Linux staging step yet, because `test_papyrus_codegen_real.cpp:sourceFor` resolves a source by exact path and case-sensitive pairing has not been measured.
+
+## Radicle/tests/papyrus_corpus_roots.hpp:skipOrFailPexCorpus
+
+`FO4RE_PEX_REQUIRE=1`, exported by the CI staging step, turns the PEX gates' "no corpus" cases into failures. Without it each case calls `GTEST_SKIP`, and a skipped gate reports green in a job whose entire purpose is measuring the corpus. The three cases are: the roots are unset or name no directory, no `.pex` file under the roots, and no `.psc`/`.pex` pair for the codegen gate. The variable unset leaves today's behaviour in place (skip), so a bare checkout and a machine without the corpus stay green. `skipOrFailPexCorpus` returns void and reuses one message for both outcomes; every caller returns immediately after it, so a failed gate never goes on to measure an empty corpus and report a second, misleading failure.

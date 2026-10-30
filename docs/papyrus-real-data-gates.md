@@ -8,11 +8,11 @@ Verified against `origin/nomad/dev` at 6add80b69 (re-checked 2026-10-28): every 
 - Path lists are split on `;` on Windows (the shared `rootsFromEnv` helper uses `rootListSeparator()`, `;` under `_WIN32`, `:` elsewhere). Never `:` on Windows, which is the drive separator.
 - A value that names no existing directory yields no roots or no files, and the gate skips. It does not fail. Set-but-bad paths can silently fall back (parse gate to `FO4RE_PSC_CORPUS`, `PapyrusSourceRealTest` to `testdata/papyrus`).
 - None of these gates reads `FO4_DATA_DIR`.
-- The shipped `.pex` are inside `Fallout4 - Misc.ba2`, not loose. The staging method is in the "Building the vanilla corpus" section of `PluginEditTool/docs/internal/PAPYRUS.md`, using `PluginEditTool/tools/build-vanilla-pex-corpus.sh` (a bash script). A Windows staging route is UNVERIFIED.
+- The shipped `.pex` are inside `Fallout4 - Misc.ba2`, not loose. CI stages them on the data runner with `radicle_parity_dump ba2pex` ("CI staging route" below). The local method is in the "Building the vanilla corpus" section of `PluginEditTool/docs/internal/PAPYRUS.md`, using `PluginEditTool/tools/build-vanilla-pex-corpus.sh` (a bash script that needs the C# server).
 - Vanilla `.psc` roots are `<Fallout 4>/Data/Scripts/Source/{User,Base}` (`PAPYRUS.md:543`). Which root set reproduces the documented counts (7,854 files, 18,802 parse corpus, 1,498 decompile sample) is UNVERIFIED.
 - Binary location: CI configures `cmake -S PluginEditTool\native -B build\native -G Ninja -DCMAKE_BUILD_TYPE=Release ... -DRADICLE_BUILD_TESTS=ON` (`.github/workflows/native-ci.yml`, job "Native real-data tests (Windows, MSVC, Fallout 4 data)", step Configure). `PluginEditTool/native/CMakeLists.txt:8` sets `CMAKE_RUNTIME_OUTPUT_DIRECTORY` to `${CMAKE_BINARY_DIR}/bin`, so the binary is expected at `build\native\bin\fo4_tests.exe`. This is derived from the CMake files and was not observed on a built tree.
 - Working directory must be `<repo>\Radicle`. `gtest_discover_tests` sets `WORKING_DIRECTORY` to the Radicle source dir (`Radicle/CMakeLists.txt`, line 1023), and `FO4_TESTDATA_DIR` is the relative `testdata` (line 1014).
-- CI's real-data Test step sets `FO4_PSC_CORPUS`, `FO4RE_PSC_CORPUS` and `FO4RE_PSC_ROOTS` to the vanilla `Scripts\Source\User` and `Scripts\Source\Base` roots (`native-ci.yml:660-662`). It sets no `FO4RE_PEX_*`, `FO4_PEX_*` or `FO4RE_F4SE_SRC` variable; the PEX gates need a staged `.pex` root and are a TODO at `native-ci.yml:663`. Whether the `fo4-data` runner's machine env sets anything else is UNVERIFIED.
+- CI's real-data Test step sets `FO4_PSC_CORPUS`, `FO4RE_PSC_CORPUS` and `FO4RE_PSC_ROOTS` to the vanilla `Scripts\Source\User` and `Scripts\Source\Base` roots. The `Stage vanilla .pex corpus` step in the same job exports `FO4_PEX_CORPUS`, `FO4RE_PEX_CORPUS`, `FO4RE_PEX_RELEASE=1` and `FO4RE_PEX_REQUIRE=1`; it sets no `FO4RE_F4SE_SRC`, so gate 8 still skips. The Linux (`native-linux`) job sets none of the `FO4RE_PEX_*` variables and its PEX gates skip. Whether the `fo4-data` runner's machine env sets anything else is UNVERIFIED.
 - CI's `REAL_DATA_TEST_REGEX` (`native-ci.yml:66`) matches every gate below except `PapyrusSourceRealTest.*`, which has `RealTest.` and no `Real.`. Checked by running the regex against each test name.
 - The PR path filter in the real-data job (the `$groups` list) does not exclude any Papyrus gate.
 
@@ -117,9 +117,27 @@ Add `--gtest_output=xml:<dir>\<gate>.xml` to keep `RecordProperty` values. For a
 - The `pairs=` and `DECOMPILE` stdout lines for gates 4 and 5.
 - Each skipped gate, with the env var it needed.
 
+## CI staging route
+
+`native-windows-real-data` builds `radicle_parity_dump` and runs it before the Test step:
+
+```powershell
+& .\build\native\bin\radicle_parity_dump.exe ba2pex <Data>\Fallout4 - Misc.ba2 $env:RUNNER_TEMP\vanilla-pex
+```
+
+`ba2pex <archive.ba2> <out-dir>` extracts every `.pex` entry with Radicle's own BA2 reader, keeping the archive's relative path, and writes nothing else. It exits non-zero when the archive is missing, when the archive holds no `.pex`, or when an entry path would resolve outside `<out-dir>`. The step removes a stale staging directory before extracting, so a failed run cannot be covered by an earlier one.
+
+The archive names its entries `scripts\<name>.pex`, so the corpus root is `$env:RUNNER_TEMP\vanilla-pex\scripts`: a `.pex` at `<root>\<relative>.pex` pairs with the source at `<root>\Source\User\<relative>.psc` or `<root>\Source\<relative>.psc` (`test_papyrus_codegen_real.cpp:sourceFor`). The step copies `Scripts\Source\Base` into `<root>\Source` and nothing else, because `User` is where F4SE and mods keep edited vanilla scripts and `sourceFor` prefers it; staging `User` would report those edits as DIFFs. It fails when `Scripts\Source\Base` is missing, which is a staging error rather than a data verdict.
+
+The step exports `FO4_PEX_CORPUS` and `FO4RE_PEX_CORPUS` (one root), `FO4RE_PEX_RELEASE=1` and `FO4RE_PEX_REQUIRE=1`, and only prints the `.pex`/`.psc` counts. The judgement lives in the tests: with `FO4RE_PEX_REQUIRE=1`, `papyrus_corpus_roots.hpp:skipOrFailPexCorpus` fails the PEX gates when the roots are unset, hold no `.pex`, or hold no `.psc`/`.pex` pairs, where an unset variable would skip them again.
+
+The staged tree is `$env:RUNNER_TEMP\vanilla-pex`; no game data is copied into the repository and nothing is written under `FO4_DATA_DIR`.
+
+Linux has no `.pex` staging yet: the pairing above resolves the source by its exact path, and case-sensitive pairing has not been measured.
+
 ## UNVERIFIED
 
-- A Windows route to stage the `.pex` corpus (the staging script is bash).
+- The counts the staged corpus produces in CI: the `pairs=` figure of gate 4 and the `DECOMPILE` figure of gate 5 have not been measured through this route.
 - Which root sets reproduce 7,854 / 18,802 / 1,498 / 161.
 - Whether the `fo4-data` runner has any gate env var set.
 - The exact `fo4_tests.exe` location (derived from CMake, not built here).
