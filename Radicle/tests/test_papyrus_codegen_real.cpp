@@ -255,11 +255,23 @@ TEST(PapyrusCodegenReal, CompiledOutputMatchesCreationKitInstructionForInstructi
   std::map<std::string, Group> refusals;
   std::map<std::string, Group> differences;
 
+  // Invariant: ScriptIndex holds no per-compile state, only its roots and a path-keyed parse cache.
+  std::map<std::string, fp::ScriptIndex> indexes;
+  const auto indexFor = [&indexes](const std::vector<fs::path>& roots) -> fp::ScriptIndex& {
+    std::string key;
+    for (const auto& root : roots) key += fs::absolute(root).lexically_normal().string() + ';';
+    const auto [entry, added] = indexes.try_emplace(key);
+    if (added) {
+      for (const auto& root : roots) entry->second.addRoot(root);
+    }
+    return entry->second;
+  };
+
   for (const auto& pair : pairs) {
     const auto name = pair.psc.filename().string();
-    fp::ScriptIndex index;
-    for (const auto& root : rootsFor(pair.psc)) index.addRoot(root);
-    for (const auto& root : extra) index.addRoot(root);
+    auto roots = rootsFor(pair.psc);
+    roots.insert(roots.end(), extra.begin(), extra.end());
+    auto& index = indexFor(roots);
 
     const auto* script = index.parseCached(pair.psc);
     if (!script) {

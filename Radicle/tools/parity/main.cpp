@@ -200,8 +200,8 @@ void dump_names(const Environment& env, const std::filesystem::path& out, const 
   write(out, "signatures.tsv", std::move(signatures));
 }
 
-std::string archive_entry_path(std::string_view path, bool lowercase = true) {
-  std::string out = lowercase ? lower(path) : std::string(path);
+std::string archive_entry_path(std::string_view path) {
+  std::string out = lower(path);
   std::replace(out.begin(), out.end(), '\\', '/');
   return out;
 }
@@ -230,8 +230,10 @@ int extract_ba2_pex(const std::filesystem::path& archive, const std::filesystem:
   std::size_t extracted = 0;
   for (std::size_t index = 0; index < reader.entries().size(); ++index) {
     // Must keep the entry's case: the gates pair <root>/Source/<name>.psc by exact name.
-    const auto relative = archive_entry_path(reader.entries()[index].path, false);
-    if (!relative.ends_with(".pex")) continue;
+    std::string relative(reader.entries()[index].path);
+    std::replace(relative.begin(), relative.end(), '\\', '/');
+    const auto extension = relative.size() >= 4 ? relative.substr(relative.size() - 4) : std::string();
+    if (lower(extension) != ".pex") continue;
     if (!is_relative_inside(relative)) {
       throw std::runtime_error("refusing BA2 entry path outside the output directory: " + relative);
     }

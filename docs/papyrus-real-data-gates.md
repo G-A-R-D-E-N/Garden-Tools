@@ -6,13 +6,13 @@ Verified against `origin/nomad/dev` at 6add80b69 (re-checked 2026-10-28): every 
 
 - Gates read process env vars. Unset or empty means `GTEST_SKIP`: the test is skipped, not run, and is not a pass. Report every SKIPPED line.
 - Path lists are split on `;` on Windows (the shared `rootsFromEnv` helper uses `rootListSeparator()`, `;` under `_WIN32`, `:` elsewhere). Never `:` on Windows, which is the drive separator.
-- A value that names no existing directory yields no roots or no files, and the gate skips. It does not fail. Set-but-bad paths can silently fall back (parse gate to `FO4RE_PSC_CORPUS`, `PapyrusSourceRealTest` to `testdata/papyrus`).
+- A value that names no existing directory yields no roots or no files, and the gate skips. It does not fail, except the PEX gates, which fail instead of skipping while `FO4RE_PEX_REQUIRE=1` is set. Set-but-bad paths can silently fall back (parse gate to `FO4RE_PSC_CORPUS`, `PapyrusSourceRealTest` to `testdata/papyrus`).
 - None of these gates reads `FO4_DATA_DIR`.
 - The shipped `.pex` are inside `Fallout4 - Misc.ba2`, not loose. CI stages them on the data runner with `radicle_parity_dump ba2pex` ("CI staging route" below). The local method is in the "Building the vanilla corpus" section of `PluginEditTool/docs/internal/PAPYRUS.md`, using `PluginEditTool/tools/build-vanilla-pex-corpus.sh` (a bash script that needs the C# server).
 - Vanilla `.psc` roots are `<Fallout 4>/Data/Scripts/Source/{User,Base}` (`PAPYRUS.md:543`). Which root set reproduces the documented counts (7,854 files, 18,802 parse corpus, 1,498 decompile sample) is UNVERIFIED.
 - Binary location: CI configures `cmake -S PluginEditTool\native -B build\native -G Ninja -DCMAKE_BUILD_TYPE=Release ... -DRADICLE_BUILD_TESTS=ON` (`.github/workflows/native-ci.yml`, job "Native real-data tests (Windows, MSVC, Fallout 4 data)", step Configure). `PluginEditTool/native/CMakeLists.txt:8` sets `CMAKE_RUNTIME_OUTPUT_DIRECTORY` to `${CMAKE_BINARY_DIR}/bin`, so the binary is expected at `build\native\bin\fo4_tests.exe`. This is derived from the CMake files and was not observed on a built tree.
 - Working directory must be `<repo>\Radicle`. `gtest_discover_tests` sets `WORKING_DIRECTORY` to the Radicle source dir (`Radicle/CMakeLists.txt`, line 1023), and `FO4_TESTDATA_DIR` is the relative `testdata` (line 1014).
-- CI's real-data Test step sets `FO4_PSC_CORPUS`, `FO4RE_PSC_CORPUS` and `FO4RE_PSC_ROOTS` to the vanilla `Scripts\Source\User` and `Scripts\Source\Base` roots. The `Stage vanilla .pex corpus` step in the same job exports `FO4_PEX_CORPUS`, `FO4RE_PEX_CORPUS`, `FO4RE_PEX_RELEASE=1` and `FO4RE_PEX_REQUIRE=1`; it sets no `FO4RE_F4SE_SRC`, so gate 8 still skips. The Linux (`native-linux`) job sets none of the `FO4RE_PEX_*` variables and its PEX gates skip. Whether the `fo4-data` runner's machine env sets anything else is UNVERIFIED.
+- CI's real-data Test step sets `FO4_PSC_CORPUS`, `FO4RE_PSC_CORPUS` and `FO4RE_PSC_ROOTS` to the vanilla `Scripts\Source\User` and `Scripts\Source\Base` roots. The `Stage vanilla .pex corpus` step in the same job exports `FO4RE_PEX_CORPUS`, `FO4RE_PEX_RELEASE=1` and `FO4RE_PEX_REQUIRE=1`; it must not export `FO4_PEX_CORPUS`, which disables `PexCorpus.EveryDataDirArchivePexRoundTripsByteIdentically` for the whole job. It sets no `FO4RE_F4SE_SRC`, so gate 8 still skips. The Linux (`native-linux`) job sets none of the `FO4RE_PEX_*` variables and its PEX gates skip. Whether the `fo4-data` runner's machine env sets anything else is UNVERIFIED.
 - CI's `REAL_DATA_TEST_REGEX` (`native-ci.yml:66`) matches every gate below except `PapyrusSourceRealTest.*`, which has `RealTest.` and no `Real.`. Checked by running the regex against each test name.
 - The PR path filter in the real-data job (the `$groups` list) does not exclude any Papyrus gate.
 
@@ -56,12 +56,13 @@ Add `--gtest_output=xml:<dir>\<gate>.xml` to keep `RecordProperty` values. For a
 
 ### 4. CK differential (158 of 161 documented)
 
-- Test: `PapyrusCodegenReal.CompiledOutputMatchesCreationKitInstructionForInstruction` (`Radicle/tests/test_papyrus_codegen_real.cpp`, line 229).
-- Env: `FO4RE_PEX_CORPUS`, or `FO4_PEX_CORPUS` when that yields no roots (lines 229-230). Extra script roots: `FO4RE_PSC_ROOTS` (lines 235, 257). `FO4RE_PEX_RELEASE` must be exactly `1` for a vanilla corpus (line 236). It switches the mode printed at lines 239-240 and turns off debug and beta emission (lines 244-245).
-- Pairing: each `.pex` needs a `.psc` under `Source/User` or `Source` (`sourceFor`, lines 91-116). Only Fallout 4 `.pex` count (`isFallout4`, lines 65-78).
-- Pass: compiled > 0 and identical / compiled >= 0.95 (`kMinimumIdenticalFraction`, line 40; check at line 300).
-- Skip: `FO4RE_PEX_CORPUS is not set to a directory holding .pex files` (line 232); `FO4RE_PEX_CORPUS holds no .psc/.pex pairs` (line 241). With `FO4RE_PEX_REQUIRE=1` both are failures, not skips.
-- Output: `pairs= compiled= refused= identical=` (lines 287-288), then `REFUSED` and `DIFF` lines.
+- Test: `PapyrusCodegenReal.CompiledOutputMatchesCreationKitInstructionForInstruction` (`Radicle/tests/test_papyrus_codegen_real.cpp`).
+- Env: `FO4RE_PEX_CORPUS`, or `FO4_PEX_CORPUS` when that yields no roots. Extra script roots: `FO4RE_PSC_ROOTS`. `FO4RE_PEX_RELEASE` must be exactly `1` for a vanilla corpus. It switches the printed mode and turns off debug and beta emission.
+- Pairing: each `.pex` needs a `.psc` under `Source/User` or `Source` (`sourceFor`). Only Fallout 4 `.pex` count (`isFallout4`).
+- Pass: compiled > 0 and identical / compiled >= 0.95 (`kMinimumIdenticalFraction`).
+- Skip: `FO4RE_PEX_CORPUS is not set to a directory holding .pex files`; `FO4RE_PEX_CORPUS holds no .psc/.pex pairs`. With `FO4RE_PEX_REQUIRE=1` both are failures, not skips.
+- Output: `pairs= compiled= refused= identical=`, then `REFUSED` and `DIFF` lines.
+- Index reuse: one `ScriptIndex` serves every pair that lists the same roots, because the index keeps no per-compile state. A fresh index per pair would re-walk the whole source tree about 7,800 times.
 - Run: `$env:FO4RE_PEX_CORPUS = '<staged pex root>'`, `$env:FO4RE_PSC_ROOTS = '<psc roots>'`, `$env:FO4RE_PEX_RELEASE = '1'`, then the template with this filter.
 - Documented figure: `PluginEditTool/docs/internal/PAPYRUS.md:102` gives 198 pairs, 161 compiled, 158 identical (98.1%), 37 refused, 3 differing, with `FO4RE_PEX_CORPUS` and `FO4RE_PSC_ROOTS`. The code threshold is 0.95, so 158/161 would pass. The row does not name its test; `PAPYRUS.md:148` names the native PET gate that reads the same variables. Whether this Radicle test reproduces 158/161 is UNVERIFIED.
 
@@ -128,9 +129,9 @@ Add `--gtest_output=xml:<dir>\<gate>.xml` to keep `RecordProperty` values. For a
 
 `ba2pex <archive.ba2> <out-dir>` extracts every `.pex` entry with Radicle's own BA2 reader, keeping the archive's relative path, and writes nothing else. It exits non-zero when the archive is missing, when the archive holds no `.pex`, or when an entry path would resolve outside `<out-dir>`. The step removes a stale staging directory before extracting, so a failed run cannot be covered by an earlier one.
 
-The archive names its entries `scripts\<name>.pex`, so the corpus root is `$env:RUNNER_TEMP\vanilla-pex\scripts`: a `.pex` at `<root>\<relative>.pex` pairs with the source at `<root>\Source\User\<relative>.psc` or `<root>\Source\<relative>.psc` (`test_papyrus_codegen_real.cpp:sourceFor`). The step copies `Scripts\Source\Base` into `<root>\Source` and nothing else, because `User` is where F4SE and mods keep edited vanilla scripts and `sourceFor` prefers it; staging `User` would report those edits as DIFFs. It fails when `Scripts\Source\Base` is missing, which is a staging error rather than a data verdict.
+The archive names its entries `scripts\<name>.pex`, so the corpus root is `$env:RUNNER_TEMP\vanilla-pex\scripts`: a `.pex` at `<root>\<relative>.pex` pairs with the source at `<root>\Source\User\<relative>.psc` or `<root>\Source\<relative>.psc` (`test_papyrus_codegen_real.cpp:sourceFor`). The step copies `Scripts\Source\Base` into `<root>\Source` and nothing else, because `User` is where F4SE and mods keep edited vanilla scripts and `sourceFor` prefers it; staging `User` would report those edits as DIFFs. It fails when `Scripts\Source\Base` is missing or holds no `.psc`, which is a staging error rather than a data verdict.
 
-The step exports `FO4_PEX_CORPUS` and `FO4RE_PEX_CORPUS` (one root), `FO4RE_PEX_RELEASE=1` and `FO4RE_PEX_REQUIRE=1`, and only prints the `.pex`/`.psc` counts. The judgement lives in the tests: with `FO4RE_PEX_REQUIRE=1`, `papyrus_corpus_roots.hpp:skipOrFailPexCorpus` fails the PEX gates when the roots are unset, hold no `.pex`, or hold no `.psc`/`.pex` pairs, where an unset variable would skip them again.
+The step exports `FO4RE_PEX_CORPUS` (one root), `FO4RE_PEX_RELEASE=1` and `FO4RE_PEX_REQUIRE=1`, and only prints the `.pex`/`.psc` counts. It must leave `FO4_PEX_CORPUS` unset: that variable makes `PexCorpus.EveryDataDirArchivePexRoundTripsByteIdentically`, which round-trips every DLC and Creation Club `.pex` from the archives, skip for the whole job. The judgement lives in the tests: with `FO4RE_PEX_REQUIRE=1`, `papyrus_corpus_roots.hpp:skipOrFailPexCorpus` fails the PEX gates when the roots are unset, hold no `.pex`, or hold no `.psc`/`.pex` pairs, where an unset variable would skip them again.
 
 The staged tree is `$env:RUNNER_TEMP\vanilla-pex`; no game data is copied into the repository and nothing is written under `FO4_DATA_DIR`.
 

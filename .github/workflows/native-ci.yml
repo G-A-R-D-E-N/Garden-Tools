@@ -775,9 +775,7 @@ jobs:
         if: steps.fo4.outputs.has_data == 'true'
         run: cmake --build build\native --target fo4_tests fo4ide_test_sound_semantic_real radicle_parity_dump -- -k 0
 
-      # The shipped .pex live inside Fallout4 - Misc.ba2, so the PEX gates need a
-      # staged root. Radicle's own BA2 reader extracts it into the runner temp
-      # directory; no game data is ever written or committed.
+      # Requires the archive: .pex entries must land at <stage>\scripts with sources at <stage>\scripts\Source.
       - name: Stage vanilla .pex corpus
         if: steps.fo4.outputs.has_data == 'true'
         shell: powershell
@@ -790,7 +788,6 @@ jobs:
             Write-Output "::error::extracting $archive into $stage failed"
             exit 1
           }
-          # Entries are named scripts\<name>.pex, so a .pex pairs with <root>\Source\<relative>.psc under <root> = <stage>\scripts.
           $scripts = Join-Path $stage 'scripts'
           $source = Join-Path $scripts 'Source'
           $base = Join-Path $env:FO4_DATA_DIR 'Scripts\Source\Base'
@@ -802,8 +799,11 @@ jobs:
           Copy-Item -Path (Join-Path $base '*') -Destination $source -Recurse -Force
           $pex = @(Get-ChildItem -LiteralPath $scripts -Filter *.pex -File -Recurse).Count
           $psc = @(Get-ChildItem -LiteralPath $source -Filter *.psc -File -Recurse).Count
+          if ($psc -eq 0) {
+            Write-Output "::error::$base holds no .psc sources; the staged .pex cannot be paired"
+            exit 1
+          }
           Write-Output "staged corpus: $pex .pex, $psc .psc under $scripts"
-          [IO.File]::AppendAllText($env:GITHUB_ENV, "FO4_PEX_CORPUS=$scripts`n")
           [IO.File]::AppendAllText($env:GITHUB_ENV, "FO4RE_PEX_CORPUS=$scripts`n")
           [IO.File]::AppendAllText($env:GITHUB_ENV, "FO4RE_PEX_RELEASE=1`n")
           [IO.File]::AppendAllText($env:GITHUB_ENV, "FO4RE_PEX_REQUIRE=1`n")
@@ -820,7 +820,7 @@ jobs:
           $env:FO4_PSC_CORPUS = $pscRoots
           $env:FO4RE_PSC_CORPUS = $pscRoots
           $env:FO4RE_PSC_ROOTS = $pscRoots
-          # FO4_PEX_CORPUS, FO4RE_PEX_CORPUS, FO4RE_PEX_RELEASE and FO4RE_PEX_REQUIRE come from the staging step.
+          # FO4RE_PEX_CORPUS, FO4RE_PEX_RELEASE and FO4RE_PEX_REQUIRE come from the staging step.
           $ctestArgs = @('--test-dir', 'build\native', '--output-on-failure', '--parallel', '4', '--no-tests=error', '-R', $env:REAL_DATA_TEST_REGEX)
           if ($env:CTEST_EXCLUDE_REGEX) { $ctestArgs += @('-E', $env:CTEST_EXCLUDE_REGEX) }
           ctest @ctestArgs
