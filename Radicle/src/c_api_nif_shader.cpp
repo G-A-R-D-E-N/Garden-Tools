@@ -76,7 +76,7 @@ radicle_status require_shader_block(const radicle_nif* nif, uint32_t block, cons
 
 extern "C" {
 
-radicle_status radicle_nif_lighting_shader(const radicle_nif* nif,
+radicle_status radicle_nif_read_lighting_shader(const radicle_nif* nif,
                                            uint32_t block,
                                            radicle_nif_lighting_shader* out_shader) {
   clear_error();
@@ -163,7 +163,7 @@ radicle_status radicle_nif_lighting_shader_root_material(const radicle_nif* nif,
   });
 }
 
-radicle_status radicle_nif_effect_shader(const radicle_nif* nif,
+radicle_status radicle_nif_read_effect_shader(const radicle_nif* nif,
                                          uint32_t block,
                                          radicle_nif_effect_shader* out_shader) {
   clear_error();
@@ -227,7 +227,7 @@ radicle_status radicle_nif_effect_shader_texture(const radicle_nif* nif,
   });
 }
 
-radicle_status radicle_nif_alpha_property(const radicle_nif* nif,
+radicle_status radicle_nif_read_alpha_property(const radicle_nif* nif,
                                          uint32_t block,
                                          radicle_nif_alpha_property* out_alpha) {
   clear_error();

@@ -234,7 +234,7 @@ typedef struct radicle_nif_alpha_property {
   uint8_t test_function;
 } radicle_nif_alpha_property;
 
-RADICLE_API radicle_status radicle_nif_lighting_shader(const radicle_nif* nif,
+RADICLE_API radicle_status radicle_nif_read_lighting_shader(const radicle_nif* nif,
                                                        uint32_t block,
                                                        radicle_nif_lighting_shader* out_shader);
 RADICLE_API radicle_status radicle_nif_lighting_shader_name(const radicle_nif* nif,
@@ -245,7 +245,7 @@ RADICLE_API radicle_status radicle_nif_lighting_shader_root_material(const radic
                                                                     uint32_t block,
                                                                     uint8_t** out_bytes,
                                                                     size_t* out_size);
-RADICLE_API radicle_status radicle_nif_effect_shader(const radicle_nif* nif,
+RADICLE_API radicle_status radicle_nif_read_effect_shader(const radicle_nif* nif,
                                                      uint32_t block,
                                                      radicle_nif_effect_shader* out_shader);
 RADICLE_API radicle_status radicle_nif_effect_shader_name(const radicle_nif* nif,
@@ -257,7 +257,7 @@ RADICLE_API radicle_status radicle_nif_effect_shader_texture(const radicle_nif* 
                                                             size_t slot,
                                                             uint8_t** out_bytes,
                                                             size_t* out_size);
-RADICLE_API radicle_status radicle_nif_alpha_property(const radicle_nif* nif,
+RADICLE_API radicle_status radicle_nif_read_alpha_property(const radicle_nif* nif,
                                                      uint32_t block,
                                                      radicle_nif_alpha_property* out_alpha);
 RADICLE_API size_t radicle_nif_shader_flag_count(void);

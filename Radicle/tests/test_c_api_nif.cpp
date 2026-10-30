@@ -402,7 +402,7 @@ TEST(CapiNif, ExposesTheShaderAndAlphaFieldsItReads) {
   ASSERT_NE(nif.get(), nullptr);
 
   radicle_nif_lighting_shader lighting{};
-  ASSERT_EQ(radicle_nif_lighting_shader(nif.get(), 0, &lighting), RADICLE_STATUS_OK) << radicle_last_error();
+  ASSERT_EQ(radicle_nif_read_lighting_shader(nif.get(), 0, &lighting), RADICLE_STATUS_OK) << radicle_last_error();
   EXPECT_EQ(lighting.shader_type, 11U);
   EXPECT_EQ(lighting.flags1, 0x80400201U);
   EXPECT_EQ(lighting.flags2, 0x21U);
@@ -419,7 +419,7 @@ TEST(CapiNif, ExposesTheShaderAndAlphaFieldsItReads) {
   EXPECT_EQ(shader_text(nif.get(), 0, radicle_nif_lighting_shader_root_material), "");
 
   radicle_nif_effect_shader effect{};
-  ASSERT_EQ(radicle_nif_effect_shader(nif.get(), 1, &effect), RADICLE_STATUS_OK) << radicle_last_error();
+  ASSERT_EQ(radicle_nif_read_effect_shader(nif.get(), 1, &effect), RADICLE_STATUS_OK) << radicle_last_error();
   EXPECT_EQ(effect.texture_count, 5U);
   EXPECT_EQ(effect.texture_clamp, 3);
   EXPECT_FLOAT_EQ(effect.base_color[0], 0.4f);
@@ -435,7 +435,7 @@ TEST(CapiNif, ExposesTheShaderAndAlphaFieldsItReads) {
             RADICLE_STATUS_INVALID_ARGUMENT);
 
   radicle_nif_alpha_property alpha{};
-  ASSERT_EQ(radicle_nif_alpha_property(nif.get(), 2, &alpha), RADICLE_STATUS_OK) << radicle_last_error();
+  ASSERT_EQ(radicle_nif_read_alpha_property(nif.get(), 2, &alpha), RADICLE_STATUS_OK) << radicle_last_error();
   EXPECT_EQ(alpha.flags, 0x12EDU);
   EXPECT_EQ(alpha.threshold, 128);
   EXPECT_EQ(alpha.blend_enabled, 1);
@@ -444,10 +444,10 @@ TEST(CapiNif, ExposesTheShaderAndAlphaFieldsItReads) {
   EXPECT_EQ(alpha.test_enabled, 1);
   EXPECT_EQ(alpha.test_function, 4);
 
-  EXPECT_EQ(radicle_nif_lighting_shader(nif.get(), 2, &lighting), RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(radicle_nif_effect_shader(nif.get(), 0, &effect), RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(radicle_nif_alpha_property(nif.get(), 0, &alpha), RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(radicle_nif_lighting_shader(nif.get(), 9, &lighting), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_nif_read_lighting_shader(nif.get(), 2, &lighting), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_nif_read_effect_shader(nif.get(), 0, &effect), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_nif_read_alpha_property(nif.get(), 0, &alpha), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_nif_read_lighting_shader(nif.get(), 9, &lighting), RADICLE_STATUS_INVALID_ARGUMENT);
 }
 
 // Invariant: the C ABI flag table holds the same 64 names in the same bit order as the reader.

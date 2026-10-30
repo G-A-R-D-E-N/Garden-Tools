@@ -4164,8 +4164,8 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_collision_target_node")]
     public static extern Status NifCollisionTargetNode(IntPtr nif, nuint index, int* out_node);
 
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_lighting_shader")]
-    public static extern Status NifLightingShader(IntPtr nif, uint block, NifLightingShader* out_shader);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_read_lighting_shader")]
+    public static extern Status NifReadLightingShader(IntPtr nif, uint block, NifLightingShader* out_shader);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_lighting_shader_name")]
     public static extern Status NifLightingShaderName(IntPtr nif, uint block, byte** out_bytes, nuint* out_size);
@@ -4173,8 +4173,8 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_lighting_shader_root_material")]
     public static extern Status NifLightingShaderRootMaterial(IntPtr nif, uint block, byte** out_bytes, nuint* out_size);
 
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_effect_shader")]
-    public static extern Status NifEffectShader(IntPtr nif, uint block, NifEffectShader* out_shader);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_read_effect_shader")]
+    public static extern Status NifReadEffectShader(IntPtr nif, uint block, NifEffectShader* out_shader);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_effect_shader_name")]
     public static extern Status NifEffectShaderName(IntPtr nif, uint block, byte** out_bytes, nuint* out_size);
@@ -4182,8 +4182,8 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_effect_shader_texture")]
     public static extern Status NifEffectShaderTexture(IntPtr nif, uint block, nuint slot, byte** out_bytes, nuint* out_size);
 
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_alpha_property")]
-    public static extern Status NifAlphaProperty(IntPtr nif, uint block, NifAlphaProperty* out_alpha);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_read_alpha_property")]
+    public static extern Status NifReadAlphaProperty(IntPtr nif, uint block, NifAlphaProperty* out_alpha);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_shader_flag_count")]
     public static extern nuint NifShaderFlagCount();
