@@ -161,14 +161,4 @@ Result<std::string> renderVerify(const std::filesystem::path& nifPath) {
     }
 }
 
-Result<std::vector<std::byte>> applyEditsInProcess(const std::filesystem::path& nifPath, const nlohmann::json& edits) {
-    try {
-        return fo4::nif::apply_edits_json(loadNif(nifPath), edits.dump());
-    } catch (const fo4::parse_error& error) {
-        return std::unexpected(Error{"NifEditFailed", error.parse_message()});
-    } catch (const std::exception& error) {
-        return std::unexpected(Error{"NifEditFailed", error.what()});
-    }
-}
-
 }  // namespace fo4ide::assets

@@ -385,7 +385,7 @@ Regression: a fixture shader that ends early makes the tree show `readError` ins
 
 ## PluginEditTool/native/src/assets/NifService.cpp:applyEdits
 
-The service reads the NIF, calls `fo4::nif::apply_edits_json` and commits with `fo4::io::write_file_atomic`; there is no temporary `.niftmp` file and no tool process. `NifRender.cpp:applyEditsInProcess` is the only adaptor left, and it holds no edit logic: the JSON-to-`Edit` conversion and its validation live in `Radicle/src/nif/edit_json.cpp:read_edit`.
+The service reads the NIF, calls `fo4::nif::apply_edits_json` and commits with `fo4::io::write_file_atomic`; there is no temporary `.niftmp` file, no tool process and no adaptor in between, so the JSON-to-`Edit` conversion and its validation live only in `Radicle/src/nif/edit_json.cpp:read_edit`.
 
 ## PluginEditTool/native/src/assets/NifService.cpp:fix
 
