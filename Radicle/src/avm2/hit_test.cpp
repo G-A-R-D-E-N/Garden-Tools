@@ -1,5 +1,6 @@
 #include <fo4/avm2/hit_test.hpp>
 
+#include <fo4/avm2/shape_geometry.hpp>
 #include <fo4/avm2/snapshot.hpp>
 
 #include <algorithm>
@@ -31,6 +32,15 @@ bool has_size(const DisplayObject& object) {
 bool inside_bounds(const DisplayObject& object, double x, double y) {
   return has_size(object) && x >= object.origin_x() && x <= object.origin_x() + object.width() &&
          y >= object.origin_y() && y <= object.origin_y() + object.height();
+}
+
+bool hits_shape_or_bounds(const DisplayObject& object, double x, double y, bool shape_flag) {
+  if (shape_flag) {
+    if (const auto& geometry = object.shape_geometry()) {
+      return shape_contains(*geometry, x, y);
+    }
+  }
+  return inside_bounds(object, x, y);
 }
 
 bool chain_visible(const DisplayObject& object) {
@@ -100,7 +110,8 @@ std::shared_ptr<DisplayObject> deepest_at(const std::shared_ptr<DisplayObject>& 
       }
     }
   }
-  if (node->mouse_enabled() && inside_bounds(*node, local_x, local_y)) {
+  // A mouse pick must use the fill shape, falling back to bounds without geometry.
+  if (node->mouse_enabled() && hits_shape_or_bounds(*node, local_x, local_y, true)) {
     return node;
   }
   return nullptr;
@@ -128,10 +139,14 @@ bool stage_to_local(const DisplayObject& object, double x, double y, double& loc
 }
 
 bool hit_test_point(const DisplayObject& object, double x, double y) {
+  return hit_test_point(object, x, y, false);
+}
+
+bool hit_test_point(const DisplayObject& object, double x, double y, bool shape_flag) {
   double local_x = 0.0;
   double local_y = 0.0;
   return chain_visible(object) && stage_to_local(object, x, y, local_x, local_y) &&
-         inside_bounds(object, local_x, local_y);
+         hits_shape_or_bounds(object, local_x, local_y, shape_flag);
 }
 
 bool hit_test_object(const DisplayObject& first, const DisplayObject& second) {

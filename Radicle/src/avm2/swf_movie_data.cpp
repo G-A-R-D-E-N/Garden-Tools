@@ -2,6 +2,7 @@
 
 #include <fo4/avm2/display.hpp>
 #include <fo4/avm2/fonts.hpp>
+#include <fo4/avm2/shape_geometry.hpp>
 #include <fo4/avm2/text.hpp>
 #include <fo4/swf/swf.hpp>
 #include <fo4/swf/swf_characters.hpp>
@@ -318,6 +319,16 @@ std::shared_ptr<SwfMovieData> read_swf_movie_data(const swf::SwfFile& file,
       if (character.has_bounds) {
         data->character_bounds[character.character_id] = character_bounds_of(character.bounds);
       }
+    }
+  }
+  for (const swf::SwfTag& tag : file.tags) {
+    // A duplicate shape id must keep the first tag, matching the bounds and bitmap rules.
+    if (!tag.shape || tag.shape->records.empty()) {
+      continue;
+    }
+    ShapeGeometry geometry = geometry_from_shape_records(tag.shape->records);
+    if (!geometry.fills.empty()) {
+      data->character_shapes.emplace(tag.shape->shape_id, std::move(geometry));
     }
   }
   data->root = collect_root(file, options, *data);

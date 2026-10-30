@@ -5,6 +5,7 @@
 #include <fo4/avm2/name.hpp>
 #include <fo4/avm2/object.hpp>
 #include <fo4/avm2/runtime.hpp>
+#include <fo4/avm2/shape_geometry.hpp>
 #include <fo4/avm2/swf_runtime.hpp>
 #include <fo4/avm2/value.hpp>
 #include <fo4/swf/swf.hpp>
@@ -348,6 +349,63 @@ TEST(Avm2Events, HitTestFollowsTheParentTransform) {
   EXPECT_FALSE(fo4::avm2::hit_test_object(*child, *other));
   root->set_visible(false);
   EXPECT_FALSE(fo4::avm2::hit_test_point(*child, 25.0, 15.0));
+}
+
+TEST(Avm2Events, ShapeGeometryUsesTheEvenOddRule) {
+  fo4::avm2::ShapeGeometry geometry;
+  geometry.fills.push_back({{{0.0, 0.0}, {100.0, 0.0}, {100.0, 100.0}, {0.0, 100.0}}});
+  geometry.fills.push_back({{{25.0, 25.0}, {75.0, 25.0}, {75.0, 75.0}, {25.0, 75.0}}});
+  EXPECT_TRUE(fo4::avm2::shape_contains(geometry, 10.0, 10.0));
+  EXPECT_FALSE(fo4::avm2::shape_contains(geometry, 50.0, 50.0));
+  EXPECT_FALSE(fo4::avm2::shape_contains(geometry, 150.0, 50.0));
+}
+
+TEST(Avm2Events, ShapeRecordsConvertFromTwipsToPixels) {
+  using Kind = fo4::swf::SwfShapeRecordKind;
+  auto edge = [](Kind kind, std::int32_t x, std::int32_t y, bool fill) {
+    fo4::swf::SwfShapeRecord record;
+    record.kind = kind;
+    record.x = x;
+    record.y = y;
+    record.has_fill1 = fill;
+    return record;
+  };
+  const std::vector<fo4::swf::SwfShapeRecord> records = {
+      edge(Kind::move, 0, 0, false),
+      edge(Kind::straight_edge, 200, 0, true),
+      edge(Kind::straight_edge, 0, 200, true),
+  };
+  const fo4::avm2::ShapeGeometry geometry =
+      fo4::avm2::geometry_from_shape_records(records);
+  ASSERT_EQ(geometry.fills.size(), 1u);
+  EXPECT_TRUE(fo4::avm2::shape_contains(geometry, 2.0, 2.0));
+  EXPECT_FALSE(fo4::avm2::shape_contains(geometry, 9.0, 9.0));
+  const std::vector<fo4::swf::SwfShapeRecord> strokes = {
+      edge(Kind::move, 0, 0, false),
+      edge(Kind::straight_edge, 200, 0, false),
+  };
+  EXPECT_TRUE(fo4::avm2::geometry_from_shape_records(strokes).fills.empty());
+}
+
+TEST(Avm2Events, ShapeFlagHitTestUsesFillGeometry) {
+  Fixture fixture;
+  fixture.finish();
+  auto root = make_sprite(fixture.runtime);
+  auto target = make_sprite(fixture.runtime);
+  ASSERT_NE(root, nullptr);
+  ASSERT_NE(target, nullptr);
+  ASSERT_TRUE(
+      static_cast<fo4::avm2::DisplayObjectContainer*>(root.get())->add_child(target));
+  target->set_width(100.0);
+  target->set_height(100.0);
+  fo4::avm2::ShapeGeometry geometry;
+  geometry.fills.push_back({{{0.0, 0.0}, {100.0, 0.0}, {0.0, 100.0}}});
+  target->set_shape_geometry(std::make_shared<const fo4::avm2::ShapeGeometry>(geometry));
+  EXPECT_TRUE(fo4::avm2::hit_test_point(*target, 90.0, 90.0));
+  EXPECT_FALSE(fo4::avm2::hit_test_point(*target, 90.0, 90.0, true));
+  EXPECT_TRUE(fo4::avm2::hit_test_point(*target, 10.0, 10.0, true));
+  EXPECT_EQ(fo4::avm2::mouse_target_at(root, 10.0, 10.0).get(), target.get());
+  EXPECT_EQ(fo4::avm2::mouse_target_at(root, 90.0, 90.0).get(), nullptr);
 }
 
 TEST(Avm2Events, FocusChangeDispatchesFocusOutThenFocusIn) {

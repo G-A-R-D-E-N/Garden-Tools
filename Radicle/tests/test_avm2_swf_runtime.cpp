@@ -3,6 +3,7 @@
 #include <fo4/avm2/interpreter.hpp>
 #include <fo4/avm2/name.hpp>
 #include <fo4/avm2/runtime.hpp>
+#include <fo4/avm2/shape_geometry.hpp>
 #include <fo4/avm2/swf_runtime.hpp>
 #include <fo4/avm2/text.hpp>
 #include <fo4/avm2/value.hpp>
@@ -359,6 +360,43 @@ TEST(Avm2SwfRuntime, PlacedCharacterBoundsDriveHitTesting) {
   EXPECT_EQ(fo4::avm2::mouse_target_at(movie->root(), 79.0, 60.0).get(), nullptr);
   EXPECT_EQ(fo4::avm2::mouse_target_at(movie->root(), 141.0, 60.0).get(), nullptr);
   EXPECT_EQ(fo4::avm2::mouse_target_at(movie->root(), 120.0, 71.0).get(), nullptr);
+}
+
+TEST(Avm2SwfRuntime, PlacedShapeGeometryDrivesShapeFlagHitTesting) {
+  fo4::swf::SwfFile file;
+  file.header.frame_rate = 24u * 256u;
+  file.header.frame_count = 1;
+  file.header.frame_size.x_min = 0;
+  file.header.frame_size.x_max = 16000;
+  file.header.frame_size.y_min = 0;
+  file.header.frame_size.y_max = 12000;
+  fo4::swf::SwfTag tag = shape_tag(20, 0, 1200, 0, 600);
+  auto edge = [](fo4::swf::SwfShapeRecordKind kind, std::int32_t x, std::int32_t y) {
+    fo4::swf::SwfShapeRecord record;
+    record.kind = kind;
+    record.x = x;
+    record.y = y;
+    record.has_fill1 = true;
+    return record;
+  };
+  using Kind = fo4::swf::SwfShapeRecordKind;
+  tag.shape->records = {edge(Kind::move, 0, 0), edge(Kind::straight_edge, 1200, 0),
+                         edge(Kind::straight_edge, 0, 600)};
+  file.tags.push_back(tag);
+  file.tags.push_back(place_tag(1, 20, 100.0, 50.0));
+  file.tags.push_back(make_tag(fo4::swf::tag::kShowFrame));
+  Harness harness;
+  const std::shared_ptr<SwfRuntime> movie =
+      SwfRuntime::create(harness.runtime, harness.interpreter, file);
+  ASSERT_NE(movie, nullptr);
+  ASSERT_EQ(movie->root()->children().size(), 1u);
+  const DisplayObject& shape = *movie->root()->children()[0];
+  ASSERT_NE(shape.shape_geometry(), nullptr);
+  EXPECT_TRUE(fo4::avm2::hit_test_point(shape, 110.0, 60.0));
+  EXPECT_TRUE(fo4::avm2::hit_test_point(shape, 110.0, 60.0, true));
+  EXPECT_TRUE(fo4::avm2::hit_test_point(shape, 150.0, 70.0));
+  EXPECT_FALSE(fo4::avm2::hit_test_point(shape, 150.0, 70.0, true));
+  EXPECT_EQ(fo4::avm2::mouse_target_at(movie->root(), 150.0, 70.0).get(), nullptr);
 }
 
 TEST(Avm2SwfRuntime, PlacedEditTextBecomesAWrappedTextField) {

@@ -163,6 +163,11 @@ void apply_character_definition(DisplayObject& object, const SwfMovieData& data,
     object.set_width(bounds->second.width);
     object.set_height(bounds->second.height);
   }
+  // Geometry must attach at creation, so a script's later size writes cannot clear it.
+  const auto shape = data.character_shapes.find(character_id);
+  if (shape != data.character_shapes.end()) {
+    object.set_shape_geometry(std::make_shared<ShapeGeometry>(shape->second));
+  }
   const auto static_text = data.static_texts.find(character_id);
   if (static_text != data.static_texts.end() && object.is_static_text()) {
     auto& static_object = static_cast<StaticTextObject&>(object);

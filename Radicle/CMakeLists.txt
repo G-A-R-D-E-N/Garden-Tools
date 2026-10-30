@@ -439,6 +439,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/avm2/snapshot.cpp
   src/avm2/display_snapshot.cpp
   src/avm2/hit_test.cpp
+  src/avm2/shape_geometry.cpp
   src/avm2/amf.cpp
   src/avm2/replay.cpp
   src/avm2/native_shared.cpp

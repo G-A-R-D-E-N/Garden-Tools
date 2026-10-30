@@ -258,8 +258,11 @@ ExecutionResult display_hit_test(const Value& self, const std::vector<Value>& ar
   if (const DisplayObject* other = display_argument(arguments)) {
     return native_value(Value::boolean(hit_test_object(*object, *other)));
   }
+  // A point hit must read the third argument as shapeFlag, matching the AS3 signature.
+  const bool shape_flag = arguments.size() > 2 && to_boolean(arguments[2]);
   return native_value(Value::boolean(hit_test_point(*object, to_number(argument_at(arguments, 0)),
-                                                    to_number(argument_at(arguments, 1)))));
+                                                    to_number(argument_at(arguments, 1)),
+                                                    shape_flag)));
 }
 
 ExecutionResult display_hit_test_point(const Value& self, const std::vector<Value>& arguments) {
@@ -267,8 +270,10 @@ ExecutionResult display_hit_test_point(const Value& self, const std::vector<Valu
   if (object == nullptr) {
     return native_value(Value::boolean(false));
   }
+  const bool shape_flag = arguments.size() > 2 && to_boolean(arguments[2]);
   return native_value(Value::boolean(hit_test_point(*object, to_number(argument_at(arguments, 0)),
-                                                    to_number(argument_at(arguments, 1)))));
+                                                    to_number(argument_at(arguments, 1)),
+                                                    shape_flag)));
 }
 
 ExecutionResult display_hit_test_object(const Value& self, const std::vector<Value>& arguments) {
