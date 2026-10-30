@@ -76,7 +76,7 @@ struct TempRoot {
 
 TEST(UndecodableRecord, CorruptCompressedRecordLoadsWithRawBytesKept) {
   const auto bytes = mixed_plugin();
-  const auto plugin = fo4::read_plugin(bytes);
+  auto plugin = fo4::read_plugin(bytes);
   const auto* record = fo4::find_record(plugin, fo4::RawFormId{k_corrupt_id});
   ASSERT_NE(record, nullptr);
   EXPECT_TRUE(record->undecodable);
@@ -87,7 +87,7 @@ TEST(UndecodableRecord, CorruptCompressedRecordLoadsWithRawBytesKept) {
 }
 
 TEST(UndecodableRecord, ValidSiblingsOfUndecodableRecordStillDecode) {
-  const auto plugin = fo4::read_plugin(mixed_plugin());
+  auto plugin = fo4::read_plugin(mixed_plugin());
   for (const auto form_id : {k_valid_compressed_id, k_plain_id}) {
     const auto* record = fo4::find_record(plugin, fo4::RawFormId{form_id});
     ASSERT_NE(record, nullptr);
@@ -121,7 +121,7 @@ TEST(UndecodableRecord, WriterRefusesUndecodableRecordWithoutOriginalBytes) {
 
 TEST(UndecodableRecord, RemapRefusesPluginWithUndecodableRecord) {
   const auto bytes = mixed_plugin();
-  const auto plugin = fo4::read_plugin(bytes);
+  auto plugin = fo4::read_plugin(bytes);
   ASSERT_NE(fo4::find_record(plugin, fo4::RawFormId{k_corrupt_id}), nullptr);
   try {
     static_cast<void>(fo4::remap_plugin_masters(
@@ -172,7 +172,7 @@ TEST(UndecodableRecord, DeclaredSizeBeyondExpansionBoundLoadsUndecodable) {
   const auto grup = fo4::test::begin_group(out, "MISC", 0);
   add_compressed(out, k_corrupt_id, 0xFFFFFFFFu, corrupt);
   fo4::test::end_group(out, grup);
-  const auto plugin = fo4::read_plugin(out.bytes);
+  auto plugin = fo4::read_plugin(out.bytes);
   const auto* record = fo4::find_record(plugin, fo4::RawFormId{k_corrupt_id});
   ASSERT_NE(record, nullptr);
   EXPECT_TRUE(record->undecodable);

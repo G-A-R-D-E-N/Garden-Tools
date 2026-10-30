@@ -21,6 +21,10 @@ struct PackageProcedureNode {
   std::optional<std::uint32_t> flags;
   std::size_t opaque_begin{0}, opaque_end{0};
   std::vector<std::size_t> children;
+  std::size_t begin{0}, end{0};
+  std::size_t condition_begin{0}, condition_end{0};
+  std::size_t children_anchor{0};
+  std::size_t prcb_index{0};
 };
 
 enum class PackageInputValueKind : std::uint8_t {
@@ -90,6 +94,7 @@ const char* package_target_type_name(PackageTargetType type);
 
 PackageProcedureTree decode_package_procedure(const Record& record);
 std::optional<std::uint32_t> expected_input_count(std::string_view leaf_name);
+bool is_known_procedure(std::string_view name);
 std::optional<PackageInputValueKind> package_input_value_kind(std::string_view type_name);
 
 PackageInputMutationStatus add_package_data_input(Plugin& plugin,
@@ -105,5 +110,39 @@ PackageInputMutationStatus set_package_data_input(Plugin& plugin,
 PackageInputMutationStatus remove_package_data_input(Plugin& plugin,
                                                      const FormKey& record_key,
                                                      std::uint8_t id);
+
+enum class PackageTreeMutationStatus {
+  updated,
+  unchanged,
+  record_missing,
+  not_a_package,
+  undecodable,
+  index_out_of_range,
+  not_a_container,
+  not_a_leaf,
+  root_node,
+  unknown_procedure,
+  leaf_payload_undetermined,
+  input_id_conflict,
+  reference_orphaned,
+  templated_package,
+  input_creation_failed,
+  tree_full,
+};
+
+inline constexpr std::size_t package_tree_max_depth = 64;
+
+const char* package_tree_mutation_status_message(PackageTreeMutationStatus status);
+
+// Constraint: the tree is rebuilt from the decoded model and every branch count is recomputed.
+PackageTreeMutationStatus add_package_procedure_node(Plugin& plugin,
+                                                     const FormKey& record_key,
+                                                     std::size_t parent_index,
+                                                     std::string_view procedure,
+                                                     std::size_t* out_node_index = nullptr);
+
+PackageTreeMutationStatus remove_package_procedure_node(Plugin& plugin,
+                                                        const FormKey& record_key,
+                                                        std::size_t node_index);
 
 }

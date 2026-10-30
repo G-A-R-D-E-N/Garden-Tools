@@ -23,7 +23,7 @@
 using namespace object_base_fixture;
 
 TEST(ObjectBaseRecordsSynthetic, EveryScalarRowDecodesOnTheFixture) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   for (const auto& item : k_items) {
     const auto signature = fo4::Signature::from_string(item.signature);
     const auto* record = fo4::find_record(plugin, fo4::FormKey::parse(item.key));
@@ -110,7 +110,7 @@ TEST(ObjectBaseRecordsSynthetic, EditsOneRowPerRecordAndRereads) {
 }
 
 TEST(ObjectBaseRecordsSynthetic, FixtureLinksStartOnTheirFirstTarget) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   for (const auto& item : k_items) {
     const auto signature = fo4::Signature::from_string(item.signature);
     const auto link = fo4::schema::formlink_field_descriptor(signature, item.link_path);
@@ -124,7 +124,7 @@ TEST(ObjectBaseRecordsSynthetic, FixtureLinksStartOnTheirFirstTarget) {
 }
 
 TEST(ObjectBaseRecordsSynthetic, FixtureRecordsMeetTheirAuthoringMinimums) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   for (const auto& item : k_items) {
     const auto signature = fo4::Signature::from_string(item.signature);
     const auto constraint = fo4::schema::record_authoring_constraint(signature);
@@ -225,7 +225,7 @@ TEST(ObjectBaseRecordsSynthetic, MultiStageDestructibleFollowsTheAuthoringOrderP
 }
 
 TEST(ObjectBaseRecordsSynthetic, ModelRowsDecodeTheirValueAndFlags) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto door_signature = fo4::Signature::from_string("DOOR");
   const auto cont_signature = fo4::Signature::from_string("CONT");
   const auto* door = fo4::find_record(plugin, fo4::FormKey::parse("000803:Patch.esp"));
@@ -281,7 +281,7 @@ TEST(ObjectBaseRecordsSynthetic, ModelRowsDecodeTheirValueAndFlags) {
 }
 
 TEST(ObjectBaseRecordsSynthetic, WrongSizedModelPayloadsAreRefused) {
-  const auto plugin = template_record_plugin("DOOR", 0x812, {{"EDID", zstr("RadicleDoor")},
+  auto plugin = template_record_plugin("DOOR", 0x812, {{"EDID", zstr("RadicleDoor")},
                                                              {"MODC", u8_bytes(1)},
                                                              {"MODF", u16_bytes(1)}});
   const auto* record = only_record(plugin, "DOOR");

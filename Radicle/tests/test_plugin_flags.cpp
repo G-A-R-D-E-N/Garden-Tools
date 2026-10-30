@@ -113,7 +113,7 @@ TEST(PluginFlags, RejectsLightFlagWhenOwnedLocalIdExceedsTwelveBits) {
 }
 
 TEST(PluginFlags, RejectsLightFlagWhenMasterlessLocalIdIsBelowTheFullFloor) {
-  const auto plugin = fo4::read_plugin(make_plugin_with_owned_record(0x00000005u), "Low.esp");
+  auto plugin = fo4::read_plugin(make_plugin_with_owned_record(0x00000005u), "Low.esp");
 
   EXPECT_THROW(
       static_cast<void>(fo4::set_plugin_light_flag(plugin, true)),
@@ -122,7 +122,7 @@ TEST(PluginFlags, RejectsLightFlagWhenMasterlessLocalIdIsBelowTheFullFloor) {
 }
 
 TEST(PluginFlags, RejectsLightFlagBelowTheFloorWhenHedrIsBelowOne) {
-  const auto plugin = fo4::read_plugin(
+  auto plugin = fo4::read_plugin(
       make_plugin_with_owned_record(0x01000005u, 0.95f, true), "OldHedr.esp");
 
   EXPECT_THROW(
@@ -131,7 +131,7 @@ TEST(PluginFlags, RejectsLightFlagBelowTheFloorWhenHedrIsBelowOne) {
 }
 
 TEST(PluginFlags, AllowsLightFlagForLowLocalIdsWithHedrOneAndAMaster) {
-  const auto plugin = fo4::set_plugin_light_flag(
+  auto plugin = fo4::set_plugin_light_flag(
       fo4::read_plugin(make_plugin_with_owned_record(0x01000005u, 1.0f, true), "Hardcoded.esp"),
       true);
 
@@ -139,14 +139,14 @@ TEST(PluginFlags, AllowsLightFlagForLowLocalIdsWithHedrOneAndAMaster) {
 }
 
 TEST(PluginFlags, AllowsLightFlagForMasterlessIdsAtTheFullFloor) {
-  const auto plugin = fo4::set_plugin_light_flag(
+  auto plugin = fo4::set_plugin_light_flag(
       fo4::read_plugin(make_plugin_with_owned_record(0x00000800u), "Floor.esp"), true);
 
   EXPECT_TRUE(plugin.header.tes4_flags.is_small_file());
 }
 
 TEST(PluginFlags, LightFlagLowersHedrNextToOnePastTheHighestOwnId) {
-  const auto plugin = fo4::set_plugin_light_flag(
+  auto plugin = fo4::set_plugin_light_flag(
       fo4::read_plugin(make_plugin_with_owned_records({0x01000800u, 0x01000801u}, 1.0f, true, 0x5000u),
                        "Lowered.esp"),
       true);
@@ -157,7 +157,7 @@ TEST(PluginFlags, LightFlagLowersHedrNextToOnePastTheHighestOwnId) {
 }
 
 TEST(PluginFlags, LightFlagKeepsHedrNextThatIsAlreadyInRange) {
-  const auto plugin = fo4::set_plugin_light_flag(
+  auto plugin = fo4::set_plugin_light_flag(
       fo4::read_plugin(make_plugin_with_owned_records({0x01000800u, 0x01000801u}, 1.0f, true, 0x900u),
                        "InRange.esp"),
       true);
@@ -166,14 +166,14 @@ TEST(PluginFlags, LightFlagKeepsHedrNextThatIsAlreadyInRange) {
 }
 
 TEST(PluginFlags, LightFlagLowersMasterlessHedrNextToTheFullFloor) {
-  const auto plugin = fo4::set_plugin_light_flag(
+  auto plugin = fo4::set_plugin_light_flag(
       fo4::read_plugin(make_plugin(0, 1.0f, false, 0x5000u), "Empty.esp"), true);
 
   EXPECT_EQ(plugin.header.next_form_id, 0x800u);
 }
 
 TEST(PluginFlags, ClearingLightFlagNeverChangesHedrNext) {
-  const auto plugin = fo4::set_plugin_light_flag(
+  auto plugin = fo4::set_plugin_light_flag(
       fo4::read_plugin(make_plugin(fo4::RecordFlags::small_file, 1.0f, true, 0x5000u), "Cleared.esp"),
       false);
 
@@ -183,7 +183,7 @@ TEST(PluginFlags, ClearingLightFlagNeverChangesHedrNext) {
 
 TEST(PluginFlags, WriteFileToEslSetsMasterAndLightFlags) {
   const TempDir dir;
-  const auto plugin = fo4::read_plugin(make_plugin_with_owned_record(0x00000800u), "Save.esp");
+  auto plugin = fo4::read_plugin(make_plugin_with_owned_record(0x00000800u), "Save.esp");
   const auto target = dir.path / "Save.esl";
 
   fo4::write_plugin_file(plugin, target);
@@ -195,7 +195,7 @@ TEST(PluginFlags, WriteFileToEslSetsMasterAndLightFlags) {
 
 TEST(PluginFlags, WriteFileToEsmSetsMasterFlagOnly) {
   const TempDir dir;
-  const auto plugin = fo4::read_plugin(make_plugin_with_owned_record(0x00000800u), "Save.esp");
+  auto plugin = fo4::read_plugin(make_plugin_with_owned_record(0x00000800u), "Save.esp");
   const auto target = dir.path / "Save.esm";
 
   fo4::write_plugin_file(plugin, target);
@@ -219,7 +219,7 @@ TEST(PluginFlags, WriteFileToEspKeepsFlags) {
 
 TEST(PluginFlags, WriteFileToEslRefusesOutOfRangeFormIds) {
   const TempDir dir;
-  const auto plugin = fo4::read_plugin(make_plugin_with_owned_record(0x00001000u), "TooLarge.esp");
+  auto plugin = fo4::read_plugin(make_plugin_with_owned_record(0x00001000u), "TooLarge.esp");
   const auto target = dir.path / "TooLarge.esl";
 
   EXPECT_THROW(fo4::write_plugin_file(plugin, target), fo4::FormIdError);

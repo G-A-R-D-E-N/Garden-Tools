@@ -212,7 +212,7 @@ TEST_P(ConditionScopesReal, BranchAndTargetScopesMatchOfficialLayoutAndWriteBack
   record_game_build(detect_game_build(directory));
   const auto path = std::filesystem::path(directory) / GetParam();
   ASSERT_TRUE(std::filesystem::is_regular_file(path));
-  const auto plugin = fo4::read_plugin_file(path);
+  auto plugin = fo4::read_plugin_file(path);
   const auto branch = fo4::schema::scoped_condition_path(Signature::from_string("PACK"), "Branches[0].Conditions");
   const auto target = fo4::schema::scoped_condition_path(Signature::from_string("QUST"), "Targets[0].Conditions");
   ASSERT_TRUE(branch.has_value());

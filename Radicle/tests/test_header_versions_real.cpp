@@ -54,7 +54,7 @@ TEST(HeaderVersionsReal, ReadsEveryOfficialMasterAndEslHeaderAndRewritesItIdenti
   for (const auto& name : installed_master_and_cc_plugins(dir)) {
     SCOPED_TRACE(name);
     const auto path = dir / name;
-    const auto plugin = fo4::read_plugin_file(path);
+    auto plugin = fo4::read_plugin_file(path);
 
     EXPECT_EQ(plugin.tes4.header.signature, fo4::sig_tes4);
     EXPECT_TRUE(std::isfinite(plugin.header.version));

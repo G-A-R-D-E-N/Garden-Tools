@@ -131,7 +131,7 @@ Bytes payload(const fo4::Plugin& plugin, std::string_view key_text, std::string_
 }  // namespace
 
 TEST(StaticLightSynthetic, EveryBatchRowDecodesOnItsRecord) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   std::size_t decoded = 0;
   fo4::visit_records(plugin, [&](const fo4::Record& record) {
     if (!in_batch(record.header.signature)) return;
@@ -192,7 +192,7 @@ TEST(StaticLightSynthetic, EditsOneFieldPerRecordAndRereadsIt) {
 }
 
 TEST(StaticLightSynthetic, MaterialSwapArraysStayUntouchedAndFlatFnamHasNoRow) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   EXPECT_FALSE(fo4::schema::scalar_field_descriptor("MSWP\\FNAM").has_value());
   EXPECT_TRUE(fo4::schema::formlink_fields(sig("MSWP")).empty());
   EXPECT_EQ(payload(plugin, "000805:Patch.esp", "BNAM"), zstr("Materials\\A.bgsm"));

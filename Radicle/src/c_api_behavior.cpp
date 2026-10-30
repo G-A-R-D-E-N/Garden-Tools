@@ -284,6 +284,68 @@ radicle_status radicle_package_input_remove(radicle_plugin* plugin, radicle_form
   });
 }
 
+namespace {
+
+radicle_status package_tree_failure(fo4::env::PackageTreeMutationStatus status) {
+  using Status = fo4::env::PackageTreeMutationStatus;
+  const auto message = fo4::env::package_tree_mutation_status_message(status);
+  switch (status) {
+    case Status::updated:
+    case Status::unchanged:
+      return RADICLE_STATUS_OK;
+    case Status::record_missing:
+      return fail(RADICLE_STATUS_NOT_FOUND, message);
+    case Status::not_a_package:
+    case Status::undecodable:
+      return fail(RADICLE_STATUS_PARSE_ERROR, message);
+    case Status::index_out_of_range:
+    case Status::not_a_container:
+    case Status::not_a_leaf:
+    case Status::root_node:
+    case Status::unknown_procedure:
+    case Status::leaf_payload_undetermined:
+    case Status::input_id_conflict:
+    case Status::reference_orphaned:
+    case Status::templated_package:
+    case Status::input_creation_failed:
+    case Status::tree_full:
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, message);
+  }
+  return fail(RADICLE_STATUS_INTERNAL_ERROR, "unknown package tree status");
+}
+
+}
+
+radicle_status radicle_package_procedure_add(radicle_plugin* plugin, radicle_form_key key,
+                                             size_t parent_index, const char* procedure,
+                                             size_t* out_node_index) {
+  if (out_node_index != nullptr) *out_node_index = 0;
+  clear_error();
+  const auto form_key = to_form_key(key);
+  if (plugin == nullptr || !form_key || procedure == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, record key and procedure are required");
+  }
+  return guarded("unknown exception while adding a PACK procedure", [&] {
+    std::size_t added = 0;
+    const auto status = fo4::env::add_package_procedure_node(plugin->value, *form_key, parent_index, procedure, &added);
+    const auto mapped = package_tree_failure(status);
+    if (mapped == RADICLE_STATUS_OK && out_node_index != nullptr) *out_node_index = added;
+    return mapped;
+  });
+}
+
+radicle_status radicle_package_procedure_remove(radicle_plugin* plugin, radicle_form_key key,
+                                                size_t node_index) {
+  clear_error();
+  const auto form_key = to_form_key(key);
+  if (plugin == nullptr || !form_key) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin and a valid record key are required");
+  }
+  return guarded("unknown exception while removing a PACK procedure", [&] {
+    return package_tree_failure(fo4::env::remove_package_procedure_node(plugin->value, *form_key, node_index));
+  });
+}
+
 const char* radicle_package_location_type_name(int32_t type) {
   if (type < 0 || type > static_cast<int32_t>(fo4::env::PackageLocationType::alias_collection_item)) return nullptr;
   return fo4::env::package_location_type_name(static_cast<fo4::env::PackageLocationType>(type));

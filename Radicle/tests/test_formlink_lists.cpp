@@ -367,7 +367,7 @@ TEST(FormLinkListMutation, MalformedExistingElementFailsClosed) {
 }
 
 TEST(FormLinkListRead, PreservesStoredOrderAndRefusesMalformedOrWrongRecord) {
-  const auto plugin = fo4::read_plugin(plugin_with_race_hair_colors(), "HeadLists.esp");
+  auto plugin = fo4::read_plugin(plugin_with_race_hair_colors(), "HeadLists.esp");
   const auto parsed = fo4::schema::indexed_formlink_list_path("RACE\\MaleHairColors[0]");
   ASSERT_TRUE(parsed.has_value());
   const auto key = fo4::FormKey::parse("000803:HeadLists.esp");

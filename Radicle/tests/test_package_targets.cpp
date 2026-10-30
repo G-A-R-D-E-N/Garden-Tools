@@ -109,7 +109,7 @@ TEST(FormLink, PackageTargetsRemapOnlyTypeTaggedFormIds) {
 }
 
 TEST(FormLink, PackageTargetCollectionReportsOnlyFormIdVariants) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "PackagePatch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "PackagePatch.esp");
   const auto hits = fo4::collect_form_links(plugin);
 
   std::size_t ptdtHits = 0;

@@ -135,6 +135,26 @@ std::vector<Piece> obstacle_body(const std::vector<std::size_t>& first, const st
   return pieces;
 }
 
+void expect_obstacle_refusal(const std::vector<Piece>& body, std::string_view message) {
+  auto plugin = fo4::read_plugin(make_nocm_plugin(body), "Patch.esp");
+  try {
+    static_cast<void>(fo4::subrecord_group_spans(plugin, record_key(), obstacle()));
+    ADD_FAILURE() << "expected a refusal containing " << message;
+  } catch (const fo4::schema::SubrecordGroupError& error) {
+    EXPECT_NE(std::string(error.what()).find(message), std::string::npos) << error.what();
+  }
+}
+
+template <typename Operation>
+void expect_group_refusal(Operation operation, std::string_view message) {
+  try {
+    static_cast<void>(operation());
+    ADD_FAILURE() << "expected a refusal containing " << message;
+  } catch (const fo4::schema::SubrecordGroupError& error) {
+    EXPECT_NE(std::string(error.what()).find(message), std::string::npos) << error.what();
+  }
+}
+
 std::uint32_t read_u32(const std::vector<std::byte>& data, std::size_t offset) {
   std::uint32_t value = 0;
   for (std::size_t i = 0; i < 4; ++i) {
@@ -213,7 +233,7 @@ TEST(NestedGroupRuns, InnrNamingRulesDescriptorNamesItsNestedRunAndCount) {
 }
 
 TEST(NestedGroupRuns, SpansScopeEachNestedRunToItsOwnCountSubrecord) {
-  const auto plugin = fo4::read_plugin(make_plugin(naming_body(2, 1)), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(naming_body(2, 1)), "Patch.esp");
   const auto spans = fo4::subrecord_group_spans(plugin, record_key(), naming_rules());
   ASSERT_TRUE(spans.has_value());
   ASSERT_EQ(spans->size(), 2u);
@@ -245,7 +265,7 @@ TEST(NestedGroupRuns, CountMismatchAndMissingLeaderFailClosed) {
        {"WNAM", zstr("RadicleName")}, {"KSIZ", u32_bytes(1)}, {"KWDA", u32_bytes(0x911)}, {"YNAM", u16_bytes(0)},
        {"WNAM", zstr("RadicleName")}, {"KSIZ", u32_bytes(1)}, {"KWDA", u32_bytes(0x911)}, {"YNAM", u16_bytes(1)}}};
   for (const auto& body : malformed) {
-    const auto plugin = fo4::read_plugin(make_plugin(body), "Patch.esp");
+    auto plugin = fo4::read_plugin(make_plugin(body), "Patch.esp");
     EXPECT_THROW(static_cast<void>(fo4::subrecord_group_spans(plugin, record_key(), naming_rules())),
                  fo4::schema::SubrecordGroupError);
   }
@@ -384,6 +404,37 @@ TEST(NestedGroupRuns, NocmSpansGroupEveryUncountedRunUnderItsModel) {
   EXPECT_EQ(names[8], "INDX");
 }
 
+TEST(NestedGroupRuns, NocmSingleModelSpansCoverItsRunsAndItsModel) {
+  const Piece edid{"EDID", zstr("NavmeshObstacleCoverManager")};
+  const auto one_run = fo4::read_plugin(
+      make_nocm_plugin({edid, {"INDX", u32_bytes(0)}, {"INTV", u32_bytes(0)}, {"NAM1", zstr("ModelA")}}),
+      "Patch.esp");
+  const auto spans = fo4::subrecord_group_spans(one_run, record_key(), obstacle());
+  ASSERT_TRUE(spans.has_value());
+  ASSERT_EQ(spans->size(), 1u);
+  EXPECT_EQ((*spans)[0].first, 1u);
+  EXPECT_EQ((*spans)[0].end, 4u);
+  ASSERT_EQ((*spans)[0].runs.size(), 1u);
+  EXPECT_EQ((*spans)[0].runs[0].first, 1u);
+  EXPECT_EQ((*spans)[0].runs[0].end, 3u);
+
+  const auto two_runs = fo4::read_plugin(
+      make_nocm_plugin({edid, {"INDX", u32_bytes(0)}, {"DATA", u32_bytes(0)}, {"DATA", u32_bytes(1)},
+                        {"INTV", u32_bytes(0)}, {"INDX", u32_bytes(1)}, {"INTV", u32_bytes(0)},
+                        {"NAM1", zstr("ModelA")}}),
+      "Patch.esp");
+  const auto pair = fo4::subrecord_group_spans(two_runs, record_key(), obstacle());
+  ASSERT_TRUE(pair.has_value());
+  ASSERT_EQ(pair->size(), 1u);
+  EXPECT_EQ((*pair)[0].first, 1u);
+  EXPECT_EQ((*pair)[0].end, 8u);
+  ASSERT_EQ((*pair)[0].runs.size(), 2u);
+  EXPECT_EQ((*pair)[0].runs[0].first, 1u);
+  EXPECT_EQ((*pair)[0].runs[0].end, 5u);
+  EXPECT_EQ((*pair)[0].runs[1].first, 5u);
+  EXPECT_EQ((*pair)[0].runs[1].end, 7u);
+}
+
 TEST(NestedGroupRuns, NocmShapeFailuresFailClosed) {
   const Piece edid{"EDID", zstr("NavmeshObstacleCoverManager")};
   const std::vector<std::vector<Piece>> malformed{
@@ -413,6 +464,17 @@ TEST(NestedGroupRuns, NocmRunlessModelAfterRunModelIsItsOwnSpan) {
   EXPECT_TRUE((*spans)[1].runs.empty());
 }
 
+TEST(NestedGroupRuns, NocmShapeFailuresNameTheirRefusal) {
+  const Piece edid{"EDID", zstr("NavmeshObstacleCoverManager")};
+  const Piece indx{"INDX", u32_bytes(0)};
+  const Piece intv{"INTV", u32_bytes(0)};
+  const Piece nam1{"NAM1", zstr("ModelA")};
+  expect_obstacle_refusal({edid, indx, {"DATA", u32_bytes(0)}, nam1}, "has a run without required INTV");
+  expect_obstacle_refusal({edid, indx, intv, {"DATA", u32_bytes(0)}, nam1}, "has DATA out of order or repeated");
+  expect_obstacle_refusal({edid, indx, intv}, "has a run without required NAM1");
+  expect_obstacle_refusal({edid, indx, intv, intv}, "has INTV out of order or repeated");
+}
+
 TEST(NestedGroupRuns, NocmUncountedRunsRefuseWholeSpanMutations) {
   auto plugin = fo4::read_plugin(make_nocm_plugin(obstacle_body({2}, {1})), "Patch.esp");
   const auto before = fo4::write_plugin(plugin);
@@ -424,6 +486,51 @@ TEST(NestedGroupRuns, NocmUncountedRunsRefuseWholeSpanMutations) {
                fo4::schema::SubrecordGroupError);
   EXPECT_THROW(static_cast<void>(fo4::remove_record_subrecord_group_run(plugin, record_key(), obstacle(), 0, 0)),
                fo4::schema::SubrecordGroupError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(NestedGroupRuns, NocmUncountedRunsRefuseWholeSpanMutationsNamingTheRefusal) {
+  auto plugin = fo4::read_plugin(make_nocm_plugin(obstacle_body({2}, {1})), "Patch.esp");
+  const auto before = fo4::write_plugin(plugin);
+  expect_group_refusal(
+      [&] { static_cast<void>(fo4::insert_record_subrecord_group(plugin, record_key(), obstacle(), 0)); },
+      "spans uncounted sub-runs");
+  expect_group_refusal(
+      [&] { static_cast<void>(fo4::remove_record_subrecord_group(plugin, record_key(), obstacle(), 0)); },
+      "spans uncounted sub-runs");
+  expect_group_refusal(
+      [&] { static_cast<void>(fo4::insert_record_subrecord_group_run(plugin, record_key(), obstacle(), 0, 0)); },
+      "has no counted sub-run");
+  expect_group_refusal(
+      [&] { static_cast<void>(fo4::remove_record_subrecord_group_run(plugin, record_key(), obstacle(), 0, 0)); },
+      "has no counted sub-run");
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(NestedGroupRuns, NocmMalformedRecordRefusesItsRowWrites) {
+  auto plugin = fo4::read_plugin(
+      make_nocm_plugin({{"EDID", zstr("NavmeshObstacleCoverManager")}, {"INDX", u32_bytes(0)},
+                        {"INTV", u32_bytes(0)}}),
+      "Patch.esp");
+  const auto index = fo4::schema::scalar_field_descriptor("NOCM\\Index");
+  const auto model = fo4::schema::scalar_field_descriptor("NOCM\\Model");
+  ASSERT_TRUE(index.has_value());
+  ASSERT_TRUE(model.has_value());
+  const auto before = fo4::write_plugin(plugin);
+  try {
+    static_cast<void>(fo4::set_record_scalar(plugin, record_key(), *index, 0, "1"));
+    ADD_FAILURE() << "a malformed NOCM accepted an Index write";
+  } catch (const fo4::schema::ScalarError& error) {
+    EXPECT_NE(std::string(error.what()).find("has a run without required NAM1"), std::string::npos)
+        << error.what();
+  }
+  try {
+    static_cast<void>(fo4::set_record_string(plugin, record_key(), *model, 0, "ModelB"));
+    ADD_FAILURE() << "a malformed NOCM accepted a Model write";
+  } catch (const fo4::schema::ScalarError& error) {
+    EXPECT_NE(std::string(error.what()).find("has a run without required NAM1"), std::string::npos)
+        << error.what();
+  }
   EXPECT_EQ(fo4::write_plugin(plugin), before);
 }
 

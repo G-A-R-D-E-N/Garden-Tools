@@ -26,7 +26,7 @@ def valid_signature(value):
 
 
 def printable_signature(value):
-    return all(0x20 <= ord(ch) <= 0x7E for ch in value)
+    return isinstance(value, str) and len(value) == 4 and all(0x20 <= ord(ch) <= 0x7E for ch in value)
 
 
 def cpp_string(value: str) -> str:
@@ -48,7 +48,7 @@ def parse_when(when, path, own_subrecord):
     if unknown:
         raise ValueError(f"unknown when keys {sorted(unknown)} for {path!r}")
     subrecord = when.get("subrecord", "")
-    if subrecord != "" and not valid_signature(subrecord):
+    if subrecord != "" and not printable_signature(subrecord):
         raise ValueError(f"when.subrecord must be four printable ASCII characters: {path!r}")
     if subrecord == own_subrecord:
         raise ValueError(f"when.subrecord must be omitted to read the field's own subrecord: {path!r}")
@@ -126,8 +126,7 @@ def parse_address(row, path, subrecord, has_offset, width):
             raise ValueError(f"array_offset requires stride: {path!r}")
         if not is_count(array_offset, 0):
             raise ValueError(f"array_offset must be a non-negative integer: {path!r}")
-    if repeated and stride:
-        raise ValueError(f"repeated and stride are mutually exclusive: {path!r}")
+    # Constraint: repeated with stride means every matching subrecord contributes its own strided elements, which is how a struct array that repeats inside one record (RACE TTEC) is addressed.
     if stride:
         if not has_offset:
             raise ValueError(f"stride requires an offset: {path!r}")
@@ -227,3 +226,23 @@ def render_address(address):
                     f"{', true' if when['negated'] else ', false'}}}")
     return (f"FieldAddress{{{'true' if address['repeated'] else 'false'}, {address['stride']}, "
             f"{address['array_offset']}, {rendered}{trailing}}}")
+
+
+HEX_DIGITS = "0123456789abcdefABCDEF"
+
+
+def reject_bytes_row(field, path, embedded, presentation):
+    if embedded:
+        raise ValueError(f"bytes storage must cover the whole payload: {path!r}")
+    if presentation != "identity":
+        raise ValueError(f"bytes storage requires identity presentation: {path!r}")
+    if "names" in field:
+        raise ValueError(f"bytes storage does not accept names: {path!r}")
+    if "default" not in field:
+        return
+    default = field["default"]
+    if not isinstance(default, str) or any(ch not in HEX_DIGITS for ch in default):
+        raise ValueError(f"bytes row default must be hexadecimal: {path!r}")
+    if len(default) % 2 != 0:
+        raise ValueError(f"bytes row default must be an even-length hex string: {path!r}")
+    raise ValueError(f"bytes row default is not applied by any insertion policy: {path!r}")

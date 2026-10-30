@@ -105,7 +105,7 @@ TEST_P(WaterRealData, MasterHasExpectedWaterCountAndDnamSizes) {
   const std::map<std::string, std::size_t> expected{
       {"Fallout4.esm", 42},      {"DLCCoast.esm", 2},       {"DLCNukaWorld.esm", 3}, {"DLCRobot.esm", 0},
       {"DLCworkshop01.esm", 0}, {"DLCworkshop02.esm", 0}, {"DLCworkshop03.esm", 0}};
-  const auto plugin = fo4::read_plugin_file(path_);
+  auto plugin = fo4::read_plugin_file(path_);
   std::size_t count = 0;
   fo4::visit_records(plugin, [&](const fo4::Record& record) {
     if (record.header.signature != fo4::Signature::from_string("WATR")) { return; }
@@ -156,7 +156,7 @@ fo4::Plugin water_sample(const std::filesystem::path& path) {
 }
 
 TEST_P(WaterRealData, EveryOfficialWaterIsListedInXEditOrderAndPreflightClean) {
-  const auto plugin = fo4::read_plugin_file(path_);
+  auto plugin = fo4::read_plugin_file(path_);
   const auto rules = fo4::schema::authoring_subrecords(*fo4::schema::record_authoring_constraint(k_watr));
   int seen = 0;
   std::vector<std::string> violators;

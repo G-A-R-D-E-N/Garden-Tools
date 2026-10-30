@@ -44,6 +44,10 @@ Bytes snam(std::size_t elements) {
   return Bytes(elements * 24, std::byte{0});
 }
 
+Bytes snam_legacy(std::size_t elements) {
+  return Bytes(elements * 20, std::byte{0});
+}
+
 std::vector<std::byte> make_plugin(const Bytes& marker_params, std::uint16_t form_version = 131) {
   ByteWriter out;
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
@@ -130,6 +134,35 @@ TEST(FurnMarkerParams, RowsDeclareStridedElements) {
   EXPECT_FALSE(fo4::schema::formlink_field_target_allowed(keyword, k_snam));
 }
 
+TEST(FurnMarkerParams, LegacyRowsDeclareATwentyByteStrideBelowFormVersion125) {
+  constexpr std::string_view paths[] = {"FURN\\MarkerOffsetXBelow125", "FURN\\MarkerOffsetYBelow125",
+                                       "FURN\\MarkerOffsetZBelow125",
+                                       "FURN\\MarkerRotationZBelow125"};
+  constexpr std::size_t offsets[] = {0, 4, 8, 12};
+  for (std::size_t i = 0; i < 4; ++i) {
+    SCOPED_TRACE(paths[i]);
+    const auto field = scalar(paths[i]);
+    EXPECT_EQ(field.scalar.subrecord, k_snam);
+    EXPECT_EQ(field.scalar.offset, offsets[i]);
+    EXPECT_EQ(field.scalar.address.stride, 20u);
+    EXPECT_FALSE(field.scalar.address.repeated);
+    EXPECT_EQ(field.scalar.min_form_version, 0u);
+    EXPECT_EQ(field.scalar.max_form_version, 125u);
+    EXPECT_EQ(field.scalar.storage, fo4::schema::ScalarStorage::f32);
+  }
+
+  const auto legacy_keyword = link("FURN\\MarkerKeywordBelow125");
+  EXPECT_EQ(legacy_keyword.subrecord, k_snam);
+  EXPECT_EQ(legacy_keyword.offset, 16u);
+  EXPECT_EQ(legacy_keyword.address.stride, 20u);
+  EXPECT_FALSE(legacy_keyword.address.repeated);
+  EXPECT_TRUE(legacy_keyword.nullable);
+  EXPECT_EQ(legacy_keyword.min_form_version, 0u);
+  EXPECT_EQ(legacy_keyword.max_form_version, 125u);
+  EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(legacy_keyword, k_kywd));
+  EXPECT_FALSE(fo4::schema::formlink_field_target_allowed(legacy_keyword, k_snam));
+}
+
 TEST(FurnMarkerParams, ElementsReadAndWriteAtTheirOwnOffsets) {
   auto plugin = fo4::read_plugin(make_plugin(snam(2)), "Patch.esp");
   EXPECT_EQ(read_member(plugin, "FURN\\MarkerOffsetX", 0), "0");
@@ -161,10 +194,13 @@ TEST(FurnMarkerParams, ElementsReadAndWriteAtTheirOwnOffsets) {
   EXPECT_EQ(read_member(after, "FURN\\MarkerEntryTypes", 1), "11");
 }
 
-TEST(FurnMarkerParams, RaggedAndPre125PayloadsHideEveryMarkerParam) {
-  auto pre125 = fo4::read_plugin(make_plugin(snam(2), 124), "Patch.esp");
-  EXPECT_EQ(read_member(pre125, "FURN\\MarkerOffsetX", 0), "absent");
-  EXPECT_EQ(fo4::set_record_scalar(pre125, furn_key(), scalar("FURN\\MarkerOffsetX"), 0, "1"),
+TEST(FurnMarkerParams, RaggedAndMismatchedPayloadsHideEveryMarkerParam) {
+  auto mismatched = fo4::read_plugin(make_plugin(snam(2), 124), "Patch.esp");
+  EXPECT_EQ(read_member(mismatched, "FURN\\MarkerOffsetX", 0), "absent");
+  EXPECT_EQ(fo4::set_record_scalar(mismatched, furn_key(), scalar("FURN\\MarkerOffsetX"), 0, "1"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(read_member(mismatched, "FURN\\MarkerOffsetXBelow125", 0), "absent");
+  EXPECT_EQ(fo4::set_record_scalar(mismatched, furn_key(), scalar("FURN\\MarkerOffsetXBelow125"), 0, "1"),
             fo4::ScalarMutationStatus::subrecord_missing);
 
   auto short_element = fo4::read_plugin(make_plugin(snam(1), 125), "Patch.esp");
@@ -178,6 +214,54 @@ TEST(FurnMarkerParams, RaggedAndPre125PayloadsHideEveryMarkerParam) {
   EXPECT_EQ(fo4::set_record_scalar(ragged, furn_key(), scalar("FURN\\MarkerOffsetX"), 0, "1"),
             fo4::ScalarMutationStatus::subrecord_missing);
   EXPECT_EQ(fo4::set_record_formlink_field(ragged, furn_key(), link("FURN\\MarkerKeyword"), 0, kywd_key()),
+            fo4::FormLinkFieldMutationStatus::subrecord_missing);
+}
+
+TEST(FurnMarkerParams, LegacyTwentyByteElementsReadAndWriteBelowFormVersion125) {
+  auto plugin = fo4::read_plugin(make_plugin(snam_legacy(2), 124), "Patch.esp");
+  EXPECT_EQ(read_member(plugin, "FURN\\MarkerOffsetXBelow125", 0), "0");
+  EXPECT_EQ(read_member(plugin, "FURN\\MarkerOffsetXBelow125", 1), "0");
+  EXPECT_EQ(read_member(plugin, "FURN\\MarkerRotationZBelow125", 1), "0");
+  EXPECT_EQ(read_member(plugin, "FURN\\MarkerOffsetXBelow125", 2), "absent");
+  EXPECT_EQ(read_member(plugin, "FURN\\MarkerOffsetX", 0), "absent");
+  EXPECT_EQ(read_member(plugin, "FURN\\MarkerEntryTypes", 0), "absent");
+  EXPECT_EQ(fo4::set_record_scalar(plugin, furn_key(), scalar("FURN\\MarkerEntryTypes"), 0, "1"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, furn_key(), scalar("FURN\\MarkerOffsetXBelow125"), 1, "2.5"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, furn_key(), scalar("FURN\\MarkerRotationZBelow125"), 0, "-90"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, furn_key(),
+                                           link("FURN\\MarkerKeywordBelow125"), 1, kywd_key()),
+            fo4::FormLinkFieldMutationStatus::updated);
+
+  const auto after = reparse(plugin);
+  const auto* params = payload_of(after, k_snam);
+  ASSERT_NE(params, nullptr);
+  ASSERT_EQ(params->size(), 40u);
+  EXPECT_EQ(read_u32(*params, 20), 0x40200000u);
+  EXPECT_EQ(read_u32(*params, 12), 0xC2B40000u);
+  EXPECT_EQ(read_u32(*params, 36), 0x00000900u);
+  EXPECT_EQ(read_u32(*params, 16), 0x00000000u);
+  EXPECT_EQ(read_u32(*params, 0), 0x00000000u);
+  EXPECT_EQ(read_member(after, "FURN\\MarkerOffsetXBelow125", 1), "2.5");
+  EXPECT_EQ(read_member(after, "FURN\\MarkerRotationZBelow125", 0), "-90");
+}
+
+TEST(FurnMarkerParams, EachMarkerLayoutHidesOutsideItsFormVersionWindow) {
+  auto modern = fo4::read_plugin(make_plugin(snam(1), 125), "Patch.esp");
+  EXPECT_EQ(read_member(modern, "FURN\\MarkerOffsetX", 0), "0");
+  EXPECT_EQ(read_member(modern, "FURN\\MarkerOffsetXBelow125", 0), "absent");
+  EXPECT_EQ(fo4::set_record_scalar(modern, furn_key(), scalar("FURN\\MarkerOffsetXBelow125"), 0, "1"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+
+  auto legacy = fo4::read_plugin(make_plugin(snam_legacy(1), 124), "Patch.esp");
+  EXPECT_EQ(read_member(legacy, "FURN\\MarkerOffsetXBelow125", 0), "0");
+  EXPECT_EQ(read_member(legacy, "FURN\\MarkerOffsetX", 0), "absent");
+  EXPECT_EQ(fo4::set_record_scalar(legacy, furn_key(), scalar("FURN\\MarkerOffsetX"), 0, "1"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_formlink_field(legacy, furn_key(), link("FURN\\MarkerKeyword"), 0, kywd_key()),
             fo4::FormLinkFieldMutationStatus::subrecord_missing);
 }
 

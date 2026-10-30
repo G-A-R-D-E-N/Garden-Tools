@@ -205,7 +205,7 @@ TEST(WeatherFormLinkRemap, ProvenSlotsRemapWhileQuarantinedCollisionsStayByteIde
 }
 
 TEST(WeatherFormLinkRemap, QuarantinedSignaturesReportNoLinksAtProvenOffsetsOnly) {
-  const auto plugin = fo4::read_plugin(make_weather_plugin(mixed_subrecords()),
+  auto plugin = fo4::read_plugin(make_weather_plugin(mixed_subrecords()),
                                        "WeatherPatch.esp");
 
   for (const auto* signature : {"LNAM", "VNAM", "WNAM", "NAM1", "PNAM", "JNAM"}) {
@@ -263,7 +263,7 @@ class WthrMalformedFormLink : public testing::TestWithParam<MalformedFormLinkCas
 
 TEST_P(WthrMalformedFormLink, StrictRemapFailsClosedAndLeavesPluginUntouched) {
   const auto& param = GetParam();
-  const auto plugin = fo4::read_plugin(
+  auto plugin = fo4::read_plugin(
       make_weather_plugin({{param.signature, param.data}}), "WeatherPatch.esp");
 
   EXPECT_TRUE(hits_for(plugin, k_weather_key, param.signature).empty());

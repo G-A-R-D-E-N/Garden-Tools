@@ -54,7 +54,7 @@ TEST(QuestStagesRealData, DecodesEveryShippedQuest) {
     if (!std::filesystem::exists(path)) continue;
     ++files;
 
-    const auto plugin = fo4::read_plugin_file(path);
+    auto plugin = fo4::read_plugin_file(path);
     const fo4::RecordIndex index{plugin};
     for (const auto* record : fo4::collect_records(plugin)) {
       if (record->header.signature != k_qust) continue;
@@ -114,7 +114,7 @@ TEST_P(QuestConditionCorpus, EveryStoredRunIsLossless) {
   record_game_build(detect_game_build(dir));
   const auto path = std::filesystem::path{dir} / GetParam();
   ASSERT_TRUE(std::filesystem::is_regular_file(path));
-  const auto plugin = fo4::read_plugin_file(path);
+  auto plugin = fo4::read_plugin_file(path);
   const auto cis1 = fo4::Signature::from_string("CIS1");
   const auto cis2 = fo4::Signature::from_string("CIS2");
   const auto condition_member = [&](const auto& member) {

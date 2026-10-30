@@ -117,7 +117,7 @@ std::vector<std::byte> make_target(std::string_view existing_signature = "SPEL")
 }  // namespace
 
 TEST(LeveledSpell, DecodesFo4TwelveByteEntriesToStableFormKeys) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto list = fo4::forms::decode_leveled_spell(
       plugin, fo4::FormKey::parse("000800:Patch.esp"));
 

@@ -241,6 +241,26 @@ public:
     virtual Result<nlohmann::json> setPerkEffects(const nlohmann::json&) {
         return std::unexpected(Error{"PerkBackendUnavailable", "PERK effect writes are unavailable"});
     }
+    // Constraint: sound structure writes keep the in-memory plugin unchanged on refusal.
+    // Constraint: package tree writes keep the in-memory plugin unchanged on refusal.
+    virtual Result<nlohmann::json> addPackageProcedure(const nlohmann::json&) {
+        return std::unexpected(Error{"PackageBackendUnavailable", "Package tree writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> removePackageProcedure(const nlohmann::json&) {
+        return std::unexpected(Error{"PackageBackendUnavailable", "Package tree writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> addSoundFile(const nlohmann::json&) {
+        return std::unexpected(Error{"SoundBackendUnavailable", "Sound file writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> removeSoundFile(const nlohmann::json&) {
+        return std::unexpected(Error{"SoundBackendUnavailable", "Sound file writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> setSoundBase(const nlohmann::json&) {
+        return std::unexpected(Error{"SoundBackendUnavailable", "Sound base-link writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> createSound(const nlohmann::json&) {
+        return std::unexpected(Error{"SoundBackendUnavailable", "Sound record creation is unavailable"});
+    }
     // Constraint: script structure writes keep the in-memory plugin unchanged on refusal.
     virtual Result<nlohmann::json> addScript(const nlohmann::json&) {
         return std::unexpected(Error{"ScriptBackendUnavailable", "Script writes are unavailable"});

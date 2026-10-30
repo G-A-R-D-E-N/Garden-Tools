@@ -85,7 +85,7 @@ std::vector<Piece> general_pieces() {
   return {
       {"EDID", zstring("Q0")},
       {"FULL", zstring("Name")},
-      {"DNAM", general_data(0x0001, 30, 2.5f, 6)},
+      {"DNAM", general_data(0x0001, 30, 12.5f, 6)},
       {"ENAM", u32_bytes(1280067915u)},
       {"LNAM", u32_bytes(0x920)},
       {"XNAM", u32_bytes(0x900)},
@@ -102,7 +102,7 @@ std::vector<Piece> nested_condition_pieces() {
   return {
       {"EDID", zstring("Q0")},
       {"FULL", zstring("Name")},
-      {"DNAM", general_data(0x0001, 30, 2.5f, 6)},
+      {"DNAM", general_data(0x0001, 30, 12.5f, 6)},
       {"ENAM", u32_bytes(1280067915u)},
       {"LNAM", u32_bytes(0x920)},
       {"XNAM", u32_bytes(0x900)},
@@ -223,12 +223,16 @@ TEST(QustGeneralRows, RowsDescribeTheGeneralDataBlock) {
   EXPECT_EQ(priority.scalar.storage, fo4::schema::ScalarStorage::u8);
 
   const auto delay = scalar("QUST\\DelayTime");
+  EXPECT_EQ(delay.scalar.subrecord, k_dnam);
   EXPECT_EQ(delay.scalar.offset, 4u);
   EXPECT_EQ(delay.scalar.storage, fo4::schema::ScalarStorage::f32);
+  EXPECT_EQ(delay.scalar.payload_size, 12u);
 
   const auto type = scalar("QUST\\Type");
   EXPECT_EQ(type.scalar.offset, 8u);
   EXPECT_EQ(type.scalar.storage, fo4::schema::ScalarStorage::u8);
+  EXPECT_EQ(type.scalar.payload_size, 12u);
+  EXPECT_EQ(type.scalar.maximum, 255.0);
   ASSERT_EQ(type.scalar.names.size(), 15u);
   EXPECT_EQ(type.scalar.names[6].name, "Miscellaneous");
 
@@ -252,11 +256,11 @@ TEST(QustGeneralRows, RowsDescribeTheGeneralDataBlock) {
 }
 
 TEST(QustGeneralRows, ReadsTheGeneralDataAndLinks) {
-  const auto plugin = load();
+  auto plugin = load();
   EXPECT_EQ(read_member(plugin, "QUST\\Name", 0), "Name");
   EXPECT_EQ(read_member(plugin, "QUST\\Flags", 0), "1");
   EXPECT_EQ(read_member(plugin, "QUST\\Priority", 0), "30");
-  EXPECT_EQ(read_member(plugin, "QUST\\DelayTime", 0), "2.5");
+  EXPECT_EQ(read_member(plugin, "QUST\\DelayTime", 0), "12.5");
   EXPECT_EQ(read_member(plugin, "QUST\\Type", 0), "6");
   EXPECT_EQ(read_member(plugin, "QUST\\Event", 0), "1280067915");
   EXPECT_EQ(read_member(plugin, "QUST\\Filter", 0), "FilterText");
@@ -281,7 +285,7 @@ TEST(QustGeneralRows, WritesEachGeneralFieldAndRoundTripsTheBlock) {
             fo4::ScalarMutationStatus::updated);
   EXPECT_EQ(fo4::set_record_scalar(plugin, record_key(), scalar("QUST\\Priority"), "7"),
             fo4::ScalarMutationStatus::updated);
-  EXPECT_EQ(fo4::set_record_scalar(plugin, record_key(), scalar("QUST\\DelayTime"), "12.25"),
+  EXPECT_EQ(fo4::set_record_scalar(plugin, record_key(), scalar("QUST\\DelayTime"), "4.5"),
             fo4::ScalarMutationStatus::updated);
   EXPECT_EQ(fo4::set_record_scalar(plugin, record_key(), scalar("QUST\\Type"), "1"),
             fo4::ScalarMutationStatus::updated);
@@ -297,12 +301,40 @@ TEST(QustGeneralRows, WritesEachGeneralFieldAndRoundTripsTheBlock) {
             fo4::ScalarMutationStatus::updated);
 
   const auto after = reparse(plugin);
-  EXPECT_EQ(payload_of(after, "DNAM"), general_data(2048, 7, 12.25f, 1));
+  EXPECT_EQ(payload_of(after, "DNAM"), general_data(2048, 7, 4.5f, 1));
   EXPECT_EQ(payload_of(after, "ENAM"), u32_bytes(1413894723u));
   EXPECT_EQ(read_member(after, "QUST\\Name", 0), "Renamed");
   EXPECT_EQ(read_member(after, "QUST\\Filter", 0), "Other");
   EXPECT_EQ(read_member(after, "QUST\\Description", 0), "Other desc");
   EXPECT_EQ(read_member(after, "QUST\\SwfFile", 0), "Other.swf");
+}
+
+TEST(QustGeneralRows, TypeIsOneByteWideAndDelayTimeIsAFloatAtOffsetFour) {
+  auto quest = general_pieces();
+  quest[2].data[3] = std::byte{0x7F};
+  quest[2].data[9] = std::byte{0xAA};
+  quest[2].data[10] = std::byte{0xBB};
+  quest[2].data[11] = std::byte{0xCC};
+  auto plugin = load(quest);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, record_key(), scalar("QUST\\DelayTime"), "3.25"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, record_key(), scalar("QUST\\Type"), "7"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_THROW(fo4::set_record_scalar(plugin, record_key(), scalar("QUST\\Type"), "300"),
+               fo4::schema::ScalarError);
+  const auto after = reparse(plugin);
+  EXPECT_EQ(read_member(after, "QUST\\DelayTime", 0), "3.25");
+  EXPECT_EQ(read_member(after, "QUST\\Type", 0), "7");
+
+  const auto payload = payload_of(after, "DNAM");
+  ASSERT_EQ(payload.size(), 12u);
+  EXPECT_EQ(std::to_integer<std::uint8_t>(payload[3]), 0x7F);
+  EXPECT_EQ(std::to_integer<std::uint8_t>(payload[8]), 7);
+  EXPECT_EQ(std::to_integer<std::uint8_t>(payload[9]), 0xAA);
+  EXPECT_EQ(std::to_integer<std::uint8_t>(payload[10]), 0xBB);
+  EXPECT_EQ(std::to_integer<std::uint8_t>(payload[11]), 0xCC);
+  EXPECT_EQ(Bytes(payload.begin() + 4, payload.begin() + 8),
+            (std::vector<std::byte>{std::byte{0x00}, std::byte{0x00}, std::byte{0x50}, std::byte{0x40}}));
 }
 
 TEST(QustGeneralRows, RefusesGeneralValuesOutsideTheRowRange) {
@@ -433,7 +465,7 @@ TEST(QustGeneralRows, AuthoringCreatesAQuestWithTheGeneralDataDefaults) {
 }
 
 TEST(QustGeneralRows, AuthoringOrderAcceptsNestedStageAndObjectiveSubrecords) {
-  const auto plugin = load(nested_condition_pieces());
+  auto plugin = load(nested_condition_pieces());
   const auto issues = fo4::schema::preflight_authoring_record(plugin, record_key());
   for (const auto& issue : issues) {
     EXPECT_NE(issue.code, "subrecord_order_invalid") << issue.path;
@@ -451,7 +483,7 @@ TEST(QustGeneralRows, ObjectiveDisplayTextIsNotTheQuestDescription) {
   const std::vector<Piece> head = {
       {"EDID", zstring("Q0")},
       {"FULL", zstring("Name")},
-      {"DNAM", general_data(0x0001, 30, 2.5f, 6)},
+      {"DNAM", general_data(0x0001, 30, 12.5f, 6)},
       {"NNAM", zstring("Description")},
   };
   const std::vector<Piece> objectives = {
@@ -465,7 +497,7 @@ TEST(QustGeneralRows, ObjectiveDisplayTextIsNotTheQuestDescription) {
 
   auto pieces = head;
   pieces.insert(pieces.end(), objectives.begin(), objectives.end());
-  const auto plugin = load(pieces);
+  auto plugin = load(pieces);
   for (const auto& issue : fo4::schema::preflight_record(record_of(plugin))) {
     EXPECT_NE(issue.code, "duplicate_scalar_subrecord") << issue.path;
   }

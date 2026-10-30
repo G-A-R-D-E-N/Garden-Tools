@@ -232,7 +232,11 @@ RecordCreateResult create_with_rules(Plugin& plugin,
   }
   for (const auto& rule : rules) {
     if (rule.signature == sig_edid || rule.minimum == 0) continue;
-    if (!editable(rule)) return {RecordCreateStatus::not_authorable, {}};
+    const bool creatable =
+        rule.coupled
+            ? (!explicit_given && rule.maximum == 1 && default_usable(plugin, signature, rule))
+            : editable(rule);
+    if (!creatable) return {RecordCreateStatus::not_authorable, {}};
     if (!default_usable(plugin, signature, rule)) return {RecordCreateStatus::no_default, {}};
   }
 

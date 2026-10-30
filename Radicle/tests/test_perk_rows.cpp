@@ -252,7 +252,7 @@ TEST(PerkRows, AuthoringListsTheHeaderRulesAndKeepsTheRequiredData) {
 }
 
 TEST(PerkRows, PreflightAcceptsAnEffectDataSubrecordAfterSwf) {
-  const auto plugin = fo4::read_plugin(make_plugin(perk_data()), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(perk_data()), "Patch.esp");
   const auto issues =
       fo4::schema::preflight_authoring_record(plugin, fo4::FormKey::parse(k_key));
   for (const auto& issue : issues) {
@@ -261,7 +261,7 @@ TEST(PerkRows, PreflightAcceptsAnEffectDataSubrecordAfterSwf) {
 }
 
 TEST(PerkRows, PreflightRefusesAPerkWithoutAnyDataSubrecord) {
-  const auto plugin = fo4::read_plugin(make_plugin(perk_data(), false), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(perk_data(), false), "Patch.esp");
   const auto issues =
       fo4::schema::preflight_authoring_record(plugin, fo4::FormKey::parse(k_key));
   ASSERT_EQ(issues.size(), 1u);
@@ -398,7 +398,7 @@ const fo4::Record* perk_record(const fo4::Plugin& plugin) {
 }  // namespace
 
 TEST(PerkEffects, DecodesEntryPointEffectSections) {
-  const auto plugin = fo4::read_plugin(
+  auto plugin = fo4::read_plugin(
       plugin_with_perk({{"DATA", header_data()},
                         {"PRKE", prke(2, 1, 3)},
                         {"DATA", entry_point_effect_data(0x26, 1, 1)},
@@ -441,7 +441,7 @@ TEST(PerkEffects, DecodesEntryPointEffectSections) {
 }
 
 TEST(PerkEffects, DecodesQuestAbilityAndActorValueData) {
-  const auto plugin = fo4::read_plugin(
+  auto plugin = fo4::read_plugin(
       plugin_with_perk({{"DATA", header_data()},
                         {"PRKE", prke(0, 1, 0)},
                         {"DATA", quest_effect_data(0x01000D10u, 42)},
@@ -477,7 +477,7 @@ TEST(PerkEffects, DecodesQuestAbilityAndActorValueData) {
 }
 
 TEST(PerkEffects, DecodesFloatPairAndTextParameterArms) {
-  const auto plugin = fo4::read_plugin(
+  auto plugin = fo4::read_plugin(
       plugin_with_perk({{"DATA", header_data()},
                         {"PRKE", prke(2, 0, 0)},
                         {"DATA", entry_point_effect_data(0x01, 4, 0)},
@@ -615,7 +615,7 @@ TEST(PerkEffects, SetRefusesForeignRecordsAndMissingKeys) {
 TEST(PerkEffects, RefusesMalformedEffectSections) {
   const auto key = fo4::FormKey::parse(k_key);
   auto decode = [key](std::vector<RawSubrecord> body) {
-    const auto plugin = fo4::read_plugin(plugin_with_perk(std::move(body)), "Patch.esp");
+    auto plugin = fo4::read_plugin(plugin_with_perk(std::move(body)), "Patch.esp");
     const auto* found = fo4::find_record(plugin, key);
     EXPECT_NE(found, nullptr);
     if (found == nullptr) return std::vector<fo4::forms::PerkEffectEntry>{};
@@ -658,7 +658,7 @@ TEST(PerkEffects, RefusesMalformedEffectSections) {
 }
 
 TEST(PerkEffects, RefusesRecordsThatDoNotCarryEffects) {
-  const auto plugin = fo4::read_plugin(make_plugin(perk_data()), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(perk_data()), "Patch.esp");
   const auto* record = fo4::find_record(plugin, fo4::FormKey::parse("000D02:Patch.esp"));
   ASSERT_NE(record, nullptr);
   EXPECT_THROW(fo4::forms::read_perk_effects(plugin, *record), fo4::forms::PerkError);

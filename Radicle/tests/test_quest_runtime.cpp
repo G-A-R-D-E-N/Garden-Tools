@@ -58,7 +58,7 @@ TEST(QuestVmadExtras, TruncatedExtrasReportUnsupportedInsteadOfThrowing) {
 }
 
 TEST(QuestRuntime, AggregatesStartGameFlagScriptsFragmentsAndAliases) {
-  const auto plugin = fo4::read_plugin(fo4::test::make_quest_plugin(1), "Quests.esp");
+  auto plugin = fo4::read_plugin(fo4::test::make_quest_plugin(1), "Quests.esp");
   const auto data = fo4::quest::quest_runtime_data(plugin, fo4::test::quest_key());
 
   EXPECT_TRUE(data.unsupported.empty()) << data.unsupported.front();
@@ -78,7 +78,7 @@ TEST(QuestRuntime, AggregatesStartGameFlagScriptsFragmentsAndAliases) {
 }
 
 TEST(QuestRuntime, StartGameFlagComesFromDnamBitZero) {
-  const auto plugin = fo4::read_plugin(fo4::test::make_quest_plugin(0), "Quests.esp");
+  auto plugin = fo4::read_plugin(fo4::test::make_quest_plugin(0), "Quests.esp");
   const auto data = fo4::quest::quest_runtime_data(plugin, fo4::test::quest_key());
 
   EXPECT_FALSE(data.start_game_enabled);
@@ -87,7 +87,7 @@ TEST(QuestRuntime, StartGameFlagComesFromDnamBitZero) {
 }
 
 TEST(QuestRuntime, MissingQuestIsReportedNotGuessed) {
-  const auto plugin = fo4::read_plugin(fo4::test::make_quest_plugin(1), "Quests.esp");
+  auto plugin = fo4::read_plugin(fo4::test::make_quest_plugin(1), "Quests.esp");
   const auto data = fo4::quest::quest_runtime_data(plugin, fo4::FormKey::parse("000900:Quests.esp"));
 
   ASSERT_EQ(data.unsupported.size(), 1u);
@@ -146,7 +146,7 @@ TEST(QuestRuntimeReal, EveryShippedQuestDecodesOrReportsUnsupported) {
   const auto path = std::filesystem::path{dir} / "Fallout4.esm";
   if (!std::filesystem::exists(path)) GTEST_SKIP() << "Fallout4.esm not found under " << dir;
 
-  const auto plugin = fo4::read_plugin_file(path);
+  auto plugin = fo4::read_plugin_file(path);
   const fo4::RecordIndex index{plugin};
   std::size_t quests = 0;
   std::size_t clean = 0;

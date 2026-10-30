@@ -8954,14 +8954,7 @@
           "payload_size": 12,
           "insertion": "existing_only"
         },
-        {
-          "path": "QUST\\Type",
-          "label": "Type",
-          "kind": "scalar",
-          "subrecord": "DNAM",
-          "offset": 8,
-          "storage": "u8",
-          "presentation": "enum",
+        {"path": "QUST\\Type", "label": "Type", "kind": "scalar", "subrecord": "DNAM", "offset": 8, "storage": "u8", "presentation": "enum",
           "names": [
             { "value": 0, "name": "None" },
             { "value": 1, "name": "Main Quest" },
@@ -10009,7 +10002,43 @@
         {"path": "RACE\\MovementOverrideYawRunFrom60", "label": "Movement override yaw run (layout 60 to 103)", "kind": "scalar", "subrecord": "SPED", "offset": 52, "min_form_version": 60, "max_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 68, "repeated": true, "insertion": "existing_only"},
         {"path": "RACE\\MovementOverrideUnknown56From60", "label": "Movement override unknown float (layout 60 to 103, offset 56)", "kind": "scalar", "subrecord": "SPED", "offset": 56, "min_form_version": 60, "max_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 68, "repeated": true, "insertion": "existing_only"},
         {"path": "RACE\\MovementOverrideUnknown60From60", "label": "Movement override unknown float (layout 60 to 103, offset 60)", "kind": "scalar", "subrecord": "SPED", "offset": 60, "min_form_version": 60, "max_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 68, "repeated": true, "insertion": "existing_only"},
-        {"path": "RACE\\MovementOverrideUnknown64From60", "label": "Movement override unknown float (layout 60 to 103, offset 64)", "kind": "scalar", "subrecord": "SPED", "offset": 64, "min_form_version": 60, "max_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 68, "repeated": true, "insertion": "existing_only"}
+        {"path": "RACE\\MovementOverrideUnknown64From60", "label": "Movement override unknown float (layout 60 to 103, offset 64)", "kind": "scalar", "subrecord": "SPED", "offset": 64, "min_form_version": 60, "max_form_version": 104, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 68, "repeated": true, "insertion": "existing_only"},
+        {"path": "RACE\\AttackDamageMult", "label": "Attack damage mult", "kind": "scalar", "subrecord": "ATKD", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 0, "repeated": true, "payload_size": 44, "insertion": "existing_only"},
+        {"path": "RACE\\AttackChance", "label": "Attack chance", "kind": "scalar", "subrecord": "ATKD", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 4, "repeated": true, "payload_size": 44, "insertion": "existing_only"},
+        {"path": "RACE\\AttackFlags", "label": "Attack flags", "kind": "scalar", "subrecord": "ATKD", "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Ignore Weapon"}, {"bit": 1, "name": "Bash Attack"}, {"bit": 2, "name": "Power Attack"}, {"bit": 3, "name": "Charge Attack"}, {"bit": 4, "name": "Rotating Attack"}, {"bit": 5, "name": "Continuous Attack"}, {"bit": 6, "name": "Unknown 6"}, {"bit": 7, "name": "Unknown 7"}, {"bit": 8, "name": "Unknown 8"}, {"bit": 9, "name": "Unknown 9"}, {"bit": 10, "name": "Unknown 10"}, {"bit": 11, "name": "Unknown 11"}, {"bit": 12, "name": "Unknown 12"}, {"bit": 13, "name": "Unknown 13"}, {"bit": 14, "name": "Unknown 14"}, {"bit": 15, "name": "Unknown 15"}, {"bit": 16, "name": "Unknown 16"}, {"bit": 17, "name": "Unknown 17"}, {"bit": 18, "name": "Unknown 18"}, {"bit": 19, "name": "Unknown 19"}, {"bit": 20, "name": "Unknown 20"}, {"bit": 21, "name": "Unknown 21"}, {"bit": 22, "name": "Unknown 22"}, {"bit": 23, "name": "Unknown 23"}, {"bit": 24, "name": "Unknown 24"}, {"bit": 25, "name": "Unknown 25"}, {"bit": 26, "name": "Unknown 26"}, {"bit": 27, "name": "Unknown 27"}, {"bit": 28, "name": "Unknown 28"}, {"bit": 29, "name": "Unknown 29"}, {"bit": 30, "name": "Unknown 30"}, {"bit": 31, "name": "Override Data"}], "minimum": 0, "maximum": 4294967295, "offset": 12, "repeated": true, "payload_size": 44, "insertion": "existing_only"},
+        {"path": "RACE\\AttackAngle", "label": "Attack angle", "kind": "scalar", "subrecord": "ATKD", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 16, "repeated": true, "payload_size": 44, "insertion": "existing_only"},
+        {"path": "RACE\\StrikeAngle", "label": "Strike angle", "kind": "scalar", "subrecord": "ATKD", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 20, "repeated": true, "payload_size": 44, "insertion": "existing_only"},
+        {"path": "RACE\\AttackStagger", "label": "Stagger", "kind": "scalar", "subrecord": "ATKD", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 24, "repeated": true, "payload_size": 44, "insertion": "existing_only"},
+        {"path": "RACE\\AttackKnockdown", "label": "Knockdown", "kind": "scalar", "subrecord": "ATKD", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 28, "repeated": true, "payload_size": 44, "insertion": "existing_only"},
+        {"path": "RACE\\AttackRecoveryTime", "label": "Recovery time", "kind": "scalar", "subrecord": "ATKD", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 32, "repeated": true, "payload_size": 44, "insertion": "existing_only"},
+        {"path": "RACE\\AttackActionPointsMult", "label": "Action points mult", "kind": "scalar", "subrecord": "ATKD", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 36, "repeated": true, "payload_size": 44, "insertion": "existing_only"},
+        {"path": "RACE\\AttackStaggerOffset", "label": "Stagger offset", "kind": "scalar", "subrecord": "ATKD", "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "offset": 40, "repeated": true, "payload_size": 44, "insertion": "existing_only"},
+        {"path": "RACE\\AttackEvent", "label": "Attack event", "kind": "string", "subrecord": "ATKE", "repeated": true, "insertion": "existing_only"},
+        {"path": "RACE\\AttackDescription", "label": "Attack description", "kind": "string", "subrecord": "ATKT", "repeated": true, "insertion": "existing_only"},
+        {"path": "RACE\\ModelPath", "label": "Model path", "kind": "string", "subrecord": "MODL", "repeated": true, "insertion": "existing_only"},
+        {"path": "RACE\\MorphPresetCount", "label": "Morph preset count", "kind": "scalar", "subrecord": "MPPC", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "repeated": true, "insertion": "existing_only"},
+        {"kind": "subrecord_group", "path": "RACE\\TintLayerOption", "label": "Tint layer option", "insertion": "existing_only", "successors": ["TTGE"], "members": [
+          {"subrecord": "TETI", "required": true, "repeatable": false, "payload_size": 4, "fields": [
+            {"path": "RACE\\TintLayerSlot", "label": "Tint layer slot", "kind": "scalar", "offset": 0, "storage": "u16", "presentation": "enum", "names": [{"value": 0, "name": "Forehead Mask"}, {"value": 1, "name": "Eyes Mask"}, {"value": 2, "name": "Nose Mask"}, {"value": 3, "name": "Ears Mask"}, {"value": 4, "name": "Cheeks Mask"}, {"value": 5, "name": "Mouth Mask"}, {"value": 6, "name": "Neck Mask"}, {"value": 7, "name": "Lip Color"}, {"value": 8, "name": "Cheek Color"}, {"value": 9, "name": "Eyeliner"}, {"value": 10, "name": "Eye Socket Upper"}, {"value": 11, "name": "Eye Socket Lower"}, {"value": 12, "name": "Skin Tone"}, {"value": 13, "name": "Paint"}, {"value": 14, "name": "Laugh Lines"}, {"value": 15, "name": "Cheek Color Lower"}, {"value": 16, "name": "Nose"}, {"value": 17, "name": "Chin"}, {"value": 18, "name": "Neck"}, {"value": 19, "name": "Forehead"}, {"value": 20, "name": "Dirt"}, {"value": 21, "name": "Scars"}, {"value": 22, "name": "Face Detail"}, {"value": 23, "name": "Brows"}, {"value": 24, "name": "Wrinkles"}, {"value": 25, "name": "Beards"}], "minimum": 0, "maximum": 25, "insertion": "existing_only"},
+            {"path": "RACE\\TintLayerIndex", "label": "Tint layer index", "kind": "scalar", "offset": 2, "storage": "u16", "presentation": "identity", "minimum": 0, "maximum": 65535, "insertion": "existing_only"}
+          ]},
+          {"subrecord": "TTGP", "required": true, "repeatable": false, "payload_size": 0, "localized": true, "skippable": true, "default": "00"},
+          {"subrecord": "TTEF", "required": false, "repeatable": false, "payload_size": 2},
+          {"subrecord": "CTDA", "required": false, "repeatable": true, "payload_size": 32},
+          {"subrecord": "TTET", "required": false, "repeatable": true, "payload_size": 0},
+          {"subrecord": "TTEB", "required": false, "repeatable": false, "payload_size": 4},
+          {"subrecord": "TTEC", "required": false, "repeatable": true, "payload_size": 0},
+          {"subrecord": "TTED", "required": false, "repeatable": false, "payload_size": 4}
+        ]},
+        {"path": "RACE\\TintLayerName", "label": "Tint layer name", "kind": "string", "subrecord": "TTGP", "localized": true, "repeated": true, "insertion": "existing_only"},
+        {"path": "RACE\\TintLayerFlags", "label": "Tint layer flags", "kind": "scalar", "subrecord": "TTEF", "offset": 0, "storage": "u16", "presentation": "flags", "names": [{"bit": 0, "name": "On/Off only"}, {"bit": 1, "name": "Chargen Detail"}, {"bit": 2, "name": "Takes Skin Tone"}], "minimum": 0, "maximum": 65535, "repeated": true, "payload_size": 2, "insertion": "existing_only"},
+        {"path": "RACE\\TintLayerTexture", "label": "Tint layer texture", "kind": "string", "subrecord": "TTET", "repeated": true, "insertion": "existing_only"},
+        {"path": "RACE\\TintLayerBlendOperation", "label": "Tint layer blend operation", "kind": "scalar", "subrecord": "TTEB", "offset": 0, "storage": "u32", "presentation": "enum", "names": [{"value": 0, "name": "Default"}, {"value": 1, "name": "Multiply"}, {"value": 2, "name": "Overlay"}, {"value": 3, "name": "Soft Light"}, {"value": 4, "name": "Hard Light"}], "minimum": 0, "maximum": 4, "repeated": true, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "RACE\\TintTemplateColorAlpha", "label": "Tint template color alpha", "kind": "scalar", "subrecord": "TTEC", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "stride": 14, "repeated": true, "insertion": "existing_only"},
+        {"path": "RACE\\TintTemplateColorTemplateIndex", "label": "Tint template color template index", "kind": "scalar", "subrecord": "TTEC", "offset": 8, "storage": "u16", "presentation": "identity", "minimum": 0, "maximum": 65535, "stride": 14, "repeated": true, "insertion": "existing_only"},
+        {"path": "RACE\\TintTemplateColorBlendOperation", "label": "Tint template color blend operation", "kind": "scalar", "subrecord": "TTEC", "offset": 10, "storage": "u32", "presentation": "enum", "names": [{"value": 0, "name": "Default"}, {"value": 1, "name": "Multiply"}, {"value": 2, "name": "Overlay"}, {"value": 3, "name": "Soft Light"}, {"value": 4, "name": "Hard Light"}], "minimum": 0, "maximum": 4, "stride": 14, "repeated": true, "insertion": "existing_only"},
+        {"path": "RACE\\TintLayerDefault", "label": "Tint layer default", "kind": "scalar", "subrecord": "TTED", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "RACE\\TintLayerCategoryIndex", "label": "Tint layer category index", "kind": "scalar", "subrecord": "TTGE", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "repeated": true, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {
@@ -10432,6 +10461,61 @@
           "repeated": true,
           "payload_sizes": [4],
           "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\AttackSpell",
+          "label": "Attack spell",
+          "subrecord": "ATKD",
+          "offset": 8,
+          "targets": ["SPEL"],
+          "nullable": true,
+          "repeated": true,
+          "payload_sizes": [44],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\AttackWeaponSlot",
+          "label": "Attack weapon slot",
+          "subrecord": "ATKW",
+          "offset": 0,
+          "targets": ["EQUP"],
+          "nullable": false,
+          "repeated": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\AttackRequiredSlot",
+          "label": "Attack required slot",
+          "subrecord": "ATKS",
+          "offset": 0,
+          "targets": ["EQUP"],
+          "nullable": false,
+          "repeated": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\BipedObjectCondition",
+          "label": "Biped object condition",
+          "subrecord": "RBPC",
+          "offset": 0,
+          "targets": ["AVIF"],
+          "nullable": true,
+          "stride": 4,
+          "min_form_version": 78,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\TintTemplateColor",
+          "label": "Tint template color",
+          "subrecord": "TTEC",
+          "offset": 0,
+          "stride": 14,
+          "repeated": true,
+          "targets": ["CLFM"],
+          "nullable": false,
+          "insertion": "existing_only"
         }
       ],
       "localized_subrecords": [
@@ -10507,6 +10591,14 @@
         ]
       },
       "fields": [
+        {"path": "REFR\\PositionX", "label": "Position X", "kind": "scalar", "subrecord": "DATA", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 24, "insertion": "existing_only"},
+        {"path": "REFR\\PositionY", "label": "Position Y", "kind": "scalar", "subrecord": "DATA", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 24, "insertion": "existing_only"},
+        {"path": "REFR\\PositionZ", "label": "Position Z", "kind": "scalar", "subrecord": "DATA", "offset": 8, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 24, "insertion": "existing_only"},
+        {"path": "REFR\\RotationX", "label": "Rotation X", "kind": "scalar", "subrecord": "DATA", "offset": 12, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 24, "insertion": "existing_only"},
+        {"path": "REFR\\RotationY", "label": "Rotation Y", "kind": "scalar", "subrecord": "DATA", "offset": 16, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 24, "insertion": "existing_only"},
+        {"path": "REFR\\RotationZ", "label": "Rotation Z", "kind": "scalar", "subrecord": "DATA", "offset": 20, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 24, "insertion": "existing_only"},
+        {"path": "REFR\\OwnerNoCrime", "label": "No Crime", "kind": "scalar", "subrecord": "XOWN", "offset": 8, "storage": "u8", "presentation": "enum", "minimum": 0, "maximum": 255, "payload_size": 12, "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "insertion": "existing_only"},
+        {"path": "REFR\\OwnerRank", "label": "Faction rank", "kind": "scalar", "subrecord": "XRNK", "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "insertion": "existing_only"},
         {"path": "REFR\\ReflectionType", "label": "Reflection type", "kind": "scalar", "subrecord": "XPWR", "offset": 4, "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Reflection"}, {"bit": 1, "name": "Refraction"}], "minimum": 0, "maximum": 4294967295, "repeated": true, "payload_size": 8, "insertion": "existing_only"},
         {"path": "REFR\\RagdollBoneId", "label": "Ragdoll bone id", "kind": "scalar", "subrecord": "XRGD", "offset": 0, "stride": 28, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
         {"path": "REFR\\RagdollPositionX", "label": "Ragdoll position X", "kind": "scalar", "subrecord": "XRGD", "offset": 4, "stride": 28, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
@@ -11040,9 +11132,38 @@
         {"path": "REFR\\SplineHalfExtentZ", "label": "Spline half extent Z", "kind": "scalar", "subrecord": "XBSD", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 16, "minimum_payload_size": 20, "insertion": "existing_only"},
         {"path": "REFR\\SplineWindDetachedEnd", "label": "Spline wind detached end", "kind": "scalar", "subrecord": "XBSD", "storage": "u8", "presentation": "enum", "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "minimum": 0, "maximum": 255, "offset": 20, "minimum_payload_size": 21, "insertion": "existing_only"},
         {"path": "REFR\\DecalWidthScale", "label": "Decal width scale", "kind": "scalar", "subrecord": "XPDD", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 0, "payload_size": 8, "insertion": "existing_only"},
-        {"path": "REFR\\DecalHeightScale", "label": "Decal height scale", "kind": "scalar", "subrecord": "XPDD", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 4, "payload_size": 8, "insertion": "existing_only"}
+        {"path": "REFR\\DecalHeightScale", "label": "Decal height scale", "kind": "scalar", "subrecord": "XPDD", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 4, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "REFR\\TeleportPositionX", "label": "Teleport position X", "kind": "scalar", "subrecord": "XTEL", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 4, "payload_size": 36, "insertion": "existing_only"},
+        {"path": "REFR\\TeleportPositionY", "label": "Teleport position Y", "kind": "scalar", "subrecord": "XTEL", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 8, "payload_size": 36, "insertion": "existing_only"},
+        {"path": "REFR\\TeleportPositionZ", "label": "Teleport position Z", "kind": "scalar", "subrecord": "XTEL", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 12, "payload_size": 36, "insertion": "existing_only"},
+        {"path": "REFR\\TeleportRotationX", "label": "Teleport rotation X", "kind": "scalar", "subrecord": "XTEL", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 16, "payload_size": 36, "insertion": "existing_only"},
+        {"path": "REFR\\TeleportRotationY", "label": "Teleport rotation Y", "kind": "scalar", "subrecord": "XTEL", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 20, "payload_size": 36, "insertion": "existing_only"},
+        {"path": "REFR\\TeleportRotationZ", "label": "Teleport rotation Z", "kind": "scalar", "subrecord": "XTEL", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 24, "payload_size": 36, "insertion": "existing_only"},
+        {"path": "REFR\\TeleportFlags", "label": "Teleport flags", "kind": "scalar", "subrecord": "XTEL", "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "No Alarm"}, {"bit": 1, "name": "No Load Screen"}, {"bit": 2, "name": "Relative Position"}], "minimum": 0, "maximum": 4294967295, "offset": 28, "payload_size": 36, "insertion": "existing_only"},
+        {"path": "REFR\\OcclusionPlaneWidth", "label": "Occlusion plane width", "kind": "scalar", "subrecord": "XOCP", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 0, "payload_size": 36, "insertion": "existing_only"},
+        {"path": "REFR\\OcclusionPlaneHeight", "label": "Occlusion plane height", "kind": "scalar", "subrecord": "XOCP", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 4, "payload_size": 36, "insertion": "existing_only"},
+        {"path": "REFR\\OcclusionPlanePositionX", "label": "Occlusion plane position X", "kind": "scalar", "subrecord": "XOCP", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 8, "payload_size": 36, "insertion": "existing_only"},
+        {"path": "REFR\\OcclusionPlanePositionY", "label": "Occlusion plane position Y", "kind": "scalar", "subrecord": "XOCP", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 12, "payload_size": 36, "insertion": "existing_only"},
+        {"path": "REFR\\OcclusionPlanePositionZ", "label": "Occlusion plane position Z", "kind": "scalar", "subrecord": "XOCP", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 16, "payload_size": 36, "insertion": "existing_only"},
+        {"path": "REFR\\OcclusionPlaneRotationQ1", "label": "Occlusion plane rotation q1", "kind": "scalar", "subrecord": "XOCP", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 20, "payload_size": 36, "insertion": "existing_only"},
+        {"path": "REFR\\OcclusionPlaneRotationQ2", "label": "Occlusion plane rotation q2", "kind": "scalar", "subrecord": "XOCP", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 24, "payload_size": 36, "insertion": "existing_only"},
+        {"path": "REFR\\OcclusionPlaneRotationQ3", "label": "Occlusion plane rotation q3", "kind": "scalar", "subrecord": "XOCP", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 28, "payload_size": 36, "insertion": "existing_only"},
+        {"path": "REFR\\OcclusionPlaneRotationQ4", "label": "Occlusion plane rotation q4", "kind": "scalar", "subrecord": "XOCP", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 32, "payload_size": 36, "insertion": "existing_only"},
+        {"path": "REFR\\RadioFrequency", "label": "Radio frequency", "kind": "scalar", "subrecord": "XRDO", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 0, "payload_size": 16, "insertion": "existing_only"},
+        {"path": "REFR\\RadioMinWeakDistance", "label": "Radio min weak distance", "kind": "scalar", "subrecord": "XRDO", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 4, "payload_size": 16, "insertion": "existing_only"},
+        {"path": "REFR\\RadioMaxWeakDistance", "label": "Radio max weak distance", "kind": "scalar", "subrecord": "XRDO", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "offset": 8, "payload_size": 16, "insertion": "existing_only"},
+        {"path": "REFR\\RadioFlags", "label": "Radio flags", "kind": "scalar", "subrecord": "XRDO", "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Ignores Distance Checks"}], "minimum": 0, "maximum": 4294967295, "offset": 12, "payload_size": 16, "insertion": "existing_only"}
       ],
       "formlink_fields": [
+        {"path": "REFR\\Base", "label": "Base", "subrecord": "NAME", "offset": 0, "target_union": "sigBaseObjects", "nullable": true, "payload_sizes": [4], "insertion": "existing_only"},
+        {"path": "REFR\\Owner", "label": "Owner", "subrecord": "XOWN", "offset": 0, "payload_sizes": [12], "targets": ["FACT", "NPC_"], "nullable": false, "insertion": "existing_only"},
+        {"path": "REFR\\LinkedRoom", "label": "Linked room", "subrecord": "XLRM", "offset": 0, "payload_sizes": [4], "targets": ["REFR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
+        {"path": "REFR\\LinkedOcclusionRight", "label": "Linked occlusion right", "subrecord": "XORD", "offset": 0, "payload_sizes": [16], "targets": ["REFR"], "nullable": true, "insertion": "existing_only"},
+        {"path": "REFR\\LinkedOcclusionLeft", "label": "Linked occlusion left", "subrecord": "XORD", "offset": 4, "payload_sizes": [16], "targets": ["REFR"], "nullable": true, "insertion": "existing_only"},
+        {"path": "REFR\\LinkedOcclusionBottom", "label": "Linked occlusion bottom", "subrecord": "XORD", "offset": 8, "payload_sizes": [16], "targets": ["REFR"], "nullable": true, "insertion": "existing_only"},
+        {"path": "REFR\\LinkedOcclusionTop", "label": "Linked occlusion top", "subrecord": "XORD", "offset": 12, "payload_sizes": [16], "targets": ["REFR"], "nullable": true, "insertion": "existing_only"},
+        {"path": "REFR\\TeleportDoor", "label": "Teleport door", "subrecord": "XTEL", "offset": 0, "payload_sizes": [36], "targets": ["REFR"], "nullable": false, "insertion": "existing_only"},
+        {"path": "REFR\\TeleportTransitionInterior", "label": "Teleport transition interior", "subrecord": "XTEL", "offset": 32, "payload_sizes": [36], "targets": ["CELL"], "nullable": true, "insertion": "existing_only"},
         {"path": "REFR\\ReflectedBy", "label": "Reflected by", "subrecord": "XPWR", "offset": 0, "payload_sizes": [8, 4], "targets": ["ACHR", "REFR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
         {
           "path": "REFR\\EncounterZone",
@@ -20487,7 +20608,8 @@
           {
             "signature": "SDSC",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00000000"
           },
           {
             "signature": "REPT",
@@ -20681,13 +20803,15 @@
             "signature": "XCNT",
             "minimum": 1,
             "maximum": 1,
-            "coupled": true
+            "coupled": true,
+            "default": "0000000000000000000000000000000000000000"
           },
           {
             "signature": "DATA",
             "minimum": 1,
             "maximum": 1,
-            "coupled": true
+            "coupled": true,
+            "default": ""
           }
         ]
       },
@@ -26519,6 +26643,16 @@
           "insertion": "existing_only"
         },
         {
+          "path": "INFO\\ResponseBytes",
+          "label": "Response NAM9 bytes",
+          "kind": "scalar",
+          "subrecord": "NAM9",
+          "storage": "bytes",
+          "presentation": "identity",
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
           "path": "INFO\\Response",
           "label": "Response",
           "kind": "subrecord_group",
@@ -29192,6 +29326,62 @@
           "insertion": "existing_only"
         },
         {
+          "path": "FURN\\MarkerOffsetXBelow125",
+          "label": "Marker offset X (below form version 125)",
+          "kind": "scalar",
+          "subrecord": "SNAM",
+          "offset": 0,
+          "stride": 20,
+          "max_form_version": 125,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FURN\\MarkerOffsetYBelow125",
+          "label": "Marker offset Y (below form version 125)",
+          "kind": "scalar",
+          "subrecord": "SNAM",
+          "offset": 4,
+          "stride": 20,
+          "max_form_version": 125,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FURN\\MarkerOffsetZBelow125",
+          "label": "Marker offset Z (below form version 125)",
+          "kind": "scalar",
+          "subrecord": "SNAM",
+          "offset": 8,
+          "stride": 20,
+          "max_form_version": 125,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FURN\\MarkerRotationZBelow125",
+          "label": "Marker rotation Z (below form version 125)",
+          "kind": "scalar",
+          "subrecord": "SNAM",
+          "offset": 12,
+          "stride": 20,
+          "max_form_version": 125,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
           "path": "FURN\\MarkerEntryTypes",
           "label": "Marker entry types",
           "kind": "scalar",
@@ -29351,6 +29541,18 @@
           "subrecord": "SNAM",
           "offset": 16,
           "stride": 24,
+          "min_form_version": 125,
+          "targets": ["KYWD"],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FURN\\MarkerKeywordBelow125",
+          "label": "Marker keyword (below form version 125)",
+          "subrecord": "SNAM",
+          "offset": 16,
+          "stride": 20,
+          "max_form_version": 125,
           "targets": ["KYWD"],
           "nullable": true,
           "insertion": "existing_only"
@@ -30373,6 +30575,15 @@
           "subrecord": "XMRK",
           "insertion": "existing_only"
         },
+        {"path": "TERM\\MarkerOffsetX", "label": "Marker offset X", "kind": "scalar", "subrecord": "SNAM", "offset": 0, "stride": 24, "min_form_version": 125, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "TERM\\MarkerOffsetY", "label": "Marker offset Y", "kind": "scalar", "subrecord": "SNAM", "offset": 4, "stride": 24, "min_form_version": 125, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "TERM\\MarkerOffsetZ", "label": "Marker offset Z", "kind": "scalar", "subrecord": "SNAM", "offset": 8, "stride": 24, "min_form_version": 125, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "TERM\\MarkerRotationZ", "label": "Marker rotation Z", "kind": "scalar", "subrecord": "SNAM", "offset": 12, "stride": 24, "min_form_version": 125, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "TERM\\MarkerOffsetXBelow125", "label": "Marker offset X (below form version 125)", "kind": "scalar", "subrecord": "SNAM", "offset": 0, "stride": 20, "max_form_version": 125, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "TERM\\MarkerOffsetYBelow125", "label": "Marker offset Y (below form version 125)", "kind": "scalar", "subrecord": "SNAM", "offset": 4, "stride": 20, "max_form_version": 125, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "TERM\\MarkerOffsetZBelow125", "label": "Marker offset Z (below form version 125)", "kind": "scalar", "subrecord": "SNAM", "offset": 8, "stride": 20, "max_form_version": 125, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "TERM\\MarkerRotationZBelow125", "label": "Marker rotation Z (below form version 125)", "kind": "scalar", "subrecord": "SNAM", "offset": 12, "stride": 20, "max_form_version": 125, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "TERM\\MarkerEntryTypes", "label": "Marker entry types", "kind": "scalar", "subrecord": "SNAM", "offset": 20, "stride": 24, "min_form_version": 125, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Front"}, {"bit": 1, "name": "Rear"}, {"bit": 2, "name": "Right"}, {"bit": 3, "name": "Left"}, {"bit": 4, "name": "Other"}, {"bit": 5, "name": "Unused 5"}, {"bit": 6, "name": "Unused 6"}, {"bit": 7, "name": "Unused 7"}], "minimum": 0, "maximum": 255, "insertion": "existing_only"},
         {
           "path": "TERM\\Properties",
           "label": "Properties",
@@ -30576,6 +30787,8 @@
           "insertion": "existing_only"
         },
         {"path": "TERM\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"},
+        {"path": "TERM\\MarkerKeyword", "label": "Marker keyword", "subrecord": "SNAM", "offset": 16, "stride": 24, "min_form_version": 125, "targets": ["KYWD"], "nullable": true, "insertion": "existing_only"},
+        {"path": "TERM\\MarkerKeywordBelow125", "label": "Marker keyword (below form version 125)", "subrecord": "SNAM", "offset": 16, "stride": 20, "max_form_version": 125, "targets": ["KYWD"], "nullable": true, "insertion": "existing_only"},
         {"path": "TERM\\ItemSubmenu", "label": "Submenu", "subrecord": "TNAM", "offset": 0, "targets": ["TERM"], "nullable": false, "repeated": true, "payload_sizes": [4], "insertion": "existing_only"}
       ],
       "localized_subrecords": [
@@ -32071,13 +32284,49 @@
         {"path": "LCTN\\ColorRed", "label": "Color red", "kind": "scalar", "subrecord": "CNAM", "offset": 0, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
         {"path": "LCTN\\ColorGreen", "label": "Color green", "kind": "scalar", "subrecord": "CNAM", "offset": 1, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
         {"path": "LCTN\\ColorBlue", "label": "Color blue", "kind": "scalar", "subrecord": "CNAM", "offset": 2, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
-        {"path": "LCTN\\ColorAlpha", "label": "Color alpha", "kind": "scalar", "subrecord": "CNAM", "offset": 3, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"}
+        {"path": "LCTN\\ColorAlpha", "label": "Color alpha", "kind": "scalar", "subrecord": "CNAM", "offset": 3, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "LCTN\\AddedEnableParentFlags", "label": "Added Enable Parent Flags", "kind": "scalar", "subrecord": "ACEP", "offset": 8, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Set Enable State to Opposite of Parent"}, {"bit": 1, "name": "Pop In"}], "minimum": 0, "maximum": 255, "stride": 12, "insertion": "existing_only"},
+        {"path": "LCTN\\AddedPersistReferenceGridX", "label": "Added Persist Reference Grid X", "kind": "scalar", "subrecord": "ACPR", "offset": 10, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "stride": 12, "insertion": "existing_only"},
+        {"path": "LCTN\\AddedPersistReferenceGridY", "label": "Added Persist Reference Grid Y", "kind": "scalar", "subrecord": "ACPR", "offset": 8, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "stride": 12, "insertion": "existing_only"},
+        {"path": "LCTN\\AddedSpecialReferenceGridX", "label": "Added Special Reference Grid X", "kind": "scalar", "subrecord": "ACSR", "offset": 14, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "stride": 16, "insertion": "existing_only"},
+        {"path": "LCTN\\AddedSpecialReferenceGridY", "label": "Added Special Reference Grid Y", "kind": "scalar", "subrecord": "ACSR", "offset": 12, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "stride": 16, "insertion": "existing_only"},
+        {"path": "LCTN\\MasterPersistReferenceGridX", "label": "Master Persist Reference Grid X", "kind": "scalar", "subrecord": "LCPR", "offset": 10, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "stride": 12, "insertion": "existing_only"},
+        {"path": "LCTN\\MasterPersistReferenceGridY", "label": "Master Persist Reference Grid Y", "kind": "scalar", "subrecord": "LCPR", "offset": 8, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "stride": 12, "insertion": "existing_only"},
+        {"path": "LCTN\\MasterSpecialReferenceGridX", "label": "Master Special Reference Grid X", "kind": "scalar", "subrecord": "LCSR", "offset": 14, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "stride": 16, "insertion": "existing_only"},
+        {"path": "LCTN\\MasterSpecialReferenceGridY", "label": "Master Special Reference Grid Y", "kind": "scalar", "subrecord": "LCSR", "offset": 12, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "stride": 16, "insertion": "existing_only"},
+        {"path": "LCTN\\MasterEnableParentFlags", "label": "Master Enable Parent Flags", "kind": "scalar", "subrecord": "LCEP", "offset": 8, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Set Enable State to Opposite of Parent"}, {"bit": 1, "name": "Pop In"}], "minimum": 0, "maximum": 255, "stride": 12, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {"path": "LCTN\\ParentLocation", "label": "Parent Location", "subrecord": "PNAM", "offset": 0, "payload_sizes": [4], "targets": ["LCTN"], "nullable": true, "insertion": "existing_only"},
         {"path": "LCTN\\Music", "label": "Music", "subrecord": "NAM1", "offset": 0, "payload_sizes": [4], "targets": ["MUSC"], "nullable": true, "insertion": "existing_only"},
         {"path": "LCTN\\UnreportedCrimeFaction", "label": "Unreported Crime Faction", "subrecord": "FNAM", "offset": 0, "payload_sizes": [4], "targets": ["FACT"], "nullable": false, "insertion": "existing_only"},
-        {"path": "LCTN\\WorldLocationMarkerRef", "label": "World Location Marker Ref", "subrecord": "MNAM", "offset": 0, "payload_sizes": [4], "targets": ["REFR", "ACHR"], "nullable": false, "insertion": "existing_only"}
+        {"path": "LCTN\\WorldLocationMarkerRef", "label": "World Location Marker Ref", "subrecord": "MNAM", "offset": 0, "payload_sizes": [4], "targets": ["REFR", "ACHR"], "nullable": false, "insertion": "existing_only"},
+        {"path": "LCTN\\AddedPersistReference", "label": "Added Persist Reference", "subrecord": "ACPR", "offset": 0, "stride": 12, "targets": ["PLYR", "ACHR", "REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"], "nullable": false, "insertion": "existing_only"},
+        {"path": "LCTN\\AddedPersistReferenceWorldOrCell", "label": "Added Persist Reference World Or Cell", "subrecord": "ACPR", "offset": 4, "stride": 12, "targets": ["WRLD", "CELL"], "nullable": false, "insertion": "existing_only"},
+        {"path": "LCTN\\MasterPersistReference", "label": "Master Persist Reference", "subrecord": "LCPR", "offset": 0, "stride": 12, "targets": ["PLYR", "ACHR", "REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"], "nullable": false, "insertion": "existing_only"},
+        {"path": "LCTN\\MasterPersistReferenceWorldOrCell", "label": "Master Persist Reference World Or Cell", "subrecord": "LCPR", "offset": 4, "stride": 12, "targets": ["WRLD", "CELL"], "nullable": false, "insertion": "existing_only"},
+        {"path": "LCTN\\AddedUniqueNpc", "label": "Added Unique NPC", "subrecord": "ACUN", "offset": 0, "stride": 12, "targets": ["NPC_"], "nullable": false, "insertion": "existing_only"},
+        {"path": "LCTN\\AddedUniqueActor", "label": "Added Unique Actor", "subrecord": "ACUN", "offset": 4, "stride": 12, "targets": ["ACHR"], "nullable": false, "insertion": "existing_only"},
+        {"path": "LCTN\\AddedUniqueLocation", "label": "Added Unique Location", "subrecord": "ACUN", "offset": 8, "stride": 12, "targets": ["LCTN"], "nullable": true, "insertion": "existing_only"},
+        {"path": "LCTN\\MasterUniqueNpc", "label": "Master Unique NPC", "subrecord": "LCUN", "offset": 0, "stride": 12, "targets": ["NPC_"], "nullable": false, "insertion": "existing_only"},
+        {"path": "LCTN\\MasterUniqueActor", "label": "Master Unique Actor", "subrecord": "LCUN", "offset": 4, "stride": 12, "targets": ["ACHR"], "nullable": false, "insertion": "existing_only"},
+        {"path": "LCTN\\MasterUniqueLocation", "label": "Master Unique Location", "subrecord": "LCUN", "offset": 8, "stride": 12, "targets": ["LCTN"], "nullable": true, "insertion": "existing_only"},
+        {"path": "LCTN\\AddedSpecialReferenceType", "label": "Added Special Reference Type", "subrecord": "ACSR", "offset": 0, "stride": 16, "targets": ["LCRT"], "nullable": false, "insertion": "existing_only"},
+        {"path": "LCTN\\AddedSpecialReference", "label": "Added Special Reference", "subrecord": "ACSR", "offset": 4, "stride": 16, "targets": ["PLYR", "ACHR", "REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"], "nullable": false, "insertion": "existing_only"},
+        {"path": "LCTN\\AddedSpecialReferenceWorldOrCell", "label": "Added Special Reference World Or Cell", "subrecord": "ACSR", "offset": 8, "stride": 16, "targets": ["WRLD", "CELL"], "nullable": false, "insertion": "existing_only"},
+        {"path": "LCTN\\MasterSpecialReferenceType", "label": "Master Special Reference Type", "subrecord": "LCSR", "offset": 0, "stride": 16, "targets": ["LCRT"], "nullable": false, "insertion": "existing_only"},
+        {"path": "LCTN\\MasterSpecialReference", "label": "Master Special Reference", "subrecord": "LCSR", "offset": 4, "stride": 16, "targets": ["PLYR", "ACHR", "REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"], "nullable": false, "insertion": "existing_only"},
+        {"path": "LCTN\\MasterSpecialReferenceWorldOrCell", "label": "Master Special Reference World Or Cell", "subrecord": "LCSR", "offset": 8, "stride": 16, "targets": ["WRLD", "CELL"], "nullable": false, "insertion": "existing_only"},
+        {"path": "LCTN\\RemovedSpecialReference", "label": "Removed Special Reference", "subrecord": "RCSR", "offset": 0, "stride": 4, "targets": ["ACHR", "REFR"], "nullable": false, "insertion": "existing_only"},
+        {"path": "LCTN\\AddedWorldspaceCellWorld", "label": "Added Worldspace Cell World", "subrecord": "ACEC", "offset": 0, "repeated": true, "targets": ["WRLD"], "nullable": false, "insertion": "existing_only"},
+        {"path": "LCTN\\MasterWorldspaceCellWorld", "label": "Master Worldspace Cell World", "subrecord": "LCEC", "offset": 0, "repeated": true, "targets": ["WRLD"], "nullable": false, "insertion": "existing_only"},
+        {"path": "LCTN\\RemovedWorldspaceCellWorld", "label": "Removed Worldspace Cell World", "subrecord": "RCEC", "offset": 0, "repeated": true, "targets": ["WRLD"], "nullable": false, "insertion": "existing_only"},
+        {"path": "LCTN\\AddedInitiallyDisabledReference", "label": "Added Initially Disabled Reference", "subrecord": "ACID", "offset": 0, "stride": 4, "targets": ["PLYR", "ACHR", "REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"], "nullable": false, "insertion": "existing_only"},
+        {"path": "LCTN\\MasterInitiallyDisabledReference", "label": "Master Initially Disabled Reference", "subrecord": "LCID", "offset": 0, "stride": 4, "targets": ["PLYR", "ACHR", "REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"], "nullable": false, "insertion": "existing_only"},
+        {"path": "LCTN\\AddedEnableParentReference", "label": "Added Enable Parent Reference", "subrecord": "ACEP", "offset": 0, "stride": 12, "targets": ["PLYR", "ACHR", "REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"], "nullable": false, "insertion": "existing_only"},
+        {"path": "LCTN\\AddedEnableParent", "label": "Added Enable Parent", "subrecord": "ACEP", "offset": 4, "stride": 12, "targets": ["PLYR", "ACHR", "REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"], "nullable": false, "insertion": "existing_only"},
+        {"path": "LCTN\\MasterEnableParentReference", "label": "Master Enable Parent Reference", "subrecord": "LCEP", "offset": 0, "stride": 12, "targets": ["PLYR", "ACHR", "REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"], "nullable": false, "insertion": "existing_only"},
+        {"path": "LCTN\\MasterEnableParent", "label": "Master Enable Parent", "subrecord": "LCEP", "offset": 4, "stride": 12, "targets": ["PLYR", "ACHR", "REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"], "nullable": false, "insertion": "existing_only"}
       ],
       "localized_subrecords": ["FULL"]
     },
@@ -34117,6 +34366,15 @@
     {
       "signature": "ACHR",
       "fields": [
+        {"path": "ACHR\\PositionX", "label": "Position X", "kind": "scalar", "subrecord": "DATA", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 24, "insertion": "existing_only"},
+        {"path": "ACHR\\PositionY", "label": "Position Y", "kind": "scalar", "subrecord": "DATA", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 24, "insertion": "existing_only"},
+        {"path": "ACHR\\PositionZ", "label": "Position Z", "kind": "scalar", "subrecord": "DATA", "offset": 8, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 24, "insertion": "existing_only"},
+        {"path": "ACHR\\RotationX", "label": "Rotation X", "kind": "scalar", "subrecord": "DATA", "offset": 12, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 24, "insertion": "existing_only"},
+        {"path": "ACHR\\RotationY", "label": "Rotation Y", "kind": "scalar", "subrecord": "DATA", "offset": 16, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 24, "insertion": "existing_only"},
+        {"path": "ACHR\\RotationZ", "label": "Rotation Z", "kind": "scalar", "subrecord": "DATA", "offset": 20, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 24, "insertion": "existing_only"},
+        {"path": "ACHR\\BipedRotationX", "label": "Biped rotation X", "kind": "scalar", "subrecord": "XRGB", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "ACHR\\BipedRotationY", "label": "Biped rotation Y", "kind": "scalar", "subrecord": "XRGB", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "ACHR\\BipedRotationZ", "label": "Biped rotation Z", "kind": "scalar", "subrecord": "XRGB", "offset": 8, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 12, "insertion": "existing_only"},
         {"path": "ACHR\\ReflectionType", "label": "Reflection type", "kind": "scalar", "subrecord": "XPWR", "offset": 4, "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Reflection"}, {"bit": 1, "name": "Refraction"}], "minimum": 0, "maximum": 4294967295, "repeated": true, "payload_size": 8, "insertion": "existing_only"},
         {"path": "ACHR\\PatrolIdleTime", "label": "Patrol idle time", "kind": "scalar", "subrecord": "XPRD", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
         {"path": "ACHR\\LevelModifier", "label": "Level modifier", "kind": "scalar", "subrecord": "XLCM", "storage": "i32", "presentation": "enum", "names": [{"value": 0, "name": "Easy"}, {"value": 1, "name": "Medium"}, {"value": 2, "name": "Hard"}, {"value": 3, "name": "Very Hard"}], "minimum": -2147483648, "maximum": 2147483647, "insertion": "existing_only"},

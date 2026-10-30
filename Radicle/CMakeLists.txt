@@ -227,6 +227,8 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/plugin/subrecord_authoring.cpp
   src/plugin/subrecord_copy.cpp
   src/plugin/scene_writer.cpp
+  src/plugin/sound_writer.cpp
+  src/plugin/scene_index.cpp
   src/plugin/master_usage.cpp
   src/plugin/maintenance.cpp
   src/plugin/placement.cpp
@@ -270,6 +272,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/environment/navmesh.cpp
   src/environment/behavior.cpp
   src/environment/package_procedure.cpp
+  src/environment/package_procedure_tree.cpp
   src/environment/dialogue.cpp
   src/environment/scene_layout.cpp
   src/environment/base_records.cpp
@@ -638,6 +641,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_undecodable_record.cpp
     tests/test_undecodable_edit.cpp
     tests/test_real_plugin.cpp
+    tests/test_row_roundtrip_real.cpp
     tests/test_actor_value_perk_real.cpp
     tests/test_perk_effects_real.cpp
     tests/test_formkey_load.cpp
@@ -681,6 +685,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_wp9_cobj_rows.cpp
     tests/test_wp9_race_weap_rows.cpp
     tests/test_race_data_rows.cpp
+    tests/test_race_tint_rows.cpp
+    tests/test_race_tint_real.cpp
     tests/test_race_data_links.cpp
     tests/test_race_link_rows.cpp
     tests/test_wp9_scol.cpp
@@ -709,6 +715,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_exterior_cell_grid_real.cpp
     tests/test_exterior_cell_creation.cpp
     tests/test_interior_cell_create.cpp
+    tests/test_placed_data_rows.cpp
     tests/test_placed_reference.cpp
     tests/test_placed_reference_copy.cpp
     tests/test_copy_as_new.cpp
@@ -742,6 +749,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_delta_patch.cpp
     tests/test_list_merge.cpp
     tests/test_climate_weather_authoring.cpp
+    tests/test_clmt_weather_entries.cpp
+    tests/test_clmt_weather_real.cpp
     tests/test_climate_weather_c_api.cpp
     tests/test_climate_weather_real.cpp
     tests/test_quest_authoring_real.cpp
@@ -777,6 +786,9 @@ if(RADICLE_BUILD_TESTS)
     tests/test_condition_scopes_real.cpp
     tests/test_condition_functions.cpp
     tests/test_package_targets.cpp
+    tests/test_package_tree.cpp
+    tests/test_package_tree_c_api.cpp
+    tests/test_package_tree_real.cpp
     tests/test_perk_entrypoints.cpp
     tests/test_perk_authoring.cpp
     tests/test_perk_rows.cpp
@@ -936,6 +948,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_sound_subrecords.cpp
     tests/test_music_track_lists.cpp
     tests/test_sound_writer_c_api.cpp
+    tests/test_sound_structure_c_api.cpp
     tests/test_sound_writer_real.cpp
     tests/test_audio_records.cpp
     tests/test_audio_records_real.cpp
@@ -1114,6 +1127,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_npc_furn_attach_slots.cpp
     tools/env_bench/env_bench.cpp
     tests/test_fsts_rows.cpp
+    tests/test_info_response_bytes.cpp
+    tests/test_subrecord_group_members.cpp
     tests/test_mswp_rows.cpp
     tests/test_sopm_onam_rows.cpp
     tests/test_stat_lod_rows.cpp

@@ -78,7 +78,7 @@ std::vector<std::byte> make_empty_plugin() {
 }
 
 TEST(Eyes, DecodesFo4FieldsAndPreservesRecordFlags) {
-  const auto plugin = fo4::read_plugin(make_eyes_plugin(), "EyesPatch.esp");
+  auto plugin = fo4::read_plugin(make_eyes_plugin(), "EyesPatch.esp");
   const auto model = fo4::forms::decode_eyes(
       plugin, fo4::FormKey::parse("000800:EyesPatch.esp"));
 

@@ -142,7 +142,7 @@ TEST(TypedFamiliesRealData, DecodesEveryShippedRecordFamily) {
   };
 
   for (const auto& path : masters(dir)) {
-    const auto plugin = fo4::read_plugin_file(path);
+    auto plugin = fo4::read_plugin_file(path);
     if (path == fallout) expect_localized_ids(plugin);
     for (const auto* record : fo4::collect_records(plugin)) {
       for (auto& family : families) {
@@ -199,8 +199,9 @@ TEST(TypedFamiliesRealData, RaceSpellCountAgreesWithTheActorEffectList) {
   std::size_t two = 0;
   std::size_t odd_size = 0;
   std::size_t mismatched = 0;
+  std::size_t effects_without_count = 0;
   for (const auto& path : shipped) {
-    const auto plugin = fo4::read_plugin_file(path);
+    auto plugin = fo4::read_plugin_file(path);
     for (const auto* record : fo4::collect_records(plugin)) {
       if (record->header.signature != race) continue;
       ++records;
@@ -210,7 +211,10 @@ TEST(TypedFamiliesRealData, RaceSpellCountAgreesWithTheActorEffectList) {
         if (sub.signature == splo) ++effects;
         if (sub.signature == spct) counts = sub.data;
       }
-      if (counts.empty()) continue;
+      if (counts.empty()) {
+        if (effects != 0) ++effects_without_count;
+        continue;
+      }
       ++with_count;
       if (counts.size() != 4) {
         ++odd_size;
@@ -229,4 +233,5 @@ TEST(TypedFamiliesRealData, RaceSpellCountAgreesWithTheActorEffectList) {
   EXPECT_EQ(two, 35u);
   EXPECT_EQ(odd_size, 0u);
   EXPECT_EQ(mismatched, 0u);
+  EXPECT_EQ(effects_without_count, 0u);
 }

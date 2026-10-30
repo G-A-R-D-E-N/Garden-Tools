@@ -35,7 +35,7 @@ Opaque preservation is the generic writer contract in tests/test_writer.cpp. Rec
 
 Derived from the repository by `Radicle/tools/parity_matrix.py`; 147 signatures from `schema/fallout4/xedit_signatures.txt`. Regenerate with `python -I Radicle/tools/parity_matrix.py --write`.
 
-Columns: xEdit line is the registration line in the pinned definitions. Rows, authoring, keyword list and FormLink counts come from `schema/fallout4/fields.json`. Typed module lists the `TYPED_MODULES` files that name the signature. Mixed remap means the signature is named in `src/schema/form_link_mixed.cpp` or `src/schema/form_link_records.cpp`. Real-data tests count registered `tests/*_real.cpp` files that name it. `-` means none.
+Columns: xEdit line is the registration line in the pinned definitions. Rows, authoring, keyword list and FormLink counts come from `schema/fallout4/fields.json`. Scalar rows counts only rows whose kind is `scalar` and String rows only `string`, while the generated `k_scalar_fields` table and `schema::scalar_fields()` carry both, so a record's row-table size is Scalar rows plus String rows - a record with one string row reports one less in the Scalar column than `scalar_fields()` returns for it. Typed module lists the `TYPED_MODULES` files that name the signature. Mixed remap means the signature is named in `src/schema/form_link_mixed.cpp` or `src/schema/form_link_records.cpp`. Real-data tests count registered `tests/*_real.cpp` files that name it. `-` means none.
 
 Tier: L4 has field rows, FormLink fields or authoring constraints; L2 has a typed module, no rows or lists; L3 has FormLink list rows only; L1 has a keyword list only; L0 has none of these. A record with an authoring constraint but no scalar, string or FormLink field rows is still L4, and the tier counts break those out. Remap evidence (the Mixed remap column and the form_links.cpp record checks) does not affect the tier. L5 (dedicated PET route) is not derived.
 
@@ -46,33 +46,33 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144 (11 L4 rows have an authoring constr
 | Record | xEdit line | Scalar rows | String rows | FormLink fields | FormLink lists | Localized subrecords | Authoring | Keyword list | Typed module | Mixed remap | Real-data tests naming it | Tier |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- | --- | ---: | --- |
 | AACT | 6970 | 5 | 1 | 1 | - | 1 | yes | - | - | - | 1 | L4 |
-| ACHR | 4483 | 28 | 1 | 21 | 1 | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
-| ACTI | 5611 | 29 | 3 | 14 | - | 2 | yes | yes | environment/base_records | yes | 2 | L4 |
+| ACHR | 4483 | 37 | 1 | 21 | 1 | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
+| ACTI | 5611 | 29 | 3 | 14 | - | 2 | yes | yes | environment/base_records | yes | 3 | L4 |
 | ADDN | 7796 | 16 | 1 | 3 | - | - | yes | - | - | - | 1 | L4 |
 | AECH | 12206 | 12 | - | - | - | - | yes | - | - | - | 1 | L4 |
-| ALCH | 5691 | 29 | 5 | 11 | - | 3 | yes | yes | - | yes | 1 | L4 |
+| ALCH | 5691 | 29 | 5 | 11 | - | 3 | yes | yes | - | yes | 2 | L4 |
 | AMDL | 12246 | 16 | - | - | - | - | yes | - | - | - | 1 | L4 |
-| AMMO | 5741 | 30 | 4 | 9 | - | 3 | yes | yes | - | - | 1 | L4 |
+| AMMO | 5741 | 30 | 4 | 9 | - | 3 | yes | yes | - | - | 2 | L4 |
 | ANIO | 5777 | 7 | 2 | 1 | - | - | yes | - | - | - | 1 | L4 |
 | AORU | 12268 | 5 | - | - | - | - | yes | - | - | - | 1 | L4 |
-| ARMA | 5845 | 16 | 4 | 12 | - | - | yes | - | forms/armor, forms/armor_edit | yes | 1 | L4 |
-| ARMO | 5786 | 27 | 8 | 18 | - | 2 | yes | yes | forms/armor, forms/armor_edit | yes | 1 | L4 |
+| ARMA | 5845 | 16 | 4 | 12 | - | - | yes | - | forms/armor, forms/armor_edit | yes | 2 | L4 |
+| ARMO | 5786 | 27 | 8 | 18 | - | 2 | yes | yes | forms/armor, forms/armor_edit | yes | 2 | L4 |
 | ARTO | 9362 | 15 | 1 | 2 | - | - | yes | yes | - | - | 1 | L4 |
 | ASPC | 7057 | 8 | - | 3 | - | - | yes | - | - | - | 1 | L4 |
 | ASTP | 9135 | 1 | 4 | - | - | - | yes | - | - | - | - | L4 |
 | AVIF | 7826 | 3 | - | - | - | 3 | yes | - | - | - | 2 | L4 |
 | BNDS | 12280 | 14 | - | 1 | - | - | yes | - | environment/base_records | - | 1 | L4 |
-| BOOK | 5891 | 30 | 5 | 10 | - | 3 | yes | yes | - | yes | 1 | L4 |
+| BOOK | 5891 | 30 | 5 | 10 | - | 3 | yes | yes | - | yes | 2 | L4 |
 | BPTD | 7693 | - | - | - | - | 1 | - | - | - | yes | - | L0 |
 | CAMS | 7880 | 23 | 1 | 2 | - | - | yes | - | - | - | 1 | L4 |
-| CELL | 5953 | 34 | 1 | 13 | 2 | 1 | yes | - | forms/cell, environment/world | yes | 1 | L4 |
+| CELL | 5953 | 34 | 1 | 13 | 2 | 1 | yes | - | forms/cell, environment/world | yes | 2 | L4 |
 | CLAS | 6102 | 2 | 1 | 1 | - | 2 | yes | - | - | - | 1 | L4 |
 | CLFM | 9572 | 2 | - | - | - | 1 | yes | - | - | - | 1 | L4 |
-| CLMT | 6115 | 14 | 3 | 2 | - | - | yes | - | environment/base_records | - | 2 | L4 |
+| CLMT | 6115 | 14 | 3 | 2 | - | - | yes | - | environment/base_records | - | 4 | L4 |
 | CMPO | 12294 | 7 | - | 3 | - | 1 | yes | - | - | - | 1 | L4 |
-| COBJ | 10266 | 2 | - | 5 | 1 | 1 | yes | - | forms/components | yes | - | L4 |
+| COBJ | 10266 | 2 | - | 5 | 1 | 1 | yes | - | forms/components | yes | 1 | L4 |
 | COLL | 9547 | 6 | 1 | - | 1 | 1 | yes | - | - | yes | 2 | L4 |
-| CONT | 6176 | 31 | 3 | 14 | - | 1 | yes | yes | - | - | 1 | L4 |
+| CONT | 6176 | 31 | 3 | 14 | - | 1 | yes | yes | - | - | 2 | L4 |
 | CPTH | 7930 | 1 | - | 2 | 1 | - | yes | - | - | - | 1 | L4 |
 | CSTY | 6233 | 49 | - | - | - | - | yes | - | environment/behavior | - | 2 | L4 |
 | DEBR | 7388 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
@@ -91,38 +91,38 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144 (11 L4 rows have an authoring constr
 | EXPL | 7334 | 28 | 1 | 7 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
 | EYES | 6752 | - | - | - | - | 1 | yes | - | forms/eyes | - | 1 | L4 |
 | FACT | 6785 | 18 | - | 9 | - | 3 | yes | - | forms/faction | yes | 1 | L4 |
-| FLOR | 12167 | 33 | 3 | 9 | - | 3 | yes | yes | environment/vegetation | - | 1 | L4 |
+| FLOR | 12167 | 33 | 3 | 9 | - | 3 | yes | yes | environment/vegetation | - | 2 | L4 |
 | FLST | 7574 | - | - | - | 1 | 1 | yes | - | - | - | - | L4 |
 | FSTP | 8686 | - | 1 | 1 | - | - | yes | - | environment/sound | yes | 2 | L4 |
-| FSTS | 8692 | 5 | - | 1 | 5 | - | yes | - | environment/sound | yes | 2 | L4 |
-| FURN | 6848 | 45 | 4 | 13 | 1 | 2 | yes | yes | - | yes | 1 | L4 |
+| FSTS | 8692 | 5 | - | 1 | 5 | - | yes | - | environment/sound | yes | 3 | L4 |
+| FURN | 6848 | 49 | 4 | 14 | 1 | 2 | yes | yes | - | yes | 2 | L4 |
 | GDRY | 12322 | 15 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | GLOB | 6921 | 2 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | GMST | 6936 | 3 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
-| GRAS | 9612 | 23 | 1 | 1 | - | - | yes | - | environment/vegetation | - | 1 | L4 |
+| GRAS | 9612 | 23 | 1 | 1 | - | - | yes | - | environment/vegetation | - | 2 | L4 |
 | HAZD | 7180 | 22 | 1 | 6 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
 | HDPT | 7006 | 10 | 2 | 4 | 1 | 1 | yes | - | - | - | 1 | L4 |
 | IDLE | 9646 | 5 | 3 | 2 | - | - | yes | - | environment/behavior | - | 2 | L4 |
 | IDLM | 7098 | 17 | 1 | 3 | - | - | yes | yes | - | yes | 1 | L4 |
 | IMAD | 7466 | 184 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | IMGS | 7393 | 36 | 1 | - | - | - | yes | - | - | - | 3 | L4 |
-| INFO | 9672 | 14 | 7 | 13 | - | 2 | yes | - | forms/info_copy, environment/dialogue | - | 2 | L4 |
-| INGR | 9788 | 29 | 5 | 9 | - | 1 | yes | yes | - | - | 1 | L4 |
+| INFO | 9672 | 15 | 7 | 13 | - | 2 | yes | - | forms/info_copy, environment/dialogue | - | 3 | L4 |
+| INGR | 9788 | 29 | 5 | 9 | - | 1 | yes | yes | - | - | 2 | L4 |
 | INNR | 12337 | 7 | 1 | - | - | 1 | yes | - | - | - | 1 | L4 |
 | IPCT | 7978 | 27 | 1 | 7 | - | - | yes | - | - | - | 1 | L4 |
 | IPDS | 8014 | - | - | 2 | - | - | yes | - | - | - | 2 | L4 |
-| KEYM | 9823 | 27 | 5 | 8 | - | 1 | yes | yes | - | - | 1 | L4 |
+| KEYM | 9823 | 27 | 5 | 8 | - | 1 | yes | yes | - | - | 2 | L4 |
 | KSSM | 12387 | 1 | - | 3 | 1 | - | yes | - | - | yes | 1 | L4 |
 | KYWD | 6947 | 5 | 2 | 1 | - | 1 | yes | - | - | - | 1 | L4 |
 | LAND | 9846 | - | - | - | - | - | - | - | environment/terrain | yes | - | L2 |
 | LAYR | 12400 | - | - | 1 | - | - | yes | - | environment/base_records | - | 1 | L4 |
 | LCRT | 6962 | 5 | - | - | - | - | yes | - | - | - | 1 | L4 |
-| LCTN | 8039 | 6 | - | 4 | - | 1 | yes | yes | - | yes | 1 | L4 |
-| LENS | 12405 | 12 | 2 | - | - | - | yes | - | - | - | 1 | L4 |
+| LCTN | 8039 | 16 | - | 30 | - | 1 | yes | yes | - | yes | 1 | L4 |
+| LENS | 12405 | 12 | 2 | - | - | - | yes | - | - | - | 2 | L4 |
 | LGTM | 8629 | 81 | - | 1 | - | - | yes | - | environment/world | - | 1 | L4 |
-| LIGH | 9871 | 44 | 6 | 10 | - | 1 | yes | yes | environment/base_records | - | 2 | L4 |
+| LIGH | 9871 | 44 | 6 | 10 | - | 1 | yes | yes | environment/base_records | - | 3 | L4 |
 | LSCR | 9946 | 4 | 1 | 2 | - | 1 | yes | - | - | - | 1 | L4 |
-| LTEX | 9967 | 3 | - | 2 | 1 | - | yes | - | environment/terrain, environment/vegetation | - | 1 | L4 |
+| LTEX | 9967 | 3 | - | 2 | 1 | - | yes | - | environment/terrain, environment/vegetation | - | 2 | L4 |
 | LVLI | 10009 | 10 | - | 3 | - | 1 | yes | - | forms/leveled_list | yes | 1 | L4 |
 | LVLN | 9986 | 17 | 1 | 3 | - | - | yes | - | forms/leveled_list | yes | 1 | L4 |
 | LVSP | 10033 | 9 | - | - | - | 1 | yes | - | forms/leveled_list, forms/leveled_spell | - | 1 | L4 |
@@ -130,26 +130,26 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144 (11 L4 rows have an authoring constr
 | MATT | 7958 | 12 | 2 | 2 | - | - | yes | - | - | - | 2 | L4 |
 | MESG | 8179 | 2 | 1 | 1 | - | 4 | yes | - | - | - | 1 | L4 |
 | MGEF | 10052 | 17 | - | 18 | 1 | 2 | yes | yes | - | yes | 1 | L4 |
-| MISC | 10212 | 18 | 2 | 4 | - | 1 | yes | yes | forms/components | yes | 1 | L4 |
+| MISC | 10212 | 18 | 2 | 4 | - | 1 | yes | yes | forms/components | yes | 2 | L4 |
 | MOVT | 9393 | 61 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
 | MSTT | 7067 | 26 | 3 | 8 | - | 1 | yes | yes | - | - | 1 | L4 |
-| MSWP | 12437 | 1 | 2 | - | - | - | yes | - | environment/material_swap | - | 1 | L4 |
+| MSWP | 12437 | 1 | 2 | - | - | - | yes | - | environment/material_swap | - | 2 | L4 |
 | MUSC | 8665 | 4 | - | - | 1 | - | yes | - | environment/sound | yes | 2 | L4 |
 | MUST | 8795 | 7 | 2 | - | 1 | - | yes | - | - | yes | 1 | L4 |
 | NAVI | 7240 | 4 | - | 1 | - | - | yes | - | environment/navmesh | yes | 2 | L4 |
 | NAVM | 7212 | - | - | - | - | - | yes | - | environment/navmesh | yes | 2 | L4 |
 | NOCM | 12453 | 1 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
 | NOTE | 12470 | 16 | 3 | 7 | - | 1 | yes | - | - | - | 1 | L4 |
-| NPC_ | 10286 | 93 | 4 | 55 | 3 | 3 | yes | yes | forms/npc | yes | 1 | L4 |
-| OMOD | 12501 | 15 | 1 | 2 | 2 | 2 | yes | - | - | yes | - | L4 |
+| NPC_ | 10286 | 93 | 4 | 55 | 3 | 3 | yes | yes | forms/npc | yes | 2 | L4 |
+| OMOD | 12501 | 15 | 1 | 2 | 2 | 2 | yes | - | - | yes | 1 | L4 |
 | OTFT | 9357 | - | - | - | 1 | - | yes | - | - | yes | 1 | L4 |
 | OVIS | 12546 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
-| PACK | 10526 | 26 | - | 12 | - | - | yes | - | environment/behavior | - | 3 | L4 |
+| PACK | 10526 | 26 | - | 12 | - | - | yes | - | environment/behavior | - | 5 | L4 |
 | PARW | 5944 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
 | PBAR | 5945 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
 | PBEA | 5946 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
 | PCON | 5947 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
-| PERK | 7582 | 5 | 2 | 2 | - | 3 | yes | - | - | yes | 1 | L4 |
+| PERK | 7582 | 5 | 2 | 2 | - | 3 | yes | - | - | yes | 2 | L4 |
 | PFLA | 5948 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
 | PGRE | 5949 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
 | PHZD | 5950 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
@@ -157,10 +157,10 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144 (11 L4 rows have an authoring constr
 | PLYR | 12129 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
 | PMIS | 5951 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
 | PROJ | 7115 | 40 | 4 | 15 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
-| QUST | 10684 | 6 | 4 | 3 | 1 | 3 | yes | - | forms/quest_alias_edit, forms/quest_aliases_decode, forms/quest_objectives, forms/quest_stages | - | 7 | L4 |
-| RACE | 11054 | 113 | 14 | 42 | 9 | 5 | yes | yes | forms/race, forms/race_body | yes | 1 | L4 |
-| REFR | 11347 | 52 | - | 25 | 1 | - | yes | - | forms/placed_reference, forms/placed_reference_edit | yes | 1 | L4 |
-| REGN | 11870 | 12 | 1 | 7 | - | 1 | yes | - | - | yes | - | L4 |
+| QUST | 10684 | 6 | 4 | 3 | 1 | 3 | yes | - | forms/quest_alias_edit, forms/quest_aliases_decode, forms/quest_objectives, forms/quest_stages | - | 8 | L4 |
+| RACE | 11054 | 133 | 19 | 47 | 9 | 5 | yes | yes | forms/race, forms/race_body | yes | 3 | L4 |
+| REFR | 11347 | 80 | - | 34 | 1 | - | yes | - | forms/placed_reference, forms/placed_reference_edit | yes | 1 | L4 |
+| REGN | 11870 | 12 | 1 | 7 | - | 1 | yes | - | - | yes | 1 | L4 |
 | RELA | 8848 | 2 | - | 3 | - | - | yes | - | - | - | 1 | L4 |
 | REVB | 9593 | 13 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | RFCT | 6163 | 1 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
@@ -173,23 +173,23 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144 (11 L4 rows have an authoring constr
 | SMEN | 8762 | 3 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | SMQN | 8735 | 4 | - | 2 | 1 | - | yes | - | - | - | 1 | L4 |
 | SNCT | 9469 | 5 | - | 2 | - | 1 | yes | - | - | - | 1 | L4 |
-| SNDR | 9406 | 11 | 3 | 5 | - | - | yes | - | environment/sound | - | 6 | L4 |
+| SNDR | 9406 | 11 | 3 | 5 | - | - | yes | - | environment/sound | - | 7 | L4 |
 | SOPM | 9489 | 24 | - | 1 | - | - | yes | - | - | - | 1 | L4 |
-| SOUN | 11961 | 9 | - | 1 | - | - | yes | - | environment/sound | - | 2 | L4 |
-| SPEL | 12030 | 14 | - | 2 | - | 2 | yes | yes | - | - | 3 | L4 |
+| SOUN | 11961 | 9 | - | 1 | - | - | yes | - | environment/sound | - | 3 | L4 |
+| SPEL | 12030 | 14 | - | 2 | - | 2 | yes | yes | - | - | 4 | L4 |
 | SPGD | 6128 | 12 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
 | STAG | 12663 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
-| STAT | 12045 | 19 | 5 | 5 | - | 1 | yes | - | environment/base_records | yes | 2 | L4 |
+| STAT | 12045 | 19 | 5 | 5 | - | 1 | yes | - | environment/base_records | yes | 3 | L4 |
 | TACT | 5672 | 24 | 3 | 7 | - | 1 | yes | yes | - | - | 1 | L4 |
-| TERM | 12671 | 20 | 7 | 5 | - | 7 | yes | yes | - | yes | 1 | L4 |
+| TERM | 12671 | 29 | 7 | 7 | - | 7 | yes | yes | - | yes | 2 | L4 |
 | TES4 | 12091 | - | - | - | - | - | - | - | - | yes | 5 | L0 |
-| TREE | 12134 | 29 | 1 | 3 | - | 1 | yes | - | environment/vegetation | - | 1 | L4 |
+| TREE | 12134 | 29 | 1 | 3 | - | 1 | yes | - | environment/vegetation | - | 2 | L4 |
 | TRNS | 12774 | 9 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | TXST | 6984 | 19 | 9 | - | - | - | yes | - | environment/terrain | - | 2 | L4 |
 | VTYP | 7950 | 1 | - | - | - | - | yes | - | - | - | 1 | L4 |
-| WATR | 12788 | 71 | 4 | 5 | - | 1 | yes | - | environment/base_records | - | 1 | L4 |
-| WEAP | 12877 | 67 | 3 | 34 | - | 2 | yes | yes | forms/weapon | yes | 2 | L4 |
-| WRLD | 13110 | 37 | 4 | 8 | - | 1 | yes | - | environment/world | yes | 1 | L4 |
+| WATR | 12788 | 71 | 4 | 5 | - | 1 | yes | - | environment/base_records | - | 2 | L4 |
+| WEAP | 12877 | 67 | 3 | 34 | - | 2 | yes | yes | forms/weapon | yes | 3 | L4 |
+| WRLD | 13110 | 37 | 4 | 8 | - | 1 | yes | - | environment/world | yes | 2 | L4 |
 | WTHR | 13034 | 131 | 33 | 9 | - | - | yes | - | forms/weather, environment/base_records | - | 2 | L4 |
 | ZOOM | 13180 | 5 | - | 1 | - | - | yes | - | - | - | 1 | L4 |
 
@@ -200,7 +200,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | Record | Scalar identity | Scalar percent_0_100 | Scalar enum | Scalar flags | String | Scalar storage | Repeated | Stride | When | Insertion |
 | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | --- |
 | AACT | 4 | - | 1 | - | 1 | u32, u8 | - | - | - | existing_only |
-| ACHR | 20 | 1 | 4 | 3 | 1 | f32, i32, u32, u8 | 8 | 11 | - | existing_only |
+| ACHR | 29 | 1 | 4 | 3 | 1 | f32, i32, u32, u8 | 8 | 11 | - | existing_only |
 | ACTI | 25 | 1 | - | 3 | 3 | f32, i16, i32, u16, u32, u8 | 12 | 11 | - | existing_only |
 | ADDN | 15 | - | 1 | - | 1 | i16, u16, u32 | - | 7 | - | existing_only |
 | AECH | 9 | - | 3 | - | - | f32, u32 | 12 | - | 10 | existing_only |
@@ -249,7 +249,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | FLST | - | - | - | - | - | - | - | - | - | - |
 | FSTP | - | - | - | - | 1 | - | - | - | - | existing_only |
 | FSTS | 5 | - | - | - | - | u32 | - | 1 | - | existing_only |
-| FURN | 34 | 1 | 3 | 7 | 4 | f32, i16, i32, u16, u32, u8 | 24 | 17 | - | existing_only |
+| FURN | 38 | 1 | 3 | 7 | 4 | f32, i16, i32, u16, u32, u8 | 24 | 22 | - | existing_only |
 | GDRY | 15 | - | - | - | - | f32 | - | - | - | existing_only |
 | GLOB | 1 | - | 1 | - | - | f32, u8 | - | - | - | existing_only |
 | GMST | 2 | - | 1 | - | 1 | f32, i32, u32 | - | - | 4 | existing_only |
@@ -260,7 +260,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | IDLM | 16 | - | - | 1 | 1 | f32, i16, u32, u8 | - | 7 | - | existing_only |
 | IMAD | 180 | - | 3 | 1 | - | f32, u32, u8 | - | 120 | - | existing_only |
 | IMGS | 35 | - | 1 | - | 1 | f32, u16 | - | - | - | existing_only |
-| INFO | 14 | - | - | - | 7 | i32, u16, u32, u8 | 15 | - | - | existing_only |
+| INFO | 15 | - | - | - | 7 | bytes, i32, u16, u32, u8 | 16 | - | - | existing_only |
 | INGR | 25 | 1 | - | 3 | 5 | f32, i16, i32, u32, u8 | 12 | 9 | - | existing_only |
 | INNR | 4 | - | 3 | - | 1 | f32, u16, u32, u8 | 7 | - | - | existing_only |
 | IPCT | 22 | - | 3 | 2 | 1 | f32, u32, u8 | - | 7 | - | existing_only |
@@ -270,7 +270,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | KYWD | 4 | - | 1 | - | 2 | u32, u8 | - | - | - | existing_only |
 | LAYR | - | - | - | - | - | - | - | - | - | existing_only |
 | LCRT | 4 | - | 1 | - | - | u32, u8 | - | - | - | existing_only |
-| LCTN | 6 | - | - | - | - | f32, u8 | - | - | - | existing_only |
+| LCTN | 14 | - | - | 2 | - | f32, i16, u8 | 3 | 33 | - | existing_only |
 | LENS | 11 | - | - | 1 | 2 | f32, u32 | 11 | - | - | existing_only |
 | LGTM | 81 | - | - | - | - | f32, i32, u8 | - | - | - | existing_only |
 | LIGH | 40 | 1 | - | 3 | 6 | f32, i16, i32, u32, u8 | 12 | 11 | - | existing_only |
@@ -311,8 +311,8 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | PMIS | 11 | 1 | 1 | 2 | - | f32, i32, u32, u8 | 2 | - | - | existing_only |
 | PROJ | 37 | 1 | - | 2 | 4 | f32, i16, i32, u16, u32, u8 | 12 | 9 | - | existing_only |
 | QUST | 3 | - | 2 | 1 | 4 | f32, u16, u32, u8 | - | - | - | existing_only |
-| RACE | 101 | - | 9 | 3 | 14 | f32, i16, i32, u16, u32, u8 | 82 | 3 | - | existing_only |
-| REFR | 43 | 1 | 5 | 3 | - | f32, i32, u32, u8 | 14 | 13 | - | existing_only |
+| RACE | 116 | - | 12 | 5 | 19 | f32, i16, i32, u16, u32, u8 | 111 | 8 | - | existing_only |
+| REFR | 68 | 1 | 6 | 5 | - | f32, i32, u32, u8 | 15 | 13 | - | existing_only |
 | REGN | 9 | - | 2 | 1 | 1 | f32, u32, u8 | 7 | 8 | - | existing_only |
 | RELA | - | - | 1 | 1 | - | u8 | - | - | - | existing_only |
 | REVB | 12 | - | 1 | - | - | i8, u16, u32, u8 | - | - | - | existing_only |
@@ -334,7 +334,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | STAG | - | - | - | - | - | - | - | - | - | - |
 | STAT | 18 | - | - | 1 | 5 | f32, i16, u32, u8 | - | 9 | - | existing_only |
 | TACT | 21 | 1 | - | 2 | 3 | f32, i16, i32, u32, u8 | 12 | 9 | - | existing_only |
-| TERM | 17 | - | 1 | 2 | 7 | f32, i16, i32, u16, u32, u8 | 10 | 9 | - | existing_only |
+| TERM | 25 | - | 1 | 3 | 7 | f32, i16, i32, u16, u32, u8 | 10 | 20 | - | existing_only |
 | TREE | 29 | - | - | - | 1 | f32, i16, u32, u8 | - | 7 | - | existing_only |
 | TRNS | 9 | - | - | - | - | f32 | - | - | - | existing_only |
 | TXST | 17 | - | - | 2 | 9 | f32, i16, u16, u8 | - | - | - | existing_only |
@@ -586,16 +586,16 @@ I is deliberately weaker than complete acceptance: generated offsets and setters
 
 ## Open parser PR audit
 
-Snapshot: 2026-10-05. Columns apply to the new named fields, not unrelated metadata or existing generic capabilities.
+Snapshot: 2026-10-05. Columns apply to the new named fields, not unrelated metadata or existing generic capabilities. The #396, #398, #404, #427 and #428 gap cells were refreshed on 2026-10-25 after their writer tranches landed; the other rows keep the 2026-10-05 snapshot.
 
 | PR / issue | Stored-format tranche | READ | WRITE / ADD / REMOVE / CREATE gap | REMAP / VALIDATE / OPAQUE boundary |
 | --- | --- | --- | --- | --- |
-| #396 / #341 | WATR visual data; effective cell/world selection | Partial C++/C/C# | WATR visual mutation and creation absent; derived effective selection is not a stored field to write | Existing raw links; unknown visual layouts preserved; runtime selection evidence separate |
-| #398 / #343 | CLMT timing and moon byte; WTHR DATA | Partial C++/C/C# | CLMT timing edit/write/reparse first; WTHR MNAM already writable; other fields remain follow-ups | WLST/WTHR known links remap; raw bytes retained; weather execution separate |
+| #396 / #341 | WATR visual data; effective cell/world selection | Partial C++/C/C# | Visual fields, strings, links and optional subrecords write in place and WATR is created from proven defaults (`tests/test_water_authoring.cpp`, `tests/test_water_real.cpp`); derived effective selection is not a stored field to write | Existing raw links; unknown visual layouts preserved; runtime selection evidence separate |
+| #398 / #343 | CLMT timing and moon byte; WTHR DATA | Partial C++/C/C# | CLMT timing edit/write/reparse delivered, WTHR MNAM already writable and the fixed DATA fields write in place (`tests/test_climate_weather_authoring.cpp`); other fields remain follow-ups | WLST/WTHR known links remap; raw bytes retained; weather execution separate |
 | #400 / #340 | SNDR variants, SOUN, MUSC, FSTP/FSTS | Partial C++/C/C# | Variant-aware existing edits, file/link add/remove and valid creation absent | Discriminator-specific references must be proved; playback is separate |
 | #402 / #339 | NAVM geometry and NAVI maps | Partial C++/C/C# | Geometry/container mutation and valid grouped creation absent | Existing form ID grammar only; opaque NVPP/island/cover data cannot be reconstructed by guessing |
-| #404 / #342 | GRAS DATA, TREE CNAM, FLOR seasons/links, LTEX grass | Partial C++/C/C# | Existing value edits first, then proven optional insertion/deletion and creation | FLOR keywords exist separately; numeric bytes cannot be remapped as links; placement algorithms separate |
-| #406 / #344 | DIAL, INFO responses, SCEN phases/actions | Partial C++/C/C# | Response/action editing and container add/remove/create absent | INFO copy-as-new and SCEN keyword editing already exist; action/VMAD ownership remains scoped |
+| #404 / #342 | GRAS DATA, TREE CNAM, FLOR seasons/links, LTEX grass | Partial C++/C/C# | Delivered by the #428 writer tranche: value edits, optional insertion/deletion, PFIG/SNAM link writes, LTEX GNAM list edits and GRAS/TREE/FLOR/LTEX creation (`tests/test_vegetation_authoring.cpp`, `tests/test_vegetation_real.cpp`) | FLOR keywords exist separately; numeric bytes cannot be remapped as links; placement algorithms separate |
+| #406 / #344 | DIAL, INFO responses, SCEN phases/actions | Partial C++/C/C# | INFO response groups add and remove as one unit with their in-place field edits (`tests/test_dialogue_writer.cpp`); SCEN phase and action insert, removal and reorder keep the action indices, phase start/end references and VMAD phase fragments consistent (`tests/test_scene_phase_edit.cpp`, `tests/test_scene_actor_action_edit.cpp`, `tests/test_vmad_fragments.cpp`); container add/remove/create beyond those groups stays refused | INFO copy-as-new exists; scene action payload lists stay opaque |
 | #408 / #345 | PACK headers/schedule/locations/targets, CSTY, IDLE | Partial C++/C/C# | Existing fixed data edits first; procedure/input/tree mutation and creation unproven | Discriminators distinguish IDs from numeric values; preserve opaque procedure streams |
 | #409 / #15 | VMAD variable evidence | Known properties and empty type 16 | Type 6 / nonempty 16 mutation/remap remains refused; variable authoring absent | Empty type 16 remaps surrounding object references; strict traversal required; no unsafe runtime error recovery |
 | #410 / #28 | Context-driven runtime light IDs | Context API | No stored-format writer prerequisite | Runtime table construction is separate from on-disk MAST ordinals |
@@ -606,8 +606,8 @@ Snapshot: 2026-10-05. Columns apply to the new named fields, not unrelated metad
 | #419 / #422 | CI workflow / runner tooling | Infrastructure | No semantic editing promotion | #384 managed execution still required; audit shared CI changes independently |
 | #424 / #287 | Operation matrix | Documentation | Main baseline and branch capabilities stay separate; full field/helper expansion pending | No new format or runtime acceptance |
 | #426 / #384 | Required managed CI | Infrastructure | Native/C ABI/managed checks required; no field promotion | Verified both runners and clean Windows teardown at its head; adopted into feature branches (ledger below); not yet adopted: #392, #419 |
-| #427 / #425 | Existing CLMT timing edits | Partial C++/C/C# | Existing WRITE tested; TNAM ADD/REMOVE and CLMT CREATE absent | See bounded writer ledger below; no runtime weather reproduction |
-| #428 / #342 | Existing GRAS/TREE/FLOR fixed fields | Partial C++/C/C# | Existing WRITE tested; ADD/REMOVE/CREATE, PFIG/SNAM link writes and LTEX GNAM list edits absent | See vegetation writer ledger below |
+| #427 / #425 | Existing CLMT timing edits | Partial C++/C/C# | Existing WRITE tested; TNAM ADD/REMOVE delivered (`tests/test_climate_weather_authoring.cpp`), CLMT CREATE from proven defaults delivered, and WLST entries add and remove (`tests/test_clmt_weather_entries.cpp`) | See bounded writer ledger below; no runtime weather reproduction |
+| #428 / #342 | Existing GRAS/TREE/FLOR fixed fields | Partial C++/C/C# | Existing WRITE tested; ADD/REMOVE/CREATE, PFIG/SNAM link writes and LTEX GNAM list edits delivered (`tests/test_vegetation_authoring.cpp`, `tests/test_vegetation_real.cpp`) | See vegetation writer ledger below |
 
 ### Managed CI adoption ledger
 

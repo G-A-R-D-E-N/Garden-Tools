@@ -86,6 +86,26 @@ constexpr ScalarRow k_scalar_rows[] = {
     {"REFR", "REFR\\SplineWindDetachedEnd", "XBSD", 20, u8, true, 0, 21},
     {"REFR", "REFR\\DecalWidthScale", "XPDD", 0, f32, true, 8, 0},
     {"REFR", "REFR\\DecalHeightScale", "XPDD", 4, f32, true, 8, 0},
+    {"REFR", "REFR\\TeleportPositionX", "XTEL", 4, f32, true, 36, 0},
+    {"REFR", "REFR\\TeleportPositionY", "XTEL", 8, f32, true, 36, 0},
+    {"REFR", "REFR\\TeleportPositionZ", "XTEL", 12, f32, true, 36, 0},
+    {"REFR", "REFR\\TeleportRotationX", "XTEL", 16, f32, true, 36, 0},
+    {"REFR", "REFR\\TeleportRotationY", "XTEL", 20, f32, true, 36, 0},
+    {"REFR", "REFR\\TeleportRotationZ", "XTEL", 24, f32, true, 36, 0},
+    {"REFR", "REFR\\TeleportFlags", "XTEL", 28, u32, true, 36, 0},
+    {"REFR", "REFR\\OcclusionPlaneWidth", "XOCP", 0, f32, true, 36, 0},
+    {"REFR", "REFR\\OcclusionPlaneHeight", "XOCP", 4, f32, true, 36, 0},
+    {"REFR", "REFR\\OcclusionPlanePositionX", "XOCP", 8, f32, true, 36, 0},
+    {"REFR", "REFR\\OcclusionPlanePositionY", "XOCP", 12, f32, true, 36, 0},
+    {"REFR", "REFR\\OcclusionPlanePositionZ", "XOCP", 16, f32, true, 36, 0},
+    {"REFR", "REFR\\OcclusionPlaneRotationQ1", "XOCP", 20, f32, true, 36, 0},
+    {"REFR", "REFR\\OcclusionPlaneRotationQ2", "XOCP", 24, f32, true, 36, 0},
+    {"REFR", "REFR\\OcclusionPlaneRotationQ3", "XOCP", 28, f32, true, 36, 0},
+    {"REFR", "REFR\\OcclusionPlaneRotationQ4", "XOCP", 32, f32, true, 36, 0},
+    {"REFR", "REFR\\RadioFrequency", "XRDO", 0, f32, true, 16, 0},
+    {"REFR", "REFR\\RadioMinWeakDistance", "XRDO", 4, f32, true, 16, 0},
+    {"REFR", "REFR\\RadioMaxWeakDistance", "XRDO", 8, f32, true, 16, 0},
+    {"REFR", "REFR\\RadioFlags", "XRDO", 12, u32, true, 16, 0},
 };
 
 constexpr LinkRow k_link_rows[] = {
@@ -113,6 +133,8 @@ constexpr LinkRow k_link_rows[] = {
     {"REFR", "REFR\\PowerGridNode1", "XWPN", 0, 12, "ACHR", true, true},
     {"REFR", "REFR\\PowerGridNode2", "XWPN", 4, 12, "REFR", true, true},
     {"REFR", "REFR\\PowerGridLine", "XWPN", 8, 12, "REFR", true, true},
+    {"REFR", "REFR\\TeleportDoor", "XTEL", 0, 36, "REFR"},
+    {"REFR", "REFR\\TeleportTransitionInterior", "XTEL", 32, 36, "CELL", true},
 };
 
 constexpr std::uint32_t raw_id(std::uint32_t local_id) { return 0x02000000u | local_id; }
@@ -366,7 +388,7 @@ TEST(REFRExtraRows, LinkRowsNameTheirSubrecordsOffsetsAndTargets) {
 }
 
 TEST(REFRExtraRows, ReadsScalarsAndLinksFromThePlugin) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto key = "000C10:Patch.esp";
   EXPECT_EQ(scalar_bytes(plugin, "REFR", key, "REFR\\Radius"), floats({4.5f}));
   EXPECT_EQ(scalar_bytes(plugin, "REFR", key, "REFR\\ItemCount"), i32_bytes(-3));
@@ -542,7 +564,7 @@ TEST(REFRExtraRows, WritesScalarsAndLinksThenRereads) {
 }
 
 TEST(REFRExtraRows, LinkedActivateParentPortalPowerGridSplineAndWaterRowsReadFromThePlugin) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto key = "000C10:Patch.esp";
 
   EXPECT_EQ(link_raw(plugin, "REFR", key, "REFR\\LinkedKeyword"), 0x00000A90u);

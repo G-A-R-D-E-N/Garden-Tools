@@ -76,7 +76,7 @@ TEST_P(PlacedVariantsReal, EveryTrackedRecordDecodesAndMeetsAuthoringMinimums) {
   const auto path = official(GetParam(), skip);
   if (skip) { GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data"; }
   record_game_build(detect_game_build(path.parent_path()));
-  const auto plugin = fo4::read_plugin_file(path);
+  auto plugin = fo4::read_plugin_file(path);
   std::map<std::string, int> totals;
   std::map<std::string, int> preflighted;
   std::vector<std::string> violators;

@@ -357,7 +357,7 @@ TEST_F(EnvironmentTest, MetadataDecodesNamesBoundsAndFlags) {
 }
 
 TEST_F(EnvironmentTest, NameIgnoresObjectTemplateCombinationFull) {
-  const auto plugin = write(
+  auto plugin = write(
       "Templates.esp",
       make_plugin(0, {},
                   {{"ARMO", 0x00000800, 0,

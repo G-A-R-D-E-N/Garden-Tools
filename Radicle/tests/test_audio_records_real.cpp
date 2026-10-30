@@ -34,7 +34,7 @@ TEST_P(AudioRecordsReal, EveryRowDecodesAndAuthoringMinimumsHold) {
   if (!std::filesystem::is_regular_file(path)) {
     GTEST_SKIP() << "missing official master: " << path;
   }
-  const auto plugin = fo4::read_plugin_file(path);
+  auto plugin = fo4::read_plugin_file(path);
   const bool localized = plugin.header.tes4_flags.is_localized();
   std::map<std::string, std::size_t> counts;
   fo4::visit_records(plugin, [&](const fo4::Record& record) {

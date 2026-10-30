@@ -78,7 +78,7 @@ fo4::FormKey quest_key() { return fo4::FormKey::parse("000800:Quests.esp"); }
 
 TEST(QuestObjectives, DecodesObjectivesTargetsAndEdgeShapes) {
   // Keyword owned by Beta.esm, which is master index 1.
-  const auto plugin = fo4::read_plugin(make_plugin(0x01000123), "Quests.esp");
+  auto plugin = fo4::read_plugin(make_plugin(0x01000123), "Quests.esp");
   const auto decoded = fo4::forms::decode_quest_objectives(plugin, quest_key());
 
   ASSERT_EQ(decoded.objectives.size(), 2u);
@@ -108,7 +108,7 @@ TEST(QuestObjectives, DecodesObjectivesTargetsAndEdgeShapes) {
 }
 
 TEST(QuestObjectives, StopsAtTheAliasArray) {
-  const auto plugin = fo4::read_plugin(make_plugin(0), "Quests.esp");
+  auto plugin = fo4::read_plugin(make_plugin(0), "Quests.esp");
   const auto decoded = fo4::forms::decode_quest_objectives(plugin, quest_key());
   for (const auto& objective : decoded.objectives) {
     EXPECT_NE(objective.index, 99u) << "read past ANAM into the alias array";
@@ -166,7 +166,7 @@ TEST(QuestObjectives, RejectsMalformedMarkers) {
   fo4::test::end_record(out, rec);
   fo4::test::end_group(out, grup);
 
-  const auto plugin = fo4::read_plugin(out.bytes, "Quests.esp");
+  auto plugin = fo4::read_plugin(out.bytes, "Quests.esp");
   EXPECT_THROW(static_cast<void>(fo4::forms::decode_quest_objectives(plugin, quest_key())),
                fo4::forms::QuestError);
 }

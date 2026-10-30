@@ -718,6 +718,15 @@ RADICLE_API radicle_status radicle_plugin_formlink_list_clear(radicle_plugin* pl
                                                               radicle_form_key key,
                                                               const char* path);
 
+/* Constraint: sets (present != 0) or clears one optional group member; group_path is
+   "<signature>\\<path>" and member must be the four-byte subrecord signature. */
+RADICLE_API radicle_status radicle_plugin_subrecord_group_member_set(radicle_plugin* plugin,
+                                                                    radicle_form_key key,
+                                                                    const char* group_path,
+                                                                    size_t index,
+                                                                    const char* member,
+                                                                    int32_t present);
+
 RADICLE_API radicle_status radicle_env_plugin_records(const radicle_env* env,
                                                       size_t plugin_index,
                                                       const radicle_record*** out_records,

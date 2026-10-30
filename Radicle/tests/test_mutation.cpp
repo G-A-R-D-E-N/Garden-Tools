@@ -477,6 +477,6 @@ TEST(Mutation, LightPluginMasksFfPrefixedHedrNextInRange) {
 }
 
 TEST(Mutation, LoweredLightNextIgnoresTheFfPrefix) {
-  const auto plugin = fo4::read_plugin(make_lifecycle_plugin(0xFF000ABCu, true, true), "Lifecycle.esl");
+  auto plugin = fo4::read_plugin(make_lifecycle_plugin(0xFF000ABCu, true, true), "Lifecycle.esl");
   EXPECT_FALSE(fo4::lowered_light_next_form_id(plugin).has_value());
 }

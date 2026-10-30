@@ -119,7 +119,7 @@ TEST(WP9PrpsRows, NewRowsMatchXEditShapeOnEveryPropertyRecord) {
 
 TEST(WP9PrpsRows, ReadsLinkAndValueOfBothEntries) {
   const auto out = make_plugin();
-  const auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
   const auto payload = subrecord_data(plugin, "000A01:Patch.esp", "PRPS");
   ASSERT_EQ(payload.size(), 16u);
   EXPECT_EQ(u32_at(payload, 0), 0x00000A10u);

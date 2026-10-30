@@ -54,7 +54,7 @@ private:
 }
 
 TEST(QuestStructure, StoredValuesAndScopedConditionsSurvivePluginRelease) {
-  const auto plugin = quest_structure_plugin();
+  auto plugin = quest_structure_plugin();
   const auto native = fo4::quest::read_quest_structure(plugin, structure_quest_key());
   ASSERT_TRUE(native.stages_supported);
   ASSERT_TRUE(native.objectives_supported);
@@ -623,7 +623,7 @@ TEST(QuestStructure, NextAliasIdRowReadsAndWritesTheStoredCounter) {
 }
 
 TEST(QuestStructure, MissingQuestReturnsNotFound) {
-  const auto plugin = quest_structure_plugin();
+  auto plugin = quest_structure_plugin();
   const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
   const auto dir = std::filesystem::temp_directory_path() / ("quest_structure_missing_" + std::to_string(id));
   std::filesystem::create_directories(dir);

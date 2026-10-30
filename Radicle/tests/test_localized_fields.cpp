@@ -115,7 +115,7 @@ TEST(LocalizedFields, MembershipIsPerRecordAndSubrecord) {
 }
 
 TEST(LocalizedFields, LocalizedPluginYieldsStringIds) {
-  const auto plugin = plugin_with_flags(0x80);
+  auto plugin = plugin_with_flags(0x80);
   const auto value =
       fo4::schema::read_localized_string(plugin, k_race, k_desc, make(k_desc, id(0x1234)));
   ASSERT_TRUE(value.localized());
@@ -125,7 +125,7 @@ TEST(LocalizedFields, LocalizedPluginYieldsStringIds) {
 }
 
 TEST(LocalizedFields, NonLocalizedPluginYieldsInlineText) {
-  const auto plugin = plugin_with_flags(0);
+  auto plugin = plugin_with_flags(0);
   const auto value =
       fo4::schema::read_localized_string(plugin, k_race, k_desc, make(k_desc, text("hello")));
   EXPECT_FALSE(value.localized());
@@ -153,7 +153,7 @@ TEST(LocalizedFields, BitSevenSelectsRepresentationForTheSameFourBytes) {
 }
 
 TEST(LocalizedFields, ZeroExternalIdIsPreservedWithoutTextLookup) {
-  const auto plugin = plugin_with_flags(0x80);
+  auto plugin = plugin_with_flags(0x80);
   const auto value =
       fo4::schema::read_localized_string(plugin, k_race, k_desc, make(k_desc, id(0)));
   ASSERT_TRUE(value.localized());
@@ -164,7 +164,7 @@ TEST(LocalizedFields, ZeroExternalIdIsPreservedWithoutTextLookup) {
 
 // A non-lstring field stays inline even in a localized plugin.
 TEST(LocalizedFields, NonLocalizedFieldStaysInlineInALocalizedPlugin) {
-  const auto plugin = plugin_with_flags(0x80);
+  auto plugin = plugin_with_flags(0x80);
   const auto value =
       fo4::schema::read_localized_string(plugin, k_race, k_edid, make(k_edid, text("EdId")));
   EXPECT_FALSE(value.localized());
@@ -172,7 +172,7 @@ TEST(LocalizedFields, NonLocalizedFieldStaysInlineInALocalizedPlugin) {
 }
 
 TEST(LocalizedFields, NonFourByteLocalizedPayloadHasNoIdAndRoundTrips) {
-  const auto plugin = plugin_with_flags(0x80);
+  auto plugin = plugin_with_flags(0x80);
   const std::vector<std::vector<std::byte>> payloads{
       {std::byte{0x34}, std::byte{0x12}},
       {std::byte{'n'}, std::byte{'o'}, std::byte{'p'}, std::byte{'e'}, std::byte{0}},
@@ -188,7 +188,7 @@ TEST(LocalizedFields, NonFourByteLocalizedPayloadHasNoIdAndRoundTrips) {
 }
 
 TEST(LocalizedFields, InlineTextMustBeSingleNulTerminated) {
-  const auto plugin = plugin_with_flags(0);
+  auto plugin = plugin_with_flags(0);
   EXPECT_THROW(
       static_cast<void>(fo4::schema::read_localized_string(
           plugin, k_race, k_desc, make(k_desc, std::vector<std::byte>{std::byte{'a'}}))),
@@ -204,7 +204,7 @@ TEST(LocalizedFields, ArmorCallerKeepsNonFourBytePayloadWithoutId) {
   const auto desc = text("nope");
   const auto bytes = localized_plugin(
       "ARMO", {{"FULL", full}, {"DESC", desc}, {"DATA", data.bytes}});
-  const auto plugin = fo4::read_plugin(bytes, "Test.esp");
+  auto plugin = fo4::read_plugin(bytes, "Test.esp");
 
   std::optional<fo4::forms::Armor> armor;
   EXPECT_NO_THROW(armor = fo4::forms::decode_armor(plugin, fo4::FormKey::parse("000800:Test.esp")));
@@ -231,7 +231,7 @@ TEST(LocalizedFields, RaceCallerKeepsNonFourBytePayloadWithoutId) {
        {"MNAM", {}},
        {"FNAM", {}},
        {"NAM3", {}}});
-  const auto plugin = fo4::read_plugin(bytes, "Test.esp");
+  auto plugin = fo4::read_plugin(bytes, "Test.esp");
 
   std::optional<fo4::forms::Race> race;
   EXPECT_NO_THROW(race = fo4::forms::decode_race(plugin, fo4::FormKey::parse("000800:Test.esp")));
@@ -309,7 +309,7 @@ TEST(LocalizedFields, Wp10LocalizedPairsAreMembers) {
 }
 
 TEST(LocalizedFields, Wp10NewPairRoundTripsAStringId) {
-  const auto plugin = plugin_with_flags(0x80);
+  auto plugin = plugin_with_flags(0x80);
   const auto shrt = fo4::Signature::from_string("SHRT");
   const auto value = fo4::schema::read_localized_string(plugin, k_npc, shrt, make(shrt, id(0x4321)));
   ASSERT_TRUE(value.localized());

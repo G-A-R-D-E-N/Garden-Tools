@@ -101,7 +101,7 @@ std::vector<std::byte> placements(int count) {
 }  // namespace
 
 TEST(StaticCollection, DecodesPartTargetsAndFixedSizePlacements) {
-  const auto plugin = fo4::read_plugin(make_scol(), "Collection.esp");
+  auto plugin = fo4::read_plugin(make_scol(), "Collection.esp");
   const auto key = fo4::FormKey::parse("000800:Collection.esp");
   const auto* record = fo4::find_record(plugin, key);
   ASSERT_NE(record, nullptr);
@@ -123,7 +123,7 @@ TEST(StaticCollection, DecodesPartTargetsAndFixedSizePlacements) {
 }
 
 TEST(StaticCollection, RejectsMalformedPlacementPayload) {
-  const auto plugin = fo4::read_plugin(make_scol(true), "Collection.esp");
+  auto plugin = fo4::read_plugin(make_scol(true), "Collection.esp");
   const auto* record = fo4::find_record(
       plugin, fo4::FormKey::parse("000800:Collection.esp"));
   ASSERT_NE(record, nullptr);
@@ -133,7 +133,7 @@ TEST(StaticCollection, RejectsMalformedPlacementPayload) {
 }
 
 TEST(StaticCollection, RejectsDuplicateDataArraysInOnePart) {
-  const auto plugin = fo4::read_plugin(
+  auto plugin = fo4::read_plugin(
       scol_plugin({{"ONAM", u32_bytes(0x00000810u)}, {"DATA", placements(1)}, {"DATA", placements(1)}}),
       "Collection.esp");
   const auto* record = fo4::find_record(plugin, fo4::FormKey::parse("000800:Collection.esp"));
@@ -143,7 +143,7 @@ TEST(StaticCollection, RejectsDuplicateDataArraysInOnePart) {
 }
 
 TEST(StaticCollection, DataBeforeAnyOnamIsDropped) {
-  const auto plugin = fo4::read_plugin(
+  auto plugin = fo4::read_plugin(
       scol_plugin({{"DATA", placements(1)}, {"ONAM", u32_bytes(0x00000810u)}, {"DATA", placements(2)}}),
       "Collection.esp");
   const auto* record = fo4::find_record(plugin, fo4::FormKey::parse("000800:Collection.esp"));
@@ -156,7 +156,7 @@ TEST(StaticCollection, DataBeforeAnyOnamIsDropped) {
 }
 
 TEST(StaticCollection, OnamWithoutDataKeepsAnEmptyPart) {
-  const auto plugin = fo4::read_plugin(
+  auto plugin = fo4::read_plugin(
       scol_plugin({{"ONAM", u32_bytes(0x00000810u)}, {"ONAM", u32_bytes(0x00000811u)}, {"DATA", placements(1)}}),
       "Collection.esp");
   const auto* record = fo4::find_record(plugin, fo4::FormKey::parse("000800:Collection.esp"));

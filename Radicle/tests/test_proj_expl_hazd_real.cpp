@@ -53,7 +53,7 @@ TEST(ProjExplHazdRealData, SchemaMatchesEveryShippedRecord) {
     const auto path = std::filesystem::path{dir} / name;
     if (!std::filesystem::exists(path)) continue;
     ++files;
-    const auto plugin = fo4::read_plugin_file(path);
+    auto plugin = fo4::read_plugin_file(path);
 
     for (const auto& family : families()) {
       const auto signature = fo4::Signature::from_string(family.signature);

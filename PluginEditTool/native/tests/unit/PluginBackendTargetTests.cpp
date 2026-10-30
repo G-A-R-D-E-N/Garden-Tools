@@ -191,6 +191,30 @@ public:
         return recordTypedCall("EditFactionEntries", args);
     }
 
+    fo4ide::Result<nlohmann::json> addPackageProcedure(const nlohmann::json& args) override {
+        return recordTypedCall("AddPackageProcedure", args);
+    }
+
+    fo4ide::Result<nlohmann::json> removePackageProcedure(const nlohmann::json& args) override {
+        return recordTypedCall("RemovePackageProcedure", args);
+    }
+
+    fo4ide::Result<nlohmann::json> addSoundFile(const nlohmann::json& args) override {
+        return recordTypedCall("AddSoundFile", args);
+    }
+
+    fo4ide::Result<nlohmann::json> removeSoundFile(const nlohmann::json& args) override {
+        return recordTypedCall("RemoveSoundFile", args);
+    }
+
+    fo4ide::Result<nlohmann::json> setSoundBase(const nlohmann::json& args) override {
+        return recordTypedCall("SetSoundBase", args);
+    }
+
+    fo4ide::Result<nlohmann::json> createSound(const nlohmann::json& args) override {
+        return recordTypedCall("CreateSound", args);
+    }
+
     fo4ide::Result<nlohmann::json> addScript(const nlohmann::json& args) override {
         return recordTypedCall("AddScript", args);
     }
@@ -211,13 +235,9 @@ public:
         return recordTypedCall("GetWeaponDamageTypes", args);
     }
 
-    fo4ide::Result<nlohmann::json> getPerkEffects(const nlohmann::json& args) const override {
-        return recordTypedCall("GetPerkEffects", args);
-    }
+    fo4ide::Result<nlohmann::json> getPerkEffects(const nlohmann::json& args) const override { return recordTypedCall("GetPerkEffects", args); }
 
-    fo4ide::Result<nlohmann::json> setPerkEffects(const nlohmann::json& args) override {
-        return recordTypedCall("SetPerkEffects", args);
-    }
+    fo4ide::Result<nlohmann::json> setPerkEffects(const nlohmann::json& args) override { return recordTypedCall("SetPerkEffects", args); }
 
     fo4ide::Result<nlohmann::json> recordTypedCall(std::string_view name, const nlohmann::json& args) const {
         typedCalls.emplace_back(std::string(name), args);
@@ -663,9 +683,9 @@ TEST_CASE("PluginBackendTarget routes the typed record methods and the strings n
     const auto args = nlohmann::json::array({"Patch.esp", "000800:Patch.esp"});
     const std::vector<std::string> methods{
         "SetLeveledListSettings", "EditLeveledListEntry", "GetNpc", "EditNpcEntries", "GetFaction",
-        "EditFactionEntries", "GetWeaponDamageTypes", "GetPerkEffects", "SetPerkEffects",
-        "CreatePlacedObject", "CreateInteriorCell",
-        "AddScript", "RemoveScript", "AddScriptProperty", "RemoveScriptProperty"};
+        "EditFactionEntries", "GetWeaponDamageTypes", "GetPerkEffects", "SetPerkEffects", "CreatePlacedObject",
+        "CreateInteriorCell", "AddSoundFile", "RemoveSoundFile", "SetSoundBase", "CreateSound", "AddPackageProcedure",
+        "RemovePackageProcedure", "AddScript", "RemoveScript", "AddScriptProperty", "RemoveScriptProperty"};
     for (const auto& method : methods) {
         const auto result = target.invoke(method, args);
         REQUIRE(result.has_value());
@@ -694,6 +714,12 @@ TEST_CASE("IPluginBackend defaults report distinct unavailable errors for the ty
     unavailable(base.copyAsWrapper(args), "CopyAsWrapperUnavailable");
     unavailable(base.createPlacedObject(args), "CellBackendUnavailable");
     unavailable(base.createInteriorCell(args), "CellBackendUnavailable");
+    unavailable(base.addSoundFile(args), "SoundBackendUnavailable");
+    unavailable(base.addPackageProcedure(args), "PackageBackendUnavailable");
+    unavailable(base.removePackageProcedure(args), "PackageBackendUnavailable");
+    unavailable(base.removeSoundFile(args), "SoundBackendUnavailable");
+    unavailable(base.setSoundBase(args), "SoundBackendUnavailable");
+    unavailable(base.createSound(args), "SoundBackendUnavailable");
     unavailable(base.addScript(args), "ScriptBackendUnavailable");
     unavailable(base.removeScript(args), "ScriptBackendUnavailable");
     unavailable(base.addScriptProperty(args), "ScriptBackendUnavailable");

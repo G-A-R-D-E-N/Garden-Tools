@@ -407,7 +407,7 @@ TEST(ScalarEmbedded, ReadsWeaponDnamAtMeasuredOffsetsAndTreatsAShortPayloadAsAbs
   fo4::test::end_record(out, weap);
   fo4::test::end_group(out, group);
 
-  const auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
   const auto key = fo4::FormKey{fo4::PluginKey::from_filename("Patch.esp"), fo4::LocalFormId{0x800}};
   const auto* record = fo4::find_record(plugin, key);
   ASSERT_NE(record, nullptr);

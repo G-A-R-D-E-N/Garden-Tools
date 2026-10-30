@@ -2,6 +2,7 @@
 
 #include "../plugin/record_edit.hpp"
 #include "fo4/environment/environment.hpp"
+#include "fo4/schema/scalar.hpp"
 #include "record_reader.hpp"
 
 #include <algorithm>
@@ -69,7 +70,7 @@ constexpr const char* location_names[] = {"near reference", "in cell", "near pac
 constexpr const char* target_names[] = {"specific reference", "object id", "object type", "linked reference",
     "quest reference alias", "special reference", "self", "keyword", "alias collection item"};
 
-constexpr std::size_t max_depth = 64;
+constexpr std::size_t max_depth = package_tree_max_depth;
 
 struct Unreconciled {};
 
@@ -198,21 +199,28 @@ std::uint32_t read_conditions(Scan& scan) {
 
 std::size_t read_node(Scan& scan, std::vector<PackageProcedureNode>& nodes, std::size_t depth) {
   if (depth > max_depth) throw Unreconciled{};
+  const auto begin = scan.at;
   const auto branch = name_in(scan.subs[scan.take(sig("ANAM"))], branch_types);
   const auto index = nodes.size();
   nodes.emplace_back();
+  nodes[index].begin = begin;
   nodes[index].kind = branch == "Procedure" ? PackageProcedureKind::leaf : PackageProcedureKind::container;
   nodes[index].name = std::string{branch};
+  nodes[index].condition_begin = scan.at;
   nodes[index].condition_count = read_conditions(scan);
+  nodes[index].condition_end = scan.at;
   if (nodes[index].kind == PackageProcedureKind::leaf) {
     nodes[index].name = std::string{name_in(scan.subs[scan.take(sig("PNAM"))], procedures)};
     nodes[index].opaque_begin = scan.at;
     while (scan.at < scan.subs.size() && !ends_leaf(scan.subs[scan.at].signature)) ++scan.at;
     nodes[index].opaque_end = scan.at;
     skip_flag_override(scan);
+    nodes[index].end = scan.at;
     return index;
   }
+  nodes[index].prcb_index = scan.at;
   const auto& prcb = scan.subs[scan.take(sig("PRCB"), 8)];
+  nodes[index].children_anchor = scan.at;
   nodes[index].child_count = Reader::u32(prcb, 0);
   nodes[index].flags = Reader::u32(prcb, 4);
   for (std::uint32_t i = 0; i < nodes[index].child_count; ++i) {
@@ -220,6 +228,7 @@ std::size_t read_node(Scan& scan, std::vector<PackageProcedureNode>& nodes, std:
     nodes[index].children.push_back(child);
   }
   skip_flag_override(scan);
+  nodes[index].end = scan.at;
   return index;
 }
 
@@ -508,4 +517,8 @@ PackageInputMutationStatus remove_package_data_input(Plugin& plugin,
   return PackageInputMutationStatus::updated;
 }
 
+bool is_known_procedure(std::string_view name) {
+  return std::find(procedures.begin(), procedures.end(), name) != procedures.end();
 }
+
+}  // namespace fo4::env

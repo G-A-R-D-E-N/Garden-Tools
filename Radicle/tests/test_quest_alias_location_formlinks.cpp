@@ -81,7 +81,7 @@ fo4::forms::QuestAliasCreation base_location() {
 }
 
 TEST(QuestAliasLocationFormLinks, EncodesSpecificLocationOwnedByCurrentPlugin) {
-  const auto plugin = fo4::read_plugin(plugin_with_master(), "Patch.esp");
+  auto plugin = fo4::read_plugin(plugin_with_master(), "Patch.esp");
   auto creation = base_location();
   creation.fill = fo4::forms::QuestSpecificLocationFill{
       fo4::FormKey::parse("000500:Patch.esp")};
@@ -97,7 +97,7 @@ TEST(QuestAliasLocationFormLinks, EncodesSpecificLocationOwnedByCurrentPlugin) {
 }
 
 TEST(QuestAliasLocationFormLinks, EncodesReferenceAliasLocationWithMasterKeyword) {
-  const auto plugin = fo4::read_plugin(plugin_with_master(), "Patch.esp");
+  auto plugin = fo4::read_plugin(plugin_with_master(), "Patch.esp");
   auto creation = base_location();
   creation.fill = fo4::forms::QuestReferenceAliasLocationFill{
       .alias = -1,
@@ -121,7 +121,7 @@ TEST(QuestAliasLocationFormLinks, EncodesReferenceAliasLocationWithMasterKeyword
 }
 
 TEST(QuestAliasLocationFormLinks, EncodesExternalLocationWithOptionalMembers) {
-  const auto plugin = fo4::read_plugin(plugin_with_master(), "Patch.esp");
+  auto plugin = fo4::read_plugin(plugin_with_master(), "Patch.esp");
   auto creation = base_location();
   creation.fill = fo4::forms::QuestExternalAliasLocationFill{
       .quest = fo4::FormKey::parse("000333:Patch.esp"),
@@ -147,7 +147,7 @@ TEST(QuestAliasLocationFormLinks, EncodesExternalLocationWithOptionalMembers) {
 }
 
 TEST(QuestAliasLocationFormLinks, RejectsEmptyExternalAndWrongAliasKind) {
-  const auto plugin = fo4::read_plugin(plugin_with_master(), "Patch.esp");
+  auto plugin = fo4::read_plugin(plugin_with_master(), "Patch.esp");
   auto empty_external = base_location();
   empty_external.fill = fo4::forms::QuestExternalAliasLocationFill{
       .quest = std::nullopt,

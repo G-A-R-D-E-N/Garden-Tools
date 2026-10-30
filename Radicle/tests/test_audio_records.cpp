@@ -200,7 +200,7 @@ void expect_only_changed(const fo4::Record& original, const fo4::Record& edited,
 }  // namespace
 
 TEST(AudioRecordsSynthetic, EveryDeclaredRowDecodesFromTheFixture) {
-  const auto plugin = fo4::read_plugin(fixture(), "Patch.esp");
+  auto plugin = fo4::read_plugin(fixture(), "Patch.esp");
   for (const auto& entry : kRecords) {
     SCOPED_TRACE(std::string(entry.signature));
     const auto signature = fo4::Signature::from_string(entry.signature);

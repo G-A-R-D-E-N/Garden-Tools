@@ -25,6 +25,8 @@ enum class ScalarStorage {
   zstring,
   // Constraint: fixed_string is whole-payload only and its width is the descriptor's payload_size.
   fixed_string,
+  // Constraint: bytes is whole-payload only, has no storage width, and carries its value as lowercase hex; an empty value is a zero-byte payload.
+  bytes,
 };
 
 enum class ScalarPresentation {

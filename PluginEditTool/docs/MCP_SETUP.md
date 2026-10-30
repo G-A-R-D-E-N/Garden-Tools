@@ -5,8 +5,8 @@
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
 FO4IDE implements it: launched with `--mcp`, `FO4RecordEditor.exe` opens no window and speaks
 line-delimited JSON-RPC on stdin and stdout (protocol version 2024-11-05, server name `fo4editor`).
-It advertises **51 tools**: 17 for plugins and records, 14 for typed records, 4 for MO2 profile and host state, 5 for
-Papyrus, 4 for NIFs, 2 for materials, 4 for audio and 1 for BA2 archives.
+It advertises **57 tools**: 17 for plugins and records, 18 for typed records, 4 for MO2 profile and host state, 5 for
+Papyrus, 4 for NIFs, 2 for materials, 4 for audio, 1 for BA2 archives and 2 for PACK procedure trees.
 
 The server is the native C++23 host that the desktop editor also runs on, and it needs no other
 runtime. Radicle, the C++ plugin library built into the app, parses, edits and writes the plugins.
@@ -158,6 +158,12 @@ These read the winning version of a leveled list, NPC_, FACT or WEAP record (PER
 | `edit_npc_entries` | `plugin`, `form_key`, `list`, `op`, [`index`], [`value`] | memory | Adds, sets or removes one entry; `list` is `factions`, `perks` or `inventory`. `index` is required for `set` and `remove`, `value` for `add` and `set`. |
 | `get_faction` | `form_key` | no | A FACT record's relations and ranks. A localized rank title reads as `{"stringId": n}`. |
 | `edit_faction_entries` | `plugin`, `form_key`, `list`, `op`, [`index`], [`value`] | memory | Adds, sets or removes one relation or rank; `list` is `relations` or `ranks`. |
+| `add_sound_file` | `plugin`, `form_key`, `file` | memory | Adds one ANAM file name to an SNDR sound descriptor, after the last file and before the descriptors. The result names the new index. Call `save_plugin` to persist. |
+| `add_package_procedure` | `plugin`, `form_key`, `parent_index`, `procedure` | memory | Adds one leaf procedure under a decoded PACK procedure-tree branch and recomputes the branch counts. A procedure with a verified data-input count gets that many data inputs (existing inputs are reused in block order, missing ones are created as Bool) and PKC2 indexes; an unknown procedure, a templated package that would need inputs created, and an unextendable input block are refused. The result names the new node index. Call `save_plugin` to persist. |
+| `remove_package_procedure` | `plugin`, `form_key`, `node_index` | memory | Removes one leaf procedure node, its PKC2 indexes and PFO2/PFOR override, and every data input only that leaf referenced, then reindexes the remaining input ids and PKC2 references. A container, the root, an unattributable leaf payload, duplicate input ids and a data input still referenced elsewhere are refused. Call `save_plugin` to persist. |
+| `remove_sound_file` | `plugin`, `form_key`, `file_index` | memory | Removes one SNDR file name by its ANAM index. Call `save_plugin` to persist. |
+| `set_sound_base` | `plugin`, `form_key` [`target`] | memory | Sets or removes the BNAM base-descriptor link of an SNDR. Only an AutoWeapon descriptor carries that arm; an empty or omitted `target` removes the link. Call `save_plugin` to persist. |
+| `create_sound` | `plugin`, `signature`, `editor_id` | memory | Creates a SOUN sound marker or an FSTS footstep set from proved defaults; any other signature is refused. Call `save_plugin` to persist. |
 | `add_script` | `plugin`, `form_key`, `script` [`flags`, `index`] | memory | Adds one script to the record's VMAD, creating an empty VMAD when the record has none. `script` is the Papyrus script name, `flags` the optional script flags byte and `index` the optional script-list position; the result names the new index. Call `save_plugin` to persist. |
 | `remove_script` | `plugin`, `form_key`, `script_index` | memory | Removes one script and its properties by script index. Call `save_plugin` to persist. |
 | `add_script_property` | `plugin`, `form_key`, `script_index`, `name`, `type` [`flags`, `index`] | memory | Adds one property to a script. `type` is the VMAD property type byte (1 object, 2 string, 3 int, 4 float, 5 bool, 7 struct, 11-15 arrays, 17 struct array); `flags` is the optional property flags byte and `index` the optional property-list position. Set the value with `set_field` or the typed VMAD setters. Call `save_plugin` to persist. |

@@ -249,7 +249,7 @@ TEST(FormLink, PackedArrayCollectionPreservesDocumentOrder) {
   append_record(out, "NPC_", 0x03000799, "PNAM", words({0x02000041}));
   append_record(out, "OMOD", 0x03000800, "MNAM", words({0x02000042, 0x00000099}));
   append_record(out, "MUSC", 0x03000801, "TNAM", words({0x02000043}));
-  const auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
   const auto links = fo4::collect_form_links(plugin);
   ASSERT_EQ(links.size(), 4);
   EXPECT_EQ(links[0].record, fo4::FormKey::parse("000799:Patch.esp"));

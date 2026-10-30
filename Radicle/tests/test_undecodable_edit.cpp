@@ -418,7 +418,7 @@ TEST(UndecodableEdit, PlacedReferenceOverwriteRefusesUndecodableTarget) {
 
 TEST(UndecodableEdit, RemapRecordFormLinksRefusesUndecodableRecord) {
   const auto bytes = undecodable_plugin("MISC");
-  const auto plugin = fo4::read_plugin(bytes, "Edit.esp");
+  auto plugin = fo4::read_plugin(bytes, "Edit.esp");
   const auto* found = fo4::find_record(plugin, fo4::FormKey::parse("000802:Edit.esp"));
   ASSERT_NE(found, nullptr);
   auto record = *found;
@@ -430,7 +430,7 @@ TEST(UndecodableEdit, RemapRecordFormLinksRefusesUndecodableRecord) {
 
 TEST(UndecodableEdit, SyncQuestVmadRefusesUndecodableRecord) {
   const auto bytes = undecodable_plugin("QUST");
-  const auto plugin = fo4::read_plugin(bytes, "Edit.esp");
+  auto plugin = fo4::read_plugin(bytes, "Edit.esp");
   const auto* found = fo4::find_record(plugin, fo4::FormKey::parse("000802:Edit.esp"));
   ASSERT_NE(found, nullptr);
   auto record = *found;
@@ -444,7 +444,7 @@ TEST(UndecodableEdit, SyncQuestVmadRefusesUndecodableRecord) {
 
 TEST(UndecodableEdit, WriteCtdaConditionsRefusesUndecodableRecord) {
   const auto bytes = undecodable_plugin("MISC");
-  const auto plugin = fo4::read_plugin(bytes, "Edit.esp");
+  auto plugin = fo4::read_plugin(bytes, "Edit.esp");
   const auto* found = fo4::find_record(plugin, fo4::FormKey::parse("000802:Edit.esp"));
   ASSERT_NE(found, nullptr);
   auto record = *found;

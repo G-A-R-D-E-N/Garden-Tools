@@ -197,7 +197,7 @@ const fo4::Subrecord* find_subrecord(const fo4::Record& record, fo4::Signature s
 }  // namespace
 
 TEST(BaseItemsSynthetic, EveryScalarRowDecodesOnTheFixture) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   for (const auto& item : k_items) {
     const auto signature = fo4::Signature::from_string(item.signature);
     const auto* record = fo4::find_record(plugin, fo4::FormKey::parse(item.key));
@@ -283,7 +283,7 @@ TEST(BaseItemsSynthetic, EditsOneRowPerRecordAndRereads) {
 }
 
 TEST(BaseItemsSynthetic, FixtureRecordsMeetTheirAuthoringMinimums) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   for (const auto& item : k_items) {
     const auto signature = fo4::Signature::from_string(item.signature);
     const auto constraint = fo4::schema::record_authoring_constraint(signature);
@@ -301,7 +301,7 @@ TEST(BaseItemsSynthetic, FixtureRecordsMeetTheirAuthoringMinimums) {
 }
 
 TEST(BaseItemsSynthetic, FixtureRecordsPassAuthoringPreflight) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   for (const auto& item : k_items) {
     const auto issues =
         fo4::schema::preflight_authoring_record(plugin, fo4::FormKey::parse(item.key));

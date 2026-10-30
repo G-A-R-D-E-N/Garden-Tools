@@ -461,7 +461,7 @@ TEST(SigBaseObjects, MatchesXeditUnionAndRejectsNonBaseRecords) {
 }
 
 TEST(KwdaFormLinkList, ReadsPackedValuesAndDistinguishesEmptyFromMissingRecord) {
-  const auto plugin = fo4::read_plugin(plugin_with_keywords(), "Guns.esp");
+  auto plugin = fo4::read_plugin(plugin_with_keywords(), "Guns.esp");
   const auto descriptor = keywords_descriptor();
   const auto values = fo4::schema::record_formlink_list_values(
       plugin, fo4::FormKey::parse("000900:Guns.esp"), descriptor);

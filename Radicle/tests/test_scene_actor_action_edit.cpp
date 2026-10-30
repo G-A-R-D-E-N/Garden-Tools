@@ -179,12 +179,20 @@ TEST(SceneActionEdit, InsertingAHeaderOnlyActionReadsBackWithTheStoredDefaults) 
   EXPECT_FALSE(scene.actions[1].name.has_value());
   ASSERT_TRUE(scene.actions[1].actor_alias.has_value());
   EXPECT_EQ(*scene.actions[1].actor_alias, -1);
-  EXPECT_FALSE(scene.actions[1].index.has_value());
+  ASSERT_TRUE(scene.actions[1].index.has_value());
+  EXPECT_EQ(*scene.actions[1].index, 2u);
   EXPECT_FALSE(scene.actions[1].flags.has_value());
   EXPECT_TRUE(scene.actions[1].payload.empty());
   EXPECT_EQ(scene.actions[2].type, 2);
   ASSERT_TRUE(scene.actions[2].actor_alias.has_value());
   EXPECT_EQ(*scene.actions[2].actor_alias, 0xFFFFFFFF);
+  ASSERT_TRUE(scene.actions[2].index.has_value());
+  EXPECT_EQ(*scene.actions[2].index, 3u);
+  ASSERT_TRUE(scene.actions[3].index.has_value());
+  EXPECT_EQ(*scene.actions[3].index, 4u);
+  const auto inams = payloads(reloaded, k_scene, "INAM");
+  ASSERT_EQ(inams.size(), 5u);
+  EXPECT_EQ(inams.back(), words({4}));
 }
 
 TEST(SceneActionEdit, RemovingAnActionErasesItsOpenCloseSpanWithPayload) {
@@ -200,13 +208,13 @@ TEST(SceneActionEdit, RemovingAnActionErasesItsOpenCloseSpanWithPayload) {
 
   EXPECT_EQ(fo4::remove_scene_action(plugin, key(k_scene), 0), Group::updated);
 
-  const auto after = snapshot(reload(plugin), k_scene);
-  ASSERT_EQ(after.size(), before.size() - (end - open + 1));
+  const auto after_names = order(plugin, k_scene);
+  ASSERT_EQ(after_names.size(), names.size() - (end - open + 1));
   for (std::size_t at = 0; at < open; ++at) {
-    EXPECT_EQ(after[at], before[at]) << at;
+    EXPECT_EQ(after_names[at], names[at]) << at;
   }
-  for (std::size_t at = open; at < after.size(); ++at) {
-    EXPECT_EQ(after[at], before[at + end - open + 1]) << at;
+  for (std::size_t at = open; at < after_names.size(); ++at) {
+    EXPECT_EQ(after_names[at], names[at + end - open + 1]) << at;
   }
   const auto reloaded = reload(plugin);
   EXPECT_EQ(part_count(reloaded, fo4::ScenePart::action), 2u);
@@ -215,7 +223,61 @@ TEST(SceneActionEdit, RemovingAnActionErasesItsOpenCloseSpanWithPayload) {
   ASSERT_EQ(scene.actions.size(), 2u);
   EXPECT_EQ(scene.actions[0].type, 2);
   EXPECT_EQ(scene.actions[1].type, 1);
+  ASSERT_TRUE(scene.actions[0].index.has_value());
+  EXPECT_EQ(*scene.actions[0].index, 1u);
+  ASSERT_TRUE(scene.actions[1].index.has_value());
+  EXPECT_EQ(*scene.actions[1].index, 2u);
+  const auto inams = payloads(reloaded, k_scene, "INAM");
+  ASSERT_EQ(inams.size(), 3u);
+  EXPECT_EQ(inams.back(), words({2}));
   EXPECT_EQ(scene.actors.size(), 2u);
+}
+
+TEST(SceneActionEdit, MovingAnActionReordersTheGroupsAndRenumbersTheirIndices) {
+  auto plugin = read(build());
+  EXPECT_EQ(fo4::move_scene_action(plugin, key(k_scene), 2, 0), Group::updated);
+  const auto reloaded = reload(plugin);
+  const SavedEnvironment saved(reloaded);
+  const auto scene = fo4::env::decode_scene(saved.env(), saved.record(k_scene));
+  ASSERT_EQ(scene.actions.size(), 3u);
+  EXPECT_EQ(scene.actions[0].type, 1);
+  EXPECT_EQ(scene.actions[1].type, 0);
+  EXPECT_EQ(scene.actions[2].type, 2);
+  ASSERT_TRUE(scene.actions[0].index.has_value());
+  ASSERT_TRUE(scene.actions[1].index.has_value());
+  ASSERT_TRUE(scene.actions[2].index.has_value());
+  EXPECT_EQ(*scene.actions[0].index, 1u);
+  EXPECT_EQ(*scene.actions[1].index, 2u);
+  EXPECT_EQ(*scene.actions[2].index, 3u);
+  EXPECT_EQ(fo4::move_scene_action(plugin, key(k_scene), 1, 1),
+            fo4::SubrecordGroupMutationStatus::unchanged);
+  EXPECT_EQ(fo4::move_scene_action(plugin, key(k_scene), 3, 0),
+            fo4::SubrecordGroupMutationStatus::index_out_of_range);
+}
+
+TEST(SceneActionEdit, ActionIndexEditsRefuseAConventionTheSceneCannotFollow) {
+  auto plugin = read(build());
+  fo4::visit_records(plugin, [&](fo4::Record& record) {
+    if (record.form_key != key(k_scene)) return;
+    bool first = true;
+    for (auto& sub : record.subrecords) {
+      if (sub.signature != sig("INAM")) continue;
+      if (first) {
+        first = false;
+        continue;
+      }
+      sub.data = words({9});
+    }
+    record.original_range.clear();
+    record.decompressed_payload.clear();
+    plugin.original_range.clear();
+  });
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_THROW(static_cast<void>(fo4::insert_scene_action(plugin, key(k_scene), 1, 2)),
+               fo4::schema::ScalarError);
+  EXPECT_THROW(static_cast<void>(fo4::remove_scene_action(plugin, key(k_scene), 0)),
+               fo4::schema::ScalarError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
 }
 
 TEST(SceneActionEdit, AnActionAppendedLastLandsBeforeTheSceneTail) {

@@ -136,7 +136,7 @@ std::vector<std::byte> make_plugin() {
 }  // namespace
 
 TEST(PlacedVariants, CellListingDecodesEveryVariantAsVariant) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto refs = fo4::forms::placed_references_for_cell(plugin, local_key(kCellLocal));
   ASSERT_EQ(refs.size(), 1 + kVariants.size());
   EXPECT_EQ(refs[0].kind, fo4::forms::PlacedReferenceKind::object);
@@ -155,14 +155,14 @@ TEST(PlacedVariants, CellListingDecodesEveryVariantAsVariant) {
 }
 
 TEST(PlacedVariants, DecodeSkipsAddonNodeBecauseItIsNotAReference) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto* addn = fo4::find_record(plugin, local_key(kAddnLocal));
   ASSERT_NE(addn, nullptr);
   EXPECT_FALSE(fo4::forms::decode_placed_reference(plugin, *addn).has_value());
 }
 
 TEST(PlacedVariants, EveryScalarAndFormLinkRowReadsItsSubrecord) {
-  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   std::size_t scalar_rows = 0;
   std::size_t link_rows = 0;
   fo4::visit_records(plugin, [&](const fo4::Record& record) {
@@ -183,8 +183,9 @@ TEST(PlacedVariants, EveryScalarAndFormLinkRowReadsItsSubrecord) {
       }
     }
   });
-  EXPECT_EQ(scalar_rows, 8u * 10u + 3u + 2u);
-  EXPECT_EQ(link_rows, 8u * 3u + 2u);
+  // Constraint: the variant rows add the XESP pair, so a variant matches one row more than REFR.
+  EXPECT_EQ(scalar_rows, kVariants.size() * 10u + 9u + 3u);
+  EXPECT_EQ(link_rows, kVariants.size() * 3u + 2u + 2u);
 }
 
 TEST(PlacedVariants, EditsOneScalarAndOneLinkPerRecordAndRoundTrips) {

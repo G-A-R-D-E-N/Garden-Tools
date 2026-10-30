@@ -265,7 +265,7 @@ TEST_P(QuestStructureReal, EveryStoredQuestAgreesAndRoundTrips) {
   fo4::test::TempDataDir data;
   const auto file = data.path() / GetParam();
   fo4::write_plugin_file(reduced, file);
-  const auto plugin = fo4::read_plugin_file(file);
+  auto plugin = fo4::read_plugin_file(file);
   radicle_plugin* raw = nullptr;
   ASSERT_EQ(radicle_plugin_read_file(file.string().c_str(), &raw), RADICLE_STATUS_OK) << radicle_last_error();
   const std::unique_ptr<radicle_plugin, decltype(&radicle_plugin_destroy)> handle(raw, radicle_plugin_destroy);

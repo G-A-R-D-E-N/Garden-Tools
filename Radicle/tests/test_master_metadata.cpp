@@ -215,7 +215,7 @@ TEST(MasterMetadata, ReorderRemapsFormIdBearingCellGroupLabels) {
 }
 
 TEST(MasterMetadata, RemovingLastMasterOfLightPluginRefusesLowOwnIds) {
-  const auto plugin = fo4::read_plugin(make_single_master_plugin(true, 0x001), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_single_master_plugin(true, 0x001), "Patch.esp");
   ASSERT_TRUE(plugin.header.tes4_flags.is_small_file());
   ASSERT_EQ(plugin.header.masters.size(), 1u);
 

@@ -105,7 +105,7 @@ std::vector<std::filesystem::path> official_hedr_samples(const std::filesystem::
 
 TEST(HedrCount, CleanPluginPreservesOriginalBytesEvenWhenStoredCountIsStale) {
   const auto bytes = make_nested_plugin(999);
-  const auto plugin = fo4::read_plugin(bytes, "StaleButClean.esp");
+  auto plugin = fo4::read_plugin(bytes, "StaleButClean.esp");
   ASSERT_EQ(plugin.header.record_count, 999u);
   EXPECT_EQ(fo4::write_plugin(plugin), bytes);
 }
