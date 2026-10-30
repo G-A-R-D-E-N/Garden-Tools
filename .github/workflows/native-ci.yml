@@ -820,6 +820,8 @@ jobs:
           $env:FO4_PSC_CORPUS = $pscRoots
           $env:FO4RE_PSC_CORPUS = $pscRoots
           $env:FO4RE_PSC_ROOTS = $pscRoots
+          # The CK differential must import from Base only; Scripts\Source\User holds F4SE and mod edits.
+          $env:FO4RE_PEX_IMPORT_ROOTS = Join-Path $env:FO4_DATA_DIR 'Scripts\Source\Base'
           # FO4RE_PEX_CORPUS, FO4RE_PEX_RELEASE and FO4RE_PEX_REQUIRE come from the staging step.
           $ctestArgs = @('--test-dir', 'build\native', '--output-on-failure', '--parallel', '4', '--no-tests=error', '-R', $env:REAL_DATA_TEST_REGEX)
           if ($env:CTEST_EXCLUDE_REGEX) { $ctestArgs += @('-E', $env:CTEST_EXCLUDE_REGEX) }

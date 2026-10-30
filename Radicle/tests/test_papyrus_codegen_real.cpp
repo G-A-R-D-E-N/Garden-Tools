@@ -234,7 +234,8 @@ TEST(PapyrusCodegenReal, CompiledOutputMatchesCreationKitInstructionForInstructi
     return;
   }
 
-  const auto extra = helper::rootsFromEnv("FO4RE_PSC_ROOTS");
+  auto extra = helper::rootsFromEnv("FO4RE_PEX_IMPORT_ROOTS");
+  if (extra.empty()) extra = helper::rootsFromEnv("FO4RE_PSC_ROOTS");
   const auto release = envValue("FO4RE_PEX_RELEASE") == "1";
   const auto pairs = pairsFrom(pexRoots);
 
