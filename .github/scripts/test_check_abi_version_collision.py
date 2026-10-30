@@ -146,15 +146,25 @@ class CompareStatusTest(unittest.TestCase):
                              ({forward: {"total_commits": 0}, backward: {"total_commits": 2}}, "behind"),
                              ({forward: {"total_commits": 0}, backward: {"total_commits": 0}}, "identical"),
                              ({forward: {"total_commits": 1}, backward: {"total_commits": 1}}, "diverged"),
-                             ({forward: {}, backward: {"total_commits": 0}}, None)]:
+                             ({forward: {}, backward: {"total_commits": 0}}, None),
+                             ({forward: {"total_commits": None}, backward: {"total_commits": 1}}, None),
+                             ({forward: {"total_commits": "1"}, backward: {"total_commits": 0}}, None)]:
             status, seen = self.run_with(bodies)
             self.assertEqual(want, status)
             self.assertEqual([forward, backward], seen)
 
+    def test_a_failed_request_gives_no_ancestry(self):
+        import urllib.error
+        real = check.get_json
+        check.get_json = lambda url, token: (_ for _ in ()).throw(urllib.error.URLError("down"))
+        try:
+            self.assertIsNone(check.compare_status("a", "r", "t", "old", "new"))
+        finally:
+            check.get_json = real
+
 
 class ChangedHeadersTest(unittest.TestCase):
-    def test_a_branch_behind_its_base_reports_no_header_edit(self):
-        root = tempfile.mkdtemp()
+    def make_repo(self, root, header_text):
         run = lambda *args: subprocess.run(
             ("git",) + args, check=True, capture_output=True, text=True, cwd=root)
         run("init", "-b", "main")
@@ -164,22 +174,53 @@ class ChangedHeadersTest(unittest.TestCase):
         header = os.path.join(root, "Radicle", "include", "fo4", "c_api_nif.h")
         os.makedirs(os.path.dirname(header))
         with open(header, "w") as stream:
-            stream.write("#define RADICLE_ABI_VERSION 92u\n")
+            stream.write(header_text)
         run("add", ".")
         run("commit", "-m", "base")
-        run("checkout", "-b", "behind")
-        run("checkout", "main")
-        with open(header, "a") as stream:
-            stream.write("/* base header edit */\n")
-        run("commit", "-am", "base header edit")
-        here = os.getcwd()
-        os.chdir(root)
-        try:
-            self.assertEqual([], check.changed_headers_from("main", "behind"))
-            self.assertEqual(["Radicle/include/fo4/c_api_nif.h"],
-                             check.changed_headers_from("behind", "main"))
-        finally:
-            os.chdir(here)
+        return run
+
+    def test_a_branch_behind_its_base_reports_no_header_edit(self):
+        with tempfile.TemporaryDirectory() as root:
+            run = self.make_repo(root, "#define RADICLE_ABI_VERSION 92u\n")
+            run("checkout", "-b", "behind")
+            run("checkout", "main")
+            header = os.path.join(root, "Radicle", "include", "fo4", "c_api_nif.h")
+            with open(header, "a") as stream:
+                stream.write("/* base header edit */\n")
+            run("commit", "-am", "base header edit")
+            here = os.getcwd()
+            os.chdir(root)
+            try:
+                self.assertEqual([], check.changed_headers_from("main", "behind"))
+                self.assertEqual(["Radicle/include/fo4/c_api_nif.h"],
+                                 check.changed_headers_from("behind", "main"))
+            finally:
+                os.chdir(here)
+
+    def test_a_missing_base_gives_exit_two(self):
+        with tempfile.TemporaryDirectory() as root:
+            run = self.make_repo(root, "#define RADICLE_ABI_VERSION 92u\n")
+            header = os.path.join(root, "Radicle", "include", "fo4", "c_api.h")
+            with open(header, "w") as stream:
+                stream.write("#define RADICLE_ABI_VERSION 92u\n")
+            run("add", ".")
+            run("commit", "-m", "number header")
+            here = os.getcwd()
+            os.chdir(root)
+            try:
+                self.assertEqual(2, check.main(["--base", "gone", "--local-only"]))
+            finally:
+                os.chdir(here)
+
+    def test_a_head_with_no_number_gives_exit_two(self):
+        with tempfile.TemporaryDirectory() as root:
+            self.make_repo(root, "/* no number here */\n")
+            here = os.getcwd()
+            os.chdir(root)
+            try:
+                self.assertEqual(2, check.main(["--base", "main", "--local-only"]))
+            finally:
+                os.chdir(here)
 
 
 if __name__ == "__main__":

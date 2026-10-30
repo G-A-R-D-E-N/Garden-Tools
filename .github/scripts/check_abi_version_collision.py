@@ -6,8 +6,7 @@ The rules, the cases behind them and the tests that pin them:
 Requires: run from a checkout of the pull request, with the base branch reachable from
 `origin` and `GITHUB_API_URL`, `GITHUB_REPOSITORY`, `GITHUB_TOKEN`, `GITHUB_BASE_REF`,
 `PR_NUMBER` set, or the same values passed as options.
-Exit codes: 0 clear, 1 a claim disagrees with another, 2 the cross-pull-request half
-could not run.
+Exit codes: 0 clear, 1 a claim disagrees with another, 2 the gate could not run.
 """
 
 import argparse
@@ -167,16 +166,18 @@ def compare_counts(api, repo, token, old, new):
     """Commits in new that are not in old, from the Forgejo compare body (see code-notes)."""
     try:
         data = get_json("{}/repos/{}/compare/{}...{}".format(api, repo, old, new), token)
-    except (urllib.error.URLError, urllib.error.HTTPError, ValueError, KeyError,
-            TypeError) as error:
+    except (OSError, ValueError, KeyError, TypeError) as error:
         print("::warning::cannot compare {} with {}: {}".format(old, new, error))
         return None
     try:
-        return data["total_commits"]
+        total = data["total_commits"]
     except (KeyError, TypeError):
+        total = None
+    if total is None or not isinstance(total, int):
         print("::warning::compare of {} with {} hides total_commits; no ancestry call".format(
             old, new))
         return None
+    return total
 
 
 def compare_status(api, repo, token, old, new):
@@ -231,15 +232,19 @@ def main(argv=None):
         print("::error::GITHUB_BASE_REF is empty; this check only runs on a pull request")
         return 2
 
-    version = read_version(git("show", "HEAD:" + HEADER), "HEAD:" + HEADER)
     try:
+        version = read_version(git("show", "HEAD:" + HEADER), "HEAD:" + HEADER)
         git("fetch", "--no-tags", "origin", arguments.base)
+        base_version = read_version(git("show", "FETCH_HEAD:" + HEADER), "the base branch")
+        changed = changed_headers_from("FETCH_HEAD", "HEAD")
     except subprocess.CalledProcessError as error:
-        print("::error::cannot fetch the base branch {} ({}); the gate needs it, so this is exit 2, not a pass".format(
+        print("::error::cannot read the base branch {} ({}); the gate needs it, so this is exit 2, not a pass".format(
             arguments.base, error))
         return 2
-    base_version = read_version(git("show", "FETCH_HEAD:" + HEADER), "the base branch")
-    changed = changed_headers_from("FETCH_HEAD", "HEAD")
+    except ValueError as error:
+        print("::error::{}; the gate needs both headers, so this is exit 2, not a pass".format(
+            error))
+        return 2
 
     if arguments.local_only:
         problems = local_problems(version, base_version, changed)
@@ -262,7 +267,7 @@ def main(argv=None):
             except (urllib.error.HTTPError, KeyError, TypeError, ValueError) as error:
                 print("::warning::cannot read the ABI of #{}: {}".format(
                     pull.get("number"), error))
-    except (urllib.error.URLError, urllib.error.HTTPError, ValueError) as error:
+    except (OSError, ValueError) as error:
         print("::error::cannot list the open pull requests ({}). This gate fails rather "
               "than passing silently.".format(error))
         return 2
