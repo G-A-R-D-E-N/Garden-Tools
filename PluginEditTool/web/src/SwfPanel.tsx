@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, RotateCcw, RotateCw, Save as SaveIcon } from 'lucide-react';
+import type { SwfHost } from './backend';
 import './SwfPanel.css';
 
 type CharacterRow = { id: number; kind: string; tagIndex: number; name: string; imported: string };
@@ -17,37 +18,6 @@ type PlacementRow = { tagIndex: number; depth: number; character: number | null;
 type AbcMethodRow = { index: number; name: string; returnType: string; hasBody: boolean };
 type AbcBlockRow = { abc: number; name: string; classes: string[]; scripts: string[]; methods: AbcMethodRow[] };
 type ActionTagRow = { tagIndex: number; code: number; insideSprite: boolean };
-
-type SwfHost = {
-  Open(path: string): Promise<string>;
-  Characters(): Promise<string>;
-  FrameLabels(timeline: number): Promise<string>;
-  Frame(timeline: number, frame: number): Promise<string>;
-  Timeline(index: number): Promise<string>;
-  RenameLabel(timeline: number, labelIndex: number, name: string): Promise<string>;
-  Undo(): Promise<string>;
-  Redo(): Promise<string>;
-  State(): Promise<string>;
-  Save(): Promise<string>;
-  AddLabel(frame: number, name: string, timeline: number): Promise<string>;
-  RemoveLabel(timeline: number, labelIndex: number): Promise<string>;
-  Placements(): Promise<string>;
-  SetDepth(tagIndex: number, depth: number): Promise<string>;
-  PlacementMatrix(tagIndex: number): Promise<string>;
-  SetTransform(tagIndex: number, x: number, y: number, scaleX: number, scaleY: number, rotate0: number, rotate1: number): Promise<string>;
-  InsertKeyframe(tagIndex: number, frame: number): Promise<string>;
-  ReadEditText(tagIndex: number): Promise<string>;
-  EditEditText(tagIndex: number, text: string, colorHex: string, x0: number, x1: number, y0: number, y1: number): Promise<string>;
-  AbcBlocks(): Promise<string>;
-  Disassemble(abc: number, methodIndex: number): Promise<string>;
-  ShapeSvg(characterId: number): Promise<string>;
-  FrameSvg(frame: number): Promise<string>;
-  BitmapPng(tagIndex: number): Promise<string>;
-  BitmapJpeg(tagIndex: number): Promise<string>;
-  InspectText(): Promise<string>;
-  ActionTags(): Promise<string>;
-  Avm1Disassemble(tagIndex: number): Promise<string>;
-};
 
 function host(): SwfHost | null {
   const bridge = (globalThis as { chrome?: { webview?: { hostObjects?: Record<string, SwfHost> } } }).chrome;

@@ -146,8 +146,11 @@ Result<nlohmann::json> SwfTarget::open(const nlohmann::json& args) {
     const std::string path = stringArg(args, 0);
     std::ifstream stream(path, std::ios::binary);
     if (!stream) return errorText("no SWF file was found at that path: " + path);
-    const std::vector<std::byte> bytes((std::istreambuf_iterator<char>(stream)),
-                                       std::istreambuf_iterator<char>());
+    const std::string text((std::istreambuf_iterator<char>(stream)),
+                           std::istreambuf_iterator<char>());
+    std::vector<std::byte> bytes;
+    bytes.reserve(text.size());
+    for (char c : text) bytes.push_back(static_cast<std::byte>(c));
     if (stream.bad()) return errorText("the SWF file could not be read: " + path);
 
     radicle_swf* movie = nullptr;
