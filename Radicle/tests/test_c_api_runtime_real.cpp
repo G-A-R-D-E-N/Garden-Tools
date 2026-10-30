@@ -18,6 +18,7 @@
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -366,7 +367,71 @@ ProgramRun run_program(const radicle_ba2* archive, const std::string& movie_path
   }
 }
 
-void check_pins(const char* program, const ProgramRun& run) {
+struct ManifestPin {
+  std::string program;
+  std::string build;
+  std::uint64_t snapshot_hash{0};
+  std::uint64_t host_log_hash{0};
+  std::size_t bgs_calls{0};
+};
+
+std::uint64_t parse_pin_u64(const std::string& text) {
+  std::uint64_t value = 0;
+  for (char c : text) {
+    if (c < '0' || c > '9') {
+      break;
+    }
+    value = value * 10 + static_cast<std::uint64_t>(c - '0');
+  }
+  return value;
+}
+
+std::vector<ManifestPin> load_replay_pins() {
+  std::vector<ManifestPin> pins;
+  std::ifstream in{std::filesystem::path{FO4_TESTDATA_DIR} / "swf" /
+                    "program_replay_pins.txt"};
+  if (!in) {
+    return pins;
+  }
+  ManifestPin current;
+  bool open = false;
+  const auto flush = [&] {
+    if (open && !current.program.empty() && !current.build.empty()) {
+      pins.push_back(current);
+    }
+    current = ManifestPin{};
+    open = false;
+  };
+  std::string line;
+  while (std::getline(in, line)) {
+    if (!line.empty() && line.back() == '\r') {
+      line.pop_back();
+    }
+    if (line.empty() || line.front() == '#') {
+      continue;
+    }
+    const std::size_t space = line.find(' ');
+    const std::string key = line.substr(0, space);
+    const std::string value = space == std::string::npos ? std::string{} : line.substr(space + 1);
+    if (key == "program") {
+      flush();
+      current.program = value;
+      open = true;
+    } else if (open && key == "build") {
+      current.build = value;
+    } else if (open && key == "snapshot") {
+      current.snapshot_hash = parse_pin_u64(value);
+    } else if (open && key == "hostlog") {
+      current.host_log_hash = parse_pin_u64(value);
+    } else if (open && key == "bgs_calls") {
+      current.bgs_calls = static_cast<std::size_t>(parse_pin_u64(value));
+    }
+  }
+  flush();
+  return pins;
+}
+
+void check_pins(const char* program, const ProgramRun& run, const GameBuild& build) {
   for (const PinnedProgram& pin : kPinned) {
     if (std::string_view{pin.program} != program) continue;
     if (pin.snapshot_hash != 0) {
@@ -376,6 +441,27 @@ void check_pins(const char* program, const ProgramRun& run) {
       EXPECT_EQ(run.host_log, pin.host_log_hash) << program;
     }
   }
+  if (run.hashes.empty()) {
+    ADD_FAILURE() << program << ": no frame hashes to pin";
+    return;
+  }
+  // A build with no rows must record unpinned, not fail; a row mismatch must fail.
+  static const std::vector<ManifestPin> pins = load_replay_pins();
+  const ManifestPin* match = nullptr;
+  for (const ManifestPin& pin : pins) {
+    if (pin.program == program && pin.build == build.file_version) {
+      match = &pin;
+      break;
+    }
+  }
+  if (match == nullptr) {
+    RecordProperty((std::string{"pin_"} + program).c_str(),
+                   ("unpinned for build " + build.file_version).c_str());
+    return;
+  }
+  EXPECT_EQ(run.hashes.back(), match->snapshot_hash) << program;
+  EXPECT_EQ(run.host_log, match->host_log_hash) << program;
+  EXPECT_EQ(run.bgs_calls, match->bgs_calls) << program;
 }
 
 }  // namespace
@@ -385,7 +471,8 @@ TEST(CApiRuntimeReal, ReplaysTheSevenProgramsDeterministically) {
   if (dir == nullptr) {
     GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
   }
-  record_game_build(detect_game_build(dir));
+  const GameBuild build = detect_game_build(dir);
+  record_game_build(build);
   const auto archive_path = std::filesystem::path(dir) / "Fallout4 - Interface.ba2";
   if (!std::filesystem::exists(archive_path)) {
     GTEST_SKIP() << "no Fallout4 - Interface.ba2 in FO4_DATA_DIR";
@@ -460,7 +547,7 @@ TEST(CApiRuntimeReal, ReplaysTheSevenProgramsDeterministically) {
       failed += std::string{program} + ": replay or host log is not deterministic\n";
       ++mismatches;
     }
-    check_pins(program, first);
+    check_pins(program, first, build);
     RecordProperty(property_name.c_str(),
                    "ran snapshot=" + std::to_string(first.hashes.back()) +
                        " hostlog=" + std::to_string(first.host_log) +

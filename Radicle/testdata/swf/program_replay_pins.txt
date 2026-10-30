@@ -1,0 +1,12 @@
+# Radicle seven-program replay pins: expected replay hashes per game build.
+# The format matches program_census.txt: `key value` lines, one group per
+# program per game build. A group starts at a `program` line. Blank lines
+# and `#` lines are ignored.
+# A build with no rows is reported unpinned and does not fail. With rows,
+# a snapshot, host-log or bgs-call mismatch fails the gate.
+# game_build unknown
+# program <basename, e.g. AtomicCommand.swf>
+# build <file version, e.g. 1.11.240.0>
+# snapshot <frame hash of the last replayed frame>
+# hostlog <host-log hash of the replay>
+# bgs_calls <bgs.* host calls during the replay>

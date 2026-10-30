@@ -9,7 +9,7 @@ The Papyrus gates are in `docs/papyrus-real-data-gates.md`. The ground rules the
 - Every gate here reads `FO4_DATA_DIR`, the Fallout 4 `Data` folder itself. The only other variable is the optional `FO4_GAME_BUILD` override (see the build bullet below). Repo examples use `D:\SteamLibrary\steamapps\common\Fallout 4\Data` (`docs/code-notes/BGS.md:562`). Unset means `GTEST_SKIP`. A set value with no `Fallout4 - Interface.ba2` in it also skips, through the `std::filesystem::exists(archive_path)` check in each test. Gate 1 skips only when it finds neither loose movies nor the archive. Every SKIPPED line needs a note.
 - No Papyrus variable is read. `FO4RE_*` and `FO4_PSC*` do not apply.
 - The census manifest path is compile-time, not env: `FO4_TESTDATA_DIR="testdata"` (`Radicle/CMakeLists.txt:1014`). It is relative, so the working directory must be `<repo>\Radicle`. `gtest_discover_tests` sets that (`Radicle/CMakeLists.txt:1023`), and the manual template sets it too.
-- The game build comes from the file version of `<FO4_DATA_DIR>\..\Fallout4.exe` (`Radicle/tests/real_data_build.cpp:82-92`), unless `FO4_GAME_BUILD` is set and non-empty. That override replaces the exe probe (`real_data_build.cpp:83-85`), and `game_build` then records the override value, not the exe's. A wrong override changes which branch runs: gate 3 row-checks only when the build is 1.10.163.0 or 1.10.984.0, and gate 5 requires zero LZMA only when the build is AE 1.11.240.0. 1.10.163.0 is OG, 1.10.980 or 1.10.984 is NG, and 1.11.x is AE (`real_data_build.cpp:76-78`). `exact_counts_known` is true only for AE 1.11.240.0 (`real_data_build.cpp:95-96`). Each test records the build as the `game_build` property.
+- The game build comes from the file version of `<FO4_DATA_DIR>\..\Fallout4.exe` (`Radicle/tests/real_data_build.cpp:82-92`), unless `FO4_GAME_BUILD` is set and non-empty. That override replaces the exe probe (`real_data_build.cpp:83-85`), and `game_build` then records the override value, not the exe's. A wrong override changes which branch runs: gate 3 row-checks only when the build is 1.10.163.0 or 1.10.984.0, gate 5 requires zero LZMA only when the build is AE 1.11.240.0, and gate 2 pins `do_action_tags == 82` only when `exact_counts_known` is true (also AE 1.11.240.0). 1.10.163.0 is OG, 1.10.980 or 1.10.984 is NG, and 1.11.x is AE (`real_data_build.cpp:76-78`). `exact_counts_known` is true only for AE 1.11.240.0 (`real_data_build.cpp:95-96`). Each test records the build as the `game_build` property.
 - Archives: the gates read `Fallout4 - Interface.ba2`, through `fo4::archive::read_ba2_general_file` or, in gates 7 and 8, through the C ABI (`radicle_ba2_open`). Gate 1 also reads the three DLC main archives. Loose `Interface\*.swf|.gfx` files are used first where a test reads them.
 - CI: the real-data job `native-windows-real-data` (`.github/workflows/native-ci.yml:492`, runner label `fo4-data`) reads `FO4_DATA_DIR` from the runner environment. The workflow does not set it. `vars.FO4_DATA_DIR_LINUX` is for the Linux job only (lines 136, 164).
 - CI's `REAL_DATA_TEST_REGEX` (`native-ci.yml:66`) matches all eight tests below. Checked by running the regex with `grep -E` against each test name.
@@ -47,9 +47,9 @@ Add `--gtest_output=xml:<dir>\<gate>.xml` to keep `RecordProperty` values. Each 
 
 - Test: `SwfRealData.InterfaceCorpusDoActionCountAndNoLzmaCompression` (`test_swf_real.cpp:613`).
 - Env: `FO4_DATA_DIR`. Reads only `Fallout4 - Interface.ba2`. No loose files, no DLC.
-- Pass: `movies > 0`; `lzma_movies == 0`; `do_action_tags == 82` (lines 658-660). The count walks every `DefineSprite` child recursively (`count_do_action`, lines 643-653).
-- Proves: the Interface archive has 82 AVM1 `DoAction` tags and no ZWS movie.
-- Caveat: `82` is an unconditional literal (line 660). No build check guards it, unlike gates 3 and 5. A movie that fails `read_swf` is skipped silently (lines 640-642), so a parse failure is caught only by gate 1.
+- Pass: `movies > 0`; `lzma_movies == 0`; `do_action_tags == 82` only when `exact_counts_known(build)` (AE 1.11.240.0). On any other build the count is recorded as the `do_action_tags_unverified` property and does not fail. The count walks every `DefineSprite` child recursively (`count_do_action`).
+- Proves: on the verified build, the Interface archive has 82 AVM1 `DoAction` tags and no ZWS movie.
+- Caveat: `82` is still a literal, now guarded the same way as gate 5's LZMA check. A movie that fails `read_swf` is skipped silently, so a parse failure is caught only by gate 1.
 - Unverified: whether 1.10.163.0 or 1.10.984.0 also gives 82. `Radicle/docs/code-notes/Radicle.md:5727` says the earlier 1.10.984 zero count was not reproduced, and no OG or NG scan is recorded. On a build where the count differs, this gate fails. It does not skip.
 
 ### 3. Program census against the committed manifest
@@ -96,7 +96,7 @@ Add `--gtest_output=xml:<dir>\<gate>.xml` to keep `RecordProperty` values. Each 
 - Pass, control: AtomicCommand and PipFall, run with `init` off, must differ from their `init` runs in both frame hashes and host-log hash (lines 471-481).
 - Pass, total: `ran == 7` and `mismatches == 0` (lines 483-485).
 - Proves: all seven Programs open, run a fixed input log for 180 frames without a script error, and produce identical frame hashes and host logs across two runs in one process. The `init` path changes what is drawn and logged.
-- Does NOT prove: that the output matches the game. `kPinned` is all zero (`test_c_api_runtime_real.cpp:232-236`), so `check_pins` compares nothing (lines 372-377). This test proves two runs agree, not what they produce.
+- Does NOT prove (yet): that the output matches the game. The compiled-in `kPinned` table is all zero, so it compares nothing. `check_pins` then loads the committed manifest `Radicle/testdata/swf/program_replay_pins.txt` (same `FO4_TESTDATA_DIR` resolution as the gate 3 census) and matches rows by program basename and detected `game_build`. With no rows for the current build it records a `pin_<program>` property of `unpinned for build <version>` and does not fail. With rows, a snapshot-hash, host-log-hash or `bgs_calls` mismatch fails. The manifest currently ships with no rows, so every build is unpinned until the RE request below is answered.
 - Other unverified points: the `SetPlatform(0.0, false)` and `InitProgram()` argument types are unconfirmed (the calls are at `Radicle/tests/test_c_api_runtime_real.cpp:287`). Whether `Interpreter` errors inside `replay` reach this test is unverified (`Radicle.md:6210`); the frame count and `playing()` are what is checked.
 
 #### Filling the pins
@@ -127,11 +127,11 @@ Add `--gtest_output=xml:<dir>\<gate>.xml` to keep `RecordProperty` values. Each 
 - Every skipped gate and the env var it needed. Every gate skips on a missing `FO4_DATA_DIR` or missing archive. Gate 8 also skips on a missing runtime feature. Gate 7 never skips for a missing feature; a program that fails is a failed test.
 - `game_build` from any gate's XML. This value decides whether gate 3 compares rows and whether gate 5 requires zero LZMA.
 - Gate 1 properties: `movies`, `lzma_movies`, `art_failures`, `character_model_failures`, `version_histogram`, `dlccoast_movies` and the other DLC keys.
-- Gate 2: `do_action_tags` and `lzma_movies`.
+- Gate 2: `do_action_tags` and `lzma_movies`, plus `do_action_tags_unverified` on builds where the count is not pinned.
 - Gate 3: `program_movies`, `abc_blocks`, `abc_parsed`, `manifest_build_unverified` (set when the row check was skipped).
 - Gate 4: `fonts`, `layout_fonts`, `total_glyphs`, `decoded`.
 - Gate 5: `abc_blocks`, `parsed_blocks`, `bodies`, `verified_flows`, `flow_refusal_histogram`, `unsupported_status_histogram`.
-- Gate 7: stderr `R8_HASH` lines, `program_<name>` properties, and `ran`.
+- Gate 7: stderr `R8_HASH` lines, `program_<name>` properties, `pin_<name>` properties (`unpinned for build <version>` when the manifest has no row), and `ran`.
 
 ## UNVERIFIED
 
