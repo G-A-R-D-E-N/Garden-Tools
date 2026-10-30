@@ -331,7 +331,7 @@ TEST_CASE("NifService fix ignores a configured niftool and repairs in-process") 
 
     REQUIRE(fix.has_value());
     CHECK(fix->starts_with("RESULT: fix OK (in-process)\nSaved: " + fixed.string() +
-                           "\nRESULT: 9 checks, 0 failed\n"));
+                           "\nRESULT: 10 checks, 0 failed\n"));
     CHECK(std::filesystem::is_regular_file(fixed));
     CHECK(runner.calls == 0);
 }
