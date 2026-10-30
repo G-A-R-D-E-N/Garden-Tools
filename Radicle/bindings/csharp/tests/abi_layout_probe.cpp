@@ -1719,6 +1719,15 @@ int main() {
   printf("SwfInstanceTransform %zu\n", sizeof(radicle_swf_instance_transform));
   printf("SwfInstanceTransform.InstanceId %zu\n", offsetof(radicle_swf_instance_transform, instance_id));
   printf("SwfInstanceTransform.Transform %zu\n", offsetof(radicle_swf_instance_transform, transform));
+  printf("SwfPlacementMatrixFields %zu\n", sizeof(radicle_swf_placement_matrix_fields));
+  printf("SwfPlacementMatrixFields.HasScale %zu\n", offsetof(radicle_swf_placement_matrix_fields, has_scale));
+  printf("SwfPlacementMatrixFields.ScaleX %zu\n", offsetof(radicle_swf_placement_matrix_fields, scale_x));
+  printf("SwfPlacementMatrixFields.ScaleY %zu\n", offsetof(radicle_swf_placement_matrix_fields, scale_y));
+  printf("SwfPlacementMatrixFields.HasRotate %zu\n", offsetof(radicle_swf_placement_matrix_fields, has_rotate));
+  printf("SwfPlacementMatrixFields.Rotate0 %zu\n", offsetof(radicle_swf_placement_matrix_fields, rotate0));
+  printf("SwfPlacementMatrixFields.Rotate1 %zu\n", offsetof(radicle_swf_placement_matrix_fields, rotate1));
+  printf("SwfPlacementMatrixFields.TranslateX %zu\n", offsetof(radicle_swf_placement_matrix_fields, translate_x));
+  printf("SwfPlacementMatrixFields.TranslateY %zu\n", offsetof(radicle_swf_placement_matrix_fields, translate_y));
   printf("PexCallSite %zu\n", sizeof(radicle_pex_call_site));
   printf("PexCallSite.CallerFile %zu\n", offsetof(radicle_pex_call_site, caller_file));
   printf("PexCallSite.CallerObject %zu\n", offsetof(radicle_pex_call_site, caller_object));
