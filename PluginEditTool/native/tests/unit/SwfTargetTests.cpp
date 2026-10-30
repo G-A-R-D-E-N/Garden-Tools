@@ -322,14 +322,15 @@ TEST_CASE("SwfTarget inserts a placement keyframe with undo") {
     TempSwf file(fixtureMovie());
     replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
 
+    // Requires a sprite child: the root placement already authors its matrix.
     const auto inserted =
-        replyJson(target.invoke("InsertKeyframe", nlohmann::json::array({2, 0})));
+        replyJson(target.invoke("InsertKeyframe", nlohmann::json::array({6, 0})));
     CHECK(inserted.value("changed", false) == true);
 
     const auto undone = replyJson(target.invoke("Undo", nlohmann::json::array()));
     CHECK(undone.value("undo", 9) == 0);
     const auto matrix =
-        replyJson(target.invoke("PlacementMatrix", nlohmann::json::array({2})));
+        replyJson(target.invoke("PlacementMatrix", nlohmann::json::array({6})));
     CHECK(matrix.value("hasScale", true) == false);
 
     const auto refusal =
