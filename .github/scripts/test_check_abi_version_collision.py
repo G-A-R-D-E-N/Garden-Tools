@@ -67,6 +67,16 @@ class LocalProblemsTest(unittest.TestCase):
         self.assertIn("backwards", problems[0])
         self.assertIn("95", problems[0])
 
+    def test_a_stacked_child_keeping_the_parents_number_passes(self):
+        self.assertEqual([], check.local_problems(
+            93, 93, ["Radicle/include/fo4/c_api_nif.h"], parent_version=93))
+
+    def test_a_dev_based_header_edit_without_a_bump_fails(self):
+        problems = check.local_problems(
+            93, 93, ["Radicle/include/fo4/c_api_nif.h"], parent_version=None)
+        self.assertEqual(1, len(problems))
+        self.assertIn("c_api_nif.h", problems[0])
+
 
 class ClaimConflictsTest(unittest.TestCase):
     def test_two_independent_pulls_claiming_one_number_collide(self):
@@ -92,6 +102,20 @@ class ClaimConflictsTest(unittest.TestCase):
     def test_two_different_numbers_never_collide(self):
         self.assertEqual([], check.claim_conflicts(
             [claim(1033, 93), claim(1038, 94), claim(1041, 95)], 92))
+
+    def test_a_dev_based_pull_carrying_the_parents_commits_is_one_lineage(self):
+        parent = claim(1041, 95, base_ref="nomad/dev")
+        child = claim(1042, 95, base_ref="nomad/dev")
+        self.assertEqual([], check.claim_conflicts(
+            [parent, child], 92, ancestry={1042: {1041}}))
+
+    def test_sibling_pulls_on_one_stack_parent_collide(self):
+        parent = claim(1041, 95, head_ref="stack", base_ref="nomad/dev")
+        first = claim(1042, 95, head_ref="sibling-a", base_ref="stack")
+        second = claim(1043, 95, head_ref="sibling-b", base_ref="stack")
+        self.assertEqual([(95, [1041, 1042, 1043])], check.claim_conflicts(
+            [parent, first, second], 92,
+            ancestry={1042: {1041}, 1043: {1041}}))
 
 
 if __name__ == "__main__":

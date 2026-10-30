@@ -30,6 +30,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # The default pull_request checkout is the merge commit, which the
+          # author never pushed; the script diffs HEAD against the base, so it
+          # needs the pull request head itself.
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Check the ABI number
         env:
