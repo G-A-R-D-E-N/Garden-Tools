@@ -11,6 +11,7 @@ Exit codes: 0 clear, 1 a claim disagrees with another, 2 the gate could not run.
 
 import argparse
 import base64
+import binascii
 import json
 import os
 import re
@@ -22,7 +23,7 @@ import urllib.request
 HEADER = "Radicle/include/fo4/c_api.h"
 HEADER_GLOB = "Radicle/include/fo4/c_api*.h"
 INTEGRATION_BRANCH = "nomad/dev"
-VERSION = re.compile(r"^[ \t]*#[ \t]*define[ \t]+RADICLE_ABI_VERSION[ \t]+(\d+)u?[ \t]*$", re.MULTILINE)
+VERSION = re.compile(r"^[ \t]*#[ \t]*define[ \t]+RADICLE_ABI_VERSION[ \t]+(\d+)[uUlL]*[ \t]*(?://[^\r\n]*)?\r?$", re.MULTILINE)
 PAGE_SIZE = 50
 MAX_PAGES = 10
 
@@ -90,7 +91,7 @@ def _descendants(parents):
     return below
 
 
-def claim_conflicts(claims, base_version, ancestry=None):
+def claim_conflicts(claims, base_version, ancestry=None, shared=None):
     """Rule 2: one entry per number that two different lineages both claim (see code-notes)."""
     parents = _parent_edges(claims)
     for child, olds in (ancestry or {}).items():
@@ -99,10 +100,11 @@ def claim_conflicts(claims, base_version, ancestry=None):
     by_version = {}
     for claim in claims:
         by_version.setdefault(claim["version"], []).append(claim)
+    skipped = {base_version} if shared is None else {base_version, shared}
     conflicts = []
     for version in sorted(by_version):
         group = by_version[version]
-        if version == base_version:
+        if version in skipped:
             continue
         numbers = [claim["number"] for claim in group]
         branched = any(
@@ -138,14 +140,19 @@ def get_json(url, token):
 
 
 def open_pulls(api, repo, token):
+    """Every open pull request; an empty page ends the list and running out fails (see code-notes)."""
     pulls = []
     for page in range(1, MAX_PAGES + 1):
         batch = get_json("{}/repos/{}/pulls?state=open&limit={}&page={}".format(
             api, repo, PAGE_SIZE, page), token)
+        if not isinstance(batch, list):
+            raise ValueError("open pull request page {} is not a list".format(page))
+        if any(not isinstance(item, dict) for item in batch):
+            raise ValueError("open pull request page {} holds a non-object".format(page))
         pulls.extend(batch)
-        if len(batch) < PAGE_SIZE:
-            break
-    return pulls
+        if not batch:
+            return pulls
+    raise ValueError("open pull requests exceed {} pages; refusing to truncate".format(MAX_PAGES))
 
 
 def claim_of(pull, api, repo, token):
@@ -305,8 +312,12 @@ def main(argv=None):
                     return 2
                 print("::warning::cannot read the ABI of #{} ({}); skipping it".format(
                     pull.get("number"), error))
-            except (KeyError, TypeError, ValueError) as error:
-                print("::warning::cannot read the ABI of #{}: {}".format(
+            except (KeyError, TypeError, json.JSONDecodeError, binascii.Error) as error:
+                print("::error::malformed claim for #{} ({}); the gate needs every claim, so this is exit 2, not a pass".format(
+                    pull.get("number"), error))
+                return 2
+            except ValueError as error:
+                print("::warning::cannot read the ABI of #{} ({}); skipping it".format(
                     pull.get("number"), error))
     except (OSError, ValueError) as error:
         print("::error::cannot list the open pull requests ({}). This gate fails rather "
@@ -330,38 +341,48 @@ def main(argv=None):
         print("  #{} ABI {}".format(claim["number"], claim["version"]))
 
     parent_version = None
-    if arguments.base != INTEGRATION_BRANCH:
+    try:
+        root = stack_root(claims, arguments.base)
+    except ValueError as error:
+        print("::error::{}; the gate needs an unambiguous stack, so this is exit 2, not a pass".format(
+            error))
+        return 2
+    if root is not None:
         try:
-            root = stack_root(claims, arguments.base)
-        except ValueError as error:
-            print("::error::{}; the gate needs an unambiguous stack, so this is exit 2, not a pass".format(
-                error))
+            floor = read_version_at(arguments.api_url, arguments.repo,
+                                    arguments.token, root,
+                                    "stack root {}".format(root))
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            print("::error::cannot read the stack root {} ({}); the gate needs it, so this is exit 2, not a pass".format(
+                root, error))
             return 2
-        if root is not None:
-            try:
-                floor = read_version_at(arguments.api_url, arguments.repo,
-                                        arguments.token, root,
-                                        "stack root {}".format(root))
-            except (OSError, ValueError, KeyError, TypeError) as error:
-                print("::error::cannot read the stack root {} ({}); the gate needs it, so this is exit 2, not a pass".format(
-                    root, error))
-                return 2
-            if version > floor:
-                parent_version = version
+        if version > floor:
+            parent_version = version
     problems = local_problems(version, base_version, changed, parent_version)
     for problem in problems:
         print("::error::{}".format(problem))
     print("ABI: this pull request {}, base branch {}.".format(version, base_version))
 
+    try:
+        shared = read_version_at(arguments.api_url, arguments.repo, arguments.token,
+                                 INTEGRATION_BRANCH,
+                                 "integration branch {}".format(INTEGRATION_BRANCH))
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        print("::error::cannot read the integration branch {} ({}); the gate needs it, so this is exit 2, not a pass".format(
+            INTEGRATION_BRANCH, error))
+        return 2
     conflicts = claim_conflicts(
         claims, base_version,
         ancestry_of(claims, base_version, arguments.api_url, arguments.repo,
-                    arguments.token))
-    for claimed, numbers in conflicts:
+                    arguments.token),
+        shared)
+    mine_conflicts = [(version, numbers) for version, numbers in conflicts
+                      if arguments.number in numbers]
+    for claimed, numbers in mine_conflicts:
         print("::error::ABI {} is claimed by more than one stack: {}. Take a number no "
               "other stack holds.".format(
                   claimed, ", ".join("#{}".format(number) for number in numbers)))
-    return 1 if problems or conflicts else 0
+    return 1 if problems or mine_conflicts else 0
 
 
 if __name__ == "__main__":
