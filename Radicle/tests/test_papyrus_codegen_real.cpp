@@ -40,7 +40,7 @@ namespace {
 constexpr double kMinimumIdenticalFraction = 0.95;
 constexpr double kMinimumDecompileFidelity = 0.802;
 constexpr std::size_t kDecompileSampleLimit = 1500;
-constexpr std::size_t kMinimumVanillaPairs = 150;
+constexpr std::size_t kMinimumVanillaPairs = 6800;
 
 struct Pair {
   fs::path pex;

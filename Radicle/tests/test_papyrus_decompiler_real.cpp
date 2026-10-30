@@ -23,7 +23,7 @@ namespace helper = fo4::papyrus::test;
 
 namespace {
 
-constexpr std::size_t kMinimumVanillaFiles = 150;
+constexpr std::size_t kMinimumVanillaFiles = 6800;
 
 std::vector<std::filesystem::path> collectLoosePex(
     const std::vector<std::filesystem::path>& roots) {

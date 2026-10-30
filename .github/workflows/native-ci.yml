@@ -804,8 +804,16 @@ jobs:
             exit 1
           }
           # A thin corpus passes the gates by luck, so staging must fail below the floor the tests use.
-          $pexFloor = 150
-          if ($env:FO4RE_PEX_MIN_PAIRS) { $pexFloor = [int]$env:FO4RE_PEX_MIN_PAIRS }
+          # Only an unset or empty value may fall back; anything else must be a positive integer.
+          $pexFloor = 6800
+          if ($env:FO4RE_PEX_MIN_PAIRS) {
+            $parsedFloor = 0
+            if (-not [int]::TryParse($env:FO4RE_PEX_MIN_PAIRS, [ref]$parsedFloor) -or $parsedFloor -le 0) {
+              Write-Output "::error::FO4RE_PEX_MIN_PAIRS must be a positive integer, not '$env:FO4RE_PEX_MIN_PAIRS'"
+              exit 1
+            }
+            $pexFloor = $parsedFloor
+          }
           if ($pex -lt $pexFloor) {
             Write-Output "::error::$scripts holds $pex .pex files, below the $pexFloor floor; the corpus is too thin to gate"
             exit 1

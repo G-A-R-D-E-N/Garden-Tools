@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 #include <cstdlib>
 #include <filesystem>
 #include <sstream>
@@ -50,13 +51,17 @@ inline void skipOrFailPexCorpus(const char* message) {
     FAIL() << message;
 }
 
-// A thin staged corpus must fail the PEX gates; the caller's default sits well under 198 pairs.
+// Only an unset or empty value may fall back; anything else must parse as a positive integer.
 inline std::size_t corpusFloor(const char* variable, std::size_t fallback) {
     const char* raw = std::getenv(variable);
-    if (!raw || !*raw) return fallback;
-    char* end = nullptr;
-    const auto value = std::strtoul(raw, &end, 10);
-    if (end == raw || value == 0) return fallback;
+    if (raw == nullptr || *raw == '\0') return fallback;
+    const std::string_view text(raw);
+    long long value = 0;
+    const auto parsed = std::from_chars(text.data(), text.data() + text.size(), value);
+    if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size() || value <= 0) {
+        ADD_FAILURE() << variable << " must be a positive integer, not '" << text << "'";
+        return fallback;
+    }
     return static_cast<std::size_t>(value);
 }
 

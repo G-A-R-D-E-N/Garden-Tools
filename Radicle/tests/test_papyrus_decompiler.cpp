@@ -1,6 +1,7 @@
 #include "fo4/papyrus/decompiler.hpp"
 #include "fo4/pex/pex.hpp"
 
+#include <gtest/gtest-spi.h>
 #include <gtest/gtest.h>
 
 #include "papyrus_corpus_roots.hpp"
@@ -16,6 +17,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <initializer_list>
@@ -512,4 +514,41 @@ TEST(PapyrusDecompilerSample, SelectionDoesNotDependOnDirectoryEnumerationOrder)
   const auto backward = stratifiedSample(reversed, {kSampleRoot}, 3);
   EXPECT_EQ(backward.stride, forward.stride);
   EXPECT_EQ(sampledNames(backward.files), sampledNames(forward.files));
+}
+
+namespace {
+
+void unsetCorpusFloor() {
+#ifdef _WIN32
+  _putenv_s("FO4RE_PEX_MIN_PAIRS", "");
+#else
+  unsetenv("FO4RE_PEX_MIN_PAIRS");
+#endif
+}
+
+void setCorpusFloor(const char* value) {
+#ifdef _WIN32
+  _putenv_s("FO4RE_PEX_MIN_PAIRS", value);
+#else
+  setenv("FO4RE_PEX_MIN_PAIRS", value, 1);
+#endif
+}
+
+}  // namespace
+
+TEST(PapyrusCorpusFloor, OnlyAnUnsetOrEmptyValueFallsBackToTheDefault) {
+  const auto parse = [](const char* value) {
+    setCorpusFloor(value);
+    return fo4::papyrus::test::corpusFloor("FO4RE_PEX_MIN_PAIRS", 7);
+  };
+  unsetCorpusFloor();
+  EXPECT_EQ(fo4::papyrus::test::corpusFloor("FO4RE_PEX_MIN_PAIRS", 7), 7u);
+  EXPECT_EQ(parse(""), 7u);
+  EXPECT_EQ(parse("200"), 200u);
+  std::size_t floor = 0;
+  for (const char* bad : {"0", "-5", "150abc", "abc"}) {
+    EXPECT_NONFATAL_FAILURE(floor = parse(bad), "must be a positive integer");
+    EXPECT_EQ(floor, 7u) << bad;
+  }
+  unsetCorpusFloor();
 }
