@@ -35,7 +35,6 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
   const [material, setMaterial] = useState(() => LS('material', ''));
   const [texD, setTexD] = useState(() => LS('texD', ''));
   const [texN, setTexN] = useState(() => LS('texN', ''));
-  const [collision, setCollision] = useState(() => LSB('collision', false));
   const [fromBlender, setFromBlender] = useState(() => LSB('fromBlender', false));
 
 
@@ -75,7 +74,7 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
   useEffect(() => setLS('material', material), [material]);
   useEffect(() => setLS('texD', texD), [texD]);
   useEffect(() => setLS('texN', texN), [texN]);
-  useEffect(() => { setLS('collision', collision); setLS('fromBlender', fromBlender); }, [collision, fromBlender]);
+  useEffect(() => setLS('fromBlender', fromBlender), [fromBlender]);
   useEffect(() => setLS('nifPath', nifPath), [nifPath]);
   useEffect(() => setLS('fixOut', fixOut), [fixOut]);
   useEffect(() => setLS('matPath', matPath), [matPath]);
@@ -204,7 +203,7 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
       let out = '';
       if (mode === 'import') {
         if (!objPath.trim() || !outNif.trim()) { setResult('Pick an OBJ and an output .nif path.'); setBusy(false); return; }
-        out = await nif.Import(objPath, outNif, material, texD, texN, collision, fromBlender);
+        out = await nif.Import(objPath, outNif, material, texD, texN, false, fromBlender);
         if (/RESULT: import OK/.test(out)) setLastOutDir(outNif);
         appendLog(`${/OK/.test(out) ? '✓' : '✗'} import ${baseName(objPath)} → ${baseName(outNif)}`);
       } else if (mode === 'inspect') {
@@ -364,7 +363,6 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
                   <input value={texN} onChange={e => setTexN(e.target.value)} placeholder="Textures\mymod\thing_n.dds" />
                 </label>
                 <div className="papyrus-opts">
-                  <label><input type="checkbox" checked={collision} onChange={e => setCollision(e.target.checked)} /> Add box collision (static)</label>
                   <label><input type="checkbox" checked={fromBlender} onChange={e => setFromBlender(e.target.checked)} /> Convert Blender Y-up → NIF Z-up</label>
                 </div>
               </>

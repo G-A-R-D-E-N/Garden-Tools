@@ -45,7 +45,8 @@ TEST_CASE("Settings preserve existing PascalCase keys and unknown values") {
   "Model": "claude-3-5-sonnet-20241022",
   "DataFolder": "/game/Data",
   "ReadLargePluginsIntoMemory": true,
-  "FutureSetting": {"keep": true}
+  "FutureSetting": {"keep": true},
+  "NiftoolPath": "/old/niftool.exe"
 })";
     }
 
@@ -56,10 +57,14 @@ TEST_CASE("Settings preserve existing PascalCase keys and unknown values") {
     CHECK(loaded->dataFolder == std::filesystem::path("/game/Data"));
     CHECK(loaded->readLargePluginsIntoMemory);
 
+    // Invariant: a settings file written by an older build still loads, and its niftool key is kept rather than dropped.
+    REQUIRE(loaded->extra.at("NiftoolPath") == "/old/niftool.exe");
+
     REQUIRE(store.save(*loaded).has_value());
     auto reloaded = store.load();
     REQUIRE(reloaded.has_value());
     CHECK(reloaded->extra.at("FutureSetting").at("keep") == true);
+    CHECK(reloaded->extra.at("NiftoolPath") == "/old/niftool.exe");
 }
 
 TEST_CASE("Malformed settings fail explicitly") {
