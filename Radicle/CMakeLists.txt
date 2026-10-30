@@ -161,6 +161,9 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/nif/geometry.cpp
   src/nif/block_transform.cpp
   src/nif/shader.cpp
+  src/nif/shader_lighting.cpp
+  src/nif/shader_effect.cpp
+  src/nif/bsx.cpp
   src/nif/skin.cpp
   src/nif/collision.cpp
   src/texture/bcn.cpp
@@ -512,7 +515,7 @@ set(RADICLE_C_SOURCES
   src/c_api_cell.cpp
   src/c_api_patch.cpp
   src/c_api_conflict.cpp
-  src/c_api_nif.cpp src/c_api_dds.cpp
+  src/c_api_nif.cpp src/c_api_nif_shader.cpp src/c_api_dds.cpp
   src/c_api_graph.cpp src/c_api_papyrus_source.cpp
   src/c_api_pex_analysis.cpp src/c_api_vmad_read.cpp src/c_api_script_set.cpp src/c_api_papyrus.cpp
   src/c_api_papyrus_runtime.cpp src/c_api_papyrus_save.cpp src/c_api_papyrus_quest.cpp

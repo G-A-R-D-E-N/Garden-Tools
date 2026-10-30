@@ -113,4 +113,10 @@ Shader read_shader(const NifFile& nif, std::uint32_t block);
 
 std::vector<Bone> read_bones(const NifFile& nif, std::uint32_t instance_block);
 
+// Invariant: BSXFlags is a NiIntegerExtraData, so a block is a u32 name index then the u32 flag word.
+constexpr std::uint32_t k_bsx_editor_marker_bit = 1U << 5U;
+// Requires a BSXFlags block; the word is the one the engine tests for is_editor_marker.
+std::uint32_t read_bsx_flags(const NifFile& nif, std::uint32_t block);
+bool is_editor_marker(std::uint32_t bsx_flags) noexcept;
+
 }  // namespace fo4::nif

@@ -2124,6 +2124,92 @@ public unsafe struct ListMergeCounts
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct NifLightingShader
+{
+    public uint Block;
+    public uint ShaderType;
+    public uint Flags1;
+    public uint Flags2;
+    public fixed float UvOffset[2];
+    public fixed float UvScale[2];
+    public int TextureSetRef;
+    public nuint TextureCount;
+    public fixed float EmissiveColor[3];
+    public float EmissiveMultiple;
+    public byte HasRootMaterial;
+    public uint TextureClamp;
+    public float Alpha;
+    public float RefractionStrength;
+    public float Smoothness;
+    public fixed float SpecularColor[3];
+    public float SpecularStrength;
+    public float SubsurfaceRolloff;
+    public float RimlightPower;
+    public byte HasBacklight;
+    public float BacklightPower;
+    public byte HasGrayscaleToPaletteScale;
+    public float GrayscaleToPaletteScale;
+    public float FresnelPower;
+    public byte HasWetness;
+    public fixed float Wetness[6];
+    public byte HasEnvMap;
+    public float EnvMapScale;
+    public byte EnvMapSsr;
+    public byte EnvMapWetnessSsr;
+    public byte HasSkinTint;
+    public fixed float SkinTint[4];
+    public byte HasHairTint;
+    public fixed float HairTint[3];
+    public byte HasSnow;
+    public fixed float Snow[4];
+    public byte HasParallaxOcc;
+    public fixed float ParallaxOcc[2];
+    public byte HasMultiLayerParallax;
+    public fixed float MultiLayerParallax[5];
+    public byte HasEye;
+    public float EyeCubemapScale;
+    public fixed float EyeLeft[3];
+    public fixed float EyeRight[3];
+    public nuint TailBytes;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct NifEffectShader
+{
+    public uint Block;
+    public uint Flags1;
+    public uint Flags2;
+    public fixed float UvOffset[2];
+    public fixed float UvScale[2];
+    public byte TextureClamp;
+    public byte LightingInfluence;
+    public byte EnvMapMinLod;
+    public byte Unused;
+    public float FalloffStartAngle;
+    public float FalloffStopAngle;
+    public float FalloffStartOpacity;
+    public float FalloffStopOpacity;
+    public fixed float BaseColor[4];
+    public float BaseColorScale;
+    public float SoftFalloffDepth;
+    public nuint TextureCount;
+    public float EnvMapScale;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct NifAlphaProperty
+{
+    public uint Block;
+    public ushort Flags;
+    public byte Threshold;
+    public byte BlendEnabled;
+    public byte SourceBlend;
+    public byte DestinationBlend;
+    public byte TestEnabled;
+    public byte TestFunction;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct LandHeights
 {
     public int HasHeights;
@@ -2942,7 +3028,7 @@ public unsafe struct PapyrusCompileOptions
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 92u;
+    public const uint CompiledAbiVersion = 93u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -4077,6 +4163,33 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_collision_target_node")]
     public static extern Status NifCollisionTargetNode(IntPtr nif, nuint index, int* out_node);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_lighting_shader")]
+    public static extern Status NifLightingShader(IntPtr nif, uint block, NifLightingShader* out_shader);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_lighting_shader_name")]
+    public static extern Status NifLightingShaderName(IntPtr nif, uint block, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_lighting_shader_root_material")]
+    public static extern Status NifLightingShaderRootMaterial(IntPtr nif, uint block, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_effect_shader")]
+    public static extern Status NifEffectShader(IntPtr nif, uint block, NifEffectShader* out_shader);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_effect_shader_name")]
+    public static extern Status NifEffectShaderName(IntPtr nif, uint block, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_effect_shader_texture")]
+    public static extern Status NifEffectShaderTexture(IntPtr nif, uint block, nuint slot, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_alpha_property")]
+    public static extern Status NifAlphaProperty(IntPtr nif, uint block, NifAlphaProperty* out_alpha);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_shader_flag_count")]
+    public static extern nuint NifShaderFlagCount();
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_shader_flag_name")]
+    public static extern Status NifShaderFlagName(uint bit, byte** out_bytes, nuint* out_size);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_free_floats")]
     public static extern void FreeFloats(float* values);

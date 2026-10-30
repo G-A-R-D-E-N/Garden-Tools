@@ -90,6 +90,29 @@ binary::Cursor block_cursor(const NifFile& nif, std::uint32_t block) {
   return binary::Cursor(std::span<const std::byte>(nif.bytes()).subspan(info.offset, info.size), info.offset);
 }
 
+std::string read_string_ref(binary::Cursor& cursor, const NifFile& nif) {
+  const auto index = cursor.read_i32();
+  if (index == -1) return {};
+  if (index < 0 || static_cast<std::size_t>(index) >= nif.strings().size()) {
+    throw parse_error(cursor.absolute_offset(), "string index is out of range");
+  }
+  return nif.strings()[static_cast<std::size_t>(index)];
+}
+
+NetPrefix read_net_prefix(binary::Cursor& cursor, const NifFile& nif) {
+  NetPrefix prefix;
+  prefix.name_at = cursor.position();
+  prefix.name = read_string_ref(cursor, nif);
+  const auto extra_count = cursor.read_u32();
+  if (static_cast<std::size_t>(extra_count) > cursor.remaining() / 4) {
+    throw parse_error(cursor.absolute_offset(), "extra-data list runs past the end of its block");
+  }
+  cursor.read_bytes(static_cast<std::size_t>(extra_count) * 4);
+  cursor.read_i32();
+  prefix.end = cursor.position();
+  return prefix;
+}
+
 AvHeader read_av_header(binary::Cursor& cursor, const NifFile& nif) {
   const auto name = cursor.read_i32();
   const auto extra_count = cursor.read_u32();
@@ -111,6 +134,33 @@ AvHeader read_av_header(binary::Cursor& cursor, const NifFile& nif) {
   for (float& value : header.transform.r) value = cursor.read_f32();
   header.transform.s = cursor.read_f32();
   return header;
+}
+
+std::vector<std::string> read_texture_set(const NifFile& nif, std::uint32_t block) {
+  const auto& info = nif.blocks().at(block);
+  if (info.type != "BSShaderTextureSet") return {};
+  if (info.size < 4) {
+    throw parse_error(info.offset, "texture set is shorter than its slot count");
+  }
+  auto cursor = block_cursor(nif, block);
+  const auto count = cursor.read_u32();
+  if (count > 4096) {
+    throw parse_error(cursor.absolute_offset(), "texture slot count exceeds 4,096");
+  }
+  if (static_cast<std::size_t>(count) > cursor.remaining() / 4) {
+    throw parse_error(cursor.absolute_offset(), "texture slot list runs past the end of its block");
+  }
+  std::vector<std::string> textures;
+  textures.reserve(count);
+  for (std::size_t i = 0; i < count; ++i) {
+    const auto length = cursor.read_u32();
+    if (length > cursor.remaining()) {
+      throw parse_error(cursor.absolute_offset(), "texture path runs past the end of its block");
+    }
+    const auto text = cursor.read_bytes(length);
+    textures.emplace_back(reinterpret_cast<const char*>(text.data()), text.size());
+  }
+  return textures;
 }
 
 }  // namespace detail

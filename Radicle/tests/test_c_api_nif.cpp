@@ -1,5 +1,6 @@
 #include "fo4/c_api_nif.h"
 
+#include "nif_build.hpp"
 #include "nif_fixture.hpp"
 
 #include <gtest/gtest.h>
@@ -49,6 +50,18 @@ std::vector<float> floats_of(radicle_nif* nif, size_t index, radicle_status (*ge
     return {};
   }
   return take_floats(values, count);
+}
+
+// Requires a block index rather than a shape index, which text_of cannot pass through.
+std::string shader_text(const radicle_nif* nif,
+                        uint32_t block,
+                        radicle_status (*getter)(const radicle_nif*, uint32_t, uint8_t**, size_t*)) {
+  uint8_t* bytes = nullptr;
+  size_t size = 0;
+  EXPECT_EQ(getter(nif, block, &bytes, &size), RADICLE_STATUS_OK) << radicle_last_error();
+  std::string result(reinterpret_cast<const char*>(bytes), size);
+  radicle_free_bytes(bytes);
+  return result;
 }
 
 std::string text_of(radicle_nif* nif, size_t index, radicle_status (*getter)(const radicle_nif*, size_t, uint8_t**,
@@ -373,4 +386,81 @@ TEST(CapiNif, ReportsNoWarningForAHealthyShape) {
   const auto bytes = nif_fixture::full_nif();
   Nif nif(bytes);
   EXPECT_EQ(text_of(nif.get(), 0, radicle_nif_shape_warning), "");
+}
+
+// Invariant: every shader field the editor shows must arrive through these structs, one member per field.
+TEST(CapiNif, ExposesTheShaderAndAlphaFieldsItReads) {
+  nif_build::LightingFields fields;
+  fields.shader_type = 11;
+  const std::vector<nif_build::Block> blocks{
+      nif_build::full_lighting_shader_block(fields),
+      nif_build::effect_shader_block(0, {"fx_source.dds", "fx_grey.dds", "fx_env.dds", "fx_normal.dds", "fx_mask.dds"}),
+      nif_build::alpha_block(0x12EDU, 128),
+  };
+  const auto bytes = nif_build::build_nif({"fx"}, blocks, {0});
+  Nif nif(bytes);
+  ASSERT_NE(nif.get(), nullptr);
+
+  radicle_nif_lighting_shader lighting{};
+  ASSERT_EQ(radicle_nif_lighting_shader(nif.get(), 0, &lighting), RADICLE_STATUS_OK) << radicle_last_error();
+  EXPECT_EQ(lighting.shader_type, 11U);
+  EXPECT_EQ(lighting.flags1, 0x80400201U);
+  EXPECT_EQ(lighting.flags2, 0x21U);
+  EXPECT_FLOAT_EQ(lighting.alpha, 0.5f);
+  EXPECT_FLOAT_EQ(lighting.smoothness, 0.75f);
+  EXPECT_EQ(lighting.has_backlight, 1);
+  EXPECT_FLOAT_EQ(lighting.backlight_power, 2.5f);
+  EXPECT_EQ(lighting.has_wetness, 1);
+  EXPECT_FLOAT_EQ(lighting.wetness[5], 6.0f);
+  EXPECT_EQ(lighting.has_multi_layer_parallax, 1);
+  EXPECT_FLOAT_EQ(lighting.multi_layer_parallax[4], 0.5f);
+  EXPECT_EQ(lighting.tail_bytes, 20U);
+  EXPECT_EQ(shader_text(nif.get(), 0, radicle_nif_lighting_shader_name), "");
+  EXPECT_EQ(shader_text(nif.get(), 0, radicle_nif_lighting_shader_root_material), "");
+
+  radicle_nif_effect_shader effect{};
+  ASSERT_EQ(radicle_nif_effect_shader(nif.get(), 1, &effect), RADICLE_STATUS_OK) << radicle_last_error();
+  EXPECT_EQ(effect.texture_count, 5U);
+  EXPECT_EQ(effect.texture_clamp, 3);
+  EXPECT_FLOAT_EQ(effect.base_color[0], 0.4f);
+  EXPECT_FLOAT_EQ(effect.env_map_scale, 1.75f);
+  EXPECT_EQ(shader_text(nif.get(), 1, radicle_nif_effect_shader_name), "fx");
+
+  uint8_t* texture = nullptr;
+  size_t texture_size = 0;
+  ASSERT_EQ(radicle_nif_effect_shader_texture(nif.get(), 1, 2, &texture, &texture_size), RADICLE_STATUS_OK);
+  EXPECT_EQ(std::string(reinterpret_cast<const char*>(texture), texture_size), "fx_env.dds");
+  radicle_free_bytes(texture);
+  EXPECT_EQ(radicle_nif_effect_shader_texture(nif.get(), 1, 5, &texture, &texture_size),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+
+  radicle_nif_alpha_property alpha{};
+  ASSERT_EQ(radicle_nif_alpha_property(nif.get(), 2, &alpha), RADICLE_STATUS_OK) << radicle_last_error();
+  EXPECT_EQ(alpha.flags, 0x12EDU);
+  EXPECT_EQ(alpha.threshold, 128);
+  EXPECT_EQ(alpha.blend_enabled, 1);
+  EXPECT_EQ(alpha.source_blend, 6);
+  EXPECT_EQ(alpha.destination_blend, 7);
+  EXPECT_EQ(alpha.test_enabled, 1);
+  EXPECT_EQ(alpha.test_function, 4);
+
+  EXPECT_EQ(radicle_nif_lighting_shader(nif.get(), 2, &lighting), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_nif_effect_shader(nif.get(), 0, &effect), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_nif_alpha_property(nif.get(), 0, &alpha), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_nif_lighting_shader(nif.get(), 9, &lighting), RADICLE_STATUS_INVALID_ARGUMENT);
+}
+
+// Invariant: the C ABI flag table holds the same 64 names in the same bit order as the reader.
+TEST(CapiNif, ExposesTheShaderFlagNameTable) {
+  EXPECT_EQ(radicle_nif_shader_flag_count(), 64U);
+  uint8_t* name = nullptr;
+  size_t size = 0;
+  ASSERT_EQ(radicle_nif_shader_flag_name(0, &name, &size), RADICLE_STATUS_OK);
+  EXPECT_EQ(std::string(reinterpret_cast<const char*>(name), size), "Specular");
+  radicle_free_bytes(name);
+  ASSERT_EQ(radicle_nif_shader_flag_name(63, &name, &size), RADICLE_STATUS_OK);
+  EXPECT_EQ(std::string(reinterpret_cast<const char*>(name), size), "Refraction_Writes_Depth");
+  radicle_free_bytes(name);
+  EXPECT_EQ(radicle_nif_shader_flag_name(64, &name, &size), RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(radicle_nif_shader_flag_name(0, nullptr, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
 }

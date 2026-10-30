@@ -5,8 +5,11 @@ NiNode-family child lists, shape-to-global transforms, billboard-node mode, and
 geometry for `BSTriShape`, `BSSubIndexTriShape`, `BSMeshLODTriShape` and
 `BSDynamicTriShape`. A shape also decodes its bitangents, its skin weights and bone
 indices, its bones with their bind transforms, its `BSLightingShaderProperty`
-+material path and its `BSShaderTextureSet` slots. Not in scope: JSON, collision
-decoding, alpha properties, and the fragment, effect and water shader property types.
++material path and its `BSShaderTextureSet` slots. `include/fo4/nif/shader.hpp` adds
+the whole `BSLightingShaderProperty` field set with its per material-type tail, the
+`BSEffectShaderProperty` field set and `NiAlphaProperty`; see the shader sections
+below. Not in scope: JSON, collision decoding, and the fragment and water shader
+property types.
 `include/fo4/nif/collision.hpp` adds the raw collision payloads with the
 `bhkNPCollisionObject` that owns each system, that object's flags, its system
 reference, Body ID and target node; see
@@ -26,6 +29,18 @@ Sources, the only fact sources for this reader:
   130, so both are true for this reader.
 - The installed vanilla data, measured by `tests/test_nif_corpus.cpp`; the counts
   quoted below are that run.
+- `PluginBrreakdown@5a58943:<map file>:<address>`, the Elric, Max and Fallout4
+  function maps in `2026-10-30-nif-pluginbreakdown-extract.md` (abbreviated
+  `PluginBrreakdown`). Its offsets such as `+0x30` are in-memory object offsets, not
+  file offsets, so only the order of its reads and its version checks are used. Names
+  it marks with a trailing `?` are guesses and are not treated as facts.
+- `G-A-R-D-E-N/commonlibf4@22b0dbd:<path>` (abbreviated `commonlibf4`). Nomad owns it
+  and approved copying its enums, flag tables, structs and bit helpers into Radicle
+  (2026-10-30); credit is in `THIRD_PARTY_NOTICES`. Only the file-side parts are
+  taken: field order, enum values and bit meanings. Its runtime parts — `REL::`
+  relocations, vtables, RTTI ids, in-memory pointers and padding — are dropped,
+  because this reader reads files and never game memory. Its offsets are in-memory
+  unless a struct is itself a serialised Havok layout.
 
 Facts the sources do not pin are in the Parity-pending list at the end. The code
 follows the stated default, and the corpus run (`tests/test_nif_corpus.cpp`)
@@ -250,8 +265,9 @@ in `.bgsm`:
 6. A shader-type tail: at type 1 an environment map scale and two bytes, at type 5 a
    three-float skin tint colour and a float, at type 6 a three-float hair tint colour.
 
-The reader stops after the texture set reference. Nothing it exposes depends on the
-tail, and the tail's conditional fields are what makes the layout uncertain.
+`read_shader` stops after the texture set reference, which is all `Shape` needs. The
+full field set is read by `src/nif/shader_lighting.cpp:read_lighting_shader`, whose
+order the next section pins.
 
 `NifShape.cs` reads neither of these blocks; the material path in step 1 is the
 `Name` of the shader property, which is the BGSM or BGEM when the shape uses a
@@ -262,6 +278,115 @@ empty for an unused slot. Corpus: 1,152,037 shapes carry a texture set, 11,520,3
 slots in total, of which 3,740,219 are non-empty - 3,740,160 ending in `.dds`, 53 in
 `.tga`, 2 in `.dd` and 4 with no extension. Those are vanilla data, passed through
 unchanged.
+
+## Lighting shader fields
+
+`nif.xml:BSLightingShaderProperty` is the FO4 field order, and the extract confirms it
+read by read. `src/nif/shader_lighting.cpp:read_lighting_shader` reads it in this
+order and records the offset of every field in `LightingFieldOffsets`, so the writer
+can edit a field in place without re-deriving the layout. The material type ids are
+named from `commonlibf4`'s `BSShaderMaterial::Feature` (0 default through 20
+dismemberment), which agrees with `nif.xml`'s `BSLightingShaderType` on every number;
+the two only word id 14 differently, `Sparkle Snow` against multi-index snow, and both
+describe the same four floats the block stores there.
+
+1. `Shader Type` u32, the material type id; then the `NiObjectNET` prefix (name, extra
+data list, controller).
+2. `Shader Flags 1` u32 and `Shader Flags 2` u32 - one 64-bit flag word
+   (`PluginBrreakdown@5a58943:Elric_BSShader/BSShader.dll function map.txt:0x10001c3a`: the
+   engine writes a 64-bit flag word; the extract's `GetFlagString` answers below 0x40,
+   so bit 32 is the first bit of word 2). Word 2 is present only from stream version
+   0x45 (`PluginBrreakdown@5a58943:Max_BGS_Libs_BSShader/BSShader.dll function map.txt:0x1800046d8`).
+3. `UV Offset` and `UV Scale`, two floats each, for stream versions above 0x2b
+   (`PluginBrreakdown@5a58943:Elric_BSShader/BSShader.dll function map.txt:0x10002284`).
+4. `Texture Set` i32 reference, then `Emissive Color` (three floats) and
+   `Emissive Multiple`.
+5. `Root Material`, a string-table index, when the stream version is above 0x7c
+   (`PluginBrreakdown@5a58943:FO4_Fallout4/Fallout4.exe function map.txt:0x142178bf0`).
+6. `Texture Clamp Mode` u32, `Alpha`, `Refraction Strength`, `Smoothness` (the engine
+   clamps it to 0-1, which is nif.xml's range). FO4 has no `Glossiness` field: nif.xml
+   gates it on `#NI_BS_LT_FO4#`.
+7. `Specular Color` (three floats), `Specular Strength`, `Subsurface Rolloff`,
+   `Rimlight Power`, then `Backlight Power` only when `Rimlight Power` is the `FLT_MAX`
+   placeholder (`PluginBrreakdown@5a58943:FO4_Fallout4/Fallout4.exe function map.txt:0x1421ce880`
+   reads the next float only when the previous one equals `FLT_MAX`).
+8. `Grayscale to Palette Scale` for stream versions above 0x79, `Fresnel Power`, and
+   `Wetness`, six floats in `nif.xml:BSSPWetnessParams` order for stream versions
+   above 0x7b (`PluginBrreakdown@5a58943:FO4_Fallout4/Fallout4.exe function map.txt:0x1421ce630`
+   writes six).
+9. The material tail for the type id, below.
+
+FO4 is stream version 130 (0x82), so every gate above (0x2b, 0x45, 0x79, 0x7b, 0x7c)
+takes its present branch; the gates are still coded because they change the offsets.
+
+Material type ids and their tails (`src/nif/shader_lighting.cpp:read_tail`):
+
+| id | nif.xml class (extract name) | tail |
+|---|---|---|
+| 0 | default | none |
+| 1 | EnvMap | `Environment Map Scale` float, plus two bytes from version 0x7c |
+| 5 | SkinTint | three-float tint and its alpha float |
+| 6 | HairTint | three-float tint |
+| 7 | ParallaxOcc | `Max Passes` and `Scale` |
+| 11 | MultiLayerParallax | four floats, plus a fifth above version 0x4a |
+| 14 | Snow | four floats (`Sparkle Parameters`, CK calls it snow) |
+| 16 | Eye | cubemap scale, left and right reflection centres |
+
+The ids are `nif.xml`'s shader-type conditions; 1, 5 and 6 also match the extract's
+read (`...:0x1800016d1` picks the lighting material class from the type id, and
+`...:0x1421cf7c0` / `0x1421d1980` / `0x1421d1b80` read the envmap, skin tint and hair
+tint tails). 7, 11, 14 and 16 rest on `nif.xml` alone, so the type ids are parity
+items 27 and 28.
+
+Flag names: `src/nif/shader.cpp:shader_flag_name` holds 64 names in nif.xml bit
+order, taken from `nif.xml:Fallout4ShaderPropertyFlags1` and
+`nif.xml:Fallout4ShaderPropertyFlags2`. The extract's table starts at `specular` for
+index 0 and stops below 0x40
+(`PluginBrreakdown@5a58943:Max_BGS_Libs_BSShader/BSShader.dll function map.txt:0x180006ce4`),
+so the bit order agrees; the reader keeps nif.xml's capitalisation rather than the
+engine's, because nif.xml is where the names are written down.
+
+## Effect shader property
+
+`src/nif/shader_effect.cpp:read_effect_shader` reads
+`nif.xml:BSEffectShaderProperty` in field order: the `NiObjectNET` prefix, the two flag
+words, UV offset and scale, `Source Texture` (a sized string), the four clamp bytes
+(`Texture Clamp Mode`, `Lighting Influence`, `Env Map Min LOD`, `Unused Byte`), the
+four falloff floats, `Base Color`, `Base Color Scale`, `Soft Falloff Depth`, then the
+greyscale texture, and from BS 130 the environment map, normal and environment mask
+textures and `Environment Map Scale`. That is five texture paths, which is the five
+slots the extract loads
+(`PluginBrreakdown@5a58943:Elric_BSShader/BSShader.dll function map.txt:0x10002991`),
+and `EffectShader::textures` holds them in that order, slot 0 being the source
+path the field also keeps separately.
+
+## Alpha property
+
+`src/nif/shader.cpp:read_alpha` reads `nif.xml:NiAlphaProperty`: the `NiObjectNET`
+prefix, then `Flags` as a u16 and `Threshold` as one byte
+(`PluginBrreakdown@5a58943:FO4_Fallout4/Fallout4.exe function map.txt:0x1416cf580`, the
+same two fields in the same order). `AlphaProperty::flags_at`, `threshold_at` and
+`end` give the writer the three offsets it edits.
+
+The flags word is decoded once, into `AlphaProperty::blend_enabled` (bit 0),
+`source_blend` (bits 1-4), `destination_blend` (bits 5-8), `test_enabled` (bit 9) and
+`test_function` (bits 10-12, the position from `nif.xml`) with the
+`AlphaBlendMode` and `AlphaTestFunction` enums
+(`commonlibf4`, `include/RE/N/NiAlphaProperty.h`: the blend values 0 one through 10
+source-alpha-saturate, the test values 0 always through 7 never, and the 0xEC default
+word). `alpha_blend_name` and `alpha_test_name` give an editor the labels; both answer
+`Unknown` past the last value rather than indexing the table. The C ABI carries the
+same five decoded values in `radicle_nif_alpha_property`.
+
+## Editor markers
+
+`src/nif/bsx.cpp:read_bsx_flags` reads a `BSXFlags` block as a u32 name index and then
+the u32 flag word, because the type inherits `NiIntegerExtraData`
+(`nif.xml:BSXFlags`). `is_editor_marker` tests bit 5, the `bEditorMarker` bit
+(`nif.xml:BSXFlags`; `commonlibf4`, `include/RE/B/BSXFlags.h`; the same bit the engine
+reports as `is_editor_marker` in `PluginBrreakdown@5a58943:include/RE/B/BSXFlags.h`).
+Bit 5 is also the one `OptimizeOptions` pass these sources pin; the describe layer
+below turns it into a verify check.
 
 ## Transforms and billboards
 
@@ -289,11 +414,15 @@ unchanged.
 ## Deliberate omissions
 
 - No JSON and no collision.
-- Only `BSLightingShaderProperty` is followed. `BSEffectShaderProperty` and the
-  other shader property types are stored as references and read for nothing.
-- Trailing bytes inside a block are not validated, and the shader property's tail
-  after the texture set reference is not read (see Parity-pending item 25).
-- Alpha properties are not followed; `Shape::alpha_ref` stores the reference.
+- `BSLightingShaderProperty`, `BSEffectShaderProperty` and `NiAlphaProperty` are read;
+  the fragment and water shader property types are stored as references and read for
+  nothing.
+- Trailing bytes inside a block are not validated: `read_shader`, which a shape uses,
+  stops after the texture set reference and never looks at what follows. The full
+  readers record where they stop (`LightingFieldOffsets::end`, `EffectFieldOffsets::end`,
+  `AlphaProperty::end`) so a caller can check it; `tests/test_nif_corpus.cpp` requires
+  every vanilla shader block to end exactly at its declared size.
+- `Shape::alpha_ref` stores the alpha property reference; a shape does not read it.
 - UV2 values are read past and discarded; `Shape` has no field for them.
 - The vertex tail slot (bit 8, `Eye Data` in `nif.xml`) is read past.
 
@@ -373,7 +502,44 @@ Numbers do not move: an item that has since been settled says so and stays for t
 25. The leading u32 of `BSLightingShaderProperty` is read as `Shader Type` because the
     shader-type tail follows it. `nif.xml`'s version condition for that NiObjectNET
     field excludes BS 130, so the corpus decides; all 1,111,752 material-bearing
-    shapes read a `.bgsm` name at the offset the field implies.
+    shapes read a `.bgsm` name at the offset the field implies. The extract settles it:
+    `PluginBrreakdown@5a58943:FO4_Fallout4/Fallout4.exe function map.txt:0x142178bf0`
+    creates the material from an id read before the base property data.
+26. `Grayscale to Palette Scale` and `Wetness` gates: `nif.xml` says `#BS_GTE_130#`
+    for both, the extract says above stream version 0x79 and 0x7b
+    (`PluginBrreakdown@5a58943:FO4_Fallout4/Fallout4.exe function map.txt:0x1421ce880`).
+    The reader follows the extract's two thresholds, which are looser than nif.xml's;
+    at 130 every reading agrees, and no tighter file is read, so the conflict cannot
+    show. The same disagreement exists for the effect shader's environment map, normal
+    and environment mask textures and its scale: `nif.xml` gates them on `#BS_GTE_130#`,
+    the extract on stream versions 0x6c and 0x6e
+    (`...:0x142176f30`), and the reader follows nif.xml there.
+27. Material type ids 7 (ParallaxOcc), 11 (MultiLayerParallax), 14 (Snow) and 16 (Eye)
+    come from `nif.xml`'s shader-type conditions alone. The extract names the classes
+    and their tails but its type ids only appear for 1, 5 and 6, so those four ids are
+    unconfirmed until a vanilla mesh or a CK check shows one.
+28. The two bytes after `Environment Map Scale` are read as `Use Screen Space
+    Reflections` and `Wetness Control: Use SSR` (nif.xml booleans). The extract calls
+    them two single bytes at `+0xd4` and `+0xd5`, which pins the width and not the
+    meaning.
+29. `Glossiness` is not read: v1.x of this reader never did, `nif.xml` gates it on
+    `#NI_BS_LT_FO4#`, and the FO4 base material has `Smoothness` in its place. The
+    extract's clamp of the float at `+0x88` to 0-1 matches `Smoothness`, not
+    `Glossiness` (`...:0x1421ce880`).
+30. Flag names come from `commonlibf4`'s `EShaderPropertyFlag`, which is the engine's
+    own enumeration, and the 64 bit positions cross-check against `nif.xml`'s
+    `Fallout4ShaderPropertyFlags1` (bits 0-31) and `Fallout4ShaderPropertyFlags2`
+    (bits 32-63). The two agree on every bit position but four of the labels differ:
+    bit 13 is `Non_Projective_Shadows` in `nif.xml` and `RefractionClamp` here, bit 20
+    `Localmap_Hide_Secret` against `LocalMapClear`, bit 21 `Skin_Tint` against
+    `FaceGenRGBTint`, and bit 58 `Gradient_Remap` against `InvertedFadePattern`. The
+    reader keeps the `commonlibf4` label because it is the engine's, and records the
+    `nif.xml` alternative here. The strings are documentation for an editor, not data
+    the game reads.
+31. The engine's loader clears flag bits 25 (tessellate) and 47 (dismemberment) when
+    the stream version is below 0x6d (`commonlibf4`, `BSShaderProperty::Load`).
+    `read_lighting_shader` reports the stored word instead of a post-load one, and the
+    strict gate at 130 never reaches the rule. A reader for older streams decides.
 
 ## Scene graph
 

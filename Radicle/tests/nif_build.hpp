@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <span>
 #include <string>
 #include <string_view>
@@ -213,6 +214,132 @@ inline Block lighting_shader_block(std::int32_t name, std::int32_t texture_set) 
   w.f32(1.0f);
   w.i32(texture_set);
   return Block{"BSLightingShaderProperty", w.bytes()};
+}
+
+// Invariant: every field carries a distinct value, so a field read out of order shows a wrong number.
+struct LightingFields {
+  std::uint32_t shader_type{1};
+  std::int32_t name{-1};
+  std::int32_t texture_set{-1};
+  std::uint32_t flags1{0x80400201U};
+  std::uint32_t flags2{0x21U};
+  float uv_offset[2]{0.25f, 0.5f};
+  float uv_scale[2]{2.0f, 3.0f};
+  float emissive_color[3]{0.5f, 0.25f, 0.125f};
+  float emissive_multiple{4.0f};
+  std::int32_t root_material{-1};
+  std::uint32_t texture_clamp{3};
+  float alpha{0.5f};
+  float refraction{0.25f};
+  float smoothness{0.75f};
+  float specular_color[3]{0.1f, 0.2f, 0.3f};
+  float specular_strength{0.875f};
+  float subsurface_rolloff{0.125f};
+  float rimlight_power{std::bit_cast<float>(0x7F7FFFFFU)};
+  float backlight_power{2.5f};
+  float grayscale_to_palette_scale{0.625f};
+  float fresnel_power{7.5f};
+  float wetness[6]{1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f};
+};
+
+inline void lighting_tail(Writer& w, std::uint32_t shader_type) {
+  switch (shader_type) {
+    case 1:
+      w.f32(1.5f);
+      w.u8(1);
+      w.u8(0);
+      break;
+    case 5:
+      for (const float value : {0.1f, 0.2f, 0.3f, 0.4f}) w.f32(value);
+      break;
+    case 6:
+      for (const float value : {0.11f, 0.22f, 0.33f}) w.f32(value);
+      break;
+    case 7:
+      w.f32(4.0f);
+      w.f32(1.25f);
+      break;
+    case 11:
+      for (const float value : {5.0f, 0.25f, 1.5f, 1.75f, 0.5f}) w.f32(value);
+      break;
+    case 14:
+      for (const float value : {0.9f, 0.8f, 0.7f, 0.6f}) w.f32(value);
+      break;
+    case 16:
+      w.f32(1.3f);
+      for (const float value : {0.01f, 0.02f, 0.03f, 0.04f, 0.05f, 0.06f}) w.f32(value);
+      break;
+    default:
+      break;
+  }
+}
+
+inline Block full_lighting_shader_block(const LightingFields& fields) {
+  Writer w;
+  w.u32(fields.shader_type);
+  w.i32(fields.name);
+  w.u32(0);
+  w.i32(-1);
+  w.u32(fields.flags1);
+  w.u32(fields.flags2);
+  for (const float value : fields.uv_offset) w.f32(value);
+  for (const float value : fields.uv_scale) w.f32(value);
+  w.i32(fields.texture_set);
+  for (const float value : fields.emissive_color) w.f32(value);
+  w.f32(fields.emissive_multiple);
+  w.i32(fields.root_material);
+  w.u32(fields.texture_clamp);
+  w.f32(fields.alpha);
+  w.f32(fields.refraction);
+  w.f32(fields.smoothness);
+  for (const float value : fields.specular_color) w.f32(value);
+  w.f32(fields.specular_strength);
+  w.f32(fields.subsurface_rolloff);
+  w.f32(fields.rimlight_power);
+  // Invariant: the block stores Backlight Power only behind the FLT_MAX rimlight placeholder.
+  if (fields.rimlight_power == std::numeric_limits<float>::max()) w.f32(fields.backlight_power);
+  w.f32(fields.grayscale_to_palette_scale);
+  w.f32(fields.fresnel_power);
+  for (const float value : fields.wetness) w.f32(value);
+  lighting_tail(w, fields.shader_type);
+  return Block{"BSLightingShaderProperty", w.bytes()};
+}
+
+inline Block effect_shader_block(std::int32_t name, const std::vector<std::string>& textures) {
+  Writer w;
+  w.i32(name);
+  w.u32(0);
+  w.i32(-1);
+  w.u32(0x80000000U);
+  w.u32(0x20U);
+  w.f32(0.5f);
+  w.f32(0.25f);
+  w.f32(4.0f);
+  w.f32(2.0f);
+  w.sized(textures.empty() ? std::string_view{} : std::string_view{textures[0]});
+  w.u8(3);
+  w.u8(255);
+  w.u8(4);
+  w.u8(0);
+  for (const float value : {1.0f, 0.5f, 0.75f, 0.25f}) w.f32(value);
+  for (const float value : {0.4f, 0.3f, 0.2f, 0.6f}) w.f32(value);
+  w.f32(1.5f);
+  w.f32(100.0f);
+  for (std::size_t slot = 1; slot < 5; ++slot) {
+    w.sized(slot < textures.size() ? std::string_view{textures[slot]} : std::string_view{});
+  }
+  w.f32(1.75f);
+  return Block{"BSEffectShaderProperty", w.bytes()};
+}
+
+inline Block alpha_block(std::uint16_t flags, std::uint8_t threshold) {
+  Writer w;
+  w.i32(-1);
+  w.u32(0);
+  w.i32(-1);
+  w.u16(flags);
+  w.u8(threshold);
+  return Block{"NiAlphaProperty", w.bytes()};
 }
 
 inline Block skin_instance_block(std::int32_t data, const std::vector<std::int32_t>& bones) {

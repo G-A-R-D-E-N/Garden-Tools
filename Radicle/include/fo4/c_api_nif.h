@@ -152,6 +152,118 @@ RADICLE_API radicle_status radicle_nif_collision_target_node(const radicle_nif* 
                                                              size_t index,
                                                              int32_t* out_node);
 
+/* Invariant: a block index names the shader block, and its strings come back as caller-owned bytes. */
+typedef struct radicle_nif_lighting_shader {
+  uint32_t block;
+  uint32_t shader_type;
+  uint32_t flags1;
+  uint32_t flags2;
+  float uv_offset[2];
+  float uv_scale[2];
+  int32_t texture_set_ref;
+  size_t texture_count;
+  float emissive_color[3];
+  float emissive_multiple;
+  uint8_t has_root_material;
+  uint32_t texture_clamp;
+  float alpha;
+  float refraction_strength;
+  float smoothness;
+  float specular_color[3];
+  float specular_strength;
+  float subsurface_rolloff;
+  float rimlight_power;
+  uint8_t has_backlight;
+  float backlight_power;
+  uint8_t has_grayscale_to_palette_scale;
+  float grayscale_to_palette_scale;
+  float fresnel_power;
+  uint8_t has_wetness;
+  float wetness[6];
+  uint8_t has_env_map;
+  float env_map_scale;
+  uint8_t env_map_ssr;
+  uint8_t env_map_wetness_ssr;
+  uint8_t has_skin_tint;
+  float skin_tint[4];
+  uint8_t has_hair_tint;
+  float hair_tint[3];
+  uint8_t has_snow;
+  float snow[4];
+  uint8_t has_parallax_occ;
+  float parallax_occ[2];
+  uint8_t has_multi_layer_parallax;
+  float multi_layer_parallax[5];
+  uint8_t has_eye;
+  float eye_cubemap_scale;
+  float eye_left[3];
+  float eye_right[3];
+  size_t tail_bytes;
+} radicle_nif_lighting_shader;
+
+typedef struct radicle_nif_effect_shader {
+  uint32_t block;
+  uint32_t flags1;
+  uint32_t flags2;
+  float uv_offset[2];
+  float uv_scale[2];
+  uint8_t texture_clamp;
+  uint8_t lighting_influence;
+  uint8_t env_map_min_lod;
+  uint8_t unused;
+  float falloff_start_angle;
+  float falloff_stop_angle;
+  float falloff_start_opacity;
+  float falloff_stop_opacity;
+  float base_color[4];
+  float base_color_scale;
+  float soft_falloff_depth;
+  size_t texture_count;
+  float env_map_scale;
+} radicle_nif_effect_shader;
+
+typedef struct radicle_nif_alpha_property {
+  uint32_t block;
+  uint16_t flags;
+  uint8_t threshold;
+  /* Invariant: the five decoded fields are flags bits 0, 1-4, 5-8, 9 and 10-12. */
+  uint8_t blend_enabled;
+  uint8_t source_blend;
+  uint8_t destination_blend;
+  uint8_t test_enabled;
+  uint8_t test_function;
+} radicle_nif_alpha_property;
+
+RADICLE_API radicle_status radicle_nif_lighting_shader(const radicle_nif* nif,
+                                                       uint32_t block,
+                                                       radicle_nif_lighting_shader* out_shader);
+RADICLE_API radicle_status radicle_nif_lighting_shader_name(const radicle_nif* nif,
+                                                            uint32_t block,
+                                                            uint8_t** out_bytes,
+                                                            size_t* out_size);
+RADICLE_API radicle_status radicle_nif_lighting_shader_root_material(const radicle_nif* nif,
+                                                                    uint32_t block,
+                                                                    uint8_t** out_bytes,
+                                                                    size_t* out_size);
+RADICLE_API radicle_status radicle_nif_effect_shader(const radicle_nif* nif,
+                                                     uint32_t block,
+                                                     radicle_nif_effect_shader* out_shader);
+RADICLE_API radicle_status radicle_nif_effect_shader_name(const radicle_nif* nif,
+                                                          uint32_t block,
+                                                          uint8_t** out_bytes,
+                                                          size_t* out_size);
+RADICLE_API radicle_status radicle_nif_effect_shader_texture(const radicle_nif* nif,
+                                                            uint32_t block,
+                                                            size_t slot,
+                                                            uint8_t** out_bytes,
+                                                            size_t* out_size);
+RADICLE_API radicle_status radicle_nif_alpha_property(const radicle_nif* nif,
+                                                     uint32_t block,
+                                                     radicle_nif_alpha_property* out_alpha);
+RADICLE_API size_t radicle_nif_shader_flag_count(void);
+/* Requires bit below the 64-entry flag word; past it the call answers RADICLE_STATUS_NOT_FOUND. */
+RADICLE_API radicle_status radicle_nif_shader_flag_name(uint32_t bit, uint8_t** out_bytes, size_t* out_size);
+
 RADICLE_API void radicle_free_floats(float* values);
 RADICLE_API void radicle_free_triangles(uint16_t* values);
 RADICLE_API void radicle_free_node_refs(uint32_t* values);

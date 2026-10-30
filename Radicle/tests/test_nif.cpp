@@ -1,5 +1,6 @@
 #include "fo4/error.hpp"
 #include "fo4/nif/nif.hpp"
+#include "fo4/nif/shader.hpp"
 #include "nif_build.hpp"
 
 #include <gtest/gtest.h>
@@ -9,6 +10,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <span>
 #include <string>
 #include <string_view>
@@ -329,4 +331,231 @@ TEST(NifGeometry, RejectsTriangleCountPastRemainingBytes) {
   block.data[108] = std::byte{100};
   const auto nif = fo4::nif::read_nif(build_nif({"s"}, {block}, {}));
   expect_parse_error([&] { fo4::nif::read_shapes(nif); }, "triangle count runs past the end of its block");
+}
+
+namespace {
+
+fo4::nif::LightingShader read_lighting(const LightingFields& fields) {
+  const auto nif = fo4::nif::read_nif(build_nif({"material", "root"}, {full_lighting_shader_block(fields)}, {0}));
+  return fo4::nif::read_lighting_shader(nif, 0);
+}
+
+std::size_t lighting_block_size(const LightingFields& fields) { return full_lighting_shader_block(fields).data.size(); }
+
+}
+
+// Invariant: each field must land on its own offset, or a value nobody edited reads back changed.
+TEST(NifShader, ReadsEveryLightingFieldInTheNifXmlOrder) {
+  LightingFields fields;
+  fields.name = 0;
+  fields.root_material = 1;
+  const auto shader = read_lighting(fields);
+  EXPECT_EQ(shader.shader_type, 1U);
+  EXPECT_EQ(shader.name, "material");
+  EXPECT_EQ(shader.flags.word1, 0x80400201U);
+  EXPECT_EQ(shader.flags.word2, 0x21U);
+  EXPECT_EQ(shader.flags.value(), 0x0021'8040'0201ULL);
+  EXPECT_FLOAT_EQ(shader.uv_offset[0], 0.25f);
+  EXPECT_FLOAT_EQ(shader.uv_offset[1], 0.5f);
+  EXPECT_FLOAT_EQ(shader.uv_scale[0], 2.0f);
+  EXPECT_FLOAT_EQ(shader.uv_scale[1], 3.0f);
+  EXPECT_EQ(shader.texture_set_ref, -1);
+  EXPECT_FLOAT_EQ(shader.emissive_color[0], 0.5f);
+  EXPECT_FLOAT_EQ(shader.emissive_color[1], 0.25f);
+  EXPECT_FLOAT_EQ(shader.emissive_color[2], 0.125f);
+  EXPECT_FLOAT_EQ(shader.emissive_multiple, 4.0f);
+  EXPECT_TRUE(shader.has_root_material);
+  EXPECT_EQ(shader.root_material, "root");
+  EXPECT_EQ(shader.texture_clamp, 3U);
+  EXPECT_FLOAT_EQ(shader.alpha, 0.5f);
+  EXPECT_FLOAT_EQ(shader.refraction_strength, 0.25f);
+  EXPECT_FLOAT_EQ(shader.smoothness, 0.75f);
+  EXPECT_FLOAT_EQ(shader.specular_color[0], 0.1f);
+  EXPECT_FLOAT_EQ(shader.specular_color[1], 0.2f);
+  EXPECT_FLOAT_EQ(shader.specular_color[2], 0.3f);
+  EXPECT_FLOAT_EQ(shader.specular_strength, 0.875f);
+  EXPECT_FLOAT_EQ(shader.subsurface_rolloff, 0.125f);
+  EXPECT_FLOAT_EQ(shader.rimlight_power, std::numeric_limits<float>::max());
+  EXPECT_TRUE(shader.has_backlight);
+  EXPECT_FLOAT_EQ(shader.backlight_power, 2.5f);
+  EXPECT_TRUE(shader.has_grayscale_to_palette_scale);
+  EXPECT_FLOAT_EQ(shader.grayscale_to_palette_scale, 0.625f);
+  EXPECT_FLOAT_EQ(shader.fresnel_power, 7.5f);
+  EXPECT_TRUE(shader.has_wetness);
+  EXPECT_FLOAT_EQ(shader.wetness.spec_scale, 1.0f);
+  EXPECT_FLOAT_EQ(shader.wetness.spec_power, 2.0f);
+  EXPECT_FLOAT_EQ(shader.wetness.min_var, 3.0f);
+  EXPECT_FLOAT_EQ(shader.wetness.env_map_scale, 4.0f);
+  EXPECT_FLOAT_EQ(shader.wetness.fresnel_power, 5.0f);
+  EXPECT_FLOAT_EQ(shader.wetness.metalness, 6.0f);
+  EXPECT_EQ(shader.offsets.end, lighting_block_size(fields));
+  EXPECT_EQ(shader.tail_bytes, 6U);
+}
+
+// Invariant: each material tail must end exactly at the block end, or the fields after it shift.
+TEST(NifShader, ReadsEveryMaterialTypeTailToTheBlockEnd) {
+  for (const std::uint32_t type : {0U, 1U, 5U, 6U, 7U, 11U, 14U, 16U}) {
+    SCOPED_TRACE("shader type " + std::to_string(type));
+    LightingFields fields;
+    fields.shader_type = type;
+    const auto shader = read_lighting(fields);
+    EXPECT_EQ(shader.shader_type, type);
+    EXPECT_EQ(shader.offsets.end, lighting_block_size(fields));
+    EXPECT_EQ(shader.has_env_map, type == 1U);
+    EXPECT_EQ(shader.has_skin_tint, type == 5U);
+    EXPECT_EQ(shader.has_hair_tint, type == 6U);
+    EXPECT_EQ(shader.has_parallax_occ, type == 7U);
+    EXPECT_EQ(shader.has_multi_layer_parallax, type == 11U);
+    EXPECT_EQ(shader.has_snow, type == 14U);
+    EXPECT_EQ(shader.has_eye, type == 16U);
+    if (type == 1U) {
+      EXPECT_FLOAT_EQ(shader.env_map_scale, 1.5f);
+      EXPECT_EQ(shader.env_map_ssr, 1);
+      EXPECT_EQ(shader.env_map_wetness_ssr, 0);
+      EXPECT_EQ(shader.tail_bytes, 6U);
+    }
+    if (type == 5U) {
+      EXPECT_FLOAT_EQ(shader.skin_tint[0], 0.1f);
+      EXPECT_FLOAT_EQ(shader.skin_tint[3], 0.4f);
+      EXPECT_EQ(shader.tail_bytes, 16U);
+    }
+    if (type == 6U) EXPECT_FLOAT_EQ(shader.hair_tint[2], 0.33f);
+    if (type == 7U) {
+      EXPECT_FLOAT_EQ(shader.parallax_occ[0], 4.0f);
+      EXPECT_FLOAT_EQ(shader.parallax_occ[1], 1.25f);
+    }
+    if (type == 11U) {
+      EXPECT_FLOAT_EQ(shader.multi_layer_parallax[0], 5.0f);
+      EXPECT_FLOAT_EQ(shader.multi_layer_parallax[4], 0.5f);
+    }
+    if (type == 14U) EXPECT_FLOAT_EQ(shader.snow[3], 0.6f);
+    if (type == 16U) {
+      EXPECT_FLOAT_EQ(shader.eye_cubemap_scale, 1.3f);
+      EXPECT_FLOAT_EQ(shader.eye_left[0], 0.01f);
+      EXPECT_FLOAT_EQ(shader.eye_right[2], 0.06f);
+    }
+    if (type == 0U) EXPECT_EQ(shader.tail_bytes, 0U);
+  }
+}
+
+// Invariant: Backlight Power is stored only behind the FLT_MAX rimlight placeholder.
+TEST(NifShader, ReadsNoBacklightWithoutTheRimlightPlaceholder) {
+  LightingFields fields;
+  fields.rimlight_power = 3.0f;
+  const auto shader = read_lighting(fields);
+  EXPECT_FALSE(shader.has_backlight);
+  EXPECT_FLOAT_EQ(shader.rimlight_power, 3.0f);
+  EXPECT_FLOAT_EQ(shader.grayscale_to_palette_scale, 0.625f);
+  EXPECT_FLOAT_EQ(shader.fresnel_power, 7.5f);
+  EXPECT_FLOAT_EQ(shader.wetness.metalness, 6.0f);
+  EXPECT_EQ(shader.offsets.end, lighting_block_size(fields));
+}
+
+// Invariant: bit N must name the nif.xml flag at bit N, or the editor labels the wrong feature.
+TEST(NifShader, NamesEverySetBitFromTheShaderFlagEnum) {
+  ASSERT_EQ(fo4::nif::shader_flag_count(), 64U);
+  EXPECT_STREQ(fo4::nif::shader_flag_name(0), "Specular");
+  EXPECT_STREQ(fo4::nif::shader_flag_name(15), "Refraction");
+  EXPECT_STREQ(fo4::nif::shader_flag_name(32), "ZBufferWrite");
+  EXPECT_STREQ(fo4::nif::shader_flag_name(63), "RefractionWritesDepth");
+  EXPECT_EQ(fo4::nif::shader_flag_name(64), nullptr);
+  const fo4::nif::ShaderFlags flags{0x80400201U, 0x21U};
+  EXPECT_EQ(fo4::nif::shader_flag_names(flags),
+            (std::vector<std::string>{"Specular", "CastShadows", "OwnEmit", "ZBufferTest", "ZBufferWrite",
+                                      "VertexColors"}));
+  EXPECT_TRUE(fo4::nif::shader_flag_names({}).empty());
+}
+
+// Invariant: texture slot N must hold the path stored in slot N, or a mesh gets the wrong map.
+TEST(NifShader, ReadsEffectShaderTexturesAndFloats) {
+  const std::vector<Block> blocks{effect_shader_block(0, {"textures\\source.dds", "textures\\grey.dds", "textures\\env.dds",
+                                                          "textures\\normal.dds", "textures\\mask.dds"})};
+  const auto nif = fo4::nif::read_nif(build_nif({"fx"}, blocks, {0}));
+  const auto shader = fo4::nif::read_effect_shader(nif, 0);
+  EXPECT_EQ(shader.name, "fx");
+  EXPECT_EQ(shader.flags.word1, 0x80000000U);
+  EXPECT_EQ(shader.flags.word2, 0x20U);
+  EXPECT_FLOAT_EQ(shader.uv_offset[1], 0.25f);
+  EXPECT_FLOAT_EQ(shader.uv_scale[0], 4.0f);
+  EXPECT_EQ(shader.source_texture, "textures\\source.dds");
+  EXPECT_EQ(shader.texture_clamp, 3);
+  EXPECT_EQ(shader.lighting_influence, 255);
+  EXPECT_EQ(shader.env_map_min_lod, 4);
+  EXPECT_FLOAT_EQ(shader.falloff_start_angle, 1.0f);
+  EXPECT_FLOAT_EQ(shader.falloff_stop_opacity, 0.25f);
+  EXPECT_FLOAT_EQ(shader.base_color[0], 0.4f);
+  EXPECT_FLOAT_EQ(shader.base_color[3], 0.6f);
+  EXPECT_FLOAT_EQ(shader.base_color_scale, 1.5f);
+  EXPECT_FLOAT_EQ(shader.soft_falloff_depth, 100.0f);
+  ASSERT_EQ(shader.textures.size(), 5U);
+  EXPECT_EQ(shader.textures[1], "textures\\grey.dds");
+  EXPECT_EQ(shader.textures[2], "textures\\env.dds");
+  EXPECT_EQ(shader.textures[3], "textures\\normal.dds");
+  EXPECT_EQ(shader.textures[4], "textures\\mask.dds");
+  EXPECT_FLOAT_EQ(shader.env_map_scale, 1.75f);
+  EXPECT_EQ(shader.offsets.end, nif.blocks()[0].size);
+}
+
+// Invariant: the u16 flags and the u8 threshold must stay in that order.
+TEST(NifShader, ReadsAlphaPropertyFlagsAndThreshold) {
+  const std::vector<Block> blocks{alpha_block(0x12EDU, 128)};
+  const auto nif = fo4::nif::read_nif(build_nif({}, blocks, {0}));
+  const auto alpha = fo4::nif::read_alpha(nif, 0);
+  EXPECT_EQ(alpha.flags, 0x12EDU);
+  EXPECT_EQ(alpha.threshold, 128);
+  EXPECT_EQ(alpha.flags_at, 12U);
+  EXPECT_EQ(alpha.threshold_at, 14U);
+  EXPECT_EQ(alpha.end, nif.blocks()[0].size);
+}
+
+// Invariant: a shift off by one in the packed word shows here as a wrong blend or test name.
+TEST(NifShader, DecodesAlphaBlendAndTestFieldsFromThePackedWord) {
+  const std::vector<Block> blocks{alpha_block(0x12EDU, 128), alpha_block(fo4::nif::k_alpha_default_flags, 0)};
+  const auto nif = fo4::nif::read_nif(build_nif({}, blocks, {0}));
+  const auto alpha = fo4::nif::read_alpha(nif, 0);
+  EXPECT_TRUE(alpha.blend_enabled);
+  EXPECT_EQ(alpha.source_blend, fo4::nif::AlphaBlendMode::SourceAlpha);
+  EXPECT_EQ(alpha.destination_blend, fo4::nif::AlphaBlendMode::InverseSourceAlpha);
+  EXPECT_TRUE(alpha.test_enabled);
+  EXPECT_EQ(alpha.test_function, fo4::nif::AlphaTestFunction::Greater);
+
+  const auto plain = fo4::nif::read_alpha(nif, 1);
+  EXPECT_FALSE(plain.blend_enabled);
+  EXPECT_EQ(plain.source_blend, fo4::nif::AlphaBlendMode::SourceAlpha);
+  EXPECT_EQ(plain.destination_blend, fo4::nif::AlphaBlendMode::InverseSourceAlpha);
+  EXPECT_FALSE(plain.test_enabled);
+  EXPECT_EQ(plain.test_function, fo4::nif::AlphaTestFunction::Always);
+  EXPECT_STREQ(fo4::nif::alpha_blend_name(plain.destination_blend), "InverseSourceAlpha");
+  EXPECT_STREQ(fo4::nif::alpha_test_name(fo4::nif::AlphaTestFunction::Never), "Never");
+  EXPECT_STREQ(fo4::nif::alpha_blend_name(static_cast<fo4::nif::AlphaBlendMode>(15)), "Unknown");
+}
+
+// Invariant: bit 5 of the BSX word is the editor-marker signal, so a mask off by one fails here.
+TEST(NifFile, EditorMarkerIsBitFiveOfTheBsxWord) {
+  Writer w;
+  w.i32(-1);
+  w.u32(0x21U);
+  const std::vector<Block> blocks{Block{"BSXFlags", w.bytes()}};
+  const auto nif = fo4::nif::read_nif(build_nif({}, blocks, {0}));
+  const auto flags = fo4::nif::read_bsx_flags(nif, 0);
+  EXPECT_EQ(flags, 0x21U);
+  EXPECT_TRUE(fo4::nif::is_editor_marker(flags));
+  EXPECT_TRUE(fo4::nif::is_editor_marker(fo4::nif::k_bsx_editor_marker_bit));
+  EXPECT_FALSE(fo4::nif::is_editor_marker(0x1U));
+  EXPECT_FALSE(fo4::nif::is_editor_marker(0x0FU));
+}
+
+// Requires a BSXFlags block: any other block must be refused, not read as a flag word.
+TEST(NifFile, RejectsBsxFlagsReadFromAnotherBlockType) {
+  const std::vector<Block> blocks{triangle_block("BSTriShape", Transform{})};
+  const auto nif = fo4::nif::read_nif(build_nif({"shape"}, blocks, {}));
+  expect_parse_error([&nif] { fo4::nif::read_bsx_flags(nif, 0); }, "not a BSXFlags");
+}
+
+// Requires the whole block: a truncated shader must fail rather than read its neighbour.
+TEST(NifShader, RejectsALightingShaderThatEndsInsideAField) {
+  auto block = full_lighting_shader_block(LightingFields{});
+  block.data.resize(block.data.size() - 4);
+  const auto nif = fo4::nif::read_nif(build_nif({}, {block}, {0}));
+  expect_parse_error([&] { fo4::nif::read_lighting_shader(nif, 0); }, "unexpected end of data");
 }

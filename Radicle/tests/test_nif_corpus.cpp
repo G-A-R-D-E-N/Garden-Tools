@@ -2,6 +2,7 @@
 #include "fo4/error.hpp"
 #include "fo4/nif/nif.hpp"
 #include "fo4/nif/nif_write.hpp"
+#include "fo4/nif/shader.hpp"
 #include "real_data_build.hpp"
 #include "real_data_plugins.hpp"
 
@@ -273,4 +274,101 @@ TEST(NifCorpus, WriteRoundTripsEveryVanillaNifByteForByte) {
     }
   }
   EXPECT_GT(nif_count, 0U);
+}
+
+// regression: a field read at the wrong width leaves bytes unconsumed, so every vanilla shader block must end at its size
+TEST(NifCorpus, ReadsEveryVanillaShaderBlockToItsDeclaredSize) {
+  const char* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder with its Fallout4 - *.ba2 archives";
+  record_game_build(detect_game_build(dir));
+  const auto archives = fo4::archive::archive_load_order(dir, {}, installed_master_and_cc_plugins(dir));
+  if (archives.empty()) GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder with its Fallout4 - *.ba2 archives";
+
+  const auto assets = fo4::archive::AssetResolver::open({}, archives);
+  std::map<std::uint32_t, std::size_t> material_types;
+  std::size_t lighting = 0;
+  std::size_t effect = 0;
+  std::size_t alpha = 0;
+  std::size_t unconsumed = 0;
+  std::size_t failures = 0;
+  std::size_t texture_sets = 0;
+  std::size_t texture_sets_without_ten = 0;
+  std::size_t effect_slots_without_five = 0;
+  std::size_t first_effect_textured = 0;
+  std::string first_unconsumed;
+  std::string first_failure;
+
+  for (const auto& reader : assets.archives()) {
+    if (reader.kind() != fo4::archive::Ba2Kind::general) continue;
+    for (std::size_t i = 0; i < reader.entries().size(); ++i) {
+      const auto& path = reader.entries()[i].path;
+      if (!has_extension(path, ".nif")) continue;
+      try {
+        const auto nif = fo4::nif::read_nif(reader.extract(i));
+        for (std::size_t block = 0; block < nif.blocks().size(); ++block) {
+          const auto index = static_cast<std::uint32_t>(block);
+          const auto& info = nif.blocks()[block];
+          if (info.type == "BSLightingShaderProperty") {
+            ++lighting;
+            const auto shader = fo4::nif::read_lighting_shader(nif, index);
+            ++material_types[shader.shader_type];
+            if (shader.offsets.end != info.size) {
+              ++unconsumed;
+              if (first_unconsumed.empty()) {
+                first_unconsumed = path + " block " + std::to_string(block) + " (type " +
+                                   std::to_string(shader.shader_type) + ") ends at " +
+                                   std::to_string(shader.offsets.end) + " of " + std::to_string(info.size);
+              }
+            }
+            if (shader.texture_set_ref >= 0) {
+              ++texture_sets;
+              if (shader.textures.size() != 10U) ++texture_sets_without_ten;
+            }
+          } else if (info.type == "BSEffectShaderProperty") {
+            ++effect;
+            const auto shader = fo4::nif::read_effect_shader(nif, index);
+            if (shader.offsets.end != info.size) {
+              ++unconsumed;
+              if (first_unconsumed.empty()) first_unconsumed = path + " block " + std::to_string(block) + " (effect)";
+            }
+            if (shader.textures.size() != 5U) ++effect_slots_without_five;
+            if (!shader.textures[0].empty() && !shader.textures[2].empty()) ++first_effect_textured;
+          } else if (info.type == "NiAlphaProperty") {
+            ++alpha;
+            const auto property = fo4::nif::read_alpha(nif, index);
+            if (property.end != info.size) {
+              ++unconsumed;
+              if (first_unconsumed.empty()) first_unconsumed = path + " block " + std::to_string(block) + " (alpha)";
+            }
+          }
+        }
+      } catch (const fo4::parse_error& error) {
+        ++failures;
+        if (first_failure.empty()) first_failure = path + ": " + error.parse_message();
+      }
+    }
+  }
+
+  for (const auto& [type, count] : material_types) {
+    std::cout << "lighting material type " << type << ": " << count << '\n';
+    RecordProperty("lighting_material_type_" + std::to_string(type) + "_count", std::to_string(count));
+  }
+  std::cout << "lighting shaders " << lighting << ", effect shaders " << effect << ", alpha properties " << alpha
+            << ", texture sets " << texture_sets << " of which " << texture_sets_without_ten
+            << " hold other than ten slots, effect shaders with a source and an env map " << first_effect_textured
+            << ", blocks not consumed exactly " << unconsumed << ", parse failures " << failures << '\n';
+  if (!first_unconsumed.empty()) std::cout << "first block not consumed exactly: " << first_unconsumed << '\n';
+  RecordProperty("lighting_shader_count", std::to_string(lighting));
+  RecordProperty("effect_shader_count", std::to_string(effect));
+  RecordProperty("alpha_property_count", std::to_string(alpha));
+  RecordProperty("unconsumed_shader_block_count", std::to_string(unconsumed));
+
+  EXPECT_EQ(failures, 0U) << first_failure;
+  EXPECT_EQ(unconsumed, 0U) << first_unconsumed;
+  EXPECT_EQ(texture_sets_without_ten, 0U);
+  EXPECT_EQ(effect_slots_without_five, 0U);
+  EXPECT_GT(lighting, 0U);
+  EXPECT_GT(effect, 0U);
+  EXPECT_GT(alpha, 0U);
+  EXPECT_GT(material_types.size(), 0U);
 }

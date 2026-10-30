@@ -1,8 +1,8 @@
 #include "fo4/c_api_nif.h"
 
 #include "c_api_internal.hpp"
+#include "c_api_nif_internal.hpp"
 #include "fo4/error.hpp"
-#include "fo4/nif/collision.hpp"
 #include "fo4/nif/nif.hpp"
 
 #include <cstddef>
@@ -14,12 +14,6 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
-
-struct radicle_nif {
-  fo4::nif::NifFile file;
-  std::vector<fo4::nif::Shape> shapes;
-  std::vector<fo4::nif::CollisionBlob> collisions;
-};
 
 namespace {
 
