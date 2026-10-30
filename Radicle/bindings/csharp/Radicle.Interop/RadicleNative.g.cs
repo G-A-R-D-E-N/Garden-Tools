@@ -2942,7 +2942,7 @@ public unsafe struct PapyrusCompileOptions
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 90u;
+    public const uint CompiledAbiVersion = 91u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -3429,6 +3429,24 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_sound_big_rumble_send")]
     public static extern Status SoundBigRumbleSend(byte rumble_control, double* out_send);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_add_sound_file")]
+    public static extern Status PluginAddSoundFile(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? file, nuint* out_file_index);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_remove_sound_file")]
+    public static extern Status PluginRemoveSoundFile(IntPtr plugin, FormKey key, nuint file_index);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_sound_file")]
+    public static extern Status PluginSetSoundFile(IntPtr plugin, FormKey key, nuint file_index, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? file);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_add_sound_base_link")]
+    public static extern Status PluginAddSoundBaseLink(IntPtr plugin, FormKey key, FormKey target);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_remove_sound_base_link")]
+    public static extern Status PluginRemoveSoundBaseLink(IntPtr plugin, FormKey key);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_create_sound_record")]
+    public static extern Status PluginCreateSoundRecord(IntPtr plugin, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? signature, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? editor_id_utf8, FormKey* out_key);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_parse")]
     public static extern Status PexParse(byte* bytes, nuint size, IntPtr* out_pex);

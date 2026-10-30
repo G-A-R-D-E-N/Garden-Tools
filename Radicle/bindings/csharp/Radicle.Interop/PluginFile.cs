@@ -312,6 +312,59 @@ public sealed unsafe class PluginFile : IDisposable
         return Edit(record, (plugin, s, key) => RadicleNative.PluginSetQuestVmadFragment(plugin, key, stage, stageIndex, script, function));
     }
 
+    public int AddSoundFile(FormKey record, string file)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+        if (file.Contains('\0')) throw new ArgumentException("Sound file name cannot hold an embedded NUL through this API.", nameof(file));
+        using var use = Use();
+        using var strings = new NativeStrings();
+        nuint added;
+        Call.Check(RadicleNative.PluginAddSoundFile(use.Pointer, strings.Key(record), file, &added));
+        return (int)added;
+    }
+
+    public void RemoveSoundFile(FormKey record, int fileIndex)
+    {
+        var at = Index(fileIndex);
+        using var use = Use();
+        using var strings = new NativeStrings();
+        Call.Check(RadicleNative.PluginRemoveSoundFile(use.Pointer, strings.Key(record), at));
+    }
+
+    public void SetSoundFile(FormKey record, int fileIndex, string file)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+        if (file.Contains('\0')) throw new ArgumentException("Sound file name cannot hold an embedded NUL through this API.", nameof(file));
+        var at = Index(fileIndex);
+        using var use = Use();
+        using var strings = new NativeStrings();
+        Call.Check(RadicleNative.PluginSetSoundFile(use.Pointer, strings.Key(record), at, file));
+    }
+
+    public void AddSoundBaseLink(FormKey record, FormKey target)
+    {
+        using var use = Use();
+        using var strings = new NativeStrings();
+        Call.Check(RadicleNative.PluginAddSoundBaseLink(use.Pointer, strings.Key(record), strings.Key(target)));
+    }
+
+    public void RemoveSoundBaseLink(FormKey record)
+    {
+        using var use = Use();
+        using var strings = new NativeStrings();
+        Call.Check(RadicleNative.PluginRemoveSoundBaseLink(use.Pointer, strings.Key(record)));
+    }
+
+    public FormKey CreateSoundRecord(string signature, string editorId)
+    {
+        ArgumentNullException.ThrowIfNull(signature);
+        ArgumentNullException.ThrowIfNull(editorId);
+        using var use = Use();
+        Native.FormKey key;
+        Call.Check(RadicleNative.PluginCreateSoundRecord(use.Pointer, signature, editorId, &key));
+        return FormKey.FromNative(key)!.Value;
+    }
+
     public bool RemoveQuestVmadFragment(FormKey record, ushort stage, int stageIndex) =>
         Edit(record, (plugin, s, key) => RadicleNative.PluginRemoveQuestVmadFragment(plugin, key, stage, stageIndex));
 

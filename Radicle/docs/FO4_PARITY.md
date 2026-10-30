@@ -173,9 +173,9 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144 (11 L4 rows have an authoring constr
 | SMEN | 8762 | 3 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | SMQN | 8735 | 4 | - | 2 | 1 | - | yes | - | - | - | 1 | L4 |
 | SNCT | 9469 | 5 | - | 2 | - | 1 | yes | - | - | - | 1 | L4 |
-| SNDR | 9406 | 11 | 3 | 5 | - | - | yes | - | environment/sound | - | 6 | L4 |
+| SNDR | 9406 | 11 | 3 | 5 | - | - | yes | - | environment/sound | - | 7 | L4 |
 | SOPM | 9489 | 24 | - | 1 | - | - | yes | - | - | - | 1 | L4 |
-| SOUN | 11961 | 9 | - | 1 | - | - | yes | - | environment/sound | - | 2 | L4 |
+| SOUN | 11961 | 9 | - | 1 | - | - | yes | - | environment/sound | - | 3 | L4 |
 | SPEL | 12030 | 14 | - | 2 | - | 2 | yes | yes | - | - | 4 | L4 |
 | SPGD | 6128 | 12 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
 | STAG | 12663 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |

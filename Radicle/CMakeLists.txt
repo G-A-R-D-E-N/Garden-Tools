@@ -227,6 +227,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/plugin/subrecord_authoring.cpp
   src/plugin/subrecord_copy.cpp
   src/plugin/scene_writer.cpp
+  src/plugin/sound_writer.cpp
   src/plugin/scene_index.cpp
   src/plugin/master_usage.cpp
   src/plugin/maintenance.cpp
@@ -941,6 +942,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_sound_subrecords.cpp
     tests/test_music_track_lists.cpp
     tests/test_sound_writer_c_api.cpp
+    tests/test_sound_structure_c_api.cpp
     tests/test_sound_writer_real.cpp
     tests/test_audio_records.cpp
     tests/test_audio_records_real.cpp
