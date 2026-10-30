@@ -74,9 +74,12 @@ Block shape_on_shader(std::int32_t shader, std::int32_t alpha) {
   return nif_build::shape_with_refs("BSTriShape", 0, {}, 0, 16, -1, shader, alpha, {}, {});
 }
 
+// Constraint: every fixture block names string 0, so the header must carry at least one string.
+const std::vector<std::string> k_names{"shape", "fx"};
+
 std::vector<std::byte> lighting_nif(const nif_build::LightingFields& fields) {
-  return nif_build::build_nif({}, {nif_build::node_block("NiNode", {}, {1}), shape_on_shader(2, -1),
-                                   nif_build::full_lighting_shader_block(fields)},
+  return nif_build::build_nif(k_names, {nif_build::node_block("NiNode", {}, {1}), shape_on_shader(2, -1),
+                                        nif_build::full_lighting_shader_block(fields)},
                               {k_root});
 }
 
@@ -144,8 +147,8 @@ TEST(NifWriteBlocks, EnvMapTailRoundTripsScaleAndBothScreenSpaceBytes) {
 TEST(NifWriteBlocks, EffectShaderTextureGrowthKeepsLaterSlotsCorrect) {
   // Invariant: a longer source path shifts every later slot, so the greyscale write must use the new offsets
   const auto bytes = nif_build::build_nif(
-      {}, {nif_build::node_block("NiNode", {}, {1}), shape_on_shader(2, -1),
-           nif_build::effect_shader_block(1, {"fx\\a.dds", "fx\\grey.dds"})},
+      k_names, {nif_build::node_block("NiNode", {}, {1}), shape_on_shader(2, -1),
+                nif_build::effect_shader_block(1, {"fx\\a.dds", "fx\\grey.dds"})},
       {k_root});
   const auto nif = read_nif(bytes);
   const std::vector<Edit> edits{
@@ -170,7 +173,8 @@ TEST(NifWriteBlocks, EffectShaderTextureGrowthKeepsLaterSlotsCorrect) {
 TEST(NifWriteBlocks, AlphaPropertyDecodesAfterItsEdits) {
   // Invariant: flags bits must be toggled in place, so blend, test and their neighbours stay independent
   const auto bytes = nif_build::build_nif(
-      {}, {nif_build::node_block("NiNode", {}, {1}), shape_on_shader(-1, 2), nif_build::alpha_block(0x12EDU, 128)},
+      k_names, {nif_build::node_block("NiNode", {}, {1}), shape_on_shader(-1, 2),
+                nif_build::alpha_block(0x12EDU, 128)},
       {k_root});
   const auto nif = read_nif(bytes);
   const std::vector<Edit> edits{
@@ -191,8 +195,8 @@ TEST(NifWriteBlocks, AlphaPropertyDecodesAfterItsEdits) {
 
 TEST(NifWriteBlocks, BsxEditorMarkerTogglesOnlyBitFive) {
   // Invariant: the marker edit must keep the other BSX bits, which the engine reads for BSX behaviour
-  const auto nif = read_nif(nif_build::build_nif({}, {nif_build::node_block("NiNode", {}, {}), bsx_block(0x480U)},
-                                                 {k_root}));
+  const auto nif = read_nif(
+      nif_build::build_nif(k_names, {nif_build::node_block("NiNode", {}, {}), bsx_block(0x480U)}, {k_root}));
   const std::vector<Edit> on{Edit{1, "editorMarker", as_number(1.0f)}};
   const auto marked = fo4::nif::read_bsx_flags(read_nif(apply_edits(nif, on)), 1);
   EXPECT_EQ(marked, 0x4A0U);
@@ -204,7 +208,8 @@ TEST(NifWriteBlocks, BsxEditorMarkerTogglesOnlyBitFive) {
 TEST(NifWriteBlocks, CollisionObjectFlagsAndBodyIdRoundTripAndKeepTheBlob) {
   // Invariant: the packfile bytes must pass through untouched, or the collision system stops loading
   const auto bytes = nif_build::build_nif(
-      {}, {nif_build::node_block("NiNode", {}, {}), collision_object_block(2, 0x0800U, 7U), physics_system_block()},
+      k_names, {nif_build::node_block("NiNode", {}, {}), collision_object_block(2, 0x0800U, 7U),
+                physics_system_block()},
       {k_root});
   const auto nif = read_nif(bytes);
   const std::vector<Edit> edits{
