@@ -1,4 +1,6 @@
 import base64
+import contextlib
+import io
 import json
 import os
 import subprocess
@@ -379,7 +381,9 @@ class ClaimReadErrorsTest(unittest.TestCase):
 
         def fake_json(url, token):
             if "/pulls?" in url:
-                return page_one
+                if "page=1" in url:
+                    return page_one
+                return []
             if "/contents/" in url:
                 return self.numbered(95)
             raise AssertionError("unexpected " + url)
@@ -409,8 +413,12 @@ class ClaimReadErrorsTest(unittest.TestCase):
                 here = os.getcwd()
                 os.chdir(root)
                 try:
-                    return check.main(["--base", "main", "--api-url", "a",
-                                       "--repo", "r", "--token", "t", "--number", "1"])
+                    stream = io.StringIO()
+                    with contextlib.redirect_stdout(stream):
+                        code = check.main(["--base", "main", "--api-url", "a",
+                                           "--repo", "r", "--token", "t", "--number", "1"])
+                    self.assertIn("page 1", stream.getvalue())
+                    return code
                 finally:
                     os.chdir(here)
         finally:
@@ -424,6 +432,32 @@ class ClaimReadErrorsTest(unittest.TestCase):
 
     def test_a_list_of_strings_fails_the_gate(self):
         self.assertEqual(2, self.main_with_list_body(["x"]))
+
+    def test_invalid_utf8_body_fails_the_gate(self):
+        bodies = {"bad": UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")}
+        pulls = [{"number": 400, "head": {"sha": "bad", "ref": "other"},
+                  "base": {"sha": "def", "ref": "nomad/dev"}}]
+        self.assertEqual(2, self.main_with(None, pulls, bodies))
+
+    def test_non_ascii_content_fails_the_gate(self):
+        bodies = {"nas": {"content": "caf\xe9"}}
+        pulls = [{"number": 401, "head": {"sha": "nas", "ref": "other"},
+                  "base": {"sha": "def", "ref": "nomad/dev"}}]
+        self.assertEqual(2, self.main_with(None, pulls, bodies))
+
+    def test_a_null_base_fails_the_gate(self):
+        pulls = [{"number": 402, "head": {"sha": "h402", "ref": "other"},
+                  "base": None}]
+        stream = io.StringIO()
+        with contextlib.redirect_stdout(stream):
+            code = self.main_with(AssertionError("must not fetch"), pulls)
+        self.assertEqual(2, code)
+        self.assertIn("malformed links", stream.getvalue())
+
+    def test_a_list_head_ref_fails_the_gate(self):
+        pulls = [{"number": 403, "head": {"sha": "h403", "ref": ["x"]},
+                  "base": {"sha": "def", "ref": "nomad/dev"}}]
+        self.assertEqual(2, self.main_with(AssertionError("must not fetch"), pulls))
 
 
 class OpenPullsTest(unittest.TestCase):

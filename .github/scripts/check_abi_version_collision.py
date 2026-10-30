@@ -11,7 +11,6 @@ Exit codes: 0 clear, 1 a claim disagrees with another, 2 the gate could not run.
 
 import argparse
 import base64
-import binascii
 import json
 import os
 import re
@@ -28,10 +27,14 @@ PAGE_SIZE = 50
 MAX_PAGES = 10
 
 
+class MissingNumber(ValueError):
+    """The header has no RADICLE_ABI_VERSION; only this skips a claim (see code-notes)."""
+
+
 def read_version(text, where):
     found = VERSION.search(text)
     if found is None:
-        raise ValueError("{} does not define RADICLE_ABI_VERSION".format(where))
+        raise MissingNumber("{} does not define RADICLE_ABI_VERSION".format(where))
     return int(found.group(1))
 
 
@@ -100,7 +103,7 @@ def claim_conflicts(claims, base_version, ancestry=None, shared=None):
     by_version = {}
     for claim in claims:
         by_version.setdefault(claim["version"], []).append(claim)
-    skipped = {base_version} if shared is None else {base_version, shared}
+    skipped = {base_version, shared}
     conflicts = []
     for version in sorted(by_version):
         group = by_version[version]
@@ -157,15 +160,24 @@ def open_pulls(api, repo, token):
 
 def claim_of(pull, api, repo, token):
     number = pull["number"]
-    head = pull["head"]["sha"]
-    contents = get_json("{}/repos/{}/contents/{}?ref={}".format(api, repo, HEADER, head), token)
+    head = pull["head"]
+    base = pull["base"]
+    if not isinstance(number, int) or not isinstance(head, dict) or not isinstance(base, dict):
+        raise TypeError("pull request #{} has malformed links".format(pull.get("number")))
+    sha = head["sha"]
+    head_ref = head.get("ref") or ""
+    base_sha = base.get("sha") or ""
+    base_ref = base.get("ref") or ""
+    if not all(isinstance(part, str) for part in (sha, head_ref, base_sha, base_ref)):
+        raise TypeError("pull request #{} has malformed links".format(number))
+    contents = get_json("{}/repos/{}/contents/{}?ref={}".format(api, repo, HEADER, sha), token)
     text = base64.b64decode(contents["content"]).decode("utf-8", "replace")
     return {
         "number": number,
-        "head": head,
-        "head_ref": pull["head"].get("ref") or "",
-        "base": pull["base"].get("sha") or "",
-        "base_ref": pull["base"].get("ref") or "",
+        "head": sha,
+        "head_ref": head_ref,
+        "base": base_sha,
+        "base_ref": base_ref,
         "version": read_version(text, "#{}".format(number)),
     }
 
@@ -312,13 +324,13 @@ def main(argv=None):
                     return 2
                 print("::warning::cannot read the ABI of #{} ({}); skipping it".format(
                     pull.get("number"), error))
-            except (KeyError, TypeError, json.JSONDecodeError, binascii.Error) as error:
+            except MissingNumber as error:
+                print("::warning::cannot read the ABI of #{} ({}); skipping it".format(
+                    pull.get("number"), error))
+            except (KeyError, TypeError, AttributeError, ValueError) as error:
                 print("::error::malformed claim for #{} ({}); the gate needs every claim, so this is exit 2, not a pass".format(
                     pull.get("number"), error))
                 return 2
-            except ValueError as error:
-                print("::warning::cannot read the ABI of #{} ({}); skipping it".format(
-                    pull.get("number"), error))
     except (OSError, ValueError) as error:
         print("::error::cannot list the open pull requests ({}). This gate fails rather "
               "than passing silently.".format(error))
