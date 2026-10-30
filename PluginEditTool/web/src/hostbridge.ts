@@ -12,7 +12,7 @@ type Listener = (e: { data: unknown }) => void;
 
 const HOST_OBJECTS = [
   'backend', 'appInterop', 'settings', 'papyrus',
-  'nif', 'material', 'masters', 'archive', 'audio', 'cell', 'graph', 'strings',
+  'nif', 'material', 'masters', 'archive', 'audio', 'cell', 'graph', 'strings', 'swf',
 ] as const;
 
 const TOKEN_KEY = 'fo4ide.token';

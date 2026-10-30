@@ -133,6 +133,7 @@ catch_discover_tests(fo4ide_test_corpus TEST_SPEC "Compiled*" PROPERTIES TIMEOUT
 fo4ide_add_test(fo4ide_test_service_targets unit/ServiceTargetsTests.cpp fo4ide_app)
 fo4ide_add_test(fo4ide_test_audio_service unit/AudioServiceTests.cpp fo4ide_app)
 fo4ide_add_test(fo4ide_test_material_target unit/MaterialTargetTests.cpp fo4ide_app)
+fo4ide_add_test(fo4ide_test_swf_target unit/SwfTargetTests.cpp fo4ide_app)
 fo4ide_add_test(fo4ide_test_settings_security unit/SettingsTargetSecurityTests.cpp fo4ide_app)
 fo4ide_add_test(fo4ide_test_papyrus_target unit/PapyrusTargetTests.cpp fo4ide_app)
 fo4ide_add_test(fo4ide_test_plugin_backend_target unit/PluginBackendTargetTests.cpp fo4ide_app)

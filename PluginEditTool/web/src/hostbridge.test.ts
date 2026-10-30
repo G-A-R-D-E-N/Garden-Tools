@@ -66,6 +66,29 @@ it('preserves the legacy host objects on app.local', async () => {
   expect(fetchStub).not.toHaveBeenCalled();
 });
 
+it('exposes the swf host object over HTTP RPC', async () => {
+  vi.stubGlobal('window', {
+    location: new URL('http://127.0.0.1:49152/#/main'),
+    chrome: undefined,
+  });
+  const fetchRpc = fetchMock({
+    ok: true,
+    json: async () => ({ ok: true, value: '{"revision":0,"undo":0,"redo":0,"dirty":false}' }),
+  });
+  vi.stubGlobal('fetch', fetchRpc);
+
+  await import('./hostbridge');
+
+  expect(await window.chrome?.webview?.hostObjects?.swf?.State()).toBe(
+    '{"revision":0,"undo":0,"redo":0,"dirty":false}',
+  );
+  expect(fetchRpc).toHaveBeenCalledWith('/rpc', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ target: 'swf', method: 'State', args: [] }),
+  });
+});
+
 it('exposes the strings host object over HTTP RPC', async () => {
   vi.stubGlobal('window', {
     location: new URL('http://127.0.0.1:49152/#/main'),

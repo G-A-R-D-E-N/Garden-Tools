@@ -20,6 +20,7 @@
 #include <fo4ide/app/AppInteropTarget.hpp>
 #include <fo4ide/app/ArchiveTarget.hpp>
 #include <fo4ide/app/AudioTarget.hpp>
+#include <fo4ide/app/SwfTarget.hpp>
 #include <fo4ide/app/MaterialTarget.hpp>
 #include <fo4ide/app/PluginBackendTarget.hpp>
 #include <fo4ide/app/ServiceTargets.hpp>
@@ -263,7 +264,8 @@ int main(int argc, char** argv) {
         !registerTarget(rpc, "masters", std::make_shared<fo4ide::app::PluginBackendTarget>(plugins, "masters"), log) ||
         !registerTarget(rpc, "cell", std::make_shared<fo4ide::app::CellTarget>(plugins, nifService, textureResolver), log) ||
         !registerTarget(rpc, "strings", std::make_shared<fo4ide::app::PluginBackendTarget>(plugins, "strings"), log) ||
-        !registerTarget(rpc, "graph", std::make_shared<fo4ide::app::GraphTarget>(platformServices, toolLocator), log)) {
+        !registerTarget(rpc, "graph", std::make_shared<fo4ide::app::GraphTarget>(platformServices, toolLocator), log) ||
+        !registerTarget(rpc, "swf", std::make_shared<fo4ide::app::SwfTarget>(), log)) {
         fo4ide::logging::shutdown();
         return 1;
     }
