@@ -343,9 +343,10 @@ inline Block alpha_block(std::uint16_t flags, std::uint8_t threshold) {
   return Block{"NiAlphaProperty", w.bytes()};
 }
 
-inline Block skin_instance_block(std::int32_t data, const std::vector<std::int32_t>& bones) {
+inline Block skin_instance_block(std::int32_t data, const std::vector<std::int32_t>& bones,
+                                 std::int32_t skeleton_root = -1) {
   Writer w;
-  w.i32(-1);
+  w.i32(skeleton_root);
   w.i32(data);
   w.u32(static_cast<std::uint32_t>(bones.size()));
   for (const auto bone : bones) w.i32(bone);
