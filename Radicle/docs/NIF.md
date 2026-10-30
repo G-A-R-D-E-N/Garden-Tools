@@ -151,6 +151,8 @@ guard).
 Descriptor: stride is `(desc & 0xF) * 4` bytes; attribute flags are `desc >> 44`
 (`NifShape.cs:ReadShape` lines 92-93). Flag bits (`NifShape.cs` lines 40-49):
 bit 1 UV, bit 2 UV2, bit 3 normal, bit 4 tangent, bit 5 colour, bit 6 skin,
+bit 7 land data (`HasLandData` in `NifShape.cs` line 47; no vertex bytes, because
+`NifShape.cs:Layout` lines 143-162 leaves it out of the stride),
 bit 8 tail slot (`HasEyeData` in `NifShape.cs` line 48; 4 bytes at the end,
 meaning not pinned), bit 10 full precision.
 
@@ -179,7 +181,10 @@ Vertex attribute offsets (`NifShape.cs:Layout` lines 143-162):
 
 The attribute bytes must equal the stride exactly
 (`src/nif/geometry.cpp:read_shape`). `NifShape.cs:Layout` applies the same
-check to skinned shapes only.
+check to skinned shapes only. Both that check and
+`src/nif/verify.cpp:descriptor_fault` measure the attributes with
+`src/nif/vertex_desc.cpp:vertex_bytes_for`, so the reader and the verifier
+cannot disagree about a flag's width.
 Each triangle index must be less than the vertex count
 (`NifShape.cs:ReadShape` lines 135-137).
 
@@ -397,7 +402,8 @@ nothing itself.
   Size` and is not an offset: the position slot is always first, at 8 bytes or 16
   when `0x400` is set, and the check starts measuring from its width. The reader takes
   the attribute widths from the flag word (`src/nif/tree.cpp` and
-  `src/nif/geometry.cpp:vertex_bytes_for`), and `nif.xml:BSVertexData` is what says
+  `src/nif/vertex_desc.cpp:vertex_bytes_for`, the one function this check and the
+  reader both measure with), and `nif.xml:BSVertexData` is what says
   the binormal and tangent take four bytes each.
 - `no editor markers` fails when a `BSXFlags` block has bit 5 set
   (`nif.xml:BSXFlags`; `PluginBrreakdown@5a58943:include/RE/B/BSXFlags.h`), the bit

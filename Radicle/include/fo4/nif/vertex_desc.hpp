@@ -38,11 +38,13 @@ struct VertexDesc {
     return (flags() >> static_cast<std::uint32_t>(attribute) & 1U) != 0;
   }
   bool full_precision() const noexcept { return (flags() & k_vertex_full_precision) != 0; }
-  // Invariant: an attribute's width is four bytes, except positions (8 or 16) and the 12-byte skin slot.
+  // Invariant: an attribute's width is four bytes, except positions (8 or 16), the 12-byte skin slot and land data, which reserves none.
   std::uint32_t attribute_bytes(VertexAttribute attribute) const noexcept;
 };
 
 const char* vertex_attribute_name(VertexAttribute attribute) noexcept;
+// Invariant: a vertex is its position slot plus the sum of its other flagged attribute widths, so this is the only place the stride is computed.
+std::size_t vertex_bytes_for(std::uint32_t flags) noexcept;
 // Requires a tri-shape block; the descriptor sits after the NiAVObject prefix, the bounding sphere and the three references.
 VertexDesc read_vertex_desc(const NifFile& nif, std::uint32_t block);
 

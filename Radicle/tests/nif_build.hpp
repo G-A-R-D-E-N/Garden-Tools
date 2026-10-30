@@ -25,6 +25,7 @@ constexpr std::uint32_t k_has_normal = 1U << 3;
 constexpr std::uint32_t k_has_tangent = 1U << 4;
 constexpr std::uint32_t k_has_colour = 1U << 5;
 constexpr std::uint32_t k_has_skin = 1U << 6;
+constexpr std::uint32_t k_has_land_data = 1U << 7;
 constexpr std::uint32_t k_has_tail_slot = 1U << 8;
 constexpr std::uint32_t k_full = 1U << 10;
 
