@@ -44,6 +44,13 @@ nlohmann::json treeValue(const nlohmann::json& block, const char* key) {
     return nullptr;
 }
 
+bool flagOn(const nlohmann::json& block, const char* key) {
+    for (const auto& flag : treeValue(block, "shaderFlags")) {
+        if (flag.at("key") == key) return flag.at("on").get<bool>();
+    }
+    return false;
+}
+
 class FakeRunner final : public fo4ide::process::Runner {
 public:
     fo4ide::process::Request last;
@@ -163,7 +170,8 @@ TEST_CASE("NifService applies name, translation and texture edits in-process wit
     CHECK(treeValue(node, "translation") == nlohmann::json::array({0.5, 0.0, 0.0}));
 }
 
-TEST_CASE("NifService leaves the NIF byte-identical when an in-process edit key is unsupported") {
+TEST_CASE("NifService writes the editor's flag toggles and booleans in-process") {
+    // Invariant: the editor sends shader flags as {key,label,on} objects and every other toggle as a JSON boolean.
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto nif = root / "tree.nif";
@@ -174,17 +182,23 @@ TEST_CASE("NifService leaves the NIF byte-identical when an in-process edit key 
     FakeRunner runner;
     fo4ide::assets::NifService service(runner, std::filesystem::path{});
     auto result = service.applyEdits(nif, nlohmann::json::array({
-        {{"id", 1}, {"cat", "shape"}, {"key", "name"}, {"value", "Renamed"}},
         {{"id", 2}, {"cat", "shader"}, {"key", "shaderFlags"},
-         {"value", nlohmann::json::array({{{"key", "Specular"}, {"label", "Specular"}, {"on", true}}})}},
+         {"value", nlohmann::json::array({{{"key", "Specular"}, {"label", "Specular"}, {"on", true}},
+                                          {{"key", "Skinned"}, {"label", "Skinned"}, {"on", false}}})}},
+        {{"id", 2}, {"cat", "shader"}, {"key", "envMapSSR"}, {"value", true}},
     }));
 
-    REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().type == "NifEditFailed");
-    CHECK(result.error().message.find("'shaderFlags'") != std::string::npos);
-    CHECK(fileBytes(nif) == before);
-    CHECK_FALSE(std::filesystem::exists(nif.string() + ".niftmp"));
+    REQUIRE(result.has_value());
+    CHECK(result->find("set OK") != std::string::npos);
     CHECK(runner.calls == 0);
+    CHECK(fileBytes(nif) != before);
+
+    auto tree = service.tree(nif);
+    REQUIRE(tree.has_value());
+    const auto shader = nlohmann::json::parse(*tree).at("blocks")[2];
+    CHECK(flagOn(shader, "Specular"));
+    CHECK_FALSE(flagOn(shader, "Skinned"));
+    CHECK(treeValue(shader, "envMapSSR") == true);
 }
 
 TEST_CASE("NifService reports a writer-rejected read-only key as NifEditFailed and keeps the NIF") {
