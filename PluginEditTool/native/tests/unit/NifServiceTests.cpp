@@ -187,7 +187,8 @@ TEST_CASE("NifService applies name, translation and texture edits in-process wit
     CHECK(treeValue(shape, "tex0") == "Textures\\Thing_new_d.dds");
     CHECK(treeValue(shape, "tex1") == "Textures\\Thing_n.dds");
     CHECK(treeValue(shape, "material") == "Materials\\Clutter\\Thing.BGSM");
-    CHECK(treeValue(shape, "verts") == 3);
+    // Invariant: the tree reports its read-only counters as text fields, so the editor renders "3", not 3.
+    CHECK(treeValue(shape, "verts") == "3");
     CHECK(treeValue(node, "name") == "Root");
     CHECK(treeValue(node, "translation") == nlohmann::json::array({0.5, 0.0, 0.0}));
 }
@@ -430,7 +431,7 @@ TEST_CASE("NifService tree maps nodes and shape slots onto the editor contract i
     CHECK(shape.at("type") == "BSTriShape");
     CHECK(shape.at("group") == "Shapes");
     CHECK(treeValue(shape, "translation") == nlohmann::json::array({0.25, 0.0, 0.0}));
-    CHECK(treeValue(shape, "verts") == 3);
+    CHECK(treeValue(shape, "verts") == "3");
     CHECK(treeValue(shape, "material") == "Materials\\Clutter\\Thing.BGSM");
     CHECK(treeValue(shape, "tex0") == "Textures\\Thing_d.dds");
     CHECK(treeValue(shape, "tex1") == "Textures\\Thing_n.dds");
