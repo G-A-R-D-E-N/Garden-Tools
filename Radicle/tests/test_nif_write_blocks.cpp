@@ -300,11 +300,19 @@ TEST(NifWriteBlocks, SharedAlphaPropertyIsCopiedBeforeAShapeEdit) {
       {k_root});
   const auto nif = read_nif(bytes);
   const std::vector<Edit> edits{Edit{1, "alphaBlend", as_number(0.0f)}};
-  const auto out = read_nif(apply_edits(nif, edits));
-  EXPECT_EQ(out.blocks().size(), nif.blocks().size() + 1);
-  EXPECT_FALSE(fo4::nif::read_alpha(out, 3).blend_enabled);
-  EXPECT_TRUE(fo4::nif::read_alpha(out, 4).blend_enabled);
-  EXPECT_EQ(fo4::nif::read_alpha(out, 4).flags, 0x0201U);
+  const auto out_bytes = apply_edits(nif, edits);
+  const auto out = read_nif(out_bytes);
+  ASSERT_EQ(out.blocks().size(), nif.blocks().size() + 1);
+  const auto shapes = fo4::nif::read_shapes(out);
+  ASSERT_EQ(shapes.size(), 2U);
+  EXPECT_EQ(shapes[0].alpha_ref, 4);
+  EXPECT_EQ(shapes[1].alpha_ref, 3);
+  // Invariant: the copy takes the edit and the shared original keeps its own bytes.
+  EXPECT_TRUE(fo4::nif::read_alpha(out, 3).blend_enabled);
+  EXPECT_EQ(fo4::nif::read_alpha(out, 3).flags, 0x0201U);
+  EXPECT_FALSE(fo4::nif::read_alpha(out, 4).blend_enabled);
+  EXPECT_EQ(fo4::nif::read_alpha(out, 4).flags, 0x0200U);
+  EXPECT_EQ(block_bytes(out_bytes, out, 3), block_bytes(bytes, nif, 3));
 }
 
 TEST(NifWriteBlocks, JsonEditsCarryFlagNamesAndRejectUnusableValues) {
@@ -357,4 +365,26 @@ TEST(NifWriteBlocks, JsonRefusesNumbersTheStoredFloatWouldChange) {
   EXPECT_THROW(fo4::nif::read_edits_json(R"([{"id":1,"key":"uvScale","value":[0.5,16777217.0]}])"),
                fo4::parse_error);
   EXPECT_NO_THROW(fo4::nif::read_edits_json(R"([{"id":1,"key":"smoothness","value":0.1}])"));
+}
+
+TEST(NifWriteBlocks, JsonAcceptsTheWidenedDoublesDescribeEmits) {
+  // Invariant: describe emits the shortest double for a stored float, so that value must survive the JSON reader.
+  EXPECT_NO_THROW(fo4::nif::read_edits_json(R"([{"id":1,"key":"smoothness","value":0.10000000149011612}])"));
+  EXPECT_NO_THROW(
+      fo4::nif::read_edits_json(R"([{"id":1,"key":"uvOffset","value":[0.10000000149011612,0.5,1.0]}])"));
+}
+
+TEST(NifWriteBlocks, JsonRefusesABooleanForANumericKey) {
+  // Invariant: only the five on/off keys take a boolean, so scale cannot be set with true.
+  EXPECT_THROW(fo4::nif::read_edits_json(R"([{"id":1,"key":"scale","value":true}])"), fo4::parse_error);
+  EXPECT_THROW(fo4::nif::read_edits_json(R"([{"id":1,"key":"smoothness","value":false}])"), fo4::parse_error);
+  EXPECT_NO_THROW(fo4::nif::read_edits_json(R"([{"id":1,"key":"alphaBlend","value":true}])"));
+  EXPECT_NO_THROW(fo4::nif::read_edits_json(R"([{"id":1,"key":"editorMarker","value":false}])"));
+}
+
+TEST(NifWriteBlocks, JsonRefusesANumberPastTheFloatRange) {
+  // Invariant: a double past FLT_MAX is refused before the narrowing cast, which is undefined for it.
+  EXPECT_THROW(fo4::nif::read_edits_json(R"([{"id":1,"key":"smoothness","value":1e300}])"), fo4::parse_error);
+  EXPECT_THROW(fo4::nif::read_edits_json(R"([{"id":1,"key":"uvScale","value":[-1e300,0.5]}]")), fo4::parse_error);
+  EXPECT_NO_THROW(fo4::nif::read_edits_json(R"([{"id":1,"key":"smoothness","value":3.4e38}])"));
 }

@@ -44,6 +44,7 @@ inline std::string block_ref_text(std::int32_t ref) {
   return ref < 0 ? std::string("none") : "block " + std::to_string(ref);
 }
 
+// Invariant: every key the tree emits is written by apply_edits or refused with a message naming the key.
 std::vector<TreeField> lighting_shader_fields(const NifFile& nif, std::uint32_t block);
 std::vector<TreeField> effect_shader_fields(const NifFile& nif, std::uint32_t block);
 std::vector<TreeField> alpha_property_fields(const NifFile& nif, std::uint32_t block);

@@ -13,7 +13,6 @@
 #include <fo4/error.hpp>
 #include <fo4/nif/describe.hpp>
 #include <fo4/nif/nif.hpp>
-#include <fo4/nif/nif_write.hpp>
 
 #include <nlohmann/json.hpp>
 
