@@ -260,44 +260,36 @@ class ChangedHeadersTest(unittest.TestCase):
                 os.chdir(here)
 
 
-class StackedParentTest(unittest.TestCase):
-    def body(self, version):
-        return {"content": base64.b64encode(
-            "#define RADICLE_ABI_VERSION {}u\n".format(version).encode()).decode()}
+class StackRootTest(unittest.TestCase):
+    def test_a_three_link_walk_ends_on_the_integration_branch(self):
+        claims = [claim(1041, 95, head_ref="branch1041", base_ref="nomad/dev"),
+                  claim(1042, 95, head_ref="branch1042", base_ref="branch1041"),
+                  claim(1043, 95, head_ref="branch1043", base_ref="branch1042")]
+        self.assertEqual("nomad/dev", check.stack_root(claims, "branch1043"))
 
-    def test_a_tracking_parent_without_a_bump_grants_no_exemption(self):
-        parent = claim(848, 95, head_ref="nomad/dev", base_ref="main")
-        real = check.get_json
-        check.get_json = lambda url, token: self.body(95)
-        try:
-            grandparent = check.parent_base_version("a", "r", "t", parent)
-        finally:
-            check.get_json = real
-        self.assertIsNone(check.exempt_parent_number(parent, grandparent))
-        problems = check.local_problems(
-            95, 95, ["Radicle/include/fo4/c_api_nif.h"], None)
-        self.assertEqual(1, len(problems))
+    def test_starting_on_the_integration_branch_is_no_stack(self):
+        self.assertIsNone(check.stack_root([claim(848, 92, head_ref="nomad/dev")], "nomad/dev"))
 
-    def test_a_stacked_parent_with_a_bump_exempts_the_number_keeping_child(self):
-        parent = claim(1042, 95, head_ref="stack", base_ref="nomad/dev")
-        real = check.get_json
-        check.get_json = lambda url, token: self.body(93)
-        try:
-            grandparent = check.parent_base_version("a", "r", "t", parent)
-        finally:
-            check.get_json = real
-        kept = check.exempt_parent_number(parent, grandparent)
-        self.assertEqual(95, kept)
-        self.assertEqual([], check.local_problems(
-            95, 93, ["Radicle/include/fo4/c_api_nif.h"], kept))
+    def test_an_unlinked_base_is_no_stack(self):
+        self.assertIsNone(check.stack_root([claim(848, 92, head_ref="nomad/dev")], "feature-x"))
 
-    def test_an_unreadable_parent_base_gives_exit_two(self):
-        parent = claim(1042, 95, head_ref="stack", base_ref="nomad/dev")
+    def test_two_claims_on_one_branch_is_an_error(self):
+        claims = [claim(1043, 95, head_ref="branch1043"), claim(1050, 95, head_ref="branch1043")]
+        with self.assertRaises(ValueError):
+            check.stack_root(claims, "branch1043")
+
+    def test_a_loop_is_an_error(self):
+        claims = [claim(1, 95, head_ref="x", base_ref="y"),
+                  claim(2, 95, head_ref="y", base_ref="x")]
+        with self.assertRaises(ValueError):
+            check.stack_root(claims, "x")
+
+    def test_read_version_at_reads_a_ref(self):
+        body = {"content": base64.b64encode(b"#define RADICLE_ABI_VERSION 92u\n").decode()}
         real = check.get_json
-        check.get_json = lambda url, token: {}
+        check.get_json = lambda url, token: body
         try:
-            with self.assertRaises((KeyError, TypeError, ValueError)):
-                check.parent_base_version("a", "r", "t", parent)
+            self.assertEqual(92, check.read_version_at("a", "r", "t", "nomad/dev", "root"))
         finally:
             check.get_json = real
 
@@ -347,6 +339,117 @@ class ClaimReadErrorsTest(unittest.TestCase):
     def test_a_broken_claim_server_fails_the_gate(self):
         error = urllib.error.HTTPError("u", 500, "Broken", {}, None)
         self.assertEqual(2, self.main_with(error))
+
+
+class StackMainTest(unittest.TestCase):
+    def body(self, version):
+        return {"content": base64.b64encode(
+            "#define RADICLE_ABI_VERSION {}u\n".format(version).encode()).decode()}
+
+    def make_pr_repo(self, top, base_branch, base_header, head_header):
+        origin = os.path.join(top, "origin")
+        subprocess.run(("git", "init", "--bare", "origin"), check=True,
+                       capture_output=True, text=True, cwd=top)
+        work = os.path.join(top, "work")
+        os.makedirs(work)
+        run = lambda *args: subprocess.run(
+            ("git",) + args, check=True, capture_output=True, text=True, cwd=work)
+        run("init", "-b", "main")
+        run("config", "core.hooksPath", "")
+        run("config", "user.email", "t@t")
+        run("config", "user.name", "t")
+        run("remote", "add", "origin", origin)
+        header = os.path.join(work, "Radicle", "include", "fo4", "c_api.h")
+        nif = os.path.join(work, "Radicle", "include", "fo4", "c_api_nif.h")
+        os.makedirs(os.path.dirname(header))
+        with open(header, "w") as stream:
+            stream.write("#define RADICLE_ABI_VERSION {}u\n".format(base_header))
+        with open(nif, "w") as stream:
+            stream.write("/* base */\n")
+        run("add", ".")
+        run("commit", "-m", "base")
+        run("push", "origin", "HEAD:{}".format(base_branch))
+        with open(header, "w") as stream:
+            stream.write("#define RADICLE_ABI_VERSION {}u\n".format(head_header))
+        with open(nif, "w") as stream:
+            stream.write("/* head edit */\n")
+        run("commit", "-am", "head")
+        return work
+
+    def raw(self, number, version, head_sha, head_ref, base_sha, base_ref):
+        return {"number": number,
+                "head": {"sha": head_sha, "ref": head_ref},
+                "base": {"sha": base_sha, "ref": base_ref},
+                "version": version}
+
+    def run_main(self, top, base_branch, base_header, head_header, pulls, versions, root_body, number):
+        work = self.make_pr_repo(top, base_branch, base_header, head_header)
+        real_pulls, real_json = check.open_pulls, check.get_json
+        check.open_pulls = lambda api, repo, token: pulls
+
+        def fake_json(url, token):
+            if "/compare/" in url:
+                return {"total_commits": 1}
+            if "/contents/" in url:
+                ref = url.rsplit("ref=", 1)[1]
+                if ref == "nomad/dev":
+                    if isinstance(root_body, Exception):
+                        raise root_body
+                    return root_body
+                return self.body(versions[ref])
+            raise AssertionError("unexpected " + url)
+
+        check.get_json = fake_json
+        here = os.getcwd()
+        os.chdir(work)
+        try:
+            return check.main(["--base", base_branch, "--api-url", "a",
+                               "--repo", "r", "--token", "t", "--number", str(number)])
+        finally:
+            os.chdir(here)
+            check.open_pulls, check.get_json = real_pulls, real_json
+
+    def test_a_tracking_branch_grants_no_exemption(self):
+        pulls = [self.raw(848, 92, "s848", "nomad/dev", "smain", "main")]
+        with tempfile.TemporaryDirectory() as top:
+            self.assertEqual(1, self.run_main(top, "nomad/dev", 92, 92, pulls,
+                                              {"s848": 92}, self.body(40), 100))
+
+    def test_a_three_link_stack_may_keep_its_number(self):
+        pulls = [self.raw(1041, 95, "s41", "branch1041", "sdev", "nomad/dev"),
+                 self.raw(1042, 95, "s42", "branch1042", "s41", "branch1041"),
+                 self.raw(1043, 95, "s43", "branch1043", "s42", "branch1042")]
+        with tempfile.TemporaryDirectory() as top:
+            self.assertEqual(0, self.run_main(top, "branch1043", 95, 95, pulls,
+                                              {"s41": 95, "s42": 95, "s43": 95},
+                                              self.body(92), 1044))
+
+    def test_a_stack_at_the_root_number_must_bump(self):
+        pulls = [self.raw(1041, 92, "s41", "branch1041", "sdev", "nomad/dev"),
+                 self.raw(1042, 92, "s42", "branch1042", "s41", "branch1041"),
+                 self.raw(1043, 92, "s43", "branch1043", "s42", "branch1042")]
+        with tempfile.TemporaryDirectory() as top:
+            self.assertEqual(1, self.run_main(top, "branch1043", 92, 92, pulls,
+                                              {"s41": 92, "s42": 92, "s43": 92},
+                                              self.body(92), 1044))
+
+    def test_an_unreadable_root_fails_the_gate(self):
+        pulls = [self.raw(1041, 95, "s41", "branch1041", "sdev", "nomad/dev"),
+                 self.raw(1042, 95, "s42", "branch1042", "s41", "branch1041"),
+                 self.raw(1043, 95, "s43", "branch1043", "s42", "branch1042")]
+        with tempfile.TemporaryDirectory() as top:
+            self.assertEqual(2, self.run_main(top, "branch1043", 95, 95, pulls,
+                                              {"s41": 95, "s42": 95, "s43": 95},
+                                              urllib.error.HTTPError("u", 500, "Broken", {}, None),
+                                              1044))
+
+    def test_an_ambiguous_link_fails_the_gate(self):
+        pulls = [self.raw(1043, 95, "s43", "branch1043", "s42", "branch1042"),
+                 self.raw(1050, 95, "s50", "branch1043", "s42", "branch1042")]
+        with tempfile.TemporaryDirectory() as top:
+            self.assertEqual(2, self.run_main(top, "branch1043", 95, 95, pulls,
+                                              {"s43": 95, "s50": 95},
+                                              self.body(92), 1044))
 
 
 if __name__ == "__main__":

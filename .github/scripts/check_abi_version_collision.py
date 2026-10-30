@@ -21,6 +21,7 @@ import urllib.request
 
 HEADER = "Radicle/include/fo4/c_api.h"
 HEADER_GLOB = "Radicle/include/fo4/c_api*.h"
+INTEGRATION_BRANCH = "nomad/dev"
 VERSION = re.compile(r"^[ \t]*#[ \t]*define[ \t]+RADICLE_ABI_VERSION[ \t]+(\d+)u?[ \t]*$", re.MULTILINE)
 PAGE_SIZE = 50
 MAX_PAGES = 10
@@ -162,17 +163,32 @@ def claim_of(pull, api, repo, token):
     }
 
 
-def exempt_parent_number(parent, grandparent):
-    """Parent number the child may keep, or None when the parent never bumped (see code-notes)."""
-    return parent["version"] if parent["version"] > grandparent else None
+def stack_root(claims, base):
+    """Lowest ancestor branch above base through open-claim links, or None without a stack (see code-notes)."""
+    seen = {base}
+    root = base
+    links = 0
+    while root != INTEGRATION_BRANCH:
+        owners = [claim for claim in claims if claim.get("head_ref") == root]
+        if not owners:
+            return root if links else None
+        if len(owners) > 1:
+            raise ValueError("more than one open pull request holds {}".format(root))
+        root = owners[0].get("base_ref") or owners[0].get("base") or ""
+        if not root:
+            raise ValueError("a stack link above {} has no base".format(base))
+        if root in seen:
+            raise ValueError("stack links loop through {}".format(root))
+        seen.add(root)
+        links += 1
+    return root if links else None
 
 
-def parent_base_version(api, repo, token, parent):
-    """Number on the stack parent's own base; the caller exits 2 when it cannot be read (see code-notes)."""
-    contents = get_json("{}/repos/{}/contents/{}?ref={}".format(
-        api, repo, HEADER, parent["base_ref"] or parent["base"]), token)
+def read_version_at(api, repo, token, ref, where):
+    """Number the header carries at a branch or sha; the caller exits 2 when it cannot be read (see code-notes)."""
+    contents = get_json("{}/repos/{}/contents/{}?ref={}".format(api, repo, HEADER, ref), token)
     text = base64.b64decode(contents["content"]).decode("utf-8", "replace")
-    return read_version(text, "parent base {}".format(parent["base_ref"] or parent["base"]))
+    return read_version(text, where)
 
 
 def compare_counts(api, repo, token, old, new):
@@ -313,19 +329,25 @@ def main(argv=None):
     for claim in sorted(claims, key=lambda entry: entry["number"]):
         print("  #{} ABI {}".format(claim["number"], claim["version"]))
 
-    parent = next((claim for claim in claims
-                   if claim["number"] != arguments.number
-                   and claim.get("head_ref") == arguments.base), None)
     parent_version = None
-    if parent is not None:
+    if arguments.base != INTEGRATION_BRANCH:
         try:
-            grandparent = parent_base_version(arguments.api_url, arguments.repo,
-                                              arguments.token, parent)
-        except (OSError, ValueError, KeyError, TypeError) as error:
-            print("::error::cannot read the base of #{} ({}); the gate needs it, so this is exit 2, not a pass".format(
-                parent["number"], error))
+            root = stack_root(claims, arguments.base)
+        except ValueError as error:
+            print("::error::{}; the gate needs an unambiguous stack, so this is exit 2, not a pass".format(
+                error))
             return 2
-        parent_version = exempt_parent_number(parent, grandparent)
+        if root is not None:
+            try:
+                floor = read_version_at(arguments.api_url, arguments.repo,
+                                        arguments.token, root,
+                                        "stack root {}".format(root))
+            except (OSError, ValueError, KeyError, TypeError) as error:
+                print("::error::cannot read the stack root {} ({}); the gate needs it, so this is exit 2, not a pass".format(
+                    root, error))
+                return 2
+            if version > floor:
+                parent_version = version
     problems = local_problems(version, base_version, changed, parent_version)
     for problem in problems:
         print("::error::{}".format(problem))
