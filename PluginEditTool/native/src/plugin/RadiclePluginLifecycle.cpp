@@ -126,7 +126,7 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
         signatureText != "EYES" && signatureText != "FACT" &&
         signatureText != "HAZD" && signatureText != "LVLI" &&
         signatureText != "LVLN" && signatureText != "LVSP" &&
-        signatureText != "PROJ" && signatureText != "RACE") {
+        signatureText != "PERK" && signatureText != "PROJ" && signatureText != "RACE") {
         return std::unexpected(Error{
             "RecordCreationRequiresSchema",
             "Raw record creation is disabled until the schema pre-flight layer defines required fields and insertion order for " +
@@ -468,6 +468,10 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
             key = fo4::forms::create_armor_addon(mutated, creation);
         } else if (generatedLayoutCreationSupported(signatureText)) {
             const auto created = createRichSchemaRecordLocked(mutated, signatureText, *payload);
+            if (!created) return std::unexpected(created.error());
+            key = *created;
+        } else if (signatureText == "PERK") {
+            const auto created = createPerkLocked(mutated, *payload);
             if (!created) return std::unexpected(created.error());
             key = *created;
         } else if (signatureText == "PROJ" || signatureText == "EXPL" || signatureText == "HAZD") {

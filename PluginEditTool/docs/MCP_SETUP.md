@@ -5,7 +5,7 @@
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
 FO4IDE implements it: launched with `--mcp`, `FO4RecordEditor.exe` opens no window and speaks
 line-delimited JSON-RPC on stdin and stdout (protocol version 2024-11-05, server name `fo4editor`).
-It advertises **49 tools**: 17 for plugins and records, 12 for typed records, 4 for MO2 profile and host state, 5 for
+It advertises **51 tools**: 17 for plugins and records, 14 for typed records, 4 for MO2 profile and host state, 5 for
 Papyrus, 4 for NIFs, 2 for materials, 4 for audio and 1 for BA2 archives.
 
 The server is the native C++23 host that the desktop editor also runs on, and it needs no other
@@ -122,7 +122,7 @@ six hex digits, a colon and the plugin that owns the record.
 
 #### create_record payloads
 
-`type` is the signature and `payload` is an object. These eighteen types have a verified layout. A payload
+`type` is the signature and `payload` is an object. These nineteen types have a verified layout. A payload
 that does not fit is rejected with `InvalidRecordCreationPayload`, and the message names the field.
 `editorId` may be written `editor_id`.
 
@@ -139,6 +139,7 @@ that does not fit is rejected with `InvalidRecordCreationPayload`, and the messa
 | `QUST`, `SPEL`, `MGEF`, `FLST`, `MESG` | `editorId` (non-empty; `editor_id` accepted) | none. Builds the schema's required subrecords from their registered defaults: `QUST` takes a zeroed `DNAM`, `MESG` an empty `DESC` plus `INAM` and `DNAM`, `MGEF` a zeroed `DATA`, `SPEL` `OBND`, `DESC` and `SPIT`, and `FLST` carries only its `EDID`. Nothing else is set at creation. |
 | `GLOB` | `editorId` (non-empty), `type` (`short`, `long`, `float` or `boolean`) | none. The type is the required `FNAM` byte the schema has no default for; `FLTV` is created as a zero `f32`. |
 | `PROJ`, `EXPL`, `HAZD` | none | `editorId`, `name`, `bounds` (six integers), and the type's own numbers and form-key links, for example `speed`, `range` and `explosionType` on `PROJ`; `force`, `damage` and `innerRadius` on `EXPL`; `radius`, `lifetime` and `spell` on `HAZD` |
+| `PERK` | `editorId` (non-empty; `editor_id` accepted) | `full` and `desc` (inline text; refused in localized plugins), `trait` (0 or 1, default 0), `level` (0-255, default 0), `ranks` (0-255, default 1), `playable` (0 or 1, default 1), `effects` (an array in the `set_perk_effects` shape; `quest` must be a loaded QUST, `ability` a loaded SPEL, and the parameter form and actor value a loaded record of the type the effect expects) |
 
 Any other signature is refused (`RecordCreationRequiresSchema`) unless the payload contains
 `"schema": true`. The record is then built from the schema's defaults, with an optional `editorId`, and
@@ -146,7 +147,7 @@ only for record types the schema layer can create on its own (`RecordNotAuthorab
 
 ### Typed records
 
-These read the winning version of a leveled list, NPC_, FACT or WEAP record and edit one plugin's version in memory. An edit needs `plugin` to already hold the record; call `save_plugin` to persist. `op` is `add`, `set` or `remove`. A refused edit leaves the plugin unchanged.
+These read the winning version of a leveled list, NPC_, FACT or WEAP record (PERK reads `plugin`'s version) and edit one plugin's version in memory. An edit needs `plugin` to already hold the record; call `save_plugin` to persist. `op` is `add`, `set` or `remove`. A refused edit leaves the plugin unchanged.
 
 | Tool | Arguments | Writes | What it does |
 |---|---|---|---|
@@ -162,6 +163,8 @@ These read the winning version of a leveled list, NPC_, FACT or WEAP record and 
 | `add_script_property` | `plugin`, `form_key`, `script_index`, `name`, `type` [`flags`, `index`] | memory | Adds one property to a script. `type` is the VMAD property type byte (1 object, 2 string, 3 int, 4 float, 5 bool, 7 struct, 11-15 arrays, 17 struct array); `flags` is the optional property flags byte and `index` the optional property-list position. Set the value with `set_field` or the typed VMAD setters. Call `save_plugin` to persist. |
 | `remove_script_property` | `plugin`, `form_key`, `script_index`, `property_index` | memory | Removes one property by property index. Call `save_plugin` to persist. |
 | `get_weapon_damage_types` | `form_key` | no | A WEAP record's damage types (read-only). |
+| `get_perk_effects` | `plugin`, `form_key` | no | A PERK record's effects: `type`, `rank`, `priority`, then `quest` and `questStage`, `ability`, or `entryPoint` and `function`; each effect's condition `tabs` and `parameters` (`data` is hex). |
+| `set_perk_effects` | `plugin`, `form_key`, `effects` | memory | Replaces the whole effect list with `effects`, in the shape `get_perk_effects` returns. An effect that omits `tabs` has its condition tabs cleared. Call `save_plugin` to persist. |
 
 ### Profile and host state
 

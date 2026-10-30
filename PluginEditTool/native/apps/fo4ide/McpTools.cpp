@@ -78,6 +78,7 @@ bool registerPluginTools(fo4ide::mcp::Registry& registry,
                                        (type == "object" && value->is_object()) ||
                                        (type == "integer" && value->is_number_integer()) ||
                                        (type == "number" && value->is_number()) ||
+                                       (type == "array" && value->is_array()) ||
                                        (type == "boolean" && value->is_boolean());
                     if (!valid) return ToolResult{std::string(field.name) + " must be " + field.type, true};
                 }
@@ -91,7 +92,7 @@ bool registerPluginTools(fo4ide::mcp::Registry& registry,
              {{"path", "string"}})) return false;
     if (!add("create_plugin", "Create an empty ESP in the trusted MO2 overwrite folder; later edits require save_plugin", "backend", "CreatePlugin",
              {{"plugin", "string"}})) return false;
-    if (!add("create_record", "Create a typed record in memory. Supported types: ARMA, ARMO, CELL, EXPL, EYES, FACT, FLST, GLOB, HAZD, LVLI, LVLN, LVSP, MESG, MGEF, PROJ, QUST, RACE, SPEL. Payload fields are validated by the native backend. FLST, GLOB, MESG, MGEF, QUST and SPEL take an editorId and build every required subrecord from the schema defaults", "backend", "CreateRecord",
+    if (!add("create_record", "Create a typed record in memory. Supported types: ARMA, ARMO, CELL, EXPL, EYES, FACT, FLST, GLOB, HAZD, LVLI, LVLN, LVSP, MESG, MGEF, PERK, PROJ, QUST, RACE, SPEL. Payload fields are validated by the native backend. FLST, GLOB, MESG, MGEF, QUST and SPEL take an editorId and build every required subrecord from the schema defaults. PERK takes an editorId and optional full, desc, trait, level, ranks, playable and effects (the set_perk_effects array)", "backend", "CreateRecord",
              {{"plugin", "string"}, {"type", "string"}, {"payload", "object"}})) return false;
     if (!add("create_placed_object",
              "Create a placed reference (REFR) over a base object in a CELL this plugin owns and return its formKey. cell and baseObject are FormKeys. The CELL must be owned by this plugin. In an exterior CELL the reference must be non-persistent and positioned inside the CELL's grid. persistent defaults to true (persistent list), false puts it in the temporary list. initially_disabled defaults to false. Rotations are in radians and default to 0",
@@ -153,6 +154,10 @@ bool registerPluginTools(fo4ide::mcp::Registry& registry,
              {{"plugin", "string"}, {"form_key", "string"}, {"script_index", "integer"}, {"property_index", "integer"}})) return false;
     if (!add("get_weapon_damage_types", "Get a WEAP record's damage types by FormKey from the winning version (read-only)", "backend", "GetWeaponDamageTypes",
              {{"form_key", "string"}})) return false;
+    if (!add("get_perk_effects", "Get a PERK record's effects by FormKey from plugin's version (read-only). Each effect has type, rank, priority, quest and questStage, ability, or entryPoint and function, condition tabs and parameters (data is hex)", "backend", "GetPerkEffects",
+             {{"plugin", "string"}, {"form_key", "string"}})) return false;
+    if (!add("set_perk_effects", "Replace a PERK record's whole effect list in memory with the effects array (see get_perk_effects for the item shape; an effect without tabs clears its condition tabs). Call save_plugin to persist", "backend", "SetPerkEffects",
+             {{"plugin", "string"}, {"form_key", "string"}, {"effects", "array"}})) return false;
     return true;
 }
 

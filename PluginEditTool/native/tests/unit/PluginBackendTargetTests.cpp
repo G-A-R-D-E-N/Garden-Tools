@@ -211,6 +211,14 @@ public:
         return recordTypedCall("GetWeaponDamageTypes", args);
     }
 
+    fo4ide::Result<nlohmann::json> getPerkEffects(const nlohmann::json& args) const override {
+        return recordTypedCall("GetPerkEffects", args);
+    }
+
+    fo4ide::Result<nlohmann::json> setPerkEffects(const nlohmann::json& args) override {
+        return recordTypedCall("SetPerkEffects", args);
+    }
+
     fo4ide::Result<nlohmann::json> recordTypedCall(std::string_view name, const nlohmann::json& args) const {
         typedCalls.emplace_back(std::string(name), args);
         return nlohmann::json(std::string(name));
@@ -655,7 +663,8 @@ TEST_CASE("PluginBackendTarget routes the typed record methods and the strings n
     const auto args = nlohmann::json::array({"Patch.esp", "000800:Patch.esp"});
     const std::vector<std::string> methods{
         "SetLeveledListSettings", "EditLeveledListEntry", "GetNpc", "EditNpcEntries", "GetFaction",
-        "EditFactionEntries", "GetWeaponDamageTypes", "CreatePlacedObject", "CreateInteriorCell",
+        "EditFactionEntries", "GetWeaponDamageTypes", "GetPerkEffects", "SetPerkEffects",
+        "CreatePlacedObject", "CreateInteriorCell",
         "AddScript", "RemoveScript", "AddScriptProperty", "RemoveScriptProperty"};
     for (const auto& method : methods) {
         const auto result = target.invoke(method, args);
@@ -697,4 +706,6 @@ TEST_CASE("IPluginBackend defaults report distinct unavailable errors for the ty
     unavailable(base.getFaction(args), "FactionBackendUnavailable");
     unavailable(base.editFactionEntries(args), "FactionBackendUnavailable");
     unavailable(base.getWeaponDamageTypes(args), "WeaponBackendUnavailable");
+    unavailable(base.getPerkEffects(args), "PerkBackendUnavailable");
+    unavailable(base.setPerkEffects(args), "PerkBackendUnavailable");
 }

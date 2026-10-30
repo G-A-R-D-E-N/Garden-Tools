@@ -198,6 +198,7 @@ add_executable(
     unit/RadiclePluginEyesGridTests.cpp
     unit/RadiclePluginLvspTests.cpp
     unit/RadiclePluginLvspGridTests.cpp
+    unit/RadiclePluginPerkTests.cpp
     unit/RadiclePluginBatchMutationTests.cpp
     unit/RadiclePluginAddMastersTests.cpp
     unit/RadiclePluginCopyAsWrapperTests.cpp
