@@ -455,8 +455,8 @@ void check_pins(const char* program, const ProgramRun& run, const GameBuild& bui
     }
   }
   if (match == nullptr) {
-    RecordProperty((std::string{"pin_"} + program).c_str(),
-                   ("unpinned for build " + build.file_version).c_str());
+    ::testing::Test::RecordProperty((std::string{"pin_"} + program).c_str(),
+                                      ("unpinned for build " + build.file_version).c_str());
     return;
   }
   EXPECT_EQ(run.hashes.back(), match->snapshot_hash) << program;
