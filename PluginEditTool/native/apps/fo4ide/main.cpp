@@ -252,6 +252,18 @@ int main(int argc, char** argv) {
     auto refreshingAppInteropTarget = std::make_shared<RefreshingAppInteropTarget>(
         appInteropTarget, currentSettings, textureResolver);
 
+    auto swfTarget = std::make_shared<fo4ide::app::SwfTarget>();
+    {
+        // Constraint: the SWF target must open only Data and project files, like the C# host.
+        std::vector<std::filesystem::path> swfRoots;
+        const auto settings = currentSettings.snapshot();
+        if (!settings.dataFolder.empty()) swfRoots.push_back(settings.dataFolder);
+        if (const auto falloutRoot = toolLocator.fallout4Root(); !falloutRoot.empty()) {
+            swfRoots.push_back(falloutRoot / "Data");
+        }
+        swfTarget->setRoots(std::move(swfRoots));
+    }
+
     if (!registerTarget(rpc, "app", std::make_shared<AppTarget>(plugins, archiveService, nifTool), log) ||
         !registerTarget(rpc, "appInterop", refreshingAppInteropTarget, log) ||
         !registerTarget(rpc, "settings", std::make_shared<RefreshingSettingsTarget>(settingsStore, currentSettings, platformServices, processRunner, textureResolver), log) ||
@@ -265,7 +277,7 @@ int main(int argc, char** argv) {
         !registerTarget(rpc, "cell", std::make_shared<fo4ide::app::CellTarget>(plugins, nifService, textureResolver), log) ||
         !registerTarget(rpc, "strings", std::make_shared<fo4ide::app::PluginBackendTarget>(plugins, "strings"), log) ||
         !registerTarget(rpc, "graph", std::make_shared<fo4ide::app::GraphTarget>(platformServices, toolLocator), log) ||
-        !registerTarget(rpc, "swf", std::make_shared<fo4ide::app::SwfTarget>(), log)) {
+        !registerTarget(rpc, "swf", swfTarget, log)) {
         fo4ide::logging::shutdown();
         return 1;
     }

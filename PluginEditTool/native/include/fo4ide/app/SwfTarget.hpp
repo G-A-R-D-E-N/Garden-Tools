@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -24,12 +25,16 @@ public:
     SwfTarget(const SwfTarget&) = delete;
     SwfTarget& operator=(const SwfTarget&) = delete;
 
+    // Constraint: an empty root list must refuse every path, like the C# host with no folders set.
+    void setRoots(std::vector<std::filesystem::path> roots);
+
     Result<nlohmann::json> invoke(std::string_view method, const nlohmann::json& args) override;
 
 private:
     Result<nlohmann::json> open(const nlohmann::json& args);
     Result<nlohmann::json> snapshot(bool changed);
     bool refreshFromHistory(std::string& message);
+    bool requireUnderRoots(const std::string& path, std::string& rooted) const;
 
     std::mutex mutex_;
     radicle_swf* movie_{nullptr};
@@ -37,6 +42,7 @@ private:
     std::optional<std::string> path_;
     std::vector<std::byte> saved_;
     std::vector<std::byte> current_;
+    std::vector<std::filesystem::path> roots_;
 };
 
 }  // namespace fo4ide::app

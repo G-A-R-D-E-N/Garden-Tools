@@ -598,6 +598,45 @@ radicle_status radicle_swf_placements_json(const radicle_swf_history* history, u
   });
 }
 
+// Requires the flat walk to visit the tag before its subtree, so rows match radicle_swf_tag_at order.
+void append_action_tags(std::string& out, const std::vector<SwfTag>& tags, std::size_t& flat,
+                        bool inside) {
+  for (const auto& tag : tags) {
+    const std::size_t row = flat;
+    flat += 1;
+    if (tag.code == fo4::swf::tag::kDoAction || tag.code == fo4::swf::tag::kDoInitAction) {
+      comma(out);
+      out += '{';
+      field(out, "tag_index", row);
+      field(out, "code", tag.code);
+      field(out, "inside_sprite", inside);
+      out += '}';
+    }
+    append_action_tags(out, tag.children, flat, true);
+  }
+}
+
+radicle_status radicle_swf_action_tags_json(const radicle_swf_history* history, uint8_t** out_text,
+                                            size_t* out_size) {
+  clear_error();
+  if (out_text) *out_text = nullptr;
+  if (out_size) *out_size = 0;
+  if (history == nullptr || out_text == nullptr || out_size == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "history, out_text and out_size are required");
+  }
+  return guarded("unknown exception while listing action tags", [&] {
+    std::string out = "[";
+    std::size_t flat = 0;
+    append_action_tags(out, history->history.file().tags, flat, false);
+    out += ']';
+    *out_text = radicle_swf_detail::copy_text(out, out_size);
+    if (*out_text == nullptr) {
+      return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to allocate the action tag list");
+    }
+    return RADICLE_STATUS_OK;
+  });
+}
+
 radicle_status radicle_swf_placement_matrix_at(const radicle_swf_history* history, size_t tag_index,
                                                radicle_swf_placement_matrix_fields* out_matrix) {
   clear_error();
@@ -618,18 +657,22 @@ radicle_status radicle_swf_placement_matrix_at(const radicle_swf_history* histor
       return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the tag is not a placement");
     }
     // Constraint: the flags are derived from the decoded values, so an explicitly flagged identity matrix reads back unflagged.
+    // Constraint: a missing scale must read 0x10000, so no caller keeps an identity default.
     if (tag.placement && tag.placement->matrix) {
       const fo4::swf::SwfMatrix& matrix = *tag.placement->matrix;
       out_matrix->has_scale =
           static_cast<uint8_t>(matrix.scale_x != 0x10000 || matrix.scale_y != 0x10000);
-      out_matrix->scale_x = matrix.scale_x;
-      out_matrix->scale_y = matrix.scale_y;
+      out_matrix->scale_x = out_matrix->has_scale != 0 ? matrix.scale_x : 0x10000;
+      out_matrix->scale_y = out_matrix->has_scale != 0 ? matrix.scale_y : 0x10000;
       out_matrix->has_rotate =
           static_cast<uint8_t>(matrix.rotate_skew0 != 0 || matrix.rotate_skew1 != 0);
       out_matrix->rotate0 = matrix.rotate_skew0;
       out_matrix->rotate1 = matrix.rotate_skew1;
       out_matrix->translate_x = matrix.translate_x;
       out_matrix->translate_y = matrix.translate_y;
+    } else {
+      out_matrix->scale_x = 0x10000;
+      out_matrix->scale_y = 0x10000;
     }
     return RADICLE_STATUS_OK;
   });

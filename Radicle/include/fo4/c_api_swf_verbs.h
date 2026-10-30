@@ -88,7 +88,7 @@ typedef struct radicle_swf_placement_matrix_fields {
 RADICLE_API radicle_status radicle_swf_placements_json(const radicle_swf_history* history,
                                                         uint8_t** out_text, size_t* out_size);
 
-/* Invariant: tag_index is the flat radicle_swf_tag_at index of a PlaceObject, PlaceObject2 or PlaceObject3; any other tag must be refused. */
+/* Invariant: tag_index is the flat radicle_swf_tag_at index of a PlaceObject, PlaceObject2 or PlaceObject3; any other tag must be refused. A tag without scale reads 0x10000 on both axes, so no caller keeps an identity default. */
 RADICLE_API radicle_status radicle_swf_placement_matrix_at(const radicle_swf_history* history, size_t tag_index,
                                                            radicle_swf_placement_matrix_fields* out_matrix);
 
@@ -106,6 +106,17 @@ RADICLE_API radicle_status radicle_swf_set_placement_transform(radicle_swf_histo
 RADICLE_API radicle_status radicle_swf_insert_placement_keyframe(radicle_swf_history* history, size_t tag_index,
                                                                  uint32_t frame,
                                                                  radicle_swf_plan_result* out_result);
+
+/* Invariant: the edit resolves the ABC tag inside the history's own movie, so a stale reader tag index cannot land it on the wrong tag. Insert must be 1 to insert and 0 to replace. */
+RADICLE_API radicle_status radicle_swf_history_abc_text_edit(radicle_swf_history* history, size_t abc,
+                                                             uint32_t body, size_t offset,
+                                                             const uint8_t* text, size_t size,
+                                                             uint8_t insert,
+                                                             radicle_swf_plan_result* out_result);
+
+/* Invariant: the JSON is an array of {tag_index, code, inside_sprite} for DoAction and DoInitAction tags in flat pre-order; *out_text is malloc'd with a trailing NUL, release with radicle_free_bytes. */
+RADICLE_API radicle_status radicle_swf_action_tags_json(const radicle_swf_history* history,
+                                                       uint8_t** out_text, size_t* out_size);
 
 #ifdef __cplusplus
 }

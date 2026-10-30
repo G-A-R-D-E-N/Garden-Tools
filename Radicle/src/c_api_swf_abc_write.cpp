@@ -11,6 +11,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <span>
 #include <string>
@@ -197,6 +198,65 @@ radicle_status radicle_swf_abc_apply_text(radicle_swf* swf, size_t abc, const ui
 radicle_status radicle_swf_abc_insert_instruction(radicle_swf* swf, size_t abc, uint32_t body,
                                                   size_t offset, const uint8_t* text, size_t size) {
   return apply_instruction_edit(swf, abc, body, offset, text, size, fo4::abc::insert_instruction);
+}
+
+radicle_status radicle_swf_history_abc_text_edit(radicle_swf_history* history, size_t abc,
+                                                 uint32_t body, size_t offset, const uint8_t* text,
+                                                 size_t size, uint8_t insert,
+                                                 radicle_swf_plan_result* out_result) {
+  clear_error();
+  if (out_result) {
+    out_result->changed = 0;
+    out_result->revision = history == nullptr ? 0 : history->history.revision();
+  }
+  if (history == nullptr || out_result == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "history and out_result are required");
+  }
+  if (text == nullptr || size == 0) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "text and size are required");
+  }
+  return guarded("unknown exception while editing an ABC instruction", [&] {
+    // Requires the scratch to carry the history bytes: the ABC tag resolves inside the edited movie.
+    const std::vector<std::byte> bytes = fo4::swf::write_swf(history->history.file());
+    radicle_swf* scratch = nullptr;
+    radicle_status status = radicle_swf_open_bytes(reinterpret_cast<const std::uint8_t*>(bytes.data()),
+                                                   bytes.size(), &scratch);
+    if (status == RADICLE_STATUS_OK && scratch == nullptr) {
+      status = RADICLE_STATUS_INTERNAL_ERROR;
+    }
+    radicle_swf_abc_info info{};
+    if (status == RADICLE_STATUS_OK) {
+      status = radicle_swf_abc_info_at(scratch, abc, &info);
+    }
+    if (status == RADICLE_STATUS_OK) {
+      status = insert != 0 ? radicle_swf_abc_insert_instruction(scratch, abc, body, offset, text,
+                                                               size)
+                           : radicle_swf_abc_replace_instruction(scratch, abc, body, offset, text,
+                                                                size);
+    }
+    std::uint8_t* payload = nullptr;
+    std::size_t payload_size = 0;
+    if (status == RADICLE_STATUS_OK) {
+      status = radicle_swf_tag_payload(scratch, info.tag_index, &payload, &payload_size);
+      if (status == RADICLE_STATUS_OK && payload == nullptr) {
+        status = RADICLE_STATUS_INTERNAL_ERROR;
+      }
+    }
+    // Requires the copy before the destroy: destroying the scratch clears the failure message.
+    const char* detail = radicle_last_error();
+    const std::string message = detail != nullptr ? detail : "";
+    radicle_swf_destroy(scratch);
+    if (status != RADICLE_STATUS_OK) {
+      std::free(payload);
+      return fail(status, message.empty() ? "the ABC instruction edit failed" : message.c_str());
+    }
+    const radicle_swf_tag_replacement replacement{info.tag_index, payload, payload_size};
+    const radicle_swf_tag_plan plan{&replacement, 1, nullptr, 0, nullptr, 0};
+    status = radicle_swf_history_apply(history, &plan, out_result);
+    // Requires std::free here: radicle_free_bytes would clear the refusal message.
+    std::free(payload);
+    return status;
+  });
 }
 
 radicle_status radicle_swf_abc_replace_instruction(radicle_swf* swf, size_t abc, uint32_t body,

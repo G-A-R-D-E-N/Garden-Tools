@@ -1,8 +1,15 @@
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <string>
 #include <vector>
+
+#ifdef _WIN32
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
 
 #include <catch2/catch_test_macros.hpp>
 #include <nlohmann/json.hpp>
@@ -136,9 +143,15 @@ nlohmann::json replyJson(const fo4ide::Result<nlohmann::json>& result) {
 struct TempSwf {
     fs::path path;
     explicit TempSwf(const std::vector<std::byte>& bytes) {
-        static int counter = 0;
-        path = fs::temp_directory_path() /
-               ("fo4ide-swf-target-test-" + std::to_string(++counter) + ".swf");
+        // Requires a per-process name: parallel test runners must never share a file.
+#ifdef _WIN32
+        const auto pid = _getpid();
+#else
+        const auto pid = getpid();
+#endif
+        const auto tick = std::chrono::steady_clock::now().time_since_epoch().count();
+        path = fs::temp_directory_path() / ("fo4ide-swf-target-test-" + std::to_string(pid) +
+                                            "-" + std::to_string(tick) + ".swf");
         std::ofstream stream(path, std::ios::binary | std::ios::trunc);
         stream.write(reinterpret_cast<const char*>(bytes.data()),
                      static_cast<std::streamsize>(bytes.size()));
@@ -148,14 +161,31 @@ struct TempSwf {
     ~TempSwf() {
         std::error_code code;
         fs::remove(path, code);
+        fs::remove(fs::path(path.string() + ".bak"), code);
     }
 };
+
+void allowPath(fo4ide::app::SwfTarget& target, const fs::path& path) {
+    target.setRoots({path.parent_path()});
+}
+
+std::vector<std::byte> readFileBytes(const fs::path& path) {
+    std::ifstream stream(path, std::ios::binary);
+    REQUIRE(stream);
+    const std::string text((std::istreambuf_iterator<char>(stream)),
+                           std::istreambuf_iterator<char>());
+    std::vector<std::byte> bytes;
+    bytes.reserve(text.size());
+    for (char c : text) bytes.push_back(static_cast<std::byte>(c));
+    return bytes;
+}
 
 }  // namespace
 
 TEST_CASE("SwfTarget opens a movie and snapshots the document") {
     fo4ide::app::SwfTarget target;
     TempSwf file(fixtureMovie());
+    allowPath(target, file.path);
 
     const auto opened =
         replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
@@ -175,6 +205,7 @@ TEST_CASE("SwfTarget opens a movie and snapshots the document") {
 TEST_CASE("SwfTarget renames a label with undo and redo tracking state") {
     fo4ide::app::SwfTarget target;
     TempSwf file(fixtureMovie());
+    allowPath(target, file.path);
     replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
 
     const auto renamed =
@@ -208,7 +239,11 @@ TEST_CASE("SwfTarget renames a label with undo and redo tracking state") {
 TEST_CASE("SwfTarget applies an ABC text edit and saves it back to disk") {
     fo4ide::app::SwfTarget target;
     TempSwf file(fixtureMovie());
-    replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
+    allowPath(target, file.path);
+    const auto opened =
+        replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
+    INFO(opened.dump());
+    CHECK_FALSE(opened.contains("error"));
 
     const auto inserted = replyJson(
         target.invoke("InsertAbcInstruction", nlohmann::json::array({0, 0, 0, "nop"})));
@@ -233,7 +268,11 @@ TEST_CASE("SwfTarget applies an ABC text edit and saves it back to disk") {
     CHECK(saved.value("saved", "") == file.path.string());
 
     fo4ide::app::SwfTarget reopened;
-    replyJson(reopened.invoke("Open", nlohmann::json::array({file.path.string()})));
+    allowPath(reopened, file.path);
+    const auto reopenedOpen =
+        replyJson(reopened.invoke("Open", nlohmann::json::array({file.path.string()})));
+    INFO(reopenedOpen.dump());
+    CHECK_FALSE(reopenedOpen.contains("error"));
     const auto again =
         replyJson(reopened.invoke("Disassemble", nlohmann::json::array({0, 0})));
     CHECK(again.at("text").get<std::string>().find("nop") != std::string::npos);
@@ -248,6 +287,65 @@ TEST_CASE("SwfTarget applies an ABC text edit and saves it back to disk") {
     CHECK_FALSE(outOfRange.contains("svg"));
 }
 
+// Constraint: the save must fail without touching the destination, so the directory loses write access.
+TEST_CASE("SwfTarget leaves the original bytes intact when saving fails") {
+    const fs::path dir =
+        fs::temp_directory_path() / "fo4ide-swf-save-fail-dir";
+    std::error_code code;
+    fs::remove_all(dir, code);
+    REQUIRE(fs::create_directories(dir, code));
+    const fs::path swfPath = dir / "movie.swf";
+    fo4ide::app::SwfTarget target;
+    allowPath(target, swfPath);
+    const auto original = fixtureMovie();
+    {
+        std::ofstream stream(swfPath, std::ios::binary | std::ios::trunc);
+        REQUIRE(stream);
+        stream.write(reinterpret_cast<const char*>(original.data()),
+                     static_cast<std::streamsize>(original.size()));
+        stream.close();
+        REQUIRE(stream);
+    }
+
+    const auto opened = replyJson(target.invoke("Open", nlohmann::json::array({swfPath.string()})));
+    REQUIRE_FALSE(opened.contains("error"));
+    const auto renamed =
+        replyJson(target.invoke("RenameLabel", nlohmann::json::array({0, 0, "menu"})));
+    REQUIRE(renamed.value("changed", false) == true);
+
+    const fs::perms previous = fs::status(dir).permissions();
+    struct RestorePermissions {
+        fs::path dir;
+        fs::perms perms;
+        ~RestorePermissions() {
+            std::error_code ignored;
+            fs::permissions(dir, perms, fs::perm_options::replace, ignored);
+        }
+    };
+    const RestorePermissions restore{dir, previous};
+    fs::permissions(dir,
+                    fs::perms::owner_read | fs::perms::owner_exec | fs::perms::group_read |
+                        fs::perms::group_exec | fs::perms::others_read | fs::perms::others_exec,
+                    fs::perm_options::replace, code);
+    REQUIRE(!code);
+
+    const auto saved = replyJson(target.invoke("Save", nlohmann::json::array()));
+    INFO(saved.dump());
+    CHECK(saved.contains("error"));
+    CHECK_FALSE(saved.contains("saved"));
+
+    std::ifstream stream(swfPath, std::ios::binary);
+    REQUIRE(stream);
+    const std::string text((std::istreambuf_iterator<char>(stream)),
+                           std::istreambuf_iterator<char>());
+    std::vector<std::byte> current;
+    current.reserve(text.size());
+    for (char c : text) current.push_back(static_cast<std::byte>(c));
+    CHECK(current == original);
+
+    fs::remove_all(dir, code);
+}
+
 TEST_CASE("SwfTarget refuses calls with no open document") {
     fo4ide::app::SwfTarget target;
     const auto state = replyJson(target.invoke("State", nlohmann::json::array()));
@@ -260,6 +358,7 @@ TEST_CASE("SwfTarget refuses calls with no open document") {
 TEST_CASE("SwfTarget moves a root placement depth with undo") {
     fo4ide::app::SwfTarget target;
     TempSwf file(fixtureMovie());
+    allowPath(target, file.path);
     replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
 
     const auto moved = replyJson(target.invoke("SetDepth", nlohmann::json::array({2, 9})));
@@ -290,6 +389,7 @@ TEST_CASE("SwfTarget moves a root placement depth with undo") {
 TEST_CASE("SwfTarget rewrites a sprite placement matrix with undo") {
     fo4ide::app::SwfTarget target;
     TempSwf file(fixtureMovie());
+    allowPath(target, file.path);
     replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
 
     const auto before =
@@ -317,18 +417,37 @@ TEST_CASE("SwfTarget rewrites a sprite placement matrix with undo") {
     CHECK(refusal.contains("status"));
 }
 
+int spriteRowCount(const nlohmann::json& placements) {
+    int rows = 0;
+    for (const auto& row : placements.at("placements")) {
+        if (row.value("insideSprite", false)) ++rows;
+    }
+    return rows;
+}
+
 TEST_CASE("SwfTarget inserts a placement keyframe with undo") {
     fo4ide::app::SwfTarget target;
     TempSwf file(fixtureMovie());
+    allowPath(target, file.path);
     replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
+
+    const auto before = replyJson(target.invoke("Placements", nlohmann::json::array()));
+    REQUIRE(before.contains("placements"));
+    CHECK(spriteRowCount(before) == 1);
 
     // Requires a sprite child: the root placement already authors its matrix.
     const auto inserted =
         replyJson(target.invoke("InsertKeyframe", nlohmann::json::array({6, 0})));
     CHECK(inserted.value("changed", false) == true);
 
+    // Requires the spliced move to list: the sprite placement must appear twice until undo.
+    const auto after = replyJson(target.invoke("Placements", nlohmann::json::array()));
+    CHECK(spriteRowCount(after) == 2);
+
     const auto undone = replyJson(target.invoke("Undo", nlohmann::json::array()));
     CHECK(undone.value("undo", 9) == 0);
+    const auto restored = replyJson(target.invoke("Placements", nlohmann::json::array()));
+    CHECK(spriteRowCount(restored) == 1);
     const auto matrix =
         replyJson(target.invoke("PlacementMatrix", nlohmann::json::array({6})));
     CHECK(matrix.value("hasScale", true) == false);
@@ -337,4 +456,114 @@ TEST_CASE("SwfTarget inserts a placement keyframe with undo") {
         replyJson(target.invoke("InsertKeyframe", nlohmann::json::array({0, 0})));
     CHECK(refusal.contains("error"));
     CHECK(refusal.contains("status"));
+
+    // Requires the frame to exist: frame 9 is past the sprite's single frame.
+    const auto pastEnd =
+        replyJson(target.invoke("InsertKeyframe", nlohmann::json::array({6, 9})));
+    CHECK(pastEnd.contains("error"));
+    CHECK(pastEnd.contains("status"));
+}
+
+// Constraint: the first save must freeze the on-disk original, so a later save never rewrites the backup.
+TEST_CASE("SwfTarget keeps the first-save backup across later saves") {
+    fo4ide::app::SwfTarget target;
+    TempSwf file(fixtureMovie());
+    allowPath(target, file.path);
+    replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
+
+    const auto original = fixtureMovie();
+    CHECK(readFileBytes(file.path) == original);
+
+    replyJson(target.invoke("RenameLabel", nlohmann::json::array({0, 0, "menu"})));
+    const auto first = replyJson(target.invoke("Save", nlohmann::json::array()));
+    CHECK(first.value("saved", "") == file.path.string());
+    CHECK(readFileBytes(fs::path(file.path.string() + ".bak")) == original);
+
+    replyJson(target.invoke("RenameLabel", nlohmann::json::array({0, 0, "submenu"})));
+    const auto second = replyJson(target.invoke("Save", nlohmann::json::array()));
+    CHECK(second.value("saved", "") == file.path.string());
+    CHECK(readFileBytes(fs::path(file.path.string() + ".bak")) == original);
+
+    fo4ide::app::SwfTarget reopened;
+    allowPath(reopened, file.path);
+    replyJson(reopened.invoke("Open", nlohmann::json::array({file.path.string()})));
+    const auto labels = replyJson(reopened.invoke("FrameLabels", nlohmann::json::array({0})));
+    CHECK(labels.at("labels")[0].value("name", "") == "submenu");
+}
+
+TEST_CASE("SwfTarget reports the Radicle message when an ABC edit fails") {
+    fo4ide::app::SwfTarget target;
+    TempSwf file(fixtureMovie());
+    allowPath(target, file.path);
+    replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
+
+    const auto bad = replyJson(
+        target.invoke("InsertAbcInstruction", nlohmann::json::array({0, 0, 0, "foo"})));
+    REQUIRE(bad.contains("error"));
+    CHECK_FALSE(bad.at("error").get<std::string>().empty());
+}
+
+std::vector<std::byte> latinLabelMovie() {
+    std::vector<std::byte> tags;
+    const std::vector<std::byte> label{static_cast<std::byte>('s'), static_cast<std::byte>('t'),
+                                       static_cast<std::byte>(0xE9), static_cast<std::byte>('r'),
+                                       static_cast<std::byte>('t'), static_cast<std::byte>(0)};
+    appendTag(tags, 43, label);
+    appendTag(tags, 1, {});
+    appendTag(tags, 0, {});
+
+    std::vector<std::byte> head;
+    head.push_back(static_cast<std::byte>('F'));
+    head.push_back(static_cast<std::byte>('W'));
+    head.push_back(static_cast<std::byte>('S'));
+    head.push_back(static_cast<std::byte>(10));
+    appendU32(head, static_cast<std::uint32_t>(8 + 9 + 4 + tags.size()));
+    const auto frame = rectBytes(0, 11000, 0, 8000, 15);
+    head.insert(head.end(), frame.begin(), frame.end());
+    appendU16(head, 0x0C00);
+    appendU16(head, 1);
+    head.insert(head.end(), tags.begin(), tags.end());
+    return head;
+}
+
+TEST_CASE("SwfTarget replaces non-UTF-8 bytes when dumping labels") {
+    fo4ide::app::SwfTarget target;
+    TempSwf file(latinLabelMovie());
+    allowPath(target, file.path);
+    const auto opened =
+        replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
+    REQUIRE_FALSE(opened.contains("error"));
+    const auto labels = replyJson(target.invoke("FrameLabels", nlohmann::json::array({0})));
+    REQUIRE(labels.contains("labels"));
+    REQUIRE(labels.at("labels").size() == 1);
+    CHECK(labels.at("labels")[0].value("name", "") == "st\xEF\xBF\xBDrt");
+}
+
+TEST_CASE("SwfTarget refuses paths outside its roots") {
+    fo4ide::app::SwfTarget target;
+    TempSwf file(fixtureMovie());
+
+    // Constraint: an empty root list must refuse every open, like the C# host with no folders set.
+    const auto unrooted =
+        replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
+    CHECK(unrooted.contains("error"));
+
+    target.setRoots({file.path.parent_path() / "fo4ide-no-such-root"});
+    const auto elsewhere =
+        replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
+    CHECK(elsewhere.contains("error"));
+
+    const fs::path sub = file.path.parent_path() / "fo4ide-swf-guard-sub";
+    std::error_code code;
+    fs::create_directories(sub, code);
+    target.setRoots({sub});
+    const auto escaped = replyJson(
+        target.invoke("Open", nlohmann::json::array({(sub / ".." / file.path.filename()).string()})));
+    CHECK(escaped.contains("error"));
+    fs::remove_all(sub, code);
+
+    allowPath(target, file.path);
+    const auto opened =
+        replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
+    CHECK_FALSE(opened.contains("error"));
 }

@@ -1,12 +1,15 @@
 #include <fo4ide/app/SwfTarget.hpp>
 
+#include <algorithm>
 #include <cctype>
+#include <filesystem>
 #include <fstream>
 #include <memory>
 
 #include <fo4/c_api.h>
 #include <fo4/c_api_swf.h>
 #include <fo4/c_api_swf_verbs.h>
+#include <fo4/io/atomic_write.hpp>
 #include <fo4ide/core/Base64.hpp>
 
 #include <span>
@@ -15,6 +18,8 @@
 
 namespace fo4ide::app {
 namespace {
+
+namespace fs = std::filesystem;
 
 const char* statusName(radicle_status status) {
     // Constraint: the names must match Status.ToString, because the panel reads the status field.
@@ -31,14 +36,26 @@ const char* statusName(radicle_status status) {
 }
 
 nlohmann::json errorText(const std::string& message) {
-    return nlohmann::json(nlohmann::json{{"error", message}}.dump());
+    return nlohmann::json(nlohmann::json{{"error", message}}.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
 }
 
 nlohmann::json radicleError(radicle_status status) {
     const char* detail = radicle_last_error();
     nlohmann::json body{{"error", detail ? detail : "unknown Radicle error"}};
     if (status != RADICLE_STATUS_OK) body["status"] = statusName(status);
-    return nlohmann::json(body.dump());
+    return nlohmann::json(body.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
+}
+
+std::string takeError() {
+    const char* detail = radicle_last_error();
+    return detail ? detail : "";
+}
+
+nlohmann::json errorStatus(radicle_status status, const std::string& detail) {
+    nlohmann::json body{
+        {"error", detail.empty() ? "unknown Radicle error" : detail}};
+    if (status != RADICLE_STATUS_OK) body["status"] = statusName(status);
+    return nlohmann::json(body.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
 }
 
 std::string stringArg(const nlohmann::json& args, std::size_t index) {
@@ -137,6 +154,33 @@ bool splitRow(const std::string& row, long long& first, unsigned long long& seco
 
 SwfTarget::SwfTarget() = default;
 
+void SwfTarget::setRoots(std::vector<std::filesystem::path> roots) {
+    std::lock_guard<std::mutex> guard(mutex_);
+    roots_ = std::move(roots);
+}
+
+bool SwfTarget::requireUnderRoots(const std::string& path, std::string& rooted) const {
+    std::error_code code;
+    const fs::path full = fs::weakly_canonical(fs::path(path), code);
+    if (code) return false;
+    for (const auto& root : roots_) {
+        std::error_code rootCode;
+        const fs::path base = fs::weakly_canonical(root, rootCode);
+        if (rootCode) continue;
+        if (full == base) {
+            rooted = full.string();
+            return true;
+        }
+        const auto [baseEnd, fullEnd] =
+            std::mismatch(base.begin(), base.end(), full.begin(), full.end());
+        if (baseEnd == base.end() && fullEnd != full.end()) {
+            rooted = full.string();
+            return true;
+        }
+    }
+    return false;
+}
+
 SwfTarget::~SwfTarget() {
     if (history_ != nullptr) radicle_swf_history_destroy(history_);
     if (movie_ != nullptr) radicle_swf_destroy(movie_);
@@ -144,7 +188,11 @@ SwfTarget::~SwfTarget() {
 
 Result<nlohmann::json> SwfTarget::open(const nlohmann::json& args) {
     const std::string path = stringArg(args, 0);
-    std::ifstream stream(path, std::ios::binary);
+    std::string rooted;
+    if (!requireUnderRoots(path, rooted)) {
+        return errorText("the path is outside the configured Data and project folders");
+    }
+    std::ifstream stream(rooted, std::ios::binary);
     if (!stream) return errorText("no SWF file was found at that path: " + path);
     const std::string text((std::istreambuf_iterator<char>(stream)),
                            std::istreambuf_iterator<char>());
@@ -158,15 +206,17 @@ Result<nlohmann::json> SwfTarget::open(const nlohmann::json& args) {
     radicle_status status =
         radicle_swf_open_bytes(data, bytes.size(), &movie);
     if (status != RADICLE_STATUS_OK || movie == nullptr) {
+        const std::string detail = takeError();
         if (movie != nullptr) radicle_swf_destroy(movie);
-        return radicleError(status);
+        return errorStatus(status, detail);
     }
     radicle_swf_history* history = nullptr;
     status = radicle_swf_history_create(movie, &history);
     if (status != RADICLE_STATUS_OK || history == nullptr) {
+        const std::string detail = takeError();
         if (history != nullptr) radicle_swf_history_destroy(history);
         radicle_swf_destroy(movie);
-        return radicleError(status);
+        return errorStatus(status, detail);
     }
     if (history_ != nullptr) radicle_swf_history_destroy(history_);
     if (movie_ != nullptr) radicle_swf_destroy(movie_);
@@ -202,7 +252,7 @@ Result<nlohmann::json> SwfTarget::snapshot(bool changed) {
                         {"undo", undo},
                         {"redo", redo},
                         {"dirty", current_ != saved_}};
-    return nlohmann::json(body.dump());
+    return nlohmann::json(body.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
 }
 
 bool SwfTarget::refreshFromHistory(std::string& message) {
@@ -220,7 +270,14 @@ bool SwfTarget::refreshFromHistory(std::string& message) {
     if (status != RADICLE_STATUS_OK || next == nullptr) {
         if (next != nullptr) radicle_swf_destroy(next);
         const char* detail = radicle_last_error();
-        message = detail ? detail : "the edited movie did not decode";
+        const std::string decodeMessage =
+            detail ? detail : "the edited movie did not decode";
+        // Constraint: an undecodable edit must roll back, so the history never runs ahead of the movie.
+        radicle_swf_plan_result rolled{};
+        if (radicle_swf_history_undo(history_, &rolled) == RADICLE_STATUS_OK) {
+            return refreshFromHistory(message);
+        }
+        message = decodeMessage;
         return false;
     }
     if (movie_ != nullptr) radicle_swf_destroy(movie_);
@@ -261,7 +318,7 @@ Result<nlohmann::json> SwfTarget::invoke(std::string_view method, const nlohmann
             }
             characters.push_back(std::move(item));
         }
-        return nlohmann::json(nlohmann::json{{"characters", std::move(characters)}}.dump());
+        return nlohmann::json(nlohmann::json{{"characters", std::move(characters)}}.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
     }
 
     if (name == "Timeline") {
@@ -277,7 +334,7 @@ Result<nlohmann::json> SwfTarget::invoke(std::string_view method, const nlohmann
         radicle_swf_frames_destroy(frames);
         if (status != RADICLE_STATUS_OK) return radicleError(status);
         return nlohmann::json(
-            nlohmann::json{{"characterId", character}, {"frameCount", frameCount}}.dump());
+            nlohmann::json{{"characterId", character}, {"frameCount", frameCount}}.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
     }
 
     if (name == "FrameLabels") {
@@ -303,7 +360,7 @@ Result<nlohmann::json> SwfTarget::invoke(std::string_view method, const nlohmann
                 nlohmann::json{{"labelIndex", labelIndex}, {"frame", frame}, {"name", labelName}});
         }
         radicle_free_string_array(rows, count);
-        return nlohmann::json(nlohmann::json{{"labels", std::move(labels)}}.dump());
+        return nlohmann::json(nlohmann::json{{"labels", std::move(labels)}}.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
     }
 
     if (name == "Frame") {
@@ -339,7 +396,7 @@ Result<nlohmann::json> SwfTarget::invoke(std::string_view method, const nlohmann
         }
         radicle_swf_frames_destroy(frames);
         if (status != RADICLE_STATUS_OK) return radicleError(status);
-        return nlohmann::json(nlohmann::json{{"rows", std::move(rows)}}.dump());
+        return nlohmann::json(nlohmann::json{{"rows", std::move(rows)}}.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
     }
 
     if (name == "RenameLabel" || name == "AddLabel" || name == "RemoveLabel") {
@@ -380,7 +437,7 @@ Result<nlohmann::json> SwfTarget::invoke(std::string_view method, const nlohmann
                             {"x1", info.bounds.x_max},
                             {"y0", info.bounds.y_min},
                             {"y1", info.bounds.y_max}};
-        return nlohmann::json(body.dump());
+        return nlohmann::json(body.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
     }
 
     if (name == "EditEditText") {
@@ -420,9 +477,10 @@ Result<nlohmann::json> SwfTarget::invoke(std::string_view method, const nlohmann
     if (name == "Placements") {
         std::uint8_t* raw = nullptr;
         std::size_t size = 0;
-        if (radicle_swf_placements_json(history_, &raw, &size) != RADICLE_STATUS_OK) {
+        const radicle_status placementsStatus = radicle_swf_placements_json(history_, &raw, &size);
+        if (placementsStatus != RADICLE_STATUS_OK) {
             if (raw != nullptr) radicle_free_bytes(raw);
-            return radicleError(RADICLE_STATUS_INTERNAL_ERROR);
+            return radicleError(placementsStatus);
         }
         const std::string text = takeText(raw, size);
         nlohmann::json parsed = nlohmann::json::array();
@@ -443,7 +501,7 @@ Result<nlohmann::json> SwfTarget::invoke(std::string_view method, const nlohmann
             }
             placements.push_back(std::move(row));
         }
-        return nlohmann::json(nlohmann::json{{"placements", std::move(placements)}}.dump());
+        return nlohmann::json(nlohmann::json{{"placements", std::move(placements)}}.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
     }
 
     if (name == "SetDepth") {
@@ -462,14 +520,14 @@ Result<nlohmann::json> SwfTarget::invoke(std::string_view method, const nlohmann
             radicle_swf_placement_matrix_at(history_, sizeArg(args, 0), &matrix);
         if (status != RADICLE_STATUS_OK) return radicleError(status);
         nlohmann::json body{{"hasScale", matrix.has_scale != 0},
-                            {"scaleX", matrix.has_scale != 0 ? matrix.scale_x : 0x10000},
-                            {"scaleY", matrix.has_scale != 0 ? matrix.scale_y : 0x10000},
+                            {"scaleX", matrix.scale_x},
+                            {"scaleY", matrix.scale_y},
                             {"hasRotate", matrix.has_rotate != 0},
                             {"rotate0", matrix.rotate0},
                             {"rotate1", matrix.rotate1},
                             {"x", matrix.translate_x},
                             {"y", matrix.translate_y}};
-        return nlohmann::json(body.dump());
+        return nlohmann::json(body.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
     }
 
     if (name == "SetTransform") {
@@ -533,7 +591,7 @@ Result<nlohmann::json> SwfTarget::invoke(std::string_view method, const nlohmann
                                            {"scripts", std::move(scripts)},
                                            {"methods", std::move(methods)}});
         }
-        return nlohmann::json(nlohmann::json{{"blocks", std::move(list)}}.dump());
+        return nlohmann::json(nlohmann::json{{"blocks", std::move(list)}}.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
     }
 
     if (name == "Disassemble") {
@@ -545,7 +603,7 @@ Result<nlohmann::json> SwfTarget::invoke(std::string_view method, const nlohmann
             if (raw != nullptr) radicle_free_bytes(raw);
             return radicleError(status);
         }
-        return nlohmann::json(nlohmann::json{{"text", takeText(raw, size)}}.dump());
+        return nlohmann::json(nlohmann::json{{"text", takeText(raw, size)}}.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
     }
 
     if (name == "InsertAbcInstruction" || name == "ReplaceAbcInstruction") {
@@ -553,51 +611,13 @@ Result<nlohmann::json> SwfTarget::invoke(std::string_view method, const nlohmann
         const std::uint32_t body = u32Arg(args, 1);
         const std::size_t offset = sizeArg(args, 2);
         const std::string text = stringArg(args, 3);
-        radicle_swf_abc_info info{};
-        if (radicle_swf_abc_info_at(movie_, abc, &info) != RADICLE_STATUS_OK)
-            return radicleError(RADICLE_STATUS_NOT_FOUND);
-        std::uint8_t* current = nullptr;
-        std::size_t currentSize = 0;
-        if (radicle_swf_history_write_bytes(history_, &current, &currentSize) !=
-            RADICLE_STATUS_OK) {
-            if (current != nullptr) radicle_free_bytes(current);
-            return radicleError(RADICLE_STATUS_INTERNAL_ERROR);
-        }
-        BytesPtr currentHolder(current);
-        radicle_swf* scratch = nullptr;
-        if (radicle_swf_open_bytes(current, currentSize, &scratch) != RADICLE_STATUS_OK ||
-            scratch == nullptr) {
-            if (scratch != nullptr) radicle_swf_destroy(scratch);
-            return radicleError(RADICLE_STATUS_PARSE_ERROR);
-        }
         const auto* input =
             text.empty() ? nullptr : reinterpret_cast<const std::uint8_t*>(text.data());
-        radicle_status status =
-            (name == "InsertAbcInstruction")
-                ? radicle_swf_abc_insert_instruction(scratch, abc, body, offset, input, text.size())
-                : radicle_swf_abc_replace_instruction(scratch, abc, body, offset, input,
-                                                      text.size());
         radicle_swf_plan_result result{};
-        if (status == RADICLE_STATUS_OK) {
-            std::uint8_t* payload = nullptr;
-            std::size_t payloadSize = 0;
-            status = radicle_swf_tag_payload(scratch, info.tag_index, &payload, &payloadSize);
-            if (status == RADICLE_STATUS_OK && payload != nullptr) {
-                BytesPtr payloadHolder(payload);
-                radicle_swf_tag_plan plan{};
-                radicle_swf_tag_replacement replacement{};
-                replacement.tag_index = info.tag_index;
-                replacement.payload = payload;
-                replacement.size = payloadSize;
-                plan.replacements = &replacement;
-                plan.replacement_count = 1;
-                status = radicle_swf_history_apply(history_, &plan, &result);
-            } else {
-                if (payload != nullptr) radicle_free_bytes(payload);
-                if (status == RADICLE_STATUS_OK) status = RADICLE_STATUS_INTERNAL_ERROR;
-            }
-        }
-        radicle_swf_destroy(scratch);
+        // Constraint: one history verb must own the ABC edit, so the reader keeps no scratch movie.
+        const radicle_status status = radicle_swf_history_abc_text_edit(
+            history_, abc, body, offset, input, text.size(),
+            name == "InsertAbcInstruction" ? 1 : 0, &result);
         if (status != RADICLE_STATUS_OK) return radicleError(status);
         std::string message;
         if (!refreshFromHistory(message)) return errorText(message);
@@ -614,22 +634,31 @@ Result<nlohmann::json> SwfTarget::invoke(std::string_view method, const nlohmann
             if (raw != nullptr) radicle_free_bytes(raw);
             return radicleError(status);
         }
-        return nlohmann::json(nlohmann::json{{"text", takeText(raw, size)}}.dump());
+        return nlohmann::json(nlohmann::json{{"text", takeText(raw, size)}}.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
     }
 
     if (name == "ActionTags") {
-        const std::size_t count = radicle_swf_tag_count(movie_);
-        nlohmann::json tags = nlohmann::json::array();
-        for (std::size_t index = 0; index < count; ++index) {
-            radicle_swf_tag tag{};
-            if (radicle_swf_tag_at(movie_, index, &tag) != RADICLE_STATUS_OK)
-                return radicleError(RADICLE_STATUS_INTERNAL_ERROR);
-            if (tag.code != 12 && tag.code != 59) continue;
-            tags.push_back(nlohmann::json{{"tagIndex", index},
-                                           {"code", tag.code},
-                                           {"insideSprite", tag.inside_sprite != 0}});
+        std::uint8_t* raw = nullptr;
+        std::size_t size = 0;
+        const radicle_status status = radicle_swf_action_tags_json(history_, &raw, &size);
+        if (status != RADICLE_STATUS_OK) {
+            if (raw != nullptr) radicle_free_bytes(raw);
+            return radicleError(status);
         }
-        return nlohmann::json(nlohmann::json{{"tags", std::move(tags)}}.dump());
+        const std::string text = takeText(raw, size);
+        nlohmann::json parsed = nlohmann::json::array();
+        try {
+            parsed = nlohmann::json::parse(text);
+        } catch (const std::exception&) {
+            return errorText("the action tag list did not parse");
+        }
+        nlohmann::json tags = nlohmann::json::array();
+        for (const auto& item : parsed) {
+            tags.push_back(nlohmann::json{{"tagIndex", item.value("tag_index", 0)},
+                                           {"code", item.value("code", 0)},
+                                           {"insideSprite", item.value("inside_sprite", false)}});
+        }
+        return nlohmann::json(nlohmann::json{{"tags", std::move(tags)}}.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
     }
 
     if (name == "Avm1Disassemble") {
@@ -641,7 +670,7 @@ Result<nlohmann::json> SwfTarget::invoke(std::string_view method, const nlohmann
             if (raw != nullptr) radicle_free_bytes(raw);
             return radicleError(status);
         }
-        return nlohmann::json(nlohmann::json{{"text", takeText(raw, size)}}.dump());
+        return nlohmann::json(nlohmann::json{{"text", takeText(raw, size)}}.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
     }
 
     if (name == "ShapeSvg") {
@@ -656,7 +685,7 @@ Result<nlohmann::json> SwfTarget::invoke(std::string_view method, const nlohmann
             if (raw != nullptr) radicle_free_bytes(raw);
             return radicleError(status);
         }
-        return nlohmann::json(nlohmann::json{{"svg", takeText(raw, size)}}.dump());
+        return nlohmann::json(nlohmann::json{{"svg", takeText(raw, size)}}.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
     }
 
     if (name == "FrameSvg") {
@@ -670,7 +699,7 @@ Result<nlohmann::json> SwfTarget::invoke(std::string_view method, const nlohmann
             if (raw != nullptr) radicle_free_bytes(raw);
             return radicleError(status);
         }
-        return nlohmann::json(nlohmann::json{{"svg", takeText(raw, size)}}.dump());
+        return nlohmann::json(nlohmann::json{{"svg", takeText(raw, size)}}.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
     }
 
     if (name == "BitmapPng" || name == "BitmapJpeg") {
@@ -687,8 +716,8 @@ Result<nlohmann::json> SwfTarget::invoke(std::string_view method, const nlohmann
         BytesPtr holder(raw);
         const std::string encoded = fo4ide::core::encodeBase64(
             std::span<const std::byte>(reinterpret_cast<const std::byte*>(raw), size));
-        if (name == "BitmapPng") return nlohmann::json(nlohmann::json{{"png", encoded}}.dump());
-        return nlohmann::json(nlohmann::json{{"jpeg", encoded}}.dump());
+        if (name == "BitmapPng") return nlohmann::json(nlohmann::json{{"png", encoded}}.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
+        return nlohmann::json(nlohmann::json{{"jpeg", encoded}}.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
     }
 
     if (name == "Undo" || name == "Redo") {
@@ -710,15 +739,28 @@ Result<nlohmann::json> SwfTarget::invoke(std::string_view method, const nlohmann
             return radicleError(RADICLE_STATUS_INTERNAL_ERROR);
         }
         BytesPtr holder(raw);
-        std::ofstream stream(*path_, std::ios::binary | std::ios::trunc);
-        if (!stream) return errorText("the SWF file could not be written: " + *path_);
-        stream.write(reinterpret_cast<const char*>(raw), static_cast<std::streamsize>(size));
-        stream.close();
-        if (!stream) return errorText("the SWF file could not be written: " + *path_);
-        saved_.assign(reinterpret_cast<const std::byte*>(raw),
-                      reinterpret_cast<const std::byte*>(raw) + size);
+        const std::vector<std::byte> bytes(reinterpret_cast<const std::byte*>(raw),
+                                           reinterpret_cast<const std::byte*>(raw) + size);
+        // Constraint: the first save must keep a .bak of the on-disk original, and later saves must never overwrite it.
+        const std::string backup = *path_ + ".bak";
+        std::error_code code;
+        if (fs::exists(*path_, code) && !fs::exists(backup, code)) {
+            fs::copy_file(*path_, backup, code);
+            if (code) {
+                return errorText("the SWF backup could not be written: " + backup + ": " +
+                                 code.message());
+            }
+        }
+        // Constraint: a failed write must never leave the destination truncated, so stage then replace.
+        try {
+            fo4::io::write_file_atomic(*path_, bytes);
+        } catch (const std::exception& ex) {
+            return errorText(std::string("the SWF file could not be written: ") + *path_ +
+                             ": " + ex.what());
+        }
+        saved_.assign(bytes.begin(), bytes.end());
         current_.assign(saved_.begin(), saved_.end());
-        return nlohmann::json(nlohmann::json{{"saved", *path_}}.dump());
+        return nlohmann::json(nlohmann::json{{"saved", *path_}}.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
     }
 
     return std::unexpected(Error{"UnknownMethod", "Unknown swf RPC method: " + name});
