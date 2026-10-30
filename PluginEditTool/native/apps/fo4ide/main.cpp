@@ -20,10 +20,10 @@
 #include <fo4ide/app/AppInteropTarget.hpp>
 #include <fo4ide/app/ArchiveTarget.hpp>
 #include <fo4ide/app/AudioTarget.hpp>
-#include <fo4ide/app/SwfTarget.hpp>
 #include <fo4ide/app/MaterialTarget.hpp>
 #include <fo4ide/app/PluginBackendTarget.hpp>
 #include <fo4ide/app/ServiceTargets.hpp>
+#include <fo4ide/app/SwfTarget.hpp>
 #include <fo4ide/archive/ArchiveService.hpp>
 #include <fo4ide/archive/RadicleArchiveBackend.hpp>
 #include <fo4ide/assets/NifService.hpp>

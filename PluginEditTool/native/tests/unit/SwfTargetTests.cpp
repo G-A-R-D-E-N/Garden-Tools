@@ -247,3 +247,93 @@ TEST_CASE("SwfTarget applies an ABC text edit and saves it back to disk") {
     CHECK(outOfRange.at("error").get<std::string>().find("0..65535") != std::string::npos);
     CHECK_FALSE(outOfRange.contains("svg"));
 }
+
+TEST_CASE("SwfTarget refuses calls with no open document") {
+    fo4ide::app::SwfTarget target;
+    const auto state = replyJson(target.invoke("State", nlohmann::json::array()));
+    CHECK(state.contains("error"));
+    const auto saved = replyJson(target.invoke("Save", nlohmann::json::array()));
+    CHECK(saved.contains("error"));
+}
+
+// Constraint: flat tag 2 is the root PlaceObject2 at depth 1, so moving it must rewrite the depth and undo must restore it.
+TEST_CASE("SwfTarget moves a root placement depth with undo") {
+    fo4ide::app::SwfTarget target;
+    TempSwf file(fixtureMovie());
+    replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
+
+    const auto moved = replyJson(target.invoke("SetDepth", nlohmann::json::array({2, 9})));
+    CHECK(moved.value("changed", false) == true);
+
+    const auto placements = replyJson(target.invoke("Placements", nlohmann::json::array()));
+    REQUIRE(placements.contains("placements"));
+    int depth = -1;
+    for (const auto& row : placements.at("placements")) {
+        if (row.value("tagIndex", -1) == 2) depth = row.value("depth", -1);
+    }
+    CHECK(depth == 9);
+
+    const auto undone = replyJson(target.invoke("Undo", nlohmann::json::array()));
+    CHECK(undone.value("undo", 9) == 0);
+    const auto restored = replyJson(target.invoke("Placements", nlohmann::json::array()));
+    for (const auto& row : restored.at("placements")) {
+        if (row.value("tagIndex", -1) == 2) depth = row.value("depth", -1);
+    }
+    CHECK(depth == 1);
+
+    const auto refusal = replyJson(target.invoke("SetDepth", nlohmann::json::array({1, 3})));
+    CHECK(refusal.contains("error"));
+    CHECK(refusal.contains("status"));
+}
+
+// Constraint: flat tag 6 is the sprite PlaceObject2 child, so the transform must splice its MATRIX and undo must clear it.
+TEST_CASE("SwfTarget rewrites a sprite placement matrix with undo") {
+    fo4ide::app::SwfTarget target;
+    TempSwf file(fixtureMovie());
+    replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
+
+    const auto before =
+        replyJson(target.invoke("PlacementMatrix", nlohmann::json::array({6})));
+    CHECK(before.value("x", -1) == 0);
+
+    const auto applied = replyJson(target.invoke(
+        "SetTransform", nlohmann::json::array({6, 40, 60, 0x10000, 0x10000, 0, 0})));
+    CHECK(applied.value("changed", false) == true);
+    const auto matrix =
+        replyJson(target.invoke("PlacementMatrix", nlohmann::json::array({6})));
+    CHECK(matrix.value("x", -1) == 40);
+    CHECK(matrix.value("y", -1) == 60);
+    CHECK(matrix.value("hasScale", true) == false);
+
+    const auto undone = replyJson(target.invoke("Undo", nlohmann::json::array()));
+    CHECK(undone.value("undo", 9) == 0);
+    const auto restored =
+        replyJson(target.invoke("PlacementMatrix", nlohmann::json::array({6})));
+    CHECK(restored.value("x", -1) == 0);
+
+    const auto refusal = replyJson(target.invoke(
+        "SetTransform", nlohmann::json::array({0, 40, 60, 0x10000, 0x10000, 0, 0})));
+    CHECK(refusal.contains("error"));
+    CHECK(refusal.contains("status"));
+}
+
+TEST_CASE("SwfTarget inserts a placement keyframe with undo") {
+    fo4ide::app::SwfTarget target;
+    TempSwf file(fixtureMovie());
+    replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
+
+    const auto inserted =
+        replyJson(target.invoke("InsertKeyframe", nlohmann::json::array({2, 0})));
+    CHECK(inserted.value("changed", false) == true);
+
+    const auto undone = replyJson(target.invoke("Undo", nlohmann::json::array()));
+    CHECK(undone.value("undo", 9) == 0);
+    const auto matrix =
+        replyJson(target.invoke("PlacementMatrix", nlohmann::json::array({2})));
+    CHECK(matrix.value("hasScale", true) == false);
+
+    const auto refusal =
+        replyJson(target.invoke("InsertKeyframe", nlohmann::json::array({0, 0})));
+    CHECK(refusal.contains("error"));
+    CHECK(refusal.contains("status"));
+}
