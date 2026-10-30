@@ -419,7 +419,9 @@ TEST(NifShader, ReadsEveryMaterialTypeTailToTheBlockEnd) {
       EXPECT_FLOAT_EQ(shader.skin_tint[3], 0.4f);
       EXPECT_EQ(shader.tail_bytes, 16U);
     }
-    if (type == 6U) EXPECT_FLOAT_EQ(shader.hair_tint[2], 0.33f);
+    if (type == 6U) {
+      EXPECT_FLOAT_EQ(shader.hair_tint[2], 0.33f);
+    }
     if (type == 7U) {
       EXPECT_FLOAT_EQ(shader.parallax_occ[0], 4.0f);
       EXPECT_FLOAT_EQ(shader.parallax_occ[1], 1.25f);
@@ -428,13 +430,17 @@ TEST(NifShader, ReadsEveryMaterialTypeTailToTheBlockEnd) {
       EXPECT_FLOAT_EQ(shader.multi_layer_parallax[0], 5.0f);
       EXPECT_FLOAT_EQ(shader.multi_layer_parallax[4], 0.5f);
     }
-    if (type == 14U) EXPECT_FLOAT_EQ(shader.snow[3], 0.6f);
+    if (type == 14U) {
+      EXPECT_FLOAT_EQ(shader.snow[3], 0.6f);
+    }
     if (type == 16U) {
       EXPECT_FLOAT_EQ(shader.eye_cubemap_scale, 1.3f);
       EXPECT_FLOAT_EQ(shader.eye_left[0], 0.01f);
       EXPECT_FLOAT_EQ(shader.eye_right[2], 0.06f);
     }
-    if (type == 0U) EXPECT_EQ(shader.tail_bytes, 0U);
+    if (type == 0U) {
+      EXPECT_EQ(shader.tail_bytes, 0U);
+    }
   }
 }
 
