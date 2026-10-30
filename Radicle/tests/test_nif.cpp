@@ -462,13 +462,13 @@ TEST(NifShader, NamesEverySetBitFromTheShaderFlagEnum) {
   ASSERT_EQ(fo4::nif::shader_flag_count(), 64U);
   EXPECT_STREQ(fo4::nif::shader_flag_name(0), "Specular");
   EXPECT_STREQ(fo4::nif::shader_flag_name(15), "Refraction");
-  EXPECT_STREQ(fo4::nif::shader_flag_name(32), "ZBufferWrite");
-  EXPECT_STREQ(fo4::nif::shader_flag_name(63), "RefractionWritesDepth");
+  EXPECT_STREQ(fo4::nif::shader_flag_name(32), "ZBuffer_Write");
+  EXPECT_STREQ(fo4::nif::shader_flag_name(63), "Refraction_Writes_Depth");
   EXPECT_EQ(fo4::nif::shader_flag_name(64), nullptr);
   const fo4::nif::ShaderFlags flags{0x80400201U, 0x21U};
   EXPECT_EQ(fo4::nif::shader_flag_names(flags),
-            (std::vector<std::string>{"Specular", "CastShadows", "OwnEmit", "ZBufferTest", "ZBufferWrite",
-                                      "VertexColors"}));
+            (std::vector<std::string>{"Specular", "Cast_Shadows", "Own_Emit", "ZBuffer_Test", "ZBuffer_Write",
+                                      "Vertex_Colors"}));
   EXPECT_TRUE(fo4::nif::shader_flag_names({}).empty());
 }
 

@@ -526,16 +526,16 @@ Numbers do not move: an item that has since been settled says so and stays for t
     `#NI_BS_LT_FO4#`, and the FO4 base material has `Smoothness` in its place. The
     extract's clamp of the float at `+0x88` to 0-1 matches `Smoothness`, not
     `Glossiness` (`...:0x1421ce880`).
-30. Flag names come from `commonlibf4`'s `EShaderPropertyFlag`, which is the engine's
-    own enumeration, and the 64 bit positions cross-check against `nif.xml`'s
-    `Fallout4ShaderPropertyFlags1` (bits 0-31) and `Fallout4ShaderPropertyFlags2`
-    (bits 32-63). The two agree on every bit position but four of the labels differ:
-    bit 13 is `Non_Projective_Shadows` in `nif.xml` and `RefractionClamp` here, bit 20
-    `Localmap_Hide_Secret` against `LocalMapClear`, bit 21 `Skin_Tint` against
-    `FaceGenRGBTint`, and bit 58 `Gradient_Remap` against `InvertedFadePattern`. The
-    reader keeps the `commonlibf4` label because it is the engine's, and records the
-    `nif.xml` alternative here. The strings are documentation for an editor, not data
-    the game reads.
+30. Flag names are `nif.xml`'s, and their 64 bit positions cross-check against
+    `commonlibf4`'s `EShaderPropertyFlag` (bits 0-31 then 32-63, the same split). The
+    two agree on every bit position but four of the labels differ: bit 13 is
+    `RefractionClamp` in `commonlibf4` and `Non_Projective_Shadows` in `nif.xml`, bit
+    20 `LocalMapClear` against `Localmap_Hide_Secret`, bit 21 `FaceGenRGBTint` against
+    `Skin_Tint`, and bit 58 `InvertedFadePattern` against `Gradient_Remap`. The reader
+    keeps the `nif.xml` spelling because `nif.xml` is where the names are written down
+    and an editor's `shaderFlags` edit has to match the table exactly; the engine
+    spellings are recorded here instead. The strings are documentation for an editor,
+    not data the game reads.
 31. The engine's loader clears flag bits 25 (tessellate) and 47 (dismemberment) when
     the stream version is below 0x6d (`commonlibf4`, `BSShaderProperty::Load`).
     `read_lighting_shader` reports the stored word instead of a post-load one, and the

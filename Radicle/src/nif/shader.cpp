@@ -15,24 +15,24 @@
 namespace fo4::nif {
 namespace {
 
-// Invariant: bit n is EShaderPropertyFlag n (G-A-R-D-E-N/commonlibf4@22b0dbd:include/RE/B/BSShaderProperty.h), the same 64 bits as nif.xml SLSF1 and SLSF2.
+// Invariant: bit n is option n of nif.xml F4SF1 then F4SF2, the same order as commonlibf4's EShaderPropertyFlag.
 constexpr std::array<std::string_view, 64> k_shader_flag_names{
-    "Specular", "Skinned", "TempRefraction", "VertexAlpha",
-    "GreyscaleToPaletteColor", "GreyscaleToPaletteAlpha", "Falloff", "EnvMap",
-    "RGBFalloff", "CastShadows", "Face", "UIMaskRects",
-    "ModelSpaceNormals", "RefractionClamp", "MultiTextureLandscape", "Refraction",
-    "RefractionFalloff", "EyeReflect", "HairTint", "ScreendoorAlphaFade",
-    "LocalMapClear", "FaceGenRGBTint", "OwnEmit", "ProjectedUV",
-    "MultipleTextures", "Tessellate", "Decal", "DynamicDecal",
-    "CharacterLight", "ExternalEmittance", "SoftEffect", "ZBufferTest",
-    "ZBufferWrite", "LODLandscape", "LODObjects", "NoFade",
-    "TwoSided", "VertexColors", "GlowMap", "TransformChanged",
-    "DismembermentMeatCuff", "Tint", "VertexLighting", "UniformScale",
-    "FitSlope", "Billboard", "LODLandBlend", "Dismemberment",
-    "Wireframe", "WeaponBlood", "HideOnLocalMap", "PremultipliedAlpha",
-    "VATSTarget", "AnisotropicLighting", "SkewSpecularAlpha", "MenuScreen",
-    "MultiLayerParallax", "AlphaTest", "InvertedFadePattern", "VATSTargetDrawAll",
-    "PipboyScreen", "TreeAnim", "EffectLighting", "RefractionWritesDepth",
+    "Specular", "Skinned", "Temp_Refraction", "Vertex_Alpha",
+    "GreyscaleToPalette_Color", "GreyscaleToPalette_Alpha", "Use_Falloff", "Environment_Mapping",
+    "RGB_Falloff", "Cast_Shadows", "Face", "UI_Mask_Rects",
+    "Model_Space_Normals", "Non_Projective_Shadows", "Landscape", "Refraction",
+    "Fire_Refraction", "Eye_Environment_Mapping", "Hair", "Screendoor_Alpha_Fade",
+    "Localmap_Hide_Secret", "Skin_Tint", "Own_Emit", "Projected_UV",
+    "Multiple_Textures", "Tessellate", "Decal", "Dynamic_Decal",
+    "Character_Lighting", "External_Emittance", "Soft_Effect", "ZBuffer_Test",
+    "ZBuffer_Write", "LOD_Landscape", "LOD_Objects", "No_Fade",
+    "Double_Sided", "Vertex_Colors", "Glow_Map", "Transform_Changed",
+    "Dismemberment_Meatcuff", "Tint", "Grass_Vertex_Lighting", "Grass_Uniform_Scale",
+    "Grass_Fit_Slope", "Grass_Billboard", "No_LOD_Land_Blend", "Dismemberment",
+    "Wireframe", "Weapon_Blood", "Hide_On_Local_Map", "Premult_Alpha",
+    "VATS_Target", "Anisotropic_Lighting", "Skew_Specular_Alpha", "Menu_Screen",
+    "Multi_Layer_Parallax", "Alpha_Test", "Gradient_Remap", "VATS_Target_Draw_All",
+    "Pipboy_Screen", "Tree_Anim", "Effect_Lighting", "Refraction_Writes_Depth",
 };
 
 constexpr std::uint16_t k_blend_enable_bit = 1U << 0U;
