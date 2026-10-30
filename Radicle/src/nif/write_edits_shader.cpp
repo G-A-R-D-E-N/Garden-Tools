@@ -37,31 +37,15 @@ std::uint64_t flag_mask(const NifFile& nif, const Edit& edit) {
   return mask;
 }
 
-std::uint64_t named_flag_mask() noexcept {
-  std::uint64_t mask = 0;
-  for (std::size_t bit = 0; bit < shader_flag_count(); ++bit) {
-    if (shader_flag_name(bit) != nullptr) mask |= std::uint64_t{1} << bit;
-  }
-  return mask;
-}
-
-std::uint32_t stored_word(const NifFile& nif, const Model& model, std::uint32_t block, std::size_t offset) {
-  check_field(nif, model, block, offset, 4);
-  return write_detail::read_int<std::uint32_t>(model.blocks[block], offset);
-}
-
 void apply_flags(const NifFile& nif, Model& model, std::uint32_t block, const Edit& edit, std::size_t offset,
                  bool wide) {
   const auto mask = flag_mask(nif, edit);
-  if (!wide && mask >> 32U != 0) {
-    fail(nif, block, "key 'shaderFlags' names a bit above 31, which this version does not store");
+  write_word(nif, model, block, offset, static_cast<std::uint32_t>(mask));
+  if (!wide) {
+    if (mask >> 32U != 0) fail(nif, block, "key 'shaderFlags' names a bit above 31, which this version does not store");
+    return;
   }
-  // Invariant: a stored flag bit that shader_flag_name cannot name is kept, because no edit can express it.
-  std::uint64_t stored = stored_word(nif, model, block, offset);
-  if (wide) stored |= static_cast<std::uint64_t>(stored_word(nif, model, block, offset + 4)) << 32U;
-  const auto next = mask | (stored & ~named_flag_mask());
-  write_word(nif, model, block, offset, static_cast<std::uint32_t>(next));
-  if (wide) write_word(nif, model, block, offset + 4, static_cast<std::uint32_t>(next >> 32U));
+  write_word(nif, model, block, offset + 4, static_cast<std::uint32_t>(mask >> 32U));
 }
 
 void apply_texture_path(const NifFile& nif, Model& model, std::uint32_t block, std::size_t offset,
