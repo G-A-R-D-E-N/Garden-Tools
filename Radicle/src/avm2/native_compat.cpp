@@ -8,10 +8,12 @@
 #include <fo4/avm2/net.hpp>
 #include <fo4/avm2/object.hpp>
 #include <fo4/avm2/runtime.hpp>
+#include <fo4/avm2/shape_geometry.hpp>
 #include <fo4/avm2/value.hpp>
 
 #include "native_internal.hpp"
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -202,6 +204,126 @@ ExecutionResult graphics_command(const Value& self, std::uint8_t op,
   }
   graphics->commands.push_back(command);
   return native_value(Value::undefined());
+}
+
+std::int32_t pixel_coord(double value) { return static_cast<std::int32_t>(std::lround(value)); }
+
+void emit_move(std::vector<swf::SwfShapeRecord>& records, double x, double y) {
+  swf::SwfShapeRecord record;
+  record.kind = swf::SwfShapeRecordKind::move;
+  record.x = pixel_coord(x);
+  record.y = pixel_coord(y);
+  records.push_back(record);
+}
+
+void emit_edge(std::vector<swf::SwfShapeRecord>& records, swf::SwfShapeRecordKind kind,
+               double control_x, double control_y, double x, double y, bool fill, bool line) {
+  swf::SwfShapeRecord record;
+  record.kind = kind;
+  record.control_x = pixel_coord(control_x);
+  record.control_y = pixel_coord(control_y);
+  record.x = pixel_coord(x);
+  record.y = pixel_coord(y);
+  record.has_fill1 = fill;
+  record.has_line = line;
+  records.push_back(record);
+}
+
+void emit_break(std::vector<swf::SwfShapeRecord>& records) {
+  swf::SwfShapeRecord record;
+  record.kind = swf::SwfShapeRecordKind::style_change;
+  records.push_back(record);
+}
+
+// A recorded path must become edge records, because the snapshot and hit test read records.
+std::vector<swf::SwfShapeRecord> graphics_shape_records(const GraphicsObject& graphics) {
+  std::vector<swf::SwfShapeRecord> records;
+  bool filling = false;
+  bool line = false;
+  double pen_x = 0.0;
+  double pen_y = 0.0;
+  auto edge_to = [&](double x, double y) {
+    emit_edge(records, swf::SwfShapeRecordKind::straight_edge, 0.0, 0.0, x, y, filling, line);
+    pen_x = x;
+    pen_y = y;
+  };
+  for (const GraphicsCommand& command : graphics.commands) {
+    switch (command.op) {
+      case 0:
+      case 1:
+        // A gradient fill must read as a flat fill, since the runtime keeps no raster state.
+        filling = true;
+        emit_break(records);
+        break;
+      case 2:
+        filling = false;
+        emit_break(records);
+        break;
+      case 3:
+        line = command.values[0] > 0.0;
+        break;
+      case 4:
+        pen_x = command.values[0];
+        pen_y = command.values[1];
+        emit_move(records, pen_x, pen_y);
+        break;
+      case 5:
+        edge_to(command.values[0], command.values[1]);
+        break;
+      case 6:
+        emit_edge(records, swf::SwfShapeRecordKind::curved_edge, command.values[0],
+                  command.values[1], command.values[2], command.values[3], filling, line);
+        pen_x = command.values[2];
+        pen_y = command.values[3];
+        break;
+      case 7: {
+        const double x = command.values[0];
+        const double y = command.values[1];
+        const double right = x + command.values[2];
+        const double bottom = y + command.values[3];
+        emit_move(records, x, y);
+        edge_to(right, y);
+        edge_to(right, bottom);
+        edge_to(x, bottom);
+        edge_to(x, y);
+        break;
+      }
+      case 8: {
+        // A circle must become an octagon, since records carry no arc primitive.
+        const double x = command.values[0];
+        const double y = command.values[1];
+        const double radius = command.values[2];
+        emit_move(records, x + radius, y);
+        for (int step = 1; step <= 8; ++step) {
+          const double angle = step * 3.141592653589793 / 4.0;
+          edge_to(x + radius * std::cos(angle), y + radius * std::sin(angle));
+        }
+        break;
+      }
+      case 9: {
+        // A round rect must become a chamfered polygon, for the same reason as the circle.
+        const double x = command.values[0];
+        const double y = command.values[1];
+        const double right = x + command.values[2];
+        const double bottom = y + command.values[3];
+        const double cut_x = command.values[4] / 2.0;
+        const double cut_y = command.values[5] / 2.0;
+        emit_move(records, x + cut_x, y);
+        edge_to(right - cut_x, y);
+        edge_to(right, y + cut_y);
+        edge_to(right, bottom - cut_y);
+        edge_to(right - cut_x, bottom);
+        edge_to(x + cut_x, bottom);
+        edge_to(x, bottom - cut_y);
+        edge_to(x, y + cut_y);
+        edge_to(x + cut_x, y);
+        break;
+      }
+      default:
+        break;
+    }
+  }
+  return records;
 }
 
 Value rectangle_value(Interpreter& interpreter, double x, double y, double width, double height) {
@@ -401,6 +523,27 @@ ExecutionResult event_format_to_string(const Value& self, const std::vector<Valu
 }
 
 }  // namespace
+
+ShapeGeometry drawn_geometry_of(const DisplayObject& object) {
+  if (!object.graphics().is_object()) {
+    return {};
+  }
+  const Object& graphics_value = *object.graphics().as_object();
+  const Class* klass = graphics_value.instance_class();
+  if (klass == nullptr || klass->name != "flash.display::Graphics") {
+    return {};
+  }
+  const auto& graphics = static_cast<const GraphicsObject&>(graphics_value);
+  // Graphics coordinates must stay pixels, so the record scale factor is one.
+  return geometry_from_shape_records(graphics_shape_records(graphics), 1.0);
+}
+
+ShapeGeometry effective_shape_geometry(const DisplayObject& object) {
+  if (const auto& placed = object.shape_geometry()) {
+    return *placed;
+  }
+  return drawn_geometry_of(object);
+}
 
 void refresh_content_loader_info(Interpreter& interpreter, LoaderObject& loader) {
   if (loader.content_loader_info.is_object()) {

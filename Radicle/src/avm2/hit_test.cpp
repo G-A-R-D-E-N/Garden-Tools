@@ -36,8 +36,10 @@ bool inside_bounds(const DisplayObject& object, double x, double y) {
 
 bool hits_shape_or_bounds(const DisplayObject& object, double x, double y, bool shape_flag) {
   if (shape_flag) {
-    if (const auto& geometry = object.shape_geometry()) {
-      return shape_contains(*geometry, x, y);
+    // Drawn geometry must count too, so script-drawn shapes hit-test like placed ones.
+    const ShapeGeometry geometry = effective_shape_geometry(object);
+    if (!geometry.fills.empty()) {
+      return shape_contains(geometry, x, y);
     }
   }
   return inside_bounds(object, x, y);
