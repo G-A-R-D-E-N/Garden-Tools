@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -81,6 +82,17 @@ void apply_lighting_edit(const NifFile& nif, Model& model, std::uint32_t block, 
     const auto offset = at.tail + (edit.key == "envMapSSR" ? 4 : 5);
     return write_byte(nif, model, block, offset, bool_value(nif, edit) ? 1 : 0);
   }
+  if (edit.key == "rimlightPower") {
+    // Invariant: Backlight Power is stored only behind a FLT_MAX rimlight, so a rimlight edit on either side of that placeholder moves every field after it.
+    const auto wanted = number_value(nif, edit);
+    if (wanted == std::numeric_limits<float>::max()) {
+      fail(nif, block, "key 'rimlightPower' cannot be set to the FLT_MAX placeholder, which adds a Backlight Power field the block does not store");
+    }
+    if (shader.rimlight_power == std::numeric_limits<float>::max()) {
+      fail(nif, block, "key 'rimlightPower' reads the FLT_MAX placeholder, so writing it would move Backlight Power and every field after it");
+    }
+    return write_floats(nif, model, block, at.rimlight_power, {wanted});
+  }
   if (edit.key == "backlightPower") require_present(nif, block, shader.has_backlight, edit.key);
   if (edit.key == "grayscaleToPaletteScale") {
     require_present(nif, block, shader.has_grayscale_to_palette_scale, edit.key);
@@ -117,7 +129,6 @@ void apply_lighting_edit(const NifFile& nif, Model& model, std::uint32_t block, 
                          {"specularColor", at.specular_color, 3},
                          {"specularStrength", at.specular_strength, 1},
                          {"subsurfaceRolloff", at.subsurface_rolloff, 1},
-                         {"rimlightPower", at.rimlight_power, 1},
                          {"backlightPower", at.backlight_power, 1},
                          {"grayscaleToPaletteScale", at.grayscale_to_palette_scale, 1},
                          {"fresnelPower", at.fresnel_power, 1},
@@ -180,6 +191,7 @@ void apply_effect_edit(const NifFile& nif, Model& model, std::uint32_t block, st
                       static_cast<std::uint8_t>(whole_number(nif, edit, k_byte_max)));
   }
   if (edit.key == "envMapScale") require_present(nif, block, extra_textures, edit.key);
+  if (edit.key == "uvOffset" || edit.key == "uvScale") require_present(nif, block, at.uv != 0, edit.key);
   if (apply_scalar_refs(nif, model, block, edit,
                         {{"uvOffset", at.uv, 2},
                          {"uvScale", at.uv + 8, 2},

@@ -516,7 +516,7 @@ Numbers do not move: an item that has since been settled says so and stays for t
    Any type-specific trailing fields are not read.
 7. `BSSubIndexTriShape` and `BSMeshLODTriShape`: `NifShape.cs:Shapes` reads them
    with the `BSTriShape` layout. Per-type trailing fields are not read.
-8. `shader_ref` is settled:   `nif.xml:BSTriShape` lists Bounding Sphere, Skin,
+8. `shader_ref` is settled: `nif.xml:BSTriShape` lists Bounding Sphere, Skin,
    Shader Property and Alpha Property in that order, and the 16 bytes are the bounding
    sphere. `alpha_ref` points at a `NiAlphaProperty`, which `read_alpha` reads and the
    shape reports as its alpha fields.
@@ -765,9 +765,13 @@ edits returns the input bytes unchanged, so a save that changes nothing changes 
 Every edited field is written where the matching reader reports it: the writer calls
 `read_lighting_shader`, `read_effect_shader`, `read_alpha`, `read_bsx_flags` and
 `read_collision_object` and writes through their recorded offsets, so a field cannot
-drift between the two sides. A shared `BSLightingShaderProperty`, `BSShaderTextureSet` or
+drift between the two sides. The one exception is `bhkNPCollisionObject`, whose layout is
+fixed: `target` i32 at 0, `flags` u16 at 4, `system` i32 at 6 and `bodyId` u32 at 10, so
+`src/nif/write_edits.cpp:apply_collision_edit` writes the two editable fields at the
+constants 4 and 10 and calls the reader only to refuse a block that does not parse. A
+shared `BSLightingShaderProperty`, `BSShaderTextureSet` or
 `NiAlphaProperty` is copied before the edit and the owner's reference is repointed
-(`src/nif/write_edits.cpp:shader_block`, `:shape_texture_set`, `:alpha_block`).
+(`src/nif/write_edits.cpp:shader_block`, `:shader_texture_set`, `:alpha_block`).
 
 Shader flags are edited by name (`edit_json.cpp:read_edit`), so an unknown name is a
 parse_error instead of a silently cleared bit. `bhkNPCollisionObject` exposes only its

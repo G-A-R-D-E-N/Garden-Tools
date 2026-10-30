@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <span>
 #include <string>
 #include <utility>
@@ -239,7 +240,71 @@ TEST(NifWriteBlocks, CollisionObjectFlagsAndBodyIdRoundTripAndKeepTheBlob) {
   for (const auto bit : named) {
     EXPECT_EQ(fo4::nif::read_collision_object(flags_out, 1).flags & bit, bit) << bit;
   }
+  // Invariant: a single-bit edit must clear every other bit and set only its own.
+  for (const auto bit : named) {
+    const std::vector<Edit> one{Edit{1, "flags", as_number(static_cast<float>(bit))}};
+    EXPECT_EQ(fo4::nif::read_collision_object(read_nif(apply_edits(nif, one)), 1).flags, bit) << bit;
+  }
   expect_rejected(nif, Edit{1, "system", as_number(1.0f)});
+  // Invariant: an Edit carries an f32, so 2^32 is the first body id a word value cannot take.
+  expect_rejected(nif, Edit{1, "bodyId", as_number(4294967296.0f)});
+}
+
+TEST(NifWriteBlocks, RimlightRefusesTheBacklightPlaceholderInEitherDirection) {
+  // Invariant: Backlight Power is stored only behind a FLT_MAX rimlight, so a rimlight edit must neither add nor remove that field.
+  const auto stored = read_nif(lighting_nif(nif_build::LightingFields{}));
+  ASSERT_TRUE(fo4::nif::read_lighting_shader(stored, 2).has_backlight);
+  expect_rejected(stored, Edit{k_shape, "rimlightPower", as_number(1.0f)});
+
+  auto plain_fields = nif_build::LightingFields{};
+  plain_fields.rimlight_power = 0.5f;
+  const auto plain = read_nif(lighting_nif(plain_fields));
+  ASSERT_FALSE(fo4::nif::read_lighting_shader(plain, 2).has_backlight);
+  expect_rejected(plain, Edit{k_shape, "rimlightPower", as_number(std::numeric_limits<float>::max())});
+
+  const std::vector<Edit> edits{Edit{k_shape, "rimlightPower", as_number(0.75f)}};
+  const auto shader = fo4::nif::read_lighting_shader(read_nif(apply_edits(plain, edits)), 2);
+  EXPECT_FLOAT_EQ(shader.rimlight_power, 0.75f);
+  EXPECT_FALSE(shader.has_backlight);
+  EXPECT_FLOAT_EQ(shader.grayscale_to_palette_scale, plain_fields.grayscale_to_palette_scale);
+  EXPECT_FLOAT_EQ(shader.fresnel_power, plain_fields.fresnel_power);
+}
+
+TEST(NifWriteBlocks, TailKeysLandOnlyInTheFieldsOfTheirOwnMaterialType) {
+  // Invariant: the tail is one region shared by every material type, so a type's keys must not land on another type's fields.
+  auto fields = nif_build::LightingFields{};
+  fields.shader_type = 11;
+  const auto nif = read_nif(lighting_nif(fields));
+  const std::vector<Edit> edits{
+      Edit{k_shape, "multiLayerThickness", as_number(6.0f)},
+      Edit{k_shape, "multiLayerRefractionScale", as_number(0.5f)},
+      Edit{k_shape, "multiLayerInnerScale", numbers({2.5f, 3.5f})},
+      Edit{k_shape, "multiLayerEnvMapStrength", as_number(0.75f)},
+  };
+  const auto shader = fo4::nif::read_lighting_shader(read_nif(apply_edits(nif, edits)), 2);
+  ASSERT_TRUE(shader.has_multi_layer_parallax);
+  EXPECT_FLOAT_EQ(shader.multi_layer_parallax[0], 6.0f);
+  EXPECT_FLOAT_EQ(shader.multi_layer_parallax[1], 0.5f);
+  EXPECT_FLOAT_EQ(shader.multi_layer_parallax[2], 2.5f);
+  EXPECT_FLOAT_EQ(shader.multi_layer_parallax[3], 3.5f);
+  EXPECT_FLOAT_EQ(shader.multi_layer_parallax[4], 0.75f);
+  EXPECT_FALSE(shader.has_env_map);
+  expect_rejected(nif, Edit{k_shape, "eyeCubemapScale", as_number(1.0f)});
+}
+
+TEST(NifWriteBlocks, SharedAlphaPropertyIsCopiedBeforeAShapeEdit) {
+  // Invariant: two shapes sharing one NiAlphaProperty must not both change when one of them is edited.
+  const auto bytes = nif_build::build_nif(
+      k_names, {nif_build::node_block("NiNode", {}, {1, 2}), shape_on_shader(-1, 3), shape_on_shader(-1, 3),
+                nif_build::alpha_block(0x0201U, 128)},
+      {k_root});
+  const auto nif = read_nif(bytes);
+  const std::vector<Edit> edits{Edit{1, "alphaBlend", as_number(0.0f)}};
+  const auto out = read_nif(apply_edits(nif, edits));
+  EXPECT_EQ(out.blocks().size(), nif.blocks().size() + 1);
+  EXPECT_FALSE(fo4::nif::read_alpha(out, 3).blend_enabled);
+  EXPECT_TRUE(fo4::nif::read_alpha(out, 4).blend_enabled);
+  EXPECT_EQ(fo4::nif::read_alpha(out, 4).flags, 0x0201U);
 }
 
 TEST(NifWriteBlocks, JsonEditsCarryFlagNamesAndRejectUnusableValues) {
@@ -259,4 +324,37 @@ TEST(NifWriteBlocks, JsonEditsCarryFlagNamesAndRejectUnusableValues) {
   EXPECT_THROW(fo4::nif::read_edits_json("[{\"id\":1,\"key\":\"bodyId\",\"value\":4294967295}]"),
                fo4::parse_error);
   EXPECT_NO_THROW(fo4::nif::read_edits_json("[{\"id\":1,\"key\":\"bodyId\",\"value\":16777216}]"));
+}
+
+TEST(NifWriteBlocks, JsonFlagTogglesBooleansAndAnEmptyListReachTheWriter) {
+  // Invariant: the editor sends a shader flag list as {key,label,on} objects and every other toggle as a JSON boolean.
+  const auto nif = read_nif(lighting_nif(nif_build::LightingFields{}));
+  const auto toggles = fo4::nif::apply_edits_json(
+      nif,
+      R"([{"id":1,"key":"shaderFlags","value":[{"key":"Specular","label":"Specular","on":true},{"key":"Skinned","label":"Skinned","on":false}]}])");
+  const auto flags = fo4::nif::read_lighting_shader(read_nif(toggles), 2).flags;
+  EXPECT_EQ(flags.word1, 0x1U);
+  EXPECT_EQ(flags.word2, 0x0U);
+
+  const auto cleared = fo4::nif::apply_edits_json(nif, R"([{"id":1,"key":"shaderFlags","value":[]}])");
+  EXPECT_EQ(fo4::nif::read_lighting_shader(read_nif(cleared), 2).flags.value(), 0U);
+
+  const auto off = fo4::nif::apply_edits_json(nif, R"([{"id":1,"key":"envMapSSR","value":false}])");
+  EXPECT_EQ(fo4::nif::read_lighting_shader(read_nif(off), 2).env_map_ssr, 0);
+  const auto on = fo4::nif::apply_edits_json(nif, R"([{"id":1,"key":"envMapSSR","value":true}])");
+  EXPECT_EQ(fo4::nif::read_lighting_shader(read_nif(on), 2).env_map_ssr, 1);
+
+  EXPECT_THROW(fo4::nif::read_edits_json(R"([{"id":1,"key":"envMapSSR","value":{"on":true}}])"),
+               fo4::parse_error);
+  EXPECT_THROW(fo4::nif::read_edits_json(R"([{"id":1,"key":"shaderFlags","value":[{"key":"Specular"}]}])"),
+               fo4::parse_error);
+}
+
+TEST(NifWriteBlocks, JsonRefusesNumbersTheStoredFloatWouldChange) {
+  // Invariant: a value typed as 254.99999999 must be refused, not silently stored as 255.
+  EXPECT_THROW(fo4::nif::read_edits_json(R"([{"id":1,"key":"smoothness","value":254.99999999}])"),
+               fo4::parse_error);
+  EXPECT_THROW(fo4::nif::read_edits_json(R"([{"id":1,"key":"uvScale","value":[0.5,16777217.0]}])"),
+               fo4::parse_error);
+  EXPECT_NO_THROW(fo4::nif::read_edits_json(R"([{"id":1,"key":"smoothness","value":0.1}])"));
 }

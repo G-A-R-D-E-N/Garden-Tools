@@ -208,6 +208,39 @@ TEST(NifTree, ShapeWithoutAlphaPropertyHasNoAlphaFields) {
   EXPECT_EQ(text_of(tree.blocks[0], "skin"), "none");
 }
 
+// Invariant: BSSkin::Instance starts with Skeleton Root Ptr (an i32 block reference), so reading it as a name index shifts every field after it.
+TEST(NifTree, SkinInstanceSkipsItsSkeletonRootPointerAndReportsTheBoneData) {
+  const Transform xf{};
+  const std::vector<Block> blocks{
+      shape_with_refs("BSTriShape", 0, xf, k_has_skin, 20, 1, -1, -1, skinned_vertices(3), {0, 1, 2}),
+      skin_instance_block(2, {-1, -1, -1, -1}),
+      bone_data_block(4),
+  };
+  const auto nif = fo4::nif::read_nif(build_nif({"shape"}, blocks, {}));
+  const auto tree = fo4::nif::describe_nif(nif);
+  ASSERT_EQ(tree.blocks.size(), 3U);
+  const auto& instance = tree.blocks.at(1);
+  EXPECT_EQ(instance.cat, "skin");
+  EXPECT_EQ(find_field(instance, "name"), nullptr);
+  EXPECT_EQ(text_of(instance, "skinData"), "block 2");
+  EXPECT_EQ(text_of(instance, "bones"), "4");
+  EXPECT_EQ(text_of(tree.blocks.at(2), "transforms"), "4");
+}
+
+TEST(NifTree, ShapeWhoseAlphaReferenceIsPastTheEndKeepsItsNameAndFault) {
+  // Invariant: a corrupt alpha reference must surface as the block's read error, not as std::out_of_range escaping describe_nif.
+  const Transform xf{};
+  const std::vector<Block> blocks{
+      shape_with_refs("BSTriShape", 0, xf, k_full, 16, -1, -1, 9, triangle_vertices(), {0, 1, 2}),
+  };
+  const auto nif = fo4::nif::read_nif(build_nif({"shape"}, blocks, {}));
+  const auto tree = fo4::nif::describe_nif(nif);
+  ASSERT_EQ(tree.blocks.size(), 1U);
+  EXPECT_EQ(text_of(tree.blocks[0], "name"), "shape");
+  EXPECT_NE(text_of(tree.blocks[0], "readError").find("alpha property reference is out of range"), std::string::npos);
+  EXPECT_EQ(find_field(tree.blocks[0], "alphaBlend"), nullptr);
+}
+
 TEST(NifTree, LightingShaderCarriesFocusFlagsAndTheEnvironmentMapTail) {
   const auto nif = fo4::nif::read_nif(full_file(0x1U));
   const auto tree = fo4::nif::describe_nif(nif);

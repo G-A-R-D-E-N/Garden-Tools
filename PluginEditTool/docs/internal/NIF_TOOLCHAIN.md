@@ -52,9 +52,13 @@ unknown or read-only key is a parse error and the file is left byte-identical.
 - **Read:** the four tri-shape types, vertex attributes, skin weights and bones, `BSLightingShaderProperty`
   with its 64 flags and every per-material tail, `BSEffectShaderProperty`, `NiAlphaProperty`,
   `BSXFlags`, `bhkNPCollisionObject` and its system payloads.
-- **Write:** AV name and transform, shape name/material/textures, shader fields and flags by name,
-  effect-shader fields and texture paths, alpha flags and threshold, BSX flags and the editor marker,
-  and the collision object's flags and Body ID.
+- **Write:** AV name and transform, shape name/material/textures, shader floats, every per-material
+  tail and the flags by name, effect-shader fields and texture paths, alpha flags and threshold, BSX
+  flags and the editor marker, and the collision object's flags and Body ID. Booleans and the editor's
+  `{key,label,on}` flag toggles are accepted, so the flag grid saves.
+- **Refused:** `rimlightPower` on either side of the `FLT_MAX` placeholder that stores Backlight
+  Power, because writing it moves every field after it; the effect shader's environment, normal and
+  env-mask paths below BS 130; and a shader flag bit above 31 below stream version 0x45.
 - **Verify:** header parses; each block is listed under one parent only; shapes parse; shapes have
   vertices and triangles; normals match the vertex count; UVs match the vertex count; shader and skin
   reads are clean; texture paths are relative; the vertex descriptor matches the stored data.

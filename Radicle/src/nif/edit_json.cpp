@@ -2,11 +2,13 @@
 
 #include "fo4/error.hpp"
 
+#include <charconv>
 #include <cstdint>
 #include <exception>
 #include <limits>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -39,6 +41,50 @@ bool all_strings(const nlohmann::json& values) {
   return true;
 }
 
+// Invariant: a flag toggle is the editor's {key,label,on} object, so only a boolean "on" and a text "key" are accepted.
+bool all_flag_toggles(const nlohmann::json& values) {
+  for (const auto& value : values) {
+    if (!value.is_object() || !value.contains("key") || !value.contains("on")) return false;
+    if (!value.at("key").is_string() || !value.at("on").is_boolean()) return false;
+  }
+  return true;
+}
+
+std::vector<std::string> flag_names(const nlohmann::json& values) {
+  std::vector<std::string> names;
+  for (const auto& value : values) {
+    if (value.at("on").get<bool>()) names.push_back(value.at("key").get<std::string>());
+  }
+  return names;
+}
+
+// Invariant: a number is accepted only when the float it is stored as reads back as the number the caller sent.
+bool stores_exactly(double value, float stored) {
+  if (static_cast<double>(stored) == value) return true;
+  char text[32];
+  const auto written = std::to_chars(text, text + sizeof(text), stored);
+  if (written.ec != std::errc{}) return false;
+  double parsed = 0.0;
+  const auto read = std::from_chars(text, written.ptr, parsed);
+  return read.ec == std::errc{} && parsed == value;
+}
+
+float exact_float(const nlohmann::json& raw, const std::string& key) {
+  const auto stored = raw.get<float>();
+  if (!stores_exactly(raw.get<double>(), stored)) {
+    throw parse_error(0, "key '" + key + "' value " + raw.dump() +
+        " cannot be stored exactly; NIF edit values are 32-bit floats");
+  }
+  return stored;
+}
+
+std::vector<float> exact_floats(const nlohmann::json& raw, const std::string& key) {
+  std::vector<float> values;
+  values.reserve(raw.size());
+  for (const auto& value : raw) values.push_back(exact_float(value, key));
+  return values;
+}
+
 Edit read_edit(const nlohmann::json& raw) {
   if (!raw.is_object() || !raw.contains("id") || !raw.contains("key") || !raw.contains("value")) {
     throw parse_error(0, "NIF edit needs id, key and value");
@@ -57,21 +103,21 @@ Edit read_edit(const nlohmann::json& raw) {
   if (raw_value.is_string()) {
     edit.value = raw_value.get<std::string>();
   } else if (raw_value.is_number()) {
-    edit.value = raw_value.get<float>();
-    if (raw_value.is_number_integer()) {
-      const auto whole = raw_value.get<std::int64_t>();
-      if (static_cast<double>(std::get<float>(edit.value)) != static_cast<double>(whole)) {
-        throw parse_error(0, "key '" + edit.key + "' value " + std::to_string(whole) +
-            " cannot be stored exactly; NIF edit values are 32-bit floats");
-      }
-    }
-  } else if (raw_value.is_array() && all_numbers(raw_value)) {
-    edit.value = raw_value.get<std::vector<float>>();
+    edit.value = exact_float(raw_value, edit.key);
+  } else if (raw_value.is_boolean()) {
+    edit.value = raw_value.get<bool>() ? 1.0f : 0.0f;
+  } else if (raw_value.is_array() && raw_value.empty()) {
+    // Invariant: an empty list is an empty name list, because the only list-valued key is the shader flag list.
+    edit.value = std::vector<std::string>{};
   } else if (raw_value.is_array() && all_strings(raw_value)) {
     edit.value = raw_value.get<std::vector<std::string>>();
+  } else if (raw_value.is_array() && all_numbers(raw_value)) {
+    edit.value = exact_floats(raw_value, edit.key);
+  } else if (raw_value.is_array() && all_flag_toggles(raw_value)) {
+    edit.value = flag_names(raw_value);
   } else {
     throw parse_error(0, "key '" + edit.key +
-        "' has a value the NIF writer cannot set (text, numbers, number lists or flag-name lists only)");
+        "' has a value the NIF writer cannot set (text, numbers, booleans, number lists, flag-name lists or flag toggles only)");
   }
   return edit;
 }
