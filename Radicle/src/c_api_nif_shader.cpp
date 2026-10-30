@@ -202,7 +202,6 @@ radicle_status radicle_nif_effect_shader_name(const radicle_nif* nif,
                                               size_t* out_size) {
   clear_error();
   radicle_status status = RADICLE_STATUS_OK;
-  if (require_shader_block(nif, block, k_lighting_type, status) != RADICLE_STATUS_OK) return status;
   if (require_shader_block(nif, block, k_effect_type, status) != RADICLE_STATUS_OK) return status;
   return guarded("unknown exception while reading an effect shader name", [&] {
     return copy_text(fo4::nif::read_effect_shader(nif->file, block).name, out_bytes, out_size);
@@ -216,7 +215,6 @@ radicle_status radicle_nif_effect_shader_texture(const radicle_nif* nif,
                                                  size_t* out_size) {
   clear_error();
   radicle_status status = RADICLE_STATUS_OK;
-  if (require_shader_block(nif, block, k_lighting_type, status) != RADICLE_STATUS_OK) return status;
   if (require_shader_block(nif, block, k_effect_type, status) != RADICLE_STATUS_OK) return status;
   return guarded("unknown exception while reading an effect shader texture", [&] {
     const auto shader = fo4::nif::read_effect_shader(nif->file, block);

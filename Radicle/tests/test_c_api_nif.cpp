@@ -459,7 +459,7 @@ TEST(CapiNif, ExposesTheShaderFlagNameTable) {
   EXPECT_EQ(std::string(reinterpret_cast<const char*>(name), size), "Specular");
   radicle_free_bytes(name);
   ASSERT_EQ(radicle_nif_shader_flag_name(63, &name, &size), RADICLE_STATUS_OK);
-  EXPECT_EQ(std::string(reinterpret_cast<const char*>(name), size), "Refraction_Writes_Depth");
+  EXPECT_EQ(std::string(reinterpret_cast<const char*>(name), size), "RefractionWritesDepth");
   radicle_free_bytes(name);
   EXPECT_EQ(radicle_nif_shader_flag_name(64, &name, &size), RADICLE_STATUS_NOT_FOUND);
   EXPECT_EQ(radicle_nif_shader_flag_name(0, nullptr, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
