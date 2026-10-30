@@ -235,9 +235,13 @@ public:
         return recordTypedCall("GetWeaponDamageTypes", args);
     }
 
-    fo4ide::Result<nlohmann::json> getPerkEffects(const nlohmann::json& args) const override { return recordTypedCall("GetPerkEffects", args); }
+    fo4ide::Result<nlohmann::json> getPerkEffects(const nlohmann::json& args) const override {
+        return recordTypedCall("GetPerkEffects", args);
+    }
 
-    fo4ide::Result<nlohmann::json> setPerkEffects(const nlohmann::json& args) override { return recordTypedCall("SetPerkEffects", args); }
+    fo4ide::Result<nlohmann::json> setPerkEffects(const nlohmann::json& args) override {
+        return recordTypedCall("SetPerkEffects", args);
+    }
 
     fo4ide::Result<nlohmann::json> recordTypedCall(std::string_view name, const nlohmann::json& args) const {
         typedCalls.emplace_back(std::string(name), args);
@@ -684,8 +688,9 @@ TEST_CASE("PluginBackendTarget routes the typed record methods and the strings n
     const std::vector<std::string> methods{
         "SetLeveledListSettings", "EditLeveledListEntry", "GetNpc", "EditNpcEntries", "GetFaction",
         "EditFactionEntries", "GetWeaponDamageTypes", "GetPerkEffects", "SetPerkEffects", "CreatePlacedObject",
-        "CreateInteriorCell", "AddSoundFile", "RemoveSoundFile", "SetSoundBase", "CreateSound", "AddPackageProcedure",
-        "RemovePackageProcedure", "AddScript", "RemoveScript", "AddScriptProperty", "RemoveScriptProperty"};
+        "CreateInteriorCell", "AddSoundFile", "RemoveSoundFile", "SetSoundBase", "CreateSound",
+        "AddPackageProcedure", "RemovePackageProcedure",
+        "AddScript", "RemoveScript", "AddScriptProperty", "RemoveScriptProperty"};
     for (const auto& method : methods) {
         const auto result = target.invoke(method, args);
         REQUIRE(result.has_value());

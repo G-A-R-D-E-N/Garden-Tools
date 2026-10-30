@@ -91,3 +91,9 @@ Anchors: `Radicle/src/forms/perk.cpp:create_perk`, `Radicle/src/forms/perk.cpp:s
 - Known ceilings: `set_perk_effects` runs `assign_record_form_keys` over the whole plugin on each call, so the real-data test is linear in the PERK count times plugin size. A ranks value of 0 is written as 0; the xEdit 0-to-1 rewrite noted above is not reproduced.
 
 - Evidence for the EPFD sizes and layout above: pinned xEdit `Core/wbDefinitionsFO4.pas` (commit 93cc0bc5a1251936c3c7859eee3150eda12a62d7) lines 7582-7691 and `wbEPFDDecider` line 1430, plus the read-only master scan recorded in the remap section (656 PERK, 993 PRKE). These are format definitions and stored-byte scans, not runtime traces; the 8-byte EPFT 2 shape is xEdit-only, as the remap section already states.
+
+## PERK MCP schema and EPFT 2 evidence
+
+`PluginEditTool/native/apps/fo4ide/McpTools.cpp:k_perk_effect_items` is the JSON schema advertised as `items` of the `set_perk_effects` `effects` argument; its keys mirror what `RadiclePluginPerk.cpp` parses and emits (`type` required, the rest conditional on the effect type), and the parser still ignores unknown keys, so the schema is documentation for clients, not extra validation.
+
+`PluginEditTool/native/src/plugin/RadiclePluginPerk.cpp:epfdDataSize` requires eight bytes of EPFD for EPFT 2. That shape comes from xEdit (`wbDefinitionsFO4.pas`, EPFT 2 `Float, Float`) alone: a byte scan of every plugin under the Fallout 4 Data folder and the local modlists (2026-10-29) found (local one-off script, output not committed) EPFT 1 (996, four-byte EPFD), EPFT 5 (42, four bytes), EPFT 8 (96, eight bytes) and EPFT 4 (34), and no EPFT 2 or EPFT 3 record, so those two types have no on-disk sample. An engine trace is the only way to settle it, so it stays an open TODO-verify.
