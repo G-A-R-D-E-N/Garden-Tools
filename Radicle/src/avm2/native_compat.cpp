@@ -206,32 +206,81 @@ ExecutionResult graphics_command(const Value& self, std::uint8_t op,
   return native_value(Value::undefined());
 }
 
-std::int32_t pixel_coord(double value) { return static_cast<std::int32_t>(std::lround(value)); }
+// Non-finite drawing coordinates must map to zero and huge ones must clamp on every platform.
+std::int32_t twip_coord(double pixels) {
+  if (!std::isfinite(pixels)) {
+    return 0;
+  }
+  const double twips = pixels * 20.0;
+  if (twips >= 2147483647.0) {
+    return INT32_MAX;
+  }
+  if (twips <= -2147483648.0) {
+    return INT32_MIN;
+  }
+  return static_cast<std::int32_t>(std::lround(twips));
+}
 
-void emit_move(std::vector<swf::SwfShapeRecord>& records, double x, double y) {
+struct GraphicsPen {
+  std::int32_t x{0};
+  std::int32_t y{0};
+};
+
+void emit_move(std::vector<swf::SwfShapeRecord>& records, GraphicsPen& pen, double x, double y) {
   swf::SwfShapeRecord record;
   record.kind = swf::SwfShapeRecordKind::move;
-  record.x = pixel_coord(x);
-  record.y = pixel_coord(y);
+  record.x = twip_coord(x);
+  record.y = twip_coord(y);
+  pen.x = record.x;
+  pen.y = record.y;
   records.push_back(record);
 }
 
-void emit_edge(std::vector<swf::SwfShapeRecord>& records, swf::SwfShapeRecordKind kind,
-               double control_x, double control_y, double x, double y, bool fill, bool line) {
+std::int32_t twip_delta(std::int32_t from, std::int32_t to) {
+  // A clamped pen and a clamped end must still subtract without wrapping.
+  const std::int64_t delta = static_cast<std::int64_t>(to) - static_cast<std::int64_t>(from);
+  if (delta >= 2147483647LL) {
+    return INT32_MAX;
+  }
+  if (delta <= -2147483648LL) {
+    return INT32_MIN;
+  }
+  return static_cast<std::int32_t>(delta);
+}
+
+void emit_edge(std::vector<swf::SwfShapeRecord>& records, GraphicsPen& pen,
+               swf::SwfShapeRecordKind kind, double control_x, double control_y, double x,
+               double y, bool fill) {
+  // Deltas must run from the quantized pen, so the reader rebuilds the emitted positions exactly.
+  const std::int32_t control_twip_x = twip_coord(control_x);
+  const std::int32_t control_twip_y = twip_coord(control_y);
+  const std::int32_t end_twip_x = twip_coord(x);
+  const std::int32_t end_twip_y = twip_coord(y);
+  const bool curved = kind == swf::SwfShapeRecordKind::curved_edge;
   swf::SwfShapeRecord record;
   record.kind = kind;
-  record.control_x = pixel_coord(control_x);
-  record.control_y = pixel_coord(control_y);
-  record.x = pixel_coord(x);
-  record.y = pixel_coord(y);
-  record.has_fill1 = fill;
-  record.has_line = line;
-  records.push_back(record);
+  record.control_x = twip_delta(pen.x, control_twip_x);
+  record.control_y = twip_delta(pen.y, control_twip_y);
+  record.x = twip_delta(curved ? control_twip_x : pen.x, end_twip_x);
+  record.y = twip_delta(curved ? control_twip_y : pen.y, end_twip_y);
+  pen.x = end_twip_x;
+  pen.y = end_twip_y;
+  // A stroke-only edge must stay out of the fill set, so only fills push records.
+  if (fill) {
+    records.push_back(record);
+  }
 }
 
-void emit_break(std::vector<swf::SwfShapeRecord>& records) {
+void emit_fill_break(std::vector<swf::SwfShapeRecord>& records, std::uint16_t fill1, bool line) {
+  // Fill state must ride a style record, matching what the SWF parser emits for real shapes.
   swf::SwfShapeRecord record;
   record.kind = swf::SwfShapeRecordKind::style_change;
+  record.has_fill0 = true;
+  record.has_fill1 = true;
+  record.fill0 = 0;
+  record.fill1 = fill1;
+  record.has_line = true;
+  record.line = line ? 1 : 0;
   records.push_back(record);
 }
 
@@ -240,12 +289,9 @@ std::vector<swf::SwfShapeRecord> graphics_shape_records(const GraphicsObject& gr
   std::vector<swf::SwfShapeRecord> records;
   bool filling = false;
   bool line = false;
-  double pen_x = 0.0;
-  double pen_y = 0.0;
+  GraphicsPen pen;
   auto edge_to = [&](double x, double y) {
-    emit_edge(records, swf::SwfShapeRecordKind::straight_edge, 0.0, 0.0, x, y, filling, line);
-    pen_x = x;
-    pen_y = y;
+    emit_edge(records, pen, swf::SwfShapeRecordKind::straight_edge, 0.0, 0.0, x, y, filling);
   };
   for (const GraphicsCommand& command : graphics.commands) {
     switch (command.op) {
@@ -253,35 +299,35 @@ std::vector<swf::SwfShapeRecord> graphics_shape_records(const GraphicsObject& gr
       case 1:
         // A gradient fill must read as a flat fill, since the runtime keeps no raster state.
         filling = true;
-        emit_break(records);
+        emit_fill_break(records, 1, line);
         break;
       case 2:
         filling = false;
-        emit_break(records);
+        emit_fill_break(records, 0, line);
         break;
       case 3:
         line = command.values[0] > 0.0;
+        // A line change must surface while a fill is open, since edges carry no line state.
+        if (filling) {
+          emit_fill_break(records, 1, line);
+        }
         break;
       case 4:
-        pen_x = command.values[0];
-        pen_y = command.values[1];
-        emit_move(records, pen_x, pen_y);
+        emit_move(records, pen, command.values[0], command.values[1]);
         break;
       case 5:
         edge_to(command.values[0], command.values[1]);
         break;
       case 6:
-        emit_edge(records, swf::SwfShapeRecordKind::curved_edge, command.values[0],
-                  command.values[1], command.values[2], command.values[3], filling, line);
-        pen_x = command.values[2];
-        pen_y = command.values[3];
+        emit_edge(records, pen, swf::SwfShapeRecordKind::curved_edge, command.values[0],
+                  command.values[1], command.values[2], command.values[3], filling);
         break;
       case 7: {
         const double x = command.values[0];
         const double y = command.values[1];
         const double right = x + command.values[2];
         const double bottom = y + command.values[3];
-        emit_move(records, x, y);
+        emit_move(records, pen, x, y);
         edge_to(right, y);
         edge_to(right, bottom);
         edge_to(x, bottom);
@@ -293,7 +339,7 @@ std::vector<swf::SwfShapeRecord> graphics_shape_records(const GraphicsObject& gr
         const double x = command.values[0];
         const double y = command.values[1];
         const double radius = command.values[2];
-        emit_move(records, x + radius, y);
+        emit_move(records, pen, x + radius, y);
         for (int step = 1; step <= 8; ++step) {
           const double angle = step * 3.141592653589793 / 4.0;
           edge_to(x + radius * std::cos(angle), y + radius * std::sin(angle));
@@ -308,7 +354,7 @@ std::vector<swf::SwfShapeRecord> graphics_shape_records(const GraphicsObject& gr
         const double bottom = y + command.values[3];
         const double cut_x = command.values[4] / 2.0;
         const double cut_y = command.values[5] / 2.0;
-        emit_move(records, x + cut_x, y);
+        emit_move(records, pen, x + cut_x, y);
         edge_to(right - cut_x, y);
         edge_to(right, y + cut_y);
         edge_to(right, bottom - cut_y);
@@ -534,8 +580,8 @@ ShapeGeometry drawn_geometry_of(const DisplayObject& object) {
     return {};
   }
   const auto& graphics = static_cast<const GraphicsObject&>(graphics_value);
-  // Graphics coordinates must stay pixels, so the record scale factor is one.
-  return geometry_from_shape_records(graphics_shape_records(graphics), 1.0);
+  // Graphics records must stay twips, so sub-pixel drawing survives the pixel conversion.
+  return geometry_from_shape_records(graphics_shape_records(graphics), 20.0);
 }
 
 ShapeGeometry effective_shape_geometry(const DisplayObject& object) {

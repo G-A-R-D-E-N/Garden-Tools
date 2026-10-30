@@ -35,14 +35,33 @@ bool inside_bounds(const DisplayObject& object, double x, double y) {
 }
 
 bool hits_shape_or_bounds(const DisplayObject& object, double x, double y, bool shape_flag) {
-  if (shape_flag) {
-    // Drawn geometry must count too, so script-drawn shapes hit-test like placed ones.
-    const ShapeGeometry geometry = effective_shape_geometry(object);
-    if (!geometry.fills.empty()) {
-      return shape_contains(geometry, x, y);
-    }
+  if (!shape_flag) {
+    return inside_bounds(object, x, y);
   }
-  return inside_bounds(object, x, y);
+  // The flag must test the drawing and the children, so no empty box claims and no child fill misses.
+  const ShapeGeometry geometry = effective_shape_geometry(object);
+  if (shape_contains(geometry, x, y)) {
+    return true;
+  }
+  if (object.is_container()) {
+    const auto& children = static_cast<const DisplayObjectContainer&>(object).children();
+    for (const auto& child : children) {
+      if (child == nullptr || !child->visible()) {
+        continue;
+      }
+      double child_x = 0.0;
+      double child_y = 0.0;
+      if (!inverse_map(local_matrix(*child), x, y, child_x, child_y)) {
+        continue;
+      }
+      if (hits_shape_or_bounds(*child, child_x, child_y, true)) {
+        return true;
+      }
+    }
+    return false;
+  }
+  // A leaf without geometry must keep its box, since text and empty shapes still hit it.
+  return geometry.edges.empty() && inside_bounds(object, x, y);
 }
 
 bool chain_visible(const DisplayObject& object) {
@@ -112,7 +131,7 @@ std::shared_ptr<DisplayObject> deepest_at(const std::shared_ptr<DisplayObject>& 
       }
     }
   }
-  // A mouse pick must use the fill shape, falling back to bounds without geometry.
+  // A mouse pick must use the fill shape and the children, falling back to bounds only for a leaf.
   if (node->mouse_enabled() && hits_shape_or_bounds(*node, local_x, local_y, true)) {
     return node;
   }

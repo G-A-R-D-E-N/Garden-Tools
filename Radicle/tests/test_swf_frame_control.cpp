@@ -247,6 +247,56 @@ TEST(SwfFrameControl, CallToItsOwnFrameExpandsOnceAndKeepsPlaying) {
             (std::vector<std::uint32_t>{0, 1, 2, 0, 1}));
 }
 
+TEST(SwfFrameControl, CallRunsADifferentFrameInline) {
+  const auto display = display_of(clip_movie({
+      {{26, place_named(1, 5, "Cell")}, {12, script(call_frame(push_frame(3)))}}},
+      {},
+      {{12, script({0x07})}},
+  }));
+  ASSERT_EQ(display.status, SwfTimelineStatus::ok) << display.message;
+  EXPECT_EQ(frames_of_row(display.timelines[0], "Art/Cell"),
+            (std::vector<std::uint32_t>{0, 0, 0, 0, 0}));
+}
+
+TEST(SwfFrameControl, CallStormPastTheBudgetRefusesTheBuild) {
+  std::vector<std::uint8_t> storm;
+  for (int call = 0; call < 100; ++call) {
+    const std::vector<std::uint8_t> call_bytes = call_frame(push_frame(3));
+    storm.insert(storm.end(), call_bytes.begin(), call_bytes.end());
+  }
+  const std::vector<std::uint8_t> stops(50, 0x07);
+  const auto display = display_of(clip_movie({
+      {{26, place_named(1, 5, "Cell")}, {12, script(storm)}},
+      {},
+      {{12, script(stops)}},
+  }));
+  EXPECT_EQ(display.status, fo4::swf::SwfTimelineStatus::malformed);
+  EXPECT_NE(display.message.find("expansion budget"), std::string::npos);
+}
+
+TEST(SwfFrameControl, DoInitActionDoesNotRerunOnLaterLandings) {
+  const auto sprite = sprite_tag(9, 3,
+                                 with_show_frames({
+                                     {{26, place_named(1, 5, "Cell")}},
+                                     {},
+                                     {},
+                                 }));
+  std::vector<std::byte> init = {std::byte{9}, std::byte{0}};
+  const std::vector<std::byte> go_first = script({0x81, 0x02, 0x01, 0x00});
+  init.insert(init.end(), go_first.begin(), go_first.end());
+  const auto movie = movie_of(5, with_show_frames({
+                                      {{{39, sprite}, {59, init}, {26, place_named(1, 9, "Art")}}}},
+                                      {},
+                                      {},
+                                      {},
+                                      {},
+                                  }));
+  const auto display = display_of(movie);
+  ASSERT_EQ(display.status, SwfTimelineStatus::ok) << display.message;
+  EXPECT_EQ(frames_of_row(display.timelines[0], "Art/Cell"),
+            (std::vector<std::uint32_t>{1, 2, 0, 1, 2}));
+}
+
 TEST(SwfFrameControl, DoInitActionStopsTheSpriteBeforeItsFirstFrame) {
   const auto sprite = sprite_tag(9, 3,
                                  with_show_frames({

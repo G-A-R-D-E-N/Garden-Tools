@@ -2,6 +2,7 @@
 
 #include <fo4/swf/swf.hpp>
 
+#include <cstdint>
 #include <vector>
 
 namespace fo4::avm2 {
@@ -15,18 +16,27 @@ struct ShapePoint {
 
 class DisplayObject;
 
-/* A fill loop must close implicitly, so even-odd testing joins the last point to the first. */
+/* A border fragment must stay open, so even-odd testing counts each raw segment once. */
+struct ShapeEdge {
+  std::vector<ShapePoint> points;
+  std::uint32_t fill0{0};
+  std::uint32_t fill1{0};
+
+  bool operator==(const ShapeEdge&) const = default;
+};
+
+/* Raw border fragments must stay unlooped, because real edges border fill0 and fill1 without forming loops. */
 struct ShapeGeometry {
-  std::vector<std::vector<ShapePoint>> fills;
+  std::vector<ShapeEdge> edges;
 
   bool operator==(const ShapeGeometry&) const = default;
 };
 
-/* Requires the divisor that converts edge units to pixels; the returned loops are in pixels. */
+/* Requires the divisor that converts edge units to pixels; the returned edges are in pixels. */
 ShapeGeometry geometry_from_shape_records(const std::vector<swf::SwfShapeRecord>& records,
                                           double twips_per_pixel = 20.0);
 
-/* Requires closed-loop reading; a point on no loop edge counts by the even-odd rule. */
+/* Requires open fragments; crossings count over raw segments, and a point with an odd count for any fill style hits. */
 bool shape_contains(const ShapeGeometry& geometry, double x, double y);
 
 /* Requires the object's graphics value; a missing Graphics object yields no geometry. */

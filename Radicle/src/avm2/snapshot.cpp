@@ -242,10 +242,12 @@ std::uint64_t snapshot_hash(const FrameSnapshot& snapshot) {
     for (const swf::SwfFilter& filter : entry.placed_filters) {
       hash_filter(hasher, filter);
     }
-    hasher.u32(static_cast<std::uint32_t>(entry.geometry.fills.size()));
-    for (const std::vector<ShapePoint>& loop : entry.geometry.fills) {
-      hasher.u32(static_cast<std::uint32_t>(loop.size()));
-      for (const ShapePoint& point : loop) {
+    hasher.u32(static_cast<std::uint32_t>(entry.geometry.edges.size()));
+    for (const ShapeEdge& edge : entry.geometry.edges) {
+      hasher.u32(edge.fill0);
+      hasher.u32(edge.fill1);
+      hasher.u32(static_cast<std::uint32_t>(edge.points.size()));
+      for (const ShapePoint& point : edge.points) {
         hasher.f64(point.x);
         hasher.f64(point.y);
       }

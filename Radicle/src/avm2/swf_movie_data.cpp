@@ -327,7 +327,7 @@ std::shared_ptr<SwfMovieData> read_swf_movie_data(const swf::SwfFile& file,
       continue;
     }
     ShapeGeometry geometry = geometry_from_shape_records(tag.shape->records);
-    if (!geometry.fills.empty()) {
+    if (!geometry.edges.empty()) {
       data->character_shapes.emplace(tag.shape->shape_id, std::move(geometry));
     }
   }

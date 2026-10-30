@@ -5,11 +5,12 @@
 
 #include <cstdint>
 #include <map>
+#include <string>
 #include <vector>
 
 namespace fo4::swf::detail {
 
-enum class FrameControlKind : std::uint8_t { stop, play, go_to, next, previous };
+enum class FrameControlKind : std::uint8_t { stop, play, go_to, next, previous, init_barrier };
 
 struct FrameControl {
   FrameControlKind kind{FrameControlKind::stop};
@@ -25,9 +26,9 @@ struct Playhead {
 
 using InitActionStreams = std::vector<std::vector<avm1::Avm1Action>>;
 
-FrameControls collect_frame_controls(const std::vector<SwfTag>& tags);
+// Requires a message sink; init actions run once per simulation and a call storm past the budget refuses.
 FrameControls collect_frame_controls(const std::vector<SwfTag>& tags,
-                                     const InitActionStreams& init);
+                                     const InitActionStreams& init, std::string& message);
 
 // Requires top-level tags; groups decoded DoInitAction streams by sprite id.
 std::map<std::uint16_t, InitActionStreams> collect_init_actions(

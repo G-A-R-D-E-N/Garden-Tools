@@ -351,40 +351,82 @@ TEST(Avm2Events, HitTestFollowsTheParentTransform) {
   EXPECT_FALSE(fo4::avm2::hit_test_point(*child, 25.0, 15.0));
 }
 
+fo4::avm2::ShapeEdge square_edge(double x0, double y0, double x1, double y1,
+                                  std::uint32_t style) {
+  fo4::avm2::ShapeEdge edge;
+  edge.fill1 = style;
+  edge.points = {{{x0, y0}, {x1, y0}, {x1, y1}, {x0, y1}}};
+  return edge;
+}
+
 TEST(Avm2Events, ShapeGeometryUsesTheEvenOddRule) {
   fo4::avm2::ShapeGeometry geometry;
-  geometry.fills.push_back({{{0.0, 0.0}, {100.0, 0.0}, {100.0, 100.0}, {0.0, 100.0}}});
-  geometry.fills.push_back({{{25.0, 25.0}, {75.0, 25.0}, {75.0, 75.0}, {25.0, 75.0}}});
+  geometry.edges.push_back(square_edge(0.0, 0.0, 100.0, 100.0, 1));
+  geometry.edges.push_back(square_edge(25.0, 25.0, 75.0, 75.0, 1));
   EXPECT_TRUE(fo4::avm2::shape_contains(geometry, 10.0, 10.0));
   EXPECT_FALSE(fo4::avm2::shape_contains(geometry, 50.0, 50.0));
   EXPECT_FALSE(fo4::avm2::shape_contains(geometry, 150.0, 50.0));
 }
 
+TEST(Avm2Events, ShapeContainsCountsCrossingsPerFillStyle) {
+  fo4::avm2::ShapeGeometry geometry;
+  geometry.edges.push_back(square_edge(0.0, 0.0, 100.0, 100.0, 1));
+  geometry.edges.push_back(square_edge(60.0, 60.0, 150.0, 150.0, 1));
+  geometry.edges.push_back(square_edge(25.0, 25.0, 75.0, 75.0, 2));
+  fo4::avm2::ShapeEdge shared;
+  shared.fill0 = 1;
+  shared.fill1 = 1;
+  shared.points = {{{30.0, -10.0}, {30.0, 200.0}}};
+  geometry.edges.push_back(shared);
+  // An edge with one style on both sides must not count, so the shared border keeps the hit.
+  EXPECT_TRUE(fo4::avm2::shape_contains(geometry, 10.0, 10.0));
+  // Overlapping fills of one style must cancel, so the overlap misses.
+  EXPECT_FALSE(fo4::avm2::shape_contains(geometry, 75.0, 75.0));
+  EXPECT_TRUE(fo4::avm2::shape_contains(geometry, 125.0, 125.0));
+  // A second style over the cancelled overlap must still hit.
+  EXPECT_TRUE(fo4::avm2::shape_contains(geometry, 50.0, 50.0));
+  EXPECT_FALSE(fo4::avm2::shape_contains(geometry, 200.0, 200.0));
+}
+
 TEST(Avm2Events, ShapeRecordsConvertFromTwipsToPixels) {
   using Kind = fo4::swf::SwfShapeRecordKind;
-  auto edge = [](Kind kind, std::int32_t x, std::int32_t y, bool fill) {
+  auto style = [](std::uint16_t fill0, std::uint16_t fill1) {
     fo4::swf::SwfShapeRecord record;
-    record.kind = kind;
-    record.x = x;
-    record.y = y;
-    record.has_fill1 = fill;
+    record.kind = Kind::style_change;
+    record.has_fill0 = true;
+    record.has_fill1 = true;
+    record.fill0 = fill0;
+    record.fill1 = fill1;
     return record;
   };
+  auto move = [](std::int32_t x, std::int32_t y) {
+    fo4::swf::SwfShapeRecord record;
+    record.kind = Kind::move;
+    record.x = x;
+    record.y = y;
+    return record;
+  };
+  auto edge = [](std::int32_t dx, std::int32_t dy) {
+    fo4::swf::SwfShapeRecord record;
+    record.kind = Kind::straight_edge;
+    record.x = dx;
+    record.y = dy;
+    return record;
+  };
+  // Requires deltas from the pen, with the fill on the style record: (0,0), (200,0), (200,200) twips.
   const std::vector<fo4::swf::SwfShapeRecord> records = {
-      edge(Kind::move, 0, 0, false),
-      edge(Kind::straight_edge, 200, 0, true),
-      edge(Kind::straight_edge, 0, 200, true),
+      move(0, 0), style(0, 1), edge(200, 0), edge(0, 200),
   };
   const fo4::avm2::ShapeGeometry geometry =
       fo4::avm2::geometry_from_shape_records(records);
-  ASSERT_EQ(geometry.fills.size(), 1u);
-  EXPECT_TRUE(fo4::avm2::shape_contains(geometry, 2.0, 2.0));
-  EXPECT_FALSE(fo4::avm2::shape_contains(geometry, 9.0, 9.0));
+  ASSERT_EQ(geometry.edges.size(), 2u);
+  EXPECT_TRUE(fo4::avm2::shape_contains(geometry, 8.0, 2.0));
+  EXPECT_FALSE(fo4::avm2::shape_contains(geometry, 2.0, 9.0));
   const std::vector<fo4::swf::SwfShapeRecord> strokes = {
-      edge(Kind::move, 0, 0, false),
-      edge(Kind::straight_edge, 200, 0, false),
+      move(0, 0),
+      edge(200, 0),
   };
-  EXPECT_TRUE(fo4::avm2::geometry_from_shape_records(strokes).fills.empty());
+  EXPECT_TRUE(fo4::avm2::geometry_from_shape_records(strokes).edges.empty());
 }
 
 TEST(Avm2Events, ShapeFlagHitTestUsesFillGeometry) {
@@ -399,13 +441,48 @@ TEST(Avm2Events, ShapeFlagHitTestUsesFillGeometry) {
   target->set_width(100.0);
   target->set_height(100.0);
   fo4::avm2::ShapeGeometry geometry;
-  geometry.fills.push_back({{{0.0, 0.0}, {100.0, 0.0}, {0.0, 100.0}}});
+  fo4::avm2::ShapeEdge edge;
+  edge.fill1 = 1;
+  edge.points = {{{0.0, 0.0}, {100.0, 0.0}, {0.0, 100.0}}};
+  geometry.edges.push_back(edge);
   target->set_shape_geometry(std::make_shared<const fo4::avm2::ShapeGeometry>(geometry));
   EXPECT_TRUE(fo4::avm2::hit_test_point(*target, 90.0, 90.0));
   EXPECT_FALSE(fo4::avm2::hit_test_point(*target, 90.0, 90.0, true));
   EXPECT_TRUE(fo4::avm2::hit_test_point(*target, 10.0, 10.0, true));
   EXPECT_EQ(fo4::avm2::mouse_target_at(root, 10.0, 10.0).get(), target.get());
   EXPECT_EQ(fo4::avm2::mouse_target_at(root, 90.0, 90.0).get(), nullptr);
+}
+
+TEST(Avm2Events, ShapeFlagHitTestFindsChildFillOutsideTheParentBox) {
+  fo4::avm2::Class sprite_class;
+  sprite_class.name = "flash.display::Sprite";
+  auto root = std::make_shared<fo4::avm2::DisplayObjectContainer>(&sprite_class);
+  root->set_width(100.0);
+  root->set_height(100.0);
+  auto child = std::make_shared<DisplayObject>(&sprite_class);
+  child->set_x(200.0);
+  fo4::avm2::ShapeGeometry geometry;
+  fo4::avm2::ShapeEdge edge;
+  edge.fill1 = 1;
+  edge.points = {{{0.0, 0.0}, {100.0, 0.0}, {0.0, 100.0}}};
+  geometry.edges.push_back(edge);
+  child->set_shape_geometry(std::make_shared<const fo4::avm2::ShapeGeometry>(geometry));
+  ASSERT_TRUE(root->add_child(child));
+  // The point misses the parent box but lands on the child fill, so only the flag must find it.
+  EXPECT_FALSE(fo4::avm2::hit_test_point(*root, 250.0, 10.0));
+  EXPECT_TRUE(fo4::avm2::hit_test_point(*root, 250.0, 10.0, true));
+  EXPECT_FALSE(fo4::avm2::hit_test_point(*root, 250.0, 150.0, true));
+}
+
+TEST(Avm2Events, ShapeFlagHitTestMissesAnEmptyContainerBox) {
+  fo4::avm2::Class sprite_class;
+  sprite_class.name = "flash.display::Sprite";
+  auto root = std::make_shared<fo4::avm2::DisplayObjectContainer>(&sprite_class);
+  root->set_width(100.0);
+  root->set_height(100.0);
+  // An empty container must claim nothing with the flag, but its box still hits without it.
+  EXPECT_FALSE(fo4::avm2::hit_test_point(*root, 50.0, 50.0, true));
+  EXPECT_TRUE(fo4::avm2::hit_test_point(*root, 50.0, 50.0));
 }
 
 TEST(Avm2Events, FocusChangeDispatchesFocusOutThenFocusIn) {

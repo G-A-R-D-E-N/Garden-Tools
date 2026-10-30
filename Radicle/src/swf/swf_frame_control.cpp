@@ -31,6 +31,9 @@ constexpr std::uint8_t kCall = 0x9E;
 // A call must inline one level only, so a frame calling itself still terminates.
 constexpr std::size_t kMaxCallDepth = 1;
 
+// Expanded entries must stay bounded, so a frame of calls cannot multiply its target without limit.
+constexpr std::size_t kMaxExpandedEntries = 4096;
+
 constexpr std::array<std::uint8_t, 10> kUnmodelledFlow{0x20, 0x8A, 0x8B, 0x8D, 0x8E,
                                                        0x8F, 0x94, 0x99, 0x9B, 0x9D};
 
@@ -43,6 +46,7 @@ struct Cursor {
   bool playing{true};
   std::size_t recorded{0};
   std::size_t budget{0};
+  bool init_done{false};
 };
 
 bool has_unmodelled_flow(const std::vector<avm1::Avm1Action>& actions) {
@@ -139,28 +143,47 @@ std::optional<std::uint32_t> call_target_frame(const avm1::Avm1Value& value,
   return *frame - 1;
 }
 
-void append_controls(const std::vector<avm1::Avm1Action>& actions,
+bool push_control(std::vector<FrameControl>& out, std::size_t& expanded,
+                  const FrameControl& control) {
+  if (++expanded > kMaxExpandedEntries) {
+    return false;
+  }
+  out.push_back(control);
+  return true;
+}
+
+bool append_controls(const std::vector<avm1::Avm1Action>& actions,
                      const CollectedTimeline& timeline, std::size_t depth,
-                     std::vector<FrameControl>& out) {
+                     std::vector<FrameControl>& out, std::size_t& expanded) {
   const avm1::Avm1Action* previous = nullptr;
   for (const avm1::Avm1Action& action : actions) {
     switch (action.code) {
       case kStop:
-        out.push_back({FrameControlKind::stop, 0});
+        if (!push_control(out, expanded, {FrameControlKind::stop, 0})) {
+          return false;
+        }
         break;
       case kPlay:
-        out.push_back({FrameControlKind::play, 0});
+        if (!push_control(out, expanded, {FrameControlKind::play, 0})) {
+          return false;
+        }
         break;
       case kNextFrame:
-        out.push_back({FrameControlKind::next, 0});
+        if (!push_control(out, expanded, {FrameControlKind::next, 0})) {
+          return false;
+        }
         break;
       case kPreviousFrame:
-        out.push_back({FrameControlKind::previous, 0});
+        if (!push_control(out, expanded, {FrameControlKind::previous, 0})) {
+          return false;
+        }
         break;
       case kGotoFrame:
         if (const auto* jump = std::get_if<avm1::Avm1Frame>(&action.payload)) {
-          out.push_back({FrameControlKind::go_to, jump->frame});
-          out.push_back({FrameControlKind::stop, 0});
+          if (!push_control(out, expanded, {FrameControlKind::go_to, jump->frame}) ||
+              !push_control(out, expanded, {FrameControlKind::stop, 0})) {
+            return false;
+          }
         }
         break;
       case kGoToLabel: {
@@ -169,8 +192,10 @@ void append_controls(const std::vector<avm1::Avm1Action>& actions,
         const auto found =
             text == nullptr ? timeline.labels.end() : timeline.labels.find(text->text);
         if (found != timeline.labels.end()) {
-          out.push_back({FrameControlKind::go_to, found->second});
-          out.push_back({FrameControlKind::stop, 0});
+          if (!push_control(out, expanded, {FrameControlKind::go_to, found->second}) ||
+              !push_control(out, expanded, {FrameControlKind::stop, 0})) {
+            return false;
+          }
         }
         break;
       }
@@ -185,7 +210,10 @@ void append_controls(const std::vector<avm1::Avm1Action>& actions,
         if (!target || *target >= timeline.frame_actions.size()) {
           break;
         }
-        append_controls(timeline.frame_actions[*target], timeline, depth + 1, out);
+        if (!append_controls(timeline.frame_actions[*target], timeline, depth + 1, out,
+                             expanded)) {
+          return false;
+        }
         break;
       }
       case kGotoFrame2: {
@@ -201,8 +229,12 @@ void append_controls(const std::vector<avm1::Avm1Action>& actions,
         if (!frame) {
           break;
         }
-        out.push_back({FrameControlKind::go_to, *frame - 1});
-        out.push_back({(jump->flags & 1) != 0 ? FrameControlKind::play : FrameControlKind::stop, 0});
+        if (!push_control(out, expanded, {FrameControlKind::go_to, *frame - 1}) ||
+            !push_control(out, expanded, {(jump->flags & 1) != 0 ? FrameControlKind::play
+                                                                 : FrameControlKind::stop,
+                                         0})) {
+          return false;
+        }
         break;
       }
       default:
@@ -210,6 +242,7 @@ void append_controls(const std::vector<avm1::Avm1Action>& actions,
     }
     previous = &action;
   }
+  return true;
 }
 
 void enter(Playhead& head, Cursor& cursor, std::uint32_t to, std::uint32_t tick) {
@@ -238,7 +271,17 @@ bool land(const FrameControls& controls, std::uint32_t tick, std::uint32_t targe
       moved = true;
     }
     std::optional<std::uint32_t> jump;
+    // Init controls must run once per simulation, so later landings on frame 0 skip to the marker.
+    bool skip = cursor.init_done && cursor.frame == 0;
     for (const FrameControl& control : controls[cursor.frame]) {
+      if (control.kind == FrameControlKind::init_barrier) {
+        cursor.init_done = true;
+        skip = false;
+        continue;
+      }
+      if (skip) {
+        continue;
+      }
       switch (control.kind) {
         case FrameControlKind::stop:
           cursor.playing = false;
@@ -261,6 +304,9 @@ bool land(const FrameControls& controls, std::uint32_t tick, std::uint32_t targe
             cursor.playing = false;
           }
           break;
+        case FrameControlKind::init_barrier:
+          // The guard above must consume the barrier, so this case never runs.
+          break;
       }
     }
     if (!jump) {
@@ -273,24 +319,34 @@ bool land(const FrameControls& controls, std::uint32_t tick, std::uint32_t targe
 
 }  // namespace
 
-FrameControls collect_frame_controls(const std::vector<SwfTag>& tags) {
-  return collect_frame_controls(tags, {});
-}
-
 FrameControls collect_frame_controls(const std::vector<SwfTag>& tags,
-                                     const InitActionStreams& init) {
+                                     const InitActionStreams& init, std::string& message) {
   CollectedTimeline collected = collect_actions(tags);
   // Init actions must run once at instantiation, before the sprite's first frame.
-  std::vector<avm1::Avm1Action>& first = collected.frame_actions.front();
-  for (auto stream = init.rbegin(); stream != init.rend(); ++stream) {
-    if (!has_unmodelled_flow(*stream)) {
-      first.insert(first.begin(), stream->begin(), stream->end());
+  std::vector<avm1::Avm1Action> init_actions;
+  for (const auto& stream : init) {
+    if (!has_unmodelled_flow(stream)) {
+      init_actions.insert(init_actions.end(), stream.begin(), stream.end());
     }
   }
   FrameControls frames;
+  std::size_t expanded = 0;
+  bool first = true;
   for (const auto& actions : collected.frame_actions) {
     std::vector<FrameControl> current;
-    append_controls(actions, collected, 0, current);
+    if (first && !init_actions.empty()) {
+      if (!append_controls(init_actions, collected, 0, current, expanded)) {
+        message = "the inlined call controls exceed the expansion budget";
+        return {};
+      }
+      current.push_back({FrameControlKind::init_barrier, 0});
+      ++expanded;
+    }
+    first = false;
+    if (!append_controls(actions, collected, 0, current, expanded)) {
+      message = "the inlined call controls exceed the expansion budget";
+      return {};
+    }
     frames.push_back(std::move(current));
   }
   return frames;

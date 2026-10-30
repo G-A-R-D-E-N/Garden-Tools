@@ -248,8 +248,11 @@ std::optional<SwfColorTransform> compose_color(const std::optional<SwfColorTrans
 }
 
 detail::FrameControls controls_for(const std::vector<SwfTag>& tags, std::size_t frames,
-                                   bool apply) {
-  return apply ? detail::collect_frame_controls(tags) : detail::FrameControls(frames);
+                                   bool apply, std::string& message) {
+  if (!apply) {
+    return detail::FrameControls(frames);
+  }
+  return detail::collect_frame_controls(tags, {}, message);
 }
 
 std::uint32_t displayed_frame(const LocalTimeline& timeline, std::uint32_t age) {
@@ -416,12 +419,17 @@ SwfDisplayList build_display_list(const SwfFile& file, const SwfDisplayOptions& 
     // A sprite must run its init actions with its first frame, when control applies.
     const auto found_init = init_actions.find(*tag.sprite_id);
     static const detail::InitActionStreams kNoInit;
-    detail::FrameControls controls =
-        !options.apply_frame_control
-            ? detail::FrameControls(frames.size())
-            : detail::collect_frame_controls(
-                  tag.children, found_init == init_actions.end() ? kNoInit
-                                                                 : found_init->second);
+    std::string sprite_message;
+    detail::FrameControls controls = detail::FrameControls(frames.size());
+    if (options.apply_frame_control) {
+      controls = detail::collect_frame_controls(
+          tag.children,
+          found_init == init_actions.end() ? kNoInit : found_init->second, sprite_message);
+      if (!sprite_message.empty()) {
+        out.message = sprite_message;
+        return out;
+      }
+    }
     if (!sprite_operations.emplace(*tag.sprite_id, std::move(frames)).second) {
       out.message = "duplicate sprite definition";
       return out;
@@ -442,8 +450,14 @@ SwfDisplayList build_display_list(const SwfFile& file, const SwfDisplayOptions& 
   for (const auto& entry : sprite_operations) {
     ticks = std::max(ticks, static_cast<std::uint32_t>(entry.second.size()));
   }
-  root.playhead = detail::simulate_playhead(
-      controls_for(file.tags, root.frames.size(), options.apply_frame_control), ticks);
+  std::string root_message;
+  detail::FrameControls root_controls = controls_for(file.tags, root.frames.size(),
+                                                    options.apply_frame_control, root_message);
+  if (!root_message.empty()) {
+    out.message = root_message;
+    return out;
+  }
+  root.playhead = detail::simulate_playhead(root_controls, ticks);
   std::map<std::uint16_t, LocalTimeline> sprites;
   for (const auto& entry : sprite_operations) {
     LocalTimeline timeline;

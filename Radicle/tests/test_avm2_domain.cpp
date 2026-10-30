@@ -337,6 +337,34 @@ TEST(Avm2Domain, SiblingDomainsStayIsolated) {
   EXPECT_NE(harness.runtime.find_domain_definition(*grandchild, "SibClass"), nullptr);
 }
 
+TEST(Avm2Domain, SiblingDomainsShareRepeatedClassNames) {
+  DomainHarness harness;
+  // Requires a linked runtime: builtins install at link.
+  harness.runtime.add_file(harness.main_file);
+  ASSERT_TRUE(harness.runtime.link().ok());
+  const Class* domain_class =
+      harness.runtime.find_class("flash.system::ApplicationDomain");
+  ASSERT_NE(domain_class, nullptr);
+  const auto first = std::make_shared<ApplicationDomainObject>(
+      const_cast<Class*>(domain_class), harness.runtime.current_domain());
+  const auto second = std::make_shared<ApplicationDomainObject>(
+      const_cast<Class*>(domain_class), harness.runtime.current_domain());
+  // The same name in both files must alias the first winner, so isolation holds for unique names only.
+  const std::vector<std::uint8_t> bytes = named_class_abc("SharedClass");
+  abc::AbcFile first_file;
+  ASSERT_EQ(abc::AbcFile::parse(bytes.data(), bytes.size(), first_file), abc::AbcStatus::Ok);
+  harness.runtime.add_file(first_file, first);
+  ASSERT_TRUE(harness.runtime.link_added_file(harness.runtime.file_count() - 1).ok());
+  abc::AbcFile second_file;
+  ASSERT_EQ(abc::AbcFile::parse(bytes.data(), bytes.size(), second_file), abc::AbcStatus::Ok);
+  harness.runtime.add_file(second_file, second);
+  ASSERT_TRUE(harness.runtime.link_added_file(harness.runtime.file_count() - 1).ok());
+  const Class* from_first = harness.runtime.find_domain_definition(*first, "SharedClass");
+  const Class* from_second = harness.runtime.find_domain_definition(*second, "SharedClass");
+  ASSERT_NE(from_first, nullptr);
+  EXPECT_EQ(from_first, from_second);
+}
+
 TEST(Avm2Domain, LoaderWithoutAContextLoadsIntoTheCurrentDomain) {
   DomainHarness harness;
   harness.assets["second.swf"] = second_movie();
