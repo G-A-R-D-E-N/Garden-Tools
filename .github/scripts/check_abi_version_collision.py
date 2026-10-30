@@ -162,6 +162,19 @@ def claim_of(pull, api, repo, token):
     }
 
 
+def exempt_parent_number(parent, grandparent):
+    """Parent number the child may keep, or None when the parent never bumped (see code-notes)."""
+    return parent["version"] if parent["version"] > grandparent else None
+
+
+def parent_base_version(api, repo, token, parent):
+    """Number on the stack parent's own base; the caller exits 2 when it cannot be read (see code-notes)."""
+    contents = get_json("{}/repos/{}/contents/{}?ref={}".format(
+        api, repo, HEADER, parent["base_ref"] or parent["base"]), token)
+    text = base64.b64decode(contents["content"]).decode("utf-8", "replace")
+    return read_version(text, "parent base {}".format(parent["base_ref"] or parent["base"]))
+
+
 def compare_counts(api, repo, token, old, new):
     """Commits in new that are not in old, from the Forgejo compare body (see code-notes)."""
     try:
@@ -234,15 +247,20 @@ def main(argv=None):
 
     try:
         version = read_version(git("show", "HEAD:" + HEADER), "HEAD:" + HEADER)
+    except (subprocess.CalledProcessError, ValueError) as error:
+        print("::error::cannot read the HEAD header {} ({}); the gate needs it, so this is exit 2, not a pass".format(
+            HEADER, error))
+        return 2
+    try:
         git("fetch", "--no-tags", "origin", arguments.base)
         base_version = read_version(git("show", "FETCH_HEAD:" + HEADER), "the base branch")
         changed = changed_headers_from("FETCH_HEAD", "HEAD")
     except subprocess.CalledProcessError as error:
-        print("::error::cannot read the base branch {} ({}); the gate needs it, so this is exit 2, not a pass".format(
+        print("::error::cannot fetch the base branch {} ({}); the gate needs it, so this is exit 2, not a pass".format(
             arguments.base, error))
         return 2
     except ValueError as error:
-        print("::error::{}; the gate needs both headers, so this is exit 2, not a pass".format(
+        print("::error::cannot read the base header ({}); the gate needs it, so this is exit 2, not a pass".format(
             error))
         return 2
 
@@ -264,7 +282,14 @@ def main(argv=None):
         for pull in pulls:
             try:
                 claims.append(claim_of(pull, arguments.api_url, arguments.repo, arguments.token))
-            except (urllib.error.HTTPError, KeyError, TypeError, ValueError) as error:
+            except urllib.error.HTTPError as error:
+                if error.code != 404:
+                    print("::error::cannot read the ABI of #{} ({}); the gate needs every claim, so this is exit 2, not a pass".format(
+                        pull.get("number"), error))
+                    return 2
+                print("::warning::cannot read the ABI of #{} ({}); skipping it".format(
+                    pull.get("number"), error))
+            except (KeyError, TypeError, ValueError) as error:
                 print("::warning::cannot read the ABI of #{}: {}".format(
                     pull.get("number"), error))
     except (OSError, ValueError) as error:
@@ -291,8 +316,17 @@ def main(argv=None):
     parent = next((claim for claim in claims
                    if claim["number"] != arguments.number
                    and claim.get("head_ref") == arguments.base), None)
-    problems = local_problems(version, base_version, changed,
-                              parent["version"] if parent else None)
+    parent_version = None
+    if parent is not None:
+        try:
+            grandparent = parent_base_version(arguments.api_url, arguments.repo,
+                                              arguments.token, parent)
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            print("::error::cannot read the base of #{} ({}); the gate needs it, so this is exit 2, not a pass".format(
+                parent["number"], error))
+            return 2
+        parent_version = exempt_parent_number(parent, grandparent)
+    problems = local_problems(version, base_version, changed, parent_version)
     for problem in problems:
         print("::error::{}".format(problem))
     print("ABI: this pull request {}, base branch {}.".format(version, base_version))

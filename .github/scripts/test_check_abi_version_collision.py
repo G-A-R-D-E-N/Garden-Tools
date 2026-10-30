@@ -1,7 +1,9 @@
+import base64
 import os
 import subprocess
 import tempfile
 import unittest
+import urllib.error
 
 import check_abi_version_collision as check
 
@@ -154,7 +156,6 @@ class CompareStatusTest(unittest.TestCase):
             self.assertEqual([forward, backward], seen)
 
     def test_a_failed_request_gives_no_ancestry(self):
-        import urllib.error
         real = check.get_json
         check.get_json = lambda url, token: (_ for _ in ()).throw(urllib.error.URLError("down"))
         try:
@@ -214,13 +215,138 @@ class ChangedHeadersTest(unittest.TestCase):
 
     def test_a_head_with_no_number_gives_exit_two(self):
         with tempfile.TemporaryDirectory() as root:
-            self.make_repo(root, "/* no number here */\n")
+            run = self.make_repo(root, "#define RADICLE_ABI_VERSION 92u\n")
+            header = os.path.join(root, "Radicle", "include", "fo4", "c_api.h")
+            with open(header, "w") as stream:
+                stream.write("/* no number here */\n")
+            run("add", ".")
+            run("commit", "-m", "numberless header")
             here = os.getcwd()
             os.chdir(root)
             try:
                 self.assertEqual(2, check.main(["--base", "main", "--local-only"]))
             finally:
                 os.chdir(here)
+
+    def test_a_base_with_no_number_gives_exit_two(self):
+        with tempfile.TemporaryDirectory() as root:
+            origin = os.path.join(root, "origin")
+            subprocess.run(("git", "init", "--bare", "origin"), check=True,
+                           capture_output=True, text=True, cwd=root)
+            work = os.path.join(root, "work")
+            os.makedirs(work)
+            run = lambda *args: subprocess.run(
+                ("git",) + args, check=True, capture_output=True, text=True, cwd=work)
+            run("init", "-b", "main")
+            run("config", "core.hooksPath", "")
+            run("config", "user.email", "t@t")
+            run("config", "user.name", "t")
+            run("remote", "add", "origin", origin)
+            header = os.path.join(work, "Radicle", "include", "fo4", "c_api.h")
+            os.makedirs(os.path.dirname(header))
+            with open(header, "w") as stream:
+                stream.write("/* no number here */\n")
+            run("add", ".")
+            run("commit", "-m", "numberless base")
+            run("push", "origin", "HEAD:base")
+            with open(header, "w") as stream:
+                stream.write("#define RADICLE_ABI_VERSION 92u\n")
+            run("commit", "-am", "numbered head")
+            here = os.getcwd()
+            os.chdir(work)
+            try:
+                self.assertEqual(2, check.main(["--base", "base", "--local-only"]))
+            finally:
+                os.chdir(here)
+
+
+class StackedParentTest(unittest.TestCase):
+    def body(self, version):
+        return {"content": base64.b64encode(
+            "#define RADICLE_ABI_VERSION {}u\n".format(version).encode()).decode()}
+
+    def test_a_tracking_parent_without_a_bump_grants_no_exemption(self):
+        parent = claim(848, 95, head_ref="nomad/dev", base_ref="main")
+        real = check.get_json
+        check.get_json = lambda url, token: self.body(95)
+        try:
+            grandparent = check.parent_base_version("a", "r", "t", parent)
+        finally:
+            check.get_json = real
+        self.assertIsNone(check.exempt_parent_number(parent, grandparent))
+        problems = check.local_problems(
+            95, 95, ["Radicle/include/fo4/c_api_nif.h"], None)
+        self.assertEqual(1, len(problems))
+
+    def test_a_stacked_parent_with_a_bump_exempts_the_number_keeping_child(self):
+        parent = claim(1042, 95, head_ref="stack", base_ref="nomad/dev")
+        real = check.get_json
+        check.get_json = lambda url, token: self.body(93)
+        try:
+            grandparent = check.parent_base_version("a", "r", "t", parent)
+        finally:
+            check.get_json = real
+        kept = check.exempt_parent_number(parent, grandparent)
+        self.assertEqual(95, kept)
+        self.assertEqual([], check.local_problems(
+            95, 93, ["Radicle/include/fo4/c_api_nif.h"], kept))
+
+    def test_an_unreadable_parent_base_gives_exit_two(self):
+        parent = claim(1042, 95, head_ref="stack", base_ref="nomad/dev")
+        real = check.get_json
+        check.get_json = lambda url, token: {}
+        try:
+            with self.assertRaises((KeyError, TypeError, ValueError)):
+                check.parent_base_version("a", "r", "t", parent)
+        finally:
+            check.get_json = real
+
+
+class ClaimReadErrorsTest(unittest.TestCase):
+    def main_with(self, error):
+        pulls = [{"number": 2, "head": {"sha": "abc", "ref": "other"},
+                  "base": {"sha": "def", "ref": "nomad/dev"}}]
+        real_pulls, real_json = check.open_pulls, check.get_json
+        check.open_pulls = lambda api, repo, token: pulls
+        check.get_json = lambda url, token: (_ for _ in ()).throw(error)
+        try:
+            with tempfile.TemporaryDirectory() as top:
+                origin = os.path.join(top, "origin")
+                subprocess.run(("git", "init", "--bare", "origin"), check=True,
+                               capture_output=True, text=True, cwd=top)
+                root = os.path.join(top, "work")
+                os.makedirs(root)
+                run = lambda *args: subprocess.run(
+                    ("git",) + args, check=True, capture_output=True, text=True, cwd=root)
+                run("init", "-b", "main")
+                run("config", "core.hooksPath", "")
+                run("config", "user.email", "t@t")
+                run("config", "user.name", "t")
+                run("remote", "add", "origin", origin)
+                header = os.path.join(root, "Radicle", "include", "fo4", "c_api.h")
+                os.makedirs(os.path.dirname(header))
+                with open(header, "w") as stream:
+                    stream.write("#define RADICLE_ABI_VERSION 95u\n")
+                run("add", ".")
+                run("commit", "-m", "numbered")
+                run("push", "origin", "HEAD:main")
+                here = os.getcwd()
+                os.chdir(root)
+                try:
+                    return check.main(["--base", "main", "--api-url", "a",
+                                       "--repo", "r", "--token", "t", "--number", "1"])
+                finally:
+                    os.chdir(here)
+        finally:
+            check.open_pulls, check.get_json = real_pulls, real_json
+
+    def test_a_gone_claim_is_skipped(self):
+        error = urllib.error.HTTPError("u", 404, "Not Found", {}, None)
+        self.assertEqual(0, self.main_with(error))
+
+    def test_a_broken_claim_server_fails_the_gate(self):
+        error = urllib.error.HTTPError("u", 500, "Broken", {}, None)
+        self.assertEqual(2, self.main_with(error))
 
 
 if __name__ == "__main__":
