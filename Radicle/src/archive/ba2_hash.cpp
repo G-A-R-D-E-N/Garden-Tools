@@ -69,8 +69,6 @@ Ba2Hashes compute_ba2_hashes(std::string_view path) {
   const auto parent = sep == std::string::npos ? "" : normalized.substr(0, sep);
   const auto begin = sep == std::string::npos ? std::size_t{0} : sep + 1;
   const auto dot = normalized.rfind('.');
-  // A dot inside the directory part does not start an extension; treat it as
-  // absent rather than computing a negative-length stem.
   const auto end = (dot != std::string::npos && dot > begin) ? dot : std::string::npos;
   const auto stem = end == std::string::npos ? normalized.substr(begin)
                                              : normalized.substr(begin, end - begin);

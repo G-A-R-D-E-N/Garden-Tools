@@ -64,9 +64,13 @@ HkxStatus read_local_table(std::span<const std::byte> table, std::vector<HkxLoca
   return HkxStatus::Ok;
 }
 
+// Requires whole entries then only filler, because a vanilla table may stop inside its last filler entry.
 HkxStatus read_remote_table(std::span<const std::byte> table, std::vector<HkxRemoteFixup>& out) {
-  if (table.size() % kRemoteEntrySize != 0) return HkxStatus::BadSection;
-  for (std::size_t at = 0; at < table.size(); at += kRemoteEntrySize) {
+  const std::size_t whole = table.size() - table.size() % kRemoteEntrySize;
+  for (std::size_t at = whole; at < table.size(); ++at) {
+    if (table[at] != std::byte{0xFF}) return HkxStatus::BadSection;
+  }
+  for (std::size_t at = 0; at < whole; at += kRemoteEntrySize) {
     const std::uint32_t source = read_u32(table, at);
     if (source == kFiller) continue;
     out.push_back({source, read_u32(table, at + 4), read_u32(table, at + 8)});
@@ -93,6 +97,7 @@ HkxStatus read_section(std::span<const std::byte> bytes, std::size_t header, std
   ranges.push_back(range);
 
   section.tag = read_tag(bytes, header);
+  section.file_offset = base;
   const auto data = bytes.subspan(base, mark(0));
   section.data.assign(data.begin(), data.end());
   if (const auto status = read_local_table(bytes.subspan(base + mark(0), mark(1) - mark(0)), section.local_fixups);

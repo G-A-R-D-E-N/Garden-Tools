@@ -346,7 +346,7 @@ VmadScan scan_vmad(std::span<const std::byte> data, Signature record_signature) 
     result.fully_consumed = slice.at_end();
     result.trailing_data = !slice.at_end();
   } catch (const UnsupportedVmadProperty&) {
-    result.offsets.clear();
+    // Requires: links parsed before the unsupported property stay valid.
     result.unsupported = true;
     result.failed = true;
     result.quest_fragment_count = 0;

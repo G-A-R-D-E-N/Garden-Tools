@@ -770,6 +770,12 @@
           "Silk.NET.OpenGL": "[2.23.0, )"
         }
       },
+      "export": {
+        "type": "Project",
+        "dependencies": {
+          "BehaviourGraph.Core": "[1.0.0, )"
+        }
+      },
       "radicle.interop": {
         "type": "Project"
       },

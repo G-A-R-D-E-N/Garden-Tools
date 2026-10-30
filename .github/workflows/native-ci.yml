@@ -488,6 +488,133 @@ jobs:
         if: always()
         run: dotnet build-server shutdown
 
+  # Builds the shipping configuration - Radicle as radicle.dll, the editor
+  # linking it - and the release package that is deployed from this artifact.
+  # native-windows-tests keeps covering the static default (RADICLE_SHARED=OFF).
+  fo4ide-package:
+    name: FO4IDE package (Windows, MSVC, shared Radicle)
+    if: github.event.inputs.lane != 'radicle-cross'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: cmd
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node 22
+        uses: https://github.com/actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: PluginEditTool/web/package-lock.json
+
+      - name: Set up MSVC, Ninja and ccache
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .github/scripts/setup-msvc-ccache.ps1
+
+      - name: Pinned zlib source (cached)
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .github/scripts/pinned-zlib-windows.ps1
+
+      - name: Configure (shared Radicle)
+        timeout-minutes: 15
+        shell: powershell
+        run: |
+          $launcher = @()
+          if ($env:CCACHE) { $launcher = @("-DCMAKE_C_COMPILER_LAUNCHER=$env:CCACHE", "-DCMAKE_CXX_COMPILER_LAUNCHER=$env:CCACHE") }
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            cmake -S PluginEditTool\native -B build\fo4ide-package -G Ninja -DCMAKE_BUILD_TYPE=Release -DFO4IDE_BUILD_TESTS=OFF -DFO4IDE_BUILD_HTTP=ON -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON "-DFETCHCONTENT_SOURCE_DIR_FO4IDE_ZLIB=$env:ZLIB_SRC" -DRADICLE_SHARED=ON @launcher
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($attempt -eq 3) {
+              Write-Output "::error::configure failed after 3 attempts"
+              exit 1
+            }
+            Write-Output "::warning::configure attempt $attempt failed, retrying"
+            Start-Sleep -Seconds (30 * $attempt)
+          }
+
+      - name: Build FO4RecordEditor.exe and radicle.dll
+        run: cmake --build build\fo4ide-package --target fo4ide
+
+      - name: ccache statistics
+        if: always()
+        run: if defined CCACHE "%CCACHE%" --show-stats
+
+      # The editor must load Radicle at run time: the import table is the proof.
+      - name: Verify FO4RecordEditor.exe imports radicle.dll
+        run: dumpbin /nologo /dependents build\fo4ide-package\bin\FO4RecordEditor.exe | findstr /i /c:"radicle.dll"
+
+      # The header is the contract; the exported function is what consumers read.
+      - name: Verify radicle.dll ABI matches RADICLE_ABI_VERSION
+        shell: powershell
+        run: |
+          $header = Get-Content -Raw Radicle\include\fo4\c_api.h
+          if ($header -notmatch '#define\s+RADICLE_ABI_VERSION\s+(\d+)u?') {
+            throw 'RADICLE_ABI_VERSION is not defined in Radicle/include/fo4/c_api.h'
+          }
+          $expected = [int]$Matches[1]
+          $dll = (Resolve-Path 'build\fo4ide-package\bin\radicle.dll').Path
+          Add-Type -TypeDefinition @'
+          using System;
+          using System.Runtime.InteropServices;
+          namespace RadicleAbiProbe {
+            public delegate uint AbiFn();
+            public static class Native {
+              [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)] public static extern IntPtr LoadLibraryW(string path);
+              [DllImport("kernel32.dll", SetLastError = true)] public static extern IntPtr GetProcAddress(IntPtr module, string name);
+            }
+          }
+          '@
+          $module = [RadicleAbiProbe.Native]::LoadLibraryW($dll)
+          if ($module -eq [IntPtr]::Zero) {
+            throw "LoadLibraryW failed for $dll (Win32 $([Runtime.InteropServices.Marshal]::GetLastWin32Error()))"
+          }
+          $entry = [RadicleAbiProbe.Native]::GetProcAddress($module, 'radicle_abi_version')
+          if ($entry -eq [IntPtr]::Zero) { throw 'radicle.dll does not export radicle_abi_version' }
+          $actual = [int][Runtime.InteropServices.Marshal]::GetDelegateForFunctionPointer($entry, [RadicleAbiProbe.AbiFn]).Invoke()
+          Write-Output "radicle.dll ABI=$actual header RADICLE_ABI_VERSION=$expected"
+          if ($actual -ne $expected) {
+            Write-Output "::error::radicle.dll reports ABI $actual but RADICLE_ABI_VERSION is $expected"
+            exit 1
+          }
+
+      - name: Native MCP smoke
+        shell: powershell
+        run: |
+          $cache = 'build\fo4ide-package\CMakeCache.txt'
+          $python = (Select-String -Path $cache -Pattern '^Python3_EXECUTABLE:FILEPATH=(.+)$').Matches.Groups[1].Value
+          if (-not $python) { throw "Python3_EXECUTABLE was not found in $cache" }
+          & $python PluginEditTool\native\tests\native_mcp_smoke.py build\fo4ide-package\bin\FO4RecordEditor.exe
+          exit $LASTEXITCODE
+
+      # The web build and the staging rules live in package.ps1; -BuildDir reuses
+      # the tree built above instead of compiling a second Visual Studio tree.
+      - name: Package
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File PluginEditTool\package.ps1 -BuildDir build\fo4ide-package
+
+      - name: Write artifact metadata
+        if: always()
+        run: |
+          if not exist PluginEditTool\dist mkdir PluginEditTool\dist
+          echo commit=${{ github.sha }}> PluginEditTool\dist\build-info.txt
+          echo ref=${{ github.ref }}>> PluginEditTool\dist\build-info.txt
+          echo run_id=${{ github.run_id }}>> PluginEditTool\dist\build-info.txt
+          echo target=x86_64-pc-windows-msvc>> PluginEditTool\dist\build-info.txt
+
+      - name: Upload package
+        uses: https://code.forgejo.org/forgejo/upload-artifact@cb8afe72b42edc798abfb8fcb556cf660d894245 # v5
+        with:
+          name: fo4ide-package
+          path: |
+            PluginEditTool/dist/FO4RecordEditor-*/
+            PluginEditTool/dist/FO4RecordEditor-*.zip
+            PluginEditTool/dist/build-info.txt
+          if-no-files-found: error
+          retention-days: 14
+
   # Runs only on the host labelled `fo4-data`, where the Fallout 4 Data folder exists.
   native-windows-real-data:
     name: Native real-data tests (Windows, MSVC, Fallout 4 data)
