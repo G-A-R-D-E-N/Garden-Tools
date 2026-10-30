@@ -227,6 +227,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/plugin/subrecord_authoring.cpp
   src/plugin/subrecord_copy.cpp
   src/plugin/scene_writer.cpp
+  src/plugin/scene_index.cpp
   src/plugin/master_usage.cpp
   src/plugin/maintenance.cpp
   src/plugin/placement.cpp

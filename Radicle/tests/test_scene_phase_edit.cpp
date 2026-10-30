@@ -106,35 +106,35 @@ TEST(ScenePhaseEdit, APhaseAppendedLastLandsBeforeTheActors) {
   EXPECT_EQ(*scene.phases[2].name, "End");
 }
 
-TEST(ScenePhaseEdit, RemovingAPhaseErasesExactlyItsOwnSubrecords) {
+TEST(ScenePhaseEdit, RemovingAnUnreferencedPhaseErasesExactlyItsOwnSubrecords) {
   auto plugin = read(build());
+  EXPECT_EQ(fo4::set_scene_scalar(plugin, key(k_scene), "SCEN\\Action\\StartPhase", 1, "0"), Scalar::updated);
+  EXPECT_EQ(fo4::set_scene_scalar(plugin, key(k_scene), "SCEN\\Action\\EndPhase", 0, "0"), Scalar::updated);
+  EXPECT_EQ(fo4::set_scene_scalar(plugin, key(k_scene), "SCEN\\Action\\EndPhase", 2, "0"), Scalar::updated);
   const auto before = snapshot(plugin, k_scene);
   ASSERT_GT(before.size(), 4u);
 
-  const auto open = std::find_if(before.begin(), before.end(), [](const Sub& sub) {
-    return sub.first == "HNAM";
-  });
-  ASSERT_NE(open, before.end());
-  const auto first_open = static_cast<std::size_t>(std::distance(before.begin(), open));
-  const auto close = std::find_if(before.begin() + static_cast<std::ptrdiff_t>(first_open + 1),
-                                  before.end(),
-                                  [](const Sub& sub) { return sub.first == "HNAM"; });
-  ASSERT_NE(close, before.end());
-  const auto first_close = static_cast<std::size_t>(std::distance(before.begin(), close));
-  const auto removed = first_close - first_open + 1;
-  EXPECT_EQ(before[first_open].second.size(), 0u);
-  EXPECT_EQ(before[first_open + 1].first, "NAM0");
-  EXPECT_EQ(before[first_open + 1].second, zstr("Start"));
+  std::vector<std::size_t> markers;
+  for (std::size_t at = 0; at < before.size(); ++at) {
+    if (before[at].first == "HNAM") markers.push_back(at);
+  }
+  ASSERT_EQ(markers.size(), 4u);
+  const auto open = markers[2];
+  const auto first_close = markers[3];
+  const auto removed = first_close - open + 1;
+  EXPECT_EQ(before[open].second.size(), 0u);
+  EXPECT_EQ(before[open + 1].first, "NAM0");
+  EXPECT_EQ(before[open + 1].second, zstr(""));
   EXPECT_EQ(before[first_close].second.size(), 0u);
 
-  EXPECT_EQ(fo4::remove_scene_phase(plugin, key(k_scene), 0), Group::updated);
+  EXPECT_EQ(fo4::remove_scene_phase(plugin, key(k_scene), 1), Group::updated);
 
   const auto after = snapshot(reload(plugin), k_scene);
   ASSERT_EQ(after.size(), before.size() - removed);
-  for (std::size_t at = 0; at < first_open; ++at) {
+  for (std::size_t at = 0; at < open; ++at) {
     EXPECT_EQ(after[at], before[at]) << at;
   }
-  for (std::size_t at = first_open; at < after.size(); ++at) {
+  for (std::size_t at = open; at < after.size(); ++at) {
     EXPECT_EQ(after[at], before[at + removed]) << at;
   }
   const auto reloaded = reload(plugin);
@@ -142,6 +142,74 @@ TEST(ScenePhaseEdit, RemovingAPhaseErasesExactlyItsOwnSubrecords) {
   EXPECT_EQ(count_of(order(reloaded, k_scene), "NEXT"), 2u);
   EXPECT_EQ(fo4::scene_group_count(reloaded, key(k_scene), fo4::ScenePart::actor), 2u);
   EXPECT_EQ(fo4::scene_group_count(reloaded, key(k_scene), fo4::ScenePart::action), 3u);
+}
+
+TEST(ScenePhaseEdit, RemovingAReferencedPhaseRefusesAndChangesNoByte) {
+  auto plugin = read(build());
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_THROW(static_cast<void>(fo4::remove_scene_phase(plugin, key(k_scene), 0)),
+               fo4::schema::ScalarError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(ScenePhaseEdit, InsertingAPhaseShiftsEveryActionPhaseReference) {
+  auto plugin = read(build());
+  EXPECT_EQ(fo4::insert_scene_phase(plugin, key(k_scene), 1, "Middle"), Group::updated);
+  const auto reloaded = reload(plugin);
+  const SavedEnvironment saved(reloaded);
+  const auto scene = fo4::env::decode_scene(saved.env(), saved.record(k_scene));
+  ASSERT_EQ(scene.phases.size(), 3u);
+  ASSERT_EQ(scene.actions.size(), 3u);
+  EXPECT_EQ(scene.actions[0].start_phase, 0u);
+  EXPECT_EQ(scene.actions[0].end_phase, 2u);
+  EXPECT_EQ(scene.actions[1].start_phase, 2u);
+  EXPECT_FALSE(scene.actions[1].end_phase.has_value());
+  EXPECT_EQ(scene.actions[2].start_phase, 0u);
+  EXPECT_EQ(scene.actions[2].end_phase, 2u);
+}
+
+TEST(ScenePhaseEdit, MovingAPhaseRemapsEveryActionPhaseReference) {
+  auto plugin = read(build());
+  EXPECT_EQ(fo4::move_scene_phase(plugin, key(k_scene), 0, 1), Group::updated);
+  const auto reloaded = reload(plugin);
+  const SavedEnvironment saved(reloaded);
+  const auto scene = fo4::env::decode_scene(saved.env(), saved.record(k_scene));
+  ASSERT_EQ(scene.phases.size(), 2u);
+  ASSERT_TRUE(scene.phases[0].name.has_value());
+  EXPECT_EQ(*scene.phases[0].name, "");
+  ASSERT_TRUE(scene.phases[1].name.has_value());
+  EXPECT_EQ(*scene.phases[1].name, "Start");
+  ASSERT_EQ(scene.actions.size(), 3u);
+  EXPECT_EQ(scene.actions[0].start_phase, 1u);
+  EXPECT_EQ(scene.actions[0].end_phase, 0u);
+  EXPECT_EQ(scene.actions[1].start_phase, 0u);
+  EXPECT_EQ(scene.actions[2].start_phase, 1u);
+  EXPECT_EQ(scene.actions[2].end_phase, 0u);
+  EXPECT_EQ(fo4::move_scene_phase(plugin, key(k_scene), 0, 1), Group::updated);
+  EXPECT_EQ(fo4::move_scene_phase(plugin, key(k_scene), 1, 1),
+            fo4::SubrecordGroupMutationStatus::unchanged);
+  EXPECT_EQ(fo4::move_scene_phase(plugin, key(k_scene), 2, 0),
+            fo4::SubrecordGroupMutationStatus::index_out_of_range);
+}
+
+TEST(ScenePhaseEdit, APhaseEditRefusesAnActionReferenceTheSceneCannotFollow) {
+  auto plugin = read(build());
+  fo4::visit_records(plugin, [&](fo4::Record& record) {
+    if (record.form_key != key(k_scene)) return;
+    for (auto& sub : record.subrecords) {
+      if (sub.signature != sig("ENAM")) continue;
+      sub.data = words({7});
+    }
+    record.original_range.clear();
+    record.decompressed_payload.clear();
+    plugin.original_range.clear();
+  });
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_THROW(static_cast<void>(fo4::insert_scene_phase(plugin, key(k_scene), 1, "Middle")),
+               fo4::schema::ScalarError);
+  EXPECT_THROW(static_cast<void>(fo4::move_scene_phase(plugin, key(k_scene), 0, 1)),
+               fo4::schema::ScalarError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
 }
 
 TEST(ScenePhaseEdit, PhaseNamesAreSettableAndIdempotent) {
