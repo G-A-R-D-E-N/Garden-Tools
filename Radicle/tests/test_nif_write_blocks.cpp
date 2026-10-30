@@ -7,6 +7,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -35,6 +36,10 @@ EditValue numbers(std::vector<float> values) { return EditValue{std::move(values
 std::span<const std::byte> block_bytes(std::span<const std::byte> file, const NifFile& nif, std::uint32_t block) {
   const auto& info = nif.blocks()[block];
   return file.subspan(info.offset, info.size);
+}
+
+bool same_bytes(std::span<const std::byte> left, std::span<const std::byte> right) {
+  return left.size() == right.size() && std::equal(left.begin(), left.end(), right.begin());
 }
 
 void expect_rejected(const NifFile& nif, const Edit& edit) {
@@ -213,7 +218,7 @@ TEST(NifWriteBlocks, CollisionObjectFlagsAndBodyIdRoundTripAndKeepTheBlob) {
   EXPECT_EQ(object.body_id, 4294967295U);
   EXPECT_EQ(object.system, 2);
   EXPECT_EQ(object.target, -1);
-  EXPECT_EQ(block_bytes(out_bytes, out, 2), block_bytes(bytes, nif, 2));
+  EXPECT_TRUE(same_bytes(block_bytes(out_bytes, out, 2), block_bytes(bytes, nif, 2)));
   const auto blobs = fo4::nif::read_collision_blobs(out);
   ASSERT_EQ(blobs.size(), 1U);
   EXPECT_EQ(blobs[0].flags, 0x0804U);
