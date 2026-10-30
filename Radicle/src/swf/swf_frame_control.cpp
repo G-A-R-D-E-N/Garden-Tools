@@ -300,7 +300,8 @@ std::map<std::uint16_t, InitActionStreams> collect_init_actions(
     const std::vector<SwfTag>& tags) {
   std::map<std::uint16_t, InitActionStreams> out;
   for (const SwfTag& tag : tags) {
-    if (tag.code != tag::kDoInitAction || !tag.action || !tag.sprite_id) {
+    // By invariant the sprite id lives on the action; only DefineSprite sets the tag-level id.
+    if (tag.code != tag::kDoInitAction || !tag.action) {
       continue;
     }
     const auto bytes =
@@ -309,7 +310,7 @@ std::map<std::uint16_t, InitActionStreams> collect_init_actions(
     if (!stream.ok()) {
       continue;
     }
-    out[*tag.sprite_id].push_back(stream.actions);
+    out[tag.action->sprite_id].push_back(stream.actions);
   }
   return out;
 }

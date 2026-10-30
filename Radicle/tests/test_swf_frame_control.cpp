@@ -115,7 +115,10 @@ std::vector<std::uint8_t> push_label(const std::string& name) {
 }
 
 std::vector<std::uint8_t> call_frame(std::vector<std::uint8_t> push) {
+  // ActionCall (0x9E) requires a u16 length even when it carries no operands.
   push.push_back(0x9E);
+  push.push_back(0x00);
+  push.push_back(0x00);
   return push;
 }
 
