@@ -51,9 +51,11 @@ std::size_t extra_offset(const NifFile& nif, const Model& model, std::uint32_t b
                          std::size_t fixed);
 
 // Invariant: an edited shader, texture set or alpha block has exactly one user.
-std::uint32_t shader_block(const NifFile& nif, Model& model, std::uint32_t block);
-std::uint32_t alpha_block(const NifFile& nif, Model& model, std::uint32_t block);
-std::uint32_t shape_texture_set(const NifFile& nif, Model& model, std::uint32_t block);
+std::uint32_t shader_source_index(const NifFile& nif, Model& model, std::uint32_t block);
+std::uint32_t shader_block(const NifFile& nif, Model& model, std::uint32_t block, std::uint32_t source);
+std::uint32_t alpha_source_index(const NifFile& nif, Model& model, std::uint32_t block);
+std::uint32_t alpha_block(const NifFile& nif, Model& model, std::uint32_t block, std::uint32_t source);
+std::uint32_t shader_texture_set(const NifFile& nif, Model& model, std::uint32_t shader, std::uint32_t source);
 bool texture_key(const std::string& key, std::size_t& slot);
 void write_texture_slot(const NifFile& nif, Model& model, std::uint32_t block, std::size_t slot,
                         const std::string& text);
@@ -76,7 +78,10 @@ inline bool apply_scalar_refs(const NifFile& nif, Model& model, std::uint32_t bl
   return false;
 }
 
-void apply_lighting_edit(const NifFile& nif, Model& model, std::uint32_t block, const Edit& edit);
-void apply_effect_edit(const NifFile& nif, Model& model, std::uint32_t block, const Edit& edit);
+// Constraint: source must be the same block in nif, which a freshly copied block is not.
+void apply_lighting_edit(const NifFile& nif, Model& model, std::uint32_t block, std::uint32_t source,
+                         const Edit& edit);
+void apply_effect_edit(const NifFile& nif, Model& model, std::uint32_t block, std::uint32_t source,
+                       const Edit& edit);
 
 }  // namespace fo4::nif::edit_detail

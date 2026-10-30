@@ -114,8 +114,9 @@ std::uint32_t share_or_copy(const NifFile& nif, Model& model, std::uint32_t bloc
   return fresh;
 }
 
-void apply_alpha_edit(const NifFile& nif, Model& model, std::uint32_t block, const Edit& edit) {
-  const auto alpha = read_alpha(nif, block);
+void apply_alpha_edit(const NifFile& nif, Model& model, std::uint32_t block, std::uint32_t source,
+                      const Edit& edit) {
+  const auto alpha = read_alpha(nif, source);
   if (edit.key == "name") return set_name(nif, model, block, 0, text_value(nif, edit));
   if (edit.key == "threshold" || edit.key == "alphaThreshold") {
     return write_byte(nif, model, block, alpha.threshold_at,
@@ -160,10 +161,11 @@ void apply_collision_edit(const NifFile& nif, Model& model, std::uint32_t block,
   fail(nif, block, "key '" + edit.key + "' is not supported by the NIF writer");
 }
 
-void apply_shader_name(const NifFile& nif, Model& model, std::uint32_t shader, const std::string& text) {
+void apply_shader_name(const NifFile& nif, Model& model, std::uint32_t shader, std::uint32_t source,
+                       const std::string& text) {
   const auto type = write_detail::block_type(model, shader);
-  if (type == k_lighting_type) return set_name(nif, model, shader, read_lighting_shader(nif, shader).offsets.name, text);
-  if (type == k_effect_type) return set_name(nif, model, shader, read_effect_shader(nif, shader).offsets.name, text);
+  if (type == k_lighting_type) return set_name(nif, model, shader, read_lighting_shader(nif, source).offsets.name, text);
+  if (type == k_effect_type) return set_name(nif, model, shader, read_effect_shader(nif, source).offsets.name, text);
   fail(nif, shader, "key 'material' needs a lighting or effect shader property");
 }
 
@@ -181,10 +183,20 @@ void apply_node_edit(const NifFile& nif, Model& model, std::uint32_t block, cons
 
 void apply_shape_edit(const NifFile& nif, Model& model, std::uint32_t block, const Edit& edit) {
   if (edit.key == "name") return set_name(nif, model, block, 0, text_value(nif, edit));
-  if (edit.key == "material") return apply_shader_name(nif, model, shader_block(nif, model, block), text_value(nif, edit));
+  const auto shader_source = [&] { return shader_source_index(nif, model, block); };
+  if (edit.key == "material") {
+    const auto source = shader_source();
+    return apply_shader_name(nif, model, shader_block(nif, model, block, source), source, text_value(nif, edit));
+  }
   std::size_t slot = 0;
   if (texture_key(edit.key, slot)) {
-    return write_texture_slot(nif, model, shape_texture_set(nif, model, block), slot, text_value(nif, edit));
+    const auto source = shader_source();
+    const auto shader = shader_block(nif, model, block, source);
+    if (write_detail::block_type(model, shader) == k_effect_type) {
+      return apply_effect_edit(nif, model, shader, source, edit);
+    }
+    return write_texture_slot(nif, model, shader_texture_set(nif, model, shader, source), slot,
+                              text_value(nif, edit));
   }
   const auto transform = extra_offset(nif, model, block, 4, k_av_transform_at);
   if (apply_scalar_refs(nif, model, block, edit,
@@ -193,17 +205,19 @@ void apply_shape_edit(const NifFile& nif, Model& model, std::uint32_t block, con
   }
   if (edit.key == "alphaBlend" || edit.key == "alphaTest" || edit.key == "alphaThreshold" ||
       edit.key == "threshold") {
-    return apply_alpha_edit(nif, model, alpha_block(nif, model, block), edit);
+    const auto alpha_source = alpha_source_index(nif, model, block);
+    return apply_alpha_edit(nif, model, alpha_block(nif, model, block, alpha_source), alpha_source, edit);
   }
   if (edit.key == "verts" || edit.key == "tris" || edit.key == "shaderType" || edit.key == "skin" ||
       edit.key == "vertexSize" || edit.key == "vertexAttributes" || edit.key == "fullPrecision") {
     fail(nif, block, "key '" + edit.key + "' is read-only");
   }
-  const auto shader = shader_block(nif, model, block);
+  const auto source = shader_source();
+  const auto shader = shader_block(nif, model, block, source);
   if (write_detail::block_type(model, shader) == k_effect_type) {
-    return apply_effect_edit(nif, model, shader, edit);
+    return apply_effect_edit(nif, model, shader, source, edit);
   }
-  apply_lighting_edit(nif, model, shader, edit);
+  apply_lighting_edit(nif, model, shader, source, edit);
 }
 
 void apply_edit(const NifFile& nif, Model& model, const Edit& edit) {
@@ -211,9 +225,9 @@ void apply_edit(const NifFile& nif, Model& model, const Edit& edit) {
     throw parse_error(0, "edit targets block " + std::to_string(edit.id) + ", which is not in the file");
   }
   const auto type = write_detail::block_type(model, edit.id);
-  if (type == k_lighting_type) return apply_lighting_edit(nif, model, edit.id, edit);
-  if (type == k_effect_type) return apply_effect_edit(nif, model, edit.id, edit);
-  if (type == k_alpha_type) return apply_alpha_edit(nif, model, edit.id, edit);
+  if (type == k_lighting_type) return apply_lighting_edit(nif, model, edit.id, edit.id, edit);
+  if (type == k_effect_type) return apply_effect_edit(nif, model, edit.id, edit.id, edit);
+  if (type == k_alpha_type) return apply_alpha_edit(nif, model, edit.id, edit.id, edit);
   if (type == k_bsx_type) return apply_bsx_edit(nif, model, edit.id, edit);
   if (type == k_collision_object_type) return apply_collision_edit(nif, model, edit.id, edit);
   if (type == k_texture_set_type) {
@@ -341,7 +355,7 @@ std::size_t extra_offset(const NifFile& nif, const Model& model, std::uint32_t b
   return fixed + 4 * static_cast<std::size_t>(write_detail::read_int<std::uint32_t>(model.blocks[block], count_at));
 }
 
-std::uint32_t shader_block(const NifFile& nif, Model& model, std::uint32_t block) {
+std::uint32_t shader_source_index(const NifFile& nif, Model& model, std::uint32_t block) {
   const auto type = write_detail::block_type(model, block);
   if (type == k_lighting_type || type == k_effect_type) return block;
   if (!is_shape_type(type)) fail(nif, block, "key needs a shape or shader block");
@@ -356,9 +370,16 @@ std::uint32_t shader_block(const NifFile& nif, Model& model, std::uint32_t block
   if (shader_type != k_lighting_type && shader_type != k_effect_type) {
     fail(nif, block, "shape has no lighting or effect shader property");
   }
-  if (shader_users(model, shader) <= 1) return shader;
-  const auto type_index = model.block_type_index[shader];
-  const Bytes bytes = model.blocks[shader];
+  return shader;
+}
+
+std::uint32_t shader_block(const NifFile& nif, Model& model, std::uint32_t block, std::uint32_t source) {
+  const auto type = write_detail::block_type(model, block);
+  if (type == k_lighting_type || type == k_effect_type) return block;
+  const auto ref_at = extra_offset(nif, model, block, 4, 92);
+  if (shader_users(model, source) <= 1) return source;
+  const auto type_index = model.block_type_index[source];
+  const Bytes bytes = model.blocks[source];
   model.block_type_index.push_back(type_index);
   model.blocks.push_back(bytes);
   const auto fresh = static_cast<std::uint32_t>(model.blocks.size() - 1);
@@ -366,7 +387,7 @@ std::uint32_t shader_block(const NifFile& nif, Model& model, std::uint32_t block
   return fresh;
 }
 
-std::uint32_t alpha_block(const NifFile& nif, Model& model, std::uint32_t block) {
+std::uint32_t alpha_source_index(const NifFile& nif, Model& model, std::uint32_t block) {
   if (write_detail::block_type(model, block) == k_alpha_type) return block;
   const auto ref_at = extra_offset(nif, model, block, 4, 96);
   check_field(nif, model, block, ref_at, 4);
@@ -375,20 +396,25 @@ std::uint32_t alpha_block(const NifFile& nif, Model& model, std::uint32_t block)
       write_detail::block_type(model, static_cast<std::uint32_t>(ref)) != k_alpha_type) {
     fail(nif, block, "shape has no NiAlphaProperty");
   }
-  return share_or_copy(nif, model, block, ref_at, alpha_users(model, static_cast<std::uint32_t>(ref)));
+  return static_cast<std::uint32_t>(ref);
 }
 
-std::uint32_t shape_texture_set(const NifFile& nif, Model& model, std::uint32_t block) {
-  const auto shader = shader_block(nif, model, block);
+std::uint32_t alpha_block(const NifFile& nif, Model& model, std::uint32_t block, std::uint32_t source) {
+  if (write_detail::block_type(model, block) == k_alpha_type) return block;
+  const auto ref_at = extra_offset(nif, model, block, 4, 96);
+  return share_or_copy(nif, model, block, ref_at, alpha_users(model, source));
+}
+
+std::uint32_t shader_texture_set(const NifFile& nif, Model& model, std::uint32_t shader, std::uint32_t source) {
   if (write_detail::block_type(model, shader) != k_lighting_type) {
-    fail(nif, shader, "an effect shader stores its textures itself");
+    fail(nif, source, "an effect shader stores its textures itself");
   }
-  const auto shader_offsets = read_lighting_shader(nif, shader).offsets;
+  const auto shader_offsets = read_lighting_shader(nif, source).offsets;
   check_field(nif, model, shader, shader_offsets.texture_set, 4);
   const auto ref = write_detail::read_int<std::int32_t>(model.blocks[shader], shader_offsets.texture_set);
   if (ref < 0 || static_cast<std::size_t>(ref) >= model.blocks.size() ||
       write_detail::block_type(model, static_cast<std::uint32_t>(ref)) != k_texture_set_type) {
-    fail(nif, shader, "shader has no BSShaderTextureSet");
+    fail(nif, source, "shader has no BSShaderTextureSet");
   }
   return share_or_copy(nif, model, shader, shader_offsets.texture_set,
                        texture_set_users(model, static_cast<std::uint32_t>(ref)));

@@ -55,13 +55,19 @@ void apply_texture_path(const NifFile& nif, Model& model, std::uint32_t block, s
 
 }  // namespace
 
-void apply_lighting_edit(const NifFile& nif, Model& model, std::uint32_t block, const Edit& edit) {
-  const auto shader = read_lighting_shader(nif, block);
+void apply_lighting_edit(const NifFile& nif, Model& model, std::uint32_t block, std::uint32_t source,
+                         const Edit& edit) {
+  const auto shader = read_lighting_shader(nif, source);
   const auto& at = shader.offsets;
   require_present(nif, block, at.end != 0, edit.key);
   const auto version = nif.bs_version();
   if (edit.key == "name") return set_name(nif, model, block, at.name, text_value(nif, edit));
   if (edit.key == "materialClass") fail(nif, block, "key 'materialClass' is read-only");
+  std::size_t slot = 0;
+  if (texture_key(edit.key, slot)) {
+    return write_texture_slot(nif, model, shader_texture_set(nif, model, block, source), slot,
+                              text_value(nif, edit));
+  }
   if (edit.key == "shaderFlags") return apply_flags(nif, model, block, edit, at.flags, version >= k_shader_flags_wide);
   if (edit.key == "rootMaterial") {
     require_present(nif, block, shader.has_root_material, edit.key);
@@ -141,13 +147,19 @@ void apply_lighting_edit(const NifFile& nif, Model& model, std::uint32_t block, 
   fail(nif, block, "key '" + edit.key + "' is not supported by the NIF writer");
 }
 
-void apply_effect_edit(const NifFile& nif, Model& model, std::uint32_t block, const Edit& edit) {
-  const auto shader = read_effect_shader(nif, block);
+void apply_effect_edit(const NifFile& nif, Model& model, std::uint32_t block, std::uint32_t source,
+                       const Edit& edit) {
+  const auto shader = read_effect_shader(nif, source);
   const auto& at = shader.offsets;
   require_present(nif, block, at.end != 0, edit.key);
   const auto version = nif.bs_version();
   const bool extra_textures = version >= k_extra_textures_since;
   if (edit.key == "name") return set_name(nif, model, block, at.name, text_value(nif, edit));
+  std::size_t slot = 0;
+  if (texture_key(edit.key, slot)) {
+    require_present(nif, block, slot < shader.textures.size(), edit.key);
+    return set_sized_string(nif, model, block, shader.texture_at[slot], text_value(nif, edit));
+  }
   if (edit.key == "shaderFlags") return apply_flags(nif, model, block, edit, at.flags, version >= k_shader_flags_wide);
   if (edit.key == "sourceTexture") return apply_texture_path(nif, model, block, at.source_texture, edit, true);
   if (edit.key == "greyscaleTexture") {
