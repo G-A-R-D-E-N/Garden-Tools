@@ -314,7 +314,7 @@ TEST_CASE("NifService fix without niftool repairs in-process and the written NIF
 
     REQUIRE(fix.has_value());
     CHECK(fix->starts_with("RESULT: fix OK (in-process)\nSaved: " + fixed.string() +
-                           "\nRESULT: 9 checks, 0 failed\n"));
+                           "\nRESULT: 10 checks, 0 failed\n"));
     CHECK(fileBytes(nif) == before);
     CHECK(std::filesystem::is_regular_file(fixed));
     CHECK_FALSE(std::filesystem::exists(fixed.string() + ".niftmp"));
@@ -458,7 +458,7 @@ TEST_CASE("NifService verify reports a readable FO4 NIF in-process") {
     auto result = service.verify(nif);
 
     REQUIRE(result.has_value());
-    CHECK(result->starts_with("RESULT: 9 checks, 0 failed\n[ok] header parses\n"));
+    CHECK(result->starts_with("RESULT: 10 checks, 0 failed\n[ok] header parses\n"));
     CHECK(result->find("[FAIL]") == std::string::npos);
     CHECK(runner.calls == 0);
 }
@@ -492,7 +492,7 @@ TEST_CASE("NifService verify flags a drive-letter texture path") {
     auto result = service.verify(nif);
 
     REQUIRE(result.has_value());
-    CHECK(result->starts_with("RESULT: 9 checks, 1 failed\n"));
+    CHECK(result->starts_with("RESULT: 10 checks, 1 failed\n"));
     CHECK(result->find("[FAIL] texture paths are relative: shape 'Tri' (block 1) texture 'C:\\Art\\Thing_d.dds' "
                        "is a drive-letter path") != std::string::npos);
 }
@@ -513,7 +513,7 @@ TEST_CASE("NifService verify flags a child that two nodes both list") {
     auto result = service.verify(nif);
 
     REQUIRE(result.has_value());
-    CHECK(result->starts_with("RESULT: 9 checks, 1 failed\n"));
+    CHECK(result->starts_with("RESULT: 10 checks, 1 failed\n"));
     CHECK(result->find("[FAIL] each block is listed under one parent only: block 1 is listed under node 2 "
                        "but its parent is 0") != std::string::npos);
 }
@@ -536,7 +536,7 @@ TEST_CASE("NifService imports an OBJ in-process without niftool and the written 
 
     REQUIRE(result.has_value());
     CHECK(result->starts_with("RESULT: import OK (in-process)\nSaved: " + nif.string() +
-                              "\nRESULT: 9 checks, 0 failed\n"));
+                              "\nRESULT: 10 checks, 0 failed\n"));
     CHECK(std::filesystem::is_regular_file(nif));
     CHECK_FALSE(std::filesystem::exists(root / "quad.nif.niftmp"));
     CHECK(runner.calls == 0);
