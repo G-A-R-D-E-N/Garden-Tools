@@ -141,13 +141,13 @@ std::size_t emit_node(Rebuild& rebuild, std::size_t index) {
     }
     write_dword(prcb.data, 0, static_cast<std::uint32_t>(children));
     rebuild.out.push_back(std::move(prcb));
-    std::optional<std::size_t> last_emitted;
+    flags_begin = node.children_anchor;
     for (const auto child : node.children) {
+      // Invariant: flags_begin follows every original child, including a skipped (removed) one.
+      if (child != rebuild.synthetic) flags_begin = rebuild.tree.nodes[child].end;
       if (rebuild.skip && *rebuild.skip == child) continue;
       emitted += emit_node(rebuild, child);
-      last_emitted = child;
     }
-    flags_begin = last_emitted ? rebuild.tree.nodes[*last_emitted].end : node.children_anchor;
   }
   for (std::size_t at = flags_begin; at < node.end; ++at) {
     rebuild.out.push_back(rebuild.record.subrecords[at]);
@@ -223,7 +223,7 @@ void reindex_kept_references(Record& record, const PackageProcedureTree& tree, s
       auto& sub = record.subrecords[at];
       if (sub.signature != sig("PKC2") || sub.data.size() != 1) continue;
       const auto old = std::to_integer<std::uint8_t>(sub.data[0]);
-      if (old <= max_input_id) sub.data[0] = std::byte{mapping[old]};
+      if (old <= max_input_id && present[old]) sub.data[0] = std::byte{mapping[old]};
     }
   }
 }
@@ -242,6 +242,7 @@ bool ensure_default_inputs(Plugin& plugin, Record*& record, const FormKey& recor
     return false;
   }
   const Record saved = *record;
+  const auto saved_range = plugin.original_range;
   const auto missing = needed - tree.inputs.size();
   for (std::size_t slot = 0; slot < missing; ++slot) {
     PackageInputValue value;
@@ -250,6 +251,7 @@ bool ensure_default_inputs(Plugin& plugin, Record*& record, const FormKey& recor
     const auto added = add_package_data_input(plugin, record_key, "Bool", value);
     if (added != PackageInputMutationStatus::updated) {
       *record = saved;
+      plugin.original_range = saved_range;
       status = PackageTreeMutationStatus::input_creation_failed;
       return false;
     }
@@ -257,6 +259,7 @@ bool ensure_default_inputs(Plugin& plugin, Record*& record, const FormKey& recor
   auto* refreshed = fo4::detail::locate_mutable_record(plugin, record_key);
   if (refreshed == nullptr) {
     *record = saved;
+    plugin.original_range = saved_range;
     status = PackageTreeMutationStatus::input_creation_failed;
     return false;
   }
@@ -264,6 +267,7 @@ bool ensure_default_inputs(Plugin& plugin, Record*& record, const FormKey& recor
   tree = decode_package_procedure(*record);
   if (!tree.decoded || tree.inputs.size() != needed) {
     *record = saved;
+    plugin.original_range = saved_range;
     status = PackageTreeMutationStatus::input_creation_failed;
     return false;
   }
@@ -293,6 +297,8 @@ PackageTreeMutationStatus add_package_procedure_node(Plugin& plugin,
   }
   const auto defaults = expected_input_count(procedure);
   const std::size_t needed = defaults.value_or(0);
+  const Record before_inputs = *record;
+  const auto before_range = plugin.original_range;
   auto status = PackageTreeMutationStatus::updated;
   if (!ensure_default_inputs(plugin, record, record_key, tree, needed, status)) return status;
   std::vector<std::uint8_t> slot_ids;
@@ -307,10 +313,16 @@ PackageTreeMutationStatus add_package_procedure_node(Plugin& plugin,
   model.nodes.push_back(std::move(node));
   model.nodes[parent_index].children.push_back(added);
 
-  Record candidate = *record;
-  Rebuild rebuild{*record, model, added, std::nullopt, procedure, {}, std::move(slot_ids)};
-  rebuild_into(candidate, model, rebuild);
-  commit_rebuilt(plugin, *record, std::move(candidate));
+  try {
+    Record candidate = *record;
+    Rebuild rebuild{*record, model, added, std::nullopt, procedure, {}, std::move(slot_ids)};
+    rebuild_into(candidate, model, rebuild);
+    commit_rebuilt(plugin, *record, std::move(candidate));
+  } catch (...) {
+    *record = before_inputs;
+    plugin.original_range = before_range;
+    throw;
+  }
   if (out_node_index != nullptr) {
     const auto rebuilt = decode_package_procedure(*record);
     if (rebuilt.decoded && parent_index < rebuilt.nodes.size() && !rebuilt.nodes[parent_index].children.empty()) {
@@ -385,14 +397,9 @@ PackageTreeMutationStatus remove_package_procedure_node(Plugin& plugin,
   Record working = *record;
   if (any_drop) reindex_kept_references(working, tree, node_index, present, drop, mapping);
 
-  auto model = tree;
-  auto& children = model.nodes[*parent].children;
-  children.erase(std::remove(children.begin(), children.end(), node_index), children.end());
-  if (model.nodes[*parent].child_count > 0) --model.nodes[*parent].child_count;
-
   Record candidate = working;
-  Rebuild rebuild{working, model, static_cast<std::size_t>(-1), node_index, {}, {}, {}};
-  rebuild_into(candidate, model, rebuild);
+  Rebuild rebuild{working, tree, static_cast<std::size_t>(-1), node_index, {}, {}, {}};
+  rebuild_into(candidate, tree, rebuild);
   if (any_drop) {
     erase_dropped_inputs(candidate, tree, drop);
     write_dword(candidate.subrecords[*pkcu].data, 0, static_cast<std::uint32_t>(kept));

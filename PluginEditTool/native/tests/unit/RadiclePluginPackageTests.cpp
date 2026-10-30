@@ -109,10 +109,11 @@ TEST_CASE("Native package procedure edits add and remove a leaf through save and
                            nlohmann::json{{"plugins", nlohmann::json::array({packEntry("Pack.esp", path)})}})
                 .has_value());
     const std::string key = "000800:Pack.esp";
-    const auto added = backend.addPackageProcedure(nlohmann::json::array({"Pack.esp", key, 1, "Activate"}));
+    const auto added = backend.addPackageProcedure(nlohmann::json::array({"Pack.esp", key, 0, "Activate"}));
     REQUIRE(added.has_value());
-    REQUIRE(backend.removePackageProcedure(nlohmann::json::array({"Pack.esp", key, 1})).has_value());
-    const auto refused = backend.addPackageProcedure(nlohmann::json::array({"Pack.esp", key, 1, "Fly"}));
+    CHECK(added->get<std::string>().find("at node 2 of") != std::string::npos);
+    REQUIRE(backend.removePackageProcedure(nlohmann::json::array({"Pack.esp", key, 2})).has_value());
+    const auto refused = backend.addPackageProcedure(nlohmann::json::array({"Pack.esp", key, 0, "Fly"}));
     REQUIRE_FALSE(refused.has_value());
     CHECK(refused.error().type == "PackageWriteFailed");
     REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Pack.esp"})).has_value());
