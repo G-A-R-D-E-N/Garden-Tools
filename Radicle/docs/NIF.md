@@ -789,3 +789,9 @@ Its parity items extend the list above:
     130, where `src/nif/shader_effect.cpp` does not read them.
 40. A box collision import still fails with `box collision is not supported yet (needs the
     HKX writer, #814)`; the Havok headers are for that work, not for this writer.
+41. `import_obj` writes an OBJ `vt` v coordinate through unchanged. No allowed source
+    states whether a NIF texture's v axis starts at the top or the bottom, and nothing
+    here compares a written mesh against an authored one, so the orientation is unproven
+    rather than chosen: the check is a NIF imported from a known OBJ and opened in the
+    Creation Kit. The read side passes the stored pair through either way, and the
+    round-trip test therefore cannot see this.
