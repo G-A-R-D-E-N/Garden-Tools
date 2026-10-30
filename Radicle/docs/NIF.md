@@ -798,7 +798,9 @@ Its parity items extend the list above:
 39. `BSEffectShaderProperty` environment, normal and env-mask paths are refused below BS
     130, where `src/nif/shader_effect.cpp` does not read them.
 40. A box collision import still fails with `box collision is not supported yet (needs the
-    HKX writer, #814)`; the Havok headers are for that work, not for this writer.
+    HKX writer, #1048)`. #814 is a read-only HKX reader that keeps writers in BGS by its own
+    scope, so the writer that would lift this is tracked on its own issue. The Havok headers
+    are for that work, not for this writer.
 41. `import_obj` writes an OBJ `vt` v coordinate through unchanged. No allowed source
     states whether a NIF texture's v axis starts at the top or the bottom, and nothing
     here compares a written mesh against an authored one, so the orientation is unproven

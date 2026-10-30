@@ -433,7 +433,7 @@ TEST_CASE("NifService refuses box collision in-process and writes no NIF") {
     auto result = service.importObj(obj, root / "quad.nif", options);
 
     REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().message.find("box collision is not supported yet (needs the HKX writer, #814)") !=
+    CHECK(result.error().message.find("box collision is not supported yet (needs the HKX writer, #1048)") !=
           std::string::npos);
     CHECK_FALSE(std::filesystem::exists(root / "quad.nif"));
 }
