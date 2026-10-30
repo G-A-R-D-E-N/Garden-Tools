@@ -2,6 +2,7 @@
 
 #include "fo4/binary/cursor.hpp"
 #include "fo4/error.hpp"
+#include "fo4/nif/vertex_desc.hpp"
 #include "nif_internal.hpp"
 
 #include <cmath>
@@ -22,7 +23,6 @@ constexpr std::uint32_t k_has_colour = 1U << 5;
 constexpr std::uint32_t k_has_skin = 1U << 6;
 constexpr std::uint32_t k_has_tail_slot = 1U << 8;
 constexpr std::uint32_t k_full_precision = 1U << 10;
-constexpr std::size_t k_skin_bytes = 12;
 constexpr std::size_t k_triangle_bytes = 6;
 constexpr std::size_t k_bone_weight_count = 4;
 constexpr std::size_t k_bone_index_count = 4;
@@ -46,16 +46,6 @@ float signed_unit_from_byte(std::uint8_t value) {
 
 float unit_from_byte(std::uint8_t value) {
   return static_cast<float>(value) / 255.0f;
-}
-
-std::size_t vertex_bytes_for(std::uint32_t flags) {
-  std::size_t bytes = (flags & k_full_precision) != 0 ? 16 : 8;
-  for (const std::uint32_t bit : {k_has_uv, k_has_uv2, k_has_normal, k_has_tangent, k_has_colour}) {
-    if ((flags & bit) != 0) bytes += 4;
-  }
-  if ((flags & k_has_skin) != 0) bytes += k_skin_bytes;
-  if ((flags & k_has_tail_slot) != 0) bytes += 4;
-  return bytes;
 }
 
 std::uint8_t read_signed_unit_vector(binary::Cursor& vertex, std::vector<float>& out) {
