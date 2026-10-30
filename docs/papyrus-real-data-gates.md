@@ -57,7 +57,7 @@ Add `--gtest_output=xml:<dir>\<gate>.xml` to keep `RecordProperty` values. For a
 ### 4. CK differential (158 of 161 documented)
 
 - Test: `PapyrusCodegenReal.CompiledOutputMatchesCreationKitInstructionForInstruction` (`Radicle/tests/test_papyrus_codegen_real.cpp`).
-- Env: `FO4RE_PEX_CORPUS`, or `FO4_PEX_CORPUS` when that yields no roots. Extra import roots: `FO4RE_PEX_IMPORT_ROOTS`, falling back to `FO4RE_PSC_ROOTS` when it is unset, so a local run that sets only the latter behaves as it did. `FO4RE_PEX_RELEASE` must be exactly `1` for a vanilla corpus. It switches the printed mode and turns off debug and beta emission.
+- Env: `FO4RE_PEX_CORPUS`, or `FO4_PEX_CORPUS` when that yields no roots. Extra import roots: `FO4RE_PEX_IMPORT_ROOTS`, falling back to `FO4RE_PSC_ROOTS` only when the variable is unset, so a local run that sets only the latter behaves as it did; a variable set to a path with no existing directory contributes no roots instead of falling back, because falling back would import `Source\User` again. `FO4RE_PEX_RELEASE` must be exactly `1` for a vanilla corpus. It switches the printed mode and turns off debug and beta emission.
 - Why its own variable: gates 3 and 5 need `Source\User` in `FO4RE_PSC_ROOTS`, because they sweep the whole source tree, and imports that resolved to an edited `User` script here would compile the vanilla `.psc` against different code and report the difference as a DIFF.
 - Pairing: each `.pex` needs a `.psc` under `Source/User` or `Source` (`sourceFor`). Only Fallout 4 `.pex` count (`isFallout4`).
 - Pass: compiled > 0 and identical / compiled >= 0.95 (`kMinimumIdenticalFraction`).

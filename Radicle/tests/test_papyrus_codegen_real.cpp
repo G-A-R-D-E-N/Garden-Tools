@@ -234,8 +234,11 @@ TEST(PapyrusCodegenReal, CompiledOutputMatchesCreationKitInstructionForInstructi
     return;
   }
 
+  // Must branch on whether the variable is set: a set-but-unusable path must not fall back to User.
   auto extra = helper::rootsFromEnv("FO4RE_PEX_IMPORT_ROOTS");
-  if (extra.empty()) extra = helper::rootsFromEnv("FO4RE_PSC_ROOTS");
+  if (envValue("FO4RE_PEX_IMPORT_ROOTS").empty()) {
+    extra = helper::rootsFromEnv("FO4RE_PSC_ROOTS");
+  }
   const auto release = envValue("FO4RE_PEX_RELEASE") == "1";
   const auto pairs = pairsFrom(pexRoots);
 
