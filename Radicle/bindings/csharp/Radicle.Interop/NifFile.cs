@@ -130,17 +130,45 @@ public sealed class NifShape
     public bool IsSkinned => Weights.Length == Positions.Length * 4 && Bones.Length > 0;
 }
 
+public sealed class NifCollisionBlob
+{
+    public required int Block { get; init; }
+
+    public required string Type { get; init; }
+
+    public required byte[] Bytes { get; init; }
+
+    // Invariant: every owner field is the reader's "none" value when no bhkNPCollisionObject names this system.
+    public required int OwnerBlock { get; init; }
+
+    public required ushort Flags { get; init; }
+
+    // Constraint: equals Block whenever OwnerBlock is set, because Data must name a system block.
+    public required int SystemRef { get; init; }
+
+    public required uint BodyId { get; init; }
+
+    public required int TargetBlock { get; init; }
+
+    public required int TargetNodeIndex { get; init; }
+
+    public NifNode? TargetNode { get; init; }
+}
+
 public sealed class NifFile
 {
-    private NifFile(NifNode[] nodes, NifShape[] shapes)
+    private NifFile(NifNode[] nodes, NifShape[] shapes, NifCollisionBlob[] collisions)
     {
         Nodes = nodes;
         Shapes = shapes;
+        Collisions = collisions;
     }
 
     public IReadOnlyList<NifNode> Nodes { get; }
 
     public IReadOnlyList<NifShape> Shapes { get; }
+
+    public IReadOnlyList<NifCollisionBlob> Collisions { get; }
 
     public static unsafe NifFile FromBytes(ReadOnlySpan<byte> bytes)
     {
@@ -154,7 +182,8 @@ public sealed class NifFile
         {
             var nodes = ReadNodes(handle);
             var shapes = ReadShapes(handle, nodes);
-            return new NifFile(nodes, shapes);
+            var collisions = ReadCollisions(handle, nodes);
+            return new NifFile(nodes, shapes, collisions);
         }
         finally
         {
@@ -211,6 +240,58 @@ public sealed class NifFile
             }
         }
         return nodes;
+    }
+
+    private static unsafe NifCollisionBlob[] ReadCollisions(IntPtr handle, NifNode[] nodes)
+    {
+        nuint count = 0;
+        Call.Check(RadicleNative.NifCollisionCount(handle, &count));
+        var collisions = new NifCollisionBlob[checked((int)count)];
+        for (var index = 0; index < collisions.Length; ++index)
+        {
+            uint block = 0;
+            Call.Check(RadicleNative.NifCollisionBlock(handle, (nuint)index, &block));
+
+            byte* type = null;
+            nuint typeSize = 0;
+            Call.Check(RadicleNative.NifCollisionType(handle, (nuint)index, &type, &typeSize));
+
+            byte* payload = null;
+            nuint payloadSize = 0;
+            Call.Check(RadicleNative.NifCollisionBytes(handle, (nuint)index, &payload, &payloadSize));
+
+            int ownerBlock = -1;
+            Call.Check(RadicleNative.NifCollisionOwnerBlock(handle, (nuint)index, &ownerBlock));
+
+            ushort flags = 0;
+            Call.Check(RadicleNative.NifCollisionFlags(handle, (nuint)index, &flags));
+
+            int systemRef = -1;
+            Call.Check(RadicleNative.NifCollisionSystemRef(handle, (nuint)index, &systemRef));
+
+            uint bodyId = 0;
+            Call.Check(RadicleNative.NifCollisionBodyId(handle, (nuint)index, &bodyId));
+
+            int targetBlock = -1;
+            Call.Check(RadicleNative.NifCollisionTargetBlock(handle, (nuint)index, &targetBlock));
+
+            int targetNode = -1;
+            Call.Check(RadicleNative.NifCollisionTargetNode(handle, (nuint)index, &targetNode));
+
+            collisions[index] = new NifCollisionBlob {
+                Block = checked((int)block),
+                Type = Encoding.Latin1.GetString(Call.TakeBytes(type, typeSize)),
+                Bytes = Call.TakeBytes(payload, payloadSize),
+                OwnerBlock = ownerBlock,
+                Flags = flags,
+                SystemRef = systemRef,
+                BodyId = bodyId,
+                TargetBlock = targetBlock,
+                TargetNodeIndex = targetNode,
+                TargetNode = targetNode >= 0 && targetNode < nodes.Length ? nodes[targetNode] : null,
+            };
+        }
+        return collisions;
     }
 
     private static unsafe NifShape[] ReadShapes(IntPtr handle, NifNode[] nodes)

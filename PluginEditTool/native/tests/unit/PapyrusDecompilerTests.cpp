@@ -1,7 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
-#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <optional>
@@ -17,31 +16,22 @@
 #include <fo4ide/papyrus/TypeChecker.hpp>
 
 #include "../helpers/PexComparer.hpp"
+#include "../helpers/TempRoot.hpp"
 
 using namespace fo4ide::papyrus;
 using namespace fo4ide::papyrus::test;
+using fo4ide_test::TempRoot;
 
 namespace {
 
-std::string uniqueRoot() {
-    return (std::filesystem::temp_directory_path() / "fo4ide-decompile-" /
-            std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()))
-        .string();
-}
-
 struct Fixture {
-    std::string root = uniqueRoot();
+    TempRoot temp{"fo4ide-decompile-"};
     ScriptIndex index;
-
-    ~Fixture() {
-        std::error_code error;
-        std::filesystem::remove_all(root, error);
-    }
 
     void write(std::string_view scriptName, std::string_view source) {
         std::string relative(scriptName);
         std::replace(relative.begin(), relative.end(), ':', '/');
-        const auto path = std::filesystem::path(root) / (relative + ".psc");
+        const auto path = temp.path() / (relative + ".psc");
         std::filesystem::create_directories(path.parent_path());
         std::ofstream out(path);
         out << source;
@@ -50,7 +40,7 @@ struct Fixture {
     void writeWithScriptObject() { write("ScriptObject", "Scriptname ScriptObject Native Hidden\n"); }
 
     std::unique_ptr<PexFile> compile(std::string_view scriptName) {
-        index.addRoot(root);
+        index.addRoot(temp.path());
         const Script* script = index.resolve(scriptName);
         REQUIRE(script != nullptr);
         if (script->hasErrors()) return nullptr;
@@ -103,9 +93,9 @@ struct Fixture {
         // be visible to the second pass too.
         Fixture f2;
         std::error_code error;
-        for (const auto& entry : std::filesystem::recursive_directory_iterator(root, error)) {
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(temp.path(), error)) {
             if (error || !entry.is_regular_file()) continue;
-            const auto target = std::filesystem::path(f2.root) / std::filesystem::relative(entry.path(), root);
+            const auto target = f2.temp.path() / std::filesystem::relative(entry.path(), temp.path());
             std::filesystem::create_directories(target.parent_path(), error);
             std::filesystem::copy_file(entry.path(), target,
                                        std::filesystem::copy_options::overwrite_existing, error);

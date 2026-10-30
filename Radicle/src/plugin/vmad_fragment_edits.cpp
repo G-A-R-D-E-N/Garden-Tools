@@ -309,6 +309,13 @@ void put_u16(std::vector<std::byte>& data, std::size_t at, std::uint16_t value) 
   data[at + 1] = static_cast<std::byte>(value >> 8);
 }
 
+void put_u32(std::vector<std::byte>& data, std::size_t at, std::uint32_t value) {
+  data[at] = static_cast<std::byte>(value);
+  data[at + 1] = static_cast<std::byte>(value >> 8);
+  data[at + 2] = static_cast<std::byte>(value >> 16);
+  data[at + 3] = static_cast<std::byte>(value >> 24);
+}
+
 std::optional<VmadStructureMutationStatus> load_fragment_section(Plugin& plugin,
                                                                 const FormKey& record_key,
                                                                 FragmentSection& section) {
@@ -586,6 +593,29 @@ VmadStructureMutationStatus remove_scene_vmad_phase_fragment(Plugin& plugin,
   splice(section.vmad->data, found->offset, found->end - found->offset, {});
   put_u16(section.vmad->data, section.phase_count_offset,
           static_cast<std::uint16_t>(section.phases.size() - 1));
+  detail::mark_record_modified(plugin, *section.record);
+  return VmadStructureMutationStatus::updated;
+}
+
+VmadStructureMutationStatus remap_scene_phase_indices(Plugin& plugin, const FormKey& record_key,
+                                                      std::span<const std::uint32_t> old_to_new) {
+  FragmentSection section;
+  if (const auto refusal = load_fragment_section(plugin, record_key, section)) return *refusal;
+  if (!section.scene) return VmadStructureMutationStatus::not_authorable;
+  bool changed = false;
+  for (const auto& phase : section.phases) {
+    if (phase.index >= old_to_new.size()) {
+      throw schema::ScalarError("VMAD scene phase fragment binds a phase the scene does not have");
+    }
+    const auto mapped = old_to_new[phase.index];
+    if (mapped == k_scene_phase_removed) {
+      throw schema::ScalarError("VMAD scene phase fragment binds the phase this edit removes");
+    }
+    if (mapped == phase.index) continue;
+    put_u32(section.vmad->data, phase.offset + 1, mapped);
+    changed = true;
+  }
+  if (!changed) return VmadStructureMutationStatus::unchanged;
   detail::mark_record_modified(plugin, *section.record);
   return VmadStructureMutationStatus::updated;
 }

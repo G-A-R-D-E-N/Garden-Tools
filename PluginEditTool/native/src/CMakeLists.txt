@@ -56,6 +56,7 @@ add_library(
     plugin/RadiclePluginTypedRecords.cpp
     plugin/RadiclePluginSound.cpp
     plugin/RadiclePluginPackage.cpp
+    plugin/RadiclePluginScripts.cpp
     plugin/ConditionCodec.cpp
     plugin/ConditionFunctions.cpp
 )

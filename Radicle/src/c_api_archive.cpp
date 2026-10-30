@@ -3,13 +3,17 @@
 #include "fo4/archive/ba2.hpp"
 #include "fo4/archive/ba2_hash.hpp"
 #include "fo4/environment/strings.hpp"
+#include "fo4/text/encoding.hpp"
 
 #include <cstdlib>
 #include <cstring>
 #include <limits>
 #include <memory>
+#include <span>
 #include <string>
 #include <string_view>
+#include <unordered_set>
+#include <utility>
 #include <vector>
 
 struct radicle_asset_list {
@@ -151,11 +155,11 @@ radicle_status radicle_ba2_write_general(const radicle_ba2_file* files,
                                          uint8_t** out_bytes,
                                          size_t* out_size) {
   clear_error();
+  if (out_bytes != nullptr) *out_bytes = nullptr;
+  if (out_size != nullptr) *out_size = 0;
   if ((files == nullptr && file_count != 0) || out_bytes == nullptr || out_size == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "files, out_bytes and out_size are required");
   }
-  *out_bytes = nullptr;
-  *out_size = 0;
   if (!fo4::archive::is_supported_ba2_general_version(version)) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT,
                 (std::string("unsupported BA2 general version ") + std::to_string(version) +
@@ -184,16 +188,23 @@ radicle_status radicle_ba2_write_general(const radicle_ba2_file* files,
   return guarded("unknown exception while writing BA2", [&] {
     fo4::archive::Ba2GeneralArchive archive;
     archive.version = version;
+    std::unordered_set<std::string> names;
     archive.entries.reserve(file_count);
     for (size_t i = 0; i < file_count; ++i) {
+      const auto& input = files[i];
+      // requires valid_ba2_write_path to have accepted input.path
+      const auto stored = *fo4::text::utf8_to_windows1252(input.path);
+      const auto name = fo4::archive::normalize_ba2_name(stored);
+      if (!names.insert(name).second) {
+        return fail(RADICLE_STATUS_INVALID_ARGUMENT, "BA2 entry path duplicates an earlier entry");
+      }
+      const auto hashes = fo4::archive::compute_ba2_hashes(stored);
       fo4::archive::Ba2GeneralEntry entry;
-      entry.path = files[i].path;
-      const auto stored_path = fo4::text::utf8_to_windows1252(entry.path);
-      const auto hashes = fo4::archive::compute_ba2_hashes(stored_path ? *stored_path : entry.path);
       entry.name_hash = hashes.name;
       entry.extension_hash = hashes.extension;
       entry.directory_hash = hashes.directory;
-      const std::span<const std::byte> data(reinterpret_cast<const std::byte*>(files[i].data), files[i].size);
+      entry.path = input.path;
+      const std::span<const std::byte> data(reinterpret_cast<const std::byte*>(input.data), input.size);
       entry.chunks.push_back(compress != 0 ? fo4::archive::make_compressed_ba2_chunk(data)
                                            : fo4::archive::make_stored_ba2_chunk(data));
       archive.entries.push_back(std::move(entry));

@@ -2942,7 +2942,7 @@ public unsafe struct PapyrusCompileOptions
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 90u;
+    public const uint CompiledAbiVersion = 92u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -3634,6 +3634,27 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_remove_quest_vmad_fragment")]
     public static extern Status PluginRemoveQuestVmadFragment(IntPtr plugin, FormKey key, ushort stage, int stage_index);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_add_vmad")]
+    public static extern Status PluginAddVmad(IntPtr plugin, FormKey key);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_add_vmad_script")]
+    public static extern Status PluginAddVmadScript(IntPtr plugin, FormKey key, nuint index, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? script_name, byte flags, nuint* out_script_index);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_remove_vmad_script")]
+    public static extern Status PluginRemoveVmadScript(IntPtr plugin, FormKey key, nuint script_index);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_add_vmad_property")]
+    public static extern Status PluginAddVmadProperty(IntPtr plugin, FormKey key, nuint script_index, nuint index, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, byte type, byte flags, nuint* out_property_index);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_remove_vmad_property")]
+    public static extern Status PluginRemoveVmadProperty(IntPtr plugin, FormKey key, nuint script_index, nuint property_index);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_add_vmad_fragment")]
+    public static extern Status PluginAddVmadFragment(IntPtr plugin, FormKey key, uint fragment_key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? script, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? function);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_remove_vmad_fragment")]
+    public static extern Status PluginRemoveVmadFragment(IntPtr plugin, FormKey key, uint fragment_key);
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_record_vmad_scripts")]
     public static extern Status RecordVmadScripts(IntPtr env, IntPtr record, IntPtr* out_scripts);
 
@@ -4026,6 +4047,36 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_shape_bone_transform")]
     public static extern Status NifShapeBoneTransform(IntPtr nif, nuint index, nuint bone, float* out_center, float* out_radius, float* out_rotation, float* out_translation, float* out_scale);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_collision_count")]
+    public static extern Status NifCollisionCount(IntPtr nif, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_collision_block")]
+    public static extern Status NifCollisionBlock(IntPtr nif, nuint index, uint* out_block);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_collision_type")]
+    public static extern Status NifCollisionType(IntPtr nif, nuint index, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_collision_bytes")]
+    public static extern Status NifCollisionBytes(IntPtr nif, nuint index, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_collision_owner_block")]
+    public static extern Status NifCollisionOwnerBlock(IntPtr nif, nuint index, int* out_block);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_collision_flags")]
+    public static extern Status NifCollisionFlags(IntPtr nif, nuint index, ushort* out_flags);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_collision_system_ref")]
+    public static extern Status NifCollisionSystemRef(IntPtr nif, nuint index, int* out_block);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_collision_body_id")]
+    public static extern Status NifCollisionBodyId(IntPtr nif, nuint index, uint* out_body_id);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_collision_target_block")]
+    public static extern Status NifCollisionTargetBlock(IntPtr nif, nuint index, int* out_block);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_nif_collision_target_node")]
+    public static extern Status NifCollisionTargetNode(IntPtr nif, nuint index, int* out_node);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_free_floats")]
     public static extern void FreeFloats(float* values);

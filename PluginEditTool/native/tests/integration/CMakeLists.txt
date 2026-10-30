@@ -12,7 +12,7 @@ target_link_libraries(
 
 fo4ide_enable_warnings(fo4ide_test_http)
 fo4ide_enable_sanitizers(fo4ide_test_http)
-catch_discover_tests(fo4ide_test_http TEST_SPEC "~[large]" PROPERTIES TIMEOUT 10)
+catch_discover_tests(fo4ide_test_http TEST_SPEC "~[large]" PROPERTIES TIMEOUT ${FO4IDE_TEST_TIMEOUT})
 catch_discover_tests(fo4ide_test_http TEST_SPEC "[large]" PROPERTIES TIMEOUT 120)
 
 fo4ide_use_utf8_code_page()
