@@ -22,7 +22,7 @@ struct ShapeGeometry {
   bool operator==(const ShapeGeometry&) const = default;
 };
 
-/* Requires edge records in twips; the returned loops are in pixels. */
+/* Requires the divisor that converts edge units to pixels; the returned loops are in pixels. */
 ShapeGeometry geometry_from_shape_records(const std::vector<swf::SwfShapeRecord>& records,
                                           double twips_per_pixel = 20.0);
 
