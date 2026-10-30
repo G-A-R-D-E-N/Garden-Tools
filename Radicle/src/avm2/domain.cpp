@@ -36,17 +36,19 @@ const Class* Runtime::find_domain_definition(const ApplicationDomainObject& doma
                                              std::string_view name) const {
   const Class* klass = find_class(name);
   if (klass == nullptr || klass->file == nullptr) {
+    // Builtins and external placeholders must resolve from every domain.
     return klass;
   }
-  const ApplicationDomainObject* owner = nullptr;
-  for (const FileState& state : files_) {
-    if (state.file == klass->file) {
-      owner = state.domain.get();
-    }
-  }
+  const std::string key{name};
   for (const ApplicationDomainObject* scope = &domain; scope != nullptr;
        scope = scope->parent().get()) {
-    if (owner == scope || (owner == nullptr && scope->parent() == nullptr)) {
+    if (const Class* local = scope->find_local_definition(key)) {
+      return local;
+    }
+  }
+  for (const FileState& state : files_) {
+    // A root-loaded file must stay visible from every domain, like a parent's definitions.
+    if (state.file == klass->file && state.domain == nullptr) {
       return klass;
     }
   }

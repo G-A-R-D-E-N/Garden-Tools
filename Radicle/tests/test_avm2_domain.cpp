@@ -30,6 +30,7 @@ namespace {
 namespace abc = fo4::abc;
 
 using fo4::avm2::ApplicationDomainObject;
+using fo4::avm2::Class;
 using fo4::avm2::ExecutionResult;
 using fo4::avm2::HostCallbacks;
 using fo4::avm2::Interpreter;
@@ -70,15 +71,15 @@ struct DomainHarness {
   }
 };
 
-std::vector<std::uint8_t> second_class_abc() {
+std::vector<std::uint8_t> named_class_abc(const char* name) {
   avm2_test::ScriptBuilder script;
   avm2_test::CodeBuilder body;
   body.returnvoid();
   const std::uint32_t init = script.method("init", body.bytes(), 0);
-  const std::uint32_t constructor = script.method("second", body.bytes(), 1);
+  const std::uint32_t constructor = script.method(name, body.bytes(), 1);
   const std::uint32_t class_init = script.method("cinit", body.bytes(), 1);
   const std::uint32_t object_name = script.multiname("Object");
-  const std::uint32_t class_name = script.multiname("Second");
+  const std::uint32_t class_name = script.multiname(name);
   abc::AbcFile file = script.finish(init);
   abc::AbcInstanceInfo instance;
   instance.name = class_name;
@@ -92,6 +93,8 @@ std::vector<std::uint8_t> second_class_abc() {
   EXPECT_EQ(file.serialize(bytes), abc::AbcStatus::Ok);
   return bytes;
 }
+
+std::vector<std::uint8_t> second_class_abc() { return named_class_abc("Second"); }
 
 std::vector<std::uint8_t> second_movie() {
   const std::vector<std::uint8_t> abc_bytes = second_class_abc();
@@ -287,6 +290,48 @@ TEST(Avm2Domain, LoaderContextDomainReceivesTheSecondMovieDefinitions) {
   EXPECT_EQ(harness.runtime.find_domain_definition(*harness.runtime.current_domain(), "Second"),
             nullptr);
   EXPECT_EQ(harness.runtime.host().stats().asset_requests, 1u);
+}
+
+TEST(Avm2Domain, ChildDomainSeesRootLoadedDefinitions) {
+  DomainHarness harness;
+  const std::vector<std::uint8_t> bytes = named_class_abc("RootClass");
+  abc::AbcFile root_file;
+  ASSERT_EQ(abc::AbcFile::parse(bytes.data(), bytes.size(), root_file), abc::AbcStatus::Ok);
+  harness.runtime.add_file(root_file);
+  ASSERT_TRUE(harness.runtime.link().ok());
+  const Class* domain_class =
+      harness.runtime.find_class("flash.system::ApplicationDomain");
+  ASSERT_NE(domain_class, nullptr);
+  const auto child = std::make_shared<ApplicationDomainObject>(
+      const_cast<Class*>(domain_class), harness.runtime.current_domain());
+  EXPECT_NE(harness.runtime.find_domain_definition(*child, "RootClass"), nullptr);
+  EXPECT_NE(harness.runtime.find_domain_definition(*child, "flash.display::Sprite"),
+            nullptr);
+  EXPECT_EQ(harness.runtime.find_domain_definition(*child, "NoSuchClass"), nullptr);
+}
+
+TEST(Avm2Domain, SiblingDomainsStayIsolated) {
+  DomainHarness harness;
+  const Class* domain_class =
+      harness.runtime.find_class("flash.system::ApplicationDomain");
+  ASSERT_NE(domain_class, nullptr);
+  const auto first = std::make_shared<ApplicationDomainObject>(
+      const_cast<Class*>(domain_class), harness.runtime.current_domain());
+  const auto second = std::make_shared<ApplicationDomainObject>(
+      const_cast<Class*>(domain_class), harness.runtime.current_domain());
+  const std::vector<std::uint8_t> bytes = named_class_abc("SibClass");
+  abc::AbcFile sib_file;
+  ASSERT_EQ(abc::AbcFile::parse(bytes.data(), bytes.size(), sib_file), abc::AbcStatus::Ok);
+  harness.runtime.add_file(sib_file, first);
+  ASSERT_TRUE(harness.runtime.link().ok());
+  EXPECT_NE(harness.runtime.find_domain_definition(*first, "SibClass"), nullptr);
+  EXPECT_EQ(
+      harness.runtime.find_domain_definition(*harness.runtime.current_domain(), "SibClass"),
+      nullptr);
+  EXPECT_EQ(harness.runtime.find_domain_definition(*second, "SibClass"), nullptr);
+  const auto grandchild = std::make_shared<ApplicationDomainObject>(
+      const_cast<Class*>(domain_class), first);
+  EXPECT_NE(harness.runtime.find_domain_definition(*grandchild, "SibClass"), nullptr);
 }
 
 TEST(Avm2Domain, LoaderWithoutAContextLoadsIntoTheCurrentDomain) {

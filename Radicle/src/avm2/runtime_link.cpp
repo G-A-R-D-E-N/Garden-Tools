@@ -38,10 +38,14 @@ std::string instance_key(const abc::AbcFile& file, std::uint32_t instance_index)
 
 }  // namespace
 
-RuntimeStatus Runtime::build_shells_for_file(const abc::AbcFile& file) {
+RuntimeStatus Runtime::build_shells_for_file(const abc::AbcFile& file,
+                                              const std::shared_ptr<ApplicationDomainObject>& domain) {
   if (file.instances.size() != file.classes.size()) {
     return RuntimeStatus::InvalidTrait;
   }
+  // A file without a domain must record its classes on the root, keeping them parent-visible.
+  const std::shared_ptr<ApplicationDomainObject> table =
+      domain != nullptr ? domain : current_domain();
   for (std::uint32_t index = 0; index < file.instances.size(); ++index) {
       Multiname name_multiname;
       if (resolve_multiname(file, file.instances[index].name, name_multiname) !=
@@ -68,6 +72,7 @@ RuntimeStatus Runtime::build_shells_for_file(const abc::AbcFile& file) {
         const auto existing = class_by_key_.find(key);
         if (existing != class_by_key_.end()) {
           class_by_instance_[instance_key(file, index)] = existing->second;
+          table->define_local_definition(owned->name, existing->second);
           continue;
         }
         class_by_key_.emplace(key, klass);
@@ -77,6 +82,7 @@ RuntimeStatus Runtime::build_shells_for_file(const abc::AbcFile& file) {
       }
     class_by_instance_[instance_key(file, index)] = klass;
     classes_.push_back(klass);
+    table->define_local_definition(owned->name, klass);
     owned_classes_.push_back(std::move(owned));
   }
   return RuntimeStatus::Ok;
@@ -84,7 +90,7 @@ RuntimeStatus Runtime::build_shells_for_file(const abc::AbcFile& file) {
 
 RuntimeStatus Runtime::build_class_shells() {
   for (const FileState& state : files_) {
-    if (build_shells_for_file(*state.file) != RuntimeStatus::Ok) {
+    if (build_shells_for_file(*state.file, state.domain) != RuntimeStatus::Ok) {
       return RuntimeStatus::InvalidTrait;
     }
   }
@@ -109,7 +115,7 @@ RuntimeLoad Runtime::link_added_file(std::size_t file_index) {
     result.message = "file is already linked";
     return result;
   }
-  if (build_shells_for_file(*state.file) != RuntimeStatus::Ok) {
+  if (build_shells_for_file(*state.file, state.domain) != RuntimeStatus::Ok) {
     result.status = RuntimeStatus::DuplicateClass;
     result.message = "a class name is defined twice";
     return result;
