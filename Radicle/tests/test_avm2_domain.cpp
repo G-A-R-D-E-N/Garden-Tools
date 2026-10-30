@@ -312,6 +312,9 @@ TEST(Avm2Domain, ChildDomainSeesRootLoadedDefinitions) {
 
 TEST(Avm2Domain, SiblingDomainsStayIsolated) {
   DomainHarness harness;
+  // Requires a linked runtime: builtins install at link.
+  harness.runtime.add_file(harness.main_file);
+  ASSERT_TRUE(harness.runtime.link().ok());
   const Class* domain_class =
       harness.runtime.find_class("flash.system::ApplicationDomain");
   ASSERT_NE(domain_class, nullptr);
@@ -323,7 +326,7 @@ TEST(Avm2Domain, SiblingDomainsStayIsolated) {
   abc::AbcFile sib_file;
   ASSERT_EQ(abc::AbcFile::parse(bytes.data(), bytes.size(), sib_file), abc::AbcStatus::Ok);
   harness.runtime.add_file(sib_file, first);
-  ASSERT_TRUE(harness.runtime.link().ok());
+  ASSERT_TRUE(harness.runtime.link_added_file(harness.runtime.file_count() - 1).ok());
   EXPECT_NE(harness.runtime.find_domain_definition(*first, "SibClass"), nullptr);
   EXPECT_EQ(
       harness.runtime.find_domain_definition(*harness.runtime.current_domain(), "SibClass"),
