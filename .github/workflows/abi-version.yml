@@ -1,13 +1,6 @@
 name: abi-version
 
-# Fails a pull request whose RADICLE_ABI_VERSION is also claimed by another open pull
-# request or by its base branch. Radicle/bindings/csharp/Radicle.Interop/Core.cs:VerifyAbi
-# compares the number for equality, so two different surfaces under one number pass the
-# guard and then fail on an export the library does not have. #1033 and #1041 both
-# declared 93 on the same 92 base that way and only a reader noticed.
-# Self-hosted only, like the other workflows here: both orgs are over the Free Actions
-# minutes allowance and hosted jobs fail silently once it is exhausted (GHRUNNER#24).
-# Path-scoped to the C ABI, so a pull request that cannot move the number costs nothing.
+# Constraint: one RADICLE_ABI_VERSION per surface; see docs/code-notes/GARDEN-TOOLS.md at .github/scripts/check_abi_version_collision.py:claim_conflicts.
 
 on:
   pull_request:
@@ -31,10 +24,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          # The default pull_request checkout is the merge commit, which the
-          # author never pushed; the script diffs HEAD against the base, so it
-          # needs the pull request head itself.
+          # Constraint: the script needs the pushed head, not the merge commit.
           ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
 
       - name: Check the ABI number
         env:

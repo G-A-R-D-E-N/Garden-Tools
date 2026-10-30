@@ -35,12 +35,7 @@ def read_version(text, where):
 
 
 def local_problems(version, base_version, changed_headers, parent_version=None):
-    """Rules 1 and 3: the number has to move forward, and an edited header has to say so.
-
-    A stacked child keeps its parent's number by design, so rule 1 passes when
-    the base is another pull request's branch and the number matches that
-    parent's. A pull request based straight on the base branch has no parent
-    and still has to bump."""
+    """Rules 1 and 3: the number moves forward, and an edited header says so (see code-notes)."""
     if version < base_version:
         return ["{} says {} but the base branch already says {}. A number may not move "
                 "backwards; rebase and take one above {}.".format(
@@ -96,14 +91,7 @@ def _descendants(parents):
 
 
 def claim_conflicts(claims, base_version, ancestry=None):
-    """Rule 2: one entry per number that two different lineages both claim.
-
-    One lineage is claims in unbroken descent: a child supersedes its parent,
-    so a chain counts once, while siblings on one parent are compared with
-    each other instead of being unioned away. Descent comes from the base and
-    head refs and shas, plus the ancestry map (child number to parent
-    numbers) for stacks whose branches hide the join, such as a pull request
-    based on the base branch that still carries its parent's commits."""
+    """Rule 2: one entry per number that two different lineages both claim (see code-notes)."""
     parents = _parent_edges(claims)
     for child, olds in (ancestry or {}).items():
         parents.setdefault(child, set()).update(olds)
@@ -130,6 +118,14 @@ def claim_conflicts(claims, base_version, ancestry=None):
 
 def git(*arguments):
     return subprocess.run(("git",) + arguments, check=True, capture_output=True, text=True).stdout
+
+
+def changed_headers_from(base_ref, head_ref):
+    """Headers the head adds over the base: three dots exclude the base's own work (see code-notes)."""
+    return [path for path in
+            git("diff", "--name-only", base_ref + "..." + head_ref, "--",
+                HEADER_GLOB).split("\n")
+            if path]
 
 
 def get_json(url, token):
@@ -167,23 +163,39 @@ def claim_of(pull, api, repo, token):
     }
 
 
-def compare_status(api, repo, token, old, new):
-    """How the second head relates to the first: ahead, behind, identical or diverged."""
+def compare_counts(api, repo, token, old, new):
+    """Commits in new that are not in old, from the Forgejo compare body (see code-notes)."""
     try:
         data = get_json("{}/repos/{}/compare/{}...{}".format(api, repo, old, new), token)
     except (urllib.error.URLError, urllib.error.HTTPError, ValueError, KeyError,
             TypeError) as error:
         print("::warning::cannot compare {} with {}: {}".format(old, new, error))
         return None
-    return data.get("status")
+    try:
+        return data["total_commits"]
+    except (KeyError, TypeError):
+        print("::warning::compare of {} with {} hides total_commits; no ancestry call".format(
+            old, new))
+        return None
+
+
+def compare_status(api, repo, token, old, new):
+    """How new relates to old: ahead, behind, identical or diverged (see code-notes)."""
+    forward = compare_counts(api, repo, token, old, new)
+    backward = compare_counts(api, repo, token, new, old)
+    if forward is None or backward is None:
+        return None
+    if forward == 0 and backward == 0:
+        return "identical"
+    if forward > 0 and backward == 0:
+        return "ahead"
+    if forward == 0 and backward > 0:
+        return "behind"
+    return "diverged"
 
 
 def ancestry_of(claims, base_version, api, repo, token):
-    """Child numbers to parent numbers for claims that share a number but no join.
-
-    One compare call per pair decides both directions: ahead means the first
-    head is an ancestor of the second. Only groups that can collide are
-    compared, so unrelated stacks cost nothing."""
+    """Child numbers to parent numbers for claims that share a number but no join (see code-notes)."""
     by_version = {}
     for claim in claims:
         by_version.setdefault(claim["version"], []).append(claim)
@@ -220,11 +232,14 @@ def main(argv=None):
         return 2
 
     version = read_version(git("show", "HEAD:" + HEADER), "HEAD:" + HEADER)
-    git("fetch", "--no-tags", "--depth=1", "origin", arguments.base)
+    try:
+        git("fetch", "--no-tags", "origin", arguments.base)
+    except subprocess.CalledProcessError as error:
+        print("::error::cannot fetch the base branch {} ({}); the gate needs it, so this is exit 2, not a pass".format(
+            arguments.base, error))
+        return 2
     base_version = read_version(git("show", "FETCH_HEAD:" + HEADER), "the base branch")
-    changed = [path for path in
-               git("diff", "--name-only", "FETCH_HEAD", "HEAD", "--", HEADER_GLOB).split("\n")
-               if path]
+    changed = changed_headers_from("FETCH_HEAD", "HEAD")
 
     if arguments.local_only:
         problems = local_problems(version, base_version, changed)

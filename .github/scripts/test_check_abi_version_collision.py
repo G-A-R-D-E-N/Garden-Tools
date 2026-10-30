@@ -1,3 +1,6 @@
+import os
+import subprocess
+import tempfile
 import unittest
 
 import check_abi_version_collision as check
@@ -116,6 +119,67 @@ class ClaimConflictsTest(unittest.TestCase):
         self.assertEqual([(95, [1041, 1042, 1043])], check.claim_conflicts(
             [parent, first, second], 92,
             ancestry={1042: {1041}, 1043: {1041}}))
+
+
+class CompareStatusTest(unittest.TestCase):
+    def run_with(self, bodies):
+        seen = []
+
+        def fake_get_json(url, token):
+            seen.append(url)
+            return dict(bodies[url])
+
+        real = check.get_json
+        check.get_json = fake_get_json
+        try:
+            return check.compare_status("a", "r", "t", "old", "new"), seen
+        finally:
+            check.get_json = real
+
+    def urls(self, old, new):
+        return ("a/repos/r/compare/{}...{}".format(old, new),
+                "a/repos/r/compare/{}...{}".format(new, old))
+
+    def test_counts_both_ways_before_naming_the_relation(self):
+        forward, backward = self.urls("old", "new")
+        for bodies, want in [({forward: {"total_commits": 1}, backward: {"total_commits": 0}}, "ahead"),
+                             ({forward: {"total_commits": 0}, backward: {"total_commits": 2}}, "behind"),
+                             ({forward: {"total_commits": 0}, backward: {"total_commits": 0}}, "identical"),
+                             ({forward: {"total_commits": 1}, backward: {"total_commits": 1}}, "diverged"),
+                             ({forward: {}, backward: {"total_commits": 0}}, None)]:
+            status, seen = self.run_with(bodies)
+            self.assertEqual(want, status)
+            self.assertEqual([forward, backward], seen)
+
+
+class ChangedHeadersTest(unittest.TestCase):
+    def test_a_branch_behind_its_base_reports_no_header_edit(self):
+        root = tempfile.mkdtemp()
+        run = lambda *args: subprocess.run(
+            ("git",) + args, check=True, capture_output=True, text=True, cwd=root)
+        run("init", "-b", "main")
+        run("config", "core.hooksPath", "")
+        run("config", "user.email", "t@t")
+        run("config", "user.name", "t")
+        header = os.path.join(root, "Radicle", "include", "fo4", "c_api_nif.h")
+        os.makedirs(os.path.dirname(header))
+        with open(header, "w") as stream:
+            stream.write("#define RADICLE_ABI_VERSION 92u\n")
+        run("add", ".")
+        run("commit", "-m", "base")
+        run("checkout", "-b", "behind")
+        run("checkout", "main")
+        with open(header, "a") as stream:
+            stream.write("/* base header edit */\n")
+        run("commit", "-am", "base header edit")
+        here = os.getcwd()
+        os.chdir(root)
+        try:
+            self.assertEqual([], check.changed_headers_from("main", "behind"))
+            self.assertEqual(["Radicle/include/fo4/c_api_nif.h"],
+                             check.changed_headers_from("behind", "main"))
+        finally:
+            os.chdir(here)
 
 
 if __name__ == "__main__":
