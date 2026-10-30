@@ -198,6 +198,7 @@ const char* alpha_test_name(AlphaTestFunction function) noexcept;
 
 struct AlphaProperty {
   std::uint32_t block{0};
+  std::string name;
   std::uint16_t flags{0};
   std::uint8_t threshold{0};
   // Invariant: the five decoded fields are flags bits 0, 1-4, 5-8, 9 and 10-12, so no caller shifts the word itself.

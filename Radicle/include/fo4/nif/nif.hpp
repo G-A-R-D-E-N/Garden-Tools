@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace fo4::nif {
@@ -103,6 +104,10 @@ struct Shape {
 };
 
 std::vector<Shape> read_shapes(const NifFile& nif);
+// Invariant: the four tri-shape types share the BSTriShape layout read_shape decodes.
+bool is_shape_block_type(std::string_view type);
+// Requires is_shape_block_type(nif.blocks().at(block).type); throws parse_error for a malformed block.
+Shape read_shape(const NifFile& nif, std::uint32_t block);
 Transform shape_to_global(const NifFile& nif, std::uint32_t block);
 Transform block_transform(const NifFile& nif, std::uint32_t block);
 std::int32_t billboard_mode(const NifFile& nif, std::uint32_t block);

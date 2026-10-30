@@ -1,7 +1,6 @@
 #include <fo4ide/assets/NifRender.hpp>
 
 #include <algorithm>
-#include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <fstream>
@@ -10,10 +9,11 @@
 #include <span>
 #include <stdexcept>
 #include <string>
-#include <string_view>
+#include <utility>
 #include <vector>
 
 #include <fo4/error.hpp>
+#include <fo4/nif/describe.hpp>
 #include <fo4/nif/nif.hpp>
 #include <fo4/nif/nif_write.hpp>
 
@@ -29,173 +29,34 @@ fo4::nif::NifFile loadNif(const std::filesystem::path& nifPath) {
     return fo4::nif::read_nif(std::as_bytes(std::span(raw)));
 }
 
-bool isBgsmPath(std::string path) {
-    std::ranges::transform(path, path.begin(),
-                           [](char ch) { return static_cast<char>(std::tolower(static_cast<unsigned char>(ch))); });
-    return path.ends_with(".bgsm");
-}
-
-bool hasBlockPrefix(const fo4::nif::NifFile& nif, std::string_view prefix) {
-    return std::any_of(nif.blocks().begin(), nif.blocks().end(),
-                       [prefix](const auto& block) { return block.type.starts_with(prefix); });
-}
-
-nlohmann::json textureRefs(const fo4::nif::Shape& shape) {
+nlohmann::json textureRefs(const std::vector<fo4::nif::TextureSlot>& slots) {
     auto refs = nlohmann::json::array();
-    for (std::size_t slot = 0; slot < shape.textures.size(); ++slot) {
-        if (!shape.textures[slot].empty()) refs.push_back({{"slot", slot}, {"path", shape.textures[slot]}});
-    }
+    for (const auto& slot : slots) refs.push_back({{"slot", slot.slot}, {"path", slot.path}});
     return refs;
 }
 
-nlohmann::json shapeGeometry(const fo4::nif::NifFile& nif, const fo4::nif::Shape& shape) {
-    nlohmann::json out{
-        {"name", shape.name},
-        {"verts", shape.verts},
-        {"tris", shape.tris},
-        {"normals", shape.normals},
-        {"uvs", shape.uvs},
-        {"textures", textureRefs(shape)},
-        {"skinned", shape.skin_ref >= 0},
-    };
-    const auto mode = fo4::nif::billboard_mode(nif, shape.block);
-    if (mode >= 0) {
-        out["billboard"] = true;
-        out["billboardMode"] = mode;
-    }
-    if (out["textures"].empty() && isBgsmPath(shape.material)) out["bgsmPath"] = shape.material;
-    return out;
-}
-
-nlohmann::json shapeInspect(const fo4::nif::Shape& shape) {
-    return {
-        {"name", shape.name},
-        {"verts", shape.verts.size() / 3},
-        {"tris", shape.tris.size() / 3},
-        {"skinned", shape.skin_ref >= 0},
-        {"shader", shape.material},
-        {"textures", textureRefs(shape)},
-        {"tangents", !shape.tangents.empty()},
-    };
-}
-
-nlohmann::json treeField(std::string key, std::string label, std::string type, nlohmann::json value) {
-    return {{"key", std::move(key)}, {"label", std::move(label)}, {"type", std::move(type)}, {"value", std::move(value)}};
-}
-
-nlohmann::json treeBlock(std::uint32_t id, const std::string& type, const std::string& name, const char* group,
-                         const char* cat, nlohmann::json fields) {
-    return {{"id", id}, {"type", type}, {"name", name}, {"group", group}, {"cat", cat}, {"fields", std::move(fields)}};
-}
-
-nlohmann::json vec3(const float* values) {
-    return nlohmann::json::array({values[0], values[1], values[2]});
-}
-
-nlohmann::json nodeTreeBlock(const fo4::nif::Node& node) {
-    return treeBlock(node.block, node.type, node.name, "Nodes", "node", nlohmann::json::array({
-        treeField("name", "Name", "string", node.name),
-        treeField("translation", "Translation", "vec3", vec3(node.local.t)),
-        treeField("scale", "Scale", "float", node.local.s),
-    }));
-}
-
-nlohmann::json shapeTreeBlock(const fo4::nif::NifFile& nif, const fo4::nif::Shape& shape) {
-    const auto transform = fo4::nif::block_transform(nif, shape.block);
-    const auto shaderType = shape.shader_ref >= 0
-        ? nif.blocks().at(static_cast<std::size_t>(shape.shader_ref)).type
-        : std::string{};
-    auto fields = nlohmann::json::array({
-        treeField("name", "Name", "string", shape.name),
-        treeField("translation", "Translation", "vec3", vec3(transform.t)),
-        treeField("verts", "Vertices", "readonly", shape.verts.size() / 3),
-        treeField("tris", "Triangles", "readonly", shape.tris.size() / 3),
-        treeField("shaderType", "Shader", "readonly", shaderType),
-        treeField("material", "Material (.bgsm)", "string", shape.material),
-    });
-    for (std::size_t slot = 0; slot < 8; ++slot) {
-        fields.push_back(treeField("tex" + std::to_string(slot), "Texture " + std::to_string(slot), "tex",
-                                   slot < shape.textures.size() ? shape.textures[slot] : std::string{}));
-    }
-    return treeBlock(shape.block, nif.blocks().at(shape.block).type, shape.name, "Shapes", "shape", std::move(fields));
-}
-
-struct VerifyCheck {
-    std::string name;
-    std::string failure;
-};
-
-std::string texturePathFault(const std::string& path) {
-    if (path.size() >= 2 && path[1] == ':') return "is a drive-letter path";
-    if (!path.empty() && (path.front() == '/' || path.front() == '\\')) return "is an absolute path";
-    return {};
-}
-
-template <typename Probe>
-VerifyCheck shapeCheck(std::string name, const std::vector<fo4::nif::Shape>& shapes, Probe probe) {
-    for (const auto& shape : shapes) {
-        auto fault = probe(shape);
-        if (!fault.empty()) {
-            return {std::move(name), "shape '" + shape.name + "' (block " + std::to_string(shape.block) + ") " + fault};
+nlohmann::json treeValue(const fo4::nif::TreeValue& value) {
+    if (const auto* text = std::get_if<std::string>(&value)) return *text;
+    if (const auto* number = std::get_if<float>(&value)) return *number;
+    if (const auto* numbers = std::get_if<std::vector<float>>(&value)) return *numbers;
+    if (const auto* flag = std::get_if<bool>(&value)) return *flag;
+    auto flags = nlohmann::json::array();
+    if (const auto* toggles = std::get_if<std::vector<fo4::nif::TreeFlag>>(&value)) {
+        for (const auto& toggle : *toggles) {
+            flags.push_back({{"key", toggle.key}, {"label", toggle.label}, {"on", toggle.on}});
         }
     }
-    return {std::move(name), {}};
+    return flags;
 }
 
-std::vector<VerifyCheck> verifyChecks(const fo4::nif::NifFile& nif) {
-    std::vector<VerifyCheck> checks{VerifyCheck{"header parses", {}}};
-
-    std::string link;
-    for (const auto& node : nif.nodes()) {
-        for (const auto child : node.children) {
-            if (!link.empty() || nif.parent(child) == static_cast<std::int32_t>(node.block)) continue;
-            link = "block " + std::to_string(child) + " is listed under node " + std::to_string(node.block) +
-                   " but its parent is " + std::to_string(nif.parent(child));
-        }
-    }
-    checks.push_back({"each block is listed under one parent only", link});
-
-    std::vector<fo4::nif::Shape> shapes;
-    try {
-        shapes = fo4::nif::read_shapes(nif);
-    } catch (const fo4::parse_error& error) {
-        checks.push_back({"shapes parse", error.parse_message()});
-        return checks;
-    }
-    checks.push_back({"shapes parse", {}});
-    checks.push_back(shapeCheck("shapes have vertices and triangles", shapes, [](const fo4::nif::Shape& shape) -> std::string {
-        if (shape.verts.empty() || shape.tris.empty()) return "has no vertices or triangles";
-        return {};
-    }));
-    checks.push_back(shapeCheck("normals match the vertex count", shapes, [](const fo4::nif::Shape& shape) -> std::string {
-        if (!shape.normals.empty() && shape.normals.size() != shape.verts.size()) {
-            return "has normals that do not match its vertex count";
-        }
-        return {};
-    }));
-    checks.push_back(shapeCheck("UVs match the vertex count", shapes, [](const fo4::nif::Shape& shape) -> std::string {
-        if (!shape.uvs.empty() && shape.uvs.size() != shape.verts.size() / 3 * 2) {
-            return "has UVs that do not match its vertex count";
-        }
-        return {};
-    }));
-    checks.push_back(shapeCheck("shader and skin reads are clean", shapes, [](const fo4::nif::Shape& shape) -> std::string {
-        if (!shape.warning.empty()) return "reported: " + shape.warning;
-        return {};
-    }));
-    checks.push_back(shapeCheck("texture paths are relative", shapes, [](const fo4::nif::Shape& shape) -> std::string {
-        for (const auto& path : shape.textures) {
-            if (auto fault = texturePathFault(path); !fault.empty()) return "texture '" + path + "' " + fault;
-        }
-        return {};
-    }));
-    return checks;
+nlohmann::json treeField(const fo4::nif::TreeField& field) {
+    return {{"key", field.key}, {"label", field.label}, {"type", field.type}, {"value", treeValue(field.value)}};
 }
 
-std::string verifyReport(const std::vector<VerifyCheck>& checks) {
-    const auto failed = std::ranges::count_if(checks, [](const VerifyCheck& check) { return !check.failure.empty(); });
-    std::string out = "RESULT: " + std::to_string(checks.size()) + " checks, " + std::to_string(failed) + " failed";
-    for (const auto& check : checks) {
+std::string verifyText(const fo4::nif::VerifyReport& report) {
+    std::string out = "RESULT: " + std::to_string(report.checks.size()) + " checks, " +
+        std::to_string(report.failed()) + " failed";
+    for (const auto& check : report.checks) {
         out += check.failure.empty() ? "\n[ok] " + check.name : "\n[FAIL] " + check.name + ": " + check.failure;
     }
     return out;
@@ -224,13 +85,29 @@ Result<fo4::nif::Edit> toEdit(const nlohmann::json& raw) {
         "' has a value the in-process NIF writer cannot set (text, numbers and number lists only)"});
 }
 
-}
+}  // namespace
 
 Result<std::string> renderGeometry(const std::filesystem::path& nifPath) {
     try {
-        const auto nif = loadNif(nifPath);
-        nlohmann::json out{{"fo4", nif.bs_version() == 130U}, {"shapes", nlohmann::json::array()}};
-        for (const auto& shape : fo4::nif::read_shapes(nif)) out["shapes"].push_back(shapeGeometry(nif, shape));
+        const auto report = fo4::nif::geometry_nif(loadNif(nifPath));
+        nlohmann::json out{{"fo4", report.fo4}, {"shapes", nlohmann::json::array()}};
+        for (const auto& shape : report.shapes) {
+            nlohmann::json entry{
+                {"name", shape.name},
+                {"verts", shape.verts},
+                {"tris", shape.tris},
+                {"normals", shape.normals},
+                {"uvs", shape.uvs},
+                {"textures", textureRefs(shape.textures)},
+                {"skinned", shape.skinned},
+            };
+            if (shape.billboard) {
+                entry["billboard"] = true;
+                entry["billboardMode"] = shape.billboard_mode;
+            }
+            if (entry["textures"].empty() && fo4::nif::is_bgsm_path(shape.material)) entry["bgsmPath"] = shape.material;
+            out["shapes"].push_back(std::move(entry));
+        }
         return out.dump();
     } catch (const fo4::parse_error& error) {
         return std::unexpected(Error{"NifParseFailed", error.parse_message()});
@@ -241,14 +118,24 @@ Result<std::string> renderGeometry(const std::filesystem::path& nifPath) {
 
 Result<std::string> renderInspect(const std::filesystem::path& nifPath) {
     try {
-        const auto nif = loadNif(nifPath);
+        const auto report = fo4::nif::inspect_nif(loadNif(nifPath));
         nlohmann::json out{
-            {"fo4", nif.bs_version() == 130U},
-            {"hasBSX", hasBlockPrefix(nif, "BSXFlags")},
-            {"hasCollision", hasBlockPrefix(nif, "bhk")},
+            {"fo4", report.fo4},
+            {"hasBSX", report.has_bsx},
+            {"hasCollision", report.has_collision},
             {"shapes", nlohmann::json::array()},
         };
-        for (const auto& shape : fo4::nif::read_shapes(nif)) out["shapes"].push_back(shapeInspect(shape));
+        for (const auto& shape : report.shapes) {
+            out["shapes"].push_back({
+                {"name", shape.name},
+                {"verts", shape.verts},
+                {"tris", shape.tris},
+                {"skinned", shape.skinned},
+                {"shader", shape.material},
+                {"textures", textureRefs(shape.textures)},
+                {"tangents", shape.tangents},
+            });
+        }
         return out.dump();
     } catch (const fo4::parse_error& error) {
         return std::unexpected(Error{"NifParseFailed", error.parse_message()});
@@ -259,12 +146,20 @@ Result<std::string> renderInspect(const std::filesystem::path& nifPath) {
 
 Result<std::string> renderTree(const std::filesystem::path& nifPath) {
     try {
-        const auto nif = loadNif(nifPath);
+        const auto tree = fo4::nif::describe_nif(loadNif(nifPath));
         auto blocks = nlohmann::json::array();
-        for (const auto& node : nif.nodes()) blocks.push_back(nodeTreeBlock(node));
-        for (const auto& shape : fo4::nif::read_shapes(nif)) blocks.push_back(shapeTreeBlock(nif, shape));
+        for (const auto& block : tree.blocks) {
+            auto fields = nlohmann::json::array();
+            for (const auto& field : block.fields) fields.push_back(treeField(field));
+            blocks.push_back({{"id", block.id},
+                              {"type", block.type},
+                              {"name", block.name},
+                              {"group", block.group},
+                              {"cat", block.cat},
+                              {"fields", std::move(fields)}});
+        }
         nlohmann::json out{
-            {"fo4", nif.bs_version() == 130U},
+            {"fo4", tree.fo4},
             {"file", nifPath.filename().string()},
             {"blocks", std::move(blocks)},
         };
@@ -278,11 +173,11 @@ Result<std::string> renderTree(const std::filesystem::path& nifPath) {
 
 Result<std::string> renderVerify(const std::filesystem::path& nifPath) {
     try {
-        return verifyReport(verifyChecks(loadNif(nifPath)));
+        return verifyText(fo4::nif::verify_nif(loadNif(nifPath)));
     } catch (const fo4::parse_error& error) {
-        return verifyReport({VerifyCheck{"header parses", error.parse_message()}});
+        return verifyText(fo4::nif::VerifyReport{{{"header parses", error.parse_message()}}});
     } catch (const std::exception& error) {
-        return verifyReport({VerifyCheck{"header parses", error.what()}});
+        return verifyText(fo4::nif::VerifyReport{{{"header parses", error.what()}}});
     }
 }
 
@@ -302,4 +197,4 @@ Result<std::vector<std::byte>> applyEditsInProcess(const std::filesystem::path& 
     }
 }
 
-}
+}  // namespace fo4ide::assets

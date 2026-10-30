@@ -39,33 +39,26 @@ CollisionBlob read_blob(const NifFile& nif, std::uint32_t block) {
   return blob;
 }
 
-struct CollisionOwner {
-  std::int32_t target{-1};
-  std::uint16_t flags{0};
-  std::int32_t system{-1};
-  std::uint32_t body_id{0};
-};
-
-// Constraint: FO4 writes Target, Flags (two bytes), Data and Body ID packed in that order, 14 bytes in all.
-CollisionOwner read_owner(const NifFile& nif, std::uint32_t block) {
-  const auto& info = nif.blocks()[block];
-  if (info.size < k_collision_object_fields) {
-    throw parse_error(info.offset, "collision object is shorter than its fields");
-  }
-  auto cursor = detail::block_cursor(nif, block);
-  CollisionOwner owner;
-  owner.target = cursor.read_i32();
-  owner.flags = cursor.read_u16();
-  owner.system = cursor.read_i32();
-  owner.body_id = cursor.read_u32();
-  return owner;
-}
-
 std::int32_t block_ref(const NifFile& nif, std::int32_t value) {
   return value >= 0 && static_cast<std::size_t>(value) < nif.blocks().size() ? value : -1;
 }
 
 }  // namespace
+
+CollisionObject read_collision_object(const NifFile& nif, std::uint32_t block) {
+  const auto& info = nif.blocks()[block];
+  if (info.size < k_collision_object_fields) {
+    throw parse_error(info.offset, "collision object is shorter than its fields");
+  }
+  auto cursor = detail::block_cursor(nif, block);
+  CollisionObject object;
+  object.block = block;
+  object.target = cursor.read_i32();
+  object.flags = cursor.read_u16();
+  object.system = cursor.read_i32();
+  object.body_id = cursor.read_u32();
+  return object;
+}
 
 std::vector<CollisionBlob> read_collision_blobs(const NifFile& nif) {
   std::vector<CollisionBlob> blobs;
@@ -78,7 +71,7 @@ std::vector<CollisionBlob> read_collision_blobs(const NifFile& nif) {
 
   for (std::size_t block = 0; block < nif.blocks().size(); ++block) {
     if (nif.blocks()[block].type != k_collision_object) continue;
-    const auto owner = read_owner(nif, static_cast<std::uint32_t>(block));
+    const auto owner = read_collision_object(nif, static_cast<std::uint32_t>(block));
     const auto system = block_ref(nif, owner.system);
     if (system < 0) continue;
     const auto slot = slot_of_block[static_cast<std::size_t>(system)];

@@ -85,42 +85,21 @@ TEST_CASE("NifService inspect reads an FO4 NIF in-process without niftool") {
     CHECK(runner.calls == 0);
 }
 
-TEST_CASE("NifService maps inspect onto the existing niftool command") {
+TEST_CASE("NifService ignores a configured niftool for inspect, geometry, verify and tree") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto tool = root / "niftool";
     const auto nif = root / "sample.nif";
     touch(tool);
-    touch(nif);
+    fo4ide::test::writeBytes(nif, fo4ide::test::triangleNif());
 
     FakeRunner runner;
     fo4ide::assets::NifService service(runner, tool);
-    auto result = service.inspect(nif);
-
-    REQUIRE(result.has_value());
-    REQUIRE(runner.last.arguments.size() == 2);
-    CHECK(runner.last.arguments[0] == "inspect");
-    CHECK(runner.last.arguments[1] == nif.string());
-    CHECK(runner.last.workingDirectory == root);
-}
-
-TEST_CASE("NifService geometry maps onto the existing niftool geo command") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto tool = root / "niftool";
-    const auto nif = root / "sample.nif";
-    touch(tool);
-    touch(nif);
-
-    FakeRunner runner;
-    fo4ide::assets::NifService service(runner, tool);
-    auto result = service.geometry(nif);
-
-    REQUIRE(result.has_value());
-    REQUIRE(runner.last.arguments.size() == 2);
-    CHECK(runner.last.arguments[0] == "geo");
-    CHECK(runner.last.arguments[1] == nif.string());
-    CHECK(runner.calls == 1);
+    CHECK(service.inspect(nif).has_value());
+    CHECK(service.geometry(nif).has_value());
+    CHECK(service.verify(nif).has_value());
+    CHECK(service.tree(nif).has_value());
+    CHECK(runner.calls == 0);
 }
 
 TEST_CASE("NifService preserves import option ordering") {
@@ -335,7 +314,7 @@ TEST_CASE("NifService fix without niftool repairs in-process and the written NIF
 
     REQUIRE(fix.has_value());
     CHECK(fix->starts_with("RESULT: fix OK (in-process)\nSaved: " + fixed.string() +
-                           "\nRESULT: 8 checks, 0 failed\n"));
+                           "\nRESULT: 9 checks, 0 failed\n"));
     CHECK(fileBytes(nif) == before);
     CHECK(std::filesystem::is_regular_file(fixed));
     CHECK_FALSE(std::filesystem::exists(fixed.string() + ".niftmp"));
@@ -440,7 +419,7 @@ TEST_CASE("NifService tree maps nodes and shape slots onto the editor contract i
     REQUIRE(result.has_value());
     const auto parsed = nlohmann::json::parse(*result);
     CHECK(parsed.at("fo4") == true);
-    REQUIRE(parsed.at("blocks").size() == 2);
+    REQUIRE(parsed.at("blocks").size() == 4);
     const auto& node = parsed.at("blocks")[0];
     CHECK(node.at("id") == 0);
     CHECK(node.at("group") == "Nodes");
@@ -456,26 +435,16 @@ TEST_CASE("NifService tree maps nodes and shape slots onto the editor contract i
     CHECK(treeValue(shape, "tex0") == "Textures\\Thing_d.dds");
     CHECK(treeValue(shape, "tex1") == "Textures\\Thing_n.dds");
     CHECK(treeValue(shape, "tex2") == "");
+    const auto& shader = parsed.at("blocks")[2];
+    CHECK(shader.at("type") == "BSLightingShaderProperty");
+    CHECK(shader.at("cat") == "shader");
+    CHECK(treeValue(shader, "materialClass") == "Environment Map");
+    CHECK(treeValue(shader, "envMapScale") == 1.0);
+    const auto& textureSet = parsed.at("blocks")[3];
+    CHECK(textureSet.at("cat") == "texture");
+    CHECK(treeValue(textureSet, "tex0") == "Textures\\Thing_d.dds");
+    CHECK(treeValue(textureSet, "tex1") == "Textures\\Thing_n.dds");
     CHECK(runner.calls == 0);
-}
-
-TEST_CASE("NifService maps tree and verify onto niftool when it resolves") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto tool = root / "niftool";
-    const auto nif = root / "sample.nif";
-    touch(tool);
-    touch(nif);
-
-    FakeRunner runner;
-    fo4ide::assets::NifService service(runner, tool);
-    auto tree = service.tree(nif);
-    REQUIRE(tree.has_value());
-    CHECK(runner.last.arguments == std::vector<std::string>{"tree", nif.string()});
-    auto verify = service.verify(nif);
-    REQUIRE(verify.has_value());
-    CHECK(runner.last.arguments == std::vector<std::string>{"verify", nif.string()});
-    CHECK(runner.calls == 2);
 }
 
 TEST_CASE("NifService verify reports a readable FO4 NIF in-process") {
@@ -489,7 +458,7 @@ TEST_CASE("NifService verify reports a readable FO4 NIF in-process") {
     auto result = service.verify(nif);
 
     REQUIRE(result.has_value());
-    CHECK(result->starts_with("RESULT: 8 checks, 0 failed\n[ok] header parses\n"));
+    CHECK(result->starts_with("RESULT: 9 checks, 0 failed\n[ok] header parses\n"));
     CHECK(result->find("[FAIL]") == std::string::npos);
     CHECK(runner.calls == 0);
 }
@@ -523,7 +492,7 @@ TEST_CASE("NifService verify flags a drive-letter texture path") {
     auto result = service.verify(nif);
 
     REQUIRE(result.has_value());
-    CHECK(result->starts_with("RESULT: 8 checks, 1 failed\n"));
+    CHECK(result->starts_with("RESULT: 9 checks, 1 failed\n"));
     CHECK(result->find("[FAIL] texture paths are relative: shape 'Tri' (block 1) texture 'C:\\Art\\Thing_d.dds' "
                        "is a drive-letter path") != std::string::npos);
 }
@@ -544,7 +513,7 @@ TEST_CASE("NifService verify flags a child that two nodes both list") {
     auto result = service.verify(nif);
 
     REQUIRE(result.has_value());
-    CHECK(result->starts_with("RESULT: 8 checks, 1 failed\n"));
+    CHECK(result->starts_with("RESULT: 9 checks, 1 failed\n"));
     CHECK(result->find("[FAIL] each block is listed under one parent only: block 1 is listed under node 2 "
                        "but its parent is 0") != std::string::npos);
 }
@@ -567,7 +536,7 @@ TEST_CASE("NifService imports an OBJ in-process without niftool and the written 
 
     REQUIRE(result.has_value());
     CHECK(result->starts_with("RESULT: import OK (in-process)\nSaved: " + nif.string() +
-                              "\nRESULT: 8 checks, 0 failed\n"));
+                              "\nRESULT: 9 checks, 0 failed\n"));
     CHECK(std::filesystem::is_regular_file(nif));
     CHECK_FALSE(std::filesystem::exists(root / "quad.nif.niftmp"));
     CHECK(runner.calls == 0);

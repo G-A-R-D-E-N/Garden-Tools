@@ -113,7 +113,7 @@ AlphaProperty read_alpha(const NifFile& nif, std::uint32_t block) {
   if (info.type != "NiAlphaProperty") return alpha;
 
   auto cursor = detail::block_cursor(nif, block);
-  detail::read_net_prefix(cursor, nif);
+  alpha.name = detail::read_net_prefix(cursor, nif).name;
   alpha.flags_at = cursor.position();
   alpha.flags = cursor.read_u16();
   alpha.threshold_at = cursor.position();

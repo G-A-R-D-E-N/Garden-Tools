@@ -66,6 +66,8 @@ inline std::vector<std::byte> shaderBlock(std::uint32_t nameIndex, std::uint32_t
     putUint(out, 0xFFFFFFFFU, 4);
     for (int i = 0; i < 6; ++i) putUint(out, 0, 4);
     putUint(out, textureSet, 4);
+    putFloat(out, 1.0f);
+    putUint(out, 0, 2);
     return out;
 }
 

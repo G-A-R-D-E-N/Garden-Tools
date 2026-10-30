@@ -366,7 +366,65 @@ path the field also keeps separately.
 prefix, then `Flags` as a u16 and `Threshold` as one byte
 (`PluginBrreakdown@5a58943:FO4_Fallout4/Fallout4.exe function map.txt:0x1416cf580`, the
 same two fields in the same order). `AlphaProperty::flags_at`, `threshold_at` and
-`end` give the writer the three offsets it edits.
+`end` give the writer the three offsets it edits. `AlphaProperty::name` is the
+`NiObjectNET` name, read for display only.
+
+## Describe layer
+
+`src/nif/describe.cpp`, `src/nif/verify.cpp` and `src/nif/tree.cpp` hold what a caller
+reports; each returns plain structs from `include/fo4/nif/describe.hpp` and formats
+nothing itself.
+
+- `inspect_nif` gives the shapes as counts, the material path, the texture slots and
+  whether tangents exist. `has_bsx` and `has_collision` are block-type prefixes, so
+  they follow the block table and not the graph.
+- `geometry_nif` carries the vertex, index, normal and UV data itself, the non-empty
+  texture slots with their index, and the billboard mode from `billboard_mode`.
+- `verify_nif` returns the checks in a fixed order, because a caller prints them in
+  that order: `header parses`, `each block is listed under one parent only`,
+  `no editor markers`, `shapes parse`, `vertex descriptor matches the data`,
+  `shapes have vertices and triangles`, `normals match the vertex count`,
+  `UVs match the vertex count`, `shader and skin reads are clean`,
+  `texture paths are relative`. The header check is the caller's: a file that does not
+  parse never reaches `verify_nif`. `shapes parse` names the block and its fault
+  rather than failing the whole report, so a broken shape still leaves the other
+  checks meaningful.
+- `vertex descriptor matches the data` reads each shape's `BSVertexDesc`
+  (`src/nif/vertex_desc.cpp:read_vertex_desc`) and requires the stored attribute
+  offsets to be the cumulative attribute widths and the size nibble to cover exactly
+  those widths. `nif.xml:BSVertexDesc` puts attribute N's offset in bits 4N+4, four
+  bits holding the byte offset over four, so attribute 0's field is `Dynamic Vertex
+  Size` and is not an offset: the position slot is always first, at 8 bytes or 16
+  when `0x400` is set, and the check starts measuring from its width. The reader takes
+  the attribute widths from the flag word (`src/nif/tree.cpp` and
+  `src/nif/geometry.cpp:vertex_bytes_for`), and `nif.xml:BSVertexData` is what says
+  the binormal and tangent take four bytes each.
+- `no editor markers` fails when a `BSXFlags` block has bit 5 set
+  (`nif.xml:BSXFlags`; `PluginBrreakdown@5a58943:include/RE/B/BSXFlags.h`), the bit
+  the engine's `is_editor_marker` reads. `BSXFlags` is a `NiIntegerExtraData`, so
+  the block is a u32 name index and then the u32 flag word. This is the only one of
+  the four `OptimizeOptions` passes the sources pin; the other three are in
+  Parity-pending.
+
+`describe_nif` returns one entry per block, in block order, each with a `group`, a
+`cat` and the fields that block owns. Every block appears: a node from
+`NifFile::nodes()`, a shape from `read_shape`, a `bhk*` block with its collision
+fields, a shader, alpha, texture-set, skin or `BSXFlags` block with its own readers,
+and anything else with nothing but its size. A block whose reader throws keeps its
+entry and carries a `readError` field with the fault, so one bad block cannot empty
+the tree.
+
+The groups are `Nodes`, `Shapes`, `Collision` and `Extra`. Those four are the editor's
+fixed list, so a block with no group of its own (a shader, a texture set, an alpha
+property) is in `Extra` and is told apart by its `cat`. Field keys are stable:
+the writer accepts the same key for the same block, which is why the per-type shader
+fields keep `nif.xml`'s names (`Max Passes` is `parallaxMaxPasses`, `Sparkle
+Parameters` splits into `sparkleParameters` and `sparkleW` because the editor has no
+four-component widget). A shape also reports its vertex descriptor as `vertexSize`,
+`vertexAttributes` and `fullPrecision`, which is the decoded `BSVertexDesc` flag word
+rather than the raw `uint64`; an alpha property reports the decoded blend and test
+names; and `BSXFlags` reports `flags` and `editorMarker` from
+`src/nif/bsx.cpp:is_editor_marker`.
 
 The flags word is decoded once, into `AlphaProperty::blend_enabled` (bit 0),
 `source_blend` (bits 1-4), `destination_blend` (bits 5-8), `test_enabled` (bit 9) and
@@ -413,7 +471,7 @@ below turns it into a verify check.
 
 ## Deliberate omissions
 
-- No JSON and no collision.
+- No JSON: the describe layer returns structs and every caller formats its own output.
 - `BSLightingShaderProperty`, `BSEffectShaderProperty` and `NiAlphaProperty` are read;
   the fragment and water shader property types are stored as references and read for
   nothing.
@@ -458,9 +516,10 @@ Numbers do not move: an item that has since been settled says so and stays for t
    Any type-specific trailing fields are not read.
 7. `BSSubIndexTriShape` and `BSMeshLODTriShape`: `NifShape.cs:Shapes` reads them
    with the `BSTriShape` layout. Per-type trailing fields are not read.
-8. `shader_ref` is settled: `nif.xml:BSTriShape` lists Bounding Sphere, Skin,
+8. `shader_ref` is settled:   `nif.xml:BSTriShape` lists Bounding Sphere, Skin,
    Shader Property and Alpha Property in that order, and the 16 bytes are the bounding
-   sphere. `alpha_ref` points at a `NiAlphaProperty` whose layout is not read.
+   sphere. `alpha_ref` points at a `NiAlphaProperty`, which `read_alpha` reads and the
+   shape reports as its alpha fields.
 9. Meaning of the vertex-descriptor flag bits beyond their positions. Only the bit
    positions are pinned.
 10. Normal and tangent encoding is settled by `nif.xml:BSVertexData`: three bytes
@@ -540,6 +599,27 @@ Numbers do not move: an item that has since been settled says so and stays for t
     the stream version is below 0x6d (`commonlibf4`, `BSShaderProperty::Load`).
     `read_lighting_shader` reports the stored word instead of a post-load one, and the
     strict gate at 130 never reaches the rule. A reader for older streams decides.
+32. `OptimizeOptions::RemoveDuplicateProperties`: no source says what counts as a
+    duplicate property, so nothing is checked or removed. A pass that guessed would
+    delete blocks the game still links. Default: no check.
+33. `OptimizeOptions::RemoveBadTextureProperties`: the only invalid texture path these
+    sources pin is an absolute one, which `texture paths are relative` already
+    reports. Whether an empty or unmatched slot counts as bad is not pinned, so it is
+    not reported. Default: no further check.
+34. `OptimizeOptions::ClearUnusedMaterialValues`: no source lists which stored
+    material values a given shader type ignores. `nif.xml` keeps every field with its
+    default for every type, and the engine overrides them from the `.bgsm`, so
+    clearing them cannot be told apart from a real value. Default: no check, and
+    `fix_nif` leaves the words alone.
+35. Effect shader texture slot order: `nif.xml:BSEffectShaderProperty` stores
+    `Greyscale Texture`, then `Env Map Texture`, then `Normal Texture`, then `Env Mask
+    Texture`, and `read_effect_shader` follows that order. The extract's
+    `BSEffectShaderMaterial` field list names its five paths source, greyscale,
+    environment, environment mask, normal
+    (`PluginBrreakdown@5a58943:include/RE/B/BSEffectShaderMaterial.h`), which swaps the
+    last two. Those in-memory fields are filled by the loader in the order the file
+    stores them, so the file order decides and the reader follows `nif.xml`. Slots 3
+    and 4 therefore keep 3 = normal and 4 = env mask; the vanilla corpus is the check.
 
 ## Scene graph
 

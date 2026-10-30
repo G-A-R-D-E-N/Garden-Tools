@@ -276,13 +276,13 @@ bool registerNativeMcpTools(fo4ide::mcp::Registry& registry,
     const auto nifPathSchema = objectSchema(
         {{"path", {{"type", "string"}, {"description", "Path to the NIF file"}}}},
         nlohmann::json::array({"path"}));
-    if (!add({"nif_inspect", "Inspect a NIF: niftool when configured, else read in-process", nifPathSchema},
+    if (!add({"nif_inspect", "Inspect a NIF, read in-process", nifPathSchema},
              "nif", "Inspect", {"path"})) return false;
-    if (!add({"nif_verify", "Verify a NIF: niftool when configured, else read in-process", nifPathSchema},
+    if (!add({"nif_verify", "Verify a NIF, read in-process", nifPathSchema},
              "nif", "Verify", {"path"})) return false;
-    if (!add({"nif_tree", "Return the NIF block tree: niftool when configured, else read in-process", nifPathSchema},
+    if (!add({"nif_tree", "Return the NIF block tree, read in-process", nifPathSchema},
              "nif", "Tree", {"path"})) return false;
-    if (!add({"nif_geometry", "Return geometry data: niftool when configured, else read in-process", nifPathSchema},
+    if (!add({"nif_geometry", "Return geometry data, read in-process", nifPathSchema},
              "nif", "Geo", {"path"})) return false;
 
     if (!add({

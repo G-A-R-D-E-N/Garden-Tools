@@ -25,6 +25,17 @@ struct CollisionBlob {
   std::int32_t target_node{-1};
 };
 
+// Constraint: bhkNPCollisionObject stores Target, Flags, Data and Body ID in that order, 14 bytes in all.
+struct CollisionObject {
+  std::uint32_t block{0};
+  std::int32_t target{-1};
+  std::uint16_t flags{0};
+  std::int32_t system{-1};
+  std::uint32_t body_id{0};
+};
+
 std::vector<CollisionBlob> read_collision_blobs(const NifFile& nif);
+// Requires a bhkNPCollisionObject block; the references are the stored values and may be out of range.
+CollisionObject read_collision_object(const NifFile& nif, std::uint32_t block);
 
 }  // namespace fo4::nif

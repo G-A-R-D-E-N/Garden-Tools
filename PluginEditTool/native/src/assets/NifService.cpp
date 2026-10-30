@@ -119,25 +119,21 @@ Result<void> NifService::requireFile(const std::filesystem::path& path, std::str
 
 Result<std::string> NifService::inspect(const std::filesystem::path& nifPath) const {
     if (auto valid = requireFile(nifPath, "NIF"); !valid) return std::unexpected(valid.error());
-    if (niftoolResolves(executable_)) return run({"inspect", pathArg(nifPath)});
     return renderInspect(nifPath);
 }
 
 Result<std::string> NifService::geometry(const std::filesystem::path& nifPath) const {
     if (auto valid = requireFile(nifPath, "NIF"); !valid) return std::unexpected(valid.error());
-    if (niftoolResolves(executable_)) return run({"geo", pathArg(nifPath)});
     return renderGeometry(nifPath);
 }
 
 Result<std::string> NifService::verify(const std::filesystem::path& nifPath) const {
     if (auto valid = requireFile(nifPath, "NIF"); !valid) return std::unexpected(valid.error());
-    if (niftoolResolves(executable_)) return run({"verify", pathArg(nifPath)});
     return renderVerify(nifPath);
 }
 
 Result<std::string> NifService::tree(const std::filesystem::path& nifPath) const {
     if (auto valid = requireFile(nifPath, "NIF"); !valid) return std::unexpected(valid.error());
-    if (niftoolResolves(executable_)) return run({"tree", pathArg(nifPath)});
     return renderTree(nifPath);
 }
 

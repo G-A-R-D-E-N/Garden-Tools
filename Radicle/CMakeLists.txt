@@ -164,6 +164,11 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/nif/shader_lighting.cpp
   src/nif/shader_effect.cpp
   src/nif/bsx.cpp
+  src/nif/describe.cpp
+  src/nif/verify.cpp
+  src/nif/tree.cpp
+  src/nif/tree_shader.cpp
+  src/nif/vertex_desc.cpp
   src/nif/skin.cpp
   src/nif/collision.cpp
   src/texture/bcn.cpp
@@ -917,6 +922,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_ba2_versions_real.cpp
     tests/test_nif.cpp
     tests/test_nif_nodes.cpp
+    tests/test_nif_describe.cpp
     tests/test_nif_corpus.cpp
     tests/test_nif_collision.cpp
     tests/test_nif_collision_real.cpp

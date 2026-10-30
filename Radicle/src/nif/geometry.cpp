@@ -27,11 +27,6 @@ constexpr std::size_t k_triangle_bytes = 6;
 constexpr std::size_t k_bone_weight_count = 4;
 constexpr std::size_t k_bone_index_count = 4;
 
-bool is_shape_type(std::string_view type) {
-  return type == "BSTriShape" || type == "BSSubIndexTriShape" || type == "BSMeshLODTriShape" ||
-         type == "BSDynamicTriShape";
-}
-
 float half_to_float(std::uint16_t bits) {
   const auto value = static_cast<std::uint32_t>(bits);
   const float sign = (value & 0x8000U) != 0 ? -1.0f : 1.0f;
@@ -96,6 +91,13 @@ void read_vertex(binary::Cursor& vertex, std::uint32_t flags, Shape& shape) {
     for (std::size_t i = 0; i < k_bone_index_count; ++i) shape.bone_indices.push_back(vertex.read_u8());
   }
   if ((flags & k_has_tail_slot) != 0) vertex.read_bytes(4);
+}
+
+}  // namespace
+
+bool is_shape_block_type(std::string_view type) {
+  return type == "BSTriShape" || type == "BSSubIndexTriShape" || type == "BSMeshLODTriShape" ||
+         type == "BSDynamicTriShape";
 }
 
 Shape read_shape(const NifFile& nif, std::uint32_t block) {
@@ -183,12 +185,10 @@ Shape read_shape(const NifFile& nif, std::uint32_t block) {
   return shape;
 }
 
-}  // namespace
-
 std::vector<Shape> read_shapes(const NifFile& nif) {
   std::vector<Shape> shapes;
   for (std::size_t i = 0; i < nif.blocks().size(); ++i) {
-    if (is_shape_type(nif.blocks()[i].type)) shapes.push_back(read_shape(nif, static_cast<std::uint32_t>(i)));
+    if (is_shape_block_type(nif.blocks()[i].type)) shapes.push_back(read_shape(nif, static_cast<std::uint32_t>(i)));
   }
   return shapes;
 }
