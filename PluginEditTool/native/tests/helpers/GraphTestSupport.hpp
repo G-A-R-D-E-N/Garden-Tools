@@ -15,7 +15,6 @@
 
 namespace fo4::graph::test {
 
-// Must match the fixtures directory the PET test targets receive as FO4IDE_TEST_FIXTURES_DIR.
 inline std::filesystem::path fixtureRoot(std::string_view name) {
     return std::filesystem::path(FO4IDE_TEST_FIXTURES_DIR) / std::string(name);
 }
