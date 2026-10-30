@@ -556,18 +556,24 @@ jobs:
           }
           $expected = [int]$Matches[1]
           $dll = (Resolve-Path 'build\fo4ide-package\bin\radicle.dll').Path
-          if (-not ('RadicleAbiProbe' -as [type])) {
-            $signatures = '[DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)] public static extern IntPtr LoadLibraryW(string path);' + "`n"
-            $signatures += '[DllImport("kernel32.dll", SetLastError = true)] public static extern IntPtr GetProcAddress(IntPtr module, string name);'
-            Add-Type -Namespace RadicleAbiProbe -Name Native -MemberDefinition $signatures
+          Add-Type -TypeDefinition @'
+          using System;
+          using System.Runtime.InteropServices;
+          namespace RadicleAbiProbe {
+            public delegate uint AbiFn();
+            public static class Native {
+              [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)] public static extern IntPtr LoadLibraryW(string path);
+              [DllImport("kernel32.dll", SetLastError = true)] public static extern IntPtr GetProcAddress(IntPtr module, string name);
+            }
           }
+          '@
           $module = [RadicleAbiProbe.Native]::LoadLibraryW($dll)
           if ($module -eq [IntPtr]::Zero) {
             throw "LoadLibraryW failed for $dll (Win32 $([Runtime.InteropServices.Marshal]::GetLastWin32Error()))"
           }
           $entry = [RadicleAbiProbe.Native]::GetProcAddress($module, 'radicle_abi_version')
           if ($entry -eq [IntPtr]::Zero) { throw 'radicle.dll does not export radicle_abi_version' }
-          $actual = [int][Runtime.InteropServices.Marshal]::GetDelegateForFunctionPointer($entry, [Func[uint32]]).Invoke()
+          $actual = [int][Runtime.InteropServices.Marshal]::GetDelegateForFunctionPointer($entry, [RadicleAbiProbe.AbiFn]).Invoke()
           Write-Output "radicle.dll ABI=$actual header RADICLE_ABI_VERSION=$expected"
           if ($actual -ne $expected) {
             Write-Output "::error::radicle.dll reports ABI $actual but RADICLE_ABI_VERSION is $expected"
@@ -592,6 +598,7 @@ jobs:
       - name: Write artifact metadata
         if: always()
         run: |
+          if not exist PluginEditTool\dist mkdir PluginEditTool\dist
           echo commit=${{ github.sha }}> PluginEditTool\dist\build-info.txt
           echo ref=${{ github.ref }}>> PluginEditTool\dist\build-info.txt
           echo run_id=${{ github.run_id }}>> PluginEditTool\dist\build-info.txt
