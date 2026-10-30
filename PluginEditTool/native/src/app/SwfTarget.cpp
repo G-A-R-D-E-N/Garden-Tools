@@ -7,6 +7,9 @@
 #include <fo4/c_api.h>
 #include <fo4/c_api_swf.h>
 #include <fo4/c_api_swf_verbs.h>
+#include <fo4ide/core/Base64.hpp>
+
+#include <span>
 
 #include "ServiceTargetSupport.hpp"
 
@@ -103,29 +106,6 @@ const char* kindName(std::uint8_t kind) {
         default: break;
     }
     return nullptr;
-}
-
-std::string base64Encode(const std::uint8_t* data, std::size_t size) {
-    static constexpr char kDigits[] =
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    std::string out;
-    out.reserve(((size + 2) / 3) * 4);
-    for (std::size_t index = 0; index < size;) {
-        std::uint32_t group = 0;
-        int count = 0;
-        for (int part = 0; part < 3; ++part) {
-            group <<= 8;
-            if (index < size) {
-                group |= data[index++];
-                ++count;
-            }
-        }
-        out.push_back(kDigits[(group >> 18) & 0x3F]);
-        out.push_back(kDigits[(group >> 12) & 0x3F]);
-        out.push_back(count > 1 ? kDigits[(group >> 6) & 0x3F] : '=');
-        out.push_back(count > 2 ? kDigits[group & 0x3F] : '=');
-    }
-    return out;
 }
 
 std::string hex8(std::uint32_t value) {
@@ -702,7 +682,8 @@ Result<nlohmann::json> SwfTarget::invoke(std::string_view method, const nlohmann
             return radicleError(status);
         }
         BytesPtr holder(raw);
-        const std::string encoded = base64Encode(raw, size);
+        const std::string encoded = fo4ide::core::encodeBase64(
+            std::span<const std::byte>(reinterpret_cast<const std::byte*>(raw), size));
         if (name == "BitmapPng") return nlohmann::json(nlohmann::json{{"png", encoded}}.dump());
         return nlohmann::json(nlohmann::json{{"jpeg", encoded}}.dump());
     }
