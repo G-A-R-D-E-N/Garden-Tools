@@ -14,8 +14,6 @@
 namespace fo4::nif {
 namespace {
 
-constexpr std::uint32_t k_component_bytes = 4;
-
 std::string texture_path_fault(const std::string& path) {
   if (path.size() >= 2 && path[1] == ':') return "is a drive-letter path";
   if (!path.empty() && (path.front() == '/' || path.front() == '\\')) return "is an absolute path";
@@ -59,6 +57,7 @@ std::string editor_marker_fault(const NifFile& nif) {
 }
 
 // Invariant: the stored offsets are the cumulative attribute widths, so a descriptor whose offsets and sizes disagree is reported.
+// Invariant: the size nibble is compared with vertex_bytes_for, the reader's stride.
 std::string descriptor_fault(const NifFile& nif) {
   for (std::size_t block = 0; block < nif.blocks().size(); ++block) {
     if (!is_shape_block_type(nif.blocks()[block].type)) continue;
@@ -73,6 +72,7 @@ std::string descriptor_fault(const NifFile& nif) {
       const auto attribute = static_cast<VertexAttribute>(index);
       if (!desc.has(attribute)) continue;
       const auto width = desc.attribute_bytes(attribute);
+      if (width == 0) continue;
       const auto offset = desc.attribute_offset(attribute);
       if (offset != expected) {
         return "block " + std::to_string(block) + " stores " + vertex_attribute_name(attribute) + " at " +
@@ -80,9 +80,10 @@ std::string descriptor_fault(const NifFile& nif) {
       }
       expected += width;
     }
-    if (expected != desc.size_bytes()) {
+    const auto filled = vertex_bytes_for(desc.flags());
+    if (filled != desc.size_bytes()) {
       return "block " + std::to_string(block) + " declares a " + std::to_string(desc.size_bytes()) +
-             "-byte vertex but its flags fill " + std::to_string(expected) + " bytes";
+             "-byte vertex but its flags fill " + std::to_string(filled) + " bytes";
     }
   }
   return {};

@@ -402,6 +402,28 @@ TEST(NifVerify, DescriptorOffsetsThatDisagreeWithTheAttributeSizesFailTheCheck) 
   EXPECT_EQ(report.checks.at(4).failure, "block 0 stores UV0 at 12 but its attributes put it at 16");
 }
 
+// Invariant: a land-data flag adds no vertex bytes, so the reader and the descriptor check agree.
+// Invariant: verify used to count land data as four bytes and faulted a file the reader accepts.
+TEST(NifVerify, LandDataFlagAddsNoVertexBytesAndBothReadersAgree) {
+  Writer vertices;
+  for (int vertex = 0; vertex < 3; ++vertex) {
+    for (int i = 0; i < 4; ++i) vertices.u32(0);
+    vertices.u32(0);
+  }
+  const std::uint64_t flags = static_cast<std::uint64_t>(k_has_uv | k_has_land_data | k_full) << 44U;
+  const std::uint64_t uv0_at_sixteen = std::uint64_t{16} << 6U;
+  const std::vector<Block> blocks{shape_with_descriptor(5U | uv0_at_sixteen | flags, 1, 3, vertices.bytes())};
+  const auto nif = fo4::nif::read_nif(build_nif({"shape"}, blocks, {}));
+
+  const auto shapes = fo4::nif::read_shapes(nif);
+  ASSERT_EQ(shapes.size(), 1U);
+  EXPECT_EQ(shapes[0].tris.size(), 3U);
+
+  const auto report = fo4::nif::verify_nif(nif);
+  EXPECT_EQ(report.checks.at(4).failure, "");
+  EXPECT_EQ(report.failed(), 0U);
+}
+
 TEST(NifDescribe, InspectAndGeometryAgreeOnShapeCounts) {
   const auto nif = fo4::nif::read_nif(full_file(0x1U));
   const auto inspect = fo4::nif::inspect_nif(nif);

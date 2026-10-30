@@ -23,17 +23,35 @@ constexpr std::array<std::string_view, k_vertex_attribute_count> k_attribute_nam
     "Position", "UV0", "UV1", "Normal", "Binormal", "Color", "Skinning", "LandData", "EyeData",
 };
 
-}  // namespace
-
-std::uint32_t VertexDesc::attribute_bytes(VertexAttribute attribute) const noexcept {
+// Invariant: land data has no vertex storage.
+std::uint32_t attribute_width(VertexAttribute attribute, bool full_precision) noexcept {
   switch (attribute) {
     case VertexAttribute::Position:
-      return full_precision() ? k_full_position_bytes : k_small_position_bytes;
+      return full_precision ? k_full_position_bytes : k_small_position_bytes;
     case VertexAttribute::Skinning:
       return k_skin_bytes;
+    case VertexAttribute::LandData:
+      return 0;
     default:
       return k_component_bytes;
   }
+}
+
+}  // namespace
+
+std::uint32_t VertexDesc::attribute_bytes(VertexAttribute attribute) const noexcept {
+  return attribute_width(attribute, full_precision());
+}
+
+std::size_t vertex_bytes_for(std::uint32_t flags) noexcept {
+  const bool full_precision = (flags & k_vertex_full_precision) != 0;
+  // Invariant: position is counted before the flags, whatever bit 0 says.
+  std::size_t bytes = attribute_width(VertexAttribute::Position, full_precision);
+  for (std::size_t id = 1; id < k_vertex_attribute_count; ++id) {
+    if (((flags >> id) & 1U) == 0) continue;
+    bytes += attribute_width(static_cast<VertexAttribute>(id), full_precision);
+  }
+  return bytes;
 }
 
 const char* vertex_attribute_name(VertexAttribute attribute) noexcept {
