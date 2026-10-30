@@ -108,9 +108,8 @@ void expect_remap_refused(std::uint8_t type, bool nested = false,
       record->subrecords[0].data, record->header.signature));
 
   const auto links = fo4::collect_form_links(plugin);
-  for (const auto& link : links) {
-    EXPECT_NE(link.subrecord.to_string(), "VMAD");
-  }
+  ASSERT_EQ(links.size(), 1u);
+  EXPECT_EQ(links[0].subrecord.to_string(), "VMAD");
 
   EXPECT_THROW(
       {

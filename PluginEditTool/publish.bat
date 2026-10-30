@@ -39,9 +39,12 @@ if not exist "web\dist\" (
 )
 
 echo Configuring native C++ host...
+REM Radicle is the editor's backend: one radicle.dll carries the C++ API and the
+REM C ABI, and the editor links against it.
 cmake -S native -B "%NATIVE_BUILD%" -G "Visual Studio 17 2022" -A x64 ^
   -DFO4IDE_BUILD_TESTS=OFF ^
   -DFO4IDE_BUILD_HTTP=ON ^
+  -DRADICLE_SHARED=ON ^
   -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON
 if errorlevel 1 (
   echo NATIVE CMAKE CONFIGURE FAILED.
@@ -79,6 +82,41 @@ if not defined DEPLOY (
     echo Failed to copy FO4RecordEditor.exe to !DEPLOY!.
     popd
     exit /b 1
+  )
+
+  REM The editor links against radicle.dll (Radicle is its backend), so the DLL
+  REM sits next to the executable that the linker produced. Ship it with the exe.
+  set "RADICLE_DLL=!NATIVE_EXE:FO4RecordEditor.exe=radicle.dll!"
+  if /i "!RADICLE_DLL!"=="!NATIVE_EXE!" (
+    echo Could not derive the radicle.dll path from !NATIVE_EXE!.
+    popd
+    exit /b 1
+  )
+  if not exist "!RADICLE_DLL!" (
+    echo The editor was built against a shared Radicle but radicle.dll is not next to !NATIVE_EXE!.
+    popd
+    exit /b 1
+  )
+
+  copy /Y "!RADICLE_DLL!" "%DEPLOY%\radicle.dll" >nul
+  if errorlevel 1 (
+    echo Failed to copy radicle.dll to !DEPLOY!.
+    popd
+    exit /b 1
+  )
+
+  if exist "%DEPLOY%\sdk\include\fo4\" rmdir /S /Q "%DEPLOY%\sdk\include\fo4"
+  mkdir "%DEPLOY%\sdk\include\fo4" >nul 2>nul
+  copy /Y "%ROOT%..\Radicle\include\fo4\c_api*.h" "%DEPLOY%\sdk\include\fo4\" >nul
+  if errorlevel 1 (
+    echo Failed to copy the Radicle C ABI headers to !DEPLOY!.
+    popd
+    exit /b 1
+  )
+  mkdir "%DEPLOY%\sdk\lib" >nul 2>nul
+  copy /Y "%NATIVE_BUILD%\lib\Release\radicle.lib" "%DEPLOY%\sdk\lib\radicle.lib" >nul
+  if errorlevel 1 (
+    echo WARNING: radicle.lib was not found; C++ consumers will need it from a local build.
   )
 
   if exist "%DEPLOY%\web\dist\" rmdir /S /Q "%DEPLOY%\web\dist"

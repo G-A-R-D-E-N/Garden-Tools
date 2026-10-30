@@ -143,6 +143,14 @@ bool registerPluginTools(fo4ide::mcp::Registry& registry,
              {{"form_key", "string"}, {"plugin", "string", true}})) return false;
     if (!add("edit_faction_entries", "Add, set or remove one FACT relation or rank in memory. list is relations or ranks; index is required for set and remove and indexes the named plugin's version; value is required for add and set. Call save_plugin to persist", "backend", "EditFactionEntries",
              {{"plugin", "string"}, {"form_key", "string"}, {"list", "string"}, {"op", "string"}, {"index", "integer", true}, {"value", "object", true}})) return false;
+    if (!add("add_script", "Add a script to a record in memory, creating an empty VMAD when the record has none. script is the Papyrus script name; flags is the optional script flags byte and index the optional script-list position; the result names the new index. Call save_plugin to persist", "backend", "AddScript",
+             {{"plugin", "string"}, {"form_key", "string"}, {"script", "string"}, {"flags", "integer", true}, {"index", "integer", true}})) return false;
+    if (!add("remove_script", "Remove one script and its properties from a record's VMAD in memory by script index. Call save_plugin to persist", "backend", "RemoveScript",
+             {{"plugin", "string"}, {"form_key", "string"}, {"script_index", "integer"}})) return false;
+    if (!add("add_script_property", "Add a property to a script in memory. type is the VMAD property type byte (1 object, 2 string, 3 int, 4 float, 5 bool, 7 struct, 11-15 arrays, 17 struct array); flags is the optional property flags byte and index the optional property-list position. Set the value with set_field or the typed VMAD setters. Call save_plugin to persist", "backend", "AddScriptProperty",
+             {{"plugin", "string"}, {"form_key", "string"}, {"script_index", "integer"}, {"name", "string"}, {"type", "integer"}, {"flags", "integer", true}, {"index", "integer", true}})) return false;
+    if (!add("remove_script_property", "Remove one property from a script in memory by property index. Call save_plugin to persist", "backend", "RemoveScriptProperty",
+             {{"plugin", "string"}, {"form_key", "string"}, {"script_index", "integer"}, {"property_index", "integer"}})) return false;
     if (!add("get_weapon_damage_types", "Get a WEAP record's damage types by FormKey from the winning version (read-only)", "backend", "GetWeaponDamageTypes",
              {{"form_key", "string"}})) return false;
     return true;

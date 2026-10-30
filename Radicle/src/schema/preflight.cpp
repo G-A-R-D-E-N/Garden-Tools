@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <iterator>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -200,7 +201,175 @@ void climate_sun_window_issues(const Record& record, std::vector<PreflightIssue>
   }
 }
 
+std::uint32_t little_endian_u32(const std::vector<std::byte>& data, std::size_t offset) {
+  std::uint32_t value = 0;
+  for (std::size_t i = 0; i < 4; ++i) {
+    value |= static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(data[offset + i]))
+             << (8 * i);
+  }
+  return value;
+}
+
+std::string hex_byte_string(std::uint32_t value) {
+  std::string out("00000000");
+  constexpr char digits[] = "0123456789ABCDEF";
+  for (int index = 7; index >= 0; --index) {
+    out[static_cast<std::size_t>(index)] = digits[value & 0xFu];
+    value >>= 4;
+  }
+  return out;
+}
+
+// Invariant: LLCT must equal the LVLO entry count (decode_leveled_list requires the coupling).
+void leveled_list_entry_issues(const Record& record, std::vector<PreflightIssue>& issues) {
+  const auto signature = record.header.signature;
+  if (signature != Signature::from_string("LVLI") &&
+      signature != Signature::from_string("LVLN") && signature != Signature::from_string("LVSP")) {
+    return;
+  }
+  const std::string prefix = signature.to_string();
+  const auto lvlo = Signature::from_string("LVLO");
+  std::size_t entries = 0;
+  for (const auto& subrecord : record.subrecords) {
+    if (subrecord.signature != lvlo) continue;
+    // Invariant: offset 4 of LVLO holds the target Form-ID.
+    if (subrecord.data.size() >= 8 && little_endian_u32(subrecord.data, 4) == 0) {
+      issues.push_back(field_issue(record, prefix + "\\LVLO[" + std::to_string(entries) + "]",
+                                   "leveled_list_null_entry",
+                                   prefix + " LVLO entry " + std::to_string(entries) + " names no item",
+                                   PreflightSeverity::error));
+    }
+    ++entries;
+  }
+  bool saw_count = false;
+  std::size_t llct_count = 0;
+  std::size_t llct_size = 0;
+  std::uint8_t declared = 0;
+  for (const auto& subrecord : record.subrecords) {
+    if (subrecord.signature != Signature::from_string("LLCT")) continue;
+    saw_count = true;
+    ++llct_count;
+    if (llct_count == 1) llct_size = subrecord.data.size();
+    if (!subrecord.data.empty()) declared = std::to_integer<std::uint8_t>(subrecord.data[0]);
+  }
+  // Requires: exactly one single-byte LLCT (decode_leveled_list require_once/read_single_byte).
+  if (llct_count == 1 && llct_size != 1) {
+    issues.push_back(field_issue(
+        record, prefix + "\\LLCT", "leveled_list_count_mismatch",
+        prefix + " LLCT holds " + std::to_string(llct_size) +
+            " bytes but the decoder requires exactly one",
+        PreflightSeverity::error));
+    return;
+  }
+  if (llct_count > 1) {
+    issues.push_back(field_issue(
+        record, prefix + "\\LLCT", "leveled_list_count_mismatch",
+        prefix + " holds " + std::to_string(llct_count) +
+            " LLCT subrecords but the decoder requires exactly one",
+        PreflightSeverity::error));
+    return;
+  }
+  // Invariant: OBND/LVLD/LVLF omission is allowed (defaults fill it; proof in notes).
+  if (!saw_count && entries > 0) {
+    issues.push_back(field_issue(record, prefix + "\\LLCT", "leveled_list_count_mismatch",
+                                 prefix + " holds " + std::to_string(entries) +
+                                     " LVLO entries but has no LLCT subrecord",
+                                 PreflightSeverity::error));
+  } else if (saw_count && declared != entries) {
+    issues.push_back(field_issue(
+        record, prefix + "\\LLCT", "leveled_list_count_mismatch",
+        prefix + " LLCT declares " + std::to_string(declared) + " but holds " +
+            std::to_string(entries) + " LVLO entries",
+        PreflightSeverity::error));
+  }
+}
+
+// Invariant: one FLST must not repeat the same LNAM key.
+void form_list_duplicate_issues(const Record& record, std::vector<PreflightIssue>& issues) {
+  if (record.header.signature != Signature::from_string("FLST")) return;
+  std::set<std::uint32_t> seen;
+  std::size_t ordinal = 0;
+  for (const auto& subrecord : record.subrecords) {
+    if (subrecord.signature != Signature::from_string("LNAM")) continue;
+    const std::size_t index = ordinal++;
+    // Requires: non-4-byte LNAM storage belongs to invalid_formlink_list_storage.
+    if (subrecord.data.size() != 4) continue;
+    const auto key = little_endian_u32(subrecord.data, 0);
+    // Invariant: null LNAM is an empty slot (wildcard-target list).
+    if (key == 0 || seen.insert(key).second) continue;
+    issues.push_back(field_issue(record, "FLST\\LNAM[" + std::to_string(index) + "]",
+                                 "duplicate_formlink_list_entry",
+                                 "FLST repeats LNAM entry " + hex_byte_string(key),
+                                 PreflightSeverity::warning));
+  }
+}
+
+// Invariant: a KSIZ counter must equal its packed KWDA entry count.
+void keyword_count_issues(const Record& record, std::vector<PreflightIssue>& issues) {
+  for (const auto& list : schema::k_generated_formlink_lists) {
+    if (list.record != record.header.signature) continue;
+    if (list.storage != schema::FormLinkListStorage::packed_array) continue;
+    if (list.counter == Signature{}) continue;
+    if (list.segment_count != 0 || list.counter_payload_size != 0) continue;
+    std::size_t counters = 0;
+    std::size_t parts = 0;
+    std::uint32_t declared = 0;
+    std::size_t bytes = 0;
+    for (const auto& subrecord : record.subrecords) {
+      if (subrecord.signature == list.counter) {
+        ++counters;
+        if (subrecord.data.size() >= 4) declared = little_endian_u32(subrecord.data, 0);
+      } else if (subrecord.signature == list.subrecord) {
+        ++parts;
+        bytes += subrecord.data.size();
+      }
+    }
+    const std::string prefix = record.header.signature.to_string();
+    // Requires: a malformed packed array belongs to invalid_formlink_list_storage.
+    if (bytes % 4 != 0) continue;
+    // Invariant: one packed list has one counter and one packed array.
+    if (counters > 1) {
+      issues.push_back(field_issue(
+          record, prefix + "\\" + list.counter.to_string(), "keyword_count_mismatch",
+          prefix + " holds " + std::to_string(counters) + " " + list.counter.to_string() +
+              " subrecords but the schema allows a single counter",
+          PreflightSeverity::error));
+      continue;
+    }
+    if (parts > 1) {
+      issues.push_back(field_issue(
+          record, prefix + "\\" + list.subrecord.to_string(), "keyword_count_mismatch",
+          prefix + " holds " + std::to_string(parts) + " " + list.subrecord.to_string() +
+              " subrecords but the schema allows a single packed array",
+          PreflightSeverity::error));
+      continue;
+    }
+    const std::size_t entries = bytes / 4;
+    const bool saw_count = counters == 1;
+    if (!saw_count && entries > 0) {
+      issues.push_back(field_issue(
+          record, prefix + "\\" + list.counter.to_string(), "keyword_count_mismatch",
+          prefix + " holds " + std::to_string(entries) + " " + list.subrecord.to_string() +
+              " entries but has no " + list.counter.to_string() + " subrecord",
+          PreflightSeverity::error));
+    } else if (saw_count && declared != entries) {
+      issues.push_back(field_issue(
+          record, prefix + "\\" + list.counter.to_string(), "keyword_count_mismatch",
+          prefix + " " + list.counter.to_string() + " declares " + std::to_string(declared) +
+              " but holds " + std::to_string(entries) + " " + list.subrecord.to_string() +
+              " entries",
+          PreflightSeverity::error));
+    }
+  }
+}
+
 }  // namespace
+
+// Invariant: the authoring gate and the real-data test share this owner for the four record-list codes.
+bool is_record_list_invariant(std::string_view code) {
+  return code == "leveled_list_count_mismatch" || code == "leveled_list_null_entry" ||
+         code == "duplicate_formlink_list_entry" || code == "keyword_count_mismatch";
+}
 
 std::vector<PreflightIssue> preflight_record(const Record& record, bool localized) {
   std::vector<PreflightIssue> issues;
@@ -357,6 +526,9 @@ std::vector<PreflightIssue> preflight_record(const Record& record, bool localize
     }
   }
 
+  leveled_list_entry_issues(record, issues);
+  form_list_duplicate_issues(record, issues);
+  keyword_count_issues(record, issues);
   climate_sun_window_issues(record, issues);
   return issues;
 }

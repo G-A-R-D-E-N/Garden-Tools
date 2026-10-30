@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <optional>
 #include <span>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -89,6 +90,10 @@ bool local_layout_valid(Rules rules, const Record& before, const Record& after) 
               .has_value();
 }
 
+bool same_check(const schema::PreflightIssue& a, const schema::PreflightIssue& b) {
+  return a.path == b.path && a.code == b.code;
+}
+
 bool layout_valid(Rules rules,
                   bool generated,
                   const Record& before,
@@ -96,8 +101,14 @@ bool layout_valid(Rules rules,
                   bool localized) {
   if (!local_layout_valid(rules, before, after)) return false;
   if (!generated) return true;
+  // Requires: only errors absent from preflight_record(before) refuse the edit, unless pre-existing and a record-list invariant.
+  const auto before_issues = schema::preflight_record(before, localized);
   for (const auto& issue : schema::preflight_record(after, localized)) {
-    if (issue.severity == schema::PreflightSeverity::error) return false;
+    if (issue.severity != schema::PreflightSeverity::error) continue;
+    const bool pre_existing = std::any_of(
+        before_issues.begin(), before_issues.end(),
+        [&](const schema::PreflightIssue& old) { return same_check(old, issue); });
+    if (!pre_existing || !schema::is_record_list_invariant(issue.code)) return false;
   }
   return true;
 }

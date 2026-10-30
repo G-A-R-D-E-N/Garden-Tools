@@ -129,6 +129,16 @@ internal static class NifFixtures
     private static Block NodeBlock(string type, int name, float[] translation, float scale, int[] children) =>
         new(type, NodeBody(name, translation, Identity, scale, children));
 
+    private static byte[] CollisionObjectBody(int target, int data, uint bodyId, ushort flags = 0)
+    {
+        var w = new Writer();
+        w.I32(target);
+        w.U16(flags);
+        w.I32(data);
+        w.U32(bodyId);
+        return w.Bytes();
+    }
+
     private static byte[] ShapeBody(uint flags, int stride, int skin, int shader, int alpha, byte[] vertices,
         ushort[] triangles, float[] translation)
     {
@@ -279,6 +289,30 @@ internal static class NifFixtures
         var blocks = new List<Block> { new("NiNode", NodeBody(-1, new float[] { 0, 0, 0 }, Identity, 1.0f, new[] { 0 })) };
         return BuildNif(Array.Empty<string>(), blocks, new[] { 0 });
     }
+    internal static byte[] CollisionNif()
+    {
+        var payload = new byte[] { 0x57, 0xE0, 0xE0, 0x57, 0x10, 0xC0, 0xC0, 0x10 };
+        var blob = new Writer();
+        blob.U32((uint)payload.Length);
+        blob.Append(payload);
+        var blocks = new List<Block>
+        {
+            new("bhkPhysicsSystem", blob.Bytes()),
+            new("bhkNPCollisionObject", CollisionObjectBody(2, 0, 7, 0x0003)),
+            NodeBlock("NiNode", 0, new float[] { 0, 0, 0 }, 1.0f, Array.Empty<int>()),
+        };
+        return BuildNif(new[] { "collision" }, blocks, new[] { 2 });
+    }
+
+    internal static byte[] UnownedCollisionNif()
+    {
+        var blob = new Writer();
+        blob.U32(1);
+        blob.Append(new byte[] { 0x01 });
+        var blocks = new List<Block> { new("bhkRagdollSystem", blob.Bytes()) };
+        return BuildNif(Array.Empty<string>(), blocks, Array.Empty<int>());
+    }
+
     internal static byte[] BadShaderNif()
     {
         var blocks = new List<Block>

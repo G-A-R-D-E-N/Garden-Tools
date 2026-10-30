@@ -484,6 +484,10 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "SetLeveledListSettings") return backend_.setLeveledListSettings(args);
         if (method == "EditLeveledListEntry") return backend_.editLeveledListEntry(args);
         if (method == "GetNpc") return backend_.getNpc(args);
+        if (method == "AddScript") return backend_.addScript(args);
+        if (method == "RemoveScript") return backend_.removeScript(args);
+        if (method == "AddScriptProperty") return backend_.addScriptProperty(args);
+        if (method == "RemoveScriptProperty") return backend_.removeScriptProperty(args);
         if (method == "EditNpcEntries") return backend_.editNpcEntries(args);
         if (method == "GetFaction") return backend_.getFaction(args);
         if (method == "EditFactionEntries") return backend_.editFactionEntries(args);
