@@ -312,7 +312,7 @@ TEST(NifWriteBlocks, SharedAlphaPropertyIsCopiedBeforeAShapeEdit) {
   EXPECT_EQ(fo4::nif::read_alpha(out, 3).flags, 0x0201U);
   EXPECT_FALSE(fo4::nif::read_alpha(out, 4).blend_enabled);
   EXPECT_EQ(fo4::nif::read_alpha(out, 4).flags, 0x0200U);
-  EXPECT_EQ(block_bytes(out_bytes, out, 3), block_bytes(bytes, nif, 3));
+  EXPECT_TRUE(same_bytes(block_bytes(out_bytes, out, 3), block_bytes(bytes, nif, 3)));
 }
 
 TEST(NifWriteBlocks, JsonEditsCarryFlagNamesAndRejectUnusableValues) {
@@ -385,6 +385,6 @@ TEST(NifWriteBlocks, JsonRefusesABooleanForANumericKey) {
 TEST(NifWriteBlocks, JsonRefusesANumberPastTheFloatRange) {
   // Invariant: a double past FLT_MAX is refused before the narrowing cast, which is undefined for it.
   EXPECT_THROW(fo4::nif::read_edits_json(R"([{"id":1,"key":"smoothness","value":1e300}])"), fo4::parse_error);
-  EXPECT_THROW(fo4::nif::read_edits_json(R"([{"id":1,"key":"uvScale","value":[-1e300,0.5]}]")), fo4::parse_error);
+  EXPECT_THROW(fo4::nif::read_edits_json(R"([{"id":1,"key":"uvScale","value":[-1e300,0.5]}])"), fo4::parse_error);
   EXPECT_NO_THROW(fo4::nif::read_edits_json(R"([{"id":1,"key":"smoothness","value":3.4e38}])"));
 }
