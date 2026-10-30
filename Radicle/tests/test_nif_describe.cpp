@@ -208,13 +208,15 @@ TEST(NifTree, ShapeWithoutAlphaPropertyHasNoAlphaFields) {
   EXPECT_EQ(text_of(tree.blocks[0], "skin"), "none");
 }
 
-// Invariant: BSSkin::Instance starts with Skeleton Root Ptr (an i32 block reference), so reading it as a name index shifts every field after it.
+// Invariant: Skeleton Root Ptr is an i32 block reference, so a root id outside the string table is not a string index.
 TEST(NifTree, SkinInstanceSkipsItsSkeletonRootPointerAndReportsTheBoneData) {
   const Transform xf{};
   const std::vector<Block> blocks{
       shape_with_refs("BSTriShape", 0, xf, k_has_skin, 20, 1, -1, -1, skinned_vertices(3), {0, 1, 2}),
-      skin_instance_block(2, {-1, -1, -1, -1}),
-      bone_data_block(4),
+      // Requires a root id past the end of the one-string table, the case a name read threw on.
+      skin_instance_block(2, {-1, -1, -1, -1, -1}, 999),
+      // Invariant: skinned_vertices writes bone indices 1 to 4, so four bones would be an invalid shape.
+      bone_data_block(5),
   };
   const auto nif = fo4::nif::read_nif(build_nif({"shape"}, blocks, {}));
   const auto tree = fo4::nif::describe_nif(nif);
@@ -222,9 +224,10 @@ TEST(NifTree, SkinInstanceSkipsItsSkeletonRootPointerAndReportsTheBoneData) {
   const auto& instance = tree.blocks.at(1);
   EXPECT_EQ(instance.cat, "skin");
   EXPECT_EQ(find_field(instance, "name"), nullptr);
+  EXPECT_EQ(find_field(instance, "readError"), nullptr);
   EXPECT_EQ(text_of(instance, "skinData"), "block 2");
-  EXPECT_EQ(text_of(instance, "bones"), "4");
-  EXPECT_EQ(text_of(tree.blocks.at(2), "transforms"), "4");
+  EXPECT_EQ(text_of(instance, "bones"), "5");
+  EXPECT_EQ(text_of(tree.blocks.at(2), "transforms"), "5");
 }
 
 TEST(NifTree, ShapeWhoseAlphaReferenceIsPastTheEndKeepsItsNameAndFault) {

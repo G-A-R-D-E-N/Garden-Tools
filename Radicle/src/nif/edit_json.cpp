@@ -3,6 +3,7 @@
 #include "fo4/error.hpp"
 
 #include <charconv>
+#include <cmath>
 #include <cstdint>
 #include <exception>
 #include <limits>
@@ -58,6 +59,12 @@ std::vector<std::string> flag_names(const nlohmann::json& values) {
   return names;
 }
 
+// Invariant: only the five on/off keys take a JSON boolean, so a float key cannot be set with true.
+bool is_boolean_key(std::string_view key) noexcept {
+  return key == "alphaBlend" || key == "alphaTest" || key == "editorMarker" || key == "envMapSSR" ||
+         key == "envMapWetnessSSR";
+}
+
 // Invariant: a number is accepted only when the float it is stored as reads back as the number the caller sent.
 bool stores_exactly(double value, float stored) {
   if (static_cast<double>(stored) == value) return true;
@@ -70,8 +77,14 @@ bool stores_exactly(double value, float stored) {
 }
 
 float exact_float(const nlohmann::json& raw, const std::string& key) {
-  const auto stored = raw.get<float>();
-  if (!stores_exactly(raw.get<double>(), stored)) {
+  const auto value = raw.get<double>();
+  // Invariant: the range check runs before the narrowing cast, which is undefined for a double past FLT_MAX.
+  if (!(std::fabs(value) <= static_cast<double>(std::numeric_limits<float>::max()))) {
+    throw parse_error(0, "key '" + key + "' value " + raw.dump() +
+        " is outside the range of a 32-bit float; NIF edit values are 32-bit floats");
+  }
+  const auto stored = static_cast<float>(value);
+  if (!stores_exactly(value, stored)) {
     throw parse_error(0, "key '" + key + "' value " + raw.dump() +
         " cannot be stored exactly; NIF edit values are 32-bit floats");
   }
@@ -105,6 +118,10 @@ Edit read_edit(const nlohmann::json& raw) {
   } else if (raw_value.is_number()) {
     edit.value = exact_float(raw_value, edit.key);
   } else if (raw_value.is_boolean()) {
+    if (!is_boolean_key(edit.key)) {
+      throw parse_error(0, "key '" + edit.key +
+          "' does not take a boolean; only alphaBlend, alphaTest, editorMarker, envMapSSR and envMapWetnessSSR do");
+    }
     edit.value = raw_value.get<bool>() ? 1.0f : 0.0f;
   } else if (raw_value.is_array() && raw_value.empty()) {
     // Invariant: an empty list is an empty name list, because the only list-valued key is the shader flag list.
