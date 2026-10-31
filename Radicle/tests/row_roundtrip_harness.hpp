@@ -141,6 +141,7 @@ struct Tally {
   std::size_t unresolved = 0;
   std::size_t shared = 0;
   std::size_t no_candidate = 0;
+  std::size_t structural = 0;
 };
 
 // Constraint: every skip is logged with its reason so a family that stops proving a row is visible in the log.
@@ -191,7 +192,7 @@ inline void roundtrip_family(const char* family, Signature signature) {
   for (const auto& field : rows) {
     ++tally.rows;
     if (field.record == Signature::from_string("ARMA") && field.scalar.subrecord == Signature::from_string("BSMP")) {
-      ++tally.no_candidate;
+      ++tally.structural;
       skip_note(family, field.path, "structural row: sculpt entries repeat BSMB and BSMS pairs");
       continue;
     }
@@ -319,7 +320,7 @@ inline void roundtrip_family(const char* family, Signature signature) {
   // Constraint: a carried row is either edited or skipped for a reason the harness cannot avoid, so none vanishes.
   EXPECT_EQ(tally.exercised + tally.shared + tally.unresolved + tally.no_candidate, carried)
       << family << " dropped a carried row without a reason";
-  EXPECT_EQ(tally.rows, carried + tally.absent + tally.derived + tally.whole_payload)
+  EXPECT_EQ(tally.rows, carried + tally.absent + tally.derived + tally.whole_payload + tally.structural)
       << family << " counted rows do not add up";
   // Constraint: a carried row is never skipped for bytes an earlier row wrote, so the record choice must free it.
   EXPECT_EQ(tally.shared, 0u) << family << " skipped a carried row whose bytes an earlier row had written";
