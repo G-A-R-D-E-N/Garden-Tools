@@ -12,9 +12,12 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -113,8 +116,7 @@ TEST(PrevisCdx, DecodesSignedExteriorGrid) {
   EXPECT_FALSE(fo4::previs::validate_cdx(fo4::previs::write_cdx(bad_interior)).empty());
 }
 
-// Detects a table edit that moves a chunk size or offset: parse must fail
-// must fail closed instead of slicing out of bounds and corrupting geometry.
+// A table edit that moves a chunk size or offset must fail closed instead of slicing past the file.
 TEST(PrevisCsg, RoundTripsAndRejectsBadChunk) {
   fo4::previs::CsgFile file;
   fo4::previs::CsgRow row{};
@@ -152,8 +154,7 @@ TEST(PrevisCsg, RoundTripsAndRejectsBadChunk) {
   EXPECT_FALSE(fo4::previs::validate_csg(magic).empty());
 }
 
-// A tiny chunk must stay tiny: a wrong cap of roughly 55 MB per chunk would
-// must not allocate before the inflater proves the stream complete.
+// A tiny chunk must stay tiny: the inflater must not allocate before it proves the stream complete.
 TEST(PrevisCsg, DecompressesOnlyCompleteChunks) {
   const auto good = std::vector<std::byte>{std::byte{0x78}, std::byte{0x9C}, std::byte{0x03},
                                            std::byte{0x00}, std::byte{0x00}, std::byte{0x00},
@@ -384,14 +385,14 @@ TEST_F(PrevisLoadOrderTest, ComputesInputsFromRealIndexes) {
   indexes.cdx_row = [](std::size_t, const fo4::previs::CdxCellTarget& target) {
     return std::optional<bool>{target.cell.local().value() == 0x801u};
   };
-  indexes.csg_rows = [](std::size_t, const fo4::previs::FormKey& cell) {
+  indexes.csg_rows = [](std::size_t, const fo4::FormKey& cell) {
     return std::optional<bool>{cell.local().value() == 0x801u};
   };
-  indexes.missing_oc_nifs = [](const fo4::previs::FormKey&,
+  indexes.missing_oc_nifs = [](const fo4::FormKey&,
                                std::span<const std::uint32_t>) {
     return std::optional<std::uint32_t>{0u};
   };
-  indexes.uvd = [](const fo4::previs::FormKey& cell) {
+  indexes.uvd = [](const fo4::FormKey& cell) {
     fo4::previs::TomeLookup answer;
     answer.checked = true;
     answer.found = cell.local().value() == 0x801u;

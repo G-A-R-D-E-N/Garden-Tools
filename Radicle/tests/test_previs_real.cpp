@@ -26,6 +26,7 @@
 #include <filesystem>
 #include <fstream>
 #include <map>
+#include <optional>
 #include <set>
 #include <cstring>
 #include <sstream>
@@ -39,9 +40,10 @@ namespace {
 
 namespace fs = std::filesystem;
 
-fs::path data_dir_or_skip() {
+// A skip must stay inside the TEST: GTEST_SKIP cannot return a non-void value.
+std::optional<fs::path> data_dir_from_env() {
   const char* dir = std::getenv("FO4_DATA_DIR");
-  if (dir == nullptr) GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
+  if (dir == nullptr || *dir == '\0') return std::nullopt;
   return fs::path{dir};
 }
 
@@ -118,7 +120,9 @@ std::string issue_codes(const fo4::previs::CellPrevisStatus& status) {
 
 // Regression: a misread bcdx header must fail here, not pass synthetic tests only.
 TEST(PrevisReal, CdxParsesAndRoundTrips) {
-  const auto dir = data_dir_or_skip();
+  const auto maybe_dir = data_dir_from_env();
+  if (!maybe_dir) GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
+  const fs::path& dir = *maybe_dir;
   const auto build = detect_game_build(dir);
   record_game_build(build);
   const std::map<std::string, std::size_t> expected_rows{
@@ -169,7 +173,9 @@ TEST(PrevisReal, CdxParsesAndRoundTrips) {
 
 // Regression: a wrong header word order or chunk entry must fail on real files.
 TEST(PrevisReal, CsgParsesAndRoundTrips) {
-  const auto dir = data_dir_or_skip();
+  const auto maybe_dir = data_dir_from_env();
+  if (!maybe_dir) GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
+  const fs::path& dir = *maybe_dir;
   const auto build = detect_game_build(dir);
   record_game_build(build);
   struct Expected {
@@ -224,7 +230,9 @@ TEST(PrevisReal, CsgParsesAndRoundTrips) {
 // Regression: a wrong CRC variant, body range, banner offset or alignment
 // rule must reject a shipped .uvd.
 TEST(PrevisReal, UvdTomesInArchives) {
-  const auto dir = data_dir_or_skip();
+  const auto maybe_dir = data_dir_from_env();
+  if (!maybe_dir) GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
+  const fs::path& dir = *maybe_dir;
   const auto build = detect_game_build(dir);
   record_game_build(build);
   const std::map<std::string, std::size_t> expected_archives{
@@ -288,7 +296,9 @@ TEST(PrevisReal, UvdTomesInArchives) {
 
 // Regression: the measured word-pair form must hold and must round-trip on every payload.
 TEST(PrevisReal, XcriCensusParses) {
-  const auto dir = data_dir_or_skip();
+  const auto maybe_dir = data_dir_from_env();
+  if (!maybe_dir) GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
+  const fs::path& dir = *maybe_dir;
   const auto build = detect_game_build(dir);
   record_game_build(build);
   const auto paths = official_masters(dir);
@@ -391,7 +401,9 @@ std::map<std::string, std::string> load_expected_broken(const fs::path& dir) {
 // Regression gate: false broken or missed verdicts must fail against the measured
 // vanilla list, which must come from measurement and not from this code.
 TEST(PrevisReal, VanillaLoadOrderGate) {
-  const auto dir = data_dir_or_skip();
+  const auto maybe_dir = data_dir_from_env();
+  if (!maybe_dir) GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
+  const fs::path& dir = *maybe_dir;
   const auto build = detect_game_build(dir);
   record_game_build(build);
   const auto paths = official_masters(dir);
@@ -510,7 +522,9 @@ TEST(PrevisReal, VanillaLoadOrderGate) {
 
 // Regression: the C ABI must surface the same report the C++ layer builds.
 TEST(PrevisReal, CApiReportSurface) {
-  const auto dir = data_dir_or_skip();
+  const auto maybe_dir = data_dir_from_env();
+  if (!maybe_dir) GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
+  const fs::path& dir = *maybe_dir;
   const auto build = detect_game_build(dir);
   record_game_build(build);
   const auto paths = official_masters(dir);
