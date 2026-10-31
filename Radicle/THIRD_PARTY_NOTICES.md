@@ -119,6 +119,8 @@ SOFTWARE.
 
 `src/nif/hknp_packfile.cpp` and `src/nif/hknp_decode_*.cpp` are adapted from the fork's `hknpdecode.cpp` and `hknpdecode.h` at commit `5422be6c`. The fork's GPLv3 `nif.xml` and the third-party libraries it lists are not included.
 
+`src/nif/hknp_encode.cpp` encoder layouts were cross-checked from the same source and re-measured on vanilla.
+
 ```
 Copyright (c) 2005-2014, NIF File Format Library and Tools.
 All rights reserved.

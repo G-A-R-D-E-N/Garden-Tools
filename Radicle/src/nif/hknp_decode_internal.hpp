@@ -12,6 +12,8 @@ namespace fo4::nif::hknp_detail {
 inline constexpr int k_shape_unvisited = -2;
 inline constexpr int k_shape_in_progress = -3;
 inline constexpr int k_shape_unsupported = -1;
+// Constraint: the capsule radius is the stored convex radius divided by 0.9801.
+inline constexpr float k_capsule_core_factor = 0.9801f;
 
 struct ArrayRef {
   std::size_t offset{0};

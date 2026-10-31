@@ -26,6 +26,7 @@ struct HknpMassProperties {
   HknpVec3 inertia_raw{};
   float volume{0.0f};
   float mass{0.0f};
+  std::uint64_t packed_orientation{0};
 };
 
 struct HknpInstance {
@@ -51,6 +52,7 @@ struct HknpShape {
   std::vector<HknpVec4> planes;
   // Invariant: each face is a loop of at least three vertex indices into vertices.
   std::vector<std::vector<std::uint8_t>> faces;
+  std::vector<std::uint8_t> face_min_half_angles;
   // Constraint: point_a is the sphere centre, or capsule end a, and point_b is capsule end b.
   HknpVec3 point_a{};
   HknpVec3 point_b{};

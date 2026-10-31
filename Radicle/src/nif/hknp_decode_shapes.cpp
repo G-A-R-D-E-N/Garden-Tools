@@ -14,8 +14,6 @@ namespace {
 
 constexpr std::size_t k_instance_stride = 0x80;
 constexpr std::size_t k_instance_child = 0x50;
-// Constraint: the capsule radius is the stored convex radius divided by 0.9801.
-constexpr float k_capsule_core_factor = 0.9801f;
 constexpr float k_uniform_point_tolerance = 1.0e-5f;
 constexpr int k_max_shape_depth = 32;
 
@@ -75,6 +73,7 @@ void read_polytope(const HknpPackObject& object, HknpShape& shape) {
     }
     if (loop.size() >= 3) {
       shape.faces.push_back(std::move(loop));
+      shape.face_min_half_angles.push_back(u8_at(object, entry + 3));
     }
   }
 }
@@ -92,6 +91,8 @@ void attach_mass_properties(const HknpPackfile& pack, const HknpPackObject& obje
   shape.has_mass_properties = true;
   shape.mass_properties.center = packed_vec3_at(mass, 0x10);
   shape.mass_properties.inertia_raw = packed_vec3_at(mass, 0x18);
+  shape.mass_properties.packed_orientation =
+      std::uint64_t{u32_at(mass, 0x20)} | (std::uint64_t{u32_at(mass, 0x24)} << 32);
   shape.mass_properties.volume = f32_at(mass, 0x28);
   shape.mass_properties.mass = f32_at(mass, 0x2c);
 }

@@ -1,5 +1,10 @@
 #include "fo4/nif/nif_import.hpp"
 
+#include "fo4/error.hpp"
+#include "fo4/nif/collision.hpp"
+#include "fo4/nif/hknp_decode.hpp"
+#include "fo4/nif/hknp_encode.hpp"
+#include "fo4/nif/hknp_packfile.hpp"
 #include "fo4/nif/nif.hpp"
 #include "import_mesh.hpp"
 #include "write_model.hpp"
@@ -43,24 +48,31 @@ constexpr std::int32_t k_shape_block = 1;
 constexpr std::int32_t k_shader_block = 2;
 constexpr std::int32_t k_texture_set_block = 3;
 constexpr std::int32_t k_bsx_block = 4;
+constexpr std::int32_t k_collision_object_block = 5;
+constexpr std::int32_t k_physics_system_block = 6;
+constexpr std::uint32_t k_box_bsx_flags = 130;
+constexpr std::uint16_t k_collision_owner_flags = 0x80;
+constexpr std::uint32_t k_box_material_crc = 0x064003D4U;
+constexpr float k_min_box_half_extent = 0.01f;
 constexpr std::array<float, 13> k_identity_transform{0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f,
                                                      0.0f, 0.0f, 1.0f, 1.0f};
 
 void put_float(Bytes& out, float value) { append_int(out, std::bit_cast<std::uint32_t>(value)); }
 
-void append_av(Bytes& out, std::int32_t name, const std::vector<std::int32_t>& extras) {
+void append_av(Bytes& out, std::int32_t name, const std::vector<std::int32_t>& extras,
+               std::int32_t collision = -1) {
   append_int(out, name);
   append_int(out, static_cast<std::uint32_t>(extras.size()));
   for (const auto extra : extras) append_int(out, extra);
   append_int(out, std::int32_t{-1});
   append_int(out, k_node_flags);
   for (const float value : k_identity_transform) put_float(out, value);
-  append_int(out, std::int32_t{-1});
+  append_int(out, collision);
 }
 
-Bytes root_block(std::int32_t name) {
+Bytes root_block(std::int32_t name, std::int32_t collision) {
   Bytes out;
-  append_av(out, name, {k_bsx_block});
+  append_av(out, name, {k_bsx_block}, collision);
   append_int(out, std::uint32_t{1});
   append_int(out, k_shape_block);
   return out;
@@ -140,19 +152,61 @@ Bytes texture_set_block(const ImportOptions& options) {
   return out;
 }
 
-Bytes bsx_block(std::int32_t name) {
+Bytes bsx_block(std::int32_t name, std::uint32_t flags) {
   Bytes out;
   append_int(out, name);
+  append_int(out, flags);
+  return out;
+}
+
+Bytes collision_object_block() {
+  Bytes out;
+  append_int(out, std::int32_t{0});
+  append_int(out, k_collision_owner_flags);
+  append_int(out, k_physics_system_block);
   append_int(out, std::uint32_t{0});
   return out;
+}
+
+Bytes physics_system_block(const Bytes& packfile) {
+  Bytes out;
+  append_int(out, static_cast<std::uint32_t>(packfile.size()));
+  out.insert(out.end(), packfile.begin(), packfile.end());
+  return out;
+}
+
+Bytes box_packfile(const Mesh& mesh) {
+  Vec3 low = mesh.positions.front();
+  Vec3 high = low;
+  for (const auto& p : mesh.positions) {
+    for (std::size_t k = 0; k < 3; ++k) {
+      low[k] = std::min(low[k], p[k]);
+      high[k] = std::max(high[k], p[k]);
+    }
+  }
+  Vec3 center{};
+  Vec3 half{};
+  for (std::size_t k = 0; k < 3; ++k) {
+    center[k] = (low[k] + high[k]) / 2.0f / k_hknp_game_units_per_metre;
+    half[k] = std::max((high[k] - low[k]) / 2.0f / k_hknp_game_units_per_metre, k_min_box_half_extent);
+  }
+  return write_hknp_packfile(author_hknp_static_body(make_hknp_box(center, half, k_box_material_crc), {}));
+}
+
+bool reads_one_box_body(const NifFile& nif) {
+  const auto blobs = read_collision_blobs(nif);
+  if (blobs.size() != 1U) return false;
+  try {
+    return decode_hknp_system(read_hknp_packfile(blobs[0].bytes)).bodies.size() == 1U;
+  } catch (const fo4::parse_error&) {
+    return false;
+  }
 }
 
 }
 
 std::vector<std::byte> import_obj(std::string_view obj_text, const ImportOptions& options) {
-  if (options.box_collision) {
-    throw std::runtime_error("box collision needs niftool; the in-process import writes no collision");
-  }
+  const bool box = options.box_collision;
   const auto mesh = import_detail::read_obj(obj_text, options.from_blender);
   if (mesh.positions.size() > k_max_vertices) {
     throw std::runtime_error("OBJ has " + std::to_string(mesh.positions.size()) +
@@ -167,14 +221,25 @@ std::vector<std::byte> import_obj(std::string_view obj_text, const ImportOptions
   model.export_strings.assign(4, std::string{});
   model.block_types = {"NiNode", "BSTriShape", "BSLightingShaderProperty", "BSShaderTextureSet", "BSXFlags"};
   model.block_type_index = {0, 1, 2, 3, 4};
+  if (box) {
+    model.block_types.push_back("bhkNPCollisionObject");
+    model.block_types.push_back("bhkPhysicsSystem");
+    model.block_type_index.push_back(5);
+    model.block_type_index.push_back(6);
+  }
   model.roots = {0};
 
   const auto root_name = write_detail::intern_string(model, "Scene Root");
   const auto shape_name = write_detail::intern_string(model, mesh.name);
   const auto material = write_detail::intern_string(model, options.material);
   const auto bsx_name = write_detail::intern_string(model, "BSX");
-  model.blocks = {root_block(root_name), shape_block(mesh, shape_name), shader_block(material, k_texture_set_block),
-                  texture_set_block(options), bsx_block(bsx_name)};
+  model.blocks = {root_block(root_name, box ? k_collision_object_block : -1), shape_block(mesh, shape_name),
+                  shader_block(material, k_texture_set_block), texture_set_block(options),
+                  bsx_block(bsx_name, box ? k_box_bsx_flags : 0U)};
+  if (box) {
+    model.blocks.push_back(collision_object_block());
+    model.blocks.push_back(physics_system_block(box_packfile(mesh)));
+  }
   for (const auto& text : model.strings) {
     model.max_string_length = std::max(model.max_string_length, static_cast<std::uint32_t>(text.size()));
   }
@@ -183,7 +248,7 @@ std::vector<std::byte> import_obj(std::string_view obj_text, const ImportOptions
   const auto nif = read_nif(bytes);
   const auto shapes = read_shapes(nif);
   if (shapes.size() != 1U || !shapes[0].warning.empty() || shapes[0].verts.size() != 3 * mesh.positions.size() ||
-      shapes[0].tris.size() != mesh.tris.size()) {
+      shapes[0].tris.size() != mesh.tris.size() || (box && !reads_one_box_body(nif))) {
     throw std::runtime_error("internal error: the written NIF does not read back as one clean shape");
   }
   return bytes;

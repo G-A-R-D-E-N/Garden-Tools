@@ -2,6 +2,7 @@
 #include "fo4/error.hpp"
 #include "fo4/nif/collision.hpp"
 #include "fo4/nif/hknp_decode.hpp"
+#include "fo4/nif/hknp_encode.hpp"
 #include "fo4/nif/hknp_packfile.hpp"
 #include "fo4/nif/nif.hpp"
 #include "real_data_build.hpp"
@@ -18,6 +19,7 @@
 #include <filesystem>
 #include <iostream>
 #include <map>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -27,6 +29,7 @@ namespace {
 constexpr std::size_t k_max_blobs = 200;
 constexpr std::size_t k_max_packfiles = 200;
 constexpr std::size_t k_entry_stride = 37;
+constexpr std::size_t k_max_convex_vertices = 255;
 
 std::string lower(std::string text) {
   std::transform(text.begin(), text.end(), text.begin(),
@@ -280,6 +283,91 @@ bool skeleton_pose_count_matches_parents(const fo4::nif::HknpSystem& sys) {
   return false;
 }
 
+bool single_authorable_body(const fo4::nif::HknpSystem& sys) {
+  if (sys.bodies.size() != 1 || sys.bodies[0].dynamic || !sys.constraints.empty() || !sys.bones.empty() ||
+      !sys.unsupported.empty() || !sys.motions.empty() || !sys.inertias.empty()) {
+    return false;
+  }
+  const auto& objects = sys.packfile.objects;
+  if (objects.size() != 4 || objects[0].class_name != "hknpPhysicsSystemData" ||
+      objects[1].class_name != "hknpConvexPolytopeShape" || objects[2].class_name != "hkRefCountedProperties" ||
+      objects[3].class_name != "hknpShapeMassProperties") {
+    return false;
+  }
+  const int index = sys.bodies[0].shape;
+  if (index < 0 || static_cast<std::size_t>(index) >= sys.shapes.size()) return false;
+  const auto kind = sys.shapes[static_cast<std::size_t>(index)].kind;
+  return kind == fo4::nif::HknpShapeKind::sphere || kind == fo4::nif::HknpShapeKind::capsule ||
+         kind == fo4::nif::HknpShapeKind::convex;
+}
+
+bool position_w_is_set(const fo4::nif::HknpSystem& sys) {
+  for (const auto& object : sys.packfile.objects) {
+    if (object.class_name == "hknpPhysicsSystemData") {
+      return object.bytes.size() >= 0x110 && read_u32_at(object, 0x10c) != 0;
+    }
+  }
+  return false;
+}
+
+void blank_mass_centre(fo4::nif::HknpPackfile& pack) {
+  for (auto& object : pack.objects) {
+    if (object.class_name != "hknpShapeMassProperties" || object.bytes.size() < 0x18) continue;
+    std::fill(object.bytes.begin() + 0x10, object.bytes.begin() + 0x18, std::byte{0});
+  }
+}
+
+bool same_objects(const fo4::nif::HknpPackfile& a, const fo4::nif::HknpPackfile& b) {
+  if (a.objects.size() != b.objects.size()) return false;
+  for (std::size_t i = 0; i < a.objects.size(); ++i) {
+    if (a.objects[i].bytes != b.objects[i].bytes) return false;
+  }
+  return true;
+}
+
+float largest_half_extent(const fo4::nif::HknpShape& shape) {
+  float largest = 0.0f;
+  if (shape.vertices.empty()) return largest;
+  for (std::size_t k = 0; k < 3; ++k) {
+    float low = shape.vertices.front()[k];
+    float high = low;
+    for (const auto& v : shape.vertices) {
+      low = std::min(low, v[k]);
+      high = std::max(high, v[k]);
+    }
+    largest = std::max(largest, (high - low) / 2.0f);
+  }
+  return largest;
+}
+
+bool centers_agree(const fo4::nif::HknpShape& stored, const fo4::nif::HknpSystem& authored) {
+  if (authored.bodies.size() != 1 || authored.bodies[0].shape < 0) return false;
+  const auto& rebuilt = authored.shapes[static_cast<std::size_t>(authored.bodies[0].shape)];
+  if (stored.has_mass_properties != rebuilt.has_mass_properties) return false;
+  const float tolerance = 1e-3f * std::max(1e-3f, largest_half_extent(stored));
+  for (std::size_t k = 0; k < 3; ++k) {
+    if (std::fabs(stored.mass_properties.center[k] - rebuilt.mass_properties.center[k]) > tolerance) return false;
+  }
+  return true;
+}
+
+bool first_stage_encodable(const fo4::nif::HknpSystem& sys, const fo4::nif::HknpShape& shape) {
+  if (shape.kind != fo4::nif::HknpShapeKind::convex) return true;
+  if (shape.class_name == "hknpConvexShape") return shape.vertices.size() <= k_max_convex_vertices;
+  if (shape.class_name != "hknpConvexPolytopeShape" || shape.object >= sys.packfile.objects.size()) return false;
+  const auto& bytes = sys.packfile.objects[shape.object].bytes;
+  if (bytes.size() < 0x46) return false;
+  const std::size_t stored = std::to_integer<std::size_t>(bytes[0x44]) |
+                             (std::to_integer<std::size_t>(bytes[0x45]) << 8);
+  return stored == shape.faces.size();
+}
+
+bool same_shape(const fo4::nif::HknpShape& a, const fo4::nif::HknpShape& b) {
+  return a.kind == b.kind && std::abs(a.radius - b.radius) <= 1e-5f &&
+         std::abs(a.convex_radius - b.convex_radius) <= 1e-5f && a.vertices == b.vertices && a.planes == b.planes &&
+         a.point_a == b.point_a && a.point_b == b.point_b;
+}
+
 }  // namespace
 
 // Detects: a vanilla physics or ragdoll packfile the typed decode rejects, a ragdoll whose constraints, bones or reference-pose count are misread, or a decoded sphere, capsule or convex vertex that is not finite or has a negative radius; every sampled system and every skeleton-backed ragdoll must decode with finite geometry and matching pose counts.
@@ -395,4 +483,169 @@ TEST(NifCollisionRealData, VanillaPhysicsSystemsDecodeWithoutParseFailure) {
   EXPECT_GT(ragdoll_constraints, 0U);
   EXPECT_GT(ragdoll_bones, 0U);
   EXPECT_EQ(pose_mismatches, 0U) << first_pose_mismatch;
+}
+
+TEST(NifCollisionRealData, AuthoredSingleBodySystemsMatchVanillaBytes) {
+  const char* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) {
+    GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder with its Fallout4 - *.ba2 archives";
+  }
+  record_game_build(detect_game_build(dir));
+  const auto archives = fo4::archive::archive_load_order(dir, {}, installed_master_and_cc_plugins(dir));
+  if (archives.empty()) {
+    GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder with its Fallout4 - *.ba2 archives";
+  }
+
+  const auto assets = fo4::archive::AssetResolver::open({}, archives);
+  std::size_t attempted = 0;
+  std::size_t skipped = 0;
+  std::size_t skipped_position_w = 0;
+  std::size_t identical = 0;
+  std::size_t mismatches = 0;
+  std::size_t center_mismatches = 0;
+  std::size_t rejected = 0;
+  std::size_t failures = 0;
+  std::string first_mismatch;
+  std::string first_center_mismatch;
+  std::string first_rejected;
+  std::string first_failure;
+
+  for (const auto& reader : assets.archives()) {
+    if (reader.kind() != fo4::archive::Ba2Kind::general) continue;
+    for (std::size_t i = 0; i < reader.entries().size() && attempted < k_max_packfiles; i += k_entry_stride) {
+      const auto& path = reader.entries()[i].path;
+      if (!is_nif(path)) continue;
+      try {
+        const auto nif = fo4::nif::read_nif(reader.extract(i));
+        for (const auto& blob : fo4::nif::read_collision_blobs(nif)) {
+          if (blob.type != "bhkPhysicsSystem" || !has_packfile_magic(blob.bytes, 0)) continue;
+          const auto sys = fo4::nif::decode_hknp_system(fo4::nif::read_hknp_packfile(blob.bytes));
+          if (!single_authorable_body(sys)) continue;
+          const auto& body = sys.bodies[0];
+          const fo4::nif::HknpStaticBody static_body{body.position, body.orientation, body.packed_filter};
+          const auto& shape = sys.shapes[static_cast<std::size_t>(body.shape)];
+          if (!first_stage_encodable(sys, shape)) {
+            ++skipped;
+            continue;
+          }
+          if (position_w_is_set(sys)) {
+            ++skipped_position_w;
+            continue;
+          }
+          ++attempted;
+          try {
+            const auto authored_bytes =
+                fo4::nif::write_hknp_packfile(fo4::nif::author_hknp_static_body(shape, static_body));
+            const auto authored = fo4::nif::decode_hknp_system(fo4::nif::read_hknp_packfile(authored_bytes));
+            auto stored_blanked = sys.packfile;
+            auto authored_blanked = authored.packfile;
+            blank_mass_centre(stored_blanked);
+            blank_mass_centre(authored_blanked);
+            if (same_objects(stored_blanked, authored_blanked) &&
+                fo4::nif::write_hknp_packfile(stored_blanked) == fo4::nif::write_hknp_packfile(authored_blanked)) {
+              ++identical;
+            } else {
+              ++mismatches;
+              if (first_mismatch.empty()) first_mismatch = path + " block " + std::to_string(blob.block);
+            }
+            if (!centers_agree(shape, authored)) {
+              ++center_mismatches;
+              if (first_center_mismatch.empty()) first_center_mismatch = path + " block " + std::to_string(blob.block);
+            }
+          } catch (const std::invalid_argument& error) {
+            ++rejected;
+            if (first_rejected.empty()) first_rejected = path + ": " + error.what();
+          }
+        }
+      } catch (const fo4::parse_error& error) {
+        ++failures;
+        if (first_failure.empty()) first_failure = path + ": " + error.parse_message();
+      }
+    }
+  }
+
+  std::cout << "single-body systems " << attempted << ", skipped (not first-stage) " << skipped
+            << ", skipped (position w) " << skipped_position_w << ", rebuilt identical " << identical
+            << " (mass centre blanked), mismatched " << mismatches << ", centre mismatches " << center_mismatches
+            << ", rejected " << rejected << ", failures " << failures << '\n';
+  RecordProperty("single_body_attempted_count", std::to_string(attempted));
+  RecordProperty("single_body_identical_count", std::to_string(identical));
+
+  EXPECT_EQ(failures, 0U) << first_failure;
+  EXPECT_EQ(rejected, 0U) << first_rejected;
+  EXPECT_GE(attempted, 100U);
+  EXPECT_GE(identical * 100, attempted * 99) << first_mismatch;
+  EXPECT_EQ(center_mismatches, 0U) << first_center_mismatch;
+}
+
+TEST(NifCollisionRealData, ReencodedSpheresConvexAndCapsulesMatchVanilla) {
+  const char* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) {
+    GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder with its Fallout4 - *.ba2 archives";
+  }
+  record_game_build(detect_game_build(dir));
+  const auto archives = fo4::archive::archive_load_order(dir, {}, installed_master_and_cc_plugins(dir));
+  if (archives.empty()) {
+    GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder with its Fallout4 - *.ba2 archives";
+  }
+
+  const auto assets = fo4::archive::AssetResolver::open({}, archives);
+  std::size_t checked = 0;
+  std::size_t skipped = 0;
+  std::size_t mismatches = 0;
+  std::size_t rejected = 0;
+  std::size_t failures = 0;
+  std::string first_mismatch;
+  std::string first_rejected;
+  std::string first_failure;
+
+  for (const auto& reader : assets.archives()) {
+    if (reader.kind() != fo4::archive::Ba2Kind::general) continue;
+    for (std::size_t i = 0; i < reader.entries().size() && checked < k_max_packfiles; i += k_entry_stride) {
+      const auto& path = reader.entries()[i].path;
+      if (!is_nif(path)) continue;
+      try {
+        const auto nif = fo4::nif::read_nif(reader.extract(i));
+        for (const auto& blob : fo4::nif::read_collision_blobs(nif)) {
+          if (blob.type != "bhkPhysicsSystem" || !has_packfile_magic(blob.bytes, 0)) continue;
+          const auto sys = fo4::nif::decode_hknp_system(fo4::nif::read_hknp_packfile(blob.bytes));
+          for (const auto& shape : sys.shapes) {
+            if (shape.kind != fo4::nif::HknpShapeKind::sphere && shape.kind != fo4::nif::HknpShapeKind::capsule &&
+                shape.kind != fo4::nif::HknpShapeKind::convex) {
+              continue;
+            }
+            if (!first_stage_encodable(sys, shape)) {
+              ++skipped;
+              continue;
+            }
+            ++checked;
+            try {
+              const auto back = fo4::nif::decode_hknp_system(fo4::nif::read_hknp_packfile(
+                  fo4::nif::write_hknp_packfile(fo4::nif::author_hknp_static_body(shape, {}))));
+              if (back.bodies.size() != 1 || back.bodies[0].shape < 0 ||
+                  !same_shape(back.shapes[static_cast<std::size_t>(back.bodies[0].shape)], shape)) {
+                ++mismatches;
+                if (first_mismatch.empty()) first_mismatch = path + " block " + std::to_string(blob.block);
+              }
+            } catch (const std::invalid_argument& error) {
+              ++rejected;
+              if (first_rejected.empty()) first_rejected = path + ": " + error.what();
+            }
+          }
+        }
+      } catch (const fo4::parse_error& error) {
+        ++failures;
+        if (first_failure.empty()) first_failure = path + ": " + error.parse_message();
+      }
+    }
+  }
+
+  std::cout << "re-encoded shapes " << checked << ", skipped (not first-stage) " << skipped << ", mismatched "
+            << mismatches << ", rejected " << rejected << ", failures " << failures << '\n';
+  RecordProperty("reencoded_shape_count", std::to_string(checked));
+
+  EXPECT_EQ(failures, 0U) << first_failure;
+  EXPECT_EQ(rejected, 0U) << first_rejected;
+  EXPECT_EQ(mismatches, 0U) << first_mismatch;
+  EXPECT_GT(checked, 0U);
 }
