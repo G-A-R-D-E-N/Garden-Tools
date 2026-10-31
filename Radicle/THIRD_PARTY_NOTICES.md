@@ -83,6 +83,41 @@ OTHER DEALINGS IN THE SOFTWARE.
 
 For more information, please refer to <https://unlicense.org>
 
+## NifSkope Wild Wasteland Edition
+
+- Upstream: https://github.com/BungoV/NifSkope-WildWastelandEdition
+- Licence: BSD-3, as stated in the fork's README and `LICENSE.md`. BungoV told Nomad the work can be used.
+
+`docs/nifskope-ww/` holds copies of the fork's HKX and ragdoll notes from commit `5422be6c`, unmodified apart from a one-line "unverified" banner and one build number replaced with a phrase such as "an older game build", with the surrounding words adjusted to fit. No code from the fork is included. Its GPLv3 `nif.xml` and the third-party libraries it lists are not included either.
+
+```
+Copyright (c) 2005-2014, NIF File Format Library and Tools.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+1. Redistributions of source code must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
+3. The name of the NIF File Format Library and Tools project may not be
+   used to endorse or promote products derived from this software
+   without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
 ## nlohmann/json
 
 - Upstream: https://github.com/nlohmann/json
