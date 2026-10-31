@@ -99,7 +99,9 @@ export default function PrevisPanel({ onClose }: { onClose: () => void }) {
 
   const broken = useMemo(() => (scan?.broken ?? []).filter(row => matches(row, filter)), [scan, filter]);
   const outdated = useMemo(() => (scan?.outdated ?? []).filter(row => matches(row, filter)), [scan, filter]);
+  const skipped = useMemo(() => (scan?.skipped ?? []).filter(row => matches(row, filter)), [scan, filter]);
   const summary = scan?.summary;
+  const clean = !!summary && summary.broken === 0 && summary.skipped === 0 && summary.problems === 0;
 
   return (
     <div className="papyrus-overlay" onClick={onClose}>
@@ -125,6 +127,9 @@ export default function PrevisPanel({ onClose }: { onClose: () => void }) {
           <div className="previs-hint">
             Read-only. Scans the saved load order and every previs container in the Data folder; the first run can take a minute.
           </div>
+          <div className="previs-hint">
+            The base game itself reports cells here; a non-zero count is not automatically a mod problem.
+          </div>
 
           {error && <div className="papyrus-banner error"><XCircle size={15} /><span className="papyrus-banner-text">{error}</span></div>}
           {!scan && !error && <div className="nif-view-empty">{busy ? 'Reading the Data folder…' : 'Press Scan to build the previs report.'}</div>}
@@ -133,8 +138,8 @@ export default function PrevisPanel({ onClose }: { onClose: () => void }) {
             <>
               <div className="previs-summary">
                 <span className="previs-stat"><b>{summary.cells.toLocaleString()}</b> cells</span>
-                <span className={`previs-stat ${summary.broken > 0 ? 'previs-stat-bad' : 'previs-stat-ok'}`}>
-                  {summary.broken > 0 ? <AlertTriangle size={13} /> : <CheckCircle2 size={13} />}
+                <span className={`previs-stat ${clean ? 'previs-stat-ok' : 'previs-stat-bad'}`}>
+                  {clean ? <CheckCircle2 size={13} /> : <AlertTriangle size={13} />}
                   <b>{summary.broken.toLocaleString()}</b> broken
                 </span>
                 <span className="previs-stat"><b>{summary.outdated.toLocaleString()}</b> outdated</span>
@@ -162,6 +167,11 @@ export default function PrevisPanel({ onClose }: { onClose: () => void }) {
               <div className="previs-section">
                 <div className="previs-section-head">Outdated cells ({summary.outdated.toLocaleString()})</div>
                 <Findings rows={outdated} empty={summary.outdated === 0 ? 'No stale previs stamps.' : 'No outdated cells match the filter.'} />
+              </div>
+
+              <div className="previs-section">
+                <div className="previs-section-head">Skipped cells ({summary.skipped.toLocaleString()})</div>
+                <Findings rows={skipped} empty={summary.skipped === 0 ? 'No unmeasured cells in this load order.' : 'No skipped cells match the filter.'} />
               </div>
             </>
           )}

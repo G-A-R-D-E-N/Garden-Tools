@@ -500,6 +500,7 @@ export interface PrevisScanResult {
   problems: string[];
   broken: PrevisCellReport[];
   outdated: PrevisCellReport[];
+  skipped: PrevisCellReport[];
   truncated: boolean;
 }
 

@@ -3,6 +3,7 @@
 #include <fo4/environment/environment.hpp>
 #include <fo4/previs/detect.hpp>
 #include <fo4/previs/previs_data.hpp>
+#include <fo4ide/mo2/Mo2Profile.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -76,6 +77,17 @@ Result<std::vector<std::filesystem::path>> loadOrderFromJson(const nlohmann::jso
 
 }
 
+std::vector<std::filesystem::path> previsAssetRoots(const settings::Settings& settings,
+                                                    const std::filesystem::path& data_dir) {
+    if (!settings.mo2InstancePath.empty()) {
+        if (auto profile = mo2::readProfile(settings.mo2InstancePath, {}, data_dir)) {
+            if (!profile->assetRootsLowToHigh.empty()) return profile->assetRootsLowToHigh;
+        }
+    }
+    if (data_dir.empty()) return {};
+    return {data_dir};
+}
+
 PrevisTarget::PrevisTarget(plugin::IPluginBackend& backend,
                            settings::SharedSettings& settings)
     : backend_(backend), settings_(settings) {}
@@ -104,7 +116,17 @@ Result<nlohmann::json> PrevisTarget::dataFolder() const {
     return nlohmann::json{{"dataDir", folder.string()}};
 }
 
-Result<nlohmann::json> PrevisTarget::scan(const nlohmann::json& args) const {
+Result<nlohmann::json> PrevisTarget::scan(const nlohmann::json& args) {
+    bool expected = false;
+    if (!scanning_.compare_exchange_strong(expected, true)) {
+        return std::unexpected(
+            Error{"PrevisScanBusy", "a previs scan is already running; wait for it to finish"});
+    }
+    struct ScanRelease {
+        std::atomic<bool>& flag;
+        ~ScanRelease() { flag.store(false); }
+    } release{scanning_};
+
     const auto folder = resolveDataFolder(args);
     if (folder.empty()) {
         return std::unexpected(Error{"PrevisDataDir",
@@ -129,7 +151,7 @@ Result<nlohmann::json> PrevisTarget::scan(const nlohmann::json& args) const {
                                      std::string("could not load the plugin list: ") + problem.what()});
     }
 
-    const std::filesystem::path roots[]{folder};
+    const auto roots = previsAssetRoots(settings_.snapshot(), folder);
     const auto data = fo4::previs::PrevisData::load(roots, environment);
     const auto report = fo4::previs::diagnose_load_order(environment, data.indexes());
 
@@ -138,9 +160,15 @@ Result<nlohmann::json> PrevisTarget::scan(const nlohmann::json& args) const {
     std::size_t skipped = 0;
     nlohmann::json brokenRows = nlohmann::json::array();
     nlohmann::json outdatedRows = nlohmann::json::array();
+    nlohmann::json skippedRows = nlohmann::json::array();
     for (const auto& diagnosis : report) {
         const std::string plugin(environment.plugins()[diagnosis.plugin].key.filename());
-        if (diagnosis.status.skip_unsupported) ++skipped;
+        if (diagnosis.status.skip_unsupported) {
+            ++skipped;
+            if (skippedRows.size() < kMaxReportedCells) {
+                skippedRows.push_back(cellJson(diagnosis, plugin));
+            }
+        }
         if (diagnosis.status.outdated) {
             ++outdated;
             if (outdatedRows.size() < kMaxReportedCells) {
@@ -176,7 +204,9 @@ Result<nlohmann::json> PrevisTarget::scan(const nlohmann::json& args) const {
         {"problems", summary.problems},
         {"broken", std::move(brokenRows)},
         {"outdated", std::move(outdatedRows)},
-        {"truncated", broken > kMaxReportedCells || outdated > kMaxReportedCells},
+        {"skipped", std::move(skippedRows)},
+        {"truncated", broken > kMaxReportedCells || outdated > kMaxReportedCells ||
+                          skipped > kMaxReportedCells},
     };
 }
 

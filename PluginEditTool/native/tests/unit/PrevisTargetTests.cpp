@@ -16,12 +16,21 @@ public:
     }
 
     fo4ide::Result<nlohmann::json> invoke(std::string_view, const nlohmann::json&) override {
+        // Reentrancy probe: a second Scan from inside the first must be refused, not queued.
+        if (target != nullptr && !probed) {
+            probed = true;
+            const auto nested = target->invoke("Scan", nlohmann::json::array());
+            busy_seen = !nested && nested.error().type == "PrevisScanBusy";
+        }
         return nlohmann::json::array();
     }
 
     std::filesystem::path dataDirectory() const override { return dataDirectory_; }
 
     std::filesystem::path dataDirectory_;
+    fo4ide::rpc::PrevisTarget* target{nullptr};
+    bool probed{false};
+    bool busy_seen{false};
 };
 
 class TemporaryDirectory {
@@ -94,4 +103,36 @@ TEST_CASE("previs target rejects unknown methods") {
     const auto result = target.invoke("Nope", nlohmann::json::array());
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().type == "UnknownMethod");
+}
+
+TEST_CASE("previs asset roots keep the Data folder when no MO2 profile is configured") {
+    TemporaryDirectory directory;
+    fo4ide::settings::Settings settings;
+
+    const auto roots = fo4ide::rpc::previsAssetRoots(settings, directory.path());
+    REQUIRE(roots.size() == 1);
+    CHECK(roots.front() == directory.path());
+}
+
+TEST_CASE("previs asset roots fall back when the MO2 profile cannot be read") {
+    TemporaryDirectory directory;
+    fo4ide::settings::Settings settings;
+    settings.mo2InstancePath = directory.path() / "no-such-instance";
+
+    const auto roots = fo4ide::rpc::previsAssetRoots(settings, directory.path());
+    REQUIRE(roots.size() == 1);
+    CHECK(roots.front() == directory.path());
+}
+
+TEST_CASE("previs target refuses a second concurrent scan") {
+    TemporaryDirectory directory;
+    FakeBackend backend;
+    fo4ide::settings::SharedSettings settings;
+    fo4ide::rpc::PrevisTarget target(backend, settings);
+    backend.target = &target;
+
+    const auto result = target.invoke("Scan", nlohmann::json::array({directory.path().string()}));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(backend.busy_seen);
+    CHECK(result.error().type == "PrevisNoEnvironment");
 }

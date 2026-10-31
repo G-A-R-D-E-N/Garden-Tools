@@ -3,6 +3,7 @@
 #include "fo4/previs/detect.hpp"
 #include "fo4/previs/uvd.hpp"
 #include "fo4/previs/xcri.hpp"
+#include "fo4/archive/ba2.hpp"
 #include "fo4/environment/environment.hpp"
 #include "fo4/environment/world.hpp"
 #include "fo4/error.hpp"
@@ -11,6 +12,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -165,6 +167,34 @@ TEST(PrevisCsg, DecompressesOnlyCompleteChunks) {
   EXPECT_THROW(fo4::previs::decompress_csg_chunk(truncated), fo4::parse_error);
 }
 
+// Regression: a hostile chunk count must fail on the table bound, not reserve gigabytes.
+TEST(PrevisCsg, RejectsHugeChunkCountBeforeAllocating) {
+  std::vector<std::byte> bytes(12, std::byte{0});
+  bytes[0] = std::byte{'b'};
+  bytes[1] = std::byte{'c'};
+  bytes[2] = std::byte{'s'};
+  bytes[3] = std::byte{'g'};
+  bytes[8] = std::byte{0xFF};
+  bytes[9] = std::byte{0xFF};
+  bytes[10] = std::byte{0xFF};
+  bytes[11] = std::byte{0xFF};
+  EXPECT_THROW(fo4::previs::parse_csg(bytes), fo4::parse_error);
+  EXPECT_FALSE(fo4::previs::validate_csg(bytes).empty());
+}
+
+// Regression: a stream that inflates past the 64 KiB chunk cap must throw, not truncate.
+TEST(PrevisCsg, RejectsInflateOverTheChunkCap) {
+  const std::vector<std::byte> oversized(65537, std::byte{0});
+  const auto chunk = fo4::test::zlib_compress(oversized);
+  EXPECT_THROW(fo4::previs::decompress_csg_chunk(chunk), fo4::parse_error);
+}
+
+// Regression: a huge XCRI count must fail on the size comparison, before any reserve.
+TEST(PrevisXcri, RejectsHugeCountsBeforeAllocating) {
+  const auto bytes = bytes_of({0xFFFFFFFFu, 0xFFFFFFFEu});
+  EXPECT_THROW(fo4::previs::parse_xcri_bytes(bytes), fo4::parse_error);
+}
+
 // A tome edit that breaks the CRC or alignment must be flagged: the game would
 // ignore or reject the tome, so the validator must flag it before release.
 TEST(PrevisUvd, ValidatesCrcAlignmentAndBanner) {
@@ -181,6 +211,20 @@ TEST(PrevisUvd, ValidatesCrcAlignmentAndBanner) {
   auto magic_bad = bytes;
   magic_bad[0] = std::byte{0x00};
   EXPECT_FALSE(fo4::previs::validate_uvd(magic_bad).empty());
+}
+
+// Regression: a banner with no NUL must be rejected instead of reading past the image.
+TEST(PrevisUvd, RejectsUnterminatedBanner) {
+  auto bytes = make_uvd_bytes("T 512.0");
+  std::fill(bytes.begin() + 0xBC, bytes.end(), std::byte{'A'});
+  const std::span<const std::byte> body(bytes.data() + 8, bytes.size() - 8);
+  const auto crc = fo4::previs::crc32c(body);
+  bytes[4] = static_cast<std::byte>(crc & 0xFFu);
+  bytes[5] = static_cast<std::byte>((crc >> 8) & 0xFFu);
+  bytes[6] = static_cast<std::byte>((crc >> 16) & 0xFFu);
+  bytes[7] = static_cast<std::byte>((crc >> 24) & 0xFFu);
+  EXPECT_THROW(fo4::previs::parse_uvd(bytes), fo4::parse_error);
+  EXPECT_FALSE(fo4::previs::validate_uvd(bytes).empty());
 }
 
 // Word pairs are an invariant: 8-byte pairs would split REFR ids from OC ids.
@@ -481,6 +525,137 @@ TEST_F(PrevisLoadOrderTest, OverrideWithoutPrevisSkips) {
   ASSERT_NE(own, nullptr);
   EXPECT_TRUE(own->status.broken);
   EXPECT_FALSE(own->status.skip_unsupported);
+}
+
+// Regression: a higher-priority asset root must win, including loose files over archives in one root.
+TEST_F(PrevisLoadOrderTest, HigherAssetRootWins) {
+  const auto low = root_ / "low";
+  const auto high = root_ / "high";
+  std::filesystem::create_directories(low);
+  std::filesystem::create_directories(high);
+  const auto put = [](const std::filesystem::path& dir, const std::string& name,
+                      const std::vector<std::byte>& bytes) {
+    const auto path = dir / name;
+    std::filesystem::create_directories(path.parent_path());
+    std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+    stream.write(reinterpret_cast<const char*>(bytes.data()),
+                 static_cast<std::streamsize>(bytes.size()));
+  };
+  const auto plugin_path = write("Patch.esp", en::make_plugin({}, {}));
+  const std::filesystem::path paths[]{plugin_path};
+  const auto env = fo4::env::Environment::load(paths);
+  const auto plugin = env.find_plugin("Patch.esp");
+  ASSERT_TRUE(plugin.has_value());
+  const auto cell = fo4::FormKey{env.plugins()[*plugin].key, fo4::LocalFormId{0x800}};
+
+  fo4::previs::CdxFile low_cdx;
+  fo4::previs::CdxFile high_cdx;
+  high_cdx.rows.push_back({0x80u, 0x00000800u, 0u, 0u});
+  put(low, "Patch.cdx", fo4::previs::write_cdx(low_cdx));
+  put(high, "Patch.cdx", fo4::previs::write_cdx(high_cdx));
+
+  fo4::previs::CsgFile good_csg;
+  good_csg.rows.push_back(fo4::previs::CsgRow{});
+  good_csg.chunks.push_back({std::byte{0x78}, std::byte{0x9C}, std::byte{0x03}, std::byte{0x00}});
+  auto bad_csg = fo4::previs::write_csg(good_csg);
+  bad_csg[0] = std::byte{'x'};
+  put(low, "Patch - Geometry.csg", bad_csg);
+  put(high, "Patch - Geometry.csg", fo4::previs::write_csg(good_csg));
+
+  auto bad_tome = make_uvd_bytes("T 512.0 SO 128.0");
+  bad_tome[4] = static_cast<std::byte>(std::to_integer<int>(bad_tome[4]) ^ 0xFF);
+  put(low, "Vis\\Patch.esp\\00000800.uvd", bad_tome);
+  put(high, "Vis\\Patch.esp\\00000800.uvd", make_uvd_bytes("T 512.0 SO 128.0"));
+  put(high, "Meshes\\PreCombined\\Patch.esp\\00000800_00000050_OC.nif",
+      std::vector<std::byte>{std::byte{1}});
+
+  const std::filesystem::path roots[]{low, high};
+  const auto data = fo4::previs::PrevisData::load(roots, env);
+  const auto indexes = data.indexes();
+  const auto cdx = indexes.cdx_row(*plugin, fo4::previs::CdxCellTarget{std::nullopt,
+                                                                       std::nullopt, cell});
+  ASSERT_TRUE(cdx.has_value());
+  EXPECT_TRUE(*cdx);
+  const auto tome = indexes.uvd(cell);
+  EXPECT_TRUE(tome.checked);
+  EXPECT_TRUE(tome.found);
+  ASSERT_TRUE(tome.issues.empty()) << tome.issues.front();
+  const std::uint32_t ids[]{0x50u};
+  const auto missing = indexes.missing_oc_nifs(cell, ids);
+  ASSERT_TRUE(missing.has_value());
+  EXPECT_EQ(*missing, 0u);
+  EXPECT_TRUE(indexes.plugin_ships_previs(*plugin));
+  ASSERT_TRUE(data.summary().problems.empty()) << data.summary().problems.front();
+}
+
+// Regression: a clean-mode .psg must fail the CSG container check closed, never pass as geometry.
+TEST_F(PrevisLoadOrderTest, PsgFailsClosed) {
+  const auto plugin_path = write("Patch.esp", en::make_plugin({}, {}));
+  const std::filesystem::path paths[]{plugin_path};
+  const auto env = fo4::env::Environment::load(paths);
+  write("Patch.psg", std::vector<std::byte>{std::byte{1}, std::byte{2}, std::byte{3}});
+
+  const std::filesystem::path roots[]{root_};
+  const auto data = fo4::previs::PrevisData::load(roots, env);
+  bool psg_problem = false;
+  for (const auto& problem : data.summary().problems) {
+    if (problem.find(".psg") != std::string::npos) psg_problem = true;
+  }
+  EXPECT_TRUE(psg_problem);
+  EXPECT_EQ(data.summary().csg_files, 0u);
+}
+
+// Regression: a loose tome must win over the archive copy, and archive paths must parse folded.
+TEST_F(PrevisLoadOrderTest, ArchiveEntryLosesToLooseFile) {
+  const auto base_path = write("Fallout4.esm", en::make_plugin({}, {}));
+  const auto patch_path = write("Patch.esp", en::make_plugin({"Fallout4.esm"}, {}));
+  const std::filesystem::path paths[]{base_path, patch_path};
+  const auto env = fo4::env::Environment::load(paths);
+  const auto base = env.find_plugin("Fallout4.esm");
+  const auto patch = env.find_plugin("Patch.esp");
+  ASSERT_TRUE(base.has_value());
+  ASSERT_TRUE(patch.has_value());
+
+  auto bad_tome = make_uvd_bytes("T 512.0 SO 128.0");
+  bad_tome[4] = static_cast<std::byte>(std::to_integer<int>(bad_tome[4]) ^ 0xFF);
+  fo4::archive::Ba2GeneralArchive archive;
+  archive.has_string_table = true;
+  fo4::archive::Ba2GeneralEntry tome_entry;
+  tome_entry.path = "Vis/Patch.ESP/00000802.uvd";
+  tome_entry.chunks.push_back(fo4::archive::make_stored_ba2_chunk(bad_tome));
+  fo4::archive::Ba2GeneralEntry nif_entry;
+  nif_entry.path = "Meshes/PreCombined/00000802_00000060_OC.NIF";
+  nif_entry.chunks.push_back(fo4::archive::make_stored_ba2_chunk(
+      std::vector<std::byte>{std::byte{1}}));
+  fo4::archive::Ba2GeneralEntry broken_entry;
+  broken_entry.path = "Meshes/PreCombined/not-a-cell.nif";
+  broken_entry.chunks.push_back(fo4::archive::make_stored_ba2_chunk(
+      std::vector<std::byte>{std::byte{2}}));
+  archive.entries = {tome_entry, nif_entry, broken_entry};
+  fo4::archive::write_ba2_general_file(archive, root_ / "Patch.ba2");
+
+  const auto loose = root_ / "Vis" / "Patch.esp";
+  std::filesystem::create_directories(loose);
+  std::ofstream stream(loose / "00000802.uvd", std::ios::binary | std::ios::trunc);
+  const auto good_tome = make_uvd_bytes("T 512.0 SO 128.0");
+  stream.write(reinterpret_cast<const char*>(good_tome.data()),
+               static_cast<std::streamsize>(good_tome.size()));
+
+  const std::filesystem::path roots[]{root_};
+  const auto data = fo4::previs::PrevisData::load(roots, env);
+  const auto indexes = data.indexes();
+  const auto patch_cell = fo4::FormKey{env.plugins()[*patch].key, fo4::LocalFormId{0x802}};
+  const auto tome = indexes.uvd(patch_cell);
+  EXPECT_TRUE(tome.checked);
+  EXPECT_TRUE(tome.found);
+  ASSERT_TRUE(tome.issues.empty()) << tome.issues.front();
+
+  const auto base_cell = fo4::FormKey{env.plugins()[*base].key, fo4::LocalFormId{0x802}};
+  const std::uint32_t ids[]{0x60u};
+  const auto missing = indexes.missing_oc_nifs(base_cell, ids);
+  ASSERT_TRUE(missing.has_value());
+  EXPECT_EQ(*missing, 0u);
+  EXPECT_EQ(data.summary().oc_nif_files, 1u);
 }
 
 namespace {
