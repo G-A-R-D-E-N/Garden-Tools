@@ -2653,3 +2653,63 @@ Regression targets, by test in `PluginEditTool/native/tests/unit/NifServiceTests
 - The graph and decompiler tests used to make `<temp>/<parent>/<timestamp>` folders (`uniqueRoot` in GraphLiftTests, GraphCompilerTests, GraphToolServiceTests and GraphScriptLoaderTests, and the `PapyrusDecompilerTests` `Fixture`) and never remove them. The lift tests alone left 38,000 folders per tag on the CI machine.
 - `TempRoot` (namespace `fo4ide_test`) creates its folder in the constructor. The destructor removes that folder and then the parent when the parent is empty, ignoring errors. The parent name is passed in full (for example `"fo4ide-lift-text"`), so temp paths are unchanged.
 - The temp root is used only inside the scope that owns it, so the lifetime is safe. Removal now also runs when a `REQUIRE` fails.
+
+## .github/public-ci/export-public-ci.py:main
+
+CI runs on GitHub-hosted runners in public `G-A-R-D-E-N/Garden-Tools`. `.github/workflows/public-ci-export.yml` pushes a parentless snapshot of private `G-A-R-D-E-N/GardenTools` to `ci/pr-<n>` or `ci/<branch>`; each public workflow's `report` job posts `public-ci/<workflow>` on the private commit named by the `Source-Commit` trailer. A PR exports its merge commit, so a PR cut before this landed needs no rebase, but a stacked PR's base must contain these workflows first.
+
+`DENY` keeps docs, notes, runner setup and agent files private. `GAME_FILES` makes the export fail if a game-format file appears outside the list, so a new fixture has to be added on purpose.
+
+## .github/scripts/fetch-private-fixtures.sh:paths
+
+Vanilla Bethesda files and third-party plugins must not be published (`BGS/tools/tests/fixtures/vanilla/README.md`). They are denied by the export and sparse-fetched from the private repo at the source commit, in a step that alone sees the token. The public workflows upload no artifacts, because public artifacts could carry these files. The path list here and the fixture entries in `export-public-ci.py:DENY` must match.
+
+## .github/public-ci/workflows/native-ci.yml:REAL_DATA_TEST_REGEX
+
+Hosted runners have no Fallout 4 data, so the Windows test job excludes these tests. They run only in `.github/workflows/native-real-data.yml`, on a self-hosted runner labelled `fo4-data` that is registered to this private repo and nowhere else, and that workflow keeps its own copy of the regex; the two must match. The export denies `.github/workflows/*`, so it never reaches the public repo. `.forgejo/workflows/release.yml` stays on Forgejo because it reads local tool paths, and Forgejo prefers `.forgejo/workflows`, so once this tree reaches Forgejo that is the only workflow it runs there.
+
+The `garden-tools-ci` environment's branch rule must be `ci/**`: `ci/*` does not match `ci/nomad/dev`.
+
+## Radicle/CMakeLists.txt:RADICLE_SHARED
+
+`WINDOWS_EXPORT_ALL_SYMBOLS` exports every external symbol in the objects, including unreferenced inline COMDATs. The first hosted FO4IDE package build failed with `LNK1189: library limit of 65535 objects exceeded` on MSVC 14.44, so `fo4` compiles with `/Zc:inline`, which drops those from each object. If the count reaches the limit again, export only the symbols the editor imports instead of all of them.
+
+## .github/public-ci/workflows/public-ci-cleanup.yml:cleanup
+
+Public `ci/*` branches exist only while their runs do: `.github/workflows/delete-finished-ci-branches.yml` on public `main` deletes finished ones every 30 minutes. Never hold a runner to wait, because waiting jobs starve the org's 20 hosted slots. `cleanup` keeps a branch's newest runs for three days so failure logs stay readable.
+
+## .github/scripts/fetch-private-fixtures.sh:Radicle/docs/FO4_PARITY.md
+
+`Radicle/CMakeLists.txt:radicle_parity_matrix_check` reads this file in every full build. It holds internal links, so it is fetched like a fixture rather than exported.
+
+## .github/public-ci/workflows/bgs-ci.yml:Build native Radicle library (linux-x64)
+
+GCC 14 at -O3 reports `-Wfree-nonheap-object` from `new_allocator.h` while compiling `Radicle/src/swf/swf_write.cpp`, with an unknown pointer and a range-only offset. This was treated as a compiler false positive without a code audit, so it is demoted from an error in this job only.
+
+## Radicle/bindings/csharp/Radicle.Interop.Tests/SoundAuthoringTests.cs:CreateBuildsDescriptorsMusicAndFootsteps
+
+Both sound tests failed on Windows and Linux from `6953e82d0`. One wrote `Snd.esp` while looking up `Snd.esm` keys, and `Radicle/src/plugin/reader.cpp:read_plugin` derives the key from the filename. The other expected the generic create path to refuse `SOUN` and `FSTS`, but `fo4::create_record` has created them since that commit, for `Radicle/src/c_api_sound.cpp:radicle_plugin_create_sound_record`. The refusal assertions were removed as stale. If the generic path should refuse them again, that needs a code change and those assertions back.
+
+## Radicle/bindings/csharp/Radicle.Interop.Tests/SoundAuthoringTests.cs:StructureEditsAddRemoveFilesSetTheBaseLinkAndCreateRecords
+
+The `Auto` fixture record already carries a BNAM base link, and `Radicle/src/c_api_sound.cpp` refuses a second copy, so the test now asserts that refusal, removes the link, then adds it.
+
+## .github/workflows/native-real-data.yml:Select real-data tests
+
+On 2026-10-31 a full run took 46 minutes of test time on 12 threads: `CheckErrorsReal.FullLoadOrderDiagnosticRunIsDeterministic` 2117 s, `RowRoundtripReal.CellRowsSurviveWriteAndReread` 1632 s and `WritebackRealData.CopiedDlcReferencesKeepEveryLinkWhenMastersMove` 855 s were half of the 9300 CPU-seconds. A PR runs each only when a changed path matches its trigger; pushes to `main` and `nomad/dev` still run everything, so a regression those triggers miss shows up on the merge rather than the PR.
+
+## Radicle/src/avm2/interpreter_dispatch_b.inc:k_newclass
+
+`newclass` now pops its base class value, as the AVM2 spec requires. It used to leave that value on the stack, so an interface's null base became the target of the following `initproperty`: `cannot write bhvr.interfaces::IExternalCommunication on null`. `Radicle/tests/test_c_api_runtime_real.cpp:ReplaysTheSevenProgramsDeterministically` reached this on real Programs. That test is still failing: it is the #807 R8 acceptance gate and the next stop is `aze.motion.specials::PropertyTint.register`.
+
+## Radicle/src/avm2/display.cpp:MovieClip::set_frame_script
+
+`addFrameScript` stores a script per frame on the clip, and it wins over a `frameN` class trait so a frame never runs twice. `Radicle/src/avm2/swf_runtime.cpp:SwfRuntime::create` adds the root to the stage before the document constructor because Programs read `stage` there.
+
+## Radicle/tests/test_check_errors.cpp:VanillaMasterHasNoErrorFindings
+
+Fallout4.esm 1.11.240 has no masters but stores master index 1 in some links, for example NPC_ 00080B TPTA holds 0x01000809, so the 73 `invalid_master_index` warnings are real. The test pins the count and still refuses any error-level finding.
+
+## Radicle/tests/test_package_tree_real.cpp:AddsAndRemovesTheDefaultInputsOfATravelLeafByteIdentically
+
+`Radicle/src/environment/package_procedure_tree.cpp:remove_package_procedure_node` renumbers kept inputs to be contiguous, so a package with sparse ids such as 01 03 05 07 04 cannot come back byte-identical. The test now picks a package whose ids are already contiguous.

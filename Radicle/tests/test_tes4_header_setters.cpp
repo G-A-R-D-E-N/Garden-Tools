@@ -118,9 +118,9 @@ std::filesystem::path write_source(const TempDir& dir, const std::string& name, 
 
 TEST(Tes4Header, AuthorSetAndReplaceRoundTrip) {
   auto plugin = fo4::read_plugin(make_tes4(0, false), "Header.esp");
-  plugin = fo4::set_plugin_author(std::move(plugin), "Ricky");
+  plugin = fo4::set_plugin_author(std::move(plugin), "Nomad");
   auto reloaded = round_trip(plugin);
-  EXPECT_EQ(reloaded.header.author, "Ricky");
+  EXPECT_EQ(reloaded.header.author, "Nomad");
   EXPECT_EQ(subrecord_names(reloaded), (std::vector<std::string>{"HEDR", "CNAM"}));
 
   plugin = fo4::set_plugin_author(std::move(reloaded), "Nomad");
@@ -175,11 +175,11 @@ TEST(Tes4Header, RejectsEmbeddedNulAndUnrepresentableText) {
 
 TEST(Tes4Header, AuthorAndDescriptionAreZstringsOnLocalizedPlugin) {
   auto plugin = fo4::read_plugin(make_tes4(0x80, false), "Header.esp");
-  plugin = fo4::set_plugin_author(std::move(plugin), "Ricky");
+  plugin = fo4::set_plugin_author(std::move(plugin), "Nomad");
   plugin = fo4::set_plugin_description(std::move(plugin), "Desc");
   const auto reloaded = round_trip(plugin);
   EXPECT_TRUE(reloaded.header.tes4_flags.is_localized());
-  EXPECT_EQ(reloaded.header.author, "Ricky");
+  EXPECT_EQ(reloaded.header.author, "Nomad");
   EXPECT_EQ(reloaded.header.description, "Desc");
   EXPECT_EQ(subrecord_names(reloaded), (std::vector<std::string>{"HEDR", "CNAM", "SNAM"}));
 }
@@ -244,7 +244,7 @@ TEST(Tes4Header, KeepsTnamScrnOfstAndDeleAcrossTextSetters) {
   EXPECT_EQ(plugin.header.intv.value_or(0), 7u);
   EXPECT_EQ(plugin.header.incc.value_or(0), 0xDEADBEEFu);
 
-  plugin = fo4::set_plugin_author(std::move(plugin), "Ricky");
+  plugin = fo4::set_plugin_author(std::move(plugin), "Nomad");
   plugin = fo4::set_plugin_description(std::move(plugin), "Desc");
   const auto reloaded = round_trip(plugin);
 
@@ -255,7 +255,7 @@ TEST(Tes4Header, KeepsTnamScrnOfstAndDeleAcrossTextSetters) {
   EXPECT_EQ(subrecord_bytes(reloaded, "DELE"), dele);
   EXPECT_EQ(subrecord_bytes(reloaded, "SCRN"), scrn);
   EXPECT_EQ(subrecord_bytes(reloaded, "TNAM"), tnam);
-  EXPECT_EQ(reloaded.header.author, "Ricky");
+  EXPECT_EQ(reloaded.header.author, "Nomad");
   EXPECT_EQ(reloaded.header.description, "Desc");
   EXPECT_EQ(reloaded.header.intv.value_or(0), 7u);
   ASSERT_EQ(reloaded.header.masters.size(), 1u);
@@ -280,7 +280,7 @@ TEST(Tes4HeaderCApi, SetsAuthorAndDescriptionThroughTheHandle) {
   ASSERT_EQ(radicle_plugin_read_file(source.c_str(), &plugin), RADICLE_STATUS_OK)
       << radicle_last_error();
   ASSERT_NE(plugin, nullptr);
-  ASSERT_EQ(radicle_plugin_set_author(plugin, "Ricky"), RADICLE_STATUS_OK) << radicle_last_error();
+  ASSERT_EQ(radicle_plugin_set_author(plugin, "Nomad"), RADICLE_STATUS_OK) << radicle_last_error();
   ASSERT_EQ(radicle_plugin_set_description(plugin, "Desc"), RADICLE_STATUS_OK)
       << radicle_last_error();
   ASSERT_EQ(radicle_plugin_write_file(plugin, out.c_str()), RADICLE_STATUS_OK)
@@ -288,7 +288,7 @@ TEST(Tes4HeaderCApi, SetsAuthorAndDescriptionThroughTheHandle) {
   radicle_plugin_destroy(plugin);
 
   const auto reloaded = fo4::read_plugin_file(out);
-  EXPECT_EQ(reloaded.header.author, "Ricky");
+  EXPECT_EQ(reloaded.header.author, "Nomad");
   EXPECT_EQ(reloaded.header.description, "Desc");
 }
 
@@ -334,7 +334,7 @@ TEST(Tes4HeaderCApi, RejectsBadArgumentsAndLeavesPluginUnchanged) {
   const auto source = write_source(dir, "Header.esp", 0, false).string();
   const auto out = (dir.path / "Out.esp").string();
 
-  EXPECT_EQ(radicle_plugin_set_author(nullptr, "Ricky"), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_set_author(nullptr, "Nomad"), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_plugin_set_description(nullptr, "Desc"), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_plugin_set_master_flag(nullptr, 1), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_plugin_set_localized_flag(nullptr, 1), RADICLE_STATUS_INVALID_ARGUMENT);
@@ -342,12 +342,12 @@ TEST(Tes4HeaderCApi, RejectsBadArgumentsAndLeavesPluginUnchanged) {
   radicle_plugin* plugin = nullptr;
   ASSERT_EQ(radicle_plugin_read_file(source.c_str(), &plugin), RADICLE_STATUS_OK)
       << radicle_last_error();
-  ASSERT_EQ(radicle_plugin_set_author(plugin, "Ricky"), RADICLE_STATUS_OK) << radicle_last_error();
+  ASSERT_EQ(radicle_plugin_set_author(plugin, "Nomad"), RADICLE_STATUS_OK) << radicle_last_error();
   EXPECT_EQ(radicle_plugin_set_author(plugin, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_plugin_set_author(plugin, "\xE7\x8C\xAB"), RADICLE_STATUS_INVALID_ARGUMENT);
   ASSERT_EQ(radicle_plugin_write_file(plugin, out.c_str()), RADICLE_STATUS_OK)
       << radicle_last_error();
   radicle_plugin_destroy(plugin);
 
-  EXPECT_EQ(fo4::read_plugin_file(out).header.author, "Ricky");
+  EXPECT_EQ(fo4::read_plugin_file(out).header.author, "Nomad");
 }
