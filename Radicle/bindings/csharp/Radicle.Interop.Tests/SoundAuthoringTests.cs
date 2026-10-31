@@ -54,7 +54,7 @@ public class SoundAuthoringTests
         plugin.SetSoundFile(Std, added, "d.wav");
         plugin.AddSoundFile(Bare, "e.wav");
         plugin.RemoveSoundFile(Bare, 0);
-        plugin.AddSoundBaseLink(Auto, Comp);
+        Assert.Throws<RadicleException>(() => plugin.AddSoundBaseLink(Auto, Comp));
         plugin.RemoveSoundBaseLink(Auto);
         plugin.AddSoundBaseLink(Auto, Comp);
         var marker = plugin.CreateSoundRecord("SOUN", "NewMarker");
