@@ -10042,18 +10042,17 @@ read `header.timestamp`. A cell is stale when the maximum timestamp over the
 winning CELL record and its same-plugin, non-partial children is newer than its
 PCMB or VISI date. Both sides zero means unknown and never stale.
 
-The stale set depends on which children count, so the pinned numbers were
-re-derived for the implemented merge. The first measurement counted every
-same-plugin child record under the cell label (per-file model, 356 PCMB / 471
-VISI stale on Fallout4). The C++ logic runs `Environment::cell_children`, which
-merges versions by child FormKey in ascending plugin order, keeps the last one,
-drops deleted children and then ignores children whose winning version lives in
-a different plugin than the CELL. A second Python mirror of exactly that model
-reproduces the pinned winner-aware counts for all six plugins: PCMB 343 / 94 / 3
-/ 142 / 65 / 114 and VISI 458 / 4 / 3 / 66 / 0 / 175 for Fallout4, DLCRobot,
-DLCworkshop01, DLCCoast, DLCworkshop03 and DLCNukaWorld. The two numbers are not
-in conflict: 356/471 is the per-file model, 343/458 is what the code computes,
-and the gate pins the latter. No side was changed to make the other agree.
+The stale set depends on which children count. `previs-measure/mirror_gate6.py`
+prints both models, and on the measured build they now agree: the naive model
+that counts every same-plugin child record under the cell label prints 343 PCMB
+and 458 VISI stale on Fallout4, and the model that runs
+`Environment::cell_children` prints the same 343 and 458. The C++ merge keeps
+the winning version of each child that lives in the cell and belongs to the
+CELL's plugin, so the earlier 356 PCMB / 471 VISI figure cannot be reproduced
+from the current script and is not used anywhere. The script prints the full
+six-plugin set: PCMB 343 / 94 / 3 / 142 / 65 / 114 and VISI 458 / 4 / 3 / 66 /
+0 / 175 for Fallout4, DLCRobot, DLCworkshop01, DLCCoast, DLCworkshop03 and
+DLCNukaWorld, which is what the gate pins.
 
 Staleness is reported with its own `outdated` severity, never as broken: the
 rule comes from a third-party tool's prose rather than from engine code, so a
@@ -10126,7 +10125,7 @@ hostile `chunk_count` must fail on the table bound before any reserve
 (`Radicle/tests/test_previs.cpp:PrevisCsg.RejectsHugeChunkCountBeforeAllocating`).
 `.psg` (the clean-mode twin) does not exist in vanilla data and its layout is
 unmeasured, so a `.psg`-shaped file records a problem and never passes as
-geometry (`Radicle/tests/test_previs.cpp:PrevisLoadOrderTest.PsgFailsClosed`).
+geometry (`Radicle/tests/test_previs.cpp:PrevisLoadOrderTest.PsgIsReportedUnsupportedAndNotCountedAsCsg`).
 
 ### UVD tomes
 
@@ -10223,9 +10222,14 @@ engine behaviour is unmeasured:
   must not turn every page of the report into a failure.
 - A winning CELL that overrides another plugin's cell whose plugin ships
   neither a CDX nor a CSG is a skip ("override with no previs of its own:
-  engine behaviour unverified"). Vanilla never hits it: every master that
-  overrides cells ships both containers, including the two DLCCoast overrides
-  `00008393` and `000083B1`, which stay broken because Coast does have a CDX.
+  engine behaviour unverified"). The override is still decoded and still
+  reports everything the cell itself proves - tombstones, a stale PCMB or VISI,
+  a missing or invalid tome, a malformed XCRI - and only the two XCRI-index
+  findings (`cdx_row_missing`, `oc_nif_missing`) are dropped, because the
+  overriding plugin ships no index that could answer them. Vanilla never hits
+  it: every master that overrides cells ships both containers, including the
+  two DLCCoast overrides `00008393` and `000083B1`, which stay broken because
+  Coast does have a CDX.
 - A light plugin is a skip ("light plugin layout not measured"): light-form
   cells have not been measured, so no verdict is possible.
 
@@ -10242,6 +10246,9 @@ each input carries a `*_checked` flag, and a needed but unchecked index becomes
 a skip with `skip_unsupported` instead of a false broken verdict. A plugin
 without a `.cdx` is not unchecked - a Data folder scan proves absence - so an
 XCRI cell there is broken, not skipped, unless the override rule above applies.
+An invalid or unreadable `.cdx` still proves the plugin ships previs, even
+though it cannot answer lookups: it counts as presence for the override rule,
+and its own cells skip because the index is unreadable.
 
 `diagnose_load_order` walks the winning CELL of every FormKey in a loaded
 Environment and builds each input from the record data plus caller-supplied
@@ -10351,9 +10358,10 @@ summary, per-cell and per-issue accessors are pure reads, out-of-range indexes
 return NOT_FOUND and a bad argument INVALID_ARGUMENT. Issue codes are dense
 0..7; `radicle_previs_issue_name` range-checks them because a cast of 256 would
 wrap to a real enumerator and name a verdict that was never reported. The
-exports moved `RADICLE_ABI_VERSION` from 92 to 98; open PRs on the repository
-claimed up to 97 (#1045) when this was taken, and the C# bindings and layout
-probe were regenerated from the headers.
+exports moved `RADICLE_ABI_VERSION` from 92 to 100, because 98 is claimed by
+`nomad/gt-swf-native-target` and 99 by `nomad/radicle-light-fields`; neither
+branch was merged here. The C# bindings and layout probe were regenerated from
+the headers, so `CompiledAbiVersion` and the two ABI assertions track 100.
 
 The `previs` RPC target serves `Scan(dataDir)` and `GetDataFolder()` for the
 panel. It builds the load order from the backend's plugin list and loads it
@@ -10373,7 +10381,12 @@ base game itself reports cells here. The web bridge needed one new host object
 Anchors: `Radicle/tests/test_previs.cpp:PrevisLoadOrderTest.HigherAssetRootWins`,
 `Radicle/tests/test_previs.cpp:PrevisLoadOrderTest.ArchiveEntryLosesToLooseFile`,
 `Radicle/tests/test_previs.cpp:PrevisLoadOrderTest.OverrideWithoutPrevisSkips`,
-`Radicle/tests/test_previs.cpp:PrevisLoadOrderTest.PsgFailsClosed`,
+`Radicle/tests/test_previs.cpp:PrevisLoadOrderTest.OverrideWithoutPrevisKeepsStalePcmb`,
+`Radicle/tests/test_previs.cpp:PrevisLoadOrderTest.LightPluginIsSkipped`,
+`Radicle/tests/test_previs.cpp:PrevisLoadOrderTest.MissingBaseGameMarksNifIndexIncomplete`,
+`Radicle/tests/test_previs.cpp:PrevisLoadOrderTest.DecodeFailureBecomesSkip`,
+`Radicle/tests/test_previs.cpp:PrevisLoadOrderTest.UnreadableCdxStillCountsAsShippedContainer`,
+`Radicle/tests/test_previs.cpp:PrevisLoadOrderTest.PsgIsReportedUnsupportedAndNotCountedAsCsg`,
 `Radicle/tests/test_previs.cpp:PrevisLoadOrderTest.MalformedRvisStaysTolerantForWater`,
 `PluginEditTool/native/tests/unit/PrevisTargetTests.cpp`,
 `PluginEditTool/web/src/PrevisPanel.test.tsx`.
@@ -10381,13 +10394,31 @@ Anchors: `Radicle/tests/test_previs.cpp:PrevisLoadOrderTest.HigherAssetRootWins`
 Each test names the regression it catches. The priority tests build two asset
 roots and require the higher root's CDX row, CSG and tome to win, then put a
 loose tome above an archive copy in one root; a regression that keeps the
-archive copy answers with the invalid CRC. The override test requires a
+archive copy answers with the invalid CRC. The override tests require a
 two-plugin load order where the overriding plugin ships no previs containers:
-the override skips while the same plugin's own cell stays broken, so the rule
-cannot swallow real findings. The `.psg` test requires a named problem and no
-counted CSG, the RVIS test requires water resolution to stay non-throwing after
-the previs decode started reading RVIS, and the hostile-input tests require
-count and inflate bounds to reject before allocating. On the native side the
-reentrancy test requires a second `Scan` from inside a first one to get
-`PrevisScanBusy`, and the panel test requires skipped rows to render and the
-green state to stay off while a skip exists.
+the override skips and still reports a stale PCMB whose child is newer, while
+the same plugin's own cell stays broken, so the rule cannot swallow real
+findings. The light-plugin test requires a `.esl` cell to skip instead of
+receiving a full-plugin verdict, the base-game test requires a scan without
+`Fallout4.esm` to mark the NIF index incomplete, the decode test requires a
+duplicate VISI to become a skip, and the unreadable-CDX test requires an invalid
+`.cdx` to still count as a shipped container. The `.psg` test requires a named
+problem and no counted CSG, the RVIS test requires water resolution to stay
+non-throwing after the previs decode started reading RVIS, and the hostile-input
+tests require count and inflate bounds to reject before allocating. On the
+native side the reentrancy test requires a second `Scan` from inside a first one
+to get `PrevisScanBusy`, and also requires the next scan after that one to run
+instead of reporting busy; the panel test requires skipped rows to render and
+the green state to stay off while a skip exists.
+
+### Phase 2 items left alone
+
+Two behaviours are deliberately not fixed here and stay documented as Phase 2
+work. Archive precedence in `Radicle/src/previs/previs_data.cpp` is
+first-archive-in-sorted-filename-order across roots rather than a per-entry
+virtual-file-system merge, so two roots that both ship the same archive name are
+not resolved per entry. In `Radicle/src/environment/world.cpp:first_link` a
+duplicate or non-4-byte RVIS decodes as absent, so previs cannot distinguish a
+missing root from a malformed one; the strict error would have to come back
+through a previs-specific accessor, not through `decode_cell`, which other
+callers rely on staying tolerant.

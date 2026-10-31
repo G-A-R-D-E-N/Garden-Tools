@@ -88,13 +88,18 @@ measured:
   malformed plugin does not fail every page of the report);
 - a winning CELL overriding another plugin's cell whose plugin ships neither
   a CDX nor a CSG ("override with no previs of its own: engine behaviour
-  unverified"); vanilla never hits it, and the DLCCoast overrides `00008393`
+  unverified"); the override is still decoded and still reports its stale PCMB
+  or VISI, tombstone, tome and malformed-XCRI findings, and only the two
+  XCRI-index findings (CDX row, OC NIF) are dropped because the plugin ships no
+  index for them. Vanilla never hits it, and the DLCCoast overrides `00008393`
   and `000083B1` stay broken because Coast does ship a CDX;
 - a light plugin ("light plugin layout not measured").
 
 A `false` presence flag means "verified absent", never "not checked": each
 index answer carries a `*_checked` flag, and a needed-but-unchecked index
-becomes a skip with `skip_unsupported` instead of a false broken verdict. A
+becomes a skip with `skip_unsupported` instead of a false broken verdict. An
+invalid or unreadable `.cdx` still proves the plugin ships previs, so it counts
+for the override rule even though its cells skip on the unreadable index. A
 `.psg` file makes the CSG container check unsupported rather than answering it.
 Staleness is its own `outdated` severity, never broken: the packed date lives
 in the record header's timestamp field (offset 0x10), not in the
@@ -105,13 +110,11 @@ counts. Staleness compares the maximum timestamp over the winning CELL and
 its same-plugin, non-partial children with the PCMB or VISI date (zero means
 unknown on both sides).
 
-The stale counts depend on which children count. A first measurement counted
-every same-plugin child record under the cell label (per-file model: 356 PCMB
-/ 471 VISI on Fallout4). The implemented merge keeps only the winning version
-of each child that lives in that cell and belongs to the CELL's plugin, and a
-second mirror of exactly that model reproduces the pinned 343 / 94 / 3 / 142 /
-65 / 114 and 458 / 4 / 3 / 66 / 0 / 175. Both models are recorded; the gate
-pins the winner-aware one.
+The stale counts depend on which children count. `previs-measure/mirror_gate6.py`
+prints both models and they agree on the measured build: the naive per-child
+model and the winner-aware `Environment::cell_children` model both give 343 PCMB
+/ 458 VISI on Fallout4. The full printed set is 343 / 94 / 3 / 142 / 65 / 114
+and 458 / 4 / 3 / 66 / 0 / 175, which the gate pins.
 
 `diagnose_load_order` builds these inputs for every winning CELL from a
 loaded Environment plus caller-supplied index answers: per-plugin CDX, the
@@ -165,7 +168,7 @@ opened archive alive, so memory scales with the load order plus BA2 table
 memory; a second concurrent scan would double that, so the RPC target allows
 one scan at a time and answers a second call with `PrevisScanBusy`.
 
-The C ABI (`include/fo4/c_api_previs.h`, ABI 98) exposes the report as an
+The C ABI (`include/fo4/c_api_previs.h`, ABI 100) exposes the report as an
 opaque handle with summary, per-cell and per-issue accessors; strings are
 borrowed until the report is destroyed and the report borrows its
 `radicle_env`. Issue names are range-checked: a wrapped code reports
