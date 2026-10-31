@@ -29,6 +29,9 @@ struct ToolDefinition {
     nlohmann::json toJson() const;
 };
 
+std::optional<std::string> argumentError(const nlohmann::json& inputSchema,
+                                         const nlohmann::json& arguments);
+
 struct ToolResult {
     std::string text;
     bool isError{false};

@@ -99,6 +99,24 @@ std::vector<std::byte> makeDisabledMaster() {
     return out.bytes;
 }
 
+std::vector<std::byte> makeTargetDeclaring(std::string_view master) {
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(0);
+    hedr.u32(0x811);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    const auto name = std::string(master) + '\0';
+    fo4::test::write_subrecord(out, "MAST", std::string_view{name});
+    fo4::test::ByteWriter data;
+    data.u32(0);
+    data.u32(0);
+    fo4::test::write_subrecord(out, "DATA", data.bytes);
+    fo4::test::end_record(out, tes4);
+    return out.bytes;
+}
+
 std::vector<std::byte> makeLightTarget() {
     fo4::test::ByteWriter out;
     const auto tes4 = fo4::test::begin_record(out, "TES4", fo4::RecordFlags::small_file, 0);
@@ -334,6 +352,130 @@ TEST_CASE("Native AddMasters refuses protected target") {
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().type == "PluginReadOnly");
     CHECK(fo4::test::original_bytes(fo4::read_plugin_file(targetPath)) == before);
+}
+
+TEST_CASE("Native AddMasters refuses a master that loads before an already-declared master") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto firstPath = root / "First.esm";
+    const auto secondPath = root / "Second.esm";
+    const auto targetPath = root / "Target.esp";
+    writeBytes(firstPath, makeMaster());
+    writeBytes(secondPath, makeMaster());
+    writeBytes(targetPath, makeTargetDeclaring("Second.esm"));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("First.esm", firstPath),
+            pluginEntry("Second.esm", secondPath),
+            pluginEntry("Target.esp", targetPath)
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const auto result = backend.invokeBackend(
+        "AddMasters", nlohmann::json::array({"Target.esp", "First.esm"}));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "MasterOrder");
+
+    const auto listedRaw = backend.invoke(
+        "masters.List", nlohmann::json::array({"Target.esp"}));
+    REQUIRE(listedRaw.has_value());
+    const auto listed = nlohmann::json::parse(listedRaw->get<std::string>());
+    REQUIRE(listed.at("masters").size() == 1);
+    CHECK(listed.at("masters")[0].at("name") == "Second.esm");
+}
+
+TEST_CASE("Native AddMasters accepts a master that loads after an already-declared master") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto firstPath = root / "First.esm";
+    const auto secondPath = root / "Second.esm";
+    const auto targetPath = root / "Target.esp";
+    writeBytes(firstPath, makeMaster());
+    writeBytes(secondPath, makeMaster());
+    writeBytes(targetPath, makeTargetDeclaring("First.esm"));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("First.esm", firstPath),
+            pluginEntry("Second.esm", secondPath),
+            pluginEntry("Target.esp", targetPath)
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    REQUIRE(backend.invokeBackend(
+        "AddMasters", nlohmann::json::array({"Target.esp", "Second.esm"})).has_value());
+    const auto listedRaw = backend.invoke(
+        "masters.List", nlohmann::json::array({"Target.esp"}));
+    REQUIRE(listedRaw.has_value());
+    const auto listed = nlohmann::json::parse(listedRaw->get<std::string>());
+    REQUIRE(listed.at("masters").size() == 2);
+    CHECK(listed.at("masters")[0].at("name") == "First.esm");
+    CHECK(listed.at("masters")[1].at("name") == "Second.esm");
+}
+
+TEST_CASE("Native AddMasters appends a comma list of masters in load order") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto firstPath = root / "First.esm";
+    const auto secondPath = root / "Second.esm";
+    const auto targetPath = root / "Target.esp";
+    writeBytes(firstPath, makeMaster());
+    writeBytes(secondPath, makeMaster());
+    writeBytes(targetPath, makeTarget());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("First.esm", firstPath),
+            pluginEntry("Second.esm", secondPath),
+            pluginEntry("Target.esp", targetPath)
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    REQUIRE(backend.invokeBackend(
+        "AddMasters", nlohmann::json::array({"Target.esp", "First.esm,Second.esm"})).has_value());
+    const auto listedRaw = backend.invoke(
+        "masters.List", nlohmann::json::array({"Target.esp"}));
+    REQUIRE(listedRaw.has_value());
+    const auto listed = nlohmann::json::parse(listedRaw->get<std::string>());
+    REQUIRE(listed.at("masters").size() == 2);
+    CHECK(listed.at("masters")[0].at("name") == "First.esm");
+    CHECK(listed.at("masters")[1].at("name") == "Second.esm");
+}
+
+TEST_CASE("Native AddMasters refuses a master that loads after the target") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto masterPath = root / "Master.esm";
+    const auto targetPath = root / "Target.esp";
+    writeBytes(masterPath, makeMaster());
+    writeBytes(targetPath, makeTarget());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Target.esp", targetPath),
+            pluginEntry("Master.esm", masterPath)
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const auto result = backend.invokeBackend(
+        "AddMasters", nlohmann::json::array({"Target.esp", "Master.esm"}));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "MasterOrder");
+
+    const auto listedRaw = backend.invoke(
+        "masters.List", nlohmann::json::array({"Target.esp"}));
+    REQUIRE(listedRaw.has_value());
+    const auto listed = nlohmann::json::parse(listedRaw->get<std::string>());
+    CHECK(listed.at("masters").empty());
 }
 
 TEST_CASE("Native CleanUnusedMasters removes an unreferenced master and keeps local FormKeys") {
