@@ -192,6 +192,17 @@ def main(executable):
         for arguments in (["--mo2"], ["--mo2", str(root / "missing")]):
             result = subprocess.run([executable, "--mcp", *arguments], input="", capture_output=True, text=True, env=environment, cwd=root, timeout=30)
             assert result.returncode != 0, f"Invalid MO2 startup succeeded: {arguments}"
+        empty = root / "empty-instance"
+        empty.mkdir()
+        requests = [
+            {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+            {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "get_mo2_status", "arguments": {}}},
+        ]
+        result = subprocess.run([executable, "--mcp", "--mo2", str(empty)], input="".join(json.dumps(request) + "\n" for request in requests), capture_output=True, text=True, env=environment, cwd=root, timeout=30)
+        assert result.returncode == 0, result.stderr
+        responses = {response["id"]: response for response in map(json.loads, result.stdout.splitlines())}
+        failed = responses[2]["result"]
+        assert failed["isError"] is True and "MO2 load failed" in failed["content"][0]["text"], failed
         print("PASS: native MCP startup, tools, memory-only edits, dirty-open guard, rejected edits, save, reload and discard")
 
 
