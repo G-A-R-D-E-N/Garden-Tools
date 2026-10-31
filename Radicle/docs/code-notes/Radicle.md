@@ -9995,3 +9995,33 @@ Follow-up to the #31 items 1-2 notes above, closing the review gaps without new 
 - Behaviour is unchanged for callers: the accessors return the same hit vectors, the maps are filled from the same `collect_form_links` walk, and a reference query after `release_references` rebuilds them. The version index stays independent, so `winner`, `versions`, `conflicts` and `all_keys` never pay the reference cost. `ConflictGraph` is move-only because of the mutex holder; all existing construction sites build a temporary and move it into an `optional`/`shared_ptr`, so no copy site exists.
 - Tests: `Radicle/tests/test_conflict_graph.cpp:TracksInboundAndOutboundFormLinks` and the comparison/kind tests exercise the lazy path through the ordinary accessors; `Radicle/tests/test_conflict_graph.cpp:ReferenceIndexRebuildsWithoutDuplicatesAfterRelease` checks that a release followed by a requery returns the same hit count, with no duplicates.
 - Lifetime and partial index: the graph keeps raw `const Plugin*` pointers in `plugins_` (`Radicle/include/fo4/graph/conflict_graph.hpp:ConflictGraph`), so every plugin must outlive any reference query, because `ensure_references` reads them lazily. `ensure_references` builds `inbound` and `outbound` as locals and moves them into `inbound_`/`outbound_` only after the loop, so a throw part-way (bad_alloc is the realistic case) leaves no partial index, and the next call does not append duplicates to a half-filled map.
+
+## Radicle/src/nif/nif.cpp:read_nif, Radicle/src/c_api_nif.cpp:radicle_nif_node_value — BSValueNode value
+
+A `BSValueNode` block is the standard node layout (the `detail::read_av_header` fields, then the children list), followed by an i32 value and one flags byte. `read_nif` reads the i32 into `Node::value` when at least four bytes remain after the children list, and leaves `value` empty otherwise. The flags byte is not read. A block with fewer than four bytes after its children reads with no value rather than throwing, so files that read today keep reading. Every other node type gets no value, even when its block has the same trailing bytes.
+
+The evidence below ties the value to an ADDN DATA index, but no test or engine source confirms how it is used. It is a stored i32: the reader does not resolve it against any master.
+
+Evidence, from a read-only scan of the shipped game NIFs (not a test run):
+
+- 1,800 BSValueNode blocks in the Data folder: 1,766 in the base game and DLC archives, 33 in Creation Club, 1 loose. The 1,783 in the `Radicle/docs/NIF.md` histogram is from an earlier corpus run and is left as measured.
+- All 1,766 base-game and DLC blocks have exactly five trailing bytes after the children list.
+- All 1,800 names contain a number, and the first run of digits (`AddOnNode401`, `AddOnNode04@#0`) equals the value in all 1,800.
+- 1,762 of the 1,766 base-game and DLC values match an ADDN DATA index in the seven masters.
+- The other 4 are all value 817, on `Meshes\DLC05\Effects\Fireworks\FireworkProjectileGold.nif`. No master has an ADDN with index 817, so those four are an unresolved reference, not a layout error; the name rule still holds for them.
+- The Creation Club samples also miss the masters, because their ADDN records are not in those seven masters. They were not scanned further.
+- Flags byte: 0 on 1,783 nodes and 1 on 17 (15 in `Meshes\Effects\ExplosionNuke01.nif`, 2 in `Meshes\Weapons\Grenade\ExplosionMolotovCocktail.nif`). Its meaning is unknown. It is not exposed, and no meaning is guessed.
+
+C surface: `radicle_nif_node_value(const radicle_nif* nif, size_t index, int32_t* out_has_value, int32_t* out_value)`. It follows `radicle_nif_node_parent` for the index check (out-of-range is `RADICLE_STATUS_INVALID_ARGUMENT`) and `radicle_nif_shape_skinned` for the 0/1 `int32_t` flag. An absent value sets the flag to 0 and the value to 0. `RADICLE_ABI_VERSION` moves 92 to 101 because 93 to 100 are claimed by unmerged branches. `RadicleNative.g.cs` was regenerated with `Radicle/bindings/csharp/tools/generate_interop.py` (pure Python, no build artifact needed); `Radicle/bindings/csharp/tests/abi_layout_probe.cpp` came out unchanged because no struct changed.
+
+Regression map for the tests (the per-test explanation lives here, not in the test source):
+
+- `Radicle/tests/test_nif_nodes.cpp:ReadsTheValueOfABSValueNodeFromItsFiveByteTrailer` detects a value read at the wrong offset or width.
+- `Radicle/tests/test_nif_nodes.cpp:KeepsAZeroValueAsPresent` detects a zero ADDN index reported as absent.
+- `Radicle/tests/test_nif_nodes.cpp:NeverGivesANiNodeAValueEvenWithTheSameTrailingBytes` detects a value read for every node type.
+- `Radicle/tests/test_nif_nodes.cpp:ReadsABSValueNodeWithNoTrailerAsHavingNoValue` detects a short block turning into a parse error.
+- `Radicle/tests/test_nif_nodes.cpp:ReadsAValueFromFourBytesAndNoneFromThree` detects the four-byte guard moving, in either direction.
+- `Radicle/tests/test_c_api_nif.cpp:ExposesTheValueOfABSValueNodeAndNoValueWithoutATrailer` detects a broken present, absent or out-of-range path through the C call.
+- `Radicle/tests/test_nif_corpus.cpp:ReadsEveryVanillaNifAndHandlesGeometryTypes` detects a wrong layout on real data: every BSValueNode it reads must hold its name's first number as the value, and at least one must be seen. It runs only with `FO4_DATA_DIR` set.
+- `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsOneHundredOne` pins the ABI number.
+
