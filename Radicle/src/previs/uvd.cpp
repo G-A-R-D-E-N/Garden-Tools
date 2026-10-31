@@ -41,28 +41,28 @@ UvdFile parse_uvd(std::span<const std::byte> data) {
   if (u32le(data, 0) != k_uvd_magic) throw parse_error(0, "UVD has a bad magic");
   UvdFile file;
   file.stored_crc = u32le(data, 4);
-  file.bytes.assign(data.begin(), data.end());
+  file.bytes = data;
   const auto* base = reinterpret_cast<const char*>(data.data() + k_uvd_banner_offset);
   const std::size_t cap = data.size() - k_uvd_banner_offset;
   std::size_t len = 0;
   while (len < cap && base[len] != '\0') ++len;
   if (len == cap) throw parse_error(k_uvd_banner_offset, "UVD banner is not NUL-terminated");
-  file.banner.assign(base, len);
+  file.banner = std::string_view(base, len);
   return file;
 }
 
 std::vector<std::string> validate_uvd(std::span<const std::byte> data) {
+  UvdFile file;
   try {
-    auto file = parse_uvd(data);
-    std::vector<std::string> issues;
-    if (data.size() % 16 != 0) issues.push_back("UVD size is not 16-byte aligned");
-    const auto body = std::span<const std::byte>(data.data() + 8, data.size() - 8);
-    if (crc32c(body) != file.stored_crc) issues.push_back("UVD CRC-32C mismatch");
-    if (file.banner.empty() || file.banner[0] != 'T') issues.push_back("UVD banner is missing");
-    return issues;
+    file = parse_uvd(data);
   } catch (const std::exception& e) {
     return {e.what()};
   }
+  std::vector<std::string> issues;
+  if (data.size() % 16 != 0) issues.push_back("UVD size is not 16-byte aligned");
+  if (crc32c(file.body()) != file.stored_crc) issues.push_back("UVD CRC-32C mismatch");
+  if (file.banner.empty() || file.banner.front() != 'T') issues.push_back("UVD banner is missing");
+  return issues;
 }
 
 }  // namespace fo4::previs

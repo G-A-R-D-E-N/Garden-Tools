@@ -16,7 +16,6 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
-#include <unordered_set>
 #include <vector>
 
 namespace {
@@ -35,8 +34,7 @@ std::vector<std::byte> bytes_of(std::initializer_list<std::uint32_t> words) {
 }
 
 std::vector<std::byte> make_uvd_bytes(const std::string& banner, std::size_t size = 0x110) {
-  // A long banner must grow the image, not overflow the header: the banner
-  // lives at +0xBC; the image must stay 16-byte aligned.
+  // The banner lives at +0xBC; the image must stay 16-byte aligned.
   if (size < 0x100) size = 0x100;
   if (0xBC + banner.size() + 1 > size) size = 0xBC + banner.size() + 1;
   size = (size + 15) & ~std::size_t{15};
@@ -56,31 +54,63 @@ std::vector<std::byte> make_uvd_bytes(const std::string& banner, std::size_t siz
   return out;
 }
 
+const fo4::previs::CellIssue* find_issue(const std::vector<fo4::previs::CellIssue>& issues,
+                                         fo4::previs::PrevisIssue code) {
+  for (const auto& issue : issues) {
+    if (issue.code == code) return &issue;
+  }
+  return nullptr;
+}
+
 }  // namespace
 
 // Sorted rows are an invariant: an unsorted rewrite would detach a cell's art.
 TEST(PrevisCdx, RoundTripsAndFlagsUnsorted) {
   fo4::previs::CdxFile file;
-  file.rows.push_back({1, 0x000800u, 2, 3});
-  file.rows.push_back({1, 0x000801u, 4, 5});
+  file.rows.push_back({0x00000080u, 0x000800u, 2, 3});
+  file.rows.push_back({0x00000080u, 0x000801u, 4, 5});
   const auto bytes = fo4::previs::write_cdx(file);
   EXPECT_TRUE(fo4::previs::validate_cdx(bytes).empty());
   const auto back = fo4::previs::parse_cdx(bytes);
   ASSERT_EQ(back.rows.size(), 2u);
-  EXPECT_EQ(back.rows[0].cell, 0x000800u);
+  EXPECT_EQ(back.rows[0].form, 0x000800u);
   EXPECT_EQ(fo4::previs::write_cdx(back), bytes);
-  EXPECT_TRUE(fo4::previs::cdx_has_data_for_cell(back, 0x000800u));
-  EXPECT_FALSE(fo4::previs::cdx_has_data_for_cell(back, 0x000802u));
+
+  fo4::previs::CdxIndex index(back);
+  EXPECT_TRUE(index.has_interior_row(0x000800u));
+  EXPECT_TRUE(index.has_interior_row(0x000801u));
+  EXPECT_FALSE(index.has_interior_row(0x000802u));
 
   fo4::previs::CdxFile flipped;
-  flipped.rows.push_back({1, 0x000801u, 4, 5});
-  flipped.rows.push_back({1, 0x000800u, 2, 3});
-  const auto bad = fo4::previs::write_cdx(flipped);
-  EXPECT_FALSE(fo4::previs::validate_cdx(bad).empty());
+  flipped.rows.push_back({0x00000080u, 0x000800u, 4, 5});
+  flipped.rows.push_back({0x00000000u, 0x000800u, 2, 3});
+  EXPECT_FALSE(fo4::previs::validate_cdx(fo4::previs::write_cdx(flipped)).empty());
 
   auto truncated = bytes;
   truncated.pop_back();
   EXPECT_THROW(fo4::previs::parse_cdx(truncated), fo4::parse_error);
+}
+
+// Exterior grids must survive signed 12-bit encode and decode; an interior row
+// must keep its grid zero or the measured layout is violated.
+TEST(PrevisCdx, DecodesSignedExteriorGrid) {
+  const fo4::previs::CdxGrid grids[] = {{-35, -39}, {30, 28}, {0, 0}, {-1, 1}};
+  for (const auto& grid : grids) {
+    EXPECT_EQ(fo4::previs::decode_cdx_grid(fo4::previs::encode_cdx_grid(grid)), grid);
+  }
+  fo4::previs::CdxFile file;
+  const auto world = 0x0000003Cu;
+  const auto key = (fo4::previs::encode_cdx_grid({-35, 28}) << 8u) | 0u;
+  file.rows.push_back({key, world, 1, 2});
+  const auto bytes = fo4::previs::write_cdx(file);
+  EXPECT_TRUE(fo4::previs::validate_cdx(bytes).empty());
+  fo4::previs::CdxIndex index(fo4::previs::parse_cdx(bytes));
+  EXPECT_TRUE(index.has_exterior_row(world, {-35, 28}));
+  EXPECT_FALSE(index.has_exterior_row(world, {-35, 27}));
+
+  fo4::previs::CdxFile bad_interior;
+  bad_interior.rows.push_back({0x00000180u, 0x000800u, 0, 0});
+  EXPECT_FALSE(fo4::previs::validate_cdx(fo4::previs::write_cdx(bad_interior)).empty());
 }
 
 // Detects a table edit that moves a chunk size or offset: parse must fail
@@ -102,8 +132,7 @@ TEST(PrevisCsg, RoundTripsAndRejectsBadChunk) {
   EXPECT_EQ(fo4::previs::write_csg(back), bytes);
 
   // Entry order invariant: the size comes before the offset.
-  const auto first_size = static_cast<unsigned>(std::to_integer<unsigned char>(bytes[12]));
-  EXPECT_EQ(first_size, 4u);
+  EXPECT_EQ(std::to_integer<unsigned>(bytes[12]), 4u);
 
   auto big_size = bytes;
   // Corrupt the first entry's size; the chunk offset must then run past the file end.
@@ -129,8 +158,7 @@ TEST(PrevisCsg, DecompressesOnlyCompleteChunks) {
   const auto good = std::vector<std::byte>{std::byte{0x78}, std::byte{0x9C}, std::byte{0x03},
                                            std::byte{0x00}, std::byte{0x00}, std::byte{0x00},
                                            std::byte{0x00}, std::byte{0x01}};
-  const auto inflated = fo4::previs::decompress_csg_chunk(good);
-  EXPECT_EQ(inflated.size(), 0u);
+  EXPECT_EQ(fo4::previs::decompress_csg_chunk(good).size(), 0u);
   auto truncated = good;
   truncated.pop_back();
   EXPECT_THROW(fo4::previs::decompress_csg_chunk(truncated), fo4::parse_error);
@@ -143,6 +171,7 @@ TEST(PrevisUvd, ValidatesCrcAlignmentAndBanner) {
   EXPECT_TRUE(fo4::previs::validate_uvd(bytes).empty());
   const auto file = fo4::previs::parse_uvd(bytes);
   EXPECT_NE(file.banner.find("3.3.17"), std::string::npos);
+  EXPECT_EQ(file.body().size(), bytes.size() - 8);
 
   auto crc_bad = bytes;
   crc_bad[20] = static_cast<std::byte>(std::to_integer<int>(crc_bad[20]) ^ 0xFF);
@@ -167,6 +196,14 @@ TEST(PrevisXcri, ParsesMeasuredWordPairs) {
   EXPECT_THROW(fo4::previs::parse_xcri_bytes(bytes_of({1, 2, 0x55})), fo4::parse_error);
 }
 
+// Mesh/reference order is an invariant: the round trip pins the exact byte layout.
+TEST(PrevisXcri, WriteRoundTrips) {
+  const auto bytes = bytes_of({1, 2, 0x55, 0x00013002u, 0x56});
+  const auto raw = fo4::previs::parse_xcri_bytes(bytes);
+  EXPECT_EQ(fo4::previs::write_xcri_bytes(raw), bytes);
+  EXPECT_EQ(fo4::previs::write_xcri_bytes(fo4::previs::XcriRaw{}), bytes_of({0, 0}));
+}
+
 TEST(PrevisDate, DecodesPackedStampAndStaleness) {
   const auto date = fo4::previs::decode_packed_date(0x306Fu);
   EXPECT_EQ(date.year, 2024u);
@@ -177,45 +214,80 @@ TEST(PrevisDate, DecodesPackedStampAndStaleness) {
   EXPECT_FALSE(fo4::previs::is_precalc_stale(0, 0x3070u));
 }
 
-// A repair patch that stamps VISI without a tome must be broken: it silently falls back.
-TEST(PrevisDetect, FlagsMissingLinkage) {
+// A repair patch that stamps VISI without a tome must be broken: it falls back
+// to individual references in game; staleness must be outdated, never broken.
+TEST(PrevisDetect, ClassifiesBrokenAndOutdated) {
   fo4::previs::CellPrevisInput clean{};
   EXPECT_FALSE(fo4::previs::diagnose_cell(clean).broken);
 
-  fo4::previs::CellPrevisInput visi_no_tome{};
-  visi_no_tome.has_visi = true;
-  visi_no_tome.has_rvis = true;
-  visi_no_tome.uvd_checked = true;  // verified absent
-  EXPECT_TRUE(fo4::previs::diagnose_cell(visi_no_tome).broken);
+  fo4::previs::CellPrevisInput tome_missing{};
+  tome_missing.has_visi = true;
+  tome_missing.has_rvis = true;
+  tome_missing.uvd_checked = true;
+  const auto missing = fo4::previs::diagnose_cell(tome_missing);
+  EXPECT_TRUE(missing.broken);
+  EXPECT_NE(find_issue(missing.issues, fo4::previs::PrevisIssue::tome_missing), nullptr);
 
+  // VISI without RVIS requires the cell-named tome, which this input supplies.
   fo4::previs::CellPrevisInput visi_no_rvis{};
   visi_no_rvis.has_visi = true;
   visi_no_rvis.uvd_checked = true;
   visi_no_rvis.has_uvd = true;
   visi_no_rvis.uvd_valid = true;
-  EXPECT_TRUE(fo4::previs::diagnose_cell(visi_no_rvis).broken);
+  EXPECT_FALSE(fo4::previs::diagnose_cell(visi_no_rvis).broken);
 
-  fo4::previs::CellPrevisInput xcri_no_cdx{};
-  xcri_no_cdx.has_pcmb = true;
-  xcri_no_cdx.has_xcri = true;
-  xcri_no_cdx.cdx_checked = true;  // verified absent
-  xcri_no_cdx.csg_checked = true;
-  xcri_no_cdx.has_csg_rows = true;
-  EXPECT_TRUE(fo4::previs::diagnose_cell(xcri_no_cdx).broken);
+  fo4::previs::CellPrevisInput rvis_no_visi{};
+  rvis_no_visi.has_rvis = true;
+  const auto no_visi = fo4::previs::diagnose_cell(rvis_no_visi);
+  EXPECT_TRUE(no_visi.broken);
+  EXPECT_NE(find_issue(no_visi.issues, fo4::previs::PrevisIssue::rvis_without_visi), nullptr);
 
   fo4::previs::CellPrevisInput stale{};
   stale.has_pcmb = true;
-  stale.has_xcri = true;
-  stale.cdx_checked = true;
-  stale.has_cdx_row = true;
-  stale.csg_checked = true;
-  stale.has_csg_rows = true;
   stale.pcmb_stale = true;
-  EXPECT_TRUE(fo4::previs::diagnose_cell(stale).broken);
+  stale.visi_stale = true;
+  const auto outdated = fo4::previs::diagnose_cell(stale);
+  EXPECT_FALSE(outdated.broken);
+  EXPECT_TRUE(outdated.outdated);
+  EXPECT_EQ(outdated.outdated_issues.size(), 2u);
 }
 
-// An unchecked index must not produce a false missing verdict: without a
-// .uvd lookup or CDX/CSG answers the cell requires a skip, not a broken verdict.
+// A precombined cell requires XCRI, CDX rows, CSG rows and every OC NIF.
+TEST(PrevisDetect, ClassifiesPrecombineLinkage) {
+  fo4::previs::CellPrevisInput complete{};
+  complete.has_pcmb = true;
+  complete.has_xcri = true;
+  complete.cdx_checked = true;
+  complete.has_cdx_row = true;
+  complete.csg_checked = true;
+  complete.has_csg_rows = true;
+  complete.oc_nif_checked = true;
+  EXPECT_FALSE(fo4::previs::diagnose_cell(complete).broken);
+
+  auto no_cdx = complete;
+  no_cdx.has_cdx_row = false;
+  EXPECT_TRUE(fo4::previs::diagnose_cell(no_cdx).broken);
+
+  auto no_csg = complete;
+  no_csg.has_csg_rows = false;
+  EXPECT_TRUE(fo4::previs::diagnose_cell(no_csg).broken);
+
+  auto no_nif = complete;
+  no_nif.missing_oc_nifs = 3;
+  const auto missing = fo4::previs::diagnose_cell(no_nif);
+  EXPECT_TRUE(missing.broken);
+  EXPECT_NE(find_issue(missing.issues, fo4::previs::PrevisIssue::oc_nif_missing), nullptr);
+
+  // PCMB without XCRI is legal in vanilla and must not be broken.
+  fo4::previs::CellPrevisInput pcmb_only{};
+  pcmb_only.has_pcmb = true;
+  pcmb_only.cdx_checked = true;
+  pcmb_only.csg_checked = true;
+  pcmb_only.uvd_checked = true;
+  EXPECT_FALSE(fo4::previs::diagnose_cell(pcmb_only).broken);
+}
+
+// Unchecked indexes require skips: no false missing-row or missing-tome verdicts.
 TEST(PrevisDetect, UncheckedIndexesBecomeSkipsNotBroken) {
   fo4::previs::CellPrevisInput visi{};
   visi.has_visi = true;
@@ -223,7 +295,7 @@ TEST(PrevisDetect, UncheckedIndexesBecomeSkipsNotBroken) {
   const auto unvis = fo4::previs::diagnose_cell(visi);
   EXPECT_FALSE(unvis.broken);
   EXPECT_TRUE(unvis.skip_unsupported);
-  EXPECT_FALSE(unvis.skips.empty());
+  ASSERT_FALSE(unvis.skips.empty());
 
   fo4::previs::CellPrevisInput xcri{};
   xcri.has_pcmb = true;
@@ -231,7 +303,7 @@ TEST(PrevisDetect, UncheckedIndexesBecomeSkipsNotBroken) {
   const auto unx = fo4::previs::diagnose_cell(xcri);
   EXPECT_FALSE(unx.broken);
   EXPECT_TRUE(unx.skip_unsupported);
-  EXPECT_EQ(unx.skips.size(), 2u);  // CDX + CSG
+  EXPECT_EQ(unx.skips.size(), 3u);  // CDX + CSG + OC NIF
 }
 
 namespace {
@@ -294,20 +366,28 @@ class PrevisLoadOrderTest : public ::testing::Test {
 
 }  // namespace
 
-// Inputs come from a loaded Environment plus index answers; a malformed CELL must be reported.
+// The report must compute its inputs from an Environment plus index answers;
+// a malformed CELL must be reported, never thrown.
 TEST_F(PrevisLoadOrderTest, ComputesInputsFromRealIndexes) {
   const std::filesystem::path paths[] = {write("Previs.esp", make_previs_plugin())};
   const auto env = fo4::env::Environment::load(paths);
 
-  fo4::previs::CdxFile cdx;
-  cdx.rows.push_back({0, 0x801, 0, 0});
-  const std::unordered_set<std::uint32_t> csg{0x801u};
   fo4::previs::LoadOrderIndexes indexes;
-  indexes.cdx = &cdx;
-  indexes.csg_cells = &csg;
-  indexes.uvd_issues = [](std::uint32_t local) -> std::optional<std::vector<std::string>> {
-    if (local == 0x800u) return std::vector<std::string>{};
-    return std::nullopt;
+  indexes.cdx_row = [](std::size_t, const fo4::previs::CdxCellTarget& target) {
+    return std::optional<bool>{target.cell.local().value() == 0x801u};
+  };
+  indexes.csg_rows = [](std::size_t, const fo4::previs::FormKey& cell) {
+    return std::optional<bool>{cell.local().value() == 0x801u};
+  };
+  indexes.missing_oc_nifs = [](const fo4::previs::FormKey&,
+                               std::span<const std::uint32_t>) {
+    return std::optional<std::uint32_t>{0u};
+  };
+  indexes.uvd = [](const fo4::previs::FormKey& cell) {
+    fo4::previs::TomeLookup answer;
+    answer.checked = true;
+    answer.found = cell.local().value() == 0x801u;
+    return answer;
   };
 
   const auto report = fo4::previs::diagnose_load_order(env, indexes);
@@ -320,7 +400,6 @@ TEST_F(PrevisLoadOrderTest, ComputesInputsFromRealIndexes) {
   EXPECT_TRUE(visi->input.has_xpri);
   EXPECT_TRUE(visi->input.uvd_checked);
   EXPECT_TRUE(visi->input.has_uvd);
-  EXPECT_TRUE(visi->input.uvd_valid);
   EXPECT_FALSE(visi->status.broken);
   EXPECT_FALSE(visi->status.skip_unsupported);
 
@@ -336,10 +415,10 @@ TEST_F(PrevisLoadOrderTest, ComputesInputsFromRealIndexes) {
   const auto* bad = find_cell(report, 0x802u);
   ASSERT_NE(bad, nullptr);
   EXPECT_TRUE(bad->status.broken);
-  EXPECT_FALSE(bad->status.issues.empty());
+  EXPECT_NE(find_issue(bad->status.issues, fo4::previs::PrevisIssue::xcri_malformed), nullptr);
 }
 
-// Missing index answers require skips: no false missing-tome or missing-row verdicts.
+// Missing index answers require skips: the same load order is not condemned.
 TEST_F(PrevisLoadOrderTest, MissingIndexesBecomeSkips) {
   const std::filesystem::path paths[] = {write("Previs.esp", make_previs_plugin())};
   const auto env = fo4::env::Environment::load(paths);
@@ -359,14 +438,6 @@ TEST_F(PrevisLoadOrderTest, MissingIndexesBecomeSkips) {
   ASSERT_NE(pcmb, nullptr);
   EXPECT_FALSE(pcmb->status.broken);
   EXPECT_TRUE(pcmb->status.skip_unsupported);
-}
-
-// Mesh/reference order is an invariant: the round trip pins the exact byte layout.
-TEST(PrevisXcri, WriteRoundTrips) {
-  const auto bytes = bytes_of({1, 2, 0x55, 0x00013002u, 0x56});
-  const auto raw = fo4::previs::parse_xcri_bytes(bytes);
-  EXPECT_EQ(fo4::previs::write_xcri_bytes(raw), bytes);
-  EXPECT_EQ(fo4::previs::write_xcri_bytes(fo4::previs::XcriRaw{}), bytes_of({0, 0}));
 }
 
 namespace {
@@ -394,31 +465,9 @@ std::vector<std::byte> make_xcri_version_plugin() {
   return en::make_plugin({}, {en::top("CELL", {en::grp(0, 2, {en::grp(0, 3, {ok, malformed, unmeasured})})})});
 }
 
-const fo4::env::RecordRef* find_ref(const fo4::env::Environment& env, std::uint32_t local) {
-  for (const auto* ref : env.winners_of(fo4::Signature::from_string("CELL"))) {
-    if (ref != nullptr && ref->record != nullptr &&
-        (ref->record->form_key.local().value() & 0xFFFFFFu) == local) {
-      return ref;
-    }
-  }
-  return nullptr;
-}
-
 }  // namespace
 
-// A malformed XCRI in a mod must not fail the whole cell read: decode_cell
-// must succeed and the report carries the parse error instead.
-TEST_F(PrevisLoadOrderTest, MalformedXcriStillDecodes) {
-  const std::filesystem::path paths[] = {write("PrevisXcriVer.esp", make_xcri_version_plugin())};
-  const auto env = fo4::env::Environment::load(paths);
-  const auto* ref = find_ref(env, 0x901u);
-  ASSERT_NE(ref, nullptr);
-  fo4::env::CellData data;
-  EXPECT_NO_THROW(data = fo4::env::decode_cell(env, *ref));
-  EXPECT_TRUE(data.precombined_timestamp.has_value());
-}
-
-// The malformed-XCRI cell must be reported broken while the scan continues.
+// A malformed XCRI in a mod must not fail the whole cell read and must be reported.
 TEST_F(PrevisLoadOrderTest, MalformedXcriReportedBroken) {
   const std::filesystem::path paths[] = {write("PrevisXcriVer.esp", make_xcri_version_plugin())};
   const auto env = fo4::env::Environment::load(paths);
@@ -426,8 +475,7 @@ TEST_F(PrevisLoadOrderTest, MalformedXcriReportedBroken) {
   const auto* bad = find_cell(report, 0x901u);
   ASSERT_NE(bad, nullptr);
   EXPECT_TRUE(bad->status.broken);
-  ASSERT_FALSE(bad->status.issues.empty());
-  EXPECT_NE(bad->status.issues.front().find("XCRI"), std::string::npos);
+  EXPECT_NE(find_issue(bad->status.issues, fo4::previs::PrevisIssue::xcri_malformed), nullptr);
   const auto* ok = find_cell(report, 0x900u);
   ASSERT_NE(ok, nullptr);
   EXPECT_FALSE(ok->status.broken);

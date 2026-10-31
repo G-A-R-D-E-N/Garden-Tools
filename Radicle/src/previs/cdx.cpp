@@ -26,6 +26,10 @@ void append_le(std::vector<std::byte>& out, std::uint32_t v) {
   out.push_back(static_cast<std::byte>((v >> 24) & 0xFFu));
 }
 
+std::uint64_t pack_key(const CdxCellKey& key) noexcept {
+  return static_cast<std::uint64_t>(key.form) << 32u | key.grid;
+}
+
 }  // namespace
 
 CdxFile parse_cdx(std::span<const std::byte> data) {
@@ -53,40 +57,80 @@ std::vector<std::byte> write_cdx(const CdxFile& file) {
   for (const char c : k_magic) out.push_back(static_cast<std::byte>(c));
   append_le(out, static_cast<std::uint32_t>(file.rows.size()));
   for (const auto& row : file.rows) {
-    append_le(out, row.kind);
-    append_le(out, row.cell);
+    append_le(out, row.key);
+    append_le(out, row.form);
     append_le(out, row.value);
     append_le(out, row.extra);
   }
   return out;
 }
 
-std::vector<std::string> validate_cdx(std::span<const std::byte> data) {
-  try {
-    auto file = parse_cdx(data);
-    std::vector<std::string> issues;
-    for (std::size_t i = 1; i < file.rows.size(); ++i) {
-      const auto& a = file.rows[i - 1];
-      const auto& b = file.rows[i];
-      const auto ta = std::tie(a.cell, a.kind);
-      const auto tb = std::tie(b.cell, b.kind);
-      if (tb < ta) {
-        issues.push_back("CDX rows are not grouped by cell and kind");
-        break;
-      }
-    }
-    return issues;
-  } catch (const std::exception& e) {
-    return {e.what()};
+std::uint8_t cdx_kind(std::uint32_t key) noexcept {
+  return static_cast<std::uint8_t>(key & 0xFFu);
+}
+
+bool cdx_kind_is_interior(std::uint32_t key) noexcept {
+  return cdx_kind(key) >= k_cdx_interior_kind_min;
+}
+
+CdxGrid decode_cdx_grid(std::uint32_t key) noexcept {
+  const auto raw_x = static_cast<std::int32_t>((key >> 20u) & 0xFFFu);
+  const auto raw_y = static_cast<std::int32_t>((key >> 8u) & 0xFFFu);
+  return CdxGrid{raw_x >= 0x800 ? raw_x - 0x1000 : raw_x, raw_y >= 0x800 ? raw_y - 0x1000 : raw_y};
+}
+
+std::uint32_t encode_cdx_grid(const CdxGrid& grid) noexcept {
+  return (static_cast<std::uint32_t>(grid.x) & 0xFFFu) << 12u |
+         (static_cast<std::uint32_t>(grid.y) & 0xFFFu);
+}
+
+std::size_t CdxCellKeyHash::operator()(const CdxCellKey& key) const noexcept {
+  return static_cast<std::size_t>(pack_key(key) * 0x9E3779B97F4A7C15ull >> 32u);
+}
+
+CdxIndex::CdxIndex(const CdxFile& file) {
+  keys_.reserve(file.rows.size() / 4 + 1);
+  for (const auto& row : file.rows) {
+    keys_.insert(pack_key(CdxCellKey{row.form, row.key >> 8u}));
   }
 }
 
-bool cdx_has_data_for_cell(const CdxFile& file, std::uint32_t cell_local_id) noexcept {
-  const auto want = cell_local_id & 0xFFFFFFu;
-  for (const auto& row : file.rows) {
-    if ((row.cell & 0xFFFFFFu) == want) return true;
+bool CdxIndex::contains(const CdxCellKey& key) const noexcept {
+  return keys_.contains(pack_key(key));
+}
+
+bool CdxIndex::has_exterior_row(std::uint32_t world_form, const CdxGrid& grid) const noexcept {
+  return contains(CdxCellKey{world_form, encode_cdx_grid(grid)});
+}
+
+bool CdxIndex::has_interior_row(std::uint32_t cell_form) const noexcept {
+  return contains(CdxCellKey{cell_form, 0});
+}
+
+std::vector<std::string> validate_cdx(std::span<const std::byte> data) {
+  CdxFile file;
+  try {
+    file = parse_cdx(data);
+  } catch (const std::exception& e) {
+    return {e.what()};
   }
-  return false;
+  std::vector<std::string> issues;
+  for (std::size_t i = 1; i < file.rows.size(); ++i) {
+    const auto& a = file.rows[i - 1];
+    const auto& b = file.rows[i];
+    if (std::tie(b.form, b.key) < std::tie(a.form, a.key)) {
+      issues.push_back("CDX rows are not ascending by (form, key)");
+      break;
+    }
+  }
+  for (const auto& row : file.rows) {
+    if (!cdx_kind_is_interior(row.key)) continue;
+    if ((row.key >> 8u) != 0) {
+      issues.push_back("CDX interior row carries a nonzero grid");
+      break;
+    }
+  }
+  return issues;
 }
 
 }  // namespace fo4::previs

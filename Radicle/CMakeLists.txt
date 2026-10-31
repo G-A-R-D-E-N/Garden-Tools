@@ -269,6 +269,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/previs/uvd.cpp
   src/previs/xcri.cpp
   src/previs/detect.cpp
+  src/previs/previs_data.cpp
   src/environment/region.cpp
   src/environment/placed.cpp
   src/environment/terrain.cpp

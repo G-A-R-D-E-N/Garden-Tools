@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace fo4::previs {
@@ -17,13 +18,13 @@ inline constexpr std::size_t k_uvd_header_min = 0x100;
 
 struct UvdFile {
   std::uint32_t stored_crc{0};
-  std::string banner;
-  std::vector<std::byte> bytes;  // full file image; body() is bytes [8, end)
+  std::string_view banner;
+  // Borrowed image; the caller must keep the bytes alive while the view is used.
+  std::span<const std::byte> bytes;
 
-  // The byte range the CRC covers; requires the file image to stay alive.
+  // CRC invariant: covers bytes [8, end).
   [[nodiscard]] std::span<const std::byte> body() const noexcept {
-    if (bytes.size() <= 8) return {};
-    return {bytes.data() + 8, bytes.size() - 8};
+    return bytes.size() <= 8 ? std::span<const std::byte>{} : bytes.subspan(8);
   }
 };
 
