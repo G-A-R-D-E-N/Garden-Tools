@@ -1,0 +1,198 @@
+name: native-real-data
+
+# Fallout 4 data cannot leave the fo4-data host, so this lane stays on Forgejo.
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-real-data-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CCACHE_NOHASHDIR: "1"
+  REAL_DATA_TEST_REGEX: '[A-Za-z0-9_]*RealData\.|[A-Za-z0-9_]*Real\.|NavmeshCorpus\.Fallout4FixturesBoundaryCountsAndNvppSize|PexCorpus\.EveryDataDirArchivePexRoundTripsByteIdentically|QuestRuntimeReal\.|QuestConditionCorpus\.|RealPluginPreservation\.|CheckErrors\.VanillaMasterHasNoErrorFindings|HedrCount\.OfficialMastersAndLightPluginsRebuildTheRecursiveCountWhenPresent|WeatherConcept\.CorpusDecodeSweepWhenPresent|BehaviorReal\.|DialogueReal\.|DialogueWriterReal\.|BehaviorWriterReal\.|ClimateWeatherReal\.|ConditionScopesReal\.|NavmeshReal\.|NavmeshWriterReal\.|NifCorpus\.|QuestStructureReal\.|SoundWriterReal\.|VegetationReal\.|VmadWriterOfficial\.|Official normal and AutoWeapon sounds'
+
+jobs:
+  # Runs only on the host labelled `fo4-data`, where the Fallout 4 Data folder exists.
+  native-windows-real-data:
+    name: Native real-data tests (Windows, MSVC, Fallout 4 data)
+    runs-on: [fo4-data]
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: cmd
+    steps:
+      - name: Print Fallout 4 build (exe file version and Steam buildid)
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Continue'
+          try {
+            if (-not $env:FO4_DATA_DIR) { "FO4_DATA_DIR is unset; no Fallout 4 build to report."; exit 0 }
+            $data = $env:FO4_DATA_DIR.TrimEnd('\','/')
+            $steamRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $data))
+            $exe = Join-Path (Split-Path -Parent $data) 'Fallout4.exe'
+            if (Test-Path -LiteralPath $exe -PathType Leaf) {
+              "Fallout4.exe file version: $((Get-Item -LiteralPath $exe).VersionInfo.FileVersion)"
+            } else {
+              "Fallout4.exe not found at $exe"
+            }
+            $manifest = Join-Path $steamRoot 'appmanifest_377160.acf'
+            $buildid = if (Test-Path -LiteralPath $manifest -PathType Leaf) {
+              Select-String -LiteralPath $manifest -Pattern '"buildid"\s+"(\d+)"' | Select-Object -First 1
+            }
+            if ($buildid) { "Steam buildid: $($buildid.Matches[0].Groups[1].Value)" } else { "Steam appmanifest_377160.acf buildid not found under $steamRoot" }
+          } catch { "build probe failed: $_" }
+          exit 0
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Check FO4 data folder
+        id: fo4
+        shell: powershell
+        run: |
+          if (-not $env:FO4_DATA_DIR) {
+            "::notice::this runner has no Fallout 4 data configured (FO4_DATA_DIR is unset); the real-data tests are not run."
+            [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "has_data=false`n")
+            exit 0
+          }
+          if (-not (Test-Path -LiteralPath $env:FO4_DATA_DIR -PathType Container)) {
+            "FO4_DATA_DIR ($env:FO4_DATA_DIR) is not an existing folder; point it at a Fallout 4 Data folder or unset it."
+            exit 1
+          }
+          $missing = @()
+          foreach ($m in 'Fallout4.esm', 'DLCRobot.esm', 'DLCworkshop01.esm', 'DLCworkshop02.esm', 'DLCworkshop03.esm', 'DLCCoast.esm', 'DLCNukaWorld.esm') {
+            if (-not (Test-Path -LiteralPath (Join-Path $env:FO4_DATA_DIR $m) -PathType Leaf)) { $missing += $m }
+          }
+          if (-not (Get-ChildItem -LiteralPath $env:FO4_DATA_DIR -Filter 'Fallout4 - *.ba2' -File -ErrorAction SilentlyContinue)) { $missing += 'Fallout4 - *.ba2' }
+          if ($missing) {
+            "FO4_DATA_DIR ($env:FO4_DATA_DIR) is missing: $($missing -join ', '); point it at a Fallout 4 Data folder or unset it."
+            exit 1
+          }
+          "FO4_DATA_DIR: $env:FO4_DATA_DIR"
+          $esm = @(Get-ChildItem -LiteralPath $env:FO4_DATA_DIR -Filter *.esm -File).Count
+          $ba2 = @(Get-ChildItem -LiteralPath $env:FO4_DATA_DIR -Filter *.ba2 -File).Count
+          "root *.esm: $esm, *.ba2: $ba2"
+          [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "has_data=true`n")
+
+      - name: Select real-data tests
+        if: steps.fo4.outputs.has_data == 'true'
+        shell: powershell
+        run: |
+          if ($env:GITHUB_EVENT_NAME -ne 'pull_request') {
+            Write-Output 'Not a pull request; running all real-data tests.'
+            exit 0
+          }
+          $groups = @(
+            @{ Name = 'Quest'; Tests = 'QuestAliasRealData|QuestStagesRealData|QuestObjectivesRealData|QuestAuthoringRealData|QuestRuntimeReal'; Trigger = 'quest|vmad|papyrus|pex|alias|condition|ctda' }
+            @{ Name = 'Writeback'; Tests = 'WritebackRealData'; Trigger = 'writeback|placed|reference|refr|ref_|master|environment|remap' }
+            @{ Name = 'SubrecordAuthoring'; Tests = 'SubrecordAuthoringRealData'; Trigger = 'subrecord|authoring' }
+            @{ Name = 'StructPayload'; Tests = 'StructPayloadFormLinksRealData'; Trigger = 'struct|payload|proj_expl|hazd' }
+            @{ Name = 'TypedFamilies'; Tests = 'TypedFamiliesRealData'; Trigger = 'typed|famil|armor|armo|arma|race|eyes|leveled|lvsp' }
+          )
+          $core = @(
+            '^Radicle/(src|include/fo4)/binary/'
+            '^Radicle/(src|include/fo4)/plugin/(reader|writer|visit|container|tes4|field_writer|mutation|record_edit|flags)\.'
+            '^Radicle/(src|include/fo4)/(form_?id|plugin_key|signature|error|headers|fo4|flags)\.'
+            '^Radicle/(src|include/fo4)/(text|localization|io)/'
+            '^Radicle/(src|include/fo4)/environment/strings\.'
+            '^Radicle/(src|include/fo4)/schema/(scalar|field_address|localized_fields|form_link|nested_formlink|formlink_lists|non_formid_slots|preflight|record_constraints|generated_record)'
+            '^Radicle/schema/'
+            '^Radicle/tools/.*codegen'
+            '^(Radicle|PluginEditTool/native)/(.*/)?CMakeLists\.txt$|^cmake/|\.cmake$'
+            '^\.(forgejo|github)/(workflows/|scripts/)'
+            '^Radicle/tests/plugin_bytes\.'
+            '^Radicle/(src|include/fo4)/plugin/onam\.'
+            '^Radicle/(src|include/fo4)/schema/(ctda|vmad)\.'
+            '^Radicle/include/fo4/schema/[^/]+\.inc$'
+            '^Radicle/(src|include/fo4)/forms/proj_expl_hazd\.'
+          )
+          $coreRegex = $core -join '|'
+          git fetch --no-tags --depth=1 origin "$env:GITHUB_BASE_REF"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Output "::warning::could not fetch base branch $env:GITHUB_BASE_REF; running all real-data tests."
+            exit 0
+          }
+          $changed = @(git diff --name-only --no-renames FETCH_HEAD HEAD)
+          if ($LASTEXITCODE -ne 0 -or -not $changed) {
+            Write-Output '::warning::could not determine the changed files; running all real-data tests.'
+            exit 0
+          }
+          $coreHits = @($changed | Where-Object { $_ -match $coreRegex })
+          if ($coreHits) {
+            $coreHits | Select-Object -First 20 | ForEach-Object { Write-Output "core change: $_" }
+            Write-Output 'Shared real-data code changed; running all real-data tests.'
+            exit 0
+          }
+          $skipped = @()
+          foreach ($group in $groups) {
+            $hits = @($changed | Where-Object { $_ -match $group.Trigger })
+            if ($hits) {
+              Write-Output "RUN  $($group.Name): $((($hits | Select-Object -First 20)) -join ', ')"
+            } else {
+              Write-Output "SKIP $($group.Name): no changed path matches $($group.Trigger)"
+              $skipped += $group.Tests
+            }
+          }
+          if ($skipped) {
+            $excludeRegex = '^(' + ($skipped -join '|') + ')\.'
+            [IO.File]::AppendAllText($env:GITHUB_ENV, "CTEST_EXCLUDE_REGEX=$excludeRegex`n")
+          } else {
+            Write-Output 'Every expensive real-data group runs on this pull request.'
+          }
+
+      - name: Set up MSVC, Ninja and ccache
+        if: steps.fo4.outputs.has_data == 'true'
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .github/scripts/setup-msvc-ccache.ps1
+
+      - name: Pinned zlib source (cached)
+        if: steps.fo4.outputs.has_data == 'true'
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .github/scripts/pinned-zlib-windows.ps1
+
+      - name: Configure
+        timeout-minutes: 15
+        if: steps.fo4.outputs.has_data == 'true'
+        shell: powershell
+        run: |
+          $launcher = @()
+          if ($env:CCACHE) { $launcher = @("-DCMAKE_C_COMPILER_LAUNCHER=$env:CCACHE", "-DCMAKE_CXX_COMPILER_LAUNCHER=$env:CCACHE") }
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            cmake -S PluginEditTool\native -B build\native -G Ninja -DCMAKE_BUILD_TYPE=Release -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=ON -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON "-DFETCHCONTENT_SOURCE_DIR_FO4IDE_ZLIB=$env:ZLIB_SRC" -DRADICLE_BUILD_TESTS=ON -DRADICLE_BUILD_TOOLS=ON -DRADICLE_CSHARP_TESTS=OFF -DRADICLE_WARNINGS_AS_ERRORS=ON @launcher
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($attempt -eq 3) {
+              Write-Output "::error::configure failed after 3 attempts"
+              exit 1
+            }
+            Write-Output "::warning::configure attempt $attempt failed, retrying"
+            Start-Sleep -Seconds (30 * $attempt)
+          }
+
+      - name: Build
+        if: steps.fo4.outputs.has_data == 'true'
+        run: cmake --build build\native --target fo4_tests fo4ide_test_sound_semantic_real -- -k 0
+
+      - name: ccache statistics
+        if: always() && steps.fo4.outputs.has_data == 'true'
+        run: if defined CCACHE "%CCACHE%" --show-stats
+
+      - name: Test
+        if: steps.fo4.outputs.has_data == 'true'
+        shell: powershell
+        run: |
+          $pscRoots = @((Join-Path $env:FO4_DATA_DIR 'Scripts\Source\User'), (Join-Path $env:FO4_DATA_DIR 'Scripts\Source\Base')) -join ';'
+          $env:FO4_PSC_CORPUS = $pscRoots
+          $env:FO4RE_PSC_CORPUS = $pscRoots
+          $env:FO4RE_PSC_ROOTS = $pscRoots
+          # TODO(papyrus-gates): PEX gates (FO4RE_PEX_CORPUS, FO4_PEX_CORPUS, FO4RE_PEX_RELEASE=1) need a staged vanilla .pex root; no Windows staging route is verified, see docs/papyrus-real-data-gates.md.
+          $ctestArgs = @('--test-dir', 'build\native', '--output-on-failure', '--parallel', '4', '--no-tests=error', '-R', $env:REAL_DATA_TEST_REGEX)
+          if ($env:CTEST_EXCLUDE_REGEX) { $ctestArgs += @('-E', $env:CTEST_EXCLUDE_REGEX) }
+          ctest @ctestArgs
+          exit $LASTEXITCODE

@@ -1,0 +1,38 @@
+name: Public CI cleanup
+
+on:
+  push:
+    branches: ["ci/**"]
+
+permissions:
+  actions: write
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    name: Delete superseded and closed-PR runs
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Delete completed ci/* runs that are not the newest commit of a live branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          CURRENT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          live=" $(gh api "repos/$REPO/branches" --paginate --jq '.[].name' | tr '\n' ' ') "
+          declare -A latest=(["$BRANCH"]="$CURRENT")
+          gh api "repos/$REPO/actions/runs?status=completed&per_page=100" --paginate \
+            --jq '.workflow_runs[] | select(.head_branch | startswith("ci/")) | "\(.id) \(.head_branch) \(.head_sha)"' > runs.txt
+          while read -r id branch sha; do
+            if [[ "$live" == *" $branch "* ]]; then
+              latest[$branch]=${latest[$branch]:-$sha}
+              [ "$sha" = "${latest[$branch]}" ] && continue
+            fi
+            gh api -X DELETE "repos/$REPO/actions/runs/$id"
+            echo "deleted run $id ($branch ${sha:0:8})"
+          done < runs.txt

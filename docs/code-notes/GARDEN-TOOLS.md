@@ -2653,3 +2653,19 @@ Regression targets, by test in `PluginEditTool/native/tests/unit/NifServiceTests
 - The graph and decompiler tests used to make `<temp>/<parent>/<timestamp>` folders (`uniqueRoot` in GraphLiftTests, GraphCompilerTests, GraphToolServiceTests and GraphScriptLoaderTests, and the `PapyrusDecompilerTests` `Fixture`) and never remove them. The lift tests alone left 38,000 folders per tag on the CI machine.
 - `TempRoot` (namespace `fo4ide_test`) creates its folder in the constructor. The destructor removes that folder and then the parent when the parent is empty, ignoring errors. The parent name is passed in full (for example `"fo4ide-lift-text"`), so temp paths are unchanged.
 - The temp root is used only inside the scope that owns it, so the lifetime is safe. Removal now also runs when a `REQUIRE` fails.
+
+## .github/public-ci/export-public-ci.py:main
+
+CI runs on GitHub-hosted runners in public `G-A-R-D-E-N/Garden-Tools`. `.github/workflows/public-ci-export.yml` pushes a parentless snapshot of private `G-A-R-D-E-N/GardenTools` to `ci/pr-<n>` or `ci/<branch>`; each public workflow's `report` job posts `public-ci/<workflow>` on the private commit named by the `Source-Commit` trailer. A PR exports its merge commit, so a PR cut before this landed needs no rebase, but a stacked PR's base must contain these workflows first.
+
+`DENY` keeps docs, notes, runner setup and agent files private. `GAME_FILES` makes the export fail if a game-format file appears outside the list, so a new fixture has to be added on purpose.
+
+## .github/scripts/fetch-private-fixtures.sh:paths
+
+Vanilla Bethesda files and third-party plugins must not be published (`BGS/tools/tests/fixtures/vanilla/README.md`). They are denied by the export and sparse-fetched from the private repo at the source commit, in a step that alone sees the token. The public workflows upload no artifacts, because public artifacts could carry these files. The path list here and the fixture entries in `export-public-ci.py:DENY` must match.
+
+## .github/public-ci/workflows/native-ci.yml:REAL_DATA_TEST_REGEX
+
+Hosted runners have no Fallout 4 data, so the Windows test job excludes these tests. They run only in `.forgejo/workflows/native-real-data.yml` on the `fo4-data` host, which keeps its own copy of the regex; the two must match. `.forgejo/workflows/release.yml` also stays on Forgejo because it reads local tool paths. Forgejo prefers `.forgejo/workflows`, so once this tree reaches Forgejo it runs only those two workflows there.
+
+The `garden-tools-ci` environment's branch rule must be `ci/**`: `ci/*` does not match `ci/nomad/dev`.
