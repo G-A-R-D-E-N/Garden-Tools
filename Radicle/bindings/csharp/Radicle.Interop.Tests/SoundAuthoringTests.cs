@@ -49,7 +49,7 @@ public class SoundAuthoringTests
     public void StructureEditsAddRemoveFilesSetTheBaseLinkAndCreateRecords()
     {
         using var temp = new TempDirectory();
-        using var plugin = PluginFile.Read(temp.Write("Snd.esp", Source()));
+        using var plugin = PluginFile.Read(temp.Write(Plugin, Source()));
         var added = plugin.AddSoundFile(Std, "c.wav");
         plugin.SetSoundFile(Std, added, "d.wav");
         plugin.AddSoundFile(Bare, "e.wav");
@@ -163,15 +163,13 @@ public class SoundAuthoringTests
     }
 
     [Fact]
-    public void CreateBuildsDescriptorsMusicAndFootstepsAndRefusesMarkersAndSets()
+    public void CreateBuildsDescriptorsMusicAndFootsteps()
     {
         using var temp = new TempDirectory();
         var path = Path.Combine(temp.Path, "Created", Plugin);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         using (var plugin = PluginFile.Create(Plugin))
         {
-            Assert.Equal(Status.InvalidArgument, Refusal(() => plugin.CreateRecord("SOUN", "NewMarker")));
-            Assert.Equal(Status.InvalidArgument, Refusal(() => plugin.CreateRecord("FSTS", "NewSet")));
             var descriptor = plugin.CreateRecord("SNDR", "NewDescriptor");
             Assert.True(plugin.AddSubrecord(descriptor, "ANAM"));
             Assert.True(plugin.SetString(descriptor, "SNDR\\Sounds", "sound\\new.wav"));

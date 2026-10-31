@@ -2685,3 +2685,7 @@ Public `ci/*` branches exist only while their runs do: `delete-branch` waits for
 ## .github/public-ci/workflows/bgs-ci.yml:Build native Radicle library (linux-x64)
 
 GCC 14 at -O3 reports `-Wfree-nonheap-object` from `new_allocator.h` while compiling `Radicle/src/swf/swf_write.cpp`, with an unknown pointer and a range-only offset. This was treated as a compiler false positive without a code audit, so it is demoted from an error in this job only.
+
+## Radicle/bindings/csharp/Radicle.Interop.Tests/SoundAuthoringTests.cs:CreateBuildsDescriptorsMusicAndFootsteps
+
+Both sound tests failed on Windows and Linux from `6953e82d0`. One wrote `Snd.esp` while looking up `Snd.esm` keys, and `Radicle/src/plugin/reader.cpp:read_plugin` derives the key from the filename. The other expected the generic create path to refuse `SOUN` and `FSTS`, but `fo4::create_record` has created them since that commit, for `Radicle/src/c_api_sound.cpp:radicle_plugin_create_sound_record`. The refusal assertions were removed as stale. If the generic path should refuse them again, that needs a code change and those assertions back.
