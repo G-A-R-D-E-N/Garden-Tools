@@ -228,6 +228,13 @@ enum class Id : std::uint32_t {
   bytearray_write_utf_bytes,
   bytearray_read_utf_bytes,
   bytearray_clear,
+  bgs_notify_scripts,
+  bgs_get_text_replace_id,
+  bgs_get_text_replace_value,
+  bgs_play_action_anim,
+  bgs_play_left_anim,
+  bgs_play_right_anim,
+  bgs_execute_command,
 };
 
 }  // namespace fo4::avm2::native

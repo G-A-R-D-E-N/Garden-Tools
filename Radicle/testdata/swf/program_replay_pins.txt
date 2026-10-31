@@ -1,4 +1,5 @@
-# Radicle seven-program replay pins: expected replay hashes per game build.
+# Radicle seven-program replay pins: recorded from Radicle's own replay runs, not from the game.
+# They are regression-only; no row here is evidence of game output.
 # The format matches program_census.txt: `key value` lines, one group per
 # program per game build. A group starts at a `program` line. Blank lines
 # and `#` lines are ignored.

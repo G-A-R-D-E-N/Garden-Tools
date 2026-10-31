@@ -530,6 +530,7 @@ void SwfRuntime::advance(Interpreter& interpreter, double dt_seconds) {
   while (accumulator_ >= 1.0) {
     const ExecutionResult result = root_->advance_frame(interpreter);
     if (!result.ok()) {
+      frame_error_ = result.message;
       playing_ = false;
       break;
     }
@@ -539,6 +540,7 @@ void SwfRuntime::advance(Interpreter& interpreter, double dt_seconds) {
         if (clip != nullptr) {
           const ExecutionResult clip_result = clip->advance_frame(interpreter);
           if (!clip_result.ok()) {
+            frame_error_ = clip_result.message;
             playing_ = false;
             break;
           }

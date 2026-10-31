@@ -1,4 +1,5 @@
 #include "fo4/abc/abc.hpp"
+#include "fo4/avm2/coercion.hpp"
 #include "fo4/avm2/host.hpp"
 #include "fo4/avm2/interpreter.hpp"
 #include "fo4/avm2/name.hpp"
@@ -8,7 +9,8 @@
 #include "fo4/avm2/value.hpp"
 #include "fo4/swf/swf.hpp"
 #include "avm2_test_support.hpp"
-#include "swf_movie_builder.hpp"
+#include "bgs_test_movies.hpp"
+#include "fake_bgs_host.hpp"
 
 #include <gtest/gtest.h>
 
@@ -16,7 +18,6 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
-#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -26,6 +27,9 @@ namespace {
 
 namespace abc = fo4::abc;
 
+using bgs_test::document_movie;
+using bgs_test::movie_of;
+using bgs_test::score_root_file;
 using fo4::avm2::ExecutionResult;
 using fo4::avm2::HostCallbacks;
 using fo4::avm2::Interpreter;
@@ -35,75 +39,12 @@ using fo4::avm2::Runtime;
 using fo4::avm2::SwfRuntime;
 using fo4::avm2::SwfRuntimeOptions;
 using fo4::avm2::Value;
-using swf_test::SwfBuilder;
-using swf_test::wrap_body;
 
 Multiname public_name(const std::string& name) {
   Multiname multiname;
   multiname.name = name;
   multiname.namespaces.push_back(Namespace{});
   return multiname;
-}
-
-abc::AbcFile document_class_file(bool sets_code_object) {
-  avm2_test::ScriptBuilder script;
-  avm2_test::CodeBuilder constructor;
-  if (sets_code_object) {
-    constructor.getlocal0();
-    constructor.pushscope();
-    constructor.getlocal0();
-    constructor.newobject(0);
-    constructor.initproperty(script.multiname("BGSCodeObj"));
-  }
-  constructor.returnvoid();
-  const std::uint32_t document = script.multiname("DocumentClass");
-  const std::uint32_t movie_clip = script.multiname("MovieClip", "flash.display");
-  const std::uint32_t constructor_method =
-      script.method("DocumentClass", constructor.bytes(), 1);
-  const std::uint32_t class_init = script.method("cinit", {0x47}, 1);
-  const std::uint32_t script_init = script.method("init", {0x47}, 1);
-  abc::AbcFile file = script.finish(script_init);
-
-  abc::AbcInstanceInfo instance;
-  instance.name = document;
-  instance.super_index = movie_clip;
-  instance.iinit = constructor_method;
-  file.instances.push_back(instance);
-  abc::AbcClassInfo klass;
-  klass.cinit = class_init;
-  file.classes.push_back(klass);
-  abc::AbcTrait class_trait;
-  class_trait.name = document;
-  class_trait.kind = abc::AbcTraitKind::Class;
-  class_trait.class_index = 0;
-  file.scripts.front().traits.push_back(class_trait);
-  return file;
-}
-
-std::vector<std::byte> document_movie(bool sets_code_object) {
-  abc::AbcFile file = document_class_file(sets_code_object);
-  std::vector<std::uint8_t> abc_bytes;
-  EXPECT_EQ(file.serialize(abc_bytes), abc::AbcStatus::Ok);
-  SwfBuilder abc_payload;
-  abc_payload.u32(0);
-  abc_payload.text("document");
-  abc_payload.bytes(std::span<const std::byte>(
-      reinterpret_cast<const std::byte*>(abc_bytes.data()), abc_bytes.size()));
-
-  SwfBuilder symbols;
-  symbols.u16(1);
-  symbols.u16(0);
-  symbols.text("DocumentClass");
-
-  SwfBuilder builder;
-  builder.rect(0, 400, 0, 200, 9);
-  builder.u16(24u * 256u);
-  builder.u16(1);
-  builder.tag(fo4::swf::tag::kDoAbc2, abc_payload.body, true);
-  builder.tag(fo4::swf::tag::kSymbolClass, symbols.body, false);
-  builder.tag(fo4::swf::tag::kShowFrame);
-  builder.tag(fo4::swf::tag::kEnd);
-  return wrap_body(builder.body, 10, false, false);
 }
 
 abc::AbcFile call_script(bool absent) {
@@ -121,6 +62,21 @@ abc::AbcFile call_script(bool absent) {
     code.newarray(1);
     code.callproperty(apply, 2);
   }
+  code.returnvalue();
+  const std::uint32_t init = script.method("init", code.bytes(), 1);
+  return script.finish(init);
+}
+
+abc::AbcFile direct_call_script(const std::string& name, const std::vector<std::string>& arguments) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t code_object = script.multiname("codeObj");
+  const std::uint32_t function = script.multiname(name);
+  avm2_test::CodeBuilder code;
+  code.getlex(code_object);
+  for (const std::string& argument : arguments) {
+    code.pushstring(script.string_of(argument));
+  }
+  code.callproperty(function, static_cast<std::uint32_t>(arguments.size()));
   code.returnvalue();
   const std::uint32_t init = script.method("init", code.bytes(), 1);
   return script.finish(init);
@@ -209,6 +165,144 @@ TEST(Avm2BgsBridge, MovieWithoutBgsCodeObjCreatesWithNoCodeObject) {
   ASSERT_NE(movie, nullptr) << SwfRuntime::last_error();
   Value code_object;
   EXPECT_FALSE(movie->root()->read_value(public_name("BGSCodeObj"), code_object));
+}
+
+// Catches a missing notifyScripts entry: the call must reach the host as bgs.notifyScripts.
+TEST(Avm2BgsBridge, NotifyScriptsReachesTheHostWithItsArgument) {
+  BgsHarness harness;
+  const std::shared_ptr<SwfRuntime> movie = harness.open(true, bgs_options());
+  ASSERT_NE(movie, nullptr) << SwfRuntime::last_error();
+  harness.publish_code_object(*movie);
+
+  const ExecutionResult result =
+      harness.run(direct_call_script("notifyScripts", {"SetTurretStatusOff"}));
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_EQ(harness.calls.size(), 1u);
+  EXPECT_EQ(harness.calls[0].first, "bgs.notifyScripts");
+  EXPECT_EQ(harness.calls[0].second, std::vector<std::string>{"SetTurretStatusOff"});
+}
+
+// Catches a text lookup whose host answer is dropped: the answer must be the call's return value.
+TEST(Avm2BgsBridge, TextReplaceIdReturnsTheHostAnswerToTheScript) {
+  BgsHarness harness;
+  const std::shared_ptr<SwfRuntime> movie = harness.open(true, bgs_options());
+  ASSERT_NE(movie, nullptr) << SwfRuntime::last_error();
+  harness.publish_code_object(*movie);
+
+  const ExecutionResult result = harness.run(direct_call_script("getTextReplaceID", {"OnStatus"}));
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_EQ(harness.calls.size(), 1u);
+  EXPECT_EQ(harness.calls[0].first, "bgs.getTextReplaceID");
+  EXPECT_EQ(harness.calls[0].second, std::vector<std::string>{"OnStatus"});
+  ASSERT_TRUE(result.value.is_string());
+  EXPECT_EQ(result.value.as_string(), "answer");
+}
+
+// Catches an anim call that forwards the SWF's arguments: the host must receive none.
+TEST(Avm2BgsBridge, AnimCallsSendNoArgumentsEvenWhenTheScriptPassesSome) {
+  BgsHarness harness;
+  const std::shared_ptr<SwfRuntime> movie = harness.open(true, bgs_options());
+  ASSERT_NE(movie, nullptr) << SwfRuntime::last_error();
+  harness.publish_code_object(*movie);
+
+  const ExecutionResult result = harness.run(direct_call_script("playLeftAnim", {"a", "b"}));
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_EQ(harness.calls.size(), 1u);
+  EXPECT_EQ(harness.calls[0].first, "bgs.playLeftAnim");
+  EXPECT_TRUE(harness.calls[0].second.empty());
+}
+
+// Catches playRightAnim forwarding the SWF's arguments: the host must receive none.
+TEST(Avm2BgsBridge, PlayRightAnimSendsNoArgumentsEvenWhenTheScriptPassesSome) {
+  BgsHarness harness;
+  const std::shared_ptr<SwfRuntime> movie = harness.open(true, bgs_options());
+  ASSERT_NE(movie, nullptr) << SwfRuntime::last_error();
+  harness.publish_code_object(*movie);
+
+  const ExecutionResult result = harness.run(direct_call_script("playRightAnim", {"a", "b"}));
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_EQ(harness.calls.size(), 1u);
+  EXPECT_EQ(harness.calls[0].first, "bgs.playRightAnim");
+  EXPECT_TRUE(harness.calls[0].second.empty());
+}
+
+// Catches playActionAnim forwarding the SWF's arguments: the host must receive none.
+TEST(Avm2BgsBridge, PlayActionAnimSendsNoArgumentsEvenWhenTheScriptPassesSome) {
+  BgsHarness harness;
+  const std::shared_ptr<SwfRuntime> movie = harness.open(true, bgs_options());
+  ASSERT_NE(movie, nullptr) << SwfRuntime::last_error();
+  harness.publish_code_object(*movie);
+
+  const ExecutionResult result = harness.run(direct_call_script("playActionAnim", {"a", "b"}));
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_EQ(harness.calls.size(), 1u);
+  EXPECT_EQ(harness.calls[0].first, "bgs.playActionAnim");
+  EXPECT_TRUE(harness.calls[0].second.empty());
+}
+
+// Catches a getHighscore that returns the host answer: the answer must arrive by callback.
+TEST(Avm2BgsBridge, GetHighscoreAnswersByCallbackNotAsAReturnValue) {
+  BgsHarness harness;
+  const std::shared_ptr<SwfRuntime> movie = harness.open(true, bgs_options());
+  ASSERT_NE(movie, nullptr) << SwfRuntime::last_error();
+  harness.publish_code_object(*movie);
+
+  const ExecutionResult result =
+      harness.run(direct_call_script("getHighscore", {"GAME_HIGH_SCORE_KEY"}));
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_EQ(harness.calls.size(), 1u);
+  EXPECT_EQ(harness.calls[0].first, "bgs.getHighscore");
+  EXPECT_EQ(harness.calls[0].second, std::vector<std::string>{"GAME_HIGH_SCORE_KEY"});
+  EXPECT_TRUE(result.value.is_null());
+}
+
+// Catches a getSaveData that returns the host answer: the answer must arrive by callback.
+TEST(Avm2BgsBridge, GetSaveDataAnswersByCallbackNotAsAReturnValue) {
+  BgsHarness harness;
+  const std::shared_ptr<SwfRuntime> movie = harness.open(true, bgs_options());
+  ASSERT_NE(movie, nullptr) << SwfRuntime::last_error();
+  harness.publish_code_object(*movie);
+
+  const ExecutionResult result =
+      harness.run(direct_call_script("getSaveData", {"GAME_SAVE_DATA_KEY"}));
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_EQ(harness.calls.size(), 1u);
+  EXPECT_EQ(harness.calls[0].first, "bgs.getSaveData");
+  EXPECT_EQ(harness.calls[0].second, std::vector<std::string>{"GAME_SAVE_DATA_KEY"});
+  EXPECT_TRUE(result.value.is_null());
+}
+
+// Catches a host store that keeps the last score: the callback must carry the greater score.
+TEST(Avm2BgsBridge, HighscoreCallbackCarriesTheGreaterStoredScore) {
+  fake_bgs::FakeBgsHost host;
+  Runtime runtime;
+  Interpreter interpreter{runtime};
+  HostCallbacks callbacks;
+  callbacks.host_call = [&host](std::string_view method, std::vector<std::string> arguments) {
+    return host.host_call(method, std::move(arguments));
+  };
+  runtime.host().set_callbacks(std::move(callbacks));
+  ASSERT_TRUE(runtime.link().ok());
+  const std::vector<std::byte> bytes = movie_of(score_root_file());
+  const fo4::swf::SwfReadResult read = fo4::swf::read_swf(bytes);
+  ASSERT_TRUE(read.ok()) << fo4::swf::status_name(read.status);
+  const std::shared_ptr<SwfRuntime> movie =
+      SwfRuntime::create(runtime, interpreter, read.file, bgs_options());
+  ASSERT_NE(movie, nullptr) << SwfRuntime::last_error();
+  ASSERT_TRUE(movie->call_root(interpreter, "SetScore", {Value::int32(50)}).ok());
+  ASSERT_TRUE(movie->call_root(interpreter, "SetScore", {Value::int32(20)}).ok());
+  ASSERT_TRUE(movie->call_root(interpreter, "RequestScore", {}).ok());
+  ASSERT_FALSE(host.calls().empty());
+  EXPECT_EQ(host.calls().back().method, "bgs.getHighscore");
+  EXPECT_EQ(host.calls().back().arguments, std::vector<std::string>{"GAME_HIGH_SCORE_KEY"});
+  const std::optional<std::string> answer =
+      host.host_call("bgs.getHighscore", {"GAME_HIGH_SCORE_KEY"});
+  ASSERT_TRUE(answer.has_value());
+  ASSERT_TRUE(
+      movie->call_root(interpreter, "SetHighscore", {Value::int32(std::stoi(*answer))}).ok());
+  Value stored;
+  ASSERT_TRUE(movie->root()->read_value(public_name("lastHighscore"), stored));
+  EXPECT_EQ(fo4::avm2::to_string(stored), "50");
 }
 
 TEST(Avm2BgsBridge, DisabledHostLeavesBgsCodeObjWithoutFunctions) {

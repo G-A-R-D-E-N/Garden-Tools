@@ -1040,6 +1040,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_avm2_snapshot.cpp
     tests/test_avm2_host.cpp
     tests/test_avm2_bgs_bridge.cpp
+    tests/bgs_capture.cpp
+    tests/test_bgs_capture.cpp
     tests/test_avm2_domain.cpp
     tests/test_avm2_script.cpp
     tests/test_avm2_shared.cpp

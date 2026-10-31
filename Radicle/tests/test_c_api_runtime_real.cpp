@@ -3,11 +3,14 @@
 #include "fo4/c_api_runtime.h"
 #include "fo4/avm2/host.hpp"
 #include "fo4/avm2/interpreter.hpp"
+#include "fo4/avm2/name.hpp"
+#include "fo4/avm2/object.hpp"
 #include "fo4/avm2/replay.hpp"
 #include "fo4/avm2/runtime.hpp"
 #include "fo4/avm2/swf_runtime.hpp"
 #include "fo4/avm2/value.hpp"
 #include "fo4/swf/swf.hpp"
+#include "bgs_capture.hpp"
 #include "fake_bgs_host.hpp"
 #include "real_data_build.hpp"
 
@@ -224,17 +227,23 @@ std::string basename_of(std::string_view path) {
   return slash == std::string_view::npos ? std::string{path} : std::string{path.substr(slash + 1)};
 }
 
-struct PinnedProgram {
-  const char* program;
-  std::uint64_t snapshot_hash;
-  std::uint64_t host_log_hash;
-};
-
-constexpr PinnedProgram kPinned[] = {
-    {"AtomicCommand.swf", 0, 0}, {"GJ_Defrag.swf", 0, 0},     {"Grognak.swf", 0, 0},
-    {"PipFall.swf", 0, 0},       {"RedMenace.swf", 0, 0},     {"TurretHack.swf", 0, 0},
-    {"ZetaInvaders.swf", 0, 0},
-};
+std::map<std::string, std::string> swf_paths_by_basename(const radicle_ba2* archive,
+                                                         const radicle_ba2_info& info) {
+  std::map<std::string, std::string> by_basename;
+  for (std::size_t index = 0; index < info.entry_count; ++index) {
+    radicle_ba2_entry_info entry{};
+    if (radicle_ba2_get_entry(archive, index, &entry) != RADICLE_STATUS_OK ||
+        entry.path == nullptr) {
+      continue;
+    }
+    const std::string_view path{entry.path};
+    if (path.size() < 4 || lower_ascii(std::string{path.substr(path.size() - 4)}) != ".swf") {
+      continue;
+    }
+    by_basename.emplace(lower_ascii(basename_of(path)), std::string{path});
+  }
+  return by_basename;
+}
 
 constexpr std::size_t kProgramFrames = 180;
 
@@ -283,9 +292,15 @@ void drive_movie(fo4::avm2::SwfRuntime& movie, fo4::avm2::Interpreter& interpret
     if (!result.ok()) run.failure = std::string{name} + " failed: " + result.message;
     return result.ok();
   };
-  const std::vector<fo4::avm2::Value> platform{fo4::avm2::Value::number(0.0),
-                                               fo4::avm2::Value::boolean(false)};
-  if (init && (!call("SetPlatform", platform) || !call("InitProgram", {}))) return;
+  if (init) {
+    const std::vector<fo4::avm2::Value> platform{fo4::avm2::Value::uint32(0),
+                                                 fo4::avm2::Value::boolean(false)};
+    fo4::avm2::Multiname set_platform;
+    set_platform.name = "SetPlatform";
+    set_platform.namespaces.push_back(fo4::avm2::Namespace{});
+    if (movie.root()->lookup(set_platform).found() && !call("SetPlatform", platform)) return;
+    if (!call("InitProgram", {})) return;
+  }
   const fo4::avm2::ReplayResult replayed =
       fo4::avm2::replay(movie, interpreter, inputs, 1.0 / 24.0, kProgramFrames);
   if (replayed.frames != kProgramFrames) {
@@ -432,15 +447,6 @@ std::vector<ManifestPin> load_replay_pins() {
 }
 
 void check_pins(const char* program, const ProgramRun& run, const GameBuild& build) {
-  for (const PinnedProgram& pin : kPinned) {
-    if (std::string_view{pin.program} != program) continue;
-    if (pin.snapshot_hash != 0) {
-      EXPECT_EQ(run.hashes.back(), pin.snapshot_hash) << program;
-    }
-    if (pin.host_log_hash != 0) {
-      EXPECT_EQ(run.host_log, pin.host_log_hash) << program;
-    }
-  }
   if (run.hashes.empty()) {
     ADD_FAILURE() << program << ": no frame hashes to pin";
     return;
@@ -484,19 +490,8 @@ TEST(CApiRuntimeReal, ReplaysTheSevenProgramsDeterministically) {
   radicle_ba2_info info{};
   ASSERT_EQ(radicle_ba2_get_info(archive.get(), &info), RADICLE_STATUS_OK);
 
-  std::map<std::string, std::string> by_basename;
-  for (std::size_t index = 0; index < info.entry_count; ++index) {
-    radicle_ba2_entry_info entry{};
-    if (radicle_ba2_get_entry(archive.get(), index, &entry) != RADICLE_STATUS_OK ||
-        entry.path == nullptr) {
-      continue;
-    }
-    const std::string_view path{entry.path};
-    if (path.size() < 4 || lower_ascii(std::string{path.substr(path.size() - 4)}) != ".swf") {
-      continue;
-    }
-    by_basename.emplace(lower_ascii(basename_of(path)), std::string{path});
-  }
+  const std::map<std::string, std::string> by_basename =
+      swf_paths_by_basename(archive.get(), info);
 
   const std::pair<const char*, bool> programs[] = {
       {"AtomicCommand.swf", true}, {"GJ_Defrag.swf", false}, {"Grognak.swf", true},
@@ -570,4 +565,100 @@ TEST(CApiRuntimeReal, ReplaysTheSevenProgramsDeterministically) {
   RecordProperty("ran", std::to_string(ran));
   EXPECT_EQ(mismatches, 0u) << failed;
   EXPECT_EQ(ran, 7u) << failed;
+}
+
+TEST(CApiRuntimeReal, ComparesTheCapturedBgsSequenceForEachProgram) {
+  const char* capture_dir = std::getenv("FO4_SWF_CAPTURE_DIR");
+  if (capture_dir == nullptr) {
+    GTEST_SKIP() << "set FO4_SWF_CAPTURE_DIR to a folder of <Program>.tsv captures";
+  }
+  const char* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) {
+    GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
+  }
+  record_game_build(detect_game_build(dir));
+  const auto archive_path = std::filesystem::path(dir) / "Fallout4 - Interface.ba2";
+  if (!std::filesystem::exists(archive_path)) {
+    GTEST_SKIP() << "no Fallout4 - Interface.ba2 in FO4_DATA_DIR";
+  }
+  radicle_ba2* raw_archive = nullptr;
+  ASSERT_EQ(radicle_ba2_open(archive_path.string().c_str(), &raw_archive), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  const ArchiveHandle archive(raw_archive);
+  radicle_ba2_info info{};
+  ASSERT_EQ(radicle_ba2_get_info(archive.get(), &info), RADICLE_STATUS_OK);
+  const std::map<std::string, std::string> by_basename =
+      swf_paths_by_basename(archive.get(), info);
+
+  const char* programs[] = {"AtomicCommand", "GJ_Defrag", "Grognak", "PipFall",
+                            "RedMenace",     "TurretHack", "ZetaInvaders"};
+  std::size_t compared_programs = 0;
+  std::string failed;
+  for (const char* program : programs) {
+    const std::string name = std::string{program} + ".swf";
+    const std::filesystem::path capture =
+        std::filesystem::path(capture_dir) / (std::string{program} + ".tsv");
+    if (!std::filesystem::exists(capture)) {
+      RecordProperty("bgs_" + name, "no capture file");
+      continue;
+    }
+    const auto found = by_basename.find(lower_ascii(name));
+    if (found == by_basename.end()) {
+      failed += name + ": missing from the archive\n";
+      continue;
+    }
+    const std::optional<std::string> text = bgs_capture::read_capture_file(capture);
+    if (!text) {
+      failed += name + ": the capture file cannot be opened\n";
+      continue;
+    }
+    std::vector<bgs_capture::Row> rows;
+    try {
+      rows = bgs_capture::parse_capture(*text);
+    } catch (const std::exception& error) {
+      failed += name + ": " + error.what() + "\n";
+      continue;
+    }
+    ResolverHost resolver{archive.get(), directory_of(found->second)};
+    const std::optional<std::vector<std::uint8_t>> movie_bytes =
+        resolve_bytes(resolver, found->second);
+    if (!movie_bytes) {
+      failed += name + ": the archive entry could not be extracted\n";
+      continue;
+    }
+    const fo4::swf::SwfReadResult read = fo4::swf::read_swf(std::span<const std::byte>(
+        reinterpret_cast<const std::byte*>(movie_bytes->data()), movie_bytes->size()));
+    if (!read.ok()) {
+      failed += name + ": the movie does not parse: " +
+                std::string{fo4::swf::status_name(read.status)} + "\n";
+      continue;
+    }
+    fo4::avm2::Runtime runtime;
+    fo4::avm2::Interpreter interpreter{runtime};
+    fo4::avm2::HostCallbacks callbacks;
+    callbacks.resolve_asset = [&resolver](std::string_view path) {
+      return resolve_bytes(resolver, path);
+    };
+    ++compared_programs;
+    const bgs_capture::Outcome outcome =
+        bgs_capture::replay_capture(runtime, interpreter, callbacks, read.file, rows);
+    if (!outcome.matched()) {
+      std::string reason;
+      if (outcome.first.has_value()) {
+        reason = "seq " + std::to_string(outcome.first->seq) + ": " + outcome.first->reason;
+      }
+      if (!outcome.replay_error.empty()) {
+        reason += (reason.empty() ? "" : "; ") + std::string{"replay: "} + outcome.replay_error;
+      }
+      failed += name + ": " + reason + "\n";
+      RecordProperty("bgs_" + name, "first difference: " + reason);
+      continue;
+    }
+    RecordProperty("bgs_" + name, "matched " + std::to_string(outcome.compared) + " bgs calls");
+  }
+  RecordProperty("compared_programs", std::to_string(compared_programs));
+  if (compared_programs == 0) {
+    GTEST_SKIP() << "no <Program>.tsv in FO4_SWF_CAPTURE_DIR";
+  }
+  EXPECT_EQ(failed, "");
 }
