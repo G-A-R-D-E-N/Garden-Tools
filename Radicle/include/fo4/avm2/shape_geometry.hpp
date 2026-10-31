@@ -3,6 +3,7 @@
 #include <fo4/swf/swf.hpp>
 
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 namespace fo4::avm2 {
@@ -39,10 +40,10 @@ ShapeGeometry geometry_from_shape_records(const std::vector<swf::SwfShapeRecord>
 /* Requires open fragments; crossings count over raw segments, and a point with an odd count for any fill style hits. */
 bool shape_contains(const ShapeGeometry& geometry, double x, double y);
 
-/* Requires the object's graphics value; a missing Graphics object yields no geometry. */
-ShapeGeometry drawn_geometry_of(const DisplayObject& object);
+/* Requires the object's graphics value; a missing Graphics object gives an empty geometry. */
+std::shared_ptr<const ShapeGeometry> drawn_geometry_of(const DisplayObject& object);
 
-/* Requires nothing; placed geometry wins over drawn geometry. */
-ShapeGeometry effective_shape_geometry(const DisplayObject& object);
+/* Requires nothing; placed geometry wins over drawn geometry, and both are shared, never copied. */
+std::shared_ptr<const ShapeGeometry> effective_shape_geometry(const DisplayObject& object);
 
 }  // namespace fo4::avm2

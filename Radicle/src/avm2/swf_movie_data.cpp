@@ -322,7 +322,7 @@ std::shared_ptr<SwfMovieData> read_swf_movie_data(const swf::SwfFile& file,
     }
   }
   for (const swf::SwfTag& tag : file.tags) {
-    // A duplicate shape id must keep the first tag, matching the bounds and bitmap rules.
+    // A duplicate shape id must keep the first tag that has fill edges.
     if (!tag.shape || tag.shape->records.empty()) {
       continue;
     }

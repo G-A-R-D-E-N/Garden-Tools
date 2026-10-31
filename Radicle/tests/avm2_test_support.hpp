@@ -1,10 +1,13 @@
 #pragma once
 
 #include <fo4/abc/abc.hpp>
+#include <fo4/avm2/display.hpp>
+#include <fo4/avm2/shape_geometry.hpp>
 
 #include <cstddef>
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -353,5 +356,16 @@ class ScriptBuilder {
   std::vector<fo4::abc::AbcMethodInfo> methods_;
   std::vector<fo4::abc::AbcMethodBody> bodies_;
 };
+
+inline void set_box_hit_area(fo4::avm2::DisplayObject& object) {
+  const double width = object.width();
+  const double height = object.height();
+  fo4::avm2::ShapeEdge side;
+  side.fill1 = 1;
+  side.points = {{{0.0, 0.0}, {width, 0.0}, {width, height}, {0.0, height}, {0.0, 0.0}}};
+  fo4::avm2::ShapeGeometry geometry;
+  geometry.edges.push_back(side);
+  object.set_shape_geometry(std::make_shared<const fo4::avm2::ShapeGeometry>(geometry));
+}
 
 }  // namespace avm2_test

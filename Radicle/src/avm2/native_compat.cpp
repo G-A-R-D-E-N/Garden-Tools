@@ -46,6 +46,7 @@ class GraphicsObject : public Object {
   }
 
   std::vector<GraphicsCommand> commands;
+  mutable std::shared_ptr<const ShapeGeometry> geometry;
 };
 
 Class* class_from_self(const Value& self) {
@@ -203,12 +204,13 @@ ExecutionResult graphics_command(const Value& self, std::uint8_t op,
     }
   }
   graphics->commands.push_back(command);
+  graphics->geometry.reset();
   return native_value(Value::undefined());
 }
 
-// Non-finite drawing coordinates must map to zero and huge ones must clamp on every platform.
+// NaN must map to zero, and infinite or huge coordinates must clamp on every platform.
 std::int32_t twip_coord(double pixels) {
-  if (!std::isfinite(pixels)) {
+  if (std::isnan(pixels)) {
     return 0;
   }
   const double twips = pixels * 20.0;
@@ -250,7 +252,7 @@ std::int32_t twip_delta(std::int32_t from, std::int32_t to) {
 
 void emit_edge(std::vector<swf::SwfShapeRecord>& records, GraphicsPen& pen,
                swf::SwfShapeRecordKind kind, double control_x, double control_y, double x,
-               double y, bool fill) {
+               double y) {
   // Deltas must run from the quantized pen, so the reader rebuilds the emitted positions exactly.
   const std::int32_t control_twip_x = twip_coord(control_x);
   const std::int32_t control_twip_y = twip_coord(control_y);
@@ -265,13 +267,11 @@ void emit_edge(std::vector<swf::SwfShapeRecord>& records, GraphicsPen& pen,
   record.y = twip_delta(curved ? control_twip_y : pen.y, end_twip_y);
   pen.x = end_twip_x;
   pen.y = end_twip_y;
-  // A stroke-only edge must stay out of the fill set, so only fills push records.
-  if (fill) {
-    records.push_back(record);
-  }
+  // A stroke-only edge must still be recorded, since the reader's pen follows every edge record.
+  records.push_back(record);
 }
 
-void emit_fill_break(std::vector<swf::SwfShapeRecord>& records, std::uint16_t fill1, bool line) {
+void emit_fill_break(std::vector<swf::SwfShapeRecord>& records, std::uint16_t fill1) {
   // Fill state must ride a style record, matching what the SWF parser emits for real shapes.
   swf::SwfShapeRecord record;
   record.kind = swf::SwfShapeRecordKind::style_change;
@@ -279,8 +279,6 @@ void emit_fill_break(std::vector<swf::SwfShapeRecord>& records, std::uint16_t fi
   record.has_fill1 = true;
   record.fill0 = 0;
   record.fill1 = fill1;
-  record.has_line = true;
-  record.line = line ? 1 : 0;
   records.push_back(record);
 }
 
@@ -288,46 +286,58 @@ void emit_fill_break(std::vector<swf::SwfShapeRecord>& records, std::uint16_t fi
 std::vector<swf::SwfShapeRecord> graphics_shape_records(const GraphicsObject& graphics) {
   std::vector<swf::SwfShapeRecord> records;
   bool filling = false;
-  bool line = false;
+  std::uint16_t fill_index = 0;
   GraphicsPen pen;
+  GraphicsPen subpath;
   auto edge_to = [&](double x, double y) {
-    emit_edge(records, pen, swf::SwfShapeRecordKind::straight_edge, 0.0, 0.0, x, y, filling);
+    emit_edge(records, pen, swf::SwfShapeRecordKind::straight_edge, 0.0, 0.0, x, y);
+  };
+  // An open fill must close back to its subpath start before it ends or restarts.
+  auto close_subpath = [&]() {
+    if (filling && (pen.x != subpath.x || pen.y != subpath.y)) {
+      edge_to(subpath.x / 20.0, subpath.y / 20.0);
+    }
+  };
+  auto begin_subpath = [&](double x, double y) {
+    close_subpath();
+    emit_move(records, pen, x, y);
+    subpath = pen;
   };
   for (const GraphicsCommand& command : graphics.commands) {
     switch (command.op) {
       case 0:
       case 1:
         // A gradient fill must read as a flat fill, since the runtime keeps no raster state.
+        close_subpath();
         filling = true;
-        emit_fill_break(records, 1, line);
+        subpath = pen;
+        // Each fill must take its own style, so overlapping fills union instead of cancelling.
+        if (fill_index < 0xFFFFu) {
+          ++fill_index;
+        }
+        emit_fill_break(records, fill_index);
         break;
       case 2:
+        close_subpath();
         filling = false;
-        emit_fill_break(records, 0, line);
-        break;
-      case 3:
-        line = command.values[0] > 0.0;
-        // A line change must surface while a fill is open, since edges carry no line state.
-        if (filling) {
-          emit_fill_break(records, 1, line);
-        }
+        emit_fill_break(records, 0);
         break;
       case 4:
-        emit_move(records, pen, command.values[0], command.values[1]);
+        begin_subpath(command.values[0], command.values[1]);
         break;
       case 5:
         edge_to(command.values[0], command.values[1]);
         break;
       case 6:
         emit_edge(records, pen, swf::SwfShapeRecordKind::curved_edge, command.values[0],
-                  command.values[1], command.values[2], command.values[3], filling);
+                  command.values[1], command.values[2], command.values[3]);
         break;
       case 7: {
         const double x = command.values[0];
         const double y = command.values[1];
         const double right = x + command.values[2];
         const double bottom = y + command.values[3];
-        emit_move(records, pen, x, y);
+        begin_subpath(x, y);
         edge_to(right, y);
         edge_to(right, bottom);
         edge_to(x, bottom);
@@ -339,7 +349,7 @@ std::vector<swf::SwfShapeRecord> graphics_shape_records(const GraphicsObject& gr
         const double x = command.values[0];
         const double y = command.values[1];
         const double radius = command.values[2];
-        emit_move(records, pen, x + radius, y);
+        begin_subpath(x + radius, y);
         for (int step = 1; step <= 8; ++step) {
           const double angle = step * 3.141592653589793 / 4.0;
           edge_to(x + radius * std::cos(angle), y + radius * std::sin(angle));
@@ -354,7 +364,7 @@ std::vector<swf::SwfShapeRecord> graphics_shape_records(const GraphicsObject& gr
         const double bottom = y + command.values[3];
         const double cut_x = command.values[4] / 2.0;
         const double cut_y = command.values[5] / 2.0;
-        emit_move(records, pen, x + cut_x, y);
+        begin_subpath(x + cut_x, y);
         edge_to(right - cut_x, y);
         edge_to(right, y + cut_y);
         edge_to(right, bottom - cut_y);
@@ -369,6 +379,7 @@ std::vector<swf::SwfShapeRecord> graphics_shape_records(const GraphicsObject& gr
         break;
     }
   }
+  close_subpath();
   return records;
 }
 
@@ -570,23 +581,29 @@ ExecutionResult event_format_to_string(const Value& self, const std::vector<Valu
 
 }  // namespace
 
-ShapeGeometry drawn_geometry_of(const DisplayObject& object) {
+std::shared_ptr<const ShapeGeometry> drawn_geometry_of(const DisplayObject& object) {
+  static const std::shared_ptr<const ShapeGeometry> kNone =
+      std::make_shared<const ShapeGeometry>();
   if (!object.graphics().is_object()) {
-    return {};
+    return kNone;
   }
   const Object& graphics_value = *object.graphics().as_object();
   const Class* klass = graphics_value.instance_class();
   if (klass == nullptr || klass->name != "flash.display::Graphics") {
-    return {};
+    return kNone;
   }
   const auto& graphics = static_cast<const GraphicsObject&>(graphics_value);
-  // Graphics records must stay twips, so sub-pixel drawing survives the pixel conversion.
-  return geometry_from_shape_records(graphics_shape_records(graphics), 20.0);
+  if (graphics.geometry == nullptr) {
+    // Graphics records must stay twips, so sub-pixel drawing survives the pixel conversion.
+    graphics.geometry = std::make_shared<const ShapeGeometry>(
+        geometry_from_shape_records(graphics_shape_records(graphics), 20.0));
+  }
+  return graphics.geometry;
 }
 
-ShapeGeometry effective_shape_geometry(const DisplayObject& object) {
+std::shared_ptr<const ShapeGeometry> effective_shape_geometry(const DisplayObject& object) {
   if (const auto& placed = object.shape_geometry()) {
-    return *placed;
+    return placed;
   }
   return drawn_geometry_of(object);
 }
@@ -660,7 +677,10 @@ bool try_compat_native(Interpreter& interpreter, native::Id id, const Value& sel
       out = graphics_command(self, 9, arguments);
       return true;
     case native::Id::graphics_clear:
-      if (GraphicsObject* graphics = graphics_self(self)) graphics->commands.clear();
+      if (GraphicsObject* graphics = graphics_self(self)) {
+        graphics->commands.clear();
+        graphics->geometry.reset();
+      }
       out = native_value(Value::undefined());
       return true;
     case native::Id::graphics_copy_from:

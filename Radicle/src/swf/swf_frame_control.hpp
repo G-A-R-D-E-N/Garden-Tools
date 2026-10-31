@@ -3,9 +3,9 @@
 #include <fo4/avm1/avm1.hpp>
 #include <fo4/swf/swf.hpp>
 
+#include <cstddef>
 #include <cstdint>
 #include <map>
-#include <string>
 #include <vector>
 
 namespace fo4::swf::detail {
@@ -26,9 +26,12 @@ struct Playhead {
 
 using InitActionStreams = std::vector<std::vector<avm1::Avm1Action>>;
 
-// Requires a message sink; init actions run once per simulation and a call storm past the budget refuses.
+// Requires one budget per movie; a call whose body does not fit is a no-op, never a refusal.
+inline constexpr std::size_t kInlineActionBudget = 65536;
+
+// Requires the budget shared by every timeline of the movie; init actions run once per simulation.
 FrameControls collect_frame_controls(const std::vector<SwfTag>& tags,
-                                     const InitActionStreams& init, std::string& message);
+                                     const InitActionStreams& init, std::size_t& budget);
 
 // Requires top-level tags; groups decoded DoInitAction streams by sprite id.
 std::map<std::uint16_t, InitActionStreams> collect_init_actions(

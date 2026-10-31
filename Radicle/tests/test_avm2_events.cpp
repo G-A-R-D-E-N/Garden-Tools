@@ -312,10 +312,12 @@ TEST(Avm2Events, MouseTargetIsTheTopmostHitChild) {
   auto* container = static_cast<fo4::avm2::DisplayObjectContainer*>(root.get());
   lower->set_width(100.0);
   lower->set_height(100.0);
+  avm2_test::set_box_hit_area(*lower);
   upper->set_x(50.0);
   upper->set_y(50.0);
   upper->set_width(100.0);
   upper->set_height(100.0);
+  avm2_test::set_box_hit_area(*upper);
   ASSERT_TRUE(container->add_child(lower));
   ASSERT_TRUE(container->add_child(upper));
   EXPECT_EQ(fo4::avm2::mouse_target_at(root, 60.0, 60.0).get(), upper.get());
@@ -323,6 +325,61 @@ TEST(Avm2Events, MouseTargetIsTheTopmostHitChild) {
   EXPECT_EQ(fo4::avm2::mouse_target_at(root, 200.0, 200.0).get(), nullptr);
   upper->set_mouse_enabled(false);
   EXPECT_EQ(fo4::avm2::mouse_target_at(root, 60.0, 60.0).get(), lower.get());
+}
+
+TEST(Avm2Events, MouseDisabledChildLetsItsParentTakeTheHit) {
+  Fixture fixture;
+  fixture.finish();
+  auto parent = make_sprite(fixture.runtime);
+  ASSERT_NE(parent, nullptr);
+  fo4::avm2::Class sprite_class;
+  sprite_class.name = "flash.display::Sprite";
+  auto child = std::make_shared<DisplayObject>(&sprite_class);
+  child->set_width(50.0);
+  child->set_height(50.0);
+  avm2_test::set_box_hit_area(*child);
+  child->set_mouse_enabled(false);
+  ASSERT_TRUE(static_cast<fo4::avm2::DisplayObjectContainer*>(parent.get())->add_child(child));
+  EXPECT_EQ(fo4::avm2::mouse_target_at(parent, 10.0, 10.0).get(), parent.get());
+  EXPECT_EQ(fo4::avm2::mouse_target_at(parent, 80.0, 80.0).get(), nullptr);
+}
+
+TEST(Avm2Events, MouseChildrenOffMakesTheContainerTheTarget) {
+  Fixture fixture;
+  fixture.finish();
+  auto parent = make_sprite(fixture.runtime);
+  ASSERT_NE(parent, nullptr);
+  fo4::avm2::Class sprite_class;
+  sprite_class.name = "flash.display::Sprite";
+  auto child = std::make_shared<DisplayObject>(&sprite_class);
+  child->set_width(50.0);
+  child->set_height(50.0);
+  avm2_test::set_box_hit_area(*child);
+  ASSERT_TRUE(static_cast<fo4::avm2::DisplayObjectContainer*>(parent.get())->add_child(child));
+  parent->set_mouse_children(false);
+  EXPECT_EQ(fo4::avm2::mouse_target_at(parent, 10.0, 10.0).get(), parent.get());
+  parent->set_mouse_children(true);
+  EXPECT_EQ(fo4::avm2::mouse_target_at(parent, 10.0, 10.0).get(), child.get());
+}
+
+TEST(Avm2Events, MouseChildrenOffHidesItsChildrenFromAnAncestor) {
+  Fixture fixture;
+  fixture.finish();
+  auto root = make_sprite(fixture.runtime);
+  auto middle = make_sprite(fixture.runtime);
+  auto inner = make_sprite(fixture.runtime);
+  ASSERT_NE(middle, nullptr);
+  fo4::avm2::Class sprite_class;
+  sprite_class.name = "flash.display::Sprite";
+  auto leaf = std::make_shared<DisplayObject>(&sprite_class);
+  leaf->set_width(50.0);
+  leaf->set_height(50.0);
+  avm2_test::set_box_hit_area(*leaf);
+  ASSERT_TRUE(static_cast<fo4::avm2::DisplayObjectContainer*>(inner.get())->add_child(leaf));
+  ASSERT_TRUE(static_cast<fo4::avm2::DisplayObjectContainer*>(middle.get())->add_child(inner));
+  middle->set_mouse_children(false);
+  ASSERT_TRUE(static_cast<fo4::avm2::DisplayObjectContainer*>(root.get())->add_child(middle));
+  EXPECT_EQ(fo4::avm2::mouse_target_at(root, 10.0, 10.0).get(), middle.get());
 }
 
 TEST(Avm2Events, HitTestFollowsTheParentTransform) {
@@ -413,13 +470,13 @@ TEST(Avm2Events, ShapeRecordsConvertFromTwipsToPixels) {
     record.y = dy;
     return record;
   };
-  // Requires deltas from the pen, with the fill on the style record: (0,0), (200,0), (200,200) twips.
+  // Requires pen deltas with the fill on the style record: (0,0), (200,0), (200,200) and back.
   const std::vector<fo4::swf::SwfShapeRecord> records = {
-      move(0, 0), style(0, 1), edge(200, 0), edge(0, 200),
+      move(0, 0), style(0, 1), edge(200, 0), edge(0, 200), edge(-200, -200),
   };
   const fo4::avm2::ShapeGeometry geometry =
       fo4::avm2::geometry_from_shape_records(records);
-  ASSERT_EQ(geometry.edges.size(), 2u);
+  ASSERT_EQ(geometry.edges.size(), 3u);
   EXPECT_TRUE(fo4::avm2::shape_contains(geometry, 8.0, 2.0));
   EXPECT_FALSE(fo4::avm2::shape_contains(geometry, 2.0, 9.0));
   const std::vector<fo4::swf::SwfShapeRecord> strokes = {
@@ -533,6 +590,7 @@ TEST(Avm2Events, SwfRuntimeRoutesMouseInputToTheHitObject) {
   ASSERT_NE(target, nullptr);
   target->set_width(100.0);
   target->set_height(100.0);
+  avm2_test::set_box_hit_area(*target);
   ASSERT_TRUE(static_cast<fo4::avm2::DisplayObjectContainer*>(movie->root().get())
                   ->add_child(target));
   ASSERT_TRUE(fo4::avm2::add_event_listener(*target, "mouseDown",
