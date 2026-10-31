@@ -116,8 +116,12 @@ ExecutionResult display_add_child(Interpreter& interpreter, const Value& self,
   if (container == nullptr || child == nullptr) {
     return native_value(Value::undefined());
   }
-  (void)interpreter;
-  container->add_child(child);
+  if (container->add_child(child)) {
+    ExecutionResult added = dispatch_added(interpreter, child);
+    if (!added.ok()) {
+      return added;
+    }
+  }
   return native_value(Value::object(std::move(child)));
 }
 
@@ -128,19 +132,28 @@ ExecutionResult display_add_child_at(Interpreter& interpreter, const Value& self
   if (container == nullptr || child == nullptr) {
     return native_value(Value::undefined());
   }
-  (void)interpreter;
   const std::int32_t index = to_int32(argument_at(arguments, 1));
-  container->add_child_at(child, index < 0 ? 0u : static_cast<std::size_t>(index));
+  if (container->add_child_at(child, index < 0 ? 0u : static_cast<std::size_t>(index))) {
+    ExecutionResult added = dispatch_added(interpreter, child);
+    if (!added.ok()) {
+      return added;
+    }
+  }
   return native_value(Value::object(std::move(child)));
 }
 
 ExecutionResult display_remove_child(Interpreter& interpreter, const Value& self,
                                      const std::vector<Value>& arguments) {
-  (void)interpreter;
   DisplayObjectContainer* container = container_self(self);
   std::shared_ptr<DisplayObject> child = display_argument(arguments, 0);
   if (container == nullptr || child == nullptr) {
     return native_value(Value::undefined());
+  }
+  if (child->parent() == container) {
+    ExecutionResult removed = dispatch_removed(interpreter, child);
+    if (!removed.ok()) {
+      return removed;
+    }
   }
   container->remove_child(child);
   return native_value(Value::object(std::move(child)));
@@ -148,7 +161,6 @@ ExecutionResult display_remove_child(Interpreter& interpreter, const Value& self
 
 ExecutionResult display_remove_child_at(Interpreter& interpreter, const Value& self,
                                         const std::vector<Value>& arguments) {
-  (void)interpreter;
   DisplayObjectContainer* container = container_self(self);
   if (container == nullptr) {
     return native_value(Value::undefined());
@@ -157,10 +169,17 @@ ExecutionResult display_remove_child_at(Interpreter& interpreter, const Value& s
   if (index < 0) {
     return native_value(Value::undefined());
   }
-  std::shared_ptr<DisplayObject> child =
-      container->remove_child_at(static_cast<std::size_t>(index));
-  return child == nullptr ? native_value(Value::undefined())
-                          : native_value(Value::object(std::move(child)));
+  const std::shared_ptr<DisplayObject> child =
+      container->child_at(static_cast<std::size_t>(index));
+  if (child == nullptr) {
+    return native_value(Value::undefined());
+  }
+  ExecutionResult removed = dispatch_removed(interpreter, child);
+  if (!removed.ok()) {
+    return removed;
+  }
+  container->remove_child(child);
+  return native_value(Value::object(child));
 }
 
 ExecutionResult display_get_child_at(Interpreter& interpreter, const Value& self,

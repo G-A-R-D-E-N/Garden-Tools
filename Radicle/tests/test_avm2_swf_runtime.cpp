@@ -13,6 +13,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -626,40 +627,94 @@ TEST(Avm2SwfRuntime, BlendModeAndVisibleReadAndWriteThroughTheDisplayState) {
   EXPECT_FALSE(out.as_boolean());
 }
 
-TEST(Avm2SwfRuntime, EnterFrameReachesTheStageAndItsSpriteChildren) {
+namespace {
+
+std::string read_global_text(Harness& harness, const char* name) {
+  fo4::avm2::Multiname multiname;
+  multiname.name = name;
+  multiname.namespaces.push_back(fo4::avm2::Namespace{});
+  fo4::avm2::Value out;
+  if (!harness.runtime.global_object()->read_value(multiname, out) || !out.is_string()) {
+    return {};
+  }
+  return out.as_string();
+}
+
+std::size_t count_letter(const std::string& text, char letter) {
+  return static_cast<std::size_t>(std::count(text.begin(), text.end(), letter));
+}
+
+}  // namespace
+
+TEST(Avm2SwfRuntime, EnterFrameIsDeliveredOncePerObjectPerFrame) {
   avm2_test::ScriptBuilder script;
-  const std::uint32_t entered = script.multiname("entered");
-  avm2_test::CodeBuilder listener_code;
-  listener_code.pushtrue();
-  listener_code.getglobalscope();
-  listener_code.swap();
-  listener_code.setproperty(entered);
-  listener_code.returnvoid();
-  const std::uint32_t listener = script.method("listener", listener_code.bytes(), 2);
+  const std::uint32_t log = script.multiname("log");
+  const auto tag = [&script, log](const char* letter) {
+    avm2_test::CodeBuilder body;
+    body.findpropstrict(log);
+    body.dup();
+    body.getproperty(log);
+    body.pushstring(script.string_of(letter));
+    body.add();
+    body.initproperty(log);
+    body.returnvoid();
+    return body.bytes();
+  };
+  const std::uint32_t root_listener = script.method("tagRoot", tag("r"), 2);
+  const std::uint32_t sprite_listener = script.method("tagSprite", tag("s"), 2);
+  const std::uint32_t shape_listener = script.method("tagShape", tag("h"), 2);
+  const std::uint32_t stage_listener = script.method("tagStage", tag("g"), 2);
   avm2_test::CodeBuilder init_code;
   init_code.returnvoid();
   const std::uint32_t init = script.method("init", init_code.bytes(), 1);
   const fo4::abc::AbcFile file = script.finish(init);
 
   Harness harness;
+  fo4::avm2::Multiname log_name;
+  log_name.name = "log";
+  log_name.namespaces.push_back(fo4::avm2::Namespace{});
+  fo4::avm2::Property& log_property =
+      harness.runtime.global_object()->define_own_property(fo4::avm2::primary_key(log_name));
+  log_property.kind = fo4::avm2::PropertyKind::Value;
+  log_property.value = fo4::avm2::Value::string(std::string{});
+
   const std::shared_ptr<SwfRuntime> movie =
       SwfRuntime::create(harness.runtime, harness.interpreter, build_movie(false));
   ASSERT_NE(movie, nullptr) << SwfRuntime::last_error();
-  auto sprite = fo4::avm2::make_display_object(
-      harness.runtime,
-      *const_cast<fo4::avm2::Class*>(harness.runtime.find_class("flash.display::Sprite")));
+  const auto make = [&harness](const char* name) {
+    return fo4::avm2::make_display_object(
+        harness.runtime, *const_cast<fo4::avm2::Class*>(harness.runtime.find_class(name)));
+  };
+  auto sprite = make("flash.display::Sprite");
+  auto shape = make("flash.display::Shape");
   ASSERT_NE(sprite, nullptr);
+  ASSERT_NE(shape, nullptr);
   ASSERT_TRUE(movie->stage()->add_child(sprite));
-  const auto function = std::make_shared<fo4::avm2::FunctionObject>("listener", &file, listener);
-  ASSERT_TRUE(fo4::avm2::add_event_listener(*sprite, "enterFrame",
-                                            fo4::avm2::Value::object(function), false, 0));
+  ASSERT_TRUE(movie->stage()->add_child(shape));
+  const auto listen = [&file](fo4::avm2::Object& target, std::uint32_t method, const char* name) {
+    const auto function = std::make_shared<fo4::avm2::FunctionObject>(name, &file, method);
+    return fo4::avm2::add_event_listener(target, "enterFrame", fo4::avm2::Value::object(function),
+                                         false, 0);
+  };
+  ASSERT_TRUE(listen(*movie->root(), root_listener, "tagRoot"));
+  ASSERT_TRUE(listen(*sprite, sprite_listener, "tagSprite"));
+  ASSERT_TRUE(listen(*shape, shape_listener, "tagShape"));
+  ASSERT_TRUE(listen(*movie->stage(), stage_listener, "tagStage"));
+
   movie->advance(harness.interpreter, 1.0 / 24.0);
-  fo4::avm2::Multiname multiname;
-  multiname.name = "entered";
-  multiname.namespaces.push_back(fo4::avm2::Namespace{});
-  fo4::avm2::Value out;
-  ASSERT_TRUE(harness.runtime.global_object()->read_value(multiname, out));
-  EXPECT_TRUE(out.as_boolean());
+  const std::string playing = read_global_text(harness, "log");
+  EXPECT_EQ(count_letter(playing, 'r'), 1u) << playing;
+  EXPECT_EQ(count_letter(playing, 's'), 1u) << playing;
+  EXPECT_EQ(count_letter(playing, 'h'), 1u) << playing;
+  EXPECT_EQ(count_letter(playing, 'g'), 1u) << playing;
+
+  movie->root()->set_playing(false);
+  movie->advance(harness.interpreter, 1.0 / 24.0);
+  const std::string stopped = read_global_text(harness, "log");
+  EXPECT_EQ(count_letter(stopped, 'r'), 2u) << stopped;
+  EXPECT_EQ(count_letter(stopped, 's'), 2u) << stopped;
+  EXPECT_EQ(count_letter(stopped, 'h'), 2u) << stopped;
+  EXPECT_EQ(count_letter(stopped, 'g'), 2u) << stopped;
 }
 
 }  // namespace

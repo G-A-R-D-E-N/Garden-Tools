@@ -85,22 +85,62 @@ Value trait_default_value(const abc::AbcFile& file, const abc::AbcTrait& trait) 
   if (trait.value_index == 0) {
     return Value::undefined();
   }
-  switch (trait.value_kind) {
+  return constant_value(file, trait.value_kind, trait.value_index);
+}
+
+void number_auto_slots(std::vector<Trait>& traits, std::uint32_t first) {
+  std::unordered_set<std::uint32_t> taken;
+  for (const Trait& trait : traits) {
+    if (trait.is_slot_like() && trait.slot_id != 0) {
+      taken.insert(trait.slot_id);
+    }
+  }
+  std::uint32_t next = first;
+  for (Trait& trait : traits) {
+    if (!trait.is_slot_like() || trait.slot_id != 0) {
+      continue;
+    }
+    while (taken.count(next) != 0) {
+      ++next;
+    }
+    trait.slot_id = next;
+    taken.insert(next);
+    ++next;
+  }
+}
+
+void assign_auto_slot_ids(Class& klass, std::unordered_set<Class*>& pending) {
+  if (pending.erase(&klass) == 0) {
+    return;
+  }
+  if (klass.super != nullptr) {
+    assign_auto_slot_ids(*klass.super, pending);
+  }
+  const std::uint32_t inherited =
+      klass.super == nullptr ? 0u : static_cast<std::uint32_t>(klass.super->compute_slot_count());
+  number_auto_slots(klass.instance_traits, inherited);
+  number_auto_slots(klass.class_traits, 0u);
+}
+
+}  // namespace
+
+Value constant_value(const abc::AbcFile& file, abc::AbcValueKind kind, std::uint32_t index) {
+  switch (kind) {
     case abc::AbcValueKind::Utf8:
-      return Value::string(file.string_at(trait.value_index));
+      return Value::string(file.string_at(index));
     case abc::AbcValueKind::Int:
-      if (trait.value_index < file.pool.ints.size()) {
-        return Value::int32(file.pool.ints[trait.value_index]);
+      if (index < file.pool.ints.size()) {
+        return Value::int32(file.pool.ints[index]);
       }
       return Value::undefined();
     case abc::AbcValueKind::UInt:
-      if (trait.value_index < file.pool.uints.size()) {
-        return Value::uint32(file.pool.uints[trait.value_index]);
+      if (index < file.pool.uints.size()) {
+        return Value::uint32(file.pool.uints[index]);
       }
       return Value::undefined();
     case abc::AbcValueKind::Double:
-      if (trait.value_index < file.pool.doubles.size()) {
-        return Value::number(file.pool.doubles[trait.value_index]);
+      if (index < file.pool.doubles.size()) {
+        return Value::number(file.pool.doubles[index]);
       }
       return Value::undefined();
     case abc::AbcValueKind::True:
@@ -113,31 +153,6 @@ Value trait_default_value(const abc::AbcFile& file, const abc::AbcTrait& trait) 
       return Value::undefined();
   }
 }
-
-void assign_auto_slot_ids(Class& klass, std::unordered_set<Class*>& pending) {
-  if (pending.erase(&klass) == 0) {
-    return;
-  }
-  if (klass.super != nullptr) {
-    assign_auto_slot_ids(*klass.super, pending);
-  }
-  std::uint32_t next = klass.super == nullptr
-                           ? 0u
-                           : static_cast<std::uint32_t>(klass.super->compute_slot_count());
-  for (Trait& trait : klass.instance_traits) {
-    if (trait.is_slot_like() && trait.slot_id == 0) {
-      trait.slot_id = next++;
-    }
-  }
-  next = 0;
-  for (Trait& trait : klass.class_traits) {
-    if (trait.is_slot_like() && trait.slot_id == 0) {
-      trait.slot_id = next++;
-    }
-  }
-}
-
-}  // namespace
 
 const char* runtime_status_name(RuntimeStatus status) noexcept {
   switch (status) {

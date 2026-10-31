@@ -162,13 +162,15 @@ class Interpreter {
 
   ExecutionResult get_property(Frame& frame, const std::shared_ptr<Object>& owner,
                                const Multiname& multiname, std::size_t depth);
-  ExecutionResult set_property(Frame& frame, Object& object, const Multiname& multiname,
-                               const Value& value, bool define, std::size_t depth);
+  ExecutionResult set_property(Frame& frame, const std::shared_ptr<Object>& owner,
+                               const Multiname& multiname, const Value& value, bool define,
+                               std::size_t depth);
   InterpreterStatus find_scope_binding(Frame& frame, const Multiname& multiname,
                                        bool create_on_global, std::shared_ptr<Object>& owner,
                                        bool& found, std::string& message);
-  ExecutionResult call_property(Frame& frame, Object& receiver, const Multiname& multiname,
-                                const std::vector<Value>& arguments, std::size_t depth);
+  ExecutionResult call_property(Frame& frame, const std::shared_ptr<Object>& owner,
+                                const Multiname& multiname, const std::vector<Value>& arguments,
+                                std::size_t depth);
   ExecutionResult construct(Frame& frame, const ClassObject& class_object,
                             const std::vector<Value>& arguments, std::size_t depth);
   ExecutionResult ensure_class_initialized(Class& klass, std::size_t depth);
@@ -177,6 +179,11 @@ class Interpreter {
   std::vector<Key>& enumeration_keys(Frame& frame, Object& object);
   InterpreterStatus coerce_value(const Multiname& multiname, Value& value,
                                  std::string& message);
+  InterpreterStatus coerce_parameter(const abc::AbcFile& file, std::uint32_t type_index,
+                                     Value& value, std::string& message);
+  InterpreterStatus bind_arguments(Frame& frame, const abc::AbcMethodInfo& info,
+                                   const std::string& name, std::vector<Value>& arguments,
+                                   std::string& message);
   InterpreterStatus array_property(Object& object, const Multiname& multiname, bool write,
                                    Value& value, bool& handled, std::string& message);
   InterpreterStatus domain_memory_load(std::uint8_t opcode, const Value& address, Value& value,

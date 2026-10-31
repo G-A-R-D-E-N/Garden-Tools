@@ -57,7 +57,7 @@
                           value_kind_name(object.kind()));
         }
         ExecutionResult nested =
-            set_property(frame, *object.as_object(), *multiname, value, false, depth);
+            set_property(frame, object.as_object(), *multiname, value, false, depth);
         if (!nested.ok()) {
           return nested;
         }

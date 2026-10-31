@@ -232,8 +232,12 @@ Value shift_unsigned(const Value& left, const Value& right) {
   return Value::uint32(to_uint32(left) >> shift);
 }
 
-Value borrowed_object(Object& object) {
-  return Value::object(std::shared_ptr<Object>(&object, [](Object*) {}));
+std::shared_ptr<Object> owner_of(Object& object) {
+  try {
+    return object.shared_from_this();
+  } catch (const std::bad_weak_ptr&) {
+    return nullptr;
+  }
 }
 
 std::string property_text(const Multiname& multiname) { return render_multiname(multiname); }

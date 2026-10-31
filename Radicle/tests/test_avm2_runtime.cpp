@@ -346,4 +346,46 @@ TEST(Avm2Runtime, ResolvesTheAs3BuiltinNamespaceToThePublicOne) {
   EXPECT_EQ(multiname.namespaces, std::vector<Namespace>{Namespace{}});
 }
 
+TEST(Avm2Runtime, AutoSlotNumberingSkipsTheIdsAnExplicitTraitUses) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t object = script.multiname("Object");
+  const std::uint32_t holder = script.multiname("SlotHolder");
+  const std::uint32_t first = script.multiname("a");
+  const std::uint32_t second = script.multiname("b");
+  const std::uint32_t third = script.multiname("c");
+  avm2_test::CodeBuilder constructor_code;
+  constructor_code.returnvoid();
+  const std::uint32_t constructor = script.method("ctor", constructor_code.bytes(), 1);
+  const std::uint32_t init = script.method("init", constructor_code.bytes(), 1);
+  AbcFile file = script.finish(init);
+
+  abc::AbcTrait a_trait;
+  a_trait.name = first;
+  abc::AbcTrait b_trait;
+  b_trait.name = second;
+  b_trait.slot_id = 1;
+  abc::AbcTrait c_trait;
+  c_trait.name = third;
+  abc::AbcInstanceInfo instance;
+  instance.name = holder;
+  instance.super_index = object;
+  instance.iinit = constructor;
+  instance.traits = {a_trait, b_trait, c_trait};
+  file.instances.push_back(instance);
+  abc::AbcClassInfo klass;
+  klass.cinit = constructor;
+  file.classes.push_back(klass);
+
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  const Class* linked = runtime.find_class("SlotHolder");
+  ASSERT_NE(linked, nullptr);
+  ASSERT_EQ(linked->instance_traits.size(), 3u);
+  EXPECT_EQ(linked->instance_traits[0].slot_id, 0u);
+  EXPECT_EQ(linked->instance_traits[1].slot_id, 1u);
+  EXPECT_EQ(linked->instance_traits[2].slot_id, 2u);
+  EXPECT_EQ(linked->slot_count, 3u);
+}
+
 }  // namespace

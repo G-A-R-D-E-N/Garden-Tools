@@ -94,6 +94,22 @@ bool same_listener_function(const FunctionObject* registered, const FunctionObje
          registered->native_id() == given->native_id();
 }
 
+ExecutionResult dispatch_stage_tree(Interpreter& interpreter,
+                                    const std::shared_ptr<DisplayObject>& node, const char* type) {
+  ExecutionResult result = dispatch_event(interpreter, node, type, false, 0);
+  if (!result.ok() || !node->is_container()) {
+    return result;
+  }
+  const auto children = static_cast<DisplayObjectContainer&>(*node).children();
+  for (const auto& child : children) {
+    result = dispatch_stage_tree(interpreter, child, type);
+    if (!result.ok()) {
+      return result;
+    }
+  }
+  return result;
+}
+
 }  // namespace
 
 EventObject::EventObject(Class* event_class, std::string type, bool bubbles, bool cancelable)
@@ -171,10 +187,36 @@ ExecutionResult dispatch_event(Interpreter& interpreter, const std::shared_ptr<O
   return dispatch_event(interpreter, target, event, depth);
 }
 
+ExecutionResult dispatch_added(Interpreter& interpreter,
+                               const std::shared_ptr<DisplayObject>& child) {
+  ExecutionResult added = dispatch_event(interpreter, child, "added", true, 0);
+  if (!added.ok() || child->stage() == nullptr) {
+    return added;
+  }
+  return dispatch_stage_tree(interpreter, child, "addedToStage");
+}
+
+ExecutionResult dispatch_removed(Interpreter& interpreter,
+                                 const std::shared_ptr<DisplayObject>& child) {
+  const bool on_stage = child->stage() != nullptr;
+  ExecutionResult removed = dispatch_event(interpreter, child, "removed", true, 0);
+  if (!removed.ok() || !on_stage) {
+    return removed;
+  }
+  return dispatch_stage_tree(interpreter, child, "removedFromStage");
+}
+
 bool add_event_listener(Object& target, std::string_view type, const Value& listener,
                         bool use_capture, std::int32_t priority) {
   if (!listener.is_object() || listener.as_object()->kind() != ObjectKind::Function) {
     return false;
+  }
+  const auto* function = static_cast<const FunctionObject*>(listener.as_object().get());
+  for (const EventListener& existing : target.event_listeners()) {
+    if (existing.type == type && existing.use_capture == use_capture &&
+        same_listener_function(existing.function.get(), function)) {
+      return true;
+    }
   }
   EventListener entry;
   entry.type = std::string{type};

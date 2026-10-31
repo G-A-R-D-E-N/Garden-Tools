@@ -59,12 +59,17 @@ namespace {
 
 std::shared_ptr<FunctionObject> bind_method(const std::shared_ptr<Object>& receiver,
                                             const FunctionObject& method) {
+  std::weak_ptr<FunctionObject>& cached = receiver->bound_methods()[&method];
+  if (std::shared_ptr<FunctionObject> existing = cached.lock()) {
+    return existing;
+  }
   auto bound =
       std::make_shared<FunctionObject>(method.name(), method.file(), method.method_index());
   bound->set_native_id(method.native_id());
   bound->set_owner_class(method.owner_class());
   bound->set_instance_class(method.instance_class());
   bound->bind_receiver(receiver);
+  cached = bound;
   return bound;
 }
 
@@ -132,7 +137,10 @@ ExecutionResult Interpreter::get_property(Frame& frame, const std::shared_ptr<Ob
       return result;
     }
   }
-  if (object.kind() == ObjectKind::Event) {
+  const PropertyLookup lookup = object.lookup(multiname);
+  const bool declared_in_abc =
+      lookup.found() && lookup.owner != nullptr && lookup.owner->file != nullptr;
+  if (object.kind() == ObjectKind::Event && !declared_in_abc) {
     Value event_value;
     if (read_event_property(*this, static_cast<EventObject&>(object), multiname, event_value)) {
       ExecutionResult result;
@@ -140,7 +148,7 @@ ExecutionResult Interpreter::get_property(Frame& frame, const std::shared_ptr<Ob
       return result;
     }
   }
-  if (object.kind() == ObjectKind::Display) {
+  if (object.kind() == ObjectKind::Display && !declared_in_abc) {
     Value display_value;
     if (read_display_property(*this, static_cast<DisplayObject&>(object), multiname,
                               display_value)) {
@@ -195,7 +203,6 @@ ExecutionResult Interpreter::get_property(Frame& frame, const std::shared_ptr<Ob
       return result;
     }
   }
-  const PropertyLookup lookup = object.lookup(multiname);
   if (!lookup.found()) {
     return ExecutionResult{};
   }
@@ -215,15 +222,16 @@ ExecutionResult Interpreter::get_property(Frame& frame, const std::shared_ptr<Ob
     if (lookup.getter == nullptr) {
       return ExecutionResult{};
     }
-    return invoke(*lookup.getter, borrowed_object(object), {}, {}, depth);
+    return invoke(*lookup.getter, Value::object(owner), {}, {}, depth);
   }
   return ExecutionResult{};
 }
 
-ExecutionResult Interpreter::set_property(Frame& frame, Object& object,
+ExecutionResult Interpreter::set_property(Frame& frame, const std::shared_ptr<Object>& owner,
                                           const Multiname& multiname, const Value& value,
                                           bool define, std::size_t depth) {
   (void)frame;
+  Object& object = *owner;
   bool handled = false;
   Value ignored = value;
   std::string message;
@@ -259,7 +267,10 @@ ExecutionResult Interpreter::set_property(Frame& frame, Object& object,
       return result;
     }
   }
-  if (object.kind() == ObjectKind::Event) {
+  const PropertyLookup lookup = object.lookup(multiname);
+  const bool declared_in_abc =
+      lookup.found() && lookup.owner != nullptr && lookup.owner->file != nullptr;
+  if (object.kind() == ObjectKind::Event && !declared_in_abc) {
     Value event_value;
     if (read_event_property(*this, static_cast<EventObject&>(object), multiname, event_value)) {
       ExecutionResult result;
@@ -267,7 +278,7 @@ ExecutionResult Interpreter::set_property(Frame& frame, Object& object,
       return result;
     }
   }
-  if (object.kind() == ObjectKind::Display) {
+  if (object.kind() == ObjectKind::Display && !declared_in_abc) {
     if (multiname.has_fixed_name() && multiname.name == "focus") {
       std::shared_ptr<DisplayObject> target;
       if (value.is_object() && value.as_object()->kind() == ObjectKind::Display) {
@@ -304,9 +315,8 @@ ExecutionResult Interpreter::set_property(Frame& frame, Object& object,
     property.value = value;
     return ExecutionResult{};
   }
-  const PropertyLookup lookup = object.lookup(multiname);
   if (lookup.kind == LookupKind::Accessor && lookup.setter != nullptr) {
-    return invoke(*lookup.setter, borrowed_object(object), {value}, {}, depth);
+    return invoke(*lookup.setter, Value::object(owner), {value}, {}, depth);
   }
   if (object.write_value(multiname, value)) {
     return ExecutionResult{};
@@ -368,13 +378,14 @@ InterpreterStatus Interpreter::find_scope_binding(Frame& frame, const Multiname&
   return InterpreterStatus::Ok;
 }
 
-ExecutionResult Interpreter::call_property(Frame& frame, Object& receiver,
+ExecutionResult Interpreter::call_property(Frame& frame, const std::shared_ptr<Object>& owner,
                                            const Multiname& multiname,
                                            const std::vector<Value>& arguments,
                                            std::size_t depth) {
   (void)frame;
+  Object& receiver = *owner;
   if (receiver.kind() == ObjectKind::Class) {
-    ExecutionResult initialized = initialize_class_value(borrowed_object(receiver), depth);
+    ExecutionResult initialized = initialize_class_value(Value::object(owner), depth);
     if (!initialized.ok()) {
       return initialized;
     }
@@ -397,14 +408,14 @@ ExecutionResult Interpreter::call_property(Frame& frame, Object& receiver,
       return fail(InterpreterStatus::CannotCall,
                   "method trait " + property_text(multiname) + " has no function");
     }
-    return invoke(*lookup.trait->function, borrowed_object(receiver), arguments, {}, depth);
+    return invoke(*lookup.trait->function, Value::object(owner), arguments, {}, depth);
   }
   if (lookup.kind == LookupKind::Accessor) {
     if (lookup.getter == nullptr) {
       return fail(InterpreterStatus::CannotCall,
                   "property " + property_text(multiname) + " has no getter to call");
     }
-    ExecutionResult getter = invoke(*lookup.getter, borrowed_object(receiver), {}, {}, depth);
+    ExecutionResult getter = invoke(*lookup.getter, Value::object(owner), {}, {}, depth);
     if (!getter.ok()) {
       return getter;
     }
@@ -417,7 +428,7 @@ ExecutionResult Interpreter::call_property(Frame& frame, Object& receiver,
                   "property " + property_text(multiname) + " is not callable");
     }
     return invoke(static_cast<const FunctionObject&>(*getter.value.as_object()),
-                  borrowed_object(receiver), arguments, {}, depth);
+                  Value::object(owner), arguments, {}, depth);
   }
   if (!lookup.value.is_object() || lookup.value.as_object()->kind() != ObjectKind::Function) {
     if (limits_.lenient_builtins) {
@@ -427,7 +438,7 @@ ExecutionResult Interpreter::call_property(Frame& frame, Object& receiver,
                 "property " + property_text(multiname) + " is not callable");
   }
   return invoke(static_cast<const FunctionObject&>(*lookup.value.as_object()),
-                borrowed_object(receiver), arguments, {}, depth);
+                Value::object(owner), arguments, {}, depth);
 }
 
 ExecutionResult Interpreter::call_indexed(Frame& frame, const abc::AbcInstruction& instruction,
@@ -486,7 +497,7 @@ ExecutionResult Interpreter::outer_scope_value(const Frame& frame, std::uint32_t
                 "getouterscope " + std::to_string(index) + " is a null scope");
   }
   ExecutionResult result;
-  result.value = borrowed_object(*(*frame.outer_scope)[index]);
+  result.value = Value::object((*frame.outer_scope)[index]);
   return result;
 }
 
@@ -610,7 +621,7 @@ InterpreterStatus Interpreter::coerce_value(const Multiname& multiname, Value& v
     return InterpreterStatus::Ok;
   }
   if (name == "String") {
-    value = Value::string(to_string(value));
+    value = value.is_nullish() ? Value::null() : Value::string(to_string(value));
     return InterpreterStatus::Ok;
   }
   if (name.find("Vector.<") == 0 || name.find("__AS3__.vec::Vector") == 0) {

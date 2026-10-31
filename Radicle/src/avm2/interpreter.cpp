@@ -197,24 +197,19 @@ ExecutionResult Interpreter::invoke(const FunctionObject& function, Value this_v
     frame.instruction_offsets.push_back(static_cast<std::uint32_t>(instruction.offset));
   }
   const abc::AbcMethodInfo* info = function.method_info();
-  const std::size_t param_count = info == nullptr ? arguments.size() : info->param_count;
   const std::size_t local_count = std::max<std::size_t>(
       body->local_count, arguments.size() + 1);
   frame.locals.assign(local_count, Value::undefined());
   if (!frame.locals.empty()) {
     frame.locals[0] = frame.this_value;
   }
-  for (std::size_t index = 0;
-       index < arguments.size() && index < param_count && index + 1 < frame.locals.size();
-       ++index) {
-    frame.locals[index + 1] = std::move(arguments[index]);
-  }
-  if (info != nullptr && info->needs_rest() && param_count + 1 < frame.locals.size()) {
-    std::vector<Value> rest;
-    for (std::size_t index = param_count; index < arguments.size(); ++index) {
-      rest.push_back(std::move(arguments[index]));
+  if (info != nullptr) {
+    std::string message;
+    const InterpreterStatus bound =
+        bind_arguments(frame, *info, function.name(), arguments, message);
+    if (bound != InterpreterStatus::Ok) {
+      return fail(bound, std::move(message));
     }
-    frame.locals[param_count + 1] = Value::object(make_array(std::move(rest)));
   }
   if (scopes.empty()) {
     if (!function.captured_scope().empty()) {
@@ -239,6 +234,68 @@ ExecutionResult Interpreter::invoke(const FunctionObject& function, Value this_v
   ExecutionResult result = execute_frame(frame, depth + 1);
   frames_ -= 1;
   return result;
+}
+
+InterpreterStatus Interpreter::coerce_parameter(const abc::AbcFile& file, std::uint32_t type_index,
+                                                Value& value, std::string& message) {
+  Multiname type;
+  if (type_index == 0 ||
+      fo4::avm2::resolve_multiname(file, type_index, type) != RuntimeStatus::Ok ||
+      type.kind == MultinameKind::TypeName) {
+    return InterpreterStatus::Ok;
+  }
+  const std::string name = property_text(type);
+  const bool primitive = name == "int" || name == "uint" || name == "Number" ||
+                         name == "double" || name == "Boolean" || name == "String";
+  if (!primitive && name != "*" && name != "Object" && runtime_.find_class(type) == nullptr) {
+    return InterpreterStatus::Ok;
+  }
+  return coerce_value(type, value, message);
+}
+
+InterpreterStatus Interpreter::bind_arguments(Frame& frame, const abc::AbcMethodInfo& info,
+                                              const std::string& name,
+                                              std::vector<Value>& arguments,
+                                              std::string& message) {
+  const std::size_t declared = info.param_count;
+  const std::size_t optional = info.has_optional() ? std::min(info.options.size(), declared) : 0;
+  const std::size_t required = declared - optional;
+  if (arguments.size() < required) {
+    message = "argument count mismatch on " + name + ": expected " + std::to_string(required) +
+              ", got " + std::to_string(arguments.size());
+    return InterpreterStatus::InvalidArgument;
+  }
+  std::vector<Value> all_arguments;
+  if (info.needs_arguments()) {
+    all_arguments = arguments;
+  }
+  for (std::size_t index = 0; index < declared && index + 1 < frame.locals.size(); ++index) {
+    Value value = Value::undefined();
+    if (index < arguments.size()) {
+      value = std::move(arguments[index]);
+    } else if (index - required < info.options.size()) {
+      const abc::AbcOptionalValue& option = info.options[index - required];
+      value = fo4::avm2::constant_value(*frame.file, option.kind, option.index);
+    }
+    const std::uint32_t type_index = index < info.param_types.size() ? info.param_types[index] : 0u;
+    const InterpreterStatus coerced = coerce_parameter(*frame.file, type_index, value, message);
+    if (coerced != InterpreterStatus::Ok) {
+      return coerced;
+    }
+    frame.locals[index + 1] = std::move(value);
+  }
+  if (declared + 1 < frame.locals.size()) {
+    if (info.needs_arguments()) {
+      frame.locals[declared + 1] = Value::object(make_array(std::move(all_arguments)));
+    } else if (info.needs_rest()) {
+      std::vector<Value> rest;
+      for (std::size_t index = declared; index < arguments.size(); ++index) {
+        rest.push_back(std::move(arguments[index]));
+      }
+      frame.locals[declared + 1] = Value::object(make_array(std::move(rest)));
+    }
+  }
+  return InterpreterStatus::Ok;
 }
 
 ExecutionResult Interpreter::ensure_class_initialized(Class& klass, std::size_t depth) {
@@ -327,7 +384,8 @@ ExecutionResult Interpreter::run_script(std::size_t script_index) {
   FunctionObject initializer(script.file->method_name(script.init_method), script.file,
                              script.init_method);
   Object* global = runtime_.global_object();
-  const Value this_value = global == nullptr ? Value::undefined() : borrowed_object(*global);
+  const Value this_value =
+      global == nullptr ? Value::undefined() : Value::object(runtime_.global_object_shared());
   return invoke(initializer, this_value, {}, {}, 0);
 }
 

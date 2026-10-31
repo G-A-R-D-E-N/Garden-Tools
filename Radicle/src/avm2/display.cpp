@@ -233,16 +233,47 @@ ExecutionResult MovieClip::goto_frame(Interpreter& interpreter, std::uint32_t fr
   return run_frame_lifecycle(interpreter);
 }
 
+void MovieClip::step_playhead() {
+  const std::uint32_t total = total_frames();
+  current_frame_ = current_frame_ >= total ? 1u : current_frame_ + 1;
+}
+
 ExecutionResult MovieClip::advance_frame(Interpreter& interpreter) {
   if (!playing_) {
     return ExecutionResult{};
   }
-  const std::uint32_t total = total_frames();
-  current_frame_ = current_frame_ >= total ? 1u : current_frame_ + 1;
+  step_playhead();
   return run_frame_lifecycle(interpreter);
 }
 
+ExecutionResult MovieClip::advance_timeline(Interpreter& interpreter) {
+  if (!playing_) {
+    return ExecutionResult{};
+  }
+  step_playhead();
+  ExecutionResult placement = apply_frame_state(interpreter);
+  if (!placement.ok()) {
+    return placement;
+  }
+  return run_frame_script(interpreter);
+}
+
+ExecutionResult MovieClip::place_frame(Interpreter& interpreter, std::uint32_t frame, bool play) {
+  current_frame_ = frame == 0 ? 1u : std::min(frame, total_frames());
+  playing_ = play;
+  return apply_frame_state(interpreter);
+}
+
+ExecutionResult MovieClip::run_frame_actions(Interpreter& interpreter) {
+  return run_frame_script(interpreter);
+}
+
 ExecutionResult MovieClip::run_frame_lifecycle(Interpreter& interpreter) {
+  const std::shared_ptr<Object> self = shared_from_this();
+  ExecutionResult enter = dispatch_event(interpreter, self, "enterFrame", false, 0);
+  if (!enter.ok()) {
+    return enter;
+  }
   ExecutionResult placement = apply_frame_state(interpreter);
   if (!placement.ok()) {
     return placement;
@@ -250,11 +281,6 @@ ExecutionResult MovieClip::run_frame_lifecycle(Interpreter& interpreter) {
   ExecutionResult script = run_frame_script(interpreter);
   if (!script.ok()) {
     return script;
-  }
-  const std::shared_ptr<Object> self = std::static_pointer_cast<Object>(shared_from_this());
-  ExecutionResult enter = dispatch_event(interpreter, self, "enterFrame", false, 0);
-  if (!enter.ok()) {
-    return enter;
   }
   ExecutionResult exit = dispatch_event(interpreter, self, "exitFrame", false, 0);
   if (!exit.ok()) {
@@ -279,15 +305,15 @@ void MovieClip::set_frame_script(std::uint32_t frame, std::shared_ptr<FunctionOb
 ExecutionResult MovieClip::run_frame_script(Interpreter& interpreter) {
   const auto added = added_frame_scripts_.find(current_frame_);
   if (added != added_frame_scripts_.end()) {
-    return interpreter.call_function(*added->second, detail::borrowed_object(*this), {}, 0);
+    return interpreter.call_function(*added->second, Value::object(shared_from_this()), {}, 0);
   }
   if (display_class() != nullptr) {
     const std::string frame_name = "frame" + std::to_string(current_frame_);
     const Trait* frame_trait =
         display_class()->resolve_instance_trait(multiname_for(frame_name));
     if (frame_trait != nullptr && frame_trait->function != nullptr) {
-      return interpreter.call_function(*frame_trait->function, detail::borrowed_object(*this), {},
-                                       0);
+      return interpreter.call_function(*frame_trait->function, Value::object(shared_from_this()),
+                                       {}, 0);
     }
   }
   if (timeline_ == nullptr || timeline_->frame_script_file == nullptr) {
@@ -308,7 +334,7 @@ ExecutionResult MovieClip::run_frame_script(Interpreter& interpreter) {
   if (display_class() != nullptr) {
     function.set_owner_class(display_class());
   }
-  return interpreter.call_function(function, detail::borrowed_object(*this), {}, 0);
+  return interpreter.call_function(function, Value::object(shared_from_this()), {}, 0);
 }
 
 Class* find_display_class(const Runtime& runtime, std::string_view rendered_name) {
@@ -566,6 +592,14 @@ bool read_display_property(Interpreter& interpreter, DisplayObject& object,
     }
     out = Value::object(interpreter.make_array(std::move(labels)));
     return true;
+  }
+  if (object.is_container()) {
+    const std::shared_ptr<DisplayObject> child =
+        static_cast<DisplayObjectContainer&>(object).child_by_name(name);
+    if (child != nullptr) {
+      out = Value::object(child);
+      return true;
+    }
   }
   return false;
 }

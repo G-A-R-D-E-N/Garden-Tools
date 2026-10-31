@@ -76,7 +76,7 @@ struct EventListener {
   std::int32_t priority{0};
 };
 
-class Object {
+class Object : public std::enable_shared_from_this<Object> {
  public:
   Object() = default;
   explicit Object(ObjectKind kind);
@@ -104,6 +104,11 @@ class Object {
 
   std::vector<EventListener>& event_listeners() noexcept { return event_listeners_; }
   const std::vector<EventListener>& event_listeners() const noexcept { return event_listeners_; }
+
+  std::unordered_map<const FunctionObject*, std::weak_ptr<FunctionObject>>&
+  bound_methods() noexcept {
+    return bound_methods_;
+  }
 
   const std::vector<Value>& slots() const noexcept { return slots_; }
   std::vector<Value>& slots() noexcept { return slots_; }
@@ -137,6 +142,7 @@ class Object {
   std::shared_ptr<Object> prototype_;
   std::vector<Value> slots_;
   std::vector<EventListener> event_listeners_;
+  std::unordered_map<const FunctionObject*, std::weak_ptr<FunctionObject>> bound_methods_;
   std::unordered_map<Key, Property, KeyHash> properties_;
 };
 

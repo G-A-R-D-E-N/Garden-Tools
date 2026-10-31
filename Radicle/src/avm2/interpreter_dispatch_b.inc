@@ -63,7 +63,7 @@
                           value_kind_name(object.kind()));
         }
         ExecutionResult nested =
-            set_property(frame, *object.as_object(), *multiname, value,
+            set_property(frame, object.as_object(), *multiname, value,
                          instruction.opcode == op::k_initproperty, depth);
         if (!nested.ok()) {
           return nested;
@@ -483,7 +483,7 @@
                       "cannot call " + property_text(*multiname) + " on " +
                           value_kind_name(receiver.kind()));
         }
-        ExecutionResult nested = call_property(frame, *receiver.as_object(), *multiname, arguments,
+        ExecutionResult nested = call_property(frame, receiver.as_object(), *multiname, arguments,
                                                depth);
         if (!nested.ok()) {
           return nested;
@@ -686,7 +686,7 @@
               if (target_class == nullptr || target_class->class_object == nullptr) {
                 type_matches = true;
               } else {
-                type_matches = is_instance_of(value, borrowed_object(*target_class->class_object));
+                type_matches = is_instance_of(value, Value::object(target_class->class_object));
               }
             }
           }

@@ -264,7 +264,9 @@ class ScriptBuilder {
     info.param_count = local_count == 0 ? 0 : local_count - 1;
     info.return_type = 0;
     info.name = string_of(name);
-    info.flags = 0;
+    info.flags = info.param_count == 0 ? 0 : 0x08;
+    info.options.assign(info.param_count,
+                        fo4::abc::AbcOptionalValue{fo4::abc::AbcValueKind::Undefined, 0});
     methods_.push_back(std::move(info));
     fo4::abc::AbcMethodBody body;
     body.method = static_cast<std::uint32_t>(methods_.size() - 1);

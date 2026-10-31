@@ -63,6 +63,13 @@ ExecutionResult dispatch_event(Interpreter& interpreter, const std::shared_ptr<O
 ExecutionResult dispatch_event(Interpreter& interpreter, const std::shared_ptr<Object>& target,
                                std::string type, bool bubbles, std::size_t depth);
 
+/* Call after the child is attached; its subtree gets addedToStage when it is on a stage. */
+ExecutionResult dispatch_added(Interpreter& interpreter,
+                               const std::shared_ptr<DisplayObject>& child);
+/* Call before the child is detached, so listeners still see its parent and stage. */
+ExecutionResult dispatch_removed(Interpreter& interpreter,
+                                 const std::shared_ptr<DisplayObject>& child);
+
 /* Requires the listener to be a Function value; the signature is the AS3 one. */
 bool add_event_listener(Object& target, std::string_view type, const Value& listener,
                         bool use_capture, std::int32_t priority);

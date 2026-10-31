@@ -436,6 +436,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/avm2/native_display.cpp
   src/avm2/swf_movie_data.cpp
   src/avm2/swf_runtime.cpp
+  src/avm2/swf_timeline_clip.cpp
   src/avm2/snapshot.cpp
   src/avm2/display_snapshot.cpp
   src/avm2/hit_test.cpp
@@ -1031,6 +1032,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_avm2_runtime.cpp
     tests/test_avm2_call_indexed.cpp
     tests/test_avm2_interpreter.cpp
+    tests/test_avm2_arguments.cpp
+    tests/test_avm2_stage_events.cpp
     tests/test_avm2_scope_depth.cpp
     tests/test_avm2_scripts_real.cpp
     tests/test_avm2_builtins.cpp

@@ -596,4 +596,126 @@ TEST(Avm2Events, BoundMethodListenerRunsWithItsReceiverAndRemovesByAFreshRead) {
   EXPECT_TRUE(fo4::avm2::remove_event_listener(*dispatcher, "ping", again.value, false));
 }
 
+namespace {
+
+fo4::abc::AbcFile holder_method_file(avm2_test::ScriptBuilder& script,
+                                     const std::vector<std::uint8_t>& init_code) {
+  const std::uint32_t holder = script.multiname("Holder");
+  const std::uint32_t object = script.multiname("Object");
+  const std::uint32_t tick = script.multiname("tick");
+  const std::uint32_t ticked_on = script.multiname("tickedOn");
+  const std::uint32_t get_tick = script.multiname("getTick");
+  avm2_test::CodeBuilder constructor_code;
+  constructor_code.returnvoid();
+  const std::uint32_t constructor = script.method("ctor", constructor_code.bytes(), 1);
+  avm2_test::CodeBuilder tick_code;
+  tick_code.getlocal0();
+  tick_code.getproperty(tick);
+  tick_code.pop();
+  tick_code.getlocal0();
+  tick_code.getglobalscope();
+  tick_code.swap();
+  tick_code.setproperty(ticked_on);
+  tick_code.returnvoid();
+  const std::uint32_t tick_method = script.method("tick", tick_code.bytes(), 1);
+  avm2_test::CodeBuilder get_code;
+  get_code.getlocal0();
+  get_code.getproperty(tick);
+  get_code.returnvalue();
+  const std::uint32_t get_method = script.method("getTick", get_code.bytes(), 1);
+  const std::uint32_t init = script.method("init", init_code, 1);
+  fo4::abc::AbcFile file = script.finish(init);
+  fo4::abc::AbcTrait tick_trait;
+  tick_trait.name = tick;
+  tick_trait.kind = fo4::abc::AbcTraitKind::Method;
+  tick_trait.method_index = tick_method;
+  fo4::abc::AbcTrait get_trait;
+  get_trait.name = get_tick;
+  get_trait.kind = fo4::abc::AbcTraitKind::Method;
+  get_trait.method_index = get_method;
+  fo4::abc::AbcInstanceInfo instance;
+  instance.name = holder;
+  instance.super_index = object;
+  instance.iinit = constructor;
+  instance.traits = {tick_trait, get_trait};
+  file.instances.push_back(instance);
+  fo4::abc::AbcClassInfo klass;
+  klass.cinit = constructor;
+  file.classes.push_back(klass);
+  return file;
+}
+
+}  // namespace
+
+TEST(Avm2Events, BoundMethodFromACalledMethodKeepsItsReceiverAlive) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t get_tick = script.multiname("getTick");
+  const std::uint32_t holder_global = script.multiname("holder");
+  const std::uint32_t bound_global = script.multiname("bound");
+  avm2_test::CodeBuilder init_code;
+  init_code.findpropstrict(holder_global);
+  init_code.getproperty(holder_global);
+  init_code.callproperty(get_tick, 0);
+  init_code.getglobalscope();
+  init_code.swap();
+  init_code.setproperty(bound_global);
+  init_code.returnvoid();
+  fo4::abc::AbcFile file = holder_method_file(script, init_code.bytes());
+
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  Interpreter interpreter{runtime};
+  auto holder = std::make_shared<fo4::avm2::Object>();
+  holder->set_instance_class(const_cast<fo4::avm2::Class*>(runtime.find_class("Holder")));
+  const fo4::avm2::Object* holder_address = holder.get();
+  std::weak_ptr<fo4::avm2::Object> watch = holder;
+  Property& holder_property =
+      runtime.global_object()->define_own_property(fo4::avm2::primary_key(public_name("holder")));
+  holder_property.kind = fo4::avm2::PropertyKind::Value;
+  holder_property.value = Value::object(holder);
+  ASSERT_TRUE(interpreter.run_script(0).ok());
+
+  Value bound;
+  ASSERT_TRUE(runtime.global_object()->read_value(public_name("bound"), bound));
+  ASSERT_TRUE(bound.is_object());
+  holder_property.value = Value::undefined();
+  holder.reset();
+  EXPECT_FALSE(watch.expired());
+  watch.reset();
+
+  const ExecutionResult called = interpreter.call_function(
+      static_cast<const FunctionObject&>(*bound.as_object()), Value::undefined(), {}, 0);
+  ASSERT_TRUE(called.ok()) << called.message;
+  Value ticked;
+  ASSERT_TRUE(runtime.global_object()->read_value(public_name("tickedOn"), ticked));
+  ASSERT_TRUE(ticked.is_object());
+  EXPECT_EQ(ticked.as_object().get(), holder_address);
+}
+
+TEST(Avm2Events, ReadingAMethodTwiceGivesTheSameClosureAndADuplicateListenerIsIgnored) {
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder init_code;
+  init_code.returnvoid();
+  fo4::abc::AbcFile file = holder_method_file(script, init_code.bytes());
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  Interpreter interpreter{runtime};
+  auto receiver = std::make_shared<fo4::avm2::Object>();
+  receiver->set_instance_class(const_cast<fo4::avm2::Class*>(runtime.find_class("Holder")));
+  auto dispatcher = make_sprite(runtime);
+  ASSERT_NE(dispatcher, nullptr);
+
+  const ExecutionResult first = interpreter.read_property(*receiver, public_name("tick"), 0);
+  const ExecutionResult second = interpreter.read_property(*receiver, public_name("tick"), 0);
+  ASSERT_TRUE(first.ok()) << first.message;
+  ASSERT_TRUE(second.ok()) << second.message;
+  ASSERT_TRUE(first.value.is_object());
+  EXPECT_EQ(first.value.as_object().get(), second.value.as_object().get());
+  ASSERT_TRUE(fo4::avm2::add_event_listener(*dispatcher, "ping", first.value, false, 0));
+  ASSERT_TRUE(fo4::avm2::add_event_listener(*dispatcher, "ping", second.value, false, 0));
+  EXPECT_EQ(dispatcher->event_listeners().size(), 1u);
+}
+
 }  // namespace

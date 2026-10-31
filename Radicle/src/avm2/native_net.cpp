@@ -308,6 +308,10 @@ ExecutionResult loader_load(Interpreter& interpreter, const Value& self,
   if (loader->content != nullptr) {
     loader->add_child(loader->content);
     interpreter.runtime().register_movie_clip(loader->content);
+    ExecutionResult added = dispatch_added(interpreter, loader->content);
+    if (!added.ok()) {
+      return added;
+    }
   }
   loader->loaded = true;
   dispatch_type(interpreter, self, "complete", depth);

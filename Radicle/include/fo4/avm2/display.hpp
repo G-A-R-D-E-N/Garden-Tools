@@ -36,7 +36,7 @@ struct TimelineDefinition {
   std::uint32_t frame_for_label(const std::string& name) const;
 };
 
-class DisplayObject : public Object, public std::enable_shared_from_this<DisplayObject> {
+class DisplayObject : public Object {
  public:
   explicit DisplayObject(Class* display_class);
 
@@ -233,8 +233,14 @@ class MovieClip : public DisplayObjectContainer {
   ExecutionResult goto_frame(Interpreter& interpreter, std::uint32_t frame, bool play);
   /* Requires a linked runtime; advances one frame and runs the frame lifecycle hooks in order. */
   ExecutionResult advance_frame(Interpreter& interpreter);
+  /* Requires a linked runtime; advances one frame without frame events, which the stage sends. */
+  ExecutionResult advance_timeline(Interpreter& interpreter);
+  /* Places a frame and sets the playhead; runs no frame script and dispatches no event. */
+  ExecutionResult place_frame(Interpreter& interpreter, std::uint32_t frame, bool play);
+  /* Runs the current frame's script; the caller has placed the frame already. */
+  ExecutionResult run_frame_actions(Interpreter& interpreter);
 
-  /* The lifecycle order must stay construct, placement, frameScript, enterFrame, exitFrame. */
+  /* enterFrame runs before placement and the frame script; exitFrame runs after them. */
   ExecutionResult run_frame_lifecycle(Interpreter& interpreter);
 
  protected:
@@ -243,6 +249,7 @@ class MovieClip : public DisplayObjectContainer {
 
  private:
   ExecutionResult run_frame_script(Interpreter& interpreter);
+  void step_playhead();
 
   std::shared_ptr<TimelineDefinition> timeline_;
   std::map<std::uint32_t, std::shared_ptr<FunctionObject>> added_frame_scripts_;

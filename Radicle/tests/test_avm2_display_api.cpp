@@ -256,4 +256,74 @@ TEST(Avm2DisplayApi, LoaderInfoIsAnEventDispatcher) {
   EXPECT_TRUE(loader_info->is_subclass_of(dispatcher));
 }
 
+TEST(Avm2DisplayApi, AbcGetterOverridesTheNativeDisplayProperty) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t panel = script.multiname("Panel");
+  const std::uint32_t sprite = script.multiname("Sprite", "flash.display");
+  const std::uint32_t width = script.multiname("width");
+  avm2_test::CodeBuilder constructor_code;
+  constructor_code.returnvoid();
+  const std::uint32_t constructor = script.method("ctor", constructor_code.bytes(), 1);
+  avm2_test::CodeBuilder getter_code;
+  getter_code.pushbyte(42);
+  getter_code.returnvalue();
+  const std::uint32_t getter = script.method("getWidth", getter_code.bytes(), 1);
+  avm2_test::CodeBuilder script_code;
+  script_code.getlex(sprite);
+  script_code.newclass(0);
+  script_code.construct(0);
+  script_code.returnvalue();
+  const std::uint32_t script_method = script.method("init", script_code.bytes(), 1);
+  abc::AbcFile file = script.finish(script_method);
+  abc::AbcTrait getter_trait;
+  getter_trait.name = width;
+  getter_trait.kind = abc::AbcTraitKind::Getter;
+  getter_trait.method_index = getter;
+  abc::AbcInstanceInfo instance;
+  instance.name = panel;
+  instance.super_index = sprite;
+  instance.iinit = constructor;
+  instance.traits.push_back(getter_trait);
+  file.instances.push_back(instance);
+  abc::AbcClassInfo klass;
+  klass.cinit = constructor;
+  file.classes.push_back(klass);
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  Interpreter interpreter{runtime};
+  const ExecutionResult made = interpreter.run_script(0);
+  ASSERT_TRUE(made.ok()) << made.message;
+  ASSERT_TRUE(made.value.is_object());
+  fo4::avm2::Multiname multiname;
+  multiname.name = "width";
+  multiname.namespaces.push_back(fo4::avm2::Namespace{});
+  const ExecutionResult read =
+      interpreter.read_property(*made.value.as_object(), multiname, 0);
+  ASSERT_TRUE(read.ok()) << read.message;
+  ASSERT_TRUE(read.value.is_number_like());
+  EXPECT_EQ(read.value.as_number(), 42.0);
+}
+
+TEST(Avm2DisplayApi, ChildInstanceNameIsAPropertyOfItsParent) {
+  Runtime runtime;
+  ASSERT_TRUE(runtime.link().ok());
+  auto clip = std::dynamic_pointer_cast<fo4::avm2::MovieClip>(fo4::avm2::make_display_object(
+      runtime, *const_cast<fo4::avm2::Class*>(runtime.find_class("flash.display::MovieClip"))));
+  auto child = fo4::avm2::make_display_object(
+      runtime, *const_cast<fo4::avm2::Class*>(runtime.find_class("flash.display::Sprite")));
+  ASSERT_NE(clip, nullptr);
+  ASSERT_NE(child, nullptr);
+  child->set_name("List_mc");
+  ASSERT_TRUE(static_cast<fo4::avm2::DisplayObjectContainer*>(clip.get())->add_child(child));
+  Interpreter interpreter{runtime};
+  fo4::avm2::Multiname multiname;
+  multiname.name = "List_mc";
+  multiname.namespaces.push_back(fo4::avm2::Namespace{});
+  const ExecutionResult read = interpreter.read_property(*clip, multiname, 0);
+  ASSERT_TRUE(read.ok()) << read.message;
+  ASSERT_TRUE(read.value.is_object());
+  EXPECT_EQ(read.value.as_object().get(), static_cast<fo4::avm2::Object*>(child.get()));
+}
+
 }  // namespace

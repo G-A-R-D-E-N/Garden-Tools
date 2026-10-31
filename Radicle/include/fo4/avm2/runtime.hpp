@@ -47,6 +47,7 @@ struct RuntimeLoad {
 };
 
 RuntimeStatus resolve_multiname(const abc::AbcFile& file, std::uint32_t index, Multiname& out);
+Value constant_value(const abc::AbcFile& file, abc::AbcValueKind kind, std::uint32_t index);
 
 struct ScriptEntry {
   const abc::AbcFile* file{nullptr};

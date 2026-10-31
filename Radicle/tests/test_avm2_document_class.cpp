@@ -29,6 +29,7 @@ using fo4::test::put_u16;
 using fo4::test::put_u30;
 using fo4::test::put_u8;
 using swf_test::SwfBuilder;
+using swf_test::sprite_tag;
 using swf_test::wrap_body;
 
 /* A document-class ABC must extend MovieClip and its iinit must record that it ran. */
@@ -205,21 +206,21 @@ std::vector<std::byte> movie_with_blocks(const std::vector<abc::AbcFile>& blocks
 }
 
 abc::AbcFile document_file(const std::string& super_package, const std::string& super_name,
-                           bool read_stage) {
+                           const std::string& read_name, const std::string& store_name) {
   avm2_test::ScriptBuilder script;
   const std::uint32_t document = script.multiname("DocumentClass");
   const std::uint32_t super = script.multiname(super_name, super_package);
-  const std::uint32_t stage = script.multiname("stage");
-  const std::uint32_t stage_seen = script.multiname("stageSeen");
+  const std::uint32_t read = script.multiname(read_name);
+  const std::uint32_t store = script.multiname(store_name);
   const std::uint32_t ping = script.multiname("Ping");
   avm2_test::CodeBuilder constructor_code;
   constructor_code.getlocal0();
   constructor_code.pushscope();
-  if (read_stage) {
-    constructor_code.getlex(stage);
+  if (!read_name.empty()) {
+    constructor_code.getlex(read);
     constructor_code.getglobalscope();
     constructor_code.swap();
-    constructor_code.setproperty(stage_seen);
+    constructor_code.setproperty(store);
   }
   constructor_code.returnvoid();
   const std::uint32_t constructor = script.method("iinit", constructor_code.bytes(), 1);
@@ -259,8 +260,8 @@ fo4::avm2::Value global_value(fo4::avm2::Runtime& runtime, const std::string& na
 }  // namespace
 
 TEST(Avm2DocumentClass, StageIsReadableInTheDocumentConstructor) {
-  const std::vector<std::byte> bytes =
-      movie_with_blocks({document_file("flash.display", "MovieClip", true)}, true);
+  const std::vector<std::byte> bytes = movie_with_blocks(
+      {document_file("flash.display", "MovieClip", "stage", "stageSeen")}, true);
   const fo4::swf::SwfReadResult read = fo4::swf::read_swf(bytes);
   ASSERT_TRUE(read.ok()) << fo4::swf::status_name(read.status);
   fo4::avm2::Runtime runtime;
@@ -276,7 +277,7 @@ TEST(Avm2DocumentClass, StageIsReadableInTheDocumentConstructor) {
 
 TEST(Avm2DocumentClass, DocumentClassExtendingSpriteBecomesTheRootAndKeepsItsMethods) {
   const std::vector<std::byte> bytes =
-      movie_with_blocks({document_file("flash.display", "Sprite", false)}, true);
+      movie_with_blocks({document_file("flash.display", "Sprite", "", "")}, true);
   const fo4::swf::SwfReadResult read = fo4::swf::read_swf(bytes);
   ASSERT_TRUE(read.ok()) << fo4::swf::status_name(read.status);
   fo4::avm2::Runtime runtime;
@@ -342,4 +343,49 @@ TEST(Avm2DocumentClass, ScriptOfAnEarlierBlockCanNameAClassFromALaterBlock) {
   ASSERT_NE(found, nullptr);
   EXPECT_FALSE(found->external);
   EXPECT_EQ(found->name, "Later");
+}
+
+namespace {
+
+std::vector<std::byte> movie_with_frame_one_child(const abc::AbcFile& document) {
+  SwfBuilder builder;
+  builder.rect(0, 400, 0, 200, 9);
+  builder.u16(24u * 256u);
+  builder.u16(1);
+  add_abc_block(builder, document, "document");
+  builder.tag(fo4::swf::tag::kDefineSprite, sprite_tag(2, 1, {}), false);
+  SwfBuilder place;
+  place.u8(0x22);
+  place.u16(1);
+  place.u16(2);
+  place.text("List_mc");
+  builder.tag(fo4::swf::tag::kPlaceObject2, place.body, false);
+  SwfBuilder symbols;
+  symbols.u16(1);
+  symbols.u16(0);
+  symbols.text("DocumentClass");
+  builder.tag(fo4::swf::tag::kSymbolClass, symbols.body, false);
+  builder.tag(fo4::swf::tag::kShowFrame);
+  builder.tag(fo4::swf::tag::kEnd);
+  return wrap_body(builder.body, 10, false, false);
+}
+
+}  // namespace
+
+TEST(Avm2DocumentClass, FrameOneChildrenExistWhenTheDocumentConstructorRuns) {
+  const std::vector<std::byte> bytes = movie_with_frame_one_child(
+      document_file("flash.display", "MovieClip", "List_mc", "childSeen"));
+  const fo4::swf::SwfReadResult read = fo4::swf::read_swf(bytes);
+  ASSERT_TRUE(read.ok()) << fo4::swf::status_name(read.status);
+  fo4::avm2::Runtime runtime;
+  fo4::avm2::Interpreter interpreter{runtime};
+  ASSERT_TRUE(runtime.link().ok());
+  const std::shared_ptr<fo4::avm2::SwfRuntime> movie =
+      fo4::avm2::SwfRuntime::create(runtime, interpreter, read.file);
+  ASSERT_NE(movie, nullptr) << fo4::avm2::SwfRuntime::last_error();
+  const std::shared_ptr<fo4::avm2::DisplayObject> placed = movie->root()->child_by_name("List_mc");
+  ASSERT_NE(placed, nullptr);
+  const fo4::avm2::Value seen = global_value(runtime, "childSeen");
+  ASSERT_TRUE(seen.is_object());
+  EXPECT_EQ(seen.as_object().get(), static_cast<fo4::avm2::Object*>(placed.get()));
 }

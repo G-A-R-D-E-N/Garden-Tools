@@ -67,7 +67,12 @@ ExecutionResult Interpreter::read_property(Object& object, const Multiname& mult
   if (global != nullptr) {
     frame.scopes.push_back(global);
   }
-  return get_property(frame, detail::borrowed_object(object).as_object(), multiname, depth);
+  const std::shared_ptr<Object> owner = detail::owner_of(object);
+  if (owner == nullptr) {
+    return fail(InterpreterStatus::InvalidArgument,
+                "the receiver of a property read must be owned by a shared_ptr");
+  }
+  return get_property(frame, owner, multiname, depth);
 }
 
 ExecutionResult Interpreter::write_property(Object& object, const Multiname& multiname,
@@ -77,7 +82,12 @@ ExecutionResult Interpreter::write_property(Object& object, const Multiname& mul
   if (global != nullptr) {
     frame.scopes.push_back(global);
   }
-  return set_property(frame, object, multiname, value, false, depth);
+  const std::shared_ptr<Object> owner = detail::owner_of(object);
+  if (owner == nullptr) {
+    return fail(InterpreterStatus::InvalidArgument,
+                "the receiver of a property write must be owned by a shared_ptr");
+  }
+  return set_property(frame, owner, multiname, value, false, depth);
 }
 
 std::shared_ptr<Object> Interpreter::make_instance(Class& klass) {
@@ -187,7 +197,7 @@ double Interpreter::next_random() {
 
 Value Interpreter::global_this() {
   Object* global = runtime_.global_object();
-  return global == nullptr ? Value::undefined() : detail::borrowed_object(*global);
+  return global == nullptr ? Value::undefined() : Value::object(runtime_.global_object_shared());
 }
 
 ExecutionResult Interpreter::call_native_id(std::uint32_t native_id, const Value& self,
