@@ -219,8 +219,9 @@ std::vector<std::byte> child_movie() {
   const std::vector<std::byte> sprite = swf_test::sprite_tag(
       2, 2, {{fo4::swf::tag::kShowFrame, {}}, {fo4::swf::tag::kShowFrame, {}}});
   const std::vector<std::byte> place = swf_test::place_full(1, 2, {}, {});
-  return swf_test::movie_of(2, {{fo4::swf::tag::kDefineSprite, sprite},
+  return swf_test::movie_of(3, {{fo4::swf::tag::kDefineSprite, sprite},
                                 {fo4::swf::tag::kPlaceObject2, place},
+                                {fo4::swf::tag::kShowFrame, {}},
                                 {fo4::swf::tag::kShowFrame, {}},
                                 {fo4::swf::tag::kRemoveObject2, remove.body},
                                 {fo4::swf::tag::kShowFrame, {}}});
@@ -488,7 +489,7 @@ TEST(Avm2StageEvents, ChildScriptThatGoesToAFrameRemovingItKeepsTheSpriteLoopInt
   avm2_test::CodeBuilder child_code;
   child_code.getlocal0();
   child_code.getproperty(parent_name);
-  child_code.pushbyte(2);
+  child_code.pushbyte(3);
   child_code.callpropvoid(goto_name, 1);
   child_code.returnvoid();
   const std::uint32_t child_frame2 = scene.script.method("childFrame2", child_code.bytes(), 1);
@@ -506,10 +507,77 @@ TEST(Avm2StageEvents, ChildScriptThatGoesToAFrameRemovingItKeepsTheSpriteLoopInt
   static_cast<fo4::avm2::MovieClip&>(*child).set_frame_script(
       2, std::make_shared<FunctionObject>("childFrame2", &scene.file, child_frame2));
 
-  const ExecutionResult jumped = movie->root()->goto_frame(*scene.interpreter, 1, true);
+  movie->advance(*scene.interpreter, 1.0 / 12.0);
+  EXPECT_EQ(movie->root()->current_frame(), 3u);
+  EXPECT_TRUE(movie->root()->children().empty());
+}
+
+TEST(Avm2StageEvents, GotoDoesNotAdvanceExistingChildren) {
+  Scene scene;
+  avm2_test::CodeBuilder init;
+  init.returnvoid();
+  scene.start(init.bytes());
+
+  const fo4::swf::SwfReadResult read = fo4::swf::read_swf(child_movie());
+  ASSERT_TRUE(read.ok()) << fo4::swf::status_name(read.status);
+  const std::shared_ptr<fo4::avm2::SwfRuntime> movie =
+      fo4::avm2::SwfRuntime::create(scene.runtime, *scene.interpreter, read.file);
+  ASSERT_NE(movie, nullptr) << fo4::avm2::SwfRuntime::last_error();
+  const std::shared_ptr<DisplayObject> child = movie->root()->child_at(0);
+  ASSERT_NE(child, nullptr);
+
+  const ExecutionResult jumped = movie->root()->goto_frame(*scene.interpreter, 2, true);
   EXPECT_TRUE(jumped.ok()) << jumped.message;
   EXPECT_EQ(movie->root()->current_frame(), 2u);
-  EXPECT_TRUE(movie->root()->children().empty());
+  EXPECT_EQ(static_cast<fo4::avm2::MovieClip&>(*child).current_frame(), 1u);
+}
+
+std::vector<std::byte> two_sprites_movie() {
+  const std::vector<std::byte> sprite = swf_test::sprite_tag(
+      2, 3,
+      {{fo4::swf::tag::kShowFrame, {}}, {fo4::swf::tag::kShowFrame, {}},
+       {fo4::swf::tag::kShowFrame, {}}});
+  const std::vector<std::byte> place_a = swf_test::place_full(1, 2, {}, {});
+  const std::vector<std::byte> place_c = swf_test::place_full(2, 2, {}, {});
+  return swf_test::movie_of(3, {{fo4::swf::tag::kDefineSprite, sprite},
+                                {fo4::swf::tag::kPlaceObject2, place_a},
+                                {fo4::swf::tag::kShowFrame, {}},
+                                {fo4::swf::tag::kShowFrame, {}},
+                                {fo4::swf::tag::kPlaceObject2, place_c},
+                                {fo4::swf::tag::kShowFrame, {}}});
+}
+
+// Regression: a live sprite loop also visits a sibling a nested goto inserts, stepping it on its creation tick.
+TEST(Avm2StageEvents, SiblingCreatedByANestedGotoIsNotAdvancedOnItsCreationTick) {
+  Scene scene;
+  const std::uint32_t goto_name = scene.script.multiname("gotoAndStop");
+  const std::uint32_t parent_name = scene.script.multiname("parent");
+  avm2_test::CodeBuilder child_code;
+  child_code.getlocal0();
+  child_code.getproperty(parent_name);
+  child_code.pushbyte(3);
+  child_code.callpropvoid(goto_name, 1);
+  child_code.returnvoid();
+  const std::uint32_t child_frame2 = scene.script.method("childFrame2", child_code.bytes(), 1);
+  avm2_test::CodeBuilder init;
+  init.returnvoid();
+  scene.start(init.bytes());
+
+  const fo4::swf::SwfReadResult read = fo4::swf::read_swf(two_sprites_movie());
+  ASSERT_TRUE(read.ok()) << fo4::swf::status_name(read.status);
+  const std::shared_ptr<fo4::avm2::SwfRuntime> movie =
+      fo4::avm2::SwfRuntime::create(scene.runtime, *scene.interpreter, read.file);
+  ASSERT_NE(movie, nullptr) << fo4::avm2::SwfRuntime::last_error();
+  const std::shared_ptr<DisplayObject> first = movie->root()->child_at(0);
+  ASSERT_NE(first, nullptr);
+  static_cast<fo4::avm2::MovieClip&>(*first).set_frame_script(
+      2, std::make_shared<FunctionObject>("childFrame2", &scene.file, child_frame2));
+
+  movie->advance(*scene.interpreter, 1.0 / 12.0);
+  EXPECT_EQ(movie->root()->current_frame(), 3u);
+  ASSERT_EQ(movie->root()->children().size(), 2u);
+  const std::shared_ptr<DisplayObject> created = movie->root()->child_at(1);
+  EXPECT_EQ(static_cast<fo4::avm2::MovieClip&>(*created).current_frame(), 1u);
 }
 
 }  // namespace

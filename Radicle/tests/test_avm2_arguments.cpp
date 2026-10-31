@@ -195,7 +195,7 @@ TEST(Avm2Arguments, ClassParameterAcceptsAClassObject) {
   EXPECT_EQ(result.value.as_object()->kind(), fo4::avm2::ObjectKind::Class);
 }
 
-TEST(Avm2Arguments, FunctionParameterAcceptsAClassObject) {
+TEST(Avm2Arguments, FunctionParameterRejectsAClassObject) {
   avm2_test::ScriptBuilder script;
   const std::uint32_t function_type = script.multiname("Function");
   const std::uint32_t object_class = script.multiname("Object");
@@ -220,9 +220,9 @@ TEST(Avm2Arguments, FunctionParameterAcceptsAClassObject) {
   ASSERT_TRUE(runtime.link().ok());
   Interpreter interpreter(runtime);
   const ExecutionResult result = interpreter.run_script(0);
-  ASSERT_TRUE(result.ok()) << result.message;
-  ASSERT_TRUE(result.value.is_object());
-  EXPECT_EQ(result.value.as_object()->kind(), fo4::avm2::ObjectKind::Class);
+  EXPECT_FALSE(result.ok());
+  EXPECT_NE(result.message.find("value is not of type Function"), std::string::npos)
+      << result.message;
 }
 
 TEST(Avm2Arguments, ObjectParameterAcceptsAClassObject) {

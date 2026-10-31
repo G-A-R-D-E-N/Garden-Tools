@@ -207,7 +207,7 @@ ExecutionResult ext_add_callback(Interpreter& interpreter, const Value& self,
 ExecutionResult definition_by_name(Interpreter& interpreter, const Value& self,
                                    const std::vector<Value>& arguments) {
   (void)self;
-  const std::string name = to_string(argument_at(arguments, 0));
+  const std::string name = rendered_class_name(to_string(argument_at(arguments, 0)));
   const Class* klass = interpreter.runtime().find_class(name);
   if (klass == nullptr) {
     return native_value(Value::null());
@@ -248,7 +248,7 @@ ExecutionResult app_domain_get_definition(Interpreter& interpreter, const Value&
   if (domain == nullptr) {
     return native_value(Value::null());
   }
-  const std::string name = to_string(argument_at(arguments, 0));
+  const std::string name = rendered_class_name(to_string(argument_at(arguments, 0)));
   const Class* klass = interpreter.runtime().find_domain_definition(*domain, name);
   if (klass == nullptr) {
     return native_value(Value::null());
@@ -262,7 +262,7 @@ ExecutionResult app_domain_has_definition(Interpreter& interpreter, const Value&
   if (domain == nullptr) {
     return native_value(Value::boolean(false));
   }
-  const std::string name = to_string(argument_at(arguments, 0));
+  const std::string name = rendered_class_name(to_string(argument_at(arguments, 0)));
   return native_value(
       Value::boolean(interpreter.runtime().find_domain_definition(*domain, name) != nullptr));
 }
@@ -293,6 +293,7 @@ ExecutionResult loader_load(Interpreter& interpreter, const Value& self,
     return native_value(Value::undefined());
   }
   const std::string url = request_url(argument_at(arguments, 0));
+  dispatch_type(interpreter, loader->content_loader_info, "open", depth);
   const std::optional<std::vector<std::uint8_t>> bytes =
       interpreter.runtime().host().resolve_asset(url);
   if (!bytes.has_value()) {
@@ -328,6 +329,7 @@ ExecutionResult loader_load(Interpreter& interpreter, const Value& self,
     }
   }
   loader->loaded = true;
+  dispatch_type(interpreter, loader->content_loader_info, "init", depth);
   dispatch_type(interpreter, loader->content_loader_info, "complete", depth);
   return native_value(Value::undefined());
 }

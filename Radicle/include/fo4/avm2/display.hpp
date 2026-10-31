@@ -250,7 +250,8 @@ class MovieClip : public DisplayObjectContainer {
 
  protected:
   /* The bridge subclass must apply the timeline's PlaceObject/RemoveObject rows here. */
-  virtual ExecutionResult apply_frame_state(Interpreter& interpreter, std::size_t depth);
+  virtual ExecutionResult apply_frame_state(Interpreter& interpreter, std::size_t depth,
+                                            bool advance_children);
 
  private:
   ExecutionResult run_frame_script(Interpreter& interpreter, std::size_t depth);

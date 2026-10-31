@@ -421,6 +421,7 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/avm2/interpreter.cpp
   src/avm2/interpreter_ops.cpp
   src/avm2/interpreter_property.cpp
+  src/avm2/interpreter_coerce.cpp
   src/avm2/interpreter_memory.cpp
   src/avm2/interpreter_xml_text.cpp
   src/avm2/interpreter_support.cpp
@@ -1032,6 +1033,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_avm2_runtime.cpp
     tests/test_avm2_call_indexed.cpp
     tests/test_avm2_interpreter.cpp
+    tests/test_avm2_types.cpp
     tests/test_avm2_arguments.cpp
     tests/test_avm2_stage_events.cpp
     tests/test_avm2_scope_depth.cpp

@@ -261,7 +261,7 @@ ExecutionResult MovieClip::advance_timeline(Interpreter& interpreter, std::size_
     return ExecutionResult{};
   }
   step_playhead();
-  ExecutionResult placement = apply_frame_state(interpreter, depth);
+  ExecutionResult placement = apply_frame_state(interpreter, depth, true);
   if (!placement.ok()) {
     return placement;
   }
@@ -272,7 +272,7 @@ ExecutionResult MovieClip::place_frame(Interpreter& interpreter, std::uint32_t f
                                        std::size_t depth) {
   current_frame_ = frame == 0 ? 1u : std::min(frame, total_frames());
   playing_ = play;
-  return apply_frame_state(interpreter, depth);
+  return apply_frame_state(interpreter, depth, false);
 }
 
 ExecutionResult MovieClip::run_frame_actions(Interpreter& interpreter, std::size_t depth) {
@@ -285,7 +285,7 @@ ExecutionResult MovieClip::run_frame_lifecycle(Interpreter& interpreter) {
   if (!enter.ok()) {
     return enter;
   }
-  ExecutionResult placement = apply_frame_state(interpreter, 0);
+  ExecutionResult placement = apply_frame_state(interpreter, 0, true);
   if (!placement.ok()) {
     return placement;
   }
@@ -300,9 +300,11 @@ ExecutionResult MovieClip::run_frame_lifecycle(Interpreter& interpreter) {
   return script;
 }
 
-ExecutionResult MovieClip::apply_frame_state(Interpreter& interpreter, std::size_t depth) {
+ExecutionResult MovieClip::apply_frame_state(Interpreter& interpreter, std::size_t depth,
+                                             bool advance_children) {
   (void)interpreter;
   (void)depth;
+  (void)advance_children;
   return ExecutionResult{};
 }
 

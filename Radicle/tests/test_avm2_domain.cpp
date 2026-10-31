@@ -571,4 +571,58 @@ TEST(Avm2Domain, LoaderInfoContentIsTheLoadedMovie) {
   EXPECT_TRUE(result.value.is_object());
 }
 
+TEST(Avm2Domain, LoaderDispatchesOpenInitAndCompleteInOrder) {
+  DomainHarness harness;
+  harness.assets["second.swf"] = second_movie();
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t loader_class = script.multiname("Loader", "flash.display");
+  const std::uint32_t request_class = script.multiname("URLRequest", "flash.net");
+  const std::uint32_t load_name = script.multiname("load");
+  const std::uint32_t content_info = script.multiname("contentLoaderInfo");
+  const std::uint32_t listen = script.multiname("addEventListener");
+  const std::uint32_t log = script.multiname("log");
+  std::vector<std::pair<std::string, std::uint32_t>> handlers;
+  for (const char* type : {"open", "init", "complete"}) {
+    avm2_test::CodeBuilder body;
+    body.getglobalscope();
+    body.getglobalscope();
+    body.getproperty(log);
+    body.pushstring(script.string_of(std::string{type} + ","));
+    body.add();
+    body.setproperty(log);
+    body.returnvoid();
+    handlers.emplace_back(type, script.method(std::string{"on_"} + type, body.bytes(), 1));
+  }
+  avm2_test::CodeBuilder code;
+  code.getglobalscope();
+  code.pushstring(script.string_of(""));
+  code.setproperty(log);
+  code.getlex(loader_class);
+  code.construct(0);
+  code.setlocal(1);
+  code.getlocal(1);
+  code.getproperty(content_info);
+  code.setlocal(2);
+  for (const auto& [type, method] : handlers) {
+    code.getlocal(2);
+    code.pushstring(script.string_of(type));
+    code.newfunction(method);
+    code.callpropvoid(listen, 2);
+  }
+  code.getlex(request_class);
+  code.pushstring(script.string_of("second.swf"));
+  code.construct(1);
+  code.setlocal(3);
+  code.getlocal(1);
+  code.getlocal(3);
+  code.callpropvoid(load_name, 1);
+  code.getglobalscope();
+  code.getproperty(log);
+  code.returnvalue();
+  const ExecutionResult result = harness.run(script, code, 4);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_string());
+  EXPECT_EQ(result.value.as_string(), "open,init,complete,");
+}
+
 }  // namespace

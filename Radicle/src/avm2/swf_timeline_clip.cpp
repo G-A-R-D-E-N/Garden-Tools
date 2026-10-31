@@ -137,7 +137,8 @@ class SwfTimelineClip : public MovieClip {
   std::uint16_t character_id() const noexcept { return character_id_; }
 
  protected:
-  ExecutionResult apply_frame_state(Interpreter& interpreter, std::size_t depth) override {
+  ExecutionResult apply_frame_state(Interpreter& interpreter, std::size_t depth,
+                                    bool advance_children) override {
     if (rows_ == nullptr) {
       return ExecutionResult{};
     }
@@ -239,6 +240,9 @@ class SwfTimelineClip : public MovieClip {
       SwfTimelineClip& clip = static_cast<SwfTimelineClip&>(*object);
       const bool created = std::find(just_created.begin(), just_created.end(), layer) !=
                            just_created.end();
+      if (!created && !advance_children) {
+        continue;
+      }
       ExecutionResult result = created ? clip.place_frame(interpreter, 1, true, depth)
                                        : clip.advance_timeline(interpreter, depth);
       if (result.ok() && created) {

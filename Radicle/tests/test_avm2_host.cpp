@@ -138,6 +138,25 @@ TEST(Avm2Host, GetDefinitionByNameResolvesABuiltinClass) {
   EXPECT_EQ(class_object.represented_class()->name, "flash.display::Sprite");
 }
 
+TEST(Avm2Host, GetDefinitionByNameAcceptsADottedName) {
+  HostHarness harness;
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder code;
+  const std::uint32_t definition = script.multiname("getDefinitionByName");
+  code.pushnull();
+  code.getlex(definition);
+  code.pushstring(script.string_of("flash.display.Sprite"));
+  code.call(1);
+  code.returnvalue();
+  const ExecutionResult result = harness.run(script, code);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_object());
+  EXPECT_EQ(result.value.as_object()->kind(), fo4::avm2::ObjectKind::Class);
+  const auto& class_object = static_cast<const fo4::avm2::ClassObject&>(*result.value.as_object());
+  ASSERT_NE(class_object.represented_class(), nullptr);
+  EXPECT_EQ(class_object.represented_class()->name, "flash.display::Sprite");
+}
+
 TEST(Avm2Host, QualifiedClassNameReportsTheClass) {
   HostHarness harness;
   avm2_test::ScriptBuilder script;
