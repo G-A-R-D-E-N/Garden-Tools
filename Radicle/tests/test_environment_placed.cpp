@@ -145,6 +145,8 @@ std::vector<Rec> fixture_records() {
         {"XAPR", concat({words({0x90A}), floats({1.5f})})},
         {"XEZN", words({0x90B})},
         {"XEMI", words({0x917})},
+        {"XRDS", floats({365.5f})},
+        {"XLIG", floats({10.0f, 2.5f, 30.0f, 4.5f, 5.5f, 6.5f})},
         {"XLRL", words({0x90C})},
         {"XLRT", words({0x90D, 0x90E})},
         {"XIS2", {}},
@@ -184,6 +186,10 @@ std::vector<Rec> fixture_records() {
       {"STAT", 0x807, {{"MODL", zstring(std::string_view{"Rock.nif\0junk", 13})}}},
       {"REFR", 0x808, {{"NAME", words({0x900})}, {"XTEL", words({1, 2})}}},
       {"REFR", 0x809, {{"NAME", words({0x900})}, {"DATA", floats({0, 0, 0, 0, 0, 0})}}},
+      {"REFR", 0x80A, {{"XLIG", floats({90.0f, 1.0f, 2048.0f, 0.5f})}}},
+      {"REFR", 0x80B, {{"XLIG", floats({90.0f, 1.0f, 2048.0f, 0.5f, 10.0f})}}},
+      {"REFR", 0x80C, {{"XLIG", floats({90.0f, 1.0f, 2048.0f})}}},
+      {"REFR", 0x80D, {{"XRDS", floats({4.5f, 1.0f})}}},
   };
 }
 
@@ -227,6 +233,14 @@ TEST_F(PlacedEnvironmentTest, DecodesObjectReferenceFields) {
   EXPECT_EQ(d.layer, key(0x909));
   EXPECT_EQ(d.encounter_zone, key(0x90B));
   EXPECT_EQ(d.emittance, key(0x917));
+  EXPECT_EQ(d.radius, std::optional<float>{365.5f});
+  ASSERT_TRUE(d.light_data.has_value());
+  EXPECT_EQ(d.light_data->fov, 10.0f);
+  EXPECT_EQ(d.light_data->fade, 2.5f);
+  EXPECT_EQ(d.light_data->end_distance_cap, 30.0f);
+  EXPECT_EQ(d.light_data->shadow_depth_bias, 4.5f);
+  EXPECT_EQ(d.light_data->near_clip, std::optional<float>{5.5f});
+  EXPECT_EQ(d.light_data->volumetric_intensity, std::optional<float>{6.5f});
   EXPECT_EQ(d.location_reference, key(0x90C));
   ASSERT_EQ(d.location_ref_types.size(), 2u);
   EXPECT_EQ(d.location_ref_types[1], key(0x90E));
@@ -315,6 +329,46 @@ TEST_F(PlacedEnvironmentTest, EmittanceStaysEmptyForAReferenceWithoutXemi) {
   const std::vector<std::filesystem::path> paths{path_};
   const auto env = fo4::env::Environment::load(paths);
   EXPECT_FALSE(fo4::env::decode_placed_reference(env, *env.winner(key(0x809))).emittance.has_value());
+}
+
+// Regression: a placed reference with neither XRDS nor XLIG must report no radius and no light data.
+TEST_F(PlacedEnvironmentTest, RadiusAndLightDataStayEmptyForAReferenceWithoutThem) {
+  const std::vector<std::filesystem::path> paths{path_};
+  const auto env = fo4::env::Environment::load(paths);
+  const auto d = fo4::env::decode_placed_reference(env, *env.winner(key(0x809)));
+  EXPECT_FALSE(d.radius.has_value());
+  EXPECT_FALSE(d.light_data.has_value());
+}
+
+// Invariant: a 16-byte XLIG has no near clip and a 20-byte XLIG has no volumetric intensity.
+TEST_F(PlacedEnvironmentTest, ShortXligStopsAtTheLastStoredMember) {
+  const std::vector<std::filesystem::path> paths{path_};
+  const auto env = fo4::env::Environment::load(paths);
+
+  const auto sixteen = fo4::env::decode_placed_reference(env, *env.winner(key(0x80A)));
+  ASSERT_TRUE(sixteen.light_data.has_value());
+  EXPECT_EQ(sixteen.light_data->fov, 90.0f);
+  EXPECT_EQ(sixteen.light_data->fade, 1.0f);
+  EXPECT_EQ(sixteen.light_data->end_distance_cap, 2048.0f);
+  EXPECT_EQ(sixteen.light_data->shadow_depth_bias, 0.5f);
+  EXPECT_FALSE(sixteen.light_data->near_clip.has_value());
+  EXPECT_FALSE(sixteen.light_data->volumetric_intensity.has_value());
+  EXPECT_FALSE(sixteen.radius.has_value());
+
+  const auto twenty = fo4::env::decode_placed_reference(env, *env.winner(key(0x80B)));
+  ASSERT_TRUE(twenty.light_data.has_value());
+  EXPECT_EQ(twenty.light_data->near_clip, std::optional<float>{10.0f});
+  EXPECT_FALSE(twenty.light_data->volumetric_intensity.has_value());
+}
+
+// Regression: a wrong-size XRDS or XLIG must fail the decode instead of reading past the stored members.
+TEST_F(PlacedEnvironmentTest, FailsClosedOnWrongSizeXrdsAndXlig) {
+  const std::vector<std::filesystem::path> paths{path_};
+  const auto env = fo4::env::Environment::load(paths);
+  EXPECT_THROW(fo4::env::decode_placed_reference(env, *env.winner(key(0x80C))),
+               fo4::env::WorldDecodeError);
+  EXPECT_THROW(fo4::env::decode_placed_reference(env, *env.winner(key(0x80D))),
+               fo4::env::WorldDecodeError);
 }
 
 TEST_F(PlacedEnvironmentTest, DecodesActorAndTrapReferences) {
@@ -449,6 +503,17 @@ TEST_F(PlacedEnvironmentTest, CApiDecodesPlacedReferences) {
   EXPECT_EQ(ref->has_emittance, 1);
   EXPECT_STREQ(ref->emittance.plugin, "Placed.esp");
   EXPECT_EQ(ref->emittance.local_id, 0x917u);
+  EXPECT_EQ(ref->has_radius, 1);
+  EXPECT_EQ(ref->radius, 365.5f);
+  EXPECT_EQ(ref->has_light_data, 1);
+  EXPECT_EQ(ref->light_fov, 10.0f);
+  EXPECT_EQ(ref->light_fade, 2.5f);
+  EXPECT_EQ(ref->light_end_distance_cap, 30.0f);
+  EXPECT_EQ(ref->light_shadow_depth_bias, 4.5f);
+  EXPECT_EQ(ref->has_light_near_clip, 1);
+  EXPECT_EQ(ref->light_near_clip, 5.5f);
+  EXPECT_EQ(ref->has_light_volumetric_intensity, 1);
+  EXPECT_EQ(ref->light_volumetric_intensity, 6.5f);
   EXPECT_EQ(ref->linked_ref_count, 2u);
   EXPECT_EQ(ref->linked_refs[1].keyword.local_id, 0x913u);
   EXPECT_EQ(ref->linked_refs[1].reference.plugin, nullptr);
@@ -480,6 +545,27 @@ TEST_F(PlacedEnvironmentTest, CApiDecodesPlacedReferences) {
   ASSERT_EQ(radicle_env_winner(env, {"Placed.esp", 0x803}, &record), RADICLE_STATUS_OK);
   EXPECT_EQ(radicle_placed_ref_decode(env, record, &ref), RADICLE_STATUS_PARSE_ERROR);
   EXPECT_EQ(ref, nullptr);
+
+  ASSERT_EQ(radicle_env_winner(env, {"Placed.esp", 0x80A}, &record), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_placed_ref_decode(env, record, &ref), RADICLE_STATUS_OK) << radicle_last_error();
+  EXPECT_EQ(ref->has_light_data, 1);
+  EXPECT_EQ(ref->has_light_near_clip, 0);
+  EXPECT_EQ(ref->has_light_volumetric_intensity, 0);
+  EXPECT_EQ(ref->has_radius, 0);
+  radicle_placed_ref_free(ref);
+
+  ASSERT_EQ(radicle_env_winner(env, {"Placed.esp", 0x80B}, &record), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_placed_ref_decode(env, record, &ref), RADICLE_STATUS_OK) << radicle_last_error();
+  EXPECT_EQ(ref->has_light_near_clip, 1);
+  EXPECT_EQ(ref->light_near_clip, 10.0f);
+  EXPECT_EQ(ref->has_light_volumetric_intensity, 0);
+  radicle_placed_ref_free(ref);
+
+  ASSERT_EQ(radicle_env_winner(env, {"Placed.esp", 0x809}, &record), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_placed_ref_decode(env, record, &ref), RADICLE_STATUS_OK) << radicle_last_error();
+  EXPECT_EQ(ref->has_radius, 0);
+  EXPECT_EQ(ref->has_light_data, 0);
+  radicle_placed_ref_free(ref);
 
   const char* model = nullptr;
   ASSERT_EQ(radicle_env_winner(env, {"Placed.esp", 0x805}, &record), RADICLE_STATUS_OK);

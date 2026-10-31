@@ -129,6 +129,19 @@ LightRecordData decode_light(const Environment& env, const RecordRef& ref) {
   return out;
 }
 
+AddOnNodeData decode_add_on_node(const Environment& env, const RecordRef& ref) {
+  const Reader reader(env, ref, sig("ADDN"));
+  AddOnNodeData out;
+  if (const auto* sub = reader.sized(sig("DATA"), 4)) out.node_index = Reader::u32(*sub, 0);
+  out.light = reader.link(sig("LNAM"));
+  out.model = text(reader, sig("MODL"));
+  if (const auto* sub = reader.sized(sig("DNAM"), 4)) {
+    out.master_particle_cap = Reader::u16(*sub, 0);
+    out.flags = Reader::u16(*sub, 2);
+  }
+  return out;
+}
+
 BendableSplineData decode_bendable_spline(const Environment& env, const RecordRef& ref) {
   const Reader reader(env, ref, sig("BNDS"));
   BendableSplineData out;

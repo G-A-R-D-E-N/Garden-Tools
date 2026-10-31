@@ -35,6 +35,16 @@ typedef struct radicle_light_info {
   radicle_form_key god_rays;
 } radicle_light_info;
 
+typedef struct radicle_add_on_node_info {
+  int32_t has_node_index;
+  uint32_t node_index;
+  radicle_form_key light;
+  const char* model;
+  int32_t has_dnam;
+  uint16_t master_particle_cap;
+  uint16_t flags;
+} radicle_add_on_node_info;
+
 typedef struct radicle_bendable_spline_info {
   int32_t has_default_tiles;
   float default_tiles;
@@ -211,6 +221,9 @@ typedef struct radicle_lighting_template_info {
 RADICLE_API radicle_status radicle_light_get_info(const radicle_env* env,
                                                   const radicle_record* record,
                                                   radicle_light_info* out_info);
+RADICLE_API radicle_status radicle_add_on_node_get_info(const radicle_env* env,
+                                                        const radicle_record* record,
+                                                        radicle_add_on_node_info* out_info);
 RADICLE_API radicle_status radicle_bendable_spline_get_info(const radicle_env* env,
                                                             const radicle_record* record,
                                                             radicle_bendable_spline_info* out_info);
