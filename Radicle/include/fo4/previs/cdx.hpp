@@ -52,10 +52,6 @@ struct CdxCellKey {
   friend bool operator==(const CdxCellKey&, const CdxCellKey&) = default;
 };
 
-struct CdxCellKeyHash {
-  std::size_t operator()(const CdxCellKey& key) const noexcept;
-};
-
 // Lookups must be per cell and never scan the 1.46M rows of Fallout4.cdx.
 class CdxIndex {
  public:

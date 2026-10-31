@@ -84,10 +84,6 @@ std::uint32_t encode_cdx_grid(const CdxGrid& grid) noexcept {
          (static_cast<std::uint32_t>(grid.y) & 0xFFFu);
 }
 
-std::size_t CdxCellKeyHash::operator()(const CdxCellKey& key) const noexcept {
-  return static_cast<std::size_t>(pack_key(key) * 0x9E3779B97F4A7C15ull >> 32u);
-}
-
 CdxIndex::CdxIndex(const CdxFile& file) {
   keys_.reserve(file.rows.size() / 4 + 1);
   for (const auto& row : file.rows) {

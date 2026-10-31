@@ -541,8 +541,9 @@ TEST_F(PrevisLoadOrderTest, HigherAssetRootWins) {
     stream.write(reinterpret_cast<const char*>(bytes.data()),
                  static_cast<std::streamsize>(bytes.size()));
   };
-  const auto plugin_path = write("Patch.esp", en::make_plugin({}, {}));
-  const std::filesystem::path paths[]{plugin_path};
+  const auto plugin_path = write("Fallout4.esm", en::make_plugin({}, {}));
+  const auto patch_path = write("Patch.esp", en::make_plugin({"Fallout4.esm"}, {}));
+  const std::filesystem::path paths[]{plugin_path, patch_path};
   const auto env = fo4::env::Environment::load(paths);
   const auto plugin = env.find_plugin("Patch.esp");
   ASSERT_TRUE(plugin.has_value());
