@@ -1,6 +1,5 @@
 #include "fo4/previs/csg.hpp"
 
-#include "fo4/binary/zlib_bound.hpp"
 #include "fo4/error.hpp"
 
 #include <zlib.h>
@@ -12,6 +11,7 @@ namespace fo4::previs {
 namespace {
 
 constexpr std::size_t k_header_bytes = 12;
+constexpr std::size_t k_zlib_header_bytes = 2;
 
 std::uint32_t u32le(std::span<const std::byte> data, std::size_t at) {
   std::uint32_t v = 0;
@@ -34,6 +34,11 @@ bool magic_is(std::span<const std::byte> data, std::string_view magic) {
   return true;
 }
 
+bool is_zlib_header(std::span<const std::byte> chunk) {
+  return chunk.size() >= k_zlib_header_bytes && std::to_integer<std::uint8_t>(chunk[0]) == 0x78 &&
+         std::to_integer<std::uint8_t>(chunk[1]) == 0x9C;
+}
+
 }  // namespace
 
 CsgFile parse_csg(std::span<const std::byte> data) {
@@ -49,15 +54,21 @@ CsgFile parse_csg(std::span<const std::byte> data) {
   file.chunks.reserve(chunk_count);
   const std::size_t chunk_table = k_header_bytes;
   const std::size_t row_table = chunk_table + static_cast<std::size_t>(chunk_count) * k_csg_chunk_entry_bytes;
+  std::uint64_t expected_offset = table_end;
   for (std::uint64_t i = 0; i < chunk_count; ++i) {
     const std::size_t at = chunk_table + static_cast<std::size_t>(i) * k_csg_chunk_entry_bytes;
-    const auto offset = u32le(data, at);
-    const auto size = u32le(data, at + 4);
+    const auto size = u32le(data, at);
+    const auto offset = u32le(data, at + 4);
     if (std::uint64_t{offset} + size > data.size()) {
       throw parse_error(at, "CSG chunk runs past the end of the file");
     }
+    if (offset != expected_offset) {
+      throw parse_error(at, "CSG chunks are not contiguous from the table end");
+    }
     file.chunks.push_back(std::vector<std::byte>(data.begin() + offset, data.begin() + offset + size));
+    expected_offset = std::uint64_t{offset} + size;
   }
+  if (expected_offset != data.size()) throw parse_error(8, "CSG chunks do not end at EOF");
   for (std::uint64_t i = 0; i < row_count; ++i) {
     CsgRow row;
     std::memcpy(row.bytes.data(), data.data() + row_table + static_cast<std::size_t>(i) * k_csg_row_bytes,
@@ -84,8 +95,8 @@ std::vector<std::byte> write_csg(const CsgFile& file) {
         payload_at + chunk.size() > 0xFFFFFFFFu) {
       throw parse_error(0, "CSG chunk offset exceeds u32");
     }
-    append_le(out, static_cast<std::uint32_t>(payload_at));
     append_le(out, static_cast<std::uint32_t>(chunk.size()));
+    append_le(out, static_cast<std::uint32_t>(payload_at));
     payload_at += chunk.size();
   }
   for (const auto& row : file.rows) {
@@ -98,20 +109,25 @@ std::vector<std::byte> write_csg(const CsgFile& file) {
 }
 
 std::vector<std::string> validate_csg(std::span<const std::byte> data) {
+  CsgFile file;
   try {
-    (void)parse_csg(data);
-    return {};
+    file = parse_csg(data);
   } catch (const std::exception& e) {
     return {e.what()};
   }
+  std::vector<std::string> issues;
+  for (std::size_t i = 0; i < file.chunks.size(); ++i) {
+    if (!is_zlib_header(file.chunks[i])) {
+      issues.push_back("CSG chunk " + std::to_string(i) + " does not start with 78 9c");
+      break;
+    }
+  }
+  return issues;
 }
 
 std::vector<std::byte> decompress_csg_chunk(std::span<const std::byte> chunk) {
   if (chunk.empty()) throw parse_error(0, "CSG chunk is empty");
-  const std::uint64_t bound = std::uint64_t{chunk.size()} * fo4::binary::k_zlib_max_expansion +
-                              fo4::binary::k_zlib_slack_bytes;
-  if (bound > 1024ull * 1024ull * 1024ull) throw parse_error(0, "CSG chunk declares too much output");
-  std::vector<std::byte> out(static_cast<std::size_t>(bound));
+  std::vector<std::byte> out(k_csg_inflated_chunk_max);
   z_stream stream{};
   stream.next_in = reinterpret_cast<Bytef*>(const_cast<std::byte*>(chunk.data()));
   stream.avail_in = static_cast<uInt>(chunk.size());
@@ -121,7 +137,7 @@ std::vector<std::byte> decompress_csg_chunk(std::span<const std::byte> chunk) {
   const int rc = inflate(&stream, Z_FINISH);
   const std::size_t produced = out.size() - stream.avail_out;
   inflateEnd(&stream);
-  if (rc != Z_STREAM_END) throw parse_error(0, "CSG chunk is not a complete zlib stream");
+  if (rc != Z_STREAM_END) throw parse_error(0, "CSG chunk does not inflate to at most 65536 bytes");
   out.resize(produced);
   return out;
 }

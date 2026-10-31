@@ -83,7 +83,7 @@ TEST(PrevisCdx, RoundTripsAndFlagsUnsorted) {
   EXPECT_THROW(fo4::previs::parse_cdx(truncated), fo4::parse_error);
 }
 
-// Detects a table edit that moves a chunk offset past the file: parse must
+// Detects a table edit that moves a chunk size or offset: parse must fail
 // must fail closed instead of slicing out of bounds and corrupting geometry.
 TEST(PrevisCsg, RoundTripsAndRejectsBadChunk) {
   fo4::previs::CsgFile file;
@@ -92,24 +92,48 @@ TEST(PrevisCsg, RoundTripsAndRejectsBadChunk) {
   file.rows.push_back(row);
   file.chunks.push_back(std::vector<std::byte>{std::byte{0x78}, std::byte{0x9C}, std::byte{0x03},
                                                 std::byte{0x00}});
+  file.chunks.push_back(std::vector<std::byte>{std::byte{0x78}, std::byte{0x9C}, std::byte{0x05},
+                                                std::byte{0x00}});
   const auto bytes = fo4::previs::write_csg(file);
   EXPECT_TRUE(fo4::previs::validate_csg(bytes).empty());
   const auto back = fo4::previs::parse_csg(bytes);
   ASSERT_EQ(back.rows.size(), 1u);
-  ASSERT_EQ(back.chunks.size(), 1u);
+  ASSERT_EQ(back.chunks.size(), 2u);
   EXPECT_EQ(fo4::previs::write_csg(back), bytes);
 
-  auto bad = bytes;
-  // Corrupt the first chunk offset to run past the end of the file.
-  bad[12] = std::byte{0xFF};
-  bad[13] = std::byte{0xFF};
-  bad[14] = std::byte{0xFF};
-  bad[15] = std::byte{0x7F};
-  EXPECT_FALSE(fo4::previs::validate_csg(bad).empty());
+  // Entry order invariant: the size comes before the offset.
+  const auto first_size = static_cast<unsigned>(std::to_integer<unsigned char>(bytes[12]));
+  EXPECT_EQ(first_size, 4u);
+
+  auto big_size = bytes;
+  // Corrupt the first entry's size; the chunk offset must then run past the file end.
+  big_size[12] = std::byte{0xFF};
+  big_size[13] = std::byte{0xFF};
+  big_size[14] = std::byte{0xFF};
+  big_size[15] = std::byte{0x7F};
+  EXPECT_FALSE(fo4::previs::validate_csg(big_size).empty());
+
+  auto moved_offset = bytes;
+  // Second entry's offset no longer continues the first chunk.
+  moved_offset[24] = std::byte{0x02};
+  EXPECT_FALSE(fo4::previs::validate_csg(moved_offset).empty());
 
   auto magic = bytes;
   magic[0] = std::byte{'x'};
   EXPECT_FALSE(fo4::previs::validate_csg(magic).empty());
+}
+
+// A tiny chunk must stay tiny: a wrong cap of roughly 55 MB per chunk would
+// must not allocate before the inflater proves the stream complete.
+TEST(PrevisCsg, DecompressesOnlyCompleteChunks) {
+  const auto good = std::vector<std::byte>{std::byte{0x78}, std::byte{0x9C}, std::byte{0x03},
+                                           std::byte{0x00}, std::byte{0x00}, std::byte{0x00},
+                                           std::byte{0x00}, std::byte{0x01}};
+  const auto inflated = fo4::previs::decompress_csg_chunk(good);
+  EXPECT_EQ(inflated.size(), 0u);
+  auto truncated = good;
+  truncated.pop_back();
+  EXPECT_THROW(fo4::previs::decompress_csg_chunk(truncated), fo4::parse_error);
 }
 
 // A tome edit that breaks the CRC or alignment must be flagged: the game would

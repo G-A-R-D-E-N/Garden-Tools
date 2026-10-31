@@ -7,21 +7,26 @@ skip-and-report live in `include/fo4/previs/detect.hpp` (plan D10/D11).
 
 - CDX: `bcdx` + u32 count + 16-byte rows `(kind, CELL, value, extra)`,
   sorted. `Fallout4.cdx` is 8 + 1460027 * 16.
-- CSG: `bcsg` + u32 rows + u32 chunks + chunk table `(offset, size,
-  absolute)` + 20-byte row table + payloads. `Fallout4 - Geometry.csg`
-  first chunk offset equals 12 + 6841*8 + 32370*20. Only `bcsg` is
-  accepted: the clean-mode `.psg` twin is unobserved in measured data,
-  so a `.psg`-shaped file fails closed until its layout is measured.
+- CSG: `bcsg` + u32 rows + u32 chunks + chunk table `(compressed size,
+  absolute offset)` + 20-byte row table + payloads. Chunks are contiguous
+  from 12 + 8*chunks + 20*rows and end exactly at EOF in all six files; each
+  starts `78 9c` and inflates to 65536 bytes except a smaller final chunk
+  (`DLCworkshop01 - Geometry.csg` has one chunk of 22872 bytes). Fallout4's
+  first entry is `(53818, 702140)`: size 53818 at offset 702140. The row
+  table has no visible cell id and its meaning is unestablished, so it stays
+  opaque. Only `bcsg` is accepted: the clean-mode `.psg` twin has no file in
+  the measured data, so a `.psg`-shaped file fails closed until its layout is
+  measured.
 - UVD: u32 magic `0xD6000012`, u32 CRC-32C over bytes [8, end), banner
   C string at +0xBC (Umbra 3.3.17), file size multiple of 16. Read and
-  validate only; no tome writer (open D3, deferred to Phase 4). CRC is
+  validate only; native tome writing is Phase 4 (decided, not open). CRC is
   standard CRC-32C (Castagnoli, init/FXOR 0xFFFFFFFF); the real-data
   test pins this against every vanilla .uvd and must fail if the
   assumption is wrong. The parsed view borrows the file image (no
   second body copy).
 - XCRI: u32 meshes, u32 reference words, meshes x u32 OC ids, words x
   u32 words as (REFR local id, OC id) pairs. Size is 8 + 4*M + 4*W with
-  W even. Contradicts xEdit's 8-byte-pair declaration; all 4599 vanilla
+  W even. Contradicts xEdit's 8-byte-pair declaration; all 4600 vanilla
   payloads match the word-pair form. One parser owns it
   (`parse_xcri_bytes`); the CELL layer (`decode_combined_index`) only
   resolves links through the Environment.
