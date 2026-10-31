@@ -190,6 +190,9 @@ std::vector<Rec> fixture_records() {
       {"REFR", 0x80B, {{"XLIG", floats({90.0f, 1.0f, 2048.0f, 0.5f, 10.0f})}}},
       {"REFR", 0x80C, {{"XLIG", floats({90.0f, 1.0f, 2048.0f})}}},
       {"REFR", 0x80D, {{"XRDS", floats({4.5f, 1.0f})}}},
+      {"REFR", 0x80E, {{"XRDS", floats({1.0f})}, {"XRDS", floats({2.0f})}}},
+      {"REFR", 0x80F, {{"XLIG", floats({90.0f, 1.0f, 2048.0f, 0.5f})},
+                       {"XLIG", floats({90.0f, 1.0f, 2048.0f, 0.5f})}}},
   };
 }
 
@@ -368,6 +371,16 @@ TEST_F(PlacedEnvironmentTest, FailsClosedOnWrongSizeXrdsAndXlig) {
   EXPECT_THROW(fo4::env::decode_placed_reference(env, *env.winner(key(0x80C))),
                fo4::env::WorldDecodeError);
   EXPECT_THROW(fo4::env::decode_placed_reference(env, *env.winner(key(0x80D))),
+               fo4::env::WorldDecodeError);
+}
+
+// Invariant: a second XRDS or XLIG must fail the decode instead of silently overwriting the first value.
+TEST_F(PlacedEnvironmentTest, RejectsASecondXrdsAndASecondXlig) {
+  const std::vector<std::filesystem::path> paths{path_};
+  const auto env = fo4::env::Environment::load(paths);
+  EXPECT_THROW(fo4::env::decode_placed_reference(env, *env.winner(key(0x80E))),
+               fo4::env::WorldDecodeError);
+  EXPECT_THROW(fo4::env::decode_placed_reference(env, *env.winner(key(0x80F))),
                fo4::env::WorldDecodeError);
 }
 

@@ -467,6 +467,27 @@ TEST_F(BaseRecordsTest, CApiDecodesBaseRecords) {
   EXPECT_EQ(radicle_add_on_node_get_info(env, record(0x884), &addon), RADICLE_STATUS_PARSE_ERROR);
   EXPECT_EQ(radicle_add_on_node_get_info(env, record(0x885), &addon), RADICLE_STATUS_PARSE_ERROR);
 
+  // Invariant: a non-ADDN record must fail as a parse error and leave the out struct untouched.
+  const char kUntouchedModel[] = "Untouched.nif";
+  radicle_add_on_node_info wrong{};
+  wrong.has_node_index = 7;
+  wrong.node_index = 0x1234u;
+  wrong.light.plugin = "Untouched.esp";
+  wrong.light.local_id = 0x55u;
+  wrong.model = kUntouchedModel;
+  wrong.has_dnam = 1;
+  wrong.master_particle_cap = 11;
+  wrong.flags = 12;
+  EXPECT_EQ(radicle_add_on_node_get_info(env, record(0x800), &wrong), RADICLE_STATUS_PARSE_ERROR);
+  EXPECT_EQ(wrong.has_node_index, 7);
+  EXPECT_EQ(wrong.node_index, 0x1234u);
+  EXPECT_STREQ(wrong.light.plugin, "Untouched.esp");
+  EXPECT_EQ(wrong.light.local_id, 0x55u);
+  EXPECT_TRUE(wrong.model == kUntouchedModel);
+  EXPECT_EQ(wrong.has_dnam, 1);
+  EXPECT_EQ(wrong.master_particle_cap, 11);
+  EXPECT_EQ(wrong.flags, 12);
+
   radicle_bendable_spline_info spline{};
   ASSERT_EQ(radicle_bendable_spline_get_info(env, record(0x810), &spline), RADICLE_STATUS_OK);
   EXPECT_EQ(spline.default_slices, 6);

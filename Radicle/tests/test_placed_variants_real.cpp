@@ -1,3 +1,4 @@
+#include "fo4/environment/base_records.hpp"
 #include "fo4/environment/environment.hpp"
 #include "fo4/environment/placed.hpp"
 #include "fo4/forms/placed_reference.hpp"
@@ -264,9 +265,9 @@ TEST(PlacedLightFieldsReal, XrdsXligAndXemiRawCountsMatchTheCensus) {
       with_xlig += record_xlig ? 1 : 0;
       with_xemi += record_xemi ? 1 : 0;
       if (record_xlig) {
-        xlig24 += xlig_size == 24 ? 1 : 0;
-        xlig20 += xlig_size == 20 ? 1 : 0;
-        xlig16 += xlig_size == 16 ? 1 : 0;
+        xlig24 += xlig_size == 24u ? 1 : 0;
+        xlig20 += xlig_size == 20u ? 1 : 0;
+        xlig16 += xlig_size == 16u ? 1 : 0;
       }
     }
     EXPECT_EQ(with_xrds, expected.xrds) << expected.plugin;
@@ -291,7 +292,7 @@ TEST(PlacedLightFieldsReal, XrdsXligAndXemiRawCountsMatchTheCensus) {
 }
 
 // Regression: a 16/20-byte XLIG must not be rejected and must not read absent members; every stored field decodes.
-TEST(PlacedLightFieldsReal, EveryPlacedReferenceWithXrdsOrXligDecodes) {
+TEST(PlacedLightFieldsReal, EveryPlacedReferenceWithLightFieldsDecodes) {
   std::vector<std::filesystem::path> paths;
   if (!load_official_masters(paths)) {
     GTEST_SKIP() << "set FO4_DATA_DIR to the seven shipped masters";
@@ -301,18 +302,22 @@ TEST(PlacedLightFieldsReal, EveryPlacedReferenceWithXrdsOrXligDecodes) {
   ASSERT_EQ(env.plugins().size(), k_official_master_count);
   const auto xrds = fo4::Signature::from_string("XRDS");
   const auto xlig = fo4::Signature::from_string("XLIG");
+  const auto xemi = fo4::Signature::from_string("XEMI");
   std::string first_failure;
   std::size_t checked = 0;
   std::size_t decoded_xrds = 0;
   std::size_t decoded_xlig = 0;
+  std::size_t decoded_xemi = 0;
 
   for (std::size_t i = 0; i < k_official_master_count; ++i) {
+    int plugin_xemi = 0;
     for (const auto* ref : env.plugin_records(i)) {
       const auto signature = ref->record->header.signature;
       if (!fo4::is_placed_reference_signature(signature)) continue;
       const bool record_xrds = has_subrecord(*ref->record, xrds);
       const bool record_xlig = has_subrecord(*ref->record, xlig);
-      if (!record_xrds && !record_xlig) continue;
+      const bool record_xemi = has_subrecord(*ref->record, xemi);
+      if (!record_xrds && !record_xlig && !record_xemi) continue;
       ++checked;
       try {
         const auto data = fo4::env::decode_placed_reference(env, *ref);
@@ -330,15 +335,25 @@ TEST(PlacedLightFieldsReal, EveryPlacedReferenceWithXrdsOrXligDecodes) {
             first_failure = ref->record->form_key.to_string() + " dropped XLIG";
           }
         }
+        if (record_xemi) {
+          if (data.emittance) {
+            ++plugin_xemi;
+            ++decoded_xemi;
+          } else if (first_failure.empty()) {
+            first_failure = ref->record->form_key.to_string() + " dropped XEMI";
+          }
+        }
       } catch (const fo4::env::WorldDecodeError& error) {
         if (first_failure.empty()) first_failure = error.what();
       }
     }
+    EXPECT_EQ(plugin_xemi, k_placed_light_counts[i].xemi) << k_official_masters[i];
   }
   EXPECT_TRUE(first_failure.empty()) << first_failure;
   EXPECT_GT(checked, 0u);
   EXPECT_EQ(decoded_xrds, 60383u);
   EXPECT_EQ(decoded_xlig, 59563u);
+  EXPECT_EQ(decoded_xemi, 28163u);
 }
 
 // Invariant: the six XLIG floats and XRDS are stored values in that order, not base-record values or converted units.
