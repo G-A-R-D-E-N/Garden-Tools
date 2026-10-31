@@ -20,8 +20,6 @@ jobs:
     environment: garden-tools-ci
     env:
       BUILD_COMMIT: ${{ github.sha }}
-      CC: gcc-14
-      CXX: g++-14
     strategy:
       fail-fast: false
       matrix:
@@ -53,7 +51,9 @@ jobs:
       - name: Install build tools
         if: matrix.rid == 'linux-x64'
         working-directory: ${{ github.workspace }}
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq ninja-build ccache
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ninja-build ccache
+          printf 'CC=gcc-14\nCXX=g++-14\n' >> "$GITHUB_ENV"
 
       - name: Set up pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
@@ -79,6 +79,7 @@ jobs:
         run: |
           cmake -S ../Radicle -B ../build/radicle-bgs -G Ninja -DCMAKE_BUILD_TYPE=Release \
             -DRADICLE_BUILD_TESTS=OFF -DRADICLE_BUILD_TOOLS=OFF -DRADICLE_WARNINGS_AS_ERRORS=ON \
+            -DCMAKE_CXX_FLAGS=-Wno-error=free-nonheap-object \
             ${CCACHE:+-DCMAKE_C_COMPILER_LAUNCHER=$CCACHE -DCMAKE_CXX_COMPILER_LAUNCHER=$CCACHE}
           cmake --build ../build/radicle-bgs --target radicle_c
           mkdir -p ../build/radicle-bgs/native

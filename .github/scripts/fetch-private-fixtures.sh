@@ -6,6 +6,7 @@ paths=(
   BGS/tools/symrm/samples
   Radicle/testdata/FW_HeatherSurvivalPatch.esp
   Radicle/testdata/SlowTime.esp
+  Radicle/docs/FO4_PARITY.md
 )
 
 [ -n "${TOKEN:-}" ] || { echo "::error::GT_PUBLIC_CI_TOKEN is not set"; exit 1; }

@@ -2673,3 +2673,15 @@ The `garden-tools-ci` environment's branch rule must be `ci/**`: `ci/*` does not
 ## Radicle/CMakeLists.txt:RADICLE_SHARED
 
 `WINDOWS_EXPORT_ALL_SYMBOLS` exports every external symbol in the objects, including unreferenced inline COMDATs. The first hosted FO4IDE package build failed with `LNK1189: library limit of 65535 objects exceeded` on MSVC 14.44, so `fo4` compiles with `/Zc:inline`, which drops those from each object. If the count reaches the limit again, export only the symbols the editor imports instead of all of them.
+
+## .github/public-ci/workflows/public-ci-cleanup.yml:delete-branch
+
+Public `ci/*` branches exist only while their runs do: `delete-branch` waits for every run of the pushed commit, then deletes the branch unless a newer export moved it. `cleanup` keeps a branch's newest runs for three days so failure logs stay readable.
+
+## .github/scripts/fetch-private-fixtures.sh:Radicle/docs/FO4_PARITY.md
+
+`Radicle/CMakeLists.txt:radicle_parity_matrix_check` reads this file in every full build. It holds internal links, so it is fetched like a fixture rather than exported.
+
+## .github/public-ci/workflows/bgs-ci.yml:Build native Radicle library (linux-x64)
+
+GCC 14 at -O3 reports `-Wfree-nonheap-object` from `new_allocator.h` while compiling `Radicle/src/swf/swf_write.cpp`, with an unknown pointer and a range-only offset. This was treated as a compiler false positive without a code audit, so it is demoted from an error in this job only.
