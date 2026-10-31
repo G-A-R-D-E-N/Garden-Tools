@@ -717,4 +717,15 @@ TEST(Avm2SwfRuntime, EnterFrameIsDeliveredOncePerObjectPerFrame) {
   EXPECT_EQ(count_letter(stopped, 'g'), 2u) << stopped;
 }
 
+
+TEST(Avm2SwfRuntime, DottedSymbolClassNameIsTheRenderedClassName) {
+  fo4::swf::SwfFile file = build_movie(false);
+  file.tags.insert(file.tags.begin() + 1, symbol_class_tag({{5, "pkg.sub.Shape"}, {0, "Main"}}));
+  const std::shared_ptr<SwfMovieData> data = fo4::avm2::read_swf_movie_data(file);
+  ASSERT_NE(data, nullptr);
+  ASSERT_TRUE(data->symbol_classes.contains(5));
+  EXPECT_EQ(data->symbol_classes[5], "pkg.sub::Shape");
+  EXPECT_EQ(data->root_class_name, "Main");
+}
+
 }  // namespace

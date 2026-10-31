@@ -95,14 +95,15 @@ bool same_listener_function(const FunctionObject* registered, const FunctionObje
 }
 
 ExecutionResult dispatch_stage_tree(Interpreter& interpreter,
-                                    const std::shared_ptr<DisplayObject>& node, const char* type) {
-  ExecutionResult result = dispatch_event(interpreter, node, type, false, 0);
+                                    const std::shared_ptr<DisplayObject>& node, const char* type,
+                                    std::size_t depth) {
+  ExecutionResult result = dispatch_event(interpreter, node, type, false, depth);
   if (!result.ok() || !node->is_container()) {
     return result;
   }
   const auto children = static_cast<DisplayObjectContainer&>(*node).children();
   for (const auto& child : children) {
-    result = dispatch_stage_tree(interpreter, child, type);
+    result = dispatch_stage_tree(interpreter, child, type, depth);
     if (!result.ok()) {
       return result;
     }
@@ -188,22 +189,22 @@ ExecutionResult dispatch_event(Interpreter& interpreter, const std::shared_ptr<O
 }
 
 ExecutionResult dispatch_added(Interpreter& interpreter,
-                               const std::shared_ptr<DisplayObject>& child) {
-  ExecutionResult added = dispatch_event(interpreter, child, "added", true, 0);
+                               const std::shared_ptr<DisplayObject>& child, std::size_t depth) {
+  ExecutionResult added = dispatch_event(interpreter, child, "added", true, depth);
   if (!added.ok() || child->stage() == nullptr) {
     return added;
   }
-  return dispatch_stage_tree(interpreter, child, "addedToStage");
+  return dispatch_stage_tree(interpreter, child, "addedToStage", depth);
 }
 
 ExecutionResult dispatch_removed(Interpreter& interpreter,
-                                 const std::shared_ptr<DisplayObject>& child) {
+                                 const std::shared_ptr<DisplayObject>& child, std::size_t depth) {
   const bool on_stage = child->stage() != nullptr;
-  ExecutionResult removed = dispatch_event(interpreter, child, "removed", true, 0);
+  ExecutionResult removed = dispatch_event(interpreter, child, "removed", true, depth);
   if (!removed.ok() || !on_stage) {
     return removed;
   }
-  return dispatch_stage_tree(interpreter, child, "removedFromStage");
+  return dispatch_stage_tree(interpreter, child, "removedFromStage", depth);
 }
 
 bool add_event_listener(Object& target, std::string_view type, const Value& listener,

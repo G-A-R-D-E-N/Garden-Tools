@@ -107,6 +107,19 @@ ExecutionResult instance_construct(Interpreter& interpreter, const Value& self) 
   return native_value(Value::object(interpreter.make_instance(*klass)));
 }
 
+ExecutionResult url_request_construct(Interpreter& interpreter, const Value& self,
+                                      const std::vector<Value>& arguments) {
+  Class* klass = class_from_self(self);
+  if (klass == nullptr) {
+    return native_value(Value::null());
+  }
+  std::shared_ptr<Object> request = interpreter.make_instance(*klass);
+  const Value url = argument_at(arguments, 0);
+  define_dynamic_value(*request, "url",
+                       url.is_nullish() ? Value::null() : Value::string(to_string(url)));
+  return native_value(Value::object(std::move(request)));
+}
+
 ApplicationDomainObject* domain_self(const Value& self) {
   if (!self.is_object() ||
       !is_instance_of_class(*self.as_object(), "flash.system::ApplicationDomain")) {
@@ -283,14 +296,14 @@ ExecutionResult loader_load(Interpreter& interpreter, const Value& self,
   const std::optional<std::vector<std::uint8_t>> bytes =
       interpreter.runtime().host().resolve_asset(url);
   if (!bytes.has_value()) {
-    dispatch_type(interpreter, self, "ioError", depth);
+    dispatch_type(interpreter, loader->content_loader_info, "ioError", depth);
     return native_value(Value::undefined());
   }
   loader->bytes = *bytes;
   const fo4::swf::SwfReadResult read = fo4::swf::read_swf(std::span<const std::byte>(
       reinterpret_cast<const std::byte*>(loader->bytes.data()), loader->bytes.size()));
   if (!read.ok()) {
-    dispatch_type(interpreter, self, "ioError", depth);
+    dispatch_type(interpreter, loader->content_loader_info, "ioError", depth);
     return native_value(Value::undefined());
   }
   loader->movie = std::make_shared<fo4::swf::SwfFile>(read.file);
@@ -301,20 +314,21 @@ ExecutionResult loader_load(Interpreter& interpreter, const Value& self,
       SwfRuntime::create(interpreter.runtime(), interpreter, *loader->movie, {}, domain);
   const std::shared_ptr<SwfRuntime>& child = loader->child_runtime;
   if (child == nullptr) {
-    dispatch_type(interpreter, self, "ioError", depth);
+    dispatch_type(interpreter, loader->content_loader_info, "ioError", depth);
     return native_value(Value::undefined());
   }
   loader->content = child->root();
+  refresh_content_loader_info(interpreter, *loader);
   if (loader->content != nullptr) {
     loader->add_child(loader->content);
     interpreter.runtime().register_movie_clip(loader->content);
-    ExecutionResult added = dispatch_added(interpreter, loader->content);
+    ExecutionResult added = dispatch_added(interpreter, loader->content, depth + 1);
     if (!added.ok()) {
       return added;
     }
   }
   loader->loaded = true;
-  dispatch_type(interpreter, self, "complete", depth);
+  dispatch_type(interpreter, loader->content_loader_info, "complete", depth);
   return native_value(Value::undefined());
 }
 
@@ -432,6 +446,9 @@ bool try_net_native(Interpreter& interpreter, native::Id id, const Value& self,
   switch (id) {
     case native::Id::instance_construct:
       out = instance_construct(interpreter, self);
+      return true;
+    case native::Id::url_request_construct:
+      out = url_request_construct(interpreter, self, arguments);
       return true;
     case native::Id::ext_available:
       out = ext_available(interpreter, self);

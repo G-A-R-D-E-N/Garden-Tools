@@ -591,6 +591,12 @@ bool Interpreter::is_instance_of(const Value& value, const Value& type) const {
   if (target == nullptr) {
     return false;
   }
+  const ObjectKind kind = value.as_object()->kind();
+  if ((kind == ObjectKind::Class || kind == ObjectKind::Function) &&
+      (target->name == "Object" || target->name == "Function" ||
+       (kind == ObjectKind::Class && target->name == "Class"))) {
+    return true;
+  }
   const Class* value_class = value.as_object()->instance_class();
   if (value_class == nullptr) {
     return false;
@@ -643,6 +649,11 @@ InterpreterStatus Interpreter::coerce_value(const Multiname& multiname, Value& v
   const Class* value_class = value.as_object()->instance_class();
   if (value_class != nullptr &&
       (value_class->is_subclass_of(target) || value_class->implements_interface(target))) {
+    return InterpreterStatus::Ok;
+  }
+  const ObjectKind kind = value.as_object()->kind();
+  if ((kind == ObjectKind::Class && (name == "Class" || name == "Function")) ||
+      (kind == ObjectKind::Function && name == "Function")) {
     return InterpreterStatus::Ok;
   }
   message = "value is not of type " + name;

@@ -143,6 +143,8 @@ class CodeBuilder {
     u30(count);
   }
   void constructsuper(std::uint32_t count) { op_u30(0x49, count); }
+  void getsuper(std::uint32_t multiname) { op_multiname(0x04, multiname); }
+  void setsuper(std::uint32_t multiname) { op_multiname(0x05, multiname); }
   void applytype(std::uint32_t count) { op_u30(0x53, count); }
   void getslot(std::uint32_t slot) { op_u30(0x6C, slot); }
   void setslot(std::uint32_t slot) { op_u30(0x6D, slot); }

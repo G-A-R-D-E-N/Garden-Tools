@@ -3,6 +3,7 @@
 #include "interpreter_internal.hpp"
 
 #include <fo4/avm2/coercion.hpp>
+#include <fo4/avm2/display.hpp>
 
 #include <algorithm>
 #include <cstddef>

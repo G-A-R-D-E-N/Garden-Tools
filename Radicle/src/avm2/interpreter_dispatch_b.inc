@@ -208,18 +208,30 @@
           if (status != InterpreterStatus::Ok || !object.is_object()) {
             break;
           }
-          const Trait* trait =
-              frame.owner_class->super->resolve_instance_trait(*multiname);
-          if (trait == nullptr || !trait->is_slot_like()) {
-            return fail(InterpreterStatus::NoSuchProperty,
-                        "super has no slot " + property_text(*multiname));
-          }
           Object& target = *object.as_object();
-          if (trait->slot_id >= target.slots().size()) {
-            target.resize_slots(trait->slot_id + 1);
+          PropertyLookup lookup;
+          lookup_class_traits(frame.owner_class->super, false, *multiname, &target.slots(), lookup);
+          if (lookup.kind == LookupKind::Accessor && lookup.setter != nullptr) {
+            ExecutionResult written = invoke(*lookup.setter, object, {value}, {}, depth);
+            if (!written.ok()) {
+              return written;
+            }
+            break;
           }
-          target.slots()[trait->slot_id] = value;
-          break;
+          if (lookup.kind == LookupKind::Slot && lookup.trait != nullptr &&
+              lookup.trait->is_slot_like()) {
+            if (lookup.trait->slot_id >= target.slots().size()) {
+              target.resize_slots(lookup.trait->slot_id + 1);
+            }
+            target.slots()[lookup.trait->slot_id] = value;
+            break;
+          }
+          if (target.kind() == ObjectKind::Display &&
+              write_display_property(static_cast<DisplayObject&>(target), *multiname, value)) {
+            break;
+          }
+          return fail(InterpreterStatus::NoSuchProperty,
+                      "super has no property " + property_text(*multiname));
         }
         Value object;
         pop_value(object);
@@ -229,20 +241,32 @@
         if (!object.is_object()) {
           return fail(InterpreterStatus::NullReference, "getsuper needs an object");
         }
-        const Trait* trait = frame.owner_class->super->resolve_instance_trait(*multiname);
-        if (trait == nullptr) {
-          push_value(Value::undefined());
+        Object& target = *object.as_object();
+        PropertyLookup lookup;
+        lookup_class_traits(frame.owner_class->super, false, *multiname, &target.slots(), lookup);
+        if (lookup.kind == LookupKind::Accessor) {
+          if (lookup.getter == nullptr) {
+            push_value(Value::undefined());
+            break;
+          }
+          ExecutionResult read = invoke(*lookup.getter, object, {}, {}, depth);
+          if (!read.ok()) {
+            return read;
+          }
+          push_value(read.value);
           break;
         }
-        if (trait->is_slot_like()) {
-          Object& target = *object.as_object();
-          push_value(trait->slot_id < target.slots().size()
-                         ? target.slots()[trait->slot_id]
-                         : Value::undefined());
-        } else if (trait->function != nullptr) {
-          push_value(Value::object(trait->function));
+        if (lookup.kind == LookupKind::Slot) {
+          push_value(lookup.value);
+        } else if (lookup.kind == LookupKind::Method && lookup.trait != nullptr &&
+                   lookup.trait->function != nullptr) {
+          push_value(Value::object(lookup.trait->function));
         } else {
-          push_value(Value::undefined());
+          Value out;
+          const bool native = target.kind() == ObjectKind::Display &&
+                              read_display_property(*this, static_cast<DisplayObject&>(target),
+                                                    *multiname, out);
+          push_value(native ? out : Value::undefined());
         }
         break;
       }

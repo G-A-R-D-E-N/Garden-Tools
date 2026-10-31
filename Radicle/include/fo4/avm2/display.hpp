@@ -147,6 +147,8 @@ class DisplayObject : public Object {
 
   bool assigned() const noexcept { return assigned_; }
   void set_assigned(bool assigned) noexcept { assigned_ = assigned; }
+  bool removing() const noexcept { return removing_; }
+  void set_removing(bool removing) noexcept { removing_ = removing; }
 
  private:
   Class* display_class_{nullptr};
@@ -182,6 +184,7 @@ class DisplayObject : public Object {
   bool mouse_children_{true};
   bool button_mode_{false};
   bool assigned_{false};
+  bool removing_{false};
   double stage_width_{0.0};
   double stage_height_{0.0};
   double frame_rate_{24.0};
@@ -201,6 +204,7 @@ class DisplayObjectContainer : public DisplayObject {
 
   bool add_child(const std::shared_ptr<DisplayObject>& child);
   bool add_child_at(const std::shared_ptr<DisplayObject>& child, std::size_t index);
+  bool can_add(const DisplayObject& child) const;
   bool remove_child(const std::shared_ptr<DisplayObject>& child);
   std::shared_ptr<DisplayObject> remove_child_at(std::size_t index);
   std::shared_ptr<DisplayObject> child_at(std::size_t index) const;
@@ -229,26 +233,27 @@ class MovieClip : public DisplayObjectContainer {
   void set_playing(bool playing) noexcept { playing_ = playing; }
   void set_frame_script(std::uint32_t frame, std::shared_ptr<FunctionObject> script);
 
-  /* Requires a linked runtime; the result reports a failed frame script by status. */
-  ExecutionResult goto_frame(Interpreter& interpreter, std::uint32_t frame, bool play);
+  ExecutionResult goto_frame(Interpreter& interpreter, std::uint32_t frame, bool play,
+                             std::size_t depth = 0);
   /* Requires a linked runtime; advances one frame and runs the frame lifecycle hooks in order. */
   ExecutionResult advance_frame(Interpreter& interpreter);
   /* Requires a linked runtime; advances one frame without frame events, which the stage sends. */
-  ExecutionResult advance_timeline(Interpreter& interpreter);
+  ExecutionResult advance_timeline(Interpreter& interpreter, std::size_t depth = 0);
   /* Places a frame and sets the playhead; runs no frame script and dispatches no event. */
-  ExecutionResult place_frame(Interpreter& interpreter, std::uint32_t frame, bool play);
+  ExecutionResult place_frame(Interpreter& interpreter, std::uint32_t frame, bool play,
+                              std::size_t depth = 0);
   /* Runs the current frame's script; the caller has placed the frame already. */
-  ExecutionResult run_frame_actions(Interpreter& interpreter);
+  ExecutionResult run_frame_actions(Interpreter& interpreter, std::size_t depth = 0);
 
   /* enterFrame runs before placement and the frame script; exitFrame runs after them. */
   ExecutionResult run_frame_lifecycle(Interpreter& interpreter);
 
  protected:
   /* The bridge subclass must apply the timeline's PlaceObject/RemoveObject rows here. */
-  virtual ExecutionResult apply_frame_state(Interpreter& interpreter);
+  virtual ExecutionResult apply_frame_state(Interpreter& interpreter, std::size_t depth);
 
  private:
-  ExecutionResult run_frame_script(Interpreter& interpreter);
+  ExecutionResult run_frame_script(Interpreter& interpreter, std::size_t depth);
   void step_playhead();
 
   std::shared_ptr<TimelineDefinition> timeline_;

@@ -529,7 +529,8 @@ RuntimeStatus Runtime::install_builtins() {
   add_method(*external_interface, "call", native::Id::ext_call, true);
   add_method(*external_interface, "addCallback", native::Id::ext_add_callback, true);
   add_static_getter(*external_interface, "available", native::Id::ext_available);
-  url_request_class->native_constructor = static_cast<std::uint32_t>(native::Id::instance_construct);
+  url_request_class->native_constructor =
+      static_cast<std::uint32_t>(native::Id::url_request_construct);
   url_loader_class->native_constructor = static_cast<std::uint32_t>(native::Id::url_loader_construct);
   add_method(*url_loader_class, "load", native::Id::url_loader_load, false);
   loader_class->native_constructor = static_cast<std::uint32_t>(native::Id::display_construct);
@@ -644,6 +645,7 @@ RuntimeStatus Runtime::install_builtins() {
     add_instance_getter(*loader_class, "contentLoaderInfo",
                         native::Id::loader_content_loader_info);
     add_instance_getter(*loader_class, "loaderInfo", native::Id::loader_content_loader_info);
+    add_instance_getter(*loader_class, "content", native::Id::loader_content);
     add_method(*loader_class, "unloadAndStop", native::Id::loader_unload_and_stop, false);
   }
   if (event_class != nullptr) {
@@ -717,6 +719,7 @@ RuntimeStatus Runtime::install_builtins() {
   add_global_function_ns("getQualifiedSuperclassName", "flash.utils",
                          native::Id::qualified_superclass_name);
   add_global_function_ns("getTimer", "flash.utils", native::Id::get_timer);
+  add_global_function_ns("getDefinitionByName", "flash.utils", native::Id::definition_by_name);
 
   const auto add_global_value = [this](std::string name, Value value) {
     Property& property = global_object_->define_own_property(primary_key(package_name(name)));

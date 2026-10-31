@@ -679,4 +679,46 @@ TEST(Avm2Interpreter, NewclassPopsItsBaseWhenTheInterfaceHasNone) {
   EXPECT_EQ(result.value.as_int32(), 5);
 }
 
+TEST(Avm2Interpreter, ClassObjectIsAnInstanceOfClassSoAsClassKeepsIt) {
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder code;
+  const std::uint32_t object_name = script.multiname("Object");
+  const std::uint32_t class_name = script.multiname("Class");
+  code.getlex(object_name);
+  code.getlex(class_name);
+  code.op(0x87);
+  code.returnvalue();
+  const std::uint32_t method = script.method("init", code.bytes(), 1);
+  abc::AbcFile file = script.finish(method);
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  Interpreter interpreter(runtime);
+  const ExecutionResult result = interpreter.run_script(0);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_object());
+  EXPECT_EQ(result.value.as_object()->kind(), fo4::avm2::ObjectKind::Class);
+}
+
+TEST(Avm2Interpreter, ClassObjectIsAFunction) {
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder code;
+  const std::uint32_t object_name = script.multiname("Object");
+  const std::uint32_t function_name = script.multiname("Function");
+  code.getlex(object_name);
+  code.getlex(function_name);
+  code.op(0xB3);
+  code.returnvalue();
+  const std::uint32_t method = script.method("init", code.bytes(), 1);
+  abc::AbcFile file = script.finish(method);
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  Interpreter interpreter(runtime);
+  const ExecutionResult result = interpreter.run_script(0);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_boolean());
+  EXPECT_TRUE(result.value.as_boolean());
+}
+
 }  // namespace

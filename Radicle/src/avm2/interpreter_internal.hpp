@@ -9,6 +9,13 @@
 #include <cstdint>
 #include <string>
 
+namespace fo4::avm2 {
+
+bool lookup_class_traits(Class* start, bool static_traits, const Multiname& multiname,
+                         const std::vector<Value>* slots, PropertyLookup& result);
+
+}  // namespace fo4::avm2
+
 namespace fo4::avm2::detail {
 
 namespace op {

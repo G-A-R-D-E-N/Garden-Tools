@@ -188,6 +188,66 @@ TEST(Avm2Host, UrlLoaderReadsThroughTheAssetResolver) {
   EXPECT_EQ(harness.runtime.host().stats().asset_requests, 1u);
 }
 
+TEST(Avm2Host, UrlRequestConstructorArgumentIsTheRequestUrl) {
+  HostHarness harness;
+  harness.assets["config.xml"] = std::vector<std::uint8_t>{'h', 'e', 'l', 'l', 'o'};
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder code;
+  const std::uint32_t request_class = script.multiname("URLRequest", "flash.net");
+  const std::uint32_t loader_class = script.multiname("URLLoader", "flash.net");
+  const std::uint32_t data_name = script.multiname("data");
+  const std::uint32_t load_name = script.multiname("load");
+  code.getlex(request_class);
+  code.pushstring(script.string_of("config.xml"));
+  code.construct(1);
+  code.setlocal(1);
+  code.getlex(loader_class);
+  code.construct(0);
+  code.setlocal(2);
+  code.getlocal(2);
+  code.getlocal(1);
+  code.callproperty(load_name, 1);
+  code.pop();
+  code.getlocal(2);
+  code.getproperty(data_name);
+  code.returnvalue();
+  const ExecutionResult result = harness.run(script, code, 3);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_string());
+  EXPECT_EQ(result.value.as_string(), "hello");
+}
+
+TEST(Avm2Host, UrlRequestWithoutAUrlHasANullUrl) {
+  HostHarness harness;
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder code;
+  const std::uint32_t request_class = script.multiname("URLRequest", "flash.net");
+  const std::uint32_t url_name = script.multiname("url");
+  code.getlex(request_class);
+  code.construct(0);
+  code.getproperty(url_name);
+  code.returnvalue();
+  const ExecutionResult result = harness.run(script, code);
+  ASSERT_TRUE(result.ok()) << result.message;
+  EXPECT_TRUE(result.value.is_null());
+}
+
+TEST(Avm2Host, UrlRequestWithANullUrlHasANullUrl) {
+  HostHarness harness;
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder code;
+  const std::uint32_t request_class = script.multiname("URLRequest", "flash.net");
+  const std::uint32_t url_name = script.multiname("url");
+  code.getlex(request_class);
+  code.pushnull();
+  code.construct(1);
+  code.getproperty(url_name);
+  code.returnvalue();
+  const ExecutionResult result = harness.run(script, code);
+  ASSERT_TRUE(result.ok()) << result.message;
+  EXPECT_TRUE(result.value.is_null());
+}
+
 TEST(Avm2Host, SoundPlayQueuesASnapshotSoundEvent) {
   HostHarness harness;
   harness.assets["sound"] = std::vector<std::uint8_t>{0x52, 0x49, 0x46, 0x58};

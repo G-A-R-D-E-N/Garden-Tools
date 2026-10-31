@@ -109,58 +109,90 @@ ExecutionResult display_construct(Interpreter& interpreter, const Value& self) {
   return native_value(Value::object(std::move(object)));
 }
 
+ExecutionResult detach_child(Interpreter& interpreter, DisplayObjectContainer& container,
+                             const std::shared_ptr<DisplayObject>& child, std::size_t depth) {
+  if (child->parent() != &container || child->removing()) {
+    return ExecutionResult{};
+  }
+  child->set_removing(true);
+  ExecutionResult removed = dispatch_removed(interpreter, child, depth + 1);
+  child->set_removing(false);
+  if (!removed.ok()) {
+    return removed;
+  }
+  container.remove_child(child);
+  return ExecutionResult{};
+}
+
+ExecutionResult attach_child(Interpreter& interpreter, DisplayObjectContainer& container,
+                             const std::shared_ptr<DisplayObject>& child, std::size_t index,
+                             std::size_t depth) {
+  if (child->removing() || !container.can_add(*child)) {
+    return ExecutionResult{};
+  }
+  DisplayObject* previous = child->parent();
+  if (previous == &container) {
+    container.add_child_at(child, index);
+    return ExecutionResult{};
+  }
+  if (previous != nullptr && previous->is_container()) {
+    ExecutionResult detached = detach_child(
+        interpreter, static_cast<DisplayObjectContainer&>(*previous), child, depth);
+    if (!detached.ok()) {
+      return detached;
+    }
+  }
+  container.add_child_at(child, index);
+  return dispatch_added(interpreter, child, depth + 1);
+}
+
 ExecutionResult display_add_child(Interpreter& interpreter, const Value& self,
-                                  const std::vector<Value>& arguments) {
+                                  const std::vector<Value>& arguments, std::size_t depth) {
   DisplayObjectContainer* container = container_self(self);
   std::shared_ptr<DisplayObject> child = display_argument(arguments, 0);
   if (container == nullptr || child == nullptr) {
     return native_value(Value::undefined());
   }
-  if (container->add_child(child)) {
-    ExecutionResult added = dispatch_added(interpreter, child);
-    if (!added.ok()) {
-      return added;
-    }
+  ExecutionResult attached =
+      attach_child(interpreter, *container, child, container->children().size(), depth);
+  if (!attached.ok()) {
+    return attached;
   }
   return native_value(Value::object(std::move(child)));
 }
 
 ExecutionResult display_add_child_at(Interpreter& interpreter, const Value& self,
-                                     const std::vector<Value>& arguments) {
+                                     const std::vector<Value>& arguments, std::size_t depth) {
   DisplayObjectContainer* container = container_self(self);
   std::shared_ptr<DisplayObject> child = display_argument(arguments, 0);
   if (container == nullptr || child == nullptr) {
     return native_value(Value::undefined());
   }
   const std::int32_t index = to_int32(argument_at(arguments, 1));
-  if (container->add_child_at(child, index < 0 ? 0u : static_cast<std::size_t>(index))) {
-    ExecutionResult added = dispatch_added(interpreter, child);
-    if (!added.ok()) {
-      return added;
-    }
+  ExecutionResult attached = attach_child(interpreter, *container, child,
+                                          index < 0 ? 0u : static_cast<std::size_t>(index), depth);
+  if (!attached.ok()) {
+    return attached;
   }
   return native_value(Value::object(std::move(child)));
 }
 
 ExecutionResult display_remove_child(Interpreter& interpreter, const Value& self,
-                                     const std::vector<Value>& arguments) {
+                                     const std::vector<Value>& arguments, std::size_t depth) {
   DisplayObjectContainer* container = container_self(self);
   std::shared_ptr<DisplayObject> child = display_argument(arguments, 0);
   if (container == nullptr || child == nullptr) {
     return native_value(Value::undefined());
   }
-  if (child->parent() == container) {
-    ExecutionResult removed = dispatch_removed(interpreter, child);
-    if (!removed.ok()) {
-      return removed;
-    }
+  ExecutionResult detached = detach_child(interpreter, *container, child, depth);
+  if (!detached.ok()) {
+    return detached;
   }
-  container->remove_child(child);
   return native_value(Value::object(std::move(child)));
 }
 
 ExecutionResult display_remove_child_at(Interpreter& interpreter, const Value& self,
-                                        const std::vector<Value>& arguments) {
+                                        const std::vector<Value>& arguments, std::size_t depth) {
   DisplayObjectContainer* container = container_self(self);
   if (container == nullptr) {
     return native_value(Value::undefined());
@@ -174,11 +206,10 @@ ExecutionResult display_remove_child_at(Interpreter& interpreter, const Value& s
   if (child == nullptr) {
     return native_value(Value::undefined());
   }
-  ExecutionResult removed = dispatch_removed(interpreter, child);
-  if (!removed.ok()) {
-    return removed;
+  ExecutionResult detached = detach_child(interpreter, *container, child, depth);
+  if (!detached.ok()) {
+    return detached;
   }
-  container->remove_child(child);
   return native_value(Value::object(child));
 }
 
@@ -256,14 +287,14 @@ std::uint32_t requested_frame(const Multiname& multiname, MovieClip& clip, const
 }
 
 ExecutionResult display_goto(Interpreter& interpreter, const Value& self,
-                             const std::vector<Value>& arguments, bool play) {
+                             const std::vector<Value>& arguments, bool play, std::size_t depth) {
   MovieClip* clip = movie_clip_self(self);
   if (clip == nullptr) {
     return native_value(Value::undefined());
   }
   const std::uint32_t frame = requested_frame(builtin_name("frame"), *clip,
                                               argument_at(arguments, 0));
-  ExecutionResult result = clip->goto_frame(interpreter, frame, play);
+  ExecutionResult result = clip->goto_frame(interpreter, frame, play, depth);
   if (!result.ok()) {
     return result;
   }
@@ -297,7 +328,8 @@ ExecutionResult display_add_frame_script(const Value& self, const std::vector<Va
   return native_value(Value::undefined());
 }
 
-ExecutionResult display_step(Interpreter& interpreter, const Value& self, int direction) {
+ExecutionResult display_step(Interpreter& interpreter, const Value& self, int direction,
+                             std::size_t depth) {
   MovieClip* clip = movie_clip_self(self);
   if (clip == nullptr) {
     return native_value(Value::undefined());
@@ -309,7 +341,7 @@ ExecutionResult display_step(Interpreter& interpreter, const Value& self, int di
   } else {
     frame = clip->current_frame() <= 1 ? total : clip->current_frame() - 1;
   }
-  ExecutionResult result = clip->goto_frame(interpreter, frame, false);
+  ExecutionResult result = clip->goto_frame(interpreter, frame, false, depth);
   if (!result.ok()) {
     return result;
   }
@@ -392,22 +424,21 @@ ExecutionResult dictionary_construct(Interpreter& interpreter, const Value& self
 bool try_display_native(Interpreter& interpreter, native::Id id, const Value& self,
                         const std::vector<Value>& arguments, std::size_t depth,
                         ExecutionResult& out) {
-  (void)depth;
   switch (id) {
     case native::Id::display_construct:
       out = display_construct(interpreter, self);
       return true;
     case native::Id::display_add_child:
-      out = display_add_child(interpreter, self, arguments);
+      out = display_add_child(interpreter, self, arguments, depth);
       return true;
     case native::Id::display_add_child_at:
-      out = display_add_child_at(interpreter, self, arguments);
+      out = display_add_child_at(interpreter, self, arguments, depth);
       return true;
     case native::Id::display_remove_child:
-      out = display_remove_child(interpreter, self, arguments);
+      out = display_remove_child(interpreter, self, arguments, depth);
       return true;
     case native::Id::display_remove_child_at:
-      out = display_remove_child_at(interpreter, self, arguments);
+      out = display_remove_child_at(interpreter, self, arguments, depth);
       return true;
     case native::Id::display_get_child_at:
       out = display_get_child_at(interpreter, self, arguments);
@@ -425,10 +456,10 @@ bool try_display_native(Interpreter& interpreter, native::Id id, const Value& se
       out = display_swap_children(interpreter, self, arguments);
       return true;
     case native::Id::display_goto_and_play:
-      out = display_goto(interpreter, self, arguments, true);
+      out = display_goto(interpreter, self, arguments, true, depth);
       return true;
     case native::Id::display_goto_and_stop:
-      out = display_goto(interpreter, self, arguments, false);
+      out = display_goto(interpreter, self, arguments, false, depth);
       return true;
     case native::Id::display_stop:
       out = display_stop_play(self, false);
@@ -440,10 +471,10 @@ bool try_display_native(Interpreter& interpreter, native::Id id, const Value& se
       out = display_stop_play(self, true);
       return true;
     case native::Id::display_next_frame:
-      out = display_step(interpreter, self, 1);
+      out = display_step(interpreter, self, 1, depth);
       return true;
     case native::Id::display_prev_frame:
-      out = display_step(interpreter, self, -1);
+      out = display_step(interpreter, self, -1, depth);
       return true;
     case native::Id::display_local_to_global:
       out = display_to_global(interpreter, self, arguments, true);

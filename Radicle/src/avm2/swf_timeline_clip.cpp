@@ -137,7 +137,7 @@ class SwfTimelineClip : public MovieClip {
   std::uint16_t character_id() const noexcept { return character_id_; }
 
  protected:
-  ExecutionResult apply_frame_state(Interpreter& interpreter) override {
+  ExecutionResult apply_frame_state(Interpreter& interpreter, std::size_t depth) override {
     if (rows_ == nullptr) {
       return ExecutionResult{};
     }
@@ -149,7 +149,7 @@ class SwfTimelineClip : public MovieClip {
     std::vector<std::uint16_t> just_created;
     for (const SwfPlacementRow& row : rows_->frames[frame - 1]) {
       if (row.kind == SwfPlacementRow::Kind::Remove) {
-        ExecutionResult removal = detach(interpreter, row.depth);
+        ExecutionResult removal = detach(interpreter, row.depth, depth);
         if (!removal.ok()) {
           return removal;
         }
@@ -173,7 +173,7 @@ class SwfTimelineClip : public MovieClip {
                  found->second->character_id() == row.character_id) {
         object = found->second;
       } else {
-        ExecutionResult removal = detach(interpreter, row.depth);
+        ExecutionResult removal = detach(interpreter, row.depth, depth);
         if (!removal.ok()) {
           return removal;
         }
@@ -210,30 +210,39 @@ class SwfTimelineClip : public MovieClip {
       apply_placement_state(*object, row);
       if (!row.name.empty()) {
         object->set_name(row.name);
+        store_named_child(interpreter, object, row.name);
       }
     }
     order_children_by_depth();
-    for (const std::uint16_t depth : just_created) {
-      const auto added_object = objects_.find(depth);
+    for (const std::uint16_t layer : just_created) {
+      const auto added_object = objects_.find(layer);
       if (added_object == objects_.end()) {
         continue;
       }
       const std::shared_ptr<DisplayObject> object = added_object->second;
-      ExecutionResult added = dispatch_added(interpreter, object);
+      ExecutionResult added = dispatch_added(interpreter, object, depth + 1);
       if (!added.ok()) {
         return added;
       }
     }
-    for (const auto& [depth, clip] : sprite_clips_) {
-      if (clip == nullptr) {
+    std::vector<std::pair<std::uint16_t, std::shared_ptr<DisplayObject>>> sprites;
+    for (const auto& [layer, object] : objects_) {
+      if (sprite_clips_.count(layer) != 0) {
+        sprites.emplace_back(layer, object);
+      }
+    }
+    for (const auto& [layer, object] : sprites) {
+      const auto current = objects_.find(layer);
+      if (current == objects_.end() || current->second != object) {
         continue;
       }
-      const bool created = std::find(just_created.begin(), just_created.end(), depth) !=
+      SwfTimelineClip& clip = static_cast<SwfTimelineClip&>(*object);
+      const bool created = std::find(just_created.begin(), just_created.end(), layer) !=
                            just_created.end();
-      ExecutionResult result = created ? clip->place_frame(interpreter, 1, true)
-                                       : clip->advance_timeline(interpreter);
+      ExecutionResult result = created ? clip.place_frame(interpreter, 1, true, depth)
+                                       : clip.advance_timeline(interpreter, depth);
       if (result.ok() && created) {
-        result = clip->run_frame_actions(interpreter);
+        result = clip.run_frame_actions(interpreter, depth);
       }
       if (!result.ok()) {
         return result;
@@ -243,20 +252,45 @@ class SwfTimelineClip : public MovieClip {
   }
 
  private:
-  ExecutionResult detach(Interpreter& interpreter, std::uint16_t depth) {
-    const auto found = objects_.find(depth);
+  ExecutionResult detach(Interpreter& interpreter, std::uint16_t layer, std::size_t depth) {
+    const auto found = objects_.find(layer);
     if (found == objects_.end()) {
       return ExecutionResult{};
     }
     const std::shared_ptr<DisplayObject> object = found->second;
-    ExecutionResult removed = dispatch_removed(interpreter, object);
+    ExecutionResult removed = dispatch_removed(interpreter, object, depth + 1);
     if (!removed.ok()) {
       return removed;
     }
     remove_child(object);
-    sprite_clips_.erase(depth);
-    objects_.erase(depth);
+    sprite_clips_.erase(layer);
+    objects_.erase(layer);
     return ExecutionResult{};
+  }
+
+  void store_named_child(Interpreter& interpreter, const std::shared_ptr<DisplayObject>& child,
+                         const std::string& name) {
+    Multiname multiname;
+    multiname.kind = MultinameKind::QName;
+    multiname.name = name;
+    multiname.namespaces.push_back(Namespace{});
+    const Class* klass = instance_class();
+    const Trait* trait = klass == nullptr ? nullptr : klass->resolve_instance_trait(multiname);
+    if (trait == nullptr || trait->kind != TraitKind::Slot) {
+      return;
+    }
+    Value value = Value::object(child);
+    if (!trait->type_name.empty() && trait->type_name != "*") {
+      const Class* type = interpreter.runtime().find_class(trait->type_name);
+      std::string message;
+      if (type == nullptr || !interpreter.coerce_to_class(*type, value, message).ok()) {
+        return;
+      }
+    }
+    if (trait->slot_id >= slots().size()) {
+      resize_slots(trait->slot_id + 1);
+    }
+    slots()[trait->slot_id] = value;
   }
 
   void order_children_by_depth() {

@@ -359,7 +359,10 @@ Value make_loader_info(Interpreter& interpreter,
 Value content_loader_info(Interpreter& interpreter, LoaderObject& loader) {
   if (loader.content_loader_info.is_object()) return loader.content_loader_info;
   Value value = make_loader_info(interpreter, loader.domain);
-  if (value.is_object()) loader.content_loader_info = value;
+  if (value.is_object()) {
+    loader.content_loader_info = value;
+    refresh_content_loader_info(interpreter, loader);
+  }
   return value;
 }
 
@@ -367,6 +370,12 @@ ExecutionResult loader_content_loader_info(Interpreter& interpreter, const Value
   auto* loader = self.is_object() ? dynamic_cast<LoaderObject*>(self.as_object().get()) : nullptr;
   if (loader == nullptr) return native_value(Value::null());
   return native_value(content_loader_info(interpreter, *loader));
+}
+
+ExecutionResult loader_content(const Value& self) {
+  auto* loader = self.is_object() ? dynamic_cast<LoaderObject*>(self.as_object().get()) : nullptr;
+  if (loader == nullptr || loader->content == nullptr) return native_value(Value::null());
+  return native_value(Value::object(loader->content));
 }
 
 ExecutionResult display_loader_info(Interpreter& interpreter, const Value& self) {
@@ -400,6 +409,10 @@ ExecutionResult event_format_to_string(const Value& self, const std::vector<Valu
 void refresh_content_loader_info(Interpreter& interpreter, LoaderObject& loader) {
   if (loader.content_loader_info.is_object()) {
     set_info_domain(interpreter, *loader.content_loader_info.as_object(), loader.domain);
+    if (loader.content != nullptr) {
+      set_property(*loader.content_loader_info.as_object(), "content",
+                   Value::object(loader.content));
+    }
   }
 }
 
@@ -495,6 +508,9 @@ bool try_compat_native(Interpreter& interpreter, native::Id id, const Value& sel
       return true;
     case native::Id::loader_content_loader_info:
       out = loader_content_loader_info(interpreter, self);
+      return true;
+    case native::Id::loader_content:
+      out = loader_content(self);
       return true;
     case native::Id::loader_unload_and_stop:
       out = compat_undefined(self);

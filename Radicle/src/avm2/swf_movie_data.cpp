@@ -164,6 +164,10 @@ void read_symbol_classes(std::span<const std::byte> payload,
       ++offset;
     }
     ++offset;
+    const std::size_t dot = name.find_last_of('.');
+    if (dot != std::string::npos && name.find("::") == std::string::npos) {
+      name.replace(dot, 1, "::");
+    }
     classes[character] = name;
     if (character == 0) {
       root_class_name = name;

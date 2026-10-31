@@ -64,12 +64,13 @@ struct Scene {
     return script.method("on_" + tag, body.bytes(), 2);
   }
 
-  void start(const std::vector<std::uint8_t>& init_code) {
+  void start(const std::vector<std::uint8_t>& init_code,
+             fo4::avm2::InterpreterLimits limits = {}) {
     const std::uint32_t init = script.method("init", init_code, 1);
     file = script.finish(init);
     runtime.add_file(file);
     runtime.link();
-    interpreter = std::make_unique<Interpreter>(runtime);
+    interpreter = std::make_unique<Interpreter>(runtime, limits);
     define_global("log", Value::string(std::string{}));
   }
 
@@ -212,6 +213,19 @@ std::vector<std::byte> timeline_movie() {
   return swf_test::wrap_body(builder.body, 10, false, false);
 }
 
+std::vector<std::byte> child_movie() {
+  swf_test::SwfBuilder remove;
+  remove.u16(1);
+  const std::vector<std::byte> sprite = swf_test::sprite_tag(
+      2, 2, {{fo4::swf::tag::kShowFrame, {}}, {fo4::swf::tag::kShowFrame, {}}});
+  const std::vector<std::byte> place = swf_test::place_full(1, 2, {}, {});
+  return swf_test::movie_of(2, {{fo4::swf::tag::kDefineSprite, sprite},
+                                {fo4::swf::tag::kPlaceObject2, place},
+                                {fo4::swf::tag::kShowFrame, {}},
+                                {fo4::swf::tag::kRemoveObject2, remove.body},
+                                {fo4::swf::tag::kShowFrame, {}}});
+}
+
 TEST(Avm2StageEvents, TimelinePlacementAndRemovalSendTheStageEvents) {
   Scene scene;
   const std::uint32_t added = scene.logger("added,");
@@ -232,6 +246,270 @@ TEST(Avm2StageEvents, TimelinePlacementAndRemovalSendTheStageEvents) {
   EXPECT_EQ(scene.log(), "added,");
   movie->advance(*scene.interpreter, 1.0 / 24.0);
   EXPECT_EQ(scene.log(), "added,removed,");
+}
+
+void log_tag(Scene& scene, avm2_test::CodeBuilder& code, const char* tag) {
+  const std::uint32_t log = scene.script.multiname("log");
+  code.findpropstrict(log);
+  code.dup();
+  code.getproperty(log);
+  code.pushstring(scene.script.string_of(tag));
+  code.add();
+  code.initproperty(log);
+}
+
+void run_once(Scene& scene, avm2_test::CodeBuilder& code, const char* flag, const char* done) {
+  const std::uint32_t name = scene.script.multiname(flag);
+  code.getlex(name);
+  code.iftrue(done);
+  code.pushtrue();
+  code.findpropstrict(name);
+  code.swap();
+  code.setproperty(name);
+}
+
+TEST(Avm2StageEvents, ReAddingToTheSameParentFromAnAddedListenerSendsOneEvent) {
+  Scene scene;
+  const std::uint32_t stage_name = scene.script.multiname("stage");
+  const std::uint32_t child_name = scene.script.multiname("child");
+  const std::uint32_t add_child = scene.script.multiname("addChild");
+  avm2_test::CodeBuilder added_code;
+  log_tag(scene, added_code, "added,");
+  run_once(scene, added_code, "again", "done");
+  added_code.getlex(stage_name);
+  added_code.getlex(child_name);
+  added_code.callpropvoid(add_child, 1);
+  added_code.label("done");
+  added_code.returnvoid();
+  const std::uint32_t added = scene.script.method("onAdded", added_code.bytes(), 2);
+  avm2_test::CodeBuilder init;
+  init.getlex(stage_name);
+  init.getlex(child_name);
+  init.callpropvoid(add_child, 1);
+  init.returnvoid();
+  scene.start(init.bytes());
+  auto stage = make_display(scene.runtime, "flash.display::Stage");
+  auto child = make_display(scene.runtime, "flash.display::Sprite");
+  ASSERT_NE(stage, nullptr);
+  ASSERT_NE(child, nullptr);
+  scene.define_global("again", Value::boolean(false));
+  scene.define_global("stage", Value::object(stage));
+  scene.define_global("child", Value::object(child));
+  scene.listen(*child, "added", added);
+
+  const ExecutionResult result = scene.interpreter->run_script(0);
+  ASSERT_TRUE(result.ok()) << result.message;
+  EXPECT_EQ(scene.log(), "added,");
+}
+
+TEST(Avm2StageEvents, ReRemovingFromARemovedListenerIsANoOp) {
+  Scene scene;
+  const std::uint32_t stage_name = scene.script.multiname("stage");
+  const std::uint32_t child_name = scene.script.multiname("child");
+  const std::uint32_t remove_child = scene.script.multiname("removeChild");
+  avm2_test::CodeBuilder removed_code;
+  log_tag(scene, removed_code, "removed,");
+  run_once(scene, removed_code, "again", "done");
+  removed_code.getlex(stage_name);
+  removed_code.getlex(child_name);
+  removed_code.callpropvoid(remove_child, 1);
+  removed_code.label("done");
+  removed_code.returnvoid();
+  const std::uint32_t removed = scene.script.method("onRemoved", removed_code.bytes(), 2);
+  avm2_test::CodeBuilder init;
+  init.getlex(stage_name);
+  init.getlex(child_name);
+  init.callpropvoid(remove_child, 1);
+  init.returnvoid();
+  scene.start(init.bytes());
+  auto stage = make_display(scene.runtime, "flash.display::Stage");
+  auto child = make_display(scene.runtime, "flash.display::Sprite");
+  ASSERT_NE(stage, nullptr);
+  ASSERT_NE(child, nullptr);
+  ASSERT_TRUE(static_cast<DisplayObjectContainer*>(stage.get())->add_child(child));
+  scene.define_global("again", Value::boolean(false));
+  scene.define_global("stage", Value::object(stage));
+  scene.define_global("child", Value::object(child));
+  scene.listen(*child, "removed", removed);
+
+  const ExecutionResult result = scene.interpreter->run_script(0);
+  ASSERT_TRUE(result.ok()) << result.message;
+  EXPECT_EQ(scene.log(), "removed,");
+  EXPECT_EQ(child->parent(), nullptr);
+}
+
+TEST(Avm2StageEvents, ReparentingSendsRemovedToTheOldParentAndAddedToTheNewOne) {
+  Scene scene;
+  const std::uint32_t box2_name = scene.script.multiname("box2");
+  const std::uint32_t child_name = scene.script.multiname("child");
+  const std::uint32_t add_child = scene.script.multiname("addChild");
+  const std::uint32_t child_removed = scene.logger("child.removed,");
+  const std::uint32_t box1_removed = scene.logger("box1.removed,");
+  const std::uint32_t child_rfs = scene.logger("child.rfs,");
+  const std::uint32_t child_added = scene.logger("child.added,");
+  const std::uint32_t box2_added = scene.logger("box2.added,");
+  const std::uint32_t child_stage = scene.logger("child.stage,");
+  avm2_test::CodeBuilder init;
+  init.getlex(box2_name);
+  init.getlex(child_name);
+  init.callpropvoid(add_child, 1);
+  init.returnvoid();
+  scene.start(init.bytes());
+  auto stage = make_display(scene.runtime, "flash.display::Stage");
+  auto box1 = make_display(scene.runtime, "flash.display::Sprite");
+  auto box2 = make_display(scene.runtime, "flash.display::Sprite");
+  auto child = make_display(scene.runtime, "flash.display::Sprite");
+  ASSERT_NE(stage, nullptr);
+  ASSERT_NE(child, nullptr);
+  auto* container = static_cast<DisplayObjectContainer*>(stage.get());
+  ASSERT_TRUE(container->add_child(box1));
+  ASSERT_TRUE(container->add_child(box2));
+  ASSERT_TRUE(static_cast<DisplayObjectContainer*>(box1.get())->add_child(child));
+  scene.listen(*child, "removed", child_removed);
+  scene.listen(*box1, "removed", box1_removed);
+  scene.listen(*child, "removedFromStage", child_rfs);
+  scene.listen(*child, "added", child_added);
+  scene.listen(*box2, "added", box2_added);
+  scene.listen(*child, "addedToStage", child_stage);
+  scene.define_global("box2", Value::object(box2));
+  scene.define_global("child", Value::object(child));
+
+  const ExecutionResult result = scene.interpreter->run_script(0);
+  ASSERT_TRUE(result.ok()) << result.message;
+  EXPECT_EQ(scene.log(),
+            "child.removed,box1.removed,child.rfs,child.added,box2.added,child.stage,");
+  EXPECT_EQ(child->parent(), box2.get());
+}
+
+TEST(Avm2StageEvents, ReparentingLoopFromAnAddedListenerStopsWithACallDepthError) {
+  Scene scene;
+  const std::uint32_t box1_name = scene.script.multiname("box1");
+  const std::uint32_t box2_name = scene.script.multiname("box2");
+  const std::uint32_t child_name = scene.script.multiname("child");
+  const std::uint32_t parent_name = scene.script.multiname("parent");
+  const std::uint32_t add_child = scene.script.multiname("addChild");
+  avm2_test::CodeBuilder added_code;
+  added_code.getlex(child_name);
+  added_code.getproperty(parent_name);
+  added_code.getlex(box1_name);
+  added_code.strictequals();
+  added_code.iffalse("to_box1");
+  added_code.getlex(box2_name);
+  added_code.getlex(child_name);
+  added_code.callpropvoid(add_child, 1);
+  added_code.returnvoid();
+  added_code.label("to_box1");
+  added_code.getlex(box1_name);
+  added_code.getlex(child_name);
+  added_code.callpropvoid(add_child, 1);
+  added_code.returnvoid();
+  const std::uint32_t added = scene.script.method("bounce", added_code.bytes(), 2);
+  avm2_test::CodeBuilder init;
+  init.getlex(box1_name);
+  init.getlex(child_name);
+  init.callpropvoid(add_child, 1);
+  init.returnvoid();
+  scene.start(init.bytes(), fo4::avm2::InterpreterLimits{.max_call_depth = 16});
+  auto stage = make_display(scene.runtime, "flash.display::Stage");
+  auto box1 = make_display(scene.runtime, "flash.display::Sprite");
+  auto box2 = make_display(scene.runtime, "flash.display::Sprite");
+  auto child = make_display(scene.runtime, "flash.display::Sprite");
+  ASSERT_NE(stage, nullptr);
+  ASSERT_NE(child, nullptr);
+  auto* container = static_cast<DisplayObjectContainer*>(stage.get());
+  ASSERT_TRUE(container->add_child(box1));
+  ASSERT_TRUE(container->add_child(box2));
+  scene.define_global("box1", Value::object(box1));
+  scene.define_global("box2", Value::object(box2));
+  scene.define_global("child", Value::object(child));
+  scene.listen(*child, "added", added);
+
+  const ExecutionResult result = scene.interpreter->run_script(0);
+  EXPECT_EQ(result.status, fo4::avm2::InterpreterStatus::CallDepthExceeded) << result.message;
+}
+
+TEST(Avm2StageEvents, GotoAndStopInsideEnterFrameSendsNoFrameEvents) {
+  Scene scene;
+  const std::uint32_t goto_name = scene.script.multiname("gotoAndStop");
+  avm2_test::CodeBuilder enter_code;
+  log_tag(scene, enter_code, "e,");
+  run_once(scene, enter_code, "went", "done");
+  enter_code.getlocal0();
+  enter_code.pushbyte(2);
+  enter_code.callpropvoid(goto_name, 1);
+  enter_code.label("done");
+  enter_code.returnvoid();
+  const std::uint32_t enter = scene.script.method("onEnter", enter_code.bytes(), 2);
+  avm2_test::CodeBuilder init;
+  init.returnvoid();
+  scene.start(init.bytes());
+  scene.define_global("went", Value::boolean(false));
+
+  const fo4::swf::SwfReadResult read = fo4::swf::read_swf(timeline_movie());
+  ASSERT_TRUE(read.ok()) << fo4::swf::status_name(read.status);
+  const std::shared_ptr<fo4::avm2::SwfRuntime> movie =
+      fo4::avm2::SwfRuntime::create(scene.runtime, *scene.interpreter, read.file);
+  ASSERT_NE(movie, nullptr) << fo4::avm2::SwfRuntime::last_error();
+  scene.listen(*movie->root(), "enterFrame", enter);
+
+  movie->advance(*scene.interpreter, 1.0 / 24.0);
+  EXPECT_EQ(scene.log(), "e,");
+}
+
+TEST(Avm2StageEvents, FrameScriptThatGoesToItsOwnFrameStopsWithACallDepthError) {
+  Scene scene;
+  const std::uint32_t goto_name = scene.script.multiname("gotoAndStop");
+  avm2_test::CodeBuilder frame_code;
+  frame_code.getlocal0();
+  frame_code.pushbyte(2);
+  frame_code.callpropvoid(goto_name, 1);
+  frame_code.returnvoid();
+  const std::uint32_t frame_method = scene.script.method("frame2", frame_code.bytes(), 1);
+  avm2_test::CodeBuilder init;
+  init.returnvoid();
+  scene.start(init.bytes(), fo4::avm2::InterpreterLimits{.max_call_depth = 16});
+
+  const fo4::swf::SwfReadResult read = fo4::swf::read_swf(timeline_movie());
+  ASSERT_TRUE(read.ok()) << fo4::swf::status_name(read.status);
+  const std::shared_ptr<fo4::avm2::SwfRuntime> movie =
+      fo4::avm2::SwfRuntime::create(scene.runtime, *scene.interpreter, read.file);
+  ASSERT_NE(movie, nullptr) << fo4::avm2::SwfRuntime::last_error();
+  movie->root()->set_frame_script(
+      2, std::make_shared<FunctionObject>("frame2", &scene.file, frame_method));
+
+  const ExecutionResult jumped = movie->root()->goto_frame(*scene.interpreter, 2, true);
+  EXPECT_EQ(jumped.status, fo4::avm2::InterpreterStatus::CallDepthExceeded) << jumped.message;
+}
+
+TEST(Avm2StageEvents, ChildScriptThatGoesToAFrameRemovingItKeepsTheSpriteLoopIntact) {
+  Scene scene;
+  const std::uint32_t goto_name = scene.script.multiname("gotoAndStop");
+  const std::uint32_t parent_name = scene.script.multiname("parent");
+  avm2_test::CodeBuilder child_code;
+  child_code.getlocal0();
+  child_code.getproperty(parent_name);
+  child_code.pushbyte(2);
+  child_code.callpropvoid(goto_name, 1);
+  child_code.returnvoid();
+  const std::uint32_t child_frame2 = scene.script.method("childFrame2", child_code.bytes(), 1);
+  avm2_test::CodeBuilder init;
+  init.returnvoid();
+  scene.start(init.bytes());
+
+  const fo4::swf::SwfReadResult read = fo4::swf::read_swf(child_movie());
+  ASSERT_TRUE(read.ok()) << fo4::swf::status_name(read.status);
+  const std::shared_ptr<fo4::avm2::SwfRuntime> movie =
+      fo4::avm2::SwfRuntime::create(scene.runtime, *scene.interpreter, read.file);
+  ASSERT_NE(movie, nullptr) << fo4::avm2::SwfRuntime::last_error();
+  const std::shared_ptr<DisplayObject> child = movie->root()->child_at(0);
+  ASSERT_NE(child, nullptr);
+  static_cast<fo4::avm2::MovieClip&>(*child).set_frame_script(
+      2, std::make_shared<FunctionObject>("childFrame2", &scene.file, child_frame2));
+
+  const ExecutionResult jumped = movie->root()->goto_frame(*scene.interpreter, 1, true);
+  EXPECT_TRUE(jumped.ok()) << jumped.message;
+  EXPECT_EQ(movie->root()->current_frame(), 2u);
+  EXPECT_TRUE(movie->root()->children().empty());
 }
 
 }  // namespace

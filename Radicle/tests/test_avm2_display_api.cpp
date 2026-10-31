@@ -326,4 +326,135 @@ TEST(Avm2DisplayApi, ChildInstanceNameIsAPropertyOfItsParent) {
   EXPECT_EQ(read.value.as_object().get(), static_cast<fo4::avm2::Object*>(child.get()));
 }
 
+TEST(Avm2DisplayApi, SuperAccessorsReachTheNativeDisplayProperty) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t panel = script.multiname("Panel");
+  const std::uint32_t sprite = script.multiname("Sprite", "flash.display");
+  const std::uint32_t width = script.multiname("width");
+  avm2_test::CodeBuilder constructor_code;
+  constructor_code.returnvoid();
+  const std::uint32_t constructor = script.method("ctor", constructor_code.bytes(), 1);
+  avm2_test::CodeBuilder getter_code;
+  getter_code.getlocal0();
+  getter_code.getsuper(width);
+  getter_code.returnvalue();
+  const std::uint32_t getter = script.method("getWidth", getter_code.bytes(), 1);
+  avm2_test::CodeBuilder setter_code;
+  setter_code.getlocal0();
+  setter_code.getlocal(1);
+  setter_code.setsuper(width);
+  setter_code.returnvoid();
+  const std::uint32_t setter = script.method("setWidth", setter_code.bytes(), 2);
+  avm2_test::CodeBuilder script_code;
+  script_code.getlex(sprite);
+  script_code.newclass(0);
+  script_code.construct(0);
+  script_code.returnvalue();
+  const std::uint32_t script_method = script.method("init", script_code.bytes(), 1);
+  abc::AbcFile file = script.finish(script_method);
+  abc::AbcTrait getter_trait;
+  getter_trait.name = width;
+  getter_trait.kind = abc::AbcTraitKind::Getter;
+  getter_trait.method_index = getter;
+  abc::AbcTrait setter_trait;
+  setter_trait.name = width;
+  setter_trait.kind = abc::AbcTraitKind::Setter;
+  setter_trait.method_index = setter;
+  abc::AbcInstanceInfo instance;
+  instance.name = panel;
+  instance.super_index = sprite;
+  instance.iinit = constructor;
+  instance.traits = {getter_trait, setter_trait};
+  file.instances.push_back(instance);
+  abc::AbcClassInfo klass;
+  klass.cinit = constructor;
+  file.classes.push_back(klass);
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  Interpreter interpreter{runtime};
+  const ExecutionResult made = interpreter.run_script(0);
+  ASSERT_TRUE(made.ok()) << made.message;
+  ASSERT_TRUE(made.value.is_object());
+  fo4::avm2::Multiname multiname;
+  multiname.name = "width";
+  multiname.namespaces.push_back(fo4::avm2::Namespace{});
+  const ExecutionResult wrote = interpreter.write_property(
+      *made.value.as_object(), multiname, fo4::avm2::Value::number(50.0), 0);
+  ASSERT_TRUE(wrote.ok()) << wrote.message;
+  const ExecutionResult read = interpreter.read_property(*made.value.as_object(), multiname, 0);
+  ASSERT_TRUE(read.ok()) << read.message;
+  ASSERT_TRUE(read.value.is_number_like());
+  EXPECT_EQ(read.value.as_number(), 50.0);
+}
+
+TEST(Avm2DisplayApi, SuperGetterRunsTheSuperclassAccessor) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t base = script.multiname("Base");
+  const std::uint32_t derived = script.multiname("Derived");
+  const std::uint32_t sprite = script.multiname("Sprite", "flash.display");
+  const std::uint32_t label = script.multiname("label");
+  avm2_test::CodeBuilder constructor_code;
+  constructor_code.returnvoid();
+  const std::uint32_t constructor = script.method("ctor", constructor_code.bytes(), 1);
+  avm2_test::CodeBuilder base_code;
+  base_code.pushbyte(7);
+  base_code.returnvalue();
+  const std::uint32_t base_getter = script.method("baseLabel", base_code.bytes(), 1);
+  avm2_test::CodeBuilder derived_code;
+  derived_code.getlocal0();
+  derived_code.getsuper(label);
+  derived_code.pushbyte(1);
+  derived_code.add();
+  derived_code.returnvalue();
+  const std::uint32_t derived_getter = script.method("derivedLabel", derived_code.bytes(), 1);
+  avm2_test::CodeBuilder script_code;
+  script_code.getlex(sprite);
+  script_code.newclass(0);
+  script_code.newclass(1);
+  script_code.construct(0);
+  script_code.returnvalue();
+  const std::uint32_t script_method = script.method("init", script_code.bytes(), 1);
+  abc::AbcFile file = script.finish(script_method);
+  abc::AbcTrait base_trait;
+  base_trait.name = label;
+  base_trait.kind = abc::AbcTraitKind::Getter;
+  base_trait.method_index = base_getter;
+  abc::AbcTrait derived_trait;
+  derived_trait.name = label;
+  derived_trait.kind = abc::AbcTraitKind::Getter;
+  derived_trait.method_index = derived_getter;
+  abc::AbcInstanceInfo base_instance;
+  base_instance.name = base;
+  base_instance.super_index = sprite;
+  base_instance.iinit = constructor;
+  base_instance.traits = {base_trait};
+  file.instances.push_back(base_instance);
+  abc::AbcInstanceInfo derived_instance;
+  derived_instance.name = derived;
+  derived_instance.super_index = base;
+  derived_instance.iinit = constructor;
+  derived_instance.traits = {derived_trait};
+  file.instances.push_back(derived_instance);
+  for (int index = 0; index < 2; ++index) {
+    abc::AbcClassInfo klass;
+    klass.cinit = constructor;
+    file.classes.push_back(klass);
+  }
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  Interpreter interpreter{runtime};
+  const ExecutionResult made = interpreter.run_script(0);
+  ASSERT_TRUE(made.ok()) << made.message;
+  ASSERT_TRUE(made.value.is_object());
+  fo4::avm2::Multiname multiname;
+  multiname.name = "label";
+  multiname.namespaces.push_back(fo4::avm2::Namespace{});
+  const ExecutionResult read = interpreter.read_property(*made.value.as_object(), multiname, 0);
+  ASSERT_TRUE(read.ok()) << read.message;
+  ASSERT_TRUE(read.value.is_number_like());
+  EXPECT_EQ(read.value.as_number(), 8.0);
+}
+
 }  // namespace

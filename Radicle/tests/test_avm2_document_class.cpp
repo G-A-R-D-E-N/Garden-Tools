@@ -206,13 +206,17 @@ std::vector<std::byte> movie_with_blocks(const std::vector<abc::AbcFile>& blocks
 }
 
 abc::AbcFile document_file(const std::string& super_package, const std::string& super_name,
-                           const std::string& read_name, const std::string& store_name) {
+                           const std::string& read_name, const std::string& store_name,
+                           const std::string& slot_package = {},
+                           const std::string& slot_name = {}) {
   avm2_test::ScriptBuilder script;
   const std::uint32_t document = script.multiname("DocumentClass");
   const std::uint32_t super = script.multiname(super_name, super_package);
   const std::uint32_t read = script.multiname(read_name);
   const std::uint32_t store = script.multiname(store_name);
   const std::uint32_t ping = script.multiname("Ping");
+  const std::uint32_t slot_type =
+      slot_name.empty() ? 0u : script.multiname(slot_name, slot_package);
   avm2_test::CodeBuilder constructor_code;
   constructor_code.getlocal0();
   constructor_code.pushscope();
@@ -241,6 +245,13 @@ abc::AbcFile document_file(const std::string& super_package, const std::string& 
   instance.super_index = super;
   instance.iinit = constructor;
   instance.traits.push_back(ping_trait);
+  if (!slot_name.empty()) {
+    abc::AbcTrait slot;
+    slot.name = read;
+    slot.kind = abc::AbcTraitKind::Slot;
+    slot.type_name = slot_type;
+    instance.traits.push_back(slot);
+  }
   file.instances.push_back(instance);
   abc::AbcClassInfo klass;
   klass.cinit = constructor;
@@ -388,4 +399,38 @@ TEST(Avm2DocumentClass, FrameOneChildrenExistWhenTheDocumentConstructorRuns) {
   const fo4::avm2::Value seen = global_value(runtime, "childSeen");
   ASSERT_TRUE(seen.is_object());
   EXPECT_EQ(seen.as_object().get(), static_cast<fo4::avm2::Object*>(placed.get()));
+}
+
+TEST(Avm2DocumentClass, PlacedChildFillsADeclaredSlotOfTheSameName) {
+  const std::vector<std::byte> bytes = movie_with_frame_one_child(
+      document_file("flash.display", "MovieClip", "List_mc", "childSeen", "flash.display",
+                    "MovieClip"));
+  const fo4::swf::SwfReadResult read = fo4::swf::read_swf(bytes);
+  ASSERT_TRUE(read.ok()) << fo4::swf::status_name(read.status);
+  fo4::avm2::Runtime runtime;
+  fo4::avm2::Interpreter interpreter{runtime};
+  ASSERT_TRUE(runtime.link().ok());
+  const std::shared_ptr<fo4::avm2::SwfRuntime> movie =
+      fo4::avm2::SwfRuntime::create(runtime, interpreter, read.file);
+  ASSERT_NE(movie, nullptr) << fo4::avm2::SwfRuntime::last_error();
+  const std::shared_ptr<fo4::avm2::DisplayObject> placed = movie->root()->child_by_name("List_mc");
+  ASSERT_NE(placed, nullptr);
+  const fo4::avm2::Value seen = global_value(runtime, "childSeen");
+  ASSERT_TRUE(seen.is_object());
+  EXPECT_EQ(seen.as_object().get(), static_cast<fo4::avm2::Object*>(placed.get()));
+}
+
+TEST(Avm2DocumentClass, PlacedChildIsNotStoredInASlotOfAnUnrelatedType) {
+  const std::vector<std::byte> bytes = movie_with_frame_one_child(
+      document_file("flash.display", "MovieClip", "List_mc", "childSeen", "flash.display",
+                    "Shape"));
+  const fo4::swf::SwfReadResult read = fo4::swf::read_swf(bytes);
+  ASSERT_TRUE(read.ok()) << fo4::swf::status_name(read.status);
+  fo4::avm2::Runtime runtime;
+  fo4::avm2::Interpreter interpreter{runtime};
+  ASSERT_TRUE(runtime.link().ok());
+  const std::shared_ptr<fo4::avm2::SwfRuntime> movie =
+      fo4::avm2::SwfRuntime::create(runtime, interpreter, read.file);
+  ASSERT_NE(movie, nullptr) << fo4::avm2::SwfRuntime::last_error();
+  EXPECT_FALSE(global_value(runtime, "childSeen").is_object());
 }

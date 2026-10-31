@@ -89,6 +89,25 @@ void collect_frame_targets(const std::shared_ptr<DisplayObjectContainer>& contai
   }
 }
 
+FrameSnapshot stage_snapshot(const DisplayObject* root, const DisplayObjectContainer* stage) {
+  FrameSnapshot snapshot = root == nullptr ? FrameSnapshot{} : build_frame_snapshot(*root);
+  if (stage == nullptr) {
+    return snapshot;
+  }
+  const auto& children = stage->children();
+  for (std::size_t index = 0; index < children.size(); ++index) {
+    if (children[index] == nullptr || children[index].get() == root) {
+      continue;
+    }
+    FrameSnapshot content = build_frame_snapshot(*children[index]);
+    for (SnapshotEntry& entry : content.entries) {
+      entry.path = "/stage/" + std::to_string(index) + entry.path;
+      snapshot.entries.push_back(std::move(entry));
+    }
+  }
+  return snapshot;
+}
+
 ExecutionResult broadcast_frame_event(Interpreter& interpreter,
                                       const std::shared_ptr<DisplayObjectContainer>& stage,
                                       const char* type) {
@@ -98,6 +117,9 @@ ExecutionResult broadcast_frame_event(Interpreter& interpreter,
   std::vector<std::shared_ptr<DisplayObject>> targets;
   collect_frame_targets(stage, targets);
   for (const auto& target : targets) {
+    if (!will_trigger(target, type)) {
+      continue;
+    }
     ExecutionResult result = dispatch_event(interpreter, target, type, false, 0);
     if (!result.ok()) {
       return result;
@@ -233,15 +255,16 @@ std::shared_ptr<SwfRuntime> SwfRuntime::create(Runtime& runtime, Interpreter& in
   if (runtime_movie->root_ == nullptr) {
     return fail("the root clip could not be built");
   }
-  // The document constructor reads stage and frame 1's children, so both exist before it runs.
   stage->add_child(runtime_movie->root_);
+  if (runtime_movie->root_class_ != nullptr) {
+    runtime_movie->root_class_->apply_slot_defaults(*runtime_movie->root_);
+  }
   const ExecutionResult placed =
       runtime_movie->root_->place_frame(interpreter, 1, options.start_playing);
   if (!placed.ok()) {
     return fail("frame 1 failed: " + placed.message);
   }
   if (runtime_movie->root_class_ != nullptr) {
-    runtime_movie->root_class_->apply_slot_defaults(*runtime_movie->root_);
     const ExecutionResult prepare_result =
         interpreter.prepare_class(*runtime_movie->root_class_, 0);
     if (!prepare_result.ok()) {
@@ -403,7 +426,7 @@ SoundEventQueue& SwfRuntime::sound_events() {
 }
 
 FrameSnapshot SwfRuntime::take_snapshot() {
-  FrameSnapshot snapshot = root_ == nullptr ? FrameSnapshot{} : build_frame_snapshot(*root_);
+  FrameSnapshot snapshot = stage_snapshot(root_.get(), stage_.get());
   if (runtime_ != nullptr) {
     runtime_->sound_events().append_to(snapshot.sounds);
   }
@@ -411,7 +434,7 @@ FrameSnapshot SwfRuntime::take_snapshot() {
 }
 
 FrameSnapshot SwfRuntime::snapshot() const {
-  return root_ == nullptr ? FrameSnapshot{} : build_frame_snapshot(*root_);
+  return stage_snapshot(root_.get(), stage_.get());
 }
 
 void SwfRuntime::mouse_move(Interpreter& interpreter, double x, double y) {

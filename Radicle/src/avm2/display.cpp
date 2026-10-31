@@ -117,15 +117,23 @@ bool DisplayObjectContainer::add_child(const std::shared_ptr<DisplayObject>& chi
   return add_child_at(child, children_.size());
 }
 
-bool DisplayObjectContainer::add_child_at(const std::shared_ptr<DisplayObject>& child,
-                                          std::size_t index) {
-  if (child == nullptr || child.get() == this) {
+bool DisplayObjectContainer::can_add(const DisplayObject& child) const {
+  if (&child == this) {
     return false;
   }
-  for (DisplayObject* ancestor = parent(); ancestor != nullptr; ancestor = ancestor->parent()) {
-    if (ancestor == child.get()) {
+  for (const DisplayObject* ancestor = parent(); ancestor != nullptr;
+       ancestor = ancestor->parent()) {
+    if (ancestor == &child) {
       return false;
     }
+  }
+  return true;
+}
+
+bool DisplayObjectContainer::add_child_at(const std::shared_ptr<DisplayObject>& child,
+                                          std::size_t index) {
+  if (child == nullptr || !can_add(*child)) {
+    return false;
   }
   if (child->parent() != nullptr && child->parent()->is_container()) {
     static_cast<DisplayObjectContainer*>(child->parent())->remove_child(child);
@@ -226,11 +234,13 @@ std::uint32_t MovieClip::total_frames() const noexcept {
   return timeline_ == nullptr ? 1u : std::max(1u, timeline_->frame_count);
 }
 
-ExecutionResult MovieClip::goto_frame(Interpreter& interpreter, std::uint32_t frame, bool play) {
-  const std::uint32_t total = total_frames();
-  current_frame_ = frame == 0 ? 1u : std::min(frame, total);
-  playing_ = play;
-  return run_frame_lifecycle(interpreter);
+ExecutionResult MovieClip::goto_frame(Interpreter& interpreter, std::uint32_t frame, bool play,
+                                      std::size_t depth) {
+  ExecutionResult placed = place_frame(interpreter, frame, play, depth);
+  if (!placed.ok()) {
+    return placed;
+  }
+  return run_frame_actions(interpreter, depth);
 }
 
 void MovieClip::step_playhead() {
@@ -246,26 +256,27 @@ ExecutionResult MovieClip::advance_frame(Interpreter& interpreter) {
   return run_frame_lifecycle(interpreter);
 }
 
-ExecutionResult MovieClip::advance_timeline(Interpreter& interpreter) {
+ExecutionResult MovieClip::advance_timeline(Interpreter& interpreter, std::size_t depth) {
   if (!playing_) {
     return ExecutionResult{};
   }
   step_playhead();
-  ExecutionResult placement = apply_frame_state(interpreter);
+  ExecutionResult placement = apply_frame_state(interpreter, depth);
   if (!placement.ok()) {
     return placement;
   }
-  return run_frame_script(interpreter);
+  return run_frame_script(interpreter, depth);
 }
 
-ExecutionResult MovieClip::place_frame(Interpreter& interpreter, std::uint32_t frame, bool play) {
+ExecutionResult MovieClip::place_frame(Interpreter& interpreter, std::uint32_t frame, bool play,
+                                       std::size_t depth) {
   current_frame_ = frame == 0 ? 1u : std::min(frame, total_frames());
   playing_ = play;
-  return apply_frame_state(interpreter);
+  return apply_frame_state(interpreter, depth);
 }
 
-ExecutionResult MovieClip::run_frame_actions(Interpreter& interpreter) {
-  return run_frame_script(interpreter);
+ExecutionResult MovieClip::run_frame_actions(Interpreter& interpreter, std::size_t depth) {
+  return run_frame_script(interpreter, depth);
 }
 
 ExecutionResult MovieClip::run_frame_lifecycle(Interpreter& interpreter) {
@@ -274,11 +285,11 @@ ExecutionResult MovieClip::run_frame_lifecycle(Interpreter& interpreter) {
   if (!enter.ok()) {
     return enter;
   }
-  ExecutionResult placement = apply_frame_state(interpreter);
+  ExecutionResult placement = apply_frame_state(interpreter, 0);
   if (!placement.ok()) {
     return placement;
   }
-  ExecutionResult script = run_frame_script(interpreter);
+  ExecutionResult script = run_frame_script(interpreter, 0);
   if (!script.ok()) {
     return script;
   }
@@ -289,8 +300,9 @@ ExecutionResult MovieClip::run_frame_lifecycle(Interpreter& interpreter) {
   return script;
 }
 
-ExecutionResult MovieClip::apply_frame_state(Interpreter& interpreter) {
+ExecutionResult MovieClip::apply_frame_state(Interpreter& interpreter, std::size_t depth) {
   (void)interpreter;
+  (void)depth;
   return ExecutionResult{};
 }
 
@@ -302,10 +314,10 @@ void MovieClip::set_frame_script(std::uint32_t frame, std::shared_ptr<FunctionOb
   }
 }
 
-ExecutionResult MovieClip::run_frame_script(Interpreter& interpreter) {
+ExecutionResult MovieClip::run_frame_script(Interpreter& interpreter, std::size_t depth) {
   const auto added = added_frame_scripts_.find(current_frame_);
   if (added != added_frame_scripts_.end()) {
-    return interpreter.call_function(*added->second, Value::object(shared_from_this()), {}, 0);
+    return interpreter.call_function(*added->second, Value::object(shared_from_this()), {}, depth);
   }
   if (display_class() != nullptr) {
     const std::string frame_name = "frame" + std::to_string(current_frame_);
@@ -313,7 +325,7 @@ ExecutionResult MovieClip::run_frame_script(Interpreter& interpreter) {
         display_class()->resolve_instance_trait(multiname_for(frame_name));
     if (frame_trait != nullptr && frame_trait->function != nullptr) {
       return interpreter.call_function(*frame_trait->function, Value::object(shared_from_this()),
-                                       {}, 0);
+                                       {}, depth);
     }
   }
   if (timeline_ == nullptr || timeline_->frame_script_file == nullptr) {
@@ -334,7 +346,7 @@ ExecutionResult MovieClip::run_frame_script(Interpreter& interpreter) {
   if (display_class() != nullptr) {
     function.set_owner_class(display_class());
   }
-  return interpreter.call_function(function, Value::object(shared_from_this()), {}, 0);
+  return interpreter.call_function(function, Value::object(shared_from_this()), {}, depth);
 }
 
 Class* find_display_class(const Runtime& runtime, std::string_view rendered_name) {

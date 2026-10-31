@@ -9999,7 +9999,7 @@ The movie's ABC blocks are all linked first, and only then do the script initial
 
 `Radicle/src/avm2/swf_runtime.cpp:SwfRuntime::create` places frame 1 (`place_frame(interpreter, 1, ...)`) after it adds the root to the stage and before the document `iinit` runs, so the constructor can read frame-1 children such as `List_mc`. The frame-1 script still runs after the constructor (`run_frame_actions`), as in AS3. Test: `Radicle/tests/test_avm2_document_class.cpp:FrameOneChildrenExistWhenTheDocumentConstructorRuns`.
 
-Open: TurretHack still fails in its constructor with `cannot call addEventListener on undefined`. The constructor reads `this.BSScrollingList`; no child of the root has that name at that point (the diagnostics show one named frame-1 child, `List_mc`), and the cause is not confirmed. It needs the constructor's bytecode.
+Open: TurretHack's constructor now completes. Its `List_mc` slot is typed `Shared.AS3:BSScrollingList`, and the timeline child is that class (SymbolClass `Shared.AS3.BSScrollingList`). Once the symbol-class name is rendered (`Radicle/src/avm2/swf_movie_data.cpp:read_symbol_classes`), the child fills the declared slot (`Radicle/src/avm2/swf_timeline_clip.cpp:SwfTimelineClip::store_named_child`). The constructor's next call, `flash.utils::getDefinitionByName`, is now registered in the package. The acceptance harness still calls `SetPlatform` for every program, which TurretHack does not define. With init off (a WSL-only change, not committed), both replay runs complete, are deterministic, and the state changes.
 
 ## Radicle/src/avm2/runtime.cpp:Runtime::build_traits (assign_auto_slot_ids)
 
@@ -10061,4 +10061,72 @@ A child with an instance name is a property of its parent: the container branch 
 
 `SwfTimelineClip`, its placement helpers and `build_movie_root` moved out of `Radicle/src/avm2/swf_runtime.cpp` into this file, which keeps `swf_runtime.cpp` under the 750-line limit. Only the location changed; `build_movie_root` is still declared in `Radicle/include/fo4/avm2/swf_runtime.hpp`.
 
-Open after this lane (#807 R8 acceptance, not fixed). Five Main programs (AtomicCommand, Grognak, PipFall, RedMenace, ZetaInvaders) place no children on frame 1, and `Main` adds none in 180 frames. The CLIK `UILoader` instances it creates are never added to the display list, so their configuration never runs. Every `Loader.load` or `URLLoader.load` they reach gets an empty URL, because the source is never set; the load misses in the archive and dispatches `ioError`. Sending `added` and `addedToStage` did not change these programs, and answering the fake host's `bgs.getHighscore` and `bgs.getSaveData` calls with `0` did not change them either. The cause is not confirmed. GJ_Defrag's ABC has no `SetPlatform` (no ABC string contains `Platform`), so the harness's `SetPlatform` call fails for it; with init off, both replay runs complete and are deterministic (28 BGS calls). The harness is unchanged. TurretHack is the open item in the frame-1 entry above.
+## Radicle/src/avm2/interpreter_property.cpp:Interpreter::coerce_value (Class and Function arguments)
+
+A class object (`ObjectKind::Class`) is accepted for a `Class` or `Function` parameter, and a closure (`ObjectKind::Function`) for a `Function` parameter. Their `instance_class()` is null, so the instance check alone failed with `value is not of type Class`. `Object` already accepts every value. Tests: `Radicle/tests/test_avm2_arguments.cpp:ClassParameterAcceptsAClassObject`, `FunctionParameterAcceptsAClassObject`, `FunctionParameterAcceptsAClosure` and `ObjectParameterAcceptsAClassObject`.
+
+## Radicle/src/avm2/swf_timeline_clip.cpp:SwfTimelineClip::store_named_child (declared slot named like a timeline child)
+
+When a named child is placed, a declared instance slot with the same name receives the child, after coercion to the slot's declared type (`Interpreter::coerce_to_class`). A child of another type is not stored, and placement continues. The write resizes the slot vector directly. Slot defaults are applied before frame 1 is placed (`Radicle/src/avm2/swf_runtime.cpp:SwfRuntime::create`), so a default never overwrites the child. Tests: `Radicle/tests/test_avm2_document_class.cpp:PlacedChildFillsADeclaredSlotOfTheSameName` and `PlacedChildIsNotStoredInASlotOfAnUnrelatedType`. Flash's behaviour for a mismatched type is not verified.
+
+## Radicle/src/avm2/native_display.cpp:attach_child (reparenting, re-entry and call depth)
+
+`attach_child` sends `removed` and `removedFromStage` to the old parent, and `added` and `addedToStage` to the new one, only when the parent changes. Re-adding a child to its own parent only reorders it. `detach_child` sets the child's `removing()` flag while its `removed` listeners run, so a nested add or remove of that child does nothing and a listener cannot remove the child twice. Every dispatch passes `depth + 1`, so a listener that keeps moving a child fails with `CallDepthExceeded` instead of recursing. The order follows the AS3 contract; it is not checked against Flash. Tests: `Radicle/tests/test_avm2_stage_events.cpp:ReAddingToTheSameParentFromAnAddedListenerSendsOneEvent`, `ReRemovingFromARemovedListenerIsANoOp`, `ReparentingSendsRemovedToTheOldParentAndAddedToTheNewOne` and `ReparentingLoopFromAnAddedListenerStopsWithACallDepthError`.
+
+## Radicle/src/avm2/display.cpp:MovieClip::goto_frame (no frame events, call depth)
+
+`goto_frame` places the frame (`place_frame`) and runs its script (`run_frame_actions`). It sends no `enterFrame` or `exitFrame`, so a `gotoAndStop` inside an `enterFrame` listener does not repeat the event. Placement and frame scripts receive the call depth, so a frame script that goes to its own frame fails with `CallDepthExceeded`. Tests: `Radicle/tests/test_avm2_stage_events.cpp:GotoAndStopInsideEnterFrameSendsNoFrameEvents` and `FrameScriptThatGoesToItsOwnFrameStopsWithACallDepthError`.
+
+## Radicle/src/avm2/interpreter_dispatch_b.inc:getsuper and setsuper (super accessors and native display)
+
+`super.name` searches the superclass chain with `lookup_class_traits` (`Radicle/src/avm2/object.cpp`, declared in `Radicle/src/avm2/interpreter_internal.hpp`). A superclass getter or setter runs with the object as `this`. A slot is read or written. A display object falls back to its native display property. Tests: `Radicle/tests/test_avm2_display_api.cpp:SuperAccessorsReachTheNativeDisplayProperty` and `SuperGetterRunsTheSuperclassAccessor`.
+
+## Radicle/src/avm2/swf_movie_data.cpp:read_symbol_classes (dotted symbol class names)
+
+SymbolClass names are dotted in the SWF (`Shared.AS3.BSScrollingList`), and the runtime's class names are rendered (`Shared.AS3::BSScrollingList`). A name without `::` gets its last `.` replaced by `::`, so timeline children and the document class resolve to their classes. Before, the lookup failed and the child became a plain MovieClip. Test: `Radicle/tests/test_avm2_swf_runtime.cpp:DottedSymbolClassNameIsTheRenderedClassName`.
+
+## Radicle/src/avm2/builtins.cpp:Runtime::install_builtins (flash.utils::getDefinitionByName)
+
+`getDefinitionByName` is registered in the `flash.utils` package, as its siblings are. Before, `flash.utils::getDefinitionByName` was not callable. Test: `Radicle/tests/test_avm2_compat.cpp:GetDefinitionByNameIsReachableThroughTheFlashUtilsPackage`.
+
+## Radicle/src/avm2/native_net.cpp:url_request_construct (URLRequest url argument)
+
+`new URLRequest(url)` stores `url`. The native constructor ignored its arguments, so every request URL read as `""` and every load missed. Config and asset loads for the seven programs depend on it. Test: `Radicle/tests/test_avm2_host.cpp:UrlRequestConstructorArgumentIsTheRequestUrl`.
+
+## Radicle/src/avm2/swf_runtime.cpp:stage_snapshot (the frame snapshot includes stage content)
+
+The frame snapshot keeps the root's entries and paths and appends the subtrees of the other stage children, under `/stage/<index>` paths. Programs add display objects to the stage directly, and before this change those objects were absent from every snapshot. Test: `Radicle/tests/test_avm2_snapshot.cpp:FlattensTheDisplayTreeWithComposedTransforms` (the stage child case).
+
+## Radicle/src/avm2/swf_runtime.cpp:SwfRuntime::create (slot defaults before frame 1; child frame-1 order)
+
+The document class's slot defaults are applied before frame 1 is placed, so the constructor sees the timeline children and no default overwrites them. A frame-1 child's own frame-1 script runs during placement, before the document constructor. The document's frame-1 script runs after the constructor. That order was left unchanged and is not verified against Flash. Test: `Radicle/tests/test_avm2_document_class.cpp:FrameOneChildrenExistWhenTheDocumentConstructorRuns`.
+
+## Radicle/src/avm2/swf_runtime.cpp:broadcast_frame_event (skip targets without listeners)
+
+A target with no listener on its propagation path (`will_trigger`) is skipped, so a tick no longer builds an event for every display object. Behaviour is unchanged; the existing EnterFrame tests cover the delivery.
+
+## Radicle/tests/test_c_api.cpp:expect_sentinel_value (padding of copied structs)
+
+Copies of a struct do not keep its padding bytes (the copy of `radicle_form_key` lost them, so `memcmp` on the copies failed in bytes 12 to 15 for a rejected call that wrote no field: 8 assertions). `fill_sentinel` writes the pattern into the object the call fills, and `expect_sentinel_value` compares against a byte pattern. No object is copied, so the padding is the pattern the test wrote. Test: `CApi.RecordFromAnotherEnvironmentIsRejected` (fails with the HEAD test file, passes with this one).
+
+## Radicle/src/avm2/native_net.cpp:loader_load (complete and ioError go to the LoaderInfo)
+
+`Loader.load` sends `complete` and `ioError` to the loader's `contentLoaderInfo`, as AS3 does. Before, they went to the Loader itself, so listeners added to the LoaderInfo never ran and the game's asset loading stalled (AtomicCommand waited forever on its first load). `Loader.content` (native_compat.cpp:loader_content) and `LoaderInfo.content` (set by native_compat.cpp:refresh_content_loader_info) return the loaded movie. Tests: `Radicle/tests/test_avm2_domain.cpp:LoaderCompleteIsSentToTheContentLoaderInfo`, `LoaderContentIsTheLoadedMovie` and `LoaderInfoContentIsTheLoadedMovie`.
+
+## Radicle/src/avm2/interpreter_property.cpp:bind_method (self-listening object is never freed; not fixed)
+
+The case is `this.addEventListener(E, this.m)` on the same object: the listener entry holds the bound closure, the closure holds the receiver strongly, and the receiver holds the entry, so dropping the object does not free it. Left unfixed. A possible fix, not implemented: store the unbound method in the listener and take `this` from the dispatch target. That removes this same-object cycle; cross-object cycles (A listens to a method of B bound to A while B holds A) would still need a cycle collector.
+
+## Radicle/tests/avm2_test_support.hpp:ScriptBuilder::method_with_exceptions (arity; not changed)
+
+`ScriptBuilder::method` delegates to `method_with_exceptions` with an empty exception table, so every test method built with `method` goes through it. `test_avm2_interpreter.cpp` also calls it directly with exception tables. The helper marks every parameter optional, so the arity check is skipped for those methods. Making the parameters required would change how frame scripts are called without arguments, so it was left unchanged.
+
+## Radicle/src/avm2/swf_timeline_clip.cpp:SwfTimelineClip::apply_frame_state (sprite loop runs over a snapshot)
+
+The sprite loop runs child scripts, and a child script can remove a sprite from its parent (for example by going to a frame that removes it). The loop therefore walks a snapshot of the sprites taken from `objects_`, and skips a sprite whose layer no longer holds that object. Walking `sprite_clips_` directly left the iterator on an erased node. Test: `Radicle/tests/test_avm2_stage_events.cpp:ChildScriptThatGoesToAFrameRemovingItKeepsTheSpriteLoopIntact`.
+
+## Radicle/src/avm2/native_net.cpp:url_request_construct (url is null when no url is given)
+
+`new URLRequest()` and `new URLRequest(null)` store `url` as null. Before, a nullish argument left `url` undefined. Tests: `Radicle/tests/test_avm2_host.cpp:UrlRequestWithoutAUrlHasANullUrl` and `UrlRequestWithANullUrlHasANullUrl`.
+
+Open after this lane (#807 R8 acceptance, not fixed). Five programs (AtomicCommand, Grognak, PipFall, RedMenace, ZetaInvaders) still report `state never changed`. Fixed in this lane: the `URLRequest` constructor argument (every config and asset URL was empty) and the frame snapshot, which ignored objects the program adds to the stage. Grognak's config request and the asset SWFs now load and complete. AtomicCommand never makes its config request in 180 frames: its document class `Main` (`Main/init`, `Main/InitProgram` in the dumped ABC block) does not reach `bhvr.states:GameLevelState/protected:loadXMLConfig`. The decision that stops it is not identified yet. GJ_Defrag and TurretHack fail the harness's `SetPlatform` call (neither defines it). With init off, both replay runs complete and are deterministic; GJ_Defrag makes 28 BGS calls, TurretHack none. The harness is unchanged.
