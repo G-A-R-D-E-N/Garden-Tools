@@ -63,7 +63,8 @@ radicle_status radicle_previs_scan(const radicle_env* env, const char* data_dir,
     if (!std::filesystem::is_directory(directory, error)) {
       return fail(RADICLE_STATUS_IO_ERROR, "data_dir is not a readable directory");
     }
-    const auto indexes = fo4::previs::PrevisData::load(directory, env->value);
+    const std::filesystem::path roots[]{directory};
+    const auto indexes = fo4::previs::PrevisData::load(roots, env->value);
     auto report = std::make_unique<radicle_previs_report>();
     report->summary = indexes.summary();
     report->cells = fo4::previs::diagnose_load_order(env->value, indexes.indexes());
@@ -182,7 +183,8 @@ radicle_status radicle_previs_report_problem(const radicle_previs_report* report
 }
 
 const char* radicle_previs_issue_name(int32_t code) {
-  if (code < 0) return "unknown";
+  // Range invariant: an out-of-range code must not wrap to a real enumerator and report its name.
+  if (code < 0 || code >= fo4::previs::k_previs_issue_count) return "unknown";
   return fo4::previs::to_string(static_cast<fo4::previs::PrevisIssue>(code)).data();
 }
 

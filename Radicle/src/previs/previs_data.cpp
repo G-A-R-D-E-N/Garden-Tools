@@ -174,12 +174,13 @@ std::optional<std::size_t> PrevisData::owner_plugin(const FormKey& cell) const {
   return it->second;
 }
 
-bool PrevisData::has_oc_nif(const FormKey& cell) const {
-  const auto plugin = owner_plugin(cell);
-  if (!plugin) return false;
-  const auto it = nifs_.find(*plugin);
-  if (it == nifs_.end()) return false;
-  return it->second.cells.contains(cell.local().value() & 0xFFFFFFu);
+std::string PrevisData::base_plugin_lower() const {
+  if (!base_known_ || env_ == nullptr) return {};
+  return lowered(env_->plugins().at(base_plugin_).key.filename());
+}
+
+bool PrevisData::plugin_ships_previs(std::size_t plugin) const {
+  return cdx_present_.contains(plugin) || csg_present_.contains(plugin);
 }
 
 std::optional<bool> PrevisData::cdx_answer(std::size_t plugin,
@@ -194,12 +195,6 @@ std::optional<bool> PrevisData::cdx_answer(std::size_t plugin,
   }
   if (!encode_in_plugin(target.cell, plugin, raw)) return std::nullopt;
   return index->second.has_interior_row(raw);
-}
-
-std::optional<bool> PrevisData::csg_answer(std::size_t plugin, const FormKey& cell) const {
-  if (!csg_complete_ || !nif_complete_) return std::nullopt;
-  if (!csg_plugins_.contains(plugin)) return false;
-  return has_oc_nif(cell);
 }
 
 std::optional<std::uint32_t> PrevisData::missing_oc_nifs(
@@ -249,13 +244,11 @@ LoadOrderIndexes PrevisData::indexes() const {
   out.cdx_row = [this](std::size_t plugin, const CdxCellTarget& target) {
     return cdx_answer(plugin, target);
   };
-  out.csg_rows = [this](std::size_t plugin, const FormKey& cell) {
-    return csg_answer(plugin, cell);
-  };
   out.missing_oc_nifs = [this](const FormKey& cell, std::span<const std::uint32_t> mesh_ids) {
     return missing_oc_nifs(cell, mesh_ids);
   };
   out.uvd = [this](const FormKey& tome_cell) { return tome_answer(tome_cell); };
+  out.plugin_ships_previs = [this](std::size_t plugin) { return plugin_ships_previs(plugin); };
   return out;
 }
 
@@ -275,18 +268,17 @@ void PrevisData::add_nif(const std::string& plugin_lower, std::uint32_t cell, st
   index.entries.insert(static_cast<std::uint64_t>(cell) << 32u | id);
 }
 
-void PrevisData::scan_archives(const fs::path& data_dir) {
+void PrevisData::scan_archives(const fs::path& root) {
   std::error_code error;
   std::vector<fs::path> paths;
-  for (fs::directory_iterator it(data_dir, error), end; !error && it != end; it.increment(error)) {
+  for (fs::directory_iterator it(root, error), end; !error && it != end; it.increment(error)) {
     std::error_code file_error;
     if (!it->is_regular_file(file_error)) continue;
     if (lowered(it->path().extension().string()) != ".ba2") continue;
     paths.push_back(it->path());
   }
   std::sort(paths.begin(), paths.end());
-  const std::string base_lower =
-      env_ == nullptr ? std::string{} : lowered(env_->plugins().at(base_plugin_).key.filename());
+  const std::string base_lower = base_plugin_lower();
 
   for (const auto& path : paths) {
     if (!is_general_archive(path)) continue;
@@ -314,9 +306,9 @@ void PrevisData::scan_archives(const fs::path& data_dir) {
   }
 }
 
-void PrevisData::scan_loose(const fs::path& data_dir) {
+void PrevisData::scan_loose(const fs::path& root) {
   std::error_code error;
-  const auto vis_root = data_dir / "Vis";
+  const auto vis_root = root / "Vis";
   if (fs::is_directory(vis_root, error)) {
     for (fs::recursive_directory_iterator it(vis_root, error), end; !error && it != end;
          it.increment(error)) {
@@ -332,13 +324,11 @@ void PrevisData::scan_loose(const fs::path& data_dir) {
       if (file_name.size() != 12) continue;
       const auto value = hex8(file_name.substr(0, 8));
       if (!value) continue;
-      add_tome(lowered(parts[0]), *value & 0xFFFFFFu,
-               TomeLocation{true, 0, 0, it->path()});
+      add_tome(lowered(parts[0]), *value & 0xFFFFFFu, TomeLocation{true, 0, 0, it->path()});
     }
   }
-  const std::string base_lower =
-      env_ == nullptr ? std::string{} : lowered(env_->plugins().at(base_plugin_).key.filename());
-  const auto precombined = data_dir / "Meshes" / "PreCombined";
+  const std::string base_lower = base_plugin_lower();
+  const auto precombined = root / "Meshes" / "PreCombined";
   if (fs::is_directory(precombined, error)) {
     for (fs::recursive_directory_iterator it(precombined, error), end; !error && it != end;
          it.increment(error)) {
@@ -360,9 +350,9 @@ void PrevisData::scan_loose(const fs::path& data_dir) {
   }
 }
 
-void PrevisData::scan_cdx(const fs::path& data_dir) {
+void PrevisData::scan_cdx(const fs::path& root) {
   std::error_code error;
-  for (fs::directory_iterator it(data_dir, error), end; !error && it != end; it.increment(error)) {
+  for (fs::directory_iterator it(root, error), end; !error && it != end; it.increment(error)) {
     std::error_code file_error;
     if (!it->is_regular_file(file_error)) continue;
     const auto path = it->path();
@@ -370,35 +360,38 @@ void PrevisData::scan_cdx(const fs::path& data_dir) {
     ++summary_.cdx_files;
     const auto plugin = plugin_by_stem_.find(lowered(path.stem().string()));
     if (plugin == plugin_by_stem_.end()) continue;
+    if (cdx_present_.contains(plugin->second) || cdx_unreadable_.contains(plugin->second)) continue;
+    const std::string plugin_name = env_->plugins().at(plugin->second).key.filename();
     try {
       const auto bytes = read_file(path);
       const auto issues = validate_cdx(bytes);
       if (!issues.empty()) {
-        summary_.problems.push_back("CDX invalid: " + path.filename().string() + ": " + issues.front());
+        summary_.problems.push_back("CDX invalid for " + plugin_name + ": " + issues.front());
         cdx_unreadable_.insert(plugin->second);
         continue;
       }
       auto file = parse_cdx(bytes);
       summary_.cdx_rows += file.rows.size();
+      cdx_present_.insert(plugin->second);
       cdx_.try_emplace(plugin->second, CdxIndex(file));
     } catch (const std::exception& e) {
-      summary_.problems.push_back("CDX unreadable: " + path.filename().string() + ": " + e.what());
+      summary_.problems.push_back("CDX unreadable for " + plugin_name + ": " + e.what());
       cdx_unreadable_.insert(plugin->second);
     }
   }
 }
 
-void PrevisData::scan_csg(const fs::path& data_dir) {
+void PrevisData::scan_csg(const fs::path& root) {
   std::error_code error;
-  for (fs::directory_iterator it(data_dir, error), end; !error && it != end; it.increment(error)) {
+  for (fs::directory_iterator it(root, error), end; !error && it != end; it.increment(error)) {
     std::error_code file_error;
     if (!it->is_regular_file(file_error)) continue;
     const auto path = it->path();
     const auto name = lowered(path.filename().string());
     if (ends_with(name, ".psg")) {
-      summary_.problems.push_back("clean-mode .psg is unsupported; CSG fails closed: " +
-                                  path.filename().string());
-      csg_complete_ = false;
+      summary_.problems.push_back(
+          "clean-mode .psg is unsupported; precombine geometry is unmeasured: " +
+          path.filename().string());
       continue;
     }
     if (!ends_with(name, k_geometry_csg_suffix)) continue;
@@ -406,40 +399,56 @@ void PrevisData::scan_csg(const fs::path& data_dir) {
     const auto stem = name.substr(0, name.size() - k_geometry_csg_suffix.size());
     const auto plugin = plugin_by_stem_.find(stem);
     if (plugin == plugin_by_stem_.end()) continue;
+    if (csg_decided_.contains(plugin->second)) continue;
+    csg_decided_.insert(plugin->second);
+    csg_present_.insert(plugin->second);
+    const std::string plugin_name = env_->plugins().at(plugin->second).key.filename();
     try {
       const auto bytes = read_file(path);
       const auto issues = validate_csg(bytes);
       if (!issues.empty()) {
-        summary_.problems.push_back("CSG invalid: " + path.filename().string() + ": " +
-                                    issues.front());
-        csg_complete_ = false;
+        summary_.problems.push_back("CSG invalid for " + plugin_name + ": " + issues.front());
         continue;
       }
       std::uint32_t header[3]{};
       std::memcpy(header, bytes.data(), sizeof(header));
       summary_.csg_rows += header[1];
       summary_.csg_chunks += header[2];
-      csg_plugins_.insert(plugin->second);
     } catch (const std::exception& e) {
-      summary_.problems.push_back("CSG unreadable: " + path.filename().string() + ": " + e.what());
-      csg_complete_ = false;
+      summary_.problems.push_back("CSG unreadable for " + plugin_name + ": " + e.what());
     }
   }
 }
 
-PrevisData PrevisData::load(const fs::path& data_dir, const env::Environment& env) {
+void PrevisData::check_csg_containers() {
+  for (const auto plugin : cdx_present_) {
+    if (csg_present_.contains(plugin)) continue;
+    const std::string plugin_name = env_->plugins().at(plugin).key.filename();
+    summary_.problems.push_back("CSG missing for " + plugin_name +
+                                ": the plugin has a CDX but no matching - Geometry.csg");
+  }
+}
+
+PrevisData PrevisData::load(std::span<const fs::path> asset_roots, const env::Environment& env) {
   PrevisData data;
   data.env_ = &env;
   const auto& plugins = env.plugins();
   if (plugins.empty()) {
     data.summary_.problems.push_back("the environment has no plugins");
     data.cdx_complete_ = false;
-    data.csg_complete_ = false;
     data.nif_complete_ = false;
     data.tome_complete_ = false;
     return data;
   }
-  data.base_plugin_ = env.find_plugin("Fallout4.esm").value_or(0);
+  if (const auto base = env.find_plugin("Fallout4.esm")) {
+    data.base_known_ = true;
+    data.base_plugin_ = *base;
+  } else {
+    data.nif_complete_ = false;
+    data.summary_.problems.push_back(
+        "Fallout4.esm is absent from the scanned load order: OC NIFs without a plugin folder "
+        "cannot be attributed");
+  }
   for (std::size_t index = 0; index < plugins.size(); ++index) {
     const std::string filename = lowered(plugins[index].key.filename());
     data.plugin_by_name_.emplace(filename, index);
@@ -447,11 +456,15 @@ PrevisData PrevisData::load(const fs::path& data_dir, const env::Environment& en
     data.plugin_by_stem_.emplace(dot == std::string::npos ? filename : filename.substr(0, dot),
                                  index);
   }
-  data.scan_cdx(data_dir);
-  data.scan_csg(data_dir);
-  data.scan_archives(data_dir);
-  data.scan_loose(data_dir);
+  // Root priority invariant: the highest root must be scanned first, and loose must beat archives.
+  for (auto root = asset_roots.rbegin(); root != asset_roots.rend(); ++root) {
+    if (root->empty()) continue;
+    data.scan_loose(*root);
+    data.scan_archives(*root);
+    data.scan_cdx(*root);
+    data.scan_csg(*root);
+  }
+  data.check_csg_containers();
   return data;
 }
-
 }  // namespace fo4::previs

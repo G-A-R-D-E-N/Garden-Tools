@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <optional>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -15,7 +16,7 @@
 
 namespace fo4::previs {
 
-// Census of one Data folder scan; any problem must mark the touched index unchecked.
+// Census of one asset scan; a problem must mark the touched index unchecked or fail closed.
 struct PrevisDataSummary {
   std::size_t cdx_files{0};
   std::size_t cdx_rows{0};
@@ -27,13 +28,14 @@ struct PrevisDataSummary {
   std::vector<std::string> problems;
 };
 
-// File system answers for diagnose_load_order; all logic must stay native, the panel
-
+// File system answers for diagnose_load_order; all logic must stay native, the panel only displays.
 class PrevisData {
  public:
-  // Scanning must cover <plugin>.cdx, `<plugin> - Geometry.csg`, every GNRL BA2 and loose
-  // Vis and Meshes/PreCombined files; a .psg requires the CSG answer to fail closed.
-  static PrevisData load(const std::filesystem::path& data_dir, const env::Environment& env);
+  // Asset roots must be lowest priority first; later roots win and loose must beat archives.
+  // A scan must cover <plugin>.cdx, `<plugin> - Geometry.csg`, every GNRL BA2 and loose Vis and
+  // Meshes/PreCombined files; a .psg must fail the CSG container check closed.
+  static PrevisData load(std::span<const std::filesystem::path> asset_roots,
+                         const env::Environment& env);
 
   LoadOrderIndexes indexes() const;
 
@@ -57,13 +59,16 @@ class PrevisData {
   // The lookup conversions require the load order, so PrevisData borrows it.
   const env::Environment* env_{nullptr};
   std::size_t base_plugin_{0};
+  bool base_known_{false};
   std::unordered_map<std::string, std::size_t> plugin_by_name_;
   std::unordered_map<std::string, std::size_t> plugin_by_stem_;
   std::unordered_map<std::size_t, CdxIndex> cdx_;
+  std::unordered_set<std::size_t> cdx_present_;
   std::unordered_set<std::size_t> cdx_unreadable_;
   bool cdx_complete_{true};
-  std::unordered_set<std::size_t> csg_plugins_;
-  bool csg_complete_{true};
+  std::unordered_set<std::size_t> csg_present_;
+  // A decided plugin must not be re-read from a lower-priority root.
+  std::unordered_set<std::size_t> csg_decided_;
   std::unordered_map<std::size_t, NifIndex> nifs_;
   bool nif_complete_{true};
   std::unordered_map<std::string, TomeLocation> tomes_;
@@ -73,18 +78,19 @@ class PrevisData {
   PrevisDataSummary summary_;
 
   std::optional<bool> cdx_answer(std::size_t plugin, const CdxCellTarget& target) const;
-  std::optional<bool> csg_answer(std::size_t plugin, const FormKey& cell) const;
   std::optional<std::uint32_t> missing_oc_nifs(const FormKey& cell,
                                                std::span<const std::uint32_t> mesh_ids) const;
   TomeLookup tome_answer(const FormKey& tome_cell) const;
 
   bool encode_in_plugin(const FormKey& key, std::size_t plugin, std::uint32_t& out) const;
-  bool has_oc_nif(const FormKey& cell) const;
   std::optional<std::size_t> owner_plugin(const FormKey& cell) const;
-  void scan_archives(const std::filesystem::path& data_dir);
-  void scan_loose(const std::filesystem::path& data_dir);
-  void scan_cdx(const std::filesystem::path& data_dir);
-  void scan_csg(const std::filesystem::path& data_dir);
+  std::string base_plugin_lower() const;
+  bool plugin_ships_previs(std::size_t plugin) const;
+  void check_csg_containers();
+  void scan_archives(const std::filesystem::path& root);
+  void scan_loose(const std::filesystem::path& root);
+  void scan_cdx(const std::filesystem::path& root);
+  void scan_csg(const std::filesystem::path& root);
   void add_tome(const std::string& plugin_lower, std::uint32_t value, TomeLocation location);
   void add_nif(const std::string& plugin_lower, std::uint32_t cell, std::uint32_t id);
 };

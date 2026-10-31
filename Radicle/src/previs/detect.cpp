@@ -18,8 +18,6 @@ std::string_view to_string(PrevisIssue issue) noexcept {
       return "tome_invalid";
     case PrevisIssue::cdx_row_missing:
       return "cdx_row_missing";
-    case PrevisIssue::csg_rows_missing:
-      return "csg_rows_missing";
     case PrevisIssue::oc_nif_missing:
       return "oc_nif_missing";
     case PrevisIssue::xcri_malformed:
@@ -28,8 +26,6 @@ std::string_view to_string(PrevisIssue issue) noexcept {
       return "pcmb_stale";
     case PrevisIssue::visi_stale:
       return "visi_stale";
-    case PrevisIssue::cell_decode_failed:
-      return "cell_decode_failed";
   }
   return "unknown";
 }
@@ -73,14 +69,7 @@ CellPrevisStatus diagnose_cell(const CellPrevisInput& in) {
       out.issues.push_back(
           {PrevisIssue::cdx_row_missing, "XCRI is present but the CDX has no row for this cell"});
     }
-    if (!in.csg_checked) {
-      out.skip_unsupported = true;
-      out.skips.push_back("no CSG index supplied; CSG coverage unverified");
-    } else if (!in.has_csg_rows) {
-      out.broken = true;
-      out.issues.push_back(
-          {PrevisIssue::csg_rows_missing, "XCRI is present but the CSG has no rows for this cell"});
-    }
+    // Per-cell CSG rows are not measured; the per-plugin container check requires the .csg to validate.
     if (!in.oc_nif_checked) {
       out.skip_unsupported = true;
       out.skips.push_back("no OC NIF index supplied; combined meshes unverified");
@@ -133,6 +122,21 @@ std::uint16_t max_same_plugin_version(const env::Environment& env, const env::Re
   return max_version;
 }
 
+// Override invariant: a version owned by another plugin is what the winner replaces.
+bool overrides_another_plugin(const env::Environment& env, const env::RecordRef& ref) {
+  for (const auto& version : env.versions(ref.record->form_key)) {
+    if (version.plugin != ref.plugin) return true;
+  }
+  return false;
+}
+
+CellPrevisStatus unmeasured_skip(std::string reason) {
+  CellPrevisStatus status;
+  status.skip_unsupported = true;
+  status.skips.push_back(std::move(reason));
+  return status;
+}
+
 }  // namespace
 
 std::vector<CellDiagnosis> diagnose_load_order(const env::Environment& env,
@@ -144,6 +148,18 @@ std::vector<CellDiagnosis> diagnose_load_order(const env::Environment& env,
     CellDiagnosis diagnosis;
     diagnosis.cell = ref->record->form_key;
     diagnosis.plugin = ref->plugin;
+    if (env.plugins().at(ref->plugin).kind == PluginKind::light) {
+      diagnosis.status = unmeasured_skip("light plugin layout not measured");
+      out.push_back(std::move(diagnosis));
+      continue;
+    }
+    if (indexes.plugin_ships_previs && !indexes.plugin_ships_previs(ref->plugin) &&
+        overrides_another_plugin(env, *ref)) {
+      diagnosis.status =
+          unmeasured_skip("override with no previs of its own: engine behaviour unverified");
+      out.push_back(std::move(diagnosis));
+      continue;
+    }
     std::optional<CellIssue> xcri_issue;
     try {
       const auto data = env::decode_cell(env, *ref);
@@ -184,12 +200,6 @@ std::vector<CellDiagnosis> diagnose_load_order(const env::Environment& env,
         if (answer) in.has_cdx_row = *answer;
       }
 
-      if (indexes.csg_rows) {
-        const auto answer = indexes.csg_rows(ref->plugin, diagnosis.cell);
-        in.csg_checked = answer.has_value();
-        if (answer) in.has_csg_rows = *answer;
-      }
-
       if (indexes.uvd && in.has_visi) {
         const FormKey tome_cell = in.has_rvis ? *data.previs_root : diagnosis.cell;
         const auto answer = indexes.uvd(tome_cell);
@@ -212,9 +222,8 @@ std::vector<CellDiagnosis> diagnose_load_order(const env::Environment& env,
         diagnosis.status.issues.insert(diagnosis.status.issues.begin(), *xcri_issue);
       }
     } catch (const std::exception& e) {
-      diagnosis.status.broken = true;
-      diagnosis.status.issues.push_back(
-          {PrevisIssue::cell_decode_failed, std::string("CELL failed to decode: ") + e.what()});
+      // A failed decode must stay a skip: an unreadable CELL is not measured, not proven broken.
+      diagnosis.status = unmeasured_skip(std::string("CELL failed to decode: ") + e.what());
       out.push_back(std::move(diagnosis));
       continue;
     }

@@ -409,7 +409,8 @@ TEST(PrevisReal, VanillaLoadOrderGate) {
   const auto paths = official_masters(dir);
   if (paths.empty()) GTEST_SKIP() << "the six installed masters are not present";
   const auto env = fo4::env::Environment::load(paths);
-  const auto data = fo4::previs::PrevisData::load(dir, env);
+  const std::filesystem::path roots[]{dir};
+  const auto data = fo4::previs::PrevisData::load(roots, env);
   const auto report = fo4::previs::diagnose_load_order(env, data.indexes());
 
   std::size_t broken = 0;
@@ -580,6 +581,11 @@ TEST(PrevisReal, CApiReportSurface) {
     break;
   }
   EXPECT_TRUE(saw_issue);
+  // Range invariant: a truncated or wrapped code must not name a real issue.
+  EXPECT_STREQ(radicle_previs_issue_name(7), "visi_stale");
+  EXPECT_STREQ(radicle_previs_issue_name(8), "unknown");
+  EXPECT_STREQ(radicle_previs_issue_name(256), "unknown");
+  EXPECT_STREQ(radicle_previs_issue_name(-1), "unknown");
 
   radicle_previs_report_destroy(report);
   radicle_env_destroy(env);

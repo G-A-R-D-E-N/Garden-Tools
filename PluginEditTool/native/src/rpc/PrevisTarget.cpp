@@ -129,7 +129,8 @@ Result<nlohmann::json> PrevisTarget::scan(const nlohmann::json& args) const {
                                      std::string("could not load the plugin list: ") + problem.what()});
     }
 
-    const auto data = fo4::previs::PrevisData::load(folder, environment);
+    const std::filesystem::path roots[]{folder};
+    const auto data = fo4::previs::PrevisData::load(roots, environment);
     const auto report = fo4::previs::diagnose_load_order(environment, data.indexes());
 
     std::size_t broken = 0;

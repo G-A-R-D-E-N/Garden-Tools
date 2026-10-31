@@ -261,25 +261,19 @@ TEST(PrevisDetect, ClassifiesBrokenAndOutdated) {
   EXPECT_EQ(outdated.outdated_issues.size(), 2u);
 }
 
-// A precombined cell requires XCRI, CDX rows, CSG rows and every OC NIF.
+// A precombined cell requires XCRI, a CDX row and every OC NIF; CSG is a per-plugin check only.
 TEST(PrevisDetect, ClassifiesPrecombineLinkage) {
   fo4::previs::CellPrevisInput complete{};
   complete.has_pcmb = true;
   complete.has_xcri = true;
   complete.cdx_checked = true;
   complete.has_cdx_row = true;
-  complete.csg_checked = true;
-  complete.has_csg_rows = true;
   complete.oc_nif_checked = true;
   EXPECT_FALSE(fo4::previs::diagnose_cell(complete).broken);
 
   auto no_cdx = complete;
   no_cdx.has_cdx_row = false;
   EXPECT_TRUE(fo4::previs::diagnose_cell(no_cdx).broken);
-
-  auto no_csg = complete;
-  no_csg.has_csg_rows = false;
-  EXPECT_TRUE(fo4::previs::diagnose_cell(no_csg).broken);
 
   auto no_nif = complete;
   no_nif.missing_oc_nifs = 3;
@@ -291,7 +285,6 @@ TEST(PrevisDetect, ClassifiesPrecombineLinkage) {
   fo4::previs::CellPrevisInput pcmb_only{};
   pcmb_only.has_pcmb = true;
   pcmb_only.cdx_checked = true;
-  pcmb_only.csg_checked = true;
   pcmb_only.uvd_checked = true;
   EXPECT_FALSE(fo4::previs::diagnose_cell(pcmb_only).broken);
 }
@@ -312,7 +305,7 @@ TEST(PrevisDetect, UncheckedIndexesBecomeSkipsNotBroken) {
   const auto unx = fo4::previs::diagnose_cell(xcri);
   EXPECT_FALSE(unx.broken);
   EXPECT_TRUE(unx.skip_unsupported);
-  EXPECT_EQ(unx.skips.size(), 3u);  // CDX + CSG + OC NIF
+  EXPECT_EQ(unx.skips.size(), 2u);  // CDX + OC NIF
 }
 
 namespace {
@@ -385,9 +378,6 @@ TEST_F(PrevisLoadOrderTest, ComputesInputsFromRealIndexes) {
   indexes.cdx_row = [](std::size_t, const fo4::previs::CdxCellTarget& target) {
     return std::optional<bool>{target.cell.local().value() == 0x801u};
   };
-  indexes.csg_rows = [](std::size_t, const fo4::FormKey& cell) {
-    return std::optional<bool>{cell.local().value() == 0x801u};
-  };
   indexes.missing_oc_nifs = [](const fo4::FormKey&,
                                std::span<const std::uint32_t>) {
     return std::optional<std::uint32_t>{0u};
@@ -417,7 +407,6 @@ TEST_F(PrevisLoadOrderTest, ComputesInputsFromRealIndexes) {
   EXPECT_TRUE(pcmb->input.has_pcmb);
   EXPECT_TRUE(pcmb->input.has_xcri);
   EXPECT_TRUE(pcmb->input.has_cdx_row);
-  EXPECT_TRUE(pcmb->input.has_csg_rows);
   EXPECT_FALSE(pcmb->status.broken);
   EXPECT_FALSE(pcmb->status.skip_unsupported);
 
@@ -447,6 +436,51 @@ TEST_F(PrevisLoadOrderTest, MissingIndexesBecomeSkips) {
   ASSERT_NE(pcmb, nullptr);
   EXPECT_FALSE(pcmb->status.broken);
   EXPECT_TRUE(pcmb->status.skip_unsupported);
+}
+
+// Regression: an override whose plugin ships no previs containers must skip, not condemn the cell.
+TEST_F(PrevisLoadOrderTest, OverrideWithoutPrevisSkips) {
+  fo4::test::ByteWriter xcri;
+  xcri.u32(1);
+  xcri.u32(2);
+  xcri.u32(0x55);
+  xcri.u32(0x810);
+  xcri.u32(0x56);
+  const auto make_cell = [&xcri](std::uint32_t local) {
+    return en::rec("CELL", local,
+                   {{"DATA", {std::byte{0x01}, std::byte{0}}},
+                    {"PCMB", {std::byte{0x34}, std::byte{0x12}}},
+                    {"XCRI", xcri.bytes}});
+  };
+  const auto base_plugin =
+      en::make_plugin({}, {en::top("CELL", {en::grp(0, 2, {en::grp(0, 3, {make_cell(0x800)})})})});
+  const auto patch_plugin = en::make_plugin(
+      {"Base.esm"},
+      {en::top("CELL", {en::grp(0, 2, {en::grp(0, 3, {make_cell(0x800), make_cell(0x801)})})})});
+  const std::filesystem::path paths[] = {write("Base.esm", base_plugin),
+                                         write("Patch.esp", patch_plugin)};
+  const auto env = fo4::env::Environment::load(paths);
+
+  fo4::previs::LoadOrderIndexes indexes;
+  indexes.cdx_row = [](std::size_t, const fo4::previs::CdxCellTarget&) {
+    return std::optional<bool>{false};
+  };
+  indexes.plugin_ships_previs = [](std::size_t plugin) { return plugin == 0; };
+  const auto report = fo4::previs::diagnose_load_order(env, indexes);
+  ASSERT_EQ(report.size(), 2u);
+
+  const auto* overridden = find_cell(report, 0x800u);
+  ASSERT_NE(overridden, nullptr);
+  EXPECT_TRUE(overridden->status.skip_unsupported);
+  EXPECT_FALSE(overridden->status.broken);
+  ASSERT_EQ(overridden->status.skips.size(), 1u);
+  EXPECT_EQ(overridden->status.skips.front(),
+            "override with no previs of its own: engine behaviour unverified");
+
+  const auto* own = find_cell(report, 0x801u);
+  ASSERT_NE(own, nullptr);
+  EXPECT_TRUE(own->status.broken);
+  EXPECT_FALSE(own->status.skip_unsupported);
 }
 
 namespace {

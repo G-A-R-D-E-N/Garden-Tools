@@ -12,21 +12,22 @@
 
 namespace fo4::previs {
 
-// Section 1.3 findings; each token must stay stable for report consumers.
+// Section 1.3 findings that the report can prove per cell; tokens must stay stable for consumers.
 enum class PrevisIssue : std::uint8_t {
   rvis_without_visi = 0,
   tome_missing = 1,
   tome_invalid = 2,
   cdx_row_missing = 3,
-  csg_rows_missing = 4,
-  oc_nif_missing = 5,
-  xcri_malformed = 6,
-  pcmb_stale = 7,
-  visi_stale = 8,
-  cell_decode_failed = 9,
+  oc_nif_missing = 4,
+  xcri_malformed = 5,
+  pcmb_stale = 6,
+  visi_stale = 7,
 };
 
 std::string_view to_string(PrevisIssue issue) noexcept;
+
+// The C ABI must reject a code at or above this; a cast would otherwise wrap to a real token.
+inline constexpr std::int32_t k_previs_issue_count = 8;
 
 struct CellIssue {
   PrevisIssue code{PrevisIssue::rvis_without_visi};
@@ -42,8 +43,6 @@ struct CellPrevisInput {
   // A false presence flag requires a checked index; unchecked answers must skip.
   bool cdx_checked{false};
   bool has_cdx_row{false};
-  bool csg_checked{false};
-  bool has_csg_rows{false};
   bool uvd_checked{false};
   bool has_uvd{false};
   bool uvd_valid{false};
@@ -90,17 +89,17 @@ struct TomeLookup {
 struct LoadOrderIndexes {
   // Answers for the winning record's plugin; an unreadable CDX requires nullopt.
   std::function<std::optional<bool>(std::size_t plugin, const CdxCellTarget& target)> cdx_row;
-  // CSG rows for the winning plugin and cell; unverifiable CSG requires nullopt.
-  std::function<std::optional<bool>(std::size_t plugin, const FormKey& cell)> csg_rows;
   // Missing OC NIF count over the XCRI mesh ids; unindexed NIFs require nullopt.
   std::function<std::optional<std::uint32_t>(const FormKey& cell,
                                              std::span<const std::uint32_t> mesh_ids)>
       missing_oc_nifs;
   // A tome lookup must use the RVIS root cell, or the cell itself when RVIS is absent.
   std::function<TomeLookup(const FormKey& tome_cell)> uvd;
+  // A plugin without either container leaves its overrides unmeasured and must skip them.
+  std::function<bool(std::size_t plugin)> plugin_ships_previs;
 };
 
-// Every winning CELL requires a broken report on decode error, never an abort.
+// Every winning CELL requires a report on decode error, never an abort; unmeasured layouts skip.
 std::vector<CellDiagnosis> diagnose_load_order(const env::Environment& env,
                                                const LoadOrderIndexes& indexes);
 
