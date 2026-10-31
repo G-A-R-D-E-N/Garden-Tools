@@ -2744,6 +2744,8 @@ The `Auto` fixture record already carries a BNAM base link, and `Radicle/src/c_a
 
 On 2026-10-31 a full run took 46 minutes of test time on 12 threads: `CheckErrorsReal.FullLoadOrderDiagnosticRunIsDeterministic` 2117 s, `RowRoundtripReal.CellRowsSurviveWriteAndReread` 1632 s and `WritebackRealData.CopiedDlcReferencesKeepEveryLinkWhenMastersMove` 855 s were half of the 9300 CPU-seconds. A PR runs each only when a changed path matches its trigger; pushes to `main` and `nomad/dev` still run everything, so a regression those triggers miss shows up on the merge rather than the PR.
 
+`CApiRuntimeReal.ReplaysTheSevenProgramsDeterministically` joined that list on 2026-10-31 for a different reason. It is the #807 Pip-Boy acceptance test and it fails on `nomad/dev` until #807 lands, so it turned the real-data check red on every PR, whatever the PR changed. A PR now runs it only when a changed path matches `/avm2/`, `/swf/`, `c_api_runtime` or `c_api_swf`. Pushes to `main` and `nomad/dev` still run it, so those runs stay red until #807 is fixed. Once #807 lands, take it off the list if it should gate every PR again.
+
 ## Radicle/src/avm2/interpreter_dispatch_b.inc:k_newclass
 
 `newclass` now pops its base class value, as the AVM2 spec requires. It used to leave that value on the stack, so an interface's null base became the target of the following `initproperty`: `cannot write bhvr.interfaces::IExternalCommunication on null`. `Radicle/tests/test_c_api_runtime_real.cpp:ReplaysTheSevenProgramsDeterministically` reached this on real Programs. That test is still failing: it is the #807 R8 acceptance gate and the next stop is `aze.motion.specials::PropertyTint.register`.
