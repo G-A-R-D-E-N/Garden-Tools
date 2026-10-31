@@ -27,19 +27,18 @@ namespace {
 class UniqueRoot {
 public:
     explicit UniqueRoot(std::string_view tag)
-        : parent_(std::filesystem::temp_directory_path() / ("fo4re-lift-" + std::string(tag))),
-          path_(parent_ / std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())) {}
+        : path_(std::filesystem::temp_directory_path() /
+                ("fo4re-lift-" + std::string(tag) + "-" +
+                 std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()))) {}
     ~UniqueRoot() {
         std::error_code ignored;
         std::filesystem::remove_all(path_, ignored);
-        std::filesystem::remove(parent_, ignored);
     }
     UniqueRoot(const UniqueRoot&) = delete;
     UniqueRoot& operator=(const UniqueRoot&) = delete;
     std::string string() const { return path_.string(); }
 
 private:
-    std::filesystem::path parent_;
     std::filesystem::path path_;
 };
 
