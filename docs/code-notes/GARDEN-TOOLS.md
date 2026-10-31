@@ -2693,3 +2693,23 @@ Both sound tests failed on Windows and Linux from `6953e82d0`. One wrote `Snd.es
 ## Radicle/bindings/csharp/Radicle.Interop.Tests/SoundAuthoringTests.cs:StructureEditsAddRemoveFilesSetTheBaseLinkAndCreateRecords
 
 The `Auto` fixture record already carries a BNAM base link, and `Radicle/src/c_api_sound.cpp` refuses a second copy, so the test now asserts that refusal, removes the link, then adds it.
+
+## .github/workflows/native-real-data.yml:Select real-data tests
+
+On 2026-10-31 a full run took 46 minutes of test time on 12 threads: `CheckErrorsReal.FullLoadOrderDiagnosticRunIsDeterministic` 2117 s, `RowRoundtripReal.CellRowsSurviveWriteAndReread` 1632 s and `WritebackRealData.CopiedDlcReferencesKeepEveryLinkWhenMastersMove` 855 s were half of the 9300 CPU-seconds. A PR runs each only when a changed path matches its trigger; pushes to `main` and `nomad/dev` still run everything, so a regression those triggers miss shows up on the merge rather than the PR.
+
+## Radicle/src/avm2/interpreter_dispatch_b.inc:k_newclass
+
+`newclass` now pops its base class value, as the AVM2 spec requires. It used to leave that value on the stack, so an interface's null base became the target of the following `initproperty`: `cannot write bhvr.interfaces::IExternalCommunication on null`. `Radicle/tests/test_c_api_runtime_real.cpp:ReplaysTheSevenProgramsDeterministically` reached this on real Programs. That test is still failing: it is the #807 R8 acceptance gate and the next stop is `aze.motion.specials::PropertyTint.register`.
+
+## Radicle/src/avm2/display.cpp:MovieClip::set_frame_script
+
+`addFrameScript` stores a script per frame on the clip, and it wins over a `frameN` class trait so a frame never runs twice. `Radicle/src/avm2/swf_runtime.cpp:SwfRuntime::create` adds the root to the stage before the document constructor because Programs read `stage` there.
+
+## Radicle/tests/test_check_errors.cpp:VanillaMasterHasNoErrorFindings
+
+Fallout4.esm 1.11.240 has no masters but stores master index 1 in some links, for example NPC_ 00080B TPTA holds 0x01000809, so the 73 `invalid_master_index` warnings are real. The test pins the count and still refuses any error-level finding.
+
+## Radicle/tests/test_package_tree_real.cpp:AddsAndRemovesTheDefaultInputsOfATravelLeafByteIdentically
+
+`Radicle/src/environment/package_procedure_tree.cpp:remove_package_procedure_node` renumbers kept inputs to be contiguous, so a package with sparse ids such as 01 03 05 07 04 cannot come back byte-identical. The test now picks a package whose ids are already contiguous.
