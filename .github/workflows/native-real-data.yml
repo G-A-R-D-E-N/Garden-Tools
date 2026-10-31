@@ -1,10 +1,9 @@
 name: native-real-data
 
-# Fallout 4 data cannot leave the fo4-data host, so this lane stays on Forgejo.
+# Fallout 4 data cannot leave the fo4-data host, so this runs on a self-hosted runner registered to this private repo only.
 on:
   push:
-    branches:
-      - main
+    branches: [main, nomad/dev]
   pull_request:
   workflow_dispatch:
 
@@ -23,7 +22,7 @@ jobs:
   # Runs only on the host labelled `fo4-data`, where the Fallout 4 Data folder exists.
   native-windows-real-data:
     name: Native real-data tests (Windows, MSVC, Fallout 4 data)
-    runs-on: [fo4-data]
+    runs-on: [self-hosted, fo4-data]
     timeout-minutes: 180
     defaults:
       run:

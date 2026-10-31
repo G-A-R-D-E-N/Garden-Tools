@@ -2666,7 +2666,7 @@ Vanilla Bethesda files and third-party plugins must not be published (`BGS/tools
 
 ## .github/public-ci/workflows/native-ci.yml:REAL_DATA_TEST_REGEX
 
-Hosted runners have no Fallout 4 data, so the Windows test job excludes these tests. They run only in `.forgejo/workflows/native-real-data.yml` on the `fo4-data` host, which keeps its own copy of the regex; the two must match. `.forgejo/workflows/release.yml` also stays on Forgejo because it reads local tool paths. Forgejo prefers `.forgejo/workflows`, so once this tree reaches Forgejo it runs only those two workflows there.
+Hosted runners have no Fallout 4 data, so the Windows test job excludes these tests. They run only in `.github/workflows/native-real-data.yml`, on a self-hosted runner labelled `fo4-data` that is registered to this private repo and nowhere else, and that workflow keeps its own copy of the regex; the two must match. The export denies `.github/workflows/*`, so it never reaches the public repo. `.forgejo/workflows/release.yml` stays on Forgejo because it reads local tool paths, and Forgejo prefers `.forgejo/workflows`, so once this tree reaches Forgejo that is the only workflow it runs there.
 
 The `garden-tools-ci` environment's branch rule must be `ci/**`: `ci/*` does not match `ci/nomad/dev`.
 
