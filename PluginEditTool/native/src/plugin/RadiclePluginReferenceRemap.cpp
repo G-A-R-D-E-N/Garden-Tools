@@ -108,7 +108,7 @@ Result<nlohmann::json> RadiclePluginBackend::changeReferencingRecords(
     if (fromKey == toKey) {
         return std::unexpected(Error{"ReferenceRemapSameKey", "'from' and 'to' are the same record"});
     }
-    const auto* toWinner = graph_.winner(toKey);
+    const auto* toWinner = (*graph_).winner(toKey);
     if (toWinner == nullptr) {
         return std::unexpected(Error{
             "ReferenceRemapTargetMissing",
@@ -150,8 +150,8 @@ Result<nlohmann::json> RadiclePluginBackend::changeReferencingRecords(
     };
     std::map<fo4::FormKey, ReferenceWork> unique;
 
-    for (const auto& hit : graph_.referenced_by(fromKey)) {
-        const auto* winner = graph_.winner(hit.source);
+    for (const auto& hit : (*graph_).referenced_by(fromKey)) {
+        const auto* winner = (*graph_).winner(hit.source);
         if (winner == nullptr || winner->plugin != hit.plugin) continue;
         const auto* source = findPlugin(winner->plugin.filename());
         if (source == nullptr) continue;
