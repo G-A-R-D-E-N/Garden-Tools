@@ -320,11 +320,26 @@ int main(int argc, char** argv) {
     }
 
     if (!mo2Instance.empty()) {
-        const auto loaded = rpc.invoke({"appInterop", "OpenMo2Profile", nlohmann::json::array({mo2Instance})});
-        if (!loaded.ok) {
-            std::cerr << "MO2 load failed: " << loaded.error << '\n';
-            fo4ide::logging::shutdown();
-            return 6;
+        if (runMcp) {
+            std::error_code ec;
+            if (!std::filesystem::is_directory(mo2Instance, ec)) {
+                std::cerr << "MO2 load failed: instance folder not found: " << mo2Instance << '\n';
+                fo4ide::logging::shutdown();
+                return 6;
+            }
+            mcpRegistry.setBeforeFirstCall([&rpc, mo2Instance]() -> std::optional<std::string> {
+                const auto loaded = rpc.invoke({"appInterop", "OpenMo2Profile", nlohmann::json::array({mo2Instance})});
+                if (loaded.ok) return std::nullopt;
+                std::cerr << "MO2 load failed: " << loaded.error << '\n';
+                return "MO2 load failed: " + loaded.error;
+            });
+        } else {
+            const auto loaded = rpc.invoke({"appInterop", "OpenMo2Profile", nlohmann::json::array({mo2Instance})});
+            if (!loaded.ok) {
+                std::cerr << "MO2 load failed: " << loaded.error << '\n';
+                fo4ide::logging::shutdown();
+                return 6;
+            }
         }
     }
 
