@@ -261,18 +261,30 @@ RuntimeStatus Runtime::install_builtins() {
   add_method(*event_class, "clone", native::Id::event_clone, false);
   add_method(*event_class, "toString", native::Id::event_to_string, false);
   std::uint32_t event_slot = 0;
-  const char* event_constants[] = {
-      "ADDED",        "ADDED_TO_STAGE", "REMOVED",      "REMOVED_FROM_STAGE", "ENTER_FRAME",
-      "EXIT_FRAME",   "CHANGE",         "RENDER",       "TIMER",              "TIMER_COMPLETE",
-      "COMPLETE",     "OPEN",           "PROGRESS",     "IO_ERROR",           "SECURITY_ERROR",
-      "CLOSE",        "CONNECT",        "INIT",         "SELECT",             "CANCEL",
-      "SCROLL",       "RESIZE",         "FULLSCREEN",   "UNLOAD",             "ACTIVATE",
-      "DEACTIVATE",   "MOUSE_UP",       "MOUSE_DOWN",   "MOUSE_MOVE",         "MOUSE_OVER",
-      "MOUSE_OUT",    "CLICK",          "DOUBLE_CLICK", "ROLL_OVER",          "ROLL_OUT",
-      "MOUSE_WHEEL",  "KEY_DOWN",       "KEY_UP",       "FOCUS_IN",           "FOCUS_OUT",
-      "TEXT_INPUT",   "FRAME_CONSTRUCTED"};
-  for (const char* constant : event_constants) {
-    add_constant(*event_class, constant, Value::string(constant), event_slot);
+  const std::pair<const char*, const char*> event_constants[] = {
+      {"ADDED", "added"},           {"ADDED_TO_STAGE", "addedToStage"},
+      {"REMOVED", "removed"},       {"REMOVED_FROM_STAGE", "removedFromStage"},
+      {"ENTER_FRAME", "enterFrame"}, {"EXIT_FRAME", "exitFrame"},
+      {"CHANGE", "change"},         {"RENDER", "render"},
+      {"TIMER", "timer"},           {"TIMER_COMPLETE", "timerComplete"},
+      {"COMPLETE", "complete"},     {"OPEN", "open"},
+      {"PROGRESS", "progress"},     {"IO_ERROR", "ioError"},
+      {"SECURITY_ERROR", "securityError"}, {"CLOSE", "close"},
+      {"CONNECT", "connect"},       {"INIT", "init"},
+      {"SELECT", "select"},         {"CANCEL", "cancel"},
+      {"SCROLL", "scroll"},         {"RESIZE", "resize"},
+      {"FULLSCREEN", "fullScreen"}, {"UNLOAD", "unload"},
+      {"ACTIVATE", "activate"},     {"DEACTIVATE", "deactivate"},
+      {"MOUSE_UP", "mouseUp"},      {"MOUSE_DOWN", "mouseDown"},
+      {"MOUSE_MOVE", "mouseMove"},  {"MOUSE_OVER", "mouseOver"},
+      {"MOUSE_OUT", "mouseOut"},    {"CLICK", "click"},
+      {"DOUBLE_CLICK", "doubleClick"}, {"ROLL_OVER", "rollOver"},
+      {"ROLL_OUT", "rollOut"},      {"MOUSE_WHEEL", "mouseWheel"},
+      {"KEY_DOWN", "keyDown"},      {"KEY_UP", "keyUp"},
+      {"FOCUS_IN", "focusIn"},      {"FOCUS_OUT", "focusOut"},
+      {"TEXT_INPUT", "textInput"},  {"FRAME_CONSTRUCTED", "frameConstructed"}};
+  for (const auto& [constant, type] : event_constants) {
+    add_constant(*event_class, constant, Value::string(type), event_slot);
   }
   const auto add_event_subclass = [&](const char* name) -> Class* {
     Class* subclass = add_builtin_class(name, "flash.events", event_class);
@@ -594,7 +606,7 @@ RuntimeStatus Runtime::install_builtins() {
     add_method(*filter, "clone", native::Id::compat_null, false);
   }
   Class* graphics_class = add_builtin_class("Graphics", "flash.display", object_class);
-  Class* loader_info_class = add_builtin_class("LoaderInfo", "flash.display", object_class);
+  Class* loader_info_class = add_builtin_class("LoaderInfo", "flash.display", event_dispatcher);
   if (graphics_class == nullptr || loader_info_class == nullptr) {
     return RuntimeStatus::InvalidTrait;
   }

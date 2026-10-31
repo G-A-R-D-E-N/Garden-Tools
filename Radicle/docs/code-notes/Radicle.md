@@ -9988,3 +9988,47 @@ Follow-up to the #31 items 1-2 notes above, closing the review gaps without new 
 ## Radicle/tests/test_check_errors_record_lists.cpp:CheckErrorsRecordLists
 
 `CheckErrorsRecordLists` stays separate from `ListPreflight` in `Radicle/tests/test_preflight.cpp` (588 lines) by scope, not by accident: it pins `check_load_order` integration (finding message, detail, severity, record) while `ListPreflight` pins `preflight_record` units, and merging its 444 lines into `test_preflight.cpp` would breach the 750-line hook. It stays under 750 lines and is listed in `Radicle/CMakeLists.txt`, satisfying AGENTS.md rules 3-4.
+
+## Radicle/src/avm2/swf_runtime.cpp:SwfRuntime::create (#807 R8 acceptance blockers)
+
+The movie's ABC blocks are all linked first, and only then do the script initializers run in block order. Before, each block's scripts ran before the next block was linked. A script in an earlier block that named a class defined in a later block then created an external placeholder (`Radicle/src/avm2/runtime.cpp:Runtime::ensure_external_class`, reached through `Radicle/src/avm2/interpreter_property.cpp:Interpreter::find_scope_binding`). `Radicle/src/avm2/runtime_link.cpp:Runtime::build_shells_for_file` then aliased the real definition onto that placeholder and never built it. In the Programs this showed as `no property register on a class (aze.motion.specials::PropertyTint)`. Test: `Radicle/tests/test_avm2_document_class.cpp:ScriptOfAnEarlierBlockCanNameAClassFromALaterBlock`.
+
+`Radicle/src/avm2/swf_runtime.cpp:build_movie_root` accepts any `flash.display::DisplayObject` subclass as the document class. Before, only MovieClip subclasses were accepted, so `Main extends Sprite` (AtomicCommand, Grognak, PipFall, RedMenace, ZetaInvaders) fell back to a plain MovieClip root and `SetPlatform` was missing. The root object stays a MovieClip in C++, and its AS3 class is the document class. Test: `Radicle/tests/test_avm2_document_class.cpp:DocumentClassExtendingSpriteBecomesTheRootAndKeepsItsMethods`.
+
+`Radicle/src/avm2/swf_runtime.cpp:SwfRuntime::advance` broadcasts `enterFrame` to the stage and to every non-MovieClip display object in its tree before the root advances (`collect_frame_targets`). A MovieClip still gets its own `enterFrame` and `exitFrame` from `Radicle/src/avm2/display.cpp:MovieClip::run_frame_lifecycle`, so no clip receives it twice. Before, a listener on the stage never ran, and the Programs' update loop is an `Event.ENTER_FRAME` listener on the stage. Test: `Radicle/tests/test_avm2_swf_runtime.cpp:EnterFrameReachesTheStageAndItsSpriteChildren`.
+
+Open: the document constructor runs before frame 1 places its children, because `SwfRuntime::create` calls the document `iinit` before `root_->goto_frame(1, ...)`. TurretHack's constructor reads `this.List_mc`, which frame 1 places, so it fails with `cannot call addEventListener on undefined`. Fixing it needs a placement-only step of `MovieClip::goto_frame` that does not run the frame script, because the frame-1 script must still run after the constructor. Not done here.
+
+## Radicle/src/avm2/runtime.cpp:Runtime::build_traits (assign_auto_slot_ids)
+
+An ABC slot trait with `slot_id` 0 is auto-numbered by the VM. The runtime had treated 0 as a literal index, so every field of a class landed in slot 0 (AtomicCommand's `Main` has four fields, all 0). `assign_auto_slot_ids` numbers the zero-id slots of each class after its superclass chain, 0-based like the builtins' `next_slot` counters, and processes superclasses first. Static (class) slots are numbered from 0 within their class. Test: `Radicle/tests/test_avm2_runtime.cpp:AutoSlotTraitsGetTheirOwnSlotsAfterTheSuperclassSlots`.
+
+## Radicle/src/avm2/runtime.cpp:resolve_multiname (AS3 builtin namespace)
+
+The namespace-kind entry `http://adobe.com/AS3/2006/builtin` is mapped to the public namespace. Builtin members are registered under the public namespace (`Radicle/src/avm2/builtins.cpp:Runtime::install_builtins`, `package_name`), but the Flash compilers reference Array members such as `shift` through the AS3 namespace, so `args.shift()` on a real Array found nothing. Normalizing in the one place every constant-pool multiname passes through covers every opcode. Test: `Radicle/tests/test_avm2_runtime.cpp:ResolvesTheAs3BuiltinNamespaceToThePublicOne`.
+
+## Radicle/src/avm2/interpreter.cpp:Interpreter::invoke (rest parameters, bound receiver)
+
+Only the declared parameters (`AbcMethodInfo::param_count`) are bound to locals 1..n. Before, every argument was copied into the next local, so an extra argument could fill an ordinary `var`. A method with the NEED_REST flag (0x04) gets an `Array` of the arguments after the declared ones in local `param_count + 1`, built with `Interpreter::make_array`. `Shared:BGSExternalInterface/call(codeObj, name, ...args)` needs this. A function with a bound receiver (`FunctionObject::bound_receiver`) runs with that receiver as `this`, whatever `this_value` the caller passed. Tests: `Radicle/tests/test_avm2_interpreter.cpp:RestParameterCollectsTheArgumentsAfterTheDeclaredOnes` and `Radicle/tests/test_avm2_interpreter.cpp:ArgumentsPastTheDeclaredParametersDoNotFillOrdinaryLocals`.
+
+## Radicle/src/avm2/interpreter_property.cpp:Interpreter::get_property, bind_method
+
+Reading a method off an object now returns a closure bound to that object (`bind_method`), as AS3 does. Before, `this.onTick` as a listener ran with the event target as `this`, so `this._stage` in `GameController.onDelayedAssetLoading` was undefined. The closure keeps the receiver that the `Value` already holds: a `getproperty` on an owned object keeps it alive, and a borrowed `this` stays borrowed. `get_property` and `find_scope_binding` now take `std::shared_ptr<Object>` for this reason. Each read makes a new closure, so `Radicle/src/avm2/events.cpp:same_listener_function` compares bound closures by underlying method, receiver and native id. That lets `removeEventListener(type, this.handler)` find the listener that was added. Test: `Radicle/tests/test_avm2_events.cpp:BoundMethodListenerRunsWithItsReceiverAndRemovesByAFreshRead`.
+
+## Radicle/src/avm2/interpreter_property.cpp:scope_has_property (display properties in scope lookups)
+
+A display object's native properties (`stage`, `x`, `visible` and the rest of `read_display_property`) were visible to `getproperty` but not to scope lookup (`findpropstrict`, `getlex`), which used `Object::has_property`. An unqualified `stage` in a method of a display class was therefore `undefined`. `scope_has_property` also asks `read_display_property`, so the same reader decides both paths. Tests: `Radicle/tests/test_avm2_display_api.cpp:DisplayPropertyResolvesThroughTheScopeChain` and `Radicle/tests/test_avm2_document_class.cpp:StageIsReadableInTheDocumentConstructor`.
+
+## Radicle/src/avm2/interpreter_property.cpp:Interpreter::construct (display subclasses)
+
+A class that extends a display class and is defined in ABC (CLIK's `UIComponent extends MovieClip`, `UILoader`) was constructed as a plain `Object`, because only the native class itself carried `native_constructor`. It had no display list, no `currentLabels` and no `addChild`. `construct` now uses `make_display_object` for any `DisplayObject` subclass. Test: `Radicle/tests/test_avm2_display_api.cpp:ClassExtendingSpriteConstructsADisplayObject`.
+
+## Radicle/src/avm2/builtins.cpp:Runtime::install_builtins (Event constants, LoaderInfo)
+
+`Event.ENTER_FRAME` and the other `Event` constants held their own names (`"ENTER_FRAME"`), but the runtime dispatches the AS3 type strings (`"enterFrame"`, `"keyDown"`, `"click"`). Listeners registered with the constants never matched. The table now maps each name to its AS3 value (`FULLSCREEN` is `"fullScreen"`). `flash.display::LoaderInfo` now extends `flash.events::EventDispatcher` as in AS3, so `contentLoaderInfo.addEventListener` exists. Tests: `Radicle/tests/test_avm2_events.cpp:EventConstantsCarryTheAs3EventTypeStrings` and `Radicle/tests/test_avm2_display_api.cpp:LoaderInfoIsAnEventDispatcher`.
+
+## Radicle/tests/avm2_test_support.hpp:ScriptBuilder::method_with_exceptions (param count)
+
+Methods built by this helper now declare `local_count - 1` parameters (the locals after `this`). Before, every helper method declared zero parameters, which only worked because the runtime copied every argument into a local. The change keeps the existing tests valid under the parameter-binding rule above. The tests that read arguments from locals (`ArrayEveryAcceptsAPositivePredicate`, `StopPropagationOnTheTargetSkipsTheBubblePhase`) depend on it.
+
+Open after this lane (#807 R8 L4 acceptance, not fixed): GJ_Defrag's ABC has no `SetPlatform` (no ABC string contains `Platform`), so the harness's `SetPlatform` call cannot succeed for it. The five Main programs run without script errors, but nothing reaches the root display list (`children=0` for the whole run), so their frame hashes stay constant. The likely cause is the CLIK `UILoader` content path (`Loader.load` through `contentLoaderInfo`), which was not checked. TurretHack is the frame-1 ordering item above. Optional parameter defaults (`AbcMethodInfo::options`) are still not bound.

@@ -77,6 +77,19 @@ std::vector<std::shared_ptr<DisplayObject>> display_chain(
   return chain;
 }
 
+void collect_frame_targets(const std::shared_ptr<DisplayObjectContainer>& container,
+                           std::vector<std::shared_ptr<DisplayObject>>& out) {
+  out.push_back(container);
+  for (const auto& child : container->children()) {
+    if (std::dynamic_pointer_cast<MovieClip>(child) == nullptr) {
+      out.push_back(child);
+    }
+    if (auto nested = std::dynamic_pointer_cast<DisplayObjectContainer>(child)) {
+      collect_frame_targets(nested, out);
+    }
+  }
+}
+
 void dispatch_pointer(Interpreter& interpreter, const char* type,
                       const std::shared_ptr<DisplayObject>& node,
                       const std::shared_ptr<DisplayObject>& related, double x, double y) {
@@ -368,9 +381,10 @@ std::shared_ptr<MovieClip> build_movie_root(Runtime& runtime,
   Class* root_class = const_cast<Class*>(runtime.find_class("flash.display::MovieClip"));
   if (!data->root_class_name.empty()) {
     Class* document_class = const_cast<Class*>(runtime.find_class(data->root_class_name));
-    Class* movie_clip_class = const_cast<Class*>(runtime.find_class("flash.display::MovieClip"));
-    if (document_class != nullptr && movie_clip_class != nullptr &&
-        document_class->is_subclass_of(movie_clip_class)) {
+    Class* display_object_class =
+        const_cast<Class*>(runtime.find_class("flash.display::DisplayObject"));
+    if (document_class != nullptr && display_object_class != nullptr &&
+        document_class->is_subclass_of(display_object_class)) {
       root_class = document_class;
     }
   }
@@ -447,13 +461,13 @@ std::shared_ptr<SwfRuntime> SwfRuntime::create(Runtime& runtime, Interpreter& in
     if (!runtime.link_added_file(runtime.file_count() - 1).ok()) {
       return fail("the movie ABC file did not link");
     }
-    while (runtime_movie->next_script_ < runtime.scripts().size()) {
-      const ExecutionResult script_result =
-          interpreter.run_script(static_cast<std::uint32_t>(runtime_movie->next_script_));
-      ++runtime_movie->next_script_;
-      if (!script_result.ok()) {
-        return fail("a movie script initializer failed: " + script_result.message);
-      }
+  }
+  while (runtime_movie->next_script_ < runtime.scripts().size()) {
+    const ExecutionResult script_result =
+        interpreter.run_script(static_cast<std::uint32_t>(runtime_movie->next_script_));
+    ++runtime_movie->next_script_;
+    if (!script_result.ok()) {
+      return fail("a movie script initializer failed: " + script_result.message);
     }
   }
   runtime_movie->stage_ = stage;
@@ -528,6 +542,20 @@ void SwfRuntime::advance(Interpreter& interpreter, double dt_seconds) {
   const double fps = data_ != nullptr && data_->frame_rate > 0.0 ? data_->frame_rate : 24.0;
   accumulator_ += dt_seconds * fps;
   while (accumulator_ >= 1.0) {
+    if (stage_ != nullptr) {
+      std::vector<std::shared_ptr<DisplayObject>> targets;
+      collect_frame_targets(stage_, targets);
+      for (const auto& target : targets) {
+        const ExecutionResult enter = dispatch_event(interpreter, target, "enterFrame", false, 0);
+        if (!enter.ok()) {
+          playing_ = false;
+          break;
+        }
+      }
+      if (!playing_) {
+        break;
+      }
+    }
     const ExecutionResult result = root_->advance_frame(interpreter);
     if (!result.ok()) {
       playing_ = false;

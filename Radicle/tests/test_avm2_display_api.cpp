@@ -183,4 +183,77 @@ TEST(Avm2DisplayApi, ContentLoaderInfoIsTheSameObjectOnEveryRead) {
   EXPECT_TRUE(result.value.as_boolean());
 }
 
+TEST(Avm2DisplayApi, DisplayPropertyResolvesThroughTheScopeChain) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t x = script.multiname("x");
+  avm2_test::CodeBuilder read_code;
+  read_code.getlocal0();
+  read_code.pushscope();
+  read_code.getlex(x);
+  read_code.returnvalue();
+  const std::uint32_t read_method = script.method("readX", read_code.bytes(), 1);
+  avm2_test::CodeBuilder init_code;
+  init_code.returnvoid();
+  const std::uint32_t init = script.method("init", init_code.bytes(), 1);
+  abc::AbcFile file = script.finish(init);
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  Interpreter interpreter{runtime};
+  auto sprite = fo4::avm2::make_display_object(
+      runtime, *const_cast<fo4::avm2::Class*>(runtime.find_class("flash.display::Sprite")));
+  ASSERT_NE(sprite, nullptr);
+  sprite->set_x(5.0);
+  const fo4::avm2::FunctionObject read("readX", &file, read_method);
+  const ExecutionResult result =
+      interpreter.call_function(read, fo4::avm2::Value::object(sprite), {}, 0);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_number_like());
+  EXPECT_EQ(result.value.as_number(), 5.0);
+}
+
+TEST(Avm2DisplayApi, ClassExtendingSpriteConstructsADisplayObject) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t panel = script.multiname("Panel");
+  const std::uint32_t sprite = script.multiname("Sprite", "flash.display");
+  avm2_test::CodeBuilder constructor_code;
+  constructor_code.returnvoid();
+  const std::uint32_t constructor = script.method("ctor", constructor_code.bytes(), 1);
+  avm2_test::CodeBuilder script_code;
+  script_code.getlex(sprite);
+  script_code.newclass(0);
+  script_code.construct(0);
+  script_code.returnvalue();
+  const std::uint32_t script_method = script.method("init", script_code.bytes(), 1);
+  abc::AbcFile file = script.finish(script_method);
+  abc::AbcInstanceInfo instance;
+  instance.name = panel;
+  instance.super_index = sprite;
+  instance.iinit = constructor;
+  file.instances.push_back(instance);
+  abc::AbcClassInfo klass;
+  klass.cinit = constructor;
+  file.classes.push_back(klass);
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  Interpreter interpreter{runtime};
+  const ExecutionResult result = interpreter.run_script(0);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_object());
+  EXPECT_EQ(result.value.as_object()->kind(), fo4::avm2::ObjectKind::Display);
+  ASSERT_NE(result.value.as_object()->instance_class(), nullptr);
+  EXPECT_EQ(result.value.as_object()->instance_class()->name, "Panel");
+}
+
+TEST(Avm2DisplayApi, LoaderInfoIsAnEventDispatcher) {
+  Runtime runtime;
+  ASSERT_TRUE(runtime.link().ok());
+  const fo4::avm2::Class* loader_info = runtime.find_class("flash.display::LoaderInfo");
+  const fo4::avm2::Class* dispatcher = runtime.find_class("flash.events::EventDispatcher");
+  ASSERT_NE(loader_info, nullptr);
+  ASSERT_NE(dispatcher, nullptr);
+  EXPECT_TRUE(loader_info->is_subclass_of(dispatcher));
+}
+
 }  // namespace

@@ -169,6 +169,9 @@ class FunctionObject : public Object {
   }
   std::vector<std::shared_ptr<Object>>& captured_scope() noexcept { return captured_scope_; }
 
+  const std::shared_ptr<Object>& bound_receiver() const noexcept { return bound_receiver_; }
+  void bind_receiver(std::shared_ptr<Object> receiver) { bound_receiver_ = std::move(receiver); }
+
  private:
   std::string name_;
   const abc::AbcFile* file_{nullptr};
@@ -176,6 +179,7 @@ class FunctionObject : public Object {
   std::uint32_t native_id_{kNoNative};
   Class* owner_class_{nullptr};
   std::vector<std::shared_ptr<Object>> captured_scope_;
+  std::shared_ptr<Object> bound_receiver_;
 };
 
 class ClassObject : public Object {

@@ -83,6 +83,17 @@ ExecutionResult dispatch_focus(Interpreter& interpreter, const std::shared_ptr<D
   return dispatch_event(interpreter, node, event, depth);
 }
 
+bool same_listener_function(const FunctionObject* registered, const FunctionObject* given) {
+  if (registered == given) {
+    return true;
+  }
+  return registered != nullptr && given != nullptr && registered->bound_receiver() != nullptr &&
+         registered->bound_receiver() == given->bound_receiver() &&
+         registered->file() == given->file() &&
+         registered->method_index() == given->method_index() &&
+         registered->native_id() == given->native_id();
+}
+
 }  // namespace
 
 EventObject::EventObject(Class* event_class, std::string type, bool bubbles, bool cancelable)
@@ -183,12 +194,12 @@ bool remove_event_listener(Object& target, std::string_view type, const Value& l
   if (!listener.is_object() || listener.as_object()->kind() != ObjectKind::Function) {
     return false;
   }
-  const Object* function = listener.as_object().get();
+  const auto* function = static_cast<const FunctionObject*>(listener.as_object().get());
   auto& listeners = target.event_listeners();
   const auto found = std::find_if(listeners.begin(), listeners.end(),
                                   [&](const EventListener& entry) {
                                     return entry.type == type && entry.use_capture == use_capture &&
-                                           entry.function.get() == function;
+                                           same_listener_function(entry.function.get(), function);
                                   });
   if (found == listeners.end()) {
     return false;

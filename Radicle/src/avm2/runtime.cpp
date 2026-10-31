@@ -6,12 +6,15 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
 namespace fo4::avm2 {
 
 namespace {
+
+constexpr std::string_view kAs3BuiltinNamespace = "http://adobe.com/AS3/2006/builtin";
 
 NamespaceKind map_namespace_kind(abc::AbcNamespaceKind kind) {
   switch (kind) {
@@ -111,6 +114,29 @@ Value trait_default_value(const abc::AbcFile& file, const abc::AbcTrait& trait) 
   }
 }
 
+void assign_auto_slot_ids(Class& klass, std::unordered_set<Class*>& pending) {
+  if (pending.erase(&klass) == 0) {
+    return;
+  }
+  if (klass.super != nullptr) {
+    assign_auto_slot_ids(*klass.super, pending);
+  }
+  std::uint32_t next = klass.super == nullptr
+                           ? 0u
+                           : static_cast<std::uint32_t>(klass.super->compute_slot_count());
+  for (Trait& trait : klass.instance_traits) {
+    if (trait.is_slot_like() && trait.slot_id == 0) {
+      trait.slot_id = next++;
+    }
+  }
+  next = 0;
+  for (Trait& trait : klass.class_traits) {
+    if (trait.is_slot_like() && trait.slot_id == 0) {
+      trait.slot_id = next++;
+    }
+  }
+}
+
 }  // namespace
 
 const char* runtime_status_name(RuntimeStatus status) noexcept {
@@ -150,6 +176,9 @@ RuntimeStatus resolve_multiname(const abc::AbcFile& file, std::uint32_t index, M
     const abc::AbcNamespace& entry = file.pool.namespaces[namespace_index];
     name_space.kind = map_namespace_kind(entry.kind);
     name_space.name = file.namespace_at(namespace_index);
+    if (entry.kind == abc::AbcNamespaceKind::Namespace && name_space.name == kAs3BuiltinNamespace) {
+      name_space = Namespace{};
+    }
     return true;
   };
   const auto resolve_set = [&file, &resolve_namespace](std::uint32_t set_index,
@@ -478,11 +507,13 @@ void Runtime::bind_function_class(FunctionObject& function) {
 }
 
 RuntimeStatus Runtime::build_traits() {
+  std::unordered_set<Class*> pending;
   for (Class* klass : classes_) {
     if (klass->external || klass->file == nullptr || klass->traits_built) {
       continue;
     }
     klass->traits_built = true;
+    pending.insert(klass);
     const abc::AbcFile& file = *klass->file;
     const auto build_trait = [this, &file, klass](const abc::AbcTrait& source, Trait& out) {
       if (resolve_multiname(file, source.name, out.multiname) != RuntimeStatus::Ok) {
@@ -557,6 +588,9 @@ RuntimeStatus Runtime::build_traits() {
       }
       klass->class_traits.push_back(std::move(trait));
     }
+  }
+  for (Class* klass : classes_) {
+    assign_auto_slot_ids(*klass, pending);
   }
   return RuntimeStatus::Ok;
 }

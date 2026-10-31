@@ -442,4 +442,158 @@ TEST(Avm2Events, SwfRuntimeRoutesKeysToTheStageFocus) {
   EXPECT_EQ(read_log(fixture.runtime), "kr");
 }
 
+TEST(Avm2Events, EventConstantsCarryTheAs3EventTypeStrings) {
+  Fixture fixture;
+  fixture.finish();
+  auto event_class = class_for(fixture.runtime, "flash.events::Event");
+  ASSERT_NE(event_class, nullptr);
+  const ExecutionResult result =
+      fixture.interpreter->read_property(*event_class->class_object, public_name("ENTER_FRAME"), 0);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_string());
+  EXPECT_EQ(result.value.as_string(), "enterFrame");
+}
+
+TEST(Avm2Events, AddFrameScriptRunsItsFunctionEachTimeThePlayheadLandsOnItsFrame) {
+  Fixture fixture;
+  const std::uint32_t body = fixture.append_body("f");
+  fixture.finish();
+  auto clip_class = class_for(fixture.runtime, "flash.display::MovieClip");
+  ASSERT_NE(clip_class, nullptr);
+  auto clip = std::dynamic_pointer_cast<MovieClip>(
+      fo4::avm2::make_display_object(fixture.runtime, *clip_class));
+  ASSERT_NE(clip, nullptr);
+  auto timeline = std::make_shared<fo4::avm2::TimelineDefinition>();
+  timeline->frame_count = 3;
+  clip->set_timeline(timeline);
+  const ExecutionResult add =
+      fixture.interpreter->read_property(*clip, public_name("addFrameScript"), 0);
+  ASSERT_TRUE(add.ok()) << add.message;
+  ASSERT_TRUE(add.value.is_object());
+  const ExecutionResult added = fixture.interpreter->call_function(
+      static_cast<const FunctionObject&>(*add.value.as_object()), Value::undefined(),
+      {Value::int32(1), Value::object(fixture.function(body))}, 0);
+  ASSERT_TRUE(added.ok()) << added.message;
+  for (int step = 0; step < 4; ++step) {
+    ASSERT_TRUE(clip->advance_frame(*fixture.interpreter).ok());
+  }
+  EXPECT_EQ(read_log(fixture.runtime), "ff");
+}
+
+TEST(Avm2Events, AddedFrameScriptWinsOverAFrameNTrait) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t trait_flag = script.multiname("traitRan");
+  const std::uint32_t added_flag = script.multiname("addedRan");
+  const std::uint32_t framed = script.multiname("Framed");
+  const std::uint32_t movie_clip = script.multiname("MovieClip", "flash.display");
+  const std::uint32_t frame2 = script.multiname("frame2");
+  const auto flag_body = [&script](std::uint32_t flag) {
+    avm2_test::CodeBuilder body;
+    body.pushtrue();
+    body.getglobalscope();
+    body.swap();
+    body.setproperty(flag);
+    body.returnvoid();
+    return body.bytes();
+  };
+  avm2_test::CodeBuilder constructor_code;
+  constructor_code.returnvoid();
+  const std::uint32_t constructor = script.method("ctor", constructor_code.bytes(), 1);
+  const std::uint32_t trait_method = script.method("frame2", flag_body(trait_flag), 1);
+  const std::uint32_t added_method = script.method("added", flag_body(added_flag), 1);
+  avm2_test::CodeBuilder init_code;
+  init_code.returnvoid();
+  const std::uint32_t init = script.method("init", init_code.bytes(), 1);
+  abc::AbcFile file = script.finish(init);
+  abc::AbcTrait frame_trait;
+  frame_trait.name = frame2;
+  frame_trait.kind = abc::AbcTraitKind::Method;
+  frame_trait.method_index = trait_method;
+  abc::AbcInstanceInfo instance;
+  instance.name = framed;
+  instance.super_index = movie_clip;
+  instance.iinit = constructor;
+  instance.traits.push_back(frame_trait);
+  file.instances.push_back(instance);
+  abc::AbcClassInfo klass;
+  klass.cinit = constructor;
+  file.classes.push_back(klass);
+
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  Interpreter interpreter{runtime};
+  auto clip = std::dynamic_pointer_cast<MovieClip>(fo4::avm2::make_display_object(
+      runtime, *const_cast<fo4::avm2::Class*>(runtime.find_class("Framed"))));
+  ASSERT_NE(clip, nullptr);
+  auto timeline = std::make_shared<fo4::avm2::TimelineDefinition>();
+  timeline->frame_count = 3;
+  clip->set_timeline(timeline);
+  clip->set_frame_script(2, std::make_shared<FunctionObject>("added", &file, added_method));
+  ASSERT_TRUE(clip->advance_frame(interpreter).ok());
+  Value added;
+  EXPECT_TRUE(runtime.global_object()->read_value(public_name("addedRan"), added));
+  Value traited;
+  EXPECT_FALSE(runtime.global_object()->read_value(public_name("traitRan"), traited));
+}
+
+TEST(Avm2Events, BoundMethodListenerRunsWithItsReceiverAndRemovesByAFreshRead) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t holder = script.multiname("Holder");
+  const std::uint32_t object = script.multiname("Object");
+  const std::uint32_t tick = script.multiname("tick");
+  const std::uint32_t ticked_on = script.multiname("tickedOn");
+  avm2_test::CodeBuilder constructor_code;
+  constructor_code.returnvoid();
+  const std::uint32_t constructor = script.method("ctor", constructor_code.bytes(), 1);
+  avm2_test::CodeBuilder tick_code;
+  tick_code.getlocal0();
+  tick_code.getglobalscope();
+  tick_code.swap();
+  tick_code.setproperty(ticked_on);
+  tick_code.returnvoid();
+  const std::uint32_t tick_method = script.method("tick", tick_code.bytes(), 1);
+  avm2_test::CodeBuilder init_code;
+  init_code.returnvoid();
+  const std::uint32_t init = script.method("init", init_code.bytes(), 1);
+  abc::AbcFile file = script.finish(init);
+  abc::AbcTrait tick_trait;
+  tick_trait.name = tick;
+  tick_trait.kind = abc::AbcTraitKind::Method;
+  tick_trait.method_index = tick_method;
+  abc::AbcInstanceInfo instance;
+  instance.name = holder;
+  instance.super_index = object;
+  instance.iinit = constructor;
+  instance.traits.push_back(tick_trait);
+  file.instances.push_back(instance);
+  abc::AbcClassInfo klass;
+  klass.cinit = constructor;
+  file.classes.push_back(klass);
+
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  Interpreter interpreter{runtime};
+  auto receiver = std::make_shared<fo4::avm2::Object>();
+  receiver->set_instance_class(const_cast<fo4::avm2::Class*>(runtime.find_class("Holder")));
+  auto dispatcher = make_sprite(runtime);
+  ASSERT_NE(dispatcher, nullptr);
+
+  const ExecutionResult first = interpreter.read_property(*receiver, public_name("tick"), 0);
+  ASSERT_TRUE(first.ok()) << first.message;
+  ASSERT_TRUE(fo4::avm2::add_event_listener(*dispatcher, "ping", first.value, false, 0));
+  auto event = fo4::avm2::make_event(runtime, "ping", false, false);
+  ASSERT_NE(event, nullptr);
+  ASSERT_TRUE(fo4::avm2::dispatch_event(interpreter, dispatcher, event, 0).ok());
+  Value ticked;
+  ASSERT_TRUE(runtime.global_object()->read_value(public_name("tickedOn"), ticked));
+  ASSERT_TRUE(ticked.is_object());
+  EXPECT_EQ(ticked.as_object().get(), receiver.get());
+
+  const ExecutionResult again = interpreter.read_property(*receiver, public_name("tick"), 0);
+  ASSERT_TRUE(again.ok()) << again.message;
+  EXPECT_TRUE(fo4::avm2::remove_event_listener(*dispatcher, "ping", again.value, false));
+}
+
 }  // namespace

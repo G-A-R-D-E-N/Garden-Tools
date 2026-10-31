@@ -160,13 +160,13 @@ class Interpreter {
   InterpreterStatus jump_to_offset(Frame& frame, std::int32_t offset, std::string& message);
   std::uint32_t instruction_index_at(const Frame& frame, std::int32_t offset) const;
 
-  ExecutionResult get_property(Frame& frame, Object& object, const Multiname& multiname,
-                               std::size_t depth);
+  ExecutionResult get_property(Frame& frame, const std::shared_ptr<Object>& owner,
+                               const Multiname& multiname, std::size_t depth);
   ExecutionResult set_property(Frame& frame, Object& object, const Multiname& multiname,
                                const Value& value, bool define, std::size_t depth);
   InterpreterStatus find_scope_binding(Frame& frame, const Multiname& multiname,
-                                       bool create_on_global, Object*& owner, bool& found,
-                                       std::string& message);
+                                       bool create_on_global, std::shared_ptr<Object>& owner,
+                                       bool& found, std::string& message);
   ExecutionResult call_property(Frame& frame, Object& receiver, const Multiname& multiname,
                                 const std::vector<Value>& arguments, std::size_t depth);
   ExecutionResult construct(Frame& frame, const ClassObject& class_object,

@@ -261,7 +261,7 @@ class ScriptBuilder {
                                        std::uint32_t local_count,
                                        std::vector<fo4::abc::AbcException> exceptions) {
     fo4::abc::AbcMethodInfo info;
-    info.param_count = 0;
+    info.param_count = local_count == 0 ? 0 : local_count - 1;
     info.return_type = 0;
     info.name = string_of(name);
     info.flags = 0;

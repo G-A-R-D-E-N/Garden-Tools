@@ -67,7 +67,7 @@ ExecutionResult Interpreter::read_property(Object& object, const Multiname& mult
   if (global != nullptr) {
     frame.scopes.push_back(global);
   }
-  return get_property(frame, object, multiname, depth);
+  return get_property(frame, detail::borrowed_object(object).as_object(), multiname, depth);
 }
 
 ExecutionResult Interpreter::write_property(Object& object, const Multiname& multiname,

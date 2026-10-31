@@ -1,4 +1,5 @@
 #include <fo4/avm2/display.hpp>
+#include <fo4/avm2/events.hpp>
 #include <fo4/avm2/hit_test.hpp>
 #include <fo4/avm2/interpreter.hpp>
 #include <fo4/avm2/name.hpp>
@@ -7,6 +8,8 @@
 #include <fo4/avm2/text.hpp>
 #include <fo4/avm2/value.hpp>
 #include <fo4/swf/swf.hpp>
+
+#include "avm2_test_support.hpp"
 
 #include <gtest/gtest.h>
 
@@ -621,6 +624,42 @@ TEST(Avm2SwfRuntime, BlendModeAndVisibleReadAndWriteThroughTheDisplayState) {
   ASSERT_TRUE(fo4::avm2::read_display_property(harness.interpreter, placed, visible_name, out));
   ASSERT_TRUE(out.is_boolean());
   EXPECT_FALSE(out.as_boolean());
+}
+
+TEST(Avm2SwfRuntime, EnterFrameReachesTheStageAndItsSpriteChildren) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t entered = script.multiname("entered");
+  avm2_test::CodeBuilder listener_code;
+  listener_code.pushtrue();
+  listener_code.getglobalscope();
+  listener_code.swap();
+  listener_code.setproperty(entered);
+  listener_code.returnvoid();
+  const std::uint32_t listener = script.method("listener", listener_code.bytes(), 2);
+  avm2_test::CodeBuilder init_code;
+  init_code.returnvoid();
+  const std::uint32_t init = script.method("init", init_code.bytes(), 1);
+  const fo4::abc::AbcFile file = script.finish(init);
+
+  Harness harness;
+  const std::shared_ptr<SwfRuntime> movie =
+      SwfRuntime::create(harness.runtime, harness.interpreter, build_movie(false));
+  ASSERT_NE(movie, nullptr) << SwfRuntime::last_error();
+  auto sprite = fo4::avm2::make_display_object(
+      harness.runtime,
+      *const_cast<fo4::avm2::Class*>(harness.runtime.find_class("flash.display::Sprite")));
+  ASSERT_NE(sprite, nullptr);
+  ASSERT_TRUE(movie->stage()->add_child(sprite));
+  const auto function = std::make_shared<fo4::avm2::FunctionObject>("listener", &file, listener);
+  ASSERT_TRUE(fo4::avm2::add_event_listener(*sprite, "enterFrame",
+                                            fo4::avm2::Value::object(function), false, 0));
+  movie->advance(harness.interpreter, 1.0 / 24.0);
+  fo4::avm2::Multiname multiname;
+  multiname.name = "entered";
+  multiname.namespaces.push_back(fo4::avm2::Namespace{});
+  fo4::avm2::Value out;
+  ASSERT_TRUE(harness.runtime.global_object()->read_value(multiname, out));
+  EXPECT_TRUE(out.as_boolean());
 }
 
 }  // namespace

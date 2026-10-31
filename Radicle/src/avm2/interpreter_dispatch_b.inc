@@ -24,7 +24,7 @@
                       "cannot read " + property_text(*multiname) + " from " +
                           value_kind_name(object.kind()));
         }
-        ExecutionResult nested = get_property(frame, *object.as_object(), *multiname, depth);
+        ExecutionResult nested = get_property(frame, object.as_object(), *multiname, depth);
         if (!nested.ok()) {
           return nested;
         }
@@ -75,7 +75,7 @@
         if (multiname == nullptr) {
           return fail(InterpreterStatus::TypeError, "getlex has an invalid multiname");
         }
-        Object* owner = nullptr;
+        std::shared_ptr<Object> owner;
         bool found = false;
         status = find_scope_binding(frame, *multiname, false, owner, found, message);
         if (status != InterpreterStatus::Ok) {
@@ -85,7 +85,7 @@
           push_value(Value::undefined());
           break;
         }
-        ExecutionResult nested = get_property(frame, *owner, *multiname, depth);
+        ExecutionResult nested = get_property(frame, owner, *multiname, depth);
         if (!nested.ok()) {
           return nested;
         }
@@ -106,7 +106,7 @@
         if (status != InterpreterStatus::Ok) {
           break;
         }
-        Object* owner = nullptr;
+        std::shared_ptr<Object> owner;
         bool found = false;
         status = find_scope_binding(frame, *multiname,
                                     instruction.opcode == op::k_findpropstrict, owner, found,
@@ -115,7 +115,7 @@
           break;
         }
         if (found) {
-          push_value(borrowed_object(*owner));
+          push_value(Value::object(owner));
         } else {
           push_value(Value::null());
         }
@@ -430,7 +430,7 @@
           return fail(InterpreterStatus::CannotConstruct,
                       "constructprop needs an object holding a class");
         }
-        ExecutionResult class_value = get_property(frame, *target.as_object(), *multiname, depth);
+        ExecutionResult class_value = get_property(frame, target.as_object(), *multiname, depth);
         if (!class_value.ok()) {
           return class_value;
         }
@@ -641,7 +641,7 @@
           multiname.kind = MultinameKind::QName;
           multiname.name = key.name;
           multiname.namespaces.push_back(key.name_space);
-          ExecutionResult nested = get_property(frame, *object.as_object(), multiname, depth);
+          ExecutionResult nested = get_property(frame, object.as_object(), multiname, depth);
           if (!nested.ok()) {
             return nested;
           }

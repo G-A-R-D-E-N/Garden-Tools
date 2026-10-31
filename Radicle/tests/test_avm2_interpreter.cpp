@@ -591,4 +591,92 @@ TEST(Avm2Interpreter, DeclocalIWrapsIntMinToIntMax) {
   EXPECT_EQ(result.value.as_int32(), std::numeric_limits<std::int32_t>::max());
 }
 
+TEST(Avm2Interpreter, RestParameterCollectsTheArgumentsAfterTheDeclaredOnes) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t length = script.multiname("length");
+  avm2_test::CodeBuilder function_code;
+  function_code.getlocal(2);
+  function_code.getproperty(length);
+  function_code.returnvalue();
+  const std::uint32_t function_method = script.method("collect", function_code.bytes(), 3);
+  avm2_test::CodeBuilder script_code;
+  script_code.pushnull();
+  script_code.newfunction(function_method);
+  script_code.pushbyte(1);
+  script_code.pushbyte(2);
+  script_code.pushbyte(3);
+  script_code.call(3);
+  script_code.returnvalue();
+  const std::uint32_t script_method = script.method("init", script_code.bytes(), 1);
+  abc::AbcFile file = script.finish(script_method);
+  file.methods[function_method].param_count = 1;
+  file.methods[function_method].flags = 0x04;
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  Interpreter interpreter(runtime);
+  const ExecutionResult result = interpreter.run_script(0);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_number_like());
+  EXPECT_EQ(result.value.as_number(), 2.0);
+}
+
+TEST(Avm2Interpreter, ArgumentsPastTheDeclaredParametersDoNotFillOrdinaryLocals) {
+  avm2_test::ScriptBuilder script;
+  avm2_test::CodeBuilder function_code;
+  function_code.getlocal(2);
+  function_code.returnvalue();
+  const std::uint32_t function_method = script.method("local", function_code.bytes(), 3);
+  avm2_test::CodeBuilder script_code;
+  script_code.pushnull();
+  script_code.newfunction(function_method);
+  script_code.pushbyte(1);
+  script_code.pushbyte(2);
+  script_code.call(2);
+  script_code.returnvalue();
+  const std::uint32_t script_method = script.method("init", script_code.bytes(), 1);
+  abc::AbcFile file = script.finish(script_method);
+  file.methods[function_method].param_count = 1;
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  Interpreter interpreter(runtime);
+  const ExecutionResult result = interpreter.run_script(0);
+  ASSERT_TRUE(result.ok()) << result.message;
+  EXPECT_TRUE(result.value.is_undefined());
+}
+
+TEST(Avm2Interpreter, NewclassPopsItsBaseWhenTheInterfaceHasNone) {
+  avm2_test::ScriptBuilder script;
+  const std::uint32_t iface = script.multiname("IFace");
+  avm2_test::CodeBuilder constructor_code;
+  constructor_code.returnvoid();
+  const std::uint32_t constructor = script.method("ctor", constructor_code.bytes(), 1);
+  avm2_test::CodeBuilder script_code;
+  script_code.pushbyte(5);
+  script_code.pushnull();
+  script_code.newclass(0);
+  script_code.pop();
+  script_code.returnvalue();
+  const std::uint32_t script_method = script.method("init", script_code.bytes(), 1);
+  abc::AbcFile file = script.finish(script_method);
+  abc::AbcInstanceInfo instance;
+  instance.name = iface;
+  instance.super_index = 0;
+  instance.flags = 0x04;
+  instance.iinit = constructor;
+  file.instances.push_back(instance);
+  abc::AbcClassInfo klass;
+  klass.cinit = constructor;
+  file.classes.push_back(klass);
+  Runtime runtime;
+  ASSERT_TRUE(runtime.add_file(file).ok());
+  ASSERT_TRUE(runtime.link().ok());
+  Interpreter interpreter(runtime);
+  const ExecutionResult result = interpreter.run_script(0);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_TRUE(result.value.is_int32());
+  EXPECT_EQ(result.value.as_int32(), 5);
+}
+
 }  // namespace

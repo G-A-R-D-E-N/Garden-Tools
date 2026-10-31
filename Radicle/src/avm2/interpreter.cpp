@@ -161,6 +161,9 @@ ExecutionResult Interpreter::invoke(const FunctionObject& function, Value this_v
   if (!runtime_.linked()) {
     return fail(InterpreterStatus::NotLinked, "the runtime is not linked");
   }
+  if (function.bound_receiver() != nullptr) {
+    this_value = Value::object(function.bound_receiver());
+  }
   const abc::AbcFile* file = function.file();
   const abc::AbcMethodBody* body = function.body();
   if (file == nullptr || body == nullptr) {
@@ -193,15 +196,25 @@ ExecutionResult Interpreter::invoke(const FunctionObject& function, Value this_v
   for (const abc::AbcInstruction& instruction : frame.instructions) {
     frame.instruction_offsets.push_back(static_cast<std::uint32_t>(instruction.offset));
   }
+  const abc::AbcMethodInfo* info = function.method_info();
+  const std::size_t param_count = info == nullptr ? arguments.size() : info->param_count;
   const std::size_t local_count = std::max<std::size_t>(
       body->local_count, arguments.size() + 1);
   frame.locals.assign(local_count, Value::undefined());
   if (!frame.locals.empty()) {
     frame.locals[0] = frame.this_value;
   }
-  for (std::size_t index = 0; index < arguments.size() && index + 1 < frame.locals.size();
+  for (std::size_t index = 0;
+       index < arguments.size() && index < param_count && index + 1 < frame.locals.size();
        ++index) {
     frame.locals[index + 1] = std::move(arguments[index]);
+  }
+  if (info != nullptr && info->needs_rest() && param_count + 1 < frame.locals.size()) {
+    std::vector<Value> rest;
+    for (std::size_t index = param_count; index < arguments.size(); ++index) {
+      rest.push_back(std::move(arguments[index]));
+    }
+    frame.locals[param_count + 1] = Value::object(make_array(std::move(rest)));
   }
   if (scopes.empty()) {
     if (!function.captured_scope().empty()) {

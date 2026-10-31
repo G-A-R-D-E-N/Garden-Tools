@@ -55,9 +55,25 @@ InterpreterStatus Interpreter::pop_runtime_operands(Frame& frame, std::size_t ab
   return InterpreterStatus::Ok;
 }
 
-ExecutionResult Interpreter::get_property(Frame& frame, Object& object,
+namespace {
+
+std::shared_ptr<FunctionObject> bind_method(const std::shared_ptr<Object>& receiver,
+                                            const FunctionObject& method) {
+  auto bound =
+      std::make_shared<FunctionObject>(method.name(), method.file(), method.method_index());
+  bound->set_native_id(method.native_id());
+  bound->set_owner_class(method.owner_class());
+  bound->set_instance_class(method.instance_class());
+  bound->bind_receiver(receiver);
+  return bound;
+}
+
+}  // namespace
+
+ExecutionResult Interpreter::get_property(Frame& frame, const std::shared_ptr<Object>& owner,
                                           const Multiname& multiname, std::size_t depth) {
   (void)frame;
+  Object& object = *owner;
   if (object.has_primitive() && object.primitive().is_string() && multiname.has_fixed_name()) {
     const std::string& text = object.primitive().as_string();
     if (multiname.name == "length") {
@@ -191,7 +207,7 @@ ExecutionResult Interpreter::get_property(Frame& frame, Object& object,
   if (lookup.kind == LookupKind::Method) {
     ExecutionResult result;
     if (lookup.trait != nullptr && lookup.trait->function != nullptr) {
-      result.value = Value::object(lookup.trait->function);
+      result.value = Value::object(bind_method(owner, *lookup.trait->function));
     }
     return result;
   }
@@ -300,13 +316,27 @@ ExecutionResult Interpreter::set_property(Frame& frame, Object& object,
                   object_kind_name(object.kind()));
 }
 
+namespace {
+
+bool scope_has_property(Interpreter& interpreter, Object& object, const Multiname& multiname) {
+  if (object.has_property(multiname)) {
+    return true;
+  }
+  Value probe;
+  return object.kind() == ObjectKind::Display &&
+         read_display_property(interpreter, static_cast<DisplayObject&>(object), multiname, probe);
+}
+
+}  // namespace
+
 InterpreterStatus Interpreter::find_scope_binding(Frame& frame, const Multiname& multiname,
-                                                  bool create_on_global, Object*& owner,
-                                                  bool& found, std::string& message) {
+                                                  bool create_on_global,
+                                                  std::shared_ptr<Object>& owner, bool& found,
+                                                  std::string& message) {
   found = false;
   for (auto current = frame.scopes.rbegin(); current != frame.scopes.rend(); ++current) {
-    if (*current != nullptr && (*current)->has_property(multiname)) {
-      owner = current->get();
+    if (*current != nullptr && scope_has_property(*this, **current, multiname)) {
+      owner = *current;
       found = true;
       return InterpreterStatus::Ok;
     }
@@ -318,14 +348,14 @@ InterpreterStatus Interpreter::find_scope_binding(Frame& frame, const Multiname&
         !multiname.name.empty() && multiname.name.front() >= 'A' && multiname.name.front() <= 'Z';
     if (package_named || capitalised) {
       if (runtime_.resolve_or_create_global_class(multiname) != nullptr) {
-        owner = runtime_.global_object();
+        owner = runtime_.global_object_shared();
         found = owner != nullptr;
         return InterpreterStatus::Ok;
       }
     }
   }
   if (create_on_global && !frame.scopes.empty() && multiname.has_fixed_name()) {
-    Object* global = frame.scopes.front().get();
+    const std::shared_ptr<Object>& global = frame.scopes.front();
     if (global != nullptr && global->is_dynamic()) {
       Property& property = global->define_own_property(primary_key(multiname));
       property.kind = PropertyKind::Value;
@@ -487,7 +517,11 @@ ExecutionResult Interpreter::construct(Frame& frame, const ClassObject& class_ob
     result.value = Value::object(std::move(array));
     return result;
   }
-  auto instance = std::make_shared<Object>();
+  const Class* display_object = find_display_class(runtime_, "flash.display::DisplayObject");
+  std::shared_ptr<Object> instance =
+      display_object != nullptr && klass->is_subclass_of(display_object)
+          ? std::shared_ptr<Object>(make_display_object(runtime_, *klass))
+          : std::make_shared<Object>();
   instance->set_instance_class(klass);
   klass->apply_slot_defaults(*instance);
   if (klass->iinit != kNoMethod && klass->file != nullptr) {
