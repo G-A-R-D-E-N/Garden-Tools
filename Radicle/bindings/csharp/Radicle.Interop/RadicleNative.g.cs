@@ -2972,7 +2972,7 @@ public unsafe struct PrevisCell
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 98u;
+    public const uint CompiledAbiVersion = 100u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
