@@ -41,6 +41,13 @@ std::vector<std::byte> read_bytes(const std::filesystem::path& path) {
   return out;
 }
 
+const fo4::Subrecord* find_subrecord(const fo4::Record& record, fo4::Signature signature) {
+  for (const auto& sub : record.subrecords) {
+    if (sub.signature == signature) return &sub;
+  }
+  return nullptr;
+}
+
 }  // namespace
 
 // Regression: a misread bcdx header must fail here, not pass synthetic tests only.
@@ -110,8 +117,7 @@ TEST(PrevisReal, UvdParsesAndValidates) {
   EXPECT_EQ(bad, 0u);
 }
 
-// Regression: an XCRI decode using xEdit's 8-byte pairs must not be assumed;
-// mis-split on real cells; the word-pair form must hold for every cell.
+// Regression: the measured word-pair form must hold and must round-trip on every XCRI payload.
 TEST(PrevisReal, XcriCensusParses) {
   const auto dir = data_dir_or_skip();
   record_game_build(detect_game_build(dir));
@@ -127,15 +133,22 @@ TEST(PrevisReal, XcriCensusParses) {
   }
   if (paths.empty()) GTEST_SKIP() << "no installed masters beside the Data folder";
   const auto env = fo4::env::Environment::load(paths);
-  for (const auto* ref : env.winners_of(fo4::Signature::from_string("CELL"))) {
+  const auto cell_signature = fo4::Signature::from_string("CELL");
+  const auto xcri_signature = fo4::Signature::from_string("XCRI");
+  for (const auto* ref : env.winners_of(cell_signature)) {
     ++cells;
     const auto data = fo4::env::decode_cell(env, *ref);
     if (data.precombined_timestamp) ++with_pcmb;
     if (data.previs_root) ++with_rvis;
-    if (!data.combined_index) continue;
+    const auto* xcri = find_subrecord(*ref->record, xcri_signature);
+    if (xcri == nullptr) continue;
     ++with_xcri;
     SCOPED_TRACE(ref->record->form_key.to_string());
-    EXPECT_FALSE(data.combined_index->refs.empty());
+    // Invariant: the wire bytes must survive parse then write unchanged.
+    EXPECT_EQ(fo4::previs::write_xcri_bytes(fo4::previs::parse_xcri_bytes(xcri->data)), xcri->data);
+    const auto index = fo4::previs::decode_combined_index(env, *ref);
+    ASSERT_TRUE(index.has_value());
+    EXPECT_FALSE(index->refs.empty());
   }
   RecordProperty("cells", static_cast<int>(cells));
   RecordProperty("with_xcri", static_cast<int>(with_xcri));
