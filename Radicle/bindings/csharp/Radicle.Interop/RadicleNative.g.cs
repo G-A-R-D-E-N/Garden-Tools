@@ -2939,10 +2939,40 @@ public unsafe struct PapyrusCompileOptions
     public IntPtr Imports;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PrevisSummary
+{
+    public nuint Cells;
+    public nuint Broken;
+    public nuint Outdated;
+    public nuint Skipped;
+    public nuint CdxFiles;
+    public nuint CdxRows;
+    public nuint CsgFiles;
+    public nuint CsgRows;
+    public nuint CsgChunks;
+    public nuint TomeFiles;
+    public nuint OcNifFiles;
+    public nuint ProblemCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PrevisCell
+{
+    public FormKey Cell;
+    public nuint PluginIndex;
+    public int Broken;
+    public int Outdated;
+    public int SkipUnsupported;
+    public nuint IssueCount;
+    public nuint OutdatedIssueCount;
+    public nuint SkipCount;
+}
+
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 92u;
+    public const uint CompiledAbiVersion = 98u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -4686,5 +4716,35 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_papyrus_natural_roots")]
     public static extern Status PapyrusNaturalRoots([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? folder, IntPtr** out_roots, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_previs_scan")]
+    public static extern Status PrevisScan(IntPtr env, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? data_dir, IntPtr* out_report);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_previs_report_destroy")]
+    public static extern void PrevisReportDestroy(IntPtr report);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_previs_report_summary")]
+    public static extern Status PrevisReportSummary(IntPtr report, PrevisSummary* out_summary);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_previs_report_cell_count")]
+    public static extern nuint PrevisReportCellCount(IntPtr report);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_previs_report_cell")]
+    public static extern Status PrevisReportCell(IntPtr report, nuint index, PrevisCell* out_cell);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_previs_report_issue")]
+    public static extern Status PrevisReportIssue(IntPtr report, nuint cell_index, nuint issue_index, int* out_code, IntPtr* out_detail);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_previs_report_outdated_issue")]
+    public static extern Status PrevisReportOutdatedIssue(IntPtr report, nuint cell_index, nuint issue_index, int* out_code, IntPtr* out_detail);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_previs_report_skip")]
+    public static extern Status PrevisReportSkip(IntPtr report, nuint cell_index, nuint skip_index, IntPtr* out_detail);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_previs_report_problem")]
+    public static extern Status PrevisReportProblem(IntPtr report, nuint index, IntPtr* out_detail);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_previs_issue_name")]
+    public static extern IntPtr PrevisIssueName(int code);
 
 }

@@ -510,7 +510,7 @@ set(RADICLE_C_SOURCES
   src/c_api_base_records.cpp src/c_api_sound.cpp src/c_api_materials.cpp src/c_api_check.cpp
   src/c_api_maintenance.cpp src/c_api_pex.cpp src/c_api_material_file.cpp src/c_api_seq.cpp
   src/c_api_quest.cpp src/c_api_quest_structure.cpp src/c_api_loadorder.cpp
-  src/c_api_version.cpp
+  src/c_api_version.cpp src/c_api_previs.cpp
   src/c_api_records.cpp src/c_api_authoring.cpp src/c_api_vmad.cpp src/c_api_behavior.cpp
   src/c_api_conditions.cpp
   src/c_api_dialogue.cpp

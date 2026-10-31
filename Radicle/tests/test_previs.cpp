@@ -236,6 +236,14 @@ TEST(PrevisDetect, ClassifiesBrokenAndOutdated) {
   visi_no_rvis.uvd_valid = true;
   EXPECT_FALSE(fo4::previs::diagnose_cell(visi_no_rvis).broken);
 
+  // Without RVIS a missing cell-named tome must stay unsupported, never proven broken.
+  fo4::previs::CellPrevisInput visi_no_rvis_missing{};
+  visi_no_rvis_missing.has_visi = true;
+  visi_no_rvis_missing.uvd_checked = true;
+  const auto unsupported = fo4::previs::diagnose_cell(visi_no_rvis_missing);
+  EXPECT_FALSE(unsupported.broken);
+  EXPECT_TRUE(unsupported.skip_unsupported);
+
   fo4::previs::CellPrevisInput rvis_no_visi{};
   rvis_no_visi.has_rvis = true;
   const auto no_visi = fo4::previs::diagnose_cell(rvis_no_visi);

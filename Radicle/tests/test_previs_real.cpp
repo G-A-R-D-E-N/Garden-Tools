@@ -1,4 +1,6 @@
 #include "fo4/archive/ba2_reader.hpp"
+#include "fo4/c_api_env.h"
+#include "fo4/c_api_previs.h"
 #include "fo4/environment/environment.hpp"
 #include "fo4/environment/world.hpp"
 #include "fo4/plugin/container.hpp"
@@ -17,6 +19,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -404,9 +407,13 @@ TEST(PrevisReal, VanillaLoadOrderGate) {
   std::map<std::string, std::size_t> actual_broken_per_plugin;
   std::map<std::string, std::size_t> pcmb_stale_per_plugin;
   std::map<std::string, std::size_t> visi_stale_per_plugin;
+  std::map<std::string, std::size_t> skipped_per_plugin;
   for (const auto& diagnosis : report) {
     const std::string filename(env.plugins()[diagnosis.plugin].key.filename());
-    if (diagnosis.status.skip_unsupported) ++skipped;
+    if (diagnosis.status.skip_unsupported) {
+      ++skipped;
+      ++skipped_per_plugin[filename];
+    }
     if (diagnosis.status.outdated) ++outdated;
     for (const auto& issue : diagnosis.status.outdated_issues) {
       if (issue.code == fo4::previs::PrevisIssue::pcmb_stale) ++pcmb_stale_per_plugin[filename];
@@ -432,6 +439,12 @@ TEST(PrevisReal, VanillaLoadOrderGate) {
   RecordProperty("broken", static_cast<int>(broken));
   RecordProperty("outdated", static_cast<int>(outdated));
   RecordProperty("skipped", static_cast<int>(skipped));
+  std::size_t skipped_total = 0;
+  for (const auto& [name, count] : skipped_per_plugin) {
+    static_cast<void>(name);
+    skipped_total += count;
+  }
+  EXPECT_EQ(skipped_total, skipped);
   std::size_t pcmb_stale_total = 0;
   for (const auto& [name, count] : pcmb_stale_per_plugin) {
     static_cast<void>(name);
@@ -443,7 +456,10 @@ TEST(PrevisReal, VanillaLoadOrderGate) {
   const auto expected = load_expected_broken(fs::path(FO4_TESTDATA_DIR));
   EXPECT_EQ(report.size(), 62393u);
   EXPECT_EQ(broken, expected.size());
-  EXPECT_EQ(skipped, 0u);
+  // A VISI cell without RVIS whose cell-named tome is absent requires a skip, not a verdict.
+  EXPECT_EQ(skipped, 207u);
+  EXPECT_EQ(skipped_per_plugin["Fallout4.esm"], 205u);
+  EXPECT_EQ(skipped_per_plugin["DLCNukaWorld.esm"], 2u);
 
   // Exact cell list invariant: a falsely broken cell or a missed true gap must change this map.
   std::size_t mismatches = 0;
@@ -487,4 +503,70 @@ TEST(PrevisReal, VanillaLoadOrderGate) {
   for (const auto& [name, count] : expected_broken_per_plugin) {
     EXPECT_EQ(actual_broken_per_plugin[name], count) << name;
   }
+}
+
+
+// Regression: the C ABI must surface the same report the C++ layer builds.
+TEST(PrevisReal, CApiReportSurface) {
+  const auto dir = data_dir_or_skip();
+  const auto build = detect_game_build(dir);
+  record_game_build(build);
+  const auto paths = official_masters(dir);
+  if (paths.empty()) GTEST_SKIP() << "the six installed masters are not present";
+
+  // A scratch Data folder must hold only the CDX files: every ABI accessor then runs.
+  const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+  const auto scratch = fs::temp_directory_path() / ("radicle_previs_capi_" + std::to_string(stamp));
+  std::error_code scratch_error;
+  fs::create_directories(scratch, scratch_error);
+  ASSERT_FALSE(scratch_error) << scratch_error.message();
+  for (const auto& entry : fs::directory_iterator(dir)) {
+    if (lowered(entry.path().extension().string()) != ".cdx") continue;
+    fs::copy_file(entry.path(), scratch / entry.path().filename(),
+                  fs::copy_options::overwrite_existing, scratch_error);
+    ASSERT_FALSE(scratch_error) << scratch_error.message();
+  }
+
+  std::vector<std::string> path_text;
+  path_text.reserve(paths.size());
+  for (const auto& path : paths) path_text.push_back(path.string());
+  std::vector<const char*> path_pointers;
+  path_pointers.reserve(path_text.size());
+  for (const auto& text : path_text) path_pointers.push_back(text.c_str());
+
+  radicle_env* env = nullptr;
+  ASSERT_EQ(radicle_env_load(path_pointers.data(), path_pointers.size(), &env),
+            RADICLE_STATUS_OK);
+  radicle_previs_report* report = nullptr;
+  ASSERT_EQ(radicle_previs_scan(env, scratch.string().c_str(), &report), RADICLE_STATUS_OK);
+  ASSERT_NE(report, nullptr);
+
+  radicle_previs_summary summary{};
+  ASSERT_EQ(radicle_previs_report_summary(report, &summary), RADICLE_STATUS_OK);
+  EXPECT_EQ(summary.cells, radicle_previs_report_cell_count(report));
+  EXPECT_GT(summary.broken, 0u);
+  if (exact_counts_known(build)) EXPECT_EQ(summary.cells, 62393u);
+
+  bool saw_issue = false;
+  for (std::size_t index = 0; index < summary.cells; ++index) {
+    radicle_previs_cell cell{};
+    ASSERT_EQ(radicle_previs_report_cell(report, index, &cell), RADICLE_STATUS_OK);
+    if (cell.broken == 0 || cell.issue_count == 0) continue;
+    int32_t code = -1;
+    const char* detail = nullptr;
+    ASSERT_EQ(radicle_previs_report_issue(report, index, 0, &code, &detail), RADICLE_STATUS_OK);
+    ASSERT_NE(detail, nullptr);
+    ASSERT_NE(cell.cell.plugin, nullptr);
+    const char* name = radicle_previs_issue_name(code);
+    ASSERT_NE(name, nullptr);
+    EXPECT_STRNE(name, "unknown");
+    saw_issue = true;
+    break;
+  }
+  EXPECT_TRUE(saw_issue);
+
+  radicle_previs_report_destroy(report);
+  radicle_env_destroy(env);
+  std::error_code cleanup_error;
+  fs::remove_all(scratch, cleanup_error);
 }

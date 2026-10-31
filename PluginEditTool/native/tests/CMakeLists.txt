@@ -19,6 +19,7 @@ function(fo4ide_add_test name source library)
 endfunction()
 
 fo4ide_add_test(fo4ide_test_wiki unit/WikiServiceTests.cpp fo4ide_app)
+fo4ide_add_test(fo4ide_test_previs_target unit/PrevisTargetTests.cpp fo4ide_app)
 fo4ide_add_test(fo4ide_test_nif unit/NifServiceTests.cpp fo4ide_nif)
 fo4ide_add_test(fo4ide_test_material unit/MaterialServiceTests.cpp fo4ide_material)
 

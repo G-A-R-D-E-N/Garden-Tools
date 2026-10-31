@@ -40,6 +40,9 @@ public:
         return {};
     }
 
+    /* The Data folder this backend must read assets from; empty when it has none. */
+    virtual std::filesystem::path dataDirectory() const { return {}; }
+
     virtual Result<nlohmann::json> createPlugin(const nlohmann::json& arguments) {
         return invokeLegacyBackend("CreatePlugin", arguments);
     }

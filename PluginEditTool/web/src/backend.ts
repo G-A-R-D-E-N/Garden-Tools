@@ -466,6 +466,53 @@ export interface ArchiveHost {
   OpenFolder(path: string): Promise<string>;
 }
 
+export interface PrevisIssue {
+  code: string;
+  detail: string;
+}
+
+export interface PrevisCellReport {
+  cell: string;
+  plugin: string;
+  issues: PrevisIssue[];
+  outdated: PrevisIssue[];
+  skips: string[];
+}
+
+export interface PrevisScanSummary {
+  cells: number;
+  broken: number;
+  outdated: number;
+  skipped: number;
+  cdxFiles: number;
+  cdxRows: number;
+  csgFiles: number;
+  csgRows: number;
+  csgChunks: number;
+  tomeFiles: number;
+  ocNifFiles: number;
+  problems: number;
+}
+
+export interface PrevisScanResult {
+  dataDir: string;
+  summary: PrevisScanSummary;
+  problems: string[];
+  broken: PrevisCellReport[];
+  outdated: PrevisCellReport[];
+  truncated: boolean;
+}
+
+export interface PrevisDataFolder {
+  dataDir: string;
+  source?: string;
+}
+
+export interface PrevisHost {
+  Scan(dataDir: string): Promise<PrevisScanResult>;
+  GetDataFolder(): Promise<PrevisDataFolder>;
+}
+
 
 export interface MaterialField {
   name: string;
@@ -633,6 +680,7 @@ declare global {
           audio?: AudioHost;
           cell?: CellHost;
           graph?: GraphHost;
+          previs?: PrevisHost;
           strings?: StringsHost;
         };
         addEventListener(type: string, listener: (event: MessageEvent) => void): void;
@@ -674,3 +722,6 @@ export const getStrings = (): StringsHost | undefined =>
 
 export const getGraph = (): GraphHost | undefined =>
   window.chrome?.webview?.hostObjects?.graph;
+
+export const getPrevis = (): PrevisHost | undefined =>
+  window.chrome?.webview?.hostObjects?.previs;

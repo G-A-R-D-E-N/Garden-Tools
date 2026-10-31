@@ -269,6 +269,7 @@ add_library(
     app/ArchiveTarget.cpp
     app/PluginBackendTarget.cpp
     app/WikiService.cpp
+    rpc/PrevisTarget.cpp
 )
 target_link_libraries(
     fo4ide_app
@@ -288,6 +289,7 @@ target_link_libraries(
         fo4ide_papyrus
         fo4ide_graph
         fo4ide_plugin_api
+        fo4
         Threads::Threads
 )
 fo4ide_enable_warnings(fo4ide_app)

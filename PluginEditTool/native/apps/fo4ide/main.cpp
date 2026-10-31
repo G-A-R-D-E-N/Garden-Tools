@@ -23,6 +23,7 @@
 #include <fo4ide/app/MaterialTarget.hpp>
 #include <fo4ide/app/PluginBackendTarget.hpp>
 #include <fo4ide/app/ServiceTargets.hpp>
+#include <fo4ide/rpc/PrevisTarget.hpp>
 #include <fo4ide/archive/ArchiveService.hpp>
 #include <fo4ide/archive/RadicleArchiveBackend.hpp>
 #include <fo4ide/assets/NifService.hpp>
@@ -263,7 +264,8 @@ int main(int argc, char** argv) {
         !registerTarget(rpc, "masters", std::make_shared<fo4ide::app::PluginBackendTarget>(plugins, "masters"), log) ||
         !registerTarget(rpc, "cell", std::make_shared<fo4ide::app::CellTarget>(plugins, nifService, textureResolver), log) ||
         !registerTarget(rpc, "strings", std::make_shared<fo4ide::app::PluginBackendTarget>(plugins, "strings"), log) ||
-        !registerTarget(rpc, "graph", std::make_shared<fo4ide::app::GraphTarget>(platformServices, toolLocator), log)) {
+        !registerTarget(rpc, "graph", std::make_shared<fo4ide::app::GraphTarget>(platformServices, toolLocator), log) ||
+        !registerTarget(rpc, "previs", std::make_shared<fo4ide::rpc::PrevisTarget>(plugins, currentSettings), log)) {
         fo4ide::logging::shutdown();
         return 1;
     }

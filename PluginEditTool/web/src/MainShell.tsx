@@ -2,7 +2,7 @@ import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react
 import {
   Files, Search, GitCompare, AlertCircle, ScrollText, Box,
   Database, FileBox, X, Zap, Rocket,
-  Link2, Archive as ArchiveIcon, Music, Boxes, Table2, Workflow, Languages,
+  Link2, Archive as ArchiveIcon, Music, Boxes, Table2, Workflow, Languages, Eye,
 } from 'lucide-react';
 import PapyrusPanel from './PapyrusPanel';
 import SwfPanel from './SwfPanel';
@@ -12,6 +12,7 @@ import ArchivePanel from './ArchivePanel';
 import LocalizationPanel from './LocalizationPanel';
 import AudioPanel from './AudioPanel';
 import CellPanel from './CellPanel';
+import PrevisPanel from './PrevisPanel';
 import SpreadsheetPanel from './SpreadsheetPanel';
 import BlueprintPanel from './Blueprint/BlueprintPanel';
 import { readFavourites, removeFavourite, FAVOURITES_CHANGED } from './favourites';
@@ -70,6 +71,7 @@ export default function MainShell() {
   const [showLocalization, setShowLocalization] = useState(false);
   const [showAudio, setShowAudio] = useState(false);
   const [showCell, setShowCell] = useState(false);
+  const [showPrevis, setShowPrevis] = useState(false);
   const [showSpreadsheet, setShowSpreadsheet] = useState(false);
   const [showBlueprint, setShowBlueprint] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
@@ -407,6 +409,9 @@ export default function MainShell() {
           <button className={`activity-btn ${showCell ? 'active' : ''}`} onClick={() => setShowCell(true)} title="Cell Viewer (read-only 3D, like Creation Kit's render window)">
             <Boxes size={22} strokeWidth={1.5} />
           </button>
+          <button className={`activity-btn ${showPrevis ? 'active' : ''}`} onClick={() => setShowPrevis(true)} title="Previs report (read-only: which cells this load order broke)">
+            <Eye size={22} strokeWidth={1.5} />
+          </button>
           <button className={`activity-btn ${showSpreadsheet ? 'active' : ''}`} onClick={() => setShowSpreadsheet(true)} title="Spreadsheet (bulk-edit every record of one type)">
             <Table2 size={22} strokeWidth={1.5} />
           </button>
@@ -713,6 +718,7 @@ export default function MainShell() {
       {showLocalization && <LocalizationPanel onClose={() => setShowLocalization(false)} />}
       {showAudio && <AudioPanel onClose={() => setShowAudio(false)} />}
       {showCell && <CellPanel onClose={() => setShowCell(false)} />}
+      {showPrevis && <PrevisPanel onClose={() => setShowPrevis(false)} />}
       {showSpreadsheet && <SpreadsheetPanel onClose={() => setShowSpreadsheet(false)} />}
       {showBlueprint && <BlueprintPanel onClose={() => setShowBlueprint(false)} />}
     </div>

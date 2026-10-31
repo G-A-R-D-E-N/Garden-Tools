@@ -43,18 +43,24 @@ CellPrevisStatus diagnose_cell(const CellPrevisInput& in) {
   }
 
   // A VISI cell requires a valid tome; a missing or invalid one is broken.
+  // Without RVIS the cell-named tome convention is unverified, so absence must skip.
   if (in.has_visi) {
     if (!in.uvd_checked) {
       out.skip_unsupported = true;
       out.skips.push_back("no .uvd lookup supplied; tome presence unverified");
-    } else if (!in.has_uvd) {
+    } else if (in.has_uvd) {
+      if (!in.uvd_valid) {
+        out.broken = true;
+        out.issues.push_back(
+            {PrevisIssue::tome_invalid, "cluster .uvd failed its CRC or structure check"});
+      }
+    } else if (in.has_rvis) {
       out.broken = true;
       out.issues.push_back(
           {PrevisIssue::tome_missing, "VISI is set but the cluster .uvd is missing"});
-    } else if (!in.uvd_valid) {
-      out.broken = true;
-      out.issues.push_back(
-          {PrevisIssue::tome_invalid, "cluster .uvd failed its CRC or structure check"});
+    } else {
+      out.skip_unsupported = true;
+      out.skips.push_back("VISI without RVIS: no cell-named tome found; convention unverified");
     }
   }
 

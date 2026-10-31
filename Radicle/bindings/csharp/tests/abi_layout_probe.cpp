@@ -37,6 +37,7 @@
 #include "fo4/c_api_papyrus_compiler.h"
 #include "fo4/c_api_graph.h"
 #include "fo4/c_api_papyrus_analysis.h"
+#include "fo4/c_api_previs.h"
 #include <cstddef>
 #include <cstdio>
 
@@ -1858,5 +1859,27 @@ int main() {
   printf("PapyrusCompileOptions.Release %zu\n", offsetof(radicle_papyrus_compile_options, release));
   printf("PapyrusCompileOptions.NoDebugInfo %zu\n", offsetof(radicle_papyrus_compile_options, no_debug_info));
   printf("PapyrusCompileOptions.Imports %zu\n", offsetof(radicle_papyrus_compile_options, imports));
+  printf("PrevisSummary %zu\n", sizeof(radicle_previs_summary));
+  printf("PrevisSummary.Cells %zu\n", offsetof(radicle_previs_summary, cells));
+  printf("PrevisSummary.Broken %zu\n", offsetof(radicle_previs_summary, broken));
+  printf("PrevisSummary.Outdated %zu\n", offsetof(radicle_previs_summary, outdated));
+  printf("PrevisSummary.Skipped %zu\n", offsetof(radicle_previs_summary, skipped));
+  printf("PrevisSummary.CdxFiles %zu\n", offsetof(radicle_previs_summary, cdx_files));
+  printf("PrevisSummary.CdxRows %zu\n", offsetof(radicle_previs_summary, cdx_rows));
+  printf("PrevisSummary.CsgFiles %zu\n", offsetof(radicle_previs_summary, csg_files));
+  printf("PrevisSummary.CsgRows %zu\n", offsetof(radicle_previs_summary, csg_rows));
+  printf("PrevisSummary.CsgChunks %zu\n", offsetof(radicle_previs_summary, csg_chunks));
+  printf("PrevisSummary.TomeFiles %zu\n", offsetof(radicle_previs_summary, tome_files));
+  printf("PrevisSummary.OcNifFiles %zu\n", offsetof(radicle_previs_summary, oc_nif_files));
+  printf("PrevisSummary.ProblemCount %zu\n", offsetof(radicle_previs_summary, problem_count));
+  printf("PrevisCell %zu\n", sizeof(radicle_previs_cell));
+  printf("PrevisCell.Cell %zu\n", offsetof(radicle_previs_cell, cell));
+  printf("PrevisCell.PluginIndex %zu\n", offsetof(radicle_previs_cell, plugin_index));
+  printf("PrevisCell.Broken %zu\n", offsetof(radicle_previs_cell, broken));
+  printf("PrevisCell.Outdated %zu\n", offsetof(radicle_previs_cell, outdated));
+  printf("PrevisCell.SkipUnsupported %zu\n", offsetof(radicle_previs_cell, skip_unsupported));
+  printf("PrevisCell.IssueCount %zu\n", offsetof(radicle_previs_cell, issue_count));
+  printf("PrevisCell.OutdatedIssueCount %zu\n", offsetof(radicle_previs_cell, outdated_issue_count));
+  printf("PrevisCell.SkipCount %zu\n", offsetof(radicle_previs_cell, skip_count));
   return 0;
 }

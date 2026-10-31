@@ -99,6 +99,7 @@ public:
     }
 
     void setDataDirectory(std::filesystem::path dataDirectory);
+    std::filesystem::path dataDirectory() const override { return dataDirectory_; }
 
 private:
     struct StagedLocalization {
