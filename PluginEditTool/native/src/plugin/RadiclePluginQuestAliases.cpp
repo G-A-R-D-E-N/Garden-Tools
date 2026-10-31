@@ -427,7 +427,7 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
                 } catch (const std::exception& error) {
                     return std::unexpected(Error{"InvalidFormKey", error.what()});
                 }
-                const auto* winner = graph_.winner(item.item);
+                const auto* winner = (*graph_).winner(item.item);
                 if (winner == nullptr) {
                     return std::unexpected(Error{
                         "InvalidTypedFormKey",
@@ -502,7 +502,7 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
                                 "item extra global requires an NPC_ owner"
                             });
                         }
-                        const auto* ownerWinner = graph_.winner(*extra.owner);
+                        const auto* ownerWinner = (*graph_).winner(*extra.owner);
                         if (ownerWinner == nullptr ||
                             ownerWinner->signature.to_string() != "NPC_") {
                             return std::unexpected(Error{
@@ -518,7 +518,7 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
                                 "item extra requiredRank requires a FACT owner"
                             });
                         }
-                        const auto* ownerWinner = graph_.winner(*extra.owner);
+                        const auto* ownerWinner = (*graph_).winner(*extra.owner);
                         if (ownerWinner == nullptr ||
                             ownerWinner->signature.to_string() != "FACT") {
                             return std::unexpected(Error{
