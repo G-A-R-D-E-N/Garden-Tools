@@ -1,12 +1,27 @@
 #pragma once
 
 #include <fo4/swf/swf.hpp>
+#include <fo4/swf/swf_timeline.hpp>
 
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <span>
 #include <string>
 #include <vector>
+
+namespace fo4::swf {
+
+bool matrix_from_transform(const SwfTransform& transform, SwfMatrix& out) noexcept;
+bool encode_matrix_fields(const SwfMatrix& matrix, std::vector<std::byte>& out);
+bool append_tag(std::vector<std::byte>& out, const SwfTag& tag, std::span<const std::byte> payload);
+bool rebuild_sprite_payload(const SwfTag& sprite,
+                            const std::map<std::size_t, std::vector<std::byte>>& replaced,
+                            std::vector<std::byte>& out);
+bool splice_matrix(std::uint16_t tag_code, std::span<const std::byte> body, const SwfMatrix& matrix,
+                   std::vector<std::byte>& out);
+
+}  // namespace fo4::swf
 
 namespace fo4::swf::detail {
 

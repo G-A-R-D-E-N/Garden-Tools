@@ -2,7 +2,6 @@
 #include "fo4/c_api_swf.h"
 #include "fo4/c_api_swf_verbs.h"
 #include "fo4/swf/swf.hpp"
-#include "fo4/swf/swf_edit.hpp"
 #include "abc_test_support.hpp"
 #include "swf_art_fixtures.hpp"
 #include "swf_movie_builder.hpp"
@@ -25,6 +24,8 @@ namespace {
 
 using swf_test::SwfBuilder;
 using swf_test::wrap_body;
+using swf_test::frame_label;
+using swf_test::placement_after_sprite_movie;
 
 struct SwfDeleter {
   void operator()(radicle_swf* swf) const { radicle_swf_destroy(swf); }
@@ -91,12 +92,6 @@ radicle_status apply(radicle_swf* swf, const Plan& builder, radicle_swf_plan_res
   return radicle_swf_apply_plan(swf, &plan, &result);
 }
 
-std::vector<std::byte> frame_label(std::string_view name) {
-  SwfBuilder body;
-  body.text(name);
-  return body.body;
-}
-
 std::vector<std::byte> place_move(std::uint16_t depth) {
   SwfBuilder body;
   body.u8(0x01);
@@ -130,36 +125,6 @@ std::vector<std::byte> sprite_movie() {
   SwfBuilder place;
   place.u8(0x02);
   place.u16(1);
-  place.u16(7);
-
-  SwfBuilder body;
-  body.rect(0, 11000, 0, 8000, 15);
-  body.u16(0x0C00);
-  body.u16(1);
-  body.tag(39, sprite.body, false);
-  body.tag(26, place.body, false);
-  body.tag(1);
-  body.tag(0);
-  return wrap_body(body.body, 6, false, false);
-}
-
-/* Invariant: with no leading tags, flat index 1 is the sprite's placement child and flat index 4 is the root placement after the DefineSprite. */
-std::vector<std::byte> placement_after_sprite_movie(int leading_tags = 0) {
-  SwfBuilder sprite;
-  sprite.u16(7);
-  sprite.u16(1);
-  for (int tag = 0; tag < leading_tags; ++tag) sprite.tag(43, frame_label("pad"), false);
-  SwfBuilder child;
-  child.u8(0x02);
-  child.u16(1);
-  child.u16(7);
-  sprite.tag(26, child.body, false);
-  sprite.tag(1);
-  sprite.tag(0);
-
-  SwfBuilder place;
-  place.u8(0x02);
-  place.u16(2);
   place.u16(7);
 
   SwfBuilder body;
@@ -708,249 +673,6 @@ TEST(CApiSwfAbcWrite, ReplacesOneInstructionInPlace) {
   const std::string text = abc_text(swf.get());
   EXPECT_NE(text.find("      0 pushtrue\n"), std::string::npos);
   EXPECT_EQ(text.find("      0 nop\n"), std::string::npos);
-}
-
-TEST(CApiSwfVerbs, SetDepthMovesASpriteChildThroughTheFlatVerb) {
-  auto swf = open(placement_after_sprite_movie());
-  ASSERT_NE(swf, nullptr);
-  radicle_swf_history* raw = nullptr;
-  ASSERT_EQ(radicle_swf_history_create(swf.get(), &raw), RADICLE_STATUS_OK) << radicle_last_error();
-  const HistoryHandle history(raw);
-
-  radicle_swf_plan_result result{};
-  ASSERT_EQ(radicle_swf_set_placement_depth(history.get(), 1, 9, &result), RADICLE_STATUS_OK)
-      << radicle_last_error();
-  EXPECT_EQ(result.changed, 1);
-
-  std::uint8_t* text = nullptr;
-  std::size_t size = 0;
-  ASSERT_EQ(radicle_swf_placements_json(history.get(), &text, &size), RADICLE_STATUS_OK)
-      << radicle_last_error();
-  const std::string moved(reinterpret_cast<const char*>(text), size);
-  radicle_free_bytes(text);
-  EXPECT_NE(moved.find(R"({"tag_index":1,"depth":9,"character_id":7,"inside_sprite":true})"),
-            std::string::npos)
-      << moved;
-
-  ASSERT_EQ(radicle_swf_history_undo(history.get(), &result), RADICLE_STATUS_OK)
-      << radicle_last_error();
-  ASSERT_EQ(radicle_swf_placements_json(history.get(), &text, &size), RADICLE_STATUS_OK)
-      << radicle_last_error();
-  const std::string restored(reinterpret_cast<const char*>(text), size);
-  radicle_free_bytes(text);
-  EXPECT_NE(
-      restored.find(R"({"tag_index":1,"depth":1,"character_id":7,"inside_sprite":true})"),
-      std::string::npos)
-      << restored;
-
-  EXPECT_EQ(radicle_swf_set_placement_depth(history.get(), 0, 9, &result),
-            RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_NE(std::string(radicle_last_error()).find("not a placement"), std::string::npos);
-  EXPECT_EQ(radicle_swf_set_placement_depth(history.get(), 99, 9, &result),
-            RADICLE_STATUS_INVALID_ARGUMENT);
-}
-
-TEST(CApiSwfVerbs, SetTransformSplicesAMatrixIntoAMatrixLessSpriteChild) {
-  auto swf = open(placement_after_sprite_movie());
-  ASSERT_NE(swf, nullptr);
-  radicle_swf_history* raw = nullptr;
-  ASSERT_EQ(radicle_swf_history_create(swf.get(), &raw), RADICLE_STATUS_OK) << radicle_last_error();
-  const HistoryHandle history(raw);
-
-  radicle_swf_plan_result result{};
-  ASSERT_EQ(radicle_swf_set_placement_transform(history.get(), 1, -40, 60, 0x20000, 0x08000,
-                                                -0x10000, 0x10000, &result),
-            RADICLE_STATUS_OK)
-      << radicle_last_error();
-  EXPECT_EQ(result.changed, 1);
-
-  radicle_swf_placement_matrix_fields matrix{};
-  ASSERT_EQ(radicle_swf_placement_matrix_at(history.get(), 1, &matrix), RADICLE_STATUS_OK)
-      << radicle_last_error();
-  EXPECT_EQ(matrix.has_scale, 1);
-  EXPECT_EQ(matrix.scale_x, 0x20000);
-  EXPECT_EQ(matrix.scale_y, 0x08000);
-  EXPECT_EQ(matrix.has_rotate, 1);
-  EXPECT_EQ(matrix.rotate0, -0x10000);
-  EXPECT_EQ(matrix.rotate1, 0x10000);
-  EXPECT_EQ(matrix.translate_x, -40);
-  EXPECT_EQ(matrix.translate_y, 60);
-
-  ASSERT_EQ(radicle_swf_history_undo(history.get(), &result), RADICLE_STATUS_OK)
-      << radicle_last_error();
-  ASSERT_EQ(radicle_swf_placement_matrix_at(history.get(), 1, &matrix), RADICLE_STATUS_OK)
-      << radicle_last_error();
-  EXPECT_EQ(matrix.has_scale, 0);
-  EXPECT_EQ(matrix.scale_x, 0x10000);
-  EXPECT_EQ(matrix.scale_y, 0x10000);
-}
-
-TEST(CApiSwfVerbs, SetTransformOnARootPlacementRoutesThroughTheNativeVerb) {
-  swf_test::SwfBuilder sprite;
-  sprite.u16(7);
-  sprite.u16(1);
-  sprite.tag(1);
-  sprite.tag(0);
-  const std::vector<std::byte> identity_matrix{std::byte{0x00}};
-  auto swf = open(swf_test::movie_of(
-      1,
-      {{39, sprite.body},
-       {26, swf_test::place_full(2, 7, identity_matrix, {})},
-       {1, {}}}));
-  ASSERT_NE(swf, nullptr);
-  radicle_swf_history* raw = nullptr;
-  ASSERT_EQ(radicle_swf_history_create(swf.get(), &raw), RADICLE_STATUS_OK) << radicle_last_error();
-  const HistoryHandle history(raw);
-
-  radicle_swf_plan_result result{};
-  ASSERT_EQ(radicle_swf_set_placement_transform(history.get(), 3, 40, 60, 0x10000, 0x10000, 0,
-                                                0, &result),
-            RADICLE_STATUS_OK)
-      << radicle_last_error();
-  EXPECT_EQ(result.changed, 1);
-
-  radicle_swf_placement_matrix_fields matrix{};
-  ASSERT_EQ(radicle_swf_placement_matrix_at(history.get(), 3, &matrix), RADICLE_STATUS_OK)
-      << radicle_last_error();
-  EXPECT_EQ(matrix.translate_x, 40);
-  EXPECT_EQ(matrix.translate_y, 60);
-  EXPECT_EQ(matrix.has_scale, 0);
-  EXPECT_EQ(matrix.scale_x, 0x10000);
-  EXPECT_EQ(matrix.scale_y, 0x10000);
-
-  ASSERT_EQ(radicle_swf_history_undo(history.get(), &result), RADICLE_STATUS_OK)
-      << radicle_last_error();
-  ASSERT_EQ(radicle_swf_placement_matrix_at(history.get(), 3, &matrix), RADICLE_STATUS_OK)
-      << radicle_last_error();
-  EXPECT_EQ(matrix.translate_x, 0);
-  EXPECT_EQ(matrix.translate_y, 0);
-}
-
-TEST(CApiSwfVerbs, InsertKeyframeSplicesAMoveChildIntoTheSprite) {
-  auto swf = open(placement_after_sprite_movie());
-  ASSERT_NE(swf, nullptr);
-  radicle_swf_history* raw = nullptr;
-  ASSERT_EQ(radicle_swf_history_create(swf.get(), &raw), RADICLE_STATUS_OK) << radicle_last_error();
-  const HistoryHandle history(raw);
-
-  const auto sprite_rows = [&](const char* label) {
-    std::uint8_t* text = nullptr;
-    std::size_t size = 0;
-    if (radicle_swf_placements_json(history.get(), &text, &size) != RADICLE_STATUS_OK) {
-      ADD_FAILURE() << label << ": " << radicle_last_error();
-      return 0u;
-    }
-    const std::string list(reinterpret_cast<const char*>(text), size);
-    radicle_free_bytes(text);
-    std::size_t rows = 0;
-    for (std::size_t at = 0; (at = list.find("\"inside_sprite\":true", at)) != std::string::npos;
-         ++at, ++rows) {
-    }
-    return rows;
-  };
-  EXPECT_EQ(sprite_rows("before"), 1u);
-
-  radicle_swf_plan_result result{};
-  ASSERT_EQ(radicle_swf_insert_placement_keyframe(history.get(), 1, 0, &result),
-            RADICLE_STATUS_OK)
-      << radicle_last_error();
-  EXPECT_EQ(result.changed, 1);
-  EXPECT_EQ(sprite_rows("inserted"), 2u);
-
-  ASSERT_EQ(radicle_swf_history_undo(history.get(), &result), RADICLE_STATUS_OK)
-      << radicle_last_error();
-  EXPECT_EQ(sprite_rows("undone"), 1u);
-
-  EXPECT_EQ(radicle_swf_insert_placement_keyframe(history.get(), 1, 9, &result),
-            RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(radicle_swf_insert_placement_keyframe(history.get(), 0, 0, &result),
-            RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(radicle_swf_insert_placement_keyframe(history.get(), 99, 0, &result),
-            RADICLE_STATUS_INVALID_ARGUMENT);
-}
-
-TEST(CApiSwfVerbs, HistoryAbcTextEditInsertsReplacesAndRefusesThroughOneVerb) {
-  SwfHandle swf = open_abc_movie();
-  ASSERT_NE(swf, nullptr);
-  radicle_swf_history* raw = nullptr;
-  ASSERT_EQ(radicle_swf_history_create(swf.get(), &raw), RADICLE_STATUS_OK) << radicle_last_error();
-  const HistoryHandle history(raw);
-
-  radicle_swf_plan_result refused{};
-  EXPECT_EQ(radicle_swf_history_abc_text_edit(nullptr, 0, 2, 0,
-                                             reinterpret_cast<const std::uint8_t*>("nop"), 3, 1,
-                                             &refused),
-            RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(refused.changed, 0);
-
-  const std::string nop = "nop";
-  radicle_swf_plan_result result{};
-  ASSERT_EQ(radicle_swf_history_abc_text_edit(
-                history.get(), 0, 2, 0, reinterpret_cast<const std::uint8_t*>(nop.data()),
-                nop.size(), 1, &result),
-            RADICLE_STATUS_OK)
-      << radicle_last_error();
-  EXPECT_EQ(result.changed, 1);
-
-  const auto disassemble = [&](const char* label) {
-    std::uint8_t* bytes = nullptr;
-    std::size_t size = 0;
-    if (radicle_swf_history_write_bytes(history.get(), &bytes, &size) != RADICLE_STATUS_OK) {
-      ADD_FAILURE() << label << ": " << radicle_last_error();
-      return std::string();
-    }
-    SwfHandle reopened = open(std::vector<std::byte>(reinterpret_cast<const std::byte*>(bytes),
-                                                     reinterpret_cast<const std::byte*>(bytes) + size));
-    radicle_free_bytes(bytes);
-    if (reopened == nullptr) {
-      ADD_FAILURE() << label << ": reopen failed";
-      return std::string();
-    }
-    return abc_text(reopened.get());
-  };
-  EXPECT_NE(disassemble("inserted").find("      0 nop\n"), std::string::npos);
-
-  const std::string pushtrue = "pushtrue";
-  ASSERT_EQ(radicle_swf_history_abc_text_edit(
-                history.get(), 0, 2, 0, reinterpret_cast<const std::uint8_t*>(pushtrue.data()),
-                pushtrue.size(), 0, &result),
-            RADICLE_STATUS_OK)
-      << radicle_last_error();
-  const std::string replaced = disassemble("replaced");
-  EXPECT_NE(replaced.find("      0 pushtrue\n"), std::string::npos) << replaced;
-  EXPECT_EQ(replaced.find("      0 nop\n"), std::string::npos) << replaced;
-
-  const std::uint64_t revision = radicle_swf_history_revision(history.get());
-  const std::string bad = "foo";
-  EXPECT_EQ(radicle_swf_history_abc_text_edit(
-                history.get(), 0, 2, 0, reinterpret_cast<const std::uint8_t*>(bad.data()),
-                bad.size(), 1, &result),
-            RADICLE_STATUS_PARSE_ERROR);
-  EXPECT_NE(std::string(radicle_last_error()), "");
-  EXPECT_EQ(radicle_swf_history_revision(history.get()), revision);
-  EXPECT_EQ(radicle_swf_history_abc_text_edit(
-                history.get(), 9, 2, 0, reinterpret_cast<const std::uint8_t*>(nop.data()),
-                nop.size(), 1, &result),
-            RADICLE_STATUS_INVALID_ARGUMENT);
-}
-
-TEST(CApiSwfVerbs, ResolveFlatTagMapsPreorderPositions) {
-  const std::vector<std::byte> bytes = placement_after_sprite_movie();
-  const auto parsed =
-      fo4::swf::read_swf(std::span<const std::byte>(bytes.data(), bytes.size()));
-  ASSERT_TRUE(parsed.ok()) << fo4::swf::status_name(parsed.status);
-  fo4::swf::SwfFlatTag addr{};
-  ASSERT_TRUE(fo4::swf::resolve_flat_tag(parsed.file, 0, addr));
-  EXPECT_EQ(addr.top, 0u);
-  EXPECT_FALSE(addr.inside);
-  ASSERT_TRUE(fo4::swf::resolve_flat_tag(parsed.file, 1, addr));
-  EXPECT_EQ(addr.top, 0u);
-  EXPECT_EQ(addr.child, 0u);
-  EXPECT_TRUE(addr.inside);
-  ASSERT_TRUE(fo4::swf::resolve_flat_tag(parsed.file, 4, addr));
-  EXPECT_EQ(addr.top, 1u);
-  EXPECT_FALSE(addr.inside);
-  EXPECT_FALSE(fo4::swf::resolve_flat_tag(parsed.file, 99, addr));
 }
 
 TEST(CApiSwfAbcWrite, RefusesAnInstructionEditAndLeavesTheHandleUnchanged) {

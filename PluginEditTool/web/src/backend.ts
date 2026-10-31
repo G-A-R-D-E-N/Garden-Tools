@@ -706,6 +706,3 @@ export const getStrings = (): StringsHost | undefined =>
 
 export const getGraph = (): GraphHost | undefined =>
   window.chrome?.webview?.hostObjects?.graph;
-
-export const getSwf = (): SwfHost | undefined =>
-  window.chrome?.webview?.hostObjects?.swf;

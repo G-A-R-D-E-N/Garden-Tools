@@ -269,6 +269,7 @@ add_library(
     app/ArchiveTarget.cpp
     app/PluginBackendTarget.cpp
     app/SwfTarget.cpp
+    app/SwfTargetFile.cpp
     app/WikiService.cpp
 )
 target_link_libraries(

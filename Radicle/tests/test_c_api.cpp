@@ -167,6 +167,10 @@ void expect_sentinel_value(const T& value) {
   EXPECT_EQ(std::memcmp(&value, &expected, sizeof(T)), 0);
 }
 
+void expect_sentinel_value(const radicle_form_key& value) {
+  EXPECT_EQ(value.plugin, sentinel_value<radicle_form_key>().plugin);
+  EXPECT_EQ(value.local_id, sentinel_value<radicle_form_key>().local_id);
+}
 }  // namespace
 
 TEST(CApi, NegativeSurfaceRejectsNullAndInvalidInput) {

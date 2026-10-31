@@ -1,191 +1,24 @@
-#include <chrono>
 #include <cstdint>
-#include <filesystem>
-#include <fstream>
 #include <string>
 #include <vector>
-
-#ifdef _WIN32
-#include <process.h>
-#else
-#include <unistd.h>
-#endif
 
 #include <catch2/catch_test_macros.hpp>
 #include <nlohmann/json.hpp>
 
 #include <fo4ide/app/SwfTarget.hpp>
+#include <fo4ide/core/PayloadLimits.hpp>
+#include <fo4ide/settings/Settings.hpp>
 
-namespace {
+#include "SwfTargetTestSupport.hpp"
 
-namespace fs = std::filesystem;
+using namespace swft_target_test;
 
-std::vector<std::byte> rectBytes(int xMin, int xMax, int yMin, int yMax, int nbits) {
-    std::vector<std::byte> out;
-    std::uint32_t pending = 0;
-    int filled = 0;
-    const auto push = [&](std::uint32_t value, int count) {
-        for (int index = 0; index < count; ++index) {
-            pending = (pending << 1) | ((value >> (count - 1 - index)) & 1u);
-            if (++filled == 8) {
-                out.push_back(static_cast<std::byte>(pending));
-                pending = 0;
-                filled = 0;
-            }
-        }
-    };
-    const std::uint32_t mask = (nbits >= 32) ? 0xFFFFFFFFu : ((1u << nbits) - 1u);
-    push(static_cast<std::uint32_t>(nbits), 5);
-    push(static_cast<std::uint32_t>(xMin) & mask, nbits);
-    push(static_cast<std::uint32_t>(xMax) & mask, nbits);
-    push(static_cast<std::uint32_t>(yMin) & mask, nbits);
-    push(static_cast<std::uint32_t>(yMax) & mask, nbits);
-    if (filled != 0) push(0, 8 - filled);
-    return out;
-}
-
-void appendU16(std::vector<std::byte>& out, int value) {
-    out.push_back(static_cast<std::byte>(value & 0xFF));
-    out.push_back(static_cast<std::byte>((value >> 8) & 0xFF));
-}
-
-void appendU32(std::vector<std::byte>& out, std::uint32_t value) {
-    for (int part = 0; part < 4; ++part)
-        out.push_back(static_cast<std::byte>((value >> (8 * part)) & 0xFFu));
-}
-
-void appendZ(std::vector<std::byte>& out, const char* text) {
-    for (const char* cursor = text; *cursor != '\0'; ++cursor)
-        out.push_back(static_cast<std::byte>(*cursor));
-    out.push_back(static_cast<std::byte>(0));
-}
-
-void appendTag(std::vector<std::byte>& out, int code, const std::vector<std::byte>& payload) {
-    if (payload.size() >= 0x3F) {
-        const auto header = static_cast<std::uint16_t>(((code & 0x3FF) << 6) | 0x3F);
-        appendU16(out, header);
-        appendU32(out, static_cast<std::uint32_t>(payload.size()));
-    } else {
-        const auto header = static_cast<std::uint16_t>(((code & 0x3FF) << 6) |
-                                                       static_cast<int>(payload.size()));
-        appendU16(out, header);
-    }
-    out.insert(out.end(), payload.begin(), payload.end());
-}
-
-// Constraint: the bytes must match SwfFixture.Movie(withAbc:true), so the native target reads the movie the C# tests own.
-std::vector<std::byte> fixtureMovie() {
-    std::vector<std::byte> editText;
-    appendU16(editText, 11);
-    const auto bounds = rectBytes(0, 400, 0, 200, 12);
-    editText.insert(editText.end(), bounds.begin(), bounds.end());
-    editText.push_back(static_cast<std::byte>(0));
-    editText.push_back(static_cast<std::byte>(0));
-    appendZ(editText, "variable");
-
-    const std::vector<std::byte> place{static_cast<std::byte>(0x06), static_cast<std::byte>(0x01),
-                                       static_cast<std::byte>(0x00), static_cast<std::byte>(0x0B),
-                                       static_cast<std::byte>(0x00), static_cast<std::byte>(0x00)};
-
-    std::vector<std::byte> sprite;
-    appendU16(sprite, 14);
-    appendU16(sprite, 1);
-    std::vector<std::byte> innerLabel;
-    appendZ(innerLabel, "inner");
-    appendTag(sprite, 43, innerLabel);
-    const std::vector<std::byte> spritePlace{
-        static_cast<std::byte>(0x06), static_cast<std::byte>(0x02), static_cast<std::byte>(0x00),
-        static_cast<std::byte>(0x0B), static_cast<std::byte>(0x00), static_cast<std::byte>(0x00)};
-    appendTag(sprite, 26, spritePlace);
-    appendTag(sprite, 1, {});
-    appendTag(sprite, 0, {});
-
-    std::vector<std::byte> tags;
-    appendTag(tags, 37, editText);
-    std::vector<std::byte> startLabel;
-    appendZ(startLabel, "start");
-    appendTag(tags, 43, startLabel);
-    appendTag(tags, 26, place);
-    appendTag(tags, 1, {});
-    appendTag(tags, 39, sprite);
-
-    std::vector<std::byte> abc;
-    appendU32(abc, 0);
-    appendZ(abc, "edit");
-    const std::uint8_t abcBody[] = {0x10, 0x00, 0x2E, 0x00, 0x00, 0x00, 0x00, 0x02, 0x03, 0x46, 0x6F,
-                                    0x6F, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                                    0x00, 0x01, 0x00, 0x01, 0x01, 0x00, 0x00, 0x02, 0x26, 0x48, 0x00,
-                                    0x00};
-    for (const auto byte : abcBody) abc.push_back(static_cast<std::byte>(byte));
-    appendTag(tags, 82, abc);
-    appendTag(tags, 0, {});
-
-    std::vector<std::byte> head;
-    head.push_back(static_cast<std::byte>('F'));
-    head.push_back(static_cast<std::byte>('W'));
-    head.push_back(static_cast<std::byte>('S'));
-    head.push_back(static_cast<std::byte>(10));
-    appendU32(head, static_cast<std::uint32_t>(8 + 9 + 4 + tags.size()));
-    const auto frame = rectBytes(0, 11000, 0, 8000, 15);
-    head.insert(head.end(), frame.begin(), frame.end());
-    appendU16(head, 0x0C00);
-    appendU16(head, 1);
-    head.insert(head.end(), tags.begin(), tags.end());
-    return head;
-}
-
-nlohmann::json replyJson(const fo4ide::Result<nlohmann::json>& result) {
-    REQUIRE(result.has_value());
-    REQUIRE(result->is_string());
-    return nlohmann::json::parse(result->get<std::string>());
-}
-
-struct TempSwf {
-    fs::path path;
-    explicit TempSwf(const std::vector<std::byte>& bytes) {
-        // Requires a per-process name: parallel test runners must never share a file.
-#ifdef _WIN32
-        const auto pid = _getpid();
-#else
-        const auto pid = getpid();
-#endif
-        const auto tick = std::chrono::steady_clock::now().time_since_epoch().count();
-        path = fs::temp_directory_path() / ("fo4ide-swf-target-test-" + std::to_string(pid) +
-                                            "-" + std::to_string(tick) + ".swf");
-        std::ofstream stream(path, std::ios::binary | std::ios::trunc);
-        stream.write(reinterpret_cast<const char*>(bytes.data()),
-                     static_cast<std::streamsize>(bytes.size()));
-        stream.close();
-        REQUIRE(fs::exists(path));
-    }
-    ~TempSwf() {
-        std::error_code code;
-        fs::remove(path, code);
-        fs::remove(fs::path(path.string() + ".bak"), code);
-    }
-};
-
-void allowPath(fo4ide::app::SwfTarget& target, const fs::path& path) {
-    target.setRoots({path.parent_path()});
-}
-
-std::vector<std::byte> readFileBytes(const fs::path& path) {
-    std::ifstream stream(path, std::ios::binary);
-    REQUIRE(stream);
-    const std::string text((std::istreambuf_iterator<char>(stream)),
-                           std::istreambuf_iterator<char>());
-    std::vector<std::byte> bytes;
-    bytes.reserve(text.size());
-    for (char c : text) bytes.push_back(static_cast<std::byte>(c));
-    return bytes;
-}
-
-}  // namespace
 
 TEST_CASE("SwfTarget opens a movie and snapshots the document") {
-    fo4ide::app::SwfTarget target;
+    RootedTarget rooted;
+    auto& target = rooted.target;
     TempSwf file(fixtureMovie());
-    allowPath(target, file.path);
+    allowPath(rooted, file.path);
 
     const auto opened =
         replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
@@ -203,9 +36,10 @@ TEST_CASE("SwfTarget opens a movie and snapshots the document") {
 }
 
 TEST_CASE("SwfTarget renames a label with undo and redo tracking state") {
-    fo4ide::app::SwfTarget target;
+    RootedTarget rooted;
+    auto& target = rooted.target;
     TempSwf file(fixtureMovie());
-    allowPath(target, file.path);
+    allowPath(rooted, file.path);
     replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
 
     const auto renamed =
@@ -237,9 +71,10 @@ TEST_CASE("SwfTarget renames a label with undo and redo tracking state") {
 }
 
 TEST_CASE("SwfTarget applies an ABC text edit and saves it back to disk") {
-    fo4ide::app::SwfTarget target;
+    RootedTarget rooted;
+    auto& target = rooted.target;
     TempSwf file(fixtureMovie());
-    allowPath(target, file.path);
+    allowPath(rooted, file.path);
     const auto opened =
         replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
     INFO(opened.dump());
@@ -267,8 +102,9 @@ TEST_CASE("SwfTarget applies an ABC text edit and saves it back to disk") {
     const auto saved = replyJson(target.invoke("Save", nlohmann::json::array()));
     CHECK(saved.value("saved", "") == file.path.string());
 
-    fo4ide::app::SwfTarget reopened;
-    allowPath(reopened, file.path);
+    RootedTarget reopenedRooted;
+    auto& reopened = reopenedRooted.target;
+    allowPath(reopenedRooted, file.path);
     const auto reopenedOpen =
         replyJson(reopened.invoke("Open", nlohmann::json::array({file.path.string()})));
     INFO(reopenedOpen.dump());
@@ -287,67 +123,9 @@ TEST_CASE("SwfTarget applies an ABC text edit and saves it back to disk") {
     CHECK_FALSE(outOfRange.contains("svg"));
 }
 
-// Constraint: the save must fail without touching the destination, so the directory loses write access.
-TEST_CASE("SwfTarget leaves the original bytes intact when saving fails") {
-    const fs::path dir =
-        fs::temp_directory_path() / "fo4ide-swf-save-fail-dir";
-    std::error_code code;
-    fs::remove_all(dir, code);
-    REQUIRE(fs::create_directories(dir, code));
-    const fs::path swfPath = dir / "movie.swf";
-    fo4ide::app::SwfTarget target;
-    allowPath(target, swfPath);
-    const auto original = fixtureMovie();
-    {
-        std::ofstream stream(swfPath, std::ios::binary | std::ios::trunc);
-        REQUIRE(stream);
-        stream.write(reinterpret_cast<const char*>(original.data()),
-                     static_cast<std::streamsize>(original.size()));
-        stream.close();
-        REQUIRE(stream);
-    }
-
-    const auto opened = replyJson(target.invoke("Open", nlohmann::json::array({swfPath.string()})));
-    REQUIRE_FALSE(opened.contains("error"));
-    const auto renamed =
-        replyJson(target.invoke("RenameLabel", nlohmann::json::array({0, 0, "menu"})));
-    REQUIRE(renamed.value("changed", false) == true);
-
-    const fs::perms previous = fs::status(dir).permissions();
-    struct RestorePermissions {
-        fs::path dir;
-        fs::perms perms;
-        ~RestorePermissions() {
-            std::error_code ignored;
-            fs::permissions(dir, perms, fs::perm_options::replace, ignored);
-        }
-    };
-    const RestorePermissions restore{dir, previous};
-    fs::permissions(dir,
-                    fs::perms::owner_read | fs::perms::owner_exec | fs::perms::group_read |
-                        fs::perms::group_exec | fs::perms::others_read | fs::perms::others_exec,
-                    fs::perm_options::replace, code);
-    REQUIRE(!code);
-
-    const auto saved = replyJson(target.invoke("Save", nlohmann::json::array()));
-    INFO(saved.dump());
-    CHECK(saved.contains("error"));
-    CHECK_FALSE(saved.contains("saved"));
-
-    std::ifstream stream(swfPath, std::ios::binary);
-    REQUIRE(stream);
-    const std::string text((std::istreambuf_iterator<char>(stream)),
-                           std::istreambuf_iterator<char>());
-    std::vector<std::byte> current;
-    current.reserve(text.size());
-    for (char c : text) current.push_back(static_cast<std::byte>(c));
-    CHECK(current == original);
-
-    fs::remove_all(dir, code);
-}
-
 TEST_CASE("SwfTarget refuses calls with no open document") {
-    fo4ide::app::SwfTarget target;
+    RootedTarget rooted;
+    auto& target = rooted.target;
     const auto state = replyJson(target.invoke("State", nlohmann::json::array()));
     CHECK(state.contains("error"));
     const auto saved = replyJson(target.invoke("Save", nlohmann::json::array()));
@@ -356,9 +134,10 @@ TEST_CASE("SwfTarget refuses calls with no open document") {
 
 // Constraint: flat tag 2 is the root PlaceObject2 at depth 1, so moving it must rewrite the depth and undo must restore it.
 TEST_CASE("SwfTarget moves a root placement depth with undo") {
-    fo4ide::app::SwfTarget target;
+    RootedTarget rooted;
+    auto& target = rooted.target;
     TempSwf file(fixtureMovie());
-    allowPath(target, file.path);
+    allowPath(rooted, file.path);
     replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
 
     const auto moved = replyJson(target.invoke("SetDepth", nlohmann::json::array({2, 9})));
@@ -387,9 +166,10 @@ TEST_CASE("SwfTarget moves a root placement depth with undo") {
 
 // Constraint: flat tag 6 is the sprite PlaceObject2 child, so the transform must splice its MATRIX and undo must clear it.
 TEST_CASE("SwfTarget rewrites a sprite placement matrix with undo") {
-    fo4ide::app::SwfTarget target;
+    RootedTarget rooted;
+    auto& target = rooted.target;
     TempSwf file(fixtureMovie());
-    allowPath(target, file.path);
+    allowPath(rooted, file.path);
     replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
 
     const auto before =
@@ -426,9 +206,10 @@ int spriteRowCount(const nlohmann::json& placements) {
 }
 
 TEST_CASE("SwfTarget inserts a placement keyframe with undo") {
-    fo4ide::app::SwfTarget target;
+    RootedTarget rooted;
+    auto& target = rooted.target;
     TempSwf file(fixtureMovie());
-    allowPath(target, file.path);
+    allowPath(rooted, file.path);
     replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
 
     const auto before = replyJson(target.invoke("Placements", nlohmann::json::array()));
@@ -466,9 +247,10 @@ TEST_CASE("SwfTarget inserts a placement keyframe with undo") {
 
 // Constraint: the first save must freeze the on-disk original, so a later save never rewrites the backup.
 TEST_CASE("SwfTarget keeps the first-save backup across later saves") {
-    fo4ide::app::SwfTarget target;
+    RootedTarget rooted;
+    auto& target = rooted.target;
     TempSwf file(fixtureMovie());
-    allowPath(target, file.path);
+    allowPath(rooted, file.path);
     replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
 
     const auto original = fixtureMovie();
@@ -484,17 +266,19 @@ TEST_CASE("SwfTarget keeps the first-save backup across later saves") {
     CHECK(second.value("saved", "") == file.path.string());
     CHECK(readFileBytes(fs::path(file.path.string() + ".bak")) == original);
 
-    fo4ide::app::SwfTarget reopened;
-    allowPath(reopened, file.path);
+    RootedTarget reopenedRooted;
+    auto& reopened = reopenedRooted.target;
+    allowPath(reopenedRooted, file.path);
     replyJson(reopened.invoke("Open", nlohmann::json::array({file.path.string()})));
     const auto labels = replyJson(reopened.invoke("FrameLabels", nlohmann::json::array({0})));
     CHECK(labels.at("labels")[0].value("name", "") == "submenu");
 }
 
 TEST_CASE("SwfTarget reports the Radicle message when an ABC edit fails") {
-    fo4ide::app::SwfTarget target;
+    RootedTarget rooted;
+    auto& target = rooted.target;
     TempSwf file(fixtureMovie());
-    allowPath(target, file.path);
+    allowPath(rooted, file.path);
     replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
 
     const auto bad = replyJson(
@@ -527,9 +311,10 @@ std::vector<std::byte> latinLabelMovie() {
 }
 
 TEST_CASE("SwfTarget replaces non-UTF-8 bytes when dumping labels") {
-    fo4ide::app::SwfTarget target;
+    RootedTarget rooted;
+    auto& target = rooted.target;
     TempSwf file(latinLabelMovie());
-    allowPath(target, file.path);
+    allowPath(rooted, file.path);
     const auto opened =
         replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
     REQUIRE_FALSE(opened.contains("error"));
@@ -540,7 +325,8 @@ TEST_CASE("SwfTarget replaces non-UTF-8 bytes when dumping labels") {
 }
 
 TEST_CASE("SwfTarget refuses paths outside its roots") {
-    fo4ide::app::SwfTarget target;
+    RootedTarget rooted;
+    auto& target = rooted.target;
     TempSwf file(fixtureMovie());
 
     // Constraint: an empty root list must refuse every open, like the C# host with no folders set.
@@ -548,7 +334,7 @@ TEST_CASE("SwfTarget refuses paths outside its roots") {
         replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
     CHECK(unrooted.contains("error"));
 
-    target.setRoots({file.path.parent_path() / "fo4ide-no-such-root"});
+    *rooted.roots = {file.path.parent_path() / "fo4ide-no-such-root"};
     const auto elsewhere =
         replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
     CHECK(elsewhere.contains("error"));
@@ -556,14 +342,254 @@ TEST_CASE("SwfTarget refuses paths outside its roots") {
     const fs::path sub = file.path.parent_path() / "fo4ide-swf-guard-sub";
     std::error_code code;
     fs::create_directories(sub, code);
-    target.setRoots({sub});
+    *rooted.roots = {sub};
     const auto escaped = replyJson(
         target.invoke("Open", nlohmann::json::array({(sub / ".." / file.path.filename()).string()})));
     CHECK(escaped.contains("error"));
     fs::remove_all(sub, code);
 
-    allowPath(target, file.path);
+    allowPath(rooted, file.path);
     const auto opened =
         replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
     CHECK_FALSE(opened.contains("error"));
+}
+
+// Constraint: an edit colour must parse as hexadecimal in full, with no partial or signed read.
+TEST_CASE("SwfTarget refuses an edit colour that is not hexadecimal in full") {
+    RootedTarget rooted;
+    auto& target = rooted.target;
+    TempSwf file(fixtureMovie());
+    allowPath(rooted, file.path);
+    replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
+
+    for (const char* color : {"12zz", "-1", "1 2"}) {
+        const auto refused = replyJson(target.invoke(
+            "EditEditText", nlohmann::json::array({0, "edit", color, 0, 400, 0, 200})));
+        INFO(color);
+        CHECK(refused.contains("error"));
+    }
+    const auto state = replyJson(target.invoke("State", nlohmann::json::array()));
+    CHECK(state.value("undo", 9) == 0);
+
+    const auto accepted = replyJson(target.invoke(
+        "EditEditText", nlohmann::json::array({0, "edit", "0xFF00FF00", 0, 400, 0, 200})));
+    CHECK(accepted.value("changed", false) == true);
+}
+
+// Constraint: roots are read on each Open, so the MO2 instance set by a settings change or --mo2 opens without a restart.
+TEST_CASE("SwfTarget reads the MO2 instance root from settings on each Open") {
+    const fs::path instance = uniqueDir("fo4ide-swf-mo2");
+    const RemoveAll cleanup{instance};
+    const fs::path movie = instance / "mods" / "X" / "Interface" / "foo.swf";
+    fs::create_directories(movie.parent_path());
+    writeBytes(movie, fixtureMovie());
+
+    fo4ide::settings::SharedSettings settings;
+    fo4ide::app::SwfTarget target([&settings] { return fo4ide::app::swfRootsFor(settings.snapshot()); });
+    const auto refused = replyJson(target.invoke("Open", nlohmann::json::array({movie.string()})));
+    CHECK(refused.contains("error"));
+
+    settings.update([&instance](fo4ide::settings::Settings& current) { current.mo2InstancePath = instance; });
+    const auto opened = replyJson(target.invoke("Open", nlohmann::json::array({movie.string()})));
+    CHECK_FALSE(opened.contains("error"));
+}
+
+// Constraint: the configured Fallout 4 folder is itself a root, as ToolPaths.RequireDataOrProjectPath treats Fallout4Path.
+TEST_CASE("SwfTarget treats the configured Fallout 4 folder as a root") {
+    const fs::path game = uniqueDir("fo4ide-swf-game");
+    const RemoveAll cleanup{game};
+    const fs::path movie = game / "Interface" / "foo.swf";
+    fs::create_directories(movie.parent_path());
+    writeBytes(movie, fixtureMovie());
+
+    fo4ide::settings::Settings settings;
+    settings.fallout4Path = game;
+    const auto roots = fo4ide::app::swfRootsFor(settings);
+    REQUIRE(roots.size() == 4u);
+    CHECK(roots[1] == game);
+    fo4ide::app::SwfTarget target([roots] { return roots; });
+    const auto opened = replyJson(target.invoke("Open", nlohmann::json::array({movie.string()})));
+    CHECK_FALSE(opened.contains("error"));
+}
+
+// Constraint: Save writes the canonical path that Open authorised, not the spelling the caller passed.
+TEST_CASE("SwfTarget saves to the canonical path it opened") {
+    const fs::path dir = uniqueDir("fo4ide-swf-canonical");
+    const RemoveAll cleanup{dir};
+    const fs::path movie = dir / "movie.swf";
+    writeBytes(movie, fixtureMovie());
+    RootedTarget rooted;
+    auto& target = rooted.target;
+    *rooted.roots = {dir};
+
+    const fs::path dotted = dir / "." / "movie.swf";
+    REQUIRE_FALSE(replyJson(target.invoke("Open", nlohmann::json::array({dotted.string()}))).contains("error"));
+    const auto saved = replyJson(target.invoke("Save", nlohmann::json::array()));
+    CHECK(saved.value("saved", "") == fs::weakly_canonical(movie).string());
+}
+
+// Constraint: a refused Open leaves no document open, as the C# host disposes the current document first.
+TEST_CASE("SwfTarget closes the open document when a later Open is refused") {
+    const fs::path inside = uniqueDir("fo4ide-swf-inside");
+    const RemoveAll insideCleanup{inside};
+    const fs::path outside = uniqueDir("fo4ide-swf-outside");
+    const RemoveAll outsideCleanup{outside};
+    writeBytes(inside / "movie.swf", fixtureMovie());
+    writeBytes(outside / "stray.swf", fixtureMovie());
+    RootedTarget rooted;
+    auto& target = rooted.target;
+    *rooted.roots = {inside};
+
+    REQUIRE_FALSE(replyJson(target.invoke("Open", nlohmann::json::array({(inside / "movie.swf").string()})))
+                      .contains("error"));
+    const auto refused = replyJson(target.invoke("Open", nlohmann::json::array({(outside / "stray.swf").string()})));
+    CHECK(refused.contains("error"));
+    const auto state = replyJson(target.invoke("State", nlohmann::json::array()));
+    CHECK(state.contains("error"));
+}
+
+// Constraint: an SWF over the body cap is refused before it is read, so a huge file never reaches memory.
+TEST_CASE("SwfTarget refuses an SWF over the size limit before reading it") {
+    const fs::path dir = uniqueDir("fo4ide-swf-large");
+    const RemoveAll cleanup{dir};
+    const fs::path large = dir / "large.swf";
+    writeBytes(large, {});
+    fs::resize_file(large, fo4ide::core::kMaxSwfFileBytes + 1);
+    RootedTarget rooted;
+    auto& target = rooted.target;
+    *rooted.roots = {dir};
+
+    const auto refused = replyJson(target.invoke("Open", nlohmann::json::array({large.string()})));
+    REQUIRE(refused.contains("error"));
+    CHECK(refused.at("error").get<std::string>().find("limit") != std::string::npos);
+}
+
+// Constraint: a non-integer, out-of-range, negative or wrong-typed argument is refused before dispatch, so no edit runs on a defaulted index.
+TEST_CASE("SwfTarget refuses malformed arguments without editing the document") {
+    TempSwf file(fixtureMovie());
+    RootedTarget rooted;
+    auto& target = rooted.target;
+    allowPath(rooted, file.path);
+    replyJson(target.invoke("Open", nlohmann::json::array({file.path.string()})));
+
+    const std::vector<std::pair<std::string, nlohmann::json>> cases{
+        {"SetDepth", nlohmann::json::array({2, 70000})},
+        {"SetDepth", nlohmann::json::array({2, 1e30})},
+        {"SetDepth", nlohmann::json::array({2, 9.5})},
+        {"SetDepth", nlohmann::json::array({2, "9"})},
+        {"SetDepth", nlohmann::json::array({-1, 9})},
+        {"SetDepth", nlohmann::json::array({2})},
+        {"RenameLabel", nlohmann::json::array({0, "0", "menu"})},
+        {"RenameLabel", nlohmann::json::array({0, 0, 42})},
+        {"InsertKeyframe", nlohmann::json::array({6, 1.5})},
+        {"EditEditText", nlohmann::json::array({0, 5, "", 0, 400, 0, 200})},
+    };
+    for (const auto& [method, args] : cases) {
+        INFO(method << " " << args.dump());
+        CHECK(replyJson(target.invoke(method, args)).contains("error"));
+    }
+    const auto state = replyJson(target.invoke("State", nlohmann::json::array()));
+    CHECK(state.value("undo", 9) == 0);
+    CHECK(state.value("dirty", true) == false);
+}
+
+// Constraint: an edit whose written movie cannot reopen is refused, and the document keeps its previous labels.
+TEST_CASE("SwfTarget refuses an edit whose result cannot reopen and keeps the previous movie", "[slow]") {
+    const fs::path dir = uniqueDir("fo4ide-swf-cap");
+    const RemoveAll cleanup{dir};
+    const fs::path movie = dir / "cap.swf";
+    writeBytes(movie, tagCapMovie());
+    RootedTarget rooted;
+    auto& target = rooted.target;
+    *rooted.roots = {dir};
+
+    REQUIRE_FALSE(replyJson(target.invoke("Open", nlohmann::json::array({movie.string()}))).contains("error"));
+    const auto added = replyJson(target.invoke("AddLabel", nlohmann::json::array({0, "cap", 0})));
+    CHECK(added.contains("error"));
+    const auto labels = replyJson(target.invoke("FrameLabels", nlohmann::json::array({0})));
+    REQUIRE(labels.contains("labels"));
+    CHECK(labels.at("labels").empty());
+    const auto state = replyJson(target.invoke("State", nlohmann::json::array()));
+    CHECK(state.value("undo", 9) == 0);
+}
+
+// Constraint: a Redo whose result cannot reopen steps back, so State, FrameLabels and Save keep the movie before it.
+TEST_CASE("SwfTarget steps back a Redo whose result cannot reopen, so Save writes a movie that reopens", "[slow]") {
+    const fs::path dir = uniqueDir("fo4ide-swf-redo");
+    const RemoveAll cleanup{dir};
+    const fs::path movie = dir / "cap.swf";
+    writeBytes(movie, tagCapMovie());
+    RootedTarget rooted;
+    auto& target = rooted.target;
+    *rooted.roots = {dir};
+
+    REQUIRE_FALSE(replyJson(target.invoke("Open", nlohmann::json::array({movie.string()}))).contains("error"));
+    CHECK(replyJson(target.invoke("AddLabel", nlohmann::json::array({0, "cap", 0}))).contains("error"));
+    CHECK(replyJson(target.invoke("Redo", nlohmann::json::array())).contains("error"));
+    const auto state = replyJson(target.invoke("State", nlohmann::json::array()));
+    CHECK(state.value("undo", 9) == 0);
+    CHECK(state.value("redo", 9) == 1);
+    CHECK(state.value("dirty", true) == false);
+    const auto labels = replyJson(target.invoke("FrameLabels", nlohmann::json::array({0})));
+    REQUIRE(labels.contains("labels"));
+    CHECK(labels.at("labels").empty());
+
+    const auto saved = replyJson(target.invoke("Save", nlohmann::json::array()));
+    REQUIRE(saved.contains("saved"));
+    RootedTarget reopenedRooted;
+    allowPath(reopenedRooted, movie);
+    const auto reopened =
+        replyJson(reopenedRooted.target.invoke("Open", nlohmann::json::array({movie.string()})));
+    CHECK_FALSE(reopened.contains("error"));
+}
+
+// Constraint: an unknown method is named as unknown even with no document open, so a typo is not reported as a missing document.
+TEST_CASE("SwfTarget names an unknown method even when no document is open") {
+    RootedTarget rooted;
+    const auto reply = rooted.target.invoke("NoSuchMethod", nlohmann::json::array());
+    REQUIRE_FALSE(reply.has_value());
+    CHECK(reply.error().type == "UnknownMethod");
+}
+
+// Constraint: a first save whose backup copy fails is refused, and the file on disk is left as it was.
+TEST_CASE("SwfTarget does not report a save when the first-save backup cannot be copied") {
+#ifdef _WIN32
+    SKIP("the dangling backup needs symlink support, and no Windows failure of the copy alone was verified");
+#else
+    const fs::path dir = uniqueDir("fo4ide-swf-backup");
+    const RemoveAll cleanup{dir};
+    const fs::path swfPath = dir / "movie.swf";
+    const auto original = fixtureMovie();
+    writeBytes(swfPath, original);
+    RootedTarget rooted;
+    auto& target = rooted.target;
+    *rooted.roots = {dir};
+    REQUIRE_FALSE(replyJson(target.invoke("Open", nlohmann::json::array({swfPath.string()}))).contains("error"));
+
+    fs::create_symlink(dir / "missing" / "movie.swf.bak", dir / "movie.swf.bak");
+    const auto saved = replyJson(target.invoke("Save", nlohmann::json::array()));
+    CHECK(saved.contains("error"));
+    CHECK_FALSE(saved.contains("saved"));
+    CHECK(readFileBytes(swfPath) == original);
+#endif
+}
+
+// Constraint: a save whose atomic write fails is refused, and no save is reported.
+TEST_CASE("SwfTarget does not report a save when the atomic write fails") {
+    const fs::path dir = uniqueDir("fo4ide-swf-write");
+    const RemoveAll cleanup{dir};
+    const fs::path swfPath = dir / "movie.swf";
+    writeBytes(swfPath, fixtureMovie());
+    writeBytes(dir / "movie.swf.bak", fixtureMovie());
+    RootedTarget rooted;
+    auto& target = rooted.target;
+    *rooted.roots = {dir};
+    REQUIRE_FALSE(replyJson(target.invoke("Open", nlohmann::json::array({swfPath.string()}))).contains("error"));
+
+    fs::remove(swfPath);
+    fs::create_directory(swfPath);
+    const auto saved = replyJson(target.invoke("Save", nlohmann::json::array()));
+    CHECK(saved.contains("error"));
+    CHECK_FALSE(saved.contains("saved"));
+    CHECK(fs::is_directory(swfPath));
 }

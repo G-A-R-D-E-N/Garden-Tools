@@ -252,17 +252,9 @@ int main(int argc, char** argv) {
     auto refreshingAppInteropTarget = std::make_shared<RefreshingAppInteropTarget>(
         appInteropTarget, currentSettings, textureResolver);
 
-    auto swfTarget = std::make_shared<fo4ide::app::SwfTarget>();
-    {
-        // Constraint: the SWF target must open only Data and project files, like the C# host.
-        std::vector<std::filesystem::path> swfRoots;
-        const auto settings = currentSettings.snapshot();
-        if (!settings.dataFolder.empty()) swfRoots.push_back(settings.dataFolder);
-        if (const auto falloutRoot = toolLocator.fallout4Root(); !falloutRoot.empty()) {
-            swfRoots.push_back(falloutRoot / "Data");
-        }
-        swfTarget->setRoots(std::move(swfRoots));
-    }
+    auto swfTarget = std::make_shared<fo4ide::app::SwfTarget>([&currentSettings] {
+        return fo4ide::app::swfRootsFor(currentSettings.snapshot());
+    });
 
     if (!registerTarget(rpc, "app", std::make_shared<AppTarget>(plugins, archiveService, nifTool), log) ||
         !registerTarget(rpc, "appInterop", refreshingAppInteropTarget, log) ||

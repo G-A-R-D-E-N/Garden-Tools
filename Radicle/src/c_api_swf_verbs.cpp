@@ -166,7 +166,7 @@ bool timeline_tags(const SwfFile& file, std::uint16_t timeline_id, const std::ve
       base = flat + 1;
       return true;
     }
-    flat += 1 + radicle_swf_detail::subtree_size(tag.children);
+    flat += 1 + fo4::swf::subtree_size(tag.children);
   }
   message = "timeline " + std::to_string(timeline_id) + " is not a DefineSprite in this movie";
   return false;
@@ -263,7 +263,7 @@ std::string placement_json(const std::vector<SwfTag>& tags, std::size_t base) {
   std::size_t flat = base;
   for (std::size_t index = 0; index < tags.size(); ++index) {
     const std::size_t row = flat;
-    flat += 1 + radicle_swf_detail::subtree_size(tags[index].children);
+    flat += 1 + fo4::swf::subtree_size(tags[index].children);
     const auto& placement = tags[index].placement;
     if (!placement) continue;
     comma(out);
@@ -656,8 +656,7 @@ radicle_status radicle_swf_placement_matrix_at(const radicle_swf_history* histor
         tag.code != fo4::swf::tag::kPlaceObject3) {
       return fail(RADICLE_STATUS_INVALID_ARGUMENT, "the tag is not a placement");
     }
-    // Constraint: the flags are derived from the decoded values, so an explicitly flagged identity matrix reads back unflagged.
-    // Constraint: a missing scale must read 0x10000, so no caller keeps an identity default.
+    // Constraint: a missing scale reads 0x10000, and the flags come from the decoded values.
     if (tag.placement && tag.placement->matrix) {
       const fo4::swf::SwfMatrix& matrix = *tag.placement->matrix;
       out_matrix->has_scale =

@@ -135,15 +135,15 @@ struct SwfFlatTag {
 /* Requires flat to be the pre-order index radicle_swf_tag_at reports; nesting below a sprite child must be refused. */
 bool resolve_flat_tag(const SwfFile& file, std::size_t flat, SwfFlatTag& out);
 
-/* Requires flat_tag to be the pre-order index radicle_swf_tag_at reports; a tag that is not a PlaceObject, PlaceObject2 or PlaceObject3 must be refused. A root placement must move its creating instance through the native depth verb, while a sprite child takes the payload write. */
+/* Requires flat_tag to name a flat placement index. */
 bool set_placement_depth_flat(SwfFile& file, std::size_t flat_tag, std::uint16_t depth,
                               std::string& message);
 
-/* Requires flat_tag to name a flat placement index and the transform to fit 31 bits; the doubles mirror the native instance verbs, so translate is points and scale is unit-one. A root placement whose MATRIX the tag authors must move through the native transform verb; any other placement takes the payload write. */
+/* Requires flat_tag to name a flat placement index and the transform to fit 31 bits. */
 bool set_placement_transform_flat(SwfFile& file, std::size_t flat_tag, const SwfTransform& transform,
                                   std::string& message);
 
-/* Requires flat_tag to name a flat PlaceObject2 index and frame to name a reached frame; a root placement must insert through the native keyframe verb and a sprite placement must splice a move child ahead of that frame. */
+/* Requires flat_tag to name a flat PlaceObject2 index and frame to name a reached frame. */
 bool insert_placement_keyframe_flat(SwfFile& file, std::size_t flat_tag, std::uint32_t frame,
                                     std::string& message);
 

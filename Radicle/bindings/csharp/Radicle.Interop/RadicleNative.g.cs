@@ -2955,7 +2955,7 @@ public unsafe struct PapyrusCompileOptions
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 94u;
+    public const uint CompiledAbiVersion = 96u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -4426,6 +4426,12 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_insert_placement_keyframe")]
     public static extern Status SwfInsertPlacementKeyframe(IntPtr history, nuint tag_index, uint frame, SwfPlanResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_history_abc_text_edit")]
+    public static extern Status SwfHistoryAbcTextEdit(IntPtr history, nuint abc, uint body, nuint offset, byte* text, nuint size, byte insert, SwfPlanResult* out_result);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_swf_action_tags_json")]
+    public static extern Status SwfActionTagsJson(IntPtr history, byte** out_text, nuint* out_size);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_call_operand_role")]
     public static extern PexOperandRole PexCallOperandRole(byte opcode, nuint index);
