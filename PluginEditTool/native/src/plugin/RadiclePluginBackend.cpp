@@ -629,6 +629,9 @@ Result<nlohmann::json> RadiclePluginBackend::discardPlugin(const nlohmann::json&
         std::error_code statEc;
         const auto readTime = std::filesystem::last_write_time(loaded->path, statEc);
         auto reloaded = fo4::read_plugin_file(loaded->path);
+#ifdef FO4IDE_TEST_HOOKS
+        if (loadReadWindowHook != nullptr) loadReadWindowHook();
+#endif
         if (const auto stable = requirePluginUnchangedSince(loaded->path, readTime); !stable) {
             return std::unexpected(stable.error());
         }

@@ -107,6 +107,28 @@ TEST_CASE("Native release_memory drop_conflict_graph keeps an edit visible to la
     CHECK(worklistTotal(backend, "Top.esp") == edited);
 }
 
+#ifdef FO4IDE_TEST_HOOKS
+// Invariant: a dropped graph must be destroyed, not pinned by a proxy snapshot.
+TEST_CASE("Native release_memory drop_conflict_graph destroys the cached graph") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeBytes(root / "Base.esp", makeBasePlugin());
+    writeBytes(root / "Top.esp", makeOverridePlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke("environment.LoadMo2", nlohmann::json{{"plugins", nlohmann::json::array({
+        pluginEntry("Base.esp", root / "Base.esp"),
+        pluginEntry("Top.esp", root / "Top.esp")
+    })}}).has_value());
+    worklistTotal(backend, "Base.esp");
+    const auto graph = backend.cachedGraphForTest();
+    REQUIRE_FALSE(graph.expired());
+
+    REQUIRE(backend.releaseMemory(nlohmann::json::array({true})).has_value());
+    CHECK(graph.expired());
+}
+#endif
+
 TEST_CASE("Native release_memory trims the working set and keeps the backend usable") {
     fo4ide::plugin::RadiclePluginBackend backend;
     const auto result = backend.releaseMemory(nlohmann::json::array());

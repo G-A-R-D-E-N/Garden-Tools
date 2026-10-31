@@ -108,6 +108,10 @@ public:
 
     void setDataDirectory(std::filesystem::path dataDirectory);
 
+#ifdef FO4IDE_TEST_HOOKS
+    std::weak_ptr<const fo4::ConflictGraph> cachedGraphForTest() const;
+#endif
+
 private:
     struct StagedLocalization {
         std::filesystem::path dlstringsPath;

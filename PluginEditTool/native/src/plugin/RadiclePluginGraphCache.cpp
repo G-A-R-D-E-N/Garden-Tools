@@ -37,6 +37,13 @@ RadiclePluginBackend::RadiclePluginBackend() {
 
 RadiclePluginBackend::~RadiclePluginBackend() = default;
 
+#ifdef FO4IDE_TEST_HOOKS
+std::weak_ptr<const fo4::ConflictGraph> RadiclePluginBackend::cachedGraphForTest() const {
+    std::scoped_lock lock(graphMutex_);
+    return graphStorage_;
+}
+#endif
+
 void RadiclePluginBackend::reapIdleConflictGraph(std::stop_token stop_token) {
     std::mutex waitMutex;
     std::condition_variable_any waitCv;
