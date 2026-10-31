@@ -490,6 +490,7 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "RemoveSoundFile") return backend_.removeSoundFile(args);
         if (method == "SetSoundBase") return backend_.setSoundBase(args);
         if (method == "CreateSound") return backend_.createSound(args);
+        if (method == "ReleaseMemory") return backend_.releaseMemory(args);
         if (method == "AddScript") return backend_.addScript(args);
         if (method == "RemoveScript") return backend_.removeScript(args);
         if (method == "AddScriptProperty") return backend_.addScriptProperty(args);

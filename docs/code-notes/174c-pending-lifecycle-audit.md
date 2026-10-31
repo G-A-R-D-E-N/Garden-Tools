@@ -7,7 +7,7 @@ No behavior changes are implied by this matrix; it is the pre-change inventory.
 
 | Path | Entry | Classification | Notes |
 | --- | --- | --- | --- |
-| Ordinary record edits (`SetField`, list/FormLink/component/condition/override/quest-non-localized, ...) | `stagePluginMutationLocked` | in-memory only | Sets `LoadedPlugin.dirty`, keeps `originalPlugin` snapshot. Disk untouched. |
+| Ordinary record edits (`SetField`, list/FormLink/component/condition/override/quest-non-localized, ...) | `stagePluginMutationLocked` | in-memory only | Sets `LoadedPlugin.dirty`; discard later re-reads the plugin from disk (`RadiclePluginBackend.cpp:discardPlugin`). Disk untouched. |
 | Localized QUST CNAM with table change | `RadiclePluginQuest.cpp:setQuestStages` | immediate disk write + transaction/dependency-first | Calls `write_file_pair_dependency_first(DLSTRINGS, plugin)`. Bypasses deferred model. Response: `Written to disk.` |
 | Localized QUST CNAM with unchanged text / no table change | `setQuestStages` | in-memory only | `localizedTableChanged == false` then `stagePluginMutationLocked`. |
 | Localized QUST while ordinary pending on localized plugin | `invokeBackend("SetQuestStages")` guard | destructive reject (no write) | #174B fail-closed: `PluginHasPendingChanges`. Leaves disk alone; does not stage sidecars. |
@@ -27,7 +27,7 @@ No behavior changes are implied by this matrix; it is the pre-change inventory.
 ## Proven #174C gaps (from call-path audit)
 
 1. Localized DLSTRINGS + plugin still commit immediately when CNAM text changes.
-2. No explicit per-plugin discard that restores `originalPlugin` without writing disk.
+2. No explicit per-plugin discard that restores the plugin by re-reading it from disk (`RadiclePluginBackend.cpp:discardPlugin`) without writing disk.
 3. Pending state is not exposed to UI/MCP consumers.
 4. Localized authoring cannot participate in deferred pending state alongside ordinary edits; it is rejected instead of staged.
 5. `SavePlugin` cannot flush staged sidecars because staging does not exist yet.

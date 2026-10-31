@@ -172,7 +172,7 @@ Result<nlohmann::json> RadiclePluginBackend::setComponents(
             failures.push_back(tag + component + ": unresolved");
             continue;
         }
-        const auto* winner = graph_.winner(*resolved);
+        const auto* winner = (*graph_).winner(*resolved);
         if (winner == nullptr) {
             failures.push_back(tag + component + ": unresolved");
             continue;

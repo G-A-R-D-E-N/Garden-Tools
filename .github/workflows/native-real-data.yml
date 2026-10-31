@@ -123,11 +123,12 @@ jobs:
             Write-Output '::warning::could not determine the changed files; running all real-data tests.'
             exit 0
           }
-          # These three take half the suite's time, so a PR runs them only when it touches their code; pushes run everything.
+          # A PR runs these only when it touches their code; pushes run everything.
           $slow = @(
             @{ Test = 'CheckErrorsReal\.FullLoadOrderDiagnosticRunIsDeterministic'; Trigger = '/graph/|check_errors' }
             @{ Test = 'RowRoundtripReal\.CellRowsSurviveWriteAndReread'; Trigger = 'row_roundtrip|/forms/cell|schema/(scalar|field_address)' }
             @{ Test = 'WritebackRealData\.CopiedDlcReferencesKeepEveryLinkWhenMastersMove'; Trigger = 'writeback|plugin/writer|remap|master' }
+            @{ Test = 'CApiRuntimeReal\.ReplaysTheSevenProgramsDeterministically'; Trigger = '/avm2/|/swf/|c_api_runtime|c_api_swf' }
           )
           $excluded = @()
           foreach ($test in $slow) {

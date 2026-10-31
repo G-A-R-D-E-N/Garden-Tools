@@ -135,17 +135,15 @@ RadiclePluginBackend::StateReleased::~StateReleased() {
 void RadiclePluginBackend::stagePluginMutationLocked(LoadedPlugin& loaded,
                                                      fo4::Plugin mutated) {
     CommitScope commit;
-    if (!loaded.dirty) loaded.originalPlugin = loaded.plugin;
     loaded.plugin = std::move(mutated);
     loaded.dirty = true;
     ++mutationEpoch_;
-    rebuildGraphLocked();
+    markGraphDirtyLocked();
 }
 
 void RadiclePluginBackend::stageLocalizationMutationLocked(
     LoadedPlugin& loaded, StagedLocalization staged) {
     CommitScope commit;
-    if (!loaded.dirty) loaded.originalPlugin = loaded.plugin;
     loaded.stagedLocalization = std::move(staged);
     loaded.dirty = true;
     ++mutationEpoch_;
@@ -192,7 +190,6 @@ Result<void> RadiclePluginBackend::persistPluginLocked(
         CommitScope commit;
         loaded.path = output;
         loaded.loadedTime = writtenTime;
-        loaded.originalPlugin.reset();
         loaded.stagedLocalization.reset();
         loaded.dirty = false;
         return {};
