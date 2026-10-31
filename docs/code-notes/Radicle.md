@@ -41,18 +41,25 @@ Anchors: `Radicle/include/fo4/previs/xcri.hpp:PackedDate`,
 `Radicle/src/previs/xcri.cpp:is_precalc_stale`.
 
 PCMB and VISI store a 16-bit packed date: year `2000 + (v >> 9)`, month
-`(v >> 5) & 15`, day `v & 31`. The record header `version_control` field uses
-the same encoding; measuring all 40,165 Fallout4 CELLs and their children gives
-only plausible values (years 2000 to 2026, months 1 to 12, days 1 to 31), which
-is the evidence for treating it as a date. A cell is stale when the maximum
-`version_control` over the winning CELL record and its same-plugin, non-partial
-children is newer than its PCMB or VISI date. Both sides zero means unknown and
-never stale.
+`(v >> 5) & 15`, day `v & 31`. The plan calls the compared field the
+version-control date; measuring all 40,165 Fallout4 CELLs shows which header
+field that is. The field at record-header offset `0x10` (`RecordHeader::
+timestamp`) decodes to plausible dates (years 2000 to 2026, months 1 to 12,
+days 1 to 31 for every value) and reproduces the documented settlement:
+PCMB stale 356 and VISI stale 471 on Fallout4. The field at offset `0x12`
+(`RecordHeader::version_control`) holds small counters (1, 62, 87, ...) that
+decode to non-dates and produces only 67 and 67 stale cells. The timestamp
+field is therefore the dated one, and `detect.cpp:max_same_plugin_version`
+must read `header.timestamp`. A cell is stale when the maximum timestamp over
+the winning CELL record and its same-plugin, non-partial children is newer than
+its PCMB or VISI date. Both sides zero means unknown and never stale.
 
 Staleness is reported with its own `outdated` severity, never as broken: the
 rule comes from a third-party tool's prose rather than from engine code, so a
 stale cell warns that restamping it is expected work, but it is not proof that
-the shipped data is unusable.
+the shipped data is unusable. The measured winner-aware occurrences are PCMB
+343 / 94 / 3 / 142 / 65 / 114 and VISI 458 / 4 / 3 / 66 / 0 / 175 for
+Fallout4, DLCRobot, DLCworkshop01, DLCCoast, DLCworkshop03 and DLCNukaWorld.
 
 ### CDX container and index
 
@@ -135,7 +142,7 @@ whole image only while the caller keeps it alive.
 ### OC NIF naming
 
 Anchors: `Radicle/src/previs/previs_data.cpp:PrevisData::load`,
-`Radicle/include/fo4/previs/previs_data.hpp:OcNifIndex`.
+`Radicle/include/fo4/previs/previs_data.hpp:PrevisData::NifIndex`.
 
 Combined-object meshes are named `<cell %08X>_<id %08X>_OC.NIF` below
 `Meshes\PreCombined\`. Cells owned by a plugin other than the base game put
@@ -151,8 +158,8 @@ DLCCoast.esm 1,217 / 1,217, DLCRobot.esm 4 / 4, DLCNukaWorld.esm 1,012 /
 
 ### Tome and CSG lookup rules
 
-Anchors: `Radicle/src/previs/previs_data.cpp:PrevisData::load`,
-`Radicle/include/fo4/previs/previs_data.hpp:TomeIndex`,
+Anchors: `Radicle/src/previs/previs_data.cpp:PrevisData::tome_answer`,
+`Radicle/src/previs/previs_data.cpp:PrevisData::load`,
 `Radicle/include/fo4/previs/detect.hpp:LoadOrderIndexes`.
 
 A cell's tome is named after its RVIS root cell, not after the cell itself.
@@ -186,8 +193,20 @@ that fails its CRC or structure check; XCRI with no CDX row for the cell; XCRI
 with no CSG rows for the cell; an XCRI OC id with no `_OC.NIF` in the archive
 set; a malformed XCRI payload. Legal in vanilla, so not broken: PCMB without
 XCRI (Fallout4 2,321 cells, and those cells have no CDX rows), XCRI without
-PCMB (Fallout4 19 cells), and VISI without RVIS (Fallout4 455 cells; the cell
-is its own root).
+PCMB (Fallout4 19 cells), and VISI without RVIS (526 cells; the cell is its own
+root). A VISI cell without RVIS whose cell-named tome is absent is a skip
+rather than a broken verdict: the cell-named naming convention is measured but
+not engine-verified, so D11 requires reporting it as unsupported. On the six
+masters 207 cells take that skip (Fallout4 205, DLCNukaWorld 2) while 315 such
+cells do find a cell-named tome and have it validated.
+
+The measured true gaps that the report must keep reporting are: 14 winning
+cells with XCRI but no CDX row (Fallout4 3, DLCCoast 4, DLCNukaWorld 7); 18
+cells holding 538 XCRI ids without an `_OC.NIF` (Fallout4 3, DLCCoast 8,
+DLCNukaWorld 527); and 359 cells in 65 cluster roots with VISI plus RVIS but no
+tome (Fallout4 3, DLCCoast 94, DLCNukaWorld 262). Those clusters ship no tome
+at all, so the whole cluster shares the gap; they are recorded, never assumed
+to be zero.
 
 Absent presence flags are only trusted when the corresponding index answered:
 each input carries a `*_checked` flag, and a needed but unchecked index becomes
@@ -203,3 +222,75 @@ stays in `PrevisData`. A CELL whose decode fails is reported broken with the
 decode error instead of aborting the scan. Index answers take the winning
 record's plugin and the cell/world FormKeys, never bare local ids, because a
 load order resolves FormKeys across plugins.
+
+### PrevisData driver
+
+Anchors: `Radicle/src/previs/previs_data.cpp:PrevisData::load`,
+`Radicle/src/previs/previs_data.cpp:PrevisData::scan_archives`,
+`Radicle/src/previs/previs_data.cpp:PrevisData::tome_answer`,
+`Radicle/include/fo4/previs/previs_data.hpp:PrevisData`.
+
+`PrevisData::load` turns a Data folder into the four index answers without
+leaving anything to the callers: `<plugin>.cdx` files parsed and validated into
+per-plugin `CdxIndex` sets; `<plugin> - Geometry.csg` files read in full,
+validated and reduced to presence plus row and chunk counts; every General BA2
+opened through the streaming `Ba2Reader` so entry names are indexed without
+loading file data; and the loose `Vis` and `Meshes\PreCombined` trees scanned
+for mods that ship assets outside archives. A `.psg` file records a problem and
+makes the CSG answer unchecked, so its cells skip instead of receiving a
+verdict. An archive that will not open marks the NIF and tome indexes
+unchecked as well.
+
+The archive path deliberately does not use `read_ba2_general_file` plus
+`extract_ba2_general_entry` for the index: the former reads and copies the
+whole archive, and `Fallout4 - MeshesExtra.ba2` is 1.3 GB, so keeping six such
+archives resident is not affordable. `Ba2Reader::open` streams the tables,
+`extract` reads one entry on demand, and `tome_answer` caches each root's
+validated answer, so a cold scan reads the roughly 1.5 GB of shipped tome bytes
+once rather than once per cell. Duplicate tome names across archives are legal
+(Fallout4.esm's tomes also ship in DLC archives) and the first archive in
+sorted filename order wins, deterministically. The Environment must outlive the
+`PrevisData` because CDX lookups re-encode FormKeys through the winning
+plugin's master list.
+
+### Load-order report gate
+
+Anchors: `Radicle/tests/test_previs_real.cpp:VanillaLoadOrderGate`,
+`Radicle/testdata/previs/vanilla_1_11_240_broken.tsv`.
+
+The gate test loads the six masters, scans the Data folder, runs
+`diagnose_load_order` and compares the exact broken-cell set with a pinned
+table recorded from measurement: 370 cells with their sorted issue codes, plus
+the per-plugin outdated counts and the 207 unsupported skips. It also pins the
+index census (2,413,992 CDX rows, 64,869 CSG rows, 13,851 chunks, 1,422 tomes,
+176,569 OC NIFs), 62,393 winning cells, and zero other skips, so a missed join,
+a reintroduced false verdict, a stale table row or a changed threshold fails
+loudly. The exact numbers only assert for the measured build, AE 1.11.240.0;
+other installs still exercise the same code but skip the pinned comparison.
+
+### C ABI, RPC and panel
+
+Anchors: `Radicle/include/fo4/c_api_previs.h:radicle_previs_scan`,
+`Radicle/src/c_api_previs.cpp:radicle_previs_report_summary`,
+`PluginEditTool/native/src/rpc/PrevisTarget.cpp:PrevisTarget::scan`,
+`PluginEditTool/web/src/PrevisPanel.tsx:PrevisPanel`.
+
+The report crosses the C boundary as an opaque `radicle_previs_report`. The
+handle borrows its `radicle_env`, so it must be destroyed first, and every
+string it returns is borrowed until `radicle_previs_report_destroy`; the
+summary, per-cell and per-issue accessors are pure reads, out-of-range indexes
+return NOT_FOUND and a bad argument INVALID_ARGUMENT. The exports moved
+`RADICLE_ABI_VERSION` from 92 to 98; open PRs on the repository claimed up to
+97 (#1045) when this was taken, and the C# bindings and layout probe were
+regenerated from the headers.
+
+The `previs` RPC target serves `Scan(dataDir)` and `GetDataFolder()` for the
+panel. It resolves the Data folder from the argument, then the backend's
+configured directory, then Settings; it builds the load order from the
+backend's plugin list and loads it through `Environment::load`, so the scan
+sees the saved on-disk load order and not unsaved editor edits. Every verdict
+is computed in Radicle C++; the target only shapes JSON. The panel renders the
+summary, scan problems, the broken table and the outdated table, with reason
+codes as chips whose tooltip carries the native detail string. The web bridge
+needed one new host object (`previs` in `hostbridge.ts`) and one new typed
+accessor (`backend.ts:getPrevis`).
