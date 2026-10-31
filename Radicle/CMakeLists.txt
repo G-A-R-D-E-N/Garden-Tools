@@ -264,6 +264,11 @@ add_library(fo4 ${FO4_LIBRARY_KIND}
   src/graph/reachability.cpp
   src/environment/environment.cpp
   src/environment/world.cpp
+  src/previs/cdx.cpp
+  src/previs/csg.cpp
+  src/previs/uvd.cpp
+  src/previs/xcri.cpp
+  src/previs/detect.cpp
   src/environment/region.cpp
   src/environment/placed.cpp
   src/environment/terrain.cpp
@@ -1134,6 +1139,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_mswp_rows.cpp
     tests/test_sopm_onam_rows.cpp
     tests/test_stat_lod_rows.cpp
+    tests/test_previs.cpp
+    tests/test_previs_real.cpp
     tests/plugin_bytes.cpp
     tests/real_data_build.cpp
     tests/test_real_data_build.cpp

@@ -90,6 +90,7 @@ struct CellData {
   std::optional<FormKey> water;
   std::optional<std::uint16_t> previs_timestamp;
   std::optional<std::uint16_t> precombined_timestamp;
+  std::optional<FormKey> previs_root;
   std::vector<FormKey> regions;
   std::vector<FormKey> previs_references;
   std::optional<FormKey> acoustic_space;

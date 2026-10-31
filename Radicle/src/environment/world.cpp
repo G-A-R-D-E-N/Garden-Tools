@@ -36,6 +36,7 @@ constexpr Signature k_xezn{'X', 'E', 'Z', 'N'};
 constexpr Signature k_xlcn{'X', 'L', 'C', 'N'};
 constexpr Signature k_visi{'V', 'I', 'S', 'I'};
 constexpr Signature k_pcmb{'P', 'C', 'M', 'B'};
+constexpr Signature k_rvis{'R', 'V', 'I', 'S'};
 constexpr Signature k_xclr{'X', 'C', 'L', 'R'};
 constexpr Signature k_xpri{'X', 'P', 'R', 'I'};
 constexpr Signature k_xcas{'X', 'C', 'A', 'S'};
@@ -120,6 +121,7 @@ std::optional<std::string_view> stored_string(const Reader& reader, Signature si
 void decode_cell_extras(const Reader& reader, CellData& data) {
   if (const auto* visi = reader.sized(k_visi, 2)) data.previs_timestamp = Reader::u16(*visi, 0);
   if (const auto* pcmb = reader.sized(k_pcmb, 2)) data.precombined_timestamp = Reader::u16(*pcmb, 0);
+  data.previs_root = reader.link(k_rvis);
   data.regions = link_list(reader, k_xclr);
   data.previs_references = link_list(reader, k_xpri);
   data.acoustic_space = reader.link(k_xcas);
