@@ -135,4 +135,10 @@ TEST_CASE("previs target refuses a second concurrent scan") {
     REQUIRE_FALSE(result.has_value());
     CHECK(backend.busy_seen);
     CHECK(result.error().type == "PrevisNoEnvironment");
+
+    // Regression: the busy flag must clear after the first scan, or every later scan is refused.
+    const auto second = target.invoke("Scan", nlohmann::json::array({directory.path().string()}));
+    REQUIRE_FALSE(second.has_value());
+    CHECK(second.error().type != "PrevisScanBusy");
+    CHECK(second.error().type == "PrevisNoEnvironment");
 }

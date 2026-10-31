@@ -52,6 +52,8 @@ struct CellPrevisInput {
   bool visi_stale{false};
   // XCRI bytes present below the measured form version must report a skip.
   bool xcri_unmeasured_version{false};
+  // Suppressed XCRI findings must stay out of the report; the caller adds its own skip.
+  bool xcri_index_checks_suppressed{false};
 };
 
 struct CellPrevisStatus {

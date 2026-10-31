@@ -26,16 +26,19 @@ struct Node {
   std::uint16_t form_version{131};
   std::uint32_t label{0};
   std::int32_t group_type{0};
+  std::uint16_t timestamp{0};
   std::vector<Node> children;
 };
 
 inline Node rec(std::string signature, std::uint32_t form_id, std::vector<Sub> subrecords = {},
-         std::uint32_t flags = 0, std::uint16_t form_version = 131) {
+         std::uint32_t flags = 0, std::uint16_t form_version = 131,
+         std::uint16_t timestamp = 0) {
   Node node;
   node.signature = std::move(signature);
   node.form_id = form_id;
   node.flags = flags;
   node.form_version = form_version;
+  node.timestamp = timestamp;
   node.subrecords = std::move(subrecords);
   return node;
 }
@@ -85,6 +88,8 @@ inline void write_node(fo4::test::ByteWriter& out, const Node& node) {
   }
   const auto header = fo4::test::begin_record(out, node.signature, node.flags, node.form_id, node.form_version);
   for (const auto& sub : node.subrecords) fo4::test::write_subrecord(out, sub.signature, sub.data);
+  // Timestamp invariant: fixtures that need staleness must be able to stamp the header date.
+  if (node.timestamp != 0) out.patch_u32(header + 16, node.timestamp);
   fo4::test::end_record(out, header);
 }
 

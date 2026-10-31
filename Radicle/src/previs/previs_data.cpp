@@ -361,7 +361,8 @@ void PrevisData::scan_cdx(const fs::path& root) {
     const auto plugin = plugin_by_stem_.find(lowered(path.stem().string()));
     if (plugin == plugin_by_stem_.end()) continue;
     if (cdx_present_.contains(plugin->second) || cdx_unreadable_.contains(plugin->second)) continue;
-    const std::string plugin_name = env_->plugins().at(plugin->second).key.filename();
+    cdx_present_.insert(plugin->second);
+    const std::string plugin_name{env_->plugins().at(plugin->second).key.filename()};
     try {
       const auto bytes = read_file(path);
       const auto issues = validate_cdx(bytes);
@@ -372,7 +373,6 @@ void PrevisData::scan_cdx(const fs::path& root) {
       }
       auto file = parse_cdx(bytes);
       summary_.cdx_rows += file.rows.size();
-      cdx_present_.insert(plugin->second);
       cdx_.try_emplace(plugin->second, CdxIndex(file));
     } catch (const std::exception& e) {
       summary_.problems.push_back("CDX unreadable for " + plugin_name + ": " + e.what());
@@ -402,7 +402,7 @@ void PrevisData::scan_csg(const fs::path& root) {
     if (csg_decided_.contains(plugin->second)) continue;
     csg_decided_.insert(plugin->second);
     csg_present_.insert(plugin->second);
-    const std::string plugin_name = env_->plugins().at(plugin->second).key.filename();
+    const std::string plugin_name{env_->plugins().at(plugin->second).key.filename()};
     try {
       const auto bytes = read_file(path);
       const auto issues = validate_csg(bytes);
@@ -423,7 +423,7 @@ void PrevisData::scan_csg(const fs::path& root) {
 void PrevisData::check_csg_containers() {
   for (const auto plugin : cdx_present_) {
     if (csg_present_.contains(plugin)) continue;
-    const std::string plugin_name = env_->plugins().at(plugin).key.filename();
+    const std::string plugin_name{env_->plugins().at(plugin).key.filename()};
     summary_.problems.push_back("CSG missing for " + plugin_name +
                                 ": the plugin has a CDX but no matching - Geometry.csg");
   }

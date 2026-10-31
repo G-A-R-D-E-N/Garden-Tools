@@ -60,7 +60,7 @@ CellPrevisStatus diagnose_cell(const CellPrevisInput& in) {
     }
   }
 
-  if (in.has_xcri && !in.xcri_unmeasured_version) {
+  if (in.has_xcri && !in.xcri_unmeasured_version && !in.xcri_index_checks_suppressed) {
     if (!in.cdx_checked) {
       out.skip_unsupported = true;
       out.skips.push_back("no CDX supplied; CDX coverage unverified");
@@ -155,10 +155,8 @@ std::vector<CellDiagnosis> diagnose_load_order(const env::Environment& env,
     }
     if (indexes.plugin_ships_previs && !indexes.plugin_ships_previs(ref->plugin) &&
         overrides_another_plugin(env, *ref)) {
-      diagnosis.status =
-          unmeasured_skip("override with no previs of its own: engine behaviour unverified");
-      out.push_back(std::move(diagnosis));
-      continue;
+      // Override invariant: a plugin without previs hides XCRI index findings, not staleness.
+      diagnosis.input.xcri_index_checks_suppressed = true;
     }
     std::optional<CellIssue> xcri_issue;
     try {
@@ -172,6 +170,7 @@ std::vector<CellDiagnosis> diagnose_load_order(const env::Environment& env,
       const bool unmeasured =
           in.has_xcri && ref->record->header.form_version < k_xcri_min_form_version;
       in.xcri_unmeasured_version = unmeasured;
+      const bool suppress_xcri_index_checks = in.xcri_index_checks_suppressed;
 
       if (in.has_xcri && !unmeasured) {
         // Content validation requires a successful CELL-layer parse, with or without indexes.
@@ -183,14 +182,14 @@ std::vector<CellDiagnosis> diagnose_load_order(const env::Environment& env,
           xcri_issue = CellIssue{PrevisIssue::xcri_malformed,
                                  std::string("CELL XCRI failed to parse: ") + e.what()};
         }
-        if (!xcri_issue && indexes.missing_oc_nifs) {
+        if (!xcri_issue && indexes.missing_oc_nifs && !suppress_xcri_index_checks) {
           const auto missing = indexes.missing_oc_nifs(diagnosis.cell, mesh_ids);
           in.oc_nif_checked = missing.has_value();
           if (missing) in.missing_oc_nifs = *missing;
         }
       }
 
-      if (indexes.cdx_row) {
+      if (indexes.cdx_row && !suppress_xcri_index_checks) {
         CdxCellTarget target;
         target.cell = diagnosis.cell;
         target.world = data.worldspace;
@@ -220,6 +219,11 @@ std::vector<CellDiagnosis> diagnose_load_order(const env::Environment& env,
       if (xcri_issue) {
         diagnosis.status.broken = true;
         diagnosis.status.issues.insert(diagnosis.status.issues.begin(), *xcri_issue);
+      }
+      if (suppress_xcri_index_checks) {
+        diagnosis.status.skip_unsupported = true;
+        diagnosis.status.skips.push_back(
+            "override with no previs of its own: engine behaviour unverified");
       }
     } catch (const std::exception& e) {
       // A failed decode must stay a skip: an unreadable CELL is not measured, not proven broken.
