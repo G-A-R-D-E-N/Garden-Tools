@@ -2713,3 +2713,7 @@ Fallout4.esm 1.11.240 has no masters but stores master index 1 in some links, fo
 ## Radicle/tests/test_package_tree_real.cpp:AddsAndRemovesTheDefaultInputsOfATravelLeafByteIdentically
 
 `Radicle/src/environment/package_procedure_tree.cpp:remove_package_procedure_node` renumbers kept inputs to be contiguous, so a package with sparse ids such as 01 03 05 07 04 cannot come back byte-identical. The test now picks a package whose ids are already contiguous.
+
+## PluginEditTool/native/tests/helpers/TempRoot.hpp:TempRoot
+
+The destructor removes the shared parent when it looks empty, so a test creating its folder at that moment failed with `No such file or directory` under parallel ctest. Seen on `Decompiler arrays round-trip`. The constructor now retries rather than keeping the parent, so no folder is left behind.
