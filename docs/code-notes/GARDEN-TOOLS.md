@@ -2669,3 +2669,7 @@ Vanilla Bethesda files and third-party plugins must not be published (`BGS/tools
 Hosted runners have no Fallout 4 data, so the Windows test job excludes these tests. They run only in `.forgejo/workflows/native-real-data.yml` on the `fo4-data` host, which keeps its own copy of the regex; the two must match. `.forgejo/workflows/release.yml` also stays on Forgejo because it reads local tool paths. Forgejo prefers `.forgejo/workflows`, so once this tree reaches Forgejo it runs only those two workflows there.
 
 The `garden-tools-ci` environment's branch rule must be `ci/**`: `ci/*` does not match `ci/nomad/dev`.
+
+## Radicle/CMakeLists.txt:RADICLE_SHARED
+
+`WINDOWS_EXPORT_ALL_SYMBOLS` exports every external symbol in the objects, including unreferenced inline COMDATs. The first hosted FO4IDE package build failed with `LNK1189: library limit of 65535 objects exceeded` on MSVC 14.44, so `fo4` compiles with `/Zc:inline`, which drops those from each object. If the count reaches the limit again, export only the symbols the editor imports instead of all of them.
